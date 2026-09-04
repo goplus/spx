@@ -24,8 +24,7 @@ type ZipLimits = runtimebundle.Limits
 // ZipExtractOptions controls bounded extraction of an untrusted ZIP.
 type ZipExtractOptions struct {
 	Limits ZipLimits
-	// MaterializeSymlinksAsFiles writes validated ZIP symlink target text as
-	// an ordinary file. It is intended only for vetted toolchain archives.
+	// MaterializeSymlinksAsFiles writes vetted symlink targets as regular files.
 	MaterializeSymlinksAsFiles bool
 }
 
@@ -45,10 +44,6 @@ func ExtractZip(srcZip, dstDir string) error {
 	return extractZip(srcZip, dstDir)
 }
 
-func ExtractZipWithLimits(srcZip, dstDir string, limits ZipLimits) error {
-	return extractZipWithLimits(srcZip, dstDir, limits)
-}
-
 func ExtractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
 	return extractZipWithOptions(srcZip, dstDir, options)
 }
@@ -57,8 +52,12 @@ func FetchURLToFile(url, dst string) error {
 	return fetchURLToFile(url, dst)
 }
 
-// FetchURLToFileWithLimit downloads a URL atomically and rejects a response
-// larger than maxBytes before publishing it.
+// FetchURLToFileWithLimit downloads atomically within maxBytes.
 func FetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
 	return fetchURLToFileWithLimit(url, dst, maxBytes)
+}
+
+// ReplaceFile atomically replaces dst with a same-filesystem src.
+func ReplaceFile(src, dst string) error {
+	return replaceFile(src, dst)
 }

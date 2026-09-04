@@ -43,10 +43,6 @@ func extractZip(srcZip, dstDir string) error {
 	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})
 }
 
-func extractZipWithLimits(srcZip, dstDir string, limits runtimebundle.Limits) error {
-	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{Limits: limits})
-}
-
 func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
 	_, err := runtimebundle.ExtractZip(srcZip, dstDir, runtimebundle.VerifyOptions{
 		Limits:                     options.Limits,
@@ -63,7 +59,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	if maxBytes <= 0 {
 		return fmt.Errorf("invalid download size limit %d", maxBytes)
 	}
-	resp, err := fileDownloadHTTPClient.Get(url)
+	resp, err := GetURL(fileDownloadHTTPClient, url)
 	if err != nil {
 		return err
 	}
@@ -112,7 +108,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	}
 	file = nil
 
-	return os.Rename(tmpPath, dst)
+	return replaceFile(tmpPath, dst)
 }
 
 func downloadLimitWithOverflow(maxBytes int64) int64 {

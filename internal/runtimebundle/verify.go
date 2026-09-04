@@ -27,7 +27,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -41,10 +40,7 @@ import (
 type VerifyOptions struct {
 	Limits   Limits
 	Expected *Bundle
-	// MaterializeSymlinksAsFiles preserves the legacy buildctl behavior for
-	// vetted toolchain archives: a ZIP symlink's validated target text is
-	// represented and extracted as an ordinary file. It never creates a
-	// filesystem symlink and is disabled by default.
+	// MaterializeSymlinksAsFiles writes vetted symlink targets as regular files.
 	MaterializeSymlinksAsFiles bool
 }
 
@@ -166,21 +162,9 @@ func oneVerifyOption(name string, options []VerifyOptions) (VerifyOptions, error
 }
 
 func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (verifiedArchive, error) {
-	if reader == nil || isNilReaderAt(reader) {
-		return verifiedArchive{}, fmt.Errorf("%w: nil archive reader", ErrUnsafeArchive)
-	}
 	limits, err := options.Limits.withDefaults()
 	if err != nil {
 		return verifiedArchive{}, err
-	}
-	if size < 0 {
-		return verifiedArchive{}, fmt.Errorf("%w: negative archive size", ErrUnsafeArchive)
-	}
-	if size > limits.MaxArchiveBytes {
-		return verifiedArchive{}, fmt.Errorf("%w: archive size %d exceeds limit %d", ErrArchiveLimit, size, limits.MaxArchiveBytes)
-	}
-	if size > 0 && size < 22 {
-		return verifiedArchive{}, fmt.Errorf("%w: archive too small", ErrUnsafeArchive)
 	}
 	if err := preflightZipArchive(reader, size, limits); err != nil {
 		if errors.Is(err, ErrArchiveLimit) {
@@ -226,7 +210,7 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		}
 
 		materializedSymlink := options.MaterializeSymlinksAsFiles && file.Mode()&fs.ModeType == fs.ModeSymlink
-		mode, err := safeZipMode(file, isDir, options.MaterializeSymlinksAsFiles)
+		mode, err := safeZipMode(file, isDir, materializedSymlink)
 		if err != nil {
 			return verifiedArchive{}, err
 		}
@@ -339,16 +323,6 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 	return verifiedArchive{bundle: bundle, entries: entries}, nil
 }
 
-func isNilReaderAt(reader io.ReaderAt) bool {
-	value := reflect.ValueOf(reader)
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
-}
-
 func validateZipOffset(file *zip.File, archiveSize int64) error {
 	dataOffset, err := file.DataOffset()
 	if err != nil {
@@ -405,13 +379,13 @@ func limitWithOverflow(max int64) int64 {
 	return max + 1
 }
 
-func safeZipMode(file *zip.File, isDir, materializeSymlinksAsFiles bool) (uint32, error) {
+func safeZipMode(file *zip.File, isDir, materializedSymlink bool) (uint32, error) {
 	mode := file.Mode()
 	typeBits := mode & fs.ModeType
 	if mode&(fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky) != 0 {
 		return 0, fmt.Errorf("%w: entry %q has special permission bits", ErrUnsupportedArchiveEntry, file.Name)
 	}
-	if typeBits == fs.ModeSymlink && materializeSymlinksAsFiles {
+	if materializedSymlink {
 		if isDir {
 			return 0, fmt.Errorf("%w: symlink entry %q uses a directory name", ErrUnsupportedArchiveEntry, file.Name)
 		}

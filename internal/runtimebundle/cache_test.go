@@ -74,6 +74,45 @@ func TestCacheMaterializeRepairsSameSizeTamper(t *testing.T) {
 	}
 }
 
+func TestCacheMaterializeRepairsOversizedMetadata(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		file  string
+		size  int
+		limit int64
+	}{
+		{name: "manifest", file: cacheManifestName, size: 1025, limit: 1024},
+		{name: "complete marker", file: completeMarkerName, size: sha256.Size*2 + 2, limit: 1024},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
+			bundle, err := VerifyZip(zipPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cache := NewProcessLocalCache(t.TempDir())
+			cache.Limits.MaxManifestBytes = test.limit
+			dir, err := materializeTestPath(cache, context.Background(), NamespaceEngine, zipPath, &bundle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, test.file), []byte(strings.Repeat("x", test.size)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := materializeTestPath(cache, context.Background(), NamespaceEngine, zipPath, &bundle); err != nil {
+				t.Fatalf("repair oversized metadata: %v", err)
+			}
+			info, err := os.Stat(filepath.Join(dir, test.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Size() >= int64(test.size) {
+				t.Fatalf("metadata size after repair = %d, want less than %d", info.Size(), test.size)
+			}
+		})
+	}
+}
+
 func TestCacheNestedFileCacheHitDoesNotRequireExplicitParentEntry(t *testing.T) {
 	zipPath := writeTestZip(t, testZipEntry{name: "bin/run", mode: 0o755, data: "trusted"})
 	bundle, err := VerifyZip(zipPath)

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
@@ -38,14 +40,14 @@ type roundTripBodyTransport struct {
 	body          string
 }
 
-func (transport roundTripBodyTransport) RoundTrip(*http.Request) (*http.Response, error) {
+func (transport roundTripBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{
 		StatusCode:    transport.status,
 		Status:        http.StatusText(transport.status),
 		Header:        make(http.Header),
 		Body:          io.NopCloser(strings.NewReader(transport.body)),
 		ContentLength: transport.contentLength,
-		Request:       &http.Request{},
+		Request:       req,
 	}, nil
 }
 
@@ -181,9 +183,48 @@ func TestFetchURLToFileRejectsShortDeclaredBody(t *testing.T) {
 	}}
 	t.Cleanup(func() { engineDownloadHTTPClient = oldClient })
 
-	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", filepath.Join(t.TempDir(), "short.zip"), 10)
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "short.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", dst, 10)
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
+	}
+	if matches, globErr := filepath.Glob(dst + ".tmp-*"); globErr != nil || len(matches) != 0 {
+		t.Fatalf("temporary download files = %v, err = %v", matches, globErr)
+	}
+}
+
+func TestFetchURLToFileRejectsHTTPSDowngrade(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("replacement"))
+	}))
+	defer target.Close()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, target.URL, http.StatusFound)
+	}))
+	defer server.Close()
+
+	oldClient := engineDownloadHTTPClient
+	engineDownloadHTTPClient = server.Client()
+	t.Cleanup(func() { engineDownloadHTTPClient = oldClient })
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFile(server.URL, dst)
+	if !errors.Is(err, shared.ErrInsecureRedirect) {
+		t.Fatalf("fetchURLToFile error = %v, want HTTPS downgrade rejection", err)
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
 	}
 }
 
@@ -249,6 +290,75 @@ func TestLoadEngineAssetManifestKeepsNonNotFoundFailuresClosed(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "make dev") {
 		t.Fatalf("server failure must not be classified as an unavailable release: %q", err)
+	}
+}
+
+func TestLoadEngineAssetManifestRejectsOversizedDownload(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.Handler
+	}{
+		{
+			name: "declared",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Length", fmt.Sprint(maxRuntimeManifestBytes+1))
+				w.WriteHeader(http.StatusOK)
+			}),
+		},
+		{
+			name: "chunked",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+				_, _ = io.Copy(w, strings.NewReader(strings.Repeat("x", int(maxRuntimeManifestBytes+1))))
+			}),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(test.handler)
+			defer server.Close()
+			cacheDir := t.TempDir()
+			manifestPath := filepath.Join(cacheDir, release.DefaultRuntimeLock().Manifest)
+			if err := os.WriteFile(manifestPath, []byte("existing"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			env := engineDownloadEnv{
+				version: release.DefaultRuntimeLock().RuntimeVersion, cacheDir: cacheDir, urlPrefix: server.URL + "/",
+			}
+			if err := loadEngineAssetManifest(&env); !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+				t.Fatalf("loadEngineAssetManifest error = %v, want ErrArchiveLimit", err)
+			}
+			if data, err := os.ReadFile(manifestPath); err != nil || string(data) != "existing" {
+				t.Fatalf("manifest content = %q, err = %v; want original content", data, err)
+			}
+			if matches, err := filepath.Glob(manifestPath + ".tmp-*"); err != nil || len(matches) != 0 {
+				t.Fatalf("manifest temporary files = %v, err = %v", matches, err)
+			}
+		})
+	}
+}
+
+func TestLoadEngineAssetManifestRejectsOversizedLocalFile(t *testing.T) {
+	assetDir := t.TempDir()
+	lock := release.DefaultRuntimeLock()
+	manifestPath := filepath.Join(assetDir, lock.Manifest)
+	file, err := os.Create(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxRuntimeManifestBytes + 1); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	env := engineDownloadEnv{version: lock.RuntimeVersion, cacheDir: t.TempDir(), assetDir: assetDir}
+	if err := loadEngineAssetManifest(&env); !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("loadEngineAssetManifest error = %v, want ErrArchiveLimit", err)
 	}
 }
 

@@ -1,3 +1,5 @@
+//go:build !windows
+
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
  *
@@ -14,23 +16,10 @@
  * limitations under the License.
  */
 
-package runtimebundle
+package shared
 
-import (
-	"fmt"
-	"io"
+import "os"
 
-	"github.com/goplus/spx/v3/internal/zippreflight"
-)
-
-func preflightZipArchive(reader io.ReaderAt, size int64, limits Limits) error {
-	err := zippreflight.Check(reader, size, zippreflight.Limits{
-		MaxArchiveBytes:          limits.MaxArchiveBytes,
-		MaxCentralDirectoryBytes: limits.MaxCentralDirectoryBytes,
-		MaxEntries:               limits.MaxEntries,
-	})
-	if zippreflight.IsLimit(err) {
-		return fmt.Errorf("%w: %v", ErrArchiveLimit, err)
-	}
-	return err
+func replaceFile(src, dst string) error {
+	return os.Rename(src, dst)
 }

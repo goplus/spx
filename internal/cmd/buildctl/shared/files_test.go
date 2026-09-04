@@ -38,14 +38,14 @@ type roundTripBodyTransport struct {
 	body          string
 }
 
-func (transport roundTripBodyTransport) RoundTrip(*http.Request) (*http.Response, error) {
+func (transport roundTripBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return &http.Response{
 		StatusCode:    transport.status,
 		Status:        http.StatusText(transport.status),
 		Header:        make(http.Header),
 		Body:          io.NopCloser(strings.NewReader(transport.body)),
 		ContentLength: transport.contentLength,
-		Request:       &http.Request{},
+		Request:       req,
 	}, nil
 }
 
@@ -95,7 +95,7 @@ func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
 	}
 }
 
-func TestExtractZipWithLimitsRejectsResourceExhaustion(t *testing.T) {
+func TestExtractZipWithOptionsRejectsResourceExhaustion(t *testing.T) {
 	tests := []struct {
 		name    string
 		entries []extractZipFixture
@@ -137,9 +137,9 @@ func TestExtractZipWithLimitsRejectsResourceExhaustion(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			archive := writeExtractZipFixture(t, test.entries...)
-			err := ExtractZipWithLimits(archive, filepath.Join(t.TempDir(), "out"), test.limits)
+			err := ExtractZipWithOptions(archive, filepath.Join(t.TempDir(), "out"), ZipExtractOptions{Limits: test.limits})
 			if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
-				t.Fatalf("ExtractZipWithLimits error = %v, want ErrArchiveLimit", err)
+				t.Fatalf("ExtractZipWithOptions error = %v, want ErrArchiveLimit", err)
 			}
 		})
 	}
@@ -219,6 +219,24 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 	}
 }
 
+func TestFetchURLToFileReplacesExistingDestination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("replacement"))
+	}))
+	defer server.Close()
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := fetchURLToFile(server.URL, dst); err != nil {
+		t.Fatalf("fetchURLToFile returned error: %v", err)
+	}
+	if data, err := os.ReadFile(dst); err != nil || string(data) != "replacement" {
+		t.Fatalf("destination content = %q, err = %v", data, err)
+	}
+}
+
 func TestFetchURLToFileWithLimitRejectsDeclaredSizeBeforeCreatingTempFile(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "5")
@@ -272,9 +290,56 @@ func TestFetchURLToFileWithLimitRejectsShortDeclaredBody(t *testing.T) {
 	}}
 	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
 
-	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", filepath.Join(t.TempDir(), "short.zip"), 10)
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "short.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", dst, 10)
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
+	}
+	if matches, globErr := filepath.Glob(dst + ".tmp-*"); globErr != nil || len(matches) != 0 {
+		t.Fatalf("temporary download files = %v, err = %v", matches, globErr)
+	}
+}
+
+func TestFetchURLToFileRejectsHTTPSDowngrade(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("replacement"))
+	}))
+	defer target.Close()
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, target.URL, http.StatusFound)
+	}))
+	defer server.Close()
+
+	oldClient := fileDownloadHTTPClient
+	fileDownloadHTTPClient = server.Client()
+	callbackCalled := false
+	fileDownloadHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		callbackCalled = true
+		return nil
+	}
+	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := fetchURLToFile(server.URL, dst)
+	if !errors.Is(err, ErrInsecureRedirect) {
+		t.Fatalf("fetchURLToFile error = %v, want HTTPS downgrade rejection", err)
+	}
+	if callbackCalled {
+		t.Fatal("custom CheckRedirect ran before HTTPS downgrade validation")
+	}
+	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
+		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
 	}
 }
 

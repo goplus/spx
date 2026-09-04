@@ -49,9 +49,10 @@ const (
 	// the verifier. It bounds central-directory/offset work independently of
 	// the uncompressed quota.
 	MaxArchiveBytes int64 = 8 << 30
-	// MaxCentralDirectoryBytes bounds metadata parsed from the ZIP central
-	// directory before archive/zip is allowed to allocate per-entry state.
+	// MaxCentralDirectoryBytes limits ZIP central-directory metadata.
 	MaxCentralDirectoryBytes int64 = 64 << 20
+	// MaxManifestBytes limits serialized manifests.
+	MaxManifestBytes int64 = 128 << 20
 	// MaxCompressionRatio is the maximum declared uncompressed/compressed
 	// ratio. It is deliberately applied even when the archive is otherwise
 	// below the byte quotas.
@@ -66,6 +67,7 @@ type Limits struct {
 	MaxTotalSize             int64
 	MaxArchiveBytes          int64
 	MaxCentralDirectoryBytes int64
+	MaxManifestBytes         int64
 	MaxCompressionRatio      uint64
 }
 
@@ -85,13 +87,16 @@ func (l Limits) withDefaults() (Limits, error) {
 	if l.MaxCentralDirectoryBytes == 0 {
 		l.MaxCentralDirectoryBytes = MaxCentralDirectoryBytes
 	}
+	if l.MaxManifestBytes == 0 {
+		l.MaxManifestBytes = MaxManifestBytes
+	}
 	if l.MaxCompressionRatio == 0 {
 		l.MaxCompressionRatio = MaxCompressionRatio
 	}
-	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 {
+	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 || l.MaxManifestBytes < 0 {
 		return Limits{}, fmt.Errorf("runtimebundle: negative archive limit")
 	}
-	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxCompressionRatio == 0 {
+	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxManifestBytes == 0 || l.MaxCompressionRatio == 0 {
 		return Limits{}, fmt.Errorf("runtimebundle: archive limits must be positive")
 	}
 	if l.MaxEntrySize > l.MaxTotalSize {
@@ -276,10 +281,6 @@ type canonicalBundle struct {
 	Entries   []Entry   `json:"entries"`
 }
 
-func (b Bundle) canonical() (canonicalBundle, error) {
-	return b.canonicalWithLimits(Limits{})
-}
-
 func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
 	// Digest is a checksum over this canonical form, so it must not be
 	// validated while constructing the form itself (otherwise validation would
@@ -313,14 +314,24 @@ func (b Bundle) CanonicalBytes() ([]byte, error) {
 	return b.CanonicalBytesWithLimits(Limits{})
 }
 
-// CanonicalBytesWithLimits is CanonicalBytes with caller-supplied manifest
-// size and count limits.
+// CanonicalBytesWithLimits applies caller-supplied limits.
 func (b Bundle) CanonicalBytesWithLimits(limits Limits) ([]byte, error) {
+	limits, err := limits.withDefaults()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
 	canonical, err := b.canonicalWithLimits(limits)
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(canonical)
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limits.MaxManifestBytes {
+		return nil, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
+	}
+	return data, nil
 }
 
 // IdentityDigest computes the full SHA-256 identity of the canonical bundle
@@ -329,8 +340,7 @@ func (b Bundle) IdentityDigest() (string, error) {
 	return b.IdentityDigestWithLimits(Limits{})
 }
 
-// IdentityDigestWithLimits is IdentityDigest with caller-supplied manifest
-// size and count limits. The limits affect validation, not the digest bytes.
+// IdentityDigestWithLimits applies limits without changing digest bytes.
 func (b Bundle) IdentityDigestWithLimits(limits Limits) (string, error) {
 	data, err := b.CanonicalBytesWithLimits(limits)
 	if err != nil {
@@ -352,14 +362,8 @@ func (b Bundle) WithDigest() (Bundle, error) {
 	return b.WithDigestWithLimits(Limits{})
 }
 
-// WithDigestWithLimits is WithDigest with caller-supplied manifest size and
-// count limits.
+// WithDigestWithLimits applies caller-supplied limits.
 func (b Bundle) WithDigestWithLimits(limits Limits) (Bundle, error) {
-	withoutDigest := b
-	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
-		return Bundle{}, err
-	}
 	digest, err := b.IdentityDigestWithLimits(limits)
 	if err != nil {
 		return Bundle{}, err
@@ -378,9 +382,15 @@ func ParseManifest(data []byte) (Bundle, error) {
 	return ParseManifestWithLimits(data, Limits{})
 }
 
-// ParseManifestWithLimits is ParseManifest with caller-supplied manifest size
-// and count limits.
+// ParseManifestWithLimits applies caller-supplied limits.
 func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
+	limits, err := limits.withDefaults()
+	if err != nil {
+		return Bundle{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
+	if int64(len(data)) > limits.MaxManifestBytes {
+		return Bundle{}, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
+	}
 	var decoded *Bundle
 	if err := strictjson.Decode(data, &decoded); err != nil {
 		return Bundle{}, fmt.Errorf("%w: decode JSON: %v", ErrInvalidManifest, err)
@@ -496,10 +506,6 @@ func entryPathKey(name string) string {
 		return ""
 	}
 	return key
-}
-
-func manifestEntriesEqual(a, b Bundle) error {
-	return manifestEntriesEqualWithLimits(a, b, Limits{})
 }
 
 func manifestEntriesEqualWithLimits(a, b Bundle, limits Limits) error {

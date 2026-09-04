@@ -17,6 +17,7 @@
 package runtimebundle
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,13 +46,9 @@ func openAndVerify(zipPath string, options VerifyOptions) (verifiedArchive, io.C
 	return archive, file, nil
 }
 
-func writeRootPrivateFile(root *os.Root, name string, data []byte, executable bool) error {
-	file, err := root.OpenFile(filepath.FromSlash(name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, privateFileMode(func() uint32 {
-		if executable {
-			return 0o700
-		}
-		return 0o600
-	}()))
+func writeRootPrivateFile(root *os.Root, name string, data []byte) error {
+	mode := os.FileMode(0o600)
+	file, err := root.OpenFile(filepath.FromSlash(name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return err
 	}
@@ -62,12 +59,7 @@ func writeRootPrivateFile(root *os.Root, name string, data []byte, executable bo
 			return err
 		}
 		if runtimeIsUnix() {
-			if err := file.Chmod(privateFileMode(func() uint32 {
-				if executable {
-					return 0o700
-				}
-				return 0o600
-			}())); err != nil {
+			if err := file.Chmod(mode); err != nil {
 				_ = file.Close()
 				_ = root.Remove(filepath.FromSlash(name))
 				return err
@@ -87,6 +79,10 @@ func writeRootPrivateFile(root *os.Root, name string, data []byte, executable bo
 }
 
 func writeMetadataRoot(root *os.Root, bundle Bundle, limits Limits) error {
+	limits, err := limits.withDefaults()
+	if err != nil {
+		return err
+	}
 	manifest, err := bundle.WithDigestWithLimits(limits)
 	if err != nil {
 		return err
@@ -95,10 +91,13 @@ func writeMetadataRoot(root *os.Root, bundle Bundle, limits Limits) error {
 	if err != nil {
 		return fmt.Errorf("runtimebundle: encode cache manifest: %w", err)
 	}
-	if err := writeRootPrivateFile(root, cacheManifestName, data, false); err != nil {
+	if int64(len(data)) > limits.MaxManifestBytes {
+		return fmt.Errorf("%w: cache manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
+	}
+	if err := writeRootPrivateFile(root, cacheManifestName, data); err != nil {
 		return fmt.Errorf("runtimebundle: write cache manifest: %w", err)
 	}
-	if err := writeRootPrivateFile(root, completeMarkerName, []byte(manifest.Digest+"\n"), false); err != nil {
+	if err := writeRootPrivateFile(root, completeMarkerName, []byte(manifest.Digest+"\n")); err != nil {
 		return fmt.Errorf("runtimebundle: write cache complete marker: %w", err)
 	}
 	return nil
@@ -116,7 +115,10 @@ func syncRootDir(root *os.Root) error {
 	return dir.Sync()
 }
 
-func readRootRegularFile(root *os.Root, name string) ([]byte, error) {
+func readRootRegularFile(root *os.Root, name string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("runtimebundle: invalid metadata size limit %d", maxBytes)
+	}
 	name = filepath.FromSlash(name)
 	info, err := root.Lstat(name)
 	if err != nil {
@@ -128,13 +130,39 @@ func readRootRegularFile(root *os.Root, name string) ([]byte, error) {
 	if runtimeIsUnix() && info.Mode().Perm() != 0o600 {
 		return nil, fmt.Errorf("%w: metadata path is not private: %s", ErrUnsafeArchive, name)
 	}
+	if info.Size() > maxBytes {
+		return nil, fmt.Errorf("%w: metadata file %s exceeds limit %d", ErrArchiveLimit, name, maxBytes)
+	}
 	if err := verifyPrivateRootPath(root, name); err != nil {
 		return nil, err
 	}
-	return root.ReadFile(name)
+	file, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	opened, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !os.SameFile(info, opened) || !opened.Mode().IsRegular() {
+		return nil, fmt.Errorf("%w: metadata path changed while opening: %s", ErrUnsafeArchive, name)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limitWithOverflow(maxBytes)))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("%w: metadata file %s exceeds limit %d", ErrArchiveLimit, name, maxBytes)
+	}
+	return data, nil
 }
 
 func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest string, expected *Bundle) (bool, error) {
+	limits, err := c.Limits.withDefaults()
+	if err != nil {
+		return false, err
+	}
 	info, err := namespaceRoot.Lstat(filepath.FromSlash(digest))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -159,23 +187,23 @@ func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest stri
 	if err := verifyPrivateRootPath(targetRoot, "."); err != nil {
 		return false, err
 	}
-	manifestData, err := readRootRegularFile(targetRoot, cacheManifestName)
+	manifestData, err := readRootRegularFile(targetRoot, cacheManifestName, limits.MaxManifestBytes)
 	if err != nil {
 		return false, nil
 	}
-	manifest, err := ParseManifestWithLimits(manifestData, c.Limits)
+	manifest, err := ParseManifestWithLimits(manifestData, limits)
 	if err != nil {
 		return false, nil
 	}
 	if manifest.Namespace != Namespace(namespace) || manifest.Digest != digest {
 		return false, nil
 	}
-	marker, err := readRootRegularFile(targetRoot, completeMarkerName)
+	marker, err := readRootRegularFile(targetRoot, completeMarkerName, sha256.Size*2+1)
 	if err != nil || strings.TrimSpace(string(marker)) != digest {
 		return false, nil
 	}
 	if expected != nil {
-		if err := manifestEntriesEqualWithLimits(manifest, *expected, c.Limits); err != nil {
+		if err := manifestEntriesEqualWithLimits(manifest, *expected, limits); err != nil {
 			return false, nil
 		}
 	}

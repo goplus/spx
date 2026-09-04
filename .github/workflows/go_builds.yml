@@ -33,6 +33,11 @@ jobs:
         shell: bash
         run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)
 
+      - name: Test Windows file replacement
+        if: runner.os == 'Windows'
+        shell: bash
+        run: go test -v ./internal/cmd/buildctl/shared -run '^(TestReplaceFileWindows|TestWindowsPath|TestFetchURLToFileReplacesExistingDestination)$'
+
       - name: Build cmd/ispx
         if: runner.os == 'Linux'
         working-directory: cmd/ispx

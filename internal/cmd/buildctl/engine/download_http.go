@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
@@ -50,7 +51,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
 
-	resp, err := engineDownloadHTTPClient.Get(url)
+	resp, err := shared.GetURL(engineDownloadHTTPClient, url)
 	if err != nil {
 		return err
 	}

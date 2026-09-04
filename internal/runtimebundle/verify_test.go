@@ -460,3 +460,24 @@ func TestBundleDigestMethodsPreserveCallerLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestMethodsEnforceSerializedLimit(t *testing.T) {
+	bundle, err := (Bundle{Entries: []Entry{{
+		Name:   "runtime",
+		SHA256: testDigest("runtime"),
+	}}}).WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits := Limits{MaxManifestBytes: 1}
+	if _, err := ParseManifestWithLimits(data, limits); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("ParseManifestWithLimits error = %v, want ErrArchiveLimit", err)
+	}
+	if _, err := bundle.CanonicalBytesWithLimits(limits); !errors.Is(err, ErrArchiveLimit) {
+		t.Fatalf("CanonicalBytesWithLimits error = %v, want ErrArchiveLimit", err)
+	}
+}

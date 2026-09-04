@@ -28,7 +28,10 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
+
+const maxRuntimeManifestBytes int64 = 1 << 20
 
 func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
@@ -94,7 +97,7 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 	}
 	manifestPath := filepath.Join(env.cacheDir, lock.Manifest)
 	if env.assetDir == "" {
-		if err := engineDownloadFetcher(env.urlPrefix+lock.Manifest, manifestPath); err != nil {
+		if err := fetchURLToFileWithLimit(env.urlPrefix+lock.Manifest, manifestPath, maxRuntimeManifestBytes); err != nil {
 			var statusErr *downloadHTTPStatusError
 			if errors.As(err, &statusErr) && statusErr.statusCode == http.StatusNotFound {
 				return fmt.Errorf(
@@ -119,7 +122,7 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 		manifestPath = src
 	}
 
-	data, err := os.ReadFile(manifestPath)
+	data, err := readRuntimeManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("read runtime manifest: %w", err)
 	}
@@ -129,6 +132,32 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 	}
 	env.manifest = &manifest
 	return nil
+}
+
+func readRuntimeManifest(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("runtime manifest is not a regular file: %s", path)
+	}
+	if info.Size() > maxRuntimeManifestBytes {
+		return nil, fmt.Errorf("%w: runtime manifest size %d exceeds limit %d", runtimebundle.ErrArchiveLimit, info.Size(), maxRuntimeManifestBytes)
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxRuntimeManifestBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxRuntimeManifestBytes {
+		return nil, fmt.Errorf("%w: runtime manifest exceeds limit %d", runtimebundle.ErrArchiveLimit, maxRuntimeManifestBytes)
+	}
+	return data, nil
 }
 
 func findLocalEngineAsset(assetDir, name string) (string, error) {
@@ -209,7 +238,7 @@ func copyEngineAssetAtomically(src, dst string) (err error) {
 }
 
 func replaceDownloadedFile(src, dst string) error {
-	return os.Rename(src, dst)
+	return shared.ReplaceFile(src, dst)
 }
 
 func linkOrCopyFile(src, dst string) error {
@@ -224,7 +253,7 @@ func linkOrCopyFile(src, dst string) error {
 	}
 	if err := os.Link(src, dst); err == nil {
 		return nil
-	} else if !errors.Is(err, fs.ErrExist) && !isLinkFallbackError(err) {
+	} else if !isLinkFallbackError(err) {
 		return err
 	}
 	return shared.CopyFile(src, dst)
