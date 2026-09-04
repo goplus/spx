@@ -504,11 +504,6 @@ const GDSPX_MAX_ALIGNED_BYTES = GDSPX_MAX_I32 - (GDSPX_MAX_I32 % GDSPX_FAST_RING
 let fastRingModule = null;
 const fastRings = new Map();
 const deferredFastRingFrees = [];
-// A fast-array wrapper contains a raw Wasm pointer. Keep its provenance in a
-// private registry instead of trusting the JavaScript-visible metadata. This
-// prevents callers from manufacturing a shape-valid wrapper that redirects a
-// raw bridge into an arbitrary range of the active Wasm heap.
-const gdspxTrustedFastArrayMetadata = new WeakMap();
 const inputActionRegistry = {
     module: null,
     epoch: 0,
@@ -652,88 +647,97 @@ function GetFastRing(minSize, poolName = GDSPX_FAST_POOL) {
     return ring;
 }
 
-function GdspxBorrowFastArray(arrayType, count, dataSize, poolName = GDSPX_FAST_POOL) {
-    if (!Number.isSafeInteger(dataSize) || dataSize < 0 || dataSize > GDSPX_MAX_ARRAY_BYTES) {
-        return null;
-    }
-    if (!IsSafeArrayCount(count)) {
-        return null;
-    }
-    const elemSize = GetFastArrayElemSize(arrayType);
-    if (elemSize === 0 || count > Math.floor(GDSPX_MAX_ARRAY_BYTES / elemSize) ||
-            dataSize !== count * elemSize) {
-        return null;
-    }
-    if (!HasActiveModuleHeap()) {
-        return null;
-    }
+// A fast-array wrapper contains a raw Wasm pointer. Keep its provenance in a
+// closure-owned registry instead of trusting the JavaScript-visible metadata.
+// The IIFE returns only the borrow and query functions; the registry and its
+// mutating operation are unreachable from subsequent classic scripts.
+const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
+    const registry = new WeakMap();
 
-    const ring = GetFastRing(dataSize, poolName);
-    if (!ring || ring.ptr === 0) {
-        return null;
-    }
+    function borrow(arrayType, count, dataSize, poolName = GDSPX_FAST_POOL) {
+        if (!Number.isSafeInteger(dataSize) || dataSize < 0 || dataSize > GDSPX_MAX_ARRAY_BYTES) {
+            return null;
+        }
+        if (!IsSafeArrayCount(count)) {
+            return null;
+        }
+        const elemSize = GetFastArrayElemSize(arrayType);
+        if (elemSize === 0 || count > Math.floor(GDSPX_MAX_ARRAY_BYTES / elemSize) ||
+                dataSize !== count * elemSize) {
+            return null;
+        }
+        if (!HasActiveModuleHeap()) {
+            return null;
+        }
 
-    const alignedSize = AlignFastSize(dataSize);
-    if (alignedSize > ring.capacity) {
-        return null;
-    }
-    if (ring.offset + alignedSize > ring.capacity) {
-        ring.offset = 0;
-    }
+        const ring = GetFastRing(dataSize, poolName);
+        if (!ring || ring.ptr === 0) {
+            return null;
+        }
 
-    const ptr = ring.ptr + ring.offset;
-    if (!IsHeapRange(ptr, dataSize) || (dataSize > 0 && ptr === 0)) {
-        return null;
-    }
-    ring.offset += alignedSize;
-    ring.sequence += 1;
+        const alignedSize = AlignFastSize(dataSize);
+        if (alignedSize > ring.capacity) {
+            return null;
+        }
+        if (ring.offset + alignedSize > ring.capacity) {
+            ring.offset = 0;
+        }
 
-    const metadata = {
-        module: Module,
-        ptr,
-        byteLength: dataSize,
-        type: arrayType,
-        count,
-        sequence: ring.sequence,
-        pool: ring.pool,
-    };
-    Object.freeze(metadata);
-    const wrapper = {};
-    // Define the ABI fields as immutable own properties. The data view remains
-    // writable, but its address and extent are captured from the private
-    // metadata rather than read from a mutable object field.
-    Object.defineProperties(wrapper, {
-        '__gdspx_fast_array': { value: true, enumerable: true },
-        '__gdspx_wasm_array': { value: true, enumerable: true },
-        'type': { value: arrayType, enumerable: true },
-        'count': { value: count, enumerable: true },
-        'ptr': { value: ptr, enumerable: true },
-        'module': { value: Module, enumerable: true },
-        'byteLength': { value: dataSize, enumerable: true },
-        'sequence': { value: ring.sequence, enumerable: true },
-        'pool': { value: ring.pool, enumerable: true },
-        'shared': {
-            value: typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
-            enumerable: true,
-        },
-        'data': {
-            configurable: false,
-            enumerable: true,
-            get() {
-                return GetFastArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
+        const ptr = ring.ptr + ring.offset;
+        if (!IsHeapRange(ptr, dataSize) || (dataSize > 0 && ptr === 0)) {
+            return null;
+        }
+        ring.offset += alignedSize;
+        ring.sequence += 1;
+
+        const metadata = {
+            module: Module,
+            ptr,
+            byteLength: dataSize,
+            type: arrayType,
+            count,
+            sequence: ring.sequence,
+            pool: ring.pool,
+        };
+        Object.freeze(metadata);
+        const wrapper = {};
+        // Define the ABI fields as immutable own properties. The data view remains
+        // writable, but its address and extent are captured from private metadata.
+        Object.defineProperties(wrapper, {
+            '__gdspx_fast_array': { value: true, enumerable: true },
+            '__gdspx_wasm_array': { value: true, enumerable: true },
+            'type': { value: arrayType, enumerable: true },
+            'count': { value: count, enumerable: true },
+            'ptr': { value: ptr, enumerable: true },
+            'module': { value: Module, enumerable: true },
+            'byteLength': { value: dataSize, enumerable: true },
+            'sequence': { value: ring.sequence, enumerable: true },
+            'pool': { value: ring.pool, enumerable: true },
+            'shared': {
+                value: typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
+                enumerable: true,
             },
-        },
-    });
-    gdspxTrustedFastArrayMetadata.set(wrapper, metadata);
-    return Object.freeze(wrapper);
-}
-
-function GetTrustedFastArrayMetadata(array) {
-    if (!array || typeof array !== 'object') {
-        return null;
+            'data': {
+                configurable: false,
+                enumerable: true,
+                get() {
+                    return GetFastArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
+                },
+            },
+        });
+        registry.set(wrapper, metadata);
+        return Object.freeze(wrapper);
     }
-    return gdspxTrustedFastArrayMetadata.get(array) || null;
-}
+
+    function get(array) {
+        if (!array || typeof array !== 'object') {
+            return null;
+        }
+        return registry.get(array) || null;
+    }
+
+    return [borrow, get];
+})();
 
 function FastArrayType(array) {
     const metadata = GetTrustedFastArrayMetadata(array);

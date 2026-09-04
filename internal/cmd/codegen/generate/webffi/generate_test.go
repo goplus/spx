@@ -335,8 +335,19 @@ func TestRepositoryWebBridgeKeepsFastArrayPointersPrivate(t *testing.T) {
 
 	// Raw Wasm pointers must only come from wrappers created by the bridge. The
 	// public shape is retained for the Go ABI, but it is not an authority record.
-	require.Contains(t, util, "const gdspxTrustedFastArrayMetadata = new WeakMap();")
-	require.Contains(t, util, "gdspxTrustedFastArrayMetadata.set(wrapper, metadata);")
+	require.Contains(t, util, "const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {")
+	require.Contains(t, util, "const registry = new WeakMap();")
+	require.Contains(t, util, "registry.set(wrapper, metadata);")
+	require.Contains(t, util, "return [borrow, get];")
+	require.NotContains(t, util, "const gdspxTrustedFastArrayMetadata = new WeakMap();")
+	require.NotContains(t, util, "globalThis['gdspxTrustedFastArrayMetadata']")
+	start := strings.Index(util, "const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {")
+	require.NotEqual(t, -1, start)
+	endOffset := strings.Index(util[start:], "})();")
+	require.NotEqual(t, -1, endOffset)
+	closure := util[start : start+endOffset]
+	require.NotContains(t, closure, "globalThis")
+	require.NotContains(t, closure, "register")
 	require.Contains(t, util, "return Object.freeze(wrapper);")
 	require.Contains(t, util, "if (metadata === null || metadata.module !== Module")
 	require.Contains(t, util, "requires an internally allocated Wasm array")
