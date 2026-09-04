@@ -17,6 +17,7 @@
 package tilemap
 
 import (
+	"encoding/json"
 	"path"
 	"strings"
 
@@ -55,6 +56,10 @@ func Load(fs spxfs.Dir, mapDir string) (LoadResult, error) {
 	if isNewFormat(mapDir) {
 		tilemapPath := path.Join(mapDir, "tilemap.json")
 		decoratorPath := path.Join(mapDir, "decorator.json")
+		var tilemapJSON json.RawMessage
+		if err := coreproject.LoadJSON(&tilemapJSON, fs, tilemapPath); err != nil {
+			return LoadResult{}, err
+		}
 		decoratorData, decoratorErr := loadDecoratorJSON(fs, decoratorPath)
 		return LoadResult{
 			DecoratorData: decoratorData,

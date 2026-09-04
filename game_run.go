@@ -22,7 +22,6 @@ import (
 	"runtime"
 	"time"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/debug"
@@ -58,6 +57,10 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	if gco.IsInCoroutine() {
 		return errors.New("game reload cannot be called from an active coroutine")
 	}
+	plan, err := prepareReload(g, v, index)
+	if err != nil {
+		return err
+	}
 	if !gco.RunAfterAbortAll(2*time.Second, g.reset) {
 		return errors.New("game reload aborted: existing coroutines did not stop")
 	}
@@ -70,27 +73,17 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	g.events = make(chan event, eventBufferSize)
 	g.resetEventQueueStats()
 
-	err = coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, v, fieldIndex)
-	}, func(name string, val any) error {
-		fld, ok := val.(Sprite)
-		if !ok {
-			return nil
-		}
-		return g.loadSprite(fld, name, v)
-	})
+	proj := &plan.project
+	g.applyStoredRuntimeConfig(proj)
+	setupGameSystems(g, proj)
+	err = plan.loadSprites(g, v)
 	if err != nil {
 		engine.Panic(err)
 		return
 	}
-	var proj coreproject.ProjectConfig
-	if err = coreproject.LoadConfig(&proj, g.fs, index); err != nil {
-		return
-	}
-	g.applyStoredRuntimeConfig(&proj)
-	setupGameSystems(g, &proj)
+	g.tilemapMgr.replaceMap(plan.tilemap)
 	gco.OnRestart()
-	err = g.loadIndex(v, &proj, generation)
+	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
 	if err != nil {
 		return
 	}

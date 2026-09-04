@@ -218,30 +218,47 @@ func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
 }
 
 func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
+	return p.newSpriteAndLoadWithLoader(name, tySpr, g, p.loadSprite)
+}
+
+func (p *Game) newSpriteAndLoadWithLoader(
+	name string,
+	tySpr reflect.Type,
+	g reflect.Value,
+	loadSprite spriteLoader,
+) Sprite {
 	spr := reflect.New(tySpr).Interface().(Sprite)
-	if err := p.loadSprite(spr, name, g); err != nil {
+	if err := loadSprite(spr, name, g); err != nil {
 		panic(err)
 	}
 	return spr
 }
 
 func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Sprite {
+	return p.getSpriteProtoWithLoader(tySpr, g, p.loadSprite)
+}
+
+func (p *Game) getSpriteProtoWithLoader(tySpr reflect.Type, g reflect.Value, loadSprite spriteLoader) Sprite {
 	name := tySpr.Name()
 	spr, ok := p.sprs[name]
 	if !ok {
-		spr = p.newSpriteAndLoad(name, tySpr, g)
+		spr = p.newSpriteAndLoadWithLoader(name, tySpr, g, loadSprite)
 	}
 	return spr
 }
 
 func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
+	return p.getSpriteProtoByNameWithLoader(name, g, p.loadSprite)
+}
+
+func (p *Game) getSpriteProtoByNameWithLoader(name string, g reflect.Value, loadSprite spriteLoader) Sprite {
 	spr, ok := p.sprs[name]
 	if !ok {
 		tySpr, ok := p.typs[name]
 		if !ok {
 			spxlog.Panicf("Sprite %s is not defined", name)
 		}
-		spr = p.newSpriteAndLoad(name, tySpr, g)
+		spr = p.newSpriteAndLoadWithLoader(name, tySpr, g, loadSprite)
 	}
 	return spr
 }

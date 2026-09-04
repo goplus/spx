@@ -43,6 +43,7 @@ func (d testDir) Close() error {
 func TestLoadNewFormat(t *testing.T) {
 	dir := testDir{
 		files: map[string]string{
+			"tilemaps/map1/tilemap.json":   `{}`,
 			"tilemaps/map1/decorator.json": `{"version":1,"decorators":[{"name":"tree","path":"tree.png"}]}`,
 		},
 	}
@@ -68,6 +69,24 @@ func TestLoadNewFormat(t *testing.T) {
 	}
 	if got.DecoratorData == nil || len(got.DecoratorData.Decorators) != 1 {
 		t.Fatalf("Load(new) DecoratorData = %#v", got.DecoratorData)
+	}
+}
+
+func TestLoadNewFormatRequiresValidTilemapJSON(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+	}{
+		{name: "missing", files: map[string]string{}},
+		{name: "malformed", files: map[string]string{"tilemaps/map1/tilemap.json": `{`}},
+		{name: "trailing content", files: map[string]string{"tilemaps/map1/tilemap.json": `{} trailing`}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := Load(testDir{files: test.files}, "tilemaps/map1"); err == nil {
+				t.Fatal("Load(new) error = nil")
+			}
+		})
 	}
 }
 
