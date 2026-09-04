@@ -50,8 +50,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 		return nil, fmt.Errorf("reload preflight: project config: %w", err)
 	}
 
-	// Use a throwaway value so pointer/interface allocation and owner validation
-	// exactly match the rebuild path without changing the live game.
+	// Mirror the field layout without changing the live game.
 	shadow := reflect.New(gamer.Type()).Elem()
 	err := coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
 		return getFieldPtrOrAlloc(g, shadow, fieldIndex)
@@ -245,9 +244,7 @@ func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
 	return bindSpriteOwner(v, gamer)
 }
 
-// validateReloadSpriteConfig checks the parts of SpriteConfig that are consumed
-// during SpriteImpl initialization. Those paths historically report malformed
-// data through engine/log panics, after the live game has already been reset.
+// validateReloadSpriteConfig rejects values that would panic during init.
 func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("configuration is nil")
@@ -257,10 +254,7 @@ func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := validateReloadAnimationMap("fAnimations", cfg.FAnimations, costumeCount, costumeNames); err != nil {
-		return err
-	}
-	return nil
+	return validateReloadAnimationMap("fAnimations", cfg.FAnimations, costumeCount, costumeNames)
 }
 
 func reloadCostumeLayout(cfg *coreproject.SpriteConfig) (int, map[string]int, error) {
@@ -311,7 +305,7 @@ func appendReloadCostumeSet(names map[string]int, start, nx int, items []corepro
 		return 0, fmt.Errorf("invalid frame count %d", nx)
 	}
 
-	// initCSPart intentionally ignores Items for a single-frame set.
+	// initCSPart ignores items for a single frame.
 	if nx == 1 || items == nil {
 		for i := 0; i < nx; i++ {
 			name := strconv.Itoa(start + i)
@@ -390,7 +384,7 @@ func reloadNumericIndex(value any) int {
 	case reflect.Float32, reflect.Float64:
 		return int(rv.Float())
 	default:
-		// animationComponent.costumeIndex treats unsupported values as zero.
+		// Match animationComponent.costumeIndex.
 		return 0
 	}
 }
@@ -456,7 +450,7 @@ func validateReloadShapeField(shape coreproject.StageShape, key string, required
 
 func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 	loadSprite := p.spriteLoader(g)
-	err := coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
+	return coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
 		return getFieldPtrOrAlloc(g, gamer, fieldIndex)
 	}, func(name string, val any) error {
 		sprite, ok := val.(Sprite)
@@ -465,7 +459,6 @@ func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 		}
 		return loadSprite(sprite, name, gamer)
 	})
-	return err
 }
 
 func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
