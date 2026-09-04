@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 
 func TestResolveRuntimeReadyDownloadsOnlyManifest(t *testing.T) {
 	fixture := newRuntimeResolutionFixture(t)
+	fixture.manifest.Provenance.SPXCommit = strings.Repeat("0", 40)
 	server, requests := fixture.server(t, http.StatusOK, false, fixture.manifest, nil)
 	defer server.Close()
 	fixture.config.GitHubAPIURL = server.URL
@@ -25,7 +27,7 @@ func TestResolveRuntimeReadyDownloadsOnlyManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.State != runtimeStateReady || got.Tag != fixture.lock.RuntimeReleaseTag() {
+	if got.State != runtimeStateReady || got.Tag != fixture.lock.RuntimeReleaseTag() || !strings.Contains(got.Reason, "current runtime inputs at HEAD") {
 		t.Fatalf("resolveRuntime = %#v, want ready %s", got, fixture.lock.RuntimeReleaseTag())
 	}
 	if gotRequests := requests.Load(); gotRequests != 2 {
@@ -92,25 +94,95 @@ func TestResolveRuntimeDraftIsMissing(t *testing.T) {
 	}
 }
 
-func TestResolveRuntimeAcceptsSameVersionBuildMetadata(t *testing.T) {
+func TestResolveRuntimeReportsIncompatibleLockIdentity(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*release.RuntimeManifest)
+		want   string
+	}{
+		{name: "runtime ABI", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.RuntimeABI++
+		}, want: "identity does not match lock"},
+		{name: "release repository", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.ReleaseRepository = "example/runtime"
+		}, want: "manifest repository"},
+		{name: "lock digest", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.LockSHA256 = strings.Repeat("0", 64)
+		}, want: "manifest lock SHA-256"},
+		{name: "Godot commit", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.GodotCommit = strings.Repeat("0", 40)
+		}, want: "manifest Godot commit"},
+		{name: "toolchain", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.Toolchain.Go = "9.9.9"
+		}, want: "manifest toolchain"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newRuntimeResolutionFixture(t)
+			test.mutate(&fixture.manifest)
+			server, _ := fixture.server(t, http.StatusOK, false, fixture.manifest, nil)
+			defer server.Close()
+			fixture.config.GitHubAPIURL = server.URL
+			fixture.config.HTTPClient = server.Client()
+
+			got, err := resolveRuntime(context.Background(), fixture.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.State != runtimeStateIncompatible || !strings.Contains(got.Reason, test.want) || !strings.Contains(got.Reason, "bump runtime_version") {
+				t.Fatalf("resolveRuntime = %#v, want incompatible %q with bump reminder", got, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveRuntimeReportsIncompatibleCurrentSourceInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*release.RuntimeManifest)
+		want   string
+	}{
+		{name: "module tree", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.ModuleTree = strings.Repeat("0", 40)
+		}, want: "module tree"},
+		{name: "runtime pack source", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.RuntimePackSourceSHA256 = strings.Repeat("0", 64)
+		}, want: "runtime pack source digest"},
+		{name: "runtime build recipe", mutate: func(manifest *release.RuntimeManifest) {
+			manifest.Provenance.BuildRecipeSHA256 = strings.Repeat("0", 64)
+		}, want: "runtime build recipe digest"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newRuntimeResolutionFixture(t)
+			test.mutate(&fixture.manifest)
+			server, _ := fixture.server(t, http.StatusOK, false, fixture.manifest, nil)
+			defer server.Close()
+			fixture.config.GitHubAPIURL = server.URL
+			fixture.config.HTTPClient = server.Client()
+
+			got, err := resolveRuntime(context.Background(), fixture.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.State != runtimeStateIncompatible || !strings.Contains(got.Reason, test.want) || !strings.Contains(got.Reason, "bump runtime_version") {
+				t.Fatalf("resolveRuntime = %#v, want incompatible %q with bump reminder", got, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveRuntimeFailsClosedWhenCurrentRevisionCannotBeInspected(t *testing.T) {
 	fixture := newRuntimeResolutionFixture(t)
-	published := fixture.manifest
-	published.RuntimeABI++
-	published.ReleaseRepository = "example/runtime"
-	published.LockSHA256 = strings.Repeat("0", 64)
-	published.Provenance.ModuleTree = strings.Repeat("1", 40)
-	published.Provenance.BuildRecipeSHA256 = strings.Repeat("2", 64)
-	server, _ := fixture.server(t, http.StatusOK, false, published, nil)
+	fixture.config.Revision = "refs/heads/does-not-exist"
+	server, _ := fixture.server(t, http.StatusOK, false, fixture.manifest, nil)
 	defer server.Close()
 	fixture.config.GitHubAPIURL = server.URL
 	fixture.config.HTTPClient = server.Client()
 
-	got, err := resolveRuntime(context.Background(), fixture.config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.State != runtimeStateReady {
-		t.Fatalf("resolveRuntime = %#v, want ready", got)
+	_, err := resolveRuntime(context.Background(), fixture.config)
+	if err == nil || !strings.Contains(err.Error(), "resolve current SPX commit") {
+		t.Fatalf("resolveRuntime error = %v, want revision inspection failure", err)
 	}
 }
 
@@ -189,6 +261,7 @@ func TestWriteRuntimeResolutionOutputs(t *testing.T) {
 	}{
 		{name: "ready", state: runtimeStateReady, reason: "verified runtime-v1.2.3"},
 		{name: "missing", state: runtimeStateMissing, reason: "runtime-v1.2.3 is not published"},
+		{name: "incompatible", state: runtimeStateIncompatible, reason: "runtime-v1.2.3 cannot be reused; bump runtime_version"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -218,13 +291,28 @@ type runtimeResolutionFixture struct {
 
 func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
 	t.Helper()
-	lock := release.DefaultRuntimeLock()
+	repoRoot := gitOutput(t, ".", "rev-parse", "--show-toplevel")
+	currentLockPath := filepath.Join(repoRoot, "internal", "release", "runtime.lock.json")
+	lock, err := loadRuntimeResolutionLock(currentLockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	lockData, err := lock.JSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	lockPath := filepath.Join(t.TempDir(), "runtime.lock.json")
 	if err := os.WriteFile(lockPath, lockData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	moduleTree := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD:"+lock.Module.Path)
+	spxCommit := gitOutput(t, repoRoot, "rev-parse", "--verify", "HEAD^{commit}")
+	runtimePackDigest, err := release.RuntimePackSourceSHA256(repoRoot, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildRecipeDigest, err := release.RuntimeBuildRecipeSHA256(repoRoot, "HEAD")
+	if err != nil {
 		t.Fatal(err)
 	}
 	assetDir := t.TempDir()
@@ -237,11 +325,11 @@ func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
 		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: path})
 	}
 	manifest, err := release.GenerateRuntimeManifest(lock, release.RuntimeProvenance{
-		SPXCommit:               strings.Repeat("a", 40),
+		SPXCommit:               spxCommit,
 		GodotCommit:             lock.Godot.Commit,
-		ModuleTree:              strings.Repeat("b", 40),
-		RuntimePackSourceSHA256: strings.Repeat("c", 64),
-		BuildRecipeSHA256:       strings.Repeat("d", 64),
+		ModuleTree:              moduleTree,
+		RuntimePackSourceSHA256: runtimePackDigest,
+		BuildRecipeSHA256:       buildRecipeDigest,
 		Toolchain:               lock.Toolchain,
 	}, inputs)
 	if err != nil {
@@ -250,10 +338,22 @@ func newRuntimeResolutionFixture(t *testing.T) runtimeResolutionFixture {
 	return runtimeResolutionFixture{
 		config: runtimeResolutionConfig{
 			LockPath: lockPath,
+			RepoRoot: repoRoot,
+			Revision: "HEAD",
 		},
 		lock:     lock,
 		manifest: manifest,
 	}
+}
+
+func gitOutput(t *testing.T, repoRoot string, args ...string) string {
+	t.Helper()
+	commandArgs := append([]string{"-C", repoRoot}, args...)
+	output, err := exec.Command("git", commandArgs...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(commandArgs, " "), err, output)
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func (fixture runtimeResolutionFixture) server(t *testing.T, releaseStatus int, draft bool, manifest release.RuntimeManifest, mutateAssets func(*[]gitHubAsset)) (*httptest.Server, *atomic.Int32) {

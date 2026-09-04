@@ -45,6 +45,8 @@ jobs:
           set -euo pipefail
           go run ./.github/scripts/runtime/resolution.go \
             --lock internal/release/runtime.lock.json \
+            --repo-root . \
+            --revision HEAD \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Report runtime CI policy
@@ -64,7 +66,11 @@ jobs:
     needs: [static-checks, runtime-resolution]
     # Job conditions implicitly require every dependency to succeed; this only
     # selects the runtime path.
-    if: needs.runtime-resolution.outputs.runtime_state == 'missing'
+    if: >-
+      ${{
+        needs.runtime-resolution.outputs.runtime_state == 'missing' ||
+        needs.runtime-resolution.outputs.runtime_state == 'incompatible'
+      }}
     uses: ./.github/workflows/spx_module_integration.yml
 
   web-build:
@@ -120,6 +126,11 @@ jobs:
               require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
               require_result web-build "$WEB_BUILD_RESULT" skipped
               echo "[ok] Runtime is unpublished; current SPX module integration passed"
+              ;;
+            incompatible)
+              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
+              require_result web-build "$WEB_BUILD_RESULT" skipped
+              echo "[ok] Published runtime is incompatible; current SPX module integration passed"
               ;;
             *)
               echo "[error] Unknown runtime state: ${RUNTIME_STATE:-<empty>}" >&2

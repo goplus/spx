@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / "workflows" / "release.yml"
+RUNNER_WORKFLOW_PATH = Path(__file__).resolve().parents[2] / "workflows" / "runner.yml"
 ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
 WEB_PACKAGE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
@@ -109,6 +110,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.jobs = job_blocks(cls.workflow)
+        cls.runner_workflow = RUNNER_WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.runner_jobs = job_blocks(cls.runner_workflow)
         cls.web_package_workflow = WEB_PACKAGE_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.web_package_jobs = job_blocks(cls.web_package_workflow)
 
@@ -119,6 +122,125 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
         operation = workflow_dispatch_input_block(self.workflow, "operation")
         self.assertIn("          - publish-dev-npm", operation)
+
+    def test_runner_selects_current_build_for_an_incompatible_runtime(self):
+        resolution = self.runner_jobs["runtime-resolution"]
+        self.assertIn("            --repo-root . \\\n", resolution)
+        self.assertIn("            --revision HEAD \\\n", resolution)
+
+        self.assertEqual(
+            job_condition(self.runner_jobs["spx-module-integration"]),
+            "needs.runtime-resolution.outputs.runtime_state=='missing'||"
+            "needs.runtime-resolution.outputs.runtime_state=='incompatible'",
+        )
+        self.assertEqual(
+            job_condition(self.runner_jobs["web-build"]),
+            "needs.runtime-resolution.outputs.runtime_state=='ready'",
+        )
+
+        gate = step_script(
+            self.runner_jobs["ci-gate"], "Verify required CI path passed"
+        )
+        cases = (
+            ("ready", "skipped", "success", True),
+            ("missing", "success", "skipped", True),
+            ("incompatible", "success", "skipped", True),
+            ("incompatible", "skipped", "skipped", False),
+            ("unknown", "success", "skipped", False),
+        )
+        for runtime_state, module_result, web_result, succeeds in cases:
+            with self.subTest(runtime_state=runtime_state):
+                completed = subprocess.run(
+                    ["bash", "-euo", "pipefail", "-c", gate],
+                    env={
+                        **os.environ,
+                        "STATIC_CHECKS_RESULT": "success",
+                        "GO_BUILDS_RESULT": "success",
+                        "RUNTIME_RESOLUTION_RESULT": "success",
+                        "RUNTIME_STATE": runtime_state,
+                        "RUNTIME_REASON": "test runtime resolution",
+                        "MODULE_INTEGRATION_RESULT": module_result,
+                        "WEB_BUILD_RESULT": web_result,
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    completed.returncode == 0,
+                    succeeds,
+                    completed.stderr,
+                )
+
+    def test_release_rejects_an_incompatible_runtime_with_bump_guidance(self):
+        setup = self.jobs["setup"]
+        self.assertIn("            --repo-root . \\\n", setup)
+        self.assertIn("            --revision HEAD \\\n", setup)
+        self.assertIn(
+            "steps.runtime.outputs.runtime_state != 'incompatible'",
+            setup,
+        )
+
+        guard = step_script(setup, "Enforce runtime reuse policy")
+        cases = (
+            ("ready", True),
+            ("missing", True),
+            ("incompatible", False),
+            ("unknown", False),
+        )
+        for runtime_state, succeeds in cases:
+            with self.subTest(runtime_state=runtime_state):
+                completed = subprocess.run(
+                    ["bash", "-euo", "pipefail", "-c", guard],
+                    env={
+                        **os.environ,
+                        "RUNTIME_STATE": runtime_state,
+                        "RUNTIME_REASON": "runtime-v1.2.3 cannot be reused; bump runtime_version",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    completed.returncode == 0,
+                    succeeds,
+                    completed.stderr,
+                )
+                if runtime_state == "incompatible":
+                    self.assertIn("Runtime version bump required", completed.stdout)
+                    self.assertIn("make bump-release", completed.stderr)
+                    self.assertIn("bump runtime_version", completed.stderr)
+
+        dev_guard = self.jobs["dev-npm-guard"]
+        self.assertIn("      - name: Resolve development runtime release", dev_guard)
+        self.assertIn("            --repo-root . \\\n", dev_guard)
+        self.assertIn("            --revision HEAD \\\n", dev_guard)
+        policy = step_script(dev_guard, "Require reusable development runtime")
+        for runtime_state, succeeds in (
+            ("ready", True),
+            ("missing", False),
+            ("incompatible", False),
+            ("unknown", False),
+        ):
+            with self.subTest(dev_runtime_state=runtime_state):
+                completed = subprocess.run(
+                    ["bash", "-euo", "pipefail", "-c", policy],
+                    env={
+                        **os.environ,
+                        "RUNTIME_STATE": runtime_state,
+                        "RUNTIME_REASON": "runtime-v1.2.3 cannot be reused; bump runtime_version",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
+                if runtime_state == "missing":
+                    self.assertIn("Published runtime required", completed.stdout)
+                    self.assertIn("Publish the declared runtime", completed.stderr)
+                if runtime_state == "incompatible":
+                    self.assertIn("Runtime version bump required", completed.stdout)
+                    self.assertIn("make bump-release", completed.stderr)
 
     def test_job_scheduling_contract(self):
         needs = {
