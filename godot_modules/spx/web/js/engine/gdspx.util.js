@@ -199,8 +199,8 @@ function ToGdInt(value) {
 
 function ToJsInt(ptr) {
     const dataView = GetHeapDataView();
-    const low = dataView.getUint32(ptr, true);  // 低32位
-    const high = dataView.getUint32(ptr + 4, true);  // 高32位
+    const low = dataView.getUint32(ptr, true);  // low word
+    const high = dataView.getUint32(ptr + 4, true);  // high word
     return {
         'low': low,
         'high': high
@@ -647,10 +647,7 @@ function GetFastRing(minSize, poolName = GDSPX_FAST_POOL) {
     return ring;
 }
 
-// A fast-array wrapper contains a raw Wasm pointer. Keep its provenance in a
-// closure-owned registry instead of trusting the JavaScript-visible metadata.
-// The IIFE returns only the borrow and query functions; the registry and its
-// mutating operation are unreachable from subsequent classic scripts.
+// Keep raw Wasm pointer provenance private to the bridge.
 const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
     const registry = new WeakMap();
 
@@ -701,8 +698,7 @@ const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
         };
         Object.freeze(metadata);
         const wrapper = {};
-        // Define the ABI fields as immutable own properties. The data view remains
-        // writable, but its address and extent are captured from private metadata.
+        // Freeze metadata; expose only a bounded data view.
         Object.defineProperties(wrapper, {
             '__gdspx_fast_array': { value: true, enumerable: true },
             '__gdspx_wasm_array': { value: true, enumerable: true },
@@ -812,8 +808,7 @@ function BorrowCopiedFastArray(array, poolName = GDSPX_INPUT_POOL) {
     if (count < 0) {
         return null;
     }
-    // Keep transient input copies separate from return buffers so fast-path
-    // calls do not trample results that are still being read by Go.
+    // Keep input copies separate from return buffers.
     const borrowed = GdspxBorrowFastArray(FastArrayType(array), count, dataSize, poolName);
     if (dataSize > 0 && (!borrowed || borrowed['ptr'] === 0)) {
         throw new Error("Failed to allocate fast GdArray input buffer");
@@ -870,9 +865,7 @@ function RequireWasmFastArray(array, opName, expectedType = null) {
     return ptr;
 }
 
-// Native array bridges may receive either a zero-copy Wasm view or a regular
-// fast-array wrapper. In the latter case GetFastArrayWasmPtr creates a checked
-// transient input copy before invoking the native function.
+// Native bridges accept zero-copy views or checked transient copies.
 function RequireFastArray(array, opName, expectedType = null) {
     if (!array || array['__gdspx_fast_array'] !== true) {
         throw new Error(opName + " requires a fast array");
@@ -894,8 +887,7 @@ function RequireFastArray(array, opName, expectedType = null) {
     return ptr;
 }
 
-// Array-transform bridges take a fast-array input, run a raw wasm transform,
-// and return another fast-array view over the shared return pool.
+// Transform bridges return views over the shared return pool.
 function TryArrayTransformFastPath(call, input, inputArrayType, outputArrayType, outputCountScale) {
     if (!IsFastArrayLike(input)) {
         return null;

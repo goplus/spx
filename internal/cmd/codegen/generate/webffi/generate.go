@@ -529,9 +529,7 @@ func flatJsScratchAccessor(typeName string) string {
 
 func getJsFuncBody(function *clang.TypedefFunction) string {
 	if function.Name == "GDExtensionSpxResFreeStr" {
-		// The Web signature exposes a copied JavaScript string, so there is no
-		// ownership-bearing pointer to release. Returned GdString wrappers are
-		// released by the normal JsToGdString/FreeGdString path.
+		// Web strings are values; the wrapper owns its storage.
 		return "// Web strings are value-owned; there is no pointer to release.\n\treturn;"
 	}
 	if spec, ok := GetArrayTransformBridgeSpec(function.Name); ok {

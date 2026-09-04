@@ -333,8 +333,7 @@ func TestRepositoryWebBridgeKeepsFastArrayPointersPrivate(t *testing.T) {
 	require.NoError(t, err)
 	util := string(body)
 
-	// Raw Wasm pointers must only come from wrappers created by the bridge. The
-	// public shape is retained for the Go ABI, but it is not an authority record.
+	// Raw pointers must come from bridge-created wrappers.
 	require.Contains(t, util, "const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {")
 	require.Contains(t, util, "const registry = new WeakMap();")
 	require.Contains(t, util, "registry.set(wrapper, metadata);")

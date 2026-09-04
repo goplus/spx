@@ -919,8 +919,7 @@ func fastGdArrayToGo(val js.Value) (Array, bool) {
 const (
 	maxInt   = int(^uint(0) >> 1)
 	maxInt32 = int(^uint32(0) >> 1)
-	// JavaScript numbers can represent integer values exactly only through
-	// Number.MAX_SAFE_INTEGER, regardless of the host Go int width.
+	// JS numbers are exact only through Number.MAX_SAFE_INTEGER.
 	maxSafeJSInt = 1<<53 - 1
 )
 

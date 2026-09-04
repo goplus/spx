@@ -47,11 +47,9 @@ namespace {
 
 constexpr size_t GDSPX_MAX_STRING_BYTES = 256 * 1024 * 1024;
 constexpr size_t GDSPX_ARRAY_HEADER_SIZE = 8;
-// Keep malformed bridge inputs from turning a 32-bit count into a multi-GB
-// allocation. Normal game arrays are far below this limit.
+// Bound counts before allocation.
 constexpr int32_t GDSPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
-// Keep the serialized representation bounded as well. This must match the
-// limits enforced by the Go and JavaScript sides of the bridge.
+// Keep all serialized payloads bounded.
 constexpr size_t GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 
 static bool checked_array_bytes(int32_t count, size_t element_size, size_t &r_bytes) {
@@ -98,9 +96,7 @@ struct GdArrayStringSlotSnapshot {
     size_t len = 0;
 };
 
-// This snapshot is the sole ownership record for arrays crossing the Web
-// ABI.  Never derive a free size/type/data pointer from a mutable GdArrayInfo
-// after it has been bound to a wrapper.
+// Trusted array metadata and ownership.
 struct GdArrayMetadataSnapshot {
     GdArrayInfo *info = nullptr;
     int32_t size = 0;
@@ -111,10 +107,7 @@ struct GdArrayMetadataSnapshot {
     std::vector<GdArrayStringSlotSnapshot> string_slots;
 };
 
-// Bindings are private C++ state and are never exposed through the wrapper
-// ABI. A stale wrapper address can still be reused by ObjectPool (the
-// documented ABA limitation), but overwriting a wrapper cannot manufacture a
-// trusted metadata entry.
+// Private bindings prevent forged wrapper metadata.
 static std::unordered_map<GdArray *, GdArrayInfo *> gdspxArrayBindings;
 static std::unordered_map<GdArrayInfo *, GdArrayMetadataSnapshot> gdspxArraySnapshots;
 static std::unordered_map<GdArrayInfo *, GdArray *> gdspxArrayOwners;
@@ -125,9 +118,7 @@ enum class GdStringReleaseKind {
     CACHE,
 };
 
-// This is the only ownership and length record consulted after a string
-// wrapper is created. The nested pointer remains ABI-visible to JavaScript,
-// but it is never trusted again after being written.
+// Trusted string ownership and length.
 struct GdStringSnapshot {
     const char *ptr = nullptr;
     uint32_t len = 0;
@@ -149,8 +140,7 @@ static size_t bounded_cstr_len(const char *str, size_t max_len) {
 }
 
 static bool string_snapshot_matches_live(GdString *wrapper, const GdStringSnapshot &snapshot) {
-    // Reading the pointer value for equality is safe. Never dereference,
-    // measure, or free the value obtained from the mutable wrapper.
+    // Compare only; never trust the mutable value for access or release.
     return wrapper != nullptr && *wrapper == snapshot.ptr;
 }
 
@@ -160,8 +150,7 @@ static void release_string_snapshot(const GdStringSnapshot &snapshot) {
     }
 
     if (snapshot.release_kind == GdStringReleaseKind::CACHE) {
-        // Lookup uses the trusted snapshot pointer, never the live nested
-        // pointer. Referenced cache entries cannot be evicted.
+        // Use the snapshot pointer; referenced entries are not evicted.
         CachedGdStringEntry *cached = find_cached_gdstring_by_ptr(snapshot.ptr);
         if (cached != nullptr && cached->data == snapshot.ptr && cached->len == snapshot.len &&
                 cached->refcount > 0) {
@@ -199,9 +188,7 @@ static void discard_manager_string_result(GdString value, GdString *wrapper) {
     if (value == nullptr) {
         return;
     }
-    // Manager string returns are allocated by SpxBaseMgr::to_return_cstr.
-    // Avoid freeing the pool-owned wrapper if a broken manager violates that
-    // contract and returns the wrapper address itself.
+    // Manager results are malloc'ed; never free the wrapper itself.
     if (value != static_cast<GdString>(wrapper)) {
         free(const_cast<void *>(value));
     }
@@ -212,9 +199,7 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
         return false;
     }
 
-    // Read the ABI header once. Callers only invoke this for an internally
-    // allocated array; subsequent validation compares these values against
-    // the same trusted snapshot before touching mutable storage.
+    // Capture the header once; later checks compare against this snapshot.
     const int32_t size = info->size;
     const int32_t type = info->type;
     void *data = info->data;
@@ -228,9 +213,7 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
     snapshot.type = type;
     snapshot.data = data;
 
-    // The metadata and payload are separate allocations on every trusted
-    // construction path. Reject aliases up front so even a later fail-closed
-    // release cannot free the same allocation twice.
+    // Metadata and payload must not alias.
     if (data == info) {
         return false;
     }
@@ -267,10 +250,7 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
         }
         snapshot.string_slots[static_cast<size_t>(i)].ptr = str;
         if (str != nullptr) {
-            // The bridge's serialized representation is bounded by
-            // GDSPX_MAX_ARRAY_BYTES. A missing terminator is rejected later by
-            // live-snapshot validation; this bounded scan avoids an unbounded
-            // walk when a manager returns malformed string storage.
+            // Bound the scan; validation checks the terminator later.
             const size_t len = bounded_cstr_len(str, GDSPX_MAX_ARRAY_BYTES + 1);
             if (len > GDSPX_MAX_ARRAY_BYTES) {
                 return false;
@@ -320,8 +300,7 @@ static bool array_snapshot_matches_live(const GdArrayMetadataSnapshot &snapshot)
             return false;
         }
         if (current != nullptr) {
-            // Require the original terminator to remain within the recorded
-            // length. Serialization then copies exactly the trusted length.
+            // Keep the original terminator within the recorded length.
             if (bounded_cstr_len(current, expected.len + 1) != expected.len) {
                 return false;
             }
@@ -360,17 +339,12 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
 
     auto owner_it = gdspxArrayOwners.find(info);
     if (expected_owner == nullptr) {
-        // Public manager-side release is only valid before an allocation is
-        // exposed through a wrapper. This prevents a failed attempt to bind an
-        // already-owned result from destroying the original owner's array.
+        // Manager-side release is valid only before wrapper binding.
         if (owner_it != gdspxArrayOwners.end()) {
             return false;
         }
 
-        // Refresh an ownerless string snapshot so a manager can release a
-        // partially or fully constructed result without leaking its slots.
-        // If validation fails, retain the original trusted allocation record
-        // and free only what that record proves was allocated.
+        // Refresh string slots while an array is still under construction.
         if (array_header_matches_snapshot(snapshot_it->second)) {
             GdArrayMetadataSnapshot current_snapshot;
             if (make_array_snapshot(info, current_snapshot)) {
@@ -394,10 +368,7 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
     return true;
 }
 
-// Used only while constructing a new array, before it is exposed through a
-// wrapper. If a complete trusted snapshot can be made, ownership still flows
-// through the same snapshot-only free path; otherwise no potentially foreign
-// data pointer is released.
+// Release an unbound array using only trusted metadata.
 static void dispose_unbound_array_info(GdArrayInfo *info) {
     if (info == nullptr) {
         return;
@@ -420,15 +391,12 @@ extern "C" bool gdspx_bind_array_wrapper(GdArray *wrapper) {
     GdArrayInfo *info = *wrapper;
     auto binding_it = gdspxArrayBindings.find(wrapper);
     if (info == nullptr) {
-        // A null result is valid only for a wrapper which has never owned an
-        // array. A bound wrapper whose nested pointer was cleared is corrupt;
-        // its trusted allocation remains owned until gdspx_free_array runs.
+        // Null is valid only for a never-bound wrapper.
         return binding_it == gdspxArrayBindings.end();
     }
 
     if (binding_it != gdspxArrayBindings.end()) {
-        // Binding is immutable. Idempotent calls are allowed only when the
-        // exact same trusted object still matches its snapshot.
+        // Bindings are immutable; allow only an unchanged object.
         if (binding_it->second != info) {
             return false;
         }
@@ -440,21 +408,17 @@ extern "C" bool gdspx_bind_array_wrapper(GdArray *wrapper) {
     auto snapshot_it = gdspxArraySnapshots.find(info);
     if (snapshot_it == gdspxArraySnapshots.end() ||
             !array_header_matches_snapshot(snapshot_it->second)) {
-        // Binding never establishes trust. Only internal construction paths
-        // may add an allocation to gdspxArraySnapshots.
+        // Only internal constructors may establish trust.
         return false;
     }
 
     auto owner_it = gdspxArrayOwners.find(info);
     if (owner_it != gdspxArrayOwners.end() && owner_it->second != wrapper) {
-        // One allocation must never be owned by two wrappers; otherwise both
-        // wrappers could eventually free the same data.
+        // A payload may have only one owner.
         return false;
     }
 
-    // String slots may be populated while an internally-created array is
-    // under construction. Seal their current pointers and lengths at the
-    // moment the allocation first crosses into a Web wrapper.
+    // Seal string slots when the array crosses into a wrapper.
     GdArrayMetadataSnapshot sealed_snapshot;
     if (!make_array_snapshot(info, sealed_snapshot)) {
         return false;
@@ -473,8 +437,7 @@ extern "C" bool gdspx_validate_array_wrapper(GdArray *wrapper) {
 
     auto binding_it = gdspxArrayBindings.find(wrapper);
     if (*wrapper == nullptr) {
-        // Preserve the existing nullable-array ABI, but never accept a bound
-        // wrapper whose nested pointer has been cleared or replaced.
+        // Preserve nullable arrays, but reject tampered bound wrappers.
         return binding_it == gdspxArrayBindings.end();
     }
     if (binding_it == gdspxArrayBindings.end() || binding_it->second != *wrapper) {
@@ -501,9 +464,7 @@ extern "C" bool gdspx_validate_array_info(GdArray array) {
     if (snapshot_it == gdspxArraySnapshots.end()) {
         return false;
     }
-    // Before an array is bound, managers may still populate its string slots.
-    // Its header and backing allocation are already immutable. Once bound,
-    // validate every sealed string slot as well.
+    // Managers may fill string slots before binding; bound arrays are sealed.
     if (gdspxArrayOwners.find(array) == gdspxArrayOwners.end()) {
         return array_header_matches_snapshot(snapshot_it->second);
     }
@@ -902,8 +863,7 @@ GdString* gdspx_alloc_string() {
         return nullptr;
     }
 
-    // Pool reuse must never inherit either a nested pointer or ownership
-    // metadata from the previous lifetime.
+    // Clear nested pointers and stale ownership on reuse.
     auto stale_it = gdspxStringSnapshots.find(wrapper);
     if (stale_it != gdspxStringSnapshots.end()) {
         GdStringSnapshot stale = stale_it->second;
@@ -1058,12 +1018,7 @@ const char* gdspx_get_string(GdString* ptr) {
 
 EMSCRIPTEN_KEEPALIVE
 void gdspx_free_cstr(const char* str) {
-    // gdspx_get_string returns a borrowed pointer owned by its GdString
-    // wrapper.  There is no ownership-bearing allocation handle in this API,
-    // so attempting to free an arbitrary pointer here can either free memory
-    // still referenced by the wrapper or invoke free() on foreign memory.
-    // Keep this legacy entry point as a compatibility no-op; callers must
-    // release the owning wrapper with gdspx_free_string instead.
+    // Legacy API; ownership stays with the wrapper.
     (void)str;
 }
 
@@ -1087,8 +1042,7 @@ void gdspx_free_string(GdString* p_gdstr) {
 
     auto snapshot_it = gdspxStringSnapshots.find(p_gdstr);
     if (snapshot_it != gdspxStringSnapshots.end()) {
-        // This comparison detects corruption without ever using the mutable
-        // value as an address. Release always follows the trusted snapshot.
+        // Detect tampering, then release from the snapshot.
         const bool live_pointer_matches =
                 string_snapshot_matches_live(p_gdstr, snapshot_it->second);
         (void)live_pointer_matches;
@@ -1135,8 +1089,7 @@ void gdspx_free_array(GdArray* p_gdstr) {
 
     auto binding_it = gdspxArrayBindings.find(p_gdstr);
     if (binding_it == gdspxArrayBindings.end()) {
-        // Do not dereference or free an unbound nested pointer. It may have
-        // been forged by a caller writing directly into wasm memory.
+        // Ignore unbound nested pointers; they may be forged.
         *p_gdstr = nullptr;
         arrayPool.release(p_gdstr);
         return;
@@ -1144,9 +1097,7 @@ void gdspx_free_array(GdArray* p_gdstr) {
 
     GdArrayInfo *info = binding_it->second;
     if (!release_array_snapshot(info, p_gdstr)) {
-        // A missing snapshot is a fail-closed condition. Release only the
-        // wrapper and leak the unknown nested allocation rather than freeing a
-        // potentially foreign pointer.
+        // Fail closed if trusted metadata is missing.
         gdspxArrayBindings.erase(binding_it);
         *p_gdstr = nullptr;
     }
@@ -1165,7 +1116,7 @@ GdArrayInfo* deserializeGdArray(uint8_t* bytes, int byteSize) {
     }
     info->data = nullptr;
 
-    // 8字节header: [size:4][type:4]
+    // Header: [size:4][type:4].
     const uint32_t encoded_size = readUint32LE(bytes);
     if (encoded_size > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
         free(info);
@@ -1450,7 +1401,7 @@ uint8_t* serializeGdArray(const GdArrayMetadataSnapshot &snapshot, int* outSize)
         return nullptr;
     }
 
-    // 8字节header: [size:4][type:4]
+    // Header: [size:4][type:4].
     writeUint32LE(result, static_cast<uint32_t>(snapshot.size));
     writeUint32LE(result + 4, static_cast<uint32_t>(snapshot.type));
 

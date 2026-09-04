@@ -173,9 +173,7 @@ GdArray SpxBaseMgr::create_array(int32_t type, int32_t size) {
 		return array;
 	}
 
-	// String arrays are released slot-by-slot. Zero initialization guarantees
-	// partially populated arrays never attempt to free indeterminate pointers;
-	// calloc also rejects a size multiplication overflow.
+	// Zero-init string slots for safe partial construction.
 	array->data = calloc(static_cast<size_t>(size), element_size);
 	if (!array->data) {
 		free(array);
@@ -198,11 +196,10 @@ void SpxBaseMgr::free_array(GdArray array) {
 		return;
 	}
 #ifdef __EMSCRIPTEN__
-	// Web allocations are owned by the private metadata registry. Unknown
-	// pointers fail closed instead of supplying mutable free parameters.
+	// Web ownership lives in the private metadata registry.
 	gdspx_release_array_info(array);
 #else
-	// Special handling for string arrays - need to free each string
+	// Release string elements before the backing array.
 	if (array->type == GD_ARRAY_TYPE_STRING && array->data && array->size > 0 &&
 			array->size <= SPX_MAX_ARRAY_ELEMENTS) {
 		char **strings = (char **)array->data;
