@@ -34,12 +34,15 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 	if err != nil {
 		return err
 	}
+	return p.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
+}
 
+func (p *Game) loadSpriteConfig(sprite Sprite, name string, gamer reflect.Value, cfg *coreproject.SpriteConfig) error {
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
-	// Paths in loaded.Config are already normalized by coreproject.LoadSpriteConfig.
-	base.init(p, name, &loaded.Config, gamer, sprite)
+	// Paths in cfg are already normalized by coreproject.LoadSpriteConfig.
+	base.init(p, name, cfg, gamer, sprite)
 	p.sprs[name] = sprite
 	return bindSpriteOwner(vSpr, gamer)
 }
