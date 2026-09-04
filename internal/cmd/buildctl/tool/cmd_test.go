@@ -18,6 +18,7 @@ package tool
 
 import (
 	"archive/zip"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,6 +85,17 @@ func TestSetupAndroidNDKManualInstall(t *testing.T) {
 	if !shared.FileExists(filepath.Join(ndkRoot, "source.properties")) {
 		t.Fatalf("expected source.properties under %s", ndkRoot)
 	}
+	clangPath := filepath.Join(ndkRoot, "toolchains", "llvm", "prebuilt", "bin", "clang")
+	info, err := os.Lstat(clangPath)
+	if err != nil {
+		t.Fatalf("Lstat(%s) returned error: %v", clangPath, err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&fs.ModeSymlink != 0 {
+		t.Fatalf("materialized clang mode = %v, want regular non-symlink", info.Mode())
+	}
+	if content, err := os.ReadFile(clangPath); err != nil || string(content) != "clang-12" {
+		t.Fatalf("materialized clang target = %q, err = %v", content, err)
+	}
 
 	shellConfig := filepath.Join(home, ".zshrc")
 	content, err := os.ReadFile(shellConfig)
@@ -140,6 +152,18 @@ func writeNDKZipFixture(dst string) error {
 		return err
 	}
 	if _, err := entry.Write([]byte("Pkg.Revision=23.2.8568313\n")); err != nil {
+		return err
+	}
+	header := &zip.FileHeader{
+		Name:   "android-ndk-r23c/toolchains/llvm/prebuilt/bin/clang",
+		Method: zip.Store,
+	}
+	header.SetMode(fs.ModeSymlink | 0o777)
+	entry, err = writer.CreateHeader(header)
+	if err != nil {
+		return err
+	}
+	if _, err := entry.Write([]byte("clang-12")); err != nil {
 		return err
 	}
 	return writer.Close()

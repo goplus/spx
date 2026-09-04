@@ -16,6 +16,19 @@
 
 package shared
 
+import "github.com/goplus/spx/v3/internal/runtimebundle"
+
+// ZipLimits controls bounded verification and extraction of untrusted ZIPs.
+type ZipLimits = runtimebundle.Limits
+
+// ZipExtractOptions controls bounded extraction of an untrusted ZIP.
+type ZipExtractOptions struct {
+	Limits ZipLimits
+	// MaterializeSymlinksAsFiles writes validated ZIP symlink target text as
+	// an ordinary file. It is intended only for vetted toolchain archives.
+	MaterializeSymlinksAsFiles bool
+}
+
 func DirExists(path string) bool {
 	return dirExists(path)
 }
@@ -30,6 +43,14 @@ func ZipDirectory(srcDir, dstZip string) error {
 
 func ExtractZip(srcZip, dstDir string) error {
 	return extractZip(srcZip, dstDir)
+}
+
+func ExtractZipWithLimits(srcZip, dstDir string, limits ZipLimits) error {
+	return extractZipWithLimits(srcZip, dstDir, limits)
+}
+
+func ExtractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
+	return extractZipWithOptions(srcZip, dstDir, options)
 }
 
 func FetchURLToFile(url, dst string) error {

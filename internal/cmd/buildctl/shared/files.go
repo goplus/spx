@@ -17,16 +17,15 @@
 package shared
 
 import (
-	"archive/zip"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
@@ -40,72 +39,18 @@ func zipDirectory(srcDir, dstZip string) (err error) {
 }
 
 func extractZip(srcZip, dstDir string) error {
-	reader, err := zip.OpenReader(srcZip)
-	if err != nil {
-		return err
-	}
-	defer reader.Close()
-
-	for _, file := range reader.File {
-		targetPath, err := resolveZipExtractPath(dstDir, file.Name)
-		if err != nil {
-			return err
-		}
-		if file.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, file.Mode()); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipFile(file, targetPath); err != nil {
-			return err
-		}
-	}
-	return nil
+	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})
 }
 
-func resolveZipExtractPath(dstDir, name string) (string, error) {
-	cleanBase := filepath.Clean(dstDir)
-	targetPath := filepath.Clean(filepath.Join(cleanBase, name))
-	basePrefix := cleanBase
-	if !strings.HasSuffix(basePrefix, string(os.PathSeparator)) {
-		basePrefix += string(os.PathSeparator)
-	}
-	targetPrefix := targetPath
-	if !strings.HasSuffix(targetPrefix, string(os.PathSeparator)) {
-		targetPrefix += string(os.PathSeparator)
-	}
-	if targetPath != cleanBase && !strings.HasPrefix(targetPrefix, basePrefix) {
-		return "", fmt.Errorf("illegal path in archive entry: %s", name)
-	}
-	return targetPath, nil
+func extractZipWithLimits(srcZip, dstDir string, limits runtimebundle.Limits) error {
+	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{Limits: limits})
 }
 
-func extractZipFile(file *zip.File, dst string) (err error) {
-	reader, err := file.Open()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := reader.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	output, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := output.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	_, err = io.Copy(output, reader)
+func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
+	_, err := runtimebundle.ExtractZip(srcZip, dstDir, runtimebundle.VerifyOptions{
+		Limits:                     options.Limits,
+		MaterializeSymlinksAsFiles: options.MaterializeSymlinksAsFiles,
+	})
 	return err
 }
 

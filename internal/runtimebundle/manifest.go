@@ -49,6 +49,9 @@ const (
 	// the verifier. It bounds central-directory/offset work independently of
 	// the uncompressed quota.
 	MaxArchiveBytes int64 = 8 << 30
+	// MaxCentralDirectoryBytes bounds metadata parsed from the ZIP central
+	// directory before archive/zip is allowed to allocate per-entry state.
+	MaxCentralDirectoryBytes int64 = 64 << 20
 	// MaxCompressionRatio is the maximum declared uncompressed/compressed
 	// ratio. It is deliberately applied even when the archive is otherwise
 	// below the byte quotas.
@@ -58,11 +61,12 @@ const (
 // Limits bounds work performed while inspecting an untrusted ZIP. A zero
 // field means the corresponding v1 default. Negative values are invalid.
 type Limits struct {
-	MaxEntries          int
-	MaxEntrySize        int64
-	MaxTotalSize        int64
-	MaxArchiveBytes     int64
-	MaxCompressionRatio uint64
+	MaxEntries               int
+	MaxEntrySize             int64
+	MaxTotalSize             int64
+	MaxArchiveBytes          int64
+	MaxCentralDirectoryBytes int64
+	MaxCompressionRatio      uint64
 }
 
 func (l Limits) withDefaults() (Limits, error) {
@@ -78,13 +82,16 @@ func (l Limits) withDefaults() (Limits, error) {
 	if l.MaxArchiveBytes == 0 {
 		l.MaxArchiveBytes = MaxArchiveBytes
 	}
+	if l.MaxCentralDirectoryBytes == 0 {
+		l.MaxCentralDirectoryBytes = MaxCentralDirectoryBytes
+	}
 	if l.MaxCompressionRatio == 0 {
 		l.MaxCompressionRatio = MaxCompressionRatio
 	}
-	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 {
+	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 {
 		return Limits{}, fmt.Errorf("runtimebundle: negative archive limit")
 	}
-	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCompressionRatio == 0 {
+	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxCompressionRatio == 0 {
 		return Limits{}, fmt.Errorf("runtimebundle: archive limits must be positive")
 	}
 	if l.MaxEntrySize > l.MaxTotalSize {

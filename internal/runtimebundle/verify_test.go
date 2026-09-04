@@ -136,6 +136,80 @@ func TestVerifyZipRejectsDuplicatesCollisionsAndSpecialFiles(t *testing.T) {
 	}
 }
 
+func TestVerifyZipMaterializedSymlinkRejectsSpecialPermissions(t *testing.T) {
+	archive := writeTestZip(t, testZipEntry{
+		name: "link",
+		mode: fs.ModeSymlink | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky | 0o777,
+		data: "target",
+	})
+	_, err := VerifyZip(archive, VerifyOptions{MaterializeSymlinksAsFiles: true})
+	if !errors.Is(err, ErrUnsupportedArchiveEntry) {
+		t.Fatalf("VerifyZip error = %v, want ErrUnsupportedArchiveEntry", err)
+	}
+}
+
+func TestExtractZipMaterializesVettedSymlinkAsFile(t *testing.T) {
+	archive := writeTestZip(t, testZipEntry{
+		name: "lib64/libc++.so",
+		mode: fs.ModeSymlink | 0o777,
+		data: "../lib/libc++.so",
+	})
+	if _, err := VerifyZip(archive); !errors.Is(err, ErrUnsupportedArchiveEntry) {
+		t.Fatalf("default VerifyZip error = %v, want ErrUnsupportedArchiveEntry", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "out")
+	bundle, err := ExtractZip(archive, dst, VerifyOptions{MaterializeSymlinksAsFiles: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Entries) != 1 || bundle.Entries[0].Mode&uint32(fs.ModeType) != 0 {
+		t.Fatalf("materialized manifest entry = %#v, want one regular file", bundle.Entries)
+	}
+	path := filepath.Join(dst, "lib64", "libc++.so")
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&fs.ModeSymlink != 0 {
+		t.Fatalf("materialized mode = %v, want regular non-symlink", info.Mode())
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "../lib/libc++.so" {
+		t.Fatalf("materialized target = %q, err = %v", data, err)
+	}
+}
+
+func TestVerifyZipMaterializedSymlinkValidatesTarget(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   error
+	}{
+		{name: "too large", target: strings.Repeat("a", int(maxMaterializedSymlinkBytes)+1), want: ErrArchiveLimit},
+		{name: "empty", target: "", want: ErrUnsafeArchive},
+		{name: "non UTF-8", target: string([]byte{0xff}), want: ErrUnsafeArchive},
+		{name: "NUL", target: "target\x00suffix", want: ErrUnsafeArchive},
+		{name: "absolute", target: "/outside", want: ErrUnsafeArchive},
+		{name: "network absolute", target: "//server/share", want: ErrUnsafeArchive},
+		{name: "drive absolute", target: "C:/outside", want: ErrUnsafeArchive},
+		{name: "backslash", target: `..\outside`, want: ErrUnsafeArchive},
+		{name: "root escape", target: "../../outside", want: ErrUnsafeArchive},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			archive := writeTestZip(t, testZipEntry{
+				name: "dir/link",
+				mode: fs.ModeSymlink | 0o777,
+				data: test.target,
+			})
+			_, err := VerifyZip(archive, VerifyOptions{MaterializeSymlinksAsFiles: true})
+			if !errors.Is(err, test.want) {
+				t.Fatalf("VerifyZip error = %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
 func TestParseManifestIsStrict(t *testing.T) {
 	digest := testDigest("x")
 	valid := `{"schema":"runtimebundle/v1","entries":[{"name":"x","mode":420,"size":1,"sha256":"` + digest + `"}]}`

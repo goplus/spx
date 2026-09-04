@@ -47,6 +47,22 @@ type androidNDKEnv struct {
 var androidNDKResolveEnv = resolveAndroidNDKEnv
 var androidNDKFetcher = shared.FetchURLToFile
 
+// These ceilings are calibrated against the pinned r23c archives published by
+// Google. The largest of darwin/linux/windows has 8,686 entries, a 1.37 MiB
+// central directory, 3.15 GB expanded bytes, a 160.4 MB entry, and a 58.6:1
+// declared compression ratio. The archives contain 23/29/0 symlink entries,
+// respectively; buildctl preserves its legacy behavior by materializing their
+// validated target text as ordinary files. Re-inventory every pinned NDK
+// update before changing androidNDKVersion or these limits.
+var androidNDKZipLimits = shared.ZipLimits{
+	MaxArchiveBytes:          2 << 30,
+	MaxCentralDirectoryBytes: 128 << 20,
+	MaxEntries:               20_000,
+	MaxEntrySize:             512 << 20,
+	MaxTotalSize:             6 << 30,
+	MaxCompressionRatio:      200,
+}
+
 func parseToolSetupNDKArgs(args []string) (toolSetupNDKConfig, error) {
 	cfg := toolSetupNDKConfig{}
 
@@ -113,7 +129,10 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 	if err := os.MkdirAll(extractDir, 0o755); err != nil {
 		return err
 	}
-	if err := shared.ExtractZip(archivePath, extractDir); err != nil {
+	if err := shared.ExtractZipWithOptions(archivePath, extractDir, shared.ZipExtractOptions{
+		Limits:                     androidNDKZipLimits,
+		MaterializeSymlinksAsFiles: true,
+	}); err != nil {
 		return err
 	}
 

@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
 func TestExtractZipRejectsPathTraversal(t *testing.T) {
@@ -41,8 +43,8 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	dstDir := filepath.Join(tempDir, "extract")
 	if err := extractZip(zipPath, dstDir); err == nil {
 		t.Fatal("expected extractZip to reject zip-slip path traversal")
-	} else if !strings.Contains(err.Error(), "illegal path in archive entry") {
-		t.Fatalf("extractZip error = %v, want illegal path error", err)
+	} else if !errors.Is(err, runtimebundle.ErrInvalidEntryName) {
+		t.Fatalf("extractZip error = %v, want ErrInvalidEntryName", err)
 	}
 
 	if fileExists(filepath.Join(tempDir, "evil.txt")) {

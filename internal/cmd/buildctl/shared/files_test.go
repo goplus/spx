@@ -17,6 +17,8 @@
 package shared
 
 import (
+	"archive/zip"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,7 +28,44 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
+
+type extractZipFixture struct {
+	name   string
+	data   string
+	method uint16
+}
+
+func writeExtractZipFixture(t *testing.T, entries ...extractZipFixture) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "archive.zip")
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(output)
+	for _, item := range entries {
+		header := &zip.FileHeader{Name: item.name, Method: item.method}
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(item.data)); err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 
 func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
 	got, err := defaultRuntimeVersion()
@@ -36,6 +75,82 @@ func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
 	if want := release.DefaultRuntimeLock().RuntimeVersion; got != want {
 		t.Fatalf("default runtime version = %q, want locked version %q", got, want)
 	}
+}
+
+func TestExtractZipWithLimitsRejectsResourceExhaustion(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []extractZipFixture
+		limits  ZipLimits
+	}{
+		{
+			name: "entry count",
+			entries: []extractZipFixture{
+				{name: "one", data: "1", method: zip.Store},
+				{name: "two", data: "2", method: zip.Store},
+			},
+			limits: ZipLimits{MaxEntries: 1},
+		},
+		{
+			name:    "entry size",
+			entries: []extractZipFixture{{name: "large", data: "12345", method: zip.Store}},
+			limits:  ZipLimits{MaxEntrySize: 4},
+		},
+		{
+			name: "total size",
+			entries: []extractZipFixture{
+				{name: "one", data: "123", method: zip.Store},
+				{name: "two", data: "456", method: zip.Store},
+			},
+			limits: ZipLimits{MaxEntrySize: 5, MaxTotalSize: 5},
+		},
+		{
+			name:    "compression ratio",
+			entries: []extractZipFixture{{name: "repetitive", data: strings.Repeat("a", 4096), method: zip.Deflate}},
+			limits:  ZipLimits{MaxCompressionRatio: 2},
+		},
+		{
+			name:    "central directory",
+			entries: []extractZipFixture{{name: "metadata", data: "1", method: zip.Store}},
+			limits:  ZipLimits{MaxCentralDirectoryBytes: 1},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			archive := writeExtractZipFixture(t, test.entries...)
+			err := ExtractZipWithLimits(archive, filepath.Join(t.TempDir(), "out"), test.limits)
+			if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+				t.Fatalf("ExtractZipWithLimits error = %v, want ErrArchiveLimit", err)
+			}
+		})
+	}
+}
+
+func TestExtractZipRejectsUnsafePathAndDestinationSymlink(t *testing.T) {
+	t.Run("path traversal", func(t *testing.T) {
+		archive := writeExtractZipFixture(t, extractZipFixture{name: "../escape", data: "bad", method: zip.Store})
+		err := ExtractZip(archive, filepath.Join(t.TempDir(), "out"))
+		if !errors.Is(err, runtimebundle.ErrInvalidEntryName) {
+			t.Fatalf("ExtractZip error = %v, want ErrInvalidEntryName", err)
+		}
+	})
+
+	t.Run("destination symlink", func(t *testing.T) {
+		dst := t.TempDir()
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(dst, "linked")); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		archive := writeExtractZipFixture(t, extractZipFixture{name: "linked/escape", data: "bad", method: zip.Store})
+		err := ExtractZip(archive, dst)
+		if !errors.Is(err, runtimebundle.ErrUnsafeArchive) {
+			t.Fatalf("ExtractZip error = %v, want ErrUnsafeArchive", err)
+		}
+		if _, err := os.Stat(filepath.Join(outside, "escape")); !os.IsNotExist(err) {
+			t.Fatalf("outside destination changed: %v", err)
+		}
+	})
 }
 
 func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testing.T) {

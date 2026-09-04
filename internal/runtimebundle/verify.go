@@ -25,11 +25,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // VerifyOptions controls verification of an untrusted ZIP. Expected, when
@@ -39,6 +41,11 @@ import (
 type VerifyOptions struct {
 	Limits   Limits
 	Expected *Bundle
+	// MaterializeSymlinksAsFiles preserves the legacy buildctl behavior for
+	// vetted toolchain archives: a ZIP symlink's validated target text is
+	// represented and extracted as an ordinary file. It never creates a
+	// filesystem symlink and is disabled by default.
+	MaterializeSymlinksAsFiles bool
 }
 
 type verifiedArchive struct {
@@ -175,6 +182,12 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 	if size > 0 && size < 22 {
 		return verifiedArchive{}, fmt.Errorf("%w: archive too small", ErrUnsafeArchive)
 	}
+	if err := preflightZipArchive(reader, size, limits); err != nil {
+		if errors.Is(err, ErrArchiveLimit) {
+			return verifiedArchive{}, err
+		}
+		return verifiedArchive{}, fmt.Errorf("%w: preflight ZIP: %v", ErrUnsafeArchive, err)
+	}
 	archive, err := zip.NewReader(reader, size)
 	if err != nil {
 		return verifiedArchive{}, fmt.Errorf("%w: parse ZIP: %v", ErrUnsafeArchive, err)
@@ -212,7 +225,8 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 			return verifiedArchive{}, fmt.Errorf("%w: case-fold/normalization collision between %q and %q", ErrUnsafeArchive, previous, name)
 		}
 
-		mode, err := safeZipMode(file, isDir)
+		materializedSymlink := options.MaterializeSymlinksAsFiles && file.Mode()&fs.ModeType == fs.ModeSymlink
+		mode, err := safeZipMode(file, isDir, options.MaterializeSymlinksAsFiles)
 		if err != nil {
 			return verifiedArchive{}, err
 		}
@@ -238,9 +252,15 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		if err := checkCompressionRatio(file, limits.MaxCompressionRatio); err != nil {
 			return verifiedArchive{}, err
 		}
-		digest, actualSize, err := hashZipEntry(file, limits.MaxEntrySize)
+		var digest string
+		var actualSize int64
+		if materializedSymlink {
+			digest, actualSize, err = hashMaterializedSymlinkEntry(file, name)
+		} else {
+			digest, actualSize, err = hashZipEntry(file, limits.MaxEntrySize)
+		}
 		if err != nil {
-			return verifiedArchive{}, fmt.Errorf("%w: entry %q: %v", ErrUnsafeArchive, name, err)
+			return verifiedArchive{}, fmt.Errorf("%w: entry %q: %w", ErrUnsafeArchive, name, err)
 		}
 		if actualSize != int64(file.UncompressedSize64) {
 			return verifiedArchive{}, fmt.Errorf("%w: entry %q declared size %d, read %d", ErrUnsafeArchive, name, file.UncompressedSize64, actualSize)
@@ -385,14 +405,20 @@ func limitWithOverflow(max int64) int64 {
 	return max + 1
 }
 
-func safeZipMode(file *zip.File, isDir bool) (uint32, error) {
+func safeZipMode(file *zip.File, isDir, materializeSymlinksAsFiles bool) (uint32, error) {
 	mode := file.Mode()
 	typeBits := mode & fs.ModeType
-	if typeBits != 0 && typeBits != fs.ModeDir {
-		return 0, fmt.Errorf("%w: entry %q has mode %v", ErrUnsupportedArchiveEntry, file.Name, mode)
-	}
 	if mode&(fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky) != 0 {
 		return 0, fmt.Errorf("%w: entry %q has special permission bits", ErrUnsupportedArchiveEntry, file.Name)
+	}
+	if typeBits == fs.ModeSymlink && materializeSymlinksAsFiles {
+		if isDir {
+			return 0, fmt.Errorf("%w: symlink entry %q uses a directory name", ErrUnsupportedArchiveEntry, file.Name)
+		}
+		return uint32(mode.Perm()), nil
+	}
+	if typeBits != 0 && typeBits != fs.ModeDir {
+		return 0, fmt.Errorf("%w: entry %q has mode %v", ErrUnsupportedArchiveEntry, file.Name, mode)
 	}
 	if isDir {
 		return uint32(fs.ModeDir) | uint32(mode.Perm()), nil
@@ -401,6 +427,55 @@ func safeZipMode(file *zip.File, isDir bool) (uint32, error) {
 		return 0, fmt.Errorf("%w: entry %q directory mode/name mismatch", ErrUnsupportedArchiveEntry, file.Name)
 	}
 	return uint32(mode.Perm()), nil
+}
+
+const maxMaterializedSymlinkBytes int64 = 4 << 10
+
+func hashMaterializedSymlinkEntry(file *zip.File, name string) (digest string, size int64, err error) {
+	if file.UncompressedSize64 > uint64(maxMaterializedSymlinkBytes) {
+		return "", 0, fmt.Errorf("%w: symlink entry %q exceeds %d bytes", ErrArchiveLimit, name, maxMaterializedSymlinkBytes)
+	}
+	input, err := file.Open()
+	if err != nil {
+		return "", 0, err
+	}
+	data, readErr := io.ReadAll(io.LimitReader(input, limitWithOverflow(maxMaterializedSymlinkBytes)))
+	closeErr := input.Close()
+	if readErr != nil {
+		return "", int64(len(data)), readErr
+	}
+	if closeErr != nil {
+		return "", int64(len(data)), closeErr
+	}
+	if int64(len(data)) > maxMaterializedSymlinkBytes {
+		return "", int64(len(data)), fmt.Errorf("%w: symlink entry %q exceeds %d bytes", ErrArchiveLimit, name, maxMaterializedSymlinkBytes)
+	}
+	if err := validateMaterializedSymlinkTarget(name, data); err != nil {
+		return "", int64(len(data)), err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), int64(len(data)), nil
+}
+
+func validateMaterializedSymlinkTarget(name string, data []byte) error {
+	if len(data) == 0 || !utf8.Valid(data) {
+		return fmt.Errorf("%w: symlink entry %q has an empty or non-UTF-8 target", ErrUnsafeArchive, name)
+	}
+	target := string(data)
+	if strings.IndexByte(target, 0) >= 0 {
+		return fmt.Errorf("%w: symlink entry %q target contains NUL", ErrUnsafeArchive, name)
+	}
+	if strings.ContainsRune(target, '\\') {
+		return fmt.Errorf("%w: symlink entry %q target contains backslash", ErrUnsafeArchive, name)
+	}
+	if path.IsAbs(target) || strings.HasPrefix(target, "//") || isDriveAbsolute(target) {
+		return fmt.Errorf("%w: symlink entry %q has an absolute target", ErrUnsafeArchive, name)
+	}
+	resolved := path.Clean(path.Join(path.Dir(name), target))
+	if resolved == ".." || strings.HasPrefix(resolved, "../") || path.IsAbs(resolved) {
+		return fmt.Errorf("%w: symlink entry %q target escapes the archive root", ErrUnsafeArchive, name)
+	}
+	return nil
 }
 
 func extractVerified(archive verifiedArchive, dst string) error {
