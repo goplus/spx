@@ -174,3 +174,16 @@ func EnqueueWithPolicy[T any](ch chan T, item T, policy QueuePolicy, stats *Queu
 		return false
 	}
 }
+
+// EnqueueWithPolicyNonBlocking applies policy without waiting for queue
+// capacity. QueueBlock is therefore treated as QueueDropNewest when the
+// queue is full. This is intended for callers, such as cooperative scheduler
+// coroutines, that must release their execution slot instead of blocking.
+// EnqueueWithPolicy retains the blocking QueueBlock behavior for callers that
+// can safely wait.
+func EnqueueWithPolicyNonBlocking[T any](ch chan T, item T, policy QueuePolicy, stats *QueueStats, dropOldestMu *sync.Mutex) bool {
+	if policy == QueueBlock {
+		policy = QueueDropNewest
+	}
+	return EnqueueWithPolicy(ch, item, policy, stats, dropOldestMu)
+}

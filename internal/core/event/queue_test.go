@@ -107,6 +107,58 @@ func TestEnqueueWithPolicyBlock(t *testing.T) {
 	}
 }
 
+func TestEnqueueWithPolicyNonBlockingDoesNotWaitForCapacity(t *testing.T) {
+	ch := make(chan int, 1)
+	ch <- 1
+	var stats QueueStats
+	stats.Reset()
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- EnqueueWithPolicyNonBlocking(ch, 2, QueueBlock, &stats, nil)
+	}()
+
+	select {
+	case accepted := <-done:
+		if accepted {
+			t.Fatal("full non-blocking QueueBlock unexpectedly accepted an item")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("non-blocking QueueBlock waited for capacity")
+	}
+	if got := <-ch; got != 1 {
+		t.Fatalf("queue retained %d, want 1", got)
+	}
+	if stats.DroppedTotal() != 1 {
+		t.Fatalf("DroppedTotal = %d, want 1", stats.DroppedTotal())
+	}
+}
+
+func TestEnqueueWithPolicyNonBlockingAcceptsWhenCapacityIsAvailable(t *testing.T) {
+	ch := make(chan int, 1)
+	var stats QueueStats
+
+	if !EnqueueWithPolicyNonBlocking(ch, 7, QueueBlock, &stats, nil) {
+		t.Fatal("available non-blocking QueueBlock capacity was rejected")
+	}
+	if got := <-ch; got != 7 {
+		t.Fatalf("queue retained %d, want 7", got)
+	}
+	if stats.EnqueuedTotal() != 1 || stats.DroppedTotal() != 0 {
+		t.Fatalf("unexpected queue stats: enqueued=%d dropped=%d", stats.EnqueuedTotal(), stats.DroppedTotal())
+	}
+}
+
+func TestEnqueueWithPolicyNonBlockingHandlesNilChannel(t *testing.T) {
+	var stats QueueStats
+	if EnqueueWithPolicyNonBlocking[int](nil, 1, QueueBlock, &stats, nil) {
+		t.Fatal("nil channel enqueue unexpectedly succeeded")
+	}
+	if stats.EnqueuedTotal() != 0 || stats.DroppedTotal() != 0 {
+		t.Fatalf("nil channel changed queue stats: enqueued=%d dropped=%d", stats.EnqueuedTotal(), stats.DroppedTotal())
+	}
+}
+
 func TestSnapshot(t *testing.T) {
 	var stats QueueStats
 	stats.Reset()
