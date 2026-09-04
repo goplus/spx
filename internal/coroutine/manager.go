@@ -47,16 +47,18 @@ type Coroutines struct {
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
-	// shutdownMu serializes fatal shutdowns. creationMu protects stopping and
-	// makes thread registration atomic with respect to shutdown transitions.
-	// Lock order is shutdownMu, runMu, then creationMu.
+	// shutdownMu serializes shutdowns; creationMu guards admission and lifecycle
+	// registration. Lock order is shutdownMu, runMu, then creationMu.
 	shutdownMu sync.Mutex
 	creationMu sync.RWMutex
 	stopping   bool
+	// Watchdog shutdowns may reopen after drain; fatal barriers require retry.
+	reopenWhenDrained bool
 
-	// threadsMu protects the thread registry.
-	threadsMu  sync.Mutex
-	allThreads map[Thread]struct{}
+	// threadsMu protects both lifecycle registries.
+	threadsMu   sync.Mutex
+	allThreads  map[Thread]struct{}
+	nativeTasks map[*nativeTask]struct{}
 
 	// schedulerMu protects threadStates and the condition-variable predicate.
 	// It also makes state changes and their corresponding enqueue atomic.
@@ -68,6 +70,7 @@ type Coroutines struct {
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
+	nextNativeID atomic.Uint64
 	// abortEpoch is even outside an abort registration barrier and odd while
 	// one is active. Create captures it before admission so a registration that
 	// overlaps AbortAll cannot escape the abort snapshot.
@@ -83,6 +86,8 @@ type Coroutines struct {
 	// executes. A scheduler-wide Current value is not sufficient to identify
 	// the caller because external goroutines can observe it concurrently.
 	goroutineThreads sync.Map // map[uint64]Thread
+	// Prevent reentry while a panic callback runs.
+	finalizingGoroutines sync.Map // map[uint64]struct{}
 }
 
 // New creates a coroutine manager. onPanic is called when a coroutine exits
@@ -91,6 +96,7 @@ func New(onPanic func(name, stack string)) *Coroutines {
 	p := &Coroutines{
 		onPanic:           onPanic,
 		allThreads:        make(map[Thread]struct{}),
+		nativeTasks:       make(map[*nativeTask]struct{}),
 		threadStates:      make(map[Thread]threadState),
 		currentJobs:       NewQueue[*WaitJob](),
 		deferredJobs:      NewQueue[*WaitJob](),

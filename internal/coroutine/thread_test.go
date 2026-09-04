@@ -18,9 +18,12 @@ package coroutine
 
 import (
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/visualfc/gid"
 )
 
 type namedThreadObj struct{}
@@ -394,7 +397,7 @@ func TestAbortAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
 	}
 }
 
-func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
+func TestRunAfterAbortAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	blocker := co.newThread("barrier-blocker")
@@ -410,8 +413,48 @@ func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
 		t.Fatal("abort barrier ran callback after timing out")
 	}
 
+	var rejectedRan atomic.Bool
+	rejected := co.CreateAndStart(true, "during-timeout", func(Thread) int {
+		rejectedRan.Store(true)
+		return 0
+	})
+	if !rejected.Stopped() {
+		t.Fatal("creation was admitted while a timed-out barrier still had work")
+	}
+	select {
+	case <-rejected.done:
+	case <-time.After(time.Second):
+		t.Fatal("rejected creation did not finish")
+	}
+	if rejectedRan.Load() {
+		t.Fatal("creation during a timed-out barrier ran user code")
+	}
+
 	co.removeThreadState(blocker)
 	co.unregisterThread(blocker)
+
+	stillRejected := co.CreateAndStart(true, "after-drain-before-recovery", func(Thread) int {
+		t.Fatal("creation ran while the manager remained quarantined")
+		return 0
+	})
+	if !stillRejected.Stopped() {
+		t.Fatal("creation was admitted after a timed-out barrier drained without recovery")
+	}
+	waitForThreadSignal(t, stillRejected.done, "quarantined creation did not finish")
+	co.stopRunawayThreads()
+	watchdogRejected := co.CreateAndStart(true, "after-watchdog-before-recovery", func(Thread) int {
+		t.Fatal("watchdog weakened a fatal barrier quarantine")
+		return 0
+	})
+	if !watchdogRejected.Stopped() {
+		t.Fatal("watchdog reopened admission after a fatal barrier timeout")
+	}
+	waitForThreadSignal(t, watchdogRejected.done, "post-watchdog quarantined creation did not finish")
+
+	// Explicit recovery reopens admission after the drain.
+	if !co.RunAfterAbortAll(time.Second, nil) {
+		t.Fatal("explicit recovery barrier did not complete after drain")
+	}
 	var nextRan atomic.Bool
 	next := co.CreateAndStart(true, "after-timeout", func(Thread) int {
 		nextRan.Store(true)
@@ -424,6 +467,163 @@ func TestRunAfterAbortAllTimeoutReopensAdmission(t *testing.T) {
 	}
 	if !nextRan.Load() {
 		t.Fatal("creation was rejected after abort barrier timed out")
+	}
+}
+
+func TestRunAfterAbortAllRejectsSynchronousPanicHandlerReentry(t *testing.T) {
+	guarded := make(chan any, 1)
+	var co *Coroutines
+	co = New(func(string, string) {
+		func() {
+			defer func() { guarded <- recover() }()
+			co.RunAfterAbortAll(time.Second, nil)
+		}()
+	})
+	co.OnInited()
+
+	worker := co.CreateAndStart(true, "panicking-worker", func(Thread) int {
+		panic("worker failure")
+	})
+	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
+	select {
+	case recovered := <-guarded:
+		const want = "coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler"
+		if recovered != want {
+			t.Fatalf("panic handler reentry panic = %v, want %q", recovered, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("panic handler did not attempt reset barrier reentry")
+	}
+	if !co.RunAfterAbortAll(time.Second, nil) {
+		t.Fatal("manager remained blocked after panic handler returned")
+	}
+}
+
+func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
+	co := New(func(string, string) {
+		panic("panic handler failure")
+	})
+	worker := co.newThread("panicking-worker")
+	co.registerThread(worker)
+
+	recovered := make(chan any, 1)
+	go func() {
+		goroutineID := gid.Get()
+		co.goroutineThreads.Store(goroutineID, worker)
+		co.runMu.Lock()
+		co.setCurrent(worker)
+		defer func() { recovered <- recover() }()
+		co.finishThread(worker, goroutineID, "worker failure")
+	}()
+
+	select {
+	case got := <-recovered:
+		if got != "panic handler failure" {
+			t.Fatalf("panic handler panic = %v, want %q", got, "panic handler failure")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("panicking handler did not return control")
+	}
+	if co.hasThreadsOtherThan(nil) {
+		t.Fatal("thread remained registered after panic handler panicked")
+	}
+	finalizing := 0
+	co.finalizingGoroutines.Range(func(any, any) bool {
+		finalizing++
+		return true
+	})
+	if finalizing != 0 {
+		t.Fatalf("finalizing goroutine markers = %d, want 0", finalizing)
+	}
+	if !co.RunAfterAbortAll(time.Second, nil) {
+		t.Fatal("manager remained blocked after panic handler panicked")
+	}
+}
+
+func TestRunAfterAbortAllWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	var releaseHandlerOnce sync.Once
+	co := New(func(string, string) {
+		close(handlerStarted)
+		<-releaseHandler
+	})
+	co.OnInited()
+
+	workerStarted := make(chan struct{})
+	releaseWorker := make(chan struct{})
+	var releaseWorkerOnce sync.Once
+	worker := co.CreateAndStart(true, "panicking-worker", func(Thread) int {
+		close(workerStarted)
+		<-releaseWorker
+		panic("worker failure")
+	})
+	t.Cleanup(func() {
+		releaseWorkerOnce.Do(func() { close(releaseWorker) })
+		releaseHandlerOnce.Do(func() { close(releaseHandler) })
+		if !co.AbortAllAndWait(time.Second) {
+			t.Error("panicking worker did not drain during cleanup")
+		}
+	})
+	waitForThreadSignal(t, workerStarted, "panicking worker did not start")
+
+	if co.RunAfterAbortAll(20*time.Millisecond, nil) {
+		t.Fatal("abort barrier reported success while the worker ignored cancellation")
+	}
+	releaseWorkerOnce.Do(func() { close(releaseWorker) })
+	waitForThreadSignal(t, handlerStarted, "panic handler did not start")
+
+	var rejectedRan atomic.Bool
+	rejected := co.CreateAndStart(true, "during-panic-handler", func(Thread) int {
+		rejectedRan.Store(true)
+		return 0
+	})
+	if !rejected.Stopped() {
+		t.Fatal("creation was admitted while the panic handler was running")
+	}
+	waitForThreadSignal(t, rejected.done, "rejected creation did not finish")
+	if rejectedRan.Load() {
+		t.Fatal("creation ran while the panic handler was running")
+	}
+
+	barrierStarted := make(chan struct{})
+	barrierCallback := make(chan struct{})
+	barrierResult := make(chan bool, 1)
+	go func() {
+		close(barrierStarted)
+		barrierResult <- co.RunAfterAbortAll(time.Second, func() {
+			close(barrierCallback)
+		})
+	}()
+	waitForThreadSignal(t, barrierStarted, "second abort barrier did not start")
+	select {
+	case <-barrierCallback:
+		t.Fatal("second abort barrier ran its callback while the panic handler was running")
+	case result := <-barrierResult:
+		t.Fatalf("second abort barrier returned %v while the panic handler was running", result)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	releaseHandlerOnce.Do(func() { close(releaseHandler) })
+	waitForThreadSignal(t, barrierCallback, "second abort barrier did not run its callback after the panic handler returned")
+	select {
+	case result := <-barrierResult:
+		if !result {
+			t.Fatal("second abort barrier timed out after the panic handler returned")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second abort barrier did not return after the panic handler returned")
+	}
+	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
+
+	var admittedRan atomic.Bool
+	admitted := co.CreateAndStart(true, "after-panic-handler", func(Thread) int {
+		admittedRan.Store(true)
+		return 0
+	})
+	waitForThreadSignal(t, admitted.done, "creation remained blocked after the panic handler returned")
+	if !admittedRan.Load() {
+		t.Fatal("creation was rejected after the panic handler returned")
 	}
 }
 

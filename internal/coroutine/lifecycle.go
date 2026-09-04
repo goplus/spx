@@ -114,14 +114,12 @@ func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
 	return p.RunAfterAbortAll(timeout, nil)
 }
 
-// RunAfterAbortAll closes coroutine admission, aborts and drains every
-// registered thread, then runs call while admission remains closed. It must be
-// called outside a managed coroutine. If the timeout expires, call is not run.
-// The callback must not create a coroutine through this manager because the
-// admission lock remains held until it returns.
+// RunAfterAbortAll drains registered threads, then runs call with admission
+// closed. Call it outside managed code; a timeout leaves admission closed until
+// a later successful call. call must not create a coroutine.
 func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
-	if p.currentCoroutineThread() != nil {
-		panic("coroutine: RunAfterAbortAll called from a managed coroutine")
+	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
+		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
 	}
 	p.shutdownMu.Lock()
 	defer p.shutdownMu.Unlock()
@@ -132,13 +130,12 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 	completed := p.waitForThreadsToStop(timeout, nil)
 
 	p.creationMu.Lock()
-	defer func() {
-		p.endStoppingLocked()
-		p.creationMu.Unlock()
-	}()
+	defer p.creationMu.Unlock()
 	if !completed || p.hasThreadsOtherThan(nil) {
+		// Keep timed-out barriers closed until explicit recovery.
 		return false
 	}
+	defer p.endStoppingLocked()
 	if call != nil {
 		call()
 	}
@@ -146,14 +143,22 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 }
 
 func (p *Coroutines) beginStoppingLocked() {
-	p.stopping = true
-	p.abortEpoch.Add(1)
+	if !p.stopping {
+		p.stopping = true
+		p.abortEpoch.Add(1)
+	}
+	// Each barrier owns recovery state until it completes.
+	p.reopenWhenDrained = false
 	p.abortAllLocked()
 }
 
 func (p *Coroutines) endStoppingLocked() {
+	if !p.stopping {
+		return
+	}
 	p.abortEpoch.Add(1)
 	p.stopping = false
+	p.reopenWhenDrained = false
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
@@ -220,6 +225,11 @@ func (p *Coroutines) callerThread() Thread {
 	return value.(Thread)
 }
 
+func (p *Coroutines) isFinalizingCaller() bool {
+	_, ok := p.finalizingGoroutines.Load(gid.Get())
+	return ok
+}
+
 func (p *Coroutines) newThread(obj ThreadObj) Thread {
 	th := &threadImpl{
 		Obj:           obj,
@@ -267,6 +277,43 @@ func (p *Coroutines) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
 	delete(p.allThreads, th)
 	p.threadsMu.Unlock()
+	p.maybeReopenAfterDrain()
+}
+
+// admitNativeTask registers a WaitToDo worker under the admission barrier.
+func (p *Coroutines) admitNativeTask(me Thread) *nativeTask {
+	p.creationMu.RLock()
+	defer p.creationMu.RUnlock()
+	if p.stopping || p.abortEpoch.Load()&1 != 0 || p.isThreadCanceled(me) {
+		return nil
+	}
+	task := &nativeTask{id: p.nextNativeID.Add(1)}
+	p.threadsMu.Lock()
+	p.nativeTasks[task] = struct{}{}
+	p.threadsMu.Unlock()
+	return task
+}
+
+func (p *Coroutines) finishNativeTask(task *nativeTask) {
+	if task == nil {
+		return
+	}
+	p.threadsMu.Lock()
+	delete(p.nativeTasks, task)
+	p.threadsMu.Unlock()
+	p.maybeReopenAfterDrain()
+}
+
+func (p *Coroutines) maybeReopenAfterDrain() {
+	p.creationMu.Lock()
+	p.maybeReopenAfterDrainLocked()
+	p.creationMu.Unlock()
+}
+
+func (p *Coroutines) maybeReopenAfterDrainLocked() {
+	if p.stopping && p.reopenWhenDrained && !p.hasThreadsOtherThan(nil) {
+		p.endStoppingLocked()
+	}
 }
 
 func (p *Coroutines) snapshotThreads() []Thread {
@@ -287,7 +334,7 @@ func (p *Coroutines) hasThreadsOtherThan(skip Thread) bool {
 			return true
 		}
 	}
-	return false
+	return len(p.nativeTasks) != 0
 }
 
 func (p *Coroutines) waitForThreadsToStopFromCoroutine(timeout stime.Duration, caller Thread) bool {
@@ -353,8 +400,10 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	close(th.done)
 	p.removeThreadState(th)
 	p.setCurrent(nil)
-	p.unregisterThread(th)
+	defer p.unregisterThread(th)
 	p.runMu.Unlock()
+	p.finalizingGoroutines.Store(gid, struct{}{})
+	defer p.finalizingGoroutines.Delete(gid)
 	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
 }

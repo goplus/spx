@@ -39,6 +39,8 @@ const (
 	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
+	// Bound watchdog shutdown; late workers reopen after draining.
+	runawayShutdownTimeout = updateWatchdogTimeout
 )
 
 // Update processes queued wait jobs and resumes eligible coroutines.
@@ -111,23 +113,27 @@ func (p *Coroutines) stopRunawayThreads() {
 
 	p.runMu.Lock()
 	p.creationMu.Lock()
+	wasStopping := p.stopping
+	reopenWhenDrained := p.reopenWhenDrained
 	p.beginStoppingLocked()
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
 
-	for {
-		p.waitForThreadsToStop(0, nil)
+	completed := p.waitForThreadsToStop(runawayShutdownTimeout, nil)
 
-		// Close the race between observing an empty registry and a concurrent
-		// registration. Creations during shutdown are rejected as canceled.
-		p.creationMu.Lock()
-		if !p.hasThreadsOtherThan(nil) {
-			p.endStoppingLocked()
-			p.creationMu.Unlock()
-			return
-		}
-		p.creationMu.Unlock()
+	// Recheck admission after the bounded wait; late workers keep it closed.
+	p.creationMu.Lock()
+	if wasStopping {
+		// Preserve a fatal barrier's quarantine and any prior watchdog policy.
+		p.reopenWhenDrained = reopenWhenDrained
+		p.maybeReopenAfterDrainLocked()
+	} else if completed && !p.hasThreadsOtherThan(nil) {
+		p.endStoppingLocked()
+	} else {
+		p.reopenWhenDrained = true
+		p.maybeReopenAfterDrainLocked()
 	}
+	p.creationMu.Unlock()
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {

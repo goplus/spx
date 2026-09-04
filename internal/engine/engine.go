@@ -277,18 +277,13 @@ func Panicf(format string, args ...any) {
 // Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
 	co := gco
-	requestReset := func() {
+	// Drain off-thread while the panic caller unwinds.
+	go requestResetAfterCoroutinesStop(co, 2*stime.Second, func() {
 		extMgr.RequestReset(exitCode)
-	}
+	})
 	if co.IsInCoroutine() {
-		// RequestReset synchronously calls back into Game.reset on the Web main
-		// thread. Coordinate it outside the managed caller so that caller also
-		// unregisters before reset clears shared runtime state.
-		go requestResetAfterCoroutinesStop(co, 2*stime.Second, requestReset)
 		co.Abort()
-		return
 	}
-	requestResetAfterCoroutinesStop(co, 2*stime.Second, requestReset)
 }
 
 func requestResetAfterCoroutinesStop(co *coroutine.Coroutines, timeout stime.Duration, requestReset func()) bool {
