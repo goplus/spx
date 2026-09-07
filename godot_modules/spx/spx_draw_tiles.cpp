@@ -45,6 +45,7 @@
 #include "spx_base_mgr.h"
 #include "spx_engine.h"
 #include "spx_ext_mgr.h"
+#include "spx_image_texture.h"
 #include "spx_res_mgr.h"
 #include "spx_scene_mgr.h"
 
@@ -607,9 +608,7 @@ Ref<ImageTexture> SpxDrawTiles::_get_or_create_scaled_texture(Ref<Texture2D> tex
 	// Forced scaling will cause image rendering distortion
 	//img->resize(default_cell_size.x, default_cell_size.y, Image::INTERPOLATE_LANCZOS);
 
-	Ref<ImageTexture> scaled_tex;
-	scaled_tex.instantiate();
-	scaled_tex = scaled_tex->create_from_image(img);
+	Ref<ImageTexture> scaled_tex = SpxImageTexture::create_from_image(img);
 	texture_scaled_cache_map[texture] = scaled_tex;
 
 	if (path_cached_textures_bimap.has_value(texture)) {

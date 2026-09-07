@@ -49,6 +49,7 @@
 #include "project_font_transaction.h"
 #include "spx_engine.h"
 #include "spx_image_loader_svg.h"
+#include "spx_image_texture.h"
 #include "spx_platform_mgr.h"
 #include "spx_svg_utils.h"
 #include "spx_theme_font.h"
@@ -293,7 +294,7 @@ Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path) {
 
 	_load_image(path, image);
 
-	Ref<ImageTexture> texture = ImageTexture::create_from_image(image);
+	Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image);
 	cached_texture.insert(path, texture);
 	return texture;
 }

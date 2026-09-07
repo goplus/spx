@@ -6,6 +6,7 @@
 #include "spx.h"
 #include "spx_engine.h"
 #include "spx_image_loader_svg.h"
+#include "spx_image_texture.h"
 #include "spx_res_mgr.h"
 
 SvgManager *SvgManager::get_singleton() {
@@ -165,9 +166,7 @@ Ref<ImageTexture> SvgManager::_load_image(const String &path /*engine path*/, in
 	image.instantiate();
 	Error err = SpxImageLoaderSVG::load_image(path, image, ImageFormatLoader::FLAG_NONE, (float)scale);
 	if (err == OK) {
-		Ref<ImageTexture> texture;
-		texture.instantiate();
-		texture->set_image(image);
+		Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image);
 		texture->set_path_cache(path); // cache raw path, not engine path
 
 		if (!svg_image_raw_size_cache.has(path)) {
