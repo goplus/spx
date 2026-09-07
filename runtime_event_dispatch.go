@@ -77,43 +77,49 @@ func sinksInScratchTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	}
 
 	shapes := game.getAllShapes()
-	liveSprites := make(map[*SpriteImpl]struct{}, len(shapes))
+	// Group by links into the immutable snapshot instead of allocating a slice
+	// per sprite. Clone-heavy broadcasts otherwise allocate hundreds of small
+	// slices before any handler runs, creating avoidable GC work on Web.
+	// Indices are one-based so zero is the end of a group.
+	heads := make(map[*SpriteImpl]int, len(shapes))
 	for _, shape := range shapes {
 		if sprite, ok := shape.(*SpriteImpl); ok {
-			liveSprites[sprite] = struct{}{}
+			heads[sprite] = 0
 		}
 	}
-
-	bySprite := make(map[*SpriteImpl][]eventSink, len(liveSprites))
-	unknown := make([]eventSink, 0)
-	stage := make([]eventSink, 0)
-	for _, sink := range sinks {
-		switch owner := sink.Owner.(type) {
+	next := make([]int, len(sinks))
+	unknown, stage := 0, 0
+	for i := len(sinks) - 1; i >= 0; i-- {
+		switch owner := sinks[i].Owner.(type) {
 		case *SpriteImpl:
-			if _, ok := liveSprites[owner]; ok {
-				bySprite[owner] = append(bySprite[owner], sink)
-			} else {
-				unknown = append(unknown, sink)
+			if head, live := heads[owner]; live {
+				next[i], heads[owner] = head, i+1
+				continue
 			}
 		case *Game:
 			if owner == game {
-				stage = append(stage, sink)
-			} else {
-				unknown = append(unknown, sink)
+				next[i], stage = stage, i+1
+				continue
 			}
-		default:
-			unknown = append(unknown, sink)
 		}
+		next[i], unknown = unknown, i+1
 	}
 
 	ordered := make([]eventSink, 0, len(sinks))
-	for i := len(shapes) - 1; i >= 0; i-- {
-		if sprite, ok := shapes[i].(*SpriteImpl); ok {
-			ordered = append(ordered, bySprite[sprite]...)
+	appendGroup := func(head int) {
+		for head != 0 {
+			ordered = append(ordered, sinks[head-1])
+			head = next[head-1]
 		}
 	}
-	ordered = append(ordered, unknown...)
-	return append(ordered, stage...)
+	for i := len(shapes) - 1; i >= 0; i-- {
+		if sprite, ok := shapes[i].(*SpriteImpl); ok {
+			appendGroup(heads[sprite])
+		}
+	}
+	appendGroup(unknown)
+	appendGroup(stage)
+	return ordered
 }
 
 func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
