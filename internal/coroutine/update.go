@@ -39,8 +39,6 @@ const (
 	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
-	// Bound watchdog shutdown; late workers reopen after draining.
-	runawayShutdownTimeout = updateWatchdogTimeout
 )
 
 // Update processes queued wait jobs and resumes eligible coroutines.
@@ -108,32 +106,25 @@ updateLoop:
 
 func (p *Coroutines) stopRunawayThreads() {
 	// This remains cooperative: an active thread must release runMu first.
-	p.shutdownMu.Lock()
+	// Another shutdown already owns cancellation and recovery. Waiting for its
+	// drain here would block the engine callback just like waiting for our own.
+	if !p.shutdownMu.TryLock() {
+		return
+	}
 	defer p.shutdownMu.Unlock()
 
 	p.runMu.Lock()
 	p.creationMu.Lock()
-	wasStopping := p.stopping
-	reopenWhenDrained := p.reopenWhenDrained
+	// Preserve an existing fatal barrier's quarantine. Otherwise the last
+	// exiting thread or native worker will reopen admission.
+	reopenWhenDrained := !p.stopping || p.reopenWhenDrained
 	p.beginStoppingLocked()
+	p.reopenWhenDrained = reopenWhenDrained
+	p.maybeReopenAfterDrainLocked()
 	p.creationMu.Unlock()
 	p.runMu.Unlock()
-
-	completed := p.waitForThreadsToStop(runawayShutdownTimeout, nil)
-
-	// Recheck admission after the bounded wait; late workers keep it closed.
-	p.creationMu.Lock()
-	if wasStopping {
-		// Preserve a fatal barrier's quarantine and any prior watchdog policy.
-		p.reopenWhenDrained = reopenWhenDrained
-		p.maybeReopenAfterDrainLocked()
-	} else if completed && !p.hasThreadsOtherThan(nil) {
-		p.endStoppingLocked()
-	} else {
-		p.reopenWhenDrained = true
-		p.maybeReopenAfterDrainLocked()
-	}
-	p.creationMu.Unlock()
+	// Do not wait for cleanup here. A timed wait can suspend the Go runtime
+	// inside a direct WASM export, returning to JS before Update has finished.
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {

@@ -526,8 +526,8 @@ func TestUpdateWatchdogStopsRecursiveSpawnChainOnRetry(t *testing.T) {
 	if stats.TaskCounts != 0 {
 		t.Fatalf("processed %d wait jobs, want a retry-only spawn chain", stats.TaskCounts)
 	}
-	if remaining := len(co.snapshotThreads()); remaining != 0 {
-		t.Fatalf("%d managed threads remained after watchdog shutdown", remaining)
+	if !co.waitForThreadsToStop(time.Second, nil) {
+		t.Fatal("managed threads did not drain after watchdog cancellation")
 	}
 	keepSpawning.Store(false)
 
@@ -571,7 +571,7 @@ func TestUpdateWatchdogStopsRecursiveSpawnChainOnRetry(t *testing.T) {
 	}
 }
 
-func TestRunawayShutdownRejectsThreadCreation(t *testing.T) {
+func TestRunawayShutdownReturnsBeforeDrainAndRejectsThreadCreation(t *testing.T) {
 	co := New(nil)
 	blocker := co.newThread("shutdown-blocker")
 	co.registerThread(blocker)
@@ -592,12 +592,13 @@ func TestRunawayShutdownRejectsThreadCreation(t *testing.T) {
 		close(shutdownDone)
 	}()
 
-	deadline := time.Now().Add(time.Second)
-	for !blocker.Stopped() {
-		if time.Now().After(deadline) {
-			t.Fatal("runaway shutdown did not reach its abort snapshot")
-		}
-		runtime.Gosched()
+	select {
+	case <-shutdownDone:
+	case <-time.After(time.Second):
+		t.Fatal("runaway shutdown waited for the canceled thread to exit")
+	}
+	if !blocker.Stopped() {
+		t.Fatal("runaway shutdown did not cancel the registered thread")
 	}
 
 	var ran atomic.Bool
@@ -620,11 +621,6 @@ func TestRunawayShutdownRejectsThreadCreation(t *testing.T) {
 	}
 
 	removeBlocker()
-	select {
-	case <-shutdownDone:
-	case <-time.After(time.Second):
-		t.Fatal("runaway shutdown did not finish")
-	}
 	if ran.Load() {
 		t.Fatal("thread created during runaway shutdown ran user code")
 	}
@@ -687,7 +683,7 @@ func TestRunawayShutdownAllowsCanceledCleanupToCreate(t *testing.T) {
 	}
 	select {
 	case <-cleanupCreated:
-	default:
+	case <-time.After(time.Second):
 		t.Fatal("canceled coroutine cleanup did not finish creating its child")
 	}
 	if cleanupChildRan.Load() {

@@ -211,7 +211,7 @@ func TestRunawayShutdownDoesNotBlockOnNativeWorker(t *testing.T) {
 	}()
 	select {
 	case <-shutdownDone:
-	case <-time.After(2 * runawayShutdownTimeout):
+	case <-time.After(time.Second):
 		t.Fatal("runaway shutdown blocked on an uncooperative native worker")
 	}
 

@@ -368,6 +368,13 @@ func TestAbortAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
 		runtime.Gosched()
 	}
 
+	co.stopRunawayThreads()
+	select {
+	case <-abortDone:
+		t.Fatal("watchdog waited for the active abort barrier to time out")
+	default:
+	}
+
 	var childRan atomic.Bool
 	child := co.Create("during-barrier", func(Thread) int {
 		childRan.Store(true)
