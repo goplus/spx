@@ -39,8 +39,6 @@ const (
 	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
-	// Bound watchdog shutdown; late workers reopen after draining.
-	runawayShutdownTimeout = updateWatchdogTimeout
 )
 
 // Update processes queued wait jobs and resumes eligible coroutines.
@@ -95,8 +93,9 @@ updateLoop:
 		}
 
 		if !p.updateWatchdogNow().Before(state.watchdogDeadline) {
-			log.Warn("engine update exceeded 1 second - stopping runaway scripts (waitMainCount=%d)", stats.WaitMainCount)
-			p.stopRunawayThreads()
+			// A slow frame is not necessarily a runaway script. Leave queued work
+			// for the next Update without canceling scripts or waiting for cleanup.
+			log.Warn("engine update exceeded 1 second - deferring remaining work to next frame (waitMainCount=%d)", stats.WaitMainCount)
 			break updateLoop
 		}
 	}
@@ -104,36 +103,6 @@ updateLoop:
 	stats.LoopTime = elapsedMillis(start)
 	stats.LoopIterations = iterations
 	p.promoteDeferredJobs(stats)
-}
-
-func (p *Coroutines) stopRunawayThreads() {
-	// This remains cooperative: an active thread must release runMu first.
-	p.shutdownMu.Lock()
-	defer p.shutdownMu.Unlock()
-
-	p.runMu.Lock()
-	p.creationMu.Lock()
-	wasStopping := p.stopping
-	reopenWhenDrained := p.reopenWhenDrained
-	p.beginStoppingLocked()
-	p.creationMu.Unlock()
-	p.runMu.Unlock()
-
-	completed := p.waitForThreadsToStop(runawayShutdownTimeout, nil)
-
-	// Recheck admission after the bounded wait; late workers keep it closed.
-	p.creationMu.Lock()
-	if wasStopping {
-		// Preserve a fatal barrier's quarantine and any prior watchdog policy.
-		p.reopenWhenDrained = reopenWhenDrained
-		p.maybeReopenAfterDrainLocked()
-	} else if completed && !p.hasThreadsOtherThan(nil) {
-		p.endStoppingLocked()
-	} else {
-		p.reopenWhenDrained = true
-		p.maybeReopenAfterDrainLocked()
-	}
-	p.creationMu.Unlock()
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {

@@ -441,15 +441,6 @@ func TestRunAfterAbortAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 		t.Fatal("creation was admitted after a timed-out barrier drained without recovery")
 	}
 	waitForThreadSignal(t, stillRejected.done, "quarantined creation did not finish")
-	co.stopRunawayThreads()
-	watchdogRejected := co.CreateAndStart(true, "after-watchdog-before-recovery", func(Thread) int {
-		t.Fatal("watchdog weakened a fatal barrier quarantine")
-		return 0
-	})
-	if !watchdogRejected.Stopped() {
-		t.Fatal("watchdog reopened admission after a fatal barrier timeout")
-	}
-	waitForThreadSignal(t, watchdogRejected.done, "post-watchdog quarantined creation did not finish")
 
 	// Explicit recovery reopens admission after the drain.
 	if !co.RunAfterAbortAll(time.Second, nil) {
