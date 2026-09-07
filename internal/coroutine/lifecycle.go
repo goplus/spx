@@ -147,8 +147,6 @@ func (p *Coroutines) beginStoppingLocked() {
 		p.stopping = true
 		p.abortEpoch.Add(1)
 	}
-	// Each barrier owns recovery state until it completes.
-	p.reopenWhenDrained = false
 	p.abortAllLocked()
 }
 
@@ -158,7 +156,6 @@ func (p *Coroutines) endStoppingLocked() {
 	}
 	p.abortEpoch.Add(1)
 	p.stopping = false
-	p.reopenWhenDrained = false
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
@@ -277,7 +274,6 @@ func (p *Coroutines) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
 	delete(p.allThreads, th)
 	p.threadsMu.Unlock()
-	p.maybeReopenAfterDrain()
 }
 
 // admitNativeTask registers a WaitToDo worker under the admission barrier.
@@ -301,19 +297,6 @@ func (p *Coroutines) finishNativeTask(task *nativeTask) {
 	p.threadsMu.Lock()
 	delete(p.nativeTasks, task)
 	p.threadsMu.Unlock()
-	p.maybeReopenAfterDrain()
-}
-
-func (p *Coroutines) maybeReopenAfterDrain() {
-	p.creationMu.Lock()
-	p.maybeReopenAfterDrainLocked()
-	p.creationMu.Unlock()
-}
-
-func (p *Coroutines) maybeReopenAfterDrainLocked() {
-	if p.stopping && p.reopenWhenDrained && !p.hasThreadsOtherThan(nil) {
-		p.endStoppingLocked()
-	}
 }
 
 func (p *Coroutines) snapshotThreads() []Thread {

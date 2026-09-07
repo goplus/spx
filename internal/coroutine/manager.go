@@ -52,8 +52,6 @@ type Coroutines struct {
 	shutdownMu sync.Mutex
 	creationMu sync.RWMutex
 	stopping   bool
-	// Watchdog shutdowns may reopen after drain; fatal barriers require retry.
-	reopenWhenDrained bool
 
 	// threadsMu protects both lifecycle registries.
 	threadsMu   sync.Mutex

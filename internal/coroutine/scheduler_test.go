@@ -458,20 +458,70 @@ func TestUpdateWatchdogDeadlineResetsWhileAwaitingInitialization(t *testing.T) {
 	}
 }
 
-func TestUpdateWatchdogStopsRecursiveSpawnChainOnRetry(t *testing.T) {
+func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	t.Cleanup(func() {
+		if !co.AbortAllAndWait(time.Second) {
+			t.Error("coroutines did not stop during cleanup")
+		}
+	})
+
+	resumed := make(chan struct{})
+	thread := co.CreateAndStart(true, "slow-frame", func(me Thread) int {
+		co.WaitYield(me)
+		close(resumed)
+		return 0
+	})
+	waitForThreadSignal(t, thread.yieldedOrDone, "script did not reach its yield")
+
+	queuedRan, deferredRan := false, false
+	co.enqueueJob(&WaitJob{Type: waitTypeMainThread, Call: func() { queuedRan = true }})
+	co.deferredJobs.PushBack(&WaitJob{Type: waitTypeYield, Call: func() { deferredRan = true }})
+
+	now := time.Now()
+	co.updateWatchdogNow = func() time.Time { return now }
+	co.enqueuePriorityJob(&WaitJob{Type: waitTypeMainThread, Call: func() {
+		now = now.Add(updateWatchdogTimeout)
+	}})
+	co.Update()
+
+	if thread.Stopped() {
+		t.Fatal("watchdog canceled a script after a slow frame")
+	}
+	select {
+	case <-resumed:
+		t.Fatal("script resumed after the frame budget was exhausted")
+	default:
+	}
+	if queuedRan || deferredRan {
+		t.Fatal("Update processed remaining work after the frame budget was exhausted")
+	}
+
+	created := co.Create("after-slow-frame", func(Thread) int { return 0 })
+	if created.Stopped() {
+		t.Fatal("watchdog rejected a new script")
+	}
+	co.Update()
+	waitForThreadSignal(t, resumed, "script did not resume on the next Update")
+	if !queuedRan || !deferredRan {
+		t.Fatal("queued or deferred work was lost after a slow frame")
+	}
+}
+
+func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
 	co := New(nil)
 	co.OnInited()
-
 	clockStart := time.Now()
 	var clockCalls atomic.Int64
 	co.updateWatchdogNow = func() time.Time {
 		if clockCalls.Add(1) == 1 {
 			return clockStart
 		}
-		return clockStart.Add(updateWatchdogTimeout + time.Nanosecond)
+		return clockStart.Add(updateWatchdogTimeout)
 	}
 
 	var keepSpawning atomic.Bool
@@ -500,194 +550,16 @@ func TestUpdateWatchdogStopsRecursiveSpawnChainOnRetry(t *testing.T) {
 		co.Update()
 		close(updateDone)
 	}()
-
-	select {
-	case <-updateDone:
-	case <-time.After(time.Second):
-		keepSpawning.Store(false)
-		if !co.AbortAllAndWait(time.Second) {
-			t.Fatal("recursive spawn chain did not stop after the watchdog test timed out")
-		}
-		select {
-		case <-updateDone:
-		case <-time.After(time.Second):
-			t.Fatal("Update remained blocked after recursive spawn chain cleanup")
-		}
-		t.Fatal("Update did not stop a recursive spawn chain after the watchdog expired")
-	}
-
-	if got := clockCalls.Load(); got < 2 {
-		t.Fatalf("watchdog clock was called %d times, want a deadline check after a wait retry", got)
-	}
-	if got := spawned.Load(); got == 0 {
-		t.Fatal("recursive spawn chain never started")
-	}
-	stats := co.GetLastUpdateStats()
-	if stats.TaskCounts != 0 {
-		t.Fatalf("processed %d wait jobs, want a retry-only spawn chain", stats.TaskCounts)
-	}
-	if !co.waitForThreadsToStop(time.Second, nil) {
-		t.Fatal("managed threads did not drain after watchdog cancellation")
-	}
+	waitForThreadSignal(t, updateDone, "Update did not return after a retry exhausted the frame budget")
 	keepSpawning.Store(false)
-
-	co.updateWatchdogNow = time.Now
-	resumed := make(chan struct{})
-	thread := co.Create("after-watchdog", func(me Thread) int {
-		co.WaitYield(me)
-		close(resumed)
-		return 0
-	})
-	deadline := time.Now().Add(time.Second)
-	for !thread.suspended.Load() {
-		if time.Now().After(deadline) {
-			t.Fatal("post-watchdog coroutine did not reach its yield")
-		}
-		runtime.Gosched()
-	}
-
-	recoveryDone := make(chan struct{})
-	go func() {
-		co.Update()
-		close(recoveryDone)
-	}()
-	select {
-	case <-recoveryDone:
-	case <-time.After(time.Second):
-		if !co.AbortAllAndWait(time.Second) {
-			t.Fatal("post-watchdog coroutine did not stop during recovery cleanup")
-		}
-		select {
-		case <-recoveryDone:
-		case <-time.After(time.Second):
-			t.Fatal("recovery Update remained blocked after cleanup")
-		}
-		t.Fatal("scheduler did not complete an Update after watchdog recovery")
-	}
-	select {
-	case <-resumed:
-	default:
-		t.Fatal("scheduler did not resume a coroutine after watchdog recovery")
-	}
-}
-
-func TestRunawayShutdownReturnsBeforeDrainAndRejectsThreadCreation(t *testing.T) {
-	co := New(nil)
-	blocker := co.newThread("shutdown-blocker")
-	co.registerThread(blocker)
-	removeBlocker := func() {
-		co.removeThreadState(blocker)
-		co.unregisterThread(blocker)
-	}
-	t.Cleanup(func() {
-		removeBlocker()
-		if !co.AbortAllAndWait(time.Second) {
-			t.Error("coroutines did not stop during cleanup")
-		}
-	})
-
-	shutdownDone := make(chan struct{})
-	go func() {
-		co.stopRunawayThreads()
-		close(shutdownDone)
-	}()
-
-	select {
-	case <-shutdownDone:
-	case <-time.After(time.Second):
-		t.Fatal("runaway shutdown waited for the canceled thread to exit")
-	}
-	if !blocker.Stopped() {
-		t.Fatal("runaway shutdown did not cancel the registered thread")
-	}
-
-	var ran atomic.Bool
-	created := make(chan Thread, 1)
-	go func() {
-		created <- co.Create("after-shutdown", func(Thread) int {
-			ran.Store(true)
-			return 0
-		})
-	}()
-
-	var rejected Thread
-	select {
-	case rejected = <-created:
-	case <-time.After(time.Second):
-		t.Fatal("thread creation remained blocked during runaway shutdown")
-	}
-	if !rejected.Stopped() {
-		t.Fatal("thread created during runaway shutdown was not canceled")
-	}
-
-	removeBlocker()
-	if ran.Load() {
-		t.Fatal("thread created during runaway shutdown ran user code")
-	}
-
-	afterShutdown := make(chan struct{})
-	co.Create("after-shutdown", func(Thread) int {
-		close(afterShutdown)
-		return 0
-	})
-	select {
-	case <-afterShutdown:
-	case <-time.After(time.Second):
-		t.Fatal("thread created after runaway shutdown did not run")
-	}
 	if !co.waitForThreadsToStop(time.Second, nil) {
-		t.Fatal("post-shutdown thread did not complete")
+		t.Fatal("recursive spawn chain did not finish")
 	}
-}
-
-func TestRunawayShutdownAllowsCanceledCleanupToCreate(t *testing.T) {
-	co := New(nil)
-	co.OnInited()
-	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
-			t.Error("coroutines did not stop during cleanup")
-		}
-	})
-
-	var cleanupChildRan atomic.Bool
-	cleanupCreated := make(chan struct{})
-	thread := co.Create("worker", func(me Thread) int {
-		defer func() {
-			co.Create("cleanup-child", func(Thread) int {
-				cleanupChildRan.Store(true)
-				return 0
-			})
-			close(cleanupCreated)
-		}()
-		co.WaitYield(me)
-		return 0
-	})
-
-	deadline := time.Now().Add(time.Second)
-	for !thread.suspended.Load() {
-		if time.Now().After(deadline) {
-			t.Fatal("worker did not reach its yield")
-		}
-		runtime.Gosched()
+	if clockCalls.Load() < 2 || spawned.Load() == 0 {
+		t.Fatal("test did not exercise the watchdog on a recursive spawn retry")
 	}
-
-	shutdownDone := make(chan struct{})
-	go func() {
-		co.stopRunawayThreads()
-		close(shutdownDone)
-	}()
-	select {
-	case <-shutdownDone:
-	case <-time.After(time.Second):
-		t.Fatal("runaway shutdown deadlocked with coroutine cleanup")
-	}
-	select {
-	case <-cleanupCreated:
-	case <-time.After(time.Second):
-		t.Fatal("canceled coroutine cleanup did not finish creating its child")
-	}
-	if cleanupChildRan.Load() {
-		t.Fatal("child created by canceled cleanup ran during shutdown")
+	if stats := co.GetLastUpdateStats(); stats.TaskCounts != 0 {
+		t.Fatalf("processed %d wait jobs, want a retry-only spawn chain", stats.TaskCounts)
 	}
 }
 

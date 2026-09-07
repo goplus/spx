@@ -93,8 +93,9 @@ updateLoop:
 		}
 
 		if !p.updateWatchdogNow().Before(state.watchdogDeadline) {
-			log.Warn("engine update exceeded 1 second - stopping runaway scripts (waitMainCount=%d)", stats.WaitMainCount)
-			p.stopRunawayThreads()
+			// A slow frame is not necessarily a runaway script. Leave queued work
+			// for the next Update without canceling scripts or waiting for cleanup.
+			log.Warn("engine update exceeded 1 second - deferring remaining work to next frame (waitMainCount=%d)", stats.WaitMainCount)
 			break updateLoop
 		}
 	}
@@ -102,29 +103,6 @@ updateLoop:
 	stats.LoopTime = elapsedMillis(start)
 	stats.LoopIterations = iterations
 	p.promoteDeferredJobs(stats)
-}
-
-func (p *Coroutines) stopRunawayThreads() {
-	// This remains cooperative: an active thread must release runMu first.
-	// Another shutdown already owns cancellation and recovery. Waiting for its
-	// drain here would block the engine callback just like waiting for our own.
-	if !p.shutdownMu.TryLock() {
-		return
-	}
-	defer p.shutdownMu.Unlock()
-
-	p.runMu.Lock()
-	p.creationMu.Lock()
-	// Preserve an existing fatal barrier's quarantine. Otherwise the last
-	// exiting thread or native worker will reopen admission.
-	reopenWhenDrained := !p.stopping || p.reopenWhenDrained
-	p.beginStoppingLocked()
-	p.reopenWhenDrained = reopenWhenDrained
-	p.maybeReopenAfterDrainLocked()
-	p.creationMu.Unlock()
-	p.runMu.Unlock()
-	// Do not wait for cleanup here. A timed wait can suspend the Go runtime
-	// inside a direct WASM export, returning to JS before Update has finished.
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {

@@ -1,7 +1,6 @@
 package coroutine
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -171,91 +170,4 @@ func TestRunAfterAbortAllWaitsForWaitToDoWorker(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("post-drain coroutine did not finish")
 	}
-}
-
-func TestRunawayShutdownDoesNotBlockOnNativeWorker(t *testing.T) {
-	co := New(nil)
-	co.OnInited()
-	workerStarted := make(chan struct{})
-	release := make(chan struct{})
-	caller := co.CreateAndStart(true, "caller", func(Thread) int {
-		co.WaitToDo(func() {
-			close(workerStarted)
-			<-release
-		})
-		return 0
-	})
-
-	cleanup := func() {
-		select {
-		case <-release:
-		default:
-			close(release)
-		}
-		if !co.AbortAllAndWait(time.Second) {
-			t.Error("coroutines did not stop during cleanup")
-		}
-	}
-	defer cleanup()
-
-	select {
-	case <-workerStarted:
-	case <-time.After(time.Second):
-		t.Fatal("native worker did not start")
-	}
-
-	shutdownDone := make(chan struct{})
-	go func() {
-		co.stopRunawayThreads()
-		close(shutdownDone)
-	}()
-	select {
-	case <-shutdownDone:
-	case <-time.After(time.Second):
-		t.Fatal("runaway shutdown blocked on an uncooperative native worker")
-	}
-
-	var rejectedRan atomic.Bool
-	rejected := co.Create("during-native-drain", func(Thread) int {
-		rejectedRan.Store(true)
-		return 0
-	})
-	if !rejected.Stopped() {
-		t.Fatal("runaway shutdown reopened admission before native worker drained")
-	}
-	if rejectedRan.Load() {
-		t.Fatal("coroutine created during native drain ran user code")
-	}
-	select {
-	case <-rejected.done:
-	case <-time.After(time.Second):
-		t.Fatal("rejected coroutine did not finish")
-	}
-
-	close(release)
-	select {
-	case <-caller.done:
-	case <-time.After(time.Second):
-		t.Fatal("canceled WaitToDo caller did not finish after native worker release")
-	}
-
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		next := co.Create("after-native-drain", func(Thread) int { return 0 })
-		if !next.Stopped() {
-			select {
-			case <-next.done:
-			case <-time.After(time.Second):
-				t.Fatal("post-drain coroutine did not finish")
-			}
-			return
-		}
-		select {
-		case <-next.done:
-		case <-time.After(time.Second):
-			t.Fatal("rejected post-drain coroutine did not finish")
-		}
-		runtime.Gosched()
-	}
-	t.Fatal("admission did not reopen after native worker drained")
 }
