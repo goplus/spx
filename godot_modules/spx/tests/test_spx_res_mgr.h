@@ -118,6 +118,12 @@ TEST_CASE("[SceneTree][SPX] Direct texture loader preserves WebP frame size and 
 
 	const Ref<Texture2D> cached = res_mgr.load_texture(frame_path, true);
 	CHECK(cached == texture);
+
+	// Pixel consumers may modify their copy without changing the texture or
+	// later collision/atlas queries sharing the same loaded resource.
+	const Color original_pixel = image->get_pixel(0, 0);
+	image->set_pixel(0, 0, Color(1, 0, 1, 1));
+	CHECK(cached->get_image()->get_pixel(0, 0) == original_pixel);
 }
 
 TEST_CASE("[SceneTree][SPX] Project theme font helper updates default and fallback fonts") {
