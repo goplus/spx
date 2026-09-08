@@ -165,13 +165,7 @@ function ToGdObj(value) {
 }
 
 function ToJsObj(ptr) {
-    const dataView = GetHeapDataView();
-    const low = dataView.getUint32(ptr, true);
-    const high = dataView.getUint32(ptr + 4, true);
-    return {
-        'low': low,
-        'high': high
-    };
+    return ToJsInt(ptr);
 }
 
 function ToJsBigObj(ptr) {
