@@ -26,6 +26,7 @@ const (
 	waitTypeTime
 	waitTypeMainThread
 	waitTypeYield
+	waitTypeLoop
 )
 
 // WaitJob describes work consumed by Update.
@@ -68,25 +69,6 @@ func (p *Coroutines) Wait(t float64) {
 	deadline := time.TimeSinceLevelLoad() + t
 	job := p.newResumeWaitJob(me, waitTypeTime)
 	job.Time = deadline
-	p.enqueueAndYield(me, job)
-}
-
-// WaitNextFrame suspends the current coroutine until the scheduler frame
-// advances.
-func (p *Coroutines) WaitNextFrame() {
-	p.WaitNextFrameFor(p.callerThread())
-}
-
-// WaitNextFrameFor suspends me until the scheduler frame advances. Callers
-// that capture an exact managed thread can reuse it without resolving the
-// current goroutine identity at every generated loop edge.
-func (p *Coroutines) WaitNextFrameFor(me Thread) {
-	if me == nil || p.callerThread() != me {
-		panic(ErrCannotYieldANonrunningThread)
-	}
-	frame := time.Frame()
-	job := p.newResumeWaitJob(me, waitTypeFrame)
-	job.Frame = frame
 	p.enqueueAndYield(me, job)
 }
 

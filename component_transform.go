@@ -424,6 +424,7 @@ func (t *transformComponent) SetRotationStyle(style RotationStyle) {
 		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", t.sprite.name, style)
 	}
 	t.rotationStyle = style
+	t.markDirty()
 }
 
 // Turn rotates the sprite by the specified angle using an animation.

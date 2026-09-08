@@ -15,6 +15,7 @@ This directory contains development documentation for SPX users and engine contr
 ### SPX engine developers
 
 - [Architecture](engine/architecture.md)
+- [SPX script scheduling](engine/scheduling.md)
 - [Build commands](engine/cmd_make.md)
 - [SPX and Godot runtime release flow](engine/release.md)
 - [Binding code generation](engine/code_generator.md)

@@ -32,21 +32,38 @@ type inputSessionInput struct {
 	lastLeftButtonPressed bool
 	mouseEvents           []engine.MouseEvent
 	keyEvents             []engine.KeyEvent
+	pending               *inputSessionFrame // engine frame thread only
 }
 
-// processInputSessionTick consumes one effective input frame for the Game-owned
-// session. Real input is sampled for recording and drained but ignored during
-// replay.
-func (p *inputManager) processInputSessionTick(session *inputSession, delta float64) {
-	inputEvents, err := p.resolveInputSessionTick(session, delta)
-	if err != nil {
-		engine.Panic(err)
-		return
+type inputSessionFrame struct {
+	events    []event
+	keyEvents []InputReplayKeyEvent
+}
+
+// Prepare one input tick before condition sampling, deferring user handlers and
+// capture requests until the engine clock has advanced.
+func (p *inputManager) prepareInputSessionTick(session *inputSession, delta float64) bool {
+	if !session.beginFrame() {
+		return false
 	}
-	p.dispatchInputSessionEvents(inputEvents)
+	frame, err := p.resolveInputSessionTick(session, delta)
+	if err != nil {
+		session.endFrame()
+		engine.Panic(err)
+		return false
+	}
+	session.input.pending = frame
+	return true
 }
 
-func (p *inputManager) resolveInputSessionTick(session *inputSession, delta float64) ([]event, error) {
+func (p *inputManager) dispatchInputSessionTick(session *inputSession) {
+	frame := session.input.pending
+	session.input.pending = nil
+	session.captureConfiguredKeyPresses(frame.keyEvents)
+	p.dispatchInputSessionEvents(frame.events)
+}
+
+func (p *inputManager) resolveInputSessionTick(session *inputSession, delta float64) (*inputSessionFrame, error) {
 	session.operationMu.Lock()
 	defer session.operationMu.Unlock()
 	c := &session.input
@@ -69,8 +86,6 @@ func (p *inputManager) resolveInputSessionTick(session *inputSession, delta floa
 	if err != nil {
 		return nil, err
 	}
-	session.captureConfiguredKeyPresses(resolved.frame.KeyEvents)
-
 	effectivePoint := mathf.Vec2{X: resolved.frame.State.Mouse.X, Y: resolved.frame.State.Mouse.Y}
 	effectiveLeftPressed := resolved.frame.State.Buttons&(1<<0) != 0
 	if resolved.firstTick {
@@ -108,7 +123,7 @@ func (p *inputManager) resolveInputSessionTick(session *inputSession, delta floa
 		},
 	)
 	c.clearEvents()
-	return inputEvents, nil
+	return &inputSessionFrame{events: inputEvents, keyEvents: resolved.frame.KeyEvents}, nil
 }
 
 func (s *inputSession) captureConfiguredKeyPresses(events []InputReplayKeyEvent) {

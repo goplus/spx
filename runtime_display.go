@@ -19,6 +19,7 @@ package spx
 import (
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
@@ -27,6 +28,7 @@ import (
 // -----------------------------------------------------------------------------
 func (p *Game) setBackdrop(backdrop any, wait bool) {
 	if p.goSetBackdrop(backdrop) {
+		engine.RequestRedraw()
 		p.setupBackdrop()
 		p.doWindowSize()
 		p.doWhenBackdropChanged(p.getCostumeName(), wait)

@@ -25,7 +25,6 @@ import (
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
-	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 // -----------------------------------------------------------------------------
@@ -66,18 +65,32 @@ func (p *Game) OnEngineReset() {
 	p.reset()
 }
 
+// OnEngineBeforeUpdate resolves input and samples conditions before advancing the clock.
+func (p *Game) OnEngineBeforeUpdate(delta float64) {
+	p.scriptEvents.pendingConditions = nil
+	if p.lifecycleState.IsRunned.Load() {
+		if session := p.currentInputSession(); session != nil {
+			if !p.inputMgr.prepareInputSessionTick(session, delta) {
+				return
+			}
+		}
+	}
+	if p.lifecycleState.StartDispatched.Load() {
+		p.scriptEvents.sampleConditions()
+	}
+}
+
 func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	// Recording and playback consume exactly one input tick per engine update.
-	// Idle games retain the long-lived input coroutine and its original dispatch
-	// path.
-	if session := p.currentInputSession(); session != nil {
-		if !session.beginFrame() {
-			return
-		}
-		p.inputMgr.processInputSessionTick(session, itime.DeltaTime())
+	session := p.currentInputSession()
+	if session != nil && session.input.pending == nil {
+		return
+	}
+	p.scriptEvents.dispatchConditions()
+	if session != nil {
+		p.inputMgr.dispatchInputSessionTick(session)
 	}
 	p.soundMgr.Update()
 	p.runScriptFramePhase()

@@ -180,15 +180,11 @@ func ShouldWaitNextFrame() bool {
 	return gco.Current().ShouldWaitNextFrame(runWithoutScreenRefreshBudget)
 }
 
-// NewControlFlowWaiter captures the exact managed thread once for a generated
-// Forever/Repeat/RepeatUntil/WaitUntil invocation. Reusing that thread avoids
-// resolving goroutine identity at every loop edge. This is especially
-// important on js/wasm, where goid.Get falls back to runtime.Stack.
+// NewControlFlowWaiter caches the calling thread for generated loop yields.
 func NewControlFlowWaiter() func() {
 	co := gco
 	if co == nil || !co.IsInCoroutine() {
-		// Preserve the existing behavior for unsupported calls outside a managed
-		// coroutine, including its validation and error path.
+		// Preserve validation outside managed coroutines.
 		return func() {
 			if ShouldWaitNextFrame() {
 				WaitNextFrame()
@@ -198,9 +194,18 @@ func NewControlFlowWaiter() func() {
 
 	thread := co.Current()
 	return func() {
-		if thread.ShouldWaitNextFrame(runWithoutScreenRefreshBudget) {
+		if !thread.RunWithoutScreenRefresh() {
+			co.YieldLoopFor(thread)
+		} else if thread.ShouldWaitNextFrame(runWithoutScreenRefreshBudget) {
 			co.WaitNextFrameFor(thread)
 		}
+	}
+}
+
+// RequestRedraw marks a visual change for cooperative script scheduling.
+func RequestRedraw() {
+	if gco != nil {
+		gco.RequestRedraw()
 	}
 }
 

@@ -40,6 +40,7 @@
 - Makefile 命令指南
 - SPX 与 Godot runtime 发布流程
 - 引擎架构
+- [SPX 脚本调度](./engine/scheduling.md) - 了解帧阶段、循环让出、条件事件及截图回放的保证范围
 - 构建系统
 - [Web 端截图与固定帧接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
 - [输入录制与回放说明](./engine/input_replay.md) - 了解 Web host 固定 FPS 输入录制、逐 tick 回放与截图测试配合方式

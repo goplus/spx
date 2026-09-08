@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
@@ -73,6 +74,7 @@ func (b *bubbleComponent) onDestroy() {
 // ============================================================================
 
 func (b *bubbleComponent) upsertText(msg string, style int) {
+	b.sprite.requestRedrawIfVisible()
 	b.mu.Lock()
 	textObj := b.textObj
 	created := false
@@ -104,6 +106,7 @@ func (b *bubbleComponent) upsertText(msg string, style int) {
 }
 
 func (b *bubbleComponent) upsertQuote(message, description string) {
+	b.sprite.requestRedrawIfVisible()
 	b.mu.Lock()
 	quoteObj := b.quoteObj
 	created := false
@@ -162,6 +165,7 @@ func (b *bubbleComponent) stopAll() {
 // ============================================================================
 
 func (b *bubbleComponent) stopBubble(obj bubbleShape) {
+	engine.RequestRedraw()
 	obj.destroyPanel()
 	b.sprite.g.removeShape(obj)
 }

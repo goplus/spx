@@ -65,6 +65,8 @@ type Coroutines struct {
 	threadStates  map[Thread]threadState
 	currentJobs   *Queue[*WaitJob]
 	deferredJobs  *Queue[*WaitJob]
+	loopJobs      *Queue[*WaitJob]
+	redrawFrame   atomic.Int64
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
@@ -98,10 +100,12 @@ func New(onPanic func(name, stack string)) *Coroutines {
 		threadStates:      make(map[Thread]threadState),
 		currentJobs:       NewQueue[*WaitJob](),
 		deferredJobs:      NewQueue[*WaitJob](),
+		loopJobs:          NewQueue[*WaitJob](),
 		readGCStats:       sdebug.ReadGCStats,
 		updateWatchdogNow: stime.Now,
 	}
 	p.schedulerCond = sync.NewCond(&p.schedulerMu)
+	p.redrawFrame.Store(-1)
 	return p
 }
 

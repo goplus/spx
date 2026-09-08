@@ -497,7 +497,7 @@ func TestScratchConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
 	register(&back.scriptEventBindings, "back")
 	register(&front.scriptEventBindings, "front")
 
-	game.scriptEvents.doWhenCondition()
+	pollRuntimeConditions(&game.scriptEvents)
 	waitForScratchEventOrderEntries(t, co, &log, 6)
 	requireScratchEventOrder(t, &log, []string{
 		"check-front",

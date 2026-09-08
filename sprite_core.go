@@ -59,6 +59,7 @@ func (p *SpriteImpl) setDying() {
 }
 
 func (p *SpriteImpl) markProxyDirty() {
+	p.requestRedrawIfVisible()
 	p.spriteState.DirtyVersion++
 	p.spriteState.IsDirty = true
 }

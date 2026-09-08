@@ -47,7 +47,8 @@ type scriptEventRegistry struct {
 	manager              coreevent.Manager
 	messageHandlerFrames sync.Map // map[coroutine.Thread]int64
 	stopAllEpoch         atomic.Uint64
-	pendingStartThreads  sync.Map // map[coroutine.Thread]struct{}
+	pendingStartThreads  sync.Map    // map[coroutine.Thread]struct{}
+	pendingConditions    []eventSink // engine frame thread only
 }
 
 // messageEventHandler tracks one broadcast script's active thread.
@@ -114,19 +115,6 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 func (p *scriptEventBindings) OnClick(onClick func()) {
 	pthis := p.pthis
 	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
-}
-
-// OnCond runs the handler on each false-to-true transition.
-// condition is polled after startup and must be fast and non-blocking.
-func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, onCondition func()) {
-	if __xgo_autoclosure_condition == nil || onCondition == nil {
-		return
-	}
-	p.scriptEventRegistry.manager.AddCondition(coreevent.NewSink(
-		p.pthis,
-		onCondition,
-		coreevent.MatchRisingEdge(__xgo_autoclosure_condition),
-	))
 }
 
 func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
@@ -447,18 +435,6 @@ func (p *scriptEventRegistry) doWhenTimer(time float64) {
 		matchData: time,
 		run: func(_ coroutine.Thread, ev *eventSink) {
 			ev.Handler.(func(float64))(time)
-		},
-	})
-}
-
-func (p *scriptEventRegistry) doWhenCondition() {
-	p.dispatchGlobal(coreevent.BucketCondition, scriptEventDispatch{
-		mode: coroutine.BatchAsync,
-		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
-				spxlog.Debug("OnCond: %s", nameOf(ev.Owner))
-			})()
-			ev.Handler.(func())()
 		},
 	})
 }
