@@ -8,8 +8,6 @@
 5. 用户逻辑使用 xgo 进行实现，在运行时会先编译成 Go，再按目标平台编译为动态库或 WebAssembly，或者解释执行
 6. 坐标空间和 Go/Godot 转换边界详见 [coordinate_system.md](./coordinate_system.md)
 
-变换、删除和视觉批次使用旧协议，将精灵 ID 作为数值存储在 `float32` 中。序列化要求 ID 非负且能够精确往返转换；非法 ID 会在提交数据包之前触发包含原始 ID 的 panic。引擎回调的 panic 处理器会报告错误并请求运行时退出或重置。这项检查保留现有传输格式；物理批次已使用两个位通道无损编码 ID。
-
 ### 1. PC 平台
 0. 依赖的是 cgo
 1. 通过 `make generate-bindings` 自动生成 Go wrapper 代码，用于在 Go 中调用 C++ 接口

@@ -50,6 +50,8 @@ Do not put irregular strings, long-lived object references, rare control operati
 
 The current implementation maintains reusable transfer storage and compact record layouts. Capacity growth, record count, and validity must be checked on both sides. Never retain a pointer/view beyond the documented synchronization window because a later batch may reuse or grow the buffer.
 
+Transform, deletion, and visual batches use a legacy format that stores sprite IDs as numeric `float32` values. Their serializers require non-negative IDs that round-trip exactly; an invalid ID causes a panic containing the original ID before the packet is submitted. The engine callback panic handler reports the failure and requests runtime exit or reset. This guard preserves the existing wire format; physics batches already encode IDs losslessly in two bit lanes.
+
 ## Priorities
 
 Optimize measured hot paths first. Preserve semantics, ordering, and diagnostics before reducing bridge calls. Add representative Web benchmarks and test normal and worker modes when changing synchronization behavior.

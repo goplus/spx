@@ -6,8 +6,6 @@ SPX consists of the XGo game runtime, platform bindings, and the SPX fork of God
 
 The Go-to-engine boundary differs by platform. Native platforms use GDExtension/native bindings. Web builds combine Go WASM with an Emscripten-built Godot runtime and JavaScript bridge code.
 
-Transform, deletion, and visual batches use a legacy format that stores sprite IDs as numeric `float32` values. Their serializers require non-negative IDs that round-trip exactly; an invalid ID causes a panic containing the original ID before the packet is submitted. The engine callback panic handler reports the failure and requests runtime exit or reset. This guard preserves the existing wire format; physics batches already encode IDs losslessly in two bit lanes.
-
 ### 1. PC platforms
 
 Desktop builds support two primary workflows:
