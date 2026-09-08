@@ -179,9 +179,9 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
 		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncName":  ManagerMethodSignature,
 		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": getManagerInterface,
+		"getManagerInterface": ManagerInterfaceSignature,
 	}
 
 	return GenerateFile(funcs, "manager_native.gen.go", managerNativeText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
@@ -203,9 +203,9 @@ func GenerateManagerInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
 		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncName":  ManagerMethodSignature,
 		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": getManagerInterface,
+		"getManagerInterface": ManagerInterfaceSignature,
 	}
 
 	return GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
@@ -288,40 +288,6 @@ func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST,
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
 	return GenerateFile(funcs, genFile, implPureGoFileText, data,
 		filepath.Join(projectPath, EnginePkgRelDir, genFile))
-}
-
-func getManagerFuncName(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString("(")
-	sb.WriteString("pself *" + mgrName)
-	sb.WriteString("Mgr) ")
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
-	}
-	return sb.String()
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {
@@ -434,37 +400,6 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	if dispatchToMainThread {
 		sb.WriteString("\n\t})")
-	}
-	return sb.String()
-}
-
-func getManagerInterface(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()
 }
