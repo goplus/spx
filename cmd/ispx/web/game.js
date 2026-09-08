@@ -114,7 +114,6 @@ class GameApp {
         this.recordingOnGameStart = config.recordingOnGameStart || false
         this.autoDownloadRecordedVideo = config.autoDownloadRecordedVideo || false
         this.logicPromise = Promise.resolve();
-        // web worker mode
         this.workerMode = EnginePackMode == "worker"
         this.minigameMode = EnginePackMode == "minigame"
         this.miniprogramMode = EnginePackMode == "miniprogram"
@@ -124,7 +123,6 @@ class GameApp {
 
         profiler.enabled = this.useProfiler;
 
-        // init worker message manager
         this.workerMessageManager = new globalThis.WorkerMessageManager();
 
         this.stopGameTask = 0;  
@@ -312,7 +310,6 @@ class GameApp {
         /** @type {{ [path: string]: Uint8Array }} */
         const nonAssetFiles = {};
         Object.entries(files).forEach(([path, file]) => {
-            // `.spx` and `.json` files are treated as non-asset files
             if (path.endsWith(".spx") || path.endsWith('.json')) {
                 nonAssetFiles[path] = new Uint8Array(file.content);
             }
@@ -714,10 +711,8 @@ class GameApp {
 
         if (this.minigameMode) {
             this.gameConfig.wasmEngine = url
-        } else {
-            if (!this.gameConfig.wasmEngine) {
-                this.gameConfig.wasmEngine = await (await fetch(url)).arrayBuffer();
-            }
+        } else if (!this.gameConfig.wasmEngine) {
+            this.gameConfig.wasmEngine = await (await fetch(url)).arrayBuffer();
         }
     }
 
@@ -726,12 +721,10 @@ class GameApp {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
             self['initExtensionWasm'] = function () { }
-        } else {
-            if (!this.workerMode) {
-                await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
-                await profiler.profile('runLogicWasm', () => this.runLogicWasm());
-                self['initExtensionWasm'] = function () { }
-            }
+        } else if (!this.workerMode) {
+            await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
+            await profiler.profile('runLogicWasm', () => this.runLogicWasm());
+            self['initExtensionWasm'] = function () { }
         }
     }
 
@@ -765,7 +758,6 @@ class GameApp {
 
     //------------------ logic wasm ------------------
     async loadLogicWasm() {
-        // load wasm
         let url = this.config.assetURLs["ispx.wasm"];
         if (isWasmCompressed) {
             url += ".br"
@@ -811,5 +803,4 @@ class GameApp {
 
 }
 
-// export GameApp to global
 globalThis.GameApp = GameApp;
