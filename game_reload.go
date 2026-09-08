@@ -458,7 +458,12 @@ func validateReloadMonitor(shape coreproject.StageShape) error {
 			return err
 		}
 	}
-	for _, key := range []string{"mode", "x", "y"} {
+	if shape["mode"] != "list" && shape["mode"] != "slider" {
+		if err := validateReloadShapeField(shape, "mode", true, reflect.TypeFor[float64]()); err != nil {
+			return err
+		}
+	}
+	for _, key := range []string{"x", "y"} {
 		if err := validateReloadShapeField(shape, key, true, reflect.TypeFor[float64]()); err != nil {
 			return err
 		}

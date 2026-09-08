@@ -1739,6 +1739,14 @@ void gdspx_ui_set_list_items(GdObj *obj, GdString *label, GdArray *items, GdColo
 	 uiMgr->set_list_items(*obj, gdspx_string_arg_1, *items, *color);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_ui_set_range(GdObj *obj, GdFloat *minimum, GdFloat *maximum, GdFloat *step, GdFloat *value) {
+	 uiMgr->set_range(*obj, *minimum, *maximum, *step, *value);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_ui_get_range_value(GdObj *obj, GdFloat *ret_val) {
+	*ret_val = uiMgr->get_range_value(*obj);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_text(GdObj *obj, GdString *ret_val) {
 	if (!gdspx_prepare_string_wrapper(ret_val)) {
 		return;

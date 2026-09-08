@@ -1,0 +1,24 @@
+var (
+    score int
+    amount float64
+    dynamic any
+    hidden bool
+)
+
+onStart => {
+    score = 25
+    amount = 0.25
+    dynamic = "hello"
+}
+
+onKey KeyR, => {
+    score = 25
+    amount = 0.25
+    dynamic = "hello"
+}
+onKey KeyO, => { score = 200 }
+onKey KeyH, => {
+    hidden = !hidden
+    if hidden { hideVar "score" } else { showVar "score" }
+}
+onKey KeySpace, => { println score, amount, dynamic }

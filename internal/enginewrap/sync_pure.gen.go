@@ -779,6 +779,11 @@ func (*uiMgrImpl) GetType(obj gdx.Object) int64 {
 }
 func (*uiMgrImpl) SetText(obj gdx.Object, text string)                                     {}
 func (*uiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, color Color) {}
+func (*uiMgrImpl) SetRange(obj gdx.Object, minimum float64, maximum float64, step float64, value float64) {
+}
+func (*uiMgrImpl) GetRangeValue(obj gdx.Object) float64 {
+	return 0
+}
 func (*uiMgrImpl) GetText(obj gdx.Object) string {
 	return ""
 }

@@ -76,6 +76,8 @@ public:
 	SPX_API GdInt get_type(GdObj obj);
 	SPX_API void set_text(GdObj obj, GdString text);
 	SPX_API void set_list_items(GdObj obj, GdString label, GdArray items, GdColor color);
+	SPX_API void set_range(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value);
+	SPX_API GdFloat get_range_value(GdObj obj);
 	SPX_API GdString get_text(GdObj obj);
 	SPX_API void set_texture(GdObj obj, GdString path);
 	SPX_API GdString get_texture(GdObj obj);

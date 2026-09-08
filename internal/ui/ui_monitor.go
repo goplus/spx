@@ -31,6 +31,7 @@ type UiMonitor struct {
 	views     [monitorAppearanceCount]monitorView
 	active    MonitorAppearance
 	listItems []string
+	slider    monitorSliderState
 }
 
 // MonitorStyle describes the fixed presentation of a stage monitor.
@@ -39,6 +40,7 @@ type MonitorStyle struct {
 	Label      string
 	Color      Color
 	Dimensions Vec2
+	Slider     MonitorSlider
 }
 
 // MonitorValue keeps list items separate from scalar text. The appearance,
@@ -56,6 +58,7 @@ const (
 	MonitorAppearanceScratch
 	MonitorAppearanceScratchLarge
 	MonitorAppearanceList
+	MonitorAppearanceSlider
 	monitorAppearanceCount
 )
 
@@ -64,6 +67,7 @@ type monitorView struct {
 	label       *UiNode
 	value       *UiNode
 	colorTarget *UiNode
+	input       *UiNode
 }
 
 type monitorViewSpec struct {
@@ -71,6 +75,7 @@ type monitorViewSpec struct {
 	label       string
 	value       string
 	colorTarget string
+	input       string
 }
 
 var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
@@ -95,6 +100,13 @@ var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
 		colorTarget: "ScratchValueOnly/C",
 	},
 	MonitorAppearanceList: {root: "ScratchList"},
+	MonitorAppearanceSlider: {
+		root:        "ScratchSlider",
+		label:       "ScratchSlider/V/H/LabelMargin/LabelName",
+		value:       "ScratchSlider/V/H/ValueMargin/C/LabelValue",
+		colorTarget: "ScratchSlider/V/H/ValueMargin/C",
+		input:       "ScratchSlider/V/Slider",
+	},
 }
 
 type monitorRenderSink interface {
@@ -103,10 +115,12 @@ type monitorRenderSink interface {
 	SetColor(engine.Object, Color)
 	SetListItems(engine.Object, string, engine.Array, Color)
 	SetSize(engine.Object, Vec2)
+	SetRange(engine.Object, float64, float64, float64, float64)
+	GetRangeValue(engine.Object) float64
 }
 
 func (p MonitorAppearance) IsScratch() bool {
-	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge || p == MonitorAppearanceList
+	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge || p == MonitorAppearanceList || p == MonitorAppearanceSlider
 }
 
 func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {
@@ -140,6 +154,7 @@ func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
 			value:       optional(spec.value),
 			label:       optional(spec.label),
 			colorTarget: optional(spec.colorTarget),
+			input:       optional(spec.input),
 		}
 	}
 	pself.active = monitorAppearanceCount
@@ -169,6 +184,10 @@ func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value
 			sink.SetVisible(view.root.GetId(), MonitorAppearance(i) == appearance)
 		}
 		pself.active = appearance
+	}
+
+	if appearance == MonitorAppearanceSlider {
+		pself.renderSlider(sink, style.Slider, value.Text)
 	}
 
 	view := pself.views[appearance]

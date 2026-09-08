@@ -1984,6 +1984,18 @@ func (*uiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, co
 		gdx.UiMgr.SetListItems(obj, label, items, color)
 	})
 }
+func (*uiMgrImpl) SetRange(obj gdx.Object, minimum float64, maximum float64, step float64, value float64) {
+	callInMainThread(func() {
+		gdx.UiMgr.SetRange(obj, minimum, maximum, step, value)
+	})
+}
+func (*uiMgrImpl) GetRangeValue(obj gdx.Object) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.UiMgr.GetRangeValue(obj)
+	})
+	return _ret1
+}
 func (*uiMgrImpl) GetText(obj gdx.Object) string {
 	var _ret1 string
 	callInMainThread(func() {

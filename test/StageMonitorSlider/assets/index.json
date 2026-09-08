@@ -1,0 +1,118 @@
+{
+  "map": {
+    "width": 480,
+    "height": 360
+  },
+  "zorder": [
+    {
+      "type": "sprite",
+      "target": "Dot",
+      "x": 180,
+      "y": -120
+    },
+    {
+      "type": "monitor",
+      "name": "score-slider",
+      "target": "",
+      "val": "getVar:score",
+      "label": "score",
+      "mode": "slider",
+      "x": -220,
+      "y": 150,
+      "visible": true
+    },
+    {
+      "type": "monitor",
+      "name": "score-value",
+      "target": "",
+      "val": "getVar:score",
+      "label": "value",
+      "mode": 1,
+      "x": 30,
+      "y": 150,
+      "visible": true,
+      "style": "scratch"
+    },
+    {
+      "type": "monitor",
+      "name": "amount-slider",
+      "target": "",
+      "val": "getVar:amount",
+      "label": "amount",
+      "mode": 3,
+      "x": -220,
+      "y": 75,
+      "visible": true,
+      "sliderMin": -1,
+      "sliderMax": 1,
+      "isDiscrete": false,
+      "color": "#59c059"
+    },
+    {
+      "type": "monitor",
+      "name": "amount-value",
+      "target": "",
+      "val": "getVar:amount",
+      "label": "value",
+      "mode": 1,
+      "x": 30,
+      "y": 75,
+      "visible": true,
+      "sliderMin": -1,
+      "sliderMax": 1,
+      "isDiscrete": false,
+      "color": "#59c059",
+      "style": "scratch"
+    },
+    {
+      "type": "monitor",
+      "name": "dynamic-slider",
+      "target": "",
+      "val": "getVar:dynamic",
+      "label": "dynamic",
+      "mode": "slider",
+      "x": -220,
+      "y": 0,
+      "visible": true
+    },
+    {
+      "type": "monitor",
+      "name": "dynamic-value",
+      "target": "",
+      "val": "getVar:dynamic",
+      "label": "value",
+      "mode": 1,
+      "x": 30,
+      "y": 0,
+      "visible": true,
+      "style": "scratch"
+    },
+    {
+      "type": "monitor",
+      "name": "level-slider",
+      "target": "Dot",
+      "val": "getVar:level",
+      "label": "Dot: level",
+      "mode": 3,
+      "x": -220,
+      "y": -75,
+      "visible": true,
+      "sliderMin": 0.5,
+      "sliderMax": 10.5
+    },
+    {
+      "type": "monitor",
+      "name": "level-value",
+      "target": "Dot",
+      "val": "getVar:level",
+      "label": "value",
+      "mode": 1,
+      "x": 30,
+      "y": -75,
+      "visible": true,
+      "sliderMin": 0.5,
+      "sliderMax": 10.5,
+      "style": "scratch"
+    }
+  ]
+}

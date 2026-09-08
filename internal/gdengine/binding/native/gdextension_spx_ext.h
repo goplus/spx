@@ -522,6 +522,8 @@ typedef void (*GDExtensionSpxUiDestroyNode)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxUiGetType)(GdObj obj, GdInt *ret_value);
 typedef void (*GDExtensionSpxUiSetText)(GdObj obj, GdString text);
 typedef void (*GDExtensionSpxUiSetListItems)(GdObj obj, GdString label, GdArray items, GdColor color);
+typedef void (*GDExtensionSpxUiSetRange)(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value);
+typedef void (*GDExtensionSpxUiGetRangeValue)(GdObj obj, GdFloat *ret_value);
 typedef void (*GDExtensionSpxUiGetText)(GdObj obj, GdString *ret_value);
 typedef void (*GDExtensionSpxUiSetTexture)(GdObj obj, GdString path);
 typedef void (*GDExtensionSpxUiGetTexture)(GdObj obj, GdString *ret_value);

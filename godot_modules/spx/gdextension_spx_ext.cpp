@@ -1267,6 +1267,14 @@ static void gdextension_spx_ui_set_list_items(GdObj obj, GdString label, GdArray
 	uiMgr->set_list_items(obj, label, items, color);
 }
 
+static void gdextension_spx_ui_set_range(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value) {
+	uiMgr->set_range(obj, minimum, maximum, step, value);
+}
+
+static void gdextension_spx_ui_get_range_value(GdObj obj, GdFloat *ret_val) {
+	*ret_val = uiMgr->get_range_value(obj);
+}
+
 static void gdextension_spx_ui_get_text(GdObj obj, GdString *ret_val) {
 	*ret_val = uiMgr->get_text(obj);
 }
@@ -1731,6 +1739,8 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_type);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_text);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_list_items);
+	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_range);
+	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_range_value);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_text);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_texture);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_texture);

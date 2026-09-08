@@ -1824,6 +1824,18 @@ void cgo_callfn_GDExtensionSpxUiSetListItems(const GDExtensionSpxUiSetListItems 
 	}
 	fn(obj, label, items, color);
 }
+void cgo_callfn_GDExtensionSpxUiSetRange(const GDExtensionSpxUiSetRange fn, GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, minimum, maximum, step, value);
+}
+void cgo_callfn_GDExtensionSpxUiGetRangeValue(const GDExtensionSpxUiGetRangeValue fn, GdObj obj, GdFloat* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, ret_val);
+}
 void cgo_callfn_GDExtensionSpxUiGetText(const GDExtensionSpxUiGetText fn, GdObj obj, GdString* ret_val) {
 	if (!fn) {
 		return;

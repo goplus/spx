@@ -338,6 +338,8 @@ type GDExtensionInterface struct {
 	SpxUiGetType                                GDExtensionSpxUiGetType
 	SpxUiSetText                                GDExtensionSpxUiSetText
 	SpxUiSetListItems                           GDExtensionSpxUiSetListItems
+	SpxUiSetRange                               GDExtensionSpxUiSetRange
+	SpxUiGetRangeValue                          GDExtensionSpxUiGetRangeValue
 	SpxUiGetText                                GDExtensionSpxUiGetText
 	SpxUiSetTexture                             GDExtensionSpxUiSetTexture
 	SpxUiGetTexture                             GDExtensionSpxUiGetTexture
@@ -675,6 +677,8 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiGetType = (GDExtensionSpxUiGetType)(resolveCFunc("spx_ui_get_type"))
 	x.SpxUiSetText = (GDExtensionSpxUiSetText)(resolveCFunc("spx_ui_set_text"))
 	x.SpxUiSetListItems = (GDExtensionSpxUiSetListItems)(resolveCFunc("spx_ui_set_list_items"))
+	x.SpxUiSetRange = (GDExtensionSpxUiSetRange)(resolveCFunc("spx_ui_set_range"))
+	x.SpxUiGetRangeValue = (GDExtensionSpxUiGetRangeValue)(resolveCFunc("spx_ui_get_range_value"))
 	x.SpxUiGetText = (GDExtensionSpxUiGetText)(resolveCFunc("spx_ui_get_text"))
 	x.SpxUiSetTexture = (GDExtensionSpxUiSetTexture)(resolveCFunc("spx_ui_set_texture"))
 	x.SpxUiGetTexture = (GDExtensionSpxUiGetTexture)(resolveCFunc("spx_ui_get_texture"))
