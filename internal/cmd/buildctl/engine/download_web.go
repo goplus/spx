@@ -57,9 +57,6 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 }
 
 func webModeReleaseTemplateName(mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
-	}
 	switch mode {
 	case "normal":
 		return "web.zip", nil

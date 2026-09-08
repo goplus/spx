@@ -95,9 +95,6 @@ func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
 }
 
 func webModeOutputZip(mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
-	}
 	switch mode {
 	case "normal":
 		return "spx_web.zip", nil
@@ -113,9 +110,6 @@ func webModeOutputZip(mode string) (string, error) {
 }
 
 func webModeSPXCommand(mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
-	}
 	switch mode {
 	case "normal":
 		return "exportweb", nil
