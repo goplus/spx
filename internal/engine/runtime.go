@@ -109,10 +109,7 @@ func (runtimeBridge) UiNodes() map[Object]gdx.IUiNode {
 }
 
 func (runtimeBridge) GetUINode(id Object) gdx.IUiNode {
-	if node, ok := state.uiNodes[id]; ok {
-		return node
-	}
-	return nil
+	return state.uiNodes[id]
 }
 
 func (runtimeBridge) DeleteSprite(id Object) {
@@ -175,20 +172,15 @@ func clearAllSprites() {
 }
 
 func lookupSprite(id Object) gdx.ISpriter {
-	if sprite, ok := state.sprites[id]; ok {
-		return sprite
-	}
-	return nil
+	return state.sprites[id]
 }
 
 func isNodeExist(id Object) bool {
 	if _, ok := state.uiNodes[id]; ok {
 		return true
 	}
-	if _, ok := state.sprites[id]; ok {
-		return true
-	}
-	return false
+	_, ok := state.sprites[id]
+	return ok
 }
 
 func bindSceneInstantiatedSprite(id Object, typeName string) {
