@@ -115,7 +115,7 @@ func Unlock() {
 type IGame interface {
 	OnEngineStart()
 	OnEngineUpdate(delta float64)
-	OnEngineBeforeUpdate()
+	OnEngineBeforeUpdate(delta float64)
 	OnEngineRender(delta float64)
 	OnEngineFrameEnd()
 	OnEngineDestroy()
@@ -160,11 +160,11 @@ func onUpdate(delta float64) {
 	defer CheckPanic()
 	profiler.BeginSample()
 	defer profiler.EndSample()
-	game.OnEngineBeforeUpdate()
-	updateTime(delta)
 	cacheTriggerEvents()
 	cacheKeyEvents()
 	cacheMouseEvents()
+	game.OnEngineBeforeUpdate(delta)
+	updateTime(delta)
 	profiler.MeasureFunctionTime("GameUpdate", func() {
 		game.OnEngineUpdate(delta)
 	})

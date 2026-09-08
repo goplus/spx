@@ -308,7 +308,7 @@ func pollRuntimeConditions(registry *scriptEventRegistry) {
 }
 
 func pollRuntimeEventConditions(game *Game) {
-	game.OnEngineBeforeUpdate()
+	game.OnEngineBeforeUpdate(1.0 / 30)
 	game.scriptEvents.dispatchConditions()
 }
 

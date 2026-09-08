@@ -18,11 +18,11 @@ apply to all projects using the corresponding APIs.
 An engine update advances the frame clock once. It may contain several script
 rounds; starting another round does not advance the frame number or timer.
 
-1. After startup scripts first yield or finish, sample condition events before
-   advancing the frame clock.
-2. Advance the clock and cache engine input. Dispatch matched condition
-   handlers, process an active input session, and run the startup or due frame
-   callbacks.
+1. Cache engine input and resolve the current recording or replay tick. After
+   startup scripts first yield or finish, sample condition events using that
+   input before advancing the frame clock.
+2. Advance the clock. Dispatch matched condition handlers, input-session events
+   and capture-key requests, and run the startup or due frame callbacks.
 3. Process runnable coroutines and eligible loop rounds.
 4. Synchronize visual state needed by captures, dispatch queued capture requests,
    and finalize input-session frame completion. The Web host waits for its
@@ -51,7 +51,8 @@ rounds; starting another round does not advance the frame number or timer.
    first yield or finish, sample conditions before each frame's clock update.
    Dispatch the matched handlers after that update, without evaluating the
    conditions again. Preserve existing target order and finish all evaluations
-   before starting handlers.
+   before starting handlers. Input predicates observe the current session tick,
+   including its final tick before replay pauses.
 2. **Trigger condition events on rising edges.** A sustained true condition
    does not start another handler. Suspend that event's condition sampling while
    its handler is active, then resume edge detection when it finishes.
