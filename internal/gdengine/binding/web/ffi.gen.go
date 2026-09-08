@@ -341,6 +341,7 @@ type GDExtensionInterface struct {
 	SpxUiDestroyNode                            js.Value
 	SpxUiGetType                                js.Value
 	SpxUiSetText                                js.Value
+	SpxUiSetListItems                           js.Value
 	SpxUiGetText                                js.Value
 	SpxUiSetTexture                             js.Value
 	SpxUiGetTexture                             js.Value
@@ -677,6 +678,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiDestroyNode = resolveJSFunc("gdspx_ui_destroy_node")
 	x.SpxUiGetType = resolveJSFunc("gdspx_ui_get_type")
 	x.SpxUiSetText = resolveJSFunc("gdspx_ui_set_text")
+	x.SpxUiSetListItems = resolveJSFunc("gdspx_ui_set_list_items")
 	x.SpxUiGetText = resolveJSFunc("gdspx_ui_get_text")
 	x.SpxUiSetTexture = resolveJSFunc("gdspx_ui_set_texture")
 	x.SpxUiGetTexture = resolveJSFunc("gdspx_ui_get_texture")

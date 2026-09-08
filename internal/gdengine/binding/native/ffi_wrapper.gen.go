@@ -394,6 +394,7 @@ type GDExtensionSpxUiCreateInput C.GDExtensionSpxUiCreateInput
 type GDExtensionSpxUiDestroyNode C.GDExtensionSpxUiDestroyNode
 type GDExtensionSpxUiGetType C.GDExtensionSpxUiGetType
 type GDExtensionSpxUiSetText C.GDExtensionSpxUiSetText
+type GDExtensionSpxUiSetListItems C.GDExtensionSpxUiSetListItems
 type GDExtensionSpxUiGetText C.GDExtensionSpxUiGetText
 type GDExtensionSpxUiSetTexture C.GDExtensionSpxUiSetTexture
 type GDExtensionSpxUiGetTexture C.GDExtensionSpxUiGetTexture
@@ -3560,6 +3561,21 @@ func CallUiSetText(
 	arg2 := (C.GdString)(text)
 
 	C.cgo_callfn_GDExtensionSpxUiSetText(arg0, arg1, arg2)
+
+}
+func CallUiSetListItems(
+	obj GdObj,
+	label GdString,
+	items GdArray,
+	color GdColor,
+) {
+	arg0 := (C.GDExtensionSpxUiSetListItems)(api.SpxUiSetListItems)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdString)(label)
+	arg3 := (C.GdArray)(items)
+	arg4 := (C.GdColor)(color)
+
+	C.cgo_callfn_GDExtensionSpxUiSetListItems(arg0, arg1, arg2, arg3, arg4)
 
 }
 func CallUiGetText(

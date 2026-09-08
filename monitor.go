@@ -36,6 +36,7 @@ const (
 	monitorUpdateIntervalS = 0.2
 	monitorModeDefault     = 1
 	monitorModeLarge       = 2
+	monitorModeList        = 4
 	monitorStyleScratch    = "scratch"
 )
 
@@ -43,20 +44,25 @@ const (
 // Monitor
 // -----------------------------------------------------------------------------
 type Monitor struct {
-	game        *Game
 	name        WidgetName
 	size        float64
 	target      string
 	val         string
-	eval        func() string
-	appearance  ui.MonitorAppearance
-	color       mathf.Color
+	eval        func() ui.MonitorValue
+	style       ui.MonitorStyle
 	pos         mathf.Vec2
-	label       string
 	visible     bool
-	panel       *ui.UiMonitor
+	panel       monitorPanel
 	isDirty     bool
 	updateTimer float64
+}
+
+// monitorPanel separates widget lifecycle from the engine-backed view.
+type monitorPanel interface {
+	Render(ui.MonitorStyle, ui.MonitorValue)
+	SetVisible(bool)
+	UpdateScale(float64)
+	UpdatePos(mathf.Vec2)
 }
 
 // -----------------------------------------------------------------------------
@@ -84,19 +90,12 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	if v["size"] != nil {
 		size, _ = tools.GetFloat(v["size"])
 	}
-	eval := buildMonitorEval(g, target, val)
+	appearance := parseMonitorAppearance(v)
+	eval := buildMonitorEval(g, target, val, appearance)
 	if eval == nil {
 		return nil, syscall.ENOENT
 	}
-	appearance := parseMonitorAppearance(v)
-	color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color"))
-	if err != nil {
-		if appearance.IsScratch() {
-			color = mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
-		} else {
-			color = mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
-		}
-	}
+	color := parseMonitorColor(v, appearance)
 	label := v["label"].(string)
 	x := v["x"].(float64)
 	y := v["y"].(float64)
@@ -105,8 +104,11 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
 		target: target, val: val, eval: eval, name: name, size: size,
-		visible: visible, appearance: appearance, color: color,
-		pos: mathf.NewVec2(x, y), label: label, panel: panel,
+		visible: visible, pos: mathf.NewVec2(x, y), panel: panel,
+		style: ui.MonitorStyle{
+			Appearance: appearance, Label: label, Color: color,
+			Dimensions: parseListMonitorDimensions(v),
+		},
 		isDirty: true, // Initial dirty state to ensure first render.
 	}
 
@@ -114,6 +116,9 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 }
 
 func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
+	if v["mode"] == "list" || v["mode"] == float64(monitorModeList) {
+		return ui.MonitorAppearanceList
+	}
 	mode := int(v["mode"].(float64))
 	style, _ := coreproject.ShapeValue(v, "style", "default").(string)
 	if style == monitorStyleScratch {
@@ -128,28 +133,40 @@ func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
 	return ui.MonitorAppearanceDefaultLarge
 }
 
+func parseMonitorColor(v coreproject.StageShape, appearance ui.MonitorAppearance) mathf.Color {
+	if color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color")); err == nil {
+		return color
+	}
+	switch {
+	case appearance == ui.MonitorAppearanceList:
+		return mathf.NewColorRGBAi(0xff, 0x66, 0x1a, 0xff)
+	case appearance.IsScratch():
+		return mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
+	default:
+		return mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
+	}
+}
+
 func (pself *Monitor) onUpdate(delta float64) {
 	pself.updateTimer += delta
-	needsUpdate := pself.isDirty || pself.updateTimer >= monitorUpdateIntervalS
-	if !needsUpdate {
+	due := pself.updateTimer >= monitorUpdateIntervalS
+	if !pself.isDirty && !due {
 		return
 	}
 
-	if pself.updateTimer >= monitorUpdateIntervalS {
+	if due {
 		pself.updateTimer = 0
 	}
 
-	if !pself.visible {
-		pself.panel.SetVisible(false)
-		pself.setDirtyFlag(false)
-		return
+	// A getter can change visibility; apply that change on the next refresh.
+	visible := pself.visible
+	if visible {
+		pself.panel.Render(pself.style, pself.eval())
+		pself.panel.UpdateScale(pself.size)
+		pself.panel.UpdatePos(pself.pos)
 	}
-	val := pself.eval()
-	pself.panel.Render(pself.appearance, pself.label, val, pself.color)
-	pself.panel.UpdateScale(pself.size)
-	pself.panel.UpdatePos(pself.pos)
-	pself.panel.SetVisible(true)
-	pself.setDirtyFlag(false)
+	pself.panel.SetVisible(visible)
+	pself.isDirty = false
 }
 
 // -----------------------------------------------------------------------------
@@ -167,30 +184,29 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 	return reflect.Value{}, -1
 }
 
-func buildMonitorEval(g reflect.Value, t, val string) func() string {
+func buildMonitorEval(g reflect.Value, t, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
 	target, from := getTarget(g, t)
 	if from < 0 {
 		return nil
 	}
-	switch {
-	case strings.HasPrefix(val, getVarPrefix):
-		name := val[len(getVarPrefix):]
+	name := strings.TrimPrefix(val, getVarPrefix)
+	if appearance == ui.MonitorAppearanceList {
 		if name == "" {
-			spxlog.Error("Bind monitor error: name is empty")
 			return nil
 		}
-
-		if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
-			return eval
+		if eval := coreproject.ResolveMemberValueEval(target, name, from); eval != nil {
+			return func() ui.MonitorValue { return ui.MonitorValue{Items: listMonitorItems(eval())} }
 		}
-		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
-	default:
-		name := val
-		if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
-			return eval
-		}
-		spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
+		return nil
 	}
+	if val == getVarPrefix {
+		spxlog.Error("Bind monitor error: name is empty")
+		return nil
+	}
+	if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
+		return func() ui.MonitorValue { return ui.MonitorValue{Text: eval()} }
+	}
+	spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
 	return nil
 }
 
@@ -203,7 +219,7 @@ func (pself *Monitor) setVisible(visible bool) {
 	}
 
 	pself.visible = visible
-	pself.setDirtyFlag(true)
+	pself.isDirty = true
 }
 
 // -----------------------------------------------------------------------------
@@ -259,7 +275,7 @@ func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
 
 func (pself *Monitor) setXYpos(x float64, y float64) {
 	pself.pos = mathf.NewVec2(x, y)
-	pself.setDirtyFlag(true)
+	pself.isDirty = true
 }
 
 func (pself *Monitor) Size() float64 {
@@ -268,21 +284,10 @@ func (pself *Monitor) Size() float64 {
 
 func (pself *Monitor) SetSize(size float64) {
 	pself.size = size
-	pself.updateSize()
+	pself.isDirty = true
 }
 
 func (pself *Monitor) ChangeSize(delta float64) {
 	pself.size += delta
-	pself.updateSize()
-}
-
-func (pself *Monitor) updateSize() {
-	pself.setDirtyFlag(true)
-}
-
-// -----------------------------------------------------------------------------
-// Dirty State
-// -----------------------------------------------------------------------------
-func (pself *Monitor) setDirtyFlag(isDirty bool) {
-	pself.isDirty = isDirty
+	pself.isDirty = true
 }

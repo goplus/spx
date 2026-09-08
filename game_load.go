@@ -293,7 +293,6 @@ func (p *Game) addSpecialShapeWithLoader(
 				spxlog.Error("AddSpecialShape type: %s", shape["type"])
 				return nil
 			}
-			sm.game = p
 			p.shapeMgr.addShape(sm)
 			return nil
 		},

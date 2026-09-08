@@ -18,6 +18,7 @@ package spx
 
 import (
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
@@ -279,8 +280,9 @@ func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
 // -----------------------------------------------------------------------------
 
 func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bool {
+	val = strings.TrimPrefix(val, getVarPrefix)
 	for _, item := range p.shapeMgr.items {
-		if sp, ok := item.(*Monitor); ok && sp.val == val && sp.target == target {
+		if sp, ok := item.(*Monitor); ok && sp.target == target && strings.TrimPrefix(sp.val, getVarPrefix) == val {
 			sp.setVisible(visible)
 			return true
 		}

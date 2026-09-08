@@ -19,6 +19,8 @@ package ui
 //lint:file-ignore ST1001 UI glue intentionally dot-imports mathf to mirror engine type names.
 
 import (
+	"slices"
+
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v3/internal/engine"
@@ -26,10 +28,25 @@ import (
 
 type UiMonitor struct {
 	UiNode
-	views  [monitorAppearanceCount]monitorView
-	active MonitorAppearance
+	views     [monitorAppearanceCount]monitorView
+	active    MonitorAppearance
+	listItems []string
 }
-type UpdateFunc func(float64)
+
+// MonitorStyle describes the fixed presentation of a stage monitor.
+type MonitorStyle struct {
+	Appearance MonitorAppearance
+	Label      string
+	Color      Color
+	Dimensions Vec2
+}
+
+// MonitorValue keeps list items separate from scalar text. The appearance,
+// rather than a nil check on Items, determines how an empty list is displayed.
+type MonitorValue struct {
+	Text  string
+	Items []string
+}
 
 type MonitorAppearance uint8
 
@@ -38,6 +55,7 @@ const (
 	MonitorAppearanceDefaultLarge
 	MonitorAppearanceScratch
 	MonitorAppearanceScratchLarge
+	MonitorAppearanceList
 	monitorAppearanceCount
 )
 
@@ -76,16 +94,19 @@ var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
 		value:       "ScratchValueOnly/C/LabelValue",
 		colorTarget: "ScratchValueOnly/C",
 	},
+	MonitorAppearanceList: {root: "ScratchList"},
 }
 
 type monitorRenderSink interface {
 	SetVisible(engine.Object, bool)
 	SetText(engine.Object, string)
 	SetColor(engine.Object, Color)
+	SetListItems(engine.Object, string, engine.Array, Color)
+	SetSize(engine.Object, Vec2)
 }
 
 func (p MonitorAppearance) IsScratch() bool {
-	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge
+	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge || p == MonitorAppearanceList
 }
 
 func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {
@@ -107,18 +128,19 @@ func (pself *UiMonitor) OnStart() {
 }
 
 func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
+	optional := func(path string) *UiNode {
+		if path == "" {
+			return nil
+		}
+		return bind(path)
+	}
 	for i, spec := range monitorViewSpecs {
-		view := monitorView{
-			root:  bind(spec.root),
-			value: bind(spec.value),
+		pself.views[i] = monitorView{
+			root:        bind(spec.root),
+			value:       optional(spec.value),
+			label:       optional(spec.label),
+			colorTarget: optional(spec.colorTarget),
 		}
-		if spec.label != "" {
-			view.label = bind(spec.label)
-		}
-		if spec.colorTarget != "" {
-			view.colorTarget = bind(spec.colorTarget)
-		}
-		pself.views[i] = view
 	}
 	pself.active = monitorAppearanceCount
 }
@@ -135,13 +157,14 @@ func (pself *UiMonitor) UpdatePos(wpos Vec2) {
 	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
 }
 
-func (pself *UiMonitor) Render(appearance MonitorAppearance, name, value string, color Color) {
-	pself.render(&mgr.UiMgr, appearance, name, value, color)
+func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
+	pself.render(&mgr.UiMgr, style, value)
 }
 
-func (pself *UiMonitor) render(sink monitorRenderSink, appearance MonitorAppearance, name, value string, color Color) {
-	appearance = normalizeMonitorAppearance(appearance)
-	if pself.active != appearance {
+func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value MonitorValue) {
+	appearance := normalizeMonitorAppearance(style.Appearance)
+	changed := pself.active != appearance
+	if changed {
 		for i, view := range pself.views {
 			sink.SetVisible(view.root.GetId(), MonitorAppearance(i) == appearance)
 		}
@@ -149,11 +172,24 @@ func (pself *UiMonitor) render(sink monitorRenderSink, appearance MonitorAppeara
 	}
 
 	view := pself.views[appearance]
-	if view.label != nil {
-		sink.SetText(view.label.GetId(), name)
+	if appearance == MonitorAppearanceList {
+		id := view.root.GetId()
+		sink.SetSize(id, style.Dimensions)
+		// The style is fixed for a monitor; only changed items cross the bridge.
+		if changed || !slices.Equal(pself.listItems, value.Items) {
+			sink.SetListItems(id, style.Label, value.Items, style.Color)
+			pself.listItems = slices.Clone(value.Items)
+		}
+		return
 	}
-	sink.SetText(view.value.GetId(), value)
+
+	if view.label != nil {
+		sink.SetText(view.label.GetId(), style.Label)
+	}
+	if view.value != nil {
+		sink.SetText(view.value.GetId(), value.Text)
+	}
 	if view.colorTarget != nil {
-		sink.SetColor(view.colorTarget.GetId(), color)
+		sink.SetColor(view.colorTarget.GetId(), style.Color)
 	}
 }

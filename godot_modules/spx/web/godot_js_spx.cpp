@@ -1728,6 +1728,17 @@ void gdspx_ui_set_text(GdObj *obj, GdString *text) {
 	 uiMgr->set_text(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_ui_set_list_items(GdObj *obj, GdString *label, GdArray *items, GdColor *color) {
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(label, &gdspx_string_arg_1)) {
+		return;
+	}
+	if (!gdspx_validate_array_wrapper(items)) {
+		return;
+	}
+	 uiMgr->set_list_items(*obj, gdspx_string_arg_1, *items, *color);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_text(GdObj *obj, GdString *ret_val) {
 	if (!gdspx_prepare_string_wrapper(ret_val)) {
 		return;

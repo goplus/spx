@@ -1,0 +1,25 @@
+var (
+	items List
+	empty List
+	hidden bool
+)
+
+onStart => {
+	items.init("苹果", 1.23456789, true, "", "[b]literal text[/b]", "A very long item is clipped inside its row", "first line\nsecond line")
+	for i := 0; i < 10000; i++ {
+		items.append(items.len() + 1)
+	}
+}
+
+onKey KeyA, => { items.append("added") }
+onKey KeyR, => { items.set(0, "changed") }
+onKey KeyD, => { items.delete(0) }
+onKey KeyC, => { items.clear() }
+onKey KeyH, => {
+	hidden = !hidden
+	if hidden {
+		hideVar "items"
+	} else {
+		showVar "items"
+	}
+}

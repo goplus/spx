@@ -3070,6 +3070,20 @@ gdspx_ui_set_text(obj_low,obj_high,text) {
 	FreeGdString(_arg1);
 
 }
+gdspx_ui_set_list_items(obj_low,obj_high,label,items,color) {
+	var _gdFuncPtr = Module['_gdspx_ui_set_list_items'];
+
+	var _arg0 = Module['_gdspx_new_obj'](obj_high, obj_low);
+	var _arg1 = ToGdString(label);
+	var _arg2 = ToGdArray(items);
+	var _arg3 = ToGdColor(color);
+	_gdFuncPtr(_arg0, _arg1, _arg2, _arg3);
+	FreeGdObj(_arg0);
+	FreeGdString(_arg1);
+	FreeGdArray(_arg2);
+	FreeGdColor(_arg3);
+
+}
 gdspx_ui_get_text(obj_low,obj_high) {
 	var _gdFuncPtr = Module['_gdspx_ui_get_text'];
 	var _retValue = AllocGdString();
@@ -3693,6 +3707,7 @@ GdspxFuncs.prototype['gdspx_ui_create_input'] = GdspxFuncs.prototype.gdspx_ui_cr
 GdspxFuncs.prototype['gdspx_ui_destroy_node'] = GdspxFuncs.prototype.gdspx_ui_destroy_node;
 GdspxFuncs.prototype['gdspx_ui_get_type'] = GdspxFuncs.prototype.gdspx_ui_get_type;
 GdspxFuncs.prototype['gdspx_ui_set_text'] = GdspxFuncs.prototype.gdspx_ui_set_text;
+GdspxFuncs.prototype['gdspx_ui_set_list_items'] = GdspxFuncs.prototype.gdspx_ui_set_list_items;
 GdspxFuncs.prototype['gdspx_ui_get_text'] = GdspxFuncs.prototype.gdspx_ui_get_text;
 GdspxFuncs.prototype['gdspx_ui_set_texture'] = GdspxFuncs.prototype.gdspx_ui_set_texture;
 GdspxFuncs.prototype['gdspx_ui_get_texture'] = GdspxFuncs.prototype.gdspx_ui_get_texture;

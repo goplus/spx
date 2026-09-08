@@ -1263,6 +1263,10 @@ static void gdextension_spx_ui_set_text(GdObj obj, GdString text) {
 	uiMgr->set_text(obj, text);
 }
 
+static void gdextension_spx_ui_set_list_items(GdObj obj, GdString label, GdArray items, GdColor color) {
+	uiMgr->set_list_items(obj, label, items, color);
+}
+
 static void gdextension_spx_ui_get_text(GdObj obj, GdString *ret_val) {
 	*ret_val = uiMgr->get_text(obj);
 }
@@ -1726,6 +1730,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_destroy_node);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_type);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_text);
+	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_list_items);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_text);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_texture);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_texture);
