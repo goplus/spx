@@ -176,3 +176,11 @@ func TestCommandRunnerRunCommandReturnsResolvePathError(t *testing.T) {
 		t.Fatalf("runCommand error = %v, want command path resolution context", err)
 	}
 }
+
+func TestPrependToPathDedupes(t *testing.T) {
+	got := PrependToPath(strings.Join([]string{"/usr/bin", "/bin"}, string(filepath.ListSeparator)), "/custom/bin", "/usr/bin")
+	want := strings.Join([]string{"/custom/bin", "/usr/bin", "/bin"}, string(filepath.ListSeparator))
+	if got != want {
+		t.Fatalf("PrependToPath = %q, want %q", got, want)
+	}
+}

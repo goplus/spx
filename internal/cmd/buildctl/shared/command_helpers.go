@@ -22,10 +22,12 @@ import (
 )
 
 func runCommandOutput(name string, args ...string) ([]byte, error) {
-	return runCommandOutputWithEnv("", os.Environ(), name, args...)
+	return RunCommandOutputWithEnv("", os.Environ(), name, args...)
 }
 
-func runCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
+// RunCommandOutputWithEnv returns combined output using the given environment
+// and working directory. An empty workdir inherits the current directory.
+func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = env
 	if workdir != "" {

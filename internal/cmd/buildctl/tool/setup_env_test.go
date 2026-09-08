@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestSConsEnvironmentCommands(t *testing.T) {
@@ -54,14 +56,6 @@ func TestParseJavaMajorVersion(t *testing.T) {
 		if got != tc.want || ok != tc.ok {
 			t.Fatalf("parseJavaMajorVersion(%q) = (%d,%v), want (%d,%v)", tc.output, got, ok, tc.want, tc.ok)
 		}
-	}
-}
-
-func TestPrependToPathDedupes(t *testing.T) {
-	got := prependToPath("/usr/bin:/bin", "/custom/bin", "/usr/bin")
-	want := strings.Join([]string{"/custom/bin", "/usr/bin", "/bin"}, string(filepath.ListSeparator))
-	if got != want {
-		t.Fatalf("prependToPath = %q, want %q", got, want)
 	}
 }
 
@@ -151,7 +145,7 @@ func TestResolveEMSDKVerificationEnvironmentAddsConfigAndCache(t *testing.T) {
 	if env["EM_CACHE"] != filepath.Join(repoDir, "upstream", "emscripten", "cache") {
 		t.Fatalf("unexpected EM_CACHE: %q", env["EM_CACHE"])
 	}
-	if !dirExists(env["EM_CACHE"]) {
+	if !shared.DirExists(env["EM_CACHE"]) {
 		t.Fatalf("expected EM_CACHE directory to exist: %s", env["EM_CACHE"])
 	}
 }
