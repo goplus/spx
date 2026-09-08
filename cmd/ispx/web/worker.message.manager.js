@@ -145,14 +145,10 @@ class WorkerMessageManager {
                     };
 
                     // Special handling required when cloning data or using transferList
-                    if (transferList && cloneForEach) {
-                        if (message.data && message.data.buffer) {
-                            const clonedData = new Uint8Array(message.data);
-                            enhancedMessage.data = clonedData;
-                            worker.postMessage(enhancedMessage, [clonedData.buffer]);
-                        } else {
-                            worker.postMessage(enhancedMessage);
-                        }
+                    if (transferList && cloneForEach && message.data && message.data.buffer) {
+                        const clonedData = new Uint8Array(message.data);
+                        enhancedMessage.data = clonedData;
+                        worker.postMessage(enhancedMessage, [clonedData.buffer]);
                     } else {
                         worker.postMessage(enhancedMessage);
                     }
