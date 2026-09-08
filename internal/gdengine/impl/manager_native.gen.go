@@ -2558,6 +2558,23 @@ func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Co
 		CallUiSetListItems(arg0, arg1, arg2, arg3)
 	})
 }
+func (pself *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
+	enginewrap.CallInMainThread(func() {
+		arg0 := ToGdObj(obj)
+		arg1 := ToGdFloat(minimum)
+		arg2 := ToGdFloat(maximum)
+		arg3 := ToGdFloat(step)
+		arg4 := ToGdFloat(value)
+		CallUiSetRange(arg0, arg1, arg2, arg3, arg4)
+	})
+}
+func (pself *uiMgr) GetRangeValue(obj Object) float64 {
+	return enginewrap.CallInMainThreadValue(func() float64 {
+		arg0 := ToGdObj(obj)
+		retValue := CallUiGetRangeValue(arg0)
+		return ToFloat64(retValue)
+	})
+}
 func (pself *uiMgr) GetText(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)

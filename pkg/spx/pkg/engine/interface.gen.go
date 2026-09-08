@@ -394,6 +394,8 @@ type IUiMgr interface {
 	GetType(obj Object) int64
 	SetText(obj Object, text string)
 	SetListItems(obj Object, label string, items Array, color Color)
+	SetRange(obj Object, minimum float64, maximum float64, step float64, value float64)
+	GetRangeValue(obj Object) float64
 	GetText(obj Object) string
 	SetTexture(obj Object, path string)
 	GetTexture(obj Object) string

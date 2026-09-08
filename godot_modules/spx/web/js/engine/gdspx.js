@@ -3084,6 +3084,32 @@ gdspx_ui_set_list_items(obj_low,obj_high,label,items,color) {
 	FreeGdColor(_arg3);
 
 }
+gdspx_ui_set_range(obj_low,obj_high,minimum,maximum,step,value) {
+	var _gdFuncPtr = Module['_gdspx_ui_set_range'];
+
+	var _arg0 = Module['_gdspx_new_obj'](obj_high, obj_low);
+	var _arg1 = ToGdFloat(minimum);
+	var _arg2 = ToGdFloat(maximum);
+	var _arg3 = ToGdFloat(step);
+	var _arg4 = ToGdFloat(value);
+	_gdFuncPtr(_arg0, _arg1, _arg2, _arg3, _arg4);
+	FreeGdObj(_arg0);
+	FreeGdFloat(_arg1);
+	FreeGdFloat(_arg2);
+	FreeGdFloat(_arg3);
+	FreeGdFloat(_arg4);
+
+}
+gdspx_ui_get_range_value(obj_low,obj_high) {
+	var _gdFuncPtr = Module['_gdspx_ui_get_range_value'];
+	var _retValue = AllocGdFloat();
+	var _arg0 = Module['_gdspx_new_obj'](obj_high, obj_low);
+	_gdFuncPtr(_arg0, _retValue);
+	FreeGdObj(_arg0);
+	var _finalRetValue = ToJsFloat(_retValue);
+	FreeGdFloat(_retValue);
+	return _finalRetValue
+}
 gdspx_ui_get_text(obj_low,obj_high) {
 	var _gdFuncPtr = Module['_gdspx_ui_get_text'];
 	var _retValue = AllocGdString();
@@ -3708,6 +3734,8 @@ GdspxFuncs.prototype['gdspx_ui_destroy_node'] = GdspxFuncs.prototype.gdspx_ui_de
 GdspxFuncs.prototype['gdspx_ui_get_type'] = GdspxFuncs.prototype.gdspx_ui_get_type;
 GdspxFuncs.prototype['gdspx_ui_set_text'] = GdspxFuncs.prototype.gdspx_ui_set_text;
 GdspxFuncs.prototype['gdspx_ui_set_list_items'] = GdspxFuncs.prototype.gdspx_ui_set_list_items;
+GdspxFuncs.prototype['gdspx_ui_set_range'] = GdspxFuncs.prototype.gdspx_ui_set_range;
+GdspxFuncs.prototype['gdspx_ui_get_range_value'] = GdspxFuncs.prototype.gdspx_ui_get_range_value;
 GdspxFuncs.prototype['gdspx_ui_get_text'] = GdspxFuncs.prototype.gdspx_ui_get_text;
 GdspxFuncs.prototype['gdspx_ui_set_texture'] = GdspxFuncs.prototype.gdspx_ui_set_texture;
 GdspxFuncs.prototype['gdspx_ui_get_texture'] = GdspxFuncs.prototype.gdspx_ui_get_texture;

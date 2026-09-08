@@ -1707,6 +1707,19 @@ func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Co
 	arg3 := JsFromGdColor(color)
 	API.SpxUiSetListItems.Invoke(arg0Low, arg0High, arg1, arg2, arg3)
 }
+func (pself *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdFloat(minimum)
+	arg2 := JsFromGdFloat(maximum)
+	arg3 := JsFromGdFloat(step)
+	arg4 := JsFromGdFloat(value)
+	API.SpxUiSetRange.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+}
+func (pself *uiMgr) GetRangeValue(obj Object) float64 {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	_retValue := API.SpxUiGetRangeValue.Invoke(arg0Low, arg0High)
+	return JsToGdFloat(_retValue)
+}
 func (pself *uiMgr) GetText(obj Object) string {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	_retValue := API.SpxUiGetText.Invoke(arg0Low, arg0High)

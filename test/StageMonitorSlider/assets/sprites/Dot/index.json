@@ -1,0 +1,16 @@
+{
+  "costumes": [
+    {
+      "name": "dot",
+      "path": "dot.svg",
+      "bitmapResolution": 1,
+      "rotationCenterX": 12,
+      "rotationCenterY": 12
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true
+}

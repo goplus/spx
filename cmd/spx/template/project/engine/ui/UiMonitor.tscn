@@ -1,7 +1,18 @@
-[gd_scene load_steps=11 format=3 uid="uid://bsaqlmdsvus4d"]
+[gd_scene load_steps=13 format=3 uid="uid://bsaqlmdsvus4d"]
 
 [ext_resource type="Texture2D" uid="uid://dtaph1d474hyg" path="res://engine/textures/monitor/frame_name.png" id="1_y7j7f"]
 [ext_resource type="Texture2D" uid="uid://d1544egog82vl" path="res://engine/textures/monitor/frame_value.png" id="2_rbnwe"]
+
+[ext_resource type="Texture2D" path="res://engine/textures/monitor/slider_thumb.svg" id="3_slider_thumb"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slider_track"]
+bg_color = Color(0.8, 0.8, 0.8, 1)
+content_margin_top = 3.0
+content_margin_bottom = 3.0
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_5mp4r"]
 texture = ExtResource("1_y7j7f")
@@ -227,3 +238,66 @@ theme_override_font_sizes/font_size = 36
 text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="ScratchSlider" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+offset_right = 100.0
+offset_bottom = 44.0
+scale = Vector2(0.45, 0.45)
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_default")
+
+[node name="V" type="VBoxContainer" parent="ScratchSlider"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="H" type="HBoxContainer" parent="ScratchSlider/V"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="LabelMargin" type="MarginContainer" parent="ScratchSlider/V/H"]
+layout_mode = 2
+theme_override_constants/margin_left = 11
+theme_override_constants/margin_right = 11
+
+[node name="LabelName" type="Label" parent="ScratchSlider/V/H/LabelMargin"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.341176, 0.368627, 0.458824, 1)
+theme_override_colors/font_outline_color = Color(0.341176, 0.368627, 0.458824, 1)
+theme_override_constants/outline_size = 1
+theme_override_font_sizes/font_size = 26
+text = "score"
+vertical_alignment = 1
+
+[node name="ValueMargin" type="MarginContainer" parent="ScratchSlider/V/H"]
+layout_mode = 2
+theme_override_constants/margin_left = 11
+theme_override_constants/margin_right = 11
+
+[node name="C" type="PanelContainer" parent="ScratchSlider/V/H/ValueMargin"]
+custom_minimum_size = Vector2(89, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_scratch_value")
+
+[node name="LabelValue" type="Label" parent="ScratchSlider/V/H/ValueMargin/C"]
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 26
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Slider" type="HSlider" parent="ScratchSlider/V"]
+custom_minimum_size = Vector2(200, 30)
+layout_mode = 2
+mouse_filter = 0
+focus_mode = 2
+scrollable = false
+theme_override_styles/slider = SubResource("StyleBoxFlat_slider_track")
+theme_override_styles/grabber_area = SubResource("StyleBoxFlat_slider_track")
+theme_override_styles/grabber_area_highlight = SubResource("StyleBoxFlat_slider_track")
+theme_override_icons/grabber = ExtResource("3_slider_thumb")
+theme_override_icons/grabber_highlight = ExtResource("3_slider_thumb")
+theme_override_icons/grabber_disabled = ExtResource("3_slider_thumb")

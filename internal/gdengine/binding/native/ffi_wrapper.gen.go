@@ -395,6 +395,8 @@ type GDExtensionSpxUiDestroyNode C.GDExtensionSpxUiDestroyNode
 type GDExtensionSpxUiGetType C.GDExtensionSpxUiGetType
 type GDExtensionSpxUiSetText C.GDExtensionSpxUiSetText
 type GDExtensionSpxUiSetListItems C.GDExtensionSpxUiSetListItems
+type GDExtensionSpxUiSetRange C.GDExtensionSpxUiSetRange
+type GDExtensionSpxUiGetRangeValue C.GDExtensionSpxUiGetRangeValue
 type GDExtensionSpxUiGetText C.GDExtensionSpxUiGetText
 type GDExtensionSpxUiSetTexture C.GDExtensionSpxUiSetTexture
 type GDExtensionSpxUiGetTexture C.GDExtensionSpxUiGetTexture
@@ -3577,6 +3579,33 @@ func CallUiSetListItems(
 
 	C.cgo_callfn_GDExtensionSpxUiSetListItems(arg0, arg1, arg2, arg3, arg4)
 
+}
+func CallUiSetRange(
+	obj GdObj,
+	minimum GdFloat,
+	maximum GdFloat,
+	step GdFloat,
+	value GdFloat,
+) {
+	arg0 := (C.GDExtensionSpxUiSetRange)(api.SpxUiSetRange)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdFloat)(minimum)
+	arg3 := (C.GdFloat)(maximum)
+	arg4 := (C.GdFloat)(step)
+	arg5 := (C.GdFloat)(value)
+
+	C.cgo_callfn_GDExtensionSpxUiSetRange(arg0, arg1, arg2, arg3, arg4, arg5)
+
+}
+func CallUiGetRangeValue(
+	obj GdObj,
+) GdFloat {
+	arg0 := (C.GDExtensionSpxUiGetRangeValue)(api.SpxUiGetRangeValue)
+	arg1 := (C.GdObj)(obj)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxUiGetRangeValue(arg0, arg1, &ret_val)
+
+	return (GdFloat)(ret_val)
 }
 func CallUiGetText(
 	obj GdObj,

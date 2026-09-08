@@ -71,7 +71,7 @@ func TestListMonitorEvalTracksChanges(t *testing.T) {
 	for _, name := range []string{"items", "getVar:items", "current", "Current"} {
 		t.Run(name, func(t *testing.T) {
 			g.items = NewList("first")
-			eval := buildMonitorEval(root, "", name, ui.MonitorAppearanceList)
+			eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceList)
 			if eval == nil {
 				t.Fatal("list binding failed")
 			}
@@ -98,11 +98,11 @@ func TestListMonitorEvalTracksChanges(t *testing.T) {
 			}
 		})
 	}
-	spriteEval := buildMonitorEval(root, "Monkey", "getVar:items", ui.MonitorAppearanceList)
+	spriteEval := monitorEvalForTest(root, "Monkey", "getVar:items", ui.MonitorAppearanceList)
 	if spriteEval == nil || !slices.Equal(spriteEval().Items, []string{"sprite"}) {
 		t.Fatal("sprite-local list binding failed")
 	}
-	globalEval := buildMonitorEval(root, "Monkey", "values", ui.MonitorAppearanceList)
+	globalEval := monitorEvalForTest(root, "Monkey", "values", ui.MonitorAppearanceList)
 	g.values = []string{"shared"}
 	if globalEval == nil || !slices.Equal(globalEval().Items, g.values) {
 		t.Fatal("promoted global slice binding failed")
@@ -112,7 +112,7 @@ func TestListMonitorEvalTracksChanges(t *testing.T) {
 		t.Fatal("slice growth not reflected")
 	}
 	for _, binding := range [][2]string{{"", "getVar:"}, {"", "missing"}, {"missing", "items"}} {
-		if buildMonitorEval(root, binding[0], binding[1], ui.MonitorAppearanceList) != nil {
+		if monitorEvalForTest(root, binding[0], binding[1], ui.MonitorAppearanceList) != nil {
 			t.Errorf("unexpected binding for %v", binding)
 		}
 	}

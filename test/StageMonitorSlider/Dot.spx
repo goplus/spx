@@ -1,0 +1,3 @@
+var level float64
+onStart => { level = 2.5 }
+onKey KeySpace, => { println "Dot.level", level }

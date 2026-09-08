@@ -46,7 +46,7 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 	g := monitorEvalFixture{score: 1.23456789}
 	root := reflect.ValueOf(&g).Elem()
 	for _, name := range []string{"score", "getVar:score"} {
-		eval := buildMonitorEval(root, "", name, ui.MonitorAppearanceDefault)
+		eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceDefault)
 		if eval == nil || eval().Text != "1.23456789" {
 			t.Fatalf("field binding %q lost precision", name)
 		}
@@ -57,7 +57,7 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 		g.score = 1.23456789
 	}
 	for _, name := range []string{"value", "getVar:value"} {
-		eval := buildMonitorEval(root, "", name, ui.MonitorAppearanceDefault)
+		eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceDefault)
 		if eval == nil || g.calls != 0 {
 			t.Fatal("binding must not invoke a getter")
 		}
@@ -68,15 +68,15 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 	}
 	// An explicitly named method is displayed as its function pointer by the
 	// existing string evaluator; only the lowercase auto-property is invoked.
-	eval := buildMonitorEval(root, "", "Value", ui.MonitorAppearanceDefault)
+	eval := monitorEvalForTest(root, "", "Value", ui.MonitorAppearanceDefault)
 	if eval == nil || !regexp.MustCompile(`^0x[0-9a-f]+$`).MatchString(eval().Text) || g.calls != 0 {
 		t.Fatal("explicit method behavior changed")
 	}
-	if eval := buildMonitorEval(root, "", "unset", ui.MonitorAppearanceDefault); eval == nil || eval().Text != "<nil>" {
+	if eval := monitorEvalForTest(root, "", "unset", ui.MonitorAppearanceDefault); eval == nil || eval().Text != "<nil>" {
 		t.Fatal("nil field formatting changed")
 	}
 	for _, binding := range [][2]string{{"", ""}, {"", "getVar:"}, {"", "missing"}, {"missing", "score"}} {
-		if buildMonitorEval(root, binding[0], binding[1], ui.MonitorAppearanceDefault) != nil {
+		if monitorEvalForTest(root, binding[0], binding[1], ui.MonitorAppearanceDefault) != nil {
 			t.Errorf("unexpected binding for %v", binding)
 		}
 	}
@@ -195,11 +195,11 @@ func TestParseMonitorAppearance(t *testing.T) {
 	}{
 		{name: "default", mode: 1, want: ui.MonitorAppearanceDefault},
 		{name: "default large", mode: 2, want: ui.MonitorAppearanceDefaultLarge},
-		{name: "default unsupported mode", mode: 3, want: ui.MonitorAppearanceDefaultLarge},
+		{name: "default unsupported mode", mode: 99, want: ui.MonitorAppearanceDefaultLarge},
 		{name: "explicit default", mode: 1, style: "default", want: ui.MonitorAppearanceDefault},
 		{name: "scratch", mode: 1, style: "scratch", want: ui.MonitorAppearanceScratch},
 		{name: "scratch large", mode: 2, style: "scratch", want: ui.MonitorAppearanceScratchLarge},
-		{name: "scratch unsupported mode", mode: 3, style: "scratch", want: ui.MonitorAppearanceScratch},
+		{name: "scratch unsupported mode", mode: 99, style: "scratch", want: ui.MonitorAppearanceScratch},
 		{name: "unknown style", mode: 1, style: "custom", want: ui.MonitorAppearanceDefault},
 		{name: "invalid style", mode: 2, style: 1.0, want: ui.MonitorAppearanceDefaultLarge},
 	}
@@ -266,4 +266,9 @@ func TestStageMonitorFixture(t *testing.T) {
 	for name := range want {
 		t.Errorf("missing monitor %q", name)
 	}
+}
+
+func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
+	binding, _ := bindMonitor(g, target, val, appearance)
+	return binding.read
 }

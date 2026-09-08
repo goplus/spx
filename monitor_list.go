@@ -16,25 +16,7 @@
 
 package spx
 
-import (
-	"math"
-	"reflect"
-
-	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/tools"
-)
-
-func parseListMonitorDimensions(v coreproject.StageShape) mathf.Vec2 {
-	dimension := func(key string, fallback, minimum float64) float64 {
-		value, ok := tools.GetFloat(v[key])
-		if !ok || value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
-			return fallback
-		}
-		return math.Max(value, minimum)
-	}
-	return mathf.NewVec2(dimension("width", 100, 100), dimension("height", 200, 60))
-}
+import "reflect"
 
 // listMonitorItems snapshots the current contents without retaining the source
 // slice or list. Replacing or growing a list is reflected on the next refresh.

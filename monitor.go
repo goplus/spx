@@ -18,12 +18,9 @@ package spx
 
 import (
 	"reflect"
-	"strings"
-	"syscall"
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 	"github.com/goplus/spx/v3/internal/tools"
 	"github.com/goplus/spx/v3/internal/ui"
 )
@@ -32,12 +29,17 @@ import (
 // Constants
 // -----------------------------------------------------------------------------
 const (
+	monitorModeDefault = 1
+	monitorModeLarge   = 2
+	monitorModeSlider  = 3
+	monitorModeList    = 4
+
+	// Style selects the appearance of default and large monitors.
+	// Slider and list monitors always use the Scratch appearance.
+	monitorStyleScratch = "scratch"
+
 	getVarPrefix           = "getVar:"
 	monitorUpdateIntervalS = 0.2
-	monitorModeDefault     = 1
-	monitorModeLarge       = 2
-	monitorModeList        = 4
-	monitorStyleScratch    = "scratch"
 )
 
 // -----------------------------------------------------------------------------
@@ -49,6 +51,7 @@ type Monitor struct {
 	target      string
 	val         string
 	eval        func() ui.MonitorValue
+	updateInput func() bool
 	style       ui.MonitorStyle
 	pos         mathf.Vec2
 	visible     bool
@@ -91,9 +94,9 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 		size, _ = tools.GetFloat(v["size"])
 	}
 	appearance := parseMonitorAppearance(v)
-	eval := buildMonitorEval(g, target, val, appearance)
-	if eval == nil {
-		return nil, syscall.ENOENT
+	binding, err := bindMonitor(g, target, val, appearance)
+	if err != nil {
+		return nil, err
 	}
 	color := parseMonitorColor(v, appearance)
 	label := v["label"].(string)
@@ -103,51 +106,29 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
-		target: target, val: val, eval: eval, name: name, size: size,
+		target: target, val: val, eval: binding.read, name: name, size: size,
 		visible: visible, pos: mathf.NewVec2(x, y), panel: panel,
 		style: ui.MonitorStyle{
 			Appearance: appearance, Label: label, Color: color,
 			Dimensions: parseListMonitorDimensions(v),
+			Slider:     parseMonitorSlider(v),
 		},
 		isDirty: true, // Initial dirty state to ensure first render.
+	}
+	if binding.write != nil {
+		monitor.updateInput = func() bool {
+			value, changed := panel.ReadSliderChange()
+			return changed && binding.write(value)
+		}
 	}
 
 	return monitor, nil
 }
 
-func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
-	if v["mode"] == "list" || v["mode"] == float64(monitorModeList) {
-		return ui.MonitorAppearanceList
-	}
-	mode := int(v["mode"].(float64))
-	style, _ := coreproject.ShapeValue(v, "style", "default").(string)
-	if style == monitorStyleScratch {
-		if mode == monitorModeLarge {
-			return ui.MonitorAppearanceScratchLarge
-		}
-		return ui.MonitorAppearanceScratch
-	}
-	if mode == monitorModeDefault {
-		return ui.MonitorAppearanceDefault
-	}
-	return ui.MonitorAppearanceDefaultLarge
-}
-
-func parseMonitorColor(v coreproject.StageShape, appearance ui.MonitorAppearance) mathf.Color {
-	if color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color")); err == nil {
-		return color
-	}
-	switch {
-	case appearance == ui.MonitorAppearanceList:
-		return mathf.NewColorRGBAi(0xff, 0x66, 0x1a, 0xff)
-	case appearance.IsScratch():
-		return mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
-	default:
-		return mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)
-	}
-}
-
 func (pself *Monitor) onUpdate(delta float64) {
+	if pself.visible && pself.updateInput != nil && pself.updateInput() {
+		pself.isDirty = true
+	}
 	pself.updateTimer += delta
 	due := pself.updateTimer >= monitorUpdateIntervalS
 	if !pself.isDirty && !due {
@@ -167,47 +148,6 @@ func (pself *Monitor) onUpdate(delta float64) {
 	}
 	pself.panel.SetVisible(visible)
 	pself.isDirty = false
-}
-
-// -----------------------------------------------------------------------------
-// Evaluation
-// -----------------------------------------------------------------------------
-func getTarget(g reflect.Value, target string) (reflect.Value, int) {
-	if target == "" {
-		return g, 1 // spx.Game
-	}
-	if val := coreproject.FindFieldPtr(g, target, 0); val != nil {
-		if _, ok := val.(Shape); ok {
-			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
-		}
-	}
-	return reflect.Value{}, -1
-}
-
-func buildMonitorEval(g reflect.Value, t, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
-	target, from := getTarget(g, t)
-	if from < 0 {
-		return nil
-	}
-	name := strings.TrimPrefix(val, getVarPrefix)
-	if appearance == ui.MonitorAppearanceList {
-		if name == "" {
-			return nil
-		}
-		if eval := coreproject.ResolveMemberValueEval(target, name, from); eval != nil {
-			return func() ui.MonitorValue { return ui.MonitorValue{Items: listMonitorItems(eval())} }
-		}
-		return nil
-	}
-	if val == getVarPrefix {
-		spxlog.Error("Bind monitor error: name is empty")
-		return nil
-	}
-	if eval := coreproject.ResolveMemberStringEval(target, name, from); eval != nil {
-		return func() ui.MonitorValue { return ui.MonitorValue{Text: eval()} }
-	}
-	spxlog.Error("Bind monitor error: cannot find property or method (getter): %s", name)
-	return nil
 }
 
 // -----------------------------------------------------------------------------

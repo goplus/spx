@@ -18,6 +18,7 @@ package ui
 
 import (
 	"bufio"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,11 +38,13 @@ type monitorRenderSpy struct {
 	items     map[engine.Object][]string
 	size      map[engine.Object]mathf.Vec2
 	listCalls int
+	ranges    map[engine.Object]float64
 }
 
 func newMonitorRenderSpy() *monitorRenderSpy {
 	return &monitorRenderSpy{
 		visible: make(map[engine.Object]bool),
+		ranges:  make(map[engine.Object]float64),
 		text:    make(map[engine.Object]string),
 		color:   make(map[engine.Object]mathf.Color),
 		items:   make(map[engine.Object][]string),
@@ -173,6 +176,7 @@ func TestUiMonitorSceneContract(t *testing.T) {
 			t.Errorf("bound node %q type = %q, want %q", path, got, want)
 		}
 	}
+	assertNodeType("ScratchSlider/V/Slider", "HSlider")
 	for _, spec := range monitorViewSpecs {
 		if spec.root == "ScratchList" {
 			assertNodeType(spec.root, "SpxListMonitor")
@@ -190,7 +194,7 @@ func TestUiMonitorSceneContract(t *testing.T) {
 	if got := monitorSceneProperty(parsed.nodes["."], "visible"); got != "false" {
 		t.Errorf("monitor root visibility = %q, want false", got)
 	}
-	for _, path := range []string{"ValueOnly", "ScratchBG", "ScratchValueOnly", "ScratchList"} {
+	for _, path := range []string{"ValueOnly", "ScratchBG", "ScratchValueOnly", "ScratchList", "ScratchSlider"} {
 		if got := monitorSceneProperty(parsed.nodes[path], "visible"); got != "false" {
 			t.Errorf("%s initial visibility = %q, want false", path, got)
 		}
@@ -374,3 +378,8 @@ func assertMonitorSceneProperties(t *testing.T, section string, want map[string]
 		}
 	}
 }
+
+func (p *monitorRenderSpy) SetRange(id engine.Object, min, max, step, value float64) {
+	p.ranges[id] = math.Max(min, math.Min(max, math.Floor((value-min)/step+0.5)*step+min))
+}
+func (p *monitorRenderSpy) GetRangeValue(id engine.Object) float64 { return p.ranges[id] }

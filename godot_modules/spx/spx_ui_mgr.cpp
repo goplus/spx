@@ -487,3 +487,24 @@ void SpxUiMgr::set_flip(GdObj obj, GdBool horizontal, GdBool is_flip) {
 	SPX_REQUIRE_UI_VOID()
 	node->set_flip(horizontal, is_flip);
 }
+
+// Range updates from game state must not emit user-input signals.
+void SpxUiMgr::set_range(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value) {
+	SPX_REQUIRE_UI_VOID();
+	auto range = Object::cast_to<Range>(node->get_control());
+	ERR_FAIL_NULL(range);
+	const bool blocked = range->is_blocking_signals();
+	range->set_block_signals(true);
+	range->set_min(minimum);
+	range->set_max(maximum);
+	range->set_step(step);
+	range->set_value_no_signal(value);
+	range->set_block_signals(blocked);
+}
+
+GdFloat SpxUiMgr::get_range_value(GdObj obj) {
+	SPX_REQUIRE_UI_RETURN(0);
+	auto range = Object::cast_to<Range>(node->get_control());
+	ERR_FAIL_NULL_V(range, 0);
+	return range->get_value();
+}
