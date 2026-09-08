@@ -1,3 +1,5 @@
+// Keep callback IDs unique across calls and manager replacements in this window.
+let nextWorkerCallbackId = 0;
 
 // PThread Worker 消息管理器类
 class WorkerMessageManager {
@@ -66,12 +68,10 @@ class WorkerMessageManager {
     processArguments(...args) {
 
         const processedArgs = [];
-        let callbackCounter = 0;
-
         for (let arg of args) {
             if (typeof arg === 'function') {
                 // generate unique callback name
-                const callbackName = `_onSpxCall_${Date.now()}_${callbackCounter++}`;
+                const callbackName = `_onSpxCall_${nextWorkerCallbackId++}`;
 
                 // register callback function
                 this.registerWorkerCallback(callbackName, arg);
@@ -88,8 +88,9 @@ class WorkerMessageManager {
 
     // register worker callback function
     registerWorkerCallback(callbackName, userFunction) {
+        const callbacks = window._spxMainCalls;
         // create callback handler function
-        window._spxMainCalls[callbackName] = async function (requestId, ...args) {
+        callbacks[callbackName] = async function (requestId, ...args) {
             let errorMsg = null;
             let result = null;
 
@@ -106,6 +107,11 @@ class WorkerMessageManager {
             } catch (error) {
                 console.error(`Error in ${callbackName}:`, error);
                 errorMsg = error.message;
+            }
+
+            // Rebinding clears subscriptions, including their pending responses.
+            if (window._spxMainCalls !== callbacks) {
+                return;
             }
 
             // send response to worker
