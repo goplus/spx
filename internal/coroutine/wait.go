@@ -34,7 +34,7 @@ type WaitJob struct {
 	Th    Thread  // Coroutine waiting on the job, if any.
 	Id    int64   // Manager-local sequence number.
 	Type  int     // Scheduler-internal job kind.
-	Call  func()  // Action invoked when the job becomes eligible.
+	Call  func()  // Action when eligible; nil resumes Th for non-main-thread jobs.
 	Time  float64 // Level-time deadline for a time job.
 	Frame int64   // Scheduler frame recorded for a frame job.
 }
@@ -180,9 +180,6 @@ func (p *Coroutines) newResumeWaitJob(me Thread, waitType int) *WaitJob {
 		Th:   me,
 		Id:   p.nextWaitJobID(),
 		Type: waitType,
-		Call: func() {
-			p.markRunnableAndResume(me)
-		},
 	}
 }
 

@@ -572,12 +572,38 @@ func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
 		t.Fatal("coroutine did not complete")
 	}
 
-	resume.Call()
+	co.runWaitJob(resume)
 	co.schedulerMu.Lock()
 	_, exists := co.threadStates[thread]
 	co.schedulerMu.Unlock()
 	if exists {
 		t.Fatal("stale resume job restored scheduler state for a completed thread")
+	}
+}
+
+func TestWaitJobPreservesCustomAction(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		kind int
+	}{
+		{"loop", waitTypeLoop},
+		{"frame", waitTypeFrame},
+		{"time", waitTypeTime},
+		{"yield", waitTypeYield},
+		{"main thread", waitTypeMainThread},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co := New(nil)
+			var calls int
+			job := &WaitJob{
+				Type: test.kind,
+				Call: func() { calls++ },
+			}
+			co.processWaitJob(&updateState{frame: 1, levelTime: 1}, &UpdateJobsStats{}, job)
+			if calls != 1 {
+				t.Fatalf("custom action called %d times; want 1", calls)
+			}
+		})
 	}
 }
 

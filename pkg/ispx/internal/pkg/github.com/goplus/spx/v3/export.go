@@ -29,6 +29,7 @@ import (
 	_ "embed"
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild/typesdata"
+	event "github.com/goplus/spx/v3/internal/core/event"
 	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -562,6 +563,7 @@ func init() {
 		"(*Game).MouseX":               method_ptr_Game_MouseX,
 		"(*Game).MouseY":               method_ptr_Game_MouseY,
 		"(*Game).ResetTimer":           method_ptr_Game_ResetTimer,
+		"(*Game).Stop":                 method_ptr_Game_Stop,
 		"(*Game).Timer":                method_ptr_Game_Timer,
 		"(*List).Append":               method_ptr_List_Append,
 		"(*List).At":                   method_ptr_List_At,
@@ -597,6 +599,7 @@ func init() {
 		"(*SpriteImpl).SetXpos":        method_ptr_SpriteImpl_SetXpos,
 		"(*SpriteImpl).SetYpos":        method_ptr_SpriteImpl_SetYpos,
 		"(*SpriteImpl).Show":           method_ptr_SpriteImpl_Show,
+		"(*SpriteImpl).Stop":           method_ptr_SpriteImpl_Stop,
 		"(*SpriteImpl).Visible":        method_ptr_SpriteImpl_Visible,
 		"(*SpriteImpl).Xpos":           method_ptr_SpriteImpl_Xpos,
 		"(*SpriteImpl).Ypos":           method_ptr_SpriteImpl_Ypos,
@@ -711,6 +714,10 @@ func method_ptr_Game_MouseY(ctx ixgo.DirectCallContext) {
 
 func method_ptr_Game_ResetTimer(ctx ixgo.DirectCallContext) {
 	(*q.Game).ResetTimer(ixgo.DirectCallArg[*q.Game](ctx, 0))
+}
+
+func method_ptr_Game_Stop(ctx ixgo.DirectCallContext) {
+	(*q.Game).Stop(ixgo.DirectCallArg[*q.Game](ctx, 0), ixgo.DirectCallArg[event.StopKind](ctx, 1))
 }
 
 func method_ptr_Game_Timer(ctx ixgo.DirectCallContext) {
@@ -935,6 +942,10 @@ func method_ptr_SpriteImpl_SetYpos(ctx ixgo.DirectCallContext) {
 
 func method_ptr_SpriteImpl_Show(ctx ixgo.DirectCallContext) {
 	(*q.SpriteImpl).Show(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0))
+}
+
+func method_ptr_SpriteImpl_Stop(ctx ixgo.DirectCallContext) {
+	(*q.SpriteImpl).Stop(ixgo.DirectCallArg[*q.SpriteImpl](ctx, 0), ixgo.DirectCallArg[event.StopKind](ctx, 1))
 }
 
 func method_ptr_SpriteImpl_Visible(ctx ixgo.DirectCallContext) {
