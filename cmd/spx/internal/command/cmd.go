@@ -134,8 +134,8 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 		return err
 	}
 
-	if cmd.handleSpecialCommands() {
-		return nil
+	if handled, err := cmd.handleSpecialCommands(); handled {
+		return err
 	}
 	if isRuntimeModeCommand(cmd.Args.CmdName) {
 		cmd.RuntimeMode = true
@@ -177,28 +177,31 @@ func (cmd *CmdTool) setupInterpretedPaths(dstRelDir string) error {
 }
 
 // handleSpecialCommands handles commands without setup.
-func (cmd *CmdTool) handleSpecialCommands() bool {
+func (cmd *CmdTool) handleSpecialCommands() (handled bool, err error) {
 	switch cmd.Args.CmdName {
 	case "help", "version":
 		cmd.ShowHelpInfo()
-		return true
+		return true, nil
 	case "clear":
-		if err := cmd.Clear(); err != nil {
+		err = cmd.Clear()
+		if err != nil {
 			logErrorf("Clearing project: %v", err)
 		}
-		return true
+		return true, err
 	case "clearbuild":
-		if err := cmd.ClearBuild(); err != nil {
+		err = cmd.ClearBuild()
+		if err != nil {
 			logErrorf("Clearing build artifacts: %v", err)
 		}
-		return true
+		return true, err
 	case "stopweb":
-		if err := cmd.StopWeb(); err != nil {
+		err = cmd.StopWeb()
+		if err != nil {
 			logErrorf("Stopping web server: %v", err)
 		}
-		return true
+		return true, err
 	}
-	return false
+	return false, nil
 }
 
 // executeCommand runs the main command flow.
