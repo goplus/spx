@@ -500,14 +500,6 @@ func validatePortableComponent(component string) error {
 	return nil
 }
 
-func entryPathKey(name string) string {
-	_, key, _, err := normalizeEntryName(name)
-	if err != nil {
-		return ""
-	}
-	return key
-}
-
 func manifestEntriesEqualWithLimits(a, b Bundle, limits Limits) error {
 	left, err := a.canonicalWithLimits(limits)
 	if err != nil {
@@ -527,8 +519,3 @@ func manifestEntriesEqualWithLimits(a, b Bundle, limits Limits) error {
 	}
 	return nil
 }
-
-// Ensure fs.FileMode remains the source of truth for mode type bits. This
-// assignment also makes accidental widening to platform-specific bits fail at
-// compile time if the mode representation changes.
-var _ fs.FileMode = fs.ModeDir
