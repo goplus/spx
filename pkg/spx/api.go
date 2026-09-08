@@ -40,7 +40,7 @@ func IsInCoroutine() bool {
 // ExecuteNative runs fn in a native Go goroutine and waits for it, yielding the
 // calling SPX coroutine so blocking operations do not stall the scheduler.
 // fn receives the coroutine's context and owner. It should return when the context
-// is canceled so game reset and owner destruction can finish cleanup.
+// is canceled so coroutine shutdown and game reset can finish cleanup.
 //
 // Outside an SPX coroutine, fn runs directly with context.Background() and nil owner.
 func ExecuteNative(fn func(ctx context.Context, owner any)) {
@@ -49,12 +49,12 @@ func ExecuteNative(fn func(ctx context.Context, owner any)) {
 
 // Execute runs fn and blocks until it completes. With an active game, it uses
 // the current SPX coroutine or creates one for owner; fn receives a context
-// canceled when that coroutine is aborted. Otherwise, fn runs in a Go goroutine
-// with context.Background() and the supplied owner.
+// canceled when that coroutine is stopped, including on game reset. Otherwise,
+// fn runs in a Go goroutine with context.Background() and the supplied owner.
 //
 // When a new SPX coroutine is created, nil owner defaults to the game. In an
 // existing coroutine, fn receives the supplied owner without changing the
-// coroutine's owner or cancellation context. Destroying an owner stops its coroutines.
+// coroutine's owner or cancellation context.
 func Execute(owner any, fn func(ctx context.Context, owner any)) {
 	if isSpxEnv() {
 		engine.Execute(owner, fn)
@@ -71,7 +71,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 
 // Go starts fn in an SPX coroutine when a game is active. A nil owner defaults
 // to the current coroutine's owner or the game. fn receives a context canceled
-// when the coroutine is aborted, including on game reset or owner destruction.
+// when the coroutine is stopped, including on game reset.
 // Without an active game, it starts a Go goroutine with context.Background()
 // and the supplied owner.
 //
