@@ -364,7 +364,9 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 		return fmt.Errorf("failed to resolve target directory: %w", err)
 	}
 
-	os.Chdir(cmd.TargetAbsDir)
+	if err := os.Chdir(cmd.TargetAbsDir); err != nil {
+		return fmt.Errorf("failed to enter target directory: %w", err)
+	}
 	cmd.TargetDir = "."
 	cmd.Args.Path = &cmd.TargetDir
 
