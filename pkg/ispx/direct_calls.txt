@@ -15,6 +15,10 @@ Game.MouseY
 Game.ResetTimer
 Game.Timer
 
+# Scratch stop blocks on both the stage and sprites.
+Game.Stop
+SpriteImpl.Stop
+
 # Common sprite movement, appearance, and pen operations.
 SpriteImpl.ChangeHeading
 SpriteImpl.ChangePenSize

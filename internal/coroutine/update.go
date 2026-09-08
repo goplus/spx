@@ -153,7 +153,7 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 	switch job.Type {
 	case waitTypeLoop:
 		if job.Frame < state.frame {
-			job.Call()
+			p.runWaitJob(job)
 		} else {
 			p.loopJobs.PushBack(job)
 		}
@@ -161,20 +161,28 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 		if job.Frame >= state.frame {
 			p.deferredJobs.PushBack(job)
 		} else {
-			job.Call()
+			p.runWaitJob(job)
 			stats.WaitFrameCount++
 		}
 	case waitTypeTime:
 		if job.Time >= state.levelTime {
 			p.deferredJobs.PushBack(job)
 		} else {
-			job.Call()
+			p.runWaitJob(job)
 		}
 	case waitTypeYield:
-		job.Call()
+		p.runWaitJob(job)
 	case waitTypeMainThread:
 		job.Call()
 		stats.WaitMainCount++
+	}
+}
+
+func (p *Coroutines) runWaitJob(job *WaitJob) {
+	if job.Call != nil {
+		job.Call()
+	} else {
+		p.markRunnableAndResume(job.Th)
 	}
 }
 
