@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/base/quoted"
 )
 
 var macOSCGOFlagVariables = []string{
@@ -145,7 +147,7 @@ func resolveMacOSXcrunPath(xcrun macOSXcrunResolver, valid macOSPathPredicate, d
 }
 
 func macOSCommandIsUsable(value string, env map[string]string, isExecutable macOSPathPredicate) bool {
-	fields, err := splitQuotedFields(value)
+	fields, err := quoted.Split(value)
 	if err != nil || len(fields) == 0 {
 		return false
 	}
@@ -165,7 +167,7 @@ func macOSCommandIsUsable(value string, env map[string]string, isExecutable macO
 }
 
 func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicate) (string, error) {
-	fields, err := splitQuotedFields(value)
+	fields, err := quoted.Split(value)
 	if err != nil {
 		return "", err
 	}
@@ -203,7 +205,7 @@ func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicat
 	if !changed {
 		return value, nil
 	}
-	return joinQuotedFields(normalized)
+	return quoted.Join(normalized)
 }
 
 func normalizeAttachedSysroot(field, sdkRoot string, isDirectory macOSPathPredicate) (string, bool) {
@@ -253,73 +255,6 @@ func replaceMissingSDKPaths(field, sdkRoot string, isDirectory macOSPathPredicat
 		}
 		searchFrom = end
 	}
-}
-
-// splitQuotedFields and joinQuotedFields match the quoting rules used by Go
-// for CGO_* environment variables: quotes may surround a whole field and are
-// not shell-evaluated or unescaped.
-func splitQuotedFields(value string) ([]string, error) {
-	var fields []string
-	for len(value) > 0 {
-		for len(value) > 0 && isQuotedFieldSpace(value[0]) {
-			value = value[1:]
-		}
-		if value == "" {
-			break
-		}
-		if value[0] == '\'' || value[0] == '"' {
-			quote := value[0]
-			value = value[1:]
-			end := strings.IndexByte(value, quote)
-			if end < 0 {
-				return nil, fmt.Errorf("unterminated %c string", quote)
-			}
-			fields = append(fields, value[:end])
-			value = value[end+1:]
-			continue
-		}
-		end := 0
-		for end < len(value) && !isQuotedFieldSpace(value[end]) {
-			end++
-		}
-		if end == len(value) {
-			fields = append(fields, value)
-			break
-		}
-		fields = append(fields, value[:end])
-		value = value[end:]
-	}
-	return fields, nil
-}
-
-func joinQuotedFields(fields []string) (string, error) {
-	quoted := make([]string, len(fields))
-	for index, field := range fields {
-		hasSpace := false
-		hasSingle := strings.ContainsRune(field, '\'')
-		hasDouble := strings.ContainsRune(field, '"')
-		for offset := 0; offset < len(field); offset++ {
-			if isQuotedFieldSpace(field[offset]) {
-				hasSpace = true
-				break
-			}
-		}
-		switch {
-		case !hasSpace:
-			quoted[index] = field
-		case !hasSingle:
-			quoted[index] = "'" + field + "'"
-		case !hasDouble:
-			quoted[index] = `"` + field + `"`
-		default:
-			return "", fmt.Errorf("field %q contains whitespace and both quote characters", field)
-		}
-	}
-	return strings.Join(quoted, " "), nil
-}
-
-func isQuotedFieldSpace(value byte) bool {
-	return value == ' ' || value == '\t' || value == '\n' || value == '\r'
 }
 
 func cloneStringMap(input map[string]string) map[string]string {

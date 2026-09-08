@@ -162,6 +162,8 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{".github/scripts/runtime_lock_snapshot.py", false},
 		{"cmd/internal/macos_go_toolchain.sh", true},
 		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", true},
+		{"internal/base/quoted/quoted.go", true},
+		{"internal/base/quoted/quoted_test.go", false},
 		{".github/scripts/release/assemble.sh", false},
 		{".github/scripts/runtime/manifest.go", false},
 		{".github/scripts/runtime/digest.go", false},

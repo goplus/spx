@@ -88,6 +88,7 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 var runtimeBuildRecipePrefixes = []string{
 	".github/actions/setup-buildctl/",
 	"internal/base/fileutil/",
+	"internal/base/quoted/",
 }
 
 var runtimePackSourceFiles = map[string]struct{}{

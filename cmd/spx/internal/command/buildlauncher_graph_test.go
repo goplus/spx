@@ -137,20 +137,6 @@ func TestLauncherGraphProtectedFilesIncludesSums(t *testing.T) {
 	}
 }
 
-func TestSplitGOFLAGSMatchesGoQuotedFields(t *testing.T) {
-	got, err := splitGOFLAGS(`-trimpath ' -modfile=module with spaces ' "-buildvcs=false"`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"-trimpath", " -modfile=module with spaces ", "-buildvcs=false"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("splitGOFLAGS = %#v, want %#v", got, want)
-	}
-	if _, err := splitGOFLAGS(`'-trimpath`); err == nil {
-		t.Fatal("splitGOFLAGS accepted an unterminated quote")
-	}
-}
-
 func TestLauncherGraphVerifier(t *testing.T) {
 	root := t.TempDir()
 	goMod := filepath.Join(root, "go.mod")
