@@ -114,6 +114,44 @@ func TestScratchSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 	}
 }
 
+func TestScratchCostumeChangesControlRedrawBoundary(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		visible    bool
+		costume    any
+		wantFrames [3]int64
+	}{
+		{"visible", true, Next, [3]int64{0, 1, 2}},
+		{"hidden", false, Next, [3]int64{0, 0, 0}},
+		{"invalid", true, SpriteCostumeName("missing"), [3]int64{0, 0, 0}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co, _ := setupRuntimeEventGame(t)
+			itime.Start(nil)
+			sprite := newTestRenderSprite()
+			sprite.spriteState.IsVisible = tt.visible
+			var frames [3]int64
+			count := 0
+			th := co.Create(sprite, func(coroutine.Thread) int {
+				Repeat(len(frames), func() {
+					sprite.setCostume(tt.costume)
+					frames[count] = itime.Frame()
+					count++
+				})
+				return 0
+			})
+			co.JoinYieldedOrDone(th)
+			for range frames {
+				co.Update()
+				itime.Update(1.0/30, 30)
+			}
+			if count != len(frames) || frames != tt.wantFrames {
+				t.Fatalf("costume iterations = %d at frames %v, want %d at %v", count, frames, len(frames), tt.wantFrames)
+			}
+		})
+	}
+}
+
 func TestScratchTimerTrackingHatDoesNotFire(t *testing.T) {
 	for _, redraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
