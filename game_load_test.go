@@ -279,6 +279,13 @@ func (s *spyCloneSpriteMgr) CreateBareSprite(pos mathf.Vec2) pkgengine.Object {
 
 func (s *spyCloneSpriteMgr) SetTypeName(obj pkgengine.Object, typeName string) {}
 
+func (s *spyCloneSpriteMgr) DestroySprite(obj pkgengine.Object) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.zIndexes, obj)
+	return true
+}
+
 func (s *spyCloneSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
 	s.record(cloneProxyOperation{kind: "visible", object: obj, visible: visible})
 }

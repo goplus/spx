@@ -44,18 +44,32 @@ func doClone(sprite Sprite, data any, onCloned func(sprite *SpriteImpl)) {
 		spxlog.Panicf("DoClone: sprite is nil")
 	}
 	src := spriteOf(sprite)
-	if isDebugInstrEnabled() {
-		spxlog.Debug("Clone: %s", src.name)
+	dest := createRuntimeClone(src)
+	if dest == nil {
+		return
 	}
-	in := reflect.ValueOf(sprite).Elem()
-	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface().(Sprite)
-	dest := cloneSprite(out, outPtr, in, nil)
-	src.g.addClonedShape(src, dest)
 	if onCloned != nil {
 		onCloned(dest)
 	}
 	dispatchCloneLifecycle(dest, data)
+}
+
+func createRuntimeClone(src *SpriteImpl) *SpriteImpl {
+	shapes := &src.g.shapeMgr
+	if !shapes.reserveClone() {
+		return nil
+	}
+	defer func() { shapes.pendingClones-- }()
+
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Clone: %s", src.name)
+	}
+	in := reflect.ValueOf(src.sprite).Elem()
+	v := reflect.New(in.Type())
+	out, outPtr := v.Elem(), v.Interface().(Sprite)
+	dest := cloneSprite(out, outPtr, in, nil)
+	src.g.addClonedShape(src, dest)
+	return dest
 }
 
 func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
