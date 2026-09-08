@@ -6,6 +6,8 @@ SPX consists of the XGo game runtime, platform bindings, and the SPX fork of God
 
 The Go-to-engine boundary differs by platform. Native platforms use GDExtension/native bindings. Web builds combine Go WASM with an Emscripten-built Godot runtime and JavaScript bridge code.
 
+Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preserving the original value, thread name, and stack at the fault. The engine includes this context in its log and `OnRuntimePanic` callback; an optional creation stack is labeled separately. `ErrAbortThread` and `ErrStopThisScript` remain normal control flow and are not reported. Shutdown barriers wait for panic reporting to finish, and lifecycle cleanup still runs if the reporter panics.
+
 ### 1. PC platforms
 
 Desktop builds support two primary workflows:

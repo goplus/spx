@@ -36,9 +36,17 @@ var (
 	ErrStopThisScript = errors.New("stop this script")
 )
 
+// PanicReport preserves an unhandled coroutine panic and its diagnostic context.
+type PanicReport struct {
+	Value         any
+	Name          string
+	Stack         string // Stack at the panic site, captured during recovery.
+	CreationStack string // Optional stack captured when the coroutine was created.
+}
+
 // Coroutines coordinates thread lifecycle and cooperative scheduling.
 type Coroutines struct {
-	onPanic   func(name, stack string)
+	onPanic   func(PanicReport)
 	hasInited atomic.Bool
 	debug     bool
 
@@ -91,8 +99,8 @@ type Coroutines struct {
 }
 
 // New creates a coroutine manager. onPanic is called when a coroutine exits
-// with an unhandled panic other than ErrAbortThread.
-func New(onPanic func(name, stack string)) *Coroutines {
+// with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
+func New(onPanic func(PanicReport)) *Coroutines {
 	p := &Coroutines{
 		onPanic:           onPanic,
 		allThreads:        make(map[Thread]struct{}),

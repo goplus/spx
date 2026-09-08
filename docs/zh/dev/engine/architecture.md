@@ -8,6 +8,8 @@
 5. 用户逻辑使用 xgo 进行实现，在运行时会先编译成 Go，再按目标平台编译为动态库或 WebAssembly，或者解释执行
 6. 坐标空间和 Go/Godot 转换边界详见 [coordinate_system.md](./coordinate_system.md)
 
+协程未处理的 panic 通过 `coroutine.PanicReport` 传递到引擎，保留原始值、线程名和故障位置的栈。引擎日志和 `OnRuntimePanic` 回调包含这些信息，可选的创建栈单独标注。`ErrAbortThread` 和 `ErrStopThisScript` 仍作为正常控制流，不报告为错误。关闭屏障会等待 panic 报告结束；即使报告处理器发生 panic，生命周期清理也仍会执行。
+
 ### 1. PC 平台
 0. 依赖的是 cgo
 1. 通过 `make generate-bindings` 自动生成 Go wrapper 代码，用于在 Go 中调用 C++ 接口

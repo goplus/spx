@@ -20,7 +20,7 @@ func TestRunTaskTracksNilPanic(t *testing.T) {
 
 func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 	panicReported := make(chan any, 1)
-	co := New(func(name, stack string) { panicReported <- "worker failure" })
+	co := New(func(report PanicReport) { panicReported <- report.Value })
 	co.OnInited()
 	co.CreateAndStart(true, "caller", func(me Thread) int {
 		co.WaitToDo(func() { panic("worker failure") })
@@ -42,7 +42,7 @@ func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 
 func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
-	co := New(func(string, string) {})
+	co := New(func(PanicReport) {})
 	co.OnInited()
 	continued := make(chan struct{}, 1)
 	thread := co.CreateAndStart(true, "caller", func(Thread) int {
