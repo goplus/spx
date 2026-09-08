@@ -20,12 +20,20 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/goplus/spx/v3/internal/engine"
+
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 // -----------------------------------------------------------------------------
 // Visibility
 // -----------------------------------------------------------------------------
+func (p *SpriteImpl) requestRedrawIfVisible() {
+	if p.Visible() {
+		engine.RequestRedraw()
+	}
+}
+
 func (p *SpriteImpl) setVisible(visible bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("%s visible is %t", p.name, visible)
@@ -36,6 +44,7 @@ func (p *SpriteImpl) setVisible(visible bool) {
 	}
 
 	p.spriteState.IsVisible = visible
+	engine.RequestRedraw()
 	p.markProxyDirty()
 }
 
@@ -119,14 +128,17 @@ func (p *SpriteImpl) SetCostume__3(action switchAction) {
 // Effects
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, val float64) {
+	p.requestRedrawIfVisible()
 	p.setGraphicEffect(kind, val)
 }
 
 func (p *SpriteImpl) ChangeGraphicEffect(kind EffectKind, delta float64) {
+	p.requestRedrawIfVisible()
 	p.changeGraphicEffect(kind, delta)
 }
 
 func (p *SpriteImpl) ClearGraphicEffects() {
+	p.requestRedrawIfVisible()
 	p.clearGraphicEffects()
 }
 

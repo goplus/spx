@@ -1,6 +1,8 @@
 # Web Capture and Fixed-Frame Integration
 
-SPX Web exports provide a host-facing capture workflow for deterministic screenshots and visual regression tests. The runtime selects a logical frame; the browser host captures the rendered canvas only after that frame has completed.
+SPX Web exports provide a host-facing capture workflow for fixed-frame screenshots and visual regression tests. The runtime selects a logical frame; the browser host captures the rendered canvas only after that frame has completed.
+
+Selecting the same frame or input tick does not guarantee identical script state. The scheduler uses a wall-clock budget for loop rounds, which input recording and replay do not fix or record. If visible state depends on the number of iterations completed within that budget, screenshots can vary between runs. See [SPX script scheduling](scheduling.md#fixed-frame-capture-and-input-replay).
 
 ## 1. SPX capability
 

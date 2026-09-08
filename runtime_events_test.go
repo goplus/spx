@@ -265,7 +265,7 @@ func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 	}
 	for _, state := range states {
 		leftValue, rightValue = state[0], state[1]
-		registry.doWhenCondition()
+		pollRuntimeConditions(&registry)
 		co.Update()
 	}
 
@@ -279,9 +279,9 @@ func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 	left.doDeleteClone()
 	leftValue = false
 	rightValue = false
-	registry.doWhenCondition()
+	pollRuntimeConditions(&registry)
 	leftValue = true
-	registry.doWhenCondition()
+	pollRuntimeConditions(&registry)
 	co.Update()
 	if leftEvaluations != len(states) {
 		t.Fatalf("deleted owner evaluated %d times, want %d", leftEvaluations, len(states))
@@ -302,6 +302,16 @@ func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 	}
 }
 
+func pollRuntimeConditions(registry *scriptEventRegistry) {
+	registry.sampleConditions()
+	registry.dispatchConditions()
+}
+
+func pollRuntimeEventConditions(game *Game) {
+	game.OnEngineBeforeUpdate()
+	game.scriptEvents.dispatchConditions()
+}
+
 func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
@@ -320,13 +330,13 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		order = append(order, "start")
 	})
 
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	if evaluations != 0 {
 		t.Fatalf("condition evaluated %d times during bootstrap, want 0", evaluations)
 	}
 
 	game.markBootstrapDoneFor(game.currentBootstrapGeneration())
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	if evaluations != 0 {
 		t.Fatalf("condition evaluated %d times before OnStart, want 0", evaluations)
 	}
@@ -337,7 +347,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("order before condition polling = %v, want %v", order, want)
 	}
 
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	co.Update()
 	if evaluations != 1 {
 		t.Fatalf("condition evaluated %d times after OnStart, want 1", evaluations)
@@ -346,7 +356,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("startup order = %v, want %v", order, want)
 	}
 
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	co.Update()
 	if evaluations != 2 {
 		t.Fatalf("condition evaluated %d times after two polls, want 2", evaluations)
@@ -394,7 +404,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	if want := []string{"top-level"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after top-level first yield = %v, want %v", order, want)
 	}
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	if want := []string{"top-level"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("condition ran before OnStart: %v", order)
 	}
@@ -406,7 +416,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 		t.Fatalf("order after OnStart = %v, want %v", order, want)
 	}
 
-	game.pollConditions()
+	pollRuntimeEventConditions(&game)
 	co.Update()
 	if want := []string{"top-level", "start", "evaluate", "condition"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("startup order = %v, want %v", order, want)

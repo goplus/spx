@@ -77,6 +77,7 @@ func (p *Game) SetWindowSize(width int64, height int64) {
 }
 
 func (p *Game) EraseAll() {
+	engine.RequestRedraw()
 	p.penCommandBarrier(p.engine().PenMgr.DestroyAllPens)
 }
 
@@ -112,14 +113,17 @@ func (kind EffectKind) String() string {
 }
 
 func (p *Game) SetGraphicEffect(kind EffectKind, val float64) {
+	engine.RequestRedraw()
 	p.baseObj.setGraphicEffect(kind, val)
 }
 
 func (p *Game) ChangeGraphicEffect(kind EffectKind, delta float64) {
+	engine.RequestRedraw()
 	p.baseObj.changeGraphicEffect(kind, delta)
 }
 
 func (p *Game) ClearGraphicEffects() {
+	engine.RequestRedraw()
 	p.baseObj.clearGraphicEffects()
 }
 

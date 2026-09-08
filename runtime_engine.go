@@ -66,10 +66,19 @@ func (p *Game) OnEngineReset() {
 	p.reset()
 }
 
+// OnEngineBeforeUpdate samples conditions before advancing the frame clock.
+func (p *Game) OnEngineBeforeUpdate() {
+	p.scriptEvents.pendingConditions = nil
+	if p.lifecycleState.StartDispatched.Load() {
+		p.scriptEvents.sampleConditions()
+	}
+}
+
 func (p *Game) OnEngineUpdate(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
+	p.scriptEvents.dispatchConditions()
 	// Recording and playback consume exactly one input tick per engine update.
 	// Idle games retain the long-lived input coroutine and its original dispatch
 	// path.

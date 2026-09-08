@@ -48,6 +48,7 @@ func doClone(sprite Sprite, data any, onCloned func(sprite *SpriteImpl)) {
 	if dest == nil {
 		return
 	}
+	dest.requestRedrawIfVisible()
 	if onCloned != nil {
 		onCloned(dest)
 	}

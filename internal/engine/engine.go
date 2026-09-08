@@ -115,6 +115,7 @@ func Unlock() {
 type IGame interface {
 	OnEngineStart()
 	OnEngineUpdate(delta float64)
+	OnEngineBeforeUpdate()
 	OnEngineRender(delta float64)
 	OnEngineFrameEnd()
 	OnEngineDestroy()
@@ -159,6 +160,7 @@ func onUpdate(delta float64) {
 	defer CheckPanic()
 	profiler.BeginSample()
 	defer profiler.EndSample()
+	game.OnEngineBeforeUpdate()
 	updateTime(delta)
 	cacheTriggerEvents()
 	cacheKeyEvents()

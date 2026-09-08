@@ -21,6 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	scheduler "github.com/goplus/spx/v3/internal/engine"
 	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -100,6 +101,7 @@ func (p *penComponent) PenUp() {
 }
 
 func (p *penComponent) PenDown() {
+	scheduler.RequestRedraw()
 	wasDown := p.penDown
 	created := p.checkOrCreatePen()
 	if !wasDown || created {
@@ -112,6 +114,7 @@ func (p *penComponent) PenDown() {
 }
 
 func (p *penComponent) Stamp() {
+	scheduler.RequestRedraw()
 	p.checkOrCreatePen()
 	x, y := p.sprite.getXY()
 	applyRenderOffset(p.sprite, &x, &y)
@@ -292,6 +295,7 @@ func (p *penComponent) movePen(x, y float64) {
 	if !p.penDown {
 		return
 	}
+	scheduler.RequestRedraw()
 	p.ensureClonePenReady()
 	p.syncPenPosition(x, y)
 }

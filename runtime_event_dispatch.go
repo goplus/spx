@@ -160,6 +160,10 @@ func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
 // dispatchScriptEventBatch completes matching before starting user handlers.
 func dispatchScriptEventBatch(sinks []eventSink, event scriptEventDispatch) {
 	matched := matchingEventSinks(sinks, event.matchData)
+	dispatchMatchedScriptEventBatch(matched, event)
+}
+
+func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispatch) {
 	if len(matched) == 0 {
 		return
 	}

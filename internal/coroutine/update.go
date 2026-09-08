@@ -28,6 +28,7 @@ type updateState struct {
 	frame            int64
 	levelTime        float64
 	watchdogDeadline stime.Time
+	workDeadline     stime.Time
 }
 
 type updateAction uint8
@@ -70,6 +71,7 @@ func (p *Coroutines) beginUpdate() (UpdateJobsStats, updateState) {
 		frame:            itime.Frame(),
 		levelTime:        itime.TimeSinceLevelLoad(),
 		watchdogDeadline: p.updateWatchdogNow().Add(updateWatchdogTimeout),
+		workDeadline:     start.Add(loopWorkBudget),
 	}
 	return UpdateJobsStats{InitTime: elapsedMillis(start)}, state
 }
@@ -83,6 +85,9 @@ updateLoop:
 		iterations++
 		switch p.nextUpdateAction(stats) {
 		case updateComplete:
+			if p.queueNextLoopRound(state) {
+				continue
+			}
 			break updateLoop
 		case updateAwaitInitialization:
 			state.watchdogDeadline = p.updateWatchdogNow().Add(updateWatchdogTimeout)
@@ -146,6 +151,12 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 	}
 
 	switch job.Type {
+	case waitTypeLoop:
+		if job.Frame < state.frame {
+			job.Call()
+		} else {
+			p.loopJobs.PushBack(job)
+		}
 	case waitTypeFrame:
 		if job.Frame >= state.frame {
 			p.deferredJobs.PushBack(job)
@@ -169,6 +180,7 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateJobsStats) {
 	start := stime.Now()
+	p.deferredJobs.Move(p.loopJobs)
 	stats.NextCount = p.deferredJobs.Count()
 	p.currentJobs.Move(p.deferredJobs)
 	stats.MoveTime = elapsedMillis(start)
