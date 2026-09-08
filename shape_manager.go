@@ -33,6 +33,9 @@ const (
 	firstSpriteLayer = penLayer + 1
 )
 
+// Scratch shares one limit across all sprites, including hidden clones.
+const maxClones = 300
+
 // shapeManager manages the lifecycle of all runtime shapes.
 // It is responsible for:
 //   - activation (delayed add)
@@ -40,6 +43,8 @@ const (
 //   - render layer grouping
 //   - minimizing per-frame allocations
 type shapeManager struct {
+	cloneCount               int
+	pendingClones            int
 	items                    []Shape
 	tempItems                []Shape
 	destroyItems             []Shape
@@ -52,6 +57,8 @@ type shapeManager struct {
 
 // init prepares internal buffers while preserving existing allocations when possible.
 func (s *shapeManager) init() {
+	s.cloneCount = 0
+	s.pendingClones = 0
 	s.pendingClonePublications.Store(false)
 	if s.items == nil {
 		s.items = make([]Shape, 0, 64)
@@ -219,6 +226,9 @@ func (s *shapeManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 
 // add adds a shape immediately to the active list.
 func (s *shapeManager) add(shape Shape) {
+	if sprite, ok := shape.(*SpriteImpl); ok && sprite.IsCloned() {
+		s.cloneCount++
+	}
 	if bubble, ok := shape.(*textBubble); ok && bubble.layoutID == 0 {
 		s.nextTextBubbleLayoutID++
 		if s.nextTextBubbleLayoutID == 0 {
@@ -251,7 +261,20 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 	}
 
 	s.items = sliceutil.InsertAt(s.items, idx, clone)
+	if sprite, ok := clone.(*SpriteImpl); ok && sprite.IsCloned() {
+		s.cloneCount++
+	}
 	s.updateRenderLayers()
+}
+
+// reserveClone includes clones still running initialization code, which can
+// yield or create more clones before they enter the active shape list.
+func (s *shapeManager) reserveClone() bool {
+	if s.cloneCount+s.pendingClones >= maxClones {
+		return false
+	}
+	s.pendingClones++
+	return true
 }
 
 // removeShape removes a shape from the active list and schedules it for destruction.
@@ -262,6 +285,9 @@ func (s *shapeManager) removeShape(child Shape) {
 	}
 
 	s.items = sliceutil.DeleteAt(s.items, idx)
+	if sprite, ok := child.(*SpriteImpl); ok && sprite.IsCloned() {
+		s.cloneCount--
+	}
 	s.remove(child)
 	s.updateRenderLayers()
 }
