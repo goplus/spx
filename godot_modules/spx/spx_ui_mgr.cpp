@@ -34,6 +34,7 @@
 #include "scene/resources/packed_scene.h"
 
 #include "spx.h"
+#include "spx_list_monitor.h"
 #include "spx_object_guard.h"
 
 #define SPX_CALLBACK SpxEngine::get_singleton()->get_callbacks()
@@ -324,6 +325,22 @@ GdBool SpxUiMgr::get_interactable(GdObj obj) {
 void SpxUiMgr::set_text(GdObj obj, GdString text) {
 	SPX_REQUIRE_UI_VOID()
 	node->set_text(text);
+}
+
+void SpxUiMgr::set_list_items(GdObj obj, GdString label, GdArray items, GdColor color) {
+	SPX_REQUIRE_UI_VOID();
+	auto monitor = Object::cast_to<SpxListMonitor>(node->get_control());
+	ERR_FAIL_NULL(monitor);
+	PackedStringArray values;
+	if (items != nullptr) {
+		ERR_FAIL_COND(items->type != GD_ARRAY_TYPE_STRING || items->size < 0);
+		ERR_FAIL_COND(items->size > 0 && items->data == nullptr);
+		values.resize(items->size);
+		for (int i = 0; i < items->size; i++) {
+			values.set(i, SpxStr(*get_array<GdString>(items, i)));
+		}
+	}
+	monitor->set_items(SpxStr(label), values, color);
 }
 
 GdString SpxUiMgr::get_text(GdObj obj) {

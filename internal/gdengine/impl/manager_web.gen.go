@@ -1700,6 +1700,13 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 	arg1 := JsFromGdString(text)
 	API.SpxUiSetText.Invoke(arg0Low, arg0High, arg1)
 }
+func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdString(label)
+	arg2 := JsFromGdArray(items)
+	arg3 := JsFromGdColor(color)
+	API.SpxUiSetListItems.Invoke(arg0Low, arg0High, arg1, arg2, arg3)
+}
 func (pself *uiMgr) GetText(obj Object) string {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	_retValue := API.SpxUiGetText.Invoke(arg0Low, arg0High)

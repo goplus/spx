@@ -47,6 +47,7 @@
 #include "spx_path_finder.h"
 #include "spx_sprite.h"
 #include "spx_ui.h"
+#include "spx_list_monitor.h"
 
 // Simple node class for initialization
 class SpxEngineNode : public Node {
@@ -138,6 +139,7 @@ void Spx::set_debug_mode(bool enable) {
 }
 
 void Spx::register_types() {
+	ClassDB::register_class<SpxListMonitor>();
 	ClassDB::register_class<SpxSprite>();
 	ClassDB::register_class<SpxInputProxy>();
 	ClassDB::register_class<SpxDrawTiles>();

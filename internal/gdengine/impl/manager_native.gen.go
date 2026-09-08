@@ -2540,6 +2540,24 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 		CallUiSetText(arg0, arg1)
 	})
 }
+func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
+	enginewrap.CallInMainThread(func() {
+		arg0 := ToGdObj(obj)
+		arg1Str := C.CString(label)
+		arg1 := (GdString)(arg1Str)
+		defer C.free(unsafe.Pointer(arg1Str))
+		arg2Info := ToGdArrayInfo(items)
+		if arg2Info != nil {
+			defer arg2Info.Free()
+		}
+		arg2 := GdArray(nil)
+		if arg2Info != nil {
+			arg2 = arg2Info.Raw()
+		}
+		arg3 := ToGdColor(color)
+		CallUiSetListItems(arg0, arg1, arg2, arg3)
+	})
+}
 func (pself *uiMgr) GetText(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)

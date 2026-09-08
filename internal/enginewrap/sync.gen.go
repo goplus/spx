@@ -1979,6 +1979,11 @@ func (*uiMgrImpl) SetText(obj gdx.Object, text string) {
 		gdx.UiMgr.SetText(obj, text)
 	})
 }
+func (*uiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, color Color) {
+	callInMainThread(func() {
+		gdx.UiMgr.SetListItems(obj, label, items, color)
+	})
+}
 func (*uiMgrImpl) GetText(obj gdx.Object) string {
 	var _ret1 string
 	callInMainThread(func() {

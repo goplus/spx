@@ -1,0 +1,31 @@
+{
+  "map": {"width": 480, "height": 360},
+  "zorder": [
+    {
+      "type": "monitor",
+      "name": "items-list",
+      "target": "",
+      "val": "getVar:items",
+      "label": "items",
+      "mode": "list",
+      "width": 180,
+      "height": 260,
+      "x": -220,
+      "y": 160,
+      "visible": true
+    },
+    {
+      "type": "monitor",
+      "name": "empty-list",
+      "target": "",
+      "val": "empty",
+      "label": "empty",
+      "mode": 4,
+      "width": 150,
+      "height": 130,
+      "x": 0,
+      "y": 160,
+      "visible": true
+    }
+  ]
+}

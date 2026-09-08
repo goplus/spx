@@ -337,6 +337,7 @@ type GDExtensionInterface struct {
 	SpxUiDestroyNode                            GDExtensionSpxUiDestroyNode
 	SpxUiGetType                                GDExtensionSpxUiGetType
 	SpxUiSetText                                GDExtensionSpxUiSetText
+	SpxUiSetListItems                           GDExtensionSpxUiSetListItems
 	SpxUiGetText                                GDExtensionSpxUiGetText
 	SpxUiSetTexture                             GDExtensionSpxUiSetTexture
 	SpxUiGetTexture                             GDExtensionSpxUiGetTexture
@@ -673,6 +674,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiDestroyNode = (GDExtensionSpxUiDestroyNode)(resolveCFunc("spx_ui_destroy_node"))
 	x.SpxUiGetType = (GDExtensionSpxUiGetType)(resolveCFunc("spx_ui_get_type"))
 	x.SpxUiSetText = (GDExtensionSpxUiSetText)(resolveCFunc("spx_ui_set_text"))
+	x.SpxUiSetListItems = (GDExtensionSpxUiSetListItems)(resolveCFunc("spx_ui_set_list_items"))
 	x.SpxUiGetText = (GDExtensionSpxUiGetText)(resolveCFunc("spx_ui_get_text"))
 	x.SpxUiSetTexture = (GDExtensionSpxUiSetTexture)(resolveCFunc("spx_ui_set_texture"))
 	x.SpxUiGetTexture = (GDExtensionSpxUiGetTexture)(resolveCFunc("spx_ui_get_texture"))

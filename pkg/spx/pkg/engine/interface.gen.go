@@ -393,6 +393,7 @@ type IUiMgr interface {
 	DestroyNode(obj Object) bool
 	GetType(obj Object) int64
 	SetText(obj Object, text string)
+	SetListItems(obj Object, label string, items Array, color Color)
 	GetText(obj Object) string
 	SetTexture(obj Object, path string)
 	GetTexture(obj Object) string

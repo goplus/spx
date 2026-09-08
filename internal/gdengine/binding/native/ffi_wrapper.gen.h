@@ -1818,6 +1818,12 @@ void cgo_callfn_GDExtensionSpxUiSetText(const GDExtensionSpxUiSetText fn, GdObj 
 	}
 	fn(obj, text);
 }
+void cgo_callfn_GDExtensionSpxUiSetListItems(const GDExtensionSpxUiSetListItems fn, GdObj obj, GdString label, GdArray items, GdColor color) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, label, items, color);
+}
 void cgo_callfn_GDExtensionSpxUiGetText(const GDExtensionSpxUiGetText fn, GdObj obj, GdString* ret_val) {
 	if (!fn) {
 		return;

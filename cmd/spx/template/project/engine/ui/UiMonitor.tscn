@@ -80,6 +80,12 @@ visible = false
 layout_mode = 3
 anchors_preset = 0
 
+[node name="ScratchList" type="SpxListMonitor" parent="."]
+visible = false
+layout_mode = 0
+offset_right = 100.0
+offset_bottom = 200.0
+
 [node name="BG" type="PanelContainer" parent="."]
 layout_mode = 1
 offset_right = 100.0

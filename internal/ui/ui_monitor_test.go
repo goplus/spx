@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -30,9 +31,12 @@ import (
 )
 
 type monitorRenderSpy struct {
-	visible map[engine.Object]bool
-	text    map[engine.Object]string
-	color   map[engine.Object]mathf.Color
+	visible   map[engine.Object]bool
+	text      map[engine.Object]string
+	color     map[engine.Object]mathf.Color
+	items     map[engine.Object][]string
+	size      map[engine.Object]mathf.Vec2
+	listCalls int
 }
 
 func newMonitorRenderSpy() *monitorRenderSpy {
@@ -40,6 +44,8 @@ func newMonitorRenderSpy() *monitorRenderSpy {
 		visible: make(map[engine.Object]bool),
 		text:    make(map[engine.Object]string),
 		color:   make(map[engine.Object]mathf.Color),
+		items:   make(map[engine.Object][]string),
+		size:    make(map[engine.Object]mathf.Vec2),
 	}
 }
 
@@ -49,20 +55,31 @@ func (p *monitorRenderSpy) SetColor(id engine.Object, color mathf.Color) {
 	p.color[id] = color
 }
 
+func (p *monitorRenderSpy) SetSize(id engine.Object, size mathf.Vec2) { p.size[id] = size }
+func (p *monitorRenderSpy) SetListItems(id engine.Object, name string, items engine.Array, color mathf.Color) {
+	p.listCalls++
+	p.items[id] = slices.Clone(items.([]string))
+	p.text[id] = name
+	p.color[id] = color
+}
+
 func (p *monitorRenderSpy) reset() {
 	clear(p.visible)
 	clear(p.text)
 	clear(p.color)
+	clear(p.items)
+	clear(p.size)
+	p.listCalls = 0
 }
 
 func TestUiMonitorRender(t *testing.T) {
 	color := mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
-	for appearance := MonitorAppearanceDefault; appearance < monitorAppearanceCount; appearance++ {
+	for appearance := MonitorAppearanceDefault; appearance < MonitorAppearanceList; appearance++ {
 		t.Run(monitorViewSpecs[appearance].root, func(t *testing.T) {
 			panel, _ := newBoundMonitor(t)
 			spy := newMonitorRenderSpy()
 
-			panel.render(spy, appearance, "score", "42", color)
+			panel.render(spy, MonitorStyle{Appearance: appearance, Label: "score", Color: color}, MonitorValue{Text: "42"})
 			if len(spy.visible) != len(panel.views) {
 				t.Fatalf("visibility updates = %d, want %d", len(spy.visible), len(panel.views))
 			}
@@ -74,7 +91,7 @@ func TestUiMonitorRender(t *testing.T) {
 			assertMonitorPayload(t, spy, panel.views[appearance], "score", "42", color)
 
 			spy.reset()
-			panel.render(spy, appearance, "points", "43", color)
+			panel.render(spy, MonitorStyle{Appearance: appearance, Label: "points", Color: color}, MonitorValue{Text: "43"})
 			if len(spy.visible) != 0 {
 				t.Errorf("unchanged appearance updated visibility: %v", spy.visible)
 			}
@@ -86,7 +103,7 @@ func TestUiMonitorRender(t *testing.T) {
 func TestUiMonitorInvalidAppearanceFallsBackToDefault(t *testing.T) {
 	panel, _ := newBoundMonitor(t)
 	spy := newMonitorRenderSpy()
-	panel.render(spy, MonitorAppearance(255), "score", "0", mathf.Color{})
+	panel.render(spy, MonitorStyle{Appearance: MonitorAppearance(255), Label: "score"}, MonitorValue{Text: "0"})
 
 	if panel.active != MonitorAppearanceDefault {
 		t.Fatalf("active appearance = %d, want default", panel.active)
@@ -113,6 +130,9 @@ func newBoundMonitor(t *testing.T) (*UiMonitor, map[string]engine.Object) {
 
 func assertMonitorPayload(t *testing.T, spy *monitorRenderSpy, view monitorView, name, value string, color mathf.Color) {
 	t.Helper()
+	if spy.listCalls != 0 || len(spy.size) != 0 {
+		t.Fatal("scalar monitor used list-only operations")
+	}
 	wantTextCount := 1
 	if view.label != nil {
 		wantTextCount++
@@ -154,6 +174,10 @@ func TestUiMonitorSceneContract(t *testing.T) {
 		}
 	}
 	for _, spec := range monitorViewSpecs {
+		if spec.root == "ScratchList" {
+			assertNodeType(spec.root, "SpxListMonitor")
+			continue
+		}
 		assertNodeType(spec.root, "PanelContainer")
 		assertNodeType(spec.value, "Label")
 		if spec.label != "" {
@@ -166,7 +190,7 @@ func TestUiMonitorSceneContract(t *testing.T) {
 	if got := monitorSceneProperty(parsed.nodes["."], "visible"); got != "false" {
 		t.Errorf("monitor root visibility = %q, want false", got)
 	}
-	for _, path := range []string{"ValueOnly", "ScratchBG", "ScratchValueOnly"} {
+	for _, path := range []string{"ValueOnly", "ScratchBG", "ScratchValueOnly", "ScratchList"} {
 		if got := monitorSceneProperty(parsed.nodes[path], "visible"); got != "false" {
 			t.Errorf("%s initial visibility = %q, want false", path, got)
 		}
