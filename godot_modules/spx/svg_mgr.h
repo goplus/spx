@@ -15,7 +15,6 @@ public:
 	~SvgManager();
 
 private:
-	// New simplified data structure
 	HashMap<String, Ref<ImageTexture>> svg_image_cache; // "scale@image_path" -> ImageTexture
 	HashMap<String, Ref<SpriteFrames>> svg_animation_cache; // "scale@animation_name" -> SpriteFrames
 	HashMap<String, Vector2> svg_image_raw_size_cache;

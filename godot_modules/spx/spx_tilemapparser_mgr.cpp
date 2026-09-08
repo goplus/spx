@@ -85,7 +85,6 @@ void SpxTilemapparserMgr::load_tilemap(GdString json_path) {
 		}
 	}
 
-	// Check if already loaded
 	if (tilemap_layers.has(tilemap_name)) {
 		print_line("SpxTilemapparserMgr: Tilemap already loaded: " + tilemap_name);
 		return;
@@ -101,15 +100,12 @@ void SpxTilemapparserMgr::load_tilemap(GdString json_path) {
 		return;
 	}
 
-	// Cache tileset
 	tileset_cache[tilemap_name] = tileset;
 
-	// Create TileMapLayers
 	Vector<TileMapLayer *> layers;
 	for (int i = 0; i < data.layers.size(); i++) {
 		TileMapLayer *layer = _create_tilemap_layer(data.layers[i], tileset, data.node_offset);
 		if (layer != nullptr) {
-			// Add to scene tree
 			Node *spx_root = get_spx_root();
 			if (spx_root != nullptr) {
 				spx_root->add_child(layer);
@@ -118,14 +114,12 @@ void SpxTilemapparserMgr::load_tilemap(GdString json_path) {
 		}
 	}
 
-	// Store layers in cache
 	tilemap_layers[tilemap_name] = layers;
 }
 
 void SpxTilemapparserMgr::unload_tilemap(GdString name) {
 	String tilemap_name = SpxStr(name);
 
-	// Destroy layers
 	if (tilemap_layers.has(tilemap_name)) {
 		Vector<TileMapLayer *> &layers = tilemap_layers[tilemap_name];
 		for (TileMapLayer *layer : layers) {
@@ -136,12 +130,10 @@ void SpxTilemapparserMgr::unload_tilemap(GdString name) {
 		tilemap_layers.erase(tilemap_name);
 	}
 
-	// Remove from tileset cache
 	tileset_cache.erase(tilemap_name);
 }
 
 void SpxTilemapparserMgr::destroy_all_tilemaps() {
-	// Destroy all layers
 	for (KeyValue<String, Vector<TileMapLayer *>> &kv : tilemap_layers) {
 		for (TileMapLayer *layer : kv.value) {
 			if (layer != nullptr) {
@@ -206,10 +198,8 @@ Ref<TileSet> SpxTilemapparserMgr::_create_tileset(const SpxTileSetData &data, co
 	Ref<TileSet> tileset;
 	tileset.instantiate();
 
-	// Set tile size
 	tileset->set_tile_size(data.tile_size);
 
-	// Create physics layers
 	for (int i = 0; i < data.physics_layers.size(); i++) {
 		const SpxPhysicsLayerData &layer_data = data.physics_layers[i];
 		tileset->add_physics_layer();
@@ -217,7 +207,6 @@ Ref<TileSet> SpxTilemapparserMgr::_create_tileset(const SpxTileSetData &data, co
 		tileset->set_physics_layer_collision_mask(i, layer_data.collision_mask);
 	}
 
-	// Create sources
 	for (int i = 0; i < data.sources.size(); i++) {
 		_create_atlas_source(tileset, data.sources[i], base_path);
 	}
@@ -246,7 +235,6 @@ void SpxTilemapparserMgr::_create_atlas_source(Ref<TileSet> tileset, const SpxTi
 		return;
 	}
 
-	// Create atlas source
 	Ref<TileSetAtlasSource> atlas;
 	atlas.instantiate();
 	atlas->set_texture(texture);
@@ -263,10 +251,8 @@ void SpxTilemapparserMgr::_create_atlas_source(Ref<TileSet> tileset, const SpxTi
 	for (int i = 0; i < data.tiles.size(); i++) {
 		const SpxTileData &tile_data = data.tiles[i];
 
-		// Create the tile
 		atlas->create_tile(tile_data.atlas_coords, tile_data.size_in_atlas);
 
-		// Get tile data for physics setup
 		TileData *td = atlas->get_tile_data(tile_data.atlas_coords, 0);
 		if (td != nullptr) {
 			_setup_tile_physics(td, tile_data);
@@ -279,7 +265,6 @@ void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTile
 		const SpxTilePhysicsData &phys_data = data.physics[i];
 		int layer_id = phys_data.layer;
 
-		// Add collision polygons
 		for (int p = 0; p < phys_data.polygons.size(); p++) {
 			const Vector<float> &polygon_flat = phys_data.polygons[p];
 
@@ -305,19 +290,13 @@ void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTile
 TileMapLayer *SpxTilemapparserMgr::_create_tilemap_layer(const SpxTileMapLayerData &data, Ref<TileSet> tileset, const Vector2 &node_offset) {
 	TileMapLayer *layer = memnew(TileMapLayer);
 
-	// Set layer name
 	layer->set_name(data.name.is_empty() ? "layer" : data.name);
-
-	// Set z_index
 	layer->set_z_index(data.z_index);
 
 	// Set offset (position) - combine layer offset with tilemap node offset for centering
 	layer->set_position(data.offset + node_offset);
 
-	// Set enabled
 	layer->set_enabled(data.enabled);
-
-	// Set tile set
 	layer->set_tile_set(tileset);
 
 	// Parse tile_map_data (Base64 encoded binary data)

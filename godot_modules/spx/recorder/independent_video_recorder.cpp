@@ -37,7 +37,6 @@ Error IndependentVideoRecorder::initialize(ThreadSafeFrameBuffer *p_frame_buffer
 	frame_buffer = p_frame_buffer;
 	config = p_config;
 
-	// create simple video writer
 	video_writer.instantiate();
 
 	Size2i movie_size(config.video_width, config.video_height);
@@ -47,7 +46,6 @@ Error IndependentVideoRecorder::initialize(ThreadSafeFrameBuffer *p_frame_buffer
 		return open_result;
 	}
 
-	// reset statistics
 	reset_statistics();
 
 	if (MovieDebugUtils::is_stdout_verbose()) {
@@ -72,11 +70,9 @@ Error IndependentVideoRecorder::start_recording() {
 		return ERR_UNCONFIGURED;
 	}
 
-	// set recording status
 	recording_active.store(true);
 	recording_start_time = OS::get_singleton()->get_ticks_usec();
 
-	// start recording thread
 	recording_thread.start(recording_thread_func, this);
 	thread_started.store(true);
 
@@ -95,18 +91,15 @@ void IndependentVideoRecorder::stop_recording() {
 		return;
 	}
 
-	// wait for thread to finish
 	if (thread_started.load()) {
 		recording_thread.wait_to_finish();
 		thread_started.store(false);
 	}
 
-	// close video writer
 	if (video_writer.is_valid()) {
 		video_writer->close();
 	}
 
-	// output final statistics
 	if (MovieDebugUtils::is_stdout_verbose()) {
 		RecordingStats final_stats = get_statistics();
 		print_line(String("Recording completed - Total frames: ") + String::num_int64(final_stats.total_recorded_frames));
@@ -132,21 +125,18 @@ void IndependentVideoRecorder::recording_loop() {
 		if (current_time >= next_record_time) {
 			uint64_t frame_process_start = OS::get_singleton()->get_ticks_usec();
 
-			// Process frame
 			bool frame_processed = process_frame(next_record_time - recording_start_time);
 
 			if (frame_processed) {
 				frame_count++;
 				update_statistics(frame_process_start);
 
-				// Output debug information every 30 frames
 				if (MovieDebugUtils::is_stdout_verbose() && frame_count % 30 == 0) {
 					print_line(String("Recording progress: ") + String::num_int64(frame_count) + " frames, " +
 							String("Repeated frame ratio: ") + String::num_real(get_repeat_frame_ratio() * 100.0f) + "%");
 				}
 			}
 
-			// Calculate next frame time
 			next_record_time += FRAME_INTERVAL_USEC;
 		}
 
@@ -162,7 +152,6 @@ void IndependentVideoRecorder::recording_loop() {
 }
 
 bool IndependentVideoRecorder::process_frame(uint64_t current_recording_time) {
-	// Get current frame data
 	ThreadSafeFrameBuffer::FrameData frame_data = frame_buffer->get_current_frame();
 
 	ThreadSafeFrameBuffer::FrameData frame_to_write;
@@ -194,7 +183,6 @@ bool IndependentVideoRecorder::process_frame(uint64_t current_recording_time) {
 		stats.last_game_frame_sequence = frame_data.frame_sequence;
 	}
 
-	// Write to video file
 	Error write_result = video_writer->write_frame(frame_to_write.image);
 
 	if (write_result != OK) {
@@ -202,7 +190,6 @@ bool IndependentVideoRecorder::process_frame(uint64_t current_recording_time) {
 		return false;
 	}
 
-	// Update statistics
 	{
 		MutexLock lock(stats_mutex);
 		stats.total_recorded_frames++;
@@ -217,7 +204,6 @@ void IndependentVideoRecorder::update_statistics(uint64_t frame_process_start_ti
 
 	MutexLock lock(stats_mutex);
 
-	// Update recording duration
 	stats.recording_duration_us = current_time - recording_start_time;
 
 	// Update average processing time (using a moving average)

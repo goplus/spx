@@ -93,14 +93,12 @@ Ref<SpriteFrames> SvgManager::_load_animation(const String &anim_name, int scale
 		return frames;
 	}
 
-	// Get animation definition from SpxResMgr
 	auto res_mgr = SpxEngine::get_singleton()->get_res();
 	if (!res_mgr) {
 		print_error("[SvgManager] Cannot access SpxResMgr");
 		return Ref<SpriteFrames>();
 	}
 
-	// Get existing animation frame list
 	auto existing_frames = res_mgr->get_anim_frames(anim_name);
 	if (!existing_frames.is_valid()) {
 		print_error("[SvgManager] Animation not found: " + anim_name);
@@ -113,7 +111,6 @@ Ref<SpriteFrames> SvgManager::_load_animation(const String &anim_name, int scale
 		return existing_frames;
 	}
 
-	// Check if animation contains SVG frames
 	if (!existing_frames->has_animation(anim_name)) {
 		print_error("[SvgManager] Animation key not found: " + anim_name);
 		return Ref<SpriteFrames>();
@@ -124,7 +121,6 @@ Ref<SpriteFrames> SvgManager::_load_animation(const String &anim_name, int scale
 	new_frames.instantiate();
 	new_frames->add_animation(anim_name);
 
-	// Copy animation properties
 	new_frames->set_animation_loop(anim_name, existing_frames->get_animation_loop(anim_name));
 	new_frames->set_animation_speed(anim_name, existing_frames->get_animation_speed(anim_name));
 
@@ -133,19 +129,15 @@ Ref<SpriteFrames> SvgManager::_load_animation(const String &anim_name, int scale
 		auto original_texture = existing_frames->get_frame_texture(anim_name, i);
 		float duration = existing_frames->get_frame_duration(anim_name, i);
 
-		// Check if it's an SVG texture
 		String texture_path = original_texture->get_path(); // engine path
 		if (is_svg_file(texture_path)) {
-			// Load scaled version of SVG
 			Ref<ImageTexture> scaled_texture = _load_image(texture_path, scale);
 			if (scaled_texture.is_valid()) {
 				new_frames->add_frame(anim_name, scaled_texture, duration);
 			} else {
-				// If SVG loading fails, use original texture
 				new_frames->add_frame(anim_name, original_texture, duration);
 			}
 		} else {
-			// Non-SVG textures directly use original texture
 			new_frames->add_frame(anim_name, original_texture, duration);
 		}
 	}
@@ -161,7 +153,6 @@ Ref<ImageTexture> SvgManager::_load_image(const String &path /*engine path*/, in
 	if (svg_image_cache.has(key)) {
 		return svg_image_cache[key];
 	}
-	// Load SVG image
 	Ref<Image> image;
 	image.instantiate();
 	Error err = SpxImageLoaderSVG::load_image(path, image, ImageFormatLoader::FLAG_NONE, (float)scale);
@@ -172,7 +163,6 @@ Ref<ImageTexture> SvgManager::_load_image(const String &path /*engine path*/, in
 		if (!svg_image_raw_size_cache.has(path)) {
 			svg_image_raw_size_cache[path] = Vector2(image->get_width() / scale, image->get_height() / scale);
 		}
-		// Cache texture
 		svg_image_cache[key] = texture;
 		return texture;
 	}

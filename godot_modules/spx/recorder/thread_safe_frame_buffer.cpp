@@ -10,7 +10,6 @@
 #include "core/os/os.h"
 
 ThreadSafeFrameBuffer::ThreadSafeFrameBuffer() {
-	// Initialize atomic variables
 	has_new_data.store(false);
 	last_sequence.store(0);
 	total_updates.store(0);
@@ -18,12 +17,10 @@ ThreadSafeFrameBuffer::ThreadSafeFrameBuffer() {
 }
 
 ThreadSafeFrameBuffer::~ThreadSafeFrameBuffer() {
-	// Clean up resources
 	reset();
 }
 
 void ThreadSafeFrameBuffer::update_frame(const Ref<Image> &new_frame, uint64_t timestamp, uint32_t sequence) {
-	// Parameter validation
 	if (new_frame.is_null()) {
 		return;
 	}
@@ -46,7 +43,6 @@ void ThreadSafeFrameBuffer::update_frame(const Ref<Image> &new_frame, uint64_t t
 		buffer_switches.fetch_add(1);
 	}
 
-	// Update status flags
 	has_new_data.store(true);
 	last_sequence.store(sequence);
 }
@@ -66,12 +62,10 @@ ThreadSafeFrameBuffer::FrameData ThreadSafeFrameBuffer::get_current_frame() cons
 void ThreadSafeFrameBuffer::reset() {
 	MutexLock lock(buffer_mutex);
 
-	// Clear buffers
 	buffer_a = FrameData();
 	buffer_b = FrameData();
 	writing_to_a = true;
 
-	// Reset status
 	has_new_data.store(false);
 	last_sequence.store(0);
 	total_updates.store(0);

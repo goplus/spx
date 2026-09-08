@@ -65,10 +65,6 @@ static Array _vector2_to_array(const Vector2 &v) {
 	return arr;
 }
 
-// ============================================================================
-// SpxPhysicsLayerData
-// ============================================================================
-
 bool SpxPhysicsLayerData::from_json(const Dictionary &dict) {
 	collision_layer = dict.get("collision_layer", 1);
 	collision_mask = dict.get("collision_mask", 1);
@@ -81,10 +77,6 @@ Dictionary SpxPhysicsLayerData::to_json() const {
 	dict["collision_mask"] = collision_mask;
 	return dict;
 }
-
-// ============================================================================
-// SpxTilePhysicsData
-// ============================================================================
 
 bool SpxTilePhysicsData::from_json(const Dictionary &dict) {
 	layer = dict.get("layer", 0);
@@ -121,10 +113,6 @@ Dictionary SpxTilePhysicsData::to_json() const {
 
 	return dict;
 }
-
-// ============================================================================
-// SpxTileData
-// ============================================================================
 
 bool SpxTileData::from_json(const Dictionary &dict) {
 	if (dict.has("atlas_coords")) {
@@ -165,10 +153,6 @@ Dictionary SpxTileData::to_json() const {
 
 	return dict;
 }
-
-// ============================================================================
-// SpxTileSetSourceData
-// ============================================================================
 
 bool SpxTileSetSourceData::from_json(const Dictionary &dict) {
 	id = dict.get("id", 0);
@@ -217,10 +201,6 @@ Dictionary SpxTileSetSourceData::to_json() const {
 
 	return dict;
 }
-
-// ============================================================================
-// SpxTileSetData
-// ============================================================================
 
 bool SpxTileSetData::from_json(const Dictionary &dict) {
 	if (dict.has("tile_size")) {
@@ -273,10 +253,6 @@ Dictionary SpxTileSetData::to_json() const {
 	return dict;
 }
 
-// ============================================================================
-// SpxTileMapLayerData
-// ============================================================================
-
 bool SpxTileMapLayerData::from_json(const Dictionary &dict) {
 	name = dict.get("name", "");
 	z_index = dict.get("z_index", 0);
@@ -299,10 +275,6 @@ Dictionary SpxTileMapLayerData::to_json() const {
 	dict["tile_map_data"] = tile_map_data_base64;
 	return dict;
 }
-
-// ============================================================================
-// SpxTileMapData
-// ============================================================================
 
 bool SpxTileMapData::from_json(const Dictionary &dict) {
 	version = dict.get("version", 1);

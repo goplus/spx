@@ -38,7 +38,6 @@ Error IndependentAudioRecorder::initialize(HybridAudioDriver *p_audio_driver,
 	audio_driver = p_audio_driver;
 	config = p_config;
 
-	// Create a simple audio writer
 	audio_writer.instantiate();
 
 	Error open_result = audio_writer->open(p_audio_path, config.sample_rate, config.channels);
@@ -47,7 +46,6 @@ Error IndependentAudioRecorder::initialize(HybridAudioDriver *p_audio_driver,
 		return open_result;
 	}
 
-	// Calculate buffer size
 	buffer_size = config.sample_rate * config.channels * config.buffer_size_seconds;
 
 	// Calculate the power for the RingBuffer
@@ -57,15 +55,12 @@ Error IndependentAudioRecorder::initialize(HybridAudioDriver *p_audio_driver,
 	}
 	int actual_buffer_size = 1 << power; // Actual buffer size
 
-	// Initialize the ring buffer
 	audio_ring_buffer = RingBuffer<int32_t>(power);
 	buffer_size = actual_buffer_size; // Update to actual size
 
-	// Initialize temporary buffers
 	temp_audio_buffer.resize(config.chunk_size * config.channels);
 	chunk_buffer.resize(config.chunk_size * config.channels);
 
-	// Reset statistics
 	reset_statistics();
 
 	if (MovieDebugUtils::is_stdout_verbose()) {
@@ -92,16 +87,13 @@ Error IndependentAudioRecorder::start_recording() {
 		return ERR_UNCONFIGURED;
 	}
 
-	// Clear buffer
 	audio_ring_buffer.clear();
 	buffer_read_pos.store(0);
 	buffer_write_pos.store(0);
 
-	// Set recording status
 	recording_active.store(true);
 	recording_start_time = OS::get_singleton()->get_ticks_usec();
 
-	// Start recording thread
 	recording_thread.start(recording_thread_func, this);
 	thread_started.store(true);
 
@@ -120,18 +112,15 @@ void IndependentAudioRecorder::stop_recording() {
 		return;
 	}
 
-	// Wait for the thread to finish
 	if (thread_started.load()) {
 		recording_thread.wait_to_finish();
 		thread_started.store(false);
 	}
 
-	// Close the audio writer
 	if (audio_writer.is_valid()) {
 		audio_writer->close();
 	}
 
-	// Output final statistics
 	if (MovieDebugUtils::is_stdout_verbose()) {
 		AudioStats final_stats = get_statistics();
 		print_line(String("Audio recording completed - Total chunks: ") + String::num_int64(final_stats.total_chunks_recorded));
@@ -157,14 +146,12 @@ void IndependentAudioRecorder::recording_loop() {
 		if (current_time >= next_chunk_time) {
 			uint64_t chunk_process_start = OS::get_singleton()->get_ticks_usec();
 
-			// Process audio chunk
 			bool chunk_processed = process_audio_chunk(next_chunk_time - recording_start_time);
 
 			if (chunk_processed) {
 				chunk_count++;
 				update_statistics(chunk_process_start, config.chunk_size);
 
-				// Output debug info every 1000 chunks
 				if (MovieDebugUtils::is_stdout_verbose() && chunk_count % 1000 == 0) {
 					AudioStats current_stats = get_statistics();
 					print_line(String("Audio recording progress: ") + String::num_int64(chunk_count) + " chunks, " +
@@ -172,7 +159,6 @@ void IndependentAudioRecorder::recording_loop() {
 				}
 			}
 
-			// Calculate next chunk time
 			next_chunk_time += CHUNK_INTERVAL_USEC;
 		}
 
@@ -188,12 +174,10 @@ void IndependentAudioRecorder::recording_loop() {
 }
 
 bool IndependentAudioRecorder::process_audio_chunk(uint64_t current_recording_time) {
-	// Read audio data from the ring buffer
 	if (!read_audio_chunk(chunk_buffer, config.chunk_size * config.channels)) {
 		handle_buffer_underrun();
 		return false;
 	}
-	// Write to audio file
 	Error write_result = audio_writer->write_audio_chunk(
 			chunk_buffer.ptr(),
 			config.chunk_size);
@@ -202,7 +186,6 @@ bool IndependentAudioRecorder::process_audio_chunk(uint64_t current_recording_ti
 		ERR_PRINT("IndependentAudioRecorder: Failed to write audio chunk");
 		return false;
 	}
-	// Update statistics
 	{
 		MutexLock lock(stats_mutex);
 		stats.total_chunks_recorded++;
@@ -221,7 +204,6 @@ bool IndependentAudioRecorder::read_audio_chunk(Vector<int32_t> &output_buffer, 
 
 	MutexLock lock(buffer_mutex);
 
-	// Use RingBuffer's read method directly
 	int samples_read = audio_ring_buffer.read(output_buffer.ptrw(), requested_samples);
 
 	if (samples_read < (int)requested_samples) {
@@ -243,14 +225,12 @@ void IndependentAudioRecorder::on_audio_output(const int32_t *p_buffer, int p_fr
 
 	uint32_t samples_to_write = p_frame_count * config.channels;
 
-	// Check buffer space
 	int available_space = audio_ring_buffer.space_left();
 	if ((int)samples_to_write > available_space) {
 		handle_buffer_overrun();
 		return;
 	}
 
-	// Write data
 	audio_ring_buffer.write(p_buffer, samples_to_write);
 }
 
@@ -260,7 +240,6 @@ void IndependentAudioRecorder::update_statistics(uint64_t chunk_process_start_ti
 
 	MutexLock lock(stats_mutex);
 
-	// Update recording duration
 	stats.recording_duration_us = current_time - recording_start_time;
 
 	// Update average processing time (using moving average)
@@ -271,7 +250,6 @@ void IndependentAudioRecorder::update_statistics(uint64_t chunk_process_start_ti
 		stats.avg_chunk_process_time_us = (stats.avg_chunk_process_time_us * 9 + process_time) / 10;
 	}
 
-	// Update buffer usage
 	update_buffer_level();
 }
 
