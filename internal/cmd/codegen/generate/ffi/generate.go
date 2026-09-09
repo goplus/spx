@@ -63,6 +63,14 @@ var (
 	syncPureApiText string
 )
 
+type ImplData struct {
+	Ast     clang.CHeaderFileAST
+	Methods []clang.TypedefFunction
+	ClsName string
+}
+
+type ByName []clang.TypedefFunction
+
 func Generate(projectPath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
@@ -258,12 +266,6 @@ func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 		filepath.Join(projectPath, EnginewrapRelDir, "sync_pure.gen.go"))
 }
 
-type ImplData struct {
-	Ast     clang.CHeaderFileAST
-	Methods []clang.TypedefFunction
-	ClsName string
-}
-
 func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
 		"getManagerImpl": getManagerImpl,
@@ -277,6 +279,7 @@ func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, cls
 	return GenerateFile(funcs, genFile, implGoFileText, data,
 		filepath.Join(projectPath, EnginePkgRelDir, genFile))
 }
+
 func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
 		"getManagerImplPure": getManagerImplPure,
@@ -288,6 +291,25 @@ func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST,
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
 	return GenerateFile(funcs, genFile, implPureGoFileText, data,
 		filepath.Join(projectPath, EnginePkgRelDir, genFile))
+}
+
+func MustGdxReturnType(function *clang.TypedefFunction) string {
+	typeName := EffectiveGoReturnType(function)
+	if typeName == "Object" {
+		return "gdx.Object"
+	}
+	if typeName == "Array" {
+		return "gdx.Array"
+	}
+	return typeName
+}
+
+func (arr ByName) Len() int { return len(arr) }
+
+func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
+
+func (arr ByName) Less(i, j int) bool {
+	return arr[i].Name < arr[j].Name
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {
@@ -419,17 +441,6 @@ func goZeroValue(typeName string) string {
 	}
 }
 
-func MustGdxReturnType(function *clang.TypedefFunction) string {
-	typeName := EffectiveGoReturnType(function)
-	if typeName == "Object" {
-		return "gdx.Object"
-	}
-	if typeName == "Array" {
-		return "gdx.Array"
-	}
-	return typeName
-}
-
 func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -558,16 +569,6 @@ func genSyncManagerWrapFunction(function *clang.TypedefFunction) string {
 	return ""
 }
 
-type ByName []clang.TypedefFunction
-
-func (arr ByName) Len() int { return len(arr) }
-
-func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
-
-func (arr ByName) Less(i, j int) bool {
-	return arr[i].Name < arr[j].Name
-}
-
 func getManagerImplPure(function *clang.TypedefFunction, clsName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -605,6 +606,7 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 	sb.WriteString("}\n")
 	return sb.String()
 }
+
 func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}

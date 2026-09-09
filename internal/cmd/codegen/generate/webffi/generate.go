@@ -56,6 +56,59 @@ var (
 	workerWrapJsFileText string
 )
 
+type managerFuncBodySpec struct {
+	call      string
+	fallback  []string
+	boolAsInt bool
+}
+
+var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
+	"GDExtensionSpxInputGetGlobalMousePos": {
+		call: "WebInputMousePos(func() Vec2",
+		fallback: []string{
+			"_retValue := API.SpxInputGetGlobalMousePos.Invoke()",
+			"return JsToGdVec2(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKey": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetMouseState": {
+		call: "WebInputMouseState(mouse_id, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(mouse_id)",
+			"_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKeyState": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)",
+			"return JsToGdInt(_retValue) != 0",
+		},
+		boolAsInt: true,
+	},
+	"GDExtensionSpxInputGetAxis": {
+		call: "CachedActionAxis(neg_action, pos_action, func() float64",
+		fallback: []string{
+			"arg0 := JsFromGdString(neg_action)",
+			"arg1 := JsFromGdString(pos_action)",
+			"_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)",
+			"return JsToGdFloat(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputIsActionPressed":      actionBoolManagerFuncBody("pressed", "API.SpxInputIsActionPressed"),
+	"GDExtensionSpxInputIsActionJustPressed":  actionBoolManagerFuncBody("just_pressed", "API.SpxInputIsActionJustPressed"),
+	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
+}
+
 func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
@@ -290,59 +343,6 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString("JsTo" + name + "(_retValue)")
 	}
 	return sb.String()
-}
-
-type managerFuncBodySpec struct {
-	call      string
-	fallback  []string
-	boolAsInt bool
-}
-
-var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
-	"GDExtensionSpxInputGetGlobalMousePos": {
-		call: "WebInputMousePos(func() Vec2",
-		fallback: []string{
-			"_retValue := API.SpxInputGetGlobalMousePos.Invoke()",
-			"return JsToGdVec2(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetKey": {
-		call: "WebInputKeyState(key, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(key)",
-			"_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)",
-			"return JsToGdBool(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetMouseState": {
-		call: "WebInputMouseState(mouse_id, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(mouse_id)",
-			"_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)",
-			"return JsToGdBool(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetKeyState": {
-		call: "WebInputKeyState(key, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(key)",
-			"_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)",
-			"return JsToGdInt(_retValue) != 0",
-		},
-		boolAsInt: true,
-	},
-	"GDExtensionSpxInputGetAxis": {
-		call: "CachedActionAxis(neg_action, pos_action, func() float64",
-		fallback: []string{
-			"arg0 := JsFromGdString(neg_action)",
-			"arg1 := JsFromGdString(pos_action)",
-			"_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)",
-			"return JsToGdFloat(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputIsActionPressed":      actionBoolManagerFuncBody("pressed", "API.SpxInputIsActionPressed"),
-	"GDExtensionSpxInputIsActionJustPressed":  actionBoolManagerFuncBody("just_pressed", "API.SpxInputIsActionJustPressed"),
-	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
 }
 
 func getInputCacheManagerFuncBody(name string) (string, bool) {
