@@ -207,6 +207,8 @@ Tilemap 本身已有数组型批量接口空间，适合继续二进制化：
 
 该方案减少了一次中间 `Uint8Array -> Module.HEAPU8` 拷贝。在线程版 Godot Web 构建中，Godot wasm heap 的底层 buffer 是 `SharedArrayBuffer`；非线程构建中是普通 `ArrayBuffer`，但协议和调用路径保持一致。
 
+变换、删除和视觉批次使用旧协议，将精灵 ID 作为数值存储在 `float32` 中。序列化要求 ID 非负且能够精确往返转换；非法 ID 会在提交数据包之前触发包含原始 ID 的 panic。引擎回调的 panic 处理器会报告错误并请求运行时退出或重置。这项检查保留现有传输格式；物理批次已使用两个位通道无损编码 ID。
+
 ## 后续优先级
 
 暂无。

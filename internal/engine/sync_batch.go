@@ -16,7 +16,10 @@
 
 package engine
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 const (
 	// Batch sync constants
@@ -105,6 +108,8 @@ func (b *SpriteSyncBuffer) GetDeleteIDs() []int64 {
 // - Header: [updateCount, deleteCount]
 // - Update section: [id1, x1, y1, rot1, scaleX1, scaleY1, offsetX1, offsetY1, vis1, ...]
 // - Delete section: [id1, id2, id3, ...]
+// Panics before returning a packet if an ID is negative or cannot be represented
+// exactly in the legacy float32 format.
 func (b *SpriteSyncBuffer) Serialize() []float32 {
 	updateCount := len(b.data)
 	deleteCount := len(b.deleteIDs)
@@ -126,7 +131,7 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 
 	// Serialize update data
 	for _, sprite := range b.data {
-		result[idx] = float32(sprite.SpriteID)
+		result[idx] = encodeLegacyBatchObjectID(sprite.SpriteID)
 		result[idx+1] = sprite.X
 		result[idx+2] = sprite.Y
 		result[idx+3] = sprite.Rotation
@@ -140,7 +145,7 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 
 	// Serialize delete IDs (only IDs, no wasted space)
 	for _, id := range b.deleteIDs {
-		result[idx] = float32(id)
+		result[idx] = encodeLegacyBatchObjectID(id)
 		idx++
 	}
 
@@ -251,6 +256,8 @@ func (b *VisualSyncBuffer) Count() int {
 // Serialize converts the buffer to a flat float32 array for FFI
 // Format: [count, entry0..., entry1..., ...]
 // Each entry: [spriteId, renderScaleX, renderScaleY, zIndex, flags, uvX, uvY, uvW, uvH]
+// Panics before returning a packet if an ID is negative or cannot be represented
+// exactly in the legacy float32 format.
 func (b *VisualSyncBuffer) Serialize() []float32 {
 	count := len(b.data)
 	if count == 0 {
@@ -265,7 +272,7 @@ func (b *VisualSyncBuffer) Serialize() []float32 {
 	idx := 1
 
 	for _, entry := range b.data {
-		result[idx] = float32(entry.SpriteID)
+		result[idx] = encodeLegacyBatchObjectID(entry.SpriteID)
 		result[idx+1] = entry.RenderScale
 		result[idx+2] = entry.RenderScale // scaleX == scaleY for render scale
 		result[idx+3] = float32(entry.ZIndex)
@@ -457,6 +464,15 @@ func boolArg(value bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func encodeLegacyBatchObjectID(id int64) float32 {
+	value := float32(id)
+	// Check the upper bound before converting back: MaxInt64 rounds up to 2^63.
+	if id < 0 || value >= 0x1p63 || int64(value) != id {
+		panic(fmt.Errorf("invalid sprite ID %d for legacy float32 batch encoding", id))
+	}
+	return value
 }
 
 func splitInt64BitsToFloat32(value int64) (low, high float32) {
