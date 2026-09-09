@@ -63,6 +63,14 @@ var (
 	syncPureApiText string
 )
 
+type ImplData struct {
+	Ast     clang.CHeaderFileAST
+	Methods []clang.TypedefFunction
+	ClsName string
+}
+
+type ByName []clang.TypedefFunction
+
 func Generate(projectPath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
@@ -179,9 +187,9 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
 		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncName":  ManagerMethodSignature,
 		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": getManagerInterface,
+		"getManagerInterface": ManagerInterfaceSignature,
 	}
 
 	return GenerateFile(funcs, "manager_native.gen.go", managerNativeText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
@@ -203,9 +211,9 @@ func GenerateManagerInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
 		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncName":  ManagerMethodSignature,
 		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": getManagerInterface,
+		"getManagerInterface": ManagerInterfaceSignature,
 	}
 
 	return GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
@@ -258,12 +266,6 @@ func GenerateSyncPureGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 		filepath.Join(projectPath, EnginewrapRelDir, "sync_pure.gen.go"))
 }
 
-type ImplData struct {
-	Ast     clang.CHeaderFileAST
-	Methods []clang.TypedefFunction
-	ClsName string
-}
-
 func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
 		"getManagerImpl": getManagerImpl,
@@ -277,6 +279,7 @@ func GenerateManagerImplGoFile(projectPath string, ast clang.CHeaderFileAST, cls
 	return GenerateFile(funcs, genFile, implGoFileText, data,
 		filepath.Join(projectPath, EnginePkgRelDir, genFile))
 }
+
 func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST, clsName string) error {
 	funcs := template.FuncMap{
 		"getManagerImplPure": getManagerImplPure,
@@ -290,38 +293,23 @@ func GenerateManagerImplPureGoFile(projectPath string, ast clang.CHeaderFileAST,
 		filepath.Join(projectPath, EnginePkgRelDir, genFile))
 }
 
-func getManagerFuncName(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString("(")
-	sb.WriteString("pself *" + mgrName)
-	sb.WriteString("Mgr) ")
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
+func MustGdxReturnType(function *clang.TypedefFunction) string {
+	typeName := EffectiveGoReturnType(function)
+	if typeName == "Object" {
+		return "gdx.Object"
 	}
-	sb.WriteString(")")
+	if typeName == "Array" {
+		return "gdx.Array"
+	}
+	return typeName
+}
 
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
-	}
-	return sb.String()
+func (arr ByName) Len() int { return len(arr) }
+
+func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
+
+func (arr ByName) Less(i, j int) bool {
+	return arr[i].Name < arr[j].Name
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {
@@ -438,37 +426,6 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	return sb.String()
 }
 
-func getManagerInterface(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
-	}
-	return sb.String()
-}
-
 func goZeroValue(typeName string) string {
 	switch typeName {
 	case "bool":
@@ -482,17 +439,6 @@ func goZeroValue(typeName string) string {
 	default:
 		return typeName + "{}"
 	}
-}
-
-func MustGdxReturnType(function *clang.TypedefFunction) string {
-	typeName := EffectiveGoReturnType(function)
-	if typeName == "Object" {
-		return "gdx.Object"
-	}
-	if typeName == "Array" {
-		return "gdx.Array"
-	}
-	return typeName
 }
 
 func genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
@@ -623,16 +569,6 @@ func genSyncManagerWrapFunction(function *clang.TypedefFunction) string {
 	return ""
 }
 
-type ByName []clang.TypedefFunction
-
-func (arr ByName) Len() int { return len(arr) }
-
-func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
-
-func (arr ByName) Less(i, j int) bool {
-	return arr[i].Name < arr[j].Name
-}
-
 func getManagerImplPure(function *clang.TypedefFunction, clsName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -670,6 +606,7 @@ func getManagerImplPure(function *clang.TypedefFunction, clsName string) string 
 	sb.WriteString("}\n")
 	return sb.String()
 }
+
 func getManagerImpl(function *clang.TypedefFunction, clsName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}

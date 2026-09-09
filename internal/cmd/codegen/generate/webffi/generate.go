@@ -56,6 +56,59 @@ var (
 	workerWrapJsFileText string
 )
 
+type managerFuncBodySpec struct {
+	call      string
+	fallback  []string
+	boolAsInt bool
+}
+
+var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
+	"GDExtensionSpxInputGetGlobalMousePos": {
+		call: "WebInputMousePos(func() Vec2",
+		fallback: []string{
+			"_retValue := API.SpxInputGetGlobalMousePos.Invoke()",
+			"return JsToGdVec2(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKey": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetMouseState": {
+		call: "WebInputMouseState(mouse_id, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(mouse_id)",
+			"_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)",
+			"return JsToGdBool(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputGetKeyState": {
+		call: "WebInputKeyState(key, func() bool",
+		fallback: []string{
+			"arg0Low, arg0High := JsSplitGdInt(key)",
+			"_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)",
+			"return JsToGdInt(_retValue) != 0",
+		},
+		boolAsInt: true,
+	},
+	"GDExtensionSpxInputGetAxis": {
+		call: "CachedActionAxis(neg_action, pos_action, func() float64",
+		fallback: []string{
+			"arg0 := JsFromGdString(neg_action)",
+			"arg1 := JsFromGdString(pos_action)",
+			"_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)",
+			"return JsToGdFloat(_retValue)",
+		},
+	},
+	"GDExtensionSpxInputIsActionPressed":      actionBoolManagerFuncBody("pressed", "API.SpxInputIsActionPressed"),
+	"GDExtensionSpxInputIsActionJustPressed":  actionBoolManagerFuncBody("just_pressed", "API.SpxInputIsActionJustPressed"),
+	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
+}
+
 func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
@@ -150,9 +203,9 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
 		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  getManagerFuncName,
+		"getManagerFuncName":  ManagerMethodSignature,
 		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": getManagerInterface,
+		"getManagerInterface": ManagerInterfaceSignature,
 	}
 
 	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
@@ -213,40 +266,6 @@ func trimTrailingWhitespace(src []byte) []byte {
 		lines[i] = bytes.TrimRight(line, " \t")
 	}
 	return bytes.Join(lines, []byte("\n"))
-}
-
-func getManagerFuncName(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString("(")
-	sb.WriteString("pself *" + mgrName)
-	sb.WriteString("Mgr) ")
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
-	}
-	return sb.String()
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {
@@ -326,59 +345,6 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	return sb.String()
 }
 
-type managerFuncBodySpec struct {
-	call      string
-	fallback  []string
-	boolAsInt bool
-}
-
-var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
-	"GDExtensionSpxInputGetGlobalMousePos": {
-		call: "WebInputMousePos(func() Vec2",
-		fallback: []string{
-			"_retValue := API.SpxInputGetGlobalMousePos.Invoke()",
-			"return JsToGdVec2(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetKey": {
-		call: "WebInputKeyState(key, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(key)",
-			"_retValue := API.SpxInputGetKey.Invoke(arg0Low, arg0High)",
-			"return JsToGdBool(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetMouseState": {
-		call: "WebInputMouseState(mouse_id, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(mouse_id)",
-			"_retValue := API.SpxInputGetMouseState.Invoke(arg0Low, arg0High)",
-			"return JsToGdBool(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputGetKeyState": {
-		call: "WebInputKeyState(key, func() bool",
-		fallback: []string{
-			"arg0Low, arg0High := JsSplitGdInt(key)",
-			"_retValue := API.SpxInputGetKeyState.Invoke(arg0Low, arg0High)",
-			"return JsToGdInt(_retValue) != 0",
-		},
-		boolAsInt: true,
-	},
-	"GDExtensionSpxInputGetAxis": {
-		call: "CachedActionAxis(neg_action, pos_action, func() float64",
-		fallback: []string{
-			"arg0 := JsFromGdString(neg_action)",
-			"arg1 := JsFromGdString(pos_action)",
-			"_retValue := API.SpxInputGetAxis.Invoke(arg0, arg1)",
-			"return JsToGdFloat(_retValue)",
-		},
-	},
-	"GDExtensionSpxInputIsActionPressed":      actionBoolManagerFuncBody("pressed", "API.SpxInputIsActionPressed"),
-	"GDExtensionSpxInputIsActionJustPressed":  actionBoolManagerFuncBody("just_pressed", "API.SpxInputIsActionJustPressed"),
-	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
-}
-
 func getInputCacheManagerFuncBody(name string) (string, bool) {
 	spec, ok := inputCacheManagerFuncBodies[name]
 	if !ok {
@@ -425,37 +391,6 @@ func appendIndented(lines []string, indent string, values ...string) []string {
 		lines = append(lines, indent+value)
 	}
 	return lines
-}
-
-func getManagerInterface(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := GetManagerName(function.Name)
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
-		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
-	}
-	return sb.String()
 }
 
 func getJsFuncArgs(function *clang.TypedefFunction) []string {
