@@ -24,43 +24,6 @@ import (
 	"testing"
 )
 
-func validInputReplay() InputReplay {
-	return InputReplay{
-		Format:        InputReplayFormat,
-		Version:       InputReplayVersion,
-		FixedTimestep: 1.0 / 30.0,
-		Initial: InputReplayState{
-			Mouse:    InputReplayMouse{X: 1, Y: 2},
-			Buttons:  0,
-			KeysDown: []int64{10},
-		},
-		Frames: []InputReplayFrame{
-			{
-				Frame: 0,
-				Time:  0,
-				State: InputReplayState{
-					Mouse:    InputReplayMouse{X: 3, Y: 4},
-					Buttons:  1,
-					KeysDown: []int64{10, 20},
-				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 20, Pressed: true}},
-			},
-			{
-				Frame: 1,
-				Time:  0.25,
-				State: InputReplayState{
-					Mouse:    InputReplayMouse{X: 5, Y: 6},
-					Buttons:  0,
-					KeysDown: []int64{20},
-				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
-			},
-		},
-	}
-}
-
 func TestInputReplayValidateAcceptsCanonicalReplay(t *testing.T) {
 	if err := validInputReplay().Validate(); err != nil {
 		t.Fatalf("Validate() error: %v", err)
@@ -201,6 +164,17 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 	if recorded.Frames[0].State.KeysDown[0] != 1 || recorded.Frames[0].MouseEvents[0].Button != 1 || recorded.Frames[0].KeyEvents[0].Key != 2 {
 		t.Fatalf("recording aliased caller or result: %+v", recorded.Frames[0])
 	}
+	recorded.Initial.KeysDown[0] = 666
+	recorded.Frames[0].State.KeysDown[0] = 666
+	recorded.Frames[0].MouseEvents[0].Button = 3
+	recorded.Frames[0].KeyEvents[0].Key = 666
+	snapshot, err := controller.Recording()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Initial.KeysDown[0] != 1 || snapshot.Frames[0].State.KeysDown[0] != 1 || snapshot.Frames[0].MouseEvents[0].Button != 1 || snapshot.Frames[0].KeyEvents[0].Key != 2 {
+		t.Fatalf("recording snapshots share mutable data: %+v", snapshot)
+	}
 	controller.Reset()
 	if status := controller.Status(); status.Mode != InputSessionModeIdle {
 		t.Fatalf("status after Reset = %+v", status)
@@ -240,6 +214,11 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	if !status.Exhausted || status.NextFrame != 2 || status.FrameCount != 2 {
 		t.Fatalf("finished status = %+v", status)
 	}
+	wantFrozenState := validInputReplay().Frames[1].State
+	frame1.State.KeysDown[0] = 999
+	frame1.State.Mouse.X = 999
+	frame1.MouseEvents[0].Button = 3
+	frame1.KeyEvents[0].Key = 999
 
 	frozen, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: 999, Y: 999}, KeysDown: []int64{999}},
@@ -249,14 +228,22 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first || !reflect.DeepEqual(frozen.State, frame1.State) {
-		t.Fatalf("frozen frame = (%+v, %v), want state %+v", frozen, first, frame1.State)
+	if first || !reflect.DeepEqual(frozen.State, wantFrozenState) {
+		t.Fatalf("frozen frame = (%+v, %v), want state %+v", frozen, first, wantFrozenState)
 	}
 	if len(frozen.KeyEvents) != 0 {
 		t.Fatalf("frozen frame repeated key events: %+v", frozen.KeyEvents)
 	}
 	if len(frozen.MouseEvents) != 0 {
 		t.Fatalf("frozen frame repeated mouse events: %+v", frozen.MouseEvents)
+	}
+	frozen.State.KeysDown[0] = 888
+	frozenAgain, _, err := controller.Resolve(InputReplayState{}, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(frozenAgain.State, wantFrozenState) {
+		t.Fatalf("frozen frames share mutable data: %+v", frozenAgain.State)
 	}
 	controller.Reset()
 }
@@ -307,6 +294,7 @@ func TestInputReplayControllerEmptyReplayFreezesInitialState(t *testing.T) {
 	if err := controller.StartReplay(replay); err != nil {
 		t.Fatal(err)
 	}
+	replay.Initial.KeysDown[0] = 999
 	if controller.Status().Exhausted {
 		t.Fatal("empty replay exhausted before its first effective tick")
 	}
@@ -320,12 +308,16 @@ func TestInputReplayControllerEmptyReplayFreezesInitialState(t *testing.T) {
 	if !controller.Status().Exhausted {
 		t.Fatal("empty replay did not exhaust after its first effective tick")
 	}
-	_, first, err = controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, 1)
+	frame.State.KeysDown[0] = 888
+	frame, first, err = controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first {
 		t.Fatal("empty replay reported first tick more than once")
+	}
+	if !reflect.DeepEqual(frame.State.KeysDown, []int64{1}) {
+		t.Fatalf("empty replay snapshots share mutable data: %+v", frame.State)
 	}
 }
 
@@ -392,5 +384,42 @@ func TestInputReplayControllerIdleResolveReturnsIsolatedLiveFrame(t *testing.T) 
 	events[0].Key = 2
 	if frame.State.KeysDown[0] != 1 || frame.KeyEvents[0].Key != 1 {
 		t.Fatalf("idle Resolve aliased live input: %+v", frame)
+	}
+}
+
+func validInputReplay() InputReplay {
+	return InputReplay{
+		Format:        InputReplayFormat,
+		Version:       InputReplayVersion,
+		FixedTimestep: 1.0 / 30.0,
+		Initial: InputReplayState{
+			Mouse:    InputReplayMouse{X: 1, Y: 2},
+			Buttons:  0,
+			KeysDown: []int64{10},
+		},
+		Frames: []InputReplayFrame{
+			{
+				Frame: 0,
+				Time:  0,
+				State: InputReplayState{
+					Mouse:    InputReplayMouse{X: 3, Y: 4},
+					Buttons:  1,
+					KeysDown: []int64{10, 20},
+				},
+				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
+				KeyEvents:   []InputReplayKeyEvent{{Key: 20, Pressed: true}},
+			},
+			{
+				Frame: 1,
+				Time:  0.25,
+				State: InputReplayState{
+					Mouse:    InputReplayMouse{X: 5, Y: 6},
+					Buttons:  0,
+					KeysDown: []int64{20},
+				},
+				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
+				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
+			},
+		},
 	}
 }

@@ -88,7 +88,7 @@ func (c *InputReplayController) StartReplay(replay InputReplay) error {
 	}
 	c.mode = InputSessionModeReplaying
 	c.replay = cloneInputReplay(replay)
-	c.last = InputReplayFrame{Frame: -1, State: cloneInputReplayState(replay.Initial)}
+	c.last = InputReplayFrame{Frame: -1, State: c.replay.Initial}
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (c *InputReplayController) ResolveWithMouseEvents(
 	}
 	c.record.Frames = append(c.record.Frames, cloneInputReplayFrame(effective))
 	c.next++
-	return cloneInputReplayFrame(effective), firstTick, nil
+	return effective, firstTick, nil
 }
 
 func (c *InputReplayController) modeValue() InputSessionMode {
@@ -185,9 +185,10 @@ func (c *InputReplayController) resolveReplay() (InputReplayFrame, bool, error) 
 
 	firstTick := c.cursor == 0
 	frame := cloneInputReplayFrame(c.replay.Frames[c.cursor])
+	// The replay is controller-owned and immutable; only caller snapshots need copies.
+	c.last = c.replay.Frames[c.cursor]
 	c.cursor++
 	c.next = int64(c.cursor)
-	c.last = cloneInputReplayFrame(frame)
 	c.exhausted = c.cursor == len(c.replay.Frames)
 	c.resolved = true
 	return frame, firstTick, nil
