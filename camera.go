@@ -47,6 +47,7 @@ type cameraImpl struct {
 	g            *Game
 	followTarget any
 	isDirty      bool
+	dirtyVersion uint64
 }
 
 func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
@@ -146,6 +147,9 @@ func (c *cameraImpl) setXYposDirect(x float64, y float64) {
 
 func (c *cameraImpl) setDirtyFlag(isDirty bool) {
 	c.isDirty = isDirty
+	if isDirty {
+		c.dirtyVersion++
+	}
 }
 
 func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
