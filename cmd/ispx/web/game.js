@@ -125,7 +125,7 @@ class GameApp {
 
         this.workerMessageManager = new globalThis.WorkerMessageManager();
 
-        this.stopGameTask = 0;  
+        this.stopGameTask = 0;
         this.gameLifecycle = null;
         this.logVerbose("EnginePackMode: ", EnginePackMode)
 
@@ -135,6 +135,151 @@ class GameApp {
          */
         this.projectFilesMeta = {};
     }
+
+    async InitEngine() {
+        return this.startTask(() => this.initEngine())
+    }
+
+    /**
+     * Initialize game with given game files. It is expected to be called after `InitEngine`, while before `StartGame`.
+     * @param {Files} files
+     * @returns Promise<void>
+     */
+    async InitGame(files) {
+        return this.startTask(() => this.initGame(files))
+    }
+
+    async StartGame(options = {}) {
+        const inputSession = options && typeof options.then === 'function'
+            ? Promise.resolve(options).then((resolved) => this.normalizeStartGameInput(resolved))
+            : this.normalizeStartGameInput(options)
+        return this.startTask(async () => this.startGame(await inputSession))
+    }
+
+    async ResetGame() {
+        this.stopGameTask++;
+        return this.startTask(() => this.stopGame(false))
+    }
+
+    async StopGame(beforeStop = null) {
+        if (beforeStop != null && typeof beforeStop !== 'function') {
+            throw new TypeError('beforeStop must be a function')
+        }
+        this.stopGameTask++;
+        return this.startTask(() => this.stopGame(true, beforeStop))
+    }
+
+    downloadRecordedVideo(fileName) {
+        Module.downloadRecordedVideo(fileName)
+    }
+
+    getRecordedVideo() {
+        return Module.getRecordedVideoBlob()
+    }
+
+    startRecording() {
+        Module.tryStartRecording()
+    }
+
+    async stopRecording() {
+        return await Module.tryStopRecording()
+    }
+
+    onGodotExit(code) {
+        this.completeGameLifecycle(code)
+        this.game = null
+        if (this.config.handleGodotExit != null) {
+            this.config.handleGodotExit(code);
+        }
+
+    }
+
+    onRuntimeReset(code) {
+        this.completeGameLifecycle(code)
+    }
+
+    restart() {
+        let funPtr = this.game.rtenv["_gdspx_ext_request_restart"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
+    pause() {
+        if (this.game == null || this.game.rtenv == null) return
+        let funPtr = this.game.rtenv["_gdspx_ext_pause"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
+    isPaused() {
+        if (this.game == null || this.game.rtenv == null) return false
+        const funPtr = this.game.rtenv["_gdspx_ext_is_paused"]
+        return funPtr != null && !!funPtr()
+    }
+
+    resume() {
+        let funPtr = this.game.rtenv["_gdspx_ext_resume"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
+    stepNextFrame() {
+        let funPtr = this.game.rtenv["_gdspx_ext_next_frame"]
+        if(funPtr != null){
+            funPtr()
+        }
+    }
+
+    callWorkerFunction(funcName, ...args) {
+        this.workerMessageManager.callWorkerFunction(funcName, ...args)
+    }
+
+    getInputSessionStatus() {
+        return this.callInputReplayFunction('ispx_input_session_status')
+    }
+
+    async waitInputSessionCompleted(options = {}) {
+        this.ensureInputReplaySupported()
+        if (options == null) options = {}
+        if (typeof options !== 'object' || Array.isArray(options)) {
+            throw new TypeError('wait options must be an object')
+        }
+        const pollIntervalMs = options.pollIntervalMs == null ? 50 : options.pollIntervalMs
+        const timeoutMs = options.timeoutMs == null ? 0 : options.timeoutMs
+        if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
+            throw new RangeError('pollIntervalMs must be a non-negative number')
+        }
+        if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+            throw new RangeError('timeoutMs must be a non-negative number')
+        }
+
+        const startedAt = Date.now()
+        while (true) {
+            if (options.signal && options.signal.aborted) {
+                throw options.signal.reason || new DOMException('The operation was aborted', 'AbortError')
+            }
+
+            const status = this.getInputSessionStatus()
+            const completed = status.completed === true || status.phase === 'completed'
+            if (completed) {
+                return status
+            }
+            if (status.phase === 'aborted') {
+                throw new Error(status.error || 'input replay was aborted')
+            }
+            if (status.mode !== 'replay' && status.mode !== 'replaying') {
+                throw new Error(`input replay is not running: ${status.mode}`)
+            }
+            if (timeoutMs > 0 && Date.now() - startedAt >= timeoutMs) {
+                throw new Error(`timed out waiting for input replay after ${timeoutMs}ms`)
+            }
+            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+        }
+    }
+
     logVerbose(...args) {
         if (this.logLevel == LOG_LEVEL_VERBOSE) {
             console.log(...args);
@@ -152,46 +297,12 @@ class GameApp {
         return this.logicPromise
     }
 
-
-    async InitEngine() {
-        return this.startTask(() => this.initEngine())
-    }
-
-    /**
-     * Initialize game with given game files. It is expected to be called after `InitEngine`, while before `StartGame`.
-     * @param {Files} files 
-     * @returns Promise<void>
-     */
-    async InitGame(files) {
-        return this.startTask(() => this.initGame(files))
-    }
-
-    async StartGame(options = {}) {
-        const inputSession = options && typeof options.then === 'function'
-            ? Promise.resolve(options).then((resolved) => this.normalizeStartGameInput(resolved))
-            : this.normalizeStartGameInput(options)
-        return this.startTask(async () => this.startGame(await inputSession))
-    }
-
     normalizeStartGameInput(options) {
         if (options == null) options = {}
         if (typeof options !== 'object' || Array.isArray(options)) {
             throw new TypeError('StartGame options must be an object')
         }
         return this.normalizeInputSession(options.input)
-    }
-
-    async ResetGame() {
-        this.stopGameTask++;
-        return this.startTask(() => this.stopGame(false))
-    }
-
-    async StopGame(beforeStop = null) {
-        if (beforeStop != null && typeof beforeStop !== 'function') {
-            throw new TypeError('beforeStop must be a function')
-        }
-        this.stopGameTask++;
-        return this.startTask(() => this.stopGame(true, beforeStop))
     }
 
     async initEngine() {
@@ -254,7 +365,7 @@ class GameApp {
 
     /**
      * @private Initialize game with given game files
-     * @param {Files} files 
+     * @param {Files} files
      * @returns Promise<void>
      */
     async initGame(files) {
@@ -343,30 +454,6 @@ class GameApp {
         profiler.measure('RunGame Start', 'RunGame Done');
     }
 
-    downloadRecordedVideo(fileName) { 
-        Module.downloadRecordedVideo(fileName)
-    }
-
-    getRecordedVideo() { 
-        return Module.getRecordedVideoBlob()
-    }
-
-    startRecording() {
-        Module.tryStartRecording()
-    }
-
-    async stopRecording() {
-        return await Module.tryStopRecording()
-    } 
-
-    onGodotExit(code) {
-        this.completeGameLifecycle(code)
-        this.game = null
-        if (this.config.handleGodotExit != null) {
-            this.config.handleGodotExit(code);
-        }
- 
-    }
     async stopGame(finishInputRecording, beforeStop = null) {
         this.stopGameTask--
         const lifecycle = this.gameLifecycle
@@ -440,45 +527,6 @@ class GameApp {
         return true
     }
 
-    onRuntimeReset(code) {
-        this.completeGameLifecycle(code)
-    }
-
-    restart() {
-        let funPtr = this.game.rtenv["_gdspx_ext_request_restart"]
-        if(funPtr != null){
-            funPtr()
-        }
-    }
-
-    pause() {
-        if (this.game == null || this.game.rtenv == null) return
-        let funPtr = this.game.rtenv["_gdspx_ext_pause"]
-        if(funPtr != null){
-            funPtr()
-        }
-    }
-
-    isPaused() {
-        if (this.game == null || this.game.rtenv == null) return false
-        const funPtr = this.game.rtenv["_gdspx_ext_is_paused"]
-        return funPtr != null && !!funPtr()
-    }
-
-    resume() {
-        let funPtr = this.game.rtenv["_gdspx_ext_resume"]
-        if(funPtr != null){
-            funPtr()
-        }
-    }
-
-    stepNextFrame() {
-        let funPtr = this.game.rtenv["_gdspx_ext_next_frame"]
-        if(funPtr != null){
-            funPtr()
-        }
-    }
-    //------------------ misc ------------------
     onProgress(value) {
         if (this.config.onProgress != null) {
             this.config.onProgress(value);
@@ -489,10 +537,6 @@ class GameApp {
         let packUrl = this.assetURLs[this.packName]
         let pckData = await (await fetch(packUrl)).arrayBuffer()
         await game.unpackEngineData(this.persistentPath, this.packName, pckData)
-    }
-
-    callWorkerFunction(funcName, ...args) {
-        this.workerMessageManager.callWorkerFunction(funcName, ...args)
     }
 
     ensureInputReplaySupported() {
@@ -559,10 +603,6 @@ class GameApp {
         return this.callInputReplayFunction('ispx_input_recording_finish')
     }
 
-    getInputSessionStatus() {
-        return this.callInputReplayFunction('ispx_input_session_status')
-    }
-
     async waitInputSessionStarted(input, timeoutMs = 30000) {
         if (input == null) return
         const startedAt = Date.now()
@@ -581,45 +621,6 @@ class GameApp {
                 throw new Error(`timed out waiting for input session startup after ${timeoutMs}ms`)
             }
             await new Promise((resolve) => setTimeout(resolve, 10))
-        }
-    }
-
-    async waitInputSessionCompleted(options = {}) {
-        this.ensureInputReplaySupported()
-        if (options == null) options = {}
-        if (typeof options !== 'object' || Array.isArray(options)) {
-            throw new TypeError('wait options must be an object')
-        }
-        const pollIntervalMs = options.pollIntervalMs == null ? 50 : options.pollIntervalMs
-        const timeoutMs = options.timeoutMs == null ? 0 : options.timeoutMs
-        if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < 0) {
-            throw new RangeError('pollIntervalMs must be a non-negative number')
-        }
-        if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
-            throw new RangeError('timeoutMs must be a non-negative number')
-        }
-
-        const startedAt = Date.now()
-        while (true) {
-            if (options.signal && options.signal.aborted) {
-                throw options.signal.reason || new DOMException('The operation was aborted', 'AbortError')
-            }
-
-            const status = this.getInputSessionStatus()
-            const completed = status.completed === true || status.phase === 'completed'
-            if (completed) {
-                return status
-            }
-            if (status.phase === 'aborted') {
-                throw new Error(status.error || 'input replay was aborted')
-            }
-            if (status.mode !== 'replay' && status.mode !== 'replaying') {
-                throw new Error(`input replay is not running: ${status.mode}`)
-            }
-            if (timeoutMs > 0 && Date.now() - startedAt >= timeoutMs) {
-                throw new Error(`timed out waiting for input replay after ${timeoutMs}ms`)
-            }
-            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
         }
     }
 
@@ -701,8 +702,6 @@ class GameApp {
         throw new TypeError(`unsupported gdint value: ${value}`)
     }
 
-
-    //------------------ onRun ------------------
     async onRunPrepareEngineWasm() {
         let url = this.assetURLs["engine.wasm"]
         if (isWasmCompressed) {
@@ -756,7 +755,6 @@ class GameApp {
         }
     }
 
-    //------------------ logic wasm ------------------
     async loadLogicWasm() {
         let url = this.config.assetURLs["ispx.wasm"];
         if (isWasmCompressed) {
