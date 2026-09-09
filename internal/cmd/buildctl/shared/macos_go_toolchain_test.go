@@ -34,14 +34,6 @@ type fakeMacOSPaths struct {
 	executables map[string]bool
 }
 
-func (p fakeMacOSPaths) isDirectory(path string) bool {
-	return p.directories[path]
-}
-
-func (p fakeMacOSPaths) isExecutable(path string) bool {
-	return p.executables[path]
-}
-
 func TestConfigureMacOSGoToolchainEnvRepairsStaleInputs(t *testing.T) {
 	t.Parallel()
 
@@ -538,6 +530,14 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS" >> "$OUTPUT_PATH"
 			t.Errorf("child %s = %q, want %q", key, got, want)
 		}
 	}
+}
+
+func (p fakeMacOSPaths) isDirectory(path string) bool {
+	return p.directories[path]
+}
+
+func (p fakeMacOSPaths) isExecutable(path string) bool {
+	return p.executables[path]
 }
 
 func assertQuotedFields(t *testing.T, value string, want []string) {

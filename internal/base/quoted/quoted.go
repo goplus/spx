@@ -54,7 +54,8 @@ func Split(value string) ([]string, error) {
 	return fields, nil
 }
 
-// Join quotes fields containing whitespace, choosing an available quote style.
+// Join preserves fields for Split, quoting empty fields, whitespace, and leading
+// quotes with an available quote style.
 func Join(fields []string) (string, error) {
 	quoted := make([]string, len(fields))
 	for index, field := range fields {
@@ -68,14 +69,14 @@ func Join(fields []string) (string, error) {
 			}
 		}
 		switch {
-		case !hasSpace:
+		case field != "" && !hasSpace && field[0] != '\'' && field[0] != '"':
 			quoted[index] = field
 		case !hasSingle:
 			quoted[index] = "'" + field + "'"
 		case !hasDouble:
 			quoted[index] = `"` + field + `"`
 		default:
-			return "", fmt.Errorf("field %q contains whitespace and both quote characters", field)
+			return "", fmt.Errorf("field %q needs quoting but contains both quote characters", field)
 		}
 	}
 	return strings.Join(quoted, " "), nil

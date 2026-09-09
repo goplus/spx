@@ -34,3 +34,31 @@ func TestSplit(t *testing.T) {
 		t.Fatal("Split accepted an unterminated quote")
 	}
 }
+
+func TestJoinPreservesFields(t *testing.T) {
+	for _, fields := range [][]string{
+		{""},
+		{"-trimpath", "", "-buildvcs=false"},
+		{"'leading", `"leading`},
+		{"two words", "tab\tfield", "line\nfield"},
+		{`-DNAME="value"`, `-DNAME='value'`, `both'"quotes`},
+		{`C:\Program Files\SDK`, "中文路径"},
+	} {
+		joined, err := Join(fields)
+		if err != nil {
+			t.Fatalf("Join(%q): %v", fields, err)
+		}
+		got, err := Split(joined)
+		if err != nil || !reflect.DeepEqual(got, fields) {
+			t.Errorf("Split(Join(%q)) = %q, %v", fields, got, err)
+		}
+	}
+}
+
+func TestJoinRejectsUnrepresentableFields(t *testing.T) {
+	for _, field := range []string{`both ' and " quotes`, `'both"`, `"both'`} {
+		if _, err := Join([]string{field}); err == nil {
+			t.Errorf("Join(%q) accepted a field requiring both quote styles", field)
+		}
+	}
+}
