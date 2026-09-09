@@ -20,6 +20,7 @@ import (
 	"context"
 	"reflect"
 	"runtime"
+	sdebug "runtime/debug"
 	"sync"
 	stime "time"
 
@@ -396,7 +397,12 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 		return
 	}
 	if p.onPanic != nil {
-		p.onPanic(th.name, th.stack)
+		p.onPanic(PanicReport{
+			Value:         recovered,
+			Name:          th.name,
+			Stack:         string(sdebug.Stack()),
+			CreationStack: th.stack,
+		})
 		return
 	}
 	panic(recovered)

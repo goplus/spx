@@ -94,7 +94,7 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 
 func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	panicReported := make(chan struct{}, 1)
-	co := coroutine.New(func(name, stack string) {
+	co := coroutine.New(func(coroutine.PanicReport) {
 		panicReported <- struct{}{}
 	})
 	original := gco

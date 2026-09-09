@@ -464,7 +464,7 @@ func TestRunAfterAbortAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 func TestRunAfterAbortAllRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 	guarded := make(chan any, 1)
 	var co *Coroutines
-	co = New(func(string, string) {
+	co = New(func(PanicReport) {
 		func() {
 			defer func() { guarded <- recover() }()
 			co.RunAfterAbortAll(time.Second, nil)
@@ -491,7 +491,7 @@ func TestRunAfterAbortAllRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 }
 
 func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
-	co := New(func(string, string) {
+	co := New(func(PanicReport) {
 		panic("panic handler failure")
 	})
 	worker := co.newThread("panicking-worker")
@@ -535,7 +535,7 @@ func TestRunAfterAbortAllWaitsForPanicHandlerBeforeReopeningAdmission(t *testing
 	handlerStarted := make(chan struct{})
 	releaseHandler := make(chan struct{})
 	var releaseHandlerOnce sync.Once
-	co := New(func(string, string) {
+	co := New(func(PanicReport) {
 		close(handlerStarted)
 		<-releaseHandler
 	})

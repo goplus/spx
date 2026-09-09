@@ -230,9 +230,13 @@ func CheckPanic() {
 	}
 }
 
-// OnPanic reports a panic with an optional name and stack.
-func OnPanic(name, stack string) {
-	handlePanic(name, stack, nil, true)
+// OnPanic reports a coroutine's original panic and its fault and creation stacks.
+func OnPanic(report coroutine.PanicReport) {
+	stack := report.Stack
+	if report.CreationStack != "" {
+		stack += "\ncreated at:\n" + report.CreationStack
+	}
+	handlePanic(report.Name, stack, report.Value, true)
 }
 
 // handlePanic reports a panic and optionally exits.
@@ -266,13 +270,13 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 // Panic reports a panic message through the engine.
 func Panic(args ...any) {
 	msg := fmt.Sprint(args...)
-	OnPanic(msg, "")
+	handlePanic(msg, "", nil, true)
 }
 
 // Panicf reports a formatted panic message through the engine.
 func Panicf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
-	OnPanic(msg, "")
+	handlePanic(msg, "", nil, true)
 }
 
 // abortCoroutinesAndReset aborts coroutines and resets the engine.
