@@ -23,6 +23,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/base/quoted"
 )
 
 type launcherSource struct {
@@ -177,7 +179,7 @@ func graphFlagsFromEnvironment(workDir string, env []string) ([]string, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
 	}
-	fields, err := splitGOFLAGS(value)
+	fields, err := quoted.Split(value)
 	if err != nil {
 		return nil, fmt.Errorf("buildlauncher: parse GOFLAGS: %w", err)
 	}
@@ -197,41 +199,6 @@ func graphFlagsFromEnvironment(workDir string, env []string) ([]string, error) {
 		flags = append(flags, flag)
 	}
 	return flags, nil
-}
-
-// splitGOFLAGS mirrors Go's cmd/internal/quoted parser.
-func splitGOFLAGS(value string) ([]string, error) {
-	var fields []string
-	for len(value) > 0 {
-		for len(value) > 0 && isGOFLAGSFieldSpace(value[0]) {
-			value = value[1:]
-		}
-		if value == "" {
-			break
-		}
-		if value[0] == '\'' || value[0] == '"' {
-			quote := value[0]
-			value = value[1:]
-			end := strings.IndexByte(value, quote)
-			if end < 0 {
-				return nil, fmt.Errorf("unterminated %c string", quote)
-			}
-			fields = append(fields, value[:end])
-			value = value[end+1:]
-			continue
-		}
-		end := 0
-		for end < len(value) && !isGOFLAGSFieldSpace(value[end]) {
-			end++
-		}
-		fields = append(fields, value[:end])
-		value = value[end:]
-	}
-	return fields, nil
-}
-
-func isGOFLAGSFieldSpace(value byte) bool {
-	return value == ' ' || value == '\t' || value == '\n' || value == '\r'
 }
 
 func canonicalDirectory(path string) (string, error) {

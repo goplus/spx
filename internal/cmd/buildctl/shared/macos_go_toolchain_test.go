@@ -25,19 +25,13 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/base/quoted"
 )
 
 type fakeMacOSPaths struct {
 	directories map[string]bool
 	executables map[string]bool
-}
-
-func (p fakeMacOSPaths) isDirectory(path string) bool {
-	return p.directories[path]
-}
-
-func (p fakeMacOSPaths) isExecutable(path string) bool {
-	return p.executables[path]
 }
 
 func TestConfigureMacOSGoToolchainEnvRepairsStaleInputs(t *testing.T) {
@@ -538,9 +532,17 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS" >> "$OUTPUT_PATH"
 	}
 }
 
+func (p fakeMacOSPaths) isDirectory(path string) bool {
+	return p.directories[path]
+}
+
+func (p fakeMacOSPaths) isExecutable(path string) bool {
+	return p.executables[path]
+}
+
 func assertQuotedFields(t *testing.T, value string, want []string) {
 	t.Helper()
-	got, err := splitQuotedFields(value)
+	got, err := quoted.Split(value)
 	if err != nil {
 		t.Fatal(err)
 	}

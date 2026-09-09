@@ -27,41 +27,6 @@ import (
 	"strings"
 )
 
-// RuntimePackSourceSHA256 returns a stable digest of the tracked SPX inputs
-// that can affect spx-runtime-assets.zip at revision. It deliberately excludes
-// godot_modules/spx: the module tree is an independent Godot-engine input and
-// is recorded separately in RuntimeProvenance.ModuleTree. Go constraints use
-// the fixed Linux/amd64 CGO pack target.
-//
-// Git tree entries are used instead of worktree contents so untracked build
-// outputs cannot contaminate release provenance.
-func RuntimePackSourceSHA256(repoRoot, revision string) (string, error) {
-	tree, err := trackedTree(repoRoot, revision, "runtime pack source")
-	if err != nil {
-		return "", err
-	}
-	paths, projections, err := runtimePackSourcePaths(repoRoot, tree)
-	if err != nil {
-		return "", err
-	}
-	return selectedRuntimePackSourceSHA256(tree, paths, projections)
-}
-
-func runtimePackSourcePathTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
-}
-
-// RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
-// can change runtime-pack bytes. CI transport details such as workflow layout
-// and external Action versions are deliberately excluded.
-func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
-	return trackedTreeSHA256(repoRoot, revision, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
-func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
-	return selectedTreeSHA256(tree, "runtime build recipe", isRuntimeBuildRecipePath)
-}
-
 var runtimeBuildRecipeFiles = map[string]struct{}{
 	".github/scripts/runtime/build_pack.sh":               {},
 	".github/scripts/runtime_build_contract.py":           {},
@@ -88,6 +53,7 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 var runtimeBuildRecipePrefixes = []string{
 	".github/actions/setup-buildctl/",
 	"internal/base/fileutil/",
+	"internal/base/quoted/",
 }
 
 var runtimePackSourceFiles = map[string]struct{}{
@@ -153,6 +119,41 @@ var runtimePackSourceDirectories = map[string]struct{}{
 }
 
 var runtimePackSourcePrefixes = []string{"cmd/spx/template/project/engine/"}
+
+// RuntimePackSourceSHA256 returns a stable digest of the tracked SPX inputs
+// that can affect spx-runtime-assets.zip at revision. It deliberately excludes
+// godot_modules/spx: the module tree is an independent Godot-engine input and
+// is recorded separately in RuntimeProvenance.ModuleTree. Go constraints use
+// the fixed Linux/amd64 CGO pack target.
+//
+// Git tree entries are used instead of worktree contents so untracked build
+// outputs cannot contaminate release provenance.
+func RuntimePackSourceSHA256(repoRoot, revision string) (string, error) {
+	tree, err := trackedTree(repoRoot, revision, "runtime pack source")
+	if err != nil {
+		return "", err
+	}
+	paths, projections, err := runtimePackSourcePaths(repoRoot, tree)
+	if err != nil {
+		return "", err
+	}
+	return selectedRuntimePackSourceSHA256(tree, paths, projections)
+}
+
+// RuntimeBuildRecipeSHA256 returns a stable digest of the implementation that
+// can change runtime-pack bytes. CI transport details such as workflow layout
+// and external Action versions are deliberately excluded.
+func RuntimeBuildRecipeSHA256(repoRoot, revision string) (string, error) {
+	return trackedTreeSHA256(repoRoot, revision, "runtime build recipe", isRuntimeBuildRecipePath)
+}
+
+func runtimePackSourcePathTreeSHA256(tree []byte) (string, error) {
+	return selectedTreeSHA256(tree, "runtime pack source", isRuntimePackSourcePath)
+}
+
+func runtimeBuildRecipeTreeSHA256(tree []byte) (string, error) {
+	return selectedTreeSHA256(tree, "runtime build recipe", isRuntimeBuildRecipePath)
+}
 
 func trackedTreeSHA256(repoRoot, revision, label string, include func(string) bool) (string, error) {
 	tree, err := trackedTree(repoRoot, revision, label)
