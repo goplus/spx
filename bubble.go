@@ -30,9 +30,11 @@ import (
 
 // bubbleBase provides common functionality for all bubble types.
 type bubbleBase struct {
-	sprite  *SpriteImpl
-	camera  *cameraImpl
-	isDirty bool
+	sprite                *SpriteImpl
+	camera                *cameraImpl
+	isDirty               bool
+	observedSpriteVersion uint64
+	observedCameraVersion uint64
 }
 
 type textBubble struct {
@@ -58,7 +60,9 @@ func (b *bubbleBase) checkNeedsUpdate() bool {
 	if !b.sprite.Visible() {
 		return false
 	}
-	return b.isDirty || b.sprite.spriteState.IsDirty || b.camera.isDirty
+	return b.isDirty ||
+		b.observedSpriteVersion != b.sprite.spriteState.DirtyVersion ||
+		b.observedCameraVersion != b.camera.dirtyVersion
 }
 
 // getBounds returns the sprite's bounds information.
@@ -71,6 +75,8 @@ func (b *bubbleBase) getBounds() (center, size mathf.Vec2) {
 
 // markClean marks the bubble as no longer needing a refresh.
 func (b *bubbleBase) markClean() {
+	b.observedSpriteVersion = b.sprite.spriteState.DirtyVersion
+	b.observedCameraVersion = b.camera.dirtyVersion
 	b.isDirty = false
 }
 

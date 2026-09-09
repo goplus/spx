@@ -393,6 +393,21 @@ func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
 	return newIdx
 }
 
+// refreshBubblesOnly updates bubble layout and visuals without advancing other shapes.
+func (s *shapeManager) refreshBubblesOnly(items []Shape) {
+	s.layoutTextBubbles(items)
+
+	delta := itime.DeltaTime()
+	for _, item := range items {
+		switch bubble := item.(type) {
+		case *textBubble:
+			bubble.onUpdate(delta)
+		case *quoterBubble:
+			bubble.onUpdate(delta)
+		}
+	}
+}
+
 func sortTextBubblesByLayoutID(bubbles []*textBubble) {
 	// Bubble counts are normally tiny and already ordered. Insertion sort keeps
 	// the unchanged-frame path allocation-free while making activation order

@@ -103,13 +103,9 @@ func (p *Game) OnEngineRender(delta float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	// Coroutines run between OnEngineUpdate and OnEngineRender. Flush again when
-	// a clone finished its first slice or a capture/replay needs post-coroutine
-	// visual state, without advancing ordinary shape logic a second time.
-	if p.shapeMgr.takeCloneProxyPublications() || engine.HasPendingCaptures() ||
-		p.inputSessionFrameCompletionPending() {
-		p.syncPostCoroutineVisuals()
-	}
+	// Flush visual changes made by coroutines before Godot draws the frame.
+	p.shapeMgr.takeCloneProxyPublications()
+	p.syncPostCoroutineVisuals()
 	// Initial sprite Main hooks can move and collide during bootstrap, so
 	// trigger pairs must be drained before the start event is dispatched.
 	p.processPhysicsTriggers()
