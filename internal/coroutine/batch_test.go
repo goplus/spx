@@ -18,6 +18,7 @@ package coroutine
 
 import (
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -57,7 +58,7 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 		created          int
 		threads          []Thread
 	)
-	onRegistered := func(Thread) { created++ }
+	onRegistered := func(Thread) func() { created++; return nil }
 
 	caller := co.Create("caller", func(Thread) int {
 		threads = co.StartBatch([]BatchTask{
@@ -187,4 +188,137 @@ func TestStartBatchCancellationBeforeWrapperPassesBaton(t *testing.T) {
 		t.Fatalf("batch order after early cancellation = %v, want %v", order, want)
 	}
 	co.Join(caller)
+}
+
+func TestStartBatchAdmissionCoversRegistration(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	registered := make(chan struct{})
+	releaseRegistration := make(chan struct{})
+	batchDone := make(chan struct{})
+	go func() {
+		co.StartBatch([]BatchTask{{
+			Owner: "task",
+			OnRegistered: func(Thread) func() {
+				close(registered)
+				<-releaseRegistration
+				return nil
+			},
+			Run: func(Thread) {},
+		}}, BatchAsync)
+		close(batchDone)
+	}()
+
+	select {
+	case <-registered:
+	case <-time.After(time.Second):
+		t.Fatal("batch task was not registered")
+	}
+	abortDone := make(chan struct{})
+	go func() {
+		co.AbortAll()
+		close(abortDone)
+	}()
+	select {
+	case <-abortDone:
+		t.Fatal("AbortAll bypassed an in-flight task registration")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(releaseRegistration)
+	select {
+	case <-batchDone:
+	case <-time.After(time.Second):
+		t.Fatal("batch registration did not finish")
+	}
+	select {
+	case <-abortDone:
+	case <-time.After(time.Second):
+		t.Fatal("AbortAll did not finish after registration")
+	}
+}
+
+func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	registered := make(chan struct{})
+	batchReady := make(chan Thread)
+	releaseCaller := make(chan struct{})
+	var cleaned, ran atomic.Bool
+
+	caller := co.Create("caller", func(Thread) int {
+		threads := co.StartBatch([]BatchTask{{
+			OnRegistered: func(Thread) func() {
+				close(registered)
+				return func() { cleaned.Store(true) }
+			},
+			Run: func(Thread) { ran.Store(true) },
+		}}, BatchAsync)
+		batchReady <- threads[0]
+		<-releaseCaller
+		return 0
+	})
+
+	select {
+	case <-registered:
+	case <-time.After(time.Second):
+		t.Fatal("batch task was not registered")
+	}
+	var child Thread
+	select {
+	case child = <-batchReady:
+	case <-time.After(time.Second):
+		t.Fatal("batch did not return its task")
+	}
+	co.AbortAll()
+	close(releaseCaller)
+	co.Join(child)
+	co.Join(caller)
+
+	if ran.Load() {
+		t.Fatal("canceled task ran after registration")
+	}
+	if !cleaned.Load() {
+		t.Fatal("registered task cleanup did not run after cancellation")
+	}
+}
+
+func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
+	reported := make(chan any, 1)
+	co := New(func(report PanicReport) { reported <- report.Value })
+	co.OnInited()
+	thread := co.StartBatch([]BatchTask{{
+		OnRegistered: func(Thread) func() {
+			return func() { panic("cleanup failure") }
+		},
+		Run: func(Thread) {},
+	}}, BatchAsync)[0]
+
+	select {
+	case <-thread.done:
+	case <-time.After(time.Second):
+		t.Fatal("cleanup panic left the task running")
+	}
+	select {
+	case got := <-reported:
+		if got != "cleanup failure" {
+			t.Fatalf("cleanup panic report = %v, want cleanup failure", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cleanup panic was not reported")
+	}
+
+	var ran atomic.Bool
+	next := co.CreateAndStart(true, "after-cleanup-panic", func(Thread) int {
+		ran.Store(true)
+		return 0
+	})
+	select {
+	case <-next.done:
+	case <-time.After(time.Second):
+		t.Fatal("runMu remained locked after cleanup panic")
+	}
+	if !ran.Load() {
+		t.Fatal("next coroutine did not run after cleanup panic")
+	}
 }

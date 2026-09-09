@@ -62,14 +62,14 @@ rounds; starting another round does not advance the frame number or timer.
 
 | Responsibility | Location |
 | --- | --- |
-| Frame waits, loop rounds, redraw budget, main-thread state reads | `internal/coroutine/frame.go` |
+| Frame waits, loop rounds, redraw budget, frame-boundary callbacks | `internal/coroutine/frame.go` |
 | Wait-job processing and scheduler statistics | `internal/coroutine/update.go` |
 | Control-flow integration | `internal/engine/coro.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Condition registration, sampling, and matched-handler dispatch | `runtime_conditions.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
 
-Frame-boundary state reads exclude script execution while servicing queued
+Frame-boundary callbacks exclude script execution while servicing queued
 engine main-thread calls. A script waiting on such a call must not block
 condition sampling. This phase does not advance loop or frame waiters.
 

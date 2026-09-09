@@ -49,15 +49,15 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 
 | 职责 | 位置 |
 | --- | --- |
-| 帧等待、循环轮次、重绘预算、主线程状态读取 | `internal/coroutine/frame.go` |
+| 帧等待、循环轮次、重绘预算、帧边界回调 | `internal/coroutine/frame.go` |
 | 等待任务处理与调度统计 | `internal/coroutine/update.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
 | 条件注册、状态采样与已匹配事件派发 | `runtime_conditions.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
 
-帧边界的状态读取与脚本执行互斥，同时处理已排队的引擎主线程调用，
-避免正在等待引擎调用的脚本阻塞条件采样。读取阶段不推进循环或帧等待任务。
+帧边界回调与脚本执行互斥，同时处理已排队的引擎主线程调用，
+避免正在等待引擎调用的脚本阻塞条件采样。该阶段不推进循环或帧等待任务。
 
 ## 固定帧截图与输入回放
 

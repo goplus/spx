@@ -29,13 +29,14 @@ const (
 // BatchTask describes one member of an ordered coroutine batch.
 type BatchTask struct {
 	Owner        ThreadObj
-	OnRegistered func(Thread)
+	OnRegistered func(Thread) func()
 	Before       func(Thread)
 	Run          func(Thread)
 }
 
 // StartBatch registers tasks before admitting Run in order; wait modes require a managed caller.
-// OnRegistered is synchronous and must not block on this batch.
+// OnRegistered is synchronous, must not block on this batch, and may return a
+// cleanup callback that runs exactly once when the task exits.
 func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
@@ -46,9 +47,20 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 
 	progress := newLatchSet(p, len(tasks)+1)
 	threads := make([]Thread, len(tasks))
+	parent := p.currentCoroutineThread()
 	for i, task := range tasks {
+		admissionEpoch := p.abortEpoch.Load()
 		current, next := progress[i], progress[i+1]
-		threads[i] = p.Create(task.Owner, func(thread Thread) int {
+		onRegistered := task.OnRegistered
+		if onRegistered != nil {
+			// Publish the slot before invoking the callback, preserving the
+			// registration order visible to callbacks.
+			onRegistered = func(thread Thread) func() {
+				threads[i] = thread
+				return task.OnRegistered(thread)
+			}
+		}
+		threads[i] = p.createThread(admissionEpoch, parent, task.Owner, onRegistered, func(thread Thread) int {
 			defer next.Open()
 			if task.Before != nil {
 				task.Before(thread)
@@ -58,9 +70,6 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 			task.Run(thread)
 			return 0
 		})
-		if task.OnRegistered != nil {
-			task.OnRegistered(threads[i])
-		}
 	}
 
 	relayBatchProgress(threads, progress[1:])

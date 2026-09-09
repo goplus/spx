@@ -33,30 +33,40 @@ type scriptEventDispatch struct {
 	run       func(coroutine.Thread, *eventSink)
 }
 
-func (p scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
-	var cleanup func()
+func (event scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
 	task := coroutine.BatchTask{
 		Owner:  sink.Owner,
-		Before: p.before,
-		Run: func(thread coroutine.Thread) {
-			if cleanup != nil {
-				defer cleanup()
-			}
-			p.invoke(thread, &sink)
-		},
+		Before: event.before,
+		Run:    func(thread coroutine.Thread) { event.invoke(thread, &sink) },
 	}
-	if p.lifecycle != nil {
-		task.OnRegistered = func(thread coroutine.Thread) {
-			cleanup = p.lifecycle(thread, &sink)
-		}
+	if event.lifecycle != nil {
+		task.OnRegistered = func(thread coroutine.Thread) func() { return event.lifecycle(thread, &sink) }
 	}
 	return task
 }
 
-func (p scriptEventDispatch) invoke(thread coroutine.Thread, sink *eventSink) {
-	if p.shouldRun == nil || p.shouldRun() {
-		p.run(thread, sink)
+func (event scriptEventDispatch) invoke(thread coroutine.Thread, sink *eventSink) {
+	if event.shouldRun == nil || event.shouldRun() {
+		event.run(thread, sink)
 	}
+}
+
+// withRegistrationBarrier prevents external producers from returning before
+// every handler is registered. The engine-thread bridge keeps the main thread
+// responsive while the managed dispatcher waits for a batch.
+func (event scriptEventDispatch) withRegistrationBarrier(dispatch func()) {
+	if gco == nil || gco.IsInCoroutine() {
+		dispatch()
+		return
+	}
+	if gco.TryRunManagedBetweenScripts(engine.GetGame(), dispatch) {
+		return
+	}
+	dispatcher := gco.Create(engine.GetGame(), func(coroutine.Thread) int {
+		dispatch()
+		return 0
+	})
+	gco.Join(dispatcher)
 }
 
 func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
@@ -79,13 +89,13 @@ func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any,
 }
 
 func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {
-	runScriptEventDispatch(func() {
+	event.withRegistrationBarrier(func() {
 		dispatchScriptEventBatch(sinks, event)
 	})
 }
 
 func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
-	runScriptEventDispatch(func() {
+	event.withRegistrationBarrier(func() {
 		p.dispatchStartEventBatch(sinks, event)
 	})
 }
@@ -113,9 +123,10 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 	for i, sink := range matched {
 		task := event.task(sink)
 		run := task.Run
-		task.OnRegistered = func(thread coroutine.Thread) {
+		task.OnRegistered = func(thread coroutine.Thread) func() {
 			p.pendingStartThreads.Store(thread, struct{}{})
 			threads = append(threads, thread)
+			return nil
 		}
 		task.Run = func(thread coroutine.Thread) {
 			p.pendingStartThreads.Delete(thread)
@@ -230,17 +241,4 @@ func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispa
 		tasks[i] = event.task(sink)
 	}
 	gco.StartBatch(tasks, event.mode)
-}
-
-// runScriptEventDispatch gives external callers a complete registration barrier.
-func runScriptEventDispatch(call func()) {
-	if gco == nil || gco.IsInCoroutine() {
-		call()
-		return
-	}
-	thread := gco.Create(engine.GetGame(), func(coroutine.Thread) int {
-		call()
-		return 0
-	})
-	gco.Join(thread)
 }

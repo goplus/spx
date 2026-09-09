@@ -43,17 +43,7 @@ func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
 func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
 	admissionEpoch := p.abortEpoch.Load()
 	parent := p.currentCoroutineThread()
-	th := p.newThread(obj)
-	p.creationMu.RLock()
-	rejected := p.stopping || admissionEpoch&1 != 0 ||
-		p.abortEpoch.Load() != admissionEpoch || p.isThreadCanceled(parent)
-	if rejected {
-		stopThreadIfRunning(th)
-	} else {
-		p.registerThread(th)
-	}
-	p.creationMu.RUnlock()
-	go p.runThread(th, fn)
+	th := p.createThread(admissionEpoch, parent, obj, nil, fn)
 
 	if start {
 		// Wait for this child so another yield job cannot reacquire runMu first.
@@ -64,6 +54,28 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 			}
 		}
 		runtime.Gosched()
+	}
+	return th
+}
+
+// createThread admits and registers a thread before launching it. onRegistered
+// participates in the same admission barrier and may return an exit callback.
+func (p *Coroutines) createThread(admissionEpoch uint64, parent Thread, obj ThreadObj, onRegistered func(Thread) func(), fn func(Thread) int) (th Thread) {
+	th = p.newThread(obj)
+	var onDone func()
+	defer func() { go p.runThread(th, fn, onDone) }()
+
+	p.creationMu.RLock()
+	defer p.creationMu.RUnlock()
+	rejected := p.stopping || admissionEpoch&1 != 0 ||
+		p.abortEpoch.Load() != admissionEpoch || p.isThreadCanceled(parent)
+	if rejected {
+		stopThreadIfRunning(th)
+	} else {
+		p.registerThread(th)
+		if onRegistered != nil {
+			onDone = onRegistered(th)
+		}
 	}
 	return th
 }
@@ -357,7 +369,7 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 	}
 }
 
-func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
+func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, onDone func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
 	p.runMu.Lock()
@@ -365,6 +377,9 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int) {
 	defer func() {
 		p.finishThread(th, gid, recover())
 	}()
+	if onDone != nil {
+		defer onDone()
+	}
 
 	if th.stopped.Load() {
 		panic(ErrAbortThread)
