@@ -86,11 +86,9 @@ func (sr *SwipeRecognizer) OnMouseMove(pos mathf.Vec2) (SwipeResult, bool) {
 	if !sr.isTracking {
 		return SwipeResult{}, false
 	}
-	if sr.enableTimeLimit && sr.timeToSwipe > 0 {
-		if sr.elapsedSeconds() > sr.timeToSwipe {
-			sr.StopTracking()
-			return SwipeResult{}, false
-		}
+	if sr.enableTimeLimit && sr.timeToSwipe > 0 && sr.elapsedSeconds() > sr.timeToSwipe {
+		sr.StopTracking()
+		return SwipeResult{}, false
 	}
 	sr.endPoint = pos
 	return SwipeResult{}, false
@@ -111,10 +109,8 @@ func (sr *SwipeRecognizer) checkForSwipeCompletion() (SwipeResult, bool) {
 	if elapsed <= 0 {
 		return SwipeResult{}, false
 	}
-	if sr.enableTimeLimit && sr.timeToSwipe > 0 {
-		if elapsed > sr.timeToSwipe {
-			return SwipeResult{}, false
-		}
+	if sr.enableTimeLimit && sr.timeToSwipe > 0 && elapsed > sr.timeToSwipe {
+		return SwipeResult{}, false
 	}
 
 	dx := sr.endPoint.X - sr.startPoint.X

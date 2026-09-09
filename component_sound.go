@@ -36,40 +36,6 @@ type soundComponent struct {
 	pendingAudios []string
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
-
-// initialize initializes the sound component from config.
-func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	s.componentBase.initialize(sprite, spriteCfg)
-	// Always initialize with default sound values
-	s.soundObj = 0
-	s.pendingAudios = make([]string, 0)
-}
-
-// cloneFrom creates a new sound component by cloning from source.
-func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	// srcSound := src.(*soundComponent) // Not used since we don't clone sound state
-	return &soundComponent{
-		componentBase: componentBase{sprite: newSprite},
-		soundObj:      0, // Don't share sound object, will be allocated if needed
-		pendingAudios: make([]string, 0),
-	}
-}
-
-// onDestroy cleans up when the component is destroyed.
-func (s *soundComponent) onDestroy() {
-	if s.soundObj != 0 {
-		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)
-		s.soundObj = 0
-	}
-}
-
-// ============================================================================
-// Sound Playback Control
-// ============================================================================
-
 func (s *soundComponent) Play(name SoundName, loop bool) {
 	s.checkSoundObj()
 	s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
@@ -92,10 +58,6 @@ func (s *soundComponent) StopPlaying(name SoundName) {
 	s.sprite.g.stopSound(name)
 }
 
-// ============================================================================
-// Sound Volume Control
-// ============================================================================
-
 func (s *soundComponent) GetVolume() float64 {
 	s.checkSoundObj()
 	return s.sprite.g.soundMgr.GetVolume(s.soundObj)
@@ -110,10 +72,6 @@ func (s *soundComponent) ChangeVolume(delta float64) {
 	s.checkSoundObj()
 	s.sprite.g.soundMgr.ChangeVolume(s.soundObj, delta)
 }
-
-// ============================================================================
-// Sound Effects Control
-// ============================================================================
 
 func (s *soundComponent) GetSoundEffect(kind SoundEffectKind) float64 {
 	s.checkSoundObj()
@@ -130,9 +88,30 @@ func (s *soundComponent) ChangeSoundEffect(kind SoundEffectKind, delta float64) 
 	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
 }
 
-// ============================================================================
-// Internal Audio Management
-// ============================================================================
+// initialize initializes the sound component from config.
+func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
+	s.componentBase.initialize(sprite, spriteCfg)
+	// Always initialize with default sound values
+	s.soundObj = 0
+	s.pendingAudios = make([]string, 0)
+}
+
+// cloneFrom creates a new sound component by cloning from source.
+func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
+	return &soundComponent{
+		componentBase: componentBase{sprite: newSprite},
+		soundObj:      0, // Don't share sound object, will be allocated if needed
+		pendingAudios: make([]string, 0),
+	}
+}
+
+// onDestroy cleans up when the component is destroyed.
+func (s *soundComponent) onDestroy() {
+	if s.soundObj != 0 {
+		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)
+		s.soundObj = 0
+	}
+}
 
 func (s *soundComponent) playAudio(name SoundName, loop bool) int64 {
 	s.checkSoundObj()

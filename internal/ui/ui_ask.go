@@ -32,8 +32,7 @@ type UiAsk struct {
 }
 
 func NewUiAsk() *UiAsk {
-	panel := engine.NewUiNode[UiAsk]()
-	return panel
+	return engine.NewUiNode[UiAsk]()
 }
 
 // !!Warning: this method is called from the engine callback context
@@ -44,21 +43,12 @@ func (pself *UiAsk) OnStart() {
 	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input")
 	pself.checkBtn = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input/Check")
 
-	// Handle check button click
 	pself.checkBtn.OnUiClickEvent.Subscribe(func() {
 		pself.handleCheck()
 	})
 }
 
-// handleCheck executes the check callback and closes the dialog
-func (pself *UiAsk) handleCheck() {
-	if pself.OnCheck != nil {
-		pself.SetVisible(false)
-		pself.OnCheck(pself.input.GetText())
-	}
-}
-
-// OnUpdate checks for Enter key press every frame
+// Update handles Enter key presses.
 func (pself *UiAsk) Update() {
 	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
 	// Trigger only on key press (not held down)
@@ -70,8 +60,6 @@ func (pself *UiAsk) Update() {
 }
 
 func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
-	// UiAsk prefab can auto scale to match window scale
-	// mgr.UiMgr.SetScale(pself.GetId(), mathf.NewVec2(windowScale, windowScale))
 	pself.OnCheck = onCheck
 	showQuestion := !isSprite && question != ""
 	mgr.UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
@@ -81,4 +69,12 @@ func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	mgr.UiMgr.SetText(pself.input.GetId(), "")
 	mgr.UiMgr.SetVisible(pself.GetId(), true)
 	pself.lastEnterState = false
+}
+
+// handleCheck executes the check callback and closes the dialog
+func (pself *UiAsk) handleCheck() {
+	if pself.OnCheck != nil {
+		pself.SetVisible(false)
+		pself.OnCheck(pself.input.GetText())
+	}
 }

@@ -32,8 +32,7 @@ type UiQuote struct {
 }
 
 func NewUiQuote() *UiQuote {
-	panel := engine.NewUiNode[UiQuote]()
-	return panel
+	return engine.NewUiNode[UiQuote]()
 }
 
 // !!Warning: this method is called from the engine callback context

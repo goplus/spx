@@ -37,10 +37,6 @@ var state = runtimeState{
 	spriteTypes: make(map[string]reflect.Type),
 }
 
-func init() {
-	gdx.SetRuntimeBridge(runtimeBridge{})
-}
-
 type runtimeBridge struct{}
 
 func (runtimeBridge) InternalUpdateEngine(delta float64) {
@@ -109,10 +105,7 @@ func (runtimeBridge) UiNodes() map[Object]gdx.IUiNode {
 }
 
 func (runtimeBridge) GetUINode(id Object) gdx.IUiNode {
-	if node, ok := state.uiNodes[id]; ok {
-		return node
-	}
-	return nil
+	return state.uiNodes[id]
 }
 
 func (runtimeBridge) DeleteSprite(id Object) {
@@ -163,6 +156,10 @@ func BindUIForType[T any](parentNode Object, path string) *T {
 	return value.Addr().Interface().(*T)
 }
 
+func init() {
+	gdx.SetRuntimeBridge(runtimeBridge{})
+}
+
 func clearAllSprites() {
 	for id, sprite := range state.sprites {
 		sprite.Destroy()
@@ -175,20 +172,15 @@ func clearAllSprites() {
 }
 
 func lookupSprite(id Object) gdx.ISpriter {
-	if sprite, ok := state.sprites[id]; ok {
-		return sprite
-	}
-	return nil
+	return state.sprites[id]
 }
 
 func isNodeExist(id Object) bool {
 	if _, ok := state.uiNodes[id]; ok {
 		return true
 	}
-	if _, ok := state.sprites[id]; ok {
-		return true
-	}
-	return false
+	_, ok := state.sprites[id]
+	return ok
 }
 
 func bindSceneInstantiatedSprite(id Object, typeName string) {

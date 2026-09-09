@@ -217,10 +217,6 @@ func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
 	return &g.gameRuntimeState
 }
 
-func (p *Game) newSpriteAndLoad(name string, tySpr reflect.Type, g reflect.Value) Sprite {
-	return p.newSpriteAndLoadWithLoader(name, tySpr, g, p.loadSprite)
-}
-
 func (p *Game) newSpriteAndLoadWithLoader(
 	name string,
 	tySpr reflect.Type,
@@ -234,10 +230,6 @@ func (p *Game) newSpriteAndLoadWithLoader(
 	return spr
 }
 
-func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value) Sprite {
-	return p.getSpriteProtoWithLoader(tySpr, g, p.loadSprite)
-}
-
 func (p *Game) getSpriteProtoWithLoader(tySpr reflect.Type, g reflect.Value, loadSprite spriteLoader) Sprite {
 	name := tySpr.Name()
 	spr, ok := p.sprs[name]
@@ -245,10 +237,6 @@ func (p *Game) getSpriteProtoWithLoader(tySpr reflect.Type, g reflect.Value, loa
 		spr = p.newSpriteAndLoadWithLoader(name, tySpr, g, loadSprite)
 	}
 	return spr
-}
-
-func (p *Game) getSpriteProtoByName(name string, g reflect.Value) Sprite {
-	return p.getSpriteProtoByNameWithLoader(name, g, p.loadSprite)
 }
 
 func (p *Game) getSpriteProtoByNameWithLoader(name string, g reflect.Value, loadSprite spriteLoader) Sprite {

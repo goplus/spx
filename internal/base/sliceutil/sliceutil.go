@@ -48,11 +48,10 @@ func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
 	item := slice[oldIdx]
 	if oldIdx < newIdx {
 		copy(slice[oldIdx:newIdx], slice[oldIdx+1:newIdx+1])
-		slice[newIdx] = item
 	} else {
 		copy(slice[newIdx+1:oldIdx+1], slice[newIdx:oldIdx])
-		slice[newIdx] = item
 	}
+	slice[newIdx] = item
 
 	return slice
 }

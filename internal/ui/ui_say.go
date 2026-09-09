@@ -17,7 +17,6 @@
 package ui
 
 import (
-	"math"
 	"strings"
 
 	"github.com/goplus/spbase/mathf"
@@ -56,8 +55,7 @@ type UiSay struct {
 
 // NewUiSay creates a new UiSay instance
 func NewUiSay() *UiSay {
-	panel := engine.NewUiNode[UiSay]()
-	return panel
+	return engine.NewUiNode[UiSay]()
 }
 
 // OnStart initializes the UI nodes
@@ -105,51 +103,18 @@ func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
 	s.updateUI(layout.position, layout.renderScale, nodes.label.GetId(), layout.content.formattedMessage)
 }
 
-// calculateScale computes the uniform scale based on window size
-func (s *UiSay) calculateScale(winSize mathf.Vec2, isThink bool) mathf.Vec2 {
-	baseSize := mathf.NewVec2(float64(baseScreenWidth), float64(baseScreenHeight))
-	return calculateSayRenderScale(
-		winSize,
-		baseSize,
-		mgr.CameraMgr.GetCameraZoom(),
-		engine.WindowScale(),
-		isThink,
-	)
-}
-
-// clampPosition ensures the UI bubble stays within screen boundaries
-func (s *UiSay) clampPosition(position mathf.Vec2, winSize mathf.Vec2, msg string) mathf.Vec2 {
-	return clampSayPosition(position, winSize, msg)
-}
-
-func clampSayPosition(position mathf.Vec2, winSize mathf.Vec2, msg string) mathf.Vec2 {
-	lineCount := strings.Count(msg, "\n")
-	uiHeight := sayMsgDefaultHeight + float64(lineCount)*sayMsgLineHeight
-
-	maxYPos := winSize.Y/2 - uiHeight
-	clampedY := math.Max(-winSize.Y/2, math.Min(position.Y, maxYPos))
-	clampedX := math.Max(-winSize.X/2, math.Min(position.X, winSize.X/2))
-
-	return mathf.NewVec2(clampedX, clampedY)
-}
-
 // selectNodes returns the appropriate UI nodes based on direction and style
 func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
 	switch {
 	case isThink && isLeft:
 		return s.leftThink
-	case isThink && !isLeft:
+	case isThink:
 		return s.rightThink
-	case !isThink && isLeft:
+	case isLeft:
 		return s.left
-	default: // !isThink && !isLeft
+	default:
 		return s.right
 	}
-}
-
-// formatMessage formats the message with line breaks if needed
-func (s *UiSay) formatMessage(msg string) string {
-	return formatSayMessage(msg)
 }
 
 func formatSayMessage(msg string) string {

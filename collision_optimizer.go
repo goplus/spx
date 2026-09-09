@@ -18,14 +18,6 @@ package spx
 
 import "github.com/goplus/spx/v3/internal/base/collision"
 
-// ======================== Collision Optimization System ========================
-// This file implements spatial partitioning and AABB (Axis-Aligned Bounding Box)
-// based broad-phase collision detection to reduce expensive pixel-perfect checks.
-
-// ======================== Configuration ========================
-
-// defaultSpatialHashCellSize defines the default cell size for spatial hash grid.
-// This value can be tuned based on your game's average sprite size:
 const defaultSpatialHashCellSize = 100.0
 
 func newSpriteAABB(sprite *SpriteImpl) *collision.Entry[*SpriteImpl] {
@@ -45,81 +37,42 @@ func newSpriteAABB(sprite *SpriteImpl) *collision.Entry[*SpriteImpl] {
 	}
 }
 
-// buildSpatialHashForNames builds a spatial hash with sprites matching the given name filter.
-// Uses a reusable spatial hash to avoid repeated allocations.
-func (p *Game) buildSpatialHashForNames(dst *SpriteImpl, nameFilter func(string) bool) *collision.SpatialHash[*SpriteImpl] {
-	// Lazy initialization of the reusable spatial hash
+func (p *Game) buildSpatialHashForName(dst *SpriteImpl, name string) *collision.SpatialHash[*SpriteImpl] {
 	if p.spatialHash == nil {
 		p.spatialHash = collision.NewSpatialHash[*SpriteImpl](defaultSpatialHashCellSize)
 	}
-
-	// Clear and reuse the existing spatial hash
 	p.spatialHash.Clear()
 
 	for _, item := range p.shapeMgr.items {
-		if sp, ok := item.(*SpriteImpl); ok && sp != dst {
-			if nameFilter(sp.name) && sp.spriteState.IsVisible && !sp.spriteState.IsDying && sp.runtimeState.SyncSprite != nil {
-				aabb := newSpriteAABB(sp)
-				if aabb != nil {
-					p.spatialHash.Insert(aabb)
-				}
-			}
+		sp, ok := item.(*SpriteImpl)
+		if !ok || sp == dst || sp.name != name || !sp.spriteState.IsVisible || sp.spriteState.IsDying || sp.runtimeState.SyncSprite == nil {
+			continue
+		}
+		if aabb := newSpriteAABB(sp); aabb != nil {
+			p.spatialHash.Insert(aabb)
 		}
 	}
 
 	return p.spatialHash
 }
 
-// findCollisionsInSpatialHash performs AABB and pixel-perfect collision detection.
-func findCollisionsInSpatialHash(
-	dstAABB *collision.Entry[*SpriteImpl],
-	spatialHash *collision.SpatialHash[*SpriteImpl],
-	findFirst bool,
-) []*SpriteImpl {
-	var results []*SpriteImpl
-
-	// Query spatial hash for potential collisions
-	potentialCollisions := spatialHash.Query(dstAABB.Box)
-
-	// AABB intersection and pixel-perfect collision tests
-	for _, candidateAABB := range potentialCollisions {
-		if !dstAABB.Box.Intersects(candidateAABB.Box) {
-			continue
-		}
-
-		// Pixel-perfect collision detection (narrow-phase)
-		if candidateAABB.Value.touchingSprite(dstAABB.Value) {
-			results = append(results, candidateAABB.Value)
-			if findFirst {
-				return results
-			}
-		}
-	}
-
-	return results
-}
-
-// findTouchingSpriteOptimized uses spatial partitioning for efficient collision detection.
+// findTouchingSpriteOptimized uses spatial partitioning and AABB intersection
+// to reduce expensive pixel-perfect collision checks.
 func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *SpriteImpl {
 	if dst == nil || dst.runtimeState.SyncSprite == nil {
 		return nil
 	}
 
-	// Create AABB for the target sprite
 	dstAABB := newSpriteAABB(dst)
 	if dstAABB == nil {
 		return nil
 	}
 
-	// Build spatial hash with name filter
-	spatialHash := p.buildSpatialHashForNames(dst, func(spriteName string) bool {
-		return spriteName == name
-	})
-
-	// Find first collision
-	results := findCollisionsInSpatialHash(dstAABB, spatialHash, true)
-	if len(results) > 0 {
-		return results[0]
+	spatialHash := p.buildSpatialHashForName(dst, name)
+	for _, candidate := range spatialHash.Query(dstAABB.Box) {
+		if dstAABB.Box.Intersects(candidate.Box) && candidate.Value.touchingSprite(dstAABB.Value) {
+			return candidate.Value
+		}
 	}
 
 	return nil
