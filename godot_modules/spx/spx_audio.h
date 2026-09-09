@@ -38,10 +38,7 @@
 
 class AudioStreamPlayer2D;
 class Node;
-class TestSpxAudioInternalsAccessor;
 class SpxAudio {
-	friend class TestSpxAudioInternalsAccessor;
-
 private:
 	RBMap<GdInt, AudioStreamPlayer2D *> aid_audios;
 	List<AudioStreamPlayer2D *> audios;
@@ -55,7 +52,6 @@ private:
 	GdFloat cur_pitch = 1.0;
 
 private:
-	static AudioStreamPlayer2D *_create_player();
 	bool ensure_dedicated_bus();
 	AudioStreamPlayer2D *_get_aid_audio(GdInt aid);
 

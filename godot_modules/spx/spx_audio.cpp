@@ -47,15 +47,6 @@ AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) {
 	return nullptr;
 }
 
-AudioStreamPlayer2D *SpxAudio::_create_player() {
-	auto *audio = memnew(AudioStreamPlayer2D);
-	// Web exports default to sample playback. Positional samples start before
-	// their first panning update, which can make very short sounds play at zero
-	// volume. Stream playback starts after that update and matches native SPX.
-	audio->set_playback_type(AudioServer::PLAYBACK_TYPE_STREAM);
-	return audio;
-}
-
 void SpxAudio::on_create(GdInt p_id, Node *p_root) {
 	root = p_root;
 	id = p_id;
@@ -127,7 +118,7 @@ bool SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, 
 	if (stream.is_null()) {
 		return false;
 	}
-	auto *audio = _create_player();
+	auto *audio = memnew(AudioStreamPlayer2D);
 	if (owner != nullptr) {
 		owner->add_child(audio);
 	} else {
@@ -137,9 +128,9 @@ bool SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, 
 	audio->set_stream(stream);
 	audio->set_max_distance(max_distance);
 	audio->set_attenuation(attenuation);
-	audio->play();
 	audio->set_name(path_str);
 	audio->set_pitch_scale(get_pitch());
+	audio->play();
 	audios.push_back(audio);
 	aid_audios[aid] = audio;
 	return true;
