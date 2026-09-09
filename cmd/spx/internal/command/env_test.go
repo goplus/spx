@@ -17,6 +17,9 @@
 package command
 
 import (
+	"embed"
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -233,5 +236,50 @@ func writeProjectImportCache(t *testing.T, projectDir string) {
 	}
 	if err := os.WriteFile(cachePath, []byte("cache"), 0o644); err != nil {
 		t.Fatalf("write cache: %v", err)
+	}
+}
+
+func TestRunCmdRejectsInvalidTargetBeforeClearing(t *testing.T) {
+	for _, command := range []string{"clear", "clearbuild"} {
+		for _, targetKind := range []string{"missing", "file"} {
+			t.Run(command+"/"+targetKind, func(t *testing.T) {
+				root := t.TempDir()
+				t.Chdir(root)
+				protected := []string{
+					filepath.Join("project", ".builds", "artifact"),
+					filepath.Join(".temp", "artifact"),
+					"go.sum", "xgo_autogen.go",
+				}
+				for _, name := range protected {
+					if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(name, []byte("keep"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				target := filepath.Join(root, "invalid-target")
+				if targetKind == "file" {
+					if err := os.WriteFile(target, []byte("file"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				oldFlags, oldArgs := flag.CommandLine, os.Args
+				flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+				flag.CommandLine.SetOutput(io.Discard)
+				os.Args = []string{"spx", command, "--path", target}
+				t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+
+				err := (&CmdTool{}).RunCmd("spx", ".spx", "test", embed.FS{}, "", "project")
+				if err == nil {
+					t.Error("RunCmd accepted an invalid target directory")
+				}
+				for _, name := range protected {
+					if got, err := os.ReadFile(name); err != nil || string(got) != "keep" {
+						t.Errorf("original directory file %s = %q, %v; want untouched", name, got, err)
+					}
+				}
+			})
+		}
 	}
 }
