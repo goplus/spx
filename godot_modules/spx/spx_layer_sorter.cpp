@@ -49,8 +49,6 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 	auto camera_mgr = SpxEngine::get_singleton()->get_camera();
 	set_screen_rect(camera_mgr->get_global_camera_rect());
 
-	// Uncomment the line below to enable screen visibility callbacks
-	//_update_visibility(sortables);
 	_collect_sprites(sortables);
 
 	if (dynamic_dirty.empty()) {
@@ -337,8 +335,6 @@ void LayerSorterDebugDrawer::_draw() {
 			draw_string(font, s.pos + Vector2(6, -2),
 					vformat("%s:%d", label_prefix, (int64_t)i),
 					HORIZONTAL_ALIGNMENT_LEFT, -1, 24, text_color);
-
-			//if (i > 0) draw_line(arr[i - 1].pos, s.pos, Color(0.4, 0.4, 0.4, 0.4), 1);
 		}
 	};
 

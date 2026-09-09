@@ -52,14 +52,6 @@ constexpr size_t SPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 
 } // namespace
 
-Node *SpxBaseMgr::create_owner_node() {
-	return memnew(Node2D);
-}
-
-GdInt SpxBaseMgr::get_unique_id() {
-	return SpxEngine::get_singleton()->get_unique_id();
-}
-
 void SpxBaseMgr::free_return_cstr(GdString str_ptr) {
 	free((void *)str_ptr);
 }
@@ -72,18 +64,6 @@ GdString SpxBaseMgr::to_return_cstr(const String &ret_val) {
 	}
 	strcpy(result, cstr.get_data());
 	return result;
-}
-
-Window *SpxBaseMgr::get_root() {
-	return SpxEngine::get_singleton()->get_root();
-}
-
-Node *SpxBaseMgr::get_spx_root() {
-	return SpxEngine::get_singleton()->get_spx_root();
-}
-
-SceneTree *SpxBaseMgr::get_tree() {
-	return SpxEngine::get_singleton()->get_tree();
 }
 
 void SpxBaseMgr::on_awake() {
@@ -118,11 +98,9 @@ void SpxBaseMgr::on_exit(int exit_code) {
 }
 
 void SpxBaseMgr::on_pause() {
-	// Default implementation - override in derived classes if needed
 }
 
 void SpxBaseMgr::on_resume() {
-	// Default implementation - override in derived classes if needed
 }
 
 GdArray SpxBaseMgr::create_array(int32_t type, int32_t size) {
@@ -215,6 +193,26 @@ void SpxBaseMgr::free_array(GdArray array) {
 	}
 	free(array);
 #endif
+}
+
+Node *SpxBaseMgr::create_owner_node() {
+	return memnew(Node2D);
+}
+
+GdInt SpxBaseMgr::get_unique_id() {
+	return SpxEngine::get_singleton()->get_unique_id();
+}
+
+Window *SpxBaseMgr::get_root() {
+	return SpxEngine::get_singleton()->get_root();
+}
+
+Node *SpxBaseMgr::get_spx_root() {
+	return SpxEngine::get_singleton()->get_spx_root();
+}
+
+SceneTree *SpxBaseMgr::get_tree() {
+	return SpxEngine::get_singleton()->get_tree();
 }
 
 void *SpxBaseMgr::_get_array(GdArray array, int64_t index, int type_size, int32_t expected_type) {

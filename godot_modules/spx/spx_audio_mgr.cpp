@@ -40,16 +40,8 @@
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
 
-SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
-	if (aid_audios.has(aid)) {
-		return aid_audios[aid];
-	}
-	return nullptr;
-}
-
 void SpxAudioMgr::on_awake() {
 	SpxBaseMgr::on_awake();
-	// Initialize SpxAudioBusPool
 	SpxAudioBusPool::init();
 	_create_root("audio_root");
 	g_audio_id = 0;
@@ -120,7 +112,6 @@ void SpxAudioMgr::stop_all() {
 void SpxAudioMgr::destroy_audio(GdObj obj) {
 	SpxAudio *audio = get_object(obj);
 	if (audio != nullptr) {
-		// Remove audio from aid_audios mapping
 		MutexLock aid_lock(aid_mutex);
 		Vector<GdInt> keys;
 		for (const auto &[aid, audio_obj] : aid_audios) {
@@ -133,7 +124,6 @@ void SpxAudioMgr::destroy_audio(GdObj obj) {
 		}
 	}
 
-	// Now destroy the object using parent class method
 	destroy_object(obj);
 }
 
@@ -331,4 +321,11 @@ void SpxAudioMgr::set_timer(GdInt aid, GdFloat time) {
 		return;
 	}
 	audio->set_timer(aid, time);
+}
+
+SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
+	if (aid_audios.has(aid)) {
+		return aid_audios[aid];
+	}
+	return nullptr;
 }
