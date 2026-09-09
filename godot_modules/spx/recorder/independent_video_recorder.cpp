@@ -110,6 +110,65 @@ void IndependentVideoRecorder::stop_recording() {
 	}
 }
 
+IndependentVideoRecorder::RecordingStats IndependentVideoRecorder::get_statistics() const {
+	MutexLock lock(stats_mutex);
+	return stats;
+}
+
+float IndependentVideoRecorder::get_repeat_frame_ratio() const {
+	MutexLock lock(stats_mutex);
+
+	if (stats.total_recorded_frames == 0) {
+		return 0.0f;
+	}
+
+	return (float)stats.repeated_frames_count / (float)stats.total_recorded_frames;
+}
+
+void IndependentVideoRecorder::update_config(const RecordingConfig &p_config) {
+	config.target_fps = p_config.target_fps;
+	config.video_width = p_config.video_width;
+	config.video_height = p_config.video_height;
+	config.jpeg_quality = p_config.jpeg_quality;
+	config.enable_timestamp_chunks = p_config.enable_timestamp_chunks;
+	config.enable_repeat_frame_marking = p_config.enable_repeat_frame_marking;
+
+	if (video_writer.is_valid()) {
+		video_writer->set_quality(config.jpeg_quality);
+	}
+}
+
+void IndependentVideoRecorder::reset_statistics() {
+	MutexLock lock(stats_mutex);
+
+	stats = RecordingStats();
+	last_game_frame_sequence = 0;
+	has_valid_frame = false;
+	recording_start_time = 0;
+	last_stats_update_time = 0;
+}
+
+String IndependentVideoRecorder::get_debug_info() const {
+	RecordingStats current_stats = get_statistics();
+
+	String info;
+	info += "=== IndependentVideoRecorder Debug Info ===\n";
+	info += String("Recording status: ") + (is_recording() ? "Running" : "Stopped") + "\n";
+	info += String("Thread status: ") + (is_thread_running() ? "Running" : "Stopped") + "\n";
+	info += String("Total recorded frames: ") + String::num_int64(current_stats.total_recorded_frames) + "\n";
+	info += String("New frames: ") + String::num_int64(current_stats.new_frames_count) + "\n";
+	info += String("Repeated frames: ") + String::num_int64(current_stats.repeated_frames_count) + "\n";
+	info += String("Repeated frame ratio: ") + String::num_real(get_repeat_frame_ratio() * 100.0f) + "%\n";
+	info += String("Recording duration: ") + String::num_real(current_stats.recording_duration_us / 1000000.0) + " seconds\n";
+	info += String("Avg frame process time: ") + String::num_int64(current_stats.avg_frame_process_time_us) + " microseconds\n";
+	info += String("Last game frame sequence: ") + String::num_int64(current_stats.last_game_frame_sequence) + "\n";
+	info += String("Config FPS: ") + String::num_int64(config.target_fps) + "\n";
+	info += String("Config resolution: ") + String::num_int64(config.video_width) + "x" + String::num_int64(config.video_height) + "\n";
+	info += "==========================================";
+
+	return info;
+}
+
 void IndependentVideoRecorder::recording_thread_func(void *p_userdata) {
 	IndependentVideoRecorder *recorder = static_cast<IndependentVideoRecorder *>(p_userdata);
 	recorder->recording_loop();
@@ -219,63 +278,4 @@ void IndependentVideoRecorder::update_statistics(uint64_t frame_process_start_ti
 uint8_t IndependentVideoRecorder::determine_frame_flags(const ThreadSafeFrameBuffer::FrameData &frame_data) {
 	// Simplified version, no longer uses complex frame flags
 	return 0;
-}
-
-IndependentVideoRecorder::RecordingStats IndependentVideoRecorder::get_statistics() const {
-	MutexLock lock(stats_mutex);
-	return stats;
-}
-
-float IndependentVideoRecorder::get_repeat_frame_ratio() const {
-	MutexLock lock(stats_mutex);
-
-	if (stats.total_recorded_frames == 0) {
-		return 0.0f;
-	}
-
-	return (float)stats.repeated_frames_count / (float)stats.total_recorded_frames;
-}
-
-void IndependentVideoRecorder::update_config(const RecordingConfig &p_config) {
-	config.target_fps = p_config.target_fps;
-	config.video_width = p_config.video_width;
-	config.video_height = p_config.video_height;
-	config.jpeg_quality = p_config.jpeg_quality;
-	config.enable_timestamp_chunks = p_config.enable_timestamp_chunks;
-	config.enable_repeat_frame_marking = p_config.enable_repeat_frame_marking;
-
-	if (video_writer.is_valid()) {
-		video_writer->set_quality(config.jpeg_quality);
-	}
-}
-
-void IndependentVideoRecorder::reset_statistics() {
-	MutexLock lock(stats_mutex);
-
-	stats = RecordingStats();
-	last_game_frame_sequence = 0;
-	has_valid_frame = false;
-	recording_start_time = 0;
-	last_stats_update_time = 0;
-}
-
-String IndependentVideoRecorder::get_debug_info() const {
-	RecordingStats current_stats = get_statistics();
-
-	String info;
-	info += "=== IndependentVideoRecorder Debug Info ===\n";
-	info += String("Recording status: ") + (is_recording() ? "Running" : "Stopped") + "\n";
-	info += String("Thread status: ") + (is_thread_running() ? "Running" : "Stopped") + "\n";
-	info += String("Total recorded frames: ") + String::num_int64(current_stats.total_recorded_frames) + "\n";
-	info += String("New frames: ") + String::num_int64(current_stats.new_frames_count) + "\n";
-	info += String("Repeated frames: ") + String::num_int64(current_stats.repeated_frames_count) + "\n";
-	info += String("Repeated frame ratio: ") + String::num_real(get_repeat_frame_ratio() * 100.0f) + "%\n";
-	info += String("Recording duration: ") + String::num_real(current_stats.recording_duration_us / 1000000.0) + " seconds\n";
-	info += String("Avg frame process time: ") + String::num_int64(current_stats.avg_frame_process_time_us) + " microseconds\n";
-	info += String("Last game frame sequence: ") + String::num_int64(current_stats.last_game_frame_sequence) + "\n";
-	info += String("Config FPS: ") + String::num_int64(config.target_fps) + "\n";
-	info += String("Config resolution: ") + String::num_int64(config.video_width) + "x" + String::num_int64(config.video_height) + "\n";
-	info += "==========================================";
-
-	return info;
 }

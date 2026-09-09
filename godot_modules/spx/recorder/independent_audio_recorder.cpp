@@ -131,6 +131,106 @@ void IndependentAudioRecorder::stop_recording() {
 	}
 }
 
+void IndependentAudioRecorder::on_audio_output(const int32_t *p_buffer, int p_frame_count) {
+	if (!recording_active.load() || !p_buffer || p_frame_count <= 0) {
+		return;
+	}
+
+	MutexLock lock(buffer_mutex);
+
+	uint32_t samples_to_write = p_frame_count * config.channels;
+
+	int available_space = audio_ring_buffer.space_left();
+	if ((int)samples_to_write > available_space) {
+		handle_buffer_overrun();
+		return;
+	}
+
+	audio_ring_buffer.write(p_buffer, samples_to_write);
+}
+
+uint32_t IndependentAudioRecorder::get_available_samples() const {
+	return audio_ring_buffer.data_left();
+}
+
+bool IndependentAudioRecorder::has_audio_data() const {
+	return get_available_samples() >= (config.chunk_size * config.channels);
+}
+
+float IndependentAudioRecorder::get_buffer_usage_ratio() const {
+	if (buffer_size == 0) {
+		return 0.0f;
+	}
+	return (float)get_available_samples() / (float)buffer_size;
+}
+
+IndependentAudioRecorder::AudioStats IndependentAudioRecorder::get_statistics() const {
+	MutexLock lock(stats_mutex);
+	return stats;
+}
+
+void IndependentAudioRecorder::update_config(const AudioConfig &p_config) {
+	if (is_recording()) {
+		ERR_PRINT("IndependentAudioRecorder: Cannot update configuration while recording");
+		return;
+	}
+
+	config.sample_rate = p_config.sample_rate;
+	config.channels = p_config.channels;
+	config.chunk_size = p_config.chunk_size;
+	config.buffer_size_seconds = p_config.buffer_size_seconds;
+	config.enable_audio_monitoring = p_config.enable_audio_monitoring;
+
+	// Recalculate buffer size
+	buffer_size = config.sample_rate * config.channels * config.buffer_size_seconds;
+
+	// Calculate the power for the RingBuffer
+	int power = 0;
+	while ((1 << power) < (int)buffer_size) {
+		power++;
+	}
+	int actual_buffer_size = 1 << power; // Actual buffer size
+
+	// Reinitialize the ring buffer
+	audio_ring_buffer = RingBuffer<int32_t>(power);
+	buffer_size = actual_buffer_size; // Update to actual size
+
+	temp_audio_buffer.resize(config.chunk_size * config.channels);
+	chunk_buffer.resize(config.chunk_size * config.channels);
+}
+
+void IndependentAudioRecorder::reset_statistics() {
+	MutexLock lock(stats_mutex);
+
+	stats = AudioStats();
+	buffer_read_pos.store(0);
+	buffer_write_pos.store(0);
+	recording_start_time = 0;
+}
+
+String IndependentAudioRecorder::get_debug_info() const {
+	AudioStats current_stats = get_statistics();
+
+	String info;
+	info += "=== IndependentAudioRecorder Debug Info ===\n";
+	info += String("Recording status: ") + (is_recording() ? "Running" : "Stopped") + "\n";
+	info += String("Thread status: ") + (is_thread_running() ? "Running" : "Stopped") + "\n";
+	info += String("Total audio chunks: ") + String::num_int64(current_stats.total_chunks_recorded) + "\n";
+	info += String("Total samples: ") + String::num_int64(current_stats.total_samples_recorded) + "\n";
+	info += String("Recording duration: ") + String::num_real(current_stats.recording_duration_us / 1000000.0) + " seconds\n";
+	info += String("Buffer usage: ") + String::num_int64(current_stats.current_buffer_level) + "%\n";
+	info += String("Available samples: ") + String::num_int64(get_available_samples()) + "\n";
+	info += String("Buffer overruns: ") + String::num_int64(current_stats.buffer_overruns) + "\n";
+	info += String("Buffer underruns: ") + String::num_int64(current_stats.buffer_underruns) + "\n";
+	info += String("Avg chunk process time: ") + String::num_int64(current_stats.avg_chunk_process_time_us) + " microseconds\n";
+	info += String("Config sample rate: ") + String::num_int64(config.sample_rate) + "Hz\n";
+	info += String("Config channels: ") + String::num_int64(config.channels) + "\n";
+	info += String("Config chunk size: ") + String::num_int64(config.chunk_size) + " samples\n";
+	info += "==========================================";
+
+	return info;
+}
+
 void IndependentAudioRecorder::recording_thread_func(void *p_userdata) {
 	IndependentAudioRecorder *recorder = static_cast<IndependentAudioRecorder *>(p_userdata);
 	recorder->recording_loop();
@@ -216,24 +316,6 @@ bool IndependentAudioRecorder::read_audio_chunk(Vector<int32_t> &output_buffer, 
 	return true;
 }
 
-void IndependentAudioRecorder::on_audio_output(const int32_t *p_buffer, int p_frame_count) {
-	if (!recording_active.load() || !p_buffer || p_frame_count <= 0) {
-		return;
-	}
-
-	MutexLock lock(buffer_mutex);
-
-	uint32_t samples_to_write = p_frame_count * config.channels;
-
-	int available_space = audio_ring_buffer.space_left();
-	if ((int)samples_to_write > available_space) {
-		handle_buffer_overrun();
-		return;
-	}
-
-	audio_ring_buffer.write(p_buffer, samples_to_write);
-}
-
 void IndependentAudioRecorder::update_statistics(uint64_t chunk_process_start_time, uint32_t samples_processed) {
 	uint64_t current_time = OS::get_singleton()->get_ticks_usec();
 	uint64_t process_time = current_time - chunk_process_start_time;
@@ -275,86 +357,4 @@ void IndependentAudioRecorder::handle_buffer_overrun() {
 	uint32_t read_pos = buffer_read_pos.load();
 	read_pos = (read_pos + samples_to_skip) % buffer_size;
 	buffer_read_pos.store(read_pos);
-}
-
-uint32_t IndependentAudioRecorder::get_available_samples() const {
-	return audio_ring_buffer.data_left();
-}
-
-bool IndependentAudioRecorder::has_audio_data() const {
-	return get_available_samples() >= (config.chunk_size * config.channels);
-}
-
-float IndependentAudioRecorder::get_buffer_usage_ratio() const {
-	if (buffer_size == 0) {
-		return 0.0f;
-	}
-	return (float)get_available_samples() / (float)buffer_size;
-}
-
-IndependentAudioRecorder::AudioStats IndependentAudioRecorder::get_statistics() const {
-	MutexLock lock(stats_mutex);
-	return stats;
-}
-
-void IndependentAudioRecorder::update_config(const AudioConfig &p_config) {
-	if (is_recording()) {
-		ERR_PRINT("IndependentAudioRecorder: Cannot update configuration while recording");
-		return;
-	}
-
-	config.sample_rate = p_config.sample_rate;
-	config.channels = p_config.channels;
-	config.chunk_size = p_config.chunk_size;
-	config.buffer_size_seconds = p_config.buffer_size_seconds;
-	config.enable_audio_monitoring = p_config.enable_audio_monitoring;
-
-	// Recalculate buffer size
-	buffer_size = config.sample_rate * config.channels * config.buffer_size_seconds;
-
-	// Calculate the power for the RingBuffer
-	int power = 0;
-	while ((1 << power) < (int)buffer_size) {
-		power++;
-	}
-	int actual_buffer_size = 1 << power; // Actual buffer size
-
-	// Reinitialize the ring buffer
-	audio_ring_buffer = RingBuffer<int32_t>(power);
-	buffer_size = actual_buffer_size; // Update to actual size
-
-	temp_audio_buffer.resize(config.chunk_size * config.channels);
-	chunk_buffer.resize(config.chunk_size * config.channels);
-}
-
-void IndependentAudioRecorder::reset_statistics() {
-	MutexLock lock(stats_mutex);
-
-	stats = AudioStats();
-	buffer_read_pos.store(0);
-	buffer_write_pos.store(0);
-	recording_start_time = 0;
-}
-
-String IndependentAudioRecorder::get_debug_info() const {
-	AudioStats current_stats = get_statistics();
-
-	String info;
-	info += "=== IndependentAudioRecorder Debug Info ===\n";
-	info += String("Recording status: ") + (is_recording() ? "Running" : "Stopped") + "\n";
-	info += String("Thread status: ") + (is_thread_running() ? "Running" : "Stopped") + "\n";
-	info += String("Total audio chunks: ") + String::num_int64(current_stats.total_chunks_recorded) + "\n";
-	info += String("Total samples: ") + String::num_int64(current_stats.total_samples_recorded) + "\n";
-	info += String("Recording duration: ") + String::num_real(current_stats.recording_duration_us / 1000000.0) + " seconds\n";
-	info += String("Buffer usage: ") + String::num_int64(current_stats.current_buffer_level) + "%\n";
-	info += String("Available samples: ") + String::num_int64(get_available_samples()) + "\n";
-	info += String("Buffer overruns: ") + String::num_int64(current_stats.buffer_overruns) + "\n";
-	info += String("Buffer underruns: ") + String::num_int64(current_stats.buffer_underruns) + "\n";
-	info += String("Avg chunk process time: ") + String::num_int64(current_stats.avg_chunk_process_time_us) + " microseconds\n";
-	info += String("Config sample rate: ") + String::num_int64(config.sample_rate) + "Hz\n";
-	info += String("Config channels: ") + String::num_int64(config.channels) + "\n";
-	info += String("Config chunk size: ") + String::num_int64(config.chunk_size) + " samples\n";
-	info += "==========================================";
-
-	return info;
 }

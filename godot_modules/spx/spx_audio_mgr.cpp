@@ -40,13 +40,6 @@
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
 
-SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
-	if (aid_audios.has(aid)) {
-		return aid_audios[aid];
-	}
-	return nullptr;
-}
-
 void SpxAudioMgr::on_awake() {
 	SpxBaseMgr::on_awake();
 	SpxAudioBusPool::init();
@@ -328,4 +321,11 @@ void SpxAudioMgr::set_timer(GdInt aid, GdFloat time) {
 		return;
 	}
 	audio->set_timer(aid, time);
+}
+
+SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
+	if (aid_audios.has(aid)) {
+		return aid_audios[aid];
+	}
+	return nullptr;
 }

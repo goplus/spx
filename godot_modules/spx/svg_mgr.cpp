@@ -34,14 +34,6 @@ bool SvgManager::is_svg_file(const String &path) const {
 	return path.to_lower().ends_with(".svg");
 }
 
-String SvgManager::_make_image_key(const String &path, int scale) {
-	return String::num(scale) + "@" + path;
-}
-
-String SvgManager::_make_animation_key(const String &name, int scale) {
-	return String::num(scale) + "@" + name;
-}
-
 Ref<ImageTexture> SvgManager::get_svg_image(const String &image_path, int scale) {
 	ERR_FAIL_COND_V_MSG(!Thread::is_main_thread(), Ref<ImageTexture>(), "SVG image caches may only be accessed on the main thread.");
 	if (!is_svg_file(image_path)) {
@@ -77,6 +69,74 @@ bool SvgManager::is_svg_animation(const String &base_anim_key) {
 void SvgManager::mark_svg_animation(const String &base_anim_key, bool is_svg_animation) {
 	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SVG animation caches may only be accessed on the main thread.");
 	is_svg_animation_registry[base_anim_key] = is_svg_animation;
+}
+
+void SvgManager::reset(bool p_clear_project_caches) {
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SVG caches may only be reset on the main thread.");
+	if (p_clear_project_caches) {
+		svg_image_cache.clear();
+		svg_image_raw_size_cache.clear();
+		is_svg_animation_registry.clear();
+	}
+	svg_animation_cache.clear();
+}
+
+void SvgManager::update_caches(const Vector<String> &files) {
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SVG caches may only be updated on the main thread.");
+	bool invalidated_svg = false;
+	for (const String &file : files) {
+		const String path = resMgr->_to_engine_path(file);
+		if (!is_svg_file(path)) {
+			continue;
+		}
+
+		Vector<String> image_keys_to_erase;
+		const String key_suffix = "@" + path;
+		for (const KeyValue<String, Ref<ImageTexture>> &E : svg_image_cache) {
+			if (E.key.ends_with(key_suffix)) {
+				image_keys_to_erase.push_back(E.key);
+			}
+		}
+		for (const String &key : image_keys_to_erase) {
+			svg_image_cache.erase(key);
+		}
+		svg_image_raw_size_cache.erase(path);
+		invalidated_svg = true;
+	}
+
+	if (invalidated_svg) {
+		// Scaled animation frames may retain textures from any image scale.
+		svg_animation_cache.clear();
+	}
+}
+
+int SvgManager::calculate_svg_scale(Vector2 required_scale) {
+	float scale = MAX(Math::abs(required_scale.x), Math::abs(required_scale.y));
+	return calculate_svg_scale(scale);
+}
+
+int SvgManager::calculate_svg_scale(float required_scale) {
+	float scale = Math::abs(required_scale);
+	if (scale <= 1.0f) {
+		return 1;
+	}
+
+	// Match Scratch's SVG MIP rule, but clamp to the largest SVG raster scale
+	// we allow to cache. Larger render scales stay pinned at this ceiling.
+	const int max_svg_scale = 1024;
+	int target_scale = 1;
+	while ((float)target_scale < scale && target_scale < max_svg_scale) {
+		target_scale <<= 1;
+	}
+	return target_scale;
+}
+
+String SvgManager::_make_image_key(const String &path, int scale) {
+	return String::num(scale) + "@" + path;
+}
+
+String SvgManager::_make_animation_key(const String &name, int scale) {
+	return String::num(scale) + "@" + name;
 }
 
 Ref<SpriteFrames> SvgManager::_load_animation(const String &anim_name, int scale) {
@@ -175,64 +235,4 @@ Ref<ImageTexture> SvgManager::_load_image(const String &path /*engine path*/, in
 	}
 
 	return Ref<ImageTexture>();
-}
-
-void SvgManager::reset(bool p_clear_project_caches) {
-	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SVG caches may only be reset on the main thread.");
-	if (p_clear_project_caches) {
-		svg_image_cache.clear();
-		svg_image_raw_size_cache.clear();
-		is_svg_animation_registry.clear();
-	}
-	svg_animation_cache.clear();
-}
-
-void SvgManager::update_caches(const Vector<String> &files) {
-	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SVG caches may only be updated on the main thread.");
-	bool invalidated_svg = false;
-	for (const String &file : files) {
-		const String path = resMgr->_to_engine_path(file);
-		if (!is_svg_file(path)) {
-			continue;
-		}
-
-		Vector<String> image_keys_to_erase;
-		const String key_suffix = "@" + path;
-		for (const KeyValue<String, Ref<ImageTexture>> &E : svg_image_cache) {
-			if (E.key.ends_with(key_suffix)) {
-				image_keys_to_erase.push_back(E.key);
-			}
-		}
-		for (const String &key : image_keys_to_erase) {
-			svg_image_cache.erase(key);
-		}
-		svg_image_raw_size_cache.erase(path);
-		invalidated_svg = true;
-	}
-
-	if (invalidated_svg) {
-		// Scaled animation frames may retain textures from any image scale.
-		svg_animation_cache.clear();
-	}
-}
-
-int SvgManager::calculate_svg_scale(Vector2 required_scale) {
-	float scale = MAX(Math::abs(required_scale.x), Math::abs(required_scale.y));
-	return calculate_svg_scale(scale);
-}
-
-int SvgManager::calculate_svg_scale(float required_scale) {
-	float scale = Math::abs(required_scale);
-	if (scale <= 1.0f) {
-		return 1;
-	}
-
-	// Match Scratch's SVG MIP rule, but clamp to the largest SVG raster scale
-	// we allow to cache. Larger render scales stay pinned at this ceiling.
-	const int max_svg_scale = 1024;
-	int target_scale = 1;
-	while ((float)target_scale < scale && target_scale < max_svg_scale) {
-		target_scale <<= 1;
-	}
-	return target_scale;
 }
