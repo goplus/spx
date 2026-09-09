@@ -71,40 +71,6 @@ type Limits struct {
 	MaxCompressionRatio      uint64
 }
 
-func (l Limits) withDefaults() (Limits, error) {
-	if l.MaxEntries == 0 {
-		l.MaxEntries = MaxEntries
-	}
-	if l.MaxEntrySize == 0 {
-		l.MaxEntrySize = MaxEntrySize
-	}
-	if l.MaxTotalSize == 0 {
-		l.MaxTotalSize = MaxTotalSize
-	}
-	if l.MaxArchiveBytes == 0 {
-		l.MaxArchiveBytes = MaxArchiveBytes
-	}
-	if l.MaxCentralDirectoryBytes == 0 {
-		l.MaxCentralDirectoryBytes = MaxCentralDirectoryBytes
-	}
-	if l.MaxManifestBytes == 0 {
-		l.MaxManifestBytes = MaxManifestBytes
-	}
-	if l.MaxCompressionRatio == 0 {
-		l.MaxCompressionRatio = MaxCompressionRatio
-	}
-	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 || l.MaxManifestBytes < 0 {
-		return Limits{}, fmt.Errorf("runtimebundle: negative archive limit")
-	}
-	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxManifestBytes == 0 || l.MaxCompressionRatio == 0 {
-		return Limits{}, fmt.Errorf("runtimebundle: archive limits must be positive")
-	}
-	if l.MaxEntrySize > l.MaxTotalSize {
-		return Limits{}, fmt.Errorf("runtimebundle: max entry size %d exceeds max total size %d", l.MaxEntrySize, l.MaxTotalSize)
-	}
-	return l, nil
-}
-
 // Namespace identifies an independent content-addressed cache namespace.
 // Keeping namespaces in separate directories prevents an engine artifact from
 // accidentally satisfying a bridge or project lookup with the same digest.
@@ -116,15 +82,6 @@ const (
 	NamespaceProject Namespace = "project"
 	NamespaceDriver  Namespace = "driver"
 )
-
-func (n Namespace) valid() bool {
-	switch n {
-	case NamespaceEngine, NamespaceBridge, NamespaceProject, NamespaceDriver:
-		return true
-	default:
-		return false
-	}
-}
 
 // Entry is one regular-file or directory entry in a bundle manifest. SHA256
 // is always the lower-case, full 64-hex-character SHA-256 digest of the
@@ -157,48 +114,10 @@ var (
 	ErrUnsupportedArchiveEntry = errors.New("runtimebundle: unsupported archive entry")
 )
 
-func (e Entry) isDir() bool {
-	return e.Mode&uint32(fs.ModeDir) != 0
-}
-
-func (e Entry) normalized() (Entry, string, error) {
-	if e.Size < 0 {
-		return Entry{}, "", fmt.Errorf("%w: %q has negative size", ErrInvalidManifest, e.Name)
-	}
-	if e.isDir() && e.Size != 0 {
-		return Entry{}, "", fmt.Errorf("%w: directory %q has size %d", ErrInvalidManifest, e.Name, e.Size)
-	}
-	if e.Mode&^uint32(fs.ModeDir|0o777) != 0 {
-		return Entry{}, "", fmt.Errorf("%w: entry %q has unsupported mode %#o", ErrInvalidManifest, e.Name, e.Mode)
-	}
-	if err := validateSHA256(e.SHA256); err != nil {
-		return Entry{}, "", fmt.Errorf("%w: entry %q: %v", ErrInvalidManifest, e.Name, err)
-	}
-	if e.isDir() {
-		empty := sha256.Sum256(nil)
-		if e.SHA256 != hex.EncodeToString(empty[:]) {
-			return Entry{}, "", fmt.Errorf("%w: directory %q must use the empty-file SHA-256", ErrInvalidManifest, e.Name)
-		}
-	}
-	name, key, isDir, err := normalizeEntryName(e.Name)
-	if err != nil {
-		return Entry{}, "", err
-	}
-	if isDir != e.isDir() {
-		return Entry{}, "", fmt.Errorf("%w: entry %q directory mode/name mismatch", ErrInvalidManifest, e.Name)
-	}
-	e.Name = name
-	return e, key, nil
-}
-
-func validateSHA256(value string) error {
-	if len(value) != sha256.Size*2 {
-		return fmt.Errorf("sha256 must be a full %d-hex-character digest", sha256.Size*2)
-	}
-	if _, err := hex.DecodeString(value); err != nil || value != strings.ToLower(value) {
-		return fmt.Errorf("sha256 must be lower-case hexadecimal")
-	}
-	return nil
+type canonicalBundle struct {
+	Schema    string    `json:"schema"`
+	Namespace Namespace `json:"namespace,omitempty"`
+	Entries   []Entry   `json:"entries"`
 }
 
 // Validate checks structure, names, modes, duplicate/case-fold collisions,
@@ -273,38 +192,6 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 		}
 	}
 	return nil
-}
-
-type canonicalBundle struct {
-	Schema    string    `json:"schema"`
-	Namespace Namespace `json:"namespace,omitempty"`
-	Entries   []Entry   `json:"entries"`
-}
-
-func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
-	// Digest is a checksum over this canonical form, so it must not be
-	// validated while constructing the form itself (otherwise validation would
-	// recurse through IdentityDigest indefinitely).
-	withoutDigest := b
-	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
-		return canonicalBundle{}, err
-	}
-	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
-	if out.Schema == "" {
-		out.Schema = SchemaV1
-	}
-	for _, original := range b.Entries {
-		entry, _, err := original.normalized()
-		if err != nil {
-			return canonicalBundle{}, err
-		}
-		out.Entries = append(out.Entries, entry)
-	}
-	sort.Slice(out.Entries, func(i, j int) bool {
-		return out.Entries[i].Name < out.Entries[j].Name
-	})
-	return out, nil
 }
 
 // CanonicalBytes returns deterministic manifest bytes. Digest is omitted from
@@ -406,6 +293,119 @@ func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
 		b.Schema = SchemaV1
 	}
 	return b, nil
+}
+
+func (l Limits) withDefaults() (Limits, error) {
+	if l.MaxEntries == 0 {
+		l.MaxEntries = MaxEntries
+	}
+	if l.MaxEntrySize == 0 {
+		l.MaxEntrySize = MaxEntrySize
+	}
+	if l.MaxTotalSize == 0 {
+		l.MaxTotalSize = MaxTotalSize
+	}
+	if l.MaxArchiveBytes == 0 {
+		l.MaxArchiveBytes = MaxArchiveBytes
+	}
+	if l.MaxCentralDirectoryBytes == 0 {
+		l.MaxCentralDirectoryBytes = MaxCentralDirectoryBytes
+	}
+	if l.MaxManifestBytes == 0 {
+		l.MaxManifestBytes = MaxManifestBytes
+	}
+	if l.MaxCompressionRatio == 0 {
+		l.MaxCompressionRatio = MaxCompressionRatio
+	}
+	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 || l.MaxManifestBytes < 0 {
+		return Limits{}, fmt.Errorf("runtimebundle: negative archive limit")
+	}
+	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxManifestBytes == 0 || l.MaxCompressionRatio == 0 {
+		return Limits{}, fmt.Errorf("runtimebundle: archive limits must be positive")
+	}
+	if l.MaxEntrySize > l.MaxTotalSize {
+		return Limits{}, fmt.Errorf("runtimebundle: max entry size %d exceeds max total size %d", l.MaxEntrySize, l.MaxTotalSize)
+	}
+	return l, nil
+}
+
+func (n Namespace) valid() bool {
+	switch n {
+	case NamespaceEngine, NamespaceBridge, NamespaceProject, NamespaceDriver:
+		return true
+	default:
+		return false
+	}
+}
+
+func (e Entry) isDir() bool {
+	return e.Mode&uint32(fs.ModeDir) != 0
+}
+
+func (e Entry) normalized() (Entry, string, error) {
+	if e.Size < 0 {
+		return Entry{}, "", fmt.Errorf("%w: %q has negative size", ErrInvalidManifest, e.Name)
+	}
+	if e.isDir() && e.Size != 0 {
+		return Entry{}, "", fmt.Errorf("%w: directory %q has size %d", ErrInvalidManifest, e.Name, e.Size)
+	}
+	if e.Mode&^uint32(fs.ModeDir|0o777) != 0 {
+		return Entry{}, "", fmt.Errorf("%w: entry %q has unsupported mode %#o", ErrInvalidManifest, e.Name, e.Mode)
+	}
+	if err := validateSHA256(e.SHA256); err != nil {
+		return Entry{}, "", fmt.Errorf("%w: entry %q: %v", ErrInvalidManifest, e.Name, err)
+	}
+	if e.isDir() {
+		empty := sha256.Sum256(nil)
+		if e.SHA256 != hex.EncodeToString(empty[:]) {
+			return Entry{}, "", fmt.Errorf("%w: directory %q must use the empty-file SHA-256", ErrInvalidManifest, e.Name)
+		}
+	}
+	name, key, isDir, err := normalizeEntryName(e.Name)
+	if err != nil {
+		return Entry{}, "", err
+	}
+	if isDir != e.isDir() {
+		return Entry{}, "", fmt.Errorf("%w: entry %q directory mode/name mismatch", ErrInvalidManifest, e.Name)
+	}
+	e.Name = name
+	return e, key, nil
+}
+
+func validateSHA256(value string) error {
+	if len(value) != sha256.Size*2 {
+		return fmt.Errorf("sha256 must be a full %d-hex-character digest", sha256.Size*2)
+	}
+	if _, err := hex.DecodeString(value); err != nil || value != strings.ToLower(value) {
+		return fmt.Errorf("sha256 must be lower-case hexadecimal")
+	}
+	return nil
+}
+
+func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
+	// Digest is a checksum over this canonical form, so it must not be
+	// validated while constructing the form itself (otherwise validation would
+	// recurse through IdentityDigest indefinitely).
+	withoutDigest := b
+	withoutDigest.Digest = ""
+	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
+		return canonicalBundle{}, err
+	}
+	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
+	if out.Schema == "" {
+		out.Schema = SchemaV1
+	}
+	for _, original := range b.Entries {
+		entry, _, err := original.normalized()
+		if err != nil {
+			return canonicalBundle{}, err
+		}
+		out.Entries = append(out.Entries, entry)
+	}
+	sort.Slice(out.Entries, func(i, j int) bool {
+		return out.Entries[i].Name < out.Entries[j].Name
+	})
+	return out, nil
 }
 
 func normalizeEntryName(name string) (normalized, folded string, isDir bool, err error) {
