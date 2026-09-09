@@ -47,6 +47,14 @@ jobs:
           bash -n .github/scripts/npm/prepare_package.sh
           bash -n .github/scripts/release/assemble.sh
 
+      - name: Set up Node.js for Web bridge tests
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Test Web callback routing
+        run: node --test cmd/ispx/tests/*.test.cjs
+
       - name: Test Go code
         shell: bash
         run: |
