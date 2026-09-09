@@ -52,6 +52,39 @@ func (r CommandRunner) RunCommand(workdir string, name string, args ...string) e
 	return cmd.Run()
 }
 
+// CurrentEnvMap returns a copy of the process environment keyed by name.
+func CurrentEnvMap() map[string]string {
+	env := map[string]string{}
+	for _, item := range os.Environ() {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		env[parts[0]] = parts[1]
+	}
+	return env
+}
+
+// PrependToPath puts dirs before pathValue, omitting empty and duplicate entries.
+func PrependToPath(pathValue string, dirs ...string) string {
+	result := []string{}
+	seen := map[string]bool{}
+	appendDir := func(dir string) {
+		if dir == "" || seen[dir] {
+			return
+		}
+		seen[dir] = true
+		result = append(result, dir)
+	}
+	for _, dir := range dirs {
+		appendDir(dir)
+	}
+	for _, dir := range filepath.SplitList(pathValue) {
+		appendDir(dir)
+	}
+	return strings.Join(result, string(os.PathListSeparator))
+}
+
 func buildctlCommandEnv() (map[string]string, error) {
 	env, err := currentBuildEnv()
 	if err != nil {
@@ -168,19 +201,6 @@ func setPathEnv(env map[string]string, value string) {
 	env["PATH"] = value
 }
 
-// CurrentEnvMap returns a copy of the process environment keyed by name.
-func CurrentEnvMap() map[string]string {
-	env := map[string]string{}
-	for _, item := range os.Environ() {
-		parts := strings.SplitN(item, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		env[parts[0]] = parts[1]
-	}
-	return env
-}
-
 func envMapToSlice(env map[string]string) []string {
 	keys := make([]string, 0, len(env))
 	for key := range env {
@@ -192,24 +212,4 @@ func envMapToSlice(env map[string]string) []string {
 		out = append(out, key+"="+env[key])
 	}
 	return out
-}
-
-// PrependToPath puts dirs before pathValue, omitting empty and duplicate entries.
-func PrependToPath(pathValue string, dirs ...string) string {
-	result := []string{}
-	seen := map[string]bool{}
-	appendDir := func(dir string) {
-		if dir == "" || seen[dir] {
-			return
-		}
-		seen[dir] = true
-		result = append(result, dir)
-	}
-	for _, dir := range dirs {
-		appendDir(dir)
-	}
-	for _, dir := range filepath.SplitList(pathValue) {
-		appendDir(dir)
-	}
-	return strings.Join(result, string(os.PathListSeparator))
 }

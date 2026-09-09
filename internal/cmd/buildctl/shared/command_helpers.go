@@ -21,10 +21,6 @@ import (
 	"os/exec"
 )
 
-func runCommandOutput(name string, args ...string) ([]byte, error) {
-	return RunCommandOutputWithEnv("", os.Environ(), name, args...)
-}
-
 // RunCommandOutputWithEnv returns combined output using the given environment
 // and working directory. An empty workdir inherits the current directory.
 func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
@@ -34,6 +30,10 @@ func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...
 		cmd.Dir = workdir
 	}
 	return cmd.CombinedOutput()
+}
+
+func runCommandOutput(name string, args ...string) ([]byte, error) {
+	return RunCommandOutputWithEnv("", os.Environ(), name, args...)
 }
 
 func runStreamingCommand(workdir, name string, args ...string) error {

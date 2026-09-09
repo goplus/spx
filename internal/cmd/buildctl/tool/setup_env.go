@@ -42,11 +42,6 @@ var (
 	resolveEMSDKShellExportsFn = ResolveEMSDKShellExports
 )
 
-func setupSCons() error {
-	_, err := EnsureSCons()
-	return err
-}
-
 func EnsureSCons() (string, error) {
 	python, err := detectPythonCommand()
 	if err != nil {
@@ -85,13 +80,6 @@ func EnsureSCons() (string, error) {
 		return "", err
 	}
 	return sconsCommand, nil
-}
-
-func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand string) {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(venvDir, "Scripts", "python.exe"), filepath.Join(venvDir, "Scripts", "scons.exe")
-	}
-	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
 }
 
 func SetupJDK() error {
@@ -191,6 +179,45 @@ func SetupEMSDK() error {
 		return err
 	}
 	return verifyEMSDK(env)
+}
+
+func ResolveJDKShellExports() (map[string]string, error) {
+	env, err := resolveJDKShellEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	exports := map[string]string{}
+	if javaHome := strings.TrimSpace(env["JAVA_HOME"]); javaHome != "" {
+		exports["JAVA_HOME"] = javaHome
+		exports["PATH"] = env["PATH"]
+	}
+	return exports, nil
+}
+
+func ResolveEMSDKShellExports() (map[string]string, error) {
+	env, err := resolveEMSDKEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	before := shared.CurrentEnvMap()
+	output, err := runEMSDKShellOutput(env.repoDir, "source ./emsdk_env.sh >/dev/null 2>&1; env -0")
+	if err != nil {
+		return nil, err
+	}
+	after := parseNullEnvOutput(output)
+	return selectEMSDKExports(before, after), nil
+}
+
+func setupSCons() error {
+	_, err := EnsureSCons()
+	return err
+}
+
+func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand string) {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(venvDir, "Scripts", "python.exe"), filepath.Join(venvDir, "Scripts", "scons.exe")
+	}
+	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
 }
 
 func verifyEMSDK(env emsdkEnvironment) error {
@@ -337,19 +364,6 @@ func parseJavaMajorVersion(output string) (int, bool) {
 	return 0, false
 }
 
-func ResolveJDKShellExports() (map[string]string, error) {
-	env, err := resolveJDKShellEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	exports := map[string]string{}
-	if javaHome := strings.TrimSpace(env["JAVA_HOME"]); javaHome != "" {
-		exports["JAVA_HOME"] = javaHome
-		exports["PATH"] = env["PATH"]
-	}
-	return exports, nil
-}
-
 func resolveEMSDKEnvironment() (emsdkEnvironment, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -384,20 +398,6 @@ func detectEMSDKVersion(env emsdkEnvironment) (string, bool) {
 		return "", false
 	}
 	return fields[2], true
-}
-
-func ResolveEMSDKShellExports() (map[string]string, error) {
-	env, err := resolveEMSDKEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	before := shared.CurrentEnvMap()
-	output, err := runEMSDKShellOutput(env.repoDir, "source ./emsdk_env.sh >/dev/null 2>&1; env -0")
-	if err != nil {
-		return nil, err
-	}
-	after := parseNullEnvOutput(output)
-	return selectEMSDKExports(before, after), nil
 }
 
 func runEMSDKShellOutput(workdir, script string) ([]byte, error) {
