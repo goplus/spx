@@ -17,6 +17,7 @@
 package runtimeasset
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -166,17 +167,43 @@ func addAssetHash(hasher hash.Hash, name string) (err error) {
 			err = closeErr
 		}
 	}()
+	return addFileHash(hasher, name, srcFile)
+}
 
+func addFileHash(hasher hash.Hash, name string, file io.Reader) error {
 	if _, err := io.WriteString(hasher, name+"\x00"); err != nil {
-		return fmt.Errorf("hash embedded runtime asset name %s: %w", name, err)
+		return fmt.Errorf("hash runtime asset name %s: %w", name, err)
 	}
-	if _, err := io.Copy(hasher, srcFile); err != nil {
-		return fmt.Errorf("hash embedded runtime asset %s: %w", name, err)
+	if _, err := io.Copy(hasher, file); err != nil {
+		return fmt.Errorf("hash runtime asset %s: %w", name, err)
 	}
 	if _, err := io.WriteString(hasher, "\x00"); err != nil {
-		return fmt.Errorf("finalize embedded runtime asset hash %s: %w", name, err)
+		return fmt.Errorf("finalize runtime asset hash %s: %w", name, err)
 	}
 	return nil
+}
+
+func cachedAssetMatches(dstPath, name string) (matches bool, err error) {
+	file, err := os.Open(dstPath)
+	if err != nil {
+		return false, fmt.Errorf("open runtime cache asset %s: %w", dstPath, err)
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	hasher := sha256.New()
+	if err := addAssetHash(hasher, name); err != nil {
+		return false, err
+	}
+	expected := hasher.Sum(nil)
+	hasher.Reset()
+	if err := addFileHash(hasher, name, file); err != nil {
+		return false, fmt.Errorf("verify runtime cache asset %s: %w", dstPath, err)
+	}
+	return bytes.Equal(expected, hasher.Sum(nil)), nil
 }
 
 func extractAsset(cacheDir, name string) (err error) {
@@ -188,9 +215,16 @@ func extractAsset(cacheDir, name string) (err error) {
 
 	dstPath := filepath.Join(cacheDir, name)
 	mode := assetMode(name)
-	if dstInfo, err := os.Stat(dstPath); err == nil && dstInfo.Size() == info.Size() {
-		if chmodErr := os.Chmod(dstPath, mode); chmodErr == nil || runtime.GOOS == "windows" {
-			return nil
+	if dstInfo, err := os.Stat(dstPath); err == nil && dstInfo.Mode().IsRegular() && dstInfo.Size() == info.Size() {
+		// The cache key identifies the expected bundle, not the current file contents.
+		matches, err := cachedAssetMatches(dstPath, name)
+		if err != nil {
+			return err
+		}
+		if matches {
+			if chmodErr := os.Chmod(dstPath, mode); chmodErr == nil || runtime.GOOS == "windows" {
+				return nil
+			}
 		}
 	}
 
