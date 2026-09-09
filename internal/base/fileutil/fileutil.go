@@ -96,7 +96,7 @@ func CopyDir(src, dst string) error {
 }
 
 // WriteNamedZip writes files to dst using the provided zip entry names.
-func WriteNamedZip(dst string, namedFiles map[string]string) (err error) {
+func WriteNamedZip(dst string, namedFiles map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -104,35 +104,24 @@ func WriteNamedZip(dst string, namedFiles map[string]string) (err error) {
 		return err
 	}
 
-	file, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil && err == nil {
-			err = cerr
+	return writeZipFile(dst, func(writer *zip.Writer) error {
+		names := make([]string, 0, len(namedFiles))
+		for name := range namedFiles {
+			names = append(names, name)
 		}
-	}()
+		sort.Strings(names)
 
-	writer := zip.NewWriter(file)
-
-	names := make([]string, 0, len(namedFiles))
-	for name := range namedFiles {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		src := namedFiles[name]
-		if err := addFileToZip(writer, src, name); err != nil {
-			return err
+		for _, name := range names {
+			if err := addFileToZip(writer, namedFiles[name], name); err != nil {
+				return err
+			}
 		}
-	}
-	return writer.Close()
+		return nil
+	})
 }
 
 // ZipDirectory writes the files in srcDir to dstZip using slash-separated relative paths.
-func ZipDirectory(srcDir, dstZip string) (err error) {
+func ZipDirectory(srcDir, dstZip string) error {
 	info, err := os.Stat(srcDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -165,7 +154,22 @@ func ZipDirectory(srcDir, dstZip string) (err error) {
 	}
 	sort.Strings(files)
 
-	file, err := os.Create(dstZip)
+	return writeZipFile(dstZip, func(writer *zip.Writer) error {
+		for _, path := range files {
+			rel, err := filepath.Rel(srcDir, path)
+			if err != nil {
+				return err
+			}
+			if err := addFileToZip(writer, path, filepath.ToSlash(rel)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func writeZipFile(dst string, writeEntries func(*zip.Writer) error) (err error) {
+	file, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
@@ -176,15 +180,8 @@ func ZipDirectory(srcDir, dstZip string) (err error) {
 	}()
 
 	writer := zip.NewWriter(file)
-
-	for _, path := range files {
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		if err := addFileToZip(writer, path, filepath.ToSlash(rel)); err != nil {
-			return err
-		}
+	if err := writeEntries(writer); err != nil {
+		return err
 	}
 	return writer.Close()
 }
