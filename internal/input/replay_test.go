@@ -24,43 +24,6 @@ import (
 	"testing"
 )
 
-func validInputReplay() InputReplay {
-	return InputReplay{
-		Format:        InputReplayFormat,
-		Version:       InputReplayVersion,
-		FixedTimestep: 1.0 / 30.0,
-		Initial: InputReplayState{
-			Mouse:    InputReplayMouse{X: 1, Y: 2},
-			Buttons:  0,
-			KeysDown: []int64{10},
-		},
-		Frames: []InputReplayFrame{
-			{
-				Frame: 0,
-				Time:  0,
-				State: InputReplayState{
-					Mouse:    InputReplayMouse{X: 3, Y: 4},
-					Buttons:  1,
-					KeysDown: []int64{10, 20},
-				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 20, Pressed: true}},
-			},
-			{
-				Frame: 1,
-				Time:  0.25,
-				State: InputReplayState{
-					Mouse:    InputReplayMouse{X: 5, Y: 6},
-					Buttons:  0,
-					KeysDown: []int64{20},
-				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
-			},
-		},
-	}
-}
-
 func TestInputReplayValidateAcceptsCanonicalReplay(t *testing.T) {
 	if err := validInputReplay().Validate(); err != nil {
 		t.Fatalf("Validate() error: %v", err)
@@ -421,5 +384,42 @@ func TestInputReplayControllerIdleResolveReturnsIsolatedLiveFrame(t *testing.T) 
 	events[0].Key = 2
 	if frame.State.KeysDown[0] != 1 || frame.KeyEvents[0].Key != 1 {
 		t.Fatalf("idle Resolve aliased live input: %+v", frame)
+	}
+}
+
+func validInputReplay() InputReplay {
+	return InputReplay{
+		Format:        InputReplayFormat,
+		Version:       InputReplayVersion,
+		FixedTimestep: 1.0 / 30.0,
+		Initial: InputReplayState{
+			Mouse:    InputReplayMouse{X: 1, Y: 2},
+			Buttons:  0,
+			KeysDown: []int64{10},
+		},
+		Frames: []InputReplayFrame{
+			{
+				Frame: 0,
+				Time:  0,
+				State: InputReplayState{
+					Mouse:    InputReplayMouse{X: 3, Y: 4},
+					Buttons:  1,
+					KeysDown: []int64{10, 20},
+				},
+				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
+				KeyEvents:   []InputReplayKeyEvent{{Key: 20, Pressed: true}},
+			},
+			{
+				Frame: 1,
+				Time:  0.25,
+				State: InputReplayState{
+					Mouse:    InputReplayMouse{X: 5, Y: 6},
+					Buttons:  0,
+					KeysDown: []int64{20},
+				},
+				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
+				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
+			},
+		},
 	}
 }
