@@ -36,57 +36,57 @@ func (p *SpriteImpl) Play__0(name SoundName) {
 }
 
 func (p *SpriteImpl) Play__1(name SoundName, loop bool) {
-	p.sound().Play(name, loop)
+	p.sound().play(name, loop)
 }
 
 func (p *SpriteImpl) PlayWith(name SoundName, __xgo_optional_loop bool) {
-	p.sound().Play(name, __xgo_optional_loop)
+	p.sound().play(name, __xgo_optional_loop)
 }
 
 func (p *SpriteImpl) PlayAndWait(name SoundName) {
-	p.sound().PlayAndWait(name)
+	p.sound().playAndWait(name)
 }
 
 func (p *SpriteImpl) PausePlaying(name SoundName) {
-	p.sound().PausePlaying(name)
+	p.sound().pausePlaying(name)
 }
 
 func (p *SpriteImpl) ResumePlaying(name SoundName) {
-	p.sound().ResumePlaying(name)
+	p.sound().resumePlaying(name)
 }
 
 func (p *SpriteImpl) StopPlaying(name SoundName) {
-	p.sound().StopPlaying(name)
+	p.sound().stopPlaying(name)
 }
 
 // -----------------------------------------------------------------------------
 // Volume
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) Volume() float64 {
-	return p.sound().GetVolume()
+	return p.sound().getVolume()
 }
 
 func (p *SpriteImpl) SetVolume(volume float64) {
-	p.sound().SetVolume(volume)
+	p.sound().setVolume(volume)
 }
 
 func (p *SpriteImpl) ChangeVolume(delta float64) {
-	p.sound().ChangeVolume(delta)
+	p.sound().changeVolume(delta)
 }
 
 // -----------------------------------------------------------------------------
 // Effect Control
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
-	return p.sound().GetSoundEffect(kind)
+	return p.sound().getSoundEffect(kind)
 }
 
 func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
-	p.sound().SetSoundEffect(kind, value)
+	p.sound().setSoundEffect(kind, value)
 }
 
 func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	p.sound().ChangeSoundEffect(kind, delta)
+	p.sound().changeSoundEffect(kind, delta)
 }
 
 // -----------------------------------------------------------------------------

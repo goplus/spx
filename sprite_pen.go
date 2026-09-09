@@ -33,30 +33,30 @@ const (
 // Pen
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) PenUp() {
-	p.pen().PenUp()
+	p.pen().penUp()
 }
 
 func (p *SpriteImpl) PenDown() {
-	p.pen().PenDown()
+	p.pen().penDown()
 }
 
 func (p *SpriteImpl) Stamp() {
-	p.pen().Stamp()
+	p.pen().stamp()
 }
 
 // -----------------------------------------------------------------------------
 // Color Control
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetPenColor__0(color Color) {
-	p.pen().SetPenColor(color)
+	p.pen().setPenColor(color)
 }
 
 func (p *SpriteImpl) SetPenColor__1(kind PenColorParam, value float64) {
-	p.pen().SetPenColorParam(kind, value)
+	p.pen().setPenColorParam(kind, value)
 }
 
 func (p *SpriteImpl) ChangePenColor(kind PenColorParam, delta float64) {
-	p.pen().ChangePenColor(kind, delta)
+	p.pen().changePenColor(kind, delta)
 }
 
 func (p *SpriteImpl) SetPenHue(value float64) {
@@ -68,22 +68,22 @@ func (p *SpriteImpl) ChangePenHue(delta float64) {
 }
 
 func (p *SpriteImpl) SetPenShade(value float64) {
-	p.pen().SetPenShade(value)
+	p.pen().setPenShade(value)
 }
 
 func (p *SpriteImpl) ChangePenShade(delta float64) {
-	p.pen().ChangePenShade(delta)
+	p.pen().changePenShade(delta)
 }
 
 // -----------------------------------------------------------------------------
 // Size
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetPenSize(size float64) {
-	p.pen().SetPenSize(size)
+	p.pen().setPenSize(size)
 }
 
 func (p *SpriteImpl) ChangePenSize(delta float64) {
-	p.pen().ChangePenSize(delta)
+	p.pen().changePenSize(delta)
 }
 
 // -----------------------------------------------------------------------------

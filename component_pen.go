@@ -30,10 +30,22 @@ import (
 // ============================================================================
 // This component encapsulates all pen drawing functionality.
 
+// scratchLegacyPenState models Scratch 2's pen hue/shade pair, which is
+// distinct from the HSV pen color params exposed elsewhere in the engine.
+type scratchLegacyPenState struct {
+	hue   float64
+	shade float64
+}
+
+const (
+	scratchLegacyDefaultPenHue   = 66.66
+	scratchLegacyDefaultPenShade = 50
+)
+
 type penComponent struct {
 	componentBase
 
-	// Pen properties
+	// Pen properties.
 	penColor        mathf.Color
 	penWidth        float64
 	penHue          float64
@@ -42,9 +54,9 @@ type penComponent struct {
 	penBrightness   float64
 	penTransparency float64
 
-	// State
-	penDown bool
-	penObj  *engine.Object
+	// Runtime state.
+	isPenDown bool
+	penObj    *engine.Object
 }
 
 // ============================================================================
@@ -54,12 +66,11 @@ type penComponent struct {
 // initialize initializes the pen component from config.
 func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	p.componentBase.initialize(sprite, spriteCfg)
-	// Always initialize with default pen values
 	p.penColor = mathf.NewColorRGBAi(66, 133, 244, 255)
 	p.penWidth = 1
 	p.syncPenColorComponents()
 	p.legacyPenColor = newScratchLegacyPenState()
-	p.penDown = false
+	p.isPenDown = false
 	p.penObj = nil
 }
 
@@ -75,8 +86,8 @@ func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component
 		penSaturation:   srcPen.penSaturation,
 		penBrightness:   srcPen.penBrightness,
 		penTransparency: srcPen.penTransparency,
-		penDown:         srcPen.penDown,
-		penObj:          nil, // Don't share pen object, will be created if needed
+		isPenDown:       srcPen.isPenDown,
+		penObj:          nil,
 	}
 }
 
@@ -89,31 +100,31 @@ func (p *penComponent) onDestroy() {
 // Pen Control
 // ============================================================================
 
-func (p *penComponent) PenUp() {
-	if !p.penDown {
+func (p *penComponent) penUp() {
+	if !p.isPenDown {
 		return
 	}
-	p.penDown = false
+	p.isPenDown = false
 	if p.penObj == nil {
 		return
 	}
 	p.sprite.g.queuePenUp(*p.penObj)
 }
 
-func (p *penComponent) PenDown() {
+func (p *penComponent) penDown() {
 	scheduler.RequestRedraw()
-	wasDown := p.penDown
+	wasDown := p.isPenDown
 	created := p.checkOrCreatePen()
 	if !wasDown || created {
 		p.syncPenAppearance()
 	}
 	x, y := p.sprite.getXY()
 	p.syncPenPosition(x, y)
-	p.penDown = true
+	p.isPenDown = true
 	p.sprite.g.queuePenDown(*p.penObj, false)
 }
 
-func (p *penComponent) Stamp() {
+func (p *penComponent) stamp() {
 	scheduler.RequestRedraw()
 	p.checkOrCreatePen()
 	x, y := p.sprite.getXY()
@@ -136,7 +147,7 @@ func (p *penComponent) Stamp() {
 // Pen Size Control
 // ============================================================================
 
-func (p *penComponent) SetPenSize(size float64) {
+func (p *penComponent) setPenSize(size float64) {
 	if p.penObj != nil && nearlyEqualPenValue(p.penWidth, size) {
 		return
 	}
@@ -145,15 +156,15 @@ func (p *penComponent) SetPenSize(size float64) {
 	p.sprite.g.queuePenSize(*p.penObj, size)
 }
 
-func (p *penComponent) ChangePenSize(delta float64) {
-	p.SetPenSize(p.penWidth + delta)
+func (p *penComponent) changePenSize(delta float64) {
+	p.setPenSize(p.penWidth + delta)
 }
 
 // ============================================================================
 // Pen Color Control
 // ============================================================================
 
-func (p *penComponent) SetPenColor(color Color) {
+func (p *penComponent) setPenColor(color Color) {
 	nextColor := toMathfColor(color)
 	if p.penObj != nil && samePenColor(p.penColor, nextColor) {
 		return
@@ -164,47 +175,7 @@ func (p *penComponent) SetPenColor(color Color) {
 	p.syncLegacyPenStateFromColor()
 }
 
-func (p *penComponent) SetPenColorParam(kind PenColorParam, value float64) {
-	switch kind {
-	case PenHue:
-		p.setPenHueParam(value)
-	case PenSaturation:
-		p.setPenSaturation(value)
-	case PenBrightness:
-		p.setPenBrightness(value)
-	case PenTransparency:
-		p.setPenTransparency(value)
-	case PenNone:
-		return
-	}
-}
-
-func (p *penComponent) ChangePenColor(kind PenColorParam, delta float64) {
-	switch kind {
-	case PenHue:
-		p.changePenHueParam(delta)
-	case PenSaturation:
-		p.changePenSaturation(delta)
-	case PenBrightness:
-		p.changePenBrightness(delta)
-	case PenTransparency:
-		p.changePenTransparency(delta)
-	case PenNone:
-		return
-	}
-}
-
-func (p *penComponent) SetPenShade(value float64) {
-	nextValue := wrapScratchLegacyPenShade(value)
-	if p.penObj != nil && nearlyEqualPenValue(p.legacyPenColor.shade, nextValue) {
-		return
-	}
-	p.updateLegacyPenState(p.legacyPenColor.withShade(nextValue), false)
-}
-
-func (p *penComponent) ChangePenShade(delta float64) {
-	p.SetPenShade(p.legacyPenColor.shade + delta)
-}
+// Legacy Color
 
 func (p *penComponent) setPenHue(value float64) {
 	nextValue := wrapScratchPenColorPercent(value / 2)
@@ -224,9 +195,49 @@ func (p *penComponent) changePenHue(delta float64) {
 	p.updateLegacyPenState(p.legacyPenColor.withHue(nextValue), false)
 }
 
-// ============================================================================
-// Pen HSV Color Components
-// ============================================================================
+func (p *penComponent) setPenShade(value float64) {
+	nextValue := wrapScratchLegacyPenShade(value)
+	if p.penObj != nil && nearlyEqualPenValue(p.legacyPenColor.shade, nextValue) {
+		return
+	}
+	p.updateLegacyPenState(p.legacyPenColor.withShade(nextValue), false)
+}
+
+func (p *penComponent) changePenShade(delta float64) {
+	p.setPenShade(p.legacyPenColor.shade + delta)
+}
+
+// HSV Color
+
+func (p *penComponent) setPenColorParam(kind PenColorParam, value float64) {
+	switch kind {
+	case PenHue:
+		p.setPenHueParam(value)
+	case PenSaturation:
+		p.setPenSaturation(value)
+	case PenBrightness:
+		p.setPenBrightness(value)
+	case PenTransparency:
+		p.setPenTransparency(value)
+	case PenNone:
+		return
+	}
+}
+
+func (p *penComponent) changePenColor(kind PenColorParam, delta float64) {
+	switch kind {
+	case PenHue:
+		p.changePenHueParam(delta)
+	case PenSaturation:
+		p.changePenSaturation(delta)
+	case PenBrightness:
+		p.changePenBrightness(delta)
+	case PenTransparency:
+		p.changePenTransparency(delta)
+	case PenNone:
+		return
+	}
+}
 
 func (p *penComponent) setPenHueParam(value float64) {
 	nextValue := wrapScratchPenColorPercent(value)
@@ -292,7 +303,7 @@ func (p *penComponent) destroyPen() {
 }
 
 func (p *penComponent) movePen(x, y float64) {
-	if !p.penDown {
+	if !p.isPenDown {
 		return
 	}
 	scheduler.RequestRedraw()
@@ -312,6 +323,10 @@ func (p *penComponent) getPenStampTransform() (rotationRadians float64, scale ma
 	renderScale := p.sprite.getCostumeRenderScale()
 	return engine.DegToRad(rotation), mathf.NewVec2(scaleX*renderScale, scaleY*renderScale)
 }
+
+// ============================================================================
+// Pen Appearance
+// ============================================================================
 
 func (p *penComponent) applyPenColorProperty() {
 	p.checkOrCreatePen()
@@ -357,7 +372,7 @@ func (p *penComponent) syncPenAppearance() {
 
 func (p *penComponent) ensureClonePenReady() {
 	created := p.checkOrCreatePen()
-	if !created || !p.penDown {
+	if !created || !p.isPenDown {
 		return
 	}
 	p.syncPenAppearance()
@@ -383,6 +398,29 @@ func (p *penComponent) updatePenColor() {
 	p.sprite.g.queuePenColor(*p.penObj, p.penColor)
 }
 
+func (s scratchLegacyPenState) withHue(hue float64) scratchLegacyPenState {
+	s.hue = hue
+	return s
+}
+
+func (s scratchLegacyPenState) withShade(shade float64) scratchLegacyPenState {
+	s.shade = shade
+	return s
+}
+
+func (s *scratchLegacyPenState) syncFromHSV(hue, brightness float64) {
+	s.hue = hue
+	s.shade = brightness / 2
+}
+
+func (s scratchLegacyPenState) color(transparency float64) mathf.Color {
+	return makeScratchLegacyPenColor(s.hue, s.shade, transparency)
+}
+
+// ============================================================================
+// Pen Helpers
+// ============================================================================
+
 func hueToPercent(hue float64) float64 {
 	return (hue / 360) * 100
 }
@@ -407,37 +445,11 @@ func transparencyToAlpha(transparency float64) float64 {
 	return 1 - percentToNormalized(transparency)
 }
 
-// scratchLegacyPenState models Scratch 2's pen hue/shade pair, which is
-// distinct from the HSV pen color params exposed elsewhere in the engine.
-type scratchLegacyPenState struct {
-	hue   float64
-	shade float64
-}
-
 func newScratchLegacyPenState() scratchLegacyPenState {
 	return scratchLegacyPenState{
 		hue:   scratchLegacyDefaultPenHue,
 		shade: scratchLegacyDefaultPenShade,
 	}
-}
-
-func (s scratchLegacyPenState) withHue(hue float64) scratchLegacyPenState {
-	s.hue = hue
-	return s
-}
-
-func (s scratchLegacyPenState) withShade(shade float64) scratchLegacyPenState {
-	s.shade = shade
-	return s
-}
-
-func (s *scratchLegacyPenState) syncFromHSV(hue, brightness float64) {
-	s.hue = hue
-	s.shade = brightness / 2
-}
-
-func (s scratchLegacyPenState) color(transparency float64) mathf.Color {
-	return makeScratchLegacyPenColor(s.hue, s.shade, transparency)
 }
 
 func makeScratchLegacyPenColor(hue, shade, transparency float64) mathf.Color {
@@ -470,11 +482,6 @@ func wrapScratchPenColorPercent(value float64) float64 {
 	}
 	return value
 }
-
-const (
-	scratchLegacyDefaultPenHue   = 66.66
-	scratchLegacyDefaultPenShade = 50
-)
 
 func nearlyEqualPenValue(a, b float64) bool {
 	return math.Abs(a-b) <= 1e-9

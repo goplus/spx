@@ -37,6 +37,91 @@ type animationWrapper struct {
 	loadOnce     sync.Once
 }
 
+type animState struct {
+	AniType                   coreproject.AniType
+	Name                      string
+	IsCanceled                bool
+	Speed                     float64
+	OnStartReplayAudioName    string
+	OnPlayReplayAudioName     string
+	OnPlayAudioRestartPending bool
+	OnPlayAudioPlaybackID     int64
+}
+
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) Animate__0(name SpriteAnimationName) {
+	p.AnimateWith(name, false)
+}
+
+func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
+	p.AnimateWith(name, loop)
+}
+
+func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Animate: %s", name)
+	}
+	p.animation().animate(name, __xgo_optional_loop)
+}
+
+func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("AnimateAndWait: %s", name)
+	}
+	p.animation().animateAndWait(name)
+}
+
+func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
+	p.animation().stopAnimation(name)
+}
+
+// -----------------------------------------------------------------------------
+// Internal State
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) getStateAnimName(stateName string) string {
+	return p.animation().getStateAnimName(stateName)
+}
+
+func (p *SpriteImpl) hasAnim(animName string) bool {
+	return p.animation().hasAnim(animName)
+}
+
+func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
+	return p.animation().getAnimation(animName)
+}
+
+func (p *SpriteImpl) onAnimationDone(animName string) {
+	p.animation().onAnimationDone(animName)
+}
+
+func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
+	engine.Lock()
+	buffer = p.animation().takeDoneAnimations(buffer)
+	engine.Unlock()
+
+	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		return buffer[:0]
+	}
+
+	for _, animName := range buffer {
+		p.onAnimationDone(animName)
+	}
+	return buffer[:0]
+}
+
+func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
+	p.animation().doTween(name, ani)
+}
+
+func (p *SpriteImpl) playDefaultAnim() {
+	p.animation().playDefaultAnim()
+}
+
+// -----------------------------------------------------------------------------
+// Animation Data
+// -----------------------------------------------------------------------------
 func (aw *animationWrapper) ensureRegistered(animName string, callerAni *coreproject.AniConfig) {
 	aw.loadOnce.Do(func() {
 		payloadJSON, maxBitmap, err := intani.BuildPayloadJSON(
@@ -51,8 +136,8 @@ func (aw *animationWrapper) ensureRegistered(animName string, callerAni *corepro
 			panic(err)
 		}
 		aw.ani.AdaptAnimBitmapResolution = maxBitmap
-		// AdaptAnimBitmapResolution is computed during registration.
-		// Propagate it to the caller's config when it differs from the canonical aw.ani.
+		// Registration computes AdaptAnimBitmapResolution and copies it to callerAni
+		// when callerAni is a distinct config.
 		if callerAni != nil && callerAni != aw.ani {
 			callerAni.AdaptAnimBitmapResolution = aw.ani.AdaptAnimBitmapResolution
 		}
@@ -81,92 +166,4 @@ func buildAnimationSources(costumes []*costume) []intani.FrameSource {
 		})
 	}
 	return frames
-}
-
-type animState struct {
-	AniType                   coreproject.AniType
-	Name                      string
-	IsCanceled                bool
-	Speed                     float64
-	OnStartReplayAudioName    string
-	OnPlayReplayAudioName     string
-	OnPlayAudioRestartPending bool
-	OnPlayAudioPlaybackID     int64
-}
-
-// -----------------------------------------------------------------------------
-// Shared Helpers
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) getStateAnimName(stateName string) string {
-	return p.animation().getStateAnimName(stateName)
-}
-
-func (p *SpriteImpl) hasAnim(animName string) bool {
-	return p.animation().hasAnim(animName)
-}
-
-func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
-	return p.animation().getAnimation(animName)
-}
-
-// -----------------------------------------------------------------------------
-// State
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) onAnimationDone(animName string) {
-	p.animation().onAnimationDone(animName)
-}
-
-func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
-	engine.Lock()
-	buffer = p.animation().takeDonedAnimations(buffer)
-	engine.Unlock()
-
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
-		return buffer[:0]
-	}
-
-	for _, animName := range buffer {
-		p.onAnimationDone(animName)
-	}
-	return buffer[:0]
-}
-
-// -----------------------------------------------------------------------------
-// Internals
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
-	p.animation().doTween(name, ani)
-}
-
-func (p *SpriteImpl) playDefaultAnim() {
-	p.animation().playDefaultAnim()
-}
-
-// -----------------------------------------------------------------------------
-// Playback
-// -----------------------------------------------------------------------------
-func (p *SpriteImpl) Animate__0(name SpriteAnimationName) {
-	p.AnimateWith(name, false)
-}
-
-func (p *SpriteImpl) Animate__1(name SpriteAnimationName, loop bool) {
-	p.AnimateWith(name, loop)
-}
-
-func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop bool) {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("Animate: %s", name)
-	}
-	p.animation().Animate(name, __xgo_optional_loop)
-}
-
-func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("AnimateAndWait: %s", name)
-	}
-	p.animation().AnimateAndWait(name)
-}
-
-func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
-	p.animation().StopAnimation(name)
 }

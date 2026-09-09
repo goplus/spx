@@ -49,6 +49,52 @@ type cameraImpl struct {
 	isDirty      bool
 }
 
+func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
+	rect := c.engine().CameraMgr.GetGlobalCameraRect()
+	return rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y
+}
+
+func (c *cameraImpl) SetZoom(scale float64) {
+	c.setDirtyFlag(true)
+	scale *= c.g.displayState.WindowScale
+	c.engine().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
+}
+
+func (c *cameraImpl) Zoom() float64 {
+	scale := c.engine().CameraMgr.GetCameraZoom().X
+	scale /= c.g.displayState.WindowScale
+	return scale
+}
+
+func (c *cameraImpl) Xpos() float64 {
+	pos := c.engine().CameraMgr.GetPosition()
+	return pos.X
+}
+
+func (c *cameraImpl) Ypos() float64 {
+	pos := c.engine().CameraMgr.GetPosition()
+	return pos.Y
+}
+
+func (c *cameraImpl) SetXYpos(x float64, y float64) {
+	c.setDirtyFlag(true)
+	c.engine().CameraMgr.SetPosition(mathf.NewVec2(x, y))
+}
+
+func (c *cameraImpl) ChangeXYpos(x float64, y float64) {
+	c.followTarget = nil
+	posX, posY := c.Xpos(), c.Ypos()
+	c.SetXYpos(posX+x, posY+y)
+}
+
+func (c *cameraImpl) Follow__0(sprite Sprite) {
+	c.follow(sprite)
+}
+
+func (c *cameraImpl) Follow__1(sprite SpriteName) {
+	c.follow(sprite)
+}
+
 func (c *cameraImpl) engine() *engineManagers {
 	return c.g.engine()
 }
@@ -89,51 +135,13 @@ func (c *cameraImpl) setLimits() {
 		c.engine().CameraMgr.SetCameraLimit(int64(side), int64(value))
 	}
 
-	// Enalbe smoothing
+	// Enable smoothing
 	c.engine().CameraMgr.SetCameraSmoothing(true)
-}
-
-func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
-	rect := c.engine().CameraMgr.GetGlobalCameraRect()
-	return rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y
-}
-
-func (c *cameraImpl) SetZoom(scale float64) {
-	c.setDirtyFlag(true)
-	scale *= c.g.displayState.WindowScale
-	c.engine().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
-}
-
-func (c *cameraImpl) Zoom() float64 {
-	scale := c.engine().CameraMgr.GetCameraZoom().X
-	scale /= c.g.displayState.WindowScale
-	return scale
-}
-
-func (c *cameraImpl) Xpos() float64 {
-	pos := c.engine().CameraMgr.GetPosition()
-	return pos.X
-}
-
-func (c *cameraImpl) Ypos() float64 {
-	pos := c.engine().CameraMgr.GetPosition()
-	return pos.Y
-}
-
-func (c *cameraImpl) SetXYpos(x float64, y float64) {
-	c.setDirtyFlag(true)
-	c.engine().CameraMgr.SetPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) setXYposDirect(x float64, y float64) {
 	c.setDirtyFlag(true)
 	engine.BridgeSetCameraPosition(mathf.NewVec2(x, y))
-}
-
-func (c *cameraImpl) ChangeXYpos(x float64, y float64) {
-	c.followTarget = nil
-	posX, posY := c.Xpos(), c.Ypos()
-	c.SetXYpos(posX+x, posY+y)
 }
 
 func (c *cameraImpl) setDirtyFlag(isDirty bool) {
@@ -179,12 +187,4 @@ func (c *cameraImpl) follow(obj any) {
 	}
 	c.followTarget = obj
 	c.setDirtyFlag(true)
-}
-
-func (c *cameraImpl) Follow__0(sprite Sprite) {
-	c.follow(sprite)
-}
-
-func (c *cameraImpl) Follow__1(sprite SpriteName) {
-	c.follow(sprite)
 }

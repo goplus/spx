@@ -20,23 +20,6 @@ import "github.com/goplus/spx/v3/internal/base/collision"
 
 const defaultSpatialHashCellSize = 100.0
 
-func newSpriteAABB(sprite *SpriteImpl) *collision.Entry[*SpriteImpl] {
-	bounds := sprite.bounds()
-	if bounds == nil {
-		return nil
-	}
-
-	return &collision.Entry[*SpriteImpl]{
-		Value: sprite,
-		Box: collision.AABB{
-			MinX: bounds.Position.X,
-			MinY: bounds.Position.Y,
-			MaxX: bounds.Position.X + bounds.Size.X,
-			MaxY: bounds.Position.Y + bounds.Size.Y,
-		},
-	}
-}
-
 func (p *Game) buildSpatialHashForName(dst *SpriteImpl, name string) *collision.SpatialHash[*SpriteImpl] {
 	if p.spatialHash == nil {
 		p.spatialHash = collision.NewSpatialHash[*SpriteImpl](defaultSpatialHashCellSize)
@@ -76,4 +59,21 @@ func (p *Game) findTouchingSpriteOptimized(dst *SpriteImpl, name string) *Sprite
 	}
 
 	return nil
+}
+
+func newSpriteAABB(sprite *SpriteImpl) *collision.Entry[*SpriteImpl] {
+	bounds := sprite.bounds()
+	if bounds == nil {
+		return nil
+	}
+
+	return &collision.Entry[*SpriteImpl]{
+		Value: sprite,
+		Box: collision.AABB{
+			MinX: bounds.Position.X,
+			MinY: bounds.Position.Y,
+			MaxX: bounds.Position.X + bounds.Size.X,
+			MaxY: bounds.Position.Y + bounds.Size.Y,
+		},
+	}
 }

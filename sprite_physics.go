@@ -44,25 +44,6 @@ const (
 	TriggerExtraPixel float64           = 2.0
 )
 
-// toPhysicsMode converts string to PhysicsMode.
-func toPhysicsMode(mode string) PhysicsMode {
-	if mode == "" {
-		return NoPhysics
-	}
-	switch mode {
-	case "kinematic":
-		return KinematicPhysics
-	case "dynamic":
-		return DynamicPhysics
-	case "static":
-		return StaticPhysics
-	case "no":
-		return NoPhysics
-	}
-	spxlog.Warn("Config error: unknown physics mode %s", mode)
-	return NoPhysics
-}
-
 // physicConfig common structure for physics configuration.
 type physicConfig struct {
 	Mask   int64             // collision/trigger mask
@@ -72,6 +53,109 @@ type physicConfig struct {
 	Params []float64         // shape parameters
 }
 
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
+
+func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
+	p.physics().setPhysicsMode(mode)
+}
+
+func (p *SpriteImpl) PhysicsMode() PhysicsMode {
+	return p.physics().getPhysicsMode()
+}
+
+func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
+	return p.physics().getVelocity()
+}
+
+func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
+	p.physics().setVelocity(velocityX, velocityY)
+}
+
+func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
+	p.physics().addImpulse(impulseX, impulseY)
+}
+
+func (p *SpriteImpl) IsOnFloor() bool {
+	return p.physics().isOnFloor()
+}
+
+func (p *SpriteImpl) Gravity() float64 {
+	return p.physics().getGravity()
+}
+
+func (p *SpriteImpl) SetGravity(gravity float64) {
+	p.physics().setGravity(gravity)
+}
+
+func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
+	return p.physics().setColliderShape(isTrigger, ctype, params)
+}
+
+func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
+	return p.physics().getColliderShape(isTrigger)
+}
+
+func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
+	p.physics().setColliderPivot(isTrigger, offsetX, offsetY)
+}
+
+func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
+	return p.physics().getColliderPivot(isTrigger)
+}
+
+func (p *SpriteImpl) SetCollisionLayer(layer int64) {
+	p.physics().setCollisionLayer(layer)
+}
+
+func (p *SpriteImpl) SetCollisionMask(mask int64) {
+	p.physics().setCollisionMask(mask)
+}
+
+func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
+	p.physics().setCollisionEnabled(enabled)
+}
+
+func (p *SpriteImpl) CollisionLayer() int64 {
+	return p.physics().getCollisionLayer()
+}
+
+func (p *SpriteImpl) CollisionMask() int64 {
+	return p.physics().getCollisionMask()
+}
+
+func (p *SpriteImpl) CollisionEnabled() bool {
+	return p.physics().isCollisionEnabled()
+}
+
+func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
+	p.physics().setTriggerEnabled(trigger)
+}
+
+func (p *SpriteImpl) SetTriggerLayer(layer int64) {
+	p.physics().setTriggerLayer(layer)
+}
+
+func (p *SpriteImpl) SetTriggerMask(mask int64) {
+	p.physics().setTriggerMask(mask)
+}
+
+func (p *SpriteImpl) TriggerLayer() int64 {
+	return p.physics().getTriggerLayer()
+}
+
+func (p *SpriteImpl) TriggerMask() int64 {
+	return p.physics().getTriggerMask()
+}
+
+func (p *SpriteImpl) TriggerEnabled() bool {
+	return p.physics().isTriggerEnabled()
+}
+
+// -----------------------------------------------------------------------------
+// Internal Physics
+// -----------------------------------------------------------------------------
 func (cfg *physicConfig) String() string {
 	return fmt.Sprintf("Mask: %d, Layer: %d, Type: %d, Pivot: %v, Params: %v", cfg.Mask, cfg.Layer, cfg.Type, cfg.Pivot, cfg.Params)
 }
@@ -268,98 +352,21 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 	physics.getCollisionInfo().applyShape(p.runtimeState.SyncSprite, false, p)
 }
 
-func (p *SpriteImpl) SetPhysicsMode(mode PhysicsMode) {
-	p.physics().SetPhysicsMode(mode)
-}
-
-func (p *SpriteImpl) PhysicsMode() PhysicsMode {
-	return p.physics().GetPhysicsMode()
-}
-
-func (p *SpriteImpl) Velocity() (velocityX, velocityY float64) {
-	return p.physics().GetVelocity()
-}
-
-func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
-	p.physics().SetVelocity(velocityX, velocityY)
-}
-
-func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
-	p.physics().AddImpulse(impulseX, impulseY)
-}
-
-func (p *SpriteImpl) IsOnFloor() bool {
-	return p.physics().IsOnFloor()
-}
-
-func (p *SpriteImpl) Gravity() float64 {
-	return p.physics().GetGravity()
-}
-
-func (p *SpriteImpl) SetGravity(gravity float64) {
-	p.physics().SetGravity(gravity)
-}
-
-func (p *SpriteImpl) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	return p.physics().SetColliderShape(isTrigger, ctype, params)
-}
-
-func (p *SpriteImpl) ColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
-	return p.physics().GetColliderShape(isTrigger)
-}
-
-func (p *SpriteImpl) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
-	p.physics().SetColliderPivot(isTrigger, offsetX, offsetY)
-}
-
-func (p *SpriteImpl) ColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
-	return p.physics().GetColliderPivot(isTrigger)
-}
-
-func (p *SpriteImpl) SetCollisionLayer(layer int64) {
-	p.physics().SetCollisionLayer(layer)
-}
-
-func (p *SpriteImpl) SetCollisionMask(mask int64) {
-	p.physics().SetCollisionMask(mask)
-}
-
-func (p *SpriteImpl) SetCollisionEnabled(enabled bool) {
-	p.physics().SetCollisionEnabled(enabled)
-}
-
-func (p *SpriteImpl) CollisionLayer() int64 {
-	return p.physics().GetCollisionLayer()
-}
-
-func (p *SpriteImpl) CollisionMask() int64 {
-	return p.physics().GetCollisionMask()
-}
-
-func (p *SpriteImpl) CollisionEnabled() bool {
-	return p.physics().IsCollisionEnabled()
-}
-
-func (p *SpriteImpl) SetTriggerEnabled(trigger bool) {
-	p.physics().SetTriggerEnabled(trigger)
-}
-
-func (p *SpriteImpl) SetTriggerLayer(layer int64) {
-	p.physics().SetTriggerLayer(layer)
-}
-
-func (p *SpriteImpl) SetTriggerMask(mask int64) {
-	p.physics().SetTriggerMask(mask)
-}
-
-func (p *SpriteImpl) TriggerLayer() int64 {
-	return p.physics().GetTriggerLayer()
-}
-
-func (p *SpriteImpl) TriggerMask() int64 {
-	return p.physics().GetTriggerMask()
-}
-
-func (p *SpriteImpl) TriggerEnabled() bool {
-	return p.physics().IsTriggerEnabled()
+// toPhysicsMode converts string to PhysicsMode.
+func toPhysicsMode(mode string) PhysicsMode {
+	if mode == "" {
+		return NoPhysics
+	}
+	switch mode {
+	case "kinematic":
+		return KinematicPhysics
+	case "dynamic":
+		return DynamicPhysics
+	case "static":
+		return StaticPhysics
+	case "no":
+		return NoPhysics
+	}
+	spxlog.Warn("Config error: unknown physics mode %s", mode)
+	return NoPhysics
 }

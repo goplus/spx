@@ -26,6 +26,12 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
+// monitorBinding resolves reads and optional writes in the same variable scope.
+type monitorBinding struct {
+	read  func() ui.MonitorValue
+	write func(float64) bool
+}
+
 // -----------------------------------------------------------------------------
 // Evaluation
 // -----------------------------------------------------------------------------
@@ -39,12 +45,6 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 		}
 	}
 	return reflect.Value{}, -1
-}
-
-// monitorBinding resolves reads and optional writes in the same variable scope.
-type monitorBinding struct {
-	read  func() ui.MonitorValue
-	write func(float64) bool
 }
 
 func bindMonitor(g reflect.Value, targetName, val string, appearance ui.MonitorAppearance) (monitorBinding, error) {

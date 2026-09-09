@@ -43,18 +43,6 @@ type gameBuilder struct {
 	err        error
 }
 
-// -----------------------------------------------------------------------------
-// Builder
-// -----------------------------------------------------------------------------
-func newGameBuilder(game Gamer, resource any, generation uint64, gameConf ...*Config) *gameBuilder {
-	return &gameBuilder{
-		gamer:      game,
-		resource:   resource,
-		gameConf:   gameConf,
-		generation: generation,
-	}
-}
-
 func (b *gameBuilder) loadResources() *gameBuilder {
 	if b.err != nil {
 		return b
@@ -159,6 +147,31 @@ func (b *gameBuilder) buildAndRun() error {
 	return b.run()
 }
 
+func (p *Game) startLoad(fs spxfs.Dir) {
+	p.soundMgr.Init(&p.engine().AudioMgr)
+	p.sounds = make(map[string]sound)
+	p.inputMgr.init(p)
+	p.events = make(chan event, eventBufferSize)
+	p.resetEventQueueStats()
+	p.fs = fs
+}
+
+func (p *Game) canBindSprite(name string) bool {
+	return p.typs[name] != nil
+}
+
+// -----------------------------------------------------------------------------
+// Builder
+// -----------------------------------------------------------------------------
+func newGameBuilder(game Gamer, resource any, generation uint64, gameConf ...*Config) *gameBuilder {
+	return &gameBuilder{
+		gamer:      game,
+		resource:   resource,
+		gameConf:   gameConf,
+		generation: generation,
+	}
+}
+
 // -----------------------------------------------------------------------------
 // Setup
 // -----------------------------------------------------------------------------
@@ -198,19 +211,6 @@ func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.P
 		engine.Panic(err)
 	}
 	g.tilemapMgr.init(g, fs, proj.TilemapPath)
-}
-
-func (p *Game) startLoad(fs spxfs.Dir) {
-	p.soundMgr.Init(&p.engine().AudioMgr)
-	p.sounds = make(map[string]sound)
-	p.inputMgr.init(p)
-	p.events = make(chan event, eventBufferSize)
-	p.resetEventQueueStats()
-	p.fs = fs
-}
-
-func (p *Game) canBindSprite(name string) bool {
-	return p.typs[name] != nil
 }
 
 func parseCommandLineFlags(conf *Config) {

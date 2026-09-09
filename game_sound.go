@@ -30,6 +30,14 @@ type sound *coreproject.SoundConfig
 type soundId = int64
 
 // -----------------------------------------------------------------------------
+// Settings
+// -----------------------------------------------------------------------------
+const (
+	defaultAudioMaxDist         = coreproject.DefaultAudioMaxDistance
+	invalidSoundId      soundId = 0
+)
+
+// -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
 func (p *Game) Volume() float64 {
@@ -110,14 +118,6 @@ func (p *Game) StopAllSounds() {
 func (p *Game) Loudness() float64 {
 	return 0
 }
-
-// -----------------------------------------------------------------------------
-// Settings
-// -----------------------------------------------------------------------------
-const (
-	defaultAudioMaxDist         = coreproject.DefaultAudioMaxDistance
-	invalidSoundId      soundId = 0
-)
 
 func (p *Game) applyAudioSettings(settings coreproject.SystemSettings) {
 	p.audioState.AudioAttenuation = settings.AudioAttenuation

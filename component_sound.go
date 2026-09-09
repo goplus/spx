@@ -29,69 +29,20 @@ import (
 type soundComponent struct {
 	componentBase
 
-	// Sound object
+	// Sound object.
 	soundObj engine.Object
 
-	// Pending audios
+	// Pending audio names.
 	pendingAudios []string
 }
 
-func (s *soundComponent) Play(name SoundName, loop bool) {
-	s.checkSoundObj()
-	s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
-}
-
-func (s *soundComponent) PlayAndWait(name SoundName) {
-	s.checkSoundObj()
-	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
-}
-
-func (s *soundComponent) PausePlaying(name SoundName) {
-	s.sprite.g.pauseSound(name)
-}
-
-func (s *soundComponent) ResumePlaying(name SoundName) {
-	s.sprite.g.resumeSound(name)
-}
-
-func (s *soundComponent) StopPlaying(name SoundName) {
-	s.sprite.g.stopSound(name)
-}
-
-func (s *soundComponent) GetVolume() float64 {
-	s.checkSoundObj()
-	return s.sprite.g.soundMgr.GetVolume(s.soundObj)
-}
-
-func (s *soundComponent) SetVolume(volume float64) {
-	s.checkSoundObj()
-	s.sprite.g.soundMgr.SetVolume(s.soundObj, volume)
-}
-
-func (s *soundComponent) ChangeVolume(delta float64) {
-	s.checkSoundObj()
-	s.sprite.g.soundMgr.ChangeVolume(s.soundObj, delta)
-}
-
-func (s *soundComponent) GetSoundEffect(kind SoundEffectKind) float64 {
-	s.checkSoundObj()
-	return s.sprite.g.getSoundEffect(s.soundObj, kind)
-}
-
-func (s *soundComponent) SetSoundEffect(kind SoundEffectKind, value float64) {
-	s.checkSoundObj()
-	s.sprite.g.setSoundEffect(s.soundObj, kind, value)
-}
-
-func (s *soundComponent) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	s.checkSoundObj()
-	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
-}
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 // initialize initializes the sound component from config.
 func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	s.componentBase.initialize(sprite, spriteCfg)
-	// Always initialize with default sound values
 	s.soundObj = 0
 	s.pendingAudios = make([]string, 0)
 }
@@ -100,7 +51,7 @@ func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.S
 func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	return &soundComponent{
 		componentBase: componentBase{sprite: newSprite},
-		soundObj:      0, // Don't share sound object, will be allocated if needed
+		soundObj:      0,
 		pendingAudios: make([]string, 0),
 	}
 }
@@ -110,6 +61,80 @@ func (s *soundComponent) onDestroy() {
 	if s.soundObj != 0 {
 		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)
 		s.soundObj = 0
+	}
+}
+
+// ============================================================================
+// Sound Playback
+// ============================================================================
+
+func (s *soundComponent) play(name SoundName, loop bool) {
+	s.checkSoundObj()
+	s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+}
+
+func (s *soundComponent) playAndWait(name SoundName) {
+	s.checkSoundObj()
+	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+}
+
+func (s *soundComponent) pausePlaying(name SoundName) {
+	s.sprite.g.pauseSound(name)
+}
+
+func (s *soundComponent) resumePlaying(name SoundName) {
+	s.sprite.g.resumeSound(name)
+}
+
+func (s *soundComponent) stopPlaying(name SoundName) {
+	s.sprite.g.stopSound(name)
+}
+
+// ============================================================================
+// Volume
+// ============================================================================
+
+func (s *soundComponent) getVolume() float64 {
+	s.checkSoundObj()
+	return s.sprite.g.soundMgr.GetVolume(s.soundObj)
+}
+
+func (s *soundComponent) setVolume(volume float64) {
+	s.checkSoundObj()
+	s.sprite.g.soundMgr.SetVolume(s.soundObj, volume)
+}
+
+func (s *soundComponent) changeVolume(delta float64) {
+	s.checkSoundObj()
+	s.sprite.g.soundMgr.ChangeVolume(s.soundObj, delta)
+}
+
+// ============================================================================
+// Sound Effects
+// ============================================================================
+
+func (s *soundComponent) getSoundEffect(kind SoundEffectKind) float64 {
+	s.checkSoundObj()
+	return s.sprite.g.getSoundEffect(s.soundObj, kind)
+}
+
+func (s *soundComponent) setSoundEffect(kind SoundEffectKind, value float64) {
+	s.checkSoundObj()
+	s.sprite.g.setSoundEffect(s.soundObj, kind, value)
+}
+
+func (s *soundComponent) changeSoundEffect(kind SoundEffectKind, delta float64) {
+	s.checkSoundObj()
+	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
+}
+
+// ============================================================================
+// Internal Audio Management
+// ============================================================================
+
+func (s *soundComponent) checkSoundObj() {
+	if s.soundObj == 0 {
+		s.soundObj = s.sprite.g.soundMgr.AllocSound()
 	}
 }
 
@@ -134,12 +159,6 @@ func (s *soundComponent) restartOrPlayLoopedAudio(name SoundName, id int64) int6
 		return id
 	}
 	return s.playAudio(name, true)
-}
-
-func (s *soundComponent) checkSoundObj() {
-	if s.soundObj == 0 {
-		s.soundObj = s.sprite.g.soundMgr.AllocSound()
-	}
 }
 
 func (s *soundComponent) addPendingAudio(audioName string) {

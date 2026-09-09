@@ -42,11 +42,6 @@ func (p *Game) setRuntimeConfigInput(conf *Config) {
 	p.runtimeConfigInput = *conf
 }
 
-func resolveGameRuntimeConfig(conf Config, proj *coreproject.ProjectConfig) coreproject.RuntimeConfig {
-	cwd, _ := os.Getwd()
-	return coreproject.ResolveRuntimeConfig(&conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
-}
-
 func (p *Game) applyResolvedRuntimeConfig(runtimeCfg coreproject.RuntimeConfig, proj *coreproject.ProjectConfig) {
 	proj.FullScreen = runtimeCfg.FullScreen
 	p.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
@@ -60,4 +55,9 @@ func (p *Game) applyResolvedRuntimeConfig(runtimeCfg coreproject.RuntimeConfig, 
 	if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
 		engine.Panic(err)
 	}
+}
+
+func resolveGameRuntimeConfig(conf Config, proj *coreproject.ProjectConfig) coreproject.RuntimeConfig {
+	cwd, _ := os.Getwd()
+	return coreproject.ResolveRuntimeConfig(&conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
 }

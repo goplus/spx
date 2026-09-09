@@ -98,15 +98,6 @@ func (p *Game) OnEngineUpdate(delta float64) {
 	p.pullPhysicsPositions()
 }
 
-// runScriptFramePhase dispatches either the initial start event or due frame callbacks.
-func (p *Game) runScriptFramePhase() {
-	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
-		p.dispatchStartEventIfNeeded()
-		return
-	}
-	engine.RunFrameCallbacks()
-}
-
 func (p *Game) OnEngineRender(delta float64) {
 	defer p.flushPenCommands()
 	if !p.lifecycleState.IsRunned.Load() {
@@ -136,6 +127,15 @@ func (p *Game) OnEnginePause(bool) {
 	// Pause lifecycle hooks are intentionally handled by engine-level managers.
 }
 
+// runScriptFramePhase dispatches either the initial start event or due frame callbacks.
+func (p *Game) runScriptFramePhase() {
+	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
+		p.dispatchStartEventIfNeeded()
+		return
+	}
+	engine.RunFrameCallbacks()
+}
+
 // -----------------------------------------------------------------------------
 // Loop Setup
 // -----------------------------------------------------------------------------
@@ -147,10 +147,6 @@ func (p *Game) runLoop(cfg *Config) (err error) {
 	p.initEventLoop()
 	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
 	return nil
-}
-
-func runMain(call func()) {
-	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
 }
 
 func (p *Game) runBootstrapMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
@@ -324,4 +320,8 @@ func (p *Game) startBootstrapPhaseFor(generation uint64) {
 			return 0
 		})
 	})
+}
+
+func runMain(call func()) {
+	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
 }

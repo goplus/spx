@@ -24,6 +24,54 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
+type pendingCloneSensingVisibilityLease struct {
+	sprite      *SpriteImpl
+	publication *cloneProxyPublication
+	proxy       *engine.Sprite
+}
+
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) TouchingColor__0(color Color) bool {
+	return p.touchingColor(toMathfColor(color))
+}
+
+func (p *SpriteImpl) TouchingColor__1(spriteColor, targetColor Color) bool {
+	return p.touchingColors(toMathfColor(spriteColor), toMathfColor(targetColor))
+}
+
+func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
+	return p.touching(sprite)
+}
+
+func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
+	return p.touching(sprite)
+}
+
+func (p *SpriteImpl) Touching__2(obj specialObj) bool {
+	return p.touching(obj)
+}
+
+func (p *SpriteImpl) TouchingWith(target Target) bool {
+	return p.touching(target)
+}
+
+func (p *SpriteImpl) HideVar(name PropertyName) {
+	if !p.g.setStageMonitor(p.name, name, false) {
+		p.g.setStageMonitor("", name, false)
+	}
+}
+
+func (p *SpriteImpl) ShowVar(name PropertyName) {
+	if !p.g.setStageMonitor(p.name, name, true) {
+		p.g.setStageMonitor("", name, true)
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Internal Queries
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
 	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
 		return nil
@@ -89,30 +137,6 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 
 	w, h := triggerInfo.getDimensions()
 	return w * p.runtimeState.Scale, h * p.runtimeState.Scale
-}
-
-func (p *SpriteImpl) TouchingColor__0(color Color) bool {
-	return p.touchingColor(toMathfColor(color))
-}
-
-func (p *SpriteImpl) TouchingColor__1(spriteColor, targetColor Color) bool {
-	return p.touchingColors(toMathfColor(spriteColor), toMathfColor(targetColor))
-}
-
-func (p *SpriteImpl) Touching__0(sprite Sprite) bool {
-	return p.touching(sprite)
-}
-
-func (p *SpriteImpl) Touching__1(sprite SpriteName) bool {
-	return p.touching(sprite)
-}
-
-func (p *SpriteImpl) Touching__2(obj specialObj) bool {
-	return p.touching(obj)
-}
-
-func (p *SpriteImpl) TouchingWith(target Target) bool {
-	return p.touching(target)
 }
 
 func (p *SpriteImpl) touching(obj Target) bool {
@@ -209,10 +233,29 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	return touching
 }
 
-type pendingCloneSensingVisibilityLease struct {
-	sprite      *SpriteImpl
-	publication *cloneProxyPublication
-	proxy       *engine.Sprite
+func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
+	if !p.prepareSelfCollisionQuery() {
+		return 0
+	}
+	switch normalizeEdgeArea(area) {
+	case edgeAreaCamera:
+		touching = int(p.engine().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
+	default:
+		touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
+	}
+	return touching & where
+}
+
+func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
+	if !p.prepareSelfCollisionQuery() {
+		return 0
+	}
+	switch normalizeEdgeArea(area) {
+	case edgeAreaCamera:
+		return int(p.engine().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
+	default:
+		return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
+	}
 }
 
 // withPendingCloneSensingVisibility makes logical visibility queryable without
@@ -274,41 +317,4 @@ func capturePendingCloneSensingPanic(call func()) (recovered any) {
 	}()
 	call()
 	return nil
-}
-
-func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) {
-	if !p.prepareSelfCollisionQuery() {
-		return 0
-	}
-	switch normalizeEdgeArea(area) {
-	case edgeAreaCamera:
-		touching = int(p.engine().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
-	default:
-		touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
-	}
-	return touching & where
-}
-
-func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
-	if !p.prepareSelfCollisionQuery() {
-		return 0
-	}
-	switch normalizeEdgeArea(area) {
-	case edgeAreaCamera:
-		return int(p.engine().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
-	default:
-		return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
-	}
-}
-
-func (p *SpriteImpl) HideVar(name PropertyName) {
-	if !p.g.setStageMonitor(p.name, name, false) {
-		p.g.setStageMonitor("", name, false)
-	}
-}
-
-func (p *SpriteImpl) ShowVar(name PropertyName) {
-	if !p.g.setStageMonitor(p.name, name, true) {
-		p.g.setStageMonitor("", name, true)
-	}
 }

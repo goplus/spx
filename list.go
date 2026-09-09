@@ -39,6 +39,172 @@ const (
 // -----------------------------------------------------------------------------
 type obj = any
 
+// -----------------------------------------------------------------------------
+// Value
+// -----------------------------------------------------------------------------
+type Value struct {
+	data any
+}
+
+// -----------------------------------------------------------------------------
+// List
+// -----------------------------------------------------------------------------
+type List struct {
+	data []obj
+}
+
+func (p Value) Equal(v obj) bool {
+	return Equal(p.data, v)
+}
+
+func (p Value) String() string {
+	return toString(p.data)
+}
+
+func (p Value) Int() int {
+	i, _ := toIntAny(p.data)
+	return i
+}
+
+func (p Value) Float() float64 {
+	f, _ := toFloat64Any(p.data)
+	return f
+}
+
+func (p *Value) Set(v obj) {
+	if p == nil {
+		return
+	}
+	p.data = fromObj(v)
+}
+
+func (p *List) Init(data ...obj) {
+	p.data = data
+}
+
+func (p *List) InitFrom(src *List) {
+	data := make([]obj, len(src.data))
+	copy(data, src.data)
+	p.data = data
+}
+
+func (p *List) Len() int {
+	return len(p.data)
+}
+
+func (p *List) String() string {
+	sep := ""
+	items := make([]string, len(p.data))
+	for i, item := range p.data {
+		val := toString(item)
+		if len(val) != 1 {
+			sep = " "
+		}
+		items[i] = fmt.Sprint(val)
+	}
+	return strings.Join(items, sep)
+}
+
+// Contains returns true if the list contains the element v.
+func (p *List) Contains(v obj) bool {
+	for _, item := range p.data {
+		if Equal(item, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// Append adds the element v to the end of the list.
+func (p *List) Append(v obj) {
+	p.data = append(p.data, fromObj(v))
+}
+
+// Set sets the element at the specified index i to v.
+func (p *List) Set(i Pos, v obj) {
+	n := len(p.data)
+	if i < 0 {
+		i = Pos(getListPos(i, n))
+	}
+	if i >= 0 && int(i) < n {
+		p.data[i] = fromObj(v)
+	}
+}
+
+// Insert inserts the element v at the specified index i.
+func (p *List) Insert(i Pos, v obj) {
+	n := len(p.data)
+	if i < 0 {
+		if i == Invalid {
+			return
+		}
+		i = Pos(getListPos(i, n+1))
+	}
+	val := fromObj(v)
+	p.data = append(p.data, val)
+	if int(i) < n {
+		copy(p.data[i+1:], p.data[i:])
+		p.data[i] = val
+	}
+}
+
+// Delete removes the element at the specified index.
+func (p *List) Delete(i Pos) {
+	n := len(p.data)
+	if i < 0 {
+		if i == All {
+			p.data = p.data[:0]
+			return
+		}
+		i = Pos(getListPos(i, n))
+	}
+	if i >= 0 && int(i) < n {
+		p.data = append(p.data[:i], p.data[i+1:]...)
+	}
+}
+
+// At returns the Value at the specified index.
+func (p *List) At(i Pos) Value {
+	n := len(p.data)
+	if i < 0 {
+		i = Pos(getListPos(i, n))
+	}
+	if i < 0 || int(i) >= n {
+		return Value{}
+	}
+	return Value{p.data[i]}
+}
+
+// IndexOf returns the zero-based position of the first occurrence of v in the list.
+// Returns Invalid (-1) if v is not found.
+func (p *List) IndexOf(v obj) Pos {
+	for i, item := range p.data {
+		if Equal(item, v) {
+			return Pos(i)
+		}
+	}
+	return Invalid
+}
+
+// Clear removes all elements from the list.
+func (p *List) Clear() {
+	p.data = p.data[:0]
+}
+
+// NewValue creates a new Value initialized with the given object.
+func NewValue(o obj) Value {
+	return Value{data: fromObj(o)}
+}
+
+// NewList creates a new List initialized with the given elements.
+func NewList(l ...obj) List {
+	data := make([]obj, len(l))
+	for i, v := range l {
+		data[i] = fromObj(v)
+	}
+	return List{data: data}
+}
+
 func toString(v obj) string {
 	if v == nil {
 		return ""
@@ -227,60 +393,6 @@ func toFloat64Any(v any) (float64, bool) {
 	return 0, false
 }
 
-// -----------------------------------------------------------------------------
-// Value
-// -----------------------------------------------------------------------------
-type Value struct {
-	data any
-}
-
-func (p Value) Equal(v obj) bool {
-	return Equal(p.data, v)
-}
-
-func (p Value) String() string {
-	return toString(p.data)
-}
-
-func (p Value) Int() int {
-	i, _ := toIntAny(p.data)
-	return i
-}
-
-func (p Value) Float() float64 {
-	f, _ := toFloat64Any(p.data)
-	return f
-}
-
-func (p *Value) Set(v obj) {
-	if p == nil {
-		return
-	}
-	p.data = fromObj(v)
-}
-
-// NewValue creates a new Value initialized with the given object.
-func NewValue(o obj) Value {
-	return Value{data: fromObj(o)}
-}
-
-// -----------------------------------------------------------------------------
-// List
-// -----------------------------------------------------------------------------
-type List struct {
-	data []obj
-}
-
-func (p *List) Init(data ...obj) {
-	p.data = data
-}
-
-func (p *List) InitFrom(src *List) {
-	data := make([]obj, len(src.data))
-	copy(data, src.data)
-	p.data = data
-}
-
 func getListPos(i Pos, n int) int {
 	if i == Last {
 		return n - 1
@@ -292,116 +404,4 @@ func getListPos(i Pos, n int) int {
 		return int(randomInt31n(int32(n)))
 	}
 	return int(i)
-}
-
-func (p *List) Len() int {
-	return len(p.data)
-}
-
-func (p *List) String() string {
-	sep := ""
-	items := make([]string, len(p.data))
-	for i, item := range p.data {
-		val := toString(item)
-		if len(val) != 1 {
-			sep = " "
-		}
-		items[i] = fmt.Sprint(val)
-	}
-	return strings.Join(items, sep)
-}
-
-// Contains returns true if the list contains the element v.
-func (p *List) Contains(v obj) bool {
-	for _, item := range p.data {
-		if Equal(item, v) {
-			return true
-		}
-	}
-	return false
-}
-
-// Append adds the element v to the end of the list.
-func (p *List) Append(v obj) {
-	p.data = append(p.data, fromObj(v))
-}
-
-// Set sets the element at the specified index i to v.
-func (p *List) Set(i Pos, v obj) {
-	n := len(p.data)
-	if i < 0 {
-		i = Pos(getListPos(i, n))
-	}
-	if i >= 0 && int(i) < n {
-		p.data[i] = fromObj(v)
-	}
-}
-
-// Insert inserts the element v at the specified index i.
-func (p *List) Insert(i Pos, v obj) {
-	n := len(p.data)
-	if i < 0 {
-		if i == Invalid {
-			return
-		}
-		i = Pos(getListPos(i, n+1))
-	}
-	val := fromObj(v)
-	p.data = append(p.data, val)
-	if int(i) < n {
-		copy(p.data[i+1:], p.data[i:])
-		p.data[i] = val
-	}
-}
-
-// Delete removes the element at the specified index.
-func (p *List) Delete(i Pos) {
-	n := len(p.data)
-	if i < 0 {
-		if i == All {
-			p.data = p.data[:0]
-			return
-		}
-		i = Pos(getListPos(i, n))
-	}
-	if i >= 0 && int(i) < n {
-		p.data = append(p.data[:i], p.data[i+1:]...)
-	}
-}
-
-// At returns the Value at the specified index.
-func (p *List) At(i Pos) Value {
-	n := len(p.data)
-	if i < 0 {
-		i = Pos(getListPos(i, n))
-	}
-	if i < 0 || int(i) >= n {
-		return Value{}
-	}
-	return Value{p.data[i]}
-}
-
-// IndexOf returns the zero-based position of the first occurrence of v in the list.
-// Returns Invalid (-1) if v is not found.
-func (p *List) IndexOf(v obj) Pos {
-	for i, item := range p.data {
-		if Equal(item, v) {
-			return Pos(i)
-		}
-	}
-	return Invalid
-}
-
-// Clear removes all elements from the list.
-func (p *List) Clear() {
-	p.data = p.data[:0]
-}
-
-// NewList creates a new List initialized with the given elements.
-func NewList(l ...obj) List {
-	data := make([]obj, len(l))
-	for i, v := range l {
-		data[i] = fromObj(v)
-	}
-	return List{data: data}
 }

@@ -28,6 +28,41 @@ import (
 )
 
 // -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
+const (
+	physicsColliderNone    = collision.ColliderNone
+	physicsColliderAuto    = collision.ColliderAuto
+	physicsColliderCircle  = collision.ColliderCircle
+	physicsColliderRect    = collision.ColliderRect
+	physicsColliderCapsule = collision.ColliderCapsule
+	physicsColliderPolygon = collision.ColliderPolygon
+)
+
+const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
+
+type rayCastResult struct {
+	Hited    bool
+	SpriteId int64
+	PosX     float64
+	PosY     float64
+	NormalX  float64
+	NormalY  float64
+}
+
+type spriteCollisionInfo struct {
+	Index int
+	Layer int64
+	Mask  int64
+}
+
+type spriteCollisionData struct {
+	sprite *SpriteImpl
+	info   *spriteCollisionInfo
+	modIdx int
+}
+
+// -----------------------------------------------------------------------------
 // Detection
 // -----------------------------------------------------------------------------
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
@@ -112,41 +147,6 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 }
 
 // -----------------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------------
-const (
-	physicsColliderNone    = collision.ColliderNone
-	physicsColliderAuto    = collision.ColliderAuto
-	physicsColliderCircle  = collision.ColliderCircle
-	physicsColliderRect    = collision.ColliderRect
-	physicsColliderCapsule = collision.ColliderCapsule
-	physicsColliderPolygon = collision.ColliderPolygon
-)
-
-const maxCollisionLayerIdx = 32 // Engine limit: max 32 collision layers
-
-type rayCastResult struct {
-	Hited    bool
-	SpriteId int64
-	PosX     float64
-	PosY     float64
-	NormalX  float64
-	NormalY  float64
-}
-
-type spriteCollisionInfo struct {
-	Index int
-	Layer int64
-	Mask  int64
-}
-
-type spriteCollisionData struct {
-	sprite *SpriteImpl
-	info   *spriteCollisionInfo
-	modIdx int
-}
-
-// -----------------------------------------------------------------------------
 // Setup
 // -----------------------------------------------------------------------------
 func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
@@ -212,10 +212,6 @@ func (p *Game) getSpriteCollisionInfo(name string) *spriteCollisionInfo {
 	return &spriteCollisionInfo{}
 }
 
-func getCollisionLayerIndex(info *spriteCollisionInfo) int {
-	return info.Index % maxCollisionLayerIdx
-}
-
 func (p *Game) buildSpriteCollisionData(inits []Sprite) []*spriteCollisionData {
 	spriteData := make([]*spriteCollisionData, 0, len(inits))
 	for _, ini := range inits {
@@ -278,6 +274,20 @@ func (p *Game) checkCollision(ary any) []Sprite {
 	return sprites
 }
 
+// raycast performs a raycast query.
+func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
+	ary := p.engine().PhysicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
+	result, err := tryRaycastResult(ary)
+	if err != nil {
+		spxlog.Warn("Raycast warn: %v", err)
+	}
+	return result
+}
+
+func getCollisionLayerIndex(info *spriteCollisionInfo) int {
+	return info.Index % maxCollisionLayerIdx
+}
+
 // tryRaycastResult attempts to parse raycast result from array.
 func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	dataAry, succ := ary.([]int64)
@@ -295,14 +305,4 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	p.NormalX = engine.ConvertToFloat64(dataAry[4])
 	p.NormalY = engine.ConvertToFloat64(dataAry[5])
 	return p, nil
-}
-
-// raycast performs a raycast query.
-func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
-	ary := p.engine().PhysicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
-	result, err := tryRaycastResult(ary)
-	if err != nil {
-		spxlog.Warn("Raycast warn: %v", err)
-	}
-	return result
 }

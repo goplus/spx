@@ -45,17 +45,26 @@ type sharedAnimationData struct {
 type animationComponent struct {
 	componentBase
 
-	// Shared animation configuration (read-only, shared across clones)
+	// Shared animation configuration (read-only, shared across clones).
 	shared *sharedAnimationData
 
-	// Animation state (per-instance)
+	// Animation state (per-instance).
 	curAnimState      *animState
 	curTweenState     *animState
 	activeTweenStates []*animState
 	defaultAnimActive bool
 
-	// Animation tracking (per-instance)
-	donedAnimations []string
+	// Animation tracking (per-instance).
+	doneAnimations []string
+}
+
+// tweenParams holds pre-calculated parameters for tween animations.
+type tweenParams struct {
+	moveFrom     mathf.Vec2
+	moveTo       mathf.Vec2
+	moveVelocity mathf.Vec2
+	turnFrom     float64
+	turnTo       float64
 }
 
 // ============================================================================
@@ -66,7 +75,7 @@ type animationComponent struct {
 func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	a.componentBase.initialize(sprite, spriteCfg)
 	a.initFromConfig(spriteCfg)
-	a.donedAnimations = make([]string, 0)
+	a.doneAnimations = make([]string, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -116,7 +125,7 @@ func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) com
 		componentBase:     componentBase{sprite: newSprite},
 		shared:            srcAnim.shared,
 		activeTweenStates: make([]*animState, 0),
-		donedAnimations:   make([]string, 0),
+		doneAnimations:    make([]string, 0),
 	}
 	return newAnim
 }
@@ -129,61 +138,23 @@ func (a *animationComponent) onDestroy() {
 	}
 	a.curTweenState = nil
 	a.activeTweenStates = nil
-	a.unRegisterOnAnimationLooped()
-	a.unRegisterOnAnimationFinished()
-}
-
-func (a *animationComponent) syncSprite() *engine.Sprite {
-	if a.sprite == nil {
-		return nil
-	}
-	return a.sprite.runtimeState.SyncSprite
-}
-
-func (a *animationComponent) syncSpriteForPlayback() *engine.Sprite {
-	if a.sprite == nil || a.sprite.isDestroyed() {
-		return nil
-	}
-	return a.sprite.runtimeState.SyncSprite
+	a.unregisterOnAnimationLooped()
+	a.unregisterOnAnimationFinished()
 }
 
 // ============================================================================
-// Playback
+// Animation Control
 // ============================================================================
 
-func (a *animationComponent) registerOnAnimationLooped(f func()) {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.RegisterOnAnimationLooped(f)
-	}
-}
-
-func (a *animationComponent) unRegisterOnAnimationLooped() {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.UnRegisterOnAnimationLooped()
-	}
-}
-
-func (a *animationComponent) registerOnAnimationFinished(f func()) {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.RegisterOnAnimationFinished(f)
-	}
-}
-
-func (a *animationComponent) unRegisterOnAnimationFinished() {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.UnRegisterOnAnimationFinished()
-	}
-}
-
-func (a *animationComponent) Animate(name SpriteAnimationName, loop bool) {
+func (a *animationComponent) animate(name SpriteAnimationName, loop bool) {
 	a.playAnimation(name, loop, false, "Animation: %s")
 }
 
-func (a *animationComponent) AnimateAndWait(name SpriteAnimationName) {
+func (a *animationComponent) animateAndWait(name SpriteAnimationName) {
 	a.playAnimation(name, false, true, "AnimateAndWait: %s")
 }
 
-func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
+func (a *animationComponent) stopAnimation(name SpriteAnimationName) {
 	if name == "" || !a.hasAnim(name) {
 		return
 	}
@@ -202,6 +173,10 @@ func (a *animationComponent) StopAnimation(name SpriteAnimationName) {
 	syncSprite.PauseAnim()
 	a.playDefaultAnim()
 }
+
+// ============================================================================
+// Animation Playback
+// ============================================================================
 
 func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, blocking bool, debugMsg string) {
 	if isDebugInstrEnabled() {
@@ -254,8 +229,22 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	return info
 }
 
+func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
+	syncSprite := a.syncSprite()
+	if syncSprite == nil {
+		return
+	}
+	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
+	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
+}
+
+func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {
+	a.shared.animationWrappers[animName].ensureRegistered(animName, ani)
+	a.adaptAnimBitmapResolution(ani)
+}
+
 // ============================================================================
-// Animation State
+// Default Animation
 // ============================================================================
 
 func (a *animationComponent) playDefaultAnim() {
@@ -311,18 +300,32 @@ func (a *animationComponent) hasActiveAnimationPlayback() bool {
 	return a.curAnimState != nil && !a.curAnimState.IsCanceled
 }
 
-func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
-	syncSprite := a.syncSprite()
-	if syncSprite == nil {
-		return
+// ============================================================================
+// Animation Events
+// ============================================================================
+
+func (a *animationComponent) registerOnAnimationLooped(f func()) {
+	if syncSprite := a.syncSprite(); syncSprite != nil {
+		syncSprite.RegisterOnAnimationLooped(f)
 	}
-	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
-	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
 }
 
-func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {
-	a.shared.animationWrappers[animName].ensureRegistered(animName, ani)
-	a.adaptAnimBitmapResolution(ani)
+func (a *animationComponent) unregisterOnAnimationLooped() {
+	if syncSprite := a.syncSprite(); syncSprite != nil {
+		syncSprite.UnRegisterOnAnimationLooped()
+	}
+}
+
+func (a *animationComponent) registerOnAnimationFinished(f func()) {
+	if syncSprite := a.syncSprite(); syncSprite != nil {
+		syncSprite.RegisterOnAnimationFinished(f)
+	}
+}
+
+func (a *animationComponent) unregisterOnAnimationFinished() {
+	if syncSprite := a.syncSprite(); syncSprite != nil {
+		syncSprite.UnRegisterOnAnimationFinished()
+	}
 }
 
 func (a *animationComponent) onAnimationDone(animName string) {
@@ -335,6 +338,28 @@ func (a *animationComponent) onAnimationDone(animName string) {
 		}
 		a.playDefaultAnim()
 	}
+}
+
+// ============================================================================
+// Animation Completion
+// ============================================================================
+
+func (a *animationComponent) addDoneAnimation(animName string) {
+	a.doneAnimations = append(a.doneAnimations, animName)
+}
+
+func (a *animationComponent) takeDoneAnimations(buffer []string) []string {
+	buffer = append(buffer, a.doneAnimations...)
+	a.doneAnimations = a.doneAnimations[:0]
+	return buffer
+}
+
+// ============================================================================
+// Animation State
+// ============================================================================
+
+func (a *animationComponent) getCurAnimState() *animState {
+	return a.curAnimState
 }
 
 func (a *animationComponent) stopCurrentAnimState(state *animState) bool {
@@ -355,6 +380,10 @@ func (a *animationComponent) stopAnimState(state *animState) {
 	engine.Unlock()
 	a.stopAnimationAudio(state)
 }
+
+// ============================================================================
+// Animation Lookup
+// ============================================================================
 
 func (a *animationComponent) costumeIndex(nameOrIndex any) int {
 	switch v := nameOrIndex.(type) {
@@ -391,19 +420,9 @@ func (a *animationComponent) getStateAnimName(stateName string) string {
 	return stateName
 }
 
-func (a *animationComponent) addDonedAnimation(animName string) {
-	a.donedAnimations = append(a.donedAnimations, animName)
-}
-
-func (a *animationComponent) takeDonedAnimations(buffer []string) []string {
-	buffer = append(buffer, a.donedAnimations...)
-	a.donedAnimations = a.donedAnimations[:0]
-	return buffer
-}
-
-func (a *animationComponent) getCurAnimState() *animState {
-	return a.curAnimState
-}
+// ============================================================================
+// Tween State
+// ============================================================================
 
 func (a *animationComponent) getCurTweenState() *animState {
 	return a.curTweenState
@@ -433,15 +452,6 @@ func (a *animationComponent) unregisterTweenState(state *animState) bool {
 		a.curTweenState = a.activeTweenStates[len(a.activeTweenStates)-1]
 	}
 	return true
-}
-
-// tweenParams holds pre-calculated parameters for tween animations.
-type tweenParams struct {
-	moveFrom     mathf.Vec2
-	moveTo       mathf.Vec2
-	moveVelocity mathf.Vec2
-	turnFrom     float64
-	turnTo       float64
 }
 
 // ============================================================================
@@ -595,4 +605,22 @@ func (a *animationComponent) stopOwnedTweenPlaybackIfCurrent(ownedPlayback *anim
 
 	a.stopCurrentAnimState(ownedPlayback)
 	return true
+}
+
+// ============================================================================
+// Runtime Access
+// ============================================================================
+
+func (a *animationComponent) syncSprite() *engine.Sprite {
+	if a.sprite == nil {
+		return nil
+	}
+	return a.sprite.runtimeState.SyncSprite
+}
+
+func (a *animationComponent) syncSpriteForPlayback() *engine.Sprite {
+	if a.sprite == nil || a.sprite.isDestroyed() {
+		return nil
+	}
+	return a.sprite.runtimeState.SyncSprite
 }

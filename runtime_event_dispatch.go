@@ -59,6 +59,82 @@ func (p scriptEventDispatch) invoke(thread coroutine.Thread, sink *eventSink) {
 	}
 }
 
+func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
+	return sinksInScratchTargetOrder(activeGame(), p.manager.Snapshot(bucket))
+}
+
+func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
+	p.dispatchSinks(p.globalSinks(bucket), event)
+}
+
+func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any, event scriptEventDispatch) {
+	sinks := p.manager.Snapshot(bucket)
+	owned := make([]eventSink, 0, len(sinks))
+	for _, sink := range sinks {
+		if sink.Owner == owner {
+			owned = append(owned, sink)
+		}
+	}
+	p.dispatchSinks(owned, event)
+}
+
+func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {
+	runScriptEventDispatch(func() {
+		dispatchScriptEventBatch(sinks, event)
+	})
+}
+
+func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
+	runScriptEventDispatch(func() {
+		p.dispatchStartEventBatch(sinks, event)
+	})
+}
+
+func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event scriptEventDispatch) {
+	matched := matchingEventSinks(sinks, event.matchData)
+	if len(matched) == 0 {
+		return
+	}
+	if gco == nil {
+		for i := range matched {
+			event.invoke(nil, &matched[i])
+		}
+		return
+	}
+
+	baseline := p.stopAllEpoch.Load()
+	tasks := make([]coroutine.BatchTask, len(matched))
+	threads := make([]coroutine.Thread, 0, len(matched))
+	defer func() {
+		for _, thread := range threads {
+			p.pendingStartThreads.Delete(thread)
+		}
+	}()
+	for i, sink := range matched {
+		task := event.task(sink)
+		run := task.Run
+		task.OnRegistered = func(thread coroutine.Thread) {
+			p.pendingStartThreads.Store(thread, struct{}{})
+			threads = append(threads, thread)
+		}
+		task.Run = func(thread coroutine.Thread) {
+			p.pendingStartThreads.Delete(thread)
+			if p.stopAllEpoch.Load() != baseline {
+				gco.StopAtNextYield(thread)
+			}
+			run(thread)
+		}
+		tasks[i] = task
+	}
+
+	gco.StartBatch(tasks, event.mode)
+}
+
+func (p *scriptEventRegistry) isPendingStartThread(thread coroutine.Thread) bool {
+	_, ok := p.pendingStartThreads.Load(thread)
+	return ok
+}
+
 func eventBatchMode(wait bool) coroutine.BatchMode {
 	if wait {
 		return coroutine.BatchWaitDone
@@ -122,31 +198,6 @@ func sinksInScratchTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	return ordered
 }
 
-func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
-	return sinksInScratchTargetOrder(activeGame(), p.manager.Snapshot(bucket))
-}
-
-func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
-	p.dispatchSinks(p.globalSinks(bucket), event)
-}
-
-func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any, event scriptEventDispatch) {
-	sinks := p.manager.Snapshot(bucket)
-	owned := make([]eventSink, 0, len(sinks))
-	for _, sink := range sinks {
-		if sink.Owner == owner {
-			owned = append(owned, sink)
-		}
-	}
-	p.dispatchSinks(owned, event)
-}
-
-func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {
-	runScriptEventDispatch(func() {
-		dispatchScriptEventBatch(sinks, event)
-	})
-}
-
 func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
 	matched := make([]eventSink, 0, len(sinks))
 	for _, sink := range sinks {
@@ -179,57 +230,6 @@ func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispa
 		tasks[i] = event.task(sink)
 	}
 	gco.StartBatch(tasks, event.mode)
-}
-
-func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
-	runScriptEventDispatch(func() {
-		p.dispatchStartEventBatch(sinks, event)
-	})
-}
-
-func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event scriptEventDispatch) {
-	matched := matchingEventSinks(sinks, event.matchData)
-	if len(matched) == 0 {
-		return
-	}
-	if gco == nil {
-		for i := range matched {
-			event.invoke(nil, &matched[i])
-		}
-		return
-	}
-
-	baseline := p.stopAllEpoch.Load()
-	tasks := make([]coroutine.BatchTask, len(matched))
-	threads := make([]coroutine.Thread, 0, len(matched))
-	defer func() {
-		for _, thread := range threads {
-			p.pendingStartThreads.Delete(thread)
-		}
-	}()
-	for i, sink := range matched {
-		task := event.task(sink)
-		run := task.Run
-		task.OnRegistered = func(thread coroutine.Thread) {
-			p.pendingStartThreads.Store(thread, struct{}{})
-			threads = append(threads, thread)
-		}
-		task.Run = func(thread coroutine.Thread) {
-			p.pendingStartThreads.Delete(thread)
-			if p.stopAllEpoch.Load() != baseline {
-				gco.StopAtNextYield(thread)
-			}
-			run(thread)
-		}
-		tasks[i] = task
-	}
-
-	gco.StartBatch(tasks, event.mode)
-}
-
-func (p *scriptEventRegistry) isPendingStartThread(thread coroutine.Thread) bool {
-	_, ok := p.pendingStartThreads.Load(thread)
-	return ok
 }
 
 // runScriptEventDispatch gives external callers a complete registration barrier.

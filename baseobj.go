@@ -39,6 +39,10 @@ type baseObj struct {
 	greffUniforms map[EffectKind]float64 // graphic effects uniforms
 }
 
+const (
+	shaderPath = "res://engine/shader/spx_sprite_shader.gdshader"
+)
+
 // getSpriteId returns the unique identifier for this sprite.
 func (p *baseObj) getSpriteId() engine.Object {
 	return p.runtimeState.SyncSprite.GetId()
@@ -342,10 +346,6 @@ func (p *baseObj) getCostumeAtlasRegion() mathf.Rect2 {
 	)
 }
 
-const (
-	shaderPath = "res://engine/shader/spx_sprite_shader.gdshader"
-)
-
 // requireGreffUniforms ensures the graphic effects map is initialized.
 func (p *baseObj) requireGreffUniforms() map[EffectKind]float64 {
 	if p.greffUniforms == nil {
@@ -405,32 +405,6 @@ func (p *baseObj) doSetGraphicEffect(kind EffectKind, isSync bool) {
 	p.setMaterialParams(kind.String(), normalizedVal, isSync)
 }
 
-// normalizeEffectValue normalizes an effect value based on its type.
-func normalizeEffectValue(kind EffectKind, val float64) float64 {
-	switch kind {
-	case ColorEffect:
-		normalized := math.Mod(val/200, 1)
-		if normalized < 0 {
-			normalized += 1
-		}
-		return normalized
-	case BrightnessEffect:
-		return mathf.Clamp(val/100, -1, 1)
-	case GhostEffect:
-		return mathf.Clamp01f(val / 100)
-	case MosaicEffect:
-		return math.Max(math.Floor((val+5)/10), 0)
-	case WhirlEffect:
-		return mathf.Clamp(val/50, -20, 20)
-	case FishEyeEffect:
-		return mathf.Clamp(val/100, -1, 1)
-	case PixelateEffect:
-		return mathf.Absf(val / 10)
-	default:
-		return val
-	}
-}
-
 // setMaterialParams sets a material parameter (scalar).
 func (p *baseObj) setMaterialParams(effect string, amount float64, isSync bool) {
 	if isSync {
@@ -475,4 +449,30 @@ func (p *baseObj) applyMaterialParamsVec4(effect string, val mathf.Vec4) {
 		p.runtimeState.HasShader = true
 	}
 	p.runtimeState.SyncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
+}
+
+// normalizeEffectValue normalizes an effect value based on its type.
+func normalizeEffectValue(kind EffectKind, val float64) float64 {
+	switch kind {
+	case ColorEffect:
+		normalized := math.Mod(val/200, 1)
+		if normalized < 0 {
+			normalized += 1
+		}
+		return normalized
+	case BrightnessEffect:
+		return mathf.Clamp(val/100, -1, 1)
+	case GhostEffect:
+		return mathf.Clamp01f(val / 100)
+	case MosaicEffect:
+		return math.Max(math.Floor((val+5)/10), 0)
+	case WhirlEffect:
+		return mathf.Clamp(val/50, -20, 20)
+	case FishEyeEffect:
+		return mathf.Clamp(val/100, -1, 1)
+	case PixelateEffect:
+		return mathf.Absf(val / 10)
+	default:
+		return val
+	}
 }

@@ -24,13 +24,6 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
-func dialogText(msg any) string {
-	if msgStr, ok := msg.(string); ok {
-		return msgStr
-	}
-	return fmt.Sprint(msg)
-}
-
 // -------------------------------------------------------------------------------------
 // Common Bubble System - Shared functionality for Say/Think/Quote bubbles
 // -------------------------------------------------------------------------------------
@@ -40,6 +33,24 @@ type bubbleBase struct {
 	sprite  *SpriteImpl
 	camera  *cameraImpl
 	isDirty bool
+}
+
+type textBubble struct {
+	bubbleBase // Embedded common bubble functionality
+	msg        string
+	style      int // styleSay, styleThink
+	panel      *ui.UiSay
+	layoutID   uint64
+	content    ui.SayBubbleContent
+	layout     ui.SayBubbleLayout
+	hasLayout  bool
+}
+
+type quoterBubble struct {
+	bubbleBase  // Embedded common bubble functionality
+	message     string
+	description string
+	panel       *ui.UiQuote
 }
 
 // checkNeedsUpdate checks if the bubble needs to be refreshed.
@@ -66,23 +77,6 @@ func (b *bubbleBase) markClean() {
 // markDirty marks the bubble as needing a refresh.
 func (b *bubbleBase) markDirty() {
 	b.isDirty = true
-}
-
-// waitAndStop is a helper function for waiting and then stopping a bubble.
-func waitAndStop(secs float64, stopFunc func()) {
-	engine.Wait(secs)
-	stopFunc()
-}
-
-type textBubble struct {
-	bubbleBase // Embedded common bubble functionality
-	msg        string
-	style      int // styleSay, styleThink
-	panel      *ui.UiSay
-	layoutID   uint64
-	content    ui.SayBubbleContent
-	layout     ui.SayBubbleLayout
-	hasLayout  bool
 }
 
 func (pself *textBubble) destroyPanel() {
@@ -122,13 +116,6 @@ func (pself *textBubble) setLayout(layout ui.SayBubbleLayout) {
 	}
 }
 
-type quoterBubble struct {
-	bubbleBase  // Embedded common bubble functionality
-	message     string
-	description string
-	panel       *ui.UiQuote
-}
-
 func (pself *quoterBubble) destroyPanel() {
 	panel := pself.panel
 	pself.panel = nil
@@ -165,7 +152,7 @@ func (p *SpriteImpl) sayOrThink(msg any, style int) {
 		return
 	}
 
-	bubble := p.components.Bubble()
+	bubble := p.components.getBubble()
 	bubble.upsertText(msgStr, style)
 }
 
@@ -181,7 +168,7 @@ func (p *SpriteImpl) doStopText() {
 }
 
 func (p *SpriteImpl) quote(message, description string) {
-	bubble := p.components.Bubble()
+	bubble := p.components.getBubble()
 	bubble.upsertQuote(message, description)
 }
 
@@ -194,4 +181,17 @@ func (p *SpriteImpl) doStopQuote() {
 	if bubble != nil {
 		bubble.stopQuote()
 	}
+}
+
+func dialogText(msg any) string {
+	if msgStr, ok := msg.(string); ok {
+		return msgStr
+	}
+	return fmt.Sprint(msg)
+}
+
+// waitAndStop waits before stopping a bubble.
+func waitAndStop(secs float64, stopFunc func()) {
+	engine.Wait(secs)
+	stopFunc()
 }

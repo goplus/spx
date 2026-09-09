@@ -76,6 +76,290 @@ type inputRecordingResult struct {
 	json   []byte
 }
 
+func (p *Game) attachPreparedInputSession() error {
+	p.inputSessionMu.Lock()
+	if p.inputClaimed || p.inputSession != nil {
+		p.inputSessionMu.Unlock()
+		return ErrInputSessionActive
+	}
+	if p.lifecycleState.IsRunned.Load() {
+		p.inputSessionMu.Unlock()
+		return fmt.Errorf("input session must be attached before the game starts")
+	}
+	p.inputClaimed = true
+	p.hasInputTerm = false
+	p.inputTerminal = InputSessionStatus{}
+	p.inputSessionMu.Unlock()
+
+	plan := claimPreparedInputSession()
+	if plan == nil {
+		return nil
+	}
+	session, err := newInputSession(plan, p.currentBootstrapGeneration())
+	if err != nil {
+		p.setInputSessionTerminal(InputSessionStatus{
+			Mode:  plan.mode,
+			Phase: InputSessionPhaseAborted,
+			Error: err.Error(),
+		})
+		completePreparedInputSessionClaim(plan)
+		return err
+	}
+	p.inputSessionMu.Lock()
+	if !p.inputClaimed || p.inputSession != nil {
+		p.inputSessionMu.Unlock()
+		p.setInputSessionTerminal(session.close("another input session is already attached"))
+		completePreparedInputSessionClaim(plan)
+		return fmt.Errorf("game lifecycle ended before input session attachment completed")
+	}
+	p.inputSession = session
+	p.inputSessionMu.Unlock()
+	completePreparedInputSessionClaim(plan)
+	return nil
+}
+
+func (p *Game) inputSessionUnavailable() bool {
+	if p == nil {
+		return false
+	}
+	p.inputSessionMu.RLock()
+	unavailable := p.inputClaimed || p.lifecycleState.IsRunned.Load()
+	p.inputSessionMu.RUnlock()
+	return unavailable
+}
+
+func (p *Game) currentInputSession() *inputSession {
+	if p == nil {
+		return nil
+	}
+	p.inputSessionMu.RLock()
+	session := p.inputSession
+	p.inputSessionMu.RUnlock()
+	return session
+}
+
+func (p *Game) abortInputSession(reason string) {
+	if p == nil {
+		return
+	}
+	p.inputSessionMu.Lock()
+	if p.inputSession != nil {
+		p.inputTerminal = p.inputSession.close(reason)
+		p.hasInputTerm = true
+		p.inputSession = nil
+	}
+	p.inputClaimed = false
+	p.inputSessionMu.Unlock()
+}
+
+func (p *Game) setInputSessionTerminal(status InputSessionStatus) {
+	p.inputSessionMu.Lock()
+	p.inputSession = nil
+	p.inputTerminal = status
+	p.hasInputTerm = true
+	p.inputSessionMu.Unlock()
+}
+
+func (p *Game) terminalInputSessionStatus() (InputSessionStatus, bool) {
+	p.inputSessionMu.RLock()
+	status, ok := p.inputTerminal, p.hasInputTerm
+	p.inputSessionMu.RUnlock()
+	return status, ok
+}
+
+func (s *inputSession) close(reason string) InputSessionStatus {
+	s.operationMu.Lock()
+	s.mu.Lock()
+	if s.phase != InputSessionPhaseCompleted && s.phase != InputSessionPhaseAborted {
+		s.phase = InputSessionPhaseAborted
+		s.abortReason = reason
+		s.result = InputReplay{}
+		s.resultJSON = nil
+	}
+	status := s.statusLocked()
+	s.terminalStatus = status
+	s.hasTerminal = true
+	s.controller.Reset()
+	s.mu.Unlock()
+	s.operationMu.Unlock()
+
+	s.environment.stop()
+	ResetRandomSeed()
+	engine.DiscardPendingKeyEvents()
+	engine.SetMouseEventCaptureEnabled(false)
+	return status
+}
+
+func (s *inputSession) finishRecording(freeze func()) (InputReplay, error) {
+	result, err := s.finishRecordingResult(freeze)
+	return result.replay, err
+}
+
+func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResult, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	s.mu.Lock()
+	if s.mode != InputSessionModeRecording {
+		s.mu.Unlock()
+		return inputRecordingResult{}, ErrInputSessionNotRecording
+	}
+	if s.phase == InputSessionPhaseAborted {
+		reason := s.abortReason
+		s.mu.Unlock()
+		return inputRecordingResult{}, fmt.Errorf("input recording was aborted: %s", reason)
+	}
+	if s.phase == InputSessionPhaseCompleted {
+		result := inputRecordingResult{
+			replay: cloneInputReplay(s.result),
+			json:   append([]byte(nil), s.resultJSON...),
+		}
+		s.mu.Unlock()
+		return result, nil
+	}
+	if s.phase != InputSessionPhaseRunning {
+		phase := s.phase
+		s.mu.Unlock()
+		return inputRecordingResult{}, fmt.Errorf("input recording cannot finish in phase %q", phase)
+	}
+	if s.frameOpen {
+		s.mu.Unlock()
+		return inputRecordingResult{}, fmt.Errorf("input recording cannot finish before the current frame ends")
+	}
+
+	s.phase = InputSessionPhaseFinishing
+	replay, err := s.controller.Recording()
+	if err != nil {
+		s.phase = InputSessionPhaseRunning
+		s.mu.Unlock()
+		return inputRecordingResult{}, err
+	}
+	encoded, err := inputstate.EncodeInputReplay(replay)
+	if err != nil {
+		s.phase = InputSessionPhaseRunning
+		s.mu.Unlock()
+		return inputRecordingResult{}, err
+	}
+	s.result = cloneInputReplay(replay)
+	s.resultJSON = append(s.resultJSON[:0], encoded...)
+	s.mu.Unlock()
+
+	if err := freezeInputSession(freeze); err != nil {
+		s.mu.Lock()
+		s.result = InputReplay{}
+		s.resultJSON = nil
+		s.phase = InputSessionPhaseRunning
+		s.mu.Unlock()
+		return inputRecordingResult{}, err
+	}
+	s.mu.Lock()
+	s.phase = InputSessionPhaseCompleted
+	s.mu.Unlock()
+	return inputRecordingResult{replay: replay, json: encoded}, nil
+}
+
+func (s *inputSession) status() InputSessionStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.statusLocked()
+}
+
+func (s *inputSession) statusLocked() InputSessionStatus {
+	if s.hasTerminal {
+		return s.terminalStatus
+	}
+	controllerStatus := s.controller.Status()
+	status := InputSessionStatus{
+		Mode:       s.mode,
+		Phase:      s.phase,
+		Completed:  s.phase == InputSessionPhaseCompleted,
+		Exhausted:  controllerStatus.Exhausted,
+		NextFrame:  controllerStatus.NextFrame,
+		FrameCount: controllerStatus.FrameCount,
+	}
+	if s.hasCurrentTick {
+		status.CurrentTick = s.currentTick
+		status.HasCurrentTick = true
+	}
+	if s.mode == InputSessionModeRecording && s.phase == InputSessionPhaseCompleted {
+		status.NextFrame = int64(len(s.result.Frames))
+		status.FrameCount = len(s.result.Frames)
+	}
+	if s.phase == InputSessionPhaseAborted {
+		status.Error = s.abortReason
+	}
+	return status
+}
+
+func (s *inputSession) beginFrame() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.phase != InputSessionPhaseRunning || s.frameOpen {
+		return false
+	}
+	s.frameOpen = true
+	return true
+}
+
+func (s *inputSession) endFrame() {
+	s.mu.Lock()
+	s.frameOpen = false
+	s.mu.Unlock()
+}
+
+func (s *inputSession) frameCompletionPending() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.mode == InputSessionModeReplaying && s.phase == InputSessionPhaseFinishing
+}
+
+func (p *Game) inputSessionFrameCompletionPending() bool {
+	session := p.currentInputSession()
+	return session != nil && session.frameCompletionPending()
+}
+
+func (p *Game) finishInputSessionFrame() {
+	session := p.currentInputSession()
+	if session == nil {
+		return
+	}
+	session.endFrame()
+	completed, err := session.completeReplayFrame(func() { p.engine().ExtMgr.Pause() })
+	if err != nil {
+		engine.Panic(err)
+		return
+	}
+	if !completed {
+		return
+	}
+}
+
+func (s *inputSession) completeReplayFrame(freeze func()) (bool, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	s.mu.Lock()
+	if s.mode != InputSessionModeReplaying || s.phase != InputSessionPhaseFinishing {
+		s.mu.Unlock()
+		return false, nil
+	}
+	if !s.controller.Status().Exhausted {
+		s.mu.Unlock()
+		return false, nil
+	}
+	s.mu.Unlock()
+
+	if err := freezeInputSession(freeze); err != nil {
+		s.mu.Lock()
+		s.phase = InputSessionPhaseAborted
+		s.abortReason = err.Error()
+		s.mu.Unlock()
+		return false, err
+	}
+	s.mu.Lock()
+	s.phase = InputSessionPhaseCompleted
+	s.mu.Unlock()
+	return true, nil
+}
+
 func prepareInputRecordingSession(fixedTimestep float64, option InputSessionOptions) (InputSessionPreparation, error) {
 	return prepareInputSession(inputSessionPlan{
 		mode:          InputSessionModeRecording,
@@ -202,120 +486,6 @@ func newInputSession(plan *inputSessionPlan, generation uint64) (*inputSession, 
 	return session, nil
 }
 
-func (p *Game) attachPreparedInputSession() error {
-	p.inputSessionMu.Lock()
-	if p.inputClaimed || p.inputSession != nil {
-		p.inputSessionMu.Unlock()
-		return ErrInputSessionActive
-	}
-	if p.lifecycleState.IsRunned.Load() {
-		p.inputSessionMu.Unlock()
-		return fmt.Errorf("input session must be attached before the game starts")
-	}
-	p.inputClaimed = true
-	p.hasInputTerm = false
-	p.inputTerminal = InputSessionStatus{}
-	p.inputSessionMu.Unlock()
-
-	plan := claimPreparedInputSession()
-	if plan == nil {
-		return nil
-	}
-	session, err := newInputSession(plan, p.currentBootstrapGeneration())
-	if err != nil {
-		p.setInputSessionTerminal(InputSessionStatus{
-			Mode:  plan.mode,
-			Phase: InputSessionPhaseAborted,
-			Error: err.Error(),
-		})
-		completePreparedInputSessionClaim(plan)
-		return err
-	}
-	p.inputSessionMu.Lock()
-	if !p.inputClaimed || p.inputSession != nil {
-		p.inputSessionMu.Unlock()
-		p.setInputSessionTerminal(session.close("another input session is already attached"))
-		completePreparedInputSessionClaim(plan)
-		return fmt.Errorf("game lifecycle ended before input session attachment completed")
-	}
-	p.inputSession = session
-	p.inputSessionMu.Unlock()
-	completePreparedInputSessionClaim(plan)
-	return nil
-}
-
-func (p *Game) inputSessionUnavailable() bool {
-	if p == nil {
-		return false
-	}
-	p.inputSessionMu.RLock()
-	unavailable := p.inputClaimed || p.lifecycleState.IsRunned.Load()
-	p.inputSessionMu.RUnlock()
-	return unavailable
-}
-
-func (p *Game) currentInputSession() *inputSession {
-	if p == nil {
-		return nil
-	}
-	p.inputSessionMu.RLock()
-	session := p.inputSession
-	p.inputSessionMu.RUnlock()
-	return session
-}
-
-func (p *Game) abortInputSession(reason string) {
-	if p == nil {
-		return
-	}
-	p.inputSessionMu.Lock()
-	if p.inputSession != nil {
-		p.inputTerminal = p.inputSession.close(reason)
-		p.hasInputTerm = true
-		p.inputSession = nil
-	}
-	p.inputClaimed = false
-	p.inputSessionMu.Unlock()
-}
-
-func (p *Game) setInputSessionTerminal(status InputSessionStatus) {
-	p.inputSessionMu.Lock()
-	p.inputSession = nil
-	p.inputTerminal = status
-	p.hasInputTerm = true
-	p.inputSessionMu.Unlock()
-}
-
-func (p *Game) terminalInputSessionStatus() (InputSessionStatus, bool) {
-	p.inputSessionMu.RLock()
-	status, ok := p.inputTerminal, p.hasInputTerm
-	p.inputSessionMu.RUnlock()
-	return status, ok
-}
-
-func (s *inputSession) close(reason string) InputSessionStatus {
-	s.operationMu.Lock()
-	s.mu.Lock()
-	if s.phase != InputSessionPhaseCompleted && s.phase != InputSessionPhaseAborted {
-		s.phase = InputSessionPhaseAborted
-		s.abortReason = reason
-		s.result = InputReplay{}
-		s.resultJSON = nil
-	}
-	status := s.statusLocked()
-	s.terminalStatus = status
-	s.hasTerminal = true
-	s.controller.Reset()
-	s.mu.Unlock()
-	s.operationMu.Unlock()
-
-	s.environment.stop()
-	ResetRandomSeed()
-	engine.DiscardPendingKeyEvents()
-	engine.SetMouseEventCaptureEnabled(false)
-	return status
-}
-
 func finishInputRecordingResultSession() (inputRecordingResult, error) {
 	game := activeGame()
 	if game == nil {
@@ -347,73 +517,6 @@ func finishInputRecordingSession() (InputReplay, error) {
 func finishInputRecordingJSONSession() (string, error) {
 	result, err := finishInputRecordingResultSession()
 	return string(result.json), err
-}
-
-func (s *inputSession) finishRecording(freeze func()) (InputReplay, error) {
-	result, err := s.finishRecordingResult(freeze)
-	return result.replay, err
-}
-
-func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResult, error) {
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	s.mu.Lock()
-	if s.mode != InputSessionModeRecording {
-		s.mu.Unlock()
-		return inputRecordingResult{}, ErrInputSessionNotRecording
-	}
-	if s.phase == InputSessionPhaseAborted {
-		reason := s.abortReason
-		s.mu.Unlock()
-		return inputRecordingResult{}, fmt.Errorf("input recording was aborted: %s", reason)
-	}
-	if s.phase == InputSessionPhaseCompleted {
-		result := inputRecordingResult{
-			replay: cloneInputReplay(s.result),
-			json:   append([]byte(nil), s.resultJSON...),
-		}
-		s.mu.Unlock()
-		return result, nil
-	}
-	if s.phase != InputSessionPhaseRunning {
-		phase := s.phase
-		s.mu.Unlock()
-		return inputRecordingResult{}, fmt.Errorf("input recording cannot finish in phase %q", phase)
-	}
-	if s.frameOpen {
-		s.mu.Unlock()
-		return inputRecordingResult{}, fmt.Errorf("input recording cannot finish before the current frame ends")
-	}
-
-	s.phase = InputSessionPhaseFinishing
-	replay, err := s.controller.Recording()
-	if err != nil {
-		s.phase = InputSessionPhaseRunning
-		s.mu.Unlock()
-		return inputRecordingResult{}, err
-	}
-	encoded, err := inputstate.EncodeInputReplay(replay)
-	if err != nil {
-		s.phase = InputSessionPhaseRunning
-		s.mu.Unlock()
-		return inputRecordingResult{}, err
-	}
-	s.result = cloneInputReplay(replay)
-	s.resultJSON = append(s.resultJSON[:0], encoded...)
-	s.mu.Unlock()
-
-	if err := freezeInputSession(freeze); err != nil {
-		s.mu.Lock()
-		s.result = InputReplay{}
-		s.resultJSON = nil
-		s.phase = InputSessionPhaseRunning
-		s.mu.Unlock()
-		return inputRecordingResult{}, err
-	}
-	s.mu.Lock()
-	s.phase = InputSessionPhaseCompleted
-	s.mu.Unlock()
-	return inputRecordingResult{replay: replay, json: encoded}, nil
 }
 
 func freezeInputSession(freeze func()) (err error) {
@@ -465,109 +568,6 @@ func inputSessionStatus() InputSessionStatus {
 		}
 	}
 	return InputSessionStatus{Mode: InputSessionModeIdle}
-}
-
-func (s *inputSession) status() InputSessionStatus {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.statusLocked()
-}
-
-func (s *inputSession) statusLocked() InputSessionStatus {
-	if s.hasTerminal {
-		return s.terminalStatus
-	}
-	controllerStatus := s.controller.Status()
-	status := InputSessionStatus{
-		Mode:       s.mode,
-		Phase:      s.phase,
-		Completed:  s.phase == InputSessionPhaseCompleted,
-		Exhausted:  controllerStatus.Exhausted,
-		NextFrame:  controllerStatus.NextFrame,
-		FrameCount: controllerStatus.FrameCount,
-	}
-	if s.hasCurrentTick {
-		status.CurrentTick = s.currentTick
-		status.HasCurrentTick = true
-	}
-	if s.mode == InputSessionModeRecording && s.phase == InputSessionPhaseCompleted {
-		status.NextFrame = int64(len(s.result.Frames))
-		status.FrameCount = len(s.result.Frames)
-	}
-	if s.phase == InputSessionPhaseAborted {
-		status.Error = s.abortReason
-	}
-	return status
-}
-
-func (s *inputSession) beginFrame() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.phase != InputSessionPhaseRunning || s.frameOpen {
-		return false
-	}
-	s.frameOpen = true
-	return true
-}
-
-func (s *inputSession) endFrame() {
-	s.mu.Lock()
-	s.frameOpen = false
-	s.mu.Unlock()
-}
-
-func (s *inputSession) frameCompletionPending() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mode == InputSessionModeReplaying && s.phase == InputSessionPhaseFinishing
-}
-
-func (p *Game) inputSessionFrameCompletionPending() bool {
-	session := p.currentInputSession()
-	return session != nil && session.frameCompletionPending()
-}
-
-func (p *Game) finishInputSessionFrame() {
-	session := p.currentInputSession()
-	if session == nil {
-		return
-	}
-	session.endFrame()
-	completed, err := session.completeReplayFrame(func() { p.engine().ExtMgr.Pause() })
-	if err != nil {
-		engine.Panic(err)
-		return
-	}
-	if !completed {
-		return
-	}
-}
-
-func (s *inputSession) completeReplayFrame(freeze func()) (bool, error) {
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	s.mu.Lock()
-	if s.mode != InputSessionModeReplaying || s.phase != InputSessionPhaseFinishing {
-		s.mu.Unlock()
-		return false, nil
-	}
-	if !s.controller.Status().Exhausted {
-		s.mu.Unlock()
-		return false, nil
-	}
-	s.mu.Unlock()
-
-	if err := freezeInputSession(freeze); err != nil {
-		s.mu.Lock()
-		s.phase = InputSessionPhaseAborted
-		s.abortReason = err.Error()
-		s.mu.Unlock()
-		return false, err
-	}
-	s.mu.Lock()
-	s.phase = InputSessionPhaseCompleted
-	s.mu.Unlock()
-	return true, nil
 }
 
 func cloneInputReplay(replay InputReplay) InputReplay {
