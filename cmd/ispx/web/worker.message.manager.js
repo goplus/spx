@@ -18,27 +18,6 @@ class WorkerMessageManager {
         game.rtenv["_spxOnMainCall"] = window._spxOnMainCall
     }
 
-    bindMainCallHandler() {
-        window._spxMainCalls = {}
-        window._spxOnMainCall = function (...params) {
-            let funcName = params[0]
-            let args = params.slice(1)
-            if (window._spxMainCalls.hasOwnProperty(funcName)) {
-                let callback = window._spxMainCalls[funcName]
-                if (callback != null) {
-                    callback(...args)
-                }
-            } else {
-                let func = window[funcName]
-                if (func != null) {
-                    func(...args)
-                } else {
-                    console.error("no such function: ", funcName)
-                }
-            }
-        }
-    }
-    
     callWorkerProjectDataUpdate(projectData, assetURLs) {
         const message = {
             cmd: 'projectDataUpdate',
@@ -62,6 +41,27 @@ class WorkerMessageManager {
             timestamp: Date.now()
         };
         return this.postMessageToWorkers(message);
+    }
+
+    bindMainCallHandler() {
+        window._spxMainCalls = {}
+        window._spxOnMainCall = function (...params) {
+            let funcName = params[0]
+            let args = params.slice(1)
+            if (window._spxMainCalls.hasOwnProperty(funcName)) {
+                let callback = window._spxMainCalls[funcName]
+                if (callback != null) {
+                    callback(...args)
+                }
+            } else {
+                let func = window[funcName]
+                if (func != null) {
+                    func(...args)
+                } else {
+                    console.error("no such function: ", funcName)
+                }
+            }
+        }
     }
 
     // process arguments, auto convert function to main thread callback
@@ -145,14 +145,10 @@ class WorkerMessageManager {
                     };
 
                     // Special handling required when cloning data or using transferList
-                    if (transferList && cloneForEach) {
-                        if (message.data && message.data.buffer) {
-                            const clonedData = new Uint8Array(message.data);
-                            enhancedMessage.data = clonedData;
-                            worker.postMessage(enhancedMessage, [clonedData.buffer]);
-                        } else {
-                            worker.postMessage(enhancedMessage);
-                        }
+                    if (transferList && cloneForEach && message.data && message.data.buffer) {
+                        const clonedData = new Uint8Array(message.data);
+                        enhancedMessage.data = clonedData;
+                        worker.postMessage(enhancedMessage, [clonedData.buffer]);
                     } else {
                         worker.postMessage(enhancedMessage);
                     }
@@ -173,4 +169,4 @@ class WorkerMessageManager {
 }
 
 // export WorkerMessageManager to global
-globalThis.WorkerMessageManager = WorkerMessageManager; 
+globalThis.WorkerMessageManager = WorkerMessageManager;
