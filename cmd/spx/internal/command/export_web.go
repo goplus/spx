@@ -151,10 +151,10 @@ func (cmd *CmdTool) prepareMinigameEngineAssets(paths minigamePaths, buildMode s
 	ispxWasm := filepath.Join(paths.rawWebDir, "ispx.wasm")
 
 	if buildMode == "fast" {
-		if err := cmd.moveFile(godotEditorWasm, filepath.Join(paths.engineDir, "engine.wasm")); err != nil {
+		if err := os.Rename(godotEditorWasm, filepath.Join(paths.engineDir, "engine.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
 		}
-		if err := cmd.moveFile(ispxWasm, filepath.Join(paths.engineDir, "ispx.wasm")); err != nil {
+		if err := os.Rename(ispxWasm, filepath.Join(paths.engineDir, "ispx.wasm")); err != nil {
 			return fmt.Errorf("failed to move %s: %w", ispxWasm, err)
 		}
 	} else {
@@ -321,11 +321,6 @@ func (cmd *CmdTool) writeWebLogicAssets() error {
 func (cmd *CmdTool) compressBrotli(filePath string) error {
 	execCmd := exec.Command("brotli", "-f", "-q", "11", filePath)
 	return execCmd.Run()
-}
-
-// moveFile moves one file.
-func (cmd *CmdTool) moveFile(srcFile, dstFile string) error {
-	return os.Rename(srcFile, dstFile)
 }
 
 // moveFilesByPattern moves matching files.

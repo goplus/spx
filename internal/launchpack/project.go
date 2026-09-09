@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -58,14 +59,7 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	foundProject := false
-	for _, name := range projectFiles {
-		if name == projectBase {
-			foundProject = true
-			break
-		}
-	}
-	if !foundProject {
+	if !slices.Contains(projectFiles, projectBase) {
 		return nil, fmt.Errorf("launchpack: project file %q is not in the source allowlist", projectBase)
 	}
 

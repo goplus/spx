@@ -118,14 +118,7 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
 	seenNames := make(map[string]struct{}, len(paths))
 	slices.SortFunc(paths, func(a, b dirInfo) int {
-		nameA := zipEntryName(baseFolder, a)
-		nameB := zipEntryName(baseFolder, b)
-		if nameA < nameB {
-			return -1
-		} else if nameA > nameB {
-			return 1
-		}
-		return 0
+		return strings.Compare(zipEntryName(baseFolder, a), zipEntryName(baseFolder, b))
 	})
 	for _, dirInfo := range paths {
 		filePath := dirInfo.path

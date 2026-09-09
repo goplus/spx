@@ -25,33 +25,6 @@ import (
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
 
-func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) error {
-	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
-		return err
-	}
-
-	spxCommand, err := webModeSPXCommand(cfg.mode)
-	if err != nil {
-		return err
-	}
-	outputZip, err := webModeOutputZip(cfg.mode)
-	if err != nil {
-		return err
-	}
-
-	workspace, cleanup, err := prepareRuntimeWorkspace(runner.RepoRootDir(), false)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	if err := runRepoSPXCommand(runner, workspace.workDir, spxCommand); err != nil {
-		return err
-	}
-
-	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, outputZip))
-}
-
 func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
 	if err := shared.ValidateWebMode(mode); err != nil {
 		return err
@@ -94,10 +67,34 @@ func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {
 	return os.WriteFile(engineJS, append([]byte(prefix), content...), 0o644)
 }
 
-func webModeOutputZip(mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
+func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) error {
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
+		return err
 	}
+
+	spxCommand, err := webModeSPXCommand(cfg.mode)
+	if err != nil {
+		return err
+	}
+	outputZip, err := webModeOutputZip(cfg.mode)
+	if err != nil {
+		return err
+	}
+
+	workspace, cleanup, err := prepareRuntimeWorkspace(runner.RepoRootDir(), false)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := runRepoSPXCommand(runner, workspace.workDir, spxCommand); err != nil {
+		return err
+	}
+
+	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, outputZip))
+}
+
+func webModeOutputZip(mode string) (string, error) {
 	switch mode {
 	case "normal":
 		return "spx_web.zip", nil
@@ -113,9 +110,6 @@ func webModeOutputZip(mode string) (string, error) {
 }
 
 func webModeSPXCommand(mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
-	}
 	switch mode {
 	case "normal":
 		return "exportweb", nil

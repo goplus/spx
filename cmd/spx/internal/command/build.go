@@ -92,9 +92,7 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 }
 
 func (cmd *CmdTool) BuildDll() error {
-	if err := cmd.hideIOSFiles(); err != nil {
-		return err
-	}
+	cmd.hideIOSFiles()
 
 	targetArchs, err := cmd.determineTargetArchs()
 	if err != nil {
@@ -135,12 +133,12 @@ func (cmd *CmdTool) withGoDir(f func() error) error {
 }
 
 // hideIOSFiles renames ios* files to .txt files.
-func (cmd *CmdTool) hideIOSFiles() error {
+func (cmd *CmdTool) hideIOSFiles() {
 	searchPattern := filepath.Join(cmd.ProjectDir, "go", "ios*")
 	files, err := filepath.Glob(searchPattern)
 	if err != nil {
 		logWarnf("Glob failed for pattern %s: %v", searchPattern, err)
-		return nil
+		return
 	}
 
 	for _, file := range files {
@@ -151,7 +149,6 @@ func (cmd *CmdTool) hideIOSFiles() error {
 			}
 		}
 	}
-	return nil
 }
 
 // determineTargetArchs resolves target architectures.
@@ -169,8 +166,6 @@ func (cmd *CmdTool) determineTargetArchs() ([]string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		validArchs = []string{"amd64", "386"}
-	case "darwin":
-		validArchs = []string{"amd64", "arm64"}
 	case "linux":
 		validArchs = []string{"amd64", "arm", "arm64", "386"}
 	default:
