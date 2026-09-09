@@ -24,7 +24,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -39,14 +38,9 @@ type emsdkEnvironment struct {
 var (
 	buildEnvLookPath           = exec.LookPath
 	buildEnvRunStreaming       = shared.RunStreamingCommand
-	buildEnvRunOutputWithDir   = runCommandOutputWithEnv
+	buildEnvRunOutputWithDir   = shared.RunCommandOutputWithEnv
 	resolveEMSDKShellExportsFn = ResolveEMSDKShellExports
 )
-
-func setupSCons() error {
-	_, err := EnsureSCons()
-	return err
-}
 
 func EnsureSCons() (string, error) {
 	python, err := detectPythonCommand()
@@ -86,13 +80,6 @@ func EnsureSCons() (string, error) {
 		return "", err
 	}
 	return sconsCommand, nil
-}
-
-func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand string) {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(venvDir, "Scripts", "python.exe"), filepath.Join(venvDir, "Scripts", "scons.exe")
-	}
-	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
 }
 
 func SetupJDK() error {
@@ -194,12 +181,51 @@ func SetupEMSDK() error {
 	return verifyEMSDK(env)
 }
 
+func ResolveJDKShellExports() (map[string]string, error) {
+	env, err := resolveJDKShellEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	exports := map[string]string{}
+	if javaHome := strings.TrimSpace(env["JAVA_HOME"]); javaHome != "" {
+		exports["JAVA_HOME"] = javaHome
+		exports["PATH"] = env["PATH"]
+	}
+	return exports, nil
+}
+
+func ResolveEMSDKShellExports() (map[string]string, error) {
+	env, err := resolveEMSDKEnvironment()
+	if err != nil {
+		return nil, err
+	}
+	before := shared.CurrentEnvMap()
+	output, err := runEMSDKShellOutput(env.repoDir, "source ./emsdk_env.sh >/dev/null 2>&1; env -0")
+	if err != nil {
+		return nil, err
+	}
+	after := parseNullEnvOutput(output)
+	return selectEMSDKExports(before, after), nil
+}
+
+func setupSCons() error {
+	_, err := EnsureSCons()
+	return err
+}
+
+func sconsEnvironmentCommands(venvDir string) (pythonCommand, sconsCommand string) {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(venvDir, "Scripts", "python.exe"), filepath.Join(venvDir, "Scripts", "scons.exe")
+	}
+	return filepath.Join(venvDir, "bin", "python"), filepath.Join(venvDir, "bin", "scons")
+}
+
 func verifyEMSDK(env emsdkEnvironment) error {
 	verifyEnv, emppPath, err := resolveEMSDKVerificationEnvironment(env)
 	if err != nil {
 		return err
 	}
-	output, err := buildEnvRunOutputWithDir("", envMapToSlice(verifyEnv), emppPath, "--version")
+	output, err := buildEnvRunOutputWithDir("", shared.EnvMapToSlice(verifyEnv), emppPath, "--version")
 	if err != nil {
 		return fmt.Errorf("failed to set up emsdk. Please check the installation: %w", err)
 	}
@@ -214,7 +240,7 @@ func resolveEMSDKVerificationEnvironment(env emsdkEnvironment) (map[string]strin
 		return nil, "", err
 	}
 
-	merged := currentEnvMap()
+	merged := shared.CurrentEnvMap()
 	for key, value := range exports {
 		merged[key] = value
 	}
@@ -254,17 +280,17 @@ func detectPythonCommand() (string, error) {
 }
 
 func resolveJDKShellEnvironment() (map[string]string, error) {
-	env := currentEnvMap()
+	env := shared.CurrentEnvMap()
 	for _, binDir := range candidateJDKBinDirs() {
-		if dirExists(binDir) {
-			env["PATH"] = prependToPath(env["PATH"], binDir)
+		if shared.DirExists(binDir) {
+			env["PATH"] = shared.PrependToPath(env["PATH"], binDir)
 			break
 		}
 	}
 
 	if javaHome, err := resolveJavaHome(env); err == nil && javaHome != "" {
 		env["JAVA_HOME"] = javaHome
-		env["PATH"] = prependToPath(env["PATH"], filepath.Join(javaHome, "bin"))
+		env["PATH"] = shared.PrependToPath(env["PATH"], filepath.Join(javaHome, "bin"))
 	}
 	return env, nil
 }
@@ -275,15 +301,15 @@ func resolveJavaHome(env map[string]string) (string, error) {
 	}
 	if runtime.GOOS == "darwin" {
 		for _, binDir := range candidateJDKBinDirs() {
-			if dirExists(binDir) {
+			if shared.DirExists(binDir) {
 				prefix := filepath.Dir(binDir)
 				home := filepath.Join(prefix, "libexec", "openjdk.jdk", "Contents", "Home")
-				if dirExists(home) {
+				if shared.DirExists(home) {
 					return home, nil
 				}
 			}
 		}
-		output, err := runCommandOutputWithEnv("", envMapToSlice(env), "/usr/libexec/java_home", "-v", strconv.Itoa(requiredJDKMajor))
+		output, err := shared.RunCommandOutputWithEnv("", shared.EnvMapToSlice(env), "/usr/libexec/java_home", "-v", strconv.Itoa(requiredJDKMajor))
 		if err == nil {
 			return strings.TrimSpace(string(output)), nil
 		}
@@ -302,7 +328,7 @@ func candidateJDKBinDirs() []string {
 }
 
 func detectJavaMajorVersion(env map[string]string) (int, bool) {
-	output, err := runCommandOutputWithEnv("", envMapToSlice(env), "java", "-version")
+	output, err := shared.RunCommandOutputWithEnv("", shared.EnvMapToSlice(env), "java", "-version")
 	if err != nil {
 		return 0, false
 	}
@@ -336,19 +362,6 @@ func parseJavaMajorVersion(output string) (int, bool) {
 		return major, err == nil
 	}
 	return 0, false
-}
-
-func ResolveJDKShellExports() (map[string]string, error) {
-	env, err := resolveJDKShellEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	exports := map[string]string{}
-	if javaHome := strings.TrimSpace(env["JAVA_HOME"]); javaHome != "" {
-		exports["JAVA_HOME"] = javaHome
-		exports["PATH"] = env["PATH"]
-	}
-	return exports, nil
 }
 
 func resolveEMSDKEnvironment() (emsdkEnvironment, error) {
@@ -387,22 +400,8 @@ func detectEMSDKVersion(env emsdkEnvironment) (string, bool) {
 	return fields[2], true
 }
 
-func ResolveEMSDKShellExports() (map[string]string, error) {
-	env, err := resolveEMSDKEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	before := currentEnvMap()
-	output, err := runEMSDKShellOutput(env.repoDir, "source ./emsdk_env.sh >/dev/null 2>&1; env -0")
-	if err != nil {
-		return nil, err
-	}
-	after := parseNullEnvOutput(output)
-	return selectEMSDKExports(before, after), nil
-}
-
 func runEMSDKShellOutput(workdir, script string) ([]byte, error) {
-	return runCommandOutputWithEnv(workdir, os.Environ(), "bash", "-lc", script)
+	return shared.RunCommandOutputWithEnv(workdir, os.Environ(), "bash", "-lc", script)
 }
 
 func parseNullEnvOutput(data []byte) map[string]string {
@@ -431,62 +430,4 @@ func selectEMSDKExports(before, after map[string]string) map[string]string {
 		}
 	}
 	return exports
-}
-
-func prependToPath(pathValue string, dirs ...string) string {
-	result := []string{}
-	seen := map[string]bool{}
-	appendDir := func(dir string) {
-		if dir == "" || seen[dir] {
-			return
-		}
-		seen[dir] = true
-		result = append(result, dir)
-	}
-	for _, dir := range dirs {
-		appendDir(dir)
-	}
-	for _, dir := range filepath.SplitList(pathValue) {
-		appendDir(dir)
-	}
-	return strings.Join(result, string(os.PathListSeparator))
-}
-
-func currentEnvMap() map[string]string {
-	env := map[string]string{}
-	for _, item := range os.Environ() {
-		parts := strings.SplitN(item, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		env[parts[0]] = parts[1]
-	}
-	return env
-}
-
-func envMapToSlice(env map[string]string) []string {
-	keys := make([]string, 0, len(env))
-	for key := range env {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-	out := make([]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, key+"="+env[key])
-	}
-	return out
-}
-
-func runCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
-	return cmd.CombinedOutput()
-}
-
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
 }
