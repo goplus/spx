@@ -58,47 +58,14 @@ type messageEventHandler struct {
 	run    func(string, any)
 }
 
-func (p *messageEventHandler) start(thread coroutine.Thread) func() {
-	p.mu.Lock()
-	previous := p.active
-	p.active = thread
-	p.mu.Unlock()
-
-	if previous != nil && previous != thread {
-		gco.Stop(previous)
-	}
-	return func() {
-		p.mu.Lock()
-		if p.active == thread {
-			p.active = nil
-		}
-		p.mu.Unlock()
-	}
-}
-
 type startEventDispatcher struct{}
 
-func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
-	p.scriptEventRegistry = registry
-	p.pthis = this
-}
-
-func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj) {
-	p.scriptEventRegistry = src.scriptEventRegistry
-	p.pthis = this
-}
-
-func (p *scriptEventBindings) doDeleteClone() {
-	p.scriptEventRegistry.manager.DeleteOwner(p.pthis)
-}
-
-func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj) {
-	p.scriptEventRegistry.doWhenSwipe(direction, target)
-}
-
-func (p *scriptEventBindings) onAwake(onAwake func()) {
-	pthis := p.pthis
-	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
+// Click Dispatch
+type clicker interface {
+	threadObj
+	doWhenClick(this threadObj)
+	getProxy() *engine.Sprite
+	Visible() bool
 }
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
@@ -115,20 +82,6 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 func (p *scriptEventBindings) OnClick(onClick func()) {
 	pthis := p.pthis
 	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
-}
-
-func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
-	if len(keys) == 0 {
-		return
-	}
-	keys = slices.Clone(keys)
-	sink := coreevent.NewSink(p.pthis, handler)
-	if slices.Contains(keys, KeyAny) {
-		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
-		return
-	}
-	sink.Cond = coreevent.MatchAnyOf(keys)
-	p.scriptEventRegistry.manager.AddKeyPressed(sink)
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -172,14 +125,6 @@ func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
 
 func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 	p.OnKey__1(keys, coreevent.Ignore1[Key](onKey))
-}
-
-func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
-	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
-		p.pthis,
-		&messageEventHandler{run: handler},
-		cond...,
-	))
 }
 
 func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
@@ -258,6 +203,86 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	}
 }
 
+// Message Broadcast
+func (p *Game) Broadcast__0(msg MsgName) {
+	p.doBroadcast(msg, nil, false)
+}
+
+func (p *Game) Broadcast__1(msg MsgName, data any) {
+	p.doBroadcast(msg, data, false)
+}
+
+func (p *Game) BroadcastAndWait__0(msg MsgName) {
+	p.doBroadcast(msg, nil, true)
+}
+
+func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
+	p.doBroadcast(msg, data, true)
+}
+
+func (p *messageEventHandler) start(thread coroutine.Thread) func() {
+	p.mu.Lock()
+	previous := p.active
+	p.active = thread
+	p.mu.Unlock()
+
+	if previous != nil && previous != thread {
+		gco.Stop(previous)
+	}
+	return func() {
+		p.mu.Lock()
+		if p.active == thread {
+			p.active = nil
+		}
+		p.mu.Unlock()
+	}
+}
+
+func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
+	p.scriptEventRegistry = registry
+	p.pthis = this
+}
+
+func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj) {
+	p.scriptEventRegistry = src.scriptEventRegistry
+	p.pthis = this
+}
+
+func (p *scriptEventBindings) doDeleteClone() {
+	p.scriptEventRegistry.manager.DeleteOwner(p.pthis)
+}
+
+func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj) {
+	p.scriptEventRegistry.doWhenSwipe(direction, target)
+}
+
+func (p *scriptEventBindings) onAwake(onAwake func()) {
+	pthis := p.pthis
+	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
+}
+
+func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
+	if len(keys) == 0 {
+		return
+	}
+	keys = slices.Clone(keys)
+	sink := coreevent.NewSink(p.pthis, handler)
+	if slices.Contains(keys, KeyAny) {
+		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
+		return
+	}
+	sink.Cond = coreevent.MatchAnyOf(keys)
+	p.scriptEventRegistry.manager.AddKeyPressed(sink)
+}
+
+func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
+	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
+		p.pthis,
+		&messageEventHandler{run: handler},
+		cond...,
+	))
+}
+
 // Scratch clears graphic effects for the stage and every sprite when a
 // project-wide stop is triggered, including the `stop all` control block.
 func (p *Game) resetGraphicEffectsOnStopAll() {
@@ -271,14 +296,6 @@ func (p *Game) resetGraphicEffectsOnStopAll() {
 		}
 		sprite.clearGraphicEffects()
 	}
-}
-
-// Click Dispatch
-type clicker interface {
-	threadObj
-	doWhenClick(this threadObj)
-	getProxy() *engine.Sprite
-	Visible() bool
 }
 
 func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
@@ -341,23 +358,6 @@ func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
 			p.scriptEvents.doWhenClick(p)
 		},
 	})
-}
-
-// Message Broadcast
-func (p *Game) Broadcast__0(msg MsgName) {
-	p.doBroadcast(msg, nil, false)
-}
-
-func (p *Game) Broadcast__1(msg MsgName, data any) {
-	p.doBroadcast(msg, data, false)
-}
-
-func (p *Game) BroadcastAndWait__0(msg MsgName) {
-	p.doBroadcast(msg, nil, true)
-}
-
-func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
-	p.doBroadcast(msg, data, true)
 }
 
 func (p *Game) doBroadcast(msg MsgName, data any, wait bool) {

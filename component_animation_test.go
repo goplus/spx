@@ -51,7 +51,7 @@ func newTestAnimationComponent() *animationComponent {
 			animationWrappers: map[SpriteAnimationName]*animationWrapper{},
 		},
 		activeTweenStates: make([]*animState, 0),
-		donedAnimations:   make([]string, 0),
+		doneAnimations:    make([]string, 0),
 	}
 	sprite.components.animation = anim
 	sprite.components.sound = &soundComponent{

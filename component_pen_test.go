@@ -176,7 +176,7 @@ func TestPenComponentUsesScratchTransparencySemantics(t *testing.T) {
 			setupSpyPenMgr(t)
 			sprite := newPenTestSprite()
 
-			sprite.pen().SetPenColorParam(PenTransparency, tt.value)
+			sprite.pen().setPenColorParam(PenTransparency, tt.value)
 
 			assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, tt.value)
 			assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, tt.wantAlpha)
@@ -189,13 +189,13 @@ func TestPenComponentDynamicTransparencyChangeUsesScratchSemantics(t *testing.T)
 	sprite := newPenTestSprite()
 	kind := PenColorParamFromString("transparency")
 
-	sprite.pen().SetPenColorParam(kind, 25)
-	sprite.pen().ChangePenColor(kind, 25)
+	sprite.pen().setPenColorParam(kind, 25)
+	sprite.pen().changePenColor(kind, 25)
 
 	assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, 50)
 	assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, 0.5)
 
-	sprite.pen().ChangePenColor(kind, 100)
+	sprite.pen().changePenColor(kind, 100)
 	assertNearlyEqualPenValue(t, "clamped penTransparency", sprite.pen().penTransparency, 100)
 	assertNearlyEqualPenValue(t, "clamped alpha", sprite.pen().penColor.A, 0)
 }
@@ -204,7 +204,7 @@ func TestPenComponentSetPenColorSyncsScratchTransparency(t *testing.T) {
 	setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenColor(HSBA(20, 80, 90, 25))
+	sprite.pen().setPenColor(HSBA(20, 80, 90, 25))
 
 	assertNearlyEqualPenValue(t, "penTransparency", sprite.pen().penTransparency, 75)
 	assertNearlyEqualPenValue(t, "alpha", sprite.pen().penColor.A, 0.25)
@@ -214,8 +214,8 @@ func TestPenComponentRepeatedPenDownDrawsAtCurrentPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().PenDown()
-	sprite.pen().PenDown()
+	sprite.pen().penDown()
+	sprite.pen().penDown()
 
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -238,7 +238,7 @@ func TestPenComponentPenUpDoesNotAllocateOrRepeat(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().PenUp()
+	sprite.pen().penUp()
 	if spy.createCalls != 0 {
 		t.Fatalf("CreatePen calls after idle PenUp = %d, want 0", spy.createCalls)
 	}
@@ -246,9 +246,9 @@ func TestPenComponentPenUpDoesNotAllocateOrRepeat(t *testing.T) {
 		t.Fatalf("PenUp calls after idle PenUp = %d, want 0", spy.penUpCalls)
 	}
 
-	sprite.pen().PenDown()
-	sprite.pen().PenUp()
-	sprite.pen().PenUp()
+	sprite.pen().penDown()
+	sprite.pen().penUp()
+	sprite.pen().penUp()
 
 	if spy.penUpCalls != 1 {
 		t.Fatalf("PenUp calls after repeated PenUp = %d, want 1", spy.penUpCalls)
@@ -259,10 +259,10 @@ func TestPenComponentIgnoresRepeatedPenStyleValues(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenSize(10)
-	sprite.pen().SetPenSize(10)
-	sprite.pen().SetPenColor(HSB(85, 33, 100))
-	sprite.pen().SetPenColor(HSB(85, 33, 100))
+	sprite.pen().setPenSize(10)
+	sprite.pen().setPenSize(10)
+	sprite.pen().setPenColor(HSB(85, 33, 100))
+	sprite.pen().setPenColor(HSB(85, 33, 100))
 
 	if spy.setSizeCalls != 1 {
 		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
@@ -276,7 +276,7 @@ func TestPenComponentDefaultPenSizeStillMaterializesPen(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenSize(1)
+	sprite.pen().setPenSize(1)
 
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -291,7 +291,7 @@ func TestPenComponentDefaultPenColorStillMaterializesPen(t *testing.T) {
 	sprite := newPenTestSprite()
 
 	defaultColor := toSpxColor(sprite.pen().penColor)
-	sprite.pen().SetPenColor(defaultColor)
+	sprite.pen().setPenColor(defaultColor)
 
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -318,7 +318,7 @@ func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
 			spy := setupSpyPenMgr(t)
 			sprite := newPenTestSprite()
 
-			sprite.pen().SetPenColorParam(tt.kind, tt.value(sprite.pen()))
+			sprite.pen().setPenColorParam(tt.kind, tt.value(sprite.pen()))
 
 			if spy.createCalls != 1 {
 				t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -334,8 +334,8 @@ func TestPenComponentPenNoneDoesNothing(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenColorParam(PenNone, 50)
-	sprite.pen().ChangePenColor(PenNone, 50)
+	sprite.pen().setPenColorParam(PenNone, 50)
+	sprite.pen().changePenColor(PenNone, 50)
 
 	if spy.createCalls != 0 {
 		t.Fatalf("CreatePen calls = %d, want 0", spy.createCalls)
@@ -349,7 +349,7 @@ func TestPenComponentSetPenShadeUsesScratchLegacyDefaults(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenShade(50)
+	sprite.pen().setPenShade(50)
 
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -369,10 +369,10 @@ func TestPenComponentChangePenShadeUsesStoredLegacyShade(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenColor(HSB(20, 80, 80))
+	sprite.pen().setPenColor(HSB(20, 80, 80))
 	assertNearlyEqualPenValue(t, "penShade", sprite.pen().legacyPenColor.shade, 40)
 
-	sprite.pen().ChangePenShade(10)
+	sprite.pen().changePenShade(10)
 
 	want := toMathfColor(HSB(20, 100, 100))
 	if !samePenColor(sprite.pen().penColor, want) {
@@ -388,9 +388,9 @@ func TestPenComponentSetPenShadeUsesCurrentHueParam(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenColor(HSB(25, 60, 70))
-	sprite.pen().SetPenColorParam(PenHue, 10)
-	sprite.pen().SetPenShade(50)
+	sprite.pen().setPenColor(HSB(25, 60, 70))
+	sprite.pen().setPenColorParam(PenHue, 10)
+	sprite.pen().setPenShade(50)
 
 	want := toMathfColor(HSB(10, 100, 100))
 	if !samePenColor(sprite.pen().penColor, want) {
@@ -405,7 +405,7 @@ func TestPenComponentPenHueParamWrapsLikeScratch(t *testing.T) {
 	setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenColorParam(PenHue, 110)
+	sprite.pen().setPenColorParam(PenHue, 110)
 
 	assertNearlyEqualPenValue(t, "penHue", sprite.pen().penHue, 10)
 	want := toMathfColor(HSB(10, sprite.pen().penSaturation, sprite.pen().penBrightness))
@@ -418,7 +418,7 @@ func TestPenComponentLegacyChangePenHueMatchesScratchSemantics(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
-	sprite.pen().SetPenShade(50)
+	sprite.pen().setPenShade(50)
 	sprite.pen().changePenHue(2)
 
 	want := toMathfColor(HSB(scratchLegacyDefaultPenHue+1, 100, 100))
@@ -437,7 +437,7 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	sprite.transform().y = 34
 
 	pen := sprite.pen()
-	pen.penDown = true
+	pen.isPenDown = true
 	pen.penWidth = 10
 	pen.penColor = toMathfColor(HSB(20, 80, 90))
 
@@ -469,7 +469,7 @@ func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
 
-	sprite.pen().PenDown()
+	sprite.pen().penDown()
 
 	want := mathf.NewVec2(50, 60)
 	if spy.lastMove != want {
@@ -482,7 +482,7 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
 
-	sprite.pen().Stamp()
+	sprite.pen().stamp()
 
 	want := mathf.NewVec2(74, 97)
 	if spy.stampWithCalls != 1 {
@@ -501,7 +501,7 @@ func TestPenComponentStampSyncsRenderedTransform(t *testing.T) {
 	sprite.transform().direction = -30
 	sprite.transform().rotationStyle = LeftRight
 
-	sprite.pen().Stamp()
+	sprite.pen().stamp()
 
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
@@ -537,7 +537,7 @@ func TestPenComponentStampSyncsNormalRotation(t *testing.T) {
 	sprite.transform().direction = 45
 	sprite.transform().rotationStyle = Normal
 
-	sprite.pen().Stamp()
+	sprite.pen().stamp()
 
 	wantRotation := engine.DegToRad(-45)
 	if spy.lastStampRotation != wantRotation {

@@ -26,28 +26,8 @@ import (
 )
 
 // -----------------------------------------------------------------------------
-// Visibility
+// Public API
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) requestRedrawIfVisible() {
-	if p.Visible() {
-		engine.RequestRedraw()
-	}
-}
-
-func (p *SpriteImpl) setVisible(visible bool) {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("%s visible is %t", p.name, visible)
-	}
-
-	if visible == p.spriteState.IsVisible {
-		return
-	}
-
-	p.spriteState.IsVisible = visible
-	engine.RequestRedraw()
-	p.markProxyDirty()
-}
-
 func (p *SpriteImpl) Hide() {
 	if bubble := p.components.bubble; bubble != nil {
 		bubble.stopAll()
@@ -63,27 +43,12 @@ func (p *SpriteImpl) Visible() bool {
 	return p.spriteState.IsVisible
 }
 
-// -----------------------------------------------------------------------------
-// Costume
-// -----------------------------------------------------------------------------
 func (p *SpriteImpl) CostumeName() SpriteCostumeName {
 	return p.getCostumeName()
 }
 
 func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
-}
-
-func (p *SpriteImpl) setCostume(costume any) {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
-	}
-	if !p.goSetCostume(costume) {
-		return
-	}
-	p.spriteState.DefaultCostumeIndex = p.costumeIndex
-	p.markAutoPhysicsShapesDirty()
-	p.markProxyDirty()
 }
 
 func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
@@ -124,9 +89,6 @@ func (p *SpriteImpl) SetCostume__3(action switchAction) {
 	p.setCostume(action)
 }
 
-// -----------------------------------------------------------------------------
-// Effects
-// -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetGraphicEffect(kind EffectKind, val float64) {
 	p.requestRedrawIfVisible()
 	p.setGraphicEffect(kind, val)
@@ -142,17 +104,6 @@ func (p *SpriteImpl) ClearGraphicEffects() {
 	p.clearGraphicEffects()
 }
 
-func (p *SpriteImpl) isFullyGhosted() bool {
-	if p.greffUniforms == nil {
-		return false
-	}
-	val, ok := p.greffUniforms[GhostEffect]
-	return ok && normalizeEffectValue(GhostEffect, val) >= 1
-}
-
-// -----------------------------------------------------------------------------
-// Layer
-// -----------------------------------------------------------------------------
 func (p *SpriteImpl) SetLayer__0(layer layerAction) {
 	p.SetLayerTo(layer)
 }
@@ -179,4 +130,47 @@ func (p *SpriteImpl) SetLayerTo(layer layerAction) {
 	case Back:
 		p.g.gotoBack(p)
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Internal Rendering
+// -----------------------------------------------------------------------------
+func (p *SpriteImpl) requestRedrawIfVisible() {
+	if p.Visible() {
+		engine.RequestRedraw()
+	}
+}
+
+func (p *SpriteImpl) setVisible(visible bool) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("%s visible is %t", p.name, visible)
+	}
+
+	if visible == p.spriteState.IsVisible {
+		return
+	}
+
+	p.spriteState.IsVisible = visible
+	engine.RequestRedraw()
+	p.markProxyDirty()
+}
+
+func (p *SpriteImpl) setCostume(costume any) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
+	}
+	if !p.goSetCostume(costume) {
+		return
+	}
+	p.spriteState.DefaultCostumeIndex = p.costumeIndex
+	p.markAutoPhysicsShapesDirty()
+	p.markProxyDirty()
+}
+
+func (p *SpriteImpl) isFullyGhosted() bool {
+	if p.greffUniforms == nil {
+		return false
+	}
+	val, ok := p.greffUniforms[GhostEffect]
+	return ok && normalizeEffectValue(GhostEffect, val) >= 1
 }

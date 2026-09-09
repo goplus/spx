@@ -43,89 +43,12 @@ type reloadCostumeOverride struct {
 	index    int
 }
 
-func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error) {
-	if g.fs == nil {
-		return nil, fmt.Errorf("reload preflight: game resource directory is not initialized")
-	}
-
-	plan := &reloadPlan{
-		spriteConfigs:   make(map[string]coreproject.LoadedSpriteConfig),
-		costumeCounts:   make(map[string]int),
-		directSprites:   make(map[string]reflect.Type),
-		prototypeByName: make(map[string]reflect.Type),
-	}
-	if err := coreproject.LoadConfig(&plan.project, g.fs, index); err != nil {
-		return nil, fmt.Errorf("reload preflight: load project config: %w", err)
-	}
-	if err := validateReloadProjectConfig(&plan.project); err != nil {
-		return nil, fmt.Errorf("reload preflight: project config: %w", err)
-	}
-	loadedTilemap, err := tm.Load(g.fs, plan.project.TilemapPath)
-	if err != nil {
-		return nil, fmt.Errorf("reload preflight: load tilemap %q: %w", plan.project.TilemapPath, err)
-	}
-	plan.tilemap = loadedTilemap
-
-	// Mirror the field layout without changing the live game.
-	shadow := reflect.New(gamer.Type()).Elem()
-	err = coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, shadow, fieldIndex)
-	}, func(name string, val any) error {
-		sprite, ok := val.(Sprite)
-		if !ok {
-			return nil
-		}
-		if err := validateReloadSprite(sprite, shadow); err != nil {
-			return fmt.Errorf("sprite field %q: %w", name, err)
-		}
-		plan.directSprites[name] = reflect.TypeOf(sprite)
-		plan.requireSpriteConfig(name)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("reload preflight: %w", err)
-	}
-	if err := plan.validateZOrder(g, shadow); err != nil {
-		return nil, fmt.Errorf("reload preflight: %w", err)
-	}
-
-	for _, name := range plan.configNames {
-		loaded, err := coreproject.LoadSpriteConfig(g.fs, name)
-		if err != nil {
-			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
-		}
-		costumeCount, err := validateReloadSpriteConfig(&loaded.Config)
-		if err != nil {
-			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
-		}
-		plan.spriteConfigs[name] = loaded
-		plan.costumeCounts[name] = costumeCount
-	}
-	if err := plan.validateCostumeOverrides(); err != nil {
-		return nil, fmt.Errorf("reload preflight: %w", err)
-	}
-	return plan, nil
-}
-
 func (p *reloadPlan) requireSpriteConfig(name string) {
 	if _, ok := p.spriteConfigs[name]; ok {
 		return
 	}
 	p.spriteConfigs[name] = coreproject.LoadedSpriteConfig{}
 	p.configNames = append(p.configNames, name)
-}
-
-func validateReloadProjectConfig(project *coreproject.ProjectConfig) error {
-	for i, backdrop := range project.Backdrops {
-		if backdrop == nil {
-			return fmt.Errorf("backdrops[%d] is null", i)
-		}
-	}
-	settings := coreproject.ResolveSystemSettings(project)
-	if settings.AutoSetCollisionLayer == project.Physics {
-		return fmt.Errorf("autoSetCollisionLayer and physics must have different enabled states")
-	}
-	return nil
 }
 
 func (p *reloadPlan) validateZOrder(g *Game, shadow reflect.Value) error {
@@ -277,6 +200,106 @@ func (p *reloadPlan) addPrototype(name string, typ reflect.Type, shadow reflect.
 
 	p.prototypeByName[name] = spriteType
 	p.requireSpriteConfig(name)
+	return nil
+}
+
+func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
+	loadSprite := p.spriteLoader(g)
+	return coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
+		return getFieldPtrOrAlloc(g, gamer, fieldIndex)
+	}, func(name string, val any) error {
+		sprite, ok := val.(Sprite)
+		if !ok {
+			return nil
+		}
+		return loadSprite(sprite, name, gamer)
+	})
+}
+
+func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
+	return func(sprite Sprite, name string, gamer reflect.Value) error {
+		loaded, ok := p.spriteConfigs[name]
+		if !ok {
+			return fmt.Errorf("reload plan has no sprite config for %q", name)
+		}
+		return g.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
+	}
+}
+
+func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error) {
+	if g.fs == nil {
+		return nil, fmt.Errorf("reload preflight: game resource directory is not initialized")
+	}
+
+	plan := &reloadPlan{
+		spriteConfigs:   make(map[string]coreproject.LoadedSpriteConfig),
+		costumeCounts:   make(map[string]int),
+		directSprites:   make(map[string]reflect.Type),
+		prototypeByName: make(map[string]reflect.Type),
+	}
+	if err := coreproject.LoadConfig(&plan.project, g.fs, index); err != nil {
+		return nil, fmt.Errorf("reload preflight: load project config: %w", err)
+	}
+	if err := validateReloadProjectConfig(&plan.project); err != nil {
+		return nil, fmt.Errorf("reload preflight: project config: %w", err)
+	}
+	loadedTilemap, err := tm.Load(g.fs, plan.project.TilemapPath)
+	if err != nil {
+		return nil, fmt.Errorf("reload preflight: load tilemap %q: %w", plan.project.TilemapPath, err)
+	}
+	plan.tilemap = loadedTilemap
+
+	// Mirror the field layout without changing the live game.
+	shadow := reflect.New(gamer.Type()).Elem()
+	err = coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
+		return getFieldPtrOrAlloc(g, shadow, fieldIndex)
+	}, func(name string, val any) error {
+		sprite, ok := val.(Sprite)
+		if !ok {
+			return nil
+		}
+		if err := validateReloadSprite(sprite, shadow); err != nil {
+			return fmt.Errorf("sprite field %q: %w", name, err)
+		}
+		plan.directSprites[name] = reflect.TypeOf(sprite)
+		plan.requireSpriteConfig(name)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reload preflight: %w", err)
+	}
+	if err := plan.validateZOrder(g, shadow); err != nil {
+		return nil, fmt.Errorf("reload preflight: %w", err)
+	}
+
+	for _, name := range plan.configNames {
+		loaded, err := coreproject.LoadSpriteConfig(g.fs, name)
+		if err != nil {
+			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
+		}
+		costumeCount, err := validateReloadSpriteConfig(&loaded.Config)
+		if err != nil {
+			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
+		}
+		plan.spriteConfigs[name] = loaded
+		plan.costumeCounts[name] = costumeCount
+	}
+	if err := plan.validateCostumeOverrides(); err != nil {
+		return nil, fmt.Errorf("reload preflight: %w", err)
+	}
+	return plan, nil
+}
+
+func validateReloadProjectConfig(project *coreproject.ProjectConfig) error {
+	for i, backdrop := range project.Backdrops {
+		if backdrop == nil {
+			return fmt.Errorf("backdrops[%d] is null", i)
+		}
+	}
+	settings := coreproject.ResolveSystemSettings(project)
+	if settings.AutoSetCollisionLayer == project.Physics {
+		return fmt.Errorf("autoSetCollisionLayer and physics must have different enabled states")
+	}
 	return nil
 }
 
@@ -502,27 +525,4 @@ func validateReloadShapeField(shape coreproject.StageShape, key string, required
 		return fmt.Errorf("stage shape field %q has type %T, want %s", key, value, want)
 	}
 	return nil
-}
-
-func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
-	loadSprite := p.spriteLoader(g)
-	return coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, gamer, fieldIndex)
-	}, func(name string, val any) error {
-		sprite, ok := val.(Sprite)
-		if !ok {
-			return nil
-		}
-		return loadSprite(sprite, name, gamer)
-	})
-}
-
-func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
-	return func(sprite Sprite, name string, gamer reflect.Value) error {
-		loaded, ok := p.spriteConfigs[name]
-		if !ok {
-			return fmt.Errorf("reload plan has no sprite config for %q", name)
-		}
-		return g.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
-	}
 }

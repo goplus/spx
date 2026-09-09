@@ -27,13 +27,6 @@ const defaultEventQueuePolicy = coreevent.DefaultQueuePolicy
 
 type eventQueueSnapshot = coreevent.QueueSnapshot
 
-// -----------------------------------------------------------------------------
-// Queue Control
-// -----------------------------------------------------------------------------
-func parseEventQueuePolicy(policy string) eventQueuePolicy {
-	return coreevent.ParsePolicy(policy)
-}
-
 func (p *Game) initEventQueueState() {
 	p.gameRuntimeState.EventQueuePolicy = defaultEventQueuePolicy
 	p.gameRuntimeState.EventQueueStats.Reset()
@@ -75,4 +68,11 @@ func (p *Game) queueEventWithPolicy(ev event) bool {
 		&p.gameRuntimeState.EventQueueStats,
 		&p.gameRuntimeState.EventQueueMu,
 	)
+}
+
+// -----------------------------------------------------------------------------
+// Queue Control
+// -----------------------------------------------------------------------------
+func parseEventQueuePolicy(policy string) eventQueuePolicy {
+	return coreevent.ParsePolicy(policy)
 }

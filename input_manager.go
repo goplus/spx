@@ -134,19 +134,6 @@ const (
 	KeyAny          Key = -1
 )
 
-// KeyFromString converts a string to its corresponding Key code.
-// It supports key names like "A", "Space", "Enter", "Left", etc.
-// Returns KeyMax if the key name is not recognized.
-func KeyFromString(key string) Key {
-	if key == "Any" {
-		return KeyAny
-	}
-	if keyCode, ok := inkey.Parse(key); ok {
-		return Key(keyCode)
-	}
-	return KeyMax
-}
-
 const (
 	// Minimum interval between two mouse click events.
 	mouseClickInterval = 50 * time.Millisecond
@@ -159,6 +146,19 @@ type inputManager struct {
 
 	clickGate inputstate.ClickGate
 	swipe     coreruntime.SwipeState[*SpriteImpl]
+}
+
+// KeyFromString converts a string to its corresponding Key code.
+// It supports key names like "A", "Space", "Enter", "Left", etc.
+// Returns KeyMax if the key name is not recognized.
+func KeyFromString(key string) Key {
+	if key == "Any" {
+		return KeyAny
+	}
+	if keyCode, ok := inkey.Parse(key); ok {
+		return Key(keyCode)
+	}
+	return KeyMax
 }
 
 func (p *inputManager) init(g *Game) {

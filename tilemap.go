@@ -43,6 +43,71 @@ type gameTilemapMgr struct {
 }
 
 // -----------------------------------------------------------------------------
+// Tile Placement
+// -----------------------------------------------------------------------------
+func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
+}
+
+func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
+}
+
+func (p *Game) PlaceTile(x, y float64, texturePath string) {
+	path := engine.ToAssetPath(texturePath)
+	p.engine().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
+}
+
+// -----------------------------------------------------------------------------
+// Tile Removal
+// -----------------------------------------------------------------------------
+func (p *Game) EraseTile__0(x, y float64) {
+	p.engine().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
+}
+
+func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
+	p.engine().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+}
+
+// -----------------------------------------------------------------------------
+// Tile Query
+// -----------------------------------------------------------------------------
+func (p *Game) GetTile__0(x, y float64) string {
+	return p.engine().TilemapMgr.GetTile(mathf.NewVec2(x, y))
+}
+
+func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
+	return p.engine().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+}
+
+// -----------------------------------------------------------------------------
+// Dynamic Loading
+// -----------------------------------------------------------------------------
+// LoadTilemap dynamically loads a tilemap from the specified path.
+// mapDir can be either:
+//   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
+//   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
+//
+// This will unload any currently loaded tilemap before loading the new one.
+func (p *Game) LoadTilemap(mapDir string) {
+	p.tilemapMgr.unloadMap()
+	p.tilemapMgr.loadMap(mapDir)
+	p.applyTilemap()
+}
+
+// UnloadTilemap unloads the currently loaded tilemap and cleans up resources.
+func (p *Game) UnloadTilemap() {
+	p.tilemapMgr.unloadMap()
+}
+
+// TilemapName returns the name of the currently loaded tilemap.
+func (p *Game) TilemapName() string {
+	return p.tilemapMgr.getCurrentMap()
+}
+
+// -----------------------------------------------------------------------------
 // Manager Setup
 // -----------------------------------------------------------------------------
 func (p *gameTilemapMgr) engine() *engineManagers {
@@ -186,71 +251,6 @@ func (p *gameTilemapMgr) calcWorldSize() {
 	p.g.displayState.MinWorldY = bounds.MinWorldY
 	p.g.displayState.WorldWidth = bounds.WorldWidth
 	p.g.displayState.WorldHeight = bounds.WorldHeight
-}
-
-// -----------------------------------------------------------------------------
-// Tile Placement
-// -----------------------------------------------------------------------------
-func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
-	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
-}
-
-func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
-	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
-}
-
-func (p *Game) PlaceTile(x, y float64, texturePath string) {
-	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
-}
-
-// -----------------------------------------------------------------------------
-// Tile Removal
-// -----------------------------------------------------------------------------
-func (p *Game) EraseTile__0(x, y float64) {
-	p.engine().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
-}
-
-func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
-	p.engine().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
-}
-
-// -----------------------------------------------------------------------------
-// Tile Query
-// -----------------------------------------------------------------------------
-func (p *Game) GetTile__0(x, y float64) string {
-	return p.engine().TilemapMgr.GetTile(mathf.NewVec2(x, y))
-}
-
-func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
-	return p.engine().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
-}
-
-// -----------------------------------------------------------------------------
-// Dynamic Loading
-// -----------------------------------------------------------------------------
-// LoadTilemap dynamically loads a tilemap from the specified path.
-// mapDir can be either:
-//   - A directory path (new format): "tilemaps/map1" -> uses C++ TileMapParser
-//   - A file path (old format): "tilemaps/map1.json" -> uses Go loader
-//
-// This will unload any currently loaded tilemap before loading the new one.
-func (p *Game) LoadTilemap(mapDir string) {
-	p.tilemapMgr.unloadMap()
-	p.tilemapMgr.loadMap(mapDir)
-	p.applyTilemap()
-}
-
-// UnloadTilemap unloads the currently loaded tilemap and cleans up resources.
-func (p *Game) UnloadTilemap() {
-	p.tilemapMgr.unloadMap()
-}
-
-// TilemapName returns the name of the currently loaded tilemap.
-func (p *Game) TilemapName() string {
-	return p.tilemapMgr.getCurrentMap()
 }
 
 // -----------------------------------------------------------------------------

@@ -25,6 +25,23 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
+// -----------------------------------------------------------------------------
+// Sprite Proxy Lifecycle
+// -----------------------------------------------------------------------------
+const (
+	cloneProxyPublished uint32 = iota
+	cloneProxyPending
+	cloneProxyReady
+)
+
+type cloneProxyPublication struct {
+	state uint32
+	// sensingVisibilityLeases is confined to the engine main thread. A count
+	// keeps temporary sensing visibility correct under nested bridge calls. It
+	// is atomic because generic proxy-sync paths may read effective visibility.
+	sensingVisibilityLeases atomic.Int32
+}
+
 // dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
 func (p *Game) dispatchStartEventIfNeeded() {
 	if ev := p.scheduleStartEvent(); ev != nil {
@@ -105,10 +122,6 @@ func (p *Game) processPhysicsTriggers() {
 	p.triggerEvents = p.triggerEvents[:0]
 }
 
-func isSpriteTouchable(sprite *SpriteImpl) bool {
-	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
-}
-
 // -----------------------------------------------------------------------------
 // Base Object Visual Sync
 // -----------------------------------------------------------------------------
@@ -147,23 +160,6 @@ func (p *baseObj) applyAtlasUVRemap() {
 	uvRemap := p.getCostumeAtlasUvRemap()
 	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
 	p.setMaterialParamsVec4("atlas_uv_rect2", val, true)
-}
-
-// -----------------------------------------------------------------------------
-// Sprite Proxy Lifecycle
-// -----------------------------------------------------------------------------
-const (
-	cloneProxyPublished uint32 = iota
-	cloneProxyPending
-	cloneProxyReady
-)
-
-type cloneProxyPublication struct {
-	state uint32
-	// sensingVisibilityLeases is confined to the engine main thread. A count
-	// keeps temporary sensing visibility correct under nested bridge calls. It
-	// is atomic because generic proxy-sync paths may read effective visibility.
-	sensingVisibilityLeases atomic.Int32
 }
 
 func (p *SpriteImpl) beginCloneProxyPublication() {
@@ -253,7 +249,7 @@ func (p *SpriteImpl) handleAnimationFinished() {
 	}
 	state := p.animation().getCurAnimState()
 	if state != nil && state.Name != "" {
-		p.animation().addDonedAnimation(state.Name)
+		p.animation().addDoneAnimation(state.Name)
 	}
 }
 
@@ -283,7 +279,7 @@ func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
 }
 
 func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
-	p.transform().setXY(x, y)
+	p.transform().setPositionRaw(x, y)
 }
 
 func (p *SpriteImpl) ensureProxyQueryStateSynced() {
@@ -352,4 +348,8 @@ func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 		p.effectiveProxyVisibility(),
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
+}
+
+func isSpriteTouchable(sprite *SpriteImpl) bool {
+	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
 }

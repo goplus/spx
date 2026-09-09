@@ -42,10 +42,6 @@ type componentBase struct {
 	sprite *SpriteImpl
 }
 
-func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	c.sprite = sprite
-}
-
 // ============================================================================
 // Component Registry
 // ============================================================================
@@ -58,6 +54,10 @@ type spriteComponents struct {
 	pen       *penComponent
 	sound     *soundComponent
 	bubble    *bubbleComponent // Optional: only allocated when Say/Think/Quote is used
+}
+
+func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
+	c.sprite = sprite
 }
 
 // initComponents initializes all sprite components.
@@ -78,17 +78,13 @@ func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *corepr
 	sc.sound.initialize(sprite, spriteCfg)
 }
 
-// cloneFrom creates new component instances by cloning from source components.
-// This is used when cloning a sprite to ensure each sprite has independent components.
-// Each component's cloneFrom method is responsible for its own cloning logic.
+// cloneFrom creates independent component instances for a cloned sprite.
 func (sc *spriteComponents) cloneFrom(src *spriteComponents, newSprite *SpriteImpl) {
-	// Delegate cloning to each component
 	sc.transform = src.transform.cloneFrom(src.transform, newSprite).(*transformComponent)
 	sc.animation = src.animation.cloneFrom(src.animation, newSprite).(*animationComponent)
 	sc.physics = src.physics.cloneFrom(src.physics, newSprite).(*physicsComponent)
 	sc.pen = src.pen.cloneFrom(src.pen, newSprite).(*penComponent)
 	sc.sound = src.sound.cloneFrom(src.sound, newSprite).(*soundComponent)
-	// Bubble component is optional and NOT cloned - each sprite starts fresh
 	sc.bubble = nil
 }
 
@@ -114,33 +110,31 @@ func (sc *spriteComponents) destroyComponents() {
 	}
 }
 
-// Transform returns the transform component.
-func (sc *spriteComponents) Transform() *transformComponent {
+// ============================================================================
+// Component Accessors
+// ============================================================================
+
+func (sc *spriteComponents) getTransform() *transformComponent {
 	return sc.transform
 }
 
-// Animation returns the animation component.
-func (sc *spriteComponents) Animation() *animationComponent {
+func (sc *spriteComponents) getAnimation() *animationComponent {
 	return sc.animation
 }
 
-// Physics returns the physics component.
-func (sc *spriteComponents) Physics() *physicsComponent {
+func (sc *spriteComponents) getPhysics() *physicsComponent {
 	return sc.physics
 }
 
-// Pen returns the pen component.
-func (sc *spriteComponents) Pen() *penComponent {
+func (sc *spriteComponents) getPen() *penComponent {
 	return sc.pen
 }
 
-// Sound returns the sound component.
-func (sc *spriteComponents) Sound() *soundComponent {
+func (sc *spriteComponents) getSound() *soundComponent {
 	return sc.sound
 }
 
-// Bubble returns the bubble component (lazy initialization).
-func (sc *spriteComponents) Bubble() *bubbleComponent {
+func (sc *spriteComponents) getBubble() *bubbleComponent {
 	if sc.bubble == nil {
 		sc.bubble = &bubbleComponent{}
 		sc.bubble.initialize(sc.transform.sprite, nil)

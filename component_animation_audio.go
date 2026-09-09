@@ -24,11 +24,6 @@ import (
 // ============================================================================
 // Animation Audio
 // ============================================================================
-// This file manages animation-bound audio playback and replay state.
-
-// ============================================================================
-// Audio Playback
-// ============================================================================
 
 func (a *animationComponent) playAnimationAudio(ani *coreproject.AniConfig, state *animState) {
 	a.playOnStartAudio(ani.OnStart, state)
@@ -111,16 +106,16 @@ func (a *animationComponent) stopOnPlayAudio(state *animState) {
 	a.sprite.stopAudioPlayback(id)
 }
 
+// ============================================================================
+// Pending Replay State
+// ============================================================================
+
 func (a *animationComponent) markOnPlayAudioRestartPending(state *animState) {
 	if state == nil || state.OnPlayReplayAudioName == "" {
 		return
 	}
 	state.OnPlayAudioRestartPending = true
 }
-
-// ============================================================================
-// Pending Replay State
-// ============================================================================
 
 func (a *animationComponent) takePendingOnPlayAudioStates(buffer []*animState) []*animState {
 	buffer = a.takePendingOnPlayAudioState(buffer[:0], a.curAnimState)

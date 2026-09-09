@@ -50,6 +50,37 @@ type costume struct {
 	atlasUVRect mathf.Vec4 // UV coordinates for atlas texture
 }
 
+func (c *costume) getAssetPath() string {
+	return costumeAssetPath(c.path)
+}
+
+// getSize returns the size of the costume accounting for bitmap resolution.
+func (c *costume) getSize() (int, int) {
+	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
+}
+
+// getSizeF returns the exact logical costume size without truncating partial
+// pixels introduced by bitmap resolution scaling.
+func (c *costume) getSizeF() (float64, float64) {
+	resolution := float64(c.bitmapResolution)
+	return float64(c.width) / resolution, float64(c.height) / resolution
+}
+
+// renderAnchorInSPX converts the costume center from top-left, Y-down asset
+// coordinates into a local SPX anchor relative to the geometric image center.
+func (c *costume) renderAnchorInSPX() mathf.Vec2 {
+	resolution := float64(c.bitmapResolution)
+	return mathf.NewVec2(
+		(c.center.X-float64(c.width)/2)/resolution,
+		(float64(c.height)/2-c.center.Y)/resolution,
+	)
+}
+
+// isAtlas returns true if this costume is part of an atlas/set.
+func (c *costume) isAtlas() bool {
+	return c.setIndex >= 0
+}
+
 // newCostumeWithSize creates a costume with specified dimensions (no image file).
 func newCostumeWithSize(width, height int) *costume {
 	frame := assetutil.NewSizedFrame(width, height)
@@ -133,10 +164,6 @@ func costumeAssetPath(path string) string {
 	return engine.ToAssetPath(path)
 }
 
-func (c *costume) getAssetPath() string {
-	return costumeAssetPath(c.path)
-}
-
 // getImageSizeCached retrieves image size from cache or loads it.
 func getImageSizeCached(imagePath string) mathf.Vec2 {
 	cache := imageSizeCacheRef()
@@ -155,31 +182,4 @@ func getCostumeAssetSize(imagePath string) mathf.Vec2 {
 		return game.engine().ResMgr.GetImageSize(assetPath)
 	}
 	return engine.Managers().ResMgr.GetImageSize(assetPath)
-}
-
-// getSize returns the size of the costume accounting for bitmap resolution.
-func (c *costume) getSize() (int, int) {
-	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
-}
-
-// getSizeF returns the exact logical costume size without truncating partial
-// pixels introduced by bitmap resolution scaling.
-func (c *costume) getSizeF() (float64, float64) {
-	resolution := float64(c.bitmapResolution)
-	return float64(c.width) / resolution, float64(c.height) / resolution
-}
-
-// renderAnchorInSPX converts the costume center from top-left, Y-down asset
-// coordinates into a local SPX anchor relative to the geometric image center.
-func (c *costume) renderAnchorInSPX() mathf.Vec2 {
-	resolution := float64(c.bitmapResolution)
-	return mathf.NewVec2(
-		(c.center.X-float64(c.width)/2)/resolution,
-		(float64(c.height)/2-c.center.Y)/resolution,
-	)
-}
-
-// isAtlas returns true if this costume is part of an atlas/set.
-func (c *costume) isAtlas() bool {
-	return c.setIndex >= 0
 }

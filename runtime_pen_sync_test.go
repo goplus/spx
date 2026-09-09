@@ -30,9 +30,9 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	sprite.transform().x = 12
 	sprite.transform().y = 34
 
-	sprite.pen().SetPenColor(HSB(20, 80, 90))
-	sprite.pen().PenDown()
-	sprite.pen().PenUp()
+	sprite.pen().setPenColor(HSB(20, 80, 90))
+	sprite.pen().penDown()
+	sprite.pen().penUp()
 	sprite.g.flushPenCommands()
 
 	if spy.batchCalls != 1 {
@@ -79,7 +79,7 @@ func TestPenBatchBarriersPreserveOrder(t *testing.T) {
 			name: "stamp",
 			action: func(sprite *penTestSprite) {
 				configurePenRenderOffsetSprite(sprite)
-				sprite.pen().Stamp()
+				sprite.pen().stamp()
 			},
 			last: "stamp",
 		},
@@ -104,7 +104,7 @@ func TestPenBatchBarriersPreserveOrder(t *testing.T) {
 			spy := setupSpyPenMgr(t)
 			sprite := newPenTestSprite()
 			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
-			sprite.pen().PenDown()
+			sprite.pen().penDown()
 
 			tt.action(sprite)
 

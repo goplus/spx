@@ -44,7 +44,7 @@ type SpriteImpl struct {
 }
 
 // -----------------------------------------------------------------------------
-// Basic State
+// Public API
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) Name() string {
 	return p.name
@@ -54,6 +54,54 @@ func (p *SpriteImpl) IsCloned() bool {
 	return p.spriteState.Cloned
 }
 
+func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
+	p.baseObj.initFrom(&src.baseObj)
+	p.scriptEventBindings.initFrom(&src.scriptEventBindings, p)
+
+	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
+	p.greffUniforms = maps.Clone(src.greffUniforms)
+
+	p.spriteState.IsVisible = src.spriteState.IsVisible
+	p.spriteState.Cloned = true
+	p.spriteState.IsDying = false
+	p.spriteState.IsAwakened = false
+
+	p.spriteState.DirtyVersion = 0
+	p.spriteState.ProxySyncVersion = 0
+	p.proxyPublication = nil
+	p.spriteState.HasOnCloned = false
+	p.spriteState.HasOnTouchStart = false
+	p.spriteState.HasOnTouching = false
+	p.spriteState.HasOnTouchEnd = false
+}
+
+func (p *SpriteImpl) Die() {
+	p.setDying()
+	p.Stop(OtherScriptsInSprite)
+	p.playStateAnimationAndWait(StateDie)
+	p.Destroy()
+}
+
+func (p *SpriteImpl) Destroy() {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Destroy: %s", p.name)
+	}
+	p.teardown()
+	p.Stop(ThisSprite)
+	p.markDestroyed()
+	p.abortIfCurrentCoroutine()
+}
+
+func (p *SpriteImpl) DeleteThisClone() {
+	if !p.spriteState.Cloned {
+		return
+	}
+	p.Destroy()
+}
+
+// -----------------------------------------------------------------------------
+// Internal State
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) setDying() {
 	p.spriteState.IsDying = true
 }
@@ -97,76 +145,32 @@ func (p *SpriteImpl) initComponents(spriteCfg *coreproject.SpriteConfig) {
 	p.components.initComponents(p, spriteCfg)
 }
 
-func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
-	p.baseObj.initFrom(&src.baseObj)
-	p.scriptEventBindings.initFrom(&src.scriptEventBindings, p)
-
-	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
-	p.greffUniforms = maps.Clone(src.greffUniforms)
-
-	p.spriteState.IsVisible = src.spriteState.IsVisible
-	p.spriteState.Cloned = true
-	p.spriteState.IsDying = false
-	p.spriteState.IsAwakened = false
-
-	p.spriteState.DirtyVersion = 0
-	p.spriteState.ProxySyncVersion = 0
-	p.proxyPublication = nil
-	p.spriteState.HasOnCloned = false
-	p.spriteState.HasOnTouchStart = false
-	p.spriteState.HasOnTouching = false
-	p.spriteState.HasOnTouchEnd = false
-}
-
 // -----------------------------------------------------------------------------
 // Components
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) transform() *transformComponent {
-	return p.components.Transform()
+	return p.components.getTransform()
 }
 
 func (p *SpriteImpl) animation() *animationComponent {
-	return p.components.Animation()
+	return p.components.getAnimation()
 }
 
 func (p *SpriteImpl) physics() *physicsComponent {
-	return p.components.Physics()
+	return p.components.getPhysics()
 }
 
 func (p *SpriteImpl) pen() *penComponent {
-	return p.components.Pen()
+	return p.components.getPen()
 }
 
 func (p *SpriteImpl) sound() *soundComponent {
-	return p.components.Sound()
+	return p.components.getSound()
 }
 
 // -----------------------------------------------------------------------------
-// Lifecycle
+// Lifecycle Helpers
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) Die() {
-	p.setDying()
-	p.Stop(OtherScriptsInSprite)
-	p.playStateAnimationAndWait(StateDie)
-	p.Destroy()
-}
-
-func (p *SpriteImpl) Destroy() {
-	if isDebugInstrEnabled() {
-		spxlog.Debug("Destroy: %s", p.name)
-	}
-	p.teardown()
-	p.Stop(ThisSprite)
-	p.markDestroyed()
-	p.abortIfCurrentCoroutine()
-}
-
-func (p *SpriteImpl) DeleteThisClone() {
-	if !p.spriteState.Cloned {
-		return
-	}
-	p.Destroy()
-}
 
 func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
 	animName := p.getStateAnimName(stateName)

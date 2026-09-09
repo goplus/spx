@@ -69,6 +69,113 @@ type monitorPanel interface {
 }
 
 // -----------------------------------------------------------------------------
+// Widget Methods
+// -----------------------------------------------------------------------------
+func (pself *Monitor) GetName() WidgetName {
+	return pself.name
+}
+
+func (pself *Monitor) Visible() bool {
+	return pself.visible
+}
+
+func (pself *Monitor) Show() {
+	pself.setVisible(true)
+}
+
+func (pself *Monitor) Hide() {
+	pself.setVisible(false)
+}
+
+func (pself *Monitor) Xpos() float64 {
+	return pself.pos.X
+}
+
+func (pself *Monitor) Ypos() float64 {
+	return pself.pos.Y
+}
+
+func (pself *Monitor) SetXpos(x float64) {
+	pself.setXYpos(x, pself.pos.Y)
+}
+
+func (pself *Monitor) SetYpos(y float64) {
+	pself.setXYpos(pself.pos.X, y)
+}
+
+func (pself *Monitor) SetXYpos(x float64, y float64) {
+	pself.setXYpos(x, y)
+}
+
+func (pself *Monitor) ChangeXpos(dx float64) {
+	pself.setXYpos(pself.pos.X+dx, pself.pos.Y)
+}
+
+func (pself *Monitor) ChangeYpos(dy float64) {
+	pself.setXYpos(pself.pos.X, pself.pos.Y+dy)
+}
+
+func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
+	pself.setXYpos(pself.pos.X+dx, pself.pos.Y+dy)
+}
+
+func (pself *Monitor) Size() float64 {
+	return pself.size
+}
+
+func (pself *Monitor) SetSize(size float64) {
+	pself.size = size
+	pself.isDirty = true
+}
+
+func (pself *Monitor) ChangeSize(delta float64) {
+	pself.size += delta
+	pself.isDirty = true
+}
+
+func (pself *Monitor) onUpdate(delta float64) {
+	if pself.visible && pself.updateInput != nil && pself.updateInput() {
+		pself.isDirty = true
+	}
+	pself.updateTimer += delta
+	due := pself.updateTimer >= monitorUpdateIntervalS
+	if !pself.isDirty && !due {
+		return
+	}
+
+	if due {
+		pself.updateTimer = 0
+	}
+
+	// A getter can change visibility; apply that change on the next refresh.
+	visible := pself.visible
+	if visible {
+		pself.panel.Render(pself.style, pself.eval())
+		pself.panel.UpdateScale(pself.size)
+		pself.panel.UpdatePos(pself.pos)
+	}
+	pself.panel.SetVisible(visible)
+	pself.isDirty = false
+}
+
+// -----------------------------------------------------------------------------
+// Visibility Control
+// -----------------------------------------------------------------------------
+func (pself *Monitor) setVisible(visible bool) {
+	if visible == pself.visible {
+		return
+	}
+
+	pself.visible = visible
+	pself.isDirty = true
+}
+
+func (pself *Monitor) setXYpos(x float64, y float64) {
+	pself.pos = mathf.NewVec2(x, y)
+	pself.isDirty = true
+}
+
+// -----------------------------------------------------------------------------
 // Construction
 // -----------------------------------------------------------------------------
 /*
@@ -123,111 +230,4 @@ func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
 	}
 
 	return monitor, nil
-}
-
-func (pself *Monitor) onUpdate(delta float64) {
-	if pself.visible && pself.updateInput != nil && pself.updateInput() {
-		pself.isDirty = true
-	}
-	pself.updateTimer += delta
-	due := pself.updateTimer >= monitorUpdateIntervalS
-	if !pself.isDirty && !due {
-		return
-	}
-
-	if due {
-		pself.updateTimer = 0
-	}
-
-	// A getter can change visibility; apply that change on the next refresh.
-	visible := pself.visible
-	if visible {
-		pself.panel.Render(pself.style, pself.eval())
-		pself.panel.UpdateScale(pself.size)
-		pself.panel.UpdatePos(pself.pos)
-	}
-	pself.panel.SetVisible(visible)
-	pself.isDirty = false
-}
-
-// -----------------------------------------------------------------------------
-// Visibility Control
-// -----------------------------------------------------------------------------
-func (pself *Monitor) setVisible(visible bool) {
-	if visible == pself.visible {
-		return
-	}
-
-	pself.visible = visible
-	pself.isDirty = true
-}
-
-// -----------------------------------------------------------------------------
-// Widget Methods
-// -----------------------------------------------------------------------------
-func (pself *Monitor) GetName() WidgetName {
-	return pself.name
-}
-
-func (pself *Monitor) Visible() bool {
-	return pself.visible
-}
-
-func (pself *Monitor) Show() {
-	pself.setVisible(true)
-}
-
-func (pself *Monitor) Hide() {
-	pself.setVisible(false)
-}
-
-func (pself *Monitor) Xpos() float64 {
-	return pself.pos.X
-}
-
-func (pself *Monitor) Ypos() float64 {
-	return pself.pos.Y
-}
-
-func (pself *Monitor) SetXpos(x float64) {
-	pself.setXYpos(x, pself.pos.Y)
-}
-
-func (pself *Monitor) SetYpos(y float64) {
-	pself.setXYpos(pself.pos.X, y)
-}
-
-func (pself *Monitor) SetXYpos(x float64, y float64) {
-	pself.setXYpos(x, y)
-}
-
-func (pself *Monitor) ChangeXpos(dx float64) {
-	pself.setXYpos(pself.pos.X+dx, pself.pos.Y)
-}
-
-func (pself *Monitor) ChangeYpos(dy float64) {
-	pself.setXYpos(pself.pos.X, pself.pos.Y+dy)
-}
-
-func (pself *Monitor) ChangeXYpos(dx float64, dy float64) {
-	pself.setXYpos(pself.pos.X+dx, pself.pos.Y+dy)
-}
-
-func (pself *Monitor) setXYpos(x float64, y float64) {
-	pself.pos = mathf.NewVec2(x, y)
-	pself.isDirty = true
-}
-
-func (pself *Monitor) Size() float64 {
-	return pself.size
-}
-
-func (pself *Monitor) SetSize(size float64) {
-	pself.size = size
-	pself.isDirty = true
-}
-
-func (pself *Monitor) ChangeSize(delta float64) {
-	pself.size += delta
-	pself.isDirty = true
 }

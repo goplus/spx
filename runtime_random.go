@@ -38,6 +38,8 @@ type randomState struct {
 	coroutineStreams map[int64]*rand.Rand
 }
 
+var scriptRandom = newRandomState()
+
 // SetRandomSeed resets the shared script random source with seed.
 func SetRandomSeed(seed int64) {
 	scriptRandom.setSeed(seed, randomScopeShared)
@@ -46,35 +48,6 @@ func SetRandomSeed(seed int64) {
 // ResetRandomSeed resets the shared script random source with a time-based seed.
 func ResetRandomSeed() {
 	SetRandomSeed(time.Now().UnixNano())
-}
-
-var scriptRandom = newRandomState()
-
-func setDeterministicRandomSeed(seed int64) {
-	scriptRandom.setSeed(seed, randomScopePerCoroutine)
-}
-
-func randomIntn(n int) int {
-	return scriptRandom.intn(n)
-}
-
-func randomInt31n(n int32) int32 {
-	return scriptRandom.int31n(n)
-}
-
-func randomFloat64() float64 {
-	return scriptRandom.float64()
-}
-
-func newRandomState() *randomState {
-	return &randomState{
-		sharedStream:     newRandomStream(time.Now().UnixNano()),
-		coroutineStreams: make(map[int64]*rand.Rand),
-	}
-}
-
-func newRandomStream(seed int64) *rand.Rand {
-	return rand.New(rand.NewSource(seed))
 }
 
 func (r *randomState) setSeed(seed int64, scope randomScope) {
@@ -133,6 +106,33 @@ func (r *randomState) currentCoroutineStreamIDLocked() (int64, bool) {
 		return 0, false
 	}
 	return id - r.coroutineIDBase, true
+}
+
+func setDeterministicRandomSeed(seed int64) {
+	scriptRandom.setSeed(seed, randomScopePerCoroutine)
+}
+
+func randomIntn(n int) int {
+	return scriptRandom.intn(n)
+}
+
+func randomInt31n(n int32) int32 {
+	return scriptRandom.int31n(n)
+}
+
+func randomFloat64() float64 {
+	return scriptRandom.float64()
+}
+
+func newRandomState() *randomState {
+	return &randomState{
+		sharedStream:     newRandomStream(time.Now().UnixNano()),
+		coroutineStreams: make(map[int64]*rand.Rand),
+	}
+}
+
+func newRandomStream(seed int64) *rand.Rand {
+	return rand.New(rand.NewSource(seed))
 }
 
 func currentCoroutineID() int64 {

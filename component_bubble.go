@@ -33,8 +33,8 @@ type bubbleComponent struct {
 	componentBase
 	mu sync.Mutex
 
-	textObj  *textBubble   // Text bubble object (Say/Think)
-	quoteObj *quoterBubble // Quote bubble object
+	textObj  *textBubble   // Text bubble object (Say/Think).
+	quoteObj *quoterBubble // Quote bubble object.
 }
 
 type bubbleShape interface {
@@ -48,14 +48,12 @@ type bubbleShape interface {
 // initialize initializes the bubble component.
 func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	b.componentBase.initialize(sprite, spriteCfg)
-	// Bubbles are created on-demand (lazy initialization)
 	b.textObj = nil
 	b.quoteObj = nil
 }
 
 // cloneFrom creates a new bubble component by cloning from source.
 func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	// Bubbles are NOT cloned - each sprite starts with clean bubbles
 	newBubble := &bubbleComponent{
 		componentBase: componentBase{sprite: newSprite},
 		textObj:       nil,

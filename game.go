@@ -131,20 +131,10 @@ type Game struct {
 	spatialHash   *collision.SpatialHash[*SpriteImpl]
 }
 
-func activeGame() *Game {
-	game, _ := engine.GetGame().(*Game)
-	return game
-}
-
 func (p *Game) initRuntimeState() {
 	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
 	syncCoroutinePerfDebug(p.debugState.DebugPerf)
 	p.initEventQueueState()
-}
-
-func setDefaultDebugFlags(instr, event, perf bool) {
-	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
-	syncCoroutinePerfDebug(perf)
 }
 
 func (p *Game) setDebugFlags(instr, event, perf bool) {
@@ -152,69 +142,12 @@ func (p *Game) setDebugFlags(instr, event, perf bool) {
 	syncCoroutinePerfDebug(perf)
 }
 
-// syncCoroutinePerfDebug keeps the process-wide coroutine scheduler aligned with
-// the most recently applied perf-debug setting. The scheduler is global, so this
-// flag is intentionally global as well.
-func syncCoroutinePerfDebug(enabled bool) {
-	gco.SetPerfDebug(enabled)
-}
-
-func isDebugInstrEnabled() bool {
-	return runtimeStateMgr.DebugInstrEnabled(activeGameDebugState())
-}
-
-func isDebugEventEnabled() bool {
-	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
-}
-
 func (p *Game) setPhysicsEnabled(enabled bool) {
 	runtimeStateMgr.SetPhysicsEnabled(&p.gameRuntimeState, enabled)
 }
 
-func isPhysicsEnabled() bool {
-	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
-}
-
 func (p *Game) resetImageSizeCache() {
 	runtimeStateMgr.ResetImageSizeCache(&p.gameRuntimeState)
-}
-
-func imageSizeCacheRef() *sync.Map {
-	return runtimeStateMgr.ImageSizeCacheRef(activeGameRuntimeState())
-}
-
-func setSchedInMain(inMain bool) {
-	runtimeStateMgr.SetSchedInMain(activeGameRuntimeState(), inMain)
-}
-
-func isSchedInMainState() bool {
-	return runtimeStateMgr.IsSchedInMain(activeGameRuntimeState())
-}
-
-func setMainSchedTime(t time.Time) {
-	runtimeStateMgr.SetMainSchedTime(activeGameRuntimeState(), t)
-}
-
-func mainSchedTime() time.Time {
-	return runtimeStateMgr.MainSchedTime(activeGameRuntimeState())
-}
-
-func activeGameDebugState() *corestate.GameDebugState {
-	if g := activeGame(); g != nil {
-		return &g.debugState
-	}
-	return nil
-}
-
-func activeGameRuntimeState() *corestate.GameRuntimeState {
-	return runtimeStateOfGame(activeGame())
-}
-
-func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
-	if g == nil {
-		return nil
-	}
-	return &g.gameRuntimeState
 }
 
 func (p *Game) newSpriteAndLoadWithLoader(
@@ -306,4 +239,71 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 
 func (p *Game) initShapeMgr() {
 	p.shapeMgr.init()
+}
+
+func activeGame() *Game {
+	game, _ := engine.GetGame().(*Game)
+	return game
+}
+
+func setDefaultDebugFlags(instr, event, perf bool) {
+	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
+	syncCoroutinePerfDebug(perf)
+}
+
+// syncCoroutinePerfDebug keeps the process-wide coroutine scheduler aligned with
+// the most recently applied perf-debug setting. The scheduler is global, so this
+// flag is intentionally global as well.
+func syncCoroutinePerfDebug(enabled bool) {
+	gco.SetPerfDebug(enabled)
+}
+
+func isDebugInstrEnabled() bool {
+	return runtimeStateMgr.DebugInstrEnabled(activeGameDebugState())
+}
+
+func isDebugEventEnabled() bool {
+	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
+}
+
+func isPhysicsEnabled() bool {
+	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
+}
+
+func imageSizeCacheRef() *sync.Map {
+	return runtimeStateMgr.ImageSizeCacheRef(activeGameRuntimeState())
+}
+
+func setSchedInMain(inMain bool) {
+	runtimeStateMgr.SetSchedInMain(activeGameRuntimeState(), inMain)
+}
+
+func isSchedInMainState() bool {
+	return runtimeStateMgr.IsSchedInMain(activeGameRuntimeState())
+}
+
+func setMainSchedTime(t time.Time) {
+	runtimeStateMgr.SetMainSchedTime(activeGameRuntimeState(), t)
+}
+
+func mainSchedTime() time.Time {
+	return runtimeStateMgr.MainSchedTime(activeGameRuntimeState())
+}
+
+func activeGameDebugState() *corestate.GameDebugState {
+	if g := activeGame(); g != nil {
+		return &g.debugState
+	}
+	return nil
+}
+
+func activeGameRuntimeState() *corestate.GameRuntimeState {
+	return runtimeStateOfGame(activeGame())
+}
+
+func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
+	if g == nil {
+		return nil
+	}
+	return &g.gameRuntimeState
 }

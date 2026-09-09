@@ -31,6 +31,38 @@ import (
 )
 
 // -----------------------------------------------------------------------------
+// Visual Effects
+// -----------------------------------------------------------------------------
+type EffectKind int
+
+const (
+	ColorEffect EffectKind = iota
+	FishEyeEffect
+	WhirlEffect
+	PixelateEffect
+	MosaicEffect
+	BrightnessEffect
+	GhostEffect
+
+	enumNumOfEffect
+)
+
+var greffNames = []string{
+	ColorEffect:      "color_amount",
+	FishEyeEffect:    "fisheye_amount",
+	WhirlEffect:      "whirl_amount",
+	MosaicEffect:     "uv_amount",
+	PixelateEffect:   "pixleate_amount",
+	BrightnessEffect: "brightness_amount",
+	GhostEffect:      "alpha_amount",
+}
+
+// -----------------------------------------------------------------------------
+// Property
+// -----------------------------------------------------------------------------
+type PropertyName = string
+
+// -----------------------------------------------------------------------------
 // Stage Display
 // -----------------------------------------------------------------------------
 func (p *Game) BackdropName() string {
@@ -82,33 +114,6 @@ func (p *Game) EraseAll() {
 	p.penCommandBarrier(p.engine().PenMgr.DestroyAllPens)
 }
 
-// -----------------------------------------------------------------------------
-// Visual Effects
-// -----------------------------------------------------------------------------
-type EffectKind int
-
-const (
-	ColorEffect EffectKind = iota
-	FishEyeEffect
-	WhirlEffect
-	PixelateEffect
-	MosaicEffect
-	BrightnessEffect
-	GhostEffect
-
-	enumNumOfEffect
-)
-
-var greffNames = []string{
-	ColorEffect:      "color_amount",
-	FishEyeEffect:    "fisheye_amount",
-	WhirlEffect:      "whirl_amount",
-	MosaicEffect:     "uv_amount",
-	PixelateEffect:   "pixleate_amount",
-	BrightnessEffect: "brightness_amount",
-	GhostEffect:      "alpha_amount",
-}
-
 func (kind EffectKind) String() string {
 	return greffNames[kind]
 }
@@ -145,10 +150,6 @@ func (p *Game) MouseY() float64 {
 
 func (p *Game) MousePressed() bool {
 	return p.inputMgr.effectiveMousePressed()
-}
-
-func (p *Game) getMousePos() (x, y float64) {
-	return p.MouseX(), p.MouseY()
 }
 
 func (p *Game) Username() string {
@@ -192,6 +193,65 @@ func (p *Game) Answer() string {
 	return p.dialogState.AnswerVal
 }
 
+// -----------------------------------------------------------------------------
+// Target
+// -----------------------------------------------------------------------------
+// GetTarget returns the implementation of the first active, non-cloned sprite
+// with the specified name. It returns nil if no matching sprite exists.
+func (p *Game) GetTarget(target string) *SpriteImpl {
+	return p.findSprite(target)
+}
+
+func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
+	if val, ok := p.resolveTargetProperty(target, name); ok {
+		return val
+	}
+	return Value{}
+}
+
+func (p *Game) HideVar(name PropertyName) {
+	p.setStageMonitor("", name, false)
+}
+
+func (p *Game) ShowVar(name PropertyName) {
+	p.setStageMonitor("", name, true)
+}
+
+func (p *Game) SetupPathFinder__0() {
+	p.setupPathFinder(true, false)
+}
+
+func (p *Game) SetupPathFinder__1(xGridSize, yGridSize, xCellSize, yCellSize float64, withJump, withDebug bool) {
+	p.engine().NavigationMgr.SetupPathFinderWithSize(
+		mathf.NewVec2(xGridSize, yGridSize),
+		mathf.NewVec2(xCellSize, yCellSize),
+		withJump,
+		withDebug,
+	)
+}
+
+func (p *Game) FindPath__0(xFrom, yFrom, xTo, yTo float64) []float64 {
+	return p.FindPath__2(xFrom, yFrom, xTo, yTo, false, true)
+}
+
+func (p *Game) FindPath__1(xFrom, yFrom, xTo, yTo float64, withDebug bool) []float64 {
+	return p.FindPath__2(xFrom, yFrom, xTo, yTo, withDebug, true)
+}
+
+func (p *Game) FindPath__2(xFrom, yFrom, xTo, yTo float64, withDebug, withJump bool) []float64 {
+	p.lifecycleState.OncePathFinder.Do(func() {
+		p.setupPathFinder(withJump, withDebug)
+	})
+
+	arr := p.engine().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
+	result := arr.([]float32)
+	return engine.F32Tof64(result)
+}
+
+func (p *Game) getMousePos() (x, y float64) {
+	return p.MouseX(), p.MouseY()
+}
+
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 	if p.dialogState.AskPanel == nil {
 		p.dialogState.AskPanel = ui.NewUiAsk()
@@ -211,20 +271,6 @@ func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 		engine.WaitNextFrame()
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Target
-// -----------------------------------------------------------------------------
-// GetTarget returns the implementation of the first active, non-cloned sprite
-// with the specified name. It returns nil if no matching sprite exists.
-func (p *Game) GetTarget(target string) *SpriteImpl {
-	return p.findSprite(target)
-}
-
-// -----------------------------------------------------------------------------
-// Property
-// -----------------------------------------------------------------------------
-type PropertyName = string
 
 func (p *Game) propertyRootValue() reflect.Value {
 	if p.gamer != nil {
@@ -268,13 +314,6 @@ func (p *Game) resolvePropertyTarget(target string) (reflect.Value, int) {
 	return v, 0 // normal target field
 }
 
-func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
-	if val, ok := p.resolveTargetProperty(target, name); ok {
-		return val
-	}
-	return Value{}
-}
-
 // -----------------------------------------------------------------------------
 // Monitor
 // -----------------------------------------------------------------------------
@@ -288,14 +327,6 @@ func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bo
 		}
 	}
 	return false
-}
-
-func (p *Game) HideVar(name PropertyName) {
-	p.setStageMonitor("", name, false)
-}
-
-func (p *Game) ShowVar(name PropertyName) {
-	p.setStageMonitor("", name, true)
 }
 
 // -----------------------------------------------------------------------------
@@ -345,39 +376,8 @@ func (p *Game) applyPathFinderSettings(settings coreproject.SystemSettings) {
 	p.pathfindingState.PathCellSizeY = settings.PathCellSizeY
 }
 
-func (p *Game) SetupPathFinder__0() {
-	p.setupPathFinder(true, false)
-}
-
-func (p *Game) SetupPathFinder__1(xGridSize, yGridSize, xCellSize, yCellSize float64, withJump, withDebug bool) {
-	p.engine().NavigationMgr.SetupPathFinderWithSize(
-		mathf.NewVec2(xGridSize, yGridSize),
-		mathf.NewVec2(xCellSize, yCellSize),
-		withJump,
-		withDebug,
-	)
-}
-
 func (p *Game) setupPathFinder(withJump, withDebug bool) {
 	cellSize := mathf.NewVec2(float64(p.pathfindingState.PathCellSizeX), float64(p.pathfindingState.PathCellSizeY))
 	gridSize := mathf.NewVec2(float64(p.displayState.WorldWidth), float64(p.displayState.WorldHeight)).Div(cellSize)
 	p.engine().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, withJump, withDebug)
-}
-
-func (p *Game) FindPath__0(xFrom, yFrom, xTo, yTo float64) []float64 {
-	return p.FindPath__2(xFrom, yFrom, xTo, yTo, false, true)
-}
-
-func (p *Game) FindPath__1(xFrom, yFrom, xTo, yTo float64, withDebug bool) []float64 {
-	return p.FindPath__2(xFrom, yFrom, xTo, yTo, withDebug, true)
-}
-
-func (p *Game) FindPath__2(xFrom, yFrom, xTo, yTo float64, withDebug, withJump bool) []float64 {
-	p.lifecycleState.OncePathFinder.Do(func() {
-		p.setupPathFinder(withJump, withDebug)
-	})
-
-	arr := p.engine().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
-	result := arr.([]float32)
-	return engine.F32Tof64(result)
 }

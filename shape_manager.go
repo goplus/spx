@@ -185,21 +185,6 @@ func (s *shapeManager) layoutTextBubbles(items []Shape) {
 	}
 }
 
-func sortTextBubblesByLayoutID(bubbles []*textBubble) {
-	// Bubble counts are normally tiny and already ordered. Insertion sort keeps
-	// the unchanged-frame path allocation-free while making activation order
-	// irrelevant to layout.
-	for i := 1; i < len(bubbles); i++ {
-		bubble := bubbles[i]
-		j := i
-		for j > 0 && bubbles[j-1].layoutID > bubble.layoutID {
-			bubbles[j] = bubbles[j-1]
-			j--
-		}
-		bubbles[j] = bubble
-	}
-}
-
 func (s *shapeManager) collectProxyUpdates(items []Shape, buffer *engine.SpriteSyncBuffer) {
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
@@ -406,4 +391,19 @@ func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
 	}
 
 	return newIdx
+}
+
+func sortTextBubblesByLayoutID(bubbles []*textBubble) {
+	// Bubble counts are normally tiny and already ordered. Insertion sort keeps
+	// the unchanged-frame path allocation-free while making activation order
+	// irrelevant to layout.
+	for i := 1; i < len(bubbles); i++ {
+		bubble := bubbles[i]
+		j := i
+		for j > 0 && bubbles[j-1].layoutID > bubble.layoutID {
+			bubbles[j] = bubbles[j-1]
+			j--
+		}
+		bubbles[j] = bubble
+	}
 }

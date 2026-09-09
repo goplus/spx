@@ -161,7 +161,7 @@ func TestSpriteBounceOffEdgeWithCameraArea(t *testing.T) {
 
 	sprite := newEdgeTestSprite(-90)
 
-	sprite.transform().BounceOffEdge(edgeAreaCamera)
+	sprite.transform().bounceOffEdge(edgeAreaCamera)
 
 	if got := sprite.Heading(); got != -90 {
 		t.Fatalf("BounceOffEdge(camera) heading = %v, want -90", got)

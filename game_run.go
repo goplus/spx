@@ -158,6 +158,23 @@ func Sched() int {
 	return 0
 }
 
+func Forever(call func()) {
+	coreruntime.Forever(call, engine.NewControlFlowWaiter())
+}
+
+func Repeat(loopCount int, call func()) {
+	coreruntime.Repeat(loopCount, call, engine.NewControlFlowWaiter())
+}
+
+// The __xgo_autoclosure_ prefix preserves XGo's command-style condition syntax.
+func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
+	coreruntime.RepeatUntil(__xgo_autoclosure_condition, call, engine.NewControlFlowWaiter())
+}
+
+func WaitUntil(__xgo_autoclosure_condition func() bool) {
+	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
+}
+
 func handleMainExecutionTimeout(err error) bool {
 	if !errors.Is(err, coreruntime.ErrMainExecutionTimedOut) {
 		return false
@@ -176,23 +193,6 @@ func handleMainExecutionTimeout(err error) bool {
 		runtime.Gosched()
 	}
 	return true
-}
-
-func Forever(call func()) {
-	coreruntime.Forever(call, engine.NewControlFlowWaiter())
-}
-
-func Repeat(loopCount int, call func()) {
-	coreruntime.Repeat(loopCount, call, engine.NewControlFlowWaiter())
-}
-
-// The __xgo_autoclosure_ prefix preserves XGo's command-style condition syntax.
-func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
-	coreruntime.RepeatUntil(__xgo_autoclosure_condition, call, engine.NewControlFlowWaiter())
-}
-
-func WaitUntil(__xgo_autoclosure_condition func() bool) {
-	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
 }
 
 func init() {

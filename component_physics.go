@@ -32,10 +32,6 @@ import (
 // ============================================================================
 // This component manages sprite physics state, collision, and trigger shapes.
 
-func parseLayerMaskValue(pval *int64) int64 {
-	return defaults.OrDefault(pval, 1)
-}
-
 // physicsComponent encapsulates all physics-related functionality.
 type physicsComponent struct {
 	componentBase
@@ -126,123 +122,103 @@ func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) compo
 
 // onDestroy cleans up when the component is destroyed.
 func (p *physicsComponent) onDestroy() {
-	// Nothing to cleanup.
 }
 
 // ============================================================================
 // Physics Control
 // ============================================================================
 
-// SetPhysicsMode sets the physics mode for the sprite.
-func (p *physicsComponent) SetPhysicsMode(mode PhysicsMode) {
+func (p *physicsComponent) setPhysicsMode(mode PhysicsMode) {
 	p.physicsMode = mode
 	p.engine().SpriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
 }
 
-// GetPhysicsMode returns the current physics mode.
-func (p *physicsComponent) GetPhysicsMode() PhysicsMode {
+func (p *physicsComponent) getPhysicsMode() PhysicsMode {
 	return p.physicsMode
 }
 
-// GetVelocity returns the current velocity in X and Y directions.
-func (p *physicsComponent) GetVelocity() (velocityX, velocityY float64) {
+func (p *physicsComponent) getVelocity() (velocityX, velocityY float64) {
 	vel := p.engine().SpriteMgr.GetVelocity(p.sprite.getSpriteId())
 	return vel.X, vel.Y
 }
 
-// SetVelocity sets the velocity in X and Y directions.
-func (p *physicsComponent) SetVelocity(velocityX, velocityY float64) {
+func (p *physicsComponent) setVelocity(velocityX, velocityY float64) {
 	p.engine().SpriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
 }
 
-// AddImpulse applies an impulse force to the sprite.
-func (p *physicsComponent) AddImpulse(impulseX, impulseY float64) {
+func (p *physicsComponent) addImpulse(impulseX, impulseY float64) {
 	p.engine().SpriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
 }
 
-// IsOnFloor checks if the sprite is on the floor.
-func (p *physicsComponent) IsOnFloor() bool {
+func (p *physicsComponent) isOnFloor() bool {
 	return p.engine().SpriteMgr.IsOnFloor(p.sprite.getSpriteId())
 }
 
-// GetGravity returns the current gravity scale.
-func (p *physicsComponent) GetGravity() float64 {
+func (p *physicsComponent) getGravity() float64 {
 	return p.engine().SpriteMgr.GetGravity(p.sprite.getSpriteId())
 }
 
-// SetGravity sets the gravity scale for the sprite.
-func (p *physicsComponent) SetGravity(gravity float64) {
+func (p *physicsComponent) setGravity(gravity float64) {
 	p.engine().SpriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
 }
 
-func (p *physicsComponent) SetCollisionLayer(layer int64) {
+// ============================================================================
+// Collision and Trigger Control
+// ============================================================================
+
+func (p *physicsComponent) setCollisionLayer(layer int64) {
 	p.sprite.runtimeState.SyncSprite.SetCollisionLayer(layer)
 }
 
-func (p *physicsComponent) SetCollisionMask(mask int64) {
+func (p *physicsComponent) setCollisionMask(mask int64) {
 	p.sprite.runtimeState.SyncSprite.SetCollisionMask(mask)
 }
 
-func (p *physicsComponent) SetCollisionEnabled(enabled bool) {
+func (p *physicsComponent) setCollisionEnabled(enabled bool) {
 	p.sprite.runtimeState.SyncSprite.SetCollisionEnabled(enabled)
 }
 
-func (p *physicsComponent) GetCollisionLayer() int64 {
+func (p *physicsComponent) getCollisionLayer() int64 {
 	return p.sprite.runtimeState.SyncSprite.GetCollisionLayer()
 }
 
-func (p *physicsComponent) GetCollisionMask() int64 {
+func (p *physicsComponent) getCollisionMask() int64 {
 	return p.sprite.runtimeState.SyncSprite.GetCollisionMask()
 }
 
-func (p *physicsComponent) IsCollisionEnabled() bool {
+func (p *physicsComponent) isCollisionEnabled() bool {
 	return p.sprite.runtimeState.SyncSprite.IsCollisionEnabled()
 }
 
-func (p *physicsComponent) SetTriggerEnabled(trigger bool) {
+func (p *physicsComponent) setTriggerEnabled(trigger bool) {
 	p.sprite.runtimeState.SyncSprite.SetTriggerEnabled(trigger)
 }
 
-func (p *physicsComponent) SetTriggerLayer(layer int64) {
+func (p *physicsComponent) setTriggerLayer(layer int64) {
 	p.sprite.runtimeState.SyncSprite.SetTriggerLayer(layer)
 }
 
-func (p *physicsComponent) SetTriggerMask(mask int64) {
+func (p *physicsComponent) setTriggerMask(mask int64) {
 	p.sprite.runtimeState.SyncSprite.SetTriggerMask(mask)
 }
 
-func (p *physicsComponent) GetTriggerLayer() int64 {
+func (p *physicsComponent) getTriggerLayer() int64 {
 	return p.sprite.runtimeState.SyncSprite.GetTriggerLayer()
 }
 
-func (p *physicsComponent) GetTriggerMask() int64 {
+func (p *physicsComponent) getTriggerMask() int64 {
 	return p.sprite.runtimeState.SyncSprite.GetTriggerMask()
 }
 
-func (p *physicsComponent) IsTriggerEnabled() bool {
+func (p *physicsComponent) isTriggerEnabled() bool {
 	return p.sprite.runtimeState.SyncSprite.IsTriggerEnabled()
-}
-
-func (p *physicsComponent) getCollisionTargets() map[string]bool {
-	return p.collisionTargets
-}
-
-func (p *physicsComponent) addCollisionTarget(target string) {
-	if p.collisionTargets[target] {
-		return
-	}
-	p.collisionTargets[target] = true
-	if p.sprite != nil && !p.sprite.IsCloned() && p.sprite.g != nil {
-		p.sprite.g.refreshCollisionLayers()
-	}
 }
 
 // ============================================================================
 // Collider Configuration
 // ============================================================================
 
-// SetColliderShape sets the collider shape type and parameters.
-func (p *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
+func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
 	config := p.getPhysicConfig(isTrigger)
 	originalType := config.Type
 	originalParams := make([]float64, len(config.Params))
@@ -262,14 +238,14 @@ func (p *physicsComponent) SetColliderShape(isTrigger bool, ctype ColliderShapeT
 	return nil
 }
 
-func (p *physicsComponent) GetColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
+func (p *physicsComponent) getColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
 	config := p.getPhysicConfig(isTrigger)
 	params := make([]float64, len(config.Params))
 	copy(params, config.Params)
 	return config.Type, params
 }
 
-func (p *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY float64) {
+func (p *physicsComponent) setColliderPivot(isTrigger bool, offsetX, offsetY float64) {
 	config := p.getPhysicConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
 	if p.sprite.runtimeState.SyncSprite != nil {
@@ -277,7 +253,7 @@ func (p *physicsComponent) SetColliderPivot(isTrigger bool, offsetX, offsetY flo
 	}
 }
 
-func (p *physicsComponent) GetColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
+func (p *physicsComponent) getColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
 	config := p.getPhysicConfig(isTrigger)
 	return config.Pivot.X, config.Pivot.Y
 }
@@ -332,4 +308,30 @@ func (p *physicsComponent) applyPhysicsProxyConfig(syncProxy *engine.Sprite) {
 	syncProxy.SetGravityScale(p.gravity)
 	syncProxy.SetPhysicsMode(p.physicsMode)
 	p.autoShapesDirty = false
+}
+
+// ============================================================================
+// Collision Targets
+// ============================================================================
+
+func (p *physicsComponent) getCollisionTargets() map[string]bool {
+	return p.collisionTargets
+}
+
+func (p *physicsComponent) addCollisionTarget(target string) {
+	if p.collisionTargets[target] {
+		return
+	}
+	p.collisionTargets[target] = true
+	if p.sprite != nil && !p.sprite.IsCloned() && p.sprite.g != nil {
+		p.sprite.g.refreshCollisionLayers()
+	}
+}
+
+// ============================================================================
+// Physics Helpers
+// ============================================================================
+
+func parseLayerMaskValue(pval *int64) int64 {
+	return defaults.OrDefault(pval, 1)
 }
