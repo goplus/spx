@@ -48,14 +48,6 @@ func (pself *UiAsk) OnStart() {
 	})
 }
 
-// handleCheck executes the check callback and closes the dialog
-func (pself *UiAsk) handleCheck() {
-	if pself.OnCheck != nil {
-		pself.SetVisible(false)
-		pself.OnCheck(pself.input.GetText())
-	}
-}
-
 // Update handles Enter key presses.
 func (pself *UiAsk) Update() {
 	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
@@ -77,4 +69,12 @@ func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	mgr.UiMgr.SetText(pself.input.GetId(), "")
 	mgr.UiMgr.SetVisible(pself.GetId(), true)
 	pself.lastEnterState = false
+}
+
+// handleCheck executes the check callback and closes the dialog
+func (pself *UiAsk) handleCheck() {
+	if pself.OnCheck != nil {
+		pself.SetVisible(false)
+		pself.OnCheck(pself.input.GetText())
+	}
 }

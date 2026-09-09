@@ -37,10 +37,6 @@ var state = runtimeState{
 	spriteTypes: make(map[string]reflect.Type),
 }
 
-func init() {
-	gdx.SetRuntimeBridge(runtimeBridge{})
-}
-
 type runtimeBridge struct{}
 
 func (runtimeBridge) InternalUpdateEngine(delta float64) {
@@ -158,6 +154,10 @@ func BindUIForType[T any](parentNode Object, path string) *T {
 		return nil
 	}
 	return value.Addr().Interface().(*T)
+}
+
+func init() {
+	gdx.SetRuntimeBridge(runtimeBridge{})
 }
 
 func clearAllSprites() {
