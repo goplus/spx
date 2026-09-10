@@ -30,13 +30,15 @@ import (
 
 func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
+	platform := &eventDispatchPlatform{}
 	previousPlatform := pkgengine.PlatformMgr
-	pkgengine.PlatformMgr = &eventDispatchPlatform{}
+	pkgengine.PlatformMgr = platform
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	callbackStarted := make(chan struct{})
 	releaseCallback := make(chan struct{})
-	var nested, registered, ran atomic.Bool
+	registrationDone := make(chan struct{})
+	var registered, ran atomic.Bool
 	handler := &messageEventHandler{}
 	event := scriptEventDispatch{
 		mode: coroutine.BatchAsync,
@@ -47,11 +49,12 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 		run: func(coroutine.Thread, *eventSink) { ran.Store(true) },
 	}
 	go func() {
+		platform.useCurrentAsMainThread()
 		co.TryRunManagedBetweenScripts("outer", func() {
 			close(callbackStarted)
 			<-releaseCallback
-			nested.Store(true)
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: handler}}, event)
+			close(registrationDone)
 		})
 	}()
 	select {
@@ -71,24 +74,19 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 		t.Fatal("abort barrier did not time out")
 	}
 	close(releaseCallback)
-	// The outer dispatcher must finish even though its child is rejected.
-	deadline := time.After(time.Second)
-	for !nested.Load() {
-		select {
-		case <-deadline:
-			t.Fatal("nested batch was not registered")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
-	if ran.Load() {
-		t.Fatal("rejected nested handler ran after abort")
+	select {
+	case <-registrationDone:
+	case <-time.After(time.Second):
+		t.Fatal("nested batch registration did not finish")
 	}
 	if registered.Load() {
 		t.Fatal("rejected nested handler ran lifecycle registration after abort")
 	}
 	if !co.RunAfterAbortAll(time.Second, nil) {
 		t.Fatal("explicit recovery barrier did not complete")
+	}
+	if ran.Load() {
+		t.Fatal("rejected nested handler ran after abort")
 	}
 	handler.mu.Lock()
 	active := handler.active

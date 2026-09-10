@@ -34,9 +34,9 @@ type BatchTask struct {
 	Run          func(Thread)
 }
 
-// StartBatch registers tasks before admitting Run in order; wait modes require a managed caller.
-// OnRegistered is synchronous, must not block on this batch, and may return a
-// cleanup callback that runs exactly once when the task exits.
+// StartBatch registers tasks before running them in order; wait modes require a
+// managed caller. OnRegistered may cancel work and return a once-only cleanup,
+// but must not wait for its task.
 func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
@@ -47,9 +47,17 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 
 	progress := newLatchSet(p, len(tasks)+1)
 	threads := make([]Thread, len(tasks))
+	batchCreated := false
+	defer func() {
+		if !batchCreated {
+			for _, thread := range threads {
+				p.Stop(thread)
+			}
+		}
+	}()
+	admissionEpoch := p.abortEpoch.Load()
 	parent := p.currentCoroutineThread()
 	for i, task := range tasks {
-		admissionEpoch := p.abortEpoch.Load()
 		current, next := progress[i], progress[i+1]
 		onRegistered := task.OnRegistered
 		if onRegistered != nil {
@@ -71,6 +79,7 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 			return 0
 		})
 	}
+	batchCreated = true
 
 	relayBatchProgress(threads, progress[1:])
 	progress[0].Open()

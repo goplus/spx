@@ -69,8 +69,8 @@ func (p *Coroutines) RequestRedraw() {
 	p.redrawFrame.Store(time.Frame())
 }
 
-// RunBetweenScripts runs call between script slices while servicing queued
-// engine-thread jobs.
+// RunBetweenScripts runs call on the caller between script slices while
+// servicing queued engine-thread jobs.
 func (p *Coroutines) RunBetweenScripts(call func()) {
 	for !p.runMu.TryLock() {
 		// Service engine calls so a waiting script can release runMu.
@@ -85,18 +85,16 @@ func (p *Coroutines) RunBetweenScripts(call func()) {
 }
 
 // TryRunManagedBetweenScripts runs call in a managed coroutine when the caller
-// can access the engine directly. It services queued engine calls while the
-// managed callback waits for the script execution lock. It returns true when
-// the call was handled here, including when shutdown admission intentionally
-// skips it.
+// has direct engine access. While waiting, it services engine jobs without
+// advancing frames. It reports handled when shutdown skips the call.
 func (p *Coroutines) TryRunManagedBetweenScripts(owner ThreadObj, call func()) bool {
-	if p.abortEpoch.Load()&1 != 0 {
+	if p.admissionClosed() {
 		return true
 	}
 	return platform.TryCallEngineDirectly(func() {
 		// Match Create's admission barrier without taking creationMu. Shutdown
 		// callbacks may invoke this while the barrier holds that lock.
-		if p.abortEpoch.Load()&1 != 0 {
+		if p.admissionClosed() {
 			return
 		}
 		dispatcher := p.Create(owner, func(Thread) int {

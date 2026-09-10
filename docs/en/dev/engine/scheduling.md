@@ -72,6 +72,9 @@ rounds; starting another round does not advance the frame number or timer.
 Frame-boundary callbacks exclude script execution while servicing queued
 engine main-thread calls. A script waiting on such a call must not block
 condition sampling. This phase does not advance loop or frame waiters.
+Frame-boundary callbacks run on the caller. External native event dispatch uses
+a managed coroutine and services only engine-thread jobs while waiting, so a
+synchronous dispatch cannot wait for a future frame.
 
 ## Fixed-frame capture and input replay
 

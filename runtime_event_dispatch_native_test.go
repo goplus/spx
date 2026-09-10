@@ -20,79 +20,135 @@
 package spx
 
 import (
+	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/visualfc/gid"
 )
 
 type eventDispatchPlatform struct {
 	pkgengine.IPlatformMgr
-	checks     atomic.Int32
-	firstCheck chan struct{}
+	mainGID    atomic.Uint64
+	workerSeen chan struct{}
+	workerOnce sync.Once
 }
 
 func (p *eventDispatchPlatform) IsMainThread() bool {
-	if p.firstCheck != nil && p.checks.Add(1) == 1 {
-		close(p.firstCheck)
-		return false
+	if p.mainGID.Load() == gid.Get() {
+		return true
 	}
-	return true
+	if p.workerSeen != nil {
+		p.workerOnce.Do(func() { close(p.workerSeen) })
+	}
+	return false
 }
 
-func TestExternalAsyncEventDispatchServicesPendingMainThreadCall(t *testing.T) {
+func (p *eventDispatchPlatform) useCurrentAsMainThread() {
+	p.mainGID.Store(gid.Get())
+}
+
+func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
-	platform := &eventDispatchPlatform{firstCheck: make(chan struct{})}
+	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
-	engineCallRan := make(chan struct{})
+	var engineCalls atomic.Int32
+	var wrongThread atomic.Bool
+	engineCall := func() {
+		engineCalls.Add(1)
+		if gid.Get() != platform.mainGID.Load() {
+			wrongThread.Store(true)
+		}
+	}
 	active := co.Create("active", func(coroutine.Thread) int {
-		co.WaitMainThread(func() { close(engineCallRan) })
+		co.WaitMainThread(engineCall)
 		return 0
 	})
 	select {
-	case <-platform.firstCheck:
+	case <-platform.workerSeen:
 	case <-time.After(time.Second):
 		t.Fatal("active coroutine did not request the engine main thread")
 	}
 
-	dispatchRan := make(chan struct{})
-	dispatchDone := make(chan struct{})
-	var managed atomic.Bool
+	producerReturned := make(chan struct{})
+	resumeEngine := make(chan struct{})
+	handlerDone := make(chan struct{})
+	cleanupDone := make(chan struct{})
+	engineDone := make(chan struct{})
+	var registered, cleaned atomic.Int32
+	handler := &messageEventHandler{}
+	event := scriptEventDispatch{
+		mode: coroutine.BatchAsync,
+		lifecycle: func(coroutine.Thread, *eventSink) func() {
+			registered.Add(1)
+			return func() {
+				cleaned.Add(1)
+				close(cleanupDone)
+			}
+		},
+		run: func(coroutine.Thread, *eventSink) {
+			co.WaitMainThread(engineCall)
+			co.WaitMainThread(engineCall)
+			close(handlerDone)
+		},
+	}
 	go func() {
-		event := scriptEventDispatch{mode: coroutine.BatchAsync}
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		platform.useCurrentAsMainThread()
 		event.withRegistrationBarrier(func() {
-			managed.Store(co.IsInCoroutine())
-			close(dispatchRan)
+			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: handler}}, event)
 		})
-		close(dispatchDone)
+		close(producerReturned)
+		<-resumeEngine
+		co.Update()
+		close(engineDone)
 	}()
 
 	select {
-	case <-dispatchDone:
+	case <-producerReturned:
 	case <-time.After(time.Second):
-		// Release the synthetic engine call so cleanup can finish even if the
-		// registration barrier regresses to a blocking Join.
-		co.Update()
 		t.Fatal("external event dispatch deadlocked with a main-thread call")
 	}
 	select {
-	case <-engineCallRan:
+	case <-handlerDone:
+		t.Fatal("async producer waited for the handler to finish")
+	default:
+	}
+	close(resumeEngine)
+	select {
+	case <-engineDone:
 	case <-time.After(time.Second):
-		co.Update()
-		t.Fatal("event dispatch did not service the pending main-thread call")
+		t.Fatal("engine thread did not finish handler round trips")
 	}
 	select {
-	case <-dispatchRan:
-	case <-time.After(time.Second):
-		t.Fatal("event dispatch callback did not run")
+	case <-handlerDone:
+	default:
+		t.Fatal("event handler did not finish")
 	}
-	if !managed.Load() {
-		t.Fatal("event dispatch callback escaped its managed coroutine")
+	select {
+	case <-cleanupDone:
+	default:
+		t.Fatal("event handler cleanup did not finish")
+	}
+	if got := engineCalls.Load(); got != 3 {
+		t.Fatalf("engine calls = %d, want 3", got)
+	}
+	if wrongThread.Load() {
+		t.Fatal("engine call ran outside the designated engine thread")
+	}
+	if got := registered.Load(); got != 1 {
+		t.Fatalf("lifecycle registrations = %d, want 1", got)
+	}
+	if got := cleaned.Load(); got != 1 {
+		t.Fatalf("lifecycle cleanups = %d, want 1", got)
 	}
 	co.Join(active)
 }

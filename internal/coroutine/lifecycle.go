@@ -58,15 +58,13 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 	return th
 }
 
-// createThread admits and registers a thread before launching it. onRegistered
-// participates in the same admission barrier and may return an exit callback.
+// createThread admits a thread before running its registration hook or user code.
 func (p *Coroutines) createThread(admissionEpoch uint64, parent Thread, obj ThreadObj, onRegistered func(Thread) func(), fn func(Thread) int) (th Thread) {
 	th = p.newThread(obj)
-	var onDone func()
-	defer func() { go p.runThread(th, fn, onDone) }()
+	var cleanup func()
+	defer func() { go p.runThread(th, fn, cleanup) }()
 
 	p.creationMu.RLock()
-	defer p.creationMu.RUnlock()
 	rejected := p.stopping || admissionEpoch&1 != 0 ||
 		p.abortEpoch.Load() != admissionEpoch || p.isThreadCanceled(parent)
 	if rejected {
@@ -74,10 +72,31 @@ func (p *Coroutines) createThread(admissionEpoch uint64, parent Thread, obj Thre
 	} else {
 		p.registerThread(th)
 		if onRegistered != nil {
-			onDone = onRegistered(th)
+			p.pendingRegistrationHooks.Add(1)
 		}
 	}
+	p.creationMu.RUnlock()
+
+	if !rejected && onRegistered != nil {
+		hookReturned := false
+		defer func() {
+			if !hookReturned {
+				stopThreadIfRunning(th)
+			}
+			p.finishRegistrationHook()
+		}()
+		cleanup = onRegistered(th)
+		hookReturned = true
+	}
 	return th
+}
+
+func (p *Coroutines) finishRegistrationHook() {
+	p.creationMu.Lock()
+	if p.pendingRegistrationHooks.Add(-1) == 0 && !p.stopping {
+		p.openAdmissionLocked()
+	}
+	p.creationMu.Unlock()
 }
 
 // LastThreadID returns the most recently allocated thread ID.
@@ -98,14 +117,10 @@ func (p *Coroutines) AbortThisScript() {
 // AbortAll requests cancellation of every registered coroutine.
 func (p *Coroutines) AbortAll() {
 	p.creationMu.Lock()
-	// A long-running shutdown barrier already rejects every registration. Keep
-	// its odd epoch stable while allowing repeated cancellation snapshots.
-	if !p.stopping {
-		p.abortEpoch.Add(1)
-	}
+	p.closeAdmissionLocked()
 	p.abortAllLocked()
-	if !p.stopping {
-		p.abortEpoch.Add(1)
+	if !p.stopping && p.pendingRegistrationHooks.Load() == 0 {
+		p.openAdmissionLocked()
 	}
 	p.creationMu.Unlock()
 }
@@ -158,7 +173,7 @@ func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool 
 func (p *Coroutines) beginStoppingLocked() {
 	if !p.stopping {
 		p.stopping = true
-		p.abortEpoch.Add(1)
+		p.closeAdmissionLocked()
 	}
 	p.abortAllLocked()
 }
@@ -167,8 +182,24 @@ func (p *Coroutines) endStoppingLocked() {
 	if !p.stopping {
 		return
 	}
-	p.abortEpoch.Add(1)
+	p.openAdmissionLocked()
 	p.stopping = false
+}
+
+func (p *Coroutines) closeAdmissionLocked() {
+	if !p.admissionClosed() {
+		p.abortEpoch.Add(1)
+	}
+}
+
+func (p *Coroutines) openAdmissionLocked() {
+	if p.admissionClosed() {
+		p.abortEpoch.Add(1)
+	}
+}
+
+func (p *Coroutines) admissionClosed() bool {
+	return p.abortEpoch.Load()&1 != 0
 }
 
 // StopIf requests cancellation of every thread accepted by filter. Filters are
@@ -293,7 +324,7 @@ func (p *Coroutines) unregisterThread(th Thread) {
 func (p *Coroutines) admitNativeTask(me Thread) *nativeTask {
 	p.creationMu.RLock()
 	defer p.creationMu.RUnlock()
-	if p.stopping || p.abortEpoch.Load()&1 != 0 || p.isThreadCanceled(me) {
+	if p.stopping || p.admissionClosed() || p.isThreadCanceled(me) {
 		return nil
 	}
 	task := &nativeTask{id: p.nextNativeID.Add(1)}
@@ -369,7 +400,7 @@ func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) b
 	}
 }
 
-func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, onDone func()) {
+func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, cleanup func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
 	p.runMu.Lock()
@@ -377,8 +408,8 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, onDone func())
 	defer func() {
 		p.finishThread(th, gid, recover())
 	}()
-	if onDone != nil {
-		defer onDone()
+	if cleanup != nil {
+		defer cleanup()
 	}
 
 	if th.stopped.Load() {
