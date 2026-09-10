@@ -509,7 +509,7 @@ func TestScratchConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
 	})
 }
 
-func TestScratchNestedAsyncBroadcastKeepsOrderAfterFrameDeferral(t *testing.T) {
+func TestScratchDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
@@ -521,18 +521,13 @@ func TestScratchNestedAsyncBroadcastKeepsOrderAfterFrameDeferral(t *testing.T) {
 	front.OnMsg__1("inner-order", func() { log.add("inner-front") })
 	game.OnMsg__1("outer-order", func() {
 		log.add("outer-before")
+		engine.RequestRedraw()
 		game.Broadcast__0("inner-order")
 		log.add("outer-after")
 	})
 
 	game.Broadcast__0("outer-order")
-	waitForScratchEventOrderEntries(t, co, &log, 2)
-	requireScratchEventOrder(t, &log, []string{"outer-before", "outer-after"})
-	updateRuntimeEventSchedulerUntil(t, co, func() bool {
-		return co.GetLastUpdateStats().NextCount >= 3
-	})
-
-	advanceScratchEventFrame(t, co, &log, 5)
+	waitForScratchEventOrderEntries(t, co, &log, 5)
 	requireScratchEventOrder(t, &log, []string{
 		"outer-before",
 		"outer-after",

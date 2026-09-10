@@ -50,6 +50,78 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	}
 }
 
+func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	itime.Start(nil)
+	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+
+	var rounds []uint64
+	th := co.Create(nil, func(me Thread) int {
+		for range 3 {
+			rounds = append(rounds, co.ScriptRound())
+			co.YieldLoopFor(me)
+		}
+		return 0
+	})
+	co.JoinYieldedOrDone(th)
+	co.Update()
+
+	if len(rounds) != 3 || rounds[1] <= rounds[0] || rounds[2] <= rounds[1] {
+		t.Fatalf("script rounds = %v, want three increasing same-frame rounds", rounds)
+	}
+}
+
+func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	itime.Start(nil)
+	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+
+	resumed := false
+	th := co.Create(nil, func(me Thread) int {
+		co.YieldToNextRoundFor(me)
+		resumed = true
+		return 0
+	})
+	co.JoinYieldedOrDone(th)
+	co.Update()
+	if resumed {
+		t.Fatal("passive round wait admitted its own round")
+	}
+
+	itime.Update(0, 30)
+	co.Update()
+	if !resumed {
+		t.Fatal("passive round wait did not resume in the next frame")
+	}
+}
+
+func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	itime.Start(nil)
+	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+
+	passiveResumed := false
+	passive := co.Create(nil, func(me Thread) int {
+		co.YieldToNextRoundFor(me)
+		passiveResumed = true
+		return 0
+	})
+	loopResumed := false
+	loop := co.Create(nil, func(me Thread) int {
+		co.YieldLoopFor(me)
+		loopResumed = true
+		return 0
+	})
+	co.JoinYieldedOrDoneAll([]Thread{passive, loop})
+	co.Update()
+	if !passiveResumed || !loopResumed {
+		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)
+	}
+}
+
 func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	co := New(nil)
 	co.OnInited()

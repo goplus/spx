@@ -42,6 +42,11 @@ func (p *Coroutines) YieldLoopFor(me Thread) {
 	p.yieldAtFrame(me, waitTypeLoop)
 }
 
+// YieldToNextRoundFor waits for a round admitted by another runnable script.
+func (p *Coroutines) YieldToNextRoundFor(me Thread) {
+	p.yieldAtFrame(me, waitTypeNextRound)
+}
+
 func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
 	if me == nil || p.callerThread() != me {
 		panic(ErrCannotYieldANonrunningThread)
@@ -52,16 +57,26 @@ func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
 }
 
 // Admit a new round only after all runnable scripts have yielded.
-func (p *Coroutines) queueNextLoopRound(state *updateState) bool {
-	if p.loopJobs.Count() == 0 || p.redrawFrame.Load() == state.frame || !stime.Now().Before(state.workDeadline) {
+func (p *Coroutines) queueNextScriptRound(state *updateState) bool {
+	if p.redrawFrame.Load() == state.frame ||
+		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
 		return false
 	}
-	for p.loopJobs.Count() > 0 {
-		job := p.loopJobs.PopFront()
+	// The jobs below resume in a new script round even when the engine frame
+	// and its clock do not advance.
+	p.scriptRound.Add(1)
+	for p.roundJobs.Count() > 0 {
+		job := p.roundJobs.PopFront()
 		job.Type = waitTypeYield
 		p.currentJobs.PushBack(job)
 	}
 	return true
+}
+
+func (p *Coroutines) hasLoopContinuation() bool {
+	return p.roundJobs.Any(func(job *WaitJob) bool {
+		return job.Type == waitTypeLoop && !p.isThreadCanceled(job.Th)
+	})
 }
 
 // RequestRedraw ends additional script rounds after the current round finishes.

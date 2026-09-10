@@ -27,7 +27,6 @@ import (
 type scriptEventDispatch struct {
 	mode      coroutine.BatchMode
 	matchData any
-	before    func(coroutine.Thread)
 	lifecycle func(coroutine.Thread, *eventSink) func()
 	shouldRun func() bool
 	run       func(coroutine.Thread, *eventSink)
@@ -35,9 +34,8 @@ type scriptEventDispatch struct {
 
 func (event scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
 	task := coroutine.BatchTask{
-		Owner:  sink.Owner,
-		Before: event.before,
-		Run:    func(thread coroutine.Thread) { event.invoke(thread, &sink) },
+		Owner: sink.Owner,
+		Run:   func(thread coroutine.Thread) { event.invoke(thread, &sink) },
 	}
 	if event.lifecycle != nil {
 		task.OnRegistered = func(thread coroutine.Thread) func() { return event.lifecycle(thread, &sink) }

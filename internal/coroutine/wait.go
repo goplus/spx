@@ -27,6 +27,7 @@ const (
 	waitTypeMainThread
 	waitTypeYield
 	waitTypeLoop
+	waitTypeNextRound
 )
 
 // WaitJob describes work consumed by Update.
@@ -36,7 +37,7 @@ type WaitJob struct {
 	Type  int     // Scheduler-internal job kind.
 	Call  func()  // Action when eligible; nil resumes Th for non-main-thread jobs.
 	Time  float64 // Level-time deadline for a time job.
-	Frame int64   // Scheduler frame recorded for a frame job.
+	Frame int64   // Issuing frame for frame-gated jobs.
 }
 
 type taskResult struct {
@@ -66,9 +67,9 @@ func (p *Coroutines) Wait(t float64) {
 	if me == nil {
 		return
 	}
-	deadline := time.TimeSinceLevelLoad() + t
 	job := p.newResumeWaitJob(me, waitTypeTime)
-	job.Time = deadline
+	job.Time = time.TimeSinceLevelLoad() + max(t, 0)
+	job.Frame = time.Frame()
 	p.enqueueAndYield(me, job)
 }
 

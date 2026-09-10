@@ -25,17 +25,18 @@ import (
 const DefaultFPS = 30
 
 var (
-	realTimeSinceLevelLoad float64
-	timeSinceLevelLoad     float64
-	deltaTime              float64
-	realDeltaTime          float64
-	fixedDeltaTimeBits     atomic.Uint64
-	timeScaleBits          atomic.Uint64
-	curFrame               atomic.Int64
-	setTimeScaleCallback   func(float64)
-	startTimestamp         stdtime.Time
-	lastTimestamp          stdtime.Time
-	fps                    float64
+	realTimeSinceLevelLoad  float64
+	timeSinceLevelLoad      float64
+	logicalTimeCompensation float64
+	deltaTime               float64
+	realDeltaTime           float64
+	fixedDeltaTimeBits      atomic.Uint64
+	timeScaleBits           atomic.Uint64
+	curFrame                atomic.Int64
+	setTimeScaleCallback    func(float64)
+	startTimestamp          stdtime.Time
+	lastTimestamp           stdtime.Time
+	fps                     float64
 )
 
 func Sleep(ms float64) {
@@ -117,6 +118,7 @@ func Start(setTimeScaleCB func(float64)) {
 	now := stdtime.Now()
 
 	realTimeSinceLevelLoad, timeSinceLevelLoad = 0, 0
+	logicalTimeCompensation = 0
 	deltaTime, realDeltaTime = 0, 0
 	timeScaleBits.Store(math.Float64bits(1))
 	curFrame.Store(0)
@@ -136,7 +138,19 @@ func Update(delta float64, pfps float64) {
 	lastTimestamp = curTime
 
 	deltaTime = delta
-	timeSinceLevelLoad += deltaTime
+	advanceLogicalTime(delta)
 	curFrame.Add(1)
 	fps = pfps
+}
+
+// advanceLogicalTime keeps repeated fixed steps numerically stable.
+func advanceLogicalTime(delta float64) {
+	adjusted := delta - logicalTimeCompensation
+	next := timeSinceLevelLoad + adjusted
+	if math.IsInf(next, 0) || math.IsNaN(next) {
+		logicalTimeCompensation = 0
+	} else {
+		logicalTimeCompensation = (next - timeSinceLevelLoad) - adjusted
+	}
+	timeSinceLevelLoad = next
 }

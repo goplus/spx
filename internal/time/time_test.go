@@ -26,6 +26,7 @@ import (
 func resetStateForTest() {
 	realTimeSinceLevelLoad = 0
 	timeSinceLevelLoad = 0
+	logicalTimeCompensation = 0
 	deltaTime = 0
 	realDeltaTime = 0
 	fixedDeltaTimeBits.Store(0)
@@ -44,6 +45,7 @@ func TestStartInitializesTimeState(t *testing.T) {
 	resetStateForTest()
 	realTimeSinceLevelLoad = 9
 	timeSinceLevelLoad = 8
+	logicalTimeCompensation = 9
 	deltaTime = 7
 	realDeltaTime = 6
 	timeScaleBits.Store(math.Float64bits(5))
@@ -67,6 +69,9 @@ func TestStartInitializesTimeState(t *testing.T) {
 	if got := TimeSinceLevelLoad(); got != 0 {
 		t.Fatalf("TimeSinceLevelLoad() = %v, want 0", got)
 	}
+	if logicalTimeCompensation != 0 {
+		t.Fatalf("logical time compensation = %v, want 0", logicalTimeCompensation)
+	}
 	if got := UnscaledTimeSinceLevelLoad(); got != 0 {
 		t.Fatalf("UnscaledTimeSinceLevelLoad() = %v, want 0", got)
 	}
@@ -84,6 +89,17 @@ func TestStartInitializesTimeState(t *testing.T) {
 	}
 	if nextTimerIndex != 0 {
 		t.Fatalf("nextTimerIndex = %d, want 0", nextTimerIndex)
+	}
+}
+
+func TestUpdateCompensatesFixedStepRounding(t *testing.T) {
+	resetStateForTest()
+	Start(nil)
+	for range 72_000 {
+		Update(1.0/30, 30)
+	}
+	if got := TimeSinceLevelLoad(); got != 2400 {
+		t.Fatalf("TimeSinceLevelLoad() = %.17g, want 2400", got)
 	}
 }
 

@@ -591,6 +591,7 @@ func TestWaitJobPreservesCustomAction(t *testing.T) {
 		{"time", waitTypeTime},
 		{"yield", waitTypeYield},
 		{"main thread", waitTypeMainThread},
+		{"next round", waitTypeNextRound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)

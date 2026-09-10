@@ -30,7 +30,6 @@ const (
 type BatchTask struct {
 	Owner        ThreadObj
 	OnRegistered func(Thread) func()
-	Before       func(Thread)
 	Run          func(Thread)
 }
 
@@ -55,8 +54,7 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 			}
 		}
 	}()
-	admissionEpoch := p.abortEpoch.Load()
-	parent := p.currentCoroutineThread()
+	admission := p.captureThreadAdmission()
 	for i, task := range tasks {
 		current, next := progress[i], progress[i+1]
 		onRegistered := task.OnRegistered
@@ -68,11 +66,8 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 				return task.OnRegistered(thread)
 			}
 		}
-		threads[i] = p.createThread(admissionEpoch, parent, task.Owner, onRegistered, func(thread Thread) int {
+		threads[i] = p.createThread(admission, task.Owner, onRegistered, func(thread Thread) int {
 			defer next.Open()
-			if task.Before != nil {
-				task.Before(thread)
-			}
 			current.Wait()
 			next.Open()
 			task.Run(thread)
