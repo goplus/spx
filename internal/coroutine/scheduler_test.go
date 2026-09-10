@@ -282,7 +282,7 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 			close(aStarted)
 			co.Yield(me)
 			return 0
-		})
+		}, nil)
 		done <- struct{}{}
 	}()
 	<-aStarted
@@ -294,7 +294,7 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 			close(bStarted)
 			co.Yield(me)
 			return 0
-		})
+		}, nil)
 		done <- struct{}{}
 	}()
 	<-bStarted

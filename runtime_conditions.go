@@ -48,7 +48,7 @@ func (p *scriptEventRegistry) sampleConditions() {
 	if gco == nil {
 		read()
 	} else {
-		gco.ReadScriptState(read)
+		gco.RunBetweenScripts(read)
 	}
 }
 
@@ -59,12 +59,13 @@ func (p *scriptEventRegistry) dispatchConditions() {
 	if len(sinks) == 0 {
 		return
 	}
-	runScriptEventDispatch(func() {
-		dispatchMatchedScriptEventBatch(sinks, scriptEventDispatch{
-			mode: coroutine.BatchAsync,
-			run: func(_ coroutine.Thread, sink *eventSink) {
-				sink.Handler.(func())()
-			},
-		})
+	event := scriptEventDispatch{
+		mode: coroutine.BatchAsync,
+		run: func(_ coroutine.Thread, sink *eventSink) {
+			sink.Handler.(func())()
+		},
+	}
+	event.withRegistrationBarrier(func() {
+		dispatchMatchedScriptEventBatch(sinks, event)
 	})
 }

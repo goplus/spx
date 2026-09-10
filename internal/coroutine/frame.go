@@ -20,6 +20,7 @@ import (
 	"runtime"
 	stime "time"
 
+	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/time"
 )
 
@@ -68,18 +69,68 @@ func (p *Coroutines) RequestRedraw() {
 	p.redrawFrame.Store(time.Frame())
 }
 
-// ReadScriptState reads state on the engine thread, excluding script execution.
-func (p *Coroutines) ReadScriptState(call func()) {
+// RunBetweenScripts runs call on the caller between script slices while
+// servicing queued engine-thread jobs.
+func (p *Coroutines) RunBetweenScripts(call func()) {
 	for !p.runMu.TryLock() {
 		// Service engine calls so a waiting script can release runMu.
 		if job := p.takeMainThreadJob(); job != nil {
-			job.Call()
+			p.runMainThreadJob(job)
 		} else {
 			runtime.Gosched()
 		}
 	}
 	defer p.runMu.Unlock()
 	call()
+}
+
+// TryRunManagedBetweenScripts runs call in a managed coroutine when the caller
+// has direct engine access. While waiting, it services engine jobs without
+// advancing frames. It reports handled when shutdown skips the call.
+func (p *Coroutines) TryRunManagedBetweenScripts(owner ThreadObj, call func()) bool {
+	if p.admissionClosed() {
+		return true
+	}
+	return platform.TryCallEngineDirectly(func() {
+		// Match Create's admission barrier without taking creationMu. Shutdown
+		// callbacks may invoke this while the barrier holds that lock.
+		if p.admissionClosed() {
+			return
+		}
+		dispatcher := p.Create(owner, func(Thread) int {
+			call()
+			return 0
+		})
+		p.waitForThreadOnEngine(dispatcher)
+	})
+}
+
+// waitForThreadOnEngine keeps the engine callback responsive while a managed
+// dispatcher waits behind another script or an engine-thread job.
+func (p *Coroutines) waitForThreadOnEngine(thread Thread) {
+	for {
+		select {
+		case <-thread.done:
+			return
+		default:
+		}
+		if job := p.takeMainThreadJob(); job != nil {
+			p.runMainThreadJob(job)
+		} else {
+			runtime.Gosched()
+		}
+	}
+}
+
+// runMainThreadJob mirrors Update's cancellation check for engine callbacks
+// serviced outside the scheduler loop. A canceled script must not receive a
+// successful WaitMainThread result merely because another engine callback
+// drained its queued job.
+func (p *Coroutines) runMainThreadJob(job *WaitJob) {
+	if job == nil || (job.Th != nil && p.isThreadCanceled(job.Th)) {
+		return
+	}
+	job.Call()
 }
 
 func (p *Coroutines) takeMainThreadJob() *WaitJob {

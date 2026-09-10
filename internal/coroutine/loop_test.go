@@ -18,6 +18,7 @@ package coroutine
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	}
 }
 
-func TestReadScriptStateServicesPendingMainThreadCall(t *testing.T) {
+func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	queued := make(chan struct{})
@@ -68,13 +69,30 @@ func TestReadScriptStateServicesPendingMainThreadCall(t *testing.T) {
 	}()
 	<-queued
 	result := make(chan int, 1)
-	go co.ReadScriptState(func() { result <- value })
+	go co.RunBetweenScripts(func() { result <- value })
 	select {
 	case got := <-result:
 		if got != 42 {
 			t.Fatalf("script state = %d, want 42", got)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("frame-boundary read deadlocked behind an engine call")
+		t.Fatal("frame-boundary callback deadlocked behind an engine call")
+	}
+}
+
+func TestRunBetweenScriptsSkipsCanceledMainThreadCall(t *testing.T) {
+	co := New(nil)
+	canceled := co.newThread("canceled")
+	canceled.stopped.Store(true)
+	var called atomic.Bool
+	co.enqueuePriorityJob(&WaitJob{
+		Th:   canceled,
+		Type: waitTypeMainThread,
+		Call: func() { called.Store(true) },
+	})
+
+	co.runMainThreadJob(co.takeMainThreadJob())
+	if called.Load() {
+		t.Fatal("canceled coroutine's main-thread callback ran")
 	}
 }

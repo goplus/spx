@@ -55,8 +55,8 @@ type Coroutines struct {
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
-	// shutdownMu serializes shutdowns; creationMu guards admission and lifecycle
-	// registration. Lock order is shutdownMu, runMu, then creationMu.
+	// shutdownMu serializes shutdowns. creationMu makes admission and registration
+	// atomic with aborts. Lock order is shutdownMu, runMu, then creationMu.
 	shutdownMu sync.Mutex
 	creationMu sync.RWMutex
 	stopping   bool
@@ -79,10 +79,10 @@ type Coroutines struct {
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
 	nextNativeID atomic.Uint64
-	// abortEpoch is even outside an abort registration barrier and odd while
-	// one is active. Create captures it before admission so a registration that
-	// overlaps AbortAll cannot escape the abort snapshot.
-	abortEpoch atomic.Uint64
+	// abortEpoch is even while admission is open and odd while closed. Pending
+	// registration hooks delay reopening after AbortAll.
+	abortEpoch               atomic.Uint64
+	pendingRegistrationHooks atomic.Int64
 
 	perfDebug         atomic.Bool
 	readGCStats       func(*sdebug.GCStats)
