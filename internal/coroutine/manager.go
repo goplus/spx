@@ -73,8 +73,9 @@ type Coroutines struct {
 	threadStates  map[Thread]threadState
 	currentJobs   *Queue[*WaitJob]
 	deferredJobs  *Queue[*WaitJob]
-	loopJobs      *Queue[*WaitJob]
+	roundJobs     *Queue[*WaitJob]
 	redrawFrame   atomic.Int64
+	scriptRound   atomic.Uint64
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
@@ -98,6 +99,13 @@ type Coroutines struct {
 	finalizingGoroutines sync.Map // map[uint64]struct{}
 }
 
+// ScriptRound advances whenever another Scratch-style execution round is
+// admitted within an engine frame. Pair it with the engine frame number when
+// an identity spanning frames is required.
+func (p *Coroutines) ScriptRound() uint64 {
+	return p.scriptRound.Load()
+}
+
 // New creates a coroutine manager. onPanic is called when a coroutine exits
 // with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
 func New(onPanic func(PanicReport)) *Coroutines {
@@ -108,7 +116,7 @@ func New(onPanic func(PanicReport)) *Coroutines {
 		threadStates:      make(map[Thread]threadState),
 		currentJobs:       NewQueue[*WaitJob](),
 		deferredJobs:      NewQueue[*WaitJob](),
-		loopJobs:          NewQueue[*WaitJob](),
+		roundJobs:         NewQueue[*WaitJob](),
 		readGCStats:       sdebug.ReadGCStats,
 		updateWatchdogNow: stime.Now,
 	}

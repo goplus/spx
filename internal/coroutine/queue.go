@@ -79,6 +79,18 @@ func (q *Queue[T]) Count() int {
 	return q.count
 }
 
+// Any reports whether a queued value satisfies match.
+func (q *Queue[T]) Any(match func(T) bool) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for node := q.head; node != nil; node = node.next {
+		if match(node.value) {
+			return true
+		}
+	}
+	return false
+}
+
 // PushBack adds value to the back of the queue.
 func (q *Queue[T]) PushBack(value T) {
 	q.mu.Lock()

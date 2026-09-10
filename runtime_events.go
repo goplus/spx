@@ -44,11 +44,24 @@ type scriptEventBindings struct {
 }
 
 type scriptEventRegistry struct {
-	manager              coreevent.Manager
-	messageHandlerFrames sync.Map // map[coroutine.Thread]int64
-	stopAllEpoch         atomic.Uint64
-	pendingStartThreads  sync.Map    // map[coroutine.Thread]struct{}
-	pendingConditions    []eventSink // engine frame thread only
+	manager             coreevent.Manager
+	messageExecutions   sync.Map // map[coroutine.Thread]*messageReceiverExecution
+	stopAllEpoch        atomic.Uint64
+	pendingStartThreads sync.Map    // map[coroutine.Thread]struct{}
+	pendingConditions   []eventSink // engine frame thread only
+}
+
+// messageDispatchContext tracks receivers visited by one broadcast tree.
+type messageDispatchContext struct {
+	mu        sync.Mutex
+	frame     int64
+	round     uint64
+	receivers map[*messageEventHandler]struct{}
+}
+
+type messageReceiverExecution struct {
+	context  *messageDispatchContext
+	receiver *messageEventHandler
 }
 
 // messageEventHandler tracks one broadcast script's active thread.
@@ -514,38 +527,63 @@ func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
 }
 
 func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
-	deferToNextFrame := p.shouldDeferMessageReceivers(wait)
+	context := p.currentMessageDispatchContext()
 	p.dispatchGlobal(coreevent.BucketIReceive, scriptEventDispatch{
 		mode:      eventBatchMode(wait),
 		matchData: msg,
 		lifecycle: func(thread coroutine.Thread, ev *eventSink) func() {
 			return ev.Handler.(*messageEventHandler).start(thread)
 		},
-		before: func(coroutine.Thread) {
-			if deferToNextFrame {
-				engine.WaitNextFrame()
-			}
-		},
 		run: func(thread coroutine.Thread, ev *eventSink) {
-			p.messageHandlerFrames.Store(thread, itime.Frame())
-			defer p.messageHandlerFrames.Delete(thread)
-			ev.Handler.(*messageEventHandler).run(msg, data)
+			receiver := ev.Handler.(*messageEventHandler)
+			if thread != nil {
+				context.waitForTurn(thread, receiver)
+				p.messageExecutions.Store(thread, &messageReceiverExecution{
+					context:  context,
+					receiver: receiver,
+				})
+				defer p.messageExecutions.Delete(thread)
+			}
+			receiver.run(msg, data)
 		},
 	})
 }
 
-// Defer only broadcasts made in the frame where their handler began. A
-// handler that already yielded has established its own frame boundary.
-func (p *scriptEventRegistry) shouldDeferMessageReceivers(wait bool) bool {
-	if wait || gco == nil || !gco.IsInCoroutine() {
+func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchContext {
+	if gco != nil && gco.IsInCoroutine() {
+		if thread := gco.Current(); thread != nil {
+			if value, ok := p.messageExecutions.Load(thread); ok {
+				execution := value.(*messageReceiverExecution)
+				execution.context.claimTurn(execution.receiver)
+				return execution.context
+			}
+		}
+	}
+	return new(messageDispatchContext)
+}
+
+func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *messageEventHandler) {
+	for !p.claimTurn(receiver) {
+		gco.YieldToNextRoundFor(thread)
+	}
+}
+
+func (p *messageDispatchContext) claimTurn(receiver *messageEventHandler) bool {
+	frame, round := itime.Frame(), gco.ScriptRound()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.frame != frame || p.round != round {
+		p.frame, p.round = frame, round
+		clear(p.receivers)
+	}
+	if p.receivers == nil {
+		p.receivers = make(map[*messageEventHandler]struct{})
+	}
+	if _, claimed := p.receivers[receiver]; claimed {
 		return false
 	}
-	thread := gco.Current()
-	if thread == nil {
-		return false
-	}
-	handlerFrame, ok := p.messageHandlerFrames.Load(thread)
-	return ok && handlerFrame == itime.Frame()
+	p.receivers[receiver] = struct{}{}
+	return true
 }
 
 func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool) {

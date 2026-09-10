@@ -32,6 +32,11 @@ type threadNamer interface {
 	Name() string
 }
 
+type threadAdmission struct {
+	epoch          uint64
+	parentCanceled bool
+}
+
 // Create creates a coroutine without explicitly yielding execution to it.
 func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
 	return p.CreateAndStart(false, obj, fn)
@@ -41,9 +46,7 @@ func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
 // is true, the new coroutine gets an immediate opportunity to run before this
 // method returns.
 func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
-	admissionEpoch := p.abortEpoch.Load()
-	parent := p.currentCoroutineThread()
-	th := p.createThread(admissionEpoch, parent, obj, nil, fn)
+	th := p.createThread(p.captureThreadAdmission(), obj, nil, fn)
 
 	if start {
 		// Wait for this child so another yield job cannot reacquire runMu first.
@@ -58,15 +61,21 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 	return th
 }
 
+func (p *Coroutines) captureThreadAdmission() threadAdmission {
+	admission := threadAdmission{epoch: p.abortEpoch.Load()}
+	admission.parentCanceled = p.isThreadCanceled(p.currentCoroutineThread())
+	return admission
+}
+
 // createThread admits a thread before running its registration hook or user code.
-func (p *Coroutines) createThread(admissionEpoch uint64, parent Thread, obj ThreadObj, onRegistered func(Thread) func(), fn func(Thread) int) (th Thread) {
+func (p *Coroutines) createThread(admission threadAdmission, obj ThreadObj, onRegistered func(Thread) func(), fn func(Thread) int) (th Thread) {
 	th = p.newThread(obj)
 	var cleanup func()
 	defer func() { go p.runThread(th, fn, cleanup) }()
 
 	p.creationMu.RLock()
-	rejected := p.stopping || admissionEpoch&1 != 0 ||
-		p.abortEpoch.Load() != admissionEpoch || p.isThreadCanceled(parent)
+	rejected := p.stopping || admission.parentCanceled || admission.epoch&1 != 0 ||
+		p.abortEpoch.Load() != admission.epoch
 	if rejected {
 		stopThreadIfRunning(th)
 	} else {

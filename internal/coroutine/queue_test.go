@@ -66,3 +66,19 @@ func TestQueueMoveToSelfIsNoOp(t *testing.T) {
 		t.Fatalf("second PopFront after self move = %d, want 2", got)
 	}
 }
+
+func TestQueueAnyDoesNotChangeOrder(t *testing.T) {
+	q := NewQueue[int]()
+	q.PushBack(1)
+	q.PushBack(2)
+
+	if !q.Any(func(value int) bool { return value%2 == 0 }) {
+		t.Fatal("Any did not find a matching value")
+	}
+	if q.Any(func(value int) bool { return value > 2 }) {
+		t.Fatal("Any found a value that is not queued")
+	}
+	if first, second := q.PopFront(), q.PopFront(); first != 1 || second != 2 {
+		t.Fatalf("queue order after Any = %d, %d", first, second)
+	}
+}

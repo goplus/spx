@@ -85,7 +85,7 @@ updateLoop:
 		iterations++
 		switch p.nextUpdateAction(stats) {
 		case updateComplete:
-			if p.queueNextLoopRound(state) {
+			if p.queueNextScriptRound(state) {
 				continue
 			}
 			break updateLoop
@@ -151,11 +151,11 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 	}
 
 	switch job.Type {
-	case waitTypeLoop:
+	case waitTypeLoop, waitTypeNextRound:
 		if job.Frame < state.frame {
 			p.runWaitJob(job)
 		} else {
-			p.loopJobs.PushBack(job)
+			p.roundJobs.PushBack(job)
 		}
 	case waitTypeFrame:
 		if job.Frame >= state.frame {
@@ -165,7 +165,7 @@ func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, 
 			stats.WaitFrameCount++
 		}
 	case waitTypeTime:
-		if job.Time >= state.levelTime {
+		if job.Frame >= state.frame || job.Time > state.levelTime {
 			p.deferredJobs.PushBack(job)
 		} else {
 			p.runWaitJob(job)
@@ -188,7 +188,7 @@ func (p *Coroutines) runWaitJob(job *WaitJob) {
 
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateJobsStats) {
 	start := stime.Now()
-	p.deferredJobs.Move(p.loopJobs)
+	p.deferredJobs.Move(p.roundJobs)
 	stats.NextCount = p.deferredJobs.Count()
 	p.currentJobs.Move(p.deferredJobs)
 	stats.MoveTime = elapsedMillis(start)

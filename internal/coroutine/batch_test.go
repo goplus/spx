@@ -107,6 +107,49 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	co.Join(caller)
 }
 
+func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	batchDone := make(chan []Thread, 1)
+	var registered, ran atomic.Int32
+
+	parent := co.Create("parent", func(parent Thread) int {
+		batchDone <- co.StartBatch([]BatchTask{
+			{
+				OnRegistered: func(Thread) func() {
+					registered.Add(1)
+					co.Stop(parent)
+					return nil
+				},
+				Run: func(Thread) { ran.Add(1) },
+			},
+			{
+				OnRegistered: func(Thread) func() {
+					registered.Add(1)
+					return nil
+				},
+				Run: func(Thread) { ran.Add(1) },
+			},
+		}, BatchAsync)
+		return 0
+	})
+
+	var threads []Thread
+	select {
+	case threads = <-batchDone:
+	case <-time.After(time.Second):
+		t.Fatal("batch registration did not finish")
+	}
+	co.JoinAll(threads)
+	co.Join(parent)
+	if got := registered.Load(); got != 2 {
+		t.Fatalf("lifecycle registrations = %d, want 2", got)
+	}
+	if got := ran.Load(); got != 2 {
+		t.Fatalf("tasks ran %d times, want 2", got)
+	}
+}
+
 func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
