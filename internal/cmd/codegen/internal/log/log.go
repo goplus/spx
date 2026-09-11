@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package log provides diagnostics for the code generator.
 package log
 
 import (

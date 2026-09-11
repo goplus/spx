@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+// Package common provides metadata and rendering helpers for binding generators.
 package common
 
 import (
+	"maps"
 	"slices"
 	"sort"
 
@@ -62,9 +64,7 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 			"GdColor": "Color", "GdArray": "Array",
 		},
 	}
-	for name, spec := range metadata.NativeArrayBridges {
-		c.nativeArrayBridges[name] = spec
-	}
+	maps.Copy(c.nativeArrayBridges, metadata.NativeArrayBridges)
 	for name, spec := range metadata.ArrayTransformBridges {
 		spec.Params = slices.Clone(spec.Params)
 		c.arrayTransformBridges[name] = spec

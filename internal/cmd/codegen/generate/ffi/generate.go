@@ -28,7 +28,7 @@ import (
 	"unicode"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
@@ -53,10 +53,10 @@ var (
 	implPureGoFileText string
 
 	//go:embed sync.gen.go.tmpl
-	syncApiText string
+	syncAPIText string
 
 	//go:embed sync_pure.gen.go.tmpl
-	syncPureApiText string
+	syncPureAPIText string
 )
 
 type ImplData struct {
@@ -69,7 +69,7 @@ type ByName []clang.TypedefFunction
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
-	*GenerationContext
+	*common.GenerationContext
 }
 
 func (arr ByName) Len() int { return len(arr) }
@@ -91,7 +91,7 @@ func (g *Generator) Generate(projectPath string) error {
 		{"GDExtension interface", func() error { return GenerateGDExtensionInterfaceGoFile(projectPath, ast) }},
 		{"manager wrapper", func() error { return g.GenerateManagerWrapperGoFile(projectPath) }},
 		{"manager interface", func() error { return g.GenerateManagerInterfaceGoFile(projectPath) }},
-		{"synchronized API", func() error { return g.GenerateSyncApiGoFile(projectPath) }},
+		{"synchronized API", func() error { return g.GenerateSyncAPIGoFile(projectPath) }},
 		{"pure synchronized API", func() error { return g.GenerateSyncPureGoFile(projectPath) }},
 	}
 	for _, generator := range generators {
@@ -113,145 +113,145 @@ func (g *Generator) Generate(projectPath string) error {
 }
 
 func GenerateGDExtensionWrapperHeaderFile(projectPath string, ast clang.CHeaderFileAST) error {
-	output, err := RenderTemplate(template.FuncMap{"snakeCase": strcase.ToSnake}, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
+	output, err := common.RenderTemplate(template.FuncMap{"snakeCase": strcase.ToSnake}, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
 	if err != nil {
 		return err
 	}
-	return WriteGeneratedFile(filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
+	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
 }
 
 func GenerateGDExtensionWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":       GdiVariableName,
+		"gdiVariableName":       common.GdiVariableName,
 		"snakeCase":             strcase.ToSnake,
 		"camelCase":             strcase.ToCamel,
-		"goReturnType":          GoReturnType,
-		"goArgumentType":        GoArgumentType,
-		"goEnumValue":           GoEnumValue,
-		"add":                   Add,
-		"cgoCastArgument":       CgoCastArgument,
-		"cgoCastReturnType":     CgoCastReturnType,
-		"cgoCleanUpArgument":    CgoCleanUpArgument,
-		"trimPrefix":            TrimPrefix,
-		"mustPrimitiveTypeName": MustPrimitiveTypeName,
+		"goReturnType":          common.GoReturnType,
+		"goArgumentType":        common.GoArgumentType,
+		"goEnumValue":           common.GoEnumValue,
+		"add":                   common.Add,
+		"cgoCastArgument":       common.CgoCastArgument,
+		"cgoCastReturnType":     common.CgoCastReturnType,
+		"cgoCleanUpArgument":    common.CgoCleanUpArgument,
+		"trimPrefix":            common.TrimPrefix,
+		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
 	}
 
-	return GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
-		filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.go"))
+	return common.GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
+		filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.go"))
 
 }
 
 func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
-		"loadProcAddressName": LoadProcAddressName,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
+		"trimPrefix":          common.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
-	return GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, NativeRelDir, "ffi.gen.go"))
+	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
+		filepath.Join(projectPath, common.NativeRelDir, "ffi.gen.go"))
 }
 
 func (g *Generator) GenerateManagerWrapperGoFile(projectPath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
+		"trimPrefix":          common.TrimPrefix,
 		"isManagerMethod":     g.IsManagerMethod,
 		"getManagerFuncName":  g.ManagerMethodSignature,
 		"getManagerFuncBody":  g.getManagerFuncBody,
 		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
-	return GenerateFile(funcs, "manager_native.gen.go", managerNativeText, g.ManagerData(),
-		filepath.Join(projectPath, GdengineImplRelDir, "manager_native.gen.go"))
+	return common.GenerateFile(funcs, "manager_native.gen.go", managerNativeText, g.ManagerData(),
+		filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go"))
 
 }
 
 func (g *Generator) GenerateManagerInterfaceGoFile(projectPath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
+		"trimPrefix":          common.TrimPrefix,
 		"isManagerMethod":     g.IsManagerMethod,
 		"getManagerFuncName":  g.ManagerMethodSignature,
 		"getManagerFuncBody":  g.getManagerFuncBody,
 		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
-	return GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, g.ManagerData(),
-		filepath.Join(projectPath, EnginePkgRelDir, "interface.gen.go"))
+	return common.GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, g.ManagerData(),
+		filepath.Join(projectPath, common.EnginePkgRelDir, "interface.gen.go"))
 }
 
-func (g *Generator) GenerateSyncApiGoFile(projectPath string) error {
+func (g *Generator) GenerateSyncAPIGoFile(projectPath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":            GdiVariableName,
+		"gdiVariableName":            common.GdiVariableName,
 		"snakeCase":                  strcase.ToSnake,
 		"lowerCamelCase":             strcase.ToLowerCamel,
 		"camelCase":                  strcase.ToCamel,
-		"goReturnType":               GoReturnType,
-		"goArgumentType":             GoArgumentType,
-		"goEnumValue":                GoEnumValue,
-		"add":                        Add,
-		"cgoCastArgument":            CgoCastArgument,
-		"cgoCastReturnType":          CgoCastReturnType,
-		"cgoCleanUpArgument":         CgoCleanUpArgument,
-		"trimPrefix":                 TrimPrefix,
+		"goReturnType":               common.GoReturnType,
+		"goArgumentType":             common.GoArgumentType,
+		"goEnumValue":                common.GoEnumValue,
+		"add":                        common.Add,
+		"cgoCastArgument":            common.CgoCastArgument,
+		"cgoCastReturnType":          common.CgoCastReturnType,
+		"cgoCleanUpArgument":         common.CgoCleanUpArgument,
+		"trimPrefix":                 common.TrimPrefix,
 		"isManagerMethod":            g.IsManagerMethod,
-		"genSyncApiWrapFunction":     g.genSyncApiWrapFunction,
+		"genSyncAPIWrapFunction":     g.genSyncAPIWrapFunction,
 		"genSyncManagerWrapFunction": genSyncManagerWrapFunction,
 	}
 
-	return GenerateFile(funcs, "sync.gen.go", syncApiText, g.ManagerData(),
-		filepath.Join(projectPath, EnginewrapRelDir, "sync.gen.go"))
+	return common.GenerateFile(funcs, "sync.gen.go", syncAPIText, g.ManagerData(),
+		filepath.Join(projectPath, common.EnginewrapRelDir, "sync.gen.go"))
 }
 
 func (g *Generator) GenerateSyncPureGoFile(projectPath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":            GdiVariableName,
+		"gdiVariableName":            common.GdiVariableName,
 		"snakeCase":                  strcase.ToSnake,
 		"lowerCamelCase":             strcase.ToLowerCamel,
 		"camelCase":                  strcase.ToCamel,
-		"goReturnType":               GoReturnType,
-		"goArgumentType":             GoArgumentType,
-		"goEnumValue":                GoEnumValue,
-		"add":                        Add,
-		"cgoCastArgument":            CgoCastArgument,
-		"cgoCastReturnType":          CgoCastReturnType,
-		"cgoCleanUpArgument":         CgoCleanUpArgument,
-		"trimPrefix":                 TrimPrefix,
+		"goReturnType":               common.GoReturnType,
+		"goArgumentType":             common.GoArgumentType,
+		"goEnumValue":                common.GoEnumValue,
+		"add":                        common.Add,
+		"cgoCastArgument":            common.CgoCastArgument,
+		"cgoCastReturnType":          common.CgoCastReturnType,
+		"cgoCleanUpArgument":         common.CgoCleanUpArgument,
+		"trimPrefix":                 common.TrimPrefix,
 		"isManagerMethod":            g.IsManagerMethod,
-		"genSyncPureApiWrapFunction": g.genSyncPureApiWrapFunction,
+		"genSyncPureAPIWrapFunction": g.genSyncPureAPIWrapFunction,
 		"genSyncManagerWrapFunction": genSyncManagerWrapFunction,
 	}
 
-	return GenerateFile(funcs, "sync_pure.gen.go", syncPureApiText, g.ManagerData(),
-		filepath.Join(projectPath, EnginewrapRelDir, "sync_pure.gen.go"))
+	return common.GenerateFile(funcs, "sync_pure.gen.go", syncPureAPIText, g.ManagerData(),
+		filepath.Join(projectPath, common.EnginewrapRelDir, "sync_pure.gen.go"))
 }
 
 func (g *Generator) GenerateManagerImplGoFile(projectPath string, clsName string) error {
@@ -265,8 +265,8 @@ func (g *Generator) GenerateManagerImplGoFile(projectPath string, clsName string
 	sort.Sort(ByName(methods))
 	data := ImplData{Ast: ast, Methods: methods, ClsName: clsName}
 
-	return GenerateFile(funcs, genFile, implGoFileText, data,
-		filepath.Join(projectPath, EnginePkgRelDir, genFile))
+	return common.GenerateFile(funcs, genFile, implGoFileText, data,
+		filepath.Join(projectPath, common.EnginePkgRelDir, genFile))
 }
 
 func (g *Generator) GenerateManagerImplPureGoFile(projectPath string, clsName string) error {
@@ -279,8 +279,8 @@ func (g *Generator) GenerateManagerImplPureGoFile(projectPath string, clsName st
 	data := ImplData{Ast: ast, Methods: methods, ClsName: clsName}
 
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
-	return GenerateFile(funcs, genFile, implPureGoFileText, data,
-		filepath.Join(projectPath, EnginePkgRelDir, genFile))
+	return common.GenerateFile(funcs, genFile, implPureGoFileText, data,
+		filepath.Join(projectPath, common.EnginePkgRelDir, genFile))
 }
 
 func (g *Generator) MustGdxReturnType(function *clang.TypedefFunction) string {
@@ -298,11 +298,11 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
-	args := EffectiveArguments(function)
-	hasSyntheticReturn := function.ReturnType.Name == "void" && HasEffectiveReturn(function)
+	args := common.EffectiveArguments(function)
+	hasSyntheticReturn := function.ReturnType.Name == "void" && common.HasEffectiveReturn(function)
 	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
 	if dispatchToMainThread {
-		if HasEffectiveReturn(function) {
+		if common.HasEffectiveReturn(function) {
 			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", g.EffectiveGoReturnType(function))
 		} else {
 			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
@@ -315,7 +315,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 			continue
 		}
 		sb.WriteString(prefixTab)
-		typeName := MustPrimitiveTypeName(arg, function.Name)
+		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
 		if g.IsNativeArrayDataArg(function, arg) {
 			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
@@ -379,9 +379,9 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 
 	// call the function
-	funcName := "Call" + TrimPrefix(function.Name, "GDExtensionSpx")
+	funcName := "Call" + common.TrimPrefix(function.Name, "GDExtensionSpx")
 	if hasSyntheticReturn {
-		rawType := EffectiveRawReturnType(function)
+		rawType := common.EffectiveRawReturnType(function)
 		sb.WriteString(prefixTab)
 		fmt.Fprintf(&sb, "var retValue %s\n", rawType)
 	}
@@ -406,7 +406,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	sb.WriteString(")")
 
-	if HasEffectiveReturn(function) {
+	if common.HasEffectiveReturn(function) {
 		sb.WriteByte('\n')
 		sb.WriteString(prefixTab)
 		sb.WriteString("return ")
@@ -434,13 +434,13 @@ func goZeroValue(typeName string) string {
 	}
 }
 
-func (g *Generator) genSyncPureApiWrapFunction(function *clang.TypedefFunction) string {
+func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
 	mgrName := strcase.ToCamel(g.GetManagerName(function.Name))
 	pureFuncName := function.Name[len(prefix)+len(mgrName):]
 	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
@@ -476,7 +476,7 @@ func (g *Generator) genSyncPureApiWrapFunction(function *clang.TypedefFunction) 
 	return sb.String()
 }
 
-func (g *Generator) genSyncApiWrapFunction(function *clang.TypedefFunction) string {
+func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) string {
 	/*
 		func syncUiGetFlip(obj Object, horizontal bool) bool {
 			var _ret1 bool
@@ -494,7 +494,7 @@ func (g *Generator) genSyncApiWrapFunction(function *clang.TypedefFunction) stri
 	//funcName := function.Name[len(prefix):]
 	gdxMgrName := "gdx." + mgrName + "Mgr"
 	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
@@ -573,7 +573,7 @@ func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName 
 	lowcaseMgr := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
 	wroteArg := false
@@ -612,7 +612,7 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName stri
 	lowcaseMgr := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	// Check if the first argument is "obj" to determine if this is an instance method

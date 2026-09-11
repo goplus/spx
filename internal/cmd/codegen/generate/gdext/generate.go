@@ -27,7 +27,7 @@ import (
 	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/iancoleman/strcase"
 )
 
@@ -44,14 +44,14 @@ var (
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
-	*GenerationContext
+	*common.GenerationContext
 }
 
 func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers) error {
 	if err := g.generateGdCppFile(projectPath, gdSpxExtCpp, "gdextension_spx_ext.cpp"); err != nil {
 		return err
 	}
-	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.cpp")
+	outputFile := filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.cpp")
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.cpp")); err != nil {
 		return fmt.Errorf("copy gdextension_spx_ext.cpp: %w", err)
 	}
@@ -60,8 +60,8 @@ func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers)
 	}
 
 	// use the new format header
-	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	if err := WriteGeneratedFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
+	outputFile = filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.h")
+	if err := common.WriteGeneratedFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
 		return err
 	}
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
@@ -71,7 +71,7 @@ func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers)
 	if err := g.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"); err != nil {
 		return err
 	}
-	outputFile = filepath.Join(projectPath, NativeRelDir, "godot_js_spx.cpp")
+	outputFile = filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp")
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "web", "godot_js_spx.cpp")); err != nil {
 		return fmt.Errorf("copy godot_js_spx.cpp: %w", err)
 	}
@@ -104,19 +104,19 @@ func fileCopy(src, dst string) error {
 
 func (g *Generator) generateGdCppFile(projectPath string, templateStr string, outputFileName string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":             GdiVariableName,
+		"gdiVariableName":             common.GdiVariableName,
 		"snakeCase":                   strcase.ToSnake,
 		"camelCase":                   strcase.ToCamel,
-		"goReturnType":                GoReturnType,
-		"goArgumentType":              GoArgumentType,
-		"goEnumValue":                 GoEnumValue,
-		"add":                         Add,
-		"sub":                         Sub,
-		"cgoCastArgument":             CgoCastArgument,
-		"cgoCastReturnType":           CgoCastReturnType,
-		"cgoCleanUpArgument":          CgoCleanUpArgument,
-		"trimPrefix":                  TrimPrefix,
-		"loadProcAddressName":         LoadProcAddressName,
+		"goReturnType":                common.GoReturnType,
+		"goArgumentType":              common.GoArgumentType,
+		"goEnumValue":                 common.GoEnumValue,
+		"add":                         common.Add,
+		"sub":                         common.Sub,
+		"cgoCastArgument":             common.CgoCastArgument,
+		"cgoCastReturnType":           common.CgoCastReturnType,
+		"cgoCleanUpArgument":          common.CgoCleanUpArgument,
+		"trimPrefix":                  common.TrimPrefix,
+		"loadProcAddressName":         common.LoadProcAddressName,
 		"isManagerMethod":             g.IsManagerMethod,
 		"getManagerName":              g.GetManagerName,
 		"isWebOwnedStringFree":        isWebOwnedStringFree,
@@ -127,11 +127,11 @@ func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ou
 		"webManagerArgument":          webManagerArgument,
 		"hasArrayTransformBridgeSpec": g.HasArrayTransformBridgeSpec,
 		"hasNativeArrayBridgeSpec":    g.HasNativeArrayBridgeSpec,
-		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
+		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) common.ArrayTransformBridgeSpec {
 			spec, _ := g.GetArrayTransformBridgeSpec(function.Name)
 			return spec
 		},
-		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) NativeArrayBridgeSpec {
+		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) common.NativeArrayBridgeSpec {
 			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
 			return spec
 		},
@@ -173,11 +173,11 @@ func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ou
 		},
 	}
 
-	output, err := RenderTemplate(funcs, outputFileName, templateStr, g.ManagerData())
+	output, err := common.RenderTemplate(funcs, outputFileName, templateStr, g.ManagerData())
 	if err != nil {
 		return err
 	}
-	return WriteGeneratedFile(filepath.Join(projectPath, NativeRelDir, outputFileName), output, 0o644)
+	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, outputFileName), output, 0o644)
 }
 
 // Web owns the value returned by this legacy method.
