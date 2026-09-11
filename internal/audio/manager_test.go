@@ -162,8 +162,8 @@ func TestManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
 	if backend.playing[id1] || !backend.playing[id2] {
 		t.Fatalf("playing states after replay = first:%v second:%v, want false/true", backend.playing[id1], backend.playing[id2])
 	}
-	if ids := mgr.path2ids["sounds/a.wav"]; len(ids) != 1 || ids[0] != id2 {
-		t.Fatalf("path2ids = %+v, want only latest playback %d", ids, id2)
+	if id := mgr.path2id["sounds/a.wav"]; id != id2 {
+		t.Fatalf("path2id = %+v, want only latest playback %d", id, id2)
 	}
 
 	mgr.Pause("sounds/a.wav")
@@ -211,8 +211,8 @@ func TestManagerRepeatedPlayReplacesFinishedPlayback(t *testing.T) {
 	second := mgr.Play(1, "sounds/a.wav", false, false, 0, 0, 0)
 	mgr.Pause("sounds/a.wav")
 
-	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
-		t.Fatalf("path2ids = %+v, want only latest live id", mgr.path2ids["sounds/a.wav"])
+	if mgr.path2id["sounds/a.wav"] != second {
+		t.Fatalf("path2id = %+v, want only latest live id", mgr.path2id["sounds/a.wav"])
 	}
 	if len(backend.pauses) != 1 || backend.pauses[0] != second {
 		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
@@ -233,11 +233,11 @@ func TestManagerStopIDOnlyStopsRequestedPlayback(t *testing.T) {
 	if len(backend.stops) != 1 || backend.stops[0] != first {
 		t.Fatalf("Stop calls = %+v, want [%d]", backend.stops, first)
 	}
-	if _, ok := mgr.path2ids["sounds/a.wav"]; ok {
-		t.Fatalf("path2ids still contains stopped playback %d", first)
+	if _, ok := mgr.path2id["sounds/a.wav"]; ok {
+		t.Fatalf("path2id still contains stopped playback %d", first)
 	}
-	if len(mgr.path2ids["sounds/b.wav"]) != 1 || mgr.path2ids["sounds/b.wav"][0] != second {
-		t.Fatalf("path2ids = %+v, want playback %d", mgr.path2ids["sounds/b.wav"], second)
+	if mgr.path2id["sounds/b.wav"] != second {
+		t.Fatalf("path2id = %+v, want playback %d", mgr.path2id["sounds/b.wav"], second)
 	}
 	if len(backend.pauses) != 1 || backend.pauses[0] != second {
 		t.Fatalf("Pause calls = %+v, want [%d]", backend.pauses, second)
@@ -258,8 +258,8 @@ func TestManagerPruneStoppedIDsRemovesStalePathEntries(t *testing.T) {
 	if len(live) != 1 || live[0] != second {
 		t.Fatalf("live = %+v, want [%d]", live, second)
 	}
-	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != second {
-		t.Fatalf("path2ids = %+v, want only second playback %d", mgr.path2ids["sounds/a.wav"], second)
+	if mgr.path2id["sounds/a.wav"] != second {
+		t.Fatalf("path2id = %+v, want only second playback %d", mgr.path2id["sounds/a.wav"], second)
 	}
 }
 
@@ -276,8 +276,8 @@ func TestManagerRestartIDKeepsTrackedPlayback(t *testing.T) {
 	if len(backend.restarts) != 1 || backend.restarts[0] != id {
 		t.Fatalf("restart calls = %+v, want [%d]", backend.restarts, id)
 	}
-	if len(mgr.path2ids["sounds/a.wav"]) != 1 || mgr.path2ids["sounds/a.wav"][0] != id {
-		t.Fatalf("path2ids = %+v, want [%d]", mgr.path2ids["sounds/a.wav"], id)
+	if mgr.path2id["sounds/a.wav"] != id {
+		t.Fatalf("path2id = %+v, want [%d]", mgr.path2id["sounds/a.wav"], id)
 	}
 }
 
@@ -292,8 +292,8 @@ func TestManagerRestartIDPrunesStalePlayback(t *testing.T) {
 	if mgr.RestartID(id) {
 		t.Fatalf("RestartID(%d) = true, want false for stale playback", id)
 	}
-	if _, ok := mgr.path2ids["sounds/a.wav"]; ok {
-		t.Fatalf("path2ids still contains stale playback %d", id)
+	if _, ok := mgr.path2id["sounds/a.wav"]; ok {
+		t.Fatalf("path2id still contains stale playback %d", id)
 	}
 }
 
@@ -513,10 +513,10 @@ func TestManagerStopAllDestroysPendingReleasedSounds(t *testing.T) {
 
 func assertManagerNoTracking(t *testing.T, mgr *Manager) {
 	t.Helper()
-	if len(mgr.path2ids) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
+	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
 		t.Fatalf(
-			"manager tracking not cleared: path2ids=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
-			mgr.path2ids,
+			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
+			mgr.path2id,
 			mgr.obj2ids,
 			mgr.playbacks,
 			mgr.pendingDestroy,

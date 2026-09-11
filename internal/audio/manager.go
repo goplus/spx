@@ -45,7 +45,7 @@ type Backend interface {
 
 type Manager struct {
 	backend        Backend
-	path2ids       map[string][]int64
+	path2id        map[string]int64
 	obj2ids        map[engine.Object][]int64
 	playbacks      map[int64]playbackInfo
 	pendingDestroy map[engine.Object]struct{}
@@ -59,7 +59,7 @@ type playbackInfo struct {
 
 func (m *Manager) Init(backend Backend) {
 	m.backend = backend
-	m.path2ids = make(map[string][]int64)
+	m.path2id = make(map[string]int64)
 	m.obj2ids = make(map[engine.Object][]int64)
 	m.playbacks = make(map[int64]playbackInfo)
 	m.pendingDestroy = make(map[engine.Object]struct{})
@@ -88,26 +88,23 @@ func (m *Manager) ReleaseSound(soundObj engine.Object) {
 }
 
 func (m *Manager) Pause(path string) {
-	ids := m.pruneDeadIDs(path)
-	for _, id := range ids {
+	if id := m.pruneDeadID(path); id != 0 {
 		m.backend.Pause(id)
 	}
 }
 
 func (m *Manager) Resume(path string) {
-	ids := m.pruneDeadIDs(path)
-	for _, id := range ids {
+	if id := m.pruneDeadID(path); id != 0 {
 		m.backend.Resume(id)
 	}
 }
 
 func (m *Manager) Stop(path string) {
-	ids := append([]int64(nil), m.path2ids[path]...)
-	for _, id := range ids {
+	if id := m.path2id[path]; id != 0 {
 		m.backend.Stop(id)
 		m.dropPlaybackTracking(id)
 	}
-	delete(m.path2ids, path)
+	delete(m.path2id, path)
 }
 
 func (m *Manager) StopID(id int64) {
@@ -170,20 +167,20 @@ func (m *Manager) Play(
 		return 0
 	}
 	m.trackPlayback(curID, path, soundObj, isLoop)
-	m.path2ids[path] = []int64{curID}
+	m.path2id[path] = curID
 	if isLoop {
 		m.backend.SetLoop(curID, true)
 	} else if isWait {
 		for m.backend.IsPlaying(curID) {
 			engine.WaitNextFrame()
 		}
-		m.pruneDeadIDs(path)
+		m.pruneDeadID(path)
 	}
 	return curID
 }
 
 func (m *Manager) StopAll() {
-	m.path2ids = make(map[string][]int64)
+	m.path2id = make(map[string]int64)
 	m.obj2ids = make(map[engine.Object][]int64)
 	m.playbacks = make(map[int64]playbackInfo)
 	m.backend.StopAll()
@@ -194,11 +191,11 @@ func (m *Manager) StopAll() {
 }
 
 func (m *Manager) Update() {
-	if m.backend == nil || len(m.path2ids) == 0 && len(m.pendingDestroy) == 0 {
+	if m.backend == nil || len(m.path2id) == 0 && len(m.pendingDestroy) == 0 {
 		return
 	}
-	for path := range m.path2ids {
-		m.pruneDeadIDs(path)
+	for path := range m.path2id {
+		m.pruneDeadID(path)
 	}
 	for soundObj := range m.pendingDestroy {
 		if len(m.obj2ids[soundObj]) == 0 {
@@ -248,45 +245,19 @@ func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
 	m.SetVolume(soundObj, m.GetVolume(soundObj)+delta)
 }
 
-func (m *Manager) pruneDeadIDs(path string) []int64 {
-	ids := m.path2ids[path]
-	if len(ids) == 0 {
-		delete(m.path2ids, path)
-		return nil
+func (m *Manager) pruneDeadID(path string) int64 {
+	id := m.path2id[path]
+	if id != 0 && m.backend.IsPlaying(id) {
+		return id
 	}
-
-	live := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if m.backend.IsPlaying(id) {
-			live = append(live, id)
-			continue
-		}
-		m.dropPlaybackTracking(id)
-	}
-	if len(live) == 0 {
-		delete(m.path2ids, path)
-		return nil
-	}
-	m.path2ids[path] = live
-	return live
+	m.dropPlaybackTracking(id)
+	delete(m.path2id, path)
+	return 0
 }
 
 func (m *Manager) removeID(target int64) {
-	info, ok := m.playbacks[target]
-	if ok {
-		ids := m.path2ids[info.path]
-		for i, id := range ids {
-			if id != target {
-				continue
-			}
-			ids = append(ids[:i], ids[i+1:]...)
-			if len(ids) == 0 {
-				delete(m.path2ids, info.path)
-			} else {
-				m.path2ids[info.path] = ids
-			}
-			break
-		}
+	if info, ok := m.playbacks[target]; ok && m.path2id[info.path] == target {
+		delete(m.path2id, info.path)
 	}
 	m.dropPlaybackTracking(target)
 }
