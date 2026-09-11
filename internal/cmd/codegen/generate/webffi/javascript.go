@@ -110,19 +110,17 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 			"\t}\n" +
 			"\treturn _fastRetValue"
 	}
-	if function.Name == "GDExtensionSpxInputWriteSnapshot" {
-		return "var _arg0 = RequireWasmFastArray(out, \"gdspx_input_write_snapshot\", 2);\n" +
-			"\tvar _arg1 = FastArrayCount(out);\n" +
-			"\t_gdFuncPtr(_arg0, _arg1);"
-	}
 	if spec, ok := g.GetNativeArrayBridgeSpec(function.Name); ok {
 		if common.HasEffectiveReturn(function) {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
-		argName := spec.BaseArgName
-		return "var _arg0 = RequireFastArray(" + argName + ", \"gd" + common.LoadProcAddressName(function.Name) + "\", " + strconv.Itoa(int(spec.FastArrayType)) + ");\n" +
-			"\tvar _arg1 = FastArrayCount(" + argName + ");\n" +
-			"\t_gdFuncPtr(_arg0, _arg1);"
+		requireArray := "RequireFastArray"
+		if !strings.HasPrefix(spec.RawDataCType, "const ") {
+			// Writable arrays must stay in Wasm memory so writes reach the caller.
+			requireArray = "RequireWasmFastArray"
+		}
+		return fmt.Sprintf("var _arg0 = %s(%s, %q, %d);\n\tvar _arg1 = FastArrayCount(%s);\n\t_gdFuncPtr(_arg0, _arg1);",
+			requireArray, spec.BaseArgName, "gd"+common.LoadProcAddressName(function.Name), spec.FastArrayType, spec.BaseArgName)
 	}
 	if function.Name == "GDExtensionSpxInputGetGlobalMousePos" {
 		return "var _retValue = AllocGdVec2();\n" +

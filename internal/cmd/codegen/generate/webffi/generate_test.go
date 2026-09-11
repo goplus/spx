@@ -24,6 +24,7 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,6 +84,7 @@ func TestGetJsFuncArgsSkipsNativeArrayLenArg(t *testing.T) {
 
 	metadata.NativeArrayBridges = map[string]common.NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
 		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		RawDataCType:     "const float *",
 		BaseArgName:      "buffer",
 		DataArgName:      "buffer_data",
 		DataArgGoType:    "[]float32",
@@ -192,17 +194,40 @@ func TestGetJsFuncBodyUsesArrayTransformBridgeSpec(t *testing.T) {
 	require.Contains(t, body, `throw new Error("gdspx_sprite_batch_retrieve_positions fast path unavailable")`)
 }
 
-func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
+func TestGetJsFuncBodyUsesArrayAccessSemantics(t *testing.T) {
+	dir := t.TempDir()
+	header := `
+class SpxTestMgr : public SpxBaseMgr {
+public:
+	SPX_API void read_values(const float *values_data, int len);
+	SPX_API void write_values(float *values_data, int len);
+	SPX_API void write_bytes(uint8_t *out, int len);
+};
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_test_mgr.h"), []byte(header), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, headers.Metadata)}
 
-	function := &clang.TypedefFunction{
-		Name: "GDExtensionSpxInputWriteSnapshot",
+	for _, test := range []struct {
+		name string
+		want string
+	}{
+		{"GDExtensionSpxTestReadValues", `RequireFastArray(values, "gdspx_test_read_values", 2)`},
+		{"GDExtensionSpxTestWriteValues", `RequireWasmFastArray(values, "gdspx_test_write_values", 2)`},
+		{"GDExtensionSpxTestWriteBytes", `RequireWasmFastArray(out, "gdspx_test_write_bytes", 5)`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.Contains(t, headers.Metadata.NativeArrayBridges, test.name)
+			body := generation.getJsFuncBody(&clang.TypedefFunction{
+				Name:       test.name,
+				ReturnType: clang.PrimativeType{Name: "void"},
+			})
+			require.Contains(t, body, test.want)
+			require.Contains(t, body, "_gdFuncPtr(_arg0, _arg1);")
+			require.NotContains(t, body, "GetFastArrayWasmPtr(")
+		})
 	}
-
-	body := generation.getJsFuncBody(function)
-	require.Contains(t, body, `RequireWasmFastArray(out, "gdspx_input_write_snapshot", 2)`)
-	require.Contains(t, body, "var _arg1 = FastArrayCount(out);")
-	require.NotContains(t, body, "GetFastArrayWasmPtr(out)")
 }
 
 func TestGetJsFuncBodyTreatsWebFreeStrAsValueOperation(t *testing.T) {
@@ -219,6 +244,7 @@ func TestGetJsFuncBodyValidatesNativeFastArray(t *testing.T) {
 
 	metadata.NativeArrayBridges = map[string]common.NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
 		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		RawDataCType:     "const float *",
 		BaseArgName:      "buffer",
 		FastArrayType:    2,
 	}}
