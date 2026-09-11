@@ -17,72 +17,13 @@
 package common
 
 import (
-	"bytes"
 	"fmt"
-	"go/format"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/internal/licenseheader"
-	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
 
 	"github.com/iancoleman/strcase"
 )
-
-const (
-	NativeRelDir       = "../../gdengine/binding/native"
-	GdengineImplRelDir = "../../gdengine/impl"
-	EnginewrapRelDir   = "../../enginewrap"
-	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
-)
-
-type NativeArrayBridgeSpec struct {
-	BaseFunctionName string
-	BaseArgName      string
-
-	DataArgName    string
-	DataArgGoType  string
-	DataArgPtrType string
-	LenArgName     string
-	LenArgGoType   string
-
-	RawFunctionName string
-	RawMethodName   string
-	RawDataArgName  string
-	RawDataCType    string
-	RawLenArgName   string
-	RawLenCType     string
-
-	GoArgType     string
-	FastArrayType int32
-}
-
-type RawExportParam struct {
-	CType string
-	Name  string
-}
-
-type ArrayTransformBridgeSpec struct {
-	FunctionName     string
-	ArrayArgName     string
-	MethodName       string
-	Params           []RawExportParam
-	InputArrayType   int32
-	OutputArrayType  int32
-	OutputCountScale int
-}
-
-func Add(a int, b int) int {
-	return a + b
-}
-
-func Sub(a int, b int) int {
-	return a - b
-}
 
 func GoArgumentType(t clang.PrimativeType, name string) string {
 	n := strings.TrimSpace(t.Name)
@@ -246,18 +187,6 @@ func GoReturnType(t clang.PrimativeType) string {
 	}
 }
 
-func GoEnumValue(v clang.EnumValue, index int) string {
-	if v.IntValue != nil {
-		return strconv.Itoa(*v.IntValue)
-	} else if v.ConstRefValue != nil {
-		return *v.ConstRefValue
-	} else if index == 0 {
-		return "iota"
-	} else {
-		return ""
-	}
-}
-
 func CgoCastArgument(a clang.Argument, defaultName string) string {
 	if a.Type.Primative != nil {
 		t := a.Type.Primative
@@ -418,19 +347,6 @@ func CgoCastReturnType(t clang.PrimativeType, argName string) string {
 	}
 }
 
-func GdiVariableName(typeName string) string {
-	ret := LoadProcAddressName(typeName)
-	ret = strcase.ToCamel(ret)
-	ret = strings.Replace(ret, "C32Str", "C32str", 1)
-	ret = strings.Replace(ret, "Placeholder", "PlaceHolder", 1)
-	return ret
-}
-
-func GetManagerFuncName(typeName string) string {
-	typeName = strings.Replace(typeName, "GDExtensionSpx", "", 1)
-	return strings.Replace(LoadProcAddressName(typeName), "spx", "Call", 1)
-}
-
 func LoadProcAddressName(typeName string) string {
 	ret := strcase.ToSnake(typeName)
 	ret = strings.Replace(ret, "gd_extension_", "", 1)
@@ -451,183 +367,4 @@ func LoadProcAddressName(typeName string) string {
 	ret = strings.Replace(ret, "_4", "4", 1)
 	ret = strings.Replace(ret, "place_holder", "placeholder", 1)
 	return ret
-}
-
-func TrimPrefix(typeName, prefix string) string {
-	prefixLen := len(prefix)
-	if strings.HasPrefix(typeName, prefix) {
-		return typeName[prefixLen:]
-	}
-	return typeName
-}
-
-func (c *GenerationContext) IsNativeArrayBridgeArg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	return c.IsNativeArrayDataArg(function, arg)
-}
-
-func (c *GenerationContext) IsNativeArrayDataArg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	spec, ok := c.GetNativeArrayBridgeSpec(function.Name)
-	if !ok {
-		return false
-	}
-	return arg.Name == spec.DataArgName || arg.Name == spec.BaseArgName
-}
-
-func (c *GenerationContext) IsNativeArrayLenArg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	spec, ok := c.GetNativeArrayBridgeSpec(function.Name)
-	if !ok {
-		return false
-	}
-	return arg.Name == spec.LenArgName && spec.LenArgName != ""
-}
-
-func (c *GenerationContext) ShouldSkipHighLevelArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
-	return c.IsNativeArrayLenArg(function, arg)
-}
-
-func (c *GenerationContext) EffectiveGoArgumentName(function *clang.TypedefFunction, arg clang.Argument) string {
-	if c.IsNativeArrayDataArg(function, arg) {
-		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
-		return spec.BaseArgName
-	}
-	return arg.Name
-}
-
-func (c *GenerationContext) EffectiveGoArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
-	if c.IsNativeArrayDataArg(function, arg) {
-		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
-		return spec.DataArgGoType
-	}
-	return c.MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
-}
-
-func (c *GenerationContext) EffectiveGdxArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
-	typeName := c.EffectiveGoArgumentType(function, arg)
-	switch typeName {
-	case "Object":
-		return "gdx.Object"
-	case "Array":
-		return "gdx.Array"
-	default:
-		return typeName
-	}
-}
-
-func (c *GenerationContext) NativeArrayLenExpr(function *clang.TypedefFunction, argName string) string {
-	spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
-	return spec.LenArgGoType + "(len(" + argName + "))"
-}
-
-func EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
-	args := function.Arguments
-	if function.ReturnType.Name == "void" && len(args) > 0 && args[len(args)-1].Name == "ret_value" {
-		return args[:len(args)-1]
-	}
-	return args
-}
-
-func (c *GenerationContext) HighLevelArguments(function *clang.TypedefFunction) []clang.Argument {
-	args := EffectiveArguments(function)
-	result := make([]clang.Argument, 0, len(args))
-	for _, arg := range args {
-		if c.ShouldSkipHighLevelArgument(function, arg) {
-			continue
-		}
-		cloned := arg
-		cloned.Name = c.EffectiveGoArgumentName(function, arg)
-		result = append(result, cloned)
-	}
-	return result
-}
-
-func EffectiveRawReturnType(function *clang.TypedefFunction) string {
-	if function.ReturnType.Name != "void" {
-		return function.ReturnType.Name
-	}
-	if len(function.Arguments) > 0 {
-		last := function.Arguments[len(function.Arguments)-1]
-		if last.Name == "ret_value" {
-			if last.Type.Primative != nil {
-				return last.Type.Primative.Name
-			}
-			panic(fmt.Sprintf("unsupported synthetic ret_value type in %s: %s", function.Name, last.Type.CStyleString()))
-		}
-	}
-	return ""
-}
-
-func (c *GenerationContext) EffectiveGoReturnType(function *clang.TypedefFunction) string {
-	rawType := EffectiveRawReturnType(function)
-	if rawType == "" {
-		return ""
-	}
-	return c.MustGoTypeForCType(rawType, function.Name)
-}
-
-func HasEffectiveReturn(function *clang.TypedefFunction) bool {
-	return EffectiveRawReturnType(function) != ""
-}
-
-func (c *GenerationContext) GetFuncParamTypeString(typeName string) string {
-	return c.cppType2Go[typeName]
-}
-
-func (c *GenerationContext) MustGoTypeForCType(typeName string, functionName string) string {
-	goType := c.GetFuncParamTypeString(typeName)
-	if goType != "" {
-		return goType
-	}
-	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", typeName, functionName))
-}
-
-func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
-	if arg.Type.Primative != nil {
-		return arg.Type.Primative.Name
-	}
-	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
-}
-
-// RenderTemplate completes template execution before any output file is opened.
-func RenderTemplate(funcs template.FuncMap, name, text string, data any) ([]byte, error) {
-	tmpl, err := template.New(name).Funcs(funcs).Parse(text)
-	if err != nil {
-		return nil, err
-	}
-	var b bytes.Buffer
-	if err := tmpl.Execute(&b, data); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-func WriteGeneratedFile(dstPath string, output []byte, mode os.FileMode) error {
-	if err := os.WriteFile(dstPath, output, mode); err != nil {
-		return fmt.Errorf("write generated file %q: %w", dstPath, err)
-	}
-	spxlog.Info("Generated file: %s", dstPath)
-	return nil
-}
-
-func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {
-	output, err := RenderTemplate(funcs, name, text, data)
-	if err != nil {
-		return err
-	}
-	if filepath.Ext(dstPath) == ".go" {
-		output = licenseheader.AddToGoSource(output)
-		output, err = format.Source(output)
-		if err != nil {
-			return fmt.Errorf("format generated Go file %q: %w", dstPath, err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-		return fmt.Errorf("create generated file directory %q: %w", filepath.Dir(dstPath), err)
-	}
-	return WriteGeneratedFile(dstPath, output, 0o644)
 }
