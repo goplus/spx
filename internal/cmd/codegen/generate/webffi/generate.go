@@ -28,7 +28,7 @@ import (
 	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	. "github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
@@ -108,7 +108,7 @@ var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
-	*GenerationContext
+	*common.GenerationContext
 }
 
 func (g *Generator) Generate(projectPath, spxModulePath string) error {
@@ -133,108 +133,108 @@ func (g *Generator) Generate(projectPath, spxModulePath string) error {
 
 func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":       GdiVariableName,
+		"gdiVariableName":       common.GdiVariableName,
 		"snakeCase":             strcase.ToSnake,
 		"camelCase":             strcase.ToCamel,
 		"upper":                 strings.ToUpper,
-		"goReturnType":          GoReturnType,
-		"goArgumentType":        GoArgumentType,
-		"goEnumValue":           GoEnumValue,
-		"add":                   Add,
-		"cgoCastArgument":       CgoCastArgument,
-		"cgoCastReturnType":     CgoCastReturnType,
-		"cgoCleanUpArgument":    CgoCleanUpArgument,
-		"trimPrefix":            TrimPrefix,
-		"mustPrimitiveTypeName": MustPrimitiveTypeName,
+		"goReturnType":          common.GoReturnType,
+		"goArgumentType":        common.GoArgumentType,
+		"goEnumValue":           common.GoEnumValue,
+		"add":                   common.Add,
+		"cgoCastArgument":       common.CgoCastArgument,
+		"cgoCastReturnType":     common.CgoCastReturnType,
+		"cgoCleanUpArgument":    common.CgoCleanUpArgument,
+		"trimPrefix":            common.TrimPrefix,
+		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
 	}
 
-	return GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
+	return common.GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
 		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
 }
 
 func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":    GdiVariableName,
+		"gdiVariableName":    common.GdiVariableName,
 		"snakeCase":          strcase.ToSnake,
 		"camelCase":          strcase.ToCamel,
 		"upper":              strings.ToUpper,
-		"goReturnType":       GoReturnType,
-		"goArgumentType":     GoArgumentType,
-		"goEnumValue":        GoEnumValue,
-		"add":                Add,
-		"cgoCastArgument":    CgoCastArgument,
-		"cgoCastReturnType":  CgoCastReturnType,
-		"cgoCleanUpArgument": CgoCleanUpArgument,
-		"trimPrefix":         TrimPrefix,
+		"goReturnType":       common.GoReturnType,
+		"goArgumentType":     common.GoArgumentType,
+		"goEnumValue":        common.GoEnumValue,
+		"add":                common.Add,
+		"cgoCastArgument":    common.CgoCastArgument,
+		"cgoCastReturnType":  common.CgoCastReturnType,
+		"cgoCleanUpArgument": common.CgoCleanUpArgument,
+		"trimPrefix":         common.TrimPrefix,
 	}
 
-	return GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
+	return common.GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
 		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
 }
 
 func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
-		"loadProcAddressName": LoadProcAddressName,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
+		"trimPrefix":          common.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
-	return GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
+	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
 		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
 }
 
 func (g *Generator) GenerateManagerWrapperGoFile(projectPath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"trimPrefix":          TrimPrefix,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
+		"trimPrefix":          common.TrimPrefix,
 		"isManagerMethod":     g.IsManagerMethod,
 		"getManagerFuncName":  g.ManagerMethodSignature,
 		"getManagerFuncBody":  g.getManagerFuncBody,
 		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
-	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, g.ManagerData(),
-		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
+	return common.GenerateFile(funcs, "manager_web.gen.go", managerWebText, g.ManagerData(),
+		filepath.Join(projectPath, common.GdengineImplRelDir, "manager_web.gen.go"))
 }
 
 func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":     GdiVariableName,
+		"gdiVariableName":     common.GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
 		"camelCase":           strcase.ToCamel,
-		"goReturnType":        GoReturnType,
-		"goArgumentType":      GoArgumentType,
-		"goEnumValue":         GoEnumValue,
-		"add":                 Add,
-		"sub":                 Sub,
+		"goReturnType":        common.GoReturnType,
+		"goArgumentType":      common.GoArgumentType,
+		"goEnumValue":         common.GoEnumValue,
+		"add":                 common.Add,
+		"sub":                 common.Sub,
 		"getJsFuncArgs":       g.getJsFuncArgs,
-		"cgoCastArgument":     CgoCastArgument,
-		"cgoCastReturnType":   CgoCastReturnType,
-		"cgoCleanUpArgument":  CgoCleanUpArgument,
+		"cgoCastArgument":     common.CgoCastArgument,
+		"cgoCastReturnType":   common.CgoCastReturnType,
+		"cgoCleanUpArgument":  common.CgoCleanUpArgument,
 		"getJsFuncBody":       g.getJsFuncBody,
-		"trimPrefix":          TrimPrefix,
-		"loadProcAddressName": LoadProcAddressName,
+		"trimPrefix":          common.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
-	output, err := RenderTemplate(funcs, "gdspx.js", jsEngineJsFileText, g.AST())
+	output, err := common.RenderTemplate(funcs, "gdspx.js", jsEngineJsFileText, g.AST())
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string) er
 	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return err
 	}
-	return WriteGeneratedFile(dstPath, output, 0o666)
+	return common.WriteGeneratedFile(dstPath, output, 0o666)
 }
 
 func trimTrailingWhitespace(src []byte) []byte {
@@ -262,7 +262,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	// convert arguments
 	for i, arg := range args {
 		if g.ShouldSkipHighLevelArgument(function, arg) {
@@ -278,7 +278,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 			params = append(params, argName)
 			continue
 		}
-		typeName := MustPrimitiveTypeName(arg, function.Name)
+		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		if g.usesFlatJsGdIntArg(function, arg) {
 			argName := "arg" + strconv.Itoa(i)
 			lowName := argName + "Low"
@@ -306,11 +306,11 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 
 	// call the function
 	sb.WriteString(prefixTab)
-	if HasEffectiveReturn(function) {
+	if common.HasEffectiveReturn(function) {
 		sb.WriteString("_retValue := ")
 	}
 
-	funcName := "API.Spx" + (TrimPrefix(function.Name, "GDExtensionSpx"))
+	funcName := "API.Spx" + (common.TrimPrefix(function.Name, "GDExtensionSpx"))
 	sb.WriteString(funcName)
 	sb.WriteString(".Invoke(")
 	for i, param := range params {
@@ -321,11 +321,11 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	}
 	sb.WriteString(")")
 
-	if HasEffectiveReturn(function) {
+	if common.HasEffectiveReturn(function) {
 		sb.WriteByte('\n')
 		sb.WriteString(prefixTab)
 		sb.WriteString("return ")
-		typeName := EffectiveRawReturnType(function)
+		typeName := common.EffectiveRawReturnType(function)
 		name := strcase.ToCamel(typeName)
 		if name == "GdObj" {
 			name = "GdObject"
@@ -384,7 +384,7 @@ func appendIndented(lines []string, indent string, values ...string) []string {
 }
 
 func (g *Generator) getJsFuncArgs(function *clang.TypedefFunction) []string {
-	args := EffectiveArguments(function)
+	args := common.EffectiveArguments(function)
 	result := make([]string, 0, len(args))
 	for _, arg := range args {
 		if g.ShouldSkipHighLevelArgument(function, arg) {
@@ -407,7 +407,7 @@ func (g *Generator) usesFlatJsGdIntArg(function *clang.TypedefFunction, arg clan
 	if g.IsNativeArrayDataArg(function, arg) {
 		return false
 	}
-	return isFlatJsGdIntLikeType(MustPrimitiveTypeName(arg, function.Name))
+	return isFlatJsGdIntLikeType(common.MustPrimitiveTypeName(arg, function.Name))
 }
 
 func isFlatJsGdIntLikeType(typeName string) bool {
@@ -462,7 +462,7 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 			strconv.Itoa(int(spec.InputArrayType)) + ", " + strconv.Itoa(int(spec.OutputArrayType)) + ", " +
 			strconv.Itoa(spec.OutputCountScale) + ");\n" +
 			"\tif (_fastRetValue == null) {\n" +
-			"\t\tthrow new Error(\"gd" + LoadProcAddressName(function.Name) + " fast path unavailable\");\n" +
+			"\t\tthrow new Error(\"gd" + common.LoadProcAddressName(function.Name) + " fast path unavailable\");\n" +
 			"\t}\n" +
 			"\treturn _fastRetValue"
 	}
@@ -472,11 +472,11 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
 	if spec, ok := g.GetNativeArrayBridgeSpec(function.Name); ok {
-		if HasEffectiveReturn(function) {
+		if common.HasEffectiveReturn(function) {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
 		argName := spec.BaseArgName
-		return "var _arg0 = RequireFastArray(" + argName + ", \"gd" + LoadProcAddressName(function.Name) + "\", " + strconv.Itoa(int(spec.FastArrayType)) + ");\n" +
+		return "var _arg0 = RequireFastArray(" + argName + ", \"gd" + common.LoadProcAddressName(function.Name) + "\", " + strconv.Itoa(int(spec.FastArrayType)) + ");\n" +
 			"\tvar _arg1 = FastArrayCount(" + argName + ");\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
@@ -494,8 +494,8 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
-	args := EffectiveArguments(function)
-	rawRetType := EffectiveRawReturnType(function)
+	args := common.EffectiveArguments(function)
+	rawRetType := common.EffectiveRawReturnType(function)
 
 	// call the function
 	if rawRetType != "" {
@@ -506,7 +506,7 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := MustPrimitiveTypeName(arg, function.Name)
+		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
 		if g.usesFlatJsGdIntArg(function, arg) {
 			fmt.Fprintf(&sb, "var %s = ", argName)
@@ -550,7 +550,7 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 	// convert arguments
 	for i, arg := range args {
 		sb.WriteString(prefixTab)
-		typeName := MustPrimitiveTypeName(arg, function.Name)
+		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
 		fmt.Fprintf(&sb, "Free%s(%s); \n", typeName, argName)
 	}

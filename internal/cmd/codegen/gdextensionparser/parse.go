@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package gdextensionparser prepares SPX headers for binding generation.
 package gdextensionparser
 
 import (

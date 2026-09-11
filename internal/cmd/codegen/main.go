@@ -33,13 +33,12 @@ import (
 )
 
 var (
-	verbose         bool
-	genClangAPI     bool
-	genExtensionAPI bool
-	packagePath     string
-	spxModulePath   string
-	parsedASTPath   string
-	buildConfig     string
+	verbose       bool
+	genClangAPI   bool
+	packagePath   string
+	spxModulePath string
+	parsedASTPath string
+	buildConfig   string
 )
 
 var requiredCodegenModuleFiles = []string{
@@ -59,7 +58,6 @@ func init() {
 	}
 	verbose = true
 	genClangAPI = true
-	genExtensionAPI = false
 	packagePath = absPath
 	repoRoot := filepath.Clean(filepath.Join(absPath, "../../.."))
 	spxModulePath = resolveSPXModuleSource(repoRoot, os.Getenv("SPX_MODULE_SRC"))

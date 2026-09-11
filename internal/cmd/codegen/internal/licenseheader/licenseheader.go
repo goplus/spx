@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+// Package licenseheader manages license headers in generated Go source.
 package licenseheader
 
 import "bytes"

@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+// Package clang parses the C declarations used by SPX bindings.
 package clang
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/participle/v2"
-	. "github.com/alecthomas/participle/v2/lexer"
-	"golang.org/x/exp/slices"
+	"github.com/alecthomas/participle/v2/lexer"
 )
 
 var (
-	legacyGDExtentionInterfaceFunctionNames []string = []string{
+	legacyGDExtensionInterfaceFunctionNames = []string{
 		"GDExtensionInterfaceFunctionPtr",
 	}
 )
@@ -104,7 +105,7 @@ type StructFunction struct {
 	Comment    string        `parser:" @Comment?              " json:",omitempty"`
 }
 
-// void (*p_func)(void *, uint32_t)
+// Argument represents a C parameter, including function-pointer parameters.
 type Argument struct {
 	Type Type   `parser:" @@                               " json:",omitempty"`
 	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
@@ -145,7 +146,7 @@ func (a CHeaderFileAST) CollectFunctionsOfClass(className string) []TypedefFunct
 		if strings.HasPrefix(fn.Name, prefix) &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxGlobal") &&
-			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
+			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
 			fns = append(fns, fn)
 		}
 	}
@@ -161,7 +162,7 @@ func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string, m
 	for _, fn := range allFns {
 		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
+			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
 			actualManager := managerNames.resolveASCII(fn.Name)
 			if actualManager == managerName {
 				fns = append(fns, fn)
@@ -181,7 +182,7 @@ func (a CHeaderFileAST) CollectGDExtensionInterfaceFunctions() []TypedefFunction
 		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
 			!strings.HasPrefix(fn.Name, "GDExtensionSpxGlobal") &&
-			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
+			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
 			fns = append(fns, fn)
 		}
 	}
@@ -196,7 +197,7 @@ func (a CHeaderFileAST) CollectGDExtensionISpriteFunctions() []TypedefFunction {
 
 	for _, fn := range allFns {
 		if strings.HasPrefix(fn.Name, "GDExtensionSpxSprite") &&
-			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
+			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
 			fns = append(fns, fn)
 		}
 	}
@@ -211,7 +212,7 @@ func (a CHeaderFileAST) CollectGDExtensionICallbackFunctions() []TypedefFunction
 
 	for _, fn := range allFns {
 		if strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!slices.Contains(legacyGDExtentionInterfaceFunctionNames, fn.Name) {
+			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
 			fns = append(fns, fn)
 		}
 	}
@@ -375,24 +376,24 @@ func (a Argument) ResolvedName(i int) string {
 }
 
 func ParseCString(s string) (CHeaderFileAST, error) {
-	var headerFileLexer = MustStateful(Rules{
+	var headerFileLexer = lexer.MustStateful(lexer.Rules{
 		"Root": {
-			{`Typedef`, `typedef`, nil},
-			{`Struct`, `struct`, nil},
-			{`{`, `{`, nil},
-			{`}`, `}`, nil},
-			{`;`, `;`, nil},
-			{`,`, `,`, nil},
-			{`"`, `"`, nil},
-			{`(`, `\(`, nil},
-			{`)`, `\)`, nil},
-			{`*`, `\*`, nil},
-			{`=`, `=`, nil},
-			{`Const`, `const`, nil},
-			{`Ident`, `[a-zA-Z_][a-zA-Z0-9_]*`, nil},
-			{`Int`, `[+-]?\d+`, nil},
-			{`Comment`, `[ \t\r\n]*(\/\/[^\n]*)|(\/\*(.|[\r\n])*?\*\/)[ \t\r\n]*`, nil},
-			{`Whitespace`, `[ \t\r\n]+`, nil},
+			{Name: `Typedef`, Pattern: `typedef`},
+			{Name: `Struct`, Pattern: `struct`},
+			{Name: `{`, Pattern: `{`},
+			{Name: `}`, Pattern: `}`},
+			{Name: `;`, Pattern: `;`},
+			{Name: `,`, Pattern: `,`},
+			{Name: `"`, Pattern: `"`},
+			{Name: `(`, Pattern: `\(`},
+			{Name: `)`, Pattern: `\)`},
+			{Name: `*`, Pattern: `\*`},
+			{Name: `=`, Pattern: `=`},
+			{Name: `Const`, Pattern: `const`},
+			{Name: `Ident`, Pattern: `[a-zA-Z_][a-zA-Z0-9_]*`},
+			{Name: `Int`, Pattern: `[+-]?\d+`},
+			{Name: `Comment`, Pattern: `[ \t\r\n]*(\/\/[^\n]*)|(\/\*(.|[\r\n])*?\*\/)[ \t\r\n]*`},
+			{Name: `Whitespace`, Pattern: `[ \t\r\n]+`},
 		},
 	})
 
