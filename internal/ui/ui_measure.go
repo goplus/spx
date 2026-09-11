@@ -41,7 +41,7 @@ func (pself *UiMeasure) OnStart() {
 }
 
 func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
-	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
+	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
 	extraLen := 4.0 // Compensate for the engine's measurement image size.
 	length += extraLen
 
@@ -51,14 +51,14 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 	labelPos := pos
 	pos = pos.Sub(NewVec2(sc.Y, sc.X))
 
-	mgr.UiMgr.SetGlobalPosition(pself.container.GetId(), pos)
-	mgr.UiMgr.SetColor(pself.container.GetId(), color)
-	mgr.UiMgr.SetSize(pself.container.GetId(), NewVec2(length+extraLen, 26))
-	mgr.UiMgr.SetRotation(pself.container.GetId(), rad)
+	engine.Managers().UiMgr.SetGlobalPosition(pself.container.GetId(), pos)
+	engine.Managers().UiMgr.SetColor(pself.container.GetId(), color)
+	engine.Managers().UiMgr.SetSize(pself.container.GetId(), NewVec2(length+extraLen, 26))
+	engine.Managers().UiMgr.SetRotation(pself.container.GetId(), rad)
 
-	mgr.UiMgr.SetGlobalPosition(pself.labelContainer.GetId(), labelPos)
-	mgr.UiMgr.SetColor(pself.labelContainer.GetId(), color)
-	mgr.UiMgr.SetText(pself.labelValue.GetId(), name)
+	engine.Managers().UiMgr.SetGlobalPosition(pself.labelContainer.GetId(), labelPos)
+	engine.Managers().UiMgr.SetColor(pself.labelContainer.GetId(), color)
+	engine.Managers().UiMgr.SetText(pself.labelValue.GetId(), name)
 }
 
 func NewUiMeasure() *UiMeasure {

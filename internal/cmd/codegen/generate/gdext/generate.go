@@ -45,13 +45,18 @@ var (
 	gdSpxExtH string
 )
 
-func GenerateHeader(projectPath, spxModulePath string) error {
-	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	return generateSpxExtHeader(spxModulePath, outputFile, true)
+// Generator renders bindings using metadata owned by one generation task.
+type Generator struct {
+	*GenerationContext
 }
 
-func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
-	if err := generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp"); err != nil {
+func (g *Generator) GenerateHeader(projectPath, spxModulePath string) error {
+	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
+	return g.generateSpxExtHeader(spxModulePath, outputFile, true)
+}
+
+func (g *Generator) Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+	if err := g.generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp"); err != nil {
 		return err
 	}
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.cpp")
@@ -64,14 +69,14 @@ func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error
 
 	// use the new format header
 	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	if err := generateSpxExtHeader(spxModulePath, outputFile, false); err != nil {
+	if err := g.generateSpxExtHeader(spxModulePath, outputFile, false); err != nil {
 		return err
 	}
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
 		return fmt.Errorf("copy gdextension_spx_ext.h: %w", err)
 	}
 
-	if err := generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"); err != nil {
+	if err := g.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"); err != nil {
 		return err
 	}
 	outputFile = filepath.Join(projectPath, NativeRelDir, "godot_js_spx.cpp")
@@ -105,7 +110,8 @@ func fileCopy(src, dst string) error {
 	return dstFile.Sync()
 }
 
-func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
+func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
+	g.PrepareAST(ast)
 	funcs := template.FuncMap{
 		"gdiVariableName":             GdiVariableName,
 		"snakeCase":                   strcase.ToSnake,
@@ -120,25 +126,25 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 		"cgoCleanUpArgument":          CgoCleanUpArgument,
 		"trimPrefix":                  TrimPrefix,
 		"loadProcAddressName":         LoadProcAddressName,
-		"isManagerMethod":             IsManagerMethod,
-		"getManagerName":              GetManagerName,
+		"isManagerMethod":             g.IsManagerMethod,
+		"getManagerName":              g.GetManagerName,
 		"isWebOwnedStringFree":        isWebOwnedStringFree,
 		"isWebGdStringReturn":         isWebGdStringReturn,
 		"isWebGdArrayReturn":          isWebGdArrayReturn,
 		"isGdStringArgument":          isGdStringArgument,
 		"isGdArrayArgument":           isGdArrayArgument,
 		"webManagerArgument":          webManagerArgument,
-		"hasArrayTransformBridgeSpec": HasArrayTransformBridgeSpec,
-		"hasNativeArrayBridgeSpec":    HasNativeArrayBridgeSpec,
+		"hasArrayTransformBridgeSpec": g.HasArrayTransformBridgeSpec,
+		"hasNativeArrayBridgeSpec":    g.HasNativeArrayBridgeSpec,
 		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) ArrayTransformBridgeSpec {
-			spec, _ := GetArrayTransformBridgeSpec(function.Name)
+			spec, _ := g.GetArrayTransformBridgeSpec(function.Name)
 			return spec
 		},
 		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) NativeArrayBridgeSpec {
-			spec, _ := GetNativeArrayBridgeSpec(function.Name)
+			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
 			return spec
 		},
-		"listArrayTransformBridgeSpecs": ListArrayTransformBridgeSpecs,
+		"listArrayTransformBridgeSpecs": g.ListArrayTransformBridgeSpecs,
 		"fastArrayElemCppType": func(arrayType int32) string {
 			switch arrayType {
 			case 1:
@@ -184,7 +190,7 @@ func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeader
 	}
 
 	var b bytes.Buffer
-	err = tmpl.Execute(&b, ManagerData{Ast: ast, Mangers: GetManagers(ast)})
+	err = tmpl.Execute(&b, ManagerData{Ast: ast, Managers: g.GetManagers(ast), KnownManagerNames: g.KnownManagerNames})
 	if err != nil {
 		return err
 	}

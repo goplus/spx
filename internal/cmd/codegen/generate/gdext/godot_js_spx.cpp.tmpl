@@ -38,12 +38,12 @@
 #include "godot_js_spx_util.h"
 {{ $view := . -}}
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 #include "../spx_{{$name}}_mgr.h"
 {{ end }}
 #include <emscripten.h>
 
-{{- range $i, $name := $view.Mangers }}
+{{- range $i, $name := $view.Managers }}
 #define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
 {{- end }}
 

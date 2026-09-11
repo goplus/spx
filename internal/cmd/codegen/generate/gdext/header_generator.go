@@ -77,12 +77,12 @@ func shouldSkipGeneratedMethod(methodName string) bool {
 	return strings.HasSuffix(methodName, "_raw") || isArrayTransformBridgeMethod(methodName)
 }
 
-func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) error {
+func (g *Generator) generateSpxExtHeader(dir, outputFile string, isRawFormat bool) error {
 	mergedStr, err := mergeManagerHeader(dir)
 	if err != nil {
 		return err
 	}
-	mergedHeaderFuncStr := generateManagerHeader(mergedStr, isRawFormat)
+	mergedHeaderFuncStr := g.generateManagerHeader(mergedStr, isRawFormat)
 	finalHeader := strings.Replace(gdSpxExtH, "###MANAGER_FUNC_DEFINE", mergedHeaderFuncStr, -1)
 	if err := os.WriteFile(outputFile, []byte(finalHeader), 0o644); err != nil {
 		return fmt.Errorf("write generated SPX extension header: %w", err)
@@ -182,16 +182,16 @@ func normalizeParams(params string) string {
 	return strings.TrimSpace(params)
 }
 
-func generateManagerHeader(input string, rawFormat bool) string {
+func (g *Generator) generateManagerHeader(input string, rawFormat bool) string {
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	var currentClassName string
 
 	var builder strings.Builder
 
 	// Clear the previous list of manager names
-	common.ClearKnownManagerNames()
-	common.ClearNativeArrayBridgeSpecs()
-	common.ClearArrayTransformBridgeSpecs()
+	g.ClearKnownManagerNames()
+	g.ClearNativeArrayBridgeSpecs()
+	g.ClearArrayTransformBridgeSpecs()
 
 	baseMethods := map[string]classMethodDecl{}
 	rawMethods := map[string]classMethodDecl{}
@@ -205,7 +205,7 @@ func generateManagerHeader(input string, rawFormat bool) string {
 			// Register manager name (remove "Spx" prefix)
 			if strings.HasPrefix(currentClassName, "Spx") {
 				managerName := currentClassName[3:] // Remove "Spx" prefix
-				common.RegisterManagerName(managerName)
+				g.RegisterManagerName(managerName)
 			}
 			builder.WriteString("// " + currentClassName + "\n")
 			continue
@@ -257,14 +257,14 @@ func generateManagerHeader(input string, rawFormat bool) string {
 		spxlog.Error("Error reading string: %v", err)
 	}
 
-	registerNativeArrayBridgeSpecs(baseMethods, rawMethods)
-	registerArrayTransformBridgeSpecs(baseMethods, rawMethods)
-	appendSyntheticArrayTransformTypedefs(&builder, rawFormat, baseMethods)
+	g.registerNativeArrayBridgeSpecs(baseMethods, rawMethods)
+	g.registerArrayTransformBridgeSpecs(baseMethods, rawMethods)
+	g.appendSyntheticArrayTransformTypedefs(&builder, rawFormat, baseMethods)
 
 	return builder.String()
 }
 
-func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
+func (g *Generator) registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
 	for _, baseMethod := range baseMethods {
 		dataType, dataArgName, lenType, lenArgName, goArgType, ptrType, lenGoType, fastArrayType, ok := parseRawNativeArrayParams(baseMethod.Params)
 		if !ok {
@@ -272,7 +272,7 @@ func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawM
 		}
 
 		baseFunctionName := "GDExtension" + baseMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
-		common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+		g.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
 			BaseFunctionName: baseFunctionName,
 			BaseArgName:      highLevelArrayArgName(dataArgName),
 			DataArgName:      dataArgName,
@@ -310,7 +310,7 @@ func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawM
 		baseFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
 		rawFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(rawMethod.MethodName)
 
-		common.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+		g.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
 			BaseFunctionName: baseFunctionName,
 			BaseArgName:      baseArgName,
 			DataArgName:      baseArgName,
@@ -335,7 +335,7 @@ func isArrayTransformBridgeMethod(methodName string) bool {
 	return ok
 }
 
-func registerArrayTransformBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
+func (g *Generator) registerArrayTransformBridgeSpecs(baseMethods map[string]classMethodDecl, rawMethods map[string]classMethodDecl) {
 	for key, rawMethod := range rawMethods {
 		baseMethod, hasBaseMethod := baseMethods[key]
 		baseMethodName := strings.TrimSuffix(rawMethod.MethodName, "_raw")
@@ -379,7 +379,7 @@ func registerArrayTransformBridgeSpecs(baseMethods map[string]classMethodDecl, r
 		}
 
 		baseFunctionName := "GDExtension" + rawMethod.ClassName + strcase.ToCamel(baseMethodName)
-		common.RegisterArrayTransformBridgeSpec(common.ArrayTransformBridgeSpec{
+		g.RegisterArrayTransformBridgeSpec(common.ArrayTransformBridgeSpec{
 			FunctionName:     baseFunctionName,
 			ArrayArgName:     baseArgName,
 			MethodName:       rawMethod.MethodName,
@@ -391,14 +391,14 @@ func registerArrayTransformBridgeSpecs(baseMethods map[string]classMethodDecl, r
 	}
 }
 
-func appendSyntheticArrayTransformTypedefs(builder *strings.Builder, rawFormat bool, baseMethods map[string]classMethodDecl) {
+func (g *Generator) appendSyntheticArrayTransformTypedefs(builder *strings.Builder, rawFormat bool, baseMethods map[string]classMethodDecl) {
 	existingFunctions := make(map[string]struct{}, len(baseMethods))
 	for _, baseMethod := range baseMethods {
 		functionName := "GDExtension" + baseMethod.ClassName + strcase.ToCamel(baseMethod.MethodName)
 		existingFunctions[functionName] = struct{}{}
 	}
 
-	for _, spec := range common.ListArrayTransformBridgeSpecs() {
+	for _, spec := range g.ListArrayTransformBridgeSpecs() {
 		if _, ok := existingFunctions[spec.FunctionName]; ok {
 			continue
 		}

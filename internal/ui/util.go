@@ -26,8 +26,6 @@ import (
 )
 
 var (
-	mgr *enginewrap.EngineManagers
-
 	baseScreenWidth         int
 	baseScreenHeight        int
 	clampUIPositionInScreen bool
@@ -37,8 +35,9 @@ type UiNode struct {
 	engine.UiNode
 }
 
+// Init binds the shared engine managers for compatibility with existing callers.
 func Init(managers *enginewrap.EngineManagers) {
-	mgr = managers
+	engine.SetManagers(managers)
 }
 
 func SetBaseScreenSize(width, height int) {
@@ -54,6 +53,6 @@ func ClampUIPositionInScreen(isClamp bool) {
 func ViewToUI(pos Vec2) Vec2 {
 	pos = pos.Mulf(engine.WindowScale())
 	pos = NewVec2(pos.X, -pos.Y)
-	viewport := mgr.CameraMgr.GetViewportRect()
+	viewport := engine.Managers().CameraMgr.GetViewportRect()
 	return pos.Add(viewport.Size.Mulf(0.5)).Sub(viewport.Position)
 }

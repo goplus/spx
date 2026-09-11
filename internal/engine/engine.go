@@ -32,13 +32,6 @@ import (
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-// Shared engine managers.
-var (
-	platformMgr enginewrap.PlatformMgrImpl
-	resMgr      enginewrap.ResMgrImpl
-	extMgr      enginewrap.ExtMgrImpl
-)
-
 type Object = gdx.Object
 
 type Array = gdx.Array
@@ -101,7 +94,7 @@ func SetLayerSortMode(s string) error {
 		return fmt.Errorf("unknown layer sort mode: %s", s)
 	}
 
-	extMgr.SetLayerSorterMode(int64(curLayerSortMode))
+	Managers().ExtMgr.SetLayerSorterMode(int64(curLayerSortMode))
 	return nil
 }
 
@@ -194,7 +187,7 @@ func RequestExit(exitCode int64) {
 		abortCoroutinesAndReset(exitCode)
 		return
 	}
-	extMgr.RequestExit(exitCode)
+	Managers().ExtMgr.RequestExit(exitCode)
 }
 
 // Engine callbacks.
@@ -205,7 +198,7 @@ func onStart() {
 	triggerEvents = make([]TriggerEvent, 0)
 
 	time.Start(func(scale float64) {
-		platformMgr.SetTimeScale(scale)
+		Managers().PlatformMgr.SetTimeScale(scale)
 	})
 	game.OnEngineStart()
 }
@@ -283,7 +276,7 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 		spxlog.Error("%s", msg)
 	}
 
-	extMgr.OnRuntimePanic(msg)
+	Managers().ExtMgr.OnRuntimePanic(msg)
 
 	if exitOnPanic {
 		RequestExit(1)
@@ -296,7 +289,7 @@ func abortCoroutinesAndReset(exitCode int64) {
 	co := gco
 	// Drain off-thread while the panic caller unwinds.
 	go requestResetAfterCoroutinesStop(co, 2*stime.Second, func() {
-		extMgr.RequestReset(exitCode)
+		Managers().ExtMgr.RequestReset(exitCode)
 	})
 	if co.IsInCoroutine() {
 		co.Abort()

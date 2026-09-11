@@ -23,6 +23,14 @@ import (
 	"path/filepath"
 )
 
+// materializationRequest contains the archive identity prepared by Materialize.
+// Publication still reopens and verifies the archive under the exclusive lease.
+type materializationRequest struct {
+	zipPath  string
+	expected Bundle
+	limits   Limits
+}
+
 // Materialize verifies and publishes a bundle, then returns while holding a
 // shared use lease for the materialized target. The caller must Close the
 // returned value after its final read or execution.
@@ -53,7 +61,7 @@ func (c *Cache) Materialize(ctx context.Context, namespace Namespace, zipPath st
 	} else if ok {
 		return hit, nil
 	}
-	target, err := c.materializePath(ctx, namespace, zipPath, expected)
+	target, err := c.materializePath(ctx, materializationRequest{zipPath: zipPath, expected: *expected, limits: limits})
 	if err != nil {
 		return nil, err
 	}
@@ -73,54 +81,15 @@ func (c *Cache) Materialize(ctx context.Context, namespace Namespace, zipPath st
 // materializePath verifies zipPath and atomically materializes it under the
 // namespace-specific content address. The caller must acquire a shared lease
 // before exposing the returned path to a consumer.
-func (c *Cache) materializePath(ctx context.Context, namespace Namespace, zipPath string, expected *Bundle) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("runtimebundle: nil cache")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
+func (c *Cache) materializePath(ctx context.Context, request materializationRequest) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
-	}
-	limits, err := c.Limits.withDefaults()
-	if err != nil {
-		return "", err
-	}
-	if !namespace.valid() {
-		return "", fmt.Errorf("runtimebundle: invalid cache namespace %q", namespace)
-	}
-	if c.LockProvider == nil {
-		return "", ErrCrossProcessLockUnsupported
 	}
 	if c.Permissions == nil {
 		c.Permissions = defaultPermissions()
 	}
-	expected, err = normalizeExpectedBundle(namespace, expected, limits)
-	if err != nil {
-		return "", err
-	}
-
-	var digest string
-	if expected != nil {
-		digest = expected.Digest
-	}
-	// A nil expected has no address until the archive has been read. It is
-	// therefore intentionally verified before lock acquisition; callers that
-	// already possess a manifest get the cheap cache-hit path first.
-	if digest == "" {
-		bundle, verifyErr := VerifyZip(zipPath, VerifyOptions{Limits: limits})
-		if verifyErr != nil {
-			return "", verifyErr
-		}
-		bundle.Namespace = namespace
-		bundle, err = bundle.WithDigestWithLimits(limits)
-		if err != nil {
-			return "", err
-		}
-		digest = bundle.Digest
-		expected = &bundle
-	}
+	zipPath, expected, limits := request.zipPath, &request.expected, request.limits
+	namespace, digest := expected.Namespace, expected.Digest
 
 	target, err := c.Path(namespace, digest)
 	if err != nil {

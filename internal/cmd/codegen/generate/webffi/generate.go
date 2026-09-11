@@ -109,15 +109,20 @@ var inputCacheManagerFuncBodies = map[string]managerFuncBodySpec{
 	"GDExtensionSpxInputIsActionJustReleased": actionBoolManagerFuncBody("just_released", "API.SpxInputIsActionJustReleased"),
 }
 
-func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+// Generator renders bindings using metadata owned by one generation task.
+type Generator struct {
+	*GenerationContext
+}
+
+func (g *Generator) Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
 		fn   func() error
 	}{
 		{"callback Go source", func() error { return GenerateCallbackGoFile(projectPath, ast) }},
 		{"GDExtension interface", func() error { return GenerateGDExtensionInterfaceGoFile(projectPath, ast) }},
-		{"manager wrapper", func() error { return GenerateManagerWrapperGoFile(projectPath, ast) }},
-		{"JavaScript engine bridge", func() error { return GenerateJsEngineJsFile(projectPath, spxModulePath, ast) }},
+		{"manager wrapper", func() error { return g.GenerateManagerWrapperGoFile(projectPath, ast) }},
+		{"JavaScript engine bridge", func() error { return g.GenerateJsEngineJsFile(projectPath, spxModulePath, ast) }},
 		{"Web worker wrapper", func() error { return GenerateWorkerWrapJsFile(projectPath, ast) }},
 	}
 	for _, generator := range generators {
@@ -189,7 +194,8 @@ func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFil
 		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
 }
 
-func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+func (g *Generator) GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+	g.PrepareAST(ast)
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -202,17 +208,17 @@ func GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) 
 		"cgoCastReturnType":   CgoCastReturnType,
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
 		"trimPrefix":          TrimPrefix,
-		"isManagerMethod":     IsManagerMethod,
-		"getManagerFuncName":  ManagerMethodSignature,
-		"getManagerFuncBody":  getManagerFuncBody,
-		"getManagerInterface": ManagerInterfaceSignature,
+		"isManagerMethod":     g.IsManagerMethod,
+		"getManagerFuncName":  g.ManagerMethodSignature,
+		"getManagerFuncBody":  g.getManagerFuncBody,
+		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
-	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, ManagerData{Ast: ast, Mangers: GetManagers(ast)},
+	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, ManagerData{Ast: ast, Managers: g.GetManagers(ast), KnownManagerNames: g.KnownManagerNames},
 		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
 }
 
-func GenerateJsEngineJsFile(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -222,11 +228,11 @@ func GenerateJsEngineJsFile(projectPath, spxModulePath string, ast clang.CHeader
 		"goEnumValue":         GoEnumValue,
 		"add":                 Add,
 		"sub":                 Sub,
-		"getJsFuncArgs":       getJsFuncArgs,
+		"getJsFuncArgs":       g.getJsFuncArgs,
 		"cgoCastArgument":     CgoCastArgument,
 		"cgoCastReturnType":   CgoCastReturnType,
 		"cgoCleanUpArgument":  CgoCleanUpArgument,
-		"getJsFuncBody":       getJsFuncBody,
+		"getJsFuncBody":       g.getJsFuncBody,
 		"trimPrefix":          TrimPrefix,
 		"loadProcAddressName": LoadProcAddressName,
 	}
@@ -268,7 +274,7 @@ func trimTrailingWhitespace(src []byte) []byte {
 	return bytes.Join(lines, []byte("\n"))
 }
 
-func getManagerFuncBody(function *clang.TypedefFunction) string {
+func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	if body, ok := getInputCacheManagerFuncBody(function.Name); ok {
 		return body
 	}
@@ -279,27 +285,27 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 	args := EffectiveArguments(function)
 	// convert arguments
 	for i, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
+		if g.ShouldSkipHighLevelArgument(function, arg) {
 			continue
 		}
 		sb.WriteString(prefixTab)
-		if IsNativeArrayDataArg(function, arg) {
+		if g.IsNativeArrayDataArg(function, arg) {
 			argName := "arg" + strconv.Itoa(i)
 			sb.WriteString(argName + " := JsFromGdArray(")
-			sb.WriteString(EffectiveGoArgumentName(function, arg))
+			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
 			sb.WriteString(")\n")
 			params = append(params, argName)
 			continue
 		}
 		typeName := MustPrimitiveTypeName(arg, function.Name)
-		if usesFlatJsGdIntArg(function, arg) {
+		if g.usesFlatJsGdIntArg(function, arg) {
 			argName := "arg" + strconv.Itoa(i)
 			lowName := argName + "Low"
 			highName := argName + "High"
 			sb.WriteString(lowName + ", " + highName + " := ")
 			sb.WriteString(flatJsSplitHelper(typeName))
 			sb.WriteString("(")
-			sb.WriteString(EffectiveGoArgumentName(function, arg))
+			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
 			sb.WriteString(")\n")
 			params = append(params, lowName, highName)
 			continue
@@ -308,7 +314,7 @@ func getManagerFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(argName + " := ")
 		sb.WriteString("JsFrom" + typeName)
 		sb.WriteString("(")
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
 		sb.WriteString(")")
 
 		sb.WriteString("\n")
@@ -393,15 +399,15 @@ func appendIndented(lines []string, indent string, values ...string) []string {
 	return lines
 }
 
-func getJsFuncArgs(function *clang.TypedefFunction) []string {
+func (g *Generator) getJsFuncArgs(function *clang.TypedefFunction) []string {
 	args := EffectiveArguments(function)
 	result := make([]string, 0, len(args))
 	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
+		if g.ShouldSkipHighLevelArgument(function, arg) {
 			continue
 		}
-		argName := EffectiveGoArgumentName(function, arg)
-		if usesFlatJsGdIntArg(function, arg) {
+		argName := g.EffectiveGoArgumentName(function, arg)
+		if g.usesFlatJsGdIntArg(function, arg) {
 			result = append(result, argName+"_low", argName+"_high")
 			continue
 		}
@@ -410,11 +416,11 @@ func getJsFuncArgs(function *clang.TypedefFunction) []string {
 	return result
 }
 
-func usesFlatJsGdIntArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+func (g *Generator) usesFlatJsGdIntArg(function *clang.TypedefFunction, arg clang.Argument) bool {
 	if function == nil {
 		return false
 	}
-	if IsNativeArrayDataArg(function, arg) {
+	if g.IsNativeArrayDataArg(function, arg) {
 		return false
 	}
 	return isFlatJsGdIntLikeType(MustPrimitiveTypeName(arg, function.Name))
@@ -462,12 +468,12 @@ func flatJsScratchAccessor(typeName string) string {
 	}
 }
 
-func getJsFuncBody(function *clang.TypedefFunction) string {
+func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 	if function.Name == "GDExtensionSpxResFreeStr" {
 		// Web strings are values; the wrapper owns its storage.
 		return "// Web strings are value-owned; there is no pointer to release.\n\treturn;"
 	}
-	if spec, ok := GetArrayTransformBridgeSpec(function.Name); ok {
+	if spec, ok := g.GetArrayTransformBridgeSpec(function.Name); ok {
 		return "var _fastRetValue = TryArrayTransformFastPath(_gdFuncPtr, " + spec.ArrayArgName + ", " +
 			strconv.Itoa(int(spec.InputArrayType)) + ", " + strconv.Itoa(int(spec.OutputArrayType)) + ", " +
 			strconv.Itoa(spec.OutputCountScale) + ");\n" +
@@ -481,7 +487,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 			"\tvar _arg1 = FastArrayCount(out);\n" +
 			"\t_gdFuncPtr(_arg0, _arg1);"
 	}
-	if spec, ok := GetNativeArrayBridgeSpec(function.Name); ok {
+	if spec, ok := g.GetNativeArrayBridgeSpec(function.Name); ok {
 		if HasEffectiveReturn(function) {
 			panic(fmt.Sprintf("native-array webffi path does not support return values: %s", function.Name))
 		}
@@ -518,7 +524,7 @@ func getJsFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
-		if usesFlatJsGdIntArg(function, arg) {
+		if g.usesFlatJsGdIntArg(function, arg) {
 			sb.WriteString("var " + argName + " = ")
 			sb.WriteString(flatJsCtor(typeName))
 			sb.WriteString("(")

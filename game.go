@@ -32,7 +32,6 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/ui"
 )
 
 const (
@@ -224,7 +223,6 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.scriptEventBindings.init(&p.scriptEvents, p)
 	p.engineMgr = engineManagers{}
 	engine.SetManagers(&p.engineMgr)
-	ui.Init(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
 	p.sounds = make(map[string]sound)
 	p.typs = make(map[string]reflect.Type)

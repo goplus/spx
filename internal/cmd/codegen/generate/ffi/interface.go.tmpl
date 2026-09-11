@@ -16,14 +16,14 @@ import (
 	. "github.com/goplus/spbase/mathf"
 )
 var (
-{{- range $i, $name := $view.Mangers }}
+{{- range $i, $name := $view.Managers }}
     {{camelCase $name}}Mgr I{{camelCase $name}}Mgr
 {{- end }}
 )
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 type I{{camelCase $name}}Mgr interface {
-{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name }}
+{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.KnownManagerNames }}
 	{{ getManagerInterface $f }}
 {{- end }} 
 }

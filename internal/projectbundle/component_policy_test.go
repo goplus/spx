@@ -14,26 +14,14 @@
  * limitations under the License.
  */
 
-package ui
+package projectbundle
 
-import "github.com/goplus/spx/v3/internal/engine"
+import "testing"
 
-type UiDebug struct {
-	UiNode
-	input *UiNode
-}
-
-// OnStart binds UI nodes in the engine callback context.
-func (pself *UiDebug) OnStart() {
-	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "Label")
-}
-
-func (pself *UiDebug) Show(msg string) {
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
-	engine.Managers().UiMgr.SetVisible(pself.input.GetId(), msg != "")
-	engine.Managers().UiMgr.SetText(pself.input.GetId(), msg)
-}
-
-func NewUiDebug() *UiDebug {
-	return engine.NewUiNode[UiDebug]()
+// Preserve each archive format's existing Unicode folding policy.
+func TestPortableComponentKelvinSignPolicy(t *testing.T) {
+	err := validatePortableComponent("CLOCK$")
+	if err != nil {
+		t.Fatalf("Unicode device-name policy changed: %v", err)
+	}
 }

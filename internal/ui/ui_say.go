@@ -73,10 +73,10 @@ func (s *UiSay) OnStart() {
 	// Think nodes are visible by default in UiSay.tscn. Keep every variant
 	// hidden until the first layout is applied so a newly-created bubble cannot
 	// briefly render both clouds at the scene origin.
-	mgr.UiMgr.SetVisible(s.left.vbox.GetId(), false)
-	mgr.UiMgr.SetVisible(s.right.vbox.GetId(), false)
-	mgr.UiMgr.SetVisible(s.leftThink.vbox.GetId(), false)
-	mgr.UiMgr.SetVisible(s.rightThink.vbox.GetId(), false)
+	engine.Managers().UiMgr.SetVisible(s.left.vbox.GetId(), false)
+	engine.Managers().UiMgr.SetVisible(s.right.vbox.GetId(), false)
+	engine.Managers().UiMgr.SetVisible(s.leftThink.vbox.GetId(), false)
+	engine.Managers().UiMgr.SetVisible(s.rightThink.vbox.GetId(), false)
 }
 
 // SetText sets the text content and position for the say/think bubble
@@ -114,16 +114,16 @@ func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
 }
 
 func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
-	mgr.UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
-	mgr.UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
-	mgr.UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
-	mgr.UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
+	engine.Managers().UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
+	engine.Managers().UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
+	engine.Managers().UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
+	engine.Managers().UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
 }
 
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
-	mgr.UiMgr.SetScale(s.GetId(), scale)
-	mgr.UiMgr.SetPosition(s.GetId(), ViewToUI(position))
-	mgr.UiMgr.SetText(label, text)
+	engine.Managers().UiMgr.SetScale(s.GetId(), scale)
+	engine.Managers().UiMgr.SetPosition(s.GetId(), ViewToUI(position))
+	engine.Managers().UiMgr.SetText(label, text)
 }
 
 func formatSayMessage(msg string) string {

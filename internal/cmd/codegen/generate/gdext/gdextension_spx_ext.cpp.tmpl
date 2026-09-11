@@ -40,7 +40,7 @@
 #include "spx_mgr_access.h"
 {{ $view := . -}}
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 #include "spx_{{$name}}_mgr.h"
 {{ end }}
 

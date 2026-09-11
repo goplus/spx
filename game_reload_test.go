@@ -29,7 +29,6 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/ui"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -261,7 +260,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 		gco = originalScheduler
 		engine.SetCoroutines(originalScheduler)
 		engine.SetManagers(originalManagers)
-		ui.Init(originalManagers)
 		engine.SetGame(originalGame)
 		cachedBounds = originalBounds
 	})

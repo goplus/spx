@@ -46,7 +46,7 @@ func (pself *UiAsk) OnStart() {
 
 // Update handles Enter key presses.
 func (pself *UiAsk) Update() {
-	enterPressed := mgr.InputMgr.GetKey(int64(gdx.KeyEnter)) || mgr.InputMgr.GetKey(int64(gdx.KeyKPEnter))
+	enterPressed := engine.Managers().InputMgr.GetKey(int64(gdx.KeyEnter)) || engine.Managers().InputMgr.GetKey(int64(gdx.KeyKPEnter))
 	// Trigger only on key press (not held down)
 	if enterPressed && !pself.lastEnterState {
 		pself.handleCheck()
@@ -58,12 +58,12 @@ func (pself *UiAsk) Update() {
 func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	pself.OnCheck = onCheck
 	showQuestion := !isSprite && question != ""
-	mgr.UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
+	engine.Managers().UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
 	if showQuestion {
-		mgr.UiMgr.SetText(pself.askLabel.GetId(), question)
+		engine.Managers().UiMgr.SetText(pself.askLabel.GetId(), question)
 	}
-	mgr.UiMgr.SetText(pself.input.GetId(), "")
-	mgr.UiMgr.SetVisible(pself.GetId(), true)
+	engine.Managers().UiMgr.SetText(pself.input.GetId(), "")
+	engine.Managers().UiMgr.SetVisible(pself.GetId(), true)
 	pself.lastEnterState = false
 }
 
