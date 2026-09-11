@@ -17,32 +17,42 @@
 package common
 
 import (
+	"slices"
 	"sort"
-	"strings"
-	"unicode"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
-// GenerationContext owns the metadata for one generation task.
-// Create a fresh context for each independent input; no state is shared across tasks.
+// GenerationMetadata is collected from headers before binding templates run.
+type GenerationMetadata struct {
+	ManagerNames          []string
+	NativeArrayBridges    map[string]NativeArrayBridgeSpec
+	ArrayTransformBridges map[string]ArrayTransformBridgeSpec
+}
+
+// GenerationContext snapshots metadata and manager membership for one AST.
+// Rendering only reads this context; independent outputs can share it.
 type GenerationContext struct {
+	ast                   clang.CHeaderFileAST
 	managerSet            map[string]bool
+	managers              []string
+	managerNames          clang.ManagerNames
 	cppType2Go            map[string]string
-	KnownManagerNames     []string
 	nativeArrayBridges    map[string]NativeArrayBridgeSpec
 	arrayTransformBridges map[string]ArrayTransformBridgeSpec
 }
 
 type ManagerData struct {
-	Ast               clang.CHeaderFileAST
-	Managers          []string
-	KnownManagerNames []string
+	Ast          clang.CHeaderFileAST
+	Managers     []string
+	ManagerNames clang.ManagerNames
 }
 
-func NewGenerationContext() *GenerationContext {
-	return &GenerationContext{
+func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
+	c := &GenerationContext{
+		ast:                   ast,
 		managerSet:            make(map[string]bool),
+		managerNames:          clang.NewManagerNames(metadata.ManagerNames),
 		nativeArrayBridges:    make(map[string]NativeArrayBridgeSpec),
 		arrayTransformBridges: make(map[string]ArrayTransformBridgeSpec),
 		cppType2Go: map[string]string{
@@ -52,47 +62,33 @@ func NewGenerationContext() *GenerationContext {
 			"GdColor": "Color", "GdArray": "Array",
 		},
 	}
-}
-
-// PrepareAST replaces the manager membership used by template predicates.
-func (c *GenerationContext) PrepareAST(ast clang.CHeaderFileAST) {
-	c.managerSet = make(map[string]bool)
-	for _, name := range c.GetManagers(ast) {
+	for name, spec := range metadata.NativeArrayBridges {
+		c.nativeArrayBridges[name] = spec
+	}
+	for name, spec := range metadata.ArrayTransformBridges {
+		spec.Params = slices.Clone(spec.Params)
+		c.arrayTransformBridges[name] = spec
+	}
+	c.managers = c.GetManagers(ast)
+	for _, name := range c.managers {
 		c.managerSet[name] = true
 	}
+	return c
 }
 
-// RegisterManagerName registers a known manager name (obtained from header parsing).
-func (c *GenerationContext) RegisterManagerName(name string) {
-	name = strings.ToLower(name)
-	// Avoid duplicate entries
-	for _, n := range c.KnownManagerNames {
-		if n == name {
-			return
-		}
-	}
-	c.KnownManagerNames = append(c.KnownManagerNames, name)
+// AST returns the input used to prepare this context. Treat it as read-only.
+func (c *GenerationContext) AST() clang.CHeaderFileAST { return c.ast }
+
+func (c *GenerationContext) ManagerData() ManagerData {
+	return ManagerData{Ast: c.ast, Managers: slices.Clone(c.managers), ManagerNames: c.managerNames}
 }
 
-// ClearKnownManagerNames clears the list of known manager names.
-func (c *GenerationContext) ClearKnownManagerNames() {
-	c.KnownManagerNames = []string{}
+func (c *GenerationContext) GetManagerName(name string) string {
+	return c.managerNames.Resolve(name)
 }
 
-func (c *GenerationContext) ClearNativeArrayBridgeSpecs() {
-	c.nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
-}
-
-func (c *GenerationContext) ClearArrayTransformBridgeSpecs() {
-	c.arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
-}
-
-func (c *GenerationContext) RegisterNativeArrayBridgeSpec(spec NativeArrayBridgeSpec) {
-	c.nativeArrayBridges[spec.BaseFunctionName] = spec
-}
-
-func (c *GenerationContext) RegisterArrayTransformBridgeSpec(spec ArrayTransformBridgeSpec) {
-	c.arrayTransformBridges[spec.FunctionName] = spec
+func (c *GenerationContext) IsManagerMethod(function *clang.TypedefFunction) bool {
+	return c.managerSet[c.GetManagerName(function.Name)]
 }
 
 func (c *GenerationContext) HasArrayTransformBridgeSpec(function *clang.TypedefFunction) bool {
@@ -110,12 +106,14 @@ func (c *GenerationContext) GetNativeArrayBridgeSpec(functionName string) (Nativ
 
 func (c *GenerationContext) GetArrayTransformBridgeSpec(functionName string) (ArrayTransformBridgeSpec, bool) {
 	spec, ok := c.arrayTransformBridges[functionName]
+	spec.Params = slices.Clone(spec.Params)
 	return spec, ok
 }
 
 func (c *GenerationContext) ListArrayTransformBridgeSpecs() []ArrayTransformBridgeSpec {
 	specs := make([]ArrayTransformBridgeSpec, 0, len(c.arrayTransformBridges))
 	for _, spec := range c.arrayTransformBridges {
+		spec.Params = slices.Clone(spec.Params)
 		specs = append(specs, spec)
 	}
 	sort.Slice(specs, func(i, j int) bool {
@@ -132,50 +130,11 @@ func (c *GenerationContext) HasNativeArrayBridgeSpec(function *clang.TypedefFunc
 	return ok
 }
 
-func (c *GenerationContext) GetManagerName(str string) string {
-	prefix := "GDExtensionSpx"
-	str = str[len(prefix):]
-	lowerStr := strings.ToLower(str)
-
-	// Match the longest known name without reordering KnownManagerNames.
-	if len(c.KnownManagerNames) > 0 {
-		sortedNames := make([]string, len(c.KnownManagerNames))
-		copy(sortedNames, c.KnownManagerNames)
-		sort.Slice(sortedNames, func(i, j int) bool {
-			return len(sortedNames[i]) > len(sortedNames[j])
-		})
-
-		for _, mgr := range sortedNames {
-			if strings.HasPrefix(lowerStr, mgr) {
-				return mgr
-			}
-		}
-	}
-
-	// Otherwise, keep the first two bytes and stop at the next uppercase rune.
-	chs := []rune{rune(str[0]), rune(str[1])}
-	for _, ch := range str[2:] {
-		if unicode.IsUpper(ch) {
-			break
-		}
-		chs = append(chs, ch)
-	}
-	return strings.ToLower(string(chs))
-}
-
-func (c *GenerationContext) IsManagerMethod(function *clang.TypedefFunction) bool {
-	return c.managerSet[c.GetManagerName(function.Name)]
-}
-
 func (c *GenerationContext) GetManagers(ast clang.CHeaderFileAST) []string {
-	items := []string{}
-	for _, item := range ast.CollectGDExtensionInterfaceFunctions() {
-		items = append(items, item.Name)
-	}
 	managerSet := make(map[string]bool)
 	managers := []string{}
-	for _, str := range items {
-		managerSet[c.GetManagerName(str)] = true
+	for _, fn := range ast.CollectGDExtensionInterfaceFunctions() {
+		managerSet[c.GetManagerName(fn.Name)] = true
 	}
 	delete(managerSet, "")
 	delete(managerSet, "string")

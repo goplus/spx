@@ -28,7 +28,6 @@ import (
 )
 
 func TestGenerateJsEngineJsFileTrimsTrailingWhitespace(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	function := &clang.TypedefFunction{
 		Name:       "GDExtensionSpxTestDoThing",
@@ -39,7 +38,8 @@ func TestGenerateJsEngineJsFileTrimsTrailingWhitespace(t *testing.T) {
 	}
 	spxModulePath := filepath.Join(t.TempDir(), "spx")
 
-	require.NoError(t, generation.GenerateJsEngineJsFile("", spxModulePath, ast))
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.GenerateJsEngineJsFile("", spxModulePath))
 	body, err := os.ReadFile(filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js"))
 	require.NoError(t, err)
 	for _, line := range strings.Split(string(body), "\n") {
@@ -52,7 +52,7 @@ func TestGenerateJsEngineJsFileTrimsTrailingWhitespace(t *testing.T) {
 }
 
 func TestGetJsFuncArgsFlattensGdObj(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
@@ -79,9 +79,9 @@ func TestGetJsFuncArgsFlattensGdObj(t *testing.T) {
 }
 
 func TestGetJsFuncArgsSkipsNativeArrayLenArg(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	metadata := common.GenerationMetadata{}
 
-	generation.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+	metadata.NativeArrayBridges = map[string]common.NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
 		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
 		BaseArgName:      "buffer",
 		DataArgName:      "buffer_data",
@@ -90,7 +90,8 @@ func TestGetJsFuncArgsSkipsNativeArrayLenArg(t *testing.T) {
 		LenArgName:       "len",
 		LenArgGoType:     "int32",
 		GoArgType:        "[]float32",
-	})
+	}}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
@@ -114,7 +115,7 @@ func TestGetJsFuncArgsSkipsNativeArrayLenArg(t *testing.T) {
 }
 
 func TestGetJsFuncBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
@@ -142,7 +143,7 @@ func TestGetJsFuncBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
 }
 
 func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
@@ -171,15 +172,16 @@ func TestGetJsFuncBodyUsesFixedScratchAccessorForFlatReturn(t *testing.T) {
 }
 
 func TestGetJsFuncBodyUsesArrayTransformBridgeSpec(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	metadata := common.GenerationMetadata{}
 
-	generation.RegisterArrayTransformBridgeSpec(common.ArrayTransformBridgeSpec{
+	metadata.ArrayTransformBridges = map[string]common.ArrayTransformBridgeSpec{"GDExtensionSpxSpriteBatchRetrievePositions": {
 		FunctionName:     "GDExtensionSpxSpriteBatchRetrievePositions",
 		ArrayArgName:     "objs",
 		InputArrayType:   6,
 		OutputArrayType:  2,
 		OutputCountScale: 2,
-	})
+	}}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchRetrievePositions",
@@ -191,7 +193,7 @@ func TestGetJsFuncBodyUsesArrayTransformBridgeSpec(t *testing.T) {
 }
 
 func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxInputWriteSnapshot",
@@ -204,7 +206,7 @@ func TestGetJsFuncBodyRequiresWasmArrayForInputSnapshot(t *testing.T) {
 }
 
 func TestGetJsFuncBodyTreatsWebFreeStrAsValueOperation(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	body := generation.getJsFuncBody(&clang.TypedefFunction{Name: "GDExtensionSpxResFreeStr"})
 	require.Contains(t, body, "Web strings are value-owned")
@@ -213,13 +215,14 @@ func TestGetJsFuncBodyTreatsWebFreeStrAsValueOperation(t *testing.T) {
 }
 
 func TestGetJsFuncBodyValidatesNativeFastArray(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	metadata := common.GenerationMetadata{}
 
-	generation.RegisterNativeArrayBridgeSpec(common.NativeArrayBridgeSpec{
+	metadata.NativeArrayBridges = map[string]common.NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
 		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
 		BaseArgName:      "buffer",
 		FastArrayType:    2,
-	})
+	}}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
 
 	body := generation.getJsFuncBody(&clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
@@ -249,7 +252,7 @@ func TestJsTemplateDeclaresInstanceScratchForMousePos(t *testing.T) {
 }
 
 func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxInputGetGlobalMousePos",
@@ -264,7 +267,7 @@ func TestGetJsFuncBodyUsesInstanceScratchForMousePos(t *testing.T) {
 }
 
 func TestGetManagerFuncBodyUsesInputCacheOverride(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxInputIsActionPressed",
@@ -277,7 +280,7 @@ func TestGetManagerFuncBodyUsesInputCacheOverride(t *testing.T) {
 }
 
 func TestGetManagerFuncBodyUsesActionAxisOverride(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxInputGetAxis",

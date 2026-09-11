@@ -38,6 +38,7 @@ import (
 var (
 	WebRelDir = "../../gdengine/binding/web"
 )
+
 var (
 
 	//go:embed callbacks.go.tmpl
@@ -114,15 +115,16 @@ type Generator struct {
 	*GenerationContext
 }
 
-func (g *Generator) Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+func (g *Generator) Generate(projectPath, spxModulePath string) error {
+	ast := g.AST()
 	generators := []struct {
 		name string
 		fn   func() error
 	}{
 		{"callback Go source", func() error { return GenerateCallbackGoFile(projectPath, ast) }},
 		{"GDExtension interface", func() error { return GenerateGDExtensionInterfaceGoFile(projectPath, ast) }},
-		{"manager wrapper", func() error { return g.GenerateManagerWrapperGoFile(projectPath, ast) }},
-		{"JavaScript engine bridge", func() error { return g.GenerateJsEngineJsFile(projectPath, spxModulePath, ast) }},
+		{"manager wrapper", func() error { return g.GenerateManagerWrapperGoFile(projectPath) }},
+		{"JavaScript engine bridge", func() error { return g.GenerateJsEngineJsFile(projectPath, spxModulePath) }},
 		{"Web worker wrapper", func() error { return GenerateWorkerWrapJsFile(projectPath, ast) }},
 	}
 	for _, generator := range generators {
@@ -194,8 +196,7 @@ func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFil
 		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
 }
 
-func (g *Generator) GenerateManagerWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
-	g.PrepareAST(ast)
+func (g *Generator) GenerateManagerWrapperGoFile(projectPath string) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -214,11 +215,11 @@ func (g *Generator) GenerateManagerWrapperGoFile(projectPath string, ast clang.C
 		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
-	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, ManagerData{Ast: ast, Managers: g.GetManagers(ast), KnownManagerNames: g.KnownManagerNames},
+	return GenerateFile(funcs, "manager_web.gen.go", managerWebText, g.ManagerData(),
 		filepath.Join(projectPath, GdengineImplRelDir, "manager_web.gen.go"))
 }
 
-func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
+func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":     GdiVariableName,
 		"snakeCase":           strcase.ToSnake,
@@ -245,7 +246,7 @@ func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string, as
 	}
 
 	var b bytes.Buffer
-	err = tmpl.Execute(&b, ast)
+	err = tmpl.Execute(&b, g.AST())
 	if err != nil {
 		return err
 	}

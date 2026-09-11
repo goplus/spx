@@ -23,7 +23,7 @@ var (
 
 {{ range $i, $name := $view.Managers -}}
 type I{{camelCase $name}}Mgr interface {
-{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.KnownManagerNames }}
+{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.ManagerNames }}
 	{{ getManagerInterface $f }}
 {{- end }} 
 }
