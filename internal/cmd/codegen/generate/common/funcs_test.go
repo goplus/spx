@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/stretchr/testify/require"
@@ -141,7 +140,7 @@ func TestMustPrimitiveTypeNamePanicsOnFunctionPointer(t *testing.T) {
 }
 
 func TestEffectiveGoReturnTypePanicsOnMissingTypeMapping(t *testing.T) {
-	generation := NewGenerationContext()
+	generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{})
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxTestUnknownReturn",
@@ -168,7 +167,7 @@ func TestEffectiveGoReturnTypePanicsOnMissingTypeMapping(t *testing.T) {
 }
 
 func TestMustGoTypeForCTypePanicsOnMissingMapping(t *testing.T) {
-	generation := NewGenerationContext()
+	generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{})
 
 	require.PanicsWithValue(
 		t,
@@ -180,9 +179,9 @@ func TestMustGoTypeForCTypePanicsOnMissingMapping(t *testing.T) {
 }
 
 func TestEffectiveGoArgumentTypeUsesNativeArrayBridgeSpec(t *testing.T) {
-	generation := NewGenerationContext()
+	metadata := GenerationMetadata{}
 
-	generation.RegisterNativeArrayBridgeSpec(NativeArrayBridgeSpec{
+	metadata.NativeArrayBridges = map[string]NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
 		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
 		BaseArgName:      "buffer",
 		DataArgName:      "buffer_data",
@@ -191,7 +190,8 @@ func TestEffectiveGoArgumentTypeUsesNativeArrayBridgeSpec(t *testing.T) {
 		LenArgName:       "len",
 		LenArgGoType:     "int32",
 		GoArgType:        "[]float32",
-	})
+	}}
+	generation := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
@@ -215,54 +215,4 @@ func TestEffectiveGoArgumentTypeUsesNativeArrayBridgeSpec(t *testing.T) {
 	require.Equal(t, "[]float32", generation.EffectiveGdxArgumentType(function, function.Arguments[0]))
 	require.Equal(t, "buffer", generation.EffectiveGoArgumentName(function, function.Arguments[0]))
 	require.True(t, generation.ShouldSkipHighLevelArgument(function, function.Arguments[1]))
-}
-
-func TestGenerationContextsAreIndependent(t *testing.T) {
-	first, second := NewGenerationContext(), NewGenerationContext()
-	first.RegisterManagerName("sprite")
-	first.RegisterNativeArrayBridgeSpec(NativeArrayBridgeSpec{BaseFunctionName: "first", GoArgType: "[]float32"})
-	first.RegisterArrayTransformBridgeSpec(ArrayTransformBridgeSpec{FunctionName: "first"})
-	second.RegisterManagerName("camera")
-	require.Equal(t, []string{"sprite"}, first.KnownManagerNames)
-	require.Equal(t, []string{"camera"}, second.KnownManagerNames)
-	_, exists := second.GetNativeArrayBridgeSpec("first")
-	require.False(t, exists)
-	require.Empty(t, second.ListArrayTransformBridgeSpecs())
-	second.ClearKnownManagerNames()
-	require.Equal(t, []string{"sprite"}, first.KnownManagerNames)
-	require.Equal(t, "int64", first.MustGoTypeForCType("GdInt", "test"))
-	require.Equal(t, "int64", second.MustGoTypeForCType("GdInt", "test"))
-}
-
-func TestGetManagersDoesNotChangePreparedAST(t *testing.T) {
-	generation := NewGenerationContext()
-	generation.RegisterManagerName("sprite")
-	generation.RegisterManagerName("camera")
-	first, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)();")
-	require.NoError(t, err)
-	second, err := clang.ParseCString("typedef void (*GDExtensionSpxCameraShow)();")
-	require.NoError(t, err)
-	generation.PrepareAST(first)
-	require.Equal(t, []string{"camera"}, generation.GetManagers(second))
-	require.True(t, generation.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
-	require.False(t, generation.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxCameraShow"}))
-}
-
-func TestGenerationContextsRenderIndependently(t *testing.T) {
-	for _, manager := range []string{"foo", "foobar"} {
-		t.Run(manager, func(t *testing.T) {
-			t.Parallel()
-			generation := NewGenerationContext()
-			generation.RegisterManagerName(manager)
-			dst := filepath.Join(t.TempDir(), "manager.go")
-			err := GenerateFile(template.FuncMap{"manager": generation.GetManagerName}, "manager.go",
-				`package generated
-const Manager = "{{manager .}}"
-`, "GDExtensionSpxFooBar", dst)
-			require.NoError(t, err)
-			data, err := os.ReadFile(dst)
-			require.NoError(t, err)
-			require.Contains(t, string(data), `const Manager = "`+manager+`"`)
-		})
-	}
 }

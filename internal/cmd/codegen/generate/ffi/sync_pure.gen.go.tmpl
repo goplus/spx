@@ -45,7 +45,7 @@ type {{camelCase $name}}MgrImpl struct {
 
 {{ range $i, $name := $view.Managers -}}
 // I{{camelCase $name}}Mgr
-{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.KnownManagerNames }}
+{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.ManagerNames }}
 {{ genSyncPureApiWrapFunction $f }}
 {{- end }} 
 

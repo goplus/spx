@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/ffi"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
@@ -107,51 +106,45 @@ func validateCodegenInputs(spxModuleSource string) error {
 }
 
 func generateCode() error {
-	generation := common.NewGenerationContext()
-	nativeGenerator := ffi.Generator{GenerationContext: generation}
-	webGenerator := webffi.Generator{GenerationContext: generation}
-	extensionGenerator := gdext.Generator{GenerationContext: generation}
 	// Validate every external input before generators can create or replace files.
 	if err := validateCodegenInputs(spxModulePath); err != nil {
 		return err
 	}
 
-	var (
-		ast clang.CHeaderFileAST
-		err error
-	)
 	if verbose {
 		spxlog.Info(`build configuration "%s" selected`, buildConfig)
 		spxlog.Info(`SPX module source "%s" selected`, spxModulePath)
 	}
-	// generte c++ ext header file
+	// Prepare both header spellings and metadata before rendering bindings.
 	if genClangAPI {
 		if verbose {
 			spxlog.Info("Generating gdextension godot ext functions...")
 		}
-		if err := extensionGenerator.GenerateHeader(packagePath, spxModulePath); err != nil {
+		headers, err := gdext.PrepareHeaders(spxModulePath)
+		if err != nil {
+			return fmt.Errorf("prepare GDExtension headers: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(packagePath, common.NativeRelDir, "gdextension_spx_ext.h"), []byte(headers.Raw), 0o644); err != nil {
 			return fmt.Errorf("generate GDExtension header: %w", err)
 		}
-	}
-
-	// generate go wrap code
-	if genClangAPI {
-		ast, err = gdextensionparser.GenerateGDExtensionInterfaceAST(packagePath, parsedASTPath)
+		ast, err := gdextensionparser.GenerateGDExtensionInterfaceAST(packagePath, parsedASTPath)
 		if err != nil {
 			return fmt.Errorf("parse GDExtension interface: %w", err)
 		}
-	}
-	if genClangAPI {
 		if verbose {
 			spxlog.Info("Generating gdextension C wrapper functions...")
 		}
-		if err := nativeGenerator.Generate(packagePath, ast); err != nil {
+		generation := common.NewGenerationContext(ast, headers.Metadata)
+		nativeGenerator := ffi.Generator{GenerationContext: generation}
+		webGenerator := webffi.Generator{GenerationContext: generation}
+		extensionGenerator := gdext.Generator{GenerationContext: generation}
+		if err := nativeGenerator.Generate(packagePath); err != nil {
 			return fmt.Errorf("generate native bindings: %w", err)
 		}
-		if err := webGenerator.Generate(packagePath, spxModulePath, ast); err != nil {
+		if err := webGenerator.Generate(packagePath, spxModulePath); err != nil {
 			return fmt.Errorf("generate Web bindings: %w", err)
 		}
-		if err := extensionGenerator.Generate(packagePath, spxModulePath, ast); err != nil {
+		if err := extensionGenerator.Generate(packagePath, spxModulePath, headers); err != nil {
 			return fmt.Errorf("generate GDExtension sources: %w", err)
 		}
 	}

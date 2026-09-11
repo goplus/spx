@@ -28,7 +28,6 @@ import (
 )
 
 func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	dir := t.TempDir()
 	header := strings.TrimSpace(`
@@ -42,11 +41,10 @@ public:
 	merged, err := mergeManagerHeader(dir)
 	require.NoError(t, err)
 	require.Contains(t, merged, "class SpxUiMgr")
-	require.Contains(t, generation.generateManagerHeader(merged, false), "GDExtensionSpxUiBindNode")
+	require.Contains(t, parseManagerHeader(merged).render(false), "GDExtensionSpxUiBindNode")
 }
 
 func TestGenerateManagerHeaderSkipsRawMethods(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
@@ -59,7 +57,9 @@ public:
 };
 `)
 
-	output := generation.generateManagerHeader(input, false)
+	header := parseManagerHeader(input)
+	output := header.render(false)
+	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchUpdateTransforms")
 	require.Contains(t, output, "GDExtensionSpxSpriteDestroySprite")
@@ -83,7 +83,6 @@ func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
 }
 
 func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
@@ -96,7 +95,8 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -107,7 +107,6 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
@@ -120,7 +119,8 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -133,7 +133,6 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
@@ -146,7 +145,8 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -158,7 +158,6 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 }
 
 func TestGenerateManagerHeaderRegistersDirectNativeArrayBridge(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
@@ -167,7 +166,9 @@ public:
 };
 `)
 
-	output := generation.generateManagerHeader(input, false)
+	header := parseManagerHeader(input)
+	output := header.render(false)
+	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchUpdateTransforms")
 	spec, ok := generation.GetNativeArrayBridgeSpec("GDExtensionSpxSpriteBatchUpdateTransforms")
@@ -181,7 +182,6 @@ public:
 }
 
 func TestGenerateManagerHeaderRegistersArrayTransformBridge(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
@@ -190,7 +190,9 @@ public:
 };
 `)
 
-	output := generation.generateManagerHeader(input, false)
+	header := parseManagerHeader(input)
+	output := header.render(false)
+	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchRetrievePositions")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")
@@ -211,7 +213,6 @@ public:
 }
 
 func TestGenerateManagerHeaderSynthesizesFastReturnTypedefForRawFormat(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext()}
 
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
@@ -220,8 +221,24 @@ public:
 };
 `)
 
-	output := generation.generateManagerHeader(input, true)
+	output := parseManagerHeader(input).render(true)
 
 	require.Contains(t, output, "typedef GdArray (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs);")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")
+}
+
+func TestHeaderRenderingDoesNotChangeMetadata(t *testing.T) {
+	input := `class SpxSpriteMgr {
+ SPX_API GdBool destroy_sprite(GdObj obj);
+ SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
+ };`
+	header := parseManagerHeader(input)
+	before := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
+	standard, raw := header.render(false), header.render(true)
+	require.Equal(t, standard, header.render(false))
+	require.Equal(t, raw, header.render(true))
+	require.Contains(t, raw, "typedef GdBool (*GDExtensionSpxSpriteDestroySprite)(GdObj obj);")
+	require.Contains(t, standard, "typedef void (*GDExtensionSpxSpriteDestroySprite)(GdObj obj, GdBool *ret_value);")
+	after := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
+	require.Equal(t, before.ListArrayTransformBridgeSpecs(), after.ListArrayTransformBridgeSpecs())
 }

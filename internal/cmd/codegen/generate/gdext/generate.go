@@ -50,13 +50,8 @@ type Generator struct {
 	*GenerationContext
 }
 
-func (g *Generator) GenerateHeader(projectPath, spxModulePath string) error {
-	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	return g.generateSpxExtHeader(spxModulePath, outputFile, true)
-}
-
-func (g *Generator) Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error {
-	if err := g.generateGdCppFile(projectPath, gdSpxExtCpp, ast, "gdextension_spx_ext.cpp"); err != nil {
+func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers) error {
+	if err := g.generateGdCppFile(projectPath, gdSpxExtCpp, "gdextension_spx_ext.cpp"); err != nil {
 		return err
 	}
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.cpp")
@@ -69,14 +64,14 @@ func (g *Generator) Generate(projectPath, spxModulePath string, ast clang.CHeade
 
 	// use the new format header
 	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	if err := g.generateSpxExtHeader(spxModulePath, outputFile, false); err != nil {
+	if err := os.WriteFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
 		return err
 	}
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
 		return fmt.Errorf("copy gdextension_spx_ext.h: %w", err)
 	}
 
-	if err := g.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"); err != nil {
+	if err := g.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"); err != nil {
 		return err
 	}
 	outputFile = filepath.Join(projectPath, NativeRelDir, "godot_js_spx.cpp")
@@ -110,8 +105,7 @@ func fileCopy(src, dst string) error {
 	return dstFile.Sync()
 }
 
-func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {
-	g.PrepareAST(ast)
+func (g *Generator) generateGdCppFile(projectPath string, templateStr string, outputFileName string) error {
 	funcs := template.FuncMap{
 		"gdiVariableName":             GdiVariableName,
 		"snakeCase":                   strcase.ToSnake,
@@ -190,7 +184,7 @@ func (g *Generator) generateGdCppFile(projectPath string, templateStr string, as
 	}
 
 	var b bytes.Buffer
-	err = tmpl.Execute(&b, ManagerData{Ast: ast, Managers: g.GetManagers(ast), KnownManagerNames: g.KnownManagerNames})
+	err = tmpl.Execute(&b, g.ManagerData())
 	if err != nil {
 		return err
 	}
