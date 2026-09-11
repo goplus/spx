@@ -49,17 +49,32 @@ var (
 	reParamDecl            = regexp.MustCompile(`^\s*(.+?[*\s])([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 )
 
-func shouldSkipGeneratedMethod(methodName string) bool {
-	// Raw helpers are web-only entry points and should not leak into the shared
-	// gdextension interface consumed by native ffi/codegen.
-	return strings.HasSuffix(methodName, "_raw") || isArrayTransformBridgeMethod(methodName)
-}
-
 type classMethodDecl struct {
 	ClassName  string
 	ReturnType string
 	MethodName string
 	Params     string
+}
+
+type arrayTransformOverride struct {
+	ArrayArgName     string
+	OutputCountScale int
+}
+
+var arrayTransformOverrides = map[string]arrayTransformOverride{
+	// The raw signature does not encode the return length formula, so keep the
+	// minimal transform metadata here and let codegen synthesize the high-level
+	// GdArray return bridge generically.
+	"batch_retrieve_positions": {
+		ArrayArgName:     "objs",
+		OutputCountScale: 2,
+	},
+}
+
+func shouldSkipGeneratedMethod(methodName string) bool {
+	// Raw helpers are web-only entry points and should not leak into the shared
+	// gdextension interface consumed by native ffi/codegen.
+	return strings.HasSuffix(methodName, "_raw") || isArrayTransformBridgeMethod(methodName)
 }
 
 func generateSpxExtHeader(dir, outputFile string, isRawFormat bool) error {
@@ -313,21 +328,6 @@ func registerNativeArrayBridgeSpecs(baseMethods map[string]classMethodDecl, rawM
 			FastArrayType:    fastArrayType,
 		})
 	}
-}
-
-type arrayTransformOverride struct {
-	ArrayArgName     string
-	OutputCountScale int
-}
-
-var arrayTransformOverrides = map[string]arrayTransformOverride{
-	// The raw signature does not encode the return length formula, so keep the
-	// minimal transform metadata here and let codegen synthesize the high-level
-	// GdArray return bridge generically.
-	"batch_retrieve_positions": {
-		ArrayArgName:     "objs",
-		OutputCountScale: 2,
-	},
 }
 
 func isArrayTransformBridgeMethod(methodName string) bool {

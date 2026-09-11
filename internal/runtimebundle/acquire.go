@@ -56,6 +56,12 @@ type AcquiredFile struct {
 	closeErr  error
 }
 
+type acquireLimitWriter struct {
+	destination io.Writer
+	remaining   int64
+	exceeded    bool
+}
+
 func (f *AcquiredFile) Read(p []byte) (int, error) {
 	if f == nil || f.file == nil {
 		return 0, os.ErrInvalid
@@ -93,6 +99,34 @@ func (f *AcquiredFile) Close() error {
 		f.closeErr = errors.Join(fileErr, leaseErr)
 	})
 	return f.closeErr
+}
+
+func (w *acquireLimitWriter) Write(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, nil
+	}
+	if w.remaining <= 0 {
+		w.exceeded = true
+		return 0, errAcquireSizeLimit
+	}
+	writable := data
+	limited := int64(len(data)) > w.remaining
+	if limited {
+		w.exceeded = true
+		writable = data[:w.remaining]
+	}
+	n, err := w.destination.Write(writable)
+	w.remaining -= int64(n)
+	if err != nil {
+		return n, err
+	}
+	if n != len(writable) {
+		return n, io.ErrShortWrite
+	}
+	if limited {
+		return n, errAcquireSizeLimit
+	}
+	return n, nil
 }
 
 // AcquireFile downloads or reuses one file, verifies it, and keeps a shared
@@ -246,40 +280,6 @@ func validateAcquireSpec(spec FetchSpec) error {
 		return fmt.Errorf("runtimebundle: invalid asset SHA-256 for %q: %w", spec.Name, err)
 	}
 	return nil
-}
-
-type acquireLimitWriter struct {
-	destination io.Writer
-	remaining   int64
-	exceeded    bool
-}
-
-func (w *acquireLimitWriter) Write(data []byte) (int, error) {
-	if len(data) == 0 {
-		return 0, nil
-	}
-	if w.remaining <= 0 {
-		w.exceeded = true
-		return 0, errAcquireSizeLimit
-	}
-	writable := data
-	limited := int64(len(data)) > w.remaining
-	if limited {
-		w.exceeded = true
-		writable = data[:w.remaining]
-	}
-	n, err := w.destination.Write(writable)
-	w.remaining -= int64(n)
-	if err != nil {
-		return n, err
-	}
-	if n != len(writable) {
-		return n, io.ErrShortWrite
-	}
-	if limited {
-		return n, errAcquireSizeLimit
-	}
-	return n, nil
 }
 
 func newAcquireRootTemp(root *os.Root) (string, *os.File, error) {

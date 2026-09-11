@@ -47,38 +47,6 @@ func (p *Coroutines) YieldToNextRoundFor(me Thread) {
 	p.yieldAtFrame(me, waitTypeNextRound)
 }
 
-func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
-	if me == nil || p.callerThread() != me {
-		panic(ErrCannotYieldANonrunningThread)
-	}
-	job := p.newResumeWaitJob(me, kind)
-	job.Frame = time.Frame()
-	p.enqueueAndYield(me, job)
-}
-
-// Admit a new round only after all runnable scripts have yielded.
-func (p *Coroutines) queueNextScriptRound(state *updateState) bool {
-	if p.redrawFrame.Load() == state.frame ||
-		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
-		return false
-	}
-	// The jobs below resume in a new script round even when the engine frame
-	// and its clock do not advance.
-	p.scriptRound.Add(1)
-	for p.roundJobs.Count() > 0 {
-		job := p.roundJobs.PopFront()
-		job.Type = waitTypeYield
-		p.currentJobs.PushBack(job)
-	}
-	return true
-}
-
-func (p *Coroutines) hasLoopContinuation() bool {
-	return p.roundJobs.Any(func(job *WaitJob) bool {
-		return job.Type == waitTypeLoop && !p.isThreadCanceled(job.Th)
-	})
-}
-
 // RequestRedraw ends additional script rounds after the current round finishes.
 func (p *Coroutines) RequestRedraw() {
 	p.redrawFrame.Store(time.Frame())
@@ -117,6 +85,38 @@ func (p *Coroutines) TryRunManagedBetweenScripts(owner ThreadObj, call func()) b
 			return 0
 		})
 		p.waitForThreadOnEngine(dispatcher)
+	})
+}
+
+func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
+	if me == nil || p.callerThread() != me {
+		panic(ErrCannotYieldANonrunningThread)
+	}
+	job := p.newResumeWaitJob(me, kind)
+	job.Frame = time.Frame()
+	p.enqueueAndYield(me, job)
+}
+
+// Admit a new round only after all runnable scripts have yielded.
+func (p *Coroutines) queueNextScriptRound(state *updateState) bool {
+	if p.redrawFrame.Load() == state.frame ||
+		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
+		return false
+	}
+	// The jobs below resume in a new script round even when the engine frame
+	// and its clock do not advance.
+	p.scriptRound.Add(1)
+	for p.roundJobs.Count() > 0 {
+		job := p.roundJobs.PopFront()
+		job.Type = waitTypeYield
+		p.currentJobs.PushBack(job)
+	}
+	return true
+}
+
+func (p *Coroutines) hasLoopContinuation() bool {
+	return p.roundJobs.Any(func(job *WaitJob) bool {
+		return job.Type == waitTypeLoop && !p.isThreadCanceled(job.Th)
 	})
 }
 

@@ -51,20 +51,6 @@ const (
 	MapModeActualSize
 )
 
-func ToMapMode(mode string) int {
-	switch mode {
-	case "repeat":
-		return MapModeRepeat
-	case "actualSize":
-		return MapModeActualSize
-	case "fillCut":
-		return MapModeFillCut
-	case "fillRatio":
-		return MapModeFillRatio
-	}
-	return MapModeFill
-}
-
 type ProjectConfig struct {
 	Zorder        []any             `json:"zorder"`
 	Backdrops     []*BackdropConfig `json:"backdrops"`
@@ -101,14 +87,6 @@ type ProjectConfig struct {
 	LayerSortMode string `json:"layerSortMode"`
 
 	PixelCollisionPrecision *string `json:"pixelCollisionPrecision"`
-}
-
-func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
-	return p.Backdrops
-}
-
-func (p *ProjectConfig) GetBackdropIndex() int {
-	return p.BackdropIndex
 }
 
 type CostumeSetRect struct {
@@ -244,12 +222,34 @@ type SpriteConfig struct {
 	Gravity     *float64 `json:"gravity"`
 }
 
-func (p *SpriteConfig) GetCostumeIndex() int {
-	return p.CostumeIndex
-}
-
 type SoundConfig struct {
 	Path        string `json:"path"`
 	Rate        int    `json:"rate"`
 	SampleCount int    `json:"sampleCount"`
+}
+
+func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
+	return p.Backdrops
+}
+
+func (p *ProjectConfig) GetBackdropIndex() int {
+	return p.BackdropIndex
+}
+
+func (p *SpriteConfig) GetCostumeIndex() int {
+	return p.CostumeIndex
+}
+
+func ToMapMode(mode string) int {
+	switch mode {
+	case "repeat":
+		return MapModeRepeat
+	case "actualSize":
+		return MapModeActualSize
+	case "fillCut":
+		return MapModeFillCut
+	case "fillRatio":
+		return MapModeFillRatio
+	}
+	return MapModeFill
 }

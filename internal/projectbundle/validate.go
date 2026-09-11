@@ -26,6 +26,11 @@ import (
 	"unicode/utf8"
 )
 
+type observedRoot struct {
+	path string
+	info os.FileInfo
+}
+
 func validateRelativePath(name, field string) (string, error) {
 	if name == "" || name == "." || !utf8.ValidString(name) || strings.IndexByte(name, 0) >= 0 {
 		return "", fmt.Errorf("%w: %s %q", ErrInvalidPath, field, name)
@@ -160,11 +165,6 @@ func canonicalFilesystemPath(name string) (string, error) {
 		suffix = append(suffix, filepath.Base(current))
 		current = parent
 	}
-}
-
-type observedRoot struct {
-	path string
-	info os.FileInfo
 }
 
 func observeRoot(name string) (observedRoot, error) {

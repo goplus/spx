@@ -32,15 +32,6 @@ type collector struct {
 	folded    map[string]string
 }
 
-func newCollector(limits resolvedLimits) *collector {
-	return &collector{
-		limits:    limits,
-		exact:     make(map[string]string),
-		canonical: make(map[string]string),
-		folded:    make(map[string]string),
-	}
-}
-
 func (c *collector) addFile(root *safeDir, sourcePath, archiveName string) error {
 	if err := c.reserveEntry(archiveName); err != nil {
 		return err
@@ -134,4 +125,13 @@ func (c *collector) addTree(root *safeDir, prefix string) error {
 		}
 	}
 	return nil
+}
+
+func newCollector(limits resolvedLimits) *collector {
+	return &collector{
+		limits:    limits,
+		exact:     make(map[string]string),
+		canonical: make(map[string]string),
+		folded:    make(map[string]string),
+	}
 }

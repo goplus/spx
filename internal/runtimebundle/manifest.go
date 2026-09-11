@@ -295,6 +295,32 @@ func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
 	return b, nil
 }
 
+func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
+	// Digest is a checksum over this canonical form, so it must not be
+	// validated while constructing the form itself (otherwise validation would
+	// recurse through IdentityDigest indefinitely).
+	withoutDigest := b
+	withoutDigest.Digest = ""
+	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
+		return canonicalBundle{}, err
+	}
+	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
+	if out.Schema == "" {
+		out.Schema = SchemaV1
+	}
+	for _, original := range b.Entries {
+		entry, _, err := original.normalized()
+		if err != nil {
+			return canonicalBundle{}, err
+		}
+		out.Entries = append(out.Entries, entry)
+	}
+	sort.Slice(out.Entries, func(i, j int) bool {
+		return out.Entries[i].Name < out.Entries[j].Name
+	})
+	return out, nil
+}
+
 func (l Limits) withDefaults() (Limits, error) {
 	if l.MaxEntries == 0 {
 		l.MaxEntries = MaxEntries
@@ -380,32 +406,6 @@ func validateSHA256(value string) error {
 		return fmt.Errorf("sha256 must be lower-case hexadecimal")
 	}
 	return nil
-}
-
-func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
-	// Digest is a checksum over this canonical form, so it must not be
-	// validated while constructing the form itself (otherwise validation would
-	// recurse through IdentityDigest indefinitely).
-	withoutDigest := b
-	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
-		return canonicalBundle{}, err
-	}
-	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
-	if out.Schema == "" {
-		out.Schema = SchemaV1
-	}
-	for _, original := range b.Entries {
-		entry, _, err := original.normalized()
-		if err != nil {
-			return canonicalBundle{}, err
-		}
-		out.Entries = append(out.Entries, entry)
-	}
-	sort.Slice(out.Entries, func(i, j int) bool {
-		return out.Entries[i].Name < out.Entries[j].Name
-	})
-	return out, nil
 }
 
 func normalizeEntryName(name string) (normalized, folded string, isDir bool, err error) {

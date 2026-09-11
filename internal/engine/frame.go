@@ -36,6 +36,14 @@ type CaptureRequest struct {
 // CaptureRequestHandler handles one screenshot request.
 type CaptureRequestHandler func(CaptureRequest) error
 
+type frameRuntimeState struct {
+	lifecycle sync.RWMutex
+	callbacks frameCallbackQueue
+	captures  captureQueue
+}
+
+var frameRuntime frameRuntimeState
+
 // CurrentFrame returns the engine-session frame counter.
 func CurrentFrame() int64 {
 	return itime.Frame()
@@ -89,14 +97,6 @@ func FlushCaptures() error {
 func ResetFrameRuntime() {
 	frameRuntime.reset()
 }
-
-type frameRuntimeState struct {
-	lifecycle sync.RWMutex
-	callbacks frameCallbackQueue
-	captures  captureQueue
-}
-
-var frameRuntime frameRuntimeState
 
 func (rt *frameRuntimeState) scheduleCallback(frame int64, fn func()) {
 	rt.lifecycle.RLock()

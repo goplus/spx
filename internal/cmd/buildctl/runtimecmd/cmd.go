@@ -33,6 +33,16 @@ type BuildWasmConfig struct {
 	Opt bool
 }
 
+func BuildWasmRuntime(cfg BuildWasmConfig, runner shared.ScriptRunner) error {
+	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
+		return err
+	}
+	if !cfg.Opt {
+		return nil
+	}
+	return compressWasmArtifacts()
+}
+
 func runOtherRuntimeCommand(args []string) error {
 	if len(args) == 0 {
 		printRuntimeUsage()
@@ -173,14 +183,4 @@ func parseRuntimeExportWebArgs(args []string) (runtimeExportWebConfig, error) {
 		return runtimeExportWebConfig{}, err
 	}
 	return cfg, nil
-}
-
-func BuildWasmRuntime(cfg BuildWasmConfig, runner shared.ScriptRunner) error {
-	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
-		return err
-	}
-	if !cfg.Opt {
-		return nil
-	}
-	return compressWasmArtifacts()
 }

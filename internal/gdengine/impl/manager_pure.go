@@ -16,14 +16,8 @@
  * limitations under the License.
  */
 
-/*
-------------------------------------------------------------------------------
-//   Pure engine mode manager wrapper (no FFI).
-//   This file is NOT auto-generated. It must be manually maintained.
-//   Manager types embed enginewrap.*MgrImpl (from sync_pure.gen.go)
-//   which are auto-generated and provide all interface method stubs.
-//----------------------------------------------------------------------------
-*/
+// Handwritten pure-engine managers embed the generated method stubs from
+// enginewrap/sync_pure.gen.go without FFI.
 package impl
 
 import (
@@ -33,6 +27,83 @@ import (
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
+
+type audioMgr struct {
+	baseMgr
+	enginewrap.AudioMgrImpl
+}
+
+type cameraMgr struct {
+	baseMgr
+	enginewrap.CameraMgrImpl
+}
+
+type debugMgr struct {
+	baseMgr
+	enginewrap.DebugMgrImpl
+}
+
+type extMgr struct {
+	baseMgr
+	enginewrap.ExtMgrImpl
+}
+
+type inputMgr struct {
+	baseMgr
+	enginewrap.InputMgrImpl
+}
+
+type navigationMgr struct {
+	baseMgr
+	enginewrap.NavigationMgrImpl
+}
+
+type penMgr struct {
+	baseMgr
+	enginewrap.PenMgrImpl
+}
+
+type physicsMgr struct {
+	baseMgr
+	enginewrap.PhysicsMgrImpl
+}
+
+type platformMgr struct {
+	baseMgr
+	enginewrap.PlatformMgrImpl
+}
+
+type resMgr struct {
+	baseMgr
+	enginewrap.ResMgrImpl
+}
+
+type sceneMgr struct {
+	baseMgr
+	enginewrap.SceneMgrImpl
+}
+
+type spriteMgr struct {
+	baseMgr
+	enginewrap.SpriteMgrImpl
+}
+
+type tilemapMgr struct {
+	baseMgr
+	enginewrap.TilemapMgrImpl
+}
+
+type tilemapparserMgr struct {
+	baseMgr
+	enginewrap.TilemapparserMgrImpl
+}
+
+type uiMgr struct {
+	baseMgr
+	enginewrap.UiMgrImpl
+}
+
+func (*platformMgr) IsMainThread() bool { return true }
 
 func BindMgr(mgrs []IManager) {
 	for _, mgr := range mgrs {
@@ -71,70 +142,6 @@ func BindMgr(mgrs []IManager) {
 			panic(fmt.Sprintf("engine init error : unknown manager type %s", reflect.TypeOf(mgr).String()))
 		}
 	}
-}
-
-type audioMgr struct {
-	baseMgr
-	enginewrap.AudioMgrImpl
-}
-type cameraMgr struct {
-	baseMgr
-	enginewrap.CameraMgrImpl
-}
-type debugMgr struct {
-	baseMgr
-	enginewrap.DebugMgrImpl
-}
-type extMgr struct {
-	baseMgr
-	enginewrap.ExtMgrImpl
-}
-type inputMgr struct {
-	baseMgr
-	enginewrap.InputMgrImpl
-}
-type navigationMgr struct {
-	baseMgr
-	enginewrap.NavigationMgrImpl
-}
-type penMgr struct {
-	baseMgr
-	enginewrap.PenMgrImpl
-}
-type physicsMgr struct {
-	baseMgr
-	enginewrap.PhysicsMgrImpl
-}
-type platformMgr struct {
-	baseMgr
-	enginewrap.PlatformMgrImpl
-}
-
-func (*platformMgr) IsMainThread() bool { return true }
-
-type resMgr struct {
-	baseMgr
-	enginewrap.ResMgrImpl
-}
-type sceneMgr struct {
-	baseMgr
-	enginewrap.SceneMgrImpl
-}
-type spriteMgr struct {
-	baseMgr
-	enginewrap.SpriteMgrImpl
-}
-type tilemapMgr struct {
-	baseMgr
-	enginewrap.TilemapMgrImpl
-}
-type tilemapparserMgr struct {
-	baseMgr
-	enginewrap.TilemapparserMgrImpl
-}
-type uiMgr struct {
-	baseMgr
-	enginewrap.UiMgrImpl
 }
 
 func createMgrs() []IManager {

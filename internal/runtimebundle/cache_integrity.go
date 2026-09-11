@@ -28,6 +28,64 @@ import (
 	"strings"
 )
 
+func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest string, expected *Bundle) (bool, error) {
+	limits, err := c.Limits.withDefaults()
+	if err != nil {
+		return false, err
+	}
+	info, err := namespaceRoot.Lstat(filepath.FromSlash(digest))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("%w: cache target is a symlink: %s", ErrUnsafeArchive, digest)
+	}
+	if !info.IsDir() {
+		return false, nil
+	}
+	if runtimeIsUnix() && info.Mode().Perm() != 0o700 {
+		return false, nil
+	}
+	targetRoot, err := openPinnedChildRoot(namespaceRoot, digest)
+	if err != nil {
+		return false, err
+	}
+	defer targetRoot.Close()
+	if err := verifyPrivateRootPath(targetRoot, "."); err != nil {
+		return false, err
+	}
+	manifestData, err := readRootRegularFile(targetRoot, cacheManifestName, limits.MaxManifestBytes)
+	if err != nil {
+		return false, nil
+	}
+	manifest, err := ParseManifestWithLimits(manifestData, limits)
+	if err != nil {
+		return false, nil
+	}
+	if manifest.Namespace != Namespace(namespace) || manifest.Digest != digest {
+		return false, nil
+	}
+	marker, err := readRootRegularFile(targetRoot, completeMarkerName, sha256.Size*2+1)
+	if err != nil || strings.TrimSpace(string(marker)) != digest {
+		return false, nil
+	}
+	if expected != nil {
+		if err := manifestEntriesEqualWithLimits(manifest, *expected, limits); err != nil {
+			return false, nil
+		}
+	}
+	if err := verifyMaterializedTreeRoot(targetRoot, manifest); err != nil {
+		return false, nil
+	}
+	if err := checkPinnedChildPath(namespaceRoot, digest, targetRoot); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func openAndVerify(zipPath string, options VerifyOptions) (verifiedArchive, io.Closer, error) {
 	file, err := openSourceZip(zipPath)
 	if err != nil {
@@ -156,64 +214,6 @@ func readRootRegularFile(root *os.Root, name string, maxBytes int64) ([]byte, er
 		return nil, fmt.Errorf("%w: metadata file %s exceeds limit %d", ErrArchiveLimit, name, maxBytes)
 	}
 	return data, nil
-}
-
-func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest string, expected *Bundle) (bool, error) {
-	limits, err := c.Limits.withDefaults()
-	if err != nil {
-		return false, err
-	}
-	info, err := namespaceRoot.Lstat(filepath.FromSlash(digest))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return false, fmt.Errorf("%w: cache target is a symlink: %s", ErrUnsafeArchive, digest)
-	}
-	if !info.IsDir() {
-		return false, nil
-	}
-	if runtimeIsUnix() && info.Mode().Perm() != 0o700 {
-		return false, nil
-	}
-	targetRoot, err := openPinnedChildRoot(namespaceRoot, digest)
-	if err != nil {
-		return false, err
-	}
-	defer targetRoot.Close()
-	if err := verifyPrivateRootPath(targetRoot, "."); err != nil {
-		return false, err
-	}
-	manifestData, err := readRootRegularFile(targetRoot, cacheManifestName, limits.MaxManifestBytes)
-	if err != nil {
-		return false, nil
-	}
-	manifest, err := ParseManifestWithLimits(manifestData, limits)
-	if err != nil {
-		return false, nil
-	}
-	if manifest.Namespace != Namespace(namespace) || manifest.Digest != digest {
-		return false, nil
-	}
-	marker, err := readRootRegularFile(targetRoot, completeMarkerName, sha256.Size*2+1)
-	if err != nil || strings.TrimSpace(string(marker)) != digest {
-		return false, nil
-	}
-	if expected != nil {
-		if err := manifestEntriesEqualWithLimits(manifest, *expected, limits); err != nil {
-			return false, nil
-		}
-	}
-	if err := verifyMaterializedTreeRoot(targetRoot, manifest); err != nil {
-		return false, nil
-	}
-	if err := checkPinnedChildPath(namespaceRoot, digest, targetRoot); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 func verifyMaterializedTreeRoot(root *os.Root, manifest Bundle) error {

@@ -31,11 +31,7 @@ type UiQuote struct {
 	labelMsg  *UiNode
 }
 
-func NewUiQuote() *UiQuote {
-	return engine.NewUiNode[UiQuote]()
-}
-
-// !!Warning: this method is called from the engine callback context
+// OnStart binds UI nodes in the engine callback context.
 func (pself *UiQuote) OnStart() {
 	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
 	pself.imageL = engine.BridgeBindUI[UiNode](pself.GetId(), "C/ImageL")
@@ -52,4 +48,8 @@ func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description 
 	mgr.UiMgr.SetSize(pself.container.GetId(), size.Mulf(2))
 	mgr.UiMgr.SetText(pself.labelMsg.GetId(), msg)
 	mgr.UiMgr.SetText(pself.labelDes.GetId(), description)
+}
+
+func NewUiQuote() *UiQuote {
+	return engine.NewUiNode[UiQuote]()
 }

@@ -27,6 +27,16 @@ import (
 	"time"
 )
 
+// CacheStats is reserved for the future quota/age collector. It is provided
+// as a stable shape so callers do not need to inspect cache internals.
+type CacheStats struct {
+	Bytes        int64
+	Entries      int
+	Oldest       time.Time
+	Namespaces   map[Namespace]int
+	CompleteOnly bool
+}
+
 // Remove removes a cache target only when it is absent or fails complete
 // verification. It refuses to remove a valid target; callers needing quota or
 // age-based deletion must wait for the lease-aware GC implementation.
@@ -111,16 +121,6 @@ func (c *Cache) Remove(namespace Namespace, digest string) error {
 		return err
 	}
 	return checkPinnedChildPath(cacheRoot, string(namespace), namespaceRoot)
-}
-
-// CacheStats is reserved for the future quota/age collector. It is provided
-// as a stable shape so callers do not need to inspect cache internals.
-type CacheStats struct {
-	Bytes        int64
-	Entries      int
-	Oldest       time.Time
-	Namespaces   map[Namespace]int
-	CompleteOnly bool
 }
 
 // List returns only complete, digest-addressed cache directories. Every

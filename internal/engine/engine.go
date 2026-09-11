@@ -40,6 +40,7 @@ var (
 )
 
 type Object = gdx.Object
+
 type Array = gdx.Array
 
 type layerSortMode int
@@ -56,6 +57,33 @@ type LayerSortInfo struct {
 }
 
 var curLayerSortMode layerSortMode
+
+const Float2IntFactor = gdx.Float2IntFactor
+
+type TriggerEvent struct {
+	Src *Sprite
+	Dst *Sprite
+}
+
+var (
+	game              IGame
+	triggerEventsTemp []TriggerEvent
+	triggerEvents     []TriggerEvent
+	triggerMutex      sync.Mutex
+
+	logicMutex sync.Mutex
+)
+
+type IGame interface {
+	OnEngineStart()
+	OnEngineUpdate(delta float64)
+	OnEngineBeforeUpdate(delta float64)
+	OnEngineRender(delta float64)
+	OnEngineFrameEnd()
+	OnEngineDestroy()
+	OnEngineReset()
+	OnEnginePause(isPaused bool)
+}
 
 // SetLayerSortMode sets sprite layer sorting.
 // Supported modes:
@@ -81,28 +109,13 @@ func HasLayerSortMethod() bool {
 	return curLayerSortMode != layerSortModeNone
 }
 
-const Float2IntFactor = gdx.Float2IntFactor
-
 func ConvertToFloat64(val int64) float64 {
 	return float64(val) / Float2IntFactor
 }
+
 func ConvertToInt64(val float64) int64 {
 	return int64(val * Float2IntFactor)
 }
-
-type TriggerEvent struct {
-	Src *Sprite
-	Dst *Sprite
-}
-
-var (
-	game              IGame
-	triggerEventsTemp []TriggerEvent
-	triggerEvents     []TriggerEvent
-	triggerMutex      sync.Mutex
-
-	logicMutex sync.Mutex
-)
 
 func Lock() {
 	logicMutex.Lock()
@@ -110,17 +123,6 @@ func Lock() {
 
 func Unlock() {
 	logicMutex.Unlock()
-}
-
-type IGame interface {
-	OnEngineStart()
-	OnEngineUpdate(delta float64)
-	OnEngineBeforeUpdate(delta float64)
-	OnEngineRender(delta float64)
-	OnEngineFrameEnd()
-	OnEngineDestroy()
-	OnEngineReset()
-	OnEnginePause(isPaused bool)
 }
 
 func Main(g IGame) {
@@ -141,6 +143,58 @@ func Main(g IGame) {
 
 func OnGameStarted() {
 	gco.OnInited()
+}
+
+func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
+	triggerMutex.Lock()
+	lst = append(lst, triggerEvents...)
+	triggerEvents = triggerEvents[:0]
+	triggerMutex.Unlock()
+	return lst
+}
+
+// DeferPanic recovers a panic, reports it, and optionally exits.
+func DeferPanic(name, stack string, exitOnPanic bool) {
+	if e := recover(); e != nil {
+		handlePanic(name, stack, e, exitOnPanic)
+	}
+}
+
+// CheckPanic is a shorthand panic handler for engine callbacks.
+func CheckPanic() {
+	if e := recover(); e != nil {
+		handlePanic("", "", e, true)
+	}
+}
+
+// OnPanic reports a coroutine's original panic and its fault and creation stacks.
+func OnPanic(report coroutine.PanicReport) {
+	stack := report.Stack
+	if report.CreationStack != "" {
+		stack += "\ncreated at:\n" + report.CreationStack
+	}
+	handlePanic(report.Name, stack, report.Value, true)
+}
+
+// Panic reports a panic message through the engine.
+func Panic(args ...any) {
+	msg := fmt.Sprint(args...)
+	handlePanic(msg, "", nil, true)
+}
+
+// Panicf reports a formatted panic message through the engine.
+func Panicf(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	handlePanic(msg, "", nil, true)
+}
+
+func RequestExit(exitCode int64) {
+	if platform.IsWeb() {
+		// Web resets instead of exiting.
+		abortCoroutinesAndReset(exitCode)
+		return
+	}
+	extMgr.RequestExit(exitCode)
 }
 
 // Engine callbacks.
@@ -208,37 +262,6 @@ func cacheTriggerEvents() {
 	triggerEventsTemp = triggerEventsTemp[:0]
 }
 
-func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
-	triggerMutex.Lock()
-	lst = append(lst, triggerEvents...)
-	triggerEvents = triggerEvents[:0]
-	triggerMutex.Unlock()
-	return lst
-}
-
-// DeferPanic recovers a panic, reports it, and optionally exits.
-func DeferPanic(name, stack string, exitOnPanic bool) {
-	if e := recover(); e != nil {
-		handlePanic(name, stack, e, exitOnPanic)
-	}
-}
-
-// CheckPanic is a shorthand panic handler for engine callbacks.
-func CheckPanic() {
-	if e := recover(); e != nil {
-		handlePanic("", "", e, true)
-	}
-}
-
-// OnPanic reports a coroutine's original panic and its fault and creation stacks.
-func OnPanic(report coroutine.PanicReport) {
-	stack := report.Stack
-	if report.CreationStack != "" {
-		stack += "\ncreated at:\n" + report.CreationStack
-	}
-	handlePanic(report.Name, stack, report.Value, true)
-}
-
 // handlePanic reports a panic and optionally exits.
 func handlePanic(name, stack string, err any, exitOnPanic bool) {
 	var msg string
@@ -267,18 +290,6 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 	}
 }
 
-// Panic reports a panic message through the engine.
-func Panic(args ...any) {
-	msg := fmt.Sprint(args...)
-	handlePanic(msg, "", nil, true)
-}
-
-// Panicf reports a formatted panic message through the engine.
-func Panicf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	handlePanic(msg, "", nil, true)
-}
-
 // abortCoroutinesAndReset aborts coroutines and resets the engine.
 // Used on web, where the process cannot exit.
 func abortCoroutinesAndReset(exitCode int64) {
@@ -302,13 +313,4 @@ func requestResetAfterCoroutinesStop(co *coroutine.Coroutines, timeout stime.Dur
 	}
 	spxlog.Debug("Coroutine shutdown completed. Engine reset requested.")
 	return true
-}
-
-func RequestExit(exitCode int64) {
-	if platform.IsWeb() {
-		// Web resets instead of exiting.
-		abortCoroutinesAndReset(exitCode)
-		return
-	}
-	extMgr.RequestExit(exitCode)
 }

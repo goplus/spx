@@ -34,20 +34,6 @@ type Assignment struct {
 	Value string
 }
 
-func resolve(env []string) []string {
-	if env == nil {
-		return os.Environ()
-	}
-	return env
-}
-
-func canonicalKey(key string) string {
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(key)
-	}
-	return key
-}
-
 // Lookup finds one key and reports whether it occurred more than once.
 func Lookup(env []string, key string) (value string, found, duplicate bool) {
 	key = canonicalKey(key)
@@ -74,19 +60,6 @@ func HasNonEmpty(env []string, key string) bool {
 		}
 	}
 	return false
-}
-
-func filter(env []string, reject func(string) bool) []string {
-	base := resolve(env)
-	filtered := make([]string, 0, len(base))
-	for _, entry := range base {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok && reject(key) {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
 }
 
 // Without removes entries whose key is one of keys.
@@ -120,6 +93,49 @@ func SetMany(env []string, assignments ...Assignment) []string {
 	return setManyWithout(env, nil, assignments...)
 }
 
+// HostGoEnvironment returns the deterministic environment for a host Go
+// command. Ambient graph, target, and CGO selection cannot leak into it.
+func HostGoEnvironment(env []string, goWork string, cgoEnabled bool, removeKeys ...string) []string {
+	cgo := "0"
+	if cgoEnabled {
+		cgo = "1"
+	}
+	return setManyWithout(env, removeKeys,
+		Assignment{Key: "GOFLAGS", Value: NeutralGOFLAGS},
+		Assignment{Key: "GOWORK", Value: goWork},
+		Assignment{Key: "GOOS", Value: runtime.GOOS},
+		Assignment{Key: "GOARCH", Value: runtime.GOARCH},
+		Assignment{Key: "CGO_ENABLED", Value: cgo},
+	)
+}
+
+func resolve(env []string) []string {
+	if env == nil {
+		return os.Environ()
+	}
+	return env
+}
+
+func canonicalKey(key string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(key)
+	}
+	return key
+}
+
+func filter(env []string, reject func(string) bool) []string {
+	base := resolve(env)
+	filtered := make([]string, 0, len(base))
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok && reject(key) {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
 func setManyWithout(env []string, removeKeys []string, assignments ...Assignment) []string {
 	last := make(map[string]int, len(removeKeys)+len(assignments))
 	for _, key := range removeKeys {
@@ -138,20 +154,4 @@ func setManyWithout(env []string, removeKeys []string, assignments ...Assignment
 		}
 	}
 	return result
-}
-
-// HostGoEnvironment returns the deterministic environment for a host Go
-// command. Ambient graph, target, and CGO selection cannot leak into it.
-func HostGoEnvironment(env []string, goWork string, cgoEnabled bool, removeKeys ...string) []string {
-	cgo := "0"
-	if cgoEnabled {
-		cgo = "1"
-	}
-	return setManyWithout(env, removeKeys,
-		Assignment{Key: "GOFLAGS", Value: NeutralGOFLAGS},
-		Assignment{Key: "GOWORK", Value: goWork},
-		Assignment{Key: "GOOS", Value: runtime.GOOS},
-		Assignment{Key: "GOARCH", Value: runtime.GOARCH},
-		Assignment{Key: "CGO_ENABLED", Value: cgo},
-	)
 }

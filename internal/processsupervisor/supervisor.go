@@ -50,24 +50,6 @@ func (c *SignalCause) Error() string {
 	return fmt.Sprintf("processsupervisor: canceled by signal %s", c.Signal)
 }
 
-func signalFromContext(ctx context.Context) (os.Signal, bool) {
-	var cause *SignalCause
-	if !errors.As(context.Cause(ctx), &cause) || cause == nil || cause.Signal == nil {
-		return nil, false
-	}
-	return cause.Signal, true
-}
-
-func cancellationError(ctx context.Context, observed bool) error {
-	if !observed && ctx.Err() == nil {
-		return nil
-	}
-	if cause := context.Cause(ctx); cause != nil {
-		return cause
-	}
-	return context.Canceled
-}
-
 // Success reports whether the child exited normally with status zero.
 func (s Status) Success() bool { return s.Signal == 0 && s.Code == 0 }
 
@@ -87,4 +69,22 @@ func Run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 		return Status{}, errors.New("processsupervisor: command has already started")
 	}
 	return run(ctx, cmd)
+}
+
+func signalFromContext(ctx context.Context) (os.Signal, bool) {
+	var cause *SignalCause
+	if !errors.As(context.Cause(ctx), &cause) || cause == nil || cause.Signal == nil {
+		return nil, false
+	}
+	return cause.Signal, true
+}
+
+func cancellationError(ctx context.Context, observed bool) error {
+	if !observed && ctx.Err() == nil {
+		return nil
+	}
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	return context.Canceled
 }

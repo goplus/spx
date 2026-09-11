@@ -32,6 +32,23 @@ const (
 
 const DefaultQueuePolicy = QueueDropNewest
 
+type QueueStats struct {
+	enqueuedTotal  atomic.Uint64
+	droppedTotal   atomic.Uint64
+	maxQueueLen    atomic.Int64
+	lastDropUnixNs atomic.Int64
+}
+
+type QueueSnapshot struct {
+	Policy          string
+	QueueLen        int
+	QueueCap        int
+	MaxQueueLenSeen int
+	EnqueuedTotal   uint64
+	DroppedTotal    uint64
+	LastDropAt      time.Time
+}
+
 func (p QueuePolicy) String() string {
 	switch p {
 	case QueueDropOldest:
@@ -41,24 +58,6 @@ func (p QueuePolicy) String() string {
 	default:
 		return "DropNewest"
 	}
-}
-
-func ParsePolicy(policy string) QueuePolicy {
-	switch policy {
-	case "drop_oldest", "dropoldest", "DropOldest":
-		return QueueDropOldest
-	case "block", "Block":
-		return QueueBlock
-	default:
-		return DefaultQueuePolicy
-	}
-}
-
-type QueueStats struct {
-	enqueuedTotal  atomic.Uint64
-	droppedTotal   atomic.Uint64
-	maxQueueLen    atomic.Int64
-	lastDropUnixNs atomic.Int64
 }
 
 func (s *QueueStats) Reset() {
@@ -106,14 +105,15 @@ func (s *QueueStats) LastDropAt() time.Time {
 	return time.Time{}
 }
 
-type QueueSnapshot struct {
-	Policy          string
-	QueueLen        int
-	QueueCap        int
-	MaxQueueLenSeen int
-	EnqueuedTotal   uint64
-	DroppedTotal    uint64
-	LastDropAt      time.Time
+func ParsePolicy(policy string) QueuePolicy {
+	switch policy {
+	case "drop_oldest", "dropoldest", "DropOldest":
+		return QueueDropOldest
+	case "block", "Block":
+		return QueueBlock
+	default:
+		return DefaultQueuePolicy
+	}
 }
 
 func Snapshot(policy QueuePolicy, stats *QueueStats, queueLen, queueCap int) QueueSnapshot {

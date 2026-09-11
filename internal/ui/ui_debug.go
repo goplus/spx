@@ -23,12 +23,7 @@ type UiDebug struct {
 	input *UiNode
 }
 
-func NewUiDebug() *UiDebug {
-	panel := engine.NewUiNode[UiDebug]()
-	return panel
-}
-
-// !!Warning: this method is called from the engine callback context
+// OnStart binds UI nodes in the engine callback context.
 func (pself *UiDebug) OnStart() {
 	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "Label")
 }
@@ -37,4 +32,8 @@ func (pself *UiDebug) Show(msg string) {
 	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
 	mgr.UiMgr.SetVisible(pself.input.GetId(), msg != "")
 	mgr.UiMgr.SetText(pself.input.GetId(), msg)
+}
+
+func NewUiDebug() *UiDebug {
+	return engine.NewUiNode[UiDebug]()
 }

@@ -48,18 +48,6 @@ type LocalRuntimeManifest struct {
 	Pack           LocalRuntimeFile `json:"pack"`
 }
 
-// ParseLocalRuntimeManifest decodes and validates a local manifest.
-func ParseLocalRuntimeManifest(data []byte) (LocalRuntimeManifest, error) {
-	var manifest LocalRuntimeManifest
-	if err := strictjson.Decode(data, &manifest); err != nil {
-		return LocalRuntimeManifest{}, fmt.Errorf("decode local runtime manifest: %w", err)
-	}
-	if err := manifest.Validate(); err != nil {
-		return LocalRuntimeManifest{}, err
-	}
-	return manifest, nil
-}
-
 // Validate checks the manifest's local structure and file declarations.
 func (m LocalRuntimeManifest) Validate() error {
 	if m.Schema != localRuntimeManifestSchema {
@@ -85,19 +73,6 @@ func (m LocalRuntimeManifest) Validate() error {
 	}
 	if err := validateLocalRuntimeFile("pack", m.Pack); err != nil {
 		return err
-	}
-	return nil
-}
-
-func validateLocalRuntimeFile(label string, file LocalRuntimeFile) error {
-	if file.Name == "" || file.Name == "." || file.Name == ".." || filepath.Base(file.Name) != file.Name || strings.ContainsAny(file.Name, `/\\`) {
-		return fmt.Errorf("release: local runtime %s has invalid name %q", label, file.Name)
-	}
-	if file.Size <= 0 {
-		return fmt.Errorf("release: local runtime %s size must be positive", label)
-	}
-	if !isLowerHexDigest(file.SHA256, sha256.Size*2) {
-		return fmt.Errorf("release: local runtime %s has invalid SHA-256 %q", label, file.SHA256)
 	}
 	return nil
 }
@@ -137,6 +112,43 @@ func (m LocalRuntimeManifest) ValidateForVersion(lock RuntimeLock, goos, goarch 
 	return m.validateVersionAndTarget(lock, goos, goarch)
 }
 
+// JSON returns the canonical local manifest representation.
+func (m LocalRuntimeManifest) JSON() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode local runtime manifest: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// ParseLocalRuntimeManifest decodes and validates a local manifest.
+func ParseLocalRuntimeManifest(data []byte) (LocalRuntimeManifest, error) {
+	var manifest LocalRuntimeManifest
+	if err := strictjson.Decode(data, &manifest); err != nil {
+		return LocalRuntimeManifest{}, fmt.Errorf("decode local runtime manifest: %w", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		return LocalRuntimeManifest{}, err
+	}
+	return manifest, nil
+}
+
+// LocalRuntimeManifestPath returns the deterministic source-mode manifest
+// location for one locked host runtime.
+func LocalRuntimeManifestPath(repoRoot string, lock RuntimeLock, goos, goarch string) (string, error) {
+	if repoRoot == "" || !filepath.IsAbs(repoRoot) || filepath.Clean(repoRoot) != repoRoot {
+		return "", fmt.Errorf("release: local runtime repository root must be absolute and clean: %q", repoRoot)
+	}
+	spec, err := HostRuntimeSpecFor(lock, goos, goarch)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(repoRoot, ".spx", "runtime", lock.RuntimeVersion, spec.GOOS+"-"+spec.GOARCH, "engine-manifest.json"), nil
+}
+
 func (m LocalRuntimeManifest) validateVersionAndTarget(lock RuntimeLock, goos, goarch string) error {
 	if m.GOOS != goos || m.GOARCH != goarch {
 		return fmt.Errorf("release: local runtime target %s/%s does not match host %s/%s", m.GOOS, m.GOARCH, goos, goarch)
@@ -151,27 +163,15 @@ func (m LocalRuntimeManifest) validateVersionAndTarget(lock RuntimeLock, goos, g
 	return nil
 }
 
-// JSON returns the canonical local manifest representation.
-func (m LocalRuntimeManifest) JSON() ([]byte, error) {
-	if err := m.Validate(); err != nil {
-		return nil, err
+func validateLocalRuntimeFile(label string, file LocalRuntimeFile) error {
+	if file.Name == "" || file.Name == "." || file.Name == ".." || filepath.Base(file.Name) != file.Name || strings.ContainsAny(file.Name, `/\\`) {
+		return fmt.Errorf("release: local runtime %s has invalid name %q", label, file.Name)
 	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("encode local runtime manifest: %w", err)
+	if file.Size <= 0 {
+		return fmt.Errorf("release: local runtime %s size must be positive", label)
 	}
-	return append(data, '\n'), nil
-}
-
-// LocalRuntimeManifestPath returns the deterministic source-mode manifest
-// location for one locked host runtime.
-func LocalRuntimeManifestPath(repoRoot string, lock RuntimeLock, goos, goarch string) (string, error) {
-	if repoRoot == "" || !filepath.IsAbs(repoRoot) || filepath.Clean(repoRoot) != repoRoot {
-		return "", fmt.Errorf("release: local runtime repository root must be absolute and clean: %q", repoRoot)
+	if !isLowerHexDigest(file.SHA256, sha256.Size*2) {
+		return fmt.Errorf("release: local runtime %s has invalid SHA-256 %q", label, file.SHA256)
 	}
-	spec, err := HostRuntimeSpecFor(lock, goos, goarch)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(repoRoot, ".spx", "runtime", lock.RuntimeVersion, spec.GOOS+"-"+spec.GOARCH, "engine-manifest.json"), nil
+	return nil
 }

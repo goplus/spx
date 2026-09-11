@@ -31,6 +31,7 @@ import (
 )
 
 const fontsDir = "fonts"
+
 const defaultFontFamilyName = "default"
 
 type ProjectFontFamily struct {
@@ -38,10 +39,7 @@ type ProjectFontFamily struct {
 	Faces []ProjectFontFace
 }
 
-// ProjectFontFace keeps a resolved face as a first-class value even while the
-// project format only permits one regular face per family. Future face
-// selection metadata can be added here without flattening the family model
-// again throughout the runtime and engine bridge.
+// ProjectFontFace stores a resolved face; each family currently permits one regular face.
 type ProjectFontFace struct {
 	Path string
 }
@@ -73,6 +71,35 @@ func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) 
 		return ProjectFonts{}, err
 	}
 	return ProjectFonts{Families: families, Preferences: resolvedPreferences}, nil
+}
+
+func ResolveFontPreferences(value []string, families []ProjectFontFamily) ([]string, error) {
+	if value == nil {
+		return []string{defaultFontFamilyName}, nil
+	}
+	available := make(map[string]string, len(families)+1)
+	available[defaultFontFamilyName] = defaultFontFamilyName
+	for _, family := range families {
+		available[asciiFold(family.Name)] = family.Name
+	}
+	resolved := make([]string, 0, len(value))
+	seen := make(map[string]struct{}, len(value))
+	for _, name := range value {
+		if name == "" {
+			return nil, errors.New("font preference must be non-empty")
+		}
+		folded := asciiFold(name)
+		canonical, ok := available[folded]
+		if !ok {
+			return nil, fmt.Errorf("font preference %q is not an available font family", name)
+		}
+		if _, ok := seen[folded]; ok {
+			return nil, fmt.Errorf("font preference %q is duplicated after ASCII case folding", name)
+		}
+		seen[folded] = struct{}{}
+		resolved = append(resolved, canonical)
+	}
+	return resolved, nil
 }
 
 func loadProjectFontFamilies(fs spxfs.Dir) ([]ProjectFontFamily, error) {
@@ -233,35 +260,6 @@ func resolveFontFacePath(baseDir, relativePath string) (string, error) {
 	resolved := path.Join(baseDir, cleaned)
 	if resolved == baseDir || !strings.HasPrefix(resolved, baseDir+"/") {
 		return "", fmt.Errorf("font face path %q escapes its family directory", relativePath)
-	}
-	return resolved, nil
-}
-
-func ResolveFontPreferences(value []string, families []ProjectFontFamily) ([]string, error) {
-	if value == nil {
-		return []string{defaultFontFamilyName}, nil
-	}
-	available := make(map[string]string, len(families)+1)
-	available[defaultFontFamilyName] = defaultFontFamilyName
-	for _, family := range families {
-		available[asciiFold(family.Name)] = family.Name
-	}
-	resolved := make([]string, 0, len(value))
-	seen := make(map[string]struct{}, len(value))
-	for _, name := range value {
-		if name == "" {
-			return nil, errors.New("font preference must be non-empty")
-		}
-		folded := asciiFold(name)
-		canonical, ok := available[folded]
-		if !ok {
-			return nil, fmt.Errorf("font preference %q is not an available font family", name)
-		}
-		if _, ok := seen[folded]; ok {
-			return nil, fmt.Errorf("font preference %q is duplicated after ASCII case folding", name)
-		}
-		seen[folded] = struct{}{}
-		resolved = append(resolved, canonical)
 	}
 	return resolved, nil
 }

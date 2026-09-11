@@ -42,16 +42,6 @@ type frameCallbackQueue struct {
 	callbacks []scheduledFrameCallback
 }
 
-func currentFrameCallbackContext() frameCallbackContext {
-	callbackContext := frameCallbackContext{owner: GetGame()}
-	if gco == nil || !gco.IsInCoroutine() {
-		return callbackContext
-	}
-	callbackContext.source = gco.Current()
-	callbackContext.owner = callbackContext.source.Obj
-	return callbackContext
-}
-
 func (q *frameCallbackQueue) schedule(
 	frame int64,
 	callbackContext frameCallbackContext,
@@ -109,6 +99,22 @@ func (q *frameCallbackQueue) reset() {
 	q.mu.Unlock()
 }
 
+func (callback scheduledFrameCallback) canceled() bool {
+	// Normal coroutine completion does not cancel callbacks registered by it;
+	// only an explicit Stop or Abort marks the source stopped.
+	return callback.context.source != nil && callback.context.source.Stopped()
+}
+
+func currentFrameCallbackContext() frameCallbackContext {
+	callbackContext := frameCallbackContext{owner: GetGame()}
+	if gco == nil || !gco.IsInCoroutine() {
+		return callbackContext
+	}
+	callbackContext.source = gco.Current()
+	callbackContext.owner = callbackContext.source.Obj
+	return callbackContext
+}
+
 func executeFrameCallbacks(callbacks []scheduledFrameCallback) {
 	if len(callbacks) == 0 {
 		return
@@ -144,10 +150,4 @@ func executeFrameCallback(callback scheduledFrameCallback) {
 	if gco.IsInCoroutine() {
 		gco.JoinYieldedOrDone(thread)
 	}
-}
-
-func (callback scheduledFrameCallback) canceled() bool {
-	// Normal coroutine completion does not cancel callbacks registered by it;
-	// only an explicit Stop or Abort marks the source stopped.
-	return callback.context.source != nil && callback.context.source.Stopped()
 }

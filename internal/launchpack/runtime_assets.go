@@ -43,14 +43,6 @@ type runtimeAssetDependencies struct {
 	goBin     func(context.Context, Config, []string) (string, error)
 }
 
-func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
-	return runtimeAssetDependencies{
-		fetch:     fetchRuntimeURL,
-		cacheRoot: runtimebundle.DefaultCacheRoot,
-		goBin:     resolveGoBin,
-	}
-}
-
 type runtimeAssetSource struct {
 	manifest       release.RuntimeManifest
 	manifestSHA256 string
@@ -63,6 +55,14 @@ type localRuntimeSource struct {
 	bytes      []byte
 	enginePath string
 	packPath   string
+}
+
+func defaultRuntimeAssetDependencies() runtimeAssetDependencies {
+	return runtimeAssetDependencies{
+		fetch:     fetchRuntimeURL,
+		cacheRoot: runtimebundle.DefaultCacheRoot,
+		goBin:     resolveGoBin,
+	}
 }
 
 // acquireRuntimeAssets obtains one verified Engine/PCK pair.

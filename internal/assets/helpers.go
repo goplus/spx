@@ -23,6 +23,18 @@ const (
 	FullUVRange             = 1.0
 )
 
+// FrameDescriptor stores precomputed size and atlas metadata for a costume frame.
+type FrameDescriptor struct {
+	Width            int
+	Height           int
+	BitmapResolution int
+	ImageSize        mathf.Vec2
+	Center           mathf.Vec2
+	PosX             int
+	PosY             int
+	AtlasUVRect      mathf.Vec4
+}
+
 // ToBitmapResolution returns a valid bitmap resolution value.
 func ToBitmapResolution(v int) int {
 	if v == 0 {
@@ -51,18 +63,6 @@ func ResolveImageSize(cfgWidth, cfgHeight float64, imagePath string, fallback fu
 		return mathf.Vec2{X: cfgWidth, Y: cfgHeight}
 	}
 	return fallback(imagePath)
-}
-
-// FrameDescriptor stores precomputed size and atlas metadata for a costume frame.
-type FrameDescriptor struct {
-	Width            int
-	Height           int
-	BitmapResolution int
-	ImageSize        mathf.Vec2
-	Center           mathf.Vec2
-	PosX             int
-	PosY             int
-	AtlasUVRect      mathf.Vec4
 }
 
 // NewSizedFrame creates a descriptor for an in-memory sized frame.

@@ -106,6 +106,21 @@ func (p *Coroutines) ScriptRound() uint64 {
 	return p.scriptRound.Load()
 }
 
+// OnRestart marks the scheduler as not yet initialized.
+func (p *Coroutines) OnRestart() {
+	p.hasInited.Store(false)
+}
+
+// OnInited marks the scheduler as initialized.
+func (p *Coroutines) OnInited() {
+	p.hasInited.Store(true)
+}
+
+// SetPerfDebug enables or disables GC statistics collection during Update.
+func (p *Coroutines) SetPerfDebug(enabled bool) {
+	p.perfDebug.Store(enabled)
+}
+
 // New creates a coroutine manager. onPanic is called when a coroutine exits
 // with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
 func New(onPanic func(PanicReport)) *Coroutines {
@@ -123,21 +138,6 @@ func New(onPanic func(PanicReport)) *Coroutines {
 	p.schedulerCond = sync.NewCond(&p.schedulerMu)
 	p.redrawFrame.Store(-1)
 	return p
-}
-
-// OnRestart marks the scheduler as not yet initialized.
-func (p *Coroutines) OnRestart() {
-	p.hasInited.Store(false)
-}
-
-// OnInited marks the scheduler as initialized.
-func (p *Coroutines) OnInited() {
-	p.hasInited.Store(true)
-}
-
-// SetPerfDebug enables or disables GC statistics collection during Update.
-func (p *Coroutines) SetPerfDebug(enabled bool) {
-	p.perfDebug.Store(enabled)
 }
 
 // IsAbortThreadError reports whether err is the coroutine abort sentinel.

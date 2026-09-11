@@ -88,6 +88,35 @@ func Run(args []string) error {
 	}
 }
 
+func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
+	switch cfg.Target {
+	case "dev":
+		return buildDevWorkflow(workflowBuildDevConfig{webMode: cfg.Mode}, runner)
+	case "editor":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		return workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
+	case "desktop":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
+			return err
+		}
+		return runtimecmd.ExportPackRuntime(runner)
+	case "web":
+		return buildWebWorkflow(workflowBuildWebConfig{mode: cfg.Mode}, runner)
+	case "android", "ios":
+		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
+			return err
+		}
+		return workflowBuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
+	default:
+		return fmt.Errorf("unsupported build target: %s", cfg.Target)
+	}
+}
+
 func printWorkflowUsage() {
 	fmt.Fprintln(osStderr, "Usage: buildctl workflow <install-apk|list-demos|open-template-editor|run-demo|stop-web> [options]")
 	fmt.Fprintln(osStderr)
@@ -271,35 +300,6 @@ func runWorkflowStopWeb(args []string) error {
 
 	runner := shared.CommandRunner{RepoRoot: repoRoot}
 	return stopWebWorkflow(runner)
-}
-
-func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
-	switch cfg.Target {
-	case "dev":
-		return buildDevWorkflow(workflowBuildDevConfig{webMode: cfg.Mode}, runner)
-	case "editor":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
-		return workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
-	case "desktop":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
-		if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
-			return err
-		}
-		return runtimecmd.ExportPackRuntime(runner)
-	case "web":
-		return buildWebWorkflow(workflowBuildWebConfig{mode: cfg.Mode}, runner)
-	case "android", "ios":
-		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
-			return err
-		}
-		return workflowBuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
-	default:
-		return fmt.Errorf("unsupported build target: %s", cfg.Target)
-	}
 }
 
 func buildWebWorkflow(cfg workflowBuildWebConfig, runner shared.ScriptRunner) error {

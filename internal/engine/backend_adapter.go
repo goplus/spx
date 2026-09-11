@@ -30,6 +30,8 @@ var (
 	windowScale float64 = 1.0
 )
 
+type UiNode = gdx.UiNode
+
 func SetWindowScale(scale float64) {
 	windowScale = scale
 }
@@ -37,8 +39,6 @@ func SetWindowScale(scale float64) {
 func WindowScale() float64 {
 	return windowScale
 }
-
-type UiNode = gdx.UiNode
 
 func NewUiNode[T any]() *T {
 	var ret *T
@@ -102,12 +102,6 @@ func BridgeViewToWorld(pos Vec2) Vec2 {
 func BridgeWorldToView(pos Vec2) Vec2 {
 	cameraOffset, viewScale := bridgeCameraTransform()
 	return pos.Sub(cameraOffset).Mulf(viewScale)
-}
-
-func bridgeCameraTransform() (Vec2, float64) {
-	cameraMgr := Managers().CameraMgr
-	cameraPos := cameraMgr.GetPosition()
-	return cameraPos, cameraMgr.GetCameraZoom().X / WindowScale()
 }
 
 func ViewToWorld(pos Vec2) Vec2 {
@@ -181,4 +175,10 @@ func F32Tof64(slice []float32) []float64 {
 		out[i] = float64(v)
 	}
 	return out
+}
+
+func bridgeCameraTransform() (Vec2, float64) {
+	cameraMgr := Managers().CameraMgr
+	cameraPos := cameraMgr.GetPosition()
+	return cameraPos, cameraMgr.GetCameraZoom().X / WindowScale()
 }

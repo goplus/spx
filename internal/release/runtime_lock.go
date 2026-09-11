@@ -95,6 +95,97 @@ var (
 	runtimeLocksByVersion = mustLoadRuntimeLocks(embeddedRuntimeLocks, defaultRuntimeLock)
 )
 
+// RuntimeReleaseTag returns the Git tag that owns this runtime's atomic
+// release assets. The tag is part of the release convention, so storing it
+// beside RuntimeVersion would create two independently editable identities.
+func (l RuntimeLock) RuntimeReleaseTag() string {
+	return "runtime-v" + l.RuntimeVersion
+}
+
+// RuntimeAssetDownloadURL returns the immutable release URL for one asset in
+// this lock's atomic runtime bundle.
+func (l RuntimeLock) RuntimeAssetDownloadURL(assetName string) string {
+	return "https://github.com/" + l.ReleaseRepository + "/releases/download/" + l.RuntimeReleaseTag() + "/" + assetName
+}
+
+// Validate checks the runtime lock's identity, source pins, paths, toolchains,
+// and required asset names.
+func (l RuntimeLock) Validate() error {
+	if l.Schema != RuntimeLockSchema {
+		return fmt.Errorf("release: runtime lock schema = %d, want %d", l.Schema, RuntimeLockSchema)
+	}
+	if !runtimeVersionPattern.MatchString(l.RuntimeVersion) {
+		return fmt.Errorf("release: invalid runtime version %q", l.RuntimeVersion)
+	}
+	if l.RuntimeABI <= 0 {
+		return fmt.Errorf("release: runtime ABI must be positive")
+	}
+	if !releaseRepositoryPattern.MatchString(l.ReleaseRepository) {
+		return fmt.Errorf("release: invalid release repository %q", l.ReleaseRepository)
+	}
+	if err := validateBaseName("manifest", l.Manifest); err != nil {
+		return err
+	}
+	if len(l.RequiredAssets) == 0 {
+		return errors.New("release: required_assets must not be empty")
+	}
+	if !slices.IsSorted(l.RequiredAssets) {
+		return errors.New("release: required_assets must be sorted by name")
+	}
+	seenAssets := make(map[string]struct{}, len(l.RequiredAssets))
+	for _, name := range l.RequiredAssets {
+		if err := validateBaseName("required asset", name); err != nil {
+			return err
+		}
+		if name == l.Manifest {
+			return fmt.Errorf("release: required asset %q conflicts with manifest", name)
+		}
+		if _, ok := seenAssets[name]; ok {
+			return fmt.Errorf("release: duplicate required asset basename %q", name)
+		}
+		seenAssets[name] = struct{}{}
+	}
+
+	if !godotRepositoryPattern.MatchString(l.Godot.Repository) {
+		return fmt.Errorf("release: invalid canonical Godot repository %q", l.Godot.Repository)
+	}
+	if l.Godot.Ref == "" || strings.IndexFunc(l.Godot.Ref, isWhitespaceOrControl) >= 0 {
+		return errors.New("release: Godot ref must be non-empty without whitespace or control characters")
+	}
+	if !gitCommitPattern.MatchString(l.Godot.Commit) {
+		return fmt.Errorf("release: Godot commit %q must be a 40-character lowercase SHA-1", l.Godot.Commit)
+	}
+	if l.Godot.Version == "" || strings.IndexFunc(l.Godot.Version, isWhitespaceOrControl) >= 0 {
+		return errors.New("release: Godot version must be non-empty without whitespace or control characters")
+	}
+	if err := validateRelativePath("module path", l.Module.Path); err != nil {
+		return err
+	}
+	return validateToolchainLock(l.Toolchain)
+}
+
+// JSON returns the validated, canonical, human-readable lock representation.
+func (l RuntimeLock) JSON() ([]byte, error) {
+	if err := l.Validate(); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(l, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode runtime lock: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// SHA256 returns the digest of the canonical JSON representation of the lock.
+func (l RuntimeLock) SHA256() (string, error) {
+	data, err := l.JSON()
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 // DefaultRuntimeLock returns a copy of the runtime lock embedded in this package.
 func DefaultRuntimeLock() RuntimeLock {
 	return cloneRuntimeLock(defaultRuntimeLock)
@@ -111,17 +202,17 @@ func RuntimeLockForVersion(runtimeVersion string) (RuntimeLock, error) {
 	return cloneRuntimeLock(lock), nil
 }
 
-// RuntimeReleaseTag returns the Git tag that owns this runtime's atomic
-// release assets. The tag is part of the release convention, so storing it
-// beside RuntimeVersion would create two independently editable identities.
-func (l RuntimeLock) RuntimeReleaseTag() string {
-	return "runtime-v" + l.RuntimeVersion
-}
-
-// RuntimeAssetDownloadURL returns the immutable release URL for one asset in
-// this lock's atomic runtime bundle.
-func (l RuntimeLock) RuntimeAssetDownloadURL(assetName string) string {
-	return "https://github.com/" + l.ReleaseRepository + "/releases/download/" + l.RuntimeReleaseTag() + "/" + assetName
+// ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields
+// are rejected so misspelled release inputs cannot silently change a build.
+func ParseRuntimeLock(data []byte) (RuntimeLock, error) {
+	var lock RuntimeLock
+	if err := strictjson.Decode(data, &lock); err != nil {
+		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
+	}
+	if err := lock.Validate(); err != nil {
+		return RuntimeLock{}, err
+	}
+	return lock, nil
 }
 
 func mustParseRuntimeLock(data []byte) RuntimeLock {
@@ -182,75 +273,6 @@ func cloneRuntimeLock(lock RuntimeLock) RuntimeLock {
 	return lock
 }
 
-// ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields
-// are rejected so misspelled release inputs cannot silently change a build.
-func ParseRuntimeLock(data []byte) (RuntimeLock, error) {
-	var lock RuntimeLock
-	if err := strictjson.Decode(data, &lock); err != nil {
-		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
-	}
-	if err := lock.Validate(); err != nil {
-		return RuntimeLock{}, err
-	}
-	return lock, nil
-}
-
-// Validate checks the runtime lock's identity, source pins, paths, toolchains,
-// and required asset names.
-func (l RuntimeLock) Validate() error {
-	if l.Schema != RuntimeLockSchema {
-		return fmt.Errorf("release: runtime lock schema = %d, want %d", l.Schema, RuntimeLockSchema)
-	}
-	if !runtimeVersionPattern.MatchString(l.RuntimeVersion) {
-		return fmt.Errorf("release: invalid runtime version %q", l.RuntimeVersion)
-	}
-	if l.RuntimeABI <= 0 {
-		return fmt.Errorf("release: runtime ABI must be positive")
-	}
-	if !releaseRepositoryPattern.MatchString(l.ReleaseRepository) {
-		return fmt.Errorf("release: invalid release repository %q", l.ReleaseRepository)
-	}
-	if err := validateBaseName("manifest", l.Manifest); err != nil {
-		return err
-	}
-	if len(l.RequiredAssets) == 0 {
-		return errors.New("release: required_assets must not be empty")
-	}
-	if !slices.IsSorted(l.RequiredAssets) {
-		return errors.New("release: required_assets must be sorted by name")
-	}
-	seenAssets := make(map[string]struct{}, len(l.RequiredAssets))
-	for _, name := range l.RequiredAssets {
-		if err := validateBaseName("required asset", name); err != nil {
-			return err
-		}
-		if name == l.Manifest {
-			return fmt.Errorf("release: required asset %q conflicts with manifest", name)
-		}
-		if _, ok := seenAssets[name]; ok {
-			return fmt.Errorf("release: duplicate required asset basename %q", name)
-		}
-		seenAssets[name] = struct{}{}
-	}
-
-	if !godotRepositoryPattern.MatchString(l.Godot.Repository) {
-		return fmt.Errorf("release: invalid canonical Godot repository %q", l.Godot.Repository)
-	}
-	if l.Godot.Ref == "" || strings.IndexFunc(l.Godot.Ref, isWhitespaceOrControl) >= 0 {
-		return errors.New("release: Godot ref must be non-empty without whitespace or control characters")
-	}
-	if !gitCommitPattern.MatchString(l.Godot.Commit) {
-		return fmt.Errorf("release: Godot commit %q must be a 40-character lowercase SHA-1", l.Godot.Commit)
-	}
-	if l.Godot.Version == "" || strings.IndexFunc(l.Godot.Version, isWhitespaceOrControl) >= 0 {
-		return errors.New("release: Godot version must be non-empty without whitespace or control characters")
-	}
-	if err := validateRelativePath("module path", l.Module.Path); err != nil {
-		return err
-	}
-	return validateToolchainLock(l.Toolchain)
-}
-
 func validateToolchainLock(toolchain ToolchainLock) error {
 	toolchainVersions := []struct {
 		name  string
@@ -272,28 +294,6 @@ func validateToolchainLock(toolchain ToolchainLock) error {
 		return fmt.Errorf("release: JDK toolchain version %q must be a positive major version", toolchain.JDK)
 	}
 	return nil
-}
-
-// JSON returns the validated, canonical, human-readable lock representation.
-func (l RuntimeLock) JSON() ([]byte, error) {
-	if err := l.Validate(); err != nil {
-		return nil, err
-	}
-	data, err := json.MarshalIndent(l, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("encode runtime lock: %w", err)
-	}
-	return append(data, '\n'), nil
-}
-
-// SHA256 returns the digest of the canonical JSON representation of the lock.
-func (l RuntimeLock) SHA256() (string, error) {
-	data, err := l.JSON()
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
 }
 
 func validateBaseName(kind, name string) error {

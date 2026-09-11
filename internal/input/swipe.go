@@ -129,6 +129,18 @@ func (sr *SwipeRecognizer) checkForSwipeCompletion() (SwipeResult, bool) {
 	}, true
 }
 
+func (sr *SwipeRecognizer) nowTime() time.Time {
+	now := sr.now
+	if now == nil {
+		now = time.Now
+	}
+	return now()
+}
+
+func (sr *SwipeRecognizer) elapsedSeconds() float64 {
+	return sr.nowTime().Sub(sr.startTime).Seconds()
+}
+
 func calculateDirection(startPoint, endPoint mathf.Vec2) float64 {
 	delta := endPoint.Sub(startPoint)
 	angle := engine.RadToDeg(math.Atan2(delta.Y, delta.X))
@@ -147,16 +159,4 @@ func calculateDirection(startPoint, endPoint mathf.Vec2) float64 {
 	default:
 		return -1
 	}
-}
-
-func (sr *SwipeRecognizer) nowTime() time.Time {
-	now := sr.now
-	if now == nil {
-		now = time.Now
-	}
-	return now()
-}
-
-func (sr *SwipeRecognizer) elapsedSeconds() float64 {
-	return sr.nowTime().Sub(sr.startTime).Seconds()
 }

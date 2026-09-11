@@ -62,6 +62,17 @@ func Run(args []string) error {
 	}
 }
 
+func InstallTools(cfg InstallConfig, runner shared.ScriptRunner) error {
+	var args []string
+	if cfg.Web {
+		args = append(args, "--web")
+	}
+	if cfg.NoEmbedRuntime {
+		args = append(args, "--no-embed-runtime")
+	}
+	return runner.RunScript("cmd/spx/install.sh", args...)
+}
+
 func printToolUsage() {
 	fmt.Fprintln(osStderr, "Usage: buildctl tool <clean-assets|install|setup-emsdk|setup-jdk|setup-ndk|setup-scons> [options]")
 	fmt.Fprintln(osStderr)
@@ -162,15 +173,4 @@ func runToolSetupEMSDK(args []string) error {
 		return err
 	}
 	return SetupEMSDK()
-}
-
-func InstallTools(cfg InstallConfig, runner shared.ScriptRunner) error {
-	var args []string
-	if cfg.Web {
-		args = append(args, "--web")
-	}
-	if cfg.NoEmbedRuntime {
-		args = append(args, "--no-embed-runtime")
-	}
-	return runner.RunScript("cmd/spx/install.sh", args...)
 }

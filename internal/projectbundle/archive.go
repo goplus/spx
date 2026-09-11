@@ -29,9 +29,26 @@ import (
 
 var canonicalZipTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 
+type archiveLimitWriter struct {
+	writer    io.Writer
+	remaining int64
+}
+
 // String returns the lowercase hexadecimal SHA-256.
 func (d Digest) String() string {
 	return hex.EncodeToString(d[:])
+}
+
+func (w *archiveLimitWriter) Write(data []byte) (int, error) {
+	if int64(len(data)) > w.remaining {
+		return 0, fmt.Errorf("%w: ZIP exceeds archive byte limit", ErrLimit)
+	}
+	n, err := w.writer.Write(data)
+	w.remaining -= int64(n)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 // WriteArchive collects cfg and writes its canonical ZIP to w.
@@ -80,21 +97,4 @@ func (b *bundle) writeZIP(w io.Writer) (Digest, error) {
 	var digest Digest
 	copy(digest[:], hasher.Sum(nil))
 	return digest, nil
-}
-
-type archiveLimitWriter struct {
-	writer    io.Writer
-	remaining int64
-}
-
-func (w *archiveLimitWriter) Write(data []byte) (int, error) {
-	if int64(len(data)) > w.remaining {
-		return 0, fmt.Errorf("%w: ZIP exceeds archive byte limit", ErrLimit)
-	}
-	n, err := w.writer.Write(data)
-	w.remaining -= int64(n)
-	if err == nil && n != len(data) {
-		err = io.ErrShortWrite
-	}
-	return n, err
 }

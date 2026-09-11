@@ -57,6 +57,10 @@ func TestGetCharWidth(t *testing.T) {
 		{"chinese character", '你', doubleCharWidth},
 		{"chinese character 2", '好', doubleCharWidth},
 		{"non-ascii character", 'é', doubleCharWidth},
+		{"tab", '\t', doubleCharWidth},
+		{"newline", '\n', doubleCharWidth},
+		{"delete", '\x7f', doubleCharWidth},
+		{"invalid rune", -1, doubleCharWidth},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -32,11 +32,11 @@ var (
 	isWebIntepreterMode bool
 )
 
+type linkerBridge struct{}
+
 func init() {
 	gdspx.SetLinkerBridge(linkerBridge{})
 }
-
-type linkerBridge struct{}
 
 func (linkerBridge) IsWebIntepreterMode() bool {
 	return IsWebIntepreterMode()

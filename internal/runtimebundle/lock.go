@@ -51,25 +51,9 @@ type LockLease interface {
 // Windows.
 type CrossProcessLockProvider struct{}
 
-func (CrossProcessLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
-	return acquirePlatformFileLock(ctx, key, lockExclusive)
-}
-
-func (CrossProcessLockProvider) AcquireShared(ctx context.Context, key string) (LockLease, error) {
-	return acquirePlatformFileLock(ctx, key, lockShared)
-}
-
 // UnsupportedCrossProcessLockProvider is retained as an explicit fail-closed
 // test seam. It is not used by NewCache.
 type UnsupportedCrossProcessLockProvider struct{}
-
-func (UnsupportedCrossProcessLockProvider) AcquireExclusive(context.Context, string) (LockLease, error) {
-	return nil, ErrCrossProcessLockUnsupported
-}
-
-func (UnsupportedCrossProcessLockProvider) AcquireShared(context.Context, string) (LockLease, error) {
-	return nil, ErrCrossProcessLockUnsupported
-}
 
 // ProcessLockProvider is an explicitly opt-in process-local implementation.
 // It is useful for tests which deliberately do not share a cache root across
@@ -84,6 +68,66 @@ type processGate struct {
 
 var processLocks sync.Map // map[string]*processGate
 
+type processLease struct {
+	gate *processGate
+	mode lockMode
+	once sync.Once
+}
+
+type lockMode uint8
+
+const (
+	lockShared lockMode = iota
+	lockExclusive
+)
+
+type fileLease struct {
+	file platformLockFile
+	once sync.Once
+	err  error
+}
+
+type rootedPlatformLockFile struct {
+	file     rawPlatformLockFile
+	rootPath string
+	root     *os.Root
+	name     string
+	ownsRoot bool
+}
+
+// platformLockFile is implemented in lock_posix.go, lock_windows.go, or the
+// explicit unsupported fallback for platforms without an OS lock primitive.
+type rawPlatformLockFile interface {
+	tryLock(lockMode) (bool, error)
+	unlock() error
+	close() error
+	stat() (os.FileInfo, error)
+	protect() error
+}
+
+type platformLockFile interface {
+	tryLock(lockMode) (bool, error)
+	unlock() error
+	close() error
+	validate() error
+}
+
+func (CrossProcessLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
+	return acquirePlatformFileLock(ctx, key, lockExclusive)
+}
+
+func (CrossProcessLockProvider) AcquireShared(ctx context.Context, key string) (LockLease, error) {
+	return acquirePlatformFileLock(ctx, key, lockShared)
+}
+
+func (UnsupportedCrossProcessLockProvider) AcquireExclusive(context.Context, string) (LockLease, error) {
+	return nil, ErrCrossProcessLockUnsupported
+}
+
+func (UnsupportedCrossProcessLockProvider) AcquireShared(context.Context, string) (LockLease, error) {
+	return nil, ErrCrossProcessLockUnsupported
+}
+
 func (ProcessLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
 	return acquireProcessLock(ctx, key, lockExclusive)
 }
@@ -92,23 +136,24 @@ func (ProcessLockProvider) AcquireShared(ctx context.Context, key string) (LockL
 	return acquireProcessLock(ctx, key, lockShared)
 }
 
-func acquireProcessLock(ctx context.Context, key string, mode lockMode) (LockLease, error) {
-	if key == "" {
-		return nil, fmt.Errorf("runtimebundle: empty cache lock key")
+func (l *processLease) Close() error {
+	if l == nil {
+		return nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
+	l.once.Do(func() { l.gate.release(l.mode) })
+	return nil
+}
+
+func (l *fileLease) Close() error {
+	if l == nil {
+		return nil
 	}
-	value, _ := processLocks.LoadOrStore(key, &processGate{})
-	gate := value.(*processGate)
-	for {
-		if gate.tryAcquire(mode) {
-			return &processLease{gate: gate, mode: mode}, nil
-		}
-		if err := waitForLock(ctx); err != nil {
-			return nil, err
-		}
-	}
+	l.once.Do(func() {
+		unlockErr := l.file.unlock()
+		closeErr := l.file.close()
+		l.err = errors.Join(unlockErr, closeErr)
+	})
+	return l.err
 }
 
 func (g *processGate) tryAcquire(mode lockMode) bool {
@@ -140,43 +185,72 @@ func (g *processGate) release(mode lockMode) {
 	}
 }
 
-type processLease struct {
-	gate *processGate
-	mode lockMode
-	once sync.Once
+func (f *rootedPlatformLockFile) tryLock(mode lockMode) (bool, error) {
+	return f.file.tryLock(mode)
 }
 
-func (l *processLease) Close() error {
-	if l == nil {
-		return nil
+func (f *rootedPlatformLockFile) unlock() error { return f.file.unlock() }
+
+func (f *rootedPlatformLockFile) close() error {
+	fileErr := f.file.close()
+	if !f.ownsRoot {
+		return fileErr
 	}
-	l.once.Do(func() { l.gate.release(l.mode) })
+	return errors.Join(fileErr, f.root.Close())
+}
+
+func (f *rootedPlatformLockFile) validate() error {
+	if err := f.validateIdentity(); err != nil {
+		return err
+	}
+	pathInfo, err := f.root.Lstat(f.name)
+	if err != nil {
+		return fmt.Errorf("%w: lock sidecar pathname changed: %v", ErrUnsafeArchive, err)
+	}
+	if runtimeIsUnix() && pathInfo.Mode().Perm() != 0o600 {
+		return fmt.Errorf("%w: lock sidecar is not private: %s", ErrUnsafeArchive, f.name)
+	}
+	return verifyPrivateRootPath(f.root, f.name)
+}
+
+func (f *rootedPlatformLockFile) validateIdentity() error {
+	if err := checkPinnedRootPath(f.rootPath, f.root); err != nil {
+		return err
+	}
+	pathInfo, err := f.root.Lstat(f.name)
+	if err != nil {
+		return fmt.Errorf("%w: lock sidecar pathname changed: %v", ErrUnsafeArchive, err)
+	}
+	if pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.Mode().IsRegular() {
+		return fmt.Errorf("%w: lock sidecar is not a regular non-symlink file: %s", ErrUnsafeArchive, f.name)
+	}
+	opened, err := f.file.stat()
+	if err != nil {
+		return err
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(pathInfo, opened) {
+		return fmt.Errorf("%w: lock sidecar pathname was replaced: %s", ErrUnsafeArchive, f.name)
+	}
 	return nil
 }
 
-type lockMode uint8
-
-const (
-	lockShared lockMode = iota
-	lockExclusive
-)
-
-type fileLease struct {
-	file platformLockFile
-	once sync.Once
-	err  error
-}
-
-func (l *fileLease) Close() error {
-	if l == nil {
-		return nil
+func acquireProcessLock(ctx context.Context, key string, mode lockMode) (LockLease, error) {
+	if key == "" {
+		return nil, fmt.Errorf("runtimebundle: empty cache lock key")
 	}
-	l.once.Do(func() {
-		unlockErr := l.file.unlock()
-		closeErr := l.file.close()
-		l.err = errors.Join(unlockErr, closeErr)
-	})
-	return l.err
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	value, _ := processLocks.LoadOrStore(key, &processGate{})
+	gate := value.(*processGate)
+	for {
+		if gate.tryAcquire(mode) {
+			return &processLease{gate: gate, mode: mode}, nil
+		}
+		if err := waitForLock(ctx); err != nil {
+			return nil, err
+		}
+	}
 }
 
 func acquirePlatformFileLock(ctx context.Context, key string, mode lockMode) (LockLease, error) {
@@ -251,14 +325,6 @@ func openPlatformLockFile(path string) (platformLockFile, error) {
 	return file, nil
 }
 
-type rootedPlatformLockFile struct {
-	file     rawPlatformLockFile
-	rootPath string
-	root     *os.Root
-	name     string
-	ownsRoot bool
-}
-
 func openPlatformRootLockFile(rootPath string, root *os.Root, name string, ownsRoot bool) (platformLockFile, error) {
 	if root == nil {
 		return nil, fmt.Errorf("runtimebundle: nil pinned lock root")
@@ -307,55 +373,6 @@ func openPlatformRootLockFile(rootPath string, root *os.Root, name string, ownsR
 	}
 	closeRaw = false
 	return file, nil
-}
-
-func (f *rootedPlatformLockFile) tryLock(mode lockMode) (bool, error) {
-	return f.file.tryLock(mode)
-}
-
-func (f *rootedPlatformLockFile) unlock() error { return f.file.unlock() }
-
-func (f *rootedPlatformLockFile) close() error {
-	fileErr := f.file.close()
-	if !f.ownsRoot {
-		return fileErr
-	}
-	return errors.Join(fileErr, f.root.Close())
-}
-
-func (f *rootedPlatformLockFile) validate() error {
-	if err := f.validateIdentity(); err != nil {
-		return err
-	}
-	pathInfo, err := f.root.Lstat(f.name)
-	if err != nil {
-		return fmt.Errorf("%w: lock sidecar pathname changed: %v", ErrUnsafeArchive, err)
-	}
-	if runtimeIsUnix() && pathInfo.Mode().Perm() != 0o600 {
-		return fmt.Errorf("%w: lock sidecar is not private: %s", ErrUnsafeArchive, f.name)
-	}
-	return verifyPrivateRootPath(f.root, f.name)
-}
-
-func (f *rootedPlatformLockFile) validateIdentity() error {
-	if err := checkPinnedRootPath(f.rootPath, f.root); err != nil {
-		return err
-	}
-	pathInfo, err := f.root.Lstat(f.name)
-	if err != nil {
-		return fmt.Errorf("%w: lock sidecar pathname changed: %v", ErrUnsafeArchive, err)
-	}
-	if pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.Mode().IsRegular() {
-		return fmt.Errorf("%w: lock sidecar is not a regular non-symlink file: %s", ErrUnsafeArchive, f.name)
-	}
-	opened, err := f.file.stat()
-	if err != nil {
-		return err
-	}
-	if !opened.Mode().IsRegular() || !os.SameFile(pathInfo, opened) {
-		return fmt.Errorf("%w: lock sidecar pathname was replaced: %s", ErrUnsafeArchive, f.name)
-	}
-	return nil
 }
 
 func openOrCreateLockParent(parent string) (*os.Root, error) {
@@ -407,20 +424,3 @@ func waitForLock(ctx context.Context) error {
 }
 
 func runtimeIsWindows() bool { return runtime.GOOS == "windows" }
-
-// platformLockFile is implemented in lock_posix.go, lock_windows.go, or the
-// explicit unsupported fallback for platforms without an OS lock primitive.
-type rawPlatformLockFile interface {
-	tryLock(lockMode) (bool, error)
-	unlock() error
-	close() error
-	stat() (os.FileInfo, error)
-	protect() error
-}
-
-type platformLockFile interface {
-	tryLock(lockMode) (bool, error)
-	unlock() error
-	close() error
-	validate() error
-}

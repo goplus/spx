@@ -29,6 +29,22 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
+type OpenedBuilderResources struct {
+	AssetDir string
+	FS       spxfs.Dir
+	LoadedBuilderProject
+}
+
+type LoadedSpriteConfig struct {
+	BaseDir string
+	Config  SpriteConfig
+}
+
+type LoadedSoundConfig struct {
+	BaseDir string
+	Config  SoundConfig
+}
+
 func AssetDirFromResource(resource any) (string, bool) {
 	switch v := resource.(type) {
 	case string:
@@ -49,12 +65,6 @@ func ResourceDir(resource any) (spxfs.Dir, error) {
 		return nil, fmt.Errorf("unsupported resource type %T", resource)
 	}
 	return spxfs.Open(path)
-}
-
-type OpenedBuilderResources struct {
-	AssetDir string
-	FS       spxfs.Dir
-	LoadedBuilderProject
 }
 
 func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResources, error) {
@@ -102,6 +112,45 @@ func LoadJSON(ret any, fs spxfs.Dir, file string) error {
 	return decodeJSON(f, ret)
 }
 
+func LoadConfig(ret any, fs spxfs.Dir, index any) error {
+	switch v := index.(type) {
+	case io.Reader:
+		return decodeJSON(v, ret)
+	case string:
+		return LoadJSON(ret, fs, v)
+	case nil:
+		return LoadJSON(ret, fs, "index.json")
+	default:
+		return syscall.EINVAL
+	}
+}
+
+func LoadSpriteConfig(fs spxfs.Dir, name string) (LoadedSpriteConfig, error) {
+	baseDir := path.Join("sprites", name) + "/"
+	var conf SpriteConfig
+	if err := LoadJSON(&conf, fs, baseDir+"index.json"); err != nil {
+		return LoadedSpriteConfig{}, err
+	}
+	normalizeSpriteConfigPaths(&conf, strings.TrimSuffix(baseDir, "/"))
+	return LoadedSpriteConfig{
+		BaseDir: baseDir,
+		Config:  conf,
+	}, nil
+}
+
+func LoadSoundConfig(fs spxfs.Dir, name string) (LoadedSoundConfig, error) {
+	baseDir := path.Join("sounds", name)
+	var conf SoundConfig
+	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
+		return LoadedSoundConfig{}, err
+	}
+	conf.Path = normalizeConfigPath(baseDir, conf.Path)
+	return LoadedSoundConfig{
+		BaseDir: baseDir,
+		Config:  conf,
+	}, nil
+}
+
 func decodeJSON(r io.Reader, ret any) error {
 	dec := json.NewDecoder(r)
 	if err := dec.Decode(ret); err != nil {
@@ -128,19 +177,6 @@ func gdAssetDir(fs spxfs.Dir) (string, bool) {
 func shouldReadConfigFromEngine(assetDir string) bool {
 	schema, _ := spxfs.SplitSchema(assetDir)
 	return schema != ""
-}
-
-func LoadConfig(ret any, fs spxfs.Dir, index any) error {
-	switch v := index.(type) {
-	case io.Reader:
-		return decodeJSON(v, ret)
-	case string:
-		return LoadJSON(ret, fs, v)
-	case nil:
-		return LoadJSON(ret, fs, "index.json")
-	default:
-		return syscall.EINVAL
-	}
 }
 
 func normalizeConfigPath(configDir, relPath string) string {
@@ -188,40 +224,4 @@ func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
 	if conf.CostumeMPSet != nil {
 		conf.CostumeMPSet.Path = normalizeConfigPath(configDir, conf.CostumeMPSet.Path)
 	}
-}
-
-type LoadedSpriteConfig struct {
-	BaseDir string
-	Config  SpriteConfig
-}
-
-func LoadSpriteConfig(fs spxfs.Dir, name string) (LoadedSpriteConfig, error) {
-	baseDir := path.Join("sprites", name) + "/"
-	var conf SpriteConfig
-	if err := LoadJSON(&conf, fs, baseDir+"index.json"); err != nil {
-		return LoadedSpriteConfig{}, err
-	}
-	normalizeSpriteConfigPaths(&conf, strings.TrimSuffix(baseDir, "/"))
-	return LoadedSpriteConfig{
-		BaseDir: baseDir,
-		Config:  conf,
-	}, nil
-}
-
-type LoadedSoundConfig struct {
-	BaseDir string
-	Config  SoundConfig
-}
-
-func LoadSoundConfig(fs spxfs.Dir, name string) (LoadedSoundConfig, error) {
-	baseDir := path.Join("sounds", name)
-	var conf SoundConfig
-	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
-		return LoadedSoundConfig{}, err
-	}
-	conf.Path = normalizeConfigPath(baseDir, conf.Path)
-	return LoadedSoundConfig{
-		BaseDir: baseDir,
-		Config:  conf,
-	}, nil
 }

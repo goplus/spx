@@ -18,13 +18,6 @@
 
 package webffi
 
-// Direct wasm exports bypass js.FuncOf and the generic event dispatcher for
-// non-string callback entry from JS into Go.
-
-func directBool(value uint32) bool {
-	return value != 0
-}
-
 //go:wasmexport gdspx_on_engine_update
 func GdspxOnEngineUpdate(delta float64) {
 	SyncWebInputSnapshot()
@@ -272,4 +265,11 @@ func GdspxOnUiToggle(obj int64, isOn uint32) {
 	if callbacks.OnUiToggle != nil {
 		callbacks.OnUiToggle(obj, directBool(isOn))
 	}
+}
+
+// Direct wasm exports bypass js.FuncOf and the generic event dispatcher for
+// non-string callback entry from JS into Go.
+
+func directBool(value uint32) bool {
+	return value != 0
 }

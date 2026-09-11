@@ -37,26 +37,6 @@ type windowsLockFile struct {
 	locked     bool
 }
 
-func openPlatformLockFileImpl(root *os.Root, name string) (rawPlatformLockFile, error) {
-	for attempt := 0; attempt < 16; attempt++ {
-		file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
-		if err == nil {
-			return &windowsLockFile{file: file}, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		file, err = root.OpenFile(name, os.O_RDWR, 0)
-		if err == nil {
-			return &windowsLockFile{file: file}, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-	}
-	return nil, fmt.Errorf("runtimebundle: lock sidecar changed repeatedly while opening: %s", name)
-}
-
 func (f *windowsLockFile) tryLock(mode lockMode) (bool, error) {
 	flags := uint32(lockFileFailImmediately)
 	if mode == lockExclusive {
@@ -86,5 +66,25 @@ func (f *windowsLockFile) close() error { return f.file.Close() }
 func (f *windowsLockFile) stat() (os.FileInfo, error) { return f.file.Stat() }
 
 func (f *windowsLockFile) protect() error { return nil }
+
+func openPlatformLockFileImpl(root *os.Root, name string) (rawPlatformLockFile, error) {
+	for attempt := 0; attempt < 16; attempt++ {
+		file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+		if err == nil {
+			return &windowsLockFile{file: file}, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		file, err = root.OpenFile(name, os.O_RDWR, 0)
+		if err == nil {
+			return &windowsLockFile{file: file}, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("runtimebundle: lock sidecar changed repeatedly while opening: %s", name)
+}
 
 func validateLockParentSecurity(path string) error { return verifyPrivateDACL(path) }

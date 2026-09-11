@@ -37,15 +37,6 @@ type PenSyncBuffer struct {
 	data  []float32
 }
 
-func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
-	if capacity < 1 {
-		capacity = 1
-	}
-	return &PenSyncBuffer{
-		data: make([]float32, 1, 1+capacity*PenBatchFields),
-	}
-}
-
 func (b *PenSyncBuffer) AddMove(obj Object, x, y float64) bool {
 	return b.add(PenBatchMove, obj, x, y, 0, 0)
 }
@@ -64,23 +55,6 @@ func (b *PenSyncBuffer) AddColor(obj Object, r, g, blue, a float64) bool {
 
 func (b *PenSyncBuffer) AddSetSize(obj Object, size float64) bool {
 	return b.add(PenBatchSetSize, obj, size, 0, 0, 0)
-}
-
-func (b *PenSyncBuffer) add(command int, obj Object, a, bval, c, d float64) bool {
-	low, high := splitInt64BitsToFloat32(int64(obj))
-
-	b.data = append(b.data,
-		float32(command),
-		low,
-		high,
-		float32(a),
-		float32(bval),
-		float32(c),
-		float32(d),
-		0,
-	)
-	b.count++
-	return b.count >= maxPenBatchCommands
 }
 
 // Flush exposes the reusable command slice synchronously and clears it only
@@ -113,6 +87,32 @@ func (b *PenSyncBuffer) Discard() {
 		return
 	}
 	b.reset()
+}
+
+func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
+	if capacity < 1 {
+		capacity = 1
+	}
+	return &PenSyncBuffer{
+		data: make([]float32, 1, 1+capacity*PenBatchFields),
+	}
+}
+
+func (b *PenSyncBuffer) add(command int, obj Object, a, bval, c, d float64) bool {
+	low, high := splitInt64BitsToFloat32(int64(obj))
+
+	b.data = append(b.data,
+		float32(command),
+		low,
+		high,
+		float32(a),
+		float32(bval),
+		float32(c),
+		float32(d),
+		0,
+	)
+	b.count++
+	return b.count >= maxPenBatchCommands
 }
 
 func (b *PenSyncBuffer) reset() {

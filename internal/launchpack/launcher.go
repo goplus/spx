@@ -61,11 +61,11 @@ func main() {
 }
 `
 
+type payloadBuilder func(workDir string, dst io.Writer) (payloadDigest, manifestDigest string, err error)
+
 func renderGeneratedLauncher(payloadDigest, manifestDigest string) []byte {
 	return []byte(fmt.Sprintf(generatedLauncherTemplate, strconv.Quote(payloadDigest), strconv.Quote(manifestDigest)))
 }
-
-type payloadBuilder func(workDir string, dst io.Writer) (payloadDigest, manifestDigest string, err error)
 
 func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload payloadBuilder) error {
 	if err := cfg.validateGraphInputs(); err != nil {

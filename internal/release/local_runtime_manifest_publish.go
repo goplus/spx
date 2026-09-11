@@ -25,42 +25,6 @@ import (
 	"strings"
 )
 
-func writeLocalRuntimeManifest(path string, manifest LocalRuntimeManifest) error {
-	data, err := manifest.JSON()
-	if err != nil {
-		return err
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create local runtime manifest directory: %w", err)
-	}
-	tmp, err := os.CreateTemp(dir, ".engine-manifest-*")
-	if err != nil {
-		return fmt.Errorf("create local runtime manifest: %w", err)
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if err := tmp.Chmod(0o644); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod local runtime manifest: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write local runtime manifest: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("sync local runtime manifest: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close local runtime manifest: %w", err)
-	}
-	if err := replaceLocalRuntimeFile(tmpPath, path, 0o644); err != nil {
-		return fmt.Errorf("install local runtime manifest: %w", err)
-	}
-	return nil
-}
-
 // PublishLocalRuntimeManifest copies the verified local Engine and PCK beside
 // path, then writes the manifest last. The manifest's basename references are
 // therefore self-contained and never point back into GOPATH/bin.
@@ -131,6 +95,42 @@ func NewLocalRuntimeManifest(lock RuntimeLock, goos, goarch, enginePath, packPat
 		return LocalRuntimeManifest{}, err
 	}
 	return manifest, nil
+}
+
+func writeLocalRuntimeManifest(path string, manifest LocalRuntimeManifest) error {
+	data, err := manifest.JSON()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create local runtime manifest directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".engine-manifest-*")
+	if err != nil {
+		return fmt.Errorf("create local runtime manifest: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod local runtime manifest: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write local runtime manifest: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("sync local runtime manifest: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close local runtime manifest: %w", err)
+	}
+	if err := replaceLocalRuntimeFile(tmpPath, path, 0o644); err != nil {
+		return fmt.Errorf("install local runtime manifest: %w", err)
+	}
+	return nil
 }
 
 func localRuntimeObjectName(name, digest string) string {

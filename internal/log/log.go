@@ -43,24 +43,6 @@ const (
 	LevelNone
 )
 
-// String returns the string representation of the log level
-func (l Level) String() string {
-	switch l {
-	case LevelDebug:
-		return "DEBUG"
-	case LevelInfo:
-		return "INFO"
-	case LevelWarn:
-		return "WARN"
-	case LevelError:
-		return "ERROR"
-	case LevelNone:
-		return "NONE"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // Logger represents a logger instance
 type Logger struct {
 	mu           sync.Mutex
@@ -79,45 +61,27 @@ func init() {
 	defaultLogger = NewWithOutputs("SPX", LevelInfo, os.Stdout, os.Stderr)
 }
 
-// New creates a new logger with the specified prefix, level, and output
-func New(prefix string, level Level, out io.Writer) *Logger {
-	return NewWithOutputs(prefix, level, out, out)
-}
-
-// NewWithOutputs creates a new logger with independent stdout/stderr outputs.
-func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
-	if stdout == nil {
-		stdout = io.Discard
+// String returns the string representation of the log level
+func (l Level) String() string {
+	switch l {
+	case LevelDebug:
+		return "DEBUG"
+	case LevelInfo:
+		return "INFO"
+	case LevelWarn:
+		return "WARN"
+	case LevelError:
+		return "ERROR"
+	case LevelNone:
+		return "NONE"
+	default:
+		return "UNKNOWN"
 	}
-	if stderr == nil {
-		stderr = io.Discard
-	}
-	return &Logger{
-		level:        level,
-		stdoutLogger: log.New(stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		stderrLogger: log.New(stderr, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		prefix:       prefix,
-	}
-}
-
-// Default returns the default logger
-func Default() *Logger {
-	return defaultLogger
-}
-
-// SetLevel sets the logging level for the default logger
-func SetLevel(level Level) {
-	defaultLogger.SetLevel(level)
 }
 
 // SetLevel sets the logging level for this logger
 func (l *Logger) SetLevel(level Level) {
 	atomic.StoreInt32((*int32)(&l.level), int32(level))
-}
-
-// SetOutput sets both stdout/stderr destinations for the default logger.
-func SetOutput(w io.Writer) {
-	defaultLogger.SetOutput(w)
 }
 
 // SetOutput sets both stdout/stderr destinations for this logger.
@@ -131,11 +95,6 @@ func (l *Logger) SetOutput(w io.Writer) {
 	l.stderrLogger.SetOutput(w)
 }
 
-// SetStdoutOutput sets the stdout destination for the default logger.
-func SetStdoutOutput(w io.Writer) {
-	defaultLogger.SetStdoutOutput(w)
-}
-
 // SetStdoutOutput sets the stdout destination for this logger.
 func (l *Logger) SetStdoutOutput(w io.Writer) {
 	l.mu.Lock()
@@ -146,11 +105,6 @@ func (l *Logger) SetStdoutOutput(w io.Writer) {
 	l.stdoutLogger.SetOutput(w)
 }
 
-// SetStderrOutput sets the stderr destination for the default logger.
-func SetStderrOutput(w io.Writer) {
-	defaultLogger.SetStderrOutput(w)
-}
-
 // SetStderrOutput sets the stderr destination for this logger.
 func (l *Logger) SetStderrOutput(w io.Writer) {
 	l.mu.Lock()
@@ -159,42 +113,6 @@ func (l *Logger) SetStderrOutput(w io.Writer) {
 		w = io.Discard
 	}
 	l.stderrLogger.SetOutput(w)
-}
-
-func (l *Logger) targetLogger(level Level) *log.Logger {
-	if level >= LevelError {
-		return l.stderrLogger
-	}
-	return l.stdoutLogger
-}
-
-// log is the internal logging function
-func (l *Logger) log(level Level, format string, args ...any) {
-	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
-		return
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
-		return
-	}
-
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(format, args...)
-	} else {
-		msg = format
-	}
-	l.targetLogger(level).Printf("[%s] [%s] %s", level, l.prefix, msg)
-}
-
-func (l *Logger) format(format string, args ...any) string {
-	if len(args) > 0 {
-		return fmt.Sprintf(format, args...)
-	}
-	return format
 }
 
 // Debug logs a debug message
@@ -248,6 +166,52 @@ func (l *Logger) Panicf(format string, args ...any) {
 	l.stderrLogger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
 }
 
+// New creates a new logger with the specified prefix, level, and output
+func New(prefix string, level Level, out io.Writer) *Logger {
+	return NewWithOutputs(prefix, level, out, out)
+}
+
+// NewWithOutputs creates a new logger with independent stdout/stderr outputs.
+func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	return &Logger{
+		level:        level,
+		stdoutLogger: log.New(stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+		stderrLogger: log.New(stderr, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+		prefix:       prefix,
+	}
+}
+
+// Default returns the default logger
+func Default() *Logger {
+	return defaultLogger
+}
+
+// SetLevel sets the logging level for the default logger
+func SetLevel(level Level) {
+	defaultLogger.SetLevel(level)
+}
+
+// SetOutput sets both stdout/stderr destinations for the default logger.
+func SetOutput(w io.Writer) {
+	defaultLogger.SetOutput(w)
+}
+
+// SetStdoutOutput sets the stdout destination for the default logger.
+func SetStdoutOutput(w io.Writer) {
+	defaultLogger.SetStdoutOutput(w)
+}
+
+// SetStderrOutput sets the stderr destination for the default logger.
+func SetStderrOutput(w io.Writer) {
+	defaultLogger.SetStderrOutput(w)
+}
+
 // Package-level convenience functions using the default logger
 
 // Debug logs a debug message using the default logger
@@ -296,4 +260,40 @@ func ParseLevel(s string) Level {
 	default:
 		return LevelInfo
 	}
+}
+
+func (l *Logger) targetLogger(level Level) *log.Logger {
+	if level >= LevelError {
+		return l.stderrLogger
+	}
+	return l.stdoutLogger
+}
+
+// log is the internal logging function
+func (l *Logger) log(level Level, format string, args ...any) {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
+	var msg string
+	if len(args) > 0 {
+		msg = fmt.Sprintf(format, args...)
+	} else {
+		msg = format
+	}
+	l.targetLogger(level).Printf("[%s] [%s] %s", level, l.prefix, msg)
+}
+
+func (l *Logger) format(format string, args ...any) string {
+	if len(args) > 0 {
+		return fmt.Sprintf(format, args...)
+	}
+	return format
 }

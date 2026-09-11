@@ -40,6 +40,81 @@ type CHeaderFileAST struct {
 	Expr []Expr `parser:" @@* " json:",omitempty"`
 }
 
+type Expr struct {
+	Comment  string           `parser:"   @Comment " json:",omitempty"`
+	Enum     *TypedefEnum     `parser:" | @@ ';'   " json:",omitempty"`
+	Alias    *TypedefAlias    `parser:" | @@ ';'   " json:",omitempty"`
+	Function *TypedefFunction `parser:" | @@ ';'   " json:",omitempty"`
+	Struct   *TypedefStruct   `parser:" | @@ ';'   " json:",omitempty"`
+}
+
+type TypedefEnum struct {
+	Values []EnumValue `parser:" 'typedef' 'enum' '{' ( @@ ( ',' Comment? @@ Comment? )* ','? Comment? )? '}' " json:",omitempty"`
+	Name   *string     `parser:" @Ident                                                                       " json:",omitempty"`
+}
+
+type EnumValue struct {
+	Name          string  `parser:" @Ident                     " json:",omitempty"`
+	IntValue      *int    `parser:" ( '=' ( @Int               " json:",omitempty"`
+	ConstRefValue *string `parser:"              | @Ident ) )? " json:",omitempty"`
+}
+
+type TypedefAlias struct {
+	Type PrimativeType `parser:" 'typedef' @@ " json:",omitempty"`
+	Name string        `parser:" @Ident       " json:",omitempty"`
+}
+
+type TypedefFunction struct {
+	ReturnType PrimativeType `parser:" 'typedef' @@                " json:",omitempty"`
+	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
+	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
+}
+
+type TypedefStruct struct {
+	Fields []StructField `parser:" 'typedef' 'struct' '{' @@* '}' " json:",omitempty"`
+	Name   string        `parser:" @Ident                         " json:",omitempty"`
+}
+
+type StructField struct {
+	Variable *StructVariable `parser:" ( @@       " json:",omitempty"`
+	Function *StructFunction `parser:" | @@ ) ';' " json:",omitempty"`
+}
+
+type StructVariable struct {
+	Type PrimativeType `parser:" @@     " json:",omitempty"`
+	Name string        `parser:" @Ident " json:",omitempty"`
+}
+
+type FunctionType struct {
+	ReturnType PrimativeType `parser:" @@                          " json:",omitempty"`
+	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
+	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
+}
+
+type PrimativeType struct {
+	IsConst   bool   `parser:" @'const'? " json:",omitempty"`
+	Name      string `parser:" @Ident    " json:",omitempty"`
+	IsPointer bool   `parser:" @'*'?     " json:",omitempty"`
+}
+
+type Type struct {
+	Function  *FunctionType  `parser:" ( @@   " json:",omitempty"`
+	Primative *PrimativeType `parser:" | @@ ) " json:",omitempty"`
+}
+
+type StructFunction struct {
+	ReturnType PrimativeType `parser:" @@                     " json:",omitempty"`
+	Name       string        `parser:" '(' '*' @Ident ')'     " json:",omitempty"`
+	Arguments  []Argument    `parser:" '(' @@ ( ',' @@ )* ')' " json:",omitempty"`
+	Comment    string        `parser:" @Comment?              " json:",omitempty"`
+}
+
+// void (*p_func)(void *, uint32_t)
+type Argument struct {
+	Type Type   `parser:" @@                               " json:",omitempty"`
+	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
+}
+
 func (a CHeaderFileAST) FindVariantEnumType() *TypedefEnum {
 	for _, e := range a.Expr {
 		if e.Enum != nil && e.Enum.Name != nil && *e.Enum.Name == "GDExtensionVariantType" {
@@ -109,40 +184,6 @@ func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string) [
 	return fns
 }
 
-// getManagerNameForFunc extracts the manager name from the function name.
-func getManagerNameForFunc(funcName string, knownManagers []string) string {
-	prefix := "GDExtensionSpx"
-	str := funcName[len(prefix):]
-	lowerStr := strings.ToLower(str)
-
-	// Prefer matching against known manager names (sorted by length descending, prioritizing longer names)
-	if len(knownManagers) > 0 {
-		// Create a copy sorted by length in descending order
-		sortedNames := make([]string, len(knownManagers))
-		copy(sortedNames, knownManagers)
-		sort.Slice(sortedNames, func(i, j int) bool {
-			return len(sortedNames[i]) > len(sortedNames[j])
-		})
-
-		for _, mgr := range sortedNames {
-			if strings.HasPrefix(lowerStr, mgr) {
-				return mgr
-			}
-		}
-	}
-
-	// Fall back to the original logic (stop at uppercase letter)
-	chs := []rune{}
-	chs = append(chs, rune(str[0]), rune(str[1]))
-	for _, ch := range str[2:] {
-		if ch >= 'A' && ch <= 'Z' {
-			break
-		}
-		chs = append(chs, ch)
-	}
-	return strings.ToLower(string(chs))
-}
-
 func (a CHeaderFileAST) CollectGDExtensionInterfaceFunctions() []TypedefFunction {
 	allFns := a.CollectFunctions()
 
@@ -174,6 +215,7 @@ func (a CHeaderFileAST) CollectGDExtensionISpriteFunctions() []TypedefFunction {
 
 	return fns
 }
+
 func (a CHeaderFileAST) CollectGDExtensionICallbackFunctions() []TypedefFunction {
 	allFns := a.CollectFunctions()
 
@@ -232,41 +274,6 @@ func (a CHeaderFileAST) CollectEnums() []TypedefEnum {
 	return enums
 }
 
-type Expr struct {
-	Comment  string           `parser:"   @Comment " json:",omitempty"`
-	Enum     *TypedefEnum     `parser:" | @@ ';'   " json:",omitempty"`
-	Alias    *TypedefAlias    `parser:" | @@ ';'   " json:",omitempty"`
-	Function *TypedefFunction `parser:" | @@ ';'   " json:",omitempty"`
-	Struct   *TypedefStruct   `parser:" | @@ ';'   " json:",omitempty"`
-}
-
-type TypedefEnum struct {
-	Values []EnumValue `parser:" 'typedef' 'enum' '{' ( @@ ( ',' Comment? @@ Comment? )* ','? Comment? )? '}' " json:",omitempty"`
-	Name   *string     `parser:" @Ident                                                                       " json:",omitempty"`
-}
-
-type EnumValue struct {
-	Name          string  `parser:" @Ident                     " json:",omitempty"`
-	IntValue      *int    `parser:" ( '=' ( @Int               " json:",omitempty"`
-	ConstRefValue *string `parser:"              | @Ident ) )? " json:",omitempty"`
-}
-
-type TypedefAlias struct {
-	Type PrimativeType `parser:" 'typedef' @@ " json:",omitempty"`
-	Name string        `parser:" @Ident       " json:",omitempty"`
-}
-
-type TypedefFunction struct {
-	ReturnType PrimativeType `parser:" 'typedef' @@                " json:",omitempty"`
-	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
-	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
-}
-
-type TypedefStruct struct {
-	Fields []StructField `parser:" 'typedef' 'struct' '{' @@* '}' " json:",omitempty"`
-	Name   string        `parser:" @Ident                         " json:",omitempty"`
-}
-
 func (t TypedefStruct) CollectFunctions() []StructFunction {
 	fns := make([]StructFunction, 0, len(t.Fields))
 	for _, f := range t.Fields {
@@ -275,22 +282,6 @@ func (t TypedefStruct) CollectFunctions() []StructFunction {
 		}
 	}
 	return fns
-}
-
-type StructField struct {
-	Variable *StructVariable `parser:" ( @@       " json:",omitempty"`
-	Function *StructFunction `parser:" | @@ ) ';' " json:",omitempty"`
-}
-
-type StructVariable struct {
-	Type PrimativeType `parser:" @@     " json:",omitempty"`
-	Name string        `parser:" @Ident " json:",omitempty"`
-}
-
-type FunctionType struct {
-	ReturnType PrimativeType `parser:" @@                          " json:",omitempty"`
-	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
-	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
 }
 
 func (t FunctionType) CStyleString() string {
@@ -309,12 +300,6 @@ func (t FunctionType) CStyleString() string {
 	return sb.String()
 }
 
-type PrimativeType struct {
-	IsConst   bool   `parser:" @'const'? " json:",omitempty"`
-	Name      string `parser:" @Ident    " json:",omitempty"`
-	IsPointer bool   `parser:" @'*'?     " json:",omitempty"`
-}
-
 func (t PrimativeType) CStyleString() string {
 	sb := strings.Builder{}
 
@@ -331,11 +316,6 @@ func (t PrimativeType) CStyleString() string {
 	return sb.String()
 }
 
-type Type struct {
-	Function  *FunctionType  `parser:" ( @@   " json:",omitempty"`
-	Primative *PrimativeType `parser:" | @@ ) " json:",omitempty"`
-}
-
 func (t Type) CStyleString() string {
 	if t.Primative != nil {
 		return t.Primative.CStyleString()
@@ -344,19 +324,6 @@ func (t Type) CStyleString() string {
 	}
 
 	panic("unhandled type")
-}
-
-type StructFunction struct {
-	ReturnType PrimativeType `parser:" @@                     " json:",omitempty"`
-	Name       string        `parser:" '(' '*' @Ident ')'     " json:",omitempty"`
-	Arguments  []Argument    `parser:" '(' @@ ( ',' @@ )* ')' " json:",omitempty"`
-	Comment    string        `parser:" @Comment?              " json:",omitempty"`
-}
-
-// void (*p_func)(void *, uint32_t)
-type Argument struct {
-	Type Type   `parser:" @@                               " json:",omitempty"`
-	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
 }
 
 func (a Argument) IsPinnable() bool {
@@ -374,6 +341,7 @@ func (a Argument) IsPinnable() bool {
 
 	return false
 }
+
 func (a Argument) CStylePtrString(i int) string {
 	if a.Type.Function != nil {
 		return a.Type.CStyleString()
@@ -383,6 +351,7 @@ func (a Argument) CStylePtrString(i int) string {
 	typeName := strings.TrimSpace(a.Type.CStyleString())
 	return typeName + " *" + name
 }
+
 func (a Argument) ResolvedPtrName(i int) string {
 	if a.Type.Function != nil && a.Type.Function.Name != "" {
 		return a.Type.Function.Name
@@ -404,14 +373,6 @@ func (a Argument) CStyleString(i int) string {
 
 	name := a.ResolvedName(i)
 	return joinCTypeAndName(a.Type.CStyleString(), name)
-}
-
-func joinCTypeAndName(typeName, name string) string {
-	typeName = strings.TrimSpace(typeName)
-	if strings.HasSuffix(typeName, "*") {
-		return typeName + name
-	}
-	return typeName + " " + name
 }
 
 func (a Argument) ResolvedName(i int) string {
@@ -464,4 +425,46 @@ func ParseCString(s string) (CHeaderFileAST, error) {
 	}
 
 	return *ast, nil
+}
+
+// getManagerNameForFunc extracts the manager name from the function name.
+func getManagerNameForFunc(funcName string, knownManagers []string) string {
+	prefix := "GDExtensionSpx"
+	str := funcName[len(prefix):]
+	lowerStr := strings.ToLower(str)
+
+	// Prefer matching against known manager names (sorted by length descending, prioritizing longer names)
+	if len(knownManagers) > 0 {
+		// Create a copy sorted by length in descending order
+		sortedNames := make([]string, len(knownManagers))
+		copy(sortedNames, knownManagers)
+		sort.Slice(sortedNames, func(i, j int) bool {
+			return len(sortedNames[i]) > len(sortedNames[j])
+		})
+
+		for _, mgr := range sortedNames {
+			if strings.HasPrefix(lowerStr, mgr) {
+				return mgr
+			}
+		}
+	}
+
+	// Fall back to the original logic (stop at uppercase letter)
+	chs := []rune{}
+	chs = append(chs, rune(str[0]), rune(str[1]))
+	for _, ch := range str[2:] {
+		if ch >= 'A' && ch <= 'Z' {
+			break
+		}
+		chs = append(chs, ch)
+	}
+	return strings.ToLower(string(chs))
+}
+
+func joinCTypeAndName(typeName, name string) string {
+	typeName = strings.TrimSpace(typeName)
+	if strings.HasSuffix(typeName, "*") {
+		return typeName + name
+	}
+	return typeName + " " + name
 }

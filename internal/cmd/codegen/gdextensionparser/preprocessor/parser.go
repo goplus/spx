@@ -31,6 +31,32 @@ type PreprocessorHeaderFileAST struct {
 	Directives []Directive `parser:" @@* "`
 }
 
+type Directive struct {
+	Ifndef  *IfndefDirective  `parser:" EOL* ( @@          "`
+	Ifdef   *IfdefDirective   `parser:"   | @@        "`
+	Define  *DefineDirective  `parser:"   | @@        "`
+	Include *IncludeDirective `parser:"   | @@        "`
+	Source  string            `parser:"   | @Source ) "`
+}
+
+type IfndefDirective struct {
+	Name       string      `parser:" @Ifndef EOL      "`
+	Directives []Directive `parser:" @@* '#endif' EOL "`
+}
+
+type IfdefDirective struct {
+	Name       string      `parser:" @Ifdef EOL       "`
+	Directives []Directive `parser:" @@* '#endif' EOL "`
+}
+
+type DefineDirective struct {
+	Name string `parser:" @Define EOL" `
+}
+
+type IncludeDirective struct {
+	Name string `parser:" @Include EOL" `
+}
+
 func (f PreprocessorHeaderFileAST) Eval(isCpp bool) string {
 	vars := PreprocVars{}
 
@@ -39,25 +65,6 @@ func (f PreprocessorHeaderFileAST) Eval(isCpp bool) string {
 	}
 
 	return f.eval(vars)
-}
-
-func (f PreprocessorHeaderFileAST) eval(vars PreprocVars) string {
-	sb := strings.Builder{}
-
-	for _, d := range f.Directives {
-		sb.WriteString(d.Eval(vars))
-		sb.WriteString("\n")
-	}
-
-	return sb.String()
-}
-
-type Directive struct {
-	Ifndef  *IfndefDirective  `parser:" EOL* ( @@          "`
-	Ifdef   *IfdefDirective   `parser:"   | @@        "`
-	Define  *DefineDirective  `parser:"   | @@        "`
-	Include *IncludeDirective `parser:"   | @@        "`
-	Source  string            `parser:"   | @Source ) "`
 }
 
 func (d Directive) Eval(vars PreprocVars) string {
@@ -72,11 +79,6 @@ func (d Directive) Eval(vars PreprocVars) string {
 	} else {
 		return d.Source
 	}
-}
-
-type IfndefDirective struct {
-	Name       string      `parser:" @Ifndef EOL      "`
-	Directives []Directive `parser:" @@* '#endif' EOL "`
 }
 
 func (d IfndefDirective) Eval(vars PreprocVars) string {
@@ -96,11 +98,6 @@ func (d IfndefDirective) Eval(vars PreprocVars) string {
 	return sb.String()
 }
 
-type IfdefDirective struct {
-	Name       string      `parser:" @Ifdef EOL       "`
-	Directives []Directive `parser:" @@* '#endif' EOL "`
-}
-
 func (d IfdefDirective) Eval(vars PreprocVars) string {
 	if len(d.Name) == 0 {
 		panic("#ifdef missing variable")
@@ -118,10 +115,6 @@ func (d IfdefDirective) Eval(vars PreprocVars) string {
 	return sb.String()
 }
 
-type DefineDirective struct {
-	Name string `parser:" @Define EOL" `
-}
-
 func (d DefineDirective) Eval(vars PreprocVars) string {
 	if len(d.Name) == 0 {
 		panic("#define missing variable")
@@ -132,10 +125,6 @@ func (d DefineDirective) Eval(vars PreprocVars) string {
 	}
 
 	return ""
-}
-
-type IncludeDirective struct {
-	Name string `parser:" @Include EOL" `
 }
 
 func (d IncludeDirective) Eval(vars PreprocVars) string {
@@ -175,6 +164,17 @@ func ParsePreprocessorString(s string) (*PreprocessorHeaderFileAST, error) {
 	}
 
 	return ast, nil
+}
+
+func (f PreprocessorHeaderFileAST) eval(vars PreprocVars) string {
+	sb := strings.Builder{}
+
+	for _, d := range f.Directives {
+		sb.WriteString(d.Eval(vars))
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
 
 func directiveIdent(types ...string) participle.Option {

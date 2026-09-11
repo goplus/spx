@@ -58,8 +58,11 @@ type androidNDKArchive struct {
 }
 
 var androidNDKResolveEnv = resolveAndroidNDKEnv
+
 var androidNDKFetcher = fetchAndroidNDK
+
 var androidNDKPersister = persistNDKArchive
+
 var androidNDKRetryDelay = 2 * time.Second
 
 const (
@@ -78,6 +81,20 @@ var androidNDKZipLimits = shared.ZipLimits{
 	MaxEntrySize:             512 << 20,
 	MaxTotalSize:             6 << 30,
 	MaxCompressionRatio:      200,
+}
+
+func (archive androidNDKArchive) validate() error {
+	if archive.archiveOS == "" || archive.hostTag == "" || archive.size <= 0 {
+		return fmt.Errorf("invalid Android NDK archive specification")
+	}
+	if !strings.HasPrefix(archive.hostTag, archive.archiveOS+"-") {
+		return fmt.Errorf("Android NDK host tag %q does not match archive OS %q", archive.hostTag, archive.archiveOS)
+	}
+	digest, err := hex.DecodeString(archive.sha256)
+	if err != nil || len(digest) != sha256.Size || archive.sha256 != strings.ToLower(archive.sha256) {
+		return fmt.Errorf("invalid Android NDK archive SHA-256")
+	}
+	return nil
 }
 
 func androidNDKArchiveForOS(goos string) (androidNDKArchive, error) {
@@ -440,20 +457,6 @@ func openNDKArchive(path string) (*os.File, os.FileInfo, error) {
 
 func invalidNDKArchivef(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", errInvalidNDKArchive, fmt.Sprintf(format, args...))
-}
-
-func (archive androidNDKArchive) validate() error {
-	if archive.archiveOS == "" || archive.hostTag == "" || archive.size <= 0 {
-		return fmt.Errorf("invalid Android NDK archive specification")
-	}
-	if !strings.HasPrefix(archive.hostTag, archive.archiveOS+"-") {
-		return fmt.Errorf("Android NDK host tag %q does not match archive OS %q", archive.hostTag, archive.archiveOS)
-	}
-	digest, err := hex.DecodeString(archive.sha256)
-	if err != nil || len(digest) != sha256.Size || archive.sha256 != strings.ToLower(archive.sha256) {
-		return fmt.Errorf("invalid Android NDK archive SHA-256")
-	}
-	return nil
 }
 
 func requiredNDKTools(hostTag string) ([]string, error) {

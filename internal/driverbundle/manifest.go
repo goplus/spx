@@ -63,6 +63,48 @@ type File struct {
 	SHA256 string `json:"sha256"`
 }
 
+// JSON returns canonical, human-readable manifest bytes.
+func (m Manifest) JSON() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("driverbundle: encode manifest: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// BundleFor returns the bundle for goos/goarch.
+func (m Manifest) BundleFor(goos, goarch string) (Bundle, error) {
+	if err := m.Validate(); err != nil {
+		return Bundle{}, err
+	}
+	for _, bundle := range m.Bundles {
+		if bundle.GOOS == goos && bundle.GOARCH == goarch {
+			return bundle, nil
+		}
+	}
+	return Bundle{}, fmt.Errorf("%w: %s/%s", ErrBundleNotFound, goos, goarch)
+}
+
+// DownloadURL returns the bundle URL in the owning SPX release.
+func (m Manifest) DownloadURL(name string) (string, error) {
+	return ReleaseAssetURL(m.SPXVersion, name)
+}
+
+// JSON returns canonical, human-readable bundle bytes.
+func (b Bundle) JSON() ([]byte, error) {
+	if err := b.Validate(); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(b, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("driverbundle: encode bundle: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
 // Parse strictly decodes and validates a manifest.
 func Parse(data []byte) (Manifest, error) {
 	if int64(len(data)) > MaxManifestSize {
@@ -91,18 +133,6 @@ func ParseForVersions(data []byte, spxVersion, runtimeVersion string) (Manifest,
 	return manifest, nil
 }
 
-// JSON returns canonical, human-readable manifest bytes.
-func (m Manifest) JSON() ([]byte, error) {
-	if err := m.Validate(); err != nil {
-		return nil, err
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("driverbundle: encode manifest: %w", err)
-	}
-	return append(data, '\n'), nil
-}
-
 // ParseBundle strictly decodes one platform descriptor.
 func ParseBundle(data []byte) (Bundle, error) {
 	if int64(len(data)) > MaxManifestSize {
@@ -116,36 +146,6 @@ func ParseBundle(data []byte) (Bundle, error) {
 		return Bundle{}, err
 	}
 	return bundle, nil
-}
-
-// JSON returns canonical, human-readable bundle bytes.
-func (b Bundle) JSON() ([]byte, error) {
-	if err := b.Validate(); err != nil {
-		return nil, err
-	}
-	data, err := json.MarshalIndent(b, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("driverbundle: encode bundle: %w", err)
-	}
-	return append(data, '\n'), nil
-}
-
-// BundleFor returns the bundle for goos/goarch.
-func (m Manifest) BundleFor(goos, goarch string) (Bundle, error) {
-	if err := m.Validate(); err != nil {
-		return Bundle{}, err
-	}
-	for _, bundle := range m.Bundles {
-		if bundle.GOOS == goos && bundle.GOARCH == goarch {
-			return bundle, nil
-		}
-	}
-	return Bundle{}, fmt.Errorf("%w: %s/%s", ErrBundleNotFound, goos, goarch)
-}
-
-// DownloadURL returns the bundle URL in the owning SPX release.
-func (m Manifest) DownloadURL(name string) (string, error) {
-	return ReleaseAssetURL(m.SPXVersion, name)
 }
 
 // ManifestURL returns the manifest URL in the SPX release selected by an exact version.

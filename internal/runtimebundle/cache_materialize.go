@@ -23,6 +23,53 @@ import (
 	"path/filepath"
 )
 
+// Materialize verifies and publishes a bundle, then returns while holding a
+// shared use lease for the materialized target. The caller must Close the
+// returned value after its final read or execution.
+func (c *Cache) Materialize(ctx context.Context, namespace Namespace, zipPath string, expected *Bundle) (*Materialized, error) {
+	if c == nil {
+		return nil, fmt.Errorf("runtimebundle: nil cache")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	limits, err := c.Limits.withDefaults()
+	if err != nil {
+		return nil, err
+	}
+	if expected == nil {
+		bundle, err := VerifyZip(zipPath, VerifyOptions{Limits: limits})
+		if err != nil {
+			return nil, err
+		}
+		expected = &bundle
+	}
+	expected, err = normalizeExpectedBundle(namespace, expected, limits)
+	if err != nil {
+		return nil, err
+	}
+	if hit, ok, err := c.tryMaterializedHit(ctx, namespace, expected.Digest, expected); err != nil {
+		return nil, err
+	} else if ok {
+		return hit, nil
+	}
+	target, err := c.materializePath(ctx, namespace, zipPath, expected)
+	if err != nil {
+		return nil, err
+	}
+	// Publication releases its exclusive lease before a shared use lease is
+	// acquired. Revalidate under the shared lease so the returned path is never
+	// exposed through an unprotected lock-transition window.
+	hit, ok, err := c.tryMaterializedHit(ctx, namespace, expected.Digest, expected)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || hit.Path != target {
+		return nil, fmt.Errorf("runtimebundle: published cache target failed shared-lease revalidation: %s", target)
+	}
+	return hit, nil
+}
+
 // materializePath verifies zipPath and atomically materializes it under the
 // namespace-specific content address. The caller must acquire a shared lease
 // before exposing the returned path to a consumer.
@@ -221,92 +268,6 @@ func (c *Cache) materializePath(ctx context.Context, namespace Namespace, zipPat
 	return target, nil
 }
 
-// Materialize verifies and publishes a bundle, then returns while holding a
-// shared use lease for the materialized target. The caller must Close the
-// returned value after its final read or execution.
-func (c *Cache) Materialize(ctx context.Context, namespace Namespace, zipPath string, expected *Bundle) (*Materialized, error) {
-	if c == nil {
-		return nil, fmt.Errorf("runtimebundle: nil cache")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	limits, err := c.Limits.withDefaults()
-	if err != nil {
-		return nil, err
-	}
-	if expected == nil {
-		bundle, err := VerifyZip(zipPath, VerifyOptions{Limits: limits})
-		if err != nil {
-			return nil, err
-		}
-		expected = &bundle
-	}
-	expected, err = normalizeExpectedBundle(namespace, expected, limits)
-	if err != nil {
-		return nil, err
-	}
-	if hit, ok, err := c.tryMaterializedHit(ctx, namespace, expected.Digest, expected); err != nil {
-		return nil, err
-	} else if ok {
-		return hit, nil
-	}
-	target, err := c.materializePath(ctx, namespace, zipPath, expected)
-	if err != nil {
-		return nil, err
-	}
-	// Publication releases its exclusive lease before a shared use lease is
-	// acquired. Revalidate under the shared lease so the returned path is never
-	// exposed through an unprotected lock-transition window.
-	hit, ok, err := c.tryMaterializedHit(ctx, namespace, expected.Digest, expected)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || hit.Path != target {
-		return nil, fmt.Errorf("runtimebundle: published cache target failed shared-lease revalidation: %s", target)
-	}
-	return hit, nil
-}
-
-func normalizeExpectedBundle(namespace Namespace, expected *Bundle, limits Limits) (*Bundle, error) {
-	if expected == nil {
-		return nil, nil
-	}
-	want := *expected
-	originalNamespace := want.Namespace
-	originalDigest := want.Digest
-	if originalNamespace != "" && originalNamespace != namespace {
-		return nil, fmt.Errorf("runtimebundle: expected namespace %q does not match %q", want.Namespace, namespace)
-	}
-	if originalNamespace == "" && originalDigest != "" {
-		// An empty namespace identifies the archive manifest itself. Verify that
-		// identity before deriving the namespace-specific cache identity.
-		namespaceLess := want
-		namespaceLess.Digest = ""
-		identity, err := namespaceLess.IdentityDigestWithLimits(limits)
-		if err != nil {
-			return nil, err
-		}
-		if identity != originalDigest {
-			return nil, fmt.Errorf("%w: namespace-empty expected digest %s, identity %s", ErrDigestMismatch, originalDigest, identity)
-		}
-	}
-	want.Namespace = namespace
-	want.Digest = ""
-	if err := want.ValidateWithLimits(limits); err != nil {
-		return nil, err
-	}
-	digest, err := want.IdentityDigestWithLimits(limits)
-	if err != nil {
-		return nil, err
-	}
-	if originalNamespace != "" && originalDigest != "" && originalDigest != digest {
-		return nil, fmt.Errorf("%w: expected manifest digest %s, identity %s", ErrDigestMismatch, originalDigest, digest)
-	}
-	want.Digest = digest
-	return &want, nil
-}
-
 func (c *Cache) tryMaterializedHit(ctx context.Context, namespace Namespace, digest string, expected *Bundle) (*Materialized, bool, error) {
 	if c.LockProvider == nil {
 		return nil, false, ErrCrossProcessLockUnsupported
@@ -353,4 +314,43 @@ func (c *Cache) tryMaterializedHit(ctx context.Context, namespace Namespace, dig
 	}
 	closeLease = false
 	return &Materialized{Path: target, lease: lease}, true, nil
+}
+
+func normalizeExpectedBundle(namespace Namespace, expected *Bundle, limits Limits) (*Bundle, error) {
+	if expected == nil {
+		return nil, nil
+	}
+	want := *expected
+	originalNamespace := want.Namespace
+	originalDigest := want.Digest
+	if originalNamespace != "" && originalNamespace != namespace {
+		return nil, fmt.Errorf("runtimebundle: expected namespace %q does not match %q", want.Namespace, namespace)
+	}
+	if originalNamespace == "" && originalDigest != "" {
+		// An empty namespace identifies the archive manifest itself. Verify that
+		// identity before deriving the namespace-specific cache identity.
+		namespaceLess := want
+		namespaceLess.Digest = ""
+		identity, err := namespaceLess.IdentityDigestWithLimits(limits)
+		if err != nil {
+			return nil, err
+		}
+		if identity != originalDigest {
+			return nil, fmt.Errorf("%w: namespace-empty expected digest %s, identity %s", ErrDigestMismatch, originalDigest, identity)
+		}
+	}
+	want.Namespace = namespace
+	want.Digest = ""
+	if err := want.ValidateWithLimits(limits); err != nil {
+		return nil, err
+	}
+	digest, err := want.IdentityDigestWithLimits(limits)
+	if err != nil {
+		return nil, err
+	}
+	if originalNamespace != "" && originalDigest != "" && originalDigest != digest {
+		return nil, fmt.Errorf("%w: expected manifest digest %s, identity %s", ErrDigestMismatch, originalDigest, digest)
+	}
+	want.Digest = digest
+	return &want, nil
 }

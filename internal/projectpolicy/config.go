@@ -75,6 +75,31 @@ func (s PortableConfigSnapshot) Identity() (string, error) {
 	return portableConfigSHA256Prefix + hex.EncodeToString(s.digest[:]), nil
 }
 
+// Verify confirms that the current .config still has the identity, metadata,
+// and bytes captured by the snapshot. Once this succeeds, callers should use
+// Bytes rather than reopen the user-controlled file.
+func (s PortableConfigSnapshot) Verify(projectDir string) error {
+	if !s.ready {
+		return fmt.Errorf("portable project config snapshot is uninitialized")
+	}
+	configPath := filepath.Join(projectDir, configName)
+	data, info, found, err := readStableRegularFile(configPath)
+	if err != nil {
+		return fmt.Errorf("revalidate project config %q: %w", configPath, err)
+	}
+	if found != s.found {
+		return fmt.Errorf("project config %q changed after validation", configPath)
+	}
+	if !found {
+		return nil
+	}
+	if !os.SameFile(s.fileInfo, info) || !stableMetadata(s.fileInfo, info) ||
+		sha256.Sum256(data) != s.digest || !bytes.Equal(data, s.data) {
+		return fmt.Errorf("project config %q changed after validation", configPath)
+	}
+	return nil
+}
+
 // ValidatePortableConfig rejects configuration that cannot be captured in a
 // self-contained project snapshot for the driver. A missing .config is valid;
 // when present it must be a stable regular non-symlink file.
@@ -130,29 +155,4 @@ func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo
 	return PortableConfigSnapshot{
 		ready: true, found: true, data: data, digest: sha256.Sum256(data), fileInfo: info,
 	}, nil
-}
-
-// Verify confirms that the current .config still has the identity, metadata,
-// and bytes captured by the snapshot. Once this succeeds, callers should use
-// Bytes rather than reopen the user-controlled file.
-func (s PortableConfigSnapshot) Verify(projectDir string) error {
-	if !s.ready {
-		return fmt.Errorf("portable project config snapshot is uninitialized")
-	}
-	configPath := filepath.Join(projectDir, configName)
-	data, info, found, err := readStableRegularFile(configPath)
-	if err != nil {
-		return fmt.Errorf("revalidate project config %q: %w", configPath, err)
-	}
-	if found != s.found {
-		return fmt.Errorf("project config %q changed after validation", configPath)
-	}
-	if !found {
-		return nil
-	}
-	if !os.SameFile(s.fileInfo, info) || !stableMetadata(s.fileInfo, info) ||
-		sha256.Sum256(data) != s.digest || !bytes.Equal(data, s.data) {
-		return fmt.Errorf("project config %q changed after validation", configPath)
-	}
-	return nil
 }

@@ -50,16 +50,6 @@ type nativeTask struct {
 	id uint64
 }
 
-func runTask(fn func()) (result taskResult) {
-	result.panicked = true
-	defer func() {
-		result.panicValue = recover()
-	}()
-	fn()
-	result.panicked = false
-	return result
-}
-
 // Wait suspends the current coroutine for the given amount of level time, in
 // seconds.
 func (p *Coroutines) Wait(t float64) {
@@ -206,4 +196,14 @@ func (p *Coroutines) enqueuePriorityJob(job *WaitJob) {
 	p.currentJobs.PushFront(job)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
+}
+
+func runTask(fn func()) (result taskResult) {
+	result.panicked = true
+	defer func() {
+		result.panicValue = recover()
+	}()
+	fn()
+	result.panicked = false
+	return result
 }

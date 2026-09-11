@@ -29,10 +29,6 @@ type posTweenInfo struct {
 	startTime float64
 }
 
-func (info *posTweenInfo) getEndTime() float64 {
-	return info.startTime + info.duration
-}
-
 type tweenCallInfo struct {
 	id         Object
 	startValue Vec2
@@ -40,6 +36,15 @@ type tweenCallInfo struct {
 	curIndex   int64
 	timer      float64
 	infos      []posTweenInfo
+}
+
+var (
+	tweenInfos     = make([]*tweenCallInfo, 0)
+	tempTweenInfos = make([]*tweenCallInfo, 0)
+)
+
+func (info *posTweenInfo) getEndTime() float64 {
+	return info.startTime + info.duration
 }
 
 func (info *tweenCallInfo) getCount() int64 {
@@ -70,11 +75,6 @@ func (info *tweenCallInfo) update() {
 		sprite.SetPosition(pos)
 	}
 }
-
-var (
-	tweenInfos     = make([]*tweenCallInfo, 0)
-	tempTweenInfos = make([]*tweenCallInfo, 0)
-)
 
 func updateTweens(delta float64) {
 	tempTweenInfos = tempTweenInfos[:0]

@@ -232,17 +232,6 @@ func (m *Manager) ChangePitch(soundObj engine.Object, delta float64) {
 	m.SetPitch(soundObj, m.GetPitch(soundObj)+delta)
 }
 
-func scratchPitchEffectToScale(value float64) float64 {
-	return math.Pow(2, value/scratchPitchStepsPerOctave)
-}
-
-func pitchScaleToScratchEffect(scale float64) float64 {
-	if scale <= 0 {
-		return 0
-	}
-	return scratchPitchStepsPerOctave * math.Log2(scale)
-}
-
 func (m *Manager) GetVolume(soundObj engine.Object) float64 {
 	return m.backend.GetVolume(soundObj) * 100
 }
@@ -367,4 +356,15 @@ func (m *Manager) preparePlaybacksForRelease(soundObj engine.Object) {
 		}
 		m.removeID(id)
 	}
+}
+
+func scratchPitchEffectToScale(value float64) float64 {
+	return math.Pow(2, value/scratchPitchStepsPerOctave)
+}
+
+func pitchScaleToScratchEffect(scale float64) float64 {
+	if scale <= 0 {
+		return 0
+	}
+	return scratchPitchStepsPerOctave * math.Log2(scale)
 }

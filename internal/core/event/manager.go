@@ -56,20 +56,6 @@ type Manager struct {
 	startFired bool
 }
 
-func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
-	out := make([]Sink, len(sinks)+1)
-	copy(out, sinks)
-	out[len(sinks)] = sink
-	return out
-}
-
-func readOnlySnapshot(sinks []Sink) []Sink {
-	if len(sinks) == 0 {
-		return sinks
-	}
-	return sinks[:len(sinks):len(sinks)]
-}
-
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -87,35 +73,6 @@ func (m *Manager) DeleteOwner(owner any) {
 	for i := range m.buckets {
 		m.buckets[i] = deleteOwnerCopy(m.buckets[i], owner)
 	}
-}
-
-func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
-	if len(sinks) == 0 {
-		return nil
-	}
-
-	firstMatch := -1
-	for i, sink := range sinks {
-		if sink.Owner == owner {
-			firstMatch = i
-			break
-		}
-	}
-	if firstMatch < 0 {
-		return sinks
-	}
-
-	out := make([]Sink, 0, len(sinks)-1)
-	out = append(out, sinks[:firstMatch]...)
-	for _, sink := range sinks[firstMatch+1:] {
-		if sink.Owner != owner {
-			out = append(out, sink)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }
 
 func (m *Manager) Add(bucket Bucket, sink Sink) {
@@ -261,4 +218,47 @@ func (m *Manager) SnapshotTimer() []Sink {
 
 func (m *Manager) SnapshotCondition() []Sink {
 	return m.Snapshot(BucketCondition)
+}
+
+func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
+	out := make([]Sink, len(sinks)+1)
+	copy(out, sinks)
+	out[len(sinks)] = sink
+	return out
+}
+
+func readOnlySnapshot(sinks []Sink) []Sink {
+	if len(sinks) == 0 {
+		return sinks
+	}
+	return sinks[:len(sinks):len(sinks)]
+}
+
+func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
+	if len(sinks) == 0 {
+		return nil
+	}
+
+	firstMatch := -1
+	for i, sink := range sinks {
+		if sink.Owner == owner {
+			firstMatch = i
+			break
+		}
+	}
+	if firstMatch < 0 {
+		return sinks
+	}
+
+	out := make([]Sink, 0, len(sinks)-1)
+	out = append(out, sinks[:firstMatch]...)
+	for _, sink := range sinks[firstMatch+1:] {
+		if sink.Owner != owner {
+			out = append(out, sink)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

@@ -47,7 +47,37 @@ type engineDownloadEnv struct {
 }
 
 var engineDownloadFetcher = fetchURLToFile
+
 var engineDownloadResolveEnv = resolveEngineDownloadEnv
+
+// PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
+// the release runtime pack workflow.
+func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return fmt.Errorf("Linux runtime pack preparation requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	if strings.TrimSpace(assetDir) == "" {
+		return fmt.Errorf("Linux runtime pack preparation requires an engine asset directory")
+	}
+
+	env, err := engineDownloadResolveEnv(repoRoot, "linux")
+	if err != nil {
+		return err
+	}
+	env.arch = linuxRuntimePackArch
+	if err := setLocalAssetDir(&env, repoRoot, assetDir, true); err != nil {
+		return err
+	}
+	if env.verifyManifest {
+		if err := loadEngineAssetManifest(&env); err != nil {
+			return err
+		}
+	}
+	if err := downloadLinuxAssets(env, false); err != nil {
+		return err
+	}
+	return downloadLinuxAssets(env, true)
+}
 
 func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, error) {
 	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, platform)
@@ -111,35 +141,6 @@ func downloadLinuxAssets(env engineDownloadEnv, editor bool) error {
 		return err
 	}
 	return linkOrCopyFile(templateBinary, filepath.Join(env.templateDir, "linux_release."+env.arch))
-}
-
-// PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
-// the release runtime pack workflow.
-func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return fmt.Errorf("Linux runtime pack preparation requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-	if strings.TrimSpace(assetDir) == "" {
-		return fmt.Errorf("Linux runtime pack preparation requires an engine asset directory")
-	}
-
-	env, err := engineDownloadResolveEnv(repoRoot, "linux")
-	if err != nil {
-		return err
-	}
-	env.arch = linuxRuntimePackArch
-	if err := setLocalAssetDir(&env, repoRoot, assetDir, true); err != nil {
-		return err
-	}
-	if env.verifyManifest {
-		if err := loadEngineAssetManifest(&env); err != nil {
-			return err
-		}
-	}
-	if err := downloadLinuxAssets(env, false); err != nil {
-		return err
-	}
-	return downloadLinuxAssets(env, true)
 }
 
 func shouldDownloadPreparedAsset(path string) bool {

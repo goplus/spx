@@ -43,6 +43,14 @@ var (
 	enabledStack       []bool
 )
 
+// TimingInfo records the execution time and related information of each module
+type TimingInfo struct {
+	PreCall    float64       // Preparation time before the call
+	ActualCall float64       // Actual function execution time
+	PostCall   float64       // Cleanup time after the call
+	GCStats    debug.GCStats // GC statistics
+}
+
 func Calcfps() float64 {
 	curTime := time.RealTimeSinceStart()
 	curFrame := time.Frame()
@@ -60,14 +68,6 @@ func Calcfps() float64 {
 		debugLastTime = curTime
 	}
 	return fps
-}
-
-// TimingInfo records the execution time and related information of each module
-type TimingInfo struct {
-	PreCall    float64       // Preparation time before the call
-	ActualCall float64       // Actual function execution time
-	PostCall   float64       // Cleanup time after the call
-	GCStats    debug.GCStats // GC statistics
 }
 
 func SetGco(co *coroutine.Coroutines) {
