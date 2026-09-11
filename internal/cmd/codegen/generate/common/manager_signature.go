@@ -23,17 +23,17 @@ import (
 )
 
 // ManagerMethodSignature renders a manager method with its receiver.
-func ManagerMethodSignature(function *clang.TypedefFunction) string {
-	mgrName := GetManagerName(function.Name)
-	return "(pself *" + mgrName + "Mgr) " + managerSignature(function, mgrName)
+func (c *GenerationContext) ManagerMethodSignature(function *clang.TypedefFunction) string {
+	mgrName := c.GetManagerName(function.Name)
+	return "(pself *" + mgrName + "Mgr) " + c.managerSignature(function, mgrName)
 }
 
 // ManagerInterfaceSignature renders a manager method without its receiver.
-func ManagerInterfaceSignature(function *clang.TypedefFunction) string {
-	return managerSignature(function, GetManagerName(function.Name))
+func (c *GenerationContext) ManagerInterfaceSignature(function *clang.TypedefFunction) string {
+	return c.managerSignature(function, c.GetManagerName(function.Name))
 }
 
-func managerSignature(function *clang.TypedefFunction, mgrName string) string {
+func (c *GenerationContext) managerSignature(function *clang.TypedefFunction, mgrName string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
 	funcName := function.Name[len(prefix)+len(mgrName):]
@@ -42,22 +42,22 @@ func managerSignature(function *clang.TypedefFunction, mgrName string) string {
 	sb.WriteString("(")
 	wroteArg := false
 	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
+		if c.ShouldSkipHighLevelArgument(function, arg) {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(EffectiveGoArgumentName(function, arg))
+		sb.WriteString(c.EffectiveGoArgumentName(function, arg))
 		sb.WriteString(" ")
-		typeName := EffectiveGoArgumentType(function, arg)
+		typeName := c.EffectiveGoArgumentType(function, arg)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
 	sb.WriteString(")")
 
 	if HasEffectiveReturn(function) {
-		typeName := EffectiveGoReturnType(function)
+		typeName := c.EffectiveGoReturnType(function)
 		sb.WriteString(" " + typeName + " ")
 	}
 	return sb.String()

@@ -131,20 +131,20 @@ func (pself *UiMonitor) OnStart() {
 }
 
 func (pself *UiMonitor) SetVisible(isOn bool) {
-	mgr.UiMgr.SetVisible(pself.GetId(), isOn)
+	engine.Managers().UiMgr.SetVisible(pself.GetId(), isOn)
 }
 
 func (pself *UiMonitor) UpdateScale(x float64) {
 	x *= engine.WindowScale()
-	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
+	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
 }
 
 func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
+	engine.Managers().UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
 }
 
 func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
-	pself.render(&mgr.UiMgr, style, value)
+	pself.render(&engine.Managers().UiMgr, style, value)
 }
 
 func NewUiMonitor() *UiMonitor {

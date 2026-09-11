@@ -26,7 +26,7 @@ import (
 )
 
 func SetAssetDir(dir string) {
-	resMgr.SetLoadMode(true)
+	Managers().ResMgr.SetLoadMode(true)
 	if assetPaths.explicitFSRoots {
 		if assetPaths.legacyCompatibility {
 			assetPaths.extAssetDir = readExtAssetDirFromFilesystem(assetPaths.projectRoot, true)

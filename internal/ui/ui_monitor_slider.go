@@ -19,6 +19,8 @@ package ui
 import (
 	"math"
 	"strconv"
+
+	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // MonitorSlider describes Scratch's min-anchored range and discrete step.
@@ -33,7 +35,7 @@ type monitorSliderState struct {
 }
 
 func (pself *UiMonitor) ReadSliderChange() (float64, bool) {
-	return pself.readSliderChange(&mgr.UiMgr)
+	return pself.readSliderChange(&engine.Managers().UiMgr)
 }
 
 func (pself *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {

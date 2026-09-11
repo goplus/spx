@@ -28,6 +28,8 @@ import (
 )
 
 func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	dir := t.TempDir()
 	header := strings.TrimSpace(`
 class SpxUiMgr : public SpxBaseMgr, private SpxUiBindingListener {
@@ -40,10 +42,12 @@ public:
 	merged, err := mergeManagerHeader(dir)
 	require.NoError(t, err)
 	require.Contains(t, merged, "class SpxUiMgr")
-	require.Contains(t, generateManagerHeader(merged, false), "GDExtensionSpxUiBindNode")
+	require.Contains(t, generation.generateManagerHeader(merged, false), "GDExtensionSpxUiBindNode")
 }
 
 func TestGenerateManagerHeaderSkipsRawMethods(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
@@ -55,7 +59,7 @@ public:
 };
 `)
 
-	output := generateManagerHeader(input, false)
+	output := generation.generateManagerHeader(input, false)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchUpdateTransforms")
 	require.Contains(t, output, "GDExtensionSpxSpriteDestroySprite")
@@ -63,7 +67,7 @@ public:
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchUpdateTransformsRaw")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchUpdateVisualsRaw")
 
-	spec, ok := common.GetNativeArrayBridgeSpec("GDExtensionSpxSpriteBatchUpdateTransforms")
+	spec, ok := generation.GetNativeArrayBridgeSpec("GDExtensionSpxSpriteBatchUpdateTransforms")
 	require.True(t, ok)
 	require.Equal(t, "buffer", spec.BaseArgName)
 	require.Equal(t, "[]float32", spec.GoArgType)
@@ -79,6 +83,8 @@ func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
 }
 
 func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
 		ReturnType: clang.PrimativeType{Name: "void"},
@@ -90,7 +96,7 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -101,6 +107,8 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
 		ReturnType: clang.PrimativeType{Name: "GdString"},
@@ -112,7 +120,7 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -125,6 +133,8 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	projectPath := t.TempDir()
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
 		ReturnType: clang.PrimativeType{Name: "GdArray"},
@@ -136,7 +146,7 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 	}}}}
 
 	require.NoError(t, os.MkdirAll(filepath.Join(projectPath, common.NativeRelDir), 0o755))
-	require.NoError(t, generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
+	require.NoError(t, generation.generateGdCppFile(projectPath, gdJsSpxCpp, ast, "godot_js_spx.cpp"))
 	generated, err := os.ReadFile(filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp"))
 	require.NoError(t, err)
 	body := string(generated)
@@ -148,6 +158,8 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 }
 
 func TestGenerateManagerHeaderRegistersDirectNativeArrayBridge(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
@@ -155,10 +167,10 @@ public:
 };
 `)
 
-	output := generateManagerHeader(input, false)
+	output := generation.generateManagerHeader(input, false)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchUpdateTransforms")
-	spec, ok := common.GetNativeArrayBridgeSpec("GDExtensionSpxSpriteBatchUpdateTransforms")
+	spec, ok := generation.GetNativeArrayBridgeSpec("GDExtensionSpxSpriteBatchUpdateTransforms")
 	require.True(t, ok)
 	require.Equal(t, "buffer", spec.BaseArgName)
 	require.Equal(t, "buffer_data", spec.DataArgName)
@@ -169,6 +181,8 @@ public:
 }
 
 func TestGenerateManagerHeaderRegistersArrayTransformBridge(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
@@ -176,12 +190,12 @@ public:
 };
 `)
 
-	output := generateManagerHeader(input, false)
+	output := generation.generateManagerHeader(input, false)
 
 	require.Contains(t, output, "GDExtensionSpxSpriteBatchRetrievePositions")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")
 
-	specs := common.ListArrayTransformBridgeSpecs()
+	specs := generation.ListArrayTransformBridgeSpecs()
 	require.Len(t, specs, 1)
 	require.Equal(t, "GDExtensionSpxSpriteBatchRetrievePositions", specs[0].FunctionName)
 	require.Equal(t, "objs", specs[0].ArrayArgName)
@@ -197,6 +211,8 @@ public:
 }
 
 func TestGenerateManagerHeaderSynthesizesFastReturnTypedefForRawFormat(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
@@ -204,7 +220,7 @@ public:
 };
 `)
 
-	output := generateManagerHeader(input, true)
+	output := generation.generateManagerHeader(input, true)
 
 	require.Contains(t, output, "typedef GdArray (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs);")
 	require.NotContains(t, output, "GDExtensionSpxSpriteBatchRetrievePositionsRaw")

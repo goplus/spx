@@ -25,7 +25,7 @@ import (
 )
 
 func SetAssetDir(dir string) {
-	resMgr.SetLoadMode(false)
+	Managers().ResMgr.SetLoadMode(false)
 	// Packmode keeps the legacy archive and export policy.
 	setAssetRoot(packmodeAssetPrefix, dir)
 	assetPaths.explicitFSRoots = false

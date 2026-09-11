@@ -21,20 +21,20 @@ import (
 
 /* // copy these code to dst file
 var(
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 {{lowerCamelCase $name}}Mgr enginewrap.{{camelCase $name}}MgrImpl
 {{ end }}
 )
 */
 
 var(
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 {{lowerCamelCase $name}}Mgr {{camelCase $name}}MgrImpl
 {{ end }}
 )
 
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 type {{lowerCamelCase $name}}MgrImpl struct {
 }
 type {{camelCase $name}}MgrImpl struct {
@@ -43,9 +43,9 @@ type {{camelCase $name}}MgrImpl struct {
 {{ end }}
 
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 // I{{camelCase $name}}Mgr
-{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name }}
+{{- range $i, $f := $view.Ast.CollectGDExtensionManagerFunctions $name $view.KnownManagerNames }}
 {{ genSyncApiWrapFunction $f }}
 {{- end }} 
 

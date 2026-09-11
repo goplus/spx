@@ -22,11 +22,9 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"text/template"
-	"unicode"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/internal/licenseheader"
@@ -35,7 +33,7 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-var (
+const (
 	NativeRelDir       = "../../gdengine/binding/native"
 	GdengineImplRelDir = "../../gdengine/impl"
 	EnginewrapRelDir   = "../../enginewrap"
@@ -76,26 +74,6 @@ type ArrayTransformBridgeSpec struct {
 	InputArrayType   int32
 	OutputArrayType  int32
 	OutputCountScale int
-}
-
-var (
-	managerSet            = map[string]bool{}
-	cppType2Go            = map[string]string{}
-	KnownManagerNames     = []string{} // List of correct manager names obtained from header parsing
-	nativeArrayBridges    = map[string]NativeArrayBridgeSpec{}
-	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
-)
-
-type ManagerData struct {
-	Ast     clang.CHeaderFileAST
-	Mangers []string
-}
-
-func init() {
-	// Set callback function so the clang package can get the list of known manager names
-	clang.KnownManagerNamesProvider = func() []string {
-		return KnownManagerNames
-	}
 }
 
 func Add(a int, b int) int {
@@ -483,124 +461,54 @@ func TrimPrefix(typeName, prefix string) string {
 	return typeName
 }
 
-// RegisterManagerName registers a known manager name (obtained from header parsing).
-func RegisterManagerName(name string) {
-	name = strings.ToLower(name)
-	// Avoid duplicate entries
-	for _, n := range KnownManagerNames {
-		if n == name {
-			return
-		}
-	}
-	KnownManagerNames = append(KnownManagerNames, name)
+func (c *GenerationContext) IsNativeArrayBridgeArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	return c.IsNativeArrayDataArg(function, arg)
 }
 
-// ClearKnownManagerNames clears the list of known manager names.
-func ClearKnownManagerNames() {
-	KnownManagerNames = []string{}
-}
-
-func ClearNativeArrayBridgeSpecs() {
-	nativeArrayBridges = map[string]NativeArrayBridgeSpec{}
-}
-
-func ClearArrayTransformBridgeSpecs() {
-	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
-}
-
-func RegisterNativeArrayBridgeSpec(spec NativeArrayBridgeSpec) {
-	nativeArrayBridges[spec.BaseFunctionName] = spec
-}
-
-func RegisterArrayTransformBridgeSpec(spec ArrayTransformBridgeSpec) {
-	arrayTransformBridges[spec.FunctionName] = spec
-}
-
-func HasArrayTransformBridgeSpec(function *clang.TypedefFunction) bool {
+func (c *GenerationContext) IsNativeArrayDataArg(function *clang.TypedefFunction, arg clang.Argument) bool {
 	if function == nil {
 		return false
 	}
-	_, ok := arrayTransformBridges[function.Name]
-	return ok
-}
-
-func GetNativeArrayBridgeSpec(functionName string) (NativeArrayBridgeSpec, bool) {
-	spec, ok := nativeArrayBridges[functionName]
-	return spec, ok
-}
-
-func GetArrayTransformBridgeSpec(functionName string) (ArrayTransformBridgeSpec, bool) {
-	spec, ok := arrayTransformBridges[functionName]
-	return spec, ok
-}
-
-func ListArrayTransformBridgeSpecs() []ArrayTransformBridgeSpec {
-	specs := make([]ArrayTransformBridgeSpec, 0, len(arrayTransformBridges))
-	for _, spec := range arrayTransformBridges {
-		specs = append(specs, spec)
-	}
-	sort.Slice(specs, func(i, j int) bool {
-		return specs[i].FunctionName < specs[j].FunctionName
-	})
-	return specs
-}
-
-func HasNativeArrayBridgeSpec(function *clang.TypedefFunction) bool {
-	if function == nil {
-		return false
-	}
-	_, ok := GetNativeArrayBridgeSpec(function.Name)
-	return ok
-}
-
-func IsNativeArrayBridgeArg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	return IsNativeArrayDataArg(function, arg)
-}
-
-func IsNativeArrayDataArg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	spec, ok := GetNativeArrayBridgeSpec(function.Name)
+	spec, ok := c.GetNativeArrayBridgeSpec(function.Name)
 	if !ok {
 		return false
 	}
 	return arg.Name == spec.DataArgName || arg.Name == spec.BaseArgName
 }
 
-func IsNativeArrayLenArg(function *clang.TypedefFunction, arg clang.Argument) bool {
+func (c *GenerationContext) IsNativeArrayLenArg(function *clang.TypedefFunction, arg clang.Argument) bool {
 	if function == nil {
 		return false
 	}
-	spec, ok := GetNativeArrayBridgeSpec(function.Name)
+	spec, ok := c.GetNativeArrayBridgeSpec(function.Name)
 	if !ok {
 		return false
 	}
 	return arg.Name == spec.LenArgName && spec.LenArgName != ""
 }
 
-func ShouldSkipHighLevelArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
-	return IsNativeArrayLenArg(function, arg)
+func (c *GenerationContext) ShouldSkipHighLevelArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
+	return c.IsNativeArrayLenArg(function, arg)
 }
 
-func EffectiveGoArgumentName(function *clang.TypedefFunction, arg clang.Argument) string {
-	if IsNativeArrayDataArg(function, arg) {
-		spec, _ := GetNativeArrayBridgeSpec(function.Name)
+func (c *GenerationContext) EffectiveGoArgumentName(function *clang.TypedefFunction, arg clang.Argument) string {
+	if c.IsNativeArrayDataArg(function, arg) {
+		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
 		return spec.BaseArgName
 	}
 	return arg.Name
 }
 
-func EffectiveGoArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
-	if IsNativeArrayDataArg(function, arg) {
-		spec, _ := GetNativeArrayBridgeSpec(function.Name)
+func (c *GenerationContext) EffectiveGoArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
+	if c.IsNativeArrayDataArg(function, arg) {
+		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
 		return spec.DataArgGoType
 	}
-	return MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
+	return c.MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 }
 
-func EffectiveGdxArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
-	typeName := EffectiveGoArgumentType(function, arg)
+func (c *GenerationContext) EffectiveGdxArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
+	typeName := c.EffectiveGoArgumentType(function, arg)
 	switch typeName {
 	case "Object":
 		return "gdx.Object"
@@ -611,44 +519,9 @@ func EffectiveGdxArgumentType(function *clang.TypedefFunction, arg clang.Argumen
 	}
 }
 
-func NativeArrayLenExpr(function *clang.TypedefFunction, argName string) string {
-	spec, _ := GetNativeArrayBridgeSpec(function.Name)
+func (c *GenerationContext) NativeArrayLenExpr(function *clang.TypedefFunction, argName string) string {
+	spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
 	return spec.LenArgGoType + "(len(" + argName + "))"
-}
-
-func GetManagerName(str string) string {
-	prefix := "GDExtensionSpx"
-	str = str[len(prefix):]
-	lowerStr := strings.ToLower(str)
-
-	// Match the longest known name without reordering KnownManagerNames.
-	if len(KnownManagerNames) > 0 {
-		sortedNames := make([]string, len(KnownManagerNames))
-		copy(sortedNames, KnownManagerNames)
-		sort.Slice(sortedNames, func(i, j int) bool {
-			return len(sortedNames[i]) > len(sortedNames[j])
-		})
-
-		for _, mgr := range sortedNames {
-			if strings.HasPrefix(lowerStr, mgr) {
-				return mgr
-			}
-		}
-	}
-
-	// Otherwise, keep the first two bytes and stop at the next uppercase rune.
-	chs := []rune{rune(str[0]), rune(str[1])}
-	for _, ch := range str[2:] {
-		if unicode.IsUpper(ch) {
-			break
-		}
-		chs = append(chs, ch)
-	}
-	return strings.ToLower(string(chs))
-}
-
-func IsManagerMethod(function *clang.TypedefFunction) bool {
-	return managerSet[GetManagerName(function.Name)]
 }
 
 func EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
@@ -659,15 +532,15 @@ func EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
 	return args
 }
 
-func HighLevelArguments(function *clang.TypedefFunction) []clang.Argument {
+func (c *GenerationContext) HighLevelArguments(function *clang.TypedefFunction) []clang.Argument {
 	args := EffectiveArguments(function)
 	result := make([]clang.Argument, 0, len(args))
 	for _, arg := range args {
-		if ShouldSkipHighLevelArgument(function, arg) {
+		if c.ShouldSkipHighLevelArgument(function, arg) {
 			continue
 		}
 		cloned := arg
-		cloned.Name = EffectiveGoArgumentName(function, arg)
+		cloned.Name = c.EffectiveGoArgumentName(function, arg)
 		result = append(result, cloned)
 	}
 	return result
@@ -689,24 +562,24 @@ func EffectiveRawReturnType(function *clang.TypedefFunction) string {
 	return ""
 }
 
-func EffectiveGoReturnType(function *clang.TypedefFunction) string {
+func (c *GenerationContext) EffectiveGoReturnType(function *clang.TypedefFunction) string {
 	rawType := EffectiveRawReturnType(function)
 	if rawType == "" {
 		return ""
 	}
-	return MustGoTypeForCType(rawType, function.Name)
+	return c.MustGoTypeForCType(rawType, function.Name)
 }
 
 func HasEffectiveReturn(function *clang.TypedefFunction) bool {
 	return EffectiveRawReturnType(function) != ""
 }
 
-func GetFuncParamTypeString(typeName string) string {
-	return cppType2Go[typeName]
+func (c *GenerationContext) GetFuncParamTypeString(typeName string) string {
+	return c.cppType2Go[typeName]
 }
 
-func MustGoTypeForCType(typeName string, functionName string) string {
-	goType := GetFuncParamTypeString(typeName)
+func (c *GenerationContext) MustGoTypeForCType(typeName string, functionName string) string {
+	goType := c.GetFuncParamTypeString(typeName)
 	if goType != "" {
 		return goType
 	}
@@ -718,40 +591,6 @@ func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
 		return arg.Type.Primative.Name
 	}
 	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
-}
-
-func GetManagers(ast clang.CHeaderFileAST) []string {
-	items := []string{}
-	for _, item := range ast.CollectGDExtensionInterfaceFunctions() {
-		items = append(items, item.Name)
-	}
-	managerSet = make(map[string]bool)
-	managers := []string{}
-	for _, str := range items {
-		managerSet[GetManagerName(str)] = true
-	}
-	delete(managerSet, "")
-	delete(managerSet, "string")
-	delete(managerSet, "variant")
-	delete(managerSet, "global")
-	for item := range managerSet {
-		managers = append(managers, item)
-	}
-	sort.Strings(managers)
-	cppType2Go = map[string]string{
-		"GdInt":    "int64",
-		"GdFloat":  "float64",
-		"GdObj":    "Object",
-		"GdVec2":   "Vec2",
-		"GdVec3":   "Vec3",
-		"GdVec4":   "Vec4",
-		"GdRect2":  "Rect2",
-		"GdString": "string",
-		"GdBool":   "bool",
-		"GdColor":  "Color",
-		"GdArray":  "Array",
-	}
-	return managers
 }
 
 func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {

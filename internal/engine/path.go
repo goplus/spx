@@ -268,10 +268,10 @@ func readExtAssetDirFromFilesystem(projectRoot string, enabled bool) string {
 
 func readExtAssetDirFromProjectConfig(prefix string) string {
 	configPath := projectConfigPath(prefix)
-	if !resMgr.HasFile(configPath) {
+	if !Managers().ResMgr.HasFile(configPath) {
 		return ""
 	}
-	return parseExtAssetDir(configPath, []byte(resMgr.ReadAllText(configPath)))
+	return parseExtAssetDir(configPath, []byte(Managers().ResMgr.ReadAllText(configPath)))
 }
 
 func parseExtAssetDir(configPath string, data []byte) string {

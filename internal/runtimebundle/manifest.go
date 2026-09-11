@@ -27,6 +27,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/goplus/spx/v3/internal/base/pathutil"
+
 	"github.com/goplus/spx/v3/internal/strictjson"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
@@ -466,36 +468,21 @@ func isDriveAbsolute(name string) bool {
 }
 
 func validatePortableComponent(component string) error {
-	if strings.HasSuffix(component, ".") || strings.HasSuffix(component, " ") {
+	switch pathutil.CheckComponent(component) {
+	case pathutil.TrailingDotOrSpace:
 		return fmt.Errorf("trailing dot/space is not portable on Windows")
-	}
-	if strings.ContainsAny(component, `<>:"|?*`) {
+	case pathutil.ReservedCharacter:
 		return fmt.Errorf("contains a Windows-reserved character")
+	case pathutil.ControlCharacter:
+		return fmt.Errorf("contains a control character")
 	}
-	for _, character := range component {
-		if character < 0x20 {
-			return fmt.Errorf("contains a control character")
-		}
-	}
-	folded := cases.Fold().String(component)
-	base := folded
+	base := cases.Fold().String(component)
 	if index := strings.IndexByte(base, '.'); index >= 0 {
 		base = base[:index]
 	}
 	base = strings.TrimRight(base, " .")
-	switch base {
-	case "con", "prn", "aux", "nul", "clock$", "conin$", "conout$":
+	if pathutil.IsDeviceBase(base) {
 		return fmt.Errorf("reserved Windows device name")
-	}
-	if len(base) == 4 && (strings.HasPrefix(base, "com") || strings.HasPrefix(base, "lpt")) && base[3] >= '1' && base[3] <= '9' {
-		return fmt.Errorf("reserved Windows device name")
-	}
-	for _, prefix := range []string{"com", "lpt"} {
-		for _, digit := range []string{"¹", "²", "³"} {
-			if base == prefix+digit {
-				return fmt.Errorf("reserved Windows device name")
-			}
-		}
 	}
 	return nil
 }

@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/goplus/spx/v3/internal/base/pathutil"
 )
 
 type observedRoot struct {
@@ -53,36 +55,21 @@ func validateRelativePath(name, field string) (string, error) {
 }
 
 func validatePortableComponent(component string) error {
-	if strings.HasSuffix(component, ".") || strings.HasSuffix(component, " ") {
+	switch pathutil.CheckComponent(component) {
+	case pathutil.TrailingDotOrSpace:
 		return errors.New("component ends in a dot or space")
-	}
-	if strings.ContainsAny(component, `<>:"|?*`) {
+	case pathutil.ReservedCharacter:
 		return errors.New("component contains a Windows-reserved character")
+	case pathutil.ControlCharacter:
+		return errors.New("component contains a control character")
 	}
-	for _, character := range component {
-		if character < 0x20 {
-			return errors.New("component contains a control character")
-		}
-	}
-
 	base := component
 	if dot := strings.IndexByte(base, '.'); dot >= 0 {
 		base = base[:dot]
 	}
 	base = strings.ToUpper(strings.TrimRight(base, " ."))
-	switch base {
-	case "CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$":
+	if pathutil.IsDeviceBase(base) {
 		return errors.New("component uses a reserved DOS device name")
-	}
-	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9' {
-		return errors.New("component uses a reserved DOS device name")
-	}
-	for _, prefix := range []string{"COM", "LPT"} {
-		for _, digit := range []string{"¹", "²", "³"} {
-			if base == prefix+digit {
-				return errors.New("component uses a reserved DOS device name")
-			}
-		}
 	}
 	return nil
 }

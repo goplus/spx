@@ -30,10 +30,10 @@ import (
 )
 
 func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
-	common.ClearKnownManagerNames()
-	common.RegisterManagerName("sprite")
-	common.RegisterManagerName("platform")
-	t.Cleanup(common.ClearKnownManagerNames)
+	generation := &Generator{GenerationContext: common.NewGenerationContext()}
+
+	generation.RegisterManagerName("sprite")
+	generation.RegisterManagerName("platform")
 
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{
 		{Function: managerFunction(
@@ -54,7 +54,7 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	}}
 
 	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, GenerateManagerWrapperGoFile(projectPath, ast))
+	require.NoError(t, generation.GenerateManagerWrapperGoFile(projectPath, ast))
 	generatedPath := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
 	generated, err := os.ReadFile(generatedPath)
 	require.NoError(t, err)

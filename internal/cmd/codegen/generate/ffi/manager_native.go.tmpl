@@ -33,7 +33,7 @@ import (
 func BindMgr(mgrs []IManager) {
 	for _, mgr := range mgrs {
 		switch v := mgr.(type) {
-{{- range $i, $name := $view.Mangers }}
+{{- range $i, $name := $view.Managers }}
 		case I{{camelCase $name}}Mgr:
 			{{camelCase $name}}Mgr = v
 {{ end }}
@@ -43,14 +43,14 @@ func BindMgr(mgrs []IManager) {
 	}
 }
 
-{{ range $i, $name := $view.Mangers -}}
+{{ range $i, $name := $view.Managers -}}
 type {{$name}}Mgr struct {
 	baseMgr
 }
 {{ end }}
 
 func createMgrs() []IManager {
-{{- range $i, $name := $view.Mangers }}
+{{- range $i, $name := $view.Managers }}
 	addManager(&{{$name}}Mgr{})
 {{- end }}
 	return mgrs

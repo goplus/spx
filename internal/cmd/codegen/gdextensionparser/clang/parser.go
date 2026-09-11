@@ -26,10 +26,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// KnownManagerNamesProvider is a callback function to get the list of known manager names.
-// This callback is set by the common package during initialization to avoid circular imports.
-var KnownManagerNamesProvider func() []string
-
 var (
 	legacyGDExtentionInterfaceFunctionNames []string = []string{
 		"GDExtensionInterfaceFunctionPtr",
@@ -158,16 +154,10 @@ func (a CHeaderFileAST) CollectFunctionsOfClass(className string) []TypedefFunct
 	return fns
 }
 
-func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string) []TypedefFunction {
+func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string, knownManagers []string) []TypedefFunction {
 	allFns := a.CollectFunctions()
 
 	fns := make([]TypedefFunction, 0, len(allFns))
-
-	// Get the list of known manager names
-	var knownManagers []string
-	if KnownManagerNamesProvider != nil {
-		knownManagers = KnownManagerNamesProvider()
-	}
 
 	for _, fn := range allFns {
 		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&

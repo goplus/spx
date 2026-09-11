@@ -25,6 +25,7 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/ffi"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/webffi"
@@ -106,6 +107,10 @@ func validateCodegenInputs(spxModuleSource string) error {
 }
 
 func generateCode() error {
+	generation := common.NewGenerationContext()
+	nativeGenerator := ffi.Generator{GenerationContext: generation}
+	webGenerator := webffi.Generator{GenerationContext: generation}
+	extensionGenerator := gdext.Generator{GenerationContext: generation}
 	// Validate every external input before generators can create or replace files.
 	if err := validateCodegenInputs(spxModulePath); err != nil {
 		return err
@@ -124,7 +129,7 @@ func generateCode() error {
 		if verbose {
 			spxlog.Info("Generating gdextension godot ext functions...")
 		}
-		if err := gdext.GenerateHeader(packagePath, spxModulePath); err != nil {
+		if err := extensionGenerator.GenerateHeader(packagePath, spxModulePath); err != nil {
 			return fmt.Errorf("generate GDExtension header: %w", err)
 		}
 	}
@@ -140,13 +145,13 @@ func generateCode() error {
 		if verbose {
 			spxlog.Info("Generating gdextension C wrapper functions...")
 		}
-		if err := ffi.Generate(packagePath, ast); err != nil {
+		if err := nativeGenerator.Generate(packagePath, ast); err != nil {
 			return fmt.Errorf("generate native bindings: %w", err)
 		}
-		if err := webffi.Generate(packagePath, spxModulePath, ast); err != nil {
+		if err := webGenerator.Generate(packagePath, spxModulePath, ast); err != nil {
 			return fmt.Errorf("generate Web bindings: %w", err)
 		}
-		if err := gdext.Generate(packagePath, spxModulePath, ast); err != nil {
+		if err := extensionGenerator.Generate(packagePath, spxModulePath, ast); err != nil {
 			return fmt.Errorf("generate GDExtension sources: %w", err)
 		}
 	}
