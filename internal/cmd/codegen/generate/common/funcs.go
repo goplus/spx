@@ -593,36 +593,41 @@ func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
 	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
 }
 
-func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {
-	tmpl, err := template.New(name).
-		Funcs(funcs).
-		Parse(text)
+// RenderTemplate completes template execution before any output file is opened.
+func RenderTemplate(funcs template.FuncMap, name, text string, data any) ([]byte, error) {
+	tmpl, err := template.New(name).Funcs(funcs).Parse(text)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	var b bytes.Buffer
-	err = tmpl.Execute(&b, data)
+	if err := tmpl.Execute(&b, data); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func WriteGeneratedFile(dstPath string, output []byte, mode os.FileMode) error {
+	if err := os.WriteFile(dstPath, output, mode); err != nil {
+		return fmt.Errorf("write generated file %q: %w", dstPath, err)
+	}
+	spxlog.Info("Generated file: %s", dstPath)
+	return nil
+}
+
+func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {
+	output, err := RenderTemplate(funcs, name, text, data)
 	if err != nil {
 		return err
 	}
-	output := b.Bytes()
-	isGoFile := filepath.Ext(dstPath) == ".go"
-	if isGoFile {
+	if filepath.Ext(dstPath) == ".go" {
 		output = licenseheader.AddToGoSource(output)
 		output, err = format.Source(output)
 		if err != nil {
 			return fmt.Errorf("format generated Go file %q: %w", dstPath, err)
 		}
 	}
-
-	dir := filepath.Dir(dstPath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create generated file directory %q: %w", dir, err)
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+		return fmt.Errorf("create generated file directory %q: %w", filepath.Dir(dstPath), err)
 	}
-	if err := os.WriteFile(dstPath, output, 0o644); err != nil {
-		return fmt.Errorf("write generated file %q: %w", dstPath, err)
-	}
-	spxlog.Info("Generated file: %s", dstPath)
-	return nil
+	return WriteGeneratedFile(dstPath, output, 0o644)
 }

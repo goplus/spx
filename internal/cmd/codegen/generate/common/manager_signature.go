@@ -58,7 +58,9 @@ func (c *GenerationContext) managerSignature(function *clang.TypedefFunction, mg
 
 	if HasEffectiveReturn(function) {
 		typeName := c.EffectiveGoReturnType(function)
-		sb.WriteString(" " + typeName + " ")
+		sb.WriteByte(' ')
+		sb.WriteString(typeName)
+		sb.WriteByte(' ')
 	}
 	return sb.String()
 }

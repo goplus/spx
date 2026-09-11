@@ -57,7 +57,8 @@ func ReadFiles(dir, fileName string) (string, error) {
 		if strings.Contains(line, "/*******") {
 			continue
 		}
-		sb.WriteString(line + "\n")
+		sb.WriteString(line)
+		sb.WriteByte('\n')
 	}
 	finalStr := sb.String()
 	finalStr = strings.ReplaceAll(finalStr, "\r", "")

@@ -156,12 +156,12 @@ func mergeManagerHeader(dir string) (string, error) {
 			}
 
 			if inPublicSection {
-				buffer.WriteString("\t" + line + "\n")
+				fmt.Fprintf(&buffer, "\t%s\n", line)
 			}
 		}
 
 		if className != "" {
-			builder.WriteString(fmt.Sprintf("class %s {\n", className))
+			fmt.Fprintf(&builder, "class %s {\n", className)
 			builder.WriteString(buffer.String())
 			builder.WriteString("\n};\n\n")
 		}
@@ -265,7 +265,7 @@ func (g *headerCollector) render(rawFormat bool) string {
 	baseMethods := make(map[string]classMethodDecl)
 	for _, method := range g.methods {
 		if method.MethodName == "" {
-			builder.WriteString("// " + method.ClassName + "\n")
+			fmt.Fprintf(&builder, "// %s\n", method.ClassName)
 			continue
 		}
 		baseMethods[method.ClassName+"::"+method.MethodName] = method
@@ -429,10 +429,10 @@ func (g *headerCollector) appendSyntheticArrayTransformTypedefs(builder *strings
 			continue
 		}
 		if rawFormat {
-			builder.WriteString(fmt.Sprintf("typedef GdArray (*%s)(GdArray %s);\n", spec.FunctionName, spec.ArrayArgName))
+			fmt.Fprintf(builder, "typedef GdArray (*%s)(GdArray %s);\n", spec.FunctionName, spec.ArrayArgName)
 			continue
 		}
-		builder.WriteString(fmt.Sprintf("typedef void (*%s)(GdArray %s, GdArray *ret_value);\n", spec.FunctionName, spec.ArrayArgName))
+		fmt.Fprintf(builder, "typedef void (*%s)(GdArray %s, GdArray *ret_value);\n", spec.FunctionName, spec.ArrayArgName)
 	}
 }
 

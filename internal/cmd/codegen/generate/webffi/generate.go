@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-// Package gdextensionwrapper generates C code to wrap all of the gdextension
-// methods to call functions on the gdextension_api_structs to work
-// around the Cgo C function pointer limitation.
+// Package webffi generates Go, JavaScript, and worker bindings for Web runtimes.
 package webffi
 
 import (
@@ -35,9 +33,7 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-var (
-	WebRelDir = "../../gdengine/binding/web"
-)
+const WebRelDir = "../../gdengine/binding/web"
 
 var (
 
@@ -238,33 +234,16 @@ func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string) er
 		"loadProcAddressName": LoadProcAddressName,
 	}
 
-	tmpl, err := template.New("gdspx.js").
-		Funcs(funcs).
-		Parse(jsEngineJsFileText)
+	output, err := RenderTemplate(funcs, "gdspx.js", jsEngineJsFileText, g.AST())
 	if err != nil {
 		return err
 	}
-
-	var b bytes.Buffer
-	err = tmpl.Execute(&b, g.AST())
-	if err != nil {
+	output = trimTrailingWhitespace(output)
+	dstPath := filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js")
+	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
 		return err
 	}
-	output := trimTrailingWhitespace(b.Bytes())
-
-	headerFileName := filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js")
-	err = os.MkdirAll(filepath.Dir(headerFileName), os.ModePerm)
-	if err != nil {
-		return err
-	}
-	f, err := os.Create(headerFileName)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.Write(output)
-	return err
+	return WriteGeneratedFile(dstPath, output, 0o666)
 }
 
 func trimTrailingWhitespace(src []byte) []byte {
@@ -292,7 +271,8 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		if g.IsNativeArrayDataArg(function, arg) {
 			argName := "arg" + strconv.Itoa(i)
-			sb.WriteString(argName + " := JsFromGdArray(")
+			sb.WriteString(argName)
+			sb.WriteString(" := JsFromGdArray(")
 			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
 			sb.WriteString(")\n")
 			params = append(params, argName)
@@ -303,7 +283,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 			argName := "arg" + strconv.Itoa(i)
 			lowName := argName + "Low"
 			highName := argName + "High"
-			sb.WriteString(lowName + ", " + highName + " := ")
+			fmt.Fprintf(&sb, "%s, %s := ", lowName, highName)
 			sb.WriteString(flatJsSplitHelper(typeName))
 			sb.WriteString("(")
 			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
@@ -312,8 +292,10 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 			continue
 		}
 		argName := "arg" + strconv.Itoa(i)
-		sb.WriteString(argName + " := ")
-		sb.WriteString("JsFrom" + typeName)
+		sb.WriteString(argName)
+		sb.WriteString(" := ")
+		sb.WriteString("JsFrom")
+		sb.WriteString(typeName)
 		sb.WriteString("(")
 		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
 		sb.WriteString(")")
@@ -340,14 +322,15 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb.WriteString(")")
 
 	if HasEffectiveReturn(function) {
-		sb.WriteString("\n" + prefixTab)
+		sb.WriteByte('\n')
+		sb.WriteString(prefixTab)
 		sb.WriteString("return ")
 		typeName := EffectiveRawReturnType(function)
 		name := strcase.ToCamel(typeName)
 		if name == "GdObj" {
 			name = "GdObject"
 		}
-		sb.WriteString("JsTo" + name + "(_retValue)")
+		fmt.Fprintf(&sb, "JsTo%s(_retValue)", name)
 	}
 	return sb.String()
 }
@@ -516,7 +499,7 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 
 	// call the function
 	if rawRetType != "" {
-		sb.WriteString("var _retValue = Alloc" + rawRetType + "();")
+		fmt.Fprintf(&sb, "var _retValue = Alloc%s();", rawRetType)
 	}
 	sb.WriteString("\n")
 
@@ -526,18 +509,19 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
 		if g.usesFlatJsGdIntArg(function, arg) {
-			sb.WriteString("var " + argName + " = ")
+			fmt.Fprintf(&sb, "var %s = ", argName)
 			sb.WriteString(flatJsCtor(typeName))
 			sb.WriteString("(")
-			sb.WriteString(arg.Name + "_high, " + arg.Name + "_low")
+			fmt.Fprintf(&sb, "%s_high, %s_low", arg.Name, arg.Name)
 			sb.WriteString(");")
 
 			sb.WriteString("\n")
 			params = append(params, argName)
 			continue
 		}
-		sb.WriteString("var " + argName + " = ")
-		sb.WriteString("To" + typeName)
+		fmt.Fprintf(&sb, "var %s = ", argName)
+		sb.WriteString("To")
+		sb.WriteString(typeName)
 		sb.WriteString("(")
 		sb.WriteString(arg.Name)
 		sb.WriteString(");")
@@ -568,11 +552,12 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		typeName := MustPrimitiveTypeName(arg, function.Name)
 		argName := "_arg" + strconv.Itoa(i)
-		sb.WriteString("Free" + typeName + "(" + argName + "); \n")
+		fmt.Fprintf(&sb, "Free%s(%s); \n", typeName, argName)
 	}
 
 	if rawRetType != "" {
-		sb.WriteString(prefixTab + "var _finalRetValue = ")
+		sb.WriteString(prefixTab)
+		sb.WriteString("var _finalRetValue = ")
 		if isFlatJsGdIntLikeType(rawRetType) {
 			sb.WriteString("this._readGdIntLike(_retValue, ")
 			sb.WriteString(flatJsScratchAccessor(rawRetType))
@@ -581,10 +566,12 @@ func (g *Generator) getJsFuncBody(function *clang.TypedefFunction) string {
 			typeName := rawRetType
 			funcName := strcase.ToCamel(typeName)
 			funcName = "ToJs" + strings.ReplaceAll(funcName, "Gd", "")
-			sb.WriteString(funcName + "(_retValue);\n")
+			sb.WriteString(funcName)
+			sb.WriteString("(_retValue);\n")
 		}
-		sb.WriteString(prefixTab + "Free" + rawRetType + "(_retValue); \n")
-		sb.WriteString(prefixTab + "return _finalRetValue")
+		fmt.Fprintf(&sb, "%sFree%s(_retValue); \n", prefixTab, rawRetType)
+		sb.WriteString(prefixTab)
+		sb.WriteString("return _finalRetValue")
 	}
 	return sb.String()
 }

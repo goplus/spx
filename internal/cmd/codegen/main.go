@@ -124,7 +124,7 @@ func generateCode() error {
 		if err != nil {
 			return fmt.Errorf("prepare GDExtension headers: %w", err)
 		}
-		if err := os.WriteFile(filepath.Join(packagePath, common.NativeRelDir, "gdextension_spx_ext.h"), []byte(headers.Raw), 0o644); err != nil {
+		if err := common.WriteGeneratedFile(filepath.Join(packagePath, common.NativeRelDir, "gdextension_spx_ext.h"), []byte(headers.Raw), 0o644); err != nil {
 			return fmt.Errorf("generate GDExtension header: %w", err)
 		}
 		ast, err := gdextensionparser.GenerateGDExtensionInterfaceAST(packagePath, parsedASTPath)
