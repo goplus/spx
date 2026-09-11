@@ -56,12 +56,12 @@ type EnumValue struct {
 }
 
 type TypedefAlias struct {
-	Type PrimativeType `parser:" 'typedef' @@ " json:",omitempty"`
+	Type PrimativeType `parser:" 'typedef' @@ "`
 	Name string        `parser:" @Ident       " json:",omitempty"`
 }
 
 type TypedefFunction struct {
-	ReturnType PrimativeType `parser:" 'typedef' @@                " json:",omitempty"`
+	ReturnType PrimativeType `parser:" 'typedef' @@                "`
 	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
 }
@@ -77,12 +77,12 @@ type StructField struct {
 }
 
 type StructVariable struct {
-	Type PrimativeType `parser:" @@     " json:",omitempty"`
+	Type PrimativeType `parser:" @@     "`
 	Name string        `parser:" @Ident " json:",omitempty"`
 }
 
 type FunctionType struct {
-	ReturnType PrimativeType `parser:" @@                          " json:",omitempty"`
+	ReturnType PrimativeType `parser:" @@                          "`
 	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
 }
@@ -99,7 +99,7 @@ type Type struct {
 }
 
 type StructFunction struct {
-	ReturnType PrimativeType `parser:" @@                     " json:",omitempty"`
+	ReturnType PrimativeType `parser:" @@                     "`
 	Name       string        `parser:" '(' '*' @Ident ')'     " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' @@ ( ',' @@ )* ')' " json:",omitempty"`
 	Comment    string        `parser:" @Comment?              " json:",omitempty"`
@@ -107,7 +107,7 @@ type StructFunction struct {
 
 // Argument represents a C parameter, including function-pointer parameters.
 type Argument struct {
-	Type Type   `parser:" @@                               " json:",omitempty"`
+	Type Type   `parser:" @@                               "`
 	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
 }
 

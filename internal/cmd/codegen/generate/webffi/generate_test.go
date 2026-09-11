@@ -42,7 +42,7 @@ func TestGenerateJsEngineJsFileTrimsTrailingWhitespace(t *testing.T) {
 	require.NoError(t, generation.GenerateJsEngineJsFile("", spxModulePath))
 	body, err := os.ReadFile(filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js"))
 	require.NoError(t, err)
-	for _, line := range strings.Split(string(body), "\n") {
+	for line := range strings.SplitSeq(string(body), "\n") {
 		require.Equal(t, strings.TrimRight(line, " \t"), line)
 	}
 	require.Contains(t, string(body), "GdspxFuncs.prototype['gdspx_test_do_thing'] = GdspxFuncs.prototype.gdspx_test_do_thing;")

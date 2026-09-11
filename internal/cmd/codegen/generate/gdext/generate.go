@@ -28,7 +28,6 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
-	"github.com/iancoleman/strcase"
 )
 
 var (
@@ -104,18 +103,8 @@ func fileCopy(src, dst string) error {
 
 func (g *Generator) generateGdCppFile(projectPath string, templateStr string, outputFileName string) error {
 	funcs := template.FuncMap{
-		"gdiVariableName":             common.GdiVariableName,
-		"snakeCase":                   strcase.ToSnake,
-		"camelCase":                   strcase.ToCamel,
-		"goReturnType":                common.GoReturnType,
-		"goArgumentType":              common.GoArgumentType,
-		"goEnumValue":                 common.GoEnumValue,
-		"add":                         common.Add,
 		"sub":                         common.Sub,
-		"cgoCastArgument":             common.CgoCastArgument,
-		"cgoCastReturnType":           common.CgoCastReturnType,
-		"cgoCleanUpArgument":          common.CgoCleanUpArgument,
-		"trimPrefix":                  common.TrimPrefix,
+		"trimPrefix":                  strings.TrimPrefix,
 		"loadProcAddressName":         common.LoadProcAddressName,
 		"isManagerMethod":             g.IsManagerMethod,
 		"getManagerName":              g.GetManagerName,
