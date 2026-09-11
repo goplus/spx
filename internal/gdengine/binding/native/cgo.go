@@ -28,9 +28,6 @@ var (
 	callbacks    engine.CallbackInfo
 )
 
-//go:linkname main main.main
-func main()
-
 func Link() bool {
 	return false
 }
@@ -46,6 +43,9 @@ func Unlink() {
 func BindCallback(info engine.CallbackInfo) {
 	callbacks = info
 }
+
+//go:linkname main main.main
+func main()
 
 //export gdspx_init
 func gdspx_init(lookupFunc uintptr, classes, configuration unsafe.Pointer) uint8 {

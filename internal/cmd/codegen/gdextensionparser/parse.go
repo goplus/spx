@@ -64,6 +64,14 @@ func ReadFiles(dir, fileName string) (string, error) {
 	return finalStr, nil
 }
 
+func GenerateGDExtensionInterfaceAST(projectPath, astOutputFilename string) (clang.CHeaderFileAST, error) {
+	str, err := expandIncludeFiles(projectPath, "gdextension_spx_codegen_header.h", "_temp_output.h")
+	if err != nil {
+		return clang.CHeaderFileAST{}, err
+	}
+	return generateGDExtensionInterfaceAST(str, projectPath, astOutputFilename)
+}
+
 func readLines(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -114,14 +122,6 @@ func expandIncludeFiles(projectPath, header, outputName string) (string, error) 
 		return "", err
 	}
 	return allStrs, nil
-}
-
-func GenerateGDExtensionInterfaceAST(projectPath, astOutputFilename string) (clang.CHeaderFileAST, error) {
-	str, err := expandIncludeFiles(projectPath, "gdextension_spx_codegen_header.h", "_temp_output.h")
-	if err != nil {
-		return clang.CHeaderFileAST{}, err
-	}
-	return generateGDExtensionInterfaceAST(str, projectPath, astOutputFilename)
 }
 
 func generateGDExtensionInterfaceAST(b, projectPath, astOutputFilename string) (clang.CHeaderFileAST, error) {

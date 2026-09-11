@@ -32,10 +32,6 @@ type monitorSliderState struct {
 	position float64
 }
 
-func (s MonitorSlider) steps() float64 {
-	return math.Floor((s.Max-s.Min)/s.Step + 1e-9)
-}
-
 func (pself *UiMonitor) ReadSliderChange() (float64, bool) {
 	return pself.readSliderChange(&mgr.UiMgr)
 }
@@ -69,4 +65,8 @@ func (pself *UiMonitor) renderSlider(sink monitorRenderSink, slider MonitorSlide
 	number = math.Max(slider.Min, math.Min(maximum, number))
 	sink.SetRange(id, slider.Min, maximum, slider.Step, number)
 	pself.slider.position = sink.GetRangeValue(id)
+}
+
+func (s MonitorSlider) steps() float64 {
+	return math.Floor((s.Max-s.Min)/s.Step + 1e-9)
 }

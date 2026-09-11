@@ -33,15 +33,6 @@ type Queue[T any] struct {
 	pool  sync.Pool
 }
 
-// NewQueue creates an empty queue.
-func NewQueue[T any]() *Queue[T] {
-	q := &Queue[T]{}
-	q.pool.New = func() any {
-		return new(node[T])
-	}
-	return q
-}
-
 // Move appends every value from src to the receiving queue and empties src.
 // Concurrent moves between two queues must use a consistent direction.
 func (q *Queue[T]) Move(src *Queue[T]) {
@@ -171,6 +162,15 @@ func (q *Queue[T]) PopBack() T {
 
 	q.releaseNode(n)
 	return value
+}
+
+// NewQueue creates an empty queue.
+func NewQueue[T any]() *Queue[T] {
+	q := &Queue[T]{}
+	q.pool.New = func() any {
+		return new(node[T])
+	}
+	return q
 }
 
 func (q *Queue[T]) ensurePool() {

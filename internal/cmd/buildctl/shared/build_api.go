@@ -16,12 +16,12 @@
 
 package shared
 
-func ResolveSPXModuleSource(repoRoot string) (string, error) {
-	return resolveSPXModuleSource(repoRoot)
-}
-
 func (env BuildEnvironment) ShellExports() string {
 	return buildEnvironment(env).shellExports()
+}
+
+func ResolveSPXModuleSource(repoRoot string) (string, error) {
+	return resolveSPXModuleSource(repoRoot)
 }
 
 func ShellQuote(value string) string {

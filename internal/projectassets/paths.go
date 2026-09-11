@@ -24,26 +24,6 @@ import (
 	"strings"
 )
 
-func validateConfig(cfg Config) error {
-	if cfg.ProjectDir == "" {
-		return errors.New("projectassets: ProjectDir is empty")
-	}
-	if cfg.PackDir == "" || cfg.PackDir == "." || strings.Contains(cfg.PackDir, "\\") || path.IsAbs(cfg.PackDir) || path.Clean(cfg.PackDir) != cfg.PackDir || cfg.PackDir == ".." || strings.HasPrefix(cfg.PackDir, "../") {
-		return fmt.Errorf("projectassets: PackDir must be a clean non-empty relative slash path: %q", cfg.PackDir)
-	}
-	if cfg.PackIndex == "" || cfg.PackIndex == "." || cfg.PackIndex == ".." || strings.ContainsAny(cfg.PackIndex, "/\\\x00") {
-		return fmt.Errorf("projectassets: PackIndex must be a plain file name: %q", cfg.PackIndex)
-	}
-	return nil
-}
-
-func validateConfigEntryName(section, name string) error {
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") {
-		return fmt.Errorf("projectassets: section %q has unsafe entry name %q", section, name)
-	}
-	return nil
-}
-
 func (r *resolver) addReference(source, base, reference string) error {
 	if reference == "" {
 		return nil
@@ -81,6 +61,26 @@ func (r *resolver) addReference(source, base, reference string) error {
 	}
 	if name != r.packDir && !strings.HasPrefix(name, r.packDir+"/") {
 		r.referenced[name] = struct{}{}
+	}
+	return nil
+}
+
+func validateConfig(cfg Config) error {
+	if cfg.ProjectDir == "" {
+		return errors.New("projectassets: ProjectDir is empty")
+	}
+	if cfg.PackDir == "" || cfg.PackDir == "." || strings.Contains(cfg.PackDir, "\\") || path.IsAbs(cfg.PackDir) || path.Clean(cfg.PackDir) != cfg.PackDir || cfg.PackDir == ".." || strings.HasPrefix(cfg.PackDir, "../") {
+		return fmt.Errorf("projectassets: PackDir must be a clean non-empty relative slash path: %q", cfg.PackDir)
+	}
+	if cfg.PackIndex == "" || cfg.PackIndex == "." || cfg.PackIndex == ".." || strings.ContainsAny(cfg.PackIndex, "/\\\x00") {
+		return fmt.Errorf("projectassets: PackIndex must be a plain file name: %q", cfg.PackIndex)
+	}
+	return nil
+}
+
+func validateConfigEntryName(section, name string) error {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") {
+		return fmt.Errorf("projectassets: section %q has unsafe entry name %q", section, name)
 	}
 	return nil
 }

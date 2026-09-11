@@ -32,12 +32,7 @@ type UiMeasure struct {
 	labelContainer *UiNode
 }
 
-func NewUiMeasure() *UiMeasure {
-	panel := engine.NewUiNode[UiMeasure]()
-	return panel
-}
-
-// !!Warning: this method is called from the engine callback context
+// OnStart binds UI nodes in the engine callback context.
 func (pself *UiMeasure) OnStart() {
 	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
 	pself.imageLine = engine.BridgeBindUI[UiNode](pself.GetId(), "C/Line")
@@ -47,7 +42,7 @@ func (pself *UiMeasure) OnStart() {
 
 func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
 	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
-	extraLen := 4.0 //hack for engine picture size
+	extraLen := 4.0 // Compensate for the engine's measurement image size.
 	length += extraLen
 
 	rad := engine.DegToRad(heading - 90)
@@ -64,4 +59,8 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 	mgr.UiMgr.SetGlobalPosition(pself.labelContainer.GetId(), labelPos)
 	mgr.UiMgr.SetColor(pself.labelContainer.GetId(), color)
 	mgr.UiMgr.SetText(pself.labelValue.GetId(), name)
+}
+
+func NewUiMeasure() *UiMeasure {
+	return engine.NewUiNode[UiMeasure]()
 }

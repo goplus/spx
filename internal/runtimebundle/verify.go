@@ -60,6 +60,8 @@ type zipDataRange struct {
 	name  string
 }
 
+const maxMaterializedSymlinkBytes int64 = 4 << 10
+
 // VerifyZip opens and fully verifies a ZIP. It hashes every regular entry, so
 // a successful result can safely be used as a content address. The source is
 // never extracted by this function.
@@ -402,8 +404,6 @@ func safeZipMode(file *zip.File, isDir, materializedSymlink bool) (uint32, error
 	}
 	return uint32(mode.Perm()), nil
 }
-
-const maxMaterializedSymlinkBytes int64 = 4 << 10
 
 func hashMaterializedSymlinkEntry(file *zip.File, name string) (digest string, size int64, err error) {
 	if file.UncompressedSize64 > uint64(maxMaterializedSymlinkBytes) {

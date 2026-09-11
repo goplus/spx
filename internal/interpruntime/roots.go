@@ -67,6 +67,90 @@ func (r Roots) Validate() error {
 	return nil
 }
 
+// Environment replaces ambient runtime paths with validated roots.
+func (r Roots) Environment(base []string) ([]string, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+	env := make([]string, 0, len(base)+3)
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, root := rootEnvKey(key); root {
+				continue
+			}
+		}
+		env = append(env, entry)
+	}
+	return append(env,
+		ProjectDirEnv+"="+r.ProjectDir,
+		AssetDirEnv+"="+r.AssetDir,
+		SessionDirEnv+"="+r.SessionDir,
+	), nil
+}
+
+// RootsFromEnv parses and validates roots from a complete process environment.
+// Duplicate root variables are rejected instead of relying on platform-specific
+// duplicate-key precedence.
+func RootsFromEnv(env []string) (Roots, error) {
+	values := make(map[string]string, 3)
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		canonical, ok := rootEnvKey(key)
+		if !ok {
+			continue
+		}
+		if _, duplicate := values[canonical]; duplicate {
+			return Roots{}, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
+		}
+		values[canonical] = value
+	}
+
+	for _, key := range []string{ProjectDirEnv, AssetDirEnv, SessionDirEnv} {
+		if _, ok := values[key]; !ok {
+			return Roots{}, fmt.Errorf("interpruntime: required environment variable %s is not set", key)
+		}
+	}
+	r := Roots{
+		ProjectDir: values[ProjectDirEnv],
+		AssetDir:   values[AssetDirEnv],
+		SessionDir: values[SessionDirEnv],
+	}
+	if err := r.Validate(); err != nil {
+		return Roots{}, err
+	}
+	return r, nil
+}
+
+// PortableConfigFromEnv returns the optional driver-owned config directory and
+// its presence/content identity. Both variables must be present together.
+func PortableConfigFromEnv(env []string) (directory, identity string, found bool, err error) {
+	values := make(map[string]string, 2)
+	for _, entry := range env {
+		key, candidate, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		canonical, ok := rootEnvKey(key)
+		if !ok || (canonical != PortableConfigDirEnv && canonical != PortableConfigIdentityEnv) {
+			continue
+		}
+		if _, duplicate := values[canonical]; duplicate {
+			return "", "", false, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
+		}
+		values[canonical] = candidate
+	}
+	directory, dirFound := values[PortableConfigDirEnv]
+	identity, identityFound := values[PortableConfigIdentityEnv]
+	if dirFound != identityFound {
+		return "", "", false, fmt.Errorf("interpruntime: portable config environment is incomplete")
+	}
+	return directory, identity, dirFound, nil
+}
+
 func validateDirectoryWithin(name, root, directory string) error {
 	canonicalRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -116,90 +200,6 @@ func validateAbsoluteCleanPath(name, path string) error {
 		return fmt.Errorf("interpruntime: %s %q is not clean (want %q)", name, path, clean)
 	}
 	return nil
-}
-
-// RootsFromEnv parses and validates roots from a complete process environment.
-// Duplicate root variables are rejected instead of relying on platform-specific
-// duplicate-key precedence.
-func RootsFromEnv(env []string) (Roots, error) {
-	values := make(map[string]string, 3)
-	for _, entry := range env {
-		key, value, ok := strings.Cut(entry, "=")
-		if !ok {
-			continue
-		}
-		canonical, ok := rootEnvKey(key)
-		if !ok {
-			continue
-		}
-		if _, duplicate := values[canonical]; duplicate {
-			return Roots{}, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
-		}
-		values[canonical] = value
-	}
-
-	for _, key := range []string{ProjectDirEnv, AssetDirEnv, SessionDirEnv} {
-		if _, ok := values[key]; !ok {
-			return Roots{}, fmt.Errorf("interpruntime: required environment variable %s is not set", key)
-		}
-	}
-	r := Roots{
-		ProjectDir: values[ProjectDirEnv],
-		AssetDir:   values[AssetDirEnv],
-		SessionDir: values[SessionDirEnv],
-	}
-	if err := r.Validate(); err != nil {
-		return Roots{}, err
-	}
-	return r, nil
-}
-
-// Environment replaces ambient runtime paths with validated roots.
-func (r Roots) Environment(base []string) ([]string, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-	env := make([]string, 0, len(base)+3)
-	for _, entry := range base {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok {
-			if _, root := rootEnvKey(key); root {
-				continue
-			}
-		}
-		env = append(env, entry)
-	}
-	return append(env,
-		ProjectDirEnv+"="+r.ProjectDir,
-		AssetDirEnv+"="+r.AssetDir,
-		SessionDirEnv+"="+r.SessionDir,
-	), nil
-}
-
-// PortableConfigFromEnv returns the optional driver-owned config directory and
-// its presence/content identity. Both variables must be present together.
-func PortableConfigFromEnv(env []string) (directory, identity string, found bool, err error) {
-	values := make(map[string]string, 2)
-	for _, entry := range env {
-		key, candidate, ok := strings.Cut(entry, "=")
-		if !ok {
-			continue
-		}
-		canonical, ok := rootEnvKey(key)
-		if !ok || (canonical != PortableConfigDirEnv && canonical != PortableConfigIdentityEnv) {
-			continue
-		}
-		if _, duplicate := values[canonical]; duplicate {
-			return "", "", false, fmt.Errorf("interpruntime: duplicate environment variable %s", canonical)
-		}
-		values[canonical] = candidate
-	}
-	directory, dirFound := values[PortableConfigDirEnv]
-	identity, identityFound := values[PortableConfigIdentityEnv]
-	if dirFound != identityFound {
-		return "", "", false, fmt.Errorf("interpruntime: portable config environment is incomplete")
-	}
-	return directory, identity, dirFound, nil
 }
 
 func rootEnvKey(key string) (string, bool) {

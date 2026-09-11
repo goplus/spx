@@ -24,7 +24,6 @@ import (
 	"github.com/goplus/spx/v3/internal/text"
 )
 
-// Constants for say message layout
 const (
 	sayMsgSpliteWidth   = 25
 	sayMsgLineHeight    = 26
@@ -32,7 +31,6 @@ const (
 	thinkScale          = 0.8
 )
 
-// Style constants for say/think bubbles
 const (
 	StyleSay   = 1
 	StyleThink = 2
@@ -53,13 +51,7 @@ type UiSay struct {
 	rightThink sayNodes
 }
 
-// NewUiSay creates a new UiSay instance
-func NewUiSay() *UiSay {
-	return engine.NewUiNode[UiSay]()
-}
-
-// OnStart initializes the UI nodes
-// Warning: this method is called from the engine callback context
+// OnStart binds UI nodes in the engine callback context.
 func (s *UiSay) OnStart() {
 	s.left = sayNodes{
 		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VL"),
@@ -103,7 +95,11 @@ func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
 	s.updateUI(layout.position, layout.renderScale, nodes.label.GetId(), layout.content.formattedMessage)
 }
 
-// selectNodes returns the appropriate UI nodes based on direction and style
+// NewUiSay creates a new UiSay instance
+func NewUiSay() *UiSay {
+	return engine.NewUiNode[UiSay]()
+}
+
 func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
 	switch {
 	case isThink && isLeft:
@@ -117,14 +113,6 @@ func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
 	}
 }
 
-func formatSayMessage(msg string) string {
-	if strings.ContainsRune(msg, '\n') {
-		return msg
-	}
-	return text.SplitLines(msg, sayMsgSpliteWidth)
-}
-
-// updateVisibility sets the visibility of all UI nodes based on style and direction
 func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
 	mgr.UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
 	mgr.UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
@@ -132,9 +120,15 @@ func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
 	mgr.UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
 }
 
-// updateUI updates the scale, position, and text of the UI element
 func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
 	mgr.UiMgr.SetScale(s.GetId(), scale)
 	mgr.UiMgr.SetPosition(s.GetId(), ViewToUI(position))
 	mgr.UiMgr.SetText(label, text)
+}
+
+func formatSayMessage(msg string) string {
+	if strings.ContainsRune(msg, '\n') {
+		return msg
+	}
+	return text.SplitLines(msg, sayMsgSpliteWidth)
 }

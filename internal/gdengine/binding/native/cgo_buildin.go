@@ -54,10 +54,15 @@ GDExtensionPtrDestructor cgo_callfn_GDExtensionInterfaceVariantGetPtrDestructor(
 import "C"
 
 type GDExtensionInterfaceStringNewWithLatin1Chars C.GDExtensionInterfaceStringNewWithLatin1Chars
+
 type GDExtensionInterfaceStringNewWithUtf8Chars C.GDExtensionInterfaceStringNewWithUtf8Chars
+
 type GDExtensionInterfaceStringToLatin1Chars C.GDExtensionInterfaceStringToLatin1Chars
+
 type GDExtensionInterfaceStringToUtf8Chars C.GDExtensionInterfaceStringToUtf8Chars
+
 type GDExtensionInterfaceVariantGetPtrConstructor C.GDExtensionInterfaceVariantGetPtrConstructor
+
 type GDExtensionInterfaceVariantGetPtrDestructor C.GDExtensionInterfaceVariantGetPtrDestructor
 
 var (
@@ -74,16 +79,6 @@ type GDExtensionBuiltinInterface struct {
 	VariantGetPtrDestructor    GDExtensionInterfaceVariantGetPtrDestructor
 }
 
-func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
-	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(resolveCFunc("spx_global_register_callbacks"))
-	x.StringNewWithLatin1Chars = (GDExtensionInterfaceStringNewWithLatin1Chars)(resolveCFunc("string_new_with_latin1_chars"))
-	x.StringNewWithUtf8Chars = (GDExtensionInterfaceStringNewWithUtf8Chars)(resolveCFunc("string_new_with_utf8_chars"))
-	x.StringToLatin1Chars = (GDExtensionInterfaceStringToLatin1Chars)(resolveCFunc("string_to_latin1_chars"))
-	x.StringToUtf8Chars = (GDExtensionInterfaceStringToUtf8Chars)(resolveCFunc("string_to_utf8_chars"))
-	x.VariantGetPtrConstructor = (GDExtensionInterfaceVariantGetPtrConstructor)(resolveCFunc("variant_get_ptr_constructor"))
-	x.VariantGetPtrDestructor = (GDExtensionInterfaceVariantGetPtrDestructor)(resolveCFunc("variant_get_ptr_destructor"))
-}
-
 type stringMethodBindings struct {
 	constructor GDExtensionPtrConstructor
 	destructor  GDExtensionPtrDestructor
@@ -93,11 +88,6 @@ var (
 	globalStringMethodBindings stringMethodBindings
 	nullptr                    = unsafe.Pointer(nil)
 )
-
-func stringInitConstructorBindings() {
-	globalStringMethodBindings.constructor = CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, 0)
-	globalStringMethodBindings.destructor = CallVariantGetPtrDestructor(GDEXTENSION_VARIANT_TYPE_STRING)
-}
 
 func CallBuiltinConstructor(constructor GDExtensionPtrConstructor, base GDExtensionUninitializedTypePtr, args ...GDExtensionConstTypePtr) {
 	a := (GDExtensionPtrConstructor)(constructor)
@@ -140,6 +130,7 @@ func CallStringNewWithLatin1Chars(
 	C.free(unsafe.Pointer(arg2))
 
 }
+
 func CallStringNewWithUtf8Chars(
 	r_dest GDExtensionUninitializedStringPtr,
 	p_contents string,
@@ -150,6 +141,7 @@ func CallStringNewWithUtf8Chars(
 	C.cgo_callfn_GDExtensionInterfaceStringNewWithUtf8Chars(arg0, arg1, arg2)
 	C.free(unsafe.Pointer(arg2))
 }
+
 func CallStringToLatin1Chars(
 	p_self GDExtensionConstStringPtr,
 	r_text *Char,
@@ -162,6 +154,7 @@ func CallStringToLatin1Chars(
 	ret := C.cgo_callfn_GDExtensionInterfaceStringToLatin1Chars(arg0, arg1, arg2, arg3)
 	return (GdInt)(ret)
 }
+
 func CallStringToUtf8Chars(
 	p_self GDExtensionConstStringPtr,
 	r_text *Char,
@@ -174,6 +167,7 @@ func CallStringToUtf8Chars(
 	ret := C.cgo_callfn_GDExtensionInterfaceStringToUtf8Chars(arg0, arg1, arg2, arg3)
 	return (GdInt)(ret)
 }
+
 func CallVariantGetPtrConstructor(
 	p_type GDExtensionVariantType,
 	p_constructor int32,
@@ -184,6 +178,7 @@ func CallVariantGetPtrConstructor(
 	ret := C.cgo_callfn_GDExtensionInterfaceVariantGetPtrConstructor(arg0, arg1, arg2)
 	return (GDExtensionPtrConstructor)(ret)
 }
+
 func CallVariantGetPtrDestructor(
 	p_type GDExtensionVariantType,
 ) GDExtensionPtrDestructor {
@@ -200,4 +195,19 @@ func CallGlobalRegisterCallbacks(
 	arg1 := (C.GDExtensionSpxCallbackInfoPtr)(callback_ptr)
 
 	C.cgo_callfn_GDExtensionSpxGlobalRegisterCallbacks(arg0, arg1)
+}
+
+func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
+	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(resolveCFunc("spx_global_register_callbacks"))
+	x.StringNewWithLatin1Chars = (GDExtensionInterfaceStringNewWithLatin1Chars)(resolveCFunc("string_new_with_latin1_chars"))
+	x.StringNewWithUtf8Chars = (GDExtensionInterfaceStringNewWithUtf8Chars)(resolveCFunc("string_new_with_utf8_chars"))
+	x.StringToLatin1Chars = (GDExtensionInterfaceStringToLatin1Chars)(resolveCFunc("string_to_latin1_chars"))
+	x.StringToUtf8Chars = (GDExtensionInterfaceStringToUtf8Chars)(resolveCFunc("string_to_utf8_chars"))
+	x.VariantGetPtrConstructor = (GDExtensionInterfaceVariantGetPtrConstructor)(resolveCFunc("variant_get_ptr_constructor"))
+	x.VariantGetPtrDestructor = (GDExtensionInterfaceVariantGetPtrDestructor)(resolveCFunc("variant_get_ptr_destructor"))
+}
+
+func stringInitConstructorBindings() {
+	globalStringMethodBindings.constructor = CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, 0)
+	globalStringMethodBindings.destructor = CallVariantGetPtrDestructor(GDEXTENSION_VARIANT_TYPE_STRING)
 }

@@ -46,25 +46,6 @@ type Logger struct {
 
 var defaultLogger = NewWithOutputs("SPX-CODEGEN", LevelInfo, os.Stdout, os.Stderr)
 
-func New(prefix string, level Level, out io.Writer) *Logger {
-	return NewWithOutputs(prefix, level, out, out)
-}
-
-func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
-	if stdout == nil {
-		stdout = io.Discard
-	}
-	if stderr == nil {
-		stderr = io.Discard
-	}
-	return &Logger{
-		level:        level,
-		stdoutLogger: stdlog.New(stdout, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
-		stderrLogger: stdlog.New(stderr, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
-		prefix:       prefix,
-	}
-}
-
 func (l *Logger) SetLevel(level Level) {
 	atomic.StoreInt32((*int32)(&l.level), int32(level))
 }
@@ -77,31 +58,6 @@ func (l *Logger) SetOutput(w io.Writer) {
 	}
 	l.stdoutLogger.SetOutput(w)
 	l.stderrLogger.SetOutput(w)
-}
-
-func (l *Logger) targetLogger(level Level) *stdlog.Logger {
-	if level >= LevelError {
-		return l.stderrLogger
-	}
-	return l.stdoutLogger
-}
-
-func (l *Logger) log(level Level, format string, args ...any) {
-	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
-		return
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
-		return
-	}
-
-	msg := format
-	if len(args) > 0 {
-		msg = fmt.Sprintf(format, args...)
-	}
-	l.targetLogger(level).Printf("[%s] [%s] %s", level.String(), l.prefix, msg)
 }
 
 func (l *Logger) Panicf(format string, args ...any) {
@@ -119,13 +75,6 @@ func (l *Logger) Panicf(format string, args ...any) {
 	l.stderrLogger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
 }
 
-func (l *Logger) format(format string, args ...any) string {
-	if len(args) > 0 {
-		return fmt.Sprintf(format, args...)
-	}
-	return format
-}
-
 func (l Level) String() string {
 	switch l {
 	case LevelDebug:
@@ -140,6 +89,25 @@ func (l Level) String() string {
 		return "NONE"
 	default:
 		return "UNKNOWN"
+	}
+}
+
+func New(prefix string, level Level, out io.Writer) *Logger {
+	return NewWithOutputs(prefix, level, out, out)
+}
+
+func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	return &Logger{
+		level:        level,
+		stdoutLogger: stdlog.New(stdout, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
+		stderrLogger: stdlog.New(stderr, "", stdlog.Ldate|stdlog.Ltime|stdlog.Lmicroseconds),
+		prefix:       prefix,
 	}
 }
 
@@ -178,4 +146,36 @@ func Error(format string, args ...any) {
 
 func Panicf(format string, args ...any) {
 	defaultLogger.Panicf(format, args...)
+}
+
+func (l *Logger) targetLogger(level Level) *stdlog.Logger {
+	if level >= LevelError {
+		return l.stderrLogger
+	}
+	return l.stdoutLogger
+}
+
+func (l *Logger) log(level Level, format string, args ...any) {
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if Level(atomic.LoadInt32((*int32)(&l.level))) > level {
+		return
+	}
+
+	msg := format
+	if len(args) > 0 {
+		msg = fmt.Sprintf(format, args...)
+	}
+	l.targetLogger(level).Printf("[%s] [%s] %s", level.String(), l.prefix, msg)
+}
+
+func (l *Logger) format(format string, args ...any) string {
+	if len(args) > 0 {
+		return fmt.Sprintf(format, args...)
+	}
+	return format
 }

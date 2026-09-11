@@ -23,13 +23,6 @@ type AABB struct {
 	MaxY float64
 }
 
-func (a AABB) Intersects(b AABB) bool {
-	return a.MinX <= b.MaxX &&
-		a.MaxX >= b.MinX &&
-		a.MinY <= b.MaxY &&
-		a.MaxY >= b.MinY
-}
-
 type Entry[T any] struct {
 	Value T
 	Box   AABB
@@ -42,14 +35,11 @@ type SpatialHash[T any] struct {
 	queryID  uint64
 }
 
-func NewSpatialHash[T any](cellSize float64) *SpatialHash[T] {
-	if cellSize <= 0 {
-		panic("collision: cellSize must be greater than zero")
-	}
-	return &SpatialHash[T]{
-		cellSize: cellSize,
-		grid:     make(map[int64]map[int64][]*Entry[T]),
-	}
+func (a AABB) Intersects(b AABB) bool {
+	return a.MinX <= b.MaxX &&
+		a.MaxX >= b.MinX &&
+		a.MinY <= b.MaxY &&
+		a.MaxY >= b.MinY
 }
 
 func (s *SpatialHash[T]) Clear() {
@@ -109,6 +99,16 @@ func (s *SpatialHash[T]) Query(box AABB) []*Entry[T] {
 	}
 
 	return results
+}
+
+func NewSpatialHash[T any](cellSize float64) *SpatialHash[T] {
+	if cellSize <= 0 {
+		panic("collision: cellSize must be greater than zero")
+	}
+	return &SpatialHash[T]{
+		cellSize: cellSize,
+		grid:     make(map[int64]map[int64][]*Entry[T]),
+	}
 }
 
 func (s *SpatialHash[T]) cellCoords(x, y float64) (int64, int64) {

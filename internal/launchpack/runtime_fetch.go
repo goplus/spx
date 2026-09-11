@@ -35,6 +35,21 @@ var runtimeHTTPClient = &http.Client{Timeout: 30 * time.Minute}
 
 var errReleaseUnavailable = errors.New("launchpack: release unavailable")
 
+type writeErrorTracker struct {
+	writer io.Writer
+	err    error
+}
+
+func (w *writeErrorTracker) Write(data []byte) (int, error) {
+	n, err := w.writer.Write(data)
+	if err != nil {
+		w.err = err
+	} else if n != len(data) {
+		w.err = io.ErrShortWrite
+	}
+	return n, err
+}
+
 func resolvePublishedRuntime(ctx context.Context, cacheRoot string, lock release.RuntimeLock, env []string, offline bool, dependencies runtimeAssetDependencies) (runtimeAssetSource, error) {
 	assetDir, assetDirSet, duplicate := environmentValue(env, runtimeAssetDirEnv)
 	if duplicate {
@@ -159,19 +174,4 @@ func fetchRuntimeURL(ctx context.Context, url string, dst io.Writer) error {
 		return fmt.Errorf("%w: read %s: %w", errReleaseUnavailable, url, err)
 	}
 	return nil
-}
-
-type writeErrorTracker struct {
-	writer io.Writer
-	err    error
-}
-
-func (w *writeErrorTracker) Write(data []byte) (int, error) {
-	n, err := w.writer.Write(data)
-	if err != nil {
-		w.err = err
-	} else if n != len(data) {
-		w.err = io.ErrShortWrite
-	}
-	return n, err
 }

@@ -36,6 +36,12 @@ type RuntimeFontPlan struct {
 	Preferences []string
 }
 
+func (p RuntimeFontPlan) Clone() RuntimeFontPlan {
+	p.Faces = slices.Clone(p.Faces)
+	p.Preferences = slices.Clone(p.Preferences)
+	return p
+}
+
 func ResolveRuntimeFontPlan(fonts ProjectFonts, resolvePath func(string) string) RuntimeFontPlan {
 	faceCount := 0
 	for _, family := range fonts.Families {
@@ -60,10 +66,4 @@ func ResolveRuntimeFontPlan(fonts ProjectFonts, resolvePath func(string) string)
 		}
 	}
 	return plan
-}
-
-func (p RuntimeFontPlan) Clone() RuntimeFontPlan {
-	p.Faces = slices.Clone(p.Faces)
-	p.Preferences = slices.Clone(p.Preferences)
-	return p
 }

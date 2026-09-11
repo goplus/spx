@@ -79,6 +79,27 @@ func (c Config) validate() error {
 	return nil
 }
 
+func (c Config) validateGraphInputs() error {
+	if c.GoCommand == "" || c.WorkDir == "" {
+		return fmt.Errorf("launchpack: Go command and work directory are required")
+	}
+	if err := regularPath("go-command", c.GoCommand, false); err != nil {
+		return err
+	}
+	if err := regularPath("work-dir", c.WorkDir, true); err != nil {
+		return err
+	}
+	if c.GoWork != "" && c.GoWork != "off" {
+		if err := regularPath("go-work", c.GoWork, false); err != nil {
+			return err
+		}
+	}
+	if err := validateGraphFlags(c.GraphFlags); err != nil {
+		return err
+	}
+	return validateBuildFlags(c.BuildFlags)
+}
+
 // validatePackPath uses the slash-separated paths stored in project metadata;
 // filepath semantics would reject nested pack directories on Windows.
 func validatePackPath(name, value string, directory bool) error {
@@ -102,27 +123,6 @@ func looksLikeWindowsAbsolutePath(value string) bool {
 
 func isASCIIAlpha(value byte) bool {
 	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
-}
-
-func (c Config) validateGraphInputs() error {
-	if c.GoCommand == "" || c.WorkDir == "" {
-		return fmt.Errorf("launchpack: Go command and work directory are required")
-	}
-	if err := regularPath("go-command", c.GoCommand, false); err != nil {
-		return err
-	}
-	if err := regularPath("work-dir", c.WorkDir, true); err != nil {
-		return err
-	}
-	if c.GoWork != "" && c.GoWork != "off" {
-		if err := regularPath("go-work", c.GoWork, false); err != nil {
-			return err
-		}
-	}
-	if err := validateGraphFlags(c.GraphFlags); err != nil {
-		return err
-	}
-	return validateBuildFlags(c.BuildFlags)
 }
 
 func validateGraphFlags(flags []string) error {

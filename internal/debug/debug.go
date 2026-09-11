@@ -51,26 +51,6 @@ var (
 	}
 )
 
-// getSmallBuffer retrieves a buffer from the pool
-func getSmallBuffer() *[]byte {
-	return smallBufPool.Get().(*[]byte)
-}
-
-// putSmallBuffer returns a buffer to the pool
-func putSmallBuffer(buf *[]byte) {
-	smallBufPool.Put(buf)
-}
-
-// getLargeBuffer retrieves a large buffer from the pool
-func getLargeBuffer() *[]byte {
-	return largeBufPool.Get().(*[]byte)
-}
-
-// putLargeBuffer returns a large buffer to the pool
-func putLargeBuffer(buf *[]byte) {
-	largeBufPool.Put(buf)
-}
-
 // GetStackInfo returns the full stack trace and a simplified version.
 // lastStackIdx specifies which stack frame to include in the simplified version.
 func GetStackInfo(lastStackIdx int) (stack, stackSimple string) {
@@ -102,18 +82,6 @@ func Log(args ...any) {
 func LogWithStack(args ...any) {
 	Log(args...)
 	logStackTrace()
-}
-
-// logStackTrace appends the current stack trace to the debug buffer.
-func logStackTrace() {
-	bufPtr := getSmallBuffer()
-	defer putSmallBuffer(bufPtr)
-
-	buf := *bufPtr
-	n := runtime.Stack(buf, false)
-	debugSb.WriteString("\n")
-	debugSb.WriteString(string(buf[:n]))
-	debugSb.WriteString("\n")
 }
 
 // GetStackTrace returns the current stack trace as a string.
@@ -156,4 +124,36 @@ func FlushLog() {
 		log.Debug("Buffered debug logs:\n%s", logs)
 		debugSb.Reset()
 	}
+}
+
+// getSmallBuffer retrieves a buffer from the pool
+func getSmallBuffer() *[]byte {
+	return smallBufPool.Get().(*[]byte)
+}
+
+// putSmallBuffer returns a buffer to the pool
+func putSmallBuffer(buf *[]byte) {
+	smallBufPool.Put(buf)
+}
+
+// getLargeBuffer retrieves a large buffer from the pool
+func getLargeBuffer() *[]byte {
+	return largeBufPool.Get().(*[]byte)
+}
+
+// putLargeBuffer returns a large buffer to the pool
+func putLargeBuffer(buf *[]byte) {
+	largeBufPool.Put(buf)
+}
+
+// logStackTrace appends the current stack trace to the debug buffer.
+func logStackTrace() {
+	bufPtr := getSmallBuffer()
+	defer putSmallBuffer(bufPtr)
+
+	buf := *bufPtr
+	n := runtime.Stack(buf, false)
+	debugSb.WriteString("\n")
+	debugSb.WriteString(string(buf[:n]))
+	debugSb.WriteString("\n")
 }

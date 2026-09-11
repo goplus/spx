@@ -31,11 +31,7 @@ type UiAsk struct {
 	lastEnterState bool
 }
 
-func NewUiAsk() *UiAsk {
-	return engine.NewUiNode[UiAsk]()
-}
-
-// !!Warning: this method is called from the engine callback context
+// OnStart binds UI nodes and subscribes to clicks in the engine callback context.
 func (pself *UiAsk) OnStart() {
 	pself.askBody = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
 	pself.askLabel = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
@@ -71,7 +67,11 @@ func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
 	pself.lastEnterState = false
 }
 
-// handleCheck executes the check callback and closes the dialog
+func NewUiAsk() *UiAsk {
+	return engine.NewUiNode[UiAsk]()
+}
+
+// handleCheck hides the dialog before invoking the callback, if present.
 func (pself *UiAsk) handleCheck() {
 	if pself.OnCheck != nil {
 		pself.SetVisible(false)

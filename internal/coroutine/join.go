@@ -66,28 +66,6 @@ func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
 	joinUnique(targets, p.JoinYieldedOrDone)
 }
 
-func joinUnique(targets []Thread, join func(Thread)) {
-	if len(targets) == 0 {
-		return
-	}
-	if len(targets) == 1 {
-		join(targets[0])
-		return
-	}
-
-	seen := make(map[Thread]struct{}, len(targets))
-	for _, target := range targets {
-		if target == nil {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		join(target)
-	}
-}
-
 func (p *Coroutines) registerWaiterAndYield(me Thread, register func() bool) {
 	// Publish waiter registration and the blocked state atomically.
 	p.schedulerMu.Lock()
@@ -160,6 +138,28 @@ func (th *threadImpl) finishJoinWaiters() []Thread {
 	th.joinDone = true
 	th.waitersMu.Unlock()
 	return waiters
+}
+
+func joinUnique(targets []Thread, join func(Thread)) {
+	if len(targets) == 0 {
+		return
+	}
+	if len(targets) == 1 {
+		join(targets[0])
+		return
+	}
+
+	seen := make(map[Thread]struct{}, len(targets))
+	for _, target := range targets {
+		if target == nil {
+			continue
+		}
+		if _, ok := seen[target]; ok {
+			continue
+		}
+		seen[target] = struct{}{}
+		join(target)
+	}
 }
 
 func copyThreadSet(set map[Thread]struct{}) []Thread {

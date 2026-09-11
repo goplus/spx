@@ -35,6 +35,30 @@ type LoadedBuilderProject struct {
 	Fonts   ProjectFonts
 }
 
+type RuntimeConfig struct {
+	Title            string
+	FullScreen       bool
+	PhysicsEnabled   bool
+	EventQueuePolicy string
+	WindowWidth      int
+	WindowHeight     int
+	ScreenshotKey    string
+}
+
+type SystemSettings struct {
+	LayerSortMode           string
+	PathCellSizeX           int
+	PathCellSizeY           int
+	AudioAttenuation        float64
+	AudioMaxDistance        float64
+	CollisionByPixel        bool
+	AutoSetCollisionLayer   bool
+	PixelCollisionPrecision int64
+	GlobalGravity           float64
+	GlobalFriction          float64
+	GlobalAirDrag           float64
+}
+
 func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, error) {
 	var loaded LoadedBuilderProject
 	var index any
@@ -59,16 +83,6 @@ func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, e
 	return loaded, nil
 }
 
-type RuntimeConfig struct {
-	Title            string
-	FullScreen       bool
-	PhysicsEnabled   bool
-	EventQueuePolicy string
-	WindowWidth      int
-	WindowHeight     int
-	ScreenshotKey    string
-}
-
 func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screenshotEnv string) RuntimeConfig {
 	title := conf.Title
 	if title == "" {
@@ -89,20 +103,6 @@ func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screens
 		WindowHeight:     conf.Height,
 		ScreenshotKey:    key,
 	}
-}
-
-type SystemSettings struct {
-	LayerSortMode           string
-	PathCellSizeX           int
-	PathCellSizeY           int
-	AudioAttenuation        float64
-	AudioMaxDistance        float64
-	CollisionByPixel        bool
-	AutoSetCollisionLayer   bool
-	PixelCollisionPrecision int64
-	GlobalGravity           float64
-	GlobalFriction          float64
-	GlobalAirDrag           float64
 }
 
 func ResolveSystemSettings(proj *ProjectConfig) SystemSettings {

@@ -46,16 +46,6 @@ type SayBubbleContent struct {
 	baseExtent       mathf.Vec2
 }
 
-// NewSayBubbleContent prepares the immutable text/style portion of a bubble.
-func NewSayBubbleContent(msg string, style int) SayBubbleContent {
-	formattedMessage := formatSayMessage(msg)
-	return SayBubbleContent{
-		formattedMessage: formattedMessage,
-		style:            style,
-		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
-	}
-}
-
 // SayBubbleLayoutContext snapshots the camera and display state shared by all
 // bubbles in one pass. Candidate rectangles therefore use exactly the same
 // scale as UiSay.SetTextLayout without querying the engine for every bubble.
@@ -65,6 +55,112 @@ type SayBubbleLayoutContext struct {
 	worldViewScale float64
 	sayRenderScale mathf.Vec2
 	viewport       sayBubbleRect
+}
+
+// SayBubbleLayout is the resolved render state of a Say/Think bubble. Fields
+// remain private so the UI cannot apply a layout that disagrees with the
+// collision bounds used by ResolveSayBubbleLayouts.
+type SayBubbleLayout struct {
+	stableID        uint64
+	position        mathf.Vec2
+	isLeft          bool
+	preferredIsLeft bool
+	previousIsLeft  bool
+	hasPrevious     bool
+	content         SayBubbleContent
+	extent          mathf.Vec2
+	renderScale     mathf.Vec2
+	viewport        sayBubbleRect
+}
+
+type sayBubbleRect struct {
+	left   float64
+	right  float64
+	bottom float64
+	top    float64
+}
+
+type sayBubbleScore struct {
+	outsideArea  float64
+	overlapArea  float64
+	flippedCount int
+	changedCount int
+}
+
+// NewLayout builds the preferred layout for one bubble. stableID must remain
+// unchanged for the bubble's lifetime so equal-score layouts never depend on
+// shape activation or render order.
+func (c SayBubbleLayoutContext) NewLayout(
+	stableID uint64,
+	worldPosition mathf.Vec2,
+	spriteSize mathf.Vec2,
+	content SayBubbleContent,
+) SayBubbleLayout {
+	// Transform the sprite's top point as a whole. Adding half the unscaled
+	// height after WorldToView detaches the tail when camera zoom is not 1.
+	worldTop := worldPosition.Add(mathf.NewVec2(0, float64(spriteSize.Y)/2))
+	position := worldTop.Sub(c.cameraPosition).Mulf(c.worldViewScale)
+
+	renderScale := c.sayRenderScale
+	if content.style == StyleThink {
+		renderScale = renderScale.Mulf(thinkScale)
+	}
+	// ViewToUI multiplies positions by WindowScale, whereas Control sizes are
+	// already UI pixels. Divide by WindowScale to compare both in view units.
+	extent := content.baseExtent.Mul(renderScale).Divf(c.windowScale)
+	if clampUIPositionInScreen {
+		position = clampSayPositionToExtent(position, c.viewport, extent)
+	}
+
+	preferredIsLeft := position.X <= 0
+	return SayBubbleLayout{
+		stableID:        stableID,
+		position:        position,
+		isLeft:          preferredIsLeft,
+		preferredIsLeft: preferredIsLeft,
+		content:         content,
+		extent:          extent,
+		renderScale:     renderScale,
+		viewport:        c.viewport,
+	}
+}
+
+// WithPreviousDirection records the last rendered direction as a late
+// tie-breaker. Preferred stage-side placement still takes precedence.
+func (l SayBubbleLayout) WithPreviousDirection(previous SayBubbleLayout) SayBubbleLayout {
+	l.previousIsLeft = previous.isLeft
+	l.hasPrevious = true
+	return l
+}
+
+// SameInput reports whether resolving another layout can change the result.
+func (l SayBubbleLayout) SameInput(other SayBubbleLayout) bool {
+	return l.stableID == other.stableID &&
+		l.position == other.position &&
+		l.preferredIsLeft == other.preferredIsLeft &&
+		l.content == other.content &&
+		l.extent == other.extent &&
+		l.renderScale == other.renderScale &&
+		l.viewport == other.viewport
+}
+
+// Equal reports whether applying another layout would change the rendered UI.
+func (l SayBubbleLayout) Equal(other SayBubbleLayout) bool {
+	return l.position == other.position &&
+		l.isLeft == other.isLeft &&
+		l.content.formattedMessage == other.content.formattedMessage &&
+		l.content.style == other.content.style &&
+		l.renderScale == other.renderScale
+}
+
+// NewSayBubbleContent prepares the immutable text/style portion of a bubble.
+func NewSayBubbleContent(msg string, style int) SayBubbleContent {
+	formattedMessage := formatSayMessage(msg)
+	return SayBubbleContent{
+		formattedMessage: formattedMessage,
+		style:            style,
+		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
+	}
 }
 
 // NewSayBubbleLayoutContext captures the current display state.
@@ -77,6 +173,113 @@ func NewSayBubbleLayoutContext(winSize mathf.Vec2) SayBubbleLayoutContext {
 		mgr.CameraMgr.GetCameraZoom(),
 		engine.WindowScale(),
 	)
+}
+
+// NewSayBubbleLayout builds a standalone layout. The shape manager uses a
+// shared context and cached SayBubbleContent for multiple bubbles.
+func NewSayBubbleLayout(winSize, worldPosition, spriteSize mathf.Vec2, msg string, style int) SayBubbleLayout {
+	content := NewSayBubbleContent(msg, style)
+	return NewSayBubbleLayoutContext(winSize).NewLayout(0, worldPosition, spriteSize, content)
+}
+
+// ResolveSayBubbleLayouts chooses a direction for each bubble. Components of
+// up to sayBubbleExactLayoutLimit bubbles are solved globally, avoiding local
+// minima from one-at-a-time flipping. Larger components use deterministic
+// multi-start local search. Both paths use stable IDs, not slice order.
+func ResolveSayBubbleLayouts(layouts []SayBubbleLayout) {
+	if len(layouts) == 0 {
+		return
+	}
+	for i := range layouts {
+		layouts[i].isLeft = layouts[i].preferredIsLeft
+	}
+
+	order := canonicalSayBubbleOrder(layouts)
+	visited := make([]bool, len(layouts))
+	queue := make([]int, 0, len(layouts))
+	component := make([]int, 0, len(layouts))
+	for _, seed := range order {
+		if visited[seed] {
+			continue
+		}
+		queue = append(queue[:0], seed)
+		component = component[:0]
+		visited[seed] = true
+		for len(queue) > 0 {
+			index := queue[0]
+			queue = queue[1:]
+			component = append(component, index)
+			for _, other := range order {
+				if visited[other] || !sayBubblesMayOverlap(layouts[index], layouts[other]) {
+					continue
+				}
+				visited[other] = true
+				queue = append(queue, other)
+			}
+		}
+
+		sort.Slice(component, func(i, j int) bool {
+			return sayBubbleCanonicalLess(layouts[component[i]], layouts[component[j]])
+		})
+		if len(component) <= sayBubbleExactLayoutLimit {
+			resolveSayBubbleComponentExact(layouts, component)
+		} else {
+			resolveSayBubbleComponentFallback(layouts, component)
+		}
+	}
+}
+
+func (l SayBubbleLayout) candidate(isLeft bool) sayBubbleRect {
+	x := float64(l.position.X)
+	y := float64(l.position.Y)
+	width := float64(l.extent.X)
+	height := float64(l.extent.Y)
+	if isLeft {
+		return sayBubbleRect{left: x, right: x + width, bottom: y, top: y + height}
+	}
+	return sayBubbleRect{left: x - width, right: x, bottom: y, top: y + height}
+}
+
+func (r sayBubbleRect) overlapArea(other sayBubbleRect) float64 {
+	width := math.Min(r.right, other.right) - math.Max(r.left, other.left)
+	height := math.Min(r.top, other.top) - math.Max(r.bottom, other.bottom)
+	if width <= 0 || height <= 0 {
+		return 0
+	}
+	return width * height
+}
+
+func (r sayBubbleRect) outsideArea(viewport sayBubbleRect) float64 {
+	area := (r.right - r.left) * (r.top - r.bottom)
+	insideWidth := math.Max(0, math.Min(r.right, viewport.right)-math.Max(r.left, viewport.left))
+	insideHeight := math.Max(0, math.Min(r.top, viewport.top)-math.Max(r.bottom, viewport.bottom))
+	return area - insideWidth*insideHeight
+}
+
+func (r sayBubbleRect) grow(amount float64) sayBubbleRect {
+	return sayBubbleRect{
+		left:   r.left - amount,
+		right:  r.right + amount,
+		bottom: r.bottom - amount,
+		top:    r.top + amount,
+	}
+}
+
+func (s sayBubbleScore) less(other sayBubbleScore) bool {
+	if s.outsideArea != other.outsideArea {
+		return s.outsideArea < other.outsideArea
+	}
+	if s.overlapArea != other.overlapArea {
+		return s.overlapArea < other.overlapArea
+	}
+	if s.flippedCount != other.flippedCount {
+		return s.flippedCount < other.flippedCount
+	}
+	return s.changedCount < other.changedCount
+}
+
+func (s sayBubbleScore) equal(other sayBubbleScore) bool {
+	return s == other
 }
 
 func newSayBubbleLayoutContext(
@@ -127,67 +330,6 @@ func calculateSayRenderScale(
 	return cameraZoom.Divf(windowScale).Mulf(uniformScale)
 }
 
-// SayBubbleLayout is the resolved render state of a Say/Think bubble. Fields
-// remain private so the UI cannot apply a layout that disagrees with the
-// collision bounds used by ResolveSayBubbleLayouts.
-type SayBubbleLayout struct {
-	stableID        uint64
-	position        mathf.Vec2
-	isLeft          bool
-	preferredIsLeft bool
-	previousIsLeft  bool
-	hasPrevious     bool
-	content         SayBubbleContent
-	extent          mathf.Vec2
-	renderScale     mathf.Vec2
-	viewport        sayBubbleRect
-}
-
-// NewLayout builds the preferred layout for one bubble. stableID must remain
-// unchanged for the bubble's lifetime so equal-score layouts never depend on
-// shape activation or render order.
-func (c SayBubbleLayoutContext) NewLayout(
-	stableID uint64,
-	worldPosition mathf.Vec2,
-	spriteSize mathf.Vec2,
-	content SayBubbleContent,
-) SayBubbleLayout {
-	// Transform the sprite's top point as a whole. Adding half the unscaled
-	// height after WorldToView detaches the tail when camera zoom is not 1.
-	worldTop := worldPosition.Add(mathf.NewVec2(0, float64(spriteSize.Y)/2))
-	position := worldTop.Sub(c.cameraPosition).Mulf(c.worldViewScale)
-
-	renderScale := c.sayRenderScale
-	if content.style == StyleThink {
-		renderScale = renderScale.Mulf(thinkScale)
-	}
-	// ViewToUI multiplies positions by WindowScale, whereas Control sizes are
-	// already UI pixels. Divide by WindowScale to compare both in view units.
-	extent := content.baseExtent.Mul(renderScale).Divf(c.windowScale)
-	if clampUIPositionInScreen {
-		position = clampSayPositionToExtent(position, c.viewport, extent)
-	}
-
-	preferredIsLeft := position.X <= 0
-	return SayBubbleLayout{
-		stableID:        stableID,
-		position:        position,
-		isLeft:          preferredIsLeft,
-		preferredIsLeft: preferredIsLeft,
-		content:         content,
-		extent:          extent,
-		renderScale:     renderScale,
-		viewport:        c.viewport,
-	}
-}
-
-// NewSayBubbleLayout builds a standalone layout. The shape manager uses a
-// shared context and cached SayBubbleContent for multiple bubbles.
-func NewSayBubbleLayout(winSize, worldPosition, spriteSize mathf.Vec2, msg string, style int) SayBubbleLayout {
-	content := NewSayBubbleContent(msg, style)
-	return NewSayBubbleLayoutContext(winSize).NewLayout(0, worldPosition, spriteSize, content)
-}
-
 func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, style int, preferredIsLeft bool) SayBubbleLayout {
 	content := SayBubbleContent{
 		formattedMessage: formattedMessage,
@@ -207,81 +349,6 @@ func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, s
 			bottom: -float64(winSize.Y) / 2,
 			top:    float64(winSize.Y) / 2,
 		},
-	}
-}
-
-// WithPreviousDirection records the last rendered direction as a late
-// tie-breaker. Preferred stage-side placement still takes precedence.
-func (l SayBubbleLayout) WithPreviousDirection(previous SayBubbleLayout) SayBubbleLayout {
-	l.previousIsLeft = previous.isLeft
-	l.hasPrevious = true
-	return l
-}
-
-// SameInput reports whether resolving another layout can change the result.
-func (l SayBubbleLayout) SameInput(other SayBubbleLayout) bool {
-	return l.stableID == other.stableID &&
-		l.position == other.position &&
-		l.preferredIsLeft == other.preferredIsLeft &&
-		l.content == other.content &&
-		l.extent == other.extent &&
-		l.renderScale == other.renderScale &&
-		l.viewport == other.viewport
-}
-
-// Equal reports whether applying another layout would change the rendered UI.
-func (l SayBubbleLayout) Equal(other SayBubbleLayout) bool {
-	return l.position == other.position &&
-		l.isLeft == other.isLeft &&
-		l.content.formattedMessage == other.content.formattedMessage &&
-		l.content.style == other.content.style &&
-		l.renderScale == other.renderScale
-}
-
-// ResolveSayBubbleLayouts chooses a direction for each bubble. Components of
-// up to sayBubbleExactLayoutLimit bubbles are solved globally, avoiding local
-// minima from one-at-a-time flipping. Larger components use deterministic
-// multi-start local search. Both paths use stable IDs, not slice order.
-func ResolveSayBubbleLayouts(layouts []SayBubbleLayout) {
-	if len(layouts) == 0 {
-		return
-	}
-	for i := range layouts {
-		layouts[i].isLeft = layouts[i].preferredIsLeft
-	}
-
-	order := canonicalSayBubbleOrder(layouts)
-	visited := make([]bool, len(layouts))
-	queue := make([]int, 0, len(layouts))
-	component := make([]int, 0, len(layouts))
-	for _, seed := range order {
-		if visited[seed] {
-			continue
-		}
-		queue = append(queue[:0], seed)
-		component = component[:0]
-		visited[seed] = true
-		for len(queue) > 0 {
-			index := queue[0]
-			queue = queue[1:]
-			component = append(component, index)
-			for _, other := range order {
-				if visited[other] || !sayBubblesMayOverlap(layouts[index], layouts[other]) {
-					continue
-				}
-				visited[other] = true
-				queue = append(queue, other)
-			}
-		}
-
-		sort.Slice(component, func(i, j int) bool {
-			return sayBubbleCanonicalLess(layouts[component[i]], layouts[component[j]])
-		})
-		if len(component) <= sayBubbleExactLayoutLimit {
-			resolveSayBubbleComponentExact(layouts, component)
-		} else {
-			resolveSayBubbleComponentFallback(layouts, component)
-		}
 	}
 }
 
@@ -504,73 +571,6 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
-}
-
-func (l SayBubbleLayout) candidate(isLeft bool) sayBubbleRect {
-	x := float64(l.position.X)
-	y := float64(l.position.Y)
-	width := float64(l.extent.X)
-	height := float64(l.extent.Y)
-	if isLeft {
-		return sayBubbleRect{left: x, right: x + width, bottom: y, top: y + height}
-	}
-	return sayBubbleRect{left: x - width, right: x, bottom: y, top: y + height}
-}
-
-type sayBubbleRect struct {
-	left   float64
-	right  float64
-	bottom float64
-	top    float64
-}
-
-func (r sayBubbleRect) overlapArea(other sayBubbleRect) float64 {
-	width := math.Min(r.right, other.right) - math.Max(r.left, other.left)
-	height := math.Min(r.top, other.top) - math.Max(r.bottom, other.bottom)
-	if width <= 0 || height <= 0 {
-		return 0
-	}
-	return width * height
-}
-
-func (r sayBubbleRect) outsideArea(viewport sayBubbleRect) float64 {
-	area := (r.right - r.left) * (r.top - r.bottom)
-	insideWidth := math.Max(0, math.Min(r.right, viewport.right)-math.Max(r.left, viewport.left))
-	insideHeight := math.Max(0, math.Min(r.top, viewport.top)-math.Max(r.bottom, viewport.bottom))
-	return area - insideWidth*insideHeight
-}
-
-func (r sayBubbleRect) grow(amount float64) sayBubbleRect {
-	return sayBubbleRect{
-		left:   r.left - amount,
-		right:  r.right + amount,
-		bottom: r.bottom - amount,
-		top:    r.top + amount,
-	}
-}
-
-type sayBubbleScore struct {
-	outsideArea  float64
-	overlapArea  float64
-	flippedCount int
-	changedCount int
-}
-
-func (s sayBubbleScore) less(other sayBubbleScore) bool {
-	if s.outsideArea != other.outsideArea {
-		return s.outsideArea < other.outsideArea
-	}
-	if s.overlapArea != other.overlapArea {
-		return s.overlapArea < other.overlapArea
-	}
-	if s.flippedCount != other.flippedCount {
-		return s.flippedCount < other.flippedCount
-	}
-	return s.changedCount < other.changedCount
-}
-
-func (s sayBubbleScore) equal(other sayBubbleScore) bool {
-	return s == other
 }
 
 func clampSayPositionToExtent(position mathf.Vec2, viewport sayBubbleRect, extent mathf.Vec2) mathf.Vec2 {

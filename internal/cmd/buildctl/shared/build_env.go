@@ -43,6 +43,25 @@ type buildEnvironment struct {
 	Arch            string
 }
 
+func (env buildEnvironment) shellExports() string {
+	lines := []string{
+		"export PROJ_DIR=" + shellQuote(env.ProjectDir),
+		"export ENGINE_DIR=" + shellQuote(env.EngineDir),
+		"export GODOT_SRC=" + shellQuote(env.GodotSrc),
+		"export SPX_MODULE_SRC=" + shellQuote(env.SPXModuleSrc),
+		"export ENGINE_VERSION=" + shellQuote(env.EngineVersion),
+		"export GOPATH=" + shellQuote(env.GoPath),
+		"export VERSION=" + shellQuote(env.Version),
+		"export GODOT_REPOSITORY=" + shellQuote(env.GodotRepository),
+		"export GODOT_REF=" + shellQuote(env.GodotRef),
+		"export GODOT_COMMIT=" + shellQuote(env.GodotCommit),
+		"export TEMPLATE_DIR=" + shellQuote(env.TemplateDir),
+		"export PLATFORM=" + shellQuote(env.Platform),
+		"export ARCH=" + shellQuote(env.Arch),
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
 func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
 	runtimeLock := release.DefaultRuntimeLock()
 	version, err := defaultRuntimeVersion()
@@ -161,25 +180,6 @@ func detectGodotTemplateDir(engineVersion string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported host OS: %s", runtime.GOOS)
 	}
-}
-
-func (env buildEnvironment) shellExports() string {
-	lines := []string{
-		"export PROJ_DIR=" + shellQuote(env.ProjectDir),
-		"export ENGINE_DIR=" + shellQuote(env.EngineDir),
-		"export GODOT_SRC=" + shellQuote(env.GodotSrc),
-		"export SPX_MODULE_SRC=" + shellQuote(env.SPXModuleSrc),
-		"export ENGINE_VERSION=" + shellQuote(env.EngineVersion),
-		"export GOPATH=" + shellQuote(env.GoPath),
-		"export VERSION=" + shellQuote(env.Version),
-		"export GODOT_REPOSITORY=" + shellQuote(env.GodotRepository),
-		"export GODOT_REF=" + shellQuote(env.GodotRef),
-		"export GODOT_COMMIT=" + shellQuote(env.GodotCommit),
-		"export TEMPLATE_DIR=" + shellQuote(env.TemplateDir),
-		"export PLATFORM=" + shellQuote(env.Platform),
-		"export ARCH=" + shellQuote(env.Arch),
-	}
-	return strings.Join(lines, "\n") + "\n"
 }
 
 func shellQuote(value string) string {

@@ -22,11 +22,17 @@ import (
 	"unicode"
 )
 
-// Character width constants for display calculation
 const (
-	singleCharWidth = 1 // Width for ASCII printable characters
-	doubleCharWidth = 2 // Width for CJK characters and other wide characters
+	singleCharWidth = 1 // Printable ASCII.
+	doubleCharWidth = 2 // Non-ASCII and non-printable characters.
 )
+
+// lineWriter wraps a strings.Builder with line-width tracking for word wrapping.
+type lineWriter struct {
+	buf       strings.Builder
+	lineWidth int
+	maxWidth  int
+}
 
 // SplitLines splits the input string into lines with a maximum display width.
 // It handles both ASCII words (split by spaces) and CJK characters (split by character).
@@ -49,42 +55,6 @@ func SplitLines(input string, maxWidth int) string {
 	return w.buf.String()
 }
 
-// isASCII checks if a string contains only ASCII characters.
-func isASCII(str string) bool {
-	for _, r := range str {
-		if r > unicode.MaxASCII {
-			return false
-		}
-	}
-	return true
-}
-
-// getCharWidth returns the display width of a rune.
-// CJK characters, non-printable characters, and non-ASCII characters are treated as double-width.
-func getCharWidth(r rune) int {
-	if unicode.Is(unicode.Han, r) || !unicode.IsPrint(r) || r > unicode.MaxASCII {
-		return doubleCharWidth
-	}
-	return singleCharWidth
-}
-
-// calculateWordWidth calculates the total display width of a word.
-func calculateWordWidth(word string) int {
-	width := 0
-	for _, r := range word {
-		width += getCharWidth(r)
-	}
-	return width
-}
-
-// lineWriter wraps a strings.Builder with line-width tracking for word wrapping.
-type lineWriter struct {
-	buf       strings.Builder
-	lineWidth int
-	maxWidth  int
-}
-
-// newLine starts a new line and resets the current line width.
 func (w *lineWriter) newLine() {
 	w.buf.WriteString("\n")
 	w.lineWidth = 0
@@ -107,12 +77,10 @@ func (w *lineWriter) writeASCIIWord(word string, hasMore bool) {
 		return
 	}
 
-	// If adding the word would exceed maxWidth, start a new line
 	if w.lineWidth+wordWidth > w.maxWidth {
 		w.newLine()
 	}
 
-	// Add space separator if line has content
 	if w.lineWidth > 0 {
 		w.buf.WriteString(" ")
 		w.lineWidth += singleCharWidth
@@ -133,4 +101,29 @@ func (w *lineWriter) writeCJKWord(word string) {
 			w.newLine()
 		}
 	}
+}
+
+func isASCII(str string) bool {
+	for _, r := range str {
+		if r > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
+}
+
+// getCharWidth treats non-ASCII and non-printable runes as double-width.
+func getCharWidth(r rune) int {
+	if r > unicode.MaxASCII || !unicode.IsPrint(r) {
+		return doubleCharWidth
+	}
+	return singleCharWidth
+}
+
+func calculateWordWidth(word string) int {
+	width := 0
+	for _, r := range word {
+		width += getCharWidth(r)
+	}
+	return width
 }

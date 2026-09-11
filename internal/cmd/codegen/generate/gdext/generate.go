@@ -45,26 +45,6 @@ var (
 	gdSpxExtH string
 )
 
-func fileCopy(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	return dstFile.Sync()
-}
 func GenerateHeader(projectPath, spxModulePath string) error {
 	outputFile := filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
 	return generateSpxExtHeader(spxModulePath, outputFile, true)
@@ -102,6 +82,27 @@ func Generate(projectPath, spxModulePath string, ast clang.CHeaderFileAST) error
 		return fmt.Errorf("remove temporary godot_js_spx.cpp: %w", err)
 	}
 	return nil
+}
+
+func fileCopy(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	return dstFile.Sync()
 }
 
 func generateGdCppFile(projectPath string, templateStr string, ast clang.CHeaderFileAST, outputFileName string) error {

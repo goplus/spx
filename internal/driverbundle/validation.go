@@ -68,6 +68,34 @@ func (m Manifest) ValidateVersions(spxVersion, runtimeVersion string) error {
 	return m.validateVersions(spxVersion, runtimeVersion)
 }
 
+// Validate checks a bundle's generic structure.
+func (b Bundle) Validate() error { return b.validateForRuntime("") }
+
+// ValidateForRuntime checks the canonical target names and modes.
+func (b Bundle) ValidateForRuntime(runtimeVersion string) error {
+	if err := validateRuntimeVersion(runtimeVersion); err != nil {
+		return fmt.Errorf("driverbundle: %w", err)
+	}
+	return b.validateForRuntime(runtimeVersion)
+}
+
+// Validate checks one regular file record.
+func (f File) Validate() error {
+	if err := validateBaseName(f.Name); err != nil {
+		return fmt.Errorf("file %q: %w", f.Name, err)
+	}
+	if f.Mode == 0 || f.Mode&^uint32(0o777) != 0 {
+		return fmt.Errorf("file %q has invalid mode %#o", f.Name, f.Mode)
+	}
+	if f.Size <= 0 {
+		return fmt.Errorf("file %q size must be positive", f.Name)
+	}
+	if err := validateSHA256(f.SHA256); err != nil {
+		return fmt.Errorf("file %q SHA-256: %w", f.Name, err)
+	}
+	return nil
+}
+
 func (m Manifest) validateVersions(spxVersion, runtimeVersion string) error {
 	if err := validateSPXVersion(spxVersion); err != nil {
 		return fmt.Errorf("driverbundle: expected %w", err)
@@ -82,17 +110,6 @@ func (m Manifest) validateVersions(spxVersion, runtimeVersion string) error {
 		return fmt.Errorf("driverbundle: manifest runtime version = %q, want %q", m.RuntimeVersion, runtimeVersion)
 	}
 	return nil
-}
-
-// Validate checks a bundle's generic structure.
-func (b Bundle) Validate() error { return b.validateForRuntime("") }
-
-// ValidateForRuntime checks the canonical target names and modes.
-func (b Bundle) ValidateForRuntime(runtimeVersion string) error {
-	if err := validateRuntimeVersion(runtimeVersion); err != nil {
-		return fmt.Errorf("driverbundle: %w", err)
-	}
-	return b.validateForRuntime(runtimeVersion)
 }
 
 func (b Bundle) validateForRuntime(runtimeVersion string) error {
@@ -150,23 +167,6 @@ func (b Bundle) validateForRuntime(runtimeVersion string) error {
 		if b.Files[i].Name != component.Name || b.Files[i].Mode != component.Mode {
 			return fmt.Errorf("bundle %q file %d identity does not match target", b.Name, i)
 		}
-	}
-	return nil
-}
-
-// Validate checks one regular file record.
-func (f File) Validate() error {
-	if err := validateBaseName(f.Name); err != nil {
-		return fmt.Errorf("file %q: %w", f.Name, err)
-	}
-	if f.Mode == 0 || f.Mode&^uint32(0o777) != 0 {
-		return fmt.Errorf("file %q has invalid mode %#o", f.Name, f.Mode)
-	}
-	if f.Size <= 0 {
-		return fmt.Errorf("file %q size must be positive", f.Name)
-	}
-	if err := validateSHA256(f.SHA256); err != nil {
-		return fmt.Errorf("file %q SHA-256: %w", f.Name, err)
 	}
 	return nil
 }

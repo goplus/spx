@@ -29,6 +29,39 @@ type DisplaySettings struct {
 	Debug       bool
 }
 
+type WorldWindowMetrics struct {
+	WorldWidth   int
+	WorldHeight  int
+	MinWorldX    int
+	MinWorldY    int
+	MapMode      int
+	WindowWidth  int
+	WindowHeight int
+}
+
+type PlatformLayoutInput struct {
+	WindowWidth       int
+	WindowHeight      int
+	WindowScale       float64
+	Fullscreen        bool
+	IsMobile          bool
+	IsWeb             bool
+	CurrentWindowSize mathf.Vec2
+}
+
+type PlatformLayout struct {
+	WindowScale  float64
+	WindowWidth  int64
+	WindowHeight int64
+	Fullscreen   bool
+}
+
+type BackdropLayout struct {
+	ScaleX      float64
+	ScaleY      float64
+	RepeatScale *mathf.Vec4
+}
+
 func ResolveDisplaySettings(proj *ProjectConfig) DisplaySettings {
 	if proj == nil {
 		proj = &ProjectConfig{}
@@ -52,16 +85,6 @@ func ResolveMapConfig(cfg MapConfig, hasTilemap bool, defaultWidth, defaultHeigh
 	return cfg
 }
 
-type WorldWindowMetrics struct {
-	WorldWidth   int
-	WorldHeight  int
-	MinWorldX    int
-	MinWorldY    int
-	MapMode      int
-	WindowWidth  int
-	WindowHeight int
-}
-
 func ResolveWorldWindowMetrics(worldWidth, worldHeight, windowWidth, windowHeight int, mapMode int) WorldWindowMetrics {
 	return WorldWindowMetrics{
 		WorldWidth:   worldWidth,
@@ -69,36 +92,16 @@ func ResolveWorldWindowMetrics(worldWidth, worldHeight, windowWidth, windowHeigh
 		MinWorldX:    -worldWidth / 2,
 		MinWorldY:    -worldHeight / 2,
 		MapMode:      mapMode,
-		WindowWidth:  minInt(windowWidth, worldWidth),
-		WindowHeight: minInt(windowHeight, worldHeight),
+		WindowWidth:  min(windowWidth, worldWidth),
+		WindowHeight: min(windowHeight, worldHeight),
 	}
-}
-
-type PlatformLayoutInput struct {
-	WindowWidth       int
-	WindowHeight      int
-	WindowScale       float64
-	Fullscreen        bool
-	IsMobile          bool
-	IsWeb             bool
-	CurrentWindowSize mathf.Vec2
-}
-
-type PlatformLayout struct {
-	WindowScale  float64
-	WindowWidth  int64
-	WindowHeight int64
-	Fullscreen   bool
 }
 
 func ResolvePlatformLayout(in PlatformLayoutInput) PlatformLayout {
 	scale := in.WindowScale
-	fullscreen := false
+	fullscreen := in.IsMobile || in.Fullscreen
 
-	if in.IsMobile || in.Fullscreen || in.IsWeb {
-		if in.Fullscreen || in.IsMobile {
-			fullscreen = true
-		}
+	if fullscreen || in.IsWeb {
 		scaleX := in.CurrentWindowSize.X / float64(in.WindowWidth)
 		scaleY := in.CurrentWindowSize.Y / float64(in.WindowHeight)
 		scale = math.Min(scaleX, scaleY)
@@ -121,12 +124,6 @@ func ResolvePlatformLayout(in PlatformLayoutInput) PlatformLayout {
 
 func IsWindowWorldSizeEqual(worldWidth, worldHeight, windowWidth, windowHeight int) bool {
 	return worldHeight == windowHeight && worldWidth == windowWidth
-}
-
-type BackdropLayout struct {
-	ScaleX      float64
-	ScaleY      float64
-	RepeatScale *mathf.Vec4
 }
 
 func ResolveBackdropLayout(imgW, imgH, dstW, dstH float64, mapMode int) BackdropLayout {
@@ -163,11 +160,4 @@ func ResolveBackdropLayout(imgW, imgH, dstW, dstH float64, mapMode int) Backdrop
 		ScaleY:      dstH / imgH,
 		RepeatScale: repeatScale,
 	}
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

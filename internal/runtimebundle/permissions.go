@@ -50,14 +50,14 @@ func (modePermissions) EnsureFile(path string, executable bool) error {
 	return os.Chmod(path, mode)
 }
 
-func defaultPermissions() Permissions {
-	return platformPermissions()
-}
-
 // PrivateFileMode exposes the private mode selected for a manifest entry. It
 // is useful to callers materializing a verified entry outside Cache.
 func PrivateFileMode(mode uint32) os.FileMode {
 	return privateFileMode(mode)
+}
+
+func defaultPermissions() Permissions {
+	return platformPermissions()
 }
 
 func mkdirPrivateRootChild(root *os.Root, name string) error {

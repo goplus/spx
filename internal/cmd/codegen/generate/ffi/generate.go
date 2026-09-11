@@ -71,6 +71,14 @@ type ImplData struct {
 
 type ByName []clang.TypedefFunction
 
+func (arr ByName) Len() int { return len(arr) }
+
+func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
+
+func (arr ByName) Less(i, j int) bool {
+	return arr[i].Name < arr[j].Name
+}
+
 func Generate(projectPath string, ast clang.CHeaderFileAST) error {
 	generators := []struct {
 		name string
@@ -302,14 +310,6 @@ func MustGdxReturnType(function *clang.TypedefFunction) string {
 		return "gdx.Array"
 	}
 	return typeName
-}
-
-func (arr ByName) Len() int { return len(arr) }
-
-func (arr ByName) Swap(i, j int) { arr[i], arr[j] = arr[j], arr[i] }
-
-func (arr ByName) Less(i, j int) bool {
-	return arr[i].Name < arr[j].Name
 }
 
 func getManagerFuncBody(function *clang.TypedefFunction) string {

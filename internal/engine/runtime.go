@@ -39,6 +39,10 @@ var state = runtimeState{
 
 type runtimeBridge struct{}
 
+func init() {
+	gdx.SetRuntimeBridge(runtimeBridge{})
+}
+
 func (runtimeBridge) InternalUpdateEngine(delta float64) {
 	updateTimers(delta)
 	updateTweens(delta)
@@ -154,10 +158,6 @@ func BindUIForType[T any](parentNode Object, path string) *T {
 		return nil
 	}
 	return value.Addr().Interface().(*T)
-}
-
-func init() {
-	gdx.SetRuntimeBridge(runtimeBridge{})
 }
 
 func clearAllSprites() {

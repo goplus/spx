@@ -48,6 +48,22 @@ type versionedReleaseManifestSpec struct {
 	Fetch     runtimebundle.FetchFunc
 }
 
+type versionedReleaseManifestWriter struct {
+	destination io.Writer
+	remaining   int64
+	exceeded    bool
+}
+
+func (w *versionedReleaseManifestWriter) Write(data []byte) (int, error) {
+	if int64(len(data)) > w.remaining {
+		w.exceeded = true
+		return 0, errVersionedReleaseManifestTooLarge
+	}
+	n, err := w.destination.Write(data)
+	w.remaining -= int64(n)
+	return n, err
+}
+
 // acquireVersionedReleaseManifest loads a version-addressed release manifest.
 // Every mirror or cache hit is parsed again and checked against spec.Version.
 // The returned bytes let callers derive a content digest without introducing a
@@ -243,20 +259,4 @@ func acquireCachedVersionedReleaseManifest[T any](
 		return zero, nil, fmt.Errorf("launchpack: cached release manifest version %q does not match %q", got, spec.Version)
 	}
 	return manifest, cached, nil
-}
-
-type versionedReleaseManifestWriter struct {
-	destination io.Writer
-	remaining   int64
-	exceeded    bool
-}
-
-func (w *versionedReleaseManifestWriter) Write(data []byte) (int, error) {
-	if int64(len(data)) > w.remaining {
-		w.exceeded = true
-		return 0, errVersionedReleaseManifestTooLarge
-	}
-	n, err := w.destination.Write(data)
-	w.remaining -= int64(n)
-	return n, err
 }

@@ -27,34 +27,6 @@ type resolvedMember struct {
 	autoProperty bool
 }
 
-func resolveMember(target reflect.Value, name string, from int) resolvedMember {
-	ref := getValueRef(target, name, from)
-	if ref.IsValid() {
-		return resolvedMember{field: ref}
-	}
-
-	targetForMethod := target
-	if target.Kind() != reflect.Ptr && target.CanAddr() {
-		targetForMethod = target.Addr()
-	}
-
-	aliasName := aliasNameOf(name, true)
-
-	m := targetForMethod.MethodByName(name)
-	if m.IsValid() && methodHasAutoProperty(m) {
-		return resolvedMember{method: m}
-	}
-
-	if !m.IsValid() && aliasName != "" && aliasName != name {
-		mAlias := targetForMethod.MethodByName(aliasName)
-		if mAlias.IsValid() && methodHasAutoProperty(mAlias) {
-			return resolvedMember{method: mAlias, autoProperty: true}
-		}
-	}
-
-	return resolvedMember{}
-}
-
 func ResolveMemberValueEval(target reflect.Value, name string, from int) func() any {
 	member := resolveMember(target, name, from)
 	if member.field.IsValid() {
@@ -84,6 +56,34 @@ func ResolveMemberStringEval(target reflect.Value, name string, from int) func()
 	}
 
 	return nil
+}
+
+func resolveMember(target reflect.Value, name string, from int) resolvedMember {
+	ref := getValueRef(target, name, from)
+	if ref.IsValid() {
+		return resolvedMember{field: ref}
+	}
+
+	targetForMethod := target
+	if target.Kind() != reflect.Ptr && target.CanAddr() {
+		targetForMethod = target.Addr()
+	}
+
+	aliasName := aliasNameOf(name, true)
+
+	m := targetForMethod.MethodByName(name)
+	if m.IsValid() && methodHasAutoProperty(m) {
+		return resolvedMember{method: m}
+	}
+
+	if !m.IsValid() && aliasName != "" && aliasName != name {
+		mAlias := targetForMethod.MethodByName(aliasName)
+		if mAlias.IsValid() && methodHasAutoProperty(mAlias) {
+			return resolvedMember{method: mAlias, autoProperty: true}
+		}
+	}
+
+	return resolvedMember{}
 }
 
 func getValueRef(target reflect.Value, name string, from int) reflect.Value {

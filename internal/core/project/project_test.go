@@ -458,29 +458,35 @@ func TestResolveMapConfigAndMetrics(t *testing.T) {
 }
 
 func TestResolvePlatformLayout(t *testing.T) {
-	layout := ResolvePlatformLayout(PlatformLayoutInput{
-		WindowWidth:       400,
-		WindowHeight:      200,
-		WindowScale:       1,
-		Fullscreen:        true,
-		CurrentWindowSize: mathf.Vec2{X: 1000, Y: 600},
-	})
-	if !layout.Fullscreen {
-		t.Fatalf("expected fullscreen: %+v", layout)
+	tests := []struct {
+		name                    string
+		mobile, fullscreen, web bool
+		want                    PlatformLayout
+	}{
+		{"windowed", false, false, false, PlatformLayout{1, 400, 200, false}},
+		{"fullscreen", false, true, false, PlatformLayout{2.5, 1000, 500, true}},
+		{"mobile", true, false, false, PlatformLayout{2.5, 1000, 500, true}},
+		{"mobile fullscreen", true, true, false, PlatformLayout{2.5, 1000, 500, true}},
+		{"web", false, false, true, PlatformLayout{2.5, 1000, 600, false}},
+		{"web fullscreen", false, true, true, PlatformLayout{2.5, 1000, 600, true}},
+		{"web mobile", true, false, true, PlatformLayout{2.5, 1000, 600, true}},
+		{"web mobile fullscreen", true, true, true, PlatformLayout{2.5, 1000, 600, true}},
 	}
-	if layout.WindowScale != 2.5 || layout.WindowWidth != 1000 || layout.WindowHeight != 500 {
-		t.Fatalf("unexpected fullscreen layout: %+v", layout)
-	}
-
-	web := ResolvePlatformLayout(PlatformLayoutInput{
-		WindowWidth:       400,
-		WindowHeight:      200,
-		WindowScale:       1,
-		IsWeb:             true,
-		CurrentWindowSize: mathf.Vec2{X: 900, Y: 500},
-	})
-	if web.WindowWidth != 900 || web.WindowHeight != 500 {
-		t.Fatalf("unexpected web layout: %+v", web)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolvePlatformLayout(PlatformLayoutInput{
+				WindowWidth:       400,
+				WindowHeight:      200,
+				WindowScale:       1,
+				Fullscreen:        tt.fullscreen,
+				IsMobile:          tt.mobile,
+				IsWeb:             tt.web,
+				CurrentWindowSize: mathf.Vec2{X: 1000, Y: 600},
+			})
+			if got != tt.want {
+				t.Fatalf("ResolvePlatformLayout() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 

@@ -43,6 +43,49 @@ type BuildShellPlan struct {
 	WebCachedTemplateZip  string
 }
 
+func (plan BuildShellPlan) ShellExports() string {
+	lines := []string{
+		"export ENGINE_BUILD_TARGET=" + shared.ShellQuote(plan.Target),
+		"export ENGINE_BUILD_PLATFORM=" + shared.ShellQuote(plan.Platform),
+	}
+	if plan.EditorSource != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_EDITOR_SOURCE="+shared.ShellQuote(plan.EditorSource),
+			"export ENGINE_BUILD_EDITOR_DESTINATION="+shared.ShellQuote(plan.EditorDestination),
+		)
+		if plan.EditorUseVSProj {
+			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='true'")
+		} else {
+			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='false'")
+		}
+	}
+	if plan.TemplateSConsPlatform != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shared.ShellQuote(plan.TemplateSConsPlatform),
+			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shared.ShellQuote(plan.TemplateSource),
+			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shared.ShellQuote(plan.TemplateDestination),
+		)
+	}
+	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_SCONS_COMMAND", plan.TemplateSConsCommands)
+	if plan.TemplatePostDir != "" {
+		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shared.ShellQuote(plan.TemplatePostDir))
+	}
+	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_POST_COMMAND", plan.TemplatePostCommands)
+	if plan.WebThreads != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_WEB_THREADS="+shared.ShellQuote(plan.WebThreads),
+			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shared.ShellQuote(plan.WebThreadSuffix),
+			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shared.ShellQuote(plan.WebCachedTemplateZip),
+		)
+		if plan.WebProxyToPThread {
+			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='true'")
+		} else {
+			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='false'")
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
 func ParseEnvExportEngineBuildShellArgs(args []string) (BuildConfig, error) {
 	cfg := BuildConfig{}
 
@@ -210,49 +253,6 @@ func resolveWebTemplateBuildConfig(mode string) (threads string, proxyToPThread 
 	default:
 		return "", false, "", fmt.Errorf("unsupported web-mode: %s", mode)
 	}
-}
-
-func (plan BuildShellPlan) ShellExports() string {
-	lines := []string{
-		"export ENGINE_BUILD_TARGET=" + shared.ShellQuote(plan.Target),
-		"export ENGINE_BUILD_PLATFORM=" + shared.ShellQuote(plan.Platform),
-	}
-	if plan.EditorSource != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_EDITOR_SOURCE="+shared.ShellQuote(plan.EditorSource),
-			"export ENGINE_BUILD_EDITOR_DESTINATION="+shared.ShellQuote(plan.EditorDestination),
-		)
-		if plan.EditorUseVSProj {
-			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='true'")
-		} else {
-			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='false'")
-		}
-	}
-	if plan.TemplateSConsPlatform != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shared.ShellQuote(plan.TemplateSConsPlatform),
-			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shared.ShellQuote(plan.TemplateSource),
-			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shared.ShellQuote(plan.TemplateDestination),
-		)
-	}
-	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_SCONS_COMMAND", plan.TemplateSConsCommands)
-	if plan.TemplatePostDir != "" {
-		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shared.ShellQuote(plan.TemplatePostDir))
-	}
-	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_POST_COMMAND", plan.TemplatePostCommands)
-	if plan.WebThreads != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_WEB_THREADS="+shared.ShellQuote(plan.WebThreads),
-			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shared.ShellQuote(plan.WebThreadSuffix),
-			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shared.ShellQuote(plan.WebCachedTemplateZip),
-		)
-		if plan.WebProxyToPThread {
-			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='true'")
-		} else {
-			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='false'")
-		}
-	}
-	return strings.Join(lines, "\n") + "\n"
 }
 
 func appendIndexedShellExports(lines []string, prefix string, values []string) []string {

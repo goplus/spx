@@ -29,6 +29,32 @@ import (
 
 type posixLockFile struct{ file *os.File }
 
+func (f *posixLockFile) tryLock(mode lockMode) (bool, error) {
+	flags := unix.LOCK_NB
+	if mode == lockExclusive {
+		flags |= unix.LOCK_EX
+	} else {
+		flags |= unix.LOCK_SH
+	}
+	if err := unix.Flock(int(f.file.Fd()), flags); err != nil {
+		if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EINTR) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (f *posixLockFile) unlock() error {
+	return unix.Flock(int(f.file.Fd()), unix.LOCK_UN)
+}
+
+func (f *posixLockFile) close() error { return f.file.Close() }
+
+func (f *posixLockFile) stat() (os.FileInfo, error) { return f.file.Stat() }
+
+func (f *posixLockFile) protect() error { return f.file.Chmod(0o600) }
+
 func openPlatformLockFileImpl(root *os.Root, name string) (rawPlatformLockFile, error) {
 	for attempt := 0; attempt < 16; attempt++ {
 		file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
@@ -66,31 +92,5 @@ func openPlatformLockFileImpl(root *os.Root, name string) (rawPlatformLockFile, 
 	}
 	return nil, fmt.Errorf("runtimebundle: lock sidecar changed repeatedly while opening: %s", name)
 }
-
-func (f *posixLockFile) tryLock(mode lockMode) (bool, error) {
-	flags := unix.LOCK_NB
-	if mode == lockExclusive {
-		flags |= unix.LOCK_EX
-	} else {
-		flags |= unix.LOCK_SH
-	}
-	if err := unix.Flock(int(f.file.Fd()), flags); err != nil {
-		if errors.Is(err, unix.EAGAIN) || errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EINTR) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (f *posixLockFile) unlock() error {
-	return unix.Flock(int(f.file.Fd()), unix.LOCK_UN)
-}
-
-func (f *posixLockFile) close() error { return f.file.Close() }
-
-func (f *posixLockFile) stat() (os.FileInfo, error) { return f.file.Stat() }
-
-func (f *posixLockFile) protect() error { return f.file.Chmod(0o600) }
 
 func validateLockParentSecurity(string) error { return nil }

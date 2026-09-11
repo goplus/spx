@@ -33,40 +33,6 @@ type safeDir struct {
 	root *os.Root
 }
 
-func openSafeRoot(name string, observed os.FileInfo) (*safeDir, error) {
-	before, err := os.Lstat(name)
-	if err != nil {
-		return nil, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.IsDir() || observed == nil || !os.SameFile(observed, before) {
-		return nil, fmt.Errorf("%w: root %q is not a real directory", ErrUnsafeFile, name)
-	}
-	root, err := os.OpenRoot(name)
-	if err != nil {
-		return nil, err
-	}
-	probe, err := root.Open(".")
-	if err != nil {
-		root.Close()
-		return nil, err
-	}
-	after, statErr := probe.Stat()
-	closeErr := probe.Close()
-	if statErr != nil {
-		root.Close()
-		return nil, statErr
-	}
-	if closeErr != nil {
-		root.Close()
-		return nil, closeErr
-	}
-	if !after.IsDir() || !os.SameFile(observed, after) || !os.SameFile(before, after) {
-		root.Close()
-		return nil, fmt.Errorf("%w: root %q changed while it was opened", ErrUnsafeFile, name)
-	}
-	return &safeDir{root: root}, nil
-}
-
 func (d *safeDir) OpenFile(name string) (*os.File, error) {
 	before, err := d.validateComponents(name, false)
 	if err != nil {
@@ -119,6 +85,23 @@ func (d *safeDir) OpenDir(name string) (*safeDir, error) {
 	return &safeDir{root: root}, nil
 }
 
+func (d *safeDir) ReadDir() ([]fs.DirEntry, error) {
+	file, err := d.root.Open(".")
+	if err != nil {
+		return nil, err
+	}
+	entries, readErr := file.ReadDir(-1)
+	closeErr := file.Close()
+	if readErr != nil {
+		return nil, readErr
+	}
+	return entries, closeErr
+}
+
+func (d *safeDir) Close() error {
+	return d.root.Close()
+}
+
 func (d *safeDir) validateComponents(name string, finalDirectory bool) (os.FileInfo, error) {
 	parts := strings.Split(filepath.Clean(name), string(filepath.Separator))
 	for i := range parts {
@@ -145,19 +128,36 @@ func (d *safeDir) validateComponents(name string, finalDirectory bool) (os.FileI
 	return nil, fmt.Errorf("%w: empty descriptor path", ErrInvalidPath)
 }
 
-func (d *safeDir) ReadDir() ([]fs.DirEntry, error) {
-	file, err := d.root.Open(".")
+func openSafeRoot(name string, observed os.FileInfo) (*safeDir, error) {
+	before, err := os.Lstat(name)
 	if err != nil {
 		return nil, err
 	}
-	entries, readErr := file.ReadDir(-1)
-	closeErr := file.Close()
-	if readErr != nil {
-		return nil, readErr
+	if before.Mode()&os.ModeSymlink != 0 || !before.IsDir() || observed == nil || !os.SameFile(observed, before) {
+		return nil, fmt.Errorf("%w: root %q is not a real directory", ErrUnsafeFile, name)
 	}
-	return entries, closeErr
-}
-
-func (d *safeDir) Close() error {
-	return d.root.Close()
+	root, err := os.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	probe, err := root.Open(".")
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	after, statErr := probe.Stat()
+	closeErr := probe.Close()
+	if statErr != nil {
+		root.Close()
+		return nil, statErr
+	}
+	if closeErr != nil {
+		root.Close()
+		return nil, closeErr
+	}
+	if !after.IsDir() || !os.SameFile(observed, after) || !os.SameFile(before, after) {
+		root.Close()
+		return nil, fmt.Errorf("%w: root %q changed while it was opened", ErrUnsafeFile, name)
+	}
+	return &safeDir{root: root}, nil
 }

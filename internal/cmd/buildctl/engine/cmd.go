@@ -59,6 +59,39 @@ func Run(args []string) error {
 	}
 }
 
+func (cfg *engineDownloadConfig) validate() error {
+	if cfg.assetDir != "" {
+		cfg.assetDir = filepath.Clean(cfg.assetDir)
+	}
+	if cfg.sameRunArtifacts && cfg.assetDir == "" {
+		return errors.New("--same-run-artifacts requires --asset-dir")
+	}
+	if cfg.skipRuntimePack && !cfg.runtime {
+		return errors.New("--skip-runtime-pack requires --runtime")
+	}
+	if cfg.runtime && cfg.platform != "" {
+		return errors.New("--runtime cannot be combined with --platform")
+	}
+	if cfg.runtime && cfg.mode != "" {
+		return errors.New("--runtime cannot be combined with --mode")
+	}
+	if err := shared.ValidateOptionalPlatform(cfg.platform); err != nil {
+		return err
+	}
+	if cfg.platform == "web" && cfg.mode == "" {
+		cfg.mode = "normal"
+	}
+	if cfg.mode != "" {
+		if cfg.platform != "web" {
+			return errors.New("--mode requires --platform web")
+		}
+		if err := shared.ValidateWebMode(cfg.mode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func printEngineUsage() {
 	fmt.Fprintln(osStderr, "Usage: buildctl engine <download|exec> [options]")
 	fmt.Fprintln(osStderr)
@@ -110,37 +143,4 @@ func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
 		return engineDownloadConfig{}, err
 	}
 	return cfg, nil
-}
-
-func (cfg *engineDownloadConfig) validate() error {
-	if cfg.assetDir != "" {
-		cfg.assetDir = filepath.Clean(cfg.assetDir)
-	}
-	if cfg.sameRunArtifacts && cfg.assetDir == "" {
-		return errors.New("--same-run-artifacts requires --asset-dir")
-	}
-	if cfg.skipRuntimePack && !cfg.runtime {
-		return errors.New("--skip-runtime-pack requires --runtime")
-	}
-	if cfg.runtime && cfg.platform != "" {
-		return errors.New("--runtime cannot be combined with --platform")
-	}
-	if cfg.runtime && cfg.mode != "" {
-		return errors.New("--runtime cannot be combined with --mode")
-	}
-	if err := shared.ValidateOptionalPlatform(cfg.platform); err != nil {
-		return err
-	}
-	if cfg.platform == "web" && cfg.mode == "" {
-		cfg.mode = "normal"
-	}
-	if cfg.mode != "" {
-		if cfg.platform != "web" {
-			return errors.New("--mode requires --platform web")
-		}
-		if err := shared.ValidateWebMode(cfg.mode); err != nil {
-			return err
-		}
-	}
-	return nil
 }

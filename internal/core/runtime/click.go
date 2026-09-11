@@ -23,15 +23,6 @@ type ClickSelection[T any, S any] struct {
 	SwipeTarget S
 }
 
-func FindClickTarget[I any, T any, S any](items []I, match func(I) (ClickSelection[T, S], bool)) (ClickSelection[T, S], bool) {
-	for i := len(items) - 1; i >= 0; i-- {
-		if selection, ok := match(items[i]); ok {
-			return selection, true
-		}
-	}
-	return ClickSelection[T, S]{}, false
-}
-
 type ClickDownHooks[T any, S any, ID comparable] struct {
 	FindTarget     func(mathf.Vec2) (ClickSelection[T, S], bool)
 	BeginSwipe     func(mathf.Vec2, S)
@@ -41,6 +32,15 @@ type ClickDownHooks[T any, S any, ID comparable] struct {
 	TargetID       func(T) (ID, bool)
 	DispatchTarget func(T)
 	DispatchStage  func()
+}
+
+func FindClickTarget[I any, T any, S any](items []I, match func(I) (ClickSelection[T, S], bool)) (ClickSelection[T, S], bool) {
+	for i := len(items) - 1; i >= 0; i-- {
+		if selection, ok := match(items[i]); ok {
+			return selection, true
+		}
+	}
+	return ClickSelection[T, S]{}, false
 }
 
 func HandleLeftButtonDown[T any, S any, ID comparable](point mathf.Vec2, hooks ClickDownHooks[T, S, ID]) {

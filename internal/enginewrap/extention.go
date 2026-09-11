@@ -25,31 +25,6 @@ import (
 
 var mainCallback func(call func())
 
-func Init(call func(f func())) {
-	mainCallback = call
-}
-
-func callInMainThread(call func()) {
-	CallInMainThread(call)
-}
-
-// CallInMainThread runs call synchronously on the engine main thread.
-func CallInMainThread(call func()) {
-	if mainCallback == nil {
-		panic("enginewrap: Init must be called before using manager methods off the main thread")
-	}
-	mainCallback(call)
-}
-
-// CallInMainThreadValue runs call synchronously on the engine main thread and
-// returns its result.
-func CallInMainThreadValue[T any](call func() T) (result T) {
-	CallInMainThread(func() {
-		result = call()
-	})
-	return
-}
-
 const (
 	MOUSE_BUTTON_LEFT   int64 = 1
 	MOUSE_BUTTON_RIGHT  int64 = 2
@@ -72,4 +47,29 @@ func (c *cameraMgrImpl) GetPosition() Vec2 {
 
 func (c *cameraMgrImpl) SetPosition(position Vec2) {
 	c.SetCameraPosition(position)
+}
+
+func Init(call func(f func())) {
+	mainCallback = call
+}
+
+// CallInMainThread runs call synchronously on the engine main thread.
+func CallInMainThread(call func()) {
+	if mainCallback == nil {
+		panic("enginewrap: Init must be called before using manager methods off the main thread")
+	}
+	mainCallback(call)
+}
+
+// CallInMainThreadValue runs call synchronously on the engine main thread and
+// returns its result.
+func CallInMainThreadValue[T any](call func() T) (result T) {
+	CallInMainThread(func() {
+		result = call()
+	})
+	return
+}
+
+func callInMainThread(call func()) {
+	CallInMainThread(call)
 }

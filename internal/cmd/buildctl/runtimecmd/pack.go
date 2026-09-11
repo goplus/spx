@@ -33,6 +33,10 @@ type runtimeExportPackConfig struct {
 
 var prepareRuntimePackEngine = engine.PrepareLinuxRuntimePackAssets
 
+func ExportPackRuntime(runner shared.ScriptRunner) error {
+	return exportPackRuntime(runtimeExportPackConfig{}, runner)
+}
+
 func runRuntimeExportPack(args []string) error {
 	cfg, err := parseRuntimeExportPackArgs(args)
 	if err != nil {
@@ -46,10 +50,6 @@ func runRuntimeExportPack(args []string) error {
 		return err
 	}
 	return exportPackRuntime(cfg, shared.CommandRunner{RepoRoot: repoRoot})
-}
-
-func ExportPackRuntime(runner shared.ScriptRunner) error {
-	return exportPackRuntime(runtimeExportPackConfig{}, runner)
 }
 
 func parseRuntimeExportPackArgs(args []string) (runtimeExportPackConfig, error) {

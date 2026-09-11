@@ -78,6 +78,19 @@ type ArrayTransformBridgeSpec struct {
 	OutputCountScale int
 }
 
+var (
+	managerSet            = map[string]bool{}
+	cppType2Go            = map[string]string{}
+	KnownManagerNames     = []string{} // List of correct manager names obtained from header parsing
+	nativeArrayBridges    = map[string]NativeArrayBridgeSpec{}
+	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
+)
+
+type ManagerData struct {
+	Ast     clang.CHeaderFileAST
+	Mangers []string
+}
+
 func init() {
 	// Set callback function so the clang package can get the list of known manager names
 	clang.KnownManagerNamesProvider = func() []string {
@@ -92,6 +105,7 @@ func Add(a int, b int) int {
 func Sub(a int, b int) int {
 	return a - b
 }
+
 func GoArgumentType(t clang.PrimativeType, name string) string {
 	n := strings.TrimSpace(t.Name)
 
@@ -469,19 +483,6 @@ func TrimPrefix(typeName, prefix string) string {
 	return typeName
 }
 
-var (
-	managerSet            = map[string]bool{}
-	cppType2Go            = map[string]string{}
-	KnownManagerNames     = []string{} // List of correct manager names obtained from header parsing
-	nativeArrayBridges    = map[string]NativeArrayBridgeSpec{}
-	arrayTransformBridges = map[string]ArrayTransformBridgeSpec{}
-)
-
-type ManagerData struct {
-	Ast     clang.CHeaderFileAST
-	Mangers []string
-}
-
 // RegisterManagerName registers a known manager name (obtained from header parsing).
 func RegisterManagerName(name string) {
 	name = strings.ToLower(name)
@@ -620,9 +621,8 @@ func GetManagerName(str string) string {
 	str = str[len(prefix):]
 	lowerStr := strings.ToLower(str)
 
-	// Prefer matching against known manager names (sorted by length descending, prioritizing longer names)
+	// Match the longest known name without reordering KnownManagerNames.
 	if len(KnownManagerNames) > 0 {
-		// Create a copy sorted by length in descending order
 		sortedNames := make([]string, len(KnownManagerNames))
 		copy(sortedNames, KnownManagerNames)
 		sort.Slice(sortedNames, func(i, j int) bool {
@@ -636,17 +636,15 @@ func GetManagerName(str string) string {
 		}
 	}
 
-	// Fall back to the original logic (stop at uppercase letter)
-	chs := []rune{}
-	chs = append(chs, rune(str[0]), rune(str[1]))
+	// Otherwise, keep the first two bytes and stop at the next uppercase rune.
+	chs := []rune{rune(str[0]), rune(str[1])}
 	for _, ch := range str[2:] {
-		if unicode.IsUpper(rune(ch)) {
+		if unicode.IsUpper(ch) {
 			break
 		}
-		chs = append(chs, rune(ch))
+		chs = append(chs, ch)
 	}
-	result := strings.ToLower(string(chs))
-	return result
+	return strings.ToLower(string(chs))
 }
 
 func IsManagerMethod(function *clang.TypedefFunction) bool {
@@ -755,6 +753,7 @@ func GetManagers(ast clang.CHeaderFileAST) []string {
 	}
 	return managers
 }
+
 func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {
 	tmpl, err := template.New(name).
 		Funcs(funcs).

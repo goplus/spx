@@ -33,6 +33,8 @@ import (
 // at creation time; no post-create chmod/security window is used.
 type windowsPermissions struct{}
 
+const fileAllAccessMask windows.ACCESS_MASK = windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff
+
 func (windowsPermissions) EnsureDir(path string) error {
 	if path == "" {
 		return fmt.Errorf("runtimebundle: empty Windows cache directory")
@@ -162,8 +164,6 @@ func verifyPrivateDACLMode(path string, requireProtected bool) error {
 	}
 	return verifyPrivateSecurityDescriptor(path, actual, user.User.Sid, system, requireProtected, info.IsDir())
 }
-
-const fileAllAccessMask windows.ACCESS_MASK = windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff
 
 func verifyPrivateSecurityDescriptor(path string, descriptor *windows.SECURITY_DESCRIPTOR, user, system *windows.SID, requireProtected, isDirectory bool) error {
 	control, _, err := descriptor.Control()

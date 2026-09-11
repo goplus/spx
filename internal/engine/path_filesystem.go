@@ -44,6 +44,10 @@ func SetAssetDir(dir string) {
 	assetPaths.extAssetDir = readExtAssetDirFromProjectConfig(prefix)
 }
 
+func ToAssetPath(relPath string) string {
+	return buildFilesystemAssetPath(relPath)
+}
+
 func setLegacyFilesystemAssetDir(dir string) {
 	prefix := defaultAssetPathPrefix
 	if platform.IsWeb() {
@@ -74,8 +78,4 @@ func setLegacyFilesystemAssetDir(dir string) {
 			assetPaths.canonicalCompatibilityRoot = cleanFilesystemPath(compatibilityRootPath)
 		}
 	}
-}
-
-func ToAssetPath(relPath string) string {
-	return buildFilesystemAssetPath(relPath)
 }

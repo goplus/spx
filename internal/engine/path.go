@@ -55,6 +55,10 @@ var (
 	}
 )
 
+type assetProjectConfig struct {
+	ExtAsset string `json:"extasset"`
+}
+
 // SetFilesystemRoots configures the physical project and asset roots used by
 // interpreted desktop sessions. It only updates path state; the Engine resource
 // manager is configured later, after the GDExtension has linked its callbacks.
@@ -240,10 +244,6 @@ func leadingParentCount(name string) int {
 		count++
 	}
 	return count
-}
-
-type assetProjectConfig struct {
-	ExtAsset string `json:"extasset"`
 }
 
 func projectConfigPath(prefix string) string {

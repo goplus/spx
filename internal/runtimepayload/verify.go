@@ -40,12 +40,6 @@ type Verified struct {
 	entries  []runtimebundle.Entry
 }
 
-// Verify is the in-memory convenience wrapper around VerifyReaderAt.
-func Verify(payload []byte, payloadSHA256, manifestSHA256, goos, goarch string) (*Verified, error) {
-	reader := bytes.NewReader(payload)
-	return VerifyReaderAt(reader, int64(len(payload)), payloadSHA256, manifestSHA256, goos, goarch)
-}
-
 const maxPayloadManifestBytes = 1 << 20
 
 // The payload is a ZIP written with archive/zip's canonical Store headers.
@@ -64,6 +58,77 @@ const (
 	zipMaxNameBytes                 = 1<<16 - 1
 	zip32Max                 uint64 = 1<<32 - 1
 )
+
+// WriteComponentZIP writes a deterministic archive containing entries below
+// prefix with the prefix removed. Only engine/ and bridge/ are accepted.
+func (v *Verified) WriteComponentZIP(prefix string, dst io.Writer) error {
+	if v == nil || (prefix != "engine/" && prefix != "bridge/") {
+		return fmt.Errorf("runtimepayload: invalid component prefix %q", prefix)
+	}
+	if dst == nil {
+		return fmt.Errorf("runtimepayload: nil component writer")
+	}
+	var entries []runtimebundle.Entry
+	for _, entry := range v.entries {
+		if strings.HasPrefix(entry.Name, prefix) {
+			entry.Name = strings.TrimPrefix(entry.Name, prefix)
+			entries = append(entries, entry)
+		}
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("runtimepayload: empty component %q", prefix)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	writer := zip.NewWriter(dst)
+	for _, entry := range entries {
+		sourceName := prefix + entry.Name
+		file := v.files[sourceName]
+		if file == nil {
+			_ = writer.Close()
+			return fmt.Errorf("runtimepayload: missing component entry %q", sourceName)
+		}
+		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
+		header.SetMode(canonicalFileMode(fs.FileMode(entry.Mode)))
+		header.SetModTime(canonicalTime)
+		output, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = writer.Close()
+			return fmt.Errorf("runtimepayload: create component entry %q: %w", entry.Name, err)
+		}
+		if err := copyVerifiedZipEntry(output, file, runtimebundle.Entry{
+			Name: sourceName, Mode: entry.Mode, Size: entry.Size, SHA256: entry.SHA256,
+		}); err != nil {
+			_ = writer.Close()
+			return err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("runtimepayload: close component ZIP: %w", err)
+	}
+	return nil
+}
+
+// WriteProjectZIP streams the embedded canonical project archive to dst.
+func (v *Verified) WriteProjectZIP(dst io.Writer) error {
+	if v == nil {
+		return fmt.Errorf("runtimepayload: nil verified payload")
+	}
+	if dst == nil {
+		return fmt.Errorf("runtimepayload: nil project writer")
+	}
+	file := v.files[ProjectZipPath]
+	entry, ok := findEntry(v.entries, ProjectZipPath)
+	if file == nil || !ok {
+		return fmt.Errorf("runtimepayload: missing required entry %q", ProjectZipPath)
+	}
+	return copyVerifiedZipEntry(dst, file, entry)
+}
+
+// Verify is the in-memory convenience wrapper around VerifyReaderAt.
+func Verify(payload []byte, payloadSHA256, manifestSHA256, goos, goarch string) (*Verified, error) {
+	reader := bytes.NewReader(payload)
+	return VerifyReaderAt(reader, int64(len(payload)), payloadSHA256, manifestSHA256, goos, goarch)
+}
 
 // VerifyReaderAt authenticates and indexes a payload without retaining copies
 // of its large entries. source must remain readable and unchanged while the
@@ -137,46 +202,6 @@ func VerifyReaderAt(source io.ReaderAt, size int64, payloadSHA256, manifestSHA25
 	return verified, nil
 }
 
-func readSmallZipEntry(file *zip.File, limit int64) ([]byte, error) {
-	if file.UncompressedSize64 > uint64(limit) {
-		return nil, fmt.Errorf("entry %q size %d exceeds limit %d", file.Name, file.UncompressedSize64, limit)
-	}
-	input, err := file.Open()
-	if err != nil {
-		return nil, err
-	}
-	data, readErr := io.ReadAll(io.LimitReader(input, limit+1))
-	closeErr := input.Close()
-	if readErr != nil {
-		return nil, readErr
-	}
-	if closeErr != nil {
-		return nil, closeErr
-	}
-	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("entry %q exceeds limit %d", file.Name, limit)
-	}
-	if uint64(len(data)) != file.UncompressedSize64 {
-		return nil, fmt.Errorf("entry %q short read: got %d, want %d", file.Name, len(data), file.UncompressedSize64)
-	}
-	return data, nil
-}
-
-func parseManifest(data []byte) (Manifest, error) {
-	var manifest Manifest
-	if err := strictjson.Decode(data, &manifest); err != nil {
-		return Manifest{}, fmt.Errorf("runtimepayload: decode manifest: %w", err)
-	}
-	if manifest.Schema != SchemaV1 || manifest.Protocol != ProtocolV1 {
-		return Manifest{}, fmt.Errorf("runtimepayload: unsupported manifest schema/protocol %q/%q", manifest.Schema, manifest.Protocol)
-	}
-	cfg := BuildConfig{SPX: manifest.SPX, Target: manifest.Target, Engine: manifest.Engine, Bridge: manifest.Bridge, Project: manifest.Project}
-	if err := validateIdentity(cfg); err != nil {
-		return Manifest{}, err
-	}
-	return manifest, nil
-}
-
 func (v *Verified) validateComponents() error {
 	required := []string{
 		"engine/runtime-manifest.json",
@@ -247,69 +272,44 @@ func (v *Verified) storedEntryReaderAt(file *zip.File) (io.ReaderAt, int64, erro
 	return io.NewSectionReader(v.source, offset, size), size, nil
 }
 
-// WriteComponentZIP writes a deterministic archive containing entries below
-// prefix with the prefix removed. Only engine/ and bridge/ are accepted.
-func (v *Verified) WriteComponentZIP(prefix string, dst io.Writer) error {
-	if v == nil || (prefix != "engine/" && prefix != "bridge/") {
-		return fmt.Errorf("runtimepayload: invalid component prefix %q", prefix)
+func readSmallZipEntry(file *zip.File, limit int64) ([]byte, error) {
+	if file.UncompressedSize64 > uint64(limit) {
+		return nil, fmt.Errorf("entry %q size %d exceeds limit %d", file.Name, file.UncompressedSize64, limit)
 	}
-	if dst == nil {
-		return fmt.Errorf("runtimepayload: nil component writer")
+	input, err := file.Open()
+	if err != nil {
+		return nil, err
 	}
-	var entries []runtimebundle.Entry
-	for _, entry := range v.entries {
-		if strings.HasPrefix(entry.Name, prefix) {
-			entry.Name = strings.TrimPrefix(entry.Name, prefix)
-			entries = append(entries, entry)
-		}
+	data, readErr := io.ReadAll(io.LimitReader(input, limit+1))
+	closeErr := input.Close()
+	if readErr != nil {
+		return nil, readErr
 	}
-	if len(entries) == 0 {
-		return fmt.Errorf("runtimepayload: empty component %q", prefix)
+	if closeErr != nil {
+		return nil, closeErr
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	writer := zip.NewWriter(dst)
-	for _, entry := range entries {
-		sourceName := prefix + entry.Name
-		file := v.files[sourceName]
-		if file == nil {
-			_ = writer.Close()
-			return fmt.Errorf("runtimepayload: missing component entry %q", sourceName)
-		}
-		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
-		header.SetMode(canonicalFileMode(fs.FileMode(entry.Mode)))
-		header.SetModTime(canonicalTime)
-		output, err := writer.CreateHeader(header)
-		if err != nil {
-			_ = writer.Close()
-			return fmt.Errorf("runtimepayload: create component entry %q: %w", entry.Name, err)
-		}
-		if err := copyVerifiedZipEntry(output, file, runtimebundle.Entry{
-			Name: sourceName, Mode: entry.Mode, Size: entry.Size, SHA256: entry.SHA256,
-		}); err != nil {
-			_ = writer.Close()
-			return err
-		}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("entry %q exceeds limit %d", file.Name, limit)
 	}
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("runtimepayload: close component ZIP: %w", err)
+	if uint64(len(data)) != file.UncompressedSize64 {
+		return nil, fmt.Errorf("entry %q short read: got %d, want %d", file.Name, len(data), file.UncompressedSize64)
 	}
-	return nil
+	return data, nil
 }
 
-// WriteProjectZIP streams the embedded canonical project archive to dst.
-func (v *Verified) WriteProjectZIP(dst io.Writer) error {
-	if v == nil {
-		return fmt.Errorf("runtimepayload: nil verified payload")
+func parseManifest(data []byte) (Manifest, error) {
+	var manifest Manifest
+	if err := strictjson.Decode(data, &manifest); err != nil {
+		return Manifest{}, fmt.Errorf("runtimepayload: decode manifest: %w", err)
 	}
-	if dst == nil {
-		return fmt.Errorf("runtimepayload: nil project writer")
+	if manifest.Schema != SchemaV1 || manifest.Protocol != ProtocolV1 {
+		return Manifest{}, fmt.Errorf("runtimepayload: unsupported manifest schema/protocol %q/%q", manifest.Schema, manifest.Protocol)
 	}
-	file := v.files[ProjectZipPath]
-	entry, ok := findEntry(v.entries, ProjectZipPath)
-	if file == nil || !ok {
-		return fmt.Errorf("runtimepayload: missing required entry %q", ProjectZipPath)
+	cfg := BuildConfig{SPX: manifest.SPX, Target: manifest.Target, Engine: manifest.Engine, Bridge: manifest.Bridge, Project: manifest.Project}
+	if err := validateIdentity(cfg); err != nil {
+		return Manifest{}, err
 	}
-	return copyVerifiedZipEntry(dst, file, entry)
+	return manifest, nil
 }
 
 func copyVerifiedZipEntry(dst io.Writer, file *zip.File, expected runtimebundle.Entry) error {

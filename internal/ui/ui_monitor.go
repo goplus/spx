@@ -123,22 +123,32 @@ func (p MonitorAppearance) IsScratch() bool {
 	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge || p == MonitorAppearanceList || p == MonitorAppearanceSlider
 }
 
-func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {
-	if appearance >= monitorAppearanceCount {
-		return MonitorAppearanceDefault
-	}
-	return appearance
-}
-
-func NewUiMonitor() *UiMonitor {
-	return engine.NewUiNode[UiMonitor]()
-}
-
 // !!Warning: this method is called from the engine callback context
 func (pself *UiMonitor) OnStart() {
 	pself.bindViews(func(path string) *UiNode {
 		return engine.BridgeBindUI[UiNode](pself.GetId(), path)
 	})
+}
+
+func (pself *UiMonitor) SetVisible(isOn bool) {
+	mgr.UiMgr.SetVisible(pself.GetId(), isOn)
+}
+
+func (pself *UiMonitor) UpdateScale(x float64) {
+	x *= engine.WindowScale()
+	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
+}
+
+func (pself *UiMonitor) UpdatePos(wpos Vec2) {
+	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
+}
+
+func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
+	pself.render(&mgr.UiMgr, style, value)
+}
+
+func NewUiMonitor() *UiMonitor {
+	return engine.NewUiNode[UiMonitor]()
 }
 
 func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
@@ -158,22 +168,6 @@ func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
 		}
 	}
 	pself.active = monitorAppearanceCount
-}
-
-func (pself *UiMonitor) SetVisible(isOn bool) {
-	mgr.UiMgr.SetVisible(pself.GetId(), isOn)
-}
-
-func (pself *UiMonitor) UpdateScale(x float64) {
-	x *= engine.WindowScale()
-	mgr.UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
-}
-func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	mgr.UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
-}
-
-func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
-	pself.render(&mgr.UiMgr, style, value)
 }
 
 func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value MonitorValue) {
@@ -211,4 +205,11 @@ func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value
 	if view.colorTarget != nil {
 		sink.SetColor(view.colorTarget.GetId(), style.Color)
 	}
+}
+
+func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {
+	if appearance >= monitorAppearanceCount {
+		return MonitorAppearanceDefault
+	}
+	return appearance
 }

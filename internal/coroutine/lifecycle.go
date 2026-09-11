@@ -61,6 +61,98 @@ func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread
 	return th
 }
 
+// LastThreadID returns the most recently allocated thread ID.
+func (p *Coroutines) LastThreadID() int64 {
+	return p.nextThreadID.Load()
+}
+
+// Abort stops the current coroutine by panicking with ErrAbortThread.
+func (p *Coroutines) Abort() {
+	panic(ErrAbortThread)
+}
+
+// AbortThisScript stops at the nearest procedure or event boundary.
+func (p *Coroutines) AbortThisScript() {
+	panic(ErrStopThisScript)
+}
+
+// AbortAll requests cancellation of every registered coroutine.
+func (p *Coroutines) AbortAll() {
+	p.creationMu.Lock()
+	p.closeAdmissionLocked()
+	p.abortAllLocked()
+	if !p.stopping && p.pendingRegistrationHooks.Load() == 0 {
+		p.openAdmissionLocked()
+	}
+	p.creationMu.Unlock()
+}
+
+// AbortAllAndWait aborts all registered coroutines and waits for every thread
+// other than the caller to stop. A non-positive timeout waits indefinitely.
+func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
+	caller := p.currentCoroutineThread()
+	if caller != nil {
+		p.AbortAll()
+		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
+	}
+	return p.RunAfterAbortAll(timeout, nil)
+}
+
+// RunAfterAbortAll drains registered threads, then runs call with admission
+// closed. Call it outside managed code; a timeout leaves admission closed until
+// a later successful call. call must not create a coroutine.
+func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
+	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
+		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
+	}
+	p.shutdownMu.Lock()
+	defer p.shutdownMu.Unlock()
+
+	p.creationMu.Lock()
+	p.beginStoppingLocked()
+	p.creationMu.Unlock()
+	completed := p.waitForThreadsToStop(timeout, nil)
+
+	p.creationMu.Lock()
+	defer p.creationMu.Unlock()
+	if !completed || p.hasThreadsOtherThan(nil) {
+		// Keep timed-out barriers closed until explicit recovery.
+		return false
+	}
+	defer p.endStoppingLocked()
+	if call != nil {
+		call()
+	}
+	return true
+}
+
+// StopIf requests cancellation of every thread accepted by filter. Filters are
+// evaluated without holding the thread registry lock.
+func (p *Coroutines) StopIf(filter func(th Thread) bool) {
+	allThreads := p.snapshotThreads()
+	threads := allThreads[:0]
+	for _, th := range allThreads {
+		if filter(th) {
+			threads = append(threads, th)
+		}
+	}
+	for _, th := range threads {
+		stopThread(th)
+	}
+}
+
+// Stop cancels thread; nil and repeated calls are safe.
+func (p *Coroutines) Stop(thread Thread) {
+	if thread != nil {
+		stopThreadIfRunning(thread)
+	}
+}
+
+// IsInCoroutine reports whether the caller is running in this manager.
+func (p *Coroutines) IsInCoroutine() bool {
+	return p.callerThread() != nil
+}
+
 func (p *Coroutines) captureThreadAdmission() threadAdmission {
 	admission := threadAdmission{epoch: p.abortEpoch.Load()}
 	admission.parentCanceled = p.isThreadCanceled(p.currentCoroutineThread())
@@ -108,75 +200,10 @@ func (p *Coroutines) finishRegistrationHook() {
 	p.creationMu.Unlock()
 }
 
-// LastThreadID returns the most recently allocated thread ID.
-func (p *Coroutines) LastThreadID() int64 {
-	return p.nextThreadID.Load()
-}
-
-// Abort stops the current coroutine by panicking with ErrAbortThread.
-func (p *Coroutines) Abort() {
-	panic(ErrAbortThread)
-}
-
-// AbortThisScript stops at the nearest procedure or event boundary.
-func (p *Coroutines) AbortThisScript() {
-	panic(ErrStopThisScript)
-}
-
-// AbortAll requests cancellation of every registered coroutine.
-func (p *Coroutines) AbortAll() {
-	p.creationMu.Lock()
-	p.closeAdmissionLocked()
-	p.abortAllLocked()
-	if !p.stopping && p.pendingRegistrationHooks.Load() == 0 {
-		p.openAdmissionLocked()
-	}
-	p.creationMu.Unlock()
-}
-
 func (p *Coroutines) abortAllLocked() {
 	for _, th := range p.snapshotThreads() {
 		stopThreadIfRunning(th)
 	}
-}
-
-// AbortAllAndWait aborts all registered coroutines and waits for every thread
-// other than the caller to stop. A non-positive timeout waits indefinitely.
-func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
-	caller := p.currentCoroutineThread()
-	if caller != nil {
-		p.AbortAll()
-		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
-	}
-	return p.RunAfterAbortAll(timeout, nil)
-}
-
-// RunAfterAbortAll drains registered threads, then runs call with admission
-// closed. Call it outside managed code; a timeout leaves admission closed until
-// a later successful call. call must not create a coroutine.
-func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
-	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
-		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
-	}
-	p.shutdownMu.Lock()
-	defer p.shutdownMu.Unlock()
-
-	p.creationMu.Lock()
-	p.beginStoppingLocked()
-	p.creationMu.Unlock()
-	completed := p.waitForThreadsToStop(timeout, nil)
-
-	p.creationMu.Lock()
-	defer p.creationMu.Unlock()
-	if !completed || p.hasThreadsOtherThan(nil) {
-		// Keep timed-out barriers closed until explicit recovery.
-		return false
-	}
-	defer p.endStoppingLocked()
-	if call != nil {
-		call()
-	}
-	return true
 }
 
 func (p *Coroutines) beginStoppingLocked() {
@@ -209,55 +236,6 @@ func (p *Coroutines) openAdmissionLocked() {
 
 func (p *Coroutines) admissionClosed() bool {
 	return p.abortEpoch.Load()&1 != 0
-}
-
-// StopIf requests cancellation of every thread accepted by filter. Filters are
-// evaluated without holding the thread registry lock.
-func (p *Coroutines) StopIf(filter func(th Thread) bool) {
-	allThreads := p.snapshotThreads()
-	threads := allThreads[:0]
-	for _, th := range allThreads {
-		if filter(th) {
-			threads = append(threads, th)
-		}
-	}
-	for _, th := range threads {
-		stopThread(th)
-	}
-}
-
-// Stop cancels thread; nil and repeated calls are safe.
-func (p *Coroutines) Stop(thread Thread) {
-	if thread != nil {
-		stopThreadIfRunning(thread)
-	}
-}
-
-// IsInCoroutine reports whether the caller is running in this manager.
-func (p *Coroutines) IsInCoroutine() bool {
-	return p.callerThread() != nil
-}
-
-func stopThreadIfRunning(th Thread) {
-	th.suspendMu.Lock()
-	if th.stopped.Load() {
-		th.suspendMu.Unlock()
-		return
-	}
-	stopThreadLocked(th)
-	th.suspendMu.Unlock()
-}
-
-func stopThread(th Thread) {
-	th.suspendMu.Lock()
-	stopThreadLocked(th)
-	th.suspendMu.Unlock()
-}
-
-func stopThreadLocked(th Thread) {
-	th.stopped.Store(true)
-	th.Cancel()
-	th.suspendCond.Signal()
 }
 
 func (p *Coroutines) currentCoroutineThread() Thread {
@@ -295,24 +273,6 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 	}
 	th.suspendCond = sync.NewCond(&th.suspendMu)
 	return th
-}
-
-func resolveThreadName(obj ThreadObj) string {
-	if obj == nil {
-		return ""
-	}
-	if name, ok := obj.(string); ok {
-		return name
-	}
-	if named, ok := obj.(threadNamer); ok {
-		return named.Name()
-	}
-
-	typ := reflect.TypeOf(obj)
-	if typ.Kind() != reflect.Pointer || typ.Elem().Name() == "" {
-		return ""
-	}
-	return "*" + typ.Elem().Name()
 }
 
 func (p *Coroutines) registerThread(th Thread) {
@@ -461,4 +421,44 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 		return
 	}
 	panic(recovered)
+}
+
+func stopThreadIfRunning(th Thread) {
+	th.suspendMu.Lock()
+	if th.stopped.Load() {
+		th.suspendMu.Unlock()
+		return
+	}
+	stopThreadLocked(th)
+	th.suspendMu.Unlock()
+}
+
+func stopThread(th Thread) {
+	th.suspendMu.Lock()
+	stopThreadLocked(th)
+	th.suspendMu.Unlock()
+}
+
+func stopThreadLocked(th Thread) {
+	th.stopped.Store(true)
+	th.Cancel()
+	th.suspendCond.Signal()
+}
+
+func resolveThreadName(obj ThreadObj) string {
+	if obj == nil {
+		return ""
+	}
+	if name, ok := obj.(string); ok {
+		return name
+	}
+	if named, ok := obj.(threadNamer); ok {
+		return named.Name()
+	}
+
+	typ := reflect.TypeOf(obj)
+	if typ.Kind() != reflect.Pointer || typ.Elem().Name() == "" {
+		return ""
+	}
+	return "*" + typ.Elem().Name()
 }

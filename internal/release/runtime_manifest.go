@@ -71,6 +71,189 @@ type RuntimeAssetInput struct {
 	Path string
 }
 
+// Validate checks the manifest's internal structure and canonical asset order.
+func (m RuntimeManifest) Validate() error {
+	if m.Schema != RuntimeManifestSchema {
+		return fmt.Errorf("release: runtime manifest schema = %d, want %d", m.Schema, RuntimeManifestSchema)
+	}
+	if !runtimeVersionPattern.MatchString(m.RuntimeVersion) {
+		return fmt.Errorf("release: invalid manifest runtime version %q", m.RuntimeVersion)
+	}
+	if m.RuntimeABI <= 0 {
+		return errors.New("release: manifest runtime ABI must be positive")
+	}
+	if !releaseRepositoryPattern.MatchString(m.ReleaseRepository) {
+		return fmt.Errorf("release: invalid manifest release repository %q", m.ReleaseRepository)
+	}
+	if !isLowerHexDigest(m.LockSHA256, sha256.Size*2) {
+		return fmt.Errorf("release: invalid runtime lock SHA-256 %q", m.LockSHA256)
+	}
+	if !gitCommitPattern.MatchString(m.Provenance.SPXCommit) {
+		return fmt.Errorf("release: invalid SPX provenance commit %q", m.Provenance.SPXCommit)
+	}
+	if !gitCommitPattern.MatchString(m.Provenance.GodotCommit) {
+		return fmt.Errorf("release: invalid Godot provenance commit %q", m.Provenance.GodotCommit)
+	}
+	if !gitCommitPattern.MatchString(m.Provenance.ModuleTree) {
+		return fmt.Errorf("release: invalid module provenance tree %q", m.Provenance.ModuleTree)
+	}
+	if !isLowerHexDigest(m.Provenance.RuntimePackSourceSHA256, sha256.Size*2) {
+		return fmt.Errorf("release: invalid runtime pack source SHA-256 %q", m.Provenance.RuntimePackSourceSHA256)
+	}
+	if !isLowerHexDigest(m.Provenance.BuildRecipeSHA256, sha256.Size*2) {
+		return fmt.Errorf("release: invalid build recipe SHA-256 %q", m.Provenance.BuildRecipeSHA256)
+	}
+	if err := validateToolchainLock(m.Provenance.Toolchain); err != nil {
+		return err
+	}
+	if len(m.Assets) == 0 {
+		return errors.New("release: runtime manifest assets must not be empty")
+	}
+	previousName := ""
+	for i, asset := range m.Assets {
+		if err := validateBaseName("runtime asset", asset.Name); err != nil {
+			return err
+		}
+		if i > 0 && asset.Name <= previousName {
+			return fmt.Errorf("release: runtime assets must be uniquely sorted by name: %q follows %q", asset.Name, previousName)
+		}
+		if asset.Size <= 0 {
+			return fmt.Errorf("release: runtime asset %q size must be positive", asset.Name)
+		}
+		if !isLowerHexDigest(asset.SHA256, sha256.Size*2) {
+			return fmt.Errorf("release: runtime asset %q has invalid SHA-256 %q", asset.Name, asset.SHA256)
+		}
+		previousName = asset.Name
+	}
+	return nil
+}
+
+// ValidateForVersion checks the version portion of a manifest's release
+// identity. Reuse callers must also validate the lock and scoped provenance.
+func (m RuntimeManifest) ValidateForVersion(runtimeVersion string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	return m.validateForVersion(runtimeVersion)
+}
+
+// ValidateRequiredAssets checks that the manifest contains exactly the named
+// release assets. Content size and SHA-256 validation remains part of Validate.
+func (m RuntimeManifest) ValidateRequiredAssets(requiredAssets []string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	return m.validateRequiredAssets(requiredAssets)
+}
+
+// ValidateForLock validates metadata generated from one exact build lock.
+// Published reuse checks compare the scoped source provenance separately.
+func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
+	if err := lock.Validate(); err != nil {
+		return err
+	}
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	if err := m.validateForVersion(lock.RuntimeVersion); err != nil {
+		return err
+	}
+	lockSHA256, err := lock.SHA256()
+	if err != nil {
+		return err
+	}
+	if m.RuntimeABI != lock.RuntimeABI {
+		return fmt.Errorf("release: runtime manifest identity does not match lock")
+	}
+	if m.ReleaseRepository != lock.ReleaseRepository {
+		return fmt.Errorf("release: manifest repository %q does not match lock %q", m.ReleaseRepository, lock.ReleaseRepository)
+	}
+	if m.LockSHA256 != lockSHA256 {
+		return fmt.Errorf("release: manifest lock SHA-256 %q does not match %q", m.LockSHA256, lockSHA256)
+	}
+	if m.Provenance.GodotCommit != lock.Godot.Commit {
+		return fmt.Errorf("release: manifest Godot commit %q does not match lock %q", m.Provenance.GodotCommit, lock.Godot.Commit)
+	}
+	if m.Provenance.Toolchain != lock.Toolchain {
+		return errors.New("release: manifest toolchain does not match lock")
+	}
+
+	return m.validateRequiredAssets(lock.RequiredAssets)
+}
+
+// JSON returns the canonical, human-readable representation of a manifest.
+func (m RuntimeManifest) JSON() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode runtime manifest: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+// Asset returns the manifest entry for name. Assets are canonically sorted, so
+// the lookup is deterministic and does not allocate.
+func (m RuntimeManifest) Asset(name string) (RuntimeAsset, bool) {
+	index, found := slices.BinarySearchFunc(m.Assets, RuntimeAsset{Name: name}, func(a, b RuntimeAsset) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	if !found {
+		return RuntimeAsset{}, false
+	}
+	return m.Assets[index], true
+}
+
+// VerifyAsset verifies one local file by exact size and SHA-256 against the
+// named manifest entry. This supports download-then-verify consumers that do
+// not materialize the complete release in one directory.
+func (m RuntimeManifest) VerifyAsset(name, path string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	asset, ok := m.Asset(name)
+	if !ok {
+		return fmt.Errorf("release: runtime asset %q is not present in the manifest", name)
+	}
+	size, digest, err := hashFile(path)
+	if err != nil {
+		return fmt.Errorf("release: verify runtime asset %q: %w", name, err)
+	}
+	if size != asset.Size {
+		return fmt.Errorf("release: runtime asset %q size = %d, want %d", name, size, asset.Size)
+	}
+	if digest != asset.SHA256 {
+		return fmt.Errorf("release: runtime asset %q SHA-256 = %s, want %s", name, digest, asset.SHA256)
+	}
+	return nil
+}
+
+// VerifyFiles verifies every manifest asset below dir by exact size and SHA-256.
+func (m RuntimeManifest) VerifyFiles(dir string) error {
+	if err := m.Validate(); err != nil {
+		return err
+	}
+	for _, asset := range m.Assets {
+		if err := m.VerifyAsset(asset.Name, filepath.Join(dir, asset.Name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SHA256SUMS returns conventional, deterministically ordered checksum lines.
+func (m RuntimeManifest) SHA256SUMS() ([]byte, error) {
+	if err := m.Validate(); err != nil {
+		return nil, err
+	}
+	var sums strings.Builder
+	for _, asset := range m.Assets {
+		fmt.Fprintf(&sums, "%s  %s\n", asset.SHA256, asset.Name)
+	}
+	return []byte(sums.String()), nil
+}
+
 // GenerateRuntimeManifest hashes assets and creates a manifest sorted by asset
 // name. It validates the result against lock before returning it.
 func GenerateRuntimeManifest(lock RuntimeLock, provenance RuntimeProvenance, inputs []RuntimeAssetInput) (RuntimeManifest, error) {
@@ -151,70 +334,28 @@ func LoadRuntimeManifest(path string) (RuntimeManifest, error) {
 	return ParseRuntimeManifest(data)
 }
 
-// Validate checks the manifest's internal structure and canonical asset order.
-func (m RuntimeManifest) Validate() error {
-	if m.Schema != RuntimeManifestSchema {
-		return fmt.Errorf("release: runtime manifest schema = %d, want %d", m.Schema, RuntimeManifestSchema)
-	}
-	if !runtimeVersionPattern.MatchString(m.RuntimeVersion) {
-		return fmt.Errorf("release: invalid manifest runtime version %q", m.RuntimeVersion)
-	}
-	if m.RuntimeABI <= 0 {
-		return errors.New("release: manifest runtime ABI must be positive")
-	}
-	if !releaseRepositoryPattern.MatchString(m.ReleaseRepository) {
-		return fmt.Errorf("release: invalid manifest release repository %q", m.ReleaseRepository)
-	}
-	if !isLowerHexDigest(m.LockSHA256, sha256.Size*2) {
-		return fmt.Errorf("release: invalid runtime lock SHA-256 %q", m.LockSHA256)
-	}
-	if !gitCommitPattern.MatchString(m.Provenance.SPXCommit) {
-		return fmt.Errorf("release: invalid SPX provenance commit %q", m.Provenance.SPXCommit)
-	}
-	if !gitCommitPattern.MatchString(m.Provenance.GodotCommit) {
-		return fmt.Errorf("release: invalid Godot provenance commit %q", m.Provenance.GodotCommit)
-	}
-	if !gitCommitPattern.MatchString(m.Provenance.ModuleTree) {
-		return fmt.Errorf("release: invalid module provenance tree %q", m.Provenance.ModuleTree)
-	}
-	if !isLowerHexDigest(m.Provenance.RuntimePackSourceSHA256, sha256.Size*2) {
-		return fmt.Errorf("release: invalid runtime pack source SHA-256 %q", m.Provenance.RuntimePackSourceSHA256)
-	}
-	if !isLowerHexDigest(m.Provenance.BuildRecipeSHA256, sha256.Size*2) {
-		return fmt.Errorf("release: invalid build recipe SHA-256 %q", m.Provenance.BuildRecipeSHA256)
-	}
-	if err := validateToolchainLock(m.Provenance.Toolchain); err != nil {
+// WriteRuntimeManifest writes a validated runtime manifest to path.
+func WriteRuntimeManifest(path string, manifest RuntimeManifest) error {
+	data, err := manifest.JSON()
+	if err != nil {
 		return err
 	}
-	if len(m.Assets) == 0 {
-		return errors.New("release: runtime manifest assets must not be empty")
-	}
-	previousName := ""
-	for i, asset := range m.Assets {
-		if err := validateBaseName("runtime asset", asset.Name); err != nil {
-			return err
-		}
-		if i > 0 && asset.Name <= previousName {
-			return fmt.Errorf("release: runtime assets must be uniquely sorted by name: %q follows %q", asset.Name, previousName)
-		}
-		if asset.Size <= 0 {
-			return fmt.Errorf("release: runtime asset %q size must be positive", asset.Name)
-		}
-		if !isLowerHexDigest(asset.SHA256, sha256.Size*2) {
-			return fmt.Errorf("release: runtime asset %q has invalid SHA-256 %q", asset.Name, asset.SHA256)
-		}
-		previousName = asset.Name
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write runtime manifest: %w", err)
 	}
 	return nil
 }
 
-// ValidateForVersion checks the version portion of a manifest's release
-// identity. Reuse callers must also validate the lock and scoped provenance.
-func (m RuntimeManifest) ValidateForVersion(runtimeVersion string) error {
-	if err := m.Validate(); err != nil {
+// WriteSHA256SUMS writes conventional checksum lines for a manifest's assets.
+func WriteSHA256SUMS(path string, manifest RuntimeManifest) error {
+	data, err := manifest.SHA256SUMS()
+	if err != nil {
 		return err
 	}
-	return m.validateForVersion(runtimeVersion)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write SHA256SUMS: %w", err)
+	}
+	return nil
 }
 
 func (m RuntimeManifest) validateForVersion(runtimeVersion string) error {
@@ -225,15 +366,6 @@ func (m RuntimeManifest) validateForVersion(runtimeVersion string) error {
 		return fmt.Errorf("release: runtime manifest version %q does not match %q", m.RuntimeVersion, runtimeVersion)
 	}
 	return nil
-}
-
-// ValidateRequiredAssets checks that the manifest contains exactly the named
-// release assets. Content size and SHA-256 validation remains part of Validate.
-func (m RuntimeManifest) ValidateRequiredAssets(requiredAssets []string) error {
-	if err := m.Validate(); err != nil {
-		return err
-	}
-	return m.validateRequiredAssets(requiredAssets)
 }
 
 func (m RuntimeManifest) validateRequiredAssets(requiredAssets []string) error {
@@ -254,138 +386,6 @@ func (m RuntimeManifest) validateRequiredAssets(requiredAssets []string) error {
 		if _, ok := required[asset.Name]; !ok {
 			return fmt.Errorf("release: runtime asset %q is not required", asset.Name)
 		}
-	}
-	return nil
-}
-
-// ValidateForLock validates metadata generated from one exact build lock.
-// Published reuse checks compare the scoped source provenance separately.
-func (m RuntimeManifest) ValidateForLock(lock RuntimeLock) error {
-	if err := lock.Validate(); err != nil {
-		return err
-	}
-	if err := m.Validate(); err != nil {
-		return err
-	}
-	if err := m.validateForVersion(lock.RuntimeVersion); err != nil {
-		return err
-	}
-	lockSHA256, err := lock.SHA256()
-	if err != nil {
-		return err
-	}
-	if m.RuntimeABI != lock.RuntimeABI {
-		return fmt.Errorf("release: runtime manifest identity does not match lock")
-	}
-	if m.ReleaseRepository != lock.ReleaseRepository {
-		return fmt.Errorf("release: manifest repository %q does not match lock %q", m.ReleaseRepository, lock.ReleaseRepository)
-	}
-	if m.LockSHA256 != lockSHA256 {
-		return fmt.Errorf("release: manifest lock SHA-256 %q does not match %q", m.LockSHA256, lockSHA256)
-	}
-	if m.Provenance.GodotCommit != lock.Godot.Commit {
-		return fmt.Errorf("release: manifest Godot commit %q does not match lock %q", m.Provenance.GodotCommit, lock.Godot.Commit)
-	}
-	if m.Provenance.Toolchain != lock.Toolchain {
-		return errors.New("release: manifest toolchain does not match lock")
-	}
-
-	return m.validateRequiredAssets(lock.RequiredAssets)
-}
-
-// JSON returns the canonical, human-readable representation of a manifest.
-func (m RuntimeManifest) JSON() ([]byte, error) {
-	if err := m.Validate(); err != nil {
-		return nil, err
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("encode runtime manifest: %w", err)
-	}
-	return append(data, '\n'), nil
-}
-
-// WriteRuntimeManifest writes a validated runtime manifest to path.
-func WriteRuntimeManifest(path string, manifest RuntimeManifest) error {
-	data, err := manifest.JSON()
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write runtime manifest: %w", err)
-	}
-	return nil
-}
-
-// Asset returns the manifest entry for name. Assets are canonically sorted, so
-// the lookup is deterministic and does not allocate.
-func (m RuntimeManifest) Asset(name string) (RuntimeAsset, bool) {
-	index, found := slices.BinarySearchFunc(m.Assets, RuntimeAsset{Name: name}, func(a, b RuntimeAsset) int {
-		return strings.Compare(a.Name, b.Name)
-	})
-	if !found {
-		return RuntimeAsset{}, false
-	}
-	return m.Assets[index], true
-}
-
-// VerifyAsset verifies one local file by exact size and SHA-256 against the
-// named manifest entry. This supports download-then-verify consumers that do
-// not materialize the complete release in one directory.
-func (m RuntimeManifest) VerifyAsset(name, path string) error {
-	if err := m.Validate(); err != nil {
-		return err
-	}
-	asset, ok := m.Asset(name)
-	if !ok {
-		return fmt.Errorf("release: runtime asset %q is not present in the manifest", name)
-	}
-	size, digest, err := hashFile(path)
-	if err != nil {
-		return fmt.Errorf("release: verify runtime asset %q: %w", name, err)
-	}
-	if size != asset.Size {
-		return fmt.Errorf("release: runtime asset %q size = %d, want %d", name, size, asset.Size)
-	}
-	if digest != asset.SHA256 {
-		return fmt.Errorf("release: runtime asset %q SHA-256 = %s, want %s", name, digest, asset.SHA256)
-	}
-	return nil
-}
-
-// VerifyFiles verifies every manifest asset below dir by exact size and SHA-256.
-func (m RuntimeManifest) VerifyFiles(dir string) error {
-	if err := m.Validate(); err != nil {
-		return err
-	}
-	for _, asset := range m.Assets {
-		if err := m.VerifyAsset(asset.Name, filepath.Join(dir, asset.Name)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// SHA256SUMS returns conventional, deterministically ordered checksum lines.
-func (m RuntimeManifest) SHA256SUMS() ([]byte, error) {
-	if err := m.Validate(); err != nil {
-		return nil, err
-	}
-	var sums strings.Builder
-	for _, asset := range m.Assets {
-		fmt.Fprintf(&sums, "%s  %s\n", asset.SHA256, asset.Name)
-	}
-	return []byte(sums.String()), nil
-}
-
-// WriteSHA256SUMS writes conventional checksum lines for a manifest's assets.
-func WriteSHA256SUMS(path string, manifest RuntimeManifest) error {
-	data, err := manifest.SHA256SUMS()
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write SHA256SUMS: %w", err)
 	}
 	return nil
 }

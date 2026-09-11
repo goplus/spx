@@ -47,6 +47,29 @@ type SessionConfig struct {
 	BridgePath string
 }
 
+// CommandConfig describes a prepared Engine child. Env is the complete base
+// environment, rather than an overlay; root variables are replaced before the
+// command is returned.
+type CommandConfig struct {
+	Roots      Roots
+	Executable string
+	Args       []string
+	Env        []string
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	PathPolicy PathPolicy
+}
+
+// PathPolicy controls how pre-existing Engine --path options are handled.
+// RejectPath is the safe default. ReplacePath supports the legacy spx adapter.
+type PathPolicy uint8
+
+const (
+	RejectPath PathPolicy = iota
+	ReplacePath
+)
+
 // PrepareSession creates the session scaffold without changing global cwd or
 // environment.
 func PrepareSession(cfg SessionConfig) error {
@@ -140,6 +163,36 @@ func PrepareSession(cfg SessionConfig) error {
 		return err
 	}
 	return nil
+}
+
+// PrepareCommand returns an Engine command rooted in SessionDir without global
+// side effects. Executable validation is fail-fast; os/exec reopens it in Start.
+func PrepareCommand(ctx context.Context, cfg CommandConfig) (*exec.Cmd, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("interpruntime: nil context")
+	}
+	if err := cfg.Roots.Validate(); err != nil {
+		return nil, err
+	}
+	if err := validateRegularFile("Executable", cfg.Executable); err != nil {
+		return nil, err
+	}
+	env, err := cfg.Roots.Environment(cfg.Env)
+	if err != nil {
+		return nil, err
+	}
+
+	args, err := engineArgs(cfg.Args, cfg.Roots.SessionDir, cfg.PathPolicy)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, cfg.Executable, args...)
+	cmd.Dir = cfg.Roots.SessionDir
+	cmd.Env = env
+	cmd.Stdin = cfg.Stdin
+	cmd.Stdout = cfg.Stdout
+	cmd.Stderr = cfg.Stderr
+	return cmd, nil
 }
 
 func ensureDirectoryNoSymlink(name, path string, mode os.FileMode) error {
@@ -304,59 +357,6 @@ func replaceRootFile(root *os.Root, name string, input io.Reader, mode os.FileMo
 		return fmt.Errorf("interpruntime: publish scaffold %q: %w", name, err)
 	}
 	return nil
-}
-
-// CommandConfig describes a prepared Engine child. Env is the complete base
-// environment, rather than an overlay; root variables are replaced before the
-// command is returned.
-type CommandConfig struct {
-	Roots      Roots
-	Executable string
-	Args       []string
-	Env        []string
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	PathPolicy PathPolicy
-}
-
-// PathPolicy controls how pre-existing Engine --path options are handled.
-// RejectPath is the safe default. ReplacePath supports the legacy spx adapter.
-type PathPolicy uint8
-
-const (
-	RejectPath PathPolicy = iota
-	ReplacePath
-)
-
-// PrepareCommand returns an Engine command rooted in SessionDir without global
-// side effects. Executable validation is fail-fast; os/exec reopens it in Start.
-func PrepareCommand(ctx context.Context, cfg CommandConfig) (*exec.Cmd, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("interpruntime: nil context")
-	}
-	if err := cfg.Roots.Validate(); err != nil {
-		return nil, err
-	}
-	if err := validateRegularFile("Executable", cfg.Executable); err != nil {
-		return nil, err
-	}
-	env, err := cfg.Roots.Environment(cfg.Env)
-	if err != nil {
-		return nil, err
-	}
-
-	args, err := engineArgs(cfg.Args, cfg.Roots.SessionDir, cfg.PathPolicy)
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, cfg.Executable, args...)
-	cmd.Dir = cfg.Roots.SessionDir
-	cmd.Env = env
-	cmd.Stdin = cfg.Stdin
-	cmd.Stdout = cfg.Stdout
-	cmd.Stderr = cfg.Stderr
-	return cmd, nil
 }
 
 func validateRegularFile(name, path string) error {

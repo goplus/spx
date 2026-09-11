@@ -24,14 +24,6 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-func RunEventLoop[T any](me coroutine.Thread, events chan T, handle func(T)) int {
-	for {
-		var ev T
-		engine.WaitForChan(events, &ev)
-		handle(ev)
-	}
-}
-
 type InputFrame struct {
 	Point                    mathf.Vec2
 	LastMousePos             mathf.Vec2
@@ -48,6 +40,56 @@ type InputFrameHooks struct {
 	SetMousePos        func(mathf.Vec2)
 	OnMouseMove        func(mathf.Vec2)
 	OnKeyPressed       func(int64)
+}
+
+type InputLoopConfig struct {
+	BeginFrame             func() bool
+	EndFrame               func()
+	CurrentMousePos        func() mathf.Vec2
+	IsLeftButtonPressed    func() bool
+	FireLeftButtonDown     func(mathf.Vec2)
+	FireLeftButtonUp       func(mathf.Vec2)
+	SetMousePos            func(mathf.Vec2)
+	OnMouseMove            func(mathf.Vec2)
+	GetKeyEvents           func([]engine.KeyEvent) []engine.KeyEvent
+	OnKeyPressed           func(int64)
+	MouseMovementThreshold float64
+}
+
+type inputLoopState struct {
+	lastLeftButtonPressed bool
+	lastMousePos          mathf.Vec2
+	keyEvents             []engine.KeyEvent
+	wasSuspended          bool
+}
+
+type LogicFrameConfig[T any] struct {
+	Items                    []T
+	TempAudios               []string
+	TempAnimations           []string
+	FlushPendingAudio        func(T, []string) []string
+	FlushCompletedAnimations func(T, []string) []string
+	NextTimer                func() (float64, bool)
+	FireTimer                func(float64)
+	PollConditions           func()
+}
+
+type LogicLoopConfig[T any] struct {
+	Items                    func() []T
+	FlushPendingAudio        func(T, []string) []string
+	FlushCompletedAnimations func(T, []string) []string
+	NextTimer                func() (float64, bool)
+	FireTimer                func(float64)
+	PollConditions           func()
+	ShowDebugPanel           func()
+}
+
+func RunEventLoop[T any](me coroutine.Thread, events chan T, handle func(T)) int {
+	for {
+		var ev T
+		engine.WaitForChan(events, &ev)
+		handle(ev)
+	}
 }
 
 func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, bool) {
@@ -91,27 +133,6 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 	return lastMousePos, frame.CurrentLeftButtonPressed
 }
 
-type InputLoopConfig struct {
-	BeginFrame             func() bool
-	EndFrame               func()
-	CurrentMousePos        func() mathf.Vec2
-	IsLeftButtonPressed    func() bool
-	FireLeftButtonDown     func(mathf.Vec2)
-	FireLeftButtonUp       func(mathf.Vec2)
-	SetMousePos            func(mathf.Vec2)
-	OnMouseMove            func(mathf.Vec2)
-	GetKeyEvents           func([]engine.KeyEvent) []engine.KeyEvent
-	OnKeyPressed           func(int64)
-	MouseMovementThreshold float64
-}
-
-type inputLoopState struct {
-	lastLeftButtonPressed bool
-	lastMousePos          mathf.Vec2
-	keyEvents             []engine.KeyEvent
-	wasSuspended          bool
-}
-
 func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
 	state := inputLoopState{keyEvents: make([]engine.KeyEvent, 0)}
 
@@ -123,6 +144,67 @@ func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
 		}
 		runInputLoopFrame(cfg, &state)
 		engine.WaitNextFrame()
+	}
+}
+
+func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
+	tempAudios := cfg.TempAudios
+	for _, item := range cfg.Items {
+		tempAudios = cfg.FlushPendingAudio(item, tempAudios)
+	}
+
+	tempAnimations := cfg.TempAnimations
+	for _, item := range cfg.Items {
+		tempAnimations = cfg.FlushCompletedAnimations(item, tempAnimations)
+	}
+
+	for {
+		targetTimer, ok := cfg.NextTimer()
+		if !ok {
+			break
+		}
+		cfg.FireTimer(targetTimer)
+	}
+	if cfg.PollConditions != nil {
+		cfg.PollConditions()
+	}
+	return tempAudios, tempAnimations
+}
+
+func RunLogicLoop[T any](me coroutine.Thread, cfg LogicLoopConfig[T]) int {
+	tempAudios := []string{}
+	tempAnimations := []string{}
+
+	for {
+		tempAudios, tempAnimations = ProcessLogicFrame(LogicFrameConfig[T]{
+			Items:                    cfg.Items(),
+			TempAudios:               tempAudios,
+			TempAnimations:           tempAnimations,
+			FlushPendingAudio:        cfg.FlushPendingAudio,
+			FlushCompletedAnimations: cfg.FlushCompletedAnimations,
+			NextTimer:                cfg.NextTimer,
+			FireTimer:                cfg.FireTimer,
+			PollConditions:           cfg.PollConditions,
+		})
+		engine.WaitNextFrame()
+		cfg.ShowDebugPanel()
+	}
+}
+
+func InitLoops(
+	create func(coroutine.ThreadObj, func(coroutine.Thread) int) coroutine.Thread,
+	eventLoop func(coroutine.Thread) int,
+	inputLoop func(coroutine.Thread) int,
+	logicLoop func(coroutine.Thread) int,
+) {
+	if eventLoop != nil {
+		create("eventLoop", eventLoop)
+	}
+	if inputLoop != nil {
+		create("inputEventLoop", inputLoop)
+	}
+	if logicLoop != nil {
+		create("logicLoop", logicLoop)
 	}
 }
 
@@ -162,86 +244,4 @@ func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
 		)
 	}
 	state.keyEvents = state.keyEvents[:0]
-}
-
-type LogicFrameConfig[T any] struct {
-	Items                    []T
-	TempAudios               []string
-	TempAnimations           []string
-	FlushPendingAudio        func(T, []string) []string
-	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (float64, bool)
-	FireTimer                func(float64)
-	PollConditions           func()
-}
-
-func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
-	tempAudios := cfg.TempAudios
-	for _, item := range cfg.Items {
-		tempAudios = cfg.FlushPendingAudio(item, tempAudios)
-	}
-
-	tempAnimations := cfg.TempAnimations
-	for _, item := range cfg.Items {
-		tempAnimations = cfg.FlushCompletedAnimations(item, tempAnimations)
-	}
-
-	for {
-		targetTimer, ok := cfg.NextTimer()
-		if !ok {
-			break
-		}
-		cfg.FireTimer(targetTimer)
-	}
-	if cfg.PollConditions != nil {
-		cfg.PollConditions()
-	}
-	return tempAudios, tempAnimations
-}
-
-type LogicLoopConfig[T any] struct {
-	Items                    func() []T
-	FlushPendingAudio        func(T, []string) []string
-	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (float64, bool)
-	FireTimer                func(float64)
-	PollConditions           func()
-	ShowDebugPanel           func()
-}
-
-func RunLogicLoop[T any](me coroutine.Thread, cfg LogicLoopConfig[T]) int {
-	tempAudios := []string{}
-	tempAnimations := []string{}
-
-	for {
-		tempAudios, tempAnimations = ProcessLogicFrame(LogicFrameConfig[T]{
-			Items:                    cfg.Items(),
-			TempAudios:               tempAudios,
-			TempAnimations:           tempAnimations,
-			FlushPendingAudio:        cfg.FlushPendingAudio,
-			FlushCompletedAnimations: cfg.FlushCompletedAnimations,
-			NextTimer:                cfg.NextTimer,
-			FireTimer:                cfg.FireTimer,
-			PollConditions:           cfg.PollConditions,
-		})
-		engine.WaitNextFrame()
-		cfg.ShowDebugPanel()
-	}
-}
-
-func InitLoops(
-	create func(coroutine.ThreadObj, func(coroutine.Thread) int) coroutine.Thread,
-	eventLoop func(coroutine.Thread) int,
-	inputLoop func(coroutine.Thread) int,
-	logicLoop func(coroutine.Thread) int,
-) {
-	if eventLoop != nil {
-		create("eventLoop", eventLoop)
-	}
-	if inputLoop != nil {
-		create("inputEventLoop", inputLoop)
-	}
-	if logicLoop != nil {
-		create("logicLoop", logicLoop)
-	}
 }

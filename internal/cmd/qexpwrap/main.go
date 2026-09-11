@@ -33,6 +33,12 @@ import (
 	"golang.org/x/tools/go/gcexportdata"
 )
 
+type sourceRoots struct {
+	moduleRoot  string
+	goRoot      string
+	moduleCache string
+}
+
 func main() {
 	args, err := expandDirectCallsFile(os.Args[1:])
 	if err != nil {
@@ -161,12 +167,6 @@ func addHeadersInDir(root string) error {
 		}
 		return licenseheader.AddToGoFile(path)
 	})
-}
-
-type sourceRoots struct {
-	moduleRoot  string
-	goRoot      string
-	moduleCache string
 }
 
 func canonicalizeTypesInDir(root string) error {

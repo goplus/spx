@@ -42,6 +42,27 @@ type Cache struct {
 	Permissions  Permissions
 }
 
+// Path returns the on-disk location for a namespace/digest pair. It does not
+// create anything and rejects invalid identities.
+func (c *Cache) Path(namespace Namespace, digest string) (string, error) {
+	if c == nil || c.Root == "" {
+		return "", fmt.Errorf("runtimebundle: nil or empty cache root")
+	}
+	if !filepath.IsAbs(c.Root) || filepath.Clean(c.Root) != c.Root {
+		return "", fmt.Errorf("runtimebundle: cache root must be absolute and clean: %q", c.Root)
+	}
+	if err := validateCacheRoot(c.Root); err != nil {
+		return "", err
+	}
+	if !namespace.valid() {
+		return "", fmt.Errorf("runtimebundle: invalid cache namespace %q", namespace)
+	}
+	if err := validateSHA256(digest); err != nil {
+		return "", fmt.Errorf("runtimebundle: invalid cache digest: %v", err)
+	}
+	return filepath.Join(c.Root, string(namespace), digest), nil
+}
+
 // NewCache constructs a cache using OS-backed cross-process locks.
 func NewCache(root string) *Cache {
 	return newCache(root, CrossProcessLockProvider{})
@@ -52,15 +73,6 @@ func NewCache(root string) *Cache {
 // adapters that can prove they never share a cache root across processes.
 func NewProcessLocalCache(root string) *Cache {
 	return newCache(root, ProcessLockProvider{})
-}
-
-func newCache(root string, lockProvider LockProvider) *Cache {
-	return &Cache{
-		Root:         filepath.Clean(root),
-		Limits:       Limits{},
-		LockProvider: lockProvider,
-		Permissions:  defaultPermissions(),
-	}
 }
 
 // NewCacheWithOptions validates options and constructs a cache.
@@ -96,23 +108,11 @@ func DefaultCacheRoot() string {
 	return filepath.Join(base, "spx", "runtimebundle")
 }
 
-// Path returns the on-disk location for a namespace/digest pair. It does not
-// create anything and rejects invalid identities.
-func (c *Cache) Path(namespace Namespace, digest string) (string, error) {
-	if c == nil || c.Root == "" {
-		return "", fmt.Errorf("runtimebundle: nil or empty cache root")
+func newCache(root string, lockProvider LockProvider) *Cache {
+	return &Cache{
+		Root:         filepath.Clean(root),
+		Limits:       Limits{},
+		LockProvider: lockProvider,
+		Permissions:  defaultPermissions(),
 	}
-	if !filepath.IsAbs(c.Root) || filepath.Clean(c.Root) != c.Root {
-		return "", fmt.Errorf("runtimebundle: cache root must be absolute and clean: %q", c.Root)
-	}
-	if err := validateCacheRoot(c.Root); err != nil {
-		return "", err
-	}
-	if !namespace.valid() {
-		return "", fmt.Errorf("runtimebundle: invalid cache namespace %q", namespace)
-	}
-	if err := validateSHA256(digest); err != nil {
-		return "", fmt.Errorf("runtimebundle: invalid cache digest: %v", err)
-	}
-	return filepath.Join(c.Root, string(namespace), digest), nil
 }

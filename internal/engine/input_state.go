@@ -32,6 +32,21 @@ type MouseEvent struct {
 	IsPressed bool
 }
 
+var (
+	keyEventsTemp  []KeyEvent
+	keyEvents      []KeyEvent
+	keyStates      = make(map[int64]bool)
+	cachedKeysDown []int64
+	keyMutex       sync.Mutex
+
+	mouseButtonStates        [4]uint32
+	mouseEventsTemp          []MouseEvent
+	mouseEvents              []MouseEvent
+	cachedMouseButtons       uint8
+	mouseEventCaptureEnabled bool
+	mouseMutex               sync.Mutex
+)
+
 // IsMouseButtonPressed reports whether the button is held.
 func IsMouseButtonPressed(id int64) bool {
 	if id < 0 || id >= int64(len(mouseButtonStates)) {
@@ -98,21 +113,6 @@ func SetMouseEventCaptureEnabled(enabled bool) {
 	mouseEventCaptureEnabled = enabled
 	mouseMutex.Unlock()
 }
-
-var (
-	keyEventsTemp  []KeyEvent
-	keyEvents      []KeyEvent
-	keyStates      = make(map[int64]bool)
-	cachedKeysDown []int64
-	keyMutex       sync.Mutex
-
-	mouseButtonStates        [4]uint32
-	mouseEventsTemp          []MouseEvent
-	mouseEvents              []MouseEvent
-	cachedMouseButtons       uint8
-	mouseEventCaptureEnabled bool
-	mouseMutex               sync.Mutex
-)
 
 func resetInputState() {
 	resetMouseButtonStates()

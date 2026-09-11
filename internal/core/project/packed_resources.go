@@ -46,6 +46,73 @@ type packedConfigIndex struct {
 	hasFonts   bool
 }
 
+func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
+	switch normalizePackedConfigPath(name) {
+	case "index.json":
+		return io.NopCloser(bytes.NewReader(p.index.projectRaw)), nil
+	case packedIndexJSON:
+		return io.NopCloser(bytes.NewReader(p.index.raw)), nil
+	}
+
+	if raw, ok := p.lookupPackedChild(name); ok {
+		return io.NopCloser(bytes.NewReader(raw)), nil
+	}
+	return openConfigReader(p.base, name)
+}
+
+func (p *packedConfigDir) Close() error {
+	return p.base.Close()
+}
+
+func (p *packedConfigDir) GetPath() string {
+	if gdDir, ok := p.base.(spxfs.GdDir); ok {
+		return gdDir.GetPath()
+	}
+	return ""
+}
+
+func (p *packedConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	reader, ok := p.base.(spxfs.ReadDirer)
+	if !ok {
+		return nil, nil
+	}
+	return reader.ReadDir(name)
+}
+
+func (p *packedConfigDir) lookupPackedChild(name string) (json.RawMessage, bool) {
+	normalized := normalizePackedConfigPath(name)
+	parts := strings.Split(normalized, "/")
+	if len(parts) != 3 || parts[2] != "index.json" {
+		return nil, false
+	}
+
+	switch parts[0] {
+	case "sprites":
+		raw, ok := p.index.sprites[parts[1]]
+		return raw, ok
+	case "sounds":
+		raw, ok := p.index.sounds[parts[1]]
+		return raw, ok
+	case "fonts":
+		raw, ok := p.index.fonts[parts[1]]
+		return raw, ok
+	default:
+		return nil, false
+	}
+}
+
+func (p *packedConfigDir) projectFontFamilyNames() ([]string, bool) {
+	if !p.index.hasFonts {
+		return nil, false
+	}
+	names := make([]string, 0, len(p.index.fonts))
+	for name := range p.index.fonts {
+		names = append(names, name)
+	}
+	sortFontFamilyNames(names)
+	return names, true
+}
+
 func wrapPackedConfigDir(fs spxfs.Dir) (spxfs.Dir, bool, error) {
 	index, ok, err := loadPackedConfigIndex(fs)
 	if err != nil || !ok {
@@ -147,73 +214,6 @@ func parsePackedSection(root map[string]json.RawMessage, key string) (map[string
 		return nil, fmt.Errorf("%s must be an object: %w", key, err)
 	}
 	return section, nil
-}
-
-func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
-	switch normalizePackedConfigPath(name) {
-	case "index.json":
-		return io.NopCloser(bytes.NewReader(p.index.projectRaw)), nil
-	case packedIndexJSON:
-		return io.NopCloser(bytes.NewReader(p.index.raw)), nil
-	}
-
-	if raw, ok := p.lookupPackedChild(name); ok {
-		return io.NopCloser(bytes.NewReader(raw)), nil
-	}
-	return openConfigReader(p.base, name)
-}
-
-func (p *packedConfigDir) Close() error {
-	return p.base.Close()
-}
-
-func (p *packedConfigDir) GetPath() string {
-	if gdDir, ok := p.base.(spxfs.GdDir); ok {
-		return gdDir.GetPath()
-	}
-	return ""
-}
-
-func (p *packedConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	reader, ok := p.base.(spxfs.ReadDirer)
-	if !ok {
-		return nil, nil
-	}
-	return reader.ReadDir(name)
-}
-
-func (p *packedConfigDir) lookupPackedChild(name string) (json.RawMessage, bool) {
-	normalized := normalizePackedConfigPath(name)
-	parts := strings.Split(normalized, "/")
-	if len(parts) != 3 || parts[2] != "index.json" {
-		return nil, false
-	}
-
-	switch parts[0] {
-	case "sprites":
-		raw, ok := p.index.sprites[parts[1]]
-		return raw, ok
-	case "sounds":
-		raw, ok := p.index.sounds[parts[1]]
-		return raw, ok
-	case "fonts":
-		raw, ok := p.index.fonts[parts[1]]
-		return raw, ok
-	default:
-		return nil, false
-	}
-}
-
-func (p *packedConfigDir) projectFontFamilyNames() ([]string, bool) {
-	if !p.index.hasFonts {
-		return nil, false
-	}
-	names := make([]string, 0, len(p.index.fonts))
-	for name := range p.index.fonts {
-		names = append(names, name)
-	}
-	sortFontFamilyNames(names)
-	return names, true
 }
 
 func normalizePackedConfigPath(name string) string {

@@ -37,6 +37,22 @@ type pinnedFile struct {
 	info os.FileInfo
 }
 
+func (f *pinnedFile) source(name string) runtimepayload.FileSource {
+	return runtimepayload.FileSource{Name: name, Mode: f.info.Mode().Perm(), ReaderAt: f.file, Size: f.info.Size()}
+}
+
+func (f *pinnedFile) verify() error {
+	opened, err := f.file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat %s %q: %w", f.name, f.path, err)
+	}
+	after, err := os.Lstat(f.path)
+	if err != nil || after.Mode()&os.ModeSymlink != 0 || !after.Mode().IsRegular() || !os.SameFile(f.info, opened) || !os.SameFile(opened, after) || opened.Size() != f.info.Size() || after.Size() != f.info.Size() {
+		return fmt.Errorf("%s %q changed while reading", f.name, f.path)
+	}
+	return nil
+}
+
 func openPinnedFile(name, filePath string) (*pinnedFile, error) {
 	before, err := os.Lstat(filePath)
 	if err != nil {
@@ -69,22 +85,6 @@ func validatePinnedFile(name, filePath string) error {
 	}
 	if err := file.file.Close(); err != nil {
 		return fmt.Errorf("close %s %q: %w", name, filePath, err)
-	}
-	return nil
-}
-
-func (f *pinnedFile) source(name string) runtimepayload.FileSource {
-	return runtimepayload.FileSource{Name: name, Mode: f.info.Mode().Perm(), ReaderAt: f.file, Size: f.info.Size()}
-}
-
-func (f *pinnedFile) verify() error {
-	opened, err := f.file.Stat()
-	if err != nil {
-		return fmt.Errorf("stat %s %q: %w", f.name, f.path, err)
-	}
-	after, err := os.Lstat(f.path)
-	if err != nil || after.Mode()&os.ModeSymlink != 0 || !after.Mode().IsRegular() || !os.SameFile(f.info, opened) || !os.SameFile(opened, after) || opened.Size() != f.info.Size() || after.Size() != f.info.Size() {
-		return fmt.Errorf("%s %q changed while reading", f.name, f.path)
 	}
 	return nil
 }
