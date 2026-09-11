@@ -14,16 +14,12 @@
  * limitations under the License.
  */
 
-// Package gdextensionwrapper generates C code to wrap all of the gdextension
-// methods to call functions on the gdextension_api_structs to work
-// around the Cgo C function pointer limitation.
+// Package ffi generates native Go bindings and C function-pointer wrappers.
 package ffi
 
 import (
-	"bytes"
 	_ "embed"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -117,33 +113,11 @@ func (g *Generator) Generate(projectPath string) error {
 }
 
 func GenerateGDExtensionWrapperHeaderFile(projectPath string, ast clang.CHeaderFileAST) error {
-	tmpl, err := template.New("ffi_wrapper.gen.h").
-		Funcs(template.FuncMap{
-			"snakeCase": strcase.ToSnake,
-		}).
-		Parse(ffiWrapperHeaderFileText)
+	output, err := RenderTemplate(template.FuncMap{"snakeCase": strcase.ToSnake}, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
 	if err != nil {
 		return err
 	}
-
-	var b bytes.Buffer
-	err = tmpl.Execute(&b, ast)
-	if err != nil {
-		return err
-	}
-
-	filename := filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.h")
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.Write(b.Bytes())
-	if err != nil {
-		return err
-	}
-	return nil
+	return WriteGeneratedFile(filepath.Join(projectPath, NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
 }
 
 func GenerateGDExtensionWrapperGoFile(projectPath string, ast clang.CHeaderFileAST) error {
@@ -329,7 +303,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
 	if dispatchToMainThread {
 		if HasEffectiveReturn(function) {
-			sb.WriteString("\treturn enginewrap.CallInMainThreadValue(func() " + g.EffectiveGoReturnType(function) + " {\n")
+			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", g.EffectiveGoReturnType(function))
 		} else {
 			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
 		}
@@ -346,46 +320,56 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 		if g.IsNativeArrayDataArg(function, arg) {
 			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
 			goArgName := g.EffectiveGoArgumentName(function, arg)
-			sb.WriteString("var " + argName + " " + spec.DataArgPtrType + "\n")
+			fmt.Fprintf(&sb, "var %s %s\n", argName, spec.DataArgPtrType)
 			sb.WriteString(prefixTab)
-			sb.WriteString("if len(" + goArgName + ") > 0 {\n")
-			sb.WriteString(prefixTab + "\t" + argName + " = &" + goArgName + "[0]\n")
-			sb.WriteString(prefixTab + "}\n")
+			fmt.Fprintf(&sb, "if len(%s) > 0 {\n", goArgName)
+			fmt.Fprintf(&sb, "%s\t%s = &%s[0]\n", prefixTab, argName, goArgName)
+			sb.WriteString(prefixTab)
+			sb.WriteString("}\n")
 			lenArgName := "arg" + strconv.Itoa(i+1)
 			sb.WriteString(prefixTab)
-			sb.WriteString(lenArgName + " := " + g.NativeArrayLenExpr(function, goArgName))
+			fmt.Fprintf(&sb, "%s := %s", lenArgName, g.NativeArrayLenExpr(function, goArgName))
 			params = append(params, argName, lenArgName)
 			sb.WriteString("\n")
 			continue
 		}
 		switch typeName {
 		case "GdString":
-			sb.WriteString(argName + "Str := ")
+			sb.WriteString(argName)
+			sb.WriteString("Str := ")
 			sb.WriteString("C.CString(")
 			sb.WriteString(arg.Name)
 			sb.WriteString(")")
-			sb.WriteString("\n" + prefixTab)
-			sb.WriteString(argName + " := " + "(GdString)(" + argName + "Str) \n")
-			sb.WriteString(prefixTab + "defer " + "C.free(unsafe.Pointer(" + argName + "Str))")
+			sb.WriteByte('\n')
+			sb.WriteString(prefixTab)
+			fmt.Fprintf(&sb, "%s := (GdString)(%sStr) \n", argName, argName)
+			fmt.Fprintf(&sb, "%sdefer C.free(unsafe.Pointer(%sStr))", prefixTab, argName)
 		case "GdArray":
-			sb.WriteString(argName + "Info := ")
+			sb.WriteString(argName)
+			sb.WriteString("Info := ")
 			sb.WriteString("ToGdArrayInfo(")
 			sb.WriteString(arg.Name)
 			sb.WriteString(")")
-			sb.WriteString("\n" + prefixTab)
-			sb.WriteString("if " + argName + "Info != nil {\n")
-			sb.WriteString(prefixTab + "\tdefer " + argName + "Info.Free()\n")
-			sb.WriteString(prefixTab + "}\n")
+			sb.WriteByte('\n')
 			sb.WriteString(prefixTab)
-			sb.WriteString(argName + " := GdArray(nil)\n")
+			fmt.Fprintf(&sb, "if %sInfo != nil {\n", argName)
+			fmt.Fprintf(&sb, "%s\tdefer %sInfo.Free()\n", prefixTab, argName)
 			sb.WriteString(prefixTab)
-			sb.WriteString("if " + argName + "Info != nil {\n")
-			sb.WriteString(prefixTab + "\t" + argName + " = " + argName + "Info.Raw()\n")
-			sb.WriteString(prefixTab + "}")
+			sb.WriteString("}\n")
+			sb.WriteString(prefixTab)
+			sb.WriteString(argName)
+			sb.WriteString(" := GdArray(nil)\n")
+			sb.WriteString(prefixTab)
+			fmt.Fprintf(&sb, "if %sInfo != nil {\n", argName)
+			fmt.Fprintf(&sb, "%s\t%s = %sInfo.Raw()\n", prefixTab, argName, argName)
+			sb.WriteString(prefixTab)
+			sb.WriteByte('}')
 
 		default:
-			sb.WriteString(argName + " := ")
-			sb.WriteString("To" + typeName)
+			sb.WriteString(argName)
+			sb.WriteString(" := ")
+			sb.WriteString("To")
+			sb.WriteString(typeName)
 			sb.WriteString("(")
 			sb.WriteString(arg.Name)
 			sb.WriteString(")")
@@ -399,7 +383,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	if hasSyntheticReturn {
 		rawType := EffectiveRawReturnType(function)
 		sb.WriteString(prefixTab)
-		sb.WriteString("var retValue " + rawType + "\n")
+		fmt.Fprintf(&sb, "var retValue %s\n", rawType)
 	}
 
 	sb.WriteString(prefixTab)
@@ -423,10 +407,11 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 	sb.WriteString(")")
 
 	if HasEffectiveReturn(function) {
-		sb.WriteString("\n" + prefixTab)
+		sb.WriteByte('\n')
+		sb.WriteString(prefixTab)
 		sb.WriteString("return ")
 		typeName := g.EffectiveGoReturnType(function)
-		sb.WriteString("To" + strcase.ToCamel(typeName) + "(retValue)")
+		fmt.Fprintf(&sb, "To%s(retValue)", strcase.ToCamel(typeName))
 	}
 	if dispatchToMainThread {
 		sb.WriteString("\n\t})")
@@ -458,7 +443,7 @@ func (g *Generator) genSyncPureApiWrapFunction(function *clang.TypedefFunction) 
 	args := EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 
-	sb.WriteString(fmt.Sprintf("func (*%s) ", mgrTypeName+"Impl"))
+	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
 	wroteArg := false
@@ -478,13 +463,14 @@ func (g *Generator) genSyncPureApiWrapFunction(function *clang.TypedefFunction) 
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + g.MustGdxReturnType(function))
+		sb.WriteByte(' ')
+		sb.WriteString(g.MustGdxReturnType(function))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "return " + goZeroValue(g.MustGdxReturnType(function)) + "\n")
+		fmt.Fprintf(&sb, "\n%sreturn %s\n", prefixStr, goZeroValue(g.MustGdxReturnType(function)))
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -511,7 +497,7 @@ func (g *Generator) genSyncApiWrapFunction(function *clang.TypedefFunction) stri
 	args := EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
 
-	sb.WriteString(fmt.Sprintf("func (*%s) ", mgrTypeName+"Impl"))
+	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
 	sb.WriteString(pureFuncName)
 	sb.WriteString("(")
 	wroteArg := false
@@ -531,24 +517,27 @@ func (g *Generator) genSyncApiWrapFunction(function *clang.TypedefFunction) stri
 	sb.WriteString(")")
 
 	if retType != "" {
-		sb.WriteString(" " + g.MustGdxReturnType(function))
+		sb.WriteByte(' ')
+		sb.WriteString(g.MustGdxReturnType(function))
 	}
 	sb.WriteString(" {")
 	prefixStr := "\t"
 	// body
 	if retType != "" {
-		sb.WriteString("\n" + prefixStr + "var _ret1 " + g.MustGdxReturnType(function) + "")
+		fmt.Fprintf(&sb, "\n%svar _ret1 %s", prefixStr, g.MustGdxReturnType(function))
 	}
 
 	sb.WriteString(`	
 	callInMainThread(func() {
 `)
 	if retType != "" {
-		sb.WriteString(prefixStr + "\t_ret1 = ")
+		sb.WriteString(prefixStr)
+		sb.WriteString("\t_ret1 = ")
 	} else {
-		sb.WriteString(prefixStr + "\t")
+		sb.WriteString(prefixStr)
+		sb.WriteByte('\t')
 	}
-	sb.WriteString(gdxMgrName + "." + pureFuncName + "(")
+	fmt.Fprintf(&sb, "%s.%s(", gdxMgrName, pureFuncName)
 	wroteArg = false
 	for _, arg := range args {
 		if g.ShouldSkipHighLevelArgument(function, arg) {
@@ -567,7 +556,8 @@ func (g *Generator) genSyncApiWrapFunction(function *clang.TypedefFunction) stri
 `)
 
 	if retType != "" {
-		sb.WriteString(prefixStr + "return _ret1 \n")
+		sb.WriteString(prefixStr)
+		sb.WriteString("return _ret1 \n")
 	}
 	sb.WriteString("}")
 	return sb.String()
@@ -585,7 +575,7 @@ func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName 
 	funcName := function.Name[len(prefix)+len(mgrName):]
 	args := EffectiveArguments(function)
 	retType := g.EffectiveGoReturnType(function)
-	sb.WriteString("func (pself *" + clsName + ") " + funcName + "(")
+	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
 	wroteArg := false
 	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" {
@@ -605,11 +595,12 @@ func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName 
 	}
 	sb.WriteString(") ")
 	if retType != "" {
-		sb.WriteString(retType + " ")
+		sb.WriteString(retType)
+		sb.WriteByte(' ')
 	}
 	sb.WriteString("{\n")
 	if retType != "" {
-		sb.WriteString("\treturn " + goZeroValue(retType) + "\n")
+		fmt.Fprintf(&sb, "\treturn %s\n", goZeroValue(retType))
 	}
 	sb.WriteString("}\n")
 	return sb.String()
@@ -627,7 +618,7 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName stri
 	// Check if the first argument is "obj" to determine if this is an instance method
 	hasObjArg := len(args) > 0 && args[0].Name == "obj"
 
-	sb.WriteString("func (pself *" + clsName + ") " + funcName + "(")
+	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
 	wroteArg := false
 	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" {
@@ -647,14 +638,15 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName stri
 	}
 	sb.WriteString(") ")
 	if retType != "" {
-		sb.WriteString(retType + " ")
+		sb.WriteString(retType)
+		sb.WriteByte(' ')
 	}
 	sb.WriteString("{\n")
 	sb.WriteString("\t")
 	if retType != "" {
 		sb.WriteString("return ")
 	}
-	sb.WriteString(mgrName + "Mgr." + funcName + "(")
+	fmt.Fprintf(&sb, "%sMgr.%s(", mgrName, funcName)
 	// Only add pself.Id if the first argument is "obj" (instance method)
 	wroteCallArg := false
 	if hasObjArg {

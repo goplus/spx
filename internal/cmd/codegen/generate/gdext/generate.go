@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
-// Package gdextensionwrapper generates C code to wrap all of the gdextension
-// methods to call functions on the gdextension_api_structs to work
-// around the Cgo C function pointer limitation.
+// Package gdext generates the SPX GDExtension headers and engine bindings.
 package gdext
 
 import (
-	"bytes"
 	_ "embed"
 	"fmt"
 	"io"
@@ -64,7 +61,7 @@ func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers)
 
 	// use the new format header
 	outputFile = filepath.Join(projectPath, NativeRelDir, "gdextension_spx_ext.h")
-	if err := os.WriteFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
+	if err := WriteGeneratedFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
 		return err
 	}
 	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
@@ -176,24 +173,11 @@ func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ou
 		},
 	}
 
-	tmpl, err := template.New(outputFileName).
-		Funcs(funcs).
-		Parse(templateStr)
+	output, err := RenderTemplate(funcs, outputFileName, templateStr, g.ManagerData())
 	if err != nil {
 		return err
 	}
-
-	var b bytes.Buffer
-	err = tmpl.Execute(&b, g.ManagerData())
-	if err != nil {
-		return err
-	}
-
-	headerFileName := filepath.Join(projectPath, NativeRelDir, outputFileName)
-	if err := os.WriteFile(headerFileName, b.Bytes(), 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", outputFileName, err)
-	}
-	return nil
+	return WriteGeneratedFile(filepath.Join(projectPath, NativeRelDir, outputFileName), output, 0o644)
 }
 
 // Web owns the value returned by this legacy method.
