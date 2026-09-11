@@ -46,6 +46,7 @@ type SayBubbleContent struct {
 // bubbles in one pass. Candidate rectangles therefore use exactly the same
 // scale as UiSay.SetTextLayout without querying the engine for every bubble.
 type SayBubbleLayoutContext struct {
+	clampPosition  bool
 	windowScale    float64
 	cameraPosition mathf.Vec2
 	worldViewScale float64
@@ -90,7 +91,7 @@ func (c SayBubbleLayoutContext) NewLayout(
 	// ViewToUI multiplies positions by WindowScale, whereas Control sizes are
 	// already UI pixels. Divide by WindowScale to compare both in view units.
 	extent := content.baseExtent.Mul(renderScale).Divf(c.windowScale)
-	if clampUIPositionInScreen {
+	if c.clampPosition {
 		position = clampSayPositionToExtent(position, c.viewport, extent)
 	}
 
@@ -154,6 +155,7 @@ func NewSayBubbleLayoutContext(winSize mathf.Vec2) SayBubbleLayoutContext {
 		engine.Managers().CameraMgr.GetPosition(),
 		engine.Managers().CameraMgr.GetCameraZoom(),
 		engine.WindowScale(),
+		clampUIPositionInScreen,
 	)
 }
 
@@ -170,9 +172,11 @@ func newSayBubbleLayoutContext(
 	cameraPosition mathf.Vec2,
 	cameraZoom mathf.Vec2,
 	windowScale float64,
+	clampPosition bool,
 ) SayBubbleLayoutContext {
 	windowScale = validWindowScale(windowScale)
 	return SayBubbleLayoutContext{
+		clampPosition:  clampPosition,
 		windowScale:    windowScale,
 		cameraPosition: cameraPosition,
 		worldViewScale: float64(cameraZoom.X) / windowScale,

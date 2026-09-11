@@ -102,15 +102,11 @@ func TestResolveSayBubbleLayoutsStableIDsIgnoreInputOrder(t *testing.T) {
 }
 
 func TestSayBubbleLayoutContextTransformsSpriteTopAndScale(t *testing.T) {
-	oldClamp := clampUIPositionInScreen
-	clampUIPositionInScreen = false
-	t.Cleanup(func() { clampUIPositionInScreen = oldClamp })
-
 	winSize := mathf.NewVec2(960, 540)
 	baseSize := mathf.NewVec2(480, 360)
 	cameraPosition := mathf.NewVec2(10, 20)
 	cameraZoom := mathf.NewVec2(4, 6)
-	context := newSayBubbleLayoutContext(winSize, baseSize, cameraPosition, cameraZoom, 2)
+	context := newSayBubbleLayoutContext(winSize, baseSize, cameraPosition, cameraZoom, 2, false)
 	content := NewSayBubbleContent("hello", StyleSay)
 	layout := context.NewLayout(
 		7,
@@ -257,5 +253,23 @@ func TestEstimateSayBubbleExtentAccountsForWideTextAndLines(t *testing.T) {
 	}
 	if multiline.Y <= ascii.Y {
 		t.Fatalf("multiline height = %v, want greater than single-line height %v", multiline.Y, ascii.Y)
+	}
+}
+
+func TestSayBubbleLayoutContextKeepsClampPolicy(t *testing.T) {
+	oldClamp := clampUIPositionInScreen
+	t.Cleanup(func() { clampUIPositionInScreen = oldClamp })
+	content := NewSayBubbleContent("hello", StyleSay)
+	position := mathf.NewVec2(1000, 1000)
+	context := newSayBubbleLayoutContext(mathf.NewVec2(480, 360), mathf.NewVec2(480, 360), mathf.Vec2{}, mathf.NewVec2(1, 1), 1, true)
+	first := context.NewLayout(1, position, mathf.Vec2{}, content)
+	clampUIPositionInScreen = false
+	second := context.NewLayout(1, position, mathf.Vec2{}, content)
+	assertVec2Near(t, "snapshot position", second.position, first.position)
+	context.clampPosition = false
+	unclamped := context.NewLayout(1, position, mathf.Vec2{}, content)
+	assertVec2Near(t, "unclamped position", unclamped.position, position)
+	if first.position == unclamped.position {
+		t.Fatal("clamping did not constrain the position")
 	}
 }
