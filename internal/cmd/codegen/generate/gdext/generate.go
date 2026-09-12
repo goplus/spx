@@ -20,8 +20,6 @@ package gdext
 import (
 	_ "embed"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -47,112 +45,41 @@ type Generator struct {
 }
 
 func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers) error {
-	if err := g.generateGdCppFile(projectPath, gdSpxExtCpp, "gdextension_spx_ext.cpp"); err != nil {
+	if err := g.writeCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), gdSpxExtCpp); err != nil {
 		return err
 	}
-	outputFile := filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.cpp")
-	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.cpp")); err != nil {
-		return fmt.Errorf("copy gdextension_spx_ext.cpp: %w", err)
+	for _, path := range []string{
+		filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.h"),
+		filepath.Join(spxModulePath, "gdextension_spx_ext.h"),
+	} {
+		if err := common.WriteGeneratedFile(path, []byte(headers.Standard), 0o644); err != nil {
+			return err
+		}
 	}
-	if err := os.Remove(outputFile); err != nil {
-		return fmt.Errorf("remove temporary gdextension_spx_ext.cpp: %w", err)
-	}
-
-	// use the new format header
-	outputFile = filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.h")
-	if err := common.WriteGeneratedFile(outputFile, []byte(headers.Standard), 0o644); err != nil {
-		return err
-	}
-	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "gdextension_spx_ext.h")); err != nil {
-		return fmt.Errorf("copy gdextension_spx_ext.h: %w", err)
-	}
-
-	if err := g.generateGdCppFile(projectPath, gdJsSpxCpp, "godot_js_spx.cpp"); err != nil {
-		return err
-	}
-	outputFile = filepath.Join(projectPath, common.NativeRelDir, "godot_js_spx.cpp")
-	if err := fileCopy(outputFile, filepath.Join(spxModulePath, "web", "godot_js_spx.cpp")); err != nil {
-		return fmt.Errorf("copy godot_js_spx.cpp: %w", err)
-	}
-	if err := os.Remove(outputFile); err != nil {
-		return fmt.Errorf("remove temporary godot_js_spx.cpp: %w", err)
-	}
-	return nil
+	return g.writeCPP(filepath.Join(spxModulePath, "web", "godot_js_spx.cpp"), gdJsSpxCpp)
 }
 
-func fileCopy(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	if err != nil {
-		return err
-	}
-
-	return dstFile.Sync()
-}
-
-func (g *Generator) generateGdCppFile(projectPath string, templateStr string, outputFileName string) error {
+func (g *Generator) writeCPP(outputPath, templateStr string) error {
 	funcs := template.FuncMap{
-		"sub":                         common.Sub,
-		"trimPrefix":                  strings.TrimPrefix,
-		"loadProcAddressName":         common.LoadProcAddressName,
-		"isManagerMethod":             g.IsManagerMethod,
-		"getManagerName":              g.GetManagerName,
-		"isWebOwnedStringFree":        isWebOwnedStringFree,
-		"isWebGdStringReturn":         isWebGdStringReturn,
-		"isWebGdArrayReturn":          isWebGdArrayReturn,
-		"isGdStringArgument":          isGdStringArgument,
-		"isGdArrayArgument":           isGdArrayArgument,
-		"webManagerArgument":          webManagerArgument,
-		"hasArrayTransformBridgeSpec": g.HasArrayTransformBridgeSpec,
-		"hasNativeArrayBridgeSpec":    g.HasNativeArrayBridgeSpec,
-		"getArrayTransformBridgeSpec": func(function *clang.TypedefFunction) common.ArrayTransformBridgeSpec {
-			spec, _ := g.GetArrayTransformBridgeSpec(function.Name)
-			return spec
-		},
-		"getNativeArrayBridgeSpec": func(function *clang.TypedefFunction) common.NativeArrayBridgeSpec {
-			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
-			return spec
-		},
-		"listArrayTransformBridgeSpecs": g.ListArrayTransformBridgeSpecs,
-		"fastArrayElemCppType": func(arrayType int32) string {
-			switch arrayType {
-			case 1:
-				return "int64_t"
-			case 2:
-				return "float"
-			case 5:
-				return "uint8_t"
-			case 6:
-				return "GdObj"
-			default:
-				panic("unsupported fast array element type")
+		"sub":                  common.Sub,
+		"trimPrefix":           strings.TrimPrefix,
+		"loadProcAddressName":  common.LoadProcAddressName,
+		"isManagerMethod":      g.IsManagerMethod,
+		"getManagerName":       g.GetManagerName,
+		"isWebOwnedStringFree": isWebOwnedStringFree,
+		"isWebGdStringReturn":  isWebGdStringReturn,
+		"isWebGdArrayReturn":   isWebGdArrayReturn,
+		"isGdStringArgument":   isGdStringArgument,
+		"isGdArrayArgument":    isGdArrayArgument,
+		"webManagerArgument":   webManagerArgument,
+		"arrayBridge": func(name string) *common.ArrayBridge {
+			spec, ok := g.ArrayBridge(name)
+			if !ok {
+				return nil
 			}
+			return &spec
 		},
-		"fastArrayTypeConst": func(arrayType int32) string {
-			switch arrayType {
-			case 1:
-				return "GD_ARRAY_TYPE_INT64"
-			case 2:
-				return "GD_ARRAY_TYPE_FLOAT"
-			case 5:
-				return "GD_ARRAY_TYPE_BYTE"
-			case 6:
-				return "GD_ARRAY_TYPE_GDOBJ"
-			default:
-				panic("unsupported fast array type constant")
-			}
-		},
+		"listArrayBridges": g.ListArrayBridges,
 		"cDecl": func(typeName, name string) string {
 			typeName = strings.TrimSpace(typeName)
 			if strings.HasSuffix(typeName, "*") {
@@ -162,11 +89,11 @@ func (g *Generator) generateGdCppFile(projectPath string, templateStr string, ou
 		},
 	}
 
-	output, err := common.RenderTemplate(funcs, outputFileName, templateStr, g.ManagerData())
+	output, err := common.RenderTemplate(funcs, filepath.Base(outputPath), templateStr, g.ManagerData())
 	if err != nil {
 		return err
 	}
-	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, outputFileName), output, 0o644)
+	return common.WriteGeneratedFile(outputPath, output, 0o644)
 }
 
 // Web owns the value returned by this legacy method.

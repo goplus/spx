@@ -13,9 +13,9 @@ make generate
 
 ## 2. Pipeline
 
-1. Collect exported declarations and binding headers.
-2. Parse Go declarations into the generator's intermediate model.
-3. Apply export, naming, type, and raw-method rules.
+1. Collect marked public methods from the SPX manager headers.
+2. Generate and preprocess the C interface header, then parse its AST.
+3. Apply naming, type, and `SPX_BINDING` options.
 4. Render native Go, engine-facing, C++, Web JavaScript, and worker templates.
 5. Format generated files and compile the affected targets.
 
@@ -27,7 +27,7 @@ The generator is a nested Go module with a local `replace` back to the repositor
 
 ### Inputs
 
-- public and engine-facing declarations under `pkg/spx` and `pkg/spx/pkg/engine`;
+- exported method declarations in `$(SPX_MODULE_SRC)/spx*mgr.h`;
 - generator source and templates under `internal/cmd/codegen`;
 - SPX module headers and integration files under `godot_modules/spx`.
 
@@ -46,7 +46,7 @@ Files containing `.gen.` in their names and generator-owned bridge sections must
 
 ## 4. Generator structure
 
-The entry point loads configuration, discovers declarations, builds an abstract method/type model, and renders platform templates. Header collection establishes the ABI surface. AST parsing supplies Go names, receivers, parameters, results, and annotations. Templates own platform-specific syntax but should not redefine API semantics.
+The entry point collects marked manager declarations, generates the C interface header, parses its AST, and renders platform templates. Header collection supplies binding metadata; the AST supplies function names and types. Templates own platform-specific syntax but should not redefine API semantics.
 
 ## 5. Export rules
 
@@ -54,13 +54,17 @@ The entry point loads configuration, discovers declarations, builds an abstract 
 
 Only declarations selected by the generator's export conventions become bridge methods. Parameter and result types must have a supported ABI representation. Keep public naming stable and make conversions explicit at the engine boundary.
 
-### `_raw` methods
-
-Raw methods expose a lower-level engine representation for a generated higher-level wrapper. They require special pairing and naming rules; confirm both methods in generated output when adding or changing one.
-
 ### Native arrays
 
-Arrays with a directly supported native representation can take a fast bridge path. Both sides must agree on element layout, length, ownership, and lifetime.
+Pointer-and-length signatures declare caller-provided array buffers. Use `SPX_BINDING(output_count=...)` for fixed-size output or `SPX_BINDING(array_arg=..., elements_per_input=...)` for slice-returning transforms. Both sides must agree on element layout, length, ownership, and lifetime.
+
+Array ABI IDs, the descriptor tag, element names, fixed element widths, and Go/C type mappings are defined once in `generate/common/arrays.go`. The C enum, Web Go `arrays.gen.go`, and the marked array ABI section in `gdspx.util.js` are generated from that definition, including the Go/JS element-size lookup functions. When adding a type, also verify that the native and Web runtimes support its element layout.
+
+### Web caches
+
+Define `Cached<Manager><Method>` functions in `internal/gdengine/binding/web/*_cache.go`. Their arguments match the API, followed by a `func() T` fallback. For example, `CachedInputGetKey(key int64, fallback func() bool) bool` wraps Input’s `get_key`. Functions access shared runtime cache state without constructing cache instances.
+
+The generator discovers these functions and emits the cache call and FFI fallback. Cache policy and boolean adaptation stay in Go; C++ headers need no cache annotations. Missing APIs and invalid fallback signatures fail generation.
 
 ### Converted arrays
 
@@ -80,7 +84,7 @@ Unsupported array types require generated conversion code. Prefer conversion at 
 
 If a method is missing, confirm that its declaration is exported and discovered. If it is absent from the parsed model, inspect AST collection and build constraints. If module output is unchanged, verify `SPX_MODULE_SRC`. If only Web fails, compare the generated ABI signature, JavaScript marshalling, and worker wrapper with the native path.
 
-Stale generated files often indicate that generation ran against a different Godot checkout or with the wrong Web mode. Regenerate before debugging hand-written callers.
+For stale generated files, check the selected SPX module directory and regenerate before debugging hand-written callers. Binding generation uses `SPX_MODULE_SRC` independently of the Godot checkout and Web build mode.
 
 ## 8. Verification
 

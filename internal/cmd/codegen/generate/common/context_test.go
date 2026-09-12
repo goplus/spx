@@ -30,28 +30,37 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)();")
 	require.NoError(t, err)
 	metadata := GenerationMetadata{
-		ManagerNames:          []string{"sprite"},
-		NativeArrayBridges:    map[string]NativeArrayBridgeSpec{"first": {GoArgType: "[]float32"}},
-		ArrayTransformBridges: map[string]ArrayTransformBridgeSpec{"first": {FunctionName: "first", Params: []RawExportParam{{Name: "input"}}}},
+		ManagerNames: []string{"sprite"},
+		WebBindings:  map[string]WebBindingMode{"first": WebBindingNoop},
+		ArrayBridges: map[string]ArrayBridge{"first": {
+			FunctionName: "first", ReturnArray: true,
+			Input:  &ArrayBuffer{Type: 2, Data: CParam{Name: "input"}},
+			Output: &ArrayBuffer{Type: 2, Count: 3},
+		}},
 	}
 	first := NewGenerationContext(ast, metadata)
 	metadata.ManagerNames[0] = "camera"
-	metadata.NativeArrayBridges["first"] = NativeArrayBridgeSpec{GoArgType: "changed"}
-	metadata.ArrayTransformBridges["first"].Params[0].Name = "changed"
+	metadata.WebBindings["first"] = WebBindingReuseResult
+	metadata.ArrayBridges["first"].Input.Data.Name = "changed"
+	metadata.ArrayBridges["first"].Output.Count = 9
 	second := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
+	require.Equal(t, WebBindingNoop, first.WebBinding("first"))
+	require.Equal(t, WebBindingReuseResult, second.WebBinding("first"))
 	require.Equal(t, "sprite", first.GetManagerName("GDExtensionSpxSpriteShow"))
 	require.True(t, first.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.False(t, second.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
-	spec, ok := first.GetNativeArrayBridgeSpec("first")
+	spec, ok := first.ArrayBridge("first")
 	require.True(t, ok)
-	require.Equal(t, "[]float32", spec.GoArgType)
-	transform, ok := first.GetArrayTransformBridgeSpec("first")
-	require.True(t, ok)
-	require.Equal(t, "input", transform.Params[0].Name)
-	transform.Params[0].Name = "caller mutation"
-	first.ListArrayTransformBridgeSpecs()[0].Params[0].Name = "another mutation"
-	again, _ := first.GetArrayTransformBridgeSpec("first")
-	require.Equal(t, "input", again.Params[0].Name)
+	require.Equal(t, "[]float32", spec.Input.GoType())
+	require.Equal(t, "input", spec.Input.Data.Name)
+	require.Equal(t, 3, spec.Output.Count)
+	spec.Input.Data.Name = "caller mutation"
+	spec.Output.Count = 8
+	first.ListArrayBridges()[0].Input.Data.Name = "another mutation"
+	first.ListArrayBridges()[0].Output.Count = 7
+	again, _ := first.ArrayBridge("first")
+	require.Equal(t, "input", again.Input.Data.Name)
+	require.Equal(t, 3, again.Output.Count)
 	require.Equal(t, "int64", first.MustGoTypeForCType("GdInt", "test"))
 }
 

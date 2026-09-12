@@ -55,6 +55,11 @@ public:                                      \
 #define SPX_BIND SPX_API
 #endif
 
+// Codegen options: array_arg, elements_per_input, output_count, web.
+#ifndef SPX_BINDING
+#define SPX_BINDING(...)
+#endif
+
 #define NULL_OBJECT_ID 0
 
 class Window;

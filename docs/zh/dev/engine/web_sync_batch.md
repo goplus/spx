@@ -90,7 +90,7 @@ Web 端输入查询已改为每帧快照优先：
 
 action name 已增加注册表：
 
-- Go 首次看到 action name 时调用 `GdspxInputActionID`。
+- Go 首次看到 action name 时调用 `GdspxGetInputActionID`。
 - JS 将 action name 转成 Godot string 并调用 `gdspx_input_register_action`。
 - Godot 保存 `action id -> StringName`。
 - 后续 `IsActionPressed` / `IsActionJustPressed` / `IsActionJustReleased` / `GetAxis` 只传数字 id。

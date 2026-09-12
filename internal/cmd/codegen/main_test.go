@@ -57,6 +57,9 @@ func TestResolveSPXModuleSourcePreservesAbsoluteOverride(t *testing.T) {
 
 func writeCodegenFixtureFile(t *testing.T, dir, name string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

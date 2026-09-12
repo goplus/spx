@@ -52,8 +52,13 @@ jobs:
         with:
           node-version: 24
 
-      - name: Test Web callback routing
-        run: node --test cmd/ispx/tests/*.test.cjs
+      - name: Test Web bridge
+        run: node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs
+
+      - name: Test Web ABI memory ownership
+        env:
+          GDSPX_SANITIZERS: address,undefined
+        run: bash godot_modules/spx/web/tests/run_string_abi_test.sh
 
       - name: Test Go code
         shell: bash

@@ -9,52 +9,39 @@
 {{ $view := . -}}
 class GdspxFuncs {
 constructor() {
-	this._inputMousePosScratch = { 'x': 0, 'y': 0 };
-	this._gdIntScratch = { 'low': 0, 'high': 0 };
-	this._gdObjScratch = { 'low': 0, 'high': 0 };
+	this._reusableResults = {
+{{- range $key, $initializer := jsResults }}
+		'{{ $key }}': {{ $initializer }},
+{{- end }}
+	};
 }
 
-// NOTE: flattened JS-facing params use (low, high), but the wasm helpers
-// `_gdspx_new_int` / `_gdspx_new_obj` follow the C ABI and expect (high, low).
-
-_getGdIntScratch() {
-	return this._gdIntScratch;
-}
-
-_getGdObjScratch() {
-	return this._gdObjScratch;
-}
-
-/**
- * Reads a GdInt/GdObj from wasm memory into a reusable scratch object.
- * The returned object is mutable and will be overwritten by the next call
- * that uses the same scratch object, so callers must consume or copy it
- * immediately.
- */
-_readGdIntLike(ptr, scratch) {
-	var _u32 = Module['HEAPU32'];
-	var _word = ptr >> 2;
-	scratch['low'] = _u32[_word];
-	scratch['high'] = _u32[_word + 1];
-	return scratch;
-}
-
-{{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions -}}
-{{ $rt := goReturnType .ReturnType }}
+{{- range $f := $view.CollectGDExtensionInterfaceFunctions }}
 gd{{ loadProcAddressName $f.Name }}(
-	{{- $args := getJsFuncArgs $f -}}
+	{{- $args := jsArgs $f -}}
 	{{- range $j, $arg := $args -}}
 		{{ $arg -}}
 		{{- if ne $j (sub (len $args) 1) -}}, {{- end -}}
 	{{ end -}}
 ) {
-	var _gdFuncPtr = Module['_gd{{ loadProcAddressName $f.Name }}'];
-	{{ getJsFuncBody $f }}
+	var _call = Module['_gd{{ loadProcAddressName $f.Name }}'];
+	{{ jsBody $f }}
 }
 {{- end -}}
 }
 
-{{- range $i, $f := $view.CollectGDExtensionInterfaceFunctions }}
+GdspxFuncs['arrayOutputs'] = {
+{{- range $f := $view.CollectGDExtensionInterfaceFunctions }}
+{{- $spec := arrayBridge $f.Name }}
+{{- if and $spec.Output $spec.Output.Count }}
+	'gd{{ loadProcAddressName $f.Name }}': function() {
+		return ReadArrayOutput('_gd{{ loadProcAddressName $f.Name }}', {{ $spec.Output.Type }}, {{ $spec.Output.Count }});
+	},
+{{- end }}
+{{- end }}
+};
+
+{{- range $f := $view.CollectGDExtensionInterfaceFunctions }}
 GdspxFuncs.prototype['gd{{ loadProcAddressName $f.Name }}'] = GdspxFuncs.prototype.gd{{ loadProcAddressName $f.Name }};
 {{- end }}
 globalThis['GdspxFuncs'] = GdspxFuncs;

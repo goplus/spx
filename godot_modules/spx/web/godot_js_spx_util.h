@@ -22,6 +22,10 @@ bool gdspx_prepare_array_wrapper(GdArray *wrapper);
 bool gdspx_validate_array_info(GdArray array);
 bool gdspx_register_array_info(GdArray array);
 bool gdspx_release_array_info(GdArray array);
+// Inputs borrow native data until the wrapper is released. String buffers use
+// [uint32 offset, uint32 length] entries followed by NUL-terminated UTF-8 bytes.
+GdArray *gdspx_borrow_array(uint8_t *data, int byte_size, int32_t count, int32_t type);
+const GdArrayInfo *gdspx_get_array_info(GdArray *wrapper);
 #ifdef __cplusplus
 }
 #endif

@@ -118,7 +118,6 @@ private:
 	bool _erase_pixel_collision_pair(const TriggerPair &pair);
 	void _remove_collision_pairs_for_sprite(GdObj obj);
 	void _check_pixel_collision_events();
-	void _batch_write_positions(const GdObj *ids, int count, float *out, int out_len);
 
 protected:
 	void _register_sprite(SpxSprite *p_sprite);
@@ -300,6 +299,7 @@ public:
 	// batch sync
 	SPX_API void batch_update_transforms(const float *buffer_data, int len);
 	SPX_API void batch_update_visuals(const float *buffer_data, int len);
+	SPX_BINDING(array_arg=objs, elements_per_input=2)
 	SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
 	SPX_API void batch_update_physics(const float *buffer_data, int len);
 };

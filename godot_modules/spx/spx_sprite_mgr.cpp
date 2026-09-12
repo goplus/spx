@@ -1781,7 +1781,7 @@ void SpxSpriteMgr::batch_update_visuals(const float *buffer_data, int len) {
 	batch_update_visuals_impl(this, buffer_data, len, "batch_update_visuals");
 }
 
-void SpxSpriteMgr::_batch_write_positions(const GdObj *ids, int count, float *out, int out_len) {
+void SpxSpriteMgr::batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len) {
 	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SPX sprite positions may only be read on the engine main thread.");
 	if (count <= 0) {
 		return;
@@ -1812,10 +1812,6 @@ void SpxSpriteMgr::_batch_write_positions(const GdObj *ids, int count, float *ou
 			out[j++] = missing;
 		}
 	}
-}
-
-void SpxSpriteMgr::batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len) {
-	_batch_write_positions(ids, count, out, out_len);
 }
 
 void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {

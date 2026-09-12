@@ -46,10 +46,9 @@ static CachedGdStringEntry *find_cached_gdstring_by_ptr(const char *ptr);
 namespace {
 
 constexpr size_t GDSPX_MAX_STRING_BYTES = 256 * 1024 * 1024;
-constexpr size_t GDSPX_ARRAY_HEADER_SIZE = 8;
 // Bound counts before allocation.
 constexpr int32_t GDSPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
-// Keep all serialized payloads bounded.
+// Bound native transfer buffers before allocation.
 constexpr size_t GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 
 static bool checked_array_bytes(int32_t count, size_t element_size, size_t &r_bytes) {
@@ -62,14 +61,6 @@ static bool checked_array_bytes(int32_t count, size_t element_size, size_t &r_by
         return false;
     }
     r_bytes = count_size * element_size;
-    return true;
-}
-
-static bool checked_add_size(size_t left, size_t right, size_t &r_sum) {
-    if (left > std::numeric_limits<size_t>::max() - right) {
-        return false;
-    }
-    r_sum = left + right;
     return true;
 }
 
@@ -103,7 +94,8 @@ struct GdArrayMetadataSnapshot {
     int32_t type = GD_ARRAY_TYPE_UNKNOWN;
     void *data = nullptr;
     size_t data_bytes = 0;
-    size_t serialized_data_bytes = 0;
+    bool owns_data = true;
+    bool owns_strings = true;
     std::vector<GdArrayStringSlotSnapshot> string_slots;
 };
 
@@ -225,7 +217,6 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
                 (size > 0 && data == nullptr) || (size == 0 && data != nullptr)) {
             return false;
         }
-        snapshot.serialized_data_bytes = snapshot.data_bytes;
         r_snapshot = std::move(snapshot);
         return true;
     }
@@ -242,6 +233,7 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
     }
     snapshot.data_bytes = slot_bytes;
     snapshot.string_slots.resize(static_cast<size_t>(size));
+    size_t native_bytes = static_cast<size_t>(size) * 8;
     char **strings = static_cast<char **>(data);
     for (int32_t i = 0; i < size; ++i) {
         char *str = strings[i];
@@ -258,16 +250,11 @@ static bool make_array_snapshot(GdArrayInfo *info, GdArrayMetadataSnapshot &r_sn
             snapshot.string_slots[static_cast<size_t>(i)].len = len;
         }
 
-        size_t encoded_length = 0;
-        if (!checked_add_size(sizeof(uint32_t), snapshot.string_slots[static_cast<size_t>(i)].len,
-                    encoded_length) ||
-                encoded_length > GDSPX_MAX_ARRAY_BYTES - GDSPX_ARRAY_HEADER_SIZE ||
-                snapshot.serialized_data_bytes >
-                        GDSPX_MAX_ARRAY_BYTES - GDSPX_ARRAY_HEADER_SIZE - encoded_length ||
-                !checked_add_size(snapshot.serialized_data_bytes, encoded_length,
-                        snapshot.serialized_data_bytes)) {
+        const size_t length = snapshot.string_slots[static_cast<size_t>(i)].len;
+        if (native_bytes > GDSPX_MAX_ARRAY_BYTES || length >= GDSPX_MAX_ARRAY_BYTES - native_bytes) {
             return false;
         }
+        native_bytes += length + 1;
     }
 
     r_snapshot = std::move(snapshot);
@@ -316,14 +303,14 @@ static bool array_header_matches_snapshot(const GdArrayMetadataSnapshot &snapsho
 
 static void free_array_snapshot(const GdArrayMetadataSnapshot &snapshot) {
     std::unordered_set<void *> freed_allocations;
-    if (snapshot.type == GD_ARRAY_TYPE_STRING) {
+    if (snapshot.owns_strings && snapshot.type == GD_ARRAY_TYPE_STRING) {
         for (const GdArrayStringSlotSnapshot &slot : snapshot.string_slots) {
             if (slot.ptr != nullptr && freed_allocations.insert(slot.ptr).second) {
                 free(slot.ptr);
             }
         }
     }
-    if (snapshot.data != nullptr && freed_allocations.insert(snapshot.data).second) {
+    if (snapshot.owns_data && snapshot.data != nullptr && freed_allocations.insert(snapshot.data).second) {
         free(snapshot.data);
     }
     if (snapshot.info != nullptr && freed_allocations.insert(snapshot.info).second) {
@@ -348,6 +335,8 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
         if (array_header_matches_snapshot(snapshot_it->second)) {
             GdArrayMetadataSnapshot current_snapshot;
             if (make_array_snapshot(info, current_snapshot)) {
+                current_snapshot.owns_data = snapshot_it->second.owns_data;
+                current_snapshot.owns_strings = snapshot_it->second.owns_strings;
                 snapshot_it->second = std::move(current_snapshot);
             }
         }
@@ -366,19 +355,6 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
     gdspxArraySnapshots.erase(snapshot_it);
     free_array_snapshot(snapshot);
     return true;
-}
-
-// Release an unbound array using only trusted metadata.
-static void dispose_unbound_array_info(GdArrayInfo *info) {
-    if (info == nullptr) {
-        return;
-    }
-    GdArrayMetadataSnapshot snapshot;
-    if (make_array_snapshot(info, snapshot)) {
-        free_array_snapshot(snapshot);
-    } else {
-        free(info);
-    }
 }
 
 } // namespace
@@ -423,6 +399,8 @@ extern "C" bool gdspx_bind_array_wrapper(GdArray *wrapper) {
     if (!make_array_snapshot(info, sealed_snapshot)) {
         return false;
     }
+    sealed_snapshot.owns_data = snapshot_it->second.owns_data;
+    sealed_snapshot.owns_strings = snapshot_it->second.owns_strings;
     snapshot_it->second = std::move(sealed_snapshot);
 
     gdspxArrayOwners[info] = wrapper;
@@ -547,65 +525,9 @@ static bool evict_oldest_unused_gdstring() {
     return true;
 }
 
-// Check if the machine is little-endian
-inline bool isLittleEndian() {
-    static const uint32_t test = 0x12345678;
-    return *reinterpret_cast<const uint8_t*>(&test) == 0x78;
-}
-
-// LittleEnd read functions
-uint64_t readUint64LE(const uint8_t* bytes) {
-    if (isLittleEndian()) {
-        uint64_t value;
-        memcpy(&value, bytes, sizeof(value));
-        return value;
-    }
-    return (uint64_t)bytes[0] |
-           ((uint64_t)bytes[1] << 8) |
-           ((uint64_t)bytes[2] << 16) |
-           ((uint64_t)bytes[3] << 24) |
-           ((uint64_t)bytes[4] << 32) |
-           ((uint64_t)bytes[5] << 40) |
-           ((uint64_t)bytes[6] << 48) |
-           ((uint64_t)bytes[7] << 56);
-}
-
-uint32_t readUint32LE(const uint8_t* bytes) {
-    if (isLittleEndian()) {
-        uint32_t value;
-        memcpy(&value, bytes, sizeof(value));
-        return value;
-    }
-    return (uint32_t)bytes[0] |
-           ((uint32_t)bytes[1] << 8) |
-           ((uint32_t)bytes[2] << 16) |
-           ((uint32_t)bytes[3] << 24);
-}
-
-void writeUint64LE(uint8_t* bytes, uint64_t value) {
-    if (isLittleEndian()) {
-        memcpy(bytes, &value, sizeof(value));
-        return;
-    }
-    bytes[0] = value & 0xFF;
-    bytes[1] = (value >> 8) & 0xFF;
-    bytes[2] = (value >> 16) & 0xFF;
-    bytes[3] = (value >> 24) & 0xFF;
-    bytes[4] = (value >> 32) & 0xFF;
-    bytes[5] = (value >> 40) & 0xFF;
-    bytes[6] = (value >> 48) & 0xFF;
-    bytes[7] = (value >> 56) & 0xFF;
-}
-
-void writeUint32LE(uint8_t* bytes, uint32_t value) {
-    if (isLittleEndian()) {
-        memcpy(bytes, &value, sizeof(value));
-        return;
-    }
-    bytes[0] = value & 0xFF;
-    bytes[1] = (value >> 8) & 0xFF;
-    bytes[2] = (value >> 16) & 0xFF;
-    bytes[3] = (value >> 24) & 0xFF;
+static uint32_t readUint32LE(const uint8_t *bytes) {
+    return uint32_t(bytes[0]) | (uint32_t(bytes[1]) << 8) |
+            (uint32_t(bytes[2]) << 16) | (uint32_t(bytes[3]) << 24);
 }
 
 static_assert(sizeof(bool) == 1, "Boolean size must be 1 byte for web array bridge");
@@ -614,6 +536,17 @@ static_assert(sizeof(GdObj) == sizeof(uint64_t), "GdObj must be 64-bit for web A
 static_assert(sizeof(GdFloat) == sizeof(float), "Web GdFloat ABI requires single precision");
 
 extern "C" {
+
+// Raw buffers shared with the JavaScript bridge.
+EMSCRIPTEN_KEEPALIVE
+void *cmalloc(int size) {
+    return malloc(size);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void cfree(void *ptr) {
+    free(ptr);
+}
 
 // other functions
 EMSCRIPTEN_KEEPALIVE
@@ -1104,434 +1037,100 @@ void gdspx_free_array(GdArray* p_gdstr) {
     arrayPool.release(p_gdstr);
 }
 
-GdArrayInfo* deserializeGdArray(uint8_t* bytes, int byteSize) {
-    if (bytes == nullptr || byteSize < static_cast<int>(GDSPX_ARRAY_HEADER_SIZE) ||
-            static_cast<size_t>(byteSize) > GDSPX_MAX_ARRAY_BYTES) {
+// Inputs borrow data for the synchronous call. Only the descriptor and the
+// native string pointer table belong to the wrapper.
+EMSCRIPTEN_KEEPALIVE
+GdArray *gdspx_borrow_array(uint8_t *bytes, int byte_size, int32_t count, int32_t type) {
+    if (count < 0 || count > GDSPX_MAX_ARRAY_ELEMENTS || byte_size < 0 ||
+            static_cast<size_t>(byte_size) > GDSPX_MAX_ARRAY_BYTES ||
+            (byte_size > 0 && bytes == nullptr)) {
         return nullptr;
     }
-
-    GdArrayInfo* info = (GdArrayInfo*)malloc(sizeof(GdArrayInfo));
-    if (info == nullptr) {
-        return nullptr;
-    }
-    info->data = nullptr;
-
-    // Header: [size:4][type:4].
-    const uint32_t encoded_size = readUint32LE(bytes);
-    if (encoded_size > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
-        free(info);
-        return nullptr;
-    }
-    info->size = static_cast<int32_t>(encoded_size);
-    info->type = (int32_t)readUint32LE(bytes + 4);
-
-    uint8_t* dataBytes = bytes + GDSPX_ARRAY_HEADER_SIZE;
-    const size_t dataSize = static_cast<size_t>(byteSize) - GDSPX_ARRAY_HEADER_SIZE;
-
     size_t element_size = 0;
-    if (array_element_size(info->type, element_size)) {
-        size_t required_bytes = 0;
-        if (!checked_array_bytes(info->size, element_size, required_bytes) || required_bytes != dataSize) {
-            free(info);
+    const bool strings = type == GD_ARRAY_TYPE_STRING;
+    if (strings) {
+        const size_t table_size = static_cast<size_t>(count) * 8;
+        if (table_size > static_cast<size_t>(byte_size)) {
             return nullptr;
         }
-        if (required_bytes == 0) {
-            return info;
-        }
-
-        info->data = malloc(required_bytes);
-        if (info->data == nullptr) {
-            free(info);
-            return nullptr;
-        }
-
-        if (info->type == GD_ARRAY_TYPE_BOOL) {
-            bool *data = static_cast<bool *>(info->data);
-            for (int32_t i = 0; i < info->size; i++) {
-                data[i] = dataBytes[i] != 0;
-            }
-        } else if (isLittleEndian()) {
-            memcpy(info->data, dataBytes, required_bytes);
-        } else if (info->type == GD_ARRAY_TYPE_INT64 || info->type == GD_ARRAY_TYPE_GDOBJ) {
-            int64_t *data = static_cast<int64_t *>(info->data);
-            for (int32_t i = 0; i < info->size; i++) {
-                data[i] = static_cast<int64_t>(readUint64LE(dataBytes + static_cast<size_t>(i) * sizeof(int64_t)));
-            }
-        } else if (info->type == GD_ARRAY_TYPE_FLOAT) {
-            float *data = static_cast<float *>(info->data);
-            for (int32_t i = 0; i < info->size; i++) {
-                const uint32_t bits = readUint32LE(dataBytes + static_cast<size_t>(i) * sizeof(float));
-                memcpy(&data[i], &bits, sizeof(float));
-            }
-        }
-        return info;
-    }
-
-    if (info->type != GD_ARRAY_TYPE_STRING) {
-        free(info);
-        return nullptr;
-    }
-
-    size_t string_slots = 0;
-    if (!checked_array_bytes(info->size, sizeof(char *), string_slots)) {
-        free(info);
-        return nullptr;
-    }
-    char **strings = nullptr;
-    if (string_slots > 0) {
-        strings = static_cast<char **>(calloc(static_cast<size_t>(info->size), sizeof(char *)));
-        if (strings == nullptr) {
-            free(info);
-            return nullptr;
-        }
-        info->data = strings;
-    }
-
-    size_t offset = 0;
-    for (int32_t i = 0; i < info->size; i++) {
-        if (dataSize - offset < sizeof(uint32_t)) {
-            dispose_unbound_array_info(info);
-            return nullptr;
-        }
-
-        const uint32_t strLen = readUint32LE(dataBytes + offset);
-        offset += sizeof(uint32_t);
-        if (static_cast<size_t>(strLen) > dataSize - offset) {
-            dispose_unbound_array_info(info);
-            return nullptr;
-        }
-
-        const size_t allocation_size = static_cast<size_t>(strLen) + 1;
-        if (allocation_size <= static_cast<size_t>(strLen)) {
-            dispose_unbound_array_info(info);
-            return nullptr;
-        }
-        strings[i] = static_cast<char *>(malloc(allocation_size));
-        if (strings[i] == nullptr) {
-            dispose_unbound_array_info(info);
-            return nullptr;
-        }
-        if (strLen > 0) {
-            memcpy(strings[i], dataBytes + offset, strLen);
-        }
-        strings[i][strLen] = '\0';
-        offset += static_cast<size_t>(strLen);
-    }
-
-    if (offset != dataSize) {
-        dispose_unbound_array_info(info);
-        return nullptr;
-    }
-
-    return info;
-}
-
-GdArrayInfo* deserializeGdArrayRaw(uint8_t* bytes, int byteSize, int32_t arraySize, int32_t arrayType) {
-    if (arraySize < 0 || byteSize < 0 || static_cast<size_t>(byteSize) > GDSPX_MAX_ARRAY_BYTES) {
-        return nullptr;
-    }
-    if (byteSize > 0 && bytes == nullptr) {
-        return nullptr;
-    }
-
-    GdArrayInfo* info = (GdArrayInfo*)malloc(sizeof(GdArrayInfo));
-    void* data = nullptr;
-    if (info == nullptr) {
-        return nullptr;
-    }
-
-    info->size = arraySize;
-    info->type = arrayType;
-    info->data = nullptr;
-
-    switch (arrayType) {
-        case GD_ARRAY_TYPE_INT64:
-        case GD_ARRAY_TYPE_GDOBJ: {
-            size_t requiredBytes = 0;
-            if (!checked_array_bytes(arraySize, sizeof(int64_t), requiredBytes) ||
-                    static_cast<size_t>(byteSize) != requiredBytes) {
-                goto cleanup;
-            }
-            if (arraySize == 0) {
-                return info;
-            }
-            data = malloc(requiredBytes);
-            if (data == nullptr) {
-                goto cleanup;
-            }
-            int64_t* int_data = (int64_t*)data;
-            if (isLittleEndian()) {
-                memcpy(data, bytes, requiredBytes);
-            } else {
-                for (int32_t i = 0; i < arraySize; i++) {
-                    int_data[i] = (int64_t)readUint64LE(bytes + static_cast<size_t>(i) * sizeof(int64_t));
-                }
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_FLOAT: {
-            size_t requiredBytes = 0;
-            if (!checked_array_bytes(arraySize, sizeof(float), requiredBytes) ||
-                    static_cast<size_t>(byteSize) != requiredBytes) {
-                goto cleanup;
-            }
-            if (arraySize == 0) {
-                return info;
-            }
-            data = malloc(requiredBytes);
-            if (data == nullptr) {
-                goto cleanup;
-            }
-            float* float_data = (float*)data;
-            if (isLittleEndian()) {
-                memcpy(data, bytes, requiredBytes);
-            } else {
-                for (int32_t i = 0; i < arraySize; i++) {
-                    uint32_t bits = readUint32LE(bytes + static_cast<size_t>(i) * sizeof(float));
-                    memcpy(&float_data[i], &bits, sizeof(float));
-                }
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_BOOL: {
-            size_t requiredBytes = 0;
-            if (!checked_array_bytes(arraySize, sizeof(bool), requiredBytes) ||
-                    static_cast<size_t>(byteSize) != requiredBytes) {
-                goto cleanup;
-            }
-            if (arraySize == 0) {
-                return info;
-            }
-            data = malloc(requiredBytes);
-            if (data == nullptr) {
-                goto cleanup;
-            }
-            bool* bool_data = (bool*)data;
-            for (int32_t i = 0; i < arraySize; i++) {
-                bool_data[i] = bytes[i] != 0;
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_BYTE: {
-            size_t requiredBytes = 0;
-            if (!checked_array_bytes(arraySize, sizeof(uint8_t), requiredBytes) ||
-                    static_cast<size_t>(byteSize) != requiredBytes) {
-                goto cleanup;
-            }
-            if (arraySize == 0) {
-                return info;
-            }
-            data = malloc(requiredBytes);
-            if (data == nullptr) {
-                goto cleanup;
-            }
-            memcpy(data, bytes, requiredBytes);
-            break;
-        }
-        default:
-            goto cleanup;
-    }
-
-    info->data = data;
-    return info;
-
-cleanup:
-    free(data);
-    free(info);
-    return nullptr;
-}
-
-uint8_t* serializeGdArray(const GdArrayMetadataSnapshot &snapshot, int* outSize) {
-    if (outSize == nullptr) {
-        return nullptr;
-    }
-    *outSize = 0;
-    if (snapshot.info == nullptr || snapshot.size < 0 ||
-            snapshot.size > GDSPX_MAX_ARRAY_ELEMENTS) {
-        return nullptr;
-    }
-    if (snapshot.size > 0 && snapshot.data == nullptr) {
-        return nullptr;
-    }
-
-    size_t dataSize = snapshot.serialized_data_bytes;
-    size_t element_size = 0;
-
-    if (array_element_size(snapshot.type, element_size)) {
-        size_t expected_data_size = 0;
-        if (!checked_array_bytes(snapshot.size, element_size, expected_data_size) ||
-                expected_data_size != snapshot.data_bytes || expected_data_size != dataSize) {
-            return nullptr;
-        }
-    } else if (snapshot.type == GD_ARRAY_TYPE_STRING) {
-        if (snapshot.string_slots.size() != static_cast<size_t>(snapshot.size)) {
-            return nullptr;
-        }
-        size_t expected_data_size = 0;
-        for (const GdArrayStringSlotSnapshot &slot : snapshot.string_slots) {
-            if (slot.ptr == nullptr || slot.len > std::numeric_limits<uint32_t>::max()) {
+        size_t offset = table_size;
+        for (int32_t i = 0; i < count; ++i) {
+            const uint32_t start = readUint32LE(bytes + static_cast<size_t>(i) * 8);
+            const uint32_t length = readUint32LE(bytes + static_cast<size_t>(i) * 8 + 4);
+            if (start != offset || length >= static_cast<size_t>(byte_size) - offset ||
+                    bytes[offset + length] != 0) {
                 return nullptr;
             }
-            size_t encoded_length = 0;
-            if (!checked_add_size(sizeof(uint32_t), slot.len, encoded_length) ||
-                    encoded_length > GDSPX_MAX_ARRAY_BYTES - GDSPX_ARRAY_HEADER_SIZE ||
-                    expected_data_size >
-                            GDSPX_MAX_ARRAY_BYTES - GDSPX_ARRAY_HEADER_SIZE - encoded_length ||
-                    !checked_add_size(expected_data_size, encoded_length, expected_data_size)) {
-                return nullptr;
-            }
+            offset += static_cast<size_t>(length) + 1;
         }
-        if (expected_data_size != dataSize) {
+        if (offset != static_cast<size_t>(byte_size)) {
             return nullptr;
         }
     } else {
-        return nullptr;
-    }
-
-    if (dataSize > GDSPX_MAX_ARRAY_BYTES - GDSPX_ARRAY_HEADER_SIZE) {
-        return nullptr;
-    }
-    size_t totalSize = 0;
-    if (!checked_add_size(GDSPX_ARRAY_HEADER_SIZE, dataSize, totalSize) ||
-            totalSize > static_cast<size_t>(std::numeric_limits<int>::max())) {
-        return nullptr;
-    }
-    uint8_t* result = (uint8_t*)malloc(totalSize);
-    if (result == nullptr) {
-        return nullptr;
-    }
-
-    // Header: [size:4][type:4].
-    writeUint32LE(result, static_cast<uint32_t>(snapshot.size));
-    writeUint32LE(result + 4, static_cast<uint32_t>(snapshot.type));
-
-    uint8_t* dataPtr = result + 8;
-    switch (snapshot.type) {
-        case GD_ARRAY_TYPE_INT64:
-        case GD_ARRAY_TYPE_GDOBJ: {
-            int64_t* data = static_cast<int64_t *>(snapshot.data);
-            if (isLittleEndian() && dataSize > 0) {
-                memcpy(dataPtr, data, dataSize);
-            } else {
-                for (int32_t i = 0; i < snapshot.size; i++) {
-                    writeUint64LE(dataPtr + static_cast<size_t>(i) * sizeof(int64_t), (uint64_t)data[i]);
+        size_t expected = 0;
+        if (!array_element_size(type, element_size) ||
+                !checked_array_bytes(count, element_size, expected) ||
+                expected != static_cast<size_t>(byte_size) ||
+                (count > 0 && reinterpret_cast<uintptr_t>(bytes) % element_size != 0)) {
+            return nullptr;
+        }
+        if (type == GD_ARRAY_TYPE_BOOL) {
+            for (int32_t i = 0; i < count; ++i) {
+                if (bytes[i] > 1) {
+                    return nullptr;
                 }
             }
-            break;
-        }
-        case GD_ARRAY_TYPE_FLOAT: {
-            float* data = static_cast<float *>(snapshot.data);
-            if (isLittleEndian() && dataSize > 0) {
-                memcpy(dataPtr, data, dataSize);
-            } else {
-                for (int32_t i = 0; i < snapshot.size; i++) {
-                    uint32_t bits;
-                    memcpy(&bits, &data[i], sizeof(bits));
-                    writeUint32LE(dataPtr + static_cast<size_t>(i) * sizeof(float), bits);
-                }
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_BOOL: {
-            bool* data = static_cast<bool *>(snapshot.data);
-            for (int32_t i = 0; i < snapshot.size; i++) {
-                dataPtr[i] = data[i] ? 1 : 0;
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_BYTE: {
-            if (dataSize > 0) {
-                memcpy(dataPtr, snapshot.data, dataSize);
-            }
-            break;
-        }
-        case GD_ARRAY_TYPE_STRING: {
-            size_t offset = 0;
-            for (const GdArrayStringSlotSnapshot &slot : snapshot.string_slots) {
-                writeUint32LE(dataPtr + offset, static_cast<uint32_t>(slot.len));
-                offset += sizeof(uint32_t);
-                if (slot.len > 0) {
-                    memcpy(dataPtr + offset, slot.ptr, slot.len);
-                }
-                offset += slot.len;
-            }
-            break;
         }
     }
-
-    *outSize = static_cast<int>(totalSize);
-    return result;
-}
-
-EMSCRIPTEN_KEEPALIVE
-uint8_t* gdspx_to_js_array(GdArray* p_gdstr, int* outSize) {
-    if (outSize != nullptr) {
-        *outSize = 0;
-    }
-    if (p_gdstr == nullptr || !arrayPool.is_active(p_gdstr)) {
-        return nullptr;
-    }
-    auto binding_it = gdspxArrayBindings.find(p_gdstr);
-    if (binding_it == gdspxArrayBindings.end() || *p_gdstr != binding_it->second) {
-        return nullptr;
-    }
-    auto snapshot_it = gdspxArraySnapshots.find(binding_it->second);
-    if (snapshot_it == gdspxArraySnapshots.end() ||
-            !array_snapshot_matches_live(snapshot_it->second)) {
-        return nullptr;
-    }
-    return serializeGdArray(snapshot_it->second, outSize);
-}
-EMSCRIPTEN_KEEPALIVE
-GdArray* gdspx_to_gd_array(uint8_t* bytes, int byteSize) {
-    GdArrayInfo* info = deserializeGdArray(bytes, byteSize);
+    GdArrayInfo *info = static_cast<GdArrayInfo *>(malloc(sizeof(GdArrayInfo)));
     if (info == nullptr) {
         return nullptr;
     }
-    if (!gdspx_register_array_info(info)) {
-        dispose_unbound_array_info(info);
+    info->size = count;
+    info->type = type;
+    info->data = count > 0 ? bytes : nullptr;
+    if (strings && count > 0) {
+        char **slots = static_cast<char **>(malloc(static_cast<size_t>(count) * sizeof(char *)));
+        if (slots == nullptr) {
+            free(info);
+            return nullptr;
+        }
+        for (int32_t i = 0; i < count; ++i) {
+            slots[i] = reinterpret_cast<char *>(bytes + readUint32LE(bytes + static_cast<size_t>(i) * 8));
+        }
+        info->data = slots;
+    }
+    GdArrayMetadataSnapshot snapshot;
+    if (!make_array_snapshot(info, snapshot)) {
+        if (strings) {
+            free(info->data);
+        }
+        free(info);
         return nullptr;
     }
+    snapshot.owns_data = strings;
+    snapshot.owns_strings = false;
+    gdspxArraySnapshots.emplace(info, std::move(snapshot));
 
-    GdArray* p_gdstr = gdspx_alloc_array();
-    if (p_gdstr == nullptr) {
+    GdArray *wrapper = gdspx_alloc_array();
+    if (wrapper == nullptr) {
         gdspx_release_array_info(info);
         return nullptr;
     }
-    *p_gdstr = info;
-    if (!gdspx_bind_array_wrapper(p_gdstr)) {
-        *p_gdstr = nullptr;
+    *wrapper = info;
+    if (!gdspx_bind_array_wrapper(wrapper)) {
+        *wrapper = nullptr;
         gdspx_release_array_info(info);
-        arrayPool.release(p_gdstr);
+        arrayPool.release(wrapper);
         return nullptr;
     }
-    return p_gdstr;
+    return wrapper;
 }
 
+// The returned view remains valid until the wrapper is released.
 EMSCRIPTEN_KEEPALIVE
-GdArray* gdspx_to_gd_array_raw(uint8_t* bytes, int byteSize, int32_t arraySize, int32_t arrayType) {
-    GdArrayInfo* info = deserializeGdArrayRaw(bytes, byteSize, arraySize, arrayType);
-    if (info == nullptr) {
-        return nullptr;
-    }
-    if (!gdspx_register_array_info(info)) {
-        dispose_unbound_array_info(info);
-        return nullptr;
-    }
-
-    GdArray* p_gdstr = gdspx_alloc_array();
-    if (p_gdstr == nullptr) {
-        gdspx_release_array_info(info);
-        return nullptr;
-    }
-    *p_gdstr = info;
-    if (!gdspx_bind_array_wrapper(p_gdstr)) {
-        *p_gdstr = nullptr;
-        gdspx_release_array_info(info);
-        arrayPool.release(p_gdstr);
-        return nullptr;
-    }
-    return p_gdstr;
+const GdArrayInfo *gdspx_get_array_info(GdArray *wrapper) {
+    return gdspx_validate_array_wrapper(wrapper) ? *wrapper : nullptr;
 }
 
 }// extern "C"

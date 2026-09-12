@@ -23,21 +23,21 @@ import (
 )
 
 func (c *GenerationContext) ShouldSkipHighLevelArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
-	return c.IsNativeArrayLenArg(function, arg)
+	return c.IsArrayLengthArgument(function, arg)
 }
 
 func (c *GenerationContext) EffectiveGoArgumentName(function *clang.TypedefFunction, arg clang.Argument) string {
-	if c.IsNativeArrayDataArg(function, arg) {
-		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
-		return spec.BaseArgName
+	if c.IsArrayBufferArgument(function, arg) {
+		spec, _ := c.ArrayBridge(function.Name)
+		return spec.ArgName
 	}
 	return arg.Name
 }
 
 func (c *GenerationContext) EffectiveGoArgumentType(function *clang.TypedefFunction, arg clang.Argument) string {
-	if c.IsNativeArrayDataArg(function, arg) {
-		spec, _ := c.GetNativeArrayBridgeSpec(function.Name)
-		return spec.DataArgGoType
+	if c.IsArrayBufferArgument(function, arg) {
+		spec, _ := c.ArrayBridge(function.Name)
+		return spec.CallerBuffer().GoType()
 	}
 	return c.MustGoTypeForCType(MustPrimitiveTypeName(arg, function.Name), function.Name)
 }

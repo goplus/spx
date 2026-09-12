@@ -55,7 +55,7 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 
 	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, metadata)}
-	require.NoError(t, generation.GenerateManagerWrapperGoFile(projectPath))
+	require.NoError(t, generation.writeManager(projectPath))
 	generatedPath := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
 	generated, err := os.ReadFile(generatedPath)
 	require.NoError(t, err)

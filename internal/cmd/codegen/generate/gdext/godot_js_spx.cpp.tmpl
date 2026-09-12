@@ -48,24 +48,15 @@
 {{- end }}
 
 extern "C" {
-// memory allocator for wrap codes
-EMSCRIPTEN_KEEPALIVE
-void* cmalloc(int size) {
-	auto ptr = malloc(size);
-	return ptr;
-}
-EMSCRIPTEN_KEEPALIVE
-void cfree(void* ptr) {
-	free(ptr);
-}
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
-{{- if not (hasArrayTransformBridgeSpec $f) }}
-{{- if hasNativeArrayBridgeSpec $f }}
-	{{- $spec := getNativeArrayBridgeSpec $f }}
+{{- $spec := arrayBridge $f.Name }}
+{{- if not (and $spec $spec.ReturnArray) }}
+{{- if $spec }}
+{{- $buffer := $spec.CallerBuffer }}
 EMSCRIPTEN_KEEPALIVE
-void gd{{ loadProcAddressName $f.Name }}({{ cDecl $spec.RawDataCType $spec.RawDataArgName }}, {{ cDecl $spec.RawLenCType $spec.RawLenArgName }}) {
-	{{ getManagerName $f.Name}}Mgr->{{ $spec.RawMethodName }}({{ $spec.RawDataArgName }}, {{ $spec.RawLenArgName }});
+void gd{{ loadProcAddressName $f.Name }}({{ cDecl $buffer.Data.CType $buffer.Data.Name }}, {{ cDecl $buffer.Length.CType $buffer.Length.Name }}) {
+	{{ getManagerName $f.Name}}Mgr->{{ $spec.MethodName }}({{ $buffer.Data.Name }}, {{ $buffer.Length.Name }});
 }
 {{- else }}
 EMSCRIPTEN_KEEPALIVE
@@ -143,7 +134,8 @@ void gd{{ loadProcAddressName $f.Name }}(
 {{- end -}}
 {{- end -}}
 	{{ end }}
-{{- range $spec := listArrayTransformBridgeSpecs }}
+{{- range $spec := listArrayBridges }}
+{{- if $spec.ReturnArray }}
 EMSCRIPTEN_KEEPALIVE
 void gd{{ loadProcAddressName $spec.FunctionName }}(
 	{{- range $i, $param := $spec.Params -}}
@@ -157,6 +149,7 @@ void gd{{ loadProcAddressName $spec.FunctionName }}(
 		{{- end -}}
 	);
 }
+{{- end }}
 {{- end }}
 
 }

@@ -121,6 +121,8 @@ public:
 	SPX_API GdBool has_file(GdString p_path);
 	SPX_API GdString list_directories(GdString p_path);
 	SPX_API void reload_texture(GdString path);
+	// Web strings are JS values and need no explicit release.
+	SPX_BINDING(web=noop)
 	SPX_API void free_str(GdString str);
 	// Atomically applies a complete project font configuration. Returns an
 	// allocated empty string on success, or an allocated diagnostic on failure.

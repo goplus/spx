@@ -25,23 +25,31 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
+type WebBindingMode string
+
+const (
+	WebBindingDefault     WebBindingMode = ""
+	WebBindingNoop        WebBindingMode = "noop"
+	WebBindingReuseResult WebBindingMode = "reuse_result"
+)
+
 // GenerationMetadata is collected from headers before binding templates run.
 type GenerationMetadata struct {
-	ManagerNames          []string
-	NativeArrayBridges    map[string]NativeArrayBridgeSpec
-	ArrayTransformBridges map[string]ArrayTransformBridgeSpec
+	ManagerNames []string
+	ArrayBridges map[string]ArrayBridge
+	WebBindings  map[string]WebBindingMode
 }
 
 // GenerationContext snapshots metadata and manager membership for one AST.
 // Rendering only reads this context; independent outputs can share it.
 type GenerationContext struct {
-	ast                   clang.CHeaderFileAST
-	managerSet            map[string]bool
-	managers              []string
-	managerNames          clang.ManagerNames
-	cppType2Go            map[string]string
-	nativeArrayBridges    map[string]NativeArrayBridgeSpec
-	arrayTransformBridges map[string]ArrayTransformBridgeSpec
+	ast          clang.CHeaderFileAST
+	managerSet   map[string]bool
+	managers     []string
+	managerNames clang.ManagerNames
+	cppType2Go   map[string]string
+	arrayBridges map[string]ArrayBridge
+	webBindings  map[string]WebBindingMode
 }
 
 type ManagerData struct {
@@ -52,11 +60,11 @@ type ManagerData struct {
 
 func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
 	c := &GenerationContext{
-		ast:                   ast,
-		managerSet:            make(map[string]bool),
-		managerNames:          clang.NewManagerNames(metadata.ManagerNames),
-		nativeArrayBridges:    make(map[string]NativeArrayBridgeSpec),
-		arrayTransformBridges: make(map[string]ArrayTransformBridgeSpec),
+		ast:          ast,
+		managerSet:   make(map[string]bool),
+		managerNames: clang.NewManagerNames(metadata.ManagerNames),
+		arrayBridges: make(map[string]ArrayBridge),
+		webBindings:  maps.Clone(metadata.WebBindings),
 		cppType2Go: map[string]string{
 			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
 			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
@@ -64,10 +72,8 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 			"GdColor": "Color", "GdArray": "Array",
 		},
 	}
-	maps.Copy(c.nativeArrayBridges, metadata.NativeArrayBridges)
-	for name, spec := range metadata.ArrayTransformBridges {
-		spec.Params = slices.Clone(spec.Params)
-		c.arrayTransformBridges[name] = spec
+	for name, spec := range metadata.ArrayBridges {
+		c.arrayBridges[name] = spec.Clone()
 	}
 	c.managers = c.GetManagers(ast)
 	for _, name := range c.managers {
@@ -91,43 +97,22 @@ func (c *GenerationContext) IsManagerMethod(function *clang.TypedefFunction) boo
 	return c.managerSet[c.GetManagerName(function.Name)]
 }
 
-func (c *GenerationContext) HasArrayTransformBridgeSpec(function *clang.TypedefFunction) bool {
-	if function == nil {
-		return false
+func (c *GenerationContext) WebBinding(functionName string) WebBindingMode {
+	return c.webBindings[functionName]
+}
+
+func (c *GenerationContext) ArrayBridge(functionName string) (ArrayBridge, bool) {
+	spec, ok := c.arrayBridges[functionName]
+	return spec.Clone(), ok
+}
+
+func (c *GenerationContext) ListArrayBridges() []ArrayBridge {
+	specs := make([]ArrayBridge, 0, len(c.arrayBridges))
+	for _, spec := range c.arrayBridges {
+		specs = append(specs, spec.Clone())
 	}
-	_, ok := c.arrayTransformBridges[function.Name]
-	return ok
-}
-
-func (c *GenerationContext) GetNativeArrayBridgeSpec(functionName string) (NativeArrayBridgeSpec, bool) {
-	spec, ok := c.nativeArrayBridges[functionName]
-	return spec, ok
-}
-
-func (c *GenerationContext) GetArrayTransformBridgeSpec(functionName string) (ArrayTransformBridgeSpec, bool) {
-	spec, ok := c.arrayTransformBridges[functionName]
-	spec.Params = slices.Clone(spec.Params)
-	return spec, ok
-}
-
-func (c *GenerationContext) ListArrayTransformBridgeSpecs() []ArrayTransformBridgeSpec {
-	specs := make([]ArrayTransformBridgeSpec, 0, len(c.arrayTransformBridges))
-	for _, spec := range c.arrayTransformBridges {
-		spec.Params = slices.Clone(spec.Params)
-		specs = append(specs, spec)
-	}
-	sort.Slice(specs, func(i, j int) bool {
-		return specs[i].FunctionName < specs[j].FunctionName
-	})
+	sort.Slice(specs, func(i, j int) bool { return specs[i].FunctionName < specs[j].FunctionName })
 	return specs
-}
-
-func (c *GenerationContext) HasNativeArrayBridgeSpec(function *clang.TypedefFunction) bool {
-	if function == nil {
-		return false
-	}
-	_, ok := c.GetNativeArrayBridgeSpec(function.Name)
-	return ok
 }
 
 func (c *GenerationContext) GetManagers(ast clang.CHeaderFileAST) []string {

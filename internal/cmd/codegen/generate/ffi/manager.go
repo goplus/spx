@@ -27,7 +27,7 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
+func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
@@ -50,10 +50,10 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 		sb.WriteString(prefixTab)
 		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		argName := "arg" + strconv.Itoa(i)
-		if g.IsNativeArrayDataArg(function, arg) {
-			spec, _ := g.GetNativeArrayBridgeSpec(function.Name)
+		if g.IsArrayBufferArgument(function, arg) {
+			spec, _ := g.ArrayBridge(function.Name)
 			goArgName := g.EffectiveGoArgumentName(function, arg)
-			fmt.Fprintf(&sb, "var %s %s\n", argName, spec.DataArgPtrType)
+			fmt.Fprintf(&sb, "var %s %s\n", argName, spec.CallerBuffer().GoPointerType())
 			sb.WriteString(prefixTab)
 			fmt.Fprintf(&sb, "if len(%s) > 0 {\n", goArgName)
 			fmt.Fprintf(&sb, "%s\t%s = &%s[0]\n", prefixTab, argName, goArgName)
@@ -61,7 +61,7 @@ func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
 			sb.WriteString("}\n")
 			lenArgName := "arg" + strconv.Itoa(i+1)
 			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "%s := %s", lenArgName, g.NativeArrayLenExpr(function, goArgName))
+			fmt.Fprintf(&sb, "%s := %s", lenArgName, common.ArrayLengthExpr(goArgName))
 			params = append(params, argName, lenArgName)
 			sb.WriteString("\n")
 			continue

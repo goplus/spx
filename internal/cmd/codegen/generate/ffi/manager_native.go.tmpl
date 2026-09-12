@@ -59,8 +59,8 @@ func createMgrs() []IManager {
 // call gdextension interface functions
 {{range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{ if isManagerMethod $f }}
-func {{ getManagerFuncName $f }} {
-{{ getManagerFuncBody $f }}
+func {{ managerSignature $f }} {
+{{ managerBody $f }}
 }
 {{- end -}}
 {{- end -}} 
