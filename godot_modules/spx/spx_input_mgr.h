@@ -51,6 +51,7 @@ protected:
 	HashMap<StringName, GdInt> action_ids;
 
 public:
+	SPX_BINDING(web=reuse_result)
 	SPX_API GdVec2 get_global_mouse_pos();
 	SPX_API GdBool get_key(GdInt key);
 	SPX_API GdBool get_mouse_state(GdInt mouse_id);
@@ -64,6 +65,7 @@ public:
 	SPX_API GdBool is_action_pressed_id(GdInt action_id);
 	SPX_API GdBool is_action_just_pressed_id(GdInt action_id);
 	SPX_API GdBool is_action_just_released_id(GdInt action_id);
+	SPX_BINDING(output_count=3)
 	SPX_API void write_snapshot(float *out, int len);
 
 private:

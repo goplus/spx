@@ -159,7 +159,7 @@ graph TD
 
 ### 4.2 Header 收集与 ABI 入口生成
 
-`internal/cmd/codegen/generate/gdext/header_generator.go`
+`internal/cmd/codegen/generate/gdext/header.go`
 
 这是整个系统最关键的入口之一，负责：
 
@@ -223,26 +223,7 @@ public:
 };
 ```
 
-### 5.2 `_raw` 方法的特殊规则
-
-以 `_raw` 结尾的方法不会直接暴露到共享 ABI 中，而是作为 fast path 辅助方法使用。
-
-例如，生成器会把下面这种“高层接口 + `_raw` fast path”配对识别为一组桥接规则：
-
-```cpp
-SPX_API void some_batch_method(GdArray buffer);
-SPX_API void some_batch_method_raw(const float *buffer_data, int len);
-```
-
-这里的 `some_batch_method_raw` 会被识别为高性能桥接实现，但不会直接生成一个对外可见的 `...Raw` 共享接口 typedef。
-
-从 `header_generator_test.go` 可以看出，这套逻辑主要用来支持：
-
-- `GdArray` 到原生指针数组的快速桥接
-- Web 侧 WASM fast array 通道
-- Native / Web 共用的高层 API 名称
-
-### 5.3 直接原生数组桥接
+### 5.2 直接原生数组桥接
 
 即使没有高层 `GdArray` 版本，只要签名是这种模式：
 
@@ -250,7 +231,18 @@ SPX_API void some_batch_method_raw(const float *buffer_data, int len);
 SPX_API void batch_update_transforms(const float *buffer_data, int len);
 ```
 
-生成器也会把它识别为 native array bridge，并记录为 `NativeArrayBridgeSpec`。
+生成器会将它记录为统一的 `ArrayBridge`。`const` 指针对应 `Input`，可写指针对应 `Output`；两者都用 `ArrayBuffer` 描述元素类型、数据指针和长度参数。
+
+只有输入或原地写入输出时，`ReturnArray` 为 `false`，缓冲区由调用者提供。例如：
+
+```cpp
+SPX_BINDING(output_count=3)
+SPX_API void write_snapshot(float *out, int len);
+```
+
+这里 `Output.Count` 为 3。该声明提供固定输出长度信息，高层仍是 `WriteSnapshot(out []float32)`，保持原地写入。
+
+Web 还会生成 `GdspxFuncs['arrayOutputs']['gdspx_input_write_snapshot']()` 读取入口，按声明的类型和数量分配原生数组并返回。新增固定输出方法只需添加声明，无需手写 JS 包装；底层内存分配共用 `ReadArrayOutput`。
 
 目前内建支持的原始数组类型主要包括：
 
@@ -258,22 +250,50 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 - `int64_t *`
 - `uint8_t *`
 
-`GdObj *` 相关 fast path 目前出现在 array-transform bridge 路径里，不属于这里讨论的 direct `NativeArrayBridgeSpec` 检测范围。
+`GdObj *` 用于下面的数组转换，当前不映射为直接传入的 Go 切片。
 
-### 5.4 数组转换桥接
+数组的 ABI 编号、描述符标记、元素名称、固定元素字节数及 Go/C 类型映射统一定义在 `generate/common/arrays.go`。C 头文件的枚举、Web Go 的 `arrays.gen.go` 和 `gdspx.util.js` 中标记的数组 ABI 区域均由这份定义生成，包括 Go/JS 的元素大小查询函数，无需分别手写。扩展类型时仍须确认原生端与 Web 端支持对应的元素布局。
 
-还有一类特殊情况：底层接口是“输入数组 + 输出数组缓冲区”，高层希望暴露成“输入 `GdArray`，返回 `GdArray`”。
+### 5.3 数组转换桥接
 
-当前这类规则通过 `arrayTransformOverrides` 维护，例如：
+当底层接收输入、输出两个缓冲区，高层需要返回结果数组时，在声明中标注：
 
-- `batch_retrieve_positions`
+```cpp
+SPX_BINDING(array_arg=objs, elements_per_input=2)
+SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
+```
 
-这表示：
+它同样使用 `ArrayBridge`：`Input` 是对象数组，`Output` 是浮点数组，`ReturnArray` 为 `true`，`Output.ElementsPerInput` 为 2。桥接层按输入数量准备输出缓冲区，高层接口保持 `GdArray -> GdArray`。
 
-- 原始实现走裸数组 fast path
-- 对外 API 仍然可以表现为 `GdArray -> GdArray`
+三种调用形式共享 `ArrayBridges` 注册表、缓冲区解析和类型映射。生成器按缓冲区方向及结果分配规则生成调用，新增同类接口无需添加方法名特判。
 
-如果以后新增类似接口，只改模板通常不够，还要补这个 override。
+### 5.4 统一绑定注解
+
+`SPX_BINDING(...)` 在 C++ 中展开为空，只为生成器提供元数据。它可与方法声明同一行，或单独放在方法的上一行；方法仍须标记 `SPX_API` 或 `SPX_BIND`。
+
+| 参数 | 含义 |
+| --- | --- |
+| `array_arg`、`elements_per_input` | 成对声明高层数组参数名及每个输入元素对应的输出数量 |
+| `output_count` | 声明固定输出数量，保留原地写入接口 |
+| `web=noop` | Web 绑定为空操作，要求方法返回 `void` |
+| `web=reuse_result` | Web 按实例、方法复用结构化返回对象；调用者应立即消费或复制结果 |
+
+例如：
+
+```cpp
+SPX_BINDING(web=noop)
+SPX_API void free_str(GdString str);
+
+SPX_BINDING(web=reuse_result)
+SPX_API GdVec2 get_global_mouse_pos();
+
+```
+
+Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_cache.go` 中定义 `Cached<Manager><Method>` 函数，参数与接口一致，并在末尾接收 `func() T` 回退闭包。例如 `CachedInputGetKey(key int64, fallback func() bool) bool` 对应 Input 的 `get_key`。函数访问共享的运行时缓存，无需创建缓存实例。
+
+生成器扫描这些函数，自动生成参数转换、FFI 回退调用及缓存接入。缓存类别和布尔值适配留在 Go 实现中，C++ 头文件无需缓存注解。缺少对应接口或回退签名不合法时生成失败。
+
+参数顺序不限，数量须为正的 int32。未知参数、重复参数、缺失配对参数以及与方法签名不兼容的组合会导致生成失败。固定输出长度和数组变换互斥，Web 策略不能覆盖已声明的数组桥接。
 
 ## 6. 新增一个接口时怎么改
 
@@ -281,14 +301,12 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 
 1. 在 `$(SPX_MODULE_SRC)/spx*_mgr.h` 中新增方法声明。
 2. 确保它位于 `public:` 区域，并带上 `SPX_API` 或 `SPX_BIND`。
-3. 如果需要高性能数组桥接：
-   - 加一组 `_raw` 方法
-   - 或直接使用可识别的指针 + 长度签名
-4. 如果是“输入数组，返回数组”的特殊 fast path，检查是否需要更新 `arrayTransformOverrides`。
+3. 如果需要数组桥接，使用可识别的指针 + 长度签名。
+4. 如果需要返回数组、固定输出长度或 Web 绑定策略，添加相应的 `SPX_BINDING(...)` 参数。
 5. 运行 `make generate-bindings`。
 6. 检查生成结果是否覆盖到了预期文件。
 7. 补相应测试，尤其是：
-   - `internal/cmd/codegen/generate/gdext/header_generator_test.go`
+   - `internal/cmd/codegen/generate/gdext/header_test.go`
    - `internal/cmd/codegen/generate/webffi/generate_test.go`
 
 ## 7. 调试建议
@@ -326,7 +344,7 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 优先看：
 
 - `internal/cmd/codegen/generate/webffi/generate_test.go`
-- `internal/cmd/codegen/generate/gdext/header_generator_test.go`
+- `internal/cmd/codegen/generate/gdext/header_test.go`
 
 这两组测试已经覆盖了：
 
@@ -353,7 +371,7 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 - Godot manager 头文件
 - `internal/cmd/codegen/generate/**` 下的模板
 - `internal/cmd/codegen/generate/common/funcs.go`
-- `internal/cmd/codegen/generate/gdext/header_generator.go`
+- `internal/cmd/codegen/generate/gdext/header.go`
 
 ## 9. 小结
 
@@ -366,5 +384,5 @@ SPX 当前的绑定生成系统，本质上是：
 维护这套系统时，最重要的经验有三条：
 
 - 先改源头 header 或模板，不要手改生成产物
-- 新增数组 fast path 时，别忘了 `_raw` / override 规则
+- 新增数组桥接时，声明指针 + 长度签名及必要的 `SPX_BINDING` 参数
 - 出问题先看 `_temp_output.h` 和 `_debug_parsed_ast.json`

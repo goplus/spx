@@ -45,9 +45,8 @@ let gdspxNewString = null;
 let gdspxNewVec2 = null;
 let gdspxNewVec3 = null;
 let gdspxNewVec4 = null;
-let gdspxToGdArray = null;
-let gdspxToGdArrayRaw = null;
-let gdspxToJsArray = null;
+let gdspxBorrowArray = null;
+let gdspxGetArrayInfo = null;
 
 function BindGdspxFunctionPointers(module) {
     gdspxMalloc = module['_cmalloc'];
@@ -87,9 +86,8 @@ function BindGdspxFunctionPointers(module) {
     gdspxNewVec2 = module['_gdspx_new_vec2'];
     gdspxNewVec3 = module['_gdspx_new_vec3'];
     gdspxNewVec4 = module['_gdspx_new_vec4'];
-    gdspxToGdArray = module['_gdspx_to_gd_array'];
-    gdspxToGdArrayRaw = module['_gdspx_to_gd_array_raw'];
-    gdspxToJsArray = module['_gdspx_to_js_array'];
+    gdspxBorrowArray = module['_gdspx_borrow_array'];
+    gdspxGetArrayInfo = module['_gdspx_get_array_info'];
 }
 
 function EnsureGdspxFunctionPointers() {
@@ -159,13 +157,14 @@ function PrintGdObject(ptr) {
     PrintGdObj(ptr);
 }
 
+// JS values use (low, high); native int and object constructors take (high, low).
 function ToGdObj(value) {
     EnsureGdspxFunctionPointers();
     return gdspxNewObj(value['high'], value['low']);
 }
 
-function ToJsObj(ptr) {
-    return ToJsInt(ptr);
+function ToJsObj(ptr, result) {
+    return ToJsInt(ptr, result);
 }
 
 function ToJsBigObj(ptr) {
@@ -191,14 +190,14 @@ function ToGdInt(value) {
     return gdspxNewInt(value['high'], value['low']);
 }
 
-function ToJsInt(ptr) {
-    const dataView = GetHeapDataView();
-    const low = dataView.getUint32(ptr, true);  // low word
-    const high = dataView.getUint32(ptr + 4, true);  // high word
-    return {
-        'low': low,
-        'high': high
-    };
+// Wasm scalar pointers are word-aligned. Supplying a result reuses its storage;
+// callers must consume or copy it before the next write to that result.
+function ToJsInt(ptr, result = {}) {
+    const words = Module['HEAPU32'];
+    const index = ptr >>> 2;
+    result['low'] = words[index];
+    result['high'] = words[index + 1];
+    return result;
 }
 
 function ToJsBigInt(ptr) {
@@ -325,13 +324,12 @@ function ToGdVec2(vec) {
     return gdspxNewVec2(vec['x'], vec['y']);
 }
 
-function ToJsVec2(ptr) {
+function ToJsVec2(ptr, out = {}) {
     const HEAPF32 = Module['HEAPF32'];
     const floatIndex = ptr / 4;
-    return {
-        'x': HEAPF32[floatIndex],
-        'y': HEAPF32[floatIndex + 1]
-    };
+    out['x'] = HEAPF32[floatIndex];
+    out['y'] = HEAPF32[floatIndex + 1];
+    return out;
 }
 
 function AllocGdVec2() {
@@ -353,14 +351,13 @@ function ToGdVec3(vec) {
     return gdspxNewVec3(vec['x'], vec['y'], vec['z']);
 }
 
-function ToJsVec3(ptr) {
+function ToJsVec3(ptr, out = {}) {
     const HEAPF32 = Module['HEAPF32'];
     const floatIndex = ptr / 4;
-    return {
-        'x': HEAPF32[floatIndex],
-        'y': HEAPF32[floatIndex + 1],
-        'z': HEAPF32[floatIndex + 2]
-    };
+    out['x'] = HEAPF32[floatIndex];
+    out['y'] = HEAPF32[floatIndex + 1];
+    out['z'] = HEAPF32[floatIndex + 2];
+    return out;
 }
 
 function AllocGdVec3() {
@@ -383,15 +380,14 @@ function ToGdVec4(vec) {
     return gdspxNewVec4(vec['x'], vec['y'], vec['z'], vec['w']);
 }
 
-function ToJsVec4(ptr) {
+function ToJsVec4(ptr, out = {}) {
     const HEAPF32 = Module['HEAPF32'];
     const floatIndex = ptr / 4;
-    return {
-        'x': HEAPF32[floatIndex],
-        'y': HEAPF32[floatIndex + 1],
-        'z': HEAPF32[floatIndex + 2],
-        'w': HEAPF32[floatIndex + 3]
-    };
+    out['x'] = HEAPF32[floatIndex];
+    out['y'] = HEAPF32[floatIndex + 1];
+    out['z'] = HEAPF32[floatIndex + 2];
+    out['w'] = HEAPF32[floatIndex + 3];
+    return out;
 }
 
 function AllocGdVec4() {
@@ -414,15 +410,14 @@ function ToGdColor(color) {
     return gdspxNewColor(color['r'], color['g'], color['b'], color['a']);
 }
 
-function ToJsColor(ptr) {
+function ToJsColor(ptr, out = {}) {
     const HEAPF32 = Module['HEAPF32'];
     const floatIndex = ptr / 4;
-    return {
-        'r': HEAPF32[floatIndex],
-        'g': HEAPF32[floatIndex + 1],
-        'b': HEAPF32[floatIndex + 2],
-        'a': HEAPF32[floatIndex + 3]
-    };
+    out['r'] = HEAPF32[floatIndex];
+    out['g'] = HEAPF32[floatIndex + 1];
+    out['b'] = HEAPF32[floatIndex + 2];
+    out['a'] = HEAPF32[floatIndex + 3];
+    return out;
 }
 
 function AllocGdColor() {
@@ -445,19 +440,14 @@ function ToGdRect2(rect) {
     return gdspxNewRect2(rect['position']['x'], rect['position']['y'], rect['size']['x'], rect['size']['y']);
 }
 
-function ToJsRect2(ptr) {
+function ToJsRect2(ptr, out = { 'position': {}, 'size': {} }) {
     const HEAPF32 = Module['HEAPF32'];
     const floatIndex = ptr / 4;
-    return {
-        'position': {
-            'x': HEAPF32[floatIndex],
-            'y': HEAPF32[floatIndex + 1]
-        },
-        'size': {
-            'x': HEAPF32[floatIndex + 2],
-            'y': HEAPF32[floatIndex + 3]
-        }
-    };
+    out['position']['x'] = HEAPF32[floatIndex];
+    out['position']['y'] = HEAPF32[floatIndex + 1];
+    out['size']['x'] = HEAPF32[floatIndex + 2];
+    out['size']['y'] = HEAPF32[floatIndex + 3];
+    return out;
 }
 
 function AllocGdRect2() {
@@ -476,36 +466,51 @@ function FreeGdRect2(ptr) {
 }
 
 // -----------------------------------------------------------------------------
-// Fast Arrays and Shared Wasm Transfer Buffers
+// Native Arrays and Wasm Allocation Arenas
 // -----------------------------------------------------------------------------
 
+// BEGIN GENERATED ARRAY TYPES
+// Code generated by spx codegen; DO NOT EDIT.
+const GDSPX_ARRAY_TAG = "__gdspx_array";
+const GDSPX_ARRAY_TYPE_UNKNOWN = 0;
 const GDSPX_ARRAY_TYPE_INT64 = 1;
 const GDSPX_ARRAY_TYPE_FLOAT = 2;
+const GDSPX_ARRAY_TYPE_BOOL = 3;
+const GDSPX_ARRAY_TYPE_STRING = 4;
 const GDSPX_ARRAY_TYPE_BYTE = 5;
 const GDSPX_ARRAY_TYPE_GDOBJ = 6;
-const GDSPX_FAST_RING_BYTES = 1024 * 1024;
-const GDSPX_FAST_RING_ALIGN = 8;
-const GDSPX_FAST_POOL = "default";
+
+function NativeArrayElementSize(arrayType) {
+    switch (arrayType) {
+    case GDSPX_ARRAY_TYPE_INT64:
+        return 8;
+    case GDSPX_ARRAY_TYPE_FLOAT:
+        return 4;
+    case GDSPX_ARRAY_TYPE_BOOL:
+        return 1;
+    case GDSPX_ARRAY_TYPE_BYTE:
+        return 1;
+    case GDSPX_ARRAY_TYPE_GDOBJ:
+        return 8;
+    default:
+        return 0;
+    }
+}
+// END GENERATED ARRAY TYPES
+const GDSPX_ARRAY_ARENA_BYTES = 1024 * 1024;
+const GDSPX_ARRAY_ALIGNMENT = 8;
+const GDSPX_ARRAY_POOL = "default";
 const GDSPX_INPUT_POOL = "input";
-const GDSPX_INPUT_SNAP_POOL = "input-snapshot";
 const GDSPX_RET_POOL = "return";
 const GDSPX_EMPTY_U8 = new Uint8Array(0);
 const GDSPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
 const GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 const GDSPX_MAX_I32 = 0x7fffffff;
-const GDSPX_MAX_ALIGNED_BYTES = GDSPX_MAX_I32 - (GDSPX_MAX_I32 % GDSPX_FAST_RING_ALIGN);
+const GDSPX_MAX_ALIGNED_BYTES = GDSPX_MAX_I32 - (GDSPX_MAX_I32 % GDSPX_ARRAY_ALIGNMENT);
 
-let fastRingModule = null;
-const fastRings = new Map();
-const deferredFastRingFrees = [];
-const inputActionRegistry = {
-    module: null,
-    epoch: 0,
-    ids: new Map(),
-};
-let inputBridgeModule = null;
-let inputBridge = null;
-
+let arrayArenaModule = null;
+const arrayArenas = new Map();
+const deferredArenaFrees = [];
 function HasActiveModule() {
     return typeof Module !== 'undefined' && Module !== null;
 }
@@ -527,16 +532,16 @@ function FreePtrMap(map) {
     map.clear();
 }
 
-function AlignFastSize(size) {
+function AlignArrayBytes(size) {
     if (!Number.isSafeInteger(size) || size <= 0 || size > GDSPX_MAX_ALIGNED_BYTES) {
         return 0;
     }
-    const aligned = Math.ceil(size / GDSPX_FAST_RING_ALIGN) * GDSPX_FAST_RING_ALIGN;
+    const aligned = Math.ceil(size / GDSPX_ARRAY_ALIGNMENT) * GDSPX_ARRAY_ALIGNMENT;
     return aligned <= GDSPX_MAX_ALIGNED_BYTES ? aligned : 0;
 }
 
-function NextFastRingCap(minSize) {
-    let capacity = GDSPX_FAST_RING_BYTES;
+function ArrayArenaCapacity(minSize) {
+    let capacity = GDSPX_ARRAY_ARENA_BYTES;
     while (capacity < minSize) {
         if (capacity > Math.floor(GDSPX_MAX_ALIGNED_BYTES / 2)) {
             return GDSPX_MAX_ALIGNED_BYTES;
@@ -559,7 +564,7 @@ function IsHeapRange(ptr, byteLength) {
     return ptr <= heapLength && byteLength <= heapLength - ptr;
 }
 
-function GetFastArrayDataView(ptr, byteLength, module) {
+function NativeArrayDataView(ptr, byteLength, module) {
     if (!Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > GDSPX_MAX_ARRAY_BYTES) {
         return GDSPX_EMPTY_U8;
     }
@@ -572,18 +577,22 @@ function GetFastArrayDataView(ptr, byteLength, module) {
     return Module['HEAPU8'].subarray(ptr, ptr + byteLength);
 }
 
-function QueueDeferredFastRingFree(ptr, freeFn) {
+function DeferArenaFree(ptr, freeFn) {
     if (!Number.isInteger(ptr) || ptr === 0 || typeof freeFn !== 'function') {
         return;
     }
-    deferredFastRingFrees.push({ ptr, free: freeFn });
+    deferredArenaFrees.push({ ptr, free: freeFn });
 }
 
 function GdspxFlushDeferredFrees() {
-    if (deferredFastRingFrees.length === 0) {
+    // Frame boundaries end all transient input/return borrows.
+    for (const arena of arrayArenas.values()) {
+        arena.offset = 0;
+    }
+    if (deferredArenaFrees.length === 0) {
         return;
     }
-    const pending = deferredFastRingFrees.splice(0, deferredFastRingFrees.length);
+    const pending = deferredArenaFrees.splice(0, deferredArenaFrees.length);
     for (const item of pending) {
         if (!item || item.ptr === 0 || typeof item.free !== 'function') {
             continue;
@@ -596,27 +605,27 @@ function GdspxFlushDeferredFrees() {
     }
 }
 
-function GetFastRing(minSize, poolName = GDSPX_FAST_POOL) {
+function GetArrayArena(minSize, poolName = GDSPX_ARRAY_POOL, rotate = false) {
     EnsureGdspxFunctionPointers();
     if (typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
         return null;
     }
-    if (fastRingModule !== Module) {
-        FreePtrMap(fastRings);
-        fastRingModule = Module;
+    if (arrayArenaModule !== Module) {
+        FreePtrMap(arrayArenas);
+        arrayArenaModule = Module;
     }
 
-    const pool = String(poolName || GDSPX_FAST_POOL);
-    let ring = fastRings.get(pool);
-    const required = AlignFastSize(minSize);
+    const pool = String(poolName || GDSPX_ARRAY_POOL);
+    let arena = arrayArenas.get(pool);
+    const required = AlignArrayBytes(minSize);
     if (required === 0 && minSize !== 0) {
         return null;
     }
-    if (ring && required <= ring.capacity) {
-        return ring;
+    if (arena && !rotate && required <= arena.capacity) {
+        return arena;
     }
 
-    const capacity = NextFastRingCap(required);
+    const capacity = ArrayArenaCapacity(required);
     if (capacity === 0 || capacity > GDSPX_MAX_ARRAY_BYTES) {
         return null;
     }
@@ -624,11 +633,11 @@ function GetFastRing(minSize, poolName = GDSPX_FAST_POOL) {
     if (!Number.isSafeInteger(ptr) || ptr <= 0 || !IsHeapRange(ptr, capacity)) {
         return null;
     }
-    if (ring && ring.ptr !== 0) {
-        QueueDeferredFastRingFree(ring.ptr, ring.free);
+    if (arena && arena.ptr !== 0) {
+        DeferArenaFree(arena.ptr, arena.free);
     }
 
-    ring = {
+    arena = {
         ptr,
         capacity,
         offset: 0,
@@ -637,49 +646,51 @@ function GetFastRing(minSize, poolName = GDSPX_FAST_POOL) {
         free: gdspxFree,
         pool,
     };
-    fastRings.set(pool, ring);
-    return ring;
+    arrayArenas.set(pool, arena);
+    return arena;
 }
 
 // Keep raw Wasm pointer provenance private to the bridge.
-const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
+const [GdspxBorrowNativeArray, GetNativeArrayMetadata] = (() => {
     const registry = new WeakMap();
 
-    function borrow(arrayType, count, dataSize, poolName = GDSPX_FAST_POOL) {
+    function borrow(arrayType, count, dataSize, poolName = GDSPX_ARRAY_POOL) {
         if (!Number.isSafeInteger(dataSize) || dataSize < 0 || dataSize > GDSPX_MAX_ARRAY_BYTES) {
             return null;
         }
         if (!IsSafeArrayCount(count)) {
             return null;
         }
-        const elemSize = GetFastArrayElemSize(arrayType);
-        if (elemSize === 0 || count > Math.floor(GDSPX_MAX_ARRAY_BYTES / elemSize) ||
-                dataSize !== count * elemSize) {
+        if (!IsNativeArrayByteLength(arrayType, count, dataSize)) {
             return null;
         }
         if (!HasActiveModuleHeap()) {
             return null;
         }
 
-        const ring = GetFastRing(dataSize, poolName);
-        if (!ring || ring.ptr === 0) {
+        let arena = GetArrayArena(dataSize, poolName);
+        if (!arena || arena.ptr === 0) {
             return null;
         }
 
-        const alignedSize = AlignFastSize(dataSize);
-        if (alignedSize > ring.capacity) {
+        const alignedSize = AlignArrayBytes(dataSize);
+        if (alignedSize > arena.capacity) {
             return null;
         }
-        if (ring.offset + alignedSize > ring.capacity) {
-            ring.offset = 0;
+        if (arena.offset + alignedSize > arena.capacity) {
+            // Earlier arguments may still refer to this block until the call finishes.
+            arena = GetArrayArena(dataSize, poolName, true);
+            if (!arena) {
+                return null;
+            }
         }
 
-        const ptr = ring.ptr + ring.offset;
+        const ptr = arena.ptr + arena.offset;
         if (!IsHeapRange(ptr, dataSize) || (dataSize > 0 && ptr === 0)) {
             return null;
         }
-        ring.offset += alignedSize;
-        ring.sequence += 1;
+        arena.offset += alignedSize;
+        arena.sequence += 1;
 
         const metadata = {
             module: Module,
@@ -687,22 +698,21 @@ const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
             byteLength: dataSize,
             type: arrayType,
             count,
-            sequence: ring.sequence,
-            pool: ring.pool,
+            sequence: arena.sequence,
+            pool: arena.pool,
         };
         Object.freeze(metadata);
         const wrapper = {};
         // Freeze metadata; expose only a bounded data view.
         Object.defineProperties(wrapper, {
-            '__gdspx_fast_array': { value: true, enumerable: true },
-            '__gdspx_wasm_array': { value: true, enumerable: true },
+            [GDSPX_ARRAY_TAG]: { value: true, enumerable: true },
             'type': { value: arrayType, enumerable: true },
             'count': { value: count, enumerable: true },
             'ptr': { value: ptr, enumerable: true },
             'module': { value: Module, enumerable: true },
             'byteLength': { value: dataSize, enumerable: true },
-            'sequence': { value: ring.sequence, enumerable: true },
-            'pool': { value: ring.pool, enumerable: true },
+            'sequence': { value: arena.sequence, enumerable: true },
+            'pool': { value: arena.pool, enumerable: true },
             'shared': {
                 value: typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
                 enumerable: true,
@@ -711,7 +721,7 @@ const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
                 configurable: false,
                 enumerable: true,
                 get() {
-                    return GetFastArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
+                    return NativeArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
                 },
             },
         });
@@ -729,23 +739,23 @@ const [GdspxBorrowFastArray, GetTrustedFastArrayMetadata] = (() => {
     return [borrow, get];
 })();
 
-function FastArrayType(array) {
-    const metadata = GetTrustedFastArrayMetadata(array);
+function NativeArrayType(array) {
+    const metadata = GetNativeArrayMetadata(array);
     const value = metadata !== null ?
         (metadata.module === Module ? metadata.type : -1) : Number(array && array['type']);
     return Number.isSafeInteger(value) ? value : -1;
 }
 
-function FastArrayCount(array) {
-    const metadata = GetTrustedFastArrayMetadata(array);
+function NativeArrayCount(array) {
+    const metadata = GetNativeArrayMetadata(array);
     // A wrapper from an old module must not remain usable after a restart.
     const count = metadata !== null ?
         (metadata.module === Module ? metadata.count : -1) : Number(array && array['count']);
     return IsSafeArrayCount(count) ? count : -1;
 }
 
-function FastArrayByteLength(array) {
-    const metadata = GetTrustedFastArrayMetadata(array);
+function NativeArrayByteLength(array) {
+    const metadata = GetNativeArrayMetadata(array);
     if (metadata !== null) {
         return metadata.module === Module && Number.isSafeInteger(metadata.byteLength) &&
             metadata.byteLength >= 0 && metadata.byteLength <= GDSPX_MAX_ARRAY_BYTES ?
@@ -756,56 +766,47 @@ function FastArrayByteLength(array) {
     return Number.isSafeInteger(length) && length >= 0 && length <= GDSPX_MAX_ARRAY_BYTES ? length : -1;
 }
 
-function IsFastArrayLike(array) {
+function IsNativeArray(array) {
     if (!array || typeof array !== 'object') {
         return false;
     }
-    const arrayType = FastArrayType(array);
-    if (!Number.isSafeInteger(arrayType) || GetFastArrayElemSize(arrayType) === 0) {
+    const arrayType = NativeArrayType(array);
+    const count = NativeArrayCount(array);
+    const byteLength = NativeArrayByteLength(array);
+    return IsNativeArrayByteLength(arrayType, count, byteLength);
+}
+
+function IsNativeArrayByteLength(type, count, byteLength) {
+    if (!IsSafeArrayCount(count) || !Number.isSafeInteger(byteLength) ||
+            byteLength < 0 || byteLength > GDSPX_MAX_ARRAY_BYTES) {
         return false;
     }
-    const count = FastArrayCount(array);
-    const byteLength = FastArrayByteLength(array);
-    const elemSize = GetFastArrayElemSize(arrayType);
-    return count >= 0 && byteLength >= 0 && count <= Math.floor(GDSPX_MAX_ARRAY_BYTES / elemSize) &&
-        byteLength === count * elemSize;
-}
-
-function GetFastArrayElemSize(arrayType) {
-    switch (arrayType) {
-    case GDSPX_ARRAY_TYPE_INT64:
-    case GDSPX_ARRAY_TYPE_GDOBJ:
-        return 8;
-    case GDSPX_ARRAY_TYPE_FLOAT:
-        return 4;
-    case GDSPX_ARRAY_TYPE_BYTE:
-        return 1;
-    default:
-        return 0;
+    if (type === GDSPX_ARRAY_TYPE_STRING) {
+        return count === 0 ? byteLength === 0 : byteLength >= count * 9;
     }
+    const size = NativeArrayElementSize(type);
+    return size > 0 && count <= Math.floor(GDSPX_MAX_ARRAY_BYTES / size) &&
+        byteLength === count * size;
 }
 
-function IsCompatibleFastArrayType(actualType, expectedType) {
+function IsCompatibleArrayType(actualType, expectedType) {
     if (actualType === expectedType) {
         return true;
     }
     return expectedType === GDSPX_ARRAY_TYPE_GDOBJ && actualType === GDSPX_ARRAY_TYPE_INT64;
 }
 
-function BorrowCopiedFastArray(array, poolName = GDSPX_INPUT_POOL) {
-    if (!IsFastArrayLike(array)) {
+function CopyToNativeArray(array, poolName = GDSPX_INPUT_POOL) {
+    if (!IsNativeArray(array)) {
         return null;
     }
     const data = array['data'];
     const dataSize = data.length;
-    const count = FastArrayCount(array);
-    if (count < 0) {
-        return null;
-    }
+    const count = NativeArrayCount(array);
     // Keep input copies separate from return buffers.
-    const borrowed = GdspxBorrowFastArray(FastArrayType(array), count, dataSize, poolName);
+    const borrowed = GdspxBorrowNativeArray(NativeArrayType(array), count, dataSize, poolName);
     if (dataSize > 0 && (!borrowed || borrowed['ptr'] === 0)) {
-        throw new Error("Failed to allocate fast GdArray input buffer");
+        throw new Error("Failed to allocate native array input buffer");
     }
     if (dataSize > 0) {
         Module['HEAPU8'].set(data, borrowed['ptr']);
@@ -813,17 +814,17 @@ function BorrowCopiedFastArray(array, poolName = GDSPX_INPUT_POOL) {
     return borrowed;
 }
 
-function GetFastArrayWasmPtr(array) {
-    if (!IsFastArrayLike(array)) {
+function GetNativeArrayPointer(array) {
+    if (!IsNativeArray(array)) {
         return 0;
     }
-    if (array['__gdspx_wasm_array'] === true) {
-        const metadata = GetTrustedFastArrayMetadata(array);
-        if (metadata === null || metadata.module !== Module || array['module'] !== Module) {
+    const metadata = GetNativeArrayMetadata(array);
+    if (metadata !== null) {
+        if (metadata.module !== Module) {
             return 0;
         }
         const byteLength = metadata.byteLength;
-        const elemSize = GetFastArrayElemSize(metadata.type);
+        const elemSize = NativeArrayElementSize(metadata.type);
         const ptr = metadata.ptr;
         if (!IsHeapRange(ptr, byteLength) || (byteLength > 0 && ptr === 0) ||
                 (byteLength > 0 && elemSize > 1 && ptr % elemSize !== 0)) {
@@ -832,73 +833,43 @@ function GetFastArrayWasmPtr(array) {
         return ptr;
     }
 
-    const borrowed = BorrowCopiedFastArray(array);
+    const borrowed = CopyToNativeArray(array);
     return borrowed ? borrowed['ptr'] : 0;
 }
 
-function RequireWasmFastArray(array, opName, expectedType = null) {
-    if (!array || array['__gdspx_wasm_array'] !== true) {
+// Writable calls require the caller's Wasm storage; read-only calls may copy.
+function RequireNativeArray(array, opName, expectedType = null, writable = false) {
+    if (!array || array[GDSPX_ARRAY_TAG] !== true) {
+        throw new Error(opName + " requires a native array");
+    }
+    if (writable && GetNativeArrayMetadata(array) === null) {
         throw new Error(opName + " requires a pre-allocated Wasm array");
     }
-    if (GetTrustedFastArrayMetadata(array) === null) {
-        throw new Error(opName + " requires an internally allocated Wasm array");
+    if (!IsNativeArray(array)) {
+        throw new Error(opName + " requires a valid native array shape");
     }
-    if (array['module'] !== Module) {
-        throw new Error(opName + " requires a Wasm array from the active module");
+    if (expectedType !== null && NativeArrayType(array) !== expectedType) {
+        throw new Error(opName + " received an incompatible native array type");
     }
-    if (!IsFastArrayLike(array)) {
-        throw new Error(opName + " requires a valid Wasm array shape");
-    }
-    if (expectedType !== null && FastArrayType(array) !== expectedType) {
-        throw new Error(opName + " received an incompatible Wasm array type");
-    }
-    const ptr = GetFastArrayWasmPtr(array);
-    if (ptr === 0 && FastArrayByteLength(array) > 0) {
-        throw new Error(opName + " requires a valid Wasm array pointer");
-    }
-    return ptr;
-}
-
-// Native bridges accept zero-copy views or checked transient copies.
-function RequireFastArray(array, opName, expectedType = null) {
-    if (!array || array['__gdspx_fast_array'] !== true) {
-        throw new Error(opName + " requires a fast array");
-    }
-    if (array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null) {
-        throw new Error(opName + " requires an internally allocated Wasm array");
-    }
-    if (!IsFastArrayLike(array)) {
-        throw new Error(opName + " requires a valid fast array shape");
-    }
-    if (expectedType !== null && FastArrayType(array) !== expectedType) {
-        throw new Error(opName + " received an incompatible fast array type");
-    }
-    const byteLength = FastArrayByteLength(array);
-    const ptr = GetFastArrayWasmPtr(array);
-    if (ptr === 0 && byteLength > 0) {
-        throw new Error(opName + " requires accessible fast array data");
+    const ptr = GetNativeArrayPointer(array);
+    if (ptr === 0 && NativeArrayByteLength(array) > 0) {
+        throw new Error(opName + " requires accessible native array data");
     }
     return ptr;
 }
 
 // Transform bridges return views over the shared return pool.
-function TryArrayTransformFastPath(call, input, inputArrayType, outputArrayType, outputCountScale) {
-    if (!IsFastArrayLike(input)) {
+function TryTransformArray(call, input, inputArrayType, outputArrayType, outputCountScale) {
+    if (!IsNativeArray(input)) {
         return null;
     }
-    if (input['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(input) === null) {
-        return null;
-    }
-    if (!IsCompatibleFastArrayType(FastArrayType(input), inputArrayType)) {
+    if (!IsCompatibleArrayType(NativeArrayType(input), inputArrayType)) {
         return null;
     }
 
-    const count = FastArrayCount(input);
-    if (count < 0 || count > GDSPX_MAX_ARRAY_ELEMENTS) {
-        return null;
-    }
-    const inputElemSize = GetFastArrayElemSize(inputArrayType);
-    if (inputElemSize === 0 || FastArrayByteLength(input) !== count * inputElemSize) {
+    const count = NativeArrayCount(input);
+    const inputElemSize = NativeArrayElementSize(inputArrayType);
+    if (inputElemSize === 0 || NativeArrayByteLength(input) !== count * inputElemSize) {
         return null;
     }
 
@@ -912,294 +883,120 @@ function TryArrayTransformFastPath(call, input, inputArrayType, outputArrayType,
         return null;
     }
 
-    const inputPtr = GetFastArrayWasmPtr(input);
+    const inputPtr = GetNativeArrayPointer(input);
     if (count > 0 && inputPtr === 0) {
         return null;
     }
 
     const outCount = count * outputCountScale;
-    const outputElemSize = GetFastArrayElemSize(outputArrayType);
+    const outputElemSize = NativeArrayElementSize(outputArrayType);
     if (outputElemSize === 0 || outCount > Math.floor(GDSPX_MAX_ARRAY_BYTES / outputElemSize)) {
         return null;
     }
     const outBytes = outCount * outputElemSize;
-    const out = GdspxBorrowFastArray(
+    const out = GdspxBorrowNativeArray(
         outputArrayType,
         outCount,
         outBytes,
         GDSPX_RET_POOL,
     );
-    if (!out || GetFastArrayWasmPtr(out) === 0) {
+    const outputPtr = out ? GetNativeArrayPointer(out) : 0;
+    if (outputPtr === 0) {
         return null;
     }
 
     if (count > 0) {
-        call(inputPtr, count, GetFastArrayWasmPtr(out), outCount);
+        call(inputPtr, count, outputPtr, outCount);
     }
     return out;
 }
 
-function GdspxInputSnapshot() {
+function ReadArrayOutput(exportName, type, count) {
     if (!HasActiveModule()) {
         return null;
     }
-    const call = Module['_gdspx_input_write_snapshot'];
+    const call = Module[exportName];
     if (typeof call !== 'function') {
         return null;
     }
 
-    const out = GdspxBorrowFastArray(GDSPX_ARRAY_TYPE_FLOAT, 3, 12, GDSPX_INPUT_SNAP_POOL);
-    if (!out || GetFastArrayWasmPtr(out) === 0) {
+    const out = GdspxBorrowNativeArray(type, count, count * NativeArrayElementSize(type), exportName);
+    if (!out || GetNativeArrayPointer(out) === 0) {
         return null;
     }
-    call(GetFastArrayWasmPtr(out), FastArrayCount(out));
+    call(GetNativeArrayPointer(out), NativeArrayCount(out));
     return out;
-}
-
-// -----------------------------------------------------------------------------
-// Input Bridge and Action-ID Cache
-// -----------------------------------------------------------------------------
-
-function GetInputBridge() {
-    if (!HasActiveModule()) {
-        return null;
-    }
-    if (typeof globalThis['gdspx_input_register_action'] === 'function') {
-        return globalThis;
-    }
-    if (inputBridgeModule !== Module) {
-        inputBridgeModule = Module;
-        inputBridge = typeof GdspxFuncs === 'function' ? new GdspxFuncs() : null;
-    }
-    return inputBridge;
-}
-
-function ToStableActionID(value) {
-    if (value && typeof value['low'] === 'number') {
-        return value['low'] | 0;
-    }
-    if (typeof value === 'bigint') {
-        return Number(BigInt.asIntN(32, value));
-    }
-    return Number(value) | 0;
-}
-
-// Input bridge wrappers expose simple JS calls while hiding whether the active
-// implementation comes from direct globals or a generated GdspxFuncs instance.
-function GetBoundBridgeCall(bridge, functionName) {
-    if (!bridge || typeof functionName !== 'string') {
-        return null;
-    }
-    const call = bridge[functionName];
-    return typeof call === 'function' ? call.bind(bridge) : null;
-}
-
-function GetInputActionBoolCallName(kind) {
-    switch (kind | 0) {
-        case 1:
-            return "gdspx_input_is_action_pressed_id";
-        case 2:
-            return "gdspx_input_is_action_just_pressed_id";
-        case 3:
-            return "gdspx_input_is_action_just_released_id";
-        default:
-            return null;
-    }
-}
-
-function EnsureInputActionRegistry() {
-    if (!HasActiveModule()) {
-        return false;
-    }
-    if (inputActionRegistry.module !== Module) {
-        inputActionRegistry.module = Module;
-        inputActionRegistry.epoch += 1;
-        inputActionRegistry.ids.clear();
-    }
-    return true;
-}
-
-function GdspxInputActionEpoch() {
-    EnsureInputActionRegistry();
-    return inputActionRegistry.epoch;
-}
-
-function GdspxInputActionID(action) {
-    if (!EnsureInputActionRegistry()) {
-        return -1;
-    }
-    if (inputActionRegistry.ids.has(action)) {
-        return inputActionRegistry.ids.get(action);
-    }
-
-    const bridge = GetInputBridge();
-    const call = GetBoundBridgeCall(bridge, "gdspx_input_register_action");
-    if (typeof call !== 'function') {
-        return -1;
-    }
-
-    const id = ToStableActionID(call(action));
-    if (id >= 0) {
-        inputActionRegistry.ids.set(action, id);
-    }
-    return id;
-}
-
-function GdspxInputActionBool(kind, actionID) {
-    if (!EnsureInputActionRegistry()) {
-        return null;
-    }
-
-    const bridge = GetInputBridge();
-    const callName = GetInputActionBoolCallName(kind);
-    if (callName == null) {
-        return null;
-    }
-    const call = GetBoundBridgeCall(bridge, callName);
-    if (typeof call !== 'function') {
-        return null;
-    }
-    return !!call(actionID | 0, 0);
-}
-
-function GdspxInputAxisByID(negActionID, posActionID) {
-    if (!EnsureInputActionRegistry()) {
-        return null;
-    }
-    const bridge = GetInputBridge();
-    const call = GetBoundBridgeCall(bridge, "gdspx_input_get_axis_id");
-    if (typeof call !== 'function') {
-        return null;
-    }
-    return Number(call(negActionID | 0, 0, posActionID | 0, 0));
-}
-
-// -----------------------------------------------------------------------------
-// Batch Helpers and Generic Array Serialization
-// -----------------------------------------------------------------------------
-
-function GdspxBatchSpritePhysics(buffer) {
-    if (buffer && buffer['__gdspx_wasm_array'] === true &&
-            GetTrustedFastArrayMetadata(buffer) === null) {
-        return false;
-    }
-    if (!IsFastArrayLike(buffer) || buffer['__gdspx_fast_array'] !== true) {
-        return false;
-    }
-    if (FastArrayType(buffer) !== GDSPX_ARRAY_TYPE_FLOAT) {
-        return false;
-    }
-    const count = FastArrayCount(buffer);
-    if (count <= 0 || FastArrayByteLength(buffer) !== count * 4) {
-        return false;
-    }
-    if (!HasActiveModule()) {
-        return false;
-    }
-    const call = Module['_gdspx_sprite_batch_update_physics'];
-    if (typeof call !== 'function') {
-        return false;
-    }
-    const ptr = GetFastArrayWasmPtr(buffer);
-    if (ptr === 0) {
-        return false;
-    }
-    call(ptr, count);
-    return true;
 }
 
 function ToGdArray(array) {
     EnsureGdspxFunctionPointers();
-    if (!array) {
-        throw new Error('Invalid array structure. Expected {type, count, data}');
+    const data = RequireNativeArray(array, "ToGdArray");
+    const wrapper = gdspxBorrowArray(data, NativeArrayByteLength(array), NativeArrayCount(array), NativeArrayType(array));
+    if (!wrapper) {
+        throw new Error("Invalid native array data");
     }
-    if (array['__gdspx_fast_array'] === true) {
-        if (array['__gdspx_wasm_array'] === true && GetTrustedFastArrayMetadata(array) === null) {
-            throw new Error("Invalid untrusted Wasm fast GdArray");
-        }
-        if (!IsFastArrayLike(array)) {
-            throw new Error("Invalid fast GdArray structure");
-        }
-        const dataSize = FastArrayByteLength(array);
-        const count = FastArrayCount(array);
-        if (dataSize < 0 || count < 0) {
-            throw new Error("Invalid fast GdArray length");
-        }
-        const dataPtr = GetFastArrayWasmPtr(array);
-        if (dataSize > 0 && dataPtr === 0) {
-            throw new Error("Failed to access fast GdArray data");
-        }
-        const gdArrayPtr = gdspxToGdArrayRaw(dataPtr, dataSize, count, FastArrayType(array));
-        if (!gdArrayPtr) {
-            throw new Error("Failed to deserialize fast GdArray");
-        }
-        return gdArrayPtr;
-    }
-    if (!(array instanceof Uint8Array) || !Number.isSafeInteger(array.length) ||
-            array.length < 8 || array.length > GDSPX_MAX_ARRAY_BYTES) {
-        throw new Error("Invalid serialized GdArray data");
-    }
-    const dataSize = array.length;
-    if (typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
-        throw new Error("GdArray allocator is unavailable");
-    }
-    const dataPtr = gdspxMalloc(dataSize);
-    if (!Number.isSafeInteger(dataPtr) || dataPtr <= 0 || !IsHeapRange(dataPtr, dataSize)) {
-        throw new Error("Failed to allocate GdArray input buffer");
-    }
-    try {
-        if (dataSize > 0) {
-            Module['HEAPU8'].set(array, dataPtr);
-        }
-        const gdArrayPtr = gdspxToGdArray(dataPtr, dataSize);
-        if (!gdArrayPtr) {
-            throw new Error("Failed to deserialize GdArray");
-        }
-        return gdArrayPtr;
-    } finally {
-        gdspxFree(dataPtr);
-    }
+    return wrapper;
 }
 
-function ToJsArray(gdArrayPtr) {
+function ToJsArray(wrapper) {
     EnsureGdspxFunctionPointers();
-    if (!gdArrayPtr) {
+    const info = gdspxGetArrayInfo(wrapper);
+    if (!info) {
         return null;
     }
-    if (typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
+    if (!IsHeapRange(info, 12) || info % 4 !== 0) {
         return null;
     }
-    const outputSizePtr = gdspxMalloc(4);
-    if (!Number.isSafeInteger(outputSizePtr) || outputSizePtr <= 0 ||
-            outputSizePtr % 4 !== 0 || !IsHeapRange(outputSizePtr, 4)) {
+    const words = Module['HEAPU32'];
+    const count = words[info / 4];
+    const type = words[info / 4 + 1];
+    const ptr = words[info / 4 + 2];
+    if (!IsSafeArrayCount(count)) {
         return null;
     }
-    try {
-        const serializedPtr = gdspxToJsArray(gdArrayPtr, outputSizePtr);
-        if (!serializedPtr) {
+    let data;
+    if (type === GDSPX_ARRAY_TYPE_STRING) {
+        if (!IsHeapRange(ptr, count * 4) || ptr % 4 !== 0 || (count > 0 && ptr === 0)) {
             return null;
         }
-        const outputSize = Module['HEAP32'][outputSizePtr >> 2];
-        const canFreeSerializedPtr = Number.isSafeInteger(serializedPtr) && serializedPtr > 0 &&
-            IsHeapRange(serializedPtr, 0);
-        if (!Number.isSafeInteger(outputSize) || outputSize < 8 ||
-                outputSize > GDSPX_MAX_ARRAY_BYTES || !canFreeSerializedPtr ||
-                !IsHeapRange(serializedPtr, outputSize)) {
-            if (canFreeSerializedPtr) {
-                gdspxFree(serializedPtr);
+        const heap = Module['HEAPU8'];
+        const strings = [];
+        let total = count * 8;
+        for (let i = 0; i < count; i++) {
+            const start = words[ptr / 4 + i];
+            if (!start || !IsHeapRange(start, 1)) {
+                return null;
             }
+            let end = start;
+            while (end < heap.length && heap[end] !== 0 && end - start < GDSPX_MAX_STRING_BYTES) {
+                end++;
+            }
+            if (end === heap.length || heap[end] !== 0 || total > GDSPX_MAX_ARRAY_BYTES - (end - start + 1)) {
+                return null;
+            }
+            strings.push([start, end]);
+            total += end - start + 1;
+        }
+        data = new Uint8Array(total);
+        const table = new DataView(data.buffer);
+        let offset = count * 8;
+        for (let i = 0; i < count; i++) {
+            const [start, end] = strings[i];
+            table.setUint32(i * 8, offset, true);
+            table.setUint32(i * 8 + 4, end - start, true);
+            data.set(heap.subarray(start, end), offset);
+            offset += end - start + 1;
+        }
+    } else {
+        const length = count * NativeArrayElementSize(type);
+        if (!IsNativeArrayByteLength(type, count, length) || !IsHeapRange(ptr, length) ||
+                (length > 0 && ptr === 0)) {
             return null;
         }
-        const data = new Uint8Array(outputSize);
-        try {
-            data.set(Module['HEAPU8'].subarray(serializedPtr, serializedPtr + outputSize));
-            return data;
-        } finally {
-            gdspxFree(serializedPtr);
-        }
-    } finally {
-        gdspxFree(outputSizePtr);
+        // Detach before the generated wrapper releases the native result.
+        data = Module['HEAPU8'].slice(ptr, ptr + length);
     }
+    return { [GDSPX_ARRAY_TAG]: true, 'type': type, 'count': count, 'data': data };
 }
 
 function AllocGdArray() {
@@ -1221,10 +1018,4 @@ function FreeGdArray(ptr) {
 // library glue. Bracketed global exports keep that ABI stable under Advanced
 // Closure property and symbol renaming.
 globalThis['GdspxFlushDeferredFrees'] = GdspxFlushDeferredFrees;
-globalThis['GdspxBorrowFastArray'] = GdspxBorrowFastArray;
-globalThis['GdspxInputSnapshot'] = GdspxInputSnapshot;
-globalThis['GdspxInputActionEpoch'] = GdspxInputActionEpoch;
-globalThis['GdspxInputActionID'] = GdspxInputActionID;
-globalThis['GdspxInputActionBool'] = GdspxInputActionBool;
-globalThis['GdspxInputAxisByID'] = GdspxInputAxisByID;
-globalThis['GdspxBatchSpritePhysics'] = GdspxBatchSpritePhysics;
+globalThis['GdspxBorrowNativeArray'] = GdspxBorrowNativeArray;

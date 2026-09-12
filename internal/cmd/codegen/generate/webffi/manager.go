@@ -27,77 +27,41 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-func (g *Generator) getManagerFuncBody(function *clang.TypedefFunction) string {
-	if body, ok := getInputCacheManagerFuncBody(function.Name); ok {
-		return body
-	}
-
-	sb := strings.Builder{}
-	prefixTab := "\t"
-	params := []string{}
+func (g *Generator) managerBody(function *clang.TypedefFunction) string {
+	var sb strings.Builder
 	args := common.EffectiveArguments(function)
-	// convert arguments
+	params := make([]string, 0, len(args))
 	for i, arg := range args {
 		if g.ShouldSkipHighLevelArgument(function, arg) {
 			continue
 		}
-		sb.WriteString(prefixTab)
-		if g.IsNativeArrayDataArg(function, arg) {
-			argName := "arg" + strconv.Itoa(i)
-			sb.WriteString(argName)
-			sb.WriteString(" := JsFromGdArray(")
-			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
-			sb.WriteString(")\n")
-			params = append(params, argName)
-			continue
-		}
-		typeName := common.MustPrimitiveTypeName(arg, function.Name)
-		if g.usesFlatJsGdIntArg(function, arg) {
-			argName := "arg" + strconv.Itoa(i)
-			lowName := argName + "Low"
-			highName := argName + "High"
-			fmt.Fprintf(&sb, "%s, %s := ", lowName, highName)
-			sb.WriteString(flatJsSplitHelper(typeName))
-			sb.WriteString("(")
-			sb.WriteString(g.EffectiveGoArgumentName(function, arg))
-			sb.WriteString(")\n")
-			params = append(params, lowName, highName)
-			continue
-		}
 		argName := "arg" + strconv.Itoa(i)
-		sb.WriteString(argName)
-		sb.WriteString(" := JsFrom")
-		sb.WriteString(typeName)
-		sb.WriteString("(")
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
-		sb.WriteString(")")
-
-		sb.WriteString("\n")
-		params = append(params, argName)
+		source := g.EffectiveGoArgumentName(function, arg)
+		typeName := "GdArray"
+		if !g.IsArrayBufferArgument(function, arg) {
+			typeName = common.MustPrimitiveTypeName(arg, function.Name)
+		}
+		if binding, ok := jsInt64Types[typeName]; ok {
+			low, high := argName+"Low", argName+"High"
+			fmt.Fprintf(&sb, "\t%s, %s := %s(%s)\n", low, high, binding.split, source)
+			params = append(params, low, high)
+		} else {
+			fmt.Fprintf(&sb, "\t%s := JsFrom%s(%s)\n", argName, typeName, source)
+			params = append(params, argName)
+		}
 	}
 
-	// call the function
-	sb.WriteString(prefixTab)
+	sb.WriteByte('\t')
 	if common.HasEffectiveReturn(function) {
-		sb.WriteString("_retValue := ")
+		sb.WriteString("_result := ")
 	}
-
-	funcName := "API.Spx" + (strings.TrimPrefix(function.Name, "GDExtensionSpx"))
-	sb.WriteString(funcName)
-	sb.WriteString(".Invoke(")
-	sb.WriteString(strings.Join(params, ", "))
-	sb.WriteString(")")
-
+	fmt.Fprintf(&sb, "API.Spx%s.Invoke(%s)", strings.TrimPrefix(function.Name, "GDExtensionSpx"), strings.Join(params, ", "))
 	if common.HasEffectiveReturn(function) {
-		sb.WriteByte('\n')
-		sb.WriteString(prefixTab)
-		sb.WriteString("return ")
-		typeName := common.EffectiveRawReturnType(function)
-		name := strcase.ToCamel(typeName)
+		name := strcase.ToCamel(common.EffectiveRawReturnType(function))
 		if name == "GdObj" {
 			name = "GdObject"
 		}
-		fmt.Fprintf(&sb, "JsTo%s(_retValue)", name)
+		fmt.Fprintf(&sb, "\n\treturn JsTo%s(_result)", name)
 	}
-	return sb.String()
+	return g.wrapCache(function, sb.String())
 }

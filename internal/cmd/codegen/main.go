@@ -44,6 +44,7 @@ var (
 var requiredCodegenModuleFiles = []string{
 	"gdextension_interface.h",
 	"spx_ext_mgr.h",
+	"web/js/engine/gdspx.util.js",
 }
 
 func init() {

@@ -22,11 +22,11 @@ import (
 	"sync"
 	"syscall/js"
 
-	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spbase/mathf"
 )
 
 type inputSnapshot struct {
-	mouse     Vec2
+	mouse     mathf.Vec2
 	mouseBits uint32
 	ok        bool
 	frame     uint64
@@ -35,18 +35,9 @@ type inputSnapshot struct {
 var (
 	inputSnap inputSnapshot
 
-	keyMu    sync.RWMutex
-	keyDown  = map[int64]bool{}
-	keyKnown = map[int64]bool{}
-
 	actionIDMu  sync.RWMutex
 	actionIDs   = map[string]int{}
 	actionEpoch int
-
-	actionMu    sync.Mutex
-	actionFrame uint64
-	actionBool  = map[string]bool{}
-	actionAxis  = map[string]float64{}
 )
 
 func SyncWebInputSnapshot() {
@@ -54,7 +45,17 @@ func SyncWebInputSnapshot() {
 	clearActionCache(inputSnap.frame)
 	syncActionIDCache()
 
-	fn := js.Global().Get("GdspxInputSnapshot")
+	bindings := js.Global().Get("GdspxFuncs")
+	if bindings.Type() != js.TypeFunction {
+		inputSnap.ok = false
+		return
+	}
+	outputs := bindings.Get("arrayOutputs")
+	if outputs.Type() != js.TypeObject || outputs.IsNull() {
+		inputSnap.ok = false
+		return
+	}
+	fn := outputs.Get("gdspx_input_write_snapshot")
 	if fn.Type() != js.TypeFunction {
 		inputSnap.ok = false
 		return
@@ -66,100 +67,9 @@ func SyncWebInputSnapshot() {
 		return
 	}
 
-	inputSnap.mouse = Vec2{X: float64(data[0]), Y: float64(data[1])}
+	inputSnap.mouse = mathf.Vec2{X: float64(data[0]), Y: float64(data[1])}
 	inputSnap.mouseBits = uint32(data[2])
 	inputSnap.ok = true
-}
-
-func WebInputMousePos(fallback func() Vec2) Vec2 {
-	if inputSnap.ok {
-		return inputSnap.mouse
-	}
-	return fallback()
-}
-
-func WebInputMouseState(id int64, fallback func() bool) bool {
-	if inputSnap.ok && id >= 1 && id <= 3 {
-		return inputSnap.mouseBits&(1<<uint(id-1)) != 0
-	}
-	return fallback()
-}
-
-func WebInputKeyState(key int64, fallback func() bool) bool {
-	keyMu.RLock()
-	known := keyKnown[key]
-	pressed := keyDown[key]
-	keyMu.RUnlock()
-	if known {
-		return pressed
-	}
-	return fallback()
-}
-
-func RecordWebKeyState(key int64, pressed bool) {
-	keyMu.Lock()
-	keyKnown[key] = true
-	keyDown[key] = pressed
-	keyMu.Unlock()
-}
-
-func CachedActionBool(kind, action string, fallback func() bool) bool {
-	key := kind + "\x00" + action
-
-	actionMu.Lock()
-	currentFrame := actionFrame
-	if value, ok := actionBool[key]; ok {
-		actionMu.Unlock()
-		return value
-	}
-	actionMu.Unlock()
-
-	value, ok := webActionBool(kind, action)
-	if !ok {
-		value = fallback()
-	}
-
-	actionMu.Lock()
-	if actionFrame == currentFrame {
-		actionBool[key] = value
-	}
-	actionMu.Unlock()
-	return value
-}
-
-func CachedActionAxis(neg, pos string, fallback func() float64) float64 {
-	key := neg + "\x00" + pos
-
-	actionMu.Lock()
-	currentFrame := actionFrame
-	if value, ok := actionAxis[key]; ok {
-		actionMu.Unlock()
-		return value
-	}
-	actionMu.Unlock()
-
-	value, ok := webActionAxis(neg, pos)
-	if !ok {
-		value = fallback()
-	}
-
-	actionMu.Lock()
-	if actionFrame == currentFrame {
-		actionAxis[key] = value
-	}
-	actionMu.Unlock()
-	return value
-}
-
-func clearActionCache(frame uint64) {
-	actionMu.Lock()
-	defer actionMu.Unlock()
-	if actionFrame == frame {
-		return
-	}
-	actionFrame = frame
-	clear(actionBool)
-	clear(actionAxis)
 }
 
 func webActionBool(kind, action string) (bool, bool) {
@@ -168,12 +78,20 @@ func webActionBool(kind, action string) (bool, bool) {
 		return false, false
 	}
 
-	fn := js.Global().Get("GdspxInputActionBool")
+	var fn js.Value
+	switch kind {
+	case "pressed":
+		fn = API.SpxInputIsActionPressedId
+	case "just_pressed":
+		fn = API.SpxInputIsActionJustPressedId
+	case "just_released":
+		fn = API.SpxInputIsActionJustReleasedId
+	}
 	if fn.Type() != js.TypeFunction {
 		return false, false
 	}
 
-	value := fn.Invoke(actionKindID(kind), id)
+	value := fn.Invoke(id, 0)
 	if value.IsUndefined() || value.IsNull() {
 		return false, false
 	}
@@ -190,12 +108,12 @@ func webActionAxis(neg, pos string) (float64, bool) {
 		return 0, false
 	}
 
-	fn := js.Global().Get("GdspxInputAxisByID")
+	fn := API.SpxInputGetAxisId
 	if fn.Type() != js.TypeFunction {
 		return 0, false
 	}
 
-	value := fn.Invoke(negID, posID)
+	value := fn.Invoke(negID, 0, posID, 0)
 	if value.IsUndefined() || value.IsNull() {
 		return 0, false
 	}
@@ -219,7 +137,7 @@ func webActionID(action string) (int, bool) {
 		return id, true
 	}
 
-	fn := js.Global().Get("GdspxInputActionID")
+	fn := js.Global().Get("GdspxGetInputActionID")
 	if fn.Type() != js.TypeFunction {
 		return 0, false
 	}
@@ -236,7 +154,7 @@ func webActionID(action string) (int, bool) {
 }
 
 func syncActionIDCache() {
-	fn := js.Global().Get("GdspxInputActionEpoch")
+	fn := js.Global().Get("GdspxGetInputActionEpoch")
 	if fn.Type() != js.TypeFunction {
 		return
 	}
@@ -248,17 +166,4 @@ func syncActionIDCache() {
 		clear(actionIDs)
 	}
 	actionIDMu.Unlock()
-}
-
-func actionKindID(kind string) int {
-	switch kind {
-	case "pressed":
-		return 1
-	case "just_pressed":
-		return 2
-	case "just_released":
-		return 3
-	default:
-		return 0
-	}
 }

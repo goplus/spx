@@ -70,16 +70,6 @@
 #define uiMgr SpxEngine::get_singleton()->get_ui()
 
 extern "C" {
-// memory allocator for wrap codes
-EMSCRIPTEN_KEEPALIVE
-void* cmalloc(int size) {
-	auto ptr = malloc(size);
-	return ptr;
-}
-EMSCRIPTEN_KEEPALIVE
-void cfree(void* ptr) {
-	free(ptr);
-}
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_stop_all() {
 	 audioMgr->stop_all();

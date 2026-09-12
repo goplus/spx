@@ -35,7 +35,6 @@ import (
 const WebRelDir = "../../gdengine/binding/web"
 
 var (
-
 	//go:embed callbacks.go.tmpl
 	callbacksFileText string
 
@@ -48,13 +47,14 @@ var (
 	//go:embed gdspx.js.tmpl
 	jsEngineJsFileText string
 
-	//go:embed worker.wrap.gen.js.tmpl
+	//go:embed worker.js.tmpl
 	workerWrapJsFileText string
 )
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
 	*common.GenerationContext
+	caches map[string]cacheFunc
 }
 
 func (g *Generator) Generate(projectPath, spxModulePath string) error {
@@ -63,11 +63,13 @@ func (g *Generator) Generate(projectPath, spxModulePath string) error {
 		name string
 		fn   func() error
 	}{
-		{"callback Go source", func() error { return GenerateCallbackGoFile(projectPath, ast) }},
-		{"GDExtension interface", func() error { return GenerateGDExtensionInterfaceGoFile(projectPath, ast) }},
-		{"manager wrapper", func() error { return g.GenerateManagerWrapperGoFile(projectPath) }},
-		{"JavaScript engine bridge", func() error { return g.GenerateJsEngineJsFile(projectPath, spxModulePath) }},
-		{"Web worker wrapper", func() error { return GenerateWorkerWrapJsFile(projectPath, ast) }},
+		{"array ABI constants", func() error { return writeGoArrays(projectPath) }},
+		{"JavaScript array ABI constants", func() error { return writeJSArrays(spxModulePath) }},
+		{"callback Go source", func() error { return writeCallbacks(projectPath, ast) }},
+		{"GDExtension interface", func() error { return writeFFI(projectPath, ast) }},
+		{"manager wrapper", func() error { return g.writeManager(projectPath) }},
+		{"JavaScript engine bridge", func() error { return g.writeEngineJS(spxModulePath) }},
+		{"Web worker wrapper", func() error { return writeWorker(projectPath, ast) }},
 	}
 	for _, generator := range generators {
 		if err := generator.fn(); err != nil {
@@ -77,7 +79,7 @@ func (g *Generator) Generate(projectPath, spxModulePath string) error {
 	return nil
 }
 
-func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+func writeCallbacks(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"add":                   common.Add,
 		"trimPrefix":            strings.TrimPrefix,
@@ -88,7 +90,7 @@ func GenerateCallbackGoFile(projectPath string, ast clang.CHeaderFileAST) error 
 		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
 }
 
-func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) error {
+func writeWorker(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"snakeCase":  strcase.ToSnake,
 		"trimPrefix": strings.TrimPrefix,
@@ -98,7 +100,7 @@ func GenerateWorkerWrapJsFile(projectPath string, ast clang.CHeaderFileAST) erro
 		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
 }
 
-func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFileAST) error {
+func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"trimPrefix":          strings.TrimPrefix,
 		"loadProcAddressName": common.LoadProcAddressName,
@@ -108,24 +110,45 @@ func GenerateGDExtensionInterfaceGoFile(projectPath string, ast clang.CHeaderFil
 		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
 }
 
-func (g *Generator) GenerateManagerWrapperGoFile(projectPath string) error {
+func (g *Generator) writeManager(projectPath string) error {
+	caches, err := scanCaches(filepath.Join(projectPath, WebRelDir))
+	if err != nil {
+		return err
+	}
+	functions := make(map[string]bool)
+	for _, function := range g.AST().CollectGDExtensionInterfaceFunctions() {
+		if g.IsManagerMethod(&function) {
+			functions[function.Name] = true
+		}
+	}
+	for name := range caches {
+		if !functions[name] {
+			return fmt.Errorf("cache function has no matching API: %s", name)
+		}
+	}
+	renderer := *g
+	renderer.caches = caches
 	funcs := template.FuncMap{
-		"camelCase":          strcase.ToCamel,
-		"isManagerMethod":    g.IsManagerMethod,
-		"getManagerFuncName": g.ManagerMethodSignature,
-		"getManagerFuncBody": g.getManagerFuncBody,
+		"camelCase":        strcase.ToCamel,
+		"isManagerMethod":  g.IsManagerMethod,
+		"managerSignature": g.ManagerMethodSignature,
+		"managerBody":      renderer.managerBody,
 	}
 
 	return common.GenerateFile(funcs, "manager_web.gen.go", managerWebText, g.ManagerData(),
 		filepath.Join(projectPath, common.GdengineImplRelDir, "manager_web.gen.go"))
 }
 
-func (g *Generator) GenerateJsEngineJsFile(projectPath, spxModulePath string) error {
+func (g *Generator) writeEngineJS(spxModulePath string) error {
 	funcs := template.FuncMap{
-		"goReturnType":        common.GoReturnType,
-		"sub":                 common.Sub,
-		"getJsFuncArgs":       g.getJsFuncArgs,
-		"getJsFuncBody":       g.getJsFuncBody,
+		"sub":       common.Sub,
+		"jsArgs":    g.jsArgs,
+		"jsBody":    g.jsBody,
+		"jsResults": g.jsResults,
+		"arrayBridge": func(name string) common.ArrayBridge {
+			spec, _ := g.ArrayBridge(name)
+			return spec
+		},
 		"loadProcAddressName": common.LoadProcAddressName,
 	}
 

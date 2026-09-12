@@ -154,18 +154,15 @@ func TestMustGoTypeForCTypePanicsOnMissingMapping(t *testing.T) {
 	)
 }
 
-func TestEffectiveGoArgumentTypeUsesNativeArrayBridgeSpec(t *testing.T) {
+func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 	metadata := GenerationMetadata{}
 
-	metadata.NativeArrayBridges = map[string]NativeArrayBridgeSpec{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		BaseFunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
-		BaseArgName:      "buffer",
-		DataArgName:      "buffer_data",
-		DataArgGoType:    "[]float32",
-		DataArgPtrType:   "*float32",
-		LenArgName:       "len",
-		LenArgGoType:     "int32",
-		GoArgType:        "[]float32",
+	metadata.ArrayBridges = map[string]ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
+		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms", ArgName: "buffer",
+		Input: &ArrayBuffer{
+			Data:   CParam{CType: "const float *", Name: "buffer_data"},
+			Length: CParam{CType: "int", Name: "len"}, Type: 2,
+		},
 	}}
 	generation := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
 

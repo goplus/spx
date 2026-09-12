@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
@@ -40,8 +41,7 @@ var (
 
 	// Only methods explicitly marked with
 	// SPX_API or SPX_BIND become part of the cross-language ABI.
-	reMethodVoid   = regexp.MustCompile(`\s*(?:SPX_API|SPX_BIND)\s+void\s+(\w+)\((.*)\);`)
-	reMethodReturn = regexp.MustCompile(`\s*(?:SPX_API|SPX_BIND)\s+(\w+)\s+(\w+)\((.*)\);`)
+	reMethod = regexp.MustCompile(`^\s*(?:SPX_API|SPX_BIND)\s+(\w+)\s+(\w+)\((.*)\);`)
 )
 
 type classMethodDecl struct {
@@ -49,12 +49,7 @@ type classMethodDecl struct {
 	ReturnType string
 	MethodName string
 	Params     string
-}
-
-func shouldSkipGeneratedMethod(methodName string) bool {
-	// Raw helpers are web-only entry points and should not leak into the shared
-	// gdextension interface consumed by native ffi/codegen.
-	return strings.HasSuffix(methodName, "_raw") || isArrayTransformBridgeMethod(methodName)
+	Binding    bindingOptions
 }
 
 // Headers holds both ABI spellings and the metadata collected from one input.
@@ -75,11 +70,15 @@ func PrepareHeaders(dir string) (Headers, error) {
 		return Headers{}, err
 	}
 	h := parseManagerHeader(merged)
-	return Headers{
-		Raw:      strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", h.render(true)),
-		Standard: strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", h.render(false)),
-		Metadata: h.metadata,
-	}, nil
+	raw, err := h.renderHeader(true)
+	if err != nil {
+		return Headers{}, err
+	}
+	standard, err := h.renderHeader(false)
+	if err != nil {
+		return Headers{}, err
+	}
+	return Headers{Raw: raw, Standard: standard, Metadata: h.metadata}, nil
 }
 
 func mergeManagerHeader(dir string) (string, error) {
@@ -175,18 +174,35 @@ func normalizeParams(params string) string {
 
 func parseManagerHeader(input string) *headerCollector {
 	g := &headerCollector{metadata: common.GenerationMetadata{
-		NativeArrayBridges:    make(map[string]common.NativeArrayBridgeSpec),
-		ArrayTransformBridges: make(map[string]common.ArrayTransformBridgeSpec),
+		ArrayBridges: make(map[string]common.ArrayBridge),
+		WebBindings:  make(map[string]common.WebBindingMode),
 	}}
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	var currentClassName string
-
-	baseMethods := map[string]classMethodDecl{}
-	rawMethods := map[string]classMethodDecl{}
+	var pendingBinding *bindingOptions
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "class") {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		options, declaration := parseBinding(line)
+		if options != nil {
+			if pendingBinding != nil {
+				panic("duplicate SPX_BINDING annotation: " + line)
+			}
+			if declaration == "" {
+				pendingBinding = options
+				continue
+			}
+			line = declaration
+		} else if pendingBinding != nil {
+			options, pendingBinding = pendingBinding, nil
+		}
+		if options != nil && !reMethod.MatchString(line) {
+			panic("SPX_BINDING must annotate an SPX_API or SPX_BIND method: " + line)
+		}
+		if strings.HasPrefix(line, "class ") {
 			parts := strings.Fields(line)
 			currentClassName = parts[1]
 			currentClassName = currentClassName[:len(currentClassName)-3]
@@ -199,23 +215,7 @@ func parseManagerHeader(input string) *headerCollector {
 			g.methods = append(g.methods, classMethodDecl{ClassName: currentClassName})
 			continue
 		}
-		if reMethodVoid.MatchString(line) {
-			matches := reMethodVoid.FindStringSubmatch(line)
-			params := normalizeParams(matches[2])
-			methodDecl := classMethodDecl{
-				ClassName:  currentClassName,
-				ReturnType: "void",
-				MethodName: matches[1],
-				Params:     params,
-			}
-			if shouldSkipGeneratedMethod(matches[1]) {
-				rawMethods[currentClassName+"::"+strings.TrimSuffix(matches[1], "_raw")] = methodDecl
-				continue
-			}
-			baseMethods[currentClassName+"::"+matches[1]] = methodDecl
-			g.methods = append(g.methods, methodDecl)
-		} else if reMethodReturn.MatchString(line) {
-			matches := reMethodReturn.FindStringSubmatch(line)
+		if matches := reMethod.FindStringSubmatch(line); matches != nil {
 			params := normalizeParams(matches[3])
 			methodDecl := classMethodDecl{
 				ClassName:  currentClassName,
@@ -223,11 +223,20 @@ func parseManagerHeader(input string) *headerCollector {
 				MethodName: matches[2],
 				Params:     params,
 			}
-			if shouldSkipGeneratedMethod(matches[2]) {
-				rawMethods[currentClassName+"::"+strings.TrimSuffix(matches[2], "_raw")] = methodDecl
+			if options != nil {
+				methodDecl.Binding = *options
+			}
+			methodDecl.Binding.validate(methodDecl)
+			functionName := "GDExtension" + currentClassName + strcase.ToCamel(methodDecl.MethodName)
+			if mode := methodDecl.Binding.Web; mode != common.WebBindingDefault {
+				g.metadata.WebBindings[functionName] = mode
+			}
+			if spec, ok := parseArrayBridge(methodDecl); ok {
+				g.metadata.ArrayBridges[spec.FunctionName] = spec
+			}
+			if methodDecl.Binding.returnsArray() {
 				continue
 			}
-			baseMethods[currentClassName+"::"+matches[2]] = methodDecl
 			g.methods = append(g.methods, methodDecl)
 		}
 	}
@@ -236,20 +245,19 @@ func parseManagerHeader(input string) *headerCollector {
 		spxlog.Error("Error reading string: %v", err)
 	}
 
-	g.registerNativeArrayBridgeSpecs(baseMethods, rawMethods)
-	g.registerArrayTransformBridgeSpecs(baseMethods, rawMethods)
+	if pendingBinding != nil {
+		panic("SPX_BINDING has no method declaration")
+	}
 	return g
 }
 
 func (g *headerCollector) render(rawFormat bool) string {
 	var builder strings.Builder
-	baseMethods := make(map[string]classMethodDecl)
 	for _, method := range g.methods {
 		if method.MethodName == "" {
 			fmt.Fprintf(&builder, "// %s\n", method.ClassName)
 			continue
 		}
-		baseMethods[method.ClassName+"::"+method.MethodName] = method
 		returnType, params := method.ReturnType, method.Params
 		name := strcase.ToCamel(method.MethodName)
 		if returnType == "void" || rawFormat {
@@ -261,6 +269,12 @@ func (g *headerCollector) render(rawFormat bool) string {
 			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *ret_value);\n", method.ClassName, name, params, returnType)
 		}
 	}
-	g.appendSyntheticArrayTransformTypedefs(&builder, rawFormat, baseMethods)
+	g.writeArrayTypedefs(&builder, rawFormat)
 	return builder.String()
+}
+
+func (g *headerCollector) renderHeader(raw bool) (string, error) {
+	text := strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", g.render(raw))
+	output, err := common.RenderTemplate(template.FuncMap{"arrayTypes": common.ArrayTypes}, "gdextension_spx_ext.h", text, nil)
+	return string(output), err
 }

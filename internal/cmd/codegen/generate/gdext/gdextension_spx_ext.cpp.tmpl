@@ -51,8 +51,8 @@ static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfo
 
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
-{{- if hasArrayTransformBridgeSpec $f }}
-	{{- $spec := getArrayTransformBridgeSpec $f }}
+{{- $spec := arrayBridge $f.Name }}
+{{- if and $spec $spec.ReturnArray }}
 static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
 		{{ $arg.CStyleString $j }}
@@ -62,30 +62,30 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
-	if (!{{ $spec.ArrayArgName }}) {
+	if (!{{ $spec.ArgName }}) {
 		*ret_val = nullptr;
 		return;
 	}
 
-	int count = {{ $spec.ArrayArgName }}->size;
+	int count = {{ $spec.ArgName }}->size;
 	if (count <= 0) {
 		*ret_val = nullptr;
 		return;
 	}
-	if (count > 0x7fffffff / {{ $spec.OutputCountScale }}) {
+	if (count > 0x7fffffff / {{ $spec.Output.ElementsPerInput }}) {
 		*ret_val = nullptr;
 		return;
 	}
 
-	int out_len = count * {{ $spec.OutputCountScale }};
-	GdArray result = SpxBaseMgr::create_array({{ fastArrayTypeConst $spec.OutputArrayType }}, out_len);
+	int out_len = count * {{ $spec.Output.ElementsPerInput }};
+	GdArray result = SpxBaseMgr::create_array({{ $spec.Output.Type.CConstant }}, out_len);
 	if (!result) {
 		*ret_val = nullptr;
 		return;
 	}
 
-	const {{ fastArrayElemCppType $spec.InputArrayType }} *input = SpxBaseMgr::get_array<{{ fastArrayElemCppType $spec.InputArrayType }}>({{ $spec.ArrayArgName }}, 0);
-	{{ fastArrayElemCppType $spec.OutputArrayType }} *out = SpxBaseMgr::get_array<{{ fastArrayElemCppType $spec.OutputArrayType }}>(result, 0);
+	const {{ $spec.Input.Type.CType }} *input = SpxBaseMgr::get_array<{{ $spec.Input.Type.CType }}>({{ $spec.ArgName }}, 0);
+	{{ $spec.Output.Type.CType }} *out = SpxBaseMgr::get_array<{{ $spec.Output.Type.CType }}>(result, 0);
 	if (!input || !out) {
 		SpxBaseMgr::free_array(result);
 		*ret_val = nullptr;

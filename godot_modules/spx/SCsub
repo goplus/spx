@@ -125,5 +125,6 @@ if env["platform"] == "web":
         WEB_ENGINE_SOURCES_APPEND=[
             web_engine_dir.File("gdspx.js"),
             web_engine_dir.File("gdspx.util.js"),
+            web_engine_dir.File("gdspx.input.js"),
         ],
     )
