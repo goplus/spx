@@ -105,16 +105,21 @@ func (t *transformComponent) moveForward(step float64) {
 }
 
 func (t *transformComponent) glide(x, y float64, secs float64) {
+	// Scratch casts NaN to zero and completes non-positive glides immediately.
+	if secs <= 0 || math.IsNaN(secs) {
+		t.setPosition(x, y)
+		return
+	}
+
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Glide: sprite=%s, x=%v, y=%v, secs=%v", t.sprite.name, x, y, secs)
 	}
 
-	x0, y0 := t.getXY()
 	animName := t.sprite.animation().getStateAnimName(StateGlide)
 	t.sprite.animation().doTween(animName, nil, tweenParams{
 		aniType:  coreproject.AniTypeGlide,
 		duration: secs,
-		moveFrom: mathf.NewVec2(x0, y0),
+		moveFrom: mathf.NewVec2(t.x, t.y),
 		moveTo:   mathf.NewVec2(x, y),
 	})
 }
