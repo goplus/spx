@@ -82,7 +82,7 @@ func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
 	}
 }
 
-func TestOnEngineRenderFlushesSpriteProxiesWhenCaptureIsPending(t *testing.T) {
+func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	enginewrap.Init(func(call func()) { call() })
 	originalSpriteMgr := pkgengine.SpriteMgr
 	spriteMgr := &captureFlushSpriteMgr{}
@@ -110,24 +110,30 @@ func TestOnEngineRenderFlushesSpriteProxiesWhenCaptureIsPending(t *testing.T) {
 
 	game.OnEngineRender(0)
 	if shape.updates != 0 {
-		t.Fatalf("shape updates without capture = %d, want 0", shape.updates)
+		t.Fatalf("post-coroutine proxy flush advanced shape logic %d times, want 0", shape.updates)
 	}
-	if destroyed.runtimeState.SyncSprite == nil {
-		t.Fatal("pending sprite destroy flushed without capture")
+	if destroyed.runtimeState.SyncSprite != nil {
+		t.Fatal("pending sprite destroy was not flushed on an ordinary frame")
+	}
+	if len(spriteMgr.batches) != 1 {
+		t.Fatalf("ordinary-frame proxy batches = %d, want 1", len(spriteMgr.batches))
 	}
 
+	destroyedWithCapture := &SpriteImpl{}
+	destroyedWithCapture.runtimeState.SyncSprite = &engine.Sprite{}
+	game.shapeMgr.remove(destroyedWithCapture)
 	if err := engine.EnqueueCapture("after-coroutine"); err != nil {
 		t.Fatal(err)
 	}
 	game.OnEngineRender(0)
 	if shape.updates != 0 {
-		t.Fatalf("capture-only proxy flush advanced shape logic %d times, want 0", shape.updates)
+		t.Fatalf("capture-frame proxy flush advanced shape logic %d times, want 0", shape.updates)
 	}
-	if destroyed.runtimeState.SyncSprite != nil {
-		t.Fatal("pending sprite destroy was not included in capture-only proxy flush")
+	if destroyedWithCapture.runtimeState.SyncSprite != nil {
+		t.Fatal("pending sprite destroy was not included in the capture-frame proxy flush")
 	}
-	if len(spriteMgr.batches) != 1 {
-		t.Fatalf("capture-only proxy batches = %d, want 1", len(spriteMgr.batches))
+	if len(spriteMgr.batches) != 2 {
+		t.Fatalf("proxy batches after capture frame = %d, want 2", len(spriteMgr.batches))
 	}
 	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)

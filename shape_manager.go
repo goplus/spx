@@ -99,24 +99,17 @@ func (s *shapeManager) reset() {
 	s.init()
 }
 
-// flushActivate updates all active non-sprite shapes for the current frame.
+// flushActivate advances active non-sprite, non-bubble shapes for the current frame.
 func (s *shapeManager) flushActivate(items []Shape) {
-	s.layoutTextBubbles(items)
 	if len(items) == 0 {
 		return
 	}
 
 	delta := itime.DeltaTime()
 	for _, item := range items {
-		if _, ok := item.(*SpriteImpl); ok {
-			continue
-		}
-
 		switch v := item.(type) {
-		case *quoterBubble:
-			v.onUpdate(delta)
-		case *textBubble:
-			v.onUpdate(delta)
+		case *SpriteImpl, *textBubble, *quoterBubble:
+			continue
 		case *Monitor:
 			v.onUpdate(delta)
 		default:
@@ -391,6 +384,21 @@ func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
 	}
 
 	return newIdx
+}
+
+// flushBubbleVisuals commits final bubble layout and UI state for the current frame.
+func (s *shapeManager) flushBubbleVisuals(items []Shape) {
+	s.layoutTextBubbles(items)
+
+	delta := itime.DeltaTime()
+	for _, item := range items {
+		switch bubble := item.(type) {
+		case *textBubble:
+			bubble.onUpdate(delta)
+		case *quoterBubble:
+			bubble.onUpdate(delta)
+		}
+	}
 }
 
 func sortTextBubblesByLayoutID(bubbles []*textBubble) {

@@ -61,7 +61,12 @@ func (p *Game) updateSpriteProxies() {
 // syncPostCoroutineVisuals flushes visual changes without advancing frame logic.
 func (p *Game) syncPostCoroutineVisuals() {
 	p.camera.onUpdate()
-	p.flushSpriteProxyChanges(p.shapeMgr.getTempShapes())
+
+	activeShapes := p.shapeMgr.getTempShapes()
+
+	p.flushSpriteProxyChanges(activeShapes)
+
+	p.shapeMgr.flushBubbleVisuals(activeShapes)
 }
 
 func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
@@ -279,7 +284,9 @@ func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
 }
 
 func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
-	p.transform().setPositionRaw(x, y)
+	if p.transform().setPositionRaw(x, y) {
+		p.markVisualDirty()
+	}
 }
 
 func (p *SpriteImpl) ensureProxyQueryStateSynced() {
