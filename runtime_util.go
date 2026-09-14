@@ -24,10 +24,7 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-const (
-	compareAbsTolerance = 1e-9
-	compareRelTolerance = 1e-9
-)
+const compareMaxULPs = 2
 
 // Rand__0 returns a random integer between from and to (inclusive).
 func Rand__0(from, to int) float64 {
@@ -103,8 +100,9 @@ func Compare(v1, v2 any) int {
 }
 
 // Equal reports whether two values match Scratch's = operator semantics.
-// Numeric values use a small absolute and relative tolerance to absorb
-// floating-point rounding errors. Compare remains exact for ordering.
+// Numeric values tolerate a small number of adjacent floating-point values to
+// absorb representation-level rounding errors. Compare remains exact for
+// ordering.
 func Equal(v1, v2 any) bool {
 	if n1, ok1 := toCompareNumber(v1); ok1 {
 		if n2, ok2 := toCompareNumber(v2); ok2 {
@@ -173,15 +171,16 @@ func nearlyEqual(a, b float64) bool {
 	if a == b {
 		return true
 	}
-	if math.IsInf(a, 0) || math.IsInf(b, 0) {
+	if math.IsNaN(a) || math.IsNaN(b) || math.IsInf(a, 0) || math.IsInf(b, 0) {
 		return false
 	}
-	diff := math.Abs(a - b)
-	if diff <= compareAbsTolerance {
-		return true
+	for range compareMaxULPs {
+		a = math.Nextafter(a, b)
+		if a == b {
+			return true
+		}
 	}
-	largest := math.Max(math.Abs(a), math.Abs(b))
-	return diff <= largest*compareRelTolerance
+	return false
 }
 
 func toCompareNumber(v any) (float64, bool) {

@@ -236,7 +236,13 @@ func TestOutOfRangeListItemDoesNotEqualZero(t *testing.T) {
 	}
 }
 
-func TestEqualUsesToleranceOnlyForNumericEquality(t *testing.T) {
+func TestEqualUsesULPToleranceOnlyForNumericEquality(t *testing.T) {
+	twoULPsAbove116 := 116.0
+	for range compareMaxULPs {
+		twoULPsAbove116 = math.Nextafter(twoULPsAbove116, math.Inf(1))
+	}
+	threeULPsAbove116 := math.Nextafter(twoULPsAbove116, math.Inf(1))
+
 	tests := []struct {
 		name  string
 		v1    any
@@ -245,8 +251,9 @@ func TestEqualUsesToleranceOnlyForNumericEquality(t *testing.T) {
 	}{
 		{name: "rounding error", v1: 116.00000000000001, v2: 116.0, equal: true},
 		{name: "numeric string rounding error", v1: "116.00000000000001", v2: 116.0, equal: true},
-		{name: "near zero", v1: 0.0, v2: 1e-12, equal: true},
-		{name: "relative tolerance at large magnitude", v1: 1e12, v2: 1e12 + 100, equal: true},
+		{name: "two ULPs", v1: twoULPsAbove116, v2: 116.0, equal: true},
+		{name: "three ULPs", v1: threeULPsAbove116, v2: 116.0, equal: false},
+		{name: "distinct close distances", v1: 372.15588144669624, v2: 372.1558811904396, equal: false},
 		{name: "different integers", v1: 116.0, v2: 117.0, equal: false},
 		{name: "meaningful fractional difference", v1: 116.0, v2: 116.5, equal: false},
 		{name: "same positive infinity", v1: math.Inf(1), v2: math.Inf(1), equal: true},
