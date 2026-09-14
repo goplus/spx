@@ -44,6 +44,7 @@ type SpriteSyncBuffer struct {
 	data       []SpriteSyncData
 	deleteIDs  []int64
 	serialized []float32
+	positions  []float32
 }
 
 const (
@@ -379,16 +380,17 @@ func SyncBatchUpdateSprites(buffer []float32) {
 	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
 }
 
-// SyncBatchGetPositions retrieves positions for multiple sprites
-// Format: [id1, id2, id3, ...] -> [x1, y1, x2, y2, x3, y3, ...]
-func SyncBatchGetPositions(spriteIDs []int64) []float32 {
-	if len(spriteIDs) == 0 {
-		return nil
+// GetPositions retrieves x/y pairs into storage owned by this sync buffer.
+// The result is valid until the next GetPositions call on the same buffer.
+func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
+	if len(spriteIDs) > math.MaxInt32/2 {
+		panic("position batch exceeds the native array length limit")
 	}
-
-	positions := Managers().SpriteMgr.BatchRetrievePositions(spriteIDs)
-	f32Pos, _ := positions.([]float32)
-	return f32Pos
+	b.positions = ensureFloat32BufferSize(b.positions, len(spriteIDs)*2)
+	if len(spriteIDs) > 0 {
+		Managers().SpriteMgr.BatchRetrievePositions(spriteIDs, b.positions)
+	}
+	return b.positions
 }
 
 // NewVisualSyncBuffer creates a new visual sync buffer

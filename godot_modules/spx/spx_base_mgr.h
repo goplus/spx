@@ -55,7 +55,7 @@ public:                                      \
 #define SPX_BIND SPX_API
 #endif
 
-// Codegen options: array_arg, elements_per_input, output_count, web.
+// Codegen options: web.
 #ifndef SPX_BINDING
 #define SPX_BINDING(...)
 #endif

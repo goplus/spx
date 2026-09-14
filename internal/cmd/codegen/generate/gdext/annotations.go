@@ -18,24 +18,16 @@ package gdext
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 )
 
 type bindingOptions struct {
-	ArrayArg         string
-	ElementsPerInput int
-	OutputCount      int
-	Web              common.WebBindingMode
+	Web common.WebBindingMode
 }
 
-var (
-	reBinding           = regexp.MustCompile(`^SPX_BINDING\s*\(([^()]*)\)`)
-	reBindingIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	reBindingCount      = regexp.MustCompile(`^[1-9][0-9]*$`)
-)
+var reBinding = regexp.MustCompile(`^SPX_BINDING\s*\(([^()]*)\)`)
 
 // parseBinding consumes an optional annotation and leaves the method declaration.
 func parseBinding(line string) (*bindingOptions, string) {
@@ -59,15 +51,6 @@ func parseBinding(line string) (*bindingOptions, string) {
 		}
 		seen[key] = true
 		switch key {
-		case "array_arg":
-			if !reBindingIdentifier.MatchString(value) {
-				panic("invalid SPX_BINDING array_arg: " + value)
-			}
-			options.ArrayArg = value
-		case "elements_per_input":
-			options.ElementsPerInput = parseBindingCount(key, value)
-		case "output_count":
-			options.OutputCount = parseBindingCount(key, value)
 		case "web":
 			options.Web = common.WebBindingMode(value)
 		default:
@@ -81,30 +64,11 @@ func parseBinding(line string) (*bindingOptions, string) {
 	return &options, declaration
 }
 
-func parseBindingCount(key, value string) int {
-	count, err := strconv.ParseInt(value, 10, 32)
-	if !reBindingCount.MatchString(value) || err != nil {
-		panic("SPX_BINDING " + key + " requires a positive int32: " + value)
-	}
-	return int(count)
-}
-
-func (o bindingOptions) returnsArray() bool { return o.ArrayArg != "" }
-
-func (o bindingOptions) validate(method classMethodDecl) {
-	if (o.ArrayArg == "") != (o.ElementsPerInput == 0) {
-		panic("SPX_BINDING requires array_arg and elements_per_input together: " + method.MethodName)
-	}
-	if o.OutputCount != 0 {
-		buffer, ok := parseCallerBuffer(method.Params)
-		if o.returnsArray() || method.ReturnType != "void" || !ok || strings.HasPrefix(buffer.Data.CType, "const ") {
-			panic("SPX_BINDING output_count requires void(output pointer, capacity): " + method.MethodName)
-		}
-	}
+func (o bindingOptions) validate(method classMethodDecl, arrayBridge bool) {
 	if o.Web == common.WebBindingDefault {
 		return
 	}
-	if o.returnsArray() || o.OutputCount != 0 {
+	if arrayBridge {
 		panic("SPX_BINDING web cannot override an array bridge: " + method.MethodName)
 	}
 	switch o.Web {

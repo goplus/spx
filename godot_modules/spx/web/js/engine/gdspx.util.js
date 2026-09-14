@@ -501,7 +501,6 @@ const GDSPX_ARRAY_ARENA_BYTES = 1024 * 1024;
 const GDSPX_ARRAY_ALIGNMENT = 8;
 const GDSPX_ARRAY_POOL = "default";
 const GDSPX_INPUT_POOL = "input";
-const GDSPX_RET_POOL = "return";
 const GDSPX_EMPTY_U8 = new Uint8Array(0);
 const GDSPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
 const GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
@@ -789,13 +788,6 @@ function IsNativeArrayByteLength(type, count, byteLength) {
         byteLength === count * size;
 }
 
-function IsCompatibleArrayType(actualType, expectedType) {
-    if (actualType === expectedType) {
-        return true;
-    }
-    return expectedType === GDSPX_ARRAY_TYPE_GDOBJ && actualType === GDSPX_ARRAY_TYPE_INT64;
-}
-
 function CopyToNativeArray(array, poolName = GDSPX_INPUT_POOL) {
     if (!IsNativeArray(array)) {
         return null;
@@ -858,59 +850,6 @@ function RequireNativeArray(array, opName, expectedType = null, writable = false
     return ptr;
 }
 
-// Transform bridges return views over the shared return pool.
-function TryTransformArray(call, input, inputArrayType, outputArrayType, outputCountScale) {
-    if (!IsNativeArray(input)) {
-        return null;
-    }
-    if (!IsCompatibleArrayType(NativeArrayType(input), inputArrayType)) {
-        return null;
-    }
-
-    const count = NativeArrayCount(input);
-    const inputElemSize = NativeArrayElementSize(inputArrayType);
-    if (inputElemSize === 0 || NativeArrayByteLength(input) !== count * inputElemSize) {
-        return null;
-    }
-
-    if (typeof call !== 'function') {
-        return null;
-    }
-    if (!Number.isInteger(outputCountScale) || outputCountScale < 0) {
-        return null;
-    }
-    if (count > 0 && outputCountScale > Math.floor(GDSPX_MAX_ARRAY_ELEMENTS / count)) {
-        return null;
-    }
-
-    const inputPtr = GetNativeArrayPointer(input);
-    if (count > 0 && inputPtr === 0) {
-        return null;
-    }
-
-    const outCount = count * outputCountScale;
-    const outputElemSize = NativeArrayElementSize(outputArrayType);
-    if (outputElemSize === 0 || outCount > Math.floor(GDSPX_MAX_ARRAY_BYTES / outputElemSize)) {
-        return null;
-    }
-    const outBytes = outCount * outputElemSize;
-    const out = GdspxBorrowNativeArray(
-        outputArrayType,
-        outCount,
-        outBytes,
-        GDSPX_RET_POOL,
-    );
-    const outputPtr = out ? GetNativeArrayPointer(out) : 0;
-    if (outputPtr === 0) {
-        return null;
-    }
-
-    if (count > 0) {
-        call(inputPtr, count, outputPtr, outCount);
-    }
-    return out;
-}
-
 function ReadArrayOutput(exportName, type, count) {
     if (!HasActiveModule()) {
         return null;
@@ -924,7 +863,7 @@ function ReadArrayOutput(exportName, type, count) {
     if (!out || GetNativeArrayPointer(out) === 0) {
         return null;
     }
-    call(GetNativeArrayPointer(out), NativeArrayCount(out));
+    call(GetNativeArrayPointer(out));
     return out;
 }
 

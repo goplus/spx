@@ -32,14 +32,15 @@ func TestEffectiveRawReturnTypeWithPrimitiveRetValue(t *testing.T) {
 		Arguments: []clang.Argument{
 			{
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdInt"},
+					Primative: &clang.PrimativeType{Name: "GdInt", IsPointer: true},
 				},
 				Name: "ret_value",
 			},
 		},
 	}
 
-	require.Equal(t, "GdInt", EffectiveRawReturnType(function))
+	generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{ReturnParameters: map[string]CParam{function.Name: {CType: "GdInt", Name: "ret_value"}}})
+	require.Equal(t, "GdInt", generation.EffectiveRawReturnType(function))
 }
 
 func TestEffectiveRawReturnTypePanicsOnFunctionPointerRetValue(t *testing.T) {
@@ -70,9 +71,10 @@ func TestEffectiveRawReturnTypePanicsOnFunctionPointerRetValue(t *testing.T) {
 
 	require.PanicsWithValue(
 		t,
-		"unsupported synthetic ret_value type in GDExtensionSpxTestFunctionReturn: void(*ret_value)(void * )",
+		"invalid synthetic return parameter in GDExtensionSpxTestFunctionReturn",
 		func() {
-			_ = EffectiveRawReturnType(function)
+			generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{ReturnParameters: map[string]CParam{function.Name: {CType: "GdInt", Name: "ret_value"}}})
+			_ = generation.EffectiveRawReturnType(function)
 		},
 	)
 }
@@ -116,7 +118,7 @@ func TestMustPrimitiveTypeNamePanicsOnFunctionPointer(t *testing.T) {
 }
 
 func TestEffectiveGoReturnTypePanicsOnMissingTypeMapping(t *testing.T) {
-	generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{})
+	generation := NewGenerationContext(clang.CHeaderFileAST{}, GenerationMetadata{ReturnParameters: map[string]CParam{"GDExtensionSpxTestUnknownReturn": {CType: "GdUnknown", Name: "ret_value"}}})
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxTestUnknownReturn",
@@ -126,7 +128,7 @@ func TestEffectiveGoReturnTypePanicsOnMissingTypeMapping(t *testing.T) {
 		Arguments: []clang.Argument{
 			{
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdUnknown"},
+					Primative: &clang.PrimativeType{Name: "GdUnknown", IsPointer: true},
 				},
 				Name: "ret_value",
 			},
@@ -158,11 +160,11 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 	metadata := GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms", ArgName: "buffer",
-		Input: &ArrayBuffer{
+		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Buffers: []ArrayBuffer{{
 			Data:   CParam{CType: "const float *", Name: "buffer_data"},
 			Length: CParam{CType: "int", Name: "len"}, Type: 2,
-		},
+		}},
 	}}
 	generation := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
 
@@ -184,8 +186,8 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, "[]float32", generation.EffectiveGoArgumentType(function, function.Arguments[0]))
-	require.Equal(t, "[]float32", generation.EffectiveGdxArgumentType(function, function.Arguments[0]))
-	require.Equal(t, "buffer", generation.EffectiveGoArgumentName(function, function.Arguments[0]))
-	require.True(t, generation.ShouldSkipHighLevelArgument(function, function.Arguments[1]))
+	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").MustGoType(function.Name))
+	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").GdxType(function.Name))
+	require.Equal(t, "buffer", generation.Parameter(function, "buffer_data").Name)
+	require.True(t, generation.Parameter(function, "len").IsLength)
 }

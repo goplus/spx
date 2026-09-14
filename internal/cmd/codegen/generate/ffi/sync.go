@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 
 	"github.com/iancoleman/strcase"
 )
@@ -58,7 +57,7 @@ func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) 
 	mgrName := strcase.ToCamel(g.GetManagerName(function.Name))
 	pureFuncName := function.Name[len(prefix)+len(mgrName):]
 	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := common.EffectiveArguments(function)
+	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
@@ -66,15 +65,15 @@ func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) 
 	sb.WriteString("(")
 	wroteArg := false
 	for _, arg := range args {
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := g.EffectiveGdxArgumentType(function, arg)
+		typeName := arg.GdxType(function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -100,7 +99,7 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 	pureFuncName := function.Name[len(prefix)+len(mgrName):]
 	gdxMgrName := "gdx." + mgrName + "Mgr"
 	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := common.EffectiveArguments(function)
+	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
@@ -108,15 +107,15 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 	sb.WriteString("(")
 	wroteArg := false
 	for _, arg := range args {
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := g.EffectiveGdxArgumentType(function, arg)
+		typeName := arg.GdxType(function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -143,13 +142,13 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 	fmt.Fprintf(&sb, "%s.%s(", gdxMgrName, pureFuncName)
 	wroteArg = false
 	for _, arg := range args {
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		wroteArg = true
 	}
 	sb.WriteString(")")

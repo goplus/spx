@@ -307,6 +307,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetPixelCollisionSamplingStep      js.Value
 	SpxSpriteBatchUpdateTransforms              js.Value
 	SpxSpriteBatchUpdateVisuals                 js.Value
+	SpxSpriteBatchRetrievePositions             js.Value
 	SpxSpriteBatchUpdatePhysics                 js.Value
 	SpxTilemapOpenDrawTilesWithSize             js.Value
 	SpxTilemapOpenDrawTiles                     js.Value
@@ -375,7 +376,6 @@ type GDExtensionInterface struct {
 	SpxUiSetRotation                            js.Value
 	SpxUiGetFlip                                js.Value
 	SpxUiSetFlip                                js.Value
-	SpxSpriteBatchRetrievePositions             js.Value
 }
 
 func (x *GDExtensionInterface) resolveAPIFunctions() {
@@ -646,6 +646,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetPixelCollisionSamplingStep = resolveJSFunc("gdspx_sprite_get_pixel_collision_sampling_step")
 	x.SpxSpriteBatchUpdateTransforms = resolveJSFunc("gdspx_sprite_batch_update_transforms")
 	x.SpxSpriteBatchUpdateVisuals = resolveJSFunc("gdspx_sprite_batch_update_visuals")
+	x.SpxSpriteBatchRetrievePositions = resolveJSFunc("gdspx_sprite_batch_retrieve_positions")
 	x.SpxSpriteBatchUpdatePhysics = resolveJSFunc("gdspx_sprite_batch_update_physics")
 	x.SpxTilemapOpenDrawTilesWithSize = resolveJSFunc("gdspx_tilemap_open_draw_tiles_with_size")
 	x.SpxTilemapOpenDrawTiles = resolveJSFunc("gdspx_tilemap_open_draw_tiles")
@@ -714,5 +715,4 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiSetRotation = resolveJSFunc("gdspx_ui_set_rotation")
 	x.SpxUiGetFlip = resolveJSFunc("gdspx_ui_get_flip")
 	x.SpxUiSetFlip = resolveJSFunc("gdspx_ui_set_flip")
-	x.SpxSpriteBatchRetrievePositions = resolveJSFunc("gdspx_sprite_batch_retrieve_positions")
 }

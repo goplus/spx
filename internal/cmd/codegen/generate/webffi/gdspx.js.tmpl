@@ -33,9 +33,10 @@ gd{{ loadProcAddressName $f.Name }}(
 GdspxFuncs['arrayOutputs'] = {
 {{- range $f := $view.CollectGDExtensionInterfaceFunctions }}
 {{- $spec := arrayBridge $f.Name }}
-{{- if and $spec.Output $spec.Output.Count }}
+{{- $output := $spec.FixedOutput }}
+{{- if $output }}
 	'gd{{ loadProcAddressName $f.Name }}': function() {
-		return ReadArrayOutput('_gd{{ loadProcAddressName $f.Name }}', {{ $spec.Output.Type }}, {{ $spec.Output.Count }});
+		return ReadArrayOutput('_gd{{ loadProcAddressName $f.Name }}', {{ $output.Type }}, {{ $output.Count }});
 	},
 {{- end }}
 {{- end }}

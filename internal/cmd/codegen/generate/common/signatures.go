@@ -37,26 +37,26 @@ func (c *GenerationContext) managerSignature(function *clang.TypedefFunction, mg
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
 	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := EffectiveArguments(function)
+	args := c.Parameters(function)
 	sb.WriteString(funcName)
 	sb.WriteString("(")
 	wroteArg := false
 	for _, arg := range args {
-		if c.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(c.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := c.EffectiveGoArgumentType(function, arg)
+		typeName := arg.MustGoType(function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
 	sb.WriteString(")")
 
-	if HasEffectiveReturn(function) {
+	if c.HasEffectiveReturn(function) {
 		typeName := c.EffectiveGoReturnType(function)
 		sb.WriteByte(' ')
 		sb.WriteString(typeName)

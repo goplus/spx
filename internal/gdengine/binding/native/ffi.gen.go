@@ -303,6 +303,7 @@ type GDExtensionInterface struct {
 	SpxSpriteGetPixelCollisionSamplingStep      GDExtensionSpxSpriteGetPixelCollisionSamplingStep
 	SpxSpriteBatchUpdateTransforms              GDExtensionSpxSpriteBatchUpdateTransforms
 	SpxSpriteBatchUpdateVisuals                 GDExtensionSpxSpriteBatchUpdateVisuals
+	SpxSpriteBatchRetrievePositions             GDExtensionSpxSpriteBatchRetrievePositions
 	SpxSpriteBatchUpdatePhysics                 GDExtensionSpxSpriteBatchUpdatePhysics
 	SpxTilemapOpenDrawTilesWithSize             GDExtensionSpxTilemapOpenDrawTilesWithSize
 	SpxTilemapOpenDrawTiles                     GDExtensionSpxTilemapOpenDrawTiles
@@ -371,7 +372,6 @@ type GDExtensionInterface struct {
 	SpxUiSetRotation                            GDExtensionSpxUiSetRotation
 	SpxUiGetFlip                                GDExtensionSpxUiGetFlip
 	SpxUiSetFlip                                GDExtensionSpxUiSetFlip
-	SpxSpriteBatchRetrievePositions             GDExtensionSpxSpriteBatchRetrievePositions
 }
 
 func (x *GDExtensionInterface) resolveAPIFunctions() {
@@ -642,6 +642,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxSpriteGetPixelCollisionSamplingStep = (GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(resolveCFunc("spx_sprite_get_pixel_collision_sampling_step"))
 	x.SpxSpriteBatchUpdateTransforms = (GDExtensionSpxSpriteBatchUpdateTransforms)(resolveCFunc("spx_sprite_batch_update_transforms"))
 	x.SpxSpriteBatchUpdateVisuals = (GDExtensionSpxSpriteBatchUpdateVisuals)(resolveCFunc("spx_sprite_batch_update_visuals"))
+	x.SpxSpriteBatchRetrievePositions = (GDExtensionSpxSpriteBatchRetrievePositions)(resolveCFunc("spx_sprite_batch_retrieve_positions"))
 	x.SpxSpriteBatchUpdatePhysics = (GDExtensionSpxSpriteBatchUpdatePhysics)(resolveCFunc("spx_sprite_batch_update_physics"))
 	x.SpxTilemapOpenDrawTilesWithSize = (GDExtensionSpxTilemapOpenDrawTilesWithSize)(resolveCFunc("spx_tilemap_open_draw_tiles_with_size"))
 	x.SpxTilemapOpenDrawTiles = (GDExtensionSpxTilemapOpenDrawTiles)(resolveCFunc("spx_tilemap_open_draw_tiles"))
@@ -710,5 +711,4 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiSetRotation = (GDExtensionSpxUiSetRotation)(resolveCFunc("spx_ui_set_rotation"))
 	x.SpxUiGetFlip = (GDExtensionSpxUiGetFlip)(resolveCFunc("spx_ui_get_flip"))
 	x.SpxUiSetFlip = (GDExtensionSpxUiSetFlip)(resolveCFunc("spx_ui_set_flip"))
-	x.SpxSpriteBatchRetrievePositions = (GDExtensionSpxSpriteBatchRetrievePositions)(resolveCFunc("spx_sprite_batch_retrieve_positions"))
 }

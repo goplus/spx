@@ -42,8 +42,8 @@ func (pself *Sprite) AddImpulse(impulse Vec2) {
 	SpriteMgr.AddImpulse(pself.Id, impulse)
 }
 
-func (pself *Sprite) BatchRetrievePositions(objs Array) Array {
-	return SpriteMgr.BatchRetrievePositions(objs)
+func (pself *Sprite) BatchRetrievePositions(objs []int64, out []float32) {
+	SpriteMgr.BatchRetrievePositions(objs, out)
 }
 
 func (pself *Sprite) BatchUpdatePhysics(buffer []float32) {

@@ -65,8 +65,7 @@ public:
 	SPX_API GdBool is_action_pressed_id(GdInt action_id);
 	SPX_API GdBool is_action_just_pressed_id(GdInt action_id);
 	SPX_API GdBool is_action_just_released_id(GdInt action_id);
-	SPX_BINDING(output_count=3)
-	SPX_API void write_snapshot(float *out, int len);
+	SPX_API void write_snapshot(float out[3]);
 
 private:
 	static constexpr GdInt KEY_ANY = -1;

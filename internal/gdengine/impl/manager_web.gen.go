@@ -427,9 +427,13 @@ func (pself *inputMgr) IsActionJustReleasedId(action_id int64) bool {
 	_result := API.SpxInputIsActionJustReleasedId.Invoke(arg0Low, arg0High)
 	return JsToGdBool(_result)
 }
-func (pself *inputMgr) WriteSnapshot(out []float32) {
-	arg0 := JsFromGdArray(out)
+func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
+	if out == nil {
+		panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
+	}
+	arg0 := JsFromNativeArray(out[:], 2)
 	API.SpxInputWriteSnapshot.Invoke(arg0)
+	CopyNativeArrayOutput(out[:], arg0)
 }
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 	arg0 := JsFromGdVec2(grid_size)
@@ -471,7 +475,10 @@ func (pself *penMgr) DestroyPen(obj Object) {
 	API.SpxPenDestroyPen.Invoke(arg0Low, arg0High)
 }
 func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
-	arg0 := JsFromGdArray(buffer)
+	if len(buffer) > 2147483647 {
+		panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
+	}
+	arg0 := JsFromNativeArray(buffer, 2)
 	API.SpxPenBatchUpdateCommands.Invoke(arg0)
 }
 func (pself *penMgr) PenStamp(obj Object) {
@@ -1525,15 +1532,36 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	return JsToGdInt(_result)
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
-	arg0 := JsFromGdArray(buffer)
+	if len(buffer) > 2147483647 {
+		panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
+	}
+	arg0 := JsFromNativeArray(buffer, 2)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
 }
 func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
-	arg0 := JsFromGdArray(buffer)
+	if len(buffer) > 2147483647 {
+		panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
+	}
+	arg0 := JsFromNativeArray(buffer, 2)
 	API.SpxSpriteBatchUpdateVisuals.Invoke(arg0)
 }
+func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) {
+	if len(objs) > 2147483647 {
+		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
+	}
+	arg0 := JsFromNativeArray(objs, 6)
+	if len(out) > 2147483647 {
+		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
+	}
+	arg2 := JsFromNativeArray(out, 2)
+	API.SpxSpriteBatchRetrievePositions.Invoke(arg0, arg2)
+	CopyNativeArrayOutput(out, arg2)
+}
 func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
-	arg0 := JsFromGdArray(buffer)
+	if len(buffer) > 2147483647 {
+		panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
+	}
+	arg0 := JsFromNativeArray(buffer, 2)
 	API.SpxSpriteBatchUpdatePhysics.Invoke(arg0)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
@@ -1873,9 +1901,4 @@ func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 	arg1 := JsFromGdBool(horizontal)
 	arg2 := JsFromGdBool(is_flip)
 	API.SpxUiSetFlip.Invoke(arg0Low, arg0High, arg1, arg2)
-}
-func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
-	arg0 := JsFromGdArray(objs)
-	_result := API.SpxSpriteBatchRetrievePositions.Invoke(arg0)
-	return JsToGdArray(_result)
 }

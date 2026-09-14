@@ -71,8 +71,7 @@ typedef enum {
 } GdArrayType;
 
 typedef struct {
-	// 0 is return value
-	// 1-7 are arguments
+	// Slot 0 holds Ret; slots 1-8 hold Arg0-Arg7.
 	GdVec4 Ret;
 	GdVec4 Arg0;
 	GdVec4 Arg1;
@@ -264,7 +263,7 @@ typedef void (*GDExtensionSpxInputGetAxisId)(GdInt neg_action_id, GdInt pos_acti
 typedef void (*GDExtensionSpxInputIsActionPressedId)(GdInt action_id, GdBool *ret_value);
 typedef void (*GDExtensionSpxInputIsActionJustPressedId)(GdInt action_id, GdBool *ret_value);
 typedef void (*GDExtensionSpxInputIsActionJustReleasedId)(GdInt action_id, GdBool *ret_value);
-typedef void (*GDExtensionSpxInputWriteSnapshot)(float *out, int len);
+typedef void (*GDExtensionSpxInputWriteSnapshot)(float *out);
 // SpxNavigation
 typedef void (*GDExtensionSpxNavigationSetupPathFinderWithSize)(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug);
 typedef void (*GDExtensionSpxNavigationSetupPathFinder)(GdBool with_jump);
@@ -484,6 +483,7 @@ typedef void (*GDExtensionSpxSpriteSetPixelCollisionSamplingStep)(GdInt step);
 typedef void (*GDExtensionSpxSpriteGetPixelCollisionSamplingStep)(GdInt *ret_value);
 typedef void (*GDExtensionSpxSpriteBatchUpdateTransforms)(const float *buffer_data, int len);
 typedef void (*GDExtensionSpxSpriteBatchUpdateVisuals)(const float *buffer_data, int len);
+typedef void (*GDExtensionSpxSpriteBatchRetrievePositions)(const GdObj *objs, int count, float *out, int out_len);
 typedef void (*GDExtensionSpxSpriteBatchUpdatePhysics)(const float *buffer_data, int len);
 // SpxTilemap
 typedef void (*GDExtensionSpxTilemapOpenDrawTilesWithSize)(GdInt tile_size);
@@ -555,7 +555,6 @@ typedef void (*GDExtensionSpxUiGetRotation)(GdObj obj, GdFloat *ret_value);
 typedef void (*GDExtensionSpxUiSetRotation)(GdObj obj, GdFloat value);
 typedef void (*GDExtensionSpxUiGetFlip)(GdObj obj, GdBool horizontal, GdBool *ret_value);
 typedef void (*GDExtensionSpxUiSetFlip)(GdObj obj, GdBool horizontal, GdBool is_flip);
-typedef void (*GDExtensionSpxSpriteBatchRetrievePositions)(GdArray objs, GdArray *ret_value);
 
 
 #ifdef __cplusplus

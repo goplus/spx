@@ -485,7 +485,7 @@ func (*inputMgrImpl) IsActionJustReleasedId(action_id int64) bool {
 	})
 	return _ret1
 }
-func (*inputMgrImpl) WriteSnapshot(out []float32) {
+func (*inputMgrImpl) WriteSnapshot(out *[3]float32) {
 	callInMainThread(func() {
 		gdx.InputMgr.WriteSnapshot(out)
 	})
@@ -1766,17 +1766,15 @@ func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32) {
 		gdx.SpriteMgr.BatchUpdateVisuals(buffer)
 	})
 }
+func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) {
+	callInMainThread(func() {
+		gdx.SpriteMgr.BatchRetrievePositions(objs, out)
+	})
+}
 func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32) {
 	callInMainThread(func() {
 		gdx.SpriteMgr.BatchUpdatePhysics(buffer)
 	})
-}
-func (*spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
-	var _ret1 gdx.Array
-	callInMainThread(func() {
-		_ret1 = gdx.SpriteMgr.BatchRetrievePositions(objs)
-	})
-	return _ret1
 }
 
 // ITilemapMgr

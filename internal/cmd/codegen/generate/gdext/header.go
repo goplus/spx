@@ -174,8 +174,9 @@ func normalizeParams(params string) string {
 
 func parseManagerHeader(input string) *headerCollector {
 	g := &headerCollector{metadata: common.GenerationMetadata{
-		ArrayBridges: make(map[string]common.ArrayBridge),
-		WebBindings:  make(map[string]common.WebBindingMode),
+		ArrayBridges:     make(map[string]common.ArrayBridge),
+		WebBindings:      make(map[string]common.WebBindingMode),
+		ReturnParameters: make(map[string]common.CParam),
 	}}
 	scanner := bufio.NewScanner(strings.NewReader(input))
 	var currentClassName string
@@ -226,16 +227,27 @@ func parseManagerHeader(input string) *headerCollector {
 			if options != nil {
 				methodDecl.Binding = *options
 			}
-			methodDecl.Binding.validate(methodDecl)
+			spec, arrayBridge := parseArrayBridge(methodDecl)
+			methodDecl.Binding.validate(methodDecl, arrayBridge)
 			functionName := "GDExtension" + currentClassName + strcase.ToCamel(methodDecl.MethodName)
+			if methodDecl.ReturnType != "void" {
+				name := "ret_value"
+				for n := 2; regexp.MustCompile(`\b` + name + `\b`).MatchString(methodDecl.Params); n++ {
+					name = fmt.Sprintf("ret_value_%d", n)
+				}
+				g.metadata.ReturnParameters[functionName] = common.CParam{CType: methodDecl.ReturnType, Name: name}
+			}
 			if mode := methodDecl.Binding.Web; mode != common.WebBindingDefault {
 				g.metadata.WebBindings[functionName] = mode
 			}
-			if spec, ok := parseArrayBridge(methodDecl); ok {
+			if arrayBridge {
 				g.metadata.ArrayBridges[spec.FunctionName] = spec
-			}
-			if methodDecl.Binding.returnsArray() {
-				continue
+				// Lower every fixed array to its pointer ABI after preserving its extent.
+				var params []string
+				for _, param := range spec.Params() {
+					params = append(params, param.Declaration())
+				}
+				methodDecl.Params = strings.Join(params, ", ")
 			}
 			g.methods = append(g.methods, methodDecl)
 		}
@@ -266,10 +278,10 @@ func (g *headerCollector) render(rawFormat bool) string {
 			if len(params) > 0 {
 				returnType = ", " + returnType
 			}
-			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *ret_value);\n", method.ClassName, name, params, returnType)
+			result := g.metadata.ReturnParameters["GDExtension"+method.ClassName+name]
+			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *%s);\n", method.ClassName, name, params, returnType, result.Name)
 		}
 	}
-	g.writeArrayTypedefs(&builder, rawFormat)
 	return builder.String()
 }
 

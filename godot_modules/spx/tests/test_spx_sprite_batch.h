@@ -36,6 +36,7 @@
 #include "scene/main/window.h"
 #include "tests/test_macros.h"
 
+#include <climits>
 #include <limits>
 
 namespace TestSpxSpriteBatch {
@@ -44,6 +45,52 @@ class SpriteMgrProbe : public SpxSpriteMgr {
 public:
 	void register_sprite(SpxSprite *p_sprite) { _register_sprite(p_sprite); }
 };
+
+TEST_CASE("[SceneTree][SPX] Position batches use independently sized native buffers") {
+	SpriteMgrProbe manager;
+	SpxSprite *sprite = memnew(SpxSprite);
+	constexpr GdObj id = 0x112233447fc00001;
+	sprite->set_gid(id);
+	sprite->set_position(Vector2(3, 4));
+	SceneTree::get_singleton()->get_root()->add_child(sprite);
+	manager.register_sprite(sprite);
+
+	const GdObj ids[] = {id, 999, id};
+	float out[] = {42, 42, 42, 42, 42, 42, 42, 42};
+	manager.batch_retrieve_positions(ids, 3, out, 8);
+	CHECK_EQ(out[0], 3);
+	CHECK_EQ(out[1], -4);
+	CHECK(Math::is_nan(out[2]));
+	CHECK(Math::is_nan(out[3]));
+	CHECK_EQ(out[4], 3);
+	CHECK_EQ(out[5], -4);
+	CHECK_EQ(out[6], 42);
+	CHECK_EQ(out[7], 42);
+	CHECK_EQ(ids[0], id);
+
+	sprite->set_position(Vector2(5, 6));
+	manager.batch_retrieve_positions(ids, 3, out, 8);
+	CHECK_EQ(out[0], 5);
+	CHECK_EQ(out[1], -6);
+	manager.destroy_sprite(id);
+}
+
+TEST_CASE("[SceneTree][SPX] Position batches reject insufficient output before writing") {
+	SpriteMgrProbe manager;
+	const GdObj ids[] = {1, 2};
+	float out[] = {3, 4, 5};
+	ERR_PRINT_OFF;
+	manager.batch_retrieve_positions(nullptr, 2, out, 3);
+	manager.batch_retrieve_positions(ids, 2, nullptr, 4);
+	manager.batch_retrieve_positions(ids, INT_MAX, out, 3);
+	for (int count : {0, -1, 2}) {
+		manager.batch_retrieve_positions(ids, count, out, 3);
+		CHECK_EQ(out[0], 3);
+		CHECK_EQ(out[1], 4);
+		CHECK_EQ(out[2], 5);
+	}
+	ERR_PRINT_ON;
+}
 
 TEST_CASE("[SceneTree][SPX] Transform batch uses destroy-wins semantics") {
 	SpriteMgrProbe manager;

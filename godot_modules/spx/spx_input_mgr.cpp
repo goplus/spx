@@ -133,8 +133,8 @@ GdBool SpxInputMgr::is_action_just_released_id(GdInt action_id) {
 	return action != nullptr && Input::get_singleton()->is_action_just_released(*action);
 }
 
-void SpxInputMgr::write_snapshot(float *out, int len) {
-	if (!out || len < 3) {
+void SpxInputMgr::write_snapshot(float out[3]) {
+	if (!out) {
 		return;
 	}
 

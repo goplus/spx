@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 )
 
 type cacheFunc struct {
@@ -81,10 +80,12 @@ func (g *Generator) wrapCache(function *clang.TypedefFunction, body string) stri
 		return body
 	}
 	var args []string
-	for _, arg := range g.HighLevelArguments(function) {
-		args = append(args, arg.Name)
+	for _, arg := range g.Parameters(function) {
+		if !arg.IsLength {
+			args = append(args, arg.Name)
+		}
 	}
-	if len(args) != cache.argCount || !common.HasEffectiveReturn(function) {
+	if len(args) != cache.argCount || !g.HasEffectiveReturn(function) {
 		panic("cache signature does not match " + function.Name)
 	}
 	args = append(args, fmt.Sprintf("func() %s {\n\t%s\n\t}", g.EffectiveGoReturnType(function), strings.ReplaceAll(body, "\n", "\n\t")))

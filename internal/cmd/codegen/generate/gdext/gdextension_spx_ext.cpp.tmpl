@@ -51,51 +51,6 @@ static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfo
 
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
-{{- $spec := arrayBridge $f.Name }}
-{{- if and $spec $spec.ReturnArray }}
-static void gdextension_{{ loadProcAddressName $f.Name }}(
-	{{- range $j, $arg := $f.Arguments -}}
-		{{ $arg.CStyleString $j }}
-		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{ end -}}
-	{{- end -}}
-	{{ if ne "void" $f.ReturnType.CStyleString -}} 
-	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
-	{{- end -}}
-) {
-	if (!{{ $spec.ArgName }}) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	int count = {{ $spec.ArgName }}->size;
-	if (count <= 0) {
-		*ret_val = nullptr;
-		return;
-	}
-	if (count > 0x7fffffff / {{ $spec.Output.ElementsPerInput }}) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	int out_len = count * {{ $spec.Output.ElementsPerInput }};
-	GdArray result = SpxBaseMgr::create_array({{ $spec.Output.Type.CConstant }}, out_len);
-	if (!result) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	const {{ $spec.Input.Type.CType }} *input = SpxBaseMgr::get_array<{{ $spec.Input.Type.CType }}>({{ $spec.ArgName }}, 0);
-	{{ $spec.Output.Type.CType }} *out = SpxBaseMgr::get_array<{{ $spec.Output.Type.CType }}>(result, 0);
-	if (!input || !out) {
-		SpxBaseMgr::free_array(result);
-		*ret_val = nullptr;
-		return;
-	}
-
-	{{ getManagerName $spec.FunctionName }}Mgr->{{ $spec.MethodName }}(input, count, out, out_len);
-	*ret_val = result;
-}
-{{- else }}
 static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
 		{{ $arg.CStyleString $j }}
@@ -113,8 +68,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 		{{- end -}}
 	);
 }
-{{- end -}}
-{{ end }}
+{{- end }}
 {{ end }}
 
 void gdextension_spx_setup_interface() {

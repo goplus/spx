@@ -98,7 +98,7 @@ func (p *Game) pullPhysicsPositions() {
 		func(item Shape) int64 {
 			return int64(item.(*SpriteImpl).runtimeState.SyncSprite.Id)
 		},
-		engine.SyncBatchGetPositions,
+		p.syncBuffer.GetPositions,
 		func(item Shape, x, y float64) {
 			item.(*SpriteImpl).applyPhysicsPosition(x, y)
 		},

@@ -275,8 +275,8 @@ static void gdextension_spx_input_is_action_just_released_id(GdInt action_id, Gd
 	*ret_val = inputMgr->is_action_just_released_id(action_id);
 }
 
-static void gdextension_spx_input_write_snapshot(float *out, int len) {
-	inputMgr->write_snapshot(out, len);
+static void gdextension_spx_input_write_snapshot(float *out) {
+	inputMgr->write_snapshot(out);
 }
 
 static void gdextension_spx_navigation_setup_path_finder_with_size(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug) {
@@ -1127,6 +1127,10 @@ static void gdextension_spx_sprite_batch_update_visuals(const float *buffer_data
 	spriteMgr->batch_update_visuals(buffer_data, len);
 }
 
+static void gdextension_spx_sprite_batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
+	spriteMgr->batch_retrieve_positions(objs, count, out, out_len);
+}
+
 static void gdextension_spx_sprite_batch_update_physics(const float *buffer_data, int len) {
 	spriteMgr->batch_update_physics(buffer_data, len);
 }
@@ -1399,41 +1403,6 @@ static void gdextension_spx_ui_set_flip(GdObj obj, GdBool horizontal, GdBool is_
 	uiMgr->set_flip(obj, horizontal, is_flip);
 }
 
-static void gdextension_spx_sprite_batch_retrieve_positions(GdArray objs, GdArray *ret_val) {
-	if (!objs) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	int count = objs->size;
-	if (count <= 0) {
-		*ret_val = nullptr;
-		return;
-	}
-	if (count > 0x7fffffff / 2) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	int out_len = count * 2;
-	GdArray result = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, out_len);
-	if (!result) {
-		*ret_val = nullptr;
-		return;
-	}
-
-	const GdObj *input = SpxBaseMgr::get_array<GdObj>(objs, 0);
-	float *out = SpxBaseMgr::get_array<float>(result, 0);
-	if (!input || !out) {
-		SpxBaseMgr::free_array(result);
-		*ret_val = nullptr;
-		return;
-	}
-
-	spriteMgr->batch_retrieve_positions(input, count, out, out_len);
-	*ret_val = result;
-}
-
 
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
@@ -1704,6 +1673,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_get_pixel_collision_sampling_step);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_batch_update_transforms);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_batch_update_visuals);
+	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_batch_retrieve_positions);
 	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_batch_update_physics);
 	REGISTER_SPX_INTERFACE_FUNC(spx_tilemap_open_draw_tiles_with_size);
 	REGISTER_SPX_INTERFACE_FUNC(spx_tilemap_open_draw_tiles);
@@ -1772,5 +1742,4 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_rotation);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_get_flip);
 	REGISTER_SPX_INTERFACE_FUNC(spx_ui_set_flip);
-	REGISTER_SPX_INTERFACE_FUNC(spx_sprite_batch_retrieve_positions);
 }

@@ -24,7 +24,7 @@ import (
 // jsResult returns a reuse key and initializer, or empty strings for fresh results.
 // Int64 values share a slot per type; annotated values use one per API.
 func (g *Generator) jsResult(function *clang.TypedefFunction) (key, initializer string) {
-	typeName := common.EffectiveRawReturnType(function)
+	typeName := g.EffectiveRawReturnType(function)
 	if _, ok := jsInt64Types[typeName]; ok {
 		return typeName, "{ 'low': 0, 'high': 0 }"
 	}
