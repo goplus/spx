@@ -503,11 +503,20 @@ Font SVGLayoutState::font() const
     auto italic = m_font_style == FontStyle::Italic;
 
     FontFace face;
-    const auto families = m_font_family.empty() ? fontPreferences() : parseFontFamilyList(m_font_family);
+    const bool hasExplicitFamilies = !m_font_family.empty();
+    const auto families = hasExplicitFamilies ? parseFontFamilyList(m_font_family) : fontPreferences();
     for(const auto& family : families) {
         face = fontFaceCache()->getFontFace(family, bold, italic);
         if(!face.isNull())
             break;
+    }
+
+    if(face.isNull() && hasExplicitFamilies && fontPreferencesConfigured()) {
+        for(const auto& family : fontPreferences()) {
+            face = fontFaceCache()->getFontFace(family, bold, italic);
+            if(!face.isNull())
+                break;
+        }
     }
 
     if(face.isNull() && !fontPreferencesConfigured())

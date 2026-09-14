@@ -76,7 +76,7 @@ Native bridge 会区分 nil slice 与显式空 slice。Web bridge 使用同一�
 
 ## SVG family 与 cluster fallback
 
-SVG 显式声明的 `font-family` 优先于项目全局 `fontPreferences`。只会使用有效的自定义 CSS family；generic family 和 system-font keyword 不属于项目 family。显式列表里的未知名称会被跳过；如果没有可用候选，不会继续使用全局列表或系统字体。没有显式 family 时才使用项目全局顺序。若项目 family 与 CSS keyword 冲突（包括 `default`），SVG 中必须引用为带引号的字符串。
+SVG 显式声明的 `font-family` 优先于项目全局 `fontPreferences`。只会使用有效的自定义 CSS family；generic family 和 system-font keyword 不属于项目 family。显式列表里的未知名称会被跳过；如果显式列表没有任何可用候选，则使用项目全局顺序，兼容引用了未随项目打包字体的旧 SVG。若项目 family 与 CSS keyword 冲突（包括 `default`），SVG 中必须引用为带引号的字符串。
 
 fallback 按 extended grapheme cluster 选择字体，但 shaping 不按 cluster 拆开：
 
@@ -119,7 +119,7 @@ SPX reset 会把字体视为项目级状态并完整清理：
 
 - 每个 Scratch family 和汉字子集 `basic-chinese` 都位于自己的 `assets/fonts/<Family>` 目录。
 - `Color Emoji` 作为项目 Family 携带完整的 Twitter Color Emoji 字体，提供 `❤️` 等 emoji 字形。
-- SVG 显式 family 只解析项目声明，不依赖 runtime 内置映射。
+- SVG 显式 family 只解析项目声明，不依赖 runtime 内置映射；全部不可用时回退到项目全局顺序。
 - `Pixel, Color Emoji, Arabic, basic-chinese, default` 展示多级全局回退。
 - emoji、中文、combining mark、variation selector 和 ZWJ 序列覆盖 cluster fallback。
 - 混排文本以逻辑字符序列 `SPX 123 | \u0633\u0644\u0627\u0645 | 456 END` 保存；渲染后 `456` visual run 位于连接后的阿拉伯文 run 之前，覆盖 ICU Unicode BiDi、阿拉伯连接形和跨 Family fallback。

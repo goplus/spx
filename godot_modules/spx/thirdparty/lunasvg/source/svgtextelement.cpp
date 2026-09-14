@@ -928,18 +928,25 @@ static std::vector<ShapedFontSpan> shapeSelectedGroups(const std::vector<Selecte
 
 static std::vector<FontCandidate> resolveFontCandidates(const SVGTextPositioningElement *element) {
 	FontFamilyList families;
-	if (!element->font_family().empty()) {
+	const bool hasExplicitFamilies = !element->font_family().empty();
+	if (hasExplicitFamilies) {
 		families = parseFontFamilyList(element->font_family());
 	} else if (fontPreferencesConfigured()) {
 		families = fontPreferences();
 	}
 
 	std::vector<FontCandidate> candidates;
-	for (const auto &family : families) {
-		auto face = fontFaceCache()->getFontFace(family, element->font_bold(), element->font_italic());
-		if (!face.isNull()) {
-			candidates.emplace_back(std::move(face));
+	auto appendCandidates = [&](const FontFamilyList &candidateFamilies) {
+		for (const auto &family : candidateFamilies) {
+			auto face = fontFaceCache()->getFontFace(family, element->font_bold(), element->font_italic());
+			if (!face.isNull()) {
+				candidates.emplace_back(std::move(face));
+			}
 		}
+	};
+	appendCandidates(families);
+	if (candidates.empty() && hasExplicitFamilies && fontPreferencesConfigured()) {
+		appendCandidates(fontPreferences());
 	}
 	if (candidates.empty() && !fontPreferencesConfigured() && !element->font().isNull()) {
 		candidates.emplace_back(element->font().face());

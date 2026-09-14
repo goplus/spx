@@ -177,6 +177,22 @@ static bool svg_shaping_observation_is_supported(const SVGShapingObservation &ob
 			});
 }
 
+TEST_CASE("[SPX] LunaSVG falls back to project preferences when explicit families are unavailable") {
+	LunaSVGTextConfigurationReset reset;
+	const String font_path = TestSpxData::get_path("fonts/noto_sans_clusters/NotoSans-Medium.ttf");
+	CHECK(lunasvg_add_font_face_from_file("Project Fallback", false, false, font_path.utf8().get_data()));
+	luna_set_font_preferences("Project Fallback");
+
+	std::vector<SVGShapingObservation> observations;
+	lunasvg::setShapingObserverFunction(observe_svg_shaping, &observations);
+	const char svg[] = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text y=\"40\" font-family=\"Missing Family\" font-size=\"32\">Cafe</text></svg>";
+	auto document = lunasvg::Document::loadFromData(svg, sizeof(svg) - 1);
+	REQUIRE(document != nullptr);
+	CHECK(document->boundingBox().w > 0.0f);
+
+	CHECK(std::any_of(observations.begin(), observations.end(), svg_shaping_observation_is_supported));
+}
+
 static const SVGShapingObservation *find_supported_svg_shaping_observation(
 		const std::vector<SVGShapingObservation> &observations, size_t start, size_t end, bool right_to_left) {
 	for (const auto &observation : observations) {

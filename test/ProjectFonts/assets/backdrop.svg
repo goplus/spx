@@ -32,7 +32,7 @@
   <rect x="240" y="193" width="216" height="79" rx="11" fill="#fff7ed" stroke="#f0ddc5"/>
   <text x="250" y="211" font-family="'default'" font-size="10" font-weight="700" fill="#9a5b18">SVG explicit overrides global</text>
   <text x="250" y="239" font-family='Scratch, "basic-chinese"' font-size="21" fill="#b45309">Hello七牛</text>
-  <text x="250" y="260" font-family="'default'" font-size="9" fill="#7c6f64">No available font:</text>
+  <text x="250" y="260" font-family="'default'" font-size="9" fill="#7c6f64">Missing family fallback:</text>
   <text x="391" y="261" font-family="'Missing Family'" font-size="18" fill="#b91c1c">A</text>
 
   <rect x="24" y="278" width="432" height="61" rx="11" fill="#faf5ff" stroke="#eadcf3"/>
