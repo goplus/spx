@@ -69,7 +69,9 @@ func TestInputActionCache(t *testing.T) {
 			}
 			calls := 0
 			fallback := func() float64 { calls++; return 0 }
-			if query(fallback) != 0 || query(fallback) != 0 || calls != 1 {
+			first := query(fallback)
+			cached := query(fallback)
+			if first != 0 || cached != 0 || calls != 1 {
 				t.Fatal("zero/false results must be cached")
 			}
 			clearActionCache(1)

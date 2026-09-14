@@ -55,6 +55,12 @@ jobs:
       - name: Test Web bridge
         run: node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs
 
+      - name: Test Go Web bindings
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: go test -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web
+
       - name: Test Web ABI memory ownership
         env:
           GDSPX_SANITIZERS: address,undefined

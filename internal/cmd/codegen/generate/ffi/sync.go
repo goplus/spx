@@ -73,7 +73,8 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 		}
 	}
 
-	sb.WriteString(g.syncSignature(function) + " {")
+	sb.WriteString(g.syncSignature(function))
+	sb.WriteString(" {")
 	if returnType != "" {
 		fmt.Fprintf(&sb, "\n\tvar _ret1 %s", returnType)
 	}
