@@ -676,8 +676,10 @@ gdspx_input_is_action_just_released_id(action_id_low,action_id_high) {
 gdspx_input_write_snapshot(out) {
 	var _call = Module['_gdspx_input_write_snapshot'];
 	var _arg0 = RequireNativeArray(out, "gdspx_input_write_snapshot", 2, true);
-	var _arg1 = NativeArrayCount(out);
-	_call(_arg0, _arg1);
+	if (NativeArrayCount(out) < 3) {
+		throw new Error("gdspx_input_write_snapshot array is too small: out");
+	}
+	_call(_arg0);
 }
 gdspx_navigation_setup_path_finder_with_size(grid_size,cell_size,with_jump,with_debug) {
 	var _call = Module['_gdspx_navigation_setup_path_finder_with_size'];
@@ -3629,6 +3631,14 @@ gdspx_sprite_batch_update_visuals(buffer) {
 	var _arg1 = NativeArrayCount(buffer);
 	_call(_arg0, _arg1);
 }
+gdspx_sprite_batch_retrieve_positions(objs,out) {
+	var _call = Module['_gdspx_sprite_batch_retrieve_positions'];
+	var _arg0 = RequireNativeArray(objs, "gdspx_sprite_batch_retrieve_positions", 6, false);
+	var _arg1 = NativeArrayCount(objs);
+	var _arg2 = RequireNativeArray(out, "gdspx_sprite_batch_retrieve_positions", 2, true);
+	var _arg3 = NativeArrayCount(out);
+	_call(_arg0, _arg1, _arg2, _arg3);
+}
 gdspx_sprite_batch_update_physics(buffer) {
 	var _call = Module['_gdspx_sprite_batch_update_physics'];
 	var _arg0 = RequireNativeArray(buffer, "gdspx_sprite_batch_update_physics", 2, false);
@@ -4534,14 +4544,6 @@ gdspx_ui_set_flip(obj_low,obj_high,horizontal,is_flip) {
 		if (_arg1) FreeGdBool(_arg1);
 		if (_arg2) FreeGdBool(_arg2);
 	}
-}
-gdspx_sprite_batch_retrieve_positions(objs) {
-	var _call = Module['_gdspx_sprite_batch_retrieve_positions'];
-	var _result = TryTransformArray(_call, objs, 6, 2, 2);
-	if (_result == null) {
-		throw new Error("gdspx_sprite_batch_retrieve_positions array transform failed");
-	}
-	return _result;
 }}
 
 GdspxFuncs['arrayOutputs'] = {
@@ -4816,6 +4818,7 @@ GdspxFuncs.prototype['gdspx_sprite_set_pixel_collision_sampling_step'] = GdspxFu
 GdspxFuncs.prototype['gdspx_sprite_get_pixel_collision_sampling_step'] = GdspxFuncs.prototype.gdspx_sprite_get_pixel_collision_sampling_step;
 GdspxFuncs.prototype['gdspx_sprite_batch_update_transforms'] = GdspxFuncs.prototype.gdspx_sprite_batch_update_transforms;
 GdspxFuncs.prototype['gdspx_sprite_batch_update_visuals'] = GdspxFuncs.prototype.gdspx_sprite_batch_update_visuals;
+GdspxFuncs.prototype['gdspx_sprite_batch_retrieve_positions'] = GdspxFuncs.prototype.gdspx_sprite_batch_retrieve_positions;
 GdspxFuncs.prototype['gdspx_sprite_batch_update_physics'] = GdspxFuncs.prototype.gdspx_sprite_batch_update_physics;
 GdspxFuncs.prototype['gdspx_tilemap_open_draw_tiles_with_size'] = GdspxFuncs.prototype.gdspx_tilemap_open_draw_tiles_with_size;
 GdspxFuncs.prototype['gdspx_tilemap_open_draw_tiles'] = GdspxFuncs.prototype.gdspx_tilemap_open_draw_tiles;
@@ -4884,5 +4887,4 @@ GdspxFuncs.prototype['gdspx_ui_get_rotation'] = GdspxFuncs.prototype.gdspx_ui_ge
 GdspxFuncs.prototype['gdspx_ui_set_rotation'] = GdspxFuncs.prototype.gdspx_ui_set_rotation;
 GdspxFuncs.prototype['gdspx_ui_get_flip'] = GdspxFuncs.prototype.gdspx_ui_get_flip;
 GdspxFuncs.prototype['gdspx_ui_set_flip'] = GdspxFuncs.prototype.gdspx_ui_set_flip;
-GdspxFuncs.prototype['gdspx_sprite_batch_retrieve_positions'] = GdspxFuncs.prototype.gdspx_sprite_batch_retrieve_positions;
 globalThis['GdspxFuncs'] = GdspxFuncs;

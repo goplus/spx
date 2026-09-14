@@ -167,7 +167,7 @@ graph TD
 - 提取 manager 名称
 - 收集 `SPX_API` / `SPX_BIND` 方法
 - 生成 `GDExtensionSpx...` 形式的 typedef
-- 记录 native array / array transform 的桥接元数据
+- 记录原生数组的桥接元数据，以及返回值降为输出参数后的身份
 
 ### 4.3 AST 解析
 
@@ -181,6 +181,8 @@ graph TD
 4. 交给 `preprocessor` 做预处理
 5. 调用 `clang.ParseCString(...)` 得到 AST
 6. 按需写出 `_debug_parsed_ast.json`
+
+`generate/common/parameters.go` 在上下文创建时整理每个参数的公开名称、Go 类型、ABI 位置及数组长度对应关系。Native 和 Web 共用这份参数描述。返回参数由 header 元数据显式标记，用户声明中的 `ret_value` 不会仅因名称相同而被当作返回值。
 
 ### 4.4 模板生成
 
@@ -231,41 +233,52 @@ public:
 SPX_API void batch_update_transforms(const float *buffer_data, int len);
 ```
 
-生成器会将它记录为统一的 `ArrayBridge`。`const` 指针对应 `Input`，可写指针对应 `Output`；两者都用 `ArrayBuffer` 描述元素类型、数据指针和长度参数。
+生成器会将它记录为统一的 `ArrayBridge`。每个参数对记录为一个 `ArrayBuffer`，保存在 `Buffers` 中；`const` 指针只读，可写指针允许回写。缓冲区名称由指针参数名解析，并去掉 `_data` 后缀。
 
-只有输入或原地写入输出时，`ReturnArray` 为 `false`，缓冲区由调用者提供。例如：
+输入和原地写入输出的缓冲区由调用者提供。例如：
 
 ```cpp
-SPX_BINDING(output_count=3)
-SPX_API void write_snapshot(float *out, int len);
+SPX_API void write_snapshot(float out[3]);
 ```
 
-这里 `Output.Count` 为 3。该声明提供固定输出长度信息，高层仍是 `WriteSnapshot(out []float32)`，保持原地写入。
+生成器从原始声明的 `[3]` 提取 `ArrayBuffer.Count`，然后将参数降为指针 ABI，不再传长度参数。高层接口为 `WriteSnapshot(out *[3]float32)`，保持原地写入；Go 绑定拒绝 nil，Web 绑定在调用前检查原生数组容量至少为 3。动态切片在 Go 调用前检查长度能否用 int32 表示。
 
-Web 还会生成 `GdspxFuncs['arrayOutputs']['gdspx_input_write_snapshot']()` 读取入口，按声明的类型和数量分配原生数组并返回。新增固定输出方法只需添加声明，无需手写 JS 包装；底层内存分配共用 `ReadArrayOutput`。
+固定数组和动态数组使用相同的类型映射，支持 `float` / `real_t`、`int64_t`、`uint8_t` 和 `GdObj`。固定数组、动态数组和普通参数可以在同一个 `void` 方法中组合使用；`const T input[N]` 为只读输入，`T out[N]` 为可写缓冲区。固定长度须为正的十进制 int32 字面量，常量名、表达式和多维数组会被拒绝，固定数组后不再附加长度参数。C++ 数组参数本身会退化为指针，不提供容量检查。
+
+对于仅有一个固定可写数组参数的方法，Web 还会生成 `GdspxFuncs['arrayOutputs']['gdspx_input_write_snapshot']()` 读取入口，按声明的类型和数量分配原生数组并返回。新增固定输出方法只需添加声明，无需手写 JS 包装；底层内存分配共用 `ReadArrayOutput`。
 
 目前内建支持的原始数组类型主要包括：
 
 - `float *` / `real_t *`
 - `int64_t *`
 - `uint8_t *`
-
-`GdObj *` 用于下面的数组转换，当前不映射为直接传入的 Go 切片。
+- `GdObj *`（Go 使用 `[]int64`，保留完整的对象 ID 位模式）
 
 数组的 ABI 编号、描述符标记、元素名称、固定元素字节数及 Go/C 类型映射统一定义在 `generate/common/arrays.go`。C 头文件的枚举、Web Go 的 `arrays.gen.go` 和 `gdspx.util.js` 中标记的数组 ABI 区域均由这份定义生成，包括 Go/JS 的元素大小查询函数，无需分别手写。扩展类型时仍须确认原生端与 Web 端支持对应的元素布局。
 
-### 5.3 数组转换桥接
+### 5.3 独立长度的原生输入、输出数组
 
-当底层接收输入、输出两个缓冲区，高层需要返回结果数组时，在声明中标注：
+每个动态原生数组使用相邻的“指针 + 长度”参数对，无需绑定注解：
 
 ```cpp
-SPX_BINDING(array_arg=objs, elements_per_input=2)
-SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len);
+SPX_API void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
 ```
 
-它同样使用 `ArrayBridge`：`Input` 是对象数组，`Output` 是浮点数组，`ReturnArray` 为 `true`，`Output.ElementsPerInput` 为 2。桥接层按输入数量准备输出缓冲区，高层接口保持 `GdArray -> GdArray`。
+Go 接口为 `BatchRetrievePositions(objs []int64, out []float32)`。生成器分别从 `len(objs)` 和 `len(out)` 传入 `count` 和 `out_len`，不约束输入和输出元素数相等，也不推导比例。多个输入、输出缓冲区按声明顺序处理，动态缓冲区使用各自的长度参数，固定数组从声明解析大小；`const` 指针只读，可写指针会在 Web 调用后复制回对应的 Go 切片。
 
-三种调用形式共享 `ArrayBridges` 注册表、缓冲区解析和类型映射。生成器按缓冲区方向及结果分配规则生成调用，新增同类接口无需添加方法名特判。
+普通参数可以穿插在数组参数之间，例如：
+
+```cpp
+SPX_API void sample(int mode, const float *values, int count, float out[3]);
+```
+
+对应 Go 接口为 `Sample(mode int32, values []float32, out *[3]float32)`。`mode` 正常传值，`count` 从输入切片长度获得，固定输出不传额外长度。`GdString` 等需要临时内存的普通参数也可混用；Web 生成器只为需要释放的值生成清理逻辑，校验或调用失败时仍执行释放。
+
+输出容量由调用方提供，记录格式和容量校验由具体函数负责。例如位置查询需要每个对象对应两个坐标，因此调用方为 N 个对象提供至少 2N 个 `float32` 元素；C++ 在写入前检查容量、空指针和数量溢出，缺失精灵写为一对 NaN。输出可以更长，多余元素保持原值。这个比例只属于位置函数，不属于生成器规则。
+
+Go 调用侧通过已有的 `SpriteSyncBuffer.GetPositions` 保存并复用位置输出缓冲区，缓存随游戏实例持有，容量不足时扩容。Native 绑定直接传递两个切片的地址和各自长度，C++ 无需分配数组。Web 使用已有 Wasm 内存池，并将可写输出字节直接复制回原 Go 切片，不分配解码结果数组；Go Wasm 和引擎 Wasm 内存独立，两者间仍需要字节复制。缓冲区复用不代表缓存坐标结果，数据每次调用都会刷新。
+
+这类方法使用 `ArrayBridge.Buffers` 保存按声明顺序排列的原生缓冲区；生成器不解析记录结构，也不使用 `GdArray` 的 C++ 包装和结果分配路径。
 
 ### 5.4 统一绑定注解
 
@@ -273,8 +286,6 @@ SPX_API void batch_retrieve_positions(const GdObj *ids, int count, float *out, i
 
 | 参数 | 含义 |
 | --- | --- |
-| `array_arg`、`elements_per_input` | 成对声明高层数组参数名及每个输入元素对应的输出数量 |
-| `output_count` | 声明固定输出数量，保留原地写入接口 |
 | `web=noop` | Web 绑定为空操作，要求方法返回 `void` |
 | `web=reuse_result` | Web 按实例、方法复用结构化返回对象；调用者应立即消费或复制结果 |
 
@@ -293,7 +304,7 @@ Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_ca
 
 生成器扫描这些函数，自动生成参数转换、FFI 回退调用及缓存接入。缓存类别和布尔值适配留在 Go 实现中，C++ 头文件无需缓存注解。缺少对应接口或回退签名不合法时生成失败。
 
-参数顺序不限，数量须为正的 int32。未知参数、重复参数、缺失配对参数以及与方法签名不兼容的组合会导致生成失败。固定输出长度和数组变换互斥，Web 策略不能覆盖已声明的数组桥接。
+未知参数、重复参数以及与方法签名不兼容的组合会导致生成失败。Web 策略不能覆盖原始缓冲区数组桥接。
 
 ## 6. 新增一个接口时怎么改
 
@@ -301,8 +312,8 @@ Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_ca
 
 1. 在 `$(SPX_MODULE_SRC)/spx*_mgr.h` 中新增方法声明。
 2. 确保它位于 `public:` 区域，并带上 `SPX_API` 或 `SPX_BIND`。
-3. 如果需要数组桥接，使用可识别的指针 + 长度签名。
-4. 如果需要返回数组、固定输出长度或 Web 绑定策略，添加相应的 `SPX_BINDING(...)` 参数。
+3. 如果需要数组桥接，动态数组使用指针 + 长度签名，固定输出使用 `T out[N]`。
+4. 原生输入、输出数组分别声明指针和长度，由具体函数解析格式并校验输出容量；Web 绑定策略使用 `SPX_BINDING(web=...)`。
 5. 运行 `make generate-bindings`。
 6. 检查生成结果是否覆盖到了预期文件。
 7. 补相应测试，尤其是：

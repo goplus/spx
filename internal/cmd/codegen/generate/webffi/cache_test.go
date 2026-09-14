@@ -33,7 +33,7 @@ func TestCacheFollowsFunctions(t *testing.T) {
  `), 0o600))
 	caches, err := scanCaches(dir)
 	require.NoError(t, err)
-	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleReadValue)(GdString renamed, GdBool ret_value);")
+	ast, err := clang.ParseCString("typedef GdBool (*GDExtensionSpxExampleReadValue)(GdString renamed);")
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{}), caches: caches}
 	functions := ast.CollectGDExtensionInterfaceFunctions()
@@ -42,7 +42,7 @@ func TestCacheFollowsFunctions(t *testing.T) {
 	require.Contains(t, body, "API.SpxExampleReadValue.Invoke(arg0)")
 
 	// API names alone do not enable caching.
-	ast, err = clang.ParseCString("typedef void (*GDExtensionSpxInputGetKey)(GdInt key, GdBool ret_value);")
+	ast, err = clang.ParseCString("typedef GdBool (*GDExtensionSpxInputGetKey)(GdInt key);")
 	require.NoError(t, err)
 	generation.GenerationContext = common.NewGenerationContext(ast, common.GenerationMetadata{})
 	functions = ast.CollectGDExtensionInterfaceFunctions()

@@ -115,7 +115,7 @@ type IInputMgr interface {
 	IsActionPressedId(action_id int64) bool
 	IsActionJustPressedId(action_id int64) bool
 	IsActionJustReleasedId(action_id int64) bool
-	WriteSnapshot(out []float32)
+	WriteSnapshot(out *[3]float32)
 }
 
 type INavigationMgr interface {
@@ -349,8 +349,8 @@ type ISpriteMgr interface {
 	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer []float32)
 	BatchUpdateVisuals(buffer []float32)
+	BatchRetrievePositions(objs []int64, out []float32)
 	BatchUpdatePhysics(buffer []float32)
-	BatchRetrievePositions(objs Array) Array
 }
 
 type ITilemapMgr interface {

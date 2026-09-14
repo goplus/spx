@@ -46,7 +46,7 @@ Files containing `.gen.` in their names and generator-owned bridge sections must
 
 ## 4. Generator structure
 
-The entry point collects marked manager declarations, generates the C interface header, parses its AST, and renders platform templates. Header collection supplies binding metadata; the AST supplies function names and types. Templates own platform-specific syntax but should not redefine API semantics.
+The entry point collects marked manager declarations, generates the C interface header, parses its AST, and renders platform templates. Header collection supplies binding metadata; the AST supplies function names and types. Templates own platform-specific syntax but should not redefine API semantics. `common/parameters.go` prepares public names, Go types, ABI positions, and array length associations once for all renderers. Header metadata explicitly identifies lowered return parameters, so a user argument named `ret_value` remains an ordinary argument.
 
 ## 5. Export rules
 
@@ -56,7 +56,11 @@ Only declarations selected by the generator's export conventions become bridge m
 
 ### Native arrays
 
-Pointer-and-length signatures declare caller-provided array buffers. Use `SPX_BINDING(output_count=...)` for fixed-size output or `SPX_BINDING(array_arg=..., elements_per_input=...)` for slice-returning transforms. Both sides must agree on element layout, length, ownership, and lifetime.
+Pointer-and-length signatures declare caller-provided array buffers. Declare fixed output as `SPX_API void write_snapshot(float out[3]);`: codegen extracts the extent before lowering to a pointer-only ABI, and exposes `WriteSnapshot(out *[3]float32)` in Go. Go rejects nil and Web checks capacity before calling C++. Fixed and dynamic buffers share the `float` / `real_t`, `int64_t`, `uint8_t`, and `GdObj` mappings and can be combined with ordinary parameters in a `void` method. Const arrays are read-only inputs. Fixed arrays require a positive decimal int32 literal extent and no separate length parameter; dynamic slice lengths are checked for int32 overflow before calling the ABI. Only methods with a single writable fixed array receive the no-argument Web output reader.
+
+For independently sized native arrays, declare `SPX_API void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);`. Go exposes `BatchRetrievePositions(objs []int64, out []float32)` and passes each slice's own length. The generator supports consecutive pointer/length pairs without imposing an input/output ratio. The caller supplies output storage, and the concrete C++ method owns record parsing and capacity checks. For positions, N objects require at least 2N floats; extra output elements remain unchanged. This ratio belongs to the position method, not the generator. Const buffers are input-only; writable buffers are copied back after Web calls. The Go caller reuses output storage through the existing per-game `SpriteSyncBuffer.GetPositions` method, growing it only when capacity is insufficient. Native bindings pass slice pointers directly. Web reuses Wasm storage and copies bytes into the caller's Go output slice without a decoded result allocation; separate Go and engine Wasm memories still require byte copies. Buffer reuse does not cache position values. No C++ `GdArray` wrapper or result allocation is used for this path.
+
+For example, `void sample(int mode, const float *values, int count, float out[3])` becomes `Sample(mode int32, values []float32, out *[3]float32)`. The scalar is passed normally, the dynamic length comes from its slice, and the fixed output needs no length argument. Owned values such as `GdString` can also be mixed with arrays; generated Web cleanup runs even if validation or the native call fails.
 
 Array ABI IDs, the descriptor tag, element names, fixed element widths, and Go/C type mappings are defined once in `generate/common/arrays.go`. The C enum, Web Go `arrays.gen.go`, and the marked array ABI section in `gdspx.util.js` are generated from that definition, including the Go/JS element-size lookup functions. When adding a type, also verify that the native and Web runtimes support its element layout.
 

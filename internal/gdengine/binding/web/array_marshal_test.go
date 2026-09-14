@@ -9,6 +9,42 @@ import (
 	"testing"
 )
 
+func TestNativeArrayOutputCopiesIntoCallerStorage(t *testing.T) {
+	for _, test := range []struct {
+		arrayType    int32
+		target, want any
+		data         []byte
+	}{
+		{GdArrayTypeFloat, []float32{0}, []float32{1.5}, []byte{0, 0, 192, 63}},
+		{GdArrayTypeInt64, []int64{0}, []int64{-1}, []byte{255, 255, 255, 255, 255, 255, 255, 255}},
+		{GdArrayTypeGdObj, []int64{0}, []int64{-1 << 63}, []byte{0, 0, 0, 0, 0, 0, 0, 128}},
+		{GdArrayTypeGdObj, []uint64{0}, []uint64{1 << 63}, []byte{0, 0, 0, 0, 0, 0, 0, 128}},
+		{GdArrayTypeByte, []byte{0}, []byte{23}, []byte{23}},
+	} {
+		bytes := jsUint8Array.New(len(test.data))
+		js.CopyBytesToJS(bytes, test.data)
+		wrapper := js.ValueOf(map[string]any{
+			arrayTag: true, "type": test.arrayType, "count": 1, "data": bytes,
+		})
+		CopyNativeArrayOutput(test.target, wrapper)
+		if !reflect.DeepEqual(test.target, test.want) {
+			t.Fatalf("copy into %T: got %v, want %v", test.target, test.target, test.want)
+		}
+		wrapper.Set("count", 2)
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("mismatched output shape was accepted")
+				}
+			}()
+			CopyNativeArrayOutput(test.target, wrapper)
+		}()
+		if !reflect.DeepEqual(test.target, test.want) {
+			t.Fatal("invalid output changed caller storage")
+		}
+	}
+}
+
 func TestNativeArrayRejectsInvalidMetadata(t *testing.T) {
 	for _, test := range []struct {
 		arrayType, count any

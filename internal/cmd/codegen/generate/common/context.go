@@ -38,48 +38,29 @@ type GenerationMetadata struct {
 	ManagerNames []string
 	ArrayBridges map[string]ArrayBridge
 	WebBindings  map[string]WebBindingMode
+	// ReturnParameters identifies outputs added when lowering source return values.
+	ReturnParameters map[string]CParam
 }
 
 // GenerationContext snapshots metadata and manager membership for one AST.
 // Rendering only reads this context; independent outputs can share it.
 type GenerationContext struct {
-	ast          clang.CHeaderFileAST
-	managerSet   map[string]bool
-	managers     []string
-	managerNames clang.ManagerNames
-	cppType2Go   map[string]string
-	arrayBridges map[string]ArrayBridge
-	webBindings  map[string]WebBindingMode
+	ast              clang.CHeaderFileAST
+	managerSet       map[string]bool
+	managers         []string
+	managerNames     clang.ManagerNames
+	cppType2Go       map[string]string
+	arrayBridges     map[string]ArrayBridge
+	webBindings      map[string]WebBindingMode
+	returnParameters map[string]CParam
+	parameters       map[string][]Parameter
+	parameterNames   map[string]map[string]Parameter
 }
 
 type ManagerData struct {
 	Ast          clang.CHeaderFileAST
 	Managers     []string
 	ManagerNames clang.ManagerNames
-}
-
-func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
-	c := &GenerationContext{
-		ast:          ast,
-		managerSet:   make(map[string]bool),
-		managerNames: clang.NewManagerNames(metadata.ManagerNames),
-		arrayBridges: make(map[string]ArrayBridge),
-		webBindings:  maps.Clone(metadata.WebBindings),
-		cppType2Go: map[string]string{
-			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
-			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
-			"GdRect2": "Rect2", "GdString": "string", "GdBool": "bool",
-			"GdColor": "Color", "GdArray": "Array",
-		},
-	}
-	for name, spec := range metadata.ArrayBridges {
-		c.arrayBridges[name] = spec.Clone()
-	}
-	c.managers = c.GetManagers(ast)
-	for _, name := range c.managers {
-		c.managerSet[name] = true
-	}
-	return c
 }
 
 // AST returns the input used to prepare this context. Treat it as read-only.
@@ -130,4 +111,35 @@ func (c *GenerationContext) GetManagers(ast clang.CHeaderFileAST) []string {
 	}
 	sort.Strings(managers)
 	return managers
+}
+
+func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
+	c := &GenerationContext{
+		ast:              ast,
+		managerSet:       make(map[string]bool),
+		managerNames:     clang.NewManagerNames(metadata.ManagerNames),
+		arrayBridges:     make(map[string]ArrayBridge),
+		webBindings:      maps.Clone(metadata.WebBindings),
+		returnParameters: maps.Clone(metadata.ReturnParameters),
+		parameters:       make(map[string][]Parameter),
+		parameterNames:   make(map[string]map[string]Parameter),
+		cppType2Go: map[string]string{
+			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
+			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
+			"GdRect2": "Rect2", "GdString": "string", "GdBool": "bool",
+			"GdColor": "Color", "GdArray": "Array",
+		},
+	}
+	maps.Copy(c.cppType2Go, directScalarTypes)
+	for name, spec := range metadata.ArrayBridges {
+		c.arrayBridges[name] = spec.Clone()
+	}
+	for _, function := range ast.CollectGDExtensionInterfaceFunctions() {
+		c.parameters[function.Name], c.parameterNames[function.Name] = c.prepareParameters(&function)
+	}
+	c.managers = c.GetManagers(ast)
+	for _, name := range c.managers {
+		c.managerSet[name] = true
+	}
+	return c
 }

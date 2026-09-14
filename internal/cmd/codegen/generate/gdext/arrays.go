@@ -17,14 +17,15 @@
 package gdext
 
 import (
-	"fmt"
 	"regexp"
-	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 	"github.com/iancoleman/strcase"
 )
+
+var reFixedArrayDecl = regexp.MustCompile(`^\s*(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*([1-9][0-9]*)\s*\]\s*$`)
 
 var reParamDecl = regexp.MustCompile(`^\s*(.+?[*\s])([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 
@@ -33,50 +34,28 @@ func parseArrayBridge(method classMethodDecl) (common.ArrayBridge, bool) {
 		FunctionName: "GDExtension" + method.ClassName + strcase.ToCamel(method.MethodName),
 		MethodName:   method.MethodName,
 	}
-	if method.Binding.returnsArray() {
-		params, ok := parseCParams(method.Params)
-		if method.ReturnType != "void" || !ok || len(params) != 4 {
-			panic("SPX_BINDING array transform requires void(input pointer, count, output pointer, capacity): " + method.MethodName)
+	params, buffers, ok := parseArrayBuffers(method.Params)
+	if !ok {
+		if strings.ContainsAny(method.Params, "[]") {
+			panic("native arrays require fixed declarations or pointer/length pairs: " + method.MethodName)
 		}
-		input, inputOK := parseArrayBuffer(params[:2])
-		output, outputOK := parseArrayBuffer(params[2:])
-		if !inputOK || !outputOK || strings.HasPrefix(output.Data.CType, "const ") {
-			panic("invalid SPX_BINDING array transform buffers: " + method.MethodName)
+		return common.ArrayBridge{}, false
+	}
+	if len(buffers) == 0 {
+		return common.ArrayBridge{}, false
+	}
+	spec.Buffers, spec.Arguments = buffers, params
+	if method.ReturnType != "void" {
+		panic("native array buffer methods must return void: " + method.MethodName)
+	}
+	seen := make(map[string]bool)
+	for _, buffer := range spec.Buffers {
+		if seen[buffer.ArgName()] {
+			panic("duplicate high-level array parameter: " + buffer.ArgName())
 		}
-		output.ElementsPerInput = method.Binding.ElementsPerInput
-		spec.ArgName = method.Binding.ArrayArg
-		spec.Input, spec.Output, spec.ReturnArray = &input, &output, true
-	} else {
-		buffer, ok := parseCallerBuffer(method.Params)
-		if !ok {
-			return common.ArrayBridge{}, false
-		}
-		spec.ArgName = strings.TrimSuffix(buffer.Data.Name, "_data")
-		if strings.HasPrefix(buffer.Data.CType, "const ") {
-			spec.Input = &buffer
-		} else {
-			buffer.Count = method.Binding.OutputCount
-			spec.Output = &buffer
-		}
+		seen[buffer.ArgName()] = true
 	}
 	return spec, true
-}
-
-func (g *headerCollector) writeArrayTypedefs(builder *strings.Builder, rawFormat bool) {
-	specs := make([]common.ArrayBridge, 0, len(g.metadata.ArrayBridges))
-	for _, spec := range g.metadata.ArrayBridges {
-		if spec.ReturnArray {
-			specs = append(specs, spec)
-		}
-	}
-	sort.Slice(specs, func(i, j int) bool { return specs[i].FunctionName < specs[j].FunctionName })
-	for _, spec := range specs {
-		if rawFormat {
-			fmt.Fprintf(builder, "typedef GdArray (*%s)(GdArray %s);\n", spec.FunctionName, spec.ArgName)
-			continue
-		}
-		fmt.Fprintf(builder, "typedef void (*%s)(GdArray %s, GdArray *ret_value);\n", spec.FunctionName, spec.ArgName)
-	}
 }
 
 func parseArrayType(rawType string) (common.ArrayType, bool) {
@@ -84,7 +63,10 @@ func parseArrayType(rawType string) (common.ArrayType, bool) {
 	if !ok {
 		return 0, false
 	}
-	return common.LookupArrayType(strings.TrimSpace(strings.TrimPrefix(elementType, "const ")))
+	elementType = strings.TrimSpace(elementType)
+	elementType = strings.TrimPrefix(elementType, "const ")
+	elementType = strings.TrimSuffix(elementType, " const")
+	return common.LookupArrayType(elementType)
 }
 
 func isArrayLengthType(typeName string) bool {
@@ -96,46 +78,75 @@ func isArrayLengthType(typeName string) bool {
 	}
 }
 
-func parseArrayBuffer(params []common.CParam) (common.ArrayBuffer, bool) {
-	if len(params) != 2 || !isArrayLengthType(params[1].CType) {
-		return common.ArrayBuffer{}, false
+// Each buffer is either T name[N] or T *name followed by its own length.
+// Parse both forms together so fixed and dynamic buffers compose identically.
+func parseArrayBuffers(params string) ([]common.CParam, []common.ArrayBuffer, bool) {
+	if strings.TrimSpace(params) == "" {
+		return nil, nil, true
 	}
-	arrayType, ok := parseArrayType(params[0].CType)
-	return common.ArrayBuffer{Data: params[0], Length: params[1], Type: arrayType}, ok
-}
-
-func parseCallerBuffer(params string) (common.ArrayBuffer, bool) {
-	parsed, ok := parseCParams(params)
-	if !ok {
-		return common.ArrayBuffer{}, false
+	parts := strings.Split(params, ",")
+	var arguments []common.CParam
+	var buffers []common.ArrayBuffer
+	for i := 0; i < len(parts); i++ {
+		var buffer common.ArrayBuffer
+		if match := reFixedArrayDecl.FindStringSubmatch(parts[i]); match != nil {
+			buffer.Data = common.CParam{CType: normalizeCType(match[1] + " *"), Name: match[2]}
+			buffer.Count = parseFixedArrayCount(match[3])
+		} else {
+			data, ok := parseCParam(parts[i])
+			if !ok {
+				return nil, nil, false
+			}
+			if _, array := parseArrayType(data.CType); !array {
+				arguments = append(arguments, data)
+				continue
+			}
+			if i+1 == len(parts) {
+				panic("native array requires an adjacent length: " + data.Name)
+			}
+			length, ok := parseCParam(parts[i+1])
+			if !ok || !isArrayLengthType(length.CType) {
+				panic("native array requires an int32 length: " + data.Name)
+			}
+			buffer.Data, buffer.Length = data, length
+			i++
+		}
+		arrayType, ok := parseArrayType(buffer.Data.CType)
+		if !ok {
+			return nil, nil, false
+		}
+		buffer.Type = arrayType
+		arguments = append(arguments, buffer.Data)
+		if buffer.Length.Name != "" {
+			arguments = append(arguments, buffer.Length)
+		}
+		buffers = append(buffers, buffer)
 	}
-	buffer, ok := parseArrayBuffer(parsed)
-	// GdObj buffers are exposed through GdArray transforms, not direct Go slices.
-	return buffer, ok && buffer.Type != common.ArrayObject
+	return arguments, buffers, true
 }
 
 func normalizeCType(cType string) string {
-	return strings.Join(strings.Fields(cType), " ")
+	cType = strings.Join(strings.Fields(cType), " ")
+	if element, pointer := strings.CutSuffix(cType, "*"); pointer {
+		if element, suffixConst := strings.CutSuffix(strings.TrimSpace(element), " const"); suffixConst {
+			return "const " + element + " *"
+		}
+	}
+	return cType
 }
 
-func parseCParams(params string) ([]common.CParam, bool) {
-	params = strings.TrimSpace(params)
-	if params == "" {
-		return nil, true
+func parseCParam(param string) (common.CParam, bool) {
+	match := reParamDecl.FindStringSubmatch(strings.TrimSpace(param))
+	if match == nil {
+		return common.CParam{}, false
 	}
+	return common.CParam{CType: normalizeCType(match[1]), Name: match[2]}, true
+}
 
-	parts := strings.Split(params, ",")
-	result := make([]common.CParam, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		matches := reParamDecl.FindStringSubmatch(part)
-		if len(matches) != 3 {
-			return nil, false
-		}
-		result = append(result, common.CParam{
-			CType: normalizeCType(matches[1]),
-			Name:  matches[2],
-		})
+func parseFixedArrayCount(value string) int {
+	count, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		panic("fixed array extent requires a positive int32: " + value)
 	}
-	return result, true
+	return int(count)
 }

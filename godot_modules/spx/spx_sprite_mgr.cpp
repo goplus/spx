@@ -1781,35 +1781,29 @@ void SpxSpriteMgr::batch_update_visuals(const float *buffer_data, int len) {
 	batch_update_visuals_impl(this, buffer_data, len, "batch_update_visuals");
 }
 
-void SpxSpriteMgr::batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len) {
+void SpxSpriteMgr::batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
 	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SPX sprite positions may only be read on the engine main thread.");
 	if (count <= 0) {
 		return;
 	}
 	if (count > INT_MAX / 2) {
-		print_error("_batch_write_positions: count too large, would cause integer overflow.");
+		print_error("batch_retrieve_positions: count too large.");
 		return;
 	}
-
-	int need = count * 2;
-	if (!ids || !out || out_len < need) {
-		print_error("_batch_write_positions: invalid input or output buffer.");
+	if (!objs || !out || out_len < count * 2) {
+		print_error("batch_retrieve_positions: invalid buffers or insufficient output capacity.");
 		return;
 	}
-
-	int j = 0;
-	for (int i = 0; i < count; i++) {
-		GdObj id = ids[i];
-		SpxSprite *sprite = get_sprite(id);
+	for (int i = 0; i < count; ++i) {
+		SpxSprite *sprite = get_sprite(objs[i]);
 		if (sprite != nullptr) {
-			auto pos = sprite->get_position();
-			const Vector2 spx_pos = godot_to_spx_vec2(pos);
-			out[j++] = spx_pos.x;
-			out[j++] = spx_pos.y;
+			const Vector2 pos = godot_to_spx_vec2(sprite->get_position());
+			out[i * 2] = pos.x;
+			out[i * 2 + 1] = pos.y;
 		} else {
 			const float missing = std::numeric_limits<float>::quiet_NaN();
-			out[j++] = missing;
-			out[j++] = missing;
+			out[i * 2] = missing;
+			out[i * 2 + 1] = missing;
 		}
 	}
 }

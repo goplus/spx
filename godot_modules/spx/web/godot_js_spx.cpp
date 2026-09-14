@@ -323,8 +323,8 @@ void gdspx_input_is_action_just_released_id(GdInt *action_id, GdBool *ret_val) {
 	*ret_val = inputMgr->is_action_just_released_id(*action_id);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_input_write_snapshot(float *out, int len) {
-	inputMgr->write_snapshot(out, len);
+void gdspx_input_write_snapshot(float *out) {
+	 inputMgr->write_snapshot(out);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_navigation_setup_path_finder_with_size(GdVec2 *grid_size, GdVec2 *cell_size, GdBool *with_jump, GdBool *with_debug) {
@@ -368,7 +368,7 @@ void gdspx_pen_destroy_pen(GdObj *obj) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_batch_update_commands(const float *buffer_data, int len) {
-	penMgr->batch_update_commands(buffer_data, len);
+	 penMgr->batch_update_commands(buffer_data, len);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_pen_stamp(GdObj *obj) {
@@ -1466,15 +1466,19 @@ void gdspx_sprite_get_pixel_collision_sampling_step(GdInt *ret_val) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_batch_update_transforms(const float *buffer_data, int len) {
-	spriteMgr->batch_update_transforms(buffer_data, len);
+	 spriteMgr->batch_update_transforms(buffer_data, len);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_batch_update_visuals(const float *buffer_data, int len) {
-	spriteMgr->batch_update_visuals(buffer_data, len);
+	 spriteMgr->batch_update_visuals(buffer_data, len);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_sprite_batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
+	 spriteMgr->batch_retrieve_positions(objs, count, out, out_len);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_batch_update_physics(const float *buffer_data, int len) {
-	spriteMgr->batch_update_physics(buffer_data, len);
+	 spriteMgr->batch_update_physics(buffer_data, len);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_open_draw_tiles_with_size(GdInt *tile_size) {
@@ -1875,10 +1879,6 @@ void gdspx_ui_get_flip(GdObj *obj, GdBool *horizontal, GdBool *ret_val) {
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_flip(GdObj *obj, GdBool *horizontal, GdBool *is_flip) {
 	 uiMgr->set_flip(*obj, *horizontal, *is_flip);
-}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_batch_retrieve_positions(const GdObj *ids, int count, float *out, int out_len) {
-	spriteMgr->batch_retrieve_positions(ids, count, out, out_len);
 }
 
 }

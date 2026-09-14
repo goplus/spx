@@ -18,7 +18,9 @@ package webffi
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,19 +60,13 @@ func TestJSFunctionArgsFlattensGdObj(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimativeType{
-			Name: "void",
+			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
 					Primative: &clang.PrimativeType{Name: "GdObj"},
-				},
-			},
-			{
-				Name: "ret_value",
-				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "int64_t"},
 				},
 			},
 		},
@@ -83,11 +79,11 @@ func TestJSFunctionArgsSkipsArrayLengthArgument(t *testing.T) {
 	metadata := common.GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]common.ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms", ArgName: "buffer",
-		Input: &common.ArrayBuffer{
+		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Buffers: []common.ArrayBuffer{{
 			Data:   common.CParam{CType: "const float *", Name: "buffer_data"},
 			Length: common.CParam{CType: "int", Name: "len"}, Type: 2,
-		},
+		}},
 	}}
 	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
 
@@ -118,19 +114,13 @@ func TestJSFunctionBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimativeType{
-			Name: "void",
+			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
 					Primative: &clang.PrimativeType{Name: "GdObj"},
-				},
-			},
-			{
-				Name: "ret_value",
-				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "int64_t"},
 				},
 			},
 		},
@@ -146,19 +136,13 @@ func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimativeType{
-			Name: "void",
+			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
 					Primative: &clang.PrimativeType{Name: "GdObj"},
-				},
-			},
-			{
-				Name: "ret_value",
-				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdInt"},
 				},
 			},
 		},
@@ -169,23 +153,19 @@ func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
 	require.NotContains(t, body, `"_gdIntResult"`)
 }
 
-func TestJSFunctionBodyReturnsArrayFromBridgeSpec(t *testing.T) {
-	metadata := common.GenerationMetadata{}
-
-	metadata.ArrayBridges = map[string]common.ArrayBridge{"GDExtensionSpxSpriteBatchRetrievePositions": {
-		FunctionName: "GDExtensionSpxSpriteBatchRetrievePositions", ArgName: "objs", ReturnArray: true,
-		Input:  &common.ArrayBuffer{Type: 6},
-		Output: &common.ArrayBuffer{Type: 2, ElementsPerInput: 2},
-	}}
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
-
-	function := &clang.TypedefFunction{
-		Name: "GDExtensionSpxSpriteBatchRetrievePositions",
-	}
-
-	body := generation.jsBody(function)
-	require.Contains(t, body, "TryTransformArray(_call, objs, 6, 2, 2)")
-	require.Contains(t, body, `throw new Error("gdspx_sprite_batch_retrieve_positions array transform failed")`)
+func TestJSFunctionBodyUsesOrdinaryArrayReturn(t *testing.T) {
+	ast, err := clang.ParseCString("typedef GdArray (*GDExtensionSpxExampleConvertArray)(GdArray objs);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	body := generation.jsBody(&functions[0])
+	require.Contains(t, body, "ToGdArray(objs)")
+	require.Contains(t, body, "AllocGdArray()")
+	require.Contains(t, body, "_call(_arg0, _resultPtr)")
+	require.Contains(t, body, "ToJsArray(_resultPtr)")
+	require.Contains(t, body, "FreeGdArray(_arg0)")
+	require.Contains(t, body, "FreeGdArray(_resultPtr)")
+	require.NotContains(t, body, "TryTransformArray")
 }
 
 func TestJSFunctionBodyUsesArrayAccessSemantics(t *testing.T) {
@@ -213,10 +193,7 @@ public:
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			require.Contains(t, headers.Metadata.ArrayBridges, test.name)
-			body := generation.jsBody(&clang.TypedefFunction{
-				Name:       test.name,
-				ReturnType: clang.PrimativeType{Name: "void"},
-			})
+			body := generation.jsBody(arrayFunction(t, test.name, headers.Metadata.ArrayBridges[test.name]))
 			require.Contains(t, body, test.want)
 			require.Contains(t, body, "_call(_arg0, _arg1);")
 			require.NotContains(t, body, "GetNativeArrayPointer(")
@@ -228,13 +205,13 @@ func TestGenerateFixedArrayOutputReader(t *testing.T) {
 	dir := t.TempDir()
 	header := `class SpxExampleMgr : public SpxBaseMgr {
 public:
- SPX_BINDING(output_count=7) SPX_API void write_values(int64_t *out, int capacity);
+ SPX_API void write_values(int64_t out[7]);
  SPX_API void update_values(const float *values, int count);
  };`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(header), 0o600))
 	headers, err := gdext.PrepareHeaders(dir)
 	require.NoError(t, err)
-	ast, err := clang.ParseCString(`typedef void (*GDExtensionSpxExampleWriteValues)(int64_t *out, int capacity);
+	ast, err := clang.ParseCString(`typedef void (*GDExtensionSpxExampleWriteValues)(int64_t *out);
 typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count);`)
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
@@ -246,7 +223,14 @@ typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count
 	require.Contains(t, string(output), "ReadArrayOutput('_gdspx_example_write_values', 1, 7)")
 	require.NotContains(t, string(output), "'gdspx_example_update_values':")
 	require.Contains(t, string(output), `RequireNativeArray(out, "gdspx_example_write_values", 1, true)`)
-	require.Contains(t, string(output), "NativeArrayCount(out)")
+	require.Contains(t, string(output), "NativeArrayCount(out) < 7")
+	require.Contains(t, string(output), "_call(_arg0);")
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	require.NotContains(t, generation.jsBody(&functions[0]), "_call(_arg0, _arg1);")
+	body := generation.managerBody(&functions[0])
+	require.Contains(t, body, "if out == nil")
+	require.Contains(t, body, "JsFromNativeArray(out[:], 1)")
+	require.Contains(t, body, "CopyNativeArrayOutput(out[:], arg0)")
 }
 
 func TestJSFunctionBodyUsesDeclaredNoop(t *testing.T) {
@@ -262,17 +246,15 @@ func TestJSFunctionBodyValidatesNativeArray(t *testing.T) {
 	metadata := common.GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]common.ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms", ArgName: "buffer",
-		Input: &common.ArrayBuffer{
+		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Buffers: []common.ArrayBuffer{{
 			Data:   common.CParam{CType: "const float *", Name: "buffer_data"},
 			Length: common.CParam{CType: "int", Name: "len"}, Type: 2,
-		},
+		}},
 	}}
 	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
 
-	body := generation.jsBody(&clang.TypedefFunction{
-		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
-	})
+	body := generation.jsBody(arrayFunction(t, "GDExtensionSpxSpriteBatchUpdateTransforms", metadata.ArrayBridges["GDExtensionSpxSpriteBatchUpdateTransforms"]))
 	require.Contains(t, body, `RequireNativeArray(buffer, "gdspx_sprite_batch_update_transforms", 2, false)`)
 	require.Contains(t, body, "var _arg1 = NativeArrayCount(buffer);")
 	require.NotContains(t, body, "buffer['count']")
@@ -280,10 +262,10 @@ func TestJSFunctionBodyValidatesNativeArray(t *testing.T) {
 
 func TestJSResultsFollowReturnTypes(t *testing.T) {
 	ast, err := clang.ParseCString(`
-	typedef void (*GDExtensionSpxExampleReadInt)(GdInt *ret_value);
-	typedef void (*GDExtensionSpxExampleReadOtherInt)(GdInt *ret_value);
-	typedef void (*GDExtensionSpxExampleReadObj)(GdObj *ret_value);
-	typedef void (*GDExtensionSpxExampleReadVec)(GdVec2 *ret_value);
+	typedef GdInt (*GDExtensionSpxExampleReadInt)();
+	typedef GdInt (*GDExtensionSpxExampleReadOtherInt)();
+	typedef GdObj (*GDExtensionSpxExampleReadObj)();
+	typedef GdVec2 (*GDExtensionSpxExampleReadVec)();
 	`)
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
@@ -299,7 +281,7 @@ func TestJSFunctionBodyReusesOnlyDeclaredResults(t *testing.T) {
 	for _, typeName := range []string{"GdVec2", "GdVec3", "GdVec4", "GdColor", "GdRect2"} {
 		t.Run(typeName, func(t *testing.T) {
 			const name = "GDExtensionSpxExampleRead"
-			ast, err := clang.ParseCString("typedef void (*" + name + ")(" + typeName + " *ret_value);")
+			ast, err := clang.ParseCString("typedef " + typeName + " (*" + name + ")();")
 			require.NoError(t, err)
 			function := ast.CollectGDExtensionInterfaceFunctions()[0]
 			for _, mode := range []common.WebBindingMode{common.WebBindingDefault, common.WebBindingReuseResult} {
@@ -341,12 +323,15 @@ func TestManagerInputCacheUsesGeneratedFallback(t *testing.T) {
 		{"IsActionPressed", "GdString renamed, GdBool ret_value", `CachedInputIsActionPressed(renamed, func() bool`, "JsToGdBool(_result)"},
 	} {
 		t.Run(test.method+"/"+test.params, func(t *testing.T) {
-			declaration := "typedef void (*GDExtensionSpxInput" + test.method + ")(" + test.params + ");"
+			parts := strings.Split(test.params, ", ")
+			ret := strings.TrimSuffix(parts[len(parts)-1], " ret_value")
+			declaration := "typedef " + ret + " (*GDExtensionSpxInput" + test.method + ")(" + strings.Join(parts[:len(parts)-1], ", ") + ");"
 			ast, err := clang.ParseCString(declaration)
 			require.NoError(t, err)
 			generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{}), caches: caches}
 			functions := ast.CollectGDExtensionInterfaceFunctions()
 			require.Len(t, functions, 1)
+			require.NotContains(t, generation.jsBody(&functions[0]), "_call(_arg0, _arg1);")
 			body := generation.managerBody(&functions[0])
 			require.Contains(t, body, test.call+" {")
 			require.Contains(t, body, "_result := API.SpxInput"+test.method+".Invoke(")
@@ -436,4 +421,132 @@ func TestRepositoryWebBridgeKeepsNativeArrayPointersPrivate(t *testing.T) {
 	require.Contains(t, util, "if (metadata.module !== Module)")
 	require.Contains(t, util, "writable && GetNativeArrayMetadata(array) === null")
 	require.NotContains(t, util, "return array['ptr'];")
+}
+
+func TestIndependentNativeBuffersPreserveOrderingAndAccess(t *testing.T) {
+	dir := t.TempDir()
+	const params = "const GdObj *objs, int count, const uint8_t *mask_data, int mask_len, float *out, int out_len, int64_t *indices, int indices_len"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(`+params+`);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(" + params + ");")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	function := &functions[0]
+	require.Equal(t, []string{"objs", "mask", "out", "indices"}, generation.jsArgs(function))
+	body := generation.jsBody(function)
+	require.Contains(t, body, `RequireNativeArray(objs, "gdspx_example_collect", 6, false)`)
+	require.Contains(t, body, `RequireNativeArray(mask, "gdspx_example_collect", 5, false)`)
+	require.Contains(t, body, `RequireNativeArray(out, "gdspx_example_collect", 2, true)`)
+	require.Contains(t, body, `RequireNativeArray(indices, "gdspx_example_collect", 1, true)`)
+	require.Contains(t, body, "var _arg1 = NativeArrayCount(objs);")
+	require.Contains(t, body, "var _arg3 = NativeArrayCount(mask);")
+	require.Contains(t, body, "var _arg5 = NativeArrayCount(out);")
+	require.Contains(t, body, "var _arg7 = NativeArrayCount(indices);")
+	require.Contains(t, body, "_call(_arg0, _arg1, _arg2, _arg3, _arg4, _arg5, _arg6, _arg7);")
+	manager := generation.managerBody(function)
+	require.Contains(t, manager, "JsFromNativeArray(objs, 6)")
+	require.Contains(t, manager, "JsFromNativeArray(mask, 5)")
+	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg2, arg4, arg6)")
+	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
+	require.Contains(t, manager, "CopyNativeArrayOutput(indices, arg6)")
+	require.NotContains(t, manager, "CopyNativeArrayOutput(objs")
+	require.NotContains(t, manager, "CopyNativeArrayOutput(mask")
+}
+
+func TestMixedBuffersShareWebConversion(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(const GdObj objects[2], const float *values, int count, GdObj selected[3]);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(const GdObj *objects, const float *values, int count, GdObj *selected);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	function := &functions[0]
+	require.Equal(t, []string{"objects", "values", "selected"}, generation.jsArgs(function))
+	body := generation.jsBody(function)
+	require.Contains(t, body, `RequireNativeArray(objects, "gdspx_example_collect", 6, false)`)
+	require.Contains(t, body, `RequireNativeArray(selected, "gdspx_example_collect", 6, true)`)
+	require.Contains(t, body, "NativeArrayCount(objects) < 2")
+	require.Contains(t, body, "NativeArrayCount(selected) < 3")
+	require.Contains(t, body, "var _arg2 = NativeArrayCount(values);")
+	require.Contains(t, body, "_call(_arg0, _arg1, _arg2, _arg3);")
+	manager := generation.managerBody(function)
+	require.Contains(t, manager, "if objects == nil")
+	require.Contains(t, manager, "if selected == nil")
+	require.Contains(t, manager, "if len(values) > 2147483647")
+	require.Contains(t, manager, "JsFromNativeArray(objects[:], 6)")
+	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg1, arg3)")
+	require.Contains(t, manager, "CopyNativeArrayOutput(selected[:], arg3)")
+	require.NotContains(t, manager, "CopyNativeArrayOutput(objects")
+	require.NotContains(t, manager, "CopyNativeArrayOutput(values")
+}
+
+func TestMixedArrayCallPreservesArgumentsAndReleasesOwnedValues(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is required to execute the generated wrapper")
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	const name = "GDExtensionSpxExampleCollect"
+	function := arrayFunction(t, name, headers.Metadata.ArrayBridges[name])
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, headers.Metadata)}
+	require.Equal(t, []string{"label", "mode", "objects", "out", "ret_value"}, generation.jsArgs(function))
+	body := generation.jsBody(function)
+	manager := generation.managerBody(function)
+	require.Contains(t, manager, "arg1 := mode")
+	require.Contains(t, manager, "Invoke(arg0, arg1, arg2, arg4, arg6)")
+	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
+	require.Contains(t, manager, "CopyNativeArrayOutput(ret_value[:], arg6)")
+	require.NotContains(t, manager, "return JsTo")
+	script := `const assert = require('node:assert/strict');
+const invoke = new Function('_call', 'ToGdString', 'FreeGdString', 'RequireNativeArray', 'NativeArrayCount', 'label', 'mode', 'objects', 'out', 'ret_value', ` + strconv.Quote(body) + `);
+for (const failure of [null, 'buffer', 'call']) {
+ const freed = [];
+ let calls = 0;
+ const nativeCall = (...args) => {
+  calls++;
+  assert.deepEqual(args, [77, 9, 16, 2, 128, 7, 256]);
+  if (failure === 'call') throw new Error('call');
+ };
+ const requireArray = (a, op, type, writable) => {
+  assert.equal(a.type, type);
+  assert.equal(a.writable, writable);
+  if (failure === 'buffer' && a.ptr === 128) throw new Error('buffer');
+  return a.ptr;
+ };
+ const run = () => invoke(nativeCall, label => { assert.equal(label, 'query'); return 77; }, p => freed.push(p), requireArray, a => a.count, 'query', 9,
+  {ptr:16, count:2, type:6, writable:false}, {ptr:128, count:7, type:2, writable:true}, {ptr:256, count:3, type:2, writable:true});
+ if (failure) assert.throws(run, new RegExp(failure)); else run();
+ assert.deepEqual(freed, [77]);
+ assert.equal(calls, failure === 'buffer' ? 0 : 1);
+}`
+	output, err := exec.Command(node, "-e", script).CombinedOutput()
+	require.NoError(t, err, "%s", output)
+}
+
+func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
+	t.Helper()
+	var params []string
+	for _, param := range spec.Params() {
+		params = append(params, param.Declaration())
+	}
+	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
+	require.NoError(t, err)
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	return &function
 }

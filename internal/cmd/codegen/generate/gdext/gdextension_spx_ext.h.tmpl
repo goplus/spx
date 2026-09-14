@@ -65,8 +65,7 @@ typedef enum {
 {{ end }}} GdArrayType;
 
 typedef struct {
-	// 0 is return value
-	// 1-7 are arguments
+	// Slot 0 holds Ret; slots 1-8 hold Arg0-Arg7.
 	GdVec4 Ret;
 	GdVec4 Arg0;
 	GdVec4 Arg1;

@@ -99,40 +99,6 @@ func (g *Generator) Generate(projectPath string) error {
 	return nil
 }
 
-func writeWrapperHeader(projectPath string, ast clang.CHeaderFileAST) error {
-	output, err := common.RenderTemplate(nil, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
-	if err != nil {
-		return err
-	}
-	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
-}
-
-func writeWrapperGo(projectPath string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"goReturnType":       common.GoReturnType,
-		"goArgumentType":     common.GoArgumentType,
-		"goEnumValue":        common.GoEnumValue,
-		"add":                common.Add,
-		"cgoCastArgument":    common.CgoCastArgument,
-		"cgoCastReturnType":  common.CgoCastReturnType,
-		"cgoCleanUpArgument": common.CgoCleanUpArgument,
-		"trimPrefix":         strings.TrimPrefix,
-	}
-
-	return common.GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
-		filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.go"))
-}
-
-func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"trimPrefix":          strings.TrimPrefix,
-		"loadProcAddressName": common.LoadProcAddressName,
-	}
-
-	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, common.NativeRelDir, "ffi.gen.go"))
-}
-
 func (g *Generator) writeManager(projectPath string) error {
 	funcs := template.FuncMap{
 		"camelCase":        strcase.ToCamel,
@@ -208,4 +174,38 @@ func (g *Generator) writePureManagerImpl(projectPath string, clsName string) err
 	genFile := strings.ToLower(clsName) + "_pure.gen.go"
 	return common.GenerateFile(funcs, genFile, implPureGoFileText, data,
 		filepath.Join(projectPath, common.EnginePkgRelDir, genFile))
+}
+
+func writeWrapperHeader(projectPath string, ast clang.CHeaderFileAST) error {
+	output, err := common.RenderTemplate(nil, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
+	if err != nil {
+		return err
+	}
+	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
+}
+
+func writeWrapperGo(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"goReturnType":       common.GoReturnType,
+		"goArgumentType":     common.GoArgumentType,
+		"goEnumValue":        common.GoEnumValue,
+		"add":                common.Add,
+		"cgoCastArgument":    common.CgoCastArgument,
+		"cgoCastReturnType":  common.CgoCastReturnType,
+		"cgoCleanUpArgument": common.CgoCleanUpArgument,
+		"trimPrefix":         strings.TrimPrefix,
+	}
+
+	return common.GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
+		filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.go"))
+}
+
+func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"trimPrefix":          strings.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
+	}
+
+	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
+		filepath.Join(projectPath, common.NativeRelDir, "ffi.gen.go"))
 }

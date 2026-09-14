@@ -336,11 +336,11 @@ void cgo_callfn_GDExtensionSpxInputIsActionJustReleasedId(const GDExtensionSpxIn
 	}
 	fn(action_id, ret_val);
 }
-void cgo_callfn_GDExtensionSpxInputWriteSnapshot(const GDExtensionSpxInputWriteSnapshot fn, float *out, int len) {
+void cgo_callfn_GDExtensionSpxInputWriteSnapshot(const GDExtensionSpxInputWriteSnapshot fn, float *out) {
 	if (!fn) {
 		return;
 	}
-	fn(out, len);
+	fn(out);
 }
 void cgo_callfn_GDExtensionSpxNavigationSetupPathFinderWithSize(const GDExtensionSpxNavigationSetupPathFinderWithSize fn, GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug) {
 	if (!fn) {
@@ -1614,6 +1614,12 @@ void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSprit
 	}
 	fn(buffer_data, len);
 }
+void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, const GdObj *objs, int count, float *out, int out_len) {
+	if (!fn) {
+		return;
+	}
+	fn(objs, count, out, out_len);
+}
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdatePhysics(const GDExtensionSpxSpriteBatchUpdatePhysics fn, const float *buffer_data, int len) {
 	if (!fn) {
 		return;
@@ -2021,11 +2027,5 @@ void cgo_callfn_GDExtensionSpxUiSetFlip(const GDExtensionSpxUiSetFlip fn, GdObj 
 		return;
 	}
 	fn(obj, horizontal, is_flip);
-}
-void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, GdArray objs, GdArray* ret_val) {
-	if (!fn) {
-		return;
-	}
-	fn(objs, ret_val);
 }
 #endif

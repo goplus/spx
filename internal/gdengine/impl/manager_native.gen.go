@@ -543,14 +543,13 @@ func (pself *inputMgr) IsActionJustReleasedId(action_id int64) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) WriteSnapshot(out []float32) {
+func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
 	enginewrap.CallInMainThread(func() {
-		var arg0 *float32
-		if len(out) > 0 {
-			arg0 = &out[0]
+		if out == nil {
+			panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
 		}
-		arg1 := int32(len(out))
-		CallInputWriteSnapshot(arg0, arg1)
+		arg0 := unsafe.SliceData(out[:])
+		CallInputWriteSnapshot(arg0)
 	})
 }
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
@@ -610,10 +609,10 @@ func (pself *penMgr) DestroyPen(obj Object) {
 }
 func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		var arg0 *float32
-		if len(buffer) > 0 {
-			arg0 = &buffer[0]
+		if len(buffer) > 2147483647 {
+			panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
 		}
+		arg0 := unsafe.SliceData(buffer)
 		arg1 := int32(len(buffer))
 		CallPenBatchUpdateCommands(arg0, arg1)
 	})
@@ -2220,30 +2219,45 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		var arg0 *float32
-		if len(buffer) > 0 {
-			arg0 = &buffer[0]
+		if len(buffer) > 2147483647 {
+			panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
 		}
+		arg0 := unsafe.SliceData(buffer)
 		arg1 := int32(len(buffer))
 		CallSpriteBatchUpdateTransforms(arg0, arg1)
 	})
 }
 func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		var arg0 *float32
-		if len(buffer) > 0 {
-			arg0 = &buffer[0]
+		if len(buffer) > 2147483647 {
+			panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
 		}
+		arg0 := unsafe.SliceData(buffer)
 		arg1 := int32(len(buffer))
 		CallSpriteBatchUpdateVisuals(arg0, arg1)
 	})
 }
+func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) {
+	enginewrap.CallInMainThread(func() {
+		if len(objs) > 2147483647 {
+			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
+		}
+		arg0 := unsafe.SliceData(objs)
+		arg1 := int32(len(objs))
+		if len(out) > 2147483647 {
+			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
+		}
+		arg2 := unsafe.SliceData(out)
+		arg3 := int32(len(out))
+		CallSpriteBatchRetrievePositions((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)
+	})
+}
 func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		var arg0 *float32
-		if len(buffer) > 0 {
-			arg0 = &buffer[0]
+		if len(buffer) > 2147483647 {
+			panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
 		}
+		arg0 := unsafe.SliceData(buffer)
 		arg1 := int32(len(buffer))
 		CallSpriteBatchUpdatePhysics(arg0, arg1)
 	})
@@ -2794,19 +2808,5 @@ func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 		arg1 := ToGdBool(horizontal)
 		arg2 := ToGdBool(is_flip)
 		CallUiSetFlip(arg0, arg1, arg2)
-	})
-}
-func (pself *spriteMgr) BatchRetrievePositions(objs Array) Array {
-	return enginewrap.CallInMainThreadValue(func() Array {
-		arg0Info := ToGdArrayInfo(objs)
-		if arg0Info != nil {
-			defer arg0Info.Free()
-		}
-		arg0 := GdArray(nil)
-		if arg0Info != nil {
-			arg0 = arg0Info.Raw()
-		}
-		retValue := CallSpriteBatchRetrievePositions(arg0)
-		return ToArray(retValue)
 	})
 }

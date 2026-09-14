@@ -18,7 +18,6 @@ package webffi
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
@@ -26,31 +25,6 @@ import (
 
 	"github.com/iancoleman/strcase"
 )
-
-func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
-	args := g.HighLevelArguments(function)
-	result := make([]string, 0, len(args))
-	for _, arg := range args {
-		argName := arg.Name
-		if g.isJSInt64Arg(function, arg) {
-			result = append(result, argName+"_low", argName+"_high")
-			continue
-		}
-		result = append(result, argName)
-	}
-	return result
-}
-
-func (g *Generator) isJSInt64Arg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	if g.IsArrayBufferArgument(function, arg) {
-		return false
-	}
-	_, ok := jsInt64Types[common.MustPrimitiveTypeName(arg, function.Name)]
-	return ok
-}
 
 type jsInt64Binding struct {
 	constructor string
@@ -62,80 +36,86 @@ var jsInt64Types = map[string]jsInt64Binding{
 	"GdObj": {constructor: "Module['_gdspx_new_obj']", split: "JsSplitGdObj"},
 }
 
+func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
+	var result []string
+	for _, param := range g.Parameters(function) {
+		if param.IsLength {
+			continue
+		}
+		if param.Buffer == nil && g.isJSInt64Arg(function, param.Argument) {
+			result = append(result, param.Name+"_low", param.Name+"_high")
+		} else {
+			result = append(result, param.Name)
+		}
+	}
+	return result
+}
+
+func (g *Generator) isJSInt64Arg(function *clang.TypedefFunction, arg clang.Argument) bool {
+	if function == nil || g.Parameter(function, arg.Name).Buffer != nil {
+		return false
+	}
+	_, ok := jsInt64Types[common.MustPrimitiveTypeName(arg, function.Name)]
+	return ok
+}
+
 func (g *Generator) jsBody(function *clang.TypedefFunction) string {
 	if g.WebBinding(function.Name) == common.WebBindingNoop {
 		return "return;"
 	}
-	if spec, ok := g.ArrayBridge(function.Name); ok {
-		return jsArrayBody(function, spec)
-	}
-	args := common.EffectiveArguments(function)
-	rawRetType := common.EffectiveRawReturnType(function)
-	if len(args) == 0 && rawRetType == "" {
-		return "_call();"
-	}
-
-	var sb strings.Builder
-	params := make([]string, 0, len(args)+1)
-	for i := range args {
-		name := "_arg" + strconv.Itoa(i)
-		fmt.Fprintf(&sb, "var %s;\n\t", name)
-		params = append(params, name)
-	}
+	params := g.Parameters(function)
+	callArgs := make([]string, len(params))
+	var declarations, statements, cleanup []string
+	rawRetType := g.EffectiveRawReturnType(function)
 	if rawRetType != "" {
-		sb.WriteString("var _resultPtr;\n\t")
+		statements = append(statements, fmt.Sprintf("_resultPtr = Alloc%s();", rawRetType))
 	}
-	sb.WriteString("try {\n")
-	if rawRetType != "" {
-		fmt.Fprintf(&sb, "\t\t_resultPtr = Alloc%s();\n", rawRetType)
-	}
-	for i, arg := range args {
-		typeName := common.MustPrimitiveTypeName(arg, function.Name)
-		if g.isJSInt64Arg(function, arg) {
-			fmt.Fprintf(&sb, "\t\t%s = %s(%s_high, %s_low);\n", params[i], jsInt64Types[typeName].constructor, arg.Name, arg.Name)
-		} else {
-			fmt.Fprintf(&sb, "\t\t%s = To%s(%s);\n", params[i], typeName, arg.Name)
+	for _, param := range params {
+		local := param.LocalName("_arg")
+		callArgs[param.Index] = local
+		if param.IsLength {
+			continue
 		}
+		if buffer := param.Buffer; buffer != nil {
+			op := "gd" + common.LoadProcAddressName(function.Name)
+			statements = append(statements, fmt.Sprintf("var %s = RequireNativeArray(%s, %q, %d, %t);", local, param.Name, op, buffer.Type, buffer.Writable()))
+			if param.LengthIndex >= 0 {
+				statements = append(statements, fmt.Sprintf("var %s = NativeArrayCount(%s);", param.LengthName("_arg"), param.Name))
+			} else {
+				statements = append(statements, fmt.Sprintf("if (NativeArrayCount(%s) < %d) {\n\tthrow new Error(%q);\n}", param.Name, buffer.Count, op+" array is too small: "+param.Name))
+			}
+			continue
+		}
+		typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
+		if param.DirectScalar() {
+			statements = append(statements, fmt.Sprintf("var %s = %s;", local, param.Name))
+			continue
+		}
+		declarations = append(declarations, "var "+local+";")
+		if binding, ok := jsInt64Types[typeName]; ok {
+			statements = append(statements, fmt.Sprintf("%s = %s(%s_high, %s_low);", local, binding.constructor, param.Name, param.Name))
+		} else {
+			statements = append(statements, fmt.Sprintf("%s = To%s(%s);", local, typeName, param.Name))
+		}
+		cleanup = append(cleanup, fmt.Sprintf("if (%s) Free%s(%s);", local, typeName, local))
 	}
 	if rawRetType != "" {
-		params = append(params, "_resultPtr")
+		declarations = append(declarations, "var _resultPtr;")
+		callArgs = append(callArgs, "_resultPtr")
 	}
-	fmt.Fprintf(&sb, "\t\t_call(%s);\n", strings.Join(params, ", "))
+	statements = append(statements, fmt.Sprintf("_call(%s);", strings.Join(callArgs, ", ")))
 	if rawRetType != "" {
-		name := strings.ReplaceAll(strcase.ToCamel(rawRetType), "Gd", "")
+		name := strings.TrimPrefix(strcase.ToCamel(rawRetType), "Gd")
 		if key, _ := g.jsResult(function); key != "" {
-			fmt.Fprintf(&sb, "\t\treturn ToJs%s(_resultPtr, this._reusableResults[%q]);\n", name, key)
+			statements = append(statements, fmt.Sprintf("return ToJs%s(_resultPtr, this._reusableResults[%q]);", name, key))
 		} else {
-			fmt.Fprintf(&sb, "\t\treturn ToJs%s(_resultPtr);\n", name)
+			statements = append(statements, fmt.Sprintf("return ToJs%s(_resultPtr);", name))
 		}
+		cleanup = append(cleanup, fmt.Sprintf("if (_resultPtr) Free%s(_resultPtr);", rawRetType))
 	}
-	sb.WriteString("\t} finally {\n")
-	for i, arg := range args {
-		typeName := common.MustPrimitiveTypeName(arg, function.Name)
-		fmt.Fprintf(&sb, "\t\tif (%s) Free%s(%s);\n", params[i], typeName, params[i])
+	body := strings.Join(statements, "\n")
+	if len(cleanup) > 0 {
+		body = strings.Join(declarations, "\n") + "\ntry {\n\t" + strings.ReplaceAll(body, "\n", "\n\t") + "\n} finally {\n\t" + strings.Join(cleanup, "\n\t") + "\n}"
 	}
-	if rawRetType != "" {
-		fmt.Fprintf(&sb, "\t\tif (_resultPtr) Free%s(_resultPtr);\n", rawRetType)
-	}
-	sb.WriteString("\t}")
-	return sb.String()
-}
-
-func jsArrayBody(function *clang.TypedefFunction, spec common.ArrayBridge) string {
-	if spec.ReturnArray {
-		return fmt.Sprintf(`var _result = TryTransformArray(_call, %s, %d, %d, %d);
-	if (_result == null) {
-		throw new Error(%q);
-	}
-	return _result;`, spec.ArgName, spec.Input.Type, spec.Output.Type, spec.Output.ElementsPerInput,
-			"gd"+common.LoadProcAddressName(function.Name)+" array transform failed")
-	}
-	if common.HasEffectiveReturn(function) {
-		panic(fmt.Sprintf("array-buffer webffi path does not support return values: %s", function.Name))
-	}
-	buffer := spec.CallerBuffer()
-	return fmt.Sprintf(`var _arg0 = RequireNativeArray(%s, %q, %d, %t);
-	var _arg1 = NativeArrayCount(%s);
-	_call(_arg0, _arg1);`,
-		spec.ArgName, "gd"+common.LoadProcAddressName(function.Name), buffer.Type, spec.Output != nil, spec.ArgName)
+	return strings.ReplaceAll(body, "\n", "\n\t")
 }

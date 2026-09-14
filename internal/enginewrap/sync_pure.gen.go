@@ -269,7 +269,7 @@ func (*inputMgrImpl) IsActionJustPressedId(action_id int64) bool {
 func (*inputMgrImpl) IsActionJustReleasedId(action_id int64) bool {
 	return false
 }
-func (*inputMgrImpl) WriteSnapshot(out []float32) {}
+func (*inputMgrImpl) WriteSnapshot(out *[3]float32) {}
 
 // INavigationMgr
 func (*navigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
@@ -702,12 +702,10 @@ func (*spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
 func (*spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 	return 0
 }
-func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {}
-func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)    {}
-func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32)    {}
-func (*spriteMgrImpl) BatchRetrievePositions(objs gdx.Array) gdx.Array {
-	return nil
-}
+func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32)             {}
+func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)                {}
+func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) {}
+func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32)                {}
 
 // ITilemapMgr
 func (*tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64)                                    {}

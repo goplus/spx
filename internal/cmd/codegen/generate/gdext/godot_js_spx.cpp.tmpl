@@ -50,19 +50,10 @@
 extern "C" {
 {{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
-{{- $spec := arrayBridge $f.Name }}
-{{- if not (and $spec $spec.ReturnArray) }}
-{{- if $spec }}
-{{- $buffer := $spec.CallerBuffer }}
-EMSCRIPTEN_KEEPALIVE
-void gd{{ loadProcAddressName $f.Name }}({{ cDecl $buffer.Data.CType $buffer.Data.Name }}, {{ cDecl $buffer.Length.CType $buffer.Length.Name }}) {
-	{{ getManagerName $f.Name}}Mgr->{{ $spec.MethodName }}({{ $buffer.Data.Name }}, {{ $buffer.Length.Name }});
-}
-{{- else }}
 EMSCRIPTEN_KEEPALIVE
 void gd{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
-		{{ $arg.CStylePtrString $j }}
+		{{ webParameterDeclaration $f $arg $j }}
 		{{- if ne $j (sub (len $f.Arguments) 1) -}}, {{ end -}}
 	{{- end -}}
 	{{ if ne "void" $f.ReturnType.CStyleString -}} 
@@ -100,7 +91,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $arg $j }}
+			{{- webManagerArgument $f $arg $j }}
 		{{- end -}}
 	);
 	if (!gdspx_bind_string_wrapper(ret_val, result)) {
@@ -111,7 +102,7 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $arg $j }}
+			{{- webManagerArgument $f $arg $j }}
 		{{- end -}}
 	);
 	*ret_val = result;
@@ -124,32 +115,13 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 	{{- range $j, $arg := $f.Arguments }}
 			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $arg $j }}
+			{{- webManagerArgument $f $arg $j }}
 		{{- end -}}
 	);
 	{{- end }}
 	{{- end }}
 }
-{{- end }}
-{{- end -}}
 {{- end -}}
 	{{ end }}
-{{- range $spec := listArrayBridges }}
-{{- if $spec.ReturnArray }}
-EMSCRIPTEN_KEEPALIVE
-void gd{{ loadProcAddressName $spec.FunctionName }}(
-	{{- range $i, $param := $spec.Params -}}
-		{{ cDecl $param.CType $param.Name }}
-		{{- if ne $i (sub (len $spec.Params) 1) -}}, {{ end -}}
-	{{- end -}}
-) {
-	{{ getManagerName $spec.FunctionName }}Mgr->{{ $spec.MethodName }}(
-		{{- range $i, $param := $spec.Params -}}
-			{{- if gt $i 0 }}, {{ end -}}{{ $param.Name }}
-		{{- end -}}
-	);
-}
-{{- end }}
-{{- end }}
 
 }

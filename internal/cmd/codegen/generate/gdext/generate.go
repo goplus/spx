@@ -61,32 +61,18 @@ func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers)
 
 func (g *Generator) writeCPP(outputPath, templateStr string) error {
 	funcs := template.FuncMap{
-		"sub":                  common.Sub,
-		"trimPrefix":           strings.TrimPrefix,
-		"loadProcAddressName":  common.LoadProcAddressName,
-		"isManagerMethod":      g.IsManagerMethod,
-		"getManagerName":       g.GetManagerName,
-		"isWebOwnedStringFree": isWebOwnedStringFree,
-		"isWebGdStringReturn":  isWebGdStringReturn,
-		"isWebGdArrayReturn":   isWebGdArrayReturn,
-		"isGdStringArgument":   isGdStringArgument,
-		"isGdArrayArgument":    isGdArrayArgument,
-		"webManagerArgument":   webManagerArgument,
-		"arrayBridge": func(name string) *common.ArrayBridge {
-			spec, ok := g.ArrayBridge(name)
-			if !ok {
-				return nil
-			}
-			return &spec
-		},
-		"listArrayBridges": g.ListArrayBridges,
-		"cDecl": func(typeName, name string) string {
-			typeName = strings.TrimSpace(typeName)
-			if strings.HasSuffix(typeName, "*") {
-				return typeName + name
-			}
-			return typeName + " " + name
-		},
+		"sub":                     common.Sub,
+		"trimPrefix":              strings.TrimPrefix,
+		"loadProcAddressName":     common.LoadProcAddressName,
+		"isManagerMethod":         g.IsManagerMethod,
+		"getManagerName":          g.GetManagerName,
+		"isWebOwnedStringFree":    isWebOwnedStringFree,
+		"isWebGdStringReturn":     isWebGdStringReturn,
+		"isWebGdArrayReturn":      isWebGdArrayReturn,
+		"isGdStringArgument":      isGdStringArgument,
+		"isGdArrayArgument":       isGdArrayArgument,
+		"webManagerArgument":      g.webManagerArgument,
+		"webParameterDeclaration": g.webParameterDeclaration,
 	}
 
 	output, err := common.RenderTemplate(funcs, filepath.Base(outputPath), templateStr, g.ManagerData())
@@ -94,6 +80,28 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		return err
 	}
 	return common.WriteGeneratedFile(outputPath, output, 0o644)
+}
+
+func (g *Generator) webManagerArgument(function *clang.TypedefFunction, argument clang.Argument, index int) string {
+	if g.isDirectWebParameter(function, argument) {
+		return argument.ResolvedName(index)
+	}
+	if isGdStringArgument(argument) {
+		return fmt.Sprintf("gdspx_string_arg_%d", index)
+	}
+	return argument.ResolvedPtrName(index)
+}
+
+func (g *Generator) isDirectWebParameter(function *clang.TypedefFunction, argument clang.Argument) bool {
+	param := g.Parameter(function, argument.Name)
+	return param.Buffer != nil || param.IsLength || param.DirectScalar()
+}
+
+func (g *Generator) webParameterDeclaration(function *clang.TypedefFunction, argument clang.Argument, index int) string {
+	if g.isDirectWebParameter(function, argument) {
+		return argument.CStyleString(index)
+	}
+	return argument.CStylePtrString(index)
 }
 
 // Web owns the value returned by this legacy method.
@@ -116,11 +124,4 @@ func isGdArrayArgument(argument clang.Argument) bool {
 func isGdStringArgument(argument clang.Argument) bool {
 	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdString" &&
 		!argument.Type.Primative.IsPointer
-}
-
-func webManagerArgument(argument clang.Argument, index int) string {
-	if isGdStringArgument(argument) {
-		return fmt.Sprintf("gdspx_string_arg_%d", index)
-	}
-	return argument.ResolvedPtrName(index)
 }

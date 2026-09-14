@@ -33,16 +33,15 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 		ManagerNames: []string{"sprite"},
 		WebBindings:  map[string]WebBindingMode{"first": WebBindingNoop},
 		ArrayBridges: map[string]ArrayBridge{"first": {
-			FunctionName: "first", ReturnArray: true,
-			Input:  &ArrayBuffer{Type: 2, Data: CParam{Name: "input"}},
-			Output: &ArrayBuffer{Type: 2, Count: 3},
+			FunctionName: "first",
+			Buffers:      []ArrayBuffer{{Type: 2, Data: CParam{Name: "input"}}, {Type: 2, Count: 3}},
 		}},
 	}
 	first := NewGenerationContext(ast, metadata)
 	metadata.ManagerNames[0] = "camera"
 	metadata.WebBindings["first"] = WebBindingReuseResult
-	metadata.ArrayBridges["first"].Input.Data.Name = "changed"
-	metadata.ArrayBridges["first"].Output.Count = 9
+	metadata.ArrayBridges["first"].Buffers[0].Data.Name = "changed"
+	metadata.ArrayBridges["first"].Buffers[1].Count = 9
 	second := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
 	require.Equal(t, WebBindingNoop, first.WebBinding("first"))
 	require.Equal(t, WebBindingReuseResult, second.WebBinding("first"))
@@ -51,16 +50,16 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	require.False(t, second.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	spec, ok := first.ArrayBridge("first")
 	require.True(t, ok)
-	require.Equal(t, "[]float32", spec.Input.GoType())
-	require.Equal(t, "input", spec.Input.Data.Name)
-	require.Equal(t, 3, spec.Output.Count)
-	spec.Input.Data.Name = "caller mutation"
-	spec.Output.Count = 8
-	first.ListArrayBridges()[0].Input.Data.Name = "another mutation"
-	first.ListArrayBridges()[0].Output.Count = 7
+	require.Equal(t, "[]float32", spec.Buffers[0].GoType())
+	require.Equal(t, "input", spec.Buffers[0].Data.Name)
+	require.Equal(t, 3, spec.Buffers[1].Count)
+	spec.Buffers[0].Data.Name = "caller mutation"
+	spec.Buffers[1].Count = 8
+	first.ListArrayBridges()[0].Buffers[0].Data.Name = "another mutation"
+	first.ListArrayBridges()[0].Buffers[1].Count = 7
 	again, _ := first.ArrayBridge("first")
-	require.Equal(t, "input", again.Input.Data.Name)
-	require.Equal(t, 3, again.Output.Count)
+	require.Equal(t, "input", again.Buffers[0].Data.Name)
+	require.Equal(t, 3, again.Buffers[1].Count)
 	require.Equal(t, "int64", first.MustGoTypeForCType("GdInt", "test"))
 }
 

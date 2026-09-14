@@ -18,7 +18,6 @@ package ffi
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
@@ -31,11 +30,11 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	sb := strings.Builder{}
 	prefixTab := "\t"
 	params := []string{}
-	args := common.EffectiveArguments(function)
-	hasSyntheticReturn := function.ReturnType.Name == "void" && common.HasEffectiveReturn(function)
+	args := g.Parameters(function)
+	hasSyntheticReturn := function.ReturnType.Name == "void" && g.HasEffectiveReturn(function)
 	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
 	if dispatchToMainThread {
-		if common.HasEffectiveReturn(function) {
+		if g.HasEffectiveReturn(function) {
 			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", g.EffectiveGoReturnType(function))
 		} else {
 			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
@@ -43,27 +42,32 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 		prefixTab += "\t"
 	}
 	// convert arguments
-	for i, arg := range args {
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+	for _, param := range args {
+		arg := param.Argument
+		if param.IsLength {
 			continue
 		}
 		sb.WriteString(prefixTab)
 		typeName := common.MustPrimitiveTypeName(arg, function.Name)
-		argName := "arg" + strconv.Itoa(i)
-		if g.IsArrayBufferArgument(function, arg) {
-			spec, _ := g.ArrayBridge(function.Name)
-			goArgName := g.EffectiveGoArgumentName(function, arg)
-			fmt.Fprintf(&sb, "var %s %s\n", argName, spec.CallerBuffer().GoPointerType())
-			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "if len(%s) > 0 {\n", goArgName)
-			fmt.Fprintf(&sb, "%s\t%s = &%s[0]\n", prefixTab, argName, goArgName)
-			sb.WriteString(prefixTab)
-			sb.WriteString("}\n")
-			lenArgName := "arg" + strconv.Itoa(i+1)
-			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "%s := %s", lenArgName, common.ArrayLengthExpr(goArgName))
-			params = append(params, argName, lenArgName)
-			sb.WriteString("\n")
+		argName := param.LocalName("arg")
+		if buffer := param.Buffer; buffer != nil {
+			fmt.Fprintf(&sb, "%s\n", buffer.GoArgumentCheck(function.Name))
+			fmt.Fprintf(&sb, "%s%s := unsafe.SliceData(%s)\n", prefixTab, argName, buffer.GoSliceExpr())
+			pointer := argName
+			if buffer.Type == common.ArrayObject {
+				pointer = "(*GdObj)(unsafe.Pointer(" + pointer + "))"
+			}
+			params = append(params, pointer)
+			if buffer.Count == 0 {
+				lenArgName := param.LengthName("arg")
+				fmt.Fprintf(&sb, "%s%s := int32(len(%s))\n", prefixTab, lenArgName, param.Name)
+				params = append(params, lenArgName)
+			}
+			continue
+		}
+		if param.DirectScalar() {
+			fmt.Fprintf(&sb, "%s := %s\n", argName, param.Name)
+			params = append(params, argName)
 			continue
 		}
 		switch typeName {
@@ -111,7 +115,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	// call the function
 	funcName := "Call" + strings.TrimPrefix(function.Name, "GDExtensionSpx")
 	if hasSyntheticReturn {
-		rawType := common.EffectiveRawReturnType(function)
+		rawType := g.EffectiveRawReturnType(function)
 		sb.WriteString(prefixTab)
 		fmt.Fprintf(&sb, "var retValue %s\n", rawType)
 	}
@@ -131,7 +135,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	}
 	sb.WriteString(")")
 
-	if common.HasEffectiveReturn(function) {
+	if g.HasEffectiveReturn(function) {
 		sb.WriteByte('\n')
 		sb.WriteString(prefixTab)
 		sb.WriteString("return ")

@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
 // ArrayTag identifies array descriptors across Go and JavaScript.
@@ -41,51 +39,41 @@ const (
 )
 
 type arrayBinding struct {
-	cType     string
-	name      string
-	goSlice   string
-	goPointer string
-	size      int
+	cType   string
+	name    string
+	goSlice string
+	size    int
 }
 
-// Object arrays are exposed through GdArray transforms, not direct Go slices.
+// Fixed-width arrays can also use caller-owned native buffers.
 var arrayTypes = map[ArrayType]arrayBinding{
 	ArrayUnknown: {name: "Unknown"},
 	ArrayBool:    {name: "Bool", size: 1},
 	ArrayString:  {name: "String"},
-	ArrayInt64:   {name: "Int64", cType: "int64_t", goSlice: "[]int64", goPointer: "*int64", size: 8},
-	ArrayFloat:   {name: "Float", cType: "float", goSlice: "[]float32", goPointer: "*float32", size: 4},
-	ArrayByte:    {name: "Byte", cType: "uint8_t", goSlice: "[]byte", goPointer: "*uint8", size: 1},
-	ArrayObject:  {name: "GdObj", cType: "GdObj", size: 8},
+	ArrayInt64:   {name: "Int64", cType: "int64_t", goSlice: "[]int64", size: 8},
+	ArrayFloat:   {name: "Float", cType: "float", goSlice: "[]float32", size: 4},
+	ArrayByte:    {name: "Byte", cType: "uint8_t", goSlice: "[]byte", size: 1},
+	ArrayObject:  {name: "GdObj", cType: "GdObj", goSlice: "[]int64", size: 8},
 }
 
-// LookupArrayType resolves a C element type to its array ABI type.
-func LookupArrayType(elementType string) (ArrayType, bool) {
-	if elementType == "real_t" {
-		elementType = "float"
-	}
-	for arrayType, binding := range arrayTypes {
-		if binding.cType != "" && binding.cType == elementType {
-			return arrayType, true
-		}
-	}
-	return 0, false
+// ArrayBridge describes ordered, independently sized caller-owned buffers.
+type ArrayBridge struct {
+	FunctionName string
+	MethodName   string
+	Buffers      []ArrayBuffer
+	Arguments    []CParam
 }
 
-func (t ArrayType) binding() arrayBinding {
-	binding, ok := arrayTypes[t]
-	if !ok {
-		panic(fmt.Sprintf("unsupported array type: %d", t))
-	}
-	return binding
+type ArrayBuffer struct {
+	Data   CParam
+	Length CParam
+	Type   ArrayType
+	Count  int // Fixed element count; zero means a separate length parameter.
 }
 
-func (t ArrayType) goBinding() arrayBinding {
-	binding := t.binding()
-	if binding.goSlice == "" {
-		panic(fmt.Sprintf("array type %d does not support direct Go slices", t))
-	}
-	return binding
+type CParam struct {
+	CType string
+	Name  string
 }
 
 func (t ArrayType) CType() string {
@@ -107,6 +95,85 @@ func (t ArrayType) GoConstant() string { return "GdArrayType" + t.binding().name
 // ElementSize is the fixed ABI width in bytes; zero means no fixed-width layout.
 func (t ArrayType) ElementSize() int { return t.binding().size }
 
+func (p CParam) Declaration() string {
+	if strings.HasSuffix(p.CType, "*") {
+		return p.CType + p.Name
+	}
+	return p.CType + " " + p.Name
+}
+
+func (s ArrayBridge) Clone() ArrayBridge {
+	s.Buffers = slices.Clone(s.Buffers)
+	s.Arguments = slices.Clone(s.Arguments)
+	return s
+}
+
+func (s ArrayBridge) Params() []CParam {
+	if s.Arguments != nil {
+		return slices.Clone(s.Arguments)
+	}
+	var params []CParam
+	for _, buffer := range s.Buffers {
+		params = append(params, buffer.Data)
+		if buffer.Length.Name != "" {
+			params = append(params, buffer.Length)
+		}
+	}
+	return params
+}
+
+// FixedOutput supports the no-argument Web reader for a single fixed output.
+func (s ArrayBridge) FixedOutput() *ArrayBuffer {
+	if len(s.Params()) == 1 && len(s.Buffers) == 1 && s.Buffers[0].Count != 0 && s.Buffers[0].Writable() {
+		return &s.Buffers[0]
+	}
+	return nil
+}
+
+func (b ArrayBuffer) ArgName() string { return strings.TrimSuffix(b.Data.Name, "_data") }
+
+func (b ArrayBuffer) Writable() bool {
+	return !slices.Contains(strings.Fields(strings.TrimSuffix(b.Data.CType, "*")), "const")
+}
+
+func (b ArrayBuffer) GoType() string {
+	slice := b.Type.goBinding().goSlice
+	if b.Count != 0 {
+		return fmt.Sprintf("*[%d]%s", b.Count, strings.TrimPrefix(slice, "[]"))
+	}
+	return slice
+}
+
+// GoSliceExpr provides a slice view without allocating or copying storage.
+func (b ArrayBuffer) GoSliceExpr() string {
+	if b.Count != 0 {
+		return b.ArgName() + "[:]"
+	}
+	return b.ArgName()
+}
+
+// GoArgumentCheck keeps Native and Web buffer preconditions consistent.
+func (b ArrayBuffer) GoArgumentCheck(functionName string) string {
+	name := b.ArgName()
+	if b.Count != 0 {
+		return fmt.Sprintf("if %s == nil { panic(%q) }", name, functionName+" requires a non-nil array: "+name)
+	}
+	return fmt.Sprintf("if len(%s) > 2147483647 { panic(%q) }", name, functionName+" array length exceeds int32: "+name)
+}
+
+// LookupArrayType resolves a C element type to its array ABI type.
+func LookupArrayType(elementType string) (ArrayType, bool) {
+	if elementType == "real_t" {
+		elementType = "float"
+	}
+	for arrayType, binding := range arrayTypes {
+		if binding.cType != "" && binding.cType == elementType {
+			return arrayType, true
+		}
+	}
+	return 0, false
+}
+
 // ArrayTypes returns ABI types in numeric order for deterministic generation.
 func ArrayTypes() []ArrayType {
 	types := make([]ArrayType, 0, len(arrayTypes))
@@ -117,88 +184,18 @@ func ArrayTypes() []ArrayType {
 	return types
 }
 
-// ArrayBridge maps raw buffers to a high-level array argument or result.
-type ArrayBridge struct {
-	FunctionName string
-	MethodName   string
-	ArgName      string
-	Input        *ArrayBuffer
-	Output       *ArrayBuffer
-	ReturnArray  bool // Allocate and return Output.
-}
-
-type ArrayBuffer struct {
-	Data             CParam
-	Length           CParam
-	Type             ArrayType
-	Count            int // Fixed element count; zero means unspecified.
-	ElementsPerInput int // Output element count per input element.
-}
-
-type CParam struct {
-	CType string
-	Name  string
-}
-
-func (s ArrayBridge) Clone() ArrayBridge {
-	if s.Input != nil {
-		input := *s.Input
-		s.Input = &input
+func (t ArrayType) binding() arrayBinding {
+	binding, ok := arrayTypes[t]
+	if !ok {
+		panic(fmt.Sprintf("unsupported array type: %d", t))
 	}
-	if s.Output != nil {
-		output := *s.Output
-		s.Output = &output
+	return binding
+}
+
+func (t ArrayType) goBinding() arrayBinding {
+	binding := t.binding()
+	if binding.goSlice == "" {
+		panic(fmt.Sprintf("array type %d does not support direct Go slices", t))
 	}
-	return s
-}
-
-// CallerBuffer returns the caller-owned buffer, or nil for array transforms.
-func (s ArrayBridge) CallerBuffer() *ArrayBuffer {
-	if s.ReturnArray {
-		return nil
-	}
-	if s.Input != nil {
-		return s.Input
-	}
-	return s.Output
-}
-
-func (s ArrayBridge) Params() []CParam {
-	var params []CParam
-	for _, buffer := range []*ArrayBuffer{s.Input, s.Output} {
-		if buffer != nil {
-			params = append(params, buffer.Data, buffer.Length)
-		}
-	}
-	return params
-}
-
-func (b ArrayBuffer) GoType() string {
-	return b.Type.goBinding().goSlice
-}
-
-func (b ArrayBuffer) GoPointerType() string {
-	return b.Type.goBinding().goPointer
-}
-
-func (c *GenerationContext) IsArrayBufferArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	spec, ok := c.ArrayBridge(function.Name)
-	buffer := spec.CallerBuffer()
-	return ok && buffer != nil && (arg.Name == buffer.Data.Name || arg.Name == spec.ArgName)
-}
-
-func (c *GenerationContext) IsArrayLengthArgument(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil {
-		return false
-	}
-	spec, ok := c.ArrayBridge(function.Name)
-	buffer := spec.CallerBuffer()
-	return ok && buffer != nil && buffer.Length.Name != "" && arg.Name == buffer.Length.Name
-}
-
-func ArrayLengthExpr(argName string) string {
-	return "int32(len(" + argName + "))"
+	return binding
 }

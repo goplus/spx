@@ -26,6 +26,10 @@ import (
 // Its zero value uses the legacy two-byte-prefix fallback.
 type ManagerNames struct{ longestFirst []string }
 
+func (m ManagerNames) Resolve(name string) string {
+	return m.resolve(name, unicode.IsUpper)
+}
+
 func NewManagerNames(names []string) ManagerNames {
 	result := ManagerNames{longestFirst: append([]string(nil), names...)}
 	for i, name := range result.longestFirst {
@@ -35,10 +39,6 @@ func NewManagerNames(names []string) ManagerNames {
 		return len(result.longestFirst[i]) > len(result.longestFirst[j])
 	})
 	return result
-}
-
-func (m ManagerNames) Resolve(name string) string {
-	return m.resolve(name, unicode.IsUpper)
 }
 
 // resolveASCII retains the parser's ASCII fallback. Parsed C identifiers are ASCII;

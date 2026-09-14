@@ -22,7 +22,6 @@ import (
 	"unicode"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 )
 
 func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName string) string {
@@ -31,23 +30,23 @@ func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName 
 	lowcaseMgr := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := common.EffectiveArguments(function)
+	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
 	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
 	wroteArg := false
 	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" {
+		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
 			continue
 		}
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := g.EffectiveGoArgumentType(function, arg)
+		typeName := arg.MustGoType(function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -70,26 +69,26 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName stri
 	lowcaseMgr := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := common.EffectiveArguments(function)
+	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
 
-	hasObjArg := len(args) > 0 && args[0].Name == "obj"
+	hasObjArg := len(args) > 0 && args[0].Name == "obj" && args[0].Buffer == nil
 
 	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
 	wroteArg := false
 	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" {
+		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
 			continue
 		}
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		sb.WriteString(" ")
-		typeName := g.EffectiveGoArgumentType(function, arg)
+		typeName := arg.MustGoType(function.Name)
 		sb.WriteString(typeName)
 		wroteArg = true
 	}
@@ -109,16 +108,16 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName stri
 		wroteCallArg = true
 	}
 	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" {
+		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
 			continue
 		}
-		if g.ShouldSkipHighLevelArgument(function, arg) {
+		if arg.IsLength {
 			continue
 		}
 		if wroteCallArg {
 			sb.WriteString(", ")
 		}
-		sb.WriteString(g.EffectiveGoArgumentName(function, arg))
+		sb.WriteString(arg.Name)
 		wroteCallArg = true
 	}
 	sb.WriteString(")\n}\n")

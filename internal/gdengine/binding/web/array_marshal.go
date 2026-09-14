@@ -28,12 +28,27 @@ import (
 var jsUint8Array = js.Global().Get("Uint8Array")
 
 func JsFromGdArray(array engine.Array) js.Value {
+	return jsFromArray(array, 0)
+}
+
+// JsFromNativeArray preserves the declared ABI type, including signed object IDs.
+func JsFromNativeArray(array engine.Array, arrayType int32) js.Value {
+	return jsFromArray(array, arrayType)
+}
+
+func jsFromArray(array engine.Array, arrayType int32) js.Value {
 	if array == nil {
 		panic("JsFromGdArray doesn't support nil array")
 	}
 	value := describeArray(array)
 	if value == nil {
 		return js.Null()
+	}
+	if arrayType != 0 {
+		if !nativeArrayTypeMatches(value.Type, arrayType) {
+			panic("native array element type does not match caller storage")
+		}
+		value.Type = arrayType
 	}
 	data, err := encodeArrayData(value.Type, value.Data)
 	if err != nil {
@@ -79,6 +94,37 @@ func JsToGdArray(value js.Value) engine.Array {
 		return nil
 	}
 	return array
+}
+
+// CopyNativeArrayOutput copies Wasm output directly into the caller's Go storage,
+// avoiding the temporary byte slice and decoded result used by GdArray returns.
+func CopyNativeArrayOutput(target engine.Array, wrapper js.Value) {
+	switch target.(type) {
+	case []int64, []uint64, []float32, []byte:
+	default:
+		panic("native array output requires a fixed-width Go slice")
+	}
+	array := describeArray(target)
+	if array == nil || wrapper.Type() != js.TypeObject {
+		panic("invalid native array output")
+	}
+	data, err := encodeArrayData(array.Type, array.Data)
+	if err != nil {
+		panic(err)
+	}
+	bytes := wrapper.Get("data")
+	arrayType, typeOK := arrayInteger(wrapper.Get("type"), GdArrayTypeGdObj)
+	if !isByteArray(bytes) || bytes.Length() != len(data) ||
+		!typeOK || !nativeArrayTypeMatches(array.Type, arrayType) ||
+		!wrapper.Get("count").Equal(js.ValueOf(array.Count)) {
+		panic("native array output shape does not match caller storage")
+	}
+	js.CopyBytesToGo(data, bytes)
+}
+
+// Go stores object IDs as int64; both ABI types preserve the same 64 bits.
+func nativeArrayTypeMatches(storageType, declaredType int32) bool {
+	return storageType == declaredType || (storageType == GdArrayTypeInt64 && declaredType == GdArrayTypeGdObj)
 }
 
 func describeArray(array engine.Array) *arrayValue {

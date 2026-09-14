@@ -26,6 +26,7 @@ import (
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,6 +79,101 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.NotContains(t, isMainThread, "enginewrap.CallInMainThread")
 	require.Contains(t, isMainThread, "retValue := CallPlatformIsMainThread()")
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
+}
+
+func TestFixedOutputManagerUsesArrayPointerWithoutLength(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void write_values(float out[3]);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleWriteValues)(float *out);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.writeManager(projectPath))
+	path := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
+	output, err := os.ReadFile(path)
+	require.NoError(t, err)
+	method := generatedMethod(t, path, output, "WriteValues")
+	require.Contains(t, method, "WriteValues(out *[3]float32)")
+	require.Contains(t, method, "if out == nil")
+	require.Contains(t, method, "arg0 := unsafe.SliceData(out[:])")
+	require.Contains(t, method, "CallExampleWriteValues(arg0)")
+	require.NotContains(t, method, "len(out)")
+}
+
+func TestNativeBuffersPassIndependentLengths(t *testing.T) {
+	dir := t.TempDir()
+	const params = "const GdObj *objs, int count, float *out, int out_len"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(`+params+`);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(" + params + ");")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.writeManager(projectPath))
+	path := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
+	output, err := os.ReadFile(path)
+	require.NoError(t, err)
+	method := generatedMethod(t, path, output, "Collect")
+	require.Contains(t, method, "Collect(objs []int64, out []float32)")
+	require.Contains(t, method, "arg0 := unsafe.SliceData(objs)")
+	require.Contains(t, method, "arg1 := int32(len(objs))")
+	require.Contains(t, method, "arg2 := unsafe.SliceData(out)")
+	require.Contains(t, method, "arg3 := int32(len(out))")
+	require.Contains(t, method, "CallExampleCollect((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)")
+}
+
+func TestMixedBuffersShareNativePointerConversion(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(const GdObj objects[2], const float *values, int count, GdObj selected[3]);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(const GdObj *objects, const float *values, int count, GdObj *selected);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	body := generation.managerBody(&functions[0])
+	for _, source := range []string{"objects[:]", "values", "selected[:]"} {
+		require.Contains(t, body, "unsafe.SliceData("+source+")")
+	}
+	require.Contains(t, body, "if objects == nil")
+	require.Contains(t, body, "if selected == nil")
+	require.Contains(t, body, "if len(values) > 2147483647")
+	require.Contains(t, body, "arg2 := int32(len(values))")
+	require.Contains(t, body, "CallExampleCollect((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, (*GdObj)(unsafe.Pointer(arg3)))")
+}
+
+func TestMixedScalarsAndArraysPreserveNativeArguments(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float *ret_value);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	body := generation.managerBody(&function)
+	require.Contains(t, body, "arg1 := mode")
+	require.Contains(t, body, "arg3 := int32(len(objects))")
+	require.Contains(t, body, "arg5 := int32(len(out))")
+	require.Contains(t, body, "unsafe.SliceData(ret_value[:])")
+	require.Contains(t, body, "defer C.free(unsafe.Pointer(arg0Str))")
+	require.Contains(t, body, "CallExampleCollect(arg0, arg1, (*GdObj)(unsafe.Pointer(arg2)), arg3, arg4, arg5, arg6)")
+	require.NotContains(t, body, "var retValue")
 }
 
 func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
