@@ -56,33 +56,24 @@ var arrayTypes = map[ArrayType]arrayBinding{
 	ArrayObject:  {name: "GdObj", cType: "GdObj", goSlice: "[]int64", size: 8},
 }
 
-// LookupArrayType resolves a C element type to its array ABI type.
-func LookupArrayType(elementType string) (ArrayType, bool) {
-	if elementType == "real_t" {
-		elementType = "float"
-	}
-	for arrayType, binding := range arrayTypes {
-		if binding.cType != "" && binding.cType == elementType {
-			return arrayType, true
-		}
-	}
-	return 0, false
+// ArrayBridge describes ordered, independently sized caller-owned buffers.
+type ArrayBridge struct {
+	FunctionName string
+	MethodName   string
+	Buffers      []ArrayBuffer
+	Arguments    []CParam
 }
 
-func (t ArrayType) binding() arrayBinding {
-	binding, ok := arrayTypes[t]
-	if !ok {
-		panic(fmt.Sprintf("unsupported array type: %d", t))
-	}
-	return binding
+type ArrayBuffer struct {
+	Data   CParam
+	Length CParam
+	Type   ArrayType
+	Count  int // Fixed element count; zero means a separate length parameter.
 }
 
-func (t ArrayType) goBinding() arrayBinding {
-	binding := t.binding()
-	if binding.goSlice == "" {
-		panic(fmt.Sprintf("array type %d does not support direct Go slices", t))
-	}
-	return binding
+type CParam struct {
+	CType string
+	Name  string
 }
 
 func (t ArrayType) CType() string {
@@ -103,36 +94,6 @@ func (t ArrayType) GoConstant() string { return "GdArrayType" + t.binding().name
 
 // ElementSize is the fixed ABI width in bytes; zero means no fixed-width layout.
 func (t ArrayType) ElementSize() int { return t.binding().size }
-
-// ArrayTypes returns ABI types in numeric order for deterministic generation.
-func ArrayTypes() []ArrayType {
-	types := make([]ArrayType, 0, len(arrayTypes))
-	for t := range arrayTypes {
-		types = append(types, t)
-	}
-	slices.Sort(types)
-	return types
-}
-
-// ArrayBridge describes ordered, independently sized caller-owned buffers.
-type ArrayBridge struct {
-	FunctionName string
-	MethodName   string
-	Buffers      []ArrayBuffer
-	Arguments    []CParam
-}
-
-type ArrayBuffer struct {
-	Data   CParam
-	Length CParam
-	Type   ArrayType
-	Count  int // Fixed element count; zero means a separate length parameter.
-}
-
-type CParam struct {
-	CType string
-	Name  string
-}
 
 func (p CParam) Declaration() string {
 	if strings.HasSuffix(p.CType, "*") {
@@ -170,6 +131,7 @@ func (s ArrayBridge) FixedOutput() *ArrayBuffer {
 }
 
 func (b ArrayBuffer) ArgName() string { return strings.TrimSuffix(b.Data.Name, "_data") }
+
 func (b ArrayBuffer) Writable() bool {
 	return !slices.Contains(strings.Fields(strings.TrimSuffix(b.Data.CType, "*")), "const")
 }
@@ -197,4 +159,43 @@ func (b ArrayBuffer) GoArgumentCheck(functionName string) string {
 		return fmt.Sprintf("if %s == nil { panic(%q) }", name, functionName+" requires a non-nil array: "+name)
 	}
 	return fmt.Sprintf("if len(%s) > 2147483647 { panic(%q) }", name, functionName+" array length exceeds int32: "+name)
+}
+
+// LookupArrayType resolves a C element type to its array ABI type.
+func LookupArrayType(elementType string) (ArrayType, bool) {
+	if elementType == "real_t" {
+		elementType = "float"
+	}
+	for arrayType, binding := range arrayTypes {
+		if binding.cType != "" && binding.cType == elementType {
+			return arrayType, true
+		}
+	}
+	return 0, false
+}
+
+// ArrayTypes returns ABI types in numeric order for deterministic generation.
+func ArrayTypes() []ArrayType {
+	types := make([]ArrayType, 0, len(arrayTypes))
+	for t := range arrayTypes {
+		types = append(types, t)
+	}
+	slices.Sort(types)
+	return types
+}
+
+func (t ArrayType) binding() arrayBinding {
+	binding, ok := arrayTypes[t]
+	if !ok {
+		panic(fmt.Sprintf("unsupported array type: %d", t))
+	}
+	return binding
+}
+
+func (t ArrayType) goBinding() arrayBinding {
+	binding := t.binding()
+	if binding.goSlice == "" {
+		panic(fmt.Sprintf("array type %d does not support direct Go slices", t))
+	}
+	return binding
 }

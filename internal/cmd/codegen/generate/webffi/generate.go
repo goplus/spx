@@ -79,37 +79,6 @@ func (g *Generator) Generate(projectPath, spxModulePath string) error {
 	return nil
 }
 
-func writeCallbacks(projectPath string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"add":                   common.Add,
-		"trimPrefix":            strings.TrimPrefix,
-		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
-	}
-
-	return common.GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
-		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
-}
-
-func writeWorker(projectPath string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"snakeCase":  strcase.ToSnake,
-		"trimPrefix": strings.TrimPrefix,
-	}
-
-	return common.GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
-		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
-}
-
-func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"trimPrefix":          strings.TrimPrefix,
-		"loadProcAddressName": common.LoadProcAddressName,
-	}
-
-	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
-}
-
 func (g *Generator) writeManager(projectPath string) error {
 	caches, err := scanCaches(filepath.Join(projectPath, WebRelDir))
 	if err != nil {
@@ -162,6 +131,37 @@ func (g *Generator) writeEngineJS(spxModulePath string) error {
 		return err
 	}
 	return common.WriteGeneratedFile(dstPath, output, 0o666)
+}
+
+func writeCallbacks(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"add":                   common.Add,
+		"trimPrefix":            strings.TrimPrefix,
+		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
+	}
+
+	return common.GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
+		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
+}
+
+func writeWorker(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"snakeCase":  strcase.ToSnake,
+		"trimPrefix": strings.TrimPrefix,
+	}
+
+	return common.GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
+		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
+}
+
+func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
+	funcs := template.FuncMap{
+		"trimPrefix":          strings.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
+	}
+
+	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
+		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
 }
 
 func trimTrailingWhitespace(src []byte) []byte {

@@ -490,18 +490,6 @@ public:
 	require.NotContains(t, manager, "CopyNativeArrayOutput(values")
 }
 
-func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
-	t.Helper()
-	var params []string
-	for _, param := range spec.Params() {
-		params = append(params, param.Declaration())
-	}
-	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
-	require.NoError(t, err)
-	function := ast.CollectGDExtensionInterfaceFunctions()[0]
-	return &function
-}
-
 func TestMixedArrayCallPreservesArgumentsAndReleasesOwnedValues(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -549,4 +537,16 @@ for (const failure of [null, 'buffer', 'call']) {
 }`
 	output, err := exec.Command(node, "-e", script).CombinedOutput()
 	require.NoError(t, err, "%s", output)
+}
+
+func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
+	t.Helper()
+	var params []string
+	for _, param := range spec.Params() {
+		params = append(params, param.Declaration())
+	}
+	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
+	require.NoError(t, err)
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	return &function
 }

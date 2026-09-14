@@ -66,6 +66,13 @@ func init() {
 	buildConfig = defaultBuildConfig
 }
 
+func main() {
+	if err := generateCode(); err != nil {
+		fmt.Fprintf(os.Stderr, "codegen: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func resolveSPXModuleSource(repoRoot, override string) string {
 	if absRepoRoot, err := filepath.Abs(repoRoot); err == nil {
 		repoRoot = absRepoRoot
@@ -152,11 +159,4 @@ func generateCode() error {
 		spxlog.Info("CLI tool completed")
 	}
 	return nil
-}
-
-func main() {
-	if err := generateCode(); err != nil {
-		fmt.Fprintf(os.Stderr, "codegen: %v\n", err)
-		os.Exit(1)
-	}
 }

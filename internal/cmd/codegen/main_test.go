@@ -55,25 +55,6 @@ func TestResolveSPXModuleSourcePreservesAbsoluteOverride(t *testing.T) {
 	}
 }
 
-func writeCodegenFixtureFile(t *testing.T, dir, name string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func newValidSPXModuleFixture(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	for _, name := range requiredCodegenModuleFiles {
-		writeCodegenFixtureFile(t, dir, name)
-	}
-	return dir
-}
-
 func TestValidateCodegenInputsOnlyRequiresGeneratorSources(t *testing.T) {
 	moduleSource := newValidSPXModuleFixture(t)
 	if err := validateCodegenInputs(moduleSource); err != nil {
@@ -145,4 +126,23 @@ func TestGenerateCodeValidatesBeforeWriting(t *testing.T) {
 	if string(sentinelAfter) != string(sentinelBefore) {
 		t.Fatalf("sentinel changed before validation: before=%q after=%q", sentinelBefore, sentinelAfter)
 	}
+}
+
+func writeCodegenFixtureFile(t *testing.T, dir, name string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newValidSPXModuleFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range requiredCodegenModuleFiles {
+		writeCodegenFixtureFile(t, dir, name)
+	}
+	return dir
 }

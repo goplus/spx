@@ -32,6 +32,24 @@ type cacheFunc struct {
 	argCount int
 }
 
+func (g *Generator) wrapCache(function *clang.TypedefFunction, body string) string {
+	cache, ok := g.caches[function.Name]
+	if !ok {
+		return body
+	}
+	var args []string
+	for _, arg := range g.Parameters(function) {
+		if !arg.IsLength {
+			args = append(args, arg.Name)
+		}
+	}
+	if len(args) != cache.argCount || !g.HasEffectiveReturn(function) {
+		panic("cache signature does not match " + function.Name)
+	}
+	args = append(args, fmt.Sprintf("func() %s {\n\t%s\n\t}", g.EffectiveGoReturnType(function), strings.ReplaceAll(body, "\n", "\n\t")))
+	return "return " + cache.name + "(" + strings.Join(args, ", ") + ")"
+}
+
 // scanCaches matches Cached<Manager><Method> functions in *_cache.go to APIs.
 // Each takes the API arguments followed by a func() T fallback.
 func scanCaches(dir string) (map[string]cacheFunc, error) {
@@ -72,22 +90,4 @@ func scanCaches(dir string) (map[string]cacheFunc, error) {
 		}
 	}
 	return functions, nil
-}
-
-func (g *Generator) wrapCache(function *clang.TypedefFunction, body string) string {
-	cache, ok := g.caches[function.Name]
-	if !ok {
-		return body
-	}
-	var args []string
-	for _, arg := range g.Parameters(function) {
-		if !arg.IsLength {
-			args = append(args, arg.Name)
-		}
-	}
-	if len(args) != cache.argCount || !g.HasEffectiveReturn(function) {
-		panic("cache signature does not match " + function.Name)
-	}
-	args = append(args, fmt.Sprintf("func() %s {\n\t%s\n\t}", g.EffectiveGoReturnType(function), strings.ReplaceAll(body, "\n", "\n\t")))
-	return "return " + cache.name + "(" + strings.Join(args, ", ") + ")"
 }

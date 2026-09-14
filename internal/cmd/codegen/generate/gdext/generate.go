@@ -82,28 +82,6 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 	return common.WriteGeneratedFile(outputPath, output, 0o644)
 }
 
-// Web owns the value returned by this legacy method.
-func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
-	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
-}
-
-func isWebGdArrayReturn(function *clang.TypedefFunction) bool {
-	return function != nil && function.ReturnType.Name == "GdArray" && !function.ReturnType.IsPointer
-}
-
-func isWebGdStringReturn(function *clang.TypedefFunction) bool {
-	return function != nil && function.ReturnType.Name == "GdString" && !function.ReturnType.IsPointer
-}
-
-func isGdArrayArgument(argument clang.Argument) bool {
-	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdArray"
-}
-
-func isGdStringArgument(argument clang.Argument) bool {
-	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdString" &&
-		!argument.Type.Primative.IsPointer
-}
-
 func (g *Generator) webManagerArgument(function *clang.TypedefFunction, argument clang.Argument, index int) string {
 	if g.isDirectWebParameter(function, argument) {
 		return argument.ResolvedName(index)
@@ -124,4 +102,26 @@ func (g *Generator) webParameterDeclaration(function *clang.TypedefFunction, arg
 		return argument.CStyleString(index)
 	}
 	return argument.CStylePtrString(index)
+}
+
+// Web owns the value returned by this legacy method.
+func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
+	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
+}
+
+func isWebGdArrayReturn(function *clang.TypedefFunction) bool {
+	return function != nil && function.ReturnType.Name == "GdArray" && !function.ReturnType.IsPointer
+}
+
+func isWebGdStringReturn(function *clang.TypedefFunction) bool {
+	return function != nil && function.ReturnType.Name == "GdString" && !function.ReturnType.IsPointer
+}
+
+func isGdArrayArgument(argument clang.Argument) bool {
+	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdArray"
+}
+
+func isGdStringArgument(argument clang.Argument) bool {
+	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdString" &&
+		!argument.Type.Primative.IsPointer
 }

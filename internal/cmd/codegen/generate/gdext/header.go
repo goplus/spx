@@ -81,6 +81,34 @@ func PrepareHeaders(dir string) (Headers, error) {
 	return Headers{Raw: raw, Standard: standard, Metadata: h.metadata}, nil
 }
 
+func (g *headerCollector) render(rawFormat bool) string {
+	var builder strings.Builder
+	for _, method := range g.methods {
+		if method.MethodName == "" {
+			fmt.Fprintf(&builder, "// %s\n", method.ClassName)
+			continue
+		}
+		returnType, params := method.ReturnType, method.Params
+		name := strcase.ToCamel(method.MethodName)
+		if returnType == "void" || rawFormat {
+			fmt.Fprintf(&builder, "typedef %s (*GDExtension%s%s)(%s);\n", returnType, method.ClassName, name, params)
+		} else {
+			if len(params) > 0 {
+				returnType = ", " + returnType
+			}
+			result := g.metadata.ReturnParameters["GDExtension"+method.ClassName+name]
+			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *%s);\n", method.ClassName, name, params, returnType, result.Name)
+		}
+	}
+	return builder.String()
+}
+
+func (g *headerCollector) renderHeader(raw bool) (string, error) {
+	text := strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", g.render(raw))
+	output, err := common.RenderTemplate(template.FuncMap{"arrayTypes": common.ArrayTypes}, "gdextension_spx_ext.h", text, nil)
+	return string(output), err
+}
+
 func mergeManagerHeader(dir string) (string, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "spx*mgr.h"))
 	if err != nil {
@@ -261,32 +289,4 @@ func parseManagerHeader(input string) *headerCollector {
 		panic("SPX_BINDING has no method declaration")
 	}
 	return g
-}
-
-func (g *headerCollector) render(rawFormat bool) string {
-	var builder strings.Builder
-	for _, method := range g.methods {
-		if method.MethodName == "" {
-			fmt.Fprintf(&builder, "// %s\n", method.ClassName)
-			continue
-		}
-		returnType, params := method.ReturnType, method.Params
-		name := strcase.ToCamel(method.MethodName)
-		if returnType == "void" || rawFormat {
-			fmt.Fprintf(&builder, "typedef %s (*GDExtension%s%s)(%s);\n", returnType, method.ClassName, name, params)
-		} else {
-			if len(params) > 0 {
-				returnType = ", " + returnType
-			}
-			result := g.metadata.ReturnParameters["GDExtension"+method.ClassName+name]
-			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *%s);\n", method.ClassName, name, params, returnType, result.Name)
-		}
-	}
-	return builder.String()
-}
-
-func (g *headerCollector) renderHeader(raw bool) (string, error) {
-	text := strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", g.render(raw))
-	output, err := common.RenderTemplate(template.FuncMap{"arrayTypes": common.ArrayTypes}, "gdextension_spx_ext.h", text, nil)
-	return string(output), err
 }

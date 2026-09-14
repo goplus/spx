@@ -36,21 +36,6 @@ func (g *Generator) MustGdxReturnType(function *clang.TypedefFunction) string {
 	return typeName
 }
 
-func goZeroValue(typeName string) string {
-	switch typeName {
-	case "bool":
-		return "false"
-	case "int64", "float64", "Object", "gdx.Object":
-		return "0"
-	case "string":
-		return `""`
-	case "Array", "gdx.Array":
-		return "nil"
-	default:
-		return typeName + "{}"
-	}
-}
-
 func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
@@ -163,4 +148,19 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 	}
 	sb.WriteString("}")
 	return sb.String()
+}
+
+func goZeroValue(typeName string) string {
+	switch typeName {
+	case "bool":
+		return "false"
+	case "int64", "float64", "Object", "gdx.Object":
+		return "0"
+	case "string":
+		return `""`
+	case "Array", "gdx.Array":
+		return "nil"
+	default:
+		return typeName + "{}"
+	}
 }

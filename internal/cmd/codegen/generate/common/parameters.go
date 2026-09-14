@@ -17,6 +17,58 @@ type Parameter struct {
 	GoType      string
 }
 
+// Scalars passed by value across the native and Web ABIs.
+var directScalarTypes = map[string]string{
+	"int": "int32", "int32_t": "int32", "float": "float32", "uint8_t": "byte",
+}
+
+// Parameters returns a read-only view in ABI order, including hidden lengths.
+func (c *GenerationContext) Parameters(function *clang.TypedefFunction) []Parameter {
+	if params, ok := c.parameters[function.Name]; ok {
+		return params
+	}
+	params, _ := c.prepareParameters(function)
+	return params
+}
+
+func (c *GenerationContext) Parameter(function *clang.TypedefFunction, name string) Parameter {
+	if function == nil {
+		return Parameter{}
+	}
+	if params, ok := c.parameterNames[function.Name]; ok {
+		return params[name]
+	}
+	_, params := c.prepareParameters(function)
+	return params[name]
+}
+
+func (p Parameter) LocalName(prefix string) string { return fmt.Sprintf("%s%d", prefix, p.Index) }
+
+func (p Parameter) LengthName(prefix string) string {
+	return fmt.Sprintf("%s%d", prefix, p.LengthIndex)
+}
+
+func (p Parameter) DirectScalar() bool {
+	primitive := p.Argument.Type.Primative
+	return primitive != nil && !primitive.IsPointer && directScalarTypes[primitive.Name] != ""
+}
+
+func (p Parameter) MustGoType(functionName string) string {
+	if p.GoType != "" {
+		return p.GoType
+	}
+	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", MustPrimitiveTypeName(p.Argument, functionName), functionName))
+}
+
+func (p Parameter) GdxType(functionName string) string {
+	switch goType := p.MustGoType(functionName); goType {
+	case "Object", "Array":
+		return "gdx." + goType
+	default:
+		return goType
+	}
+}
+
 func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) ([]Parameter, map[string]Parameter) {
 	args := c.EffectiveArguments(function)
 	indices := make(map[string]int, len(args))
@@ -61,55 +113,4 @@ func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) (
 		names[arg.Name] = param
 	}
 	return params, names
-}
-
-// Parameters returns a read-only view in ABI order, including hidden lengths.
-func (c *GenerationContext) Parameters(function *clang.TypedefFunction) []Parameter {
-	if params, ok := c.parameters[function.Name]; ok {
-		return params
-	}
-	params, _ := c.prepareParameters(function)
-	return params
-}
-
-func (c *GenerationContext) Parameter(function *clang.TypedefFunction, name string) Parameter {
-	if function == nil {
-		return Parameter{}
-	}
-	if params, ok := c.parameterNames[function.Name]; ok {
-		return params[name]
-	}
-	_, params := c.prepareParameters(function)
-	return params[name]
-}
-
-func (p Parameter) LocalName(prefix string) string { return fmt.Sprintf("%s%d", prefix, p.Index) }
-func (p Parameter) LengthName(prefix string) string {
-	return fmt.Sprintf("%s%d", prefix, p.LengthIndex)
-}
-
-// Scalars passed by value across the native and Web ABIs.
-var directScalarTypes = map[string]string{
-	"int": "int32", "int32_t": "int32", "float": "float32", "uint8_t": "byte",
-}
-
-func (p Parameter) DirectScalar() bool {
-	primitive := p.Argument.Type.Primative
-	return primitive != nil && !primitive.IsPointer && directScalarTypes[primitive.Name] != ""
-}
-
-func (p Parameter) MustGoType(functionName string) string {
-	if p.GoType != "" {
-		return p.GoType
-	}
-	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", MustPrimitiveTypeName(p.Argument, functionName), functionName))
-}
-
-func (p Parameter) GdxType(functionName string) string {
-	switch goType := p.MustGoType(functionName); goType {
-	case "Object", "Array":
-		return "gdx." + goType
-	default:
-		return goType
-	}
 }

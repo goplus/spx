@@ -81,40 +81,6 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
 }
 
-func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
-	return &clang.TypedefFunction{
-		Name:       name,
-		ReturnType: clang.PrimativeType{Name: returnType},
-		Arguments:  arguments,
-	}
-}
-
-func managerArgument(name, typeName string) clang.Argument {
-	return clang.Argument{
-		Name: name,
-		Type: clang.Type{Primative: &clang.PrimativeType{Name: typeName}},
-	}
-}
-
-func generatedMethod(t *testing.T, filename string, source []byte, name string) string {
-	t.Helper()
-
-	files := token.NewFileSet()
-	parsed, err := parser.ParseFile(files, filename, source, 0)
-	require.NoError(t, err)
-	for _, declaration := range parsed.Decls {
-		function, ok := declaration.(*ast.FuncDecl)
-		if !ok || function.Name.Name != name {
-			continue
-		}
-		start := files.Position(function.Pos()).Offset
-		end := files.Position(function.End()).Offset
-		return string(source[start:end])
-	}
-	t.Fatalf("generated method %s not found", name)
-	return ""
-}
-
 func TestFixedOutputManagerUsesArrayPointerWithoutLength(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
@@ -208,4 +174,38 @@ public:
 	require.Contains(t, body, "defer C.free(unsafe.Pointer(arg0Str))")
 	require.Contains(t, body, "CallExampleCollect(arg0, arg1, (*GdObj)(unsafe.Pointer(arg2)), arg3, arg4, arg5, arg6)")
 	require.NotContains(t, body, "var retValue")
+}
+
+func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
+	return &clang.TypedefFunction{
+		Name:       name,
+		ReturnType: clang.PrimativeType{Name: returnType},
+		Arguments:  arguments,
+	}
+}
+
+func managerArgument(name, typeName string) clang.Argument {
+	return clang.Argument{
+		Name: name,
+		Type: clang.Type{Primative: &clang.PrimativeType{Name: typeName}},
+	}
+}
+
+func generatedMethod(t *testing.T, filename string, source []byte, name string) string {
+	t.Helper()
+
+	files := token.NewFileSet()
+	parsed, err := parser.ParseFile(files, filename, source, 0)
+	require.NoError(t, err)
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != name {
+			continue
+		}
+		start := files.Position(function.Pos()).Offset
+		end := files.Position(function.End()).Offset
+		return string(source[start:end])
+	}
+	t.Fatalf("generated method %s not found", name)
+	return ""
 }

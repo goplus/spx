@@ -29,6 +29,29 @@ type bindingOptions struct {
 
 var reBinding = regexp.MustCompile(`^SPX_BINDING\s*\(([^()]*)\)`)
 
+func (o bindingOptions) validate(method classMethodDecl, arrayBridge bool) {
+	if o.Web == common.WebBindingDefault {
+		return
+	}
+	if arrayBridge {
+		panic("SPX_BINDING web cannot override an array bridge: " + method.MethodName)
+	}
+	switch o.Web {
+	case common.WebBindingNoop:
+		if method.ReturnType != "void" {
+			panic("SPX_BINDING web=noop requires a void method: " + method.MethodName)
+		}
+	case common.WebBindingReuseResult:
+		switch method.ReturnType {
+		case "GdVec2", "GdVec3", "GdVec4", "GdColor", "GdRect2":
+		default:
+			panic("SPX_BINDING web=reuse_result requires a structured value result: " + method.MethodName)
+		}
+	default:
+		panic("unknown SPX_BINDING web mode: " + string(o.Web))
+	}
+}
+
 // parseBinding consumes an optional annotation and leaves the method declaration.
 func parseBinding(line string) (*bindingOptions, string) {
 	if !strings.HasPrefix(line, "SPX_BINDING") {
@@ -62,27 +85,4 @@ func parseBinding(line string) (*bindingOptions, string) {
 		panic("duplicate SPX_BINDING annotation: " + line)
 	}
 	return &options, declaration
-}
-
-func (o bindingOptions) validate(method classMethodDecl, arrayBridge bool) {
-	if o.Web == common.WebBindingDefault {
-		return
-	}
-	if arrayBridge {
-		panic("SPX_BINDING web cannot override an array bridge: " + method.MethodName)
-	}
-	switch o.Web {
-	case common.WebBindingNoop:
-		if method.ReturnType != "void" {
-			panic("SPX_BINDING web=noop requires a void method: " + method.MethodName)
-		}
-	case common.WebBindingReuseResult:
-		switch method.ReturnType {
-		case "GdVec2", "GdVec3", "GdVec4", "GdColor", "GdRect2":
-		default:
-			panic("SPX_BINDING web=reuse_result requires a structured value result: " + method.MethodName)
-		}
-	default:
-		panic("unknown SPX_BINDING web mode: " + string(o.Web))
-	}
 }

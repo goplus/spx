@@ -26,6 +26,16 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
+type jsInt64Binding struct {
+	constructor string
+	split       string
+}
+
+var jsInt64Types = map[string]jsInt64Binding{
+	"GdInt": {constructor: "Module['_gdspx_new_int']", split: "JsSplitGdInt"},
+	"GdObj": {constructor: "Module['_gdspx_new_obj']", split: "JsSplitGdObj"},
+}
+
 func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
 	var result []string
 	for _, param := range g.Parameters(function) {
@@ -47,16 +57,6 @@ func (g *Generator) isJSInt64Arg(function *clang.TypedefFunction, arg clang.Argu
 	}
 	_, ok := jsInt64Types[common.MustPrimitiveTypeName(arg, function.Name)]
 	return ok
-}
-
-type jsInt64Binding struct {
-	constructor string
-	split       string
-}
-
-var jsInt64Types = map[string]jsInt64Binding{
-	"GdInt": {constructor: "Module['_gdspx_new_int']", split: "JsSplitGdInt"},
-	"GdObj": {constructor: "Module['_gdspx_new_obj']", split: "JsSplitGdObj"},
 }
 
 func (g *Generator) jsBody(function *clang.TypedefFunction) string {
