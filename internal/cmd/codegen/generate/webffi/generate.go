@@ -57,19 +57,19 @@ type Generator struct {
 	caches map[string]cacheFunc
 }
 
-func (g *Generator) Generate(projectPath, spxModulePath string) error {
+func (g *Generator) Generate(codegenDir, spxModulePath string) error {
 	ast := g.AST()
 	generators := []struct {
 		name string
 		fn   func() error
 	}{
-		{"array ABI constants", func() error { return writeGoArrays(projectPath) }},
+		{"array ABI constants", func() error { return writeGoArrays(codegenDir) }},
 		{"JavaScript array ABI constants", func() error { return writeJSArrays(spxModulePath) }},
-		{"callback Go source", func() error { return writeCallbacks(projectPath, ast) }},
-		{"GDExtension interface", func() error { return writeFFI(projectPath, ast) }},
-		{"manager wrapper", func() error { return g.writeManager(projectPath) }},
+		{"callback Go source", func() error { return writeCallbacks(codegenDir, ast) }},
+		{"GDExtension interface", func() error { return writeFFI(codegenDir, ast) }},
+		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
 		{"JavaScript engine bridge", func() error { return g.writeEngineJS(spxModulePath) }},
-		{"Web worker wrapper", func() error { return writeWorker(projectPath, ast) }},
+		{"Web worker wrapper", func() error { return writeWorker(codegenDir, ast) }},
 	}
 	for _, generator := range generators {
 		if err := generator.fn(); err != nil {
@@ -79,8 +79,8 @@ func (g *Generator) Generate(projectPath, spxModulePath string) error {
 	return nil
 }
 
-func (g *Generator) writeManager(projectPath string) error {
-	caches, err := scanCaches(filepath.Join(projectPath, WebRelDir))
+func (g *Generator) writeManager(codegenDir string) error {
+	caches, err := scanCaches(filepath.Join(codegenDir, WebRelDir))
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (g *Generator) writeManager(projectPath string) error {
 	}
 
 	return common.GenerateFile(funcs, "manager_web.gen.go", managerWebText, g.ManagerData(),
-		filepath.Join(projectPath, common.GdengineImplRelDir, "manager_web.gen.go"))
+		filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_web.gen.go"))
 }
 
 func (g *Generator) writeEngineJS(spxModulePath string) error {
@@ -134,7 +134,7 @@ func (g *Generator) writeEngineJS(spxModulePath string) error {
 	return common.WriteGeneratedFile(dstPath, output, 0o666)
 }
 
-func writeCallbacks(projectPath string, ast clang.CHeaderFileAST) error {
+func writeCallbacks(codegenDir string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"add":                   common.Add,
 		"trimPrefix":            strings.TrimPrefix,
@@ -142,27 +142,27 @@ func writeCallbacks(projectPath string, ast clang.CHeaderFileAST) error {
 	}
 
 	return common.GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
-		filepath.Join(projectPath, WebRelDir, "callbacks.gen.go"))
+		filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
 }
 
-func writeWorker(projectPath string, ast clang.CHeaderFileAST) error {
+func writeWorker(codegenDir string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"snakeCase":  strcase.ToSnake,
 		"trimPrefix": strings.TrimPrefix,
 	}
 
 	return common.GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
-		filepath.Join(projectPath, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
+		filepath.Join(codegenDir, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
 }
 
-func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
+func writeFFI(codegenDir string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"trimPrefix":          strings.TrimPrefix,
 		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
 	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, WebRelDir, "ffi.gen.go"))
+		filepath.Join(codegenDir, WebRelDir, "ffi.gen.go"))
 }
 
 func trimTrailingWhitespace(src []byte) []byte {

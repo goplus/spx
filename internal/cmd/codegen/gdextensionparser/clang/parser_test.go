@@ -262,11 +262,11 @@ func TestParseTypedefStruct(t *testing.T) {
 	require.False(t, f.Expr[0].Struct.Fields[4].Function.ReturnType.IsConst)
 	require.Equal(t, "string_new_with_latin1_chars", f.Expr[0].Struct.Fields[4].Function.Name)
 	require.Len(t, f.Expr[0].Struct.Fields[4].Function.Arguments, 2)
-	require.Equal(t, "GDExtensionStringPtr", f.Expr[0].Struct.Fields[4].Function.Arguments[0].Type.Primative.Name)
+	require.Equal(t, "GDExtensionStringPtr", f.Expr[0].Struct.Fields[4].Function.Arguments[0].Type.Primitive.Name)
 	require.Equal(t, "r_dest", f.Expr[0].Struct.Fields[4].Function.Arguments[0].Name)
-	require.Equal(t, "char", f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primative.Name)
-	require.True(t, f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primative.IsConst)
-	require.True(t, f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primative.IsPointer)
+	require.Equal(t, "char", f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primitive.Name)
+	require.True(t, f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primitive.IsConst)
+	require.True(t, f.Expr[0].Struct.Fields[4].Function.Arguments[1].Type.Primitive.IsPointer)
 	require.Equal(t, "p_contents", f.Expr[0].Struct.Fields[4].Function.Arguments[1].Name)
 
 	require.Equal(t, "int64_t", f.Expr[0].Struct.Fields[5].Function.ReturnType.Name)
@@ -274,36 +274,36 @@ func TestParseTypedefStruct(t *testing.T) {
 	require.False(t, f.Expr[0].Struct.Fields[5].Function.ReturnType.IsPointer)
 	require.Equal(t, "worker_thread_pool_add_native_group_task", f.Expr[0].Struct.Fields[5].Function.Name)
 	require.Len(t, f.Expr[0].Struct.Fields[5].Function.Arguments, 7)
-	require.Equal(t, "GDExtensionObjectPtr", f.Expr[0].Struct.Fields[5].Function.Arguments[0].Type.Primative.Name)
+	require.Equal(t, "GDExtensionObjectPtr", f.Expr[0].Struct.Fields[5].Function.Arguments[0].Type.Primitive.Name)
 	require.Equal(t, "p_instance", f.Expr[0].Struct.Fields[5].Function.Arguments[0].Name)
 
 	require.Equal(t, "p_func", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Name)
 	require.Equal(t, "void", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.ReturnType.Name)
 	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.ReturnType.IsPointer)
 	require.Len(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments, 2)
-	require.Equal(t, "void", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[0].Type.Primative.Name)
-	require.True(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[0].Type.Primative.IsPointer)
-	require.Equal(t, "uint32_t", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[1].Type.Primative.Name)
-	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[1].Type.Primative.IsPointer)
+	require.Equal(t, "void", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[0].Type.Primitive.Name)
+	require.True(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[0].Type.Primitive.IsPointer)
+	require.Equal(t, "uint32_t", f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[1].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[1].Type.Function.Arguments[1].Type.Primitive.IsPointer)
 
-	require.Equal(t, "void", f.Expr[0].Struct.Fields[5].Function.Arguments[2].Type.Primative.Name)
-	require.True(t, f.Expr[0].Struct.Fields[5].Function.Arguments[2].Type.Primative.IsPointer)
+	require.Equal(t, "void", f.Expr[0].Struct.Fields[5].Function.Arguments[2].Type.Primitive.Name)
+	require.True(t, f.Expr[0].Struct.Fields[5].Function.Arguments[2].Type.Primitive.IsPointer)
 	require.Equal(t, "p_userdata", f.Expr[0].Struct.Fields[5].Function.Arguments[2].Name)
 
-	require.Equal(t, "int", f.Expr[0].Struct.Fields[5].Function.Arguments[3].Type.Primative.Name)
-	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[3].Type.Primative.IsPointer)
+	require.Equal(t, "int", f.Expr[0].Struct.Fields[5].Function.Arguments[3].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[3].Type.Primitive.IsPointer)
 	require.Equal(t, "p_elements", f.Expr[0].Struct.Fields[5].Function.Arguments[3].Name)
 
-	require.Equal(t, "int", f.Expr[0].Struct.Fields[5].Function.Arguments[4].Type.Primative.Name)
-	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[4].Type.Primative.IsPointer)
+	require.Equal(t, "int", f.Expr[0].Struct.Fields[5].Function.Arguments[4].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[4].Type.Primitive.IsPointer)
 	require.Equal(t, "p_tasks", f.Expr[0].Struct.Fields[5].Function.Arguments[4].Name)
 
-	require.Equal(t, "GDExtensionBool", f.Expr[0].Struct.Fields[5].Function.Arguments[5].Type.Primative.Name)
-	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[5].Type.Primative.IsPointer)
+	require.Equal(t, "GDExtensionBool", f.Expr[0].Struct.Fields[5].Function.Arguments[5].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[5].Type.Primitive.IsPointer)
 	require.Equal(t, "p_high_priority", f.Expr[0].Struct.Fields[5].Function.Arguments[5].Name)
 
-	require.Equal(t, "GDExtensionConstStringPtr", f.Expr[0].Struct.Fields[5].Function.Arguments[6].Type.Primative.Name)
-	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[6].Type.Primative.IsPointer)
+	require.Equal(t, "GDExtensionConstStringPtr", f.Expr[0].Struct.Fields[5].Function.Arguments[6].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Struct.Fields[5].Function.Arguments[6].Type.Primitive.IsPointer)
 	require.Equal(t, "p_description", f.Expr[0].Struct.Fields[5].Function.Arguments[6].Name)
 }
 
@@ -354,10 +354,10 @@ func TestParseTypedefFuncPointer(t *testing.T) {
 	require.False(t, f.Expr[0].Function.ReturnType.IsConst)
 	require.Len(t, f.Expr[0].Function.Arguments, 1)
 	require.Equal(t, "p_function_name", f.Expr[0].Function.Arguments[0].Name)
-	require.NotNil(t, f.Expr[0].Function.Arguments[0].Type.Primative)
-	require.Equal(t, "char", f.Expr[0].Function.Arguments[0].Type.Primative.Name)
-	require.True(t, f.Expr[0].Function.Arguments[0].Type.Primative.IsPointer)
-	require.True(t, f.Expr[0].Function.Arguments[0].Type.Primative.IsConst)
+	require.NotNil(t, f.Expr[0].Function.Arguments[0].Type.Primitive)
+	require.Equal(t, "char", f.Expr[0].Function.Arguments[0].Type.Primitive.Name)
+	require.True(t, f.Expr[0].Function.Arguments[0].Type.Primitive.IsPointer)
+	require.True(t, f.Expr[0].Function.Arguments[0].Type.Primitive.IsConst)
 
 	funcs := f.CollectFunctions()
 
@@ -375,13 +375,13 @@ func TestParseTypedefFunctionWithFunctionArgument(t *testing.T) {
 	require.Equal(t, "GDExtensionInterfaceWorkerThreadPoolAddNativeGroupTask", f.Expr[0].Function.Name)
 	require.Len(t, f.Expr[0].Function.Arguments, 7)
 	require.Equal(t, "p_instance", f.Expr[0].Function.Arguments[0].Name)
-	require.Equal(t, "GDExtensionObjectPtr", f.Expr[0].Function.Arguments[0].Type.Primative.Name)
+	require.Equal(t, "GDExtensionObjectPtr", f.Expr[0].Function.Arguments[0].Type.Primitive.Name)
 	require.Equal(t, "p_func", f.Expr[0].Function.Arguments[1].Type.Function.Name)
 	require.Len(t, f.Expr[0].Function.Arguments[1].Type.Function.Arguments, 2)
-	require.True(t, f.Expr[0].Function.Arguments[1].Type.Function.Arguments[0].Type.Primative.IsPointer)
-	require.Equal(t, "void", f.Expr[0].Function.Arguments[1].Type.Function.Arguments[0].Type.Primative.Name)
-	require.False(t, f.Expr[0].Function.Arguments[1].Type.Function.Arguments[1].Type.Primative.IsPointer)
-	require.Equal(t, "uint32_t", f.Expr[0].Function.Arguments[1].Type.Function.Arguments[1].Type.Primative.Name)
+	require.True(t, f.Expr[0].Function.Arguments[1].Type.Function.Arguments[0].Type.Primitive.IsPointer)
+	require.Equal(t, "void", f.Expr[0].Function.Arguments[1].Type.Function.Arguments[0].Type.Primitive.Name)
+	require.False(t, f.Expr[0].Function.Arguments[1].Type.Function.Arguments[1].Type.Primitive.IsPointer)
+	require.Equal(t, "uint32_t", f.Expr[0].Function.Arguments[1].Type.Function.Arguments[1].Type.Primitive.Name)
 }
 
 func TestParseTypedefFunctionNoArgumentNames(t *testing.T) {
@@ -426,4 +426,34 @@ func TestArgumentCStylePtrStringKeepsSpaceBeforePointer(t *testing.T) {
 
 	arg := f.Expr[0].Function.Arguments[0]
 	require.Equal(t, "GdObj *obj", arg.CStylePtrString(0))
+}
+
+func TestNestedFunctionPointerDeclaration(t *testing.T) {
+	ast, err := ParseCString(`typedef void (*GDExtensionSpxCallbackRegister)(void (*callback)(void (*nested)(int value)));`)
+	require.NoError(t, err)
+	argument := ast.CollectFunctions()[0].Arguments[0]
+	require.Equal(t, "void(*callback)(void(*nested)(int))", argument.CStyleString(0))
+}
+
+func TestFunctionCollectionsPreserveOrderAndDeduplicate(t *testing.T) {
+	ast, err := ParseCString(`
+ typedef void (*GDExtensionSpxSpriteCreate)();
+ typedef void (*GDExtensionSpxGlobalInit)();
+ typedef void (*GDExtensionSpxCallbackReady)();
+ typedef void (*GDExtensionSpxSpriteCreate)();
+ typedef void (*GDExtensionInterfaceFunctionPtr)();
+ typedef void (*GDExtensionSpxSpriteDestroy)();`)
+	require.NoError(t, err)
+	names := func(functions []TypedefFunction) []string {
+		result := make([]string, 0, len(functions))
+		for _, function := range functions {
+			result = append(result, function.Name)
+		}
+		return result
+	}
+	require.Equal(t, []string{"GDExtensionSpxSpriteCreate", "GDExtensionSpxSpriteDestroy"}, names(ast.CollectGDExtensionInterfaceFunctions()))
+	require.Equal(t, ast.CollectFunctionsOfClass("Sprite"), ast.CollectGDExtensionISpriteFunctions())
+	require.Equal(t, []string{"GDExtensionSpxGlobalInit"}, names(ast.CollectGDExtensionManagerFunctions("global", ManagerNames{})))
+	require.Equal(t, []string{"GDExtensionSpxCallbackReady"}, names(ast.CollectGDExtensionICallbackFunctions()))
+	require.Equal(t, []string{"GDExtensionInterfaceFunctionPtr"}, names(ast.CollectNonGDExtensionInterfaceFunctions()))
 }

@@ -49,3 +49,11 @@ func TestCollectManagerFunctionsUsesExactLongestMatch(t *testing.T) {
 	require.Len(t, functions, 1)
 	require.Equal(t, "GDExtensionSpxFooShow", functions[0].Name)
 }
+
+func TestManagerNamesRejectsInvalidPrefixes(t *testing.T) {
+	matcher := NewManagerNames([]string{"sprite"})
+	for _, name := range []string{"", "Other", "GDExtensionSpx", "GDExtensionSpxA", "OtherPrefixSpxSpriteCreate"} {
+		require.Empty(t, matcher.Resolve(name), name)
+		require.Empty(t, matcher.resolveASCII(name), name)
+	}
+}

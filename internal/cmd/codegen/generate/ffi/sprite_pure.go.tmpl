@@ -18,5 +18,5 @@ import (
 )
 
 {{range $i, $f := $param.Methods -}}
-	{{ getManagerImplPure $f $param.ClsName }}
+	{{ getManagerImplPure $f $param.ClassName }}
 {{ end }}

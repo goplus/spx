@@ -67,11 +67,11 @@ func TestCacheRejectsInvalidFallback(t *testing.T) {
 }
 
 func TestCacheRejectsMissingAPI(t *testing.T) {
-	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	dir := filepath.Join(projectPath, WebRelDir)
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	dir := filepath.Join(codegenDir, WebRelDir)
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	source := "package webffi; func CachedExampleRemoved(fallback func() bool) bool { return fallback() }"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "example_cache.go"), []byte(source), 0o600))
 	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-	require.ErrorContains(t, generation.writeManager(projectPath), "cache function has no matching API: GDExtensionSpxExampleRemoved")
+	require.ErrorContains(t, generation.writeManager(codegenDir), "cache function has no matching API: GDExtensionSpxExampleRemoved")
 }

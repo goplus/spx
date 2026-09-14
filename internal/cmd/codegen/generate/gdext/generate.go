@@ -44,12 +44,12 @@ type Generator struct {
 	*common.GenerationContext
 }
 
-func (g *Generator) Generate(projectPath, spxModulePath string, headers Headers) error {
+func (g *Generator) Generate(codegenDir, spxModulePath string, headers Headers) error {
 	if err := g.writeCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), gdSpxExtCpp); err != nil {
 		return err
 	}
 	for _, path := range []string{
-		filepath.Join(projectPath, common.NativeRelDir, "gdextension_spx_ext.h"),
+		filepath.Join(codegenDir, common.NativeRelDir, "gdextension_spx_ext.h"),
 		filepath.Join(spxModulePath, "gdextension_spx_ext.h"),
 	} {
 		if err := common.WriteGeneratedFile(path, []byte(headers.Standard), 0o644); err != nil {
@@ -119,10 +119,10 @@ func isWebGdStringReturn(function *clang.TypedefFunction) bool {
 }
 
 func isGdArrayArgument(argument clang.Argument) bool {
-	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdArray"
+	return argument.Type.Primitive != nil && argument.Type.Primitive.Name == "GdArray"
 }
 
 func isGdStringArgument(argument clang.Argument) bool {
-	return argument.Type.Primative != nil && argument.Type.Primative.Name == "GdString" &&
-		!argument.Type.Primative.IsPointer
+	return argument.Type.Primitive != nil && argument.Type.Primitive.Name == "GdString" &&
+		!argument.Type.Primitive.IsPointer
 }

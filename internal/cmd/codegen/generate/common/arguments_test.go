@@ -26,13 +26,13 @@ import (
 func TestEffectiveRawReturnTypeWithPrimitiveRetValue(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxTestPrimitiveReturn",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "void",
 		},
 		Arguments: []clang.Argument{
 			{
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdInt", IsPointer: true},
+					Primitive: &clang.PrimitiveType{Name: "GdInt", IsPointer: true},
 				},
 				Name: "ret_value",
 			},
@@ -46,19 +46,19 @@ func TestEffectiveRawReturnTypeWithPrimitiveRetValue(t *testing.T) {
 func TestEffectiveRawReturnTypePanicsOnFunctionPointerRetValue(t *testing.T) {
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxTestFunctionReturn",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "void",
 		},
 		Arguments: []clang.Argument{
 			{
 				Type: clang.Type{
 					Function: &clang.FunctionType{
-						ReturnType: clang.PrimativeType{Name: "void"},
+						ReturnType: clang.PrimitiveType{Name: "void"},
 						Name:       "ret_value",
 						Arguments: []clang.Argument{
 							{
 								Type: clang.Type{
-									Primative: &clang.PrimativeType{Name: "void", IsPointer: true},
+									Primitive: &clang.PrimitiveType{Name: "void", IsPointer: true},
 								},
 							},
 						},
@@ -83,7 +83,7 @@ func TestMustPrimitiveTypeName(t *testing.T) {
 	arg := clang.Argument{
 		Name: "value",
 		Type: clang.Type{
-			Primative: &clang.PrimativeType{Name: "GdString"},
+			Primitive: &clang.PrimitiveType{Name: "GdString"},
 		},
 	}
 
@@ -95,12 +95,12 @@ func TestMustPrimitiveTypeNamePanicsOnFunctionPointer(t *testing.T) {
 		Name: "callback",
 		Type: clang.Type{
 			Function: &clang.FunctionType{
-				ReturnType: clang.PrimativeType{Name: "void"},
+				ReturnType: clang.PrimitiveType{Name: "void"},
 				Name:       "callback",
 				Arguments: []clang.Argument{
 					{
 						Type: clang.Type{
-							Primative: &clang.PrimativeType{Name: "uint32_t"},
+							Primitive: &clang.PrimitiveType{Name: "uint32_t"},
 						},
 					},
 				},
@@ -122,13 +122,13 @@ func TestEffectiveGoReturnTypePanicsOnMissingTypeMapping(t *testing.T) {
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxTestUnknownReturn",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "void",
 		},
 		Arguments: []clang.Argument{
 			{
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdUnknown", IsPointer: true},
+					Primitive: &clang.PrimitiveType{Name: "GdUnknown", IsPointer: true},
 				},
 				Name: "ret_value",
 			},
@@ -174,20 +174,20 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 			{
 				Name: "buffer_data",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "float", IsPointer: true},
+					Primitive: &clang.PrimitiveType{Name: "float", IsPointer: true},
 				},
 			},
 			{
 				Name: "len",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "int"},
+					Primitive: &clang.PrimitiveType{Name: "int"},
 				},
 			},
 		},
 	}
 
 	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").MustGoType(function.Name))
-	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").GdxType(function.Name))
+	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").GDXType(function.Name))
 	require.Equal(t, "buffer", generation.Parameter(function, "buffer_data").Name)
 	require.True(t, generation.Parameter(function, "len").IsLength)
 }

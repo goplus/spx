@@ -39,9 +39,9 @@ var arrayTemplateFuncs = template.FuncMap{
 	"arrayTag": func() string { return common.ArrayTag },
 }
 
-func writeGoArrays(projectPath string) error {
+func writeGoArrays(codegenDir string) error {
 	return common.GenerateFile(arrayTemplateFuncs, "arrays.gen.go", goArraysTemplate, common.ArrayTypes(),
-		filepath.Join(projectPath, WebRelDir, "arrays.gen.go"))
+		filepath.Join(codegenDir, WebRelDir, "arrays.gen.go"))
 }
 
 func writeJSArrays(spxModulePath string) error {
