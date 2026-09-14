@@ -107,3 +107,56 @@ func TestNativeArrayBridgeRoundtrip(t *testing.T) {
 		}
 	}
 }
+
+func TestAllocateNativeOutputKeepsBorrowedBytes(t *testing.T) {
+	previous := js.Global().Get("GdspxBorrowNativeArray")
+	calls := 0
+	borrow := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		calls++
+		data := jsUint8Array.New(args[2].Int())
+		data.Call("fill", 0xa5)
+		return map[string]any{arrayTag: true, "type": args[0].Int(), "count": args[1].Int(), "data": data}
+	})
+	js.Global().Set("GdspxBorrowNativeArray", borrow)
+	t.Cleanup(func() { js.Global().Set("GdspxBorrowNativeArray", previous); borrow.Release() })
+	for _, typ := range []int32{GdArrayTypeFloat, GdArrayTypeInt64, GdArrayTypeGdObj, GdArrayTypeByte} {
+		for _, count := range []int{0, 3} {
+			wrapper := JsAllocNativeArray(typ, count)
+			size, _ := arrayElementSize(typ)
+			data := make([]byte, size*count)
+			js.CopyBytesToGo(data, wrapper.Get("data"))
+			for _, value := range data {
+				if value != 0xa5 {
+					t.Fatal("output allocation modified borrowed storage")
+				}
+			}
+		}
+	}
+	previousCalls := calls
+	for _, tc := range []struct {
+		typ   int32
+		count int
+	}{
+		{GdArrayTypeFloat, -1}, {GdArrayTypeFloat, maxGdArrayElements + 1},
+		{GdArrayTypeString, 3}, {GdArrayTypeBool, 3}, {99, 3},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("invalid output allocation was accepted")
+				}
+			}()
+			JsAllocNativeArray(tc.typ, tc.count)
+		}()
+	}
+	if calls != previousCalls {
+		t.Fatal("invalid output allocation reached JavaScript")
+	}
+	js.Global().Set("GdspxBorrowNativeArray", js.Undefined())
+	defer func() {
+		if recover() == nil {
+			t.Error("missing allocator did not fail")
+		}
+	}()
+	JsAllocNativeArray(GdArrayTypeFloat, 3)
+}

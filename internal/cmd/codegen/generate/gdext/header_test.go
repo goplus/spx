@@ -479,3 +479,59 @@ func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
 	require.Contains(t, string(output), "int mode, const GdObj *objects, int count, float *out, int out_len, float *ret_value")
 	require.Contains(t, string(output), "exampleMgr->collect(gdspx_string_arg_0, mode, objects, count, out, out_len, ret_value);")
 }
+
+func TestOutputOnlyArraysPreserveDirectionsAndReturnABI(t *testing.T) {
+	header := parseManagerHeader(`class SpxExampleMgr {
+ SPX_API GdBool collect(GdString label, const float *input, int count, SPX_OUT GdObj selected[2], SPX_OUT uint8_t *flags, int flags_len, float *state, int state_len);
+ };`)
+	const name = "GDExtensionSpxExampleCollect"
+	spec := header.metadata.ArrayBridges[name]
+	require.Len(t, spec.Buffers, 4)
+	for i, want := range []struct{ writable, outputOnly bool }{{false, false}, {true, true}, {true, true}, {true, false}} {
+		require.Equal(t, want.writable, spec.Buffers[i].Writable())
+		require.Equal(t, want.outputOnly, spec.Buffers[i].OutputOnly)
+	}
+	for _, raw := range []bool{true, false} {
+		source := header.render(raw)
+		require.NotContains(t, source, "SPX_OUT")
+		ast, err := clang.ParseCString(source)
+		require.NoError(t, err)
+		context := common.NewGenerationContext(ast, header.metadata)
+		function := ast.CollectGDExtensionInterfaceFunctions()[0]
+		require.True(t, context.HasOutputStatus(&function))
+		require.Equal(t, "Collect(label string, input []float32, selected *[2]int64, flags []byte, state []float32) bool ", context.ManagerInterfaceSignature(&function))
+		require.Len(t, context.EffectiveArguments(&function), 8)
+		if !raw {
+			require.Contains(t, source, "GdBool *ret_value")
+		}
+	}
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	path := filepath.Join(t.TempDir(), "wrapper.cpp")
+	require.NoError(t, generation.writeCPP(path, gdJsSpxCpp))
+	output, err := os.ReadFile(path)
+	require.NoError(t, err)
+	source := string(output)
+	require.Contains(t, source, "*ret_val = exampleMgr->collect(gdspx_string_arg_0, input, count, selected, flags, flags_len, state, state_len);")
+	// A reused bool result must be reset before argument validation can return early.
+	require.Greater(t, strings.Index(source, "gdspx_get_string_value(label"), strings.Index(source, "*ret_val = false;"))
+	require.Contains(t, source, "*ret_val = false;")
+}
+
+func TestOutputOnlyRejectsAmbiguousDeclarations(t *testing.T) {
+	for _, declaration := range []string{
+		"SPX_API void read(SPX_OUT const float out[3]);",
+		"SPX_API void read(SPX_OUT float const *out, int n);",
+		"SPX_API void read(SPX_OUT int n);",
+		"SPX_API void read(SPX_OUT GdArray out);",
+		"SPX_API void read(SPX_OUT float *out);",
+		"SPX_API void read(SPX_OUT SPX_OUT float out[3]);",
+		"SPX_API void read(float SPX_OUT out[3]);",
+		"SPX_API void read(float *out, SPX_OUT int n);",
+		"SPX_API void read(SPX_OUT double out[3]);",
+		"SPX_API GdInt read(SPX_OUT float out[3]);",
+	} {
+		require.Panics(t, func() { parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};") }, declaration)
+	}
+}

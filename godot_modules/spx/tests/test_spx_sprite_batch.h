@@ -57,7 +57,7 @@ TEST_CASE("[SceneTree][SPX] Position batches use independently sized native buff
 
 	const GdObj ids[] = {id, 999, id};
 	float out[] = {42, 42, 42, 42, 42, 42, 42, 42};
-	manager.batch_retrieve_positions(ids, 3, out, 8);
+	CHECK(manager.batch_retrieve_positions(ids, 3, out, 6));
 	CHECK_EQ(out[0], 3);
 	CHECK_EQ(out[1], -4);
 	CHECK(Math::is_nan(out[2]));
@@ -69,26 +69,31 @@ TEST_CASE("[SceneTree][SPX] Position batches use independently sized native buff
 	CHECK_EQ(ids[0], id);
 
 	sprite->set_position(Vector2(5, 6));
-	manager.batch_retrieve_positions(ids, 3, out, 8);
+	CHECK(manager.batch_retrieve_positions(ids, 3, out, 6));
 	CHECK_EQ(out[0], 5);
 	CHECK_EQ(out[1], -6);
 	manager.destroy_sprite(id);
 }
 
-TEST_CASE("[SceneTree][SPX] Position batches reject insufficient output before writing") {
+TEST_CASE("[SceneTree][SPX] Position batches reject invalid output before writing") {
 	SpriteMgrProbe manager;
 	const GdObj ids[] = {1, 2};
 	float out[] = {3, 4, 5};
 	ERR_PRINT_OFF;
-	manager.batch_retrieve_positions(nullptr, 2, out, 3);
-	manager.batch_retrieve_positions(ids, 2, nullptr, 4);
-	manager.batch_retrieve_positions(ids, INT_MAX, out, 3);
+	CHECK_FALSE(manager.batch_retrieve_positions(nullptr, 2, out, 4));
+	CHECK_FALSE(manager.batch_retrieve_positions(ids, 2, nullptr, 4));
+	CHECK_FALSE(manager.batch_retrieve_positions(ids, INT_MAX, out, 3));
 	for (int count : {0, -1, 2}) {
-		manager.batch_retrieve_positions(ids, count, out, 3);
+		CHECK_FALSE(manager.batch_retrieve_positions(ids, count, out, 3));
 		CHECK_EQ(out[0], 3);
 		CHECK_EQ(out[1], 4);
 		CHECK_EQ(out[2], 5);
 	}
+	CHECK_FALSE(manager.batch_retrieve_positions(ids, 1, out, 3));
+	CHECK_EQ(out[0], 3);
+	CHECK_EQ(out[1], 4);
+	CHECK_EQ(out[2], 5);
+	CHECK(manager.batch_retrieve_positions(nullptr, 0, nullptr, 0));
 	ERR_PRINT_ON;
 }
 

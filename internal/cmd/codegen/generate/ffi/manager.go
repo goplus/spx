@@ -27,120 +27,73 @@ import (
 )
 
 func (g *Generator) managerBody(function *clang.TypedefFunction) string {
-	sb := strings.Builder{}
-	prefixTab := "\t"
-	params := []string{}
+	var sb strings.Builder
+	indent := "\t"
 	args := g.Parameters(function)
-	hasSyntheticReturn := function.ReturnType.Name == "void" && g.HasEffectiveReturn(function)
+	params := make([]string, 0, len(args)+1)
+	returnType := g.EffectiveRawReturnType(function)
+	goReturnType := g.EffectiveGoReturnType(function)
+	hasSyntheticReturn := g.HasSyntheticReturn(function)
 	dispatchToMainThread := function.Name != "GDExtensionSpxPlatformIsMainThread"
 	if dispatchToMainThread {
-		if g.HasEffectiveReturn(function) {
-			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", g.EffectiveGoReturnType(function))
+		if returnType != "" {
+			fmt.Fprintf(&sb, "\treturn enginewrap.CallInMainThreadValue(func() %s {\n", goReturnType)
 		} else {
 			sb.WriteString("\tenginewrap.CallInMainThread(func() {\n")
 		}
-		prefixTab += "\t"
+		indent += "\t"
 	}
-	// convert arguments
+
 	for _, param := range args {
-		arg := param.Argument
 		if param.IsLength {
 			continue
 		}
-		sb.WriteString(prefixTab)
-		typeName := common.MustPrimitiveTypeName(arg, function.Name)
 		argName := param.LocalName("arg")
-		if buffer := param.Buffer; buffer != nil {
-			fmt.Fprintf(&sb, "%s\n", buffer.GoArgumentCheck(function.Name))
-			fmt.Fprintf(&sb, "%s%s := unsafe.SliceData(%s)\n", prefixTab, argName, buffer.GoSliceExpr())
+		typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
+		switch {
+		case param.Buffer != nil:
+			buffer := param.Buffer
+			fmt.Fprintf(&sb, "%s%s\n", indent, buffer.GoArgumentCheck(function.Name))
+			fmt.Fprintf(&sb, "%s%s := unsafe.SliceData(%s)\n", indent, argName, buffer.GoSliceExpr())
 			pointer := argName
 			if buffer.Type == common.ArrayObject {
 				pointer = "(*GdObj)(unsafe.Pointer(" + pointer + "))"
 			}
 			params = append(params, pointer)
 			if buffer.Count == 0 {
-				lenArgName := param.LengthName("arg")
-				fmt.Fprintf(&sb, "%s%s := int32(len(%s))\n", prefixTab, lenArgName, param.Name)
-				params = append(params, lenArgName)
+				length := param.LengthName("arg")
+				fmt.Fprintf(&sb, "%s%s := int32(len(%s))\n", indent, length, param.Name)
+				params = append(params, length)
 			}
 			continue
-		}
-		if param.DirectScalar() {
-			fmt.Fprintf(&sb, "%s := %s\n", argName, param.Name)
-			params = append(params, argName)
-			continue
-		}
-		switch typeName {
-		case "GdString":
-			sb.WriteString(argName)
-			sb.WriteString("Str := C.CString(")
-			sb.WriteString(arg.Name)
-			sb.WriteString(")")
-			sb.WriteByte('\n')
-			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "%s := (GdString)(%sStr) \n", argName, argName)
-			fmt.Fprintf(&sb, "%sdefer C.free(unsafe.Pointer(%sStr))", prefixTab, argName)
-		case "GdArray":
-			sb.WriteString(argName)
-			sb.WriteString("Info := ToGdArrayInfo(")
-			sb.WriteString(arg.Name)
-			sb.WriteString(")")
-			sb.WriteByte('\n')
-			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "if %sInfo != nil {\n", argName)
-			fmt.Fprintf(&sb, "%s\tdefer %sInfo.Free()\n", prefixTab, argName)
-			sb.WriteString(prefixTab)
-			sb.WriteString("}\n")
-			sb.WriteString(prefixTab)
-			sb.WriteString(argName)
-			sb.WriteString(" := GdArray(nil)\n")
-			sb.WriteString(prefixTab)
-			fmt.Fprintf(&sb, "if %sInfo != nil {\n", argName)
-			fmt.Fprintf(&sb, "%s\t%s = %sInfo.Raw()\n", prefixTab, argName, argName)
-			sb.WriteString(prefixTab)
-			sb.WriteByte('}')
-
+		case param.DirectScalar():
+			fmt.Fprintf(&sb, "%s%s := %s\n", indent, argName, param.Name)
+		case typeName == "GdString":
+			fmt.Fprintf(&sb, "%s%sStr := C.CString(%s)\n", indent, argName, param.Name)
+			fmt.Fprintf(&sb, "%s%s := (GdString)(%sStr)\n", indent, argName, argName)
+			fmt.Fprintf(&sb, "%sdefer C.free(unsafe.Pointer(%sStr))\n", indent, argName)
+		case typeName == "GdArray":
+			fmt.Fprintf(&sb, "%s%sInfo := ToGdArrayInfo(%s)\n", indent, argName, param.Name)
+			fmt.Fprintf(&sb, "%sif %sInfo != nil {\n%s\tdefer %sInfo.Free()\n%s}\n", indent, argName, indent, argName, indent)
+			fmt.Fprintf(&sb, "%s%s := GdArray(nil)\n", indent, argName)
+			fmt.Fprintf(&sb, "%sif %sInfo != nil {\n%s\t%s = %sInfo.Raw()\n%s}\n", indent, argName, indent, argName, argName, indent)
 		default:
-			sb.WriteString(argName)
-			sb.WriteString(" := To")
-			sb.WriteString(typeName)
-			sb.WriteString("(")
-			sb.WriteString(arg.Name)
-			sb.WriteString(")")
+			fmt.Fprintf(&sb, "%s%s := To%s(%s)\n", indent, argName, typeName, param.Name)
 		}
-		sb.WriteString("\n")
 		params = append(params, argName)
 	}
 
-	// call the function
-	funcName := "Call" + strings.TrimPrefix(function.Name, "GDExtensionSpx")
 	if hasSyntheticReturn {
-		rawType := g.EffectiveRawReturnType(function)
-		sb.WriteString(prefixTab)
-		fmt.Fprintf(&sb, "var retValue %s\n", rawType)
+		fmt.Fprintf(&sb, "%svar retValue %s\n", indent, returnType)
+		params = append(params, "&retValue")
 	}
-
-	sb.WriteString(prefixTab)
+	sb.WriteString(indent)
 	if function.ReturnType.Name != "void" {
 		sb.WriteString("retValue := ")
 	}
-	sb.WriteString(funcName)
-	sb.WriteString("(")
-	sb.WriteString(strings.Join(params, ", "))
-	if hasSyntheticReturn {
-		if len(params) > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString("&retValue")
-	}
-	sb.WriteString(")")
-
-	if g.HasEffectiveReturn(function) {
-		sb.WriteByte('\n')
-		sb.WriteString(prefixTab)
-		sb.WriteString("return ")
-		typeName := g.EffectiveGoReturnType(function)
-		fmt.Fprintf(&sb, "To%s(retValue)", strcase.ToCamel(typeName))
+	fmt.Fprintf(&sb, "Call%s(%s)", strings.TrimPrefix(function.Name, "GDExtensionSpx"), strings.Join(params, ", "))
+	if returnType != "" {
+		fmt.Fprintf(&sb, "\n%sreturn To%s(retValue)", indent, strcase.ToCamel(goReturnType))
 	}
 	if dispatchToMainThread {
 		sb.WriteString("\n\t})")

@@ -110,10 +110,11 @@ func (g *Generator) writeManager(projectPath string) error {
 
 func (g *Generator) writeEngineJS(spxModulePath string) error {
 	funcs := template.FuncMap{
-		"sub":       common.Sub,
-		"jsArgs":    g.jsArgs,
-		"jsBody":    g.jsBody,
-		"jsResults": g.jsResults,
+		"sub":                common.Sub,
+		"jsArgs":             g.jsArgs,
+		"jsBody":             g.jsBody,
+		"jsResults":          g.jsResults,
+		"hasEffectiveReturn": g.HasEffectiveReturn,
 		"arrayBridge": func(name string) common.ArrayBridge {
 			spec, _ := g.ArrayBridge(name)
 			return spec

@@ -60,6 +60,9 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
+	{{- if hasOutputStatus $f }}
+	*ret_val = false;
+	{{- end }}
 	{{- if isWebGdStringReturn $f }}
 	if (!gdspx_prepare_string_wrapper(ret_val)) {
 		return;

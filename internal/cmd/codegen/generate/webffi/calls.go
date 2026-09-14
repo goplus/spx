@@ -42,21 +42,15 @@ func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
 		if param.IsLength {
 			continue
 		}
-		if param.Buffer == nil && g.isJSInt64Arg(function, param.Argument) {
-			result = append(result, param.Name+"_low", param.Name+"_high")
-		} else {
-			result = append(result, param.Name)
+		if param.Buffer == nil {
+			if _, ok := jsInt64Types[common.MustPrimitiveTypeName(param.Argument, function.Name)]; ok {
+				result = append(result, param.Name+"_low", param.Name+"_high")
+				continue
+			}
 		}
+		result = append(result, param.Name)
 	}
 	return result
-}
-
-func (g *Generator) isJSInt64Arg(function *clang.TypedefFunction, arg clang.Argument) bool {
-	if function == nil || g.Parameter(function, arg.Name).Buffer != nil {
-		return false
-	}
-	_, ok := jsInt64Types[common.MustPrimitiveTypeName(arg, function.Name)]
-	return ok
 }
 
 func (g *Generator) jsBody(function *clang.TypedefFunction) string {
@@ -82,7 +76,11 @@ func (g *Generator) jsBody(function *clang.TypedefFunction) string {
 			if param.LengthIndex >= 0 {
 				statements = append(statements, fmt.Sprintf("var %s = NativeArrayCount(%s);", param.LengthName("_arg"), param.Name))
 			} else {
-				statements = append(statements, fmt.Sprintf("if (NativeArrayCount(%s) < %d) {\n\tthrow new Error(%q);\n}", param.Name, buffer.Count, op+" array is too small: "+param.Name))
+				comparison, message := "<", " array is too small: "
+				if buffer.OutputOnly {
+					comparison, message = "!==", " output array length must match its declaration: "
+				}
+				statements = append(statements, fmt.Sprintf("if (NativeArrayCount(%s) %s %d) {\n\tthrow new Error(%q);\n}", param.Name, comparison, buffer.Count, op+message+param.Name))
 			}
 			continue
 		}

@@ -40,7 +40,8 @@ func (pself *Sprite) AddForce(force Vec2) {
 func (pself *Sprite) AddImpulse(impulse Vec2) {
 }
 
-func (pself *Sprite) BatchRetrievePositions(objs []int64, out []float32) {
+func (pself *Sprite) BatchRetrievePositions(objs []int64, out []float32) bool {
+	return false
 }
 
 func (pself *Sprite) BatchUpdatePhysics(buffer []float32) {

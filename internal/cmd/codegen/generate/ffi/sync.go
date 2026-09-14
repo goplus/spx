@@ -36,115 +36,54 @@ func (g *Generator) MustGdxReturnType(function *clang.TypedefFunction) string {
 	return typeName
 }
 
+// syncSignature is shared by the forwarding and pure-engine implementations.
+func (g *Generator) syncSignature(function *clang.TypedefFunction) string {
+	mgrName := g.GetManagerName(function.Name)
+	methodName := function.Name[len("GDExtensionSpx")+len(strcase.ToCamel(mgrName)):]
+	var params []string
+	for _, param := range g.Parameters(function) {
+		if !param.IsLength {
+			params = append(params, param.Name+" "+param.GdxType(function.Name))
+		}
+	}
+	signature := fmt.Sprintf("func (*%sMgrImpl) %s(%s)", strcase.ToLowerCamel(mgrName), methodName, strings.Join(params, ", "))
+	if returnType := g.MustGdxReturnType(function); returnType != "" {
+		signature += " " + returnType
+	}
+	return signature
+}
+
 func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	mgrName := strcase.ToCamel(g.GetManagerName(function.Name))
-	pureFuncName := function.Name[len(prefix)+len(mgrName):]
-	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := g.Parameters(function)
-	retType := g.EffectiveGoReturnType(function)
-
-	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
-	sb.WriteString(pureFuncName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if arg.IsLength {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := arg.GdxType(function.Name)
-		sb.WriteString(typeName)
-		wroteArg = true
+	body := g.syncSignature(function) + " {"
+	if returnType := g.MustGdxReturnType(function); returnType != "" {
+		body += "\n\treturn " + goZeroValue(returnType) + "\n"
 	}
-	sb.WriteString(")")
-
-	if retType != "" {
-		sb.WriteByte(' ')
-		sb.WriteString(g.MustGdxReturnType(function))
-	}
-	sb.WriteString(" {")
-	prefixStr := "\t"
-	if retType != "" {
-		fmt.Fprintf(&sb, "\n%sreturn %s\n", prefixStr, goZeroValue(g.MustGdxReturnType(function)))
-	}
-	sb.WriteString("}")
-	return sb.String()
+	return body + "}"
 }
 
 func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
+	var sb strings.Builder
 	mgrName := strcase.ToCamel(g.GetManagerName(function.Name))
-	pureFuncName := function.Name[len(prefix)+len(mgrName):]
-	gdxMgrName := "gdx." + mgrName + "Mgr"
-	mgrTypeName := strcase.ToLowerCamel(g.GetManagerName(function.Name)) + "Mgr"
-	args := g.Parameters(function)
-	retType := g.EffectiveGoReturnType(function)
-
-	fmt.Fprintf(&sb, "func (*%sImpl) ", mgrTypeName)
-	sb.WriteString(pureFuncName)
-	sb.WriteString("(")
-	wroteArg := false
-	for _, arg := range args {
-		if arg.IsLength {
-			continue
+	methodName := function.Name[len("GDExtensionSpx")+len(mgrName):]
+	returnType := g.MustGdxReturnType(function)
+	var args []string
+	for _, param := range g.Parameters(function) {
+		if !param.IsLength {
+			args = append(args, param.Name)
 		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := arg.GdxType(function.Name)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(")")
-
-	if retType != "" {
-		sb.WriteByte(' ')
-		sb.WriteString(g.MustGdxReturnType(function))
-	}
-	sb.WriteString(" {")
-	prefixStr := "\t"
-	if retType != "" {
-		fmt.Fprintf(&sb, "\n%svar _ret1 %s", prefixStr, g.MustGdxReturnType(function))
 	}
 
-	sb.WriteString("\t\n\tcallInMainThread(func() {\n")
-	if retType != "" {
-		sb.WriteString(prefixStr)
-		sb.WriteString("\t_ret1 = ")
-	} else {
-		sb.WriteString(prefixStr)
-		sb.WriteByte('\t')
+	sb.WriteString(g.syncSignature(function) + " {")
+	if returnType != "" {
+		fmt.Fprintf(&sb, "\n\tvar _ret1 %s", returnType)
 	}
-	fmt.Fprintf(&sb, "%s.%s(", gdxMgrName, pureFuncName)
-	wroteArg = false
-	for _, arg := range args {
-		if arg.IsLength {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(arg.Name)
-		wroteArg = true
+	sb.WriteString("\t\n\tcallInMainThread(func() {\n\t\t")
+	if returnType != "" {
+		sb.WriteString("_ret1 = ")
 	}
-	sb.WriteString(")")
-
-	sb.WriteString(`
-	})
-`)
-
-	if retType != "" {
-		sb.WriteString(prefixStr)
-		sb.WriteString("return _ret1 \n")
+	fmt.Fprintf(&sb, "gdx.%sMgr.%s(%s)\n\t})\n", mgrName, methodName, strings.Join(args, ", "))
+	if returnType != "" {
+		sb.WriteString("\treturn _ret1\n")
 	}
 	sb.WriteString("}")
 	return sb.String()

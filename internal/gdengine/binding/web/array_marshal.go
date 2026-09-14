@@ -36,37 +36,25 @@ func JsFromNativeArray(array engine.Array, arrayType int32) js.Value {
 	return jsFromArray(array, arrayType)
 }
 
-func jsFromArray(array engine.Array, arrayType int32) js.Value {
-	if array == nil {
-		panic("JsFromGdArray doesn't support nil array")
+// JsAllocNativeArray borrows output storage without copying or clearing its bytes.
+func JsAllocNativeArray(arrayType int32, count int) js.Value {
+	switch arrayType {
+	case GdArrayTypeInt64, GdArrayTypeGdObj, GdArrayTypeFloat, GdArrayTypeByte:
+	default:
+		panic("unsupported native output array type")
 	}
-	value := describeArray(array)
-	if value == nil {
-		return js.Null()
+	n, ok := checkedArrayCount(count)
+	if !ok {
+		panic("invalid native output array count")
 	}
-	if arrayType != 0 {
-		if !nativeArrayTypeMatches(value.Type, arrayType) {
-			panic("native array element type does not match caller storage")
-		}
-		value.Type = arrayType
+	size, _ := arrayElementSize(arrayType)
+	if count > maxGdArrayBytes/size {
+		panic("native output array exceeds byte limit")
 	}
-	data, err := encodeArrayData(value.Type, value.Data)
-	if err != nil {
-		return js.Null()
+	wrapper := borrowNativeArray(arrayType, n, count*size)
+	if wrapper.IsNull() {
+		panic("failed to borrow native output array")
 	}
-	borrow := js.Global().Get("GdspxBorrowNativeArray")
-	if borrow.Type() != js.TypeFunction {
-		return js.Null()
-	}
-	wrapper := borrow.Invoke(value.Type, value.Count, len(data))
-	if wrapper.Type() != js.TypeObject {
-		return js.Null()
-	}
-	bytes := wrapper.Get("data")
-	if !isByteArray(bytes) || bytes.Length() != len(data) {
-		return js.Null()
-	}
-	js.CopyBytesToJS(bytes, data)
 	return wrapper
 }
 
@@ -122,6 +110,31 @@ func CopyNativeArrayOutput(target engine.Array, wrapper js.Value) {
 	js.CopyBytesToGo(data, bytes)
 }
 
+func jsFromArray(array engine.Array, arrayType int32) js.Value {
+	if array == nil {
+		panic("JsFromGdArray doesn't support nil array")
+	}
+	value := describeArray(array)
+	if value == nil {
+		return js.Null()
+	}
+	if arrayType != 0 {
+		if !nativeArrayTypeMatches(value.Type, arrayType) {
+			panic("native array element type does not match caller storage")
+		}
+		value.Type = arrayType
+	}
+	data, err := encodeArrayData(value.Type, value.Data)
+	if err != nil {
+		return js.Null()
+	}
+	wrapper := borrowNativeArray(value.Type, value.Count, len(data))
+	if !wrapper.IsNull() {
+		js.CopyBytesToJS(wrapper.Get("data"), data)
+	}
+	return wrapper
+}
+
 // Go stores object IDs as int64; both ABI types preserve the same 64 bits.
 func nativeArrayTypeMatches(storageType, declaredType int32) bool {
 	return storageType == declaredType || (storageType == GdArrayTypeInt64 && declaredType == GdArrayTypeGdObj)
@@ -161,4 +174,23 @@ func arrayInteger(value js.Value, maximum int32) (int32, bool) {
 		return 0, false
 	}
 	return int32(n), true
+}
+
+func borrowNativeArray(arrayType, count int32, byteLength int) js.Value {
+	borrow := js.Global().Get("GdspxBorrowNativeArray")
+	if borrow.Type() != js.TypeFunction {
+		return js.Null()
+	}
+	wrapper := borrow.Invoke(arrayType, count, byteLength)
+	if wrapper.Type() != js.TypeObject {
+		return js.Null()
+	}
+	bytes := wrapper.Get("data")
+	if !isByteArray(bytes) || bytes.Length() != byteLength ||
+		!wrapper.Get(arrayTag).Equal(js.ValueOf(true)) ||
+		!wrapper.Get("type").Equal(js.ValueOf(arrayType)) ||
+		!wrapper.Get("count").Equal(js.ValueOf(count)) {
+		return js.Null()
+	}
+	return wrapper
 }

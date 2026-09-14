@@ -1614,11 +1614,11 @@ void cgo_callfn_GDExtensionSpxSpriteBatchUpdateVisuals(const GDExtensionSpxSprit
 	}
 	fn(buffer_data, len);
 }
-void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, const GdObj *objs, int count, float *out, int out_len) {
+void cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(const GDExtensionSpxSpriteBatchRetrievePositions fn, const GdObj *objs, int count, float *out, int out_len, GdBool* ret_val) {
 	if (!fn) {
 		return;
 	}
-	fn(objs, count, out, out_len);
+	fn(objs, count, out, out_len, ret_val);
 }
 void cgo_callfn_GDExtensionSpxSpriteBatchUpdatePhysics(const GDExtensionSpxSpriteBatchUpdatePhysics fn, const float *buffer_data, int len) {
 	if (!fn) {

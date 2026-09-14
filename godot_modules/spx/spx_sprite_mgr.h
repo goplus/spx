@@ -299,7 +299,7 @@ public:
 	// batch sync
 	SPX_API void batch_update_transforms(const float *buffer_data, int len);
 	SPX_API void batch_update_visuals(const float *buffer_data, int len);
-	SPX_API void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
+	SPX_API GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
 	SPX_API void batch_update_physics(const float *buffer_data, int len);
 };
 

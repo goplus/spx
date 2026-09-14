@@ -32,6 +32,7 @@ package impl
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 
 	. "github.com/goplus/spbase/mathf"
@@ -431,7 +432,7 @@ func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
 	if out == nil {
 		panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
 	}
-	arg0 := JsFromNativeArray(out[:], 2)
+	arg0 := JsAllocNativeArray(GdArrayTypeFloat, len(out[:]))
 	API.SpxInputWriteSnapshot.Invoke(arg0)
 	CopyNativeArrayOutput(out[:], arg0)
 }
@@ -475,10 +476,10 @@ func (pself *penMgr) DestroyPen(obj Object) {
 	API.SpxPenDestroyPen.Invoke(arg0Low, arg0High)
 }
 func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
-	if len(buffer) > 2147483647 {
+	if len(buffer) > math.MaxInt32 {
 		panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
 	}
-	arg0 := JsFromNativeArray(buffer, 2)
+	arg0 := JsFromNativeArray(buffer, GdArrayTypeFloat)
 	API.SpxPenBatchUpdateCommands.Invoke(arg0)
 }
 func (pself *penMgr) PenStamp(obj Object) {
@@ -1532,36 +1533,40 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	return JsToGdInt(_result)
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
-	if len(buffer) > 2147483647 {
+	if len(buffer) > math.MaxInt32 {
 		panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
 	}
-	arg0 := JsFromNativeArray(buffer, 2)
+	arg0 := JsFromNativeArray(buffer, GdArrayTypeFloat)
 	API.SpxSpriteBatchUpdateTransforms.Invoke(arg0)
 }
 func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
-	if len(buffer) > 2147483647 {
+	if len(buffer) > math.MaxInt32 {
 		panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
 	}
-	arg0 := JsFromNativeArray(buffer, 2)
+	arg0 := JsFromNativeArray(buffer, GdArrayTypeFloat)
 	API.SpxSpriteBatchUpdateVisuals.Invoke(arg0)
 }
-func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) {
-	if len(objs) > 2147483647 {
+func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool {
+	if len(objs) > math.MaxInt32 {
 		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
 	}
-	arg0 := JsFromNativeArray(objs, 6)
-	if len(out) > 2147483647 {
+	arg0 := JsFromNativeArray(objs, GdArrayTypeGdObj)
+	if len(out) > math.MaxInt32 {
 		panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
 	}
-	arg2 := JsFromNativeArray(out, 2)
-	API.SpxSpriteBatchRetrievePositions.Invoke(arg0, arg2)
+	arg2 := JsAllocNativeArray(GdArrayTypeFloat, len(out))
+	_result := API.SpxSpriteBatchRetrievePositions.Invoke(arg0, arg2)
+	if !JsToGdBool(_result) {
+		return false
+	}
 	CopyNativeArrayOutput(out, arg2)
+	return true
 }
 func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
-	if len(buffer) > 2147483647 {
+	if len(buffer) > math.MaxInt32 {
 		panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
 	}
-	arg0 := JsFromNativeArray(buffer, 2)
+	arg0 := JsFromNativeArray(buffer, GdArrayTypeFloat)
 	API.SpxSpriteBatchUpdatePhysics.Invoke(arg0)
 }
 func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
