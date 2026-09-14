@@ -69,6 +69,12 @@ func (c *GenerationContext) MustGoTypeForCType(typeName string, functionName str
 	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", typeName, functionName))
 }
 
+// HasOutputStatus identifies methods whose bool result commits all output buffers.
+func (c *GenerationContext) HasOutputStatus(function *clang.TypedefFunction) bool {
+	spec, ok := c.ArrayBridge(function.Name)
+	return ok && spec.HasOutputOnly() && c.EffectiveRawReturnType(function) == "GdBool"
+}
+
 func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
 	if arg.Type.Primative != nil {
 		return arg.Type.Primative.Name

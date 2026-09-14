@@ -504,12 +504,56 @@ const GDSPX_INPUT_POOL = "input";
 const GDSPX_EMPTY_U8 = new Uint8Array(0);
 const GDSPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
 const GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
-const GDSPX_MAX_I32 = 0x7fffffff;
-const GDSPX_MAX_ALIGNED_BYTES = GDSPX_MAX_I32 - (GDSPX_MAX_I32 % GDSPX_ARRAY_ALIGNMENT);
 
 let arrayArenaModule = null;
 const arrayArenas = new Map();
 const deferredArenaFrees = [];
+
+// Only descriptors created here can lend their Wasm pointer to a native call.
+// The frozen descriptor is also its metadata; no second object is needed.
+const NativeArrays = (() => {
+    const borrowed = new WeakSet();
+
+    function borrow(type, count, byteLength, poolName = GDSPX_ARRAY_POOL) {
+        if (!HasActiveModuleHeap() || !IsNativeArrayByteLength(type, count, byteLength)) {
+            return null;
+        }
+        const arena = GetArrayArena(byteLength, poolName);
+        if (!arena) {
+            return null;
+        }
+        const module = arena.module;
+        const ptr = arena.ptr + arena.offset;
+        arena.offset += AlignArrayBytes(byteLength);
+        arena.sequence += 1;
+
+        const array = Object.freeze({
+            [GDSPX_ARRAY_TAG]: true,
+            'type': type,
+            'count': count,
+            'ptr': ptr,
+            'module': module,
+            'byteLength': byteLength,
+            'sequence': arena.sequence,
+            'pool': arena.pool,
+            'shared': typeof SharedArrayBuffer === 'function' && module['HEAPU8'].buffer instanceof SharedArrayBuffer,
+            get 'data'() {
+                return NativeArrayDataView(ptr, byteLength, module);
+            },
+        });
+        borrowed.add(array);
+        return array;
+    }
+
+    function metadata(array) {
+        return borrowed.has(array) ? array : null;
+    }
+
+    return Object.freeze({ borrow, metadata });
+})();
+
+const GdspxBorrowNativeArray = NativeArrays.borrow;
+
 function HasActiveModule() {
     return typeof Module !== 'undefined' && Module !== null;
 }
@@ -518,33 +562,21 @@ function HasActiveModuleHeap() {
     return HasActiveModule() && !!Module['HEAPU8'];
 }
 
-function FreePtrMap(map) {
-    for (const item of map.values()) {
-        if (item.ptr !== 0 && typeof item.free === 'function') {
-            try {
-                item.free(item.ptr);
-            } catch {
-                // The previous wasm instance may already be torn down during restart.
-            }
-        }
+function FreeArrayArena(arena) {
+    try {
+        arena.free(arena.ptr);
+    } catch {
+        // The previous wasm instance may already be torn down during restart.
     }
-    map.clear();
 }
 
 function AlignArrayBytes(size) {
-    if (!Number.isSafeInteger(size) || size <= 0 || size > GDSPX_MAX_ALIGNED_BYTES) {
-        return 0;
-    }
-    const aligned = Math.ceil(size / GDSPX_ARRAY_ALIGNMENT) * GDSPX_ARRAY_ALIGNMENT;
-    return aligned <= GDSPX_MAX_ALIGNED_BYTES ? aligned : 0;
+    return Math.ceil(size / GDSPX_ARRAY_ALIGNMENT) * GDSPX_ARRAY_ALIGNMENT;
 }
 
 function ArrayArenaCapacity(minSize) {
     let capacity = GDSPX_ARRAY_ARENA_BYTES;
     while (capacity < minSize) {
-        if (capacity > Math.floor(GDSPX_MAX_ALIGNED_BYTES / 2)) {
-            return GDSPX_MAX_ALIGNED_BYTES;
-        }
         capacity *= 2;
     }
     return capacity;
@@ -564,23 +596,10 @@ function IsHeapRange(ptr, byteLength) {
 }
 
 function NativeArrayDataView(ptr, byteLength, module) {
-    if (!Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > GDSPX_MAX_ARRAY_BYTES) {
+    if (!HasActiveModule() || module !== Module || !IsHeapRange(ptr, byteLength)) {
         return GDSPX_EMPTY_U8;
     }
-    if (!HasActiveModuleHeap() || module !== Module) {
-        return GDSPX_EMPTY_U8;
-    }
-    if (!IsHeapRange(ptr, byteLength) || (byteLength > 0 && ptr === 0)) {
-        return GDSPX_EMPTY_U8;
-    }
-    return Module['HEAPU8'].subarray(ptr, ptr + byteLength);
-}
-
-function DeferArenaFree(ptr, freeFn) {
-    if (!Number.isInteger(ptr) || ptr === 0 || typeof freeFn !== 'function') {
-        return;
-    }
-    deferredArenaFrees.push({ ptr, free: freeFn });
+    return module['HEAPU8'].subarray(ptr, ptr + byteLength);
 }
 
 function GdspxFlushDeferredFrees() {
@@ -588,191 +607,44 @@ function GdspxFlushDeferredFrees() {
     for (const arena of arrayArenas.values()) {
         arena.offset = 0;
     }
-    if (deferredArenaFrees.length === 0) {
-        return;
-    }
-    const pending = deferredArenaFrees.splice(0, deferredArenaFrees.length);
-    for (const item of pending) {
-        if (!item || item.ptr === 0 || typeof item.free !== 'function') {
-            continue;
-        }
-        try {
-            item.free(item.ptr);
-        } catch {
-            // The previous wasm instance may already be torn down during restart.
-        }
+    for (const arena of deferredArenaFrees.splice(0)) {
+        FreeArrayArena(arena);
     }
 }
 
-function GetArrayArena(minSize, poolName = GDSPX_ARRAY_POOL, rotate = false) {
+// Reserve room in the current block, or rotate without invalidating earlier
+// arguments. Counts and byte lengths have already been checked by borrow().
+function GetArrayArena(byteLength, poolName) {
     EnsureGdspxFunctionPointers();
     if (typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
         return null;
     }
     if (arrayArenaModule !== Module) {
-        FreePtrMap(arrayArenas);
+        for (const arena of arrayArenas.values()) {
+            FreeArrayArena(arena);
+        }
+        arrayArenas.clear();
         arrayArenaModule = Module;
     }
 
     const pool = String(poolName || GDSPX_ARRAY_POOL);
-    let arena = arrayArenas.get(pool);
-    const required = AlignArrayBytes(minSize);
-    if (required === 0 && minSize !== 0) {
-        return null;
-    }
-    if (arena && !rotate && required <= arena.capacity) {
-        return arena;
+    const previous = arrayArenas.get(pool);
+    const required = AlignArrayBytes(byteLength);
+    if (previous && required <= previous.capacity - previous.offset) {
+        return previous;
     }
 
     const capacity = ArrayArenaCapacity(required);
-    if (capacity === 0 || capacity > GDSPX_MAX_ARRAY_BYTES) {
-        return null;
-    }
     const ptr = gdspxMalloc(capacity);
-    if (!Number.isSafeInteger(ptr) || ptr <= 0 || !IsHeapRange(ptr, capacity)) {
+    if (!Number.isSafeInteger(ptr) || ptr <= 0 || ptr % GDSPX_ARRAY_ALIGNMENT !== 0 || !IsHeapRange(ptr, capacity)) {
         return null;
     }
-    if (arena && arena.ptr !== 0) {
-        DeferArenaFree(arena.ptr, arena.free);
+    if (previous) {
+        deferredArenaFrees.push(previous);
     }
-
-    arena = {
-        ptr,
-        capacity,
-        offset: 0,
-        sequence: 0,
-        module: Module,
-        free: gdspxFree,
-        pool,
-    };
+    const arena = { ptr, capacity, offset: 0, sequence: 0, module: Module, free: gdspxFree, pool };
     arrayArenas.set(pool, arena);
     return arena;
-}
-
-// Keep raw Wasm pointer provenance private to the bridge.
-const [GdspxBorrowNativeArray, GetNativeArrayMetadata] = (() => {
-    const registry = new WeakMap();
-
-    function borrow(arrayType, count, dataSize, poolName = GDSPX_ARRAY_POOL) {
-        if (!Number.isSafeInteger(dataSize) || dataSize < 0 || dataSize > GDSPX_MAX_ARRAY_BYTES) {
-            return null;
-        }
-        if (!IsSafeArrayCount(count)) {
-            return null;
-        }
-        if (!IsNativeArrayByteLength(arrayType, count, dataSize)) {
-            return null;
-        }
-        if (!HasActiveModuleHeap()) {
-            return null;
-        }
-
-        let arena = GetArrayArena(dataSize, poolName);
-        if (!arena || arena.ptr === 0) {
-            return null;
-        }
-
-        const alignedSize = AlignArrayBytes(dataSize);
-        if (alignedSize > arena.capacity) {
-            return null;
-        }
-        if (arena.offset + alignedSize > arena.capacity) {
-            // Earlier arguments may still refer to this block until the call finishes.
-            arena = GetArrayArena(dataSize, poolName, true);
-            if (!arena) {
-                return null;
-            }
-        }
-
-        const ptr = arena.ptr + arena.offset;
-        if (!IsHeapRange(ptr, dataSize) || (dataSize > 0 && ptr === 0)) {
-            return null;
-        }
-        arena.offset += alignedSize;
-        arena.sequence += 1;
-
-        const metadata = {
-            module: Module,
-            ptr,
-            byteLength: dataSize,
-            type: arrayType,
-            count,
-            sequence: arena.sequence,
-            pool: arena.pool,
-        };
-        Object.freeze(metadata);
-        const wrapper = {};
-        // Freeze metadata; expose only a bounded data view.
-        Object.defineProperties(wrapper, {
-            [GDSPX_ARRAY_TAG]: { value: true, enumerable: true },
-            'type': { value: arrayType, enumerable: true },
-            'count': { value: count, enumerable: true },
-            'ptr': { value: ptr, enumerable: true },
-            'module': { value: Module, enumerable: true },
-            'byteLength': { value: dataSize, enumerable: true },
-            'sequence': { value: arena.sequence, enumerable: true },
-            'pool': { value: arena.pool, enumerable: true },
-            'shared': {
-                value: typeof SharedArrayBuffer === 'function' && Module['HEAPU8'].buffer instanceof SharedArrayBuffer,
-                enumerable: true,
-            },
-            'data': {
-                configurable: false,
-                enumerable: true,
-                get() {
-                    return NativeArrayDataView(metadata.ptr, metadata.byteLength, metadata.module);
-                },
-            },
-        });
-        registry.set(wrapper, metadata);
-        return Object.freeze(wrapper);
-    }
-
-    function get(array) {
-        if (!array || typeof array !== 'object') {
-            return null;
-        }
-        return registry.get(array) || null;
-    }
-
-    return [borrow, get];
-})();
-
-function NativeArrayType(array) {
-    const metadata = GetNativeArrayMetadata(array);
-    const value = metadata !== null ?
-        (metadata.module === Module ? metadata.type : -1) : Number(array && array['type']);
-    return Number.isSafeInteger(value) ? value : -1;
-}
-
-function NativeArrayCount(array) {
-    const metadata = GetNativeArrayMetadata(array);
-    // A wrapper from an old module must not remain usable after a restart.
-    const count = metadata !== null ?
-        (metadata.module === Module ? metadata.count : -1) : Number(array && array['count']);
-    return IsSafeArrayCount(count) ? count : -1;
-}
-
-function NativeArrayByteLength(array) {
-    const metadata = GetNativeArrayMetadata(array);
-    if (metadata !== null) {
-        return metadata.module === Module && Number.isSafeInteger(metadata.byteLength) &&
-            metadata.byteLength >= 0 && metadata.byteLength <= GDSPX_MAX_ARRAY_BYTES ?
-            metadata.byteLength : -1;
-    }
-    const data = array && array['data'];
-    const length = Number(data && data.length);
-    return Number.isSafeInteger(length) && length >= 0 && length <= GDSPX_MAX_ARRAY_BYTES ? length : -1;
-}
-
-function IsNativeArray(array) {
-    if (!array || typeof array !== 'object') {
-        return false;
-    }
-    const arrayType = NativeArrayType(array);
-    const count = NativeArrayCount(array);
-    const byteLength = NativeArrayByteLength(array);
-    return IsNativeArrayByteLength(arrayType, count, byteLength);
 }
 
 function IsNativeArrayByteLength(type, count, byteLength) {
@@ -784,70 +656,68 @@ function IsNativeArrayByteLength(type, count, byteLength) {
         return count === 0 ? byteLength === 0 : byteLength >= count * 9;
     }
     const size = NativeArrayElementSize(type);
-    return size > 0 && count <= Math.floor(GDSPX_MAX_ARRAY_BYTES / size) &&
-        byteLength === count * size;
+    return size > 0 && byteLength === count * size;
 }
 
-function CopyToNativeArray(array, poolName = GDSPX_INPUT_POOL) {
-    if (!IsNativeArray(array)) {
+// Borrowed descriptors are already validated and immutable. External descriptors
+// are normalized without retaining their untrusted pointer or module fields.
+function DescribeNativeArray(array) {
+    if (!array || typeof array !== 'object') {
         return null;
     }
+    const metadata = NativeArrays.metadata(array);
+    if (metadata) {
+        return HasActiveModule() && metadata['module'] === Module ? metadata : null;
+    }
+    const type = Number(array['type']);
+    const count = Number(array['count']);
     const data = array['data'];
-    const dataSize = data.length;
-    const count = NativeArrayCount(array);
-    // Keep input copies separate from return buffers.
-    const borrowed = GdspxBorrowNativeArray(NativeArrayType(array), count, dataSize, poolName);
-    if (dataSize > 0 && (!borrowed || borrowed['ptr'] === 0)) {
-        throw new Error("Failed to allocate native array input buffer");
+    const byteLength = Number(data && data.length);
+    if (!IsNativeArrayByteLength(type, count, byteLength)) {
+        return null;
     }
-    if (dataSize > 0) {
-        Module['HEAPU8'].set(data, borrowed['ptr']);
-    }
-    return borrowed;
+    return { 'type': type, 'count': count, 'byteLength': byteLength, 'data': data };
 }
 
-function GetNativeArrayPointer(array) {
-    if (!IsNativeArray(array)) {
-        return 0;
-    }
-    const metadata = GetNativeArrayMetadata(array);
-    if (metadata !== null) {
-        if (metadata.module !== Module) {
-            return 0;
-        }
-        const byteLength = metadata.byteLength;
-        const elemSize = NativeArrayElementSize(metadata.type);
-        const ptr = metadata.ptr;
-        if (!IsHeapRange(ptr, byteLength) || (byteLength > 0 && ptr === 0) ||
-                (byteLength > 0 && elemSize > 1 && ptr % elemSize !== 0)) {
-            return 0;
-        }
-        return ptr;
-    }
-
-    const borrowed = CopyToNativeArray(array);
-    return borrowed ? borrowed['ptr'] : 0;
+function NativeArrayCount(array) {
+    const info = DescribeNativeArray(array);
+    return info ? info['count'] : -1;
 }
 
-// Writable calls require the caller's Wasm storage; read-only calls may copy.
-function RequireNativeArray(array, opName, expectedType = null, writable = false) {
+// Writable calls retain caller-provided Wasm storage. External read-only inputs
+// are copied into the input pool; their pointer fields are never used.
+function RequireNativeArrayBuffer(array, opName, expectedType = null, writable = false) {
     if (!array || array[GDSPX_ARRAY_TAG] !== true) {
         throw new Error(opName + " requires a native array");
     }
-    if (writable && GetNativeArrayMetadata(array) === null) {
+    const metadata = NativeArrays.metadata(array);
+    if (writable && !metadata) {
         throw new Error(opName + " requires a pre-allocated Wasm array");
     }
-    if (!IsNativeArray(array)) {
+    const info = DescribeNativeArray(array);
+    if (!info) {
         throw new Error(opName + " requires a valid native array shape");
     }
-    if (expectedType !== null && NativeArrayType(array) !== expectedType) {
+    if (expectedType !== null && info['type'] !== expectedType) {
         throw new Error(opName + " received an incompatible native array type");
     }
-    const ptr = GetNativeArrayPointer(array);
-    if (ptr === 0 && NativeArrayByteLength(array) > 0) {
-        throw new Error(opName + " requires accessible native array data");
+    if (metadata) {
+        if (!IsHeapRange(metadata['ptr'], metadata['byteLength'])) {
+            throw new Error(opName + " requires accessible native array data");
+        }
+        return metadata;
     }
-    return ptr;
+
+    const copy = GdspxBorrowNativeArray(info['type'], info['count'], info['byteLength'], GDSPX_INPUT_POOL);
+    if (!copy) {
+        throw new Error(opName + " failed to allocate native array input buffer");
+    }
+    copy['data'].set(info['data']);
+    return copy;
+}
+
+function RequireNativeArray(array, opName, expectedType = null, writable = false) {
+    return RequireNativeArrayBuffer(array, opName, expectedType, writable)['ptr'];
 }
 
 function ReadArrayOutput(exportName, type, count) {
@@ -858,19 +728,18 @@ function ReadArrayOutput(exportName, type, count) {
     if (typeof call !== 'function') {
         return null;
     }
-
     const out = GdspxBorrowNativeArray(type, count, count * NativeArrayElementSize(type), exportName);
-    if (!out || GetNativeArrayPointer(out) === 0) {
+    if (!out) {
         return null;
     }
-    call(GetNativeArrayPointer(out));
+    call(out['ptr']);
     return out;
 }
 
 function ToGdArray(array) {
     EnsureGdspxFunctionPointers();
-    const data = RequireNativeArray(array, "ToGdArray");
-    const wrapper = gdspxBorrowArray(data, NativeArrayByteLength(array), NativeArrayCount(array), NativeArrayType(array));
+    const input = RequireNativeArrayBuffer(array, "ToGdArray");
+    const wrapper = gdspxBorrowArray(input['ptr'], input['byteLength'], input['count'], input['type']);
     if (!wrapper) {
         throw new Error("Invalid native array data");
     }

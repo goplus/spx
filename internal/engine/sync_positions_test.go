@@ -11,11 +11,11 @@ import (
 
 type positionQuerySpy struct {
 	gdx.ISpriteMgr
-	query func([]int64, []float32)
+	query func([]int64, []float32) bool
 }
 
-func (s *positionQuerySpy) BatchRetrievePositions(ids []int64, out []float32) {
-	s.query(ids, out)
+func (s *positionQuerySpy) BatchRetrievePositions(ids []int64, out []float32) bool {
+	return s.query(ids, out)
 }
 
 func TestPositionSyncReusesStorageAndPreservesIDs(t *testing.T) {
@@ -27,7 +27,7 @@ func TestPositionSyncReusesStorageAndPreservesIDs(t *testing.T) {
 	})
 	ids := []int64{0x112233447fc00001, -1}
 	calls := 0
-	gdx.SpriteMgr = &positionQuerySpy{query: func(input []int64, out []float32) {
+	gdx.SpriteMgr = &positionQuerySpy{query: func(input []int64, out []float32) bool {
 		calls++
 		if len(input) != len(ids) || &input[0] != &ids[0] || input[0] != 0x112233447fc00001 || input[1] != -1 {
 			t.Fatal("position query changed the original ID buffer")
@@ -36,6 +36,7 @@ func TestPositionSyncReusesStorageAndPreservesIDs(t *testing.T) {
 			t.Fatal("position query has incorrect output length")
 		}
 		copy(out, []float32{float32(calls), -4, 5, -6})
+		return true
 	}}
 
 	var buffer SpriteSyncBuffer
@@ -62,5 +63,32 @@ func TestPositionSyncReusesStorageAndPreservesIDs(t *testing.T) {
 	ids = append(ids, 2, 3, 4, 5, 6, 7, 8)
 	if out := buffer.GetPositions(ids); len(out) != len(ids)*2 || out[0] != float32(calls) {
 		t.Fatal("position storage did not grow with the batch")
+	}
+}
+
+func TestPositionSyncSkipsFailedQueryAndKeepsStorage(t *testing.T) {
+	previous := gdx.SpriteMgr
+	enginewrap.Init(func(call func()) { call() })
+	t.Cleanup(func() {
+		gdx.SpriteMgr = previous
+		enginewrap.Init(WaitMainThread)
+	})
+	success := true
+	gdx.SpriteMgr = &positionQuerySpy{query: func(_ []int64, out []float32) bool {
+		if success {
+			copy(out, []float32{3, 4})
+		}
+		return success
+	}}
+	var buffer SpriteSyncBuffer
+	ids := []int64{1}
+	first := buffer.GetPositions(ids)
+	success = false
+	if got := buffer.GetPositions(ids); len(got) != 0 {
+		t.Fatalf("failed query returned stale positions: %v", got)
+	}
+	success = true
+	if got := buffer.GetPositions(ids); &got[0] != &first[0] {
+		t.Fatal("failed query discarded reusable storage")
 	}
 }

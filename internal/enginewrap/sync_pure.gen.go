@@ -702,10 +702,12 @@ func (*spriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {}
 func (*spriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
 	return 0
 }
-func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32)             {}
-func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)                {}
-func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) {}
-func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32)                {}
+func (*spriteMgrImpl) BatchUpdateTransforms(buffer []float32) {}
+func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32)    {}
+func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) bool {
+	return false
+}
+func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32) {}
 
 // ITilemapMgr
 func (*tilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64)                                    {}

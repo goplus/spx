@@ -3225,15 +3225,16 @@ func CallSpriteBatchRetrievePositions(
 	count int32,
 	out *float32,
 	out_len int32,
-) {
+) GdBool {
 	arg0 := (C.GDExtensionSpxSpriteBatchRetrievePositions)(api.SpxSpriteBatchRetrievePositions)
 	arg1 := (*C.GdObj)(objs)
 	arg2 := (C.int)(count)
 	arg3 := (*C.float)(out)
 	arg4 := (C.int)(out_len)
+	var ret_val C.GdBool
+	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, arg2, arg3, arg4, &ret_val)
 
-	C.cgo_callfn_GDExtensionSpxSpriteBatchRetrievePositions(arg0, arg1, arg2, arg3, arg4)
-
+	return (GdBool)(ret_val)
 }
 func CallSpriteBatchUpdatePhysics(
 	buffer_data *float32,

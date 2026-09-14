@@ -205,14 +205,18 @@ func TestGenerateFixedArrayOutputReader(t *testing.T) {
 	dir := t.TempDir()
 	header := `class SpxExampleMgr : public SpxBaseMgr {
 public:
- SPX_API void write_values(int64_t out[7]);
+ SPX_API void write_values(SPX_OUT int64_t out[7]);
+ SPX_API GdBool try_write(SPX_OUT float out[3]);
+ SPX_API void update_fixed(float out[3]);
  SPX_API void update_values(const float *values, int count);
  };`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(header), 0o600))
 	headers, err := gdext.PrepareHeaders(dir)
 	require.NoError(t, err)
 	ast, err := clang.ParseCString(`typedef void (*GDExtensionSpxExampleWriteValues)(int64_t *out);
-typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count);`)
+typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count);
+typedef GdBool (*GDExtensionSpxExampleTryWrite)(float *out);
+typedef void (*GDExtensionSpxExampleUpdateFixed)(float *out);`)
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 	require.NoError(t, generation.writeEngineJS(dir))
@@ -222,14 +226,16 @@ typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count
 	require.Contains(t, string(output), "'gdspx_example_write_values': function() {")
 	require.Contains(t, string(output), "ReadArrayOutput('_gdspx_example_write_values', 1, 7)")
 	require.NotContains(t, string(output), "'gdspx_example_update_values':")
+	require.NotContains(t, string(output), "'gdspx_example_try_write': function()")
+	require.NotContains(t, string(output), "'gdspx_example_update_fixed': function()")
 	require.Contains(t, string(output), `RequireNativeArray(out, "gdspx_example_write_values", 1, true)`)
-	require.Contains(t, string(output), "NativeArrayCount(out) < 7")
+	require.Contains(t, string(output), "NativeArrayCount(out) !== 7")
 	require.Contains(t, string(output), "_call(_arg0);")
 	functions := ast.CollectGDExtensionInterfaceFunctions()
 	require.NotContains(t, generation.jsBody(&functions[0]), "_call(_arg0, _arg1);")
 	body := generation.managerBody(&functions[0])
 	require.Contains(t, body, "if out == nil")
-	require.Contains(t, body, "JsFromNativeArray(out[:], 1)")
+	require.Contains(t, body, "JsAllocNativeArray(GdArrayTypeInt64, len(out[:]))")
 	require.Contains(t, body, "CopyNativeArrayOutput(out[:], arg0)")
 }
 
@@ -398,31 +404,6 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 	require.NotContains(t, audioLibrary, "positionWorker.onMessage")
 }
 
-func TestRepositoryWebBridgeKeepsNativeArrayPointersPrivate(t *testing.T) {
-	repositoryRoot := filepath.Join("..", "..", "..", "..", "..")
-	utilPath := filepath.Join(repositoryRoot, "godot_modules", "spx", "web", "js", "engine", "gdspx.util.js")
-	body, err := os.ReadFile(utilPath)
-	require.NoError(t, err)
-	util := string(body)
-
-	// Raw pointers must come from bridge-created wrappers.
-	require.Contains(t, util, "const [GdspxBorrowNativeArray, GetNativeArrayMetadata] = (() => {")
-	require.Contains(t, util, "const registry = new WeakMap();")
-	require.Contains(t, util, "registry.set(wrapper, metadata);")
-	require.Contains(t, util, "return [borrow, get];")
-	start := strings.Index(util, "const [GdspxBorrowNativeArray, GetNativeArrayMetadata] = (() => {")
-	require.NotEqual(t, -1, start)
-	endOffset := strings.Index(util[start:], "})();")
-	require.NotEqual(t, -1, endOffset)
-	closure := util[start : start+endOffset]
-	require.NotContains(t, closure, "globalThis")
-	require.NotContains(t, closure, "register")
-	require.Contains(t, util, "return Object.freeze(wrapper);")
-	require.Contains(t, util, "if (metadata.module !== Module)")
-	require.Contains(t, util, "writable && GetNativeArrayMetadata(array) === null")
-	require.NotContains(t, util, "return array['ptr'];")
-}
-
 func TestIndependentNativeBuffersPreserveOrderingAndAccess(t *testing.T) {
 	dir := t.TempDir()
 	const params = "const GdObj *objs, int count, const uint8_t *mask_data, int mask_len, float *out, int out_len, int64_t *indices, int indices_len"
@@ -449,8 +430,8 @@ public:
 	require.Contains(t, body, "var _arg7 = NativeArrayCount(indices);")
 	require.Contains(t, body, "_call(_arg0, _arg1, _arg2, _arg3, _arg4, _arg5, _arg6, _arg7);")
 	manager := generation.managerBody(function)
-	require.Contains(t, manager, "JsFromNativeArray(objs, 6)")
-	require.Contains(t, manager, "JsFromNativeArray(mask, 5)")
+	require.Contains(t, manager, "JsFromNativeArray(objs, GdArrayTypeGdObj)")
+	require.Contains(t, manager, "JsFromNativeArray(mask, GdArrayTypeByte)")
 	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg2, arg4, arg6)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(indices, arg6)")
@@ -482,8 +463,8 @@ public:
 	manager := generation.managerBody(function)
 	require.Contains(t, manager, "if objects == nil")
 	require.Contains(t, manager, "if selected == nil")
-	require.Contains(t, manager, "if len(values) > 2147483647")
-	require.Contains(t, manager, "JsFromNativeArray(objects[:], 6)")
+	require.Contains(t, manager, "if len(values) > math.MaxInt32")
+	require.Contains(t, manager, "JsFromNativeArray(objects[:], GdArrayTypeGdObj)")
 	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg1, arg3)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(selected[:], arg3)")
 	require.NotContains(t, manager, "CopyNativeArrayOutput(objects")
@@ -534,6 +515,57 @@ for (const failure of [null, 'buffer', 'call']) {
  if (failure) assert.throws(run, new RegExp(failure)); else run();
  assert.deepEqual(freed, [77]);
  assert.equal(calls, failure === 'buffer' ? 0 : 1);
+}`
+	output, err := exec.Command(node, "-e", script).CombinedOutput()
+	require.NoError(t, err, "%s", output)
+}
+
+func TestOutputOnlyStatusControlsMultipleBuffers(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API GdBool collect(GdString label, const float *input, int count, SPX_OUT float *out, int out_len, SPX_OUT uint8_t flags[2], float *state, int state_len);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef GdBool (*GDExtensionSpxExampleCollect)(GdString label, const float *input, int count, float *out, int out_len, uint8_t *flags, float *state, int state_len);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	manager := generation.managerBody(&function)
+	require.Contains(t, manager, "JsFromNativeArray(input, GdArrayTypeFloat)")
+	require.Contains(t, manager, "JsFromNativeArray(state, GdArrayTypeFloat)")
+	require.Contains(t, manager, "JsAllocNativeArray(GdArrayTypeFloat, len(out))")
+	require.Contains(t, manager, "JsAllocNativeArray(GdArrayTypeByte, len(flags[:]))")
+	guard := strings.Index(manager, "if !JsToGdBool(_result) { return false }")
+	require.GreaterOrEqual(t, guard, 0)
+	for _, copy := range []string{"CopyNativeArrayOutput(out, arg3)", "CopyNativeArrayOutput(flags[:], arg5)", "CopyNativeArrayOutput(state, arg6)"} {
+		require.Greater(t, strings.Index(manager, copy), guard, copy)
+	}
+
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is required to execute generated JavaScript")
+	}
+	body := generation.jsBody(&function)
+	script := `const assert = require('node:assert/strict');
+const invoke = new Function('_call', 'ToGdString', 'FreeGdString', 'RequireNativeArray', 'NativeArrayCount', 'AllocGdBool', 'FreeGdBool', 'ToJsBool', 'label', 'input', 'out', 'flags', 'state', ` + strconv.Quote(body) + `);
+for (const status of [true, false, 'throw', 'wrong-length']) {
+ let result, calls = 0;
+ const freed = [];
+ const run = () => invoke((...args) => {
+  calls++;
+  assert.deepEqual(args, [77, 16, 1, 128, 3, 256, 512, 4, 900]);
+  if (status === 'throw') throw new Error('native failure');
+  result = status;
+ }, () => 77, p => freed.push(p), (a, op, type, writable) => {
+  assert.equal(a.type, type); assert.equal(a.writable, writable); return a.ptr;
+ }, a => a.count, () => 900, p => freed.push(p), p => { assert.equal(p, 900); return result; },
+ 'query', {ptr:16, count:1, type:2, writable:false}, {ptr:128, count:3, type:2, writable:true},
+ {ptr:256, count:status === 'wrong-length' ? 3 : 2, type:5, writable:true}, {ptr:512, count:4, type:2, writable:true});
+ if (typeof status === 'boolean') assert.equal(run(), status); else assert.throws(run);
+ assert.deepEqual(freed, [77, 900]);
+ assert.equal(calls, status === 'wrong-length' ? 0 : 1);
 }`
 	output, err := exec.Command(node, "-e", script).CombinedOutput()
 	require.NoError(t, err, "%s", output)

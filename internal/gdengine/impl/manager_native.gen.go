@@ -41,6 +41,7 @@ import (
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	. "github.com/goplus/spx/v3/internal/gdengine/binding/native"
 	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"math"
 	"reflect"
 	"unsafe"
 )
@@ -609,7 +610,7 @@ func (pself *penMgr) DestroyPen(obj Object) {
 }
 func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		if len(buffer) > 2147483647 {
+		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
 		}
 		arg0 := unsafe.SliceData(buffer)
@@ -2219,7 +2220,7 @@ func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 }
 func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		if len(buffer) > 2147483647 {
+		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
 		}
 		arg0 := unsafe.SliceData(buffer)
@@ -2229,7 +2230,7 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 }
 func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		if len(buffer) > 2147483647 {
+		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
 		}
 		arg0 := unsafe.SliceData(buffer)
@@ -2237,24 +2238,25 @@ func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 		CallSpriteBatchUpdateVisuals(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) {
-	enginewrap.CallInMainThread(func() {
-		if len(objs) > 2147483647 {
+func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool {
+	return enginewrap.CallInMainThreadValue(func() bool {
+		if len(objs) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
 		}
 		arg0 := unsafe.SliceData(objs)
 		arg1 := int32(len(objs))
-		if len(out) > 2147483647 {
+		if len(out) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: out")
 		}
 		arg2 := unsafe.SliceData(out)
 		arg3 := int32(len(out))
-		CallSpriteBatchRetrievePositions((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)
+		retValue := CallSpriteBatchRetrievePositions((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, arg3)
+		return ToBool(retValue)
 	})
 }
 func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
-		if len(buffer) > 2147483647 {
+		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
 		}
 		arg0 := unsafe.SliceData(buffer)

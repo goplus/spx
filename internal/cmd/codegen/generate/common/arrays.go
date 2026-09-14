@@ -65,10 +65,11 @@ type ArrayBridge struct {
 }
 
 type ArrayBuffer struct {
-	Data   CParam
-	Length CParam
-	Type   ArrayType
-	Count  int // Fixed element count; zero means a separate length parameter.
+	Data       CParam
+	Length     CParam
+	Type       ArrayType
+	Count      int  // Fixed element count; zero means a separate length parameter.
+	OutputOnly bool // The callee writes the full range without reading caller storage.
 }
 
 type CParam struct {
@@ -122,9 +123,18 @@ func (s ArrayBridge) Params() []CParam {
 	return params
 }
 
+func (s ArrayBridge) HasOutputOnly() bool {
+	for _, buffer := range s.Buffers {
+		if buffer.OutputOnly {
+			return true
+		}
+	}
+	return false
+}
+
 // FixedOutput supports the no-argument Web reader for a single fixed output.
 func (s ArrayBridge) FixedOutput() *ArrayBuffer {
-	if len(s.Params()) == 1 && len(s.Buffers) == 1 && s.Buffers[0].Count != 0 && s.Buffers[0].Writable() {
+	if len(s.Params()) == 1 && len(s.Buffers) == 1 && s.Buffers[0].Count != 0 && s.Buffers[0].OutputOnly {
 		return &s.Buffers[0]
 	}
 	return nil
@@ -158,7 +168,7 @@ func (b ArrayBuffer) GoArgumentCheck(functionName string) string {
 	if b.Count != 0 {
 		return fmt.Sprintf("if %s == nil { panic(%q) }", name, functionName+" requires a non-nil array: "+name)
 	}
-	return fmt.Sprintf("if len(%s) > 2147483647 { panic(%q) }", name, functionName+" array length exceeds int32: "+name)
+	return fmt.Sprintf("if len(%s) > math.MaxInt32 { panic(%q) }", name, functionName+" array length exceeds int32: "+name)
 }
 
 // LookupArrayType resolves a C element type to its array ABI type.

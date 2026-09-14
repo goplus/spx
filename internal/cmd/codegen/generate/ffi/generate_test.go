@@ -149,7 +149,7 @@ public:
 	}
 	require.Contains(t, body, "if objects == nil")
 	require.Contains(t, body, "if selected == nil")
-	require.Contains(t, body, "if len(values) > 2147483647")
+	require.Contains(t, body, "if len(values) > math.MaxInt32")
 	require.Contains(t, body, "arg2 := int32(len(values))")
 	require.Contains(t, body, "CallExampleCollect((*GdObj)(unsafe.Pointer(arg0)), arg1, arg2, (*GdObj)(unsafe.Pointer(arg3)))")
 }
@@ -174,6 +174,31 @@ public:
 	require.Contains(t, body, "defer C.free(unsafe.Pointer(arg0Str))")
 	require.Contains(t, body, "CallExampleCollect(arg0, arg1, (*GdObj)(unsafe.Pointer(arg2)), arg3, arg4, arg5, arg6)")
 	require.NotContains(t, body, "var retValue")
+}
+
+func TestOutputOnlyBuffersKeepNativeStatusAndCallerStorage(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+public:
+ SPX_API GdBool collect(const GdObj *ids, int count, SPX_OUT float *out, int out_len);
+};`), 0o600))
+	headers, err := gdext.PrepareHeaders(dir)
+	require.NoError(t, err)
+	for _, declaration := range []string{
+		"typedef GdBool (*GDExtensionSpxExampleCollect)(const GdObj *ids, int count, float *out, int out_len);",
+		"typedef void (*GDExtensionSpxExampleCollect)(const GdObj *ids, int count, float *out, int out_len, GdBool *ret_value);",
+	} {
+		ast, err := clang.ParseCString(declaration)
+		require.NoError(t, err)
+		generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+		function := ast.CollectGDExtensionInterfaceFunctions()[0]
+		body := generation.managerBody(&function)
+		require.Contains(t, body, "return enginewrap.CallInMainThreadValue(func() bool")
+		require.Contains(t, body, "unsafe.SliceData(out)")
+		require.Contains(t, body, "int32(len(out))")
+		require.Contains(t, body, "return ToBool(retValue)")
+		require.NotContains(t, body, "make(")
+	}
 }
 
 func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {

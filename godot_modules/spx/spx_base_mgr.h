@@ -60,6 +60,12 @@ public:                                      \
 #define SPX_BINDING(...)
 #endif
 
+// Output-only native array: completely filled on success, never read on entry.
+// GdBool methods return false before modifying any writable array on failure.
+#ifndef SPX_OUT
+#define SPX_OUT
+#endif
+
 #define NULL_OBJECT_ID 0
 
 class Window;

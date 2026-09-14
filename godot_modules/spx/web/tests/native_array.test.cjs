@@ -150,24 +150,30 @@ test('generated wrappers release every acquired argument and result on failure',
 
 test('position batches pass independent native input and output counts without array wrappers', () => {
     const b = bridge();
-    b.module._gdspx_sprite_batch_retrieve_positions = (inputPtr, inputCount, outPtr, outLen) => {
+    b.module._gdspx_alloc_bool = () => b.module._cmalloc(1);
+    b.module._gdspx_free_bool = b.module._cfree;
+    let success = true;
+    b.module._gdspx_sprite_batch_retrieve_positions = (inputPtr, inputCount, outPtr, outLen, resultPtr) => {
         assert.equal(inputCount, 2);
-        assert.equal(outLen, 7);
+        assert.equal(outLen, 4);
         assert.notEqual(inputPtr, outPtr);
         assert.equal(b.module.HEAPU32[inputPtr / 4], 0x7fc00001);
         assert.equal(b.module.HEAPU32[inputPtr / 4 + 1], 0x11223344);
-        b.module.HEAPF32.set([3, -4, NaN, NaN], outPtr / 4);
+        if (success) b.module.HEAPF32.set([3, -4, NaN, NaN], outPtr / 4);
+        b.module.HEAPU8[resultPtr] = success ? 1 : 0;
     };
     b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
     const objs = b.run('objs = GdspxBorrowNativeArray(6, 2, 16)');
-    const out = b.run('out = GdspxBorrowNativeArray(2, 7, 28)');
+    const out = b.run('out = GdspxBorrowNativeArray(2, 4, 16)');
     const ids = [0x7fc00001, 0x11223344, 999, 0];
     b.module.HEAPU32.set(ids, objs.ptr / 4);
-    b.module.HEAPF32.fill(42, out.ptr / 4, out.ptr / 4 + 7);
+    b.module.HEAPF32.fill(42, out.ptr / 4, out.ptr / 4 + 4);
     // No _gdspx_alloc_array/_gdspx_free_array exports are installed in this test.
-    b.run('new GdspxFuncs().gdspx_sprite_batch_retrieve_positions(objs, out)');
+    assert.equal(b.run('new GdspxFuncs().gdspx_sprite_batch_retrieve_positions(objs, out)'), true);
+    success = false;
+    assert.equal(b.run('new GdspxFuncs().gdspx_sprite_batch_retrieve_positions(objs, out)'), false);
     assert.deepEqual(Array.from(b.module.HEAPU32.subarray(objs.ptr / 4, objs.ptr / 4 + 4)), ids);
-    assert.deepEqual(Array.from(b.module.HEAPF32.subarray(out.ptr / 4, out.ptr / 4 + 7)), [3, -4, NaN, NaN, 42, 42, 42]);
+    assert.deepEqual(Array.from(b.module.HEAPF32.subarray(out.ptr / 4, out.ptr / 4 + 4)), [3, -4, NaN, NaN]);
 });
 
 test('fixed output allocation uses generated metadata and preserves in-place calls', () => {
@@ -191,15 +197,15 @@ test('fixed output allocation uses generated metadata and preserves in-place cal
         b.module.HEAPF32.fill(42, out.ptr / 4, out.ptr / 4 + count);
         const callCount = calls.length;
         const invoke = () => b.run('new GdspxFuncs().gdspx_input_write_snapshot(out)');
-        if (count < 3) {
-            assert.throws(invoke, /array is too small/);
+        if (count !== 3) {
+            assert.throws(invoke, /output array length must match/);
             assert.equal(calls.length, callCount);
         } else {
             invoke();
             assert.equal(calls.at(-1), out.ptr);
         }
         const values = Array.from(b.module.HEAPF32.subarray(out.ptr / 4, out.ptr / 4 + count));
-        assert.deepEqual(values, count < 3 ? Array(count).fill(42) : [1.5, -2.5, 7, ...Array(count - 3).fill(42)]);
+        assert.deepEqual(values, count !== 3 ? Array(count).fill(42) : [1.5, -2.5, 7]);
     }
     // A different type and count exercise the same allocator without a method-name branch.
     b.module._example = ptr => b.module.HEAPU8.fill(23, ptr, ptr + 7);

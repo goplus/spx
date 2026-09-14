@@ -73,6 +73,7 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		"isGdArrayArgument":       isGdArrayArgument,
 		"webManagerArgument":      g.webManagerArgument,
 		"webParameterDeclaration": g.webParameterDeclaration,
+		"hasOutputStatus":         g.HasOutputStatus,
 	}
 
 	output, err := common.RenderTemplate(funcs, filepath.Base(outputPath), templateStr, g.ManagerData())

@@ -1781,18 +1781,15 @@ void SpxSpriteMgr::batch_update_visuals(const float *buffer_data, int len) {
 	batch_update_visuals_impl(this, buffer_data, len, "batch_update_visuals");
 }
 
-void SpxSpriteMgr::batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
-	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SPX sprite positions may only be read on the engine main thread.");
-	if (count <= 0) {
-		return;
+GdBool SpxSpriteMgr::batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
+	ERR_FAIL_COND_V_MSG(!Thread::is_main_thread(), false, "SPX sprite positions may only be read on the engine main thread.");
+	if (count < 0 || count > INT_MAX / 2) {
+		print_error("batch_retrieve_positions: invalid count.");
+		return false;
 	}
-	if (count > INT_MAX / 2) {
-		print_error("batch_retrieve_positions: count too large.");
-		return;
-	}
-	if (!objs || !out || out_len < count * 2) {
-		print_error("batch_retrieve_positions: invalid buffers or insufficient output capacity.");
-		return;
+	if (out_len != count * 2 || (count > 0 && (!objs || !out))) {
+		print_error("batch_retrieve_positions: invalid buffers or output length.");
+		return false;
 	}
 	for (int i = 0; i < count; ++i) {
 		SpxSprite *sprite = get_sprite(objs[i]);
@@ -1806,6 +1803,7 @@ void SpxSpriteMgr::batch_retrieve_positions(const GdObj *objs, int count, float 
 			out[i * 2 + 1] = missing;
 		}
 	}
+	return true;
 }
 
 void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {

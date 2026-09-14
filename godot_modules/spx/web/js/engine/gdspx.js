@@ -676,8 +676,8 @@ gdspx_input_is_action_just_released_id(action_id_low,action_id_high) {
 gdspx_input_write_snapshot(out) {
 	var _call = Module['_gdspx_input_write_snapshot'];
 	var _arg0 = RequireNativeArray(out, "gdspx_input_write_snapshot", 2, true);
-	if (NativeArrayCount(out) < 3) {
-		throw new Error("gdspx_input_write_snapshot array is too small: out");
+	if (NativeArrayCount(out) !== 3) {
+		throw new Error("gdspx_input_write_snapshot output array length must match its declaration: out");
 	}
 	_call(_arg0);
 }
@@ -3633,11 +3633,18 @@ gdspx_sprite_batch_update_visuals(buffer) {
 }
 gdspx_sprite_batch_retrieve_positions(objs,out) {
 	var _call = Module['_gdspx_sprite_batch_retrieve_positions'];
-	var _arg0 = RequireNativeArray(objs, "gdspx_sprite_batch_retrieve_positions", 6, false);
-	var _arg1 = NativeArrayCount(objs);
-	var _arg2 = RequireNativeArray(out, "gdspx_sprite_batch_retrieve_positions", 2, true);
-	var _arg3 = NativeArrayCount(out);
-	_call(_arg0, _arg1, _arg2, _arg3);
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdBool();
+		var _arg0 = RequireNativeArray(objs, "gdspx_sprite_batch_retrieve_positions", 6, false);
+		var _arg1 = NativeArrayCount(objs);
+		var _arg2 = RequireNativeArray(out, "gdspx_sprite_batch_retrieve_positions", 2, true);
+		var _arg3 = NativeArrayCount(out);
+		_call(_arg0, _arg1, _arg2, _arg3, _resultPtr);
+		return ToJsBool(_resultPtr);
+	} finally {
+		if (_resultPtr) FreeGdBool(_resultPtr);
+	}
 }
 gdspx_sprite_batch_update_physics(buffer) {
 	var _call = Module['_gdspx_sprite_batch_update_physics'];

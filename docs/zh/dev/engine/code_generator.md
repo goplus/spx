@@ -238,14 +238,14 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 输入和原地写入输出的缓冲区由调用者提供。例如：
 
 ```cpp
-SPX_API void write_snapshot(float out[3]);
+SPX_API void write_snapshot(SPX_OUT float out[3]);
 ```
 
-生成器从原始声明的 `[3]` 提取 `ArrayBuffer.Count`，然后将参数降为指针 ABI，不再传长度参数。高层接口为 `WriteSnapshot(out *[3]float32)`，保持原地写入；Go 绑定拒绝 nil，Web 绑定在调用前检查原生数组容量至少为 3。动态切片在 Go 调用前检查长度能否用 int32 表示。
+生成器从原始声明的 `[3]` 提取 `ArrayBuffer.Count`，然后将参数降为指针 ABI，不再传长度参数。高层接口为 `WriteSnapshot(out *[3]float32)`，保持原地写入；Go 绑定拒绝 nil，Web 绑定在调用前检查原生输出数组长度恰好为 3。动态切片在 Go 调用前检查长度能否用 int32 表示。
 
-固定数组和动态数组使用相同的类型映射，支持 `float` / `real_t`、`int64_t`、`uint8_t` 和 `GdObj`。固定数组、动态数组和普通参数可以在同一个 `void` 方法中组合使用；`const T input[N]` 为只读输入，`T out[N]` 为可写缓冲区。固定长度须为正的十进制 int32 字面量，常量名、表达式和多维数组会被拒绝，固定数组后不再附加长度参数。C++ 数组参数本身会退化为指针，不提供容量检查。
+固定数组和动态数组使用相同的类型映射，支持 `float` / `real_t`、`int64_t`、`uint8_t` 和 `GdObj`。固定数组、动态数组和普通参数可以在同一个方法中组合使用；默认返回 `void`，包含 `SPX_OUT` 的方法也可以返回 `GdBool` 表示整体成功或失败；`const T input[N]` 为只读输入，`T out[N]` 为可写缓冲区。固定长度须为正的十进制 int32 字面量，常量名、表达式和多维数组会被拒绝，固定数组后不再附加长度参数。C++ 数组参数本身会退化为指针，不提供容量检查。
 
-对于仅有一个固定可写数组参数的方法，Web 还会生成 `GdspxFuncs['arrayOutputs']['gdspx_input_write_snapshot']()` 读取入口，按声明的类型和数量分配原生数组并返回。新增固定输出方法只需添加声明，无需手写 JS 包装；底层内存分配共用 `ReadArrayOutput`。
+对于返回 `void` 且仅有一个固定 `SPX_OUT` 数组参数的方法，Web 还会生成 `GdspxFuncs['arrayOutputs']['gdspx_input_write_snapshot']()` 读取入口，按声明的类型和数量分配原生数组并返回。新增固定输出方法只需添加声明，无需手写 JS 包装；底层内存分配共用 `ReadArrayOutput`。
 
 目前内建支持的原始数组类型主要包括：
 
@@ -258,27 +258,39 @@ SPX_API void write_snapshot(float out[3]);
 
 ### 5.3 独立长度的原生输入、输出数组
 
-每个动态原生数组使用相邻的“指针 + 长度”参数对，无需绑定注解：
+每个动态原生数组使用相邻的“指针 + 长度”参数对，长度直接从声明解析，`SPX_OUT` 仅标记只输出方向：
 
 ```cpp
-SPX_API void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
+SPX_API GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
 ```
 
-Go 接口为 `BatchRetrievePositions(objs []int64, out []float32)`。生成器分别从 `len(objs)` 和 `len(out)` 传入 `count` 和 `out_len`，不约束输入和输出元素数相等，也不推导比例。多个输入、输出缓冲区按声明顺序处理，动态缓冲区使用各自的长度参数，固定数组从声明解析大小；`const` 指针只读，可写指针会在 Web 调用后复制回对应的 Go 切片。
+Go 接口为 `BatchRetrievePositions(objs []int64, out []float32) bool`。生成器分别从 `len(objs)` 和 `len(out)` 传入 `count` 和 `out_len`，不约束输入和输出元素数相等，也不推导比例。多个输入、输出缓冲区按声明顺序处理，动态缓冲区使用各自的长度参数，固定数组从声明解析大小；`const` 指针只读，可写数组在输出有效时复制回对应的 Go 切片。
 
 普通参数可以穿插在数组参数之间，例如：
 
 ```cpp
-SPX_API void sample(int mode, const float *values, int count, float out[3]);
+SPX_API void sample(int mode, const float *values, int count, SPX_OUT float out[3]);
 ```
 
 对应 Go 接口为 `Sample(mode int32, values []float32, out *[3]float32)`。`mode` 正常传值，`count` 从输入切片长度获得，固定输出不传额外长度。`GdString` 等需要临时内存的普通参数也可混用；Web 生成器只为需要释放的值生成清理逻辑，校验或调用失败时仍执行释放。
 
-输出容量由调用方提供，记录格式和容量校验由具体函数负责。例如位置查询需要每个对象对应两个坐标，因此调用方为 N 个对象提供至少 2N 个 `float32` 元素；C++ 在写入前检查容量、空指针和数量溢出，缺失精灵写为一对 NaN。输出可以更长，多余元素保持原值。这个比例只属于位置函数，不属于生成器规则。
+输出容量由调用方提供，记录格式和容量校验由具体函数负责。例如位置查询需要每个对象对应两个坐标，因此调用方为 N 个对象提供恰好 2N 个 `float32` 元素（底层缓存可以更大，传入切片限定本次写入范围）；C++ 在写入前检查线程、长度、空指针和数量溢出，失败返回 `false` 且所有输出保持不变，成功完整写入并返回 `true`，缺失精灵写为一对 NaN。空输入配合空输出也返回 `true`。这个比例只属于位置函数，不属于生成器规则。
 
-Go 调用侧通过已有的 `SpriteSyncBuffer.GetPositions` 保存并复用位置输出缓冲区，缓存随游戏实例持有，容量不足时扩容。Native 绑定直接传递两个切片的地址和各自长度，C++ 无需分配数组。Web 使用已有 Wasm 内存池，并将可写输出字节直接复制回原 Go 切片，不分配解码结果数组；Go Wasm 和引擎 Wasm 内存独立，两者间仍需要字节复制。缓冲区复用不代表缓存坐标结果，数据每次调用都会刷新。
+Go 调用侧通过已有的 `SpriteSyncBuffer.GetPositions` 保存并复用位置输出缓冲区，缓存随游戏实例持有，容量不足时扩容；查询失败返回空结果，避免应用旧坐标。Native 绑定直接传递两个切片的地址和各自长度，C++ 无需分配数组。Web 使用已有 Wasm 内存池，并将可写输出字节直接复制回原 Go 切片，不分配解码结果数组；Go Wasm 和引擎 Wasm 内存独立，两者间仍需要字节复制。缓冲区复用不代表缓存坐标结果，数据每次调用都会刷新。
 
 这类方法使用 `ArrayBridge.Buffers` 保存按声明顺序排列的原生缓冲区；生成器不解析记录结构，也不使用 `GdArray` 的 C++ 包装和结果分配路径。
+
+`SPX_OUT` 放在数组参数类型之前，在 C++ 中展开为空，由生成器记录只输出方向：
+
+| 参数声明 | Web 调用前 | Web 调用后 |
+| --- | --- | --- |
+| `const T *input, int len` | 复制输入 | 不回写 |
+| `T *buffer, int len` | 复制旧内容 | 回写 |
+| `SPX_OUT T *out, int len` / `SPX_OUT T out[N]` | 只借用存储，不复制、不清零 | 输出有效时回写 |
+
+调用方确保每个输出切片长度等于本次写入元素数，函数不读取旧值，并完整覆盖所有 `SPX_OUT` 范围。`void` 方法正常返回即表示输出有效；返回 `GdBool` 的方法，`true` 表示全部输出完整，`false` 表示所有可写数组均未修改，Web 跳过所有数组回写。Native 直接使用调用方地址，因此 C++ 必须在开始写入前完成所有可能失败的校验。多个输出各自声明长度，共用整体成功状态，不需要额外的实际写入数量。
+
+`SPX_OUT` 不允许标记 `const`、普通参数或不支持的数组类型。固定只输出数组在 JS 入口也要求长度完全匹配。自动无参数读取入口仅用于单个固定输出且返回 `void` 的方法，避免丢失成功状态或把读写数组误当输出。
 
 ### 5.4 统一绑定注解
 

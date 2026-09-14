@@ -387,8 +387,8 @@ func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
 		panic("position batch exceeds the native array length limit")
 	}
 	b.positions = ensureFloat32BufferSize(b.positions, len(spriteIDs)*2)
-	if len(spriteIDs) > 0 {
-		Managers().SpriteMgr.BatchRetrievePositions(spriteIDs, b.positions)
+	if len(spriteIDs) > 0 && !Managers().SpriteMgr.BatchRetrievePositions(spriteIDs, b.positions) {
+		return nil
 	}
 	return b.positions
 }

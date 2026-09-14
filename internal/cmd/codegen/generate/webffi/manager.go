@@ -31,45 +31,54 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	args := g.Parameters(function)
 	params := make([]string, 0, len(args))
 	var outputs []string
+	returnType := g.EffectiveRawReturnType(function)
 	for _, param := range args {
-		arg := param.Argument
 		if param.IsLength {
 			continue
 		}
-		argName := param.LocalName("arg")
-		source := param.Name
-		if buffer := param.Buffer; buffer != nil {
-			fmt.Fprintf(&sb, "\t%s\n", buffer.GoArgumentCheck(function.Name))
+		argName, source := param.LocalName("arg"), param.Name
+		switch {
+		case param.Buffer != nil:
+			buffer := param.Buffer
 			source = buffer.GoSliceExpr()
+			fmt.Fprintf(&sb, "\t%s\n", buffer.GoArgumentCheck(function.Name))
+			if buffer.OutputOnly {
+				fmt.Fprintf(&sb, "\t%s := JsAllocNativeArray(%s, len(%s))\n", argName, buffer.Type.GoConstant(), source)
+			} else {
+				fmt.Fprintf(&sb, "\t%s := JsFromNativeArray(%s, %s)\n", argName, source, buffer.Type.GoConstant())
+			}
 			if buffer.Writable() {
 				outputs = append(outputs, fmt.Sprintf("\n\tCopyNativeArrayOutput(%s, %s)", source, argName))
 			}
-			fmt.Fprintf(&sb, "\t%s := JsFromNativeArray(%s, %d)\n", argName, source, buffer.Type)
-			params = append(params, argName)
-			continue
-		}
-		typeName := common.MustPrimitiveTypeName(arg, function.Name)
-		if param.DirectScalar() {
+		case param.DirectScalar():
 			fmt.Fprintf(&sb, "\t%s := %s\n", argName, source)
-			params = append(params, argName)
-		} else if binding, ok := jsInt64Types[typeName]; ok {
-			low, high := argName+"Low", argName+"High"
-			fmt.Fprintf(&sb, "\t%s, %s := %s(%s)\n", low, high, binding.split, source)
-			params = append(params, low, high)
-		} else {
+		default:
+			typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
+			if binding, ok := jsInt64Types[typeName]; ok {
+				low, high := argName+"Low", argName+"High"
+				fmt.Fprintf(&sb, "\t%s, %s := %s(%s)\n", low, high, binding.split, source)
+				params = append(params, low, high)
+				continue
+			}
 			fmt.Fprintf(&sb, "\t%s := JsFrom%s(%s)\n", argName, typeName, source)
-			params = append(params, argName)
 		}
+		params = append(params, argName)
 	}
 
 	sb.WriteByte('\t')
-	if g.HasEffectiveReturn(function) {
+	if returnType != "" {
 		sb.WriteString("_result := ")
 	}
 	fmt.Fprintf(&sb, "API.Spx%s.Invoke(%s)", strings.TrimPrefix(function.Name, "GDExtensionSpx"), strings.Join(params, ", "))
+	outputStatus := g.HasOutputStatus(function)
+	if outputStatus {
+		sb.WriteString("\n\tif !JsToGdBool(_result) { return false }")
+	}
 	sb.WriteString(strings.Join(outputs, ""))
-	if g.HasEffectiveReturn(function) {
-		name := strcase.ToCamel(g.EffectiveRawReturnType(function))
+	if outputStatus {
+		sb.WriteString("\n\treturn true")
+	} else if returnType != "" {
+		name := strcase.ToCamel(returnType)
 		if name == "GdObj" {
 			name = "GdObject"
 		}

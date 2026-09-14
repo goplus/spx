@@ -349,7 +349,7 @@ type ISpriteMgr interface {
 	GetPixelCollisionSamplingStep() int64
 	BatchUpdateTransforms(buffer []float32)
 	BatchUpdateVisuals(buffer []float32)
-	BatchRetrievePositions(objs []int64, out []float32)
+	BatchRetrievePositions(objs []int64, out []float32) bool
 	BatchUpdatePhysics(buffer []float32)
 }
 

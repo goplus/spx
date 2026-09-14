@@ -1473,8 +1473,9 @@ void gdspx_sprite_batch_update_visuals(const float *buffer_data, int len) {
 	 spriteMgr->batch_update_visuals(buffer_data, len);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len) {
-	 spriteMgr->batch_retrieve_positions(objs, count, out, out_len);
+void gdspx_sprite_batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len, GdBool *ret_val) {
+	*ret_val = false;
+	*ret_val = spriteMgr->batch_retrieve_positions(objs, count, out, out_len);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_batch_update_physics(const float *buffer_data, int len) {

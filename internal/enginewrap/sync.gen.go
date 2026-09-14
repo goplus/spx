@@ -1766,10 +1766,12 @@ func (*spriteMgrImpl) BatchUpdateVisuals(buffer []float32) {
 		gdx.SpriteMgr.BatchUpdateVisuals(buffer)
 	})
 }
-func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) {
+func (*spriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) bool {
+	var _ret1 bool
 	callInMainThread(func() {
-		gdx.SpriteMgr.BatchRetrievePositions(objs, out)
+		_ret1 = gdx.SpriteMgr.BatchRetrievePositions(objs, out)
 	})
+	return _ret1
 }
 func (*spriteMgrImpl) BatchUpdatePhysics(buffer []float32) {
 	callInMainThread(func() {
