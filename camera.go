@@ -44,10 +44,11 @@ type Camera interface {
 }
 
 type cameraImpl struct {
-	g            *Game
-	followTarget any
-	isDirty      bool
-	dirtyVersion uint64
+	g                     *Game
+	followTarget          any
+	isDirty               bool
+	dirtyVersion          uint64
+	observedFollowVersion uint64
 }
 
 func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
@@ -112,8 +113,15 @@ func (c *cameraImpl) onUpdate() {
 		return
 	}
 	shouldUpdate, pos := c.getFollowPos()
-	if shouldUpdate {
-		c.setXYposDirect(pos.X, pos.Y)
+
+	if !shouldUpdate {
+		return
+	}
+
+	c.setXYposDirect(pos.X, pos.Y)
+
+	if sprite, ok := c.followTarget.(*SpriteImpl); ok {
+		c.observedFollowVersion = sprite.spriteState.VisualVersion
 	}
 }
 
@@ -156,7 +164,8 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	if c.followTarget != nil {
 		switch v := c.followTarget.(type) {
 		case *SpriteImpl:
-			return c.isDirty || v.spriteState.IsDirty, mathf.NewVec2(v.getXY())
+			changed := c.observedFollowVersion != v.spriteState.VisualVersion
+			return c.isDirty || changed, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.followTarget == Mouse {
 				return true, c.g.inputMgr.currentMousePos()

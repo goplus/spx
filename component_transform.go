@@ -297,9 +297,13 @@ func (t *transformComponent) clampSpriteScale(size float64) float64 {
 	return mathf.Clamp(size, minScale, maxScale)
 }
 
-// setPositionRaw updates position without movement side effects.
-func (t *transformComponent) setPositionRaw(x, y float64) {
+// setPositionRaw updates position without movement side effects and reports whether it changed.
+func (t *transformComponent) setPositionRaw(x, y float64) bool {
+	if t.x == x && t.y == y {
+		return false
+	}
 	t.x, t.y = x, y
+	return true
 }
 
 // moveTo moves the sprite to the specified position, handling pen movement

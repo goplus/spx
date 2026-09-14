@@ -23,6 +23,7 @@ type SpriteRuntimeState struct {
 	IsDirty             bool
 	DirtyVersion        uint64
 	ProxySyncVersion    uint64
+	VisualVersion       uint64
 	IsAwakened          bool
 	HasOnCloned         bool
 	HasOnTouchStart     bool

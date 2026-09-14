@@ -43,3 +43,49 @@ func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
 		t.Fatal("bubble still needs an update after observing the camera change")
 	}
 }
+
+func TestBubbleObservesSpriteChangesAfterProxyDirtyFlagIsCleared(t *testing.T) {
+	sprite := &SpriteImpl{}
+	sprite.spriteState.IsVisible = true
+	camera := &cameraImpl{}
+	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
+	bubble.markClean()
+
+	sprite.markProxyDirty()
+	sprite.spriteState.IsDirty = false
+	if !bubble.checkNeedsUpdate() {
+		t.Fatal("sprite change was lost when its proxy dirty flag was cleared")
+	}
+	if sprite.spriteState.DirtyVersion != 1 || sprite.spriteState.VisualVersion != 1 {
+		t.Fatalf(
+			"sprite versions = (proxy %d, visual %d), want (1, 1)",
+			sprite.spriteState.DirtyVersion,
+			sprite.spriteState.VisualVersion,
+		)
+	}
+
+	bubble.markClean()
+	if bubble.checkNeedsUpdate() {
+		t.Fatal("bubble still needs an update after observing the sprite change")
+	}
+}
+
+func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
+	sprite := &SpriteImpl{}
+	sprite.spriteState.IsVisible = true
+	bubble := &quoterBubble{
+		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
+	}
+	items := []Shape{bubble}
+	var shapes shapeManager
+
+	shapes.flushActivate(items)
+	if !bubble.isDirty {
+		t.Fatal("update phase unexpectedly committed bubble visuals")
+	}
+
+	shapes.flushBubbleVisuals(items)
+	if bubble.isDirty {
+		t.Fatal("frame-end phase did not commit bubble visuals")
+	}
+}

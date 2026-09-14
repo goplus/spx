@@ -67,6 +67,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState.IsAwakened = false
 
 	p.spriteState.DirtyVersion = 0
+	p.spriteState.VisualVersion = 0
 	p.spriteState.ProxySyncVersion = 0
 	p.proxyPublication = nil
 	p.spriteState.HasOnCloned = false
@@ -107,9 +108,14 @@ func (p *SpriteImpl) setDying() {
 }
 
 func (p *SpriteImpl) markProxyDirty() {
-	p.requestRedrawIfVisible()
+	p.markVisualDirty()
 	p.spriteState.DirtyVersion++
 	p.spriteState.IsDirty = true
+}
+
+func (p *SpriteImpl) markVisualDirty() {
+	p.requestRedrawIfVisible()
+	p.spriteState.VisualVersion++
 }
 
 // -----------------------------------------------------------------------------
