@@ -24,35 +24,46 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
+// scriptEventLifecycle registers an invocation before it can run and returns
+// its cleanup. Handlers without this interface allow overlapping invocations.
+type scriptEventLifecycle interface {
+	Start(coroutine.Thread) func()
+}
+
+// Each registration owns its execution state; clones re-register their handlers.
+type scriptEventHandler[F any] struct {
+	coroutine.HandlerState
+	run F
+}
+
+type messageEventHandler = scriptEventHandler[func(string, any)]
+
+func newScriptEventSink[F any](owner threadObj, run F, policy coroutine.HandlerPolicy, cond ...func(any) bool) eventSink {
+	handler := &scriptEventHandler[F]{HandlerState: coroutine.NewHandlerState(policy), run: run}
+	return coreevent.NewSink(owner, handler, cond...)
+}
+
 type scriptEventDispatch struct {
 	mode      coroutine.BatchMode
 	matchData any
-	lifecycle func(coroutine.Thread, *eventSink) func()
-	shouldRun func() bool
 	run       func(coroutine.Thread, *eventSink)
 }
 
 func (event scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
 	task := coroutine.BatchTask{
 		Owner: sink.Owner,
-		Run:   func(thread coroutine.Thread) { event.invoke(thread, &sink) },
+		Run:   func(thread coroutine.Thread) { event.run(thread, &sink) },
 	}
-	if event.lifecycle != nil {
-		task.OnRegistered = func(thread coroutine.Thread) func() { return event.lifecycle(thread, &sink) }
+	if handler, ok := sink.Handler.(scriptEventLifecycle); ok {
+		task.OnRegistered = handler.Start
 	}
 	return task
 }
 
-func (event scriptEventDispatch) invoke(thread coroutine.Thread, sink *eventSink) {
-	if event.shouldRun == nil || event.shouldRun() {
-		event.run(thread, sink)
-	}
-}
-
-// withRegistrationBarrier prevents external producers from returning before
+// withEventRegistrationBarrier prevents external producers from returning before
 // every handler is registered. The engine-thread bridge keeps the main thread
 // responsive while the managed dispatcher waits for a batch.
-func (event scriptEventDispatch) withRegistrationBarrier(dispatch func()) {
+func withEventRegistrationBarrier(dispatch func()) {
 	if gco == nil || gco.IsInCoroutine() {
 		dispatch()
 		return
@@ -87,26 +98,23 @@ func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any,
 }
 
 func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {
-	event.withRegistrationBarrier(func() {
-		dispatchScriptEventBatch(sinks, event)
+	withEventRegistrationBarrier(func() {
+		// Complete matching before starting user handlers.
+		matched := matchingEventSinks(sinks, event.matchData)
+		dispatchMatchedScriptEventBatch(matched, event)
 	})
 }
 
 func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
-	event.withRegistrationBarrier(func() {
+	withEventRegistrationBarrier(func() {
 		p.dispatchStartEventBatch(sinks, event)
 	})
 }
 
 func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event scriptEventDispatch) {
 	matched := matchingEventSinks(sinks, event.matchData)
-	if len(matched) == 0 {
-		return
-	}
-	if gco == nil {
-		for i := range matched {
-			event.invoke(nil, &matched[i])
-		}
+	if len(matched) == 0 || gco == nil {
+		dispatchMatchedScriptEventBatch(matched, event)
 		return
 	}
 
@@ -217,19 +225,13 @@ func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
 	return matched
 }
 
-// dispatchScriptEventBatch completes matching before starting user handlers.
-func dispatchScriptEventBatch(sinks []eventSink, event scriptEventDispatch) {
-	matched := matchingEventSinks(sinks, event.matchData)
-	dispatchMatchedScriptEventBatch(matched, event)
-}
-
 func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispatch) {
 	if len(matched) == 0 {
 		return
 	}
 	if gco == nil {
 		for i := range matched {
-			event.invoke(nil, &matched[i])
+			event.run(nil, &matched[i])
 		}
 		return
 	}

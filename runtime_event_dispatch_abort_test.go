@@ -40,20 +40,20 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	registrationDone := make(chan struct{})
 	var registered, ran atomic.Bool
 	handler := &messageEventHandler{}
+	lifecycle := eventLifecycleFunc(func(thread coroutine.Thread) func() {
+		registered.Store(true)
+		return handler.Start(thread)
+	})
 	event := scriptEventDispatch{
 		mode: coroutine.BatchAsync,
-		lifecycle: func(thread coroutine.Thread, _ *eventSink) func() {
-			registered.Store(true)
-			return handler.start(thread)
-		},
-		run: func(coroutine.Thread, *eventSink) { ran.Store(true) },
+		run:  func(coroutine.Thread, *eventSink) { ran.Store(true) },
 	}
 	go func() {
 		platform.useCurrentAsMainThread()
 		co.TryRunManagedBetweenScripts("outer", func() {
 			close(callbackStarted)
 			<-releaseCallback
-			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: handler}}, event)
+			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
 			close(registrationDone)
 		})
 	}()
@@ -88,10 +88,13 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	if ran.Load() {
 		t.Fatal("rejected nested handler ran after abort")
 	}
-	handler.mu.Lock()
-	active := handler.active
-	handler.mu.Unlock()
-	if active != nil {
-		t.Fatalf("rejected lifecycle left active thread %v", active)
+	co.StartBatch([]coroutine.BatchTask{{
+		Owner:        handler,
+		OnRegistered: handler.Start,
+		Run:          func(coroutine.Thread) { ran.Store(true) },
+	}}, coroutine.BatchAsync)
+	co.Update()
+	if !ran.Load() {
+		t.Fatal("handler could not run after the abort barrier recovered")
 	}
 }

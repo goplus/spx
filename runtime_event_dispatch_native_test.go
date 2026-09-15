@@ -52,6 +52,12 @@ func (p *eventDispatchPlatform) useCurrentAsMainThread() {
 	p.mainGID.Store(gid.Get())
 }
 
+type eventLifecycleFunc func(coroutine.Thread) func()
+
+func (f eventLifecycleFunc) Start(thread coroutine.Thread) func() {
+	return f(thread)
+}
+
 func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
@@ -83,16 +89,15 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	cleanupDone := make(chan struct{})
 	engineDone := make(chan struct{})
 	var registered, cleaned atomic.Int32
-	handler := &messageEventHandler{}
+	handler := eventLifecycleFunc(func(coroutine.Thread) func() {
+		registered.Add(1)
+		return func() {
+			cleaned.Add(1)
+			close(cleanupDone)
+		}
+	})
 	event := scriptEventDispatch{
 		mode: coroutine.BatchAsync,
-		lifecycle: func(coroutine.Thread, *eventSink) func() {
-			registered.Add(1)
-			return func() {
-				cleaned.Add(1)
-				close(cleanupDone)
-			}
-		},
 		run: func(coroutine.Thread, *eventSink) {
 			co.WaitMainThread(engineCall)
 			co.WaitMainThread(engineCall)
@@ -103,8 +108,8 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		platform.useCurrentAsMainThread()
-		event.withRegistrationBarrier(func() {
-			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: handler}}, event)
+		withEventRegistrationBarrier(func() {
+			dispatchMatchedScriptEventBatch([]eventSink{{Owner: "handler", Handler: handler}}, event)
 		})
 		close(producerReturned)
 		<-resumeEngine
@@ -160,9 +165,8 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	called := false
-	event := scriptEventDispatch{mode: coroutine.BatchAsync}
 	if !co.RunAfterAbortAll(time.Second, func() {
-		event.withRegistrationBarrier(func() { called = true })
+		withEventRegistrationBarrier(func() { called = true })
 	}) {
 		t.Fatal("shutdown barrier did not complete")
 	}

@@ -65,7 +65,7 @@ func (p *scriptEventRegistry) dispatchConditions() {
 			sink.Handler.(func())()
 		},
 	}
-	event.withRegistrationBarrier(func() {
+	withEventRegistrationBarrier(func() {
 		dispatchMatchedScriptEventBatch(sinks, event)
 	})
 }
