@@ -180,14 +180,16 @@ func (m *Manager) Play(
 }
 
 func (m *Manager) StopAll() {
-	m.path2id = make(map[string]int64)
-	m.obj2ids = make(map[engine.Object][]int64)
-	m.playbacks = make(map[int64]playbackInfo)
-	m.backend.StopAll()
+	clear(m.path2id)
+	clear(m.obj2ids)
+	clear(m.playbacks)
+	if m.backend != nil {
+		m.backend.StopAll()
+	}
 	for soundObj := range m.pendingDestroy {
 		m.backend.DestroyAudio(soundObj)
 	}
-	m.pendingDestroy = make(map[engine.Object]struct{})
+	clear(m.pendingDestroy)
 }
 
 func (m *Manager) Update() {

@@ -105,10 +105,15 @@ func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 }
 
 func (p *Game) ClearSoundEffects() {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.soundMgr.SetPan(soundObj, 0)
-		p.soundMgr.SetPitch(soundObj, 0)
-	})
+	p.withGameSound(p.clearSoundEffects)
+}
+
+func (p *Game) clearSoundEffects(soundObj engine.Object) {
+	if soundObj == 0 {
+		return
+	}
+	p.soundMgr.SetPan(soundObj, 0)
+	p.soundMgr.SetPitch(soundObj, 0)
 }
 
 func (p *Game) StopAllSounds() {
