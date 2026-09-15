@@ -58,8 +58,8 @@ var (
 )
 
 type implData struct {
-	Methods []clang.TypedefFunction
-	ClsName string
+	Methods   []clang.TypedefFunction
+	ClassName string
 }
 
 // Generator renders bindings using metadata owned by one generation task.
@@ -67,19 +67,19 @@ type Generator struct {
 	*common.GenerationContext
 }
 
-func (g *Generator) Generate(projectPath string) error {
+func (g *Generator) Generate(codegenDir string) error {
 	ast := g.AST()
 	generators := []struct {
 		name string
 		fn   func() error
 	}{
-		{"GDExtension wrapper header", func() error { return writeWrapperHeader(projectPath, ast) }},
-		{"GDExtension wrapper Go source", func() error { return writeWrapperGo(projectPath, ast) }},
-		{"GDExtension interface", func() error { return writeFFI(projectPath, ast) }},
-		{"manager wrapper", func() error { return g.writeManager(projectPath) }},
-		{"manager interface", func() error { return g.writeManagerInterface(projectPath) }},
-		{"synchronized API", func() error { return g.writeSyncAPI(projectPath) }},
-		{"pure synchronized API", func() error { return g.writePureSyncAPI(projectPath) }},
+		{"GDExtension wrapper header", func() error { return writeWrapperHeader(codegenDir, ast) }},
+		{"GDExtension wrapper Go source", func() error { return writeWrapperGo(codegenDir, ast) }},
+		{"GDExtension interface", func() error { return writeFFI(codegenDir, ast) }},
+		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
+		{"manager interface", func() error { return g.writeManagerInterface(codegenDir) }},
+		{"synchronized API", func() error { return g.writeSyncAPI(codegenDir) }},
+		{"pure synchronized API", func() error { return g.writePureSyncAPI(codegenDir) }},
 	}
 	for _, generator := range generators {
 		if err := generator.fn(); err != nil {
@@ -87,19 +87,13 @@ func (g *Generator) Generate(projectPath string) error {
 		}
 	}
 
-	clsNames := []string{"Sprite"}
-	for _, clsName := range clsNames {
-		if err := g.writeManagerImpl(projectPath, clsName); err != nil {
-			return fmt.Errorf("generate %s manager implementation: %w", clsName, err)
-		}
-		if err := g.writePureManagerImpl(projectPath, clsName); err != nil {
-			return fmt.Errorf("generate pure %s manager implementation: %w", clsName, err)
-		}
+	if err := g.writeManagerImpl(codegenDir, "Sprite"); err != nil {
+		return fmt.Errorf("generate Sprite manager implementation: %w", err)
 	}
 	return nil
 }
 
-func (g *Generator) writeManager(projectPath string) error {
+func (g *Generator) writeManager(codegenDir string) error {
 	funcs := template.FuncMap{
 		"camelCase":        strcase.ToCamel,
 		"isManagerMethod":  g.IsManagerMethod,
@@ -108,20 +102,20 @@ func (g *Generator) writeManager(projectPath string) error {
 	}
 
 	return common.GenerateFile(funcs, "manager_native.gen.go", managerNativeText, g.ManagerData(),
-		filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go"))
+		filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go"))
 }
 
-func (g *Generator) writeManagerInterface(projectPath string) error {
+func (g *Generator) writeManagerInterface(codegenDir string) error {
 	funcs := template.FuncMap{
 		"camelCase":           strcase.ToCamel,
 		"getManagerInterface": g.ManagerInterfaceSignature,
 	}
 
 	return common.GenerateFile(funcs, "interface.gen.go", interfaceGoFileText, g.ManagerData(),
-		filepath.Join(projectPath, common.EnginePkgRelDir, "interface.gen.go"))
+		filepath.Join(codegenDir, common.EnginePkgRelDir, "interface.gen.go"))
 }
 
-func (g *Generator) writeSyncAPI(projectPath string) error {
+func (g *Generator) writeSyncAPI(codegenDir string) error {
 	funcs := template.FuncMap{
 		"lowerCamelCase":         strcase.ToLowerCamel,
 		"camelCase":              strcase.ToCamel,
@@ -129,10 +123,10 @@ func (g *Generator) writeSyncAPI(projectPath string) error {
 	}
 
 	return common.GenerateFile(funcs, "sync.gen.go", syncAPIText, g.ManagerData(),
-		filepath.Join(projectPath, common.EnginewrapRelDir, "sync.gen.go"))
+		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync.gen.go"))
 }
 
-func (g *Generator) writePureSyncAPI(projectPath string) error {
+func (g *Generator) writePureSyncAPI(codegenDir string) error {
 	funcs := template.FuncMap{
 		"lowerCamelCase":             strcase.ToLowerCamel,
 		"camelCase":                  strcase.ToCamel,
@@ -140,51 +134,42 @@ func (g *Generator) writePureSyncAPI(projectPath string) error {
 	}
 
 	return common.GenerateFile(funcs, "sync_pure.gen.go", syncPureAPIText, g.ManagerData(),
-		filepath.Join(projectPath, common.EnginewrapRelDir, "sync_pure.gen.go"))
+		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync_pure.gen.go"))
 }
 
-func (g *Generator) writeManagerImpl(projectPath string, clsName string) error {
-	ast := g.AST()
-	funcs := template.FuncMap{
-		"getManagerImpl": g.getManagerImpl,
-	}
-
-	genFile := strings.ToLower(clsName) + ".gen.go"
-	methods := ast.CollectFunctionsOfClass(clsName)
+func (g *Generator) writeManagerImpl(codegenDir, className string) error {
+	methods := g.AST().CollectFunctionsOfClass(className)
 	slices.SortFunc(methods, func(a, b clang.TypedefFunction) int {
 		return strings.Compare(a.Name, b.Name)
 	})
-	data := implData{Methods: methods, ClsName: clsName}
-
-	return common.GenerateFile(funcs, genFile, implGoFileText, data,
-		filepath.Join(projectPath, common.EnginePkgRelDir, genFile))
-}
-
-func (g *Generator) writePureManagerImpl(projectPath string, clsName string) error {
-	ast := g.AST()
-	funcs := template.FuncMap{
-		"getManagerImplPure": g.getManagerImplPure,
+	data := implData{Methods: methods, ClassName: className}
+	variants := []struct {
+		suffix string
+		text   string
+		funcs  template.FuncMap
+	}{
+		{".gen.go", implGoFileText, template.FuncMap{"getManagerImpl": g.getManagerImpl}},
+		{"_pure.gen.go", implPureGoFileText, template.FuncMap{"getManagerImplPure": g.getManagerImplPure}},
 	}
-	methods := ast.CollectFunctionsOfClass(clsName)
-	slices.SortFunc(methods, func(a, b clang.TypedefFunction) int {
-		return strings.Compare(a.Name, b.Name)
-	})
-	data := implData{Methods: methods, ClsName: clsName}
-
-	genFile := strings.ToLower(clsName) + "_pure.gen.go"
-	return common.GenerateFile(funcs, genFile, implPureGoFileText, data,
-		filepath.Join(projectPath, common.EnginePkgRelDir, genFile))
+	for _, variant := range variants {
+		filename := strings.ToLower(className) + variant.suffix
+		if err := common.GenerateFile(variant.funcs, filename, variant.text, data,
+			filepath.Join(codegenDir, common.EnginePkgRelDir, filename)); err != nil {
+			return fmt.Errorf("generate %s: %w", filename, err)
+		}
+	}
+	return nil
 }
 
-func writeWrapperHeader(projectPath string, ast clang.CHeaderFileAST) error {
+func writeWrapperHeader(codegenDir string, ast clang.CHeaderFileAST) error {
 	output, err := common.RenderTemplate(nil, "ffi_wrapper.gen.h", ffiWrapperHeaderFileText, ast)
 	if err != nil {
 		return err
 	}
-	return common.WriteGeneratedFile(filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
+	return common.WriteGeneratedFile(filepath.Join(codegenDir, common.NativeRelDir, "ffi_wrapper.gen.h"), output, 0o666)
 }
 
-func writeWrapperGo(projectPath string, ast clang.CHeaderFileAST) error {
+func writeWrapperGo(codegenDir string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"goReturnType":       common.GoReturnType,
 		"goArgumentType":     common.GoArgumentType,
@@ -197,15 +182,15 @@ func writeWrapperGo(projectPath string, ast clang.CHeaderFileAST) error {
 	}
 
 	return common.GenerateFile(funcs, "ffi_wrapper.gen.go", ffiWrapperGoFileText, ast,
-		filepath.Join(projectPath, common.NativeRelDir, "ffi_wrapper.gen.go"))
+		filepath.Join(codegenDir, common.NativeRelDir, "ffi_wrapper.gen.go"))
 }
 
-func writeFFI(projectPath string, ast clang.CHeaderFileAST) error {
+func writeFFI(codegenDir string, ast clang.CHeaderFileAST) error {
 	funcs := template.FuncMap{
 		"trimPrefix":          strings.TrimPrefix,
 		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
 	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(projectPath, common.NativeRelDir, "ffi.gen.go"))
+		filepath.Join(codegenDir, common.NativeRelDir, "ffi.gen.go"))
 }

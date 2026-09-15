@@ -49,7 +49,7 @@ static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfo
 	SpxEngine::register_callbacks(callback_ptr);
 }
 
-{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
+{{- range $i, $f := $view.AST.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
 static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- range $j, $arg := $f.Arguments -}}
@@ -73,7 +73,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
-	{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions }}
+	{{- range $i, $f := $view.AST.CollectGDExtensionInterfaceFunctions }}
 	{{- if isManagerMethod $f }}
 	REGISTER_SPX_INTERFACE_FUNC({{ loadProcAddressName $f.Name }});
 	{{- end }}

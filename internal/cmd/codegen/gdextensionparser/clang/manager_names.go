@@ -48,7 +48,10 @@ func (m ManagerNames) resolveASCII(name string) string {
 }
 
 func (m ManagerNames) resolve(name string, isUpper func(rune) bool) string {
-	suffix := name[len("GDExtensionSpx"):]
+	suffix, ok := strings.CutPrefix(name, "GDExtensionSpx")
+	if !ok || len(suffix) < 2 {
+		return ""
+	}
 	lower := strings.ToLower(suffix)
 	for _, manager := range m.longestFirst {
 		if strings.HasPrefix(lower, manager) {

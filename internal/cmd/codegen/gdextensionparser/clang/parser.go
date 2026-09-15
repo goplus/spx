@@ -19,17 +19,10 @@ package clang
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
-)
-
-var (
-	legacyGDExtensionInterfaceFunctionNames = []string{
-		"GDExtensionInterfaceFunctionPtr",
-	}
 )
 
 type CHeaderFileAST struct {
@@ -56,12 +49,12 @@ type EnumValue struct {
 }
 
 type TypedefAlias struct {
-	Type PrimativeType `parser:" 'typedef' @@ "`
+	Type PrimitiveType `parser:" 'typedef' @@ "`
 	Name string        `parser:" @Ident       " json:",omitempty"`
 }
 
 type TypedefFunction struct {
-	ReturnType PrimativeType `parser:" 'typedef' @@                "`
+	ReturnType PrimitiveType `parser:" 'typedef' @@                "`
 	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
 }
@@ -77,17 +70,18 @@ type StructField struct {
 }
 
 type StructVariable struct {
-	Type PrimativeType `parser:" @@     "`
+	Type PrimitiveType `parser:" @@     "`
 	Name string        `parser:" @Ident " json:",omitempty"`
 }
 
 type FunctionType struct {
-	ReturnType PrimativeType `parser:" @@                          "`
+	ReturnType PrimitiveType `parser:" @@                          "`
 	Name       string        `parser:" '(' '*' @Ident ')'          " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' ( @@ ( ',' @@ )* )? ')' " json:",omitempty"`
 }
 
-type PrimativeType struct {
+// PrimitiveType describes a named C type with optional const and pointer qualifiers.
+type PrimitiveType struct {
 	IsConst   bool   `parser:" @'const'? " json:",omitempty"`
 	Name      string `parser:" @Ident    " json:",omitempty"`
 	IsPointer bool   `parser:" @'*'?     " json:",omitempty"`
@@ -95,11 +89,11 @@ type PrimativeType struct {
 
 type Type struct {
 	Function  *FunctionType  `parser:" ( @@   " json:",omitempty"`
-	Primative *PrimativeType `parser:" | @@ ) " json:",omitempty"`
+	Primitive *PrimitiveType `parser:" | @@ ) " json:",omitempty"`
 }
 
 type StructFunction struct {
-	ReturnType PrimativeType `parser:" @@                     "`
+	ReturnType PrimitiveType `parser:" @@                     "`
 	Name       string        `parser:" '(' '*' @Ident ')'     " json:",omitempty"`
 	Arguments  []Argument    `parser:" '(' @@ ( ',' @@ )* ')' " json:",omitempty"`
 	Comment    string        `parser:" @Comment?              " json:",omitempty"`
@@ -121,7 +115,7 @@ func (a CHeaderFileAST) FindVariantEnumType() *TypedefEnum {
 }
 
 func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
-	// there's a duplicate of GDExtensionClassGetPropertyList
+	// Included headers may repeat typedefs, such as GDExtensionClassGetPropertyList.
 	distinct := map[string]struct{}{}
 	fns := make([]TypedefFunction, 0, len(a.Expr))
 
@@ -136,101 +130,57 @@ func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 	return fns
 }
 
-func (a CHeaderFileAST) CollectFunctionsOfClass(className string) []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	prefix := "GDExtensionSpx" + className
-	for _, fn := range allFns {
-		if strings.HasPrefix(fn.Name, prefix) &&
-			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!strings.HasPrefix(fn.Name, "GDExtensionSpxGlobal") &&
-			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
-			fns = append(fns, fn)
+// filterFunctions preserves declaration order and the deduplication in CollectFunctions.
+func (a CHeaderFileAST) filterFunctions(include func(TypedefFunction) bool) []TypedefFunction {
+	functions := a.CollectFunctions()
+	filtered := make([]TypedefFunction, 0, len(functions))
+	for _, function := range functions {
+		if include(function) {
+			filtered = append(filtered, function)
 		}
 	}
+	return filtered
+}
 
-	return fns
+func isInterfaceFunction(function TypedefFunction) bool {
+	return strings.HasPrefix(function.Name, "GDExtensionSpx") &&
+		!strings.HasPrefix(function.Name, "GDExtensionSpxCallback") &&
+		!strings.HasPrefix(function.Name, "GDExtensionSpxGlobal")
+}
+
+func (a CHeaderFileAST) CollectFunctionsOfClass(className string) []TypedefFunction {
+	return a.filterFunctions(func(function TypedefFunction) bool {
+		return isInterfaceFunction(function) && strings.HasPrefix(function.Name, "GDExtensionSpx"+className)
+	})
 }
 
 func (a CHeaderFileAST) CollectGDExtensionManagerFunctions(managerName string, managerNames ManagerNames) []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	for _, fn := range allFns {
-		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&
-			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
-			actualManager := managerNames.resolveASCII(fn.Name)
-			if actualManager == managerName {
-				fns = append(fns, fn)
-			}
-		}
-	}
-
-	return fns
+	return a.filterFunctions(func(function TypedefFunction) bool {
+		// Global functions remain available when explicitly requesting their manager.
+		return strings.HasPrefix(function.Name, "GDExtensionSpx") &&
+			!strings.HasPrefix(function.Name, "GDExtensionSpxCallback") &&
+			managerNames.resolveASCII(function.Name) == managerName
+	})
 }
 
 func (a CHeaderFileAST) CollectGDExtensionInterfaceFunctions() []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	for _, fn := range allFns {
-		if strings.HasPrefix(fn.Name, "GDExtensionSpx") &&
-			!strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!strings.HasPrefix(fn.Name, "GDExtensionSpxGlobal") &&
-			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
-			fns = append(fns, fn)
-		}
-	}
-
-	return fns
+	return a.filterFunctions(isInterfaceFunction)
 }
 
 func (a CHeaderFileAST) CollectGDExtensionISpriteFunctions() []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	for _, fn := range allFns {
-		if strings.HasPrefix(fn.Name, "GDExtensionSpxSprite") &&
-			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
-			fns = append(fns, fn)
-		}
-	}
-
-	return fns
+	return a.CollectFunctionsOfClass("Sprite")
 }
 
 func (a CHeaderFileAST) CollectGDExtensionICallbackFunctions() []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	for _, fn := range allFns {
-		if strings.HasPrefix(fn.Name, "GDExtensionSpxCallback") &&
-			!slices.Contains(legacyGDExtensionInterfaceFunctionNames, fn.Name) {
-			fns = append(fns, fn)
-		}
-	}
-	return fns
+	return a.filterFunctions(func(function TypedefFunction) bool {
+		return strings.HasPrefix(function.Name, "GDExtensionSpxCallback")
+	})
 }
 
 func (a CHeaderFileAST) CollectNonGDExtensionInterfaceFunctions() []TypedefFunction {
-	allFns := a.CollectFunctions()
-
-	fns := make([]TypedefFunction, 0, len(allFns))
-
-	for _, fn := range allFns {
-		if !strings.HasPrefix(fn.Name, "GDExtensionSpx") {
-			fns = append(fns, fn)
-		}
-	}
-
-	return fns
+	return a.filterFunctions(func(function TypedefFunction) bool {
+		return !strings.HasPrefix(function.Name, "GDExtensionSpx")
+	})
 }
 
 func (a CHeaderFileAST) CollectStructs() []TypedefStruct {
@@ -283,13 +233,13 @@ func (t FunctionType) CStyleString() string {
 		if i > 0 {
 			sb.WriteString(",")
 		}
-		sb.WriteString(t.Arguments[i].Type.Primative.CStyleString())
+		sb.WriteString(t.Arguments[i].Type.CStyleString())
 	}
 	sb.WriteString(")")
 	return sb.String()
 }
 
-func (t PrimativeType) CStyleString() string {
+func (t PrimitiveType) CStyleString() string {
 	sb := strings.Builder{}
 
 	if t.IsConst {
@@ -306,8 +256,8 @@ func (t PrimativeType) CStyleString() string {
 }
 
 func (t Type) CStyleString() string {
-	if t.Primative != nil {
-		return t.Primative.CStyleString()
+	if t.Primitive != nil {
+		return t.Primitive.CStyleString()
 	} else if t.Function != nil {
 		return t.Function.CStyleString()
 	}
@@ -319,12 +269,12 @@ func (a Argument) IsPinnable() bool {
 	switch {
 	case a.Type.Function != nil:
 		return false
-	case a.Type.Primative != nil:
-		switch a.Type.Primative.Name {
+	case a.Type.Primitive != nil:
+		switch a.Type.Primitive.Name {
 		case "char":
 			return false
 		default:
-			return a.Type.Primative.IsPointer
+			return a.Type.Primitive.IsPointer
 		}
 	}
 
@@ -345,14 +295,7 @@ func (a Argument) ResolvedPtrName(i int) string {
 	if a.Type.Function != nil && a.Type.Function.Name != "" {
 		return a.Type.Function.Name
 	}
-	retStr := ""
-	if a.Name != "" {
-		retStr = a.Name
-	} else {
-		retStr = fmt.Sprintf("arg_%d", i)
-	}
-	retStr = "*" + retStr
-	return retStr
+	return "*" + a.ResolvedName(i)
 }
 
 func (a Argument) CStyleString(i int) string {

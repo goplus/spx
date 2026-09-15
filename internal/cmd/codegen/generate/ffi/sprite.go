@@ -24,15 +24,15 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
-func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName string) string {
+func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, className string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
-	lowcaseMgr := g.GetManagerName(function.Name)
-	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
+	lowerManagerName := g.GetManagerName(function.Name)
+	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
 	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
-	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
+	fmt.Fprintf(&sb, "func (pself *%s) %s(", className, funcName)
 	wroteArg := false
 	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
@@ -63,18 +63,18 @@ func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, clsName 
 	return sb.String()
 }
 
-func (g *Generator) getManagerImpl(function *clang.TypedefFunction, clsName string) string {
+func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string) string {
 	prefix := "GDExtensionSpx"
 	sb := strings.Builder{}
-	lowcaseMgr := g.GetManagerName(function.Name)
-	mgrName := string(unicode.ToUpper(rune(lowcaseMgr[0]))) + lowcaseMgr[1:]
+	lowerManagerName := g.GetManagerName(function.Name)
+	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
 	funcName := function.Name[len(prefix)+len(mgrName):]
 	args := g.Parameters(function)
 	retType := g.EffectiveGoReturnType(function)
 
 	hasObjArg := len(args) > 0 && args[0].Name == "obj" && args[0].Buffer == nil
 
-	fmt.Fprintf(&sb, "func (pself *%s) %s(", clsName, funcName)
+	fmt.Fprintf(&sb, "func (pself *%s) %s(", className, funcName)
 	wroteArg := false
 	for i, arg := range args {
 		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {

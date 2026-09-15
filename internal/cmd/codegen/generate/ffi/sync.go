@@ -43,7 +43,7 @@ func (g *Generator) syncSignature(function *clang.TypedefFunction) string {
 	var params []string
 	for _, param := range g.Parameters(function) {
 		if !param.IsLength {
-			params = append(params, param.Name+" "+param.GdxType(function.Name))
+			params = append(params, param.Name+" "+param.GDXType(function.Name))
 		}
 	}
 	signature := fmt.Sprintf("func (*%sMgrImpl) %s(%s)", strcase.ToLowerCamel(mgrName), methodName, strings.Join(params, ", "))
@@ -73,7 +73,8 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 		}
 	}
 
-	sb.WriteString(g.syncSignature(function) + " {")
+	sb.WriteString(g.syncSignature(function))
+	sb.WriteString(" {")
 	if returnType != "" {
 		fmt.Fprintf(&sb, "\n\tvar _ret1 %s", returnType)
 	}

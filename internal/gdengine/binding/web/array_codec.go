@@ -1,3 +1,5 @@
+//go:build js && wasm
+
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *

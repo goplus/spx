@@ -87,32 +87,25 @@ func TestValidateCodegenInputsRejectsInvalidDirectories(t *testing.T) {
 }
 
 func TestGenerateCodeValidatesBeforeWriting(t *testing.T) {
-	oldPackagePath := packagePath
-	oldSPXModulePath := spxModulePath
-	t.Cleanup(func() {
-		packagePath = oldPackagePath
-		spxModulePath = oldSPXModulePath
-	})
-
-	packagePath = t.TempDir()
-	sentinelPath := filepath.Join(packagePath, "sentinel")
-	writeCodegenFixtureFile(t, packagePath, filepath.Base(sentinelPath))
+	codegenDir := t.TempDir()
+	sentinelPath := filepath.Join(codegenDir, "sentinel")
+	writeCodegenFixtureFile(t, codegenDir, filepath.Base(sentinelPath))
 	sentinelBefore, err := os.ReadFile(sentinelPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := os.ReadDir(packagePath)
+	before, err := os.ReadDir(codegenDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	spxModulePath = filepath.Join(t.TempDir(), "missing-module")
-	if err := generateCode(); err == nil {
+	spxModulePath := filepath.Join(t.TempDir(), "missing-module")
+	if err := generateCode(codegenConfig{codegenDir: codegenDir, spxModulePath: spxModulePath}); err == nil {
 		t.Fatal("generateCode() error = nil, want invalid input error")
 	}
 	if _, err := os.Stat(spxModulePath); !os.IsNotExist(err) {
 		t.Fatalf("invalid module path was modified: %v", err)
 	}
-	after, err := os.ReadDir(packagePath)
+	after, err := os.ReadDir(codegenDir)
 	if err != nil {
 		t.Fatal(err)
 	}

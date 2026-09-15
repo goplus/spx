@@ -48,7 +48,7 @@
 {{- end }}
 
 extern "C" {
-{{- range $i, $f := $view.Ast.CollectGDExtensionInterfaceFunctions -}}
+{{- range $i, $f := $view.AST.CollectGDExtensionInterfaceFunctions -}}
 {{- if isManagerMethod $f }}
 EMSCRIPTEN_KEEPALIVE
 void gd{{ loadProcAddressName $f.Name }}(

@@ -48,7 +48,7 @@ func Call{{ trimPrefix $f.Name "GDExtensionSpx" }}(
 		{{ $arg.Type.Function.Name -}}
 		{{ else -}}
 		inArg{{ add $j 1 -}}
-		{{ end }} {{ if $arg.Type.Primative }}{{ goArgumentType $arg.Type.Primative $arg.Name }}{{ else }} unsafe.Pointer{{ end }},
+		{{ end }} {{ if $arg.Type.Primitive }}{{ goArgumentType $arg.Type.Primitive $arg.Name }}{{ else }} unsafe.Pointer{{ end }},
 	{{ end -}}
 ) {{ $rt }} {
 	arg0 := (C.{{ $f.Name }})(api.{{ trimPrefix $f.Name "GDExtension" }})

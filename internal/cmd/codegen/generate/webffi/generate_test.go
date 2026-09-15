@@ -34,7 +34,7 @@ func TestWriteEngineJSTrimsTrailingWhitespace(t *testing.T) {
 
 	function := &clang.TypedefFunction{
 		Name:       "GDExtensionSpxTestDoThing",
-		ReturnType: clang.PrimativeType{Name: "void"},
+		ReturnType: clang.PrimitiveType{Name: "void"},
 	}
 	ast := clang.CHeaderFileAST{
 		Expr: []clang.Expr{{Function: function}},
@@ -59,14 +59,14 @@ func TestJSFunctionArgsFlattensGdObj(t *testing.T) {
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdObj"},
+					Primitive: &clang.PrimitiveType{Name: "GdObj"},
 				},
 			},
 		},
@@ -93,13 +93,13 @@ func TestJSFunctionArgsSkipsArrayLengthArgument(t *testing.T) {
 			{
 				Name: "buffer_data",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "float", IsPointer: true},
+					Primitive: &clang.PrimitiveType{Name: "float", IsPointer: true},
 				},
 			},
 			{
 				Name: "len",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "int"},
+					Primitive: &clang.PrimitiveType{Name: "int"},
 				},
 			},
 		},
@@ -113,14 +113,14 @@ func TestJSFunctionBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdObj"},
+					Primitive: &clang.PrimitiveType{Name: "GdObj"},
 				},
 			},
 		},
@@ -135,14 +135,14 @@ func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
 
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
-		ReturnType: clang.PrimativeType{
+		ReturnType: clang.PrimitiveType{
 			Name: "GdInt",
 		},
 		Arguments: []clang.Argument{
 			{
 				Name: "obj",
 				Type: clang.Type{
-					Primative: &clang.PrimativeType{Name: "GdObj"},
+					Primitive: &clang.PrimitiveType{Name: "GdObj"},
 				},
 			},
 		},

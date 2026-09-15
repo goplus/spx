@@ -54,10 +54,10 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 		)},
 	}}
 
-	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, metadata)}
-	require.NoError(t, generation.writeManager(projectPath))
-	generatedPath := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
+	require.NoError(t, generation.writeManager(codegenDir))
+	generatedPath := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	generated, err := os.ReadFile(generatedPath)
 	require.NoError(t, err)
 
@@ -92,9 +92,9 @@ public:
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleWriteValues)(float *out);")
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
-	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeManager(projectPath))
-	path := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.writeManager(codegenDir))
+	path := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
 	method := generatedMethod(t, path, output, "WriteValues")
@@ -117,9 +117,9 @@ public:
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(" + params + ");")
 	require.NoError(t, err)
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
-	projectPath := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeManager(projectPath))
-	path := filepath.Join(projectPath, common.GdengineImplRelDir, "manager_native.gen.go")
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.writeManager(codegenDir))
+	path := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
 	method := generatedMethod(t, path, output, "Collect")
@@ -204,7 +204,7 @@ public:
 func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
 	return &clang.TypedefFunction{
 		Name:       name,
-		ReturnType: clang.PrimativeType{Name: returnType},
+		ReturnType: clang.PrimitiveType{Name: returnType},
 		Arguments:  arguments,
 	}
 }
@@ -212,7 +212,7 @@ func managerFunction(name, returnType string, arguments ...clang.Argument) *clan
 func managerArgument(name, typeName string) clang.Argument {
 	return clang.Argument{
 		Name: name,
-		Type: clang.Type{Primative: &clang.PrimativeType{Name: typeName}},
+		Type: clang.Type{Primitive: &clang.PrimitiveType{Name: typeName}},
 	}
 }
 

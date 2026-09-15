@@ -41,7 +41,7 @@ func (c *GenerationContext) EffectiveRawReturnType(function *clang.TypedefFuncti
 	}
 	if result, ok := c.returnParameters[function.Name]; ok {
 		args := function.Arguments
-		if len(args) == 0 || args[len(args)-1].Name != result.Name || args[len(args)-1].Type.Primative == nil || !args[len(args)-1].Type.Primative.IsPointer || args[len(args)-1].Type.Primative.Name != result.CType {
+		if len(args) == 0 || args[len(args)-1].Name != result.Name || args[len(args)-1].Type.Primitive == nil || !args[len(args)-1].Type.Primitive.IsPointer || args[len(args)-1].Type.Primitive.Name != result.CType {
 			panic("invalid synthetic return parameter in " + function.Name)
 		}
 		return result.CType
@@ -62,7 +62,7 @@ func (c *GenerationContext) HasEffectiveReturn(function *clang.TypedefFunction) 
 }
 
 func (c *GenerationContext) MustGoTypeForCType(typeName string, functionName string) string {
-	goType := c.cppType2Go[typeName]
+	goType := c.goTypes[typeName]
 	if goType != "" {
 		return goType
 	}
@@ -76,8 +76,8 @@ func (c *GenerationContext) HasOutputStatus(function *clang.TypedefFunction) boo
 }
 
 func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
-	if arg.Type.Primative != nil {
-		return arg.Type.Primative.Name
+	if arg.Type.Primitive != nil {
+		return arg.Type.Primitive.Name
 	}
 	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
 }

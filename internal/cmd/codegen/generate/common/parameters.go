@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package common
 
 import (
@@ -49,7 +65,7 @@ func (p Parameter) LengthName(prefix string) string {
 }
 
 func (p Parameter) DirectScalar() bool {
-	primitive := p.Argument.Type.Primative
+	primitive := p.Argument.Type.Primitive
 	return primitive != nil && !primitive.IsPointer && directScalarTypes[primitive.Name] != ""
 }
 
@@ -60,7 +76,7 @@ func (p Parameter) MustGoType(functionName string) string {
 	panic(fmt.Sprintf("no Go mapping for C type %q in function %s", MustPrimitiveTypeName(p.Argument, functionName), functionName))
 }
 
-func (p Parameter) GdxType(functionName string) string {
+func (p Parameter) GDXType(functionName string) string {
 	switch goType := p.MustGoType(functionName); goType {
 	case "Object", "Array":
 		return "gdx." + goType
@@ -106,8 +122,8 @@ func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) (
 		}
 		if param.Buffer != nil {
 			param.GoType = param.Buffer.GoType()
-		} else if arg.Type.Primative != nil {
-			param.GoType = c.cppType2Go[arg.Type.Primative.Name]
+		} else if arg.Type.Primitive != nil {
+			param.GoType = c.goTypes[arg.Type.Primitive.Name]
 		}
 		params = append(params, param)
 		names[arg.Name] = param

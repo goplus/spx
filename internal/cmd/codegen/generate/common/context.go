@@ -25,6 +25,7 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
+// WebBindingMode selects the JavaScript implementation of an annotated method.
 type WebBindingMode string
 
 const (
@@ -49,7 +50,7 @@ type GenerationContext struct {
 	managerSet       map[string]bool
 	managers         []string
 	managerNames     clang.ManagerNames
-	cppType2Go       map[string]string
+	goTypes          map[string]string
 	arrayBridges     map[string]ArrayBridge
 	webBindings      map[string]WebBindingMode
 	returnParameters map[string]CParam
@@ -57,8 +58,9 @@ type GenerationContext struct {
 	parameterNames   map[string]map[string]Parameter
 }
 
+// ManagerData is the template view of declarations and their manager names.
 type ManagerData struct {
-	Ast          clang.CHeaderFileAST
+	AST          clang.CHeaderFileAST
 	Managers     []string
 	ManagerNames clang.ManagerNames
 }
@@ -67,7 +69,7 @@ type ManagerData struct {
 func (c *GenerationContext) AST() clang.CHeaderFileAST { return c.ast }
 
 func (c *GenerationContext) ManagerData() ManagerData {
-	return ManagerData{Ast: c.ast, Managers: slices.Clone(c.managers), ManagerNames: c.managerNames}
+	return ManagerData{AST: c.ast, Managers: slices.Clone(c.managers), ManagerNames: c.managerNames}
 }
 
 func (c *GenerationContext) GetManagerName(name string) string {
@@ -123,14 +125,14 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 		returnParameters: maps.Clone(metadata.ReturnParameters),
 		parameters:       make(map[string][]Parameter),
 		parameterNames:   make(map[string]map[string]Parameter),
-		cppType2Go: map[string]string{
+		goTypes: map[string]string{
 			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
 			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
 			"GdRect2": "Rect2", "GdString": "string", "GdBool": "bool",
 			"GdColor": "Color", "GdArray": "Array",
 		},
 	}
-	maps.Copy(c.cppType2Go, directScalarTypes)
+	maps.Copy(c.goTypes, directScalarTypes)
 	for name, spec := range metadata.ArrayBridges {
 		c.arrayBridges[name] = spec.Clone()
 	}

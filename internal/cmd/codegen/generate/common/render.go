@@ -32,8 +32,8 @@ import (
 
 const (
 	NativeRelDir       = "../../gdengine/binding/native"
-	GdengineImplRelDir = "../../gdengine/impl"
-	EnginewrapRelDir   = "../../enginewrap"
+	GDEngineImplRelDir = "../../gdengine/impl"
+	EngineWrapRelDir   = "../../enginewrap"
 	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
 )
 

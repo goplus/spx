@@ -17,8 +17,6 @@
 package gdext
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,7 +26,6 @@ import (
 	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
-	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
 	"github.com/iancoleman/strcase"
 )
 
@@ -120,82 +117,62 @@ func mergeManagerHeader(dir string) (string, error) {
 	builder.WriteString("#include \"gdextension_spx_mgr_pre_define.h\"\n")
 
 	for _, file := range files {
-		if strings.Contains(file, "spx_base_mgr.h") || strings.Contains(file, "spx_object_mgr.h") {
+		switch filepath.Base(file) {
+		case "spx_base_mgr.h", "spx_object_mgr.h":
 			continue
 		}
-
-		f, err := os.Open(file)
+		source, err := os.ReadFile(file)
 		if err != nil {
-			return "", fmt.Errorf("open SPX manager header %q: %w", file, err)
+			return "", fmt.Errorf("read SPX manager header %q: %w", file, err)
 		}
-
-		var buffer bytes.Buffer
-		scanner := bufio.NewScanner(f)
-		className := ""
-		inPublicSection := false
-
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") || strings.HasPrefix(line, "*/") {
-				continue
-			}
-			if strings.HasPrefix(line, "};") {
-				continue
-			}
-			// Skip inline function definitions (lines with both { and })
-			if strings.Contains(line, "{") && strings.Contains(line, "}") {
-				continue
-			}
-
-			if className == "" {
-				match := reClassDefinition.FindStringSubmatch(line)
-				if len(match) > 0 {
-					className = match[1]
-				} else {
-					continue
-				}
-			}
-
-			if strings.HasPrefix(line, "public:") {
-				inPublicSection = true
-				buffer.Reset()
-				buffer.WriteString("public:\n")
-				continue
-			}
-
-			if inPublicSection {
-				fmt.Fprintf(&buffer, "\t%s\n", line)
-			}
-		}
-
-		if className != "" {
-			fmt.Fprintf(&builder, "class %s {\n", className)
-			builder.WriteString(buffer.String())
-			builder.WriteString("\n};\n\n")
-		}
-
-		scanErr := scanner.Err()
-		closeErr := f.Close()
-		if scanErr != nil {
-			return "", fmt.Errorf("read SPX manager header %q: %w", file, scanErr)
-		}
-		if closeErr != nil {
-			return "", fmt.Errorf("close SPX manager header %q: %w", file, closeErr)
-		}
+		appendPublicDeclarations(&builder, string(source))
 	}
 
 	return builder.String(), nil
 }
 
-// normalizeParams ensures proper spacing in parameter lists
+// appendPublicDeclarations collects all public sections of each manager class.
+// Manager exports use one declaration per line; inline definitions are omitted.
+func appendPublicDeclarations(builder *strings.Builder, source string) {
+	inClass, inPublicSection := false, false
+	for line := range strings.SplitSeq(source, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") {
+			continue
+		}
+		if strings.Contains(line, "{") && strings.Contains(line, "}") {
+			continue
+		}
+		if !inClass {
+			if match := reClassDefinition.FindStringSubmatch(line); match != nil {
+				fmt.Fprintf(builder, "class %s {\npublic:\n", match[1])
+				inClass = true
+			}
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "};"):
+			builder.WriteString("\n};\n\n")
+			inClass, inPublicSection = false, false
+		case strings.HasPrefix(line, "public:"):
+			inPublicSection = true
+		case strings.HasPrefix(line, "private:"), strings.HasPrefix(line, "protected:"):
+			inPublicSection = false
+		case inPublicSection:
+			fmt.Fprintf(builder, "\t%s\n", line)
+		}
+	}
+}
+
+// normalizeParams normalizes whitespace around parameter separators.
 func normalizeParams(params string) string {
 	if params == "" {
 		return params
 	}
-	// Remove trailing spaces before commas and closing paren
+	// Remove whitespace before commas and closing parentheses.
 	params = reSpaceComma.ReplaceAllString(params, ",")
 	params = reSpaceParen.ReplaceAllString(params, ")")
-	// Ensure single space after commas
+	// Use one space after each comma.
 	params = reCommaSpace.ReplaceAllString(params, ", ")
 	return strings.TrimSpace(params)
 }
@@ -206,12 +183,11 @@ func parseManagerHeader(input string) *headerCollector {
 		WebBindings:      make(map[string]common.WebBindingMode),
 		ReturnParameters: make(map[string]common.CParam),
 	}}
-	scanner := bufio.NewScanner(strings.NewReader(input))
 	var currentClassName string
 	var pendingBinding *bindingOptions
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	for line := range strings.SplitSeq(input, "\n") {
+		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
@@ -279,10 +255,6 @@ func parseManagerHeader(input string) *headerCollector {
 			}
 			g.methods = append(g.methods, methodDecl)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		spxlog.Error("Error reading string: %v", err)
 	}
 
 	if pendingBinding != nil {

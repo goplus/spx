@@ -83,10 +83,10 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 
 	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
-		ReturnType: clang.PrimativeType{Name: "void"},
+		ReturnType: clang.PrimitiveType{Name: "void"},
 		Name:       "GDExtensionSpxResFreeStr",
 		Arguments: []clang.Argument{{
-			Type: clang.Type{Primative: &clang.PrimativeType{Name: "GdString"}},
+			Type: clang.Type{Primitive: &clang.PrimitiveType{Name: "GdString"}},
 			Name: "str",
 		}},
 	}}}}
@@ -106,10 +106,10 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 
 	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
-		ReturnType: clang.PrimativeType{Name: "GdString"},
+		ReturnType: clang.PrimitiveType{Name: "GdString"},
 		Name:       "GDExtensionSpxResReadAllText",
 		Arguments: []clang.Argument{{
-			Type: clang.Type{Primative: &clang.PrimativeType{Name: "GdString"}},
+			Type: clang.Type{Primitive: &clang.PrimitiveType{Name: "GdString"}},
 			Name: "p_path",
 		}},
 	}}}}
@@ -131,10 +131,10 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 
 	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
-		ReturnType: clang.PrimativeType{Name: "GdArray"},
+		ReturnType: clang.PrimitiveType{Name: "GdArray"},
 		Name:       "GDExtensionSpxPhysicsRaycastWithDetails",
 		Arguments: []clang.Argument{{
-			Type: clang.Type{Primative: &clang.PrimativeType{Name: "GdArray"}},
+			Type: clang.Type{Primitive: &clang.PrimitiveType{Name: "GdArray"}},
 			Name: "ignore_sprites",
 		}},
 	}}}}
@@ -534,4 +534,50 @@ func TestOutputOnlyRejectsAmbiguousDeclarations(t *testing.T) {
 	} {
 		require.Panics(t, func() { parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};") }, declaration)
 	}
+}
+
+func TestPrepareHeadersPreservesPublicSectionsAndClassBoundaries(t *testing.T) {
+	dir := t.TempDir()
+	source := `class SpxExampleMgr : public SpxBaseMgr {
+ SPX_API void default_private();
+public:
+ SPX_API void first();
+private:
+ SPX_API void hidden();
+protected:
+ SPX_API void protected_method();
+public:
+ SPX_API void second();
+};
+class SpxOtherMgr : public SpxBaseMgr {
+ SPX_API void other_private();
+public:
+ SPX_API void third();
+};`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
+	headers, err := PrepareHeaders(dir)
+	require.NoError(t, err)
+	for _, name := range []string{"SpxExampleFirst", "SpxExampleSecond", "SpxOtherThird"} {
+		require.Contains(t, headers.Raw, "GDExtension"+name)
+		require.Contains(t, headers.Standard, "GDExtension"+name)
+	}
+	for _, name := range []string{"DefaultPrivate", "Hidden", "ProtectedMethod", "OtherPrivate", "SpxExampleThird"} {
+		require.NotContains(t, headers.Raw, name)
+	}
+	require.Equal(t, []string{"example", "other"}, headers.Metadata.ManagerNames)
+}
+
+func TestPrepareHeadersDoesNotTruncateLongLines(t *testing.T) {
+	dir := t.TempDir()
+	source := "class SpxExampleMgr : public SpxBaseMgr {\npublic:\n" +
+		"// " + strings.Repeat("long comment ", 10000) + "\n" +
+		"SPX_API void first(" + strings.Repeat(" ", 70000) + ");\nSPX_API void second();\n};"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
+	headers, err := PrepareHeaders(dir)
+	require.NoError(t, err)
+	require.Contains(t, headers.Raw, "GDExtensionSpxExampleFirst")
+	require.Contains(t, headers.Raw, "GDExtensionSpxExampleSecond")
+	// Exercise the in-memory parser separately: it must not silently return a partial AST.
+	parsed := parseManagerHeader(source)
+	require.Contains(t, parsed.render(true), "GDExtensionSpxExampleSecond")
 }
