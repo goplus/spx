@@ -167,55 +167,6 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 	))
 }
 
-// Stop stops scripts selected by kind. The explicit receiver enables generated
-// direct-call adapters for interpreted scripts.
-func (p *Game) Stop(kind StopKind) {
-	p.scriptEventBindings.Stop(kind)
-}
-
-// Stop stops scripts selected by kind.
-func (p *SpriteImpl) Stop(kind StopKind) {
-	p.scriptEventBindings.Stop(kind)
-}
-
-func (p *scriptEventBindings) Stop(kind StopKind) {
-	// Read the receiver before the fast path to preserve nil-receiver behavior.
-	owner := p.pthis
-	if kind == ThisScript {
-		// This signal is scoped by Procedure and never filters other threads.
-		gco.AbortThisScript()
-		return
-	}
-	if kind == AllStop {
-		p.scriptEventRegistry.stopAllEpoch.Add(1)
-		if game := activeGame(); game != nil {
-			game.resetGraphicEffectsOnStopAll()
-		}
-	}
-
-	var current coroutine.Thread
-	if gco.IsInCoroutine() {
-		current = gco.Current()
-	}
-	filter, abort := coreevent.ResolveStop(
-		kind,
-		owner,
-		func(obj any) bool { return isSprite(obj) },
-		func(obj any) bool { return isGame(obj) },
-	)
-	if filter != nil {
-		gco.StopIf(func(th coroutine.Thread) bool {
-			if !filter(th.Obj, th == current) {
-				return false
-			}
-			return kind != AllStop || !p.scriptEventRegistry.isPendingStartThread(th)
-		})
-	}
-	if abort {
-		gco.Abort()
-	}
-}
-
 // Message Broadcast
 func (p *Game) Broadcast__0(msg MsgName) {
 	p.doBroadcast(msg, nil, false)
@@ -261,7 +212,7 @@ func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj)
 	p.pthis = this
 }
 
-func (p *scriptEventBindings) doDeleteClone() {
+func (p *scriptEventBindings) clearHandlers() {
 	p.scriptEventRegistry.manager.DeleteOwner(p.pthis)
 }
 
@@ -294,21 +245,6 @@ func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), 
 		&messageEventHandler{run: handler},
 		cond...,
 	))
-}
-
-// Scratch clears graphic effects for the stage and every sprite when a
-// project-wide stop is triggered, including the `stop all` control block.
-func (p *Game) resetGraphicEffectsOnStopAll() {
-	p.baseObj.clearGraphicEffects()
-
-	shapes := append([]Shape(nil), p.getAllShapes()...)
-	for _, item := range shapes {
-		sprite, ok := item.(*SpriteImpl)
-		if !ok {
-			continue
-		}
-		sprite.clearGraphicEffects()
-	}
 }
 
 func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {

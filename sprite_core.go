@@ -87,9 +87,8 @@ func (p *SpriteImpl) Destroy() {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Destroy: %s", p.name)
 	}
-	p.teardown()
+	p.destroy()
 	p.Stop(ThisSprite)
-	p.markDestroyed()
 	p.abortIfCurrentCoroutine()
 }
 
@@ -186,17 +185,22 @@ func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
 	p.AnimateAndWait(animName)
 }
 
-func (p *SpriteImpl) teardown() {
+// destroy releases resources without stopping scripts.
+func (p *SpriteImpl) destroy() {
+	if p.isDestroyed() {
+		return
+	}
 	if bubble := p.components.bubble; bubble != nil {
 		bubble.stopAll()
 	}
 	p.setVisible(false)
-	p.doDeleteClone()
+	p.clearHandlers()
 	p.components.destroyComponents()
 	p.g.removeShape(p)
 	if syncSprite := p.runtimeState.SyncSprite; syncSprite != nil {
 		p.g.inputMgr.removeClickTarget(syncSprite.GetId())
 	}
+	p.markDestroyed()
 }
 
 func (p *SpriteImpl) abortIfCurrentCoroutine() {

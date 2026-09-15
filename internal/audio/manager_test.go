@@ -527,3 +527,34 @@ func assertManagerNoTracking(t *testing.T, mgr *Manager) {
 func almostEqual(got, want float64) bool {
 	return math.Abs(got-want) < 1e-9
 }
+
+func TestManagerStopAllBeforeInitialization(t *testing.T) {
+	var mgr Manager
+	mgr.StopAll()
+	mgr.StopAll()
+	backend := &fakeBackend{}
+	mgr.Init(backend)
+	id := mgr.Play(13, "sound.wav", false, false, 0, 0, 0)
+	if !backend.IsPlaying(id) {
+		t.Fatal("initialization after stop did not restore playback")
+	}
+	mgr.StopAll()
+	if backend.IsPlaying(id) {
+		t.Fatal("initialized playback survived stop")
+	}
+}
+
+func TestManagerCanReplayAfterRepeatedStopAll(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+	for round := 1; round <= 3; round++ {
+		id := mgr.Play(13, "sound.wav", false, false, 0, 0, 0)
+		mgr.ReleaseSound(13)
+		mgr.StopAll()
+		mgr.StopAll()
+		if backend.IsPlaying(id) || len(backend.destroys) != round {
+			t.Fatalf("round %d: playing=%v destroyed=%v", round, backend.IsPlaying(id), backend.destroys)
+		}
+	}
+}
