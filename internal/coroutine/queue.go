@@ -16,7 +16,10 @@
 
 package coroutine
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 type node[T any] struct {
 	value T
@@ -31,6 +34,8 @@ type Queue[T any] struct {
 	tail  *node[T]
 	count int
 	pool  sync.Pool
+
+	sortBuffer []T
 }
 
 // Move appends every value from src to the receiving queue and empties src.
@@ -68,6 +73,37 @@ func (q *Queue[T]) Count() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.count
+}
+
+// PeekFront returns the first value without removing it.
+func (q *Queue[T]) PeekFront() (value T, ok bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.head == nil {
+		return value, false
+	}
+	return q.head.value, true
+}
+
+// SortStable orders values while preserving ties.
+func (q *Queue[T]) SortStable(compare func(T, T) int) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.count < 2 {
+		return
+	}
+	values := slices.Grow(q.sortBuffer[:0], q.count)
+	for n := q.head; n != nil; n = n.next {
+		values = append(values, n.value)
+	}
+	q.sortBuffer = values
+	defer clear(values)
+	slices.SortStableFunc(values, compare)
+	n := q.head
+	for _, value := range values {
+		n.value = value
+		n = n.next
+	}
 }
 
 // Any reports whether a queued value satisfies match.

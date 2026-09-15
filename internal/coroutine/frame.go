@@ -151,13 +151,8 @@ func (p *Coroutines) runMainThreadJob(job *WaitJob) {
 func (p *Coroutines) takeMainThreadJob() *WaitJob {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
-	if p.currentJobs.Count() == 0 {
-		return nil
+	if job, ok := p.currentJobs.PeekFront(); ok && job.Type == waitTypeMainThread {
+		return p.currentJobs.PopFront()
 	}
-	job := p.currentJobs.PopFront()
-	if job.Type == waitTypeMainThread {
-		return job
-	}
-	p.currentJobs.PushFront(job)
 	return nil
 }

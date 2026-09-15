@@ -17,6 +17,7 @@
 package coroutine
 
 import (
+	"cmp"
 	sdebug "runtime/debug"
 	stime "time"
 
@@ -124,13 +125,13 @@ func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
 	start := stime.Now()
 	action := updateProcessJob
 	p.schedulerMu.Lock()
-	if p.currentJobs.Count() == 0 {
-		if p.runnableThreadCountLocked() == 0 {
-			action = updateComplete
-		} else {
-			p.schedulerCond.Wait()
-			action = updateRetry
-		}
+	job, queued := p.currentJobs.PeekFront()
+	// Engine calls may unblock the current script slice.
+	if (!queued || job.Type != waitTypeMainThread) && p.hasRunnableThreadLocked() {
+		p.schedulerCond.Wait()
+		action = updateRetry
+	} else if !queued {
+		action = updateComplete
 	}
 	p.schedulerMu.Unlock()
 	stats.WaitTime += elapsedMillis(start)
@@ -189,6 +190,10 @@ func (p *Coroutines) runWaitJob(job *WaitJob) {
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateJobsStats) {
 	start := stime.Now()
 	p.deferredJobs.Move(p.roundJobs)
+	// All deferred waits retain thread registration order.
+	p.deferredJobs.SortStable(func(a, b *WaitJob) int {
+		return cmp.Compare(a.threadID(), b.threadID())
+	})
 	stats.NextCount = p.deferredJobs.Count()
 	p.currentJobs.Move(p.deferredJobs)
 	stats.MoveTime = elapsedMillis(start)

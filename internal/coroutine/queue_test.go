@@ -16,7 +16,39 @@
 
 package coroutine
 
-import "testing"
+import (
+	"cmp"
+	"testing"
+)
+
+func TestQueueSortStable(t *testing.T) {
+	type entry struct{ key int }
+	a, b, c := &entry{2}, &entry{1}, &entry{2}
+	var q Queue[*entry]
+	compare := func(a, b *entry) int { return cmp.Compare(a.key, b.key) }
+	q.SortStable(compare)
+	if _, ok := q.PeekFront(); ok {
+		t.Fatal("empty queue has a front value")
+	}
+
+	for range 2 {
+		for _, value := range []*entry{a, b, c} {
+			q.PushBack(value)
+		}
+		q.SortStable(compare)
+		if first, ok := q.PeekFront(); !ok || first != b || q.Count() != 3 {
+			t.Fatal("PeekFront changed the sorted queue")
+		}
+		if q.PopFront() != b || q.PopBack() != c || q.PopFront() != a {
+			t.Fatal("sorting lost equal-value order or deque links")
+		}
+		for _, value := range q.sortBuffer {
+			if value != nil {
+				t.Fatal("sort buffer retains a queued value")
+			}
+		}
+	}
+}
 
 func TestQueuePushPopPreservesOrder(t *testing.T) {
 	q := NewQueue[int]()

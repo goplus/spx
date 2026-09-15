@@ -40,6 +40,14 @@ type WaitJob struct {
 	Frame int64   // Issuing frame for frame-gated jobs.
 }
 
+// Jobs without a thread sort first.
+func (job *WaitJob) threadID() int64 {
+	if job.Th == nil {
+		return 0
+	}
+	return job.Th.ID()
+}
+
 type taskResult struct {
 	panicValue any
 	panicked   bool
