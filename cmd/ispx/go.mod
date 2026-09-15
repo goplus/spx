@@ -1,6 +1,6 @@
 module github.com/goplus/spx/v3/cmd/ispx
 
-go 1.25.0
+go 1.26.0
 
 tool github.com/goplus/ixgo/cmd/qexp
 
@@ -18,12 +18,12 @@ require (
 	github.com/goplus/xgo v1.7.6-0.20260818050008-fd36b6192e30 // indirect
 	github.com/qiniu/x v1.18.3 // indirect
 	github.com/visualfc/funcval v0.1.5 // indirect
-	github.com/visualfc/gid v0.3.5 // indirect
+	github.com/visualfc/gid v0.3.6 // indirect
 	github.com/visualfc/xtype v0.3.3 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd // indirect
-	golang.org/x/mod v0.40.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/tools v0.50.0 // indirect
 )
 
 replace github.com/goplus/spx/v3 => ../..
