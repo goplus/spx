@@ -167,14 +167,12 @@ func (p *Coroutines) removeThreadState(th Thread) {
 	p.schedulerMu.Unlock()
 }
 
-// runnableThreadCountLocked returns the number of threads that can make
-// progress without an external wake-up. The caller must hold schedulerMu.
-func (p *Coroutines) runnableThreadCountLocked() int {
-	runnable := 0
+// Caller must hold schedulerMu.
+func (p *Coroutines) hasRunnableThreadLocked() bool {
 	for th, state := range p.threadStates {
 		if state == threadRunnable && !p.isThreadCanceled(th) {
-			runnable++
+			return true
 		}
 	}
-	return runnable
+	return false
 }

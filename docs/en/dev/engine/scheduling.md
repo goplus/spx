@@ -44,6 +44,10 @@ rounds; starting another round does not advance the frame number or timer.
    of the default 30 Hz interval, or 25 ms. This budget controls admission of
    another round; it does not interrupt the current round. `Warp` uses a
    separate 500 ms cooperative yield budget.
+4. **Preserve script order across frames.** Deferred waits and loop continuations
+   are checked in script registration order. Each keeps its resume conditions.
+   Runnable scripts, including new handlers, yield or finish before another
+   queued script resumes. Engine main-thread calls remain available throughout.
 
 ## Condition events
 
@@ -98,11 +102,11 @@ semantics, but it does not remove variation caused by wall-clock scheduling.
 
 ## Scope
 
-These rules cover ordinary loops, redraw boundaries, and condition events.
-Startup, cancellation, broadcasts, and cloning retain their respective
-lifecycle contracts; the scheduler does not impose a global FIFO order on all
-coroutines. The implementation is in Go and requires no Godot C++ interface
-changes.
+These rules cover ordinary loops, explicit waits, redraw boundaries, and
+condition events. Startup, cancellation, broadcasts, and cloning retain their
+respective lifecycle contracts; ordering waits across frames does not impose a
+global FIFO order on external events or all coroutines. The implementation is
+in Go and requires no Godot C++ interface changes.
 
 The loop and condition-event rules follow the corresponding Scratch mechanisms.
 They do not imply complete Scratch VM compatibility or identical iteration
@@ -113,6 +117,8 @@ counts across runs or platforms.
 - Nonvisual loops can run multiple rounds per frame; redraws do not truncate
   the current round's other scripts.
 - Explicit waits retain their boundaries, and `Warp` retains its yield rules.
+- Deferred waits retain registration order; unexpired waits do not block
+  eligible scripts.
 - Scripts continue in later frames after budget exhaustion and remain cancellable.
 - Predicates and handlers observe the states before and after clock advancement,
   respectively; slow frames preserve this phase ordering.
@@ -126,9 +132,10 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
 Core regression coverage is in `runtime_scratch_scheduler_test.go`,
-`runtime_events_test.go`, `runtime_events_order_test.go`, and
-`internal/coroutine/loop_test.go`. WASM compilation does not replace browser
-runtime verification.
+`runtime_events_test.go`, `runtime_events_order_test.go`,
+`sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
+`internal/coroutine/order_test.go`.
+WASM compilation does not replace browser runtime verification.
 
 ## Reference implementation
 

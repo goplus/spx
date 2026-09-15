@@ -34,6 +34,9 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 3. **保留独立的等待语义。** 显式时间等待和 `WaitNextFrame` 各有自己的恢复条件。
    普通循环按真实耗时计算帧内预算，为默认 30 Hz 间隔的 75%，即 25 ms。
    预算只决定是否开始下一轮，不会中断当前轮。`Warp` 使用独立的 500 ms 协作让出预算。
+4. **跨帧保留脚本顺序。** 延后到下一帧的等待和循环任务，按脚本注册顺序
+   检查各自的恢复条件。可运行脚本（包括新启动的处理函数）让出或结束后，
+   再恢复下一项已排队的脚本；期间仍处理引擎主线程调用。
 
 ## 条件事件
 
@@ -78,8 +81,8 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 
 ## 适用范围
 
-这些规则覆盖普通循环、重绘边界和条件事件。启动、取消、广播和克隆仍有各自的
-生命周期契约，调度器不对全部协程施加全局 FIFO 顺序。实现位于 Go 层，
+这些规则覆盖普通循环、显式等待、重绘边界和条件事件。启动、取消、广播和克隆仍有各自的
+生命周期契约；跨帧等待任务的排序不代表外部事件或全部协程遵循全局 FIFO 顺序。实现位于 Go 层，
 无需改变 Godot C++ 接口。
 
 循环和条件事件的规则参考 Scratch 的相应机制，但不代表完整兼容 Scratch VM，
@@ -89,6 +92,7 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 
 - 无重绘循环可同帧多轮执行，重绘不截断当前轮其他脚本。
 - 显式等待仍跨越约定边界，`Warp` 的让出规则保持一致。
+- 跨帧等待保留注册顺序；尚未到期的等待不会阻塞可恢复的脚本。
 - 预算耗尽后脚本可在后续帧继续执行，并保留取消能力。
 - 条件与处理函数分别观察时钟推进前、后的状态；慢帧不破坏阶段顺序。
 - 条件事件维持上升沿、防重入和拥有者隔离语义。
@@ -101,7 +105,8 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
 核心回归位于 `runtime_scratch_scheduler_test.go`、`runtime_events_test.go`、
-`runtime_events_order_test.go` 和 `internal/coroutine/loop_test.go`。
+`runtime_events_order_test.go`、`sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
+`internal/coroutine/order_test.go`。
 WASM 编译检查不替代浏览器运行验证。
 
 ## 参考实现
