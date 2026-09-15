@@ -107,17 +107,13 @@ const GodotGdspx = {
 		},
 
 		getDirectHandler: function (exportName) {
-			// Read the shared slots at call time. Emscripten serializes library object
-			// properties while linking, which would detach a stored object from the
-			// global table populated later by the SPX Web runtime.
+			// Read slots dynamically to avoid Emscripten serializing a detached copy.
 			const slots = globalThis['__spxDirectCallbackHandlerSlots'];
 			const directHandler = slots && slots[exportName];
 			return typeof directHandler === 'function' ? directHandler : null;
 		},
 
-		// Direct callbacks use native BigInt object ids to avoid boxing on the hot
-		// path. The FFI fallback keeps the legacy { low, high } shape for
-		// compatibility with older callback bridges.
+		// Direct callbacks use BigInt IDs; legacy FFI callbacks use { low, high }.
 		toCallbackInt: function (ptr, directHandler) {
 			if (typeof directHandler === 'function') {
 				return GodotRuntime.ToJsBigInt(ptr);
@@ -274,6 +270,7 @@ const GodotGdspx = {
 
 	godot_js_spx_on_engine_update__sig: 'vf',
 	godot_js_spx_on_engine_update: function (delta) {
+		// Reclaim transient arrays once per Update, across all FixedUpdate calls.
 		if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
 			globalThis['GdspxFlushDeferredFrees']();
 		}
@@ -284,9 +281,6 @@ const GodotGdspx = {
 
 	godot_js_spx_on_engine_fixed_update__sig: 'vf',
 	godot_js_spx_on_engine_fixed_update: function (delta) {
-		if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
-			globalThis['GdspxFlushDeferredFrees']();
-		}
 		GodotGdspx.flushContactEvents();
 		const directHandler = GodotGdspx.getDirectHandler("gdspx_on_engine_fixed_update");
 		GodotGdspx.call1("gdspx_on_engine_fixed_update", "OnEngineFixedUpdate", delta, directHandler);
