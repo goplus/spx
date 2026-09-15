@@ -450,6 +450,26 @@ func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
 	}
 }
 
+func TestOnStartWithoutSchedulerDoesNotCrossReset(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	gco = nil
+	defer func() { gco = co }()
+
+	var calls []string
+	game.OnStart(func() {
+		calls = append(calls, "first")
+		game.resetBootstrapState()
+	})
+	game.OnStart(func() { calls = append(calls, "stale") })
+	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+	if want := []string{"first"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("start callbacks after reset = %v, want %v", calls, want)
+	}
+	if game.lifecycleState.StartDispatched.Load() {
+		t.Fatal("stale OnStart completion reopened the start gate")
+	}
+}
+
 func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 

@@ -24,7 +24,7 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-var spriteImplType = reflect.TypeOf(SpriteImpl{})
+var spriteImplType = reflect.TypeFor[SpriteImpl]()
 
 func (p *SpriteImpl) Clone__0() {
 	p.CloneWith(nil)

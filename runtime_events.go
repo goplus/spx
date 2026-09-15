@@ -64,13 +64,6 @@ type messageReceiverExecution struct {
 	receiver *messageEventHandler
 }
 
-// messageEventHandler tracks one broadcast script's active thread.
-type messageEventHandler struct {
-	mu     sync.Mutex
-	active coroutine.Thread
-	run    func(string, any)
-}
-
 type startEventDispatcher struct{}
 
 // Click Dispatch
@@ -94,7 +87,7 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
 	pthis := p.pthis
-	p.scriptEventRegistry.manager.AddClick(coreevent.NewSink(pthis, onClick, coreevent.MatchOwner(pthis)))
+	p.scriptEventRegistry.manager.AddClick(newScriptEventSink(pthis, onClick, coroutine.RestartExisting, coreevent.MatchOwner(pthis)))
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -154,16 +147,15 @@ func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.scriptEventRegistry.manager.AddBackdropChanged(coreevent.NewSink(p.pthis, onBackdrop))
+	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(p.pthis, onBackdrop, coroutine.RestartExisting))
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
-	p.scriptEventRegistry.manager.AddBackdropChanged(coreevent.NewSink(
-		p.pthis,
-		coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
-			spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.pthis))
-		})),
-		coreevent.MatchValue(name),
+	handler := coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
+		spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.pthis))
+	}))
+	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(
+		p.pthis, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
 	))
 }
 
@@ -182,24 +174,6 @@ func (p *Game) BroadcastAndWait__0(msg MsgName) {
 
 func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
 	p.doBroadcast(msg, data, true)
-}
-
-func (p *messageEventHandler) start(thread coroutine.Thread) func() {
-	p.mu.Lock()
-	previous := p.active
-	p.active = thread
-	p.mu.Unlock()
-
-	if previous != nil && previous != thread {
-		gco.Stop(previous)
-	}
-	return func() {
-		p.mu.Lock()
-		if p.active == thread {
-			p.active = nil
-		}
-		p.mu.Unlock()
-	}
 }
 
 func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
@@ -229,21 +203,18 @@ func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) 
 	if len(keys) == 0 {
 		return
 	}
-	keys = slices.Clone(keys)
-	sink := coreevent.NewSink(p.pthis, handler)
+	sink := newScriptEventSink(p.pthis, handler, coroutine.IgnoreWhileRunning)
 	if slices.Contains(keys, KeyAny) {
 		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
 		return
 	}
-	sink.Cond = coreevent.MatchAnyOf(keys)
+	sink.Cond = coreevent.MatchAnyOf(slices.Clone(keys))
 	p.scriptEventRegistry.manager.AddKeyPressed(sink)
 }
 
 func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
-	p.scriptEventRegistry.manager.AddIReceive(coreevent.NewSink(
-		p.pthis,
-		&messageEventHandler{run: handler},
-		cond...,
+	p.scriptEventRegistry.manager.AddIReceive(newScriptEventSink(
+		p.pthis, handler, coroutine.RestartExisting, cond...,
 	))
 }
 
@@ -367,12 +338,14 @@ func (p *Game) fireEvent(ev event) {
 // Event Dispatch
 func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bool) {
 	p.dispatchStartSinks(sinksInScratchTargetOrder(activeGame(), sinks), scriptEventDispatch{
-		mode:      coroutine.BatchWaitFirstSlice,
-		shouldRun: shouldRun,
+		mode: coroutine.BatchWaitFirstSlice,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
+			if shouldRun != nil && !shouldRun() {
+				return
+			}
+			if isDebugEventEnabled() {
 				spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
-			})()
+			}
 			ev.Handler.(func())()
 		},
 	})
@@ -383,9 +356,9 @@ func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
 		mode:      coroutine.BatchWaitDone,
 		matchData: this,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
+			if isDebugEventEnabled() {
 				spxlog.Debug("OnAwake: %s", nameOf(ev.Owner))
-			})()
+			}
 			ev.Handler.(func())()
 		},
 	})
@@ -408,7 +381,7 @@ func (p *scriptEventRegistry) doWhenKeyPressed(key Key) {
 		mode:      coroutine.BatchAsync,
 		matchData: key,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			ev.Handler.(func(Key))(key)
+			ev.Handler.(*scriptEventHandler[func(Key)]).run(key)
 		},
 	})
 }
@@ -428,10 +401,10 @@ func (p *scriptEventRegistry) doWhenClick(this threadObj) {
 		mode:      coroutine.BatchAsync,
 		matchData: this,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
+			if isDebugEventEnabled() {
 				spxlog.Debug("OnClick: %s", nameOf(this))
-			})()
-			ev.Handler.(func())()
+			}
+			ev.Handler.(*scriptEventHandler[func()]).run()
 		},
 	})
 }
@@ -441,9 +414,9 @@ func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) 
 		mode:      coroutine.BatchAsync,
 		matchData: this,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
+			if isDebugEventEnabled() {
 				spxlog.Debug("OnTouchStart: %s, %s", nameOf(this), obj.name)
-			})()
+			}
 			ev.Handler.(func(Sprite))(obj.sprite)
 		},
 	})
@@ -454,9 +427,9 @@ func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
 		mode:      coroutine.BatchWaitFirstSlice,
 		matchData: this,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			coreevent.If0(isDebugEventEnabled, func() {
+			if isDebugEventEnabled() {
 				spxlog.Debug("OnCloned: %s", nameOf(this))
-			})()
+			}
 			ev.Handler.(func(any))(data)
 		},
 	})
@@ -467,9 +440,6 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 	p.dispatchGlobal(coreevent.BucketIReceive, scriptEventDispatch{
 		mode:      eventBatchMode(wait),
 		matchData: msg,
-		lifecycle: func(thread coroutine.Thread, ev *eventSink) func() {
-			return ev.Handler.(*messageEventHandler).start(thread)
-		},
 		run: func(thread coroutine.Thread, ev *eventSink) {
 			receiver := ev.Handler.(*messageEventHandler)
 			if thread != nil {
@@ -486,16 +456,16 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 }
 
 func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchContext {
-	if gco != nil && gco.IsInCoroutine() {
-		if thread := gco.Current(); thread != nil {
-			if value, ok := p.messageExecutions.Load(thread); ok {
-				execution := value.(*messageReceiverExecution)
-				execution.context.claimTurn(execution.receiver)
-				return execution.context
-			}
-		}
+	if gco == nil || !gco.IsInCoroutine() {
+		return new(messageDispatchContext)
 	}
-	return new(messageDispatchContext)
+	value, ok := p.messageExecutions.Load(gco.Current())
+	if !ok {
+		return new(messageDispatchContext)
+	}
+	execution := value.(*messageReceiverExecution)
+	execution.context.claimTurn(execution.receiver)
+	return execution.context
 }
 
 func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *messageEventHandler) {
@@ -527,7 +497,7 @@ func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool
 		mode:      eventBatchMode(wait),
 		matchData: name,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			ev.Handler.(func(BackdropName))(name)
+			ev.Handler.(*scriptEventHandler[func(BackdropName)]).run(name)
 		},
 	})
 }
