@@ -603,7 +603,7 @@ function NativeArrayDataView(ptr, byteLength, module) {
 }
 
 function GdspxFlushDeferredFrees() {
-    // Frame boundaries end all transient input/return borrows.
+    // Update entry, reset, and destroy end all transient array borrows.
     for (const arena of arrayArenas.values()) {
         arena.offset = 0;
     }

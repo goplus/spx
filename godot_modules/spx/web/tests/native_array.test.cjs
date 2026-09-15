@@ -37,6 +37,80 @@ function bridge() {
     return { context, module, freed, heap, run: text => vm.runInContext(text, context) };
 }
 
+function engineBridge() {
+    const b = bridge();
+    Object.assign(b.context, {
+        autoAddDeps: () => {},
+        mergeInto: Object.assign,
+        LibraryManager: { library: {} },
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/libs/library_godot_gdspx.js'), 'utf8'));
+    // Make the library's runtime helpers available to its callback functions.
+    b.run('Object.assign(GodotGdspx, GodotGdspx.$GodotGdspx)');
+    return { ...b, callbacks: b.context.LibraryManager.library };
+}
+
+test('fixed updates preserve array borrows until the next update begins', () => {
+    const b = engineBridge();
+    const borrows = [];
+    const borrow = () => {
+        const value = b.run('GdspxBorrowNativeArray(5, 8, 8)');
+        value.data.fill(borrows.length + 1);
+        borrows.push(value);
+    };
+    b.context.FFI = {
+        gdspx_on_engine_update: borrow,
+        gdspx_on_engine_fixed_update: borrow,
+    };
+
+    b.callbacks.godot_js_spx_on_engine_update(1 / 60);
+    for (let i = 0; i < 3; i++) {
+        b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+    }
+    assert.equal(new Set(borrows.map(value => value.ptr)).size, 4);
+    for (const [i, value] of borrows.entries()) {
+        assert.deepEqual(Array.from(value.data), Array(8).fill(i + 1));
+    }
+    assert.deepEqual(b.freed, []);
+
+    b.callbacks.godot_js_spx_on_engine_update(1 / 60);
+    assert.equal(borrows[4].ptr, borrows[0].ptr, 'Update reuses the arena before calling the handler');
+    assert.deepEqual(Array.from(borrows[4].data), Array(8).fill(5));
+    assert.deepEqual(b.freed, [], 'the active arena stays allocated for reuse');
+});
+
+for (const phase of ['update', 'destroy', 'reset']) {
+    test(`${phase} releases retired arenas once before dispatching the callback`, () => {
+        const b = engineBridge();
+        const borrows = [];
+        b.context.FFI = {
+            gdspx_on_engine_fixed_update: () => {
+                const value = b.run('GdspxBorrowNativeArray(5, 700000, 700000)');
+                value.data[0] = borrows.length + 1;
+                borrows.push(value);
+            },
+        };
+        for (let i = 0; i < 3; i++) {
+            b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+        }
+        assert.equal(new Set(borrows.map(value => value.ptr)).size, 3);
+        assert.deepEqual(borrows.map(value => value.data[0]), [1, 2, 3]);
+        assert.deepEqual(b.freed, [], 'FixedUpdate must defer retired arena releases');
+
+        let calls = 0;
+        b.context.FFI[`gdspx_on_engine_${phase}`] = () => {
+            calls++;
+            assert.deepEqual(b.freed, borrows.slice(0, 2).map(value => value.ptr));
+            const value = b.run('GdspxBorrowNativeArray(5, 8, 8)');
+            assert.equal(value.ptr, borrows[2].ptr, 'the active arena is reset before dispatch');
+        };
+        b.callbacks[`godot_js_spx_on_engine_${phase}`](1 / 60);
+        b.callbacks[`godot_js_spx_on_engine_${phase}`](1 / 60);
+        assert.equal(calls, 2);
+        assert.equal(new Set(b.freed).size, b.freed.length, 'no arena is freed twice');
+    });
+}
+
 test('all fixed-width types use the same native descriptor and borrow their input', () => {
     const b = bridge();
     for (const [type, size] of [[1, 8], [2, 4], [3, 1], [5, 1], [6, 8]]) {
