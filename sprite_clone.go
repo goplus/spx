@@ -95,7 +95,7 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	dest.runtimeState.IsLayerDirty = true
 
 	src := spriteOf(in.Addr().Interface().(Sprite))
-	dest.components.cloneFrom(&src.components, dest)
+	dest.components.cloneFrom(src, dest)
 
 	if v != nil {
 		applySpriteProps(dest, v)

@@ -69,6 +69,18 @@ func (m *Manager) AllocSound() engine.Object {
 	return m.backend.CreateAudio()
 }
 
+// CloneSoundEffects allocates independent effects without copying volume or
+// playback. An unallocated source stays unallocated.
+func (m *Manager) CloneSoundEffects(source engine.Object) engine.Object {
+	if source == 0 {
+		return 0
+	}
+	target := m.AllocSound()
+	m.backend.SetPan(target, m.backend.GetPan(source))
+	m.backend.SetPitch(target, m.backend.GetPitch(source))
+	return target
+}
+
 func (m *Manager) ReleaseSound(soundObj engine.Object) {
 	if soundObj == 0 {
 		return

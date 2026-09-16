@@ -79,12 +79,15 @@ func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *corepr
 }
 
 // cloneFrom creates independent component instances for a cloned sprite.
-func (sc *spriteComponents) cloneFrom(src *spriteComponents, newSprite *SpriteImpl) {
+func (sc *spriteComponents) cloneFrom(source *SpriteImpl, newSprite *SpriteImpl) {
+	src := &source.components
 	sc.transform = src.transform.cloneFrom(src.transform, newSprite).(*transformComponent)
 	sc.animation = src.animation.cloneFrom(src.animation, newSprite).(*animationComponent)
 	sc.physics = src.physics.cloneFrom(src.physics, newSprite).(*physicsComponent)
-	sc.pen = src.pen.cloneFrom(src.pen, newSprite).(*penComponent)
-	sc.sound = src.sound.cloneFrom(src.sound, newSprite).(*soundComponent)
+	// Pen and sound inherit the original instance's current state across generations.
+	original := &source.originalSprite().components
+	sc.pen = original.pen.cloneFrom(original.pen, newSprite).(*penComponent)
+	sc.sound = original.sound.cloneFrom(original.sound, newSprite).(*soundComponent)
 	sc.bubble = nil
 }
 
