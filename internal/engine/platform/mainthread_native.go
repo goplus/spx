@@ -32,7 +32,7 @@ func TryCallEngineDirectly(call func()) bool {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	if !gdx.PlatformMgr.IsMainThread() {
+	if gdx.PlatformMgr == nil || !gdx.PlatformMgr.IsMainThread() {
 		return false
 	}
 	call()

@@ -112,7 +112,7 @@ updateLoop:
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
-	if !p.hasInited.Load() {
+	if !p.initialized.Load() {
 		if p.currentJobs.Count() == 0 {
 			start := stime.Now()
 			itime.Sleep(0.05)
@@ -190,9 +190,9 @@ func (p *Coroutines) runWaitJob(job *WaitJob) {
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateJobsStats) {
 	start := stime.Now()
 	p.deferredJobs.Move(p.roundJobs)
-	// All deferred waits retain thread registration order.
+	// Deferred waits retain script order, including restarted handlers.
 	p.deferredJobs.SortStable(func(a, b *WaitJob) int {
-		return cmp.Compare(a.threadID(), b.threadID())
+		return cmp.Compare(a.threadOrder(), b.threadOrder())
 	})
 	stats.NextCount = p.deferredJobs.Count()
 	p.currentJobs.Move(p.deferredJobs)

@@ -48,7 +48,7 @@ func (r *resetRecordingExt) RequestReset(exitCode int64) {
 	r.calls <- exitCode
 }
 
-func setupAbortCoroutinesAndResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
+func setupStopCoroutinesAndResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
 	t.Helper()
 
 	original := gco
@@ -60,7 +60,7 @@ func setupAbortCoroutinesAndResetTest(t *testing.T, co *coroutine.Coroutines) *r
 	gdx.ExtMgr = recorder
 	enginewrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("test coroutines did not stop")
 		}
 		SetCoroutines(original)
@@ -88,7 +88,7 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var ran atomic.Bool
-		probe := co.CreateAndStart(true, "reset-open-probe", func(coroutine.Thread) int {
+		probe := co.CreateAndStart("reset-open-probe", func(coroutine.Thread) int {
 			ran.Store(true)
 			return 0
 		})
@@ -101,16 +101,16 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	t.Fatal("reset barrier did not reopen coroutine admission")
 }
 
-func TestAbortCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
+func TestStopCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
-	recorder := setupAbortCoroutinesAndResetTest(t, co)
+	recorder := setupStopCoroutinesAndResetTest(t, co)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	var released atomic.Bool
 	workerDone := make(chan struct{})
-	co.CreateAndStart(true, "blocked", func(coroutine.Thread) int {
+	co.CreateAndStart("blocked", func(coroutine.Thread) int {
 		defer close(workerDone)
 		close(started)
 		<-release
@@ -129,7 +129,7 @@ func TestAbortCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 
 	returned := make(chan struct{})
 	go func() {
-		abortCoroutinesAndReset(7)
+		stopCoroutinesAndReset(7)
 		close(returned)
 	}()
 	select {
@@ -155,18 +155,18 @@ func TestAbortCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 	waitForResetAdmissionOpen(t, co)
 }
 
-func TestAbortCoroutinesAndResetAbortsManagedCaller(t *testing.T) {
+func TestStopCoroutinesAndResetStopsManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
-	recorder := setupAbortCoroutinesAndResetTest(t, co)
+	recorder := setupStopCoroutinesAndResetTest(t, co)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
 	var returned atomic.Bool
-	caller := co.CreateAndStart(true, "caller", func(coroutine.Thread) int {
+	caller := co.CreateAndStart("caller", func(coroutine.Thread) int {
 		defer close(callerDone)
 		close(entered)
-		abortCoroutinesAndReset(9)
+		stopCoroutinesAndReset(9)
 		returned.Store(true)
 		return 0
 	})
@@ -178,7 +178,7 @@ func TestAbortCoroutinesAndResetAbortsManagedCaller(t *testing.T) {
 	select {
 	case <-callerDone:
 	case <-time.After(time.Second):
-		t.Fatal("managed reset caller was not aborted")
+		t.Fatal("managed reset caller did not stop")
 	}
 	if returned.Load() {
 		t.Fatal("managed reset caller returned normally")
@@ -213,7 +213,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	co.CreateAndStart(true, "peer", func(peer coroutine.Thread) int {
+	co.CreateAndStart("peer", func(peer coroutine.Thread) int {
 		defer close(peerDone)
 		close(peerYielding)
 		co.Yield(peer)
@@ -232,7 +232,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	resetCalled := make(chan struct{})
 	result := make(chan bool, 1)
 	var resetBeforeDrain atomic.Bool
-	co.CreateAndStart(true, "caller", func(me coroutine.Thread) int {
+	co.CreateAndStart("caller", func(me coroutine.Thread) int {
 		defer close(callerDone)
 		go func() {
 			result <- requestResetAfterCoroutinesStop(co, time.Second, func() {
@@ -249,7 +249,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 				close(resetCalled)
 			})
 		}()
-		co.Abort()
+		co.StopCurrent()
 		return 0
 	})
 
@@ -288,7 +288,7 @@ func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.CreateAndStart(true, "blocked", func(coroutine.Thread) int {
+	thread := co.CreateAndStart("blocked", func(coroutine.Thread) int {
 		close(started)
 		<-release
 		return 0
@@ -314,7 +314,7 @@ func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("blocked coroutine was not canceled")
 	}
-	if !co.AbortAllAndWait(time.Second) {
+	if !co.StopAllAndWait(time.Second) {
 		t.Fatal("blocking coroutine did not finish after release")
 	}
 }

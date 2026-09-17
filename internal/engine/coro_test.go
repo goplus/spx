@@ -73,7 +73,7 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 	}
 	done := make(chan result, 1)
 
-	th := co.CreateAndStart(true, owner, func(me coroutine.Thread) int {
+	th := co.CreateAndStart(owner, func(me coroutine.Thread) int {
 		var got result
 		ExecuteNative(func(ctx context.Context, gotOwner any) {
 			close(nativeStarted)

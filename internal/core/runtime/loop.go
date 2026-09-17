@@ -86,9 +86,7 @@ type LogicLoopConfig[T any] struct {
 
 func RunEventLoop[T any](me coroutine.Thread, events chan T, handle func(T)) int {
 	for {
-		var ev T
-		engine.WaitForChan(events, &ev)
-		handle(ev)
+		handle(engine.WaitForChan(events))
 	}
 }
 
@@ -191,20 +189,22 @@ func RunLogicLoop[T any](me coroutine.Thread, cfg LogicLoopConfig[T]) int {
 	}
 }
 
-func InitLoops(
-	create func(coroutine.ThreadObj, func(coroutine.Thread) int) coroutine.Thread,
-	eventLoop func(coroutine.Thread) int,
-	inputLoop func(coroutine.Thread) int,
-	logicLoop func(coroutine.Thread) int,
-) {
-	if eventLoop != nil {
-		create("eventLoop", eventLoop)
+type LoopTasks struct {
+	Event func(coroutine.Thread) int
+	Input func(coroutine.Thread) int
+	Logic func(coroutine.Thread) int
+}
+
+// InitLoops registers enabled loops in event, input, then logic order.
+func InitLoops(create func(coroutine.ThreadObj, func(coroutine.Thread) int) coroutine.Thread, tasks LoopTasks) {
+	if tasks.Event != nil {
+		create("eventLoop", tasks.Event)
 	}
-	if inputLoop != nil {
-		create("inputEventLoop", inputLoop)
+	if tasks.Input != nil {
+		create("inputEventLoop", tasks.Input)
 	}
-	if logicLoop != nil {
-		create("logicLoop", logicLoop)
+	if tasks.Logic != nil {
+		create("logicLoop", tasks.Logic)
 	}
 }
 

@@ -25,6 +25,14 @@ import (
 	"time"
 )
 
+func isSuspended(thread Thread) bool {
+	if !thread.suspendMu.TryLock() {
+		return false
+	}
+	defer thread.suspendMu.Unlock()
+	return thread.suspendState == suspendStateSuspended
+}
+
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
@@ -75,10 +83,9 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	co.CreateAndStart(false, nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) int {
 		defer close(done)
-		var value int
-		WaitForChan(co, ch, &value)
+		value := WaitForChan(co, ch)
 		if value != 7 {
 			t.Fatalf("expected received value 7, got %d", value)
 		}
@@ -86,13 +93,7 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 	})
 
 	deadline := time.Now().Add(time.Second)
-	for {
-		co.schedulerMu.Lock()
-		waitingCount := len(co.threadStates)
-		co.schedulerMu.Unlock()
-		if waitingCount > 0 {
-			break
-		}
+	for !isSuspended(th) {
 		if time.Now().After(deadline) {
 			t.Fatal("coroutine did not enter wait state")
 		}
@@ -113,21 +114,14 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	th := co.CreateAndStart(false, nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) int {
 		defer close(done)
-		var value int
-		WaitForChan(co, ch, &value)
+		WaitForChan(co, ch)
 		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)
-	for {
-		co.schedulerMu.Lock()
-		state := co.threadStates[th]
-		co.schedulerMu.Unlock()
-		if state == threadBlocked {
-			break
-		}
+	for !isSuspended(th) {
 		if time.Now().After(deadline) {
 			t.Fatal("coroutine did not enter wait state")
 		}
@@ -171,7 +165,7 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 
 	<-started
 	deadline := time.Now().Add(time.Second)
-	for !th.suspended.Load() {
+	for !isSuspended(th) {
 		if time.Now().After(deadline) {
 			t.Fatal("coroutine did not suspend")
 		}
@@ -266,8 +260,8 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	b := co.newThread("b")
 	co.registerThread(a)
 	co.registerThread(b)
-	a.yieldWaiters = map[Thread]struct{}{b: {}}
-	b.yieldWaiters = map[Thread]struct{}{a: {}}
+	a.yieldWaiters.add(b)
+	b.yieldWaiters.add(a)
 
 	// Keep A between releasing runMu and publishing its suspension. B can then
 	// publish its own suspension and try to wake A. Yield must not hold B's
@@ -278,10 +272,9 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	bStarted := make(chan struct{})
 	done := make(chan struct{}, 2)
 	go func() {
-		co.runThread(a, func(me Thread) int {
+		co.runThread(a, func(me Thread) {
 			close(aStarted)
 			co.Yield(me)
-			return 0
 		}, nil)
 		done <- struct{}{}
 	}()
@@ -290,17 +283,16 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	co.runMu.Unlock()
 
 	go func() {
-		co.runThread(b, func(me Thread) int {
+		co.runThread(b, func(me Thread) {
 			close(bStarted)
 			co.Yield(me)
-			return 0
 		}, nil)
 		done <- struct{}{}
 	}()
 	<-bStarted
 
 	deadline := time.Now().Add(time.Second)
-	for !b.suspended.Load() {
+	for !isSuspended(b) {
 		if time.Now().After(deadline) {
 			a.suspendMu.Unlock()
 			t.Fatal("B did not publish its suspended state")
@@ -352,7 +344,7 @@ func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
 		})
 
 		deadline := time.Now().Add(time.Second)
-		for !th.suspended.Load() {
+		for !isSuspended(th) {
 			if time.Now().After(deadline) {
 				t.Fatalf("run %d: coroutine did not reach its first yield", run)
 			}
@@ -398,7 +390,7 @@ func TestUpdateWatchdogDeadlineResetsWhileAwaitingInitialization(t *testing.T) {
 	co := New(nil)
 	t.Cleanup(func() {
 		co.OnInited()
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
 		}
 	})
@@ -462,13 +454,13 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
 		}
 	})
 
 	resumed := make(chan struct{})
-	thread := co.CreateAndStart(true, "slow-frame", func(me Thread) int {
+	thread := co.CreateAndStart("slow-frame", func(me Thread) int {
 		co.WaitYield(me)
 		close(resumed)
 		return 0
@@ -528,7 +520,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	keepSpawning.Store(true)
 	t.Cleanup(func() {
 		keepSpawning.Store(false)
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("recursive spawn chain did not stop during cleanup")
 		}
 	})
@@ -552,7 +544,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	}()
 	waitForThreadSignal(t, updateDone, "Update did not return after a retry exhausted the frame budget")
 	keepSpawning.Store(false)
-	if !co.waitForThreadsToStop(time.Second, nil) {
+	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("recursive spawn chain did not finish")
 	}
 	if clockCalls.Load() < 2 || spawned.Load() == 0 {
@@ -567,14 +559,14 @@ func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
 	co := New(nil)
 
 	thread := co.Create("completed", func(Thread) int { return 0 })
-	resume := co.newResumeWaitJob(thread, waitTypeYield)
-	if !co.waitForThreadsToStop(time.Second, nil) {
+	resume := co.newResumeJob(thread, waitTypeYield)
+	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("coroutine did not complete")
 	}
 
 	co.runWaitJob(resume)
 	co.schedulerMu.Lock()
-	_, exists := co.threadStates[thread]
+	_, exists := co.runnableThreads[thread]
 	co.schedulerMu.Unlock()
 	if exists {
 		t.Fatal("stale resume job restored scheduler state for a completed thread")
@@ -613,7 +605,7 @@ func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	co.OnInited()
 
 	thread := co.Create("completed", func(Thread) int { return 0 })
-	if !co.waitForThreadsToStop(time.Second, nil) {
+	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("coroutine did not complete")
 	}
 

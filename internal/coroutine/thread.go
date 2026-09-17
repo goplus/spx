@@ -19,10 +19,12 @@ package coroutine
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	stime "time"
 
+	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/goplus/spx/v3/internal/time"
 )
 
@@ -45,8 +47,10 @@ type threadImpl struct {
 	name  string
 	stack string
 
+	// Active handler restarts inherit this position without changing identity.
+	resumeOrder int64
+
 	stopped      atomic.Bool
-	suspended    atomic.Bool
 	suspendMu    sync.Mutex
 	suspendCond  *sync.Cond
 	suspendState suspendState
@@ -58,21 +62,35 @@ type threadImpl struct {
 	schedFrame     int64
 	schedTimestamp stime.Time
 
-	runWithoutScreenRefresh      atomic.Bool
-	runWithoutScreenRefreshStart atomic.Int64
-	stopAtNextYield              atomic.Bool
+	warp            atomic.Bool
+	warpStart       atomic.Int64
+	stopAtNextYield atomic.Bool
 
-	waitersMu   sync.Mutex
-	joinDone    bool
-	joinWaiters map[Thread]struct{}
-
-	yieldedOrDoneOnce sync.Once
-	yieldedOrDone     chan struct{}
-	yieldWaiters      map[Thread]struct{}
+	joinWaiters   waiterSet
+	yieldWaiters  waiterSet
+	yieldedOrDone chan struct{}
 }
 
 // Thread represents a coroutine.
 type Thread = *threadImpl
+
+func (p *Coroutines) newThread(obj ThreadObj) Thread {
+	th := &threadImpl{
+		Obj:           obj,
+		id:            p.nextThreadID.Add(1),
+		schedFrame:    -1,
+		name:          resolveThreadName(obj),
+		done:          make(chan struct{}),
+		yieldedOrDone: make(chan struct{}),
+	}
+	th.resumeOrder = th.id
+	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
+	if p.debug {
+		th.stack = debug.GetStackTrace()
+	}
+	th.suspendCond = sync.NewCond(&th.suspendMu)
+	return th
+}
 
 // Context returns the thread's cancellation context.
 func (th *threadImpl) Context() context.Context {
@@ -82,8 +100,19 @@ func (th *threadImpl) Context() context.Context {
 	return th.ctx
 }
 
-// Cancel cancels the thread's context.
+// Cancel requests a stop and wakes the thread if it is suspended.
 func (th *threadImpl) Cancel() {
+	th.suspendMu.Lock()
+	defer th.suspendMu.Unlock()
+	if th.stopped.Load() {
+		return
+	}
+	th.stopped.Store(true)
+	th.cancelContext()
+	th.suspendCond.Signal()
+}
+
+func (th *threadImpl) cancelContext() {
 	if th.cancelFunc != nil {
 		th.cancelFunc()
 	}
@@ -116,37 +145,37 @@ func (th *threadImpl) Stopped() bool {
 
 // RunWithoutScreenRefresh reports whether the thread is in warp mode.
 func (th *threadImpl) RunWithoutScreenRefresh() bool {
-	return th.runWithoutScreenRefresh.Load()
+	return th.warp.Load()
 }
 
 // SetRunWithoutScreenRefresh changes warp mode and returns its previous value.
 func (th *threadImpl) SetRunWithoutScreenRefresh(enabled bool) bool {
-	previous := th.runWithoutScreenRefresh.Swap(enabled)
+	previous := th.warp.Swap(enabled)
 	if enabled != previous {
-		th.runWithoutScreenRefreshStart.Store(0)
+		th.warpStart.Store(0)
 	}
 	return previous
 }
 
 // ShouldWaitNextFrame reports whether the thread should yield at a loop edge.
 // Warp mode suppresses the yield until budget is exhausted.
-func (th *threadImpl) ShouldWaitNextFrame(runWithoutScreenRefreshBudget stime.Duration) bool {
+func (th *threadImpl) ShouldWaitNextFrame(budget stime.Duration) bool {
 	if !th.RunWithoutScreenRefresh() {
 		return true
 	}
 
 	now := stime.Now().UnixNano()
-	startedAt := th.runWithoutScreenRefreshStart.Load()
+	startedAt := th.warpStart.Load()
 	if startedAt == 0 {
-		th.runWithoutScreenRefreshStart.Store(now)
+		th.warpStart.Store(now)
 		return false
 	}
-	if stime.Duration(now-startedAt) <= runWithoutScreenRefreshBudget {
+	if stime.Duration(now-startedAt) <= budget {
 		return false
 	}
 
 	// Exhausting a warp budget forces one yield, then starts a new window.
-	th.runWithoutScreenRefreshStart.Store(0)
+	th.warpStart.Store(0)
 	return true
 }
 
@@ -158,4 +187,26 @@ func (th Thread) IsSchedTimeout(ms float64) bool {
 		th.schedTimestamp = stime.Now()
 	}
 	return stime.Since(th.schedTimestamp) > stime.Duration(ms)*stime.Millisecond
+}
+
+type threadNamer interface {
+	Name() string
+}
+
+func resolveThreadName(obj ThreadObj) string {
+	if obj == nil {
+		return ""
+	}
+	if name, ok := obj.(string); ok {
+		return name
+	}
+	if named, ok := obj.(threadNamer); ok {
+		return named.Name()
+	}
+
+	typ := reflect.TypeOf(obj)
+	if typ.Kind() != reflect.Pointer || typ.Elem().Name() == "" {
+		return ""
+	}
+	return "*" + typ.Elem().Name()
 }

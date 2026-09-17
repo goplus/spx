@@ -91,7 +91,7 @@ func (p *SpriteImpl) Destroy() {
 	}
 	p.destroy()
 	p.Stop(ThisSprite)
-	p.abortIfCurrentCoroutine()
+	p.stopIfCurrentCoroutine()
 }
 
 func (p *SpriteImpl) DeleteThisClone() {
@@ -205,11 +205,11 @@ func (p *SpriteImpl) destroy() {
 	p.markDestroyed()
 }
 
-func (p *SpriteImpl) abortIfCurrentCoroutine() {
+func (p *SpriteImpl) stopIfCurrentCoroutine() {
 	if gco.IsInCoroutine() {
 		current := gco.Current()
 		if current != nil && p == current.Obj {
-			gco.Abort()
+			gco.StopCurrent()
 		}
 	}
 }

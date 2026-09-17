@@ -23,17 +23,15 @@ func (p *Coroutines) Join(target Thread) {
 		return
 	}
 
-	me := p.currentCoroutineThread()
+	me := p.callerThread()
 	if me == nil {
-		<-target.done
+		p.waitOutsideScript(target.done)
 		return
 	}
 	if me == target {
 		return
 	}
-	p.registerWaiterAndYield(me, func() bool {
-		return target.addJoinWaiter(me)
-	})
+	p.waitOn(me, &target.joinWaiters)
 }
 
 // JoinAll waits for each distinct, non-nil target to finish.
@@ -47,97 +45,21 @@ func (p *Coroutines) JoinYieldedOrDone(target Thread) {
 		return
 	}
 
-	me := p.currentCoroutineThread()
+	me := p.callerThread()
 	if me == nil {
-		<-target.yieldedOrDone
+		p.waitOutsideScript(target.yieldedOrDone)
 		return
 	}
 	if me == target {
 		return
 	}
-	p.registerWaiterAndYield(me, func() bool {
-		return target.addYieldWaiter(me)
-	})
+	p.waitOn(me, &target.yieldWaiters)
 }
 
 // JoinYieldedOrDoneAll waits until every distinct, non-nil target has first
 // yielded or finished.
 func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
 	joinUnique(targets, p.JoinYieldedOrDone)
-}
-
-func (p *Coroutines) registerWaiterAndYield(me Thread, register func() bool) {
-	// Publish waiter registration and the blocked state atomically.
-	p.schedulerMu.Lock()
-	p.setThreadStateLocked(me, threadBlocked)
-	registered := register()
-	if !registered {
-		p.setThreadStateLocked(me, threadRunnable)
-	}
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
-
-	if registered {
-		p.Yield(me)
-	}
-}
-
-func (th *threadImpl) finishYieldWaiters() (waiters []Thread) {
-	th.yieldedOrDoneOnce.Do(func() {
-		th.waitersMu.Lock()
-		if len(th.yieldWaiters) != 0 {
-			waiters = copyThreadSet(th.yieldWaiters)
-			th.yieldWaiters = nil
-		}
-		close(th.yieldedOrDone)
-		th.waitersMu.Unlock()
-	})
-	return waiters
-}
-
-func (th *threadImpl) addYieldWaiter(waiter Thread) bool {
-	if waiter == nil {
-		return false
-	}
-
-	th.waitersMu.Lock()
-	defer th.waitersMu.Unlock()
-	select {
-	case <-th.yieldedOrDone:
-		return false
-	default:
-	}
-	if th.yieldWaiters == nil {
-		th.yieldWaiters = make(map[Thread]struct{})
-	}
-	th.yieldWaiters[waiter] = struct{}{}
-	return true
-}
-
-func (th *threadImpl) addJoinWaiter(waiter Thread) bool {
-	if waiter == nil {
-		return false
-	}
-
-	th.waitersMu.Lock()
-	defer th.waitersMu.Unlock()
-	if th.joinDone {
-		return false
-	}
-	if th.joinWaiters == nil {
-		th.joinWaiters = make(map[Thread]struct{})
-	}
-	th.joinWaiters[waiter] = struct{}{}
-	return true
-}
-
-func (th *threadImpl) finishJoinWaiters() []Thread {
-	th.waitersMu.Lock()
-	waiters := copyThreadSet(th.joinWaiters)
-	th.joinWaiters = nil
-	th.joinDone = true
-	th.waitersMu.Unlock()
-	return waiters
 }
 
 func joinUnique(targets []Thread, join func(Thread)) {
@@ -160,12 +82,4 @@ func joinUnique(targets []Thread, join func(Thread)) {
 		seen[target] = struct{}{}
 		join(target)
 	}
-}
-
-func copyThreadSet(set map[Thread]struct{}) []Thread {
-	threads := make([]Thread, 0, len(set))
-	for th := range set {
-		threads = append(threads, th)
-	}
-	return threads
 }

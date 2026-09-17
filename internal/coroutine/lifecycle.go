@@ -17,45 +17,37 @@
 package coroutine
 
 import (
-	"context"
-	"reflect"
 	"runtime"
 	sdebug "runtime/debug"
-	"sync"
-	stime "time"
 
-	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/visualfc/gid"
 )
 
-type threadNamer interface {
-	Name() string
-}
-
-type threadAdmission struct {
-	epoch          uint64
-	parentCanceled bool
+// Task describes a coroutine's owner, setup, and execution.
+type Task struct {
+	Owner ThreadObj
+	// Setup runs synchronously after registration and returns optional cleanup.
+	// Cleanup runs once on thread exit, even if Run never starts.
+	Setup func(Thread) (cleanup func())
+	Run   func(Thread)
 }
 
 // Create creates a coroutine without explicitly yielding execution to it.
 func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
-	return p.CreateAndStart(false, obj, fn)
+	return p.createThread(p.captureAdmission(), Task{
+		Owner: obj,
+		Run:   func(th Thread) { fn(th) },
+	})
 }
 
-// CreateAndStart creates a coroutine. start controls eager scheduling: when it
-// is true, the new coroutine gets an immediate opportunity to run before this
-// method returns.
-func (p *Coroutines) CreateAndStart(start bool, obj ThreadObj, fn func(me Thread) int) Thread {
-	th := p.createThread(p.captureThreadAdmission(), obj, nil, fn)
-
-	if start {
+// CreateAndStart creates a coroutine and requests eager scheduling.
+// Initialized managed callers then wait for the child's first yield or completion.
+func (p *Coroutines) CreateAndStart(obj ThreadObj, fn func(me Thread) int) Thread {
+	th := p.Create(obj, fn)
+	if p.initialized.Load() && p.callerThread() != nil {
 		// Wait for this child so another yield job cannot reacquire runMu first.
-		if p.hasInited.Load() {
-			if caller := p.currentCoroutineThread(); caller != nil {
-				p.JoinYieldedOrDone(th)
-				return th
-			}
-		}
+		p.JoinYieldedOrDone(th)
+	} else {
 		runtime.Gosched()
 	}
 	return th
@@ -66,310 +58,58 @@ func (p *Coroutines) LastThreadID() int64 {
 	return p.nextThreadID.Load()
 }
 
-// Abort stops the current coroutine by panicking with ErrAbortThread.
-func (p *Coroutines) Abort() {
-	panic(ErrAbortThread)
+type threadAdmission struct {
+	epoch   uint64
+	allowed bool
 }
 
-// AbortThisScript stops at the nearest procedure or event boundary.
-func (p *Coroutines) AbortThisScript() {
-	panic(ErrStopThisScript)
+func (a threadAdmission) valid(epoch uint64) bool {
+	return a.allowed && a.epoch == epoch
 }
 
-// AbortAll requests cancellation of every registered coroutine.
-func (p *Coroutines) AbortAll() {
-	p.creationMu.Lock()
-	p.closeAdmissionLocked()
-	p.abortAllLocked()
-	if !p.stopping && p.pendingRegistrationHooks.Load() == 0 {
-		p.openAdmissionLocked()
-	}
-	p.creationMu.Unlock()
-}
-
-// AbortAllAndWait aborts all registered coroutines and waits for every thread
-// other than the caller to stop. A non-positive timeout waits indefinitely.
-func (p *Coroutines) AbortAllAndWait(timeout stime.Duration) bool {
-	caller := p.currentCoroutineThread()
-	if caller != nil {
-		p.AbortAll()
-		return p.waitForThreadsToStopFromCoroutine(timeout, caller)
-	}
-	return p.RunAfterAbortAll(timeout, nil)
-}
-
-// RunAfterAbortAll drains registered threads, then runs call with admission
-// closed. Call it outside managed code; a timeout leaves admission closed until
-// a later successful call. call must not create a coroutine.
-func (p *Coroutines) RunAfterAbortAll(timeout stime.Duration, call func()) bool {
-	if p.currentCoroutineThread() != nil || p.isFinalizingCaller() {
-		panic("coroutine: RunAfterAbortAll called from a managed coroutine or its panic handler")
-	}
-	p.shutdownMu.Lock()
-	defer p.shutdownMu.Unlock()
-
-	p.creationMu.Lock()
-	p.beginStoppingLocked()
-	p.creationMu.Unlock()
-	completed := p.waitForThreadsToStop(timeout, nil)
-
-	p.creationMu.Lock()
-	defer p.creationMu.Unlock()
-	if !completed || p.hasThreadsOtherThan(nil) {
-		// Keep timed-out barriers closed until explicit recovery.
-		return false
-	}
-	defer p.endStoppingLocked()
-	if call != nil {
-		call()
-	}
-	return true
-}
-
-// StopIf requests cancellation of every thread accepted by filter. Filters are
-// evaluated without holding the thread registry lock.
-func (p *Coroutines) StopIf(filter func(th Thread) bool) {
-	allThreads := p.snapshotThreads()
-	threads := allThreads[:0]
-	for _, th := range allThreads {
-		if filter(th) {
-			threads = append(threads, th)
-		}
-	}
-	for _, th := range threads {
-		stopThread(th)
+func (p *Coroutines) captureAdmission() threadAdmission {
+	epoch := p.admissionEpoch.Load()
+	return threadAdmission{
+		epoch:   epoch,
+		allowed: epoch&1 == 0 && !p.isThreadCanceled(p.callerThread()),
 	}
 }
 
-// Stop cancels thread; nil and repeated calls are safe.
-func (p *Coroutines) Stop(thread Thread) {
-	if thread != nil {
-		stopThreadIfRunning(thread)
-	}
-}
-
-// IsInCoroutine reports whether the caller is running in this manager.
-func (p *Coroutines) IsInCoroutine() bool {
-	return p.callerThread() != nil
-}
-
-func (p *Coroutines) captureThreadAdmission() threadAdmission {
-	admission := threadAdmission{epoch: p.abortEpoch.Load()}
-	admission.parentCanceled = p.isThreadCanceled(p.currentCoroutineThread())
-	return admission
-}
-
-// createThread admits a thread before running its registration hook or user code.
-func (p *Coroutines) createThread(admission threadAdmission, obj ThreadObj, onRegistered func(Thread) func(), fn func(Thread) int) (th Thread) {
-	th = p.newThread(obj)
+// createThread admits a thread before setup or execution.
+func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
+	th := p.newThread(task.Owner)
 	var cleanup func()
-	defer func() { go p.runThread(th, fn, cleanup) }()
+	defer func() { go p.runThread(th, task.Run, cleanup) }()
 
-	p.creationMu.RLock()
-	rejected := p.stopping || admission.parentCanceled || admission.epoch&1 != 0 ||
-		p.abortEpoch.Load() != admission.epoch
+	p.admissionMu.RLock()
+	rejected := !admission.valid(p.admissionEpoch.Load())
 	if rejected {
-		stopThreadIfRunning(th)
+		th.Cancel()
 	} else {
 		p.registerThread(th)
-		if onRegistered != nil {
-			p.pendingRegistrationHooks.Add(1)
+		if task.Setup != nil {
+			p.pendingSetups.Add(1)
 		}
 	}
-	p.creationMu.RUnlock()
+	p.admissionMu.RUnlock()
 
-	if !rejected && onRegistered != nil {
-		hookReturned := false
+	if !rejected && task.Setup != nil {
+		id, previous := p.enterCallback(callbackSetup)
+		defer p.leaveCallback(id, previous)
+		setupReturned := false
 		defer func() {
-			if !hookReturned {
-				stopThreadIfRunning(th)
+			if !setupReturned {
+				th.Cancel()
 			}
-			p.finishRegistrationHook()
+			p.finishSetup()
 		}()
-		cleanup = onRegistered(th)
-		hookReturned = true
+		cleanup = task.Setup(th)
+		setupReturned = true
 	}
 	return th
 }
 
-func (p *Coroutines) finishRegistrationHook() {
-	p.creationMu.Lock()
-	if p.pendingRegistrationHooks.Add(-1) == 0 && !p.stopping {
-		p.openAdmissionLocked()
-	}
-	p.creationMu.Unlock()
-}
-
-func (p *Coroutines) abortAllLocked() {
-	for _, th := range p.snapshotThreads() {
-		stopThreadIfRunning(th)
-	}
-}
-
-func (p *Coroutines) beginStoppingLocked() {
-	if !p.stopping {
-		p.stopping = true
-		p.closeAdmissionLocked()
-	}
-	p.abortAllLocked()
-}
-
-func (p *Coroutines) endStoppingLocked() {
-	if !p.stopping {
-		return
-	}
-	p.openAdmissionLocked()
-	p.stopping = false
-}
-
-func (p *Coroutines) closeAdmissionLocked() {
-	if !p.admissionClosed() {
-		p.abortEpoch.Add(1)
-	}
-}
-
-func (p *Coroutines) openAdmissionLocked() {
-	if p.admissionClosed() {
-		p.abortEpoch.Add(1)
-	}
-}
-
-func (p *Coroutines) admissionClosed() bool {
-	return p.abortEpoch.Load()&1 != 0
-}
-
-func (p *Coroutines) currentCoroutineThread() Thread {
-	return p.callerThread()
-}
-
-// callerThread returns the coroutine owned by the calling goroutine. Current
-// is intentionally not used here: it describes scheduler state, not caller
-// identity, and may refer to a different goroutine's coroutine.
-func (p *Coroutines) callerThread() Thread {
-	value, ok := p.goroutineThreads.Load(gid.Get())
-	if !ok {
-		return nil
-	}
-	return value.(Thread)
-}
-
-func (p *Coroutines) isFinalizingCaller() bool {
-	_, ok := p.finalizingGoroutines.Load(gid.Get())
-	return ok
-}
-
-func (p *Coroutines) newThread(obj ThreadObj) Thread {
-	th := &threadImpl{
-		Obj:           obj,
-		id:            p.nextThreadID.Add(1),
-		schedFrame:    -1,
-		name:          resolveThreadName(obj),
-		done:          make(chan struct{}),
-		yieldedOrDone: make(chan struct{}),
-	}
-	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
-	if p.debug {
-		th.stack = debug.GetStackTrace()
-	}
-	th.suspendCond = sync.NewCond(&th.suspendMu)
-	return th
-}
-
-func (p *Coroutines) registerThread(th Thread) {
-	p.threadsMu.Lock()
-	p.allThreads[th] = struct{}{}
-	p.threadsMu.Unlock()
-	// Update treats synchronous registration as a spawn barrier.
-	p.setThreadState(th, threadRunnable)
-}
-
-func (p *Coroutines) unregisterThread(th Thread) {
-	p.threadsMu.Lock()
-	delete(p.allThreads, th)
-	p.threadsMu.Unlock()
-}
-
-// admitNativeTask registers a WaitToDo worker under the admission barrier.
-func (p *Coroutines) admitNativeTask(me Thread) *nativeTask {
-	p.creationMu.RLock()
-	defer p.creationMu.RUnlock()
-	if p.stopping || p.admissionClosed() || p.isThreadCanceled(me) {
-		return nil
-	}
-	task := &nativeTask{id: p.nextNativeID.Add(1)}
-	p.threadsMu.Lock()
-	p.nativeTasks[task] = struct{}{}
-	p.threadsMu.Unlock()
-	return task
-}
-
-func (p *Coroutines) finishNativeTask(task *nativeTask) {
-	if task == nil {
-		return
-	}
-	p.threadsMu.Lock()
-	delete(p.nativeTasks, task)
-	p.threadsMu.Unlock()
-}
-
-func (p *Coroutines) snapshotThreads() []Thread {
-	p.threadsMu.Lock()
-	threads := make([]Thread, 0, len(p.allThreads))
-	for th := range p.allThreads {
-		threads = append(threads, th)
-	}
-	p.threadsMu.Unlock()
-	return threads
-}
-
-func (p *Coroutines) hasThreadsOtherThan(skip Thread) bool {
-	p.threadsMu.Lock()
-	defer p.threadsMu.Unlock()
-	for th := range p.allThreads {
-		if th != skip {
-			return true
-		}
-	}
-	return len(p.nativeTasks) != 0
-}
-
-func (p *Coroutines) waitForThreadsToStopFromCoroutine(timeout stime.Duration, caller Thread) bool {
-	// Release runMu so canceled peers can unregister.
-	p.setCurrent(nil)
-	p.runMu.Unlock()
-	completed := p.waitForThreadsToStop(timeout, caller)
-	p.runMu.Lock()
-	p.setCurrent(caller)
-	return completed
-}
-
-func (p *Coroutines) waitForThreadsToStop(timeout stime.Duration, skip Thread) bool {
-	hasTimeout := timeout > 0
-	deadline := stime.Time{}
-	if hasTimeout {
-		deadline = stime.Now().Add(timeout)
-	}
-
-	for {
-		if !p.hasThreadsOtherThan(skip) {
-			return true
-		}
-
-		sleepFor := 10 * stime.Millisecond
-		if hasTimeout {
-			remaining := stime.Until(deadline)
-			if remaining <= 0 {
-				return false
-			}
-			if remaining < sleepFor {
-				sleepFor = remaining
-			}
-		}
-		stime.Sleep(sleepFor)
-	}
-}
-
-func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, cleanup func()) {
+func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
 	p.runMu.Lock()
@@ -378,7 +118,11 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, cleanup func()
 		p.finishThread(th, gid, recover())
 	}()
 	if cleanup != nil {
-		defer cleanup()
+		defer func() {
+			id, previous := p.enterCallback(callbackCleanup)
+			defer p.leaveCallback(id, previous)
+			cleanup()
+		}()
 	}
 
 	if th.stopped.Load() {
@@ -388,21 +132,22 @@ func (p *Coroutines) runThread(th Thread, fn func(me Thread) int, cleanup func()
 }
 
 func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
-	for _, waiter := range th.finishYieldWaiters() {
+	for waiter := range th.yieldWaiters.close(th.yieldedOrDone) {
 		p.markRunnableAndResume(waiter)
 	}
-	for _, waiter := range th.finishJoinWaiters() {
+	for waiter := range th.joinWaiters.close(nil) {
 		p.markRunnableAndResume(waiter)
 	}
 	// Make waiters runnable before removing the target's scheduler state.
-	th.Cancel()
+	th.cancelContext()
 	close(th.done)
 	p.removeThreadState(th)
 	p.setCurrent(nil)
+	// Draining also waits for the panic handler below.
 	defer p.unregisterThread(th)
 	p.runMu.Unlock()
-	p.finalizingGoroutines.Store(gid, struct{}{})
-	defer p.finalizingGoroutines.Delete(gid)
+	id, previous := p.enterCallback(callbackFinalizing)
+	defer p.leaveCallback(id, previous)
 	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
 }
@@ -423,42 +168,81 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 	panic(recovered)
 }
 
-func stopThreadIfRunning(th Thread) {
-	th.suspendMu.Lock()
-	if th.stopped.Load() {
-		th.suspendMu.Unlock()
-		return
+func (p *Coroutines) finishSetup() {
+	p.admissionMu.Lock()
+	if p.pendingSetups.Add(-1) == 0 && !p.stopping {
+		p.openAdmissionLocked()
 	}
-	stopThreadLocked(th)
-	th.suspendMu.Unlock()
+	p.admissionMu.Unlock()
 }
 
-func stopThread(th Thread) {
-	th.suspendMu.Lock()
-	stopThreadLocked(th)
-	th.suspendMu.Unlock()
+func (p *Coroutines) closeAdmissionLocked() {
+	if !p.admissionClosed() {
+		p.admissionEpoch.Add(1)
+	}
 }
 
-func stopThreadLocked(th Thread) {
-	th.stopped.Store(true)
-	th.Cancel()
-	th.suspendCond.Signal()
+func (p *Coroutines) openAdmissionLocked() {
+	if p.admissionClosed() {
+		p.admissionEpoch.Add(1)
+	}
 }
 
-func resolveThreadName(obj ThreadObj) string {
-	if obj == nil {
-		return ""
-	}
-	if name, ok := obj.(string); ok {
-		return name
-	}
-	if named, ok := obj.(threadNamer); ok {
-		return named.Name()
-	}
+func (p *Coroutines) admissionClosed() bool {
+	return p.admissionEpoch.Load()&1 != 0
+}
 
-	typ := reflect.TypeOf(obj)
-	if typ.Kind() != reflect.Pointer || typ.Elem().Name() == "" {
-		return ""
+func (p *Coroutines) registerThread(th Thread) {
+	p.threadsMu.Lock()
+	p.allThreads[th] = struct{}{}
+	p.threadsMu.Unlock()
+	// Update must observe the new runnable thread before its goroutine starts.
+	p.setThreadState(th, threadRunnable)
+}
+
+func (p *Coroutines) unregisterThread(th Thread) {
+	p.threadsMu.Lock()
+	if _, registered := p.allThreads[th]; registered {
+		delete(p.allThreads, th)
+		p.notifyDrainLocked()
 	}
-	return "*" + typ.Elem().Name()
+	p.threadsMu.Unlock()
+}
+
+// admitWorker registers external work under the admission barrier.
+func (p *Coroutines) admitWorker(me Thread) bool {
+	p.admissionMu.RLock()
+	defer p.admissionMu.RUnlock()
+	if p.admissionClosed() || p.isThreadCanceled(me) {
+		return false
+	}
+	p.threadsMu.Lock()
+	p.workerCount++
+	p.threadsMu.Unlock()
+	return true
+}
+
+// WaitToDo pairs each admission with one deferred finish in the worker.
+func (p *Coroutines) finishWorker() {
+	p.threadsMu.Lock()
+	p.workerCount--
+	p.notifyDrainLocked()
+	p.threadsMu.Unlock()
+}
+
+func (p *Coroutines) notifyDrainLocked() {
+	if p.lifecycleChanged != nil {
+		close(p.lifecycleChanged)
+		p.lifecycleChanged = nil
+	}
+}
+
+func (p *Coroutines) snapshotThreads() []Thread {
+	p.threadsMu.Lock()
+	threads := make([]Thread, 0, len(p.allThreads))
+	for th := range p.allThreads {
+		threads = append(threads, th)
+	}
+	p.threadsMu.Unlock()
+	return threads
 }

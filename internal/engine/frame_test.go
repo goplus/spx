@@ -120,7 +120,7 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		SetCoroutines(original)
 	})
 
@@ -139,7 +139,7 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	observed := make(chan observation, 1)
 	done := make(chan struct{})
 	registered := make(chan struct{})
-	source := co.CreateAndStart(false, owner, func(coroutine.Thread) int {
+	source := co.Create(owner, func(coroutine.Thread) int {
 		ScheduleFrame(base+1, func() {
 			observed <- observation{
 				inCoroutine: IsInCoroutine(),
@@ -184,7 +184,7 @@ func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		SetCoroutines(original)
 	})
 
@@ -197,7 +197,7 @@ func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 
 	ran := false
 	registered := make(chan struct{})
-	source := co.CreateAndStart(false, owner, func(me coroutine.Thread) int {
+	source := co.Create(owner, func(me coroutine.Thread) int {
 		ScheduleFrame(base+1, func() { ran = true })
 		close(registered)
 		co.WaitYield(me)

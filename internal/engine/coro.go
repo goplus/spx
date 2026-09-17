@@ -71,7 +71,7 @@ func SetCoroutines(co *coroutine.Coroutines) {
 }
 
 func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
-	gco.CreateAndStart(false, tobj, func(me coroutine.Thread) int {
+	gco.Create(tobj, func(me coroutine.Thread) int {
 		fn(me.Context())
 		return 0
 	})
@@ -95,17 +95,23 @@ func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
 }
 
 func Execute(owner any, fn func(ctx context.Context, owner any)) {
-	if IsInCoroutine() {
-		fn(GetCurrentThreadContext(), owner)
+	co := gco
+	if co.IsInCoroutine() {
+		fn(co.Current().Context(), owner)
 		return
 	}
 
-	done := make(chan struct{}, 1)
-	GoWithOwner(owner, func(ctx context.Context, owner any) {
-		defer close(done)
-		fn(ctx, owner)
+	owner = ResolveCoroutineOwner(owner)
+	call := func() { fn(co.Current().Context(), owner) }
+	if co.TryRunFromEngine(owner, call) {
+		return
+	}
+	thread := co.Create(owner, func(coroutine.Thread) int {
+		call()
+		return 0
 	})
-	<-done
+	// Thread completion also covers cancellation before the callback starts.
+	co.Join(thread)
 }
 
 func Wait(secs float64) float64 {
@@ -229,6 +235,6 @@ func ExecuteNative(fn func(ctx context.Context, owner any)) {
 	})
 }
 
-func WaitForChan[T any](done <-chan T, data *T) {
-	coroutine.WaitForChan(gco, done, data)
+func WaitForChan[T any](ch <-chan T) T {
+	return coroutine.WaitForChan(gco, ch)
 }

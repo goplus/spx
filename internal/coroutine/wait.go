@@ -17,7 +17,6 @@
 package coroutine
 
 import (
-	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/time"
 )
 
@@ -41,11 +40,11 @@ type WaitJob struct {
 }
 
 // Jobs without a thread sort first.
-func (job *WaitJob) threadID() int64 {
+func (job *WaitJob) threadOrder() int64 {
 	if job.Th == nil {
 		return 0
 	}
-	return job.Th.ID()
+	return job.Th.resumeOrder
 }
 
 type taskResult struct {
@@ -53,86 +52,51 @@ type taskResult struct {
 	panicked   bool
 }
 
-// nativeTask tracks work outside the scheduler.
-type nativeTask struct {
-	id uint64
-}
-
-// Wait suspends the current coroutine for the given amount of level time, in
-// seconds.
+// Wait suspends the current coroutine for t seconds of level time.
 func (p *Coroutines) Wait(t float64) {
 	me := p.callerThread()
 	if me == nil {
 		return
 	}
-	job := p.newResumeWaitJob(me, waitTypeTime)
+	job := p.newResumeJob(me, waitTypeTime)
 	job.Time = time.TimeSinceLevelLoad() + max(t, 0)
 	job.Frame = time.Frame()
-	p.enqueueAndYield(me, job)
+	p.enqueueAndYield(job)
 }
 
-// WaitMainThread runs call on the main thread. It runs call immediately when
-// the current platform can call the engine directly.
-func (p *Coroutines) WaitMainThread(call func()) {
-	if platform.TryCallEngineDirectly(call) {
-		return
-	}
-
-	jobID := p.nextWaitJobID()
-	done := make(chan taskResult, 1)
-	me := p.currentCoroutineThread()
-	job := &WaitJob{
-		Th:   me,
-		Id:   jobID,
-		Type: waitTypeMainThread,
-		Call: func() {
-			result := taskResult{}
-			defer func() { done <- result }()
-			if p.isThreadCanceled(me) {
-				return
-			}
-			result = runTask(call)
-		},
-	}
-	p.enqueuePriorityJob(job)
-
-	if me == nil {
-		result := <-done
-		if result.panicked {
-			panic(result.panicValue)
-		}
-		return
-	}
-	select {
-	case result := <-done:
-		if result.panicked {
-			panic(result.panicValue)
-		}
-	case <-me.Context().Done():
-		panic(ErrAbortThread)
-	}
+// WaitYield suspends me until an Update pass processes its yield job.
+func (p *Coroutines) WaitYield(me Thread) {
+	p.enqueueAndYield(p.newResumeJob(me, waitTypeYield))
 }
 
-// WaitToDo runs fn in a separate goroutine and suspends the current coroutine
-// until fn returns.
+// WaitToDo runs fn in a worker and yields when called from a coroutine.
+// Other callers run fn directly.
 func (p *Coroutines) WaitToDo(fn func()) {
 	me := p.callerThread()
 	if me == nil {
 		fn()
 		return
 	}
-	task := p.admitNativeTask(me)
-	if task == nil {
+	if !p.admitWorker(me) {
 		panic(ErrAbortThread)
 	}
 	results := make(chan taskResult, 1)
 	p.setThreadState(me, threadBlocked)
 	go func() {
-		defer p.finishNativeTask(task)
-		result := runTask(fn)
-		// Publish before waking; buffering lets canceled waiters exit.
-		results <- result
-		p.markRunnableAndResume(me)
+		defer p.finishWorker()
+		var result taskResult
+		returned := false
+		defer func() {
+			if !returned {
+				// Goexit ends the worker without returning a result to its script.
+				me.Cancel()
+			}
+			// Publish before waking; buffering lets canceled waiters exit.
+			results <- result
+			p.markRunnableAndResume(me)
+		}()
+		result = p.runExternalTask(fn)
+		returned = true
 	}()
 	p.Yield(me)
 	result := <-results
@@ -141,40 +105,30 @@ func (p *Coroutines) WaitToDo(fn func()) {
 	}
 }
 
-// WaitYield suspends me until an Update pass processes its yield job.
-func (p *Coroutines) WaitYield(me Thread) {
-	p.enqueueAndYield(me, p.newResumeWaitJob(me, waitTypeYield))
-}
-
 // WaitForChan receives one value from ch. Inside a coroutine it yields while
 // waiting; otherwise it blocks the caller directly.
-func WaitForChan[T any](p *Coroutines, ch <-chan T, data *T) {
+func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
 	me := p.callerThread()
 	if me == nil {
-		*data = <-ch
-		return
+		return <-ch
 	}
 
-	p.setThreadState(me, threadBlocked)
-	go func() {
+	var value T
+	p.WaitToDo(func() {
 		select {
-		case value := <-ch:
-			if p.isThreadCanceled(me) {
-				return
-			}
-			*data = value
-			p.markRunnableAndResume(me)
+		case value = <-ch:
 		case <-me.Context().Done():
 		}
-	}()
-	p.Yield(me)
+	})
+	// Only return the result after the script resumes normally.
+	return value
 }
 
 func (p *Coroutines) nextWaitJobID() int64 {
 	return p.nextJobID.Add(1)
 }
 
-func (p *Coroutines) newResumeWaitJob(me Thread, waitType int) *WaitJob {
+func (p *Coroutines) newResumeJob(me Thread, waitType int) *WaitJob {
 	return &WaitJob{
 		Th:   me,
 		Id:   p.nextWaitJobID(),
@@ -182,7 +136,9 @@ func (p *Coroutines) newResumeWaitJob(me Thread, waitType int) *WaitJob {
 	}
 }
 
-func (p *Coroutines) enqueueAndYield(me Thread, job *WaitJob) {
+func (p *Coroutines) enqueueAndYield(job *WaitJob) {
+	me := job.Th
+	p.requireCurrent(me)
 	// Publish blocking and its wake-up job atomically.
 	p.schedulerMu.Lock()
 	p.setThreadStateLocked(me, threadBlocked)
@@ -206,7 +162,15 @@ func (p *Coroutines) enqueuePriorityJob(job *WaitJob) {
 	p.schedulerMu.Unlock()
 }
 
+// runExternalTask calls fn here; nested calls retain the outer drain guard.
+func (p *Coroutines) runExternalTask(fn func()) taskResult {
+	id, previous := p.enterCallback(callbackExternal)
+	defer p.leaveCallback(id, previous)
+	return runTask(fn)
+}
+
 func runTask(fn func()) (result taskResult) {
+	// Distinguish panic(nil) from a normal return.
 	result.panicked = true
 	defer func() {
 		result.panicValue = recover()

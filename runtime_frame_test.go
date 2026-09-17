@@ -32,7 +32,7 @@ func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		gco = original
 		engine.SetCoroutines(original)
 	})
@@ -311,7 +311,7 @@ func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		gco = original
 		engine.SetCoroutines(original)
 	})
@@ -367,7 +367,7 @@ func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		gco = original
 		engine.SetCoroutines(original)
 	})

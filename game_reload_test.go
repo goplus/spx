@@ -194,7 +194,7 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	engine.SetGame(&game.Game)
 
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("reload preflight test coroutines did not stop")
 		}
 		gco = originalScheduler
@@ -253,7 +253,7 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	base.lifecycleState.IsRunned.Store(true)
 
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("reload commit test coroutines did not stop")
 		}
 		engine.ClearAllSprites()

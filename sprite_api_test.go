@@ -33,7 +33,7 @@ func TestSetLayerPublicAPI(t *testing.T) {
 	}
 }
 
-func TestAbortIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
+func TestStopIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
 	if current := gco.Current(); current != nil {
 		t.Fatalf("unexpected active coroutine before test: %v", current)
 	}
@@ -41,10 +41,10 @@ func TestAbortIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
 	// Engine-driven destruction can run between coroutine turns. The scheduler
 	// deliberately clears Current at that boundary, so this path must be a no-op
 	// instead of dereferencing a stale or nil thread.
-	(&SpriteImpl{}).abortIfCurrentCoroutine()
+	(&SpriteImpl{}).stopIfCurrentCoroutine()
 }
 
-func TestAbortIfCurrentCoroutineExternalCallerDoesNotAbortActiveThread(t *testing.T) {
+func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 	sprite := &SpriteImpl{}
 	started := make(chan struct{})
@@ -62,9 +62,9 @@ func TestAbortIfCurrentCoroutineExternalCallerDoesNotAbortActiveThread(t *testin
 
 	// This is an engine-side call from outside the managed coroutine. It must
 	// not mistake the scheduler's Current value for the caller's coroutine.
-	sprite.abortIfCurrentCoroutine()
+	sprite.stopIfCurrentCoroutine()
 	if thread.Stopped() {
-		t.Fatal("external caller unexpectedly aborted the active coroutine")
+		t.Fatal("external caller unexpectedly stopped the active coroutine")
 	}
 	close(release)
 	co.Join(thread)

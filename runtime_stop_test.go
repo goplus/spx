@@ -58,7 +58,7 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop")
 		}
 		gco = original
@@ -66,13 +66,13 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 	})
 
 	done := make(chan string, 1)
-	co.CreateAndStart(true, "stop-this-script", func(coroutine.Thread) int {
+	co.CreateAndStart("stop-this-script", func(coroutine.Thread) int {
 		trace := "outer-before;"
 		Procedure(func() {
 			trace += "inner-before;"
 			Repeat(1, func() {
 				// Match a stop nested in a converted repeat callback.
-				co.AbortThisScript()
+				co.StopThisScript()
 				trace += "inner-bad;"
 			})
 			trace += "inner-bad2;"
@@ -101,7 +101,7 @@ func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop")
 		}
 		gco = original
@@ -110,7 +110,7 @@ func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 
 	var script scriptEventBindings
 	script.init(&scriptEventRegistry{}, "owner")
-	thread := co.CreateAndStart(true, "event-stop-this-script", func(coroutine.Thread) int {
+	thread := co.CreateAndStart("event-stop-this-script", func(coroutine.Thread) int {
 		script.Stop(ThisScript)
 		panic("stop-this-script should not continue")
 	})

@@ -16,6 +16,8 @@
 
 package coroutine
 
+import "github.com/visualfc/gid"
+
 type threadState uint8
 
 const (
@@ -26,6 +28,7 @@ const (
 // Sched yields the current coroutine and arranges for it to resume without an
 // Update pass.
 func (p *Coroutines) Sched(me Thread) {
+	p.requireCurrent(me)
 	// Publish blocked first so a fast wake-up cannot be lost.
 	p.setThreadState(me, threadBlocked)
 	go p.markRunnableAndResume(me)
@@ -35,11 +38,9 @@ func (p *Coroutines) Sched(me Thread) {
 // Yield suspends me until it is resumed or canceled. It panics if me is not the
 // current coroutine.
 func (p *Coroutines) Yield(me Thread) {
-	if me == nil || p.callerThread() != me || p.Current() != me {
-		panic(ErrCannotYieldANonrunningThread)
-	}
+	p.requireCurrent(me)
 	if me.stopAtNextYield.Swap(false) {
-		stopThreadIfRunning(me)
+		me.Cancel()
 	}
 
 	// Clear current before releasing the execution lock.
@@ -53,11 +54,10 @@ func (p *Coroutines) Yield(me Thread) {
 		me.suspendState = suspendStateRunning
 	} else {
 		me.suspendState = suspendStateSuspended
-		me.suspended.Store(true)
 	}
 	me.suspendMu.Unlock()
 
-	for _, waiter := range me.finishYieldWaiters() {
+	for waiter := range me.yieldWaiters.close(me.yieldedOrDone) {
 		p.markRunnableAndResume(waiter)
 	}
 
@@ -67,7 +67,6 @@ func (p *Coroutines) Yield(me Thread) {
 	}
 	if me.suspendState == suspendStateSuspended {
 		me.suspendState = suspendStateRunning
-		me.suspended.Store(false)
 	}
 	me.suspendMu.Unlock()
 
@@ -77,15 +76,6 @@ func (p *Coroutines) Yield(me Thread) {
 	if me.stopped.Load() {
 		panic(ErrAbortThread)
 	}
-}
-
-// StopAtNextYield cancels me when it next yields to the scheduler.
-// It must be called by the currently running managed coroutine.
-func (p *Coroutines) StopAtNextYield(me Thread) {
-	if p.currentCoroutineThread() != me {
-		panic(ErrCannotYieldANonrunningThread)
-	}
-	me.stopAtNextYield.Store(true)
 }
 
 // Resume wakes me if it is suspended. If Yield has not published suspension
@@ -100,16 +90,42 @@ func (p *Coroutines) Resume(me Thread) {
 	switch me.suspendState {
 	case suspendStateSuspended:
 		me.suspendState = suspendStateRunning
-		me.suspended.Store(false)
 		me.suspendCond.Signal()
 	case suspendStateRunning:
 		me.suspendState = suspendStateSignaled
 	}
 }
 
+// StopAtNextYield cancels me when it next yields to the scheduler.
+// It must be called by the currently running managed coroutine.
+func (p *Coroutines) StopAtNextYield(me Thread) {
+	p.requireCurrent(me)
+	me.stopAtNextYield.Store(true)
+}
+
+// IsInCoroutine reports whether the caller is running in this manager.
+func (p *Coroutines) IsInCoroutine() bool {
+	return p.callerThread() != nil
+}
+
 // Current returns the coroutine that currently owns the scheduler, or nil.
 func (p *Coroutines) Current() Thread {
 	return p.current.Load()
+}
+
+// callerThread identifies the calling goroutine; Current identifies the runMu owner.
+func (p *Coroutines) callerThread() Thread {
+	value, ok := p.goroutineThreads.Load(gid.Get())
+	if !ok {
+		return nil
+	}
+	return value.(Thread)
+}
+
+func (p *Coroutines) requireCurrent(me Thread) {
+	if me == nil || p.callerThread() != me || p.Current() != me {
+		panic(ErrCannotYieldANonrunningThread)
+	}
 }
 
 func (p *Coroutines) setCurrent(th Thread) {
@@ -157,20 +173,24 @@ func (p *Coroutines) setThreadState(th Thread, state threadState) {
 }
 
 func (p *Coroutines) setThreadStateLocked(th Thread, state threadState) {
-	p.threadStates[th] = state
+	if state == threadRunnable {
+		p.runnableThreads[th] = struct{}{}
+	} else {
+		delete(p.runnableThreads, th)
+	}
 }
 
 func (p *Coroutines) removeThreadState(th Thread) {
 	p.schedulerMu.Lock()
-	delete(p.threadStates, th)
+	delete(p.runnableThreads, th)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
 // Caller must hold schedulerMu.
 func (p *Coroutines) hasRunnableThreadLocked() bool {
-	for th, state := range p.threadStates {
-		if state == threadRunnable && !p.isThreadCanceled(th) {
+	for th := range p.runnableThreads {
+		if !p.isThreadCanceled(th) {
 			return true
 		}
 	}

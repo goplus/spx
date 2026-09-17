@@ -21,10 +21,10 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	owner := p.pthis
 	if kind == ThisScript {
 		// Procedure handles this signal without stopping its caller.
-		gco.AbortThisScript()
+		gco.StopThisScript()
 		return
 	}
-	filter, abortCaller := coreevent.ResolveStop(
+	filter, stopCaller := coreevent.ResolveStop(
 		kind,
 		owner,
 		func(obj any) bool { return isSprite(obj) },
@@ -54,8 +54,8 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 	} else {
 		gco.StopIf(shouldStop)
 	}
-	if abortCaller {
-		gco.Abort()
+	if stopCaller {
+		gco.StopCurrent()
 	}
 }
 

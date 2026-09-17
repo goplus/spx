@@ -16,17 +16,13 @@
 
 package coroutine
 
-import "sync"
-
 // Latch is a scheduler-aware, idempotent one-shot signal.
 // Wait atomically publishes blocking and waiter registration.
 type Latch struct {
 	manager *Coroutines
 
-	mu      sync.Mutex
-	opened  bool
 	done    chan struct{}
-	waiters map[Thread]struct{}
+	waiters waiterSet
 }
 
 // NewLatch creates a closed latch associated with this coroutine manager.
@@ -45,18 +41,7 @@ func (p *Latch) Done() <-chan struct{} {
 // Open opens the latch and resumes every registered waiter. Repeated calls are
 // safe and have no effect.
 func (p *Latch) Open() {
-	p.mu.Lock()
-	if p.opened {
-		p.mu.Unlock()
-		return
-	}
-	p.opened = true
-	close(p.done)
-	waiters := copyThreadSet(p.waiters)
-	p.waiters = nil
-	p.mu.Unlock()
-
-	for _, waiter := range waiters {
+	for waiter := range p.waiters.close(p.done) {
 		p.manager.markRunnableAndResume(waiter)
 	}
 }
@@ -65,40 +50,11 @@ func (p *Latch) Open() {
 // outside this latch's coroutine manager block the calling goroutine.
 func (p *Latch) Wait() {
 	manager := p.manager
-	me := manager.currentCoroutineThread()
+	me := manager.callerThread()
 	if me == nil {
-		<-p.done
+		manager.waitOutsideScript(p.done)
 		return
 	}
 
-	manager.schedulerMu.Lock()
-	manager.setThreadStateLocked(me, threadBlocked)
-	p.mu.Lock()
-	registered := !p.opened
-	if registered {
-		if p.waiters == nil {
-			p.waiters = make(map[Thread]struct{})
-		}
-		p.waiters[me] = struct{}{}
-	}
-	p.mu.Unlock()
-	if !registered {
-		manager.setThreadStateLocked(me, threadRunnable)
-	}
-	manager.schedulerCond.Signal()
-	manager.schedulerMu.Unlock()
-
-	if registered {
-		defer p.removeWaiter(me)
-		manager.Yield(me)
-	}
-}
-
-func (p *Latch) removeWaiter(waiter Thread) {
-	p.mu.Lock()
-	delete(p.waiters, waiter)
-	if len(p.waiters) == 0 {
-		p.waiters = nil
-	}
-	p.mu.Unlock()
+	manager.waitOn(me, &p.waiters)
 }

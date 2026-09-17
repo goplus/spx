@@ -25,7 +25,11 @@ import (
 )
 
 func (p *Game) initEventLoop() {
-	coreruntime.InitLoops(gco.Create, p.eventLoop, p.inputEventLoop, p.logicLoop)
+	coreruntime.InitLoops(gco.Create, coreruntime.LoopTasks{
+		Event: p.eventLoop,
+		Input: p.inputEventLoop,
+		Logic: p.logicLoop,
+	})
 }
 
 func (p *Game) eventLoop(me coroutine.Thread) int {

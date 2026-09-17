@@ -49,13 +49,13 @@ type scriptEventDispatch struct {
 	run       func(coroutine.Thread, *eventSink)
 }
 
-func (event scriptEventDispatch) task(sink eventSink) coroutine.BatchTask {
-	task := coroutine.BatchTask{
+func (event scriptEventDispatch) task(sink eventSink) coroutine.Task {
+	task := coroutine.Task{
 		Owner: sink.Owner,
 		Run:   func(thread coroutine.Thread) { event.run(thread, &sink) },
 	}
 	if handler, ok := sink.Handler.(scriptEventLifecycle); ok {
-		task.OnRegistered = handler.Start
+		task.Setup = handler.Start
 	}
 	return task
 }
@@ -68,7 +68,7 @@ func withEventRegistrationBarrier(dispatch func()) {
 		dispatch()
 		return
 	}
-	if gco.TryRunManagedBetweenScripts(engine.GetGame(), dispatch) {
+	if gco.TryRunFromEngine(engine.GetGame(), dispatch) {
 		return
 	}
 	dispatcher := gco.Create(engine.GetGame(), func(coroutine.Thread) int {
@@ -119,7 +119,7 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 	}
 
 	baseline := p.stopAllEpoch.Load()
-	tasks := make([]coroutine.BatchTask, len(matched))
+	tasks := make([]coroutine.Task, len(matched))
 	threads := make([]coroutine.Thread, 0, len(matched))
 	defer func() {
 		for _, thread := range threads {
@@ -129,7 +129,7 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 	for i, sink := range matched {
 		task := event.task(sink)
 		run := task.Run
-		task.OnRegistered = func(thread coroutine.Thread) func() {
+		task.Setup = func(thread coroutine.Thread) func() {
 			p.pendingStartThreads.Store(thread, struct{}{})
 			threads = append(threads, thread)
 			return nil
@@ -236,7 +236,7 @@ func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispa
 		return
 	}
 
-	tasks := make([]coroutine.BatchTask, len(matched))
+	tasks := make([]coroutine.Task, len(matched))
 	for i, sink := range matched {
 		tasks[i] = event.task(sink)
 	}

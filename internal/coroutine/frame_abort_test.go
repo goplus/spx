@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-func TestTryRunManagedBetweenScriptsRejectedByAbortBarrier(t *testing.T) {
+func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
 	co := New(nil)
 	co.OnInited()
@@ -42,7 +42,7 @@ func TestTryRunManagedBetweenScriptsRejectedByAbortBarrier(t *testing.T) {
 	callbackRan := atomic.Bool{}
 	dispatchDone := make(chan struct{})
 	go func() {
-		co.TryRunManagedBetweenScripts("dispatcher", func() {
+		co.TryRunFromEngine("dispatcher", func() {
 			callbackRan.Store(true)
 		})
 		close(dispatchDone)
@@ -62,15 +62,15 @@ func TestTryRunManagedBetweenScriptsRejectedByAbortBarrier(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	abortResult := make(chan bool, 1)
-	go func() { abortResult <- co.RunAfterAbortAll(20*time.Millisecond, nil) }()
+	stopResult := make(chan bool, 1)
+	go func() { stopResult <- co.RunAfterStopAll(20*time.Millisecond, nil) }()
 	select {
-	case completed := <-abortResult:
+	case completed := <-stopResult:
 		if completed {
-			t.Fatal("abort barrier completed while blocker was still running")
+			t.Fatal("shutdown barrier completed while blocker was still running")
 		}
 	case <-time.After(time.Second):
-		t.Fatal("abort barrier did not time out")
+		t.Fatal("shutdown barrier did not time out")
 	}
 
 	close(releaseBlocker)
@@ -80,17 +80,17 @@ func TestTryRunManagedBetweenScriptsRejectedByAbortBarrier(t *testing.T) {
 		t.Fatal("rejected managed dispatcher did not clean up")
 	}
 	if callbackRan.Load() {
-		t.Fatal("managed dispatcher callback ran after abort admission closed")
+		t.Fatal("managed dispatcher callback ran after shutdown admission closed")
 	}
 	select {
 	case <-blocker.done:
 	case <-time.After(time.Second):
 		t.Fatal("blocking coroutine did not finish")
 	}
-	if !co.RunAfterAbortAll(time.Second, nil) {
+	if !co.RunAfterStopAll(time.Second, nil) {
 		t.Fatal("explicit recovery barrier did not complete")
 	}
-	if co.hasThreadsOtherThan(nil) {
+	if co.hasPendingWork(nil) {
 		t.Fatal("rejected managed dispatcher leaked from thread registry")
 	}
 }

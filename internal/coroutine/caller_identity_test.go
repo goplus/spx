@@ -18,7 +18,7 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 	})
 	t.Cleanup(func() {
 		close(release)
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Fatal("coroutine did not stop during cleanup")
 		}
 	})
@@ -54,4 +54,47 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 	}
 
 	_ = th
+}
+
+func TestExternalWaitDoesNotChangeSchedulerState(t *testing.T) {
+	co := New(nil)
+	started, release := make(chan struct{}), make(chan struct{})
+	thread := co.Create("active", func(Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	<-started
+	t.Cleanup(func() {
+		close(release)
+		if !co.StopAllAndWait(time.Second) {
+			t.Error("coroutine did not stop")
+		}
+	})
+	for _, test := range []struct {
+		name string
+		wait func(Thread)
+	}{
+		{"yield", co.WaitYield},
+		{"frame", co.WaitNextFrameFor},
+		{"loop", co.YieldLoopFor},
+		{"round", co.YieldToNextRoundFor},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var recovered any
+			func() {
+				defer func() { recovered = recover() }()
+				test.wait(thread)
+			}()
+			if recovered != ErrCannotYieldANonrunningThread {
+				t.Fatalf("panic = %v, want invalid caller", recovered)
+			}
+			co.schedulerMu.Lock()
+			defer co.schedulerMu.Unlock()
+			_, runnable := co.runnableThreads[thread]
+			if !runnable || co.currentJobs.Count() != 0 {
+				t.Fatal("rejected wait changed the running script or queued work")
+			}
+		})
+	}
 }

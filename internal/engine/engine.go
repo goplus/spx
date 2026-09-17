@@ -184,7 +184,7 @@ func Panicf(format string, args ...any) {
 func RequestExit(exitCode int64) {
 	if platform.IsWeb() {
 		// Web resets instead of exiting.
-		abortCoroutinesAndReset(exitCode)
+		stopCoroutinesAndReset(exitCode)
 		return
 	}
 	Managers().ExtMgr.RequestExit(exitCode)
@@ -283,21 +283,21 @@ func handlePanic(name, stack string, err any, exitOnPanic bool) {
 	}
 }
 
-// abortCoroutinesAndReset aborts coroutines and resets the engine.
+// stopCoroutinesAndReset stops coroutines and resets the engine.
 // Used on web, where the process cannot exit.
-func abortCoroutinesAndReset(exitCode int64) {
+func stopCoroutinesAndReset(exitCode int64) {
 	co := gco
 	// Drain off-thread while the panic caller unwinds.
 	go requestResetAfterCoroutinesStop(co, 2*stime.Second, func() {
 		Managers().ExtMgr.RequestReset(exitCode)
 	})
 	if co.IsInCoroutine() {
-		co.Abort()
+		co.StopCurrent()
 	}
 }
 
 func requestResetAfterCoroutinesStop(co *coroutine.Coroutines, timeout stime.Duration, requestReset func()) bool {
-	completed := co.RunAfterAbortAll(timeout, func() {
+	completed := co.RunAfterStopAll(timeout, func() {
 		co.WaitMainThread(requestReset)
 	})
 	if !completed {

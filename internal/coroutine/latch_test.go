@@ -60,6 +60,47 @@ func TestLatchAlreadyOpenReturns(t *testing.T) {
 	co.Join(thread)
 }
 
+func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
+	co := New(nil)
+	latch := co.NewLatch()
+	t.Cleanup(func() {
+		if !co.StopAllAndWait(time.Second) {
+			t.Error("latch waiter did not stop")
+		}
+	})
+	var resumed int
+	waiter := co.Create("waiter", func(Thread) int {
+		latch.Wait()
+		resumed++
+		return 0
+	})
+	co.JoinYieldedOrDone(waiter)
+
+	const callers = 32
+	start := make(chan struct{})
+	finished := make(chan struct{}, callers)
+	for range callers {
+		go func() {
+			<-start
+			latch.Open()
+			select {
+			case <-latch.Done():
+			default:
+				t.Error("Open returned before Done was closed")
+			}
+			finished <- struct{}{}
+		}()
+	}
+	close(start)
+	for range callers {
+		waitForThreadSignal(t, finished, "Open did not return")
+	}
+	waitForThreadSignal(t, waiter.done, "waiter did not resume")
+	if resumed != 1 {
+		t.Fatalf("waiter resumed %d times, want 1", resumed)
+	}
+}
+
 func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
@@ -73,10 +114,10 @@ func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	co.StopIf(func(thread Thread) bool { return thread == waiter })
 	co.Join(waiter)
 
-	latch.mu.Lock()
-	defer latch.mu.Unlock()
-	if len(latch.waiters) != 0 {
-		t.Fatalf("canceled latch waiters = %d, want 0", len(latch.waiters))
+	latch.waiters.mu.Lock()
+	defer latch.waiters.mu.Unlock()
+	if len(latch.waiters.threads) != 0 {
+		t.Fatalf("canceled latch waiters = %d, want 0", len(latch.waiters.threads))
 	}
 }
 

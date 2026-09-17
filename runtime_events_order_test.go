@@ -315,7 +315,7 @@ func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testi
 	register(&back.scriptEventBindings, "back")
 	register(&front.scriptEventBindings, "front")
 
-	co.CreateAndStart(false, game, func(coroutine.Thread) int {
+	co.Create(game, func(coroutine.Thread) int {
 		log.add("caller-before")
 		game.Broadcast__0("async-order")
 		log.add("caller-after")
@@ -394,7 +394,7 @@ func TestScratchSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
 	game.OnMsg__1("restart-pending", func() {
 		log.add("receiver")
 	})
-	co.CreateAndStart(false, game, func(coroutine.Thread) int {
+	co.Create(game, func(coroutine.Thread) int {
 		log.add("caller-before")
 		game.Broadcast__0("restart-pending")
 		game.Broadcast__0("restart-pending")
@@ -425,7 +425,7 @@ func TestScratchBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	game.Broadcast__0("restart-and-wait")
 	waitForScratchEventOrderEntries(t, co, &log, 1)
 
-	co.CreateAndStart(false, game, func(coroutine.Thread) int {
+	co.Create(game, func(coroutine.Thread) int {
 		log.add("waiter-before")
 		game.BroadcastAndWait__0("restart-and-wait")
 		log.add("waiter-after")
