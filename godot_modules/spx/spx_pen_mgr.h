@@ -36,8 +36,11 @@
 #include "spx_pen.h"
 
 class SpxPenSurface;
+class Image;
+class TestSpxPenCollisionInternalsAccessor;
 class SpxPenMgr : public SpxObjectMgr<SpxPen> {
 	SPXCLASS(SpxPenMgr, SpxObjectMgr<SpxPen>)
+	friend class TestSpxPenCollisionInternalsAccessor;
 
 private:
 	SpxPenSurface *surface = nullptr;
@@ -53,6 +56,7 @@ public:
 	SPX_API void destroy_all_pens();
 	SPX_API void set_canvas_size(GdInt width, GdInt height);
 	void flush_all();
+	Ref<Image> get_image() const;
 	SPX_API GdObj create_pen();
 	SPX_API void destroy_pen(GdObj obj);
 	SPX_API void batch_update_commands(const float *buffer_data, int len);

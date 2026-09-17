@@ -52,6 +52,7 @@
 #include "spx_layer_sorter.h"
 #include "spx_object_guard.h"
 #include "spx_physics_mgr.h"
+#include "spx_pen_mgr.h"
 #include "spx_res_mgr.h"
 #include "spx_scene_mgr.h"
 #include "spx_sprite.h"
@@ -163,6 +164,7 @@ struct PixelCollisionQuery {
 struct SceneColorQuery {
 	PixelCollisionQuery pixel_query;
 	int z_index = 0;
+	int layer_order = 2;
 	int tree_index = 0;
 };
 
@@ -255,6 +257,30 @@ static _FORCE_INLINE_ bool build_pixel_collision_query(
 	return true;
 }
 
+static _FORCE_INLINE_ bool build_pen_collision_query(
+		const Ref<Image> &p_image,
+		PixelCollisionQuery &r_query) {
+	if (p_image.is_null()) {
+		return false;
+	}
+
+	const Size2i image_size = p_image->get_size();
+	if (image_size.x <= 0 || image_size.y <= 0) {
+		return false;
+	}
+
+	const Vector2 size(image_size);
+	r_query.image = p_image;
+	r_query.bounds = Rect2(-size * 0.5f, size);
+	r_query.local_rect = r_query.bounds;
+	r_query.inverse_transform = Transform2D();
+	r_query.image_size = image_size;
+	r_query.collision_alpha_scale = 1.0f;
+	r_query.flip_h = false;
+	r_query.flip_v = false;
+	return true;
+}
+
 static _FORCE_INLINE_ bool ensure_query_image(PixelCollisionQuery &r_query) {
 	if (r_query.image.is_valid()) {
 		return true;
@@ -307,6 +333,9 @@ static _FORCE_INLINE_ bool read_query_premultiplied_pixel(
 
 static _FORCE_INLINE_ bool scene_color_query_sort_desc(const SceneColorQuery &p_a, const SceneColorQuery &p_b) {
 	if (p_a.z_index == p_b.z_index) {
+		if (p_a.layer_order != p_b.layer_order) {
+			return p_a.layer_order > p_b.layer_order;
+		}
 		return p_a.tree_index > p_b.tree_index;
 	}
 	return p_a.z_index > p_b.z_index;
@@ -1288,7 +1317,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	}
 
 	std::vector<SceneColorQuery> scene_queries;
-	scene_queries.reserve((size_t)id_objects.size());
+	scene_queries.reserve((size_t)id_objects.size() + 1);
 	for (const auto &item : id_objects) {
 		SpxSprite *candidate = item.value;
 		if (candidate == nullptr || candidate == sprite.get() || candidate->is_queued_for_deletion()) {
@@ -1307,8 +1336,25 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 		}
 
 		query.z_index = candidate->get_z_index();
+		query.layer_order = candidate->is_backdrop_sprite() ? 0 : 2;
 		query.tree_index = candidate->get_index();
 		scene_queries.push_back(std::move(query));
+	}
+
+	// Pen is rendered in the shared stage canvas at z=0, beneath all managed
+	// sprites (whose runtime layers start at 1). Include it in color sensing so
+	// TouchingColor/ColorIsTouching can see user-drawn pixels as scene colors.
+	SpxEngine *engine = SpxEngine::get_singleton();
+	SpxPenMgr *pen_mgr = engine != nullptr ? engine->get_pen() : nullptr;
+	if (pen_mgr != nullptr) {
+		SceneColorQuery pen_query;
+		if (build_pen_collision_query(pen_mgr->get_image(), pen_query.pixel_query) &&
+				get_pixel_overlap_rect(self_query.bounds, pen_query.pixel_query.bounds).has_area()) {
+			pen_query.z_index = 0;
+			// At z=0, Scratch orders regular sprites above pen and pen above backdrop.
+			pen_query.layer_order = 1;
+			scene_queries.push_back(std::move(pen_query));
+		}
 	}
 	std::sort(scene_queries.begin(), scene_queries.end(), scene_color_query_sort_desc);
 
