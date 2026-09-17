@@ -31,6 +31,7 @@ type SpriteImpl struct {
 	scriptEventBindings
 
 	sprite      Sprite
+	original    *SpriteImpl
 	spriteState corestate.SpriteRuntimeState
 	// proxyPublication points to fresh clone-local state. The pointer itself
 	// remains stable after clone construction so reflective cloning never copies
@@ -62,6 +63,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
 	p.spriteState.IsVisible = src.spriteState.IsVisible
+	p.original = src.originalSprite()
 	p.spriteState.Cloned = true
 	p.spriteState.IsDying = false
 	p.spriteState.IsAwakened = false
@@ -230,4 +232,13 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 		}
 	}
 	return nil
+}
+
+// originalSprite returns the original instance, including for clones of clones.
+// A configured stage instance starts its own family even if built from a template.
+func (p *SpriteImpl) originalSprite() *SpriteImpl {
+	if p.IsCloned() && p.original != nil {
+		return p.original
+	}
+	return p
 }

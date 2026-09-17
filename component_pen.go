@@ -42,10 +42,8 @@ const (
 	scratchLegacyDefaultPenShade = 50
 )
 
-type penComponent struct {
-	componentBase
-
-	// Pen properties.
+// penState is copied by value; drawing resources remain component-local.
+type penState struct {
 	penColor        mathf.Color
 	penWidth        float64
 	penHue          float64
@@ -53,10 +51,13 @@ type penComponent struct {
 	penSaturation   float64
 	penBrightness   float64
 	penTransparency float64
+	isPenDown       bool
+}
 
-	// Runtime state.
-	isPenDown bool
-	penObj    *engine.Object
+type penComponent struct {
+	componentBase
+	penState
+	penObj *engine.Object
 }
 
 // ============================================================================
@@ -78,16 +79,8 @@ func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.Spr
 func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcPen := src.(*penComponent)
 	return &penComponent{
-		componentBase:   componentBase{sprite: newSprite},
-		penColor:        srcPen.penColor,
-		penWidth:        srcPen.penWidth,
-		penHue:          srcPen.penHue,
-		legacyPenColor:  srcPen.legacyPenColor,
-		penSaturation:   srcPen.penSaturation,
-		penBrightness:   srcPen.penBrightness,
-		penTransparency: srcPen.penTransparency,
-		isPenDown:       srcPen.isPenDown,
-		penObj:          nil,
+		componentBase: componentBase{sprite: newSprite},
+		penState:      srcPen.penState,
 	}
 }
 

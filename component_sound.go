@@ -44,16 +44,19 @@ type soundComponent struct {
 func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	s.componentBase.initialize(sprite, spriteCfg)
 	s.soundObj = 0
-	s.pendingAudios = make([]string, 0)
+	s.pendingAudios = nil
 }
 
 // cloneFrom creates a new sound component by cloning from source.
 func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	return &soundComponent{
+	source := src.(*soundComponent)
+	cloned := &soundComponent{
 		componentBase: componentBase{sprite: newSprite},
-		soundObj:      0,
-		pendingAudios: make([]string, 0),
 	}
+	if source.soundObj != 0 {
+		cloned.soundObj = newSprite.g.soundMgr.CloneSoundEffects(source.soundObj)
+	}
+	return cloned
 }
 
 // onDestroy cleans up when the component is destroyed.
