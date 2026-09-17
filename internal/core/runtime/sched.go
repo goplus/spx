@@ -82,27 +82,27 @@ func RunMain(call func(), now time.Time, setSchedInMain func(bool), setMainSched
 	call()
 }
 
-func Forever(call func(), waitNextFrame func()) {
+func Forever(call func(), yield func()) {
 	if call == nil {
 		return
 	}
 	for {
 		call()
-		waitNextFrame()
+		yield()
 	}
 }
 
-func Repeat(loopCount int, call func(), waitNextFrame func()) {
+func Repeat(loopCount int, call func(), yield func()) {
 	if call == nil {
 		return
 	}
 	for range loopCount {
 		call()
-		waitNextFrame()
+		yield()
 	}
 }
 
-func RepeatUntil(condition func() bool, call func(), waitNextFrame func()) {
+func RepeatUntil(condition func() bool, call func(), yield func()) {
 	if call == nil || condition == nil {
 		return
 	}
@@ -111,11 +111,11 @@ func RepeatUntil(condition func() bool, call func(), waitNextFrame func()) {
 			return
 		}
 		call()
-		waitNextFrame()
+		yield()
 	}
 }
 
-func WaitUntil(condition func() bool, waitNextFrame func()) {
+func WaitUntil(condition func() bool, yield func()) {
 	if condition == nil {
 		return
 	}
@@ -123,6 +123,6 @@ func WaitUntil(condition func() bool, waitNextFrame func()) {
 		if condition() {
 			return
 		}
-		waitNextFrame()
+		yield()
 	}
 }
