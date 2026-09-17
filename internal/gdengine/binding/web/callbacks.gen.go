@@ -94,12 +94,14 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		}
 		callbacks.OnEngineStart()
 	} else if eventVal.Equal(jsEventOnEngineUpdate) {
+		SyncWebInputSnapshot()
 		if callbacks.OnEngineUpdate == nil {
 			return nil
 		}
 		arg0 := JsToGdFloat(args[1])
 		callbacks.OnEngineUpdate(arg0)
 	} else if eventVal.Equal(jsEventOnEngineFixedUpdate) {
+		SyncWebInputSnapshot()
 		if callbacks.OnEngineFixedUpdate == nil {
 			return nil
 		}
@@ -213,18 +215,18 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		arg0 := JsToGdInt(args[1])
 		callbacks.OnMouseReleased(arg0)
 	} else if eventVal.Equal(jsEventOnKeyPressed) {
+		arg0 := JsToGdInt(args[1])
+		RecordWebKeyState(arg0, true)
 		if callbacks.OnKeyPressed == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		RecordWebKeyState(arg0, true)
 		callbacks.OnKeyPressed(arg0)
 	} else if eventVal.Equal(jsEventOnKeyReleased) {
+		arg0 := JsToGdInt(args[1])
+		RecordWebKeyState(arg0, false)
 		if callbacks.OnKeyReleased == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		RecordWebKeyState(arg0, false)
 		callbacks.OnKeyReleased(arg0)
 	} else if eventVal.Equal(jsEventOnActionPressed) {
 		if callbacks.OnActionPressed == nil {

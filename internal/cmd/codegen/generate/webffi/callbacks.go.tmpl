@@ -35,20 +35,26 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 	}
 	eventVal := args[0]
 {{ range $i, $f := $view.CollectGDExtensionICallbackFunctions -}}
-	{{ if $i }}} else {{ end }}if eventVal.Equal(jsEvent{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}) {
-		if callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }} == nil {
+	{{ $cbName := trimPrefix $f.Name "GDExtensionSpxCallback" -}}
+	{{ if $i }}} else {{ end }}if eventVal.Equal(jsEvent{{ $cbName }}) {
+		{{ if or (eq $cbName "OnEngineUpdate") (eq $cbName "OnEngineFixedUpdate") -}}
+		SyncWebInputSnapshot()
+		{{ else if eq $cbName "OnKeyPressed" -}}
+		arg0 := JsTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
+		RecordWebKeyState(arg0, true)
+		{{ else if eq $cbName "OnKeyReleased" -}}
+		arg0 := JsTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
+		RecordWebKeyState(arg0, false)
+		{{ end -}}
+		if callbacks.{{ $cbName }} == nil {
 			return nil
 		}
+		{{ if not (or (eq $cbName "OnKeyPressed") (eq $cbName "OnKeyReleased")) -}}
 		{{ range $j, $arg := $f.Arguments -}}
 		arg{{ $j }} := JsTo{{mustPrimitiveTypeName $arg $f.Name}}(args[{{add $j 1}}])
 		{{ end -}}
-		{{ $cbName := trimPrefix $f.Name "GDExtensionSpxCallback" -}}
-		{{ if eq $cbName "OnKeyPressed" -}}
-		RecordWebKeyState(arg0, true)
-		{{ else if eq $cbName "OnKeyReleased" -}}
-		RecordWebKeyState(arg0, false)
 		{{ end -}}
-		callbacks.{{ trimPrefix $f.Name "GDExtensionSpxCallback" }}(
+		callbacks.{{ $cbName }}(
 			{{- range $j, $arg := $f.Arguments -}}
 				arg{{ $j }},
 			{{- end -}}
