@@ -17,10 +17,8 @@
 package coroutine
 
 import (
-	"runtime"
 	stime "time"
 
-	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/time"
 )
 
@@ -42,7 +40,7 @@ func (p *Coroutines) YieldLoopFor(me Thread) {
 	p.yieldAtFrame(me, waitTypeLoop)
 }
 
-// YieldToNextRoundFor waits for a round admitted by another runnable script.
+// YieldToNextRoundFor waits for the next frame or a round admitted by a loop continuation.
 func (p *Coroutines) YieldToNextRoundFor(me Thread) {
 	p.yieldAtFrame(me, waitTypeNextRound)
 }
@@ -52,49 +50,10 @@ func (p *Coroutines) RequestRedraw() {
 	p.redrawFrame.Store(time.Frame())
 }
 
-// RunBetweenScripts runs call on the caller between script slices while
-// servicing queued engine-thread jobs.
-func (p *Coroutines) RunBetweenScripts(call func()) {
-	for !p.runMu.TryLock() {
-		// Service engine calls so a waiting script can release runMu.
-		if job := p.takeMainThreadJob(); job != nil {
-			p.runMainThreadJob(job)
-		} else {
-			runtime.Gosched()
-		}
-	}
-	defer p.runMu.Unlock()
-	call()
-}
-
-// TryRunManagedBetweenScripts runs call in a managed coroutine when the caller
-// has direct engine access. While waiting, it services engine jobs without
-// advancing frames. It reports handled when shutdown skips the call.
-func (p *Coroutines) TryRunManagedBetweenScripts(owner ThreadObj, call func()) bool {
-	if p.admissionClosed() {
-		return true
-	}
-	return platform.TryCallEngineDirectly(func() {
-		// Match Create's admission barrier without taking creationMu. Shutdown
-		// callbacks may invoke this while the barrier holds that lock.
-		if p.admissionClosed() {
-			return
-		}
-		dispatcher := p.Create(owner, func(Thread) int {
-			call()
-			return 0
-		})
-		p.waitForThreadOnEngine(dispatcher)
-	})
-}
-
 func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
-	if me == nil || p.callerThread() != me {
-		panic(ErrCannotYieldANonrunningThread)
-	}
-	job := p.newResumeWaitJob(me, kind)
+	job := p.newResumeJob(me, kind)
 	job.Frame = time.Frame()
-	p.enqueueAndYield(me, job)
+	p.enqueueAndYield(job)
 }
 
 // Admit a new round only after all runnable scripts have yielded.
@@ -103,8 +62,7 @@ func (p *Coroutines) queueNextScriptRound(state *updateState) bool {
 		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
 		return false
 	}
-	// The jobs below resume in a new script round even when the engine frame
-	// and its clock do not advance.
+	// A script round does not advance the frame clock.
 	p.scriptRound.Add(1)
 	for p.roundJobs.Count() > 0 {
 		job := p.roundJobs.PopFront()
@@ -118,41 +76,4 @@ func (p *Coroutines) hasLoopContinuation() bool {
 	return p.roundJobs.Any(func(job *WaitJob) bool {
 		return job.Type == waitTypeLoop && !p.isThreadCanceled(job.Th)
 	})
-}
-
-// waitForThreadOnEngine keeps the engine callback responsive while a managed
-// dispatcher waits behind another script or an engine-thread job.
-func (p *Coroutines) waitForThreadOnEngine(thread Thread) {
-	for {
-		select {
-		case <-thread.done:
-			return
-		default:
-		}
-		if job := p.takeMainThreadJob(); job != nil {
-			p.runMainThreadJob(job)
-		} else {
-			runtime.Gosched()
-		}
-	}
-}
-
-// runMainThreadJob mirrors Update's cancellation check for engine callbacks
-// serviced outside the scheduler loop. A canceled script must not receive a
-// successful WaitMainThread result merely because another engine callback
-// drained its queued job.
-func (p *Coroutines) runMainThreadJob(job *WaitJob) {
-	if job == nil || (job.Th != nil && p.isThreadCanceled(job.Th)) {
-		return
-	}
-	job.Call()
-}
-
-func (p *Coroutines) takeMainThreadJob() *WaitJob {
-	p.schedulerMu.Lock()
-	defer p.schedulerMu.Unlock()
-	if job, ok := p.currentJobs.PeekFront(); ok && job.Type == waitTypeMainThread {
-		return p.currentJobs.PopFront()
-	}
-	return nil
 }

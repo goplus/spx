@@ -150,7 +150,7 @@ func (p *Game) runBootstrapMainUntilYield(owner coroutine.ThreadObj, mainFn func
 		return
 	}
 
-	thread := gco.CreateAndStart(false, owner, func(coroutine.Thread) int {
+	thread := gco.Create(owner, func(coroutine.Thread) int {
 		runMain(mainFn)
 		return 0
 	})
@@ -310,7 +310,7 @@ func (p *Game) startBootstrapPhaseFor(generation uint64) {
 			return
 		}
 
-		gco.CreateAndStart(false, p, func(coroutine.Thread) int {
+		gco.Create(p, func(coroutine.Thread) int {
 			p.runBootstrapTasksFor(generation)
 			p.markBootstrapDoneFor(generation)
 			return 0

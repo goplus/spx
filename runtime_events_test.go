@@ -39,7 +39,7 @@ func setupRuntimeEventScheduler(t *testing.T) *coroutine.Coroutines {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop")
 		}
 		gco = original
@@ -389,13 +389,11 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 			game.OnStart(func() {
 				ready = true
 				order = append(order, "start")
-				var signal struct{}
-				engine.WaitForChan(onStartBlocked, &signal)
+				engine.WaitForChan(onStartBlocked)
 				order = append(order, "start-resumed")
 			})
 
-			var signal struct{}
-			engine.WaitForChan(topLevelBlocked, &signal)
+			engine.WaitForChan(topLevelBlocked)
 			order = append(order, "top-level-resumed")
 		})
 	})

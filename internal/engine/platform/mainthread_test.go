@@ -37,6 +37,11 @@ func TestTryCallEngineDirectlyUsesGodot(t *testing.T) {
 	previous := gdx.PlatformMgr
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
 
+	gdx.PlatformMgr = nil
+	if TryCallEngineDirectly(func() { t.Error("engine call ran before platform setup") }) {
+		t.Fatal("uninitialized platform reported direct engine access")
+	}
+
 	gdx.PlatformMgr = testPlatformMgr{main: true}
 	called := false
 	if !TryCallEngineDirectly(func() { called = true }) {

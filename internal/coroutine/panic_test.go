@@ -20,7 +20,7 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 				return 0
 			})
 			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-			if !co.AbortAllAndWait(time.Second) {
+			if !co.StopAllAndWait(time.Second) {
 				t.Fatal("panic handler did not finish")
 			}
 			select {
@@ -55,7 +55,7 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	co.debug = true
 	worker := co.Create("runtime-panic-worker", panicWithNilDereference)
 	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-	if !co.AbortAllAndWait(time.Second) {
+	if !co.StopAllAndWait(time.Second) {
 		t.Fatal("panic handler did not finish")
 	}
 	select {
@@ -93,7 +93,7 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 			return 0
 		})
 		waitForThreadSignal(t, worker.done, "coroutine did not finish")
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Fatal("coroutine did not drain")
 		}
 		select {

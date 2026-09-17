@@ -17,7 +17,6 @@
 package coroutine
 
 import (
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	itime.Start(nil)
-	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 	iterations := 0
 	th := co.Create(nil, func(me Thread) int {
 		for {
@@ -54,7 +53,7 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	itime.Start(nil)
-	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	var rounds []uint64
 	th := co.Create(nil, func(me Thread) int {
@@ -76,7 +75,7 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	itime.Start(nil)
-	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	resumed := false
 	th := co.Create(nil, func(me Thread) int {
@@ -101,7 +100,7 @@ func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	itime.Start(nil)
-	t.Cleanup(func() { co.AbortAllAndWait(time.Second) })
+	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	passiveResumed := false
 	passive := co.Create(nil, func(me Thread) int {
@@ -119,36 +118,6 @@ func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co.Update()
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)
-	}
-}
-
-func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
-	co := New(nil)
-	co.OnInited()
-	queued := make(chan struct{})
-	release := make(chan struct{})
-	var once sync.Once
-	unblock := func() { once.Do(func() { close(release) }) }
-	t.Cleanup(unblock)
-	value := 0
-	go func() {
-		co.runMu.Lock()
-		defer co.runMu.Unlock()
-		co.enqueuePriorityJob(&WaitJob{Type: waitTypeMainThread, Call: unblock})
-		close(queued)
-		<-release
-		value = 42
-	}()
-	<-queued
-	result := make(chan int, 1)
-	go co.RunBetweenScripts(func() { result <- value })
-	select {
-	case got := <-result:
-		if got != 42 {
-			t.Fatalf("script state = %d, want 42", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("frame-boundary callback deadlocked behind an engine call")
 	}
 }
 

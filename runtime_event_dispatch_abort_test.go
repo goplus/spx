@@ -50,7 +50,7 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	}
 	go func() {
 		platform.useCurrentAsMainThread()
-		co.TryRunManagedBetweenScripts("outer", func() {
+		co.TryRunFromEngine("outer", func() {
 			close(callbackStarted)
 			<-releaseCallback
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
@@ -63,15 +63,15 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 		t.Fatal("outer dispatcher callback did not start")
 	}
 
-	abortDone := make(chan bool, 1)
-	go func() { abortDone <- co.RunAfterAbortAll(20*time.Millisecond, nil) }()
+	stopDone := make(chan bool, 1)
+	go func() { stopDone <- co.RunAfterStopAll(20*time.Millisecond, nil) }()
 	select {
-	case completed := <-abortDone:
+	case completed := <-stopDone:
 		if completed {
-			t.Fatal("abort barrier completed while callback was blocked")
+			t.Fatal("shutdown barrier completed while callback was blocked")
 		}
 	case <-time.After(time.Second):
-		t.Fatal("abort barrier did not time out")
+		t.Fatal("shutdown barrier did not time out")
 	}
 	close(releaseCallback)
 	select {
@@ -82,19 +82,19 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	if registered.Load() {
 		t.Fatal("rejected nested handler ran lifecycle registration after abort")
 	}
-	if !co.RunAfterAbortAll(time.Second, nil) {
+	if !co.RunAfterStopAll(time.Second, nil) {
 		t.Fatal("explicit recovery barrier did not complete")
 	}
 	if ran.Load() {
 		t.Fatal("rejected nested handler ran after abort")
 	}
-	co.StartBatch([]coroutine.BatchTask{{
-		Owner:        handler,
-		OnRegistered: handler.Start,
-		Run:          func(coroutine.Thread) { ran.Store(true) },
+	co.StartBatch([]coroutine.Task{{
+		Owner: handler,
+		Setup: handler.Start,
+		Run:   func(coroutine.Thread) { ran.Store(true) },
 	}}, coroutine.BatchAsync)
 	co.Update()
 	if !ran.Load() {
-		t.Fatal("handler could not run after the abort barrier recovered")
+		t.Fatal("handler could not run after the shutdown barrier recovered")
 	}
 }

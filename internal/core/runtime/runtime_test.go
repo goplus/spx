@@ -128,9 +128,7 @@ func TestInitLoopsSkipsDisabledLoop(t *testing.T) {
 			names = append(names, obj.(string))
 			return nil
 		},
-		noop,
-		nil,
-		noop,
+		LoopTasks{Event: noop, Logic: noop},
 	)
 
 	want := []string{"eventLoop", "logicLoop"}

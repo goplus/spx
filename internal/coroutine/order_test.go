@@ -30,7 +30,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop")
 		}
 	})
@@ -92,7 +92,7 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop")
 		}
 	})
@@ -101,7 +101,7 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	parent := co.Create("parent", func(Thread) int {
 		co.WaitNextFrame()
 		order = append(order, "parent")
-		co.StartBatch([]BatchTask{
+		co.StartBatch([]Task{
 			{Run: func(Thread) {
 				order = append(order, "first handler")
 				co.WaitNextFrame()

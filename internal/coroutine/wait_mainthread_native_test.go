@@ -21,6 +21,7 @@ package coroutine
 
 import (
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -123,7 +124,7 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 		default:
 			close(releaseActive)
 		}
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
 		}
 	})
@@ -149,7 +150,7 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 	}
 
 	close(releaseActive)
-	if !co.waitForThreadsToStop(time.Second, nil) {
+	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("active coroutine did not complete")
 	}
 	co.Update()
@@ -174,7 +175,7 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	t.Cleanup(func() {
-		if !co.AbortAllAndWait(time.Second) {
+		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
 		}
 	})
@@ -195,9 +196,9 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 		runtime.Gosched()
 	}
 
-	co.AbortAll()
+	co.StopAll()
 	co.Update()
-	if !co.waitForThreadsToStop(time.Second, nil) {
+	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("canceled coroutine did not stop")
 	}
 	if callbackRan.Load() {
@@ -205,6 +206,101 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 	}
 	if continued.Load() {
 		t.Fatal("canceled coroutine continued after WaitMainThread")
+	}
+}
+
+func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	entered, release, updated := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	releaseCall := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(func() {
+		releaseCall()
+		if !co.RunAfterStopAll(time.Second, nil) {
+			t.Error("main-thread call did not drain")
+		}
+		waitForThreadSignal(t, updated, "Update did not return")
+	})
+	var continued atomic.Bool
+	thread := co.Create("caller", func(Thread) int {
+		co.WaitMainThread(func() {
+			close(entered)
+			<-release
+		})
+		continued.Store(true)
+		return 0
+	})
+	go func() {
+		co.Update()
+		close(updated)
+	}()
+	waitForThreadSignal(t, entered, "main-thread call did not start")
+	co.Stop(thread)
+	reset := false
+	completed := co.RunAfterStopAll(20*time.Millisecond, func() { reset = true })
+	if completed || reset {
+		t.Error("reset ran while the main-thread call was executing")
+	}
+	if co.runMu.TryLock() {
+		co.runMu.Unlock()
+		t.Error("cancellation released script execution before the engine call finished")
+	}
+	releaseCall()
+	waitForThreadSignal(t, updated, "Update did not return after the call finished")
+	if !co.RunAfterStopAll(time.Second, nil) {
+		t.Fatal("completed main-thread call did not drain")
+	}
+	if continued.Load() {
+		t.Fatal("canceled caller continued after its engine call")
+	}
+}
+
+func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
+	setMainThreadForTest(t, false)
+	var reported atomic.Bool
+	co := New(func(PanicReport) { reported.Store(true) })
+	co.OnInited()
+	thread := co.Create("caller", func(me Thread) int {
+		co.WaitMainThread(func() {
+			co.Stop(me)
+			panic("canceled result")
+		})
+		t.Error("canceled caller continued")
+		return 0
+	})
+	co.Update()
+	waitForThreadSignal(t, thread.done, "canceled caller did not finish")
+	if !co.RunAfterStopAll(time.Second, nil) {
+		t.Fatal("canceled call did not drain")
+	}
+	if reported.Load() {
+		t.Fatal("canceled call published its panic result")
+	}
+}
+
+func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	guarded := make(chan any, 1)
+	thread := co.Create("caller", func(Thread) int {
+		co.WaitMainThread(func() {
+			defer func() { guarded <- recover() }()
+			co.StopAllAndWait(time.Millisecond)
+		})
+		return 0
+	})
+	co.Update()
+	waitForThreadSignal(t, thread.done, "caller did not finish")
+	if recovered := <-guarded; recovered != ErrReentrantWait {
+		t.Fatalf("synchronous drain panic = %v", recovered)
+	}
+	if thread.Stopped() {
+		t.Fatal("rejected drain canceled its own caller")
+	}
+	if !co.RunAfterStopAll(time.Second, nil) {
+		t.Fatal("external drain did not recover after the callback returned")
 	}
 }
 
@@ -267,5 +363,53 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("WaitMainThread caller remained blocked after nil callback panic")
+	}
+}
+
+func TestWaitMainThreadGoexitReleasesExternalCaller(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+	callerDone := make(chan bool, 1)
+	go func() {
+		returned := false
+		defer func() {
+			_ = recover()
+			callerDone <- returned
+		}()
+		co.WaitMainThread(runtime.Goexit)
+		returned = true
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("WaitMainThread did not enqueue worker call")
+		}
+		runtime.Gosched()
+	}
+
+	updateDone := make(chan bool, 1)
+	go func() {
+		returned := false
+		defer func() { updateDone <- returned }()
+		co.Update()
+		returned = true
+	}()
+	select {
+	case returned := <-updateDone:
+		if returned {
+			t.Fatal("callback Goexit did not exit the Update goroutine")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Update goroutine did not exit")
+	}
+	select {
+	case returned := <-callerDone:
+		if !returned {
+			t.Fatal("external caller did not return normally after callback Goexit")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("external caller remained blocked after callback Goexit")
 	}
 }

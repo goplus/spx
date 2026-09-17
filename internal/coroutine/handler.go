@@ -49,15 +49,19 @@ func (p *HandlerState) Start(thread Thread) func() {
 	if p.policy == IgnoreWhileRunning && previous != nil && !previous.Stopped() {
 		p.mu.Unlock()
 		if thread != nil {
-			stopThreadIfRunning(thread)
+			thread.Cancel()
 		}
 		return nil
+	}
+	if p.policy == RestartExisting && thread != nil && previous != nil &&
+		!previous.Stopped() && previous.Context().Err() == nil {
+		thread.resumeOrder = previous.resumeOrder
 	}
 	p.active = thread
 	p.mu.Unlock()
 
 	if previous != nil && previous != thread {
-		stopThreadIfRunning(previous)
+		previous.Cancel()
 	}
 	return func() {
 		p.mu.Lock()

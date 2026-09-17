@@ -10,6 +10,71 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 本文描述 SPX 当前运行时的帧阶段、循环轮次，以及固定帧截图和输入回放的保证范围。
 这些规则适用于所有使用相应 API 的项目。
 
+## 执行权与结束
+
+每个脚本使用一个 Go goroutine 保存调用栈，通过 `runMu` 串行执行脚本片段。
+`Yield` 释放执行权；被唤醒的脚本重新取得执行权后才能继续。`Current()` 表示当前
+执行权的拥有者，不代表调用 API 的 goroutine 身份。
+
+普通时间、帧、Join 和外部任务等待会让出执行权。`WaitMainThread` 是同步引擎调用，
+等待期间保留当前脚本片段：尚未开始的请求可以取消，已经开始的请求必须完成后，
+调用脚本才能退出。主线程等待脚本时继续处理引擎请求，不推进未来帧。
+
+channel 接收复用受管理的外部任务，只在脚本正常恢复后提交接收结果；等待因取消
+退出时不会写入调用方的数据。Join 和 Latch 的等待登记在正常返回或取消时都会解除。
+`Execute` 等待任务生命周期结束，因此任务启动前被取消或拒绝也能返回。
+
+请求取消、脚本结束和运行时清理完成是三个阶段。`Cancel` 与 `Stop` 都请求停止并
+唤醒挂起脚本，但不能强制终止任意 Go 阻塞调用。重置屏障等待脚本、外部工作和最终
+异常处理收尾。普通脚本可以调用 `StopAllAndWait`，等待范围排除自身。
+`WaitToDo` 的 worker 若通过 `Goexit` 退出，会取消并唤醒所属脚本，使其执行收尾。
+
+### 停止接口
+
+| 接口 | 语义 |
+| --- | --- |
+| `Stop(thread)` / `StopIf` | 请求目标协程停止，不等待收尾。 |
+| `StopCurrent` | 退出当前协程，穿透自定义过程边界。 |
+| `StopThisScript` | 退出最近的自定义过程并让外层继续；没有过程边界时结束协程。 |
+| `StopAll` | 请求全部已登记协程停止，不等待收尾。 |
+| `StopAllAndWait` | 请求全部停止并等待脚本和 worker 收尾；当前协程也会被取消，但不等待自身退出。 |
+| `RunAfterStopAll` | 关闭准入、请求停止、等待收尾，再执行回调；用于外部重置屏障。 |
+
+`Stop` 表达脚本操作，`Cancel` 传递取消，内部 `drain` 等待收尾。
+`ErrAbortThread` 保留为退出当前协程的控制流信号。
+
+### 回调与同步等待
+
+`Setup` 在创建方同步执行，此时任务已登记但尚未启动；它返回的 cleanup 在任务退出时
+执行，启动前被取消的任务也会执行 cleanup。`Setup` 不得等待本批任务，因为本批执行
+需要全部 `Setup` 返回。
+
+worker、`Setup`、cleanup、最终异常处理、停机回调和独占脚本执行权的回调不能同步
+drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。独占回调也不能再次
+同步执行脚本或等待未完成的 Join / Latch，否则脚本无法取得执行权；已经完成的等待可直接返回。
+
+停机回调期间，准入保持关闭，但不持有准入锁。回调可以调用 `StopAll`，新任务会被拒绝；
+正常返回、panic 或 `Goexit` 都会恢复准入。drain 超时则保持关闭，直到之后一次
+`RunAfterStopAll` 成功。原生引擎主线程等待停机锁或清理通知时继续处理主线程任务，
+不推进帧或脚本轮次。Web 无需处理原生主线程队列，后台等待会挂起 Go goroutine，
+让 JS 事件循环继续处理异步回调。从 JS 同步回调进入时，依赖后续 JS 事件的工作仍须
+转到独立 goroutine，并让当前 JS 回调返回。
+
+timeout 限制清理通知的等待，不是整个调用的硬期限：取得锁、正在运行的回调和脚本
+重新取得执行权仍依赖协作。任意 Go 阻塞、用户代码构成的循环等待，以及 `Setup`
+等待自身任务，仍可能阻止进展。
+
+### 并发约束
+
+- 等待登记与 blocked 状态一起发布，锁序为 `schedulerMu` → `waiterSet.mu`。
+  关闭等待集合时移交等待者，解锁后再唤醒，避免与登记形成锁序环。
+- 任务结束时先把 Join 等待者标为 runnable，再取消 context、关闭完成通知并移除
+  调度状态，避免 Update 在两者之间误判没有可运行脚本。
+- 外部工作启动前登记，worker 退出时统一注销。取消调用脚本不能提前减少
+  外部工作计数；重置必须等实际工作结束。
+- 清理等待在生命周期登记锁下同时检查条件并订阅完成通知，避免遗漏唤醒。
+  通知在实际注销时发布，包括最终异常处理结束；不以脚本的完成 channel 替代。
+
 ## 帧阶段
 
 一次 engine update 推进一次帧时钟，其中可以包含多轮脚本执行。
@@ -37,6 +102,8 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 4. **跨帧保留脚本顺序。** 延后到下一帧的等待和循环任务，按脚本注册顺序
    检查各自的恢复条件。可运行脚本（包括新启动的处理函数）让出或结束后，
    再恢复下一项已排队的脚本；期间仍处理引擎主线程调用。
+   重启仍在运行的事件处理函数时，新实例继承原实例的跨帧排序位置，Thread ID
+   仍独立分配。旧实例已经停止或完成后再次触发，使用新的注册位置。
 
 ## 条件事件
 
@@ -52,6 +119,8 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 
 | 职责 | 位置 |
 | --- | --- |
+| 准入与任务生命周期、停止与清理屏障 | `internal/coroutine/lifecycle.go`、`shutdown.go` |
+| 回调重入限制、主线程调用与等待 | `internal/coroutine/callback.go`、`mainthread.go` |
 | 帧等待、循环轮次、重绘预算、帧边界回调 | `internal/coroutine/frame.go` |
 | 等待任务处理与调度统计 | `internal/coroutine/update.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
@@ -87,6 +156,9 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 
 循环和条件事件的规则参考 Scratch 的相应机制，但不代表完整兼容 Scratch VM，
 也不保证不同运行或平台具有相同的迭代次数。
+例如，异步广播新建的可运行处理函数可能先于仍在等待队列中的旧脚本执行；
+这与 Scratch 将新线程追加到既有线程列表末尾的规则不同。
+调度 watchdog 只在调度循环取回控制权后检查时间，不提供抢占或硬超时保证。
 
 ## 回归覆盖
 
@@ -97,6 +169,13 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 - 条件与处理函数分别观察时钟推进前、后的状态；慢帧不破坏阶段顺序。
 - 条件事件维持上升沿、防重入和拥有者隔离语义。
 - 采样阶段不会因待处理的主线程调用发生死锁。
+- 同步引擎调用保持脚本片段连续；取消不会让正在执行的调用越过重置屏障。
+- 接收结果只由恢复后的脚本提交，取消的 Join 等待者不残留引用。
+- 活跃事件重启保留原排序位置，已停止或完成的事件重新注册。
+- 并发清理等待者全部得到通知，最后一个外部工作结束前不会执行重置。
+- 并发打开 Latch 不会重复恢复脚本，且 Open 返回时 Done 已关闭。
+- 回调同步 drain 与独占回调同步执行脚本快速拒绝；停机等待继续处理 worker 的主线程收尾。
+- worker 的 `Goexit` 唤醒并停止所属脚本，停机回调异常退出后恢复准入。
 
 ```sh
 go test -race ./internal/coroutine ./internal/engine ./internal/core/runtime .
@@ -107,6 +186,8 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 核心回归位于 `runtime_scratch_scheduler_test.go`、`runtime_events_test.go`、
 `runtime_events_order_test.go`、`sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
 `internal/coroutine/order_test.go`。
+取消与重启覆盖位于 `internal/coroutine/wait_cancel_test.go`、`join_cancel_test.go`、
+`handler_order_test.go` 和 `internal/engine/execute_test.go`。
 WASM 编译检查不替代浏览器运行验证。
 
 ## 参考实现

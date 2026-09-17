@@ -354,8 +354,7 @@ func TestScratchConditionDoesNotReenterRunningHandler(t *testing.T) {
 	game.OnCond(func() bool { evaluations++; return value }, func() {
 		calls++
 		defer func() { completed <- struct{}{} }()
-		var signal struct{}
-		engine.WaitForChan(release, &signal)
+		engine.WaitForChan(release)
 	})
 	poll := func() {
 		game.OnEngineBeforeUpdate(1.0 / 30)

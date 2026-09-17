@@ -100,8 +100,7 @@ func (q *frameCallbackQueue) reset() {
 }
 
 func (callback scheduledFrameCallback) canceled() bool {
-	// Normal coroutine completion does not cancel callbacks registered by it;
-	// only an explicit Stop or Abort marks the source stopped.
+	// Callback lifetime follows the source's Stopped flag, not goroutine completion.
 	return callback.context.source != nil && callback.context.source.Stopped()
 }
 
@@ -120,7 +119,7 @@ func executeFrameCallbacks(callbacks []scheduledFrameCallback) {
 		return
 	}
 	if gco != nil && !gco.IsInCoroutine() {
-		gco.CreateAndStart(false, GetGame(), func(coroutine.Thread) int {
+		gco.Create(GetGame(), func(coroutine.Thread) int {
 			executeFrameCallbacks(callbacks)
 			return 0
 		})
@@ -139,7 +138,7 @@ func executeFrameCallback(callback scheduledFrameCallback) {
 		callback.fn()
 		return
 	}
-	thread := gco.CreateAndStart(false, callback.context.owner, func(coroutine.Thread) int {
+	thread := gco.Create(callback.context.owner, func(coroutine.Thread) int {
 		if !callback.canceled() {
 			callback.fn()
 		}

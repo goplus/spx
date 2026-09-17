@@ -33,7 +33,7 @@ type Queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]
 	count int
-	pool  sync.Pool
+	pool  *sync.Pool
 
 	sortBuffer []T
 }
@@ -203,17 +203,15 @@ func (q *Queue[T]) PopBack() T {
 // NewQueue creates an empty queue.
 func NewQueue[T any]() *Queue[T] {
 	q := &Queue[T]{}
-	q.pool.New = func() any {
-		return new(node[T])
-	}
+	q.ensurePool()
 	return q
 }
 
 func (q *Queue[T]) ensurePool() {
-	if q.pool.New == nil {
-		q.pool.New = func() any {
+	if q.pool == nil {
+		q.pool = &sync.Pool{New: func() any {
 			return new(node[T])
-		}
+		}}
 	}
 }
 

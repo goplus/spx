@@ -261,8 +261,7 @@ func (s *cloneProxyInitSprite) Main() {
 			return
 		}
 		if s.waitOnCloned != nil {
-			var signal struct{}
-			engine.WaitForChan(s.waitOnCloned, &signal)
+			engine.WaitForChan(s.waitOnCloned)
 			if s.onClonedReturned != nil {
 				close(s.onClonedReturned)
 			}
@@ -510,7 +509,7 @@ func setupBootstrapScheduler(t *testing.T) {
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		co.AbortAllAndWait(time.Second)
+		co.StopAllAndWait(time.Second)
 		gco = original
 		engine.SetCoroutines(original)
 	})
@@ -682,8 +681,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 	var spriteBSeenThreadCount int64
 	spriteA := newCollisionLayerOrderSprite(&game, "SpriteA", func() {
 		spriteASeenThreadCount = gco.LastThreadID()
-		var signal struct{}
-		engine.WaitForChan(blocked, &signal)
+		engine.WaitForChan(blocked)
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", func() {
 		spriteBSeenThreadCount = gco.LastThreadID()
@@ -814,8 +812,7 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	game.deferBootstrapFor(generation, func() {
 		game.runBootstrapMainUntilYield(&game, func() {
 			close(stageStarted)
-			var signal struct{}
-			engine.WaitForChan(blocked, &signal)
+			engine.WaitForChan(blocked)
 			close(stageResumed)
 		})
 	})
@@ -858,8 +855,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 		spriteA.OnStart(func() {
 			close(started)
 		})
-		var signal struct{}
-		engine.WaitForChan(blocked, &signal)
+		engine.WaitForChan(blocked)
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
 

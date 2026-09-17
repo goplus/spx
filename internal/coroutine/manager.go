@@ -25,8 +25,7 @@ import (
 )
 
 var (
-	// ErrCannotYieldANonrunningThread is the panic value used when a coroutine
-	// tries to yield without owning the scheduler.
+	// ErrCannotYieldANonrunningThread signals a yield without execution ownership.
 	ErrCannotYieldANonrunningThread = errors.New("can not yield a non-running thread")
 
 	// ErrAbortThread is the panic value used to stop the current coroutine.
@@ -34,6 +33,9 @@ var (
 
 	// ErrStopThisScript signals Scratch-style termination to a procedure boundary.
 	ErrStopThisScript = errors.New("stop this script")
+
+	// ErrReentrantWait rejects a synchronous wait that would depend on its caller.
+	ErrReentrantWait = errors.New("coroutine: callback cannot synchronously wait for itself")
 )
 
 // PanicReport preserves an unhandled coroutine panic and its diagnostic context.
@@ -46,44 +48,43 @@ type PanicReport struct {
 
 // Coroutines coordinates thread lifecycle and cooperative scheduling.
 type Coroutines struct {
-	onPanic   func(PanicReport)
-	hasInited atomic.Bool
-	debug     bool
+	onPanic     func(PanicReport)
+	initialized atomic.Bool
+	debug       bool
 
-	// runMu ensures that only one coroutine executes at a time. current is valid
-	// only while a coroutine owns runMu.
+	// runMu serializes script slices; current identifies its owner.
 	runMu   sync.Mutex
 	current atomic.Pointer[threadImpl]
 
-	// shutdownMu serializes shutdowns. creationMu makes admission and registration
-	// atomic with aborts. Lock order is shutdownMu, runMu, then creationMu.
-	shutdownMu sync.Mutex
-	creationMu sync.RWMutex
-	stopping   bool
+	// shutdownMu serializes external drains; admissionMu guards admission and registration.
+	// Lock order: shutdownMu, runMu, admissionMu.
+	shutdownMu  sync.Mutex
+	admissionMu sync.RWMutex
+	stopping    bool // Implies closed admission when observed under admissionMu.RLock.
 
-	// threadsMu protects both lifecycle registries.
-	threadsMu   sync.Mutex
-	allThreads  map[Thread]struct{}
-	nativeTasks map[*nativeTask]struct{}
+	// threadsMu protects lifecycle registration and the drain notification.
+	threadsMu        sync.Mutex
+	allThreads       map[Thread]struct{}
+	workerCount      int
+	lifecycleChanged chan struct{} // Created lazily by drains; closed on removal.
 
-	// schedulerMu protects threadStates and the condition-variable predicate.
-	// It also makes state changes and their corresponding enqueue atomic.
-	schedulerMu   sync.Mutex
-	schedulerCond *sync.Cond
-	threadStates  map[Thread]threadState
-	currentJobs   *Queue[*WaitJob]
-	deferredJobs  *Queue[*WaitJob]
-	roundJobs     *Queue[*WaitJob]
-	redrawFrame   atomic.Int64
-	scriptRound   atomic.Uint64
+	// schedulerMu guards runnable state and atomic state/queue publication.
+	schedulerMu     sync.Mutex
+	schedulerCond   *sync.Cond
+	runnableThreads map[Thread]struct{} // Cancellation is checked before execution.
+	currentJobs     *Queue[*WaitJob]
+	deferredJobs    *Queue[*WaitJob]
+	roundJobs       *Queue[*WaitJob]
+	redrawFrame     atomic.Int64
+	scriptRound     atomic.Uint64
 
 	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
-	nextNativeID atomic.Uint64
-	// abortEpoch is even while admission is open and odd while closed. Pending
-	// registration hooks delay reopening after AbortAll.
-	abortEpoch               atomic.Uint64
-	pendingRegistrationHooks atomic.Int64
+
+	// admissionEpoch is even while admission is open and odd while closed. Pending
+	// setup calls delay reopening after StopAll.
+	admissionEpoch atomic.Uint64
+	pendingSetups  atomic.Int64
 
 	perfDebug         atomic.Bool
 	readGCStats       func(*sdebug.GCStats)
@@ -91,53 +92,52 @@ type Coroutines struct {
 	statsMu           sync.RWMutex
 	lastUpdateStats   UpdateJobsStats
 
-	// goroutineThreads maps each managed goroutine to the exact coroutine it
-	// executes. A scheduler-wide Current value is not sufficient to identify
-	// the caller because external goroutines can observe it concurrently.
+	// Caller identity is independent of the script owning runMu.
 	goroutineThreads sync.Map // map[uint64]Thread
-	// Prevent reentry while a panic callback runs.
-	finalizingGoroutines sync.Map // map[uint64]struct{}
-}
 
-// ScriptRound advances whenever another Scratch-style execution round is
-// admitted within an engine frame. Pair it with the engine frame number when
-// an identity spanning frames is required.
-func (p *Coroutines) ScriptRound() uint64 {
-	return p.scriptRound.Load()
-}
-
-// OnRestart marks the scheduler as not yet initialized.
-func (p *Coroutines) OnRestart() {
-	p.hasInited.Store(false)
-}
-
-// OnInited marks the scheduler as initialized.
-func (p *Coroutines) OnInited() {
-	p.hasInited.Store(true)
-}
-
-// SetPerfDebug enables or disables GC statistics collection during Update.
-func (p *Coroutines) SetPerfDebug(enabled bool) {
-	p.perfDebug.Store(enabled)
+	// Callbacks cannot drain themselves; exclusive callbacks also retain runMu.
+	callbacks sync.Map // map[uint64]callbackScope
 }
 
 // New creates a coroutine manager. onPanic is called when a coroutine exits
 // with an unhandled panic other than ErrAbortThread or ErrStopThisScript.
 func New(onPanic func(PanicReport)) *Coroutines {
+	// Nodes move between these queues, so they share a recycling pool.
+	jobs := NewQueue[*WaitJob]()
 	p := &Coroutines{
 		onPanic:           onPanic,
 		allThreads:        make(map[Thread]struct{}),
-		nativeTasks:       make(map[*nativeTask]struct{}),
-		threadStates:      make(map[Thread]threadState),
-		currentJobs:       NewQueue[*WaitJob](),
-		deferredJobs:      NewQueue[*WaitJob](),
-		roundJobs:         NewQueue[*WaitJob](),
+		runnableThreads:   make(map[Thread]struct{}),
+		currentJobs:       jobs,
+		deferredJobs:      &Queue[*WaitJob]{pool: jobs.pool},
+		roundJobs:         &Queue[*WaitJob]{pool: jobs.pool},
 		readGCStats:       sdebug.ReadGCStats,
 		updateWatchdogNow: stime.Now,
 	}
 	p.schedulerCond = sync.NewCond(&p.schedulerMu)
 	p.redrawFrame.Store(-1)
 	return p
+}
+
+// ScriptRound counts additional script rounds within engine frames.
+// Pair it with the frame number to identify a scheduling round.
+func (p *Coroutines) ScriptRound() uint64 {
+	return p.scriptRound.Load()
+}
+
+// OnRestart marks the scheduler as not yet initialized.
+func (p *Coroutines) OnRestart() {
+	p.initialized.Store(false)
+}
+
+// OnInited marks the scheduler as initialized.
+func (p *Coroutines) OnInited() {
+	p.initialized.Store(true)
+}
+
+// SetPerfDebug enables or disables GC statistics collection during Update.
+func (p *Coroutines) SetPerfDebug(enabled bool) {
+	p.perfDebug.Store(enabled)
 }
 
 // IsAbortThreadError reports whether err is the coroutine abort sentinel.

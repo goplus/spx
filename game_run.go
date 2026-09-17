@@ -61,7 +61,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	if err != nil {
 		return err
 	}
-	if !gco.RunAfterAbortAll(2*time.Second, g.reset) {
+	if !gco.RunAfterStopAll(2*time.Second, g.reset) {
 		return errors.New("game reload aborted: existing coroutines did not stop")
 	}
 	generation := g.currentBootstrapGeneration()

@@ -26,17 +26,9 @@ const (
 	BatchWaitDone
 )
 
-// BatchTask describes one member of an ordered coroutine batch.
-type BatchTask struct {
-	Owner        ThreadObj
-	OnRegistered func(Thread) func()
-	Run          func(Thread)
-}
-
 // StartBatch registers tasks before running them in order; wait modes require a
-// managed caller. OnRegistered may cancel work and return a once-only cleanup,
-// but must not wait for its task.
-func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
+// managed caller. Setup may cancel work but must not wait for its task.
+func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
 	}
@@ -44,38 +36,7 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 		return nil
 	}
 
-	progress := newLatchSet(p, len(tasks)+1)
-	threads := make([]Thread, len(tasks))
-	batchCreated := false
-	defer func() {
-		if !batchCreated {
-			for _, thread := range threads {
-				p.Stop(thread)
-			}
-		}
-	}()
-	admission := p.captureThreadAdmission()
-	for i, task := range tasks {
-		current, next := progress[i], progress[i+1]
-		onRegistered := task.OnRegistered
-		if onRegistered != nil {
-			// Publish the slot before invoking the callback, preserving the
-			// registration order visible to callbacks.
-			onRegistered = func(thread Thread) func() {
-				threads[i] = thread
-				return task.OnRegistered(thread)
-			}
-		}
-		threads[i] = p.createThread(admission, task.Owner, onRegistered, func(thread Thread) int {
-			defer next.Open()
-			current.Wait()
-			next.Open()
-			task.Run(thread)
-			return 0
-		})
-	}
-	batchCreated = true
-
+	threads, progress := p.registerBatch(tasks)
 	relayBatchProgress(threads, progress[1:])
 	progress[0].Open()
 	switch mode {
@@ -87,6 +48,41 @@ func (p *Coroutines) StartBatch(tasks []BatchTask, mode BatchMode) []Thread {
 	return threads
 }
 
+func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
+	progress := newLatchSet(p, len(tasks)+1)
+	threads := make([]Thread, len(tasks))
+	batchCreated := false
+	defer func() {
+		if !batchCreated {
+			for _, thread := range threads {
+				p.Stop(thread)
+			}
+		}
+	}()
+	admission := p.captureAdmission()
+	for i, task := range tasks {
+		current, next := progress[i], progress[i+1]
+		if setup := task.Setup; setup != nil {
+			// Publish the slot before invoking the callback, preserving the
+			// registration order visible to callbacks.
+			task.Setup = func(thread Thread) func() {
+				threads[i] = thread
+				return setup(thread)
+			}
+		}
+		run := task.Run
+		task.Run = func(thread Thread) {
+			defer next.Open()
+			current.Wait()
+			next.Open()
+			run(thread)
+		}
+		threads[i] = p.createThread(admission, task)
+	}
+	batchCreated = true
+	return threads, progress
+}
+
 func newLatchSet(p *Coroutines, size int) []*Latch {
 	latches := make([]*Latch, size)
 	for i := range latches {
@@ -95,6 +91,7 @@ func newLatchSet(p *Coroutines, size int) []*Latch {
 	return latches
 }
 
+// Advance canceled tasks in order so later tasks cannot bypass an unfinished prefix.
 func relayBatchProgress(threads []Thread, progress []*Latch) {
 	go func() {
 		for i, thread := range threads {

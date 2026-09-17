@@ -165,7 +165,7 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	called := false
-	if !co.RunAfterAbortAll(time.Second, func() {
+	if !co.RunAfterStopAll(time.Second, func() {
 		withEventRegistrationBarrier(func() { called = true })
 	}) {
 		t.Fatal("shutdown barrier did not complete")
