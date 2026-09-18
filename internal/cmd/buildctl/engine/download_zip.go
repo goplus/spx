@@ -24,6 +24,8 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
+const maxEngineArchiveEntrySize int64 = 2 << 30
+
 type binaryInstall struct {
 	assetName string
 	dst       string
@@ -67,5 +69,9 @@ func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []b
 }
 
 func extractZip(srcZip, dstDir string) error {
-	return shared.ExtractZip(srcZip, dstDir)
+	return shared.ExtractZipWithOptions(srcZip, dstDir, shared.ZipExtractOptions{
+		Limits: shared.ZipLimits{
+			MaxEntrySize: maxEngineArchiveEntrySize,
+		},
+	})
 }

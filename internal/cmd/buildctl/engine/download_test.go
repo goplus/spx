@@ -17,8 +17,10 @@
 package engine
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -70,6 +72,85 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	if fileExists(filepath.Join(tempDir, "evil.txt")) {
 		t.Fatal("unexpected file extracted outside destination directory")
 	}
+}
+
+func TestExtractZipAllowsEngineSizedEntryMetadata(t *testing.T) {
+	// The Windows editor with debug symbols is the largest v3.3.0 engine asset.
+	const windowsEditorEntrySize uint64 = 1_890_193_473
+	declaredSize := windowsEditorEntrySize
+	if declaredSize <= uint64(runtimebundle.MaxEntrySize) {
+		t.Fatalf("test entry size %d does not exceed default limit %d", declaredSize, runtimebundle.MaxEntrySize)
+	}
+	if declaredSize > uint64(maxEngineArchiveEntrySize) {
+		t.Fatalf("test entry size %d exceeds engine limit %d", declaredSize, maxEngineArchiveEntrySize)
+	}
+
+	zipPath := writeRawZipFixture(t, declaredSize)
+	if err := shared.ExtractZip(zipPath, filepath.Join(t.TempDir(), "default")); !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("default ZIP extraction error = %v, want ErrArchiveLimit", err)
+	}
+
+	dstDir := filepath.Join(t.TempDir(), "engine")
+	err := extractZip(zipPath, dstDir)
+	if err == nil {
+		t.Fatal("expected inconsistent ZIP metadata to be rejected")
+	}
+	if errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("extractZip rejected entry metadata within the engine limit: %v", err)
+	}
+	if !errors.Is(err, runtimebundle.ErrUnsafeArchive) {
+		t.Fatalf("extractZip error = %v, want ErrUnsafeArchive", err)
+	}
+	if _, err := os.Stat(dstDir); !os.IsNotExist(err) {
+		t.Fatalf("extraction destination was created before verification completed: %v", err)
+	}
+}
+
+func TestExtractZipRejectsEntryAboveEngineSizeLimit(t *testing.T) {
+	declaredSize := uint64(maxEngineArchiveEntrySize + 1)
+	zipPath := writeRawZipFixture(t, declaredSize)
+	err := extractZip(zipPath, filepath.Join(t.TempDir(), "extract"))
+	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
+		t.Fatalf("extractZip error = %v, want ErrArchiveLimit", err)
+	}
+	if want := fmt.Sprintf("limit %d", maxEngineArchiveEntrySize); !strings.Contains(err.Error(), want) {
+		t.Fatalf("extractZip error = %v, want %q", err, want)
+	}
+}
+
+func writeRawZipFixture(t *testing.T, declaredSize uint64) string {
+	t.Helper()
+	dataSize := declaredSize/runtimebundle.MaxCompressionRatio + 1
+	data := make([]byte, int(dataSize))
+	zipPath := filepath.Join(t.TempDir(), "archive.zip")
+	output, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(output)
+	entry, err := writer.CreateRaw(&zip.FileHeader{
+		Name:               "editor",
+		Method:             zip.Store,
+		CRC32:              crc32.ChecksumIEEE(data),
+		CompressedSize64:   uint64(len(data)),
+		UncompressedSize64: declaredSize,
+	})
+	if err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(data); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return zipPath
 }
 
 func TestDownloadLinuxAssetsRequiresLinuxPlatform(t *testing.T) {
