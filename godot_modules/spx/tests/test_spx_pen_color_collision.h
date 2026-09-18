@@ -31,7 +31,6 @@
 #define TEST_SPX_PEN_COLOR_COLLISION_H
 
 #include "../spx_engine.h"
-#include "../spx_pen_mgr.h"
 #include "../spx_pen_surface.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
@@ -45,29 +44,40 @@
 #include "scene/resources/sprite_frames.h"
 #include "tests/test_macros.h"
 
-class TestSpxPenCollisionInternalsAccessor {
-public:
-	static void install_image(SpxPenMgr *p_pen_mgr, const Ref<Image> &p_image) {
-		if (p_pen_mgr->surface == nullptr) {
-			p_pen_mgr->surface = memnew(SpxPenSurface);
-		}
-		p_pen_mgr->surface->collision_image = p_image;
-	}
-
-	static void remove_surface(SpxPenMgr *p_pen_mgr) {
-		SpxPenSurface *surface = p_pen_mgr->surface;
-		p_pen_mgr->surface = nullptr;
-		if (surface != nullptr) {
-			memdelete(surface);
-		}
-	}
-};
-
 namespace TestSpxPenColorCollision {
 
 class SpriteMgrProbe : public SpxSpriteMgr {
+private:
+	Ref<Image> pen_image;
+	SpxPenSurface *pen_surface = nullptr;
+
+protected:
+	Ref<Image> _get_pen_collision_image() const override {
+		return pen_surface != nullptr ? pen_surface->get_image() : pen_image;
+	}
+
 public:
 	void register_sprite(SpxSprite *p_sprite) { _register_sprite(p_sprite); }
+	void set_pen_image(const Ref<Image> &p_image) { pen_image = p_image; }
+	void set_pen_surface(SpxPenSurface *p_surface) { pen_surface = p_surface; }
+};
+
+class PenSurfaceProbe : public SpxPenSurface {
+	GDCLASS(PenSurfaceProbe, SpxPenSurface);
+
+private:
+	Ref<Image> readback_image;
+	mutable int readback_count = 0;
+
+protected:
+	Ref<Image> _read_collision_image() const override {
+		readback_count++;
+		return readback_image;
+	}
+
+public:
+	void set_readback_image(const Ref<Image> &p_image) { readback_image = p_image; }
+	int get_readback_count() const { return readback_count; }
 };
 
 struct EngineScope {
@@ -80,7 +90,6 @@ struct EngineScope {
 
 	~EngineScope() {
 		if (engine != nullptr && SpxEngine::get_singleton() == engine) {
-			TestSpxPenCollisionInternalsAccessor::remove_surface(engine->get_pen());
 			SpxEngine::shutdown();
 		}
 	}
@@ -142,10 +151,10 @@ TEST_CASE("[SceneTree][SPX] Pen pixels participate in scene color collision at t
 	const Color black(0, 0, 0, 1);
 	const Color green(0, 1, 0, 1);
 	const Color red(1, 0, 0, 1);
-	TestSpxPenCollisionInternalsAccessor::install_image(engine_scope.engine->get_pen(), create_solid_image(Size2i(8, 8), black));
 
 	SpriteMgrProbe manager;
 	manager.set_pixel_collision_sampling_step(1);
+	manager.set_pen_image(create_solid_image(Size2i(8, 8), black));
 	SpxSprite *subject = create_colored_sprite(manager, 1, Color(1, 1, 1, 1));
 
 	CHECK(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
@@ -163,6 +172,47 @@ TEST_CASE("[SceneTree][SPX] Pen pixels participate in scene color collision at t
 	manager.destroy_sprite(subject->get_gid());
 	manager.destroy_sprite(backdrop->get_gid());
 	manager.destroy_sprite(foreground->get_gid());
+}
+
+TEST_CASE("[SceneTree][SPX] Pending pen clear hides the previous collision image") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	EngineScope engine_scope;
+	REQUIRE(engine_scope.engine != nullptr);
+
+	const Color black(0, 0, 0, 1);
+	const Color red(1, 0, 0, 1);
+	PenSurfaceProbe *pen_surface = memnew(PenSurfaceProbe);
+	SceneTree::get_singleton()->get_root()->add_child(pen_surface);
+	pen_surface->initialize(Size2i(8, 8));
+	Ref<Image> black_pen_image = create_solid_image(Size2i(8, 8), black);
+	pen_surface->set_readback_image(black_pen_image);
+	pen_surface->draw_line(Vector2(-4, 0), Vector2(4, 0), 1.0f, black, true);
+	pen_surface->flush();
+
+	SpriteMgrProbe manager;
+	manager.set_pixel_collision_sampling_step(1);
+	manager.set_pen_surface(pen_surface);
+	SpxSprite *subject = create_colored_sprite(manager, 1, Color(1, 1, 1, 1));
+	CHECK(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+	CHECK_EQ(pen_surface->get_readback_count(), 1);
+	CHECK(pen_surface->get_image() == black_pen_image);
+	CHECK_EQ(pen_surface->get_readback_count(), 1);
+
+	pen_surface->clear();
+	CHECK_FALSE(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+
+	pen_surface->draw_line(Vector2(-4, 0), Vector2(4, 0), 1.0f, red, true);
+	CHECK_FALSE(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+	CHECK_EQ(pen_surface->get_readback_count(), 1);
+
+	pen_surface->set_readback_image(create_solid_image(Size2i(8, 8), red));
+	pen_surface->flush();
+	CHECK_FALSE(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+	CHECK(manager.check_collision_by_color(subject->get_gid(), red, 0.01f, 0.05f));
+	CHECK_EQ(pen_surface->get_readback_count(), 2);
+
+	manager.destroy_sprite(subject->get_gid());
+	pen_surface->queue_free();
 }
 
 } // namespace TestSpxPenColorCollision

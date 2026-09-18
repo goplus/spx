@@ -1304,6 +1304,12 @@ GdBool SpxSpriteMgr::check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold
 	});
 }
 
+Ref<Image> SpxSpriteMgr::_get_pen_collision_image() const {
+	SpxEngine *engine = SpxEngine::get_singleton();
+	SpxPenMgr *pen_mgr = engine != nullptr ? engine->get_pen() : nullptr;
+	return pen_mgr != nullptr ? pen_mgr->get_image() : Ref<Image>();
+}
+
 GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc check_func) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 
@@ -1344,11 +1350,10 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	// Pen is rendered in the shared stage canvas at z=0, beneath all managed
 	// sprites (whose runtime layers start at 1). Include it in color sensing so
 	// TouchingColor/ColorIsTouching can see user-drawn pixels as scene colors.
-	SpxEngine *engine = SpxEngine::get_singleton();
-	SpxPenMgr *pen_mgr = engine != nullptr ? engine->get_pen() : nullptr;
-	if (pen_mgr != nullptr) {
+	Ref<Image> pen_image = _get_pen_collision_image();
+	if (pen_image.is_valid()) {
 		SceneColorQuery pen_query;
-		if (build_pen_collision_query(pen_mgr->get_image(), pen_query.pixel_query) &&
+		if (build_pen_collision_query(pen_image, pen_query.pixel_query) &&
 				get_pixel_overlap_rect(self_query.bounds, pen_query.pixel_query.bounds).has_area()) {
 			pen_query.z_index = 0;
 			// At z=0, Scratch orders regular sprites above pen and pen above backdrop.

@@ -37,10 +37,8 @@
 
 class SpxPenSurface;
 class Image;
-class TestSpxPenCollisionInternalsAccessor;
 class SpxPenMgr : public SpxObjectMgr<SpxPen> {
 	SPXCLASS(SpxPenMgr, SpxObjectMgr<SpxPen>)
-	friend class TestSpxPenCollisionInternalsAccessor;
 
 private:
 	SpxPenSurface *surface = nullptr;

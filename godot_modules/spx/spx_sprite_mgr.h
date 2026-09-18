@@ -121,6 +121,7 @@ private:
 
 protected:
 	void _register_sprite(SpxSprite *p_sprite);
+	virtual Ref<Image> _get_pen_collision_image() const;
 
 public:
 	static StringName default_texture_anim;
