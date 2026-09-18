@@ -34,6 +34,9 @@ const (
 	// minSpeed is the minimum allowed speed value to prevent division by zero.
 	minSpeed = 0.001
 
+	// missingTargetDistance is Scratch's sentinel for an unresolved target.
+	missingTargetDistance = 10_000
+
 	// minBounceComponent prevents sprites from getting stuck at boundaries.
 	minBounceComponent = 0.2
 
@@ -151,8 +154,14 @@ func (t *transformComponent) glide(x, y float64, secs float64) {
 	t.sprite.animation().doTween(animName, &aniCopy)
 }
 
-func (t *transformComponent) glideTo(obj any, secs float64) {
-	x, y := t.sprite.g.objectPos(obj)
+func (t *transformComponent) glideToTarget(target Target, secs float64) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Glide: target=%v, secs=%v", target, secs)
+	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return
+	}
 	t.glide(x, y, secs)
 }
 
@@ -187,8 +196,14 @@ func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnim
 	t.doAnimatedTween(animation, ani, &from, &to, coreproject.AniTypeMove, duration, speed)
 }
 
-func (t *transformComponent) stepTo(obj any, speed float64, animation SpriteAnimationName) {
-	x, y := t.sprite.g.objectPos(obj)
+func (t *transformComponent) stepToTarget(target Target, speed float64, animation SpriteAnimationName) {
+	if isDebugInstrEnabled() {
+		spxlog.Debug("Goto: sprite=%s, target=%v", t.sprite.name, target)
+	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return
+	}
 	t.stepToPos(x, y, speed, animation)
 }
 
@@ -251,9 +266,12 @@ func (t *transformComponent) changeY(dy float64) {
 	t.moveTo(t.x, t.y+dy)
 }
 
-func (t *transformComponent) distanceTo(obj any) float64 {
+func (t *transformComponent) distanceToTarget(target Target) float64 {
 	x, y := t.x, t.y
-	x2, y2 := t.sprite.g.objectPos(obj)
+	x2, y2, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return missingTargetDistance
+	}
 	dx := x - x2
 	dy := y - y2
 	return math.Sqrt(dx*dx + dy*dy)
@@ -390,13 +408,16 @@ func (t *transformComponent) turn(delta Direction, speed float64, animation Spri
 	})
 }
 
-func (t *transformComponent) turnTo(obj any, speed float64, animation SpriteAnimationName) {
-	targetAngle := t.calculateTargetAngle(obj)
-	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
+func (t *transformComponent) turnTo(target any, speed float64, animation SpriteAnimationName) {
+	targetDirection, ok := t.resolveTargetDirection(target)
+	if !ok {
+		return
+	}
+	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetDirection)
 
 	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
-		if t.applyDirection(targetAngle) && isDebugInstrEnabled() {
-			spxlog.Debug("TurnTo: sprite=%s, obj=%v", t.sprite.name, obj)
+		if t.applyDirection(targetDirection) && isDebugInstrEnabled() {
+			spxlog.Debug("TurnTo: sprite=%s, target=%v", t.sprite.name, target)
 		}
 	})
 }
@@ -450,22 +471,28 @@ func (t *transformComponent) applyDirection(dir float64) bool {
 	return true
 }
 
-func (t *transformComponent) directionTo(obj any) Direction {
-	return normalizeDirection(t.calculateTargetAngle(obj))
+func (t *transformComponent) directionToTarget(target Target) Direction {
+	direction, ok := t.resolveTargetDirection(target)
+	if !ok {
+		return t.direction
+	}
+	return normalizeDirection(direction)
 }
 
 func (t *transformComponent) directionToPos(x, y float64) Direction {
 	return normalizeDirection(t.calculateTargetAngleToPos(x, y))
 }
 
-// calculateTargetAngle calculates the angle to turn toward the specified object.
-func (t *transformComponent) calculateTargetAngle(obj any) float64 {
-	switch v := obj.(type) {
+func (t *transformComponent) resolveTargetDirection(target any) (Direction, bool) {
+	switch target := target.(type) {
 	case Direction:
-		return v
+		return target, true
 	default:
-		x, y := t.sprite.g.objectPos(obj)
-		return t.calculateTargetAngleToPos(x, y)
+		x, y, ok := t.sprite.g.resolveTargetPosition(target)
+		if !ok {
+			return 0, false
+		}
+		return t.calculateTargetAngleToPos(x, y), true
 	}
 }
 

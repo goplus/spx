@@ -198,15 +198,15 @@ type Sprite interface {
 
 	StepTo__0(sprite Sprite)
 	StepTo__1(sprite SpriteName)
-	StepTo__2(obj specialObj)
+	StepTo__2(target specialObj)
 	StepTo__3(x, y float64)
 	StepTo__4(sprite Sprite, speed Speed)
 	StepTo__5(sprite SpriteName, speed Speed)
-	StepTo__6(obj specialObj, speed Speed)
+	StepTo__6(target specialObj, speed Speed)
 	StepTo__7(x, y, speed Speed)
 	StepTo__8(sprite Sprite, speed Speed, animation SpriteAnimationName)
 	StepTo__9(sprite SpriteName, speed Speed, animation SpriteAnimationName)
-	StepTo__a(obj specialObj, speed Speed, animation SpriteAnimationName)
+	StepTo__a(target specialObj, speed Speed, animation SpriteAnimationName)
 	StepTo__b(x, y, speed Speed, animation SpriteAnimationName)
 	StepTo__c(pos Pos)
 	StepTo__d(pos Pos, speed Speed)
@@ -217,7 +217,7 @@ type Sprite interface {
 
 	Glide__0(sprite Sprite, secs Seconds)
 	Glide__1(sprite SpriteName, secs Seconds)
-	Glide__2(obj specialObj, secs Seconds)
+	Glide__2(target specialObj, secs Seconds)
 	Glide__3(pos Pos, secs Seconds)
 	Glide__4(x, y float64, secs Seconds)
 
@@ -308,14 +308,14 @@ type Sprite interface {
 	// Distance and Detection Methods
 	DistanceTo__0(sprite Sprite) float64
 	DistanceTo__1(sprite SpriteName) float64
-	DistanceTo__2(obj specialObj) float64
+	DistanceTo__2(target specialObj) float64
 	DistanceTo__3(pos Pos) float64
 
 	DistanceToWith(target Target) float64
 
 	DirectionTo__0(sprite Sprite) Direction
 	DirectionTo__1(sprite SpriteName) Direction
-	DirectionTo__2(obj specialObj) Direction
+	DirectionTo__2(target specialObj) Direction
 	DirectionTo__3(pos Pos) Direction
 	DirectionTo__4(x, y float64) Direction
 
