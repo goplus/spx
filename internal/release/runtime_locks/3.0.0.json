@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "runtime_version": "2.4.5",
-  "runtime_abi": 2,
+  "runtime_version": "3.0.0",
+  "runtime_abi": 3,
   "release_repository": "goplus/spx",
   "manifest": "runtime-manifest.json",
   "required_assets": [
