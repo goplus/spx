@@ -282,6 +282,12 @@ Size2i SpxPenSurface::get_canvas_size() const {
 }
 
 Ref<Image> SpxPenSurface::get_image() const {
+	// The viewport still contains its previous pixels until the frame-end flush
+	// is rendered. Do not expose those pixels after a synchronous clear, even if
+	// more pen commands have already been queued for the cleared surface.
+	if (clear_requested) {
+		return Ref<Image>();
+	}
 	if (collision_image.is_valid()) {
 		return collision_image;
 	}

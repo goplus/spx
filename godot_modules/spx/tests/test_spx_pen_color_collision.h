@@ -50,8 +50,15 @@ public:
 	static void install_image(SpxPenMgr *p_pen_mgr, const Ref<Image> &p_image) {
 		if (p_pen_mgr->surface == nullptr) {
 			p_pen_mgr->surface = memnew(SpxPenSurface);
+			p_pen_mgr->surface->initialize(p_image->get_size());
 		}
 		p_pen_mgr->surface->collision_image = p_image;
+		p_pen_mgr->surface->clear_requested = false;
+		p_pen_mgr->surface->dirty = false;
+	}
+
+	static void draw_line(SpxPenMgr *p_pen_mgr, const Vector2 &p_from, const Vector2 &p_to, const Color &p_color) {
+		p_pen_mgr->surface->draw_line(p_from, p_to, 1.0f, p_color, true);
 	}
 
 	static void remove_surface(SpxPenMgr *p_pen_mgr) {
@@ -163,6 +170,30 @@ TEST_CASE("[SceneTree][SPX] Pen pixels participate in scene color collision at t
 	manager.destroy_sprite(subject->get_gid());
 	manager.destroy_sprite(backdrop->get_gid());
 	manager.destroy_sprite(foreground->get_gid());
+}
+
+TEST_CASE("[SceneTree][SPX] Pending pen clear hides the previous collision image") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	EngineScope engine_scope;
+	REQUIRE(engine_scope.engine != nullptr);
+
+	const Color black(0, 0, 0, 1);
+	const Color red(1, 0, 0, 1);
+	SpxPenMgr *pen_mgr = engine_scope.engine->get_pen();
+	TestSpxPenCollisionInternalsAccessor::install_image(pen_mgr, create_solid_image(Size2i(8, 8), black));
+
+	SpriteMgrProbe manager;
+	manager.set_pixel_collision_sampling_step(1);
+	SpxSprite *subject = create_colored_sprite(manager, 1, Color(1, 1, 1, 1));
+	CHECK(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+
+	pen_mgr->destroy_all_pens();
+	CHECK_FALSE(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+
+	TestSpxPenCollisionInternalsAccessor::draw_line(pen_mgr, Vector2(-4, 0), Vector2(4, 0), red);
+	CHECK_FALSE(manager.check_collision_by_color(subject->get_gid(), black, 0.01f, 0.05f));
+
+	manager.destroy_sprite(subject->get_gid());
 }
 
 } // namespace TestSpxPenColorCollision
