@@ -272,12 +272,35 @@ void SpxPenSurface::flush() {
 	render_target->set_clear_mode(clear_requested ? SubViewport::CLEAR_MODE_ONCE : SubViewport::CLEAR_MODE_NEVER);
 	canvas->queue_redraw();
 	render_target->set_update_mode(SubViewport::UPDATE_ONCE);
+	collision_image.unref();
 	clear_requested = false;
 	dirty = false;
 }
 
 Size2i SpxPenSurface::get_canvas_size() const {
 	return canvas_size;
+}
+
+Ref<Image> SpxPenSurface::get_image() const {
+	// The viewport still contains its previous pixels until the frame-end flush
+	// is rendered. Do not expose those pixels after a synchronous clear, even if
+	// more pen commands have already been queued for the cleared surface.
+	if (clear_requested) {
+		return Ref<Image>();
+	}
+	if (collision_image.is_valid()) {
+		return collision_image;
+	}
+	if (render_target == nullptr) {
+		return Ref<Image>();
+	}
+
+	Ref<Texture2D> texture = render_target->get_texture();
+	if (texture.is_null()) {
+		return Ref<Image>();
+	}
+	collision_image = texture->get_image();
+	return collision_image;
 }
 
 SpxPenSurface::~SpxPenSurface() {

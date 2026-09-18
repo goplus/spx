@@ -35,6 +35,9 @@
 #include "scene/2d/sprite_2d.h"
 #include "scene/main/viewport.h"
 
+class Image;
+class TestSpxPenCollisionInternalsAccessor;
+
 class SpxPenCanvas : public Node2D {
 	GDCLASS(SpxPenCanvas, Node2D);
 
@@ -74,12 +77,14 @@ public:
 // Image pixels on the CPU and uploading the whole stage texture every frame.
 class SpxPenSurface : public Node2D {
 	GDCLASS(SpxPenSurface, Node2D);
+	friend class TestSpxPenCollisionInternalsAccessor;
 
 private:
 	SubViewport *render_target = nullptr;
 	SpxPenCanvas *canvas = nullptr;
 	Sprite2D *canvas_sprite = nullptr;
 	Size2i canvas_size;
+	mutable Ref<Image> collision_image;
 	bool dirty = false;
 	bool clear_requested = true;
 
@@ -94,6 +99,7 @@ public:
 	void clear();
 	void flush();
 	Size2i get_canvas_size() const;
+	Ref<Image> get_image() const;
 
 	~SpxPenSurface();
 };

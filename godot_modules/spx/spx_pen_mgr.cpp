@@ -229,6 +229,13 @@ void SpxPenMgr::flush_all() {
 	}
 }
 
+Ref<Image> SpxPenMgr::get_image() const {
+	if (surface == nullptr) {
+		return Ref<Image>();
+	}
+	return surface->get_image();
+}
+
 void SpxPenMgr::move_pen_to(GdObj obj, GdVec2 position) {
 	SPX_WITH_PEN_OR_RETURN(obj, pen->move_to(spx_to_godot_vec2(position)))
 }
