@@ -24,7 +24,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
 	"github.com/goplus/spx/v3/internal/ui"
 	spxapi "github.com/goplus/spx/v3/pkg/spx"
@@ -341,31 +340,6 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 		return nil
 	}
 	return p.findTouchingSpriteOptimized(dst, name)
-}
-
-func (p *Game) objectPos(obj Target) (float64, float64) {
-	switch v := obj.(type) {
-	case SpriteName:
-		if sp := p.shapeMgr.findSprite(v); sp != nil {
-			return sp.getXY()
-		}
-		spxlog.Error("objectPos: sprite not found - %s", v)
-		return 0, 0
-	case specialObj:
-		if v == Mouse {
-			return p.getMousePos()
-		}
-	case Pos:
-		if v == Random {
-			worldW, worldH := p.worldSize()
-			mx, my := randomIntn(worldW), randomIntn(worldH)
-			return float64(mx - (worldW >> 1)), float64((worldH >> 1) - my)
-		}
-	case Sprite:
-		return spriteOf(v).getXY()
-	}
-	spxlog.Error("objectPos: unexpected input: %T", obj)
-	return 0, 0
 }
 
 // -----------------------------------------------------------------------------
