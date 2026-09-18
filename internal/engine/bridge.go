@@ -27,10 +27,6 @@ var (
 	activeManagers  atomic.Pointer[enginewrap.EngineManagers]
 )
 
-func init() {
-	activeManagers.Store(&defaultManagers)
-}
-
 // SetManagers injects the runtime-scoped manager set used by the Go bridge layer.
 // Passing nil resets to the default zero-value manager set.
 func SetManagers(managers *enginewrap.EngineManagers) {
@@ -44,4 +40,8 @@ func SetManagers(managers *enginewrap.EngineManagers) {
 // Managers returns the active runtime-scoped manager set for the current game.
 func Managers() *enginewrap.EngineManagers {
 	return activeManagers.Load()
+}
+
+func init() {
+	activeManagers.Store(&defaultManagers)
 }

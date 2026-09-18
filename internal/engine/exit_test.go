@@ -48,7 +48,7 @@ func (r *resetRecordingExt) RequestReset(exitCode int64) {
 	r.calls <- exitCode
 }
 
-func setupStopCoroutinesAndResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
+func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
 	t.Helper()
 
 	original := gco
@@ -101,10 +101,10 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	t.Fatal("reset barrier did not reopen coroutine admission")
 }
 
-func TestStopCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
+func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
-	recorder := setupStopCoroutinesAndResetTest(t, co)
+	recorder := setupWebResetTest(t, co)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -129,7 +129,7 @@ func TestStopCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 
 	returned := make(chan struct{})
 	go func() {
-		stopCoroutinesAndReset(7)
+		resetWebRuntime(7)
 		close(returned)
 	}()
 	select {
@@ -155,10 +155,10 @@ func TestStopCoroutinesAndResetReturnsBeforeExternalDrain(t *testing.T) {
 	waitForResetAdmissionOpen(t, co)
 }
 
-func TestStopCoroutinesAndResetStopsManagedCaller(t *testing.T) {
+func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
-	recorder := setupStopCoroutinesAndResetTest(t, co)
+	recorder := setupWebResetTest(t, co)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
@@ -166,7 +166,7 @@ func TestStopCoroutinesAndResetStopsManagedCaller(t *testing.T) {
 	caller := co.CreateAndStart("caller", func(coroutine.Thread) int {
 		defer close(callerDone)
 		close(entered)
-		stopCoroutinesAndReset(9)
+		resetWebRuntime(9)
 		returned.Store(true)
 		return 0
 	})
@@ -199,7 +199,7 @@ func TestStopCoroutinesAndResetStopsManagedCaller(t *testing.T) {
 	waitForResetAdmissionOpen(t, co)
 }
 
-func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
+func TestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
 	original := gco
@@ -235,7 +235,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	co.CreateAndStart("caller", func(me coroutine.Thread) int {
 		defer close(callerDone)
 		go func() {
-			result <- requestResetAfterCoroutinesStop(co, time.Second, func() {
+			result <- resetAfterCoroutinesStop(co, time.Second, func() {
 				select {
 				case <-callerDone:
 				default:
@@ -279,7 +279,7 @@ func TestRequestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 	}
 }
 
-func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
+func TestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
 	co := coroutine.New(nil)
 	co.OnInited()
 	original := gco
@@ -300,7 +300,7 @@ func TestRequestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
 	}
 
 	var resetCalled atomic.Bool
-	if requestResetAfterCoroutinesStop(co, 20*time.Millisecond, func() {
+	if resetAfterCoroutinesStop(co, 20*time.Millisecond, func() {
 		resetCalled.Store(true)
 	}) {
 		t.Fatal("reset barrier reported success with a blocked coroutine")

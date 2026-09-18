@@ -102,7 +102,7 @@ func (rt *frameRuntimeState) scheduleCallback(frame int64, fn func()) {
 	rt.lifecycle.RLock()
 	callback, due := rt.callbacks.schedule(
 		frame,
-		currentFrameCallbackContext(),
+		currentFrameCallbackOrigin(),
 		fn,
 	)
 	rt.lifecycle.RUnlock()

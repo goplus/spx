@@ -19,10 +19,7 @@ package engine
 import "testing"
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
-	keyMutex.Lock()
-	keyStates = make(map[int64]bool)
-	cachedKeysDown = nil
-	keyMutex.Unlock()
+	keyInput.reset()
 	DiscardPendingKeyEvents()
 	onKeyPressed(1)
 	cacheKeyEvents()
@@ -39,10 +36,7 @@ func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 }
 
 func TestKeyInputIncludesHeldStateAtUpdateBoundary(t *testing.T) {
-	keyMutex.Lock()
-	keyStates = make(map[int64]bool)
-	cachedKeysDown = nil
-	keyMutex.Unlock()
+	keyInput.reset()
 	DiscardPendingKeyEvents()
 	t.Cleanup(DiscardPendingKeyEvents)
 
@@ -67,16 +61,10 @@ func TestKeyInputIncludesHeldStateAtUpdateBoundary(t *testing.T) {
 }
 
 func TestDiscardPendingKeyEventsPreservesHeldState(t *testing.T) {
-	keyMutex.Lock()
-	keyStates = make(map[int64]bool)
-	cachedKeysDown = nil
-	keyMutex.Unlock()
+	keyInput.reset()
 	DiscardPendingKeyEvents()
 	t.Cleanup(func() {
-		keyMutex.Lock()
-		keyStates = make(map[int64]bool)
-		cachedKeysDown = nil
-		keyMutex.Unlock()
+		keyInput.reset()
 		DiscardPendingKeyEvents()
 	})
 

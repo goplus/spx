@@ -25,6 +25,27 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
+func TestResolveCoroutineOwnerPreservesNilCoroutineOwner(t *testing.T) {
+	co := coroutine.New(nil)
+	previousCo, previousGame := gco, GetGame()
+	SetCoroutines(co)
+	SetGame(&struct{}{})
+	t.Cleanup(func() {
+		SetCoroutines(previousCo)
+		SetGame(previousGame)
+	})
+
+	resolved := make(chan any, 1)
+	thread := co.Create(nil, func(coroutine.Thread) int {
+		resolved <- ResolveCoroutineOwner(nil)
+		return 0
+	})
+	co.Join(thread)
+	if owner := <-resolved; owner != nil {
+		t.Fatalf("owner = %v, want nil", owner)
+	}
+}
+
 func TestExecuteNativeRunsInlineOutsideCoroutine(t *testing.T) {
 	called := false
 

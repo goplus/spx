@@ -23,7 +23,7 @@ import (
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-// !!!Warning all method belong to this class can only be called in main thread
+// Sprite methods must run on the main thread.
 type Sprite struct {
 	gdx.Sprite
 	Name    string
@@ -31,94 +31,90 @@ type Sprite struct {
 	Target  any
 }
 
-func (pself *Sprite) UpdateTexture(path string, renderScale float64, isUpdateTexture bool) {
+func (s *Sprite) UpdateTexture(path string, renderScale float64, updateTexture bool) {
 	if path == "" {
 		return
 	}
-	resPath := ToAssetPath(path)
-	pself.PicPath = resPath
-	if isUpdateTexture {
-		pself.SetTexture(pself.PicPath)
+	s.PicPath = ToAssetPath(path)
+	if updateTexture {
+		s.SetTexture(s.PicPath)
 	}
-	pself.SetRenderScale(UniformVec2(renderScale))
+	s.SetRenderScale(UniformVec2(renderScale))
 }
 
-func (pself *Sprite) UpdateTextureAtlas(path string, rect2 Rect2, renderScale float64, isUpdateTexture bool) {
+func (s *Sprite) UpdateTextureAtlas(path string, rect Rect2, renderScale float64, updateTexture bool) {
 	if path == "" {
 		return
 	}
-	resPath := ToAssetPath(path)
-	pself.PicPath = resPath
-	if isUpdateTexture {
-		pself.SetTextureAtlas(pself.PicPath, rect2)
+	s.PicPath = ToAssetPath(path)
+	if updateTexture {
+		s.SetTextureAtlas(s.PicPath, rect)
 	}
-	pself.SetRenderScale(UniformVec2(renderScale))
+	s.SetRenderScale(UniformVec2(renderScale))
 }
 
-func (pself *Sprite) OnTriggerEnter(target gdx.ISpriter) {
+func (s *Sprite) OnTriggerEnter(target gdx.ISpriter) {
 	sprite, ok := target.(*Sprite)
 	if ok {
-		triggerEventsTemp = append(triggerEventsTemp, TriggerEvent{Src: pself, Dst: sprite})
+		enqueueTriggerEvent(s, sprite)
 	}
 }
 
-func (pself *Sprite) RegisterOnAnimationLooped(f func()) {
-	pself.Sprite.OnAnimationLoopedEvent.Subscribe(f)
+func (s *Sprite) RegisterOnAnimationLooped(fn func()) {
+	s.Sprite.OnAnimationLoopedEvent.Subscribe(fn)
 }
 
-func (pself *Sprite) UnRegisterOnAnimationLooped() {
-	pself.Sprite.OnAnimationLoopedEvent.UnsubscribeAll()
+func (s *Sprite) UnRegisterOnAnimationLooped() {
+	s.Sprite.OnAnimationLoopedEvent.UnsubscribeAll()
 }
 
-func (pself *Sprite) RegisterOnAnimationFinished(f func()) {
-	pself.Sprite.OnAnimationFinishedEvent.Subscribe(f)
+func (s *Sprite) RegisterOnAnimationFinished(fn func()) {
+	s.Sprite.OnAnimationFinishedEvent.Subscribe(fn)
 }
 
-func (pself *Sprite) UnRegisterOnAnimationFinished() {
-	pself.Sprite.OnAnimationFinishedEvent.UnsubscribeAll()
+func (s *Sprite) UnRegisterOnAnimationFinished() {
+	s.Sprite.OnAnimationFinishedEvent.UnsubscribeAll()
 }
 
-// --------------------------------------------------------------------------
-// Collider convenience methods. Coordinate conversion belongs to the Godot
-// module boundary; these methods keep all values in SPX coordinates.
+// Collider values use SPX coordinates.
 
-func (pself *Sprite) SetColliderShapeRect(isTrigger bool, center Vec2, size Vec2) {
-	if isTrigger {
-		pself.Sprite.SetTriggerRect(center, size)
+func (s *Sprite) SetColliderShapeRect(trigger bool, center Vec2, size Vec2) {
+	if trigger {
+		s.Sprite.SetTriggerRect(center, size)
 	} else {
-		pself.Sprite.SetColliderRect(center, size)
+		s.Sprite.SetColliderRect(center, size)
 	}
 }
 
-func (pself *Sprite) SetColliderShapeCircle(isTrigger bool, center Vec2, radius float64) {
-	if isTrigger {
-		pself.Sprite.SetTriggerCircle(center, radius)
+func (s *Sprite) SetColliderShapeCircle(trigger bool, center Vec2, radius float64) {
+	if trigger {
+		s.Sprite.SetTriggerCircle(center, radius)
 	} else {
-		pself.Sprite.SetColliderCircle(center, radius)
+		s.Sprite.SetColliderCircle(center, radius)
 	}
 }
 
-func (pself *Sprite) SetColliderShapeCapsule(isTrigger bool, center Vec2, size Vec2) {
-	if isTrigger {
-		pself.Sprite.SetTriggerCapsule(center, size)
+func (s *Sprite) SetColliderShapeCapsule(trigger bool, center Vec2, size Vec2) {
+	if trigger {
+		s.Sprite.SetTriggerCapsule(center, size)
 	} else {
-		pself.Sprite.SetColliderCapsule(center, size)
+		s.Sprite.SetColliderCapsule(center, size)
 	}
 }
 
-func (pself *Sprite) SetColliderShapePolygon(isTrigger bool, center Vec2, points []float64) {
+func (s *Sprite) SetColliderShapePolygon(trigger bool, center Vec2, points []float64) {
 	points32 := F64Tof32(points)
-	if isTrigger {
-		pself.Sprite.SetTriggerPolygon(center, points32)
+	if trigger {
+		s.Sprite.SetTriggerPolygon(center, points32)
 	} else {
-		pself.Sprite.SetColliderPolygon(center, points32)
+		s.Sprite.SetColliderPolygon(center, points32)
 	}
 }
 
-func (pself *Sprite) SetColliderEnabled(isTrigger bool, enabled bool) {
-	if isTrigger {
-		pself.Sprite.SetTriggerEnabled(enabled)
+func (s *Sprite) SetColliderEnabled(trigger bool, enabled bool) {
+	if trigger {
+		s.Sprite.SetTriggerEnabled(enabled)
 	} else {
-		pself.Sprite.SetCollisionEnabled(enabled)
+		s.Sprite.SetCollisionEnabled(enabled)
 	}
 }

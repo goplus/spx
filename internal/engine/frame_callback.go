@@ -17,45 +17,42 @@
 package engine
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"sync"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-type scheduledFrameCallback struct {
-	frame   int64
-	seq     uint64
-	context frameCallbackContext
-	fn      func()
+type frameCallback struct {
+	frame  int64
+	origin frameCallbackOrigin
+	fn     func()
 }
 
-type frameCallbackContext struct {
+type frameCallbackOrigin struct {
 	owner  any
-	source coroutine.Thread
+	thread coroutine.Thread
 }
 
 type frameCallbackQueue struct {
 	mu        sync.Mutex
-	sequence  uint64
-	callbacks []scheduledFrameCallback
+	callbacks []frameCallback
 }
 
 func (q *frameCallbackQueue) schedule(
 	frame int64,
-	callbackContext frameCallbackContext,
+	origin frameCallbackOrigin,
 	fn func(),
-) (scheduledFrameCallback, bool) {
+) (frameCallback, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	q.sequence++
-	callback := scheduledFrameCallback{
-		frame:   frame,
-		seq:     q.sequence,
-		context: callbackContext,
-		fn:      fn,
+	callback := frameCallback{
+		frame:  frame,
+		origin: origin,
+		fn:     fn,
 	}
 	if frame <= itime.Frame() {
 		return callback, true
@@ -64,14 +61,14 @@ func (q *frameCallbackQueue) schedule(
 	return callback, false
 }
 
-func (q *frameCallbackQueue) takeDue(frame int64) []scheduledFrameCallback {
+func (q *frameCallbackQueue) takeDue(frame int64) []frameCallback {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	if len(q.callbacks) == 0 {
 		return nil
 	}
-	due := make([]scheduledFrameCallback, 0, len(q.callbacks))
+	due := make([]frameCallback, 0, len(q.callbacks))
 	future := q.callbacks[:0]
 	for _, callback := range q.callbacks {
 		if callback.frame <= frame {
@@ -83,11 +80,8 @@ func (q *frameCallbackQueue) takeDue(frame int64) []scheduledFrameCallback {
 	clear(q.callbacks[len(future):])
 	q.callbacks = future
 
-	sort.Slice(due, func(i, j int) bool {
-		if due[i].frame == due[j].frame {
-			return due[i].seq < due[j].seq
-		}
-		return due[i].frame < due[j].frame
+	slices.SortStableFunc(due, func(a, b frameCallback) int {
+		return cmp.Compare(a.frame, b.frame)
 	})
 	return due
 }
@@ -95,26 +89,24 @@ func (q *frameCallbackQueue) takeDue(frame int64) []scheduledFrameCallback {
 func (q *frameCallbackQueue) reset() {
 	q.mu.Lock()
 	q.callbacks = nil
-	q.sequence = 0
 	q.mu.Unlock()
 }
 
-func (callback scheduledFrameCallback) canceled() bool {
-	// Callback lifetime follows the source's Stopped flag, not goroutine completion.
-	return callback.context.source != nil && callback.context.source.Stopped()
+func (callback frameCallback) canceled() bool {
+	// A callback expires when its source thread stops.
+	return callback.origin.thread != nil && callback.origin.thread.Stopped()
 }
 
-func currentFrameCallbackContext() frameCallbackContext {
-	callbackContext := frameCallbackContext{owner: GetGame()}
-	if gco == nil || !gco.IsInCoroutine() {
-		return callbackContext
+func currentFrameCallbackOrigin() frameCallbackOrigin {
+	origin := frameCallbackOrigin{owner: GetGame()}
+	if thread := currentThread(); thread != nil {
+		origin.thread = thread
+		origin.owner = thread.Obj
 	}
-	callbackContext.source = gco.Current()
-	callbackContext.owner = callbackContext.source.Obj
-	return callbackContext
+	return origin
 }
 
-func executeFrameCallbacks(callbacks []scheduledFrameCallback) {
+func executeFrameCallbacks(callbacks []frameCallback) {
 	if len(callbacks) == 0 {
 		return
 	}
@@ -130,7 +122,7 @@ func executeFrameCallbacks(callbacks []scheduledFrameCallback) {
 	}
 }
 
-func executeFrameCallback(callback scheduledFrameCallback) {
+func executeFrameCallback(callback frameCallback) {
 	if callback.canceled() {
 		return
 	}
@@ -138,7 +130,7 @@ func executeFrameCallback(callback scheduledFrameCallback) {
 		callback.fn()
 		return
 	}
-	thread := gco.Create(callback.context.owner, func(coroutine.Thread) int {
+	thread := gco.Create(callback.origin.owner, func(coroutine.Thread) int {
 		if !callback.canceled() {
 			callback.fn()
 		}
