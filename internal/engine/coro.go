@@ -18,49 +18,38 @@ package engine
 
 import (
 	"context"
-	stdtime "time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine/profiler"
-	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 var (
-	gco   *coroutine.Coroutines
-	pgame any // pointer to the current game object
+	gco        *coroutine.Coroutines
+	gameObject any
 )
 
-const runWithoutScreenRefreshBudget = 500 * stdtime.Millisecond
-
 func SetGame(game any) {
-	pgame = game
+	gameObject = game
 }
 
 func GetGame() any {
-	return pgame
+	return gameObject
 }
 
 func IsInCoroutine() bool {
-	if gco == nil {
-		return false
-	}
-	return gco.IsInCoroutine()
-}
-
-func IsAbortThreadError(err any) bool {
-	return coroutine.IsAbortThreadError(err)
+	return gco != nil && gco.IsInCoroutine()
 }
 
 func GetCoroutineOwner() any {
-	if IsInCoroutine() {
-		return gco.Current().Obj
+	if thread := currentThread(); thread != nil {
+		return thread.Obj
 	}
 	return nil
 }
 
 func GetCurrentThreadContext() context.Context {
-	if IsInCoroutine() {
-		return gco.Current().Context()
+	if thread := currentThread(); thread != nil {
+		return thread.Context()
 	}
 	return context.Background()
 }
@@ -81,8 +70,8 @@ func ResolveCoroutineOwner(owner any) any {
 	if owner != nil {
 		return owner
 	}
-	if IsInCoroutine() {
-		return GetCoroutineOwner()
+	if thread := currentThread(); thread != nil {
+		return thread.Obj
 	}
 	return GetGame()
 }
@@ -94,147 +83,10 @@ func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
 	})
 }
 
-func Execute(owner any, fn func(ctx context.Context, owner any)) {
-	co := gco
-	if co.IsInCoroutine() {
-		fn(co.Current().Context(), owner)
-		return
-	}
-
-	owner = ResolveCoroutineOwner(owner)
-	call := func() { fn(co.Current().Context(), owner) }
-	if co.TryRunFromEngine(owner, call) {
-		return
-	}
-	thread := co.Create(owner, func(coroutine.Thread) int {
-		call()
-		return 0
-	})
-	// Thread completion also covers cancellation before the callback starts.
-	co.Join(thread)
-}
-
-func Wait(secs float64) float64 {
-	startTime := itime.TimeSinceLevelLoad()
-	gco.Wait(secs)
-	return itime.TimeSinceLevelLoad() - startTime
-}
-
-func WaitYield() {
-	gco.WaitYield(gco.Current())
-}
-
-func WaitNextFrame() float64 {
-	gco.WaitNextFrame()
-	return itime.DeltaTime()
-}
-
-func WaitNextFrameIfNeeded() float64 {
-	if ShouldWaitNextFrame() {
-		return WaitNextFrame()
-	}
-	return itime.DeltaTime()
-}
-
-func IsRunWithoutScreenRefresh() bool {
-	if !IsInCoroutine() {
-		return false
-	}
-	return gco.Current().RunWithoutScreenRefresh()
-}
-
-func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
-	if !IsInCoroutine() {
-		return false
-	}
-	return gco.Current().SetRunWithoutScreenRefresh(enabled)
-}
-
-func RunWithoutScreenRefresh(call func()) {
-	if call == nil {
-		return
-	}
-	previous := SetRunWithoutScreenRefresh(true)
-	defer SetRunWithoutScreenRefresh(previous)
-	call()
-}
-
-// RunStopThisScript consumes stop-this-script signals at a procedure boundary.
-func RunStopThisScript(call func()) {
-	if call == nil {
-		return
-	}
-
-	panicked := true
-	defer func() {
-		recovered := recover()
-		if !panicked {
-			return
-		}
-		if !coroutine.IsStopThisScriptError(recovered) {
-			panic(recovered)
-		}
-	}()
-	call()
-	panicked = false
-}
-
-func ShouldWaitNextFrame() bool {
-	if !IsInCoroutine() {
-		return true
-	}
-	return gco.Current().ShouldWaitNextFrame(runWithoutScreenRefreshBudget)
-}
-
-// NewControlFlowWaiter caches the calling thread for generated loop yields.
-func NewControlFlowWaiter() func() {
+func currentThread() coroutine.Thread {
 	co := gco
 	if co == nil || !co.IsInCoroutine() {
-		// Preserve validation outside managed coroutines.
-		return func() {
-			if ShouldWaitNextFrame() {
-				WaitNextFrame()
-			}
-		}
+		return nil
 	}
-
-	thread := co.Current()
-	return func() {
-		if !thread.RunWithoutScreenRefresh() {
-			co.YieldLoopFor(thread)
-		} else if thread.ShouldWaitNextFrame(runWithoutScreenRefreshBudget) {
-			co.WaitNextFrameFor(thread)
-		}
-	}
-}
-
-// RequestRedraw marks a visual change for cooperative script scheduling.
-func RequestRedraw() {
-	if gco != nil {
-		gco.RequestRedraw()
-	}
-}
-
-func WaitMainThread(call func()) {
-	gco.WaitMainThread(call)
-}
-
-func WaitToDo(fn func()) {
-	gco.WaitToDo(fn)
-}
-
-func ExecuteNative(fn func(ctx context.Context, owner any)) {
-	ctx := GetCurrentThreadContext()
-	if !IsInCoroutine() {
-		fn(ctx, nil)
-		return
-	}
-	owner := GetCoroutineOwner()
-	WaitToDo(func() {
-		fn(ctx, owner)
-	})
-}
-
-func WaitForChan[T any](ch <-chan T) T {
-	return coroutine.WaitForChan(gco, ch)
+	return co.Current()
 }

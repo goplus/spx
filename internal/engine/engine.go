@@ -17,54 +17,26 @@
 package engine
 
 import (
-	"fmt"
 	"sync"
-	stime "time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine/platform"
 	"github.com/goplus/spx/v3/internal/engine/profiler"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	gde "github.com/goplus/spx/v3/internal/gdengine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	"github.com/goplus/spx/v3/internal/time"
+	itime "github.com/goplus/spx/v3/internal/time"
 
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-type Object = gdx.Object
-
-type Array = gdx.Array
-
-type layerSortMode int
-
-const (
-	layerSortModeNone layerSortMode = iota
-	layerSortModeVertical
+type (
+	Object = gdx.Object
+	Array  = gdx.Array
 )
-
-type LayerSortInfo struct {
-	X      float64
-	Y      float64
-	Sprite *Sprite
-}
-
-var curLayerSortMode layerSortMode
 
 const Float2IntFactor = gdx.Float2IntFactor
 
-type TriggerEvent struct {
-	Src *Sprite
-	Dst *Sprite
-}
-
 var (
-	game              IGame
-	triggerEventsTemp []TriggerEvent
-	triggerEvents     []TriggerEvent
-	triggerMutex      sync.Mutex
-
-	logicMutex sync.Mutex
+	currentGame IGame
+	logicMu     sync.Mutex
 )
 
 type IGame interface {
@@ -78,55 +50,31 @@ type IGame interface {
 	OnEnginePause(isPaused bool)
 }
 
-// SetLayerSortMode sets sprite layer sorting.
-// Supported modes:
-//   - "" or "none": disable sorting (default)
-//   - "vertical": sort by Y, then X, both descending
-//
-// When enabled, manual layer changes are disabled.
-func SetLayerSortMode(s string) error {
-	switch s {
-	case "", "none":
-		curLayerSortMode = layerSortModeNone
-	case "vertical":
-		curLayerSortMode = layerSortModeVertical
-	default:
-		return fmt.Errorf("unknown layer sort mode: %s", s)
-	}
-
-	Managers().ExtMgr.SetLayerSorterMode(int64(curLayerSortMode))
-	return nil
+func ConvertToFloat64(value int64) float64 {
+	return float64(value) / Float2IntFactor
 }
 
-func HasLayerSortMethod() bool {
-	return curLayerSortMode != layerSortModeNone
-}
-
-func ConvertToFloat64(val int64) float64 {
-	return float64(val) / Float2IntFactor
-}
-
-func ConvertToInt64(val float64) int64 {
-	return int64(val * Float2IntFactor)
+func ConvertToInt64(value float64) int64 {
+	return int64(value * Float2IntFactor)
 }
 
 func Lock() {
-	logicMutex.Lock()
+	logicMu.Lock()
 }
 
 func Unlock() {
-	logicMutex.Unlock()
+	logicMu.Unlock()
 }
 
-func Main(g IGame) {
+func Main(game IGame) {
 	enginewrap.Init(WaitMainThread)
-	game = g
+	currentGame = game
 	gde.Link(gdx.CoreCallbackInfo{
 		OnEngineStart:   onStart,
 		OnEngineUpdate:  onUpdate,
 		OnEngineDestroy: onDestroy,
 		OnEngineReset:   onReset,
-		OnEnginePause:   onPaused,
+		OnEnginePause:   onPause,
 		OnMousePressed:  onMousePressed,
 		OnMouseReleased: onMouseReleased,
 		OnKeyPressed:    onKeyPressed,
@@ -138,69 +86,15 @@ func OnGameStarted() {
 	gco.OnInited()
 }
 
-func GetTriggerEvents(lst []TriggerEvent) []TriggerEvent {
-	triggerMutex.Lock()
-	lst = append(lst, triggerEvents...)
-	triggerEvents = triggerEvents[:0]
-	triggerMutex.Unlock()
-	return lst
-}
-
-// DeferPanic recovers a panic, reports it, and optionally exits.
-func DeferPanic(name, stack string, exitOnPanic bool) {
-	if e := recover(); e != nil {
-		handlePanic(name, stack, e, exitOnPanic)
-	}
-}
-
-// CheckPanic is a shorthand panic handler for engine callbacks.
-func CheckPanic() {
-	if e := recover(); e != nil {
-		handlePanic("", "", e, true)
-	}
-}
-
-// OnPanic reports a coroutine's original panic and its fault and creation stacks.
-func OnPanic(report coroutine.PanicReport) {
-	stack := report.Stack
-	if report.CreationStack != "" {
-		stack += "\ncreated at:\n" + report.CreationStack
-	}
-	handlePanic(report.Name, stack, report.Value, true)
-}
-
-// Panic reports a panic message through the engine.
-func Panic(args ...any) {
-	msg := fmt.Sprint(args...)
-	handlePanic(msg, "", nil, true)
-}
-
-// Panicf reports a formatted panic message through the engine.
-func Panicf(format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	handlePanic(msg, "", nil, true)
-}
-
-func RequestExit(exitCode int64) {
-	if platform.IsWeb() {
-		// Web resets instead of exiting.
-		stopCoroutinesAndReset(exitCode)
-		return
-	}
-	Managers().ExtMgr.RequestExit(exitCode)
-}
-
-// Engine callbacks.
 func onStart() {
 	defer CheckPanic()
 	resetInputState()
-	triggerEventsTemp = make([]TriggerEvent, 0)
-	triggerEvents = make([]TriggerEvent, 0)
+	resetTriggerEvents()
 
-	time.Start(func(scale float64) {
+	itime.Start(func(scale float64) {
 		Managers().PlatformMgr.SetTimeScale(scale)
 	})
-	game.OnEngineStart()
+	currentGame.OnEngineStart()
 }
 
 func onUpdate(delta float64) {
@@ -210,100 +104,36 @@ func onUpdate(delta float64) {
 	cacheTriggerEvents()
 	cacheKeyEvents()
 	cacheMouseEvents()
-	game.OnEngineBeforeUpdate(delta)
-	updateTime(delta)
+	currentGame.OnEngineBeforeUpdate(delta)
+	itime.Update(delta, profiler.Calcfps())
 	profiler.MeasureFunctionTime("GameUpdate", func() {
-		game.OnEngineUpdate(delta)
+		currentGame.OnEngineUpdate(delta)
 	})
 	profiler.MeasureFunctionTime("CoroUpdateJobs", func() {
 		gco.Update()
 	})
 	profiler.MeasureFunctionTime("GameRender", func() {
-		game.OnEngineRender(delta)
+		currentGame.OnEngineRender(delta)
 	})
 	if err := FlushCaptures(); err != nil {
 		Panic(err)
 		return
 	}
-	game.OnEngineFrameEnd()
+	currentGame.OnEngineFrameEnd()
 }
 
 func onDestroy() {
 	defer CheckPanic()
-	game.OnEngineDestroy()
+	currentGame.OnEngineDestroy()
 }
 
-func onPaused(isPaused bool) {
+func onPause(paused bool) {
 	defer CheckPanic()
-	game.OnEnginePause(isPaused)
+	currentGame.OnEnginePause(paused)
 }
 
 func onReset() {
 	defer CheckPanic()
 	defer gde.Unlink()
-	game.OnEngineReset()
-}
-
-func updateTime(delta float64) {
-	time.Update(delta, profiler.Calcfps())
-}
-
-func cacheTriggerEvents() {
-	triggerMutex.Lock()
-	triggerEvents = append(triggerEvents, triggerEventsTemp...)
-	triggerMutex.Unlock()
-	triggerEventsTemp = triggerEventsTemp[:0]
-}
-
-// handlePanic reports a panic and optionally exits.
-func handlePanic(name, stack string, err any, exitOnPanic bool) {
-	var msg string
-	if err != nil {
-		msg = fmt.Sprintf("panic: %v", err)
-	}
-	if name != "" {
-		if msg != "" {
-			msg = name + ": " + msg
-		} else {
-			msg = name
-		}
-	}
-	if stack != "" {
-		msg += "\nstack:\n" + stack
-	}
-
-	if msg != "" {
-		spxlog.Error("%s", msg)
-	}
-
-	Managers().ExtMgr.OnRuntimePanic(msg)
-
-	if exitOnPanic {
-		RequestExit(1)
-	}
-}
-
-// stopCoroutinesAndReset stops coroutines and resets the engine.
-// Used on web, where the process cannot exit.
-func stopCoroutinesAndReset(exitCode int64) {
-	co := gco
-	// Drain off-thread while the panic caller unwinds.
-	go requestResetAfterCoroutinesStop(co, 2*stime.Second, func() {
-		Managers().ExtMgr.RequestReset(exitCode)
-	})
-	if co.IsInCoroutine() {
-		co.StopCurrent()
-	}
-}
-
-func requestResetAfterCoroutinesStop(co *coroutine.Coroutines, timeout stime.Duration, requestReset func()) bool {
-	completed := co.RunAfterStopAll(timeout, func() {
-		co.WaitMainThread(requestReset)
-	})
-	if !completed {
-		spxlog.Error("Coroutine shutdown timed out; engine reset was not requested.")
-		return false
-	}
-	spxlog.Debug("Coroutine shutdown completed. Engine reset requested.")
-	return true
+	currentGame.OnEngineReset()
 }

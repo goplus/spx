@@ -41,23 +41,20 @@ func WindowScale() float64 {
 }
 
 func NewUiNode[T any]() *T {
-	var ret *T
-	WaitMainThread(func() {
-		ret = CreateEngineUIForType[T]("")
+	return waitMainThreadValue(func() *T {
+		return CreateEngineUIForType[T]("")
 	})
-	return ret
 }
 
 func NewBackdropProxy(obj any, path string, renderScale float64) *Sprite {
-	var ret *Sprite
-	WaitMainThread(func() {
-		ret = CreateBackdropForType[Sprite]()
-		ret.Target = obj
-		ret.SetZIndex(-1)
-		ret.DisablePhysic()
-		ret.UpdateTexture(path, renderScale, true)
+	return waitMainThreadValue(func() *Sprite {
+		sprite := CreateBackdropForType[Sprite]()
+		sprite.Target = obj
+		sprite.SetZIndex(-1)
+		sprite.DisablePhysic()
+		sprite.UpdateTexture(path, renderScale, true)
+		return sprite
 	})
-	return ret
 }
 
 func BridgeNewBareSprite(obj any, pos Vec2) *Sprite {
@@ -105,19 +102,15 @@ func BridgeWorldToView(pos Vec2) Vec2 {
 }
 
 func ViewToWorld(pos Vec2) Vec2 {
-	var ret Vec2
-	WaitMainThread(func() {
-		ret = BridgeViewToWorld(pos)
+	return waitMainThreadValue(func() Vec2 {
+		return BridgeViewToWorld(pos)
 	})
-	return ret
 }
 
 func WorldToView(pos Vec2) Vec2 {
-	var ret Vec2
-	WaitMainThread(func() {
-		ret = BridgeWorldToView(pos)
+	return waitMainThreadValue(func() Vec2 {
+		return BridgeWorldToView(pos)
 	})
-	return ret
 }
 
 func ClearAllSprites() {
@@ -175,6 +168,13 @@ func F32Tof64(slice []float32) []float64 {
 		out[i] = float64(v)
 	}
 	return out
+}
+
+func waitMainThreadValue[T any](fn func() T) (value T) {
+	WaitMainThread(func() {
+		value = fn()
+	})
+	return value
 }
 
 func bridgeCameraTransform() (Vec2, float64) {

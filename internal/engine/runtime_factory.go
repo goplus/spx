@@ -24,115 +24,6 @@ import (
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-type runtimeState struct {
-	sprites        map[Object]gdx.ISpriter
-	uiNodes        map[Object]gdx.IUiNode
-	spriteTypes    map[string]reflect.Type
-	timeSinceStart float64
-}
-
-var state = runtimeState{
-	sprites:     make(map[Object]gdx.ISpriter),
-	uiNodes:     make(map[Object]gdx.IUiNode),
-	spriteTypes: make(map[string]reflect.Type),
-}
-
-type runtimeBridge struct{}
-
-func init() {
-	gdx.SetRuntimeBridge(runtimeBridge{})
-}
-
-func (runtimeBridge) InternalUpdateEngine(delta float64) {
-	updateTimers(delta)
-	updateTweens(delta)
-}
-
-func (runtimeBridge) ClearAllSprites() {
-	clearAllSprites()
-}
-
-func (runtimeBridge) RegisterSpriteType(t reflect.Type) {
-	state.spriteTypes[t.Name()] = t
-}
-
-func (runtimeBridge) GetSprite(id Object) gdx.ISpriter {
-	return lookupSprite(id)
-}
-
-func (runtimeBridge) BindSceneInstantiatedSprite(id Object, typeName string) {
-	bindSceneInstantiatedSprite(id, typeName)
-}
-
-func (runtimeBridge) CreateSprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	return createPrefabSprite(t, pos)
-}
-
-func (runtimeBridge) CreateEmptySprite(t reflect.Type, pos mathf.Vec2) reflect.Value {
-	return createBareSprite(t, pos)
-}
-
-func (runtimeBridge) CreateBackdrop(t reflect.Type) reflect.Value {
-	return createBackdrop(t)
-}
-
-func (runtimeBridge) CreateUI(t reflect.Type, prefabName string, isEngine bool) reflect.Value {
-	return createUI(t, prefabName, isEngine)
-}
-
-func (runtimeBridge) BindUI(t reflect.Type, parentNode Object, path string) reflect.Value {
-	return bindUI(t, parentNode, path)
-}
-
-func (runtimeBridge) DelayCall(delay float64, callback func()) {
-	delayCall(delay, callback)
-}
-
-func (runtimeBridge) DelaySpriteCall(delay float64, sprite gdx.ISpriter, callback func()) {
-	delaySpriteCall(delay, sprite, callback)
-}
-
-func (runtimeBridge) TweenPos(node gdx.ISpriter, pos mathf.Vec2, duration float64, callback func()) {
-	tweenPos(node, pos, duration, callback)
-}
-
-func (runtimeBridge) TweenPos2(node gdx.ISpriter, pos mathf.Vec2, duration float64, pos2 mathf.Vec2, duration2 float64, callback func()) {
-	tweenPos2(node, pos, duration, pos2, duration2, callback)
-}
-
-func (runtimeBridge) Sprites() map[Object]gdx.ISpriter {
-	return state.sprites
-}
-
-func (runtimeBridge) UiNodes() map[Object]gdx.IUiNode {
-	return state.uiNodes
-}
-
-func (runtimeBridge) GetUINode(id Object) gdx.IUiNode {
-	return state.uiNodes[id]
-}
-
-func (runtimeBridge) DeleteSprite(id Object) {
-	delete(state.sprites, id)
-}
-
-func (runtimeBridge) DeleteUINode(id Object) {
-	delete(state.uiNodes, id)
-}
-
-func (runtimeBridge) AdvanceTimeSinceGameStart(delta float64) float64 {
-	state.timeSinceStart += delta
-	return state.timeSinceStart
-}
-
-func (runtimeBridge) TimeSinceGameStarted() float64 {
-	return state.timeSinceStart
-}
-
-func IsNodeExist(id Object) bool {
-	return isNodeExist(id)
-}
-
 func CreateBareSpriteForType[T any](pos mathf.Vec2) *T {
 	tType := reflect.TypeOf((*T)(nil)).Elem()
 	value := createBareSprite(tType, pos)
@@ -158,29 +49,6 @@ func BindUIForType[T any](parentNode Object, path string) *T {
 		return nil
 	}
 	return value.Addr().Interface().(*T)
-}
-
-func clearAllSprites() {
-	for id, sprite := range state.sprites {
-		sprite.Destroy()
-		delete(state.sprites, id)
-	}
-	for id, node := range state.uiNodes {
-		node.Destroy()
-		delete(state.uiNodes, id)
-	}
-}
-
-func lookupSprite(id Object) gdx.ISpriter {
-	return state.sprites[id]
-}
-
-func isNodeExist(id Object) bool {
-	if _, ok := state.uiNodes[id]; ok {
-		return true
-	}
-	_, ok := state.sprites[id]
-	return ok
 }
 
 func bindSceneInstantiatedSprite(id Object, typeName string) {
@@ -213,11 +81,7 @@ func createUI(t reflect.Type, prefabName string, isEngine bool) reflect.Value {
 	}
 	nodeValue := reflect.New(t).Elem()
 	id := Managers().UiMgr.CreateNode(getUIPath(name, isEngine))
-	node := nodeValue.Addr().Interface().(gdx.IUiNode)
-	gdx.InitUINodeInstance(id, node, func(id Object, node gdx.IUiNode) {
-		state.uiNodes[id] = node
-	})
-	return nodeValue
+	return initUIValue(nodeValue, id)
 }
 
 func bindUI(t reflect.Type, parentNode Object, path string) reflect.Value {
@@ -227,11 +91,15 @@ func bindUI(t reflect.Type, parentNode Object, path string) reflect.Value {
 		return reflect.Value{}
 	}
 	nodeValue := reflect.New(t).Elem()
-	node := nodeValue.Addr().Interface().(gdx.IUiNode)
+	return initUIValue(nodeValue, id)
+}
+
+func initUIValue(value reflect.Value, id Object) reflect.Value {
+	node := value.Addr().Interface().(gdx.IUiNode)
 	gdx.InitUINodeInstance(id, node, func(id Object, node gdx.IUiNode) {
 		state.uiNodes[id] = node
 	})
-	return nodeValue
+	return value
 }
 
 func createSpriteValue(t reflect.Type, id Object) reflect.Value {

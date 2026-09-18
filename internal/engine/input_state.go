@@ -17,7 +17,7 @@
 package engine
 
 import (
-	"sort"
+	"slices"
 	"sync"
 	"sync/atomic"
 )
@@ -32,27 +32,34 @@ type MouseEvent struct {
 	IsPressed bool
 }
 
-var (
-	keyEventsTemp  []KeyEvent
-	keyEvents      []KeyEvent
-	keyStates      = make(map[int64]bool)
-	cachedKeysDown []int64
-	keyMutex       sync.Mutex
+type keyInputState struct {
+	mu       sync.Mutex
+	pending  []KeyEvent
+	ready    []KeyEvent
+	pressed  map[int64]bool
+	keysDown []int64
+}
 
-	mouseButtonStates        [4]uint32
-	mouseEventsTemp          []MouseEvent
-	mouseEvents              []MouseEvent
-	cachedMouseButtons       uint8
-	mouseEventCaptureEnabled bool
-	mouseMutex               sync.Mutex
+type mouseInputState struct {
+	mu             sync.Mutex
+	buttons        [4]atomic.Bool
+	pending        []MouseEvent
+	ready          []MouseEvent
+	cachedButtons  uint8
+	captureEnabled bool
+}
+
+var (
+	keyInput   = keyInputState{pressed: make(map[int64]bool)}
+	mouseInput mouseInputState
 )
 
 // IsMouseButtonPressed reports whether the button is held.
 func IsMouseButtonPressed(id int64) bool {
-	if id < 0 || id >= int64(len(mouseButtonStates)) {
+	if id < 0 || id >= int64(len(mouseInput.buttons)) {
 		return false
 	}
-	return atomic.LoadUint32(&mouseButtonStates[id]) != 0
+	return mouseInput.buttons[id].Load()
 }
 
 // AnyMouseButtonPressed reports whether a primary mouse button is held.
@@ -62,31 +69,17 @@ func AnyMouseButtonPressed() bool {
 
 // GetKeyEvents drains the ordered key edges for the current update.
 func GetKeyEvents(dst []KeyEvent) []KeyEvent {
-	keyMutex.Lock()
-	dst = append(dst, keyEvents...)
-	keyEvents = keyEvents[:0]
-	keyMutex.Unlock()
-	return dst
+	return keyInput.drain(dst)
 }
 
 // GetKeyInput drains key edges and returns a sorted held-key snapshot.
 func GetKeyInput(dst []KeyEvent) ([]KeyEvent, []int64) {
-	keyMutex.Lock()
-	dst = append(dst, keyEvents...)
-	keyEvents = keyEvents[:0]
-	keysDown := append([]int64(nil), cachedKeysDown...)
-	keyMutex.Unlock()
-	return dst, keysDown
+	return keyInput.drainInput(dst)
 }
 
 // GetMouseInput drains button edges and returns the held-button snapshot.
 func GetMouseInput(dst []MouseEvent) ([]MouseEvent, uint8) {
-	mouseMutex.Lock()
-	dst = append(dst, mouseEvents...)
-	mouseEvents = mouseEvents[:0]
-	buttons := cachedMouseButtons
-	mouseMutex.Unlock()
-	return dst, buttons
+	return mouseInput.drainInput(dst)
 }
 
 // GetMouseEvents drains the ordered mouse-button edges for the current update.
@@ -97,50 +90,36 @@ func GetMouseEvents(dst []MouseEvent) []MouseEvent {
 
 // DiscardPendingKeyEvents starts a clean input-session boundary.
 func DiscardPendingKeyEvents() {
-	keyMutex.Lock()
-	keyEventsTemp = keyEventsTemp[:0]
-	keyEvents = keyEvents[:0]
-	rebuildCachedKeysDownLocked()
-	keyMutex.Unlock()
+	keyInput.discard()
 }
 
 // SetMouseEventCaptureEnabled switches ordered mouse-edge capture at a clean boundary.
 func SetMouseEventCaptureEnabled(enabled bool) {
-	mouseMutex.Lock()
-	mouseEventsTemp = mouseEventsTemp[:0]
-	mouseEvents = mouseEvents[:0]
-	cachedMouseButtons = currentMouseButtons()
-	mouseEventCaptureEnabled = enabled
-	mouseMutex.Unlock()
+	mouseInput.setCaptureEnabled(enabled)
 }
 
 func resetInputState() {
-	resetMouseButtonStates()
-	keyMutex.Lock()
-	keyEventsTemp = make([]KeyEvent, 0)
-	keyEvents = make([]KeyEvent, 0)
-	keyStates = make(map[int64]bool)
-	cachedKeysDown = nil
-	keyMutex.Unlock()
-	mouseMutex.Lock()
-	mouseEventsTemp = make([]MouseEvent, 0)
-	mouseEvents = make([]MouseEvent, 0)
-	cachedMouseButtons = 0
-	mouseMutex.Unlock()
+	keyInput.reset()
+	mouseInput.reset()
 }
 
 func onKeyPressed(id int64) {
-	keyMutex.Lock()
-	keyStates[id] = true
-	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: true})
-	keyMutex.Unlock()
+	queueKeyEvent(id, true)
 }
 
 func onKeyReleased(id int64) {
-	keyMutex.Lock()
-	delete(keyStates, id)
-	keyEventsTemp = append(keyEventsTemp, KeyEvent{Id: id, IsPressed: false})
-	keyMutex.Unlock()
+	queueKeyEvent(id, false)
+}
+
+func queueKeyEvent(id int64, pressed bool) {
+	keyInput.mu.Lock()
+	if pressed {
+		keyInput.pressed[id] = true
+	} else {
+		delete(keyInput.pressed, id)
+	}
+	keyInput.pending = append(keyInput.pending, KeyEvent{Id: id, IsPressed: pressed})
+	keyInput.mu.Unlock()
 }
 
 func onMousePressed(id int64) {
@@ -152,71 +131,135 @@ func onMouseReleased(id int64) {
 }
 
 func queueMouseEvent(id int64, pressed bool) {
-	if id < 1 || id > 3 {
+	if id < 1 || id >= int64(len(mouseInput.buttons)) {
 		return
 	}
-	mouseMutex.Lock()
-	if IsMouseButtonPressed(id) == pressed {
-		mouseMutex.Unlock()
+	mouseInput.mu.Lock()
+	if mouseInput.buttons[id].Load() == pressed {
+		mouseInput.mu.Unlock()
 		return
 	}
-	setMouseButtonPressed(id, pressed)
-	if mouseEventCaptureEnabled {
-		mouseEventsTemp = append(mouseEventsTemp, MouseEvent{Id: id, IsPressed: pressed})
+	mouseInput.buttons[id].Store(pressed)
+	if mouseInput.captureEnabled {
+		mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
 	}
-	mouseMutex.Unlock()
+	mouseInput.mu.Unlock()
 }
 
 func cacheKeyEvents() {
-	keyMutex.Lock()
-	keyEvents = append(keyEvents, keyEventsTemp...)
-	keyStateChanged := len(keyEventsTemp) != 0
-	keyEventsTemp = keyEventsTemp[:0]
-	if keyStateChanged {
-		rebuildCachedKeysDownLocked()
-	}
-	keyMutex.Unlock()
-}
-
-func rebuildCachedKeysDownLocked() {
-	cachedKeysDown = cachedKeysDown[:0]
-	for key := range keyStates {
-		cachedKeysDown = append(cachedKeysDown, key)
-	}
-	sort.Slice(cachedKeysDown, func(i, j int) bool { return cachedKeysDown[i] < cachedKeysDown[j] })
+	keyInput.cache()
 }
 
 func cacheMouseEvents() {
-	mouseMutex.Lock()
-	mouseEvents = append(mouseEvents, mouseEventsTemp...)
-	mouseEventsTemp = mouseEventsTemp[:0]
-	cachedMouseButtons = currentMouseButtons()
-	mouseMutex.Unlock()
+	mouseInput.cache()
 }
 
-func currentMouseButtons() uint8 {
+func resetMouseButtonStates() {
+	mouseInput.mu.Lock()
+	mouseInput.resetButtonsLocked()
+	mouseInput.mu.Unlock()
+}
+
+func (s *keyInputState) drain(dst []KeyEvent) []KeyEvent {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	s.mu.Unlock()
+	return dst
+}
+
+func (s *keyInputState) drainInput(dst []KeyEvent) ([]KeyEvent, []int64) {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	keysDown := append([]int64(nil), s.keysDown...)
+	s.mu.Unlock()
+	return dst, keysDown
+}
+
+func (s *keyInputState) discard() {
+	s.mu.Lock()
+	s.pending = s.pending[:0]
+	s.ready = s.ready[:0]
+	s.rebuildKeysDownLocked()
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) reset() {
+	s.mu.Lock()
+	s.pending = nil
+	s.ready = nil
+	s.pressed = make(map[int64]bool)
+	s.keysDown = nil
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) cache() {
+	s.mu.Lock()
+	s.ready = append(s.ready, s.pending...)
+	changed := len(s.pending) != 0
+	s.pending = s.pending[:0]
+	if changed {
+		s.rebuildKeysDownLocked()
+	}
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) rebuildKeysDownLocked() {
+	s.keysDown = s.keysDown[:0]
+	for key := range s.pressed {
+		s.keysDown = append(s.keysDown, key)
+	}
+	slices.Sort(s.keysDown)
+}
+
+func (s *mouseInputState) drainInput(dst []MouseEvent) ([]MouseEvent, uint8) {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	buttons := s.cachedButtons
+	s.mu.Unlock()
+	return dst, buttons
+}
+
+func (s *mouseInputState) setCaptureEnabled(enabled bool) {
+	s.mu.Lock()
+	s.pending = s.pending[:0]
+	s.ready = s.ready[:0]
+	s.cachedButtons = s.buttonMask()
+	s.captureEnabled = enabled
+	s.mu.Unlock()
+}
+
+func (s *mouseInputState) reset() {
+	s.mu.Lock()
+	s.resetButtonsLocked()
+	s.pending = nil
+	s.ready = nil
+	s.cachedButtons = 0
+	s.mu.Unlock()
+}
+
+func (s *mouseInputState) cache() {
+	s.mu.Lock()
+	s.ready = append(s.ready, s.pending...)
+	s.pending = s.pending[:0]
+	s.cachedButtons = s.buttonMask()
+	s.mu.Unlock()
+}
+
+func (s *mouseInputState) buttonMask() uint8 {
 	var buttons uint8
-	for id := int64(1); id <= 3; id++ {
-		if IsMouseButtonPressed(id) {
+	for id := 1; id < len(s.buttons); id++ {
+		if s.buttons[id].Load() {
 			buttons |= 1 << (id - 1)
 		}
 	}
 	return buttons
 }
 
-func resetMouseButtonStates() {
-	for i := range mouseButtonStates {
-		atomic.StoreUint32(&mouseButtonStates[i], 0)
+func (s *mouseInputState) resetButtonsLocked() {
+	for i := range s.buttons {
+		s.buttons[i].Store(false)
 	}
-}
-
-func setMouseButtonPressed(id int64, pressed bool) {
-	if id < 0 || id >= int64(len(mouseButtonStates)) {
-		return
-	}
-	var state uint32
-	if pressed {
-		state = 1
-	}
-	atomic.StoreUint32(&mouseButtonStates[id], state)
 }
