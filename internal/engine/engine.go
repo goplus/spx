@@ -70,15 +70,16 @@ func Main(game IGame) {
 	enginewrap.Init(WaitMainThread)
 	currentGame = game
 	gde.Link(gdx.CoreCallbackInfo{
-		OnEngineStart:   onStart,
-		OnEngineUpdate:  onUpdate,
-		OnEngineDestroy: onDestroy,
-		OnEngineReset:   onReset,
-		OnEnginePause:   onPause,
-		OnMousePressed:  onMousePressed,
-		OnMouseReleased: onMouseReleased,
-		OnKeyPressed:    onKeyPressed,
-		OnKeyReleased:   onKeyReleased,
+		OnEngineStart:     onStart,
+		OnEngineUpdate:    onUpdate,
+		OnEngineDestroy:   onDestroy,
+		OnEngineDestroyed: gde.Unlink,
+		OnEngineReset:     onReset,
+		OnEnginePause:     onPause,
+		OnMousePressed:    onMousePressed,
+		OnMouseReleased:   onMouseReleased,
+		OnKeyPressed:      onKeyPressed,
+		OnKeyReleased:     onKeyReleased,
 	})
 }
 
