@@ -135,7 +135,7 @@ func (p *Game) setDebugFlags(flags dbgFlags) {
 	gco.SetPerfDebug(p.debugState.DebugPerf)
 }
 
-func (p *Game) newSpriteAndLoadWithLoader(
+func (p *Game) newSpriteAndLoad(
 	name string,
 	tySpr reflect.Type,
 	g reflect.Value,
@@ -148,30 +148,29 @@ func (p *Game) newSpriteAndLoadWithLoader(
 	return spr
 }
 
-func (p *Game) getSpriteProtoWithLoader(tySpr reflect.Type, g reflect.Value, loadSprite spriteLoader) Sprite {
+func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value, loadSprite spriteLoader) Sprite {
 	name := tySpr.Name()
 	spr, ok := p.sprs[name]
 	if !ok {
-		spr = p.newSpriteAndLoadWithLoader(name, tySpr, g, loadSprite)
+		spr = p.newSpriteAndLoad(name, tySpr, g, loadSprite)
 	}
 	return spr
 }
 
-func (p *Game) getSpriteProtoByNameWithLoader(name string, g reflect.Value, loadSprite spriteLoader) Sprite {
+func (p *Game) getSpriteProtoByName(name string, g reflect.Value, loadSprite spriteLoader) Sprite {
 	spr, ok := p.sprs[name]
 	if !ok {
 		tySpr, ok := p.typs[name]
 		if !ok {
 			spxlog.Panicf("Sprite %s is not defined", name)
 		}
-		spr = p.newSpriteAndLoadWithLoader(name, tySpr, g, loadSprite)
+		spr = p.newSpriteAndLoad(name, tySpr, g, loadSprite)
 	}
 	return spr
 }
 
 func (p *Game) reset() {
-	p.lifecycleState.IsRunned.Store(false)
-	p.resetBootstrapState()
+	p.resetBootstrap()
 
 	p.releaseGameAudio()
 	p.EraseAll()
@@ -189,17 +188,17 @@ func (p *Game) reset() {
 	p.sprs = make(map[string]Sprite)
 
 	engine.ResetFrameRuntime()
+	engine.ResetInputState()
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
 	costumeSizeCache.Clear()
 	p.eventQueueState.EventQueueStats.Reset()
-	close(p.events)
+	p.events = nil
 
 	itime.OnReload()
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
-	engine.SetGame(p)
 	engine.ResetFrameRuntime()
 	costumeSizeCache.Clear()
 	if err := p.attachPreparedInputSession(); err != nil {
@@ -218,6 +217,10 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 		tySpr := reflect.TypeOf(spr).Elem()
 		p.typs[tySpr.Name()] = tySpr
 	}
+	return p
+}
+
+func (p *Game) baseGame() *Game {
 	return p
 }
 

@@ -16,7 +16,10 @@
 
 package engine
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 	keyInput.reset()
@@ -154,5 +157,50 @@ func TestMouseEventsAreNotQueuedOutsideCaptureSession(t *testing.T) {
 	}
 	if buttons != 0 {
 		t.Fatalf("mouse buttons outside capture session = %#x, want released", buttons)
+	}
+}
+
+func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
+	isolateGameBinding(t)
+	setupExecuteTest(t)
+	ResetInputState()
+	SetMouseEventCaptureEnabled(true)
+	t.Cleanup(func() {
+		ResetInputState()
+		SetMouseEventCaptureEnabled(false)
+	})
+
+	binding, err := bindGame(new(bindingTestGame), new(struct{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { releaseGame(binding) })
+
+	if err := Reload(GetGame(), time.Second, func() error {
+		onKeyPressed(7)
+		onMousePressed(1)
+		return nil
+	}, func() error {
+		onKeyPressed(9)
+		onMousePressed(3)
+		return nil
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !beginGameClose(binding) {
+		t.Fatal("failed to close the active game")
+	}
+	onKeyPressed(8)
+	onMousePressed(2)
+
+	cacheKeyEvents()
+	cacheMouseEvents()
+	keyEvents, keysDown := GetKeyInput(nil)
+	mouseEvents, buttons := GetMouseInput(nil)
+	if len(keyEvents) != 0 || len(keysDown) != 0 {
+		t.Fatalf("transition key state = events %v, held %v; want empty", keyEvents, keysDown)
+	}
+	if len(mouseEvents) != 0 || buttons != 0 || IsMouseButtonPressed(1) || IsMouseButtonPressed(2) {
+		t.Fatalf("transition mouse state = events %v, buttons %#x; want empty", mouseEvents, buttons)
 	}
 }

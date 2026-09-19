@@ -949,23 +949,6 @@ func TestWalkZOrder(t *testing.T) {
 	}
 }
 
-func TestRunSpriteInitializers(t *testing.T) {
-	var got []string
-	RunSpriteInitializers(SpriteInitConfig[string]{
-		Items: []string{"a", "b"},
-		Setup: func(items []string) {
-			got = append(got, "setup")
-		},
-		BeforeMain: func(item string) {
-			got = append(got, "before:"+item)
-		},
-	})
-	want := []string{"setup", "before:a", "before:b"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("RunSpriteInitializers got %v, want %v", got, want)
-	}
-}
-
 func TestFieldPtrOrAllocAndFinders(t *testing.T) {
 	type spriteLike struct{ V int }
 	type holder struct {

@@ -156,7 +156,7 @@ func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	game.abortInputSession("recording game ended")
-	game.resetBootstrapState()
+	game.resetBootstrap()
 
 	if _, err := PrepareInputReplay(replay); err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestInputReplayRuntimePreservesShortClickWithinOneTick(t *testing.T) {
 		t.Fatal(err)
 	}
 	game.abortInputSession("recording game ended")
-	game.resetBootstrapState()
+	game.resetBootstrap()
 
 	if _, err := PrepareInputReplay(replay); err != nil {
 		t.Fatal(err)
@@ -390,11 +390,11 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 	}
 	game := &Game{}
 	first := claimPreparedSession(t, game)
-	if first.generation != game.currentBootstrapGeneration() {
-		t.Fatalf("session generation = %d, want %d", first.generation, game.currentBootstrapGeneration())
+	if first.generation != game.bootstrapGeneration() {
+		t.Fatalf("session generation = %d, want %d", first.generation, game.bootstrapGeneration())
 	}
 	game.abortInputSession("generation ended")
-	game.resetBootstrapState()
+	game.resetBootstrap()
 	if err := game.attachPreparedInputSession(); err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 		t.Fatalf("ordinary generation retained terminal input status: %+v", status)
 	}
 	game.abortInputSession("ordinary generation ended")
-	game.resetBootstrapState()
+	game.resetBootstrap()
 
 	if _, err := PrepareInputReplay(validRuntimeReplay()); err != nil {
 		t.Fatal(err)
@@ -414,8 +414,8 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 	if second == first {
 		t.Fatal("new Game generation reused the previous input session")
 	}
-	if second.generation != game.currentBootstrapGeneration() {
-		t.Fatalf("second generation = %d, want current generation %d", second.generation, game.currentBootstrapGeneration())
+	if second.generation != game.bootstrapGeneration() {
+		t.Fatalf("second generation = %d, want current generation %d", second.generation, game.bootstrapGeneration())
 	}
 	if status := second.status(); status.NextFrame != 0 {
 		t.Fatalf("new session did not start at tick zero: %+v", status)

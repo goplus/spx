@@ -49,24 +49,19 @@ func (p *Game) loadSpriteConfig(sprite Sprite, name string, gamer reflect.Value,
 	return bindSpriteOwner(vSpr, gamer)
 }
 
-func (p *Game) loadIndex(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
-	return p.loadIndexWithSpriteLoader(g, proj, generation, p.loadSprite)
-}
-
-func (p *Game) loadIndexWithSpriteLoader(
+func (p *Game) loadStage(
 	g reflect.Value,
 	proj *coreproject.ProjectConfig,
 	generation uint64,
 	loadSprite spriteLoader,
-) (err error) {
+) {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 
-	inits := p.loadAndInitSpritesWithLoader(g, proj, loadSprite)
+	inits := p.loadAndInitSprites(g, proj, loadSprite)
 	p.runSpriteCallbacks(inits, proj, g, generation)
-	return
 }
 
 // -----------------------------------------------------------------------------
@@ -181,11 +176,7 @@ func (p *Game) applyStageGeometry() {
 // -----------------------------------------------------------------------------
 // Sprite Setup
 // -----------------------------------------------------------------------------
-func (p *Game) loadAndInitSprites(g reflect.Value, proj *coreproject.ProjectConfig) []Sprite {
-	return p.loadAndInitSpritesWithLoader(g, proj, p.loadSprite)
-}
-
-func (p *Game) loadAndInitSpritesWithLoader(
+func (p *Game) loadAndInitSprites(
 	g reflect.Value,
 	proj *coreproject.ProjectConfig,
 	loadSprite spriteLoader,
@@ -194,7 +185,7 @@ func (p *Game) loadAndInitSpritesWithLoader(
 	err := coreproject.WalkZOrder(
 		proj.Zorder,
 		func(layer int, name string) error {
-			sp := p.getSpriteProtoByNameWithLoader(name, g, loadSprite)
+			sp := p.getSpriteProtoByName(name, g, loadSprite)
 			spr := spriteOf(sp)
 			spr.setLayer(layer + firstSpriteLayer)
 			p.addShape(spr)
@@ -203,7 +194,7 @@ func (p *Game) loadAndInitSpritesWithLoader(
 		},
 		func(layer int, shape coreproject.StageShape) error {
 			var err error
-			inits, err = p.addSpecialShapeWithLoader(g, shape, inits, loadSprite)
+			inits, err = p.addSpecialShape(g, shape, inits, loadSprite)
 			if err != nil {
 				return fmt.Errorf("addSpecialShape: %w", err)
 			}
@@ -224,33 +215,22 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		onLoaded = loader.OnLoaded
 	}
 	queueBootstrap := func(call func()) {
-		p.deferBootstrapFor(generation, call)
+		p.queueBootstrap(generation, call)
 	}
-	cameraTarget := ""
-	if proj.Camera != nil {
-		cameraTarget = proj.Camera.On
+	// Bootstrap hooks may override the initial camera target.
+	if proj.Camera != nil && proj.Camera.On != "" {
+		p.Camera.Follow__1(proj.Camera.On)
 	}
-	// Apply the project camera target as an initial default so bootstrap hooks
-	// such as MainEntry/Main/OnLoaded can still override it later.
-	if cameraTarget != "" {
-		p.Camera.Follow__1(cameraTarget)
-	}
-	coreproject.RunSpriteInitializers(coreproject.SpriteInitConfig[Sprite]{
-		Items: inits,
-		Setup: func(items []Sprite) {
-			queueBootstrap(func() {
-				p.setupCollisionData(items)
-			})
-		},
-		BeforeMain: func(ini Sprite) {
-			spr := spriteOf(ini)
-			if spr != nil {
-				queueBootstrap(spr.awake)
-			}
-		},
-	})
 	queueBootstrap(func() {
-		p.runBootstrapSpriteMainsUntilYield(inits)
+		p.setupCollisionData(inits)
+	})
+	for _, ini := range inits {
+		if spr := spriteOf(ini); spr != nil {
+			queueBootstrap(spr.awake)
+		}
+	}
+	queueBootstrap(func() {
+		runSpriteMainsUntilYield(inits)
 	})
 	queueBootstrap(onLoaded)
 }
@@ -271,16 +251,7 @@ func (p *Game) applyTilemap() {
 	p.applyStageGeometry()
 }
 
-func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
-	spxlog.Debug("EndLoad")
-	return p.loadIndex(g, proj, generation)
-}
-
-func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits []Sprite) ([]Sprite, error) {
-	return p.addSpecialShapeWithLoader(g, v, inits, p.loadSprite)
-}
-
-func (p *Game) addSpecialShapeWithLoader(
+func (p *Game) addSpecialShape(
 	g reflect.Value,
 	v coreproject.StageShape,
 	inits []Sprite,
@@ -301,7 +272,7 @@ func (p *Game) addSpecialShapeWithLoader(
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
-			return p.addStageSpritesWithLoader(g, shape, loadSprite)
+			return p.addStageSprites(g, shape, loadSprite)
 		},
 		Sprite: func(shape coreproject.StageShape) (Sprite, error) {
 			return p.addStageSprite(g, shape)
@@ -332,11 +303,7 @@ func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite
 	return added, nil
 }
 
-func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Sprite, error) {
-	return p.addStageSpritesWithLoader(g, v, p.loadSprite)
-}
-
-func (p *Game) addStageSpritesWithLoader(
+func (p *Game) addStageSprites(
 	g reflect.Value,
 	v coreproject.StageShape,
 	loadSprite spriteLoader,
@@ -359,7 +326,7 @@ func (p *Game) addStageSpritesWithLoader(
 			return typ.Implements(tySprite)
 		},
 		func(newItem reflect.Value, shape coreproject.StageShape) error {
-			spr := p.getSpriteProtoWithLoader(newItem.Type(), g, loadSprite)
+			spr := p.getSpriteProto(newItem.Type(), g, loadSprite)
 			dest, sp := applySprite(newItem, spr, shape)
 			p.shapeMgr.addShape(dest)
 			items = append(items, sp)

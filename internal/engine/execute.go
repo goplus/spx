@@ -23,15 +23,25 @@ import (
 )
 
 func Execute(owner any, fn func(ctx context.Context, owner any)) {
+	binding, ok := captureRuntimeWork()
+	if !ok {
+		return
+	}
 	co := gco
 	if co.IsInCoroutine() {
 		thread := co.Current()
-		fn(thread.Context(), owner)
+		if isRuntimeWorkCurrent(binding) {
+			fn(thread.Context(), owner)
+		}
 		return
 	}
 
 	owner = ResolveCoroutineOwner(owner)
-	call := func() { fn(co.Current().Context(), owner) }
+	call := func() {
+		if isRuntimeWorkCurrent(binding) {
+			fn(co.Current().Context(), owner)
+		}
+	}
 	if co.TryRunFromEngine(owner, call) {
 		return
 	}

@@ -1,3 +1,5 @@
+//go:build !pure_engine
+
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
@@ -18,6 +20,7 @@ package engine
 
 import (
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,13 +28,15 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/visualfc/gid"
 )
 
-type resetWorkerPlatform struct {
+type resetMainThreadPlatform struct {
 	gdx.IPlatformMgr
+	main uint64
 }
 
-func (resetWorkerPlatform) IsMainThread() bool { return false }
+func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.main }
 
 type resetDirectPlatform struct {
 	gdx.IPlatformMgr
@@ -42,6 +47,21 @@ func (resetDirectPlatform) IsMainThread() bool { return true }
 type resetRecordingExt struct {
 	gdx.IExtMgr
 	calls chan int64
+}
+
+type resetBlockingExt struct {
+	gdx.IExtMgr
+	callback func()
+	entered  chan int64
+	release  chan struct{}
+}
+
+func (r *resetBlockingExt) RequestReset(exitCode int64) {
+	if r.callback != nil {
+		r.callback()
+	}
+	r.entered <- exitCode
+	<-r.release
 }
 
 func (r *resetRecordingExt) RequestReset(exitCode int64) {
@@ -108,7 +128,7 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	var released atomic.Bool
+	releaseWorker := sync.OnceFunc(func() { close(release) })
 	workerDone := make(chan struct{})
 	co.CreateAndStart("blocked", func(coroutine.Thread) int {
 		defer close(workerDone)
@@ -116,11 +136,7 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 		<-release
 		return 0
 	})
-	t.Cleanup(func() {
-		if released.CompareAndSwap(false, true) {
-			close(release)
-		}
-	})
+	t.Cleanup(releaseWorker)
 	select {
 	case <-started:
 	case <-time.After(time.Second):
@@ -144,9 +160,7 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	if released.CompareAndSwap(false, true) {
-		close(release)
-	}
+	releaseWorker()
 	select {
 	case <-workerDone:
 	case <-time.After(time.Second):
@@ -199,17 +213,101 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	waitForResetAdmissionOpen(t, co)
 }
 
-func TestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
+func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
+	isolateGameBinding(t)
 	co := coroutine.New(nil)
 	co.OnInited()
-	original := gco
-	SetCoroutines(co)
-	t.Cleanup(func() {
-		SetCoroutines(original)
-	})
-	originalPlatform := gdx.PlatformMgr
-	gdx.PlatformMgr = resetWorkerPlatform{}
-	t.Cleanup(func() { gdx.PlatformMgr = originalPlatform })
+	setupWebResetTest(t, co)
+
+	game, owner := new(bindingTestGame), new(struct{})
+	binding, err := bindGame(game, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend := &resetBlockingExt{
+		callback: onReset,
+		entered:  make(chan int64, 1),
+		release:  make(chan struct{}),
+	}
+	gdx.ExtMgr = backend
+	releaseBackend := sync.OnceFunc(func() { close(backend.release) })
+	t.Cleanup(releaseBackend)
+
+	resetWebRuntime(11)
+	select {
+	case code := <-backend.entered:
+		if code != 11 {
+			t.Fatalf("reset code = %d, want 11", code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("backend reset was not requested")
+	}
+	if game.reset.Load() != 1 {
+		t.Fatalf("reset callbacks = %d, want 1", game.reset.Load())
+	}
+	if got := activeGame.Load(); got != binding {
+		t.Fatalf("binding was released inside the reset barrier: %p", got)
+	}
+	if got := binding.loadPhase(); got != gameClosing {
+		t.Fatalf("binding phase during reset = %d, want closing", got)
+	}
+	waitForResetAdmissionClose(t, co)
+
+	releaseBackend()
+	deadline := time.Now().Add(time.Second)
+	for GetGame() != nil && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := GetGame(); got != nil {
+		t.Fatalf("binding after reset completion = %v, want nil", got)
+	}
+	waitForResetAdmissionOpen(t, co)
+}
+
+func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
+	isolateGameBinding(t)
+	co := coroutine.New(nil)
+	co.OnInited()
+	recorder := setupWebResetTest(t, co)
+
+	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finishStart := sync.OnceFunc(func() { close(binding.startDone) })
+	t.Cleanup(finishStart)
+
+	resetWebRuntime(13)
+	select {
+	case code := <-recorder.calls:
+		t.Fatalf("backend reset %d was requested before startup established a backend", code)
+	case <-time.After(25 * time.Millisecond):
+	}
+	finishStart()
+	deadline := time.Now().Add(time.Second)
+	for GetGame() != nil && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if got := GetGame(); got != nil {
+		t.Fatalf("startup binding after reset = %v, want nil", got)
+	}
+	select {
+	case code := <-recorder.calls:
+		t.Fatalf("backend reset %d was requested for a canceled startup", code)
+	default:
+	}
+}
+
+func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
+	isolateGameBinding(t)
+	co := coroutine.New(nil)
+	co.OnInited()
+	setupWebResetTest(t, co)
+	gdx.PlatformMgr = resetMainThreadPlatform{main: gid.Get()}
+	game := new(bindingTestGame)
+	if _, err := bindGame(game, game); err != nil {
+		t.Fatal(err)
+	}
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
@@ -220,101 +318,64 @@ func TestResetAfterCoroutinesStopWaitsForManagedCaller(t *testing.T) {
 		return 0
 	})
 
-	timer := time.NewTimer(time.Second)
-	defer timer.Stop()
 	select {
 	case <-peerYielding:
-	case <-timer.C:
+	case <-time.After(time.Second):
 		t.Fatal("peer coroutine did not reach yield")
 	}
 
 	callerDone := make(chan struct{})
-	resetCalled := make(chan struct{})
-	result := make(chan bool, 1)
 	var resetBeforeDrain atomic.Bool
-	co.CreateAndStart("caller", func(me coroutine.Thread) int {
+	var resetOffMainThread atomic.Bool
+	backend := &resetBlockingExt{
+		callback: func() {
+			for _, done := range []chan struct{}{callerDone, peerDone} {
+				select {
+				case <-done:
+				default:
+					resetBeforeDrain.Store(true)
+				}
+			}
+			if runtime.GOOS != "js" && !gdx.PlatformMgr.IsMainThread() {
+				resetOffMainThread.Store(true)
+			}
+			onReset()
+		},
+		entered: make(chan int64, 1),
+		release: make(chan struct{}),
+	}
+	close(backend.release)
+	gdx.ExtMgr = backend
+	co.CreateAndStart("caller", func(coroutine.Thread) int {
 		defer close(callerDone)
-		go func() {
-			result <- resetAfterCoroutinesStop(co, time.Second, func() {
-				select {
-				case <-callerDone:
-				default:
-					resetBeforeDrain.Store(true)
-				}
-				select {
-				case <-peerDone:
-				default:
-					resetBeforeDrain.Store(true)
-				}
-				close(resetCalled)
-			})
-		}()
-		co.StopCurrent()
+		resetWebRuntime(17)
 		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)
-	for {
-		select {
-		case completed := <-result:
-			if !completed {
-				t.Fatal("coroutine reset barrier timed out")
-			}
-			if resetBeforeDrain.Load() {
-				t.Fatal("engine reset ran before managed callers drained")
-			}
-			select {
-			case <-resetCalled:
-			default:
-				t.Fatal("reset barrier completed without requesting reset")
-			}
-			return
-		default:
-		}
+	for activeGame.Load() != nil {
 		if time.Now().After(deadline) {
-			t.Fatal("reset barrier did not reach its main-thread callback")
+			t.Fatal("web reset did not finish and release its binding")
 		}
 		co.Update()
 		runtime.Gosched()
 	}
-}
-
-func TestResetAfterCoroutinesStopSkipsResetOnTimeout(t *testing.T) {
-	co := coroutine.New(nil)
-	co.OnInited()
-	original := gco
-	SetCoroutines(co)
-	t.Cleanup(func() { SetCoroutines(original) })
-
-	started := make(chan struct{})
-	release := make(chan struct{})
-	thread := co.CreateAndStart("blocked", func(coroutine.Thread) int {
-		close(started)
-		<-release
-		return 0
-	})
 	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("blocking coroutine did not start")
+	case code := <-backend.entered:
+		if code != 17 {
+			t.Fatalf("reset code = %d, want 17", code)
+		}
+	default:
+		t.Fatal("web reset released its binding without requesting backend reset")
 	}
-
-	var resetCalled atomic.Bool
-	if resetAfterCoroutinesStop(co, 20*time.Millisecond, func() {
-		resetCalled.Store(true)
-	}) {
-		t.Fatal("reset barrier reported success with a blocked coroutine")
+	if resetBeforeDrain.Load() {
+		t.Fatal("engine reset ran before managed callers drained")
 	}
-	if resetCalled.Load() {
-		t.Fatal("engine reset was requested after shutdown timed out")
+	if resetOffMainThread.Load() {
+		t.Fatal("engine reset ran outside the main thread")
 	}
-	close(release)
-	select {
-	case <-thread.Context().Done():
-	case <-time.After(time.Second):
-		t.Fatal("blocked coroutine was not canceled")
+	if got := game.reset.Load(); got != 1 {
+		t.Fatalf("reset callbacks = %d, want 1", got)
 	}
-	if !co.StopAllAndWait(time.Second) {
-		t.Fatal("blocking coroutine did not finish after release")
-	}
+	waitForResetAdmissionOpen(t, co)
 }

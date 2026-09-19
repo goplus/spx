@@ -17,41 +17,55 @@
 package engine
 
 import (
-	stdtime "time"
-
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 )
-
-const coroutineShutdownTimeout = 2 * stdtime.Second
 
 func RequestExit(exitCode int64) {
 	if platform.IsWeb() {
 		resetWebRuntime(exitCode)
 		return
 	}
-	Managers().ExtMgr.RequestExit(exitCode)
+	co := gco
+	exit := func() {
+		bindingMu.Lock()
+		if binding := activeGame.Load(); binding != nil && binding.loadPhase() != gameClosing {
+			binding.storePhase(gameStopped)
+		}
+		bindingMu.Unlock()
+		Managers().ExtMgr.RequestExit(exitCode)
+		if co != nil {
+			co.StopAll()
+		}
+	}
+	if co == nil {
+		exit()
+		return
+	}
+	// Deliver exit on the engine thread before closing the frame gate.
+	co.WaitMainThread(exit)
 }
 
 func resetWebRuntime(exitCode int64) {
 	co := gco
-	// Let the caller unwind while coroutines drain.
-	go resetAfterCoroutinesStop(co, coroutineShutdownTimeout, func() {
-		Managers().ExtMgr.RequestReset(exitCode)
-	})
+	binding, started := beginDeferredReset()
+	if started {
+		// Let the caller unwind while coroutines drain.
+		go finishWebReset(co, binding, exitCode)
+	}
 	if co.IsInCoroutine() {
 		co.StopCurrent()
 	}
 }
 
-func resetAfterCoroutinesStop(co *coroutine.Coroutines, timeout stdtime.Duration, reset func()) bool {
-	if !co.RunAfterStopAll(timeout, func() {
-		co.WaitMainThread(reset)
-	}) {
-		spxlog.Error("Coroutine shutdown timed out; engine reset was not requested.")
-		return false
+func finishWebReset(co *coroutine.Coroutines, binding *gameBinding, exitCode int64) {
+	defer CheckPanic()
+	waitForGameStart(binding)
+	defer finishDeferredReset(binding)
+	if binding.startDone != nil && binding.link == nil {
+		return
 	}
-	spxlog.Debug("Coroutine shutdown completed. Engine reset requested.")
-	return true
+	co.RunAfterStopAll(0, func() {
+		co.WaitMainThread(func() { Managers().ExtMgr.RequestReset(exitCode) })
+	})
 }

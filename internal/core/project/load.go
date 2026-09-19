@@ -21,12 +21,6 @@ import (
 	"reflect"
 )
 
-type SpriteInitConfig[T any] struct {
-	Items      []T
-	Setup      func([]T)
-	BeforeMain func(T)
-}
-
 func WalkZOrder(
 	zorder []any,
 	onSprite func(layer int, name string) error,
@@ -48,17 +42,6 @@ func WalkZOrder(
 		}
 	}
 	return nil
-}
-
-func RunSpriteInitializers[T any](cfg SpriteInitConfig[T]) {
-	if cfg.Setup != nil {
-		cfg.Setup(cfg.Items)
-	}
-	for _, item := range cfg.Items {
-		if cfg.BeforeMain != nil {
-			cfg.BeforeMain(item)
-		}
-	}
 }
 
 func WalkFields(
