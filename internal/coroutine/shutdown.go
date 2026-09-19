@@ -78,23 +78,35 @@ func (p *Coroutines) StopAllAndWait(timeout stime.Duration) bool {
 }
 
 // RunAfterStopAll drains scripts and workers, then runs call with admission
-// closed. Call it outside managed coroutines and runtime callbacks. A timeout
-// leaves admission closed until a later successful call.
-// The timeout bounds drain notifications, not lock acquisition or running callbacks.
+// closed. Call it outside managed coroutines and runtime callbacks. A drain timeout
+// leaves admission closed until a later successful call. The timeout covers
+// barrier acquisition and draining, but not call.
 func (p *Coroutines) RunAfterStopAll(timeout stime.Duration, call func()) bool {
+	_, completed := p.RunAfterStopAllIf(timeout, nil, call)
+	return completed
+}
+
+// RunAfterStopAllIf drains only if condition still holds after earlier barriers.
+// selected is false if condition fails or the barrier cannot be acquired in time.
+func (p *Coroutines) RunAfterStopAllIf(timeout stime.Duration, condition func() bool, call func()) (selected, completed bool) {
 	p.requireDrainCaller()
 	if p.callerThread() != nil {
 		panic("coroutine: RunAfterStopAll requires an external caller")
 	}
-	p.lockShutdown()
+	remaining, locked := p.lockShutdown(timeout)
+	if !locked {
+		return false, false
+	}
 	defer p.shutdownMu.Unlock()
+	if condition != nil && !condition() {
+		return false, false
+	}
 
 	p.admissionMu.Lock()
 	p.beginStoppingLocked()
 	p.admissionMu.Unlock()
-	if !p.waitForDrain(timeout, nil) {
-		// Keep timed-out barriers closed until explicit recovery.
-		return false
+	if !p.waitForDrain(remaining, nil) {
+		return true, false
 	}
 	defer func() {
 		p.admissionMu.Lock()
@@ -106,7 +118,7 @@ func (p *Coroutines) RunAfterStopAll(timeout stime.Duration, call func()) bool {
 		defer p.leaveCallback(id, previous)
 		call()
 	}
-	return true
+	return true, true
 }
 
 func (p *Coroutines) beginStoppingLocked() {

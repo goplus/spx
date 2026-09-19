@@ -27,7 +27,6 @@ type UpdateJobsStats struct {
 	GCPauses       float64 // GC pause time observed during the update.
 	ExternalTime   float64 // Unaccounted time, including runtime scheduling overhead.
 	TotalTime      float64 // Total update time.
-	TimeDifference float64 // Difference between total and accounted time.
 	TaskCounts     int     // Number of jobs processed.
 	WaitFrameCount int     // Number of frame-wait jobs resumed.
 	WaitMainCount  int     // Number of main-thread jobs executed.

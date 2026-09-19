@@ -32,7 +32,6 @@ const (
 // WaitJob describes work consumed by Update.
 type WaitJob struct {
 	Th    Thread  // Coroutine waiting on the job, if any.
-	Id    int64   // Manager-local sequence number.
 	Type  int     // Scheduler-internal job kind.
 	Call  func()  // Action when eligible; nil resumes Th for non-main-thread jobs.
 	Time  float64 // Level-time deadline for a time job.
@@ -58,15 +57,17 @@ func (p *Coroutines) Wait(t float64) {
 	if me == nil {
 		return
 	}
-	job := p.newResumeJob(me, waitTypeTime)
-	job.Time = time.TimeSinceLevelLoad() + max(t, 0)
-	job.Frame = time.Frame()
-	p.enqueueAndYield(job)
+	p.enqueueAndYield(&WaitJob{
+		Th:    me,
+		Type:  waitTypeTime,
+		Time:  time.TimeSinceLevelLoad() + max(t, 0),
+		Frame: time.Frame(),
+	})
 }
 
 // WaitYield suspends me until an Update pass processes its yield job.
 func (p *Coroutines) WaitYield(me Thread) {
-	p.enqueueAndYield(p.newResumeJob(me, waitTypeYield))
+	p.enqueueAndYield(&WaitJob{Th: me, Type: waitTypeYield})
 }
 
 // WaitToDo runs fn in a worker and yields when called from a coroutine.
@@ -122,18 +123,6 @@ func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
 	})
 	// Only return the result after the script resumes normally.
 	return value
-}
-
-func (p *Coroutines) nextWaitJobID() int64 {
-	return p.nextJobID.Add(1)
-}
-
-func (p *Coroutines) newResumeJob(me Thread, waitType int) *WaitJob {
-	return &WaitJob{
-		Th:   me,
-		Id:   p.nextWaitJobID(),
-		Type: waitType,
-	}
 }
 
 func (p *Coroutines) enqueueAndYield(job *WaitJob) {
