@@ -104,12 +104,9 @@ func (p *Game) UnloadTilemap() {
 
 // TilemapName returns the name of the currently loaded tilemap.
 func (p *Game) TilemapName() string {
-	return p.tilemapMgr.getCurrentMap()
+	return p.tilemapMgr.currentMap
 }
 
-// -----------------------------------------------------------------------------
-// Manager Setup
-// -----------------------------------------------------------------------------
 func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.g = g
 	p.fs = fs
@@ -170,22 +167,12 @@ func (p *gameTilemapMgr) unloadMap() {
 	if p.useNewLoader {
 		engine.Managers().TilemapparserMgr.DestroyAllTilemaps()
 	}
-	p.cleanupDecorators()
+	engine.Managers().SceneMgr.ClearPureSprites()
 	p.datas = nil
 	p.decoratorDatas = nil
 	p.currentMap = ""
 	p.tilemapDir = ""
 	p.useNewLoader = false
-}
-
-// getCurrentMap returns the name of the currently loaded tilemap.
-func (p *gameTilemapMgr) getCurrentMap() string {
-	return p.currentMap
-}
-
-// cleanupDecorators removes all static sprites (decorators) created by tilemaps.
-func (p *gameTilemapMgr) cleanupDecorators() {
-	engine.Managers().SceneMgr.ClearPureSprites()
 }
 
 func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {

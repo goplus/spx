@@ -548,7 +548,7 @@ func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent
 	switch aniType {
 	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
-		if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+		if a.sprite.g.physicsEnabled && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 			a.sprite.SetVelocity(params.moveVelocity.X, params.moveVelocity.Y)
 		} else {
 			a.applyTweenPosition(percent, params)
@@ -592,7 +592,7 @@ func (a *animationComponent) stopMoveTweenVelocity(ani *coreproject.AniConfig) {
 	}
 
 	physicsMode := a.sprite.PhysicsMode()
-	if isPhysicsEnabled() && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+	if a.sprite.g.physicsEnabled && physicsMode != NoPhysics && physicsMode != StaticPhysics {
 		a.sprite.SetVelocity(0, 0)
 	}
 }

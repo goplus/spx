@@ -53,7 +53,7 @@ func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 
 	co := setupRuntimeEventScheduler(t)
 	game := new(Game)
-	game.scriptEventBindings.init(&game.scriptEvents, game)
+	game.bindScriptEvents()
 	engine.SetGame(game)
 	t.Cleanup(func() { engine.SetGame(nil) })
 	return co, game
@@ -98,7 +98,7 @@ func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	engine.SetGame(&game)
 	defer engine.SetGame(nil)
 	engine.ResetFrameRuntime()
@@ -133,7 +133,7 @@ func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) 
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	game.markBootstrapDoneFor(game.currentBootstrapGeneration())
 	engine.SetGame(&game)
 	defer engine.SetGame(nil)
@@ -167,7 +167,7 @@ func TestOnStartUsesScratchTargetOrder(t *testing.T) {
 
 	newSprite := func(name string) *SpriteImpl {
 		sprite := &SpriteImpl{name: name, g: game}
-		sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+		sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
 		return sprite
 	}
 
@@ -217,7 +217,7 @@ func TestOnStartUsesScratchTargetOrder(t *testing.T) {
 func TestAwakeNilDispatchesEveryOwner(t *testing.T) {
 	_, game := setupRuntimeEventGame(t)
 	sprite := &SpriteImpl{name: "sprite", g: game}
-	sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
 	var calls []string
 
 	game.scriptEventBindings.onAwake(func() { calls = append(calls, "stage") })
@@ -234,8 +234,8 @@ func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 
 	var registry scriptEventRegistry
 	var left, right scriptEventBindings
-	left.init(&registry, "left")
-	right.init(&registry, "right")
+	left.bind(&registry, "left")
+	right.bind(&registry, "right")
 
 	var (
 		leftValue, rightValue bool
@@ -293,7 +293,7 @@ func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 
 func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	game.OnCond(nil, func() {})
 	game.OnCond(func() bool { return true }, nil)
 
@@ -316,7 +316,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	var order []string
 	evaluations := 0
 	game.OnCond(func() bool {
@@ -370,7 +370,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	var order []string
 	ready := false
 	topLevelBlocked := make(chan struct{})
@@ -429,7 +429,7 @@ func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	stale := game.currentBootstrapGeneration()
 	game.resetBootstrapState()
 
@@ -472,7 +472,7 @@ func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 
 	var game Game
-	game.scriptEventBindings.init(&game.scriptEvents, &game)
+	game.bindScriptEvents()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	game.OnStart(func() {
@@ -991,7 +991,7 @@ func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick
 	sprite.spriteState.IsVisible = true
 	sprite.runtimeState.SyncSprite = &engine.Sprite{}
 	sprite.runtimeState.SyncSprite.SetId(id)
-	sprite.scriptEventBindings.init(&g.scriptEvents, sprite)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
 	if registerClick {
 		sprite.OnClick(func() {})
 	}

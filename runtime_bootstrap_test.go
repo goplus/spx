@@ -47,10 +47,10 @@ func TestGameRunBootstrapTasksDrainsNestedCallbacks(t *testing.T) {
 
 func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 	var g Game
-	g.scriptEventBindings.init(&g.scriptEvents, &g)
+	g.bindScriptEvents()
 
 	var sprite SpriteImpl
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite)
 
 	g.deferBootstrap(func() {
 		g.OnStart(func() {})

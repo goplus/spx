@@ -18,61 +18,22 @@ package spx
 
 import coreevent "github.com/goplus/spx/v3/internal/core/event"
 
-// -----------------------------------------------------------------------------
-// Queue State
-// -----------------------------------------------------------------------------
-type eventQueuePolicy = coreevent.QueuePolicy
-
-const defaultEventQueuePolicy = coreevent.DefaultQueuePolicy
-
-type eventQueueSnapshot = coreevent.QueueSnapshot
-
 func (p *Game) initEventQueueState() {
-	p.gameRuntimeState.EventQueuePolicy = defaultEventQueuePolicy
-	p.gameRuntimeState.EventQueueStats.Reset()
+	p.eventQueueState.EventQueuePolicy = coreevent.DefaultQueuePolicy
+	p.eventQueueState.EventQueueStats.Reset()
 }
 
-func (p *Game) resetEventQueueStats() {
-	p.gameRuntimeState.EventQueueStats.Reset()
-}
-
-func (p *Game) setEventQueuePolicy(policy eventQueuePolicy) {
-	p.gameRuntimeState.EventQueuePolicy = policy
-}
-
-func (p *Game) eventQueueSnapshot() eventQueueSnapshot {
-	queueLen, queueCap := 0, 0
-	if p.events != nil {
-		queueLen = len(p.events)
-		queueCap = cap(p.events)
-	}
-	return coreevent.Snapshot(p.gameRuntimeState.EventQueuePolicy, &p.gameRuntimeState.EventQueueStats, queueLen, queueCap)
+func (p *Game) eventQueueSnapshot() coreevent.QueueSnapshot {
+	state := &p.eventQueueState
+	return coreevent.Snapshot(state.EventQueuePolicy, &state.EventQueueStats, len(p.events), cap(p.events))
 }
 
 func (p *Game) queueEventWithPolicy(ev event) bool {
-	policy := p.gameRuntimeState.EventQueuePolicy
+	state := &p.eventQueueState
+	enqueue := coreevent.EnqueueWithPolicy[event]
 	// A managed send must release the scheduler slot when the queue is full.
-	if policy == coreevent.QueueBlock && gco != nil && gco.IsInCoroutine() {
-		return coreevent.EnqueueWithPolicyNonBlocking(
-			p.events,
-			ev,
-			policy,
-			&p.gameRuntimeState.EventQueueStats,
-			&p.gameRuntimeState.EventQueueMu,
-		)
+	if state.EventQueuePolicy == coreevent.QueueBlock && gco != nil && gco.IsInCoroutine() {
+		enqueue = coreevent.EnqueueWithPolicyNonBlocking[event]
 	}
-	return coreevent.EnqueueWithPolicy(
-		p.events,
-		ev,
-		policy,
-		&p.gameRuntimeState.EventQueueStats,
-		&p.gameRuntimeState.EventQueueMu,
-	)
-}
-
-// -----------------------------------------------------------------------------
-// Queue Control
-// -----------------------------------------------------------------------------
-func parseEventQueuePolicy(policy string) eventQueuePolicy {
-	return coreevent.ParsePolicy(policy)
+	return enqueue(p.events, ev, state.EventQueuePolicy, &state.EventQueueStats, &state.EventQueueMu)
 }

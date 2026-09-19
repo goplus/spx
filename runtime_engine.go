@@ -22,7 +22,6 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
@@ -172,7 +171,7 @@ func (p *Game) runBootstrapSpriteMainsUntilYield(inits []Sprite) {
 			continue
 		}
 
-		p.runBootstrapMainUntilYield(spr.pthis, ini.Main)
+		p.runBootstrapMainUntilYield(spr.owner, ini.Main)
 	}
 }
 
@@ -319,5 +318,12 @@ func (p *Game) startBootstrapPhaseFor(generation uint64) {
 }
 
 func runMain(call func()) {
-	coreruntime.RunMain(call, time.Now(), setSchedInMain, setMainSchedTime)
+	if gco == nil || !gco.IsInCoroutine() {
+		call()
+		return
+	}
+	thread := gco.Current()
+	end := thread.BeginMain(time.Now())
+	defer end()
+	call()
 }

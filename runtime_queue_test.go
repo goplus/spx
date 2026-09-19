@@ -12,7 +12,7 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	game.events = make(chan event, 1)
 	game.events <- &eventTimer{Time: 1}
-	game.setEventQueuePolicy(coreevent.QueueBlock)
+	game.eventQueueState.EventQueuePolicy = coreevent.QueueBlock
 
 	done := make(chan bool, 1)
 	thread := co.Create("managed-producer", func(coroutine.Thread) int {
@@ -32,7 +32,7 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	}
 	co.Join(thread)
 
-	if got := game.gameRuntimeState.EventQueueStats.DroppedTotal(); got != 1 {
+	if got := game.eventQueueState.EventQueueStats.DroppedTotal(); got != 1 {
 		t.Fatalf("DroppedTotal = %d, want 1", got)
 	}
 	if got := <-game.events; got.(*eventTimer).Time != 1 {
@@ -44,7 +44,7 @@ func TestQueueBlockStillBlocksExternalCaller(t *testing.T) {
 	_, game := setupRuntimeEventGame(t)
 	game.events = make(chan event, 1)
 	game.events <- &eventTimer{Time: 1}
-	game.setEventQueuePolicy(coreevent.QueueBlock)
+	game.eventQueueState.EventQueuePolicy = coreevent.QueueBlock
 
 	started := make(chan struct{})
 	done := make(chan bool, 1)

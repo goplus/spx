@@ -95,12 +95,14 @@ func PrepareInputRecording(fps float64, options ...InputSessionOptions) (InputSe
 
 // FinishInputRecording completes the active Game's recording.
 func FinishInputRecording() (InputReplay, error) {
-	return finishInputRecordingSession()
+	result, err := finishInputRecording()
+	return result.replay, err
 }
 
 // FinishInputRecordingJSON completes the recording and returns its cached JSON.
 func FinishInputRecordingJSON() (string, error) {
-	return finishInputRecordingJSONSession()
+	result, err := finishInputRecording()
+	return string(result.json), err
 }
 
 // PrepareInputReplay configures playback for the next Game lifecycle.
