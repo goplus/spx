@@ -26,7 +26,7 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 	for _, target := range []string{"stage", "clone"} {
 		t.Run(target, func(t *testing.T) {
 			game := setupCloneLimitGame(t)
-			game.scriptEventBindings.init(&game.scriptEvents, game)
+			game.bindScriptEvents()
 			backend := &stopAllAudioBackend{}
 			game.soundMgr.Init(backend)
 			source := newCloneLimitSprite(game, "source")

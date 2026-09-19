@@ -84,7 +84,7 @@ type LogicLoopConfig[T any] struct {
 	ShowDebugPanel           func()
 }
 
-func RunEventLoop[T any](me coroutine.Thread, events chan T, handle func(T)) int {
+func RunEventLoop[T any](events chan T, handle func(T)) int {
 	for {
 		handle(engine.WaitForChan(events))
 	}
@@ -131,7 +131,7 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 	return lastMousePos, frame.CurrentLeftButtonPressed
 }
 
-func RunInputLoop(me coroutine.Thread, cfg InputLoopConfig) int {
+func RunInputLoop(cfg InputLoopConfig) int {
 	state := inputLoopState{keyEvents: make([]engine.KeyEvent, 0)}
 
 	for {
@@ -169,7 +169,7 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 	return tempAudios, tempAnimations
 }
 
-func RunLogicLoop[T any](me coroutine.Thread, cfg LogicLoopConfig[T]) int {
+func RunLogicLoop[T any](cfg LogicLoopConfig[T]) int {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 

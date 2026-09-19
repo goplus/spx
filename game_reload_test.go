@@ -248,7 +248,7 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	base.startLoad(files)
 	base.soundMgr.Init(&fakeAudioBackend{})
 	base.tilemapMgr.init(base, files, "")
-	base.setPhysicsEnabled(physics)
+	base.physicsEnabled = physics
 	base.lifecycleState.IsRunned.Store(true)
 
 	t.Cleanup(func() {

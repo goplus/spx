@@ -34,13 +34,13 @@ import (
 // -----------------------------------------------------------------------------
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)
-	instr := (flags & DbgFlagInstr) != 0
-	event := (flags & DbgFlagEvent) != 0
-	perf := (flags & DbgFlagPerf) != 0
-	setDefaultDebugFlags(instr, event, perf)
-	if g := activeGame(); g != nil {
-		g.setDebugFlags(instr, event, perf)
+	flags &= DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
+	defaultDebugFlags.Store(uint32(flags))
+	if g := currentGame(); g != nil {
+		g.setDebugFlags(flags)
+		return
 	}
+	gco.SetPerfDebug(flags&DbgFlagPerf != 0)
 }
 
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
@@ -71,7 +71,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 	engine.ClearAllSprites()
 
 	g.events = make(chan event, eventBufferSize)
-	g.resetEventQueueStats()
+	g.eventQueueState.EventQueueStats.Reset()
 
 	proj := &plan.project
 	g.applyStoredRuntimeConfig(proj)
@@ -100,12 +100,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 func SchedNow() int {
 	now := time.Now()
 	err := coreruntime.SchedNow(
-		coreruntime.ScheduleState{
-			IsSchedInMain:   isSchedInMainState(),
-			MainSchedTime:   mainSchedTime(),
-			Now:             now,
-			MainExecTimeout: time.Second * mainExecTimeoutSec,
-		},
+		mainScheduleState(now),
 		coreruntime.SchedulerHooks{
 			SchedCurrent: func() {
 				if gco.IsInCoroutine() {
@@ -127,12 +122,7 @@ func SchedNow() int {
 
 func Sched() int {
 	err := coreruntime.Sched(
-		coreruntime.ScheduleState{
-			IsSchedInMain:   isSchedInMainState(),
-			MainSchedTime:   mainSchedTime(),
-			Now:             time.Now(),
-			MainExecTimeout: time.Second * mainExecTimeoutSec,
-		},
+		mainScheduleState(time.Now()),
 		schedTimeoutMs,
 		coreruntime.SchedulerHooks{
 			IsSchedTimeout: func(ms float64) bool {
@@ -180,19 +170,30 @@ func handleMainExecutionTimeout(err error) bool {
 		return false
 	}
 	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
-	// Demote long-running top-level Main code to regular coroutine scheduling
-	// after the first timeout so it keeps running without repeated panics.
-	setSchedInMain(false)
-	setMainSchedTime(time.Time{})
-	if engine.IsInCoroutine() {
-		me := gco.Current()
-		if me != nil {
-			gco.Sched(me)
+	// Warn once, then schedule Main as a regular coroutine.
+	if gco != nil && gco.IsInCoroutine() {
+		if thread := gco.Current(); thread != nil {
+			thread.DisableMainTimeout()
+			gco.Sched(thread)
 		}
 	} else {
 		runtime.Gosched()
 	}
 	return true
+}
+
+func mainScheduleState(now time.Time) coreruntime.ScheduleState {
+	var startedAt time.Time
+	if gco != nil && gco.IsInCoroutine() {
+		if thread := gco.Current(); thread != nil {
+			startedAt = thread.MainStartedAt()
+		}
+	}
+	return coreruntime.ScheduleState{
+		MainStartedAt:   startedAt,
+		Now:             now,
+		MainExecTimeout: time.Second * mainExecTimeoutSec,
+	}
 }
 
 func init() {

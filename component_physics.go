@@ -73,7 +73,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *co
 	p.collisionInfo.Layer = parseLayerMaskValue(spriteCfg.CollisionLayer)
 
 	var defaultCollisionType int64 = physicsColliderNone
-	if isPhysicsEnabled() {
+	if sprite.g.physicsEnabled {
 		defaultCollisionType = physicsColliderAuto
 	}
 
@@ -293,7 +293,7 @@ func (p *physicsComponent) initCollisionParams() {
 		p.collisionInfo.Mask = 0
 		p.triggerInfo.Layer = int64(info.Layer)
 		p.triggerInfo.Mask = int64(info.Mask)
-		if isPhysicsEnabled() {
+		if p.sprite.g.physicsEnabled {
 			p.collisionInfo.Layer = int64(info.Layer)
 			p.collisionInfo.Mask = int64(info.Mask)
 		}

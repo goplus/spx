@@ -19,7 +19,6 @@ package state
 import (
 	"sync"
 	"sync/atomic"
-	"time"
 
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -59,11 +58,7 @@ type GameDebugState struct {
 	DebugPerf  bool
 }
 
-type GameRuntimeState struct {
-	EnabledPhysics   bool
-	IsSchedInMain    bool
-	MainSchedTime    time.Time
-	ImageSizeCache   sync.Map
+type GameEventQueueState struct {
 	EventQueueMu     sync.Mutex
 	EventQueuePolicy coreevent.QueuePolicy
 	EventQueueStats  coreevent.QueueStats

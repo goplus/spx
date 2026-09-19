@@ -49,6 +49,7 @@ func setupCloneLimitGame(t *testing.T) *Game {
 	setupCloneSpriteMgr(t)
 	game := new(Game)
 	game.initShapeMgr()
+	game.bindScriptEvents()
 	original := engine.GetGame()
 	engine.SetGame(game)
 	t.Cleanup(func() { engine.SetGame(original) })
@@ -60,7 +61,7 @@ func newCloneLimitSprite(game *Game, name string) *cloneLimitSprite {
 	s := &cloneLimitSprite{}
 	s.baseObj.initWithSize(1, 1)
 	s.g, s.name, s.sprite = game, name, s
-	s.scriptEventBindings.init(&game.scriptEvents, &s.SpriteImpl)
+	s.scriptEventBindings.bind(&game.scriptEvents, &s.SpriteImpl)
 	s.components.initComponents(&s.SpriteImpl, &coreproject.SpriteConfig{})
 	s.physics().collisionInfo.Type = physicsColliderNone
 	s.physics().triggerInfo.Type = physicsColliderNone

@@ -17,11 +17,15 @@
 package spx
 
 import (
+	"sync"
+
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v3/internal/assets"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 )
+
+var costumeSizeCache sync.Map
 
 // costumeSetImage represents metadata for a costume set image.
 type costumeSetImage struct {
@@ -110,7 +114,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 		img.nx,
 		frameIndex,
 		bitmapResolution,
-		getImageSizeCached,
+		costumeImageSize,
 	)
 	return &costume{
 		path:             img.path,
@@ -136,7 +140,7 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 		config.ImageHeight,
 		fullPath,
 		config.BitmapResolution,
-		getImageSizeCached,
+		costumeImageSize,
 	)
 	return &costume{
 		name:             config.Name,
@@ -164,19 +168,11 @@ func costumeAssetPath(path string) string {
 	return engine.ToAssetPath(path)
 }
 
-// getImageSizeCached retrieves image size from cache or loads it.
-func getImageSizeCached(imagePath string) mathf.Vec2 {
-	cache := imageSizeCacheRef()
-	if v, ok := cache.Load(imagePath); ok {
-		return v.(mathf.Vec2)
+func costumeImageSize(imagePath string) mathf.Vec2 {
+	if value, ok := costumeSizeCache.Load(imagePath); ok {
+		return value.(mathf.Vec2)
 	}
-	size := getCostumeAssetSize(imagePath)
-	cache.Store(imagePath, size)
+	size := engine.Managers().ResMgr.GetImageSize(costumeAssetPath(imagePath))
+	costumeSizeCache.Store(imagePath, size)
 	return size
-}
-
-// getCostumeAssetSize loads the actual image size from the asset.
-func getCostumeAssetSize(imagePath string) mathf.Vec2 {
-	assetPath := costumeAssetPath(imagePath)
-	return engine.Managers().ResMgr.GetImageSize(assetPath)
 }

@@ -114,10 +114,6 @@ func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfi
 	p.animation().doTween(name, ani)
 }
 
-func (p *SpriteImpl) playDefaultAnim() {
-	p.animation().playDefaultAnim()
-}
-
 // -----------------------------------------------------------------------------
 // Animation Data
 // -----------------------------------------------------------------------------

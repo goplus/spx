@@ -97,7 +97,7 @@ func updateTweens(delta float64) {
 		}
 	}
 	for i := range count {
-		if tempTweenInfos[i].isDone() && isNodeExist(tempTweenInfos[i].id) {
+		if tempTweenInfos[i].isDone() && IsNodeExist(tempTweenInfos[i].id) {
 			tempTweenInfos[i].callback()
 		}
 	}

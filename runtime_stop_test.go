@@ -109,7 +109,7 @@ func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	})
 
 	var script scriptEventBindings
-	script.init(&scriptEventRegistry{}, "owner")
+	script.bind(&scriptEventRegistry{}, "owner")
 	thread := co.CreateAndStart("event-stop-this-script", func(coroutine.Thread) int {
 		script.Stop(ThisScript)
 		panic("stop-this-script should not continue")

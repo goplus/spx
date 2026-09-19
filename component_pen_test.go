@@ -108,7 +108,7 @@ func newPenTestSprite() *penTestSprite {
 	sprite.g = game
 	sprite.name = "PenTest"
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&game.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }

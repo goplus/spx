@@ -25,26 +25,22 @@ import (
 )
 
 func CreateBareSpriteForType[T any](pos mathf.Vec2) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	value := createBareSprite(tType, pos)
+	value := createBareSprite(reflect.TypeFor[T](), pos)
 	return value.Addr().Interface().(*T)
 }
 
 func CreateBackdropForType[T any]() *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	value := createBackdrop(tType)
+	value := createBackdrop(reflect.TypeFor[T]())
 	return value.Addr().Interface().(*T)
 }
 
 func CreateEngineUIForType[T any](prefabName string) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	value := createUI(tType, prefabName, true)
+	value := createUI(reflect.TypeFor[T](), prefabName, true)
 	return value.Addr().Interface().(*T)
 }
 
 func BindUIForType[T any](parentNode Object, path string) *T {
-	tType := reflect.TypeOf((*T)(nil)).Elem()
-	value := bindUI(tType, parentNode, path)
+	value := bindUI(reflect.TypeFor[T](), parentNode, path)
 	if !value.IsValid() {
 		return nil
 	}

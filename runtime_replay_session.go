@@ -65,7 +65,6 @@ type inputSession struct {
 	abortReason    string
 	frameOpen      bool
 	terminalStatus InputSessionStatus
-	hasTerminal    bool
 
 	input       inputSessionInput
 	environment inputSessionEnvironment
@@ -87,7 +86,6 @@ func (p *Game) attachPreparedInputSession() error {
 		return fmt.Errorf("input session must be attached before the game starts")
 	}
 	p.inputClaimed = true
-	p.hasInputTerm = false
 	p.inputTerminal = InputSessionStatus{}
 	p.inputSessionMu.Unlock()
 
@@ -95,6 +93,7 @@ func (p *Game) attachPreparedInputSession() error {
 	if plan == nil {
 		return nil
 	}
+	defer completePreparedInputSessionClaim(plan)
 	session, err := newInputSession(plan, p.currentBootstrapGeneration())
 	if err != nil {
 		p.setInputSessionTerminal(InputSessionStatus{
@@ -102,19 +101,16 @@ func (p *Game) attachPreparedInputSession() error {
 			Phase: InputSessionPhaseAborted,
 			Error: err.Error(),
 		})
-		completePreparedInputSessionClaim(plan)
 		return err
 	}
 	p.inputSessionMu.Lock()
 	if !p.inputClaimed || p.inputSession != nil {
 		p.inputSessionMu.Unlock()
 		p.setInputSessionTerminal(session.close("another input session is already attached"))
-		completePreparedInputSessionClaim(plan)
 		return fmt.Errorf("game lifecycle ended before input session attachment completed")
 	}
 	p.inputSession = session
 	p.inputSessionMu.Unlock()
-	completePreparedInputSessionClaim(plan)
 	return nil
 }
 
@@ -145,7 +141,6 @@ func (p *Game) abortInputSession(reason string) {
 	p.inputSessionMu.Lock()
 	if p.inputSession != nil {
 		p.inputTerminal = p.inputSession.close(reason)
-		p.hasInputTerm = true
 		p.inputSession = nil
 	}
 	p.inputClaimed = false
@@ -156,15 +151,14 @@ func (p *Game) setInputSessionTerminal(status InputSessionStatus) {
 	p.inputSessionMu.Lock()
 	p.inputSession = nil
 	p.inputTerminal = status
-	p.hasInputTerm = true
 	p.inputSessionMu.Unlock()
 }
 
 func (p *Game) terminalInputSessionStatus() (InputSessionStatus, bool) {
 	p.inputSessionMu.RLock()
-	status, ok := p.inputTerminal, p.hasInputTerm
+	status := p.inputTerminal
 	p.inputSessionMu.RUnlock()
-	return status, ok
+	return status, status.Phase != ""
 }
 
 func (s *inputSession) close(reason string) InputSessionStatus {
@@ -178,7 +172,6 @@ func (s *inputSession) close(reason string) InputSessionStatus {
 	}
 	status := s.statusLocked()
 	s.terminalStatus = status
-	s.hasTerminal = true
 	s.controller.Reset()
 	s.mu.Unlock()
 	s.operationMu.Unlock()
@@ -264,7 +257,7 @@ func (s *inputSession) status() InputSessionStatus {
 }
 
 func (s *inputSession) statusLocked() InputSessionStatus {
-	if s.hasTerminal {
+	if s.terminalStatus.Phase != "" {
 		return s.terminalStatus
 	}
 	controllerStatus := s.controller.Status()
@@ -306,30 +299,14 @@ func (s *inputSession) endFrame() {
 	s.mu.Unlock()
 }
 
-func (s *inputSession) frameCompletionPending() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mode == InputSessionModeReplaying && s.phase == InputSessionPhaseFinishing
-}
-
-func (p *Game) inputSessionFrameCompletionPending() bool {
-	session := p.currentInputSession()
-	return session != nil && session.frameCompletionPending()
-}
-
 func (p *Game) finishInputSessionFrame() {
 	session := p.currentInputSession()
 	if session == nil {
 		return
 	}
 	session.endFrame()
-	completed, err := session.completeReplayFrame(func() { engine.Managers().ExtMgr.Pause() })
-	if err != nil {
+	if _, err := session.completeReplayFrame(engine.Managers().ExtMgr.Pause); err != nil {
 		engine.Panic(err)
-		return
-	}
-	if !completed {
-		return
 	}
 }
 
@@ -385,7 +362,7 @@ func prepareInputSession(plan inputSessionPlan) (InputSessionPreparation, error)
 	if preparedInputSession.plan != nil {
 		return InputSessionPreparation{}, ErrInputSessionActive
 	}
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		if game.inputSessionUnavailable() {
 			return InputSessionPreparation{}, ErrInputSessionActive
 		}
@@ -486,8 +463,8 @@ func newInputSession(plan *inputSessionPlan, generation uint64) (*inputSession, 
 	return session, nil
 }
 
-func finishInputRecordingResultSession() (inputRecordingResult, error) {
-	game := activeGame()
+func finishInputRecording() (inputRecordingResult, error) {
+	game := currentGame()
 	if game == nil {
 		return inputRecordingResult{}, ErrInputSessionNotRecording
 	}
@@ -497,7 +474,7 @@ func finishInputRecordingResultSession() (inputRecordingResult, error) {
 	}
 	var freeze func()
 	if game.lifecycleState.IsRunned.Load() {
-		freeze = func() { engine.Managers().ExtMgr.Pause() }
+		freeze = engine.Managers().ExtMgr.Pause
 	}
 	result, err := session.finishRecordingResult(freeze)
 	if err != nil && freeze != nil {
@@ -507,16 +484,6 @@ func finishInputRecordingResultSession() (inputRecordingResult, error) {
 		_ = freezeInputSession(freeze)
 	}
 	return result, err
-}
-
-func finishInputRecordingSession() (InputReplay, error) {
-	result, err := finishInputRecordingResultSession()
-	return result.replay, err
-}
-
-func finishInputRecordingJSONSession() (string, error) {
-	result, err := finishInputRecordingResultSession()
-	return string(result.json), err
 }
 
 func freezeInputSession(freeze func()) (err error) {
@@ -536,17 +503,16 @@ func freezeInputSession(freeze func()) (err error) {
 // callers end the Game instead of resetting input independently.
 func resetInputSessionState() {
 	clearPreparedInputSession()
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		game.abortInputSession("input session reset")
 		game.inputSessionMu.Lock()
 		game.inputTerminal = InputSessionStatus{}
-		game.hasInputTerm = false
 		game.inputSessionMu.Unlock()
 	}
 }
 
 func activeInputSession() *inputSession {
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		return game.currentInputSession()
 	}
 	return nil
@@ -562,7 +528,7 @@ func inputSessionStatus() InputSessionStatus {
 	if session := activeInputSession(); session != nil {
 		return session.status()
 	}
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		if status, ok := game.terminalInputSessionStatus(); ok {
 			return status
 		}
