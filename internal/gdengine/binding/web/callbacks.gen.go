@@ -40,6 +40,7 @@ var (
 	jsEventOnEngineUpdate            = js.ValueOf("OnEngineUpdate")
 	jsEventOnEngineFixedUpdate       = js.ValueOf("OnEngineFixedUpdate")
 	jsEventOnEngineDestroy           = js.ValueOf("OnEngineDestroy")
+	jsEventOnEngineDestroyed         = js.ValueOf("OnEngineDestroyed")
 	jsEventOnEngineReset             = js.ValueOf("OnEngineReset")
 	jsEventOnEnginePause             = js.ValueOf("OnEnginePause")
 	jsEventOnSceneSpriteInstantiated = js.ValueOf("OnSceneSpriteInstantiated")
@@ -112,6 +113,11 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 			return nil
 		}
 		callbacks.OnEngineDestroy()
+	} else if eventVal.Equal(jsEventOnEngineDestroyed) {
+		if callbacks.OnEngineDestroyed == nil {
+			return nil
+		}
+		callbacks.OnEngineDestroyed()
 	} else if eventVal.Equal(jsEventOnEngineReset) {
 		if callbacks.OnEngineReset == nil {
 			return nil

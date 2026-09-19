@@ -638,6 +638,20 @@ func func_on_engine_destroy() {
 	}
 }
 
+//export func_on_engine_destroyed
+func func_on_engine_destroyed() {
+	if callbacks.OnEngineDestroyed != nil {
+		callbacks.OnEngineDestroyed()
+	}
+}
+
+//export func_on_engine_reset
+func func_on_engine_reset() {
+	if callbacks.OnEngineReset != nil {
+		callbacks.OnEngineReset()
+	}
+}
+
 //export func_on_engine_pause
 func func_on_engine_pause(is_pause bool) {
 	if callbacks.OnEnginePause != nil {

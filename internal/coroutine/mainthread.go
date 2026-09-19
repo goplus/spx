@@ -149,16 +149,49 @@ func (p *Coroutines) joinOnEngine(thread Thread) {
 	}
 }
 
-// lockShutdown keeps engine jobs moving while another drain owns shutdownMu.
-func (p *Coroutines) lockShutdown() {
-	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
-		for !p.shutdownMu.TryLock() {
-			p.pumpMainThread()
-		}
-	}) {
-		return
+// lockShutdown keeps engine-thread work moving while it waits for the barrier.
+func (p *Coroutines) lockShutdown(timeout time.Duration) (remaining time.Duration, locked bool) {
+	var deadline time.Time
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
 	}
-	p.shutdownMu.Lock()
+	tryLock := func(wait func()) bool {
+		for !p.shutdownMu.TryLock() {
+			if !deadline.IsZero() && time.Now().After(deadline) {
+				return false
+			}
+			wait()
+		}
+		return true
+	}
+	var acquired bool
+	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
+		acquired = tryLock(p.pumpMainThread)
+	}) {
+		locked = acquired
+	} else if deadline.IsZero() {
+		p.shutdownMu.Lock()
+		locked = true
+	} else {
+		locked = tryLock(func() {
+			delay := time.Until(deadline)
+			if delay > time.Millisecond {
+				delay = time.Millisecond
+			}
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+		})
+	}
+	if !locked || deadline.IsZero() {
+		return 0, locked
+	}
+	remaining = time.Until(deadline)
+	if remaining > 0 {
+		return remaining, true
+	}
+	p.shutdownMu.Unlock()
+	return 0, false
 }
 
 func (p *Coroutines) waitForDrainChange(changed <-chan struct{}, timedOut <-chan time.Time) bool {

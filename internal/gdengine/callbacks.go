@@ -30,6 +30,7 @@ func bindCallbacks() CallbackInfo {
 	infos.OnEngineUpdate = onEngineUpdate
 	infos.OnEngineFixedUpdate = onEngineFixedUpdate
 	infos.OnEngineDestroy = onEngineDestroy
+	infos.OnEngineDestroyed = onEngineDestroyed
 	infos.OnEngineReset = onEngineReset
 	infos.OnEnginePause = onEnginePause
 
@@ -145,6 +146,12 @@ func onEngineDestroy() {
 	}
 	for _, mgr := range mgrs {
 		mgr.OnDestroy()
+	}
+}
+
+func onEngineDestroyed() {
+	if coreCallbacks.OnEngineDestroyed != nil {
+		coreCallbacks.OnEngineDestroyed()
 	}
 }
 

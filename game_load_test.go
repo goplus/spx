@@ -372,7 +372,7 @@ func newCameraFollowOverrideSprite(g *Game, name string, followTarget SpriteName
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -382,7 +382,7 @@ func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisio
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -392,7 +392,7 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -409,7 +409,7 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -425,7 +425,7 @@ func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -441,7 +441,7 @@ func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKi
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -465,7 +465,7 @@ func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneP
 	sprite.g = g
 	sprite.name = "Score"
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -520,7 +520,7 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 
 	done := make(chan struct{})
 	go func() {
-		game.runBootstrapTasksFor(generation)
+		game.runBootstrapTasks(generation)
 		close(done)
 	}()
 
@@ -552,14 +552,14 @@ func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
 	game.addShape(spriteOf(spriteA))
 	game.addShape(spriteOf(spriteB))
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{Camera: &coreproject.CameraConfig{On: "SpriteA"}},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 
 	followTarget, ok := game.camera.followTarget.(*SpriteImpl)
 	if !ok {
@@ -587,14 +587,14 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 	spriteA.physics().addCollisionTarget("SpriteB")
 	spriteB.physics().addCollisionTarget("SpriteA")
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 	game.refreshCollisionLayers()
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
@@ -624,7 +624,7 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 	game.addShape(spriteOf(spriteA))
 	game.addShape(spriteOf(spriteB))
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -649,14 +649,14 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	spriteA.peer = spriteB
 	spriteB.peer = spriteA
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 
 	if !spriteA.sawSelfAwake || !spriteA.sawPeerAwake {
 		t.Fatalf("SpriteA main saw awake state self=%v peer=%v, want both true", spriteA.sawSelfAwake, spriteA.sawPeerAwake)
@@ -687,7 +687,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 		spriteBSeenThreadCount = gco.LastThreadID()
 	})
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -808,15 +808,15 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	stageStarted := make(chan struct{})
 	stageResumed := make(chan struct{})
 	followingTaskRan := make(chan struct{})
-	generation := game.currentBootstrapGeneration()
-	game.deferBootstrapFor(generation, func() {
-		game.runBootstrapMainUntilYield(&game, func() {
+	generation := game.bootstrapGeneration()
+	game.queueBootstrap(generation, func() {
+		runMainUntilYield(&game, func() {
 			close(stageStarted)
 			engine.WaitForChan(blocked)
 			close(stageResumed)
 		})
 	})
-	game.deferBootstrapFor(generation, func() {
+	game.queueBootstrap(generation, func() {
 		close(followingTaskRan)
 	})
 
@@ -859,7 +859,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -869,7 +869,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 
 	runBootstrapTasksWithScheduler(t, &game, generation)
 
-	game.markBootstrapDoneFor(generation)
+	game.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
 	gco.Update()
 

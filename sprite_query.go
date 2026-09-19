@@ -124,7 +124,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 	}
 
 	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.SyncSprite == nil {
-		center, size := getCostumeBoundByAlpha(p, false)
+		center, size := getCostumeBoundByAlpha(p)
 		triggerInfo.Pivot = center
 		triggerInfo.Params = []float64{size.X, size.Y}
 	}
@@ -178,21 +178,21 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 	}
 	// Scratch's sensing path ignores visible/ghost when checking whether a sprite
 	// is touching the mouse, so use the sensing branch in the engine query.
-	return p.engine().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), false)
+	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(x, y), false)
 }
 
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
+	return engine.Managers().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
 func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
-	return p.engine().SpriteMgr.CheckCollisionByColors(
+	return engine.Managers().SpriteMgr.CheckCollisionByColors(
 		p.runtimeState.SyncSprite.GetId(),
 		spriteColor,
 		targetColor,
@@ -205,9 +205,9 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
-	usePixelPerfect := !isPhysicsEnabled()
+	usePixelPerfect := !p.g.physicsEnabled
 	if !p.isCloneProxyPublicationBlocked() && !dst.isCloneProxyPublicationBlocked() {
-		return p.engine().SpriteMgr.CheckCollisionWithSprite(
+		return engine.Managers().SpriteMgr.CheckCollisionWithSprite(
 			p.runtimeState.SyncSprite.GetId(),
 			dst.runtimeState.SyncSprite.GetId(),
 			alphaThreshold,
@@ -239,9 +239,9 @@ func (p *SpriteImpl) checkTouchingScreen(where int, area string) (touching int) 
 	}
 	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
-		touching = int(p.engine().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
+		touching = int(engine.Managers().PhysicsMgr.CheckTouchedCameraBoundaries(p.runtimeState.SyncSprite.GetId()))
 	default:
-		touching = int(p.engine().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
+		touching = int(engine.Managers().PhysicsMgr.CheckTouchedStageBoundaries(p.runtimeState.SyncSprite.GetId()))
 	}
 	return touching & where
 }
@@ -252,9 +252,9 @@ func (p *SpriteImpl) checkNearestTouchedBoundary(area string) int {
 	}
 	switch normalizeEdgeArea(area) {
 	case edgeAreaCamera:
-		return int(p.engine().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
+		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedCameraBoundary(p.runtimeState.SyncSprite.GetId()))
 	default:
-		return int(p.engine().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
+		return int(engine.Managers().PhysicsMgr.CheckNearestTouchedStageBoundary(p.runtimeState.SyncSprite.GetId()))
 	}
 }
 

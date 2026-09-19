@@ -33,8 +33,7 @@ var ErrMainExecutionTimedOut = errors.New(MainExecutionTimedOutMsg)
 var ErrLoopExecutionTimedOut = errors.New(LoopExecutionTimedOutMsg)
 
 type ScheduleState struct {
-	IsSchedInMain   bool
-	MainSchedTime   time.Time
+	MainStartedAt   time.Time
 	Now             time.Time
 	MainExecTimeout time.Duration
 }
@@ -45,15 +44,15 @@ type SchedulerHooks struct {
 	OnSchedTimeout func()
 }
 
-func MainSchedTimedOut(state ScheduleState) bool {
-	if !state.IsSchedInMain || state.MainSchedTime.IsZero() {
+func MainExecutionTimedOut(state ScheduleState) bool {
+	if state.MainStartedAt.IsZero() {
 		return false
 	}
-	return state.Now.Sub(state.MainSchedTime) >= state.MainExecTimeout
+	return state.Now.Sub(state.MainStartedAt) >= state.MainExecTimeout
 }
 
 func SchedNow(state ScheduleState, hooks SchedulerHooks) error {
-	if MainSchedTimedOut(state) {
+	if MainExecutionTimedOut(state) {
 		return ErrMainExecutionTimedOut
 	}
 	if hooks.SchedCurrent != nil {
@@ -63,7 +62,7 @@ func SchedNow(state ScheduleState, hooks SchedulerHooks) error {
 }
 
 func Sched(state ScheduleState, schedTimeoutMs float64, hooks SchedulerHooks) error {
-	if MainSchedTimedOut(state) {
+	if MainExecutionTimedOut(state) {
 		return ErrMainExecutionTimedOut
 	}
 	if hooks.IsSchedTimeout != nil && hooks.IsSchedTimeout(schedTimeoutMs) {
@@ -73,13 +72,6 @@ func Sched(state ScheduleState, schedTimeoutMs float64, hooks SchedulerHooks) er
 		return ErrLoopExecutionTimedOut
 	}
 	return nil
-}
-
-func RunMain(call func(), now time.Time, setSchedInMain func(bool), setMainSchedTime func(time.Time)) {
-	setSchedInMain(true)
-	setMainSchedTime(now)
-	defer setSchedInMain(false)
-	call()
 }
 
 func Forever(call func(), yield func()) {

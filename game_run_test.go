@@ -21,50 +21,31 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestSchedNowWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
-	originalGame := engine.GetGame()
-	t.Cleanup(func() {
-		engine.SetGame(originalGame)
-	})
-
-	var g Game
-	g.initGame(nil)
-
-	setSchedInMain(true)
-	setMainSchedTime(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
-
-	SchedNow()
-
-	if isSchedInMainState() {
-		t.Fatal("SchedNow should demote timed-out Main execution instead of keeping the main timeout state")
-	}
-	if !mainSchedTime().IsZero() {
-		t.Fatalf("mainSchedTime = %v, want zero after timed-out Main demotion", mainSchedTime())
-	}
+	testMainExecutionTimeoutDemotion(t, SchedNow)
 }
 
 func TestSchedWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
-	originalGame := engine.GetGame()
-	t.Cleanup(func() {
-		engine.SetGame(originalGame)
+	testMainExecutionTimeoutDemotion(t, Sched)
+}
+
+func testMainExecutionTimeoutDemotion(t *testing.T, sched func() int) {
+	t.Helper()
+	co := setupRuntimeEventScheduler(t)
+	thread := co.Create("main", func(thread coroutine.Thread) int {
+		end := thread.BeginMainExecution(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
+		defer end()
+		sched()
+		if !thread.MainExecutionStartedAt().IsZero() {
+			t.Error("timed-out Main execution was not demoted")
+		}
+		return 0
 	})
-
-	var g Game
-	g.initGame(nil)
-
-	setSchedInMain(true)
-	setMainSchedTime(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
-
-	Sched()
-
-	if isSchedInMainState() {
-		t.Fatal("Sched should demote timed-out Main execution instead of keeping the main timeout state")
-	}
-	if !mainSchedTime().IsZero() {
-		t.Fatalf("mainSchedTime = %v, want zero after timed-out Main demotion", mainSchedTime())
+	co.Join(thread)
+	if !thread.Stopped() && thread.Context().Err() == nil {
+		t.Fatal("Main timeout test coroutine did not finish")
 	}
 }
 
@@ -72,7 +53,9 @@ func TestSchedNowExternalCallerDoesNotDriveActiveCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(game, func(coroutine.Thread) int {
+	thread := co.Create(game, func(thread coroutine.Thread) int {
+		end := thread.BeginMainExecution(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
+		defer end()
 		close(started)
 		<-release
 		return 0

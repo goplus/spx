@@ -61,6 +61,7 @@ type threadImpl struct {
 
 	schedFrame     int64
 	schedTimestamp stime.Time
+	mainStartedAt  stime.Time
 
 	warp            atomic.Bool
 	warpStart       atomic.Int64
@@ -187,6 +188,26 @@ func (th Thread) IsSchedTimeout(ms float64) bool {
 		th.schedTimestamp = stime.Now()
 	}
 	return stime.Since(th.schedTimestamp) > stime.Duration(ms)*stime.Millisecond
+}
+
+// BeginMainExecution scopes generated Main timeout tracking to this thread.
+// The returned function restores an enclosing Main execution, if any.
+func (th Thread) BeginMainExecution(startedAt stime.Time) func() {
+	previous := th.mainStartedAt
+	th.mainStartedAt = startedAt
+	return func() {
+		th.mainStartedAt = previous
+	}
+}
+
+// MainExecutionStartedAt returns the innermost active Main start time.
+func (th Thread) MainExecutionStartedAt() stime.Time {
+	return th.mainStartedAt
+}
+
+// DemoteMainExecution disables timeout checks for the current Main execution.
+func (th Thread) DemoteMainExecution() {
+	th.mainStartedAt = stime.Time{}
 }
 
 type threadNamer interface {

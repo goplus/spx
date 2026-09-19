@@ -351,19 +351,16 @@ func TestProcessLogicFrame(t *testing.T) {
 	}
 }
 
-func TestMainSchedTimedOut(t *testing.T) {
+func TestMainExecutionTimedOut(t *testing.T) {
 	now := time.Unix(20, 0)
-	if !MainSchedTimedOut(ScheduleState{
-		IsSchedInMain:   true,
-		MainSchedTime:   time.Unix(10, 0),
+	if !MainExecutionTimedOut(ScheduleState{
+		MainStartedAt:   time.Unix(10, 0),
 		Now:             now,
 		MainExecTimeout: 5 * time.Second,
 	}) {
 		t.Fatal("expected main scheduler timeout")
 	}
-	if MainSchedTimedOut(ScheduleState{
-		IsSchedInMain:   false,
-		MainSchedTime:   time.Unix(10, 0),
+	if MainExecutionTimedOut(ScheduleState{
 		Now:             now,
 		MainExecTimeout: 5 * time.Second,
 	}) {
@@ -391,8 +388,7 @@ func TestSchedNow(t *testing.T) {
 
 	err = SchedNow(
 		ScheduleState{
-			IsSchedInMain:   true,
-			MainSchedTime:   time.Unix(1, 0),
+			MainStartedAt:   time.Unix(1, 0),
 			Now:             time.Unix(5, 0),
 			MainExecTimeout: 2 * time.Second,
 		},
@@ -439,30 +435,6 @@ func TestSched(t *testing.T) {
 	)
 	if err != ErrLoopExecutionTimedOut {
 		t.Fatalf("Sched timeout error = %v, want %v", err, ErrLoopExecutionTimedOut)
-	}
-}
-
-func TestRunMain(t *testing.T) {
-	var (
-		flags []bool
-		at    time.Time
-		calls int
-	)
-	now := time.Unix(123, 0)
-	RunMain(
-		func() { calls++ },
-		now,
-		func(v bool) { flags = append(flags, v) },
-		func(t time.Time) { at = t },
-	)
-	if calls != 1 {
-		t.Fatalf("calls = %d, want 1", calls)
-	}
-	if len(flags) != 2 || !flags[0] || flags[1] {
-		t.Fatalf("flags = %+v, want [true false]", flags)
-	}
-	if !at.Equal(now) {
-		t.Fatalf("at = %v, want %v", at, now)
 	}
 }
 

@@ -64,9 +64,8 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	b.conf = opened.Config
 	b.proj = opened.Project
 
-	resMgr := b.game.engine().ResMgr
 	fontPlan := coreproject.ResolveRuntimeFontPlan(opened.Fonts, engine.ToAssetPath)
-	if err := applyRuntimeFontPlan(&resMgr, fontPlan); err != nil {
+	if err := applyRuntimeFontPlan(&engine.Managers().ResMgr, fontPlan); err != nil {
 		b.err = fmt.Errorf("apply project fonts: %w", err)
 	}
 	return b
@@ -124,10 +123,6 @@ func (b *gameBuilder) finalizeLoad() *gameBuilder {
 	return b
 }
 
-func (b *gameBuilder) run() error {
-	return b.game.runLoop(&b.conf)
-}
-
 func (b *gameBuilder) build() (*Game, error) {
 	b.initializeGame().
 		loadResources().
@@ -144,11 +139,12 @@ func (b *gameBuilder) buildAndRun() error {
 	if _, err := b.build(); err != nil {
 		return err
 	}
-	return b.run()
+	b.game.startLoops(&b.conf)
+	return nil
 }
 
 func (p *Game) startLoad(fs spxfs.Dir) {
-	p.soundMgr.Init(&p.engine().AudioMgr)
+	p.soundMgr.Init(&engine.Managers().AudioMgr)
 	p.sounds = make(map[string]sound)
 	p.inputMgr.init(p)
 	p.events = make(chan event, eventBufferSize)
@@ -182,7 +178,7 @@ func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
 
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
-	if settings.AutoSetCollisionLayer == isPhysicsEnabled() {
+	if settings.AutoSetCollisionLayer == g.physicsEnabled {
 		engine.Panic("invalid configuration: autoSetCollisionLayer and physics enabled state must not be the same")
 	}
 	engine.SetLayerSortMode(settings.LayerSortMode)

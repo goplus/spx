@@ -98,16 +98,23 @@ func SetMouseEventCaptureEnabled(enabled bool) {
 	mouseInput.setCaptureEnabled(enabled)
 }
 
-func resetInputState() {
+// ResetInputState clears process-wide input state at a game lifecycle boundary.
+func ResetInputState() {
 	keyInput.reset()
 	mouseInput.reset()
 }
 
 func onKeyPressed(id int64) {
+	if !acceptsRuntimeWork() {
+		return
+	}
 	queueKeyEvent(id, true)
 }
 
 func onKeyReleased(id int64) {
+	if !acceptsRuntimeWork() {
+		return
+	}
 	queueKeyEvent(id, false)
 }
 
@@ -123,10 +130,16 @@ func queueKeyEvent(id int64, pressed bool) {
 }
 
 func onMousePressed(id int64) {
+	if !acceptsRuntimeWork() {
+		return
+	}
 	queueMouseEvent(id, true)
 }
 
 func onMouseReleased(id int64) {
+	if !acceptsRuntimeWork() {
+		return
+	}
 	queueMouseEvent(id, false)
 }
 

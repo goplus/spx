@@ -18,7 +18,7 @@ func (p *SpriteImpl) Stop(kind StopKind) {
 
 func (p *scriptEventBindings) Stop(kind StopKind) {
 	// Preserve nil-receiver behavior for ThisScript.
-	owner := p.pthis
+	owner := p.owner
 	if kind == ThisScript {
 		// Procedure handles this signal without stopping its caller.
 		gco.StopThisScript()
@@ -48,7 +48,7 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 			// Keep the caller for cleanup; pending starts use the new epoch.
 			return thread != caller && !p.scriptEventRegistry.isPendingStartThread(thread) && shouldStop(thread)
 		})
-		if game := activeGame(); game != nil {
+		if game := p.scriptEventRegistry.game; game != nil {
 			game.stopAllResources()
 		}
 	} else {

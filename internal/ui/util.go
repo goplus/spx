@@ -22,7 +22,6 @@ import (
 	. "github.com/goplus/spbase/mathf"
 
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
 )
 
 var (
@@ -33,11 +32,6 @@ var (
 
 type UiNode struct {
 	engine.UiNode
-}
-
-// Init binds the shared engine managers for compatibility with existing callers.
-func Init(managers *enginewrap.EngineManagers) {
-	engine.SetManagers(managers)
 }
 
 func SetBaseScreenSize(width, height int) {

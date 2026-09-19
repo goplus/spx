@@ -26,72 +26,59 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/goplus/spx/v3/internal/engine"
+	engineplatform "github.com/goplus/spx/v3/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v3/internal/log"
+)
+
+const reloadDrainTimeout = 2 * time.Second
+
+var (
+	errReloadInactiveGame = errors.New("game reload requires the active game")
+	errReloadWrongThread  = errors.New("game reload requires the engine main thread")
 )
 
 // -----------------------------------------------------------------------------
 // Entry Points
 // -----------------------------------------------------------------------------
+
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)
-	instr := (flags & DbgFlagInstr) != 0
-	event := (flags & DbgFlagEvent) != 0
-	perf := (flags & DbgFlagPerf) != 0
-	setDefaultDebugFlags(instr, event, perf)
-	if g := activeGame(); g != nil {
-		g.setDebugFlags(instr, event, perf)
+	flags &= DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
+	defaultDebugFlags.Store(uint32(flags))
+	if g := currentGame(); g != nil {
+		g.setDebugFlags(flags)
+		return
 	}
+	syncCoroutinePerfDebug(flags&DbgFlagPerf != 0)
 }
 
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
 func XGot_Game_Main(game Gamer, sprites ...Sprite) {
-	g := game.initGame(sprites)
-	g.gamer = game
-	engine.Main(game)
+	g := game.baseGame()
+	err := engine.Main(game, g, func() {
+		g.initGame(sprites)
+		g.gamer = game
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // XGot_Game_Reload reloads the game with new configuration.
 func XGot_Game_Reload(game Gamer, index any) (err error) {
-	v := reflect.ValueOf(game).Elem()
-	g := instance(v)
 	if gco.IsInCoroutine() {
 		return errors.New("game reload cannot be called from an active coroutine")
 	}
-	plan, err := prepareReload(g, v, index)
-	if err != nil {
-		return err
+	g := game.baseGame()
+	if currentGame() != g {
+		return errReloadInactiveGame
 	}
-	if !gco.RunAfterStopAll(2*time.Second, g.reset) {
-		return errors.New("game reload aborted: existing coroutines did not stop")
+	if !engineplatform.TryCallEngineDirectly(func() {
+		err = reloadGame(game, g, index)
+	}) {
+		return errReloadWrongThread
 	}
-	generation := g.currentBootstrapGeneration()
-	if err = g.attachPreparedInputSession(); err != nil {
-		return err
-	}
-	engine.ClearAllSprites()
-
-	g.events = make(chan event, eventBufferSize)
-	g.resetEventQueueStats()
-
-	proj := &plan.project
-	g.applyStoredRuntimeConfig(proj)
-	setupGameSystems(g, proj)
-	err = plan.loadSprites(g, v)
-	if err != nil {
-		engine.Panic(err)
-		return
-	}
-	g.tilemapMgr.replaceMap(plan.tilemap)
-	gco.OnRestart()
-	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
-	if err != nil {
-		return
-	}
-	g.initEventLoop()
-	gco.OnInited()
-	g.lifecycleState.IsRunned.Store(true)
-	g.startBootstrapPhaseFor(generation)
-	return
+	return err
 }
 
 // -----------------------------------------------------------------------------
@@ -100,12 +87,7 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 func SchedNow() int {
 	now := time.Now()
 	err := coreruntime.SchedNow(
-		coreruntime.ScheduleState{
-			IsSchedInMain:   isSchedInMainState(),
-			MainSchedTime:   mainSchedTime(),
-			Now:             now,
-			MainExecTimeout: time.Second * mainExecTimeoutSec,
-		},
+		mainScheduleState(now),
 		coreruntime.SchedulerHooks{
 			SchedCurrent: func() {
 				if gco.IsInCoroutine() {
@@ -127,12 +109,7 @@ func SchedNow() int {
 
 func Sched() int {
 	err := coreruntime.Sched(
-		coreruntime.ScheduleState{
-			IsSchedInMain:   isSchedInMainState(),
-			MainSchedTime:   mainSchedTime(),
-			Now:             time.Now(),
-			MainExecTimeout: time.Second * mainExecTimeoutSec,
-		},
+		mainScheduleState(time.Now()),
 		schedTimeoutMs,
 		coreruntime.SchedulerHooks{
 			IsSchedTimeout: func(ms float64) bool {
@@ -175,6 +152,48 @@ func WaitUntil(__xgo_autoclosure_condition func() bool) {
 	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
 }
 
+func reloadGame(game Gamer, g *Game, index any) error {
+	if currentGame() != g {
+		return errReloadInactiveGame
+	}
+	v := reflect.ValueOf(game).Elem()
+	var plan *reloadPlan
+	var generation uint64
+	err := engine.Reload(g, reloadDrainTimeout, func() error {
+		var err error
+		plan, err = prepareReload(g, v, index)
+		return err
+	}, func() (err error) {
+		g.reset()
+		generation = g.bootstrapGeneration()
+		if err = g.attachPreparedInputSession(); err != nil {
+			return
+		}
+
+		g.events = make(chan event, eventBufferSize)
+
+		proj := &plan.project
+		g.applyStoredRuntimeConfig(proj)
+		setupGameSystems(g, proj)
+		if err = plan.loadSprites(g, v); err != nil {
+			return
+		}
+		g.tilemapMgr.replaceMap(plan.tilemap)
+		gco.OnRestart()
+		err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
+		return err
+	}, func() {
+		g.initEventLoop()
+		gco.OnInited()
+		g.lifecycleState.IsRunned.Store(true)
+	})
+	if err != nil {
+		return err
+	}
+	g.startBootstrap(generation)
+	return nil
+}
+
 func handleMainExecutionTimeout(err error) bool {
 	if !errors.Is(err, coreruntime.ErrMainExecutionTimedOut) {
 		return false
@@ -182,17 +201,29 @@ func handleMainExecutionTimeout(err error) bool {
 	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
 	// Demote long-running top-level Main code to regular coroutine scheduling
 	// after the first timeout so it keeps running without repeated panics.
-	setSchedInMain(false)
-	setMainSchedTime(time.Time{})
-	if engine.IsInCoroutine() {
-		me := gco.Current()
-		if me != nil {
-			gco.Sched(me)
+	if gco != nil && gco.IsInCoroutine() {
+		if thread := gco.Current(); thread != nil {
+			thread.DemoteMainExecution()
+			gco.Sched(thread)
 		}
 	} else {
 		runtime.Gosched()
 	}
 	return true
+}
+
+func mainScheduleState(now time.Time) coreruntime.ScheduleState {
+	var startedAt time.Time
+	if gco != nil && gco.IsInCoroutine() {
+		if thread := gco.Current(); thread != nil {
+			startedAt = thread.MainExecutionStartedAt()
+		}
+	}
+	return coreruntime.ScheduleState{
+		MainStartedAt:   startedAt,
+		Now:             now,
+		MainExecTimeout: time.Second * mainExecTimeoutSec,
+	}
 }
 
 func init() {

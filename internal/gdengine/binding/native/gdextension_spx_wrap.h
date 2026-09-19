@@ -34,6 +34,8 @@ extern void func_on_engine_start();
 extern void func_on_engine_update(GdFloat delta);  
 extern void func_on_engine_fixed_update(GdFloat delta);  
 extern void func_on_engine_destroy();  
+extern void func_on_engine_destroyed();
+extern void func_on_engine_reset();
 extern void func_on_engine_pause(GdBool is_paused);  
 
 extern void func_on_scene_sprite_instantiated(GdInt id,GdString type_name);  
@@ -82,13 +84,15 @@ extern void func_on_ui_toggle(GdInt id, GdBool is_on);
 extern void func_on_ui_text_changed(GdInt id, GdString text);  
 
 static inline void spx_global_register_callbacks(pointer fn) {
-	SpxCallbackInfo info;
+	SpxCallbackInfo info = {0};
 	SpxCallbackInfo* p_extension_funcs = &info;
     // engine
 	p_extension_funcs->func_on_engine_start = func_on_engine_start;
 	p_extension_funcs->func_on_engine_update = func_on_engine_update;
 	p_extension_funcs->func_on_engine_fixed_update = func_on_engine_fixed_update;
 	p_extension_funcs->func_on_engine_destroy = func_on_engine_destroy;
+	p_extension_funcs->func_on_engine_destroyed = func_on_engine_destroyed;
+	p_extension_funcs->func_on_engine_reset = func_on_engine_reset;
 	p_extension_funcs->func_on_engine_pause = func_on_engine_pause;
 	
 

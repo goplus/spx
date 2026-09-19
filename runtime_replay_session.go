@@ -95,7 +95,7 @@ func (p *Game) attachPreparedInputSession() error {
 	if plan == nil {
 		return nil
 	}
-	session, err := newInputSession(plan, p.currentBootstrapGeneration())
+	session, err := newInputSession(plan, p.bootstrapGeneration())
 	if err != nil {
 		p.setInputSessionTerminal(InputSessionStatus{
 			Mode:  plan.mode,
@@ -306,30 +306,14 @@ func (s *inputSession) endFrame() {
 	s.mu.Unlock()
 }
 
-func (s *inputSession) frameCompletionPending() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mode == InputSessionModeReplaying && s.phase == InputSessionPhaseFinishing
-}
-
-func (p *Game) inputSessionFrameCompletionPending() bool {
-	session := p.currentInputSession()
-	return session != nil && session.frameCompletionPending()
-}
-
 func (p *Game) finishInputSessionFrame() {
 	session := p.currentInputSession()
 	if session == nil {
 		return
 	}
 	session.endFrame()
-	completed, err := session.completeReplayFrame(func() { p.engine().ExtMgr.Pause() })
-	if err != nil {
+	if _, err := session.completeReplayFrame(func() { engine.Managers().ExtMgr.Pause() }); err != nil {
 		engine.Panic(err)
-		return
-	}
-	if !completed {
-		return
 	}
 }
 
@@ -385,7 +369,7 @@ func prepareInputSession(plan inputSessionPlan) (InputSessionPreparation, error)
 	if preparedInputSession.plan != nil {
 		return InputSessionPreparation{}, ErrInputSessionActive
 	}
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		if game.inputSessionUnavailable() {
 			return InputSessionPreparation{}, ErrInputSessionActive
 		}
@@ -487,7 +471,7 @@ func newInputSession(plan *inputSessionPlan, generation uint64) (*inputSession, 
 }
 
 func finishInputRecordingResultSession() (inputRecordingResult, error) {
-	game := activeGame()
+	game := currentGame()
 	if game == nil {
 		return inputRecordingResult{}, ErrInputSessionNotRecording
 	}
@@ -497,7 +481,7 @@ func finishInputRecordingResultSession() (inputRecordingResult, error) {
 	}
 	var freeze func()
 	if game.lifecycleState.IsRunned.Load() {
-		freeze = func() { game.engine().ExtMgr.Pause() }
+		freeze = func() { engine.Managers().ExtMgr.Pause() }
 	}
 	result, err := session.finishRecordingResult(freeze)
 	if err != nil && freeze != nil {
@@ -536,7 +520,7 @@ func freezeInputSession(freeze func()) (err error) {
 // callers end the Game instead of resetting input independently.
 func resetInputSessionState() {
 	clearPreparedInputSession()
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		game.abortInputSession("input session reset")
 		game.inputSessionMu.Lock()
 		game.inputTerminal = InputSessionStatus{}
@@ -546,7 +530,7 @@ func resetInputSessionState() {
 }
 
 func activeInputSession() *inputSession {
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		return game.currentInputSession()
 	}
 	return nil
@@ -562,7 +546,7 @@ func inputSessionStatus() InputSessionStatus {
 	if session := activeInputSession(); session != nil {
 		return session.status()
 	}
-	if game := activeGame(); game != nil {
+	if game := currentGame(); game != nil {
 		if status, ok := game.terminalInputSessionStatus(); ok {
 			return status
 		}

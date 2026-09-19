@@ -44,6 +44,7 @@ func init() {
 		Name: "spx",
 		Path: "github.com/goplus/spx/v3",
 		Deps: map[string]string{
+			"context":                           "context",
 			"errors":                            "errors",
 			"flag":                              "flag",
 			"fmt":                               "fmt",
@@ -66,7 +67,6 @@ func init() {
 			"github.com/goplus/spx/v3/internal/engine":          "engine",
 			"github.com/goplus/spx/v3/internal/engine/platform": "platform",
 			"github.com/goplus/spx/v3/internal/engine/profiler": "profiler",
-			"github.com/goplus/spx/v3/internal/enginewrap":      "enginewrap",
 			"github.com/goplus/spx/v3/internal/input":           "input",
 			"github.com/goplus/spx/v3/internal/input/keycode":   "keycode",
 			"github.com/goplus/spx/v3/internal/log":             "log",

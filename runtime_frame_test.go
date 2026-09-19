@@ -211,7 +211,7 @@ func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 	}
 
 	game.abortInputSession("recording ended")
-	game.resetBootstrapState()
+	game.resetBootstrap()
 	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyP}); err != nil {
 		t.Fatal(err)
 	}
