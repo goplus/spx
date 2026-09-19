@@ -236,7 +236,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 
 	originalScheduler := gco
 	originalGame := engine.GetGame()
-	originalManagers := engine.Managers()
 	originalBounds := cachedBounds
 	co := coroutine.New(nil)
 	co.OnInited()
@@ -259,7 +258,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 		engine.ClearAllSprites()
 		gco = originalScheduler
 		engine.SetCoroutines(originalScheduler)
-		engine.SetManagers(originalManagers)
 		engine.SetGame(originalGame)
 		cachedBounds = originalBounds
 	})

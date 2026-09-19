@@ -64,7 +64,7 @@ func (b *gameBuilder) loadResources() *gameBuilder {
 	b.conf = opened.Config
 	b.proj = opened.Project
 
-	resMgr := b.game.engine().ResMgr
+	resMgr := engine.Managers().ResMgr
 	fontPlan := coreproject.ResolveRuntimeFontPlan(opened.Fonts, engine.ToAssetPath)
 	if err := applyRuntimeFontPlan(&resMgr, fontPlan); err != nil {
 		b.err = fmt.Errorf("apply project fonts: %w", err)
@@ -148,7 +148,7 @@ func (b *gameBuilder) buildAndRun() error {
 }
 
 func (p *Game) startLoad(fs spxfs.Dir) {
-	p.soundMgr.Init(&p.engine().AudioMgr)
+	p.soundMgr.Init(&engine.Managers().AudioMgr)
 	p.sounds = make(map[string]sound)
 	p.inputMgr.init(p)
 	p.events = make(chan event, eventBufferSize)

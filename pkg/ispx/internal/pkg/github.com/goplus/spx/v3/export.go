@@ -66,7 +66,6 @@ func init() {
 			"github.com/goplus/spx/v3/internal/engine":          "engine",
 			"github.com/goplus/spx/v3/internal/engine/platform": "platform",
 			"github.com/goplus/spx/v3/internal/engine/profiler": "profiler",
-			"github.com/goplus/spx/v3/internal/enginewrap":      "enginewrap",
 			"github.com/goplus/spx/v3/internal/input":           "input",
 			"github.com/goplus/spx/v3/internal/input/keycode":   "keycode",
 			"github.com/goplus/spx/v3/internal/log":             "log",

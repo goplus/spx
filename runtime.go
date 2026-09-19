@@ -20,14 +20,11 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
 )
 
 // -----------------------------------------------------------------------------
 // Shared Types
 // -----------------------------------------------------------------------------
-type engineManagers = enginewrap.EngineManagers
-
 type threadObj = coroutine.ThreadObj
 
 type event any
@@ -62,21 +59,6 @@ type eventTimer struct {
 var (
 	cachedBounds map[string]mathf.Rect2
 )
-
-// -----------------------------------------------------------------------------
-// Engine Access
-// -----------------------------------------------------------------------------
-func (p *Game) engine() *engineManagers {
-	return &p.engineMgr
-}
-
-func (p *SpriteImpl) engine() *engineManagers {
-	return p.g.engine()
-}
-
-func (c *componentBase) engine() *engineManagers {
-	return c.sprite.engine()
-}
 
 // -----------------------------------------------------------------------------
 // Runtime Helpers

@@ -47,39 +47,39 @@ type gameTilemapMgr struct {
 // -----------------------------------------------------------------------------
 func (p *Game) PlaceTiles__0(positions []float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
+	engine.Managers().TilemapMgr.PlaceTiles(engine.F64Tof32(positions), path)
 }
 
 func (p *Game) PlaceTiles__1(positions []float64, texturePath string, layerIndex int64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
+	engine.Managers().TilemapMgr.PlaceTilesWithLayer(engine.F64Tof32(positions), path, layerIndex)
 }
 
 func (p *Game) PlaceTile(x, y float64, texturePath string) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
+	engine.Managers().TilemapMgr.PlaceTile(mathf.NewVec2(x, y), path)
 }
 
 // -----------------------------------------------------------------------------
 // Tile Removal
 // -----------------------------------------------------------------------------
 func (p *Game) EraseTile__0(x, y float64) {
-	p.engine().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
+	engine.Managers().TilemapMgr.EraseTile(mathf.NewVec2(x, y))
 }
 
 func (p *Game) EraseTile__1(x, y float64, layerIndex int64) {
-	p.engine().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+	engine.Managers().TilemapMgr.EraseTileWithLayer(mathf.NewVec2(x, y), layerIndex)
 }
 
 // -----------------------------------------------------------------------------
 // Tile Query
 // -----------------------------------------------------------------------------
 func (p *Game) GetTile__0(x, y float64) string {
-	return p.engine().TilemapMgr.GetTile(mathf.NewVec2(x, y))
+	return engine.Managers().TilemapMgr.GetTile(mathf.NewVec2(x, y))
 }
 
 func (p *Game) GetTile__1(x, y float64, layerIndex int64) string {
-	return p.engine().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
+	return engine.Managers().TilemapMgr.GetTileWithLayer(mathf.NewVec2(x, y), layerIndex)
 }
 
 // -----------------------------------------------------------------------------
@@ -110,10 +110,6 @@ func (p *Game) TilemapName() string {
 // -----------------------------------------------------------------------------
 // Manager Setup
 // -----------------------------------------------------------------------------
-func (p *gameTilemapMgr) engine() *engineManagers {
-	return p.g.engine()
-}
-
 func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.g = g
 	p.fs = fs
@@ -159,7 +155,7 @@ func (p *gameTilemapMgr) setMap(loaded tm.LoadResult) {
 	p.currentMap = loaded.CurrentMap
 
 	if p.useNewLoader {
-		p.engine().TilemapparserMgr.LoadTilemap(engine.ToAssetPath(loaded.TilemapPath))
+		engine.Managers().TilemapparserMgr.LoadTilemap(engine.ToAssetPath(loaded.TilemapPath))
 		if loaded.DecoratorErr != nil {
 			spxlog.Info("Tilemap: no decorator.json found at %s (this is OK if no decorators)", loaded.DecoratorPath)
 		}
@@ -172,7 +168,7 @@ func (p *gameTilemapMgr) unloadMap() {
 		return
 	}
 	if p.useNewLoader {
-		p.engine().TilemapparserMgr.DestroyAllTilemaps()
+		engine.Managers().TilemapparserMgr.DestroyAllTilemaps()
 	}
 	p.cleanupDecorators()
 	p.datas = nil
@@ -189,7 +185,7 @@ func (p *gameTilemapMgr) getCurrentMap() string {
 
 // cleanupDecorators removes all static sprites (decorators) created by tilemaps.
 func (p *gameTilemapMgr) cleanupDecorators() {
-	p.engine().SceneMgr.ClearPureSprites()
+	engine.Managers().SceneMgr.ClearPureSprites()
 }
 
 func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
@@ -207,7 +203,7 @@ func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilem
 		pivot := item.Pivot.ToVec2()
 		relativePath := path.Join(tilemapDir, item.Path)
 		assetPath := engine.ToAssetPath(relativePath)
-		texSize := p.engine().ResMgr.GetImageSize(assetPath)
+		texSize := engine.Managers().ResMgr.GetImageSize(assetPath)
 		colliderPivot := item.ColliderPivot.ToVec2().Add(pivot)
 		pivot = pivot.Sub(texSize.Divf(2))
 		p.g.createStaticSprite(relativePath, position, item.Ratation+headingOffset,
@@ -257,15 +253,15 @@ func (p *gameTilemapMgr) calcWorldSize() {
 // Engine Bridge
 // -----------------------------------------------------------------------------
 func (p *Game) setTileMapLayerIndex(index int64) {
-	p.engine().TilemapMgr.SetLayerIndex(index)
+	engine.Managers().TilemapMgr.SetLayerIndex(index)
 }
 
 func (p *Game) setTileInfo(texturePath string, collisionPoints []float64) {
 	path := engine.ToAssetPath(texturePath)
-	p.engine().TilemapMgr.SetTileWithCollisionInfo(path, engine.F64Tof32(collisionPoints))
+	engine.Managers().TilemapMgr.SetTileWithCollisionInfo(path, engine.F64Tof32(collisionPoints))
 }
 
 func (p *Game) createStaticSprite(texturePath string, pos mathf.Vec2, rot float64, scale mathf.Vec2, zindex int64, pivot mathf.Vec2, colliderType string, colliderPivot mathf.Vec2, colliderParams []float64) {
 	colliderTypeInt := collision.ParseColliderShapeType(colliderType, 0)
-	p.engine().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
+	engine.Managers().SceneMgr.CreateStaticSprite(engine.ToAssetPath(texturePath), pos, rot, scale, zindex, pivot, colliderTypeInt, colliderPivot, colliderParams)
 }

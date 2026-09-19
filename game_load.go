@@ -126,7 +126,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 }
 
 func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
-	platformMgr := p.engine().PlatformMgr
+	platformMgr := engine.Managers().PlatformMgr
 
 	layout := coreproject.ResolvePlatformLayout(coreproject.PlatformLayoutInput{
 		WindowWidth:       p.displayState.WindowWidth,
@@ -167,7 +167,7 @@ func (p *Game) syncPenCanvasToWorld() {
 	width := int64(p.displayState.WorldWidth)
 	height := int64(p.displayState.WorldHeight)
 	p.penCommandBarrier(func() {
-		p.engine().PenMgr.SetCanvasSize(width, height)
+		engine.Managers().PenMgr.SetCanvasSize(width, height)
 	})
 }
 
