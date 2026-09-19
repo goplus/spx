@@ -69,7 +69,7 @@ func (g *Generator) Generate(codegenDir, spxModulePath string) error {
 		{"GDExtension interface", func() error { return writeFFI(codegenDir, ast) }},
 		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
 		{"JavaScript engine bridge", func() error { return g.writeEngineJS(spxModulePath) }},
-		{"Web worker wrapper", func() error { return writeWorker(codegenDir, ast) }},
+		{"Web worker wrapper", func() error { return writeWorker(codegenDir) }},
 	}
 	for _, generator := range generators {
 		if err := generator.fn(); err != nil {
@@ -145,13 +145,8 @@ func writeCallbacks(codegenDir string, ast clang.CHeaderFileAST) error {
 		filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
 }
 
-func writeWorker(codegenDir string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"snakeCase":  strcase.ToSnake,
-		"trimPrefix": strings.TrimPrefix,
-	}
-
-	return common.GenerateFile(funcs, "worker.wrap.gen.js", workerWrapJsFileText, ast,
+func writeWorker(codegenDir string) error {
+	return common.GenerateFile(nil, "worker.wrap.gen.js", workerWrapJsFileText, nil,
 		filepath.Join(codegenDir, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
 }
 

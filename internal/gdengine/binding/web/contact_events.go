@@ -30,8 +30,7 @@ const (
 	contactTriggerEnter   = 4
 	contactTriggerStay    = 5
 	contactTriggerExit    = 6
-	contactEventFields    = 5
-	contactEventBytes     = contactEventFields * 4
+	contactEventBytes     = 4 + 8 + 8 // kind, self ID, other ID
 )
 
 var contactEventsHandle js.Func
@@ -46,44 +45,26 @@ func registerContactEventQueue() {
 }
 
 func gdspxContactEvents(this js.Value, args []js.Value) any {
-	if len(args) == 0 || args[0].IsUndefined() || args[0].IsNull() {
+	if len(args) == 0 || !isByteArray(args[0]) {
 		return nil
 	}
 
 	events := args[0]
-	uint8ArrayCtor := js.Global().Get("Uint8Array")
-	if uint8ArrayCtor.Type() != js.TypeUndefined && events.InstanceOf(uint8ArrayCtor) {
-		length := events.Length()
-		if length < contactEventBytes {
-			return nil
-		}
-
-		if cap(contactEventScratch) < length {
-			contactEventScratch = make([]byte, length)
-		}
-		buf := contactEventScratch[:length]
-		js.CopyBytesToGo(buf, events)
-
-		for i := 0; i+contactEventBytes <= len(buf); i += contactEventBytes {
-			kind := int(binary.LittleEndian.Uint32(buf[i : i+4]))
-			self := gdIntFromParts(
-				binary.LittleEndian.Uint32(buf[i+4:i+8]),
-				binary.LittleEndian.Uint32(buf[i+8:i+12]),
-			)
-			other := gdIntFromParts(
-				binary.LittleEndian.Uint32(buf[i+12:i+16]),
-				binary.LittleEndian.Uint32(buf[i+16:i+20]),
-			)
-			dispatchContactEvent(kind, self, other)
-		}
+	length := events.Length()
+	if length < contactEventBytes {
 		return nil
 	}
 
-	n := events.Length()
-	for i := 0; i+contactEventFields <= n; i += contactEventFields {
-		kind := events.Index(i).Int()
-		self := gdIntFromParts(uint32(events.Index(i+1).Int()), uint32(events.Index(i+2).Int()))
-		other := gdIntFromParts(uint32(events.Index(i+3).Int()), uint32(events.Index(i+4).Int()))
+	if cap(contactEventScratch) < length {
+		contactEventScratch = make([]byte, length)
+	}
+	buf := contactEventScratch[:length]
+	js.CopyBytesToGo(buf, events)
+
+	for i := 0; i+contactEventBytes <= len(buf); i += contactEventBytes {
+		kind := int(binary.LittleEndian.Uint32(buf[i : i+4]))
+		self := int64(binary.LittleEndian.Uint64(buf[i+4 : i+12]))
+		other := int64(binary.LittleEndian.Uint64(buf[i+12 : i+20]))
 		dispatchContactEvent(kind, self, other)
 	}
 	return nil

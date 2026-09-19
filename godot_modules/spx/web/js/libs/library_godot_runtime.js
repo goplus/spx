@@ -129,47 +129,6 @@ const GodotRuntime = {
 			return stringToUTF8Array(p_str, HEAP8, p_ptr, p_len);
 		},
 
-		_heapDataViewBuffer: null,
-		_heapDataView: null,
-		_hasBigInt64: typeof DataView.prototype.getBigInt64 === 'function',
-
-		getHeapDataView: function () {
-			const memoryBuffer = HEAPU8.buffer;
-			if (GodotRuntime._heapDataViewBuffer !== memoryBuffer) {
-				GodotRuntime._heapDataViewBuffer = memoryBuffer;
-				GodotRuntime._heapDataView = new DataView(memoryBuffer);
-			}
-			return GodotRuntime._heapDataView;
-		},
-
-		ToJsInt : function (ptr) {
-			const dataView = GodotRuntime.getHeapDataView();
-			const low = dataView.getUint32(ptr, true);  // 低32位
-			const high = dataView.getUint32(ptr + 4, true);  // 高32位
-			return {
-				low : low,
-				high : high
-			};
-		},
-
-		ToJsBigInt : function (ptr) {
-			const dataView = GodotRuntime.getHeapDataView();
-			if (GodotRuntime._hasBigInt64) {
-				return dataView.getBigInt64(ptr, true);
-			}
-			const low = dataView.getUint32(ptr, true);
-			const high = dataView.getUint32(ptr + 4, true);
-			return BigInt.asIntN(64, (BigInt(high) << 32n) | BigInt(low));
-		},
-
-		ToJsObj : function (ptr) {
-			return GodotRuntime.ToJsInt(ptr);
-		},
-
-		ToJsBigObj : function (ptr) {
-			return GodotRuntime.ToJsBigInt(ptr);
-		},
-
 	},
 };
 autoAddDeps(GodotRuntime, '$GodotRuntime');

@@ -3,11 +3,62 @@
 package webffi
 
 import (
+	"encoding/binary"
+	"slices"
 	"syscall/js"
 	"testing"
 
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
+
+func TestContactEventsDecodePackedBytes(t *testing.T) {
+	previousCallbacks, previousScratch := callbacks, contactEventScratch
+	t.Cleanup(func() { callbacks, contactEventScratch = previousCallbacks, previousScratch })
+	type contact struct {
+		kind        int
+		self, other int64
+	}
+	want := []contact{
+		{contactCollisionEnter, -1 << 63, 1<<63 - 1},
+		{contactCollisionStay, 1<<54 + 3, -1},
+		{contactCollisionExit, 0, 1},
+		{contactTriggerEnter, -1, 1<<54 + 3},
+		{contactTriggerStay, 1<<63 - 1, -1 << 63},
+		{contactTriggerExit, 1, 0},
+	}
+	var got []contact
+	record := func(kind int) func(int64, int64) {
+		return func(self, other int64) { got = append(got, contact{kind, self, other}) }
+	}
+	callbacks = engine.CallbackInfo{
+		OnCollisionEnter: record(contactCollisionEnter), OnCollisionStay: record(contactCollisionStay),
+		OnCollisionExit: record(contactCollisionExit), OnTriggerEnter: record(contactTriggerEnter),
+		OnTriggerStay: record(contactTriggerStay), OnTriggerExit: record(contactTriggerExit),
+	}
+	data := make([]byte, (len(want)+1)*contactEventBytes+7)
+	for i, event := range want {
+		entry := data[i*contactEventBytes:]
+		binary.LittleEndian.PutUint32(entry, uint32(event.kind))
+		binary.LittleEndian.PutUint64(entry[4:], uint64(event.self))
+		binary.LittleEndian.PutUint64(entry[12:], uint64(event.other))
+	}
+	packed := jsUint8Array.New(len(data))
+	js.CopyBytesToJS(packed, data)
+	gdspxContactEvents(js.Undefined(), []js.Value{packed})
+	if !slices.Equal(got, want) {
+		t.Fatalf("decoded contacts = %v, want %v", got, want)
+	}
+	// Empty, non-byte, incomplete and unknown records produce no extra callbacks.
+	for _, args := range [][]js.Value{
+		nil, {js.Undefined()}, {js.Null()}, {js.ValueOf([]any{1, 0, 0, 0, 0})},
+		{jsUint8Array.New(0)}, {jsUint8Array.New(contactEventBytes - 1)},
+	} {
+		gdspxContactEvents(js.Undefined(), args)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("invalid batches changed contacts: %v", got)
+	}
+}
 
 func TestDispatcherSyncsFrameInput(t *testing.T) {
 	previousCallbacks, previousSnapshot := callbacks, inputSnap
