@@ -113,7 +113,6 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 			ani:          ani,
 			costumes:     a.sprite.costumes,
 			isCostumeSet: a.sprite.runtimeState.IsCostumeSet,
-			engineMgr:    a.engine(),
 		}
 	}
 }
@@ -214,10 +213,10 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	a.sprite.baseObj.applyCostumeUpdate()
 	a.prepareAnimationPlayback(animName, ani)
 
-	a.engine().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, loop, false)
+	engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, loop, false)
 	if isBlocking {
 		a.sprite.runtimeState.IsAnimating = true
-		for a.engine().SpriteMgr.IsPlayingAnim(syncSprite.GetId()) {
+		for engine.Managers().SpriteMgr.IsPlayingAnim(syncSprite.GetId()) {
 			if info.IsCanceled {
 				break
 			}
@@ -278,7 +277,7 @@ func (a *animationComponent) playDefaultAnim() {
 
 	if ani, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(animName, ani)
-		a.engine().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, true, false)
+		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, true, false)
 		a.defaultAnimActive = true
 	} else {
 		a.defaultAnimActive = false

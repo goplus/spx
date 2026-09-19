@@ -138,10 +138,10 @@ func (p *Game) runScriptFramePhase() {
 func (p *Game) runLoop(cfg *Config) (err error) {
 	spxlog.Debug("RunLoop")
 	if !cfg.DontRunOnUnfocused {
-		p.engine().PlatformMgr.SetRunnableOnUnfocused(true)
+		engine.Managers().PlatformMgr.SetRunnableOnUnfocused(true)
 	}
 	p.initEventLoop()
-	p.engine().PlatformMgr.SetWindowTitle(cfg.Title)
+	engine.Managers().PlatformMgr.SetWindowTitle(cfg.Title)
 	return nil
 }
 

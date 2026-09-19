@@ -323,7 +323,7 @@ func (p *Game) finishInputSessionFrame() {
 		return
 	}
 	session.endFrame()
-	completed, err := session.completeReplayFrame(func() { p.engine().ExtMgr.Pause() })
+	completed, err := session.completeReplayFrame(func() { engine.Managers().ExtMgr.Pause() })
 	if err != nil {
 		engine.Panic(err)
 		return
@@ -497,7 +497,7 @@ func finishInputRecordingResultSession() (inputRecordingResult, error) {
 	}
 	var freeze func()
 	if game.lifecycleState.IsRunned.Load() {
-		freeze = func() { game.engine().ExtMgr.Pause() }
+		freeze = func() { engine.Managers().ExtMgr.Pause() }
 	}
 	result, err := session.finishRecordingResult(freeze)
 	if err != nil && freeze != nil {

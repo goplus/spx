@@ -232,7 +232,7 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 		}
 	}
 
-	return p.engine().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
+	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 }
 
 func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
