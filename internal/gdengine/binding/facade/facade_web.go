@@ -1,4 +1,4 @@
-//go:build js
+//go:build js && !pure_engine
 
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
@@ -23,16 +23,9 @@ import (
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func LinkFFI() bool {
-	return webffi.Link()
-}
-
-func OnLinked() {
-	webffi.Linked()
-}
-
-func UnlinkFFI() {
-	webffi.Unlink()
+func LinkFFI() (*LinkSession, bool) {
+	link, interpreter := webffi.Link()
+	return newLinkSession(link.Run, link.Unlink), interpreter
 }
 
 func RegisterCallbacks(callbacks engine.CallbackInfo) {

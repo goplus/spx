@@ -25,33 +25,35 @@ import (
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
+type LinkSession struct {
+	exit        chan struct{}
+	interpreter bool
+}
+
 var (
 	callbacks                engine.CallbackInfo
 	hasInitEngine            bool
-	exitChan                 chan struct{}
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
 )
 
-func Link() bool {
+func Link() (*LinkSession, bool) {
 	registerWebGlobals()
 	API.resolveAPIFunctions()
-	return !hasInitEngine
+	interpreter := !hasInitEngine
+	return &LinkSession{exit: make(chan struct{}), interpreter: interpreter}, interpreter
 }
-func Linked() {
-	if !hasInitEngine { // adapt for ixgo
+
+func (s *LinkSession) Run(ready func()) {
+	if s.interpreter { // adapt for ixgo
 		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
 	}
-
-	exitChan = make(chan struct{})
-	<-exitChan
+	ready()
+	<-s.exit
 }
 
-func Unlink() {
-	if exitChan != nil {
-		close(exitChan)
-		exitChan = nil
-	}
+func (s *LinkSession) Unlink() {
+	close(s.exit)
 	hasInitEngine = false
 }
 
@@ -85,7 +87,7 @@ func registerCallbackDispatcher() {
 
 // goWasmInit is only called in worker mode.
 func goWasmInit(this js.Value, args []js.Value) any {
-	spxlog.Info("Go wasm init success!")
+	spxlog.Info("WASM initialized")
 	hasInitEngine = true
 	return js.ValueOf(nil)
 }

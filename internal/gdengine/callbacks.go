@@ -25,62 +25,56 @@ import (
 )
 
 func bindCallbacks() CallbackInfo {
-	infos := CallbackInfo{}
-	infos.OnEngineStart = onEngineStart
-	infos.OnEngineUpdate = onEngineUpdate
-	infos.OnEngineFixedUpdate = onEngineFixedUpdate
-	infos.OnEngineDestroy = onEngineDestroy
-	infos.OnEngineReset = onEngineReset
-	infos.OnEnginePause = onEnginePause
+	return CallbackInfo{
+		CoreCallbackInfo: CoreCallbackInfo{
+			OnEngineStart:       onEngineStart,
+			OnEngineUpdate:      onEngineUpdate,
+			OnEngineFixedUpdate: onEngineFixedUpdate,
+			OnEngineDestroy:     onEngineDestroy,
+			OnEngineDestroyed:   onEngineDestroyed,
+			OnEngineReset:       onEngineReset,
+			OnEnginePause:       onEnginePause,
+			OnMousePressed:      onMousePressed,
+			OnMouseReleased:     onMouseReleased,
+			OnKeyPressed:        onKeyPressed,
+			OnKeyReleased:       onKeyReleased,
+		},
 
-	infos.OnSceneSpriteInstantiated = onSceneSpriteInstantiated
+		OnSceneSpriteInstantiated: onSceneSpriteInstantiated,
+		OnSpriteReady:             onSpriteReady,
+		OnSpriteUpdated:           onSpriteUpdated,
+		OnSpriteFixedUpdated:      onSpriteFixedUpdated,
+		OnSpriteDestroyed:         onSpriteDestroyed,
+		OnSpriteScreenEntered:     onSpriteScreenEntered,
+		OnSpriteScreenExited:      onSpriteScreenExited,
+		OnSpriteVfxFinished:       onSpriteVfxFinished,
+		OnSpriteAnimationFinished: onSpriteAnimationFinished,
+		OnSpriteAnimationLooped:   onSpriteAnimationLooped,
+		OnSpriteFrameChanged:      onSpriteFrameChanged,
+		OnSpriteAnimationChanged:  onSpriteAnimationChanged,
+		OnSpriteFramesSetChanged:  onSpriteFramesSetChanged,
 
-	infos.OnSpriteReady = onSpriteReady
-	infos.OnSpriteUpdated = onSpriteUpdated
-	infos.OnSpriteFixedUpdated = onSpriteFixedUpdated
-	infos.OnSpriteDestroyed = onSpriteDestroyed
+		OnActionPressed:      onActionPressed,
+		OnActionJustPressed:  onActionJustPressed,
+		OnActionJustReleased: onActionJustReleased,
+		OnAxisChanged:        onAxisChanged,
 
-	// input
-	infos.OnMousePressed = onMousePressed
-	infos.OnMouseReleased = onMouseReleased
-	infos.OnKeyPressed = onKeyPressed
-	infos.OnKeyReleased = onKeyReleased
-	infos.OnActionPressed = onActionPressed
-	infos.OnActionJustPressed = onActionJustPressed
-	infos.OnActionJustReleased = onActionJustReleased
-	infos.OnAxisChanged = onAxisChanged
+		OnCollisionEnter: onCollisionEnter,
+		OnCollisionStay:  onCollisionStay,
+		OnCollisionExit:  onCollisionExit,
+		OnTriggerEnter:   onTriggerEnter,
+		OnTriggerStay:    onTriggerStay,
+		OnTriggerExit:    onTriggerExit,
 
-	// physics
-	infos.OnCollisionEnter = onCollisionEnter
-	infos.OnCollisionStay = onCollisionStay
-	infos.OnCollisionExit = onCollisionExit
-
-	infos.OnTriggerEnter = onTriggerEnter
-	infos.OnTriggerStay = onTriggerStay
-	infos.OnTriggerExit = onTriggerExit
-
-	// ui
-	// OnUiReady/OnUiUpdated are intentionally left unbound here.
-	// Go-side UI construction already triggers OnStart, and the callback payload
-	// does not include delta for a meaningful OnUpdate dispatch.
-	infos.OnUiDestroyed = onUiDestroyed
-	infos.OnUiPressed = onUiPressed
-	infos.OnUiReleased = onUiReleased
-	infos.OnUiHovered = onUiHovered
-	infos.OnUiClicked = onUiClicked
-	infos.OnUiToggle = onUiToggle
-	infos.OnUiTextChanged = onUiTextChanged
-
-	infos.OnSpriteScreenEntered = onSpriteScreenEntered
-	infos.OnSpriteScreenExited = onSpriteScreenExited
-	infos.OnSpriteVfxFinished = onSpriteVfxFinished
-	infos.OnSpriteAnimationFinished = onSpriteAnimationFinished
-	infos.OnSpriteAnimationLooped = onSpriteAnimationLooped
-	infos.OnSpriteFrameChanged = onSpriteFrameChanged
-	infos.OnSpriteAnimationChanged = onSpriteAnimationChanged
-	infos.OnSpriteFramesSetChanged = onSpriteFramesSetChanged
-
-	return infos
+		// Go UI construction handles OnStart; the update callback has no delta.
+		OnUiDestroyed:   onUiDestroyed,
+		OnUiPressed:     onUiPressed,
+		OnUiReleased:    onUiReleased,
+		OnUiHovered:     onUiHovered,
+		OnUiClicked:     onUiClicked,
+		OnUiToggle:      onUiToggle,
+		OnUiTextChanged: onUiTextChanged,
+	}
 }
 
 func onEngineStart() {
@@ -145,6 +139,12 @@ func onEngineDestroy() {
 	}
 	for _, mgr := range mgrs {
 		mgr.OnDestroy()
+	}
+}
+
+func onEngineDestroyed() {
+	if coreCallbacks.OnEngineDestroyed != nil {
+		coreCallbacks.OnEngineDestroyed()
 	}
 }
 

@@ -23,6 +23,7 @@ extern void godot_js_spx_on_engine_start();
 extern void godot_js_spx_on_engine_update(GdFloat delta);
 extern void godot_js_spx_on_engine_fixed_update(GdFloat delta);
 extern void godot_js_spx_on_engine_destroy();
+extern void godot_js_spx_on_engine_destroyed();
 extern void godot_js_spx_on_engine_reset();
 extern void godot_js_spx_on_engine_pause(GdBool is_paused);
 

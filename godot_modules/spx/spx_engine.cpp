@@ -75,6 +75,7 @@ static SpxCallbackInfo get_default_spx_callbacks() {
 	callbacks.func_on_engine_fixed_update = [](GdFloat delta) {};
 	callbacks.func_on_engine_update = [](GdFloat delta) {};
 	callbacks.func_on_engine_destroy = []() {};
+	callbacks.func_on_engine_destroyed = []() {};
 	callbacks.func_on_engine_reset = []() {};
 	callbacks.func_on_engine_pause = [](GdBool is_paused) {};
 	callbacks.func_on_scene_sprite_instantiated = [](GdObj obj, GdString type_name) {};
@@ -136,9 +137,16 @@ void SpxEngine::shutdown() {
 
 	SpxEngine *engine = singleton;
 	engine->shutting_down = true;
+	const auto on_engine_destroyed = engine->callbacks.func_on_engine_destroyed;
+	if (engine->callbacks.func_on_engine_destroy) {
+		engine->callbacks.func_on_engine_destroy();
+	}
 	engine->on_destroy();
 	singleton = nullptr;
 	memdelete(engine);
+	if (on_engine_destroyed) {
+		on_engine_destroyed();
+	}
 }
 
 SpxCallbackInfo *SpxEngine::get_callbacks() {
@@ -245,16 +253,9 @@ void SpxEngine::on_destroy() {
 	_disconnect_reset_timer();
 	clear_frozen_frame();
 
-	const bool was_awake = managers_awake;
-	if (was_awake) {
+	if (managers_awake) {
 		_notify_managers_destroy();
 		managers_awake = false;
-	}
-
-	if (was_awake && !has_exit) {
-		if (callbacks.func_on_engine_destroy) {
-			callbacks.func_on_engine_destroy();
-		}
 	}
 
 	if (delay_proxy) {
@@ -283,7 +284,12 @@ void SpxEngine::on_exit(int exit_code) {
 
 	_notify_managers_exit(exit_code);
 
+	// Stop runtime events now; shutdown still owns both teardown callbacks.
+	const auto on_engine_destroy = callbacks.func_on_engine_destroy;
+	const auto on_engine_destroyed = callbacks.func_on_engine_destroyed;
 	callbacks = get_default_spx_callbacks();
+	callbacks.func_on_engine_destroy = on_engine_destroy;
+	callbacks.func_on_engine_destroyed = on_engine_destroyed;
 }
 
 void SpxEngine::on_reset(int reset_code) {

@@ -91,6 +91,7 @@ typedef void (*GDExtensionSpxCallbackOnEngineStart)();
 typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
 typedef void (*GDExtensionSpxCallbackOnEngineFixedUpdate)(GdFloat delta);
 typedef void (*GDExtensionSpxCallbackOnEngineDestroy)();
+typedef void (*GDExtensionSpxCallbackOnEngineDestroyed)();
 typedef void (*GDExtensionSpxCallbackOnEngineReset)();
 typedef void (*GDExtensionSpxCallbackOnEnginePause)(GdBool is_paused);
 
@@ -146,6 +147,7 @@ typedef struct {
 	GDExtensionSpxCallbackOnEngineUpdate func_on_engine_update;
 	GDExtensionSpxCallbackOnEngineFixedUpdate func_on_engine_fixed_update;
 	GDExtensionSpxCallbackOnEngineDestroy func_on_engine_destroy;
+	GDExtensionSpxCallbackOnEngineDestroyed func_on_engine_destroyed;
 	GDExtensionSpxCallbackOnEngineReset func_on_engine_reset;
 	GDExtensionSpxCallbackOnEnginePause func_on_engine_pause;
 
@@ -198,8 +200,6 @@ typedef struct {
 	GDExtensionSpxCallbackOnUiClicked func_on_ui_clicked;
 	GDExtensionSpxCallbackOnUiToggle func_on_ui_toggle;
 	GDExtensionSpxCallbackOnUiTextChanged func_on_ui_text_changed;
-
-
 } SpxCallbackInfo;
 
 

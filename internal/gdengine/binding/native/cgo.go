@@ -28,18 +28,6 @@ var (
 	callbacks    engine.CallbackInfo
 )
 
-func Link() bool {
-	return false
-}
-
-func Linked() {
-
-}
-
-func Unlink() {
-
-}
-
 func BindCallback(info engine.CallbackInfo) {
 	callbacks = info
 }

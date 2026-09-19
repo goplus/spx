@@ -21,6 +21,9 @@ ffi.gdspx_on_engine_fixed_update = function() {
 ffi.gdspx_on_engine_destroy = function() {
         ffi.gdspx_dispatch("OnEngineDestroy", ...arguments)
     }
+ffi.gdspx_on_engine_destroyed = function() {
+        ffi.gdspx_dispatch("OnEngineDestroyed", ...arguments)
+    }
 ffi.gdspx_on_engine_reset = function() {
         ffi.gdspx_dispatch("OnEngineReset", ...arguments)
     }

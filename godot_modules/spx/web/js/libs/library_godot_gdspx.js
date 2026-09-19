@@ -295,6 +295,12 @@ const GodotGdspx = {
 		GodotGdspx.call0("gdspx_on_engine_destroy", "OnEngineDestroy", directHandler);
 	},
 
+	godot_js_spx_on_engine_destroyed__sig: 'v',
+	godot_js_spx_on_engine_destroyed: function () {
+		const directHandler = GodotGdspx.getDirectHandler("gdspx_on_engine_destroyed");
+		GodotGdspx.call0("gdspx_on_engine_destroyed", "OnEngineDestroyed", directHandler);
+	},
+
 	godot_js_spx_on_engine_reset__sig: 'v',
 	godot_js_spx_on_engine_reset: function () {
 		if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
