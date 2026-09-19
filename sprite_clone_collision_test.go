@@ -134,7 +134,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				})
 			})
 
-			game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 			const frames = 12
 			for range frames {
 				co.Update()

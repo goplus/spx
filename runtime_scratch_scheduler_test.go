@@ -295,7 +295,7 @@ func TestScratchTimerTrackingHatDoesNotFire(t *testing.T) {
 				})
 			})
 			game.OnCond(func() bool { return game.Timer() > tracked+0.01 }, func() { fired++ })
-			game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 			co.Update()
 			// Slow frames must preserve the same sampling order.
 			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {

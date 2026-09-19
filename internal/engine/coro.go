@@ -23,17 +23,29 @@ import (
 	"github.com/goplus/spx/v3/internal/engine/profiler"
 )
 
-var (
-	gco        *coroutine.Coroutines
-	gameObject any
-)
+var gco *coroutine.Coroutines
 
+// SetGame installs a non-runtime owner binding and cannot replace Main.
 func SetGame(game any) {
-	gameObject = game
+	bindingMu.Lock()
+	defer bindingMu.Unlock()
+	if binding := activeGame.Load(); binding != nil && binding.callbacks != nil {
+		panic("engine: SetGame cannot replace an active runtime")
+	}
+	if game == nil {
+		activeGame.Store(nil)
+		return
+	}
+	binding := &gameBinding{owner: game}
+	binding.storePhase(gameRunning)
+	activeGame.Store(binding)
 }
 
 func GetGame() any {
-	return gameObject
+	if binding := activeGame.Load(); binding != nil {
+		return binding.owner
+	}
+	return nil
 }
 
 func IsInCoroutine() bool {
@@ -60,8 +72,14 @@ func SetCoroutines(co *coroutine.Coroutines) {
 }
 
 func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
+	binding, ok := captureRuntimeWork()
+	if !ok {
+		return
+	}
 	gco.Create(tobj, func(me coroutine.Thread) int {
-		fn(me.Context())
+		if isRuntimeWorkCurrent(binding) {
+			fn(me.Context())
+		}
 		return 0
 	})
 }

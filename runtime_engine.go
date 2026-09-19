@@ -17,45 +17,43 @@
 package spx
 
 import (
+	"context"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-// -----------------------------------------------------------------------------
-// Engine Callbacks
-// -----------------------------------------------------------------------------
 func (p *Game) OnEngineStart() {
 	p.lifecycleState.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
-		generation := p.currentBootstrapGeneration()
-		go func() {
-			defer engine.CheckPanic()
+		generation := p.bootstrapGeneration()
+		engine.Go(p, func(context.Context) {
+			if !p.isCurrentBootstrap(generation) {
+				return
+			}
 			if me, ok := p.gamer.(interface{ MainEntry() }); ok {
-				p.deferBootstrapFor(generation, func() {
-					p.runBootstrapMainUntilYield(p, me.MainEntry)
+				p.queueBootstrap(generation, func() {
+					runMainUntilYield(p, me.MainEntry)
 				})
 			}
 			if !p.lifecycleState.IsRunned.Load() {
-				builder := newGameBuilder(p.gamer, "assets", generation)
-				if err := builder.buildAndRun(); err != nil {
+				if err := p.loadGame("assets", generation); err != nil {
 					engine.Panic(err)
 					return
 				}
 			}
-			engine.OnGameStarted()
-			p.lifecycleState.IsRunned.Store(true)
-			p.startBootstrapPhaseFor(generation)
-		}()
+			if !p.markGameStarted(generation) {
+				return
+			}
+			p.startBootstrap(generation)
+		})
 	})
 }
 
 func (p *Game) OnEngineDestroy() {
-	p.lifecycleState.IsRunned.Store(false)
+	p.resetBootstrap()
 	p.discardPenCommands()
 	p.abortInputSession("game destroyed")
 }
@@ -64,14 +62,12 @@ func (p *Game) OnEngineReset() {
 	p.reset()
 }
 
-// OnEngineBeforeUpdate resolves input and samples conditions before advancing the clock.
+// OnEngineBeforeUpdate samples input and conditions before the clock advances.
 func (p *Game) OnEngineBeforeUpdate(delta float64) {
 	p.scriptEvents.pendingConditions = nil
 	if p.lifecycleState.IsRunned.Load() {
-		if session := p.currentInputSession(); session != nil {
-			if !p.inputMgr.prepareInputSessionTick(session, delta) {
-				return
-			}
+		if session := p.currentInputSession(); session != nil && !p.inputMgr.prepareInputSessionTick(session, delta) {
+			return
 		}
 	}
 	if p.lifecycleState.StartDispatched.Load() {
@@ -79,7 +75,7 @@ func (p *Game) OnEngineBeforeUpdate(delta float64) {
 	}
 }
 
-func (p *Game) OnEngineUpdate(delta float64) {
+func (p *Game) OnEngineUpdate(float64) {
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
@@ -92,38 +88,33 @@ func (p *Game) OnEngineUpdate(delta float64) {
 		p.inputMgr.dispatchInputSessionTick(session)
 	}
 	p.soundMgr.Update()
-	p.runScriptFramePhase()
+	p.runFrameScripts()
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()
 }
 
-func (p *Game) OnEngineRender(delta float64) {
+func (p *Game) OnEngineRender(float64) {
 	defer p.flushPenCommands()
 	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	// Flush visual changes made by coroutines before Godot draws the frame.
+	// Flush coroutine changes before drawing.
 	p.shapeMgr.takeCloneProxyPublications()
 	p.syncPostCoroutineVisuals()
-	// Initial sprite Main hooks can move and collide during bootstrap, so
-	// trigger pairs must be drained before the start event is dispatched.
+	// Drain bootstrap collisions before OnStart.
 	p.processPhysicsTriggers()
 }
 
-// OnEngineFrameEnd runs after the current update's coroutine work, render-side
-// proxy synchronization, and capture dispatch have completed. Replays pause at
-// this boundary so their final effective input frame is fully observable before
-// any later update can run.
+// OnEngineFrameEnd pauses completed replays after rendering and capture.
 func (p *Game) OnEngineFrameEnd() {
 	p.finishInputSessionFrame()
 }
 
 func (p *Game) OnEnginePause(bool) {
-	// Pause lifecycle hooks are intentionally handled by engine-level managers.
+	// Pause is handled by engine managers.
 }
 
-// runScriptFramePhase dispatches either the initial start event or due frame callbacks.
-func (p *Game) runScriptFramePhase() {
+func (p *Game) runFrameScripts() {
 	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
 		p.dispatchStartEventIfNeeded()
 		return
@@ -131,24 +122,7 @@ func (p *Game) runScriptFramePhase() {
 	engine.RunFrameCallbacks()
 }
 
-// -----------------------------------------------------------------------------
-// Loop Setup
-// -----------------------------------------------------------------------------
-func (p *Game) runLoop(cfg *Config) (err error) {
-	spxlog.Debug("RunLoop")
-	if !cfg.DontRunOnUnfocused {
-		engine.Managers().PlatformMgr.SetRunnableOnUnfocused(true)
-	}
-	p.initEventLoop()
-	engine.Managers().PlatformMgr.SetWindowTitle(cfg.Title)
-	return nil
-}
-
-func (p *Game) runBootstrapMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
-	if mainFn == nil {
-		return
-	}
-
+func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
 	thread := gco.Create(owner, func(coroutine.Thread) int {
 		runMain(mainFn)
 		return 0
@@ -156,30 +130,19 @@ func (p *Game) runBootstrapMainUntilYield(owner coroutine.ThreadObj, mainFn func
 	gco.JoinYieldedOrDone(thread)
 }
 
-func (p *Game) runBootstrapSpriteMainsUntilYield(inits []Sprite) {
-	if len(inits) == 0 {
-		return
-	}
-
-	// Advance initial sprite Mains in load/Z-order until each reaches its first
-	// yield (or return) before continuing bootstrap. This preserves deterministic
-	// pre-yield setup while still releasing startup once a long-running Main
-	// yields for the first time.
+func runSpriteMainsUntilYield(inits []Sprite) {
+	// Preserve load/Z-order while letting each Main run until its first yield.
 	for _, ini := range inits {
 		spr := spriteOf(ini)
 		if spr == nil {
 			continue
 		}
 
-		p.runBootstrapMainUntilYield(spr.owner, ini.Main)
+		runMainUntilYield(spr.owner, ini.Main)
 	}
 }
 
-func (p *Game) deferBootstrap(call func()) {
-	p.deferBootstrapFor(p.currentBootstrapGeneration(), call)
-}
-
-func (p *Game) deferBootstrapFor(generation uint64, call func()) bool {
+func (p *Game) queueBootstrap(generation uint64, call func()) bool {
 	if call == nil {
 		return false
 	}
@@ -192,36 +155,33 @@ func (p *Game) deferBootstrapFor(generation uint64, call func()) bool {
 	return true
 }
 
-func (p *Game) currentBootstrapGeneration() uint64 {
+func (p *Game) bootstrapGeneration() uint64 {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	return p.bootstrapGen
 }
 
-func (p *Game) resetBootstrapState() {
+func (p *Game) resetBootstrap() {
 	p.bootstrapMu.Lock()
 	p.bootstrapGen++
 	p.bootstrapStarted = false
 	p.startScheduled = false
 	p.pendingBootstrap = nil
+	p.lifecycleState.IsRunned.Store(false)
 	p.lifecycleState.BootstrapDone.Store(false)
 	p.lifecycleState.StartDispatched.Store(false)
 	p.bootstrapMu.Unlock()
 }
 
-func (p *Game) runBootstrapTasks() {
-	p.runBootstrapTasksFor(p.currentBootstrapGeneration())
-}
-
-func (p *Game) runBootstrapTasksFor(generation uint64) {
+func (p *Game) runBootstrapTasks(generation uint64) {
 	for {
-		tasks, ok := p.takeBootstrapTasksFor(generation)
-		if !ok || len(tasks) == 0 {
+		tasks := p.takeBootstrapTasks(generation)
+		if len(tasks) == 0 {
 			return
 		}
-		// Re-check after each pass so tasks queued by tasks are also consumed.
+		// Also drain tasks queued by earlier tasks.
 		for _, task := range tasks {
-			if !p.isBootstrapGenerationCurrent(generation) {
+			if !p.isCurrentBootstrap(generation) {
 				return
 			}
 			task()
@@ -229,33 +189,39 @@ func (p *Game) runBootstrapTasksFor(generation uint64) {
 	}
 }
 
-func (p *Game) takeBootstrapTasksFor(generation uint64) ([]func(), bool) {
+func (p *Game) takeBootstrapTasks(generation uint64) []func() {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	if generation != p.bootstrapGen {
-		return nil, false
-	}
-	if len(p.pendingBootstrap) == 0 {
-		return nil, true
+		return nil
 	}
 	tasks := p.pendingBootstrap
 	p.pendingBootstrap = nil
-	return tasks, true
+	return tasks
 }
 
-func (p *Game) isBootstrapGenerationCurrent(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	return generation == p.bootstrapGen
+func (p *Game) isCurrentBootstrap(generation uint64) bool {
+	return generation == p.bootstrapGeneration()
 }
 
-func (p *Game) markBootstrapDoneFor(generation uint64) bool {
+func (p *Game) completeBootstrap(generation uint64) bool {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	if generation != p.bootstrapGen {
 		return false
 	}
 	p.lifecycleState.BootstrapDone.Store(true)
+	return true
+}
+
+func (p *Game) markGameStarted(generation uint64) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	engine.OnGameStarted()
+	p.lifecycleState.IsRunned.Store(true)
 	return true
 }
 
@@ -269,7 +235,7 @@ func (p *Game) scheduleStartEvent() *eventStart {
 	return &eventStart{generation: p.bootstrapGen}
 }
 
-func (p *Game) takeStartSinksFor(generation uint64) ([]eventSink, bool) {
+func (p *Game) takeStartSinks(generation uint64) ([]eventSink, bool) {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	if generation != p.bootstrapGen {
@@ -278,7 +244,7 @@ func (p *Game) takeStartSinksFor(generation uint64) ([]eventSink, bool) {
 	return p.scriptEvents.manager.SnapshotStartOnce(), true
 }
 
-func (p *Game) markStartDispatchedFor(generation uint64) bool {
+func (p *Game) markStartDispatched(generation uint64) bool {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	if generation != p.bootstrapGen {
@@ -288,32 +254,23 @@ func (p *Game) markStartDispatchedFor(generation uint64) bool {
 	return true
 }
 
-func (p *Game) claimBootstrapPhaseFor(generation uint64) (hasTasks, ok bool) {
+func (p *Game) claimBootstrap(generation uint64) bool {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
 	if generation != p.bootstrapGen || p.bootstrapStarted {
-		return false, false
+		return false
 	}
 	p.bootstrapStarted = true
-	return len(p.pendingBootstrap) > 0, true
+	return true
 }
 
-func (p *Game) startBootstrapPhaseFor(generation uint64) {
-	engine.WaitMainThread(func() {
-		hasTasks, ok := p.claimBootstrapPhaseFor(generation)
-		if !ok {
+func (p *Game) startBootstrap(generation uint64) {
+	engine.Go(p, func(context.Context) {
+		if currentGame() != p || !p.claimBootstrap(generation) {
 			return
 		}
-		if !hasTasks {
-			p.markBootstrapDoneFor(generation)
-			return
-		}
-
-		gco.Create(p, func(coroutine.Thread) int {
-			p.runBootstrapTasksFor(generation)
-			p.markBootstrapDoneFor(generation)
-			return 0
-		})
+		p.runBootstrapTasks(generation)
+		p.completeBootstrap(generation)
 	})
 }
 

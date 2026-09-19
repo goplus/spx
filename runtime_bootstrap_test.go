@@ -16,23 +16,76 @@
 
 package spx
 
-import "testing"
+import (
+	"sync/atomic"
+	"testing"
+	"time"
+
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+)
+
+func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
+	for _, name := range []string{"empty", "tasks", "stale"} {
+		t.Run(name, func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			previousPlatform := pkgengine.PlatformMgr
+			pkgengine.PlatformMgr = nil
+			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+
+			generation := game.bootstrapGeneration()
+			var calls atomic.Int32
+			if name != "empty" {
+				game.queueBootstrap(generation, func() {
+					calls.Add(1)
+					game.queueBootstrap(generation, func() { calls.Add(1) })
+				})
+			}
+			if name == "stale" {
+				game.resetBootstrap()
+			}
+
+			queued := make(chan struct{})
+			go func() {
+				game.startBootstrap(generation)
+				game.startBootstrap(generation)
+				close(queued)
+			}()
+			select {
+			case <-queued:
+			case <-time.After(time.Second):
+				t.Fatal("bootstrap scheduling waited for an engine-thread call")
+			}
+			co.Update()
+			if got, want := game.lifecycleState.BootstrapDone.Load(), name != "stale"; got != want {
+				t.Fatalf("bootstrap done = %v, want %v", got, want)
+			}
+			var wantCalls int32
+			if name == "tasks" {
+				wantCalls = 2
+			}
+			if got := calls.Load(); got != wantCalls {
+				t.Fatalf("bootstrap calls = %d, want %d", got, wantCalls)
+			}
+		})
+	}
+}
 
 func TestGameRunBootstrapTasksDrainsNestedCallbacks(t *testing.T) {
 	var g Game
+	generation := g.bootstrapGeneration()
 	var got []string
 
-	g.deferBootstrap(func() {
+	g.queueBootstrap(generation, func() {
 		got = append(got, "first")
-		g.deferBootstrap(func() {
+		g.queueBootstrap(generation, func() {
 			got = append(got, "nested")
 		})
 	})
-	g.deferBootstrap(func() {
+	g.queueBootstrap(generation, func() {
 		got = append(got, "second")
 	})
 
-	g.runBootstrapTasks()
+	g.runBootstrapTasks(generation)
 
 	want := []string{"first", "second", "nested"}
 	if len(got) != len(want) {
@@ -47,19 +100,20 @@ func TestGameRunBootstrapTasksDrainsNestedCallbacks(t *testing.T) {
 
 func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 	var g Game
+	generation := g.bootstrapGeneration()
 	g.bindScriptEvents()
 
 	var sprite SpriteImpl
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite)
 
-	g.deferBootstrap(func() {
+	g.queueBootstrap(generation, func() {
 		g.OnStart(func() {})
 	})
-	g.deferBootstrap(func() {
+	g.queueBootstrap(generation, func() {
 		sprite.OnStart(func() {})
 	})
 
-	g.runBootstrapTasks()
+	g.runBootstrapTasks(generation)
 
 	got := g.scriptEvents.manager.SnapshotStart()
 	if len(got) != 2 {
@@ -75,30 +129,30 @@ func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 
 func TestGameRunBootstrapTasksStopsDrainingAfterReset(t *testing.T) {
 	var g Game
-	generation := g.currentBootstrapGeneration()
+	generation := g.bootstrapGeneration()
 	var got []string
 
-	if !g.deferBootstrapFor(generation, func() {
+	if !g.queueBootstrap(generation, func() {
 		got = append(got, "first")
-		g.resetBootstrapState()
-		g.deferBootstrapFor(g.currentBootstrapGeneration(), func() {
+		g.resetBootstrap()
+		g.queueBootstrap(g.bootstrapGeneration(), func() {
 			got = append(got, "new")
 		})
 	}) {
-		t.Fatal("deferBootstrapFor rejected current generation")
+		t.Fatal("queueBootstrap rejected current generation")
 	}
-	if !g.deferBootstrapFor(generation, func() {
+	if !g.queueBootstrap(generation, func() {
 		got = append(got, "stale")
 	}) {
-		t.Fatal("deferBootstrapFor rejected current generation")
+		t.Fatal("queueBootstrap rejected current generation")
 	}
 
-	g.runBootstrapTasksFor(generation)
+	g.runBootstrapTasks(generation)
 	if len(got) != 1 || got[0] != "first" {
 		t.Fatalf("old generation drained stale tasks: got %v, want [first]", got)
 	}
 
-	g.runBootstrapTasks()
+	g.runBootstrapTasks(g.bootstrapGeneration())
 	want := []string{"first", "new"}
 	if len(got) != len(want) {
 		t.Fatalf("current generation tasks got %v, want %v", got, want)
@@ -112,16 +166,16 @@ func TestGameRunBootstrapTasksStopsDrainingAfterReset(t *testing.T) {
 
 func TestGameBootstrapCompletionIgnoresStaleGeneration(t *testing.T) {
 	var game Game
-	stale := game.currentBootstrapGeneration()
+	stale := game.bootstrapGeneration()
 
 	game.lifecycleState.BootstrapDone.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
-	game.resetBootstrapState()
+	game.resetBootstrap()
 
-	if game.markBootstrapDoneFor(stale) {
+	if game.completeBootstrap(stale) {
 		t.Fatal("stale bootstrap generation was marked done")
 	}
-	if game.markStartDispatchedFor(stale) {
+	if game.markStartDispatched(stale) {
 		t.Fatal("stale bootstrap generation was marked started")
 	}
 	if game.lifecycleState.BootstrapDone.Load() || game.lifecycleState.StartDispatched.Load() {

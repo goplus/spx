@@ -26,12 +26,21 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/goplus/spx/v3/internal/engine"
+	engineplatform "github.com/goplus/spx/v3/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v3/internal/log"
+)
+
+const reloadDrainTimeout = 2 * time.Second
+
+var (
+	errReloadInactiveGame = errors.New("game reload requires the active game")
+	errReloadWrongThread  = errors.New("game reload requires the engine main thread")
 )
 
 // -----------------------------------------------------------------------------
 // Entry Points
 // -----------------------------------------------------------------------------
+
 func SetDebug(flags dbgFlags) {
 	spxlog.SetLevel(spxlog.LevelDebug)
 	flags &= DbgFlagInstr | DbgFlagEvent | DbgFlagPerf
@@ -45,53 +54,31 @@ func SetDebug(flags dbgFlags) {
 
 // XGot_Game_Main is required by XGo compiler as the entry of a .gmx project.
 func XGot_Game_Main(game Gamer, sprites ...Sprite) {
-	g := game.initGame(sprites)
-	g.gamer = game
-	engine.Main(game)
+	g := game.baseGame()
+	err := engine.Main(game, g, func() {
+		g.initGame(sprites)
+		g.gamer = game
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // XGot_Game_Reload reloads the game with new configuration.
 func XGot_Game_Reload(game Gamer, index any) (err error) {
-	v := reflect.ValueOf(game).Elem()
-	g := instance(v)
 	if gco.IsInCoroutine() {
 		return errors.New("game reload cannot be called from an active coroutine")
 	}
-	plan, err := prepareReload(g, v, index)
-	if err != nil {
-		return err
+	g := game.baseGame()
+	if currentGame() != g {
+		return errReloadInactiveGame
 	}
-	if !gco.RunAfterStopAll(2*time.Second, g.reset) {
-		return errors.New("game reload aborted: existing coroutines did not stop")
+	if !engineplatform.TryCallEngineDirectly(func() {
+		err = reloadGame(game, g, index)
+	}) {
+		return errReloadWrongThread
 	}
-	generation := g.currentBootstrapGeneration()
-	if err = g.attachPreparedInputSession(); err != nil {
-		return err
-	}
-	engine.ClearAllSprites()
-
-	g.events = make(chan event, eventBufferSize)
-	g.eventQueueState.EventQueueStats.Reset()
-
-	proj := &plan.project
-	g.applyStoredRuntimeConfig(proj)
-	setupGameSystems(g, proj)
-	err = plan.loadSprites(g, v)
-	if err != nil {
-		engine.Panic(err)
-		return
-	}
-	g.tilemapMgr.replaceMap(plan.tilemap)
-	gco.OnRestart()
-	err = g.loadIndexWithSpriteLoader(v, proj, generation, plan.spriteLoader(g))
-	if err != nil {
-		return
-	}
-	g.initEventLoop()
-	gco.OnInited()
-	g.lifecycleState.IsRunned.Store(true)
-	g.startBootstrapPhaseFor(generation)
-	return
+	return err
 }
 
 // -----------------------------------------------------------------------------
@@ -163,6 +150,45 @@ func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
 
 func WaitUntil(__xgo_autoclosure_condition func() bool) {
 	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
+}
+
+func reloadGame(game Gamer, g *Game, index any) error {
+	v := reflect.ValueOf(game).Elem()
+	var plan *reloadPlan
+	var generation uint64
+	err := engine.Reload(g, reloadDrainTimeout, func() error {
+		var err error
+		plan, err = prepareReload(g, v, index)
+		return err
+	}, func() error {
+		g.reset()
+		generation = g.bootstrapGeneration()
+		if err := g.attachPreparedInputSession(); err != nil {
+			return err
+		}
+
+		g.events = make(chan event, eventBufferSize)
+
+		proj := &plan.project
+		g.applyStoredRuntimeConfig(proj)
+		setupGameSystems(g, proj)
+		if err := plan.loadSprites(g, v); err != nil {
+			return err
+		}
+		g.tilemapMgr.replaceMap(plan.tilemap)
+		gco.OnRestart()
+		g.loadStage(v, proj, generation, plan.spriteLoader(g))
+		return nil
+	}, func() {
+		g.initEventLoop()
+		gco.OnInited()
+		g.lifecycleState.IsRunned.Store(true)
+	})
+	if err != nil {
+		return err
+	}
+	g.startBootstrap(generation)
+	return nil
 }
 
 func handleMainExecutionTimeout(err error) bool {
