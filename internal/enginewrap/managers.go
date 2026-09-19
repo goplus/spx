@@ -16,8 +16,7 @@
 
 package enginewrap
 
-// EngineManagers groups all engine-facing manager wrappers.
-// This keeps runtime dependencies scoped to the game instead of package-level globals.
+// EngineManagers groups the wrappers for the process-wide engine backend.
 type EngineManagers struct {
 	AudioMgr         AudioMgrImpl
 	CameraMgr        CameraMgrImpl

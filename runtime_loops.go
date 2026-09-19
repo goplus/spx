@@ -42,7 +42,7 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 			return p.currentInputSession() == nil
 		},
 		CurrentMousePos: func() mathf.Vec2 {
-			curMousePos := p.engine().InputMgr.GetGlobalMousePos()
+			curMousePos := engine.Managers().InputMgr.GetGlobalMousePos()
 			return mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
 		},
 		IsLeftButtonPressed: func() bool {

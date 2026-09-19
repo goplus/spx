@@ -21,8 +21,8 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	scheduler "github.com/goplus/spx/v3/internal/engine"
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v3/internal/engine"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 // ============================================================================
@@ -57,7 +57,7 @@ type penState struct {
 type penComponent struct {
 	componentBase
 	penState
-	penObj *engine.Object
+	penObj *gdx.Object
 }
 
 // ============================================================================
@@ -105,7 +105,7 @@ func (p *penComponent) penUp() {
 }
 
 func (p *penComponent) penDown() {
-	scheduler.RequestRedraw()
+	engine.RequestRedraw()
 	wasDown := p.isPenDown
 	created := p.checkOrCreatePen()
 	if !wasDown || created {
@@ -118,7 +118,7 @@ func (p *penComponent) penDown() {
 }
 
 func (p *penComponent) stamp() {
-	scheduler.RequestRedraw()
+	engine.RequestRedraw()
 	p.checkOrCreatePen()
 	x, y := p.sprite.getXY()
 	applyRenderOffset(p.sprite, &x, &y)
@@ -126,7 +126,7 @@ func (p *penComponent) stamp() {
 	obj := *p.penObj
 	texturePath := p.sprite.getCostumeAssetPath()
 	p.sprite.g.penCommandBarrier(func() {
-		p.engine().PenMgr.PenStampWithTransform(
+		engine.Managers().PenMgr.PenStampWithTransform(
 			obj,
 			texturePath,
 			mathf.NewVec2(x, y),
@@ -277,7 +277,7 @@ func (p *penComponent) changePenTransparency(delta float64) {
 
 func (p *penComponent) checkOrCreatePen() bool {
 	if p.penObj == nil {
-		obj := p.engine().PenMgr.CreatePen()
+		obj := engine.Managers().PenMgr.CreatePen()
 		p.penObj = &obj
 		p.penTransparency = alphaToTransparency(p.penColor.A)
 		return true
@@ -289,7 +289,7 @@ func (p *penComponent) destroyPen() {
 	if p.penObj != nil {
 		obj := *p.penObj
 		p.sprite.g.penCommandBarrier(func() {
-			p.engine().PenMgr.DestroyPen(obj)
+			engine.Managers().PenMgr.DestroyPen(obj)
 		})
 		p.penObj = nil
 	}
@@ -299,7 +299,7 @@ func (p *penComponent) movePen(x, y float64) {
 	if !p.isPenDown {
 		return
 	}
-	scheduler.RequestRedraw()
+	engine.RequestRedraw()
 	p.ensureClonePenReady()
 	p.syncPenPosition(x, y)
 }
@@ -314,7 +314,7 @@ func (p *penComponent) syncPenPosition(x, y float64) {
 func (p *penComponent) getPenStampTransform() (rotationRadians float64, scale mathf.Vec2) {
 	rotation, scaleX, scaleY := getRenderRotationAndScale(p.sprite)
 	renderScale := p.sprite.getCostumeRenderScale()
-	return engine.DegToRad(rotation), mathf.NewVec2(scaleX*renderScale, scaleY*renderScale)
+	return gdx.DegToRad(rotation), mathf.NewVec2(scaleX*renderScale, scaleY*renderScale)
 }
 
 // ============================================================================

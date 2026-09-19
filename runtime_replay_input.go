@@ -68,7 +68,7 @@ func (p *inputManager) resolveInputSessionTick(session *inputSession, delta floa
 	defer session.operationMu.Unlock()
 	c := &session.input
 	resolved, err := session.consumeSampledInputTickLocked(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		pointValue := p.g.engine().InputMgr.GetGlobalMousePos()
+		pointValue := engine.Managers().InputMgr.GetGlobalMousePos()
 		var buttons uint8
 		c.mouseEvents, buttons = engine.GetMouseInput(c.mouseEvents[:0])
 		var keysDown []int64
@@ -181,7 +181,7 @@ func (p *inputManager) effectiveKeyPressed(key Key) bool {
 		})
 		return index < len(state.KeysDown) && state.KeysDown[index] == keyID
 	}
-	return p.g.engine().InputMgr.GetKey(int64(key))
+	return engine.Managers().InputMgr.GetKey(int64(key))
 }
 
 func (p *inputManager) effectiveMousePos() mathf.Vec2 {

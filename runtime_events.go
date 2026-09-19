@@ -40,10 +40,11 @@ type eventSink = coreevent.Sink
 
 type scriptEventBindings struct {
 	*scriptEventRegistry
-	pthis threadObj
+	owner threadObj
 }
 
 type scriptEventRegistry struct {
+	game                *Game
 	manager             coreevent.Manager
 	messageExecutions   sync.Map // map[coroutine.Thread]*messageReceiverExecution
 	stopAllEpoch        atomic.Uint64
@@ -75,7 +76,7 @@ type clicker interface {
 }
 
 func (p *scriptEventBindings) OnStart(onStart func()) {
-	sink := coreevent.NewSink(p.pthis, onStart)
+	sink := coreevent.NewSink(p.owner, onStart)
 	if p.scriptEventRegistry.manager.TryAddStart(sink) {
 		return
 	}
@@ -86,8 +87,8 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 }
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
-	pthis := p.pthis
-	p.scriptEventRegistry.manager.AddClick(newScriptEventSink(pthis, onClick, coroutine.RestartExisting, coreevent.MatchOwner(pthis)))
+	owner := p.owner
+	p.scriptEventRegistry.manager.AddClick(newScriptEventSink(owner, onClick, coroutine.RestartExisting, coreevent.MatchOwner(owner)))
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -97,9 +98,9 @@ func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	itime.RegisterTimer(time)
 	p.scriptEventRegistry.manager.AddTimer(coreevent.NewSink(
-		p.pthis,
+		p.owner,
 		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
-			spxlog.Debug("OnTimer: %s", nameOf(p.pthis))
+			spxlog.Debug("OnTimer: %s", nameOf(p.owner))
 		})),
 		coreevent.MatchApproxFloat(time, 0.001),
 	))
@@ -107,16 +108,16 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
 	handler := coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
-		spxlog.Debug("OnKey: %v, %s", key, nameOf(p.pthis))
+		spxlog.Debug("OnKey: %v, %s", key, nameOf(p.owner))
 	}))
 	p.registerKeyHandler([]Key{key}, handler)
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 	p.scriptEventRegistry.manager.AddSwipe(coreevent.NewSink(
-		p.pthis,
+		p.owner,
 		coreevent.TapVoid1(onSwipe, coreevent.If1(isDebugEventEnabled, func(Direction) {
-			spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.pthis))
+			spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.owner))
 		})),
 		coreevent.MatchValue(direction),
 	))
@@ -124,7 +125,7 @@ func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 
 func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
 	handler := coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
-		spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.pthis))
+		spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.owner))
 	}))
 	p.registerKeyHandler(keys, handler)
 }
@@ -140,22 +141,22 @@ func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
 func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 	p.registerMessageHandler(
 		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
-			spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.pthis))
+			spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.owner))
 		})),
 		coreevent.MatchValue(msg),
 	)
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(p.pthis, onBackdrop, coroutine.RestartExisting))
+	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(p.owner, onBackdrop, coroutine.RestartExisting))
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
 	handler := coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
-		spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.pthis))
+		spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.owner))
 	}))
 	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(
-		p.pthis, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
+		p.owner, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
 	))
 }
 
@@ -176,18 +177,18 @@ func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
 	p.doBroadcast(msg, data, true)
 }
 
-func (p *scriptEventBindings) init(registry *scriptEventRegistry, this threadObj) {
-	p.scriptEventRegistry = registry
-	p.pthis = this
+func (p *Game) bindScriptEvents() {
+	p.scriptEvents.game = p
+	p.scriptEventBindings.bind(&p.scriptEvents, p)
 }
 
-func (p *scriptEventBindings) initFrom(src *scriptEventBindings, this threadObj) {
-	p.scriptEventRegistry = src.scriptEventRegistry
-	p.pthis = this
+func (p *scriptEventBindings) bind(registry *scriptEventRegistry, owner threadObj) {
+	p.scriptEventRegistry = registry
+	p.owner = owner
 }
 
 func (p *scriptEventBindings) clearHandlers() {
-	p.scriptEventRegistry.manager.DeleteOwner(p.pthis)
+	p.scriptEventRegistry.manager.DeleteOwner(p.owner)
 }
 
 func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj) {
@@ -195,15 +196,15 @@ func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj)
 }
 
 func (p *scriptEventBindings) onAwake(onAwake func()) {
-	pthis := p.pthis
-	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(p.pthis, onAwake, coreevent.MatchOwnerOrNil(pthis)))
+	owner := p.owner
+	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(owner, onAwake, coreevent.MatchOwnerOrNil(owner)))
 }
 
 func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
 	if len(keys) == 0 {
 		return
 	}
-	sink := newScriptEventSink(p.pthis, handler, coroutine.IgnoreWhileRunning)
+	sink := newScriptEventSink(p.owner, handler, coroutine.IgnoreWhileRunning)
 	if slices.Contains(keys, KeyAny) {
 		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
 		return
@@ -214,7 +215,7 @@ func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) 
 
 func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
 	p.scriptEventRegistry.manager.AddIReceive(newScriptEventSink(
-		p.pthis, handler, coroutine.RestartExisting, cond...,
+		p.owner, handler, coroutine.RestartExisting, cond...,
 	))
 }
 
@@ -232,7 +233,7 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 		}
 	}
 
-	return p.engine().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
+	return engine.Managers().SpriteMgr.CheckCollisionWithPoint(syncSprite.GetId(), point, true)
 }
 
 func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
@@ -301,14 +302,14 @@ func (p *Game) handleEvent(ev event) {
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		runStartPhase := func() {
-			sinks, ok := p.takeStartSinksFor(e.generation)
+			sinks, ok := p.takeStartSinks(e.generation)
 			if !ok {
 				return
 			}
 			p.scriptEvents.doWhenStart(sinks, func() bool {
-				return p.isBootstrapGenerationCurrent(e.generation)
+				return p.isCurrentBootstrap(e.generation)
 			})
-			p.markStartDispatchedFor(e.generation)
+			p.markStartDispatched(e.generation)
 		}
 		if gco == nil {
 			runStartPhase()
@@ -331,13 +332,13 @@ func (p *Game) fireEvent(ev event) {
 		return
 	}
 	if isDebugInstrEnabled() {
-		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.gameRuntimeState.EventQueuePolicy, ev)
+		spxlog.Warn("Event buffer is full (policy=%s). Drop event: %v", p.eventQueueState.EventQueuePolicy, ev)
 	}
 }
 
 // Event Dispatch
 func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bool) {
-	p.dispatchStartSinks(sinksInScratchTargetOrder(activeGame(), sinks), scriptEventDispatch{
+	p.dispatchStartSinks(sinksInScratchTargetOrder(p.game, sinks), scriptEventDispatch{
 		mode: coroutine.BatchWaitFirstSlice,
 		run: func(_ coroutine.Thread, ev *eventSink) {
 			if shouldRun != nil && !shouldRun() {

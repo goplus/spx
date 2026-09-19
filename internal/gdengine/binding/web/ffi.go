@@ -25,34 +25,44 @@ import (
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
+type LinkSession struct {
+	exit        chan struct{}
+	interpreter bool
+}
+
 var (
 	callbacks                engine.CallbackInfo
 	hasInitEngine            bool
-	exitChan                 chan struct{}
+	activeLink               *LinkSession
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
 )
 
-func Link() bool {
+func Link() (*LinkSession, bool) {
 	registerWebGlobals()
 	API.resolveAPIFunctions()
-	return !hasInitEngine
+	interpreter := !hasInitEngine
+	link := &LinkSession{exit: make(chan struct{}), interpreter: interpreter}
+	activeLink = link
+	return link, interpreter
 }
-func Linked() {
-	if !hasInitEngine { // adapt for ixgo
+
+func (s *LinkSession) Run(ready func()) {
+	if s.interpreter { // adapt for ixgo
 		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
 	}
-
-	exitChan = make(chan struct{})
-	<-exitChan
+	if ready != nil {
+		ready()
+	}
+	<-s.exit
 }
 
-func Unlink() {
-	if exitChan != nil {
-		close(exitChan)
-		exitChan = nil
+func (s *LinkSession) Unlink() {
+	close(s.exit)
+	if activeLink == s {
+		activeLink = nil
+		hasInitEngine = false
 	}
-	hasInitEngine = false
 }
 
 func BindCallback(info engine.CallbackInfo) {

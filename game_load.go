@@ -126,7 +126,7 @@ func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
 }
 
 func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
-	platformMgr := p.engine().PlatformMgr
+	platformMgr := engine.Managers().PlatformMgr
 
 	layout := coreproject.ResolvePlatformLayout(coreproject.PlatformLayoutInput{
 		WindowWidth:       p.displayState.WindowWidth,
@@ -167,7 +167,7 @@ func (p *Game) syncPenCanvasToWorld() {
 	width := int64(p.displayState.WorldWidth)
 	height := int64(p.displayState.WorldHeight)
 	p.penCommandBarrier(func() {
-		p.engine().PenMgr.SetCanvasSize(width, height)
+		engine.Managers().PenMgr.SetCanvasSize(width, height)
 	})
 }
 
@@ -224,7 +224,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		onLoaded = loader.OnLoaded
 	}
 	queueBootstrap := func(call func()) {
-		p.deferBootstrapFor(generation, call)
+		p.queueBootstrap(generation, call)
 	}
 	cameraTarget := ""
 	if proj.Camera != nil {
@@ -250,7 +250,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		},
 	})
 	queueBootstrap(func() {
-		p.runBootstrapSpriteMainsUntilYield(inits)
+		runSpriteMainsUntilYield(inits)
 	})
 	queueBootstrap(onLoaded)
 }
@@ -274,10 +274,6 @@ func (p *Game) applyTilemap() {
 func (p *Game) endLoad(g reflect.Value, proj *coreproject.ProjectConfig, generation uint64) (err error) {
 	spxlog.Debug("EndLoad")
 	return p.loadIndex(g, proj, generation)
-}
-
-func (p *Game) addSpecialShape(g reflect.Value, v coreproject.StageShape, inits []Sprite) ([]Sprite, error) {
-	return p.addSpecialShapeWithLoader(g, v, inits, p.loadSprite)
 }
 
 func (p *Game) addSpecialShapeWithLoader(
@@ -330,10 +326,6 @@ func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite
 		return nil, fmt.Errorf("addStageSprite: %w", err)
 	}
 	return added, nil
-}
-
-func (p *Game) addStageSprites(g reflect.Value, v coreproject.StageShape) ([]Sprite, error) {
-	return p.addStageSpritesWithLoader(g, v, p.loadSprite)
 }
 
 func (p *Game) addStageSpritesWithLoader(

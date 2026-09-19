@@ -106,6 +106,78 @@ func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 	}
 }
 
+func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	co.OnInited()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	blocker := co.CreateAndStart("shutdown-blocker", func(Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	<-started
+
+	barrierLocked := make(chan struct{})
+	barrierDone := make(chan bool, 1)
+	go func() {
+		selected, completed := co.RunAfterStopAllIf(0, func() bool {
+			close(barrierLocked)
+			return true
+		}, nil)
+		barrierDone <- selected && completed
+	}()
+	<-barrierLocked
+
+	var callbackRan atomic.Bool
+	callDone := make(chan struct{})
+	go func() {
+		co.WaitMainThread(func() { callbackRan.Store(true) })
+		close(callDone)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("WaitMainThread did not enqueue worker call")
+		}
+		runtime.Gosched()
+	}
+
+	if co.RunAfterStopAll(20*time.Millisecond, nil) {
+		t.Fatal("second barrier completed while the first owned the lock")
+	}
+	if callbackRan.Load() {
+		t.Fatal("shutdown lock waiter ran a main-thread job from a worker")
+	}
+	select {
+	case <-callDone:
+		t.Fatal("WaitMainThread returned before an engine update")
+	default:
+	}
+
+	close(release)
+	co.Join(blocker)
+	select {
+	case completed := <-barrierDone:
+		if !completed {
+			t.Fatal("first barrier did not complete")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first barrier did not finish after drain")
+	}
+	co.Update()
+	select {
+	case <-callDone:
+	case <-time.After(time.Second):
+		t.Fatal("queued main-thread call did not finish after Update")
+	}
+	if !callbackRan.Load() {
+		t.Fatal("queued main-thread call did not run on Update")
+	}
+}
+
 func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)

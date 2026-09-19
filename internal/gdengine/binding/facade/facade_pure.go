@@ -22,16 +22,12 @@ import (
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func LinkFFI() bool {
-	return true
-}
-
-func OnLinked() {
-
-}
-
-func UnlinkFFI() {
-
+func LinkFFI() (*LinkSession, bool) {
+	return newLinkSession(func(ready func()) {
+		if ready != nil {
+			ready()
+		}
+	}, nil), true
 }
 
 func RegisterCallbacks(_ engine.CallbackInfo) {

@@ -5,6 +5,7 @@ package coroutine
 import (
 	"syscall/js"
 	"testing"
+	"time"
 )
 
 func TestDrainLetsJavaScriptCompleteWorker(t *testing.T) {
@@ -48,6 +49,25 @@ func TestContendedDrainLetsJavaScriptFinishShutdown(t *testing.T) {
 	// The first shutdown holds shutdownMu until JavaScript calls back.
 	if !co.RunAfterStopAll(0, nil) {
 		t.Fatal("second drain did not complete")
+	}
+	waitForDrainResult(t, firstDone)
+}
+
+func TestTimedContendedDrainLetsJavaScriptFinishShutdown(t *testing.T) {
+	co := New(nil)
+	started, hostDone := make(chan struct{}), make(chan struct{})
+	firstDone := make(chan bool, 1)
+	go func() {
+		firstDone <- co.RunAfterStopAll(0, func() {
+			close(started)
+			<-hostDone
+		})
+	}()
+	waitForThreadSignal(t, started, "first shutdown callback did not start")
+	closeFromJavaScript(t, hostDone)
+
+	if !co.RunAfterStopAll(time.Second, nil) {
+		t.Fatal("timed drain starved the JavaScript callback")
 	}
 	waitForDrainResult(t, firstDone)
 }

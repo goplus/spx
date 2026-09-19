@@ -47,7 +47,7 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	if !proj.FullScreen {
 		t.Fatal("applyRuntimeConfig did not propagate fullscreen override")
 	}
-	if got := game.gameRuntimeState.EventQueuePolicy; got != parseEventQueuePolicy("block") {
+	if got := game.eventQueueState.EventQueuePolicy; got != parseEventQueuePolicy("block") {
 		t.Fatalf("EventQueuePolicy = %v, want block", got)
 	}
 	if game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 480 {

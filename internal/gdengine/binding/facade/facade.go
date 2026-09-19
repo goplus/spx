@@ -23,16 +23,14 @@ import (
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func LinkFFI() bool {
-	return ffi.Link()
-}
-
-func OnLinked() {
-	ffi.Linked()
-}
-
-func UnlinkFFI() {
-	ffi.Unlink()
+func LinkFFI() (*LinkSession, bool) {
+	interpreter := ffi.Link()
+	return newLinkSession(func(ready func()) {
+		ffi.Linked()
+		if ready != nil {
+			ready()
+		}
+	}, ffi.Unlink), interpreter
 }
 
 func RegisterCallbacks(callbacks engine.CallbackInfo) {

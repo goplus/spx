@@ -59,7 +59,7 @@ func (l *scratchEventOrderLog) snapshot() []string {
 
 func newScratchEventOrderSprite(game *Game, name string) *SpriteImpl {
 	sprite := &SpriteImpl{name: name, g: game}
-	sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
 	return sprite
 }
 
@@ -171,7 +171,7 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		log.add("message-after-yield")
 	})
 
-	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
 	waitForScratchEventOrderEntries(t, co, &log, 5)
 	requireScratchEventOrder(t, &log, []string{

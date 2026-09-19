@@ -96,5 +96,5 @@ type ShapeGetter interface {
 // Gamer is the runtime entry interface expected by the engine.
 type Gamer interface {
 	engine.IGame
-	initGame(sprites []Sprite) *Game
+	baseGame() *Game
 }

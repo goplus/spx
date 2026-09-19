@@ -69,11 +69,7 @@ func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64)
 	return rotation, scaleX, scaleY
 }
 
-func syncGetCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
-	return getCostumeBoundByAlpha(p, true)
-}
-
-func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2) {
+func getCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex]
 	var rect mathf.Rect2
 	if cs.isAtlas() {
@@ -85,11 +81,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 			rect = cache
 		} else {
 			assetPath := cs.getAssetPath()
-			if isSync {
-				rect = engine.Managers().ResMgr.GetBoundFromAlpha(assetPath)
-			} else {
-				rect = p.engine().ResMgr.GetBoundFromAlpha(assetPath)
-			}
+			rect = engine.Managers().ResMgr.GetBoundFromAlpha(assetPath)
 		}
 		cachedBounds[cs.path] = rect
 	}

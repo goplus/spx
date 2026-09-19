@@ -33,7 +33,6 @@ type animationWrapper struct {
 	ani          *coreproject.AniConfig
 	costumes     []*costume
 	isCostumeSet bool
-	engineMgr    *engineManagers
 	loadOnce     sync.Once
 }
 
@@ -115,10 +114,6 @@ func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfi
 	p.animation().doTween(name, ani)
 }
 
-func (p *SpriteImpl) playDefaultAnim() {
-	p.animation().playDefaultAnim()
-}
-
 // -----------------------------------------------------------------------------
 // Animation Data
 // -----------------------------------------------------------------------------
@@ -141,7 +136,7 @@ func (aw *animationWrapper) ensureRegistered(animName string, callerAni *corepro
 		if callerAni != nil && callerAni != aw.ani {
 			callerAni.AdaptAnimBitmapResolution = aw.ani.AdaptAnimBitmapResolution
 		}
-		aw.engineMgr.ResMgr.CreateAnimation(
+		engine.Managers().ResMgr.CreateAnimation(
 			aw.spriteName,
 			animName,
 			payloadJSON,

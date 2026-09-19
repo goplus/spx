@@ -32,7 +32,7 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	}
 	co.Join(thread)
 
-	if got := game.gameRuntimeState.EventQueueStats.DroppedTotal(); got != 1 {
+	if got := game.eventQueueState.EventQueueStats.DroppedTotal(); got != 1 {
 		t.Fatalf("DroppedTotal = %d, want 1", got)
 	}
 	if got := <-game.events; got.(*eventTimer).Time != 1 {

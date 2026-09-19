@@ -68,7 +68,7 @@ func (p *Game) setRandomBackdrop() bool {
 
 func (p *Game) setupBackdrop() {
 	imgW, imgH := p.getCostumeSize()
-	spriteMgr := p.engine().SpriteMgr
+	spriteMgr := engine.Managers().SpriteMgr
 	layout := coreproject.ResolveBackdropLayout(
 		imgW,
 		imgH,

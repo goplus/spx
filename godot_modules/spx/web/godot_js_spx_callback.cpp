@@ -30,6 +30,9 @@ static void _godot_js_spx_on_engine_fixed_update(GdFloat delta){
 static void _godot_js_spx_on_engine_destroy(){
 	godot_js_spx_on_engine_destroy();
 }
+static void _godot_js_spx_on_engine_destroyed(){
+	godot_js_spx_on_engine_destroyed();
+}
 static void _godot_js_spx_on_engine_reset(){
 	godot_js_spx_on_engine_reset();
 }
@@ -188,6 +191,7 @@ void spx_web_register_callbacks() {
 	callback_infos.func_on_engine_update = &_godot_js_spx_on_engine_update;
 	callback_infos.func_on_engine_fixed_update = &_godot_js_spx_on_engine_fixed_update;
 	callback_infos.func_on_engine_destroy = &_godot_js_spx_on_engine_destroy;
+	callback_infos.func_on_engine_destroyed = &_godot_js_spx_on_engine_destroyed;
 	callback_infos.func_on_engine_reset = &_godot_js_spx_on_engine_reset;
 	callback_infos.func_on_engine_pause = &_godot_js_spx_on_engine_pause;
 	callback_infos.func_on_scene_sprite_instantiated = &_godot_js_spx_on_scene_sprite_instantiated;

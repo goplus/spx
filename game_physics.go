@@ -66,12 +66,12 @@ type spriteCollisionData struct {
 // Detection
 // -----------------------------------------------------------------------------
 func (p *Game) IntersectRect(posX, posY, width, height float64) []Sprite {
-	ary := p.engine().PhysicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
+	ary := engine.Managers().PhysicsMgr.CheckCollisionRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), -1)
 	return p.checkCollision(ary)
 }
 
 func (p *Game) IntersectCircle(posX, posY, radius float64) []Sprite {
-	ary := p.engine().PhysicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
+	ary := engine.Managers().PhysicsMgr.CheckCollisionCircle(mathf.NewVec2(posX, posY), radius, -1)
 	return p.checkCollision(ary)
 }
 
@@ -123,15 +123,15 @@ func (p *Game) Raycast__2(fromX, fromY, toX, toY float64, ignoreSprites []Sprite
 // Debug Draw
 // -----------------------------------------------------------------------------
 func (p *Game) DebugDrawRect(posX, posY, width, height float64, color Color) {
-	p.engine().DebugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
+	engine.Managers().DebugMgr.DebugDrawRect(mathf.NewVec2(posX, posY), mathf.NewVec2(width, height), toMathfColor(color))
 }
 
 func (p *Game) DebugDrawCircle(posX, posY, radius float64, color Color) {
-	p.engine().DebugMgr.DebugDrawCircle(mathf.NewVec2(posX, posY), radius, toMathfColor(color))
+	engine.Managers().DebugMgr.DebugDrawCircle(mathf.NewVec2(posX, posY), radius, toMathfColor(color))
 }
 
 func (p *Game) DebugDrawLine(fromX, fromY, toX, toY float64, color Color) {
-	p.engine().DebugMgr.DebugDrawLine(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), toMathfColor(color))
+	engine.Managers().DebugMgr.DebugDrawLine(mathf.NewVec2(fromX, fromY), mathf.NewVec2(toX, toY), toMathfColor(color))
 }
 
 func (p *Game) DebugDrawLines(points []float64, color Color) {
@@ -142,7 +142,7 @@ func (p *Game) DebugDrawLines(points []float64, color Color) {
 	for i := 0; i < len(points)-2; i += 2 {
 		from := mathf.NewVec2(points[i], points[i+1])
 		to := mathf.NewVec2(points[i+2], points[i+3])
-		p.engine().DebugMgr.DebugDrawLine(from, to, toMathfColor(color))
+		engine.Managers().DebugMgr.DebugDrawLine(from, to, toMathfColor(color))
 	}
 }
 
@@ -155,12 +155,12 @@ func (p *Game) applyPhysicsSettings(settings coreproject.SystemSettings) {
 	spxlog.Debug("IsCollisionByPixel: %v", p.isCollisionByPixel)
 	spxlog.Debug("IsAutoSetCollisionLayer: %v", p.isAutoSetCollisionLayer)
 
-	p.engine().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
+	engine.Managers().SpriteMgr.SetPixelCollisionSamplingStep(settings.PixelCollisionPrecision)
 
-	p.engine().PhysicsMgr.SetGlobalGravity(settings.GlobalGravity)
-	p.engine().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
-	p.engine().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
-	p.engine().PhysicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
+	engine.Managers().PhysicsMgr.SetGlobalGravity(settings.GlobalGravity)
+	engine.Managers().PhysicsMgr.SetGlobalAirDrag(settings.GlobalAirDrag)
+	engine.Managers().PhysicsMgr.SetGlobalFriction(settings.GlobalFriction)
+	engine.Managers().PhysicsMgr.SetCollisionSystemType(p.isCollisionByPixel)
 
 	p.resetCollisionLayerState()
 	if p.isAutoSetCollisionLayer {
@@ -276,7 +276,7 @@ func (p *Game) checkCollision(ary any) []Sprite {
 
 // raycast performs a raycast query.
 func (p *Game) raycast(from, to mathf.Vec2, ignoreSprites []int64, mask int64) *rayCastResult {
-	ary := p.engine().PhysicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
+	ary := engine.Managers().PhysicsMgr.RaycastWithDetails(from, to, ignoreSprites, mask, true, true)
 	result, err := tryRaycastResult(ary)
 	if err != nil {
 		spxlog.Warn("Raycast warn: %v", err)
