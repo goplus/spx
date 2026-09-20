@@ -44,6 +44,29 @@ func (f reloadConfigFS) Open(name string) (io.ReadCloser, error) {
 
 func (reloadConfigFS) Close() error { return nil }
 
+type blockingReloadConfigFS struct {
+	reloadConfigFS
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+type panickingReloadConfigFS struct{}
+
+func (panickingReloadConfigFS) Open(string) (io.ReadCloser, error) {
+	panic("reload preflight failure")
+}
+
+func (panickingReloadConfigFS) Close() error { return nil }
+
+func (f *blockingReloadConfigFS) Open(name string) (io.ReadCloser, error) {
+	f.once.Do(func() {
+		close(f.entered)
+		<-f.release
+	})
+	return f.reloadConfigFS.Open(name)
+}
+
 type reloadPreflightGame struct {
 	Game
 	Sprite  *reloadPreflightSprite
@@ -174,10 +197,12 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 
 	originalScheduler := gco
 	originalGame := engine.GetGame()
+	originalPlatformMgr := pkgengine.PlatformMgr
 	co := coroutine.New(nil)
 	co.OnInited()
 	gco = co
 	engine.SetCoroutines(co)
+	pkgengine.PlatformMgr = &reloadCommitPlatformMgr{}
 
 	game := &reloadPreflightGame{}
 	sprite := &reloadPreflightSprite{reloadPreflightGame: game}
@@ -200,6 +225,7 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 		gco = originalScheduler
 		engine.SetCoroutines(originalScheduler)
 		engine.SetGame(originalGame)
+		pkgengine.PlatformMgr = originalPlatformMgr
 	})
 	return game, sprite, co
 }
@@ -243,7 +269,8 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	engine.SetCoroutines(co)
 	cachedBounds = make(map[string]mathf.Rect2)
 
-	base := game.initGame(sprites)
+	base := game.baseGame().initGame(sprites)
+	engine.SetGame(base)
 	base.gamer = game
 	base.startLoad(files)
 	base.soundMgr.Init(&fakeAudioBackend{})
@@ -339,6 +366,106 @@ func assertReloadPreflightPreservedLiveState(
 	if got := game.TilemapName(); got != "live-map" {
 		t.Fatalf("reload preflight changed live tilemap to %q", got)
 	}
+}
+
+func assertReloadAvailable(t *testing.T, game *Game) {
+	t.Helper()
+	canceled := errors.New("cancel reload probe")
+	err := engine.Reload(game, time.Second, func() error { return canceled }, nil, nil)
+	if !errors.Is(err, canceled) {
+		t.Fatalf("reload probe error = %v, want running game", err)
+	}
+}
+
+func TestReloadRejectsInactiveGameBeforePreflight(t *testing.T) {
+	original := engine.GetGame()
+	active := new(reloadCommitGame)
+	inactive := new(reloadCommitGame)
+	engine.SetGame(&active.Game)
+	t.Cleanup(func() { engine.SetGame(original) })
+
+	err := XGot_Game_Reload(inactive, strings.NewReader("{"))
+	if !errors.Is(err, errReloadInactiveGame) {
+		t.Fatalf("XGot_Game_Reload error = %v, want %v", err, errReloadInactiveGame)
+	}
+	if got := engine.GetGame(); got != &active.Game {
+		t.Fatalf("inactive reload changed active game to %p", got)
+	}
+}
+
+func TestReloadDoesNotCommitToReplacementBindingWithSameGame(t *testing.T) {
+	files := reloadConfigFS{
+		"sprites/Sprite/index.json": `{"costumeSet":{"path":"sprite.png","nx":1}}`,
+	}
+	game, sprite, co := setupReloadPreflightGame(t, files)
+	blockingFS := &blockingReloadConfigFS{
+		reloadConfigFS: files,
+		entered:        make(chan struct{}),
+		release:        make(chan struct{}),
+	}
+	game.Game.fs = blockingFS
+	events := game.Game.events
+	releasePreflight := sync.OnceFunc(func() { close(blockingFS.release) })
+	t.Cleanup(releasePreflight)
+
+	reloadDone := make(chan error, 1)
+	go func() {
+		reloadDone <- XGot_Game_Reload(game, strings.NewReader(`{"zorder":["Sprite"]}`))
+	}()
+	select {
+	case <-blockingFS.entered:
+	case <-time.After(time.Second):
+		t.Fatal("reload preflight did not reach the blocking filesystem")
+	}
+
+	engine.SetGame(nil)
+	engine.SetGame(&game.Game)
+	replacementThread, finishThread := startReloadPreflightSentinelThread(t, co, game)
+	releasePreflight()
+	select {
+	case err := <-reloadDone:
+		if !errors.Is(err, engine.ErrReloadUnavailable) {
+			t.Fatalf("XGot_Game_Reload error = %v, want %v", err, engine.ErrReloadUnavailable)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("reload did not stop after its binding was replaced")
+	}
+	if replacementThread.Stopped() {
+		t.Fatal("stale reload stopped a replacement binding coroutine")
+	}
+	finishThread()
+
+	if game.Game.events != events {
+		t.Fatal("stale reload replaced the live event channel")
+	}
+	if game.Game.sprs["Sprite"] != sprite || game.Sprite != sprite || sprite.name != "live-sentinel" {
+		t.Fatal("stale reload mutated the live sprite state")
+	}
+	if got := game.TilemapName(); got != "live-map" {
+		t.Fatalf("stale reload changed live tilemap to %q", got)
+	}
+}
+
+func TestReloadPreflightPanicRestoresLiveGame(t *testing.T) {
+	files := reloadConfigFS{
+		"sprites/Sprite/index.json": `{"costumeSet":{"path":"sprite.png","nx":1}}`,
+	}
+	game, sprite, co := setupReloadPreflightGame(t, files)
+	game.Game.fs = panickingReloadConfigFS{}
+	events := game.Game.events
+	thread, finishThread := startReloadPreflightSentinelThread(t, co, game)
+
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		_ = XGot_Game_Reload(game, strings.NewReader(`{"zorder":["Sprite"]}`))
+	}()
+	if recovered != "reload preflight failure" {
+		t.Fatalf("reload panic = %v, want reload preflight failure", recovered)
+	}
+	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
+	assertReloadAvailable(t, &game.Game)
+	finishThread()
 }
 
 func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
@@ -494,6 +621,7 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 				t.Fatalf("XGot_Game_Reload error = %v, want substring %q", err, test.wantError)
 			}
 			assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
+			assertReloadAvailable(t, &game.Game)
 			finishThread()
 		})
 	}
@@ -508,6 +636,7 @@ func TestReloadCommitInitializesLazyPrototypeWithNewPhysicsSettings(t *testing.T
 		}`,
 	}
 	game := setupReloadCommitGame(t, files)
+	owner := engine.GetGame()
 
 	err := XGot_Game_Reload(game, strings.NewReader(`{
 		"physics":true,
@@ -516,6 +645,9 @@ func TestReloadCommitInitializesLazyPrototypeWithNewPhysicsSettings(t *testing.T
 	}`))
 	if err != nil {
 		t.Fatalf("XGot_Game_Reload error = %v", err)
+	}
+	if got := engine.GetGame(); got != owner {
+		t.Fatalf("reload changed active game from %p to %p", owner, got)
 	}
 
 	prototype, ok := game.Game.sprs["reloadCommitSprite"].(*reloadCommitSprite)

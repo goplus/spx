@@ -94,7 +94,7 @@ func (p *Game) attachPreparedInputSession() error {
 		return nil
 	}
 	defer completePreparedInputSessionClaim(plan)
-	session, err := newInputSession(plan, p.currentBootstrapGeneration())
+	session, err := newInputSession(plan, p.bootstrapGeneration())
 	if err != nil {
 		p.setInputSessionTerminal(InputSessionStatus{
 			Mode:  plan.mode,

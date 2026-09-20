@@ -302,14 +302,14 @@ func (p *Game) handleEvent(ev event) {
 		p.scriptEvents.doWhenKeyPressed(e.Key)
 	case *eventStart:
 		runStartPhase := func() {
-			sinks, ok := p.takeStartSinksFor(e.generation)
+			sinks, ok := p.takeStartSinks(e.generation)
 			if !ok {
 				return
 			}
 			p.scriptEvents.doWhenStart(sinks, func() bool {
-				return p.isBootstrapGenerationCurrent(e.generation)
+				return p.isCurrentBootstrap(e.generation)
 			})
-			p.markStartDispatchedFor(e.generation)
+			p.markStartDispatched(e.generation)
 		}
 		if gco == nil {
 			runStartPhase()

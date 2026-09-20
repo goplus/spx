@@ -25,126 +25,36 @@ import (
 	spxfs "github.com/goplus/spx/v3/fs"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-type gameBuilder struct {
-	gamer    Gamer
-	resource any
-	gameConf []*Config
-
-	fs   spxfs.Dir
-	conf Config
-	proj coreproject.ProjectConfig
-
-	game       *Game
-	gamerValue reflect.Value
-	generation uint64
-	err        error
-}
-
-func (b *gameBuilder) loadResources() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-
-	var gameConf *Config
-	if len(b.gameConf) > 0 {
-		gameConf = b.gameConf[0]
-	}
-	opened, err := coreproject.OpenBuilderResources(b.resource, gameConf)
+func (p *Game) loadGame(resource any, generation uint64) error {
+	opened, err := coreproject.OpenBuilderResources(resource, nil)
 	if err != nil {
-		b.err = err
-		return b
+		return err
 	}
 	if opened.AssetDir != "" {
 		engine.SetAssetDir(opened.AssetDir)
 	}
-	b.fs = opened.FS
-	b.conf = opened.Config
-	b.proj = opened.Project
-
-	resMgr := engine.Managers().ResMgr
 	fontPlan := coreproject.ResolveRuntimeFontPlan(opened.Fonts, engine.ToAssetPath)
-	if err := applyRuntimeFontPlan(&resMgr, fontPlan); err != nil {
-		b.err = fmt.Errorf("apply project fonts: %w", err)
+	if err := applyRuntimeFontPlan(&engine.Managers().ResMgr, fontPlan); err != nil {
+		return fmt.Errorf("apply project fonts: %w", err)
 	}
-	return b
-}
 
-func (b *gameBuilder) parseFlags() *gameBuilder {
-	if b.err != nil {
-		return b
+	conf, proj := &opened.Config, &opened.Project
+	parseCommandLineFlags(conf)
+	p.applyRuntimeConfig(conf, proj)
+	setupGameSystems(p, proj)
+	gamer := reflect.ValueOf(p.gamer).Elem()
+	loadGameSprites(p, gamer, opened.FS, proj)
+	p.loadStage(gamer, proj, generation, p.loadSprite)
+
+	platform := &engine.Managers().PlatformMgr
+	if !conf.DontRunOnUnfocused {
+		platform.SetRunnableOnUnfocused(true)
 	}
-	parseCommandLineFlags(&b.conf)
-	return b
-}
-
-func (b *gameBuilder) initializeGame() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	b.gamerValue = reflect.ValueOf(b.gamer).Elem()
-	b.game = instance(b.gamerValue)
-	return b
-}
-
-func (b *gameBuilder) setupConfig() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	setupGameConfig(b.game, &b.conf, &b.proj)
-	return b
-}
-
-func (b *gameBuilder) setupSystems() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	setupGameSystems(b.game, &b.proj)
-	return b
-}
-
-func (b *gameBuilder) loadSprites() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	loadGameSprites(b.game, b.gamerValue, b.fs, &b.proj)
-	return b
-}
-
-func (b *gameBuilder) finalizeLoad() *gameBuilder {
-	if b.err != nil {
-		return b
-	}
-	if err := b.game.endLoad(b.gamerValue, &b.proj, b.generation); err != nil {
-		b.err = err
-		return b
-	}
-	return b
-}
-
-func (b *gameBuilder) run() error {
-	return b.game.runLoop(&b.conf)
-}
-
-func (b *gameBuilder) build() (*Game, error) {
-	b.initializeGame().
-		loadResources().
-		parseFlags().
-		setupConfig().
-		setupSystems().
-		loadSprites().
-		finalizeLoad()
-
-	return b.game, b.err
-}
-
-func (b *gameBuilder) buildAndRun() error {
-	if _, err := b.build(); err != nil {
-		return err
-	}
-	return b.run()
+	p.initEventLoop()
+	platform.SetWindowTitle(p.runtimeConfigInput.Title)
+	return nil
 }
 
 func (p *Game) startLoad(fs spxfs.Dir) {
@@ -156,30 +66,9 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.fs = fs
 }
 
-func (p *Game) canBindSprite(name string) bool {
-	return p.typs[name] != nil
-}
-
-// -----------------------------------------------------------------------------
-// Builder
-// -----------------------------------------------------------------------------
-func newGameBuilder(game Gamer, resource any, generation uint64, gameConf ...*Config) *gameBuilder {
-	return &gameBuilder{
-		gamer:      game,
-		resource:   resource,
-		gameConf:   gameConf,
-		generation: generation,
-	}
-}
-
 // -----------------------------------------------------------------------------
 // Setup
 // -----------------------------------------------------------------------------
-func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
-	g.applyRuntimeConfig(conf, proj)
-	conf.Title = g.runtimeConfigInput.Title
-}
-
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
 	if settings.AutoSetCollisionLayer == g.physicsEnabled {
@@ -195,14 +84,12 @@ func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 // Loading
 // -----------------------------------------------------------------------------
 func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) {
-	spxlog.Debug("StartLoad")
-
 	g.startLoad(fs)
 	err := coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
 		return getFieldPtrOrAlloc(g, v, fieldIndex)
 	}, func(name string, val any) error {
 		fld, ok := val.(Sprite)
-		if !ok || !g.canBindSprite(name) {
+		if !ok || g.typs[name] == nil {
 			return nil
 		}
 		return g.loadSprite(fld, name, v)
@@ -229,14 +116,6 @@ func parseCommandLineFlags(conf *Config) {
 	if effects.Verbose {
 		SetDebug(DbgFlagAll)
 	}
-}
-
-func instance(gamer reflect.Value) *Game {
-	fld := gamer.FieldByName("Game")
-	if !fld.IsValid() {
-		panic("type doesn't have field spx.Game")
-	}
-	return fld.Addr().Interface().(*Game)
 }
 
 func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) {

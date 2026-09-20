@@ -171,7 +171,7 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		log.add("message-after-yield")
 	})
 
-	game.handleEvent(&eventStart{generation: game.currentBootstrapGeneration()})
+	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
 	waitForScratchEventOrderEntries(t, co, &log, 5)
 	requireScratchEventOrder(t, &log, []string{

@@ -520,7 +520,7 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 
 	done := make(chan struct{})
 	go func() {
-		game.runBootstrapTasksFor(generation)
+		game.runBootstrapTasks(generation)
 		close(done)
 	}()
 
@@ -552,14 +552,14 @@ func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
 	game.addShape(spriteOf(spriteA))
 	game.addShape(spriteOf(spriteB))
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{Camera: &coreproject.CameraConfig{On: "SpriteA"}},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 
 	followTarget, ok := game.camera.followTarget.(*SpriteImpl)
 	if !ok {
@@ -587,14 +587,14 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 	spriteA.physics().addCollisionTarget("SpriteB")
 	spriteB.physics().addCollisionTarget("SpriteA")
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 	game.refreshCollisionLayers()
 
 	if got := game.sprCollisionInfos["SpriteA"].Mask; got != 0 {
@@ -624,7 +624,7 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 	game.addShape(spriteOf(spriteA))
 	game.addShape(spriteOf(spriteB))
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -649,14 +649,14 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	spriteA.peer = spriteB
 	spriteB.peer = spriteA
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
-	game.runBootstrapTasksFor(generation)
+	game.runBootstrapTasks(generation)
 
 	if !spriteA.sawSelfAwake || !spriteA.sawPeerAwake {
 		t.Fatalf("SpriteA main saw awake state self=%v peer=%v, want both true", spriteA.sawSelfAwake, spriteA.sawPeerAwake)
@@ -687,7 +687,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 		spriteBSeenThreadCount = gco.LastThreadID()
 	})
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -720,7 +720,7 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 
 	inits := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
 		Zorder: []any{"Back", "Front"},
-	})
+	}, game.loadSprite)
 	if got, want := len(inits), 2; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
 	}
@@ -768,7 +768,7 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 			coreproject.StageShape{"type": "sprite", "target": "Middle"},
 			"Front",
 		},
-	})
+	}, game.loadSprite)
 
 	if got, want := len(inits), 5; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
@@ -808,15 +808,15 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	stageStarted := make(chan struct{})
 	stageResumed := make(chan struct{})
 	followingTaskRan := make(chan struct{})
-	generation := game.currentBootstrapGeneration()
-	game.deferBootstrapFor(generation, func() {
-		game.runBootstrapMainUntilYield(&game, func() {
+	generation := game.bootstrapGeneration()
+	game.queueBootstrap(generation, func() {
+		runMainUntilYield(&game, func() {
 			close(stageStarted)
 			engine.WaitForChan(blocked)
 			close(stageResumed)
 		})
 	})
-	game.deferBootstrapFor(generation, func() {
+	game.queueBootstrap(generation, func() {
 		close(followingTaskRan)
 	})
 
@@ -859,7 +859,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
 
-	generation := game.currentBootstrapGeneration()
+	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
@@ -869,7 +869,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 
 	runBootstrapTasksWithScheduler(t, &game, generation)
 
-	game.markBootstrapDoneFor(generation)
+	game.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
 	gco.Update()
 
