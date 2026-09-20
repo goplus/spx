@@ -120,15 +120,21 @@ const GodotGdspx = {
 		},
 
 		contactEvents: [],
-		contactEventsWarned: false,
 		contactSessionActive: true,
 		contactSessionGeneration: 0,
 
 		setContactSessionActive: function (active) {
 			GodotGdspx.contactEvents = [];
-			GodotGdspx.contactEventsWarned = false;
 			GodotGdspx.contactSessionGeneration += 1;
 			GodotGdspx.contactSessionActive = active;
+		},
+
+		endContactSession: function (eventName) {
+			GodotGdspx.setContactSessionActive(false);
+			if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
+				globalThis['GdspxFlushDeferredFrees']();
+			}
+			GodotGdspx.dispatch(eventName);
 		},
 
 		queueContact: function (type, selfID, otherID) {
@@ -138,9 +144,9 @@ const GodotGdspx = {
 			const self = GodotGdspx.splitInt64(selfID);
 			const other = GodotGdspx.splitInt64(otherID);
 			const events = GodotGdspx.contactEvents;
+			const belowWarningThreshold = events.length < GodotGdspx.contactEventWarnThreshold;
 			events.push(type, self['low'], self['high'], other['low'], other['high']);
-			if (!GodotGdspx.contactEventsWarned && events.length >= GodotGdspx.contactEventWarnThreshold) {
-				GodotGdspx.contactEventsWarned = true;
+			if (belowWarningThreshold && events.length >= GodotGdspx.contactEventWarnThreshold) {
 				GodotRuntime.error("gdspx contact event queue is growing large before flush.");
 			}
 		},
@@ -152,7 +158,6 @@ const GodotGdspx = {
 				return;
 			}
 			GodotGdspx.contactEvents = [];
-			GodotGdspx.contactEventsWarned = false;
 
 			const batch = globalThis['gdspx_on_contact_events'];
 			if (typeof batch === 'function') {
@@ -242,11 +247,7 @@ const GodotGdspx = {
 
 	godot_js_spx_on_engine_destroy__sig: 'v',
 	godot_js_spx_on_engine_destroy: function () {
-		GodotGdspx.setContactSessionActive(false);
-		if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
-			globalThis['GdspxFlushDeferredFrees']();
-		}
-		GodotGdspx.dispatch("OnEngineDestroy");
+		GodotGdspx.endContactSession("OnEngineDestroy");
 	},
 
 	godot_js_spx_on_engine_destroyed__sig: 'v',
@@ -256,11 +257,7 @@ const GodotGdspx = {
 
 	godot_js_spx_on_engine_reset__sig: 'v',
 	godot_js_spx_on_engine_reset: function () {
-		GodotGdspx.setContactSessionActive(false);
-		if (typeof globalThis['GdspxFlushDeferredFrees'] === 'function') {
-			globalThis['GdspxFlushDeferredFrees']();
-		}
-		GodotGdspx.dispatch("OnEngineReset");
+		GodotGdspx.endContactSession("OnEngineReset");
 	},
 
 	godot_js_spx_on_reset_done__sig: 'vj',

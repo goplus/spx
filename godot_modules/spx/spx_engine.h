@@ -57,15 +57,12 @@ class SpxPenMgr;
 class SpxTilemapMgr;
 class SpxTilemapparserMgr;
 class SpxCallbackProxy;
-class TestSpxEngineInternalsAccessor;
 
 typedef void (*GDExtensionSpxGlobalRuntimePanicCallback)(GdString msg);
 typedef void (*GDExtensionSpxGlobalRuntimeExitCallback)(GdInt code);
 typedef void (*GDExtensionSpxGlobalRuntimeResetCallback)(GdInt code);
 
 class SpxEngine : public SpxBaseMgr {
-	friend class TestSpxEngineInternalsAccessor;
-
 	static inline SpxEngine *singleton = nullptr;
 
 public:
