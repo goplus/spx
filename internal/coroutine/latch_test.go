@@ -24,7 +24,6 @@ import (
 
 func TestLatchResumesManagedWaitersOnce(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	latch := co.NewLatch()
 	var order []string
 
@@ -48,7 +47,6 @@ func TestLatchResumesManagedWaitersOnce(t *testing.T) {
 
 func TestLatchAlreadyOpenReturns(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	latch := co.NewLatch()
 	latch.Open()
 
@@ -100,7 +98,6 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 
 func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	latch := co.NewLatch()
 
 	waiter := co.Create("waiter", func(Thread) {

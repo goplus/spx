@@ -108,7 +108,7 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var ran atomic.Bool
-		probe := co.CreateAndStart("reset-open-probe", func(coroutine.Thread) {
+		probe := co.Create("reset-open-probe", func(coroutine.Thread) {
 			ran.Store(true)
 		})
 		co.Join(probe)
@@ -122,14 +122,13 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 
 func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	releaseWorker := sync.OnceFunc(func() { close(release) })
 	workerDone := make(chan struct{})
-	co.CreateAndStart("blocked", func(coroutine.Thread) {
+	co.Create("blocked", func(coroutine.Thread) {
 		defer close(workerDone)
 		close(started)
 		<-release
@@ -169,13 +168,12 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 
 func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
 	var returned atomic.Bool
-	caller := co.CreateAndStart("caller", func(coroutine.Thread) {
+	caller := co.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		close(entered)
 		resetWebRuntime(9)
@@ -213,7 +211,6 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	setupWebResetTest(t, co)
 
 	game, owner := new(bindingTestGame), new(struct{})
@@ -264,7 +261,6 @@ func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
 func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
@@ -298,7 +294,6 @@ func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	setupWebResetTest(t, co)
 	gdx.PlatformMgr = resetMainThreadPlatform{main: gid.Get()}
 	game := new(bindingTestGame)
@@ -308,7 +303,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	co.CreateAndStart("peer", func(peer coroutine.Thread) {
+	co.Create("peer", func(peer coroutine.Thread) {
 		defer close(peerDone)
 		close(peerYielding)
 		co.Yield(peer)
@@ -342,7 +337,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	}
 	close(backend.release)
 	gdx.ExtMgr = backend
-	co.CreateAndStart("caller", func(coroutine.Thread) {
+	co.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		resetWebRuntime(17)
 	})

@@ -35,7 +35,6 @@ func setupRuntimeEventScheduler(t *testing.T) *coroutine.Coroutines {
 	t.Helper()
 
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	gco = co
 	engine.SetCoroutines(co)

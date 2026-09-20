@@ -42,7 +42,7 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	th := co.CreateAndStart("run-without-screen-refresh", func(me coroutine.Thread) {
+	th := co.Create("run-without-screen-refresh", func(me coroutine.Thread) {
 		flagDuring := false
 		repeatCalls := 0
 		condCalls := 0
@@ -105,7 +105,7 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	th := co.CreateAndStart("run-without-screen-refresh-state", func(me coroutine.Thread) {
+	th := co.Create("run-without-screen-refresh-state", func(me coroutine.Thread) {
 		prev := SetRunWithoutScreenRefresh(true)
 		outerDuring := IsRunWithoutScreenRefresh()
 

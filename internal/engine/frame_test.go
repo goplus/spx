@@ -116,7 +116,6 @@ func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 
 func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
@@ -179,7 +178,6 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 
 func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {

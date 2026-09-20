@@ -277,7 +277,7 @@ func TestBackendTeardownCannotReleaseBeforeCoroutinesDrain(t *testing.T) {
 	release := make(chan struct{})
 	finish := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(finish)
-	blocker := co.CreateAndStart("destroy-drain", func(coroutine.Thread) {
+	blocker := co.Create("destroy-drain", func(coroutine.Thread) {
 		close(started)
 		<-release
 	})
@@ -631,7 +631,7 @@ func TestReloadGatesRuntimeWorkAndRestarts(t *testing.T) {
 		return nil
 	}, func() {
 		checkGated(gameReloading)
-		activated = co.CreateAndStart("new-loop", func(coroutine.Thread) {
+		activated = co.Create("new-loop", func(coroutine.Thread) {
 			calls.Add(1)
 		})
 	})
@@ -831,7 +831,7 @@ func TestReloadDrainTimeoutRemainsStoppedUntilReset(t *testing.T) {
 	release := make(chan struct{})
 	finish := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(finish)
-	blocker := co.CreateAndStart("reload-timeout", func(coroutine.Thread) {
+	blocker := co.Create("reload-timeout", func(coroutine.Thread) {
 		close(started)
 		<-release
 	})
@@ -942,7 +942,7 @@ func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	finish := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(finish)
-	co.CreateAndStart("slow-destroy", func(coroutine.Thread) {
+	co.Create("slow-destroy", func(coroutine.Thread) {
 		close(started)
 		<-release
 	})

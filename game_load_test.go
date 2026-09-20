@@ -504,7 +504,6 @@ func setupBootstrapScheduler(t *testing.T) {
 	t.Helper()
 
 	co := coroutine.New(nil)
-	co.OnInited()
 
 	original := gco
 	gco = co

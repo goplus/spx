@@ -121,7 +121,6 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 							test.exit()
 						})
 					}
-					OnGameStarted()
 					started.Store(true)
 				})
 			}

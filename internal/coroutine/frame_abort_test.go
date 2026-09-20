@@ -28,7 +28,6 @@ import (
 func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
 	co := New(nil)
-	co.OnInited()
 
 	blockerStarted := make(chan struct{})
 	releaseBlocker := make(chan struct{})

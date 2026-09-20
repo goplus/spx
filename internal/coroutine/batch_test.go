@@ -49,7 +49,6 @@ func TestStartBatchRejectsInvalidMode(t *testing.T) {
 
 func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	releaseFirst := make(chan struct{})
 	callerDone := make(chan struct{})
 	var (
@@ -107,7 +106,6 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 
 func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	batchDone := make(chan []Thread, 1)
 	var registered, ran atomic.Int32
 
@@ -149,7 +147,6 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 
 func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	callerDone := make(chan struct{})
 	var (
 		order   []string
@@ -191,7 +188,6 @@ func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 
 func TestStartBatchCancellationBeforeWrapperPassesBaton(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	callerDone := make(chan struct{})
 	var (
 		order   []string
@@ -231,7 +227,6 @@ func TestStartBatchCancellationBeforeWrapperPassesBaton(t *testing.T) {
 
 func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	registered := make(chan Thread, 1)
 	releaseRegistration := make(chan struct{})
 	batchDone := make(chan struct{})
@@ -294,7 +289,6 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 
 func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	finished := make(chan []Thread, 1)
 	var registered, cleaned, ran atomic.Int32
 
@@ -343,7 +337,6 @@ func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 
 func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	registered := make(chan Thread, 2)
 	releases := []chan struct{}{make(chan struct{}), make(chan struct{})}
 	batchDone := make(chan Thread, 2)
@@ -440,7 +433,6 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 
 func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	done := make(chan struct{})
 	var cleaned, ran atomic.Int32
 
@@ -493,7 +485,6 @@ func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 
 func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	recovered := make(chan any, 1)
 	var cleaned, ran atomic.Int32
 
@@ -548,7 +539,6 @@ func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 
 func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	registered := make(chan struct{})
 	batchReady := make(chan Thread)
 	releaseCaller := make(chan struct{})
@@ -593,7 +583,6 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	reported := make(chan any, 1)
 	co := New(func(report PanicReport) { reported <- report.Value })
-	co.OnInited()
 	thread := co.StartBatch([]Task{{
 		Setup: func(Thread) func() {
 			return func() { panic("cleanup failure") }
@@ -616,7 +605,7 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	}
 
 	var ran atomic.Bool
-	next := co.CreateAndStart("after-cleanup-panic", func(Thread) {
+	next := co.Create("after-cleanup-panic", func(Thread) {
 		ran.Store(true)
 	})
 	select {

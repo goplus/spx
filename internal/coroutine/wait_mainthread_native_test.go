@@ -76,7 +76,6 @@ func TestWaitMainThreadNestedFastPath(t *testing.T) {
 func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	returned := make(chan struct{})
 
 	go func() {
@@ -109,11 +108,10 @@ func TestWaitMainThreadQueuesFromWorker(t *testing.T) {
 func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	blocker := co.CreateAndStart("shutdown-blocker", func(Thread) {
+	blocker := co.Create("shutdown-blocker", func(Thread) {
 		close(started)
 		<-release
 	})
@@ -169,7 +167,6 @@ func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 
 	active := make(chan struct{})
 	releaseActive := make(chan struct{})
@@ -232,7 +229,6 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
@@ -270,7 +266,6 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	entered, release, updated := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	releaseCall := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(func() {
@@ -317,7 +312,6 @@ func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 	setMainThreadForTest(t, false)
 	var reported atomic.Bool
 	co := New(func(PanicReport) { reported.Store(true) })
-	co.OnInited()
 	thread := co.Create("caller", func(me Thread) {
 		co.WaitMainThread(func() {
 			co.Stop(me)
@@ -338,7 +332,6 @@ func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	guarded := make(chan any, 1)
 	thread := co.Create("caller", func(Thread) {
 		co.WaitMainThread(func() {
@@ -362,7 +355,6 @@ func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 func TestWaitMainThreadPropagatesCallbackPanic(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	returned := make(chan any, 1)
 	go func() {
 		defer func() { returned <- recover() }()
@@ -391,7 +383,6 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	returned := make(chan bool, 1)
 	go func() {
 		panicked := true
@@ -424,7 +415,6 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 func TestWaitMainThreadGoexitReleasesExternalCaller(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	callerDone := make(chan bool, 1)
 	go func() {
 		returned := false

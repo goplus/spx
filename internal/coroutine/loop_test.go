@@ -26,7 +26,6 @@ import (
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 	iterations := 0
@@ -51,7 +50,6 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
@@ -72,7 +70,6 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
@@ -96,7 +93,6 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
@@ -110,7 +106,7 @@ func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 		co.YieldLoopFor(me)
 		loopResumed = true
 	})
-	co.JoinYieldedOrDoneAll([]Thread{passive, loop})
+	joinYieldedOrDoneAll(co, []Thread{passive, loop})
 	co.Update()
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)

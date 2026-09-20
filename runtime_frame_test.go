@@ -27,7 +27,6 @@ import (
 
 func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	gco = co
 	engine.SetCoroutines(co)
@@ -306,7 +305,6 @@ func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 
 func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	gco = co
 	engine.SetCoroutines(co)
@@ -362,7 +360,6 @@ func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
 
 func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	gco = co
 	engine.SetCoroutines(co)

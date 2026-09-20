@@ -88,7 +88,7 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 	started := make(chan Thread, 1)
 	done := make(chan struct{})
 
-	co.CreateAndStart("worker", func(me Thread) {
+	co.Create("worker", func(me Thread) {
 		started <- me
 		for {
 			select {
@@ -160,7 +160,7 @@ func TestStopIfEvaluatesFilterWithoutHoldingMutex(t *testing.T) {
 	started := make(chan Thread, 1)
 	done := make(chan struct{})
 
-	co.CreateAndStart("worker", func(me Thread) {
+	co.Create("worker", func(me Thread) {
 		started <- me
 		for {
 			select {
@@ -218,7 +218,7 @@ func TestStopAllAndWaitFromCoroutineWaitsForPeersWithoutWaitingForCaller(t *test
 	otherYielding := make(chan struct{})
 	otherDone := make(chan struct{})
 
-	co.CreateAndStart("other", func(other Thread) {
+	co.Create("other", func(other Thread) {
 		defer close(otherDone)
 		close(otherYielding)
 		co.Yield(other)
@@ -232,7 +232,7 @@ func TestStopAllAndWaitFromCoroutineWaitsForPeersWithoutWaitingForCaller(t *test
 		t.Fatal("other coroutine did not reach yield")
 	}
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		result <- co.StopAllAndWait(time.Hour)
 	})
 
@@ -261,7 +261,7 @@ func TestStopAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
 	result := make(chan bool, 1)
 	peerRan := make(chan struct{}, 1)
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		co.Create("peer", func(peer Thread) {
 			close(peerRan)
 		})
@@ -288,11 +288,10 @@ func TestStopAllAndWaitFromCoroutineDoesNotStartStoppedPeer(t *testing.T) {
 
 func TestStopAllRejectsChildCreatedByCanceledOwner(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	childResult := make(chan Thread, 1)
 	var childRan atomic.Bool
 
-	co.CreateAndStart("parent", func(Thread) {
+	co.Create("parent", func(Thread) {
 		co.StopAll()
 		childResult <- co.Create("late-child", func(Thread) {
 			childRan.Store(true)
@@ -348,7 +347,6 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 
 func TestStopAllAndWaitOrdersInFlightRegistration(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	co.admissionMu.Lock()
 	registrationStarted := make(chan struct{})
 	created := make(chan Thread, 1)
@@ -398,7 +396,6 @@ func TestStopAllAndWaitOrdersInFlightRegistration(t *testing.T) {
 
 func TestStopAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	blocker := co.newThread("barrier-blocker")
 	co.registerThread(blocker)
 
@@ -446,7 +443,6 @@ func TestStopAllAndWaitRejectsCreationDuringBarrier(t *testing.T) {
 
 func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	blocker := co.newThread("barrier-blocker")
 	co.registerThread(blocker)
 
@@ -461,7 +457,7 @@ func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	}
 
 	var rejectedRan atomic.Bool
-	rejected := co.CreateAndStart("during-timeout", func(Thread) {
+	rejected := co.Create("during-timeout", func(Thread) {
 		rejectedRan.Store(true)
 	})
 	if !rejected.Stopped() {
@@ -479,7 +475,7 @@ func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	co.removeThreadState(blocker)
 	co.unregisterThread(blocker)
 
-	stillRejected := co.CreateAndStart("after-drain-before-recovery", func(Thread) {
+	stillRejected := co.Create("after-drain-before-recovery", func(Thread) {
 		t.Fatal("creation ran while the manager remained quarantined")
 	})
 	if !stillRejected.Stopped() {
@@ -492,7 +488,7 @@ func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 		t.Fatal("explicit recovery barrier did not complete after drain")
 	}
 	var nextRan atomic.Bool
-	next := co.CreateAndStart("after-timeout", func(Thread) {
+	next := co.Create("after-timeout", func(Thread) {
 		nextRan.Store(true)
 	})
 	select {
@@ -507,10 +503,9 @@ func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 
 func TestRunAfterStopAllIfRejectsWithoutChangingState(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.CreateAndStart("conditional-blocker", func(Thread) {
+	thread := co.Create("conditional-blocker", func(Thread) {
 		close(started)
 		<-release
 	})
@@ -537,7 +532,6 @@ func TestRunAfterStopAllIfRejectsWithoutChangingState(t *testing.T) {
 
 func TestRunAfterStopAllIfPredicatePanicReleasesBarrier(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	func() {
 		defer func() {
 			if recovered := recover(); recovered != "predicate failure" {
@@ -555,10 +549,9 @@ func TestRunAfterStopAllIfPredicatePanicReleasesBarrier(t *testing.T) {
 
 func TestRunAfterStopAllTimeoutIncludesBarrierWait(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	started := make(chan struct{})
 	release := make(chan struct{})
-	blocker := co.CreateAndStart("barrier-owner", func(Thread) {
+	blocker := co.Create("barrier-owner", func(Thread) {
 		close(started)
 		<-release
 	})
@@ -597,9 +590,8 @@ func TestRunAfterStopAllRejectsSynchronousPanicHandlerReentry(t *testing.T) {
 			co.RunAfterStopAll(time.Second, nil)
 		}()
 	})
-	co.OnInited()
 
-	worker := co.CreateAndStart("panicking-worker", func(Thread) {
+	worker := co.Create("panicking-worker", func(Thread) {
 		panic("worker failure")
 	})
 	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
@@ -666,12 +658,11 @@ func TestRunAfterStopAllWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.
 		close(handlerStarted)
 		<-releaseHandler
 	})
-	co.OnInited()
 
 	workerStarted := make(chan struct{})
 	releaseWorker := make(chan struct{})
 	var releaseWorkerOnce sync.Once
-	worker := co.CreateAndStart("panicking-worker", func(Thread) {
+	worker := co.Create("panicking-worker", func(Thread) {
 		close(workerStarted)
 		<-releaseWorker
 		panic("worker failure")
@@ -692,7 +683,7 @@ func TestRunAfterStopAllWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.
 	waitForThreadSignal(t, handlerStarted, "panic handler did not start")
 
 	var rejectedRan atomic.Bool
-	rejected := co.CreateAndStart("during-panic-handler", func(Thread) {
+	rejected := co.Create("during-panic-handler", func(Thread) {
 		rejectedRan.Store(true)
 	})
 	if !rejected.Stopped() {
@@ -734,7 +725,7 @@ func TestRunAfterStopAllWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.
 	waitForThreadSignal(t, worker.done, "panicking worker did not finish")
 
 	var admittedRan atomic.Bool
-	admitted := co.CreateAndStart("after-panic-handler", func(Thread) {
+	admitted := co.Create("after-panic-handler", func(Thread) {
 		admittedRan.Store(true)
 	})
 	waitForThreadSignal(t, admitted.done, "creation remained blocked after the panic handler returned")
@@ -749,7 +740,7 @@ func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.CreateAndStart("peer", func(peer Thread) {
+	peer := co.Create("peer", func(peer Thread) {
 		peerReady <- peer
 		WaitForChan(co, releasePeer)
 	})
@@ -762,7 +753,7 @@ func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		co.Join(peer)
 		close(callerDone)
 	})
@@ -792,11 +783,11 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 	peerBReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peerA := co.CreateAndStart("peer-a", func(peer Thread) {
+	peerA := co.Create("peer-a", func(peer Thread) {
 		peerAReady <- peer
 		WaitForChan(co, releaseA)
 	})
-	peerB := co.CreateAndStart("peer-b", func(peer Thread) {
+	peerB := co.Create("peer-b", func(peer Thread) {
 		peerBReady <- peer
 		WaitForChan(co, releaseB)
 	})
@@ -817,7 +808,7 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 		t.Fatal("peer B coroutine did not start")
 	}
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		co.JoinAll([]Thread{peerA, peerB, peerA})
 		close(callerDone)
 	})
@@ -847,7 +838,7 @@ func TestJoinYieldedOrDoneResumesCallerAfterPeerFirstYield(t *testing.T) {
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.CreateAndStart("peer", func(peer Thread) {
+	peer := co.Create("peer", func(peer Thread) {
 		peerReady <- peer
 		WaitForChan(co, releasePeer)
 	})
@@ -860,7 +851,7 @@ func TestJoinYieldedOrDoneResumesCallerAfterPeerFirstYield(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		co.JoinYieldedOrDone(peer)
 		close(callerDone)
 	})
@@ -886,7 +877,7 @@ func TestJoinYieldedOrDoneReturnsWhenPeerExitsWithoutYield(t *testing.T) {
 	peerReady := make(chan Thread, 1)
 	callerDone := make(chan struct{})
 
-	peer := co.CreateAndStart("peer", func(peer Thread) {
+	peer := co.Create("peer", func(peer Thread) {
 		peerReady <- peer
 	})
 
@@ -898,7 +889,7 @@ func TestJoinYieldedOrDoneReturnsWhenPeerExitsWithoutYield(t *testing.T) {
 		t.Fatal("peer coroutine did not start")
 	}
 
-	co.CreateAndStart("caller", func(me Thread) {
+	co.Create("caller", func(me Thread) {
 		co.JoinYieldedOrDone(peer)
 		close(callerDone)
 	})
@@ -912,18 +903,18 @@ func TestJoinYieldedOrDoneReturnsWhenPeerExitsWithoutYield(t *testing.T) {
 	}
 }
 
-func TestCreateAndStartFromCoroutineYieldsCallerWhenStarted(t *testing.T) {
+func TestJoinYieldedOrDoneWaitsForChildFromCoroutine(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 
 	peerStarted := make(chan struct{}, 1)
 	observed := make(chan bool, 1)
 	done := make(chan struct{})
 
-	co.CreateAndStart("caller", func(me Thread) {
-		co.CreateAndStart("peer", func(peer Thread) {
+	co.Create("caller", func(me Thread) {
+		peer := co.Create("peer", func(peer Thread) {
 			close(peerStarted)
 		})
+		co.JoinYieldedOrDone(peer)
 
 		select {
 		case <-peerStarted:
@@ -941,7 +932,7 @@ func TestCreateAndStartFromCoroutineYieldsCallerWhenStarted(t *testing.T) {
 			select {
 			case got := <-observed:
 				if !got {
-					t.Fatal("CreateAndStart returned before the eagerly started peer ran")
+					t.Fatal("JoinYieldedOrDone returned before the peer ran")
 				}
 			default:
 				t.Fatal("caller completed without recording eager-start observation")

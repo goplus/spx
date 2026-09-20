@@ -219,7 +219,6 @@ func (p *Game) markGameStarted(generation uint64) bool {
 	if generation != p.bootstrapGen {
 		return false
 	}
-	engine.OnGameStarted()
 	p.lifecycleState.IsRunned.Store(true)
 	return true
 }

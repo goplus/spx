@@ -27,7 +27,6 @@ import (
 
 func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -88,7 +87,6 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {

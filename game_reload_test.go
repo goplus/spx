@@ -199,7 +199,6 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	originalGame := engine.GetGame()
 	originalPlatformMgr := pkgengine.PlatformMgr
 	co := coroutine.New(nil)
-	co.OnInited()
 	gco = co
 	engine.SetCoroutines(co)
 	pkgengine.PlatformMgr = &reloadCommitPlatformMgr{}
@@ -264,7 +263,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	originalGame := engine.GetGame()
 	originalBounds := cachedBounds
 	co := coroutine.New(nil)
-	co.OnInited()
 	gco = co
 	engine.SetCoroutines(co)
 	cachedBounds = make(map[string]mathf.Rect2)

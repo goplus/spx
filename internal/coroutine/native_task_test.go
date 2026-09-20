@@ -17,7 +17,6 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)
-			co.OnInited()
 			started := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			unblock := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			finished := [2]chan struct{}{make(chan struct{}), make(chan struct{})}

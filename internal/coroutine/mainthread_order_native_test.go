@@ -15,7 +15,6 @@ import (
 func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -51,7 +50,7 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 			record("B")
 		}
 	})
-	co.JoinYieldedOrDoneAll([]Thread{first, second})
+	joinYieldedOrDoneAll(co, []Thread{first, second})
 	co.Update()
 
 	want := []string{"A-before", "main", "A-after", "B"}
@@ -71,7 +70,6 @@ func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 
 func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	queued := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once

@@ -7,7 +7,6 @@ import (
 
 func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 
 	started := make(chan Thread, 1)
 	release := make(chan struct{})

@@ -37,7 +37,6 @@ func isSuspended(thread Thread) bool {
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 
 	originalReadGCStats := co.readGCStats
 	t.Cleanup(func() {
@@ -69,7 +68,6 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 
 func TestLastUpdateStatsAreScopedToManager(t *testing.T) {
 	first := New(nil)
-	first.OnInited()
 	first.SetPerfDebug(true)
 	first.readGCStats = func(*sdebug.GCStats) {}
 	first.Update()
@@ -184,7 +182,6 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 
 func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	var resumed atomic.Bool
 
 	thread := co.Create("worker", func(me Thread) {
@@ -328,7 +325,6 @@ func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
 	)
 	for run := 0; run < runs; run++ {
 		co := New(nil)
-		co.OnInited()
 		done := make(chan struct{})
 		th := co.Create("worker", func(me Thread) {
 			for range yields {
@@ -360,7 +356,6 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 	const runs = 100
 	for run := 0; run < runs; run++ {
 		co := New(nil)
-		co.OnInited()
 		var ran atomic.Bool
 
 		co.enqueueJob(&WaitJob{
@@ -379,9 +374,10 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 	}
 }
 
-func TestUpdateReturnsBeforeInitialization(t *testing.T) {
+func TestUpdateReturnsForStartupOutcomes(t *testing.T) {
 	for _, outcome := range []string{"idle", "success", "failure", "canceled"} {
 		t.Run(outcome, func(t *testing.T) {
+			var completed atomic.Bool
 			panicReported := make(chan PanicReport, 1)
 			co := New(func(report PanicReport) { panicReported <- report })
 			t.Cleanup(func() {
@@ -396,7 +392,7 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 					co.WaitYield(me)
 					switch outcome {
 					case "success":
-						co.OnInited()
+						completed.Store(true)
 					case "failure":
 						panic("startup failed")
 					case "canceled":
@@ -410,9 +406,9 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 				co.Update()
 				close(updated)
 			}()
-			waitForThreadSignal(t, updated, "Update waited for successful initialization")
-			if got, want := co.initialized.Load(), outcome == "success"; got != want {
-				t.Fatalf("initialized = %v, want %v", got, want)
+			waitForThreadSignal(t, updated, "Update waited for startup to succeed")
+			if got, want := completed.Load(), outcome == "success"; got != want {
+				t.Fatalf("completed = %v, want %v", got, want)
 			}
 			if outcome == "failure" {
 				select {
@@ -429,11 +425,12 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 }
 
 func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
+	var completed atomic.Bool
 	co := New(nil)
 	resume := make(chan struct{})
 	thread := co.Create("startup", func(me Thread) {
 		WaitForChan(co, resume)
-		co.OnInited()
+		completed.Store(true)
 	})
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -447,22 +444,23 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 		close(updated)
 	}()
 	waitForThreadSignal(t, updated, "Update waited for startup's asynchronous work")
-	if co.initialized.Load() {
-		t.Fatal("startup was published before its worker finished")
+	if completed.Load() {
+		t.Fatal("startup completed before its worker finished")
 	}
 	close(resume)
 	waitForThreadSignal(t, thread.done, "startup did not finish after its worker returned")
-	if !co.initialized.Load() {
-		t.Fatal("startup did not publish successful initialization")
+	if !completed.Load() {
+		t.Fatal("startup did not complete after its worker finished")
 	}
 }
 
 func TestStartupCanWaitForNextFrame(t *testing.T) {
+	var completed atomic.Bool
 	itime.Start(nil)
 	co := New(nil)
 	co.Create("startup", func(me Thread) {
 		co.WaitNextFrameFor(me)
-		co.OnInited()
+		completed.Store(true)
 	})
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -476,8 +474,8 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 			close(updated)
 		}()
 		waitForThreadSignal(t, updated, "startup prevented the frame from returning")
-		if got, want := co.initialized.Load(), frame == 1; got != want {
-			t.Fatalf("frame %d: initialized = %v, want %v", frame, got, want)
+		if got, want := completed.Load(), frame == 1; got != want {
+			t.Fatalf("frame %d: completed = %v, want %v", frame, got, want)
 		}
 		itime.Update(1.0/30, 30)
 	}
@@ -485,7 +483,6 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 
 func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
 			t.Error("coroutines did not stop during cleanup")
@@ -493,7 +490,7 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	})
 
 	resumed := make(chan struct{})
-	thread := co.CreateAndStart("slow-frame", func(me Thread) {
+	thread := co.Create("slow-frame", func(me Thread) {
 		co.WaitYield(me)
 		close(resumed)
 	})
@@ -538,7 +535,6 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
 	co := New(nil)
-	co.OnInited()
 	var keepSpawning atomic.Bool
 	keepSpawning.Store(true)
 	clockStart := time.Now()
@@ -635,7 +631,6 @@ func TestWaitJobPreservesCustomAction(t *testing.T) {
 
 func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 
 	thread := co.Create("completed", func(Thread) {})
 	if !co.waitForDrain(time.Second, nil) {
@@ -666,7 +661,6 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 	const runs = 100
 	for run := 0; run < runs; run++ {
 		co := New(nil)
-		co.OnInited()
 		var waiterRan atomic.Bool
 
 		co.enqueueJob(&WaitJob{

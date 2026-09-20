@@ -43,7 +43,6 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)
-			co.OnInited()
 			itime.Start(nil)
 			t.Cleanup(func() {
 				if !co.StopAllAndWait(time.Second) {
