@@ -309,9 +309,7 @@ typedef void (*GDExtensionSpxPhysicsCheckCollisionRect)(GdVec2 pos, GdVec2 size,
 typedef void (*GDExtensionSpxPhysicsCheckCollisionCircle)(GdVec2 pos, GdFloat radius, GdInt collision_mask, GdArray *ret_value);
 typedef void (*GDExtensionSpxPhysicsRaycastWithDetails)(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray *ret_value);
 // SpxPlatform
-typedef void (*GDExtensionSpxPlatformSetStretchMode)(GdBool enable);
-typedef void (*GDExtensionSpxPlatformSetStretchAspect)(GdBool is_keep);
-typedef void (*GDExtensionSpxPlatformSetStretchContentScale)(GdInt width, GdInt height);
+typedef void (*GDExtensionSpxPlatformSetStretch)(GdBool enabled, GdInt content_width, GdInt content_height);
 typedef void (*GDExtensionSpxPlatformSetWindowPosition)(GdVec2 pos);
 typedef void (*GDExtensionSpxPlatformGetWindowPosition)(GdVec2 *ret_value);
 typedef void (*GDExtensionSpxPlatformSetWindowSize)(GdInt width, GdInt height, GdBool with_content_scale);

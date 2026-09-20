@@ -133,9 +133,7 @@ type GDExtensionInterface struct {
 	SpxPhysicsCheckCollisionRect                js.Value
 	SpxPhysicsCheckCollisionCircle              js.Value
 	SpxPhysicsRaycastWithDetails                js.Value
-	SpxPlatformSetStretchMode                   js.Value
-	SpxPlatformSetStretchAspect                 js.Value
-	SpxPlatformSetStretchContentScale           js.Value
+	SpxPlatformSetStretch                       js.Value
 	SpxPlatformSetWindowPosition                js.Value
 	SpxPlatformGetWindowPosition                js.Value
 	SpxPlatformSetWindowSize                    js.Value
@@ -471,9 +469,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPhysicsCheckCollisionRect = resolveJSFunc("gdspx_physics_check_collision_rect")
 	x.SpxPhysicsCheckCollisionCircle = resolveJSFunc("gdspx_physics_check_collision_circle")
 	x.SpxPhysicsRaycastWithDetails = resolveJSFunc("gdspx_physics_raycast_with_details")
-	x.SpxPlatformSetStretchMode = resolveJSFunc("gdspx_platform_set_stretch_mode")
-	x.SpxPlatformSetStretchAspect = resolveJSFunc("gdspx_platform_set_stretch_aspect")
-	x.SpxPlatformSetStretchContentScale = resolveJSFunc("gdspx_platform_set_stretch_content_scale")
+	x.SpxPlatformSetStretch = resolveJSFunc("gdspx_platform_set_stretch")
 	x.SpxPlatformSetWindowPosition = resolveJSFunc("gdspx_platform_set_window_position")
 	x.SpxPlatformGetWindowPosition = resolveJSFunc("gdspx_platform_get_window_position")
 	x.SpxPlatformSetWindowSize = resolveJSFunc("gdspx_platform_set_window_size")

@@ -50,10 +50,12 @@ type PlatformLayoutInput struct {
 }
 
 type PlatformLayout struct {
-	WindowScale  float64
-	WindowWidth  int64
-	WindowHeight int64
-	Fullscreen   bool
+	WindowScale   float64
+	WindowWidth   int64
+	WindowHeight  int64
+	ContentWidth  int64
+	ContentHeight int64
+	Fullscreen    bool
 }
 
 type BackdropLayout struct {
@@ -107,19 +109,19 @@ func ResolvePlatformLayout(in PlatformLayoutInput) PlatformLayout {
 		scale = math.Min(scaleX, scaleY)
 	}
 
-	winWidth := int64(float64(in.WindowWidth) * scale)
-	winHeight := int64(float64(in.WindowHeight) * scale)
+	layout := PlatformLayout{
+		WindowScale:   scale,
+		ContentWidth:  int64(float64(in.WindowWidth) * scale),
+		ContentHeight: int64(float64(in.WindowHeight) * scale),
+		Fullscreen:    fullscreen,
+	}
+	layout.WindowWidth, layout.WindowHeight = layout.ContentWidth, layout.ContentHeight
 	if in.IsWeb {
-		winWidth = int64(in.CurrentWindowSize.X)
-		winHeight = int64(in.CurrentWindowSize.Y)
+		// The host can have a different aspect ratio from the fitted content.
+		layout.WindowWidth = int64(in.CurrentWindowSize.X)
+		layout.WindowHeight = int64(in.CurrentWindowSize.Y)
 	}
-
-	return PlatformLayout{
-		WindowScale:  scale,
-		WindowWidth:  winWidth,
-		WindowHeight: winHeight,
-		Fullscreen:   fullscreen,
-	}
+	return layout
 }
 
 func IsWindowWorldSizeEqual(worldWidth, worldHeight, windowWidth, windowHeight int) bool {

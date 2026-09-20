@@ -46,10 +46,8 @@ public:
 	String _get_persistent_data_dir();
 
 public:
-	//Expose as few interfaces as possible to prevent misuse.
-	SPX_BIND void set_stretch_mode(GdBool enable);
-	SPX_BIND void set_stretch_aspect(GdBool is_keep);
-	SPX_BIND void set_stretch_content_scale(GdInt width, GdInt height);
+	// Stretching preserves the content aspect ratio on every platform.
+	SPX_BIND void set_stretch(GdBool enabled, GdInt content_width, GdInt content_height);
 
 	SPX_BIND void set_window_position(GdVec2 pos);
 	SPX_BIND GdVec2 get_window_position();

@@ -166,9 +166,7 @@ type IPhysicsMgr interface {
 }
 
 type IPlatformMgr interface {
-	SetStretchMode(enable bool)
-	SetStretchAspect(is_keep bool)
-	SetStretchContentScale(width int64, height int64)
+	SetStretch(enabled bool, content_width int64, content_height int64)
 	SetWindowPosition(pos Vec2)
 	GetWindowPosition() Vec2
 	SetWindowSize(width int64, height int64, with_content_scale bool)

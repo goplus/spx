@@ -463,14 +463,14 @@ func TestResolvePlatformLayout(t *testing.T) {
 		mobile, fullscreen, web bool
 		want                    PlatformLayout
 	}{
-		{"windowed", false, false, false, PlatformLayout{1, 400, 200, false}},
-		{"fullscreen", false, true, false, PlatformLayout{2.5, 1000, 500, true}},
-		{"mobile", true, false, false, PlatformLayout{2.5, 1000, 500, true}},
-		{"mobile fullscreen", true, true, false, PlatformLayout{2.5, 1000, 500, true}},
-		{"web", false, false, true, PlatformLayout{2.5, 1000, 600, false}},
-		{"web fullscreen", false, true, true, PlatformLayout{2.5, 1000, 600, true}},
-		{"web mobile", true, false, true, PlatformLayout{2.5, 1000, 600, true}},
-		{"web mobile fullscreen", true, true, true, PlatformLayout{2.5, 1000, 600, true}},
+		{"windowed", false, false, false, PlatformLayout{1, 400, 200, 400, 200, false}},
+		{"fullscreen", false, true, false, PlatformLayout{2.5, 1000, 500, 1000, 500, true}},
+		{"mobile", true, false, false, PlatformLayout{2.5, 1000, 500, 1000, 500, true}},
+		{"mobile fullscreen", true, true, false, PlatformLayout{2.5, 1000, 500, 1000, 500, true}},
+		{"web", false, false, true, PlatformLayout{2.5, 1000, 600, 1000, 500, false}},
+		{"web fullscreen", false, true, true, PlatformLayout{2.5, 1000, 600, 1000, 500, true}},
+		{"web mobile", true, false, true, PlatformLayout{2.5, 1000, 600, 1000, 500, true}},
+		{"web mobile fullscreen", true, true, true, PlatformLayout{2.5, 1000, 600, 1000, 500, true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

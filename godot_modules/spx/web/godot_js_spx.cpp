@@ -509,16 +509,8 @@ void gdspx_physics_raycast_with_details(GdVec2 *from, GdVec2 *to, GdArray *ignor
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_stretch_mode(GdBool enable) {
-	 platformMgr->set_stretch_mode(enable);
-}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_stretch_aspect(GdBool is_keep) {
-	 platformMgr->set_stretch_aspect(is_keep);
-}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_stretch_content_scale(GdInt width, GdInt height) {
-	 platformMgr->set_stretch_content_scale(width, height);
+void gdspx_platform_set_stretch(GdBool enabled, GdInt content_width, GdInt content_height) {
+	 platformMgr->set_stretch(enabled, content_width, content_height);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_window_position(GdVec2 *pos) {

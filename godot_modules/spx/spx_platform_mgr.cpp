@@ -60,37 +60,30 @@ void SpxPlatformMgr::on_awake() {
 
 void SpxPlatformMgr::on_reset(int reset_code) {
 	window_size_uses_content_scale = false;
-	set_stretch_mode(false);
+	set_stretch(false, 0, 0);
 }
 
-void SpxPlatformMgr::set_stretch_mode(GdBool enable) {
-	if (auto root = get_root()) {
-		auto target_mode = enable
-				? Window::ContentScaleMode::CONTENT_SCALE_MODE_CANVAS_ITEMS
-				: Window::ContentScaleMode::CONTENT_SCALE_MODE_DISABLED;
-
-		if (root->get_content_scale_mode() != target_mode) {
-			root->set_content_scale_mode(target_mode);
-		}
+void SpxPlatformMgr::set_stretch(GdBool enabled, GdInt content_width, GdInt content_height) {
+	auto root = get_root();
+	if (root == nullptr) {
+		return;
 	}
 
-	set_stretch_aspect(false);
-}
-
-void SpxPlatformMgr::set_stretch_aspect(GdBool is_keep) {
-	if (auto root = get_root()) {
-		auto target_aspect = is_keep
-				? Window::ContentScaleAspect::CONTENT_SCALE_ASPECT_KEEP
-				: Window::ContentScaleAspect::CONTENT_SCALE_ASPECT_IGNORE;
-
-		if (root->get_content_scale_aspect() != target_aspect) {
-			root->set_content_scale_aspect(target_aspect);
-		}
+	auto target_mode = enabled ? Window::CONTENT_SCALE_MODE_CANVAS_ITEMS : Window::CONTENT_SCALE_MODE_DISABLED;
+	if (root->get_content_scale_mode() != target_mode) {
+		root->set_content_scale_mode(target_mode);
 	}
-}
 
-void SpxPlatformMgr::set_stretch_content_scale(GdInt width, GdInt height) {
-	get_root()->set_content_scale_size(Size2i(width, height));
+#ifdef WEB_ENABLED
+	if (enabled) {
+		// The caller has already applied window and device scaling.
+		root->set_content_scale_size(Size2i(content_width, content_height));
+	}
+#endif
+	auto target_aspect = enabled ? Window::CONTENT_SCALE_ASPECT_KEEP : Window::CONTENT_SCALE_ASPECT_IGNORE;
+	if (root->get_content_scale_aspect() != target_aspect) {
+		root->set_content_scale_aspect(target_aspect);
+	}
 }
 
 void SpxPlatformMgr::set_window_position(GdVec2 pos) {
@@ -102,7 +95,7 @@ GdVec2 SpxPlatformMgr::get_window_position() {
 }
 void SpxPlatformMgr::set_window_size(GdInt width, GdInt height, GdBool with_content_scale) {
 	if (with_content_scale) {
-		set_stretch_content_scale(width, height);
+		get_root()->set_content_scale_size(Size2i(width, height));
 	}
 
 	window_size_uses_content_scale = with_content_scale;
