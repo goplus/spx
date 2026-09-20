@@ -17,6 +17,7 @@
 package spx
 
 import (
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"reflect"
 	"runtime"
 	"testing"
@@ -297,7 +298,7 @@ func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 	game.OnCond(nil, func() {})
 	game.OnCond(func() bool { return true }, nil)
 
-	if got := game.scriptEvents.manager.SnapshotCondition(); len(got) != 0 {
+	if got := game.scriptEvents.manager.Snapshot(coreevent.BucketCondition); len(got) != 0 {
 		t.Fatalf("condition sinks = %d, want 0", len(got))
 	}
 }
