@@ -38,10 +38,9 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 			playback := game.soundMgr.Play(17, "long.wav", false, false, 0, 0, 0)
 			gate := gco.NewLatch()
 			peerFinished := false
-			peer := gco.Create(&source.SpriteImpl, func(coroutine.Thread) int {
+			peer := gco.Create(&source.SpriteImpl, func(coroutine.Thread) {
 				gate.Wait()
 				peerFinished = true
-				return 0
 			})
 			gco.JoinYieldedOrDone(peer)
 			caller, stopScripts := threadObj(game), game.Stop
@@ -49,10 +48,9 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 				caller, stopScripts = clone, clone.Stop
 			}
 			afterStop := false
-			stop := gco.Create(caller, func(coroutine.Thread) int {
+			stop := gco.Create(caller, func(coroutine.Thread) {
 				stopScripts(AllStop)
 				afterStop = true
-				return 0
 			})
 			gco.Join(stop)
 			gco.Join(peer)
@@ -75,7 +73,7 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 				t.Fatal("stop all reset or removed original")
 			}
 			// Repeated stops must not release resources twice.
-			again := gco.Create(game, func(coroutine.Thread) int { game.Stop(AllStop); return 0 })
+			again := gco.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
 			gco.Join(again)
 			if game.shapeMgr.cloneCount != 0 || len(backend.destroyed) != 1 {
 				t.Fatal("repeated stop duplicated cleanup")
@@ -93,10 +91,9 @@ func TestStopAllCancelsWaitingCloneHandler(t *testing.T) {
 		t.Error("clone handler continued after stop all")
 	}
 	var clone *SpriteImpl
-	parent := gco.Create(&source.SpriteImpl, func(coroutine.Thread) int {
+	parent := gco.Create(&source.SpriteImpl, func(coroutine.Thread) {
 		doClone(source, nil, func(s *SpriteImpl) { clone = s })
 		source.Stop(AllStop)
-		return 0
 	})
 	gco.Join(parent)
 	gco.Update()
@@ -122,7 +119,7 @@ func TestStopAllClearsExistingSoundEffectsWithoutAllocating(t *testing.T) {
 			} else {
 				source.sound().soundObj = 9
 			}
-			stop := co.Create(game, func(coroutine.Thread) int { game.Stop(AllStop); return 0 })
+			stop := co.Create(game, func(coroutine.Thread) { game.Stop(AllStop) })
 			co.Join(stop)
 			if backend.pan != 0 || backend.pitch != 1 || backend.createCalls != 0 {
 				t.Fatalf("audio after stop: %+v", backend)
@@ -150,7 +147,7 @@ func TestStopAllRemovesEveryCloneFromMixedShapes(t *testing.T) {
 		}
 	}
 	for range 2 {
-		stop := gco.Create(&left.SpriteImpl, func(coroutine.Thread) int { left.Stop(AllStop); return 0 })
+		stop := gco.Create(&left.SpriteImpl, func(coroutine.Thread) { left.Stop(AllStop) })
 		gco.Join(stop)
 		if !slices.Equal(game.getAllShapes(), originals) || game.shapeMgr.cloneCount != 0 {
 			t.Fatal("stop retained clones or changed original shape order")

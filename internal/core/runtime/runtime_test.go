@@ -122,9 +122,9 @@ func TestRunInputLoopFrameEndsBoundaryAfterPanic(t *testing.T) {
 
 func TestInitLoopsSkipsDisabledLoop(t *testing.T) {
 	var names []string
-	noop := func(coroutine.Thread) int { return 0 }
+	noop := func(coroutine.Thread) {}
 	InitLoops(
-		func(obj coroutine.ThreadObj, fn func(coroutine.Thread) int) coroutine.Thread {
+		func(obj coroutine.ThreadObj, fn func(coroutine.Thread)) coroutine.Thread {
 			names = append(names, obj.(string))
 			return nil
 		},

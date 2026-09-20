@@ -17,11 +17,10 @@ func TestWaitToDoGoexitStopsCaller(t *testing.T) {
 	})
 	var continued atomic.Bool
 	cleaned := make(chan struct{})
-	thread := co.Create("caller", func(Thread) int {
+	thread := co.Create("caller", func(Thread) {
 		defer close(cleaned)
 		co.WaitToDo(runtime.Goexit)
 		continued.Store(true)
-		return 0
 	})
 	waitForThreadSignal(t, thread.done, "worker Goexit left its caller suspended")
 	waitForThreadSignal(t, cleaned, "caller cleanup did not run")
@@ -51,12 +50,11 @@ func TestRunTaskTracksNilPanic(t *testing.T) {
 func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 	co := New(nil)
 	guarded := make(chan any, 1)
-	thread := co.Create("caller", func(Thread) int {
+	thread := co.Create("caller", func(Thread) {
 		co.WaitToDo(func() {
 			defer func() { guarded <- recover() }()
 			co.StopAllAndWait(time.Millisecond)
 		})
-		return 0
 	})
 	waitForThreadSignal(t, thread.done, "caller did not finish")
 	if recovered := <-guarded; recovered != ErrReentrantWait {
@@ -73,10 +71,9 @@ func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 	panicReported := make(chan any, 1)
 	co := New(func(report PanicReport) { panicReported <- report.Value })
-	co.OnInited()
-	co.CreateAndStart("caller", func(me Thread) int {
+
+	co.Create("caller", func(me Thread) {
 		co.WaitToDo(func() { panic("worker failure") })
-		return 0
 	})
 
 	select {
@@ -95,12 +92,10 @@ func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
 	co := New(func(PanicReport) {})
-	co.OnInited()
 	continued := make(chan struct{}, 1)
-	thread := co.CreateAndStart("caller", func(Thread) int {
+	thread := co.Create("caller", func(Thread) {
 		co.WaitToDo(func() { panic(nil) })
 		continued <- struct{}{}
-		return 0
 	})
 
 	select {
@@ -117,19 +112,17 @@ func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 
 func TestRunAfterStopAllWaitsForWaitToDoWorker(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	workerStarted := make(chan struct{})
 	workerDone := make(chan struct{})
 	release := make(chan struct{})
 	var releaseOnce sync.Once
 	releaseWorker := func() { releaseOnce.Do(func() { close(release) }) }
-	caller := co.CreateAndStart("caller", func(Thread) int {
+	caller := co.Create("caller", func(Thread) {
 		co.WaitToDo(func() {
 			close(workerStarted)
 			<-release
 			close(workerDone)
 		})
-		return 0
 	})
 	defer func() {
 		releaseWorker()
@@ -173,9 +166,8 @@ func TestRunAfterStopAllWaitsForWaitToDoWorker(t *testing.T) {
 	}
 
 	var rejectedRan atomic.Bool
-	rejected := co.CreateAndStart("during-timeout", func(Thread) int {
+	rejected := co.Create("during-timeout", func(Thread) {
 		rejectedRan.Store(true)
-		return 0
 	})
 	if !rejected.Stopped() {
 		t.Fatal("creation was admitted while native work was still running")
@@ -201,9 +193,8 @@ func TestRunAfterStopAllWaitsForWaitToDoWorker(t *testing.T) {
 		t.Fatal("canceled WaitToDo caller did not finish")
 	}
 
-	stillRejected := co.Create("after-drain-before-recovery", func(Thread) int {
+	stillRejected := co.Create("after-drain-before-recovery", func(Thread) {
 		t.Fatal("creation ran while the manager remained quarantined")
-		return 0
 	})
 	if !stillRejected.Stopped() {
 		t.Fatal("admission reopened after a fatal barrier timed out")
@@ -216,7 +207,7 @@ func TestRunAfterStopAllWaitsForWaitToDoWorker(t *testing.T) {
 	if !co.RunAfterStopAll(time.Second, nil) {
 		t.Fatal("explicit recovery barrier did not complete after native drain")
 	}
-	next := co.Create("after-recovery", func(Thread) int { return 0 })
+	next := co.Create("after-recovery", func(Thread) {})
 	select {
 	case <-next.done:
 	case <-time.After(time.Second):

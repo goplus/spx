@@ -17,7 +17,6 @@
 package coroutine
 
 import (
-	"runtime"
 	sdebug "runtime/debug"
 
 	"github.com/visualfc/gid"
@@ -33,24 +32,11 @@ type Task struct {
 }
 
 // Create creates a coroutine without explicitly yielding execution to it.
-func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread) int) Thread {
+func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread)) Thread {
 	return p.createThread(p.captureAdmission(), Task{
 		Owner: obj,
-		Run:   func(th Thread) { fn(th) },
+		Run:   fn,
 	})
-}
-
-// CreateAndStart creates a coroutine and requests eager scheduling.
-// Initialized managed callers then wait for the child's first yield or completion.
-func (p *Coroutines) CreateAndStart(obj ThreadObj, fn func(me Thread) int) Thread {
-	th := p.Create(obj, fn)
-	if p.initialized.Load() && p.callerThread() != nil {
-		// Wait for this child so another yield job cannot reacquire runMu first.
-		p.JoinYieldedOrDone(th)
-	} else {
-		runtime.Gosched()
-	}
-	return th
 }
 
 // LastThreadID returns the most recently allocated thread ID.

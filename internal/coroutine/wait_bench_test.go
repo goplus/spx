@@ -15,11 +15,10 @@ func BenchmarkWaitToDo(b *testing.B) {
 	work := func() {}
 	b.ReportAllocs()
 	b.ResetTimer()
-	thread := co.Create("worker", func(Thread) int {
+	thread := co.Create("worker", func(Thread) {
 		for range b.N {
 			co.WaitToDo(work)
 		}
-		return 0
 	})
 	co.Join(thread)
 }

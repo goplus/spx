@@ -37,10 +37,9 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 			sprite.transform().x, sprite.transform().y, sprite.transform().direction = 30, 40, 60
 			dirtyVersion := sprite.spriteState.DirtyVersion
 			finished := false
-			thread := gco.Create(sprite, func(coroutine.Thread) int {
+			thread := gco.Create(sprite, func(coroutine.Thread) {
 				action.run(sprite)
 				finished = true
-				return 0
 			})
 			gco.Join(thread)
 
@@ -76,10 +75,9 @@ func TestSpriteGlideToMissingTargetReturnsWithoutYielding(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	sprite := newCloneLimitSprite(game, "source")
 	finished := false
-	thread := gco.Create(sprite, func(coroutine.Thread) int {
+	thread := gco.Create(sprite, func(coroutine.Thread) {
 		sprite.Glide__1("missing", 60)
 		finished = true
-		return 0
 	})
 	gco.JoinYieldedOrDone(thread)
 	if !finished {

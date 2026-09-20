@@ -31,9 +31,8 @@ func TestScratchNonVisualLoopsShareFrame(t *testing.T) {
 	itime.Start(nil)
 	counts := [2]int{}
 	for i := range counts {
-		th := co.Create(nil, func(coroutine.Thread) int {
+		th := co.Create(nil, func(coroutine.Thread) {
 			Repeat(5, func() { counts[i]++ })
-			return 0
 		})
 		co.JoinYieldedOrDone(th)
 	}
@@ -55,7 +54,7 @@ func TestScratchRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 				direction:     45, rotationStyle: Normal,
 			}
 			var frames []int64
-			th := co.Create(sprite, func(coroutine.Thread) int {
+			th := co.Create(sprite, func(coroutine.Thread) {
 				Repeat(3, func() {
 					if len(frames)%2 == 0 {
 						sprite.SetRotationStyle(None)
@@ -64,7 +63,6 @@ func TestScratchRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 					}
 					frames = append(frames, itime.Frame())
 				})
-				return 0
 			})
 			co.JoinYieldedOrDone(th)
 			for range 3 {
@@ -172,17 +170,15 @@ func TestScratchRedrawFinishesWholeRound(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	var visual, nonVisual int
-	th := co.Create(nil, func(coroutine.Thread) int {
+	th := co.Create(nil, func(coroutine.Thread) {
 		Forever(func() {
 			visual++
 			engine.RequestRedraw()
 		})
-		return 0
 	})
 	co.JoinYieldedOrDone(th)
-	th = co.Create(nil, func(coroutine.Thread) int {
+	th = co.Create(nil, func(coroutine.Thread) {
 		Forever(func() { nonVisual++ })
-		return 0
 	})
 	co.JoinYieldedOrDone(th)
 	co.Update()
@@ -199,12 +195,11 @@ func TestScratchExplicitWaitStillCrossesFrame(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	count := 0
-	th := co.Create(nil, func(coroutine.Thread) int {
+	th := co.Create(nil, func(coroutine.Thread) {
 		Repeat(3, func() {
 			count++
 			engine.Wait(0)
 		})
-		return 0
 	})
 	co.JoinYieldedOrDone(th)
 	for want := 1; want <= 3; want++ {
@@ -224,9 +219,8 @@ func TestScratchSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 			sprite := new(SpriteImpl)
 			sprite.spriteState.IsVisible = visible
 			count := 0
-			th := co.Create(sprite, func(coroutine.Thread) int {
+			th := co.Create(sprite, func(coroutine.Thread) {
 				Repeat(5, func() { count++; sprite.markProxyDirty() })
-				return 0
 			})
 			co.JoinYieldedOrDone(th)
 			co.Update()
@@ -259,13 +253,12 @@ func TestScratchCostumeChangesControlRedrawBoundary(t *testing.T) {
 			sprite.spriteState.IsVisible = tt.visible
 			var frames [3]int64
 			count := 0
-			th := co.Create(sprite, func(coroutine.Thread) int {
+			th := co.Create(sprite, func(coroutine.Thread) {
 				Repeat(len(frames), func() {
 					sprite.setCostume(tt.costume)
 					frames[count] = itime.Frame()
 					count++
 				})
-				return 0
 			})
 			co.JoinYieldedOrDone(th)
 			for range frames {

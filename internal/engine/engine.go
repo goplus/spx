@@ -135,10 +135,6 @@ func Main(game IGame, owner any, initialize func()) error {
 	return nil
 }
 
-func OnGameStarted() {
-	gco.OnInited()
-}
-
 func onStart() {
 	defer CheckPanic()
 	binding := runningBinding()

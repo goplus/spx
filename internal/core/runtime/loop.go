@@ -84,7 +84,7 @@ type LogicLoopConfig[T any] struct {
 	ShowDebugPanel           func()
 }
 
-func RunEventLoop[T any](events chan T, handle func(T)) int {
+func RunEventLoop[T any](events chan T, handle func(T)) {
 	for {
 		handle(engine.WaitForChan(events))
 	}
@@ -131,7 +131,7 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 	return lastMousePos, frame.CurrentLeftButtonPressed
 }
 
-func RunInputLoop(cfg InputLoopConfig) int {
+func RunInputLoop(cfg InputLoopConfig) {
 	state := inputLoopState{keyEvents: make([]engine.KeyEvent, 0)}
 
 	for {
@@ -169,7 +169,7 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 	return tempAudios, tempAnimations
 }
 
-func RunLogicLoop[T any](cfg LogicLoopConfig[T]) int {
+func RunLogicLoop[T any](cfg LogicLoopConfig[T]) {
 	tempAudios := []string{}
 	tempAnimations := []string{}
 
@@ -190,13 +190,13 @@ func RunLogicLoop[T any](cfg LogicLoopConfig[T]) int {
 }
 
 type LoopTasks struct {
-	Event func(coroutine.Thread) int
-	Input func(coroutine.Thread) int
-	Logic func(coroutine.Thread) int
+	Event func(coroutine.Thread)
+	Input func(coroutine.Thread)
+	Logic func(coroutine.Thread)
 }
 
 // InitLoops registers enabled loops in event, input, then logic order.
-func InitLoops(create func(coroutine.ThreadObj, func(coroutine.Thread) int) coroutine.Thread, tasks LoopTasks) {
+func InitLoops(create func(coroutine.ThreadObj, func(coroutine.Thread)) coroutine.Thread, tasks LoopTasks) {
 	if tasks.Event != nil {
 		create("eventLoop", tasks.Event)
 	}

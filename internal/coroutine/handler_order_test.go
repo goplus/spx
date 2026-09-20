@@ -43,7 +43,6 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)
-			co.OnInited()
 			itime.Start(nil)
 			t.Cleanup(func() {
 				if !co.StopAllAndWait(time.Second) {
@@ -69,10 +68,9 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 			if test.completed {
 				co.Join(first)
 			}
-			sibling := co.Create("sibling", func(Thread) int {
+			sibling := co.Create("sibling", func(Thread) {
 				co.WaitNextFrame()
 				order = append(order, "sibling")
-				return 0
 			})
 			co.JoinYieldedOrDone(sibling)
 

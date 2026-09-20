@@ -60,17 +60,15 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			}
 
 			survivorReturned := make(chan struct{})
-			survivor := co.Create("survivor", func(Thread) int {
+			survivor := co.Create("survivor", func(Thread) {
 				test.join(co, target)
 				close(survivorReturned)
-				return 0
 			})
 			waitForThreadSignal(t, survivor.yieldedOrDone, "survivor did not wait")
 
 			for range 16 {
-				waiter := co.Create("canceled-waiter", func(Thread) int {
+				waiter := co.Create("canceled-waiter", func(Thread) {
 					test.join(co, target)
-					return 0
 				})
 				waitForThreadSignal(t, waiter.yieldedOrDone, "waiter did not wait")
 				co.Stop(waiter)
