@@ -265,26 +265,30 @@ func (p *SpriteImpl) SetGravity(gravity float64)
 // AddImpulse 施加瞬间冲量
 //
 // 参数:
-//   impulseX: 水平冲量，单位：像素/秒，正值向右推，负值向左推
-//   impulseY: 垂直冲量，单位：像素/秒，正值向上推，负值向下推
+//   impulseX: 水平冲量，单位：质量 × 像素/秒，正值向右推，负值向左推
+//   impulseY: 垂直冲量，单位：质量 × 像素/秒，正值向上推，负值向下推
 //
 //
 // 特点:
-//   - 瞬间改变速度，不是持续施力
+//   - 累加到下一次动态物理 tick，一次性消耗；连续调用会累加
 //   - 只对DynamicPhysics模式有效
-//   - 会叠加到当前速度上：新速度 = 当前速度 + 冲量
+//   - 新速度 = 当前速度 + 冲量 / 质量，不乘 tick 时长
+//   - 相同冲量在 30/60/120 Hz 下的初始速度变化相同，质量翻倍则变化减半
+//   - 质量接近零时保留有效质量为 1 的回退；重力和阻力仍按时间积分
 //
 // 常用场景:
-//   - 跳跃: AddImpulse(0, -400)
-//   - 击退: AddImpulse(-300, -100)  
-//   - 爆炸推力: AddImpulse(200, -200)
-//   - 弹跳: AddImpulse(0, -300)
+//   - 跳跃: AddImpulse(0, 400)
+//   - 击退: AddImpulse(-300, 100)
+//   - 爆炸推力: AddImpulse(200, 200)
+//   - 弹跳: AddImpulse(0, 300)
 //
 // 技巧:
 //   - 可以用来实现二段跳、冲刺、击飞等效果
 //   - 与SetVelocity的区别：AddImpulse是累加，SetVelocity是替换
 func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64)
 ```
+
+本实现移除了旧算法额外乘以 tick 时长的行为。依赖旧效果的冲量值需要重新调整：例如在 60 Hz、其他条件相同时，原值现在产生的初始速度变化是旧值的 60 倍。
 
 ### 2. 碰撞器接口（2个碰撞器方法）
 
@@ -655,7 +659,7 @@ player.SetColliderRect(playerWidth * 0.8, playerHeight * 0.9)
 // 问题2: 跳跃感觉不够responsive
 // 解决: 使用AddImpulse而不是SetVelocity，并调整重力
 if input.Jump && player.IsOnFloor() {
-    player.AddImpulse(0, -350)  // 增大跳跃力
+    player.AddImpulse(0, 350)  // 增大跳跃力
     player.SetGravity(1.2)  // 稍微增大重力，让跳跃更紧凑
 }
 
@@ -767,7 +771,7 @@ func updatePlayer(player *SpriteImpl, input GameInput) {
     
     // 跳跃（只有在地面才能跳）
     if input.Jump && player.IsOnFloor() {
-        player.AddImpulse(0, -300)  // 向上跳跃
+        player.AddImpulse(0, 300)  // 向上跳跃
     }
 }
 ```
@@ -892,7 +896,7 @@ func (p *Player) CollectFlyPowerup() {
     p.sprite.SetGravity(0.0)
     
     // 给一个向上的推力
-    p.sprite.AddImpulse(0, -200)
+    p.sprite.AddImpulse(0, 200)
 }
 
 func (p *Player) UpdateFlying(deltaTime float64, input GameInput) {

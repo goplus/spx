@@ -70,6 +70,10 @@ Evaluate joints, richer shapes, continuous collision, and advanced engine featur
 
 A sprite selects an appropriate body behavior: static for immovable geometry, kinematic/character-style for code-driven motion, dynamic for simulation-driven motion, or no physics for decorative elements. Velocity, gravity scale, forces/impulses, and body activation are applied only where meaningful for that mode.
 
+`AddImpulse(Jx, Jy)` accumulates a one-shot momentum change, consumed on the next dynamic physics tick: `delta_v = J / mass`. It is independent of the physics tick rate (30, 60, or 120 Hz); gravity and drag still integrate over time normally. Impulse units are mass × pixels/second, with positive X right and positive Y up. A mass of 2 receives half the velocity change of a mass of 1. The existing near-zero-mass fallback uses an effective mass of 1. Other body modes ignore the call. Multiple calls before a tick add together and are consumed only once.
+
+This corrects the previous extra multiplication by the tick duration. Old impulse values tuned for that behavior must be retuned; at 60 Hz the same impulse now produces 60 times the initial velocity change. For a mass-1 upward jump, use `AddImpulse(0, 300)`.
+
 ### Colliders
 
 Collider shape and trigger/sensor behavior are independent from visual appearance. Shapes are defined in sprite-local coordinates and transformed once by the engine. Collision layers describe what a body is; masks describe what it interacts with.

@@ -46,6 +46,30 @@ public:
 	void register_sprite(SpxSprite *p_sprite) { _register_sprite(p_sprite); }
 };
 
+TEST_CASE("[SceneTree][SPX] Dynamic impulses change momentum once independently of tick rate") {
+	SceneTree *tree = SceneTree::get_singleton();
+	for (int ticks_per_second : { 30, 60, 120 }) {
+		for (real_t mass : { 1.0f, 2.0f, 0.0f }) {
+			SpxSprite *sprite = memnew(SpxSprite);
+			tree->get_root()->add_child(sprite);
+			sprite->set_physics_mode(SpxSprite::DYNAMIC);
+			sprite->set_use_gravity(false);
+			sprite->set_drag(0);
+			sprite->set_friction(0);
+			sprite->set_mass(mass);
+			sprite->set_velocity(Vector2(3, 4));
+			sprite->add_impulse(Vector2(20, -40));
+			sprite->add_impulse(Vector2(40, -80));
+			const Vector2 expected = Vector2(3, 4) + Vector2(60, -120) / (mass == 0 ? 1 : mass);
+			tree->physics_process(1.0 / ticks_per_second);
+			CHECK(sprite->get_velocity().is_equal_approx(expected));
+			tree->physics_process(1.0 / ticks_per_second);
+			CHECK(sprite->get_velocity().is_equal_approx(expected));
+			memdelete(sprite);
+		}
+	}
+}
+
 TEST_CASE("[SceneTree][SPX] Position batches use independently sized native buffers") {
 	SpriteMgrProbe manager;
 	SpxSprite *sprite = memnew(SpxSprite);

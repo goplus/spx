@@ -34,6 +34,8 @@
 #include "gdextension_spx_ext.h"
 #include "spx_base_mgr.h"
 
+class PhysicsDirectSpaceState2D;
+
 class SpxPhysicsDefine {
 private:
 	static inline GdFloat global_gravity = 1.0;
@@ -49,18 +51,6 @@ public:
 	static GdFloat get_global_air_drag();
 };
 
-class SpxRaycastInfo {
-public:
-	GdBool collide;
-	GdObj sprite_gid;
-	GdVec2 position;
-	GdVec2 normal;
-
-public:
-	SpxRaycastInfo() = default;
-	~SpxRaycastInfo() = default;
-	GdArray ToArray();
-};
 
 enum class ColliderType {
 	NONE = 0,
@@ -82,8 +72,17 @@ class SpxPhysicsMgr : public SpxBaseMgr {
 	SPXCLASS(SpxPhysicsMgr, SpxBaseMgr)
 
 private:
-	GdArray _check_collision(RID shape, GdVec2 pos, GdInt collision_mask);
-	SpxRaycastInfo _raycast(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
+	struct RayHit {
+		GdBool collide = false;
+		GdObj sprite_id = 0;
+		GdVec2 position;
+		GdVec2 normal;
+		GdArray to_array() const;
+	};
+
+	PhysicsDirectSpaceState2D *_get_space_state();
+	GdArray _query_shape(RID shape, GdVec2 pos, GdInt collision_mask);
+	RayHit _query_ray(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
 
 	// Internal boundary check helpers
 	GdInt _check_touched_boundaries(GdObj obj, GdBool use_stage_limits);

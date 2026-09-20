@@ -247,6 +247,7 @@ public:
 	SPX_BIND void set_mass(GdObj obj, GdFloat mass);
 	SPX_BIND GdFloat get_mass(GdObj obj);
 	SPX_BIND void add_force(GdObj obj, GdVec2 force);
+	// One-shot momentum change: next dynamic tick adds impulse / mass, with no delta factor.
 	SPX_BIND void add_impulse(GdObj obj, GdVec2 impulse);
 
 	SPX_BIND void set_physics_mode(GdObj obj, GdInt mode);

@@ -337,7 +337,7 @@ private:
 	float drag_value = 0.0f;
 	float friction_value = 300.0f;
 	Vector2 external_forces = Vector2();
-	Vector2 applied_forces = Vector2();
+	Vector2 pending_impulse = Vector2();
 	float _gravity = 980.0f;
 
 	bool _is_collision_enabled = true;
