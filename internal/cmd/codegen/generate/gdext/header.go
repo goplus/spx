@@ -37,9 +37,8 @@ var (
 	// Manager identity comes from its name and explicit exports, not its implementation base.
 	reClassDefinition = regexp.MustCompile(`^class\s+(Spx\w+Mgr)(?:\s+final)?\s*(?::[^\{]+)?\s*\{`)
 
-	// Only methods explicitly marked with
-	// SPX_API or SPX_BIND become part of the cross-language ABI.
-	reMethod = regexp.MustCompile(`^\s*(?:SPX_API|SPX_BIND)\s+(\w+)\s+(\w+)\((.*)\);`)
+	// SPX_BIND exports one C++ declaration; static is ordinary C++ semantics.
+	reMethod = regexp.MustCompile(`^SPX_BIND\s+(static\s+)?(\w+)\s+(\w+)\((.*)\);$`)
 )
 
 type classMethodDecl struct {
@@ -47,7 +46,7 @@ type classMethodDecl struct {
 	ReturnType string
 	MethodName string
 	Params     string
-	Binding    bindingOptions
+	Static     bool
 }
 
 // Headers holds both ABI spellings and the metadata collected from one input.
@@ -181,34 +180,15 @@ func normalizeParams(params string) string {
 func parseManagerHeader(input string) *headerCollector {
 	g := &headerCollector{metadata: common.GenerationMetadata{
 		ArrayBridges:     make(map[string]common.ArrayBridge),
-		WebBindings:      make(map[string]common.WebBindingMode),
-		StringReleases:   make(map[string]bool),
-		ControlMethods:   make(map[string]string),
+		StaticMethods:    make(map[string]string),
 		ReturnParameters: make(map[string]common.CParam),
 	}}
 	var currentClassName string
-	var pendingBinding *bindingOptions
 
 	for line := range strings.SplitSeq(input, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
-		}
-		options, declaration := parseBinding(line)
-		if options != nil {
-			if pendingBinding != nil {
-				panic("duplicate SPX_BINDING annotation: " + line)
-			}
-			if declaration == "" {
-				pendingBinding = options
-				continue
-			}
-			line = declaration
-		} else if pendingBinding != nil {
-			options, pendingBinding = pendingBinding, nil
-		}
-		if options != nil && !reMethod.MatchString(line) {
-			panic("SPX_BINDING must annotate an SPX_API or SPX_BIND method: " + line)
 		}
 		if strings.HasPrefix(line, "class ") {
 			parts := strings.Fields(line)
@@ -224,18 +204,15 @@ func parseManagerHeader(input string) *headerCollector {
 			continue
 		}
 		if matches := reMethod.FindStringSubmatch(line); matches != nil {
-			params := normalizeParams(matches[3])
+			params := normalizeParams(matches[4])
 			methodDecl := classMethodDecl{
 				ClassName:  currentClassName,
-				ReturnType: matches[1],
-				MethodName: matches[2],
+				ReturnType: matches[2],
+				MethodName: matches[3],
 				Params:     params,
-			}
-			if options != nil {
-				methodDecl.Binding = *options
+				Static:     matches[1] != "",
 			}
 			spec, arrayBridge := parseArrayBridge(methodDecl)
-			methodDecl.Binding.validate(methodDecl, arrayBridge)
 			functionName := "GDExtension" + currentClassName + strcase.ToCamel(methodDecl.MethodName)
 			if methodDecl.ReturnType != "void" {
 				name := "ret_value"
@@ -244,15 +221,8 @@ func parseManagerHeader(input string) *headerCollector {
 				}
 				g.metadata.ReturnParameters[functionName] = common.CParam{CType: methodDecl.ReturnType, Name: name}
 			}
-			if mode := methodDecl.Binding.Web; mode != common.WebBindingDefault {
-				g.metadata.WebBindings[functionName] = mode
-			}
-			if methodDecl.Binding.ABI == "free_string" {
-				g.metadata.StringReleases[functionName] = true
-				g.metadata.WebBindings[functionName] = common.WebBindingNoop
-			}
-			if methodDecl.Binding.Control != "" {
-				g.metadata.ControlMethods[functionName] = methodDecl.Binding.Control
+			if methodDecl.Static {
+				g.metadata.StaticMethods[functionName] = currentClassName + "Mgr::" + methodDecl.MethodName
 			}
 			if arrayBridge {
 				g.metadata.ArrayBridges[spec.FunctionName] = spec
@@ -264,11 +234,10 @@ func parseManagerHeader(input string) *headerCollector {
 				methodDecl.Params = strings.Join(params, ", ")
 			}
 			g.methods = append(g.methods, methodDecl)
+		} else if strings.HasPrefix(line, "SPX_BIND") {
+			panic("invalid SPX_BIND declaration: " + line)
 		}
 	}
 
-	if pendingBinding != nil {
-		panic("SPX_BINDING has no method declaration")
-	}
 	return g
 }

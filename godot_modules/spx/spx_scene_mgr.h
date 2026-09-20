@@ -74,18 +74,18 @@ public:
 public:
 	virtual ~SpxSceneMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
-	SPX_API void change_scene_to_file(GdString path);
-	SPX_API void destroy_all_sprites();
-	SPX_API GdInt reload_current_scene();
-	SPX_API void unload_current_scene();
+	SPX_BIND void change_scene_to_file(GdString path);
+	SPX_BIND void destroy_all_sprites();
+	SPX_BIND GdInt reload_current_scene();
+	SPX_BIND void unload_current_scene();
 
 	// create sprites
-	SPX_API void clear_pure_sprites();
-	SPX_API void create_pure_sprite(GdString texture_path, GdVec2 pos, GdInt zindex);
-	SPX_API void destroy_pure_sprite(GdObj id);
+	SPX_BIND void clear_pure_sprites();
+	SPX_BIND void create_pure_sprite(GdString texture_path, GdVec2 pos, GdInt zindex);
+	SPX_BIND void destroy_pure_sprite(GdObj id);
 
-	SPX_API GdObj create_render_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot);
-	SPX_API GdObj create_static_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot, GdInt collider_type, GdVec2 collider_pivot, GdArray collider_params);
+	SPX_BIND GdObj create_render_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot);
+	SPX_BIND GdObj create_static_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot, GdInt collider_type, GdVec2 collider_pivot, GdArray collider_params);
 };
 
 #endif // SPX_SCENE_MGR_H

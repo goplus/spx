@@ -62,9 +62,6 @@ func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) 
 }
 
 func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) string {
-	if g.IsStringRelease(function) {
-		return g.syncSignature(function) + " {}"
-	}
 	var sb strings.Builder
 	mgrName := strcase.ToCamel(g.GetManagerName(function.Name))
 	methodName := function.Name[len("GDExtensionSpx")+len(mgrName):]

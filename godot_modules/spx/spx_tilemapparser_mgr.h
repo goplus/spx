@@ -80,13 +80,13 @@ public:
 
 public:
 	// Main API
-	SPX_API void load_tilemap(GdString json_path);
-	SPX_API void unload_tilemap(GdString name);
-	SPX_API void destroy_all_tilemaps();
+	SPX_BIND void load_tilemap(GdString json_path);
+	SPX_BIND void unload_tilemap(GdString name);
+	SPX_BIND void destroy_all_tilemaps();
 
 	// Query API
-	SPX_API GdBool has_tilemap(GdString name);
-	SPX_API GdInt get_tilemap_layer_count(GdString name);
+	SPX_BIND GdBool has_tilemap(GdString name);
+	SPX_BIND GdInt get_tilemap_layer_count(GdString name);
 };
 
 #endif // SPX_TILEMAP_PARSER_MGR_H

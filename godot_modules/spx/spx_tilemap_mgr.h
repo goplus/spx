@@ -47,23 +47,23 @@ private:
 	SpxDrawTiles *draw_tiles = nullptr;
 
 public:
-	SPX_API void open_draw_tiles_with_size(GdInt tile_size);
-	SPX_API void open_draw_tiles();
-	SPX_API void set_layer_index(GdInt index);
-	SPX_API void set_tile(GdString texture_path, GdBool with_collision);
-	SPX_API void set_tile_with_collision_info(GdString texture_path, GdArray collision_points);
-	SPX_API void set_layer_offset(GdInt index, GdVec2 offset);
-	SPX_API GdVec2 get_layer_offset(GdInt index);
-	SPX_API void place_tiles(GdArray positions, GdString texture_path);
-	SPX_API void place_tiles_with_layer(GdArray positions, GdString texture_path, GdInt layer_index);
-	SPX_API void place_tile(GdVec2 pos, GdString texture_path);
-	SPX_API void place_tile_with_layer(GdVec2 pos, GdString texture_path, GdInt layer_index);
-	SPX_API void erase_tile(GdVec2 pos);
-	SPX_API void erase_tile_with_layer(GdVec2 pos, GdInt layer_index);
-	SPX_API GdString get_tile(GdVec2 pos);
-	SPX_API GdString get_tile_with_layer(GdVec2 pos, GdInt layer_index);
-	SPX_API void close_draw_tiles();
-	SPX_API void exit_tilemap_editor_mode();
+	SPX_BIND void open_draw_tiles_with_size(GdInt tile_size);
+	SPX_BIND void open_draw_tiles();
+	SPX_BIND void set_layer_index(GdInt index);
+	SPX_BIND void set_tile(GdString texture_path, GdBool with_collision);
+	SPX_BIND void set_tile_with_collision_info(GdString texture_path, GdArray collision_points);
+	SPX_BIND void set_layer_offset(GdInt index, GdVec2 offset);
+	SPX_BIND GdVec2 get_layer_offset(GdInt index);
+	SPX_BIND void place_tiles(GdArray positions, GdString texture_path);
+	SPX_BIND void place_tiles_with_layer(GdArray positions, GdString texture_path, GdInt layer_index);
+	SPX_BIND void place_tile(GdVec2 pos, GdString texture_path);
+	SPX_BIND void place_tile_with_layer(GdVec2 pos, GdString texture_path, GdInt layer_index);
+	SPX_BIND void erase_tile(GdVec2 pos);
+	SPX_BIND void erase_tile_with_layer(GdVec2 pos, GdInt layer_index);
+	SPX_BIND GdString get_tile(GdVec2 pos);
+	SPX_BIND GdString get_tile_with_layer(GdVec2 pos, GdInt layer_index);
+	SPX_BIND void close_draw_tiles();
+	SPX_BIND void exit_tilemap_editor_mode();
 
 	template <typename Func>
 	void with_draw_tiles(Func f, const String error_msg = "The draw tiles node is null, first open it!!!") {

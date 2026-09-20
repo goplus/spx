@@ -11,7 +11,6 @@ constructor() {
 	this._reusableResults = {
 		'GdInt': { 'low': 0, 'high': 0 },
 		'GdObj': { 'low': 0, 'high': 0 },
-		'gdspx_input_get_global_mouse_pos': {},
 	};
 }
 gdspx_audio_stop_all() {
@@ -494,7 +493,7 @@ gdspx_input_get_global_mouse_pos() {
 	try {
 		_resultPtr = AllocGdVec2();
 		_call(_resultPtr);
-		return ToJsVec2(_resultPtr, this._reusableResults["gdspx_input_get_global_mouse_pos"]);
+		return ToJsVec2(_resultPtr);
 	} finally {
 		if (_resultPtr) FreeGdVec2(_resultPtr);
 	}
@@ -1571,10 +1570,6 @@ gdspx_res_reload_texture(path) {
 	} finally {
 		if (_arg0) FreeGdString(_arg0);
 	}
-}
-gdspx_res_free_str(str) {
-	var _call = Module['_gdspx_res_free_str'];
-	return;
 }
 gdspx_res_apply_project_fonts(default_font_path,font_paths,font_families,preferences) {
 	var _call = Module['_gdspx_res_apply_project_fonts'];
@@ -4681,7 +4676,6 @@ GdspxFuncs.prototype['gdspx_res_read_all_text'] = GdspxFuncs.prototype.gdspx_res
 GdspxFuncs.prototype['gdspx_res_has_file'] = GdspxFuncs.prototype.gdspx_res_has_file;
 GdspxFuncs.prototype['gdspx_res_list_directories'] = GdspxFuncs.prototype.gdspx_res_list_directories;
 GdspxFuncs.prototype['gdspx_res_reload_texture'] = GdspxFuncs.prototype.gdspx_res_reload_texture;
-GdspxFuncs.prototype['gdspx_res_free_str'] = GdspxFuncs.prototype.gdspx_res_free_str;
 GdspxFuncs.prototype['gdspx_res_apply_project_fonts'] = GdspxFuncs.prototype.gdspx_res_apply_project_fonts;
 GdspxFuncs.prototype['gdspx_res_set_default_font'] = GdspxFuncs.prototype.gdspx_res_set_default_font;
 GdspxFuncs.prototype['gdspx_res_register_font_face'] = GdspxFuncs.prototype.gdspx_res_register_font_face;

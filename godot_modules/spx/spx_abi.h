@@ -34,6 +34,13 @@
 #include "gdextension_spx_ext.h"
 #include <type_traits>
 
+// Exported cross-language method. C++ static declarations need no manager.
+#define SPX_BIND
+
+// Output-only native array: completely filled on success, never read on entry.
+// GdBool methods return false before modifying any writable array on failure.
+#define SPX_OUT
+
 // ABI allocations belong to their caller, independently of engine lifetime.
 namespace SpxAbi {
 

@@ -50,25 +50,25 @@ public:
 	void on_destroy() override;
 	void on_reset(int reset_code) override;
 
-	SPX_API void destroy_all_pens();
-	SPX_API void set_canvas_size(GdInt width, GdInt height);
+	SPX_BIND void destroy_all_pens();
+	SPX_BIND void set_canvas_size(GdInt width, GdInt height);
 	void flush_all();
-	SPX_API GdObj create_pen();
-	SPX_API void destroy_pen(GdObj obj);
-	SPX_API void batch_update_commands(const float *buffer_data, int len);
+	SPX_BIND GdObj create_pen();
+	SPX_BIND void destroy_pen(GdObj obj);
+	SPX_BIND void batch_update_commands(const float *buffer_data, int len);
 	// Pen operation methods
-	SPX_API void pen_stamp(GdObj obj);
-	SPX_API void move_pen_to(GdObj obj, GdVec2 position);
-	SPX_API void pen_down(GdObj obj, GdBool move_by_mouse);
-	SPX_API void pen_up(GdObj obj);
-	SPX_API void set_pen_color_to(GdObj obj, GdColor color);
-	SPX_API void change_pen_by(GdObj obj, GdInt property, GdFloat amount);
-	SPX_API void set_pen_to(GdObj obj, GdInt property, GdFloat value);
-	SPX_API void change_pen_size_by(GdObj obj, GdFloat amount);
-	SPX_API void set_pen_size_to(GdObj obj, GdFloat size);
-	SPX_API void set_pen_stamp_texture(GdObj obj, GdString texture_path);
+	SPX_BIND void pen_stamp(GdObj obj);
+	SPX_BIND void move_pen_to(GdObj obj, GdVec2 position);
+	SPX_BIND void pen_down(GdObj obj, GdBool move_by_mouse);
+	SPX_BIND void pen_up(GdObj obj);
+	SPX_BIND void set_pen_color_to(GdObj obj, GdColor color);
+	SPX_BIND void change_pen_by(GdObj obj, GdInt property, GdFloat amount);
+	SPX_BIND void set_pen_to(GdObj obj, GdInt property, GdFloat value);
+	SPX_BIND void change_pen_size_by(GdObj obj, GdFloat amount);
+	SPX_BIND void set_pen_size_to(GdObj obj, GdFloat size);
+	SPX_BIND void set_pen_stamp_texture(GdObj obj, GdString texture_path);
 	// rotation_radians is in radians.
-	SPX_API void pen_stamp_with_transform(GdObj obj, GdString texture_path, GdVec2 position, GdFloat rotation_radians, GdVec2 scale);
+	SPX_BIND void pen_stamp_with_transform(GdObj obj, GdString texture_path, GdVec2 position, GdFloat rotation_radians, GdVec2 scale);
 };
 
 #endif // SPX_PEN_MGR_H

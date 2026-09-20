@@ -51,21 +51,20 @@ protected:
 	HashMap<StringName, GdInt> action_ids;
 
 public:
-	SPX_BINDING(web=reuse_result)
-	SPX_API GdVec2 get_global_mouse_pos();
-	SPX_API GdBool get_key(GdInt key);
-	SPX_API GdBool get_mouse_state(GdInt mouse_id);
-	SPX_API GdInt get_key_state(GdInt key);
-	SPX_API GdFloat get_axis(GdString neg_action, GdString pos_action);
-	SPX_API GdBool is_action_pressed(GdString action);
-	SPX_API GdBool is_action_just_pressed(GdString action);
-	SPX_API GdBool is_action_just_released(GdString action);
-	SPX_API GdInt register_action(GdString action);
-	SPX_API GdFloat get_axis_id(GdInt neg_action_id, GdInt pos_action_id);
-	SPX_API GdBool is_action_pressed_id(GdInt action_id);
-	SPX_API GdBool is_action_just_pressed_id(GdInt action_id);
-	SPX_API GdBool is_action_just_released_id(GdInt action_id);
-	SPX_API void write_snapshot(SPX_OUT float out[3]);
+	SPX_BIND GdVec2 get_global_mouse_pos();
+	SPX_BIND GdBool get_key(GdInt key);
+	SPX_BIND GdBool get_mouse_state(GdInt mouse_id);
+	SPX_BIND GdInt get_key_state(GdInt key);
+	SPX_BIND GdFloat get_axis(GdString neg_action, GdString pos_action);
+	SPX_BIND GdBool is_action_pressed(GdString action);
+	SPX_BIND GdBool is_action_just_pressed(GdString action);
+	SPX_BIND GdBool is_action_just_released(GdString action);
+	SPX_BIND GdInt register_action(GdString action);
+	SPX_BIND GdFloat get_axis_id(GdInt neg_action_id, GdInt pos_action_id);
+	SPX_BIND GdBool is_action_pressed_id(GdInt action_id);
+	SPX_BIND GdBool is_action_just_pressed_id(GdInt action_id);
+	SPX_BIND GdBool is_action_just_released_id(GdInt action_id);
+	SPX_BIND void write_snapshot(SPX_OUT float out[3]);
 
 private:
 	static constexpr GdInt KEY_ANY = -1;

@@ -1060,9 +1060,6 @@ func (pself *resMgr) ReloadTexture(path string) {
 		CallResReloadTexture(arg0)
 	})
 }
-func (pself *resMgr) FreeStr(str string) {
-	// Compatibility API: Go strings own their memory; only raw ABI strings need release.
-}
 func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0Str := C.CString(default_font_path)

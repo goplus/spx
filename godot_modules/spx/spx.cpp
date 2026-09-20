@@ -132,6 +132,7 @@ void Spx::set_debug_mode(bool enable) {
 void Spx::register_types() {
 	ClassDB::register_class<SpxListMonitor>();
 	ClassDB::register_class<SpxSprite>();
+	ClassDB::register_internal_class<SpxCollisionDebugOverlay>();
 	ClassDB::register_class<SpxInputProxy>();
 	ClassDB::register_class<SpxDrawTiles>();
 	ClassDB::register_class<SpxPathFinder>();

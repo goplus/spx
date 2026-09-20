@@ -15,7 +15,7 @@ make generate
 
 1. Collect marked public methods from the SPX manager headers.
 2. Generate and preprocess the C interface header, then parse its AST.
-3. Apply naming, type, and `SPX_BINDING` options.
+3. Derive names, types, static call targets, and array directions from the declarations.
 4. Render native Go, engine-facing, C++, Web JavaScript, and worker templates.
 5. Format generated files and compile the affected targets.
 
@@ -52,25 +52,37 @@ The entry point collects marked manager declarations, generates the C interface 
 
 ### Basic rules
 
-Only declarations selected by the generator's export conventions become bridge methods. Parameter and result types must have a supported ABI representation. Keep public naming stable and make conversions explicit at the engine boundary.
+Mark each exported public method with `SPX_BIND`, a macro with no arguments that expands to nothing in C++. Write one declaration per line. Parameter and result types must have a supported ABI representation; the generator derives conversions and call targets from the declaration.
 
 Manager discovery recognizes `Spx*Mgr` classes in `spx*mgr.h`, independently of their base classes. Only marked public declarations are exported. Removing `SpxBaseMgr` inheritance does not remove an interface; renaming the manager still changes its ABI name.
 
-### Ownership and lifecycle bindings
+### Static methods and ownership
 
-`SPX_BINDING(abi=free_string)` marks a raw ABI deallocator with the signature `void method(GdString value)`. Native C++ calls `SpxAbi::free_return_cstr` directly without resolving an engine or manager. The high-level Go/JS compatibility methods are no-ops because their strings are language-owned values; raw Native return conversion still releases its owned pointer through the original export. `spx_abi.h/.cpp` own allocation, release, and typed array access independently of engine lifetime.
+Use ordinary C++ `static` to declare a method that needs no manager instance:
 
-`SPX_BINDING(control=reset)` routes a lifecycle operation directly through `Spx`, preserving the public method name and ABI. Supported targets are `reset` (one `GdInt` argument), `restart`, `pause`, `resume`, `next_frame` (no arguments, `void`) and `is_paused` (no arguments, `GdBool`). These apply to Native and ordinary Web C++ bridges. They cannot be combined with Web overrides or memory-release bindings. Exit and panic notification APIs remain runtime operations.
+```cpp
+class SpxExtMgr {
+public:
+    SPX_BIND static void request_reset(GdInt exit_code);
+    SPX_BIND static GdBool is_paused();
+};
+```
+
+Native and ordinary Web bridges call `SpxExtMgr::request_reset` and `SpxExtMgr::is_paused` directly. Their C++ implementations delegate to the `Spx` lifecycle facade. Other declarations call the manager instance. The declaration determines the target; static methods use the same argument and result conversion rules as instance methods. Declaring a method static does not itself make the implementation thread-safe.
+
+Go and JavaScript strings own their memory, so the manager API has no `FreeStr` method. Raw Native strings are released through the builtin `GDExtensionSpxGlobalFreeString` / `spx_global_free_string`, which calls `SpxAbi::free_return_cstr` without resolving an engine or manager. Native `ToString` copies an owned method return before calling this builtin. Callback string arguments are borrowed for the duration of the synchronous call: Native copies them into Go strings without freeing the caller's memory, and Web parses them before dispatch. A callback that retains a value must copy it; a missing handler requires no allocation. Global builtins are excluded from manager and Web bridge generation. Web string wrappers keep their existing allocation and release path. `spx_abi.h/.cpp` own allocation, release, and typed array access independently of engine lifetime.
+
+Structured JavaScript value results such as vectors, rectangles, and colors are fresh objects on each call. Input snapshots and caller-provided output buffers provide reuse where needed. Internal 64-bit integer/object marshalling still reuses its per-instance `low`/`high` split result slots; that representation is separate from structured value results.
 
 The generator also emits `spx_callback_defaults.gen.h` from the existing `SpxCallbackInfo` fields and callback typedefs. The engine uses this table of typed no-op callbacks; no separate callback schema or ABI layout change is needed.
 
 ### Native arrays
 
-Pointer-and-length signatures declare caller-provided array buffers. Declare fixed output as `SPX_API void write_snapshot(SPX_OUT float out[3]);`: codegen extracts the extent before lowering to a pointer-only ABI, and exposes `WriteSnapshot(out *[3]float32)` in Go. Go rejects nil and Web checks the exact output length before calling C++. Fixed and dynamic buffers share the `float` / `real_t`, `int64_t`, `uint8_t`, and `GdObj` mappings and can be combined with ordinary parameters in a method returning `void`, or `GdBool` when it has `SPX_OUT` parameters. Const arrays are read-only inputs. Fixed arrays require a positive decimal int32 literal extent and no separate length parameter; dynamic slice lengths are checked for int32 overflow before calling the ABI. Only `void` methods with a single fixed `SPX_OUT` array receive the no-argument Web output reader.
+Pointer-and-length signatures declare caller-provided array buffers. Declare fixed output as `SPX_BIND void write_snapshot(SPX_OUT float out[3]);`: codegen extracts the extent before lowering to a pointer-only ABI, and exposes `WriteSnapshot(out *[3]float32)` in Go. Go rejects nil and Web checks the exact output length before calling C++. Fixed and dynamic buffers share the `float` / `real_t`, `int64_t`, `uint8_t`, and `GdObj` mappings and can be combined with ordinary parameters in a method returning `void`, or `GdBool` when it has `SPX_OUT` parameters. Const arrays are read-only inputs. Fixed arrays require a positive decimal int32 literal extent and no separate length parameter; dynamic slice lengths are checked for int32 overflow before calling the ABI. Only `void` methods with a single fixed `SPX_OUT` array receive the no-argument Web output reader.
 
-For independently sized native arrays, declare `SPX_API GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);`. Go exposes `BatchRetrievePositions(objs []int64, out []float32) bool` and passes each slice's own length. The generator supports consecutive pointer/length pairs without imposing an input/output ratio. The caller supplies output storage, and the concrete C++ method owns record parsing and capacity checks. For positions, N objects require exactly 2N floats. A larger backing buffer can be sliced to this range. The method validates all arguments before writing, returns false without changing output on failure, and fills the entire range on success. Missing objects produce NaN pairs; empty input and output succeed. This ratio belongs to the position method, not the generator. Const buffers are input-only; writable buffers are copied back when output is valid. The Go caller reuses output storage through the existing per-game `SpriteSyncBuffer.GetPositions` method, growing it only when capacity is insufficient and returning an empty result on failure so stale positions are not applied. Native bindings pass slice pointers directly. Web reuses Wasm storage and copies bytes into the caller's Go output slice without a decoded result allocation; separate Go and engine Wasm memories still require byte copies. Buffer reuse does not cache position values. No C++ `GdArray` wrapper or array-result allocation is used for this path.
+For independently sized native arrays, declare `SPX_BIND GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);`. Go exposes `BatchRetrievePositions(objs []int64, out []float32) bool` and passes each slice's own length. The generator supports consecutive pointer/length pairs without imposing an input/output ratio. The caller supplies output storage, and the concrete C++ method owns record parsing and capacity checks. For positions, N objects require exactly 2N floats. A larger backing buffer can be sliced to this range. The method validates all arguments before writing, returns false without changing output on failure, and fills the entire range on success. Missing objects produce NaN pairs; empty input and output succeed. This ratio belongs to the position method, not the generator. Const buffers are input-only; writable buffers are copied back when output is valid. The Go caller reuses output storage through the existing per-game `SpriteSyncBuffer.GetPositions` method, growing it only when capacity is insufficient and returning an empty result on failure so stale positions are not applied. Native bindings pass slice pointers directly. Web reuses Wasm storage and copies bytes into the caller's Go output slice without a decoded result allocation; separate Go and engine Wasm memories still require byte copies. Buffer reuse does not cache position values. No C++ `GdArray` wrapper or array-result allocation is used for this path.
 
-For example, `void sample(int mode, const float *values, int count, SPX_OUT float out[3])` becomes `Sample(mode int32, values []float32, out *[3]float32)`. The scalar is passed normally, the dynamic length comes from its slice, and the fixed output needs no length argument. Owned values such as `GdString` can also be mixed with arrays; generated Web cleanup runs even if validation or the native call fails.
+For example, `SPX_BIND void sample(int mode, const float *values, int count, SPX_OUT float out[3])` becomes `Sample(mode int32, values []float32, out *[3]float32)`. The scalar is passed normally, the dynamic length comes from its slice, and the fixed output needs no length argument. Owned values such as `GdString` can also be mixed with arrays; generated Web cleanup runs even if validation or the native call fails.
 
 Array ABI IDs, the descriptor tag, element names, fixed element widths, and Go/C type mappings are defined once in `generate/common/arrays.go`. The C enum, Web Go `arrays.gen.go`, and the marked array ABI section in `gdspx.util.js` are generated from that definition, including the Go/JS element-size lookup functions. When adding a type, also verify that the native and Web runtimes support its element layout.
 
@@ -100,7 +112,7 @@ Unsupported array types require generated conversion code. Prefer conversion at 
 
 ## 6. Adding an interface
 
-1. Add or update the authoritative declaration.
+1. Add or update a public `SPX_BIND` declaration; use `static` when it requires no manager instance.
 2. Add engine implementation where required.
 3. Update generator type rules or templates only if the signature is new.
 4. Run `make generate` with the repository-owned module, or set `SPX_MODULE_SRC` explicitly.

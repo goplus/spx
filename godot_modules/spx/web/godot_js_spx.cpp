@@ -35,7 +35,6 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
-#include "../spx.h"
 #include "godot_js_spx_util.h"
 #include "../spx_audio_mgr.h"
 #include "../spx_camera_mgr.h"
@@ -213,11 +212,11 @@ void gdspx_ext_request_exit(GdInt *exit_code) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_reset(GdInt *exit_code) {
-	Spx::reset(*exit_code);
+	 SpxExtMgr::request_reset(*exit_code);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_restart() {
-	Spx::restart();
+	 SpxExtMgr::request_restart();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_on_runtime_panic(GdString *msg) {
@@ -229,19 +228,19 @@ void gdspx_ext_on_runtime_panic(GdString *msg) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_pause() {
-	Spx::pause();
+	 SpxExtMgr::pause();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_resume() {
-	Spx::resume();
+	 SpxExtMgr::resume();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_is_paused(GdBool *ret_val) {
-	*ret_val = Spx::is_paused();
+	*ret_val = SpxExtMgr::is_paused();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_next_frame() {
-	Spx::next_frame();
+	 SpxExtMgr::next_frame();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_set_layer_sorter_mode(GdInt *mode) {
@@ -713,14 +712,6 @@ void gdspx_res_reload_texture(GdString *path) {
 		return;
 	}
 	 resMgr->reload_texture(gdspx_string_arg_0);
-}
-EMSCRIPTEN_KEEPALIVE
-void gdspx_res_free_str(GdString *str) {
-	GdString gdspx_string_arg_0 = nullptr;
-	if (!gdspx_get_string_value(str, &gdspx_string_arg_0)) {
-		return;
-	}
-	(void)gdspx_string_arg_0;
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_apply_project_fonts(GdString *default_font_path, GdArray *font_paths, GdArray *font_families, GdArray *preferences, GdString *ret_val) {

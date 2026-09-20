@@ -58,6 +58,7 @@ class SpxTilemapMgr;
 class SpxTilemapparserMgr;
 class SpxCallbackProxy;
 
+// msg is borrowed for this synchronous callback; copy it to retain it, and do not free it.
 typedef void (*GDExtensionSpxGlobalRuntimePanicCallback)(GdString msg);
 typedef void (*GDExtensionSpxGlobalRuntimeExitCallback)(GdInt code);
 typedef void (*GDExtensionSpxGlobalRuntimeResetCallback)(GdInt code);

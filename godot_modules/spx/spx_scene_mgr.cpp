@@ -40,6 +40,7 @@
 
 #include "spx_coordinate.h"
 #include "spx_draw_tiles.h"
+#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_layer_sorter.h"
 #include "spx_physics_mgr.h"
@@ -252,7 +253,7 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 	auto data_len = collider_params == nullptr ? 0 : collider_params->size;
 	const float *collider_data = nullptr;
 	if (data_len > 0) {
-		collider_data = SpxBaseMgr::get_array<float>(collider_params, 0);
+		collider_data = SpxAbi::get_array<float>(collider_params, 0);
 		if (collider_data == nullptr) {
 			print_error("Invalid collider parameters array");
 			return NULL_OBJECT_ID;

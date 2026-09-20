@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_ui_mgr.h"
+#include "spx_abi.h"
 
 #include "scene/main/canvas_layer.h"
 #include "scene/resources/packed_scene.h"
@@ -336,7 +337,7 @@ void SpxUiMgr::set_list_items(GdObj obj, GdString label, GdArray items, GdColor 
 		ERR_FAIL_COND(items->size > 0 && items->data == nullptr);
 		values.resize(items->size);
 		for (int i = 0; i < items->size; i++) {
-			values.set(i, SpxStr(*get_array<GdString>(items, i)));
+			values.set(i, SpxStr(*SpxAbi::get_array<GdString>(items, i)));
 		}
 	}
 	monitor->set_items(SpxStr(label), values, color);

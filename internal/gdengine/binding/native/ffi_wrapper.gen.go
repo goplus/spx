@@ -51,6 +51,7 @@ const (
 
 // C function aliases
 type GDExtensionSpxGlobalRegisterCallbacks C.GDExtensionSpxGlobalRegisterCallbacks
+type GDExtensionSpxGlobalFreeString C.GDExtensionSpxGlobalFreeString
 type GDExtensionSpxCallbackOnEngineStart C.GDExtensionSpxCallbackOnEngineStart
 type GDExtensionSpxCallbackOnEngineUpdate C.GDExtensionSpxCallbackOnEngineUpdate
 type GDExtensionSpxCallbackOnEngineFixedUpdate C.GDExtensionSpxCallbackOnEngineFixedUpdate
@@ -217,7 +218,6 @@ type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResListDirectories C.GDExtensionSpxResListDirectories
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
-type GDExtensionSpxResFreeStr C.GDExtensionSpxResFreeStr
 type GDExtensionSpxResApplyProjectFonts C.GDExtensionSpxResApplyProjectFonts
 type GDExtensionSpxResSetDefaultFont C.GDExtensionSpxResSetDefaultFont
 type GDExtensionSpxResRegisterFontFace C.GDExtensionSpxResRegisterFontFace
@@ -1616,15 +1616,6 @@ func CallResReloadTexture(
 	arg1 := (C.GdString)(path)
 
 	C.cgo_callfn_GDExtensionSpxResReloadTexture(arg0, arg1)
-
-}
-func CallResFreeStr(
-	str GdString,
-) {
-	arg0 := (C.GDExtensionSpxResFreeStr)(api.SpxResFreeStr)
-	arg1 := (C.GdString)(str)
-
-	C.cgo_callfn_GDExtensionSpxResFreeStr(arg0, arg1)
 
 }
 func CallResApplyProjectFonts(

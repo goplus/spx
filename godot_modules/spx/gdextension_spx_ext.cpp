@@ -38,7 +38,6 @@
 #include "gdextension_interface.h"
 #include "spx_engine.h"
 #include "spx_abi.h"
-#include "spx.h"
 #include "spx_mgr_access.h"
 #include "spx_audio_mgr.h"
 #include "spx_camera_mgr.h"
@@ -58,6 +57,10 @@
 
 
 #define REGISTER_SPX_INTERFACE_FUNC(m_name) GDExtension::register_interface_function(#m_name, (GDExtensionInterfaceFunctionPtr)&gdextension_##m_name)
+static void gdextension_spx_global_free_string(GdString value) {
+	SpxAbi::free_return_cstr(value);
+}
+
 static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {
 	SpxEngine::register_callbacks(callback_ptr);
 }
@@ -194,11 +197,11 @@ static void gdextension_spx_ext_request_exit(GdInt exit_code) {
 }
 
 static void gdextension_spx_ext_request_reset(GdInt exit_code) {
-	Spx::reset(exit_code);
+	SpxExtMgr::request_reset(exit_code);
 }
 
 static void gdextension_spx_ext_request_restart() {
-	Spx::restart();
+	SpxExtMgr::request_restart();
 }
 
 static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
@@ -206,19 +209,19 @@ static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
 }
 
 static void gdextension_spx_ext_pause() {
-	Spx::pause();
+	SpxExtMgr::pause();
 }
 
 static void gdextension_spx_ext_resume() {
-	Spx::resume();
+	SpxExtMgr::resume();
 }
 
 static void gdextension_spx_ext_is_paused(GdBool *ret_val) {
-	*ret_val = Spx::is_paused();
+	*ret_val = SpxExtMgr::is_paused();
 }
 
 static void gdextension_spx_ext_next_frame() {
-	Spx::next_frame();
+	SpxExtMgr::next_frame();
 }
 
 static void gdextension_spx_ext_set_layer_sorter_mode(GdInt mode) {
@@ -551,10 +554,6 @@ static void gdextension_spx_res_list_directories(GdString p_path, GdString *ret_
 
 static void gdextension_spx_res_reload_texture(GdString path) {
 	resMgr->reload_texture(path);
-}
-
-static void gdextension_spx_res_free_str(GdString str) {
-	SpxAbi::free_return_cstr(str);
 }
 
 static void gdextension_spx_res_apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_val) {
@@ -1408,6 +1407,7 @@ static void gdextension_spx_ui_set_flip(GdObj obj, GdBool horizontal, GdBool is_
 
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
+	REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_stop_all);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_create_audio);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_destroy_audio);
@@ -1531,7 +1531,6 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_has_file);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_list_directories);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_reload_texture);
-	REGISTER_SPX_INTERFACE_FUNC(spx_res_free_str);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_apply_project_fonts);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_set_default_font);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_register_font_face);

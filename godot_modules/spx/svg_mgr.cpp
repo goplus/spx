@@ -72,7 +72,7 @@ Ref<ImageTexture> SvgManager::reload_svg_image(const String &image_path) {
 		const String key = _make_image_key(path, entry.key);
 		Ref<ImageTexture> *texture = svg_image_cache.getptr(key);
 		if (texture != nullptr) {
-			(*texture)->set_image(entry.value);
+			SpxImageTexture::replace_image(*texture, entry.value);
 		} else {
 			Ref<ImageTexture> created =
 					SpxImageTexture::create_from_image(entry.value);

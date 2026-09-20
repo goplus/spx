@@ -34,6 +34,7 @@
 #include "../spx.h"
 #include "../spx_callback_proxy.h"
 #include "../spx_engine.h"
+#include "../spx_ext_mgr.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxLifecycle {
@@ -74,6 +75,19 @@ TEST_CASE("[SPX] Engine callback registration has one idempotent owner") {
 
 	SpxEngine::shutdown();
 	CHECK_FALSE(SpxEngine::is_initialized());
+	SpxEngine::shutdown();
+	CHECK_FALSE(SpxEngine::is_initialized());
+}
+
+TEST_CASE("[SPX] Runtime panic callbacks borrow the caller string") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	SpxEngine::register_callbacks(nullptr);
+	static GdString received;
+	received = nullptr;
+	SpxEngine::register_runtime_panic_callbacks([](GdString msg) { received = msg; });
+	const char message[] = "borrowed panic";
+	SpxEngine::get_singleton()->get_ext()->on_runtime_panic(message);
+	CHECK_EQ(received, message);
 	SpxEngine::shutdown();
 	CHECK_FALSE(SpxEngine::is_initialized());
 }

@@ -53,15 +53,15 @@ public:
 	void set_stretch_clear_color();
 
 public:
-	SPX_API GdVec2 get_camera_position();
-	SPX_API void set_camera_position(GdVec2 position);
-	SPX_API GdVec2 get_camera_zoom();
-	SPX_API void set_camera_zoom(GdVec2 size);
-	SPX_API GdRect2 get_viewport_rect();
-	SPX_API GdRect2 get_global_camera_rect();
-	SPX_API GdRect2 get_stage_limits_rect();
-	SPX_API void set_camera_limit(GdInt side, GdInt limit);
-	SPX_API void set_camera_smoothing(GdBool enabled);
+	SPX_BIND GdVec2 get_camera_position();
+	SPX_BIND void set_camera_position(GdVec2 position);
+	SPX_BIND GdVec2 get_camera_zoom();
+	SPX_BIND void set_camera_zoom(GdVec2 size);
+	SPX_BIND GdRect2 get_viewport_rect();
+	SPX_BIND GdRect2 get_global_camera_rect();
+	SPX_BIND GdRect2 get_stage_limits_rect();
+	SPX_BIND void set_camera_limit(GdInt side, GdInt limit);
+	SPX_BIND void set_camera_smoothing(GdBool enabled);
 };
 
 #endif // SPX_CAMERA_MGR_H

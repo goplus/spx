@@ -47,10 +47,10 @@ private:
 	const GdVec2 default_cell_size{ 16, 16 };
 
 public:
-	SPX_API void setup_path_finder_with_size(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug);
-	SPX_API void setup_path_finder(GdBool with_jump);
-	SPX_API void set_obstacle(GdObj obj, GdBool enabled);
-	SPX_API GdArray find_path(GdVec2 p_from, GdVec2 p_to, GdBool with_jump);
+	SPX_BIND void setup_path_finder_with_size(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug);
+	SPX_BIND void setup_path_finder(GdBool with_jump);
+	SPX_BIND void set_obstacle(GdObj obj, GdBool enabled);
+	SPX_BIND GdArray find_path(GdVec2 p_from, GdVec2 p_to, GdBool with_jump);
 };
 
 #endif // SPX_NAVIGATION_MGR_H

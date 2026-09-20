@@ -361,7 +361,7 @@ Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
 	}
 	if (cached != nullptr) {
 		Ref<ImageTexture> texture = *cached;
-		texture->set_image(image);
+		SpxImageTexture::replace_image(texture, image);
 		return texture;
 	}
 	Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
@@ -523,9 +523,6 @@ GdVec2 SpxResMgr::get_image_size(GdString path) {
 	return GdVec2(1, 1);
 }
 
-void SpxResMgr::free_str(GdString str_ptr) {
-	SpxAbi::free_return_cstr(str_ptr);
-}
 GdString SpxResMgr::read_all_text(GdString p_path) {
 	auto path = SpxStr(p_path);
 	path = _to_engine_path(path);

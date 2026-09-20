@@ -34,7 +34,7 @@ func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
 	header := strings.TrimSpace(`
 class SpxUiMgr : public SpxBaseMgr, private SpxUiBindingListener {
 public:
-	SPX_API GdObj bind_node(GdObj obj, GdString rel_path);
+	SPX_BIND GdObj bind_node(GdObj obj, GdString rel_path);
 };
 `)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_ui_mgr.h"), []byte(header), 0o600))
@@ -50,7 +50,7 @@ func TestGenerateManagerHeaderUsesExplicitExports(t *testing.T) {
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
-	SPX_API void batch_update_transforms(const float *buffer_data, int len);
+	SPX_BIND void batch_update_transforms(const float *buffer_data, int len);
 	SPX_BIND GdBool destroy_sprite(GdObj obj);
 	void helper_not_exported();
 };
@@ -77,31 +77,6 @@ func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
 	require.Contains(t, gdJsSpxCpp, `#include "../spx_engine.h"`)
 	require.Contains(t, gdJsSpxCpp, `#include "godot_js_spx_util.h"`)
 	require.NotContains(t, gdJsSpxCpp, `#include "modules/spx/`)
-}
-
-func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
-
-	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
-	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: &clang.TypedefFunction{
-		ReturnType: clang.PrimitiveType{Name: "void"},
-		Name:       "GDExtensionSpxResFreeStr",
-		Arguments: []clang.Argument{{
-			Type: clang.Type{Primitive: &clang.PrimitiveType{Name: "GdString"}},
-			Name: "str",
-		}},
-	}}}}
-
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{
-		StringReleases: map[string]bool{"GDExtensionSpxResFreeStr": true},
-	})}
-	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
-	generated, err := os.ReadFile(outputPath)
-	require.NoError(t, err)
-	body := string(generated)
-	require.Contains(t, body, "void gdspx_res_free_str(GdString *str)")
-	require.Contains(t, body, "gdspx_get_string_value(str, &gdspx_string_arg_0)")
-	require.Contains(t, body, "(void)gdspx_string_arg_0;")
-	require.NotContains(t, body, "resMgr->free_str(*str)")
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
@@ -158,7 +133,7 @@ func TestGenerateManagerHeaderRegistersCallerArrayBuffer(t *testing.T) {
 	input := strings.TrimSpace(`
 class SpxSpriteMgr {
 public:
-	SPX_API void batch_update_transforms(const float *buffer_data, int len);
+	SPX_BIND void batch_update_transforms(const float *buffer_data, int len);
 };
 `)
 
@@ -177,7 +152,7 @@ public:
 
 func TestArrayTransformUsesOrdinaryGdArraySignature(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API GdArray expand_values(GdArray input);
+ SPX_BIND GdArray expand_values(GdArray input);
  };`)
 	require.Empty(t, header.metadata.ArrayBridges)
 	require.Contains(t, header.render(true), "typedef GdArray (*GDExtensionSpxExampleExpandValues)(GdArray input);")
@@ -202,9 +177,9 @@ func TestArrayTransformUsesOrdinaryGdArraySignature(t *testing.T) {
 
 func TestArrayBridgesKeepDistinctBufferOwnership(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API void update_values(const float *values, int count);
- SPX_API void read_bytes(uint8_t out[7]);
- SPX_API GdArray read_positions(GdArray objects);
+ SPX_BIND void update_values(const float *values, int count);
+ SPX_BIND void read_bytes(uint8_t out[7]);
+ SPX_BIND GdArray read_positions(GdArray objects);
  };`)
 	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
 	specs := generation.ListArrayBridges()
@@ -237,7 +212,7 @@ func TestFixedArrayOutputTypesAndPointerABI(t *testing.T) {
 	} {
 		t.Run(tt.cType, func(t *testing.T) {
 			header := parseManagerHeader(fmt.Sprintf(`class SpxExampleMgr {
- SPX_API void write_values(%s out_data [ 7 ]);
+ SPX_BIND void write_values(%s out_data [ 7 ]);
  };`, tt.cType))
 			spec := header.metadata.ArrayBridges["GDExtensionSpxExampleWriteValues"]
 			require.Equal(t, 7, spec.Buffers[0].Count)
@@ -264,46 +239,14 @@ func TestFixedArrayOutputTypesAndPointerABI(t *testing.T) {
 
 func TestArrayOutputRejectsInvalidDeclarations(t *testing.T) {
 	for _, declaration := range []string{
-		"SPX_API void write_values(float out[0]);",
-		"SPX_API void write_values(float out[-1]);",
-		"SPX_API void write_values(float out[2147483648]);",
-		"SPX_API void write_values(float out[]);",
-		"SPX_API void write_values(float out[COUNT]);",
-		"SPX_API void write_values(float out[2][3]);",
-		"SPX_API void write_values(float *out[3]);",
-		"SPX_API GdBool write_values(float out[3]);",
-		"SPX_BINDING(elements_per_input=2) SPX_API void write_values(float out[3]);",
-	} {
-		require.Panics(t, func() {
-			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
-		}, declaration)
-	}
-}
-
-func TestWebBindingPreservesNativeSignatures(t *testing.T) {
-	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_BINDING(web=noop) SPX_API void release_value(GdString text);
- SPX_BINDING(web=reuse_result) SPX_API GdVec3 get_direction();
- SPX_API GdVec3 get_owned_direction();
- };`)
-	require.Equal(t, map[string]common.WebBindingMode{
-		"GDExtensionSpxExampleReleaseValue": common.WebBindingNoop,
-		"GDExtensionSpxExampleGetDirection": common.WebBindingReuseResult,
-	}, header.metadata.WebBindings)
-	require.Contains(t, header.render(true), "typedef void (*GDExtensionSpxExampleReleaseValue)(GdString text);")
-	require.Contains(t, header.render(true), "typedef GdVec3 (*GDExtensionSpxExampleGetDirection)();")
-}
-
-func TestWebBindingRejectsInvalidDeclarations(t *testing.T) {
-	for _, declaration := range []string{
-		"SPX_BINDING(web=) SPX_API void release();",
-		"SPX_BINDING(web=unknown) SPX_API void release();",
-		"SPX_BINDING(web=noop) SPX_API GdVec2 read();",
-		"SPX_BINDING(web=reuse_result) SPX_API void read();",
-		"SPX_BINDING(web=reuse_result) SPX_API GdString read();",
-		"SPX_BINDING(web=reuse_result) SPX_API GdArray read();",
-		"SPX_BINDING(web=noop) SPX_API void read(float out[3]);",
-		"SPX_BINDING(web=noop, elements_per_input=2) SPX_API void read(const GdObj *objs, int count, float *out, int capacity);",
+		"SPX_BIND void write_values(float out[0]);",
+		"SPX_BIND void write_values(float out[-1]);",
+		"SPX_BIND void write_values(float out[2147483648]);",
+		"SPX_BIND void write_values(float out[]);",
+		"SPX_BIND void write_values(float out[COUNT]);",
+		"SPX_BIND void write_values(float out[2][3]);",
+		"SPX_BIND void write_values(float *out[3]);",
+		"SPX_BIND GdBool write_values(float out[3]);",
 	} {
 		require.Panics(t, func() {
 			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
@@ -319,8 +262,8 @@ func TestManagerDiscoveryDoesNotDependOnInheritance(t *testing.T) {
 		"class SpxExampleMgr : public Lifecycle {",
 		"class SpxExampleMgr : public SpxObjectMgr<Sprite> {",
 	} {
-		source := declaration + "\npublic:\n SPX_API void run();\n};\n" +
-			"class Helper {\npublic:\n SPX_API void hidden();\n};\n"
+		source := declaration + "\npublic:\n SPX_BIND void run();\n};\n" +
+			"class Helper {\npublic:\n SPX_BIND void hidden();\n};\n"
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
 		headers, err := PrepareHeaders(dir)
 		require.NoError(t, err)
@@ -330,143 +273,10 @@ func TestManagerDiscoveryDoesNotDependOnInheritance(t *testing.T) {
 	}
 }
 
-func TestStringReleaseBindingUsesRawABIWithoutManagerAccess(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr {
-public:
- SPX_BINDING(abi=free_string)
- SPX_API void release_text(GdString text);
-};`), 0o600))
-	headers, err := PrepareHeaders(dir)
-	require.NoError(t, err)
-	const name = "GDExtensionSpxExampleReleaseText"
-	require.True(t, headers.Metadata.StringReleases[name])
-	require.Equal(t, common.WebBindingNoop, headers.Metadata.WebBindings[name])
-	ast, err := clang.ParseCString("typedef void (*" + name + ")(GdString text);")
-	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
-	path := filepath.Join(dir, "bridge.cpp")
-	require.NoError(t, generation.writeCPP(path, gdSpxExtCpp))
-	output, err := os.ReadFile(path)
-	require.NoError(t, err)
-	require.Contains(t, string(output), "SpxAbi::free_return_cstr(text);")
-	require.NotContains(t, string(output), "exampleMgr->")
-}
-
-func TestStringReleaseBindingRejectsWrongOwnershipShapes(t *testing.T) {
-	for _, declaration := range []string{
-		"SPX_BINDING(abi=free_string) SPX_API GdBool release(GdString text);",
-		"SPX_BINDING(abi=free_string) SPX_API void release(GdString text, GdInt n);",
-		"SPX_BINDING(abi=free_string) SPX_API void release(GdArray array);",
-		"SPX_BINDING(abi=free_string) SPX_API void release(GdString *text);",
-		"SPX_BINDING(abi=unknown) SPX_API void release(GdString text);",
-	} {
-		require.Panics(t, func() {
-			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
-		}, declaration)
-	}
-}
-
-func TestControlBindingsBypassManagersOnNativeAndWeb(t *testing.T) {
-	header := parseManagerHeader(`class SpxExtMgr {
- SPX_BINDING(control=reset) SPX_API void request_reset(GdInt exit_code);
- SPX_BINDING(control=restart) SPX_API void request_restart();
- SPX_BINDING(control=pause) SPX_API void pause();
- SPX_BINDING(control=resume) SPX_API void resume();
- SPX_BINDING(control=is_paused) SPX_API GdBool is_paused();
- SPX_BINDING(control=next_frame) SPX_API void next_frame();
-};`)
-	ast, err := clang.ParseCString(header.render(true))
-	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
-	for _, test := range []struct{ name, template, resetArg string }{
-		{"native", gdSpxExtCpp, "exit_code"},
-		{"web", gdJsSpxCpp, "*exit_code"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "bridge.cpp")
-			require.NoError(t, generation.writeCPP(path, test.template))
-			output, err := os.ReadFile(path)
-			require.NoError(t, err)
-			body := string(output)
-			require.NotContains(t, body, "extMgr->")
-			require.Contains(t, body, "Spx::reset("+test.resetArg+");")
-			for _, call := range []string{"restart", "pause", "resume", "next_frame"} {
-				require.Contains(t, body, "Spx::"+call+"();")
-			}
-			require.Contains(t, body, "*ret_val = Spx::is_paused();")
-		})
-	}
-}
-
-func TestControlBindingsRejectUnknownTargetsAndWrongSignatures(t *testing.T) {
-	for _, declaration := range []string{
-		"SPX_BINDING(control=unknown) SPX_API void control();",
-		"SPX_BINDING(control=pause) SPX_API void control(GdInt arg);",
-		"SPX_BINDING(control=reset) SPX_API void control();",
-		"SPX_BINDING(control=reset) SPX_API void control(GdString code);",
-		"SPX_BINDING(control=is_paused) SPX_API void control();",
-		"SPX_BINDING(control=pause,web=noop) SPX_API void control();",
-		"SPX_BINDING(control=reset,abi=free_string) SPX_API void control(GdInt code);",
-	} {
-		require.Panics(t, func() {
-			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
-		}, declaration)
-	}
-}
-
-func TestBindingAnnotationPlacementAndWhitespace(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "spx_example_mgr.h")
-	var reference Headers
-	for i, declaration := range []string{
-		"SPX_BINDING(web=noop) SPX_API void release(GdString text);",
-		"SPX_BINDING ( web = noop )\n\n// Release text.\nSPX_API void release(GdString text);",
-	} {
-		header := "class SpxExampleMgr : public SpxBaseMgr {\npublic:\n" + declaration + "\n};"
-		require.NoError(t, os.WriteFile(path, []byte(header), 0o600))
-		generated, err := PrepareHeaders(dir)
-		require.NoError(t, err)
-		if i == 0 {
-			reference = generated
-		} else {
-			require.Equal(t, reference, generated)
-		}
-	}
-}
-
-func TestBindingRejectsMalformedAndConflictingOptions(t *testing.T) {
-	for _, declaration := range []string{
-		"SPX_BINDING() SPX_API void release();",
-		"SPX_BINDING(web) SPX_API void release();",
-		"SPX_BINDING(web=noop,) SPX_API void release();",
-		"SPX_BINDING(unknown=1) SPX_API void release();",
-		"SPX_BINDING(output_count=3) SPX_API void read(float *out, int len);",
-		"SPX_BINDING(array_arg=values, elements_per_input=2) SPX_API void read(const float *in, int count, float *out, int len);",
-		"SPX_BINDING(web=noop, web=noop) SPX_API void release();",
-		"SPX_BINDING(web=noop) SPX_BINDING(web=noop) SPX_API void release();",
-		"SPX_BINDING(web=noop)\nSPX_BINDING(web=noop)\nSPX_API void release();",
-		"SPX_BINDING(web=noop SPX_API void release();",
-		"SPX_BINDING(web=noop)",
-		"SPX_BINDING(web=noop)\nvoid release();",
-		"SPX_BINDING(array_arg=values) SPX_API void read(float *out, int len);",
-		"SPX_BINDING(elements_per_input=2) SPX_API void read(const GdObj *objs, int count, float *out, int len);",
-		"SPX_BINDING(array_arg=bad-name, elements_per_input=2) SPX_API void read(float *out, int len);",
-		"SPX_BINDING(elements_per_input=2147483648) SPX_API void read(float *out, int len);",
-		"SPX_BINDING(elements_per_input=2, web=noop) SPX_API void read(const float *in, int count, float *out, int len);",
-	} {
-		t.Run(declaration, func(t *testing.T) {
-			require.Panics(t, func() {
-				parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
-			})
-		})
-	}
-}
-
 func TestHeaderRenderingDoesNotChangeMetadata(t *testing.T) {
 	input := `class SpxSpriteMgr {
- SPX_API GdBool destroy_sprite(GdObj obj);
- SPX_API void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
+ SPX_BIND GdBool destroy_sprite(GdObj obj);
+ SPX_BIND void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
  };`
 	header := parseManagerHeader(input)
 	before := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
@@ -496,7 +306,7 @@ func TestArrayBridgeTypeMappings(t *testing.T) {
 	} {
 		t.Run(tt.declaration, func(t *testing.T) {
 			header := parseManagerHeader(fmt.Sprintf(`class SpxExampleMgr {
- SPX_API void update_values(const %svalues_data, int32_t count);
+ SPX_BIND void update_values(const %svalues_data, int32_t count);
  };`, tt.declaration))
 			caller, ok := header.metadata.ArrayBridges["GDExtensionSpxExampleUpdateValues"]
 			if tt.goSlice == "" {
@@ -517,7 +327,7 @@ func TestArrayBridgeTypeMappings(t *testing.T) {
 
 func TestMixedFixedAndDynamicArraysPreservePointerABI(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API void collect(GdObj const objects[2], float const *values, int count, GdObj selected[3], uint8_t *flags, int flags_len);
+ SPX_BIND void collect(GdObj const objects[2], float const *values, int count, GdObj selected[3], uint8_t *flags, int flags_len);
  };`)
 	spec := header.metadata.ArrayBridges["GDExtensionSpxExampleCollect"]
 	require.Len(t, spec.Buffers, 4)
@@ -549,9 +359,9 @@ func TestMixedFixedAndDynamicArraysPreservePointerABI(t *testing.T) {
 
 func TestReturnParametersHaveExplicitIdentity(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API void output(float ret_value[3]);
- SPX_API void update(float *values, int ret_value);
- SPX_API GdInt read(GdInt ret_value);
+ SPX_BIND void output(float ret_value[3]);
+ SPX_BIND void update(float *values, int ret_value);
+ SPX_BIND GdInt read(GdInt ret_value);
  };`)
 	require.NotContains(t, header.metadata.ReturnParameters, "GDExtensionSpxExampleOutput")
 	require.Equal(t, "ret_value_2", header.metadata.ReturnParameters["GDExtensionSpxExampleRead"].Name)
@@ -571,7 +381,7 @@ func TestReturnParametersHaveExplicitIdentity(t *testing.T) {
 
 func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
+ SPX_BIND void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
  };`)
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
@@ -588,7 +398,7 @@ func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
 
 func TestOutputOnlyArraysPreserveDirectionsAndReturnABI(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
- SPX_API GdBool collect(GdString label, const float *input, int count, SPX_OUT GdObj selected[2], SPX_OUT uint8_t *flags, int flags_len, float *state, int state_len);
+ SPX_BIND GdBool collect(GdString label, const float *input, int count, SPX_OUT GdObj selected[2], SPX_OUT uint8_t *flags, int flags_len, float *state, int state_len);
  };`)
 	const name = "GDExtensionSpxExampleCollect"
 	spec := header.metadata.ArrayBridges[name]
@@ -627,16 +437,16 @@ func TestOutputOnlyArraysPreserveDirectionsAndReturnABI(t *testing.T) {
 
 func TestOutputOnlyRejectsAmbiguousDeclarations(t *testing.T) {
 	for _, declaration := range []string{
-		"SPX_API void read(SPX_OUT const float out[3]);",
-		"SPX_API void read(SPX_OUT float const *out, int n);",
-		"SPX_API void read(SPX_OUT int n);",
-		"SPX_API void read(SPX_OUT GdArray out);",
-		"SPX_API void read(SPX_OUT float *out);",
-		"SPX_API void read(SPX_OUT SPX_OUT float out[3]);",
-		"SPX_API void read(float SPX_OUT out[3]);",
-		"SPX_API void read(float *out, SPX_OUT int n);",
-		"SPX_API void read(SPX_OUT double out[3]);",
-		"SPX_API GdInt read(SPX_OUT float out[3]);",
+		"SPX_BIND void read(SPX_OUT const float out[3]);",
+		"SPX_BIND void read(SPX_OUT float const *out, int n);",
+		"SPX_BIND void read(SPX_OUT int n);",
+		"SPX_BIND void read(SPX_OUT GdArray out);",
+		"SPX_BIND void read(SPX_OUT float *out);",
+		"SPX_BIND void read(SPX_OUT SPX_OUT float out[3]);",
+		"SPX_BIND void read(float SPX_OUT out[3]);",
+		"SPX_BIND void read(float *out, SPX_OUT int n);",
+		"SPX_BIND void read(SPX_OUT double out[3]);",
+		"SPX_BIND GdInt read(SPX_OUT float out[3]);",
 	} {
 		require.Panics(t, func() { parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};") }, declaration)
 	}
@@ -645,20 +455,20 @@ func TestOutputOnlyRejectsAmbiguousDeclarations(t *testing.T) {
 func TestPrepareHeadersPreservesPublicSectionsAndClassBoundaries(t *testing.T) {
 	dir := t.TempDir()
 	source := `class SpxExampleMgr : public SpxBaseMgr {
- SPX_API void default_private();
+ SPX_BIND void default_private();
 public:
- SPX_API void first();
+ SPX_BIND void first();
 private:
- SPX_API void hidden();
+ SPX_BIND void hidden();
 protected:
- SPX_API void protected_method();
+ SPX_BIND void protected_method();
 public:
- SPX_API void second();
+ SPX_BIND void second();
 };
 class SpxOtherMgr : public SpxBaseMgr {
- SPX_API void other_private();
+ SPX_BIND void other_private();
 public:
- SPX_API void third();
+ SPX_BIND void third();
 };`
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
 	headers, err := PrepareHeaders(dir)
@@ -677,7 +487,7 @@ func TestPrepareHeadersDoesNotTruncateLongLines(t *testing.T) {
 	dir := t.TempDir()
 	source := "class SpxExampleMgr : public SpxBaseMgr {\npublic:\n" +
 		"// " + strings.Repeat("long comment ", 10000) + "\n" +
-		"SPX_API void first(" + strings.Repeat(" ", 70000) + ");\nSPX_API void second();\n};"
+		"SPX_BIND void first(" + strings.Repeat(" ", 70000) + ");\nSPX_BIND void second();\n};"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
 	headers, err := PrepareHeaders(dir)
 	require.NoError(t, err)
@@ -686,4 +496,64 @@ func TestPrepareHeadersDoesNotTruncateLongLines(t *testing.T) {
 	// Exercise the in-memory parser separately: it must not silently return a partial AST.
 	parsed := parseManagerHeader(source)
 	require.Contains(t, parsed.render(true), "GDExtensionSpxExampleSecond")
+}
+
+func TestStaticDeclarationsShareConversionAndReturnHandling(t *testing.T) {
+	header := parseManagerHeader(`class SpxExampleMgr {
+public:
+ SPX_BIND static void run(GdInt code);
+ SPX_BIND static GdString read_label(GdInt id);
+ SPX_BIND static GdArray read_values(GdArray input);
+ SPX_BIND static GdBool fill(SPX_OUT float out[3]);
+ SPX_BIND GdInt read_count();
+};`)
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	for _, file := range []struct{ name, content string }{
+		{"native.cpp", gdSpxExtCpp}, {"web.cpp", gdJsSpxCpp},
+	} {
+		path := filepath.Join(t.TempDir(), file.name)
+		require.NoError(t, generation.writeCPP(path, file.content))
+		output, err := os.ReadFile(path)
+		require.NoError(t, err)
+		body := string(output)
+		for _, method := range []string{"run", "read_label", "read_values", "fill"} {
+			require.Contains(t, body, "SpxExampleMgr::"+method+"(")
+			require.NotContains(t, body, "exampleMgr->"+method+"(")
+		}
+		require.Contains(t, body, "exampleMgr->read_count(")
+		if file.name == "web.cpp" {
+			require.Contains(t, body, "gdspx_prepare_string_wrapper(ret_val)")
+			require.Contains(t, body, "gdspx_bind_string_wrapper(ret_val, result)")
+			require.Contains(t, body, "gdspx_bind_array_wrapper(ret_val)")
+			require.Contains(t, body, "*ret_val = false;")
+		}
+	}
+}
+
+func TestExportMarkerRejectsUnsupportedDeclarations(t *testing.T) {
+	for _, declaration := range []string{
+		"SPX_BIND() void run();", "SPX_BIND(reuse_result) GdVec2 read();",
+		"SPX_BIND static static void run();", "SPX_BIND void run(",
+	} {
+		t.Run(declaration, func(t *testing.T) {
+			require.Panics(t, func() { parseManagerHeader("class SpxExampleMgr {\npublic:\n" + declaration + "\n};") })
+		})
+	}
+}
+
+func TestNativeStringReleaseIsABuiltinNotAManagerMethod(t *testing.T) {
+	headers, err := PrepareHeaders(filepath.Join("..", "..", "..", "..", "..", "godot_modules", "spx"))
+	require.NoError(t, err)
+	require.Contains(t, headers.Raw, "GDExtensionSpxGlobalFreeString)(GdString value)")
+	merged, err := mergeManagerHeader(filepath.Join("..", "..", "..", "..", "..", "godot_modules", "spx"))
+	require.NoError(t, err)
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxGlobalFreeString)(GdString value);\n" + parseManagerHeader(merged).render(true))
+	require.NoError(t, err)
+	for _, fn := range ast.CollectGDExtensionInterfaceFunctions() {
+		require.NotContains(t, fn.Name, "FreeStr")
+	}
+	require.Contains(t, gdSpxExtCpp, "SpxAbi::free_return_cstr(value);")
+	require.Contains(t, gdSpxExtCpp, "REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string)")
 }
