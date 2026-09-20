@@ -76,13 +76,14 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 	r_visual.shared_frames = shared_frames;
 	// Replaying the same clip must retain frame/progress, just as Godot play()
 	// does. A new source gets private metadata, while textures stay shared.
-	if (source_sprite_frames == shared_frames &&
-			visual_source.key == r_visual.source.key &&
-			anim2d->get_sprite_frames().is_valid()) {
+	if (source_sprite_frames == shared_frames && anim2d->get_sprite_frames().is_valid() && anim2d->get_sprite_frames()->has_animation(r_visual.animation)) {
 		r_visual.frames = anim2d->get_sprite_frames();
+	} else if (resMgr->is_dynamic_anim_mode()) {
+		r_visual.frames = spx_copy_animation_frames(shared_frames, r_visual.animation);
 	} else {
-		r_visual.frames =
-				spx_copy_animation_frames(shared_frames, r_visual.animation);
+		// Scene-authored sprites may contain several clips. Retain that complete
+		// library when Node::duplicate() copies the current visual into a clone.
+		r_visual.frames = shared_frames->duplicate(false);
 	}
 	return r_visual.frames.is_valid();
 }
@@ -93,10 +94,16 @@ void SpxSprite::play_anim(GdString p_name, GdFloat p_speed, GdBool p_is_loop, Gd
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
 		return;
 	}
+	const bool changed_animation = anim2d->get_animation() != visual.animation;
 	visual.frames->set_animation_loop(visual.animation, p_is_loop);
 	_commit_visual(visual);
 	playback_speed = p_speed;
 	anim2d->play(visual.animation, p_speed, p_from_end);
+	if (changed_animation && p_from_end) {
+		// commit selected the new name already; preserve Godot play() semantics
+		// for a new clip even when its effective playback speed is positive.
+		anim2d->set_frame_and_progress(visual.frames->get_frame_count(visual.animation) - 1, 1.0);
+	}
 	_on_frame_changed();
 	_update_current_frame_shader_uv_rect();
 }
@@ -107,9 +114,13 @@ void SpxSprite::play_backwards_anim(GdString p_name) {
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
 		return;
 	}
+	const bool changed_animation = anim2d->get_animation() != visual.animation;
 	_commit_visual(visual);
 	playback_speed = -1.0f;
 	anim2d->play_backwards(visual.animation);
+	if (changed_animation) {
+		anim2d->set_frame_and_progress(visual.frames->get_frame_count(visual.animation) - 1, 1.0);
+	}
 	_on_frame_changed();
 	_update_current_frame_shader_uv_rect();
 }

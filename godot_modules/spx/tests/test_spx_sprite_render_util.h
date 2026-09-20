@@ -32,6 +32,8 @@
 #define TEST_SPX_SPRITE_RENDER_UTIL_H
 
 #include "../spx_camera_mgr.h"
+#include "../spx_collision_debug_overlay.h"
+#include "scene/2d/physics/collision_shape_2d.h"
 #include "../spx_engine.h"
 #include "../spx_res_mgr.h"
 #include "../spx_sprite.h"
@@ -43,6 +45,7 @@
 #include "scene/2d/animated_sprite_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+#include "servers/audio_server.h"
 #include "scene/resources/image_texture.h"
 #include "tests/test_macros.h"
 #include "tests/test_utils.h"
@@ -338,13 +341,17 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 	const Ref<Texture2D> texture =
 			fixture.resources->load_texture("spx_visual.png");
 	REQUIRE(texture.is_valid());
+	CHECK(texture->is_pixel_opaque(0, 0));
 	Ref<Image> replacement =
 			Image::create_empty(12, 10, false, Image::FORMAT_RGBA8);
 	replacement->fill(Color(0, 0, 1));
+	replacement->set_pixel(1, 0, Color(0, 0, 1, 0));
 	REQUIRE(replacement->save_png(fixture.png_path) == OK);
 	fixture.resources->reload_texture("spx_visual.png");
 	CHECK(texture == fixture.resources->load_texture("spx_visual.png"));
 	CHECK(texture->get_size() == Vector2(12, 10));
+	CHECK(texture->get_image()->get_pixel(0, 0) == Color(0, 0, 1));
+	CHECK_FALSE(texture->is_pixel_opaque(1, 0));
 	VisualFixture::write_text(fixture.png_path, "invalid PNG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture("spx_visual.png");
@@ -368,11 +375,67 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 			sprite->get_anim2d()->get_sprite_frames()->get_frame_texture("default",
 					0));
 	CHECK(svg_texture->get_size() == Vector2(24, 20));
+	CHECK(svg_texture->get_image()->get_pixel(0, 0) == Color(0, 0, 1));
 	VisualFixture::write_text(fixture.svg_path, "invalid SVG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture("spx_visual.svg");
 	ERR_PRINT_ON
 	CHECK(svg_texture->get_size() == Vector2(24, 20));
+}
+
+TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preserve from-end playback") {
+	// The SceneTree listener returns before Audio initialization. Cloning Area2D
+	// enumerates audio bus properties; the listener owns AudioServer teardown.
+	REQUIRE(AudioServer::get_singleton() == nullptr);
+	AudioDriverManager::initialize(AudioDriverManager::get_driver_count() - 1);
+	AudioServer *audio_server = memnew(AudioServer);
+	audio_server->init();
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	Ref<SpriteFrames> authored;
+	authored.instantiate();
+	authored->remove_animation("default");
+	const Ref<Texture2D> texture = fixture.resources->load_texture(fixture.png_path);
+	for (const char *name : { "idle", "walk" }) {
+		authored->add_animation(name);
+		authored->add_frame(name, texture);
+		authored->add_frame(name, texture);
+	}
+	SpxSprite *sprite = fixture.create_sprite();
+	sprite->get_anim2d()->set_sprite_frames(authored);
+	sprite->on_start();
+	sprite->play_anim("idle", 1, false, false);
+	const Ref<SpriteFrames> private_frames = sprite->get_anim2d()->get_sprite_frames();
+	sprite->play_anim("walk", 1, false, true);
+	CHECK(sprite->get_anim2d()->get_sprite_frames() == private_frames);
+	CHECK_EQ(sprite->get_anim_frame(), 1);
+	CHECK(sprite->get_anim2d()->get_frame_progress() == doctest::Approx(1));
+	CHECK_FALSE(private_frames->get_animation_loop("idle"));
+	sprite->set_anim_speed_scale(-1);
+	sprite->play_backwards_anim("idle");
+	CHECK_EQ(sprite->get_anim_frame(), 1);
+	CHECK(sprite->get_anim2d()->get_frame_progress() == doctest::Approx(1));
+	CHECK(sprite->get_anim_playing_speed() == doctest::Approx(1));
+	SpxSprite *clone = fixture.sprites->get_sprite(fixture.sprites->clone_sprite(sprite->get_gid()));
+	REQUIRE(clone != nullptr);
+	for (bool is_trigger : { false, true }) {
+		CollisionShape2D *target = clone->get_collider(is_trigger);
+		SpxCollisionDebugOverlay *overlay = spx_find_collision_debug_overlay(target);
+		REQUIRE(overlay != nullptr);
+		CHECK(overlay->get_target() == target);
+		CHECK(overlay->get_target() != sprite->get_collider(is_trigger));
+		CHECK_EQ(target->get_child_count(true), 1);
+		CHECK_EQ(target->get_child_count(false), 0);
+		CHECK(overlay->get_internal_mode() == Node::INTERNAL_MODE_FRONT);
+	}
+	clone->play_anim("walk", 1, true, false);
+	const Ref<SpriteFrames> clone_frames = clone->get_anim2d()->get_sprite_frames();
+	CHECK(clone->get_anim2d()->get_animation() == StringName("walk"));
+	CHECK(clone_frames != private_frames);
+	CHECK(clone_frames->has_animation("idle"));
+	CHECK(clone_frames->get_frame_texture("walk", 0) == texture);
+	CHECK_FALSE(private_frames->get_animation_loop("walk"));
+	CHECK(authored->get_animation_loop("idle"));
 }
 
 } // namespace TestSpxSpriteRenderUtil

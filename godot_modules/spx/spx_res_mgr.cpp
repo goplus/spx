@@ -361,7 +361,7 @@ Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
 	}
 	if (cached != nullptr) {
 		Ref<ImageTexture> texture = *cached;
-		texture->set_image(image);
+		SpxImageTexture::replace_image(texture, image);
 		return texture;
 	}
 	Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
