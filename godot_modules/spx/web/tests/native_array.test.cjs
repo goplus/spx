@@ -59,8 +59,10 @@ test('fixed updates preserve array borrows until the next update begins', () => 
         borrows.push(value);
     };
     b.context.FFI = {
-        gdspx_on_engine_update: borrow,
-        gdspx_on_engine_fixed_update: borrow,
+        gdspx_dispatch: (event) => {
+            assert.ok(['OnEngineUpdate', 'OnEngineFixedUpdate'].includes(event));
+            borrow();
+        },
     };
 
     b.callbacks.godot_js_spx_on_engine_update(1 / 60);
@@ -84,7 +86,8 @@ for (const phase of ['update', 'destroy', 'reset']) {
         const b = engineBridge();
         const borrows = [];
         b.context.FFI = {
-            gdspx_on_engine_fixed_update: () => {
+            gdspx_dispatch: (event) => {
+                assert.equal(event, 'OnEngineFixedUpdate');
                 const value = b.run('GdspxBorrowNativeArray(5, 700000, 700000)');
                 value.data[0] = borrows.length + 1;
                 borrows.push(value);
@@ -98,7 +101,8 @@ for (const phase of ['update', 'destroy', 'reset']) {
         assert.deepEqual(b.freed, [], 'FixedUpdate must defer retired arena releases');
 
         let calls = 0;
-        b.context.FFI[`gdspx_on_engine_${phase}`] = () => {
+        b.context.FFI.gdspx_dispatch = (event) => {
+            assert.equal(event, `OnEngine${phase[0].toUpperCase()}${phase.slice(1)}`);
             calls++;
             assert.deepEqual(b.freed, borrows.slice(0, 2).map(value => value.ptr));
             const value = b.run('GdspxBorrowNativeArray(5, 8, 8)');
@@ -108,6 +112,135 @@ for (const phase of ['update', 'destroy', 'reset']) {
         b.callbacks[`godot_js_spx_on_engine_${phase}`](1 / 60);
         assert.equal(calls, 2);
         assert.equal(new Set(b.freed).size, b.freed.length, 'no arena is freed twice');
+    });
+}
+
+test('Web callback signatures match their C value types', () => {
+    const b = engineBridge();
+    const header = fs.readFileSync(path.join(__dirname, '../godot_js_spx.h'), 'utf8');
+    const types = {GdObj: 'j', GdInt: 'j', GdString: 'i', GdFloat: 'f', GdBool: 'i'};
+    for (const [, name, params] of header.matchAll(/extern void (godot_js_spx_on_\w+)\(([^)]*)\);/g)) {
+        const signature = 'v' + (params ? params.split(',').map(param => {
+            const type = param.trim().split(/\s+/)[0];
+            assert.ok(types[type], `unexpected callback type: ${param}`);
+            return types[type];
+        }).join('') : '');
+        assert.equal(b.callbacks[name + '__sig'], signature, name);
+    }
+});
+
+test('integer and object callbacks preserve all 64 bits through dispatch', () => {
+    const b = engineBridge();
+    const calls = [];
+    b.context.FFI = {gdspx_dispatch: (...args) => calls.push(args)};
+    for (const [value, low, high] of [
+        [0n, 0, 0],
+        [0x20000000000001n, 1, 0x200000],
+        [0x7fffffffffffffffn, 0xffffffff, 0x7fffffff],
+        [-0x8000000000000000n, 0, 0x80000000],
+        [-1n, 0xffffffff, 0xffffffff],
+    ]) {
+        for (const [callback, event] of [
+            ['mouse_pressed', 'OnMousePressed'], ['mouse_released', 'OnMouseReleased'],
+            ['key_pressed', 'OnKeyPressed'], ['key_released', 'OnKeyReleased'],
+            ['sprite_ready', 'OnSpriteReady'], ['sprite_destroyed', 'OnSpriteDestroyed'],
+            ['sprite_frames_set_changed', 'OnSpriteFramesSetChanged'],
+            ['sprite_animation_changed', 'OnSpriteAnimationChanged'],
+            ['sprite_frame_changed', 'OnSpriteFrameChanged'],
+            ['sprite_animation_looped', 'OnSpriteAnimationLooped'],
+            ['sprite_animation_finished', 'OnSpriteAnimationFinished'],
+            ['sprite_vfx_finished', 'OnSpriteVfxFinished'],
+            ['sprite_screen_exited', 'OnSpriteScreenExited'], ['sprite_screen_entered', 'OnSpriteScreenEntered'],
+            ['ui_ready', 'OnUiReady'], ['ui_updated', 'OnUiUpdated'], ['ui_destroyed', 'OnUiDestroyed'],
+            ['ui_pressed', 'OnUiPressed'], ['ui_released', 'OnUiReleased'],
+            ['ui_hovered', 'OnUiHovered'], ['ui_clicked', 'OnUiClicked'],
+        ]) {
+            b.callbacks['godot_js_spx_on_' + callback](value);
+            const [name, arg] = calls.pop();
+            assert.equal(name, event);
+            assert.deepEqual({...arg}, {low, high});
+        }
+    }
+});
+
+test('mixed callbacks preserve scalar and string arguments', () => {
+    const b = engineBridge();
+    const calls = [];
+    b.context.FFI = {gdspx_dispatch: (...args) => calls.push(args)};
+    b.context.GodotRuntime = {parseString: ptr => ({8: '精灵', 16: 'hello'})[ptr]};
+    b.callbacks.godot_js_spx_on_scene_sprite_instantiated(-1n, 8);
+    b.callbacks.godot_js_spx_on_ui_text_changed(-1n, 16);
+    b.callbacks.godot_js_spx_on_ui_toggle(-1n, 1);
+    assert.deepEqual(calls.map(([name, obj, value]) => [name, {...obj}, value]), [
+        ['OnSceneSpriteInstantiated', {low: 0xffffffff, high: 0xffffffff}, '精灵'],
+        ['OnUiTextChanged', {low: 0xffffffff, high: 0xffffffff}, 'hello'],
+        ['OnUiToggle', {low: 0xffffffff, high: 0xffffffff}, 1],
+    ]);
+});
+
+test('runtime notifications keep dedicated exports and numeric exit codes', () => {
+    const b = engineBridge();
+    const calls = [];
+    b.context.GodotRuntime = {parseString: () => 'runtime failed'};
+    b.context.FFI = {
+        gdspx_on_runtime_exit: code => calls.push(['exit', code]),
+        gdspx_on_runtime_reset: code => calls.push(['reset', code]),
+        gdspx_on_runtime_panic: message => calls.push(['panic', message]),
+    };
+    for (const code of [0n, 7n, -1n]) {
+        b.callbacks.godot_js_spx_on_runtime_exit(code);
+        b.callbacks.godot_js_spx_on_reset_done(code);
+    }
+    b.callbacks.godot_js_spx_on_runtime_panic(8);
+    assert.deepEqual(calls, [
+        ['exit', 0], ['reset', 0], ['exit', 7], ['reset', 7],
+        ['exit', -1], ['reset', -1], ['panic', 'runtime failed'],
+    ]);
+});
+
+for (const batched of [true, false]) {
+    test(`contacts preserve signed IDs and order before frame dispatch (batched=${batched})`, () => {
+        const b = engineBridge();
+        const calls = [];
+        const records = [];
+        const events = ['CollisionEnter', 'CollisionStay', 'CollisionExit', 'TriggerEnter', 'TriggerStay', 'TriggerExit'];
+        const self = -0x8000000000000000n;
+        const other = 0x2000007fc00001n;
+        b.context.FFI = {gdspx_dispatch: (...args) => calls.push(args)};
+        if (batched) {
+            b.context.gdspx_on_contact_events = bytes => {
+                assert.ok(bytes instanceof Uint8Array);
+                assert.equal(bytes.length, events.length * 20);
+                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+                for (let offset = 0; offset < bytes.length; offset += 20) {
+                    records.push([view.getUint32(offset, true), view.getBigInt64(offset + 4, true), view.getBigInt64(offset + 12, true)]);
+                }
+                calls.push(['batch']);
+            };
+        }
+        for (const frame of ['fixed_update', 'update']) {
+            calls.length = 0;
+            records.length = 0;
+            for (const event of events) {
+                const callback = event.replace(/[A-Z]/g, value => '_' + value.toLowerCase());
+                b.callbacks['godot_js_spx_on' + callback](self, other);
+            }
+            assert.equal(calls.length, 0, 'contacts wait for the next frame');
+            b.callbacks['godot_js_spx_on_engine_' + frame](0.25);
+            const frameEvent = frame === 'update' ? 'OnEngineUpdate' : 'OnEngineFixedUpdate';
+            if (batched) {
+                assert.deepEqual(records, events.map((_, index) => [index + 1, self, other]));
+                assert.deepEqual(calls, [['batch'], [frameEvent, 0.25]]);
+            } else {
+                assert.deepEqual(calls.slice(0, -1).map(([name, a, b]) => [name, {...a}, {...b}]), events.map(event => [
+                    'On' + event, {low: 0, high: 0x80000000}, {low: 0x7fc00001, high: 0x200000},
+                ]));
+                assert.deepEqual(calls.at(-1), [frameEvent, 0.25]);
+            }
+            calls.length = 0;
+            b.callbacks['godot_js_spx_on_engine_' + frame](0.5);
+            assert.deepEqual(calls, [[frameEvent, 0.5]], 'flushed contacts must not repeat');
+        }
     });
 }
 

@@ -54,6 +54,17 @@ func TestWriteEngineJSTrimsTrailingWhitespace(t *testing.T) {
 	require.NotContains(t, string(body), "Module._gdspx_test_do_thing")
 }
 
+func TestWorkerExposesOnlyCallbackDispatcher(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, writeWorker(filepath.Join(root, "internal", "cmd", "codegen")))
+	body, err := os.ReadFile(filepath.Join(root, "cmd", "spx", "template", "platform", "webworker", "worker.wrap.gen.js"))
+	require.NoError(t, err)
+	source := string(body)
+	require.Contains(t, source, `goBridge.getGoFunction("gdspx_dispatch")`)
+	require.Equal(t, 1, strings.Count(source, "goBridge.getGoFunction("))
+	require.NotContains(t, source, "gdspx_on_")
+}
+
 func TestJSFunctionArgsFlattensGdObj(t *testing.T) {
 	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
