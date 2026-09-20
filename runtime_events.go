@@ -99,34 +99,54 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	itime.RegisterTimer(time)
 	p.scriptEventRegistry.manager.AddTimer(coreevent.NewSink(
 		p.owner,
-		coreevent.TapVoid1(call, coreevent.If1(isDebugEventEnabled, func(float64) {
-			spxlog.Debug("OnTimer: %s", nameOf(p.owner))
-		})),
+		func(float64) {
+			if isDebugEventEnabled() {
+				spxlog.Debug("OnTimer: %s", nameOf(p.owner))
+			}
+			if call != nil {
+				call()
+			}
+		},
 		coreevent.MatchApproxFloat(time, 0.001),
 	))
 }
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
-	handler := coreevent.TapVoid1(onKey, coreevent.If1(isDebugEventEnabled, func(Key) {
-		spxlog.Debug("OnKey: %v, %s", key, nameOf(p.owner))
-	}))
+	handler := func(Key) {
+		if isDebugEventEnabled() {
+			spxlog.Debug("OnKey: %v, %s", key, nameOf(p.owner))
+		}
+		if onKey != nil {
+			onKey()
+		}
+	}
 	p.registerKeyHandler([]Key{key}, handler)
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 	p.scriptEventRegistry.manager.AddSwipe(coreevent.NewSink(
 		p.owner,
-		coreevent.TapVoid1(onSwipe, coreevent.If1(isDebugEventEnabled, func(Direction) {
-			spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.owner))
-		})),
+		func(Direction) {
+			if isDebugEventEnabled() {
+				spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.owner))
+			}
+			if onSwipe != nil {
+				onSwipe()
+			}
+		},
 		coreevent.MatchValue(direction),
 	))
 }
 
 func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
-	handler := coreevent.Tap1(onKey, coreevent.If1(isDebugEventEnabled, func(key Key) {
-		spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.owner))
-	}))
+	handler := func(key Key) {
+		if isDebugEventEnabled() {
+			spxlog.Debug("OnKey: %v, %s", keys, nameOf(p.owner))
+		}
+		if onKey != nil {
+			onKey(key)
+		}
+	}
 	p.registerKeyHandler(keys, handler)
 }
 
@@ -140,9 +160,14 @@ func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
 
 func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 	p.registerMessageHandler(
-		coreevent.TapVoid2(onMsg, coreevent.If2(isDebugEventEnabled, func(msg string, data any) {
-			spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.owner))
-		})),
+		func(msg string, _ any) {
+			if isDebugEventEnabled() {
+				spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.owner))
+			}
+			if onMsg != nil {
+				onMsg()
+			}
+		},
 		coreevent.MatchValue(msg),
 	)
 }
@@ -152,9 +177,14 @@ func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) 
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
-	handler := coreevent.TapVoid1(onBackdrop, coreevent.If1(isDebugEventEnabled, func(name BackdropName) {
-		spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.owner))
-	}))
+	handler := func(name BackdropName) {
+		if isDebugEventEnabled() {
+			spxlog.Debug("OnBackdrop: %s, %s", name, nameOf(p.owner))
+		}
+		if onBackdrop != nil {
+			onBackdrop()
+		}
+	}
 	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(
 		p.owner, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
 	))
