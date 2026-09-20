@@ -48,6 +48,8 @@ const (
 )
 
 // Manager groups sinks by Bucket and tracks the one-time start lifecycle.
+// Published slice elements are never changed: registration appends after the
+// existing prefix, deletion copies survivors, and Reset drops slice references.
 type Manager struct {
 	mu      sync.RWMutex
 	buckets [bucketCount][]Sink
@@ -77,7 +79,7 @@ func (m *Manager) DeleteOwner(owner any) {
 func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.buckets[bucket] = appendSinkCopy(m.buckets[bucket], sink)
+	m.buckets[bucket] = append(m.buckets[bucket], sink)
 }
 
 func (m *Manager) TryAddStart(sink Sink) bool {
@@ -86,10 +88,14 @@ func (m *Manager) TryAddStart(sink Sink) bool {
 	if m.startFired {
 		return false
 	}
-	m.buckets[BucketStart] = appendSinkCopy(m.buckets[BucketStart], sink)
+	m.buckets[BucketStart] = append(m.buckets[BucketStart], sink)
 	return true
 }
 
+// Snapshot returns a shallow, read-only view of the current registrations.
+// Callers must not assign its elements. The view remains stable across manager
+// writes, and its capacity is limited so appending cannot change the bucket.
+// Objects referenced by a Sink, including its Handler, are not made immutable.
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
 	out := readOnlySnapshot(m.buckets[bucket])
@@ -97,6 +103,8 @@ func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	return out
 }
 
+// SnapshotStartOnce closes start registration and returns its first snapshot.
+// The returned slice has the same read-only, shallow-view contract as Snapshot.
 func (m *Manager) SnapshotStartOnce() []Sink {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -107,17 +115,7 @@ func (m *Manager) SnapshotStartOnce() []Sink {
 	return readOnlySnapshot(m.buckets[BucketStart])
 }
 
-func appendSinkCopy(sinks []Sink, sink Sink) []Sink {
-	out := make([]Sink, len(sinks)+1)
-	copy(out, sinks)
-	out[len(sinks)] = sink
-	return out
-}
-
 func readOnlySnapshot(sinks []Sink) []Sink {
-	if len(sinks) == 0 {
-		return sinks
-	}
 	return sinks[:len(sinks):len(sinks)]
 }
 
