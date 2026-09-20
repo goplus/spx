@@ -18,24 +18,16 @@ package webffi
 
 import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
 )
 
 // jsResult returns a reuse key and initializer, or empty strings for fresh results.
-// Int64 values share a slot per type; annotated values use one per API.
+// Only the internal split int64 representation shares a slot per type.
 func (g *Generator) jsResult(function *clang.TypedefFunction) (key, initializer string) {
 	typeName := g.EffectiveRawReturnType(function)
 	if _, ok := jsInt64Types[typeName]; ok {
 		return typeName, "{ 'low': 0, 'high': 0 }"
 	}
-	if g.WebBinding(function.Name) != common.WebBindingReuseResult {
-		return "", ""
-	}
-	key = "gd" + common.LoadProcAddressName(function.Name)
-	if typeName == "GdRect2" {
-		return key, "{ 'position': {}, 'size': {} }"
-	}
-	return key, "{}"
+	return "", ""
 }
 
 func (g *Generator) jsResults() map[string]string {

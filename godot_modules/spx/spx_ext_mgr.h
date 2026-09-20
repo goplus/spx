@@ -42,24 +42,18 @@ public:
 
 public:
 	// engine API
-	SPX_API void request_exit(GdInt exit_code);
-	SPX_BINDING(control=reset)
-	SPX_API void request_reset(GdInt exit_code);
-	SPX_BINDING(control=restart)
-	SPX_API void request_restart();
-	SPX_API void on_runtime_panic(GdString msg);
+	SPX_BIND void request_exit(GdInt exit_code);
+	SPX_BIND static void request_reset(GdInt exit_code);
+	SPX_BIND static void request_restart();
+	SPX_BIND void on_runtime_panic(GdString msg);
 	// pause API
-	SPX_BINDING(control=pause)
-	SPX_API void pause();
-	SPX_BINDING(control=resume)
-	SPX_API void resume();
-	SPX_BINDING(control=is_paused)
-	SPX_API GdBool is_paused();
-	SPX_BINDING(control=next_frame)
-	SPX_API void next_frame();
+	SPX_BIND static void pause();
+	SPX_BIND static void resume();
+	SPX_BIND static GdBool is_paused();
+	SPX_BIND static void next_frame();
 
 	// layer sorter
-	SPX_API void set_layer_sorter_mode(GdInt mode);
+	SPX_BIND void set_layer_sorter_mode(GdInt mode);
 };
 
 #endif // SPX_EXT_MGR_H

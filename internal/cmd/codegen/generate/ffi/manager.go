@@ -27,9 +27,6 @@ import (
 )
 
 func (g *Generator) managerBody(function *clang.TypedefFunction) string {
-	if g.IsStringRelease(function) {
-		return "\t// Compatibility API: Go strings own their memory; only raw ABI strings need release."
-	}
 	var sb strings.Builder
 	indent := "\t"
 	args := g.Parameters(function)

@@ -85,8 +85,11 @@ typedef struct {
 
 typedef void *GDExtensionSpxCallbackInfoPtr;
 typedef void (*GDExtensionSpxGlobalRegisterCallbacks)(GDExtensionSpxCallbackInfoPtr callback_ptr);
+// Releases a caller-owned Native string, including after engine shutdown.
+typedef void (*GDExtensionSpxGlobalFreeString)(GdString value);
 
-// callback
+// Callbacks run synchronously. GdString arguments are borrowed until the callback returns;
+// copy them to retain their value, and do not free them.
 typedef void (*GDExtensionSpxCallbackOnEngineStart)();
 typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
 typedef void (*GDExtensionSpxCallbackOnEngineFixedUpdate)(GdFloat delta);
@@ -337,7 +340,6 @@ typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString *ret_valu
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool *ret_value);
 typedef void (*GDExtensionSpxResListDirectories)(GdString p_path, GdString *ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
-typedef void (*GDExtensionSpxResFreeStr)(GdString str);
 typedef void (*GDExtensionSpxResApplyProjectFonts)(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_value);
 typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
 typedef void (*GDExtensionSpxResRegisterFontFace)(GdString font_path, GdString family);

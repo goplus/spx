@@ -110,25 +110,21 @@ public:
 	String _to_engine_path(const String &p_path);
 
 public:
-	SPX_API void create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
-	SPX_API void set_load_mode(GdBool is_direct_mode);
-	SPX_API GdBool get_load_mode();
-	SPX_API GdRect2 get_bound_from_alpha(GdString p_path);
-	SPX_API GdVec2 get_image_size(GdString p_path);
-	SPX_API GdString read_all_text(GdString p_path);
-	SPX_API GdBool has_file(GdString p_path);
-	SPX_API GdString list_directories(GdString p_path);
-	SPX_API void reload_texture(GdString path);
-	// Raw ABI strings are freed independently of engine lifetime. High-level
-	// Go/JS strings own their memory, so their compatibility method is a no-op.
-	SPX_BINDING(abi=free_string)
-	SPX_API void free_str(GdString str);
+	SPX_BIND void create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
+	SPX_BIND void set_load_mode(GdBool is_direct_mode);
+	SPX_BIND GdBool get_load_mode();
+	SPX_BIND GdRect2 get_bound_from_alpha(GdString p_path);
+	SPX_BIND GdVec2 get_image_size(GdString p_path);
+	SPX_BIND GdString read_all_text(GdString p_path);
+	SPX_BIND GdBool has_file(GdString p_path);
+	SPX_BIND GdString list_directories(GdString p_path);
+	SPX_BIND void reload_texture(GdString path);
 	// Atomically applies a complete project font configuration. Returns an
 	// allocated empty string on success, or an allocated diagnostic on failure.
-	SPX_API GdString apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences);
-	SPX_API void set_default_font(GdString font_path);
-	SPX_API void register_font_face(GdString font_path, GdString family);
-	SPX_API void set_font_preferences(GdArray preferences);
+	SPX_BIND GdString apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences);
+	SPX_BIND void set_default_font(GdString font_path);
+	SPX_BIND void register_font_face(GdString font_path, GdString family);
+	SPX_BIND void set_font_preferences(GdArray preferences);
 };
 
 #endif // SPX_RES_MGR_H

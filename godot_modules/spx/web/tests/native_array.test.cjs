@@ -489,7 +489,7 @@ test('integer and object results preserve bits, reuse scope and heap growth', ()
     assert.equal(released.length, names.length * 3);
 });
 
-test('declared Web bindings preserve instance result identity and release on failure', () => {
+test('structured results remain independent and release storage on failure', () => {
     const b = bridge();
     b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
     const released = [];
@@ -503,16 +503,17 @@ test('declared Web bindings preserve instance result identity and release on fai
     b.run('api = new GdspxFuncs(); other = new GdspxFuncs()');
     const first = b.run('api.gdspx_input_get_global_mouse_pos()');
     const second = b.run('api.gdspx_input_get_global_mouse_pos()');
-    assert.equal(first, second);
-    assert.equal(first.x, 2);
+    assert.notEqual(first, second);
+    assert.equal(first.x, 1);
+    assert.equal(second.x, 2);
     assert.notEqual(b.run('other.gdspx_input_get_global_mouse_pos()'), first);
     assert.notEqual(b.run('api.gdspx_camera_get_camera_position()'), b.run('api.gdspx_camera_get_camera_position()'));
     assert.equal(released.length, 5);
     b.module._gdspx_input_get_global_mouse_pos = () => { throw new Error('engine failure'); };
     assert.throws(() => b.run('api.gdspx_input_get_global_mouse_pos()'), /engine failure/);
     assert.equal(released.length, 6);
-    b.module._gdspx_res_free_str = () => { throw new Error('native release must not run on Web'); };
-    assert.equal(b.run('api.gdspx_res_free_str("value")'), undefined);
+    assert.equal(b.run('api.gdspx_res_free_str'), undefined);
+    assert.equal(b.run('api.gdspx_global_free_string'), undefined);
 });
 
 test('writable arrays retain caller storage and reject copied or stale buffers', () => {

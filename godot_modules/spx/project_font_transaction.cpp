@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "project_font_transaction.h"
+#include "spx_abi.h"
 
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
@@ -75,7 +76,7 @@ bool strings_from_array(GdArray p_values, const String &p_name, Vector<String> &
 	}
 	GdString *values = nullptr;
 	if (p_values->size > 0) {
-		values = SpxBaseMgr::get_array<GdString>(p_values, 0);
+		values = SpxAbi::get_array<GdString>(p_values, 0);
 		if (values == nullptr) {
 			r_error = p_name + " has an invalid array payload.";
 			return false;

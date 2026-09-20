@@ -367,8 +367,8 @@ void SpxSpriteMgr::on_start() {
 			sprite->on_start();
 			_register_sprite(sprite);
 			auto value = sprite->get_spx_type_name();
-			auto data = SpxReturnStr(value);
-			SPX_CALLBACK->func_on_scene_sprite_instantiated(sprite->get_gid(), data);
+			CharString data = value.utf8();
+			SPX_CALLBACK->func_on_scene_sprite_instantiated(sprite->get_gid(), data.get_data());
 		}
 	}
 }

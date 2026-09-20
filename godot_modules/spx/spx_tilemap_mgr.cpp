@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_tilemap_mgr.h"
+#include "spx_abi.h"
 
 #include "spx_draw_tiles.h"
 
@@ -82,7 +83,7 @@ void SpxTilemapMgr::set_tile_with_collision_info(GdString texture_path, GdArray 
 	auto len = collision_points == nullptr ? 0 : collision_points->size;
 	const float *data = nullptr;
 	if (len > 0) {
-		data = SpxBaseMgr::get_array<float>(collision_points, 0);
+		data = SpxAbi::get_array<float>(collision_points, 0);
 		if (data == nullptr) {
 			print_error("Invalid collision points array");
 			return;

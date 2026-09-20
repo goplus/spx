@@ -43,6 +43,7 @@
 #include "servers/physics_server_2d.h"
 
 #include "spx_base_mgr.h"
+#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_ext_mgr.h"
 #include "spx_image_texture.h"
@@ -354,7 +355,7 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	if (len <= 0) {
 		return;
 	}
-	const float *position_data = SpxBaseMgr::get_array<float>(positions, 0);
+	const float *position_data = SpxAbi::get_array<float>(positions, 0);
 	if (position_data == nullptr) {
 		return;
 	}

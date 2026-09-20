@@ -750,12 +750,6 @@ void cgo_callfn_GDExtensionSpxResReloadTexture(const GDExtensionSpxResReloadText
 	}
 	fn(path);
 }
-void cgo_callfn_GDExtensionSpxResFreeStr(const GDExtensionSpxResFreeStr fn, GdString str) {
-	if (!fn) {
-		return;
-	}
-	fn(str);
-}
 void cgo_callfn_GDExtensionSpxResApplyProjectFonts(const GDExtensionSpxResApplyProjectFonts fn, GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString* ret_val) {
 	if (!fn) {
 		return;

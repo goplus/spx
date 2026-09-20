@@ -53,11 +53,9 @@ void SpxExtMgr::request_restart() {
 }
 
 void SpxExtMgr::on_runtime_panic(GdString msg) {
-	auto msg_str = SpxStr(msg);
 	auto callback = SpxEngine::get_singleton()->get_on_runtime_panic();
 	if (callback != nullptr) {
-		auto str = SpxReturnStr(msg_str);
-		callback(str);
+		callback(msg);
 	}
 }
 

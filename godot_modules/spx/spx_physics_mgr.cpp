@@ -45,18 +45,19 @@
 #include "gdextension_spx_ext.h"
 #include "spx_camera_mgr.h"
 #include "spx_coordinate.h"
+#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
 
 GdArray SpxRaycastInfo::ToArray() {
-	GdArray result_array = SpxBaseMgr::create_array(GD_ARRAY_TYPE_INT64, 6);
-	SpxBaseMgr::set_array(result_array, 0, (GdInt)collide);
-	SpxBaseMgr::set_array(result_array, 1, (GdInt)sprite_gid);
-	SpxBaseMgr::set_array(result_array, 2, spx_float_to_int(position.x));
-	SpxBaseMgr::set_array(result_array, 3, spx_float_to_int(position.y));
-	SpxBaseMgr::set_array(result_array, 4, spx_float_to_int(normal.x));
-	SpxBaseMgr::set_array(result_array, 5, spx_float_to_int(normal.y));
+	GdArray result_array = SpxAbi::create_array(GD_ARRAY_TYPE_INT64, 6);
+	SpxAbi::set_array(result_array, 0, (GdInt)collide);
+	SpxAbi::set_array(result_array, 1, (GdInt)sprite_gid);
+	SpxAbi::set_array(result_array, 2, spx_float_to_int(position.x));
+	SpxAbi::set_array(result_array, 3, spx_float_to_int(position.y));
+	SpxAbi::set_array(result_array, 4, spx_float_to_int(normal.x));
+	SpxAbi::set_array(result_array, 5, spx_float_to_int(normal.y));
 	return result_array;
 }
 
@@ -104,7 +105,7 @@ SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sp
 
 	HashSet<RID> ignore_set;
 	if (ignore_sprites && ignore_sprites->size > 0) {
-		const GdObj *sprite_data = SpxBaseMgr::get_array<GdObj>(ignore_sprites, 0);
+		const GdObj *sprite_data = SpxAbi::get_array<GdObj>(ignore_sprites, 0);
 		if (sprite_data == nullptr) {
 			return info;
 		}
@@ -378,7 +379,7 @@ GdArray SpxPhysicsMgr::_check_collision(RID shape, GdVec2 pos, GdInt collision_m
 	auto node = (Node2D *)get_root();
 	PhysicsDirectSpaceState2D *space_state = node->get_world_2d()->get_direct_space_state();
 	if (!space_state) {
-		return create_array(GD_ARRAY_TYPE_GDOBJ, 0);
+		return SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, 0);
 	}
 
 	Transform2D query_transform(0, spx_to_godot_vec2(pos));
@@ -406,10 +407,10 @@ GdArray SpxPhysicsMgr::_check_collision(RID shape, GdVec2 pos, GdInt collision_m
 		}
 	}
 	int valid_count = resultIds.size();
-	GdArray result_array = create_array(GD_ARRAY_TYPE_GDOBJ, valid_count);
+	GdArray result_array = SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, valid_count);
 	for (int i = 0; i < valid_count; i++) {
 		auto val = (GdObj)resultIds.get(i);
-		set_array(result_array, i, val);
+		SpxAbi::set_array(result_array, i, val);
 	}
 	return result_array;
 }

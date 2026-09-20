@@ -21,28 +21,17 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-)
-
-// WebBindingMode selects the JavaScript implementation of an annotated method.
-type WebBindingMode string
-
-const (
-	WebBindingDefault     WebBindingMode = ""
-	WebBindingNoop        WebBindingMode = "noop"
-	WebBindingReuseResult WebBindingMode = "reuse_result"
 )
 
 // GenerationMetadata is collected from headers before binding templates run.
 type GenerationMetadata struct {
 	ManagerNames []string
 	ArrayBridges map[string]ArrayBridge
-	WebBindings  map[string]WebBindingMode
-	// StringReleases consume a raw ABI string; high-level Go/JS strings need no release.
-	StringReleases map[string]bool
-	// ControlMethods route lifecycle controls directly through Spx's thread-safe facade.
-	ControlMethods map[string]string
+	// StaticMethods preserves the C++ target of exported static declarations.
+	StaticMethods map[string]string
 	// ReturnParameters identifies outputs added when lowering source return values.
 	ReturnParameters map[string]CParam
 }
@@ -56,9 +45,7 @@ type GenerationContext struct {
 	managerNames     clang.ManagerNames
 	goTypes          map[string]string
 	arrayBridges     map[string]ArrayBridge
-	webBindings      map[string]WebBindingMode
-	stringReleases   map[string]bool
-	controlMethods   map[string]string
+	staticMethods    map[string]string
 	returnParameters map[string]CParam
 	parameters       map[string][]Parameter
 	parameterNames   map[string]map[string]Parameter
@@ -86,19 +73,15 @@ func (c *GenerationContext) IsManagerMethod(function *clang.TypedefFunction) boo
 	return c.managerSet[c.GetManagerName(function.Name)]
 }
 
-func (c *GenerationContext) WebBinding(functionName string) WebBindingMode {
-	return c.webBindings[functionName]
-}
-
-func (c *GenerationContext) IsStringRelease(function *clang.TypedefFunction) bool {
-	return function != nil && c.stringReleases[function.Name]
-}
-
-func (c *GenerationContext) ControlTarget(function *clang.TypedefFunction) string {
-	if function != nil && c.controlMethods[function.Name] != "" {
-		return "Spx::" + c.controlMethods[function.Name]
+// MethodTarget selects static dispatch from the source declaration, otherwise
+// the instance method on the generated manager accessor.
+func (c *GenerationContext) MethodTarget(function *clang.TypedefFunction) string {
+	if target := c.staticMethods[function.Name]; target != "" {
+		return target
 	}
-	return ""
+	manager := c.GetManagerName(function.Name)
+	name := strings.TrimPrefix(LoadProcAddressName(function.Name), "spx_"+manager+"_")
+	return manager + "Mgr->" + name
 }
 
 func (c *GenerationContext) ArrayBridge(functionName string) (ArrayBridge, bool) {
@@ -138,9 +121,7 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 		managerSet:       make(map[string]bool),
 		managerNames:     clang.NewManagerNames(metadata.ManagerNames),
 		arrayBridges:     make(map[string]ArrayBridge),
-		webBindings:      maps.Clone(metadata.WebBindings),
-		stringReleases:   maps.Clone(metadata.StringReleases),
-		controlMethods:   maps.Clone(metadata.ControlMethods),
+		staticMethods:    maps.Clone(metadata.StaticMethods),
 		returnParameters: maps.Clone(metadata.ReturnParameters),
 		parameters:       make(map[string][]Parameter),
 		parameterNames:   make(map[string]map[string]Parameter),

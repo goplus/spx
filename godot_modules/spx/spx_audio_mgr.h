@@ -56,30 +56,30 @@ public:
 	void on_update(float delta) override;
 	void on_reset(int reset_code) override;
 
-	SPX_API void stop_all();
-	SPX_API GdObj create_audio();
-	SPX_API void destroy_audio(GdObj obj);
+	SPX_BIND void stop_all();
+	SPX_BIND GdObj create_audio();
+	SPX_BIND void destroy_audio(GdObj obj);
 
-	SPX_API void set_pitch(GdObj obj, GdFloat pitch);
-	SPX_API GdFloat get_pitch(GdObj obj);
-	SPX_API void set_pan(GdObj obj, GdFloat pan);
-	SPX_API GdFloat get_pan(GdObj obj);
-	SPX_API void set_volume(GdObj obj, GdFloat volume);
-	SPX_API GdFloat get_volume(GdObj obj);
+	SPX_BIND void set_pitch(GdObj obj, GdFloat pitch);
+	SPX_BIND GdFloat get_pitch(GdObj obj);
+	SPX_BIND void set_pan(GdObj obj, GdFloat pan);
+	SPX_BIND GdFloat get_pan(GdObj obj);
+	SPX_BIND void set_volume(GdObj obj, GdFloat volume);
+	SPX_BIND GdFloat get_volume(GdObj obj);
 
 	// play audio and return the audioid
-	SPX_API GdInt play_with_attenuation(GdObj obj, GdString path, GdObj owner_id, GdFloat attenuation, GdFloat max_distance);
-	SPX_API GdInt play(GdObj obj, GdString path);
-	SPX_API void pause(GdInt aid);
-	SPX_API void resume(GdInt aid);
-	SPX_API void stop(GdInt aid);
-	SPX_API GdBool restart(GdInt aid);
-	SPX_API void set_loop(GdInt aid, GdBool loop);
-	SPX_API GdBool get_loop(GdInt aid);
+	SPX_BIND GdInt play_with_attenuation(GdObj obj, GdString path, GdObj owner_id, GdFloat attenuation, GdFloat max_distance);
+	SPX_BIND GdInt play(GdObj obj, GdString path);
+	SPX_BIND void pause(GdInt aid);
+	SPX_BIND void resume(GdInt aid);
+	SPX_BIND void stop(GdInt aid);
+	SPX_BIND GdBool restart(GdInt aid);
+	SPX_BIND void set_loop(GdInt aid, GdBool loop);
+	SPX_BIND GdBool get_loop(GdInt aid);
 
-	SPX_API GdFloat get_timer(GdInt aid);
-	SPX_API void set_timer(GdInt aid, GdFloat time);
-	SPX_API GdBool is_playing(GdInt aid);
+	SPX_BIND GdFloat get_timer(GdInt aid);
+	SPX_BIND void set_timer(GdInt aid, GdFloat time);
+	SPX_BIND GdBool is_playing(GdInt aid);
 };
 
 #endif // SPX_AUDIO_MGR_H

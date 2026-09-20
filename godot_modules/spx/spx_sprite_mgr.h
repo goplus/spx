@@ -139,168 +139,168 @@ public:
 	void collect_sortable_sprites(Vector<ISortableSprite *> &out);
 
 public:
-	SPX_API void set_dont_destroy_on_load(GdObj obj);
+	SPX_BIND void set_dont_destroy_on_load(GdObj obj);
 	// process
-	SPX_API void set_process(GdObj obj, GdBool is_on);
-	SPX_API void set_physic_process(GdObj obj, GdBool is_on);
+	SPX_BIND void set_process(GdObj obj, GdBool is_on);
+	SPX_BIND void set_physic_process(GdObj obj, GdBool is_on);
 
-	SPX_API void set_type_name(GdObj obj, GdString type_name);
+	SPX_BIND void set_type_name(GdObj obj, GdString type_name);
 
-	SPX_API void set_pivot(GdObj obj, GdVec2 pivot);
-	SPX_API GdVec2 get_pivot(GdObj obj);
+	SPX_BIND void set_pivot(GdObj obj, GdVec2 pivot);
+	SPX_BIND GdVec2 get_pivot(GdObj obj);
 
 	// children
-	SPX_API void set_child_position(GdObj obj, GdString path, GdVec2 pos);
-	SPX_API GdVec2 get_child_position(GdObj obj, GdString path);
-	SPX_API void set_child_rotation(GdObj obj, GdString path, GdFloat rot);
-	SPX_API GdFloat get_child_rotation(GdObj obj, GdString path);
-	SPX_API void set_child_scale(GdObj obj, GdString path, GdVec2 scale);
-	SPX_API GdVec2 get_child_scale(GdObj obj, GdString path);
+	SPX_BIND void set_child_position(GdObj obj, GdString path, GdVec2 pos);
+	SPX_BIND GdVec2 get_child_position(GdObj obj, GdString path);
+	SPX_BIND void set_child_rotation(GdObj obj, GdString path, GdFloat rot);
+	SPX_BIND GdFloat get_child_rotation(GdObj obj, GdString path);
+	SPX_BIND void set_child_scale(GdObj obj, GdString path, GdVec2 scale);
+	SPX_BIND GdVec2 get_child_scale(GdObj obj, GdString path);
 
-	SPX_API GdBool check_collision(GdObj obj, GdObj target, GdBool is_src_trigger, GdBool is_dst_trigger);
-	SPX_API GdBool check_collision_with_point(GdObj obj, GdVec2 point, GdBool is_click_query);
-	SPX_API void set_debug_collision_visible(GdObj obj, GdBool visible);
-	SPX_API GdBool is_debug_collision_visible(GdObj obj);
-	SPX_API GdObj create_backdrop(GdString path);
-	SPX_API GdObj create_sprite(GdString path, GdVec2 pos);
-	SPX_API GdObj create_bare_sprite(GdVec2 pos);
-	SPX_API GdObj clone_sprite(GdObj obj);
-	SPX_API GdBool destroy_sprite(GdObj obj);
-	SPX_API GdBool is_sprite_alive(GdObj obj);
-	SPX_API void set_position(GdObj obj, GdVec2 pos);
-	SPX_API void set_transform(GdObj obj, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
-	SPX_API GdVec2 get_position(GdObj obj);
-	SPX_API void set_rotation(GdObj obj, GdFloat rot);
-	SPX_API GdFloat get_rotation(GdObj obj);
-	SPX_API void set_scale(GdObj obj, GdVec2 scale);
-	SPX_API GdVec2 get_scale(GdObj obj);
-	SPX_API void set_render_scale(GdObj obj, GdVec2 scale);
-	SPX_API GdVec2 get_render_scale(GdObj obj);
-	SPX_API void set_color(GdObj obj, GdColor color);
-	SPX_API GdColor get_color(GdObj obj);
+	SPX_BIND GdBool check_collision(GdObj obj, GdObj target, GdBool is_src_trigger, GdBool is_dst_trigger);
+	SPX_BIND GdBool check_collision_with_point(GdObj obj, GdVec2 point, GdBool is_click_query);
+	SPX_BIND void set_debug_collision_visible(GdObj obj, GdBool visible);
+	SPX_BIND GdBool is_debug_collision_visible(GdObj obj);
+	SPX_BIND GdObj create_backdrop(GdString path);
+	SPX_BIND GdObj create_sprite(GdString path, GdVec2 pos);
+	SPX_BIND GdObj create_bare_sprite(GdVec2 pos);
+	SPX_BIND GdObj clone_sprite(GdObj obj);
+	SPX_BIND GdBool destroy_sprite(GdObj obj);
+	SPX_BIND GdBool is_sprite_alive(GdObj obj);
+	SPX_BIND void set_position(GdObj obj, GdVec2 pos);
+	SPX_BIND void set_transform(GdObj obj, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
+	SPX_BIND GdVec2 get_position(GdObj obj);
+	SPX_BIND void set_rotation(GdObj obj, GdFloat rot);
+	SPX_BIND GdFloat get_rotation(GdObj obj);
+	SPX_BIND void set_scale(GdObj obj, GdVec2 scale);
+	SPX_BIND GdVec2 get_scale(GdObj obj);
+	SPX_BIND void set_render_scale(GdObj obj, GdVec2 scale);
+	SPX_BIND GdVec2 get_render_scale(GdObj obj);
+	SPX_BIND void set_color(GdObj obj, GdColor color);
+	SPX_BIND GdColor get_color(GdObj obj);
 
-	SPX_API void set_material_shader(GdObj obj, GdString path);
-	SPX_API GdString get_material_shader(GdObj obj);
-	SPX_API void set_material_params(GdObj obj, GdString effect, GdFloat amount);
-	SPX_API GdFloat get_material_params(GdObj obj, GdString effect);
+	SPX_BIND void set_material_shader(GdObj obj, GdString path);
+	SPX_BIND GdString get_material_shader(GdObj obj);
+	SPX_BIND void set_material_params(GdObj obj, GdString effect, GdFloat amount);
+	SPX_BIND GdFloat get_material_params(GdObj obj, GdString effect);
 
-	SPX_API void set_material_params_vec(GdObj obj, GdString effect, GdFloat x, GdFloat y, GdFloat z, GdFloat w);
+	SPX_BIND void set_material_params_vec(GdObj obj, GdString effect, GdFloat x, GdFloat y, GdFloat z, GdFloat w);
 
-	SPX_API void set_material_params_vec4(GdObj obj, GdString effect, GdVec4 vec4);
-	SPX_API GdVec4 get_material_params_vec4(GdObj obj, GdString effect);
+	SPX_BIND void set_material_params_vec4(GdObj obj, GdString effect, GdVec4 vec4);
+	SPX_BIND GdVec4 get_material_params_vec4(GdObj obj, GdString effect);
 
-	SPX_API void set_material_params_color(GdObj obj, GdString effect, GdColor color);
-	SPX_API GdColor get_material_params_color(GdObj obj, GdString effect);
+	SPX_BIND void set_material_params_color(GdObj obj, GdString effect, GdColor color);
+	SPX_BIND GdColor get_material_params_color(GdObj obj, GdString effect);
 
-	SPX_API void set_texture_atlas(GdObj obj, GdString path, GdRect2 rect2);
-	SPX_API void set_texture(GdObj obj, GdString path);
-	SPX_API void set_texture_atlas_direct(GdObj obj, GdString path, GdRect2 rect2);
-	SPX_API void set_texture_direct(GdObj obj, GdString path);
+	SPX_BIND void set_texture_atlas(GdObj obj, GdString path, GdRect2 rect2);
+	SPX_BIND void set_texture(GdObj obj, GdString path);
+	SPX_BIND void set_texture_atlas_direct(GdObj obj, GdString path, GdRect2 rect2);
+	SPX_BIND void set_texture_direct(GdObj obj, GdString path);
 
-	SPX_API GdString get_texture(GdObj obj);
-	SPX_API void set_visible(GdObj obj, GdBool visible);
-	SPX_API GdBool get_visible(GdObj obj);
-	SPX_API GdInt get_z_index(GdObj obj);
-	SPX_API void set_z_index(GdObj obj, GdInt z);
+	SPX_BIND GdString get_texture(GdObj obj);
+	SPX_BIND void set_visible(GdObj obj, GdBool visible);
+	SPX_BIND GdBool get_visible(GdObj obj);
+	SPX_BIND GdInt get_z_index(GdObj obj);
+	SPX_BIND void set_z_index(GdObj obj, GdInt z);
 
 	// animation
-	SPX_API void play_anim(GdObj obj, GdString p_name, GdFloat p_speed, GdBool isLoop, GdBool p_revert);
-	SPX_API void play_backwards_anim(GdObj obj, GdString p_name);
-	SPX_API void pause_anim(GdObj obj);
-	SPX_API void stop_anim(GdObj obj);
-	SPX_API GdBool is_playing_anim(GdObj obj);
-	SPX_API void set_anim(GdObj obj, GdString p_name);
-	SPX_API GdString get_anim(GdObj obj);
-	SPX_API void set_anim_frame(GdObj obj, GdInt p_frame);
-	SPX_API GdInt get_anim_frame(GdObj obj);
-	SPX_API void set_anim_speed_scale(GdObj obj, GdFloat p_speed_scale);
-	SPX_API GdFloat get_anim_speed_scale(GdObj obj);
-	SPX_API GdFloat get_anim_playing_speed(GdObj obj);
-	SPX_API void set_anim_centered(GdObj obj, GdBool p_center);
-	SPX_API GdBool is_anim_centered(GdObj obj);
-	SPX_API void set_anim_offset(GdObj obj, GdVec2 p_offset);
-	SPX_API GdVec2 get_anim_offset(GdObj obj);
-	SPX_API void set_anim_flip_h(GdObj obj, GdBool p_flip);
-	SPX_API GdBool is_anim_flipped_h(GdObj obj);
-	SPX_API void set_anim_flip_v(GdObj obj, GdBool p_flip);
-	SPX_API GdBool is_anim_flipped_v(GdObj obj);
-	SPX_API GdString get_current_anim_name(GdObj obj);
+	SPX_BIND void play_anim(GdObj obj, GdString p_name, GdFloat p_speed, GdBool isLoop, GdBool p_revert);
+	SPX_BIND void play_backwards_anim(GdObj obj, GdString p_name);
+	SPX_BIND void pause_anim(GdObj obj);
+	SPX_BIND void stop_anim(GdObj obj);
+	SPX_BIND GdBool is_playing_anim(GdObj obj);
+	SPX_BIND void set_anim(GdObj obj, GdString p_name);
+	SPX_BIND GdString get_anim(GdObj obj);
+	SPX_BIND void set_anim_frame(GdObj obj, GdInt p_frame);
+	SPX_BIND GdInt get_anim_frame(GdObj obj);
+	SPX_BIND void set_anim_speed_scale(GdObj obj, GdFloat p_speed_scale);
+	SPX_BIND GdFloat get_anim_speed_scale(GdObj obj);
+	SPX_BIND GdFloat get_anim_playing_speed(GdObj obj);
+	SPX_BIND void set_anim_centered(GdObj obj, GdBool p_center);
+	SPX_BIND GdBool is_anim_centered(GdObj obj);
+	SPX_BIND void set_anim_offset(GdObj obj, GdVec2 p_offset);
+	SPX_BIND GdVec2 get_anim_offset(GdObj obj);
+	SPX_BIND void set_anim_flip_h(GdObj obj, GdBool p_flip);
+	SPX_BIND GdBool is_anim_flipped_h(GdObj obj);
+	SPX_BIND void set_anim_flip_v(GdObj obj, GdBool p_flip);
+	SPX_BIND GdBool is_anim_flipped_v(GdObj obj);
+	SPX_BIND GdString get_current_anim_name(GdObj obj);
 
 	// physics
-	SPX_API void set_velocity(GdObj obj, GdVec2 velocity);
-	SPX_API GdVec2 get_velocity(GdObj obj);
-	SPX_API GdBool is_on_floor(GdObj obj);
-	SPX_API GdBool is_on_floor_only(GdObj obj);
-	SPX_API GdBool is_on_wall(GdObj obj);
-	SPX_API GdBool is_on_wall_only(GdObj obj);
-	SPX_API GdBool is_on_ceiling(GdObj obj);
-	SPX_API GdBool is_on_ceiling_only(GdObj obj);
-	SPX_API GdVec2 get_last_motion(GdObj obj);
-	SPX_API GdVec2 get_position_delta(GdObj obj);
-	SPX_API GdVec2 get_floor_normal(GdObj obj);
-	SPX_API GdVec2 get_wall_normal(GdObj obj);
-	SPX_API GdVec2 get_real_velocity(GdObj obj);
-	SPX_API void move_and_slide(GdObj obj);
+	SPX_BIND void set_velocity(GdObj obj, GdVec2 velocity);
+	SPX_BIND GdVec2 get_velocity(GdObj obj);
+	SPX_BIND GdBool is_on_floor(GdObj obj);
+	SPX_BIND GdBool is_on_floor_only(GdObj obj);
+	SPX_BIND GdBool is_on_wall(GdObj obj);
+	SPX_BIND GdBool is_on_wall_only(GdObj obj);
+	SPX_BIND GdBool is_on_ceiling(GdObj obj);
+	SPX_BIND GdBool is_on_ceiling_only(GdObj obj);
+	SPX_BIND GdVec2 get_last_motion(GdObj obj);
+	SPX_BIND GdVec2 get_position_delta(GdObj obj);
+	SPX_BIND GdVec2 get_floor_normal(GdObj obj);
+	SPX_BIND GdVec2 get_wall_normal(GdObj obj);
+	SPX_BIND GdVec2 get_real_velocity(GdObj obj);
+	SPX_BIND void move_and_slide(GdObj obj);
 
-	SPX_API void set_gravity(GdObj obj, GdFloat gravity);
-	SPX_API GdFloat get_gravity(GdObj obj);
-	SPX_API void set_mass(GdObj obj, GdFloat mass);
-	SPX_API GdFloat get_mass(GdObj obj);
-	SPX_API void add_force(GdObj obj, GdVec2 force);
-	SPX_API void add_impulse(GdObj obj, GdVec2 impulse);
+	SPX_BIND void set_gravity(GdObj obj, GdFloat gravity);
+	SPX_BIND GdFloat get_gravity(GdObj obj);
+	SPX_BIND void set_mass(GdObj obj, GdFloat mass);
+	SPX_BIND GdFloat get_mass(GdObj obj);
+	SPX_BIND void add_force(GdObj obj, GdVec2 force);
+	SPX_BIND void add_impulse(GdObj obj, GdVec2 impulse);
 
-	SPX_API void set_physics_mode(GdObj obj, GdInt mode);
-	SPX_API GdInt get_physics_mode(GdObj obj);
-	SPX_API void set_use_gravity(GdObj obj, GdBool enabled);
-	SPX_API GdBool is_use_gravity(GdObj obj);
-	SPX_API void set_gravity_scale(GdObj obj, GdFloat scale);
-	SPX_API GdFloat get_gravity_scale(GdObj obj);
-	SPX_API void set_drag(GdObj obj, GdFloat drag);
-	SPX_API GdFloat get_drag(GdObj obj);
-	SPX_API void set_friction(GdObj obj, GdFloat friction);
-	SPX_API GdFloat get_friction(GdObj obj);
+	SPX_BIND void set_physics_mode(GdObj obj, GdInt mode);
+	SPX_BIND GdInt get_physics_mode(GdObj obj);
+	SPX_BIND void set_use_gravity(GdObj obj, GdBool enabled);
+	SPX_BIND GdBool is_use_gravity(GdObj obj);
+	SPX_BIND void set_gravity_scale(GdObj obj, GdFloat scale);
+	SPX_BIND GdFloat get_gravity_scale(GdObj obj);
+	SPX_BIND void set_drag(GdObj obj, GdFloat drag);
+	SPX_BIND GdFloat get_drag(GdObj obj);
+	SPX_BIND void set_friction(GdObj obj, GdFloat friction);
+	SPX_BIND GdFloat get_friction(GdObj obj);
 
-	SPX_API void set_collision_layer(GdObj obj, GdInt layer);
-	SPX_API GdInt get_collision_layer(GdObj obj);
-	SPX_API void set_collision_mask(GdObj obj, GdInt mask);
-	SPX_API GdInt get_collision_mask(GdObj obj);
+	SPX_BIND void set_collision_layer(GdObj obj, GdInt layer);
+	SPX_BIND GdInt get_collision_layer(GdObj obj);
+	SPX_BIND void set_collision_mask(GdObj obj, GdInt mask);
+	SPX_BIND GdInt get_collision_mask(GdObj obj);
 
-	SPX_API void set_trigger_layer(GdObj obj, GdInt layer);
-	SPX_API GdInt get_trigger_layer(GdObj obj);
-	SPX_API void set_trigger_mask(GdObj obj, GdInt mask);
-	SPX_API GdInt get_trigger_mask(GdObj obj);
+	SPX_BIND void set_trigger_layer(GdObj obj, GdInt layer);
+	SPX_BIND GdInt get_trigger_layer(GdObj obj);
+	SPX_BIND void set_trigger_mask(GdObj obj, GdInt mask);
+	SPX_BIND GdInt get_trigger_mask(GdObj obj);
 
-	SPX_API void set_collider_rect(GdObj obj, GdVec2 center, GdVec2 size);
-	SPX_API void set_collider_circle(GdObj obj, GdVec2 center, GdFloat radius);
-	SPX_API void set_collider_capsule(GdObj obj, GdVec2 center, GdVec2 size);
-	SPX_API void set_collider_polygon(GdObj obj, GdVec2 center, GdArray points);
-	SPX_API void set_collision_enabled(GdObj obj, GdBool enabled);
-	SPX_API GdBool is_collision_enabled(GdObj obj);
+	SPX_BIND void set_collider_rect(GdObj obj, GdVec2 center, GdVec2 size);
+	SPX_BIND void set_collider_circle(GdObj obj, GdVec2 center, GdFloat radius);
+	SPX_BIND void set_collider_capsule(GdObj obj, GdVec2 center, GdVec2 size);
+	SPX_BIND void set_collider_polygon(GdObj obj, GdVec2 center, GdArray points);
+	SPX_BIND void set_collision_enabled(GdObj obj, GdBool enabled);
+	SPX_BIND GdBool is_collision_enabled(GdObj obj);
 
-	SPX_API void set_trigger_rect(GdObj obj, GdVec2 center, GdVec2 size);
-	SPX_API void set_trigger_circle(GdObj obj, GdVec2 center, GdFloat radius);
-	SPX_API void set_trigger_capsule(GdObj obj, GdVec2 center, GdVec2 size);
-	SPX_API void set_trigger_polygon(GdObj obj, GdVec2 center, GdArray points);
-	SPX_API void set_trigger_enabled(GdObj obj, GdBool trigger);
-	SPX_API GdBool is_trigger_enabled(GdObj obj);
+	SPX_BIND void set_trigger_rect(GdObj obj, GdVec2 center, GdVec2 size);
+	SPX_BIND void set_trigger_circle(GdObj obj, GdVec2 center, GdFloat radius);
+	SPX_BIND void set_trigger_capsule(GdObj obj, GdVec2 center, GdVec2 size);
+	SPX_BIND void set_trigger_polygon(GdObj obj, GdVec2 center, GdArray points);
+	SPX_BIND void set_trigger_enabled(GdObj obj, GdBool trigger);
+	SPX_BIND GdBool is_trigger_enabled(GdObj obj);
 
 	// misc
 	// Matches any opaque source pixel against the target pixel color; the source pixel color itself is not filtered.
-	SPX_API GdBool check_collision_by_color(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold);
+	SPX_BIND GdBool check_collision_by_color(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold);
 	// Matches both source and target pixel colors using the same RGBA distance threshold on each side.
-	SPX_API GdBool check_collision_by_colors(GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold);
-	SPX_API GdBool check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold);
-	SPX_API GdBool check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect);
+	SPX_BIND GdBool check_collision_by_colors(GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold);
+	SPX_BIND GdBool check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold);
+	SPX_BIND GdBool check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect);
 
 	// pixel collision sampling configuration
-	SPX_API void set_pixel_collision_sampling_step(GdInt step);
-	SPX_API GdInt get_pixel_collision_sampling_step();
+	SPX_BIND void set_pixel_collision_sampling_step(GdInt step);
+	SPX_BIND GdInt get_pixel_collision_sampling_step();
 
 	// batch sync
-	SPX_API void batch_update_transforms(const float *buffer_data, int len);
-	SPX_API void batch_update_visuals(const float *buffer_data, int len);
-	SPX_API GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
-	SPX_API void batch_update_physics(const float *buffer_data, int len);
+	SPX_BIND void batch_update_transforms(const float *buffer_data, int len);
+	SPX_BIND void batch_update_visuals(const float *buffer_data, int len);
+	SPX_BIND GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
+	SPX_BIND void batch_update_physics(const float *buffer_data, int len);
 };
 
 #endif // SPX_SPRITE_MGR_H

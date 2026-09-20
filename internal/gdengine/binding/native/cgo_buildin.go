@@ -29,6 +29,9 @@ void cgo_callfn_GDExtensionPtrConstructor(const GDExtensionPtrConstructor fn, GD
 void cgo_callfn_GDExtensionPtrDestructor(const GDExtensionPtrDestructor fn, GDExtensionTypePtr p_base) {
     fn(p_base);
 }
+void cgo_callfn_GDExtensionSpxGlobalFreeString(const GDExtensionSpxGlobalFreeString fn, GdString value) {
+ fn(value);
+}
 void cgo_callfn_GDExtensionSpxGlobalRegisterCallbacks(const GDExtensionSpxGlobalRegisterCallbacks fn, GDExtensionSpxCallbackInfoPtr callback_ptr) {
 	fn(callback_ptr);
 }
@@ -71,6 +74,7 @@ var (
 
 type GDExtensionBuiltinInterface struct {
 	SpxGlobalRegisterCallbacks GDExtensionSpxGlobalRegisterCallbacks
+	SpxGlobalFreeString        GDExtensionSpxGlobalFreeString
 	StringNewWithLatin1Chars   GDExtensionInterfaceStringNewWithLatin1Chars
 	StringNewWithUtf8Chars     GDExtensionInterfaceStringNewWithUtf8Chars
 	StringToLatin1Chars        GDExtensionInterfaceStringToLatin1Chars
@@ -188,6 +192,13 @@ func CallVariantGetPtrDestructor(
 	return (GDExtensionPtrDestructor)(ret)
 }
 
+func freeReturnedString(value GdString) {
+	C.cgo_callfn_GDExtensionSpxGlobalFreeString(
+		(C.GDExtensionSpxGlobalFreeString)(builtinAPI.SpxGlobalFreeString),
+		(C.GdString)(value),
+	)
+}
+
 func CallGlobalRegisterCallbacks(
 	callback_ptr GDExtensionSpxCallbackInfoPtr,
 ) {
@@ -199,6 +210,7 @@ func CallGlobalRegisterCallbacks(
 
 func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
 	x.SpxGlobalRegisterCallbacks = (GDExtensionSpxGlobalRegisterCallbacks)(resolveCFunc("spx_global_register_callbacks"))
+	x.SpxGlobalFreeString = (GDExtensionSpxGlobalFreeString)(resolveCFunc("spx_global_free_string"))
 	x.StringNewWithLatin1Chars = (GDExtensionInterfaceStringNewWithLatin1Chars)(resolveCFunc("string_new_with_latin1_chars"))
 	x.StringNewWithUtf8Chars = (GDExtensionInterfaceStringNewWithUtf8Chars)(resolveCFunc("string_new_with_utf8_chars"))
 	x.StringToLatin1Chars = (GDExtensionInterfaceStringToLatin1Chars)(resolveCFunc("string_to_latin1_chars"))

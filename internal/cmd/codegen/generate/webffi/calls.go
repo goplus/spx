@@ -54,9 +54,6 @@ func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
 }
 
 func (g *Generator) jsBody(function *clang.TypedefFunction) string {
-	if g.WebBinding(function.Name) == common.WebBindingNoop {
-		return "return;"
-	}
 	params := g.Parameters(function)
 	callArgs := make([]string, len(params))
 	var declarations, statements, cleanup []string

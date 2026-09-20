@@ -773,10 +773,6 @@ func (pself *resMgr) ReloadTexture(path string) {
 	arg0 := JsFromGdString(path)
 	API.SpxResReloadTexture.Invoke(arg0)
 }
-func (pself *resMgr) FreeStr(str string) {
-	arg0 := JsFromGdString(str)
-	API.SpxResFreeStr.Invoke(arg0)
-}
 func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
 	arg0 := JsFromGdString(default_font_path)
 	arg1 := JsFromGdArray(font_paths)

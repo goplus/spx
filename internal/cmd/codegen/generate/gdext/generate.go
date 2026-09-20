@@ -21,7 +21,6 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
@@ -65,12 +64,10 @@ func (g *Generator) Generate(codegenDir, spxModulePath string, headers Headers) 
 func (g *Generator) writeCPP(outputPath, templateStr string) error {
 	funcs := template.FuncMap{
 		"sub":                     common.Sub,
-		"trimPrefix":              strings.TrimPrefix,
 		"loadProcAddressName":     common.LoadProcAddressName,
 		"isManagerMethod":         g.IsManagerMethod,
 		"getManagerName":          g.GetManagerName,
-		"isStringRelease":         g.IsStringRelease,
-		"controlTarget":           g.ControlTarget,
+		"methodTarget":            g.MethodTarget,
 		"isWebGdStringReturn":     isWebGdStringReturn,
 		"isWebGdArrayReturn":      isWebGdArrayReturn,
 		"isGdStringArgument":      isGdStringArgument,

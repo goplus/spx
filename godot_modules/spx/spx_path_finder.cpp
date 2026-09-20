@@ -36,7 +36,7 @@
 #include "scene/2d/tile_map_layer.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
 
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
 #include "spx_coordinate.h"
 #include "spx_engine.h"
 #include "spx_scene_mgr.h"
@@ -140,13 +140,13 @@ GdArray SpxPathFinder::find_path_spx(GdVec2 p_from, GdVec2 p_to) {
 		return nullptr;
 	}
 	const int32_t output_count = static_cast<int32_t>(count) * 2;
-	GdArray result = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, output_count);
+	GdArray result = SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, output_count);
 	if (result == nullptr || output_count == 0) {
 		return result;
 	}
-	float *output = SpxBaseMgr::get_array<float>(result, 0);
+	float *output = SpxAbi::get_array<float>(result, 0);
 	if (output == nullptr) {
-		SpxBaseMgr::free_array(result);
+		SpxAbi::free_array(result);
 		return nullptr;
 	}
 

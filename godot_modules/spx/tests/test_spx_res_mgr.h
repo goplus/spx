@@ -82,7 +82,7 @@ static String apply_fonts_raw(SpxResMgr &p_res_mgr, const String &p_default_path
 	CharString default_path = p_default_path.utf8();
 	GdString result = p_res_mgr.apply_project_fonts(default_path.get_data(), p_paths, p_families, p_preferences);
 	String error = String::utf8(static_cast<const char *>(result));
-	SpxBaseMgr::free_return_cstr(result);
+	SpxAbi::free_return_cstr(result);
 	return error;
 }
 

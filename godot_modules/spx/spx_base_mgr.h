@@ -46,52 +46,11 @@ public:                                      \
 #define SpxStr(str) (String::utf8((const char *)str))
 #define SpxReturnStr(str) (SpxAbi::to_return_cstr(str))
 
-#ifndef SPX_API
-#define SPX_API
-#endif
-
-#ifndef SPX_BIND
-#define SPX_BIND SPX_API
-#endif
-
-// Codegen options: Web behavior, ABI ownership, and lifecycle controls.
-#ifndef SPX_BINDING
-#define SPX_BINDING(...)
-#endif
-
-// Output-only native array: completely filled on success, never read on entry.
-// GdBool methods return false before modifying any writable array on failure.
-#ifndef SPX_OUT
-#define SPX_OUT
-#endif
-
 #define NULL_OBJECT_ID 0
 
 class Window;
 class SceneTree;
 class SpxBaseMgr {
-public:
-	// Compatibility forwarding for existing manager code. Allocation ownership
-	// and validation live in SpxAbi and do not require an engine instance.
-	static GdString to_return_cstr(const String &value) {
-		return SpxAbi::to_return_cstr(value);
-	}
-	static void free_return_cstr(GdString value) {
-		SpxAbi::free_return_cstr(value);
-	}
-	static GdArray create_array(int32_t type, int32_t size) {
-		return SpxAbi::create_array(type, size);
-	}
-	static void free_array(GdArray array) { SpxAbi::free_array(array); }
-	template <typename T>
-	static void set_array(GdArray array, int64_t index, T value) {
-		SpxAbi::set_array(array, index, value);
-	}
-	template <typename T>
-	static T *get_array(GdArray array, int64_t index) {
-		return SpxAbi::get_array<T>(array, index);
-	}
-
 protected:
 	Node *owner = nullptr;
 	virtual Node *create_owner_node();
