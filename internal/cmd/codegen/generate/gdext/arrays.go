@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
-	"github.com/iancoleman/strcase"
 )
 
 var reFixedArrayDecl = regexp.MustCompile(`^\s*(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*([1-9][0-9]*)\s*\]\s*$`)
@@ -33,7 +32,7 @@ var reParamDecl = regexp.MustCompile(`^\s*(.+?[*\s])([A-Za-z_][A-Za-z0-9_]*)\s*$
 
 func parseArrayBridge(method classMethodDecl) (common.ArrayBridge, bool) {
 	spec := common.ArrayBridge{
-		FunctionName: "GDExtension" + method.ClassName + strcase.ToCamel(method.MethodName),
+		FunctionName: method.functionName(),
 		MethodName:   method.MethodName,
 	}
 	params, buffers, ok := parseArrayBuffers(method.Params)

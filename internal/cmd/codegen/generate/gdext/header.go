@@ -49,6 +49,10 @@ type classMethodDecl struct {
 	Static     bool
 }
 
+func (m classMethodDecl) functionName() string {
+	return "GDExtension" + m.ClassName + strcase.ToCamel(m.MethodName)
+}
+
 // Headers holds both ABI spellings and the metadata collected from one input.
 type Headers struct {
 	Raw      string
@@ -86,16 +90,16 @@ func (g *headerCollector) render(rawFormat bool) string {
 			continue
 		}
 		returnType, params := method.ReturnType, method.Params
-		name := strcase.ToCamel(method.MethodName)
-		if returnType == "void" || rawFormat {
-			fmt.Fprintf(&builder, "typedef %s (*GDExtension%s%s)(%s);\n", returnType, method.ClassName, name, params)
-		} else {
-			if len(params) > 0 {
-				returnType = ", " + returnType
+		functionName := method.functionName()
+		if !rawFormat && returnType != "void" {
+			if params != "" {
+				params += ", "
 			}
-			result := g.metadata.ReturnParameters["GDExtension"+method.ClassName+name]
-			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *%s);\n", method.ClassName, name, params, returnType, result.Name)
+			result := g.metadata.ReturnParameters[functionName]
+			params += result.CType + " *" + result.Name
+			returnType = "void"
 		}
+		fmt.Fprintf(&builder, "typedef %s (*%s)(%s);\n", returnType, functionName, params)
 	}
 	return builder.String()
 }
@@ -213,7 +217,7 @@ func parseManagerHeader(input string) *headerCollector {
 				Static:     matches[1] != "",
 			}
 			spec, arrayBridge := parseArrayBridge(methodDecl)
-			functionName := "GDExtension" + currentClassName + strcase.ToCamel(methodDecl.MethodName)
+			functionName := methodDecl.functionName()
 			if methodDecl.ReturnType != "void" {
 				name := "ret_value"
 				for n := 2; regexp.MustCompile(`\b` + name + `\b`).MatchString(methodDecl.Params); n++ {
