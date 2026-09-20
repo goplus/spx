@@ -32,6 +32,7 @@
 #define PROJECT_FONT_TRANSACTION_H
 
 #include "gdextension_spx_ext.h"
+#include "core/templates/hash_set.h"
 #include "scene/resources/font.h"
 
 class SpxResMgr;
@@ -67,9 +68,8 @@ struct Prepared {
 
 String fold_family(const String &p_family);
 bool strings_from_array(GdArray p_values, const String &p_name, Vector<String> &r_values, String &r_error);
-Vector<String> preferences_from_array(GdArray p_preferences);
-bool load_font_data(const String &p_path, const String &p_engine_path, Vector<uint8_t> &r_font_data, String *r_error = nullptr);
-Ref<FontFile> create_display_font(const Vector<uint8_t> &p_font_data);
+bool validate_preferences(const Vector<String> &p_preferences, const HashSet<String> &p_families, String &r_error);
+bool prepare_font(const String &p_path, SpxResMgr &p_resources, Vector<uint8_t> &r_data, Ref<FontFile> &r_font, String &r_error);
 Ref<Font> build_display_font_chain(const HashMap<String, Ref<FontFile>> &p_fonts, const Vector<String> &p_preferences);
 bool decode_request(GdString p_default_font_path, GdArray p_font_paths, GdArray p_font_families, GdArray p_preferences, Request &r_request, String &r_error);
 bool validate_request(Request &r_request, String &r_error);

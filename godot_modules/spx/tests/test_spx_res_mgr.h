@@ -34,6 +34,9 @@
 #include "../spx_res_mgr.h"
 #include "../spx_svg_utils.h"
 #include "../spx_theme_font.h"
+#include "core/io/dir_access.h"
+#include "core/io/file_access.h"
+#include "core/io/json.h"
 #include "scene/theme/theme_db.h"
 #include "spx_test_data.h"
 #include "tests/test_macros.h"
@@ -88,6 +91,74 @@ static String apply_fonts_raw(SpxResMgr &p_res_mgr, const String &p_default_path
 
 static String apply_fonts(SpxResMgr &p_res_mgr, const String &p_default_path, GdStringArray &p_paths, GdStringArray &p_families, GdStringArray &p_preferences) {
 	return apply_fonts_raw(p_res_mgr, p_default_path, p_paths.ptr(), p_families.ptr(), p_preferences.ptr());
+}
+
+struct SvgFile {
+	String path = TestUtils::get_temp_path("spx_resource_cache.svg");
+
+	SvgFile() { write(8, 6); }
+	~SvgFile() { DirAccess::remove_absolute(path); }
+
+	void write(int p_width, int p_height) {
+		Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
+		REQUIRE(file.is_valid());
+		file->store_string(vformat("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"><rect width=\"100%%\" height=\"100%%\" fill=\"red\"/></svg>", p_width, p_height));
+	}
+
+	void create_clip(SpxResMgr &p_resources) {
+		Dictionary frame;
+		frame["path"] = path;
+		frame["bitmap"] = 2;
+		Array frames;
+		frames.push_back(frame);
+		Dictionary clip;
+		clip["frames"] = frames;
+		clip["max_bitmap"] = 4;
+		CharString json = JSON::stringify(clip).utf8();
+		p_resources.create_animation("Cache", "walk", json.get_data(), 12, false);
+	}
+};
+
+TEST_CASE("[SceneTree][SPX] SVG cache belongs to its resource manager") {
+	ProjectFontStateReset reset;
+	SvgFile svg;
+	SpxResMgr first;
+	const Ref<Texture2D> first_texture = first.load_texture(svg.path);
+	REQUIRE(first_texture.is_valid());
+	CHECK(first.load_texture(svg.path) == first_texture);
+	{
+		SpxResMgr second;
+		const Ref<Texture2D> second_texture = second.load_texture(svg.path);
+		REQUIRE(second_texture.is_valid());
+		CHECK(second_texture != first_texture);
+		second.on_reset(0);
+		CHECK(second.load_texture(svg.path) != second_texture);
+	}
+	CHECK(first.load_texture(svg.path) == first_texture);
+	CHECK(first_texture->get_size() == Vector2(8, 6));
+}
+
+TEST_CASE("[SceneTree][SPX] SVG clip invalidation rebuilds every requested raster scale") {
+	SvgFile svg;
+	SpxResMgr resources;
+	svg.create_clip(resources);
+	const Ref<SpriteFrames> original = resources.get_animation_frames("Cache::walk");
+	REQUIRE(original.is_valid());
+	CHECK(original->get_frame_texture("Cache::walk", 0)->get_size() == Vector2(16, 12));
+	const Ref<SpriteFrames> enlarged = resources.get_animation_frames("Cache::walk", 4);
+	REQUIRE(enlarged.is_valid());
+	CHECK(enlarged->get_frame_texture("Cache::walk", 0)->get_size() == Vector2(64, 48));
+
+	svg.write(12, 10);
+	resources.update_caches(Vector<String>{ svg.path });
+	const Ref<SpriteFrames> replacement = resources.get_animation_frames("Cache::walk");
+	REQUIRE(replacement.is_valid());
+	CHECK(replacement != original);
+	CHECK(replacement->get_frame_texture("Cache::walk", 0)->get_size() == Vector2(24, 20));
+	const Ref<SpriteFrames> enlarged_replacement = resources.get_animation_frames("Cache::walk", 4);
+	REQUIRE(enlarged_replacement.is_valid());
+	CHECK(enlarged_replacement->get_frame_texture("Cache::walk", 0)->get_size() == Vector2(96, 80));
+	CHECK(original->get_frame_texture("Cache::walk", 0)->get_size() == Vector2(16, 12));
 }
 
 TEST_CASE("[SceneTree][SPX] Direct texture loader preserves WebP frame size and alpha") {
@@ -208,6 +279,41 @@ TEST_CASE("[SceneTree][SPX] Invalid project font preserves the published transac
 	CHECK(SpxSvgUtils::get_font_registry_generation() == published_generation);
 	CHECK(ThemeDB::get_singleton()->get_default_theme() == published_theme);
 	CHECK(ThemeDB::get_singleton()->get_default_theme()->get_default_font() == published_font);
+}
+
+TEST_CASE("[SceneTree][SPX] Incremental font updates validate before publishing and invalidate SVGs") {
+	ProjectFontStateReset restore_fonts;
+	SpxResMgr resources;
+	SvgFile svg;
+	const CharString font_path = TestSpxData::get_path("fonts/noto_sans_clusters/NotoSans-Medium.ttf").utf8();
+	auto image = resources.load_svg_texture(svg.path, 1);
+	resources.set_default_font(font_path.get_data());
+	auto after_default = resources.load_svg_texture(svg.path, 1);
+	CHECK(after_default != image);
+	resources.register_font_face(font_path.get_data(), "Project");
+	auto after_face = resources.load_svg_texture(svg.path, 1);
+	CHECK(after_face != after_default);
+	GdStringArray preferences(Vector<String>{ "Project", "default" });
+	resources.set_font_preferences(preferences.ptr());
+	auto after_preferences = resources.load_svg_texture(svg.path, 1);
+	CHECK(after_preferences != after_face);
+
+	const uint64_t generation = SpxSvgUtils::get_font_registry_generation();
+	const Ref<Font> published = ThemeDB::get_singleton()->get_default_theme()->get_default_font();
+	GdStringArray unknown(Vector<String>{ "Missing" });
+	GdStringArray duplicate(Vector<String>{ "Project", "PROJECT" });
+	GdArrayInfo malformed = {};
+	malformed.type = GD_ARRAY_TYPE_FLOAT;
+	ERR_PRINT_OFF
+	resources.set_font_preferences(&malformed);
+	resources.set_font_preferences(unknown.ptr());
+	resources.set_font_preferences(duplicate.ptr());
+	resources.register_font_face(font_path.get_data(), "DEFAULT");
+	resources.set_default_font("missing-font.ttf");
+	ERR_PRINT_ON
+	CHECK(SpxSvgUtils::get_font_registry_generation() == generation);
+	CHECK(ThemeDB::get_singleton()->get_default_theme()->get_default_font() == published);
+	CHECK(resources.load_svg_texture(svg.path, 1) == after_preferences);
 }
 
 TEST_CASE("[SceneTree][SPX] Malformed project font arrays are rejected atomically") {

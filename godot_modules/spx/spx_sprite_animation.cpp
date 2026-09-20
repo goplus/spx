@@ -35,7 +35,6 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_render_util.h"
-#include "svg_mgr.h"
 
 GdString SpxSprite::get_current_anim_name() {
 	return SpxReturnStr(visual_source.animation_name);
@@ -51,8 +50,8 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 	if (resMgr->is_dynamic_anim_mode()) {
 		String key = resMgr->get_anim_key_name(get_spx_type_name(), p_name);
 		// set_anim/get_anim also accept the complete engine animation key.
-		if (resMgr->get_anim_frames(key).is_null() &&
-				resMgr->get_anim_frames(p_name).is_valid()) {
+		if (!resMgr->has_animation(key) &&
+				resMgr->has_animation(p_name)) {
 			key = p_name;
 		}
 		r_visual.source.key = key;
@@ -62,9 +61,9 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 					? p_raster_scale
 					: _get_actual_match_render_scale();
 			shared_frames =
-					svgMgr->get_svg_animation(key, r_visual.source.raster_scale);
+					resMgr->get_animation_frames(key, r_visual.source.raster_scale);
 		} else {
-			shared_frames = resMgr->get_anim_frames(key);
+			shared_frames = resMgr->get_animation_frames(key);
 		}
 	}
 	r_visual.animation = r_visual.source.key;

@@ -37,7 +37,6 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_mgr.h"
-#include "svg_mgr.h"
 
 void SpxSprite::set_texture_atlas_direct(GdString p_path, GdRect2 p_region, GdBool p_direct) {
 	ERR_FAIL_NULL_MSG(anim2d,
@@ -63,11 +62,11 @@ void SpxSprite::set_texture_direct(GdString p_path, GdBool p_direct) {
 			"SpxSprite: AnimatedSprite2D component is missing.");
 	VisualSource source;
 	source.key = SpxStr(p_path);
-	source.kind = svgMgr->is_svg_file(source.key) ? VisualKind::SVG_TEXTURE
+	source.kind = SpxSvgCache::is_svg_path(source.key) ? VisualKind::SVG_TEXTURE
 												  : VisualKind::TEXTURE;
 	source.raster_scale = source.is_svg() ? _get_actual_match_render_scale() : 1;
 	Ref<Texture2D> texture =
-			source.is_svg() ? Ref<Texture2D>(svgMgr->get_svg_image(
+			source.is_svg() ? Ref<Texture2D>(resMgr->load_svg_texture(
 									  source.key, source.raster_scale))
 							: resMgr->load_texture_checked(source.key, p_direct);
 	ERR_FAIL_COND_MSG(texture.is_null(), "SpxSprite: texture is null.");

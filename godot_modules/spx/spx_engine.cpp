@@ -57,7 +57,6 @@
 #include "spx_tilemap_mgr.h"
 #include "spx_tilemapparser_mgr.h"
 #include "spx_ui_mgr.h"
-#include "svg_mgr.h"
 #ifdef WEB_ENABLED
 #include "web/spx_web_session.h"
 #endif
@@ -217,7 +216,6 @@ void SpxEngine::on_destroy() {
 	on_runtime_panic = nullptr;
 	on_runtime_exit = nullptr;
 	on_runtime_reset = nullptr;
-	SvgManager::destroy_singleton();
 	_destroy_all_managers();
 	tree = nullptr;
 	spx_root = nullptr;
@@ -341,8 +339,6 @@ void SpxEngine::_do_reset(int reset_code) {
 	}
 
 	_notify_managers_reset(reset_code);
-
-	SvgManager::get_singleton()->reset(true);
 
 	if (should_delay_runtime_reset) {
 		_invoke_runtime_reset_delayed(reset_code);

@@ -35,7 +35,6 @@
 #include "spx_abi.h"
 #include "spx_mgr_access.h"
 #include "spx_utils.h"
-#include "svg_mgr.h"
 
 #define SPXCLASS(m_class, m_inherits)        \
 public:                                      \

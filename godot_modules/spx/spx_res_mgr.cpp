@@ -53,7 +53,6 @@
 #include "spx_platform_mgr.h"
 #include "spx_svg_utils.h"
 #include "spx_theme_font.h"
-#include "svg_mgr.h"
 
 void SpxResMgr::on_awake() {
 	SpxBaseMgr::on_awake();
@@ -65,6 +64,7 @@ void SpxResMgr::on_awake() {
 }
 
 void SpxResMgr::on_reset(int reset_code) {
+	svg_cache.clear();
 	animation_clips.clear();
 	display_fonts.clear();
 	display_default_font.unref();
@@ -92,22 +92,15 @@ String SpxResMgr::_to_engine_path(const String &p_path) {
 	return path;
 }
 
-Ref<AudioStreamWAV> SpxResMgr::_load_wav(const String &path) {
-	return AudioStreamWAV::load_from_file(path, Dictionary());
-}
-
-static Ref<AudioStream> _import_mp3(const String &p_path) {
+static Ref<AudioStream> _load_mp3(const Ref<FileAccess> &p_file) {
 #ifdef MODULE_MINIMP3_ENABLED
-	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
-	ERR_FAIL_COND_V(f.is_null(), Ref<AudioStreamMP3>());
-
-	uint64_t len = f->get_length();
+	uint64_t len = p_file->get_length();
 
 	Vector<uint8_t> data;
 	data.resize(len);
 	uint8_t *w = data.ptrw();
 
-	f->get_buffer(w, len);
+	p_file->get_buffer(w, len);
 
 	Ref<AudioStreamMP3> mp3_stream;
 	mp3_stream.instantiate();
@@ -121,14 +114,11 @@ static Ref<AudioStream> _import_mp3(const String &p_path) {
 #endif
 }
 
-Ref<AudioStream> SpxResMgr::_load_mp3(const String &path) {
-	return _import_mp3(path);
-}
-
 Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	String path = _to_engine_path(p_path);
-	if (cached_audio.has(path)) {
-		return cached_audio[path];
+	const Ref<AudioStream> *cached = cached_audio.getptr(path);
+	if (cached != nullptr) {
+		return *cached;
 	}
 	Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
 	if (file.is_null()) {
@@ -138,9 +128,9 @@ Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	Ref<AudioStream> res;
 	const String ext = path.get_extension().to_lower();
 	if (ext == "mp3") {
-		res = _load_mp3(path);
+		res = _load_mp3(file);
 	} else if (ext == "wav") {
-		res = _load_wav(path);
+		res = AudioStreamWAV::load_from_file(path, Dictionary());
 	} else {
 		print_error("unknown audio extension " + ext + " path=" + path);
 	}
@@ -214,7 +204,7 @@ bool SpxResMgr::_parse_anim_json(const String &src, bool p_is_atlas,
 							!is_positive_animation_integer(frame["bitmap"]),
 					false,
 					"Animation bitmap must be a positive integer.");
-			const bool svg = svgMgr->is_svg_file(frame["path"]);
+			const bool svg = SpxSvgCache::is_svg_path(frame["path"]);
 			has_svg = has_svg || svg;
 			has_bitmap = has_bitmap || !svg;
 		}
@@ -256,10 +246,10 @@ bool SpxResMgr::_build_normal_frames(const String &anim_key,
 		String path = frame["path"];
 		const double bitmap = frame["bitmap"];
 		Ref<Texture2D> texture;
-		if (svgMgr->is_svg_file(path)) {
+		if (SpxSvgCache::is_svg_path(path)) {
 			const int scale =
-					svgMgr->calculate_svg_scale(float(payload.max_bitmap / bitmap));
-			texture = svgMgr->get_svg_image(path, scale);
+					SpxSvgCache::raster_scale(float(payload.max_bitmap / bitmap));
+			texture = load_svg_texture(path, scale);
 			r_clip.svg_frame_scales.push_back(scale);
 			r_clip.is_svg = true;
 		} else {
@@ -312,7 +302,7 @@ static Error _load_image(String path, Ref<Image> p_image) {
 
 Ref<Texture2D> SpxResMgr::load_texture_checked(const String &p_path,
 		GdBool p_direct) {
-	if ((!is_load_direct && !p_direct) || svgMgr->is_svg_file(p_path)) {
+	if ((!is_load_direct && !p_direct) || SpxSvgCache::is_svg_path(p_path)) {
 		return load_texture(p_path, p_direct);
 	}
 	const String path = _to_engine_path(p_path);
@@ -349,8 +339,8 @@ Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path) {
 	return texture;
 }
 Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
-	if (svgMgr->is_svg_file(path)) {
-		return svgMgr->reload_svg_image(path);
+	if (SpxSvgCache::is_svg_path(path)) {
+		return svg_cache.reload_image(_to_engine_path(path));
 	}
 	path = _to_engine_path(path);
 	Ref<Image> image;
@@ -375,12 +365,10 @@ void SpxResMgr::reload_texture(GdString path) {
 }
 
 Ref<Texture2D> SpxResMgr::load_texture(String path, GdBool direct) {
-	// If SVG file, use SVG manager
-	if (svgMgr->is_svg_file(path)) {
-		return svgMgr->get_svg_image(path, 1); // Default 1x scale
+	if (SpxSvgCache::is_svg_path(path)) {
+		return load_svg_texture(path, 1);
 	}
 
-	// For non-SVG files, use original logic
 	if (!is_load_direct && !direct) {
 		Ref<Resource> res = ResourceLoader::load(path);
 		if (res.is_null()) {
@@ -398,17 +386,14 @@ void SpxResMgr::set_game_datas(String path, Vector<String> files) {
 	game_data_root = path;
 	platformMgr->_set_persistant_data_dir(path);
 	update_caches(files);
-	svgMgr->update_caches(files);
 }
 
 void SpxResMgr::update_caches(const Vector<String> &files) {
-	if (cached_texture.is_empty() && cached_audio.is_empty()) {
-		return;
-	}
 	for (auto &file : files) {
 		auto path = _to_engine_path(file);
 		cached_texture.erase(path);
 		cached_audio.erase(path);
+		svg_cache.invalidate_image(path);
 	}
 }
 
@@ -424,9 +409,20 @@ Ref<AudioStream> SpxResMgr::load_audio(String path, GdBool direct) {
 	return _load_audio_direct(path);
 }
 
-Ref<SpriteFrames> SpxResMgr::get_anim_frames(const String &anim_name) {
-	const SpxAnimationClip *clip = animation_clips.getptr(anim_name);
-	return clip != nullptr ? clip->frames : Ref<SpriteFrames>();
+bool SpxResMgr::has_animation(const String &p_key) const {
+	return animation_clips.has(p_key);
+}
+
+Ref<SpriteFrames> SpxResMgr::get_animation_frames(const String &p_key, int p_raster_scale) {
+	const SpxAnimationClip *clip = animation_clips.getptr(p_key);
+	if (clip == nullptr) {
+		return Ref<SpriteFrames>();
+	}
+	return clip->is_svg ? svg_cache.load_animation(p_key, clip->frames, clip->svg_frame_scales, p_raster_scale) : clip->frames;
+}
+
+Ref<ImageTexture> SpxResMgr::load_svg_texture(const String &p_path, int p_raster_scale) {
+	return svg_cache.load_image(_to_engine_path(p_path), p_raster_scale);
 }
 
 String SpxResMgr::get_anim_key_name(const String &sprite_type_name, const String &anim_name) {
@@ -557,25 +553,22 @@ GdString SpxResMgr::list_directories(GdString p_path) {
 }
 
 GdString SpxResMgr::apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences) {
-	auto fail = [](const String &p_error) -> GdString {
-		return SpxReturnStr(p_error);
-	};
 	if (!Thread::is_main_thread()) {
-		return fail("Project fonts must be applied on the engine main thread.");
+		return SpxReturnStr("Project fonts must be applied on the engine main thread.");
 	}
 	String error;
 	ProjectFonts::Request request;
 	if (!ProjectFonts::decode_request(default_font_path, font_paths, font_families, preferences, request, error) ||
 			!ProjectFonts::validate_request(request, error)) {
-		return fail(error);
+		return SpxReturnStr(error);
 	}
 	ProjectFonts::Prepared prepared;
 	if (!ProjectFonts::prepare(request, *this, prepared, error)) {
-		return fail(error);
+		return SpxReturnStr(error);
 	}
 	_commit_project_fonts(std::move(prepared));
 
-	return fail(String());
+	return SpxReturnStr(String());
 }
 
 void SpxResMgr::_commit_project_fonts(ProjectFonts::Prepared &&p_prepared) {
@@ -591,94 +584,70 @@ void SpxResMgr::_commit_project_fonts(ProjectFonts::Prepared &&p_prepared) {
 	display_fonts = std::move(p_prepared.display_fonts);
 	display_default_font = std::move(p_prepared.default_font);
 	spx_set_project_theme_font(p_prepared.theme_font);
-	SvgManager::get_singleton()->reset(true);
+	svg_cache.clear();
 }
 
 void SpxResMgr::set_default_font(GdString font_path) {
-	String path = SpxStr(font_path);
-	if (path.is_empty()) {
-		ERR_PRINT("Can not open empty font path.");
-		return;
-	}
-	Vector<uint8_t> font_data;
-	String engine_path = _to_engine_path(path);
-	if (!ProjectFonts::load_font_data(path, engine_path, font_data)) {
-		return;
-	}
-	Ref<FontFile> font = ProjectFonts::create_display_font(font_data);
-	if (font.is_null() || font->get_face_count() <= 0) {
-		ERR_PRINT("Default font file is not a supported font: " + path);
-		return;
-	}
-	if (!SpxSvgUtils::is_font_data_valid(font_data)) {
-		ERR_PRINT("Default font file is not supported by LunaSVG: " + path);
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	Vector<uint8_t> data;
+	Ref<FontFile> font;
+	String error;
+	if (!ProjectFonts::prepare_font(SpxStr(font_path), *this, data, font, error)) {
+		ERR_PRINT(error);
 		return;
 	}
 
-	// update svg
-	// Setting the default font begins a complete project font transaction.
-	// Drop any faces left by an earlier bootstrap before registering this one.
+	// Each incremental call publishes immediately. Use apply_project_fonts to
+	// replace a complete configuration atomically.
 	SpxSvgUtils::reset_font_registry();
-	SpxSvgUtils::set_default_font(font_data.ptrw(), (int)font_data.size());
-
-	// Start a new project font configuration. Named faces are registered after
-	// this call and set_font_preferences commits the ordered fallback chain.
+	SpxSvgUtils::set_default_font(data.ptrw(), data.size());
 	display_fonts.clear();
 	display_default_font = font;
-	display_fonts.insert("default", display_default_font);
-	spx_set_project_theme_font(display_default_font);
+	display_fonts.insert("default", font);
+	spx_set_project_theme_font(font);
+	svg_cache.clear();
 }
 
 void SpxResMgr::register_font_face(GdString font_path, GdString family) {
-	String path = SpxStr(font_path);
-	if (path.is_empty()) {
-		ERR_PRINT("Can not open empty font path.");
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	const String name = SpxStr(family);
+	const String key = ProjectFonts::fold_family(name);
+	ERR_FAIL_COND_MSG(name.is_empty() || key == "default", "Font family must be nonempty and must not use the reserved name default.");
+	Vector<uint8_t> data;
+	Ref<FontFile> font;
+	String error;
+	if (!ProjectFonts::prepare_font(SpxStr(font_path), *this, data, font, error)) {
+		ERR_PRINT(error);
 		return;
 	}
 
-	String svg_family = SpxStr(family);
-	if (svg_family.is_empty()) {
-		ERR_PRINT("Can not register empty SVG font family.");
-		return;
-	}
-
-	Vector<uint8_t> font_data;
-	String engine_path = _to_engine_path(path);
-	if (!ProjectFonts::load_font_data(path, engine_path, font_data)) {
-		return;
-	}
-	Ref<FontFile> font = ProjectFonts::create_display_font(font_data);
-	if (font.is_null() || font->get_face_count() <= 0) {
-		ERR_PRINT("Project font file is not a supported font: " + path);
-		return;
-	}
-	if (!SpxSvgUtils::is_font_data_valid(font_data)) {
-		ERR_PRINT("Project font file is not supported by LunaSVG: " + path);
-		return;
-	}
-
-	SpxSvgUtils::add_font_face(svg_family, font_data.ptrw(), (int)font_data.size());
-	display_fonts.insert(ProjectFonts::fold_family(svg_family), font);
+	SpxSvgUtils::add_font_face(name, data.ptrw(), data.size());
+	display_fonts.insert(key, font);
+	svg_cache.clear();
 }
 
 void SpxResMgr::set_font_preferences(GdArray preferences) {
-	Vector<String> values = ProjectFonts::preferences_from_array(preferences);
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	Vector<String> values;
+	String error;
+	HashSet<String> families;
+	for (const KeyValue<String, Ref<FontFile>> &entry : display_fonts) {
+		families.insert(entry.key);
+	}
+	if (!ProjectFonts::strings_from_array(preferences, "Font preferences", values, error) ||
+			!ProjectFonts::validate_preferences(values, families, error)) {
+		ERR_PRINT(error);
+		return;
+	}
+	Ref<Font> theme_font = ProjectFonts::build_display_font_chain(display_fonts, values);
 	SpxSvgUtils::set_font_preferences(values);
-	spx_set_project_theme_font(ProjectFonts::build_display_font_chain(display_fonts, values));
+	spx_set_project_theme_font(theme_font);
+	svg_cache.clear();
 }
 
 bool SpxResMgr::is_svg_animation(const String &p_anim_key) const {
 	const SpxAnimationClip *clip = animation_clips.getptr(p_anim_key);
 	return clip != nullptr && clip->is_svg;
-}
-
-int SpxResMgr::get_animation_svg_frame_scale(const String &p_anim_key,
-		int p_frame) const {
-	const SpxAnimationClip *clip = animation_clips.getptr(p_anim_key);
-	return clip != nullptr && p_frame >= 0 &&
-					p_frame < clip->svg_frame_scales.size()
-			? clip->svg_frame_scales[p_frame]
-			: 1;
 }
 
 Vector2 SpxResMgr::get_animation_frame_offset(String anim_key, int frame_index) {

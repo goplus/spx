@@ -33,7 +33,6 @@
 
 // Forward declaration to avoid circular dependency
 class SpxEngine;
-class SvgManager;
 class SpxAudioBusPool;
 
 /**
@@ -62,7 +61,6 @@ class SpxAudioBusPool;
 #define tilemapparserMgr SpxEngine::get_singleton()->get_tilemapparser()
 
 // Special Manager access macro
-#define svgMgr SvgManager::get_singleton()
 #define audioPool SpxAudioBusPool::get_singleton()
 #define SPX_CALLBACK SpxEngine::get_singleton()->get_callbacks()
 
