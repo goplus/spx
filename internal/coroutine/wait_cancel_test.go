@@ -15,9 +15,8 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 	})
 	input := make(chan int)
 	value := 0
-	thread := co.Create("receiver", func(Thread) int {
+	thread := co.Create("receiver", func(Thread) {
 		value = WaitForChan(co, input)
-		return 0
 	})
 	waitForThreadSignal(t, thread.yieldedOrDone, "receiver did not wait")
 
@@ -58,9 +57,8 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 func TestWaitForChanTracksPendingReceive(t *testing.T) {
 	co := New(nil)
 	value := 7
-	thread := co.Create("receiver", func(Thread) int {
+	thread := co.Create("receiver", func(Thread) {
 		value = WaitForChan[int](co, nil)
-		return 0
 	})
 	co.JoinYieldedOrDone(thread)
 	co.threadsMu.Lock()
@@ -85,10 +83,9 @@ func TestWaitForChanTracksPendingReceive(t *testing.T) {
 
 func TestCancelStopsSuspendedThread(t *testing.T) {
 	co := New(nil)
-	thread := co.Create("suspended", func(me Thread) int {
+	thread := co.Create("suspended", func(me Thread) {
 		co.WaitYield(me)
 		t.Error("canceled script continued")
-		return 0
 	})
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 	co.JoinYieldedOrDone(thread)

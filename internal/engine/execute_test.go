@@ -37,10 +37,9 @@ func blockExecuteScheduler(t *testing.T, co *coroutine.Coroutines) func() {
 	started, unblock := make(chan struct{}), make(chan struct{})
 	release := sync.OnceFunc(func() { close(unblock) })
 	t.Cleanup(release)
-	co.Create("blocker", func(coroutine.Thread) int {
+	co.Create("blocker", func(coroutine.Thread) {
 		close(started)
 		<-unblock
-		return 0
 	})
 	select {
 	case <-started:
@@ -111,14 +110,13 @@ func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 func TestExecuteKeepsCurrentCoroutineAndSuppliedOwner(t *testing.T) {
 	co := setupExecuteTest(t)
 	var called bool
-	thread := co.Create("original", func(thread coroutine.Thread) int {
+	thread := co.Create("original", func(thread coroutine.Thread) {
 		Execute(nil, func(ctx context.Context, owner any) {
 			called = true
 			if ctx != thread.Context() || co.Current() != thread || owner != nil {
 				t.Error("Execute changed the current coroutine, context, or supplied owner")
 			}
 		})
-		return 0
 	})
 	co.Join(thread)
 	if !called {

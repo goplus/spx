@@ -57,10 +57,3 @@ func (p *Coroutines) JoinYieldedOrDone(target Thread) {
 	}
 	p.waitOn(me, &target.yieldWaiters)
 }
-
-// JoinYieldedOrDoneAll waits until every target has first yielded or finished.
-func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
-	for _, target := range targets {
-		p.JoinYieldedOrDone(target)
-	}
-}

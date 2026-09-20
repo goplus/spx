@@ -176,12 +176,10 @@ func reloadGame(game Gamer, g *Game, index any) error {
 			return err
 		}
 		g.tilemapMgr.replaceMap(plan.tilemap)
-		gco.OnRestart()
 		g.loadStage(v, proj, generation, plan.spriteLoader(g))
 		return nil
 	}, func() {
 		g.initEventLoop()
-		gco.OnInited()
 		g.lifecycleState.IsRunned.Store(true)
 	})
 	if err != nil {

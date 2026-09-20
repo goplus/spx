@@ -88,7 +88,7 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
 	owner := p.owner
-	p.scriptEventRegistry.manager.AddClick(newScriptEventSink(owner, onClick, coroutine.RestartExisting, coreevent.MatchOwner(owner)))
+	p.scriptEventRegistry.manager.Add(coreevent.BucketClick, newScriptEventSink(owner, onClick, coroutine.RestartExisting, coreevent.MatchOwner(owner)))
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -97,7 +97,7 @@ func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	itime.RegisterTimer(time)
-	p.scriptEventRegistry.manager.AddTimer(coreevent.NewSink(
+	p.scriptEventRegistry.manager.Add(coreevent.BucketTimer, coreevent.NewSink(
 		p.owner,
 		func(float64) {
 			if isDebugEventEnabled() {
@@ -124,7 +124,7 @@ func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
-	p.scriptEventRegistry.manager.AddSwipe(coreevent.NewSink(
+	p.scriptEventRegistry.manager.Add(coreevent.BucketSwipe, coreevent.NewSink(
 		p.owner,
 		func(Direction) {
 			if isDebugEventEnabled() {
@@ -173,7 +173,7 @@ func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(p.owner, onBackdrop, coroutine.RestartExisting))
+	p.scriptEventRegistry.manager.Add(coreevent.BucketBackdropChanged, newScriptEventSink(p.owner, onBackdrop, coroutine.RestartExisting))
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
@@ -185,7 +185,7 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 			onBackdrop()
 		}
 	}
-	p.scriptEventRegistry.manager.AddBackdropChanged(newScriptEventSink(
+	p.scriptEventRegistry.manager.Add(coreevent.BucketBackdropChanged, newScriptEventSink(
 		p.owner, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
 	))
 }
@@ -227,7 +227,7 @@ func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj)
 
 func (p *scriptEventBindings) onAwake(onAwake func()) {
 	owner := p.owner
-	p.scriptEventRegistry.manager.AddAwake(coreevent.NewSink(owner, onAwake, coreevent.MatchOwnerOrNil(owner)))
+	p.scriptEventRegistry.manager.Add(coreevent.BucketAwake, coreevent.NewSink(owner, onAwake, coreevent.MatchOwnerOrNil(owner)))
 }
 
 func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
@@ -236,15 +236,15 @@ func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) 
 	}
 	sink := newScriptEventSink(p.owner, handler, coroutine.IgnoreWhileRunning)
 	if slices.Contains(keys, KeyAny) {
-		p.scriptEventRegistry.manager.AddAnyKeyPressed(sink)
+		p.scriptEventRegistry.manager.Add(coreevent.BucketAnyKeyPressed, sink)
 		return
 	}
 	sink.Cond = coreevent.MatchAnyOf(slices.Clone(keys))
-	p.scriptEventRegistry.manager.AddKeyPressed(sink)
+	p.scriptEventRegistry.manager.Add(coreevent.BucketKeyPressed, sink)
 }
 
 func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
-	p.scriptEventRegistry.manager.AddIReceive(newScriptEventSink(
+	p.scriptEventRegistry.manager.Add(coreevent.BucketIReceive, newScriptEventSink(
 		p.owner, handler, coroutine.RestartExisting, cond...,
 	))
 }
@@ -345,9 +345,8 @@ func (p *Game) handleEvent(ev event) {
 			runStartPhase()
 			break
 		}
-		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) int {
+		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) {
 			runStartPhase()
-			return 0
 		})
 		if gco.IsInCoroutine() {
 			gco.Join(dispatcher)

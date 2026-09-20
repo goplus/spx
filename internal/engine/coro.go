@@ -76,11 +76,10 @@ func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
 	if !ok {
 		return
 	}
-	gco.Create(tobj, func(me coroutine.Thread) int {
+	gco.Create(tobj, func(me coroutine.Thread) {
 		if isRuntimeWorkCurrent(binding) {
 			fn(me.Context())
 		}
-		return 0
 	})
 }
 

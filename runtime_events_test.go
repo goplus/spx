@@ -17,6 +17,7 @@
 package spx
 
 import (
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"reflect"
 	"runtime"
 	"testing"
@@ -34,7 +35,6 @@ func setupRuntimeEventScheduler(t *testing.T) *coroutine.Coroutines {
 	t.Helper()
 
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	gco = co
 	engine.SetCoroutines(co)
@@ -63,10 +63,9 @@ func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(game, func(coroutine.Thread) int {
+	thread := co.Create(game, func(coroutine.Thread) {
 		close(started)
 		<-release
-		return 0
 	})
 	select {
 	case <-started:
@@ -297,7 +296,7 @@ func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 	game.OnCond(nil, func() {})
 	game.OnCond(func() bool { return true }, nil)
 
-	if got := game.scriptEvents.manager.SnapshotCondition(); len(got) != 0 {
+	if got := game.scriptEvents.manager.Snapshot(coreevent.BucketCondition); len(got) != 0 {
 		t.Fatalf("condition sinks = %d, want 0", len(got))
 	}
 }
@@ -686,7 +685,7 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
 	co, game := setupRuntimeEventGame(t)
-	driver := co.Create(nil, func(me coroutine.Thread) int {
+	driver := co.Create(nil, func(me coroutine.Thread) {
 		for {
 			co.YieldLoopFor(me)
 		}
@@ -719,9 +718,8 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 
 func TestNestedAsyncBroadcastCycleResetsContextAtRoundBoundary(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	driver := co.Create(nil, func(me coroutine.Thread) int {
+	driver := co.Create(nil, func(me coroutine.Thread) {
 		co.YieldLoopFor(me)
-		return 0
 	})
 	co.JoinYieldedOrDone(driver)
 

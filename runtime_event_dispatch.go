@@ -68,9 +68,8 @@ func withEventRegistrationBarrier(owner any, dispatch func()) {
 	if gco.TryRunFromEngine(owner, dispatch) {
 		return
 	}
-	dispatcher := gco.Create(owner, func(coroutine.Thread) int {
+	dispatcher := gco.Create(owner, func(coroutine.Thread) {
 		dispatch()
-		return 0
 	})
 	gco.Join(dispatcher)
 }

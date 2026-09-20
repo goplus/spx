@@ -45,9 +45,8 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 	if co.TryRunFromEngine(owner, call) {
 		return
 	}
-	thread := co.Create(owner, func(coroutine.Thread) int {
+	thread := co.Create(owner, func(coroutine.Thread) {
 		call()
-		return 0
 	})
 	// Completion also covers cancellation before the callback starts.
 	co.Join(thread)

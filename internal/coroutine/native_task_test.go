@@ -17,7 +17,6 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)
-			co.OnInited()
 			started := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			unblock := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
 			finished := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
@@ -36,7 +35,7 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 
 			var callers [2]Thread
 			for i := range callers {
-				callers[i] = co.Create("caller", func(Thread) int {
+				callers[i] = co.Create("caller", func(Thread) {
 					co.WaitToDo(func() {
 						defer close(finished[i])
 						close(started[i])
@@ -45,7 +44,6 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 							test.exit()
 						}
 					})
-					return 0
 				})
 			}
 			for _, signal := range started {

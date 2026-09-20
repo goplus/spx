@@ -137,13 +137,6 @@ func (p *Coroutines) enqueueAndYield(job *WaitJob) {
 	p.Yield(me)
 }
 
-func (p *Coroutines) enqueueJob(job *WaitJob) {
-	p.schedulerMu.Lock()
-	p.currentJobs.PushBack(job)
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
-}
-
 func (p *Coroutines) enqueuePriorityJob(job *WaitJob) {
 	p.schedulerMu.Lock()
 	p.currentJobs.PushFront(job)

@@ -116,7 +116,6 @@ func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 
 func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
@@ -139,7 +138,7 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	observed := make(chan observation, 1)
 	done := make(chan struct{})
 	registered := make(chan struct{})
-	source := co.Create(owner, func(coroutine.Thread) int {
+	source := co.Create(owner, func(coroutine.Thread) {
 		ScheduleFrame(base+1, func() {
 			observed <- observation{
 				inCoroutine: IsInCoroutine(),
@@ -149,7 +148,6 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 			close(done)
 		})
 		close(registered)
-		return 0
 	})
 	<-registered
 	co.Join(source)
@@ -180,7 +178,6 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 
 func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
@@ -197,11 +194,10 @@ func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 
 	ran := false
 	registered := make(chan struct{})
-	source := co.Create(owner, func(me coroutine.Thread) int {
+	source := co.Create(owner, func(me coroutine.Thread) {
 		ScheduleFrame(base+1, func() { ran = true })
 		close(registered)
 		co.WaitYield(me)
-		return 0
 	})
 	<-registered
 	co.JoinYieldedOrDone(source)

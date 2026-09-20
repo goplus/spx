@@ -32,12 +32,12 @@ func (p *Game) initEventLoop() {
 	})
 }
 
-func (p *Game) eventLoop(coroutine.Thread) int {
-	return coreruntime.RunEventLoop(p.events, p.handleEvent)
+func (p *Game) eventLoop(coroutine.Thread) {
+	coreruntime.RunEventLoop(p.events, p.handleEvent)
 }
 
-func (p *Game) inputEventLoop(coroutine.Thread) int {
-	return coreruntime.RunInputLoop(coreruntime.InputLoopConfig{
+func (p *Game) inputEventLoop(coroutine.Thread) {
+	coreruntime.RunInputLoop(coreruntime.InputLoopConfig{
 		BeginFrame: func() bool {
 			return p.currentInputSession() == nil
 		},
@@ -61,8 +61,8 @@ func (p *Game) inputEventLoop(coroutine.Thread) int {
 	})
 }
 
-func (p *Game) logicLoop(coroutine.Thread) int {
-	return coreruntime.RunLogicLoop(coreruntime.LogicLoopConfig[Shape]{
+func (p *Game) logicLoop(coroutine.Thread) {
+	coreruntime.RunLogicLoop(coreruntime.LogicLoopConfig[Shape]{
 		Items: p.getTempShapes,
 		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
 			sprite, ok := item.(*SpriteImpl)

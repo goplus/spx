@@ -40,12 +40,11 @@ func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 		setDeterministicRandomSeed(123)
 
 		doneA := make(chan struct{}, 1)
-		co.CreateAndStart("extra-draws", func(me coroutine.Thread) int {
+		co.Create("extra-draws", func(me coroutine.Thread) {
 			for range extraDraws {
 				_ = Rand__1(0, 1)
 			}
 			doneA <- struct{}{}
-			return 0
 		})
 		select {
 		case <-doneA:
@@ -54,9 +53,8 @@ func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 		}
 
 		doneB := make(chan []float64, 1)
-		co.CreateAndStart("captured-sequence", func(me coroutine.Thread) int {
+		co.Create("captured-sequence", func(me coroutine.Thread) {
 			doneB <- []float64{Rand__1(0, 1), Rand__1(0, 1)}
-			return 0
 		})
 		select {
 		case values := <-doneB:
@@ -95,14 +93,13 @@ func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 		setDeterministicRandomSeed(123)
 
 		done := make(chan []float64, 1)
-		co.CreateAndStart("wait-to-do-random", func(me coroutine.Thread) int {
+		co.Create("wait-to-do-random", func(me coroutine.Thread) {
 			engine.WaitToDo(func() {
 				if drawOutsideCoroutine {
 					_ = Rand__1(0, 1)
 				}
 			})
 			done <- []float64{Rand__1(0, 1), Rand__1(0, 1)}
-			return 0
 		})
 
 		select {

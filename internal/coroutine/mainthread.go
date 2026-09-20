@@ -124,9 +124,8 @@ func (p *Coroutines) TryRunFromEngine(owner ThreadObj, call func()) bool {
 		if p.admissionClosed() {
 			return
 		}
-		dispatcher := p.Create(owner, func(Thread) int {
+		dispatcher := p.Create(owner, func(Thread) {
 			call()
-			return 0
 		})
 		p.joinOnEngine(dispatcher)
 	})

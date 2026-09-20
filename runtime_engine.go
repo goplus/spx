@@ -123,9 +123,8 @@ func (p *Game) runFrameScripts() {
 }
 
 func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
-	thread := gco.Create(owner, func(coroutine.Thread) int {
+	thread := gco.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)
-		return 0
 	})
 	gco.JoinYieldedOrDone(thread)
 }
@@ -220,7 +219,6 @@ func (p *Game) markGameStarted(generation uint64) bool {
 	if generation != p.bootstrapGen {
 		return false
 	}
-	engine.OnGameStarted()
 	p.lifecycleState.IsRunned.Store(true)
 	return true
 }
