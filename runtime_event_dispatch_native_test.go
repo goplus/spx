@@ -108,7 +108,7 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		platform.useCurrentAsMainThread()
-		withEventRegistrationBarrier(func() {
+		withEventRegistrationBarrier(nil, func() {
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: "handler", Handler: handler}}, event)
 		})
 		close(producerReturned)
@@ -166,7 +166,7 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 
 	called := false
 	if !co.RunAfterStopAll(time.Second, func() {
-		withEventRegistrationBarrier(func() { called = true })
+		withEventRegistrationBarrier(nil, func() { called = true })
 	}) {
 		t.Fatal("shutdown barrier did not complete")
 	}

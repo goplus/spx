@@ -32,19 +32,16 @@ func (p *Game) initEventLoop() {
 	})
 }
 
-func (p *Game) eventLoop(me coroutine.Thread) int {
-	return coreruntime.RunEventLoop(me, p.events, p.handleEvent)
+func (p *Game) eventLoop(coroutine.Thread) int {
+	return coreruntime.RunEventLoop(p.events, p.handleEvent)
 }
 
-func (p *Game) inputEventLoop(me coroutine.Thread) int {
-	return coreruntime.RunInputLoop(me, coreruntime.InputLoopConfig{
+func (p *Game) inputEventLoop(coroutine.Thread) int {
+	return coreruntime.RunInputLoop(coreruntime.InputLoopConfig{
 		BeginFrame: func() bool {
 			return p.currentInputSession() == nil
 		},
-		CurrentMousePos: func() mathf.Vec2 {
-			curMousePos := engine.Managers().InputMgr.GetGlobalMousePos()
-			return mathf.Vec2{X: float64(curMousePos.X), Y: float64(curMousePos.Y)}
-		},
+		CurrentMousePos: engine.Managers().InputMgr.GetGlobalMousePos,
 		IsLeftButtonPressed: func() bool {
 			return engine.IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
 		},
@@ -64,8 +61,8 @@ func (p *Game) inputEventLoop(me coroutine.Thread) int {
 	})
 }
 
-func (p *Game) logicLoop(me coroutine.Thread) int {
-	return coreruntime.RunLogicLoop(me, coreruntime.LogicLoopConfig[Shape]{
+func (p *Game) logicLoop(coroutine.Thread) int {
+	return coreruntime.RunLogicLoop(coreruntime.LogicLoopConfig[Shape]{
 		Items: p.getTempShapes,
 		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
 			sprite, ok := item.(*SpriteImpl)

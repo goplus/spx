@@ -152,7 +152,7 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.sounds = make(map[string]sound)
 	p.inputMgr.init(p)
 	p.events = make(chan event, eventBufferSize)
-	p.resetEventQueueStats()
+	p.eventQueueState.EventQueueStats.Reset()
 	p.fs = fs
 }
 
@@ -182,7 +182,7 @@ func setupGameConfig(g *Game, conf *Config, proj *coreproject.ProjectConfig) {
 
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
-	if settings.AutoSetCollisionLayer == isPhysicsEnabled() {
+	if settings.AutoSetCollisionLayer == g.physicsEnabled {
 		engine.Panic("invalid configuration: autoSetCollisionLayer and physics enabled state must not be the same")
 	}
 	engine.SetLayerSortMode(settings.LayerSortMode)

@@ -59,7 +59,7 @@ func (l *scratchEventOrderLog) snapshot() []string {
 
 func newScratchEventOrderSprite(game *Game, name string) *SpriteImpl {
 	sprite := &SpriteImpl{name: name, g: game}
-	sprite.scriptEventBindings.init(&game.scriptEvents, sprite)
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
 	return sprite
 }
 

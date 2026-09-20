@@ -248,7 +248,7 @@ func (cfg *physicConfig) syncToProxy(syncProxy *engine.Sprite, isTrigger bool, s
 // syncShape synchronizes shape to engine proxy.
 func (cfg *physicConfig) syncShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	if cfg.Type == physicsColliderAuto {
-		pivot, autoSize := syncGetCostumeBoundByAlpha(sprite)
+		pivot, autoSize := getCostumeBoundByAlpha(sprite)
 		if isTrigger {
 			autoSize.X += TriggerExtraPixel
 			autoSize.Y += TriggerExtraPixel

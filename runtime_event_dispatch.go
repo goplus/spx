@@ -21,7 +21,6 @@ import (
 
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // scriptEventLifecycle registers an invocation before it can run and returns
@@ -60,18 +59,16 @@ func (event scriptEventDispatch) task(sink eventSink) coroutine.Task {
 	return task
 }
 
-// withEventRegistrationBarrier prevents external producers from returning before
-// every handler is registered. The engine-thread bridge keeps the main thread
-// responsive while the managed dispatcher waits for a batch.
-func withEventRegistrationBarrier(dispatch func()) {
+// Register all handlers before returning; keep engine calls live while waiting.
+func withEventRegistrationBarrier(owner any, dispatch func()) {
 	if gco == nil || gco.IsInCoroutine() {
 		dispatch()
 		return
 	}
-	if gco.TryRunFromEngine(engine.GetGame(), dispatch) {
+	if gco.TryRunFromEngine(owner, dispatch) {
 		return
 	}
-	dispatcher := gco.Create(engine.GetGame(), func(coroutine.Thread) int {
+	dispatcher := gco.Create(owner, func(coroutine.Thread) int {
 		dispatch()
 		return 0
 	})
@@ -79,7 +76,7 @@ func withEventRegistrationBarrier(dispatch func()) {
 }
 
 func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
-	return sinksInScratchTargetOrder(activeGame(), p.manager.Snapshot(bucket))
+	return sinksInScratchTargetOrder(p.game, p.manager.Snapshot(bucket))
 }
 
 func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
@@ -98,7 +95,7 @@ func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any,
 }
 
 func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {
-	withEventRegistrationBarrier(func() {
+	withEventRegistrationBarrier(p.game, func() {
 		// Complete matching before starting user handlers.
 		matched := matchingEventSinks(sinks, event.matchData)
 		dispatchMatchedScriptEventBatch(matched, event)
@@ -106,7 +103,7 @@ func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEvent
 }
 
 func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
-	withEventRegistrationBarrier(func() {
+	withEventRegistrationBarrier(p.game, func() {
 		p.dispatchStartEventBatch(sinks, event)
 	})
 }

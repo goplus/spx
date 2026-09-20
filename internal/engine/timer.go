@@ -43,7 +43,7 @@ func updateTimers(delta float64) {
 	for i := range count {
 		if tempDelaySpriteCalls[i].timer <= 0 {
 			id := tempDelaySpriteCalls[i].objectID
-			if id == 0 || isNodeExist(id) {
+			if id == 0 || IsNodeExist(id) {
 				tempDelaySpriteCalls[i].callback()
 			}
 		}

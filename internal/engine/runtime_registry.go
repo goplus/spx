@@ -36,7 +36,11 @@ var state = runtimeState{
 }
 
 func IsNodeExist(id Object) bool {
-	return isNodeExist(id)
+	if _, ok := state.uiNodes[id]; ok {
+		return true
+	}
+	_, ok := state.sprites[id]
+	return ok
 }
 
 func clearAllSprites() {
@@ -52,12 +56,4 @@ func clearAllSprites() {
 
 func lookupSprite(id Object) gdx.ISpriter {
 	return state.sprites[id]
-}
-
-func isNodeExist(id Object) bool {
-	if _, ok := state.uiNodes[id]; ok {
-		return true
-	}
-	_, ok := state.sprites[id]
-	return ok
 }

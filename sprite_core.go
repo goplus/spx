@@ -57,7 +57,7 @@ func (p *SpriteImpl) IsCloned() bool {
 
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
-	p.scriptEventBindings.initFrom(&src.scriptEventBindings, p)
+	p.scriptEventBindings.bind(src.scriptEventRegistry, p)
 
 	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
 	p.greffUniforms = maps.Clone(src.greffUniforms)
@@ -137,7 +137,7 @@ func (p *SpriteImpl) initBaseObjects(spriteCfg *coreproject.SpriteConfig, g *Gam
 		p.baseObj.initWith(spriteCfg)
 	}
 	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
-	p.scriptEventBindings.init(&g.scriptEvents, p)
+	p.scriptEventBindings.bind(&g.scriptEvents, p)
 }
 
 func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *coreproject.SpriteConfig) {

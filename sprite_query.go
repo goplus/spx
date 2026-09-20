@@ -124,7 +124,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 	}
 
 	if triggerInfo.Type == physicsColliderAuto && p.runtimeState.SyncSprite == nil {
-		center, size := getCostumeBoundByAlpha(p, false)
+		center, size := getCostumeBoundByAlpha(p)
 		triggerInfo.Pivot = center
 		triggerInfo.Params = []float64{size.X, size.Y}
 	}
@@ -205,7 +205,7 @@ func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {
 	if !p.prepareSelfCollisionQuery() || !dst.prepareSelfCollisionQuery() {
 		return false
 	}
-	usePixelPerfect := !isPhysicsEnabled()
+	usePixelPerfect := !p.g.physicsEnabled
 	if !p.isCloneProxyPublicationBlocked() && !dst.isCloneProxyPublicationBlocked() {
 		return engine.Managers().SpriteMgr.CheckCollisionWithSprite(
 			p.runtimeState.SyncSprite.GetId(),

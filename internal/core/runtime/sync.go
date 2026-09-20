@@ -18,19 +18,9 @@ package runtime
 
 import (
 	"math"
-	"sync"
 
-	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
 )
-
-func SyncOnce(start *sync.Once, fire func()) {
-	start.Do(fire)
-}
-
-func SyncMousePos(pos mathf.Vec2, setMousePos func(mathf.Vec2)) {
-	setMousePos(pos)
-}
 
 func SyncBatchPositions[T any](
 	items []T,

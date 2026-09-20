@@ -401,6 +401,9 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 	if game.currentInputSession() != nil {
 		t.Fatal("one-shot session descriptor was consumed twice")
 	}
+	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
+		t.Fatalf("ordinary generation retained terminal input status: %+v", status)
+	}
 	game.abortInputSession("ordinary generation ended")
 	game.resetBootstrapState()
 
@@ -489,6 +492,14 @@ func TestGameAbortInvalidatesRecordingAndRestoresEnvironment(t *testing.T) {
 	}
 	if status := GetInputSessionStatus(); status.Phase != InputSessionPhaseAborted || status.Error != "game reset" || status.NextFrame != 1 || status.FrameCount != 1 {
 		t.Fatalf("public aborted session status = %+v", status)
+	}
+	wantStatus := GetInputSessionStatus()
+	game.abortInputSession("second reset")
+	if got := session.close("second reset"); got != wantStatus {
+		t.Fatalf("repeated close changed session status: %+v", got)
+	}
+	if got := GetInputSessionStatus(); got != wantStatus {
+		t.Fatalf("repeated abort changed public status: %+v", got)
 	}
 	if _, err := session.finishRecording(nil); err == nil {
 		t.Fatal("aborted recording produced a commit result")

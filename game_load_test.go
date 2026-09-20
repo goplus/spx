@@ -372,7 +372,7 @@ func newCameraFollowOverrideSprite(g *Game, name string, followTarget SpriteName
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -382,7 +382,7 @@ func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisio
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -392,7 +392,7 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	return sprite
 }
@@ -409,7 +409,7 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -425,7 +425,7 @@ func newCloneStatePreservingSprite(g *Game, name string, recordValue *float64) *
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -441,7 +441,7 @@ func newCloneAllFieldKindsSprite(g *Game, name string, observed *cloneAllFieldKi
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -465,7 +465,7 @@ func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneP
 	sprite.g = g
 	sprite.name = "Score"
 	sprite.sprite = sprite
-	sprite.scriptEventBindings.init(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -843,7 +843,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	setupBootstrapScheduler(t)
 
 	var game Game
-	game.initRuntimeState()
+	game.initEventQueueState()
 	game.events = make(chan event, eventBufferSize)
 
 	blocked := make(chan struct{})

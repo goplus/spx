@@ -19,33 +19,26 @@ package spx
 import (
 	"os"
 
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func (p *Game) applyRuntimeConfig(conf *Config, proj *coreproject.ProjectConfig) {
-	p.setRuntimeConfigInput(conf)
+	if conf != nil {
+		p.runtimeConfigInput = *conf
+	} else {
+		p.runtimeConfigInput = Config{}
+	}
 	p.applyStoredRuntimeConfig(proj)
 }
 
 func (p *Game) applyStoredRuntimeConfig(proj *coreproject.ProjectConfig) {
 	runtimeCfg := resolveGameRuntimeConfig(p.runtimeConfigInput, proj)
 	p.runtimeConfigInput.Title = runtimeCfg.Title
-	p.applyResolvedRuntimeConfig(runtimeCfg, proj)
-}
-
-func (p *Game) setRuntimeConfigInput(conf *Config) {
-	if conf == nil {
-		p.runtimeConfigInput = Config{}
-		return
-	}
-	p.runtimeConfigInput = *conf
-}
-
-func (p *Game) applyResolvedRuntimeConfig(runtimeCfg coreproject.RuntimeConfig, proj *coreproject.ProjectConfig) {
 	proj.FullScreen = runtimeCfg.FullScreen
-	p.setPhysicsEnabled(runtimeCfg.PhysicsEnabled)
-	p.setEventQueuePolicy(parseEventQueuePolicy(runtimeCfg.EventQueuePolicy))
+	p.physicsEnabled = runtimeCfg.PhysicsEnabled
+	p.eventQueueState.EventQueuePolicy = coreevent.ParsePolicy(runtimeCfg.EventQueuePolicy)
 	p.displayState.WindowHeight = runtimeCfg.WindowHeight
 	p.displayState.WindowWidth = runtimeCfg.WindowWidth
 

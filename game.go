@@ -19,7 +19,7 @@ package spx
 import (
 	"reflect"
 	"sync"
-	"time"
+	"sync/atomic"
 
 	spxfs "github.com/goplus/spx/v3/fs"
 	_ "github.com/goplus/spx/v3/fs/asset"
@@ -47,7 +47,7 @@ var (
 	tySprite = reflect.TypeFor[Sprite]()
 )
 
-var runtimeStateMgr corestate.RuntimeManager
+var defaultDebugFlags atomic.Uint32
 
 type dbgFlags int
 
@@ -86,10 +86,11 @@ type Game struct {
 	displayState       corestate.GameDisplayState
 	dialogState        corestate.GameDialogState
 	debugState         corestate.GameDebugState
-	gameRuntimeState   corestate.GameRuntimeState
+	eventQueueState    corestate.GameEventQueueState
 	pathfindingState   corestate.GamePathfindingState
 	audioState         corestate.GameAudioState
 	runtimeConfigInput Config
+	physicsEnabled     bool
 
 	Camera Camera
 	camera *cameraImpl
@@ -116,7 +117,6 @@ type Game struct {
 	inputSessionMu sync.RWMutex
 	inputSession   *inputSession
 	inputTerminal  InputSessionStatus
-	hasInputTerm   bool
 	inputClaimed   bool
 	soundMgr       audio.Manager
 	shapeMgr       shapeManager
@@ -128,23 +128,11 @@ type Game struct {
 	spatialHash   *collision.SpatialHash[*SpriteImpl]
 }
 
-func (p *Game) initRuntimeState() {
-	runtimeStateMgr.Init(&p.debugState, &p.gameRuntimeState)
-	syncCoroutinePerfDebug(p.debugState.DebugPerf)
-	p.initEventQueueState()
-}
-
-func (p *Game) setDebugFlags(instr, event, perf bool) {
-	runtimeStateMgr.ApplyDebugFlags(&p.debugState, instr, event, perf)
-	syncCoroutinePerfDebug(perf)
-}
-
-func (p *Game) setPhysicsEnabled(enabled bool) {
-	runtimeStateMgr.SetPhysicsEnabled(&p.gameRuntimeState, enabled)
-}
-
-func (p *Game) resetImageSizeCache() {
-	runtimeStateMgr.ResetImageSizeCache(&p.gameRuntimeState)
+func (p *Game) setDebugFlags(flags dbgFlags) {
+	p.debugState.DebugInstr = flags&DbgFlagInstr != 0
+	p.debugState.DebugEvent = flags&DbgFlagEvent != 0
+	p.debugState.DebugPerf = flags&DbgFlagPerf != 0
+	gco.SetPerfDebug(p.debugState.DebugPerf)
 }
 
 func (p *Game) newSpriteAndLoadWithLoader(
@@ -203,8 +191,8 @@ func (p *Game) reset() {
 	engine.ResetFrameRuntime()
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
-	p.resetImageSizeCache()
-	p.resetEventQueueStats()
+	costumeSizeCache.Clear()
+	p.eventQueueState.EventQueueStats.Reset()
 	close(p.events)
 
 	itime.OnReload()
@@ -213,12 +201,14 @@ func (p *Game) reset() {
 func (p *Game) initGame(sprites []Sprite) *Game {
 	engine.SetGame(p)
 	engine.ResetFrameRuntime()
+	costumeSizeCache.Clear()
 	if err := p.attachPreparedInputSession(); err != nil {
 		engine.Panic(err)
 	}
 	p.initShapeMgr()
-	p.initRuntimeState()
-	p.scriptEventBindings.init(&p.scriptEvents, p)
+	p.setDebugFlags(dbgFlags(defaultDebugFlags.Load()))
+	p.initEventQueueState()
+	p.bindScriptEvents()
 	p.sprs = make(map[string]Sprite)
 	p.sounds = make(map[string]sound)
 	p.typs = make(map[string]reflect.Type)
@@ -235,69 +225,21 @@ func (p *Game) initShapeMgr() {
 	p.shapeMgr.init()
 }
 
-func activeGame() *Game {
+func currentGame() *Game {
 	game, _ := engine.GetGame().(*Game)
 	return game
 }
 
-func setDefaultDebugFlags(instr, event, perf bool) {
-	runtimeStateMgr.SetDefaultDebugFlags(instr, event, perf)
-	syncCoroutinePerfDebug(perf)
-}
-
-// syncCoroutinePerfDebug keeps the process-wide coroutine scheduler aligned with
-// the most recently applied perf-debug setting. The scheduler is global, so this
-// flag is intentionally global as well.
-func syncCoroutinePerfDebug(enabled bool) {
-	gco.SetPerfDebug(enabled)
-}
-
 func isDebugInstrEnabled() bool {
-	return runtimeStateMgr.DebugInstrEnabled(activeGameDebugState())
+	if game := currentGame(); game != nil {
+		return game.debugState.DebugInstr
+	}
+	return dbgFlags(defaultDebugFlags.Load())&DbgFlagInstr != 0
 }
 
 func isDebugEventEnabled() bool {
-	return runtimeStateMgr.DebugEventEnabled(activeGameDebugState())
-}
-
-func isPhysicsEnabled() bool {
-	return runtimeStateMgr.PhysicsEnabled(activeGameRuntimeState())
-}
-
-func imageSizeCacheRef() *sync.Map {
-	return runtimeStateMgr.ImageSizeCacheRef(activeGameRuntimeState())
-}
-
-func setSchedInMain(inMain bool) {
-	runtimeStateMgr.SetSchedInMain(activeGameRuntimeState(), inMain)
-}
-
-func isSchedInMainState() bool {
-	return runtimeStateMgr.IsSchedInMain(activeGameRuntimeState())
-}
-
-func setMainSchedTime(t time.Time) {
-	runtimeStateMgr.SetMainSchedTime(activeGameRuntimeState(), t)
-}
-
-func mainSchedTime() time.Time {
-	return runtimeStateMgr.MainSchedTime(activeGameRuntimeState())
-}
-
-func activeGameDebugState() *corestate.GameDebugState {
-	if g := activeGame(); g != nil {
-		return &g.debugState
+	if game := currentGame(); game != nil {
+		return game.debugState.DebugEvent
 	}
-	return nil
-}
-
-func activeGameRuntimeState() *corestate.GameRuntimeState {
-	return runtimeStateOfGame(activeGame())
-}
-
-func runtimeStateOfGame(g *Game) *corestate.GameRuntimeState {
-	if g == nil {
-		return nil
-	}
-	return &g.gameRuntimeState
+	return dbgFlags(defaultDebugFlags.Load())&DbgFlagEvent != 0
 }

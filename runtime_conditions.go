@@ -30,7 +30,7 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 	running := false
 	edge := coreevent.MatchRisingEdge(__xgo_autoclosure_condition)
 	p.scriptEventRegistry.manager.AddCondition(coreevent.NewSink(
-		p.pthis,
+		p.owner,
 		func() {
 			running = true
 			defer func() { running = false }()
@@ -65,7 +65,7 @@ func (p *scriptEventRegistry) dispatchConditions() {
 			sink.Handler.(func())()
 		},
 	}
-	withEventRegistrationBarrier(func() {
+	withEventRegistrationBarrier(p.game, func() {
 		dispatchMatchedScriptEventBatch(sinks, event)
 	})
 }

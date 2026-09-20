@@ -69,11 +69,7 @@ func getRenderRotationAndScale(p *SpriteImpl) (rotation, scaleX, scaleY float64)
 	return rotation, scaleX, scaleY
 }
 
-func syncGetCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
-	return getCostumeBoundByAlpha(p, true)
-}
-
-func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2) {
+func getCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
 	cs := p.costumes[p.costumeIndex]
 	var rect mathf.Rect2
 	if cs.isAtlas() {
