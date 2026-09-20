@@ -155,9 +155,8 @@ func (p *inputManager) dispatchInputSessionEvents(events []event) {
 		dispatch()
 		return
 	}
-	gco.Create(p.g, func(coroutine.Thread) int {
+	gco.Create(p.g, func(coroutine.Thread) {
 		dispatch()
-		return 0
 	})
 }
 

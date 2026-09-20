@@ -48,9 +48,8 @@ type PanicReport struct {
 
 // Coroutines coordinates thread lifecycle and cooperative scheduling.
 type Coroutines struct {
-	onPanic     func(PanicReport)
-	initialized atomic.Bool
-	debug       bool
+	onPanic func(PanicReport)
+	debug   bool
 
 	// runMu serializes script slices; current identifies its owner.
 	runMu   sync.Mutex
@@ -122,16 +121,6 @@ func New(onPanic func(PanicReport)) *Coroutines {
 // Pair it with the frame number to identify a scheduling round.
 func (p *Coroutines) ScriptRound() uint64 {
 	return p.scriptRound.Load()
-}
-
-// OnRestart marks the scheduler as not yet initialized.
-func (p *Coroutines) OnRestart() {
-	p.initialized.Store(false)
-}
-
-// OnInited marks the scheduler as initialized.
-func (p *Coroutines) OnInited() {
-	p.initialized.Store(true)
 }
 
 // SetPerfDebug enables or disables GC statistics collection during Update.

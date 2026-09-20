@@ -26,11 +26,10 @@ import (
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 	iterations := 0
-	th := co.Create(nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) {
 		for {
 			iterations++
 			co.YieldLoopFor(me)
@@ -51,17 +50,15 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	var rounds []uint64
-	th := co.Create(nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) {
 		for range 3 {
 			rounds = append(rounds, co.ScriptRound())
 			co.YieldLoopFor(me)
 		}
-		return 0
 	})
 	co.JoinYieldedOrDone(th)
 	co.Update()
@@ -73,15 +70,13 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	resumed := false
-	th := co.Create(nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) {
 		co.YieldToNextRoundFor(me)
 		resumed = true
-		return 0
 	})
 	co.JoinYieldedOrDone(th)
 	co.Update()
@@ -98,23 +93,20 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co := New(nil)
-	co.OnInited()
 	itime.Start(nil)
 	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
 
 	passiveResumed := false
-	passive := co.Create(nil, func(me Thread) int {
+	passive := co.Create(nil, func(me Thread) {
 		co.YieldToNextRoundFor(me)
 		passiveResumed = true
-		return 0
 	})
 	loopResumed := false
-	loop := co.Create(nil, func(me Thread) int {
+	loop := co.Create(nil, func(me Thread) {
 		co.YieldLoopFor(me)
 		loopResumed = true
-		return 0
 	})
-	co.JoinYieldedOrDoneAll([]Thread{passive, loop})
+	joinYieldedOrDoneAll(co, []Thread{passive, loop})
 	co.Update()
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)

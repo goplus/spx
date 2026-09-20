@@ -17,6 +17,7 @@
 package spx
 
 import (
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"reflect"
 	"strings"
 	"sync"
@@ -503,7 +504,6 @@ func setupBootstrapScheduler(t *testing.T) {
 	t.Helper()
 
 	co := coroutine.New(nil)
-	co.OnInited()
 
 	original := gco
 	gco = co
@@ -664,7 +664,7 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	if !spriteB.sawSelfAwake || !spriteB.sawPeerAwake {
 		t.Fatalf("SpriteB main saw awake state self=%v peer=%v, want both true", spriteB.sawSelfAwake, spriteB.sawPeerAwake)
 	}
-	if got := game.scriptEvents.manager.SnapshotAwake(); len(got) != 0 {
+	if got := game.scriptEvents.manager.Snapshot(coreevent.BucketAwake); len(got) != 0 {
 		t.Fatalf("SnapshotAwake len = %d, want 0 for initial sprites", len(got))
 	}
 }
@@ -1044,13 +1044,12 @@ func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
 
 	creatorDone := make(chan struct{})
 	var clone *SpriteImpl
-	co.Create(source, func(coroutine.Thread) int {
+	co.Create(source, func(coroutine.Thread) {
 		defer close(creatorDone)
 		doClone(source, nil, func(sprite *SpriteImpl) {
 			clone = sprite
 		})
 
-		return 0
 	})
 	updateRuntimeEventSchedulerUntil(t, co, func() bool {
 		select {

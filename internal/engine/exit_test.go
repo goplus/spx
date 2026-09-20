@@ -94,7 +94,7 @@ func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
-		probe := co.Create("reset-close-probe", func(coroutine.Thread) int { return 0 })
+		probe := co.Create("reset-close-probe", func(coroutine.Thread) {})
 		if probe.Stopped() {
 			return
 		}
@@ -108,9 +108,8 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var ran atomic.Bool
-		probe := co.CreateAndStart("reset-open-probe", func(coroutine.Thread) int {
+		probe := co.Create("reset-open-probe", func(coroutine.Thread) {
 			ran.Store(true)
-			return 0
 		})
 		co.Join(probe)
 		if ran.Load() {
@@ -123,18 +122,16 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 
 func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	releaseWorker := sync.OnceFunc(func() { close(release) })
 	workerDone := make(chan struct{})
-	co.CreateAndStart("blocked", func(coroutine.Thread) int {
+	co.Create("blocked", func(coroutine.Thread) {
 		defer close(workerDone)
 		close(started)
 		<-release
-		return 0
 	})
 	t.Cleanup(releaseWorker)
 	select {
@@ -171,18 +168,16 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 
 func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
 	var returned atomic.Bool
-	caller := co.CreateAndStart("caller", func(coroutine.Thread) int {
+	caller := co.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		close(entered)
 		resetWebRuntime(9)
 		returned.Store(true)
-		return 0
 	})
 	select {
 	case <-entered:
@@ -216,7 +211,6 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	setupWebResetTest(t, co)
 
 	game, owner := new(bindingTestGame), new(struct{})
@@ -267,7 +261,6 @@ func TestResetWebRuntimeReleasesBindingAfterDrainReopens(t *testing.T) {
 func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	recorder := setupWebResetTest(t, co)
 
 	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
@@ -301,7 +294,6 @@ func TestResetWebRuntimeCancelsStartupWithoutCallingBackend(t *testing.T) {
 func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	isolateGameBinding(t)
 	co := coroutine.New(nil)
-	co.OnInited()
 	setupWebResetTest(t, co)
 	gdx.PlatformMgr = resetMainThreadPlatform{main: gid.Get()}
 	game := new(bindingTestGame)
@@ -311,11 +303,10 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	co.CreateAndStart("peer", func(peer coroutine.Thread) int {
+	co.Create("peer", func(peer coroutine.Thread) {
 		defer close(peerDone)
 		close(peerYielding)
 		co.Yield(peer)
-		return 0
 	})
 
 	select {
@@ -346,10 +337,9 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	}
 	close(backend.release)
 	gdx.ExtMgr = backend
-	co.CreateAndStart("caller", func(coroutine.Thread) int {
+	co.Create("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		resetWebRuntime(17)
-		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)

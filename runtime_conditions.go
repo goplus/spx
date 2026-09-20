@@ -29,7 +29,7 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 	}
 	running := false
 	edge := coreevent.MatchRisingEdge(__xgo_autoclosure_condition)
-	p.scriptEventRegistry.manager.AddCondition(coreevent.NewSink(
+	p.scriptEventRegistry.manager.Add(coreevent.BucketCondition, coreevent.NewSink(
 		p.owner,
 		func() {
 			running = true

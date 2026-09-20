@@ -112,7 +112,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			game := new(startupExitGame)
 			var started, exitedInFrame atomic.Bool
 			game.start = func() {
-				co.Create(game, func(coroutine.Thread) int {
+				co.Create(game, func(coroutine.Thread) {
 					if test.beforeFrame {
 						test.exit()
 					} else {
@@ -121,9 +121,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 							test.exit()
 						})
 					}
-					OnGameStarted()
 					started.Store(true)
-					return 0
 				})
 			}
 			binding, err := bindGame(game, game)

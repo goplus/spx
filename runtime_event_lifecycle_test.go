@@ -184,11 +184,10 @@ func TestEventHandlerQueuedRetriggers(t *testing.T) {
 			} else {
 				game.OnClick(run)
 			}
-			parent := co.Create(game, func(coroutine.Thread) int {
+			parent := co.Create(game, func(coroutine.Thread) {
 				fire()
 				fire()
 				fire()
-				return 0
 			})
 			co.Join(parent)
 			co.Update()

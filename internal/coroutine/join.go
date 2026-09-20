@@ -56,12 +56,6 @@ func (p *Coroutines) JoinYieldedOrDone(target Thread) {
 	p.waitOn(me, &target.yieldWaiters)
 }
 
-// JoinYieldedOrDoneAll waits until every distinct, non-nil target has first
-// yielded or finished.
-func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
-	joinUnique(targets, p.JoinYieldedOrDone)
-}
-
 func joinUnique(targets []Thread, join func(Thread)) {
 	if len(targets) == 0 {
 		return

@@ -73,9 +73,8 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 			wrongThread.Store(true)
 		}
 	}
-	active := co.Create("active", func(coroutine.Thread) int {
+	active := co.Create("active", func(coroutine.Thread) {
 		co.WaitMainThread(engineCall)
-		return 0
 	})
 	select {
 	case <-platform.workerSeen:

@@ -17,6 +17,7 @@
 package spx
 
 import (
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -115,7 +116,7 @@ func TestGameBootstrapCanOrderGameStartBeforeSpriteStart(t *testing.T) {
 
 	g.runBootstrapTasks(generation)
 
-	got := g.scriptEvents.manager.SnapshotStart()
+	got := g.scriptEvents.manager.Snapshot(coreevent.BucketStart)
 	if len(got) != 2 {
 		t.Fatalf("SnapshotStart len = %d, want 2", len(got))
 	}

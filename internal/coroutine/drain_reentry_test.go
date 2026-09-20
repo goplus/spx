@@ -28,7 +28,7 @@ func TestSetupRejectsSynchronousDrain(t *testing.T) {
 				}
 				var parent Thread
 				if managed {
-					parent = co.Create("parent", func(Thread) int { start(); return 0 })
+					parent = co.Create("parent", func(Thread) { start() })
 					<-parent.done
 				} else {
 					start()
@@ -84,9 +84,8 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 		setup, ran := false, false
 		completed := co.RunAfterStopAll(0, func() {
 			co.StopAll()
-			threads = append(threads, co.Create("rejected", func(Thread) int {
+			threads = append(threads, co.Create("rejected", func(Thread) {
 				ran = true
-				return 0
 			}))
 			threads = append(threads, co.StartBatch([]Task{{
 				Setup: func(Thread) func() { setup = true; return nil },
@@ -160,7 +159,7 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 					if co.admissionClosed() || !co.RunAfterStopAll(0, nil) {
 						t.Error("unwinding shutdown did not restore admission and caller scope")
 					}
-					thread := co.Create("after-unwind", func(Thread) int { return 0 })
+					thread := co.Create("after-unwind", func(Thread) {})
 					<-thread.done
 					if thread.Stopped() {
 						t.Error("unwinding shutdown rejected a fresh thread")
