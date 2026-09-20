@@ -62,12 +62,10 @@ void SpxResMgr::on_awake() {
 		initial_theme_fonts_saved = true;
 	}
 	is_load_direct = true;
-	anim_frames.instantiate();
 }
 
 void SpxResMgr::on_reset(int reset_code) {
-	animation_frame_offsets.clear();
-	anim_frames->clear_all();
+	animation_clips.clear();
 	display_fonts.clear();
 	display_default_font.unref();
 	if (initial_theme_fonts_saved) {
@@ -77,7 +75,7 @@ void SpxResMgr::on_reset(int reset_code) {
 }
 
 bool SpxResMgr::is_dynamic_anim_mode() const {
-	return is_dynamic_anim;
+	return !animation_clips.is_empty();
 }
 
 String SpxResMgr::_to_engine_path(const String &p_path) {
@@ -150,32 +148,88 @@ Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	return res;
 }
 
-bool SpxResMgr::_parse_anim_json(const String &src, AnimPayload &out) {
+namespace {
+
+bool is_animation_number(const Variant &p_value) {
+	return (p_value.get_type() == Variant::INT ||
+				   p_value.get_type() == Variant::FLOAT) &&
+			Math::is_finite(double(p_value));
+}
+
+bool is_positive_animation_integer(const Variant &p_value) {
+	return is_animation_number(p_value) && double(p_value) > 0 &&
+			double(p_value) <= INT32_MAX &&
+			double(p_value) == Math::floor(double(p_value));
+}
+
+} // namespace
+
+bool SpxResMgr::_parse_anim_json(const String &src, bool p_is_atlas,
+		AnimPayload &out) {
 	JSON json;
-	Error error = json.parse(src);
-	if (error != OK) {
-		print_error("Failed to parse JSON: " + json.get_error_message());
-		return false;
-	}
-
+	ERR_FAIL_COND_V_MSG(json.parse(src) != OK, false,
+			"Invalid animation JSON: " + json.get_error_message());
+	ERR_FAIL_COND_V_MSG(json.get_data().get_type() != Variant::DICTIONARY, false,
+			"Animation JSON must be an object.");
 	Dictionary dict = json.get_data();
-
-	if (dict.has("base_path")) {
+	ERR_FAIL_COND_V_MSG(!dict.has("frames") ||
+					dict["frames"].get_type() != Variant::ARRAY,
+			false, "Animation frames must be an array.");
+	ERR_FAIL_COND_V_MSG(!dict.has("max_bitmap") ||
+					!is_positive_animation_integer(dict["max_bitmap"]),
+			false,
+			"Animation max_bitmap must be a positive integer.");
+	out.frames = dict["frames"];
+	out.max_bitmap = dict["max_bitmap"];
+	ERR_FAIL_COND_V_MSG(out.frames.is_empty(), false,
+			"Animation must contain at least one frame.");
+	if (p_is_atlas) {
+		ERR_FAIL_COND_V_MSG(!dict.has("base_path") ||
+						dict["base_path"].get_type() != Variant::STRING ||
+						String(dict["base_path"]).is_empty(),
+				false, "Animation atlas path is missing.");
 		out.base_path = dict["base_path"];
 	}
 
-	if (!dict.has("frames")) {
-		print_error("JSON missing 'frames'");
-		return false;
+	bool has_svg = false;
+	bool has_bitmap = false;
+	for (int i = 0; i < out.frames.size(); i++) {
+		ERR_FAIL_COND_V_MSG(out.frames[i].get_type() != Variant::DICTIONARY, false,
+				"Animation frame must be an object.");
+		Dictionary frame = out.frames[i];
+		if (p_is_atlas) {
+			for (const char *field : { "x", "y", "w", "h" }) {
+				ERR_FAIL_COND_V_MSG(!frame.has(field) ||
+								!is_animation_number(frame[field]),
+						false, "Invalid animation atlas rectangle.");
+			}
+			ERR_FAIL_COND_V_MSG(double(frame["w"]) <= 0 || double(frame["h"]) <= 0,
+					false, "Animation atlas size must be positive.");
+		} else {
+			ERR_FAIL_COND_V_MSG(!frame.has("path") ||
+							frame["path"].get_type() != Variant::STRING ||
+							String(frame["path"]).is_empty(),
+					false, "Animation frame path is missing.");
+			ERR_FAIL_COND_V_MSG(!frame.has("bitmap") ||
+							!is_positive_animation_integer(frame["bitmap"]),
+					false,
+					"Animation bitmap must be a positive integer.");
+			const bool svg = svgMgr->is_svg_file(frame["path"]);
+			has_svg = has_svg || svg;
+			has_bitmap = has_bitmap || !svg;
+		}
+		if (frame.has("offset")) {
+			ERR_FAIL_COND_V_MSG(frame["offset"].get_type() != Variant::ARRAY, false,
+					"Animation offset must be an array.");
+			Array offset = frame["offset"];
+			ERR_FAIL_COND_V_MSG(
+					offset.size() != 2 || !is_animation_number(offset[0]) ||
+							!is_animation_number(offset[1]),
+					false, "Animation offset must contain two finite numbers.");
+		}
 	}
-
-	if (!dict.has("max_bitmap")) {
-		print_error("JSON missing 'max_bitmap'");
-		return false;
-	}
-
-	out.frames = dict["frames"];
-	out.max_bitmap = dict["max_bitmap"];
+	ERR_FAIL_COND_V_MSG(has_svg && has_bitmap, false,
+			"Animation cannot mix SVG and bitmap frames.");
 	return true;
 }
 
@@ -194,78 +248,51 @@ Vector2 SpxResMgr::_read_offset(const Dictionary &d) {
 			double(off[1]));
 }
 
-void SpxResMgr::_build_normal_frames(
-		const String &p_sprite_type,
-		const String &anim_key,
+bool SpxResMgr::_build_normal_frames(const String &anim_key,
 		const AnimPayload &payload,
-		Vector<Vector2> &out_offsets) {
-	int svg_count = 0;
+		SpxAnimationClip &r_clip) {
 	for (int i = 0; i < payload.frames.size(); i++) {
-		Dictionary f = payload.frames[i];
-
-		String path = f["path"];
-		int64_t bitmap = f["bitmap"];
-		Vector2 offset = _read_offset(f) / float(bitmap);
-
-		Ref<Texture2D> final_tex;
+		Dictionary frame = payload.frames[i];
+		String path = frame["path"];
+		const double bitmap = frame["bitmap"];
+		Ref<Texture2D> texture;
 		if (svgMgr->is_svg_file(path)) {
-			float scale = float(payload.max_bitmap) / float(bitmap);
-			final_tex = svgMgr->get_svg_image(path, scale);
-			svg_count++;
+			const int scale =
+					svgMgr->calculate_svg_scale(float(payload.max_bitmap / bitmap));
+			texture = svgMgr->get_svg_image(path, scale);
+			r_clip.svg_frame_scales.push_back(scale);
+			r_clip.is_svg = true;
 		} else {
-			final_tex = load_texture(path);
+			texture = load_texture_checked(path);
 		}
-
-		if (!final_tex.is_valid()) {
-			print_error("cannot load texture: " + path);
-			continue;
-		}
-
-		anim_frames->add_frame(anim_key, final_tex);
-		out_offsets.push_back(offset);
+		ERR_FAIL_COND_V_MSG(texture.is_null(), false,
+				"Cannot load animation texture: " + path);
+		r_clip.frames->add_frame(anim_key, texture);
+		r_clip.offsets.push_back(_read_offset(frame) / bitmap);
 	}
-
-	if (svg_count > 0 && svg_count != payload.frames.size()) {
-		print_error(vformat(
-				"[SpxResMgr::create_animation][ERR_SVG_FRAME_MISMATCH] "
-				"Sprite='%s', Anim='%s', SVG_Count=%d, Frame_Count=%d — counts must match for SVG animations.",
-				p_sprite_type,
-				anim_key,
-				svg_count,
-				payload.frames.size()));
-		return;
-	}
-
-	svgMgr->mark_svg_animation(anim_key, svg_count > 0);
+	return true;
 }
 
-void SpxResMgr::_build_atlas_frames(const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets) {
-	Ref<Texture2D> atlas = load_texture(payload.base_path);
-	if (!atlas.is_valid()) {
-		print_error("cannot load atlas: " + payload.base_path);
-		return;
-	}
-
+bool SpxResMgr::_build_atlas_frames(const String &anim_key,
+		const AnimPayload &payload,
+		SpxAnimationClip &r_clip) {
+	Ref<Texture2D> atlas = load_texture_checked(payload.base_path);
+	ERR_FAIL_COND_V_MSG(atlas.is_null(), false,
+			"Cannot load animation atlas: " + payload.base_path);
 	for (int i = 0; i < payload.frames.size(); i++) {
-		Dictionary f = payload.frames[i];
-
-		int64_t x = f["x"];
-		int64_t y = f["y"];
-		int64_t w = f["w"];
-		int64_t h = f["h"];
-		Vector2 offset = _read_offset(f);
-
-		Ref<AtlasTexture> tex;
-		tex.instantiate();
-		tex->set_atlas(atlas);
-		tex->set_region(Rect2(x, y, w, h));
-
-		anim_frames->add_frame(anim_key, tex);
-		out_offsets.push_back(offset);
+		Dictionary frame = payload.frames[i];
+		Ref<AtlasTexture> texture;
+		texture.instantiate();
+		texture->set_atlas(atlas);
+		texture->set_region(Rect2(double(frame["x"]), double(frame["y"]),
+				double(frame["w"]), double(frame["h"])));
+		r_clip.frames->add_frame(anim_key, texture);
+		r_clip.offsets.push_back(_read_offset(frame));
 	}
+	return true;
 }
 
-static void _load_image(String path, Ref<Image> p_image) {
+static Error _load_image(String path, Ref<Image> p_image) {
 	const bool is_svg = path.get_extension().nocasecmp_to("svg") == 0;
 	Error err = is_svg ? SpxImageLoaderSVG::load_image(path, p_image) : ImageLoader::load_image(path, p_image);
 	if (err != OK) {
@@ -280,6 +307,27 @@ static void _load_image(String path, Ref<Image> p_image) {
 		}
 		p_image->set_data(4, 4, false, Image::FORMAT_RGBA8, data);
 	}
+	return err;
+}
+
+Ref<Texture2D> SpxResMgr::load_texture_checked(const String &p_path,
+		GdBool p_direct) {
+	if ((!is_load_direct && !p_direct) || svgMgr->is_svg_file(p_path)) {
+		return load_texture(p_path, p_direct);
+	}
+	const String path = _to_engine_path(p_path);
+	const Ref<Texture2D> *cached = cached_texture.getptr(path);
+	if (cached != nullptr) {
+		return *cached;
+	}
+	Ref<Image> image;
+	image.instantiate();
+	if (ImageLoader::load_image(path, image) != OK) {
+		return Ref<Texture2D>();
+	}
+	Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
+	cached_texture.insert(path, texture);
+	return texture;
 }
 
 Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path) {
@@ -292,25 +340,33 @@ Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path) {
 	Ref<Image> image;
 	image.instantiate();
 
-	_load_image(path, image);
+	const Error error = _load_image(path, image);
 
 	Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image);
-	cached_texture.insert(path, texture);
+	if (error == OK) {
+		cached_texture.insert(path, texture);
+	}
 	return texture;
 }
 Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
-	if (cached_texture.has(path)) {
-		auto tex = (Ref<ImageTexture>)cached_texture[path];
-		Ref<Image> image;
-		image.instantiate();
-		_load_image(path, image);
-		tex->set_image(image);
-		cached_texture.erase(path);
-		cached_texture.insert(path, tex);
-		return tex;
-	} else {
-		return _load_texture_direct(path);
+	if (svgMgr->is_svg_file(path)) {
+		return svgMgr->reload_svg_image(path);
 	}
+	path = _to_engine_path(path);
+	Ref<Image> image;
+	image.instantiate();
+	const Ref<Texture2D> *cached = cached_texture.getptr(path);
+	if (ImageLoader::load_image(path, image) != OK) {
+		return cached != nullptr ? *cached : Ref<Texture2D>();
+	}
+	if (cached != nullptr) {
+		Ref<ImageTexture> texture = *cached;
+		texture->set_image(image);
+		return texture;
+	}
+	Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
+	cached_texture.insert(path, texture);
+	return texture;
 }
 
 void SpxResMgr::reload_texture(GdString path) {
@@ -369,7 +425,8 @@ Ref<AudioStream> SpxResMgr::load_audio(String path, GdBool direct) {
 }
 
 Ref<SpriteFrames> SpxResMgr::get_anim_frames(const String &anim_name) {
-	return anim_frames;
+	const SpxAnimationClip *clip = animation_clips.getptr(anim_name);
+	return clip != nullptr ? clip->frames : Ref<SpriteFrames>();
 }
 
 String SpxResMgr::get_anim_key_name(const String &sprite_type_name, const String &anim_name) {
@@ -382,35 +439,27 @@ void SpxResMgr::create_animation(
 		GdString p_json_ctx,
 		GdInt fps,
 		GdBool is_atlas) {
-	is_dynamic_anim = true;
-	String sprite = SpxStr(p_sprite_type);
-	String clip = SpxStr(p_anim_name);
-	String ctx = SpxStr(p_json_ctx);
-
-	String key = get_anim_key_name(sprite, clip);
-
-	if (anim_frames->has_animation(key)) {
+	const String key =
+			get_anim_key_name(SpxStr(p_sprite_type), SpxStr(p_anim_name));
+	if (animation_clips.has(key)) {
 		return;
 	}
-
+	ERR_FAIL_COND_MSG(fps < 0, "Animation FPS must not be negative.");
 	AnimPayload payload;
-	if (!_parse_anim_json(ctx, payload)) {
-		print_error("animation JSON parse failed");
+	if (!_parse_anim_json(SpxStr(p_json_ctx), is_atlas, payload)) {
 		return;
 	}
-
-	anim_frames->add_animation(key);
-	anim_frames->set_animation_speed(key, fps);
-
-	Vector<Vector2> offsets;
-
-	if (is_atlas) {
-		_build_atlas_frames(key, payload, offsets);
-	} else {
-		_build_normal_frames(sprite, key, payload, offsets);
+	SpxAnimationClip clip;
+	clip.frames.instantiate();
+	clip.frames->remove_animation("default");
+	clip.frames->add_animation(key);
+	clip.frames->set_animation_speed(key, fps);
+	if (!(is_atlas ? _build_atlas_frames(key, payload, clip)
+				   : _build_normal_frames(key, payload, clip))) {
+		ERR_PRINT("Cannot create complete animation: " + key);
+		return;
 	}
-
-	animation_frame_offsets[key] = offsets;
+	animation_clips.insert(key, clip);
 }
 
 void SpxResMgr::set_load_mode(GdBool is_direct_mode) {
@@ -621,12 +670,25 @@ void SpxResMgr::set_font_preferences(GdArray preferences) {
 	spx_set_project_theme_font(ProjectFonts::build_display_font_chain(display_fonts, values));
 }
 
+bool SpxResMgr::is_svg_animation(const String &p_anim_key) const {
+	const SpxAnimationClip *clip = animation_clips.getptr(p_anim_key);
+	return clip != nullptr && clip->is_svg;
+}
+
+int SpxResMgr::get_animation_svg_frame_scale(const String &p_anim_key,
+		int p_frame) const {
+	const SpxAnimationClip *clip = animation_clips.getptr(p_anim_key);
+	return clip != nullptr && p_frame >= 0 &&
+					p_frame < clip->svg_frame_scales.size()
+			? clip->svg_frame_scales[p_frame]
+			: 1;
+}
+
 Vector2 SpxResMgr::get_animation_frame_offset(String anim_key, int frame_index) {
-	if (animation_frame_offsets.has(anim_key)) {
-		const Vector<Vector2> &offsets = animation_frame_offsets[anim_key];
-		if (frame_index >= 0 && frame_index < offsets.size()) {
-			return offsets[frame_index];
-		}
+	const SpxAnimationClip *clip = animation_clips.getptr(anim_key);
+	if (clip != nullptr && frame_index >= 0 &&
+			frame_index < clip->offsets.size()) {
+		return clip->offsets[frame_index];
 	}
-	return Vector2(0, 0);
+	return Vector2();
 }

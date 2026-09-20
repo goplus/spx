@@ -291,12 +291,38 @@ private:
 	void _disable_collision();
 
 	bool _ensure_material_ready(const char *p_context, GdBool p_create_if_missing = false);
-	bool _update_anim_scale();
+	enum class VisualKind { ANIMATION,
+		SVG_ANIMATION,
+		TEXTURE,
+		SVG_TEXTURE };
+	struct VisualSource {
+		VisualKind kind = VisualKind::ANIMATION;
+		String key;
+		String animation_name;
+		int raster_scale = 1;
+		bool is_svg() const {
+			return kind == VisualKind::SVG_TEXTURE ||
+					kind == VisualKind::SVG_ANIMATION;
+		}
+		bool is_single_image() const {
+			return kind == VisualKind::TEXTURE || kind == VisualKind::SVG_TEXTURE;
+		}
+	};
+	struct PreparedVisual {
+		VisualSource source;
+		Ref<SpriteFrames> shared_frames;
+		Ref<SpriteFrames> frames;
+		StringName animation;
+	};
+	bool _prepare_animation(const String &p_name, PreparedVisual &r_visual,
+			int p_raster_scale = 0);
+	void _prepare_texture(const Ref<Texture2D> &p_texture,
+			const VisualSource &p_source, PreparedVisual &r_visual);
+	void _commit_visual(const PreparedVisual &p_visual);
+	void _update_anim_scale();
 	bool _update_svg_scale_content(int p_target_scale);
-	void _update_svg_animation_scale(int p_target_scale);
 	void _on_frame_changed();
 	void _update_current_frame_shader_uv_rect();
-	void _play_single_image_animation(Ref<Texture2D> p_texture);
 	Vector2 _get_actual_render_scale();
 	int _get_actual_match_render_scale();
 
@@ -319,19 +345,15 @@ private:
 	bool debug_collision_visible = true;
 	bool use_default_frames = false;
 	bool enable_dynamic_frame_offset = true;
-	bool is_single_image_mode = false;
-	bool is_svg_mode = false;
 	bool is_backdrop = false;
-
-	int current_svg_scale = 1;
 
 	Vector2 base_offset = Vector2(0, 0);
 	Vector2 _render_scale = Vector2(1.0f, 1.0f);
 
 	String spx_type_name;
-	String current_svg_path;
-	String current_svg_anim_key;
-	String current_anim_name = "";
+	VisualSource visual_source;
+	Ref<SpriteFrames> source_sprite_frames;
+	float playback_speed = 1.0f;
 
 	Ref<SpriteFrames> default_sprite_frames;
 	Ref<ShaderMaterial> default_material;

@@ -45,23 +45,17 @@ namespace ProjectFonts {
 struct Prepared;
 }
 
-struct FrameNormal {
-	String path;
-	double offset_x;
-	double offset_y;
-	int64_t bitmap;
-};
-
-struct FrameAtlas {
-	int64_t x, y, w, h;
-	double offset_x;
-	double offset_y;
-};
-
 struct AnimPayload {
 	String base_path;
 	Array frames;
-	int64_t max_bitmap;
+	int64_t max_bitmap = 1;
+};
+
+struct SpxAnimationClip {
+	Ref<SpriteFrames> frames;
+	Vector<Vector2> offsets;
+	Vector<int> svg_frame_scales;
+	bool is_svg = false;
 };
 
 class SpxResMgr : public SpxBaseMgr {
@@ -78,12 +72,9 @@ private:
 	Ref<Font> initial_theme_default_font;
 	Ref<Font> initial_theme_fallback_font;
 	bool initial_theme_fonts_saved = false;
-	bool is_load_direct;
+	bool is_load_direct = true;
 	String game_data_root = "res://";
-	Ref<SpriteFrames> anim_frames;
-	bool is_dynamic_anim = false;
-	// store animation frame offset information: anim_name -> frame_offset_list
-	HashMap<String, Vector<Vector2>> animation_frame_offsets;
+	HashMap<String, SpxAnimationClip> animation_clips;
 
 private:
 	static Ref<AudioStreamWAV> _load_wav(const String &path);
@@ -91,16 +82,20 @@ private:
 	Ref<Texture2D> _load_texture_direct(const String &p_path);
 	Ref<AudioStream> _load_audio_direct(const String &p_path);
 
-	bool _parse_anim_json(const String &src, AnimPayload &out);
+	bool _parse_anim_json(const String &src, bool p_is_atlas, AnimPayload &out);
 	Vector2 _read_offset(const Dictionary &d);
-	void _build_normal_frames(const String &p_sprite_type, const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets);
-	void _build_atlas_frames(const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets);
+	bool _build_normal_frames(const String &anim_key, const AnimPayload &payload,
+			SpxAnimationClip &r_clip);
+	bool _build_atlas_frames(const String &anim_key, const AnimPayload &payload,
+			SpxAnimationClip &r_clip);
 	void _commit_project_fonts(ProjectFonts::Prepared &&p_prepared);
 
 public:
 	void on_awake() override;
 	void on_reset(int reset_code) override;
 	Ref<Texture2D> load_texture(String path, GdBool direct = false);
+	Ref<Texture2D> load_texture_checked(const String &p_path,
+			GdBool p_direct = false);
 	Ref<AudioStream> load_audio(String path, GdBool direct = false);
 	Ref<Texture2D> _reload_texture(String path);
 	void set_game_datas(String path, Vector<String> files);
@@ -108,6 +103,9 @@ public:
 	Ref<SpriteFrames> get_anim_frames(const String &anim_name);
 	String get_anim_key_name(const String &sprite_type_name, const String &anim_name);
 	bool is_dynamic_anim_mode() const;
+	bool is_svg_animation(const String &p_anim_key) const;
+	int get_animation_svg_frame_scale(const String &p_anim_key,
+			int p_frame) const;
 	Vector2 get_animation_frame_offset(String anim_key, int frame_index);
 	String _to_engine_path(const String &p_path);
 

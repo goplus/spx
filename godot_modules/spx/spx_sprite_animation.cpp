@@ -34,83 +34,82 @@
 
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
+#include "spx_sprite_render_util.h"
 #include "svg_mgr.h"
 
 GdString SpxSprite::get_current_anim_name() {
-	return SpxReturnStr(current_anim_name);
+	return SpxReturnStr(visual_source.animation_name);
+}
+
+bool SpxSprite::_prepare_animation(const String &p_name,
+		PreparedVisual &r_visual,
+		int p_raster_scale) {
+	r_visual = PreparedVisual();
+	r_visual.source.animation_name = p_name;
+	r_visual.source.key = p_name;
+	Ref<SpriteFrames> shared_frames = default_sprite_frames;
+	if (resMgr->is_dynamic_anim_mode()) {
+		String key = resMgr->get_anim_key_name(get_spx_type_name(), p_name);
+		// set_anim/get_anim also accept the complete engine animation key.
+		if (resMgr->get_anim_frames(key).is_null() &&
+				resMgr->get_anim_frames(p_name).is_valid()) {
+			key = p_name;
+		}
+		r_visual.source.key = key;
+		if (resMgr->is_svg_animation(key)) {
+			r_visual.source.kind = VisualKind::SVG_ANIMATION;
+			r_visual.source.raster_scale = p_raster_scale > 0
+					? p_raster_scale
+					: _get_actual_match_render_scale();
+			shared_frames =
+					svgMgr->get_svg_animation(key, r_visual.source.raster_scale);
+		} else {
+			shared_frames = resMgr->get_anim_frames(key);
+		}
+	}
+	r_visual.animation = r_visual.source.key;
+	ERR_FAIL_COND_V_MSG(shared_frames.is_null() ||
+					!shared_frames->has_animation(r_visual.animation) ||
+					shared_frames->get_frame_count(r_visual.animation) ==
+							0,
+			false, "SpxSprite: animation frames are missing.");
+	r_visual.shared_frames = shared_frames;
+	// Replaying the same clip must retain frame/progress, just as Godot play()
+	// does. A new source gets private metadata, while textures stay shared.
+	if (source_sprite_frames == shared_frames &&
+			visual_source.key == r_visual.source.key &&
+			anim2d->get_sprite_frames().is_valid()) {
+		r_visual.frames = anim2d->get_sprite_frames();
+	} else {
+		r_visual.frames =
+				spx_copy_animation_frames(shared_frames, r_visual.animation);
+	}
+	return r_visual.frames.is_valid();
 }
 
 void SpxSprite::play_anim(GdString p_name, GdFloat p_speed, GdBool p_is_loop, GdBool p_from_end) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
-
-	String anim_name = SpxStr(p_name);
-	String final_anim_key = anim_name;
-
-	is_svg_mode = false;
-	is_single_image_mode = false;
-	current_anim_name = anim_name;
-	current_svg_path = "";
-
-	if (resMgr->is_dynamic_anim_mode()) {
-		String sprite_type = get_spx_type_name();
-		String base_anim_key = resMgr->get_anim_key_name(sprite_type, anim_name);
-		Ref<SpriteFrames> frames;
-
-		current_svg_anim_key = base_anim_key;
-		is_svg_mode = svgMgr->is_svg_animation(base_anim_key);
-		if (is_svg_mode) {
-			int target_scale = _get_actual_match_render_scale();
-			current_svg_scale = target_scale;
-			frames = svgMgr->get_svg_animation(base_anim_key, target_scale);
-		} else {
-			current_svg_scale = 1;
-			frames = resMgr->get_anim_frames(base_anim_key);
-		}
-
-		ERR_FAIL_COND_MSG(frames.is_null(), "SpxSprite: animation frames are missing.");
-		ERR_FAIL_COND_MSG(!frames->has_animation(base_anim_key), "SpxSprite: animation is missing from SpriteFrames.");
-
-		final_anim_key = base_anim_key;
-		anim2d->set_sprite_frames(frames);
-		frames->set_animation_loop(final_anim_key, p_is_loop);
+	PreparedVisual visual;
+	if (!_prepare_animation(SpxStr(p_name), visual)) {
+		return;
 	}
-
-	anim2d->play(final_anim_key, p_speed, p_from_end);
+	visual.frames->set_animation_loop(visual.animation, p_is_loop);
+	_commit_visual(visual);
+	playback_speed = p_speed;
+	anim2d->play(visual.animation, p_speed, p_from_end);
 	_on_frame_changed();
 	_update_current_frame_shader_uv_rect();
 }
 
 void SpxSprite::play_backwards_anim(GdString p_name) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
-
-	String anim_name = SpxStr(p_name);
-
-	if (resMgr->is_dynamic_anim_mode()) {
-		String base_anim_key = resMgr->get_anim_key_name(get_spx_type_name(), anim_name);
-		Ref<SpriteFrames> frames;
-
-		current_anim_name = anim_name;
-		current_svg_anim_key = base_anim_key;
-		current_svg_path = "";
-		is_single_image_mode = false;
-		is_svg_mode = svgMgr->is_svg_animation(base_anim_key);
-		if (is_svg_mode) {
-			int target_scale = _get_actual_match_render_scale();
-			current_svg_scale = target_scale;
-			frames = svgMgr->get_svg_animation(base_anim_key, target_scale);
-		} else {
-			current_svg_scale = 1;
-			frames = resMgr->get_anim_frames(base_anim_key);
-		}
-
-		ERR_FAIL_COND_MSG(frames.is_null(), "SpxSprite: animation frames are missing.");
-		ERR_FAIL_COND_MSG(!frames->has_animation(base_anim_key), "SpxSprite: animation is missing from SpriteFrames.");
-
-		anim_name = base_anim_key;
-		anim2d->set_sprite_frames(frames);
+	PreparedVisual visual;
+	if (!_prepare_animation(SpxStr(p_name), visual)) {
+		return;
 	}
-
-	anim2d->play_backwards(anim_name);
+	_commit_visual(visual);
+	playback_speed = -1.0f;
+	anim2d->play_backwards(visual.animation);
 	_on_frame_changed();
 	_update_current_frame_shader_uv_rect();
 }
@@ -123,6 +122,7 @@ void SpxSprite::pause_anim() {
 void SpxSprite::stop_anim() {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->stop();
+	playback_speed = 1.0f;
 }
 
 GdBool SpxSprite::is_playing_anim() const {
@@ -132,10 +132,17 @@ GdBool SpxSprite::is_playing_anim() const {
 
 void SpxSprite::set_anim(GdString p_name) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
-	current_anim_name = SpxStr(p_name);
-	anim2d->set_animation(StringName(current_anim_name));
-	_on_frame_changed();
-	_update_current_frame_shader_uv_rect();
+	PreparedVisual visual;
+	if (!_prepare_animation(SpxStr(p_name), visual)) {
+		return;
+	}
+	const bool was_playing = anim2d->is_playing();
+	const bool changed_animation = anim2d->get_animation() != visual.animation;
+	const bool backwards = playback_speed * anim2d->get_speed_scale() < 0;
+	_commit_visual(visual);
+	if (was_playing) {
+		anim2d->play(visual.animation, playback_speed, changed_animation && backwards);
+	}
 }
 
 GdString SpxSprite::get_anim() const {

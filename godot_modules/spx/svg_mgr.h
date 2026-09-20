@@ -15,11 +15,10 @@ public:
 	~SvgManager();
 
 	bool is_svg_file(const String &path) const;
-	bool is_svg_animation(const String &base_anim_key);
-	void mark_svg_animation(const String &base_anim_key, bool is_svg_animation);
 
 	Ref<SpriteFrames> get_svg_animation(const String &base_anim_key, int scale);
 	Ref<ImageTexture> get_svg_image(const String &image_path, int scale);
+	Ref<ImageTexture> reload_svg_image(const String &image_path);
 	Ref<ImageTexture> get_svg_image(const String &image_path, float scale);
 
 	int calculate_svg_scale(Vector2 required_scale);
@@ -31,9 +30,6 @@ public:
 private:
 	HashMap<String, Ref<ImageTexture>> svg_image_cache; // "scale@image_path" -> ImageTexture
 	HashMap<String, Ref<SpriteFrames>> svg_animation_cache; // "scale@animation_name" -> SpriteFrames
-	HashMap<String, Vector2> svg_image_raw_size_cache;
-
-	HashMap<String, bool> is_svg_animation_registry;
 	static inline SvgManager *singleton = nullptr;
 
 	String _make_image_key(const String &path, int scale); // "scale@path"
