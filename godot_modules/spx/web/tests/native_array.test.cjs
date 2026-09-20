@@ -536,3 +536,65 @@ test('writable arrays retain caller storage and reject copied or stale buffers',
     assert.throws(() => b.run('RequireNativeArray(borrowed, "read", 2)'), /valid native array/);
     assert.throws(() => b.run('RequireNativeArray(borrowed, "write", 2, true)'), /valid native array/);
 });
+
+test('expired arena descriptors cannot lend reused or freed storage', () => {
+    const b = bridge();
+    b.run('var retired = GdspxBorrowNativeArray(5, 700000, 700000); var active = GdspxBorrowNativeArray(5, 700000, 700000)');
+    const retired = b.run('retired');
+    const active = b.run('active');
+    b.run('GdspxFlushDeferredFrees()');
+    assert.ok(b.freed.includes(retired.ptr));
+    assert.equal(retired.data.length, 0);
+    assert.equal(active.data.length, 0);
+    for (const name of ['retired', 'active']) {
+        for (const writable of [false, true]) {
+            assert.throws(() => b.run(`RequireNativeArrayBuffer(${name}, 'test', 5, ${writable})`), /valid native array/);
+        }
+        assert.equal(b.run(`NativeArrayCount(${name})`), -1);
+    }
+    const fresh = b.run('var fresh = GdspxBorrowNativeArray(5, 8, 8); fresh');
+    assert.equal(fresh.ptr, active.ptr);
+    assert.equal(fresh.data.length, 8);
+    assert.equal(b.run("RequireNativeArrayBuffer(fresh, 'test', 5, true).ptr"), fresh.ptr);
+    assert.equal(active.data.length, 0, 'reuse must not revive a descriptor');
+});
+
+for (const phase of ['reset', 'destroy']) for (const batched of [false, true]) {
+    test(`${phase} (batched=${batched}) drops queued and teardown contacts until a new session starts`, () => {
+        const b = engineBridge();
+        const calls = [];
+        b.context.FFI = { gdspx_dispatch: event => {
+            calls.push(event);
+            if (event === `OnEngine${phase[0].toUpperCase()}${phase.slice(1)}`) {
+                b.callbacks.godot_js_spx_on_trigger_exit(10n, 11n);
+            }
+        }};
+        if (batched) b.context.gdspx_on_contact_events = bytes => {
+            const kinds = ['OnCollisionEnter', 'OnCollisionStay', 'OnCollisionExit', 'OnTriggerEnter', 'OnTriggerStay', 'OnTriggerExit'];
+            const values = new Uint32Array(bytes.buffer);
+            for (let i = 0; i < values.length; i += 5) calls.push(kinds[values[i] - 1]);
+        };
+        b.callbacks.godot_js_spx_on_trigger_enter(10n, 11n);
+        b.callbacks[`godot_js_spx_on_engine_${phase}`]();
+        b.callbacks.godot_js_spx_on_trigger_exit(10n, 11n);
+        b.callbacks.godot_js_spx_on_engine_update(1 / 60);
+        assert.deepEqual(calls, [`OnEngine${phase[0].toUpperCase()}${phase.slice(1)}`, 'OnEngineUpdate']);
+        b.callbacks.godot_js_spx_contact_session_start();
+        b.callbacks.godot_js_spx_on_trigger_enter(20n, 21n);
+        b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+        assert.deepEqual(calls.slice(-2), ['OnTriggerEnter', 'OnEngineFixedUpdate']);
+    });
+}
+
+test('reset during fallback contact dispatch stops the previous batch', () => {
+    const b = engineBridge();
+    const calls = [];
+    b.context.FFI = { gdspx_dispatch: event => {
+        calls.push(event);
+        if (event === 'OnTriggerEnter') b.callbacks.godot_js_spx_on_engine_reset();
+    }};
+    b.callbacks.godot_js_spx_on_trigger_enter(1n, 2n);
+    b.callbacks.godot_js_spx_on_trigger_enter(3n, 4n);
+    b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+    assert.deepEqual(calls, ['OnTriggerEnter', 'OnEngineReset', 'OnEngineFixedUpdate']);
+});

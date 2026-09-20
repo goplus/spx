@@ -56,6 +56,9 @@
 #include "spx_tilemapparser_mgr.h"
 #include "spx_ui_mgr.h"
 #include "svg_mgr.h"
+#ifdef WEB_ENABLED
+#include "web/spx_web_session.h"
+#endif
 
 void SpxEngine::register_runtime_panic_callbacks(GDExtensionSpxGlobalRuntimePanicCallback callback) {
 	_register_runtime_callback(&SpxEngine::on_runtime_panic, callback, __func__);
@@ -315,6 +318,9 @@ void SpxEngine::restart() {
 	clear_frozen_frame();
 	_resume_pure();
 	is_spx_reset = false;
+#ifdef WEB_ENABLED
+	godot_js_spx_contact_session_start();
+#endif
 
 	_notify_managers_start();
 }
