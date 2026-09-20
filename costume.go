@@ -169,10 +169,11 @@ func costumeAssetPath(path string) string {
 }
 
 func costumeImageSize(imagePath string) mathf.Vec2 {
-	if value, ok := costumeSizeCache.Load(imagePath); ok {
+	assetPath := costumeAssetPath(imagePath)
+	if value, ok := costumeSizeCache.Load(assetPath); ok {
 		return value.(mathf.Vec2)
 	}
-	size := engine.Managers().ResMgr.GetImageSize(costumeAssetPath(imagePath))
-	costumeSizeCache.Store(imagePath, size)
+	size := engine.Managers().ResMgr.GetImageSize(assetPath)
+	costumeSizeCache.Store(assetPath, size)
 	return size
 }
