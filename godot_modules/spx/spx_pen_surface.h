@@ -79,9 +79,16 @@ private:
 	SubViewport *render_target = nullptr;
 	SpxPenCanvas *canvas = nullptr;
 	Sprite2D *canvas_sprite = nullptr;
+	struct StampEffectCanvas {
+		SpxPenCanvas *canvas = nullptr;
+		float amount = 0.0f;
+	};
+	Vector<StampEffectCanvas> stamp_effect_canvases;
 	Size2i canvas_size;
 	bool dirty = false;
 	bool clear_requested = true;
+
+	SpxPenCanvas *get_stamp_effect_canvas(float p_color_effect);
 
 protected:
 	static void _bind_methods();
@@ -90,7 +97,7 @@ public:
 	void initialize(const Size2i &p_size);
 	void set_canvas_size(const Size2i &p_size);
 	void draw_line(const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, bool p_draw_start_cap);
-	void draw_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale);
+	void draw_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale, float p_color_effect);
 	void clear();
 	void flush();
 	Size2i get_canvas_size() const;

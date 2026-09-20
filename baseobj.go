@@ -405,6 +405,20 @@ func (p *baseObj) doSetGraphicEffect(kind EffectKind, isSync bool) {
 	p.setMaterialParams(kind.String(), normalizedVal, isSync)
 }
 
+// graphicEffectValue returns the normalized value used by the renderer for a
+// graphic effect. Pen stamps need the same value as the sprite material so
+// that each stamped image captures the effect at the time it is drawn.
+func (p *baseObj) graphicEffectValue(kind EffectKind) float64 {
+	if p.greffUniforms == nil {
+		return 0
+	}
+	val, ok := p.greffUniforms[kind]
+	if !ok {
+		return 0
+	}
+	return normalizeEffectValue(kind, val)
+}
+
 // setMaterialParams sets a material parameter (scalar).
 func (p *baseObj) setMaterialParams(effect string, amount float64, isSync bool) {
 	if isSync {

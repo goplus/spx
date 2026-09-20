@@ -37,6 +37,8 @@
 const int PEN_PROPERTY_SATURATION = 0;
 const int PEN_PROPERTY_BRIGHTNESS = 1;
 const int PEN_PROPERTY_TRANSPARENCY = 2;
+// Internal property used to snapshot a sprite color effect into a stamp.
+const int PEN_PROPERTY_STAMP_COLOR_EFFECT = 3;
 
 GdObj SpxPen::get_id() {
 	return id;
@@ -126,6 +128,7 @@ void SpxPen::on_reset(int reset_code) {
 	needs_start_cap = true;
 	is_pen_down = false;
 	move_by_mouse = false;
+	stamp_color_effect = 0.0f;
 }
 
 void SpxPen::on_erase_all() {
@@ -139,7 +142,7 @@ void SpxPen::_stamp_texture(const Ref<Texture2D> &texture, GdVec2 position, GdFl
 		return;
 	}
 	if (surface != nullptr) {
-		surface->draw_stamp(texture, position, rotation_radians, scale);
+		surface->draw_stamp(texture, position, rotation_radians, scale, stamp_color_effect);
 	}
 }
 
@@ -201,6 +204,9 @@ void SpxPen::set_to(GdInt property, GdFloat value) {
 		pen_properties.brightness = CLAMP(value, 0.0f, 1.0f);
 	} else if (property == PEN_PROPERTY_TRANSPARENCY) {
 		pen_properties.transparency = CLAMP(value, 0.0f, 1.0f);
+	} else if (property == PEN_PROPERTY_STAMP_COLOR_EFFECT) {
+		stamp_color_effect = CLAMP(value, 0.0f, 1.0f);
+		return;
 	}
 	_start_new_line();
 }

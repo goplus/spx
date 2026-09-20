@@ -40,6 +40,8 @@ type scratchLegacyPenState struct {
 const (
 	scratchLegacyDefaultPenHue   = 66.66
 	scratchLegacyDefaultPenShade = 50
+	// Internal pen property used to snapshot a sprite color effect into a stamp.
+	penPropertyStampColorEffect = 3
 )
 
 // penState is copied by value; drawing resources remain component-local.
@@ -125,7 +127,9 @@ func (p *penComponent) stamp() {
 	rotationRadians, scale := p.getPenStampTransform()
 	obj := *p.penObj
 	texturePath := p.sprite.getCostumeAssetPath()
+	colorEffect := p.sprite.graphicEffectValue(ColorEffect)
 	p.sprite.g.penCommandBarrier(func() {
+		engine.Managers().PenMgr.SetPenTo(obj, penPropertyStampColorEffect, colorEffect)
 		engine.Managers().PenMgr.PenStampWithTransform(
 			obj,
 			texturePath,

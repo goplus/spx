@@ -59,6 +59,7 @@ private:
 
 	Ref<Texture2D> stamp_texture;
 	String stamp_texture_path;
+	float stamp_color_effect = 0.0f;
 
 private:
 	void _draw_line(GdVec2 from, GdVec2 to, float size, Color color, bool draw_start_cap);

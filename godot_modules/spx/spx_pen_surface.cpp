@@ -29,7 +29,15 @@
 
 #include "spx_pen_surface.h"
 
+#include "core/io/resource_loader.h"
+#include "scene/resources/material.h"
 #include "servers/rendering_server.h"
+
+namespace {
+
+constexpr const char *STAMP_SHADER_PATH = "res://engine/shader/spx_sprite_shader.gdshader";
+
+} // namespace
 
 void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 	constexpr int CAP_SEGMENTS = 12;
@@ -172,6 +180,9 @@ void SpxPenCanvas::add_line(const Vector2 &p_from, const Vector2 &p_to, float p_
 }
 
 void SpxPenCanvas::add_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale) {
+	if (p_texture.is_null()) {
+		return;
+	}
 	DrawCommand command;
 	command.type = DrawCommand::STAMP;
 	command.from = p_position;
@@ -233,6 +244,11 @@ void SpxPenSurface::set_canvas_size(const Size2i &p_size) {
 	}
 
 	canvas->discard_pending();
+	for (StampEffectCanvas &entry : stamp_effect_canvases) {
+		if (entry.canvas != nullptr) {
+			entry.canvas->discard_pending();
+		}
+	}
 	canvas_size = next_size;
 	render_target->set_size(canvas_size);
 	clear_requested = true;
@@ -246,19 +262,47 @@ void SpxPenSurface::draw_line(const Vector2 &p_from, const Vector2 &p_to, float 
 	dirty = true;
 }
 
-void SpxPenSurface::draw_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale) {
+SpxPenCanvas *SpxPenSurface::get_stamp_effect_canvas(float p_color_effect) {
+	for (const StampEffectCanvas &entry : stamp_effect_canvases) {
+		if (Math::is_equal_approx(entry.amount, p_color_effect)) {
+			return entry.canvas;
+		}
+	}
+
+	SpxPenCanvas *effect_canvas = memnew(SpxPenCanvas);
+	Ref<Shader> shader = ResourceLoader::load(STAMP_SHADER_PATH);
+	if (shader.is_valid()) {
+		Ref<ShaderMaterial> material;
+		material.instantiate();
+		material->set_shader(shader);
+		material->set_shader_parameter(SNAME("color_amount"), p_color_effect);
+		effect_canvas->set_material(material);
+	}
+	render_target->add_child(effect_canvas);
+	stamp_effect_canvases.push_back({effect_canvas, p_color_effect});
+	return effect_canvas;
+}
+
+void SpxPenSurface::draw_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale, float p_color_effect) {
 	ERR_FAIL_NULL(canvas);
 	if (p_texture.is_null()) {
 		return;
 	}
 	const Vector2 canvas_origin = Vector2(canvas_size) * 0.5f;
-	canvas->add_stamp(p_texture, p_position + canvas_origin, p_rotation, p_scale);
+	SpxPenCanvas *target = Math::is_zero_approx(p_color_effect) ? canvas : get_stamp_effect_canvas(p_color_effect);
+	target->add_stamp(p_texture, p_position + canvas_origin, p_rotation, p_scale);
+	target->queue_redraw();
 	dirty = true;
 }
 
 void SpxPenSurface::clear() {
 	if (canvas != nullptr) {
 		canvas->discard_pending();
+	}
+	for (StampEffectCanvas &entry : stamp_effect_canvases) {
+		if (entry.canvas != nullptr) {
+			entry.canvas->discard_pending();
+		}
 	}
 	clear_requested = true;
 	dirty = true;
@@ -271,6 +315,11 @@ void SpxPenSurface::flush() {
 
 	render_target->set_clear_mode(clear_requested ? SubViewport::CLEAR_MODE_ONCE : SubViewport::CLEAR_MODE_NEVER);
 	canvas->queue_redraw();
+	for (StampEffectCanvas &entry : stamp_effect_canvases) {
+		if (entry.canvas != nullptr) {
+			entry.canvas->queue_redraw();
+		}
+	}
 	render_target->set_update_mode(SubViewport::UPDATE_ONCE);
 	clear_requested = false;
 	dirty = false;

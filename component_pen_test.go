@@ -25,6 +25,7 @@ type spyPenMgr struct {
 	lastStampTexturePath string
 	lastStampRotation    float64
 	lastStampScale       mathf.Vec2
+	lastStampColorEffect float64
 	batchCalls           int
 	batches              [][]float32
 	events               []string
@@ -77,7 +78,11 @@ func (s *spyPenMgr) SetPenColorTo(obj engine.Object, color mathf.Color) {
 
 func (s *spyPenMgr) ChangePenBy(obj engine.Object, property int64, amount float64) {}
 
-func (s *spyPenMgr) SetPenTo(obj engine.Object, property int64, value float64) {}
+func (s *spyPenMgr) SetPenTo(obj engine.Object, property int64, value float64) {
+	if property == penPropertyStampColorEffect {
+		s.lastStampColorEffect = value
+	}
+}
 
 func (s *spyPenMgr) ChangePenSizeBy(obj engine.Object, amount float64) {}
 
@@ -490,6 +495,20 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 	}
 	if spy.lastStampPosition != want {
 		t.Fatalf("PenStampWithTransform position = %v, want %v", spy.lastStampPosition, want)
+	}
+}
+
+func TestPenComponentStampCapturesColorEffect(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	sprite.setGraphicEffect(ColorEffect, -7)
+
+	sprite.pen().stamp()
+
+	want := normalizeEffectValue(ColorEffect, -7)
+	if spy.lastStampColorEffect != want {
+		t.Fatalf("stamp color effect = %v, want %v", spy.lastStampColorEffect, want)
 	}
 }
 
