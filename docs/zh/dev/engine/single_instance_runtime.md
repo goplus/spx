@@ -81,7 +81,7 @@ OnEngineDestroyed
 
 Go `onDestroy` 取得 closing 所有权，等待启动完成并排空协程，然后调用 `Game.OnEngineDestroy` 清除 bootstrap、pen 缓冲和 input session，最后设置 `destroyReady`。
 
-destroy 和直接 reset 共用 `drainCoroutines`：排空超时后保持 binding 关闭，继续异步等待。销毁路径中的 `OnEngineDestroyed` 只设置 `backendDestroyed`；脚本清理和 backend 销毁都完成后，才 unlink 并释放单实例槽位。
+destroy 和直接 reset 共用 `drainCoroutines`：同步等待脚本排空，在调用线程完成清理后才返回，确保销毁钩子先于 backend 释放。阻塞在外部 I/O 的脚本会延迟关闭。销毁路径中的 `OnEngineDestroyed` 只设置 `backendDestroyed`；脚本清理和 backend 销毁都完成后，才 unlink 并释放单实例槽位。
 
 ### Web reset
 

@@ -20,12 +20,10 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/goplus/spx/v3/internal/engine/profiler"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	gde "github.com/goplus/spx/v3/internal/gdengine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
 
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -37,8 +35,6 @@ type (
 )
 
 const Float2IntFactor = gdx.Float2IntFactor
-
-const coroutineShutdownTimeout = 2 * time.Second
 
 var (
 	activeGame atomic.Pointer[gameBinding]
@@ -261,21 +257,13 @@ func onReset() {
 	})
 }
 
-// drainCoroutines continues asynchronously if scripts exceed the shutdown timeout.
+// Keep cleanup on the caller thread and finish before backend teardown.
 func drainCoroutines(cleanup func()) {
-	co := gco
-	if co == nil {
+	if gco == nil {
 		cleanup()
 		return
 	}
-	if co.RunAfterStopAll(coroutineShutdownTimeout, cleanup) {
-		return
-	}
-	spxlog.Warn("Coroutine shutdown timed out; cleanup continues asynchronously.")
-	go func() {
-		defer CheckPanic()
-		co.RunAfterStopAll(0, cleanup)
-	}()
+	gco.RunAfterStopAll(0, cleanup)
 }
 
 func (b *gameBinding) loadPhase() gamePhase {

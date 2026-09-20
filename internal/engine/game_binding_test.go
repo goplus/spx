@@ -934,3 +934,45 @@ func TestDestroyRejectsRuntimeWorkUntilBackendTeardown(t *testing.T) {
 		t.Fatalf("binding after backend teardown = %v, want nil", got)
 	}
 }
+
+func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
+	isolateGameBinding(t)
+	co := setupExecuteTest(t)
+	game := new(bindingTestGame)
+	if _, err := bindGame(game, new(struct{})); err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	finish := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(finish)
+	co.CreateAndStart("slow-destroy", func(coroutine.Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	<-started
+	done := make(chan struct{})
+	go func() {
+		// Native shutdown tears down the backend as soon as onDestroy returns.
+		onDestroy()
+		if game.destroyed.Load() != 1 {
+			t.Error("backend teardown preceded the destroy hook")
+		}
+		onDestroyed()
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("destroy returned before the blocked script drained")
+	case <-time.After(2200 * time.Millisecond):
+	}
+	finish()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("destroy did not finish after the script drained")
+	}
+	if activeGame.Load() != nil {
+		t.Fatal("destroy did not release the binding")
+	}
+}
