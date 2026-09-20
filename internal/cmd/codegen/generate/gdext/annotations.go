@@ -24,12 +24,39 @@ import (
 )
 
 type bindingOptions struct {
-	Web common.WebBindingMode
+	Web     common.WebBindingMode
+	ABI     string
+	Control string
 }
 
 var reBinding = regexp.MustCompile(`^SPX_BINDING\s*\(([^()]*)\)`)
 
 func (o bindingOptions) validate(method classMethodDecl, arrayBridge bool) {
+	if o.Control != "" {
+		valid := false
+		switch o.Control {
+		case "reset":
+			valid = method.ReturnType == "void" && regexp.MustCompile(`^GdInt\s+\w+$`).MatchString(method.Params)
+		case "restart", "pause", "resume", "next_frame":
+			valid = method.ReturnType == "void" && method.Params == ""
+		case "is_paused":
+			valid = method.ReturnType == "GdBool" && method.Params == ""
+		}
+		if !valid || arrayBridge || o.ABI != "" || o.Web != common.WebBindingDefault {
+			panic("invalid SPX_BINDING control signature or options: " + method.MethodName)
+		}
+	}
+	if o.ABI != "" {
+		if o.ABI != "free_string" {
+			panic("unknown SPX_BINDING abi mode: " + o.ABI)
+		}
+		if arrayBridge || method.ReturnType != "void" || !regexp.MustCompile(`^GdString\s+\w+$`).MatchString(method.Params) {
+			panic("SPX_BINDING abi=free_string requires void with one GdString argument: " + method.MethodName)
+		}
+		if o.Web != common.WebBindingDefault && o.Web != common.WebBindingNoop {
+			panic("SPX_BINDING abi=free_string cannot reuse a result: " + method.MethodName)
+		}
+	}
 	if o.Web == common.WebBindingDefault {
 		return
 	}
@@ -76,6 +103,10 @@ func parseBinding(line string) (*bindingOptions, string) {
 		switch key {
 		case "web":
 			options.Web = common.WebBindingMode(value)
+		case "abi":
+			options.ABI = value
+		case "control":
+			options.Control = value
 		default:
 			panic("unknown SPX_BINDING option: " + key)
 		}

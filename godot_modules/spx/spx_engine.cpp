@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_engine.h"
+#include "spx_callback_defaults.gen.h"
 
 #include "core/os/memory.h"
 #include "core/os/thread.h"
@@ -67,54 +68,6 @@ void SpxEngine::register_runtime_exit_callbacks(GDExtensionSpxGlobalRuntimeExitC
 
 void SpxEngine::register_runtime_reset_callbacks(GDExtensionSpxGlobalRuntimeResetCallback callback) {
 	_register_runtime_callback(&SpxEngine::on_runtime_reset, callback, __func__);
-}
-
-static SpxCallbackInfo get_default_spx_callbacks() {
-	SpxCallbackInfo callbacks;
-	callbacks.func_on_engine_start = []() {};
-	callbacks.func_on_engine_fixed_update = [](GdFloat delta) {};
-	callbacks.func_on_engine_update = [](GdFloat delta) {};
-	callbacks.func_on_engine_destroy = []() {};
-	callbacks.func_on_engine_destroyed = []() {};
-	callbacks.func_on_engine_reset = []() {};
-	callbacks.func_on_engine_pause = [](GdBool is_paused) {};
-	callbacks.func_on_scene_sprite_instantiated = [](GdObj obj, GdString type_name) {};
-	callbacks.func_on_sprite_ready = [](GdObj obj) {};
-	callbacks.func_on_sprite_updated = [](GdFloat delta) {};
-	callbacks.func_on_sprite_fixed_updated = [](GdFloat delta) {};
-	callbacks.func_on_sprite_destroyed = [](GdObj obj) {};
-	callbacks.func_on_sprite_frames_set_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_frame_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_looped = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_finished = [](GdObj obj) {};
-	callbacks.func_on_sprite_vfx_finished = [](GdObj obj) {};
-	callbacks.func_on_sprite_screen_exited = [](GdObj obj) {};
-	callbacks.func_on_sprite_screen_entered = [](GdObj obj) {};
-	callbacks.func_on_mouse_pressed = [](GdInt keyid) {};
-	callbacks.func_on_mouse_released = [](GdInt keyid) {};
-	callbacks.func_on_key_pressed = [](GdInt keyid) {};
-	callbacks.func_on_key_released = [](GdInt keyid) {};
-	callbacks.func_on_action_pressed = [](GdString action_name) {};
-	callbacks.func_on_action_just_pressed = [](GdString action_name) {};
-	callbacks.func_on_action_just_released = [](GdString action_name) {};
-	callbacks.func_on_axis_changed = [](GdString action_name, GdFloat value) {};
-	callbacks.func_on_collision_enter = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_collision_stay = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_collision_exit = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_enter = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_stay = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_exit = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_ui_ready = [](GdObj obj) {};
-	callbacks.func_on_ui_updated = [](GdObj obj) {};
-	callbacks.func_on_ui_destroyed = [](GdObj obj) {};
-	callbacks.func_on_ui_pressed = [](GdObj obj) {};
-	callbacks.func_on_ui_released = [](GdObj obj) {};
-	callbacks.func_on_ui_hovered = [](GdObj obj) {};
-	callbacks.func_on_ui_clicked = [](GdObj obj) {};
-	callbacks.func_on_ui_toggle = [](GdObj obj, GdBool is_on) {};
-	callbacks.func_on_ui_text_changed = [](GdObj obj, GdString text) {};
-	return callbacks;
 }
 
 void SpxEngine::register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {

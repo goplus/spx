@@ -54,6 +54,16 @@ The entry point collects marked manager declarations, generates the C interface 
 
 Only declarations selected by the generator's export conventions become bridge methods. Parameter and result types must have a supported ABI representation. Keep public naming stable and make conversions explicit at the engine boundary.
 
+Manager discovery recognizes `Spx*Mgr` classes in `spx*mgr.h`, independently of their base classes. Only marked public declarations are exported. Removing `SpxBaseMgr` inheritance does not remove an interface; renaming the manager still changes its ABI name.
+
+### Ownership and lifecycle bindings
+
+`SPX_BINDING(abi=free_string)` marks a raw ABI deallocator with the signature `void method(GdString value)`. Native C++ calls `SpxAbi::free_return_cstr` directly without resolving an engine or manager. The high-level Go/JS compatibility methods are no-ops because their strings are language-owned values; raw Native return conversion still releases its owned pointer through the original export. `spx_abi.h/.cpp` own allocation, release, and typed array access independently of engine lifetime.
+
+`SPX_BINDING(control=reset)` routes a lifecycle operation directly through `Spx`, preserving the public method name and ABI. Supported targets are `reset` (one `GdInt` argument), `restart`, `pause`, `resume`, `next_frame` (no arguments, `void`) and `is_paused` (no arguments, `GdBool`). These apply to Native and ordinary Web C++ bridges. They cannot be combined with Web overrides or memory-release bindings. Exit and panic notification APIs remain runtime operations.
+
+The generator also emits `spx_callback_defaults.gen.h` from the existing `SpxCallbackInfo` fields and callback typedefs. The engine uses this table of typed no-op callbacks; no separate callback schema or ABI layout change is needed.
+
 ### Native arrays
 
 Pointer-and-length signatures declare caller-provided array buffers. Declare fixed output as `SPX_API void write_snapshot(SPX_OUT float out[3]);`: codegen extracts the extent before lowering to a pointer-only ABI, and exposes `WriteSnapshot(out *[3]float32)` in Go. Go rejects nil and Web checks the exact output length before calling C++. Fixed and dynamic buffers share the `float` / `real_t`, `int64_t`, `uint8_t`, and `GdObj` mappings and can be combined with ordinary parameters in a method returning `void`, or `GdBool` when it has `SPX_OUT` parameters. Const arrays are read-only inputs. Fixed arrays require a positive decimal int32 literal extent and no separate length parameter; dynamic slice lengths are checked for int32 overflow before calling the ABI. Only `void` methods with a single fixed `SPX_OUT` array receive the no-argument Web output reader.

@@ -37,6 +37,8 @@
 
 #include "gdextension_interface.h"
 #include "spx_engine.h"
+#include "spx_abi.h"
+#include "spx.h"
 #include "spx_mgr_access.h"
 {{ $view := . -}}
 
@@ -60,6 +62,15 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 	{{- if ne 0 (len $f.Arguments) -}}, {{ end -}}{{$f.ReturnType.CStyleString }} *ret_val
 	{{- end -}}
 ) {
+	{{- if isStringRelease $f }}
+	SpxAbi::free_return_cstr({{ (index $f.Arguments 0).ResolvedName 0 }});
+	{{- else if controlTarget $f }}
+	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{ end }}{{ controlTarget $f }}(
+		{{- range $j, $arg := $f.Arguments }}
+			{{- if gt $j 0 }}, {{ end }}{{ $arg.ResolvedName $j }}
+		{{- end -}}
+	);
+	{{- else }}
 	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{ end }}{{ getManagerName $f.Name}}Mgr->
 	{{- trimPrefix (trimPrefix (trimPrefix (loadProcAddressName $f.Name) "spx_") (getManagerName $f.Name)) "_" }}(
 		{{- range $j, $arg := $f.Arguments }}
@@ -67,6 +78,7 @@ static void gdextension_{{ loadProcAddressName $f.Name }}(
 			{{- $arg.ResolvedName $j }}
 		{{- end -}}
 	);
+	{{- end }}
 }
 {{- end }}
 {{ end }}

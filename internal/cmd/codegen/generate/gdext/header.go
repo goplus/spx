@@ -34,7 +34,8 @@ var (
 	reSpaceParen = regexp.MustCompile(`\s+\)`)
 	reCommaSpace = regexp.MustCompile(`,\s*`)
 
-	reClassDefinition = regexp.MustCompile(`class\s+(\w+)\s*:\s*(?:public\s+)?(?:SpxBaseMgr|SpxObjectMgr<\w+>)(?:\s*,\s*[^\{]+)?\s*\{`)
+	// Manager identity comes from its name and explicit exports, not its implementation base.
+	reClassDefinition = regexp.MustCompile(`^class\s+(Spx\w+Mgr)(?:\s+final)?\s*(?::[^\{]+)?\s*\{`)
 
 	// Only methods explicitly marked with
 	// SPX_API or SPX_BIND become part of the cross-language ABI.
@@ -181,6 +182,8 @@ func parseManagerHeader(input string) *headerCollector {
 	g := &headerCollector{metadata: common.GenerationMetadata{
 		ArrayBridges:     make(map[string]common.ArrayBridge),
 		WebBindings:      make(map[string]common.WebBindingMode),
+		StringReleases:   make(map[string]bool),
+		ControlMethods:   make(map[string]string),
 		ReturnParameters: make(map[string]common.CParam),
 	}}
 	var currentClassName string
@@ -243,6 +246,13 @@ func parseManagerHeader(input string) *headerCollector {
 			}
 			if mode := methodDecl.Binding.Web; mode != common.WebBindingDefault {
 				g.metadata.WebBindings[functionName] = mode
+			}
+			if methodDecl.Binding.ABI == "free_string" {
+				g.metadata.StringReleases[functionName] = true
+				g.metadata.WebBindings[functionName] = common.WebBindingNoop
+			}
+			if methodDecl.Binding.Control != "" {
+				g.metadata.ControlMethods[functionName] = methodDecl.Binding.Control
 			}
 			if arrayBridge {
 				g.metadata.ArrayBridges[spec.FunctionName] = spec

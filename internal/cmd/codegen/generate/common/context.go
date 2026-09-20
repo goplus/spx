@@ -39,6 +39,10 @@ type GenerationMetadata struct {
 	ManagerNames []string
 	ArrayBridges map[string]ArrayBridge
 	WebBindings  map[string]WebBindingMode
+	// StringReleases consume a raw ABI string; high-level Go/JS strings need no release.
+	StringReleases map[string]bool
+	// ControlMethods route lifecycle controls directly through Spx's thread-safe facade.
+	ControlMethods map[string]string
 	// ReturnParameters identifies outputs added when lowering source return values.
 	ReturnParameters map[string]CParam
 }
@@ -53,6 +57,8 @@ type GenerationContext struct {
 	goTypes          map[string]string
 	arrayBridges     map[string]ArrayBridge
 	webBindings      map[string]WebBindingMode
+	stringReleases   map[string]bool
+	controlMethods   map[string]string
 	returnParameters map[string]CParam
 	parameters       map[string][]Parameter
 	parameterNames   map[string]map[string]Parameter
@@ -82,6 +88,17 @@ func (c *GenerationContext) IsManagerMethod(function *clang.TypedefFunction) boo
 
 func (c *GenerationContext) WebBinding(functionName string) WebBindingMode {
 	return c.webBindings[functionName]
+}
+
+func (c *GenerationContext) IsStringRelease(function *clang.TypedefFunction) bool {
+	return function != nil && c.stringReleases[function.Name]
+}
+
+func (c *GenerationContext) ControlTarget(function *clang.TypedefFunction) string {
+	if function != nil && c.controlMethods[function.Name] != "" {
+		return "Spx::" + c.controlMethods[function.Name]
+	}
+	return ""
 }
 
 func (c *GenerationContext) ArrayBridge(functionName string) (ArrayBridge, bool) {
@@ -122,6 +139,8 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 		managerNames:     clang.NewManagerNames(metadata.ManagerNames),
 		arrayBridges:     make(map[string]ArrayBridge),
 		webBindings:      maps.Clone(metadata.WebBindings),
+		stringReleases:   maps.Clone(metadata.StringReleases),
+		controlMethods:   maps.Clone(metadata.ControlMethods),
 		returnParameters: maps.Clone(metadata.ReturnParameters),
 		parameters:       make(map[string][]Parameter),
 		parameterNames:   make(map[string]map[string]Parameter),

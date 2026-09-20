@@ -904,11 +904,7 @@ func (*resMgrImpl) ReloadTexture(path string) {
 		gdx.ResMgr.ReloadTexture(path)
 	})
 }
-func (*resMgrImpl) FreeStr(str string) {
-	callInMainThread(func() {
-		gdx.ResMgr.FreeStr(str)
-	})
-}
+func (*resMgrImpl) FreeStr(str string) {}
 func (*resMgrImpl) ApplyProjectFonts(default_font_path string, font_paths gdx.Array, font_families gdx.Array, preferences gdx.Array) string {
 	var _ret1 string
 	callInMainThread(func() {

@@ -91,7 +91,9 @@ func TestGodotJsTemplateKeepsResStringOwned(t *testing.T) {
 		}},
 	}}}}
 
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{
+		StringReleases: map[string]bool{"GDExtensionSpxResFreeStr": true},
+	})}
 	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
 	generated, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
@@ -302,6 +304,110 @@ func TestWebBindingRejectsInvalidDeclarations(t *testing.T) {
 		"SPX_BINDING(web=reuse_result) SPX_API GdArray read();",
 		"SPX_BINDING(web=noop) SPX_API void read(float out[3]);",
 		"SPX_BINDING(web=noop, elements_per_input=2) SPX_API void read(const GdObj *objs, int count, float *out, int capacity);",
+	} {
+		require.Panics(t, func() {
+			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
+		}, declaration)
+	}
+}
+
+func TestManagerDiscoveryDoesNotDependOnInheritance(t *testing.T) {
+	dir := t.TempDir()
+	for _, declaration := range []string{
+		"class SpxExampleMgr {",
+		"class SpxExampleMgr final {",
+		"class SpxExampleMgr : public Lifecycle {",
+		"class SpxExampleMgr : public SpxObjectMgr<Sprite> {",
+	} {
+		source := declaration + "\npublic:\n SPX_API void run();\n};\n" +
+			"class Helper {\npublic:\n SPX_API void hidden();\n};\n"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
+		headers, err := PrepareHeaders(dir)
+		require.NoError(t, err)
+		require.Contains(t, headers.Standard, "typedef void (*GDExtensionSpxExampleRun)();")
+		require.NotContains(t, headers.Standard, "Hidden")
+		require.Equal(t, []string{"example"}, headers.Metadata.ManagerNames)
+	}
+}
+
+func TestStringReleaseBindingUsesRawABIWithoutManagerAccess(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr {
+public:
+ SPX_BINDING(abi=free_string)
+ SPX_API void release_text(GdString text);
+};`), 0o600))
+	headers, err := PrepareHeaders(dir)
+	require.NoError(t, err)
+	const name = "GDExtensionSpxExampleReleaseText"
+	require.True(t, headers.Metadata.StringReleases[name])
+	require.Equal(t, common.WebBindingNoop, headers.Metadata.WebBindings[name])
+	ast, err := clang.ParseCString("typedef void (*" + name + ")(GdString text);")
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	path := filepath.Join(dir, "bridge.cpp")
+	require.NoError(t, generation.writeCPP(path, gdSpxExtCpp))
+	output, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Contains(t, string(output), "SpxAbi::free_return_cstr(text);")
+	require.NotContains(t, string(output), "exampleMgr->")
+}
+
+func TestStringReleaseBindingRejectsWrongOwnershipShapes(t *testing.T) {
+	for _, declaration := range []string{
+		"SPX_BINDING(abi=free_string) SPX_API GdBool release(GdString text);",
+		"SPX_BINDING(abi=free_string) SPX_API void release(GdString text, GdInt n);",
+		"SPX_BINDING(abi=free_string) SPX_API void release(GdArray array);",
+		"SPX_BINDING(abi=free_string) SPX_API void release(GdString *text);",
+		"SPX_BINDING(abi=unknown) SPX_API void release(GdString text);",
+	} {
+		require.Panics(t, func() {
+			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")
+		}, declaration)
+	}
+}
+
+func TestControlBindingsBypassManagersOnNativeAndWeb(t *testing.T) {
+	header := parseManagerHeader(`class SpxExtMgr {
+ SPX_BINDING(control=reset) SPX_API void request_reset(GdInt exit_code);
+ SPX_BINDING(control=restart) SPX_API void request_restart();
+ SPX_BINDING(control=pause) SPX_API void pause();
+ SPX_BINDING(control=resume) SPX_API void resume();
+ SPX_BINDING(control=is_paused) SPX_API GdBool is_paused();
+ SPX_BINDING(control=next_frame) SPX_API void next_frame();
+};`)
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	for _, test := range []struct{ name, template, resetArg string }{
+		{"native", gdSpxExtCpp, "exit_code"},
+		{"web", gdJsSpxCpp, "*exit_code"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "bridge.cpp")
+			require.NoError(t, generation.writeCPP(path, test.template))
+			output, err := os.ReadFile(path)
+			require.NoError(t, err)
+			body := string(output)
+			require.NotContains(t, body, "extMgr->")
+			require.Contains(t, body, "Spx::reset("+test.resetArg+");")
+			for _, call := range []string{"restart", "pause", "resume", "next_frame"} {
+				require.Contains(t, body, "Spx::"+call+"();")
+			}
+			require.Contains(t, body, "*ret_val = Spx::is_paused();")
+		})
+	}
+}
+
+func TestControlBindingsRejectUnknownTargetsAndWrongSignatures(t *testing.T) {
+	for _, declaration := range []string{
+		"SPX_BINDING(control=unknown) SPX_API void control();",
+		"SPX_BINDING(control=pause) SPX_API void control(GdInt arg);",
+		"SPX_BINDING(control=reset) SPX_API void control();",
+		"SPX_BINDING(control=reset) SPX_API void control(GdString code);",
+		"SPX_BINDING(control=is_paused) SPX_API void control();",
+		"SPX_BINDING(control=pause,web=noop) SPX_API void control();",
+		"SPX_BINDING(control=reset,abi=free_string) SPX_API void control(GdInt code);",
 	} {
 		require.Panics(t, func() {
 			parseManagerHeader("class SpxExampleMgr {\n" + declaration + "\n};")

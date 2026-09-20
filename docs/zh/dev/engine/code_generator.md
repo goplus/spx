@@ -215,6 +215,8 @@ graph TD
 2. 使用 `SPX_API` 或 `SPX_BIND`
 3. 声明形式能被当前正则规则识别
 
+manager 类通过 `spx*mgr.h` 中的 `Spx*Mgr` 名称识别，不再要求继承 `SpxBaseMgr` 或 `SpxObjectMgr`。修改继承不会删除导出接口；修改类名仍会改变对应 ABI 名称。
+
 典型例子：
 
 ```cpp
@@ -300,6 +302,12 @@ Go 调用侧通过已有的 `SpriteSyncBuffer.GetPositions` 保存并复用位�
 | --- | --- |
 | `web=noop` | Web 绑定为空操作，要求方法返回 `void` |
 | `web=reuse_result` | Web 按实例、方法复用结构化返回对象；调用者应立即消费或复制结果 |
+| `abi=free_string` | 原始 ABI 字符串释放函数，签名必须是 `void method(GdString value)`；Native 直接调用独立内存工具，高层 Go/JS 兼容方法为空操作 |
+| `control=...` | Native 和普通 Web C++ 入口直接路由 `Spx` 生命周期方法，不先查找 manager |
+
+`control` 支持 `reset`（一个 `GdInt` 参数）、`restart`、`pause`、`resume`、`next_frame`（无参数、返回 `void`）及 `is_paused`（无参数、返回 `GdBool`）。不能与 Web 覆盖策略或内存释放注解组合。退出和 panic 通知仍属于运行期接口。
+
+`abi=free_string` 保留原始释放导出，供 Native 返回值转换在复制后释放 C++ 地址；不能把高层 Go `string` 转换为临时地址再调用释放接口。字符串和数组的分配、释放、类型检查实现在 `spx_abi.h/.cpp`，不依赖引擎或 manager 是否存活。默认 callback 表由已有 `SpxCallbackInfo` 字段和 callback typedef 生成到 `spx_callback_defaults.gen.h`，无需新增 schema 或改变 ABI 布局。
 
 例如：
 

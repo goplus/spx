@@ -475,7 +475,7 @@ GdVec2 SpxResMgr::get_image_size(GdString path) {
 }
 
 void SpxResMgr::free_str(GdString str_ptr) {
-	free_return_cstr(str_ptr);
+	SpxAbi::free_return_cstr(str_ptr);
 }
 GdString SpxResMgr::read_all_text(GdString p_path) {
 	auto path = SpxStr(p_path);

@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "../spx.h"
 #include "godot_js_spx_util.h"
 #include "../spx_audio_mgr.h"
 #include "../spx_camera_mgr.h"
@@ -212,11 +213,11 @@ void gdspx_ext_request_exit(GdInt *exit_code) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_reset(GdInt *exit_code) {
-	 extMgr->request_reset(*exit_code);
+	Spx::reset(*exit_code);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_restart() {
-	 extMgr->request_restart();
+	Spx::restart();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_on_runtime_panic(GdString *msg) {
@@ -228,19 +229,19 @@ void gdspx_ext_on_runtime_panic(GdString *msg) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_pause() {
-	 extMgr->pause();
+	Spx::pause();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_resume() {
-	 extMgr->resume();
+	Spx::resume();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_is_paused(GdBool *ret_val) {
-	*ret_val = extMgr->is_paused();
+	*ret_val = Spx::is_paused();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_next_frame() {
-	 extMgr->next_frame();
+	Spx::next_frame();
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_set_layer_sorter_mode(GdInt *mode) {
