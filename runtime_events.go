@@ -44,17 +44,18 @@ type scriptEventBindings struct {
 }
 
 type scriptEventRegistry struct {
-	game                *Game
-	manager             coreevent.Manager
-	messageExecutions   sync.Map // map[coroutine.Thread]*messageReceiverExecution
+	game    *Game
+	manager coreevent.Manager
+	// Accessed only in managed script slices, under the scheduler's runMu.
+	messageExecutions   map[coroutine.Thread]messageReceiverExecution
 	stopAllEpoch        atomic.Uint64
 	pendingStartThreads sync.Map    // map[coroutine.Thread]struct{}
 	pendingConditions   []eventSink // engine frame thread only
 }
 
 // messageDispatchContext tracks receivers visited by one broadcast tree.
+// Its state is accessed only by managed scripts holding the scheduler's runMu.
 type messageDispatchContext struct {
-	mu        sync.Mutex
 	frame     int64
 	round     uint64
 	receivers map[*messageEventHandler]struct{}
@@ -445,11 +446,16 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 			receiver := ev.Handler.(*messageEventHandler)
 			if thread != nil {
 				context.waitForTurn(thread, receiver)
-				p.messageExecutions.Store(thread, &messageReceiverExecution{
+				if p.messageExecutions == nil {
+					p.messageExecutions = make(map[coroutine.Thread]messageReceiverExecution)
+				}
+				p.messageExecutions[thread] = messageReceiverExecution{
 					context:  context,
 					receiver: receiver,
-				})
-				defer p.messageExecutions.Delete(thread)
+				}
+				// Yield reacquires runMu before cancellation unwinds this defer;
+				// runThread releases it only after Run and its defers finish.
+				defer delete(p.messageExecutions, thread)
 			}
 			receiver.run(msg, data)
 		},
@@ -460,11 +466,10 @@ func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchCo
 	if gco == nil || !gco.IsInCoroutine() {
 		return new(messageDispatchContext)
 	}
-	value, ok := p.messageExecutions.Load(gco.Current())
+	execution, ok := p.messageExecutions[gco.Current()]
 	if !ok {
 		return new(messageDispatchContext)
 	}
-	execution := value.(*messageReceiverExecution)
 	execution.context.claimTurn(execution.receiver)
 	return execution.context
 }
@@ -477,8 +482,6 @@ func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *
 
 func (p *messageDispatchContext) claimTurn(receiver *messageEventHandler) bool {
 	frame, round := itime.Frame(), gco.ScriptRound()
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.frame != frame || p.round != round {
 		p.frame, p.round = frame, round
 		clear(p.receivers)
