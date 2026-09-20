@@ -45,6 +45,23 @@ namespace {
 constexpr int32_t SPX_MAX_ARRAY_ELEMENTS = 16 * 1024 * 1024;
 constexpr size_t SPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 
+constexpr size_t array_element_size(int32_t type) {
+	switch (type) {
+		case GD_ARRAY_TYPE_INT64:
+		case GD_ARRAY_TYPE_GDOBJ:
+			return sizeof(int64_t);
+		case GD_ARRAY_TYPE_FLOAT:
+			return sizeof(float);
+		case GD_ARRAY_TYPE_BOOL:
+		case GD_ARRAY_TYPE_BYTE:
+			return sizeof(uint8_t);
+		case GD_ARRAY_TYPE_STRING:
+			return sizeof(char *);
+		default:
+			return 0;
+	}
+}
+
 } // namespace
 
 void SpxAbi::free_return_cstr(GdString str_ptr) {
@@ -66,25 +83,7 @@ GdArray SpxAbi::create_array(int32_t type, int32_t size) {
 		return nullptr;
 	}
 
-	constexpr auto get_element_size = [](int32_t array_type) -> size_t {
-		switch (array_type) {
-			case GD_ARRAY_TYPE_INT64:
-				return sizeof(int64_t);
-			case GD_ARRAY_TYPE_FLOAT:
-				return sizeof(float);
-			case GD_ARRAY_TYPE_BOOL:
-				return sizeof(uint8_t);
-			case GD_ARRAY_TYPE_STRING:
-				return sizeof(char *);
-			case GD_ARRAY_TYPE_BYTE:
-				return sizeof(uint8_t);
-			case GD_ARRAY_TYPE_GDOBJ:
-				return sizeof(GdObj);
-			default:
-				return 0;
-		}
-	};
-	const size_t element_size = get_element_size(type);
+	const size_t element_size = array_element_size(type);
 	if (element_size == 0 ||
 			static_cast<size_t>(size) >
 					std::numeric_limits<size_t>::max() / element_size ||
@@ -100,20 +99,10 @@ GdArray SpxAbi::create_array(int32_t type, int32_t size) {
 	array->size = size;
 	array->type = type;
 
-	if (size == 0) {
-		array->data = nullptr;
-#ifdef __EMSCRIPTEN__
-		if (!gdspx_register_array_info(array)) {
-			free(array);
-			return nullptr;
-		}
-#endif
-		return array;
-	}
-
-	// Zero-init string slots for safe partial construction.
-	array->data = calloc(static_cast<size_t>(size), element_size);
-	if (!array->data) {
+	// Empty arrays have no payload; nonempty arrays zero-init string slots so
+	// partial construction can always use the same cleanup path.
+	array->data = size > 0 ? calloc(static_cast<size_t>(size), element_size) : nullptr;
+	if (size > 0 && !array->data) {
 		free(array);
 		return nullptr;
 	}
@@ -177,26 +166,8 @@ void *SpxAbi::_get_array(GdArray array, int64_t index, int type_size,
 		return nullptr;
 	}
 
-	size_t element_size = 0;
-	switch (array->type) {
-		case GD_ARRAY_TYPE_INT64:
-		case GD_ARRAY_TYPE_GDOBJ:
-			element_size = sizeof(int64_t);
-			break;
-		case GD_ARRAY_TYPE_FLOAT:
-			element_size = sizeof(float);
-			break;
-		case GD_ARRAY_TYPE_BOOL:
-		case GD_ARRAY_TYPE_BYTE:
-			element_size = sizeof(uint8_t);
-			break;
-		case GD_ARRAY_TYPE_STRING:
-			element_size = sizeof(char *);
-			break;
-		default:
-			return nullptr;
-	}
-	if (element_size != static_cast<size_t>(type_size) ||
+	const size_t element_size = array_element_size(array->type);
+	if (element_size == 0 || element_size != static_cast<size_t>(type_size) ||
 			static_cast<uint64_t>(index) >
 					std::numeric_limits<size_t>::max() / element_size) {
 		return nullptr;
