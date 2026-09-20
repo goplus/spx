@@ -31,20 +31,24 @@
 #ifndef SPX_AUDIO_H
 #define SPX_AUDIO_H
 
+#include "core/object/object_id.h"
 #include "core/string/string_name.h"
-#include "core/templates/list.h"
-#include "core/templates/rb_map.h"
+#include "core/templates/hash_map.h"
 #include "gdextension_spx_ext.h"
 
 class AudioStreamPlayer2D;
 class Node;
 class SpxAudio {
 private:
-	RBMap<GdInt, AudioStreamPlayer2D *> aid_audios;
-	List<AudioStreamPlayer2D *> audios;
-	List<AudioStreamPlayer2D *> loop_audios;
-	Node *root = nullptr;
-	GdObj id = 0;
+	struct Voice {
+		ObjectID player_id;
+		bool loop = false;
+	};
+
+	// The scene owns each player. An owner node may destroy its children before
+	// the audio manager next updates, so only keep IDs across main-thread calls.
+	HashMap<GdInt, Voice> voices;
+	ObjectID root_id;
 
 	StringName bus_name;
 	bool owns_dedicated_bus = false;
@@ -53,7 +57,8 @@ private:
 
 private:
 	bool ensure_dedicated_bus();
-	AudioStreamPlayer2D *_get_aid_audio(GdInt aid);
+	AudioStreamPlayer2D *_get_aid_audio(GdInt aid) const;
+	void _release_voice(GdInt aid);
 
 public:
 	void on_create(GdInt p_id, Node *p_root);

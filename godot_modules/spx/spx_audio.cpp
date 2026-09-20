@@ -40,34 +40,36 @@
 #include "spx_object_guard.h"
 #include "spx_res_mgr.h"
 
-AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) {
-	if (aid_audios.has(aid)) {
-		return aid_audios[aid];
+AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) const {
+	const Voice *voice = voices.getptr(aid);
+	if (voice == nullptr) {
+		return nullptr;
 	}
-	return nullptr;
+	AudioStreamPlayer2D *player = Object::cast_to<AudioStreamPlayer2D>(ObjectDB::get_instance(voice->player_id));
+	return player != nullptr && !player->is_queued_for_deletion() ? player : nullptr;
+}
+
+void SpxAudio::_release_voice(GdInt aid) {
+	AudioStreamPlayer2D *player = _get_aid_audio(aid);
+	// Remove the handle before interacting with the scene-owned player. All
+	// cleanup paths are also safe after its parent has already deleted it.
+	voices.erase(aid);
+	if (player != nullptr) {
+		player->stop();
+		player->queue_free();
+	}
 }
 
 void SpxAudio::on_create(GdInt p_id, Node *p_root) {
-	root = p_root;
-	id = p_id;
+	root_id = p_root != nullptr ? p_root->get_instance_id() : ObjectID();
 	bus_name = SpxAudioBusPool::STR_BUS_SFX;
 	owns_dedicated_bus = false;
 }
 
 void SpxAudio::stop_all() {
-	for (List<AudioStreamPlayer2D *>::Element *item = audios.front(); item;) {
-		item->get()->queue_free();
-		item = item->next();
+	while (!voices.is_empty()) {
+		_release_voice(voices.begin()->key);
 	}
-	audios.clear();
-
-	for (List<AudioStreamPlayer2D *>::Element *item = loop_audios.front(); item;) {
-		item->get()->queue_free();
-		item = item->next();
-	}
-	loop_audios.clear();
-
-	aid_audios.clear();
 }
 
 void SpxAudio::on_destroy() {
@@ -75,30 +77,21 @@ void SpxAudio::on_destroy() {
 }
 
 void SpxAudio::on_update(float delta) {
-	// check the audio is done
-	for (auto item = audios.front(); item;) {
-		const auto audio = item->get();
-		auto *next = item->next();
-		if (!audio->is_playing()) {
-			audio->queue_free();
-			audios.erase(item);
-			for (const auto &[aid, audio_player] : aid_audios) {
-				if (audio_player == audio) {
-					aid_audios.erase(aid);
-					break;
-				}
+	Vector<GdInt> finished_aids;
+	for (const KeyValue<GdInt, Voice> &entry : voices) {
+		AudioStreamPlayer2D *player = _get_aid_audio(entry.key);
+		if (player == nullptr || player->get_stream().is_null()) {
+			finished_aids.push_back(entry.key);
+		} else if (!player->is_playing() && !player->get_stream_paused()) {
+			if (entry.value.loop) {
+				player->play();
+			} else {
+				finished_aids.push_back(entry.key);
 			}
 		}
-		item = next;
 	}
-
-	for (auto item = loop_audios.front(); item;) {
-		const auto audio = item->get();
-		auto *next = item->next();
-		if (audio->get_stream().is_valid() && !audio->is_playing() && !audio->get_stream_paused()) {
-			audio->play();
-		}
-		item = next;
+	for (GdInt aid : finished_aids) {
+		_release_voice(aid);
 	}
 }
 
@@ -118,12 +111,13 @@ bool SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, 
 	if (stream.is_null()) {
 		return false;
 	}
-	auto *audio = memnew(AudioStreamPlayer2D);
-	if (owner != nullptr) {
-		owner->add_child(audio);
-	} else {
-		root->add_child(audio);
+	Node *parent = owner != nullptr ? owner : Object::cast_to<Node>(ObjectDB::get_instance(root_id));
+	if (parent == nullptr || parent->is_queued_for_deletion()) {
+		return false;
 	}
+	_release_voice(aid);
+	auto *audio = memnew(AudioStreamPlayer2D);
+	parent->add_child(audio);
 	audio->set_bus(bus_name);
 	audio->set_stream(stream);
 	audio->set_max_distance(max_distance);
@@ -131,13 +125,12 @@ bool SpxAudio::play(GdInt aid, GdString path, Node *owner, GdFloat attenuation, 
 	audio->set_name(path_str);
 	audio->set_pitch_scale(get_pitch());
 	audio->play();
-	audios.push_back(audio);
-	aid_audios[aid] = audio;
+	voices[aid] = { audio->get_instance_id(), false };
 	return true;
 }
 
 bool SpxAudio::has_audio(GdInt aid) const {
-	return aid_audios.has(aid);
+	return _get_aid_audio(aid) != nullptr;
 }
 
 GdBool SpxAudio::is_playing(GdInt aid) {
@@ -156,12 +149,8 @@ void SpxAudio::resume(GdInt aid) {
 }
 
 void SpxAudio::stop(GdInt aid) {
-	SPX_AUDIO_GUARD_VOID(aid, __func__)
-	audios.erase(audio.get());
-	loop_audios.erase(audio.get());
-	aid_audios.erase(aid);
-	audio->stop();
-	audio->queue_free();
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "SPX audio voices may only be stopped on the engine main thread.");
+	_release_voice(aid);
 }
 
 GdBool SpxAudio::restart(GdInt aid) {
@@ -175,22 +164,12 @@ GdBool SpxAudio::restart(GdInt aid) {
 
 void SpxAudio::set_loop(GdInt aid, GdBool loop) {
 	SPX_AUDIO_GUARD_VOID(aid, __func__)
-	if (loop) {
-		auto succ = audios.erase(audio.get());
-		if (succ) {
-			loop_audios.push_back(audio.get());
-		}
-	} else {
-		auto succ = loop_audios.erase(audio.get());
-		if (succ) {
-			audios.push_back(audio.get());
-		}
-	}
+	voices[aid].loop = loop;
 }
 
 GdBool SpxAudio::get_loop(GdInt aid) {
 	SPX_AUDIO_GUARD_RETURN(aid, __func__, false)
-	return loop_audios.find(audio.get()) != nullptr;
+	return voices[aid].loop;
 }
 
 GdFloat SpxAudio::get_timer(GdInt aid) {
@@ -243,14 +222,11 @@ bool SpxAudio::ensure_dedicated_bus() {
 		bus_name = allocated_bus;
 		owns_dedicated_bus = true;
 
-		for (auto item = audios.front(); item;) {
-			item->get()->set_bus(bus_name);
-			item = item->next();
-		}
-
-		for (auto item = loop_audios.front(); item;) {
-			item->get()->set_bus(bus_name);
-			item = item->next();
+		for (const KeyValue<GdInt, Voice> &entry : voices) {
+			AudioStreamPlayer2D *player = _get_aid_audio(entry.key);
+			if (player != nullptr) {
+				player->set_bus(bus_name);
+			}
 		}
 	}
 	return true;
