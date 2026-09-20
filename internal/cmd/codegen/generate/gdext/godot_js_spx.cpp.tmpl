@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "../spx_mgr_access.h"
 #include "godot_js_spx_util.h"
 {{ $view := . -}}
 
@@ -43,9 +44,6 @@
 {{ end }}
 #include <emscripten.h>
 
-{{- range $i, $name := $view.Managers }}
-#define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
-{{- end }}
 
 extern "C" {
 {{- range $i, $f := $view.AST.CollectGDExtensionInterfaceFunctions -}}

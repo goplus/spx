@@ -35,15 +35,14 @@
 #include "core/templates/hash_map.h"
 #include "core/templates/vector.h"
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 #include "spx_input_proxy.h"
 
-class SpxInputMgr : public SpxBaseMgr {
-	SPXCLASS(SpxInputMgr, SpxBaseMgr)
+class SpxInputMgr : public SpxManager {
 public:
-	virtual ~SpxInputMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
-	virtual void on_start() override;
+	void on_start() override;
 	void on_reset(int reset_code) override;
+	void on_destroy() override;
 
 protected:
 	SpxInputProxy *input_proxy = nullptr;

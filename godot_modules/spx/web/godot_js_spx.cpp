@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "../spx_mgr_access.h"
 #include "godot_js_spx_util.h"
 #include "../spx_audio_mgr.h"
 #include "../spx_camera_mgr.h"
@@ -53,21 +54,7 @@
 #include "../spx_ui_mgr.h"
 
 #include <emscripten.h>
-#define audioMgr SpxEngine::get_singleton()->get_audio()
-#define cameraMgr SpxEngine::get_singleton()->get_camera()
-#define debugMgr SpxEngine::get_singleton()->get_debug()
-#define extMgr SpxEngine::get_singleton()->get_ext()
-#define inputMgr SpxEngine::get_singleton()->get_input()
-#define navigationMgr SpxEngine::get_singleton()->get_navigation()
-#define penMgr SpxEngine::get_singleton()->get_pen()
-#define physicsMgr SpxEngine::get_singleton()->get_physics()
-#define platformMgr SpxEngine::get_singleton()->get_platform()
-#define resMgr SpxEngine::get_singleton()->get_res()
-#define sceneMgr SpxEngine::get_singleton()->get_scene()
-#define spriteMgr SpxEngine::get_singleton()->get_sprite()
-#define tilemapMgr SpxEngine::get_singleton()->get_tilemap()
-#define tilemapparserMgr SpxEngine::get_singleton()->get_tilemapparser()
-#define uiMgr SpxEngine::get_singleton()->get_ui()
+
 
 extern "C" {
 EMSCRIPTEN_KEEPALIVE
@@ -208,7 +195,7 @@ void gdspx_debug_debug_draw_line(GdVec2 *from, GdVec2 *to, GdColor *color) {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_exit(GdInt *exit_code) {
-	 extMgr->request_exit(*exit_code);
+	 SpxExtMgr::request_exit(*exit_code);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_request_reset(GdInt *exit_code) {
@@ -224,7 +211,7 @@ void gdspx_ext_on_runtime_panic(GdString *msg) {
 	if (!gdspx_get_string_value(msg, &gdspx_string_arg_0)) {
 		return;
 	}
-	 extMgr->on_runtime_panic(gdspx_string_arg_0);
+	 SpxExtMgr::on_runtime_panic(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_pause() {
@@ -244,7 +231,7 @@ void gdspx_ext_next_frame() {
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ext_set_layer_sorter_mode(GdInt *mode) {
-	 extMgr->set_layer_sorter_mode(*mode);
+	 SpxExtMgr::set_layer_sorter_mode(*mode);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_input_get_global_mouse_pos(GdVec2 *ret_val) {
@@ -604,30 +591,30 @@ void gdspx_platform_set_max_fps(GdInt *fps) {
 	 platformMgr->set_max_fps(*fps);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_get_persistant_data_dir(GdString *ret_val) {
+void gdspx_platform_get_persistent_data_dir(GdString *ret_val) {
 	if (!gdspx_prepare_string_wrapper(ret_val)) {
 		return;
 	}
-	GdString result = platformMgr->get_persistant_data_dir();
+	GdString result = platformMgr->get_persistent_data_dir();
 	if (!gdspx_bind_string_wrapper(ret_val, result)) {
 		return;
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_persistant_data_dir(GdString *path) {
+void gdspx_platform_set_persistent_data_dir(GdString *path) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
 		return;
 	}
-	 platformMgr->set_persistant_data_dir(gdspx_string_arg_0);
+	 platformMgr->set_persistent_data_dir(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_is_in_persistant_data_dir(GdString *path, GdBool *ret_val) {
+void gdspx_platform_is_in_persistent_data_dir(GdString *path, GdBool *ret_val) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
 		return;
 	}
-	*ret_val = platformMgr->is_in_persistant_data_dir(gdspx_string_arg_0);
+	*ret_val = platformMgr->is_in_persistent_data_dir(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_create_animation(GdString *p_sprite_type, GdString *p_anim_name, GdString *p_json_ctx, GdInt *fps, GdBool *is_atlas) {

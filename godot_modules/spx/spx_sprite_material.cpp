@@ -35,7 +35,7 @@
 #include "scene/resources/material.h"
 #include "scene/resources/shader.h"
 
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
 
 void SpxSprite::set_material_shader(GdString p_path) {
 	Ref<Shader> shader = ResourceLoader::load(SpxStr(p_path));

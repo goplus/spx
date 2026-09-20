@@ -39,7 +39,6 @@
 Mutex SpxDebugMgr::lock;
 
 void SpxDebugMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 
 	debug_root = memnew(Node2D);
 	debug_root->set_name("debug_root");
@@ -49,7 +48,6 @@ void SpxDebugMgr::on_awake() {
 }
 
 void SpxDebugMgr::on_update(float delta) {
-	SpxBaseMgr::on_update(delta);
 
 	lock.lock();
 	_clear_debug_shapes();
@@ -64,7 +62,6 @@ void SpxDebugMgr::on_destroy() {
 		debug_root = nullptr;
 	}
 	lock.unlock();
-	SpxBaseMgr::on_destroy();
 }
 
 void SpxDebugMgr::on_reset(int reset_code) {

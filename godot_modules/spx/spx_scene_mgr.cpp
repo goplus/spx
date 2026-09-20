@@ -68,7 +68,6 @@ void SpxSceneMgr::_export_vp_png(SubViewport *viewport) {
 }
 
 void SpxSceneMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	pure_sprite_root = memnew(Node2D);
 	pure_sprite_root->set_name("pure_sprite_root");
 	get_spx_root()->add_child(pure_sprite_root);
@@ -92,7 +91,6 @@ void SpxSceneMgr::on_destroy() {
 		pure_sprite_root->queue_free();
 	}
 	pure_sprite_root = nullptr;
-	SpxBaseMgr::on_destroy();
 }
 
 void SpxSceneMgr::on_reset(int reset_code) {

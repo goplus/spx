@@ -35,7 +35,7 @@
 #include "scene/resources/font.h"
 #include "scene/resources/sprite_frames.h"
 #include "servers/audio/audio_stream.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 class AudioStreamMP3;
 class AudioStreamWAV;
@@ -58,11 +58,9 @@ struct SpxAnimationClip {
 	bool is_svg = false;
 };
 
-class SpxResMgr : public SpxBaseMgr {
-	SPXCLASS(SpxResMgr, SpxBaseMgr)
+class SpxResMgr : public SpxManager {
 
 public:
-	virtual ~SpxResMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
 private:
 	HashMap<String, Ref<Texture2D>> cached_texture;

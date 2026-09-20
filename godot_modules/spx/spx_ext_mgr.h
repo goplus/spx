@@ -32,20 +32,15 @@
 #define SPX_EXT_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "scene/2d/node_2d.h"
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
 
-class SpxExtMgr : public SpxBaseMgr {
-	SPXCLASS(SpxExtMgr, SpxBaseMgr)
-public:
-	virtual ~SpxExtMgr() = default;
-
+class SpxExtMgr {
 public:
 	// engine API
-	SPX_BIND void request_exit(GdInt exit_code);
+	SPX_BIND static void request_exit(GdInt exit_code);
 	SPX_BIND static void request_reset(GdInt exit_code);
 	SPX_BIND static void request_restart();
-	SPX_BIND void on_runtime_panic(GdString msg);
+	SPX_BIND static void on_runtime_panic(GdString msg);
 	// pause API
 	SPX_BIND static void pause();
 	SPX_BIND static void resume();
@@ -53,7 +48,7 @@ public:
 	SPX_BIND static void next_frame();
 
 	// layer sorter
-	SPX_BIND void set_layer_sorter_mode(GdInt mode);
+	SPX_BIND static void set_layer_sorter_mode(GdInt mode);
 };
 
 #endif // SPX_EXT_MGR_H

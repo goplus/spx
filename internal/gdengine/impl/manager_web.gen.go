@@ -715,17 +715,17 @@ func (pself *platformMgr) SetMaxFps(fps int64) {
 	arg0Low, arg0High := JsSplitGdInt(fps)
 	API.SpxPlatformSetMaxFps.Invoke(arg0Low, arg0High)
 }
-func (pself *platformMgr) GetPersistantDataDir() string {
-	_result := API.SpxPlatformGetPersistantDataDir.Invoke()
+func (pself *platformMgr) GetPersistentDataDir() string {
+	_result := API.SpxPlatformGetPersistentDataDir.Invoke()
 	return JsToGdString(_result)
 }
-func (pself *platformMgr) SetPersistantDataDir(path string) {
+func (pself *platformMgr) SetPersistentDataDir(path string) {
 	arg0 := JsFromGdString(path)
-	API.SpxPlatformSetPersistantDataDir.Invoke(arg0)
+	API.SpxPlatformSetPersistentDataDir.Invoke(arg0)
 }
-func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
+func (pself *platformMgr) IsInPersistentDataDir(path string) bool {
 	arg0 := JsFromGdString(path)
-	_result := API.SpxPlatformIsInPersistantDataDir.Invoke(arg0)
+	_result := API.SpxPlatformIsInPersistentDataDir.Invoke(arg0)
 	return JsToGdBool(_result)
 }
 func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {

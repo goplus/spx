@@ -37,13 +37,11 @@
 
 class SpxPenSurface;
 class SpxPenMgr : public SpxObjectMgr<SpxPen> {
-	SPXCLASS(SpxPenMgr, SpxObjectMgr<SpxPen>)
 
 private:
 	SpxPenSurface *surface = nullptr;
 
 public:
-	virtual ~SpxPenMgr() = default;
 
 	void on_awake() override;
 	void on_update(float delta) override;

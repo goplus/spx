@@ -45,7 +45,6 @@
 #include "spx_callback_proxy.h"
 #include "spx_camera_mgr.h"
 #include "spx_debug_mgr.h"
-#include "spx_ext_mgr.h"
 #include "spx_input_mgr.h"
 #include "spx_navigation_mgr.h"
 #include "spx_pen_mgr.h"
@@ -145,8 +144,8 @@ void SpxEngine::on_awake() {
 	}
 
 	managers_awake = true;
-	_notify_managers_awake();
-	_notify_managers_start();
+	_notify_managers(&SpxManager::on_awake);
+	_notify_managers(&SpxManager::on_start);
 
 	if (callbacks.func_on_engine_start) {
 		callbacks.func_on_engine_start();
@@ -162,7 +161,7 @@ void SpxEngine::on_fixed_update(float delta) {
 		return;
 	}
 
-	_notify_managers_fixed_update(delta);
+	_notify_managers(&SpxManager::on_fixed_update, delta);
 
 	if (callbacks.func_on_engine_fixed_update) {
 		callbacks.func_on_engine_fixed_update(delta);
@@ -182,7 +181,7 @@ void SpxEngine::on_update(float delta) {
 		should_execute_single_frame = false;
 	}
 
-	_notify_managers_update(delta);
+	_notify_managers(&SpxManager::on_update, delta);
 
 	if (callbacks.func_on_engine_update) {
 		callbacks.func_on_engine_update(delta);
@@ -202,7 +201,7 @@ void SpxEngine::on_destroy() {
 	clear_frozen_frame();
 
 	if (managers_awake) {
-		_notify_managers_destroy();
+		_notify_managers(&SpxManager::on_destroy);
 		managers_awake = false;
 	}
 
@@ -230,7 +229,7 @@ void SpxEngine::on_exit(int exit_code) {
 
 	has_exit = true;
 
-	_notify_managers_exit(exit_code);
+	_notify_managers(&SpxManager::on_exit, exit_code);
 
 	// Stop runtime events now; shutdown still owns both teardown callbacks.
 	const auto on_engine_destroy = callbacks.func_on_engine_destroy;
@@ -267,7 +266,7 @@ void SpxEngine::restart() {
 	godot_js_spx_contact_session_start();
 #endif
 
-	_notify_managers_start();
+	_notify_managers(&SpxManager::on_start);
 }
 
 void SpxEngine::set_delay_runtime_reset(bool p_delay) {
@@ -340,7 +339,7 @@ void SpxEngine::_do_reset(int reset_code) {
 		callbacks.func_on_engine_reset();
 	}
 
-	_notify_managers_reset(reset_code);
+	_notify_managers(&SpxManager::on_reset, reset_code);
 
 	SvgManager::get_singleton()->reset(true);
 
@@ -387,7 +386,7 @@ void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
 		is_spx_paused = is_godot_paused;
 		Spx::pending_controls.set_paused(is_spx_paused);
 
-		_notify_managers_pause(is_spx_paused);
+		_notify_managers(is_spx_paused ? &SpxManager::on_pause : &SpxManager::on_resume);
 
 		if (callbacks.func_on_engine_pause) {
 			callbacks.func_on_engine_pause(is_spx_paused);
@@ -453,83 +452,30 @@ void SpxEngine::_attach_freeze_node(TextureRect *screen) {
 }
 
 void SpxEngine::_initialize_managers() {
-	input = create_manager<SpxInputMgr>();
-	audio = create_manager<SpxAudioMgr>();
-	physics = create_manager<SpxPhysicsMgr>();
+	input = _create_manager<SpxInputMgr>();
+	audio = _create_manager<SpxAudioMgr>();
+	physics = _create_manager<SpxPhysicsMgr>();
 
-	sprite = create_manager<SpxSpriteMgr>();
-	ui = create_manager<SpxUiMgr>();
-	scene = create_manager<SpxSceneMgr>();
-	camera = create_manager<SpxCameraMgr>();
+	sprite = _create_manager<SpxSpriteMgr>();
+	ui = _create_manager<SpxUiMgr>();
+	scene = _create_manager<SpxSceneMgr>();
+	camera = _create_manager<SpxCameraMgr>();
 
-	platform = create_manager<SpxPlatformMgr>();
-	res = create_manager<SpxResMgr>();
-	ext = create_manager<SpxExtMgr>();
-	debug = create_manager<SpxDebugMgr>();
+	platform = _create_manager<SpxPlatformMgr>();
+	res = _create_manager<SpxResMgr>();
+	debug = _create_manager<SpxDebugMgr>();
 
-	navigation = create_manager<SpxNavigationMgr>();
-	pen = create_manager<SpxPenMgr>();
-	tilemap = create_manager<SpxTilemapMgr>();
-	tilemapparser = create_manager<SpxTilemapparserMgr>();
-}
-
-void SpxEngine::_notify_managers_awake() {
-	for (auto *mgr : mgrs) {
-		mgr->on_awake();
-	}
-}
-
-void SpxEngine::_notify_managers_start() {
-	for (auto *mgr : mgrs) {
-		mgr->on_start();
-	}
-}
-
-void SpxEngine::_notify_managers_fixed_update(float delta) {
-	for (auto *mgr : mgrs) {
-		mgr->on_fixed_update(delta);
-	}
-}
-
-void SpxEngine::_notify_managers_update(float delta) {
-	for (auto *mgr : mgrs) {
-		mgr->on_update(delta);
-	}
-}
-
-void SpxEngine::_notify_managers_destroy() {
-	for (auto *mgr : mgrs) {
-		mgr->on_destroy();
-	}
-}
-
-void SpxEngine::_notify_managers_exit(int exit_code) {
-	for (auto *mgr : mgrs) {
-		mgr->on_exit(exit_code);
-	}
-}
-
-void SpxEngine::_notify_managers_reset(int reset_code) {
-	for (auto *mgr : mgrs) {
-		mgr->on_reset(reset_code);
-	}
-}
-
-void SpxEngine::_notify_managers_pause(bool paused) {
-	for (auto *mgr : mgrs) {
-		if (paused) {
-			mgr->on_pause();
-		} else {
-			mgr->on_resume();
-		}
-	}
+	navigation = _create_manager<SpxNavigationMgr>();
+	pen = _create_manager<SpxPenMgr>();
+	tilemap = _create_manager<SpxTilemapMgr>();
+	tilemapparser = _create_manager<SpxTilemapparserMgr>();
 }
 
 void SpxEngine::_destroy_all_managers() {
-	for (int i = mgrs.size() - 1; i >= 0; --i) {
-		memdelete(mgrs[i]);
+	for (int i = managers.size() - 1; i >= 0; --i) {
+		memdelete(managers[i]);
 	}
-	mgrs.clear();
+	managers.clear();
 
 	input = nullptr;
 	audio = nullptr;
@@ -540,7 +486,6 @@ void SpxEngine::_destroy_all_managers() {
 	camera = nullptr;
 	platform = nullptr;
 	res = nullptr;
-	ext = nullptr;
 	debug = nullptr;
 	navigation = nullptr;
 	pen = nullptr;

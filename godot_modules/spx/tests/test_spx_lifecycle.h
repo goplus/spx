@@ -35,9 +35,61 @@
 #include "../spx_callback_proxy.h"
 #include "../spx_engine.h"
 #include "../spx_ext_mgr.h"
+#include "../spx_ui_mgr.h"
+#include "scene/2d/camera_2d.h"
+#include "scene/main/canvas_layer.h"
+#include "scene/main/window.h"
+#include "servers/audio_server.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxLifecycle {
+
+TEST_CASE("[SceneTree][SPX] Managers release owned nodes and preserve an authored camera") {
+	AudioDriverManager::initialize(AudioDriverManager::get_driver_count() - 1);
+	memnew(AudioServer)->init();
+	SceneTree *tree = SceneTree::get_singleton();
+	Node *root = memnew(Node);
+	tree->get_root()->add_child(root);
+	Camera2D *authored_camera = nullptr;
+	SUBCASE("Generated camera belongs to the manager") {}
+	SUBCASE("Authored camera belongs to the scene") {
+		authored_camera = memnew(Camera2D);
+		root->add_child(authored_camera);
+	}
+
+	SpxEngine::register_callbacks(nullptr);
+	SpxEngine *engine = SpxEngine::get_singleton();
+	engine->set_root_node(tree, root);
+	engine->on_awake();
+	Node *ui_layer = root->get_node_or_null(NodePath("SpxUiMgr"));
+	CHECK(Object::cast_to<CanvasLayer>(ui_layer) != nullptr);
+	CHECK(root->get_node_or_null(NodePath("SpxResMgr")) == nullptr);
+	CHECK(root->get_node_or_null(NodePath("SpxPhysicsMgr")) == nullptr);
+	CHECK(root->get_node_or_null(NodePath("SpxExtMgr")) == nullptr);
+
+	engine->get_ui()->on_reset(0);
+	Node *replacement = root->get_node_or_null(NodePath("SpxUiMgr"));
+	CHECK(replacement != ui_layer);
+	CHECK(Object::cast_to<CanvasLayer>(replacement) != nullptr);
+	CHECK(ui_layer->is_queued_for_deletion());
+
+	Vector<Node *> owned;
+	for (int i = 0; i < root->get_child_count(); i++) {
+		Node *child = root->get_child(i);
+		if (child != authored_camera) {
+			owned.push_back(child);
+		}
+	}
+	SpxEngine::shutdown();
+	for (Node *node : owned) {
+		CHECK(node->is_queued_for_deletion());
+	}
+	if (authored_camera != nullptr) {
+		CHECK_FALSE(authored_camera->is_queued_for_deletion());
+		CHECK(authored_camera->get_parent() == root);
+	}
+	memdelete(root);
+}
 
 static int shutdown_callback_count = 0;
 static void shutdown_from_destroy_callback() {
@@ -86,7 +138,7 @@ TEST_CASE("[SPX] Runtime panic callbacks borrow the caller string") {
 	received = nullptr;
 	SpxEngine::register_runtime_panic_callbacks([](GdString msg) { received = msg; });
 	const char message[] = "borrowed panic";
-	SpxEngine::get_singleton()->get_ext()->on_runtime_panic(message);
+	SpxExtMgr::on_runtime_panic(message);
 	CHECK_EQ(received, message);
 	SpxEngine::shutdown();
 	CHECK_FALSE(SpxEngine::is_initialized());

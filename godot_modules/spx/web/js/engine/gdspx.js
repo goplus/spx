@@ -1413,8 +1413,8 @@ gdspx_platform_set_max_fps(fps_low,fps_high) {
 		if (_arg0) FreeGdInt(_arg0);
 	}
 }
-gdspx_platform_get_persistant_data_dir() {
-	var _call = Module['_gdspx_platform_get_persistant_data_dir'];
+gdspx_platform_get_persistent_data_dir() {
+	var _call = Module['_gdspx_platform_get_persistent_data_dir'];
 	var _resultPtr;
 	try {
 		_resultPtr = AllocGdString();
@@ -1424,8 +1424,8 @@ gdspx_platform_get_persistant_data_dir() {
 		if (_resultPtr) FreeGdString(_resultPtr);
 	}
 }
-gdspx_platform_set_persistant_data_dir(path) {
-	var _call = Module['_gdspx_platform_set_persistant_data_dir'];
+gdspx_platform_set_persistent_data_dir(path) {
+	var _call = Module['_gdspx_platform_set_persistent_data_dir'];
 	var _arg0;
 	try {
 		_arg0 = ToGdString(path);
@@ -1434,8 +1434,8 @@ gdspx_platform_set_persistant_data_dir(path) {
 		if (_arg0) FreeGdString(_arg0);
 	}
 }
-gdspx_platform_is_in_persistant_data_dir(path) {
-	var _call = Module['_gdspx_platform_is_in_persistant_data_dir'];
+gdspx_platform_is_in_persistent_data_dir(path) {
+	var _call = Module['_gdspx_platform_is_in_persistent_data_dir'];
 	var _arg0;
 	var _resultPtr;
 	try {
@@ -4664,9 +4664,9 @@ GdspxFuncs.prototype['gdspx_platform_get_time_scale'] = GdspxFuncs.prototype.gds
 GdspxFuncs.prototype['gdspx_platform_set_time_scale'] = GdspxFuncs.prototype.gdspx_platform_set_time_scale;
 GdspxFuncs.prototype['gdspx_platform_get_max_fps'] = GdspxFuncs.prototype.gdspx_platform_get_max_fps;
 GdspxFuncs.prototype['gdspx_platform_set_max_fps'] = GdspxFuncs.prototype.gdspx_platform_set_max_fps;
-GdspxFuncs.prototype['gdspx_platform_get_persistant_data_dir'] = GdspxFuncs.prototype.gdspx_platform_get_persistant_data_dir;
-GdspxFuncs.prototype['gdspx_platform_set_persistant_data_dir'] = GdspxFuncs.prototype.gdspx_platform_set_persistant_data_dir;
-GdspxFuncs.prototype['gdspx_platform_is_in_persistant_data_dir'] = GdspxFuncs.prototype.gdspx_platform_is_in_persistant_data_dir;
+GdspxFuncs.prototype['gdspx_platform_get_persistent_data_dir'] = GdspxFuncs.prototype.gdspx_platform_get_persistent_data_dir;
+GdspxFuncs.prototype['gdspx_platform_set_persistent_data_dir'] = GdspxFuncs.prototype.gdspx_platform_set_persistent_data_dir;
+GdspxFuncs.prototype['gdspx_platform_is_in_persistent_data_dir'] = GdspxFuncs.prototype.gdspx_platform_is_in_persistent_data_dir;
 GdspxFuncs.prototype['gdspx_res_create_animation'] = GdspxFuncs.prototype.gdspx_res_create_animation;
 GdspxFuncs.prototype['gdspx_res_set_load_mode'] = GdspxFuncs.prototype.gdspx_res_set_load_mode;
 GdspxFuncs.prototype['gdspx_res_get_load_mode'] = GdspxFuncs.prototype.gdspx_res_get_load_mode;

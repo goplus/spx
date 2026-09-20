@@ -32,19 +32,18 @@
 #define SPX_TILEMAP_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 class SpxDrawTiles;
 
-class SpxTilemapMgr : public SpxBaseMgr {
-	SPXCLASS(SpxTilemapMgr, SpxBaseMgr)
+class SpxTilemapMgr : public SpxManager {
 public:
-	virtual ~SpxTilemapMgr() = default;
 	void on_destroy() override;
 	void on_reset(int reset_code) override;
 
 private:
 	SpxDrawTiles *draw_tiles = nullptr;
+	SpxDrawTiles *_ensure_draw_tiles();
 
 public:
 	SPX_BIND void open_draw_tiles_with_size(GdInt tile_size);
@@ -65,22 +64,6 @@ public:
 	SPX_BIND void close_draw_tiles();
 	SPX_BIND void exit_tilemap_editor_mode();
 
-	template <typename Func>
-	void with_draw_tiles(Func f, const String error_msg = "The draw tiles node is null, first open it!!!") {
-		if (draw_tiles == nullptr) {
-			print_error(error_msg);
-			return;
-		}
-		f();
-	}
-
-	template <typename Func>
-	void without_draw_tiles(Func f) {
-		if (draw_tiles == nullptr) {
-			open_draw_tiles();
-		}
-		f();
-	}
 };
 
 #endif // SPX_TILEMAP_MGR_H

@@ -32,8 +32,10 @@
 #define SPX_ENGINE_H
 
 #include "core/variant/callable.h"
+#include "core/string/print_string.h"
+#include "scene/main/scene_tree.h"
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 class SceneTree;
 class Window;
@@ -50,7 +52,6 @@ class SpxSceneMgr;
 class SpxCameraMgr;
 class SpxPlatformMgr;
 class SpxResMgr;
-class SpxExtMgr;
 class SpxDebugMgr;
 class SpxNavigationMgr;
 class SpxPenMgr;
@@ -77,7 +78,7 @@ public:
 	~SpxEngine() = default;
 
 private:
-	Vector<SpxBaseMgr *> mgrs;
+	Vector<SpxManager *> managers;
 	SpxInputMgr *input = nullptr;
 	SpxAudioMgr *audio = nullptr;
 	SpxPhysicsMgr *physics = nullptr;
@@ -87,7 +88,6 @@ private:
 	SpxCameraMgr *camera = nullptr;
 	SpxPlatformMgr *platform = nullptr;
 	SpxResMgr *res = nullptr;
-	SpxExtMgr *ext = nullptr;
 	SpxDebugMgr *debug = nullptr;
 	SpxNavigationMgr *navigation = nullptr;
 	SpxPenMgr *pen = nullptr;
@@ -97,9 +97,9 @@ private:
 	SpxCallbackProxy *delay_proxy = nullptr;
 
 	template <typename T>
-	T *create_manager() {
+	T *_create_manager() {
 		T *mgr = memnew(T);
-		mgrs.append(static_cast<SpxBaseMgr *>(mgr));
+		managers.append(mgr);
 		return mgr;
 	}
 
@@ -115,7 +115,6 @@ public:
 	SpxCameraMgr *get_camera() { return camera; }
 	SpxPlatformMgr *get_platform() { return platform; }
 	SpxResMgr *get_res() { return res; }
-	SpxExtMgr *get_ext() { return ext; }
 	SpxDebugMgr *get_debug() { return debug; }
 	SpxNavigationMgr *get_navigation() { return navigation; }
 	SpxPenMgr *get_pen() { return pen; }
@@ -207,14 +206,12 @@ private:
 	void _attach_freeze_node(TextureRect *screen);
 
 	void _initialize_managers();
-	void _notify_managers_awake();
-	void _notify_managers_start();
-	void _notify_managers_fixed_update(float delta);
-	void _notify_managers_update(float delta);
-	void _notify_managers_destroy();
-	void _notify_managers_exit(int exit_code);
-	void _notify_managers_reset(int reset_code);
-	void _notify_managers_pause(bool paused);
+	template <typename... Args>
+	void _notify_managers(void (SpxManager::*p_callback)(Args...), Args... p_args) {
+		for (SpxManager *manager : managers) {
+			(manager->*p_callback)(p_args...);
+		}
+	}
 };
 
 #endif // SPX_ENGINE_H

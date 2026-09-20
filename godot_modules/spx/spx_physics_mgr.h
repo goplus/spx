@@ -32,7 +32,7 @@
 #define SPX_PHYSICS_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 class SpxPhysicsDefine {
 private:
@@ -78,8 +78,7 @@ enum BoundaryType {
 	BOUND_BOTTOM = 1 << 3
 };
 
-class SpxPhysicsMgr : public SpxBaseMgr {
-	SPXCLASS(SpxPhysicsMgr, SpxBaseMgr)
+class SpxPhysicsMgr : public SpxManager {
 
 private:
 	GdArray _check_collision(RID shape, GdVec2 pos, GdInt collision_mask);
@@ -93,10 +92,8 @@ private:
 public:
 	bool is_collision_by_pixel;
 	void on_awake() override;
-	void on_reset(int reset_code) override;
 
 public:
-	virtual ~SpxPhysicsMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 	SPX_BIND GdObj raycast(GdVec2 from, GdVec2 to, GdInt collision_mask);
 	SPX_BIND GdBool check_collision(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
 	SPX_BIND GdInt check_touched_camera_boundaries(GdObj obj);

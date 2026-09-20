@@ -56,7 +56,6 @@
 #include "svg_mgr.h"
 
 void SpxResMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	if (!initial_theme_fonts_saved) {
 		spx_get_theme_fonts(initial_theme_default_font, initial_theme_fallback_font);
 		initial_theme_fonts_saved = true;
@@ -83,7 +82,7 @@ String SpxResMgr::_to_engine_path(const String &p_path) {
 	SpxEngine *engine = SpxEngine::get_singleton();
 	SpxPlatformMgr *platform = engine != nullptr ? engine->get_platform() : nullptr;
 	if (game_data_root != "res://" &&
-			(platform == nullptr || !path.begins_with(platform->_get_persistant_data_dir()))) {
+			(platform == nullptr || !path.begins_with(platform->_get_persistent_data_dir()))) {
 		if (path.begins_with("../")) {
 			path = path.substr(3, -1);
 		}
@@ -396,7 +395,7 @@ Ref<Texture2D> SpxResMgr::load_texture(String path, GdBool direct) {
 void SpxResMgr::set_game_datas(String path, Vector<String> files) {
 	print_line("SpxResMgr::set_game_datas", path);
 	game_data_root = path;
-	platformMgr->_set_persistant_data_dir(path);
+	platformMgr->_set_persistent_data_dir(path);
 	update_caches(files);
 	svgMgr->update_caches(files);
 }

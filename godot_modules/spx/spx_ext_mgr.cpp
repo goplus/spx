@@ -41,7 +41,7 @@ void SpxExtMgr::request_exit(GdInt exit_code) {
 	}
 
 	SpxEngine::get_singleton()->on_exit(exit_code);
-	get_tree()->quit(exit_code);
+	SpxEngine::get_singleton()->get_tree()->quit(exit_code);
 }
 
 void SpxExtMgr::request_reset(GdInt exit_code) {

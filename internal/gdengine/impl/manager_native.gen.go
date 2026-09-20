@@ -956,26 +956,26 @@ func (pself *platformMgr) SetMaxFps(fps int64) {
 		CallPlatformSetMaxFps(arg0)
 	})
 }
-func (pself *platformMgr) GetPersistantDataDir() string {
+func (pself *platformMgr) GetPersistentDataDir() string {
 	return enginewrap.CallInMainThreadValue(func() string {
-		retValue := CallPlatformGetPersistantDataDir()
+		retValue := CallPlatformGetPersistentDataDir()
 		return ToString(retValue)
 	})
 }
-func (pself *platformMgr) SetPersistantDataDir(path string) {
+func (pself *platformMgr) SetPersistentDataDir(path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
 		defer C.free(unsafe.Pointer(arg0Str))
-		CallPlatformSetPersistantDataDir(arg0)
+		CallPlatformSetPersistentDataDir(arg0)
 	})
 }
-func (pself *platformMgr) IsInPersistantDataDir(path string) bool {
+func (pself *platformMgr) IsInPersistentDataDir(path string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
 		defer C.free(unsafe.Pointer(arg0Str))
-		retValue := CallPlatformIsInPersistantDataDir(arg0)
+		retValue := CallPlatformIsInPersistentDataDir(arg0)
 		return ToBool(retValue)
 	})
 }

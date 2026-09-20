@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_base_mgr.h                                                        */
+/*  spx_manager.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,51 +28,36 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SPX_BASE_MGR_H
-#define SPX_BASE_MGR_H
+#ifndef SPX_MANAGER_H
+#define SPX_MANAGER_H
 
-#include "scene/2d/node_2d.h"
 #include "spx_abi.h"
 #include "spx_mgr_access.h"
 #include "spx_utils.h"
-#include "svg_mgr.h"
 
-#define SPXCLASS(m_class, m_inherits)        \
-public:                                      \
-	String get_class_name() const override { \
-		return #m_class;                     \
-	}
-
-#define SpxStr(str) (String::utf8((const char *)str))
-#define SpxReturnStr(str) (SpxAbi::to_return_cstr(str))
-
-#define NULL_OBJECT_ID 0
-
+class Node;
 class Window;
 class SceneTree;
-class SpxBaseMgr {
-protected:
-	Node *owner = nullptr;
-	virtual Node *create_owner_node();
 
+// Managers opt into lifecycle hooks; scene nodes belong to their actual users.
+class SpxManager {
 protected:
-	virtual GdInt get_unique_id();
-	virtual SceneTree *get_tree();
-	virtual Window *get_root();
-	virtual Node *get_spx_root();
+	GdInt get_unique_id();
+	SceneTree *get_tree();
+	Window *get_root();
+	Node *get_spx_root();
 
 public:
-	virtual String get_class_name() const { return "SpxBaseMgr"; }
-	virtual void on_awake();
-	virtual void on_start();
-	virtual void on_update(float delta);
-	virtual void on_fixed_update(float delta);
-	virtual void on_destroy();
-	virtual void on_reset(int reset_code);
-	virtual void on_exit(int exit_code);
-	virtual void on_pause();
-	virtual void on_resume();
-	virtual ~SpxBaseMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
+	virtual ~SpxManager() = default;
+	virtual void on_awake() {}
+	virtual void on_start() {}
+	virtual void on_update(float delta) {}
+	virtual void on_fixed_update(float delta) {}
+	virtual void on_destroy() {}
+	virtual void on_reset(int reset_code) {}
+	virtual void on_exit(int exit_code) {}
+	virtual void on_pause() {}
+	virtual void on_resume() {}
 };
 
-#endif // SPX_BASE_MGR_H
+#endif // SPX_MANAGER_H

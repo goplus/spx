@@ -86,11 +86,7 @@ GdFloat SpxPhysicsDefine::get_global_air_drag() {
 }
 
 void SpxPhysicsMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	is_collision_by_pixel = true;
-}
-
-void SpxPhysicsMgr::on_reset(int reset_code) {
 }
 
 SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies) {

@@ -32,8 +32,8 @@
 
 #include "scene/gui/label.h"
 
-#include "spx_base_mgr.h"
-#include "spx_object_guard.h"
+#include "spx_abi.h"
+#include "spx_object_access.h"
 #include "spx_ui_binding.h"
 
 #define UI_DEFAULT_THEME_NAME "default"
@@ -155,32 +155,32 @@ GdBool SpxUi::is_interactable() {
 }
 
 void SpxUi::set_rect(GdRect2 rect) {
-	SPX_UI_CONTROL_GUARD_VOID(__func__)
+	SPX_UI_CONTROL_LOOKUP_VOID(__func__)
 	node->set_rect(rect);
 }
 
 GdRect2 SpxUi::get_rect() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, GdRect2())
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, GdRect2())
 	return node->get_rect();
 }
 
 void SpxUi::set_color(GdColor color) {
-	SPX_UI_CONTROL_GUARD_VOID(__func__)
+	SPX_UI_CONTROL_LOOKUP_VOID(__func__)
 	node->set_self_modulate(color);
 }
 
 GdColor SpxUi::get_color() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, GdColor())
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, GdColor())
 	return node->get_self_modulate();
 }
 
 void SpxUi::set_font_size(GdInt size) {
-	SPX_UI_CONTROL_GUARD_VOID(__func__)
+	SPX_UI_CONTROL_LOOKUP_VOID(__func__)
 	node->add_theme_font_size_override(UI_DEFAULT_THEME_NAME, size);
 }
 
 GdInt SpxUi::get_font_size() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, 0)
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, 0)
 	return node->get_theme_font_size(UI_DEFAULT_THEME_NAME);
 }
 
@@ -192,12 +192,12 @@ GdString SpxUi::get_font() {
 }
 
 void SpxUi::set_visible(GdBool visible) {
-	SPX_UI_CONTROL_GUARD_VOID(__func__)
+	SPX_UI_CONTROL_LOOKUP_VOID(__func__)
 	node->set_visible(visible);
 }
 
 GdBool SpxUi::get_visible() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, false)
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, false)
 	return node->is_visible();
 }
 
@@ -303,17 +303,17 @@ void SpxUi::set_layout_direction(GdInt value) {
 }
 
 GdInt SpxUi::get_layout_mode() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, 0)
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, 0)
 	return (GdInt)(int64_t)node->get(SNAME("layout_mode"));
 }
 
 void SpxUi::set_layout_mode(GdInt value) {
-	SPX_UI_CONTROL_GUARD_VOID(__func__)
+	SPX_UI_CONTROL_LOOKUP_VOID(__func__)
 	node->set(SNAME("layout_mode"), value);
 }
 
 GdInt SpxUi::get_anchors_preset() {
-	SPX_UI_CONTROL_GUARD_RETURN(__func__, 0)
+	SPX_UI_CONTROL_LOOKUP_RETURN(__func__, 0)
 	return (GdInt)(int64_t)node->get(SNAME("anchors_preset"));
 }
 

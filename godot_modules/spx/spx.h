@@ -62,7 +62,6 @@ public:
 	static void reset(int exit_code);
 	static void restart();
 
-	// Pause functionality - public interface
 	static void pause();
 	static void resume();
 	static bool is_paused();

@@ -34,7 +34,7 @@
 #include "core/templates/hash_map.h"
 #include "gdextension_spx_ext.h"
 #include "scene/2d/animated_sprite_2d.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 #include "spx_layer_sorter.h"
 #include <functional>
 #include <unordered_set>
@@ -87,10 +87,8 @@ struct hash<TriggerPair> {
 };
 } //namespace std
 
-class SpxSpriteMgr : public SpxBaseMgr {
-	SPXCLASS(SpxSpriteMgr, SpxBaseMgr)
+class SpxSpriteMgr : public SpxManager {
 public:
-	virtual ~SpxSpriteMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
 private:
 	RBMap<GdObj, SpxSprite *> id_objects;
@@ -98,8 +96,8 @@ private:
 	std::unordered_set<TriggerPair> bounding_collision_pairs;
 	std::unordered_set<TriggerPair> pixel_collision_pairs;
 
-	Node *dont_destroy_root;
-	Node *sprite_root;
+	Node *dont_destroy_root = nullptr;
+	Node *sprite_root = nullptr;
 
 	// Pixel-perfect collision sampling step: check every N pixels instead of every pixel
 	// Higher values = better performance but lower accuracy

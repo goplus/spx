@@ -55,8 +55,7 @@ static Size2i _spx_unscale_window_size_for_macos(const Size2i &p_size) {
 #endif
 
 void SpxPlatformMgr::on_awake() {
-	SpxBaseMgr::on_awake();
-	persistant_data_dir = ::OS::get_singleton()->get_user_data_dir();
+	persistent_data_dir = ::OS::get_singleton()->get_user_data_dir();
 }
 
 void SpxPlatformMgr::on_reset(int reset_code) {
@@ -181,24 +180,24 @@ GdInt SpxPlatformMgr::get_max_fps() {
 	return Engine::get_singleton()->get_max_fps();
 }
 
-GdString SpxPlatformMgr::get_persistant_data_dir() {
-	auto value = _get_persistant_data_dir();
+GdString SpxPlatformMgr::get_persistent_data_dir() {
+	auto value = _get_persistent_data_dir();
 	return SpxReturnStr(value);
 }
 
-String SpxPlatformMgr::_get_persistant_data_dir() {
-	return persistant_data_dir;
+String SpxPlatformMgr::_get_persistent_data_dir() {
+	return persistent_data_dir;
 }
 
-void SpxPlatformMgr::_set_persistant_data_dir(String path) {
-	persistant_data_dir = path;
+void SpxPlatformMgr::_set_persistent_data_dir(String path) {
+	persistent_data_dir = path;
 }
-void SpxPlatformMgr::set_persistant_data_dir(GdString path) {
+void SpxPlatformMgr::set_persistent_data_dir(GdString path) {
 	auto path_str = SpxStr(path);
-	_set_persistant_data_dir(path_str);
+	_set_persistent_data_dir(path_str);
 }
 
-GdBool SpxPlatformMgr::is_in_persistant_data_dir(GdString path) {
+GdBool SpxPlatformMgr::is_in_persistent_data_dir(GdString path) {
 	auto path_str = SpxStr(path);
-	return path_str.begins_with(persistant_data_dir);
+	return path_str.begins_with(persistent_data_dir);
 }

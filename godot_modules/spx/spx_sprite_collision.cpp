@@ -40,7 +40,7 @@
 
 #include <cstdint>
 
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
 #include "spx_coordinate.h"
 
 namespace {

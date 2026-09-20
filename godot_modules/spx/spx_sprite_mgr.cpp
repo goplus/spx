@@ -50,7 +50,7 @@
 #include "spx_engine.h"
 #include "spx_ext_mgr.h"
 #include "spx_layer_sorter.h"
-#include "spx_object_guard.h"
+#include "spx_object_access.h"
 #include "spx_physics_mgr.h"
 #include "spx_res_mgr.h"
 #include "spx_scene_mgr.h"
@@ -88,16 +88,16 @@ StringName SpxSpriteMgr::default_texture_anim;
 
 // Checked main-thread lookup with each API's existing default return value.
 #define SPX_REQUIRE_SPRITE_VOID() \
-	SPX_SPRITE_GUARD_VOID(obj, __func__)
+	SPX_SPRITE_LOOKUP_VOID(obj, __func__)
 
 #define SPX_REQUIRE_SPRITE_RETURN(VALUE) \
-	SPX_SPRITE_GUARD_RETURN(obj, __func__, VALUE)
+	SPX_SPRITE_LOOKUP_RETURN(obj, __func__, VALUE)
 
 #define SPX_REQUIRE_TARGET_SPRITE_VOID(TARGET) \
-	SPX_TARGET_SPRITE_GUARD_VOID(TARGET, __func__)
+	SPX_TARGET_SPRITE_LOOKUP_VOID(TARGET, __func__)
 
 #define SPX_REQUIRE_TARGET_SPRITE_RETURN(TARGET, VALUE) \
-	SPX_TARGET_SPRITE_GUARD_RETURN(TARGET, __func__, VALUE)
+	SPX_TARGET_SPRITE_LOOKUP_RETURN(TARGET, __func__, VALUE)
 
 static _FORCE_INLINE_ GdFloat color_rgb_distance_squared(const GdColor &p_a, const GdColor &p_b) {
 	const GdFloat dr = p_a.r - p_b.r;
@@ -342,7 +342,6 @@ static _FORCE_INLINE_ Color composite_scene_color_at(
 }
 
 void SpxSpriteMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	default_texture_anim = "default";
 
 	// Initialize pixel collision sampling step with default value of 2 (good balance between performance and accuracy)
@@ -358,7 +357,6 @@ void SpxSpriteMgr::on_awake() {
 }
 
 void SpxSpriteMgr::on_start() {
-	SpxBaseMgr::on_start();
 	auto nodes = get_root()->find_children("*", "SpxSprite", true, false);
 	for (int i = 0; i < nodes.size(); i++) {
 		auto sprite = Object::cast_to<SpxSprite>(nodes[i]);
@@ -374,11 +372,20 @@ void SpxSpriteMgr::on_start() {
 }
 
 void SpxSpriteMgr::on_destroy() {
-	SpxBaseMgr::on_destroy();
+	id_objects.clear();
+	bounding_collision_pairs.clear();
+	pixel_collision_pairs.clear();
+	if (sprite_root != nullptr) {
+		sprite_root->queue_free();
+		sprite_root = nullptr;
+	}
+	if (dont_destroy_root != nullptr) {
+		dont_destroy_root->queue_free();
+		dont_destroy_root = nullptr;
+	}
 }
 
 void SpxSpriteMgr::on_update(float delta) {
-	SpxBaseMgr::on_update(delta);
 	_check_pixel_collision_events();
 
 	Vector<ISortableSprite *> all_sortables;

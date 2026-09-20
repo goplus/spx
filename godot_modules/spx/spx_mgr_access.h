@@ -54,7 +54,6 @@ class SpxAudioBusPool;
 #define cameraMgr SpxEngine::get_singleton()->get_camera()
 #define platformMgr SpxEngine::get_singleton()->get_platform()
 #define resMgr SpxEngine::get_singleton()->get_res()
-#define extMgr SpxEngine::get_singleton()->get_ext()
 #define debugMgr SpxEngine::get_singleton()->get_debug()
 #define navigationMgr SpxEngine::get_singleton()->get_navigation()
 #define penMgr SpxEngine::get_singleton()->get_pen()

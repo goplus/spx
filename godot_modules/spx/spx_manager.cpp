@@ -28,66 +28,22 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "spx_base_mgr.h"
-
-#include "scene/2d/node_2d.h"
-#include "scene/main/window.h"
+#include "spx_manager.h"
 
 #include "spx_engine.h"
 
-void SpxBaseMgr::on_awake() {
-	owner = create_owner_node();
-	if (owner == nullptr) {
-		return;
-	}
-	owner->set_name(get_class_name());
-	get_spx_root()->add_child(owner);
-}
-
-void SpxBaseMgr::on_start() {
-}
-
-void SpxBaseMgr::on_update(float delta) {
-}
-
-void SpxBaseMgr::on_fixed_update(float delta) {
-}
-
-void SpxBaseMgr::on_destroy() {
-	if (owner != nullptr) {
-		owner->queue_free();
-		owner = nullptr;
-	}
-}
-
-void SpxBaseMgr::on_reset(int reset_code) {
-}
-
-void SpxBaseMgr::on_exit(int exit_code) {
-}
-
-void SpxBaseMgr::on_pause() {
-}
-
-void SpxBaseMgr::on_resume() {
-}
-
-Node *SpxBaseMgr::create_owner_node() {
-	return memnew(Node2D);
-}
-
-GdInt SpxBaseMgr::get_unique_id() {
+GdInt SpxManager::get_unique_id() {
 	return SpxEngine::get_singleton()->get_unique_id();
 }
 
-Window *SpxBaseMgr::get_root() {
+Window *SpxManager::get_root() {
 	return SpxEngine::get_singleton()->get_root();
 }
 
-Node *SpxBaseMgr::get_spx_root() {
+Node *SpxManager::get_spx_root() {
 	return SpxEngine::get_singleton()->get_spx_root();
 }
 
-SceneTree *SpxBaseMgr::get_tree() {
+SceneTree *SpxManager::get_tree() {
 	return SpxEngine::get_singleton()->get_tree();
 }
