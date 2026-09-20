@@ -83,36 +83,36 @@ void gdspx_audio_destroy_audio(GdObj *obj) {
 	 audioMgr->destroy_audio(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_set_pitch(GdObj *obj, GdFloat *pitch) {
-	 audioMgr->set_pitch(*obj, *pitch);
+void gdspx_audio_set_pitch(GdObj *obj, GdFloat pitch) {
+	 audioMgr->set_pitch(*obj, pitch);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_get_pitch(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = audioMgr->get_pitch(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_set_pan(GdObj *obj, GdFloat *pan) {
-	 audioMgr->set_pan(*obj, *pan);
+void gdspx_audio_set_pan(GdObj *obj, GdFloat pan) {
+	 audioMgr->set_pan(*obj, pan);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_get_pan(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = audioMgr->get_pan(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_set_volume(GdObj *obj, GdFloat *volume) {
-	 audioMgr->set_volume(*obj, *volume);
+void gdspx_audio_set_volume(GdObj *obj, GdFloat volume) {
+	 audioMgr->set_volume(*obj, volume);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_get_volume(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = audioMgr->get_volume(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_play_with_attenuation(GdObj *obj, GdString *path, GdObj *owner_id, GdFloat *attenuation, GdFloat *max_distance, GdInt *ret_val) {
+void gdspx_audio_play_with_attenuation(GdObj *obj, GdString *path, GdObj *owner_id, GdFloat attenuation, GdFloat max_distance, GdInt *ret_val) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
 		return;
 	}
-	*ret_val = audioMgr->play_with_attenuation(*obj, gdspx_string_arg_1, *owner_id, *attenuation, *max_distance);
+	*ret_val = audioMgr->play_with_attenuation(*obj, gdspx_string_arg_1, *owner_id, attenuation, max_distance);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_play(GdObj *obj, GdString *path, GdInt *ret_val) {
@@ -139,8 +139,8 @@ void gdspx_audio_restart(GdInt *aid, GdBool *ret_val) {
 	*ret_val = audioMgr->restart(*aid);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_set_loop(GdInt *aid, GdBool *loop) {
-	 audioMgr->set_loop(*aid, *loop);
+void gdspx_audio_set_loop(GdInt *aid, GdBool loop) {
+	 audioMgr->set_loop(*aid, loop);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_get_loop(GdInt *aid, GdBool *ret_val) {
@@ -151,8 +151,8 @@ void gdspx_audio_get_timer(GdInt *aid, GdFloat *ret_val) {
 	*ret_val = audioMgr->get_timer(*aid);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_audio_set_timer(GdInt *aid, GdFloat *time) {
-	 audioMgr->set_timer(*aid, *time);
+void gdspx_audio_set_timer(GdInt *aid, GdFloat time) {
+	 audioMgr->set_timer(*aid, time);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_audio_is_playing(GdInt *aid, GdBool *ret_val) {
@@ -191,12 +191,12 @@ void gdspx_camera_set_camera_limit(GdInt *side, GdInt *limit) {
 	 cameraMgr->set_camera_limit(*side, *limit);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_camera_set_camera_smoothing(GdBool *enabled) {
-	 cameraMgr->set_camera_smoothing(*enabled);
+void gdspx_camera_set_camera_smoothing(GdBool enabled) {
+	 cameraMgr->set_camera_smoothing(enabled);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_debug_debug_draw_circle(GdVec2 *pos, GdFloat *radius, GdColor *color) {
-	 debugMgr->debug_draw_circle(*pos, *radius, *color);
+void gdspx_debug_debug_draw_circle(GdVec2 *pos, GdFloat radius, GdColor *color) {
+	 debugMgr->debug_draw_circle(*pos, radius, *color);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_debug_debug_draw_rect(GdVec2 *pos, GdVec2 *size, GdColor *color) {
@@ -327,23 +327,23 @@ void gdspx_input_write_snapshot(float *out) {
 	 inputMgr->write_snapshot(out);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_navigation_setup_path_finder_with_size(GdVec2 *grid_size, GdVec2 *cell_size, GdBool *with_jump, GdBool *with_debug) {
-	 navigationMgr->setup_path_finder_with_size(*grid_size, *cell_size, *with_jump, *with_debug);
+void gdspx_navigation_setup_path_finder_with_size(GdVec2 *grid_size, GdVec2 *cell_size, GdBool with_jump, GdBool with_debug) {
+	 navigationMgr->setup_path_finder_with_size(*grid_size, *cell_size, with_jump, with_debug);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_navigation_setup_path_finder(GdBool *with_jump) {
-	 navigationMgr->setup_path_finder(*with_jump);
+void gdspx_navigation_setup_path_finder(GdBool with_jump) {
+	 navigationMgr->setup_path_finder(with_jump);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_navigation_set_obstacle(GdObj *obj, GdBool *enabled) {
-	 navigationMgr->set_obstacle(*obj, *enabled);
+void gdspx_navigation_set_obstacle(GdObj *obj, GdBool enabled) {
+	 navigationMgr->set_obstacle(*obj, enabled);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_navigation_find_path(GdVec2 *p_from, GdVec2 *p_to, GdBool *with_jump, GdArray *ret_val) {
+void gdspx_navigation_find_path(GdVec2 *p_from, GdVec2 *p_to, GdBool with_jump, GdArray *ret_val) {
 	if (!gdspx_prepare_array_wrapper(ret_val)) {
 		return;
 	}
-	GdArray result = navigationMgr->find_path(*p_from, *p_to, *with_jump);
+	GdArray result = navigationMgr->find_path(*p_from, *p_to, with_jump);
 	*ret_val = result;
 	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
 		*ret_val = nullptr;
@@ -379,8 +379,8 @@ void gdspx_pen_move_pen_to(GdObj *obj, GdVec2 *position) {
 	 penMgr->move_pen_to(*obj, *position);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_pen_down(GdObj *obj, GdBool *move_by_mouse) {
-	 penMgr->pen_down(*obj, *move_by_mouse);
+void gdspx_pen_pen_down(GdObj *obj, GdBool move_by_mouse) {
+	 penMgr->pen_down(*obj, move_by_mouse);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_pen_up(GdObj *obj) {
@@ -391,20 +391,20 @@ void gdspx_pen_set_pen_color_to(GdObj *obj, GdColor *color) {
 	 penMgr->set_pen_color_to(*obj, *color);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_change_pen_by(GdObj *obj, GdInt *property, GdFloat *amount) {
-	 penMgr->change_pen_by(*obj, *property, *amount);
+void gdspx_pen_change_pen_by(GdObj *obj, GdInt *property, GdFloat amount) {
+	 penMgr->change_pen_by(*obj, *property, amount);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_set_pen_to(GdObj *obj, GdInt *property, GdFloat *value) {
-	 penMgr->set_pen_to(*obj, *property, *value);
+void gdspx_pen_set_pen_to(GdObj *obj, GdInt *property, GdFloat value) {
+	 penMgr->set_pen_to(*obj, *property, value);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_change_pen_size_by(GdObj *obj, GdFloat *amount) {
-	 penMgr->change_pen_size_by(*obj, *amount);
+void gdspx_pen_change_pen_size_by(GdObj *obj, GdFloat amount) {
+	 penMgr->change_pen_size_by(*obj, amount);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_set_pen_size_to(GdObj *obj, GdFloat *size) {
-	 penMgr->set_pen_size_to(*obj, *size);
+void gdspx_pen_set_pen_size_to(GdObj *obj, GdFloat size) {
+	 penMgr->set_pen_size_to(*obj, size);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_set_pen_stamp_texture(GdObj *obj, GdString *texture_path) {
@@ -415,20 +415,20 @@ void gdspx_pen_set_pen_stamp_texture(GdObj *obj, GdString *texture_path) {
 	 penMgr->set_pen_stamp_texture(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_pen_pen_stamp_with_transform(GdObj *obj, GdString *texture_path, GdVec2 *position, GdFloat *rotation_radians, GdVec2 *scale) {
+void gdspx_pen_pen_stamp_with_transform(GdObj *obj, GdString *texture_path, GdVec2 *position, GdFloat rotation_radians, GdVec2 *scale) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_1)) {
 		return;
 	}
-	 penMgr->pen_stamp_with_transform(*obj, gdspx_string_arg_1, *position, *rotation_radians, *scale);
+	 penMgr->pen_stamp_with_transform(*obj, gdspx_string_arg_1, *position, rotation_radians, *scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_raycast(GdVec2 *from, GdVec2 *to, GdInt *collision_mask, GdObj *ret_val) {
 	*ret_val = physicsMgr->raycast(*from, *to, *collision_mask);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_check_collision(GdVec2 *from, GdVec2 *to, GdInt *collision_mask, GdBool *collide_with_areas, GdBool *collide_with_bodies, GdBool *ret_val) {
-	*ret_val = physicsMgr->check_collision(*from, *to, *collision_mask, *collide_with_areas, *collide_with_bodies);
+void gdspx_physics_check_collision(GdVec2 *from, GdVec2 *to, GdInt *collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdBool *ret_val) {
+	*ret_val = physicsMgr->check_collision(*from, *to, *collision_mask, collide_with_areas, collide_with_bodies);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_check_touched_camera_boundaries(GdObj *obj, GdInt *ret_val) {
@@ -455,28 +455,28 @@ void gdspx_physics_check_nearest_touched_stage_boundary(GdObj *obj, GdInt *ret_v
 	*ret_val = physicsMgr->check_nearest_touched_stage_boundary(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_set_collision_system_type(GdBool *is_collision_by_alpha) {
-	 physicsMgr->set_collision_system_type(*is_collision_by_alpha);
+void gdspx_physics_set_collision_system_type(GdBool is_collision_by_alpha) {
+	 physicsMgr->set_collision_system_type(is_collision_by_alpha);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_set_global_gravity(GdFloat *gravity) {
-	 physicsMgr->set_global_gravity(*gravity);
+void gdspx_physics_set_global_gravity(GdFloat gravity) {
+	 physicsMgr->set_global_gravity(gravity);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_get_global_gravity(GdFloat *ret_val) {
 	*ret_val = physicsMgr->get_global_gravity();
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_set_global_friction(GdFloat *friction) {
-	 physicsMgr->set_global_friction(*friction);
+void gdspx_physics_set_global_friction(GdFloat friction) {
+	 physicsMgr->set_global_friction(friction);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_get_global_friction(GdFloat *ret_val) {
 	*ret_val = physicsMgr->get_global_friction();
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_set_global_air_drag(GdFloat *air_drag) {
-	 physicsMgr->set_global_air_drag(*air_drag);
+void gdspx_physics_set_global_air_drag(GdFloat air_drag) {
+	 physicsMgr->set_global_air_drag(air_drag);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_physics_get_global_air_drag(GdFloat *ret_val) {
@@ -495,11 +495,11 @@ void gdspx_physics_check_collision_rect(GdVec2 *pos, GdVec2 *size, GdInt *collis
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_check_collision_circle(GdVec2 *pos, GdFloat *radius, GdInt *collision_mask, GdArray *ret_val) {
+void gdspx_physics_check_collision_circle(GdVec2 *pos, GdFloat radius, GdInt *collision_mask, GdArray *ret_val) {
 	if (!gdspx_prepare_array_wrapper(ret_val)) {
 		return;
 	}
-	GdArray result = physicsMgr->check_collision_circle(*pos, *radius, *collision_mask);
+	GdArray result = physicsMgr->check_collision_circle(*pos, radius, *collision_mask);
 	*ret_val = result;
 	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
 		*ret_val = nullptr;
@@ -507,14 +507,14 @@ void gdspx_physics_check_collision_circle(GdVec2 *pos, GdFloat *radius, GdInt *c
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_physics_raycast_with_details(GdVec2 *from, GdVec2 *to, GdArray *ignore_sprites, GdInt *collision_mask, GdBool *collide_with_areas, GdBool *collide_with_bodies, GdArray *ret_val) {
+void gdspx_physics_raycast_with_details(GdVec2 *from, GdVec2 *to, GdArray *ignore_sprites, GdInt *collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies, GdArray *ret_val) {
 	if (!gdspx_prepare_array_wrapper(ret_val)) {
 		return;
 	}
 	if (!gdspx_validate_array_wrapper(ignore_sprites)) {
 		return;
 	}
-	GdArray result = physicsMgr->raycast_with_details(*from, *to, *ignore_sprites, *collision_mask, *collide_with_areas, *collide_with_bodies);
+	GdArray result = physicsMgr->raycast_with_details(*from, *to, *ignore_sprites, *collision_mask, collide_with_areas, collide_with_bodies);
 	*ret_val = result;
 	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
 		*ret_val = nullptr;
@@ -522,12 +522,12 @@ void gdspx_physics_raycast_with_details(GdVec2 *from, GdVec2 *to, GdArray *ignor
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_stretch_mode(GdBool *enable) {
-	 platformMgr->set_stretch_mode(*enable);
+void gdspx_platform_set_stretch_mode(GdBool enable) {
+	 platformMgr->set_stretch_mode(enable);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_stretch_aspect(GdBool *is_keep) {
-	 platformMgr->set_stretch_aspect(*is_keep);
+void gdspx_platform_set_stretch_aspect(GdBool is_keep) {
+	 platformMgr->set_stretch_aspect(is_keep);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_set_stretch_content_scale(GdInt *width, GdInt *height) {
@@ -542,8 +542,8 @@ void gdspx_platform_get_window_position(GdVec2 *ret_val) {
 	*ret_val = platformMgr->get_window_position();
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_window_size(GdInt *width, GdInt *height, GdBool *with_content_scale) {
-	 platformMgr->set_window_size(*width, *height, *with_content_scale);
+void gdspx_platform_set_window_size(GdInt *width, GdInt *height, GdBool with_content_scale) {
+	 platformMgr->set_window_size(*width, *height, with_content_scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_get_window_size(GdVec2 *ret_val) {
@@ -568,16 +568,16 @@ void gdspx_platform_get_window_title(GdString *ret_val) {
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_window_fullscreen(GdBool *enable) {
-	 platformMgr->set_window_fullscreen(*enable);
+void gdspx_platform_set_window_fullscreen(GdBool enable) {
+	 platformMgr->set_window_fullscreen(enable);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_is_window_fullscreen(GdBool *ret_val) {
 	*ret_val = platformMgr->is_window_fullscreen();
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_debug_mode(GdBool *enable) {
-	 platformMgr->set_debug_mode(*enable);
+void gdspx_platform_set_debug_mode(GdBool enable) {
+	 platformMgr->set_debug_mode(enable);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_is_debug_mode(GdBool *ret_val) {
@@ -592,8 +592,8 @@ void gdspx_platform_get_time_scale(GdFloat *ret_val) {
 	*ret_val = platformMgr->get_time_scale();
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_platform_set_time_scale(GdFloat *time_scale) {
-	 platformMgr->set_time_scale(*time_scale);
+void gdspx_platform_set_time_scale(GdFloat time_scale) {
+	 platformMgr->set_time_scale(time_scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_platform_get_max_fps(GdInt *ret_val) {
@@ -630,7 +630,7 @@ void gdspx_platform_is_in_persistant_data_dir(GdString *path, GdBool *ret_val) {
 	*ret_val = platformMgr->is_in_persistant_data_dir(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_res_create_animation(GdString *p_sprite_type, GdString *p_anim_name, GdString *p_json_ctx, GdInt *fps, GdBool *is_atlas) {
+void gdspx_res_create_animation(GdString *p_sprite_type, GdString *p_anim_name, GdString *p_json_ctx, GdInt *fps, GdBool is_atlas) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(p_sprite_type, &gdspx_string_arg_0)) {
 		return;
@@ -643,11 +643,11 @@ void gdspx_res_create_animation(GdString *p_sprite_type, GdString *p_anim_name, 
 	if (!gdspx_get_string_value(p_json_ctx, &gdspx_string_arg_2)) {
 		return;
 	}
-	 resMgr->create_animation(gdspx_string_arg_0, gdspx_string_arg_1, gdspx_string_arg_2, *fps, *is_atlas);
+	 resMgr->create_animation(gdspx_string_arg_0, gdspx_string_arg_1, gdspx_string_arg_2, *fps, is_atlas);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_res_set_load_mode(GdBool *is_direct_mode) {
-	 resMgr->set_load_mode(*is_direct_mode);
+void gdspx_res_set_load_mode(GdBool is_direct_mode) {
+	 resMgr->set_load_mode(is_direct_mode);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_res_get_load_mode(GdBool *ret_val) {
@@ -800,15 +800,15 @@ void gdspx_scene_destroy_pure_sprite(GdObj *id) {
 	 sceneMgr->destroy_pure_sprite(*id);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_scene_create_render_sprite(GdString *texture_path, GdVec2 *pos, GdFloat *degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdObj *ret_val) {
+void gdspx_scene_create_render_sprite(GdString *texture_path, GdVec2 *pos, GdFloat degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdObj *ret_val) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
 		return;
 	}
-	*ret_val = sceneMgr->create_render_sprite(gdspx_string_arg_0, *pos, *degree, *scale, *zindex, *pivot);
+	*ret_val = sceneMgr->create_render_sprite(gdspx_string_arg_0, *pos, degree, *scale, *zindex, *pivot);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_scene_create_static_sprite(GdString *texture_path, GdVec2 *pos, GdFloat *degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdInt *collider_type, GdVec2 *collider_pivot, GdArray *collider_params, GdObj *ret_val) {
+void gdspx_scene_create_static_sprite(GdString *texture_path, GdVec2 *pos, GdFloat degree, GdVec2 *scale, GdInt *zindex, GdVec2 *pivot, GdInt *collider_type, GdVec2 *collider_pivot, GdArray *collider_params, GdObj *ret_val) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
 		return;
@@ -816,19 +816,19 @@ void gdspx_scene_create_static_sprite(GdString *texture_path, GdVec2 *pos, GdFlo
 	if (!gdspx_validate_array_wrapper(collider_params)) {
 		return;
 	}
-	*ret_val = sceneMgr->create_static_sprite(gdspx_string_arg_0, *pos, *degree, *scale, *zindex, *pivot, *collider_type, *collider_pivot, *collider_params);
+	*ret_val = sceneMgr->create_static_sprite(gdspx_string_arg_0, *pos, degree, *scale, *zindex, *pivot, *collider_type, *collider_pivot, *collider_params);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_dont_destroy_on_load(GdObj *obj) {
 	 spriteMgr->set_dont_destroy_on_load(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_process(GdObj *obj, GdBool *is_on) {
-	 spriteMgr->set_process(*obj, *is_on);
+void gdspx_sprite_set_process(GdObj *obj, GdBool is_on) {
+	 spriteMgr->set_process(*obj, is_on);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_physic_process(GdObj *obj, GdBool *is_on) {
-	 spriteMgr->set_physic_process(*obj, *is_on);
+void gdspx_sprite_set_physic_process(GdObj *obj, GdBool is_on) {
+	 spriteMgr->set_physic_process(*obj, is_on);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_type_name(GdObj *obj, GdString *type_name) {
@@ -863,12 +863,12 @@ void gdspx_sprite_get_child_position(GdObj *obj, GdString *path, GdVec2 *ret_val
 	*ret_val = spriteMgr->get_child_position(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_child_rotation(GdObj *obj, GdString *path, GdFloat *rot) {
+void gdspx_sprite_set_child_rotation(GdObj *obj, GdString *path, GdFloat rot) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_1)) {
 		return;
 	}
-	 spriteMgr->set_child_rotation(*obj, gdspx_string_arg_1, *rot);
+	 spriteMgr->set_child_rotation(*obj, gdspx_string_arg_1, rot);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_child_rotation(GdObj *obj, GdString *path, GdFloat *ret_val) {
@@ -895,16 +895,16 @@ void gdspx_sprite_get_child_scale(GdObj *obj, GdString *path, GdVec2 *ret_val) {
 	*ret_val = spriteMgr->get_child_scale(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision(GdObj *obj, GdObj *target, GdBool *is_src_trigger, GdBool *is_dst_trigger, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision(*obj, *target, *is_src_trigger, *is_dst_trigger);
+void gdspx_sprite_check_collision(GdObj *obj, GdObj *target, GdBool is_src_trigger, GdBool is_dst_trigger, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision(*obj, *target, is_src_trigger, is_dst_trigger);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision_with_point(GdObj *obj, GdVec2 *point, GdBool *is_click_query, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_with_point(*obj, *point, *is_click_query);
+void gdspx_sprite_check_collision_with_point(GdObj *obj, GdVec2 *point, GdBool is_click_query, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_with_point(*obj, *point, is_click_query);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_debug_collision_visible(GdObj *obj, GdBool *visible) {
-	 spriteMgr->set_debug_collision_visible(*obj, *visible);
+void gdspx_sprite_set_debug_collision_visible(GdObj *obj, GdBool visible) {
+	 spriteMgr->set_debug_collision_visible(*obj, visible);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_debug_collision_visible(GdObj *obj, GdBool *ret_val) {
@@ -947,16 +947,16 @@ void gdspx_sprite_set_position(GdObj *obj, GdVec2 *pos) {
 	 spriteMgr->set_position(*obj, *pos);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_transform(GdObj *obj, GdVec2 *pos, GdFloat *rot, GdVec2 *scale, GdBool *visible, GdVec2 *pivot) {
-	 spriteMgr->set_transform(*obj, *pos, *rot, *scale, *visible, *pivot);
+void gdspx_sprite_set_transform(GdObj *obj, GdVec2 *pos, GdFloat rot, GdVec2 *scale, GdBool visible, GdVec2 *pivot) {
+	 spriteMgr->set_transform(*obj, *pos, rot, *scale, visible, *pivot);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_position(GdObj *obj, GdVec2 *ret_val) {
 	*ret_val = spriteMgr->get_position(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_rotation(GdObj *obj, GdFloat *rot) {
-	 spriteMgr->set_rotation(*obj, *rot);
+void gdspx_sprite_set_rotation(GdObj *obj, GdFloat rot) {
+	 spriteMgr->set_rotation(*obj, rot);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_rotation(GdObj *obj, GdFloat *ret_val) {
@@ -1005,12 +1005,12 @@ void gdspx_sprite_get_material_shader(GdObj *obj, GdString *ret_val) {
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_material_params(GdObj *obj, GdString *effect, GdFloat *amount) {
+void gdspx_sprite_set_material_params(GdObj *obj, GdString *effect, GdFloat amount) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
 		return;
 	}
-	 spriteMgr->set_material_params(*obj, gdspx_string_arg_1, *amount);
+	 spriteMgr->set_material_params(*obj, gdspx_string_arg_1, amount);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_material_params(GdObj *obj, GdString *effect, GdFloat *ret_val) {
@@ -1021,12 +1021,12 @@ void gdspx_sprite_get_material_params(GdObj *obj, GdString *effect, GdFloat *ret
 	*ret_val = spriteMgr->get_material_params(*obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_material_params_vec(GdObj *obj, GdString *effect, GdFloat *x, GdFloat *y, GdFloat *z, GdFloat *w) {
+void gdspx_sprite_set_material_params_vec(GdObj *obj, GdString *effect, GdFloat x, GdFloat y, GdFloat z, GdFloat w) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(effect, &gdspx_string_arg_1)) {
 		return;
 	}
-	 spriteMgr->set_material_params_vec(*obj, gdspx_string_arg_1, *x, *y, *z, *w);
+	 spriteMgr->set_material_params_vec(*obj, gdspx_string_arg_1, x, y, z, w);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_material_params_vec4(GdObj *obj, GdString *effect, GdVec4 *vec4) {
@@ -1103,8 +1103,8 @@ void gdspx_sprite_get_texture(GdObj *obj, GdString *ret_val) {
 	}
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_visible(GdObj *obj, GdBool *visible) {
-	 spriteMgr->set_visible(*obj, *visible);
+void gdspx_sprite_set_visible(GdObj *obj, GdBool visible) {
+	 spriteMgr->set_visible(*obj, visible);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_visible(GdObj *obj, GdBool *ret_val) {
@@ -1119,12 +1119,12 @@ void gdspx_sprite_set_z_index(GdObj *obj, GdInt *z) {
 	 spriteMgr->set_z_index(*obj, *z);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_play_anim(GdObj *obj, GdString *p_name, GdFloat *p_speed, GdBool *isLoop, GdBool *p_revert) {
+void gdspx_sprite_play_anim(GdObj *obj, GdString *p_name, GdFloat p_speed, GdBool isLoop, GdBool p_revert) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(p_name, &gdspx_string_arg_1)) {
 		return;
 	}
-	 spriteMgr->play_anim(*obj, gdspx_string_arg_1, *p_speed, *isLoop, *p_revert);
+	 spriteMgr->play_anim(*obj, gdspx_string_arg_1, p_speed, isLoop, p_revert);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_play_backwards_anim(GdObj *obj, GdString *p_name) {
@@ -1173,8 +1173,8 @@ void gdspx_sprite_get_anim_frame(GdObj *obj, GdInt *ret_val) {
 	*ret_val = spriteMgr->get_anim_frame(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_anim_speed_scale(GdObj *obj, GdFloat *p_speed_scale) {
-	 spriteMgr->set_anim_speed_scale(*obj, *p_speed_scale);
+void gdspx_sprite_set_anim_speed_scale(GdObj *obj, GdFloat p_speed_scale) {
+	 spriteMgr->set_anim_speed_scale(*obj, p_speed_scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_anim_speed_scale(GdObj *obj, GdFloat *ret_val) {
@@ -1185,8 +1185,8 @@ void gdspx_sprite_get_anim_playing_speed(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = spriteMgr->get_anim_playing_speed(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_anim_centered(GdObj *obj, GdBool *p_center) {
-	 spriteMgr->set_anim_centered(*obj, *p_center);
+void gdspx_sprite_set_anim_centered(GdObj *obj, GdBool p_center) {
+	 spriteMgr->set_anim_centered(*obj, p_center);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_anim_centered(GdObj *obj, GdBool *ret_val) {
@@ -1201,16 +1201,16 @@ void gdspx_sprite_get_anim_offset(GdObj *obj, GdVec2 *ret_val) {
 	*ret_val = spriteMgr->get_anim_offset(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_anim_flip_h(GdObj *obj, GdBool *p_flip) {
-	 spriteMgr->set_anim_flip_h(*obj, *p_flip);
+void gdspx_sprite_set_anim_flip_h(GdObj *obj, GdBool p_flip) {
+	 spriteMgr->set_anim_flip_h(*obj, p_flip);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_anim_flipped_h(GdObj *obj, GdBool *ret_val) {
 	*ret_val = spriteMgr->is_anim_flipped_h(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_anim_flip_v(GdObj *obj, GdBool *p_flip) {
-	 spriteMgr->set_anim_flip_v(*obj, *p_flip);
+void gdspx_sprite_set_anim_flip_v(GdObj *obj, GdBool p_flip) {
+	 spriteMgr->set_anim_flip_v(*obj, p_flip);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_anim_flipped_v(GdObj *obj, GdBool *ret_val) {
@@ -1283,16 +1283,16 @@ void gdspx_sprite_move_and_slide(GdObj *obj) {
 	 spriteMgr->move_and_slide(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_gravity(GdObj *obj, GdFloat *gravity) {
-	 spriteMgr->set_gravity(*obj, *gravity);
+void gdspx_sprite_set_gravity(GdObj *obj, GdFloat gravity) {
+	 spriteMgr->set_gravity(*obj, gravity);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_gravity(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = spriteMgr->get_gravity(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_mass(GdObj *obj, GdFloat *mass) {
-	 spriteMgr->set_mass(*obj, *mass);
+void gdspx_sprite_set_mass(GdObj *obj, GdFloat mass) {
+	 spriteMgr->set_mass(*obj, mass);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_mass(GdObj *obj, GdFloat *ret_val) {
@@ -1315,32 +1315,32 @@ void gdspx_sprite_get_physics_mode(GdObj *obj, GdInt *ret_val) {
 	*ret_val = spriteMgr->get_physics_mode(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_use_gravity(GdObj *obj, GdBool *enabled) {
-	 spriteMgr->set_use_gravity(*obj, *enabled);
+void gdspx_sprite_set_use_gravity(GdObj *obj, GdBool enabled) {
+	 spriteMgr->set_use_gravity(*obj, enabled);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_use_gravity(GdObj *obj, GdBool *ret_val) {
 	*ret_val = spriteMgr->is_use_gravity(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_gravity_scale(GdObj *obj, GdFloat *scale) {
-	 spriteMgr->set_gravity_scale(*obj, *scale);
+void gdspx_sprite_set_gravity_scale(GdObj *obj, GdFloat scale) {
+	 spriteMgr->set_gravity_scale(*obj, scale);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_gravity_scale(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = spriteMgr->get_gravity_scale(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_drag(GdObj *obj, GdFloat *drag) {
-	 spriteMgr->set_drag(*obj, *drag);
+void gdspx_sprite_set_drag(GdObj *obj, GdFloat drag) {
+	 spriteMgr->set_drag(*obj, drag);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_drag(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = spriteMgr->get_drag(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_friction(GdObj *obj, GdFloat *friction) {
-	 spriteMgr->set_friction(*obj, *friction);
+void gdspx_sprite_set_friction(GdObj *obj, GdFloat friction) {
+	 spriteMgr->set_friction(*obj, friction);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_get_friction(GdObj *obj, GdFloat *ret_val) {
@@ -1383,8 +1383,8 @@ void gdspx_sprite_set_collider_rect(GdObj *obj, GdVec2 *center, GdVec2 *size) {
 	 spriteMgr->set_collider_rect(*obj, *center, *size);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_collider_circle(GdObj *obj, GdVec2 *center, GdFloat *radius) {
-	 spriteMgr->set_collider_circle(*obj, *center, *radius);
+void gdspx_sprite_set_collider_circle(GdObj *obj, GdVec2 *center, GdFloat radius) {
+	 spriteMgr->set_collider_circle(*obj, *center, radius);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_collider_capsule(GdObj *obj, GdVec2 *center, GdVec2 *size) {
@@ -1398,8 +1398,8 @@ void gdspx_sprite_set_collider_polygon(GdObj *obj, GdVec2 *center, GdArray *poin
 	 spriteMgr->set_collider_polygon(*obj, *center, *points);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_collision_enabled(GdObj *obj, GdBool *enabled) {
-	 spriteMgr->set_collision_enabled(*obj, *enabled);
+void gdspx_sprite_set_collision_enabled(GdObj *obj, GdBool enabled) {
+	 spriteMgr->set_collision_enabled(*obj, enabled);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_collision_enabled(GdObj *obj, GdBool *ret_val) {
@@ -1410,8 +1410,8 @@ void gdspx_sprite_set_trigger_rect(GdObj *obj, GdVec2 *center, GdVec2 *size) {
 	 spriteMgr->set_trigger_rect(*obj, *center, *size);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_trigger_circle(GdObj *obj, GdVec2 *center, GdFloat *radius) {
-	 spriteMgr->set_trigger_circle(*obj, *center, *radius);
+void gdspx_sprite_set_trigger_circle(GdObj *obj, GdVec2 *center, GdFloat radius) {
+	 spriteMgr->set_trigger_circle(*obj, *center, radius);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_trigger_capsule(GdObj *obj, GdVec2 *center, GdVec2 *size) {
@@ -1425,28 +1425,28 @@ void gdspx_sprite_set_trigger_polygon(GdObj *obj, GdVec2 *center, GdArray *point
 	 spriteMgr->set_trigger_polygon(*obj, *center, *points);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_set_trigger_enabled(GdObj *obj, GdBool *trigger) {
-	 spriteMgr->set_trigger_enabled(*obj, *trigger);
+void gdspx_sprite_set_trigger_enabled(GdObj *obj, GdBool trigger) {
+	 spriteMgr->set_trigger_enabled(*obj, trigger);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_is_trigger_enabled(GdObj *obj, GdBool *ret_val) {
 	*ret_val = spriteMgr->is_trigger_enabled(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision_by_color(GdObj *obj, GdColor *color, GdFloat *color_threshold, GdFloat *alpha_threshold, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_by_color(*obj, *color, *color_threshold, *alpha_threshold);
+void gdspx_sprite_check_collision_by_color(GdObj *obj, GdColor *color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_by_color(*obj, *color, color_threshold, alpha_threshold);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision_by_colors(GdObj *obj, GdColor *sprite_color, GdColor *target_color, GdFloat *color_threshold, GdFloat *alpha_threshold, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_by_colors(*obj, *sprite_color, *target_color, *color_threshold, *alpha_threshold);
+void gdspx_sprite_check_collision_by_colors(GdObj *obj, GdColor *sprite_color, GdColor *target_color, GdFloat color_threshold, GdFloat alpha_threshold, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_by_colors(*obj, *sprite_color, *target_color, color_threshold, alpha_threshold);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision_by_alpha(GdObj *obj, GdFloat *alpha_threshold, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_by_alpha(*obj, *alpha_threshold);
+void gdspx_sprite_check_collision_by_alpha(GdObj *obj, GdFloat alpha_threshold, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_by_alpha(*obj, alpha_threshold);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_sprite_check_collision_with_sprite(GdObj *obj, GdObj *obj_b, GdFloat *alpha_threshold, GdBool *use_pixel_perfect, GdBool *ret_val) {
-	*ret_val = spriteMgr->check_collision_with_sprite(*obj, *obj_b, *alpha_threshold, *use_pixel_perfect);
+void gdspx_sprite_check_collision_with_sprite(GdObj *obj, GdObj *obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect, GdBool *ret_val) {
+	*ret_val = spriteMgr->check_collision_with_sprite(*obj, *obj_b, alpha_threshold, use_pixel_perfect);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_sprite_set_pixel_collision_sampling_step(GdInt *step) {
@@ -1486,12 +1486,12 @@ void gdspx_tilemap_set_layer_index(GdInt *index) {
 	 tilemapMgr->set_layer_index(*index);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_tilemap_set_tile(GdString *texture_path, GdBool *with_collision) {
+void gdspx_tilemap_set_tile(GdString *texture_path, GdBool with_collision) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(texture_path, &gdspx_string_arg_0)) {
 		return;
 	}
-	 tilemapMgr->set_tile(gdspx_string_arg_0, *with_collision);
+	 tilemapMgr->set_tile(gdspx_string_arg_0, with_collision);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_tilemap_set_tile_with_collision_info(GdString *texture_path, GdArray *collision_points) {
@@ -1671,20 +1671,20 @@ void gdspx_ui_create_image(GdString *path, GdObj *ret_val) {
 	*ret_val = uiMgr->create_image(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_create_toggle(GdString *path, GdBool *value, GdObj *ret_val) {
+void gdspx_ui_create_toggle(GdString *path, GdBool value, GdObj *ret_val) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
 		return;
 	}
-	*ret_val = uiMgr->create_toggle(gdspx_string_arg_0, *value);
+	*ret_val = uiMgr->create_toggle(gdspx_string_arg_0, value);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_create_slider(GdString *path, GdFloat *value, GdObj *ret_val) {
+void gdspx_ui_create_slider(GdString *path, GdFloat value, GdObj *ret_val) {
 	GdString gdspx_string_arg_0 = nullptr;
 	if (!gdspx_get_string_value(path, &gdspx_string_arg_0)) {
 		return;
 	}
-	*ret_val = uiMgr->create_slider(gdspx_string_arg_0, *value);
+	*ret_val = uiMgr->create_slider(gdspx_string_arg_0, value);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_create_input(GdString *path, GdString *text, GdObj *ret_val) {
@@ -1726,8 +1726,8 @@ void gdspx_ui_set_list_items(GdObj *obj, GdString *label, GdArray *items, GdColo
 	 uiMgr->set_list_items(*obj, gdspx_string_arg_1, *items, *color);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_set_range(GdObj *obj, GdFloat *minimum, GdFloat *maximum, GdFloat *step, GdFloat *value) {
-	 uiMgr->set_range(*obj, *minimum, *maximum, *step, *value);
+void gdspx_ui_set_range(GdObj *obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value) {
+	 uiMgr->set_range(*obj, minimum, maximum, step, value);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_range_value(GdObj *obj, GdFloat *ret_val) {
@@ -1778,16 +1778,16 @@ void gdspx_ui_get_font_size(GdObj *obj, GdInt *ret_val) {
 	*ret_val = uiMgr->get_font_size(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_set_visible(GdObj *obj, GdBool *visible) {
-	 uiMgr->set_visible(*obj, *visible);
+void gdspx_ui_set_visible(GdObj *obj, GdBool visible) {
+	 uiMgr->set_visible(*obj, visible);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_visible(GdObj *obj, GdBool *ret_val) {
 	*ret_val = uiMgr->get_visible(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_set_interactable(GdObj *obj, GdBool *interactable) {
-	 uiMgr->set_interactable(*obj, *interactable);
+void gdspx_ui_set_interactable(GdObj *obj, GdBool interactable) {
+	 uiMgr->set_interactable(*obj, interactable);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_interactable(GdObj *obj, GdBool *ret_val) {
@@ -1862,16 +1862,16 @@ void gdspx_ui_get_rotation(GdObj *obj, GdFloat *ret_val) {
 	*ret_val = uiMgr->get_rotation(*obj);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_set_rotation(GdObj *obj, GdFloat *value) {
-	 uiMgr->set_rotation(*obj, *value);
+void gdspx_ui_set_rotation(GdObj *obj, GdFloat value) {
+	 uiMgr->set_rotation(*obj, value);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_get_flip(GdObj *obj, GdBool *horizontal, GdBool *ret_val) {
-	*ret_val = uiMgr->get_flip(*obj, *horizontal);
+void gdspx_ui_get_flip(GdObj *obj, GdBool horizontal, GdBool *ret_val) {
+	*ret_val = uiMgr->get_flip(*obj, horizontal);
 }
 EMSCRIPTEN_KEEPALIVE
-void gdspx_ui_set_flip(GdObj *obj, GdBool *horizontal, GdBool *is_flip) {
-	 uiMgr->set_flip(*obj, *horizontal, *is_flip);
+void gdspx_ui_set_flip(GdObj *obj, GdBool horizontal, GdBool is_flip) {
+	 uiMgr->set_flip(*obj, horizontal, is_flip);
 }
 
 }

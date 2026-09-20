@@ -557,3 +557,23 @@ func TestNativeStringReleaseIsABuiltinNotAManagerMethod(t *testing.T) {
 	require.Contains(t, gdSpxExtCpp, "SpxAbi::free_return_cstr(value);")
 	require.Contains(t, gdSpxExtCpp, "REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string)")
 }
+
+func TestWebScalarValuesPreserveNativeSignatureAndOutputPointers(t *testing.T) {
+	header := parseManagerHeader(`class SpxExampleMgr {
+ SPX_BIND GdBool try_write(GdObj obj, GdFloat scale, GdBool enabled, int32_t count, SPX_OUT float out[3]);
+ };`)
+	require.Contains(t, header.render(false), "(GdObj obj, GdFloat scale, GdBool enabled, int32_t count, float *out, GdBool *ret_value)")
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
+	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
+	generated, err := os.ReadFile(outputPath)
+	require.NoError(t, err)
+	body := string(generated)
+	require.Contains(t, body, "(GdObj *obj, GdFloat scale, GdBool enabled, int32_t count, float *out, GdBool *ret_val)")
+	require.Contains(t, body, "*ret_val = false;")
+	require.Contains(t, body, "exampleMgr->try_write(*obj, scale, enabled, count, out)")
+	require.NotContains(t, body, "*scale")
+	require.NotContains(t, body, "*enabled")
+}

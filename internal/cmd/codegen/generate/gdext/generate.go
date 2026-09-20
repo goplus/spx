@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
@@ -72,7 +73,7 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		"isWebGdArrayReturn":      isWebGdArrayReturn,
 		"isGdStringArgument":      isGdStringArgument,
 		"isGdArrayArgument":       isGdArrayArgument,
-		"webManagerArgument":      g.webManagerArgument,
+		"webManagerCall":          g.webManagerCall,
 		"webParameterDeclaration": g.webParameterDeclaration,
 		"hasOutputStatus":         g.HasOutputStatus,
 	}
@@ -82,6 +83,14 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		return err
 	}
 	return common.WriteGeneratedFile(outputPath, output, 0o644)
+}
+
+func (g *Generator) webManagerCall(function *clang.TypedefFunction) string {
+	args := make([]string, len(function.Arguments))
+	for index, argument := range function.Arguments {
+		args[index] = g.webManagerArgument(function, argument, index)
+	}
+	return fmt.Sprintf("%s(%s)", g.MethodTarget(function), strings.Join(args, ", "))
 }
 
 func (g *Generator) webManagerArgument(function *clang.TypedefFunction, argument clang.Argument, index int) string {
@@ -96,7 +105,7 @@ func (g *Generator) webManagerArgument(function *clang.TypedefFunction, argument
 
 func (g *Generator) isDirectWebParameter(function *clang.TypedefFunction, argument clang.Argument) bool {
 	param := g.Parameter(function, argument.Name)
-	return param.Buffer != nil || param.IsLength || param.DirectScalar()
+	return param.Buffer != nil || param.IsLength || param.WebScalarByValue()
 }
 
 func (g *Generator) webParameterDeclaration(function *clang.TypedefFunction, argument clang.Argument, index int) string {

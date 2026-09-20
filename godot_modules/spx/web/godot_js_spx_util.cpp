@@ -562,16 +562,6 @@ GdBool* gdspx_alloc_bool() {
 }
 
 EMSCRIPTEN_KEEPALIVE
-GdBool* gdspx_new_bool(bool val) {
-    GdBool* ptr = gdspx_alloc_bool();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    *ptr = (GdBool)val;
-    return ptr;
-}
-
-EMSCRIPTEN_KEEPALIVE
 void gdspx_free_bool(GdBool* b) {
 	if (b == nullptr || !boolPool.is_active(b)) {
 		return;
@@ -584,16 +574,6 @@ void gdspx_free_bool(GdBool* b) {
 EMSCRIPTEN_KEEPALIVE
 GdFloat* gdspx_alloc_float() {
     return floatPool.acquire();
-}
-
-EMSCRIPTEN_KEEPALIVE
-GdFloat* gdspx_new_float(float val) {
-    GdFloat* ptr = gdspx_alloc_float();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    *ptr = (GdFloat)val;
-    return ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE

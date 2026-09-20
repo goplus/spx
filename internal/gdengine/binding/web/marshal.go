@@ -123,14 +123,6 @@ func JsFromGdRect2(rect Rect2) js.Value {
 	return rectJs
 }
 
-func JsFromGdBool(val bool) js.Value {
-	return js.ValueOf(val)
-}
-
-func JsFromGdFloat(val float64) js.Value {
-	return js.ValueOf(float32(val))
-}
-
 func JsToGdString(object js.Value) string {
 	s := object.String()
 	// Strip null terminators from C/FFI layer to ensure proper string comparison

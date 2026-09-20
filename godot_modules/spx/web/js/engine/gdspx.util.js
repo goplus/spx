@@ -33,9 +33,7 @@ let gdspxFreeVec3 = null;
 let gdspxFreeVec4 = null;
 let gdspxGetString = null;
 let gdspxGetStringLen = null;
-let gdspxNewBool = null;
 let gdspxNewColor = null;
-let gdspxNewFloat = null;
 let gdspxNewRect2 = null;
 let gdspxNewString = null;
 let gdspxNewVec2 = null;
@@ -71,9 +69,7 @@ function BindGdspxFunctionPointers(module) {
     gdspxFreeVec4 = module['_gdspx_free_vec4'];
     gdspxGetString = module['_gdspx_get_string'];
     gdspxGetStringLen = module['_gdspx_get_string_len'];
-    gdspxNewBool = module['_gdspx_new_bool'];
     gdspxNewColor = module['_gdspx_new_color'];
-    gdspxNewFloat = module['_gdspx_new_float'];
     gdspxNewRect2 = module['_gdspx_new_rect2'];
     gdspxNewString = module['_gdspx_new_string'];
     gdspxNewVec2 = module['_gdspx_new_vec2'];
@@ -94,11 +90,6 @@ function EnsureGdspxFunctionPointers() {
 // -----------------------------------------------------------------------------
 // Scalar and Object Value Bridges
 // -----------------------------------------------------------------------------
-
-function ToGdBool(value) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewBool(value);
-}
 
 function ToJsBool(ptr) {
     const HEAPU8 = Module['HEAPU8'];
@@ -153,11 +144,6 @@ function FreeGdInt(ptr) {
 // -----------------------------------------------------------------------------
 // Strings and Structured Math Types
 // -----------------------------------------------------------------------------
-
-function ToGdFloat(value) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewFloat(value);
-}
 
 function ToJsFloat(ptr) {
     const HEAPF32 = Module['HEAPF32'];

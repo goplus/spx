@@ -599,3 +599,29 @@ test('reset during fallback contact dispatch stops the previous batch', () => {
     b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
     assert.deepEqual(calls, ['OnTriggerEnter', 'OnEngineReset', 'OnEngineFixedUpdate']);
 });
+
+test('generated scalar inputs bypass pools while 64-bit IDs retain cleanup on failure', () => {
+    const b = bridge();
+    const calls = [];
+    Object.assign(b.module, {
+        _gdspx_physics_set_global_gravity: value => calls.push(['float', value]),
+        _gdspx_camera_set_camera_smoothing: value => calls.push(['bool', value]),
+        _gdspx_new_obj: (high, low) => { calls.push(['id', high, low]); return 64; },
+        _gdspx_free_obj: ptr => calls.push(['free', ptr]),
+        _gdspx_sprite_set_rotation: (ptr, rotation) => {
+            calls.push(['rotation', ptr, rotation]);
+            throw new Error('manager failed');
+        },
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    const api = b.run('new GdspxFuncs()');
+    api.gdspx_physics_set_global_gravity(9.81);
+    api.gdspx_camera_set_camera_smoothing(true);
+    api.gdspx_camera_set_camera_smoothing(false);
+    assert.throws(() => api.gdspx_sprite_set_rotation(1, 0x200000, 45.5), /manager failed/);
+    assert.deepEqual(calls, [
+        ['float', 9.81], ['bool', 1], ['bool', 0],
+        ['id', 0x200000, 1], ['rotation', 64, 45.5], ['free', 64],
+    ]);
+    assert.deepEqual(b.freed, []);
+});

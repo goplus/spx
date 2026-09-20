@@ -69,6 +69,14 @@ func (p Parameter) DirectScalar() bool {
 	return primitive != nil && !primitive.IsPointer && directScalarTypes[primitive.Name] != ""
 }
 
+// WebScalarByValue identifies inputs carried directly by a JavaScript number.
+// Int64 IDs, pointers, and composite values keep their existing memory representation.
+func (p Parameter) WebScalarByValue() bool {
+	primitive := p.Argument.Type.Primitive
+	return p.DirectScalar() || (primitive != nil && !primitive.IsPointer &&
+		(primitive.Name == "GdBool" || primitive.Name == "GdFloat"))
+}
+
 func (p Parameter) MustGoType(functionName string) string {
 	if p.GoType != "" {
 		return p.GoType

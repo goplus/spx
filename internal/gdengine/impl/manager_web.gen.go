@@ -174,8 +174,7 @@ func (pself *audioMgr) DestroyAudio(obj Object) {
 }
 func (pself *audioMgr) SetPitch(obj Object, pitch float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(pitch)
-	API.SpxAudioSetPitch.Invoke(arg0Low, arg0High, arg1)
+	API.SpxAudioSetPitch.Invoke(arg0Low, arg0High, float32(pitch))
 }
 func (pself *audioMgr) GetPitch(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -184,8 +183,7 @@ func (pself *audioMgr) GetPitch(obj Object) float64 {
 }
 func (pself *audioMgr) SetPan(obj Object, pan float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(pan)
-	API.SpxAudioSetPan.Invoke(arg0Low, arg0High, arg1)
+	API.SpxAudioSetPan.Invoke(arg0Low, arg0High, float32(pan))
 }
 func (pself *audioMgr) GetPan(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -194,8 +192,7 @@ func (pself *audioMgr) GetPan(obj Object) float64 {
 }
 func (pself *audioMgr) SetVolume(obj Object, volume float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(volume)
-	API.SpxAudioSetVolume.Invoke(arg0Low, arg0High, arg1)
+	API.SpxAudioSetVolume.Invoke(arg0Low, arg0High, float32(volume))
 }
 func (pself *audioMgr) GetVolume(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -206,9 +203,7 @@ func (pself *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Obj
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(path)
 	arg2Low, arg2High := JsSplitGdObj(owner_id)
-	arg3 := JsFromGdFloat(attenuation)
-	arg4 := JsFromGdFloat(max_distance)
-	_result := API.SpxAudioPlayWithAttenuation.Invoke(arg0Low, arg0High, arg1, arg2Low, arg2High, arg3, arg4)
+	_result := API.SpxAudioPlayWithAttenuation.Invoke(arg0Low, arg0High, arg1, arg2Low, arg2High, float32(attenuation), float32(max_distance))
 	return JsToGdInt(_result)
 }
 func (pself *audioMgr) Play(obj Object, path string) int64 {
@@ -236,8 +231,7 @@ func (pself *audioMgr) Restart(aid int64) bool {
 }
 func (pself *audioMgr) SetLoop(aid int64, loop bool) {
 	arg0Low, arg0High := JsSplitGdInt(aid)
-	arg1 := JsFromGdBool(loop)
-	API.SpxAudioSetLoop.Invoke(arg0Low, arg0High, arg1)
+	API.SpxAudioSetLoop.Invoke(arg0Low, arg0High, loop)
 }
 func (pself *audioMgr) GetLoop(aid int64) bool {
 	arg0Low, arg0High := JsSplitGdInt(aid)
@@ -251,8 +245,7 @@ func (pself *audioMgr) GetTimer(aid int64) float64 {
 }
 func (pself *audioMgr) SetTimer(aid int64, time float64) {
 	arg0Low, arg0High := JsSplitGdInt(aid)
-	arg1 := JsFromGdFloat(time)
-	API.SpxAudioSetTimer.Invoke(arg0Low, arg0High, arg1)
+	API.SpxAudioSetTimer.Invoke(arg0Low, arg0High, float32(time))
 }
 func (pself *audioMgr) IsPlaying(aid int64) bool {
 	arg0Low, arg0High := JsSplitGdInt(aid)
@@ -293,14 +286,12 @@ func (pself *cameraMgr) SetCameraLimit(side int64, limit int64) {
 	API.SpxCameraSetCameraLimit.Invoke(arg0Low, arg0High, arg1Low, arg1High)
 }
 func (pself *cameraMgr) SetCameraSmoothing(enabled bool) {
-	arg0 := JsFromGdBool(enabled)
-	API.SpxCameraSetCameraSmoothing.Invoke(arg0)
+	API.SpxCameraSetCameraSmoothing.Invoke(enabled)
 }
 func (pself *debugMgr) DebugDrawCircle(pos Vec2, radius float64, color Color) {
 	arg0 := JsFromGdVec2(pos)
-	arg1 := JsFromGdFloat(radius)
 	arg2 := JsFromGdColor(color)
-	API.SpxDebugDebugDrawCircle.Invoke(arg0, arg1, arg2)
+	API.SpxDebugDebugDrawCircle.Invoke(arg0, float32(radius), arg2)
 }
 func (pself *debugMgr) DebugDrawRect(pos Vec2, size Vec2, color Color) {
 	arg0 := JsFromGdVec2(pos)
@@ -439,24 +430,19 @@ func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
 func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 	arg0 := JsFromGdVec2(grid_size)
 	arg1 := JsFromGdVec2(cell_size)
-	arg2 := JsFromGdBool(with_jump)
-	arg3 := JsFromGdBool(with_debug)
-	API.SpxNavigationSetupPathFinderWithSize.Invoke(arg0, arg1, arg2, arg3)
+	API.SpxNavigationSetupPathFinderWithSize.Invoke(arg0, arg1, with_jump, with_debug)
 }
 func (pself *navigationMgr) SetupPathFinder(with_jump bool) {
-	arg0 := JsFromGdBool(with_jump)
-	API.SpxNavigationSetupPathFinder.Invoke(arg0)
+	API.SpxNavigationSetupPathFinder.Invoke(with_jump)
 }
 func (pself *navigationMgr) SetObstacle(obj Object, enabled bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(enabled)
-	API.SpxNavigationSetObstacle.Invoke(arg0Low, arg0High, arg1)
+	API.SpxNavigationSetObstacle.Invoke(arg0Low, arg0High, enabled)
 }
 func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Array {
 	arg0 := JsFromGdVec2(p_from)
 	arg1 := JsFromGdVec2(p_to)
-	arg2 := JsFromGdBool(with_jump)
-	_result := API.SpxNavigationFindPath.Invoke(arg0, arg1, arg2)
+	_result := API.SpxNavigationFindPath.Invoke(arg0, arg1, with_jump)
 	return JsToGdArray(_result)
 }
 func (pself *penMgr) DestroyAllPens() {
@@ -493,8 +479,7 @@ func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
 }
 func (pself *penMgr) PenDown(obj Object, move_by_mouse bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(move_by_mouse)
-	API.SpxPenPenDown.Invoke(arg0Low, arg0High, arg1)
+	API.SpxPenPenDown.Invoke(arg0Low, arg0High, move_by_mouse)
 }
 func (pself *penMgr) PenUp(obj Object) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -508,24 +493,20 @@ func (pself *penMgr) SetPenColorTo(obj Object, color Color) {
 func (pself *penMgr) ChangePenBy(obj Object, property int64, amount float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1Low, arg1High := JsSplitGdInt(property)
-	arg2 := JsFromGdFloat(amount)
-	API.SpxPenChangePenBy.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2)
+	API.SpxPenChangePenBy.Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(amount))
 }
 func (pself *penMgr) SetPenTo(obj Object, property int64, value float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1Low, arg1High := JsSplitGdInt(property)
-	arg2 := JsFromGdFloat(value)
-	API.SpxPenSetPenTo.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2)
+	API.SpxPenSetPenTo.Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(value))
 }
 func (pself *penMgr) ChangePenSizeBy(obj Object, amount float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(amount)
-	API.SpxPenChangePenSizeBy.Invoke(arg0Low, arg0High, arg1)
+	API.SpxPenChangePenSizeBy.Invoke(arg0Low, arg0High, float32(amount))
 }
 func (pself *penMgr) SetPenSizeTo(obj Object, size float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(size)
-	API.SpxPenSetPenSizeTo.Invoke(arg0Low, arg0High, arg1)
+	API.SpxPenSetPenSizeTo.Invoke(arg0Low, arg0High, float32(size))
 }
 func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -536,9 +517,8 @@ func (pself *penMgr) PenStampWithTransform(obj Object, texture_path string, posi
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(texture_path)
 	arg2 := JsFromGdVec2(position)
-	arg3 := JsFromGdFloat(rotation_radians)
 	arg4 := JsFromGdVec2(scale)
-	API.SpxPenPenStampWithTransform.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+	API.SpxPenPenStampWithTransform.Invoke(arg0Low, arg0High, arg1, arg2, float32(rotation_radians), arg4)
 }
 func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	arg0 := JsFromGdVec2(from)
@@ -551,9 +531,7 @@ func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64
 	arg0 := JsFromGdVec2(from)
 	arg1 := JsFromGdVec2(to)
 	arg2Low, arg2High := JsSplitGdInt(collision_mask)
-	arg3 := JsFromGdBool(collide_with_areas)
-	arg4 := JsFromGdBool(collide_with_bodies)
-	_result := API.SpxPhysicsCheckCollision.Invoke(arg0, arg1, arg2Low, arg2High, arg3, arg4)
+	_result := API.SpxPhysicsCheckCollision.Invoke(arg0, arg1, arg2Low, arg2High, collide_with_areas, collide_with_bodies)
 	return JsToGdBool(_result)
 }
 func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
@@ -589,28 +567,24 @@ func (pself *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
 	return JsToGdInt(_result)
 }
 func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
-	arg0 := JsFromGdBool(is_collision_by_alpha)
-	API.SpxPhysicsSetCollisionSystemType.Invoke(arg0)
+	API.SpxPhysicsSetCollisionSystemType.Invoke(is_collision_by_alpha)
 }
 func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
-	arg0 := JsFromGdFloat(gravity)
-	API.SpxPhysicsSetGlobalGravity.Invoke(arg0)
+	API.SpxPhysicsSetGlobalGravity.Invoke(float32(gravity))
 }
 func (pself *physicsMgr) GetGlobalGravity() float64 {
 	_result := API.SpxPhysicsGetGlobalGravity.Invoke()
 	return JsToGdFloat(_result)
 }
 func (pself *physicsMgr) SetGlobalFriction(friction float64) {
-	arg0 := JsFromGdFloat(friction)
-	API.SpxPhysicsSetGlobalFriction.Invoke(arg0)
+	API.SpxPhysicsSetGlobalFriction.Invoke(float32(friction))
 }
 func (pself *physicsMgr) GetGlobalFriction() float64 {
 	_result := API.SpxPhysicsGetGlobalFriction.Invoke()
 	return JsToGdFloat(_result)
 }
 func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
-	arg0 := JsFromGdFloat(air_drag)
-	API.SpxPhysicsSetGlobalAirDrag.Invoke(arg0)
+	API.SpxPhysicsSetGlobalAirDrag.Invoke(float32(air_drag))
 }
 func (pself *physicsMgr) GetGlobalAirDrag() float64 {
 	_result := API.SpxPhysicsGetGlobalAirDrag.Invoke()
@@ -625,9 +599,8 @@ func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask 
 }
 func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	arg0 := JsFromGdVec2(pos)
-	arg1 := JsFromGdFloat(radius)
 	arg2Low, arg2High := JsSplitGdInt(collision_mask)
-	_result := API.SpxPhysicsCheckCollisionCircle.Invoke(arg0, arg1, arg2Low, arg2High)
+	_result := API.SpxPhysicsCheckCollisionCircle.Invoke(arg0, float32(radius), arg2Low, arg2High)
 	return JsToGdArray(_result)
 }
 func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
@@ -635,18 +608,14 @@ func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites A
 	arg1 := JsFromGdVec2(to)
 	arg2 := JsFromGdArray(ignore_sprites)
 	arg3Low, arg3High := JsSplitGdInt(collision_mask)
-	arg4 := JsFromGdBool(collide_with_areas)
-	arg5 := JsFromGdBool(collide_with_bodies)
-	_result := API.SpxPhysicsRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3Low, arg3High, arg4, arg5)
+	_result := API.SpxPhysicsRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3Low, arg3High, collide_with_areas, collide_with_bodies)
 	return JsToGdArray(_result)
 }
 func (pself *platformMgr) SetStretchMode(enable bool) {
-	arg0 := JsFromGdBool(enable)
-	API.SpxPlatformSetStretchMode.Invoke(arg0)
+	API.SpxPlatformSetStretchMode.Invoke(enable)
 }
 func (pself *platformMgr) SetStretchAspect(is_keep bool) {
-	arg0 := JsFromGdBool(is_keep)
-	API.SpxPlatformSetStretchAspect.Invoke(arg0)
+	API.SpxPlatformSetStretchAspect.Invoke(is_keep)
 }
 func (pself *platformMgr) SetStretchContentScale(width int64, height int64) {
 	arg0Low, arg0High := JsSplitGdInt(width)
@@ -664,8 +633,7 @@ func (pself *platformMgr) GetWindowPosition() Vec2 {
 func (pself *platformMgr) SetWindowSize(width int64, height int64, with_content_scale bool) {
 	arg0Low, arg0High := JsSplitGdInt(width)
 	arg1Low, arg1High := JsSplitGdInt(height)
-	arg2 := JsFromGdBool(with_content_scale)
-	API.SpxPlatformSetWindowSize.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2)
+	API.SpxPlatformSetWindowSize.Invoke(arg0Low, arg0High, arg1Low, arg1High, with_content_scale)
 }
 func (pself *platformMgr) GetWindowSize() Vec2 {
 	_result := API.SpxPlatformGetWindowSize.Invoke()
@@ -680,16 +648,14 @@ func (pself *platformMgr) GetWindowTitle() string {
 	return JsToGdString(_result)
 }
 func (pself *platformMgr) SetWindowFullscreen(enable bool) {
-	arg0 := JsFromGdBool(enable)
-	API.SpxPlatformSetWindowFullscreen.Invoke(arg0)
+	API.SpxPlatformSetWindowFullscreen.Invoke(enable)
 }
 func (pself *platformMgr) IsWindowFullscreen() bool {
 	_result := API.SpxPlatformIsWindowFullscreen.Invoke()
 	return JsToGdBool(_result)
 }
 func (pself *platformMgr) SetDebugMode(enable bool) {
-	arg0 := JsFromGdBool(enable)
-	API.SpxPlatformSetDebugMode.Invoke(arg0)
+	API.SpxPlatformSetDebugMode.Invoke(enable)
 }
 func (pself *platformMgr) IsDebugMode() bool {
 	_result := API.SpxPlatformIsDebugMode.Invoke()
@@ -704,8 +670,7 @@ func (pself *platformMgr) GetTimeScale() float64 {
 	return JsToGdFloat(_result)
 }
 func (pself *platformMgr) SetTimeScale(time_scale float64) {
-	arg0 := JsFromGdFloat(time_scale)
-	API.SpxPlatformSetTimeScale.Invoke(arg0)
+	API.SpxPlatformSetTimeScale.Invoke(float32(time_scale))
 }
 func (pself *platformMgr) GetMaxFps() int64 {
 	_result := API.SpxPlatformGetMaxFps.Invoke()
@@ -733,12 +698,10 @@ func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p
 	arg1 := JsFromGdString(p_anim_name)
 	arg2 := JsFromGdString(p_json_ctx)
 	arg3Low, arg3High := JsSplitGdInt(fps)
-	arg4 := JsFromGdBool(is_atlas)
-	API.SpxResCreateAnimation.Invoke(arg0, arg1, arg2, arg3Low, arg3High, arg4)
+	API.SpxResCreateAnimation.Invoke(arg0, arg1, arg2, arg3Low, arg3High, is_atlas)
 }
 func (pself *resMgr) SetLoadMode(is_direct_mode bool) {
-	arg0 := JsFromGdBool(is_direct_mode)
-	API.SpxResSetLoadMode.Invoke(arg0)
+	API.SpxResSetLoadMode.Invoke(is_direct_mode)
 }
 func (pself *resMgr) GetLoadMode() bool {
 	_result := API.SpxResGetLoadMode.Invoke()
@@ -824,24 +787,22 @@ func (pself *sceneMgr) DestroyPureSprite(id Object) {
 func (pself *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) Object {
 	arg0 := JsFromGdString(texture_path)
 	arg1 := JsFromGdVec2(pos)
-	arg2 := JsFromGdFloat(degree)
 	arg3 := JsFromGdVec2(scale)
 	arg4Low, arg4High := JsSplitGdInt(zindex)
 	arg5 := JsFromGdVec2(pivot)
-	_result := API.SpxSceneCreateRenderSprite.Invoke(arg0, arg1, arg2, arg3, arg4Low, arg4High, arg5)
+	_result := API.SpxSceneCreateRenderSprite.Invoke(arg0, arg1, float32(degree), arg3, arg4Low, arg4High, arg5)
 	return JsToGdObject(_result)
 }
 func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object {
 	arg0 := JsFromGdString(texture_path)
 	arg1 := JsFromGdVec2(pos)
-	arg2 := JsFromGdFloat(degree)
 	arg3 := JsFromGdVec2(scale)
 	arg4Low, arg4High := JsSplitGdInt(zindex)
 	arg5 := JsFromGdVec2(pivot)
 	arg6Low, arg6High := JsSplitGdInt(collider_type)
 	arg7 := JsFromGdVec2(collider_pivot)
 	arg8 := JsFromGdArray(collider_params)
-	_result := API.SpxSceneCreateStaticSprite.Invoke(arg0, arg1, arg2, arg3, arg4Low, arg4High, arg5, arg6Low, arg6High, arg7, arg8)
+	_result := API.SpxSceneCreateStaticSprite.Invoke(arg0, arg1, float32(degree), arg3, arg4Low, arg4High, arg5, arg6Low, arg6High, arg7, arg8)
 	return JsToGdObject(_result)
 }
 func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
@@ -850,13 +811,11 @@ func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
 }
 func (pself *spriteMgr) SetProcess(obj Object, is_on bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(is_on)
-	API.SpxSpriteSetProcess.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetProcess.Invoke(arg0Low, arg0High, is_on)
 }
 func (pself *spriteMgr) SetPhysicProcess(obj Object, is_on bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(is_on)
-	API.SpxSpriteSetPhysicProcess.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetPhysicProcess.Invoke(arg0Low, arg0High, is_on)
 }
 func (pself *spriteMgr) SetTypeName(obj Object, type_name string) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -888,8 +847,7 @@ func (pself *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
 func (pself *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(path)
-	arg2 := JsFromGdFloat(rot)
-	API.SpxSpriteSetChildRotation.Invoke(arg0Low, arg0High, arg1, arg2)
+	API.SpxSpriteSetChildRotation.Invoke(arg0Low, arg0High, arg1, float32(rot))
 }
 func (pself *spriteMgr) GetChildRotation(obj Object, path string) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -912,22 +870,18 @@ func (pself *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
 func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1Low, arg1High := JsSplitGdObj(target)
-	arg2 := JsFromGdBool(is_src_trigger)
-	arg3 := JsFromGdBool(is_dst_trigger)
-	_result := API.SpxSpriteCheckCollision.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2, arg3)
+	_result := API.SpxSpriteCheckCollision.Invoke(arg0Low, arg0High, arg1Low, arg1High, is_src_trigger, is_dst_trigger)
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(point)
-	arg2 := JsFromGdBool(is_click_query)
-	_result := API.SpxSpriteCheckCollisionWithPoint.Invoke(arg0Low, arg0High, arg1, arg2)
+	_result := API.SpxSpriteCheckCollisionWithPoint.Invoke(arg0Low, arg0High, arg1, is_click_query)
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(visible)
-	API.SpxSpriteSetDebugCollisionVisible.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetDebugCollisionVisible.Invoke(arg0Low, arg0High, visible)
 }
 func (pself *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -973,11 +927,9 @@ func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
 func (pself *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(pos)
-	arg2 := JsFromGdFloat(rot)
 	arg3 := JsFromGdVec2(scale)
-	arg4 := JsFromGdBool(visible)
 	arg5 := JsFromGdVec2(pivot)
-	API.SpxSpriteSetTransform.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4, arg5)
+	API.SpxSpriteSetTransform.Invoke(arg0Low, arg0High, arg1, float32(rot), arg3, visible, arg5)
 }
 func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -986,8 +938,7 @@ func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
 }
 func (pself *spriteMgr) SetRotation(obj Object, rot float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(rot)
-	API.SpxSpriteSetRotation.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetRotation.Invoke(arg0Low, arg0High, float32(rot))
 }
 func (pself *spriteMgr) GetRotation(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1037,8 +988,7 @@ func (pself *spriteMgr) GetMaterialShader(obj Object) string {
 func (pself *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(effect)
-	arg2 := JsFromGdFloat(amount)
-	API.SpxSpriteSetMaterialParams.Invoke(arg0Low, arg0High, arg1, arg2)
+	API.SpxSpriteSetMaterialParams.Invoke(arg0Low, arg0High, arg1, float32(amount))
 }
 func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1049,11 +999,7 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(effect)
-	arg2 := JsFromGdFloat(x)
-	arg3 := JsFromGdFloat(y)
-	arg4 := JsFromGdFloat(z)
-	arg5 := JsFromGdFloat(w)
-	API.SpxSpriteSetMaterialParamsVec.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4, arg5)
+	API.SpxSpriteSetMaterialParamsVec.Invoke(arg0Low, arg0High, arg1, float32(x), float32(y), float32(z), float32(w))
 }
 func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1108,8 +1054,7 @@ func (pself *spriteMgr) GetTexture(obj Object) string {
 }
 func (pself *spriteMgr) SetVisible(obj Object, visible bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(visible)
-	API.SpxSpriteSetVisible.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetVisible.Invoke(arg0Low, arg0High, visible)
 }
 func (pself *spriteMgr) GetVisible(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1129,10 +1074,7 @@ func (pself *spriteMgr) SetZIndex(obj Object, z int64) {
 func (pself *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(p_name)
-	arg2 := JsFromGdFloat(p_speed)
-	arg3 := JsFromGdBool(isLoop)
-	arg4 := JsFromGdBool(p_revert)
-	API.SpxSpritePlayAnim.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+	API.SpxSpritePlayAnim.Invoke(arg0Low, arg0High, arg1, float32(p_speed), isLoop, p_revert)
 }
 func (pself *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1174,8 +1116,7 @@ func (pself *spriteMgr) GetAnimFrame(obj Object) int64 {
 }
 func (pself *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(p_speed_scale)
-	API.SpxSpriteSetAnimSpeedScale.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetAnimSpeedScale.Invoke(arg0Low, arg0High, float32(p_speed_scale))
 }
 func (pself *spriteMgr) GetAnimSpeedScale(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1189,8 +1130,7 @@ func (pself *spriteMgr) GetAnimPlayingSpeed(obj Object) float64 {
 }
 func (pself *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(p_center)
-	API.SpxSpriteSetAnimCentered.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetAnimCentered.Invoke(arg0Low, arg0High, p_center)
 }
 func (pself *spriteMgr) IsAnimCentered(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1209,8 +1149,7 @@ func (pself *spriteMgr) GetAnimOffset(obj Object) Vec2 {
 }
 func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(p_flip)
-	API.SpxSpriteSetAnimFlipH.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetAnimFlipH.Invoke(arg0Low, arg0High, p_flip)
 }
 func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1219,8 +1158,7 @@ func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
 }
 func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(p_flip)
-	API.SpxSpriteSetAnimFlipV.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetAnimFlipV.Invoke(arg0Low, arg0High, p_flip)
 }
 func (pself *spriteMgr) IsAnimFlippedV(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1303,8 +1241,7 @@ func (pself *spriteMgr) MoveAndSlide(obj Object) {
 }
 func (pself *spriteMgr) SetGravity(obj Object, gravity float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(gravity)
-	API.SpxSpriteSetGravity.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetGravity.Invoke(arg0Low, arg0High, float32(gravity))
 }
 func (pself *spriteMgr) GetGravity(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1313,8 +1250,7 @@ func (pself *spriteMgr) GetGravity(obj Object) float64 {
 }
 func (pself *spriteMgr) SetMass(obj Object, mass float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(mass)
-	API.SpxSpriteSetMass.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetMass.Invoke(arg0Low, arg0High, float32(mass))
 }
 func (pself *spriteMgr) GetMass(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1343,8 +1279,7 @@ func (pself *spriteMgr) GetPhysicsMode(obj Object) int64 {
 }
 func (pself *spriteMgr) SetUseGravity(obj Object, enabled bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(enabled)
-	API.SpxSpriteSetUseGravity.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetUseGravity.Invoke(arg0Low, arg0High, enabled)
 }
 func (pself *spriteMgr) IsUseGravity(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1353,8 +1288,7 @@ func (pself *spriteMgr) IsUseGravity(obj Object) bool {
 }
 func (pself *spriteMgr) SetGravityScale(obj Object, scale float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(scale)
-	API.SpxSpriteSetGravityScale.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetGravityScale.Invoke(arg0Low, arg0High, float32(scale))
 }
 func (pself *spriteMgr) GetGravityScale(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1363,8 +1297,7 @@ func (pself *spriteMgr) GetGravityScale(obj Object) float64 {
 }
 func (pself *spriteMgr) SetDrag(obj Object, drag float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(drag)
-	API.SpxSpriteSetDrag.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetDrag.Invoke(arg0Low, arg0High, float32(drag))
 }
 func (pself *spriteMgr) GetDrag(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1373,8 +1306,7 @@ func (pself *spriteMgr) GetDrag(obj Object) float64 {
 }
 func (pself *spriteMgr) SetFriction(obj Object, friction float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(friction)
-	API.SpxSpriteSetFriction.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetFriction.Invoke(arg0Low, arg0High, float32(friction))
 }
 func (pself *spriteMgr) GetFriction(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1430,8 +1362,7 @@ func (pself *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
 func (pself *spriteMgr) SetColliderCircle(obj Object, center Vec2, radius float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(center)
-	arg2 := JsFromGdFloat(radius)
-	API.SpxSpriteSetColliderCircle.Invoke(arg0Low, arg0High, arg1, arg2)
+	API.SpxSpriteSetColliderCircle.Invoke(arg0Low, arg0High, arg1, float32(radius))
 }
 func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1447,8 +1378,7 @@ func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array
 }
 func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(enabled)
-	API.SpxSpriteSetCollisionEnabled.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetCollisionEnabled.Invoke(arg0Low, arg0High, enabled)
 }
 func (pself *spriteMgr) IsCollisionEnabled(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1464,8 +1394,7 @@ func (pself *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
 func (pself *spriteMgr) SetTriggerCircle(obj Object, center Vec2, radius float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(center)
-	arg2 := JsFromGdFloat(radius)
-	API.SpxSpriteSetTriggerCircle.Invoke(arg0Low, arg0High, arg1, arg2)
+	API.SpxSpriteSetTriggerCircle.Invoke(arg0Low, arg0High, arg1, float32(radius))
 }
 func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1481,8 +1410,7 @@ func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array)
 }
 func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(trigger)
-	API.SpxSpriteSetTriggerEnabled.Invoke(arg0Low, arg0High, arg1)
+	API.SpxSpriteSetTriggerEnabled.Invoke(arg0Low, arg0High, trigger)
 }
 func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1492,32 +1420,25 @@ func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
 func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdColor(color)
-	arg2 := JsFromGdFloat(color_threshold)
-	arg3 := JsFromGdFloat(alpha_threshold)
-	_result := API.SpxSpriteCheckCollisionByColor.Invoke(arg0Low, arg0High, arg1, arg2, arg3)
+	_result := API.SpxSpriteCheckCollisionByColor.Invoke(arg0Low, arg0High, arg1, float32(color_threshold), float32(alpha_threshold))
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdColor(sprite_color)
 	arg2 := JsFromGdColor(target_color)
-	arg3 := JsFromGdFloat(color_threshold)
-	arg4 := JsFromGdFloat(alpha_threshold)
-	_result := API.SpxSpriteCheckCollisionByColors.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+	_result := API.SpxSpriteCheckCollisionByColors.Invoke(arg0Low, arg0High, arg1, arg2, float32(color_threshold), float32(alpha_threshold))
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(alpha_threshold)
-	_result := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0Low, arg0High, arg1)
+	_result := API.SpxSpriteCheckCollisionByAlpha.Invoke(arg0Low, arg0High, float32(alpha_threshold))
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1Low, arg1High := JsSplitGdObj(obj_b)
-	arg2 := JsFromGdFloat(alpha_threshold)
-	arg3 := JsFromGdBool(use_pixel_perfect)
-	_result := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0Low, arg0High, arg1Low, arg1High, arg2, arg3)
+	_result := API.SpxSpriteCheckCollisionWithSprite.Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(alpha_threshold), use_pixel_perfect)
 	return JsToGdBool(_result)
 }
 func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
@@ -1578,8 +1499,7 @@ func (pself *tilemapMgr) SetLayerIndex(index int64) {
 }
 func (pself *tilemapMgr) SetTile(texture_path string, with_collision bool) {
 	arg0 := JsFromGdString(texture_path)
-	arg1 := JsFromGdBool(with_collision)
-	API.SpxTilemapSetTile.Invoke(arg0, arg1)
+	API.SpxTilemapSetTile.Invoke(arg0, with_collision)
 }
 func (pself *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision_points Array) {
 	arg0 := JsFromGdString(texture_path)
@@ -1695,14 +1615,12 @@ func (pself *uiMgr) CreateImage(path string) Object {
 }
 func (pself *uiMgr) CreateToggle(path string, value bool) Object {
 	arg0 := JsFromGdString(path)
-	arg1 := JsFromGdBool(value)
-	_result := API.SpxUiCreateToggle.Invoke(arg0, arg1)
+	_result := API.SpxUiCreateToggle.Invoke(arg0, value)
 	return JsToGdObject(_result)
 }
 func (pself *uiMgr) CreateSlider(path string, value float64) Object {
 	arg0 := JsFromGdString(path)
-	arg1 := JsFromGdFloat(value)
-	_result := API.SpxUiCreateSlider.Invoke(arg0, arg1)
+	_result := API.SpxUiCreateSlider.Invoke(arg0, float32(value))
 	return JsToGdObject(_result)
 }
 func (pself *uiMgr) CreateInput(path string, text string) Object {
@@ -1735,11 +1653,7 @@ func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Co
 }
 func (pself *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(minimum)
-	arg2 := JsFromGdFloat(maximum)
-	arg3 := JsFromGdFloat(step)
-	arg4 := JsFromGdFloat(value)
-	API.SpxUiSetRange.Invoke(arg0Low, arg0High, arg1, arg2, arg3, arg4)
+	API.SpxUiSetRange.Invoke(arg0Low, arg0High, float32(minimum), float32(maximum), float32(step), float32(value))
 }
 func (pself *uiMgr) GetRangeValue(obj Object) float64 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1783,8 +1697,7 @@ func (pself *uiMgr) GetFontSize(obj Object) int64 {
 }
 func (pself *uiMgr) SetVisible(obj Object, visible bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(visible)
-	API.SpxUiSetVisible.Invoke(arg0Low, arg0High, arg1)
+	API.SpxUiSetVisible.Invoke(arg0Low, arg0High, visible)
 }
 func (pself *uiMgr) GetVisible(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1793,8 +1706,7 @@ func (pself *uiMgr) GetVisible(obj Object) bool {
 }
 func (pself *uiMgr) SetInteractable(obj Object, interactable bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(interactable)
-	API.SpxUiSetInteractable.Invoke(arg0Low, arg0High, arg1)
+	API.SpxUiSetInteractable.Invoke(arg0Low, arg0High, interactable)
 }
 func (pself *uiMgr) GetInteractable(obj Object) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
@@ -1888,18 +1800,14 @@ func (pself *uiMgr) GetRotation(obj Object) float64 {
 }
 func (pself *uiMgr) SetRotation(obj Object, value float64) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdFloat(value)
-	API.SpxUiSetRotation.Invoke(arg0Low, arg0High, arg1)
+	API.SpxUiSetRotation.Invoke(arg0Low, arg0High, float32(value))
 }
 func (pself *uiMgr) GetFlip(obj Object, horizontal bool) bool {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(horizontal)
-	_result := API.SpxUiGetFlip.Invoke(arg0Low, arg0High, arg1)
+	_result := API.SpxUiGetFlip.Invoke(arg0Low, arg0High, horizontal)
 	return JsToGdBool(_result)
 }
 func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
-	arg1 := JsFromGdBool(horizontal)
-	arg2 := JsFromGdBool(is_flip)
-	API.SpxUiSetFlip.Invoke(arg0Low, arg0High, arg1, arg2)
+	API.SpxUiSetFlip.Invoke(arg0Low, arg0High, horizontal, is_flip)
 }

@@ -50,8 +50,14 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 			if buffer.Writable() {
 				outputs = append(outputs, fmt.Sprintf("\n\tCopyNativeArrayOutput(%s, %s)", source, argName))
 			}
-		case param.DirectScalar():
-			fmt.Fprintf(&sb, "\t%s := %s\n", argName, source)
+		case param.WebScalarByValue():
+			// Invoke converts ordinary Go scalars to JS values. Preserve the
+			// float32 ABI precision without constructing an intermediate js.Value.
+			if common.MustPrimitiveTypeName(param.Argument, function.Name) == "GdFloat" {
+				source = "float32(" + source + ")"
+			}
+			params = append(params, source)
+			continue
 		default:
 			typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
 			if binding, ok := jsInt64Types[typeName]; ok {

@@ -82,8 +82,11 @@ func (g *Generator) jsBody(function *clang.TypedefFunction) string {
 			continue
 		}
 		typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
-		if param.DirectScalar() {
-			statements = append(statements, fmt.Sprintf("var %s = %s;", local, param.Name))
+		if param.WebScalarByValue() {
+			callArgs[param.Index] = param.Name
+			if typeName == "GdBool" {
+				callArgs[param.Index] += " ? 1 : 0"
+			}
 			continue
 		}
 		declarations = append(declarations, "var "+local+";")

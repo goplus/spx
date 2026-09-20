@@ -481,8 +481,7 @@ public:
 	require.Equal(t, []string{"label", "mode", "objects", "out", "ret_value"}, generation.jsArgs(function))
 	body := generation.jsBody(function)
 	manager := generation.managerBody(function)
-	require.Contains(t, manager, "arg1 := mode")
-	require.Contains(t, manager, "Invoke(arg0, arg1, arg2, arg4, arg6)")
+	require.Contains(t, manager, "Invoke(arg0, mode, arg2, arg4, arg6)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(ret_value[:], arg6)")
 	require.NotContains(t, manager, "return JsTo")
@@ -573,4 +572,20 @@ func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.Ty
 	require.NoError(t, err)
 	function := ast.CollectGDExtensionInterfaceFunctions()[0]
 	return &function
+}
+
+func TestJSScalarInputsKeepIDsAndOutputsInMemory(t *testing.T) {
+	ast, err := clang.ParseCString(`typedef GdBool (*GDExtensionSpxExampleSetValues)(GdObj obj, GdFloat scale, GdBool enabled, int32_t count);`)
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	body := generation.jsBody(&functions[0])
+	require.Contains(t, body, "Module['_gdspx_new_obj'](obj_high, obj_low)")
+	require.Contains(t, body, "_call(_arg0, scale, enabled ? 1 : 0, count, _resultPtr)")
+	require.Contains(t, body, "AllocGdBool()")
+	require.Contains(t, body, "ToJsBool(_resultPtr)")
+	require.Contains(t, body, "FreeGdBool(_resultPtr)")
+	require.Contains(t, body, "FreeGdObj(_arg0)")
+	require.NotContains(t, body, "ToGdFloat")
+	require.NotContains(t, body, "ToGdBool")
 }
