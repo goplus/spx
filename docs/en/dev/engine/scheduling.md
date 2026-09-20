@@ -138,6 +138,20 @@ rounds; starting another round does not advance the frame number or timer.
    assigning a new Thread ID. Invocations started after the previous one stopped
    or completed take a new registration position.
 
+## Event registration snapshots
+
+The event Manager appends registrations under its lock. Snapshots may share their
+backing array with subsequent appends. `Snapshot` and `SnapshotStartOnce` return
+shallow, read-only views: callers must not assign existing elements. Capacity is
+limited to the current length, so appending to a snapshot uses separate storage.
+Objects referenced by a Sink, including its Handler, retain their existing
+mutability; snapshots do not synchronize those objects or guarantee owner lifetime.
+
+Deleting an owner copies the surviving registrations. Reset only drops the
+Manager's slice references. Neither operation changes published elements, so old
+snapshots retain their registration order and contents across append, deletion,
+and Reset. The first `SnapshotStartOnce` still closes start registration until Reset.
+
 ## Condition events
 
 1. **Evaluate conditions before advancing the clock.** After startup scripts
