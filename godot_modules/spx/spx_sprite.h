@@ -316,6 +316,7 @@ private:
 	};
 	bool _prepare_animation(const String &p_name, PreparedVisual &r_visual,
 			int p_raster_scale = 0);
+	void _play_prepared_animation(const PreparedVisual &p_visual, GdFloat p_speed, GdBool p_from_end);
 	void _prepare_texture(const Ref<Texture2D> &p_texture,
 			const VisualSource &p_source, PreparedVisual &r_visual);
 	void _commit_visual(const PreparedVisual &p_visual);
