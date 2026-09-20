@@ -58,6 +58,31 @@ func TestResolveThreadNameFallsBackForInvalidNameSignature(t *testing.T) {
 	}
 }
 
+func TestMainExecutionScopeRestoresEnclosingExecution(t *testing.T) {
+	thread := New(nil).newThread("main")
+	outerStartedAt := time.Unix(10, 0)
+	innerStartedAt := time.Unix(20, 0)
+
+	endOuter := thread.BeginMain(outerStartedAt)
+	endInner := thread.BeginMain(innerStartedAt)
+	if got := thread.MainStartedAt(); !got.Equal(innerStartedAt) {
+		t.Fatalf("inner Main started at %v, want %v", got, innerStartedAt)
+	}
+	thread.DisableMainTimeout()
+	if got := thread.MainStartedAt(); !got.IsZero() {
+		t.Fatalf("disabled Main timeout started at %v, want zero", got)
+	}
+
+	endInner()
+	if got := thread.MainStartedAt(); !got.Equal(outerStartedAt) {
+		t.Fatalf("restored outer Main started at %v, want %v", got, outerStartedAt)
+	}
+	endOuter()
+	if got := thread.MainStartedAt(); !got.IsZero() {
+		t.Fatalf("finished Main started at %v, want zero", got)
+	}
+}
+
 func TestStopIfStopsActiveThread(t *testing.T) {
 	co := New(nil)
 	started := make(chan Thread, 1)
@@ -490,6 +515,91 @@ func TestRunAfterStopAllTimeoutRequiresExplicitRecovery(t *testing.T) {
 	if !nextRan.Load() {
 		t.Fatal("creation was rejected after shutdown barrier timed out")
 	}
+}
+
+func TestRunAfterStopAllIfRejectsWithoutChangingState(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	thread := co.CreateAndStart("conditional-blocker", func(Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	<-started
+	epoch := co.admissionEpoch.Load()
+	called := false
+	selected, completed := co.RunAfterStopAllIf(time.Second, func() bool {
+		return false
+	}, func() {
+		called = true
+	})
+	if selected || completed {
+		t.Fatalf("conditional barrier = (%v, %v), want (false, false)", selected, completed)
+	}
+	if called || thread.Stopped() || co.admissionClosed() {
+		t.Fatalf("rejected barrier changed state: called=%v stopped=%v admissionClosed=%v", called, thread.Stopped(), co.admissionClosed())
+	}
+	if got := co.admissionEpoch.Load(); got != epoch {
+		t.Fatalf("admission epoch = %d, want %d", got, epoch)
+	}
+	close(release)
+	waitForThreadSignal(t, thread.done, "conditional blocker did not finish")
+}
+
+func TestRunAfterStopAllIfPredicatePanicReleasesBarrier(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != "predicate failure" {
+				t.Fatalf("predicate panic = %v, want predicate failure", recovered)
+			}
+		}()
+		co.RunAfterStopAllIf(time.Second, func() bool {
+			panic("predicate failure")
+		}, nil)
+	}()
+	if !co.RunAfterStopAll(time.Second, nil) {
+		t.Fatal("shutdown barrier remained locked after predicate panic")
+	}
+}
+
+func TestRunAfterStopAllTimeoutIncludesBarrierWait(t *testing.T) {
+	co := New(nil)
+	co.OnInited()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	blocker := co.CreateAndStart("barrier-owner", func(Thread) int {
+		close(started)
+		<-release
+		return 0
+	})
+	<-started
+
+	barrierLocked := make(chan struct{})
+	barrierDone := make(chan bool, 1)
+	go func() {
+		selected, completed := co.RunAfterStopAllIf(0, func() bool {
+			close(barrierLocked)
+			return true
+		}, nil)
+		barrierDone <- selected && completed
+	}()
+	<-barrierLocked
+
+	startedAt := time.Now()
+	if co.RunAfterStopAll(20*time.Millisecond, nil) {
+		t.Fatal("second barrier completed while the first still owned the lock")
+	}
+	if elapsed := time.Since(startedAt); elapsed > time.Second {
+		t.Fatalf("barrier lock wait took %v, want a bounded timeout", elapsed)
+	}
+
+	close(release)
+	co.Join(blocker)
+	waitForDrainResult(t, barrierDone)
 }
 
 func TestRunAfterStopAllRejectsSynchronousPanicHandlerReentry(t *testing.T) {

@@ -38,7 +38,6 @@ const (
 	updateProcessJob updateAction = iota
 	updateRetry
 	updateComplete
-	updateAwaitInitialization
 
 	updateWatchdogTimeout = stime.Second
 )
@@ -90,9 +89,6 @@ updateLoop:
 				continue
 			}
 			break updateLoop
-		case updateAwaitInitialization:
-			state.watchdogDeadline = p.updateWatchdogNow().Add(updateWatchdogTimeout)
-			continue
 		case updateProcessJob:
 			p.processNextWaitJob(state, stats)
 		case updateRetry:
@@ -112,21 +108,11 @@ updateLoop:
 }
 
 func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
-	if !p.initialized.Load() {
-		if p.currentJobs.Count() == 0 {
-			start := stime.Now()
-			itime.Sleep(0.05)
-			stats.WaitTime += elapsedMillis(start)
-			return updateAwaitInitialization
-		}
-		return updateProcessJob
-	}
-
 	start := stime.Now()
 	action := updateProcessJob
 	p.schedulerMu.Lock()
 	job, queued := p.currentJobs.PeekFront()
-	// Engine calls may unblock the current script slice.
+	// Service engine calls before waiting for scripts, including startup, to yield.
 	if (!queued || job.Type != waitTypeMainThread) && p.hasRunnableThreadLocked() {
 		p.schedulerCond.Wait()
 		action = updateRetry
@@ -211,7 +197,6 @@ func (p *Coroutines) finishUpdate(stats *UpdateJobsStats, start stime.Time, befo
 	accounted := stats.InitTime + stats.LoopTime + stats.MoveTime
 	stats.TotalTime = total
 	stats.ExternalTime = total - accounted
-	stats.TimeDifference = total - accounted
 }
 
 func elapsedMillis(start stime.Time) float64 {

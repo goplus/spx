@@ -78,7 +78,6 @@ type Coroutines struct {
 	redrawFrame     atomic.Int64
 	scriptRound     atomic.Uint64
 
-	nextJobID    atomic.Int64
 	nextThreadID atomic.Int64
 
 	// admissionEpoch is even while admission is open and odd while closed. Pending

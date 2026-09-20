@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func isSuspended(thread Thread) bool {
@@ -386,67 +388,110 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 	}
 }
 
-func TestUpdateWatchdogDeadlineResetsWhileAwaitingInitialization(t *testing.T) {
+func TestUpdateReturnsBeforeInitialization(t *testing.T) {
+	for _, outcome := range []string{"idle", "success", "failure", "canceled"} {
+		t.Run(outcome, func(t *testing.T) {
+			panicReported := make(chan PanicReport, 1)
+			co := New(func(report PanicReport) { panicReported <- report })
+			t.Cleanup(func() {
+				if !co.StopAllAndWait(time.Second) {
+					t.Error("startup coroutine did not stop")
+				}
+			})
+
+			if outcome != "idle" {
+				co.Create("startup", func(me Thread) int {
+					// Finish only after Update has entered and resumed startup.
+					co.WaitYield(me)
+					switch outcome {
+					case "success":
+						co.OnInited()
+					case "failure":
+						panic("startup failed")
+					case "canceled":
+						co.StopCurrent()
+					}
+					return 0
+				})
+			}
+
+			updated := make(chan struct{})
+			go func() {
+				co.Update()
+				close(updated)
+			}()
+			waitForThreadSignal(t, updated, "Update waited for successful initialization")
+			if got, want := co.initialized.Load(), outcome == "success"; got != want {
+				t.Fatalf("initialized = %v, want %v", got, want)
+			}
+			if outcome == "failure" {
+				select {
+				case report := <-panicReported:
+					if report.Value != "startup failed" {
+						t.Fatalf("panic = %v, want startup failed", report.Value)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("startup failure was not reported")
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 	co := New(nil)
-	t.Cleanup(func() {
+	resume := make(chan struct{})
+	thread := co.Create("startup", func(me Thread) int {
+		WaitForChan(co, resume)
 		co.OnInited()
+		return 0
+	})
+	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
-			t.Error("coroutines did not stop during cleanup")
+			t.Error("startup coroutine did not stop")
 		}
 	})
 
-	clockStart := time.Now()
-	waitingForInitialization := make(chan struct{})
-	var clockCalls atomic.Int64
-	co.updateWatchdogNow = func() time.Time {
-		call := clockCalls.Add(1)
-		if call == 1 {
-			return clockStart
-		}
-		if call == 2 {
-			close(waitingForInitialization)
-		}
-		return clockStart.Add(2 * updateWatchdogTimeout)
-	}
-
-	updateDone := make(chan struct{})
+	updated := make(chan struct{})
 	go func() {
 		co.Update()
-		close(updateDone)
+		close(updated)
 	}()
+	waitForThreadSignal(t, updated, "Update waited for startup's asynchronous work")
+	if co.initialized.Load() {
+		t.Fatal("startup was published before its worker finished")
+	}
+	close(resume)
+	waitForThreadSignal(t, thread.done, "startup did not finish after its worker returned")
+	if !co.initialized.Load() {
+		t.Fatal("startup did not publish successful initialization")
+	}
+}
 
-	select {
-	case <-waitingForInitialization:
-	case <-time.After(time.Second):
+func TestStartupCanWaitForNextFrame(t *testing.T) {
+	itime.Start(nil)
+	co := New(nil)
+	co.Create("startup", func(me Thread) int {
+		co.WaitNextFrameFor(me)
 		co.OnInited()
-		select {
-		case <-updateDone:
-		case <-time.After(time.Second):
-			t.Fatal("Update remained blocked after initialization cleanup")
-		}
-		t.Fatal("Update did not refresh its watchdog while awaiting initialization")
-	}
-
-	var resumed atomic.Bool
-	co.enqueueJob(&WaitJob{
-		Type: waitTypeMainThread,
-		Call: func() {
-			co.Create("after-initialization", func(me Thread) int {
-				co.WaitYield(me)
-				resumed.Store(true)
-				return 0
-			})
-		},
+		return 0
 	})
-	co.OnInited()
-
-	select {
-	case <-updateDone:
-	case <-time.After(time.Second):
-		t.Fatal("Update did not complete after initialization")
-	}
-	if !resumed.Load() {
-		t.Fatal("watchdog stopped normal work immediately after initialization")
+	t.Cleanup(func() {
+		if !co.StopAllAndWait(time.Second) {
+			t.Error("startup coroutine did not stop")
+		}
+	})
+	for frame := 0; frame < 2; frame++ {
+		updated := make(chan struct{})
+		go func() {
+			co.Update()
+			close(updated)
+		}()
+		waitForThreadSignal(t, updated, "startup prevented the frame from returning")
+		if got, want := co.initialized.Load(), frame == 1; got != want {
+			t.Fatalf("frame %d: initialized = %v, want %v", frame, got, want)
+		}
+		itime.Update(1.0/30, 30)
 	}
 }
 
@@ -507,17 +552,19 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 
 	co := New(nil)
 	co.OnInited()
+	var keepSpawning atomic.Bool
+	keepSpawning.Store(true)
 	clockStart := time.Now()
 	var clockCalls atomic.Int64
 	co.updateWatchdogNow = func() time.Time {
 		if clockCalls.Add(1) == 1 {
 			return clockStart
 		}
+		// Let Node finish the watchdog's async log write once expiry is observed.
+		keepSpawning.Store(false)
 		return clockStart.Add(updateWatchdogTimeout)
 	}
 
-	var keepSpawning atomic.Bool
-	keepSpawning.Store(true)
 	t.Cleanup(func() {
 		keepSpawning.Store(false)
 		if !co.StopAllAndWait(time.Second) {
@@ -550,8 +597,8 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	if clockCalls.Load() < 2 || spawned.Load() == 0 {
 		t.Fatal("test did not exercise the watchdog on a recursive spawn retry")
 	}
-	if stats := co.GetLastUpdateStats(); stats.TaskCounts != 0 {
-		t.Fatalf("processed %d wait jobs, want a retry-only spawn chain", stats.TaskCounts)
+	if stats := co.GetLastUpdateStats(); stats.TaskCounts != 0 || stats.LoopIterations != 1 {
+		t.Fatalf("processed %d wait jobs over %d iterations, want one retry", stats.TaskCounts, stats.LoopIterations)
 	}
 }
 
@@ -559,7 +606,7 @@ func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
 	co := New(nil)
 
 	thread := co.Create("completed", func(Thread) int { return 0 })
-	resume := co.newResumeJob(thread, waitTypeYield)
+	resume := &WaitJob{Th: thread, Type: waitTypeYield}
 	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("coroutine did not complete")
 	}

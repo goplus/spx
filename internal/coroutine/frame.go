@@ -51,9 +51,7 @@ func (p *Coroutines) RequestRedraw() {
 }
 
 func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
-	job := p.newResumeJob(me, kind)
-	job.Frame = time.Frame()
-	p.enqueueAndYield(job)
+	p.enqueueAndYield(&WaitJob{Th: me, Type: kind, Frame: time.Frame()})
 }
 
 // Admit a new round only after all runnable scripts have yielded.
