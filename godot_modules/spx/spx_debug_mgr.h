@@ -33,7 +33,7 @@
 
 #include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 struct DebugShape {
 	enum Type {
@@ -50,11 +50,7 @@ struct DebugShape {
 	Node2D *node;
 };
 
-class SpxDebugMgr : public SpxBaseMgr {
-	SPXCLASS(SpxDebugMgr, SpxBaseMgr)
-public:
-	virtual ~SpxDebugMgr() = default;
-
+class SpxDebugMgr : public SpxManager {
 private:
 	Vector<DebugShape> debug_shapes;
 	Node2D *debug_root;

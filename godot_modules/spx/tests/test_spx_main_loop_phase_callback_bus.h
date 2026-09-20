@@ -30,36 +30,33 @@
 #ifndef TEST_SPX_MAIN_LOOP_PHASE_CALLBACK_BUS_H
 #define TEST_SPX_MAIN_LOOP_PHASE_CALLBACK_BUS_H
 
-#include "main/main_loop_phase_callback_bus.h"
 #include "../spx.h"
+#include "main/main_loop_phase_callback_bus.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxMainLoopPhaseCallbackBus {
 
 TEST_CASE("[SPX] Module main loop phase callback registration is idempotent") {
 	MainLoopPhaseCallbackBus &bus = get_main_loop_phase_callback_bus();
-	const bool was_registered = Spx::has_main_loop_callbacks_registered();
-	if (!was_registered) {
+	const uint32_t initial_count = bus.get_registration_count();
+	Spx::unregister_main_loop_callbacks();
+	const uint32_t unregistered_count = bus.get_registration_count();
+	const bool was_registered = initial_count != unregistered_count;
+
+	Spx::register_main_loop_callbacks();
+	CHECK(bus.get_registration_count() == unregistered_count + 1);
+	Spx::register_main_loop_callbacks();
+	CHECK(bus.get_registration_count() == unregistered_count + 1);
+
+	Spx::unregister_main_loop_callbacks();
+	CHECK(bus.get_registration_count() == unregistered_count);
+	Spx::unregister_main_loop_callbacks();
+	CHECK(bus.get_registration_count() == unregistered_count);
+
+	if (was_registered) {
 		Spx::register_main_loop_callbacks();
 	}
-
-	const uint32_t registered_count = bus.get_registration_count();
-	CHECK(Spx::has_main_loop_callbacks_registered());
-	Spx::register_main_loop_callbacks();
-	CHECK(bus.get_registration_count() == registered_count);
-
-	Spx::unregister_main_loop_callbacks();
-	CHECK_FALSE(Spx::has_main_loop_callbacks_registered());
-	CHECK(bus.get_registration_count() + 1 == registered_count);
-	Spx::unregister_main_loop_callbacks();
-	CHECK(bus.get_registration_count() + 1 == registered_count);
-
-	Spx::register_main_loop_callbacks();
-	CHECK(Spx::has_main_loop_callbacks_registered());
-	CHECK(bus.get_registration_count() == registered_count);
-	if (!was_registered) {
-		Spx::unregister_main_loop_callbacks();
-	}
+	CHECK(bus.get_registration_count() == initial_count);
 }
 
 } // namespace TestSpxMainLoopPhaseCallbackBus

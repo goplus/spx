@@ -32,13 +32,11 @@
 #define SPX_NAVIGATION_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 #include "spx_path_finder.h"
 
-class SpxNavigationMgr : public SpxBaseMgr {
-	SPXCLASS(SpxNavigationMgr, SpxBaseMgr)
+class SpxNavigationMgr : public SpxManager {
 public:
-	virtual ~SpxNavigationMgr() = default;
 	void on_reset(int reset_code) override;
 
 private:

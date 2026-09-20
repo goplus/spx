@@ -37,7 +37,6 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_render_util.h"
-#include "svg_mgr.h"
 
 void SpxSprite::set_render_offset(GdVec2 p_render_offset) {
 	if (render_offset == p_render_offset) {
@@ -107,7 +106,7 @@ void SpxSprite::_update_anim_scale() {
 bool SpxSprite::_update_svg_scale_content(int p_target_scale) {
 	PreparedVisual visual;
 	if (visual_source.is_single_image()) {
-		Ref<Texture2D> texture = svgMgr->get_svg_image(visual_source.key, p_target_scale);
+		Ref<Texture2D> texture = resMgr->load_svg_texture(visual_source.key, p_target_scale);
 		if (texture.is_null()) {
 			return false;
 		}
@@ -142,7 +141,7 @@ bool SpxSprite::_update_svg_scale_content(int p_target_scale) {
 }
 
 int SpxSprite::_get_actual_match_render_scale() {
-	return svgMgr->calculate_svg_scale(_get_actual_render_scale());
+	return SpxSvgCache::raster_scale(_get_actual_render_scale());
 }
 
 Vector2 SpxSprite::_get_actual_render_scale() {

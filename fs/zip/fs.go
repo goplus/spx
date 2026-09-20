@@ -156,7 +156,7 @@ func saveTo(cachePath string, resp *http.Response) (err error) {
 		}
 	}()
 
-	limit := remoteMaxBytes()
+	limit := MaxRemoteZipBytes
 	n, copyErr := io.Copy(f, io.LimitReader(resp.Body, limit+1))
 	if copyErr != nil {
 		return fmt.Errorf("zip: download remote archive: %w", copyErr)

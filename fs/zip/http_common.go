@@ -30,17 +30,12 @@ import (
 )
 
 const (
-	// MaxRemoteZipBytes is kept for compatibility.
+	// MaxRemoteZipBytes limits the downloaded archive size.
 	MaxRemoteZipBytes int64 = MaxZipArchiveBytes
+	remoteHTTPTimeout       = 5 * time.Minute
 )
 
 var (
-	// remoteHTTPClient is a test hook; nil uses http.DefaultClient.
-	remoteHTTPClient  *http.Client
-	remoteHTTPTimeout = 5 * time.Minute
-	// maxRemoteZipBytes allows a test-only limit override.
-	maxRemoteZipBytes int64 = MaxRemoteZipBytes
-
 	ErrInvalidRemoteURL = errors.New("zip: invalid remote URL")
 	ErrHTTPStatus       = errors.New("zip: unexpected HTTP status")
 	ErrRemoteSizeLimit  = errors.New("zip: remote archive too large")
@@ -61,13 +56,6 @@ func (e *remoteHTTPStatusError) Error() string {
 }
 
 func (e *remoteHTTPStatusError) Unwrap() error { return ErrHTTPStatus }
-
-func remoteMaxBytes() int64 {
-	if maxRemoteZipBytes > 0 {
-		return maxRemoteZipBytes
-	}
-	return MaxRemoteZipBytes
-}
 
 // parseRemoteURL validates the legacy host/path form.
 func parseRemoteURL(raw, schema string) (remote, cacheKey string, err error) {
@@ -140,7 +128,7 @@ func parseRemoteURL(raw, schema string) (remote, cacheKey string, err error) {
 }
 
 func getRemote(remote, scheme string) (*http.Response, error) {
-	resp, err := remoteClientForScheme(remoteHTTPClient, scheme).Get(remote)
+	resp, err := remoteClientForScheme(scheme).Get(remote)
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +161,8 @@ func checkRemoteHTTPResponse(resp *http.Response, remote string) error {
 		}
 		return &remoteHTTPStatusError{URL: remote, StatusCode: resp.StatusCode, Status: status}
 	}
-	if resp.ContentLength > remoteMaxBytes() {
-		return fmt.Errorf("%w: response length %d exceeds limit %d", ErrRemoteSizeLimit, resp.ContentLength, remoteMaxBytes())
+	if resp.ContentLength > MaxRemoteZipBytes {
+		return fmt.Errorf("%w: response length %d exceeds limit %d", ErrRemoteSizeLimit, resp.ContentLength, MaxRemoteZipBytes)
 	}
 	return nil
 }
@@ -186,7 +174,7 @@ func readRemoteBody(resp *http.Response) ([]byte, error) {
 	if resp.Body == nil {
 		return nil, fmt.Errorf("zip: HTTP response has no body")
 	}
-	limit := remoteMaxBytes()
+	limit := MaxRemoteZipBytes
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("zip: read remote archive: %w", err)
@@ -197,20 +185,14 @@ func readRemoteBody(resp *http.Response) ([]byte, error) {
 	return body, nil
 }
 
-func remoteClientForScheme(client *http.Client, scheme string) *http.Client {
-	if client == nil {
-		client = http.DefaultClient
-	}
+func remoteClientForScheme(scheme string) *http.Client {
+	client := http.DefaultClient
 	if client == nil {
 		client = &http.Client{}
 	}
 	clone := *client
-	timeout := remoteHTTPTimeout
-	if timeout <= 0 {
-		timeout = 5 * time.Minute
-	}
-	if clone.Timeout <= 0 || clone.Timeout > timeout {
-		clone.Timeout = timeout
+	if clone.Timeout <= 0 || clone.Timeout > remoteHTTPTimeout {
+		clone.Timeout = remoteHTTPTimeout
 	}
 	if scheme != "https://" {
 		return &clone

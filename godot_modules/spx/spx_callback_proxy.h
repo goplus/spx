@@ -64,10 +64,6 @@ public:
 	void clear_callback() {
 		callback = {};
 	}
-
-	bool has_callback() const {
-		return bool(callback);
-	}
 };
 
 #endif // SPX_CALLBACK_PROXY_H

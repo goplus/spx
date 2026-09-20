@@ -50,6 +50,28 @@ function engineBridge() {
     return { ...b, callbacks: b.context.LibraryManager.library };
 }
 
+test('module replacement uses new exports and releases arenas with their original allocator', () => {
+    const first = bridge();
+    const second = bridge();
+    first.module._gdspx_alloc_bool = () => 16;
+    second.module._gdspx_alloc_bool = () => 24;
+    assert.equal(first.run('AllocGdBool()'), 16);
+    const retired = first.run('GdspxBorrowNativeArray(5, 700000, 700000)');
+    const active = first.run('GdspxBorrowNativeArray(5, 700000, 700000)');
+
+    first.context.Module = second.module;
+    assert.equal(first.run('AllocGdBool()'), 24);
+    const current = first.run('GdspxBorrowNativeArray(5, 8, 8)');
+    assert.equal(current.module, second.module);
+    assert.deepEqual(first.freed, [active.ptr]);
+    first.run('GdspxFlushDeferredFrees()');
+    first.run('GdspxFlushDeferredFrees()');
+    assert.deepEqual(first.freed, [active.ptr, retired.ptr]);
+    assert.deepEqual(second.freed, []);
+    assert.equal(active.data.length, 0);
+    assert.equal(retired.data.length, 0);
+});
+
 test('fixed updates preserve array borrows until the next update begins', () => {
     const b = engineBridge();
     const borrows = [];
@@ -598,4 +620,63 @@ test('reset during fallback contact dispatch stops the previous batch', () => {
     b.callbacks.godot_js_spx_on_trigger_enter(3n, 4n);
     b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
     assert.deepEqual(calls, ['OnTriggerEnter', 'OnEngineReset', 'OnEngineFixedUpdate']);
+});
+
+test('generated scalar inputs bypass pools even when the manager fails', () => {
+    const b = bridge();
+    const calls = [];
+    Object.assign(b.module, {
+        _gdspx_physics_set_global_gravity: value => calls.push(['float', value]),
+        _gdspx_camera_set_camera_smoothing: value => calls.push(['bool', value]),
+        _gdspx_sprite_set_rotation: (id, rotation) => {
+            calls.push(['rotation', id, rotation]);
+            throw new Error('manager failed');
+        },
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    const api = b.run('new GdspxFuncs()');
+    api.gdspx_physics_set_global_gravity(9.81);
+    api.gdspx_camera_set_camera_smoothing(true);
+    api.gdspx_camera_set_camera_smoothing(false);
+    assert.throws(() => api.gdspx_sprite_set_rotation(1, 0x200000, 45.5), /manager failed/);
+    assert.deepEqual(calls, [
+        ['float', 9.81], ['bool', 1], ['bool', 0],
+        ['rotation', 9007199254740993n, 45.5],
+    ]);
+    assert.deepEqual(b.freed, []);
+});
+
+test('generated int64 inputs preserve signed precision and order for integers and multiple IDs', () => {
+    const b = bridge();
+    const calls = [];
+    const released = [];
+    Object.assign(b.module, {
+        _gdspx_camera_set_camera_limit: (side, limit) => calls.push([side, limit]),
+        _gdspx_sprite_set_z_index: (id, index) => calls.push([id, index]),
+        _gdspx_sprite_check_collision: (id, target, sourceTrigger, targetTrigger, result) => {
+            calls.push([id, target]);
+            assert.equal(sourceTrigger, 1);
+            assert.equal(targetTrigger, 0);
+            assert.equal(result, 64);
+            b.module.HEAPU8[result] = 1;
+        },
+        _gdspx_alloc_bool: () => 64,
+        _gdspx_free_bool: ptr => released.push(ptr),
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    const api = b.run('new GdspxFuncs()');
+    const values = [0n, 1n, -1n, 0xffffffffn, 0x100000000n,
+        9007199254740991n, 9007199254740992n, 9007199254740993n,
+        -9007199254740993n, 9223372036854775807n, -9223372036854775808n];
+    const parts = value => [Number(BigInt.asUintN(32, value)), Number(BigInt.asUintN(32, value >> 32n))];
+    for (const [index, first] of values.entries()) {
+        const second = values[(index + 1) % values.length];
+        const args = [...parts(first), ...parts(second)];
+        api.gdspx_camera_set_camera_limit(...args);
+        api.gdspx_sprite_set_z_index(...args);
+        assert.equal(api.gdspx_sprite_check_collision(...args, true, false), true);
+        assert.deepEqual(calls.splice(0), [[first, second], [first, second], [first, second]]);
+    }
+    assert.deepEqual(released, values.map(() => 64), 'return values retain their existing output pool');
+    assert.deepEqual(b.freed, []);
 });

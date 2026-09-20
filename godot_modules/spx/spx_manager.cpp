@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_utils.cpp                                                         */
+/*  spx_manager.cpp                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,4 +28,22 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "spx_utils.h"
+#include "spx_manager.h"
+
+#include "spx_engine.h"
+
+GdInt SpxManager::get_unique_id() {
+	return SpxEngine::get_singleton()->get_unique_id();
+}
+
+Window *SpxManager::get_root() {
+	return SpxEngine::get_singleton()->get_root();
+}
+
+Node *SpxManager::get_spx_root() {
+	return SpxEngine::get_singleton()->get_spx_root();
+}
+
+SceneTree *SpxManager::get_tree() {
+	return SpxEngine::get_singleton()->get_tree();
+}

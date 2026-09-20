@@ -46,10 +46,6 @@ type engineDownloadEnv struct {
 	manifest              *release.RuntimeManifest
 }
 
-var engineDownloadFetcher = fetchURLToFile
-
-var engineDownloadResolveEnv = resolveEngineDownloadEnv
-
 // PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
 // the release runtime pack workflow.
 func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
@@ -60,7 +56,7 @@ func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
 		return fmt.Errorf("Linux runtime pack preparation requires an engine asset directory")
 	}
 
-	env, err := engineDownloadResolveEnv(repoRoot, "linux")
+	env, err := resolveEngineDownloadEnv(repoRoot, "linux")
 	if err != nil {
 		return err
 	}

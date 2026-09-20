@@ -34,7 +34,7 @@
 #include "core/templates/hash_map.h"
 #include "gdextension_spx_ext.h"
 #include "scene/2d/animated_sprite_2d.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 #include "spx_layer_sorter.h"
 #include <functional>
 #include <unordered_set>
@@ -87,19 +87,15 @@ struct hash<TriggerPair> {
 };
 } //namespace std
 
-class SpxSpriteMgr : public SpxBaseMgr {
-	SPXCLASS(SpxSpriteMgr, SpxBaseMgr)
-public:
-	virtual ~SpxSpriteMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
-
+class SpxSpriteMgr : public SpxManager {
 private:
 	RBMap<GdObj, SpxSprite *> id_objects;
 
 	std::unordered_set<TriggerPair> bounding_collision_pairs;
 	std::unordered_set<TriggerPair> pixel_collision_pairs;
 
-	Node *dont_destroy_root;
-	Node *sprite_root;
+	Node *dont_destroy_root = nullptr;
+	Node *sprite_root = nullptr;
 
 	// Pixel-perfect collision sampling step: check every N pixels instead of every pixel
 	// Higher values = better performance but lower accuracy
@@ -247,6 +243,7 @@ public:
 	SPX_BIND void set_mass(GdObj obj, GdFloat mass);
 	SPX_BIND GdFloat get_mass(GdObj obj);
 	SPX_BIND void add_force(GdObj obj, GdVec2 force);
+	// One-shot momentum change: next dynamic tick adds impulse / mass, with no delta factor.
 	SPX_BIND void add_impulse(GdObj obj, GdVec2 impulse);
 
 	SPX_BIND void set_physics_mode(GdObj obj, GdInt mode);

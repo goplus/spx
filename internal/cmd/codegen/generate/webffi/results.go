@@ -24,7 +24,7 @@ import (
 // Only the internal split int64 representation shares a slot per type.
 func (g *Generator) jsResult(function *clang.TypedefFunction) (key, initializer string) {
 	typeName := g.EffectiveRawReturnType(function)
-	if _, ok := jsInt64Types[typeName]; ok {
+	if typeName == "GdInt" || typeName == "GdObj" {
 		return typeName, "{ 'low': 0, 'high': 0 }"
 	}
 	return "", ""

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_base_mgr.cpp                                                      */
+/*  spx_manager.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,66 +28,35 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "spx_base_mgr.h"
+#ifndef SPX_MANAGER_H
+#define SPX_MANAGER_H
 
-#include "scene/2d/node_2d.h"
-#include "scene/main/window.h"
+#include "spx_abi.h"
+#include "spx_mgr_access.h"
 
-#include "spx_engine.h"
+class Node;
+class Window;
+class SceneTree;
 
-void SpxBaseMgr::on_awake() {
-	owner = create_owner_node();
-	if (owner == nullptr) {
-		return;
-	}
-	owner->set_name(get_class_name());
-	get_spx_root()->add_child(owner);
-}
+// Managers opt into lifecycle hooks; scene nodes belong to their actual users.
+class SpxManager {
+protected:
+	GdInt get_unique_id();
+	SceneTree *get_tree();
+	Window *get_root();
+	Node *get_spx_root();
 
-void SpxBaseMgr::on_start() {
-}
+public:
+	virtual ~SpxManager() = default;
+	virtual void on_awake() {}
+	virtual void on_start() {}
+	virtual void on_update(float delta) {}
+	virtual void on_fixed_update(float delta) {}
+	virtual void on_destroy() {}
+	virtual void on_reset(int reset_code) {}
+	virtual void on_exit(int exit_code) {}
+	virtual void on_pause() {}
+	virtual void on_resume() {}
+};
 
-void SpxBaseMgr::on_update(float delta) {
-}
-
-void SpxBaseMgr::on_fixed_update(float delta) {
-}
-
-void SpxBaseMgr::on_destroy() {
-	if (owner != nullptr) {
-		owner->queue_free();
-		owner = nullptr;
-	}
-}
-
-void SpxBaseMgr::on_reset(int reset_code) {
-}
-
-void SpxBaseMgr::on_exit(int exit_code) {
-}
-
-void SpxBaseMgr::on_pause() {
-}
-
-void SpxBaseMgr::on_resume() {
-}
-
-Node *SpxBaseMgr::create_owner_node() {
-	return memnew(Node2D);
-}
-
-GdInt SpxBaseMgr::get_unique_id() {
-	return SpxEngine::get_singleton()->get_unique_id();
-}
-
-Window *SpxBaseMgr::get_root() {
-	return SpxEngine::get_singleton()->get_root();
-}
-
-Node *SpxBaseMgr::get_spx_root() {
-	return SpxEngine::get_singleton()->get_spx_root();
-}
-
-SceneTree *SpxBaseMgr::get_tree() {
-	return SpxEngine::get_singleton()->get_tree();
-}
+#endif // SPX_MANAGER_H

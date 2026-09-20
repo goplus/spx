@@ -34,6 +34,10 @@
 #include "gdextension_spx_ext.h"
 #include <type_traits>
 
+#define SpxStr(str) (String::utf8((const char *)str))
+#define SpxReturnStr(str) (SpxAbi::to_return_cstr(str))
+#define NULL_OBJECT_ID 0
+
 // Exported cross-language method. C++ static declarations need no manager.
 #define SPX_BIND
 

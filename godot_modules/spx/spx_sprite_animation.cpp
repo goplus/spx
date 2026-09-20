@@ -35,7 +35,6 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_render_util.h"
-#include "svg_mgr.h"
 
 GdString SpxSprite::get_current_anim_name() {
 	return SpxReturnStr(visual_source.animation_name);
@@ -51,8 +50,8 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 	if (resMgr->is_dynamic_anim_mode()) {
 		String key = resMgr->get_anim_key_name(get_spx_type_name(), p_name);
 		// set_anim/get_anim also accept the complete engine animation key.
-		if (resMgr->get_anim_frames(key).is_null() &&
-				resMgr->get_anim_frames(p_name).is_valid()) {
+		if (!resMgr->has_animation(key) &&
+				resMgr->has_animation(p_name)) {
 			key = p_name;
 		}
 		r_visual.source.key = key;
@@ -62,9 +61,9 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 					? p_raster_scale
 					: _get_actual_match_render_scale();
 			shared_frames =
-					svgMgr->get_svg_animation(key, r_visual.source.raster_scale);
+					resMgr->get_animation_frames(key, r_visual.source.raster_scale);
 		} else {
-			shared_frames = resMgr->get_anim_frames(key);
+			shared_frames = resMgr->get_animation_frames(key);
 		}
 	}
 	r_visual.animation = r_visual.source.key;
@@ -88,24 +87,28 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 	return r_visual.frames.is_valid();
 }
 
+void SpxSprite::_play_prepared_animation(const PreparedVisual &p_visual, GdFloat p_speed, GdBool p_from_end) {
+	const bool changed_animation = anim2d->get_animation() != p_visual.animation;
+	_commit_visual(p_visual);
+	playback_speed = p_speed;
+	anim2d->play(p_visual.animation, p_speed, p_from_end);
+	if (changed_animation && p_from_end) {
+		// commit selected the new name already; preserve Godot play() semantics
+		// for a new clip even when its effective playback speed is positive.
+		anim2d->set_frame_and_progress(p_visual.frames->get_frame_count(p_visual.animation) - 1, 1.0);
+	}
+	_on_frame_changed();
+	_update_current_frame_shader_uv_rect();
+}
+
 void SpxSprite::play_anim(GdString p_name, GdFloat p_speed, GdBool p_is_loop, GdBool p_from_end) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	PreparedVisual visual;
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
 		return;
 	}
-	const bool changed_animation = anim2d->get_animation() != visual.animation;
 	visual.frames->set_animation_loop(visual.animation, p_is_loop);
-	_commit_visual(visual);
-	playback_speed = p_speed;
-	anim2d->play(visual.animation, p_speed, p_from_end);
-	if (changed_animation && p_from_end) {
-		// commit selected the new name already; preserve Godot play() semantics
-		// for a new clip even when its effective playback speed is positive.
-		anim2d->set_frame_and_progress(visual.frames->get_frame_count(visual.animation) - 1, 1.0);
-	}
-	_on_frame_changed();
-	_update_current_frame_shader_uv_rect();
+	_play_prepared_animation(visual, p_speed, p_from_end);
 }
 
 void SpxSprite::play_backwards_anim(GdString p_name) {
@@ -114,15 +117,7 @@ void SpxSprite::play_backwards_anim(GdString p_name) {
 	if (!_prepare_animation(SpxStr(p_name), visual)) {
 		return;
 	}
-	const bool changed_animation = anim2d->get_animation() != visual.animation;
-	_commit_visual(visual);
-	playback_speed = -1.0f;
-	anim2d->play_backwards(visual.animation);
-	if (changed_animation) {
-		anim2d->set_frame_and_progress(visual.frames->get_frame_count(visual.animation) - 1, 1.0);
-	}
-	_on_frame_changed();
-	_update_current_frame_shader_uv_rect();
+	_play_prepared_animation(visual, -1.0f, true);
 }
 
 void SpxSprite::pause_anim() {

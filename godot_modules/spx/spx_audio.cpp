@@ -37,7 +37,7 @@
 #include "spx_audio_bus_pool.h"
 #include "spx_audio_mgr.h"
 #include "spx_engine.h"
-#include "spx_object_guard.h"
+#include "spx_object_access.h"
 #include "spx_res_mgr.h"
 
 AudioStreamPlayer2D *SpxAudio::_get_aid_audio(GdInt aid) const {
@@ -134,17 +134,17 @@ bool SpxAudio::has_audio(GdInt aid) const {
 }
 
 GdBool SpxAudio::is_playing(GdInt aid) {
-	SPX_AUDIO_GUARD_RETURN(aid, __func__, false)
+	SPX_AUDIO_LOOKUP_RETURN(aid, __func__, false)
 	return audio->is_playing();
 }
 
 void SpxAudio::pause(GdInt aid) {
-	SPX_AUDIO_GUARD_VOID(aid, __func__)
+	SPX_AUDIO_LOOKUP_VOID(aid, __func__)
 	audio->set_stream_paused(true);
 }
 
 void SpxAudio::resume(GdInt aid) {
-	SPX_AUDIO_GUARD_VOID(aid, __func__)
+	SPX_AUDIO_LOOKUP_VOID(aid, __func__)
 	audio->set_stream_paused(false);
 }
 
@@ -154,7 +154,7 @@ void SpxAudio::stop(GdInt aid) {
 }
 
 GdBool SpxAudio::restart(GdInt aid) {
-	SPX_AUDIO_GUARD_RETURN(aid, __func__, false)
+	SPX_AUDIO_LOOKUP_RETURN(aid, __func__, false)
 	if (audio->is_queued_for_deletion() || !audio->get_stream().is_valid()) {
 		return false;
 	}
@@ -163,22 +163,22 @@ GdBool SpxAudio::restart(GdInt aid) {
 }
 
 void SpxAudio::set_loop(GdInt aid, GdBool loop) {
-	SPX_AUDIO_GUARD_VOID(aid, __func__)
+	SPX_AUDIO_LOOKUP_VOID(aid, __func__)
 	voices[aid].loop = loop;
 }
 
 GdBool SpxAudio::get_loop(GdInt aid) {
-	SPX_AUDIO_GUARD_RETURN(aid, __func__, false)
+	SPX_AUDIO_LOOKUP_RETURN(aid, __func__, false)
 	return voices[aid].loop;
 }
 
 GdFloat SpxAudio::get_timer(GdInt aid) {
-	SPX_AUDIO_GUARD_RETURN(aid, __func__, 0)
+	SPX_AUDIO_LOOKUP_RETURN(aid, __func__, 0)
 	return audio->get_playback_position();
 }
 
 void SpxAudio::set_timer(GdInt aid, GdFloat time) {
-	SPX_AUDIO_GUARD_VOID(aid, __func__)
+	SPX_AUDIO_LOOKUP_VOID(aid, __func__)
 	audio->seek(time);
 }
 

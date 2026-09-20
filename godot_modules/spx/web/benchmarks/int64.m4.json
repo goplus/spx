@@ -1,0 +1,211 @@
+{
+  "node": "v24.20.0",
+  "cpu": "Apple M4",
+  "platform": "darwin/arm64",
+  "baseline": "f497756e54",
+  "candidate": "three-rounds",
+  "samples": 7,
+  "callsPerSample": 200000,
+  "cases": [
+    {
+      "name": "float input",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 11.399040999999997,
+        "minMs": 10.866833,
+        "maxMs": 11.83458300000001,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 17.545335612004557
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 10.740290999999985,
+        "minMs": 10.594583,
+        "maxMs": 11.037834000000004,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 18.6214693810438
+      },
+      "speedup": 1.061334464773814
+    },
+    {
+      "name": "bool input",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 12.57695799999999,
+        "minMs": 12.177542000000017,
+        "maxMs": 12.835207999999994,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 15.902096516502652
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 12.94149999999999,
+        "minMs": 12.391250000000014,
+        "maxMs": 13.928167000000002,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 15.454159100567951
+      },
+      "speedup": 0.9718315496658038
+    },
+    {
+      "name": "64-bit ID + float",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 67.41704200000004,
+        "minMs": 67.19508299999995,
+        "maxMs": 68.44991699999991,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.9666089473341164
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 62.36687500000005,
+        "minMs": 61.972999999999956,
+        "maxMs": 63.423625000000015,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 3.2068305490695157
+      },
+      "speedup": 1.0809751490675135
+    },
+    {
+      "name": "64-bit ID + 4 floats",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 67.62954200000013,
+        "minMs": 67.20600000000013,
+        "maxMs": 67.87112499999989,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.9572875120165625
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 62.89191600000004,
+        "minMs": 62.44724999999994,
+        "maxMs": 63.02604099999985,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 3.180058944300566
+      },
+      "speedup": 1.075329649680256
+    },
+    {
+      "name": "two 64-bit integers",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 5,
+        "wrapperAcquires": 2,
+        "wrapperReleases": 2,
+        "medianMs": 125.79449999999997,
+        "minMs": 125.73533300000008,
+        "maxMs": 126.09487499999977,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.5898946297334149
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 111.73245900000029,
+        "minMs": 111.4935419999997,
+        "maxMs": 111.95229100000006,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.789990140644801
+      },
+      "speedup": 1.125854573736712
+    },
+    {
+      "name": "64-bit ID + integer",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 5,
+        "wrapperAcquires": 2,
+        "wrapperReleases": 2,
+        "medianMs": 123.80020800000057,
+        "minMs": 123.20937499999991,
+        "maxMs": 124.59054199999991,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.6155061710397054
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 112.61566700000003,
+        "minMs": 112.05466700000034,
+        "maxMs": 113.75308300000052,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.7759518309295272
+      },
+      "speedup": 1.0993160303352867
+    },
+    {
+      "name": "two 64-bit IDs + bool result",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 7,
+        "wrapperAcquires": 3,
+        "wrapperReleases": 3,
+        "medianMs": 210.85625000000073,
+        "minMs": 210.42575000000033,
+        "maxMs": 212.1522500000001,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 0.9485135014968696
+      },
+      "after": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 184.59145800000078,
+        "minMs": 184.04650000000038,
+        "maxMs": 186.45637499999975,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.0834737542405626
+      },
+      "speedup": 1.142286063962937
+    },
+    {
+      "name": "100 sprites: rotation + visibility",
+      "callsPerIteration": 200,
+      "before": {
+        "wasmCalls": 600,
+        "wrapperAcquires": 200,
+        "wrapperReleases": 200,
+        "medianMs": 67.91200000000026,
+        "minMs": 67.66983299999993,
+        "maxMs": 67.99116700000013,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.944987631051938
+      },
+      "after": {
+        "wasmCalls": 200,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 62.281332999998995,
+        "minMs": 62.03399999999965,
+        "maxMs": 62.5262500000008,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 3.2112350581835365
+      },
+      "speedup": 1.090406976356806
+    }
+  ]
+}

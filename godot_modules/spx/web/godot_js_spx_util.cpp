@@ -562,16 +562,6 @@ GdBool* gdspx_alloc_bool() {
 }
 
 EMSCRIPTEN_KEEPALIVE
-GdBool* gdspx_new_bool(bool val) {
-    GdBool* ptr = gdspx_alloc_bool();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    *ptr = (GdBool)val;
-    return ptr;
-}
-
-EMSCRIPTEN_KEEPALIVE
 void gdspx_free_bool(GdBool* b) {
 	if (b == nullptr || !boolPool.is_active(b)) {
 		return;
@@ -584,16 +574,6 @@ void gdspx_free_bool(GdBool* b) {
 EMSCRIPTEN_KEEPALIVE
 GdFloat* gdspx_alloc_float() {
     return floatPool.acquire();
-}
-
-EMSCRIPTEN_KEEPALIVE
-GdFloat* gdspx_new_float(float val) {
-    GdFloat* ptr = gdspx_alloc_float();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    *ptr = (GdFloat)val;
-    return ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -611,17 +591,6 @@ GdInt* gdspx_alloc_int() {
 }
 
 EMSCRIPTEN_KEEPALIVE
-GdInt* gdspx_new_int(uint32_t high,uint32_t low) {
-    GdInt* ptr = gdspx_alloc_int();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    const uint64_t val = (static_cast<uint64_t>(high) << 32) | static_cast<uint64_t>(low);
-    memcpy(ptr, &val, sizeof(val));
-    return ptr;
-}
-
-EMSCRIPTEN_KEEPALIVE
 void gdspx_free_int(GdInt* i) {
     if (i == nullptr || !intPool.is_active(i)) {
         return;
@@ -634,17 +603,6 @@ void gdspx_free_int(GdInt* i) {
 EMSCRIPTEN_KEEPALIVE
 GdObj* gdspx_alloc_obj() {
     return objPool.acquire();
-}
-
-EMSCRIPTEN_KEEPALIVE
-GdObj* gdspx_new_obj(uint32_t high,uint32_t low) {
-    GdObj* ptr = gdspx_alloc_obj();
-    if (ptr == nullptr) {
-        return nullptr;
-    }
-    const uint64_t val = (static_cast<uint64_t>(high) << 32) | static_cast<uint64_t>(low);
-    memcpy(ptr, &val, sizeof(val));
-    return ptr;
 }
 
 EMSCRIPTEN_KEEPALIVE

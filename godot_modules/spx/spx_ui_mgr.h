@@ -36,18 +36,17 @@
 #include "spx_ui.h"
 #include "spx_ui_binding.h"
 class Node;
-class SpxUiMgr : public SpxBaseMgr, private SpxUiBindingListener {
-	SPXCLASS(SpxUiMgr, SpxBaseMgr)
-
-public:
-	virtual ~SpxUiMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
+class CanvasLayer;
+class SpxUiMgr : public SpxManager, private SpxUiBindingListener {
 
 private:
 	RBMap<GdObj, SpxUi *> id_objects;
+	CanvasLayer *canvas_layer = nullptr;
 
 	Control *create_control(GdString path);
 	void _clear_nodes(bool emit_destroyed, bool queue_controls);
-	Node *create_owner_node() override;
+	void _create_canvas_layer();
+	void _release_canvas_layer();
 	void on_spx_ui_clicked(GdObj p_gid, ObjectID p_binding_id) override;
 	void on_spx_ui_destroyed(GdObj p_gid, ObjectID p_binding_id) override;
 

@@ -31,7 +31,6 @@
 #include "spx_physics_mgr.h"
 
 #include "core/templates/hash_set.h"
-#include "core/variant/typed_array.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/collision_shape_2d.h"
@@ -40,24 +39,28 @@
 #include "scene/resources/2d/rectangle_shape_2d.h"
 #include "scene/resources/world_2d.h"
 #include "servers/physics_server_2d.h"
-#include "servers/physics_server_3d.h"
 
 #include "gdextension_spx_ext.h"
+#include "spx_abi.h"
 #include "spx_camera_mgr.h"
 #include "spx_coordinate.h"
-#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_sprite.h"
 #include "spx_sprite_mgr.h"
 
-GdArray SpxRaycastInfo::ToArray() {
+// Ray-query arrays encode coordinates and normals as fixed-point integers.
+static GdInt pack_query_float(GdFloat value) {
+	return (GdInt)(value * 10000);
+}
+
+GdArray SpxPhysicsMgr::RayHit::to_array() const {
 	GdArray result_array = SpxAbi::create_array(GD_ARRAY_TYPE_INT64, 6);
 	SpxAbi::set_array(result_array, 0, (GdInt)collide);
-	SpxAbi::set_array(result_array, 1, (GdInt)sprite_gid);
-	SpxAbi::set_array(result_array, 2, spx_float_to_int(position.x));
-	SpxAbi::set_array(result_array, 3, spx_float_to_int(position.y));
-	SpxAbi::set_array(result_array, 4, spx_float_to_int(normal.x));
-	SpxAbi::set_array(result_array, 5, spx_float_to_int(normal.y));
+	SpxAbi::set_array(result_array, 1, (GdInt)sprite_id);
+	SpxAbi::set_array(result_array, 2, pack_query_float(position.x));
+	SpxAbi::set_array(result_array, 3, pack_query_float(position.y));
+	SpxAbi::set_array(result_array, 4, pack_query_float(normal.x));
+	SpxAbi::set_array(result_array, 5, pack_query_float(normal.y));
 	return result_array;
 }
 
@@ -86,19 +89,11 @@ GdFloat SpxPhysicsDefine::get_global_air_drag() {
 }
 
 void SpxPhysicsMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	is_collision_by_pixel = true;
 }
 
-void SpxPhysicsMgr::on_reset(int reset_code) {
-}
-
-SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies) {
-	SpxRaycastInfo info;
-	info.collide = false;
-	info.position = GdVec2{ 0, 0 };
-	info.normal = GdVec2{ 0, 0 };
-	info.sprite_gid = 0;
+SpxPhysicsMgr::RayHit SpxPhysicsMgr::_query_ray(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies) {
+	RayHit info;
 
 	GdVec2 current_from = spx_to_godot_vec2(from);
 	GdVec2 target_to = spx_to_godot_vec2(to);
@@ -130,8 +125,7 @@ SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sp
 	params.collide_with_bodies = collide_with_bodies;
 	params.exclude = ignore_set;
 
-	auto node = (Node2D *)get_root();
-	PhysicsDirectSpaceState2D *space_state = node->get_world_2d()->get_direct_space_state();
+	PhysicsDirectSpaceState2D *space_state = _get_space_state();
 	if (!space_state) {
 		return info;
 	}
@@ -140,56 +134,30 @@ SpxRaycastInfo SpxPhysicsMgr::_raycast(GdVec2 from, GdVec2 to, GdArray ignore_sp
 	if (!hit) {
 		return info;
 	}
-	SpxSprite *collider = dynamic_cast<SpxSprite *>(result.collider);
+	SpxSprite *collider = Object::cast_to<SpxSprite>(result.collider);
 	GdObj current_gid = collider ? collider->get_gid() : 0;
 	info.collide = true;
 	info.position = godot_to_spx_vec2(result.position);
 	info.normal = godot_to_spx_vec2(result.normal);
-	info.sprite_gid = current_gid;
+	info.sprite_id = current_gid;
 	return info;
 }
 
+PhysicsDirectSpaceState2D *SpxPhysicsMgr::_get_space_state() {
+	Window *viewport = get_root();
+	return viewport != nullptr ? viewport->get_world_2d()->get_direct_space_state() : nullptr;
+}
+
 GdArray SpxPhysicsMgr::raycast_with_details(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies) {
-	SpxRaycastInfo info = _raycast(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies);
-	return info.ToArray();
+	return _query_ray(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies).to_array();
 }
 
 GdObj SpxPhysicsMgr::raycast(GdVec2 from, GdVec2 to, GdInt collision_mask) {
-	auto node = (Node2D *)get_root();
-	PhysicsDirectSpaceState2D *space_state = node->get_world_2d()->get_direct_space_state();
-
-	PhysicsDirectSpaceState2D::RayResult result;
-	PhysicsDirectSpaceState2D::RayParameters params;
-	from = spx_to_godot_vec2(from);
-	to = spx_to_godot_vec2(to);
-	params.from = from;
-	params.to = to;
-	params.collision_mask = (uint32_t)collision_mask;
-	bool hit = space_state->intersect_ray(params, result);
-	if (hit) {
-		SpxSprite *collider = dynamic_cast<SpxSprite *>(result.collider);
-		if (collider != nullptr) {
-			return collider->get_gid();
-		}
-	}
-	return 0;
+	return _query_ray(from, to, nullptr, collision_mask, false, true).sprite_id;
 }
 
 GdBool SpxPhysicsMgr::check_collision(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies) {
-	auto node = (Node2D *)get_root();
-	PhysicsDirectSpaceState2D *space_state = node->get_world_2d()->get_direct_space_state();
-	PhysicsDirectSpaceState2D::RayResult result;
-	PhysicsDirectSpaceState2D::RayParameters params;
-
-	from = spx_to_godot_vec2(from);
-	to = spx_to_godot_vec2(to);
-	params.from = from;
-	params.to = to;
-	params.collision_mask = (uint32_t)collision_mask;
-	params.collide_with_areas = collide_with_areas;
-	params.collide_with_bodies = collide_with_bodies;
-	bool hit = space_state->intersect_ray(params, result);
-	return hit;
+	return _query_ray(from, to, nullptr, collision_mask, collide_with_areas, collide_with_bodies).collide;
 }
 
 // Internal helper function for boundary checking
@@ -293,41 +261,21 @@ GdInt SpxPhysicsMgr::_check_nearest_touched_boundary(GdObj obj, GdBool use_stage
 	real_t bound_right = boundary_rect.position.x + boundary_rect.size.x;
 	real_t bound_bottom = boundary_rect.position.y + boundary_rect.size.y;
 
-	// Calculate distances to edges (positive when far away, clamped to 0 when beyond)
-	real_t dist_left = MAX(0.0, left - bound_left);
-	real_t dist_top = MAX(0.0, top - bound_top);
-	real_t dist_right = MAX(0.0, bound_right - right);
-	real_t dist_bottom = MAX(0.0, bound_bottom - bottom);
-
-	// Find nearest edge
-	real_t min_dist = INFINITY;
-	GdInt nearest_edge = 0;
-
-	if (dist_left < min_dist) {
-		min_dist = dist_left;
-		nearest_edge = BOUND_LEFT;
+	// Positive distances never count as a touch. The first touched edge wins,
+	// preserving the left/top/right/bottom tie order at corners.
+	if (left - bound_left <= 0) {
+		return BOUND_LEFT;
 	}
-
-	if (dist_top < min_dist) {
-		min_dist = dist_top;
-		nearest_edge = BOUND_TOP;
+	if (top - bound_top <= 0) {
+		return BOUND_TOP;
 	}
-
-	if (dist_right < min_dist) {
-		min_dist = dist_right;
-		nearest_edge = BOUND_RIGHT;
+	if (bound_right - right <= 0) {
+		return BOUND_RIGHT;
 	}
-
-	if (dist_bottom < min_dist) {
-		min_dist = dist_bottom;
-		nearest_edge = BOUND_BOTTOM;
+	if (bound_bottom - bottom <= 0) {
+		return BOUND_BOTTOM;
 	}
-
-	if (min_dist > 0) {
-		return 0;
-	}
-
-	return nearest_edge;
+	return 0;
 }
 
 GdInt SpxPhysicsMgr::check_nearest_touched_camera_boundary(GdObj obj) {
@@ -375,9 +323,8 @@ GdFloat SpxPhysicsMgr::get_global_air_drag() {
 	return SpxPhysicsDefine::get_global_air_drag();
 }
 
-GdArray SpxPhysicsMgr::_check_collision(RID shape, GdVec2 pos, GdInt collision_mask) {
-	auto node = (Node2D *)get_root();
-	PhysicsDirectSpaceState2D *space_state = node->get_world_2d()->get_direct_space_state();
+GdArray SpxPhysicsMgr::_query_shape(RID shape, GdVec2 pos, GdInt collision_mask) {
+	PhysicsDirectSpaceState2D *space_state = _get_space_state();
 	if (!space_state) {
 		return SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, 0);
 	}
@@ -393,24 +340,20 @@ GdArray SpxPhysicsMgr::_check_collision(RID shape, GdVec2 pos, GdInt collision_m
 	params.motion = Vector2(0, 0);
 	params.margin = 0.0;
 
-	PhysicsDirectSpaceState2D::ShapeResult results[32];
-	int result_count = space_state->intersect_shape(params, results, 32);
-
-	Array resultIds;
+	constexpr int MAX_QUERY_HITS = 32;
+	PhysicsDirectSpaceState2D::ShapeResult results[MAX_QUERY_HITS];
+	const int result_count = space_state->intersect_shape(params, results, MAX_QUERY_HITS);
+	GdObj ids[MAX_QUERY_HITS];
+	int count = 0;
 	for (int i = 0; i < result_count; i++) {
-		Object *collider_obj = results[i].collider;
-		if (collider_obj) {
-			SpxSprite *sprite = dynamic_cast<SpxSprite *>(collider_obj);
-			if (sprite) {
-				resultIds.push_back(sprite->get_gid());
-			}
+		SpxSprite *sprite = Object::cast_to<SpxSprite>(results[i].collider);
+		if (sprite != nullptr) {
+			ids[count++] = sprite->get_gid();
 		}
 	}
-	int valid_count = resultIds.size();
-	GdArray result_array = SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, valid_count);
-	for (int i = 0; i < valid_count; i++) {
-		auto val = (GdObj)resultIds.get(i);
-		SpxAbi::set_array(result_array, i, val);
+	GdArray result_array = SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, count);
+	for (int i = 0; i < count; i++) {
+		SpxAbi::set_array(result_array, i, ids[i]);
 	}
 	return result_array;
 }
@@ -418,12 +361,12 @@ GdArray SpxPhysicsMgr::check_collision_rect(GdVec2 pos, GdVec2 size, GdInt colli
 	Ref<RectangleShape2D> rect_shape;
 	rect_shape.instantiate();
 	rect_shape->set_size(size);
-	return _check_collision(rect_shape->get_rid(), pos, collision_mask);
+	return _query_shape(rect_shape->get_rid(), pos, collision_mask);
 }
 
 GdArray SpxPhysicsMgr::check_collision_circle(GdVec2 pos, GdFloat radius, GdInt collision_mask) {
 	Ref<CircleShape2D> circle_shape;
 	circle_shape.instantiate();
 	circle_shape->set_radius(radius);
-	return _check_collision(circle_shape->get_rid(), pos, collision_mask);
+	return _query_shape(circle_shape->get_rid(), pos, collision_mask);
 }

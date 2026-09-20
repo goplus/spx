@@ -35,6 +35,7 @@
 #include "core/extension/gdextension_interface.h"
 #include "scene/main/window.h"
 #include "../spx_engine.h"
+#include "../spx_mgr_access.h"
 #include "godot_js_spx_util.h"
 {{ $view := . -}}
 
@@ -43,9 +44,6 @@
 {{ end }}
 #include <emscripten.h>
 
-{{- range $i, $name := $view.Managers }}
-#define {{$name}}Mgr SpxEngine::get_singleton()->get_{{$name}}()
-{{- end }}
 
 extern "C" {
 {{- range $i, $f := $view.AST.CollectGDExtensionInterfaceFunctions -}}
@@ -87,34 +85,19 @@ void gd{{ loadProcAddressName $f.Name }}(
 	{{- end }}
 	{{- end }}
 	{{- if isWebGdStringReturn $f }}
-	GdString result = {{ methodTarget $f }}(
-	{{- range $j, $arg := $f.Arguments }}
-			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $f $arg $j }}
-		{{- end -}}
-	);
+	GdString result = {{ webManagerCall $f }};
 	if (!gdspx_bind_string_wrapper(ret_val, result)) {
 		return;
 	}
 	{{- else if isWebGdArrayReturn $f }}
-	GdArray result = {{ methodTarget $f }}(
-	{{- range $j, $arg := $f.Arguments }}
-			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $f $arg $j }}
-		{{- end -}}
-	);
+	GdArray result = {{ webManagerCall $f }};
 	*ret_val = result;
 	if (result != nullptr && !gdspx_bind_array_wrapper(ret_val)) {
 		*ret_val = nullptr;
 		gdspx_release_array_info(result);
 	}
 	{{- else }}
-	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ methodTarget $f }}(
-	{{- range $j, $arg := $f.Arguments }}
-			{{- if gt $j 0 }}, {{ end -}}
-			{{- webManagerArgument $f $arg $j }}
-		{{- end -}}
-	);
+	{{ if ne "void" $f.ReturnType.CStyleString -}} *ret_val = {{- end }} {{ webManagerCall $f }};
 	{{- end }}
 }
 {{- end -}}

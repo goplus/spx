@@ -184,9 +184,9 @@ type IPlatformMgr interface {
 	SetTimeScale(time_scale float64)
 	GetMaxFps() int64
 	SetMaxFps(fps int64)
-	GetPersistantDataDir() string
-	SetPersistantDataDir(path string)
-	IsInPersistantDataDir(path string) bool
+	GetPersistentDataDir() string
+	SetPersistentDataDir(path string)
+	IsInPersistentDataDir(path string) bool
 }
 
 type IResMgr interface {

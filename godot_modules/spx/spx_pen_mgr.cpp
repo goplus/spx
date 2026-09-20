@@ -91,7 +91,6 @@ bool is_valid_pen_batch_command(float p_value) {
 } // namespace
 
 void SpxPenMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	surface = memnew(SpxPenSurface);
 	surface->set_name("pen_root");
 	root = surface;
@@ -105,18 +104,16 @@ void SpxPenMgr::on_awake() {
 }
 
 void SpxPenMgr::on_update(float delta) {
-	SpxBaseMgr::on_update(delta);
 	_update_all(delta);
 }
 
 void SpxPenMgr::on_destroy() {
 	surface = nullptr;
-	_destroy_all();
-	SpxBaseMgr::on_destroy();
+	_destroy_objects_and_root();
 }
 
 void SpxPenMgr::on_reset(int reset_code) {
-	_reset_all(reset_code);
+	_reset_objects(reset_code);
 	if (surface != nullptr) {
 		surface->clear();
 	}
@@ -131,7 +128,7 @@ void SpxPenMgr::destroy_pen(GdObj obj) {
 }
 
 void SpxPenMgr::batch_update_commands(const float *buffer_data, int len) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 
@@ -165,7 +162,7 @@ void SpxPenMgr::batch_update_commands(const float *buffer_data, int len) {
 	bool has_missing_pen = false;
 	for (int i = 0; i < command_count; i++) {
 		const float *record = &buffer_data[1 + i * SPX_PEN_BATCH_FIELDS];
-		SpxPen *pen = _get_object_unsafe(read_gd_obj_lanes(record));
+		SpxPen *pen = _find_object(read_gd_obj_lanes(record));
 		if (pen == nullptr) {
 			has_missing_pen = true;
 			continue;
@@ -197,7 +194,7 @@ void SpxPenMgr::batch_update_commands(const float *buffer_data, int len) {
 }
 
 void SpxPenMgr::destroy_all_pens() {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 
@@ -210,7 +207,7 @@ void SpxPenMgr::destroy_all_pens() {
 }
 
 void SpxPenMgr::set_canvas_size(GdInt width, GdInt height) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 
@@ -220,7 +217,7 @@ void SpxPenMgr::set_canvas_size(GdInt width, GdInt height) {
 }
 
 void SpxPenMgr::flush_all() {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 

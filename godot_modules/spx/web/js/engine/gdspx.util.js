@@ -3,101 +3,12 @@ const GDSPX_UTF8_DECODER = new TextDecoder("utf-8");
 const GDSPX_MAX_STRING_BYTES = 256 * 1024 * 1024;
 
 // -----------------------------------------------------------------------------
-// Wasm Function Pointers
-// -----------------------------------------------------------------------------
-
-let gdspxFunctionPointerModule = null;
-let gdspxMalloc = null;
-let gdspxFree = null;
-let gdspxAllocArray = null;
-let gdspxAllocBool = null;
-let gdspxAllocColor = null;
-let gdspxAllocFloat = null;
-let gdspxAllocInt = null;
-let gdspxAllocObj = null;
-let gdspxAllocRect2 = null;
-let gdspxAllocString = null;
-let gdspxAllocVec2 = null;
-let gdspxAllocVec3 = null;
-let gdspxAllocVec4 = null;
-let gdspxFreeArray = null;
-let gdspxFreeBool = null;
-let gdspxFreeColor = null;
-let gdspxFreeFloat = null;
-let gdspxFreeInt = null;
-let gdspxFreeObj = null;
-let gdspxFreeRect2 = null;
-let gdspxFreeString = null;
-let gdspxFreeVec2 = null;
-let gdspxFreeVec3 = null;
-let gdspxFreeVec4 = null;
-let gdspxGetString = null;
-let gdspxGetStringLen = null;
-let gdspxNewBool = null;
-let gdspxNewColor = null;
-let gdspxNewFloat = null;
-let gdspxNewRect2 = null;
-let gdspxNewString = null;
-let gdspxNewVec2 = null;
-let gdspxNewVec3 = null;
-let gdspxNewVec4 = null;
-let gdspxBorrowArray = null;
-let gdspxGetArrayInfo = null;
-
-function BindGdspxFunctionPointers(module) {
-    gdspxMalloc = module['_cmalloc'];
-    gdspxFree = module['_cfree'];
-    gdspxAllocArray = module['_gdspx_alloc_array'];
-    gdspxAllocBool = module['_gdspx_alloc_bool'];
-    gdspxAllocColor = module['_gdspx_alloc_color'];
-    gdspxAllocFloat = module['_gdspx_alloc_float'];
-    gdspxAllocInt = module['_gdspx_alloc_int'];
-    gdspxAllocObj = module['_gdspx_alloc_obj'];
-    gdspxAllocRect2 = module['_gdspx_alloc_rect2'];
-    gdspxAllocString = module['_gdspx_alloc_string'];
-    gdspxAllocVec2 = module['_gdspx_alloc_vec2'];
-    gdspxAllocVec3 = module['_gdspx_alloc_vec3'];
-    gdspxAllocVec4 = module['_gdspx_alloc_vec4'];
-    gdspxFreeArray = module['_gdspx_free_array'];
-    gdspxFreeBool = module['_gdspx_free_bool'];
-    gdspxFreeColor = module['_gdspx_free_color'];
-    gdspxFreeFloat = module['_gdspx_free_float'];
-    gdspxFreeInt = module['_gdspx_free_int'];
-    gdspxFreeObj = module['_gdspx_free_obj'];
-    gdspxFreeRect2 = module['_gdspx_free_rect2'];
-    gdspxFreeString = module['_gdspx_free_string'];
-    gdspxFreeVec2 = module['_gdspx_free_vec2'];
-    gdspxFreeVec3 = module['_gdspx_free_vec3'];
-    gdspxFreeVec4 = module['_gdspx_free_vec4'];
-    gdspxGetString = module['_gdspx_get_string'];
-    gdspxGetStringLen = module['_gdspx_get_string_len'];
-    gdspxNewBool = module['_gdspx_new_bool'];
-    gdspxNewColor = module['_gdspx_new_color'];
-    gdspxNewFloat = module['_gdspx_new_float'];
-    gdspxNewRect2 = module['_gdspx_new_rect2'];
-    gdspxNewString = module['_gdspx_new_string'];
-    gdspxNewVec2 = module['_gdspx_new_vec2'];
-    gdspxNewVec3 = module['_gdspx_new_vec3'];
-    gdspxNewVec4 = module['_gdspx_new_vec4'];
-    gdspxBorrowArray = module['_gdspx_borrow_array'];
-    gdspxGetArrayInfo = module['_gdspx_get_array_info'];
-}
-
-function EnsureGdspxFunctionPointers() {
-    if (gdspxFunctionPointerModule === Module) {
-        return;
-    }
-    BindGdspxFunctionPointers(Module);
-    gdspxFunctionPointerModule = Module;
-}
-
-// -----------------------------------------------------------------------------
 // Scalar and Object Value Bridges
 // -----------------------------------------------------------------------------
 
-function ToGdBool(value) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewBool(value);
+// Go passes exact uint32 lanes; only the JS-to-Wasm boundary uses an i64 BigInt.
+function GdInt64FromParts(low, high) {
+    return BigInt.asIntN(64, (BigInt(high >>> 0) << 32n) | BigInt(low >>> 0));
 }
 
 function ToJsBool(ptr) {
@@ -107,13 +18,11 @@ function ToJsBool(ptr) {
 }
 
 function AllocGdBool() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocBool();
+    return Module['_gdspx_alloc_bool']();
 }
 
 function FreeGdBool(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeBool(ptr);
+    Module['_gdspx_free_bool'](ptr);
 }
 
 function ToJsObj(ptr, result) {
@@ -121,13 +30,11 @@ function ToJsObj(ptr, result) {
 }
 
 function AllocGdObj() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocObj();
+    return Module['_gdspx_alloc_obj']();
 }
 
 function FreeGdObj(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeObj(ptr);
+    Module['_gdspx_free_obj'](ptr);
 }
 
 // Wasm scalar pointers are word-aligned. Supplying a result reuses its storage;
@@ -141,23 +48,16 @@ function ToJsInt(ptr, result = {}) {
 }
 
 function AllocGdInt() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocInt();
+    return Module['_gdspx_alloc_int']();
 }
 
 function FreeGdInt(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeInt(ptr);
+    Module['_gdspx_free_int'](ptr);
 }
 
 // -----------------------------------------------------------------------------
 // Strings and Structured Math Types
 // -----------------------------------------------------------------------------
-
-function ToGdFloat(value) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewFloat(value);
-}
 
 function ToJsFloat(ptr) {
     const HEAPF32 = Module['HEAPF32'];
@@ -167,31 +67,30 @@ function ToJsFloat(ptr) {
 }
 
 function AllocGdFloat() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocFloat();
+    return Module['_gdspx_alloc_float']();
 }
 
 function FreeGdFloat(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeFloat(ptr);
+    Module['_gdspx_free_float'](ptr);
 }
 
 function ToGdString(str) {
-    EnsureGdspxFunctionPointers();
+    const malloc = Module['_cmalloc'];
+    const free = Module['_cfree'];
     const stringBytes = GDSPX_UTF8_ENCODER.encode(str);
     const allocationSize = stringBytes.length + 1;
     if (!Number.isSafeInteger(allocationSize) || allocationSize > GDSPX_MAX_STRING_BYTES ||
-            typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
+            typeof malloc !== 'function' || typeof free !== 'function') {
         throw new Error("String is too large or the Wasm allocator is unavailable");
     }
-    const ptr = gdspxMalloc(allocationSize);
+    const ptr = malloc(allocationSize);
     if (!Number.isSafeInteger(ptr) || ptr <= 0 || !IsHeapRange(ptr, allocationSize)) {
         throw new Error("Failed to allocate a Wasm string buffer");
     }
     Module['HEAPU8'].set(stringBytes, ptr);
     Module['HEAPU8'][ptr + stringBytes.length] = 0;
-    const gdstrPtr = gdspxNewString(ptr, stringBytes.length);
-    gdspxFree(ptr);
+    const gdstrPtr = Module['_gdspx_new_string'](ptr, stringBytes.length);
+    free(ptr);
     if (!Number.isSafeInteger(gdstrPtr) || gdstrPtr <= 0) {
         throw new Error("Failed to allocate a GdString wrapper");
     }
@@ -199,13 +98,12 @@ function ToGdString(str) {
 }
 
 function ToJsString(gdstrPtr) {
-    EnsureGdspxFunctionPointers();
-    if (!gdstrPtr || typeof gdspxGetStringLen !== 'function' ||
-            typeof gdspxGetString !== 'function') {
+    if (!gdstrPtr || typeof Module['_gdspx_get_string_len'] !== 'function' ||
+            typeof Module['_gdspx_get_string'] !== 'function') {
         return '';
     }
-    const length = gdspxGetStringLen(gdstrPtr);
-    const ptr = gdspxGetString(gdstrPtr);
+    const length = Module['_gdspx_get_string_len'](gdstrPtr);
+    const ptr = Module['_gdspx_get_string'](gdstrPtr);
     if (!Number.isSafeInteger(length) || length < 0 || length > GDSPX_MAX_ARRAY_BYTES ||
             !Number.isSafeInteger(ptr) || ptr <= 0 || !IsHeapRange(ptr, length)) {
         return '';
@@ -215,18 +113,15 @@ function ToJsString(gdstrPtr) {
 }
 
 function AllocGdString() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocString();
+    return Module['_gdspx_alloc_string']();
 }
 
 function FreeGdString(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeString(ptr);
+    Module['_gdspx_free_string'](ptr);
 }
 
 function ToGdVec2(vec) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewVec2(vec['x'], vec['y']);
+    return Module['_gdspx_new_vec2'](vec['x'], vec['y']);
 }
 
 function ToJsVec2(ptr, out = {}) {
@@ -238,18 +133,15 @@ function ToJsVec2(ptr, out = {}) {
 }
 
 function AllocGdVec2() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocVec2();
+    return Module['_gdspx_alloc_vec2']();
 }
 
 function FreeGdVec2(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeVec2(ptr);
+    Module['_gdspx_free_vec2'](ptr);
 }
 
 function ToGdVec3(vec) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewVec3(vec['x'], vec['y'], vec['z']);
+    return Module['_gdspx_new_vec3'](vec['x'], vec['y'], vec['z']);
 }
 
 function ToJsVec3(ptr, out = {}) {
@@ -262,18 +154,15 @@ function ToJsVec3(ptr, out = {}) {
 }
 
 function AllocGdVec3() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocVec3();
+    return Module['_gdspx_alloc_vec3']();
 }
 
 function FreeGdVec3(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeVec3(ptr);
+    Module['_gdspx_free_vec3'](ptr);
 }
 
 function ToGdVec4(vec) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewVec4(vec['x'], vec['y'], vec['z'], vec['w']);
+    return Module['_gdspx_new_vec4'](vec['x'], vec['y'], vec['z'], vec['w']);
 }
 
 function ToJsVec4(ptr, out = {}) {
@@ -287,18 +176,15 @@ function ToJsVec4(ptr, out = {}) {
 }
 
 function AllocGdVec4() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocVec4();
+    return Module['_gdspx_alloc_vec4']();
 }
 
 function FreeGdVec4(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeVec4(ptr);
+    Module['_gdspx_free_vec4'](ptr);
 }
 
 function ToGdColor(color) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewColor(color['r'], color['g'], color['b'], color['a']);
+    return Module['_gdspx_new_color'](color['r'], color['g'], color['b'], color['a']);
 }
 
 function ToJsColor(ptr, out = {}) {
@@ -312,18 +198,15 @@ function ToJsColor(ptr, out = {}) {
 }
 
 function AllocGdColor() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocColor();
+    return Module['_gdspx_alloc_color']();
 }
 
 function FreeGdColor(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeColor(ptr);
+    Module['_gdspx_free_color'](ptr);
 }
 
 function ToGdRect2(rect) {
-    EnsureGdspxFunctionPointers();
-    return gdspxNewRect2(rect['position']['x'], rect['position']['y'], rect['size']['x'], rect['size']['y']);
+    return Module['_gdspx_new_rect2'](rect['position']['x'], rect['position']['y'], rect['size']['x'], rect['size']['y']);
 }
 
 function ToJsRect2(ptr, out = { 'position': {}, 'size': {} }) {
@@ -337,13 +220,11 @@ function ToJsRect2(ptr, out = { 'position': {}, 'size': {} }) {
 }
 
 function AllocGdRect2() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocRect2();
+    return Module['_gdspx_alloc_rect2']();
 }
 
 function FreeGdRect2(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeRect2(ptr);
+    Module['_gdspx_free_rect2'](ptr);
 }
 
 // -----------------------------------------------------------------------------
@@ -408,7 +289,6 @@ const NativeArrays = (() => {
         const generation = arrayBorrowGeneration;
         const ptr = arena.ptr + arena.offset;
         arena.offset += AlignArrayBytes(byteLength);
-        arena.sequence += 1;
 
         const array = Object.freeze({
             [GDSPX_ARRAY_TAG]: true,
@@ -417,9 +297,6 @@ const NativeArrays = (() => {
             'ptr': ptr,
             'module': module,
             'byteLength': byteLength,
-            'sequence': arena.sequence,
-            'pool': arena.pool,
-            'shared': typeof SharedArrayBuffer === 'function' && module['HEAPU8'].buffer instanceof SharedArrayBuffer,
             get 'data'() {
                 return generation === arrayBorrowGeneration ? NativeArrayDataView(ptr, byteLength, module) : GDSPX_EMPTY_U8;
             },
@@ -500,8 +377,9 @@ function GdspxFlushDeferredFrees() {
 // Reserve room in the current block, or rotate without invalidating earlier
 // arguments. Counts and byte lengths have already been checked by borrow().
 function GetArrayArena(byteLength, poolName) {
-    EnsureGdspxFunctionPointers();
-    if (typeof gdspxMalloc !== 'function' || typeof gdspxFree !== 'function') {
+    const malloc = Module['_cmalloc'];
+    const free = Module['_cfree'];
+    if (typeof malloc !== 'function' || typeof free !== 'function') {
         return null;
     }
     if (arrayArenaModule !== Module) {
@@ -520,14 +398,14 @@ function GetArrayArena(byteLength, poolName) {
     }
 
     const capacity = ArrayArenaCapacity(required);
-    const ptr = gdspxMalloc(capacity);
+    const ptr = malloc(capacity);
     if (!Number.isSafeInteger(ptr) || ptr <= 0 || ptr % GDSPX_ARRAY_ALIGNMENT !== 0 || !IsHeapRange(ptr, capacity)) {
         return null;
     }
     if (previous) {
         deferredArenaFrees.push(previous);
     }
-    const arena = { ptr, capacity, offset: 0, sequence: 0, module: Module, free: gdspxFree, pool };
+    const arena = { ptr, capacity, offset: 0, module: Module, free };
     arrayArenas.set(pool, arena);
     return arena;
 }
@@ -622,9 +500,8 @@ function ReadArrayOutput(exportName, type, count) {
 }
 
 function ToGdArray(array) {
-    EnsureGdspxFunctionPointers();
     const input = RequireNativeArrayBuffer(array, "ToGdArray");
-    const wrapper = gdspxBorrowArray(input['ptr'], input['byteLength'], input['count'], input['type']);
+    const wrapper = Module['_gdspx_borrow_array'](input['ptr'], input['byteLength'], input['count'], input['type']);
     if (!wrapper) {
         throw new Error("Invalid native array data");
     }
@@ -632,8 +509,7 @@ function ToGdArray(array) {
 }
 
 function ToJsArray(wrapper) {
-    EnsureGdspxFunctionPointers();
-    const info = gdspxGetArrayInfo(wrapper);
+    const info = Module['_gdspx_get_array_info'](wrapper);
     if (!info) {
         return null;
     }
@@ -693,13 +569,11 @@ function ToJsArray(wrapper) {
 }
 
 function AllocGdArray() {
-    EnsureGdspxFunctionPointers();
-    return gdspxAllocArray();
+    return Module['_gdspx_alloc_array']();
 }
 
 function FreeGdArray(ptr) {
-    EnsureGdspxFunctionPointers();
-    gdspxFreeArray(ptr);
+    Module['_gdspx_free_array'](ptr);
 }
 
 // These functions are called from Go/Wasm or Emscripten's separately compiled

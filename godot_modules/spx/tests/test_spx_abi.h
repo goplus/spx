@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_base_mgr.h                                                   */
+/*  test_spx_manager.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,15 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef TEST_SPX_BASE_MGR_H
-#define TEST_SPX_BASE_MGR_H
+#ifndef TEST_SPX_ABI_H
+#define TEST_SPX_ABI_H
 
 #include "../spx_abi.h"
 #include "core/string/print_string.h"
 #include "../web/godot_js_spx_util.h"
 #include "tests/test_macros.h"
 
-namespace TestSpxBaseMgr {
+namespace TestSpxAbi {
 
 TEST_CASE("[SPX] ABI string arrays are safe when only partially populated") {
 	GdArray array = SpxAbi::create_array(GD_ARRAY_TYPE_STRING, 3);
@@ -107,6 +107,6 @@ TEST_CASE("[SPX] ObjectPool rejects foreign and duplicate pointers") {
 	}
 }
 
-} // namespace TestSpxBaseMgr
+} // namespace TestSpxAbi
 
-#endif // TEST_SPX_BASE_MGR_H
+#endif // TEST_SPX_ABI_H

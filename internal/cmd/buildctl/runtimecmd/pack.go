@@ -31,8 +31,6 @@ type runtimeExportPackConfig struct {
 	engineAssetDir string
 }
 
-var prepareRuntimePackEngine = engine.PrepareLinuxRuntimePackAssets
-
 func ExportPackRuntime(runner shared.ScriptRunner) error {
 	return exportPackRuntime(runtimeExportPackConfig{}, runner)
 }
@@ -72,7 +70,7 @@ func parseRuntimeExportPackArgs(args []string) (runtimeExportPackConfig, error) 
 
 func exportPackRuntime(cfg runtimeExportPackConfig, runner shared.ScriptRunner) error {
 	if cfg.engineAssetDir != "" {
-		if err := prepareRuntimePackEngine(runner.RepoRootDir(), cfg.engineAssetDir); err != nil {
+		if err := engine.PrepareLinuxRuntimePackAssets(runner.RepoRootDir(), cfg.engineAssetDir); err != nil {
 			return err
 		}
 	}

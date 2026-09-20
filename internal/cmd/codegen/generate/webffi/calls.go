@@ -26,27 +26,15 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-type jsInt64Binding struct {
-	constructor string
-	split       string
-}
-
-var jsInt64Types = map[string]jsInt64Binding{
-	"GdInt": {constructor: "Module['_gdspx_new_int']", split: "JsSplitGdInt"},
-	"GdObj": {constructor: "Module['_gdspx_new_obj']", split: "JsSplitGdObj"},
-}
-
 func (g *Generator) jsArgs(function *clang.TypedefFunction) []string {
 	var result []string
 	for _, param := range g.Parameters(function) {
 		if param.IsLength {
 			continue
 		}
-		if param.Buffer == nil {
-			if _, ok := jsInt64Types[common.MustPrimitiveTypeName(param.Argument, function.Name)]; ok {
-				result = append(result, param.Name+"_low", param.Name+"_high")
-				continue
-			}
+		if param.WebInt64ByValue() {
+			result = append(result, param.Name+"_low", param.Name+"_high")
+			continue
 		}
 		result = append(result, param.Name)
 	}
@@ -82,16 +70,17 @@ func (g *Generator) jsBody(function *clang.TypedefFunction) string {
 			continue
 		}
 		typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
-		if param.DirectScalar() {
-			statements = append(statements, fmt.Sprintf("var %s = %s;", local, param.Name))
+		if param.WebScalarByValue() {
+			callArgs[param.Index] = param.Name
+			if param.WebInt64ByValue() {
+				callArgs[param.Index] = fmt.Sprintf("GdInt64FromParts(%s_low, %s_high)", param.Name, param.Name)
+			} else if typeName == "GdBool" {
+				callArgs[param.Index] += " ? 1 : 0"
+			}
 			continue
 		}
 		declarations = append(declarations, "var "+local+";")
-		if binding, ok := jsInt64Types[typeName]; ok {
-			statements = append(statements, fmt.Sprintf("%s = %s(%s_high, %s_low);", local, binding.constructor, param.Name, param.Name))
-		} else {
-			statements = append(statements, fmt.Sprintf("%s = To%s(%s);", local, typeName, param.Name))
-		}
+		statements = append(statements, fmt.Sprintf("%s = To%s(%s);", local, typeName, param.Name))
 		cleanup = append(cleanup, fmt.Sprintf("if (%s) Free%s(%s);", local, typeName, local))
 	}
 	if rawRetType != "" {

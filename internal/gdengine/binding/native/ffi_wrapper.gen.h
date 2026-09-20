@@ -678,19 +678,19 @@ void cgo_callfn_GDExtensionSpxPlatformSetMaxFps(const GDExtensionSpxPlatformSetM
 	}
 	fn(fps);
 }
-void cgo_callfn_GDExtensionSpxPlatformGetPersistantDataDir(const GDExtensionSpxPlatformGetPersistantDataDir fn, GdString* ret_val) {
+void cgo_callfn_GDExtensionSpxPlatformGetPersistentDataDir(const GDExtensionSpxPlatformGetPersistentDataDir fn, GdString* ret_val) {
 	if (!fn) {
 		return;
 	}
 	fn(ret_val);
 }
-void cgo_callfn_GDExtensionSpxPlatformSetPersistantDataDir(const GDExtensionSpxPlatformSetPersistantDataDir fn, GdString path) {
+void cgo_callfn_GDExtensionSpxPlatformSetPersistentDataDir(const GDExtensionSpxPlatformSetPersistentDataDir fn, GdString path) {
 	if (!fn) {
 		return;
 	}
 	fn(path);
 }
-void cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(const GDExtensionSpxPlatformIsInPersistantDataDir fn, GdString path, GdBool* ret_val) {
+void cgo_callfn_GDExtensionSpxPlatformIsInPersistentDataDir(const GDExtensionSpxPlatformIsInPersistentDataDir fn, GdString path, GdBool* ret_val) {
 	if (!fn) {
 		return;
 	}

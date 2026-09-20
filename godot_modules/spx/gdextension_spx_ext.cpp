@@ -193,7 +193,7 @@ static void gdextension_spx_debug_debug_draw_line(GdVec2 from, GdVec2 to, GdColo
 }
 
 static void gdextension_spx_ext_request_exit(GdInt exit_code) {
-	extMgr->request_exit(exit_code);
+	SpxExtMgr::request_exit(exit_code);
 }
 
 static void gdextension_spx_ext_request_reset(GdInt exit_code) {
@@ -205,7 +205,7 @@ static void gdextension_spx_ext_request_restart() {
 }
 
 static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
-	extMgr->on_runtime_panic(msg);
+	SpxExtMgr::on_runtime_panic(msg);
 }
 
 static void gdextension_spx_ext_pause() {
@@ -225,7 +225,7 @@ static void gdextension_spx_ext_next_frame() {
 }
 
 static void gdextension_spx_ext_set_layer_sorter_mode(GdInt mode) {
-	extMgr->set_layer_sorter_mode(mode);
+	SpxExtMgr::set_layer_sorter_mode(mode);
 }
 
 static void gdextension_spx_input_get_global_mouse_pos(GdVec2 *ret_val) {
@@ -508,16 +508,16 @@ static void gdextension_spx_platform_set_max_fps(GdInt fps) {
 	platformMgr->set_max_fps(fps);
 }
 
-static void gdextension_spx_platform_get_persistant_data_dir(GdString *ret_val) {
-	*ret_val = platformMgr->get_persistant_data_dir();
+static void gdextension_spx_platform_get_persistent_data_dir(GdString *ret_val) {
+	*ret_val = platformMgr->get_persistent_data_dir();
 }
 
-static void gdextension_spx_platform_set_persistant_data_dir(GdString path) {
-	platformMgr->set_persistant_data_dir(path);
+static void gdextension_spx_platform_set_persistent_data_dir(GdString path) {
+	platformMgr->set_persistent_data_dir(path);
 }
 
-static void gdextension_spx_platform_is_in_persistant_data_dir(GdString path, GdBool *ret_val) {
-	*ret_val = platformMgr->is_in_persistant_data_dir(path);
+static void gdextension_spx_platform_is_in_persistent_data_dir(GdString path, GdBool *ret_val) {
+	*ret_val = platformMgr->is_in_persistent_data_dir(path);
 }
 
 static void gdextension_spx_res_create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas) {
@@ -1519,9 +1519,9 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_time_scale);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_max_fps);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_max_fps);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_persistant_data_dir);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_persistant_data_dir);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_in_persistant_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_persistent_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_persistent_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_in_persistent_data_dir);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_create_animation);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_set_load_mode);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_load_mode);

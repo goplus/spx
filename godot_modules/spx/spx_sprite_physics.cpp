@@ -106,7 +106,7 @@ void SpxSprite::add_impulse(GdVec2 p_impulse) {
 		return;
 	}
 
-	applied_forces += Vector2(p_impulse.x, p_impulse.y);
+	pending_impulse += Vector2(p_impulse.x, p_impulse.y);
 }
 
 void SpxSprite::_physics_process(double p_delta) {
@@ -139,7 +139,8 @@ void SpxSprite::_handle_dynamic_physics(double p_delta) {
 	}
 
 	float safe_mass = Math::is_zero_approx(mass_value) ? 1.0f : mass_value;
-	current_velocity += applied_forces * p_delta / safe_mass;
+	// An impulse changes momentum once; unlike a force it is not integrated over time.
+	current_velocity += pending_impulse / safe_mass;
 	current_velocity += external_forces * p_delta;
 
 	if (drag_value > 0.0f) {
@@ -151,7 +152,7 @@ void SpxSprite::_handle_dynamic_physics(double p_delta) {
 	}
 
 	set_velocity(current_velocity);
-	applied_forces = Vector2();
+	pending_impulse = Vector2();
 }
 
 void SpxSprite::_handle_kinematic_physics(double /* p_delta */) {
@@ -160,7 +161,7 @@ void SpxSprite::_handle_kinematic_physics(double /* p_delta */) {
 void SpxSprite::_handle_static_physics(double /* p_delta */) {
 	set_velocity(Vector2());
 	external_forces = Vector2();
-	applied_forces = Vector2();
+	pending_impulse = Vector2();
 }
 
 void SpxSprite::_handle_no_physics(double p_delta) {
@@ -170,7 +171,7 @@ void SpxSprite::_handle_no_physics(double p_delta) {
 	}
 
 	external_forces = Vector2();
-	applied_forces = Vector2();
+	pending_impulse = Vector2();
 }
 
 void SpxSprite::_update_physics_mode() {

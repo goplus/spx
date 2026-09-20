@@ -32,21 +32,19 @@
 #define SPX_CAMERA_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 class Camera2D;
 
-class SpxCameraMgr : public SpxBaseMgr {
-	SPXCLASS(SpxCameraMgr, SpxBaseMgr)
-
-public:
-	virtual ~SpxCameraMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
+class SpxCameraMgr : public SpxManager {
 
 private:
 	Camera2D *camera = nullptr;
+	bool owns_camera = false;
 
 public:
 	void on_awake() override;
+	void on_destroy() override;
 	void on_reset(int reset_code) override;
 	Camera2D *get_camera() { return camera; }
 	Vector2 get_global_mouse_position();

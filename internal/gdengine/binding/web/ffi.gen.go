@@ -151,9 +151,9 @@ type GDExtensionInterface struct {
 	SpxPlatformSetTimeScale                     js.Value
 	SpxPlatformGetMaxFps                        js.Value
 	SpxPlatformSetMaxFps                        js.Value
-	SpxPlatformGetPersistantDataDir             js.Value
-	SpxPlatformSetPersistantDataDir             js.Value
-	SpxPlatformIsInPersistantDataDir            js.Value
+	SpxPlatformGetPersistentDataDir             js.Value
+	SpxPlatformSetPersistentDataDir             js.Value
+	SpxPlatformIsInPersistentDataDir            js.Value
 	SpxResCreateAnimation                       js.Value
 	SpxResSetLoadMode                           js.Value
 	SpxResGetLoadMode                           js.Value
@@ -489,9 +489,9 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPlatformSetTimeScale = resolveJSFunc("gdspx_platform_set_time_scale")
 	x.SpxPlatformGetMaxFps = resolveJSFunc("gdspx_platform_get_max_fps")
 	x.SpxPlatformSetMaxFps = resolveJSFunc("gdspx_platform_set_max_fps")
-	x.SpxPlatformGetPersistantDataDir = resolveJSFunc("gdspx_platform_get_persistant_data_dir")
-	x.SpxPlatformSetPersistantDataDir = resolveJSFunc("gdspx_platform_set_persistant_data_dir")
-	x.SpxPlatformIsInPersistantDataDir = resolveJSFunc("gdspx_platform_is_in_persistant_data_dir")
+	x.SpxPlatformGetPersistentDataDir = resolveJSFunc("gdspx_platform_get_persistent_data_dir")
+	x.SpxPlatformSetPersistentDataDir = resolveJSFunc("gdspx_platform_set_persistent_data_dir")
+	x.SpxPlatformIsInPersistentDataDir = resolveJSFunc("gdspx_platform_is_in_persistent_data_dir")
 	x.SpxResCreateAnimation = resolveJSFunc("gdspx_res_create_animation")
 	x.SpxResSetLoadMode = resolveJSFunc("gdspx_res_set_load_mode")
 	x.SpxResGetLoadMode = resolveJSFunc("gdspx_res_get_load_mode")

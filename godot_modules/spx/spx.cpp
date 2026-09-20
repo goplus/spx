@@ -120,10 +120,6 @@ void Spx::unregister_main_loop_callbacks() {
 	main_loop_callback_registration = MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
 }
 
-bool Spx::has_main_loop_callbacks_registered() {
-	return main_loop_callback_registration != MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
-}
-
 void Spx::set_debug_mode(bool enable) {
 	debug_mode = enable;
 	spx_collision_debug_mode_changed(enable);

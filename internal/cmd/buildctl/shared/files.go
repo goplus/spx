@@ -29,8 +29,6 @@ import (
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
-var fileDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
-
 func copyDir(src, dst string) error {
 	return fileutil.CopyDir(src, dst)
 }
@@ -59,7 +57,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	if maxBytes <= 0 {
 		return fmt.Errorf("invalid download size limit %d", maxBytes)
 	}
-	resp, err := GetURL(fileDownloadHTTPClient, url)
+	resp, err := GetURL(&http.Client{Timeout: 30 * time.Minute}, url)
 	if err != nil {
 		return err
 	}

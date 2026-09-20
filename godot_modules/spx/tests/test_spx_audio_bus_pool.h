@@ -115,6 +115,9 @@ TEST_CASE("[Audio][SPX] Audio bus pool owns, reuses, resets, and removes its bus
 	pool->set_pan(first_bus, 0.4f);
 	CHECK(Math::is_equal_approx(pool->get_volume(first_bus), 0.25f));
 	CHECK(Math::is_equal_approx(pool->get_pan(first_bus), 0.4f));
+	pool->set_pan(first_bus, -0.2f);
+	CHECK(Math::is_equal_approx(pool->get_pan(first_bus), -0.2f));
+	CHECK_EQ(audio_server->get_bus_effect_count(audio_server->get_bus_index(first_bus)), 1);
 	pool->free(first_bus);
 
 	const StringName reused_bus = pool->alloc();

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_object_guard.h                                                    */
+/*  spx_object_access.h                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SPX_OBJECT_GUARD_H
-#define SPX_OBJECT_GUARD_H
+#ifndef SPX_OBJECT_ACCESS_H
+#define SPX_OBJECT_ACCESS_H
 
 #include "core/os/thread.h"
 #include "core/string/ustring.h"
@@ -53,76 +53,75 @@ T *spx_checked_lookup(GdObj p_id, const char *p_context, Mgr *p_manager, Getter 
 	return object;
 }
 
-// Keep the existing call-site defaults and diagnostic context. These macros
-// introduce plain borrowed pointers, not owners or scoped lifetime guards.
-#define SPX_SPRITE_GUARD_VOID(obj, context_name)                               \
+// Checked lookups retain each call site's default return value.
+#define SPX_SPRITE_LOOKUP_VOID(obj, context_name)                              \
 	SpxSprite *sprite = spx_checked_lookup<SpxSprite>(obj, context_name, this, \
 			[](SpxSpriteMgr *mgr, GdObj id) { return mgr->get_sprite(id); });  \
 	if (sprite == nullptr) {                                                   \
 		return;                                                                \
 	}
 
-#define SPX_SPRITE_GUARD_RETURN(obj, context_name, return_val)                 \
+#define SPX_SPRITE_LOOKUP_RETURN(obj, context_name, return_val)                \
 	SpxSprite *sprite = spx_checked_lookup<SpxSprite>(obj, context_name, this, \
 			[](SpxSpriteMgr *mgr, GdObj id) { return mgr->get_sprite(id); });  \
 	if (sprite == nullptr) {                                                   \
 		return return_val;                                                     \
 	}
 
-#define SPX_TARGET_SPRITE_GUARD_VOID(target_obj, context_name)                               \
+#define SPX_TARGET_SPRITE_LOOKUP_VOID(target_obj, context_name)                              \
 	SpxSprite *sprite_target = spx_checked_lookup<SpxSprite>(target_obj, context_name, this, \
 			[](SpxSpriteMgr *mgr, GdObj id) { return mgr->get_sprite(id); });                \
 	if (sprite_target == nullptr) {                                                          \
 		return;                                                                              \
 	}
 
-#define SPX_TARGET_SPRITE_GUARD_RETURN(target_obj, context_name, return_val)                 \
+#define SPX_TARGET_SPRITE_LOOKUP_RETURN(target_obj, context_name, return_val)                \
 	SpxSprite *sprite_target = spx_checked_lookup<SpxSprite>(target_obj, context_name, this, \
 			[](SpxSpriteMgr *mgr, GdObj id) { return mgr->get_sprite(id); });                \
 	if (sprite_target == nullptr) {                                                          \
 		return return_val;                                                                   \
 	}
 
-#define SPX_UI_GUARD_VOID(obj, context_name)                            \
+#define SPX_UI_LOOKUP_VOID(obj, context_name)                           \
 	SpxUi *node = spx_checked_lookup<SpxUi>(obj, context_name, this,    \
 			[](SpxUiMgr *mgr, GdObj id) { return mgr->get_node(id); }); \
 	if (node == nullptr) {                                              \
 		return;                                                         \
 	}
 
-#define SPX_UI_GUARD_RETURN(obj, context_name, return_val)              \
+#define SPX_UI_LOOKUP_RETURN(obj, context_name, return_val)             \
 	SpxUi *node = spx_checked_lookup<SpxUi>(obj, context_name, this,    \
 			[](SpxUiMgr *mgr, GdObj id) { return mgr->get_node(id); }); \
 	if (node == nullptr) {                                              \
 		return return_val;                                              \
 	}
 
-#define SPX_AUDIO_GUARD_VOID(aid, context_name)                                                   \
+#define SPX_AUDIO_LOOKUP_VOID(aid, context_name)                                                  \
 	AudioStreamPlayer2D *audio = spx_checked_lookup<AudioStreamPlayer2D>(aid, context_name, this, \
 			[](SpxAudio *mgr, GdInt audio_id) { return mgr->_get_aid_audio(audio_id); });         \
 	if (audio == nullptr) {                                                                       \
 		return;                                                                                   \
 	}
 
-#define SPX_AUDIO_GUARD_RETURN(aid, context_name, return_val)                                     \
+#define SPX_AUDIO_LOOKUP_RETURN(aid, context_name, return_val)                                    \
 	AudioStreamPlayer2D *audio = spx_checked_lookup<AudioStreamPlayer2D>(aid, context_name, this, \
 			[](SpxAudio *mgr, GdInt audio_id) { return mgr->_get_aid_audio(audio_id); });         \
 	if (audio == nullptr) {                                                                       \
 		return return_val;                                                                        \
 	}
 
-#define SPX_UI_CONTROL_GUARD_VOID(context_name)                        \
+#define SPX_UI_CONTROL_LOOKUP_VOID(context_name)                       \
 	Control *node = spx_checked_lookup<Control>(0, context_name, this, \
 			[](SpxUi *ui, GdInt) { return ui->get_control_item(); });  \
 	if (node == nullptr) {                                             \
 		return;                                                        \
 	}
 
-#define SPX_UI_CONTROL_GUARD_RETURN(context_name, return_val)          \
+#define SPX_UI_CONTROL_LOOKUP_RETURN(context_name, return_val)         \
 	Control *node = spx_checked_lookup<Control>(0, context_name, this, \
 			[](SpxUi *ui, GdInt) { return ui->get_control_item(); });  \
 	if (node == nullptr) {                                             \
 		return return_val;                                             \
 	}
 
-#endif // SPX_OBJECT_GUARD_H
+#endif // SPX_OBJECT_ACCESS_H

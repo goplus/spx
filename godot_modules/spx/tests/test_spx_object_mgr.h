@@ -76,7 +76,6 @@ TEST_CASE("[SPX] Object manager rejects access outside the engine main thread") 
 	manager.add(id, value);
 
 	CHECK_EQ(manager.get_object(id), value);
-	CHECK_EQ(manager.get_object_count(), 1);
 
 	WorkerProbe probe;
 	probe.manager = &manager;
@@ -94,13 +93,13 @@ TEST_CASE("[SPX] Object manager rejects access outside the engine main thread") 
 	CHECK_FALSE(probe.with_object_result);
 	CHECK_EQ(value->update_count, 0);
 	CHECK_EQ(ManagedValue::destroy_count, 0);
-	CHECK_EQ(manager.get_object_count(), 1);
+	CHECK_EQ(manager.get_object(id), value);
 
 	manager.update_all();
 	CHECK_EQ(value->update_count, 1);
 	manager.destroy_object(id);
 	CHECK_EQ(ManagedValue::destroy_count, 1);
-	CHECK_EQ(manager.get_object_count(), 0);
+	CHECK_EQ(manager.get_object(id), nullptr);
 }
 #endif // THREADS_ENABLED
 

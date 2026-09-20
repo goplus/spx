@@ -40,12 +40,8 @@
 
 namespace ProjectFonts {
 
-static bool _fail(const String &p_message, String *r_error) {
-	if (r_error != nullptr) {
-		*r_error = p_message;
-	} else {
-		ERR_PRINT(p_message);
-	}
+static bool fail(const String &p_message, String &r_error) {
+	r_error = p_message;
 	return false;
 }
 
@@ -94,27 +90,13 @@ bool strings_from_array(GdArray p_values, const String &p_name, Vector<String> &
 	return true;
 }
 
-Vector<String> preferences_from_array(GdArray p_preferences) {
-	// The legacy native bridge encodes an empty []string as nullptr.
-	if (p_preferences == nullptr) {
-		return Vector<String>();
-	}
-	Vector<String> families;
-	String error;
-	if (!strings_from_array(p_preferences, "Font preferences", families, error)) {
-		ERR_PRINT(error);
-		families.clear();
-	}
-	return families;
-}
-
-bool load_font_data(const String &p_path, const String &p_engine_path, Vector<uint8_t> &r_font_data, String *r_error) {
+static bool load_font_data(const String &p_path, const String &p_engine_path, Vector<uint8_t> &r_font_data, String &r_error) {
 	if (ResourceLoader::exists(p_path, "FontFile")) {
 		Ref<FontFile> imported_font = ResourceLoader::load(p_path, "FontFile");
 		if (!imported_font.is_null()) {
 			r_font_data = imported_font->get_data();
 			if (r_font_data.is_empty()) {
-				return _fail("Loaded font resource has no data: " + p_path, r_error);
+				return fail("Loaded font resource has no data: " + p_path, r_error);
 			}
 			return true;
 		}
@@ -122,27 +104,27 @@ bool load_font_data(const String &p_path, const String &p_engine_path, Vector<ui
 
 	Ref<FileAccess> file = FileAccess::open(p_engine_path, FileAccess::READ);
 	if (file.is_null()) {
-		return _fail("Can not open font file: " + p_path + " engine_path= " + p_engine_path, r_error);
+		return fail("Can not open font file: " + p_path + " engine_path= " + p_engine_path, r_error);
 	}
 
 	uint64_t font_size = file->get_length();
 	if (font_size == 0) {
-		return _fail("Font file is empty: " + p_path + " engine_path= " + p_engine_path, r_error);
+		return fail("Font file is empty: " + p_path + " engine_path= " + p_engine_path, r_error);
 	}
 	if (font_size > uint64_t(std::numeric_limits<int>::max())) {
-		return _fail("Font file is too large: " + p_path + " engine_path= " + p_engine_path, r_error);
+		return fail("Font file is too large: " + p_path + " engine_path= " + p_engine_path, r_error);
 	}
 
 	r_font_data.resize((int)font_size);
 	uint64_t read_bytes = file->get_buffer(r_font_data.ptrw(), font_size);
 	if (read_bytes != font_size) {
 		r_font_data.resize(0);
-		return _fail("Can not read full font file: " + p_path + " engine_path= " + p_engine_path, r_error);
+		return fail("Can not read full font file: " + p_path + " engine_path= " + p_engine_path, r_error);
 	}
 	return true;
 }
 
-Ref<FontFile> create_display_font(const Vector<uint8_t> &p_font_data) {
+static Ref<FontFile> create_display_font(const Vector<uint8_t> &p_font_data) {
 	Ref<FontFile> font;
 	font.instantiate();
 	font->set_data(p_font_data);
@@ -156,6 +138,26 @@ Ref<FontFile> create_display_font(const Vector<uint8_t> &p_font_data) {
 	font->set_fixed_size(0);
 	font->set_allow_system_fallback(false);
 	return font;
+}
+
+bool prepare_font(const String &p_path, SpxResMgr &p_resources, Vector<uint8_t> &r_data, Ref<FontFile> &r_font, String &r_error) {
+	if (p_path.is_empty()) {
+		r_error = "Font path must not be empty.";
+		return false;
+	}
+	if (!load_font_data(p_path, p_resources._to_engine_path(p_path), r_data, r_error)) {
+		return false;
+	}
+	r_font = create_display_font(r_data);
+	if (r_font->get_face_count() <= 0) {
+		r_error = "Font file is not a supported font: " + p_path;
+		return false;
+	}
+	if (!SpxSvgUtils::is_font_data_valid(r_data)) {
+		r_error = "Font file is not supported by LunaSVG: " + p_path;
+		return false;
+	}
+	return true;
 }
 
 Ref<Font> build_display_font_chain(const HashMap<String, Ref<FontFile>> &p_fonts, const Vector<String> &p_preferences) {
@@ -218,8 +220,8 @@ bool decode_request(GdString p_default_font_path, GdArray p_font_paths, GdArray 
 }
 
 bool validate_request(Request &r_request, String &r_error) {
-	HashMap<String, String> available_families;
-	available_families.insert("default", "default");
+	HashSet<String> available_families;
+	available_families.insert("default");
 	for (int i = 0; i < r_request.faces.size(); i++) {
 		FaceSpec &face = r_request.faces.write[i];
 		if (face.path.is_empty()) {
@@ -239,18 +241,22 @@ bool validate_request(Request &r_request, String &r_error) {
 			r_error = "Font family " + face.family + " is duplicated after ASCII case folding.";
 			return false;
 		}
-		available_families.insert(face.family_key, face.family);
+		available_families.insert(face.family_key);
 	}
 
-	HashMap<String, bool> seen_preferences;
-	for (int i = 0; i < r_request.preferences.size(); i++) {
-		const String &preference = r_request.preferences[i];
+	return validate_preferences(r_request.preferences, available_families, r_error);
+}
+
+bool validate_preferences(const Vector<String> &p_preferences, const HashSet<String> &p_families, String &r_error) {
+	HashSet<String> seen_preferences;
+	for (int i = 0; i < p_preferences.size(); i++) {
+		const String &preference = p_preferences[i];
 		if (preference.is_empty()) {
 			r_error = "Font preference at index " + itos(i) + " must not be empty.";
 			return false;
 		}
 		const String folded_preference = fold_family(preference);
-		if (!available_families.has(folded_preference)) {
+		if (!p_families.has(folded_preference)) {
 			r_error = "Font preference " + preference + " is not an available font family.";
 			return false;
 		}
@@ -258,7 +264,7 @@ bool validate_request(Request &r_request, String &r_error) {
 			r_error = "Font preference " + preference + " is duplicated after ASCII case folding.";
 			return false;
 		}
-		seen_preferences.insert(folded_preference, true);
+		seen_preferences.insert(folded_preference);
 	}
 	return true;
 }
@@ -266,37 +272,21 @@ bool validate_request(Request &r_request, String &r_error) {
 bool prepare(const Request &p_request, SpxResMgr &p_res_mgr, Prepared &r_prepared, String &r_error) {
 	r_prepared = Prepared();
 	r_prepared.preferences = p_request.preferences;
-	if (!load_font_data(p_request.default_path, p_res_mgr._to_engine_path(p_request.default_path), r_prepared.default_data, &r_error)) {
-		return false;
-	}
-	r_prepared.default_font = create_display_font(r_prepared.default_data);
-	if (r_prepared.default_font.is_null() || r_prepared.default_font->get_face_count() <= 0) {
-		r_error = "Default font file is not a supported font: " + p_request.default_path;
-		return false;
-	}
-	if (!SpxSvgUtils::is_font_data_valid(r_prepared.default_data)) {
-		r_error = "Default font file is not supported by LunaSVG: " + p_request.default_path;
+	Ref<FontFile> font;
+	if (!prepare_font(p_request.default_path, p_res_mgr, r_prepared.default_data, font, r_error)) {
 		return false;
 	}
 
-	r_prepared.display_fonts.insert("default", r_prepared.default_font);
+	r_prepared.display_fonts.insert("default", font);
 	r_prepared.faces.resize(p_request.faces.size());
 	for (int i = 0; i < p_request.faces.size(); i++) {
-		PreparedFace &prepared_face = r_prepared.faces.write[i];
-		prepared_face.spec = p_request.faces[i];
-		if (!load_font_data(prepared_face.spec.path, p_res_mgr._to_engine_path(prepared_face.spec.path), prepared_face.data, &r_error)) {
+		const FaceSpec &face = p_request.faces[i];
+		SpxSvgProjectFontFace &prepared_face = r_prepared.faces.write[i];
+		prepared_face.family = face.family;
+		if (!prepare_font(face.path, p_res_mgr, prepared_face.data, font, r_error)) {
 			return false;
 		}
-		prepared_face.display_font = create_display_font(prepared_face.data);
-		if (prepared_face.display_font.is_null() || prepared_face.display_font->get_face_count() <= 0) {
-			r_error = "Project font file is not a supported font: " + prepared_face.spec.path;
-			return false;
-		}
-		if (!SpxSvgUtils::is_font_data_valid(prepared_face.data)) {
-			r_error = "Project font file is not supported by LunaSVG: " + prepared_face.spec.path;
-			return false;
-		}
-		r_prepared.display_fonts.insert(prepared_face.spec.family_key, prepared_face.display_font);
+		r_prepared.display_fonts.insert(face.family_key, font);
 	}
 	r_prepared.theme_font = build_display_font_chain(r_prepared.display_fonts, p_request.preferences);
 	return true;

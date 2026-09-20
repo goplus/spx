@@ -51,7 +51,7 @@ func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
 	defer os.Remove(tmpPath)
 
 	if env.assetDir == "" {
-		if err := engineDownloadFetcher(url, tmpPath); err != nil {
+		if err := fetchURLToFile(url, tmpPath); err != nil {
 			return err
 		}
 	} else {

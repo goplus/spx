@@ -187,7 +187,7 @@ TEST_CASE("[SceneTree][SPX] Animation players isolate loop metadata and share "
 	VisualFixture fixture;
 	fixture.create_clip("walk", fixture.png_path, fixture.png_path);
 	const Ref<SpriteFrames> shared =
-			fixture.resources->get_anim_frames("ReviewSprite::walk");
+			fixture.resources->get_animation_frames("ReviewSprite::walk");
 	REQUIRE(shared.is_valid());
 	SpxSprite *first = fixture.create_sprite();
 	SpxSprite *second = fixture.create_sprite();
@@ -224,28 +224,28 @@ TEST_CASE("[SceneTree][SPX] Animation creation publishes complete clips and "
 	ERR_PRINT_OFF
 	fixture.create_clip("retry", fixture.svg_path, fixture.retry_path);
 	ERR_PRINT_ON
-	CHECK(fixture.resources->get_anim_frames("ReviewSprite::retry").is_null());
+	CHECK(fixture.resources->get_animation_frames("ReviewSprite::retry").is_null());
 	CHECK_FALSE(fixture.resources->is_dynamic_anim_mode());
 	CHECK_FALSE(fixture.resources->is_svg_animation("ReviewSprite::retry"));
 	VisualFixture::write_svg(fixture.retry_path);
 	fixture.create_clip("retry", fixture.svg_path, fixture.retry_path);
 	const Ref<SpriteFrames> frames =
-			fixture.resources->get_anim_frames("ReviewSprite::retry");
+			fixture.resources->get_animation_frames("ReviewSprite::retry");
 	REQUIRE(frames.is_valid());
 	CHECK_EQ(frames->get_frame_count("ReviewSprite::retry"), 2);
 	CHECK(fixture.resources->is_svg_animation("ReviewSprite::retry"));
 	CHECK(fixture.resources->get_animation_frame_offset("ReviewSprite::retry",
 				  1) == Vector2(4, 6));
-	CHECK(fixture.resources->get_anim_frames("ReviewSprite::missing").is_null());
+	CHECK(fixture.resources->get_animation_frames("ReviewSprite::missing").is_null());
 
 	ERR_PRINT_OFF
 	fixture.create_clip("mixed", fixture.svg_path, fixture.png_path);
 	fixture.create_clip("zero", fixture.png_path, fixture.png_path, 0);
 	ERR_PRINT_ON
-	CHECK(fixture.resources->get_anim_frames("ReviewSprite::mixed").is_null());
-	CHECK(fixture.resources->get_anim_frames("ReviewSprite::zero").is_null());
+	CHECK(fixture.resources->get_animation_frames("ReviewSprite::mixed").is_null());
+	CHECK(fixture.resources->get_animation_frames("ReviewSprite::zero").is_null());
 	fixture.create_clip("mixed", fixture.png_path, fixture.png_path);
-	CHECK(fixture.resources->get_anim_frames("ReviewSprite::mixed").is_valid());
+	CHECK(fixture.resources->get_animation_frames("ReviewSprite::mixed").is_valid());
 }
 
 TEST_CASE("[SceneTree][SPX] Visual switches commit raster scale for forward "
@@ -422,8 +422,13 @@ TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preser
 		CollisionShape2D *target = clone->get_collider(is_trigger);
 		SpxCollisionDebugOverlay *overlay = spx_find_collision_debug_overlay(target);
 		REQUIRE(overlay != nullptr);
-		CHECK(overlay->get_target() == target);
-		CHECK(overlay->get_target() != sprite->get_collider(is_trigger));
+		CHECK(overlay->get_parent() == target);
+		CollisionShape2D *original = sprite->get_collider(is_trigger);
+		const Color original_color = original->get_debug_color();
+		const Color clone_color(0.25, 0.5, 0.75, 0.6);
+		overlay->set_debug_color(clone_color);
+		CHECK(target->get_debug_color() == clone_color);
+		CHECK(original->get_debug_color() == original_color);
 		CHECK_EQ(target->get_child_count(true), 1);
 		CHECK_EQ(target->get_child_count(false), 0);
 		CHECK(overlay->get_internal_mode() == Node::INTERNAL_MODE_FRONT);

@@ -92,7 +92,7 @@ func TestNativeStringArgumentRetainsTemporaryOwnership(t *testing.T) {
 
 func TestFixedOutputManagerUsesArrayPointerWithoutLength(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void write_values(float out[3]);
 };`), 0o600))
@@ -117,7 +117,7 @@ public:
 func TestNativeBuffersPassIndependentLengths(t *testing.T) {
 	dir := t.TempDir()
 	const params = "const GdObj *objs, int count, float *out, int out_len"
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(`+params+`);
 };`), 0o600))
@@ -142,7 +142,7 @@ public:
 
 func TestMixedBuffersShareNativePointerConversion(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(const GdObj objects[2], const float *values, int count, GdObj selected[3]);
 };`), 0o600))
@@ -165,7 +165,7 @@ public:
 
 func TestMixedScalarsAndArraysPreserveNativeArguments(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
 };`), 0o600))
@@ -187,7 +187,7 @@ public:
 
 func TestOutputOnlyBuffersKeepNativeStatusAndCallerStorage(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND GdBool collect(const GdObj *ids, int count, SPX_OUT float *out, int out_len);
 };`), 0o600))

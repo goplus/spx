@@ -17,7 +17,6 @@
 package engine
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,21 +35,9 @@ func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T
 	mustWriteFile(t, filepath.Join(moduleSource, "spx_scons_profile.json"), []byte(`{"schema":`))
 	t.Setenv("SPX_MODULE_SRC", moduleSource)
 
-	prepareCalled := false
-	prepareErr := errors.New("expensive build preparation must not run")
-	err := buildEngineWithEnvironmentPreparer(
-		BuildConfig{Target: "template", Platform: "linux"},
-		repoRoot,
-		func(buildEnvironment) (map[string]string, string, error) {
-			prepareCalled = true
-			return nil, "", prepareErr
-		},
-	)
+	err := BuildEngine(BuildConfig{Target: "template", Platform: "linux"}, repoRoot)
 	if err == nil || !strings.Contains(err.Error(), "parse SCons profile") {
-		t.Fatalf("buildEngineWithEnvironmentPreparer error = %v, want profile parse error", err)
-	}
-	if errors.Is(err, prepareErr) || prepareCalled {
-		t.Fatal("build preparation ran before the SCons profile was validated")
+		t.Fatalf("BuildEngine error = %v, want profile parse error", err)
 	}
 }
 

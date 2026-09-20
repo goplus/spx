@@ -41,22 +41,20 @@
 #include "spx_sprite_mgr.h"
 
 void SpxAudioMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	SpxAudioBusPool::init();
 	_create_root("audio_root");
 	g_audio_id = 0;
 }
 
 void SpxAudioMgr::on_update(float delta) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
-	SpxBaseMgr::on_update(delta);
 	_update_all(delta);
 
 	Vector<GdInt> finished_aids;
 	for (const KeyValue<GdInt, GdObj> &entry : aid_owners) {
-		SpxAudio *audio = _get_object_unsafe(entry.value);
+		SpxAudio *audio = _find_object(entry.value);
 		if (audio == nullptr || !audio->has_audio(entry.key)) {
 			finished_aids.push_back(entry.key);
 		}
@@ -67,22 +65,21 @@ void SpxAudioMgr::on_update(float delta) {
 }
 
 void SpxAudioMgr::on_reset(int reset_code) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	aid_owners.clear();
-	_reset_all(reset_code);
+	_reset_objects(reset_code);
 	SpxAudioBusPool::reset();
 }
 
 void SpxAudioMgr::on_destroy() {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	aid_owners.clear();
-	_destroy_all();
+	_destroy_objects_and_root();
 	SpxAudioBusPool::shutdown();
-	SpxBaseMgr::on_destroy();
 }
 
 GdObj SpxAudioMgr::create_audio() {
@@ -90,7 +87,7 @@ GdObj SpxAudioMgr::create_audio() {
 }
 
 void SpxAudioMgr::stop_all() {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 
@@ -99,7 +96,7 @@ void SpxAudioMgr::stop_all() {
 		audio_ids.push_back(entry.key);
 	}
 	for (GdObj id : audio_ids) {
-		SpxAudio *audio = _get_object_unsafe(id);
+		SpxAudio *audio = _find_object(id);
 		if (audio != nullptr) {
 			audio->stop_all();
 		}
@@ -108,7 +105,7 @@ void SpxAudioMgr::stop_all() {
 }
 
 void SpxAudioMgr::destroy_audio(GdObj obj) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	Vector<GdInt> aids;
@@ -170,7 +167,7 @@ GdInt SpxAudioMgr::play(GdObj obj, GdString path) {
 }
 
 GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_id, GdFloat attenuation, GdFloat max_distance) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return 0;
 	}
 	Node *audio_owner = nullptr;
@@ -263,14 +260,14 @@ void SpxAudioMgr::set_timer(GdInt aid, GdFloat time) {
 }
 
 SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return nullptr;
 	}
 	const GdObj *owner = aid_owners.getptr(aid);
 	if (owner == nullptr) {
 		return nullptr;
 	}
-	SpxAudio *audio = _get_object_unsafe(*owner);
+	SpxAudio *audio = _find_object(*owner);
 	if (audio == nullptr || !audio->has_audio(aid)) {
 		if (audio != nullptr) {
 			audio->stop(aid);

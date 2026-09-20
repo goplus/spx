@@ -384,11 +384,11 @@ func (*platformMgrImpl) GetMaxFps() int64 {
 	return 0
 }
 func (*platformMgrImpl) SetMaxFps(fps int64) {}
-func (*platformMgrImpl) GetPersistantDataDir() string {
+func (*platformMgrImpl) GetPersistentDataDir() string {
 	return ""
 }
-func (*platformMgrImpl) SetPersistantDataDir(path string) {}
-func (*platformMgrImpl) IsInPersistantDataDir(path string) bool {
+func (*platformMgrImpl) SetPersistentDataDir(path string) {}
+func (*platformMgrImpl) IsInPersistentDataDir(path string) bool {
 	return false
 }
 

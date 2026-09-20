@@ -28,10 +28,9 @@ type recordedCall struct {
 }
 
 type recordingRunner struct {
-	calls       []recordedCall
-	commands    []recordedCommand
-	repoRoot    string
-	commandHook func(workdir string, name string, args ...string) error
+	calls    []recordedCall
+	commands []recordedCommand
+	repoRoot string
 }
 
 func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
@@ -52,9 +51,6 @@ func (r *recordingRunner) RunCommand(workdir string, name string, args ...string
 		name: name,
 		args: append([]string(nil), args...),
 	})
-	if r.commandHook != nil {
-		return r.commandHook(dir, name, args...)
-	}
 	return nil
 }
 
@@ -63,81 +59,6 @@ func (r *recordingRunner) RepoRootDir() string {
 		return "."
 	}
 	return r.repoRoot
-}
-
-func newRuntimeFixtureRunner(t *testing.T) *recordingRunner {
-	t.Helper()
-
-	root := t.TempDir()
-	gopath := filepath.Join(root, "gopath")
-	t.Setenv("GOPATH", gopath)
-
-	mustMkdirAll(t, filepath.Join(root, "cmd", "spx", "template", "project"))
-	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), []byte("runtime extension"))
-
-	return &recordingRunner{
-		repoRoot:    root,
-		commandHook: simulateRuntimeCommandOutputs,
-	}
-}
-
-func simulateRuntimeCommandOutputs(workdir string, name string, args ...string) error {
-	projectDir, spxArgs, ok := simulatedSPXInvocation(workdir, name, args...)
-	if !ok || len(spxArgs) == 0 {
-		return nil
-	}
-
-	switch spxArgs[0] {
-	case "exportpack":
-		dst := filepath.Join(projectDir, "project", ".builds", "pc", "gdexport.pck")
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(dst, []byte("runtime-pack"), 0o644)
-	case "exporttemplateweb":
-		dstDir := filepath.Join(projectDir, "project", ".builds", "webi")
-		if err := os.MkdirAll(dstDir, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(dstDir, "engine.pck"), []byte("engine-pack"), 0o644); err != nil {
-			return err
-		}
-		return os.WriteFile(filepath.Join(dstDir, "engine.js"), []byte("console.log('engine');\n"), 0o644)
-	case "exportweb", "exportwebworker", "exportminigame", "exportminiprogram":
-		dstDir := filepath.Join(projectDir, "project", ".builds", "web", "subdir")
-		if err := os.MkdirAll(dstDir, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(projectDir, "project", ".builds", "web", "index.html"), []byte("<html></html>"), 0o644); err != nil {
-			return err
-		}
-		return os.WriteFile(filepath.Join(dstDir, "game.js"), []byte("console.log('game');\n"), 0o644)
-	default:
-		return nil
-	}
-}
-
-func simulatedSPXInvocation(workdir string, name string, args ...string) (string, []string, bool) {
-	switch name {
-	case "spx":
-		return workdir, append([]string(nil), args...), len(args) > 0
-	case "go":
-		if len(args) < 4 || args[0] != "run" || args[1] != "./cmd/spx" {
-			return "", nil, false
-		}
-		spxArgs := append([]string(nil), args[2:]...)
-		projectDir := workdir
-		for i := 0; i+1 < len(spxArgs); i++ {
-			if spxArgs[i] == "--path" {
-				projectDir = spxArgs[i+1]
-				spxArgs = append(spxArgs[:i], spxArgs[i+2:]...)
-				break
-			}
-		}
-		return projectDir, spxArgs, len(spxArgs) > 0
-	default:
-		return "", nil, false
-	}
 }
 
 func mustMkdirAll(t *testing.T, path string) {

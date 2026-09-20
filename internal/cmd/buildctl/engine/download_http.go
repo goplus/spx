@@ -29,8 +29,6 @@ import (
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
-var engineDownloadHTTPClient = &http.Client{Timeout: 30 * time.Minute}
-
 type downloadHTTPStatusError struct {
 	url        string
 	statusCode int
@@ -51,7 +49,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, "Downloading %s -> %s\n", url, dst)
 
-	resp, err := shared.GetURL(engineDownloadHTTPClient, url)
+	resp, err := shared.GetURL(&http.Client{Timeout: 30 * time.Minute}, url)
 	if err != nil {
 		return err
 	}

@@ -826,22 +826,22 @@ func (*platformMgrImpl) SetMaxFps(fps int64) {
 		gdx.PlatformMgr.SetMaxFps(fps)
 	})
 }
-func (*platformMgrImpl) GetPersistantDataDir() string {
+func (*platformMgrImpl) GetPersistentDataDir() string {
 	var _ret1 string
 	callInMainThread(func() {
-		_ret1 = gdx.PlatformMgr.GetPersistantDataDir()
+		_ret1 = gdx.PlatformMgr.GetPersistentDataDir()
 	})
 	return _ret1
 }
-func (*platformMgrImpl) SetPersistantDataDir(path string) {
+func (*platformMgrImpl) SetPersistentDataDir(path string) {
 	callInMainThread(func() {
-		gdx.PlatformMgr.SetPersistantDataDir(path)
+		gdx.PlatformMgr.SetPersistentDataDir(path)
 	})
 }
-func (*platformMgrImpl) IsInPersistantDataDir(path string) bool {
+func (*platformMgrImpl) IsInPersistentDataDir(path string) bool {
 	var _ret1 bool
 	callInMainThread(func() {
-		_ret1 = gdx.PlatformMgr.IsInPersistantDataDir(path)
+		_ret1 = gdx.PlatformMgr.IsInPersistentDataDir(path)
 	})
 	return _ret1
 }

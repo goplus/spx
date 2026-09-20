@@ -48,7 +48,6 @@ public:
 	static void unregister_extension_functions();
 	static void register_main_loop_callbacks();
 	static void unregister_main_loop_callbacks();
-	static bool has_main_loop_callbacks_registered();
 	static bool is_initialized() { return initialized.is_set(); }
 	static bool is_debug_mode() { return debug_mode; }
 	static void set_debug_mode(bool enable);
@@ -62,7 +61,6 @@ public:
 	static void reset(int exit_code);
 	static void restart();
 
-	// Pause functionality - public interface
 	static void pause();
 	static void resume();
 	static bool is_paused();

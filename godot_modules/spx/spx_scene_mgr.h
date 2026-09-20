@@ -32,14 +32,14 @@
 #define SPX_SCENE_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "core/templates/rb_map.h"
+#include "spx_manager.h"
 
 class ISortableSprite;
 class TileMapLayer;
 class SubViewport;
 
-class SpxSceneMgr : public SpxBaseMgr {
-	SPXCLASS(SpxSceneMgr, SpxBaseMgr)
+class SpxSceneMgr : public SpxManager {
 
 private:
 	const String DEFAULT_SAVE_PATH = "user://exported_scene.png";
@@ -52,8 +52,8 @@ private:
 	void _export_vp_png(SubViewport *viewport);
 
 public:
-	// Pure sprite management (kept in SpxExtMgr)
-	Node *pure_sprite_root;
+	// Sprites without the full SPX physics and behavior state.
+	Node *pure_sprite_root = nullptr;
 	RBMap<GdObj, ISortableSprite *> id_pure_sprites;
 
 	void on_awake() override;
@@ -72,7 +72,6 @@ public:
 	void export_scene_as_png(Node *root);
 
 public:
-	virtual ~SpxSceneMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
 	SPX_BIND void change_scene_to_file(GdString path);
 	SPX_BIND void destroy_all_sprites();

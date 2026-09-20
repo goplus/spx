@@ -33,7 +33,7 @@
 
 #include "gdextension_spx_ext.h"
 #include "scene/resources/2d/tile_set.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 #include "spx_tilemap_types.h"
 
 class TileMapLayer;
@@ -48,11 +48,7 @@ class TileData;
 //   JSON -> SpxTileMapData (via from_json) -> Godot Objects (via this manager)
 //   Godot Objects -> SpxTileMapData (via to_json) -> JSON (for export plugin)
 //
-class SpxTilemapparserMgr : public SpxBaseMgr {
-	SPXCLASS(SpxTilemapparserMgr, SpxBaseMgr)
-
-public:
-	virtual ~SpxTilemapparserMgr() = default;
+class SpxTilemapparserMgr : public SpxManager {
 
 private:
 	// Cache of loaded TileSets by tilemap name
@@ -74,7 +70,6 @@ private:
 
 public:
 	// Lifecycle methods
-	void on_awake() override;
 	void on_destroy() override;
 	void on_reset(int reset_code) override;
 

@@ -39,7 +39,6 @@
 #include "spx_object_mgr.h"
 
 class SpxAudioMgr : public SpxObjectMgr<SpxAudio> {
-	SPXCLASS(SpxAudioMgr, SpxObjectMgr<SpxAudio>)
 
 private:
 	// Main-thread-only routing index. Player state lives solely in SpxAudio.
@@ -49,7 +48,6 @@ private:
 	SpxAudio *_get_aid_audio(GdInt aid);
 
 public:
-	virtual ~SpxAudioMgr() = default;
 
 	void on_awake() override;
 	void on_destroy() override;

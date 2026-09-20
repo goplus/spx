@@ -119,7 +119,7 @@ func TestJSFunctionArgsSkipsArrayLengthArgument(t *testing.T) {
 	require.Equal(t, []string{"buffer"}, generation.jsArgs(function))
 }
 
-func TestJSFunctionBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
+func TestJSFunctionBodyUsesLowHighBigIntOrderForFlatGdIntArgs(t *testing.T) {
 	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
 
 	function := &clang.TypedefFunction{
@@ -138,7 +138,8 @@ func TestJSFunctionBodyUsesHighLowCtorOrderForFlatGdIntArgs(t *testing.T) {
 	}
 
 	body := generation.jsBody(function)
-	require.Contains(t, body, "Module['_gdspx_new_obj'](obj_high, obj_low)")
+	require.Contains(t, body, "_call(GdInt64FromParts(obj_low, obj_high), _resultPtr)")
+	require.NotContains(t, body, "FreeGdObj")
 }
 
 func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
@@ -182,7 +183,7 @@ func TestJSFunctionBodyUsesOrdinaryArrayReturn(t *testing.T) {
 func TestJSFunctionBodyUsesArrayAccessSemantics(t *testing.T) {
 	dir := t.TempDir()
 	header := `
-class SpxTestMgr : public SpxBaseMgr {
+class SpxTestMgr : public SpxManager {
 public:
 	SPX_BIND void read_values(const float *values_data, int len);
 	SPX_BIND void write_values(float *values_data, int len);
@@ -214,7 +215,7 @@ public:
 
 func TestGenerateFixedArrayOutputReader(t *testing.T) {
 	dir := t.TempDir()
-	header := `class SpxExampleMgr : public SpxBaseMgr {
+	header := `class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void write_values(SPX_OUT int64_t out[7]);
  SPX_BIND GdBool try_write(SPX_OUT float out[3]);
@@ -354,7 +355,7 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 
 	util := read("godot_modules", "spx", "web", "js", "engine", "gdspx.util.js")
 	require.NotContains(t, util, "Module.")
-	require.Contains(t, util, "module['_gdspx_alloc_array']")
+	require.Contains(t, util, "Module['_gdspx_alloc_array']")
 	for _, name := range []string{
 		"GdspxFlushDeferredFrees",
 		"GdspxBorrowNativeArray",
@@ -399,7 +400,7 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 func TestIndependentNativeBuffersPreserveOrderingAndAccess(t *testing.T) {
 	dir := t.TempDir()
 	const params = "const GdObj *objs, int count, const uint8_t *mask_data, int mask_len, float *out, int out_len, int64_t *indices, int indices_len"
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(`+params+`);
 };`), 0o600))
@@ -433,7 +434,7 @@ public:
 
 func TestMixedBuffersShareWebConversion(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(const GdObj objects[2], const float *values, int count, GdObj selected[3]);
 };`), 0o600))
@@ -469,7 +470,7 @@ func TestMixedArrayCallPreservesArgumentsAndReleasesOwnedValues(t *testing.T) {
 		t.Skip("Node.js is required to execute the generated wrapper")
 	}
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
 };`), 0o600))
@@ -481,8 +482,7 @@ public:
 	require.Equal(t, []string{"label", "mode", "objects", "out", "ret_value"}, generation.jsArgs(function))
 	body := generation.jsBody(function)
 	manager := generation.managerBody(function)
-	require.Contains(t, manager, "arg1 := mode")
-	require.Contains(t, manager, "Invoke(arg0, arg1, arg2, arg4, arg6)")
+	require.Contains(t, manager, "Invoke(arg0, mode, arg2, arg4, arg6)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(ret_value[:], arg6)")
 	require.NotContains(t, manager, "return JsTo")
@@ -514,7 +514,7 @@ for (const failure of [null, 'buffer', 'call']) {
 
 func TestOutputOnlyStatusControlsMultipleBuffers(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxManager {
 public:
  SPX_BIND GdBool collect(GdString label, const float *input, int count, SPX_OUT float *out, int out_len, SPX_OUT uint8_t flags[2], float *state, int state_len);
 };`), 0o600))
@@ -573,4 +573,25 @@ func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.Ty
 	require.NoError(t, err)
 	function := ast.CollectGDExtensionInterfaceFunctions()[0]
 	return &function
+}
+
+func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
+	ast, err := clang.ParseCString(`typedef GdBool (*GDExtensionSpxExampleSetValues)(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count);`)
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	functions := ast.CollectGDExtensionInterfaceFunctions()
+	body := generation.jsBody(&functions[0])
+	require.Equal(t, []string{"obj_low", "obj_high", "index_low", "index_high", "scale", "enabled", "count"}, generation.jsArgs(&functions[0]))
+	require.Contains(t, body, "_call(GdInt64FromParts(obj_low, obj_high), GdInt64FromParts(index_low, index_high), scale, enabled ? 1 : 0, count, _resultPtr)")
+	require.Contains(t, body, "AllocGdBool()")
+	require.Contains(t, body, "ToJsBool(_resultPtr)")
+	require.Contains(t, body, "FreeGdBool(_resultPtr)")
+	require.NotContains(t, body, "FreeGdObj")
+	require.NotContains(t, body, "FreeGdInt")
+	require.NotContains(t, body, "ToGdFloat")
+	require.NotContains(t, body, "ToGdBool")
+	manager := generation.managerBody(&functions[0])
+	require.Contains(t, manager, "arg0Low, arg0High := JsSplitGdObj(obj)")
+	require.Contains(t, manager, "arg1Low, arg1High := JsSplitGdInt(index)")
+	require.Contains(t, manager, "Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(scale), enabled, count)")
 }

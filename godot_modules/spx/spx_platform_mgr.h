@@ -28,24 +28,22 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SPX_OS_MGR_H
-#define SPX_OS_MGR_H
+#ifndef SPX_PLATFORM_MGR_H
+#define SPX_PLATFORM_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
-class SpxPlatformMgr : public SpxBaseMgr {
-	SPXCLASS(SpxPlatformMgr, SpxBaseMgr)
-	String persistant_data_dir = "res://";
+class SpxPlatformMgr : public SpxManager {
+	String persistent_data_dir = "res://";
 	bool window_size_uses_content_scale = false;
 
 public:
-	virtual ~SpxPlatformMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
 	void on_awake() override;
 	void on_reset(int reset_code) override;
-	void _set_persistant_data_dir(String path);
-	String _get_persistant_data_dir();
+	void _set_persistent_data_dir(String path);
+	String _get_persistent_data_dir();
 
 public:
 	//Expose as few interfaces as possible to prevent misuse.
@@ -71,9 +69,9 @@ public:
 	SPX_BIND GdInt get_max_fps();
 	SPX_BIND void set_max_fps(GdInt fps);
 
-	SPX_BIND GdString get_persistant_data_dir();
-	SPX_BIND void set_persistant_data_dir(GdString path);
-	SPX_BIND GdBool is_in_persistant_data_dir(GdString path);
+	SPX_BIND GdString get_persistent_data_dir();
+	SPX_BIND void set_persistent_data_dir(GdString path);
+	SPX_BIND GdBool is_in_persistent_data_dir(GdString path);
 };
 
-#endif // SPX_OS_MGR_H
+#endif // SPX_PLATFORM_MGR_H

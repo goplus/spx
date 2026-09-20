@@ -46,11 +46,7 @@ type assetManifest struct {
 //go:embed assets/*
 var embeddedAssets embed.FS
 
-var (
-	assetsFS       fs.FS = embeddedAssets
-	cacheBaseDirFn       = defaultCacheBaseDir
-	extractMu      sync.Mutex
-)
+var extractMu sync.Mutex
 
 // Prepare extracts the named embedded runtime assets into a stable cache dir.
 // It returns ok=false when this spx binary was built without the requested assets.
@@ -79,7 +75,7 @@ func Prepare(version string, names ...string) (dir string, ok bool, err error) {
 		}
 	}
 
-	cacheDir := filepath.Join(cacheBaseDirFn(), "spx", "embedded-runtime", version, runtime.GOOS+"-"+runtime.GOARCH, cacheKey)
+	cacheDir := filepath.Join(defaultCacheBaseDir(), "spx", "embedded-runtime", version, runtime.GOOS+"-"+runtime.GOARCH, cacheKey)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", false, fmt.Errorf("create runtime cache dir %s: %w", cacheDir, err)
 	}
@@ -104,7 +100,7 @@ func hasAsset(name string) bool {
 	if name == "" {
 		return false
 	}
-	_, err := fs.Stat(assetsFS, assetPath(name))
+	_, err := fs.Stat(embeddedAssets, assetPath(name))
 	return err == nil
 }
 
@@ -123,7 +119,7 @@ func assetMode(name string) os.FileMode {
 }
 
 func manifestCacheKey(names []string) (string, bool, error) {
-	data, err := fs.ReadFile(assetsFS, assetPath(manifestFileName))
+	data, err := fs.ReadFile(embeddedAssets, assetPath(manifestFileName))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", false, nil
@@ -158,7 +154,7 @@ func assetCacheKey(names []string) (string, error) {
 
 func addAssetHash(hasher hash.Hash, name string) (err error) {
 	srcPath := assetPath(name)
-	srcFile, err := assetsFS.Open(srcPath)
+	srcFile, err := embeddedAssets.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("open embedded runtime asset %s for hashing: %w", name, err)
 	}
@@ -208,7 +204,7 @@ func cachedAssetMatches(dstPath, name string) (matches bool, err error) {
 
 func extractAsset(cacheDir, name string) (err error) {
 	srcPath := assetPath(name)
-	info, err := fs.Stat(assetsFS, srcPath)
+	info, err := fs.Stat(embeddedAssets, srcPath)
 	if err != nil {
 		return fmt.Errorf("stat embedded runtime asset %s: %w", name, err)
 	}
@@ -228,7 +224,7 @@ func extractAsset(cacheDir, name string) (err error) {
 		}
 	}
 
-	srcFile, err := assetsFS.Open(srcPath)
+	srcFile, err := embeddedAssets.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("open embedded runtime asset %s: %w", name, err)
 	}

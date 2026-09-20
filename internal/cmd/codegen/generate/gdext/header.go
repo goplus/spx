@@ -30,6 +30,9 @@ import (
 )
 
 var (
+	// Braces in comments and literals do not change the surrounding C++ scope.
+	reNonCode = regexp.MustCompile(`(?s)/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'`)
+
 	reSpaceComma = regexp.MustCompile(`\s+,`)
 	reSpaceParen = regexp.MustCompile(`\s+\)`)
 	reCommaSpace = regexp.MustCompile(`,\s*`)
@@ -47,6 +50,10 @@ type classMethodDecl struct {
 	MethodName string
 	Params     string
 	Static     bool
+}
+
+func (m classMethodDecl) functionName() string {
+	return "GDExtension" + m.ClassName + strcase.ToCamel(m.MethodName)
 }
 
 // Headers holds both ABI spellings and the metadata collected from one input.
@@ -86,16 +93,16 @@ func (g *headerCollector) render(rawFormat bool) string {
 			continue
 		}
 		returnType, params := method.ReturnType, method.Params
-		name := strcase.ToCamel(method.MethodName)
-		if returnType == "void" || rawFormat {
-			fmt.Fprintf(&builder, "typedef %s (*GDExtension%s%s)(%s);\n", returnType, method.ClassName, name, params)
-		} else {
-			if len(params) > 0 {
-				returnType = ", " + returnType
+		functionName := method.functionName()
+		if !rawFormat && returnType != "void" {
+			if params != "" {
+				params += ", "
 			}
-			result := g.metadata.ReturnParameters["GDExtension"+method.ClassName+name]
-			fmt.Fprintf(&builder, "typedef void (*GDExtension%s%s)(%s%s *%s);\n", method.ClassName, name, params, returnType, result.Name)
+			result := g.metadata.ReturnParameters[functionName]
+			params += result.CType + " *" + result.Name
+			returnType = "void"
 		}
+		fmt.Fprintf(&builder, "typedef %s (*%s)(%s);\n", returnType, functionName, params)
 	}
 	return builder.String()
 }
@@ -118,7 +125,7 @@ func mergeManagerHeader(dir string) (string, error) {
 
 	for _, file := range files {
 		switch filepath.Base(file) {
-		case "spx_base_mgr.h", "spx_object_mgr.h":
+		case "spx_object_mgr.h":
 			continue
 		}
 		source, err := os.ReadFile(file)
@@ -131,34 +138,38 @@ func mergeManagerHeader(dir string) (string, error) {
 	return builder.String(), nil
 }
 
-// appendPublicDeclarations collects all public sections of each manager class.
-// Manager exports use one declaration per line; inline definitions are omitted.
+// appendPublicDeclarations collects direct public exports from manager classes.
+// Nested types and inline bodies cannot change the manager's access section.
 func appendPublicDeclarations(builder *strings.Builder, source string) {
-	inClass, inPublicSection := false, false
+	source = reNonCode.ReplaceAllStringFunc(source, func(text string) string {
+		return " " + strings.Repeat("\n", strings.Count(text, "\n"))
+	})
+	depth, public := 0, false
 	for line := range strings.SplitSeq(source, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || strings.HasPrefix(line, "*") {
-			continue
-		}
-		if strings.Contains(line, "{") && strings.Contains(line, "}") {
-			continue
-		}
-		if !inClass {
+		if depth == 0 {
 			if match := reClassDefinition.FindStringSubmatch(line); match != nil {
 				fmt.Fprintf(builder, "class %s {\npublic:\n", match[1])
-				inClass = true
+				depth = strings.Count(line, "{") - strings.Count(line, "}")
+				public = false
 			}
 			continue
 		}
-		switch {
-		case strings.HasPrefix(line, "};"):
+		previousDepth := depth
+		depth += strings.Count(line, "{") - strings.Count(line, "}")
+		if depth == 0 {
 			builder.WriteString("\n};\n\n")
-			inClass, inPublicSection = false, false
+			continue
+		}
+		if previousDepth != 1 {
+			continue
+		}
+		switch {
 		case strings.HasPrefix(line, "public:"):
-			inPublicSection = true
+			public = true
 		case strings.HasPrefix(line, "private:"), strings.HasPrefix(line, "protected:"):
-			inPublicSection = false
-		case inPublicSection:
+			public = false
+		case public && strings.HasPrefix(line, "SPX_BIND"):
 			fmt.Fprintf(builder, "\t%s\n", line)
 		}
 	}
@@ -213,7 +224,7 @@ func parseManagerHeader(input string) *headerCollector {
 				Static:     matches[1] != "",
 			}
 			spec, arrayBridge := parseArrayBridge(methodDecl)
-			functionName := "GDExtension" + currentClassName + strcase.ToCamel(methodDecl.MethodName)
+			functionName := methodDecl.functionName()
 			if methodDecl.ReturnType != "void" {
 				name := "ret_value"
 				for n := 2; regexp.MustCompile(`\b` + name + `\b`).MatchString(methodDecl.Params); n++ {

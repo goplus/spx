@@ -41,12 +41,7 @@
 // Lifecycle Methods
 // ============================================================================
 
-void SpxTilemapparserMgr::on_awake() {
-	SpxBaseMgr::on_awake();
-}
-
 void SpxTilemapparserMgr::on_destroy() {
-	SpxBaseMgr::on_destroy();
 	destroy_all_tilemaps();
 	tileset_cache.clear();
 }

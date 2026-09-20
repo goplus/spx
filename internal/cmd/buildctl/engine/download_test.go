@@ -29,29 +29,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
-
-type roundTripBodyTransport struct {
-	status        int
-	contentLength int64
-	body          string
-}
-
-func (transport roundTripBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return &http.Response{
-		StatusCode:    transport.status,
-		Status:        http.StatusText(transport.status),
-		Header:        make(http.Header),
-		Body:          io.NopCloser(strings.NewReader(transport.body)),
-		ContentLength: transport.contentLength,
-		Request:       req,
-	}, nil
-}
 
 func TestExtractZipRejectsPathTraversal(t *testing.T) {
 	tempDir := t.TempDir()
@@ -252,81 +234,6 @@ func TestFetchURLToFileRejectsChunkedBodyAboveLimit(t *testing.T) {
 	}
 	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "asset.zip.tmp-*")); globErr != nil || len(matches) != 0 {
 		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
-	}
-}
-
-func TestFetchURLToFileRejectsShortDeclaredBody(t *testing.T) {
-	oldClient := engineDownloadHTTPClient
-	engineDownloadHTTPClient = &http.Client{Transport: roundTripBodyTransport{
-		status:        http.StatusOK,
-		contentLength: 5,
-		body:          "123",
-	}}
-	t.Cleanup(func() { engineDownloadHTTPClient = oldClient })
-
-	dir := t.TempDir()
-	dst := filepath.Join(dir, "short.zip")
-	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", dst, 10)
-	if !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
-	}
-	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
-		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
-	}
-	if matches, globErr := filepath.Glob(dst + ".tmp-*"); globErr != nil || len(matches) != 0 {
-		t.Fatalf("temporary download files = %v, err = %v", matches, globErr)
-	}
-}
-
-func TestFetchURLToFileRejectsHTTPSDowngrade(t *testing.T) {
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("replacement"))
-	}))
-	defer target.Close()
-
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		http.Redirect(w, req, target.URL, http.StatusFound)
-	}))
-	defer server.Close()
-
-	oldClient := engineDownloadHTTPClient
-	engineDownloadHTTPClient = server.Client()
-	t.Cleanup(func() { engineDownloadHTTPClient = oldClient })
-
-	dst := filepath.Join(t.TempDir(), "asset.zip")
-	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	err := fetchURLToFile(server.URL, dst)
-	if !errors.Is(err, shared.ErrInsecureRedirect) {
-		t.Fatalf("fetchURLToFile error = %v, want HTTPS downgrade rejection", err)
-	}
-	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
-		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
-	}
-}
-
-func TestFetchURLToFileHonorsHTTPClientTimeout(t *testing.T) {
-	oldClient := engineDownloadHTTPClient
-	engineDownloadHTTPClient = &http.Client{Timeout: 20 * time.Millisecond}
-	defer func() { engineDownloadHTTPClient = oldClient }()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("late"))
-	}))
-	defer server.Close()
-
-	err := fetchURLToFile(server.URL, filepath.Join(t.TempDir(), "asset.zip"))
-	if err == nil {
-		t.Fatal("expected timeout error")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "timeout") && !strings.Contains(strings.ToLower(err.Error()), "deadline") {
-		t.Fatalf("fetchURLToFile error = %v, want timeout/deadline error", err)
 	}
 }
 

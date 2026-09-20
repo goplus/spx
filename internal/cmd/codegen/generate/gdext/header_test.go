@@ -32,7 +32,7 @@ func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
 
 	dir := t.TempDir()
 	header := strings.TrimSpace(`
-class SpxUiMgr : public SpxBaseMgr, private SpxUiBindingListener {
+class SpxUiMgr : public SpxManager, private SpxUiBindingListener {
 public:
 	SPX_BIND GdObj bind_node(GdObj obj, GdString rel_path);
 };
@@ -454,7 +454,7 @@ func TestOutputOnlyRejectsAmbiguousDeclarations(t *testing.T) {
 
 func TestPrepareHeadersPreservesPublicSectionsAndClassBoundaries(t *testing.T) {
 	dir := t.TempDir()
-	source := `class SpxExampleMgr : public SpxBaseMgr {
+	source := `class SpxExampleMgr : public SpxManager {
  SPX_BIND void default_private();
 public:
  SPX_BIND void first();
@@ -465,7 +465,7 @@ protected:
 public:
  SPX_BIND void second();
 };
-class SpxOtherMgr : public SpxBaseMgr {
+class SpxOtherMgr : public SpxManager {
  SPX_BIND void other_private();
 public:
  SPX_BIND void third();
@@ -485,7 +485,7 @@ public:
 
 func TestPrepareHeadersDoesNotTruncateLongLines(t *testing.T) {
 	dir := t.TempDir()
-	source := "class SpxExampleMgr : public SpxBaseMgr {\npublic:\n" +
+	source := "class SpxExampleMgr : public SpxManager {\npublic:\n" +
 		"// " + strings.Repeat("long comment ", 10000) + "\n" +
 		"SPX_BIND void first(" + strings.Repeat(" ", 70000) + ");\nSPX_BIND void second();\n};"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
@@ -556,4 +556,54 @@ func TestNativeStringReleaseIsABuiltinNotAManagerMethod(t *testing.T) {
 	}
 	require.Contains(t, gdSpxExtCpp, "SpxAbi::free_return_cstr(value);")
 	require.Contains(t, gdSpxExtCpp, "REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string)")
+}
+
+func TestWebScalarValuesPreserveNativeSignatureAndOutputPointers(t *testing.T) {
+	header := parseManagerHeader(`class SpxExampleMgr {
+ SPX_BIND GdBool try_write(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count, SPX_OUT float out[3]);
+ };`)
+	require.Contains(t, header.render(false), "(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count, float *out, GdBool *ret_value)")
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
+	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
+	generated, err := os.ReadFile(outputPath)
+	require.NoError(t, err)
+	body := string(generated)
+	require.Contains(t, body, "(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count, float *out, GdBool *ret_val)")
+	require.Contains(t, body, "*ret_val = false;")
+	require.Contains(t, body, "exampleMgr->try_write(obj, index, scale, enabled, count, out)")
+	require.NotContains(t, body, "*scale")
+	require.NotContains(t, body, "*enabled")
+}
+
+func TestPrepareHeadersSkipsNestedTypesAndInlineBodies(t *testing.T) {
+	dir := t.TempDir()
+	source := `class SpxExampleMgr : public SpxManager {
+ struct Result {
+ public:
+  SPX_BIND void nested_private_type();
+ };
+ public:
+ SPX_BIND void before();
+ struct Helper {
+ public:
+  SPX_BIND void nested_public_type();
+ };
+ void inline_method() {
+  const char *braces = "}; {";
+  /* These are not class boundaries:
+  };
+  public:
+  { */
+ }
+ SPX_BIND void after();
+};`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(source), 0o600))
+	headers, err := PrepareHeaders(dir)
+	require.NoError(t, err)
+	require.Contains(t, headers.Raw, "GDExtensionSpxExampleBefore")
+	require.Contains(t, headers.Raw, "GDExtensionSpxExampleAfter")
+	require.NotContains(t, headers.Raw, "Nested")
 }

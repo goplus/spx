@@ -316,6 +316,7 @@ private:
 	};
 	bool _prepare_animation(const String &p_name, PreparedVisual &r_visual,
 			int p_raster_scale = 0);
+	void _play_prepared_animation(const PreparedVisual &p_visual, GdFloat p_speed, GdBool p_from_end);
 	void _prepare_texture(const Ref<Texture2D> &p_texture,
 			const VisualSource &p_source, PreparedVisual &r_visual);
 	void _commit_visual(const PreparedVisual &p_visual);
@@ -337,7 +338,7 @@ private:
 	float drag_value = 0.0f;
 	float friction_value = 300.0f;
 	Vector2 external_forces = Vector2();
-	Vector2 applied_forces = Vector2();
+	Vector2 pending_impulse = Vector2();
 	float _gravity = 980.0f;
 
 	bool _is_collision_enabled = true;

@@ -383,6 +383,7 @@ type Sprite interface {
 	Velocity() (velocityX, velocityY float64)
 	SetGravity(gravity float64)
 	Gravity() float64
+	// AddImpulse adds impulse / mass to velocity on the next dynamic physics tick.
 	AddImpulse(impulseX, impulseY float64)
 	IsOnFloor() bool
 

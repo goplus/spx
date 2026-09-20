@@ -147,9 +147,9 @@ type GDExtensionInterface struct {
 	SpxPlatformSetTimeScale                     GDExtensionSpxPlatformSetTimeScale
 	SpxPlatformGetMaxFps                        GDExtensionSpxPlatformGetMaxFps
 	SpxPlatformSetMaxFps                        GDExtensionSpxPlatformSetMaxFps
-	SpxPlatformGetPersistantDataDir             GDExtensionSpxPlatformGetPersistantDataDir
-	SpxPlatformSetPersistantDataDir             GDExtensionSpxPlatformSetPersistantDataDir
-	SpxPlatformIsInPersistantDataDir            GDExtensionSpxPlatformIsInPersistantDataDir
+	SpxPlatformGetPersistentDataDir             GDExtensionSpxPlatformGetPersistentDataDir
+	SpxPlatformSetPersistentDataDir             GDExtensionSpxPlatformSetPersistentDataDir
+	SpxPlatformIsInPersistentDataDir            GDExtensionSpxPlatformIsInPersistentDataDir
 	SpxResCreateAnimation                       GDExtensionSpxResCreateAnimation
 	SpxResSetLoadMode                           GDExtensionSpxResSetLoadMode
 	SpxResGetLoadMode                           GDExtensionSpxResGetLoadMode
@@ -485,9 +485,9 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPlatformSetTimeScale = (GDExtensionSpxPlatformSetTimeScale)(resolveCFunc("spx_platform_set_time_scale"))
 	x.SpxPlatformGetMaxFps = (GDExtensionSpxPlatformGetMaxFps)(resolveCFunc("spx_platform_get_max_fps"))
 	x.SpxPlatformSetMaxFps = (GDExtensionSpxPlatformSetMaxFps)(resolveCFunc("spx_platform_set_max_fps"))
-	x.SpxPlatformGetPersistantDataDir = (GDExtensionSpxPlatformGetPersistantDataDir)(resolveCFunc("spx_platform_get_persistant_data_dir"))
-	x.SpxPlatformSetPersistantDataDir = (GDExtensionSpxPlatformSetPersistantDataDir)(resolveCFunc("spx_platform_set_persistant_data_dir"))
-	x.SpxPlatformIsInPersistantDataDir = (GDExtensionSpxPlatformIsInPersistantDataDir)(resolveCFunc("spx_platform_is_in_persistant_data_dir"))
+	x.SpxPlatformGetPersistentDataDir = (GDExtensionSpxPlatformGetPersistentDataDir)(resolveCFunc("spx_platform_get_persistent_data_dir"))
+	x.SpxPlatformSetPersistentDataDir = (GDExtensionSpxPlatformSetPersistentDataDir)(resolveCFunc("spx_platform_set_persistent_data_dir"))
+	x.SpxPlatformIsInPersistentDataDir = (GDExtensionSpxPlatformIsInPersistentDataDir)(resolveCFunc("spx_platform_is_in_persistent_data_dir"))
 	x.SpxResCreateAnimation = (GDExtensionSpxResCreateAnimation)(resolveCFunc("spx_res_create_animation"))
 	x.SpxResSetLoadMode = (GDExtensionSpxResSetLoadMode)(resolveCFunc("spx_res_set_load_mode"))
 	x.SpxResGetLoadMode = (GDExtensionSpxResGetLoadMode)(resolveCFunc("spx_res_get_load_mode"))

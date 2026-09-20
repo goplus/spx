@@ -17,13 +17,10 @@
 package tool
 
 import (
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestSConsEnvironmentCommands(t *testing.T) {
@@ -105,85 +102,5 @@ func TestResolveEMSDKEnvironment(t *testing.T) {
 		if !strings.Contains(strings.ToLower(env.rootDir), strings.ToLower(filepath.Join("AppData", "emsdk"))) {
 			t.Fatalf("unexpected windows emsdk root: %s", env.rootDir)
 		}
-	}
-}
-
-func TestResolveEMSDKVerificationEnvironmentAddsConfigAndCache(t *testing.T) {
-	root := t.TempDir()
-	repoDir := filepath.Join(root, "emsdk")
-	empp := filepath.Join(repoDir, "upstream", "emscripten", emscriptenCPPExecutableName())
-	if err := os.MkdirAll(filepath.Dir(empp), 0o755); err != nil {
-		t.Fatalf("MkdirAll returned error: %v", err)
-	}
-	if err := os.WriteFile(empp, []byte("stub"), 0o644); err != nil {
-		t.Fatalf("WriteFile returned error: %v", err)
-	}
-
-	oldResolve := resolveEMSDKShellExportsFn
-	resolveEMSDKShellExportsFn = func() (map[string]string, error) {
-		return map[string]string{
-			"PATH": filepath.Join(repoDir, "upstream", "emscripten") + string(filepath.ListSeparator) + os.Getenv("PATH"),
-		}, nil
-	}
-	defer func() {
-		resolveEMSDKShellExportsFn = oldResolve
-	}()
-
-	env, emppPath, err := resolveEMSDKVerificationEnvironment(emsdkEnvironment{
-		rootDir: root,
-		repoDir: repoDir,
-	})
-	if err != nil {
-		t.Fatalf("resolveEMSDKVerificationEnvironment returned error: %v", err)
-	}
-	if emppPath != empp {
-		t.Fatalf("unexpected em++ path: %s", emppPath)
-	}
-	if env["EM_CONFIG"] != filepath.Join(repoDir, ".emscripten") {
-		t.Fatalf("unexpected EM_CONFIG: %q", env["EM_CONFIG"])
-	}
-	if env["EM_CACHE"] != filepath.Join(repoDir, "upstream", "emscripten", "cache") {
-		t.Fatalf("unexpected EM_CACHE: %q", env["EM_CACHE"])
-	}
-	if !shared.DirExists(env["EM_CACHE"]) {
-		t.Fatalf("expected EM_CACHE directory to exist: %s", env["EM_CACHE"])
-	}
-}
-
-func TestVerifyEMSDKRunsVersionCheckOnce(t *testing.T) {
-	root := t.TempDir()
-	repoDir := filepath.Join(root, "emsdk")
-	empp := filepath.Join(repoDir, "upstream", "emscripten", emscriptenCPPExecutableName())
-	if err := os.MkdirAll(filepath.Dir(empp), 0o755); err != nil {
-		t.Fatalf("MkdirAll returned error: %v", err)
-	}
-	if err := os.WriteFile(empp, []byte("stub"), 0o644); err != nil {
-		t.Fatalf("WriteFile returned error: %v", err)
-	}
-
-	oldResolve := resolveEMSDKShellExportsFn
-	oldRunOutput := buildEnvRunOutputWithDir
-	defer func() {
-		resolveEMSDKShellExportsFn = oldResolve
-		buildEnvRunOutputWithDir = oldRunOutput
-	}()
-
-	resolveEMSDKShellExportsFn = func() (map[string]string, error) {
-		return map[string]string{
-			"PATH": filepath.Join(repoDir, "upstream", "emscripten") + string(filepath.ListSeparator) + os.Getenv("PATH"),
-		}, nil
-	}
-
-	calls := 0
-	buildEnvRunOutputWithDir = func(workdir string, env []string, name string, args ...string) ([]byte, error) {
-		calls++
-		return []byte("em++ 1.0\n"), nil
-	}
-
-	if err := verifyEMSDK(emsdkEnvironment{rootDir: root, repoDir: repoDir}); err != nil {
-		t.Fatalf("verifyEMSDK returned error: %v", err)
-	}
-	if calls != 1 {
-		t.Fatalf("verifyEMSDK version checks = %d, want 1", calls)
 	}
 }

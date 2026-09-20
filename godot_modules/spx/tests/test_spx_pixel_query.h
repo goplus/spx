@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_base_mgr.h                                                        */
+/*  test_spx_pixel_query.h                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,51 +28,45 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef SPX_BASE_MGR_H
-#define SPX_BASE_MGR_H
+#ifndef TEST_SPX_PIXEL_QUERY_H
+#define TEST_SPX_PIXEL_QUERY_H
 
-#include "scene/2d/node_2d.h"
-#include "spx_abi.h"
-#include "spx_mgr_access.h"
-#include "spx_utils.h"
-#include "svg_mgr.h"
+#include "../spx_pixel_query.h"
+#include "tests/test_macros.h"
 
-#define SPXCLASS(m_class, m_inherits)        \
-public:                                      \
-	String get_class_name() const override { \
-		return #m_class;                     \
-	}
+namespace TestSpxPixelQuery {
 
-#define SpxStr(str) (String::utf8((const char *)str))
-#define SpxReturnStr(str) (SpxAbi::to_return_cstr(str))
+TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
+	const Rect2i centers = SpxPixelQuery::pixel_centers(Rect2(-0.6, -0.6, 3.2, 3.2));
+	Vector<Vector2> visited;
+	CHECK_FALSE(SpxPixelQuery::any_pixel_center(centers, 2, [&](Vector2 point) {
+		visited.push_back(point);
+		return false;
+	}));
+	REQUIRE(visited.size() == 4);
+	CHECK(visited[0] == Vector2(-0.5, -0.5));
+	CHECK(visited[1] == Vector2(-0.5, 1.5));
+	CHECK(visited[2] == Vector2(1.5, -0.5));
+	CHECK(visited[3] == Vector2(1.5, 1.5));
+}
 
-#define NULL_OBJECT_ID 0
+TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
+	SpxPixelQuery::Snapshot snapshot;
+	snapshot.image = Image::create_empty(2, 1, false, Image::FORMAT_RGBA8);
+	snapshot.image->set_pixel(0, 0, Color(1, 0, 0, 1));
+	snapshot.image->set_pixel(1, 0, Color(0, 1, 0, 1));
+	snapshot.image_size = Vector2i(2, 1);
+	snapshot.inverse_transform = Transform2D(0, Vector2(-10, 0));
+	Color color;
+	CHECK(SpxPixelQuery::sample(snapshot, Vector2(10.5, 0.5), color));
+	CHECK(color == Color(1, 0, 0, 1));
+	snapshot.flip_h = true;
+	snapshot.collision_alpha_scale = 0.5;
+	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10.5, 0.5), color));
+	CHECK(color == Color(0, 0.5, 0, 0.5));
+	CHECK_FALSE(SpxPixelQuery::sample(snapshot, Vector2(12.5, 0.5), color));
+}
 
-class Window;
-class SceneTree;
-class SpxBaseMgr {
-protected:
-	Node *owner = nullptr;
-	virtual Node *create_owner_node();
+} // namespace TestSpxPixelQuery
 
-protected:
-	virtual GdInt get_unique_id();
-	virtual SceneTree *get_tree();
-	virtual Window *get_root();
-	virtual Node *get_spx_root();
-
-public:
-	virtual String get_class_name() const { return "SpxBaseMgr"; }
-	virtual void on_awake();
-	virtual void on_start();
-	virtual void on_update(float delta);
-	virtual void on_fixed_update(float delta);
-	virtual void on_destroy();
-	virtual void on_reset(int reset_code);
-	virtual void on_exit(int exit_code);
-	virtual void on_pause();
-	virtual void on_resume();
-	virtual ~SpxBaseMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
-};
-
-#endif // SPX_BASE_MGR_H
+#endif // TEST_SPX_PIXEL_QUERY_H

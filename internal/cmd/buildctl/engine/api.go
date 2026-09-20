@@ -40,7 +40,7 @@ func ShouldRefreshPreparedAssets() bool {
 }
 
 func PrepareHostEditorAsset(repoRoot, assetDir string) error {
-	env, err := engineDownloadResolveEnv(repoRoot, "")
+	env, err := resolveEngineDownloadEnv(repoRoot, "")
 	if err != nil {
 		return err
 	}
