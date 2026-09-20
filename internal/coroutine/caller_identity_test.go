@@ -11,10 +11,9 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 
 	started := make(chan Thread, 1)
 	release := make(chan struct{})
-	th := co.Create("owner", func(me Thread) int {
+	th := co.Create("owner", func(me Thread) {
 		started <- me
 		<-release
-		return 0
 	})
 	t.Cleanup(func() {
 		close(release)
@@ -59,10 +58,9 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 func TestExternalWaitDoesNotChangeSchedulerState(t *testing.T) {
 	co := New(nil)
 	started, release := make(chan struct{}), make(chan struct{})
-	thread := co.Create("active", func(Thread) int {
+	thread := co.Create("active", func(Thread) {
 		close(started)
 		<-release
-		return 0
 	})
 	<-started
 	t.Cleanup(func() {

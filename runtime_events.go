@@ -315,9 +315,8 @@ func (p *Game) handleEvent(ev event) {
 			runStartPhase()
 			break
 		}
-		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) int {
+		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) {
 			runStartPhase()
-			return 0
 		})
 		if gco.IsInCoroutine() {
 			gco.Join(dispatcher)

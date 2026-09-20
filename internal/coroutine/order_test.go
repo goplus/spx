@@ -49,7 +49,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	gates := make([]*Latch, len(waits))
 	for i, wait := range waits {
 		gates[i] = co.NewLatch()
-		thread := co.Create(wait.name, func(me Thread) int {
+		thread := co.Create(wait.name, func(me Thread) {
 			gates[i].Wait()
 			queued = append(queued, wait.name)
 			if i > 0 {
@@ -60,7 +60,6 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 				resumed = append(resumed, wait.name)
 				co.RequestRedraw()
 			}
-			return 0
 		})
 		co.JoinYieldedOrDone(thread)
 	}
@@ -98,7 +97,7 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	})
 
 	var order []string
-	parent := co.Create("parent", func(Thread) int {
+	parent := co.Create("parent", func(Thread) {
 		co.WaitNextFrame()
 		order = append(order, "parent")
 		co.StartBatch([]Task{
@@ -112,13 +111,11 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 			}},
 		}, BatchWaitFirstSlice)
 		order = append(order, "parent continued")
-		return 0
 	})
 	co.JoinYieldedOrDone(parent)
-	sibling := co.Create("sibling", func(Thread) int {
+	sibling := co.Create("sibling", func(Thread) {
 		co.WaitNextFrame()
 		order = append(order, "sibling")
-		return 0
 	})
 	co.JoinYieldedOrDone(sibling)
 	co.Update()

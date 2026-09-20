@@ -36,9 +36,8 @@ func TestResolveCoroutineOwnerPreservesNilCoroutineOwner(t *testing.T) {
 	})
 
 	resolved := make(chan any, 1)
-	thread := co.Create(nil, func(coroutine.Thread) int {
+	thread := co.Create(nil, func(coroutine.Thread) {
 		resolved <- ResolveCoroutineOwner(nil)
-		return 0
 	})
 	co.Join(thread)
 	if owner := <-resolved; owner != nil {
@@ -94,7 +93,7 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 	}
 	done := make(chan result, 1)
 
-	th := co.CreateAndStart(owner, func(me coroutine.Thread) int {
+	th := co.CreateAndStart(owner, func(me coroutine.Thread) {
 		var got result
 		ExecuteNative(func(ctx context.Context, gotOwner any) {
 			close(nativeStarted)
@@ -109,7 +108,6 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 		})
 		got.returnedInCoroutine = IsInCoroutine()
 		done <- got
-		return 0
 	})
 	t.Cleanup(func() {
 		release()

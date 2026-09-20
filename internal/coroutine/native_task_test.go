@@ -36,7 +36,7 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 
 			var callers [2]Thread
 			for i := range callers {
-				callers[i] = co.Create("caller", func(Thread) int {
+				callers[i] = co.Create("caller", func(Thread) {
 					co.WaitToDo(func() {
 						defer close(finished[i])
 						close(started[i])
@@ -45,7 +45,6 @@ func TestNativeTasksDrainAfterLastCanceledCallerWorker(t *testing.T) {
 							test.exit()
 						}
 					})
-					return 0
 				})
 			}
 			for _, signal := range started {

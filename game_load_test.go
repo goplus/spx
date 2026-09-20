@@ -1045,13 +1045,12 @@ func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
 
 	creatorDone := make(chan struct{})
 	var clone *SpriteImpl
-	co.Create(source, func(coroutine.Thread) int {
+	co.Create(source, func(coroutine.Thread) {
 		defer close(creatorDone)
 		doClone(source, nil, func(sprite *SpriteImpl) {
 			clone = sprite
 		})
 
-		return 0
 	})
 	updateRuntimeEventSchedulerUntil(t, co, func() bool {
 		select {

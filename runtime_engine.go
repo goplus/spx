@@ -123,9 +123,8 @@ func (p *Game) runFrameScripts() {
 }
 
 func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
-	thread := gco.Create(owner, func(coroutine.Thread) int {
+	thread := gco.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)
-		return 0
 	})
 	gco.JoinYieldedOrDone(thread)
 }

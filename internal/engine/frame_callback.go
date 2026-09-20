@@ -111,9 +111,8 @@ func executeFrameCallbacks(callbacks []frameCallback) {
 		return
 	}
 	if gco != nil && !gco.IsInCoroutine() {
-		gco.Create(GetGame(), func(coroutine.Thread) int {
+		gco.Create(GetGame(), func(coroutine.Thread) {
 			executeFrameCallbacks(callbacks)
-			return 0
 		})
 		return
 	}
@@ -130,11 +129,10 @@ func executeFrameCallback(callback frameCallback) {
 		callback.fn()
 		return
 	}
-	thread := gco.Create(callback.origin.owner, func(coroutine.Thread) int {
+	thread := gco.Create(callback.origin.owner, func(coroutine.Thread) {
 		if !callback.canceled() {
 			callback.fn()
 		}
-		return 0
 	})
 	// The engine thread cannot wait here because the callback may need
 	// WaitMainThread. Coroutine callers still preserve immediate semantics.

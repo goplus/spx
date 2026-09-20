@@ -15,9 +15,8 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	game.eventQueueState.EventQueuePolicy = coreevent.QueueBlock
 
 	done := make(chan bool, 1)
-	thread := co.Create("managed-producer", func(coroutine.Thread) int {
+	thread := co.Create("managed-producer", func(coroutine.Thread) {
 		done <- game.queueEventWithPolicy(&eventTimer{Time: 2})
-		return 0
 	})
 
 	select {

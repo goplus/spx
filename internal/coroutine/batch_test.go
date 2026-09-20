@@ -61,7 +61,7 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	)
 	setup := func(Thread) func() { created++; return nil }
 
-	caller := co.Create("caller", func(Thread) int {
+	caller := co.Create("caller", func(Thread) {
 		threads = co.StartBatch([]Task{
 			{
 				Owner: "first",
@@ -83,7 +83,6 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 		}, BatchWaitFirstSlice)
 		order = append(order, "caller")
 		close(callerDone)
-		return 0
 	})
 
 	select {
@@ -112,7 +111,7 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 	batchDone := make(chan []Thread, 1)
 	var registered, ran atomic.Int32
 
-	parent := co.Create("parent", func(parent Thread) int {
+	parent := co.Create("parent", func(parent Thread) {
 		batchDone <- co.StartBatch([]Task{
 			{
 				Setup: func(Thread) func() {
@@ -130,7 +129,6 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 				Run: func(Thread) { ran.Add(1) },
 			},
 		}, BatchAsync)
-		return 0
 	})
 
 	var threads []Thread
@@ -158,7 +156,7 @@ func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 		threads []Thread
 	)
 
-	caller := co.Create("caller", func(Thread) int {
+	caller := co.Create("caller", func(Thread) {
 		threads = co.StartBatch([]Task{
 			{
 				Owner: "first",
@@ -176,7 +174,6 @@ func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 		}, BatchWaitFirstSlice)
 		order = append(order, "caller")
 		close(callerDone)
-		return 0
 	})
 
 	select {
@@ -201,7 +198,7 @@ func TestStartBatchCancellationBeforeWrapperPassesBaton(t *testing.T) {
 		threads []Thread
 	)
 
-	caller := co.Create("caller", func(Thread) int {
+	caller := co.Create("caller", func(Thread) {
 		threads = co.StartBatch([]Task{
 			{Owner: "first", Run: func(Thread) { order = append(order, "first") }},
 			{Owner: "middle", Run: func(Thread) { order = append(order, "middle") }},
@@ -209,7 +206,6 @@ func TestStartBatchCancellationBeforeWrapperPassesBaton(t *testing.T) {
 		}, BatchAsync)
 		co.StopIf(func(thread Thread) bool { return thread == threads[1] })
 		close(callerDone)
-		return 0
 	})
 
 	select {
@@ -393,9 +389,8 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 		}
 	}
 
-	rejected := co.Create("during-registration", func(Thread) int {
+	rejected := co.Create("during-registration", func(Thread) {
 		lateRan.Add(1)
-		return 0
 	})
 	if !rejected.Stopped() {
 		t.Fatal("admission reopened before registration finished")
@@ -409,9 +404,8 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration did not finish")
 	}
-	stillRejected := co.Create("between-registrations", func(Thread) int {
+	stillRejected := co.Create("between-registrations", func(Thread) {
 		lateRan.Add(1)
-		return 0
 	})
 	if !stillRejected.Stopped() {
 		t.Fatal("admission reopened before every registration finished")
@@ -432,9 +426,8 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 		t.Fatalf("rejected task ran %d times", got)
 	}
 
-	admitted := co.Create("after-registration", func(Thread) int {
+	admitted := co.Create("after-registration", func(Thread) {
 		lateRan.Add(1)
-		return 0
 	})
 	co.Join(admitted)
 	if admitted.Stopped() {
@@ -489,9 +482,8 @@ func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 		t.Fatalf("cleanup calls = %d, want 1", got)
 	}
 
-	next := co.Create("after-registration-Goexit", func(Thread) int {
+	next := co.Create("after-registration-Goexit", func(Thread) {
 		ran.Add(1)
-		return 0
 	})
 	co.Join(next)
 	if next.Stopped() || ran.Load() != 1 {
@@ -545,9 +537,8 @@ func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 		t.Fatalf("pending registration hooks = %d, want 0", got)
 	}
 
-	next := co.Create("after-registration-panic", func(Thread) int {
+	next := co.Create("after-registration-panic", func(Thread) {
 		ran.Add(1)
-		return 0
 	})
 	co.Join(next)
 	if next.Stopped() || ran.Load() != 1 {
@@ -563,7 +554,7 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 	releaseCaller := make(chan struct{})
 	var cleaned, ran atomic.Int32
 
-	caller := co.Create("caller", func(Thread) int {
+	caller := co.Create("caller", func(Thread) {
 		threads := co.StartBatch([]Task{{
 			Setup: func(Thread) func() {
 				close(registered)
@@ -573,7 +564,6 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 		}}, BatchAsync)
 		batchReady <- threads[0]
 		<-releaseCaller
-		return 0
 	})
 
 	select {
@@ -626,9 +616,8 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	}
 
 	var ran atomic.Bool
-	next := co.CreateAndStart("after-cleanup-panic", func(Thread) int {
+	next := co.CreateAndStart("after-cleanup-panic", func(Thread) {
 		ran.Store(true)
-		return 0
 	})
 	select {
 	case <-next.done:

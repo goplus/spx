@@ -94,7 +94,7 @@ func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
-		probe := co.Create("reset-close-probe", func(coroutine.Thread) int { return 0 })
+		probe := co.Create("reset-close-probe", func(coroutine.Thread) {})
 		if probe.Stopped() {
 			return
 		}
@@ -108,9 +108,8 @@ func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		var ran atomic.Bool
-		probe := co.CreateAndStart("reset-open-probe", func(coroutine.Thread) int {
+		probe := co.CreateAndStart("reset-open-probe", func(coroutine.Thread) {
 			ran.Store(true)
-			return 0
 		})
 		co.Join(probe)
 		if ran.Load() {
@@ -130,11 +129,10 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	release := make(chan struct{})
 	releaseWorker := sync.OnceFunc(func() { close(release) })
 	workerDone := make(chan struct{})
-	co.CreateAndStart("blocked", func(coroutine.Thread) int {
+	co.CreateAndStart("blocked", func(coroutine.Thread) {
 		defer close(workerDone)
 		close(started)
 		<-release
-		return 0
 	})
 	t.Cleanup(releaseWorker)
 	select {
@@ -177,12 +175,11 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 	entered := make(chan struct{})
 	callerDone := make(chan struct{})
 	var returned atomic.Bool
-	caller := co.CreateAndStart("caller", func(coroutine.Thread) int {
+	caller := co.CreateAndStart("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		close(entered)
 		resetWebRuntime(9)
 		returned.Store(true)
-		return 0
 	})
 	select {
 	case <-entered:
@@ -311,11 +308,10 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	co.CreateAndStart("peer", func(peer coroutine.Thread) int {
+	co.CreateAndStart("peer", func(peer coroutine.Thread) {
 		defer close(peerDone)
 		close(peerYielding)
 		co.Yield(peer)
-		return 0
 	})
 
 	select {
@@ -346,10 +342,9 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 	}
 	close(backend.release)
 	gdx.ExtMgr = backend
-	co.CreateAndStart("caller", func(coroutine.Thread) int {
+	co.CreateAndStart("caller", func(coroutine.Thread) {
 		defer close(callerDone)
 		resetWebRuntime(17)
-		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)

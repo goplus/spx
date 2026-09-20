@@ -113,10 +113,9 @@ func TestShutdownLockWaiterDoesNotPumpMainThreadJobs(t *testing.T) {
 
 	started := make(chan struct{})
 	release := make(chan struct{})
-	blocker := co.CreateAndStart("shutdown-blocker", func(Thread) int {
+	blocker := co.CreateAndStart("shutdown-blocker", func(Thread) {
 		close(started)
 		<-release
-		return 0
 	})
 	<-started
 
@@ -174,10 +173,9 @@ func TestWaitMainThreadWorkerDoesNotBorrowActiveCoroutine(t *testing.T) {
 
 	active := make(chan struct{})
 	releaseActive := make(chan struct{})
-	co.Create("active", func(Thread) int {
+	co.Create("active", func(Thread) {
 		close(active)
 		<-releaseActive
-		return 0
 	})
 	t.Cleanup(func() {
 		select {
@@ -243,10 +241,9 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 
 	var callbackRan atomic.Bool
 	var continued atomic.Bool
-	co.Create("worker", func(Thread) int {
+	co.Create("worker", func(Thread) {
 		co.WaitMainThread(func() { callbackRan.Store(true) })
 		continued.Store(true)
-		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)
@@ -284,13 +281,12 @@ func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 		waitForThreadSignal(t, updated, "Update did not return")
 	})
 	var continued atomic.Bool
-	thread := co.Create("caller", func(Thread) int {
+	thread := co.Create("caller", func(Thread) {
 		co.WaitMainThread(func() {
 			close(entered)
 			<-release
 		})
 		continued.Store(true)
-		return 0
 	})
 	go func() {
 		co.Update()
@@ -322,13 +318,12 @@ func TestWaitMainThreadCancellationDiscardsRunningCallResult(t *testing.T) {
 	var reported atomic.Bool
 	co := New(func(PanicReport) { reported.Store(true) })
 	co.OnInited()
-	thread := co.Create("caller", func(me Thread) int {
+	thread := co.Create("caller", func(me Thread) {
 		co.WaitMainThread(func() {
 			co.Stop(me)
 			panic("canceled result")
 		})
 		t.Error("canceled caller continued")
-		return 0
 	})
 	co.Update()
 	waitForThreadSignal(t, thread.done, "canceled caller did not finish")
@@ -345,12 +340,11 @@ func TestWaitMainThreadRejectsSynchronousDrain(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 	guarded := make(chan any, 1)
-	thread := co.Create("caller", func(Thread) int {
+	thread := co.Create("caller", func(Thread) {
 		co.WaitMainThread(func() {
 			defer func() { guarded <- recover() }()
 			co.StopAllAndWait(time.Millisecond)
 		})
-		return 0
 	})
 	co.Update()
 	waitForThreadSignal(t, thread.done, "caller did not finish")

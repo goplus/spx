@@ -18,7 +18,7 @@ func TestUpdateServicesMainThreadDuringStartup(t *testing.T) {
 				}
 			})
 			called := false
-			co.Create("startup", func(me Thread) int {
+			co.Create("startup", func(me Thread) {
 				co.WaitMainThread(func() {
 					called = true
 					if outcome == "canceled" {
@@ -29,7 +29,6 @@ func TestUpdateServicesMainThreadDuringStartup(t *testing.T) {
 					panic("startup failed")
 				}
 				co.OnInited()
-				return 0
 			})
 
 			updated := make(chan struct{})

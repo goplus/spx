@@ -64,10 +64,9 @@ func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(game, func(coroutine.Thread) int {
+	thread := co.Create(game, func(coroutine.Thread) {
 		close(started)
 		<-release
-		return 0
 	})
 	select {
 	case <-started:
@@ -687,7 +686,7 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
 	co, game := setupRuntimeEventGame(t)
-	driver := co.Create(nil, func(me coroutine.Thread) int {
+	driver := co.Create(nil, func(me coroutine.Thread) {
 		for {
 			co.YieldLoopFor(me)
 		}
@@ -720,9 +719,8 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 
 func TestNestedAsyncBroadcastCycleResetsContextAtRoundBoundary(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	driver := co.Create(nil, func(me coroutine.Thread) int {
+	driver := co.Create(nil, func(me coroutine.Thread) {
 		co.YieldLoopFor(me)
-		return 0
 	})
 	co.JoinYieldedOrDone(driver)
 

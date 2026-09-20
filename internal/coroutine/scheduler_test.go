@@ -85,13 +85,12 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	th := co.Create(nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) {
 		defer close(done)
 		value := WaitForChan(co, ch)
 		if value != 7 {
 			t.Fatalf("expected received value 7, got %d", value)
 		}
-		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)
@@ -116,10 +115,9 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 	ch := make(chan int)
 	done := make(chan struct{})
 
-	th := co.Create(nil, func(me Thread) int {
+	th := co.Create(nil, func(me Thread) {
 		defer close(done)
 		WaitForChan(co, ch)
-		return 0
 	})
 
 	deadline := time.Now().Add(time.Second)
@@ -158,11 +156,10 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 	started := make(chan struct{})
 	done := make(chan struct{})
 
-	th := co.Create("worker", func(me Thread) int {
+	th := co.Create("worker", func(me Thread) {
 		close(started)
 		co.Yield(me)
 		close(done)
-		return 0
 	})
 
 	<-started
@@ -190,11 +187,10 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 	co.OnInited()
 	var resumed atomic.Bool
 
-	thread := co.Create("worker", func(me Thread) int {
+	thread := co.Create("worker", func(me Thread) {
 		co.StopAtNextYield(me)
 		co.WaitYield(me)
 		resumed.Store(true)
-		return 0
 	})
 
 	co.JoinYieldedOrDone(thread)
@@ -211,9 +207,8 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 		t.Fatal("coroutine resumed after its stop-at-yield boundary")
 	}
 
-	completed := co.Create("no-yield", func(me Thread) int {
+	completed := co.Create("no-yield", func(me Thread) {
 		co.StopAtNextYield(me)
-		return 0
 	})
 	co.Join(completed)
 	if completed.Stopped() {
@@ -227,12 +222,11 @@ func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 	proceed := make(chan struct{})
 	done := make(chan struct{})
 
-	th := co.Create("worker", func(me Thread) int {
+	th := co.Create("worker", func(me Thread) {
 		close(started)
 		<-proceed
 		co.Yield(me)
 		close(done)
-		return 0
 	})
 	<-started
 
@@ -315,10 +309,9 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
 	co := New(nil)
 	done := make(chan struct{})
-	co.Create("worker", func(me Thread) int {
+	co.Create("worker", func(me Thread) {
 		co.Sched(me)
 		close(done)
-		return 0
 	})
 
 	select {
@@ -337,12 +330,11 @@ func TestUpdateDrainsRepeatedWaitYieldWithoutLosingRunnableState(t *testing.T) {
 		co := New(nil)
 		co.OnInited()
 		done := make(chan struct{})
-		th := co.Create("worker", func(me Thread) int {
+		th := co.Create("worker", func(me Thread) {
 			for range yields {
 				co.WaitYield(me)
 			}
 			close(done)
-			return 0
 		})
 
 		deadline := time.Now().Add(time.Second)
@@ -374,9 +366,8 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 		co.enqueueJob(&WaitJob{
 			Type: waitTypeMainThread,
 			Call: func() {
-				co.Create("spawned", func(me Thread) int {
+				co.Create("spawned", func(me Thread) {
 					ran.Store(true)
-					return 0
 				})
 			},
 		})
@@ -400,7 +391,7 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 			})
 
 			if outcome != "idle" {
-				co.Create("startup", func(me Thread) int {
+				co.Create("startup", func(me Thread) {
 					// Finish only after Update has entered and resumed startup.
 					co.WaitYield(me)
 					switch outcome {
@@ -411,7 +402,6 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 					case "canceled":
 						co.StopCurrent()
 					}
-					return 0
 				})
 			}
 
@@ -441,10 +431,9 @@ func TestUpdateReturnsBeforeInitialization(t *testing.T) {
 func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 	co := New(nil)
 	resume := make(chan struct{})
-	thread := co.Create("startup", func(me Thread) int {
+	thread := co.Create("startup", func(me Thread) {
 		WaitForChan(co, resume)
 		co.OnInited()
-		return 0
 	})
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -471,10 +460,9 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 func TestStartupCanWaitForNextFrame(t *testing.T) {
 	itime.Start(nil)
 	co := New(nil)
-	co.Create("startup", func(me Thread) int {
+	co.Create("startup", func(me Thread) {
 		co.WaitNextFrameFor(me)
 		co.OnInited()
-		return 0
 	})
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {
@@ -505,10 +493,9 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	})
 
 	resumed := make(chan struct{})
-	thread := co.CreateAndStart("slow-frame", func(me Thread) int {
+	thread := co.CreateAndStart("slow-frame", func(me Thread) {
 		co.WaitYield(me)
 		close(resumed)
-		return 0
 	})
 	waitForThreadSignal(t, thread.yieldedOrDone, "script did not reach its yield")
 
@@ -535,7 +522,7 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 		t.Fatal("Update processed remaining work after the frame budget was exhausted")
 	}
 
-	created := co.Create("after-slow-frame", func(Thread) int { return 0 })
+	created := co.Create("after-slow-frame", func(Thread) {})
 	if created.Stopped() {
 		t.Fatal("watchdog rejected a new script")
 	}
@@ -573,14 +560,13 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	})
 
 	var spawned atomic.Int64
-	var spawnNext func(Thread) int
-	spawnNext = func(Thread) int {
+	var spawnNext func(Thread)
+	spawnNext = func(Thread) {
 		spawned.Add(1)
 		if keepSpawning.Load() {
 			co.Create("recursive", spawnNext)
 			runtime.Gosched()
 		}
-		return 0
 	}
 	co.Create("recursive", spawnNext)
 
@@ -605,7 +591,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
 	co := New(nil)
 
-	thread := co.Create("completed", func(Thread) int { return 0 })
+	thread := co.Create("completed", func(Thread) {})
 	resume := &WaitJob{Th: thread, Type: waitTypeYield}
 	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("coroutine did not complete")
@@ -651,7 +637,7 @@ func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	co := New(nil)
 	co.OnInited()
 
-	thread := co.Create("completed", func(Thread) int { return 0 })
+	thread := co.Create("completed", func(Thread) {})
 	if !co.waitForDrain(time.Second, nil) {
 		t.Fatal("coroutine did not complete")
 	}
@@ -686,17 +672,14 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 		co.enqueueJob(&WaitJob{
 			Type: waitTypeMainThread,
 			Call: func() {
-				co.Create("controller", func(controller Thread) int {
+				co.Create("controller", func(controller Thread) {
 					var target Thread
-					co.Create("waiter", func(waiter Thread) int {
+					co.Create("waiter", func(waiter Thread) {
 						co.Join(target)
 						waiterRan.Store(true)
-						return 0
 					})
-					target = co.Create("target", func(target Thread) int {
-						return 0
+					target = co.Create("target", func(target Thread) {
 					})
-					return 0
 				})
 			},
 		})

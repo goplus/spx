@@ -17,18 +17,16 @@ func TestDrainWakesMultipleWaiters(t *testing.T) {
 		}
 	})
 
-	workerOwner := co.Create("worker-owner", func(Thread) int {
+	workerOwner := co.Create("worker-owner", func(Thread) {
 		co.WaitToDo(func() {
 			close(workerStarted)
 			<-release
 		})
-		return 0
 	})
 	waitForThreadSignal(t, workerStarted, "native worker did not start")
 	latch := co.NewLatch()
-	peer := co.Create("peer", func(Thread) int {
+	peer := co.Create("peer", func(Thread) {
 		latch.Wait()
-		return 0
 	})
 	waitForThreadSignal(t, peer.yieldedOrDone, "peer did not suspend")
 
@@ -84,19 +82,17 @@ func TestStopAllAndWaitFromCoroutineWithoutDeadline(t *testing.T) {
 					t.Error("coroutines did not stop during cleanup")
 				}
 			})
-			peer := co.Create("peer", func(Thread) int {
+			peer := co.Create("peer", func(Thread) {
 				co.WaitToDo(func() {
 					close(workerStarted)
 					<-release
 				})
-				return 0
 			})
 			waitForThreadSignal(t, workerStarted, "native worker did not start")
 
 			result := make(chan bool, 1)
-			caller := co.Create("drainer", func(Thread) int {
+			caller := co.Create("drainer", func(Thread) {
 				result <- co.StopAllAndWait(timeout)
-				return 0
 			})
 			waitForThreadSignal(t, peer.done, "drain did not stop its peer")
 			select {
@@ -114,9 +110,8 @@ func TestStopAllAndWaitFromCoroutineWithoutDeadline(t *testing.T) {
 func TestDrainDoesNotSkipUnregisteredThread(t *testing.T) {
 	co := New(nil)
 	latch := co.NewLatch()
-	thread := co.Create("registered", func(Thread) int {
+	thread := co.Create("registered", func(Thread) {
 		latch.Wait()
-		return 0
 	})
 	t.Cleanup(func() {
 		if !co.StopAllAndWait(time.Second) {

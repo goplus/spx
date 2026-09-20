@@ -66,7 +66,7 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 	})
 
 	done := make(chan string, 1)
-	co.CreateAndStart("stop-this-script", func(coroutine.Thread) int {
+	co.CreateAndStart("stop-this-script", func(coroutine.Thread) {
 		trace := "outer-before;"
 		Procedure(func() {
 			trace += "inner-before;"
@@ -79,7 +79,6 @@ func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
 		})
 		trace += "outer-after;"
 		done <- trace
-		return 0
 	})
 
 	select {
@@ -110,7 +109,7 @@ func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 
 	var script scriptEventBindings
 	script.bind(&scriptEventRegistry{}, "owner")
-	thread := co.CreateAndStart("event-stop-this-script", func(coroutine.Thread) int {
+	thread := co.CreateAndStart("event-stop-this-script", func(coroutine.Thread) {
 		script.Stop(ThisScript)
 		panic("stop-this-script should not continue")
 	})

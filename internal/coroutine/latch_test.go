@@ -28,11 +28,10 @@ func TestLatchResumesManagedWaitersOnce(t *testing.T) {
 	latch := co.NewLatch()
 	var order []string
 
-	waiter := co.Create("waiter", func(Thread) int {
+	waiter := co.Create("waiter", func(Thread) {
 		order = append(order, "before")
 		latch.Wait()
 		order = append(order, "after")
-		return 0
 	})
 	co.JoinYieldedOrDone(waiter)
 	if want := []string{"before"}; !reflect.DeepEqual(order, want) {
@@ -53,9 +52,8 @@ func TestLatchAlreadyOpenReturns(t *testing.T) {
 	latch := co.NewLatch()
 	latch.Open()
 
-	thread := co.Create("waiter", func(Thread) int {
+	thread := co.Create("waiter", func(Thread) {
 		latch.Wait()
-		return 0
 	})
 	co.Join(thread)
 }
@@ -69,10 +67,9 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 		}
 	})
 	var resumed int
-	waiter := co.Create("waiter", func(Thread) int {
+	waiter := co.Create("waiter", func(Thread) {
 		latch.Wait()
 		resumed++
-		return 0
 	})
 	co.JoinYieldedOrDone(waiter)
 
@@ -106,9 +103,8 @@ func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	co.OnInited()
 	latch := co.NewLatch()
 
-	waiter := co.Create("waiter", func(Thread) int {
+	waiter := co.Create("waiter", func(Thread) {
 		latch.Wait()
-		return 0
 	})
 	co.JoinYieldedOrDone(waiter)
 	co.StopIf(func(thread Thread) bool { return thread == waiter })

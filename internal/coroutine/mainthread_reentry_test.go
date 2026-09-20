@@ -23,7 +23,7 @@ func TestExclusiveCallbackRejectsBlockedWaits(t *testing.T) {
 				defer close(finished)
 				var thread Thread
 				co.RunBetweenScripts(func() {
-					thread = co.Create("child", func(Thread) int { return 0 })
+					thread = co.Create("child", func(Thread) {})
 					func() {
 						defer func() { guarded <- recover() }()
 						test.wait(co, thread, latch)

@@ -69,10 +69,9 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 			if test.completed {
 				co.Join(first)
 			}
-			sibling := co.Create("sibling", func(Thread) int {
+			sibling := co.Create("sibling", func(Thread) {
 				co.WaitNextFrame()
 				order = append(order, "sibling")
-				return 0
 			})
 			co.JoinYieldedOrDone(sibling)
 

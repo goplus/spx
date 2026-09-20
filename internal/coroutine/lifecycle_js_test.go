@@ -11,12 +11,11 @@ import (
 func TestDrainLetsJavaScriptCompleteWorker(t *testing.T) {
 	co := New(nil)
 	started, hostDone := make(chan struct{}), make(chan struct{})
-	co.Create("host-worker", func(Thread) int {
+	co.Create("host-worker", func(Thread) {
 		co.WaitToDo(func() {
 			close(started)
 			<-hostDone
 		})
-		return 0
 	})
 	waitForThreadSignal(t, started, "worker did not start")
 	closeFromJavaScript(t, hostDone)
@@ -76,10 +75,9 @@ func TestEngineDispatchLetsJavaScriptCompleteWorker(t *testing.T) {
 func TestRunBetweenScriptsLetsJavaScriptReleaseScript(t *testing.T) {
 	co := New(nil)
 	started, hostDone := make(chan struct{}), make(chan struct{})
-	co.Create("host-owner", func(Thread) int {
+	co.Create("host-owner", func(Thread) {
 		close(started)
 		<-hostDone
-		return 0
 	})
 	waitForThreadSignal(t, started, "script did not acquire execution")
 	closeFromJavaScript(t, hostDone)

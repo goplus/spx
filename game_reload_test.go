@@ -304,11 +304,10 @@ func startReloadPreflightSentinelThread(t *testing.T, co *coroutine.Coroutines, 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	completed := make(chan struct{})
-	thread := co.Create(owner, func(coroutine.Thread) int {
+	thread := co.Create(owner, func(coroutine.Thread) {
 		close(started)
 		<-release
 		close(completed)
-		return 0
 	})
 	var once sync.Once
 	finish := func() {
