@@ -93,6 +93,13 @@ protected:
 		return nullptr;
 	}
 
+	T *_get_object_checked(GdObj obj, const char *p_operation) const {
+		if (unlikely(!_validate_main_thread(p_operation))) {
+			return nullptr;
+		}
+		return _get_object_unsafe(obj);
+	}
+
 	/**
 	 * @brief Create root node for this manager's objects
 	 */
@@ -128,28 +135,19 @@ public:
 	 * @return Pointer to object, or nullptr if not found
 	 */
 	T *get_object(GdObj obj) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return nullptr;
-		}
-		return _get_object_unsafe(obj);
+		return _get_object_checked(obj, __func__);
 	}
 
 	/**
 	 * @brief Get object by ID (const version, main-thread only)
 	 */
 	const T *get_object(GdObj obj) const {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return nullptr;
-		}
-		return _get_object_unsafe(obj);
+		return _get_object_checked(obj, __func__);
 	}
 
 	template <typename Func>
 	bool with_object(GdObj obj, Func &&func) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return false;
-		}
-		T *object = _get_object_unsafe(obj);
+		T *object = _get_object_checked(obj, __func__);
 		if (object == nullptr) {
 			return false;
 		}
@@ -159,10 +157,7 @@ public:
 
 	template <typename Ret, typename Func>
 	Ret with_object_ret(GdObj obj, Ret default_value, Func &&func) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return default_value;
-		}
-		T *object = _get_object_unsafe(obj);
+		T *object = _get_object_checked(obj, __func__);
 		if (object == nullptr) {
 			return default_value;
 		}
@@ -250,10 +245,7 @@ void SpxObjectMgr<T>::_reset_all(int reset_code) {
 
 template <typename T>
 void SpxObjectMgr<T>::destroy_object(GdObj obj) {
-	if (unlikely(!_validate_main_thread(__func__))) {
-		return;
-	}
-	T *object = _get_object_unsafe(obj);
+	T *object = _get_object_checked(obj, __func__);
 	if (object != nullptr) {
 		id_objects.erase(obj);
 		object->on_destroy();

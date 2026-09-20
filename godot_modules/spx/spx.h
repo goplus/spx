@@ -33,11 +33,8 @@
 #include "core/templates/safe_refcount.h"
 
 class MainLoop;
-class TestSpxInternalsAccessor;
 
 class Spx {
-	friend class TestSpxInternalsAccessor;
-
 	static inline bool extension_functions_registered = false;
 	static inline bool initialized = false;
 	static inline bool debug_mode = false;
