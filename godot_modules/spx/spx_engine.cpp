@@ -305,7 +305,7 @@ void SpxEngine::restart() {
 
 	_disconnect_reset_timer();
 	clear_frozen_frame();
-	_resume_pure();
+	_set_paused_pure(false);
 	is_spx_reset = false;
 
 	_notify_managers_start();
@@ -393,7 +393,7 @@ void SpxEngine::_do_reset(int reset_code) {
 }
 
 void SpxEngine::_invoke_runtime_reset(int reset_code) {
-	_pause_pure();
+	_set_paused_pure(true);
 	auto callback = get_on_runtime_reset();
 	if (callback) {
 		callback(reset_code);
@@ -436,22 +436,13 @@ void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
 	}
 }
 
-void SpxEngine::_pause_pure() {
+void SpxEngine::_set_paused_pure(bool p_paused) {
 	ERR_FAIL_COND(!Thread::is_main_thread());
 	if (tree) {
-		tree->set_pause(true);
+		tree->set_pause(p_paused);
 	}
-	is_spx_paused = true;
-	Spx::pending_controls.set_paused(true);
-}
-
-void SpxEngine::_resume_pure() {
-	ERR_FAIL_COND(!Thread::is_main_thread());
-	if (tree) {
-		tree->set_pause(false);
-	}
-	is_spx_paused = false;
-	Spx::pending_controls.set_paused(false);
+	is_spx_paused = p_paused;
+	Spx::pending_controls.set_paused(p_paused);
 }
 
 Ref<Image> SpxEngine::_get_viewport_image() const {

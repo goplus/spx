@@ -198,8 +198,7 @@ private:
 	void _disconnect_reset_timer();
 
 	void _on_godot_pause_changed(bool is_godot_paused);
-	void _pause_pure();
-	void _resume_pure();
+	void _set_paused_pure(bool p_paused);
 
 	Ref<Image> _get_viewport_image() const;
 	TextureRect *_create_freeze_texture(const Ref<Image> &img) const;
