@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_engine.h"
+#include "spx_callback_defaults.gen.h"
 
 #include "core/os/memory.h"
 #include "core/os/thread.h"
@@ -39,6 +40,7 @@
 #include "servers/display_server.h"
 
 #include "gdextension_spx_ext.h"
+#include "spx.h"
 #include "spx_audio_mgr.h"
 #include "spx_callback_proxy.h"
 #include "spx_camera_mgr.h"
@@ -56,6 +58,9 @@
 #include "spx_tilemapparser_mgr.h"
 #include "spx_ui_mgr.h"
 #include "svg_mgr.h"
+#ifdef WEB_ENABLED
+#include "web/spx_web_session.h"
+#endif
 
 void SpxEngine::register_runtime_panic_callbacks(GDExtensionSpxGlobalRuntimePanicCallback callback) {
 	_register_runtime_callback(&SpxEngine::on_runtime_panic, callback, __func__);
@@ -67,54 +72,6 @@ void SpxEngine::register_runtime_exit_callbacks(GDExtensionSpxGlobalRuntimeExitC
 
 void SpxEngine::register_runtime_reset_callbacks(GDExtensionSpxGlobalRuntimeResetCallback callback) {
 	_register_runtime_callback(&SpxEngine::on_runtime_reset, callback, __func__);
-}
-
-static SpxCallbackInfo get_default_spx_callbacks() {
-	SpxCallbackInfo callbacks;
-	callbacks.func_on_engine_start = []() {};
-	callbacks.func_on_engine_fixed_update = [](GdFloat delta) {};
-	callbacks.func_on_engine_update = [](GdFloat delta) {};
-	callbacks.func_on_engine_destroy = []() {};
-	callbacks.func_on_engine_destroyed = []() {};
-	callbacks.func_on_engine_reset = []() {};
-	callbacks.func_on_engine_pause = [](GdBool is_paused) {};
-	callbacks.func_on_scene_sprite_instantiated = [](GdObj obj, GdString type_name) {};
-	callbacks.func_on_sprite_ready = [](GdObj obj) {};
-	callbacks.func_on_sprite_updated = [](GdFloat delta) {};
-	callbacks.func_on_sprite_fixed_updated = [](GdFloat delta) {};
-	callbacks.func_on_sprite_destroyed = [](GdObj obj) {};
-	callbacks.func_on_sprite_frames_set_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_frame_changed = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_looped = [](GdObj obj) {};
-	callbacks.func_on_sprite_animation_finished = [](GdObj obj) {};
-	callbacks.func_on_sprite_vfx_finished = [](GdObj obj) {};
-	callbacks.func_on_sprite_screen_exited = [](GdObj obj) {};
-	callbacks.func_on_sprite_screen_entered = [](GdObj obj) {};
-	callbacks.func_on_mouse_pressed = [](GdInt keyid) {};
-	callbacks.func_on_mouse_released = [](GdInt keyid) {};
-	callbacks.func_on_key_pressed = [](GdInt keyid) {};
-	callbacks.func_on_key_released = [](GdInt keyid) {};
-	callbacks.func_on_action_pressed = [](GdString action_name) {};
-	callbacks.func_on_action_just_pressed = [](GdString action_name) {};
-	callbacks.func_on_action_just_released = [](GdString action_name) {};
-	callbacks.func_on_axis_changed = [](GdString action_name, GdFloat value) {};
-	callbacks.func_on_collision_enter = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_collision_stay = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_collision_exit = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_enter = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_stay = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_trigger_exit = [](GdInt self_id, GdInt other_id) {};
-	callbacks.func_on_ui_ready = [](GdObj obj) {};
-	callbacks.func_on_ui_updated = [](GdObj obj) {};
-	callbacks.func_on_ui_destroyed = [](GdObj obj) {};
-	callbacks.func_on_ui_pressed = [](GdObj obj) {};
-	callbacks.func_on_ui_released = [](GdObj obj) {};
-	callbacks.func_on_ui_hovered = [](GdObj obj) {};
-	callbacks.func_on_ui_clicked = [](GdObj obj) {};
-	callbacks.func_on_ui_toggle = [](GdObj obj, GdBool is_on) {};
-	callbacks.func_on_ui_text_changed = [](GdObj obj, GdString text) {};
-	return callbacks;
 }
 
 void SpxEngine::register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {
@@ -225,11 +182,6 @@ void SpxEngine::on_update(float delta) {
 		should_execute_single_frame = false;
 	}
 
-	if (is_defer_call_pause) {
-		_on_godot_pause_changed(defer_pause_value);
-		is_defer_call_pause = false;
-	}
-
 	_notify_managers_update(delta);
 
 	if (callbacks.func_on_engine_update) {
@@ -240,12 +192,8 @@ void SpxEngine::on_update(float delta) {
 		pen->flush_all();
 	}
 
-	if (is_spx_paused && !tree->is_paused()) {
-		if (Thread::is_main_thread()) {
-			tree->set_pause(true);
-		} else {
-			tree->call_deferred("set_pause", true);
-		}
+	if (is_spx_paused && tree && !tree->is_paused()) {
+		tree->set_pause(true);
 	}
 }
 
@@ -315,6 +263,9 @@ void SpxEngine::restart() {
 	clear_frozen_frame();
 	_resume_pure();
 	is_spx_reset = false;
+#ifdef WEB_ENABLED
+	godot_js_spx_contact_session_start();
+#endif
 
 	_notify_managers_start();
 }
@@ -357,32 +308,18 @@ void SpxEngine::clear_frozen_frame() {
 }
 
 void SpxEngine::pause() {
-	if (!tree) {
-		return;
-	}
-
-	if (Thread::is_main_thread()) {
+	ERR_FAIL_COND(!Thread::is_main_thread());
+	if (tree) {
 		tree->set_pause(true);
 		_on_godot_pause_changed(true);
-	} else {
-		tree->call_deferred("set_pause", true);
-		is_defer_call_pause = true;
-		defer_pause_value = true;
 	}
 }
 
 void SpxEngine::resume() {
-	if (!tree) {
-		return;
-	}
-
-	if (Thread::is_main_thread()) {
+	ERR_FAIL_COND(!Thread::is_main_thread());
+	if (tree) {
 		tree->set_pause(false);
 		_on_godot_pause_changed(false);
-	} else {
-		tree->call_deferred("set_pause", false);
-		is_defer_call_pause = true;
-		defer_pause_value = false;
 	}
 }
 
@@ -391,19 +328,9 @@ bool SpxEngine::is_paused() const {
 }
 
 void SpxEngine::next_frame() {
-	if (!is_spx_paused) {
-		return;
-	}
-
-	if (!tree) {
-		return;
-	}
-
-	if (Thread::is_main_thread()) {
+	ERR_FAIL_COND(!Thread::is_main_thread());
+	if (is_spx_paused && tree) {
 		tree->set_pause(false);
-		should_execute_single_frame = true;
-	} else {
-		tree->call_deferred("set_pause", false);
 		should_execute_single_frame = true;
 	}
 }
@@ -458,6 +385,7 @@ void SpxEngine::_disconnect_reset_timer() {
 void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
 	if (is_godot_paused != is_spx_paused) {
 		is_spx_paused = is_godot_paused;
+		Spx::pending_controls.set_paused(is_spx_paused);
 
 		_notify_managers_pause(is_spx_paused);
 
@@ -468,33 +396,21 @@ void SpxEngine::_on_godot_pause_changed(bool is_godot_paused) {
 }
 
 void SpxEngine::_pause_pure() {
-	if (!tree) {
-		is_spx_paused = true;
-		return;
-	}
-
-	if (Thread::is_main_thread()) {
+	ERR_FAIL_COND(!Thread::is_main_thread());
+	if (tree) {
 		tree->set_pause(true);
-	} else {
-		tree->call_deferred("set_pause", true);
 	}
-
 	is_spx_paused = true;
+	Spx::pending_controls.set_paused(true);
 }
 
 void SpxEngine::_resume_pure() {
-	if (!tree) {
-		is_spx_paused = false;
-		return;
-	}
-
-	if (Thread::is_main_thread()) {
+	ERR_FAIL_COND(!Thread::is_main_thread());
+	if (tree) {
 		tree->set_pause(false);
-	} else {
-		tree->call_deferred("set_pause", false);
 	}
-
 	is_spx_paused = false;
+	Spx::pending_controls.set_paused(false);
 }
 
 Ref<Image> SpxEngine::_get_viewport_image() const {

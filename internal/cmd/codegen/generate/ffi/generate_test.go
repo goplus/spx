@@ -81,6 +81,25 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
 }
 
+func TestNativeStringReleaseKeepsHighLevelStringOwnedByGo(t *testing.T) {
+	function := managerFunction("GDExtensionSpxExampleReleaseText", "void", managerArgument("text", "GdString"))
+	metadata := common.GenerationMetadata{StringReleases: map[string]bool{function.Name: true}}
+	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, metadata)}
+	body := generation.managerBody(function)
+	require.Contains(t, body, "Go strings own their memory")
+	require.NotContains(t, body, "C.CString")
+	require.NotContains(t, body, "C.free")
+	require.NotContains(t, body, "CallExampleReleaseText")
+	require.NotContains(t, generation.genSyncAPIWrapFunction(function), "callInMainThread")
+	// Ordinary borrowed string arguments must still allocate and release their temporary copy.
+	delete(metadata.StringReleases, function.Name)
+	generation = &Generator{GenerationContext: common.NewGenerationContext(ast, metadata)}
+	body = generation.managerBody(function)
+	require.Contains(t, body, "C.CString(text)")
+	require.Contains(t, body, "defer C.free")
+}
+
 func TestFixedOutputManagerUsesArrayPointerWithoutLength(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_example_mgr.h"), []byte(`class SpxExampleMgr : public SpxBaseMgr {

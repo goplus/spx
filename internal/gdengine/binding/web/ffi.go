@@ -58,6 +58,7 @@ func (s *LinkSession) Unlink() {
 }
 
 func BindCallback(info engine.CallbackInfo) {
+	contactEventGeneration++
 	callbacks = info
 }
 

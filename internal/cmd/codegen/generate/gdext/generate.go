@@ -45,6 +45,9 @@ type Generator struct {
 }
 
 func (g *Generator) Generate(codegenDir, spxModulePath string, headers Headers) error {
+	if err := g.writeCallbackDefaults(spxModulePath); err != nil {
+		return err
+	}
 	if err := g.writeCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), gdSpxExtCpp); err != nil {
 		return err
 	}
@@ -66,7 +69,8 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		"loadProcAddressName":     common.LoadProcAddressName,
 		"isManagerMethod":         g.IsManagerMethod,
 		"getManagerName":          g.GetManagerName,
-		"isWebOwnedStringFree":    isWebOwnedStringFree,
+		"isStringRelease":         g.IsStringRelease,
+		"controlTarget":           g.ControlTarget,
 		"isWebGdStringReturn":     isWebGdStringReturn,
 		"isWebGdArrayReturn":      isWebGdArrayReturn,
 		"isGdStringArgument":      isGdStringArgument,
@@ -103,11 +107,6 @@ func (g *Generator) webParameterDeclaration(function *clang.TypedefFunction, arg
 		return argument.CStyleString(index)
 	}
 	return argument.CStylePtrString(index)
-}
-
-// Web owns the value returned by this legacy method.
-func isWebOwnedStringFree(function *clang.TypedefFunction) bool {
-	return function != nil && function.Name == "GDExtensionSpxResFreeStr"
 }
 
 func isWebGdArrayReturn(function *clang.TypedefFunction) bool {

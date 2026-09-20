@@ -48,37 +48,38 @@ void SpxAudioMgr::on_awake() {
 }
 
 void SpxAudioMgr::on_update(float delta) {
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return;
+	}
 	SpxBaseMgr::on_update(delta);
 	_update_all(delta);
 
-	// SpxAudio removes finished players during its update. Mirror that cleanup in
-	// the manager so subsequent queries do not resolve a stale aid to the owner.
-	MutexLock aid_lock(aid_mutex);
 	Vector<GdInt> finished_aids;
-	for (const auto &[aid, audio] : aid_audios) {
-		if (audio == nullptr || !audio->has_audio(aid)) {
-			finished_aids.push_back(aid);
+	for (const KeyValue<GdInt, GdObj> &entry : aid_owners) {
+		SpxAudio *audio = _get_object_unsafe(entry.value);
+		if (audio == nullptr || !audio->has_audio(entry.key)) {
+			finished_aids.push_back(entry.key);
 		}
 	}
-	for (const GdInt &aid : finished_aids) {
-		aid_audios.erase(aid);
+	for (GdInt aid : finished_aids) {
+		aid_owners.erase(aid);
 	}
 }
 
 void SpxAudioMgr::on_reset(int reset_code) {
-	{
-		MutexLock aid_lock(aid_mutex);
-		aid_audios.clear();
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return;
 	}
+	aid_owners.clear();
 	_reset_all(reset_code);
 	SpxAudioBusPool::reset();
 }
 
 void SpxAudioMgr::on_destroy() {
-	{
-		MutexLock aid_lock(aid_mutex);
-		aid_audios.clear();
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return;
 	}
+	aid_owners.clear();
 	_destroy_all();
 	SpxAudioBusPool::shutdown();
 	SpxBaseMgr::on_destroy();
@@ -94,8 +95,8 @@ void SpxAudioMgr::stop_all() {
 	}
 
 	Vector<GdObj> audio_ids;
-	for (const KeyValue<GdObj, SpxAudio *> &E : id_objects) {
-		audio_ids.push_back(E.key);
+	for (const KeyValue<GdObj, SpxAudio *> &entry : id_objects) {
+		audio_ids.push_back(entry.key);
 	}
 	for (GdObj id : audio_ids) {
 		SpxAudio *audio = _get_object_unsafe(id);
@@ -103,27 +104,22 @@ void SpxAudioMgr::stop_all() {
 			audio->stop_all();
 		}
 	}
-	{
-		MutexLock aid_lock(aid_mutex);
-		aid_audios.clear();
-	}
+	aid_owners.clear();
 }
 
 void SpxAudioMgr::destroy_audio(GdObj obj) {
-	SpxAudio *audio = get_object(obj);
-	if (audio != nullptr) {
-		MutexLock aid_lock(aid_mutex);
-		Vector<GdInt> keys;
-		for (const auto &[aid, audio_obj] : aid_audios) {
-			if (audio_obj == audio) {
-				keys.push_back(aid);
-			}
-		}
-		for (const GdInt &key : keys) {
-			aid_audios.erase(key);
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return;
+	}
+	Vector<GdInt> aids;
+	for (const KeyValue<GdInt, GdObj> &entry : aid_owners) {
+		if (entry.value == obj) {
+			aids.push_back(entry.key);
 		}
 	}
-
+	for (GdInt aid : aids) {
+		aid_owners.erase(aid);
+	}
 	destroy_object(obj);
 }
 
@@ -174,6 +170,9 @@ GdInt SpxAudioMgr::play(GdObj obj, GdString path) {
 }
 
 GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_id, GdFloat attenuation, GdFloat max_distance) {
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return 0;
+	}
 	Node *audio_owner = nullptr;
 	if (owner_id == -1) {
 		audio_owner = static_cast<Node *>(cameraMgr->get_camera());
@@ -191,141 +190,93 @@ GdInt SpxAudioMgr::play_with_attenuation(GdObj obj, GdString path, GdObj owner_i
 		return 0;
 	}
 
-	GdInt aid = 0;
-	{
-		MutexLock aid_lock(aid_mutex);
-		aid = ++g_audio_id;
-	}
+	const GdInt aid = ++g_audio_id;
 	if (!audio->play(aid, path, audio_owner, attenuation, max_distance)) {
 		return 0;
 	}
-	{
-		MutexLock aid_lock(aid_mutex);
-		aid_audios[aid] = audio;
-	}
+	aid_owners[aid] = obj;
 	return aid;
 }
 
 GdBool SpxAudioMgr::is_playing(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
-	}
-	if (audio == nullptr) {
-		return false;
-	}
-	if (!audio->has_audio(aid)) {
-		MutexLock aid_lock(aid_mutex);
-		aid_audios.erase(aid);
-		return false;
-	}
-	return audio->is_playing(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	return audio != nullptr && audio->is_playing(aid);
 }
 
 void SpxAudioMgr::pause(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	if (audio != nullptr) {
+		audio->pause(aid);
 	}
-	if (audio == nullptr) {
-		return;
-	}
-	audio->pause(aid);
 }
 
 void SpxAudioMgr::resume(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	if (audio != nullptr) {
+		audio->resume(aid);
 	}
-	if (audio == nullptr) {
-		return;
-	}
-	audio->resume(aid);
 }
 
 void SpxAudioMgr::stop(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
-		if (audio != nullptr) {
-			aid_audios.erase(aid);
-		}
+	SpxAudio *audio = _get_aid_audio(aid);
+	if (audio != nullptr) {
+		aid_owners.erase(aid);
+		audio->stop(aid);
 	}
-	if (audio == nullptr) {
-		return;
-	}
-	audio->stop(aid);
 }
 
 GdBool SpxAudioMgr::restart(GdInt aid) {
-	MutexLock aid_lock(aid_mutex);
 	SpxAudio *audio = _get_aid_audio(aid);
 	if (audio == nullptr) {
 		return false;
 	}
-	GdBool restarted = audio->restart(aid);
-	if (!restarted) {
-		aid_audios.erase(aid);
+	if (!audio->restart(aid)) {
+		audio->stop(aid);
+		aid_owners.erase(aid);
+		return false;
 	}
-	return restarted;
+	return true;
 }
 
 void SpxAudioMgr::set_loop(GdInt aid, GdBool loop) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	if (audio != nullptr) {
+		audio->set_loop(aid, loop);
 	}
-	if (audio == nullptr) {
-		return;
-	}
-	audio->set_loop(aid, loop);
 }
 
 GdBool SpxAudioMgr::get_loop(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
-	}
-	if (audio == nullptr) {
-		return false;
-	}
-	return audio->get_loop(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	return audio != nullptr && audio->get_loop(aid);
 }
 
 GdFloat SpxAudioMgr::get_timer(GdInt aid) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
-	}
-	if (audio == nullptr) {
-		return 0.0;
-	}
-	return audio->get_timer(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	return audio != nullptr ? audio->get_timer(aid) : 0.0;
 }
 
 void SpxAudioMgr::set_timer(GdInt aid, GdFloat time) {
-	SpxAudio *audio = nullptr;
-	{
-		MutexLock aid_lock(aid_mutex);
-		audio = _get_aid_audio(aid);
+	SpxAudio *audio = _get_aid_audio(aid);
+	if (audio != nullptr) {
+		audio->set_timer(aid, time);
 	}
-	if (audio == nullptr) {
-		return;
-	}
-	audio->set_timer(aid, time);
 }
 
 SpxAudio *SpxAudioMgr::_get_aid_audio(GdInt aid) {
-	if (aid_audios.has(aid)) {
-		return aid_audios[aid];
+	if (unlikely(!_validate_main_thread(__func__))) {
+		return nullptr;
 	}
-	return nullptr;
+	const GdObj *owner = aid_owners.getptr(aid);
+	if (owner == nullptr) {
+		return nullptr;
+	}
+	SpxAudio *audio = _get_object_unsafe(*owner);
+	if (audio == nullptr || !audio->has_audio(aid)) {
+		if (audio != nullptr) {
+			audio->stop(aid);
+		}
+		aid_owners.erase(aid);
+		return nullptr;
+	}
+	return audio;
 }

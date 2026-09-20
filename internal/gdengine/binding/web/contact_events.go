@@ -35,6 +35,7 @@ const (
 
 var contactEventsHandle js.Func
 var contactEventScratch []byte
+var contactEventGeneration uint64
 
 func registerContactEventQueue() {
 	if contactEventsHandle.Type() != js.TypeUndefined {
@@ -45,6 +46,7 @@ func registerContactEventQueue() {
 }
 
 func gdspxContactEvents(this js.Value, args []js.Value) any {
+	generation := contactEventGeneration
 	if len(args) == 0 || !isByteArray(args[0]) {
 		return nil
 	}
@@ -61,7 +63,9 @@ func gdspxContactEvents(this js.Value, args []js.Value) any {
 	buf := contactEventScratch[:length]
 	js.CopyBytesToGo(buf, events)
 
-	for i := 0; i+contactEventBytes <= len(buf); i += contactEventBytes {
+	// A callback may synchronously reset/destroy the engine or rebind callbacks.
+	// Stop before delivering the rest of that batch to a different session.
+	for i := 0; generation == contactEventGeneration && i+contactEventBytes <= len(buf); i += contactEventBytes {
 		kind := int(binary.LittleEndian.Uint32(buf[i : i+4]))
 		self := int64(binary.LittleEndian.Uint64(buf[i+4 : i+12]))
 		other := int64(binary.LittleEndian.Uint64(buf[i+12 : i+20]))

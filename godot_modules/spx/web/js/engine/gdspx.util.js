@@ -389,11 +389,12 @@ const GDSPX_MAX_ARRAY_BYTES = 256 * 1024 * 1024;
 let arrayArenaModule = null;
 const arrayArenas = new Map();
 const deferredArenaFrees = [];
+let arrayBorrowGeneration = 0;
 
 // Only descriptors created here can lend their Wasm pointer to a native call.
 // The frozen descriptor is also its metadata; no second object is needed.
 const NativeArrays = (() => {
-    const borrowed = new WeakSet();
+    const borrowed = new WeakMap();
 
     function borrow(type, count, byteLength, poolName = GDSPX_ARRAY_POOL) {
         if (!HasActiveModuleHeap() || !IsNativeArrayByteLength(type, count, byteLength)) {
@@ -404,6 +405,7 @@ const NativeArrays = (() => {
             return null;
         }
         const module = arena.module;
+        const generation = arrayBorrowGeneration;
         const ptr = arena.ptr + arena.offset;
         arena.offset += AlignArrayBytes(byteLength);
         arena.sequence += 1;
@@ -419,10 +421,10 @@ const NativeArrays = (() => {
             'pool': arena.pool,
             'shared': typeof SharedArrayBuffer === 'function' && module['HEAPU8'].buffer instanceof SharedArrayBuffer,
             get 'data'() {
-                return NativeArrayDataView(ptr, byteLength, module);
+                return generation === arrayBorrowGeneration ? NativeArrayDataView(ptr, byteLength, module) : GDSPX_EMPTY_U8;
             },
         });
-        borrowed.add(array);
+        borrowed.set(array, generation);
         return array;
     }
 
@@ -430,7 +432,7 @@ const NativeArrays = (() => {
         return borrowed.has(array) ? array : null;
     }
 
-    return Object.freeze({ borrow, metadata });
+    return Object.freeze({ borrow, metadata, isCurrent: array => borrowed.get(array) === arrayBorrowGeneration });
 })();
 
 const GdspxBorrowNativeArray = NativeArrays.borrow;
@@ -484,6 +486,8 @@ function NativeArrayDataView(ptr, byteLength, module) {
 }
 
 function GdspxFlushDeferredFrees() {
+    // Invalidate descriptors before reusing or freeing their backing storage.
+    arrayBorrowGeneration += 1;
     // Update entry, reset, and destroy end all transient array borrows.
     for (const arena of arrayArenas.values()) {
         arena.offset = 0;
@@ -548,7 +552,7 @@ function DescribeNativeArray(array) {
     }
     const metadata = NativeArrays.metadata(array);
     if (metadata) {
-        return HasActiveModule() && metadata['module'] === Module ? metadata : null;
+        return NativeArrays.isCurrent(array) && HasActiveModule() && metadata['module'] === Module ? metadata : null;
     }
     const type = Number(array['type']);
     const count = Number(array['count']);

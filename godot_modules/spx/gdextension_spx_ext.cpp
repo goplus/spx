@@ -37,6 +37,8 @@
 
 #include "gdextension_interface.h"
 #include "spx_engine.h"
+#include "spx_abi.h"
+#include "spx.h"
 #include "spx_mgr_access.h"
 #include "spx_audio_mgr.h"
 #include "spx_camera_mgr.h"
@@ -192,11 +194,11 @@ static void gdextension_spx_ext_request_exit(GdInt exit_code) {
 }
 
 static void gdextension_spx_ext_request_reset(GdInt exit_code) {
-	extMgr->request_reset(exit_code);
+	Spx::reset(exit_code);
 }
 
 static void gdextension_spx_ext_request_restart() {
-	extMgr->request_restart();
+	Spx::restart();
 }
 
 static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
@@ -204,19 +206,19 @@ static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
 }
 
 static void gdextension_spx_ext_pause() {
-	extMgr->pause();
+	Spx::pause();
 }
 
 static void gdextension_spx_ext_resume() {
-	extMgr->resume();
+	Spx::resume();
 }
 
 static void gdextension_spx_ext_is_paused(GdBool *ret_val) {
-	*ret_val = extMgr->is_paused();
+	*ret_val = Spx::is_paused();
 }
 
 static void gdextension_spx_ext_next_frame() {
-	extMgr->next_frame();
+	Spx::next_frame();
 }
 
 static void gdextension_spx_ext_set_layer_sorter_mode(GdInt mode) {
@@ -552,7 +554,7 @@ static void gdextension_spx_res_reload_texture(GdString path) {
 }
 
 static void gdextension_spx_res_free_str(GdString str) {
-	resMgr->free_str(str);
+	SpxAbi::free_return_cstr(str);
 }
 
 static void gdextension_spx_res_apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_val) {

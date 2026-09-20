@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_base_mgr.cpp                                                      */
+/*  spx_abi.h                                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,66 +28,67 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "spx_base_mgr.h"
+#ifndef SPX_ABI_H
+#define SPX_ABI_H
 
-#include "scene/2d/node_2d.h"
-#include "scene/main/window.h"
+#include "gdextension_spx_ext.h"
+#include <type_traits>
 
-#include "spx_engine.h"
+// ABI allocations belong to their caller, independently of engine lifetime.
+namespace SpxAbi {
 
-void SpxBaseMgr::on_awake() {
-	owner = create_owner_node();
-	if (owner == nullptr) {
+void *_get_array(GdArray array, int64_t index, int type_size,
+		int32_t expected_type);
+
+template <typename T>
+constexpr int32_t _array_type_for() {
+	using U = std::remove_cv_t<std::remove_reference_t<T>>;
+	if constexpr (std::is_same_v<U, GdString> ||
+			(std::is_pointer_v<U> &&
+					std::is_same_v<std::remove_cv_t<std::remove_pointer_t<U>>,
+							char>)) {
+		return GD_ARRAY_TYPE_STRING;
+	} else if constexpr (std::is_floating_point_v<U>) {
+		return GD_ARRAY_TYPE_FLOAT;
+	} else if constexpr (std::is_same_v<U, bool> ||
+			(std::is_integral_v<U> &&
+					sizeof(U) == sizeof(uint8_t))) {
+		// GdBool and byte are both one-byte ABI values. The underlying C
+		// aliases can be indistinguishable, so _get_array accepts either
+		// one-byte wire type for this category.
+		return GD_ARRAY_TYPE_BOOL;
+	} else if constexpr (std::is_integral_v<U> && sizeof(U) == sizeof(int64_t)) {
+		// GdInt and GdObj intentionally share the 64-bit ABI.
+		return GD_ARRAY_TYPE_INT64;
+	} else {
+		return GD_ARRAY_TYPE_UNKNOWN;
+	}
+}
+
+GdString to_return_cstr(const String &ret_val);
+void free_return_cstr(GdString ret_val);
+GdArray create_array(int32_t type, int32_t size);
+void free_array(GdArray array);
+
+template <typename T>
+void set_array(GdArray array, int64_t index, T value);
+template <typename T>
+T *get_array(GdArray array, int64_t index);
+
+template <typename T>
+T *get_array(GdArray array, int64_t index) {
+	return static_cast<T *>(
+			_get_array(array, index, sizeof(T), _array_type_for<T>()));
+}
+template <typename T>
+void set_array(GdArray array, int64_t index, T value) {
+	auto ptr = get_array<T>(array, index);
+	if (ptr == nullptr) {
 		return;
 	}
-	owner->set_name(get_class_name());
-	get_spx_root()->add_child(owner);
+	*ptr = value;
 }
 
-void SpxBaseMgr::on_start() {
-}
+} // namespace SpxAbi
 
-void SpxBaseMgr::on_update(float delta) {
-}
-
-void SpxBaseMgr::on_fixed_update(float delta) {
-}
-
-void SpxBaseMgr::on_destroy() {
-	if (owner != nullptr) {
-		owner->queue_free();
-		owner = nullptr;
-	}
-}
-
-void SpxBaseMgr::on_reset(int reset_code) {
-}
-
-void SpxBaseMgr::on_exit(int exit_code) {
-}
-
-void SpxBaseMgr::on_pause() {
-}
-
-void SpxBaseMgr::on_resume() {
-}
-
-Node *SpxBaseMgr::create_owner_node() {
-	return memnew(Node2D);
-}
-
-GdInt SpxBaseMgr::get_unique_id() {
-	return SpxEngine::get_singleton()->get_unique_id();
-}
-
-Window *SpxBaseMgr::get_root() {
-	return SpxEngine::get_singleton()->get_root();
-}
-
-Node *SpxBaseMgr::get_spx_root() {
-	return SpxEngine::get_singleton()->get_spx_root();
-}
-
-SceneTree *SpxBaseMgr::get_tree() {
-	return SpxEngine::get_singleton()->get_tree();
-}
+#endif // SPX_ABI_H

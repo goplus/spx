@@ -80,15 +80,6 @@ inline bool _is_spx_engine_ready() {
 }
 } // namespace
 
-void Spx::_clear_pending_requests() {
-	restart_requested.clear();
-	reset_requested.clear();
-	reset_exit_code.set(0);
-	pause_requested.clear();
-	resume_requested.clear();
-	next_frame_requested.clear();
-}
-
 void Spx::register_extension_functions() {
 	if (extension_functions_registered) {
 		return;
@@ -149,7 +140,7 @@ void Spx::register_types() {
 }
 
 void Spx::on_start(MainLoop *p_main_loop) {
-	if (initialized || !SpxEngine::is_initialized()) {
+	if (initialized.is_set() || !SpxEngine::is_initialized()) {
 		return;
 	}
 
@@ -162,12 +153,13 @@ void Spx::on_start(MainLoop *p_main_loop) {
 		return;
 	}
 
-	_clear_pending_requests();
+	pending_controls.set_accepting(false);
 	SpxEngineNode *new_node = memnew(SpxEngineNode);
 	new_node->set_name("SpxEngineNode");
 	root->add_child(new_node);
 	SPX_ENGINE->set_root_node(tree, new_node);
-	initialized = true;
+	initialized.set();
+	pending_controls.set_accepting(true);
 	SPX_ENGINE->on_awake();
 }
 
@@ -184,37 +176,24 @@ void Spx::on_update(double delta) {
 		return;
 	}
 
-	// Check if restart was requested from a non-main thread
-	if (restart_requested.is_set()) {
-		restart_requested.clear(); // Clear the flag first
+	// Consume each phase immediately before execution. Requests made by a
+	// callback for a later phase still run in this update, as before.
+	if (pending_controls.take(SpxPendingControls::RESTART)) {
 		SPX_ENGINE->restart();
-		return; // Skip the normal update after restart
+		return;
 	}
-
-	// Check if reset was requested from a non-main thread
-	if (reset_requested.is_set()) {
-		// Read exit code BEFORE clearing the flag to avoid TOCTOU race condition
-		int exit_code = reset_exit_code.get();
-		reset_requested.clear(); // Clear the flag after reading
+	int exit_code = 0;
+	if (pending_controls.take(SpxPendingControls::RESET, &exit_code)) {
 		SPX_ENGINE->on_reset(exit_code);
-		return; // Skip the normal update after reset
+		return;
 	}
-
-	// Check if pause was requested from a non-main thread
-	if (pause_requested.is_set()) {
-		pause_requested.clear(); // Clear the flag first
+	if (pending_controls.take(SpxPendingControls::PAUSE)) {
 		SPX_ENGINE->pause();
 	}
-
-	// Check if resume was requested from a non-main thread
-	if (resume_requested.is_set()) {
-		resume_requested.clear(); // Clear the flag first
+	if (pending_controls.take(SpxPendingControls::RESUME)) {
 		SPX_ENGINE->resume();
 	}
-
-	// Check if next_frame was requested from a non-main thread
-	if (next_frame_requested.is_set()) {
-		next_frame_requested.clear(); // Clear the flag first
+	if (pending_controls.take(SpxPendingControls::NEXT_FRAME)) {
 		SPX_ENGINE->next_frame();
 	}
 
@@ -224,8 +203,8 @@ void Spx::on_update(double delta) {
 void Spx::on_destroy() {
 	// Runtime callbacks invoked during shutdown must observe SPX as unavailable;
 	// otherwise they can re-enter ordinary APIs while managers are tearing down.
-	initialized = false;
-	_clear_pending_requests();
+	initialized.clear();
+	pending_controls.set_accepting(false);
 
 	if (SpxEngine::is_initialized()) {
 		SpxEngine::shutdown();
@@ -233,76 +212,55 @@ void Spx::on_destroy() {
 }
 
 void Spx::reset(int exit_code) {
-	if (!_is_spx_engine_ready()) {
+	if (!Thread::is_main_thread()) {
+		pending_controls.submit(SpxPendingControls::RESET, exit_code);
 		return;
 	}
-
-	if (Thread::is_main_thread()) {
+	if (_is_spx_engine_ready()) {
 		SPX_ENGINE->on_reset(exit_code);
-		return;
 	}
-
-	// Write data first, then set flag to ensure happens-before ordering.
-	reset_exit_code.set(exit_code);
-	reset_requested.set();
 }
 
 void Spx::restart() {
-	if (!_is_spx_engine_ready()) {
+	if (!Thread::is_main_thread()) {
+		pending_controls.submit(SpxPendingControls::RESTART);
 		return;
 	}
-
-	if (Thread::is_main_thread()) {
+	if (_is_spx_engine_ready()) {
 		SPX_ENGINE->restart();
-		return;
 	}
-
-	restart_requested.set();
 }
 
 void Spx::pause() {
-	if (!_is_spx_engine_ready()) {
+	if (!Thread::is_main_thread()) {
+		pending_controls.submit(SpxPendingControls::PAUSE);
 		return;
 	}
-
-	if (Thread::is_main_thread()) {
+	if (_is_spx_engine_ready()) {
 		SPX_ENGINE->pause();
-		return;
 	}
-
-	pause_requested.set();
 }
 
 void Spx::resume() {
-	if (!_is_spx_engine_ready()) {
+	if (!Thread::is_main_thread()) {
+		pending_controls.submit(SpxPendingControls::RESUME);
 		return;
 	}
-
-	if (Thread::is_main_thread()) {
+	if (_is_spx_engine_ready()) {
 		SPX_ENGINE->resume();
-		return;
 	}
-
-	resume_requested.set();
-}
-
-bool Spx::is_paused() {
-	if (!_is_spx_engine_ready()) {
-		return false;
-	}
-	// Query operations are generally safe from any thread
-	return SPX_ENGINE->is_paused();
 }
 
 void Spx::next_frame() {
-	if (!_is_spx_engine_ready()) {
+	if (!Thread::is_main_thread()) {
+		pending_controls.submit(SpxPendingControls::NEXT_FRAME);
 		return;
 	}
-
-	if (Thread::is_main_thread()) {
+	if (_is_spx_engine_ready()) {
 		SPX_ENGINE->next_frame();
-		return;
 	}
+}
 
-	next_frame_requested.set();
+bool Spx::is_paused() {
+	return pending_controls.is_paused();
 }

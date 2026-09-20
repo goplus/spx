@@ -57,15 +57,12 @@ class SpxPenMgr;
 class SpxTilemapMgr;
 class SpxTilemapparserMgr;
 class SpxCallbackProxy;
-class TestSpxEngineInternalsAccessor;
 
 typedef void (*GDExtensionSpxGlobalRuntimePanicCallback)(GdString msg);
 typedef void (*GDExtensionSpxGlobalRuntimeExitCallback)(GdInt code);
 typedef void (*GDExtensionSpxGlobalRuntimeResetCallback)(GdInt code);
 
-class SpxEngine : public SpxBaseMgr {
-	friend class TestSpxEngineInternalsAccessor;
-
+class SpxEngine {
 	static inline SpxEngine *singleton = nullptr;
 
 public:
@@ -76,7 +73,7 @@ public:
 	static void register_runtime_panic_callbacks(GDExtensionSpxGlobalRuntimePanicCallback callback);
 	static void register_runtime_exit_callbacks(GDExtensionSpxGlobalRuntimeExitCallback callback);
 	static void register_runtime_reset_callbacks(GDExtensionSpxGlobalRuntimeResetCallback callback);
-	~SpxEngine() override = default;
+	~SpxEngine() = default;
 
 private:
 	Vector<SpxBaseMgr *> mgrs;
@@ -160,8 +157,6 @@ private:
 	bool has_exit = false;
 	bool is_spx_reset = true;
 	bool is_spx_paused = false;
-	bool is_defer_call_pause = false;
-	bool defer_pause_value = false;
 	bool should_execute_single_frame = false;
 
 public:
@@ -171,18 +166,18 @@ public:
 	GDExtensionSpxGlobalRuntimeResetCallback get_on_runtime_reset() { return on_runtime_reset; }
 
 public:
-	GdInt get_unique_id() override;
-	Node *get_spx_root() override;
-	SceneTree *get_tree() override;
-	Window *get_root() override;
+	GdInt get_unique_id();
+	Node *get_spx_root();
+	SceneTree *get_tree();
+	Window *get_root();
 	void set_root_node(SceneTree *p_tree, Node *p_node);
 
-	void on_awake() override;
-	void on_fixed_update(float delta) override;
-	void on_update(float delta) override;
-	void on_destroy() override;
-	void on_exit(int exit_code) override;
-	void on_reset(int reset_code) override;
+	void on_awake();
+	void on_fixed_update(float delta);
+	void on_update(float delta);
+	void on_destroy();
+	void on_exit(int exit_code);
+	void on_reset(int reset_code);
 
 	bool is_reset();
 	void restart();

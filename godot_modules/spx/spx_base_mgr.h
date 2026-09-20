@@ -31,12 +31,11 @@
 #ifndef SPX_BASE_MGR_H
 #define SPX_BASE_MGR_H
 
-#include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
+#include "spx_abi.h"
 #include "spx_mgr_access.h"
 #include "spx_utils.h"
 #include "svg_mgr.h"
-#include <type_traits>
 
 #define SPXCLASS(m_class, m_inherits)        \
 public:                                      \
@@ -45,7 +44,7 @@ public:                                      \
 	}
 
 #define SpxStr(str) (String::utf8((const char *)str))
-#define SpxReturnStr(str) (SpxBaseMgr::to_return_cstr(str))
+#define SpxReturnStr(str) (SpxAbi::to_return_cstr(str))
 
 #ifndef SPX_API
 #define SPX_API
@@ -55,7 +54,7 @@ public:                                      \
 #define SPX_BIND SPX_API
 #endif
 
-// Codegen options: web.
+// Codegen options: Web behavior, ABI ownership, and lifecycle controls.
 #ifndef SPX_BINDING
 #define SPX_BINDING(...)
 #endif
@@ -71,42 +70,27 @@ public:                                      \
 class Window;
 class SceneTree;
 class SpxBaseMgr {
-private:
-	static void *_get_array(GdArray array, int64_t index, int type_size, int32_t expected_type);
-
-	template <typename T>
-	static constexpr int32_t _array_type_for() {
-		using U = std::remove_cv_t<std::remove_reference_t<T>>;
-		if constexpr (std::is_same_v<U, GdString> ||
-				(std::is_pointer_v<U> &&
-					std::is_same_v<std::remove_cv_t<std::remove_pointer_t<U>>, char>)) {
-			return GD_ARRAY_TYPE_STRING;
-		} else if constexpr (std::is_floating_point_v<U>) {
-			return GD_ARRAY_TYPE_FLOAT;
-		} else if constexpr (std::is_same_v<U, bool> ||
-				(std::is_integral_v<U> && sizeof(U) == sizeof(uint8_t))) {
-			// GdBool and byte are both one-byte ABI values. The underlying C
-			// aliases can be indistinguishable, so _get_array accepts either
-			// one-byte wire type for this category.
-			return GD_ARRAY_TYPE_BOOL;
-		} else if constexpr (std::is_integral_v<U> && sizeof(U) == sizeof(int64_t)) {
-			// GdInt and GdObj intentionally share the 64-bit ABI.
-			return GD_ARRAY_TYPE_INT64;
-		} else {
-			return GD_ARRAY_TYPE_UNKNOWN;
-		}
-	}
-
 public:
-	static GdString to_return_cstr(const String &ret_val);
-	static void free_return_cstr(GdString ret_val);
-	static GdArray create_array(int32_t type, int32_t size);
-	static void free_array(GdArray array);
-
+	// Compatibility forwarding for existing manager code. Allocation ownership
+	// and validation live in SpxAbi and do not require an engine instance.
+	static GdString to_return_cstr(const String &value) {
+		return SpxAbi::to_return_cstr(value);
+	}
+	static void free_return_cstr(GdString value) {
+		SpxAbi::free_return_cstr(value);
+	}
+	static GdArray create_array(int32_t type, int32_t size) {
+		return SpxAbi::create_array(type, size);
+	}
+	static void free_array(GdArray array) { SpxAbi::free_array(array); }
 	template <typename T>
-	static void set_array(GdArray array, int64_t index, T value);
+	static void set_array(GdArray array, int64_t index, T value) {
+		SpxAbi::set_array(array, index, value);
+	}
 	template <typename T>
-	static T *get_array(GdArray array, int64_t index);
+	static T *get_array(GdArray array, int64_t index) {
+		return SpxAbi::get_array<T>(array, index);
+	}
 
 protected:
 	Node *owner = nullptr;
@@ -131,18 +115,5 @@ public:
 	virtual void on_resume();
 	virtual ~SpxBaseMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 };
-
-template <typename T>
-T *SpxBaseMgr::get_array(GdArray array, int64_t index) {
-	return static_cast<T *>(_get_array(array, index, sizeof(T), _array_type_for<T>()));
-}
-template <typename T>
-void SpxBaseMgr::set_array(GdArray array, int64_t index, T value) {
-	auto ptr = get_array<T>(array, index);
-	if (ptr == nullptr) {
-		return;
-	}
-	*ptr = value;
-}
 
 #endif // SPX_BASE_MGR_H

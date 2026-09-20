@@ -60,6 +60,87 @@ func TestContactEventsDecodePackedBytes(t *testing.T) {
 	}
 }
 
+func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
+	previousCallbacks := callbacks
+	t.Cleanup(func() { BindCallback(previousCallbacks) })
+	registerWebGlobals()
+	dispatch := js.Global().Get("gdspx_dispatch")
+	batch := js.Global().Get("gdspx_on_contact_events")
+	data := make([]byte, 2*contactEventBytes)
+	for i := range 2 {
+		entry := data[i*contactEventBytes:]
+		binary.LittleEndian.PutUint32(entry, contactTriggerEnter)
+		binary.LittleEndian.PutUint64(entry[4:], uint64(101+i))
+		binary.LittleEndian.PutUint64(entry[12:], 201)
+	}
+	packed := jsUint8Array.New(len(data))
+	js.CopyBytesToJS(packed, data)
+
+	for _, event := range []string{"OnEngineReset", "OnEngineDestroy", "OnEngineStart"} {
+		for _, hasHandler := range []bool{false, true} {
+			name := event + "/without_handler"
+			if hasHandler {
+				name = event + "/with_handler"
+			}
+			t.Run(name, func(t *testing.T) {
+				var got []int64
+				lifecycleCalls := 0
+				info := engine.CallbackInfo{
+					OnTriggerEnter: func(self, other int64) {
+						got = append(got, self)
+						if len(got) == 1 {
+							dispatch.Invoke(event)
+						}
+					},
+				}
+				if hasHandler {
+					handler := func() { lifecycleCalls++ }
+					switch event {
+					case "OnEngineReset":
+						info.OnEngineReset = handler
+					case "OnEngineDestroy":
+						info.OnEngineDestroy = handler
+					case "OnEngineStart":
+						info.OnEngineStart = handler
+					}
+				}
+				BindCallback(info)
+				batch.Invoke(packed)
+				if !slices.Equal(got, []int64{101}) {
+					t.Fatalf("contacts crossing %s = %v, want [101]", event, got)
+				}
+				if hasHandler && lifecycleCalls != 1 {
+					t.Fatalf("lifecycle calls = %d, want 1", lifecycleCalls)
+				}
+				batch.Invoke(packed)
+				if !slices.Equal(got, []int64{101, 101, 102}) {
+					t.Fatalf("contacts from a new batch = %v, want [101 101 102]", got)
+				}
+			})
+		}
+	}
+
+	t.Run("BindCallback", func(t *testing.T) {
+		var oldContacts, newContacts []int64
+		BindCallback(engine.CallbackInfo{
+			OnTriggerEnter: func(self, other int64) {
+				oldContacts = append(oldContacts, self)
+				BindCallback(engine.CallbackInfo{
+					OnTriggerEnter: func(self, other int64) { newContacts = append(newContacts, self) },
+				})
+			},
+		})
+		batch.Invoke(packed)
+		if !slices.Equal(oldContacts, []int64{101}) || len(newContacts) != 0 {
+			t.Fatalf("contacts crossing rebind: old = %v, new = %v", oldContacts, newContacts)
+		}
+		batch.Invoke(packed)
+		if !slices.Equal(newContacts, []int64{101, 102}) {
+			t.Fatalf("contacts after rebind = %v, want [101 102]", newContacts)
+		}
+	})
+}
+
 func TestDispatcherSyncsFrameInput(t *testing.T) {
 	previousCallbacks, previousSnapshot := callbacks, inputSnap
 	previousFrame, previousBool, previousAxis := actionFrame, actionBool, actionAxis

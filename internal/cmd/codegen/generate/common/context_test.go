@@ -30,8 +30,10 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)();")
 	require.NoError(t, err)
 	metadata := GenerationMetadata{
-		ManagerNames: []string{"sprite"},
-		WebBindings:  map[string]WebBindingMode{"first": WebBindingNoop},
+		ManagerNames:   []string{"sprite"},
+		WebBindings:    map[string]WebBindingMode{"first": WebBindingNoop},
+		StringReleases: map[string]bool{"first": true},
+		ControlMethods: map[string]string{"control": "pause"},
 		ArrayBridges: map[string]ArrayBridge{"first": {
 			FunctionName: "first",
 			Buffers:      []ArrayBuffer{{Type: 2, Data: CParam{Name: "input"}}, {Type: 2, Count: 3}},
@@ -40,11 +42,17 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	first := NewGenerationContext(ast, metadata)
 	metadata.ManagerNames[0] = "camera"
 	metadata.WebBindings["first"] = WebBindingReuseResult
+	metadata.StringReleases["first"] = false
+	metadata.ControlMethods["control"] = "resume"
 	metadata.ArrayBridges["first"].Buffers[0].Data.Name = "changed"
 	metadata.ArrayBridges["first"].Buffers[1].Count = 9
 	second := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
 	require.Equal(t, WebBindingNoop, first.WebBinding("first"))
 	require.Equal(t, WebBindingReuseResult, second.WebBinding("first"))
+	require.True(t, first.IsStringRelease(&clang.TypedefFunction{Name: "first"}))
+	require.False(t, second.IsStringRelease(&clang.TypedefFunction{Name: "first"}))
+	require.Equal(t, "Spx::pause", first.ControlTarget(&clang.TypedefFunction{Name: "control"}))
+	require.Equal(t, "Spx::resume", second.ControlTarget(&clang.TypedefFunction{Name: "control"}))
 	require.Equal(t, "sprite", first.GetManagerName("GDExtensionSpxSpriteShow"))
 	require.True(t, first.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.False(t, second.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))

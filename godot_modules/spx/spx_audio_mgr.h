@@ -31,25 +31,20 @@
 #ifndef SPX_AUDIO_MGR_H
 #define SPX_AUDIO_MGR_H
 
-#include "core/templates/list.h"
-#include "core/templates/rb_map.h"
+#include "core/templates/hash_map.h"
 #include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
 #include "scene/main/node.h"
 #include "spx_audio.h"
 #include "spx_object_mgr.h"
 
-// Forward declarations
-class AudioStreamPlayer2D;
-
 class SpxAudioMgr : public SpxObjectMgr<SpxAudio> {
 	SPXCLASS(SpxAudioMgr, SpxObjectMgr<SpxAudio>)
 
 private:
-	// Additional mapping for audio instance IDs (aid) to audio objects
-	RBMap<GdInt, SpxAudio *> aid_audios;
-	mutable Mutex aid_mutex;
-	GdInt g_audio_id;
+	// Main-thread-only routing index. Player state lives solely in SpxAudio.
+	HashMap<GdInt, GdObj> aid_owners;
+	GdInt g_audio_id = 0;
 
 	SpxAudio *_get_aid_audio(GdInt aid);
 

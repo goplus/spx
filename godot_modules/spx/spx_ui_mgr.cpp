@@ -39,8 +39,7 @@
 
 #define SPX_CALLBACK SpxEngine::get_singleton()->get_callbacks()
 
-// Refactored UI node validation using unified SpxObjectGuard (RAII pattern)
-// See spx_object_guard.h for details
+// Checked main-thread lookup with each API's existing default return value.
 #define SPX_REQUIRE_UI_VOID() \
 	SPX_UI_GUARD_VOID(obj, __func__)
 

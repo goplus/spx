@@ -1061,12 +1061,7 @@ func (pself *resMgr) ReloadTexture(path string) {
 	})
 }
 func (pself *resMgr) FreeStr(str string) {
-	enginewrap.CallInMainThread(func() {
-		arg0Str := C.CString(str)
-		arg0 := (GdString)(arg0Str)
-		defer C.free(unsafe.Pointer(arg0Str))
-		CallResFreeStr(arg0)
-	})
+	// Compatibility API: Go strings own their memory; only raw ABI strings need release.
 }
 func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
 	return enginewrap.CallInMainThreadValue(func() string {
