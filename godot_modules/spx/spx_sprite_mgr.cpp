@@ -86,8 +86,7 @@ static constexpr int SPX_PHYSICS_BATCH_FIELDS = 6;
 
 StringName SpxSpriteMgr::default_texture_anim;
 
-// Refactored sprite validation using unified SpxObjectGuard (RAII pattern)
-// See spx_object_guard.h for details
+// Checked main-thread lookup with each API's existing default return value.
 #define SPX_REQUIRE_SPRITE_VOID() \
 	SPX_SPRITE_GUARD_VOID(obj, __func__)
 
@@ -443,8 +442,8 @@ void SpxSpriteMgr::on_sprite_destroy(SpxSprite *sprite) {
 
 void SpxSpriteMgr::set_dont_destroy_on_load(GdObj obj) {
 	SPX_REQUIRE_SPRITE_VOID()
-	sprite.get()->get_parent()->remove_child(sprite.get());
-	dont_destroy_root->add_child(sprite.get());
+	sprite->get_parent()->remove_child(sprite);
+	dont_destroy_root->add_child(sprite);
 }
 
 void SpxSpriteMgr::set_process(GdObj obj, GdBool is_on) {
@@ -516,7 +515,7 @@ GdVec2 SpxSpriteMgr::get_child_scale(GdObj obj, GdString path) {
 GdBool SpxSpriteMgr::check_collision(GdObj obj, GdObj target, GdBool is_src_trigger, GdBool is_dst_trigger) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 	SPX_REQUIRE_TARGET_SPRITE_RETURN(target, false)
-	return sprite->check_collision(sprite_target.get(), is_src_trigger, is_dst_trigger);
+	return sprite->check_collision(sprite_target, is_src_trigger, is_dst_trigger);
 }
 
 GdBool SpxSpriteMgr::check_collision_with_point(GdObj obj, GdVec2 point, GdBool is_click_query) {
@@ -531,7 +530,7 @@ GdBool SpxSpriteMgr::check_collision_with_point(GdObj obj, GdVec2 point, GdBool 
 	// Scratch keeps point sensing and click picking distinct:
 	// - click queries respect visibility and ghost alpha
 	// - sensing queries ignore both and use the sprite silhouette directly
-	if (build_pixel_collision_query(sprite.get(), query, is_click_query, is_click_query) && ensure_query_image(query)) {
+	if (build_pixel_collision_query(sprite, query, is_click_query, is_click_query) && ensure_query_image(query)) {
 		Color color;
 		return read_query_pixel(query, point, color) && color.a > 0.0f;
 	}
@@ -1200,16 +1199,16 @@ Rect2 SpxSpriteMgr::_get_sprite_aabb(AnimatedSprite2D *anim2d) {
 GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 	SPX_REQUIRE_TARGET_SPRITE_RETURN(obj_b, false)
-	if (!can_query_visible_sprite(sprite.get()) || !can_query_visible_sprite(sprite_target.get())) {
+	if (!can_query_visible_sprite(sprite) || !can_query_visible_sprite(sprite_target)) {
 		return false;
 	}
 
 	// If not using pixel-perfect collision, use simple collider2d collision detection
 	if (!use_pixel_perfect) {
-		return sprite->check_collision(sprite_target.get(), false, false);
+		return sprite->check_collision(sprite_target, false, false);
 	}
 
-	return _check_pixel_collision_between(sprite.get(), sprite_target.get(), alpha_threshold);
+	return _check_pixel_collision_between(sprite, sprite_target, alpha_threshold);
 }
 
 bool SpxSpriteMgr::_check_pixel_collision_between(SpxSprite *sprite_a, SpxSprite *sprite_b, GdFloat alpha_threshold) {
@@ -1280,7 +1279,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 
 	PixelCollisionQuery self_query;
 	// Scratch uses the caller's silhouette/color as the query mask even when ghosted or hidden.
-	if (!build_pixel_collision_query(sprite.get(), self_query, false, false)) {
+	if (!build_pixel_collision_query(sprite, self_query, false, false)) {
 		return false;
 	}
 	if (!ensure_query_image(self_query)) {
@@ -1291,7 +1290,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	scene_queries.reserve((size_t)id_objects.size());
 	for (const auto &item : id_objects) {
 		SpxSprite *candidate = item.value;
-		if (candidate == nullptr || candidate == sprite.get() || candidate->is_queued_for_deletion()) {
+		if (candidate == nullptr || candidate == sprite || candidate->is_queued_for_deletion()) {
 			continue;
 		}
 
@@ -1337,7 +1336,7 @@ GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
 
 	PixelCollisionQuery query1;
 	// Scratch uses the caller's silhouette/color as the mask even when ghosted or hidden.
-	if (!build_pixel_collision_query(sprite.get(), query1, false, false)) {
+	if (!build_pixel_collision_query(sprite, query1, false, false)) {
 		return false;
 	}
 	if (!ensure_query_image(query1)) {
@@ -1347,7 +1346,7 @@ GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
 	// Iterate through all objects
 	for (const auto &item : id_objects) {
 		SpxSprite *sp2 = item.value;
-		if (sprite.get() == sp2 || sp2 == nullptr || sp2->is_queued_for_deletion()) {
+		if (sprite == sp2 || sp2 == nullptr || sp2->is_queued_for_deletion()) {
 			continue; // Skip itself
 		}
 
