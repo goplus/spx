@@ -34,9 +34,11 @@ func (p *Coroutines) Join(target Thread) {
 	p.waitOn(me, &target.joinWaiters)
 }
 
-// JoinAll waits for each distinct, non-nil target to finish.
+// JoinAll waits for each target to finish.
 func (p *Coroutines) JoinAll(targets []Thread) {
-	joinUnique(targets, p.Join)
+	for _, target := range targets {
+		p.Join(target)
+	}
 }
 
 // JoinYieldedOrDone waits until target first yields or finishes.
@@ -56,30 +58,9 @@ func (p *Coroutines) JoinYieldedOrDone(target Thread) {
 	p.waitOn(me, &target.yieldWaiters)
 }
 
-// JoinYieldedOrDoneAll waits until every distinct, non-nil target has first
-// yielded or finished.
+// JoinYieldedOrDoneAll waits until every target has first yielded or finished.
 func (p *Coroutines) JoinYieldedOrDoneAll(targets []Thread) {
-	joinUnique(targets, p.JoinYieldedOrDone)
-}
-
-func joinUnique(targets []Thread, join func(Thread)) {
-	if len(targets) == 0 {
-		return
-	}
-	if len(targets) == 1 {
-		join(targets[0])
-		return
-	}
-
-	seen := make(map[Thread]struct{}, len(targets))
 	for _, target := range targets {
-		if target == nil {
-			continue
-		}
-		if _, ok := seen[target]; ok {
-			continue
-		}
-		seen[target] = struct{}{}
-		join(target)
+		p.JoinYieldedOrDone(target)
 	}
 }

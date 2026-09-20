@@ -838,7 +838,7 @@ func TestJoinAllWaitsForEveryPeer(t *testing.T) {
 	}
 
 	co.CreateAndStart("caller", func(me Thread) int {
-		co.JoinAll([]Thread{peerA, peerB, peerA})
+		co.JoinAll([]Thread{nil, me, peerA, peerB, peerA, nil, me})
 		close(callerDone)
 		return 0
 	})
