@@ -23,11 +23,10 @@ import (
 
 type node[T any] struct {
 	value T
-	prev  *node[T]
 	next  *node[T]
 }
 
-// Queue is a thread-safe double-ended queue. Its zero value is ready for use.
+// Queue is thread-safe and supports insertion at either end. Its zero value is ready for use.
 type Queue[T any] struct {
 	mu    sync.Mutex
 	head  *node[T]
@@ -58,7 +57,6 @@ func (q *Queue[T]) Move(src *Queue[T]) {
 		q.tail = src.tail
 	} else {
 		q.tail.next = src.head
-		src.head.prev = q.tail
 		q.tail = src.tail
 	}
 	q.count += src.count
@@ -128,7 +126,6 @@ func (q *Queue[T]) PushBack(value T) {
 		q.head = newNode
 		q.tail = newNode
 	} else {
-		newNode.prev = q.tail
 		q.tail.next = newNode
 		q.tail = newNode
 	}
@@ -146,7 +143,6 @@ func (q *Queue[T]) PushFront(value T) {
 		q.tail = newNode
 	} else {
 		newNode.next = q.head
-		q.head.prev = newNode
 		q.head = newNode
 	}
 	q.count++
@@ -168,32 +164,6 @@ func (q *Queue[T]) PopFront() T {
 
 	if q.count == 0 {
 		q.tail = nil
-	} else {
-		q.head.prev = nil
-	}
-
-	q.releaseNode(n)
-	return value
-}
-
-// PopBack removes and returns the back value. It panics if the queue is empty.
-func (q *Queue[T]) PopBack() T {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	if q.count == 0 {
-		panic("queue is empty")
-	}
-
-	n := q.tail
-	value := n.value
-	q.tail = n.prev
-	q.count--
-
-	if q.count == 0 {
-		q.head = nil
-	} else {
-		q.tail.next = nil
 	}
 
 	q.releaseNode(n)
@@ -219,7 +189,6 @@ func (q *Queue[T]) acquireNode(value T) *node[T] {
 	q.ensurePool()
 	n := q.pool.Get().(*node[T])
 	n.value = value
-	n.prev = nil
 	n.next = nil
 	return n
 }
@@ -227,7 +196,6 @@ func (q *Queue[T]) acquireNode(value T) *node[T] {
 func (q *Queue[T]) releaseNode(n *node[T]) {
 	var zero T
 	n.value = zero
-	n.prev = nil
 	n.next = nil
 	q.ensurePool()
 	q.pool.Put(n)

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	inputstate "github.com/goplus/spx/v3/internal/input"
 	inkey "github.com/goplus/spx/v3/internal/input/keycode"
@@ -198,14 +197,17 @@ func (p *inputManager) onMouseMove(pos mathf.Vec2) {
 
 func (p *inputManager) swipeHooks() coreruntime.SwipeHooks[*SpriteImpl] {
 	return coreruntime.SwipeHooks[*SpriteImpl]{
-		Debug: coreevent.If1(isDebugEventEnabled, func(ev coreruntime.SwipeEvent[*SpriteImpl]) {
+		Debug: func(ev coreruntime.SwipeEvent[*SpriteImpl]) {
+			if !isDebugEventEnabled() {
+				return
+			}
 			targetName := "stage"
 			if ev.Target != nil {
 				targetName = ev.Target.name
 			}
 			spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
 				Direction(ev.Direction), ev.Velocity, ev.Distance, targetName)
-		}),
+		},
 		DispatchTarget: func(direction float64, targetSprite *SpriteImpl) {
 			targetSprite.doWhenSwipe(Direction(direction), targetSprite)
 		},
