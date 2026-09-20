@@ -101,6 +101,7 @@ type CoreCallbackInfo struct {
 	OnEngineUpdate      func(float64)
 	OnEngineFixedUpdate func(float64)
 	OnEngineDestroy     func()
+	OnEngineDestroyed   func()
 	OnEngineReset       func()
 	OnEnginePause       func(bool)
 

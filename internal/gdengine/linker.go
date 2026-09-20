@@ -19,6 +19,8 @@ package gdengine
 //lint:file-ignore ST1001 Godot linker glue intentionally dot-imports engine API types.
 
 import (
+	"sync"
+
 	"github.com/goplus/spx/v3/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v3/internal/gdengine/impl"
 	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -30,7 +32,14 @@ var (
 	coreCallbacks       CoreCallbackInfo
 	sprites             = make([]ISpriter, 0)
 	isWebIntepreterMode bool
+	activeLink          *LinkSession
+	linkMu              sync.Mutex
 )
+
+// LinkSession owns the backend resources installed by one Link call.
+type LinkSession struct {
+	backend *facade.LinkSession
+}
 
 type linkerBridge struct{}
 
@@ -55,16 +64,63 @@ func IsWebIntepreterMode() bool {
 }
 
 func Link(coreCallbackInfo CoreCallbackInfo) {
-	isWebIntepreterMode = facade.LinkFFI()
-	coreCallbacks = coreCallbackInfo
-	infos := bindCallbacks()
-	facade.RegisterCallbacks(infos)
-	mgrs = engineimpl.CreateMgrs()
-	engineimpl.BindMgr(mgrs)
-	facade.OnLinked()
+	PrepareLink(coreCallbackInfo).Run(nil)
 }
 
-func Unlink() {
+// PrepareLink installs callbacks and managers before Run enters the backend.
+func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
+	linkMu.Lock()
+	defer linkMu.Unlock()
+	if activeLink != nil {
+		panic("gdengine: a link is already active")
+	}
+
+	backend, interpreter := facade.LinkFFI()
+	session := &LinkSession{backend: backend}
+	committed := false
+	defer func() {
+		if !committed {
+			backend.Unlink()
+			mgrs = nil
+			coreCallbacks = CoreCallbackInfo{}
+			isWebIntepreterMode = false
+		}
+	}()
+
+	isWebIntepreterMode = interpreter
+	coreCallbacks = coreCallbackInfo
+	facade.RegisterCallbacks(bindCallbacks())
+	mgrs = engineimpl.CreateMgrs()
+	engineimpl.BindMgr(mgrs)
+	activeLink = session
+	committed = true
+	return session
+}
+
+func (s *LinkSession) Run(ready func()) {
+	s.backend.Run(ready)
+}
+
+func (s *LinkSession) Unlink() {
+	if s == nil {
+		return
+	}
+	s.backend.Unlink()
+	linkMu.Lock()
+	defer linkMu.Unlock()
+	if activeLink != s {
+		return
+	}
+	activeLink = nil
 	mgrs = nil
-	facade.UnlinkFFI()
+	coreCallbacks = CoreCallbackInfo{}
+	isWebIntepreterMode = false
+}
+
+// Unlink closes the active link.
+func Unlink() {
+	linkMu.Lock()
+	session := activeLink
+	linkMu.Unlock()
+	session.Unlink()
 }
