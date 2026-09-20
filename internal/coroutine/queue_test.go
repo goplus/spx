@@ -18,6 +18,9 @@ package coroutine
 
 import (
 	"cmp"
+	"math/rand/v2"
+	"slices"
+	"sync"
 	"testing"
 )
 
@@ -39,8 +42,8 @@ func TestQueueSortStable(t *testing.T) {
 		if first, ok := q.PeekFront(); !ok || first != b || q.Count() != 3 {
 			t.Fatal("PeekFront changed the sorted queue")
 		}
-		if q.PopFront() != b || q.PopBack() != c || q.PopFront() != a {
-			t.Fatal("sorting lost equal-value order or deque links")
+		if q.PopFront() != b || q.PopFront() != a || q.PopFront() != c {
+			t.Fatal("sorting lost equal-value order")
 		}
 		for _, value := range q.sortBuffer {
 			if value != nil {
@@ -62,8 +65,8 @@ func TestQueuePushPopPreservesOrder(t *testing.T) {
 	if got := q.PopFront(); got != 1 {
 		t.Fatalf("second PopFront = %d, want 1", got)
 	}
-	if got := q.PopBack(); got != 2 {
-		t.Fatalf("PopBack = %d, want 2", got)
+	if got := q.PopFront(); got != 2 {
+		t.Fatalf("third PopFront = %d, want 2", got)
 	}
 }
 
@@ -76,8 +79,8 @@ func TestQueueSupportsZeroValueWithPooling(t *testing.T) {
 	}
 
 	q.PushFront(9)
-	if got := q.PopBack(); got != 9 {
-		t.Fatalf("PopBack = %d, want 9", got)
+	if got := q.PopFront(); got != 9 {
+		t.Fatalf("PopFront = %d, want 9", got)
 	}
 }
 
@@ -112,5 +115,91 @@ func TestQueueAnyDoesNotChangeOrder(t *testing.T) {
 	}
 	if first, second := q.PopFront(), q.PopFront(); first != 1 || second != 2 {
 		t.Fatalf("queue order after Any = %d, %d", first, second)
+	}
+}
+
+func TestQueueRandomOperations(t *testing.T) {
+	random := rand.New(rand.NewPCG(1, 2))
+	var queues [2]Queue[int]
+	var expected [2][]int
+	for step := range 2000 {
+		i := random.IntN(len(queues))
+		q := &queues[i]
+		value := random.IntN(100)
+		switch random.IntN(7) {
+		case 0:
+			q.PushBack(value)
+			expected[i] = append(expected[i], value)
+		case 1:
+			q.PushFront(value)
+			expected[i] = slices.Insert(expected[i], 0, value)
+		case 2:
+			if len(expected[i]) > 0 {
+				if got := q.PopFront(); got != expected[i][0] {
+					t.Fatalf("step %d: PopFront = %d, want %d", step, got, expected[i][0])
+				}
+				expected[i] = expected[i][1:]
+			}
+		case 3:
+			other := 1 - i
+			q.Move(&queues[other])
+			expected[i] = append(expected[i], expected[other]...)
+			expected[other] = nil
+		case 4:
+			q.SortStable(cmp.Compare[int])
+			slices.Sort(expected[i])
+		case 5:
+			if got := q.Any(func(v int) bool { return v == value }); got != slices.Contains(expected[i], value) {
+				t.Fatalf("step %d: Any(%d) = %v", step, value, got)
+			}
+		case 6:
+			q.Move(q)
+		}
+		for j := range queues {
+			if got := queues[j].Count(); got != len(expected[j]) {
+				t.Fatalf("step %d: queue %d Count = %d, want %d", step, j, got, len(expected[j]))
+			}
+			if first, ok := queues[j].PeekFront(); ok != (len(expected[j]) > 0) || ok && first != expected[j][0] {
+				t.Fatalf("step %d: queue %d PeekFront = %d, %v, values = %v", step, j, first, ok, expected[j])
+			}
+		}
+	}
+	for i := range queues {
+		for _, want := range expected[i] {
+			if got := queues[i].PopFront(); got != want {
+				t.Fatalf("queue %d final PopFront = %d, want %d", i, got, want)
+			}
+		}
+	}
+}
+
+func TestQueueMoveWithConcurrentProducers(t *testing.T) {
+	var destination, source Queue[int]
+	var producers sync.WaitGroup
+	const valuesPerProducer = 100
+	for id, q := range []*Queue[int]{&destination, &source, &destination, &source} {
+		producers.Go(func() {
+			for value := range valuesPerProducer {
+				q.PushBack(id*valuesPerProducer + value)
+			}
+		})
+	}
+	for range valuesPerProducer {
+		destination.Move(&source)
+	}
+	producers.Wait()
+	destination.Move(&source)
+
+	if source.Count() != 0 || destination.Count() != 4*valuesPerProducer {
+		t.Fatalf("counts after Move = %d, %d", destination.Count(), source.Count())
+	}
+	var next [4]int
+	for range 4 * valuesPerProducer {
+		value := destination.PopFront()
+		id, index := value/valuesPerProducer, value%valuesPerProducer
+		if id < 0 || id >= len(next) || index != next[id] {
+			t.Fatalf("concurrent Move lost producer order or duplicated a value: %d, next = %v", value, next)
+		}
+		next[id]++
 	}
 }
