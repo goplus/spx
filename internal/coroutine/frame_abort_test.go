@@ -28,14 +28,12 @@ import (
 func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
 	co := New(nil)
-	co.OnInited()
 
 	blockerStarted := make(chan struct{})
 	releaseBlocker := make(chan struct{})
-	blocker := co.Create("blocker", func(Thread) int {
+	blocker := co.Create("blocker", func(Thread) {
 		close(blockerStarted)
 		<-releaseBlocker
-		return 0
 	})
 	waitForThreadSignal(t, blockerStarted, "blocking coroutine did not start")
 

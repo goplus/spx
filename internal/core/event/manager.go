@@ -48,7 +48,6 @@ const (
 )
 
 // Manager groups sinks by Bucket and tracks the one-time start lifecycle.
-// Its dispatch methods treat a nil receiver as a no-op.
 // Published slice elements are never changed: registration appends after the
 // existing prefix, deletion copies survivors, and Reset drops slice references.
 type Manager struct {
@@ -83,10 +82,6 @@ func (m *Manager) Add(bucket Bucket, sink Sink) {
 	m.buckets[bucket] = append(m.buckets[bucket], sink)
 }
 
-func (m *Manager) AddStart(sink Sink) {
-	m.Add(BucketStart, sink)
-}
-
 func (m *Manager) TryAddStart(sink Sink) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -95,58 +90,6 @@ func (m *Manager) TryAddStart(sink Sink) bool {
 	}
 	m.buckets[BucketStart] = append(m.buckets[BucketStart], sink)
 	return true
-}
-
-func (m *Manager) AddAwake(sink Sink) {
-	m.Add(BucketAwake, sink)
-}
-
-func (m *Manager) AddKeyPressed(sink Sink) {
-	m.Add(BucketKeyPressed, sink)
-}
-
-func (m *Manager) AddAnyKeyPressed(sink Sink) {
-	m.Add(BucketAnyKeyPressed, sink)
-}
-
-func (m *Manager) AddSwipe(sink Sink) {
-	m.Add(BucketSwipe, sink)
-}
-
-func (m *Manager) AddIReceive(sink Sink) {
-	m.Add(BucketIReceive, sink)
-}
-
-func (m *Manager) AddBackdropChanged(sink Sink) {
-	m.Add(BucketBackdropChanged, sink)
-}
-
-func (m *Manager) AddCloned(sink Sink) {
-	m.Add(BucketCloned, sink)
-}
-
-func (m *Manager) AddTouchStart(sink Sink) {
-	m.Add(BucketTouchStart, sink)
-}
-
-func (m *Manager) AddTouching(sink Sink) {
-	m.Add(BucketTouching, sink)
-}
-
-func (m *Manager) AddTouchEnd(sink Sink) {
-	m.Add(BucketTouchEnd, sink)
-}
-
-func (m *Manager) AddClick(sink Sink) {
-	m.Add(BucketClick, sink)
-}
-
-func (m *Manager) AddTimer(sink Sink) {
-	m.Add(BucketTimer, sink)
-}
-
-func (m *Manager) AddCondition(sink Sink) {
-	m.Add(BucketCondition, sink)
 }
 
 // Snapshot returns a shallow, read-only view of the current registrations.
@@ -160,10 +103,6 @@ func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	return out
 }
 
-func (m *Manager) SnapshotStart() []Sink {
-	return m.Snapshot(BucketStart)
-}
-
 // SnapshotStartOnce closes start registration and returns its first snapshot.
 // The returned slice has the same read-only, shallow-view contract as Snapshot.
 func (m *Manager) SnapshotStartOnce() []Sink {
@@ -174,58 +113,6 @@ func (m *Manager) SnapshotStartOnce() []Sink {
 	}
 	m.startFired = true
 	return readOnlySnapshot(m.buckets[BucketStart])
-}
-
-func (m *Manager) SnapshotAwake() []Sink {
-	return m.Snapshot(BucketAwake)
-}
-
-func (m *Manager) SnapshotKeyPressed() []Sink {
-	return m.Snapshot(BucketKeyPressed)
-}
-
-func (m *Manager) SnapshotAnyKeyPressed() []Sink {
-	return m.Snapshot(BucketAnyKeyPressed)
-}
-
-func (m *Manager) SnapshotSwipe() []Sink {
-	return m.Snapshot(BucketSwipe)
-}
-
-func (m *Manager) SnapshotIReceive() []Sink {
-	return m.Snapshot(BucketIReceive)
-}
-
-func (m *Manager) SnapshotBackdropChanged() []Sink {
-	return m.Snapshot(BucketBackdropChanged)
-}
-
-func (m *Manager) SnapshotCloned() []Sink {
-	return m.Snapshot(BucketCloned)
-}
-
-func (m *Manager) SnapshotTouchStart() []Sink {
-	return m.Snapshot(BucketTouchStart)
-}
-
-func (m *Manager) SnapshotTouching() []Sink {
-	return m.Snapshot(BucketTouching)
-}
-
-func (m *Manager) SnapshotTouchEnd() []Sink {
-	return m.Snapshot(BucketTouchEnd)
-}
-
-func (m *Manager) SnapshotClick() []Sink {
-	return m.Snapshot(BucketClick)
-}
-
-func (m *Manager) SnapshotTimer() []Sink {
-	return m.Snapshot(BucketTimer)
-}
-
-func (m *Manager) SnapshotCondition() []Sink {
-	return m.Snapshot(BucketCondition)
 }
 
 func readOnlySnapshot(sinks []Sink) []Sink {

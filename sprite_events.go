@@ -28,7 +28,7 @@ func (p *SpriteImpl) OnCloned__0(onCloned func()) {
 
 func (p *SpriteImpl) OnCloned__1(onCloned func(data any)) {
 	p.spriteState.HasOnCloned = true
-	p.scriptEventRegistry.manager.AddCloned(coreevent.NewSink(p, onCloned, coreevent.MatchOwner(p)))
+	p.scriptEventRegistry.manager.Add(coreevent.BucketCloned, coreevent.NewSink(p, onCloned, coreevent.MatchOwner(p)))
 }
 
 func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func()) {
@@ -69,5 +69,5 @@ func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
 
 func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
 	p.spriteState.HasOnTouchStart = true
-	p.scriptEventRegistry.manager.AddTouchStart(coreevent.NewSink(p, onTouchStart, coreevent.MatchOwner(p)))
+	p.scriptEventRegistry.manager.Add(coreevent.BucketTouchStart, coreevent.NewSink(p, onTouchStart, coreevent.MatchOwner(p)))
 }

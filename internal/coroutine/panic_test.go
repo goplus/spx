@@ -15,9 +15,8 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 		t.Run(reflect.TypeOf(value).String(), func(t *testing.T) {
 			reports := make(chan PanicReport, 1)
 			co := New(func(report PanicReport) { reports <- report })
-			worker := co.Create("panic-worker", func(Thread) int {
+			worker := co.Create("panic-worker", func(Thread) {
 				panicWithValue(value)
-				return 0
 			})
 			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
 			if !co.StopAllAndWait(time.Second) {
@@ -77,20 +76,19 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	}
 }
 
-func panicWithNilDereference(Thread) int {
+func panicWithNilDereference(Thread) {
 	var pointer *int
-	return *pointer
+	_ = *pointer
 }
 
 func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 	for _, value := range []any{nil, ErrAbortThread, ErrStopThisScript} {
 		reports := make(chan PanicReport, 1)
 		co := New(func(report PanicReport) { reports <- report })
-		worker := co.Create("stopped-worker", func(Thread) int {
+		worker := co.Create("stopped-worker", func(Thread) {
 			if value != nil {
 				panic(value)
 			}
-			return 0
 		})
 		waitForThreadSignal(t, worker.done, "coroutine did not finish")
 		if !co.StopAllAndWait(time.Second) {

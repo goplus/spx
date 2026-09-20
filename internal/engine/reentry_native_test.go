@@ -88,13 +88,12 @@ func TestEngineDrainServicesWorkerMainThreadCleanup(t *testing.T) {
 	gdx.PlatformMgr = platform
 	started := make(chan struct{})
 	called := false
-	co.Create("caller", func(thread coroutine.Thread) int {
+	co.Create("caller", func(thread coroutine.Thread) {
 		co.WaitToDo(func() {
 			close(started)
 			<-thread.Context().Done()
 			WaitMainThread(func() { called = platform.IsMainThread() })
 		})
-		return 0
 	})
 	waitForEngineSignal(t, started, "worker did not start")
 	drained := make(chan bool, 1)
@@ -116,7 +115,7 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 	unblock := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(unblock)
 	called := false
-	co.Create("caller", func(thread coroutine.Thread) int {
+	co.Create("caller", func(thread coroutine.Thread) {
 		co.WaitToDo(func() {
 			close(started)
 			<-thread.Context().Done()
@@ -124,7 +123,6 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 			<-release
 			WaitMainThread(func() { called = platform.IsMainThread() })
 		})
-		return 0
 	})
 	waitForEngineSignal(t, started, "worker did not start")
 	first := make(chan bool, 1)

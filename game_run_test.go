@@ -34,14 +34,13 @@ func TestSchedWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
 func testMainExecutionTimeoutDemotion(t *testing.T, sched func() int) {
 	t.Helper()
 	co := setupRuntimeEventScheduler(t)
-	thread := co.Create("main", func(thread coroutine.Thread) int {
+	thread := co.Create("main", func(thread coroutine.Thread) {
 		end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
 		defer end()
 		sched()
 		if !thread.MainStartedAt().IsZero() {
 			t.Error("timed-out Main execution was not demoted")
 		}
-		return 0
 	})
 	co.Join(thread)
 	if !thread.Stopped() && thread.Context().Err() == nil {
@@ -53,12 +52,11 @@ func TestSchedNowExternalCallerDoesNotDriveActiveCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(game, func(thread coroutine.Thread) int {
+	thread := co.Create(game, func(thread coroutine.Thread) {
 		end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
 		defer end()
 		close(started)
 		<-release
-		return 0
 	})
 	select {
 	case <-started:

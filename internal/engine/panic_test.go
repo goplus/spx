@@ -58,6 +58,6 @@ func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
 	}
 }
 
-func panicWithSentinelCause(coroutine.Thread) int {
+func panicWithSentinelCause(coroutine.Thread) {
 	panic("sentinel cause")
 }

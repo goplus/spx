@@ -199,7 +199,6 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	originalGame := engine.GetGame()
 	originalPlatformMgr := pkgengine.PlatformMgr
 	co := coroutine.New(nil)
-	co.OnInited()
 	gco = co
 	engine.SetCoroutines(co)
 	pkgengine.PlatformMgr = &reloadCommitPlatformMgr{}
@@ -264,7 +263,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	originalGame := engine.GetGame()
 	originalBounds := cachedBounds
 	co := coroutine.New(nil)
-	co.OnInited()
 	gco = co
 	engine.SetCoroutines(co)
 	cachedBounds = make(map[string]mathf.Rect2)
@@ -304,11 +302,10 @@ func startReloadPreflightSentinelThread(t *testing.T, co *coroutine.Coroutines, 
 	started := make(chan struct{})
 	release := make(chan struct{})
 	completed := make(chan struct{})
-	thread := co.Create(owner, func(coroutine.Thread) int {
+	thread := co.Create(owner, func(coroutine.Thread) {
 		close(started)
 		<-release
 		close(completed)
-		return 0
 	})
 	var once sync.Once
 	finish := func() {

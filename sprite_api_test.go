@@ -49,10 +49,9 @@ func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.
 	sprite := &SpriteImpl{}
 	started := make(chan struct{})
 	release := make(chan struct{})
-	thread := co.Create(sprite, func(coroutine.Thread) int {
+	thread := co.Create(sprite, func(coroutine.Thread) {
 		close(started)
 		<-release
-		return 0
 	})
 	select {
 	case <-started:

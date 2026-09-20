@@ -11,7 +11,6 @@ func BenchmarkUpdateSleepingThreads(b *testing.B) {
 	for _, count := range []int{1, 100, 1000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
 			co := New(nil)
-			co.OnInited()
 			itime.Start(nil)
 			// Measure scheduler bookkeeping without goroutine startup or script work.
 			for range count {
