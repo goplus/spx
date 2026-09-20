@@ -85,11 +85,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl, isSync bool) (mathf.Vec2, mathf.Vec2)
 			rect = cache
 		} else {
 			assetPath := cs.getAssetPath()
-			if isSync {
-				rect = engine.Managers().ResMgr.GetBoundFromAlpha(assetPath)
-			} else {
-				rect = p.engine().ResMgr.GetBoundFromAlpha(assetPath)
-			}
+			rect = engine.Managers().ResMgr.GetBoundFromAlpha(assetPath)
 		}
 		cachedBounds[cs.path] = rect
 	}

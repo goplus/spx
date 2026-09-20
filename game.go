@@ -112,8 +112,6 @@ type Game struct {
 	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
 
-	engineMgr engineManagers
-
 	inputMgr       inputManager
 	inputSessionMu sync.RWMutex
 	inputSession   *inputSession
@@ -221,8 +219,6 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	p.initShapeMgr()
 	p.initRuntimeState()
 	p.scriptEventBindings.init(&p.scriptEvents, p)
-	p.engineMgr = engineManagers{}
-	engine.SetManagers(&p.engineMgr)
 	p.sprs = make(map[string]Sprite)
 	p.sounds = make(map[string]sound)
 	p.typs = make(map[string]reflect.Type)

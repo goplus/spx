@@ -130,7 +130,7 @@ func (p *physicsComponent) onDestroy() {
 
 func (p *physicsComponent) setPhysicsMode(mode PhysicsMode) {
 	p.physicsMode = mode
-	p.engine().SpriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
+	engine.Managers().SpriteMgr.SetPhysicsMode(p.sprite.getSpriteId(), int64(mode))
 }
 
 func (p *physicsComponent) getPhysicsMode() PhysicsMode {
@@ -138,28 +138,28 @@ func (p *physicsComponent) getPhysicsMode() PhysicsMode {
 }
 
 func (p *physicsComponent) getVelocity() (velocityX, velocityY float64) {
-	vel := p.engine().SpriteMgr.GetVelocity(p.sprite.getSpriteId())
+	vel := engine.Managers().SpriteMgr.GetVelocity(p.sprite.getSpriteId())
 	return vel.X, vel.Y
 }
 
 func (p *physicsComponent) setVelocity(velocityX, velocityY float64) {
-	p.engine().SpriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
+	engine.Managers().SpriteMgr.SetVelocity(p.sprite.getSpriteId(), mathf.NewVec2(velocityX, velocityY))
 }
 
 func (p *physicsComponent) addImpulse(impulseX, impulseY float64) {
-	p.engine().SpriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
+	engine.Managers().SpriteMgr.AddImpulse(p.sprite.getSpriteId(), mathf.NewVec2(impulseX, impulseY))
 }
 
 func (p *physicsComponent) isOnFloor() bool {
-	return p.engine().SpriteMgr.IsOnFloor(p.sprite.getSpriteId())
+	return engine.Managers().SpriteMgr.IsOnFloor(p.sprite.getSpriteId())
 }
 
 func (p *physicsComponent) getGravity() float64 {
-	return p.engine().SpriteMgr.GetGravity(p.sprite.getSpriteId())
+	return engine.Managers().SpriteMgr.GetGravity(p.sprite.getSpriteId())
 }
 
 func (p *physicsComponent) setGravity(gravity float64) {
-	p.engine().SpriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
+	engine.Managers().SpriteMgr.SetGravity(p.sprite.getSpriteId(), gravity)
 }
 
 // ============================================================================

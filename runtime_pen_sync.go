@@ -23,7 +23,7 @@ import (
 
 func (p *Game) queuePenMove(obj engine.Object, position mathf.Vec2) {
 	if p.penSyncBuffer == nil {
-		p.engine().PenMgr.MovePenTo(obj, position)
+		engine.Managers().PenMgr.MovePenTo(obj, position)
 		return
 	}
 	if p.penSyncBuffer.AddMove(obj, position.X, position.Y) {
@@ -34,12 +34,12 @@ func (p *Game) queuePenMove(obj engine.Object, position mathf.Vec2) {
 func (p *Game) queuePenDown(obj engine.Object, moveByMouse bool) {
 	if moveByMouse {
 		p.penCommandBarrier(func() {
-			p.engine().PenMgr.PenDown(obj, true)
+			engine.Managers().PenMgr.PenDown(obj, true)
 		})
 		return
 	}
 	if p.penSyncBuffer == nil {
-		p.engine().PenMgr.PenDown(obj, false)
+		engine.Managers().PenMgr.PenDown(obj, false)
 		return
 	}
 	if p.penSyncBuffer.AddDown(obj, false) {
@@ -49,7 +49,7 @@ func (p *Game) queuePenDown(obj engine.Object, moveByMouse bool) {
 
 func (p *Game) queuePenUp(obj engine.Object) {
 	if p.penSyncBuffer == nil {
-		p.engine().PenMgr.PenUp(obj)
+		engine.Managers().PenMgr.PenUp(obj)
 		return
 	}
 	if p.penSyncBuffer.AddUp(obj) {
@@ -59,7 +59,7 @@ func (p *Game) queuePenUp(obj engine.Object) {
 
 func (p *Game) queuePenColor(obj engine.Object, color mathf.Color) {
 	if p.penSyncBuffer == nil {
-		p.engine().PenMgr.SetPenColorTo(obj, color)
+		engine.Managers().PenMgr.SetPenColorTo(obj, color)
 		return
 	}
 	if p.penSyncBuffer.AddColor(obj, color.R, color.G, color.B, color.A) {
@@ -69,7 +69,7 @@ func (p *Game) queuePenColor(obj engine.Object, color mathf.Color) {
 
 func (p *Game) queuePenSize(obj engine.Object, size float64) {
 	if p.penSyncBuffer == nil {
-		p.engine().PenMgr.SetPenSizeTo(obj, size)
+		engine.Managers().PenMgr.SetPenSizeTo(obj, size)
 		return
 	}
 	if p.penSyncBuffer.AddSetSize(obj, size) {
@@ -81,7 +81,7 @@ func (p *Game) flushPenCommands() {
 	if p.penSyncBuffer == nil {
 		return
 	}
-	p.penSyncBuffer.Flush(p.engine().PenMgr.BatchUpdateCommands)
+	p.penSyncBuffer.Flush(engine.Managers().PenMgr.BatchUpdateCommands)
 }
 
 func (p *Game) discardPenCommands() {
@@ -95,5 +95,5 @@ func (p *Game) penCommandBarrier(operation func()) {
 		operation()
 		return
 	}
-	p.penSyncBuffer.Barrier(p.engine().PenMgr.BatchUpdateCommands, operation)
+	p.penSyncBuffer.Barrier(engine.Managers().PenMgr.BatchUpdateCommands, operation)
 }

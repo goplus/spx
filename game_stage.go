@@ -105,12 +105,12 @@ func (p *Game) SetBackdropAndWait__3(action switchAction) {
 }
 
 func (p *Game) SetWindowSize(width int64, height int64) {
-	p.engine().PlatformMgr.SetWindowSize(width, height, false)
+	engine.Managers().PlatformMgr.SetWindowSize(width, height, false)
 }
 
 func (p *Game) EraseAll() {
 	engine.RequestRedraw()
-	p.penCommandBarrier(p.engine().PenMgr.DestroyAllPens)
+	p.penCommandBarrier(engine.Managers().PenMgr.DestroyAllPens)
 }
 
 func (kind EffectKind) String() string {
@@ -221,7 +221,7 @@ func (p *Game) SetupPathFinder__0() {
 }
 
 func (p *Game) SetupPathFinder__1(xGridSize, yGridSize, xCellSize, yCellSize float64, withJump, withDebug bool) {
-	p.engine().NavigationMgr.SetupPathFinderWithSize(
+	engine.Managers().NavigationMgr.SetupPathFinderWithSize(
 		mathf.NewVec2(xGridSize, yGridSize),
 		mathf.NewVec2(xCellSize, yCellSize),
 		withJump,
@@ -242,7 +242,7 @@ func (p *Game) FindPath__2(xFrom, yFrom, xTo, yTo float64, withDebug, withJump b
 		p.setupPathFinder(withJump, withDebug)
 	})
 
-	arr := p.engine().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
+	arr := engine.Managers().NavigationMgr.FindPath(mathf.NewVec2(xFrom, yFrom), mathf.NewVec2(xTo, yTo), withJump)
 	result := arr.([]float32)
 	return engine.F32Tof64(result)
 }
@@ -353,5 +353,5 @@ func (p *Game) applyPathFinderSettings(settings coreproject.SystemSettings) {
 func (p *Game) setupPathFinder(withJump, withDebug bool) {
 	cellSize := mathf.NewVec2(float64(p.pathfindingState.PathCellSizeX), float64(p.pathfindingState.PathCellSizeY))
 	gridSize := mathf.NewVec2(float64(p.displayState.WorldWidth), float64(p.displayState.WorldHeight)).Div(cellSize)
-	p.engine().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, withJump, withDebug)
+	engine.Managers().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, withJump, withDebug)
 }

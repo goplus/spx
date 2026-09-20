@@ -52,35 +52,35 @@ type cameraImpl struct {
 }
 
 func (c *cameraImpl) ViewportRect() (float64, float64, float64, float64) {
-	rect := c.engine().CameraMgr.GetGlobalCameraRect()
+	rect := engine.Managers().CameraMgr.GetGlobalCameraRect()
 	return rect.Position.X, rect.Position.Y, rect.Size.X, rect.Size.Y
 }
 
 func (c *cameraImpl) SetZoom(scale float64) {
 	c.setDirtyFlag(true)
 	scale *= c.g.displayState.WindowScale
-	c.engine().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
+	engine.Managers().CameraMgr.SetCameraZoom(engine.UniformVec2(scale))
 }
 
 func (c *cameraImpl) Zoom() float64 {
-	scale := c.engine().CameraMgr.GetCameraZoom().X
+	scale := engine.Managers().CameraMgr.GetCameraZoom().X
 	scale /= c.g.displayState.WindowScale
 	return scale
 }
 
 func (c *cameraImpl) Xpos() float64 {
-	pos := c.engine().CameraMgr.GetPosition()
+	pos := engine.Managers().CameraMgr.GetPosition()
 	return pos.X
 }
 
 func (c *cameraImpl) Ypos() float64 {
-	pos := c.engine().CameraMgr.GetPosition()
+	pos := engine.Managers().CameraMgr.GetPosition()
 	return pos.Y
 }
 
 func (c *cameraImpl) SetXYpos(x float64, y float64) {
 	c.setDirtyFlag(true)
-	c.engine().CameraMgr.SetPosition(mathf.NewVec2(x, y))
+	engine.Managers().CameraMgr.SetPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) ChangeXYpos(x float64, y float64) {
@@ -95,10 +95,6 @@ func (c *cameraImpl) Follow__0(sprite Sprite) {
 
 func (c *cameraImpl) Follow__1(sprite SpriteName) {
 	c.follow(sprite)
-}
-
-func (c *cameraImpl) engine() *engineManagers {
-	return c.g.engine()
 }
 
 func (c *cameraImpl) init(g *Game) {
@@ -141,11 +137,11 @@ func (c *cameraImpl) setLimits() {
 
 	// Apply camera limits
 	for side, value := range world {
-		c.engine().CameraMgr.SetCameraLimit(int64(side), int64(value))
+		engine.Managers().CameraMgr.SetCameraLimit(int64(side), int64(value))
 	}
 
 	// Enable smoothing
-	c.engine().CameraMgr.SetCameraSmoothing(true)
+	engine.Managers().CameraMgr.SetCameraSmoothing(true)
 }
 
 func (c *cameraImpl) setXYposDirect(x float64, y float64) {

@@ -178,8 +178,5 @@ func getImageSizeCached(imagePath string) mathf.Vec2 {
 // getCostumeAssetSize loads the actual image size from the asset.
 func getCostumeAssetSize(imagePath string) mathf.Vec2 {
 	assetPath := costumeAssetPath(imagePath)
-	if game, ok := engine.GetGame().(*Game); ok && game != nil {
-		return game.engine().ResMgr.GetImageSize(assetPath)
-	}
 	return engine.Managers().ResMgr.GetImageSize(assetPath)
 }
