@@ -845,23 +845,12 @@ func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites A
 		return ToArray(retValue)
 	})
 }
-func (pself *platformMgr) SetStretchMode(enable bool) {
+func (pself *platformMgr) SetStretch(enabled bool, content_width int64, content_height int64) {
 	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(enable)
-		CallPlatformSetStretchMode(arg0)
-	})
-}
-func (pself *platformMgr) SetStretchAspect(is_keep bool) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdBool(is_keep)
-		CallPlatformSetStretchAspect(arg0)
-	})
-}
-func (pself *platformMgr) SetStretchContentScale(width int64, height int64) {
-	enginewrap.CallInMainThread(func() {
-		arg0 := ToGdInt(width)
-		arg1 := ToGdInt(height)
-		CallPlatformSetStretchContentScale(arg0, arg1)
+		arg0 := ToGdBool(enabled)
+		arg1 := ToGdInt(content_width)
+		arg2 := ToGdInt(content_height)
+		CallPlatformSetStretch(arg0, arg1, arg2)
 	})
 }
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {

@@ -570,23 +570,11 @@ void cgo_callfn_GDExtensionSpxPhysicsRaycastWithDetails(const GDExtensionSpxPhys
 	}
 	fn(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies, ret_val);
 }
-void cgo_callfn_GDExtensionSpxPlatformSetStretchMode(const GDExtensionSpxPlatformSetStretchMode fn, GdBool enable) {
+void cgo_callfn_GDExtensionSpxPlatformSetStretch(const GDExtensionSpxPlatformSetStretch fn, GdBool enabled, GdInt content_width, GdInt content_height) {
 	if (!fn) {
 		return;
 	}
-	fn(enable);
-}
-void cgo_callfn_GDExtensionSpxPlatformSetStretchAspect(const GDExtensionSpxPlatformSetStretchAspect fn, GdBool is_keep) {
-	if (!fn) {
-		return;
-	}
-	fn(is_keep);
-}
-void cgo_callfn_GDExtensionSpxPlatformSetStretchContentScale(const GDExtensionSpxPlatformSetStretchContentScale fn, GdInt width, GdInt height) {
-	if (!fn) {
-		return;
-	}
-	fn(width, height);
+	fn(enabled, content_width, content_height);
 }
 void cgo_callfn_GDExtensionSpxPlatformSetWindowPosition(const GDExtensionSpxPlatformSetWindowPosition fn, GdVec2 pos) {
 	if (!fn) {

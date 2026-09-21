@@ -134,7 +134,7 @@ func (*reloadCommitPlatformMgr) GetWindowSize() mathf.Vec2        { return mathf
 func (*reloadCommitPlatformMgr) SetWindowSize(int64, int64, bool) {}
 func (*reloadCommitPlatformMgr) SetWindowFullscreen(bool)         {}
 func (*reloadCommitPlatformMgr) SetMaxFps(int64)                  {}
-func (*reloadCommitPlatformMgr) SetStretchMode(bool)              {}
+func (*reloadCommitPlatformMgr) SetStretch(bool, int64, int64)    {}
 func (*reloadCommitPlatformMgr) SetDebugMode(bool)                {}
 
 type reloadCommitCameraMgr struct {

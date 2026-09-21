@@ -129,9 +129,7 @@ type GDExtensionInterface struct {
 	SpxPhysicsCheckCollisionRect                GDExtensionSpxPhysicsCheckCollisionRect
 	SpxPhysicsCheckCollisionCircle              GDExtensionSpxPhysicsCheckCollisionCircle
 	SpxPhysicsRaycastWithDetails                GDExtensionSpxPhysicsRaycastWithDetails
-	SpxPlatformSetStretchMode                   GDExtensionSpxPlatformSetStretchMode
-	SpxPlatformSetStretchAspect                 GDExtensionSpxPlatformSetStretchAspect
-	SpxPlatformSetStretchContentScale           GDExtensionSpxPlatformSetStretchContentScale
+	SpxPlatformSetStretch                       GDExtensionSpxPlatformSetStretch
 	SpxPlatformSetWindowPosition                GDExtensionSpxPlatformSetWindowPosition
 	SpxPlatformGetWindowPosition                GDExtensionSpxPlatformGetWindowPosition
 	SpxPlatformSetWindowSize                    GDExtensionSpxPlatformSetWindowSize
@@ -467,9 +465,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPhysicsCheckCollisionRect = (GDExtensionSpxPhysicsCheckCollisionRect)(resolveCFunc("spx_physics_check_collision_rect"))
 	x.SpxPhysicsCheckCollisionCircle = (GDExtensionSpxPhysicsCheckCollisionCircle)(resolveCFunc("spx_physics_check_collision_circle"))
 	x.SpxPhysicsRaycastWithDetails = (GDExtensionSpxPhysicsRaycastWithDetails)(resolveCFunc("spx_physics_raycast_with_details"))
-	x.SpxPlatformSetStretchMode = (GDExtensionSpxPlatformSetStretchMode)(resolveCFunc("spx_platform_set_stretch_mode"))
-	x.SpxPlatformSetStretchAspect = (GDExtensionSpxPlatformSetStretchAspect)(resolveCFunc("spx_platform_set_stretch_aspect"))
-	x.SpxPlatformSetStretchContentScale = (GDExtensionSpxPlatformSetStretchContentScale)(resolveCFunc("spx_platform_set_stretch_content_scale"))
+	x.SpxPlatformSetStretch = (GDExtensionSpxPlatformSetStretch)(resolveCFunc("spx_platform_set_stretch"))
 	x.SpxPlatformSetWindowPosition = (GDExtensionSpxPlatformSetWindowPosition)(resolveCFunc("spx_platform_set_window_position"))
 	x.SpxPlatformGetWindowPosition = (GDExtensionSpxPlatformGetWindowPosition)(resolveCFunc("spx_platform_get_window_position"))
 	x.SpxPlatformSetWindowSize = (GDExtensionSpxPlatformSetWindowSize)(resolveCFunc("spx_platform_set_window_size"))

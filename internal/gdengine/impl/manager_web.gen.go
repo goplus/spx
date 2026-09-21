@@ -611,16 +611,10 @@ func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites A
 	_result := API.SpxPhysicsRaycastWithDetails.Invoke(arg0, arg1, arg2, arg3Low, arg3High, collide_with_areas, collide_with_bodies)
 	return JsToGdArray(_result)
 }
-func (pself *platformMgr) SetStretchMode(enable bool) {
-	API.SpxPlatformSetStretchMode.Invoke(enable)
-}
-func (pself *platformMgr) SetStretchAspect(is_keep bool) {
-	API.SpxPlatformSetStretchAspect.Invoke(is_keep)
-}
-func (pself *platformMgr) SetStretchContentScale(width int64, height int64) {
-	arg0Low, arg0High := JsSplitGdInt(width)
-	arg1Low, arg1High := JsSplitGdInt(height)
-	API.SpxPlatformSetStretchContentScale.Invoke(arg0Low, arg0High, arg1Low, arg1High)
+func (pself *platformMgr) SetStretch(enabled bool, content_width int64, content_height int64) {
+	arg1Low, arg1High := JsSplitGdInt(content_width)
+	arg2Low, arg2High := JsSplitGdInt(content_height)
+	API.SpxPlatformSetStretch.Invoke(enabled, arg1Low, arg1High, arg2Low, arg2High)
 }
 func (pself *platformMgr) SetWindowPosition(pos Vec2) {
 	arg0 := JsFromGdVec2(pos)

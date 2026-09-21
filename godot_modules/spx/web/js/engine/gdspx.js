@@ -856,17 +856,9 @@ gdspx_physics_raycast_with_details(from,to,ignore_sprites,collision_mask_low,col
 		if (_resultPtr) FreeGdArray(_resultPtr);
 	}
 }
-gdspx_platform_set_stretch_mode(enable) {
-	var _call = Module['_gdspx_platform_set_stretch_mode'];
-	_call(enable ? 1 : 0);
-}
-gdspx_platform_set_stretch_aspect(is_keep) {
-	var _call = Module['_gdspx_platform_set_stretch_aspect'];
-	_call(is_keep ? 1 : 0);
-}
-gdspx_platform_set_stretch_content_scale(width_low,width_high,height_low,height_high) {
-	var _call = Module['_gdspx_platform_set_stretch_content_scale'];
-	_call(GdInt64FromParts(width_low, width_high), GdInt64FromParts(height_low, height_high));
+gdspx_platform_set_stretch(enabled,content_width_low,content_width_high,content_height_low,content_height_high) {
+	var _call = Module['_gdspx_platform_set_stretch'];
+	_call(enabled ? 1 : 0, GdInt64FromParts(content_width_low, content_width_high), GdInt64FromParts(content_height_low, content_height_high));
 }
 gdspx_platform_set_window_position(pos) {
 	var _call = Module['_gdspx_platform_set_window_position'];
@@ -3365,9 +3357,7 @@ GdspxFuncs.prototype['gdspx_physics_get_global_air_drag'] = GdspxFuncs.prototype
 GdspxFuncs.prototype['gdspx_physics_check_collision_rect'] = GdspxFuncs.prototype.gdspx_physics_check_collision_rect;
 GdspxFuncs.prototype['gdspx_physics_check_collision_circle'] = GdspxFuncs.prototype.gdspx_physics_check_collision_circle;
 GdspxFuncs.prototype['gdspx_physics_raycast_with_details'] = GdspxFuncs.prototype.gdspx_physics_raycast_with_details;
-GdspxFuncs.prototype['gdspx_platform_set_stretch_mode'] = GdspxFuncs.prototype.gdspx_platform_set_stretch_mode;
-GdspxFuncs.prototype['gdspx_platform_set_stretch_aspect'] = GdspxFuncs.prototype.gdspx_platform_set_stretch_aspect;
-GdspxFuncs.prototype['gdspx_platform_set_stretch_content_scale'] = GdspxFuncs.prototype.gdspx_platform_set_stretch_content_scale;
+GdspxFuncs.prototype['gdspx_platform_set_stretch'] = GdspxFuncs.prototype.gdspx_platform_set_stretch;
 GdspxFuncs.prototype['gdspx_platform_set_window_position'] = GdspxFuncs.prototype.gdspx_platform_set_window_position;
 GdspxFuncs.prototype['gdspx_platform_get_window_position'] = GdspxFuncs.prototype.gdspx_platform_get_window_position;
 GdspxFuncs.prototype['gdspx_platform_set_window_size'] = GdspxFuncs.prototype.gdspx_platform_set_window_size;

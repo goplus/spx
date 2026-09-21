@@ -188,9 +188,7 @@ type GDExtensionSpxPhysicsGetGlobalAirDrag C.GDExtensionSpxPhysicsGetGlobalAirDr
 type GDExtensionSpxPhysicsCheckCollisionRect C.GDExtensionSpxPhysicsCheckCollisionRect
 type GDExtensionSpxPhysicsCheckCollisionCircle C.GDExtensionSpxPhysicsCheckCollisionCircle
 type GDExtensionSpxPhysicsRaycastWithDetails C.GDExtensionSpxPhysicsRaycastWithDetails
-type GDExtensionSpxPlatformSetStretchMode C.GDExtensionSpxPlatformSetStretchMode
-type GDExtensionSpxPlatformSetStretchAspect C.GDExtensionSpxPlatformSetStretchAspect
-type GDExtensionSpxPlatformSetStretchContentScale C.GDExtensionSpxPlatformSetStretchContentScale
+type GDExtensionSpxPlatformSetStretch C.GDExtensionSpxPlatformSetStretch
 type GDExtensionSpxPlatformSetWindowPosition C.GDExtensionSpxPlatformSetWindowPosition
 type GDExtensionSpxPlatformGetWindowPosition C.GDExtensionSpxPlatformGetWindowPosition
 type GDExtensionSpxPlatformSetWindowSize C.GDExtensionSpxPlatformSetWindowSize
@@ -1358,33 +1356,17 @@ func CallPhysicsRaycastWithDetails(
 
 	return GdArray(ret_val)
 }
-func CallPlatformSetStretchMode(
-	enable GdBool,
+func CallPlatformSetStretch(
+	enabled GdBool,
+	content_width GdInt,
+	content_height GdInt,
 ) {
-	arg0 := (C.GDExtensionSpxPlatformSetStretchMode)(api.SpxPlatformSetStretchMode)
-	arg1 := (C.GdBool)(enable)
+	arg0 := (C.GDExtensionSpxPlatformSetStretch)(api.SpxPlatformSetStretch)
+	arg1 := (C.GdBool)(enabled)
+	arg2 := (C.GdInt)(content_width)
+	arg3 := (C.GdInt)(content_height)
 
-	C.cgo_callfn_GDExtensionSpxPlatformSetStretchMode(arg0, arg1)
-
-}
-func CallPlatformSetStretchAspect(
-	is_keep GdBool,
-) {
-	arg0 := (C.GDExtensionSpxPlatformSetStretchAspect)(api.SpxPlatformSetStretchAspect)
-	arg1 := (C.GdBool)(is_keep)
-
-	C.cgo_callfn_GDExtensionSpxPlatformSetStretchAspect(arg0, arg1)
-
-}
-func CallPlatformSetStretchContentScale(
-	width GdInt,
-	height GdInt,
-) {
-	arg0 := (C.GDExtensionSpxPlatformSetStretchContentScale)(api.SpxPlatformSetStretchContentScale)
-	arg1 := (C.GdInt)(width)
-	arg2 := (C.GdInt)(height)
-
-	C.cgo_callfn_GDExtensionSpxPlatformSetStretchContentScale(arg0, arg1, arg2)
+	C.cgo_callfn_GDExtensionSpxPlatformSetStretch(arg0, arg1, arg2, arg3)
 
 }
 func CallPlatformSetWindowPosition(

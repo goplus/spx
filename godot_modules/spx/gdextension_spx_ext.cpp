@@ -436,16 +436,8 @@ static void gdextension_spx_physics_raycast_with_details(GdVec2 from, GdVec2 to,
 	*ret_val = physicsMgr->raycast_with_details(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies);
 }
 
-static void gdextension_spx_platform_set_stretch_mode(GdBool enable) {
-	platformMgr->set_stretch_mode(enable);
-}
-
-static void gdextension_spx_platform_set_stretch_aspect(GdBool is_keep) {
-	platformMgr->set_stretch_aspect(is_keep);
-}
-
-static void gdextension_spx_platform_set_stretch_content_scale(GdInt width, GdInt height) {
-	platformMgr->set_stretch_content_scale(width, height);
+static void gdextension_spx_platform_set_stretch(GdBool enabled, GdInt content_width, GdInt content_height) {
+	platformMgr->set_stretch(enabled, content_width, content_height);
 }
 
 static void gdextension_spx_platform_set_window_position(GdVec2 pos) {
@@ -1501,9 +1493,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_physics_check_collision_rect);
 	REGISTER_SPX_INTERFACE_FUNC(spx_physics_check_collision_circle);
 	REGISTER_SPX_INTERFACE_FUNC(spx_physics_raycast_with_details);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_stretch_mode);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_stretch_aspect);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_stretch_content_scale);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_stretch);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_window_position);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_window_position);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_window_size);

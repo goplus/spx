@@ -350,10 +350,8 @@ func (*physicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx
 }
 
 // IPlatformMgr
-func (*platformMgrImpl) SetStretchMode(enable bool)                       {}
-func (*platformMgrImpl) SetStretchAspect(is_keep bool)                    {}
-func (*platformMgrImpl) SetStretchContentScale(width int64, height int64) {}
-func (*platformMgrImpl) SetWindowPosition(pos Vec2)                       {}
+func (*platformMgrImpl) SetStretch(enabled bool, content_width int64, content_height int64) {}
+func (*platformMgrImpl) SetWindowPosition(pos Vec2)                                         {}
 func (*platformMgrImpl) GetWindowPosition() Vec2 {
 	return Vec2{}
 }
