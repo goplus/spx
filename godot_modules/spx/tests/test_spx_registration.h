@@ -50,6 +50,7 @@ TEST_CASE("[SPX] Module initialization registers extension interface functions")
 	CHECK_NE(GDExtension::get_interface_function("spx_sprite_batch_update_visuals"), nullptr);
 	CHECK_NE(GDExtension::get_interface_function("spx_pen_set_canvas_size"), nullptr);
 	CHECK_NE(GDExtension::get_interface_function("spx_pen_batch_update_commands"), nullptr);
+	CHECK_NE(GDExtension::get_interface_function("spx_pen_pen_stamp_sprite"), nullptr);
 }
 
 #ifdef THREADS_ENABLED

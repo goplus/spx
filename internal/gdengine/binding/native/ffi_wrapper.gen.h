@@ -402,6 +402,12 @@ void cgo_callfn_GDExtensionSpxPenPenStamp(const GDExtensionSpxPenPenStamp fn, Gd
 	}
 	fn(obj);
 }
+void cgo_callfn_GDExtensionSpxPenPenStampSprite(const GDExtensionSpxPenPenStampSprite fn, GdObj sprite_id) {
+	if (!fn) {
+		return;
+	}
+	fn(sprite_id);
+}
 void cgo_callfn_GDExtensionSpxPenMovePenTo(const GDExtensionSpxPenMovePenTo fn, GdObj obj, GdVec2 position) {
 	if (!fn) {
 		return;

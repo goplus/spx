@@ -289,6 +289,7 @@ func (*penMgrImpl) CreatePen() gdx.Object {
 func (*penMgrImpl) DestroyPen(obj gdx.Object)                                  {}
 func (*penMgrImpl) BatchUpdateCommands(buffer []float32)                       {}
 func (*penMgrImpl) PenStamp(obj gdx.Object)                                    {}
+func (*penMgrImpl) PenStampSprite(sprite_id gdx.Object)                        {}
 func (*penMgrImpl) MovePenTo(obj gdx.Object, position Vec2)                    {}
 func (*penMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool)                 {}
 func (*penMgrImpl) PenUp(obj gdx.Object)                                       {}

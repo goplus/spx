@@ -34,6 +34,12 @@
 #include "scene/2d/node_2d.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/main/viewport.h"
+#include "scene/resources/material.h"
+
+class AnimatedSprite2D;
+namespace SpxPixelQuery {
+struct Snapshot;
+}
 
 class SpxPenCanvas : public Node2D {
 	GDCLASS(SpxPenCanvas, Node2D);
@@ -52,21 +58,37 @@ private:
 		float width = 1.0f;
 		bool draw_start_cap = true;
 		Ref<Texture2D> texture;
-		float rotation = 0.0f;
-		Vector2 scale = Vector2(1.0f, 1.0f);
+		Transform2D transform;
+		Rect2 rect;
+		Ref<Material> material;
+		TextureFilter texture_filter = TEXTURE_FILTER_PARENT_NODE;
+		TextureRepeat texture_repeat = TEXTURE_REPEAT_PARENT_NODE;
+	};
+
+	// Keep resources alive for exactly as long as their RenderingServer item.
+	struct DrawItem {
+		RID rid;
+		Ref<Texture2D> texture;
+		Ref<Material> material;
 	};
 
 	Vector<DrawCommand> pending_commands;
+	Vector<DrawItem> draw_items;
+	RID _create_draw_item(const Ref<Texture2D> &p_texture = Ref<Texture2D>(), const Ref<Material> &p_material = Ref<Material>());
+	void _clear_draw_items();
 	void _draw_line_batch(int p_begin, int p_end);
 
 protected:
 	static void _bind_methods();
-	void _notification(int p_what);
 
 public:
 	void add_line(const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, bool p_draw_start_cap);
 	void add_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale);
-	void discard_pending();
+	void add_stamp(AnimatedSprite2D *p_sprite, const Transform2D &p_transform);
+	void clear_commands();
+	bool has_pending_commands() const { return !pending_commands.is_empty(); }
+	void submit(bool p_append);
+	~SpxPenCanvas();
 };
 
 // A Scratch-style shared pen layer. Drawing commands are rasterized by the
@@ -78,10 +100,10 @@ class SpxPenSurface : public Node2D {
 private:
 	SubViewport *render_target = nullptr;
 	SpxPenCanvas *canvas = nullptr;
-	Sprite2D *canvas_sprite = nullptr;
 	Size2i canvas_size;
-	bool dirty = false;
+	Ref<Image> collision_image;
 	bool clear_requested = true;
+	bool _is_render_pending() const;
 
 protected:
 	static void _bind_methods();
@@ -91,11 +113,11 @@ public:
 	void set_canvas_size(const Size2i &p_size);
 	void draw_line(const Vector2 &p_from, const Vector2 &p_to, float p_width, const Color &p_color, bool p_draw_start_cap);
 	void draw_stamp(const Ref<Texture2D> &p_texture, const Vector2 &p_position, float p_rotation, const Vector2 &p_scale);
+	void draw_stamp(AnimatedSprite2D *p_sprite);
 	void clear();
 	void flush();
-	Size2i get_canvas_size() const;
-
-	~SpxPenSurface();
+	// Only synchronize and read back pixels when the query overlaps this layer.
+	bool capture(const Rect2 &p_query_bounds, SpxPixelQuery::Snapshot &r_snapshot);
 };
 
 #endif // SPX_PEN_SURFACE_H

@@ -160,6 +160,7 @@ type GDExtensionSpxPenCreatePen C.GDExtensionSpxPenCreatePen
 type GDExtensionSpxPenDestroyPen C.GDExtensionSpxPenDestroyPen
 type GDExtensionSpxPenBatchUpdateCommands C.GDExtensionSpxPenBatchUpdateCommands
 type GDExtensionSpxPenPenStamp C.GDExtensionSpxPenPenStamp
+type GDExtensionSpxPenPenStampSprite C.GDExtensionSpxPenPenStampSprite
 type GDExtensionSpxPenMovePenTo C.GDExtensionSpxPenMovePenTo
 type GDExtensionSpxPenPenDown C.GDExtensionSpxPenPenDown
 type GDExtensionSpxPenPenUp C.GDExtensionSpxPenPenUp
@@ -1038,6 +1039,15 @@ func CallPenPenStamp(
 	arg1 := (C.GdObj)(obj)
 
 	C.cgo_callfn_GDExtensionSpxPenPenStamp(arg0, arg1)
+
+}
+func CallPenPenStampSprite(
+	sprite_id GdObj,
+) {
+	arg0 := (C.GDExtensionSpxPenPenStampSprite)(api.SpxPenPenStampSprite)
+	arg1 := (C.GdObj)(sprite_id)
+
+	C.cgo_callfn_GDExtensionSpxPenPenStampSprite(arg0, arg1)
 
 }
 func CallPenMovePenTo(

@@ -279,6 +279,7 @@ typedef void (*GDExtensionSpxPenCreatePen)(GdObj *ret_value);
 typedef void (*GDExtensionSpxPenDestroyPen)(GdObj obj);
 typedef void (*GDExtensionSpxPenBatchUpdateCommands)(const float *buffer_data, int len);
 typedef void (*GDExtensionSpxPenPenStamp)(GdObj obj);
+typedef void (*GDExtensionSpxPenPenStampSprite)(GdObj sprite_id);
 typedef void (*GDExtensionSpxPenMovePenTo)(GdObj obj, GdVec2 position);
 typedef void (*GDExtensionSpxPenPenDown)(GdObj obj, GdBool move_by_mouse);
 typedef void (*GDExtensionSpxPenPenUp)(GdObj obj);

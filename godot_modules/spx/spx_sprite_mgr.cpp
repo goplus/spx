@@ -49,6 +49,7 @@
 #include "spx_ext_mgr.h"
 #include "spx_layer_sorter.h"
 #include "spx_object_access.h"
+#include "spx_pen_mgr.h"
 #include "spx_physics_mgr.h"
 #include "spx_pixel_query.h"
 #include "spx_res_mgr.h"
@@ -93,13 +94,6 @@ bool capture_sprite_pixels(SpxSprite *p_sprite, Snapshot &r_snapshot, bool p_req
 		return false;
 	}
 	return SpxPixelQuery::capture(p_sprite->get_anim2d(), p_apply_collision_alpha, r_snapshot);
-}
-
-static bool scene_color_query_sort_desc(const Layer &p_a, const Layer &p_b) {
-	if (p_a.z_index == p_b.z_index) {
-		return p_a.tree_index > p_b.tree_index;
-	}
-	return p_a.z_index > p_b.z_index;
 }
 
 } // namespace
@@ -1048,7 +1042,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	}
 
 	std::vector<Layer> scene_queries;
-	scene_queries.reserve((size_t)id_objects.size());
+	scene_queries.reserve((size_t)id_objects.size() + 1);
 	for (const auto &item : id_objects) {
 		SpxSprite *candidate = item.value;
 		if (candidate == nullptr || candidate == sprite || candidate->is_queued_for_deletion()) {
@@ -1067,10 +1061,20 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 		}
 
 		query.z_index = candidate->get_z_index();
+		query.order = candidate->is_backdrop_sprite() ? Layer::BACKDROP : Layer::SPRITE;
 		query.tree_index = candidate->get_index();
 		scene_queries.push_back(std::move(query));
 	}
-	std::sort(scene_queries.begin(), scene_queries.end(), scene_color_query_sort_desc);
+	SpxEngine *engine = SpxEngine::get_singleton();
+	SpxPenMgr *pen = engine != nullptr ? engine->get_pen() : nullptr;
+	Layer pen_layer;
+	if (pen != nullptr && pen->capture(self_query.bounds, pen_layer.pixel_query)) {
+		pen_layer.order = Layer::PEN;
+		scene_queries.push_back(std::move(pen_layer));
+	}
+	std::sort(scene_queries.begin(), scene_queries.end(), [](const Layer &a, const Layer &b) {
+		return a.in_front_of(b);
+	});
 
 	return SpxPixelQuery::any_pixel_center(SpxPixelQuery::pixel_centers(self_query.bounds), pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 		Color self_color;

@@ -1,0 +1,18 @@
+{
+  "costumes": [
+    {
+      "name": "red-arrow",
+      "path": "arrow.svg",
+      "bitmapResolution": 1,
+      "imageWidth": 72,
+      "imageHeight": 64,
+      "x": 36,
+      "y": 32
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true
+}

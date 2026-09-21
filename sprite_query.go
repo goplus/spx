@@ -185,6 +185,7 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
+	p.g.flushPenCommands()
 	return engine.Managers().SpriteMgr.CheckCollisionByColor(p.runtimeState.SyncSprite.GetId(), color, colorThreshold, alphaThreshold)
 }
 
@@ -192,6 +193,7 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 	if !p.prepareSelfCollisionQuery() {
 		return false
 	}
+	p.g.flushPenCommands()
 	return engine.Managers().SpriteMgr.CheckCollisionByColors(
 		p.runtimeState.SyncSprite.GetId(),
 		spriteColor,

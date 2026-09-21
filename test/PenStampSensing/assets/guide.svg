@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" fill="#ffffff"/>
+  <g font-family="'default'" fill="#334155">
+    <text x="32" y="44" font-size="22" font-weight="700">Pen stamps &amp; color sensing</text>
+    <text x="32" y="70" font-size="13">R: rerun checks   E: erase   Space: redraw</text>
+    <text x="32" y="90" font-size="13">Arrow keys: move and stamp (40 steps)</text>
+    <text x="76" y="116" font-size="13">Color effect 100</text>
+    <text x="248" y="116" font-size="13">+ Ghost effect 50</text>
+    <text x="443" y="116" font-size="13">Live source</text>
+    <text x="95" y="239" font-size="12">Cyan stamp</text>
+    <text x="259" y="239" font-size="12">Half-opacity stamp</text>
+    <text x="433" y="239" font-size="12">Red, turned left</text>
+    <text x="32" y="287" font-size="13">Pen lines: black square is the color probe</text>
+    <text x="150" y="352" font-size="12">Red line</text>
+    <text x="385" y="352" font-size="12">Blue line</text>
+    <text x="32" y="416" font-size="13">Expected: both stamps stay unchanged when the source changes.</text>
+    <text x="32" y="442" font-size="13">Console: PEN_DEMO_DONE checks=17 failures=0</text>
+  </g>
+  <g fill="none" stroke="#cbd5e1" stroke-dasharray="4 4">
+    <rect x="76" y="133" width="128" height="92" rx="8"/>
+    <rect x="256" y="133" width="128" height="92" rx="8"/>
+    <rect x="436" y="133" width="128" height="92" rx="8"/>
+  </g>
+</svg>

@@ -1,0 +1,158 @@
+import "fmt"
+import "os"
+
+var (
+	checks int
+	failures int
+	running bool
+)
+
+func check(ok bool, label string) {
+	checks++
+	if ok {
+		println "PEN_DEMO_PASS", label
+	} else {
+		failures++
+		println "PEN_DEMO_FAIL", label
+	}
+}
+
+func senseAt(x, y float64, color string) bool {
+	Probe.SetXYpos x, y
+	return Probe.TouchingColor(NewColor(color))
+}
+
+func drawStamps() {
+	setSize 1
+	setHeading 90
+	clearGraphicEffects
+	setXYpos -180, 60
+	setGraphicEffect ColorEffect, 100
+	stamp
+
+	setXYpos 0, 60
+	setGraphicEffect GhostEffect, 50
+	stamp
+
+	// Mutate the source immediately, before the pending stamps are rendered.
+	clearGraphicEffects
+	setXYpos 180, 60
+	setHeading -90
+}
+
+func drawLine(x1, x2, y float64, color string) {
+	penUp
+	setXYpos x1, y
+	setPenColor NewColor(color)
+	setPenSize 24
+	penDown
+	setXYpos x2, y
+	penUp
+	setXYpos 180, 60
+}
+
+func redraw() {
+	eraseAll
+	drawStamps
+	drawLine -220, -20, -75, "#ff0000"
+	drawLine 20, 220, -75, "#0000ff"
+	Probe.SetXYpos -120, -75
+}
+
+func runChecks() {
+	if running {
+		return
+	}
+	running = true
+	checks, failures = 0, 0
+	say ""
+	eraseAll
+
+	// Stamp before ever setting up a pen: stamping only needs the sprite.
+	drawStamps
+	// Let the live source publish its new position so it no longer covers the
+	// second stamp. Later pen checks deliberately sense without waiting.
+	waitNextFrame
+	check senseAt(-180, 60, "#00ffff"), "color-effect stamp is cyan"
+	check !senseAt(-180, 60, "#ff0000"), "stamp does not use the original red texture"
+	check Probe.TouchingColor(NewColor("#000000"), NewColor("#00ffff")), "black probe touches cyan stamp"
+	check !Probe.TouchingColor(NewColor("#ffffff"), NewColor("#00ffff")), "missing probe color does not match"
+	check senseAt(0, 60, "#80ffff"), "50% ghost stamp blends cyan over the white backdrop"
+	check senseAt(-180, 60, "#00ffff"), "later source effects and movement leave the first stamp unchanged"
+
+	// No wait: sensing must see Go's buffered pen commands in the same script.
+	drawLine -220, -20, -75, "#ff0000"
+	check senseAt(-120, -75, "#ff0000"), "new pen line is sensed immediately"
+	check Probe.TouchingColor(NewColor("#000000"), NewColor("#ff0000")), "two-color sensing includes the pen layer"
+	check !Probe.TouchingColor(NewColor("#000000"), NewColor("#0000ff")), "a different line color does not match"
+	drawLine 20, 220, -75, "#0000ff"
+	check senseAt(120, -75, "#0000ff"), "a second submission adds the blue line"
+	check senseAt(-120, -75, "#ff0000"), "a second submission preserves the red line"
+	waitNextFrame
+	check senseAt(-180, 60, "#00ffff"), "stamp survives the next rendered frame"
+	check senseAt(-120, -75, "#ff0000"), "line survives the next rendered frame"
+
+	eraseAll
+	check !senseAt(-180, 60, "#00ffff"), "erase removes stamps immediately"
+	check !senseAt(-120, -75, "#ff0000"), "erase removes lines immediately"
+	drawLine -220, -20, -75, "#ff0000"
+	eraseAll
+	drawLine 20, 220, -75, "#0000ff"
+	check !senseAt(-120, -75, "#ff0000"), "erase discards pending drawing"
+	check senseAt(120, -75, "#0000ff"), "drawing immediately after erase is retained"
+
+	redraw
+	println fmt.Sprintf("PEN_DEMO_DONE checks=%d failures=%d", checks, failures)
+	if failures == 0 {
+		say fmt.Sprintf("PASS: %d checks", checks)
+	} else {
+		say fmt.Sprintf("FAIL: %d / %d checks", failures, checks)
+	}
+	running = false
+	if os.Getenv("SPX_PEN_DEMO_TEST") == "1" {
+		if failures != 0 {
+			exit 1
+		}
+		exit 0
+	}
+}
+
+onStart => {
+	waitNextFrame
+	runChecks
+}
+
+onKey [KeyUp, KeyDown, KeyLeft, KeyRight], key => {
+	if running {
+		return
+	}
+	say ""
+	switch key {
+	case KeyUp:
+		setHeading 0
+	case KeyDown:
+		setHeading 180
+	case KeyLeft:
+		setHeading -90
+	case KeyRight:
+		setHeading 90
+	}
+	move 40
+	stamp
+}
+
+onKey KeyR, => {
+	runChecks
+}
+
+onKey KeyE, => {
+	if !running {
+		eraseAll
+	}
+}
+
+onKey KeySpace, => {
+	if !running {
+		redraw
+	}
+}

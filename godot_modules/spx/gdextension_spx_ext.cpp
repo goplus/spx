@@ -324,6 +324,10 @@ static void gdextension_spx_pen_pen_stamp(GdObj obj) {
 	penMgr->pen_stamp(obj);
 }
 
+static void gdextension_spx_pen_pen_stamp_sprite(GdObj sprite_id) {
+	penMgr->pen_stamp_sprite(sprite_id);
+}
+
 static void gdextension_spx_pen_move_pen_to(GdObj obj, GdVec2 position) {
 	penMgr->move_pen_to(obj, position);
 }
@@ -1465,6 +1469,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_destroy_pen);
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_batch_update_commands);
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_pen_stamp);
+	REGISTER_SPX_INTERFACE_FUNC(spx_pen_pen_stamp_sprite);
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_move_pen_to);
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_pen_down);
 	REGISTER_SPX_INTERFACE_FUNC(spx_pen_pen_up);

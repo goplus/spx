@@ -48,12 +48,22 @@ struct Snapshot {
 	real_t collision_alpha_scale = 1.0f;
 	bool flip_h = false;
 	bool flip_v = false;
+	// Transparent render targets store premultiplied RGB, unlike costume images.
+	bool image_premultiplied = false;
 };
 
 struct Layer {
+	enum Order {
+		BACKDROP,
+		PEN,
+		SPRITE,
+	};
+
 	Snapshot pixel_query;
 	int z_index = 0;
+	Order order = SPRITE;
 	int tree_index = 0;
+	bool in_front_of(const Layer &p_other) const;
 };
 
 Ref<Texture2D> frame_texture(AnimatedSprite2D *p_animation);
@@ -85,7 +95,7 @@ bool any_pixel_center(const Rect2i &p_rect, int p_step, const Predicate &p_match
 bool sample(const Snapshot &p_snapshot, const Vector2 &p_world_pos, Color &r_color);
 bool sample_premultiplied(const Snapshot &p_snapshot, const Vector2 &p_world_pos, Color &r_color);
 
-// Layers arrive front-to-back (descending z, then descending tree index).
+// Layers arrive front-to-back (descending z, stage order, then tree index).
 // Scratch composites their premultiplied colors over a white clear color.
 Color composite(const std::vector<Layer> &p_layers, const Vector2 &p_world_pos);
 

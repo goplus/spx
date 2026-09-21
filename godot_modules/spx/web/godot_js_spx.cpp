@@ -362,6 +362,10 @@ void gdspx_pen_pen_stamp(GdObj obj) {
 	 penMgr->pen_stamp(obj);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_pen_pen_stamp_sprite(GdObj sprite_id) {
+	 penMgr->pen_stamp_sprite(sprite_id);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_move_pen_to(GdObj obj, GdVec2 *position) {
 	 penMgr->move_pen_to(obj, *position);
 }

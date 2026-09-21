@@ -472,6 +472,10 @@ func (pself *penMgr) PenStamp(obj Object) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	API.SpxPenPenStamp.Invoke(arg0Low, arg0High)
 }
+func (pself *penMgr) PenStampSprite(sprite_id Object) {
+	arg0Low, arg0High := JsSplitGdObj(sprite_id)
+	API.SpxPenPenStampSprite.Invoke(arg0Low, arg0High)
+}
 func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdVec2(position)

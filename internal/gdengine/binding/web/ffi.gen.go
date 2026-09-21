@@ -105,6 +105,7 @@ type GDExtensionInterface struct {
 	SpxPenDestroyPen                            js.Value
 	SpxPenBatchUpdateCommands                   js.Value
 	SpxPenPenStamp                              js.Value
+	SpxPenPenStampSprite                        js.Value
 	SpxPenMovePenTo                             js.Value
 	SpxPenPenDown                               js.Value
 	SpxPenPenUp                                 js.Value
@@ -441,6 +442,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPenDestroyPen = resolveJSFunc("gdspx_pen_destroy_pen")
 	x.SpxPenBatchUpdateCommands = resolveJSFunc("gdspx_pen_batch_update_commands")
 	x.SpxPenPenStamp = resolveJSFunc("gdspx_pen_pen_stamp")
+	x.SpxPenPenStampSprite = resolveJSFunc("gdspx_pen_pen_stamp_sprite")
 	x.SpxPenMovePenTo = resolveJSFunc("gdspx_pen_move_pen_to")
 	x.SpxPenPenDown = resolveJSFunc("gdspx_pen_pen_down")
 	x.SpxPenPenUp = resolveJSFunc("gdspx_pen_pen_up")

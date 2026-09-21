@@ -36,13 +36,14 @@
 #include "spx_pen.h"
 
 class SpxPenSurface;
+namespace SpxPixelQuery {
+struct Snapshot;
+}
 class SpxPenMgr : public SpxObjectMgr<SpxPen> {
-
 private:
 	SpxPenSurface *surface = nullptr;
 
 public:
-
 	void on_awake() override;
 	void on_update(float delta) override;
 	void on_destroy() override;
@@ -51,11 +52,13 @@ public:
 	SPX_BIND void destroy_all_pens();
 	SPX_BIND void set_canvas_size(GdInt width, GdInt height);
 	void flush_all();
+	bool capture(const Rect2 &p_query_bounds, SpxPixelQuery::Snapshot &r_snapshot);
 	SPX_BIND GdObj create_pen();
 	SPX_BIND void destroy_pen(GdObj obj);
 	SPX_BIND void batch_update_commands(const float *buffer_data, int len);
 	// Pen operation methods
 	SPX_BIND void pen_stamp(GdObj obj);
+	SPX_BIND void pen_stamp_sprite(GdObj sprite_id);
 	SPX_BIND void move_pen_to(GdObj obj, GdVec2 position);
 	SPX_BIND void pen_down(GdObj obj, GdBool move_by_mouse);
 	SPX_BIND void pen_up(GdObj obj);

@@ -62,17 +62,7 @@ Rect2 local_rect(AnimatedSprite2D *p_anim2d, const Vector2 &p_texture_size) {
 }
 
 Rect2 world_bounds(const Transform2D &p_transform, const Rect2 &p_local_rect) {
-	const Vector2 top_left = p_transform.xform(p_local_rect.position);
-	const Vector2 top_right = p_transform.xform(p_local_rect.position + Vector2(p_local_rect.size.x, 0));
-	const Vector2 bottom_left = p_transform.xform(p_local_rect.position + Vector2(0, p_local_rect.size.y));
-	const Vector2 bottom_right = p_transform.xform(p_local_rect.position + p_local_rect.size);
-
-	const float min_x = MIN(MIN(top_left.x, top_right.x), MIN(bottom_left.x, bottom_right.x));
-	const float max_x = MAX(MAX(top_left.x, top_right.x), MAX(bottom_left.x, bottom_right.x));
-	const float min_y = MIN(MIN(top_left.y, top_right.y), MIN(bottom_left.y, bottom_right.y));
-	const float max_y = MAX(MAX(top_left.y, top_right.y), MAX(bottom_left.y, bottom_right.y));
-
-	return Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x, max_y - min_y));
+	return p_transform.xform(p_local_rect);
 }
 
 static _FORCE_INLINE_ real_t get_collision_alpha_scale(AnimatedSprite2D *p_anim2d) {
@@ -148,6 +138,9 @@ bool load_image(Snapshot &r_query) {
 	if (r_query.image.is_valid()) {
 		return true;
 	}
+	if (r_query.texture.is_null()) {
+		return false;
+	}
 
 	r_query.image = r_query.texture->get_image();
 	if (r_query.image.is_null()) {
@@ -188,10 +181,21 @@ bool sample_premultiplied(
 	if (!sample(p_query, p_world_pos, r_color)) {
 		return false;
 	}
-	r_color.r *= r_color.a;
-	r_color.g *= r_color.a;
-	r_color.b *= r_color.a;
+	const real_t rgb_scale = p_query.image_premultiplied ? p_query.collision_alpha_scale : r_color.a;
+	r_color.r *= rgb_scale;
+	r_color.g *= rgb_scale;
+	r_color.b *= rgb_scale;
 	return true;
+}
+
+bool Layer::in_front_of(const Layer &p_other) const {
+	if (z_index != p_other.z_index) {
+		return z_index > p_other.z_index;
+	}
+	if (order != p_other.order) {
+		return order > p_other.order;
+	}
+	return tree_index > p_other.tree_index;
 }
 
 Color composite(

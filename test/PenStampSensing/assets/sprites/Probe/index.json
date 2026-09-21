@@ -1,0 +1,18 @@
+{
+  "costumes": [
+    {
+      "name": "black-probe",
+      "path": "probe.svg",
+      "bitmapResolution": 1,
+      "imageWidth": 8,
+      "imageHeight": 8,
+      "x": 4,
+      "y": 4
+    }
+  ],
+  "costumeIndex": 0,
+  "heading": 90,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true
+}

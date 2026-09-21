@@ -33,7 +33,11 @@
 #include "scene/main/viewport.h"
 
 #include "spx_coordinate.h"
+#include "spx_engine.h"
+#include "spx_object_access.h"
 #include "spx_pen_surface.h"
+#include "spx_sprite.h"
+#include "spx_sprite_mgr.h"
 
 #include <cstdint>
 #include <cstring>
@@ -232,6 +236,19 @@ void SpxPenMgr::move_pen_to(GdObj obj, GdVec2 position) {
 
 void SpxPenMgr::pen_stamp(GdObj obj) {
 	SPX_WITH_PEN_OR_RETURN(obj, pen->stamp())
+}
+
+void SpxPenMgr::pen_stamp_sprite(GdObj sprite_id) {
+	SpxSprite *sprite = spx_checked_lookup<SpxSprite>(sprite_id, __func__, spriteMgr,
+			[](SpxSpriteMgr *mgr, GdObj id) { return mgr->get_sprite(id); });
+	if (sprite == nullptr || surface == nullptr) {
+		return;
+	}
+	surface->draw_stamp(sprite->get_anim2d());
+}
+
+bool SpxPenMgr::capture(const Rect2 &p_query_bounds, SpxPixelQuery::Snapshot &r_snapshot) {
+	return surface != nullptr && surface->capture(p_query_bounds, r_snapshot);
 }
 
 void SpxPenMgr::pen_down(GdObj obj, GdBool move_by_mouse) {

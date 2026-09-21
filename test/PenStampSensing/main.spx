@@ -1,0 +1,3 @@
+onStart => {
+	println "PenStampSensing: Arrow keys = move and stamp, R = run checks again, E = erase, Space = redraw"
+}
