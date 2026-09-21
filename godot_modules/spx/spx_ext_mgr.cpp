@@ -41,7 +41,7 @@ void SpxExtMgr::request_exit(GdInt exit_code) {
 	}
 
 	SpxEngine::get_singleton()->on_exit(exit_code);
-	get_tree()->quit(exit_code);
+	SpxEngine::get_singleton()->get_tree()->quit(exit_code);
 }
 
 void SpxExtMgr::request_reset(GdInt exit_code) {
@@ -53,11 +53,9 @@ void SpxExtMgr::request_restart() {
 }
 
 void SpxExtMgr::on_runtime_panic(GdString msg) {
-	auto msg_str = SpxStr(msg);
 	auto callback = SpxEngine::get_singleton()->get_on_runtime_panic();
 	if (callback != nullptr) {
-		auto str = SpxReturnStr(msg_str);
-		callback(str);
+		callback(msg);
 	}
 }
 

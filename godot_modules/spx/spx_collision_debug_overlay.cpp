@@ -197,7 +197,9 @@ SpxCollisionDebugOverlay *spx_find_collision_debug_overlay(CollisionShape2D *p_t
 
 	for (int i = 0; i < p_target->get_child_count(true); ++i) {
 		SpxCollisionDebugOverlay *overlay = Object::cast_to<SpxCollisionDebugOverlay>(p_target->get_child(i, true));
-		if (overlay != nullptr && overlay->get_target() == p_target) {
+		// Node::duplicate recreates this internal node without its runtime target.
+		// on_start/configure binds the copy to its own CollisionShape2D.
+		if (overlay != nullptr) {
 			return overlay;
 		}
 	}
@@ -211,6 +213,11 @@ SpxCollisionDebugOverlay *spx_ensure_collision_debug_overlay(CollisionShape2D *p
 	if (overlay == nullptr) {
 		overlay = memnew(SpxCollisionDebugOverlay);
 		overlay->set_name("_SpxCollisionDebugOverlay");
+		p_target->add_child(overlay, false, Node::INTERNAL_MODE_FRONT);
+	} else if (overlay->get_internal_mode() != Node::INTERNAL_MODE_FRONT) {
+		// Node::duplicate adds copied children as ordinary nodes. Restore the
+		// overlay's implementation-only position before configuring the new target.
+		p_target->remove_child(overlay);
 		p_target->add_child(overlay, false, Node::INTERNAL_MODE_FRONT);
 	}
 	overlay->configure(p_target, p_color, p_visible);

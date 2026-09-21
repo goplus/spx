@@ -33,7 +33,7 @@
 
 #include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
 
 struct DebugShape {
 	enum Type {
@@ -50,11 +50,7 @@ struct DebugShape {
 	Node2D *node;
 };
 
-class SpxDebugMgr : public SpxBaseMgr {
-	SPXCLASS(SpxDebugMgr, SpxBaseMgr)
-public:
-	virtual ~SpxDebugMgr() = default;
-
+class SpxDebugMgr : public SpxManager {
 private:
 	Vector<DebugShape> debug_shapes;
 	Node2D *debug_root;
@@ -68,9 +64,9 @@ public:
 	void on_destroy() override;
 	void on_reset(int reset_code) override;
 
-	SPX_API void debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color);
-	SPX_API void debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color);
-	SPX_API void debug_draw_line(GdVec2 from, GdVec2 to, GdColor color);
+	SPX_BIND void debug_draw_circle(GdVec2 pos, GdFloat radius, GdColor color);
+	SPX_BIND void debug_draw_rect(GdVec2 pos, GdVec2 size, GdColor color);
+	SPX_BIND void debug_draw_line(GdVec2 from, GdVec2 to, GdColor color);
 };
 
 #endif // SPX_DEBUG_MGR_H

@@ -32,7 +32,11 @@
 #define SPX_PEN_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
+#include "spx_mgr_access.h"
+#include "scene/resources/texture.h"
+
+class Node;
 
 class SpxSprite;
 class SpxPenSurface;

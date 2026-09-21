@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_object_mgr.h                                                      */
+/*  spx_object_mgr.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -33,71 +33,51 @@
 
 #include "core/os/thread.h"
 #include "core/templates/hash_map.h"
-#include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "scene/2d/node_2d.h"
+#include "spx_manager.h"
 
-/**
- * @brief Generic object manager template for SPX objects
- *
- * This template provides common functionality for managing SPX objects:
- * - Main-thread-owned object storage and retrieval
- * - Automatic lifecycle management (create, destroy, update)
- * - Common helper macros for null checks
- *
- * Threading:
- * - Managed values own Godot Node/Object state and may only be accessed on the
- *   engine main thread.
- * - Cross-thread producers must enqueue immutable data before entering a
- *   manager. A lock around this map cannot make a returned raw Node pointer
- *   safe after the lock is released.
- *
- * @tparam T The type of object being managed (e.g., SpxAudio, SpxPen)
- */
+// Owns non-Node objects and their shared scene root on the engine main thread.
+// Returned pointers must not escape the current main-thread task; callers from
+// other threads must enqueue work before entering the manager.
 template <typename T>
-class SpxObjectMgr : public SpxBaseMgr {
+class SpxObjectMgr : public SpxManager {
 protected:
 	HashMap<GdObj, T *> id_objects;
 	Node2D *root = nullptr;
 
-	bool _validate_main_thread(const char *p_operation) const {
+	bool _require_main_thread(const char *p_operation) const {
 		if (likely(Thread::is_main_thread())) {
 			return true;
 		}
-		ERR_PRINT(vformat("%s::%s may only access managed objects on the engine main thread.", get_class_name(), p_operation));
+		ERR_PRINT(vformat("Object manager operation %s must run on the engine main thread.", p_operation));
 		return false;
 	}
 
-	/**
-	 * @brief Create and register a new object
-	 * Can be called directly from derived classes
-	 * Main-thread only
-	 */
 	GdObj _create_object() {
-		if (unlikely(!_validate_main_thread(__func__))) {
+		if (unlikely(!_require_main_thread(__func__))) {
 			return NULL_OBJECT_ID;
 		}
 		auto id = get_unique_id();
-		T *node = memnew(T);
-		node->on_create(id, root);
-		id_objects[id] = node;
+		T *object = memnew(T);
+		object->on_create(id, root);
+		id_objects[id] = object;
 		return id;
 	}
 
-	/**
-	 * @brief Get object by ID after main-thread validation
-	 */
-	T *_get_object_unsafe(GdObj obj) const {
-		if (id_objects.has(obj)) {
-			return id_objects[obj];
-		}
-		return nullptr;
+	T *_find_object(GdObj obj) const {
+		T *const *object = id_objects.getptr(obj);
+		return object != nullptr ? *object : nullptr;
 	}
 
-	/**
-	 * @brief Create root node for this manager's objects
-	 */
+	T *_find_object_checked(GdObj obj, const char *p_operation) const {
+		if (unlikely(!_require_main_thread(p_operation))) {
+			return nullptr;
+		}
+		return _find_object(obj);
+	}
+
 	void _create_root(const String &name) {
-		if (unlikely(!_validate_main_thread(__func__))) {
+		if (unlikely(!_require_main_thread(__func__))) {
 			return;
 		}
 		root = memnew(Node2D);
@@ -105,51 +85,24 @@ protected:
 		get_spx_root()->add_child(root);
 	}
 
-	/**
-	 * @brief Destroy all managed objects and root node
-	 */
-	void _destroy_all();
+	void _destroy_objects_and_root();
 
-	/**
-	 * @brief Update all managed objects
-	 */
 	void _update_all(float delta);
 
-	/**
-	 * @brief Reset all managed objects
-	 */
-	void _reset_all(int reset_code);
+	void _reset_objects(int reset_code);
 
 public:
-	/**
-	 * @brief Get object by ID on the main thread
-	 * @warning The returned pointer must not escape the current main-thread task.
-	 * @param obj Object ID
-	 * @return Pointer to object, or nullptr if not found
-	 */
 	T *get_object(GdObj obj) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return nullptr;
-		}
-		return _get_object_unsafe(obj);
+		return _find_object_checked(obj, __func__);
 	}
 
-	/**
-	 * @brief Get object by ID (const version, main-thread only)
-	 */
 	const T *get_object(GdObj obj) const {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return nullptr;
-		}
-		return _get_object_unsafe(obj);
+		return _find_object_checked(obj, __func__);
 	}
 
 	template <typename Func>
 	bool with_object(GdObj obj, Func &&func) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return false;
-		}
-		T *object = _get_object_unsafe(obj);
+		T *object = _find_object_checked(obj, __func__);
 		if (object == nullptr) {
 			return false;
 		}
@@ -159,38 +112,19 @@ public:
 
 	template <typename Ret, typename Func>
 	Ret with_object_ret(GdObj obj, Ret default_value, Func &&func) {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return default_value;
-		}
-		T *object = _get_object_unsafe(obj);
+		T *object = _find_object_checked(obj, __func__);
 		if (object == nullptr) {
 			return default_value;
 		}
-		Ret result = func(object);
-		return result;
+		return func(object);
 	}
 
-	/**
-	 * @brief Destroy a managed object by ID (main-thread only)
-	 */
 	void destroy_object(GdObj obj);
-
-	/**
-	 * @brief Get the number of managed objects (main-thread only)
-	 */
-	int get_object_count() const {
-		if (unlikely(!_validate_main_thread(__func__))) {
-			return 0;
-		}
-		return id_objects.size();
-	}
-
-	virtual ~SpxObjectMgr() = default;
 };
 
 template <typename T>
-void SpxObjectMgr<T>::_destroy_all() {
-	if (unlikely(!_validate_main_thread(__func__))) {
+void SpxObjectMgr<T>::_destroy_objects_and_root() {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	Vector<T *> objects;
@@ -212,7 +146,7 @@ void SpxObjectMgr<T>::_destroy_all() {
 
 template <typename T>
 void SpxObjectMgr<T>::_update_all(float delta) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	Vector<GdObj> object_ids;
@@ -223,7 +157,7 @@ void SpxObjectMgr<T>::_update_all(float delta) {
 	// Re-resolve each ID so a main-thread callback that destroys a later object
 	// cannot leave a dangling pointer in this update pass.
 	for (GdObj id : object_ids) {
-		T *object = _get_object_unsafe(id);
+		T *object = _find_object(id);
 		if (object != nullptr) {
 			object->on_update(delta);
 		}
@@ -231,8 +165,8 @@ void SpxObjectMgr<T>::_update_all(float delta) {
 }
 
 template <typename T>
-void SpxObjectMgr<T>::_reset_all(int reset_code) {
-	if (unlikely(!_validate_main_thread(__func__))) {
+void SpxObjectMgr<T>::_reset_objects(int reset_code) {
+	if (unlikely(!_require_main_thread(__func__))) {
 		return;
 	}
 	Vector<T *> objects;
@@ -250,30 +184,12 @@ void SpxObjectMgr<T>::_reset_all(int reset_code) {
 
 template <typename T>
 void SpxObjectMgr<T>::destroy_object(GdObj obj) {
-	if (unlikely(!_validate_main_thread(__func__))) {
-		return;
-	}
-	T *object = _get_object_unsafe(obj);
+	T *object = _find_object_checked(obj, __func__);
 	if (object != nullptr) {
 		id_objects.erase(obj);
 		object->on_destroy();
 		memdelete(object);
 	}
 }
-
-// Common macros for checking and getting objects with error handling
-#define SPX_CHECK_AND_GET_OBJECT_V(obj, getter, obj_type)       \
-	auto obj = getter;                                          \
-	if (obj == nullptr) {                                       \
-		print_error("try to access null " #obj_type " object"); \
-		return;                                                 \
-	}
-
-#define SPX_CHECK_AND_GET_OBJECT_R(obj, getter, obj_type, ret_value) \
-	auto obj = getter;                                               \
-	if (obj == nullptr) {                                            \
-		print_error("try to access null " #obj_type " object");      \
-		return ret_value;                                            \
-	}
 
 #endif // SPX_OBJECT_MGR_H

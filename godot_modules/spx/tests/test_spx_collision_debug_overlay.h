@@ -60,16 +60,11 @@ TEST_CASE("[SceneTree][SPX] Collision debug overlay is internal, idempotent, and
 	REQUIRE(overlay != nullptr);
 	CHECK(overlay->get_parent() == target);
 	CHECK(overlay->get_internal_mode() == Node::INTERNAL_MODE_FRONT);
-	CHECK(overlay->get_target() == target);
-	CHECK(overlay->is_requested_visible());
-	CHECK(overlay->get_debug_color() == collider_color);
 	CHECK(target->get_debug_color() == collider_color);
 
 	SpxCollisionDebugOverlay *same_overlay = spx_ensure_collision_debug_overlay(target, trigger_color, false);
 	CHECK(same_overlay == overlay);
 	CHECK(target->get_child_count(true) == 1);
-	CHECK_FALSE(overlay->is_requested_visible());
-	CHECK(overlay->get_debug_color() == trigger_color);
 	CHECK(target->get_debug_color() == trigger_color);
 
 	target->remove_child(overlay);

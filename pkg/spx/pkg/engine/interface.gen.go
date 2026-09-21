@@ -184,9 +184,9 @@ type IPlatformMgr interface {
 	SetTimeScale(time_scale float64)
 	GetMaxFps() int64
 	SetMaxFps(fps int64)
-	GetPersistantDataDir() string
-	SetPersistantDataDir(path string)
-	IsInPersistantDataDir(path string) bool
+	GetPersistentDataDir() string
+	SetPersistentDataDir(path string)
+	IsInPersistentDataDir(path string) bool
 }
 
 type IResMgr interface {
@@ -199,7 +199,6 @@ type IResMgr interface {
 	HasFile(p_path string) bool
 	ListDirectories(p_path string) string
 	ReloadTexture(path string)
-	FreeStr(str string)
 	ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string
 	SetDefaultFont(font_path string)
 	RegisterFontFace(font_path string, family string)

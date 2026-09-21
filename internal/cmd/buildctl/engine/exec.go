@@ -39,7 +39,7 @@ type engineExecConfig struct {
 	command []string
 }
 
-var (
+const (
 	engineBuildLockPollInterval   = time.Second
 	engineBuildLockAcquireTimeout = 30 * time.Minute
 )

@@ -33,8 +33,6 @@ var osStderr = os.Stderr
 
 var errUsage = shared.ErrUsage
 
-var workflowBuildEngine = engine.BuildEngine
-
 type BuildConfig struct {
 	Target string
 	Mode   string
@@ -96,12 +94,12 @@ func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
 		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
 			return err
 		}
-		return workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
+		return engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir())
 	case "desktop":
 		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
 			return err
 		}
-		if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
+		if err := engine.BuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
 			return err
 		}
 		return runtimecmd.ExportPackRuntime(runner)
@@ -111,7 +109,7 @@ func Build(cfg BuildConfig, runner shared.ScriptRunner) error {
 		if err := toolpkg.InstallTools(toolpkg.InstallConfig{}, runner); err != nil {
 			return err
 		}
-		return workflowBuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
+		return engine.BuildEngine(engine.BuildConfig{Target: "template", Platform: cfg.Target}, runner.RepoRootDir())
 	default:
 		return fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
@@ -308,7 +306,7 @@ func buildWebWorkflow(cfg workflowBuildWebConfig, runner shared.ScriptRunner) er
 			return err
 		}
 	}
-	if err := workflowBuildEngine(engine.BuildConfig{
+	if err := engine.BuildEngine(engine.BuildConfig{
 		Target:   "template",
 		Platform: "web",
 		Mode:     cfg.mode,
@@ -319,7 +317,7 @@ func buildWebWorkflow(cfg workflowBuildWebConfig, runner shared.ScriptRunner) er
 }
 
 func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
-	if err := workflowBuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
+	if err := engine.BuildEngine(engine.BuildConfig{Target: "template"}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 	return runtimecmd.ExportPackRuntime(runner)
@@ -327,7 +325,7 @@ func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
 
 func buildDevWorkflow(cfg workflowBuildDevConfig, runner shared.ScriptRunner) error {
 	printWorkflowStep(1, 4, "Build host editor")
-	if err := workflowBuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir()); err != nil {
+	if err := engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 

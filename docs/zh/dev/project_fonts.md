@@ -70,7 +70,7 @@ Family 的 `index.json` 格式如下：
 
 `ResolveDisplaySettings()` 只负责窗口和显示配置，不再参与字体计划生成。
 
-Godot 侧只在 `SpxResMgr` 中用 `SPX_API` 声明接口；Go、Native、Web bridge 都通过 `make generate` 生成，不手工维护生成文件。
+Godot 侧只在 `SpxResMgr` 中用 `SPX_BIND` 声明接口；Go、Native、Web bridge 都通过 `make generate` 生成，不手工维护生成文件。
 
 Native bridge 会区分 nil slice 与显式空 slice。Web bridge 使用同一份生成接口。
 

@@ -35,19 +35,12 @@ type emsdkEnvironment struct {
 	repoDir string
 }
 
-var (
-	buildEnvLookPath           = exec.LookPath
-	buildEnvRunStreaming       = shared.RunStreamingCommand
-	buildEnvRunOutputWithDir   = shared.RunCommandOutputWithEnv
-	resolveEMSDKShellExportsFn = ResolveEMSDKShellExports
-)
-
 func EnsureSCons() (string, error) {
 	python, err := detectPythonCommand()
 	if err != nil {
 		return "", err
 	}
-	if err := buildEnvRunStreaming("", python, "-c", "import sys; print(sys.version)"); err != nil {
+	if err := shared.RunStreamingCommand("", python, "-c", "import sys; print(sys.version)"); err != nil {
 		return "", err
 	}
 
@@ -58,9 +51,9 @@ func EnsureSCons() (string, error) {
 	venvDir := filepath.Join(repoRoot, ".bin", "scons-"+requiredSConsVersion)
 	venvPython, sconsCommand := sconsEnvironmentCommands(venvDir)
 	if shared.FileExists(venvPython) && shared.FileExists(sconsCommand) {
-		output, versionErr := buildEnvRunOutputWithDir("", os.Environ(), venvPython, "-c", "import SCons; print(SCons.__version__)")
+		output, versionErr := shared.RunCommandOutputWithEnv("", os.Environ(), venvPython, "-c", "import SCons; print(SCons.__version__)")
 		if versionErr == nil && strings.TrimSpace(string(output)) == requiredSConsVersion {
-			if err := buildEnvRunStreaming("", sconsCommand, "--version"); err != nil {
+			if err := shared.RunStreamingCommand("", sconsCommand, "--version"); err != nil {
 				return "", err
 			}
 			return sconsCommand, nil
@@ -70,13 +63,13 @@ func EnsureSCons() (string, error) {
 	if err := os.MkdirAll(filepath.Dir(venvDir), 0o755); err != nil {
 		return "", err
 	}
-	if err := buildEnvRunStreaming("", python, "-m", "venv", venvDir); err != nil {
+	if err := shared.RunStreamingCommand("", python, "-m", "venv", venvDir); err != nil {
 		return "", err
 	}
-	if err := buildEnvRunStreaming("", venvPython, "-m", "pip", "install", "scons=="+requiredSConsVersion); err != nil {
+	if err := shared.RunStreamingCommand("", venvPython, "-m", "pip", "install", "scons=="+requiredSConsVersion); err != nil {
 		return "", err
 	}
-	if err := buildEnvRunStreaming("", sconsCommand, "--version"); err != nil {
+	if err := shared.RunStreamingCommand("", sconsCommand, "--version"); err != nil {
 		return "", err
 	}
 	return sconsCommand, nil
@@ -95,26 +88,26 @@ func SetupJDK() error {
 	fmt.Fprintf(os.Stdout, "JDK %d not found. Installing...\n", requiredJDKMajor)
 	switch runtime.GOOS {
 	case "darwin":
-		if _, err := buildEnvLookPath("brew"); err != nil {
+		if _, err := exec.LookPath("brew"); err != nil {
 			return fmt.Errorf("homebrew not found; install Homebrew first or install JDK %d manually", requiredJDKMajor)
 		}
-		if err := buildEnvRunStreaming("", "brew", "install", fmt.Sprintf("openjdk@%d", requiredJDKMajor)); err != nil {
+		if err := shared.RunStreamingCommand("", "brew", "install", fmt.Sprintf("openjdk@%d", requiredJDKMajor)); err != nil {
 			return err
 		}
 	case "linux":
-		if _, err := buildEnvLookPath("apt-get"); err == nil {
-			if err := buildEnvRunStreaming("", "sudo", "apt-get", "update"); err != nil {
+		if _, err := exec.LookPath("apt-get"); err == nil {
+			if err := shared.RunStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
 				return err
 			}
-			if err := buildEnvRunStreaming("", "sudo", "apt-get", "install", "-y", fmt.Sprintf("openjdk-%d-jdk", requiredJDKMajor)); err != nil {
+			if err := shared.RunStreamingCommand("", "sudo", "apt-get", "install", "-y", fmt.Sprintf("openjdk-%d-jdk", requiredJDKMajor)); err != nil {
 				return err
 			}
-		} else if _, err := buildEnvLookPath("dnf"); err == nil {
-			if err := buildEnvRunStreaming("", "sudo", "dnf", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
+		} else if _, err := exec.LookPath("dnf"); err == nil {
+			if err := shared.RunStreamingCommand("", "sudo", "dnf", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
 				return err
 			}
-		} else if _, err := buildEnvLookPath("yum"); err == nil {
-			if err := buildEnvRunStreaming("", "sudo", "yum", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
+		} else if _, err := exec.LookPath("yum"); err == nil {
+			if err := shared.RunStreamingCommand("", "sudo", "yum", "install", "-y", fmt.Sprintf("java-%d-openjdk-devel", requiredJDKMajor)); err != nil {
 				return err
 			}
 		} else {
@@ -150,13 +143,13 @@ func SetupEMSDK() error {
 
 	if !shared.FileExists(env.repoDir) {
 		fmt.Fprintln(os.Stdout, "EMSDK not found in the global location. Installing...")
-		if err := buildEnvRunStreaming(env.rootDir, "git", "clone", "https://github.com/emscripten-core/emsdk.git"); err != nil {
+		if err := shared.RunStreamingCommand(env.rootDir, "git", "clone", "https://github.com/emscripten-core/emsdk.git"); err != nil {
 			return err
 		}
-		if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "install", requiredEMSDKVersion); err != nil {
+		if err := shared.RunStreamingCommand(env.repoDir, "./emsdk", "install", requiredEMSDKVersion); err != nil {
 			return err
 		}
-		if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "activate", requiredEMSDKVersion); err != nil {
+		if err := shared.RunStreamingCommand(env.repoDir, "./emsdk", "activate", requiredEMSDKVersion); err != nil {
 			return err
 		}
 		return verifyEMSDK(env)
@@ -169,13 +162,13 @@ func SetupEMSDK() error {
 
 	if !ok || currentVersion != requiredEMSDKVersion {
 		fmt.Fprintf(os.Stdout, "Installing target emcc version %s...\n", requiredEMSDKVersion)
-		if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "install", requiredEMSDKVersion); err != nil {
+		if err := shared.RunStreamingCommand(env.repoDir, "./emsdk", "install", requiredEMSDKVersion); err != nil {
 			return err
 		}
 	} else {
 		fmt.Fprintln(os.Stdout, "Current emcc version matches the target version. No reinstall needed.")
 	}
-	if err := buildEnvRunStreaming(env.repoDir, "./emsdk", "activate", requiredEMSDKVersion); err != nil {
+	if err := shared.RunStreamingCommand(env.repoDir, "./emsdk", "activate", requiredEMSDKVersion); err != nil {
 		return err
 	}
 	return verifyEMSDK(env)
@@ -225,7 +218,7 @@ func verifyEMSDK(env emsdkEnvironment) error {
 	if err != nil {
 		return err
 	}
-	output, err := buildEnvRunOutputWithDir("", shared.EnvMapToSlice(verifyEnv), emppPath, "--version")
+	output, err := shared.RunCommandOutputWithEnv("", shared.EnvMapToSlice(verifyEnv), emppPath, "--version")
 	if err != nil {
 		return fmt.Errorf("failed to set up emsdk. Please check the installation: %w", err)
 	}
@@ -235,7 +228,7 @@ func verifyEMSDK(env emsdkEnvironment) error {
 }
 
 func resolveEMSDKVerificationEnvironment(env emsdkEnvironment) (map[string]string, string, error) {
-	exports, err := resolveEMSDKShellExportsFn()
+	exports, err := ResolveEMSDKShellExports()
 	if err != nil {
 		return nil, "", err
 	}
@@ -270,10 +263,10 @@ func emscriptenCPPExecutableName() string {
 }
 
 func detectPythonCommand() (string, error) {
-	if _, err := buildEnvLookPath("python3"); err == nil {
+	if _, err := exec.LookPath("python3"); err == nil {
 		return "python3", nil
 	}
-	if _, err := buildEnvLookPath("python"); err == nil {
+	if _, err := exec.LookPath("python"); err == nil {
 		return "python", nil
 	}
 	return "", errors.New("neither python3 nor python is installed")

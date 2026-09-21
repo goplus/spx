@@ -77,13 +77,13 @@ graph TD
 
 - 文件名匹配 `spx*mgr.h`
 - `public:` 区域中的方法
-- 带 `SPX_API` 或 `SPX_BIND` 标记的方法
+- 带 `SPX_BIND` 标记的方法
 
 不会进入生成流程的内容包括：
 
 - `spx_base_mgr.h`
 - `spx_object_mgr.h`
-- 没有 `SPX_API` / `SPX_BIND` 的 helper 方法
+- 没有 `SPX_BIND` 的 helper 方法
 - 内联函数定义
 - 注释内容
 
@@ -165,9 +165,9 @@ graph TD
 
 - 扫描 `spx*mgr.h`
 - 提取 manager 名称
-- 收集 `SPX_API` / `SPX_BIND` 方法
+- 收集 `SPX_BIND` 方法
 - 生成 `GDExtensionSpx...` 形式的 typedef
-- 记录原生数组的桥接元数据，以及返回值降为输出参数后的身份
+- 从声明记录静态调用目标、原生数组方向和长度，以及返回值降为输出参数后的身份
 
 ### 4.3 AST 解析
 
@@ -212,15 +212,17 @@ graph TD
 一个方法要进入绑定生成，至少要满足：
 
 1. 位于 `public:` 区域
-2. 使用 `SPX_API` 或 `SPX_BIND`
-3. 声明形式能被当前正则规则识别
+2. 使用无参数宏 `SPX_BIND`，在 C++ 中展开为空
+3. 每行一个声明，参数和返回值采用生成器支持的类型
+
+manager 类通过 `spx*mgr.h` 中的 `Spx*Mgr` 名称识别，不再要求继承 `SpxBaseMgr` 或 `SpxObjectMgr`。修改继承不会删除导出接口；修改类名仍会改变对应 ABI 名称。
 
 典型例子：
 
 ```cpp
 class SpxSpriteMgr {
 public:
-    SPX_API void batch_update_transforms(GdArray buffer);
+    SPX_BIND void batch_update_transforms(GdArray buffer);
     SPX_BIND GdBool destroy_sprite(GdObj obj);
 };
 ```
@@ -230,7 +232,7 @@ public:
 即使没有高层 `GdArray` 版本，只要签名是这种模式：
 
 ```cpp
-SPX_API void batch_update_transforms(const float *buffer_data, int len);
+SPX_BIND void batch_update_transforms(const float *buffer_data, int len);
 ```
 
 生成器会将它记录为统一的 `ArrayBridge`。每个参数对记录为一个 `ArrayBuffer`，保存在 `Buffers` 中；`const` 指针只读，可写指针允许回写。缓冲区名称由指针参数名解析，并去掉 `_data` 后缀。
@@ -238,7 +240,7 @@ SPX_API void batch_update_transforms(const float *buffer_data, int len);
 输入和原地写入输出的缓冲区由调用者提供。例如：
 
 ```cpp
-SPX_API void write_snapshot(SPX_OUT float out[3]);
+SPX_BIND void write_snapshot(SPX_OUT float out[3]);
 ```
 
 生成器从原始声明的 `[3]` 提取 `ArrayBuffer.Count`，然后将参数降为指针 ABI，不再传长度参数。高层接口为 `WriteSnapshot(out *[3]float32)`，保持原地写入；Go 绑定拒绝 nil，Web 绑定在调用前检查原生输出数组长度恰好为 3。动态切片在 Go 调用前检查长度能否用 int32 表示。
@@ -261,7 +263,7 @@ SPX_API void write_snapshot(SPX_OUT float out[3]);
 每个动态原生数组使用相邻的“指针 + 长度”参数对，长度直接从声明解析，`SPX_OUT` 仅标记只输出方向：
 
 ```cpp
-SPX_API GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
+SPX_BIND GdBool batch_retrieve_positions(const GdObj *objs, int count, SPX_OUT float *out, int out_len);
 ```
 
 Go 接口为 `BatchRetrievePositions(objs []int64, out []float32) bool`。生成器分别从 `len(objs)` 和 `len(out)` 传入 `count` 和 `out_len`，不约束输入和输出元素数相等，也不推导比例。多个输入、输出缓冲区按声明顺序处理，动态缓冲区使用各自的长度参数，固定数组从声明解析大小；`const` 指针只读，可写数组在输出有效时复制回对应的 Go 切片。
@@ -269,7 +271,7 @@ Go 接口为 `BatchRetrievePositions(objs []int64, out []float32) bool`。生成
 普通参数可以穿插在数组参数之间，例如：
 
 ```cpp
-SPX_API void sample(int mode, const float *values, int count, SPX_OUT float out[3]);
+SPX_BIND void sample(int mode, const float *values, int count, SPX_OUT float out[3]);
 ```
 
 对应 Go 接口为 `Sample(mode int32, values []float32, out *[3]float32)`。`mode` 正常传值，`count` 从输入切片长度获得，固定输出不传额外长度。`GdString` 等需要临时内存的普通参数也可混用；Web 生成器只为需要释放的值生成清理逻辑，校验或调用失败时仍执行释放。
@@ -292,40 +294,42 @@ Go 调用侧通过已有的 `SpriteSyncBuffer.GetPositions` 保存并复用位�
 
 `SPX_OUT` 不允许标记 `const`、普通参数或不支持的数组类型。固定只输出数组在 JS 入口也要求长度完全匹配。自动无参数读取入口仅用于单个固定输出且返回 `void` 的方法，避免丢失成功状态或把读写数组误当输出。
 
-### 5.4 统一绑定注解
+### 5.4 静态方法与内存所有权
 
-`SPX_BINDING(...)` 在 C++ 中展开为空，只为生成器提供元数据。它可与方法声明同一行，或单独放在方法的上一行；方法仍须标记 `SPX_API` 或 `SPX_BIND`。
-
-| 参数 | 含义 |
-| --- | --- |
-| `web=noop` | Web 绑定为空操作，要求方法返回 `void` |
-| `web=reuse_result` | Web 按实例、方法复用结构化返回对象；调用者应立即消费或复制结果 |
-
-例如：
+不需要 manager 实例的方法，直接使用普通 C++ `static` 声明：
 
 ```cpp
-SPX_BINDING(web=noop)
-SPX_API void free_str(GdString str);
-
-SPX_BINDING(web=reuse_result)
-SPX_API GdVec2 get_global_mouse_pos();
-
+class SpxExtMgr {
+public:
+    SPX_BIND static void request_reset(GdInt exit_code);
+    SPX_BIND static GdBool is_paused();
+};
 ```
+
+Native 和普通 Web 桥接分别调用 `SpxExtMgr::request_reset`、`SpxExtMgr::is_paused`，由 C++ 实现转发到 `Spx` 生命周期入口。其他声明通过 manager 实例调用。生成器从声明推导调用目标，静态方法和实例方法共用参数、返回值转换规则。`static` 只表达不需要实例，线程安全仍由具体实现保证。
+
+Go 和 JavaScript 字符串由各自语言管理内存，manager 接口中没有 `FreeStr`。原始 Native 字符串通过 builtin `GDExtensionSpxGlobalFreeString` / `spx_global_free_string` 释放，入口直接调用 `SpxAbi::free_return_cstr`，不查找 Engine 或 manager。普通方法返回的字符串由调用方持有，Native `ToString` 先复制，再调用这个 builtin 释放。回调字符串参数只在同步调用期间借用：Native 复制成 Go 字符串但不释放调用方内存，Web 在派发前解析。回调需要保留字符串时必须复制；没有处理函数时无需分配。Global builtin 不参与 manager 或 Web 桥接生成；Web 字符串包装继续使用已有的分配和释放流程。字符串和数组的分配、释放、类型检查实现在 `spx_abi.h/.cpp`，不依赖引擎生命周期。
+
+JS 的向量、矩形、颜色等结构化返回值每次创建新对象。输入快照和调用方提供的输出缓冲区负责需要的复用。内部 64 位整数、对象 ID 的 `low`/`high` 拆分结果仍按桥接实例复用；它属于底层整数传输表示，不改变结构化值的返回语义。
+
+默认 callback 表由已有 `SpxCallbackInfo` 字段和 callback typedef 生成到 `spx_callback_defaults.gen.h`，不另设 callback schema。
+
+### 5.5 Web Go 缓存
 
 Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_cache.go` 中定义 `Cached<Manager><Method>` 函数，参数与接口一致，并在末尾接收 `func() T` 回退闭包。例如 `CachedInputGetKey(key int64, fallback func() bool) bool` 对应 Input 的 `get_key`。函数访问共享的运行时缓存，无需创建缓存实例。
 
 生成器扫描这些函数，自动生成参数转换、FFI 回退调用及缓存接入。缓存类别和布尔值适配留在 Go 实现中，C++ 头文件无需缓存注解。缺少对应接口或回退签名不合法时生成失败。
 
-未知参数、重复参数以及与方法签名不兼容的组合会导致生成失败。Web 策略不能覆盖原始缓冲区数组桥接。
+鼠标位置在正常帧读取输入快照；快照不可用时才调用 JS getter，并立即复制坐标。需要重复使用数组存储时，通过显式输出参数传入缓冲区。
 
 ## 6. 新增一个接口时怎么改
 
 推荐按下面顺序操作：
 
 1. 在 `$(SPX_MODULE_SRC)/spx*_mgr.h` 中新增方法声明。
-2. 确保它位于 `public:` 区域，并带上 `SPX_API` 或 `SPX_BIND`。
+2. 确保它位于 `public:` 区域，并带上 `SPX_BIND`。
 3. 如果需要数组桥接，动态数组使用指针 + 长度签名，固定输出使用 `T out[N]`。
-4. 原生输入、输出数组分别声明指针和长度，由具体函数解析格式并校验输出容量；Web 绑定策略使用 `SPX_BINDING(web=...)`。
+4. 原生输入、输出数组分别声明指针和长度，由具体函数解析格式并校验输出容量；只输出数组使用 `SPX_OUT`，无实例方法使用 `SPX_BIND static`。
 5. 运行 `make generate-bindings`。
 6. 检查生成结果是否覆盖到了预期文件。
 7. 补相应测试，尤其是：
@@ -339,7 +343,7 @@ Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_ca
 优先检查：
 
 - 方法是否在 `public:` 下
-- 是否加了 `SPX_API` / `SPX_BIND`
+- 是否加了 `SPX_BIND`
 - 是否写成了生成器当前支持的声明形式
 - 是否被写成了 inline 定义
 
@@ -407,5 +411,5 @@ SPX 当前的绑定生成系统，本质上是：
 维护这套系统时，最重要的经验有三条：
 
 - 先改源头 header 或模板，不要手改生成产物
-- 新增数组桥接时，声明指针 + 长度签名及必要的 `SPX_BINDING` 参数
+- 新增数组桥接时，声明指针 + 长度或固定数组大小，只输出参数标记 `SPX_OUT`
 - 出问题先看 `_temp_output.h` 和 `_debug_parsed_ast.json`

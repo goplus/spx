@@ -21,7 +21,7 @@ import (
 )
 
 func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
-	env, err := engineDownloadResolveEnv(repoRoot, cfg.platform)
+	env, err := resolveEngineDownloadEnv(repoRoot, cfg.platform)
 	if err != nil {
 		return err
 	}

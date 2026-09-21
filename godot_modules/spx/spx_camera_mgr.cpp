@@ -36,8 +36,8 @@
 #include "spx_coordinate.h"
 
 void SpxCameraMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	camera = nullptr;
+	owns_camera = false;
 	auto nodes = get_root()->find_children("*", "Camera2D", true, false);
 	for (int i = 0; i < nodes.size(); i++) {
 		camera = Object::cast_to<Camera2D>(nodes[i]);
@@ -48,9 +48,18 @@ void SpxCameraMgr::on_awake() {
 
 	if (camera == nullptr) {
 		camera = memnew(Camera2D);
+		owns_camera = true;
 		camera->set_name("SpxCamera2D");
 		get_spx_root()->add_child(camera);
 	}
+}
+
+void SpxCameraMgr::on_destroy() {
+	if (owns_camera && camera != nullptr) {
+		camera->queue_free();
+	}
+	camera = nullptr;
+	owns_camera = false;
 }
 
 void SpxCameraMgr::on_reset(int reset_code) {

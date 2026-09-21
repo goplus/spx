@@ -32,11 +32,6 @@ type setupConfig struct {
 	publishedRuntime bool
 }
 
-var (
-	downloadEngineAssets   = engine.DownloadEngineAssets
-	prepareHostEditorAsset = engine.PrepareHostEditorAsset
-)
-
 func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
 	switch cfg.target {
 	case "host":
@@ -45,7 +40,7 @@ func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
 		}
 		return runner.RunScript(filepath.Join("cmd", "spx", "install.sh"))
 	case "web":
-		if err := prepareHostEditorAsset(runner.RepoRootDir(), cfg.assetDir); err != nil {
+		if err := engine.PrepareHostEditorAsset(runner.RepoRootDir(), cfg.assetDir); err != nil {
 			return err
 		}
 		return prepareWebAssets(cfg.mode, runner, false, cfg.assetDir)
@@ -64,7 +59,7 @@ func prepareRuntimeAssets(runner shared.ScriptRunner, assetDir string, published
 	// release_runtime_assets.yml. Install that exact pack so every standalone
 	// product consumes the bytes that will be published in runtime-v*.
 	useLockedRuntimePack := assetDir != "" || publishedRuntime
-	if err := downloadEngineAssets(engine.DownloadConfig{
+	if err := engine.DownloadEngineAssets(engine.DownloadConfig{
 		Runtime:          true,
 		SkipRuntimePack:  !useLockedRuntimePack,
 		AssetDir:         assetDir,
@@ -95,7 +90,7 @@ func ensureRuntimePack(runner shared.ScriptRunner) error {
 }
 
 func prepareWebAssets(webMode string, runner shared.ScriptRunner, embedRuntime bool, assetDir string) error {
-	if err := downloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode, AssetDir: assetDir, SameRunArtifacts: assetDir != ""}, runner.RepoRootDir()); err != nil {
+	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode, AssetDir: assetDir, SameRunArtifacts: assetDir != ""}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 	args := []string{"--web"}

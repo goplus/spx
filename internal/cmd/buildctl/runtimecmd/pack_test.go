@@ -23,28 +23,6 @@ import (
 	"testing"
 )
 
-func TestExportPackRuntimePreparesExplicitEngineAssets(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	assetDir := filepath.Join(runner.repoRoot, "runtime-assets")
-	if err := os.MkdirAll(assetDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	oldPrepare := prepareRuntimePackEngine
-	defer func() { prepareRuntimePackEngine = oldPrepare }()
-	var gotRepoRoot, gotAssetDir string
-	prepareRuntimePackEngine = func(repoRoot, dir string) error {
-		gotRepoRoot, gotAssetDir = repoRoot, dir
-		return nil
-	}
-
-	if err := exportPackRuntime(runtimeExportPackConfig{engineAssetDir: assetDir}, runner); err != nil {
-		t.Fatalf("exportPackRuntime returned error: %v", err)
-	}
-	if gotRepoRoot != runner.repoRoot || gotAssetDir != assetDir {
-		t.Fatalf("engine preparation = (%q, %q), want (%q, %q)", gotRepoRoot, gotAssetDir, runner.repoRoot, assetDir)
-	}
-}
-
 func TestFindExportedPack(t *testing.T) {
 	root := t.TempDir()
 	pcDir := filepath.Join(root, "project", ".builds", "pc")

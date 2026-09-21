@@ -139,11 +139,6 @@ public:
 		return true;
 	}
 
-	uint64_t get_generation() const {
-		MutexLock lock(m_mutex);
-		return m_generation;
-	}
-
 private:
 	Mutex m_mutex;
 	Vector<uint8_t> m_default_font_data;
@@ -294,10 +289,6 @@ bool SpxSvgUtils::is_font_data_valid(const Vector<uint8_t> &font_data) {
 
 void SpxSvgUtils::apply_font_registry(const Vector<uint8_t> &default_font_data, const Vector<SpxSvgProjectFontFace> &named_font_faces, const Vector<String> &preferences) {
 	get_font_registry().replace_all(default_font_data, named_font_faces, preferences);
-}
-
-uint64_t SpxSvgUtils::get_font_registry_generation() {
-	return get_font_registry().get_generation();
 }
 
 void SpxSvgUtils::set_default_font(const void *font_data, int length) {

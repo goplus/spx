@@ -46,6 +46,28 @@ static inline Vector2 spx_compute_anim_offset(bool p_is_single_image_mode, const
 	return final_offset;
 }
 
+// SpriteFrames stores loop in the resource. Give each player only the selected
+// clip's metadata; copying Ref<Texture2D> keeps image storage shared.
+static inline Ref<SpriteFrames>
+spx_copy_animation_frames(const Ref<SpriteFrames> &p_frames,
+		const StringName &p_animation) {
+	ERR_FAIL_COND_V(p_frames.is_null() || !p_frames->has_animation(p_animation),
+			Ref<SpriteFrames>());
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->remove_animation("default");
+	frames->add_animation(p_animation);
+	frames->set_animation_speed(p_animation,
+			p_frames->get_animation_speed(p_animation));
+	frames->set_animation_loop(p_animation,
+			p_frames->get_animation_loop(p_animation));
+	for (int i = 0; i < p_frames->get_frame_count(p_animation); i++) {
+		frames->add_frame(p_animation, p_frames->get_frame_texture(p_animation, i),
+				p_frames->get_frame_duration(p_animation, i));
+	}
+	return frames;
+}
+
 // Returns the normalized atlas region for an animation frame. This is SPX
 // rendering policy, so keep it in the module instead of extending
 // AnimatedSprite2D's core API.

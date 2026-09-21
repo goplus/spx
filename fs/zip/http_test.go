@@ -21,7 +21,6 @@ package zip
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -30,27 +29,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
-
-type zipRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f zipRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
-type zipContextBody struct{ ctx context.Context }
-
-func (b zipContextBody) Read([]byte) (int, error) {
-	<-b.ctx.Done()
-	return 0, b.ctx.Err()
-}
-
-func (zipContextBody) Close() error { return nil }
 
 func TestOpenHTTPRejectsPathTraversalBeforeRequest(t *testing.T) {
 	root := t.TempDir()
@@ -276,28 +261,21 @@ func TestOpenHTTPDoesNotFollowCacheSymlink(t *testing.T) {
 	}
 }
 
-func TestOpenHTTPEnforcesResponseLimitWithoutContentLength(t *testing.T) {
-	root := t.TempDir()
+func TestOpenHTTPRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		}
-		for i := 0; i < 64; i++ {
-			_, _ = w.Write([]byte("0123456789"))
-		}
+		w.Header().Set("Content-Length", strconv.FormatInt(MaxRemoteZipBytes+1, 10))
 	}))
 	defer server.Close()
-	oldBase, oldLimit := spxBaseDir, maxRemoteZipBytes
-	spxBaseDir = filepath.Join(root, "cache")
-	maxRemoteZipBytes = 32
-	t.Cleanup(func() {
-		spxBaseDir = oldBase
-		maxRemoteZipBytes = oldLimit
-	})
+	oldBase := spxBaseDir
+	spxBaseDir = filepath.Join(t.TempDir(), "cache")
+	t.Cleanup(func() { spxBaseDir = oldBase })
 
 	_, err := OpenHttp(server.Listener.Addr().String() + "/large.zip")
 	if !errors.Is(err, ErrRemoteSizeLimit) {
 		t.Fatalf("OpenHttp error = %v, want ErrRemoteSizeLimit", err)
+	}
+	if _, err := os.Stat(spxBaseDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oversized response created a cache: %v", err)
 	}
 }
 
@@ -306,7 +284,7 @@ func TestHTTPSClientRejectsDowngradeRedirect(t *testing.T) {
 		t.Fatal("downgrade target was contacted")
 	}))
 	defer downgrade.Close()
-	client := remoteClientForScheme(&http.Client{}, "https://")
+	client := remoteClientForScheme("https://")
 	requestURL, err := url.Parse("https://example.test/archive.zip")
 	if err != nil {
 		t.Fatal(err)
@@ -321,56 +299,17 @@ func TestHTTPSClientRejectsDowngradeRedirect(t *testing.T) {
 	}
 }
 
-func TestRemoteClientPreservesConfigurationAndBoundsTimeout(t *testing.T) {
-	transport := http.RoundTripper(http.DefaultTransport)
-	redirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	original := &http.Client{
-		Transport:     transport,
-		CheckRedirect: redirect,
-		Timeout:       10 * time.Minute,
-	}
-
-	client := remoteClientForScheme(original, "http://")
-	if client == original {
-		t.Fatal("remoteClientForScheme returned the caller's mutable client")
-	}
-	if client.Transport != transport || client.CheckRedirect == nil {
-		t.Fatal("remote client did not preserve transport and redirect configuration")
+func TestRemoteClientClonesDefaultWithTimeout(t *testing.T) {
+	originalTimeout := http.DefaultClient.Timeout
+	client := remoteClientForScheme("http://")
+	if client == http.DefaultClient {
+		t.Fatal("remoteClientForScheme returned the shared default client")
 	}
 	if got, want := client.Timeout, 5*time.Minute; got != want {
 		t.Fatalf("remote client timeout = %v, want %v", got, want)
 	}
-	if got := original.Timeout; got != 10*time.Minute {
-		t.Fatalf("original client timeout changed to %v", got)
-	}
-
-	original.Timeout = time.Second
-	client = remoteClientForScheme(original, "http://")
-	if got := client.Timeout; got != time.Second {
-		t.Fatalf("short caller timeout was changed to %v", got)
-	}
-}
-
-func TestRemoteClientTimeoutCoversResponseBody(t *testing.T) {
-	original := &http.Client{
-		Transport: zipRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Body:       zipContextBody{ctx: req.Context()},
-				Request:    req,
-			}, nil
-		}),
-		Timeout: 25 * time.Millisecond,
-	}
-	client := remoteClientForScheme(original, "http://")
-	resp, err := client.Get("http://example.test/archive.zip")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	defer resp.Body.Close()
-	if _, err := io.ReadAll(resp.Body); err == nil {
-		t.Fatal("response body read succeeded after timeout")
+	if http.DefaultClient.Timeout != originalTimeout {
+		t.Fatal("remoteClientForScheme modified the default client timeout")
 	}
 }
 

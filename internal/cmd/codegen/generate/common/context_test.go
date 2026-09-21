@@ -30,8 +30,8 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)();")
 	require.NoError(t, err)
 	metadata := GenerationMetadata{
-		ManagerNames: []string{"sprite"},
-		WebBindings:  map[string]WebBindingMode{"first": WebBindingNoop},
+		ManagerNames:  []string{"sprite"},
+		StaticMethods: map[string]string{"control": "SpxExtMgr::pause"},
 		ArrayBridges: map[string]ArrayBridge{"first": {
 			FunctionName: "first",
 			Buffers:      []ArrayBuffer{{Type: 2, Data: CParam{Name: "input"}}, {Type: 2, Count: 3}},
@@ -39,12 +39,13 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	}
 	first := NewGenerationContext(ast, metadata)
 	metadata.ManagerNames[0] = "camera"
-	metadata.WebBindings["first"] = WebBindingReuseResult
+	metadata.StaticMethods["control"] = "SpxExtMgr::resume"
 	metadata.ArrayBridges["first"].Buffers[0].Data.Name = "changed"
 	metadata.ArrayBridges["first"].Buffers[1].Count = 9
 	second := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
-	require.Equal(t, WebBindingNoop, first.WebBinding("first"))
-	require.Equal(t, WebBindingReuseResult, second.WebBinding("first"))
+	require.Equal(t, "SpxExtMgr::pause", first.MethodTarget(&clang.TypedefFunction{Name: "control"}))
+	require.Equal(t, "SpxExtMgr::resume", second.MethodTarget(&clang.TypedefFunction{Name: "control"}))
+	require.Equal(t, "spriteMgr->show", first.MethodTarget(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.Equal(t, "sprite", first.GetManagerName("GDExtensionSpxSpriteShow"))
 	require.True(t, first.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.False(t, second.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))

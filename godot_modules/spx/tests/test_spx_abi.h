@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_base_mgr.h                                                   */
+/*  test_spx_manager.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,18 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef TEST_SPX_BASE_MGR_H
-#define TEST_SPX_BASE_MGR_H
+#ifndef TEST_SPX_ABI_H
+#define TEST_SPX_ABI_H
 
-#include "../spx_base_mgr.h"
+#include "../spx_abi.h"
+#include "core/string/print_string.h"
 #include "../web/godot_js_spx_util.h"
 #include "tests/test_macros.h"
 
-namespace TestSpxBaseMgr {
+namespace TestSpxAbi {
 
 TEST_CASE("[SPX] ABI string arrays are safe when only partially populated") {
-	GdArray array = SpxBaseMgr::create_array(GD_ARRAY_TYPE_STRING, 3);
+	GdArray array = SpxAbi::create_array(GD_ARRAY_TYPE_STRING, 3);
 	REQUIRE(array != nullptr);
 	REQUIRE(array->data != nullptr);
 
@@ -47,45 +48,45 @@ TEST_CASE("[SPX] ABI string arrays are safe when only partially populated") {
 	CHECK_EQ(strings[1], nullptr);
 	CHECK_EQ(strings[2], nullptr);
 
-	GdString value = SpxBaseMgr::to_return_cstr("value");
+	GdString value = SpxAbi::to_return_cstr("value");
 	REQUIRE(value != nullptr);
-	SpxBaseMgr::set_array<GdString>(array, 1, value);
-	GdString *stored = SpxBaseMgr::get_array<GdString>(array, 1);
+	SpxAbi::set_array<GdString>(array, 1, value);
+	GdString *stored = SpxAbi::get_array<GdString>(array, 1);
 	REQUIRE(stored != nullptr);
 	CHECK_EQ(*stored, value);
-	SpxBaseMgr::free_array(array);
+	SpxAbi::free_array(array);
 }
 
 TEST_CASE("[SPX] ABI array access rejects type confusion and malformed storage") {
-	CHECK(SpxBaseMgr::create_array(GD_ARRAY_TYPE_UNKNOWN, 0) == nullptr);
-	CHECK(SpxBaseMgr::create_array(99, 0) == nullptr);
+	CHECK(SpxAbi::create_array(GD_ARRAY_TYPE_UNKNOWN, 0) == nullptr);
+	CHECK(SpxAbi::create_array(99, 0) == nullptr);
 
-	GdArray floats = SpxBaseMgr::create_array(GD_ARRAY_TYPE_FLOAT, 2);
+	GdArray floats = SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, 2);
 	REQUIRE(floats != nullptr);
-	CHECK(SpxBaseMgr::get_array<float>(floats, 0) != nullptr);
-	CHECK(SpxBaseMgr::get_array<int64_t>(floats, 0) == nullptr);
-	CHECK(SpxBaseMgr::get_array<float>(floats, 2) == nullptr);
-	SpxBaseMgr::free_array(floats);
+	CHECK(SpxAbi::get_array<float>(floats, 0) != nullptr);
+	CHECK(SpxAbi::get_array<int64_t>(floats, 0) == nullptr);
+	CHECK(SpxAbi::get_array<float>(floats, 2) == nullptr);
+	SpxAbi::free_array(floats);
 
 	GdArrayInfo malformed = {};
 	malformed.size = 1;
 	malformed.type = GD_ARRAY_TYPE_FLOAT;
 	malformed.data = nullptr;
-	CHECK(SpxBaseMgr::get_array<float>(&malformed, 0) == nullptr);
+	CHECK(SpxAbi::get_array<float>(&malformed, 0) == nullptr);
 
-	GdArray bytes = SpxBaseMgr::create_array(GD_ARRAY_TYPE_BYTE, 1);
+	GdArray bytes = SpxAbi::create_array(GD_ARRAY_TYPE_BYTE, 1);
 	REQUIRE(bytes != nullptr);
-	CHECK(SpxBaseMgr::get_array<uint8_t>(bytes, 0) != nullptr);
-	CHECK(SpxBaseMgr::get_array<float>(bytes, 0) == nullptr);
-	SpxBaseMgr::free_array(bytes);
+	CHECK(SpxAbi::get_array<uint8_t>(bytes, 0) != nullptr);
+	CHECK(SpxAbi::get_array<float>(bytes, 0) == nullptr);
+	SpxAbi::free_array(bytes);
 
 	// GdInt and GdObj are the same 64-bit C ABI type, so either matching
 	// 64-bit array tag must remain usable through the shared C++ typedef.
-	GdArray objects = SpxBaseMgr::create_array(GD_ARRAY_TYPE_GDOBJ, 1);
+	GdArray objects = SpxAbi::create_array(GD_ARRAY_TYPE_GDOBJ, 1);
 	REQUIRE(objects != nullptr);
-	CHECK(SpxBaseMgr::get_array<GdObj>(objects, 0) != nullptr);
-	CHECK(SpxBaseMgr::get_array<GdInt>(objects, 0) != nullptr);
-	SpxBaseMgr::free_array(objects);
+	CHECK(SpxAbi::get_array<GdObj>(objects, 0) != nullptr);
+	CHECK(SpxAbi::get_array<GdInt>(objects, 0) != nullptr);
+	SpxAbi::free_array(objects);
 }
 
 TEST_CASE("[SPX] ObjectPool rejects foreign and duplicate pointers") {
@@ -106,6 +107,6 @@ TEST_CASE("[SPX] ObjectPool rejects foreign and duplicate pointers") {
 	}
 }
 
-} // namespace TestSpxBaseMgr
+} // namespace TestSpxAbi
 
-#endif // TEST_SPX_BASE_MGR_H
+#endif // TEST_SPX_ABI_H

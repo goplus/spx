@@ -24,21 +24,8 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
-type runtimeFixture struct {
-	repoRoot string
-}
-
 func fileExists(path string) bool {
 	return shared.FileExists(path)
-}
-
-func newRuntimeFixtureRunner(t *testing.T) *runtimeFixture {
-	t.Helper()
-
-	root := t.TempDir()
-	gopath := filepath.Join(root, "gopath")
-	t.Setenv("GOPATH", gopath)
-	return &runtimeFixture{repoRoot: root}
 }
 
 func mustDefaultRuntimeVersion(t *testing.T) string {

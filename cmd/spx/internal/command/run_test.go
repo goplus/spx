@@ -393,14 +393,6 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 }
 
 func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T) {
-	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
-	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
-		return "", false, nil
-	}
-	t.Cleanup(func() {
-		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
-	})
-
 	goBinPath := t.TempDir()
 	projectDir := t.TempDir()
 	mustWriteAssetIndex(t, projectDir)
@@ -486,59 +478,7 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 	}
 }
 
-func TestResolveInterpretedRuntimeAssetsPrefersEmbedded(t *testing.T) {
-	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
-	embeddedDir := t.TempDir()
-	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
-		return embeddedDir, true, nil
-	}
-	t.Cleanup(func() {
-		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
-	})
-
-	goBinPath := t.TempDir()
-	version := "9.9.9-test"
-	runtimeName := "gdspxrt" + version
-	if runtime.GOOS == "windows" {
-		runtimeName += ".exe"
-	}
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimeName), []byte("external runtime"), 0o755); err != nil {
-		t.Fatalf("write external runtime: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
-		t.Fatalf("write external runtime pack: %v", err)
-	}
-	libName := libraryFileName(envName, runtime.GOOS, runtime.GOARCH)
-	if err := os.WriteFile(filepath.Join(goBinPath, libName), []byte("external library"), 0o755); err != nil {
-		t.Fatalf("write external shared library: %v", err)
-	}
-
-	cmd := CmdTool{
-		GoBinPath: goBinPath,
-		Version:   version,
-	}
-
-	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
-	if err != nil {
-		t.Fatalf("resolveInterpretedRuntimeAssets returned error: %v", err)
-	}
-	if got, want := runtimePath, filepath.Join(embeddedDir, runtimeName); got != want {
-		t.Fatalf("runtime path = %s, want %s", got, want)
-	}
-	if got, want := libPath, filepath.Join(embeddedDir, libName); got != want {
-		t.Fatalf("shared library path = %s, want %s", got, want)
-	}
-}
-
 func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailable(t *testing.T) {
-	oldPrepareEmbeddedRuntimeAssets := prepareEmbeddedRuntimeAssets
-	prepareEmbeddedRuntimeAssets = func(string, ...string) (string, bool, error) {
-		return "", false, nil
-	}
-	t.Cleanup(func() {
-		prepareEmbeddedRuntimeAssets = oldPrepareEmbeddedRuntimeAssets
-	})
-
 	goBinPath := t.TempDir()
 	version := "9.9.9-test"
 	runtimeName := "gdspxrt" + version

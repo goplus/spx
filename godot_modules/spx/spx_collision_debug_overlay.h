@@ -54,11 +54,8 @@ protected:
 public:
 	void configure(CollisionShape2D *p_target, const Color &p_color, bool p_visible);
 	void set_debug_color(const Color &p_color);
-	Color get_debug_color() const { return debug_color; }
 	void set_requested_visible(bool p_visible);
-	bool is_requested_visible() const { return requested_visible; }
 	void sync_debug_mode(bool p_enabled) { _sync_visibility(p_enabled); }
-	CollisionShape2D *get_target() const { return _get_target(); }
 
 	SpxCollisionDebugOverlay();
 };

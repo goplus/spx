@@ -38,7 +38,6 @@
 #include "spx_engine.h"
 
 void SpxInputMgr::on_start() {
-	SpxBaseMgr::on_start();
 	if (input_proxy && !input_proxy->is_queued_for_deletion()) {
 		return;
 	}
@@ -46,6 +45,10 @@ void SpxInputMgr::on_start() {
 	input_proxy->set_name("input_proxy");
 	get_spx_root()->add_child(input_proxy);
 	input_proxy->ready();
+}
+
+void SpxInputMgr::on_destroy() {
+	on_reset(0);
 }
 
 void SpxInputMgr::on_reset(int reset_code) {

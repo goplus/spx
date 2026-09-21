@@ -48,9 +48,6 @@ public:
 	// see either the previous generation or this complete generation; they never
 	// observe individual faces being registered.
 	static void apply_font_registry(const Vector<uint8_t> &default_font_data, const Vector<SpxSvgProjectFontFace> &named_font_faces, const Vector<String> &preferences);
-	// Exposes the currently published project-font generation for diagnostics
-	// and transaction tests.
-	static uint64_t get_font_registry_generation();
 	static void set_default_font(const void *font_data, int length);
 	static void add_font_face(const String &family, const void *font_data, int length);
 	static void set_font_preferences(const Vector<String> &preferences);

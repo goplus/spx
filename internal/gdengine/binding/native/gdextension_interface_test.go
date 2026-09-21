@@ -21,6 +21,9 @@ package ffi
 import (
 	"reflect"
 	"testing"
+	"unsafe"
+
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func TestToGdArrayInfoPreservesTypedEmptyArrays(t *testing.T) {
@@ -118,4 +121,32 @@ func TestToGdArrayInfoPreservesTypedEmptyArrays(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStringCallbackBorrowsCallerMemory(t *testing.T) {
+	previous := callbacks
+	t.Cleanup(func() { BindCallback(previous) })
+	input := ToGdArrayInfo([]string{"borrowed"})
+	defer input.Free()
+	ptr := *(*unsafe.Pointer)(input.gdArray.data)
+	var got string
+	BindCallback(engine.CallbackInfo{OnActionPressed: func(value string) { got = value }})
+	invokeStringCallback(func_on_action_pressed, ptr)
+	if got != "borrowed" || input.ToStrings()[0] != "borrowed" {
+		t.Fatalf("callback = %q, caller input = %q", got, input.ToStrings()[0])
+	}
+	unsafe.Slice((*byte)(ptr), len(got))[0] = 'B'
+	if got != "borrowed" || input.ToStrings()[0] != "Borrowed" {
+		t.Fatalf("callback did not retain an independent copy: callback = %q, input = %q", got, input.ToStrings()[0])
+	}
+	BindCallback(engine.CallbackInfo{})
+	invokeStringCallback(func_on_action_pressed, ptr)
+	if input.ToStrings()[0] != "Borrowed" {
+		t.Fatal("a missing handler changed the caller input")
+	}
+}
+
+// Infer the cgo pointer type without adding an import-C production test hook.
+func invokeStringCallback[T ~unsafe.Pointer](callback func(T), input unsafe.Pointer) {
+	callback(T(input))
 }

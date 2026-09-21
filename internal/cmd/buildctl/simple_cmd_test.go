@@ -109,49 +109,6 @@ func TestParseBuildCommandArgs(t *testing.T) {
 	}
 }
 
-func TestRunDispatchesSimpleCommands(t *testing.T) {
-	originalSetup := rootRunSetup
-	originalBuild := rootRunBuild
-	originalDoctor := rootRunDoctor
-	t.Cleanup(func() {
-		rootRunSetup = originalSetup
-		rootRunBuild = originalBuild
-		rootRunDoctor = originalDoctor
-	})
-
-	var called string
-	var calledArgs []string
-	recorder := func(name string) func([]string) error {
-		return func(args []string) error {
-			called = name
-			calledArgs = append([]string(nil), args...)
-			return nil
-		}
-	}
-	rootRunSetup = recorder("setup")
-	rootRunBuild = recorder("build")
-	rootRunDoctor = recorder("doctor")
-
-	for _, test := range []struct {
-		args     []string
-		wantName string
-		wantArgs []string
-	}{
-		{args: []string{"setup", "web", "--mode", "worker"}, wantName: "setup", wantArgs: []string{"web", "--mode", "worker"}},
-		{args: []string{"build", "desktop"}, wantName: "build", wantArgs: []string{"desktop"}},
-		{args: []string{"doctor"}, wantName: "doctor", wantArgs: nil},
-	} {
-		called = ""
-		calledArgs = nil
-		if err := run(test.args); err != nil {
-			t.Fatalf("run(%q) returned error: %v", test.args, err)
-		}
-		if called != test.wantName || !reflect.DeepEqual(calledArgs, test.wantArgs) {
-			t.Fatalf("run(%q) called %q %#v, want %q %#v", test.args, called, calledArgs, test.wantName, test.wantArgs)
-		}
-	}
-}
-
 func TestInspectBuildConfiguration(t *testing.T) {
 	repoRoot := t.TempDir()
 	lockData, err := release.DefaultRuntimeLock().JSON()

@@ -51,6 +51,7 @@ const (
 
 // C function aliases
 type GDExtensionSpxGlobalRegisterCallbacks C.GDExtensionSpxGlobalRegisterCallbacks
+type GDExtensionSpxGlobalFreeString C.GDExtensionSpxGlobalFreeString
 type GDExtensionSpxCallbackOnEngineStart C.GDExtensionSpxCallbackOnEngineStart
 type GDExtensionSpxCallbackOnEngineUpdate C.GDExtensionSpxCallbackOnEngineUpdate
 type GDExtensionSpxCallbackOnEngineFixedUpdate C.GDExtensionSpxCallbackOnEngineFixedUpdate
@@ -205,9 +206,9 @@ type GDExtensionSpxPlatformGetTimeScale C.GDExtensionSpxPlatformGetTimeScale
 type GDExtensionSpxPlatformSetTimeScale C.GDExtensionSpxPlatformSetTimeScale
 type GDExtensionSpxPlatformGetMaxFps C.GDExtensionSpxPlatformGetMaxFps
 type GDExtensionSpxPlatformSetMaxFps C.GDExtensionSpxPlatformSetMaxFps
-type GDExtensionSpxPlatformGetPersistantDataDir C.GDExtensionSpxPlatformGetPersistantDataDir
-type GDExtensionSpxPlatformSetPersistantDataDir C.GDExtensionSpxPlatformSetPersistantDataDir
-type GDExtensionSpxPlatformIsInPersistantDataDir C.GDExtensionSpxPlatformIsInPersistantDataDir
+type GDExtensionSpxPlatformGetPersistentDataDir C.GDExtensionSpxPlatformGetPersistentDataDir
+type GDExtensionSpxPlatformSetPersistentDataDir C.GDExtensionSpxPlatformSetPersistentDataDir
+type GDExtensionSpxPlatformIsInPersistentDataDir C.GDExtensionSpxPlatformIsInPersistentDataDir
 type GDExtensionSpxResCreateAnimation C.GDExtensionSpxResCreateAnimation
 type GDExtensionSpxResSetLoadMode C.GDExtensionSpxResSetLoadMode
 type GDExtensionSpxResGetLoadMode C.GDExtensionSpxResGetLoadMode
@@ -217,7 +218,6 @@ type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResListDirectories C.GDExtensionSpxResListDirectories
 type GDExtensionSpxResReloadTexture C.GDExtensionSpxResReloadTexture
-type GDExtensionSpxResFreeStr C.GDExtensionSpxResFreeStr
 type GDExtensionSpxResApplyProjectFonts C.GDExtensionSpxResApplyProjectFonts
 type GDExtensionSpxResSetDefaultFont C.GDExtensionSpxResSetDefaultFont
 type GDExtensionSpxResRegisterFontFace C.GDExtensionSpxResRegisterFontFace
@@ -1502,28 +1502,28 @@ func CallPlatformSetMaxFps(
 	C.cgo_callfn_GDExtensionSpxPlatformSetMaxFps(arg0, arg1)
 
 }
-func CallPlatformGetPersistantDataDir() GdString {
-	arg0 := (C.GDExtensionSpxPlatformGetPersistantDataDir)(api.SpxPlatformGetPersistantDataDir)
+func CallPlatformGetPersistentDataDir() GdString {
+	arg0 := (C.GDExtensionSpxPlatformGetPersistentDataDir)(api.SpxPlatformGetPersistentDataDir)
 	var ret_val C.GdString
-	C.cgo_callfn_GDExtensionSpxPlatformGetPersistantDataDir(arg0, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPlatformGetPersistentDataDir(arg0, &ret_val)
 	return (GdString)(ret_val)
 }
-func CallPlatformSetPersistantDataDir(
+func CallPlatformSetPersistentDataDir(
 	path GdString,
 ) {
-	arg0 := (C.GDExtensionSpxPlatformSetPersistantDataDir)(api.SpxPlatformSetPersistantDataDir)
+	arg0 := (C.GDExtensionSpxPlatformSetPersistentDataDir)(api.SpxPlatformSetPersistentDataDir)
 	arg1 := (C.GdString)(path)
 
-	C.cgo_callfn_GDExtensionSpxPlatformSetPersistantDataDir(arg0, arg1)
+	C.cgo_callfn_GDExtensionSpxPlatformSetPersistentDataDir(arg0, arg1)
 
 }
-func CallPlatformIsInPersistantDataDir(
+func CallPlatformIsInPersistentDataDir(
 	path GdString,
 ) GdBool {
-	arg0 := (C.GDExtensionSpxPlatformIsInPersistantDataDir)(api.SpxPlatformIsInPersistantDataDir)
+	arg0 := (C.GDExtensionSpxPlatformIsInPersistentDataDir)(api.SpxPlatformIsInPersistentDataDir)
 	arg1 := (C.GdString)(path)
 	var ret_val C.GdBool
-	C.cgo_callfn_GDExtensionSpxPlatformIsInPersistantDataDir(arg0, arg1, &ret_val)
+	C.cgo_callfn_GDExtensionSpxPlatformIsInPersistentDataDir(arg0, arg1, &ret_val)
 
 	return (GdBool)(ret_val)
 }
@@ -1616,15 +1616,6 @@ func CallResReloadTexture(
 	arg1 := (C.GdString)(path)
 
 	C.cgo_callfn_GDExtensionSpxResReloadTexture(arg0, arg1)
-
-}
-func CallResFreeStr(
-	str GdString,
-) {
-	arg0 := (C.GDExtensionSpxResFreeStr)(api.SpxResFreeStr)
-	arg1 := (C.GdString)(str)
-
-	C.cgo_callfn_GDExtensionSpxResFreeStr(arg0, arg1)
 
 }
 func CallResApplyProjectFonts(

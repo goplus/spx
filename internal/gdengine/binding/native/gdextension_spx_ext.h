@@ -85,8 +85,11 @@ typedef struct {
 
 typedef void *GDExtensionSpxCallbackInfoPtr;
 typedef void (*GDExtensionSpxGlobalRegisterCallbacks)(GDExtensionSpxCallbackInfoPtr callback_ptr);
+// Releases a caller-owned Native string, including after engine shutdown.
+typedef void (*GDExtensionSpxGlobalFreeString)(GdString value);
 
-// callback
+// Callbacks run synchronously. GdString arguments are borrowed until the callback returns;
+// copy them to retain their value, and do not free them.
 typedef void (*GDExtensionSpxCallbackOnEngineStart)();
 typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
 typedef void (*GDExtensionSpxCallbackOnEngineFixedUpdate)(GdFloat delta);
@@ -324,9 +327,9 @@ typedef void (*GDExtensionSpxPlatformGetTimeScale)(GdFloat *ret_value);
 typedef void (*GDExtensionSpxPlatformSetTimeScale)(GdFloat time_scale);
 typedef void (*GDExtensionSpxPlatformGetMaxFps)(GdInt *ret_value);
 typedef void (*GDExtensionSpxPlatformSetMaxFps)(GdInt fps);
-typedef void (*GDExtensionSpxPlatformGetPersistantDataDir)(GdString *ret_value);
-typedef void (*GDExtensionSpxPlatformSetPersistantDataDir)(GdString path);
-typedef void (*GDExtensionSpxPlatformIsInPersistantDataDir)(GdString path, GdBool *ret_value);
+typedef void (*GDExtensionSpxPlatformGetPersistentDataDir)(GdString *ret_value);
+typedef void (*GDExtensionSpxPlatformSetPersistentDataDir)(GdString path);
+typedef void (*GDExtensionSpxPlatformIsInPersistentDataDir)(GdString path, GdBool *ret_value);
 // SpxRes
 typedef void (*GDExtensionSpxResCreateAnimation)(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
 typedef void (*GDExtensionSpxResSetLoadMode)(GdBool is_direct_mode);
@@ -337,7 +340,6 @@ typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString *ret_valu
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool *ret_value);
 typedef void (*GDExtensionSpxResListDirectories)(GdString p_path, GdString *ret_value);
 typedef void (*GDExtensionSpxResReloadTexture)(GdString path);
-typedef void (*GDExtensionSpxResFreeStr)(GdString str);
 typedef void (*GDExtensionSpxResApplyProjectFonts)(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_value);
 typedef void (*GDExtensionSpxResSetDefaultFont)(GdString font_path);
 typedef void (*GDExtensionSpxResRegisterFontFace)(GdString font_path, GdString family);

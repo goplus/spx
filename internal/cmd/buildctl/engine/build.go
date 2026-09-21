@@ -29,13 +29,7 @@ import (
 
 type buildEnvironment = shared.BuildEnvironment
 
-var buildEnvRunStreaming = shared.RunStreamingCommand
-
 func BuildEngine(cfg BuildConfig, repoRoot string) error {
-	return buildEngineWithEnvironmentPreparer(cfg, repoRoot, prepareEngineBuildEnvironment)
-}
-
-func buildEngineWithEnvironmentPreparer(cfg BuildConfig, repoRoot string, prepare func(buildEnvironment) (map[string]string, string, error)) error {
 	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, cfg.Platform)
 	if err != nil {
 		return err
@@ -48,7 +42,7 @@ func buildEngineWithEnvironmentPreparer(cfg BuildConfig, repoRoot string, prepar
 	if err != nil {
 		return err
 	}
-	commandEnv, sconsCommand, err := prepare(buildEnv)
+	commandEnv, sconsCommand, err := prepareEngineBuildEnvironment(buildEnv)
 	if err != nil {
 		return err
 	}
@@ -78,7 +72,7 @@ func prepareEngineBuildEnvironment(buildEnv buildEnvironment) (map[string]string
 		return nil, "", err
 	}
 	if err := shared.EnsureEngineSource(buildEnv.RepoRoot, func(name string, args ...string) error {
-		return buildEnvRunStreaming("", name, args...)
+		return shared.RunStreamingCommand("", name, args...)
 	}); err != nil {
 		return nil, "", err
 	}
@@ -283,7 +277,7 @@ func populateWebTemplateCopies(srcZip, templateDir string) error {
 }
 
 func runOptionalStreamingCommand(workdir, name string, args ...string) {
-	_ = buildEnvRunStreaming(workdir, name, args...)
+	_ = shared.RunStreamingCommand(workdir, name, args...)
 }
 
 func waitForNonEmptyFile(path string, timeout time.Duration) error {

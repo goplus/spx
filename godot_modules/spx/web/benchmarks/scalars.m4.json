@@ -1,0 +1,136 @@
+{
+  "node": "v24.20.0",
+  "cpu": "Apple M4",
+  "platform": "darwin/arm64",
+  "baseline": "f263460539",
+  "candidate": "worktree",
+  "samples": 7,
+  "callsPerSample": 200000,
+  "cases": [
+    {
+      "name": "float input",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 82.40895800000001,
+        "minMs": 81.86916699999995,
+        "maxMs": 83.10329200000001,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.4269206267600176
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 12.320832999999993,
+        "minMs": 11.784999999999997,
+        "maxMs": 12.531291999999993,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 16.23266868400863
+      },
+      "speedup": 6.688586559041914
+    },
+    {
+      "name": "bool input",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 84.02091599999994,
+        "minMs": 82.75975000000005,
+        "maxMs": 84.41508399999998,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.3803596713942055
+      },
+      "after": {
+        "wasmCalls": 1,
+        "wrapperAcquires": 0,
+        "wrapperReleases": 0,
+        "medianMs": 13.000999999999976,
+        "minMs": 12.307917000000089,
+        "maxMs": 13.42254099999991,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 15.383432043688975
+      },
+      "speedup": 6.462650257672494
+    },
+    {
+      "name": "64-bit ID + float",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 5,
+        "wrapperAcquires": 2,
+        "wrapperReleases": 2,
+        "medianMs": 139.26979200000005,
+        "minMs": 138.60837500000025,
+        "maxMs": 139.6274159999998,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.4360615976219733
+      },
+      "after": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 66.58787500000017,
+        "minMs": 66.39579099999992,
+        "maxMs": 67.71070799999984,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 3.0035498204440296
+      },
+      "speedup": 2.0915187937743878
+    },
+    {
+      "name": "64-bit ID + 4 floats",
+      "callsPerIteration": 1,
+      "before": {
+        "wasmCalls": 11,
+        "wrapperAcquires": 5,
+        "wrapperReleases": 5,
+        "medianMs": 355.6133749999999,
+        "minMs": 353.15816700000005,
+        "maxMs": 357.99312499999996,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 0.5624085427045595
+      },
+      "after": {
+        "wasmCalls": 3,
+        "wrapperAcquires": 1,
+        "wrapperReleases": 1,
+        "medianMs": 67.01204199999984,
+        "minMs": 66.91824999999972,
+        "maxMs": 70.41766699999971,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.98453821180379
+      },
+      "speedup": 5.3067085315800515
+    },
+    {
+      "name": "100 sprites: rotation + visibility",
+      "callsPerIteration": 200,
+      "before": {
+        "wasmCalls": 1000,
+        "wrapperAcquires": 400,
+        "wrapperReleases": 400,
+        "medianMs": 140.83700000000044,
+        "minMs": 138.42362500000036,
+        "maxMs": 142.26749999999993,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 1.4200813706625346
+      },
+      "after": {
+        "wasmCalls": 600,
+        "wrapperAcquires": 200,
+        "wrapperReleases": 200,
+        "medianMs": 68.64241599999968,
+        "minMs": 67.55262500000026,
+        "maxMs": 69.30245800000012,
+        "heapAllocations": 0,
+        "millionCallsPerSecond": 2.913650358693682
+      },
+      "speedup": 2.0517488778367166
+    }
+  ]
+}

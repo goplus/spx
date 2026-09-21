@@ -90,6 +90,7 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 	}
 	eventVal := args[0]
 	if eventVal.Equal(jsEventOnEngineStart) {
+		contactEventGeneration++
 		if callbacks.OnEngineStart == nil {
 			return nil
 		}
@@ -109,6 +110,7 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		arg0 := JsToGdFloat(args[1])
 		callbacks.OnEngineFixedUpdate(arg0)
 	} else if eventVal.Equal(jsEventOnEngineDestroy) {
+		contactEventGeneration++
 		if callbacks.OnEngineDestroy == nil {
 			return nil
 		}
@@ -119,6 +121,7 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		}
 		callbacks.OnEngineDestroyed()
 	} else if eventVal.Equal(jsEventOnEngineReset) {
+		contactEventGeneration++
 		if callbacks.OnEngineReset == nil {
 			return nil
 		}

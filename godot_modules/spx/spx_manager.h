@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  spx_utils.cpp                                                         */
+/*  spx_manager.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,4 +28,35 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "spx_utils.h"
+#ifndef SPX_MANAGER_H
+#define SPX_MANAGER_H
+
+#include "spx_abi.h"
+#include "spx_mgr_access.h"
+
+class Node;
+class Window;
+class SceneTree;
+
+// Managers opt into lifecycle hooks; scene nodes belong to their actual users.
+class SpxManager {
+protected:
+	GdInt get_unique_id();
+	SceneTree *get_tree();
+	Window *get_root();
+	Node *get_spx_root();
+
+public:
+	virtual ~SpxManager() = default;
+	virtual void on_awake() {}
+	virtual void on_start() {}
+	virtual void on_update(float delta) {}
+	virtual void on_fixed_update(float delta) {}
+	virtual void on_destroy() {}
+	virtual void on_reset(int reset_code) {}
+	virtual void on_exit(int exit_code) {}
+	virtual void on_pause() {}
+	virtual void on_resume() {}
+};
+
+#endif // SPX_MANAGER_H

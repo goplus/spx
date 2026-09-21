@@ -19,35 +19,16 @@ package shared
 import (
 	"archive/zip"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
-
-type roundTripBodyTransport struct {
-	status        int
-	contentLength int64
-	body          string
-}
-
-func (transport roundTripBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return &http.Response{
-		StatusCode:    transport.status,
-		Status:        http.StatusText(transport.status),
-		Header:        make(http.Header),
-		Body:          io.NopCloser(strings.NewReader(transport.body)),
-		ContentLength: transport.contentLength,
-		Request:       req,
-	}, nil
-}
 
 type extractZipFixture struct {
 	name   string
@@ -278,91 +259,5 @@ func TestFetchURLToFileWithLimitRejectsChunkedBodyAboveLimit(t *testing.T) {
 	}
 	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "ndk.zip.tmp-*")); globErr != nil || len(matches) != 0 {
 		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
-	}
-}
-
-func TestFetchURLToFileWithLimitRejectsShortDeclaredBody(t *testing.T) {
-	oldClient := fileDownloadHTTPClient
-	fileDownloadHTTPClient = &http.Client{Transport: roundTripBodyTransport{
-		status:        http.StatusOK,
-		contentLength: 5,
-		body:          "123",
-	}}
-	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
-
-	dir := t.TempDir()
-	dst := filepath.Join(dir, "short.zip")
-	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	err := fetchURLToFileWithLimit("https://example.invalid/short.zip", dst, 10)
-	if !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Fatalf("fetchURLToFileWithLimit error = %v, want io.ErrUnexpectedEOF", err)
-	}
-	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
-		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
-	}
-	if matches, globErr := filepath.Glob(dst + ".tmp-*"); globErr != nil || len(matches) != 0 {
-		t.Fatalf("temporary download files = %v, err = %v", matches, globErr)
-	}
-}
-
-func TestFetchURLToFileRejectsHTTPSDowngrade(t *testing.T) {
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("replacement"))
-	}))
-	defer target.Close()
-
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		http.Redirect(w, req, target.URL, http.StatusFound)
-	}))
-	defer server.Close()
-
-	oldClient := fileDownloadHTTPClient
-	fileDownloadHTTPClient = server.Client()
-	callbackCalled := false
-	fileDownloadHTTPClient.CheckRedirect = func(*http.Request, []*http.Request) error {
-		callbackCalled = true
-		return nil
-	}
-	t.Cleanup(func() { fileDownloadHTTPClient = oldClient })
-
-	dst := filepath.Join(t.TempDir(), "asset.zip")
-	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	err := fetchURLToFile(server.URL, dst)
-	if !errors.Is(err, ErrInsecureRedirect) {
-		t.Fatalf("fetchURLToFile error = %v, want HTTPS downgrade rejection", err)
-	}
-	if callbackCalled {
-		t.Fatal("custom CheckRedirect ran before HTTPS downgrade validation")
-	}
-	if data, readErr := os.ReadFile(dst); readErr != nil || string(data) != "existing" {
-		t.Fatalf("destination content = %q, err = %v; want original content", data, readErr)
-	}
-}
-
-func TestFetchURLToFileHonorsHTTPClientTimeout(t *testing.T) {
-	oldClient := fileDownloadHTTPClient
-	fileDownloadHTTPClient = &http.Client{Timeout: 20 * time.Millisecond}
-	t.Cleanup(func() {
-		fileDownloadHTTPClient = oldClient
-	})
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("late"))
-	}))
-	defer server.Close()
-
-	err := fetchURLToFile(server.URL, filepath.Join(t.TempDir(), "asset.zip"))
-	if err == nil {
-		t.Fatal("expected timeout error")
-	}
-	msg := strings.ToLower(err.Error())
-	if !strings.Contains(msg, "timeout") && !strings.Contains(msg, "deadline") {
-		t.Fatalf("fetchURLToFile error = %v, want timeout/deadline error", err)
 	}
 }

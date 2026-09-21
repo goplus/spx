@@ -32,14 +32,14 @@
 #define SPX_SCENE_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "core/templates/rb_map.h"
+#include "spx_manager.h"
 
 class ISortableSprite;
 class TileMapLayer;
 class SubViewport;
 
-class SpxSceneMgr : public SpxBaseMgr {
-	SPXCLASS(SpxSceneMgr, SpxBaseMgr)
+class SpxSceneMgr : public SpxManager {
 
 private:
 	const String DEFAULT_SAVE_PATH = "user://exported_scene.png";
@@ -52,8 +52,8 @@ private:
 	void _export_vp_png(SubViewport *viewport);
 
 public:
-	// Pure sprite management (kept in SpxExtMgr)
-	Node *pure_sprite_root;
+	// Sprites without the full SPX physics and behavior state.
+	Node *pure_sprite_root = nullptr;
 	RBMap<GdObj, ISortableSprite *> id_pure_sprites;
 
 	void on_awake() override;
@@ -72,20 +72,19 @@ public:
 	void export_scene_as_png(Node *root);
 
 public:
-	virtual ~SpxSceneMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
 
-	SPX_API void change_scene_to_file(GdString path);
-	SPX_API void destroy_all_sprites();
-	SPX_API GdInt reload_current_scene();
-	SPX_API void unload_current_scene();
+	SPX_BIND void change_scene_to_file(GdString path);
+	SPX_BIND void destroy_all_sprites();
+	SPX_BIND GdInt reload_current_scene();
+	SPX_BIND void unload_current_scene();
 
 	// create sprites
-	SPX_API void clear_pure_sprites();
-	SPX_API void create_pure_sprite(GdString texture_path, GdVec2 pos, GdInt zindex);
-	SPX_API void destroy_pure_sprite(GdObj id);
+	SPX_BIND void clear_pure_sprites();
+	SPX_BIND void create_pure_sprite(GdString texture_path, GdVec2 pos, GdInt zindex);
+	SPX_BIND void destroy_pure_sprite(GdObj id);
 
-	SPX_API GdObj create_render_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot);
-	SPX_API GdObj create_static_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot, GdInt collider_type, GdVec2 collider_pivot, GdArray collider_params);
+	SPX_BIND GdObj create_render_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot);
+	SPX_BIND GdObj create_static_sprite(GdString texture_path, GdVec2 pos, GdFloat degree, GdVec2 scale, GdInt zindex, GdVec2 pivot, GdInt collider_type, GdVec2 collider_pivot, GdArray collider_params);
 };
 
 #endif // SPX_SCENE_MGR_H

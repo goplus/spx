@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "spx_sprite.h"
+#include "spx_abi.h"
 
 #include "scene/2d/physics/area_2d.h"
 #include "scene/2d/physics/collision_shape_2d.h"
@@ -39,7 +40,7 @@
 
 #include <cstdint>
 
-#include "spx_base_mgr.h"
+#include "spx_abi.h"
 #include "spx_coordinate.h"
 
 namespace {
@@ -59,7 +60,7 @@ bool build_polygon_points(GdArray p_points, Vector<Vector2> &r_points) {
 		return false;
 	}
 
-	const float *data = SpxBaseMgr::get_array<float>(p_points, 0);
+	const float *data = SpxAbi::get_array<float>(p_points, 0);
 	if (data == nullptr) {
 		return false;
 	}

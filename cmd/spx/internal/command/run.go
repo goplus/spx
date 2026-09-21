@@ -35,8 +35,6 @@ import (
 	"github.com/goplus/spx/v3/internal/interpruntime"
 )
 
-var prepareEmbeddedRuntimeAssets = runtimeasset.Prepare
-
 func (cmd *CmdTool) Run(arg string) (err error) {
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, arg)
 }
@@ -220,7 +218,7 @@ func (cmd *CmdTool) findRuntimeAsset(name string) (string, error) {
 }
 
 func (cmd *CmdTool) resolveInterpretedRuntimeAssets(runtimeName, packName, libName string) (runtimePath, libPath string, err error) {
-	embeddedDir, ok, err := prepareEmbeddedRuntimeAssets(cmd.Version, runtimeName, packName, libName)
+	embeddedDir, ok, err := runtimeasset.Prepare(cmd.Version, runtimeName, packName, libName)
 	if err != nil {
 		return "", "", fmt.Errorf("prepare embedded runtime assets: %w", err)
 	}

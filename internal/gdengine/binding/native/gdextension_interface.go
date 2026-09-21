@@ -492,16 +492,22 @@ func ToFloat(val GdFloat) float64 {
 	return float64(val)
 }
 
+// ToString copies an owned ABI return and releases it through the runtime allocator.
 func ToString(val GdString) string {
 	if val == nil {
 		return ""
 	}
-	cstrPtr := (*C.char)(unsafe.Pointer(val))
-	str := C.GoString(cstrPtr)
-	// free the memory allocated in c++
-	// Warning!: Using Go's C.free(unsafe.Pointer(cstrPtr)) to free memory allocated in C++ can cause a crash
-	CallResFreeStr(val)
+	str := copyString(val)
+	freeReturnedString(val)
 	return str
+}
+
+// copyString copies a borrowed string without releasing the caller's memory.
+func copyString(val GdString) string {
+	if val == nil {
+		return ""
+	}
+	return C.GoString((*C.char)(unsafe.Pointer(val)))
 }
 
 func GDExtensionInterfaceObjectMethodBindPtrcall(
@@ -661,8 +667,8 @@ func func_on_engine_pause(is_pause bool) {
 
 //export func_on_scene_sprite_instantiated
 func func_on_scene_sprite_instantiated(id C.GDExtensionInt, typeName C.GdString) {
-	name := ToString(GdString(typeName))
 	if callbacks.OnSceneSpriteInstantiated != nil {
+		name := copyString(GdString(typeName))
 		callbacks.OnSceneSpriteInstantiated(int64(id), name)
 	}
 }
@@ -697,8 +703,8 @@ func func_on_sprite_destroyed(id C.GDExtensionInt) {
 
 //export func_on_action_pressed
 func func_on_action_pressed(actionName C.GdString) {
-	name := ToString(GdString(actionName))
 	if callbacks.OnActionPressed != nil {
+		name := copyString(GdString(actionName))
 		callbacks.OnActionPressed(name)
 	}
 }
@@ -733,24 +739,24 @@ func func_on_key_released(keyid C.GDExtensionInt) {
 
 //export func_on_action_just_pressed
 func func_on_action_just_pressed(actionName C.GdString) {
-	name := ToString(GdString(actionName))
 	if callbacks.OnActionJustPressed != nil {
+		name := copyString(GdString(actionName))
 		callbacks.OnActionJustPressed(name)
 	}
 }
 
 //export func_on_action_just_released
 func func_on_action_just_released(actionName C.GdString) {
-	name := ToString(GdString(actionName))
 	if callbacks.OnActionJustReleased != nil {
+		name := copyString(GdString(actionName))
 		callbacks.OnActionJustReleased(name)
 	}
 }
 
 //export func_on_axis_changed
 func func_on_axis_changed(actionName C.GdString, value C.GDReal) {
-	name := ToString(GdString(actionName))
 	if callbacks.OnAxisChanged != nil {
+		name := copyString(GdString(actionName))
 		callbacks.OnAxisChanged(name, float64(value))
 	}
 }
@@ -855,8 +861,8 @@ func func_on_ui_toggle(id C.GDExtensionInt, isOn C.GDExtensionBool) {
 
 //export func_on_ui_text_changed
 func func_on_ui_text_changed(id C.GDExtensionInt, text C.GdString) {
-	str := ToString(GdString(text))
 	if callbacks.OnUiTextChanged != nil {
+		str := copyString(GdString(text))
 		callbacks.OnUiTextChanged(int64(id), str)
 	}
 }

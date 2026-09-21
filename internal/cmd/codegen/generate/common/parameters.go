@@ -69,6 +69,21 @@ func (p Parameter) DirectScalar() bool {
 	return primitive != nil && !primitive.IsPointer && directScalarTypes[primitive.Name] != ""
 }
 
+// WebInt64ByValue identifies scalar inputs represented by exact JavaScript BigInts.
+func (p Parameter) WebInt64ByValue() bool {
+	primitive := p.Argument.Type.Primitive
+	return p.Buffer == nil && primitive != nil && !primitive.IsPointer &&
+		(primitive.Name == "GdInt" || primitive.Name == "GdObj")
+}
+
+// WebScalarByValue identifies inputs carried by a JavaScript number or BigInt.
+// Pointers and composite values keep their existing memory representation.
+func (p Parameter) WebScalarByValue() bool {
+	primitive := p.Argument.Type.Primitive
+	return p.DirectScalar() || p.WebInt64ByValue() || (primitive != nil && !primitive.IsPointer &&
+		(primitive.Name == "GdBool" || primitive.Name == "GdFloat"))
+}
+
 func (p Parameter) MustGoType(functionName string) string {
 	if p.GoType != "" {
 		return p.GoType

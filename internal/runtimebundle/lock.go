@@ -51,10 +51,6 @@ type LockLease interface {
 // Windows.
 type CrossProcessLockProvider struct{}
 
-// UnsupportedCrossProcessLockProvider is retained as an explicit fail-closed
-// test seam. It is not used by NewCache.
-type UnsupportedCrossProcessLockProvider struct{}
-
 // ProcessLockProvider is an explicitly opt-in process-local implementation.
 // It is useful for tests which deliberately do not share a cache root across
 // processes; production callers should use NewCache.
@@ -118,14 +114,6 @@ func (CrossProcessLockProvider) AcquireExclusive(ctx context.Context, key string
 
 func (CrossProcessLockProvider) AcquireShared(ctx context.Context, key string) (LockLease, error) {
 	return acquirePlatformFileLock(ctx, key, lockShared)
-}
-
-func (UnsupportedCrossProcessLockProvider) AcquireExclusive(context.Context, string) (LockLease, error) {
-	return nil, ErrCrossProcessLockUnsupported
-}
-
-func (UnsupportedCrossProcessLockProvider) AcquireShared(context.Context, string) (LockLease, error) {
-	return nil, ErrCrossProcessLockUnsupported
 }
 
 func (ProcessLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {

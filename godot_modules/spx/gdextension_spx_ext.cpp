@@ -37,6 +37,7 @@
 
 #include "gdextension_interface.h"
 #include "spx_engine.h"
+#include "spx_abi.h"
 #include "spx_mgr_access.h"
 #include "spx_audio_mgr.h"
 #include "spx_camera_mgr.h"
@@ -56,6 +57,10 @@
 
 
 #define REGISTER_SPX_INTERFACE_FUNC(m_name) GDExtension::register_interface_function(#m_name, (GDExtensionInterfaceFunctionPtr)&gdextension_##m_name)
+static void gdextension_spx_global_free_string(GdString value) {
+	SpxAbi::free_return_cstr(value);
+}
+
 static void gdextension_spx_global_register_callbacks(GDExtensionSpxCallbackInfoPtr callback_ptr) {
 	SpxEngine::register_callbacks(callback_ptr);
 }
@@ -188,39 +193,39 @@ static void gdextension_spx_debug_debug_draw_line(GdVec2 from, GdVec2 to, GdColo
 }
 
 static void gdextension_spx_ext_request_exit(GdInt exit_code) {
-	extMgr->request_exit(exit_code);
+	SpxExtMgr::request_exit(exit_code);
 }
 
 static void gdextension_spx_ext_request_reset(GdInt exit_code) {
-	extMgr->request_reset(exit_code);
+	SpxExtMgr::request_reset(exit_code);
 }
 
 static void gdextension_spx_ext_request_restart() {
-	extMgr->request_restart();
+	SpxExtMgr::request_restart();
 }
 
 static void gdextension_spx_ext_on_runtime_panic(GdString msg) {
-	extMgr->on_runtime_panic(msg);
+	SpxExtMgr::on_runtime_panic(msg);
 }
 
 static void gdextension_spx_ext_pause() {
-	extMgr->pause();
+	SpxExtMgr::pause();
 }
 
 static void gdextension_spx_ext_resume() {
-	extMgr->resume();
+	SpxExtMgr::resume();
 }
 
 static void gdextension_spx_ext_is_paused(GdBool *ret_val) {
-	*ret_val = extMgr->is_paused();
+	*ret_val = SpxExtMgr::is_paused();
 }
 
 static void gdextension_spx_ext_next_frame() {
-	extMgr->next_frame();
+	SpxExtMgr::next_frame();
 }
 
 static void gdextension_spx_ext_set_layer_sorter_mode(GdInt mode) {
-	extMgr->set_layer_sorter_mode(mode);
+	SpxExtMgr::set_layer_sorter_mode(mode);
 }
 
 static void gdextension_spx_input_get_global_mouse_pos(GdVec2 *ret_val) {
@@ -503,16 +508,16 @@ static void gdextension_spx_platform_set_max_fps(GdInt fps) {
 	platformMgr->set_max_fps(fps);
 }
 
-static void gdextension_spx_platform_get_persistant_data_dir(GdString *ret_val) {
-	*ret_val = platformMgr->get_persistant_data_dir();
+static void gdextension_spx_platform_get_persistent_data_dir(GdString *ret_val) {
+	*ret_val = platformMgr->get_persistent_data_dir();
 }
 
-static void gdextension_spx_platform_set_persistant_data_dir(GdString path) {
-	platformMgr->set_persistant_data_dir(path);
+static void gdextension_spx_platform_set_persistent_data_dir(GdString path) {
+	platformMgr->set_persistent_data_dir(path);
 }
 
-static void gdextension_spx_platform_is_in_persistant_data_dir(GdString path, GdBool *ret_val) {
-	*ret_val = platformMgr->is_in_persistant_data_dir(path);
+static void gdextension_spx_platform_is_in_persistent_data_dir(GdString path, GdBool *ret_val) {
+	*ret_val = platformMgr->is_in_persistent_data_dir(path);
 }
 
 static void gdextension_spx_res_create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas) {
@@ -549,10 +554,6 @@ static void gdextension_spx_res_list_directories(GdString p_path, GdString *ret_
 
 static void gdextension_spx_res_reload_texture(GdString path) {
 	resMgr->reload_texture(path);
-}
-
-static void gdextension_spx_res_free_str(GdString str) {
-	resMgr->free_str(str);
 }
 
 static void gdextension_spx_res_apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences, GdString *ret_val) {
@@ -1406,6 +1407,7 @@ static void gdextension_spx_ui_set_flip(GdObj obj, GdBool horizontal, GdBool is_
 
 void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_global_register_callbacks);
+	REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_stop_all);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_create_audio);
 	REGISTER_SPX_INTERFACE_FUNC(spx_audio_destroy_audio);
@@ -1517,9 +1519,9 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_time_scale);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_max_fps);
 	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_max_fps);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_persistant_data_dir);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_persistant_data_dir);
-	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_in_persistant_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_get_persistent_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_set_persistent_data_dir);
+	REGISTER_SPX_INTERFACE_FUNC(spx_platform_is_in_persistent_data_dir);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_create_animation);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_set_load_mode);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_load_mode);
@@ -1529,7 +1531,6 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_has_file);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_list_directories);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_reload_texture);
-	REGISTER_SPX_INTERFACE_FUNC(spx_res_free_str);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_apply_project_fonts);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_set_default_font);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_register_font_face);

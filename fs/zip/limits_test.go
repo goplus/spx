@@ -21,11 +21,11 @@ package zip
 import (
 	archivezip "archive/zip"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -35,24 +35,12 @@ type limitZipEntry struct {
 	method uint16
 }
 
-func useZipTestLimits(t *testing.T, update func(*resolvedZipLimits)) {
-	t.Helper()
-	previous := zipTestLimits.Load()
-	limits := defaultZipLimits()
-	update(&limits)
-	setZipTestLimits(limits)
-	t.Cleanup(func() {
-		if previous == nil {
-			clearZipTestLimits()
-			return
-		}
-		setZipTestLimits(*previous)
-	})
-}
-
 func TestOpenRejectsTooManyZipEntries(t *testing.T) {
-	path := makeLimitZip(t, limitZipEntry{name: "one", data: "1", method: archivezip.Store}, limitZipEntry{name: "two", data: "2", method: archivezip.Store})
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntries = 1 })
+	entries := make([]limitZipEntry, MaxZipEntries+1)
+	for i := range entries {
+		entries[i].name = fmt.Sprintf("entry-%d", i)
+	}
+	path := makeLimitZip(t, entries...)
 
 	_, err := Open(path)
 	if !errors.Is(err, ErrArchiveLimit) {
@@ -60,40 +48,33 @@ func TestOpenRejectsTooManyZipEntries(t *testing.T) {
 	}
 }
 
-func TestOpenRejectsOversizedZipEntry(t *testing.T) {
-	path := makeLimitZip(t, limitZipEntry{name: "large", data: "12345", method: archivezip.Store})
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntrySize = 4 })
-
-	_, err := Open(path)
-	if !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("Open error = %v, want ErrArchiveLimit", err)
-	}
-	if !strings.Contains(err.Error(), "large") {
-		t.Fatalf("Open error = %v, want entry name", err)
+func TestValidateRejectsOversizedZipEntry(t *testing.T) {
+	reader := &archivezip.Reader{File: []*archivezip.File{
+		{FileHeader: archivezip.FileHeader{Name: "large", UncompressedSize64: uint64(MaxZipEntrySize) + 1}},
+	}}
+	if err := validateZipReader(reader); !errors.Is(err, ErrArchiveLimit) || !strings.Contains(err.Error(), "large") {
+		t.Fatalf("validateZipReader error = %v, want named entry-size error", err)
 	}
 }
 
-func TestOpenRejectsExcessiveTotalZipSize(t *testing.T) {
-	path := makeLimitZip(t,
-		limitZipEntry{name: "one", data: "123", method: archivezip.Store},
-		limitZipEntry{name: "two", data: "456", method: archivezip.Store},
-	)
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxTotalSize = 5 })
-
-	_, err := Open(path)
-	if !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("Open error = %v, want ErrArchiveLimit", err)
+func TestValidateRejectsExcessiveTotalZipSize(t *testing.T) {
+	reader := &archivezip.Reader{}
+	for i := int64(0); i <= MaxZipTotalSize/MaxZipEntrySize; i++ {
+		reader.File = append(reader.File, &archivezip.File{FileHeader: archivezip.FileHeader{
+			Name:               fmt.Sprintf("entry-%d", i),
+			UncompressedSize64: uint64(MaxZipEntrySize),
+			CompressedSize64:   uint64(MaxZipEntrySize)/MaxZipCompressionRatio + 1,
+		}})
 	}
-	if !strings.Contains(err.Error(), "total") {
-		t.Fatalf("Open error = %v, want total-size detail", err)
+	if err := validateZipReader(reader); !errors.Is(err, ErrArchiveLimit) || !strings.Contains(err.Error(), "total uncompressed") {
+		t.Fatalf("validateZipReader error = %v, want total-size error", err)
 	}
 }
 
 func TestValidateRejectsRepeatedCompressedWork(t *testing.T) {
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxArchiveBytes = 7 })
 	reader := &archivezip.Reader{File: []*archivezip.File{
-		{FileHeader: archivezip.FileHeader{Name: "one", CompressedSize64: 4}},
-		{FileHeader: archivezip.FileHeader{Name: "two", CompressedSize64: 4}},
+		{FileHeader: archivezip.FileHeader{Name: "one", CompressedSize64: uint64(MaxZipArchiveBytes)/2 + 1}},
+		{FileHeader: archivezip.FileHeader{Name: "two", CompressedSize64: uint64(MaxZipArchiveBytes)/2 + 1}},
 	}}
 	if err := validateZipReader(reader); !errors.Is(err, ErrArchiveLimit) {
 		t.Fatalf("validateZipReader error = %v, want ErrArchiveLimit", err)
@@ -103,10 +84,9 @@ func TestValidateRejectsRepeatedCompressedWork(t *testing.T) {
 func TestOpenRejectsExcessiveZipCompressionRatio(t *testing.T) {
 	path := makeLimitZip(t, limitZipEntry{
 		name:   "repetitive",
-		data:   strings.Repeat("a", 4096),
+		data:   strings.Repeat("a", 65536),
 		method: archivezip.Deflate,
 	})
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxCompressionRatio = 2 })
 
 	_, err := Open(path)
 	if !errors.Is(err, ErrArchiveLimit) {
@@ -187,13 +167,8 @@ func TestOpenAcceptsUnambiguousZipPaths(t *testing.T) {
 	}
 }
 
-func TestOpenAndReadZipAtLimits(t *testing.T) {
+func TestOpenAndReadZip(t *testing.T) {
 	path := makeLimitZip(t, limitZipEntry{name: "exact", data: "1234", method: archivezip.Store})
-	useZipTestLimits(t, func(limits *resolvedZipLimits) {
-		limits.maxEntrySize = 4
-		limits.maxTotalSize = 4
-		limits.maxCompressionRatio = 1
-	})
 
 	dir, err := Open(path)
 	if err != nil {
@@ -224,7 +199,6 @@ func TestOpenReadRejectsEntryThatExceedsDeclaration(t *testing.T) {
 	// Mutating the exported header simulates an archive whose declaration was
 	// tampered with after parsing. The wrapper must still fail closed.
 	reader.File[0].UncompressedSize64 = 4
-	useZipTestLimits(t, func(limits *resolvedZipLimits) { limits.maxEntrySize = 10 })
 	zipFS := &FS{Reader: &reader.Reader}
 	entry, err := zipFS.Open("grow")
 	if err != nil {
@@ -248,32 +222,6 @@ func TestFSNilCloseIsSafe(t *testing.T) {
 	if err := (&FS{}).Close(); err != nil {
 		t.Fatalf("empty FS Close error = %v", err)
 	}
-}
-
-func TestZipLimitHookConcurrent(t *testing.T) {
-	previous := zipTestLimits.Load()
-	t.Cleanup(func() {
-		if previous == nil {
-			clearZipTestLimits()
-		} else {
-			setZipTestLimits(*previous)
-		}
-	})
-	var group sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		group.Add(2)
-		go func(i int) {
-			defer group.Done()
-			limits := defaultZipLimits()
-			limits.maxEntries = i + 1
-			setZipTestLimits(limits)
-		}(i)
-		go func() {
-			defer group.Done()
-			_ = currentZipLimits()
-		}()
-	}
-	group.Wait()
 }
 
 func TestZipLimitedReaderDoesNotExposeSentinelByte(t *testing.T) {

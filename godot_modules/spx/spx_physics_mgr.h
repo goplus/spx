@@ -32,7 +32,9 @@
 #define SPX_PHYSICS_MGR_H
 
 #include "gdextension_spx_ext.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
+
+class PhysicsDirectSpaceState2D;
 
 class SpxPhysicsDefine {
 private:
@@ -47,19 +49,6 @@ public:
 	static GdFloat get_global_friction();
 	static void set_global_air_drag(GdFloat air_drag);
 	static GdFloat get_global_air_drag();
-};
-
-class SpxRaycastInfo {
-public:
-	GdBool collide;
-	GdObj sprite_gid;
-	GdVec2 position;
-	GdVec2 normal;
-
-public:
-	SpxRaycastInfo() = default;
-	~SpxRaycastInfo() = default;
-	GdArray ToArray();
 };
 
 enum class ColliderType {
@@ -78,12 +67,19 @@ enum BoundaryType {
 	BOUND_BOTTOM = 1 << 3
 };
 
-class SpxPhysicsMgr : public SpxBaseMgr {
-	SPXCLASS(SpxPhysicsMgr, SpxBaseMgr)
-
+class SpxPhysicsMgr : public SpxManager {
 private:
-	GdArray _check_collision(RID shape, GdVec2 pos, GdInt collision_mask);
-	SpxRaycastInfo _raycast(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
+	struct RayHit {
+		GdBool collide = false;
+		GdObj sprite_id = 0;
+		GdVec2 position;
+		GdVec2 normal;
+		GdArray to_array() const;
+	};
+
+	PhysicsDirectSpaceState2D *_get_space_state();
+	GdArray _query_shape(RID shape, GdVec2 pos, GdInt collision_mask);
+	RayHit _query_ray(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
 
 	// Internal boundary check helpers
 	GdInt _check_touched_boundaries(GdObj obj, GdBool use_stage_limits);
@@ -93,34 +89,32 @@ private:
 public:
 	bool is_collision_by_pixel;
 	void on_awake() override;
-	void on_reset(int reset_code) override;
 
 public:
-	virtual ~SpxPhysicsMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
-	SPX_API GdObj raycast(GdVec2 from, GdVec2 to, GdInt collision_mask);
-	SPX_API GdBool check_collision(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
-	SPX_API GdInt check_touched_camera_boundaries(GdObj obj);
-	SPX_API GdBool check_touched_camera_boundary(GdObj obj, GdInt board_type);
-	SPX_API GdInt check_nearest_touched_camera_boundary(GdObj obj);
+	SPX_BIND GdObj raycast(GdVec2 from, GdVec2 to, GdInt collision_mask);
+	SPX_BIND GdBool check_collision(GdVec2 from, GdVec2 to, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
+	SPX_BIND GdInt check_touched_camera_boundaries(GdObj obj);
+	SPX_BIND GdBool check_touched_camera_boundary(GdObj obj, GdInt board_type);
+	SPX_BIND GdInt check_nearest_touched_camera_boundary(GdObj obj);
 
 	// Stage boundary check functions
-	SPX_API GdInt check_touched_stage_boundaries(GdObj obj);
-	SPX_API GdBool check_touched_stage_boundary(GdObj obj, GdInt board_type);
-	SPX_API GdInt check_nearest_touched_stage_boundary(GdObj obj);
-	SPX_API void set_collision_system_type(GdBool is_collision_by_alpha);
+	SPX_BIND GdInt check_touched_stage_boundaries(GdObj obj);
+	SPX_BIND GdBool check_touched_stage_boundary(GdObj obj, GdInt board_type);
+	SPX_BIND GdInt check_nearest_touched_stage_boundary(GdObj obj);
+	SPX_BIND void set_collision_system_type(GdBool is_collision_by_alpha);
 
 	// configs
-	SPX_API void set_global_gravity(GdFloat gravity);
-	SPX_API GdFloat get_global_gravity();
-	SPX_API void set_global_friction(GdFloat friction);
-	SPX_API GdFloat get_global_friction();
-	SPX_API void set_global_air_drag(GdFloat air_drag);
-	SPX_API GdFloat get_global_air_drag();
+	SPX_BIND void set_global_gravity(GdFloat gravity);
+	SPX_BIND GdFloat get_global_gravity();
+	SPX_BIND void set_global_friction(GdFloat friction);
+	SPX_BIND GdFloat get_global_friction();
+	SPX_BIND void set_global_air_drag(GdFloat air_drag);
+	SPX_BIND GdFloat get_global_air_drag();
 
 	// check collision
-	SPX_API GdArray check_collision_rect(GdVec2 pos, GdVec2 size, GdInt collision_mask);
-	SPX_API GdArray check_collision_circle(GdVec2 pos, GdFloat radius, GdInt collision_mask);
-	SPX_API GdArray raycast_with_details(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
+	SPX_BIND GdArray check_collision_rect(GdVec2 pos, GdVec2 size, GdInt collision_mask);
+	SPX_BIND GdArray check_collision_circle(GdVec2 pos, GdFloat radius, GdInt collision_mask);
+	SPX_BIND GdArray raycast_with_details(GdVec2 from, GdVec2 to, GdArray ignore_sprites, GdInt collision_mask, GdBool collide_with_areas, GdBool collide_with_bodies);
 };
 
 #endif // SPX_PHYSICS_MGR_H

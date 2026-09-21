@@ -384,11 +384,11 @@ func (*platformMgrImpl) GetMaxFps() int64 {
 	return 0
 }
 func (*platformMgrImpl) SetMaxFps(fps int64) {}
-func (*platformMgrImpl) GetPersistantDataDir() string {
+func (*platformMgrImpl) GetPersistentDataDir() string {
 	return ""
 }
-func (*platformMgrImpl) SetPersistantDataDir(path string) {}
-func (*platformMgrImpl) IsInPersistantDataDir(path string) bool {
+func (*platformMgrImpl) SetPersistentDataDir(path string) {}
+func (*platformMgrImpl) IsInPersistentDataDir(path string) bool {
 	return false
 }
 
@@ -415,7 +415,6 @@ func (*resMgrImpl) ListDirectories(p_path string) string {
 	return ""
 }
 func (*resMgrImpl) ReloadTexture(path string) {}
-func (*resMgrImpl) FreeStr(str string)        {}
 func (*resMgrImpl) ApplyProjectFonts(default_font_path string, font_paths gdx.Array, font_families gdx.Array, preferences gdx.Array) string {
 	return ""
 }

@@ -17,6 +17,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -30,4 +32,19 @@ func mustDefaultRuntimeVersion(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return version
+}
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	mustMkdirAll(t, filepath.Dir(path))
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }

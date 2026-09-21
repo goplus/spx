@@ -24,7 +24,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync/atomic"
 
 	"github.com/goplus/spx/v3/internal/zippreflight"
 )
@@ -48,82 +47,12 @@ const (
 // ErrArchiveLimit identifies excessive ZIP work.
 var ErrArchiveLimit = errors.New("zip: archive limit exceeded")
 
-type resolvedZipLimits struct {
-	maxArchiveBytes     int64
-	maxCentralDirBytes  int64
-	maxEntries          int
-	maxEntrySize        int64
-	maxTotalSize        int64
-	maxCompressionRatio uint64
-}
-
-func defaultZipLimits() resolvedZipLimits {
-	return resolvedZipLimits{
-		maxArchiveBytes:     MaxZipArchiveBytes,
-		maxCentralDirBytes:  MaxZipCentralDirectoryBytes,
-		maxEntries:          MaxZipEntries,
-		maxEntrySize:        MaxZipEntrySize,
-		maxTotalSize:        MaxZipTotalSize,
-		maxCompressionRatio: MaxZipCompressionRatio,
-	}
-}
-
-func normalizeZipLimits(limits resolvedZipLimits) resolvedZipLimits {
-	// Keep test overrides bounded when fields are omitted.
-	if limits.maxArchiveBytes <= 0 {
-		limits.maxArchiveBytes = MaxZipArchiveBytes
-	}
-	if limits.maxCentralDirBytes <= 0 {
-		limits.maxCentralDirBytes = MaxZipCentralDirectoryBytes
-	}
-	if limits.maxEntries <= 0 {
-		limits.maxEntries = MaxZipEntries
-	}
-	if limits.maxEntrySize <= 0 {
-		limits.maxEntrySize = MaxZipEntrySize
-	}
-	if limits.maxTotalSize <= 0 {
-		limits.maxTotalSize = MaxZipTotalSize
-	}
-	if limits.maxCompressionRatio == 0 {
-		limits.maxCompressionRatio = MaxZipCompressionRatio
-	}
-	if limits.maxEntrySize > limits.maxTotalSize {
-		limits.maxEntrySize = limits.maxTotalSize
-	}
-	return limits
-}
-
-// Package tests override limits concurrently.
-var zipTestLimits atomic.Pointer[resolvedZipLimits]
-
-func currentZipLimits() resolvedZipLimits {
-	if limits := zipTestLimits.Load(); limits != nil {
-		return *limits
-	}
-	return defaultZipLimits()
-}
-
-func setZipTestLimits(limits resolvedZipLimits) {
-	limits = normalizeZipLimits(limits)
-	zipTestLimits.Store(&limits)
-}
-
-func clearZipTestLimits() {
-	zipTestLimits.Store(nil)
-}
-
 // preflightZipArchive bounds work before zip.NewReader allocates entries.
 func preflightZipArchive(reader io.ReaderAt, size int64) error {
-	return preflightZipArchiveWithLimits(reader, size, currentZipLimits())
-}
-
-func preflightZipArchiveWithLimits(reader io.ReaderAt, size int64, limits resolvedZipLimits) error {
-	limits = normalizeZipLimits(limits)
 	err := zippreflight.Check(reader, size, zippreflight.Limits{
-		MaxArchiveBytes:          limits.maxArchiveBytes,
-		MaxCentralDirectoryBytes: limits.maxCentralDirBytes,
-		MaxEntries:               limits.maxEntries,
+		MaxArchiveBytes:          MaxZipArchiveBytes,
+		MaxCentralDirectoryBytes: MaxZipCentralDirectoryBytes,
+		MaxEntries:               MaxZipEntries,
 	})
 	if zippreflight.IsLimit(err) {
 		return fmt.Errorf("%w: %v", ErrArchiveLimit, err)
@@ -136,15 +65,14 @@ func validateZipReader(reader *zip.Reader) error {
 	if reader == nil {
 		return fmt.Errorf("%w: nil ZIP reader", ErrArchiveLimit)
 	}
-	limits := currentZipLimits()
-	if len(reader.File) > limits.maxEntries {
-		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(reader.File), limits.maxEntries)
+	if len(reader.File) > MaxZipEntries {
+		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(reader.File), MaxZipEntries)
 	}
 
 	paths := make([]zipPath, 0, len(reader.File))
 	var compressedTotal, total uint64
 	for _, file := range reader.File {
-		if err := validateZipFile(file, limits); err != nil {
+		if err := validateZipFile(file); err != nil {
 			return err
 		}
 		path, err := newZipPath(file)
@@ -153,16 +81,16 @@ func validateZipReader(reader *zip.Reader) error {
 		}
 		paths = append(paths, path)
 		compressed := file.CompressedSize64
-		if compressed > uint64(limits.maxArchiveBytes) || compressedTotal > uint64(limits.maxArchiveBytes)-compressed {
-			return fmt.Errorf("%w: total compressed size exceeds limit %d", ErrArchiveLimit, limits.maxArchiveBytes)
+		if compressed > uint64(MaxZipArchiveBytes) || compressedTotal > uint64(MaxZipArchiveBytes)-compressed {
+			return fmt.Errorf("%w: total compressed size exceeds limit %d", ErrArchiveLimit, MaxZipArchiveBytes)
 		}
 		compressedTotal += compressed
 		if isZipDirectory(file) {
 			continue
 		}
 		size := file.UncompressedSize64
-		if size > uint64(limits.maxTotalSize) || total > uint64(limits.maxTotalSize)-size {
-			return fmt.Errorf("%w: total uncompressed size exceeds limit %d", ErrArchiveLimit, limits.maxTotalSize)
+		if size > uint64(MaxZipTotalSize) || total > uint64(MaxZipTotalSize)-size {
+			return fmt.Errorf("%w: total uncompressed size exceeds limit %d", ErrArchiveLimit, MaxZipTotalSize)
 		}
 		total += size
 	}
@@ -229,7 +157,7 @@ func validateZipPaths(paths []zipPath) error {
 	return nil
 }
 
-func validateZipFile(file *zip.File, limits resolvedZipLimits) error {
+func validateZipFile(file *zip.File) error {
 	if file == nil {
 		return fmt.Errorf("%w: nil ZIP entry", ErrArchiveLimit)
 	}
@@ -241,10 +169,10 @@ func validateZipFile(file *zip.File, limits resolvedZipLimits) error {
 		return nil
 	}
 	uncompressed := file.UncompressedSize64
-	if uncompressed > uint64(limits.maxEntrySize) {
-		return fmt.Errorf("%w: entry %q uncompressed size %d exceeds limit %d", ErrArchiveLimit, file.Name, uncompressed, limits.maxEntrySize)
+	if uncompressed > uint64(MaxZipEntrySize) {
+		return fmt.Errorf("%w: entry %q uncompressed size %d exceeds limit %d", ErrArchiveLimit, file.Name, uncompressed, MaxZipEntrySize)
 	}
-	if err := checkZipCompressionRatio(file, limits.maxCompressionRatio); err != nil {
+	if err := checkZipCompressionRatio(file, MaxZipCompressionRatio); err != nil {
 		return err
 	}
 	return nil
@@ -267,8 +195,7 @@ func checkZipCompressionRatio(file *zip.File, maxRatio uint64) error {
 
 // openZipEntry caps output at the entry's declared size plus one sentinel byte.
 func openZipEntry(file *zip.File) (io.ReadCloser, error) {
-	limits := currentZipLimits()
-	if err := validateZipFile(file, limits); err != nil {
+	if err := validateZipFile(file); err != nil {
 		return nil, err
 	}
 	reader, err := file.Open()

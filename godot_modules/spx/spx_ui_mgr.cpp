@@ -29,26 +29,39 @@
 /**************************************************************************/
 
 #include "spx_ui_mgr.h"
+#include "spx_abi.h"
 
 #include "scene/main/canvas_layer.h"
 #include "scene/resources/packed_scene.h"
 
 #include "spx.h"
 #include "spx_list_monitor.h"
-#include "spx_object_guard.h"
+#include "spx_object_access.h"
 
 #define SPX_CALLBACK SpxEngine::get_singleton()->get_callbacks()
 
-// Refactored UI node validation using unified SpxObjectGuard (RAII pattern)
-// See spx_object_guard.h for details
+// Checked main-thread lookup with each API's existing default return value.
 #define SPX_REQUIRE_UI_VOID() \
-	SPX_UI_GUARD_VOID(obj, __func__)
+	SPX_UI_LOOKUP_VOID(obj, __func__)
 
 #define SPX_REQUIRE_UI_RETURN(VALUE) \
-	SPX_UI_GUARD_RETURN(obj, __func__, VALUE)
+	SPX_UI_LOOKUP_RETURN(obj, __func__, VALUE)
 
-Node *SpxUiMgr::create_owner_node() {
-	return memnew(CanvasLayer);
+void SpxUiMgr::_create_canvas_layer() {
+	canvas_layer = memnew(CanvasLayer);
+	canvas_layer->set_name("SpxUiMgr");
+	get_spx_root()->add_child(canvas_layer);
+}
+
+void SpxUiMgr::_release_canvas_layer() {
+	if (canvas_layer == nullptr) {
+		return;
+	}
+	if (canvas_layer->get_parent() != nullptr) {
+		canvas_layer->get_parent()->remove_child(canvas_layer);
+	}
+	canvas_layer->queue_free();
+	canvas_layer = nullptr;
 }
 
 SpxUi *SpxUiMgr::get_node(GdObj obj) {
@@ -119,7 +132,7 @@ void SpxUiMgr::on_spx_ui_destroyed(GdObj p_gid, ObjectID p_binding_id) {
 }
 
 void SpxUiMgr::on_awake() {
-	SpxBaseMgr::on_awake();
+	_create_canvas_layer();
 }
 
 void SpxUiMgr::_clear_nodes(bool emit_destroyed, bool queue_controls) {
@@ -152,20 +165,13 @@ void SpxUiMgr::_clear_nodes(bool emit_destroyed, bool queue_controls) {
 
 void SpxUiMgr::on_destroy() {
 	_clear_nodes(false, false);
-	SpxBaseMgr::on_destroy();
+	_release_canvas_layer();
 }
 
 void SpxUiMgr::on_reset(int reset_code) {
 	_clear_nodes(true, true);
-	if (owner != nullptr) {
-		owner->queue_free();
-	}
-	owner = create_owner_node();
-	if (owner == nullptr) {
-		return;
-	}
-	owner->set_name(get_class_name());
-	get_spx_root()->add_child(owner);
+	_release_canvas_layer();
+	_create_canvas_layer();
 }
 
 Control *SpxUiMgr::create_control(GdString path) {
@@ -175,7 +181,7 @@ Control *SpxUiMgr::create_control(GdString path) {
 		Ref<PackedScene> scene = ResourceLoader::load(path_str);
 		if (scene.is_null()) {
 			print_error("Failed to load sprite scene " + path_str);
-			return NULL_OBJECT_ID;
+			return nullptr;
 		} else {
 			node = dynamic_cast<Control *>(scene->instantiate());
 			if (node == nullptr) {
@@ -192,13 +198,13 @@ SpxUi *SpxUiMgr::on_create_node(Control *control, GdInt type, bool is_attach) {
 	}
 	SpxUi *node = memnew(SpxUi);
 	if (is_attach) {
-		owner->add_child(control);
+		canvas_layer->add_child(control);
 	}
 	node->set_type(type);
 	node->set_gid(get_unique_id());
 	if (node->set_control_item(control, this) != OK) {
 		if (is_attach) {
-			owner->remove_child(control);
+			canvas_layer->remove_child(control);
 			memdelete(control);
 		}
 		memdelete(node);
@@ -337,7 +343,7 @@ void SpxUiMgr::set_list_items(GdObj obj, GdString label, GdArray items, GdColor 
 		ERR_FAIL_COND(items->size > 0 && items->data == nullptr);
 		values.resize(items->size);
 		for (int i = 0; i < items->size; i++) {
-			values.set(i, SpxStr(*get_array<GdString>(items, i)));
+			values.set(i, SpxStr(*SpxAbi::get_array<GdString>(items, i)));
 		}
 	}
 	monitor->set_items(SpxStr(label), values, color);

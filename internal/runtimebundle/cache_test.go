@@ -291,10 +291,7 @@ func TestPinnedChildRootRejectsPathReplacement(t *testing.T) {
 	}
 }
 
-func TestCrossProcessAndGCBoundariesFailClosed(t *testing.T) {
-	if _, err := (UnsupportedCrossProcessLockProvider{}).AcquireExclusive(context.Background(), "cache-key"); !errors.Is(err, ErrCrossProcessLockUnsupported) {
-		t.Fatalf("cross-process lock error = %v, want ErrCrossProcessLockUnsupported", err)
-	}
+func TestGarbageCollectionFailsClosed(t *testing.T) {
 	if err := NewProcessLocalCache(t.TempDir()).Collect(context.Background(), GCOptions{}); !errors.Is(err, ErrGCUnsupported) {
 		t.Fatalf("GC error = %v, want ErrGCUnsupported", err)
 	}

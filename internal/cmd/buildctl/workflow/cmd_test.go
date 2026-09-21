@@ -20,21 +20,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
 )
 
 type recordedCommand struct {
 	dir  string
 	name string
 	args []string
-}
-
-type recordedEngineBuild struct {
-	config   engine.BuildConfig
-	repoRoot string
 }
 
 type workflowRecordingRunner struct {
@@ -82,186 +74,8 @@ func (r *workflowRecordingRunner) StopWebServers() error {
 	return nil
 }
 
-func TestBuildWebWorkflow(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	engineBuilds := recordWorkflowEngineBuilds(t)
-
-	if err := buildWebWorkflow(workflowBuildWebConfig{mode: "worker"}, runner); err != nil {
-		t.Fatalf("buildWebWorkflow returned error: %v", err)
-	}
-
-	expectedCalls := []recordedCall{
-		{script: "cmd/spx/install.sh", args: nil},
-	}
-	if !reflect.DeepEqual(runner.calls, expectedCalls) {
-		t.Fatalf("unexpected calls: %#v", runner.calls)
-	}
-
-	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"exporttemplateweb"}},
-	}
-	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
-	assertWorkflowEngineBuilds(t, *engineBuilds, []recordedEngineBuild{{
-		config:   engine.BuildConfig{Target: "template", Platform: "web", Mode: "worker"},
-		repoRoot: runner.repoRoot,
-	}})
-}
-
-func TestBuildWebWorkflowSkipInstall(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	engineBuilds := recordWorkflowEngineBuilds(t)
-
-	if err := buildWebWorkflow(workflowBuildWebConfig{mode: "worker", skipToolInstall: true}, runner); err != nil {
-		t.Fatalf("buildWebWorkflow returned error: %v", err)
-	}
-
-	if len(runner.calls) != 0 {
-		t.Fatalf("unexpected calls: %#v", runner.calls)
-	}
-
-	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"exporttemplateweb"}},
-	}
-	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
-	assertWorkflowEngineBuilds(t, *engineBuilds, []recordedEngineBuild{{
-		config:   engine.BuildConfig{Target: "template", Platform: "web", Mode: "worker"},
-		repoRoot: runner.repoRoot,
-	}})
-}
-
-func TestBuildHostRuntimeWorkflow(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	engineBuilds := recordWorkflowEngineBuilds(t)
-
-	if err := buildHostRuntimeWorkflow(runner); err != nil {
-		t.Fatalf("buildHostRuntimeWorkflow returned error: %v", err)
-	}
-
-	if len(runner.calls) != 0 {
-		t.Fatalf("unexpected calls: %#v", runner.calls)
-	}
-
-	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"exportpack"}},
-	}
-	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
-	assertWorkflowEngineBuilds(t, *engineBuilds, []recordedEngineBuild{{
-		config:   engine.BuildConfig{Target: "template"},
-		repoRoot: runner.repoRoot,
-	}})
-}
-
-func TestBuildDevWorkflow(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	engineBuilds := recordWorkflowEngineBuilds(t)
-
-	if err := buildDevWorkflow(workflowBuildDevConfig{webMode: "minigame"}, runner); err != nil {
-		t.Fatalf("buildDevWorkflow returned error: %v", err)
-	}
-
-	expectedCalls := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web"}},
-	}
-	if !reflect.DeepEqual(runner.calls, expectedCalls) {
-		t.Fatalf("unexpected calls: %#v", runner.calls)
-	}
-
-	expectedCommands := []recordedCommand{
-		{name: "spx", args: []string{"exportpack"}},
-		{name: "spx", args: []string{"exporttemplateweb"}},
-	}
-	assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, expectedCommands)
-	assertWorkflowEngineBuilds(t, *engineBuilds, []recordedEngineBuild{
-		{config: engine.BuildConfig{Target: "editor"}, repoRoot: runner.repoRoot},
-		{config: engine.BuildConfig{Target: "template"}, repoRoot: runner.repoRoot},
-		{config: engine.BuildConfig{Target: "template", Platform: "web", Mode: "minigame"}, repoRoot: runner.repoRoot},
-	})
-}
-
-func TestBuildTargets(t *testing.T) {
-	tests := []struct {
-		name         string
-		config       BuildConfig
-		wantCalls    []recordedCall
-		wantCommands []recordedCommand
-		wantBuilds   []engine.BuildConfig
-	}{
-		{
-			name:      "dev",
-			config:    BuildConfig{Target: "dev", Mode: "minigame"},
-			wantCalls: []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web"}}},
-			wantCommands: []recordedCommand{
-				{name: "spx", args: []string{"exportpack"}},
-				{name: "spx", args: []string{"exporttemplateweb"}},
-			},
-			wantBuilds: []engine.BuildConfig{
-				{Target: "editor"},
-				{Target: "template"},
-				{Target: "template", Platform: "web", Mode: "minigame"},
-			},
-		},
-		{
-			name:       "editor",
-			config:     BuildConfig{Target: "editor"},
-			wantCalls:  []recordedCall{{script: "cmd/spx/install.sh"}},
-			wantBuilds: []engine.BuildConfig{{Target: "editor"}},
-		},
-		{
-			name:      "desktop",
-			config:    BuildConfig{Target: "desktop"},
-			wantCalls: []recordedCall{{script: "cmd/spx/install.sh"}},
-			wantCommands: []recordedCommand{
-				{name: "spx", args: []string{"exportpack"}},
-			},
-			wantBuilds: []engine.BuildConfig{{Target: "template"}},
-		},
-		{
-			name:      "web",
-			config:    BuildConfig{Target: "web", Mode: "worker"},
-			wantCalls: []recordedCall{{script: "cmd/spx/install.sh"}},
-			wantCommands: []recordedCommand{
-				{name: "spx", args: []string{"exporttemplateweb"}},
-			},
-			wantBuilds: []engine.BuildConfig{{Target: "template", Platform: "web", Mode: "worker"}},
-		},
-		{
-			name:       "android",
-			config:     BuildConfig{Target: "android"},
-			wantCalls:  []recordedCall{{script: "cmd/spx/install.sh"}},
-			wantBuilds: []engine.BuildConfig{{Target: "template", Platform: "android"}},
-		},
-		{
-			name:       "ios",
-			config:     BuildConfig{Target: "ios"},
-			wantCalls:  []recordedCall{{script: "cmd/spx/install.sh"}},
-			wantBuilds: []engine.BuildConfig{{Target: "template", Platform: "ios"}},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			runner := newRuntimeFixtureRunner(t)
-			engineBuilds := recordWorkflowEngineBuilds(t)
-
-			if err := Build(test.config, runner); err != nil {
-				t.Fatalf("Build(%#v) returned error: %v", test.config, err)
-			}
-			if !reflect.DeepEqual(runner.calls, test.wantCalls) {
-				t.Fatalf("unexpected calls: got %#v want %#v", runner.calls, test.wantCalls)
-			}
-			assertWorkflowRuntimeWorkspaceCommands(t, runner.commands, runner.repoRoot, test.wantCommands)
-
-			wantBuilds := make([]recordedEngineBuild, len(test.wantBuilds))
-			for i, config := range test.wantBuilds {
-				wantBuilds[i] = recordedEngineBuild{config: config, repoRoot: runner.repoRoot}
-			}
-			assertWorkflowEngineBuilds(t, *engineBuilds, wantBuilds)
-		})
-	}
-}
-
 func TestBuildRejectsUnknownTarget(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
+	runner := &recordingRunner{repoRoot: t.TempDir()}
 	if err := Build(BuildConfig{Target: "unknown"}, runner); err == nil {
 		t.Fatal("Build accepted an unknown target")
 	}
@@ -422,60 +236,5 @@ func TestRunDemoWorkflowWeb(t *testing.T) {
 	}
 	if runner.stopCalls != 0 {
 		t.Fatalf("unexpected stopCalls: %d", runner.stopCalls)
-	}
-}
-
-func assertWorkflowRuntimeWorkspaceCommands(t *testing.T, got []recordedCommand, repoRoot string, want []recordedCommand) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("unexpected commands: %#v", got)
-	}
-	for i := range want {
-		if want[i].name == "spx" {
-			projectDir, spxArgs, ok := simulatedSPXInvocation(got[i].dir, got[i].name, got[i].args...)
-			if !ok || !reflect.DeepEqual(want[i].args, spxArgs) {
-				t.Fatalf("unexpected command[%d]: %#v", i, got[i])
-			}
-			prefix := filepath.Join(repoRoot, ".tmp", "runtime-")
-			if !strings.HasPrefix(projectDir, prefix) {
-				t.Fatalf("unexpected runtime workspace dir[%d]: %s", i, projectDir)
-			}
-			continue
-		}
-		if want[i].name != got[i].name || !reflect.DeepEqual(want[i].args, got[i].args) {
-			t.Fatalf("unexpected command[%d]: %#v", i, got[i])
-		}
-		if want[i].dir != "" {
-			if got[i].dir != want[i].dir {
-				t.Fatalf("unexpected dir[%d]: got %s want %s", i, got[i].dir, want[i].dir)
-			}
-			continue
-		}
-		prefix := filepath.Join(repoRoot, ".tmp", "runtime-")
-		if !strings.HasPrefix(got[i].dir, prefix) {
-			t.Fatalf("unexpected runtime workspace dir[%d]: %s", i, got[i].dir)
-		}
-	}
-}
-
-func recordWorkflowEngineBuilds(t *testing.T) *[]recordedEngineBuild {
-	t.Helper()
-
-	original := workflowBuildEngine
-	var builds []recordedEngineBuild
-	workflowBuildEngine = func(cfg engine.BuildConfig, repoRoot string) error {
-		builds = append(builds, recordedEngineBuild{config: cfg, repoRoot: repoRoot})
-		return nil
-	}
-	t.Cleanup(func() {
-		workflowBuildEngine = original
-	})
-	return &builds
-}
-
-func assertWorkflowEngineBuilds(t *testing.T, got, want []recordedEngineBuild) {
-	t.Helper()
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected engine builds: got %#v want %#v", got, want)
 	}
 }

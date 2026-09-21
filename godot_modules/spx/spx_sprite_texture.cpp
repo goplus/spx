@@ -37,45 +37,42 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_mgr.h"
-#include "svg_mgr.h"
 
 void SpxSprite::set_texture_atlas_direct(GdString p_path, GdRect2 p_region, GdBool p_direct) {
-	String path_str = SpxStr(p_path);
-	current_anim_name = "";
-	current_svg_anim_key = "";
-	current_svg_path = "";
-	is_svg_mode = false;
+	ERR_FAIL_NULL_MSG(anim2d,
+			"SpxSprite: AnimatedSprite2D component is missing.");
+	const String path = SpxStr(p_path);
 
-	Ref<Texture2D> texture = resMgr->load_texture(path_str, p_direct);
+	Ref<Texture2D> texture = resMgr->load_texture_checked(path, p_direct);
 	ERR_FAIL_COND_MSG(texture.is_null(), "SpxSprite: texture atlas source is null.");
 
 	Ref<AtlasTexture> atlas_texture_frame = memnew(AtlasTexture);
 	atlas_texture_frame->set_atlas(texture);
 	atlas_texture_frame->set_region(p_region);
-
-	_play_single_image_animation(atlas_texture_frame);
+	VisualSource source;
+	source.kind = VisualKind::TEXTURE;
+	source.key = path;
+	PreparedVisual visual;
+	_prepare_texture(atlas_texture_frame, source, visual);
+	_commit_visual(visual);
 }
 
 void SpxSprite::set_texture_direct(GdString p_path, GdBool p_direct) {
-	String path_str = SpxStr(p_path);
-	current_anim_name = "";
-	current_svg_anim_key = "";
-	current_svg_path = "";
-	is_single_image_mode = false;
-
-	Ref<Texture2D> texture;
-	is_svg_mode = svgMgr->is_svg_file(path_str);
-	if (is_svg_mode) {
-		int target_scale = _get_actual_match_render_scale();
-		current_svg_scale = target_scale;
-		current_svg_path = path_str;
-		texture = svgMgr->get_svg_image(path_str, target_scale);
-	} else {
-		current_svg_scale = 1;
-		texture = resMgr->load_texture(path_str, p_direct);
-	}
-
-	_play_single_image_animation(texture);
+	ERR_FAIL_NULL_MSG(anim2d,
+			"SpxSprite: AnimatedSprite2D component is missing.");
+	VisualSource source;
+	source.key = SpxStr(p_path);
+	source.kind = SpxSvgCache::is_svg_path(source.key) ? VisualKind::SVG_TEXTURE
+												  : VisualKind::TEXTURE;
+	source.raster_scale = source.is_svg() ? _get_actual_match_render_scale() : 1;
+	Ref<Texture2D> texture =
+			source.is_svg() ? Ref<Texture2D>(resMgr->load_svg_texture(
+									  source.key, source.raster_scale))
+							: resMgr->load_texture_checked(source.key, p_direct);
+	ERR_FAIL_COND_MSG(texture.is_null(), "SpxSprite: texture is null.");
+	PreparedVisual visual;
+	_prepare_texture(texture, source, visual);
+	_commit_visual(visual);
 }
 
 void SpxSprite::set_texture_atlas(GdString p_path, GdRect2 p_region) {
@@ -125,28 +122,14 @@ Rect2 SpxSprite::get_rect() const {
 	return Rect2(offset, size);
 }
 
-void SpxSprite::_play_single_image_animation(Ref<Texture2D> p_texture) {
-	ERR_FAIL_COND_MSG(anim2d == nullptr, "SpxSprite: AnimatedSprite2D component is missing.");
-	ERR_FAIL_COND_MSG(p_texture.is_null(), "SpxSprite: texture is null.");
-
-	is_single_image_mode = true;
-	anim2d->set_sprite_frames(default_sprite_frames);
-
-	Ref<SpriteFrames> frames = anim2d->get_sprite_frames();
-	ERR_FAIL_COND_MSG(frames.is_null(), "SpxSprite: SpriteFrames resource is missing.");
-
-	if (!frames->has_animation(SpxSpriteMgr::default_texture_anim)) {
-		frames->add_animation(SpxSpriteMgr::default_texture_anim);
-	}
-
-	if (frames->get_frame_count(SpxSpriteMgr::default_texture_anim) == 0) {
-		frames->add_frame(SpxSpriteMgr::default_texture_anim, p_texture);
-	} else {
-		frames->set_frame(SpxSpriteMgr::default_texture_anim, 0, p_texture);
-	}
-
-	anim2d->set_animation(SpxSpriteMgr::default_texture_anim);
-	_update_anim_scale();
-	_on_frame_changed();
-	_update_current_frame_shader_uv_rect();
+void SpxSprite::_prepare_texture(const Ref<Texture2D> &p_texture,
+		const VisualSource &p_source,
+		PreparedVisual &r_visual) {
+	r_visual = PreparedVisual();
+	r_visual.source = p_source;
+	r_visual.animation = SpxSpriteMgr::default_texture_anim;
+	r_visual.frames.instantiate();
+	r_visual.frames->remove_animation("default");
+	r_visual.frames->add_animation(r_visual.animation);
+	r_visual.frames->add_frame(r_visual.animation, p_texture);
 }

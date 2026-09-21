@@ -27,12 +27,6 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
 )
 
-var (
-	rootRunSetup  = runSetup
-	rootRunBuild  = runBuild
-	rootRunDoctor = runDoctor
-)
-
 func runOtherRootCommand(args []string) error {
 	if len(args) == 0 {
 		printRootUsage()
@@ -41,11 +35,11 @@ func runOtherRootCommand(args []string) error {
 
 	switch args[0] {
 	case "setup":
-		return rootRunSetup(args[1:])
+		return runSetup(args[1:])
 	case "build":
-		return rootRunBuild(args[1:])
+		return runBuild(args[1:])
 	case "doctor":
-		return rootRunDoctor(args[1:])
+		return runDoctor(args[1:])
 	case "env":
 		return runEnv(args[1:])
 	case "tool":

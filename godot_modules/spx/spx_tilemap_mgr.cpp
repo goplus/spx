@@ -29,11 +29,12 @@
 /**************************************************************************/
 
 #include "spx_tilemap_mgr.h"
+#include "spx_abi.h"
 
 #include "spx_draw_tiles.h"
 
 void SpxTilemapMgr::on_destroy() {
-	SpxBaseMgr::on_destroy();
+	close_draw_tiles();
 }
 
 void SpxTilemapMgr::on_reset(int reset_code) {
@@ -67,22 +68,25 @@ void SpxTilemapMgr::open_draw_tiles_with_size(GdInt tile_size) {
 	get_spx_root()->add_child(draw_tiles);
 }
 
+SpxDrawTiles *SpxTilemapMgr::_ensure_draw_tiles() {
+	if (draw_tiles == nullptr) {
+		open_draw_tiles();
+	}
+	return draw_tiles;
+}
+
 void SpxTilemapMgr::set_layer_index(GdInt index) {
-	without_draw_tiles([&]() {
-		draw_tiles->set_layer_index_spx(index);
-	});
+	_ensure_draw_tiles()->set_layer_index_spx(index);
 }
 void SpxTilemapMgr::set_tile(GdString texture_path, GdBool with_collision) {
-	without_draw_tiles([&]() {
-		draw_tiles->set_tile_texture_spx(texture_path, with_collision ? &SpxDrawTiles::default_collision_rect : &SpxDrawTiles::no_collision_array);
-	});
+	_ensure_draw_tiles()->set_tile_texture_spx(texture_path, with_collision ? &SpxDrawTiles::default_collision_rect : &SpxDrawTiles::no_collision_array);
 }
 void SpxTilemapMgr::set_tile_with_collision_info(GdString texture_path, GdArray collision_points) {
 	Vector<Vector2> points = {};
 	auto len = collision_points == nullptr ? 0 : collision_points->size;
 	const float *data = nullptr;
 	if (len > 0) {
-		data = SpxBaseMgr::get_array<float>(collision_points, 0);
+		data = SpxAbi::get_array<float>(collision_points, 0);
 		if (data == nullptr) {
 			print_error("Invalid collision points array");
 			return;
@@ -94,44 +98,32 @@ void SpxTilemapMgr::set_tile_with_collision_info(GdString texture_path, GdArray 
 	for (int i = 0; i + 1 < len; i += 2) {
 		points.append(Vector2(data[i], data[i + 1]));
 	}
-	without_draw_tiles([&]() {
-		draw_tiles->set_tile_texture_spx(texture_path, &points);
-	});
+	_ensure_draw_tiles()->set_tile_texture_spx(texture_path, &points);
 }
 
 void SpxTilemapMgr::place_tiles(GdArray positions, GdString texture_path) {
-	without_draw_tiles([&]() {
-		draw_tiles->place_tiles_spx(positions, texture_path);
-	});
+	_ensure_draw_tiles()->place_tiles_spx(positions, texture_path);
 }
 void SpxTilemapMgr::place_tiles_with_layer(GdArray positions, GdString texture_path, GdInt layer_index) {
-	without_draw_tiles([&]() {
-		draw_tiles->place_tiles_spx(positions, texture_path, layer_index);
-	});
+	_ensure_draw_tiles()->place_tiles_spx(positions, texture_path, layer_index);
 }
 
 void SpxTilemapMgr::place_tile(GdVec2 pos, GdString texture_path) {
-	without_draw_tiles([&]() {
-		draw_tiles->place_tile_spx(pos, texture_path);
-	});
+	_ensure_draw_tiles()->place_tile_spx(pos, texture_path);
 }
 
 void SpxTilemapMgr::place_tile_with_layer(GdVec2 pos, GdString texture_path, GdInt layer_index) {
-	without_draw_tiles([&]() {
-		draw_tiles->place_tile_spx(pos, texture_path, layer_index);
-	});
+	_ensure_draw_tiles()->place_tile_spx(pos, texture_path, layer_index);
 }
 
 void SpxTilemapMgr::erase_tile(GdVec2 pos) {
-	with_draw_tiles([&]() {
-		draw_tiles->erase_tile_spx(pos);
-	});
+	ERR_FAIL_NULL_MSG(draw_tiles, "Open the draw tiles node before erasing tiles.");
+	draw_tiles->erase_tile_spx(pos);
 }
 
 void SpxTilemapMgr::erase_tile_with_layer(GdVec2 pos, GdInt layer_index) {
-	with_draw_tiles([&]() {
-		draw_tiles->erase_tile_spx(pos, layer_index);
-	});
+	ERR_FAIL_NULL_MSG(draw_tiles, "Open the draw tiles node before erasing tiles.");
+	draw_tiles->erase_tile_spx(pos, layer_index);
 }
 
 GdString SpxTilemapMgr::get_tile(GdVec2 pos) {

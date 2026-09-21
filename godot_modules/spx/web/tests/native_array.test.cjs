@@ -50,6 +50,28 @@ function engineBridge() {
     return { ...b, callbacks: b.context.LibraryManager.library };
 }
 
+test('module replacement uses new exports and releases arenas with their original allocator', () => {
+    const first = bridge();
+    const second = bridge();
+    first.module._gdspx_alloc_bool = () => 16;
+    second.module._gdspx_alloc_bool = () => 24;
+    assert.equal(first.run('AllocGdBool()'), 16);
+    const retired = first.run('GdspxBorrowNativeArray(5, 700000, 700000)');
+    const active = first.run('GdspxBorrowNativeArray(5, 700000, 700000)');
+
+    first.context.Module = second.module;
+    assert.equal(first.run('AllocGdBool()'), 24);
+    const current = first.run('GdspxBorrowNativeArray(5, 8, 8)');
+    assert.equal(current.module, second.module);
+    assert.deepEqual(first.freed, [active.ptr]);
+    first.run('GdspxFlushDeferredFrees()');
+    first.run('GdspxFlushDeferredFrees()');
+    assert.deepEqual(first.freed, [active.ptr, retired.ptr]);
+    assert.deepEqual(second.freed, []);
+    assert.equal(active.data.length, 0);
+    assert.equal(retired.data.length, 0);
+});
+
 test('fixed updates preserve array borrows until the next update begins', () => {
     const b = engineBridge();
     const borrows = [];
@@ -489,7 +511,7 @@ test('integer and object results preserve bits, reuse scope and heap growth', ()
     assert.equal(released.length, names.length * 3);
 });
 
-test('declared Web bindings preserve instance result identity and release on failure', () => {
+test('structured results remain independent and release storage on failure', () => {
     const b = bridge();
     b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
     const released = [];
@@ -503,16 +525,17 @@ test('declared Web bindings preserve instance result identity and release on fai
     b.run('api = new GdspxFuncs(); other = new GdspxFuncs()');
     const first = b.run('api.gdspx_input_get_global_mouse_pos()');
     const second = b.run('api.gdspx_input_get_global_mouse_pos()');
-    assert.equal(first, second);
-    assert.equal(first.x, 2);
+    assert.notEqual(first, second);
+    assert.equal(first.x, 1);
+    assert.equal(second.x, 2);
     assert.notEqual(b.run('other.gdspx_input_get_global_mouse_pos()'), first);
     assert.notEqual(b.run('api.gdspx_camera_get_camera_position()'), b.run('api.gdspx_camera_get_camera_position()'));
     assert.equal(released.length, 5);
     b.module._gdspx_input_get_global_mouse_pos = () => { throw new Error('engine failure'); };
     assert.throws(() => b.run('api.gdspx_input_get_global_mouse_pos()'), /engine failure/);
     assert.equal(released.length, 6);
-    b.module._gdspx_res_free_str = () => { throw new Error('native release must not run on Web'); };
-    assert.equal(b.run('api.gdspx_res_free_str("value")'), undefined);
+    assert.equal(b.run('api.gdspx_res_free_str'), undefined);
+    assert.equal(b.run('api.gdspx_global_free_string'), undefined);
 });
 
 test('writable arrays retain caller storage and reject copied or stale buffers', () => {
@@ -535,4 +558,125 @@ test('writable arrays retain caller storage and reject copied or stale buffers',
     b.context.Module = {...b.module};
     assert.throws(() => b.run('RequireNativeArray(borrowed, "read", 2)'), /valid native array/);
     assert.throws(() => b.run('RequireNativeArray(borrowed, "write", 2, true)'), /valid native array/);
+});
+
+test('expired arena descriptors cannot lend reused or freed storage', () => {
+    const b = bridge();
+    b.run('var retired = GdspxBorrowNativeArray(5, 700000, 700000); var active = GdspxBorrowNativeArray(5, 700000, 700000)');
+    const retired = b.run('retired');
+    const active = b.run('active');
+    b.run('GdspxFlushDeferredFrees()');
+    assert.ok(b.freed.includes(retired.ptr));
+    assert.equal(retired.data.length, 0);
+    assert.equal(active.data.length, 0);
+    for (const name of ['retired', 'active']) {
+        for (const writable of [false, true]) {
+            assert.throws(() => b.run(`RequireNativeArrayBuffer(${name}, 'test', 5, ${writable})`), /valid native array/);
+        }
+        assert.equal(b.run(`NativeArrayCount(${name})`), -1);
+    }
+    const fresh = b.run('var fresh = GdspxBorrowNativeArray(5, 8, 8); fresh');
+    assert.equal(fresh.ptr, active.ptr);
+    assert.equal(fresh.data.length, 8);
+    assert.equal(b.run("RequireNativeArrayBuffer(fresh, 'test', 5, true).ptr"), fresh.ptr);
+    assert.equal(active.data.length, 0, 'reuse must not revive a descriptor');
+});
+
+for (const phase of ['reset', 'destroy']) for (const batched of [false, true]) {
+    test(`${phase} (batched=${batched}) drops queued and teardown contacts until a new session starts`, () => {
+        const b = engineBridge();
+        const calls = [];
+        b.context.FFI = { gdspx_dispatch: event => {
+            calls.push(event);
+            if (event === `OnEngine${phase[0].toUpperCase()}${phase.slice(1)}`) {
+                b.callbacks.godot_js_spx_on_trigger_exit(10n, 11n);
+            }
+        }};
+        if (batched) b.context.gdspx_on_contact_events = bytes => {
+            const kinds = ['OnCollisionEnter', 'OnCollisionStay', 'OnCollisionExit', 'OnTriggerEnter', 'OnTriggerStay', 'OnTriggerExit'];
+            const values = new Uint32Array(bytes.buffer);
+            for (let i = 0; i < values.length; i += 5) calls.push(kinds[values[i] - 1]);
+        };
+        b.callbacks.godot_js_spx_on_trigger_enter(10n, 11n);
+        b.callbacks[`godot_js_spx_on_engine_${phase}`]();
+        b.callbacks.godot_js_spx_on_trigger_exit(10n, 11n);
+        b.callbacks.godot_js_spx_on_engine_update(1 / 60);
+        assert.deepEqual(calls, [`OnEngine${phase[0].toUpperCase()}${phase.slice(1)}`, 'OnEngineUpdate']);
+        b.callbacks.godot_js_spx_contact_session_start();
+        b.callbacks.godot_js_spx_on_trigger_enter(20n, 21n);
+        b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+        assert.deepEqual(calls.slice(-2), ['OnTriggerEnter', 'OnEngineFixedUpdate']);
+    });
+}
+
+test('reset during fallback contact dispatch stops the previous batch', () => {
+    const b = engineBridge();
+    const calls = [];
+    b.context.FFI = { gdspx_dispatch: event => {
+        calls.push(event);
+        if (event === 'OnTriggerEnter') b.callbacks.godot_js_spx_on_engine_reset();
+    }};
+    b.callbacks.godot_js_spx_on_trigger_enter(1n, 2n);
+    b.callbacks.godot_js_spx_on_trigger_enter(3n, 4n);
+    b.callbacks.godot_js_spx_on_engine_fixed_update(1 / 60);
+    assert.deepEqual(calls, ['OnTriggerEnter', 'OnEngineReset', 'OnEngineFixedUpdate']);
+});
+
+test('generated scalar inputs bypass pools even when the manager fails', () => {
+    const b = bridge();
+    const calls = [];
+    Object.assign(b.module, {
+        _gdspx_physics_set_global_gravity: value => calls.push(['float', value]),
+        _gdspx_camera_set_camera_smoothing: value => calls.push(['bool', value]),
+        _gdspx_sprite_set_rotation: (id, rotation) => {
+            calls.push(['rotation', id, rotation]);
+            throw new Error('manager failed');
+        },
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    const api = b.run('new GdspxFuncs()');
+    api.gdspx_physics_set_global_gravity(9.81);
+    api.gdspx_camera_set_camera_smoothing(true);
+    api.gdspx_camera_set_camera_smoothing(false);
+    assert.throws(() => api.gdspx_sprite_set_rotation(1, 0x200000, 45.5), /manager failed/);
+    assert.deepEqual(calls, [
+        ['float', 9.81], ['bool', 1], ['bool', 0],
+        ['rotation', 9007199254740993n, 45.5],
+    ]);
+    assert.deepEqual(b.freed, []);
+});
+
+test('generated int64 inputs preserve signed precision and order for integers and multiple IDs', () => {
+    const b = bridge();
+    const calls = [];
+    const released = [];
+    Object.assign(b.module, {
+        _gdspx_camera_set_camera_limit: (side, limit) => calls.push([side, limit]),
+        _gdspx_sprite_set_z_index: (id, index) => calls.push([id, index]),
+        _gdspx_sprite_check_collision: (id, target, sourceTrigger, targetTrigger, result) => {
+            calls.push([id, target]);
+            assert.equal(sourceTrigger, 1);
+            assert.equal(targetTrigger, 0);
+            assert.equal(result, 64);
+            b.module.HEAPU8[result] = 1;
+        },
+        _gdspx_alloc_bool: () => 64,
+        _gdspx_free_bool: ptr => released.push(ptr),
+    });
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    const api = b.run('new GdspxFuncs()');
+    const values = [0n, 1n, -1n, 0xffffffffn, 0x100000000n,
+        9007199254740991n, 9007199254740992n, 9007199254740993n,
+        -9007199254740993n, 9223372036854775807n, -9223372036854775808n];
+    const parts = value => [Number(BigInt.asUintN(32, value)), Number(BigInt.asUintN(32, value >> 32n))];
+    for (const [index, first] of values.entries()) {
+        const second = values[(index + 1) % values.length];
+        const args = [...parts(first), ...parts(second)];
+        api.gdspx_camera_set_camera_limit(...args);
+        api.gdspx_sprite_set_z_index(...args);
+        assert.equal(api.gdspx_sprite_check_collision(...args, true, false), true);
+        assert.deepEqual(calls.splice(0), [[first, second], [first, second], [first, second]]);
+    }
+    assert.deepEqual(released, values.map(() => 64), 'return values retain their existing output pool');
+    assert.deepEqual(b.freed, []);
 });

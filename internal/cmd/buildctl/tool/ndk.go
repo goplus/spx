@@ -57,31 +57,16 @@ type androidNDKArchive struct {
 	sha256    string
 }
 
-var androidNDKResolveEnv = resolveAndroidNDKEnv
-
-var androidNDKFetcher = fetchAndroidNDK
-
-var androidNDKPersister = persistNDKArchive
-
-var androidNDKRetryDelay = 2 * time.Second
-
 const (
-	maxNDKPropertiesBytes int64 = 64 << 10
-	maxNDKSymlinkBytes          = 4 << 10
-	androidNDKOwnerFile         = ".spx-buildctl"
+	maxNDKArchiveBytes          int64 = 2 << 30
+	maxNDKCentralDirectoryBytes       = 128 << 20
+	maxNDKEntries                     = 20_000
+	maxNDKPropertiesBytes       int64 = 64 << 10
+	maxNDKSymlinkBytes                = 4 << 10
+	androidNDKOwnerFile               = ".spx-buildctl"
 )
 
 var errInvalidNDKArchive = errors.New("invalid Android NDK archive")
-
-// Re-inventory these r23c limits when changing androidNDKVersion.
-var androidNDKZipLimits = shared.ZipLimits{
-	MaxArchiveBytes:          2 << 30,
-	MaxCentralDirectoryBytes: 128 << 20,
-	MaxEntries:               20_000,
-	MaxEntrySize:             512 << 20,
-	MaxTotalSize:             6 << 30,
-	MaxCompressionRatio:      200,
-}
 
 func (archive androidNDKArchive) validate() error {
 	if archive.archiveOS == "" || archive.hostTag == "" || archive.size <= 0 {
@@ -120,7 +105,7 @@ func androidNDKArchiveForOS(goos string) (androidNDKArchive, error) {
 }
 
 func fetchAndroidNDK(url, dst string) error {
-	return shared.FetchURLToFileWithLimit(url, dst, androidNDKZipLimits.MaxArchiveBytes)
+	return shared.FetchURLToFileWithLimit(url, dst, maxNDKArchiveBytes)
 }
 
 func parseToolSetupNDKArgs(args []string) (toolSetupNDKConfig, error) {
@@ -156,7 +141,7 @@ func parseToolSetupNDKArgs(args []string) (toolSetupNDKConfig, error) {
 }
 
 func setupAndroidNDK(cfg toolSetupNDKConfig) error {
-	env, err := androidNDKResolveEnv()
+	env, err := resolveAndroidNDKEnv()
 	if err != nil {
 		return err
 	}
@@ -197,7 +182,15 @@ func setupAndroidNDK(cfg toolSetupNDKConfig) error {
 		return err
 	}
 	if err := shared.ExtractZipWithOptions(archivePath, extractDir, shared.ZipExtractOptions{
-		Limits:                     androidNDKZipLimits,
+		// Re-inventory these r23c limits when changing androidNDKVersion.
+		Limits: shared.ZipLimits{
+			MaxArchiveBytes:          maxNDKArchiveBytes,
+			MaxCentralDirectoryBytes: maxNDKCentralDirectoryBytes,
+			MaxEntries:               maxNDKEntries,
+			MaxEntrySize:             512 << 20,
+			MaxTotalSize:             6 << 30,
+			MaxCompressionRatio:      200,
+		},
 		MaterializeSymlinksAsFiles: true,
 	}); err != nil {
 		return err
@@ -276,7 +269,7 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 	}
 	snapshot := filepath.Join(tempDir, "android-ndk-source.zip")
 	if cfg.manualInstall {
-		return androidNDKPersister(cfg.ndkPath, snapshot, env.archive)
+		return persistNDKArchive(cfg.ndkPath, snapshot, env.archive)
 	}
 
 	cachedArchive := filepath.Join(env.cacheDir, env.archiveName)
@@ -284,7 +277,7 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return "", fmt.Errorf("NDK cache is not a regular non-symlink file: %s", cachedArchive)
 		}
-		path, err := androidNDKPersister(cachedArchive, snapshot, env.archive)
+		path, err := persistNDKArchive(cachedArchive, snapshot, env.archive)
 		if err == nil {
 			return path, nil
 		}
@@ -298,9 +291,9 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 	tempArchive := filepath.Join(tempDir, env.archiveName)
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		if err := androidNDKFetcher(env.downloadURL, tempArchive); err != nil {
+		if err := fetchAndroidNDK(env.downloadURL, tempArchive); err != nil {
 			lastErr = err
-		} else if _, err := androidNDKPersister(tempArchive, cachedArchive, env.archive); err != nil {
+		} else if _, err := persistNDKArchive(tempArchive, cachedArchive, env.archive); err != nil {
 			if !errors.Is(err, errInvalidNDKArchive) {
 				return "", fmt.Errorf("persist Android NDK archive: %w", err)
 			}
@@ -308,8 +301,8 @@ func resolveNDKArchivePath(cfg toolSetupNDKConfig, env androidNDKEnv, tempDir st
 		} else {
 			return tempArchive, nil
 		}
-		if attempt < 2 && androidNDKRetryDelay > 0 {
-			time.Sleep(androidNDKRetryDelay)
+		if attempt < 2 {
+			time.Sleep(2 * time.Second)
 		}
 	}
 	if lastErr == nil {
@@ -389,9 +382,9 @@ func verifyNDKArchive(path string, archive androidNDKArchive) error {
 		return invalidNDKArchivef("SHA-256 %s does not match locked digest %s", digest, archive.sha256)
 	}
 	if err := zippreflight.Check(file, info.Size(), zippreflight.Limits{
-		MaxArchiveBytes:          androidNDKZipLimits.MaxArchiveBytes,
-		MaxCentralDirectoryBytes: androidNDKZipLimits.MaxCentralDirectoryBytes,
-		MaxEntries:               androidNDKZipLimits.MaxEntries,
+		MaxArchiveBytes:          maxNDKArchiveBytes,
+		MaxCentralDirectoryBytes: maxNDKCentralDirectoryBytes,
+		MaxEntries:               maxNDKEntries,
 	}); err != nil {
 		return invalidNDKArchivef("preflight: %v", err)
 	}

@@ -35,101 +35,90 @@
 #include "scene/resources/font.h"
 #include "scene/resources/sprite_frames.h"
 #include "servers/audio/audio_stream.h"
-#include "spx_base_mgr.h"
+#include "spx_manager.h"
+#include "spx_svg_cache.h"
 
-class AudioStreamMP3;
-class AudioStreamWAV;
 class Texture2D;
 
 namespace ProjectFonts {
 struct Prepared;
 }
 
-struct FrameNormal {
-	String path;
-	double offset_x;
-	double offset_y;
-	int64_t bitmap;
-};
-
-struct FrameAtlas {
-	int64_t x, y, w, h;
-	double offset_x;
-	double offset_y;
-};
-
 struct AnimPayload {
 	String base_path;
 	Array frames;
-	int64_t max_bitmap;
+	int64_t max_bitmap = 1;
 };
 
-class SpxResMgr : public SpxBaseMgr {
-	SPXCLASS(SpxResMgr, SpxBaseMgr)
+struct SpxAnimationClip {
+	Ref<SpriteFrames> frames;
+	Vector<Vector2> offsets;
+	Vector<int> svg_frame_scales;
+	bool is_svg = false;
+};
 
-public:
-	virtual ~SpxResMgr() = default; // Added virtual destructor to fix -Werror=non-virtual-dtor
+class SpxResMgr : public SpxManager {
 
 private:
 	HashMap<String, Ref<Texture2D>> cached_texture;
 	HashMap<String, Ref<AudioStream>> cached_audio;
 	HashMap<String, Ref<FontFile>> display_fonts;
-	Ref<FontFile> display_default_font;
 	Ref<Font> initial_theme_default_font;
 	Ref<Font> initial_theme_fallback_font;
 	bool initial_theme_fonts_saved = false;
-	bool is_load_direct;
+	bool is_load_direct = true;
 	String game_data_root = "res://";
-	Ref<SpriteFrames> anim_frames;
-	bool is_dynamic_anim = false;
-	// store animation frame offset information: anim_name -> frame_offset_list
-	HashMap<String, Vector<Vector2>> animation_frame_offsets;
+	HashMap<String, SpxAnimationClip> animation_clips;
+	SpxSvgCache svg_cache;
 
 private:
-	static Ref<AudioStreamWAV> _load_wav(const String &path);
-	static Ref<AudioStream> _load_mp3(const String &path);
-	Ref<Texture2D> _load_texture_direct(const String &p_path);
+	Ref<Texture2D> _load_texture_direct(const String &p_path, bool p_allow_placeholder);
 	Ref<AudioStream> _load_audio_direct(const String &p_path);
 
-	bool _parse_anim_json(const String &src, AnimPayload &out);
+	bool _parse_anim_json(const String &src, bool p_is_atlas, AnimPayload &out);
 	Vector2 _read_offset(const Dictionary &d);
-	void _build_normal_frames(const String &p_sprite_type, const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets);
-	void _build_atlas_frames(const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets);
+	bool _build_normal_frames(const String &anim_key, const AnimPayload &payload,
+			SpxAnimationClip &r_clip);
+	bool _build_atlas_frames(const String &anim_key, const AnimPayload &payload,
+			SpxAnimationClip &r_clip);
 	void _commit_project_fonts(ProjectFonts::Prepared &&p_prepared);
 
 public:
 	void on_awake() override;
 	void on_reset(int reset_code) override;
+	void on_destroy() override;
 	Ref<Texture2D> load_texture(String path, GdBool direct = false);
+	Ref<Texture2D> load_texture_checked(const String &p_path,
+			GdBool p_direct = false);
 	Ref<AudioStream> load_audio(String path, GdBool direct = false);
 	Ref<Texture2D> _reload_texture(String path);
 	void set_game_datas(String path, Vector<String> files);
 	void update_caches(const Vector<String> &files);
-	Ref<SpriteFrames> get_anim_frames(const String &anim_name);
+	bool has_animation(const String &p_key) const;
+	Ref<SpriteFrames> get_animation_frames(const String &p_key, int p_raster_scale = 1);
+	Ref<ImageTexture> load_svg_texture(const String &p_path, int p_raster_scale);
 	String get_anim_key_name(const String &sprite_type_name, const String &anim_name);
 	bool is_dynamic_anim_mode() const;
+	bool is_svg_animation(const String &p_anim_key) const;
 	Vector2 get_animation_frame_offset(String anim_key, int frame_index);
 	String _to_engine_path(const String &p_path);
 
 public:
-	SPX_API void create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
-	SPX_API void set_load_mode(GdBool is_direct_mode);
-	SPX_API GdBool get_load_mode();
-	SPX_API GdRect2 get_bound_from_alpha(GdString p_path);
-	SPX_API GdVec2 get_image_size(GdString p_path);
-	SPX_API GdString read_all_text(GdString p_path);
-	SPX_API GdBool has_file(GdString p_path);
-	SPX_API GdString list_directories(GdString p_path);
-	SPX_API void reload_texture(GdString path);
-	// Web strings are JS values and need no explicit release.
-	SPX_BINDING(web=noop)
-	SPX_API void free_str(GdString str);
+	SPX_BIND void create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
+	SPX_BIND void set_load_mode(GdBool is_direct_mode);
+	SPX_BIND GdBool get_load_mode();
+	SPX_BIND GdRect2 get_bound_from_alpha(GdString p_path);
+	SPX_BIND GdVec2 get_image_size(GdString p_path);
+	SPX_BIND GdString read_all_text(GdString p_path);
+	SPX_BIND GdBool has_file(GdString p_path);
+	SPX_BIND GdString list_directories(GdString p_path);
+	SPX_BIND void reload_texture(GdString path);
 	// Atomically applies a complete project font configuration. Returns an
 	// allocated empty string on success, or an allocated diagnostic on failure.
-	SPX_API GdString apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences);
-	SPX_API void set_default_font(GdString font_path);
-	SPX_API void register_font_face(GdString font_path, GdString family);
-	SPX_API void set_font_preferences(GdArray preferences);
+	SPX_BIND GdString apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences);
+	SPX_BIND void set_default_font(GdString font_path);
+	SPX_BIND void register_font_face(GdString font_path, GdString family);
+	SPX_BIND void set_font_preferences(GdArray preferences);
 };
 
 #endif // SPX_RES_MGR_H

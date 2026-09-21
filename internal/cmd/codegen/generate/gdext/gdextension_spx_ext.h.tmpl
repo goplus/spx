@@ -79,8 +79,11 @@ typedef struct {
 
 typedef void *GDExtensionSpxCallbackInfoPtr;
 typedef void (*GDExtensionSpxGlobalRegisterCallbacks)(GDExtensionSpxCallbackInfoPtr callback_ptr);
+// Releases a caller-owned Native string, including after engine shutdown.
+typedef void (*GDExtensionSpxGlobalFreeString)(GdString value);
 
-// callback
+// Callbacks run synchronously. GdString arguments are borrowed until the callback returns;
+// copy them to retain their value, and do not free them.
 typedef void (*GDExtensionSpxCallbackOnEngineStart)();
 typedef void (*GDExtensionSpxCallbackOnEngineUpdate)(GdFloat delta);
 typedef void (*GDExtensionSpxCallbackOnEngineFixedUpdate)(GdFloat delta);

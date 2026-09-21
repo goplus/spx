@@ -73,6 +73,9 @@ func (p *SpriteImpl) SetVelocity(velocityX, velocityY float64) {
 	p.physics().setVelocity(velocityX, velocityY)
 }
 
+// AddImpulse applies a one-shot momentum change on the next dynamic physics tick.
+// Velocity changes by impulse / mass, independently of the physics tick rate.
+// Coordinates use positive X to the right and positive Y upward.
 func (p *SpriteImpl) AddImpulse(impulseX, impulseY float64) {
 	p.physics().addImpulse(impulseX, impulseY)
 }

@@ -48,36 +48,35 @@
 
 #include "project_font_transaction.h"
 #include "spx_engine.h"
-#include "spx_image_loader_svg.h"
 #include "spx_image_texture.h"
 #include "spx_platform_mgr.h"
 #include "spx_svg_utils.h"
 #include "spx_theme_font.h"
-#include "svg_mgr.h"
 
 void SpxResMgr::on_awake() {
-	SpxBaseMgr::on_awake();
 	if (!initial_theme_fonts_saved) {
 		spx_get_theme_fonts(initial_theme_default_font, initial_theme_fallback_font);
 		initial_theme_fonts_saved = true;
 	}
 	is_load_direct = true;
-	anim_frames.instantiate();
 }
 
 void SpxResMgr::on_reset(int reset_code) {
-	animation_frame_offsets.clear();
-	anim_frames->clear_all();
+	svg_cache.clear();
+	animation_clips.clear();
 	display_fonts.clear();
-	display_default_font.unref();
 	if (initial_theme_fonts_saved) {
 		spx_set_theme_fonts(initial_theme_default_font, initial_theme_fallback_font);
 	}
 	SpxSvgUtils::reset_font_registry();
 }
 
+void SpxResMgr::on_destroy() {
+	on_reset(0);
+}
+
 bool SpxResMgr::is_dynamic_anim_mode() const {
-	return is_dynamic_anim;
+	return !animation_clips.is_empty();
 }
 
 String SpxResMgr::_to_engine_path(const String &p_path) {
@@ -85,7 +84,7 @@ String SpxResMgr::_to_engine_path(const String &p_path) {
 	SpxEngine *engine = SpxEngine::get_singleton();
 	SpxPlatformMgr *platform = engine != nullptr ? engine->get_platform() : nullptr;
 	if (game_data_root != "res://" &&
-			(platform == nullptr || !path.begins_with(platform->_get_persistant_data_dir()))) {
+			(platform == nullptr || !path.begins_with(platform->_get_persistent_data_dir()))) {
 		if (path.begins_with("../")) {
 			path = path.substr(3, -1);
 		}
@@ -94,22 +93,15 @@ String SpxResMgr::_to_engine_path(const String &p_path) {
 	return path;
 }
 
-Ref<AudioStreamWAV> SpxResMgr::_load_wav(const String &path) {
-	return AudioStreamWAV::load_from_file(path, Dictionary());
-}
-
-static Ref<AudioStream> _import_mp3(const String &p_path) {
+static Ref<AudioStream> _load_mp3(const Ref<FileAccess> &p_file) {
 #ifdef MODULE_MINIMP3_ENABLED
-	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
-	ERR_FAIL_COND_V(f.is_null(), Ref<AudioStreamMP3>());
-
-	uint64_t len = f->get_length();
+	uint64_t len = p_file->get_length();
 
 	Vector<uint8_t> data;
 	data.resize(len);
 	uint8_t *w = data.ptrw();
 
-	f->get_buffer(w, len);
+	p_file->get_buffer(w, len);
 
 	Ref<AudioStreamMP3> mp3_stream;
 	mp3_stream.instantiate();
@@ -123,14 +115,11 @@ static Ref<AudioStream> _import_mp3(const String &p_path) {
 #endif
 }
 
-Ref<AudioStream> SpxResMgr::_load_mp3(const String &path) {
-	return _import_mp3(path);
-}
-
 Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	String path = _to_engine_path(p_path);
-	if (cached_audio.has(path)) {
-		return cached_audio[path];
+	const Ref<AudioStream> *cached = cached_audio.getptr(path);
+	if (cached != nullptr) {
+		return *cached;
 	}
 	Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
 	if (file.is_null()) {
@@ -140,9 +129,9 @@ Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	Ref<AudioStream> res;
 	const String ext = path.get_extension().to_lower();
 	if (ext == "mp3") {
-		res = _load_mp3(path);
+		res = _load_mp3(file);
 	} else if (ext == "wav") {
-		res = _load_wav(path);
+		res = AudioStreamWAV::load_from_file(path, Dictionary());
 	} else {
 		print_error("unknown audio extension " + ext + " path=" + path);
 	}
@@ -150,32 +139,88 @@ Ref<AudioStream> SpxResMgr::_load_audio_direct(const String &p_path) {
 	return res;
 }
 
-bool SpxResMgr::_parse_anim_json(const String &src, AnimPayload &out) {
+namespace {
+
+bool is_animation_number(const Variant &p_value) {
+	return (p_value.get_type() == Variant::INT ||
+				   p_value.get_type() == Variant::FLOAT) &&
+			Math::is_finite(double(p_value));
+}
+
+bool is_positive_animation_integer(const Variant &p_value) {
+	return is_animation_number(p_value) && double(p_value) > 0 &&
+			double(p_value) <= INT32_MAX &&
+			double(p_value) == Math::floor(double(p_value));
+}
+
+} // namespace
+
+bool SpxResMgr::_parse_anim_json(const String &src, bool p_is_atlas,
+		AnimPayload &out) {
 	JSON json;
-	Error error = json.parse(src);
-	if (error != OK) {
-		print_error("Failed to parse JSON: " + json.get_error_message());
-		return false;
-	}
-
+	ERR_FAIL_COND_V_MSG(json.parse(src) != OK, false,
+			"Invalid animation JSON: " + json.get_error_message());
+	ERR_FAIL_COND_V_MSG(json.get_data().get_type() != Variant::DICTIONARY, false,
+			"Animation JSON must be an object.");
 	Dictionary dict = json.get_data();
-
-	if (dict.has("base_path")) {
+	ERR_FAIL_COND_V_MSG(!dict.has("frames") ||
+					dict["frames"].get_type() != Variant::ARRAY,
+			false, "Animation frames must be an array.");
+	ERR_FAIL_COND_V_MSG(!dict.has("max_bitmap") ||
+					!is_positive_animation_integer(dict["max_bitmap"]),
+			false,
+			"Animation max_bitmap must be a positive integer.");
+	out.frames = dict["frames"];
+	out.max_bitmap = dict["max_bitmap"];
+	ERR_FAIL_COND_V_MSG(out.frames.is_empty(), false,
+			"Animation must contain at least one frame.");
+	if (p_is_atlas) {
+		ERR_FAIL_COND_V_MSG(!dict.has("base_path") ||
+						dict["base_path"].get_type() != Variant::STRING ||
+						String(dict["base_path"]).is_empty(),
+				false, "Animation atlas path is missing.");
 		out.base_path = dict["base_path"];
 	}
 
-	if (!dict.has("frames")) {
-		print_error("JSON missing 'frames'");
-		return false;
+	bool has_svg = false;
+	bool has_bitmap = false;
+	for (int i = 0; i < out.frames.size(); i++) {
+		ERR_FAIL_COND_V_MSG(out.frames[i].get_type() != Variant::DICTIONARY, false,
+				"Animation frame must be an object.");
+		Dictionary frame = out.frames[i];
+		if (p_is_atlas) {
+			for (const char *field : { "x", "y", "w", "h" }) {
+				ERR_FAIL_COND_V_MSG(!frame.has(field) ||
+								!is_animation_number(frame[field]),
+						false, "Invalid animation atlas rectangle.");
+			}
+			ERR_FAIL_COND_V_MSG(double(frame["w"]) <= 0 || double(frame["h"]) <= 0,
+					false, "Animation atlas size must be positive.");
+		} else {
+			ERR_FAIL_COND_V_MSG(!frame.has("path") ||
+							frame["path"].get_type() != Variant::STRING ||
+							String(frame["path"]).is_empty(),
+					false, "Animation frame path is missing.");
+			ERR_FAIL_COND_V_MSG(!frame.has("bitmap") ||
+							!is_positive_animation_integer(frame["bitmap"]),
+					false,
+					"Animation bitmap must be a positive integer.");
+			const bool svg = SpxSvgCache::is_svg_path(frame["path"]);
+			has_svg = has_svg || svg;
+			has_bitmap = has_bitmap || !svg;
+		}
+		if (frame.has("offset")) {
+			ERR_FAIL_COND_V_MSG(frame["offset"].get_type() != Variant::ARRAY, false,
+					"Animation offset must be an array.");
+			Array offset = frame["offset"];
+			ERR_FAIL_COND_V_MSG(
+					offset.size() != 2 || !is_animation_number(offset[0]) ||
+							!is_animation_number(offset[1]),
+					false, "Animation offset must contain two finite numbers.");
+		}
 	}
-
-	if (!dict.has("max_bitmap")) {
-		print_error("JSON missing 'max_bitmap'");
-		return false;
-	}
-
-	out.frames = dict["frames"];
-	out.max_bitmap = dict["max_bitmap"];
+	ERR_FAIL_COND_V_MSG(has_svg && has_bitmap, false,
+			"Animation cannot mix SVG and bitmap frames.");
 	return true;
 }
 
@@ -194,123 +239,101 @@ Vector2 SpxResMgr::_read_offset(const Dictionary &d) {
 			double(off[1]));
 }
 
-void SpxResMgr::_build_normal_frames(
-		const String &p_sprite_type,
-		const String &anim_key,
+bool SpxResMgr::_build_normal_frames(const String &anim_key,
 		const AnimPayload &payload,
-		Vector<Vector2> &out_offsets) {
-	int svg_count = 0;
+		SpxAnimationClip &r_clip) {
 	for (int i = 0; i < payload.frames.size(); i++) {
-		Dictionary f = payload.frames[i];
-
-		String path = f["path"];
-		int64_t bitmap = f["bitmap"];
-		Vector2 offset = _read_offset(f) / float(bitmap);
-
-		Ref<Texture2D> final_tex;
-		if (svgMgr->is_svg_file(path)) {
-			float scale = float(payload.max_bitmap) / float(bitmap);
-			final_tex = svgMgr->get_svg_image(path, scale);
-			svg_count++;
+		Dictionary frame = payload.frames[i];
+		String path = frame["path"];
+		const double bitmap = frame["bitmap"];
+		Ref<Texture2D> texture;
+		if (SpxSvgCache::is_svg_path(path)) {
+			const int scale =
+					SpxSvgCache::raster_scale(float(payload.max_bitmap / bitmap));
+			texture = load_svg_texture(path, scale);
+			r_clip.svg_frame_scales.push_back(scale);
+			r_clip.is_svg = true;
 		} else {
-			final_tex = load_texture(path);
+			texture = load_texture_checked(path);
 		}
-
-		if (!final_tex.is_valid()) {
-			print_error("cannot load texture: " + path);
-			continue;
-		}
-
-		anim_frames->add_frame(anim_key, final_tex);
-		out_offsets.push_back(offset);
+		ERR_FAIL_COND_V_MSG(texture.is_null(), false,
+				"Cannot load animation texture: " + path);
+		r_clip.frames->add_frame(anim_key, texture);
+		r_clip.offsets.push_back(_read_offset(frame) / bitmap);
 	}
-
-	if (svg_count > 0 && svg_count != payload.frames.size()) {
-		print_error(vformat(
-				"[SpxResMgr::create_animation][ERR_SVG_FRAME_MISMATCH] "
-				"Sprite='%s', Anim='%s', SVG_Count=%d, Frame_Count=%d — counts must match for SVG animations.",
-				p_sprite_type,
-				anim_key,
-				svg_count,
-				payload.frames.size()));
-		return;
-	}
-
-	svgMgr->mark_svg_animation(anim_key, svg_count > 0);
+	return true;
 }
 
-void SpxResMgr::_build_atlas_frames(const String &anim_key, const AnimPayload &payload, Vector<Vector2> &out_offsets) {
-	Ref<Texture2D> atlas = load_texture(payload.base_path);
-	if (!atlas.is_valid()) {
-		print_error("cannot load atlas: " + payload.base_path);
-		return;
-	}
-
+bool SpxResMgr::_build_atlas_frames(const String &anim_key,
+		const AnimPayload &payload,
+		SpxAnimationClip &r_clip) {
+	Ref<Texture2D> atlas = load_texture_checked(payload.base_path);
+	ERR_FAIL_COND_V_MSG(atlas.is_null(), false,
+			"Cannot load animation atlas: " + payload.base_path);
 	for (int i = 0; i < payload.frames.size(); i++) {
-		Dictionary f = payload.frames[i];
-
-		int64_t x = f["x"];
-		int64_t y = f["y"];
-		int64_t w = f["w"];
-		int64_t h = f["h"];
-		Vector2 offset = _read_offset(f);
-
-		Ref<AtlasTexture> tex;
-		tex.instantiate();
-		tex->set_atlas(atlas);
-		tex->set_region(Rect2(x, y, w, h));
-
-		anim_frames->add_frame(anim_key, tex);
-		out_offsets.push_back(offset);
+		Dictionary frame = payload.frames[i];
+		Ref<AtlasTexture> texture;
+		texture.instantiate();
+		texture->set_atlas(atlas);
+		texture->set_region(Rect2(double(frame["x"]), double(frame["y"]),
+				double(frame["w"]), double(frame["h"])));
+		r_clip.frames->add_frame(anim_key, texture);
+		r_clip.offsets.push_back(_read_offset(frame));
 	}
+	return true;
 }
 
-static void _load_image(String path, Ref<Image> p_image) {
-	const bool is_svg = path.get_extension().nocasecmp_to("svg") == 0;
-	Error err = is_svg ? SpxImageLoaderSVG::load_image(path, p_image) : ImageLoader::load_image(path, p_image);
-	if (err != OK) {
-		// Failed to load image , so give a pink image
-		// pink color
-		PackedByteArray data;
-		for (int i = 0; i < 4 * 4; i++) {
-			data.append(255); // R
-			data.append(0); // G
-			data.append(255); // B
-			data.append(128); // A
-		}
-		p_image->set_data(4, 4, false, Image::FORMAT_RGBA8, data);
+Ref<Texture2D> SpxResMgr::load_texture_checked(const String &p_path,
+		GdBool p_direct) {
+	if ((!is_load_direct && !p_direct) || SpxSvgCache::is_svg_path(p_path)) {
+		return load_texture(p_path, p_direct);
 	}
+	return _load_texture_direct(p_path, false);
 }
 
-Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path) {
-	String path = _to_engine_path(p_path);
-	// data in tmp dir would not keep in cache
-	if (cached_texture.has(path)) {
-		return cached_texture[path];
+Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path, bool p_allow_placeholder) {
+	const String path = _to_engine_path(p_path);
+	const Ref<Texture2D> *cached = cached_texture.getptr(path);
+	if (cached != nullptr) {
+		return *cached;
 	}
 
 	Ref<Image> image;
 	image.instantiate();
-
-	_load_image(path, image);
+	const Error error = ImageLoader::load_image(path, image);
+	if (error != OK) {
+		if (!p_allow_placeholder) {
+			return Ref<Texture2D>();
+		}
+		image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+		image->fill(Color(1, 0, 1, 128.0f / 255.0f));
+	}
 
 	Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image);
-	cached_texture.insert(path, texture);
+	if (error == OK) {
+		cached_texture.insert(path, texture);
+	}
 	return texture;
 }
 Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
-	if (cached_texture.has(path)) {
-		auto tex = (Ref<ImageTexture>)cached_texture[path];
-		Ref<Image> image;
-		image.instantiate();
-		_load_image(path, image);
-		tex->set_image(image);
-		cached_texture.erase(path);
-		cached_texture.insert(path, tex);
-		return tex;
-	} else {
-		return _load_texture_direct(path);
+	if (SpxSvgCache::is_svg_path(path)) {
+		return svg_cache.reload_image(_to_engine_path(path));
 	}
+	path = _to_engine_path(path);
+	Ref<Image> image;
+	image.instantiate();
+	const Ref<Texture2D> *cached = cached_texture.getptr(path);
+	if (ImageLoader::load_image(path, image) != OK) {
+		return cached != nullptr ? *cached : Ref<Texture2D>();
+	}
+	if (cached != nullptr) {
+		Ref<ImageTexture> texture = *cached;
+		SpxImageTexture::replace_image(texture, image);
+		return texture;
+	}
+	Ref<Texture2D> texture = SpxImageTexture::create_from_image(image);
+	cached_texture.insert(path, texture);
+	return texture;
 }
 
 void SpxResMgr::reload_texture(GdString path) {
@@ -319,12 +342,10 @@ void SpxResMgr::reload_texture(GdString path) {
 }
 
 Ref<Texture2D> SpxResMgr::load_texture(String path, GdBool direct) {
-	// If SVG file, use SVG manager
-	if (svgMgr->is_svg_file(path)) {
-		return svgMgr->get_svg_image(path, 1); // Default 1x scale
+	if (SpxSvgCache::is_svg_path(path)) {
+		return load_svg_texture(path, 1);
 	}
 
-	// For non-SVG files, use original logic
 	if (!is_load_direct && !direct) {
 		Ref<Resource> res = ResourceLoader::load(path);
 		if (res.is_null()) {
@@ -333,26 +354,23 @@ Ref<Texture2D> SpxResMgr::load_texture(String path, GdBool direct) {
 		}
 		return res;
 	} else {
-		return _load_texture_direct(path);
+		return _load_texture_direct(path, true);
 	}
 }
 
 void SpxResMgr::set_game_datas(String path, Vector<String> files) {
 	print_line("SpxResMgr::set_game_datas", path);
 	game_data_root = path;
-	platformMgr->_set_persistant_data_dir(path);
+	platformMgr->_set_persistent_data_dir(path);
 	update_caches(files);
-	svgMgr->update_caches(files);
 }
 
 void SpxResMgr::update_caches(const Vector<String> &files) {
-	if (cached_texture.is_empty() && cached_audio.is_empty()) {
-		return;
-	}
 	for (auto &file : files) {
 		auto path = _to_engine_path(file);
 		cached_texture.erase(path);
 		cached_audio.erase(path);
+		svg_cache.invalidate_image(path);
 	}
 }
 
@@ -368,8 +386,20 @@ Ref<AudioStream> SpxResMgr::load_audio(String path, GdBool direct) {
 	return _load_audio_direct(path);
 }
 
-Ref<SpriteFrames> SpxResMgr::get_anim_frames(const String &anim_name) {
-	return anim_frames;
+bool SpxResMgr::has_animation(const String &p_key) const {
+	return animation_clips.has(p_key);
+}
+
+Ref<SpriteFrames> SpxResMgr::get_animation_frames(const String &p_key, int p_raster_scale) {
+	const SpxAnimationClip *clip = animation_clips.getptr(p_key);
+	if (clip == nullptr) {
+		return Ref<SpriteFrames>();
+	}
+	return clip->is_svg ? svg_cache.load_animation(p_key, clip->frames, clip->svg_frame_scales, p_raster_scale) : clip->frames;
+}
+
+Ref<ImageTexture> SpxResMgr::load_svg_texture(const String &p_path, int p_raster_scale) {
+	return svg_cache.load_image(_to_engine_path(p_path), p_raster_scale);
 }
 
 String SpxResMgr::get_anim_key_name(const String &sprite_type_name, const String &anim_name) {
@@ -382,35 +412,27 @@ void SpxResMgr::create_animation(
 		GdString p_json_ctx,
 		GdInt fps,
 		GdBool is_atlas) {
-	is_dynamic_anim = true;
-	String sprite = SpxStr(p_sprite_type);
-	String clip = SpxStr(p_anim_name);
-	String ctx = SpxStr(p_json_ctx);
-
-	String key = get_anim_key_name(sprite, clip);
-
-	if (anim_frames->has_animation(key)) {
+	const String key =
+			get_anim_key_name(SpxStr(p_sprite_type), SpxStr(p_anim_name));
+	if (animation_clips.has(key)) {
 		return;
 	}
-
+	ERR_FAIL_COND_MSG(fps < 0, "Animation FPS must not be negative.");
 	AnimPayload payload;
-	if (!_parse_anim_json(ctx, payload)) {
-		print_error("animation JSON parse failed");
+	if (!_parse_anim_json(SpxStr(p_json_ctx), is_atlas, payload)) {
 		return;
 	}
-
-	anim_frames->add_animation(key);
-	anim_frames->set_animation_speed(key, fps);
-
-	Vector<Vector2> offsets;
-
-	if (is_atlas) {
-		_build_atlas_frames(key, payload, offsets);
-	} else {
-		_build_normal_frames(sprite, key, payload, offsets);
+	SpxAnimationClip clip;
+	clip.frames.instantiate();
+	clip.frames->remove_animation("default");
+	clip.frames->add_animation(key);
+	clip.frames->set_animation_speed(key, fps);
+	if (!(is_atlas ? _build_atlas_frames(key, payload, clip)
+				   : _build_normal_frames(key, payload, clip))) {
+		ERR_PRINT("Cannot create complete animation: " + key);
+		return;
 	}
-
-	animation_frame_offsets[key] = offsets;
+	animation_clips.insert(key, clip);
 }
 
 void SpxResMgr::set_load_mode(GdBool is_direct_mode) {
@@ -474,9 +496,6 @@ GdVec2 SpxResMgr::get_image_size(GdString path) {
 	return GdVec2(1, 1);
 }
 
-void SpxResMgr::free_str(GdString str_ptr) {
-	free_return_cstr(str_ptr);
-}
 GdString SpxResMgr::read_all_text(GdString p_path) {
 	auto path = SpxStr(p_path);
 	path = _to_engine_path(path);
@@ -511,122 +530,100 @@ GdString SpxResMgr::list_directories(GdString p_path) {
 }
 
 GdString SpxResMgr::apply_project_fonts(GdString default_font_path, GdArray font_paths, GdArray font_families, GdArray preferences) {
-	auto fail = [](const String &p_error) -> GdString {
-		return SpxReturnStr(p_error);
-	};
 	if (!Thread::is_main_thread()) {
-		return fail("Project fonts must be applied on the engine main thread.");
+		return SpxReturnStr("Project fonts must be applied on the engine main thread.");
 	}
 	String error;
 	ProjectFonts::Request request;
 	if (!ProjectFonts::decode_request(default_font_path, font_paths, font_families, preferences, request, error) ||
 			!ProjectFonts::validate_request(request, error)) {
-		return fail(error);
+		return SpxReturnStr(error);
 	}
 	ProjectFonts::Prepared prepared;
 	if (!ProjectFonts::prepare(request, *this, prepared, error)) {
-		return fail(error);
+		return SpxReturnStr(error);
 	}
 	_commit_project_fonts(std::move(prepared));
 
-	return fail(String());
+	return SpxReturnStr(String());
 }
 
 void SpxResMgr::_commit_project_fonts(ProjectFonts::Prepared &&p_prepared) {
 	// Preparation performs every fallible operation. Publish the complete
 	// generation to all consumers before invalidating previously rendered SVGs.
-	Vector<SpxSvgProjectFontFace> svg_faces;
-	svg_faces.resize(p_prepared.faces.size());
-	for (int i = 0; i < p_prepared.faces.size(); i++) {
-		svg_faces.write[i].family = p_prepared.faces[i].spec.family;
-		svg_faces.write[i].data = p_prepared.faces[i].data;
-	}
-	SpxSvgUtils::apply_font_registry(p_prepared.default_data, svg_faces, p_prepared.preferences);
+	SpxSvgUtils::apply_font_registry(p_prepared.default_data, p_prepared.faces, p_prepared.preferences);
 	display_fonts = std::move(p_prepared.display_fonts);
-	display_default_font = std::move(p_prepared.default_font);
 	spx_set_project_theme_font(p_prepared.theme_font);
-	SvgManager::get_singleton()->reset(true);
+	svg_cache.clear();
 }
 
 void SpxResMgr::set_default_font(GdString font_path) {
-	String path = SpxStr(font_path);
-	if (path.is_empty()) {
-		ERR_PRINT("Can not open empty font path.");
-		return;
-	}
-	Vector<uint8_t> font_data;
-	String engine_path = _to_engine_path(path);
-	if (!ProjectFonts::load_font_data(path, engine_path, font_data)) {
-		return;
-	}
-	Ref<FontFile> font = ProjectFonts::create_display_font(font_data);
-	if (font.is_null() || font->get_face_count() <= 0) {
-		ERR_PRINT("Default font file is not a supported font: " + path);
-		return;
-	}
-	if (!SpxSvgUtils::is_font_data_valid(font_data)) {
-		ERR_PRINT("Default font file is not supported by LunaSVG: " + path);
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	Vector<uint8_t> data;
+	Ref<FontFile> font;
+	String error;
+	if (!ProjectFonts::prepare_font(SpxStr(font_path), *this, data, font, error)) {
+		ERR_PRINT(error);
 		return;
 	}
 
-	// update svg
-	// Setting the default font begins a complete project font transaction.
-	// Drop any faces left by an earlier bootstrap before registering this one.
+	// Each incremental call publishes immediately. Use apply_project_fonts to
+	// replace a complete configuration atomically.
 	SpxSvgUtils::reset_font_registry();
-	SpxSvgUtils::set_default_font(font_data.ptrw(), (int)font_data.size());
-
-	// Start a new project font configuration. Named faces are registered after
-	// this call and set_font_preferences commits the ordered fallback chain.
+	SpxSvgUtils::set_default_font(data.ptrw(), data.size());
 	display_fonts.clear();
-	display_default_font = font;
-	display_fonts.insert("default", display_default_font);
-	spx_set_project_theme_font(display_default_font);
+	display_fonts.insert("default", font);
+	spx_set_project_theme_font(font);
+	svg_cache.clear();
 }
 
 void SpxResMgr::register_font_face(GdString font_path, GdString family) {
-	String path = SpxStr(font_path);
-	if (path.is_empty()) {
-		ERR_PRINT("Can not open empty font path.");
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	const String name = SpxStr(family);
+	const String key = ProjectFonts::fold_family(name);
+	ERR_FAIL_COND_MSG(name.is_empty() || key == "default", "Font family must be nonempty and must not use the reserved name default.");
+	Vector<uint8_t> data;
+	Ref<FontFile> font;
+	String error;
+	if (!ProjectFonts::prepare_font(SpxStr(font_path), *this, data, font, error)) {
+		ERR_PRINT(error);
 		return;
 	}
 
-	String svg_family = SpxStr(family);
-	if (svg_family.is_empty()) {
-		ERR_PRINT("Can not register empty SVG font family.");
-		return;
-	}
-
-	Vector<uint8_t> font_data;
-	String engine_path = _to_engine_path(path);
-	if (!ProjectFonts::load_font_data(path, engine_path, font_data)) {
-		return;
-	}
-	Ref<FontFile> font = ProjectFonts::create_display_font(font_data);
-	if (font.is_null() || font->get_face_count() <= 0) {
-		ERR_PRINT("Project font file is not a supported font: " + path);
-		return;
-	}
-	if (!SpxSvgUtils::is_font_data_valid(font_data)) {
-		ERR_PRINT("Project font file is not supported by LunaSVG: " + path);
-		return;
-	}
-
-	SpxSvgUtils::add_font_face(svg_family, font_data.ptrw(), (int)font_data.size());
-	display_fonts.insert(ProjectFonts::fold_family(svg_family), font);
+	SpxSvgUtils::add_font_face(name, data.ptrw(), data.size());
+	display_fonts.insert(key, font);
+	svg_cache.clear();
 }
 
 void SpxResMgr::set_font_preferences(GdArray preferences) {
-	Vector<String> values = ProjectFonts::preferences_from_array(preferences);
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Project fonts must be applied on the engine main thread.");
+	Vector<String> values;
+	String error;
+	HashSet<String> families;
+	for (const KeyValue<String, Ref<FontFile>> &entry : display_fonts) {
+		families.insert(entry.key);
+	}
+	if (!ProjectFonts::strings_from_array(preferences, "Font preferences", values, error) ||
+			!ProjectFonts::validate_preferences(values, families, error)) {
+		ERR_PRINT(error);
+		return;
+	}
+	Ref<Font> theme_font = ProjectFonts::build_display_font_chain(display_fonts, values);
 	SpxSvgUtils::set_font_preferences(values);
-	spx_set_project_theme_font(ProjectFonts::build_display_font_chain(display_fonts, values));
+	spx_set_project_theme_font(theme_font);
+	svg_cache.clear();
+}
+
+bool SpxResMgr::is_svg_animation(const String &p_anim_key) const {
+	const SpxAnimationClip *clip = animation_clips.getptr(p_anim_key);
+	return clip != nullptr && clip->is_svg;
 }
 
 Vector2 SpxResMgr::get_animation_frame_offset(String anim_key, int frame_index) {
-	if (animation_frame_offsets.has(anim_key)) {
-		const Vector<Vector2> &offsets = animation_frame_offsets[anim_key];
-		if (frame_index >= 0 && frame_index < offsets.size()) {
-			return offsets[frame_index];
-		}
+	const SpxAnimationClip *clip = animation_clips.getptr(anim_key);
+	if (clip != nullptr && frame_index >= 0 &&
+			frame_index < clip->offsets.size()) {
+		return clip->offsets[frame_index];
 	}
-	return Vector2(0, 0);
+	return Vector2();
 }

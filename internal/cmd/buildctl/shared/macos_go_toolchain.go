@@ -34,20 +34,13 @@ var macOSCGOFlagVariables = []string{
 	"CGO_LDFLAGS",
 }
 
-type macOSXcrunResolver func(args ...string) (string, error)
 type macOSPathPredicate func(path string) bool
 
-// configureMacOSGoToolchainEnv replaces stale Darwin SDK/compiler inputs in a
+// configureCurrentMacOSGoToolchainEnv replaces stale Darwin SDK/compiler inputs in a
 // child environment. Work happens on a copy so a failed xcrun lookup never
 // leaves callers with a partially rewritten environment.
-func configureMacOSGoToolchainEnv(
-	goos string,
-	env map[string]string,
-	xcrun macOSXcrunResolver,
-	isDirectory macOSPathPredicate,
-	isExecutable macOSPathPredicate,
-) error {
-	if goos != "darwin" {
+func configureCurrentMacOSGoToolchainEnv(env map[string]string) error {
+	if runtime.GOOS != "darwin" {
 		return nil
 	}
 	if env == nil {
@@ -56,8 +49,8 @@ func configureMacOSGoToolchainEnv(
 
 	next := cloneStringMap(env)
 	sdkRoot := next["SDKROOT"]
-	if !macOSSDKDirectoryIsUsable(sdkRoot, isDirectory) {
-		resolved, err := resolveMacOSXcrunPath(xcrun, isDirectory, "SDK", "--show-sdk-path")
+	if !macOSSDKDirectoryIsUsable(sdkRoot) {
+		resolved, err := resolveMacOSXcrunPath(env, pathIsDirectory, "SDK", "--show-sdk-path")
 		if err != nil {
 			return err
 		}
@@ -73,10 +66,10 @@ func configureMacOSGoToolchainEnv(
 		{environment: "CC", tool: "clang", description: "C compiler"},
 		{environment: "CXX", tool: "clang++", description: "C++ compiler"},
 	} {
-		if macOSCommandIsUsable(next[compiler.environment], next, isExecutable) {
+		if macOSCommandIsUsable(next[compiler.environment], next) {
 			continue
 		}
-		resolved, err := resolveMacOSXcrunPath(xcrun, isExecutable, compiler.description, "--find", compiler.tool)
+		resolved, err := resolveMacOSXcrunPath(env, pathIsExecutable, compiler.description, "--find", compiler.tool)
 		if err != nil {
 			return err
 		}
@@ -88,7 +81,7 @@ func configureMacOSGoToolchainEnv(
 		if !ok || value == "" {
 			continue
 		}
-		normalized, err := normalizeMacOSCGOFlags(value, sdkRoot, isDirectory)
+		normalized, err := normalizeMacOSCGOFlags(value, sdkRoot)
 		if err != nil {
 			return fmt.Errorf("normalize %s: %w", name, err)
 		}
@@ -102,16 +95,6 @@ func configureMacOSGoToolchainEnv(
 		env[key] = value
 	}
 	return nil
-}
-
-func configureCurrentMacOSGoToolchainEnv(env map[string]string) error {
-	return configureMacOSGoToolchainEnv(
-		runtime.GOOS,
-		env,
-		func(args ...string) (string, error) { return runMacOSXcrun(env, args...) },
-		pathIsDirectory,
-		pathIsExecutable,
-	)
 }
 
 func runMacOSXcrun(env map[string]string, args ...string) (string, error) {
@@ -135,8 +118,8 @@ func runMacOSXcrun(env map[string]string, args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func resolveMacOSXcrunPath(xcrun macOSXcrunResolver, valid macOSPathPredicate, description string, args ...string) (string, error) {
-	resolved, err := xcrun(args...)
+func resolveMacOSXcrunPath(env map[string]string, valid macOSPathPredicate, description string, args ...string) (string, error) {
+	resolved, err := runMacOSXcrun(env, args...)
 	if err != nil {
 		return "", fmt.Errorf("resolve macOS %s: %w", description, err)
 	}
@@ -146,27 +129,27 @@ func resolveMacOSXcrunPath(xcrun macOSXcrunResolver, valid macOSPathPredicate, d
 	return resolved, nil
 }
 
-func macOSCommandIsUsable(value string, env map[string]string, isExecutable macOSPathPredicate) bool {
+func macOSCommandIsUsable(value string, env map[string]string) bool {
 	fields, err := quoted.Split(value)
 	if err != nil || len(fields) == 0 {
 		return false
 	}
 	command := fields[0]
 	if filepath.IsAbs(command) {
-		return isExecutable(command)
+		return pathIsExecutable(command)
 	}
 	if strings.ContainsRune(command, filepath.Separator) {
 		return false
 	}
 	for _, directory := range filepath.SplitList(pathEnvValue(env)) {
-		if directory != "" && isExecutable(filepath.Join(directory, command)) {
+		if directory != "" && pathIsExecutable(filepath.Join(directory, command)) {
 			return true
 		}
 	}
 	return false
 }
 
-func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicate) (string, error) {
+func normalizeMacOSCGOFlags(value, sdkRoot string) (string, error) {
 	fields, err := quoted.Split(value)
 	if err != nil {
 		return "", err
@@ -185,7 +168,7 @@ func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicat
 			}
 			index++
 			root := fields[index]
-			if !macOSSDKDirectoryIsUsable(root, isDirectory) {
+			if !macOSSDKDirectoryIsUsable(root) {
 				root = sdkRoot
 				changed = true
 			}
@@ -193,12 +176,12 @@ func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicat
 			continue
 		}
 
-		if replacement, ok := normalizeAttachedSysroot(field, sdkRoot, isDirectory); ok {
+		if replacement, ok := normalizeAttachedSysroot(field, sdkRoot); ok {
 			normalized = append(normalized, replacement)
 			changed = changed || replacement != field
 			continue
 		}
-		replacement := replaceMissingSDKPaths(field, sdkRoot, isDirectory)
+		replacement := replaceMissingSDKPaths(field, sdkRoot)
 		normalized = append(normalized, replacement)
 		changed = changed || replacement != field
 	}
@@ -208,14 +191,14 @@ func normalizeMacOSCGOFlags(value, sdkRoot string, isDirectory macOSPathPredicat
 	return quoted.Join(normalized)
 }
 
-func normalizeAttachedSysroot(field, sdkRoot string, isDirectory macOSPathPredicate) (string, bool) {
+func normalizeAttachedSysroot(field, sdkRoot string) (string, bool) {
 	for _, prefix := range []string{"-isysroot=", "--sysroot=", "-isysroot", "--sysroot"} {
 		if strings.HasPrefix(field, prefix) {
 			root := strings.TrimPrefix(field, prefix)
 			if root == "" {
 				continue
 			}
-			if !macOSSDKDirectoryIsUsable(root, isDirectory) {
+			if !macOSSDKDirectoryIsUsable(root) {
 				root = sdkRoot
 			}
 			return prefix + root, true
@@ -224,13 +207,13 @@ func normalizeAttachedSysroot(field, sdkRoot string, isDirectory macOSPathPredic
 	return "", false
 }
 
-func macOSSDKDirectoryIsUsable(path string, isDirectory macOSPathPredicate) bool {
-	return filepath.IsAbs(path) && isDirectory(path)
+func macOSSDKDirectoryIsUsable(path string) bool {
+	return filepath.IsAbs(path) && pathIsDirectory(path)
 }
 
 // replaceMissingSDKPaths handles SDK references embedded in flags such as
 // -I.../MacOSX.sdk/usr/include and -Wl,-syslibroot,.../MacOSX.sdk.
-func replaceMissingSDKPaths(field, sdkRoot string, isDirectory macOSPathPredicate) string {
+func replaceMissingSDKPaths(field, sdkRoot string) string {
 	searchFrom := 0
 	for {
 		lower := strings.ToLower(field[searchFrom:])
@@ -248,7 +231,7 @@ func replaceMissingSDKPaths(field, sdkRoot string, isDirectory macOSPathPredicat
 		}
 		start := segmentStart + relativeSlash
 		candidate := field[start:end]
-		if filepath.IsAbs(candidate) && !isDirectory(candidate) {
+		if filepath.IsAbs(candidate) && !pathIsDirectory(candidate) {
 			field = field[:start] + sdkRoot + field[end:]
 			searchFrom = start + len(sdkRoot)
 			continue

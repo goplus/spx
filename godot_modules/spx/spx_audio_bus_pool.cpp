@@ -42,6 +42,17 @@ StringName SpxAudioBusPool::STR_BUS_MUSIC;
 
 namespace {
 constexpr char SPX_BUS_PREFIX[] = "_spx_audio_bus_";
+
+Ref<AudioEffectPanner> find_panner(AudioServer *p_audio_server, int p_bus_id) {
+	const int effect_count = p_audio_server->get_bus_effect_count(p_bus_id);
+	for (int i = 0; i < effect_count; i++) {
+		Ref<AudioEffect> effect = p_audio_server->get_bus_effect(p_bus_id, i);
+		if (effect.is_valid() && effect->is_class("AudioEffectPanner")) {
+			return effect;
+		}
+	}
+	return Ref<AudioEffectPanner>();
+}
 }
 
 SpxAudioBusPool *SpxAudioBusPool::get_singleton() {
@@ -193,25 +204,11 @@ void SpxAudioBusPool::set_pan(const StringName &p_name, GdFloat p_pan) {
 	// Clamp pan between -1 and 1
 	p_pan = CLAMP(p_pan, -1.0f, 1.0f);
 
-	// Check if there's already a panner effect
-	int effect_count = AudioServer::get_singleton()->get_bus_effect_count(bus_id);
-	int panner_idx = -1;
-
-	for (int i = 0; i < effect_count; i++) {
-		Ref<AudioEffect> effect = AudioServer::get_singleton()->get_bus_effect(bus_id, i);
-		if (effect.is_valid() && effect->is_class("AudioEffectPanner")) {
-			panner_idx = i;
-			break;
-		}
-	}
-
-	// Create a panner effect if not exists
-	Ref<AudioEffectPanner> panner;
-	if (panner_idx == -1) {
+	AudioServer *audio_server = AudioServer::get_singleton();
+	Ref<AudioEffectPanner> panner = find_panner(audio_server, bus_id);
+	if (panner.is_null()) {
 		panner.instantiate();
-		AudioServer::get_singleton()->add_bus_effect(bus_id, panner);
-	} else {
-		panner = AudioServer::get_singleton()->get_bus_effect(bus_id, panner_idx);
+		audio_server->add_bus_effect(bus_id, panner);
 	}
 
 	// Set the pan value
@@ -224,18 +221,8 @@ GdFloat SpxAudioBusPool::get_pan(const StringName &p_name) {
 		return 0.0f;
 	}
 
-	// Find panner effect
-	int effect_count = AudioServer::get_singleton()->get_bus_effect_count(bus_id);
-
-	for (int i = 0; i < effect_count; i++) {
-		Ref<AudioEffect> effect = AudioServer::get_singleton()->get_bus_effect(bus_id, i);
-		if (effect.is_valid() && effect->is_class("AudioEffectPanner")) {
-			Ref<AudioEffectPanner> panner = effect;
-			return panner->get_pan();
-		}
-	}
-
-	return 0.0f; // Default pan value if no panner found
+	Ref<AudioEffectPanner> panner = find_panner(AudioServer::get_singleton(), bus_id);
+	return panner.is_valid() ? panner->get_pan() : 0.0f;
 }
 
 int SpxAudioBusPool::ensure_bus(const StringName &p_name) {
@@ -282,14 +269,9 @@ void SpxAudioBusPool::reset_bus(int p_id) {
 	ERR_FAIL_INDEX(p_id, audio_server->get_bus_count());
 
 	audio_server->set_bus_volume_db(p_id, 0.0);
-	const int effect_count = audio_server->get_bus_effect_count(p_id);
-	for (int i = 0; i < effect_count; i++) {
-		Ref<AudioEffect> effect = audio_server->get_bus_effect(p_id, i);
-		if (effect.is_valid() && effect->is_class("AudioEffectPanner")) {
-			Ref<AudioEffectPanner> panner = effect;
-			panner->set_pan(0.0);
-			break;
-		}
+	Ref<AudioEffectPanner> panner = find_panner(audio_server, p_id);
+	if (panner.is_valid()) {
+		panner->set_pan(0.0);
 	}
 }
 
