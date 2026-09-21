@@ -47,6 +47,7 @@ type touchingSyncSpriteMgr struct {
 	setTextureAtlasPathByID map[pkgengine.Object]string
 	collisionChecks         int
 	onCollision             func()
+	onColorCollision        func()
 	panicVisibleTrue        any
 	panicVisibleFalse       any
 	panicCollision          any
@@ -162,9 +163,16 @@ func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Obj
 }
 
 func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
+	if s.onColorCollision != nil {
+		s.onColorCollision()
+	}
 	s.checkedTexturePaths[obj] = s.texturePaths[obj]
 	expected, ok := s.expectedTexturePaths[obj]
 	return !ok || s.texturePaths[obj] == expected
+}
+
+func (s *touchingSyncSpriteMgr) CheckCollisionByColors(obj pkgengine.Object, spriteColor, targetColor mathf.Color, colorThreshold, alphaThreshold float64) bool {
+	return s.CheckCollisionByColor(obj, targetColor, colorThreshold, alphaThreshold)
 }
 
 func installTouchingSyncSpriteMgr(t *testing.T, mgr *touchingSyncSpriteMgr) {
@@ -518,5 +526,43 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 	}
 	if got := mgr.setTextureCalls[1]; got != 1 {
 		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
+	}
+}
+
+func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		query func(*SpriteImpl) bool
+	}{
+		{"touching color", func(sprite *SpriteImpl) bool { return sprite.TouchingColor__0(HSB(0, 100, 100)) }},
+		{"color touching color", func(sprite *SpriteImpl) bool {
+			return sprite.TouchingColor__1(HSB(0, 0, 100), HSB(0, 100, 100))
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			pen := setupSpyPenMgr(t)
+			mgr := newTouchingSyncSpriteMgr()
+			installTouchingSyncSpriteMgr(t, mgr)
+			sprite := newTouchingTestSprite("sensor", 0, 0, 1)
+			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
+			sprite.g.queuePenDown(7, false)
+			sprite.g.queuePenMove(7, mathf.NewVec2(10, 20))
+			mgr.onColorCollision = func() {
+				if pen.batchCalls != 1 {
+					t.Fatalf("color query saw %d pen batches, want 1", pen.batchCalls)
+				}
+				ops := penBatchOperations(pen.batches[0])
+				if len(ops) != 2 || ops[0] != internalengine.PenBatchDown || ops[1] != internalengine.PenBatchMove {
+					t.Fatalf("color query saw pen commands %v, want down then move", ops)
+				}
+			}
+			if !tt.query(sprite) || !tt.query(sprite) {
+				t.Fatal("color sensing returned false")
+			}
+			sprite.g.flushPenCommands()
+			if pen.batchCalls != 1 {
+				t.Fatalf("pen batches after repeated queries = %d, want 1", pen.batchCalls)
+			}
+		})
 	}
 }

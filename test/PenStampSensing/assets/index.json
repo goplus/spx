@@ -1,0 +1,22 @@
+{
+  "run": {
+    "title": "SPX Pen Stamp & Color Sensing",
+    "width": 640,
+    "height": 480
+  },
+  "map": {
+    "width": 640,
+    "height": 480
+  },
+  "backdrops": [
+    {
+      "name": "guide",
+      "path": "guide.svg"
+    }
+  ],
+  "backdropIndex": 0,
+  "zorder": [
+    { "type": "sprite", "target": "Brush", "x": 180, "y": 60 },
+    { "type": "sprite", "target": "Probe", "x": -120, "y": -75 }
+  ]
+}

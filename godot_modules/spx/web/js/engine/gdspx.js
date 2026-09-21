@@ -586,6 +586,10 @@ gdspx_pen_pen_stamp(obj_low,obj_high) {
 	var _call = Module['_gdspx_pen_pen_stamp'];
 	_call(GdInt64FromParts(obj_low, obj_high));
 }
+gdspx_pen_pen_stamp_sprite(sprite_id_low,sprite_id_high) {
+	var _call = Module['_gdspx_pen_pen_stamp_sprite'];
+	_call(GdInt64FromParts(sprite_id_low, sprite_id_high));
+}
 gdspx_pen_move_pen_to(obj_low,obj_high,position) {
 	var _call = Module['_gdspx_pen_move_pen_to'];
 	var _arg1;
@@ -3329,6 +3333,7 @@ GdspxFuncs.prototype['gdspx_pen_create_pen'] = GdspxFuncs.prototype.gdspx_pen_cr
 GdspxFuncs.prototype['gdspx_pen_destroy_pen'] = GdspxFuncs.prototype.gdspx_pen_destroy_pen;
 GdspxFuncs.prototype['gdspx_pen_batch_update_commands'] = GdspxFuncs.prototype.gdspx_pen_batch_update_commands;
 GdspxFuncs.prototype['gdspx_pen_pen_stamp'] = GdspxFuncs.prototype.gdspx_pen_pen_stamp;
+GdspxFuncs.prototype['gdspx_pen_pen_stamp_sprite'] = GdspxFuncs.prototype.gdspx_pen_pen_stamp_sprite;
 GdspxFuncs.prototype['gdspx_pen_move_pen_to'] = GdspxFuncs.prototype.gdspx_pen_move_pen_to;
 GdspxFuncs.prototype['gdspx_pen_pen_down'] = GdspxFuncs.prototype.gdspx_pen_pen_down;
 GdspxFuncs.prototype['gdspx_pen_pen_up'] = GdspxFuncs.prototype.gdspx_pen_pen_up;

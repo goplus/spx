@@ -624,6 +624,12 @@ func (pself *penMgr) PenStamp(obj Object) {
 		CallPenPenStamp(arg0)
 	})
 }
+func (pself *penMgr) PenStampSprite(sprite_id Object) {
+	enginewrap.CallInMainThread(func() {
+		arg0 := ToGdObj(sprite_id)
+		CallPenPenStampSprite(arg0)
+	})
+}
 func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)

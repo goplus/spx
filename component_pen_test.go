@@ -5,29 +5,68 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	internalengine "github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type spyPenMgr struct {
-	canvasWidth          int64
-	canvasHeight         int64
-	canvasCalls          int
-	createCalls          int
-	moveCalls            int
-	penDownCalls         int
-	penUpCalls           int
-	setColorCalls        int
-	setSizeCalls         int
-	stampWithCalls       int
-	lastMove             mathf.Vec2
-	lastStampPosition    mathf.Vec2
-	lastStampTexturePath string
-	lastStampRotation    float64
-	lastStampScale       mathf.Vec2
-	batchCalls           int
-	batches              [][]float32
-	events               []string
+	canvasWidth      int64
+	canvasHeight     int64
+	canvasCalls      int
+	createCalls      int
+	moveCalls        int
+	penDownCalls     int
+	penUpCalls       int
+	setColorCalls    int
+	setSizeCalls     int
+	stampSpriteCalls int
+	lastMove         mathf.Vec2
+	lastStampSprite  engine.Object
+	spriteMgr        *spyStampSpriteMgr
+	onStamp          func()
+	batchCalls       int
+	batches          [][]float32
+	events           []string
+}
+
+type spyStampSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	position     mathf.Vec2
+	rotation     float64
+	scale        mathf.Vec2
+	renderOffset mathf.Vec2
+	renderScale  mathf.Vec2
+	visible      bool
+	texturePath  string
+	atlasRegion  mathf.Rect2
+	effects      map[string]float64
+}
+
+func (s *spyStampSpriteMgr) SetTransform(_ engine.Object, position mathf.Vec2, rotation float64, scale mathf.Vec2, visible bool, offset mathf.Vec2) {
+	s.position, s.rotation, s.scale = position, rotation, scale
+	s.visible, s.renderOffset = visible, offset
+}
+
+func (s *spyStampSpriteMgr) SetTexture(_ engine.Object, path string) {
+	s.texturePath = path
+}
+
+func (s *spyStampSpriteMgr) SetTextureAtlas(_ engine.Object, path string, region mathf.Rect2) {
+	s.texturePath, s.atlasRegion = path, region
+}
+
+func (s *spyStampSpriteMgr) SetRenderScale(_ engine.Object, scale mathf.Vec2) {
+	s.renderScale = scale
+}
+
+func (*spyStampSpriteMgr) SetMaterialShader(engine.Object, string) {}
+
+func (*spyStampSpriteMgr) SetMaterialParamsVec(engine.Object, string, float64, float64, float64, float64) {
+}
+
+func (s *spyStampSpriteMgr) SetMaterialParams(_ engine.Object, effect string, amount float64) {
+	s.effects[effect] = amount
 }
 
 type penTestSprite struct {
@@ -87,13 +126,17 @@ func (s *spyPenMgr) SetPenSizeTo(obj engine.Object, size float64) {
 
 func (s *spyPenMgr) SetPenStampTexture(obj engine.Object, texturePath string) {}
 
-func (s *spyPenMgr) PenStampWithTransform(obj engine.Object, texturePath string, position mathf.Vec2, rotationRadians float64, scale mathf.Vec2) {
-	s.stampWithCalls++
+func (s *spyPenMgr) PenStampWithTransform(engine.Object, string, mathf.Vec2, float64, mathf.Vec2) {
+	panic("sprite stamps must use the current rendered sprite")
+}
+
+func (s *spyPenMgr) PenStampSprite(spriteID engine.Object) {
+	s.stampSpriteCalls++
 	s.events = append(s.events, "stamp")
-	s.lastStampTexturePath = texturePath
-	s.lastStampPosition = position
-	s.lastStampRotation = rotationRadians
-	s.lastStampScale = scale
+	s.lastStampSprite = spriteID
+	if s.onStamp != nil {
+		s.onStamp()
+	}
 }
 
 func (s *spyPenMgr) BatchUpdateCommands(buffer []float32) {
@@ -119,6 +162,7 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 	sprite.transform().y = 60
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
+		setIndex:         -1,
 		path:             "sprites/PenTest/costume1.svg",
 		center:           mathf.NewVec2(10, 20),
 		bitmapResolution: 1,
@@ -126,6 +170,10 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 		height:           80,
 	}}
 	sprite.costumeIndex = 0
+	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.SyncSprite.SetId(101)
+	sprite.runtimeState.IsCostumeDirty = true
+	sprite.markProxyDirty()
 }
 
 func setupSpyPenMgr(t *testing.T) *spyPenMgr {
@@ -135,11 +183,14 @@ func setupSpyPenMgr(t *testing.T) *spyPenMgr {
 		call()
 	})
 
-	spy := &spyPenMgr{}
+	spy := &spyPenMgr{spriteMgr: &spyStampSpriteMgr{effects: make(map[string]float64)}}
 	original := engine.PenMgr
+	originalSprites := engine.SpriteMgr
 	engine.PenMgr = spy
+	engine.SpriteMgr = spy.spriteMgr
 	t.Cleanup(func() {
 		engine.PenMgr = original
+		engine.SpriteMgr = originalSprites
 	})
 	return spy
 }
@@ -484,12 +535,14 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 
 	sprite.pen().stamp()
 
-	want := mathf.NewVec2(74, 97)
-	if spy.stampWithCalls != 1 {
-		t.Fatalf("PenStampWithTransform calls = %d, want 1", spy.stampWithCalls)
+	if spy.stampSpriteCalls != 1 || spy.lastStampSprite != sprite.runtimeState.SyncSprite.Id {
+		t.Fatalf("PenStampSprite calls = %d, sprite = %v", spy.stampSpriteCalls, spy.lastStampSprite)
 	}
-	if spy.lastStampPosition != want {
-		t.Fatalf("PenStampWithTransform position = %v, want %v", spy.lastStampPosition, want)
+	if got, want := spy.spriteMgr.position, mathf.NewVec2(50, 60); got != want {
+		t.Fatalf("sprite position = %v, want %v", got, want)
+	}
+	if got, want := spy.spriteMgr.renderOffset, mathf.NewVec2(37, -24); got != want {
+		t.Fatalf("sprite render offset = %v, want %v", got, want)
 	}
 }
 
@@ -503,30 +556,29 @@ func TestPenComponentStampSyncsRenderedTransform(t *testing.T) {
 
 	sprite.pen().stamp()
 
-	if spy.createCalls != 1 {
-		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
+	if spy.createCalls != 0 || sprite.pen().penObj != nil {
+		t.Fatalf("stamp allocated a pen: create=%d pen=%v", spy.createCalls, sprite.pen().penObj)
 	}
-	if spy.stampWithCalls != 1 {
-		t.Fatalf("PenStampWithTransform calls = %d, want 1", spy.stampWithCalls)
+	if spy.stampSpriteCalls != 1 {
+		t.Fatalf("PenStampSprite calls = %d, want 1", spy.stampSpriteCalls)
 	}
 
 	wantRotation := 0.0
-	if spy.lastStampRotation != wantRotation {
-		t.Fatalf("PenStampWithTransform rotation = %v, want %v", spy.lastStampRotation, wantRotation)
+	if spy.spriteMgr.rotation != wantRotation {
+		t.Fatalf("sprite rotation = %v, want %v", spy.spriteMgr.rotation, wantRotation)
 	}
 
-	wantScale := mathf.NewVec2(-2, 2)
-	if spy.lastStampScale != wantScale {
-		t.Fatalf("PenStampWithTransform scale = %v, want %v", spy.lastStampScale, wantScale)
+	wantScale := mathf.NewVec2(-1, 1)
+	if spy.spriteMgr.scale != wantScale {
+		t.Fatalf("sprite scale = %v, want %v", spy.spriteMgr.scale, wantScale)
 	}
-	wantPosition := mathf.NewVec2(-24, 12)
-	if spy.lastStampPosition != wantPosition {
-		t.Fatalf("PenStampWithTransform position = %v, want %v", spy.lastStampPosition, wantPosition)
+	if got, want := spy.spriteMgr.renderScale, mathf.NewVec2(2, 2); got != want {
+		t.Fatalf("sprite render scale = %v, want %v", got, want)
 	}
 
 	wantTexturePath := sprite.getCostumeAssetPath()
-	if spy.lastStampTexturePath != wantTexturePath {
-		t.Fatalf("PenStampWithTransform texturePath = %q, want %q", spy.lastStampTexturePath, wantTexturePath)
+	if spy.spriteMgr.texturePath != wantTexturePath {
+		t.Fatalf("sprite texturePath = %q, want %q", spy.spriteMgr.texturePath, wantTexturePath)
 	}
 }
 
@@ -540,8 +592,80 @@ func TestPenComponentStampSyncsNormalRotation(t *testing.T) {
 	sprite.pen().stamp()
 
 	wantRotation := engine.DegToRad(-45)
-	if spy.lastStampRotation != wantRotation {
-		t.Fatalf("PenStampWithTransform rotation = %v, want %v", spy.lastStampRotation, wantRotation)
+	if spy.spriteMgr.rotation != wantRotation {
+		t.Fatalf("sprite rotation = %v, want %v", spy.spriteMgr.rotation, wantRotation)
+	}
+}
+
+func TestPenComponentStampSyncsHiddenSpriteBeforeCapture(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	sprite.spriteState.IsVisible = false
+	sprite.runtimeState.Scale = 2
+	sprite.transform().x = 120
+	spy.onStamp = func() {
+		if got := spy.spriteMgr.position.X; got != 120 {
+			t.Fatalf("position at capture = %v, want 120", got)
+		}
+		if spy.spriteMgr.visible {
+			t.Fatal("stamping made a hidden sprite visible")
+		}
+		if spy.spriteMgr.texturePath != sprite.getCostumeAssetPath() || spy.spriteMgr.renderScale.X != 2 {
+			t.Fatal("capture ran before the pending costume and scale were synchronized")
+		}
+	}
+
+	sprite.pen().stamp()
+	if spy.stampSpriteCalls != 1 {
+		t.Fatalf("hidden sprite stamp calls = %d, want 1", spy.stampSpriteCalls)
+	}
+}
+
+func TestPenComponentStampReusesAllSpriteEffects(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	for kind := EffectKind(0); kind < enumNumOfEffect; kind++ {
+		sprite.setGraphicEffect(kind, 35)
+	}
+	spy.onStamp = func() {
+		for kind := EffectKind(0); kind < enumNumOfEffect; kind++ {
+			if got, want := spy.spriteMgr.effects[kind.String()], normalizeEffectValue(kind, 35); got != want {
+				t.Fatalf("%v at capture = %v, want %v", kind, got, want)
+			}
+		}
+	}
+	sprite.pen().stamp()
+}
+
+func TestPenComponentStampSyncsAtlasCostume(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	costume := sprite.currentCostume()
+	costume.setIndex = 0
+	costume.posX, costume.posY = 32, 16
+	spy.onStamp = func() {
+		if got, want := spy.spriteMgr.atlasRegion, mathf.NewRect2(32, 16, 100, 80); got != want {
+			t.Fatalf("atlas region at capture = %v, want %v", got, want)
+		}
+	}
+	sprite.pen().stamp()
+}
+
+func TestPenComponentStampSkipsUnavailableSprite(t *testing.T) {
+	for _, destroyed := range []bool{false, true} {
+		spy := setupSpyPenMgr(t)
+		sprite := newPenTestSprite()
+		if destroyed {
+			configurePenRenderOffsetSprite(sprite)
+			sprite.markDestroyed()
+		}
+		sprite.pen().stamp()
+		if spy.createCalls != 0 || spy.stampSpriteCalls != 0 {
+			t.Fatalf("unavailable sprite allocated a pen or stamped: create=%d stamp=%d", spy.createCalls, spy.stampSpriteCalls)
+		}
 	}
 }
 

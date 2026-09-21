@@ -548,6 +548,11 @@ func (*penMgrImpl) PenStamp(obj gdx.Object) {
 		gdx.PenMgr.PenStamp(obj)
 	})
 }
+func (*penMgrImpl) PenStampSprite(sprite_id gdx.Object) {
+	callInMainThread(func() {
+		gdx.PenMgr.PenStampSprite(sprite_id)
+	})
+}
 func (*penMgrImpl) MovePenTo(obj gdx.Object, position Vec2) {
 	callInMainThread(func() {
 		gdx.PenMgr.MovePenTo(obj, position)

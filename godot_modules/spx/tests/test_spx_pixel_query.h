@@ -34,6 +34,8 @@
 #include "../spx_pixel_query.h"
 #include "tests/test_macros.h"
 
+#include <algorithm>
+
 namespace TestSpxPixelQuery {
 
 TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
@@ -65,6 +67,54 @@ TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
 	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10.5, 0.5), color));
 	CHECK(color == Color(0, 0.5, 0, 0.5));
 	CHECK_FALSE(SpxPixelQuery::sample(snapshot, Vector2(12.5, 0.5), color));
+}
+
+static SpxPixelQuery::Layer solid_layer(const Color &p_color, SpxPixelQuery::Layer::Order p_order) {
+	SpxPixelQuery::Layer layer;
+	layer.order = p_order;
+	layer.pixel_query.image = Image::create_empty(1, 1, false, Image::FORMAT_RGBAF);
+	layer.pixel_query.image->fill(p_color);
+	layer.pixel_query.image_size = Vector2i(1, 1);
+	layer.pixel_query.bounds = Rect2(0, 0, 1, 1);
+	layer.pixel_query.local_rect = layer.pixel_query.bounds;
+	return layer;
+}
+
+TEST_CASE("[SPX] Scene colors blend premultiplied pen pixels between sprites and backdrop") {
+	using SpxPixelQuery::Layer;
+	Layer backdrop = solid_layer(Color(0, 1, 0, 1), Layer::BACKDROP);
+	backdrop.tree_index = 100;
+	Layer pen = solid_layer(Color(0.5, 0, 0, 0.5), Layer::PEN);
+	pen.pixel_query.image_premultiplied = true;
+	Layer sprite = solid_layer(Color(0, 0, 1, 1), Layer::SPRITE);
+	std::vector<Layer> layers{backdrop, pen, sprite};
+	auto sort_layers = [&]() {
+		std::sort(layers.begin(), layers.end(), [](const Layer &a, const Layer &b) {
+			return a.in_front_of(b);
+		});
+	};
+	sort_layers();
+	CHECK(layers[0].order == Layer::SPRITE);
+	CHECK(layers[1].order == Layer::PEN);
+	CHECK(layers[2].order == Layer::BACKDROP);
+	CHECK(SpxPixelQuery::composite(layers, Vector2(0.5, 0.5)) == Color(0, 0, 1, 1));
+
+	layers[0].pixel_query.collision_alpha_scale = 0.25;
+	CHECK(SpxPixelQuery::composite(layers, Vector2(0.5, 0.5)) == Color(0.375, 0.375, 0.25, 1));
+	layers[0].z_index = -1;
+	sort_layers();
+	CHECK(SpxPixelQuery::composite(layers, Vector2(0.5, 0.5)) == Color(0.5, 0.5, 0, 1));
+}
+
+TEST_CASE("[SPX] Premultiplied snapshots apply opacity once and retain world transforms") {
+	SpxPixelQuery::Snapshot snapshot = solid_layer(Color(0.5, 0, 0, 0.5), SpxPixelQuery::Layer::PEN).pixel_query;
+	snapshot.image_premultiplied = true;
+	snapshot.inverse_transform = Transform2D(0, Vector2(-10, -20));
+	snapshot.collision_alpha_scale = 0.5;
+	Color color;
+	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10.5, 20.5), color));
+	CHECK(color == Color(0.25, 0, 0, 0.25));
+	CHECK_FALSE(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(0.5, 0.5), color));
 }
 
 } // namespace TestSpxPixelQuery
