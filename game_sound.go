@@ -17,6 +17,7 @@
 package spx
 
 import (
+	internalaudio "github.com/goplus/spx/v3/internal/audio"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -27,22 +28,20 @@ import (
 // -----------------------------------------------------------------------------
 type sound *coreproject.SoundConfig
 
-type soundId = int64
-
 // -----------------------------------------------------------------------------
 // Settings
 // -----------------------------------------------------------------------------
 const (
-	defaultAudioMaxDist         = coreproject.DefaultAudioMaxDistance
-	invalidSoundId      soundId = 0
+	defaultAudioMaxDist               = coreproject.DefaultAudioMaxDistance
+	invalidSoundObject  engine.Object = internalaudio.InvalidSoundID
 )
 
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
 func (p *Game) Volume() float64 {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	return p.soundMgr.GetVolume(soundObj)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	return p.soundMgr.GetVolume(p.audioState.SoundObj)
 }
 
 func (p *Game) Play__0(name SoundName) {
@@ -50,13 +49,13 @@ func (p *Game) Play__0(name SoundName) {
 }
 
 func (p *Game) Play__1(name SoundName, loop bool) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.playSound(nil, soundObj, name, loop, 0, defaultAudioMaxDist)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.playSound(nil, p.audioState.SoundObj, name, loop, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) PlayAndWait(name SoundName) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.playSoundAndWait(nil, soundObj, name, 0, defaultAudioMaxDist)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.playSoundAndWait(nil, p.audioState.SoundObj, name, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) PausePlaying(name SoundName) {
@@ -72,36 +71,37 @@ func (p *Game) StopPlaying(name SoundName) {
 }
 
 func (p *Game) SetVolume(volume float64) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.soundMgr.SetVolume(soundObj, volume)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.soundMgr.SetVolume(p.audioState.SoundObj, volume)
 }
 
 func (p *Game) ChangeVolume(delta float64) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.soundMgr.ChangeVolume(soundObj, delta)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.soundMgr.ChangeVolume(p.audioState.SoundObj, delta)
 }
 
 func (p *Game) GetSoundEffect(kind SoundEffectKind) float64 {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	return p.getSoundEffect(soundObj, kind)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	return p.getSoundEffect(p.audioState.SoundObj, kind)
 }
 
 func (p *Game) SetSoundEffect(kind SoundEffectKind, value float64) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.setSoundEffect(soundObj, kind, value)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.setSoundEffect(p.audioState.SoundObj, kind, value)
 }
 
 func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
-	p.changeSoundEffect(soundObj, kind, delta)
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.changeSoundEffect(p.audioState.SoundObj, kind, delta)
 }
 
 func (p *Game) ClearSoundEffects() {
-	p.clearSoundEffects(p.ensureSoundObject(&p.audioState.SoundObj))
+	p.ensureSoundObject(&p.audioState.SoundObj)
+	p.clearSoundEffects(p.audioState.SoundObj)
 }
 
 func (p *Game) clearSoundEffects(soundObj engine.Object) {
-	if soundObj == 0 {
+	if soundObj == invalidSoundObject {
 		return
 	}
 	p.soundMgr.SetPan(soundObj, 0)
@@ -140,24 +140,24 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	return
 }
 
-func (p *Game) playSound(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) int64 {
-	return p.playSoundInternal(sprite, audioId, name, isLoop, false, attenuation, maxDistance)
+func (p *Game) playSound(sprite *engine.Sprite, soundObj engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) int64 {
+	return p.playSoundInternal(sprite, soundObj, name, isLoop, false, attenuation, maxDistance)
 }
 
-func (p *Game) playSoundAndWait(sprite *engine.Sprite, audioId engine.Object, name SoundName, attenuation, maxDistance float64) int64 {
-	return p.playSoundInternal(sprite, audioId, name, false, true, attenuation, maxDistance)
+func (p *Game) playSoundAndWait(sprite *engine.Sprite, soundObj engine.Object, name SoundName, attenuation, maxDistance float64) int64 {
+	return p.playSoundInternal(sprite, soundObj, name, false, true, attenuation, maxDistance)
 }
 
-func (p *Game) playSoundInternal(sprite *engine.Sprite, audioId engine.Object, name SoundName, isLoop, wait bool, attenuation, maxDistance float64) int64 {
+func (p *Game) playSoundInternal(sprite *engine.Sprite, soundObj engine.Object, name SoundName, isLoop, wait bool, attenuation, maxDistance float64) int64 {
 	m, err := p.loadSound(name)
 	if err != nil {
 		return 0
 	}
-	ownerID := engine.Object(0)
+	ownerID := invalidSoundObject
 	if sprite != nil {
 		ownerID = sprite.Id
 	}
-	return p.soundMgr.Play(audioId, m.Path, isLoop, wait, ownerID, attenuation, maxDistance)
+	return p.soundMgr.Play(soundObj, m.Path, isLoop, wait, ownerID, attenuation, maxDistance)
 }
 
 func (p *Game) withSound(name SoundName, action func(m sound)) {
@@ -194,18 +194,17 @@ func (p *Game) restartSoundPlayback(id int64) bool {
 	return p.soundMgr.RestartID(id)
 }
 
-func (p *Game) ensureSoundObject(slot *engine.Object) engine.Object {
-	if *slot == 0 {
-		*slot = p.soundMgr.AllocSound()
+func (p *Game) ensureSoundObject(soundObj *engine.Object) {
+	if *soundObj == invalidSoundObject {
+		*soundObj = p.soundMgr.AllocSound()
 	}
-	return *slot
 }
 
 func (p *Game) releaseGameAudio() {
 	p.soundMgr.StopAll()
-	if p.audioState.SoundObj != 0 {
+	if p.audioState.SoundObj != invalidSoundObject {
 		p.soundMgr.ReleaseSound(p.audioState.SoundObj)
-		p.audioState.SoundObj = 0
+		p.audioState.SoundObj = invalidSoundObject
 	}
 }
 

@@ -16,7 +16,11 @@
 
 package runtime
 
-import "github.com/goplus/spbase/mathf"
+import (
+	"slices"
+
+	"github.com/goplus/spbase/mathf"
+)
 
 type ClickSelection[T any, S any] struct {
 	Target      T
@@ -35,8 +39,8 @@ type ClickDownHooks[T any, S any, ID comparable] struct {
 }
 
 func FindClickTarget[I any, T any, S any](items []I, match func(I) (ClickSelection[T, S], bool)) (ClickSelection[T, S], bool) {
-	for i := len(items) - 1; i >= 0; i-- {
-		if selection, ok := match(items[i]); ok {
+	for _, item := range slices.Backward(items) {
+		if selection, ok := match(item); ok {
 			return selection, true
 		}
 	}

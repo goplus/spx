@@ -36,11 +36,11 @@ func (p *SpriteImpl) Play__0(name SoundName) {
 }
 
 func (p *SpriteImpl) Play__1(name SoundName, loop bool) {
-	p.playAudio(name, loop)
+	p.sound().play(name, loop)
 }
 
 func (p *SpriteImpl) PlayWith(name SoundName, __xgo_optional_loop bool) {
-	p.playAudio(name, __xgo_optional_loop)
+	p.sound().play(name, __xgo_optional_loop)
 }
 
 func (p *SpriteImpl) PlayAndWait(name SoundName) {
@@ -92,18 +92,6 @@ func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 // -----------------------------------------------------------------------------
 // Internals
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) playAudio(name SoundName, loop bool) int64 {
-	return p.sound().playAudio(name, loop)
-}
-
-func (p *SpriteImpl) stopAudioPlayback(id int64) {
-	p.sound().stopAudioPlayback(id)
-}
-
-func (p *SpriteImpl) restartOrPlayLoopedAudio(name SoundName, id int64) int64 {
-	return p.sound().restartOrPlayLoopedAudio(name, id)
-}
-
 func (p *SpriteImpl) queueAnimationLoopAudio(state *animState) {
 	if state == nil {
 		return
@@ -129,7 +117,7 @@ func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	}
 
 	for _, audio := range buffer {
-		p.playAudio(audio, false)
+		p.sound().play(audio, false)
 	}
 	for _, state := range pendingOnPlayAudioStates {
 		p.animation().restartOnPlayAudio(state)

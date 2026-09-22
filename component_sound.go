@@ -42,7 +42,7 @@ func (s *soundComponent) cloneFor(newSprite *SpriteImpl) *soundComponent {
 	cloned := &soundComponent{
 		sprite: newSprite,
 	}
-	if s.soundObj != 0 {
+	if s.soundObj != invalidSoundObject {
 		cloned.soundObj = newSprite.g.soundMgr.CloneSoundEffects(s.soundObj)
 	}
 	return cloned
@@ -50,9 +50,9 @@ func (s *soundComponent) cloneFor(newSprite *SpriteImpl) *soundComponent {
 
 // onDestroy cleans up when the component is destroyed.
 func (s *soundComponent) onDestroy() {
-	if s.soundObj != 0 {
+	if s.soundObj != invalidSoundObject {
 		s.sprite.g.soundMgr.ReleaseSound(s.soundObj)
-		s.soundObj = 0
+		s.soundObj = invalidSoundObject
 	}
 }
 
@@ -60,9 +60,14 @@ func (s *soundComponent) onDestroy() {
 // Sound Playback
 // ============================================================================
 
+func (s *soundComponent) play(name SoundName, loop bool) int64 {
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	return s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+}
+
 func (s *soundComponent) playAndWait(name SoundName) {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
 }
 
 func (s *soundComponent) pausePlaying(name SoundName) {
@@ -82,18 +87,18 @@ func (s *soundComponent) stopPlaying(name SoundName) {
 // ============================================================================
 
 func (s *soundComponent) getVolume() float64 {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	return s.sprite.g.soundMgr.GetVolume(soundObj)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	return s.sprite.g.soundMgr.GetVolume(s.soundObj)
 }
 
 func (s *soundComponent) setVolume(volume float64) {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.soundMgr.SetVolume(soundObj, volume)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	s.sprite.g.soundMgr.SetVolume(s.soundObj, volume)
 }
 
 func (s *soundComponent) changeVolume(delta float64) {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.soundMgr.ChangeVolume(soundObj, delta)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	s.sprite.g.soundMgr.ChangeVolume(s.soundObj, delta)
 }
 
 // ============================================================================
@@ -101,28 +106,23 @@ func (s *soundComponent) changeVolume(delta float64) {
 // ============================================================================
 
 func (s *soundComponent) getSoundEffect(kind SoundEffectKind) float64 {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	return s.sprite.g.getSoundEffect(soundObj, kind)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	return s.sprite.g.getSoundEffect(s.soundObj, kind)
 }
 
 func (s *soundComponent) setSoundEffect(kind SoundEffectKind, value float64) {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.setSoundEffect(soundObj, kind, value)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	s.sprite.g.setSoundEffect(s.soundObj, kind, value)
 }
 
 func (s *soundComponent) changeSoundEffect(kind SoundEffectKind, delta float64) {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.changeSoundEffect(soundObj, kind, delta)
+	s.sprite.g.ensureSoundObject(&s.soundObj)
+	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
 }
 
 // ============================================================================
-// Internal Audio Management
+// Internal Playback Management
 // ============================================================================
-
-func (s *soundComponent) playAudio(name SoundName, loop bool) int64 {
-	soundObj := s.sprite.g.ensureSoundObject(&s.soundObj)
-	return s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
-}
 
 func (s *soundComponent) stopAudioPlayback(id int64) {
 	s.sprite.g.stopSoundPlayback(id)
@@ -139,7 +139,7 @@ func (s *soundComponent) restartOrPlayLoopedAudio(name SoundName, id int64) int6
 	if id != 0 && s.restartAudioPlayback(id) {
 		return id
 	}
-	return s.playAudio(name, true)
+	return s.play(name, true)
 }
 
 func (s *soundComponent) addPendingAudio(audioName string) {
