@@ -119,8 +119,9 @@ func (a *animationComponent) markOnPlayAudioRestartPending(state *animState) {
 
 func (a *animationComponent) takePendingOnPlayAudioStates(buffer []*animState) []*animState {
 	buffer = a.takePendingOnPlayAudioState(buffer[:0], a.curAnimState)
-	if a.curTweenState != a.curAnimState {
-		buffer = a.takePendingOnPlayAudioState(buffer, a.curTweenState)
+	tweenState := a.getCurTweenState()
+	if tweenState != a.curAnimState {
+		buffer = a.takePendingOnPlayAudioState(buffer, tweenState)
 	}
 	return buffer
 }
