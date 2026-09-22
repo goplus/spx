@@ -18,6 +18,7 @@ package spx
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/base/collision"
@@ -79,7 +80,7 @@ func (p *physicsComponent) initCollisionConfig(sprite *SpriteImpl, spriteCfg *co
 
 	p.collisionInfo.Type = collision.ParseColliderShapeType(spriteCfg.CollisionShapeType, defaultCollisionType)
 	p.collisionInfo.Pivot = spriteCfg.CollisionPivot
-	p.collisionInfo.Params = spriteCfg.CollisionShapeParams
+	p.collisionInfo.Params = slices.Clone(spriteCfg.CollisionShapeParams)
 
 	if !p.collisionInfo.validateShape() {
 		spxlog.Warn("Invalid collider configuration for sprite %s, using default values", sprite.name)
@@ -94,7 +95,7 @@ func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *core
 	p.triggerInfo.Layer = parseLayerMaskValue(spriteCfg.TriggerLayer)
 	p.triggerInfo.Type = collision.ParseColliderShapeType(spriteCfg.TriggerShapeType, physicsColliderAuto)
 	p.triggerInfo.Pivot = spriteCfg.TriggerPivot
-	p.triggerInfo.Params = spriteCfg.TriggerShapeParams
+	p.triggerInfo.Params = slices.Clone(spriteCfg.TriggerShapeParams)
 
 	if !p.triggerInfo.validateShape() {
 		spxlog.Warn("Invalid trigger configuration for sprite %s, using default values", sprite.name)
@@ -220,20 +221,15 @@ func (p *physicsComponent) isTriggerEnabled() bool {
 
 func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
 	config := p.getPhysicConfig(isTrigger)
-	originalType := config.Type
-	originalParams := make([]float64, len(config.Params))
-	copy(originalParams, config.Params)
+	candidate := *config
+	candidate.Type = ctype
+	candidate.Params = slices.Clone(params)
 
-	config.Type = ctype
-	config.Params = make([]float64, len(params))
-	copy(config.Params, params)
-
-	if !config.validateShape() {
-		config.Type = originalType
-		config.Params = originalParams
+	if !candidate.validateShape() {
 		return fmt.Errorf("invalid shape parameters for type %d", ctype)
 	}
 
+	*config = candidate
 	p.applyPhysicShape(isTrigger)
 	return nil
 }
