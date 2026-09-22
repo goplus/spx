@@ -19,6 +19,7 @@ package spx
 import (
 	"maps"
 	"math"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/base/defaults"
@@ -50,7 +51,6 @@ type animationComponent struct {
 
 	// Animation state (per-instance).
 	curAnimState      *animState
-	curTweenState     *animState
 	activeTweenStates []*animState
 	defaultAnimActive bool
 
@@ -121,10 +121,9 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
 	srcAnim := src.(*animationComponent)
 	newAnim := &animationComponent{
-		componentBase:     componentBase{sprite: newSprite},
-		shared:            srcAnim.shared,
-		activeTweenStates: make([]*animState, 0),
-		doneAnimations:    make([]string, 0),
+		componentBase:  componentBase{sprite: newSprite},
+		shared:         srcAnim.shared,
+		doneAnimations: make([]string, 0),
 	}
 	return newAnim
 }
@@ -135,7 +134,6 @@ func (a *animationComponent) onDestroy() {
 	for _, state := range a.activeTweenStates {
 		a.stopAnimState(state)
 	}
-	a.curTweenState = nil
 	a.activeTweenStates = nil
 	a.unregisterOnAnimationLooped()
 	a.unregisterOnAnimationFinished()
@@ -256,11 +254,12 @@ func (a *animationComponent) playDefaultAnim() {
 		return
 	}
 
+	tweenState := a.getCurTweenState()
 	speed := 1.0
-	if a.curTweenState == nil {
+	if tweenState == nil {
 		animName = a.shared.defaultAnimation
 	} else {
-		switch a.curTweenState.AniType {
+		switch tweenState.AniType {
 		case coreproject.AniTypeMove:
 			animName = a.sprite.getStateAnimName(StateStep)
 		case coreproject.AniTypeTurn:
@@ -268,7 +267,7 @@ func (a *animationComponent) playDefaultAnim() {
 		case coreproject.AniTypeGlide:
 			animName = a.sprite.getStateAnimName(StateGlide)
 		}
-		speed = a.curTweenState.Speed
+		speed = tweenState.Speed
 	}
 
 	if animName == "" {
@@ -424,33 +423,21 @@ func (a *animationComponent) getStateAnimName(stateName string) string {
 // ============================================================================
 
 func (a *animationComponent) getCurTweenState() *animState {
-	return a.curTweenState
-}
-
-func (a *animationComponent) registerTweenState(state *animState) {
-	a.activeTweenStates = append(a.activeTweenStates, state)
-	a.curTweenState = state
+	if len(a.activeTweenStates) == 0 {
+		return nil
+	}
+	return a.activeTweenStates[len(a.activeTweenStates)-1]
 }
 
 func (a *animationComponent) unregisterTweenState(state *animState) bool {
-	idx := -1
 	for i := len(a.activeTweenStates) - 1; i >= 0; i-- {
-		if a.activeTweenStates[i] == state {
-			idx = i
-			break
+		if a.activeTweenStates[i] != state {
+			continue
 		}
+		a.activeTweenStates = slices.Delete(a.activeTweenStates, i, i+1)
+		return true
 	}
-	if idx < 0 {
-		return false
-	}
-
-	a.activeTweenStates = append(a.activeTweenStates[:idx], a.activeTweenStates[idx+1:]...)
-	if len(a.activeTweenStates) == 0 {
-		a.curTweenState = nil
-	} else {
-		a.curTweenState = a.activeTweenStates[len(a.activeTweenStates)-1]
-	}
-	return true
+	return false
 }
 
 // ============================================================================
@@ -458,32 +445,23 @@ func (a *animationComponent) unregisterTweenState(state *animState) bool {
 // ============================================================================
 
 func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
-	info, ownedPlayback := a.initTweenState(name, ani)
-	if info == nil {
-		return
-	}
-
 	params, ok := a.prepareTweenParams(ani)
 	if !ok {
 		return
 	}
 
+	info, ownedPlayback := a.initTweenState(name, ani)
 	a.executeTweenLoop(info, ani, params)
 	a.cleanupTween(info, ownedPlayback, name, ani)
 }
 
 func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *coreproject.AniConfig) (*animState, *animState) {
-	if ani.Duration <= 0 {
-		spxlog.Warn("Invalid animation duration: %v", ani.Duration)
-		return nil, nil
-	}
-
 	info := &animState{
 		AniType: ani.AniType,
 		Name:    name,
 		Speed:   ani.Speed,
 	}
-	a.registerTweenState(info)
+	a.activeTweenStates = append(a.activeTweenStates, info)
 
 	var ownedPlayback *animState
 	if a.hasAnim(name) {
@@ -495,8 +473,13 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 }
 
 func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tweenParams, bool) {
-	params := &tweenParams{}
 	duration := ani.Duration
+	if duration <= 0 {
+		spxlog.Warn("Invalid animation duration: %v", duration)
+		return nil, false
+	}
+
+	params := &tweenParams{}
 
 	switch ani.AniType {
 	case coreproject.AniTypeMove, coreproject.AniTypeGlide:
