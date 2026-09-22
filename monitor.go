@@ -36,7 +36,7 @@ const (
 
 	// Style selects the appearance of default and large monitors.
 	// Slider and list monitors always use the Scratch appearance.
-	monitorStyleScratch = "scratch"
+	monitorStyleCompatible = "scratch"
 
 	getVarPrefix           = "getVar:"
 	monitorUpdateIntervalS = 0.2

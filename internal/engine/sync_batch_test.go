@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-func TestSpriteSyncBufferSerializeReusesScratch(t *testing.T) {
+func TestSpriteSyncBufferSerializeReusesBuffer(t *testing.T) {
 	buffer := NewSpriteSyncBuffer(1)
 	buffer.Add(1, 2, 3, 4, 5, 6, 7, 8, true)
 	buffer.AddDelete(9)
@@ -59,7 +59,7 @@ func TestSpriteSyncBufferSerializeReusesScratch(t *testing.T) {
 	}
 }
 
-func TestVisualSyncBufferSerializeReusesScratch(t *testing.T) {
+func TestVisualSyncBufferSerializeReusesBuffer(t *testing.T) {
 	buffer := NewVisualSyncBuffer(1)
 	buffer.AddFull(1, 2, 3, true, [4]float64{4, 5, 6, 7}, true)
 
@@ -93,7 +93,7 @@ func TestVisualSyncBufferSerializeReusesScratch(t *testing.T) {
 	}
 }
 
-func TestPhysicsSyncBufferSerializeReusesScratch(t *testing.T) {
+func TestPhysicsSyncBufferSerializeReusesBuffer(t *testing.T) {
 	buffer := NewPhysicsSyncBuffer(2)
 	buffer.SetVelocity(7, 1.5, -2.5)
 	buffer.SetGravity(7, 9.8)

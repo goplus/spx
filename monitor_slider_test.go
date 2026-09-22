@@ -129,7 +129,7 @@ func TestReloadMonitorModes(t *testing.T) {
 func TestMonitorBindingCapabilities(t *testing.T) {
 	game := monitorEvalFixture{score: 1}
 	root := reflect.ValueOf(&game).Elem()
-	for _, appearance := range []ui.MonitorAppearance{ui.MonitorAppearanceDefault, ui.MonitorAppearanceScratchLarge} {
+	for _, appearance := range []ui.MonitorAppearance{ui.MonitorAppearanceDefault, ui.MonitorAppearanceCompatibleLarge} {
 		binding, err := bindMonitor(root, "", "score", appearance)
 		if err != nil || binding.read == nil || binding.write != nil {
 			t.Fatal("display-only monitor gained a writer")

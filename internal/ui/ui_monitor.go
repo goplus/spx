@@ -55,8 +55,8 @@ type MonitorAppearance uint8
 const (
 	MonitorAppearanceDefault MonitorAppearance = iota
 	MonitorAppearanceDefaultLarge
-	MonitorAppearanceScratch
-	MonitorAppearanceScratchLarge
+	MonitorAppearanceCompatible
+	MonitorAppearanceCompatibleLarge
 	MonitorAppearanceList
 	MonitorAppearanceSlider
 	monitorAppearanceCount
@@ -88,13 +88,13 @@ var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
 		root:  "ValueOnly",
 		value: "ValueOnly/LabelValue",
 	},
-	MonitorAppearanceScratch: {
+	MonitorAppearanceCompatible: {
 		root:        "ScratchBG",
 		label:       "ScratchBG/H/LabelMargin/LabelName",
 		value:       "ScratchBG/H/ValueMargin/C/LabelValue",
 		colorTarget: "ScratchBG/H/ValueMargin/C",
 	},
-	MonitorAppearanceScratchLarge: {
+	MonitorAppearanceCompatibleLarge: {
 		root:        "ScratchValueOnly",
 		value:       "ScratchValueOnly/C/LabelValue",
 		colorTarget: "ScratchValueOnly/C",
@@ -119,8 +119,8 @@ type monitorRenderSink interface {
 	GetRangeValue(engine.Object) float64
 }
 
-func (p MonitorAppearance) IsScratch() bool {
-	return p == MonitorAppearanceScratch || p == MonitorAppearanceScratchLarge || p == MonitorAppearanceList || p == MonitorAppearanceSlider
+func (p MonitorAppearance) IsCompatible() bool {
+	return p == MonitorAppearanceCompatible || p == MonitorAppearanceCompatibleLarge || p == MonitorAppearanceList || p == MonitorAppearanceSlider
 }
 
 // !!Warning: this method is called from the engine callback context

@@ -26,7 +26,7 @@ import (
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func TestScratchNonVisualLoopsShareFrame(t *testing.T) {
+func TestNonVisualLoopsShareFrame(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	counts := [2]int{}
@@ -42,7 +42,7 @@ func TestScratchNonVisualLoopsShareFrame(t *testing.T) {
 	}
 }
 
-func TestScratchRotationStyleChangesControlRedrawBoundary(t *testing.T) {
+func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
@@ -88,7 +88,7 @@ func TestScratchRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 	}
 }
 
-func TestScratchReplayFinalTickConditionBeforePause(t *testing.T) {
+func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	resetInputSessionTest(t)
 	co, game := setupRuntimeEventGame(t)
 	itime.Start(nil)
@@ -166,7 +166,7 @@ func TestScratchReplayFinalTickConditionBeforePause(t *testing.T) {
 	}
 }
 
-func TestScratchRedrawFinishesWholeRound(t *testing.T) {
+func TestRedrawFinishesWholeRound(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	var visual, nonVisual int
@@ -191,7 +191,7 @@ func TestScratchRedrawFinishesWholeRound(t *testing.T) {
 	}
 }
 
-func TestScratchExplicitWaitStillCrossesFrame(t *testing.T) {
+func TestExplicitWaitStillCrossesFrame(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	count := 0
@@ -211,7 +211,7 @@ func TestScratchExplicitWaitStillCrossesFrame(t *testing.T) {
 	}
 }
 
-func TestScratchSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
+func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
@@ -235,7 +235,7 @@ func TestScratchSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 	}
 }
 
-func TestScratchCostumeChangesControlRedrawBoundary(t *testing.T) {
+func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 	for _, tt := range []struct {
 		name       string
 		visible    bool
@@ -272,7 +272,7 @@ func TestScratchCostumeChangesControlRedrawBoundary(t *testing.T) {
 	}
 }
 
-func TestScratchTimerTrackingHatDoesNotFire(t *testing.T) {
+func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 	for _, redraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
 			co, game := setupRuntimeEventGame(t)
@@ -317,7 +317,7 @@ func TestScratchTimerTrackingHatDoesNotFire(t *testing.T) {
 	}
 }
 
-func TestScratchConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
+func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	game.lifecycleState.StartDispatched.Store(true)
@@ -336,7 +336,7 @@ func TestScratchConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) 
 	}
 }
 
-func TestScratchConditionDoesNotReenterRunningHandler(t *testing.T) {
+func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	itime.Start(nil)
 	game.lifecycleState.StartDispatched.Store(true)

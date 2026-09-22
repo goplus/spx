@@ -27,9 +27,9 @@ import (
 const InvalidSoundID int64 = 0
 
 const (
-	scratchPitchStepsPerOctave               = 120
-	invalidPlaybackID                        = InvalidSoundID
-	invalidSoundObject         engine.Object = InvalidSoundID
+	pitchStepsPerOctave               = 120
+	invalidPlaybackID                 = InvalidSoundID
+	invalidSoundObject  engine.Object = InvalidSoundID
 )
 
 type Backend interface {
@@ -240,11 +240,11 @@ func (m *Manager) ChangePan(soundObj engine.Object, delta float64) {
 }
 
 func (m *Manager) GetPitch(soundObj engine.Object) float64 {
-	return pitchScaleToScratchEffect(m.backend.GetPitch(soundObj))
+	return pitchScaleToEffect(m.backend.GetPitch(soundObj))
 }
 
 func (m *Manager) SetPitch(soundObj engine.Object, value float64) {
-	m.backend.SetPitch(soundObj, scratchPitchEffectToScale(value))
+	m.backend.SetPitch(soundObj, pitchEffectToScale(value))
 }
 
 func (m *Manager) ChangePitch(soundObj engine.Object, delta float64) {
@@ -351,13 +351,13 @@ func (m *Manager) preparePlaybacksForRelease(soundObj engine.Object) {
 	}
 }
 
-func scratchPitchEffectToScale(value float64) float64 {
-	return math.Pow(2, value/scratchPitchStepsPerOctave)
+func pitchEffectToScale(value float64) float64 {
+	return math.Pow(2, value/pitchStepsPerOctave)
 }
 
-func pitchScaleToScratchEffect(scale float64) float64 {
+func pitchScaleToEffect(scale float64) float64 {
 	if scale <= 0 {
 		return 0
 	}
-	return scratchPitchStepsPerOctave * math.Log2(scale)
+	return pitchStepsPerOctave * math.Log2(scale)
 }

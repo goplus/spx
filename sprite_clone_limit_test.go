@@ -229,7 +229,7 @@ func TestCloneLimitDeletionDuringHandlerReleasesSlot(t *testing.T) {
 	}
 }
 
-func TestCloneLimitPreservesScratchLayerOrderAfterRecycling(t *testing.T) {
+func TestCloneLimitPreservesLayerOrderAfterRecycling(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	source := newCloneLimitSprite(game, "Source")
 	clones := make([]*SpriteImpl, 0, 300)

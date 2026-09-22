@@ -368,7 +368,7 @@ func (p *Game) fireEvent(ev event) {
 
 // Event Dispatch
 func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bool) {
-	p.dispatchStartSinks(sinksInScratchTargetOrder(p.game, sinks), scriptEventDispatch{
+	p.dispatchStartSinks(sinksInTargetOrder(p.game, sinks), scriptEventDispatch{
 		mode: coroutine.BatchWaitFirstSlice,
 		run: func(_ coroutine.Thread, ev *eventSink) {
 			if shouldRun != nil && !shouldRun() {

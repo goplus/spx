@@ -160,7 +160,7 @@ func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) 
 	}
 }
 
-func TestOnStartUsesScratchTargetOrder(t *testing.T) {
+func TestOnStartUsesTargetOrder(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	game.initShapeMgr()
 
@@ -616,7 +616,7 @@ func TestRepeatedReceiverDoesNotDeferNewSibling(t *testing.T) {
 	}
 }
 
-func TestNestedAsyncBroadcastCycleYieldsAtScratchRoundBoundary(t *testing.T) {
+func TestNestedAsyncBroadcastCycleYieldsAtRoundBoundary(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 
 	var calls []string
@@ -904,7 +904,7 @@ func TestNestedBroadcastAndWaitCompletesInCurrentFrame(t *testing.T) {
 	}
 }
 
-func TestRecursiveBroadcastAndWaitYieldsAtScratchRoundBoundary(t *testing.T) {
+func TestRecursiveBroadcastAndWaitYieldsAtRoundBoundary(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 
 	calls := 0
@@ -1100,7 +1100,7 @@ func TestFindClickTargetSkipsFullyGhostedSpriteEvenWithClickHandler(t *testing.T
 	}
 }
 
-func TestTouchPointUsesScratchSensingQuery(t *testing.T) {
+func TestTouchPointUsesSensingQuery(t *testing.T) {
 	mgr := setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{
 		1: true,
 	})

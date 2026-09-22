@@ -28,42 +28,42 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-type scratchEventOrderLog struct {
+type eventOrderLog struct {
 	mu      sync.Mutex
 	entries []string
 }
 
-func (l *scratchEventOrderLog) add(entry string) {
+func (l *eventOrderLog) add(entry string) {
 	l.mu.Lock()
 	l.entries = append(l.entries, entry)
 	l.mu.Unlock()
 }
 
-func (l *scratchEventOrderLog) len() int {
+func (l *eventOrderLog) len() int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return len(l.entries)
 }
 
-func (l *scratchEventOrderLog) reset() {
+func (l *eventOrderLog) reset() {
 	l.mu.Lock()
 	l.entries = l.entries[:0]
 	l.mu.Unlock()
 }
 
-func (l *scratchEventOrderLog) snapshot() []string {
+func (l *eventOrderLog) snapshot() []string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return append([]string(nil), l.entries...)
 }
 
-func newScratchEventOrderSprite(game *Game, name string) *SpriteImpl {
+func newEventOrderSprite(game *Game, name string) *SpriteImpl {
 	sprite := &SpriteImpl{name: name, g: game}
 	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
 	return sprite
 }
 
-func setupScratchEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl, *SpriteImpl) {
+func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl, *SpriteImpl) {
 	t.Helper()
 
 	co, game := setupRuntimeEventGame(t)
@@ -71,15 +71,15 @@ func setupScratchEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *Sp
 	engine.ResetFrameRuntime()
 	t.Cleanup(engine.ResetFrameRuntime)
 
-	back := newScratchEventOrderSprite(game, "back")
-	front := newScratchEventOrderSprite(game, "front")
+	back := newEventOrderSprite(game, "back")
+	front := newEventOrderSprite(game, "front")
 	game.addShape(back)
 	game.addShape(front)
 	game.shapeMgr.updateRenderLayers()
 	return co, game, back, front
 }
 
-func waitForScratchEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *scratchEventOrderLog, count int) {
+func waitForEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
 	t.Helper()
 	// Drain once before observing the log; a handler may write its final entry
 	// while its coroutine is still tearing down.
@@ -89,22 +89,22 @@ func waitForScratchEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log
 	})
 }
 
-func advanceScratchEventFrame(t *testing.T, co *coroutine.Coroutines, log *scratchEventOrderLog, count int) {
+func advanceEventFrame(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
 	t.Helper()
 	itime.Update(0, 0)
-	waitForScratchEventOrderEntries(t, co, log, count)
+	waitForEventOrderEntries(t, co, log, count)
 }
 
-func requireScratchEventOrder(t *testing.T, log *scratchEventOrderLog, want []string) {
+func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {
 	t.Helper()
 	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("event order = %v, want %v", got, want)
 	}
 }
 
-func TestScratchGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	// Registration follows SPX bootstrap order: stage first, then sprites from
 	// back to front. Scratch discovers global hats in the opposite target order.
@@ -124,16 +124,16 @@ func TestScratchGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T
 	})
 
 	game.Broadcast__0("ordered")
-	waitForScratchEventOrderEntries(t, co, &log, 4)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 4)
+	requireEventOrder(t, &log, []string{
 		"front-1-before-yield",
 		"front-2",
 		"back",
 		"stage",
 	})
 
-	advanceScratchEventFrame(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{
+	advanceEventFrame(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
 		"front-1-before-yield",
 		"front-2",
 		"back",
@@ -142,9 +142,9 @@ func TestScratchGlobalBroadcastRunsFrontToBackThenStageToFirstYield(t *testing.T
 	})
 }
 
-func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	front.OnStart(func() {
 		log.add("front-before-yield")
@@ -173,8 +173,8 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 
 	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
-	waitForScratchEventOrderEntries(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
 		"front-before-yield",
 		"front-stop",
 		"back-before-yield",
@@ -182,8 +182,8 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 		"message-before-yield",
 	})
 
-	advanceScratchEventFrame(t, co, &log, 6)
-	requireScratchEventOrder(t, &log, []string{
+	advanceEventFrame(t, co, &log, 6)
+	requireEventOrder(t, &log, []string{
 		"front-before-yield",
 		"front-stop",
 		"back-before-yield",
@@ -193,30 +193,30 @@ func TestScratchOnStartStopAllDrainsSnapshotOnly(t *testing.T) {
 	})
 }
 
-func TestScratchGlobalBroadcastTracksDynamicLayerOrder(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestGlobalBroadcastTracksDynamicLayerOrder(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	game.OnMsg__1("layer-order", func() { log.add("stage") })
 	back.OnMsg__1("layer-order", func() { log.add("back") })
 	front.OnMsg__1("layer-order", func() { log.add("front") })
 
 	game.Broadcast__0("layer-order")
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{"front", "back", "stage"})
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{"front", "back", "stage"})
 
 	log.reset()
 	back.SetLayerTo(Front)
 	game.Broadcast__0("layer-order")
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{"back", "front", "stage"})
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{"back", "front", "stage"})
 }
 
-func TestScratchGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
-	co, game, back, source := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
+	co, game, back, source := setupEventOrderGame(t)
+	var log eventOrderLog
 
-	front := newScratchEventOrderSprite(game, "front")
+	front := newEventOrderSprite(game, "front")
 	game.addShape(front)
 	game.shapeMgr.updateRenderLayers()
 
@@ -227,7 +227,7 @@ func TestScratchGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 
 	// Clone handlers are registered after the original targets, but the clone
 	// itself is inserted immediately behind its source in the live layer list.
-	clone := newScratchEventOrderSprite(game, "source-clone")
+	clone := newEventOrderSprite(game, "source-clone")
 	clone.spriteState.Cloned = true
 	clone.OnMsg__1("clone-order", func() { log.add("clone") })
 	game.addClonedShape(source, clone)
@@ -237,13 +237,13 @@ func TestScratchGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	}
 
 	game.Broadcast__0("clone-order")
-	waitForScratchEventOrderEntries(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{"front", "source", "clone", "back", "stage"})
+	waitForEventOrderEntries(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{"front", "source", "clone", "back", "stage"})
 }
 
-func TestScratchKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
 		// Register KeyAny first to ensure dispatch uses Scratch's two event
@@ -256,8 +256,8 @@ func TestScratchKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
 	register(&front.scriptEventBindings, "front")
 
 	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForScratchEventOrderEntries(t, co, &log, 6)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 6)
+	requireEventOrder(t, &log, []string{
 		"front-specific",
 		"back-specific",
 		"stage-specific",
@@ -268,13 +268,13 @@ func TestScratchKeySpecificHandlersRunBeforeKeyAnyHandlers(t *testing.T) {
 
 	log.reset()
 	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{"front-any", "back-any", "stage-any"})
 }
 
-func TestScratchKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
+func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	var log scratchEventOrderLog
+	var log eventOrderLog
 
 	game.OnKey__1([]Key{KeyAny, KeySpace, KeyAny}, func(key Key) {
 		switch key {
@@ -292,18 +292,18 @@ func TestScratchKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
 	game.OnKey__2([]Key{}, func() { log.add("empty") })
 
 	game.handleEvent(&eventKeyDown{Key: KeySpace})
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{"specific", "with-key-space", "without-key"})
 
 	log.reset()
 	game.handleEvent(&eventKeyDown{Key: KeyA})
-	waitForScratchEventOrderEntries(t, co, &log, 2)
-	requireScratchEventOrder(t, &log, []string{"with-key-a", "without-key"})
+	waitForEventOrderEntries(t, co, &log, 2)
+	requireEventOrder(t, &log, []string{"with-key-a", "without-key"})
 }
 
-func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
 		events.OnMsg__1("async-order", func() {
@@ -321,8 +321,8 @@ func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testi
 		log.add("caller-after")
 	})
 
-	waitForScratchEventOrderEntries(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
 		"caller-before",
 		"caller-after",
 		"front",
@@ -336,12 +336,12 @@ func TestScratchAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testi
 	co.Update()
 }
 
-func TestScratchBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
+func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	engine.ResetFrameRuntime()
 	t.Cleanup(engine.ResetFrameRuntime)
 
-	var log scratchEventOrderLog
+	var log eventOrderLog
 	register := func(name string) {
 		game.OnMsg__1("restart", func() {
 			log.add(name + "-start")
@@ -353,20 +353,20 @@ func TestScratchBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	register("second")
 
 	game.Broadcast__0("restart")
-	waitForScratchEventOrderEntries(t, co, &log, 2)
-	requireScratchEventOrder(t, &log, []string{"first-start", "second-start"})
+	waitForEventOrderEntries(t, co, &log, 2)
+	requireEventOrder(t, &log, []string{"first-start", "second-start"})
 
 	// Scratch restarts a receiver instead of overlapping it.
 	game.Broadcast__0("restart")
-	waitForScratchEventOrderEntries(t, co, &log, 4)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 4)
+	requireEventOrder(t, &log, []string{
 		"first-start",
 		"second-start",
 		"first-start",
 		"second-start",
 	})
 
-	advanceScratchEventFrame(t, co, &log, 6)
+	advanceEventFrame(t, co, &log, 6)
 	got := log.snapshot()
 	if len(got) != 6 {
 		t.Fatalf("event order = %v, want four starts and two finishes", got)
@@ -386,9 +386,9 @@ func TestScratchBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	}
 }
 
-func TestScratchSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
+func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	var log scratchEventOrderLog
+	var log eventOrderLog
 
 	game.OnMsg__1("restart-pending", func() {
 		log.add("receiver")
@@ -400,20 +400,20 @@ func TestScratchSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
 		log.add("caller-after")
 	})
 
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{
 		"caller-before",
 		"caller-after",
 		"receiver",
 	})
 }
 
-func TestScratchBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
+func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	engine.ResetFrameRuntime()
 	t.Cleanup(engine.ResetFrameRuntime)
 
-	var log scratchEventOrderLog
+	var log eventOrderLog
 	game.OnMsg__1("restart-and-wait", func() {
 		log.add("receiver-start")
 		engine.WaitNextFrame()
@@ -421,22 +421,22 @@ func TestScratchBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	})
 
 	game.Broadcast__0("restart-and-wait")
-	waitForScratchEventOrderEntries(t, co, &log, 1)
+	waitForEventOrderEntries(t, co, &log, 1)
 
 	co.Create(game, func(coroutine.Thread) {
 		log.add("waiter-before")
 		game.BroadcastAndWait__0("restart-and-wait")
 		log.add("waiter-after")
 	})
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{
 		"receiver-start",
 		"waiter-before",
 		"receiver-start",
 	})
 
-	advanceScratchEventFrame(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{
+	advanceEventFrame(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
 		"receiver-start",
 		"waiter-before",
 		"receiver-start",
@@ -445,9 +445,9 @@ func TestScratchBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	})
 }
 
-func TestScratchBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	game.OnMsg__1("stop-all", func() { log.add("stage") })
 	back.OnMsg__1("stop-all", func() { log.add("back") })
@@ -458,12 +458,12 @@ func TestScratchBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
 
 	game.Broadcast__0("stop-all")
 	co.Update()
-	requireScratchEventOrder(t, &log, []string{"front"})
+	requireEventOrder(t, &log, []string{"front"})
 }
 
-func TestScratchCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	front.OnMsg__1("cancel-middle", func() {
 		log.add("front-first")
@@ -474,13 +474,13 @@ func TestScratchCanceledReceiverDoesNotBreakOrderedBatch(t *testing.T) {
 	game.OnMsg__1("cancel-middle", func() { log.add("stage") })
 
 	game.Broadcast__0("cancel-middle")
-	waitForScratchEventOrderEntries(t, co, &log, 3)
-	requireScratchEventOrder(t, &log, []string{"front-first", "back", "stage"})
+	waitForEventOrderEntries(t, co, &log, 3)
+	requireEventOrder(t, &log, []string{"front-first", "back", "stage"})
 }
 
-func TestScratchConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+func TestConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	register := func(events *scriptEventBindings, name string) {
 		events.OnCond(func() bool {
@@ -495,8 +495,8 @@ func TestScratchConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
 	register(&front.scriptEventBindings, "front")
 
 	pollRuntimeConditions(&game.scriptEvents)
-	waitForScratchEventOrderEntries(t, co, &log, 6)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 6)
+	requireEventOrder(t, &log, []string{
 		"check-front",
 		"check-back",
 		"check-stage",
@@ -506,12 +506,12 @@ func TestScratchConditionsEvaluateFrontToBackBeforeAnyHandler(t *testing.T) {
 	})
 }
 
-func TestScratchDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
+func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
-	co, game, back, front := setupScratchEventOrderGame(t)
-	var log scratchEventOrderLog
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
 
 	game.OnMsg__1("inner-order", func() { log.add("inner-stage") })
 	back.OnMsg__1("inner-order", func() { log.add("inner-back") })
@@ -524,8 +524,8 @@ func TestScratchDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 	})
 
 	game.Broadcast__0("outer-order")
-	waitForScratchEventOrderEntries(t, co, &log, 5)
-	requireScratchEventOrder(t, &log, []string{
+	waitForEventOrderEntries(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
 		"outer-before",
 		"outer-after",
 		"inner-front",

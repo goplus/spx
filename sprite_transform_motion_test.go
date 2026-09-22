@@ -76,7 +76,7 @@ func TestFixWorldRangeLeavesOversizedSpriteCentered(t *testing.T) {
 	}
 }
 
-func TestFixWorldRangeFencesSpriteLikeScratch(t *testing.T) {
+func TestFixWorldRangeFencesSprite(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360

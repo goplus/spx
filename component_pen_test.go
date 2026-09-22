@@ -211,7 +211,7 @@ func TestPenComponentInitializesDefaultColorComponents(t *testing.T) {
 	assertNearlyEqualPenValue(t, "penTransparency", pen.penTransparency, alphaToTransparency(wantColor.A))
 }
 
-func TestPenComponentUsesScratchTransparencySemantics(t *testing.T) {
+func TestPenComponentUsesTransparencySemantics(t *testing.T) {
 	tests := []struct {
 		name      string
 		value     float64
@@ -235,7 +235,7 @@ func TestPenComponentUsesScratchTransparencySemantics(t *testing.T) {
 	}
 }
 
-func TestPenComponentDynamicTransparencyChangeUsesScratchSemantics(t *testing.T) {
+func TestPenComponentDynamicTransparencyChangeUsesSemantics(t *testing.T) {
 	setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 	kind := PenColorParamFromString("transparency")
@@ -251,7 +251,7 @@ func TestPenComponentDynamicTransparencyChangeUsesScratchSemantics(t *testing.T)
 	assertNearlyEqualPenValue(t, "clamped alpha", sprite.pen().penColor.A, 0)
 }
 
-func TestPenComponentSetPenColorSyncsScratchTransparency(t *testing.T) {
+func TestPenComponentSetPenColorSyncsTransparency(t *testing.T) {
 	setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
@@ -396,7 +396,7 @@ func TestPenComponentPenNoneDoesNothing(t *testing.T) {
 	}
 }
 
-func TestPenComponentSetPenShadeUsesScratchLegacyDefaults(t *testing.T) {
+func TestPenComponentSetPenShadeUsesLegacyDefaults(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
@@ -452,7 +452,7 @@ func TestPenComponentSetPenShadeUsesCurrentHueParam(t *testing.T) {
 	}
 }
 
-func TestPenComponentPenHueParamWrapsLikeScratch(t *testing.T) {
+func TestPenComponentPenHueParamWraps(t *testing.T) {
 	setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
@@ -465,14 +465,14 @@ func TestPenComponentPenHueParamWrapsLikeScratch(t *testing.T) {
 	}
 }
 
-func TestPenComponentLegacyChangePenHueMatchesScratchSemantics(t *testing.T) {
+func TestPenComponentLegacyChangePenHueMatchesSemantics(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 
 	sprite.pen().setPenShade(50)
 	sprite.pen().changePenHue(2)
 
-	want := toMathfColor(HSB(scratchLegacyDefaultPenHue+1, 100, 100))
+	want := toMathfColor(HSB(legacyDefaultPenHue+1, 100, 100))
 	if !samePenColor(sprite.pen().penColor, want) {
 		t.Fatalf("penColor = %v, want %v", sprite.pen().penColor, want)
 	}

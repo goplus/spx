@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestScratchStyleListEquality(t *testing.T) {
+func TestStyleListEquality(t *testing.T) {
 	list := NewList(1, "02", "Apple")
 
 	tests := []struct {
@@ -86,7 +86,7 @@ func TestListSetLast(t *testing.T) {
 	}
 }
 
-func TestValueEqualUsesScratchSemantics(t *testing.T) {
+func TestValueEqualUsesCompatibilitySemantics(t *testing.T) {
 	if !NewValue(1).Equal(1.0) {
 		t.Fatal("Value.Equal should treat integer and float values equally")
 	}

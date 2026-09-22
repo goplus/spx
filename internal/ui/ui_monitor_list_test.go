@@ -61,7 +61,7 @@ func TestMonitorSwitchesBetweenScalarAndList(t *testing.T) {
 	color := mathf.Color{}
 	size := mathf.NewVec2(100, 200)
 	style := MonitorStyle{Appearance: MonitorAppearanceList, Label: "items", Color: color, Dimensions: size}
-	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceScratch, Label: "score", Color: color}, MonitorValue{Text: "1"})
+	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceCompatible, Label: "score", Color: color}, MonitorValue{Text: "1"})
 	panel.render(sink, style, MonitorValue{Items: nil})
 	panel.render(sink, style, MonitorValue{Items: []string{}})
 	if sink.listCalls != 1 || panel.active != MonitorAppearanceList {

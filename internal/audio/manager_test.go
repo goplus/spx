@@ -327,7 +327,7 @@ func TestManagerVolumeAndEffects(t *testing.T) {
 	}
 }
 
-func TestManagerPitchEffectUsesScratchScale(t *testing.T) {
+func TestManagerPitchEffectUsesScale(t *testing.T) {
 	backend := &fakeBackend{}
 	var mgr Manager
 	mgr.Init(backend)
