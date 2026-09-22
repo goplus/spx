@@ -101,7 +101,7 @@ func (l *CostumeLayout) appendSet(part, count int, items []CostumeSetItem) error
 
 	start := len(l.Frames)
 	if count == 1 || items == nil {
-		for i := 0; i < count; i++ {
+		for i := range count {
 			l.appendFrame(CostumeFrame{
 				Name:  strconv.Itoa(start + i),
 				Part:  part,

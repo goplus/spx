@@ -532,7 +532,7 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 	}
 }
 
-func TestSoundPlayAndPlayAudioUseSamePlaybackParameters(t *testing.T) {
+func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
@@ -541,9 +541,9 @@ func TestSoundPlayAndPlayAudioUseSamePlaybackParameters(t *testing.T) {
 	anim.sprite.runtimeState.SyncSprite.Id = 42
 
 	anim.sprite.Play__1("walk", true)
-	playID := anim.sprite.playAudio("walk", true)
+	playID := anim.sprite.sound().play("walk", true)
 	if playID == 0 {
-		t.Fatal("playAudio returned no playback id")
+		t.Fatal("play returned no playback id")
 	}
 	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
 		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)

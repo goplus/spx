@@ -35,7 +35,7 @@ func (a *animationComponent) playOnStartAudio(action *coreproject.ActionConfig, 
 		return
 	}
 	state.OnStartReplayAudioName = action.Play
-	a.sprite.playAudio(action.Play, false)
+	a.sprite.sound().play(action.Play, false)
 }
 
 func (a *animationComponent) playOnPlayAudio(action *coreproject.ActionConfig, state *animState) {
@@ -68,7 +68,7 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 		return
 	}
 
-	nextID := a.sprite.restartOrPlayLoopedAudio(name, prevID)
+	nextID := a.sprite.sound().restartOrPlayLoopedAudio(name, prevID)
 	if nextID == 0 {
 		return
 	}
@@ -81,7 +81,7 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 	engine.Unlock()
 
 	if canceled {
-		a.sprite.stopAudioPlayback(nextID)
+		a.sprite.sound().stopAudioPlayback(nextID)
 	}
 }
 
@@ -103,7 +103,7 @@ func (a *animationComponent) stopOnPlayAudio(state *animState) {
 		a.sprite.g.soundMgr.PruneStoppedIDs([]int64{id})
 		return
 	}
-	a.sprite.stopAudioPlayback(id)
+	a.sprite.sound().stopAudioPlayback(id)
 }
 
 // ============================================================================

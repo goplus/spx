@@ -22,7 +22,15 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-const scratchPitchStepsPerOctave = 120
+// InvalidSoundID is the zero sentinel used for unallocated sound objects and
+// invalid playback IDs.
+const InvalidSoundID int64 = 0
+
+const (
+	scratchPitchStepsPerOctave               = 120
+	invalidPlaybackID                        = InvalidSoundID
+	invalidSoundObject         engine.Object = InvalidSoundID
+)
 
 type Backend interface {
 	CreateAudio() engine.Object
@@ -72,8 +80,8 @@ func (m *Manager) AllocSound() engine.Object {
 // CloneSoundEffects allocates independent effects without copying volume or
 // playback. An unallocated source stays unallocated.
 func (m *Manager) CloneSoundEffects(source engine.Object) engine.Object {
-	if source == 0 {
-		return 0
+	if source == invalidSoundObject {
+		return invalidSoundObject
 	}
 	target := m.AllocSound()
 	m.backend.SetPan(target, m.backend.GetPan(source))
@@ -82,7 +90,7 @@ func (m *Manager) CloneSoundEffects(source engine.Object) engine.Object {
 }
 
 func (m *Manager) ReleaseSound(soundObj engine.Object) {
-	if soundObj == 0 {
+	if soundObj == invalidSoundObject {
 		return
 	}
 	_, wasPending := m.pendingDestroy[soundObj]
@@ -100,19 +108,19 @@ func (m *Manager) ReleaseSound(soundObj engine.Object) {
 }
 
 func (m *Manager) Pause(path string) {
-	if id := m.pruneDeadID(path); id != 0 {
+	if id := m.pruneDeadID(path); id != invalidPlaybackID {
 		m.backend.Pause(id)
 	}
 }
 
 func (m *Manager) Resume(path string) {
-	if id := m.pruneDeadID(path); id != 0 {
+	if id := m.pruneDeadID(path); id != invalidPlaybackID {
 		m.backend.Resume(id)
 	}
 }
 
 func (m *Manager) Stop(path string) {
-	if id := m.path2id[path]; id != 0 {
+	if id := m.path2id[path]; id != invalidPlaybackID {
 		m.backend.Stop(id)
 		m.dropPlaybackTracking(id)
 	}
@@ -120,7 +128,7 @@ func (m *Manager) Stop(path string) {
 }
 
 func (m *Manager) StopID(id int64) {
-	if id == 0 {
+	if id == invalidPlaybackID {
 		return
 	}
 	m.backend.Stop(id)
@@ -128,7 +136,7 @@ func (m *Manager) StopID(id int64) {
 }
 
 func (m *Manager) RestartID(id int64) bool {
-	if id == 0 || m.backend == nil {
+	if id == invalidPlaybackID || m.backend == nil {
 		return false
 	}
 	if !m.backend.Restart(id) {
@@ -139,7 +147,7 @@ func (m *Manager) RestartID(id int64) bool {
 }
 
 func (m *Manager) IsPlaying(id int64) bool {
-	if id == 0 {
+	if id == invalidPlaybackID {
 		return false
 	}
 	return m.backend.IsPlaying(id)
@@ -168,15 +176,15 @@ func (m *Manager) Play(
 	attenuation, maxDistance float64,
 ) int64 {
 	if attenuation == 0 {
-		owner = 0
+		owner = invalidSoundObject
 	}
 
 	// Scratch keeps one player per sound. Replaying the same sound stops its
 	// current playback before starting it again instead of mixing both plays.
 	m.Stop(path)
 	curID := m.backend.PlayWithAttenuation(soundObj, engine.ToAssetPath(path), owner, attenuation, maxDistance)
-	if curID == 0 {
-		return 0
+	if curID == invalidPlaybackID {
+		return invalidPlaybackID
 	}
 	m.trackPlayback(curID, path, soundObj, isLoop)
 	m.path2id[path] = curID
@@ -261,12 +269,12 @@ func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
 
 func (m *Manager) pruneDeadID(path string) int64 {
 	id := m.path2id[path]
-	if id != 0 && m.backend.IsPlaying(id) {
+	if id != invalidPlaybackID && m.backend.IsPlaying(id) {
 		return id
 	}
 	m.dropPlaybackTracking(id)
 	delete(m.path2id, path)
-	return 0
+	return invalidPlaybackID
 }
 
 func (m *Manager) removeID(target int64) {
@@ -277,7 +285,7 @@ func (m *Manager) removeID(target int64) {
 }
 
 func (m *Manager) trackPlayback(id int64, path string, soundObj engine.Object, loop bool) {
-	if id == 0 {
+	if id == invalidPlaybackID {
 		return
 	}
 	m.playbacks[id] = playbackInfo{
