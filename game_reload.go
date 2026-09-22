@@ -19,7 +19,6 @@ package spx
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
@@ -29,7 +28,7 @@ import (
 type reloadPlan struct {
 	project          coreproject.ProjectConfig
 	spriteConfigs    map[string]coreproject.LoadedSpriteConfig
-	costumeCounts    map[string]int
+	costumeLayouts   map[string]*coreproject.CostumeLayout
 	configNames      []string
 	directSprites    map[string]reflect.Type
 	prototypeByName  map[string]reflect.Type
@@ -161,10 +160,11 @@ func (p *reloadPlan) recordCostumeOverride(sprite, location string, shape corepr
 
 func (p *reloadPlan) validateCostumeOverrides() error {
 	for _, override := range p.costumeOverrides {
-		count, ok := p.costumeCounts[override.sprite]
+		layout, ok := p.costumeLayouts[override.sprite]
 		if !ok {
 			return fmt.Errorf("%s has no sprite configuration", override.location)
 		}
+		count := len(layout.Frames)
 		if override.index < 0 || override.index >= count {
 			return fmt.Errorf("%s costumeIndex %d is outside %d costumes", override.location, override.index, count)
 		}
@@ -222,7 +222,11 @@ func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
 		if !ok {
 			return fmt.Errorf("reload plan has no sprite config for %q", name)
 		}
-		return g.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
+		layout, ok := p.costumeLayouts[name]
+		if !ok {
+			return fmt.Errorf("reload plan has no costume layout for %q", name)
+		}
+		return g.loadSpriteConfigWithLayout(sprite, name, gamer, &loaded.Config, layout)
 	}
 }
 
@@ -233,7 +237,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 
 	plan := &reloadPlan{
 		spriteConfigs:   make(map[string]coreproject.LoadedSpriteConfig),
-		costumeCounts:   make(map[string]int),
+		costumeLayouts:  make(map[string]*coreproject.CostumeLayout),
 		directSprites:   make(map[string]reflect.Type),
 		prototypeByName: make(map[string]reflect.Type),
 	}
@@ -277,12 +281,12 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
 		}
-		costumeCount, err := validateReloadSpriteConfig(&loaded.Config)
+		costumeLayout, err := validateReloadSpriteConfig(&loaded.Config)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
 		}
 		plan.spriteConfigs[name] = loaded
-		plan.costumeCounts[name] = costumeCount
+		plan.costumeLayouts[name] = costumeLayout
 	}
 	if err := plan.validateCostumeOverrides(); err != nil {
 		return nil, fmt.Errorf("reload preflight: %w", err)
@@ -316,151 +320,46 @@ func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
 }
 
 // validateReloadSpriteConfig rejects values that would panic during init.
-func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) (int, error) {
-	if cfg == nil {
-		return 0, fmt.Errorf("configuration is nil")
-	}
-
-	costumeCount, costumeNames, err := reloadCostumeLayout(cfg)
+func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) (*coreproject.CostumeLayout, error) {
+	layout, err := coreproject.PrepareCostumeLayout(cfg)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	if err := validateReloadAnimationMap("fAnimations", cfg.FAnimations, costumeCount, costumeNames); err != nil {
-		return 0, err
+	if err := validateReloadAnimationMap("fAnimations", cfg.FAnimations, layout); err != nil {
+		return nil, err
 	}
-	return costumeCount, nil
+	return layout, nil
 }
 
-func reloadCostumeLayout(cfg *coreproject.SpriteConfig) (int, map[string]int, error) {
-	names := make(map[string]int)
-	switch {
-	case cfg.Costumes != nil:
-		if len(cfg.Costumes) == 0 {
-			return 0, nil, fmt.Errorf("costumes must not be empty")
-		}
-		for i, costume := range cfg.Costumes {
-			if costume == nil {
-				return 0, nil, fmt.Errorf("costumes[%d] is null", i)
-			}
-			if _, exists := names[costume.Name]; !exists {
-				names[costume.Name] = i
-			}
-		}
-		return len(cfg.Costumes), names, nil
-
-	case cfg.CostumeSet != nil:
-		count, err := appendReloadCostumeSet(names, 0, cfg.CostumeSet.Nx, cfg.CostumeSet.Items)
-		if err != nil {
-			return 0, nil, fmt.Errorf("costumeSet: %w", err)
-		}
-		return count, names, nil
-
-	case cfg.CostumeMPSet != nil:
-		if len(cfg.CostumeMPSet.Parts) == 0 {
-			return 0, nil, fmt.Errorf("costumeMPSet.parts must not be empty")
-		}
-		count := 0
-		for i, part := range cfg.CostumeMPSet.Parts {
-			partCount, err := appendReloadCostumeSet(names, count, part.Nx, part.Items)
-			if err != nil {
-				return 0, nil, fmt.Errorf("costumeMPSet.parts[%d]: %w", i, err)
-			}
-			count += partCount
-		}
-		return count, names, nil
-
-	default:
-		return 0, nil, fmt.Errorf("configuration must define costumes, costumeSet, or costumeMPSet")
-	}
-}
-
-func appendReloadCostumeSet(names map[string]int, start, nx int, items []coreproject.CostumeSetItem) (int, error) {
-	if nx <= 0 {
-		return 0, fmt.Errorf("invalid frame count %d", nx)
-	}
-
-	// initCSPart ignores items for a single frame.
-	if nx == 1 || items == nil {
-		for i := 0; i < nx; i++ {
-			name := strconv.Itoa(start + i)
-			if nx == 1 {
-				name = strconv.Itoa(start)
-			}
-			if _, exists := names[name]; !exists {
-				names[name] = start + i
-			}
-		}
-		return nx, nil
-	}
-
-	frameIndex := 0
-	for itemIndex, item := range items {
-		if item.N < 0 {
-			return 0, fmt.Errorf("items[%d] has negative frame count %d", itemIndex, item.N)
-		}
-		for i := 0; i < item.N; i++ {
-			name := item.NamePrefix + strconv.Itoa(i)
-			if _, exists := names[name]; !exists {
-				names[name] = start + frameIndex
-			}
-			frameIndex++
-		}
-	}
-	if frameIndex != nx {
-		return 0, fmt.Errorf("incomplete frame loading (loaded=%d, expected=%d)", frameIndex, nx)
-	}
-	return nx, nil
-}
-
-func validateReloadAnimationMap(kind string, animations map[string]*coreproject.AniConfig, costumeCount int, costumeNames map[string]int) error {
+func validateReloadAnimationMap(kind string, animations map[string]*coreproject.AniConfig, layout *coreproject.CostumeLayout) error {
 	for name, animation := range animations {
 		if animation == nil {
 			return fmt.Errorf("%s[%q] is null", kind, name)
 		}
-		if err := validateReloadAnimationFrame(kind, name, "frameFrom", animation.FrameFrom, costumeCount, costumeNames); err != nil {
+		if err := validateReloadAnimationFrame(kind, name, "frameFrom", animation.FrameFrom, layout); err != nil {
 			return err
 		}
-		if err := validateReloadAnimationFrame(kind, name, "frameTo", animation.FrameTo, costumeCount, costumeNames); err != nil {
+		if err := validateReloadAnimationFrame(kind, name, "frameTo", animation.FrameTo, layout); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateReloadAnimationFrame(kind, animation, field string, value any, costumeCount int, costumeNames map[string]int) error {
+func validateReloadAnimationFrame(kind, animation, field string, value any, layout *coreproject.CostumeLayout) error {
 	if value == nil {
 		return nil
 	}
-	if name, ok := value.(string); ok {
-		if _, exists := costumeNames[name]; !exists {
-			return fmt.Errorf("%s[%q].%s references missing costume %q", kind, animation, field, name)
-		}
-		return nil
-	}
 
-	index := reloadNumericIndex(value)
+	index, ok := layout.ResolveFrameIndex(value)
+	if !ok {
+		return fmt.Errorf("%s[%q].%s references missing costume %q", kind, animation, field, value)
+	}
+	costumeCount := len(layout.Frames)
 	if index < 0 || index >= costumeCount {
 		return fmt.Errorf("%s[%q].%s index %d is outside %d costumes", kind, animation, field, index, costumeCount)
 	}
 	return nil
-}
-
-func reloadNumericIndex(value any) int {
-	rv := reflect.ValueOf(value)
-	if !rv.IsValid() {
-		return 0
-	}
-	switch rv.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return int(rv.Int())
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return int(rv.Uint())
-	case reflect.Float32, reflect.Float64:
-		return int(rv.Float())
-	default:
-		// Match animationComponent.costumeIndex.
-		return 0
-	}
 }
 
 func validateReloadSpriteProperties(shape coreproject.StageShape) error {

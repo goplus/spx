@@ -385,17 +385,11 @@ func (a *animationComponent) stopAnimState(state *animState) {
 // ============================================================================
 
 func (a *animationComponent) costumeIndex(nameOrIndex any) int {
-	switch v := nameOrIndex.(type) {
-	case SpriteCostumeName:
-		idx := a.sprite.findCostume(v)
-		if idx < 0 {
-			spxlog.Panicf("FindCostume failed for %s", v)
-		}
-		return idx
-	default:
-		val, _ := tools.GetFloat(nameOrIndex)
-		return int(val)
+	index, ok := a.sprite.costumeLayout.ResolveFrameIndex(nameOrIndex)
+	if !ok {
+		spxlog.Panicf("FindCostume failed for %s", nameOrIndex)
 	}
+	return index
 }
 
 func (a *animationComponent) frameRange(from, to any) (int, int) {

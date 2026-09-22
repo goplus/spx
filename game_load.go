@@ -40,11 +40,26 @@ func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error
 }
 
 func (p *Game) loadSpriteConfig(sprite Sprite, name string, gamer reflect.Value, cfg *coreproject.SpriteConfig) error {
+	layout, err := coreproject.PrepareCostumeLayout(cfg)
+	if err != nil {
+		return fmt.Errorf("prepare sprite %q costumes: %w", name, err)
+	}
+	return p.loadSpriteConfigWithLayout(sprite, name, gamer, cfg, layout)
+}
+
+func (p *Game) loadSpriteConfigWithLayout(sprite Sprite, name string, gamer reflect.Value, cfg *coreproject.SpriteConfig, layout *coreproject.CostumeLayout) error {
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
 	// Paths in cfg are already normalized by coreproject.LoadSpriteConfig.
-	base.init(p, name, cfg, gamer, sprite)
+	base.init(spriteInitContext{
+		game:          p,
+		name:          name,
+		owner:         gamer,
+		sprite:        sprite,
+		config:        cfg,
+		costumeLayout: layout,
+	})
 	p.sprs[name] = sprite
 	return bindSpriteOwner(vSpr, gamer)
 }

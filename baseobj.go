@@ -18,7 +18,6 @@ package spx
 
 import (
 	"math"
-	"strconv"
 
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v3/internal/assets"
@@ -32,8 +31,9 @@ import (
 type baseObj struct {
 	runtimeState corestate.BaseObjRuntimeState
 
-	costumes     []*costume
-	costumeIndex int
+	costumes      []*costume
+	costumeIndex  int
+	costumeLayout *coreproject.CostumeLayout
 
 	// Effects
 	greffUniforms map[EffectKind]float64 // graphic effects uniforms
@@ -80,88 +80,49 @@ func (p *baseObj) markDestroyed() {
 	p.runtimeState.MarkDestroyed()
 }
 
-// initWith initializes the base object with sprite configuration.
-func (p *baseObj) initWith(sprite *coreproject.SpriteConfig) {
-	if sprite.CostumeSet != nil {
-		p.initWithCS(sprite.CostumeSet)
-	} else if sprite.CostumeMPSet != nil {
-		p.initWithCMPS(sprite.CostumeMPSet)
-	} else {
-		engine.Panic("initWith: sprite configuration must have either CostumeSet or CostumeMPSet defined")
+// initSpriteCostumes creates costumes from a layout prepared before any engine
+// state is mutated.
+func (p *baseObj) initSpriteCostumes(sprite *coreproject.SpriteConfig, layout *coreproject.CostumeLayout) {
+	p.costumeLayout = layout
+	if sprite.Costumes != nil {
+		p.init(sprite.Costumes, sprite.GetCostumeIndex())
 		return
 	}
 
+	p.runtimeState.IsCostumeSet = true
+	p.costumes = make([]*costume, 0, len(layout.Frames))
+	if sprite.CostumeSet != nil {
+		cs := sprite.CostumeSet
+		image := &costumeSetImage{
+			path:   cs.Path,
+			width:  cs.ImageWidth,
+			height: cs.ImageHeight,
+			nx:     cs.Nx,
+		}
+		if cs.Rect != nil {
+			image.rc = *cs.Rect
+		}
+		p.addCostumeFrames(layout.Frames, []*costumeSetImage{image}, cs.FaceRight, cs.BitmapResolution)
+	} else {
+		cmps := sprite.CostumeMPSet
+		images := make([]*costumeSetImage, len(cmps.Parts))
+		for i, part := range cmps.Parts {
+			images[i] = &costumeSetImage{path: cmps.Path, rc: part.Rect, nx: part.Nx}
+		}
+		p.addCostumeFrames(layout.Frames, images, cmps.FaceRight, cmps.BitmapResolution)
+	}
+
 	costumeIndex := sprite.GetCostumeIndex()
-	if costumeIndex >= len(p.costumes) || costumeIndex < 0 {
+	if costumeIndex < 0 || costumeIndex >= len(p.costumes) {
 		costumeIndex = 0
 	}
 	p.setCostumeIndex(costumeIndex)
 }
 
-// initWithCMPS initializes with a multi-part costume set.
-func (p *baseObj) initWithCMPS(cmps *coreproject.CostumeMPSet) {
-	faceRight := cmps.FaceRight
-	bitmapResolution := assetutil.ToBitmapResolution(cmps.BitmapResolution)
-	imgPath := cmps.Path
-
-	for _, cs := range cmps.Parts {
-		img := &costumeSetImage{
-			path: imgPath,
-			rc:   cs.Rect,
-			nx:   cs.Nx,
-		}
-		p.initCSPart(img, faceRight, bitmapResolution, cs.Nx, cs.Items)
-	}
-}
-
-// initWithCS initializes with a costume set.
-func (p *baseObj) initWithCS(cs *coreproject.CostumeSet) {
-	nx := cs.Nx
-	imgPath := cs.Path
-
-	img := &costumeSetImage{
-		path:   imgPath,
-		width:  cs.ImageWidth,
-		height: cs.ImageHeight,
-		nx:     nx,
-	}
-	if cs.Rect != nil {
-		img.rc = *cs.Rect
-	}
-
-	p.costumes = make([]*costume, 0, nx)
-	p.initCSPart(img, cs.FaceRight, assetutil.ToBitmapResolution(cs.BitmapResolution), nx, cs.Items)
-}
-
-// initCSPart initializes a costume set part.
-func (p *baseObj) initCSPart(img *costumeSetImage, faceRight float64, bitmapResolution, nx int, items []coreproject.CostumeSetItem) {
-	p.runtimeState.IsCostumeSet = true
-	if nx <= 0 {
-		engine.Panicf("initCSPart: invalid costume set frame count %d", nx)
-		return
-	}
-	if nx == 1 {
-		name := strconv.Itoa(len(p.costumes))
-		p.addCostumeWith(name, img, faceRight, 0, bitmapResolution)
-		return
-	}
-	if items == nil {
-		for index := range nx {
-			name := strconv.Itoa(len(p.costumes))
-			p.addCostumeWith(name, img, faceRight, index, bitmapResolution)
-		}
-		return
-	}
-	frameIndex := 0
-	for _, item := range items {
-		for i := 0; i < item.N; i++ {
-			name := item.NamePrefix + strconv.Itoa(i)
-			p.addCostumeWith(name, img, faceRight, frameIndex, bitmapResolution)
-			frameIndex++
-		}
-	}
-	if frameIndex != nx {
-		engine.Panicf("initCSPart: incomplete costume set loading (loaded=%d, expected=%d)", frameIndex, nx)
+func (p *baseObj) addCostumeFrames(frames []coreproject.CostumeFrame, images []*costumeSetImage, faceRight float64, bitmapResolution int) {
+	resolution := assetutil.ToBitmapResolution(bitmapResolution)
+	for _, frame := range frames {
+		p.addCostumeWith(frame.Name, images[frame.Part], faceRight, frame.Index, resolution)
 	}
 }
 
@@ -206,6 +167,7 @@ func (p *baseObj) initWithSize(width, height int) {
 // initFrom initializes from another base object (cloning).
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
+	p.costumeLayout = src.costumeLayout
 	p.runtimeState.HasShader = false
 	p.setCostumeIndex(src.costumeIndex)
 }
