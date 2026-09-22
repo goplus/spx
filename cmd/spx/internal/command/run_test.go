@@ -305,10 +305,7 @@ func TestBrowserOpenCommandsWindowsUsesRundll32(t *testing.T) {
 }
 
 func TestSetupInterpretedPathsKeepsWorkingDirectory(t *testing.T) {
-	before, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
+	before := workingDirectory(t)
 	projectDir := t.TempDir()
 	pathArg := projectDir
 	cmd := CmdTool{Args: ExtraArgs{Path: &pathArg}}
@@ -316,19 +313,89 @@ func TestSetupInterpretedPathsKeepsWorkingDirectory(t *testing.T) {
 	if err := cmd.setupInterpretedPaths("project"); err != nil {
 		t.Fatal(err)
 	}
-	after, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after != before {
-		t.Fatalf("working directory changed from %q to %q", before, after)
-	}
+	assertWorkingDirectory(t, before)
 	if cmd.TargetAbsDir != projectDir || cmd.TargetDir != projectDir {
 		t.Fatalf("project root = (%q, %q), want %q", cmd.TargetAbsDir, cmd.TargetDir, projectDir)
 	}
 	if cmd.ProjectDir != filepath.Join(projectDir, "project") {
 		t.Fatalf("Engine project dir = %q", cmd.ProjectDir)
 	}
+}
+
+func TestRunPureEngineBuildsWithTagsAndRunsFromTargetDir(t *testing.T) {
+	goDir := t.TempDir()
+	targetDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "pure-engine.log")
+	writePureEngineTestProject(t, goDir)
+
+	t.Setenv("GOTOOLCHAIN", "local")
+	t.Setenv("GOPROXY", "off")
+	tags := "pure_test_tag"
+	cmd := CmdTool{
+		GoDir: goDir, TargetDir: targetDir,
+		Args: ExtraArgs{Tags: &tags},
+	}
+	before := workingDirectory(t)
+	if err := cmd.RunPureEngine(logPath, "--sample", "value"); err != nil {
+		t.Fatalf("RunPureEngine returned error: %v", err)
+	}
+	assertWorkingDirectory(t, before)
+
+	binaryPath := filepath.Join(goDir, "main"+executableSuffix(runtime.GOOS))
+	if !fileExists(binaryPath) {
+		t.Fatalf("pure-engine binary not created at %s", binaryPath)
+	}
+	assertPureEngineLog(t, logPath, targetDir, tags, "--sample", "value")
+}
+
+func TestRunPureEngineSupportsConcurrentWorkingDirectories(t *testing.T) {
+	t.Setenv("GOTOOLCHAIN", "local")
+	t.Setenv("GOPROXY", "off")
+	tags := "pure_test_tag"
+	type run struct {
+		cmd     CmdTool
+		logPath string
+	}
+	runs := make([]run, 2)
+	for i := range runs {
+		goDir := t.TempDir()
+		writePureEngineTestProject(t, goDir)
+		runs[i] = run{
+			cmd: CmdTool{
+				GoDir: goDir, TargetDir: t.TempDir(),
+				Args: ExtraArgs{Tags: &tags},
+			},
+			logPath: filepath.Join(t.TempDir(), fmt.Sprintf("pure-engine-%d.log", i)),
+		}
+	}
+
+	before := workingDirectory(t)
+	errs := make(chan error, len(runs))
+	for _, run := range runs {
+		go func() {
+			errs <- run.cmd.RunPureEngine(run.logPath)
+		}()
+	}
+	for range runs {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent RunPureEngine returned error: %v", err)
+		}
+	}
+	assertWorkingDirectory(t, before)
+	for _, run := range runs {
+		assertPureEngineLog(t, run.logPath, run.cmd.TargetDir, tags)
+	}
+}
+
+func TestRunPureEngineBuildFailureKeepsWorkingDirectory(t *testing.T) {
+	goDir := filepath.Join(t.TempDir(), "missing")
+
+	before := workingDirectory(t)
+	err := (&CmdTool{GoDir: goDir, TargetDir: t.TempDir()}).RunPureEngine()
+	if err == nil || !strings.Contains(err.Error(), "failed to build Go binary") {
+		t.Fatalf("RunPureEngine error = %v, want build failure context", err)
+	}
+	assertWorkingDirectory(t, before)
 }
 
 func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
@@ -357,14 +424,17 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 		TargetAbsDir: projectDir, ProjectDir: generatedDir, RuntimeTempDir: sessionDir,
 		RuntimeCmdPath: runtimePath, LibPath: libPath,
 	}
+	before := workingDirectory(t)
 	if err := cmd.RunPackMode("--path", "ignored"); err != nil {
 		t.Fatalf("RunPackMode returned error: %v", err)
 	}
+	assertWorkingDirectory(t, before)
 
 	log, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertSameDirectory(t, strings.SplitN(string(log), "\n", 2)[0], sessionDir)
 	for _, want := range []string{
 		"--path\n" + sessionDir,
 		"SPX_PROJECT_DIR=" + projectDir,
@@ -419,8 +489,14 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 	}
 	cmd.BinPostfix = executableSuffix(runtime.GOOS)
 
+	before := workingDirectory(t)
 	if err := cmd.RunInterpreted("--path", "ignored"); err != nil {
 		t.Fatalf("RunInterpreted returned error: %v", err)
+	}
+	assertWorkingDirectory(t, before)
+	wantRuntimePath := filepath.Join(goBinPath, runtimeName)
+	if cmd.RuntimeCmdPath != wantRuntimePath {
+		t.Fatalf("runtime path = %q, want %q", cmd.RuntimeCmdPath, wantRuntimePath)
 	}
 
 	extensionPath := filepath.Join(runtimeTempDir, "runtime.gdextension")
@@ -461,6 +537,7 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 		t.Fatalf("read runtime log: %v", err)
 	}
 	logContent := string(gotLog)
+	assertSameDirectory(t, strings.SplitN(logContent, "\n", 2)[0], runtimeTempDir)
 	if !strings.Contains(logContent, "--path\n"+runtimeTempDir+"\n") {
 		t.Fatalf("runtime log = %q, want --path followed by %s", logContent, runtimeTempDir)
 	}
@@ -475,6 +552,65 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 		if !strings.Contains(logContent, want+"\n") {
 			t.Fatalf("runtime log = %q, want %q", logContent, want)
 		}
+	}
+}
+
+func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
+	projectDir := t.TempDir()
+	mustWriteAssetIndex(t, projectDir)
+	goBinPath := t.TempDir()
+	version := "9.9.9-failure-test"
+	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
+	runtimePath := filepath.Join(goBinPath, runtimeName)
+	if err := os.WriteFile(runtimePath, []byte("not an executable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	libPath := filepath.Join(goBinPath, libraryFileName(envName, runtime.GOOS, runtime.GOARCH))
+	if err := os.WriteFile(libPath, []byte("bridge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		wantErr string
+		run     func(sessionDir string) error
+	}{
+		{
+			name:    "pack mode",
+			wantErr: "native Engine failed",
+			run: func(sessionDir string) error {
+				cmd := CmdTool{
+					TargetAbsDir: projectDir, RuntimeTempDir: sessionDir,
+					RuntimeCmdPath: runtimePath, LibPath: libPath,
+				}
+				return cmd.RunPackMode()
+			},
+		},
+		{
+			name:    "interpreted mode",
+			wantErr: "interpreted Engine failed",
+			run: func(sessionDir string) error {
+				cmd := CmdTool{
+					TargetAbsDir: projectDir, RuntimeTempDir: sessionDir,
+					GoBinPath: goBinPath, Version: version, BinPostfix: executableSuffix(runtime.GOOS),
+				}
+				return cmd.RunInterpreted()
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := workingDirectory(t)
+			err := tt.run(filepath.Join(projectDir, ".temp-"+strings.ReplaceAll(tt.name, " ", "-")))
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("run error = %v, want context %q", err, tt.wantErr)
+			}
+			assertWorkingDirectory(t, before)
+		})
 	}
 }
 
@@ -671,7 +807,87 @@ func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
 	}
 }
 
+func writePureEngineTestProject(t *testing.T, goDir string) {
+	t.Helper()
+	for name, content := range map[string]string{
+		"go.mod": "module example.com/pureenginetest\n\ngo 1.23\n",
+		"main.go": `package main
+
+import (
+	"os"
+	"strings"
+)
+
+func main() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	fields := append([]string{cwd, requiredTag}, os.Args[2:]...)
+	if err := os.WriteFile(os.Args[1], []byte(strings.Join(fields, "\n")), 0o644); err != nil {
+		panic(err)
+	}
+}
+`,
+		"tag.go": `//go:build pure_test_tag
+
+package main
+
+const requiredTag = "pure_test_tag"
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(goDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func workingDirectory(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func assertWorkingDirectory(t *testing.T, want string) {
+	t.Helper()
+	if got := workingDirectory(t); got != want {
+		t.Fatalf("working directory changed from %q to %q", want, got)
+	}
+}
+
+func assertPureEngineLog(t *testing.T, logPath, targetDir, tag string, wantArgs ...string) {
+	t.Helper()
+	log, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(log), "\n")
+	wantLines := append([]string{targetDir, tag}, wantArgs...)
+	if len(lines) != len(wantLines) || !reflect.DeepEqual(lines[1:], wantLines[1:]) {
+		t.Fatalf("pure-engine log = %q, want %q", log, strings.Join(wantLines, "\n"))
+	}
+	assertSameDirectory(t, lines[0], targetDir)
+}
+
+func assertSameDirectory(t *testing.T, got, want string) {
+	t.Helper()
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat runtime working directory %q: %v", got, err)
+	}
+	wantInfo, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("stat expected runtime working directory %q: %v", want, err)
+	}
+	if !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("runtime working directory = %q, want %q", got, want)
+	}
 }

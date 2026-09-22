@@ -40,25 +40,29 @@ func (cmd *CmdTool) Run(arg string) (err error) {
 }
 
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {
+	return cmd.runInterpretedEngine(cmd.RuntimeCmdPath, cmd.LibPath, "native", pargs...)
+}
+
+func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind string, pargs ...string) error {
 	roots, err := cmd.interpretedRoots()
 	if err != nil {
 		return err
 	}
 	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{
-		Roots: roots, BridgePath: cmd.LibPath,
+		Roots: roots, BridgePath: bridgePath,
 	}); err != nil {
 		return err
 	}
 
 	engineCmd, err := interpruntime.PrepareCommand(context.Background(), interpruntime.CommandConfig{
-		Roots: roots, Executable: cmd.RuntimeCmdPath, Args: pargs, Env: os.Environ(),
+		Roots: roots, Executable: runtimePath, Args: pargs, Env: os.Environ(),
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, PathPolicy: interpruntime.ReplacePath,
 	})
 	if err != nil {
 		return err
 	}
 	if err := engineCmd.Run(); err != nil {
-		return fmt.Errorf("native Engine failed: %w", err)
+		return fmt.Errorf("%s Engine failed: %w", engineKind, err)
 	}
 	return nil
 }
@@ -100,28 +104,17 @@ func (cmd *CmdTool) StopWeb() (err error) {
 }
 
 func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
-	rawdir, _ := os.Getwd()
-	os.Chdir(cmd.GoDir)
-
 	binaryName := "main" + executableSuffix(runtime.GOOS)
-
-	envVars := []string{"CGO_ENABLED=0"}
+	buildArgs := []string{"build"}
 	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
-		err := util.RunGolang(envVars, "build", "-tags="+*cmd.Args.Tags, "-o", binaryName)
-		if err != nil {
-			os.Chdir(rawdir)
-			return fmt.Errorf("failed to build Go binary: %w", err)
-		}
-	} else {
-		err := util.RunGolang(envVars, "build", "-o", binaryName)
-		if err != nil {
-			os.Chdir(rawdir)
-			return fmt.Errorf("failed to build Go binary: %w", err)
-		}
+		buildArgs = append(buildArgs, "-tags="+*cmd.Args.Tags)
+	}
+	buildArgs = append(buildArgs, "-o", binaryName)
+	if err := util.ExecCommand(util.CommandOptions{Env: []string{"CGO_ENABLED=0"}, Dir: cmd.GoDir}, "go", buildArgs...); err != nil {
+		return fmt.Errorf("failed to build Go binary: %w", err)
 	}
 
 	binaryPath := filepath.Join(cmd.GoDir, binaryName)
-	os.Chdir(rawdir)
 	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
 }
 
@@ -142,31 +135,7 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 		return err
 	}
 	cmd.RuntimeCmdPath = runtimePath
-
-	roots, err := cmd.interpretedRoots()
-	if err != nil {
-		return err
-	}
-	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{Roots: roots, BridgePath: libPath}); err != nil {
-		return err
-	}
-	engineCmd, err := interpruntime.PrepareCommand(context.Background(), interpruntime.CommandConfig{
-		Roots:      roots,
-		Executable: runtimePath,
-		Args:       pargs,
-		Env:        os.Environ(),
-		Stdin:      os.Stdin,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
-		PathPolicy: interpruntime.ReplacePath,
-	})
-	if err != nil {
-		return err
-	}
-	if err := engineCmd.Run(); err != nil {
-		return fmt.Errorf("interpreted Engine failed: %w", err)
-	}
-	return nil
+	return cmd.runInterpretedEngine(runtimePath, libPath, "interpreted", pargs...)
 }
 
 func (cmd *CmdTool) runtimeSearchDirs() []string {
