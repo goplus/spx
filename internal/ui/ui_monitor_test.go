@@ -236,7 +236,7 @@ func TestUiMonitorSceneContract(t *testing.T) {
 		}
 	}
 
-	scratchStyles := map[string]map[string]string{
+	appearanceStyles := map[string]map[string]string{
 		"ScratchBG": {
 			"bg_color":               "Color(0.898039, 0.941176, 1, 1)",
 			"border_color":           "Color(0.764706, 0.8, 0.85098, 1)",
@@ -257,7 +257,7 @@ func TestUiMonitorSceneContract(t *testing.T) {
 			"corner_radius_top_left": "9",
 		},
 	}
-	for path, properties := range scratchStyles {
+	for path, properties := range appearanceStyles {
 		node := parsed.nodes[path]
 		resourceID := monitorSceneReference(t, monitorSceneProperty(node, "theme_override_styles/panel"), "SubResource")
 		assertMonitorSceneProperties(t, parsed.resources[resourceID], properties)

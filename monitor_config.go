@@ -34,11 +34,11 @@ func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
 	}
 	mode := int(v["mode"].(float64))
 	style, _ := coreproject.ShapeValue(v, "style", "default").(string)
-	if style == monitorStyleScratch {
+	if style == monitorStyleCompatible {
 		if mode == monitorModeLarge {
-			return ui.MonitorAppearanceScratchLarge
+			return ui.MonitorAppearanceCompatibleLarge
 		}
-		return ui.MonitorAppearanceScratch
+		return ui.MonitorAppearanceCompatible
 	}
 	if mode == monitorModeDefault {
 		return ui.MonitorAppearanceDefault
@@ -53,7 +53,7 @@ func parseMonitorColor(v coreproject.StageShape, appearance ui.MonitorAppearance
 	switch {
 	case appearance == ui.MonitorAppearanceList:
 		return mathf.NewColorRGBAi(0xff, 0x66, 0x1a, 0xff)
-	case appearance.IsScratch():
+	case appearance.IsCompatible():
 		return mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
 	default:
 		return mathf.NewColorRGBAi(0x28, 0x9c, 0xfc, 0xff)

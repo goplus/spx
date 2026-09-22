@@ -70,7 +70,7 @@ func TestFloorMod(t *testing.T) {
 	}
 }
 
-func TestContainsUsesScratchCaseInsensitiveSemantics(t *testing.T) {
+func TestContainsUsesCaseInsensitiveSemantics(t *testing.T) {
 	tests := []struct {
 		name      string
 		s         string

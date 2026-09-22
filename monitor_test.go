@@ -114,7 +114,7 @@ func (p *monitorPanelSpy) UpdatePos(pos mathf.Vec2) {
 }
 
 func TestMonitorRefreshLifecycle(t *testing.T) {
-	for name, appearance := range map[string]ui.MonitorAppearance{"scalar": ui.MonitorAppearanceScratch, "list": ui.MonitorAppearanceList} {
+	for name, appearance := range map[string]ui.MonitorAppearance{"scalar": ui.MonitorAppearanceCompatible, "list": ui.MonitorAppearanceList} {
 		t.Run(name, func(t *testing.T) {
 			panel := &monitorPanelSpy{}
 			value := ui.MonitorValue{Text: "42", Items: []string{"one", "two"}}
@@ -197,9 +197,9 @@ func TestParseMonitorAppearance(t *testing.T) {
 		{name: "default large", mode: 2, want: ui.MonitorAppearanceDefaultLarge},
 		{name: "default unsupported mode", mode: 99, want: ui.MonitorAppearanceDefaultLarge},
 		{name: "explicit default", mode: 1, style: "default", want: ui.MonitorAppearanceDefault},
-		{name: "scratch", mode: 1, style: "scratch", want: ui.MonitorAppearanceScratch},
-		{name: "scratch large", mode: 2, style: "scratch", want: ui.MonitorAppearanceScratchLarge},
-		{name: "scratch unsupported mode", mode: 99, style: "scratch", want: ui.MonitorAppearanceScratch},
+		{name: "scratch", mode: 1, style: "scratch", want: ui.MonitorAppearanceCompatible},
+		{name: "scratch large", mode: 2, style: "scratch", want: ui.MonitorAppearanceCompatibleLarge},
+		{name: "scratch unsupported mode", mode: 99, style: "scratch", want: ui.MonitorAppearanceCompatible},
 		{name: "unknown style", mode: 1, style: "custom", want: ui.MonitorAppearanceDefault},
 		{name: "invalid style", mode: 2, style: 1.0, want: ui.MonitorAppearanceDefaultLarge},
 	}
@@ -238,8 +238,8 @@ func TestStageMonitorFixture(t *testing.T) {
 	want := map[string]monitorFixture{
 		"default-implicit": {ui.MonitorAppearanceDefault, "Monkey", "getVar:clicked", -235, 175},
 		"default-large":    {ui.MonitorAppearanceDefaultLarge, "", "getVar:downs", -115, 175},
-		"scratch-default":  {ui.MonitorAppearanceScratch, "Monkey", "getVar:clicked", -235, 140},
-		"scratch-large":    {ui.MonitorAppearanceScratchLarge, "", "getVar:downs", -115, 140},
+		"scratch-default":  {ui.MonitorAppearanceCompatible, "Monkey", "getVar:clicked", -235, 140},
+		"scratch-large":    {ui.MonitorAppearanceCompatibleLarge, "", "getVar:downs", -115, 140},
 	}
 	for _, shape := range project.ZOrder {
 		if shape["type"] != "monitor" {

@@ -12,8 +12,8 @@ import (
 )
 
 func TestContactEventsDecodePackedBytes(t *testing.T) {
-	previousCallbacks, previousScratch := callbacks, contactEventScratch
-	t.Cleanup(func() { callbacks, contactEventScratch = previousCallbacks, previousScratch })
+	previousCallbacks, previousEventBuffer := callbacks, contactEventBuffer
+	t.Cleanup(func() { callbacks, contactEventBuffer = previousCallbacks, previousEventBuffer })
 	type contact struct {
 		kind        int
 		self, other int64

@@ -75,7 +75,7 @@ func withEventRegistrationBarrier(owner any, dispatch func()) {
 }
 
 func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
-	return sinksInScratchTargetOrder(p.game, p.manager.Snapshot(bucket))
+	return sinksInTargetOrder(p.game, p.manager.Snapshot(bucket))
 }
 
 func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
@@ -155,9 +155,9 @@ func eventBatchMode(wait bool) coroutine.BatchMode {
 	return coroutine.BatchAsync
 }
 
-// sinksInScratchTargetOrder uses the live front-to-back sprite order and puts
+// sinksInTargetOrder uses the live front-to-back sprite order and puts
 // the stage last while preserving registration order within each owner.
-func sinksInScratchTargetOrder(game *Game, sinks []eventSink) []eventSink {
+func sinksInTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	if len(sinks) < 2 {
 		return sinks
 	}

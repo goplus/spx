@@ -14,7 +14,7 @@ func TestClonePenStateComesFromOriginal(t *testing.T) {
 		penColor:        toMathfColor(HSB(20, 80, 90)),
 		penWidth:        5,
 		penHue:          20,
-		legacyPenColor:  scratchLegacyPenState{hue: 20, shade: 40},
+		legacyPenColor:  legacyPenState{hue: 20, shade: 40},
 		penSaturation:   80,
 		penBrightness:   90,
 		penTransparency: 30,

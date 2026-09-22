@@ -63,7 +63,7 @@ func assertLayerOrder(t *testing.T, game *Game, want []string) {
 	}
 }
 
-func TestSpriteLayerActionsMatchScratchOrdering(t *testing.T) {
+func TestSpriteLayerActionsMatchTargetOrdering(t *testing.T) {
 	tests := []struct {
 		name   string
 		target string

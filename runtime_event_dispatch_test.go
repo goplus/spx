@@ -23,7 +23,7 @@ import (
 )
 
 // Stamp-driven games broadcast to many clones each frame.
-func BenchmarkScratchTargetOrder(b *testing.B) {
+func BenchmarkTargetOrder(b *testing.B) {
 	game := &Game{}
 	game.initShapeMgr()
 	sinks := make([]eventSink, 0, 202)
@@ -36,13 +36,13 @@ func BenchmarkScratchTargetOrder(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if got := sinksInScratchTargetOrder(game, sinks); len(got) != len(sinks) {
+		if got := sinksInTargetOrder(game, sinks); len(got) != len(sinks) {
 			b.Fatal(len(got))
 		}
 	}
 }
 
-func TestScratchTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
+func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	game := &Game{}
 	game.initShapeMgr()
 	back, front := &SpriteImpl{g: game}, &SpriteImpl{g: game}
@@ -61,7 +61,7 @@ func TestScratchTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 		{Owner: &Game{}, Handler: "other-game"},
 	}
 	snapshot := slices.Clone(sinks)
-	ordered := sinksInScratchTargetOrder(game, sinks)
+	ordered := sinksInTargetOrder(game, sinks)
 	names := make([]string, len(ordered))
 	for i, sink := range ordered {
 		names[i] = sink.Handler.(string)
@@ -79,7 +79,7 @@ func TestScratchTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	}
 	// A later broadcast must observe the new layer order, not a cached grouping.
 	game.shapeMgr.items[0], game.shapeMgr.items[1] = front, back
-	if got := sinksInScratchTargetOrder(game, sinks)[0].Handler; got != "back-1" {
+	if got := sinksInTargetOrder(game, sinks)[0].Handler; got != "back-1" {
 		t.Fatalf("first handler after layer change = %v", got)
 	}
 }
