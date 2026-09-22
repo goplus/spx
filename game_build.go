@@ -46,7 +46,7 @@ func (p *Game) loadGame(resource any, generation uint64) error {
 	setupGameSystems(p, proj)
 	gamer := reflect.ValueOf(p.gamer).Elem()
 	loadGameSprites(p, gamer, opened.FS, proj)
-	p.loadStage(gamer, proj, generation, p.loadSprite)
+	p.loadStage(gamer, proj, generation, p.loadSprite, nil)
 
 	platform := &engine.Managers().PlatformMgr
 	if !conf.DontRunOnUnfocused {

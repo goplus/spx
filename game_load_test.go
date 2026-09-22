@@ -720,7 +720,7 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 
 	inits := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
 		Zorder: []any{"Back", "Front"},
-	}, game.loadSprite)
+	}, game.loadSprite, nil)
 	if got, want := len(inits), 2; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
 	}
@@ -768,7 +768,7 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 			coreproject.StageShape{"type": "sprite", "target": "Middle"},
 			"Front",
 		},
-	}, game.loadSprite)
+	}, game.loadSprite, nil)
 
 	if got, want := len(inits), 5; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
@@ -911,9 +911,13 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 		"size":         2.0,
 		"costumeIndex": 1.0,
 	}
+	properties, err := parseSpriteProperties(shape)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var dest *SpriteImpl
-	dest, _ = instantiateStageSprite(out, source, shape)
+	dest, _ = instantiateStageSprite(out, source, properties)
 
 	if dest == nil {
 		t.Fatal("instantiateStageSprite returned nil sprite")
@@ -945,8 +949,11 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	setupCloneSpriteMgr(t)
 	source := newCloneAwakeOrderSprite(&game, "SpriteA")
 	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
-	shape := coreproject.StageShape{"visible": false}
-	dest, _ := instantiateStageSprite(out, source, shape)
+	properties, err := parseSpriteProperties(coreproject.StageShape{"visible": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest, _ := instantiateStageSprite(out, source, properties)
 
 	if dest.IsCloned() {
 		t.Fatal("stage instance is marked cloned")

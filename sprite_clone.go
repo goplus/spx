@@ -20,7 +20,6 @@ import (
 	"reflect"
 	"unsafe"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
@@ -88,9 +87,9 @@ func instantiateRuntimeClone(out reflect.Value, source Sprite) *SpriteImpl {
 	return dest
 }
 
-func instantiateStageSprite(out reflect.Value, source Sprite, shape coreproject.StageShape) (*SpriteImpl, Sprite) {
+func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteProperties) (*SpriteImpl, Sprite) {
 	dest, outPtr := copySprite(out, source)
-	applySpriteProps(dest, shape)
+	applySpriteProperties(dest, properties)
 	dest.initRuntimeProxy()
 	return dest, outPtr
 }
@@ -166,30 +165,4 @@ func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
 	if dest.spriteState.HasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
-}
-
-func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {
-	transform := dest.transform()
-	if x, ok := v["x"]; ok {
-		transform.x = x.(float64)
-	}
-	if y, ok := v["y"]; ok {
-		transform.y = y.(float64)
-	}
-	if heading, ok := v["heading"]; ok {
-		transform.direction = heading.(float64)
-	}
-	if style, ok := v["rotationStyle"]; ok {
-		transform.rotationStyle = toRotationStyle(style.(string))
-	}
-	if visible, ok := v["visible"]; ok {
-		dest.spriteState.IsVisible = visible.(bool)
-	}
-	if size, ok := v["size"]; ok {
-		dest.runtimeState.Scale = size.(float64)
-	}
-	if idx, ok := v["costumeIndex"]; ok {
-		dest.setCostumeIndex(int(idx.(float64)))
-	}
-	dest.spriteState.Cloned = false
 }
