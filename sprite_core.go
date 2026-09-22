@@ -122,34 +122,28 @@ func (p *SpriteImpl) markVisualDirty() {
 // -----------------------------------------------------------------------------
 // Initialization
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) init(
-	g *Game, name string, spriteCfg *coreproject.SpriteConfig, gamer reflect.Value, sprite Sprite) {
-	p.initBaseObjects(spriteCfg, g)
-	p.initBasicProperties(g, name, sprite, gamer, spriteCfg)
-	p.initComponents(spriteCfg)
-	p.initRuntimeProxy()
+type spriteInitContext struct {
+	game          *Game
+	name          string
+	owner         reflect.Value
+	sprite        Sprite
+	config        *coreproject.SpriteConfig
+	costumeLayout *coreproject.CostumeLayout
 }
 
-func (p *SpriteImpl) initBaseObjects(spriteCfg *coreproject.SpriteConfig, g *Game) {
-	if spriteCfg.Costumes != nil {
-		p.baseObj.init(spriteCfg.Costumes, spriteCfg.GetCostumeIndex())
-	} else {
-		p.baseObj.initWith(spriteCfg)
-	}
+func (p *SpriteImpl) init(ctx spriteInitContext) {
+	p.baseObj.initSpriteCostumes(ctx.config, ctx.costumeLayout)
 	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
-	p.scriptEventBindings.bind(&g.scriptEvents, p)
-}
+	p.scriptEventBindings.bind(&ctx.game.scriptEvents, p)
 
-func (p *SpriteImpl) initBasicProperties(g *Game, name string, sprite Sprite, gamer reflect.Value, spriteCfg *coreproject.SpriteConfig) {
-	p.gamer = gamer
-	p.g, p.name, p.sprite = g, name, sprite
-	p.runtimeState.Scale = spriteCfg.Size
-	p.spriteState.IsVisible = spriteCfg.Visible
+	p.gamer = ctx.owner
+	p.g, p.name, p.sprite = ctx.game, ctx.name, ctx.sprite
+	p.runtimeState.Scale = ctx.config.Size
+	p.spriteState.IsVisible = ctx.config.Visible
 	p.spriteState.IsAwakened = false
-}
 
-func (p *SpriteImpl) initComponents(spriteCfg *coreproject.SpriteConfig) {
-	p.components.initComponents(p, spriteCfg)
+	p.components.initComponents(p, ctx.config)
+	p.initRuntimeProxy()
 }
 
 // -----------------------------------------------------------------------------
