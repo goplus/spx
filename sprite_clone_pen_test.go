@@ -46,7 +46,7 @@ func TestClonePenStateFromStageInstance(t *testing.T) {
 	template := newCloneLimitSprite(game, "template")
 	template.pen().penWidth = 5
 	var instance cloneLimitSprite
-	applySprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
 	game.addShape(&instance.SpriteImpl)
 	instance.pen().penWidth = 10
 	child := createRuntimeClone(&instance.SpriteImpl)

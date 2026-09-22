@@ -913,16 +913,16 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	}
 
 	var dest *SpriteImpl
-	dest, _ = applySprite(out, source, shape)
+	dest, _ = instantiateStageSprite(out, source, shape)
 
 	if dest == nil {
-		t.Fatal("applySprite returned nil sprite")
+		t.Fatal("instantiateStageSprite returned nil sprite")
 	}
 	if dest.runtimeState.SyncSprite == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
 	}
 	if dest.runtimeState.IsCostumeDirty {
-		t.Fatal("IsCostumeDirty = true, want false after applySprite")
+		t.Fatal("IsCostumeDirty = true, want false after instantiateStageSprite")
 	}
 	if dest.costumeIndex != 1 {
 		t.Fatalf("costumeIndex = %d, want 1", dest.costumeIndex)
@@ -937,6 +937,56 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	}
 	if dest.runtimeState.Scale != 2 {
 		t.Fatalf("Scale = %v, want 2", dest.runtimeState.Scale)
+	}
+}
+
+func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
+	var game Game
+	setupCloneSpriteMgr(t)
+	source := newCloneAwakeOrderSprite(&game, "SpriteA")
+	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
+	shape := coreproject.StageShape{"visible": false}
+	dest, _ := instantiateStageSprite(out, source, shape)
+
+	if dest.IsCloned() {
+		t.Fatal("stage instance is marked cloned")
+	}
+	if dest.isCloneProxyPublicationBlocked() {
+		t.Fatal("stage instance has clone publication state")
+	}
+	if dest.spriteState.IsAwakened {
+		t.Fatal("stage instantiation ran runtime clone awake lifecycle")
+	}
+	if dest.spriteState.HasOnCloned || *source.sawAwakeInMain {
+		t.Fatal("stage instantiation ran sprite Main")
+	}
+	if dest.runtimeState.SyncSprite == nil {
+		t.Fatal("stage instance proxy was not initialized")
+	}
+}
+
+func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	setupCloneSpriteMgr(t)
+	source := newCloneAwakeOrderSprite(&game, "SpriteA")
+	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
+	dest := instantiateRuntimeClone(out, source)
+
+	if !dest.IsCloned() {
+		t.Fatal("runtime clone is not marked cloned")
+	}
+	if !dest.spriteState.IsAwakened {
+		t.Fatal("runtime clone did not run awake lifecycle")
+	}
+	if !dest.spriteState.HasOnCloned || !*source.sawAwakeInMain {
+		t.Fatal("runtime clone did not run Main after awake")
+	}
+	if dest.runtimeState.SyncSprite == nil {
+		t.Fatal("runtime clone proxy was not initialized")
+	}
+	if !dest.isCloneProxyPublicationBlocked() {
+		t.Fatal("runtime clone publication state was not created")
 	}
 }
 
@@ -1159,9 +1209,8 @@ func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
 	game.addShape(spriteOf(source))
 
 	in := reflect.ValueOf(source).Elem()
-	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface().(Sprite)
-	clone := cloneSprite(out, outPtr, in, nil)
+	out := reflect.New(in.Type()).Elem()
+	clone := instantiateRuntimeClone(out, source)
 	game.addClonedShape(spriteOf(source), clone)
 
 	clone.ensureProxyQueryStateSynced()
