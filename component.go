@@ -19,30 +19,6 @@ package spx
 import coreproject "github.com/goplus/spx/v3/internal/core/project"
 
 // ============================================================================
-// Component System
-// ============================================================================
-// This file defines the component-based architecture for sprites.
-// Each component encapsulates a specific aspect of sprite functionality.
-
-// component is the base interface for all sprite components.
-type component interface {
-	// initialize is called when the component is first created.
-	// spriteCfg can be nil when cloning.
-	initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig)
-
-	// cloneFrom creates a new component instance by cloning from source.
-	cloneFrom(src component, newSprite *SpriteImpl) component
-
-	// onDestroy is called when the sprite is being destroyed.
-	onDestroy()
-}
-
-// componentBase provides default implementations for the component interface.
-type componentBase struct {
-	sprite *SpriteImpl
-}
-
-// ============================================================================
 // Component Registry
 // ============================================================================
 
@@ -54,10 +30,6 @@ type spriteComponents struct {
 	pen       *penComponent
 	sound     *soundComponent
 	bubble    *bubbleComponent // Optional: only allocated when Say/Think/Quote is used
-}
-
-func (c *componentBase) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	c.sprite = sprite
 }
 
 // initComponents initializes all sprite components.
@@ -72,35 +44,29 @@ func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *corepr
 	sc.physics.initialize(sprite, spriteCfg)
 
 	sc.pen = &penComponent{}
-	sc.pen.initialize(sprite, spriteCfg)
+	sc.pen.initialize(sprite)
 
-	sc.sound = &soundComponent{}
-	sc.sound.initialize(sprite, spriteCfg)
+	sc.sound = &soundComponent{sprite: sprite}
 }
 
-// cloneFrom creates independent component instances for a cloned sprite.
-func (sc *spriteComponents) cloneFrom(source *SpriteImpl, newSprite *SpriteImpl) {
-	src := &source.components
-	sc.transform = src.transform.cloneFrom(src.transform, newSprite).(*transformComponent)
-	sc.animation = src.animation.cloneFrom(src.animation, newSprite).(*animationComponent)
-	sc.physics = src.physics.cloneFrom(src.physics, newSprite).(*physicsComponent)
+// cloneComponents creates independent eager components for a cloned sprite.
+// Bubble state is intentionally omitted and remains lazy.
+func cloneComponents(source *SpriteImpl, newSprite *SpriteImpl) spriteComponents {
 	// Pen and sound inherit the original instance's current state across generations.
-	original := &source.originalSprite().components
-	sc.pen = original.pen.cloneFrom(original.pen, newSprite).(*penComponent)
-	sc.sound = original.sound.cloneFrom(original.sound, newSprite).(*soundComponent)
-	sc.bubble = nil
+	original := source.originalSprite()
+	return spriteComponents{
+		transform: source.components.transform.cloneFor(newSprite),
+		animation: source.components.animation.cloneFor(newSprite),
+		physics:   source.components.physics.cloneFor(newSprite),
+		pen:       original.components.pen.cloneFor(newSprite),
+		sound:     original.components.sound.cloneFor(newSprite),
+	}
 }
 
 // destroyComponents destroys all sprite components.
 func (sc *spriteComponents) destroyComponents() {
-	if sc.transform != nil {
-		sc.transform.onDestroy()
-	}
 	if sc.animation != nil {
 		sc.animation.onDestroy()
-	}
-	if sc.physics != nil {
-		sc.physics.onDestroy()
 	}
 	if sc.pen != nil {
 		sc.pen.onDestroy()
@@ -111,36 +77,4 @@ func (sc *spriteComponents) destroyComponents() {
 	if sc.bubble != nil {
 		sc.bubble.onDestroy()
 	}
-}
-
-// ============================================================================
-// Component Accessors
-// ============================================================================
-
-func (sc *spriteComponents) getTransform() *transformComponent {
-	return sc.transform
-}
-
-func (sc *spriteComponents) getAnimation() *animationComponent {
-	return sc.animation
-}
-
-func (sc *spriteComponents) getPhysics() *physicsComponent {
-	return sc.physics
-}
-
-func (sc *spriteComponents) getPen() *penComponent {
-	return sc.pen
-}
-
-func (sc *spriteComponents) getSound() *soundComponent {
-	return sc.sound
-}
-
-func (sc *spriteComponents) getBubble() *bubbleComponent {
-	if sc.bubble == nil {
-		sc.bubble = &bubbleComponent{}
-		sc.bubble.initialize(sc.transform.sprite, nil)
-	}
-	return sc.bubble
 }

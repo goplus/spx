@@ -150,23 +150,30 @@ func (p *SpriteImpl) init(ctx spriteInitContext) {
 // Components
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) transform() *transformComponent {
-	return p.components.getTransform()
+	return p.components.transform
 }
 
 func (p *SpriteImpl) animation() *animationComponent {
-	return p.components.getAnimation()
+	return p.components.animation
 }
 
 func (p *SpriteImpl) physics() *physicsComponent {
-	return p.components.getPhysics()
+	return p.components.physics
 }
 
 func (p *SpriteImpl) pen() *penComponent {
-	return p.components.getPen()
+	return p.components.pen
 }
 
 func (p *SpriteImpl) sound() *soundComponent {
-	return p.components.getSound()
+	return p.components.sound
+}
+
+func (p *SpriteImpl) bubble() *bubbleComponent {
+	if p.components.bubble == nil {
+		p.components.bubble = &bubbleComponent{sprite: p}
+	}
+	return p.components.bubble
 }
 
 // -----------------------------------------------------------------------------
@@ -185,9 +192,6 @@ func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
 func (p *SpriteImpl) destroy() {
 	if p.isDestroyed() {
 		return
-	}
-	if bubble := p.components.bubble; bubble != nil {
-		bubble.stopAll()
 	}
 	p.setVisible(false)
 	p.clearHandlers()

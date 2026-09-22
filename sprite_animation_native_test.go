@@ -56,13 +56,13 @@ func TestClonedAnimationEntryRegistersOnceConcurrently(t *testing.T) {
 	frame.path = "walk.png"
 	sprite := &SpriteImpl{name: "TestSprite"}
 	sprite.costumes = []*costume{frame}
-	original := &animationComponent{componentBase: componentBase{sprite: sprite}}
+	original := &animationComponent{sprite: sprite}
 	original.initFromConfig(&coreproject.SpriteConfig{
 		FAnimations: map[string]*coreproject.AniConfig{
 			"walk": {FrameFrom: 0, FrameTo: 0},
 		},
 	})
-	clone := original.cloneFrom(original, &SpriteImpl{name: sprite.name}).(*animationComponent)
+	clone := original.cloneFor(&SpriteImpl{name: sprite.name})
 
 	originalEntry := original.shared.animations["walk"]
 	cloneEntry := clone.shared.animations["walk"]

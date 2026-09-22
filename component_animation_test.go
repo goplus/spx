@@ -43,22 +43,20 @@ func newTestAnimationComponent() *animationComponent {
 	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
 
 	anim := &animationComponent{
-		componentBase: componentBase{sprite: sprite},
+		sprite: sprite,
 		shared: &sharedAnimationData{
 			defaultAnimation: "idle",
 			animations:       map[SpriteAnimationName]*animationEntry{},
 			animBindings:     map[string]string{},
 		},
-		doneAnimations: make([]string, 0),
 	}
 	sprite.components.animation = anim
 	sprite.components.sound = &soundComponent{
-		componentBase: componentBase{sprite: sprite},
-		pendingAudios: make([]string, 0),
+		sprite: sprite,
 	}
 	sprite.components.physics = &physicsComponent{
-		componentBase: componentBase{sprite: sprite},
-		physicsMode:   NoPhysics,
+		sprite:      sprite,
+		physicsMode: NoPhysics,
 	}
 	return anim
 }
@@ -76,7 +74,7 @@ func TestInitFromConfigBuildsSingleAnimationEntryMap(t *testing.T) {
 		},
 	}
 
-	anim := &animationComponent{componentBase: componentBase{sprite: sprite}}
+	anim := &animationComponent{sprite: sprite}
 	anim.initFromConfig(config)
 
 	if len(anim.shared.animations) != 2 {
@@ -101,12 +99,12 @@ func TestInitFromConfigBuildsSingleAnimationEntryMap(t *testing.T) {
 
 func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
 	sprite.components.transform = &transformComponent{
-		componentBase: componentBase{sprite: sprite},
-		x:             x,
-		y:             y,
+		sprite: sprite,
+		x:      x,
+		y:      y,
 	}
 	sprite.components.pen = &penComponent{
-		componentBase: componentBase{sprite: sprite},
+		sprite: sprite,
 	}
 }
 
@@ -355,7 +353,10 @@ func TestDoTweenRejectsInvalidInputBeforeSideEffects(t *testing.T) {
 			backend := &animationAudioBackend{}
 			initTestAnimationAudio(anim, backend)
 			anim.sprite.runtimeState.SyncSprite = nil
-			anim.shared.animations[StateGlide] = tt.ani
+			anim.shared.animations[StateGlide] = &animationEntry{
+				name:   StateGlide,
+				config: tt.ani,
+			}
 
 			anim.doTween(StateGlide, tt.ani)
 

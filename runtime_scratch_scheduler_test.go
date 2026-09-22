@@ -50,8 +50,8 @@ func TestScratchRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 			sprite := new(SpriteImpl)
 			sprite.spriteState.IsVisible = visible
 			sprite.components.transform = &transformComponent{
-				componentBase: componentBase{sprite: sprite},
-				direction:     45, rotationStyle: Normal,
+				sprite:    sprite,
+				direction: 45, rotationStyle: Normal,
 			}
 			var frames []int64
 			th := co.Create(sprite, func(coroutine.Thread) {

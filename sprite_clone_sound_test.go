@@ -98,7 +98,7 @@ func TestCloneWithoutSoundKeepsAudioUnallocated(t *testing.T) {
 func TestCloneSoundComponentWithoutGame(t *testing.T) {
 	source := &soundComponent{pendingAudios: []string{"do not replay"}}
 	target := &SpriteImpl{}
-	cloned := source.cloneFrom(source, target).(*soundComponent)
+	cloned := source.cloneFor(target)
 	if cloned.sprite != target || cloned.soundObj != 0 || len(cloned.pendingAudios) != 0 {
 		t.Fatal("unallocated sound clone inherited runtime resources")
 	}

@@ -59,7 +59,7 @@ const (
 // transformComponent encapsulates all position, rotation, and scale functionality
 // for sprites in the game world.
 type transformComponent struct {
-	componentBase
+	sprite *SpriteImpl
 
 	// Position coordinates in world space.
 	x, y float64
@@ -70,9 +70,6 @@ type transformComponent struct {
 
 	// Transform origin.
 	pivot mathf.Vec2
-
-	// Runtime state.
-	isDirty bool
 }
 
 // ============================================================================
@@ -81,41 +78,33 @@ type transformComponent struct {
 
 // initialize initializes the transform component from configuration.
 func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	t.componentBase.initialize(sprite, spriteCfg)
+	t.sprite = sprite
 
 	t.x = spriteCfg.X
 	t.y = spriteCfg.Y
 	t.direction = spriteCfg.Heading
 	t.rotationStyle = toRotationStyle(spriteCfg.RotationStyle)
 	t.pivot = spriteCfg.Pivot
-	t.isDirty = false
 }
 
-// cloneFrom creates a new transform component by cloning from source.
-func (t *transformComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	srcTransform := src.(*transformComponent)
+// cloneFor creates a new transform component for newSprite.
+func (t *transformComponent) cloneFor(newSprite *SpriteImpl) *transformComponent {
 	return &transformComponent{
-		componentBase: componentBase{sprite: newSprite},
-		x:             srcTransform.x,
-		y:             srcTransform.y,
-		direction:     srcTransform.direction,
-		rotationStyle: srcTransform.rotationStyle,
-		pivot:         srcTransform.pivot,
-		isDirty:       false,
+		sprite:        newSprite,
+		x:             t.x,
+		y:             t.y,
+		direction:     t.direction,
+		rotationStyle: t.rotationStyle,
+		pivot:         t.pivot,
 	}
-}
-
-// onDestroy performs cleanup when the component is destroyed.
-func (t *transformComponent) onDestroy() {
 }
 
 // ============================================================================
 // Transform State
 // ============================================================================
 
-// markDirty marks the transform as dirty, triggering an update.
+// markDirty publishes a transform change to the sprite proxy.
 func (t *transformComponent) markDirty() {
-	t.isDirty = true
 	t.sprite.markProxyDirty()
 }
 

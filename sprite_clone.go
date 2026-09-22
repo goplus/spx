@@ -118,7 +118,7 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	dest.runtimeState.IsLayerDirty = true
 
 	src := spriteOf(source)
-	dest.components.cloneFrom(src, dest)
+	dest.components = cloneComponents(src, dest)
 	return dest, outPtr
 }
 

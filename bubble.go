@@ -158,7 +158,7 @@ func (p *SpriteImpl) sayOrThink(msg any, style int) {
 		return
 	}
 
-	bubble := p.components.getBubble()
+	bubble := p.bubble()
 	bubble.upsertText(msgStr, style)
 }
 
@@ -174,7 +174,7 @@ func (p *SpriteImpl) doStopText() {
 }
 
 func (p *SpriteImpl) quote(message, description string) {
-	bubble := p.components.getBubble()
+	bubble := p.bubble()
 	bubble.upsertQuote(message, description)
 }
 
