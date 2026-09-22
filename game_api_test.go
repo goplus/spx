@@ -21,14 +21,24 @@ import (
 	"time"
 
 	internalaudio "github.com/goplus/spx/v3/internal/audio"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 	spxapi "github.com/goplus/spx/v3/pkg/spx"
 )
 
 type fakeAudioBackend struct {
-	pan         float64
-	pitch       float64
-	createCalls int
+	pan          float64
+	pitch        float64
+	volume       float64
+	createCalls  int
+	destroyCalls int
+	plays        []fakeAudioPlay
+}
+
+type fakeAudioPlay struct {
+	owner       internalengine.Object
+	attenuation float64
+	maxDistance float64
 }
 
 type targetPropertyActor struct {
@@ -63,10 +73,13 @@ type targetPropertyGame struct {
 
 func (f *fakeAudioBackend) CreateAudio() internalengine.Object {
 	f.createCalls++
+	f.volume = 1
 	return 77
 }
 
-func (f *fakeAudioBackend) DestroyAudio(obj internalengine.Object) {}
+func (f *fakeAudioBackend) DestroyAudio(obj internalengine.Object) {
+	f.destroyCalls++
+}
 
 func (f *fakeAudioBackend) SetPitch(obj internalengine.Object, pitch float64) {
 	f.pitch = pitch
@@ -84,13 +97,16 @@ func (f *fakeAudioBackend) GetPan(obj internalengine.Object) float64 {
 	return f.pan
 }
 
-func (f *fakeAudioBackend) SetVolume(obj internalengine.Object, volume float64) {}
+func (f *fakeAudioBackend) SetVolume(obj internalengine.Object, volume float64) {
+	f.volume = volume
+}
 
 func (f *fakeAudioBackend) GetVolume(obj internalengine.Object) float64 {
-	return 1
+	return f.volume
 }
 
 func (f *fakeAudioBackend) PlayWithAttenuation(obj internalengine.Object, path string, ownerID internalengine.Object, attenuation, maxDistance float64) int64 {
+	f.plays = append(f.plays, fakeAudioPlay{owner: ownerID, attenuation: attenuation, maxDistance: maxDistance})
 	return 1
 }
 
@@ -138,6 +154,62 @@ func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
 	}
 	if backend.pitch != 1 {
 		t.Fatalf("pitch = %v, want 1", backend.pitch)
+	}
+}
+
+func TestGameSoundHandleIsLazyReusedAndReleased(t *testing.T) {
+	backend := &fakeAudioBackend{}
+	var g Game
+	g.soundMgr = internalaudio.Manager{}
+	g.soundMgr.Init(backend)
+
+	g.SetVolume(60)
+	g.ChangeVolume(5)
+	g.SetSoundEffect(SoundPanEffect, -25)
+	if got := g.Volume(); got != 65 {
+		t.Fatalf("Volume() = %v, want 65", got)
+	}
+	if got := g.GetSoundEffect(SoundPanEffect); got != -25 {
+		t.Fatalf("GetSoundEffect(Pan) = %v, want -25", got)
+	}
+	if backend.createCalls != 1 {
+		t.Fatalf("CreateAudio calls = %d, want one lazy allocation", backend.createCalls)
+	}
+	if got := g.audioState.SoundObj; got != 77 {
+		t.Fatalf("SoundObj = %d, want 77", got)
+	}
+
+	g.releaseGameAudio()
+	if g.audioState.SoundObj != 0 {
+		t.Fatalf("SoundObj = %d after release, want 0", g.audioState.SoundObj)
+	}
+	if backend.destroyCalls != 1 {
+		t.Fatalf("DestroyAudio calls = %d, want one release", backend.destroyCalls)
+	}
+	if got := g.Volume(); got != 100 || backend.createCalls != 2 {
+		t.Fatalf("Volume() after release = %v with %d allocations, want 100 and 2", got, backend.createCalls)
+	}
+}
+
+func TestGamePlayUsesStageAudioParameters(t *testing.T) {
+	backend := &fakeAudioBackend{}
+	var g Game
+	g.soundMgr = internalaudio.Manager{}
+	g.soundMgr.Init(backend)
+	g.sounds = map[string]sound{
+		"stage": &coreproject.SoundConfig{Path: "sounds/stage.wav"},
+	}
+
+	g.Play__1("stage", true)
+	if len(backend.plays) != 1 {
+		t.Fatalf("plays = %d, want one stage playback", len(backend.plays))
+	}
+	call := backend.plays[0]
+	if call.owner != 0 || call.attenuation != 0 || call.maxDistance != defaultAudioMaxDist {
+		t.Fatalf("stage playback parameters = %+v, want owner 0, attenuation 0, max distance %v", call, defaultAudioMaxDist)
+	}
+	if g.audioState.SoundObj != 77 || backend.createCalls != 1 {
+		t.Fatalf("game sound object = %d with %d allocations, want 77 and 1", g.audioState.SoundObj, backend.createCalls)
 	}
 }
 

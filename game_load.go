@@ -240,7 +240,7 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 // -----------------------------------------------------------------------------
 func (p *Game) setupAudioAndTilemap(proj *coreproject.ProjectConfig) {
 	p.applyTilemap()
-	p.audioState.SoundObj = p.soundMgr.AllocSound()
+	p.ensureSoundObject(&p.audioState.SoundObj)
 	if proj.Bgm != "" {
 		p.Play__1(proj.Bgm, true)
 	}
