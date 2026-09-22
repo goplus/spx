@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -46,7 +45,7 @@ func TestClonePenStateFromStageInstance(t *testing.T) {
 	template := newCloneLimitSprite(game, "template")
 	template.pen().penWidth = 5
 	var instance cloneLimitSprite
-	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteProperties{})
 	game.addShape(&instance.SpriteImpl)
 	instance.pen().penWidth = 10
 	child := createRuntimeClone(&instance.SpriteImpl)

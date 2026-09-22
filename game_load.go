@@ -69,13 +69,14 @@ func (p *Game) loadStage(
 	proj *coreproject.ProjectConfig,
 	generation uint64,
 	loadSprite spriteLoader,
+	preparedProperties stageSpriteProperties,
 ) {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 
-	inits := p.loadAndInitSprites(g, proj, loadSprite)
+	inits := p.loadAndInitSprites(g, proj, loadSprite, preparedProperties)
 	p.runSpriteCallbacks(inits, proj, g, generation)
 }
 
@@ -195,6 +196,7 @@ func (p *Game) loadAndInitSprites(
 	g reflect.Value,
 	proj *coreproject.ProjectConfig,
 	loadSprite spriteLoader,
+	preparedProperties stageSpriteProperties,
 ) []Sprite {
 	inits := make([]Sprite, 0, len(proj.Zorder))
 	err := coreproject.WalkZOrder(
@@ -209,7 +211,7 @@ func (p *Game) loadAndInitSprites(
 		},
 		func(layer int, shape coreproject.StageShape) error {
 			var err error
-			inits, err = p.addSpecialShape(g, shape, inits, loadSprite)
+			inits, err = p.addSpecialShape(g, shape, inits, loadSprite, layer, preparedProperties)
 			if err != nil {
 				return fmt.Errorf("addSpecialShape: %w", err)
 			}
@@ -271,6 +273,8 @@ func (p *Game) addSpecialShape(
 	v coreproject.StageShape,
 	inits []Sprite,
 	loadSprite spriteLoader,
+	layer int,
+	preparedProperties stageSpriteProperties,
 ) ([]Sprite, error) {
 	return coreproject.AppendStageItems(inits, v, coreproject.StageItemHandlers[Sprite]{
 		StageMonitor: func(shape coreproject.StageShape) error {
@@ -287,16 +291,25 @@ func (p *Game) addSpecialShape(
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
-			return p.addStageSprites(g, shape, loadSprite)
+			return p.addStageSprites(g, shape, loadSprite, layer, preparedProperties)
 		},
 		Sprite: func(shape coreproject.StageShape) (Sprite, error) {
-			return p.addStageSprite(g, shape)
+			return p.addStageSprite(g, shape, layer, preparedProperties)
 		},
 	})
 }
 
-func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite, error) {
+func (p *Game) addStageSprite(
+	g reflect.Value,
+	v coreproject.StageShape,
+	layer int,
+	preparedProperties stageSpriteProperties,
+) (Sprite, error) {
 	target, err := stageShapeTarget(v)
+	if err != nil {
+		return nil, err
+	}
+	properties, err := preparedProperties.resolve(layer, 0, v)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +320,7 @@ func (p *Game) addStageSprite(g reflect.Value, v coreproject.StageShape) (Sprite
 			return fmt.Errorf("stage sprite target is not a sprite")
 		}
 		dest := spriteOf(sp)
-		applySpriteProps(dest, v)
+		applySpriteProperties(dest, properties)
 		p.shapeMgr.addShape(dest)
 		added = sp
 		return nil
@@ -322,6 +335,8 @@ func (p *Game) addStageSprites(
 	g reflect.Value,
 	v coreproject.StageShape,
 	loadSprite spriteLoader,
+	layer int,
+	preparedProperties stageSpriteProperties,
 ) ([]Sprite, error) {
 	target, err := stageShapeTarget(v)
 	if err != nil {
@@ -332,6 +347,7 @@ func (p *Game) addStageSprites(
 		return nil, err
 	}
 	items := make([]Sprite, 0, len(rawItems))
+	itemIndex := 0
 	err = coreproject.BindStageSprites(
 		g,
 		target,
@@ -341,8 +357,13 @@ func (p *Game) addStageSprites(
 			return typ.Implements(tySprite)
 		},
 		func(newItem reflect.Value, shape coreproject.StageShape) error {
+			properties, err := preparedProperties.resolve(layer, itemIndex, shape)
+			if err != nil {
+				return err
+			}
+			itemIndex++
 			spr := p.getSpriteProto(newItem.Type(), g, loadSprite)
-			dest, sp := instantiateStageSprite(newItem, spr, shape)
+			dest, sp := instantiateStageSprite(newItem, spr, properties)
 			p.shapeMgr.addShape(dest)
 			items = append(items, sp)
 			return nil

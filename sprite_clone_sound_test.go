@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -146,7 +145,7 @@ func TestCloneSoundEffectsFromStageInstance(t *testing.T) {
 	template := newCloneLimitSprite(game, "template")
 	template.SetSoundEffect(SoundPanEffect, -40)
 	var instance cloneLimitSprite
-	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteProperties{})
 	game.addShape(&instance.SpriteImpl)
 	instance.SetSoundEffect(SoundPanEffect, 20)
 	child := createRuntimeClone(&instance.SpriteImpl)

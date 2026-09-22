@@ -82,7 +82,8 @@ func (*reloadPreflightSprite) Main() {}
 
 type reloadCommitGame struct {
 	Game
-	Empty []*reloadCommitSprite
+	Empty   []*reloadCommitSprite
+	Sprites []*reloadCommitSprite
 }
 
 type reloadCommitSprite struct {
@@ -215,6 +216,12 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	}
 	game.Game.tilemapMgr.currentMap = "live-map"
 	sprite.name = "live-sentinel"
+	sprite.components.transform = &transformComponent{
+		x: 10, y: 20, direction: 30, rotationStyle: LeftRight,
+	}
+	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.Scale = 2
+	sprite.costumeIndex = 3
 	engine.SetGame(&game.Game)
 
 	t.Cleanup(func() {
@@ -359,6 +366,13 @@ func assertReloadPreflightPreservedLiveState(
 	}
 	if game.Sprite != sprite || sprite.name != "live-sentinel" || sprite.reloadPreflightGame != game {
 		t.Fatal("reload preflight mutated the live sprite field")
+	}
+	if transform := sprite.transform(); transform.x != 10 || transform.y != 20 ||
+		transform.direction != 30 || transform.rotationStyle != LeftRight {
+		t.Fatalf("reload preflight mutated the live sprite transform: %+v", transform)
+	}
+	if !sprite.spriteState.IsVisible || sprite.runtimeState.Scale != 2 || sprite.costumeIndex != 3 {
+		t.Fatal("reload preflight mutated the live sprite properties")
 	}
 	if got := game.TilemapName(); got != "live-map" {
 		t.Fatalf("reload preflight changed live tilemap to %q", got)
@@ -536,6 +550,12 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			wantError: `stage shape field "size" has type string`,
 		},
 		{
+			name:      "invalid stage sprite property",
+			project:   `{"zorder":[{"type":"sprite","target":"Sprite","x":"left"}]}`,
+			files:     reloadConfigFS{"sprites/Sprite/index.json": validSprite},
+			wantError: `stage shape field "x" has type string, want float64`,
+		},
+		{
 			name:      "direct sprite costume index out of range",
 			project:   `{"zorder":[{"type":"sprite","target":"Sprite","costumeIndex":1}]}`,
 			files:     reloadConfigFS{"sprites/Sprite/index.json": validSprite},
@@ -621,6 +641,118 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			assertReloadAvailable(t, &game.Game)
 			finishThread()
 		})
+	}
+}
+
+const preparedPropertiesSpriteConfig = `{
+	"costumes":[
+		{"name":"first","imageWidth":10,"imageHeight":10},
+		{"name":"second","imageWidth":10,"imageHeight":10}
+	],
+	"x":10,"y":20,"heading":30,
+	"rotationStyle":"left-right","visible":true,
+	"size":2,"costumeIndex":1
+}`
+
+func TestReloadCommitAppliesPreparedSpriteProperties(t *testing.T) {
+	tests := []struct {
+		name         string
+		shape        string
+		wantX, wantY float64
+		wantHeading  float64
+		wantStyle    RotationStyle
+		wantVisible  bool
+		wantSize     float64
+		wantCostume  int
+	}{
+		{
+			name:  "missing values preserve sprite config",
+			shape: `{"type":"sprite","target":"DirectCommitSprite"}`,
+			wantX: 10, wantY: 20, wantHeading: 30, wantStyle: LeftRight,
+			wantVisible: true, wantSize: 2, wantCostume: 1,
+		},
+		{
+			name: "explicit zero values override sprite config",
+			shape: `{
+				"type":"sprite","target":"DirectCommitSprite",
+				"x":0,"y":0,"heading":0,"rotationStyle":"none",
+				"visible":false,"size":0,"costumeIndex":0
+			}`,
+			wantStyle: None,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			game := &reloadDirectCommitGame{}
+			setupReloadCommitRuntime(
+				t,
+				reloadConfigFS{"sprites/DirectCommitSprite/index.json": preparedPropertiesSpriteConfig},
+				game,
+				[]Sprite{&DirectCommitSprite{}},
+				false,
+			)
+			project := `{"zorder":[` + test.shape + `]}`
+			if err := XGot_Game_Reload(game, strings.NewReader(project)); err != nil {
+				t.Fatalf("XGot_Game_Reload error = %v", err)
+			}
+			sprite := &game.DirectCommitSprite.SpriteImpl
+			transform := sprite.transform()
+			if transform.x != test.wantX || transform.y != test.wantY ||
+				transform.direction != test.wantHeading || transform.rotationStyle != test.wantStyle {
+				t.Fatalf("committed transform = %+v", transform)
+			}
+			if sprite.spriteState.IsVisible != test.wantVisible ||
+				sprite.runtimeState.Scale != test.wantSize || sprite.costumeIndex != test.wantCostume {
+				t.Fatalf("committed sprite properties: visible=%v size=%v costume=%d",
+					sprite.spriteState.IsVisible, sprite.runtimeState.Scale, sprite.costumeIndex)
+			}
+		})
+	}
+}
+
+func TestReloadCommitAppliesPreparedStageSpriteGroupProperties(t *testing.T) {
+	game := setupReloadCommitGame(t, reloadConfigFS{
+		"sprites/reloadCommitSprite/index.json": preparedPropertiesSpriteConfig,
+	})
+
+	err := XGot_Game_Reload(game, strings.NewReader(`{
+		"zorder":[
+			{"type":"sprites","target":"Empty","items":[]},
+			{"type":"sprites","target":"Sprites","items":[
+				{"x":7,"costumeIndex":0},
+				{
+					"x":0,"y":0,"heading":0,"rotationStyle":"none",
+					"visible":false,"size":0,"costumeIndex":1
+				}
+			]}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("XGot_Game_Reload error = %v", err)
+	}
+	if len(game.Sprites) != 2 {
+		t.Fatalf("stage sprite group length = %d, want 2", len(game.Sprites))
+	}
+	wants := []struct {
+		x, y, heading float64
+		style         RotationStyle
+		visible       bool
+		size          float64
+		costume       int
+	}{
+		{x: 7, y: 20, heading: 30, style: LeftRight, visible: true, size: 2, costume: 0},
+		{style: None, costume: 1},
+	}
+	for i, want := range wants {
+		sprite := &game.Sprites[i].SpriteImpl
+		transform := sprite.transform()
+		if transform.x != want.x || transform.y != want.y || transform.direction != want.heading ||
+			transform.rotationStyle != want.style || sprite.spriteState.IsVisible != want.visible ||
+			sprite.runtimeState.Scale != want.size || sprite.costumeIndex != want.costume {
+			t.Fatalf("stage sprite %d properties were misaligned: transform=%+v visible=%v size=%v costume=%d",
+				i, transform, sprite.spriteState.IsVisible, sprite.runtimeState.Scale, sprite.costumeIndex)
+		}
 	}
 }
 
