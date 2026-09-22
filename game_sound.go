@@ -41,9 +41,8 @@ const (
 // Playback
 // -----------------------------------------------------------------------------
 func (p *Game) Volume() float64 {
-	return p.withGameSoundFloat(func(soundObj engine.Object) float64 {
-		return p.soundMgr.GetVolume(soundObj)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	return p.soundMgr.GetVolume(soundObj)
 }
 
 func (p *Game) Play__0(name SoundName) {
@@ -51,15 +50,13 @@ func (p *Game) Play__0(name SoundName) {
 }
 
 func (p *Game) Play__1(name SoundName, loop bool) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.playSound(p.runtimeState.SyncSprite, soundObj, name, loop, 0, defaultAudioMaxDist)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.playSound(nil, soundObj, name, loop, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) PlayAndWait(name SoundName) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.playSoundAndWait(p.runtimeState.SyncSprite, soundObj, name, 0, defaultAudioMaxDist)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.playSoundAndWait(nil, soundObj, name, 0, defaultAudioMaxDist)
 }
 
 func (p *Game) PausePlaying(name SoundName) {
@@ -75,37 +72,32 @@ func (p *Game) StopPlaying(name SoundName) {
 }
 
 func (p *Game) SetVolume(volume float64) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.soundMgr.SetVolume(soundObj, volume)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.soundMgr.SetVolume(soundObj, volume)
 }
 
 func (p *Game) ChangeVolume(delta float64) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.soundMgr.ChangeVolume(soundObj, delta)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.soundMgr.ChangeVolume(soundObj, delta)
 }
 
 func (p *Game) GetSoundEffect(kind SoundEffectKind) float64 {
-	return p.withGameSoundFloat(func(soundObj engine.Object) float64 {
-		return p.getSoundEffect(soundObj, kind)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	return p.getSoundEffect(soundObj, kind)
 }
 
 func (p *Game) SetSoundEffect(kind SoundEffectKind, value float64) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.setSoundEffect(soundObj, kind, value)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.setSoundEffect(soundObj, kind, value)
 }
 
 func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
-	p.withGameSound(func(soundObj engine.Object) {
-		p.changeSoundEffect(soundObj, kind, delta)
-	})
+	soundObj := p.ensureSoundObject(&p.audioState.SoundObj)
+	p.changeSoundEffect(soundObj, kind, delta)
 }
 
 func (p *Game) ClearSoundEffects() {
-	p.withGameSound(p.clearSoundEffects)
+	p.clearSoundEffects(p.ensureSoundObject(&p.audioState.SoundObj))
 }
 
 func (p *Game) clearSoundEffects(soundObj engine.Object) {
@@ -202,20 +194,11 @@ func (p *Game) restartSoundPlayback(id int64) bool {
 	return p.soundMgr.RestartID(id)
 }
 
-func (p *Game) checkSoundObj() {
-	if p.audioState.SoundObj == 0 {
-		p.audioState.SoundObj = p.soundMgr.AllocSound()
+func (p *Game) ensureSoundObject(slot *engine.Object) engine.Object {
+	if *slot == 0 {
+		*slot = p.soundMgr.AllocSound()
 	}
-}
-
-func (p *Game) withGameSound(action func(soundObj engine.Object)) {
-	p.checkSoundObj()
-	action(p.audioState.SoundObj)
-}
-
-func (p *Game) withGameSoundFloat(action func(soundObj engine.Object) float64) float64 {
-	p.checkSoundObj()
-	return action(p.audioState.SoundObj)
+	return *slot
 }
 
 func (p *Game) releaseGameAudio() {

@@ -77,17 +77,19 @@ func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
 }
 
 type animationAudioBackend struct {
-	nextID    int64
-	plays     []animationPlayCall
-	loops     []animationLoopCall
-	restarts  []int64
-	stops     []int64
-	playing   map[int64]bool
-	onPlay    func(id int64)
-	onRestart func(id int64)
+	createCalls int
+	nextID      int64
+	plays       []animationPlayCall
+	loops       []animationLoopCall
+	restarts    []int64
+	stops       []int64
+	playing     map[int64]bool
+	onPlay      func(id int64)
+	onRestart   func(id int64)
 }
 
 type animationPlayCall struct {
+	soundObj   engine.Object
 	path       string
 	owner      engine.Object
 	attenation float64
@@ -100,6 +102,7 @@ type animationLoopCall struct {
 }
 
 func (f *animationAudioBackend) CreateAudio() engine.Object {
+	f.createCalls++
 	return 77
 }
 
@@ -130,6 +133,7 @@ func (f *animationAudioBackend) PlayWithAttenuation(obj engine.Object, path stri
 	}
 	f.playing[f.nextID] = true
 	f.plays = append(f.plays, animationPlayCall{
+		soundObj:   obj,
 		path:       path,
 		owner:      ownerID,
 		attenation: attenuation,
@@ -429,6 +433,40 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 	}
 	if anim.curAnimState != nil {
 		t.Fatal("onAnimationDone did not clear the finished animation state")
+	}
+}
+
+func TestSoundPlayAndPlayAudioUseSamePlaybackParameters(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	anim.sprite.g.audioState.AudioAttenuation = 0.35
+	anim.sprite.g.audioState.AudioMaxDistance = 640
+	anim.sprite.runtimeState.SyncSprite.Id = 42
+
+	anim.sprite.Play__1("walk", true)
+	playID := anim.sprite.playAudio("walk", true)
+	if playID == 0 {
+		t.Fatal("playAudio returned no playback id")
+	}
+	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
+		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)
+	}
+	if anim.sprite.g.audioState.SoundObj != 0 {
+		t.Fatalf("sprite playback initialized game sound object %d", anim.sprite.g.audioState.SoundObj)
+	}
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+	first, second := backend.plays[0], backend.plays[1]
+	if first != second {
+		t.Fatalf("play parameters differ: first=%+v second=%+v", first, second)
+	}
+	if first.soundObj != 77 || first.owner != 42 || first.attenation != 0.35 || first.maxDist != 640 {
+		t.Fatalf("sprite playback parameters = %+v", first)
+	}
+	if len(backend.loops) != 2 || !backend.loops[0].loop || !backend.loops[1].loop {
+		t.Fatalf("loop parameters = %+v, want two looping plays", backend.loops)
 	}
 }
 
