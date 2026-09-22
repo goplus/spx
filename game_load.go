@@ -327,7 +327,7 @@ func (p *Game) addStageSprites(
 		},
 		func(newItem reflect.Value, shape coreproject.StageShape) error {
 			spr := p.getSpriteProto(newItem.Type(), g, loadSprite)
-			dest, sp := applySprite(newItem, spr, shape)
+			dest, sp := instantiateStageSprite(newItem, spr, shape)
 			p.shapeMgr.addShape(dest)
 			items = append(items, sp)
 			return nil

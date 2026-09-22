@@ -146,7 +146,7 @@ func TestCloneSoundEffectsFromStageInstance(t *testing.T) {
 	template := newCloneLimitSprite(game, "template")
 	template.SetSoundEffect(SoundPanEffect, -40)
 	var instance cloneLimitSprite
-	applySprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, coreproject.StageShape{})
 	game.addShape(&instance.SpriteImpl)
 	instance.SetSoundEffect(SoundPanEffect, 20)
 	child := createRuntimeClone(&instance.SpriteImpl)

@@ -65,15 +65,39 @@ func createRuntimeClone(src *SpriteImpl) *SpriteImpl {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Clone: %s", src.name)
 	}
-	in := reflect.ValueOf(src.sprite).Elem()
-	v := reflect.New(in.Type())
-	out, outPtr := v.Elem(), v.Interface().(Sprite)
-	dest := cloneSprite(out, outPtr, in, nil)
+	out := reflect.New(reflect.TypeOf(src.sprite).Elem()).Elem()
+	dest := instantiateRuntimeClone(out, src.sprite)
 	src.g.addClonedShape(src, dest)
 	return dest
 }
 
-func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproject.StageShape) *SpriteImpl {
+func instantiateRuntimeClone(out reflect.Value, source Sprite) *SpriteImpl {
+	dest, outPtr := copySprite(out, source)
+	// The native proxy must stay hidden until the clone's initialization
+	// handlers have completed their first execution slice.
+	dest.beginCloneProxyPublication()
+	dest.initRuntimeProxy()
+	dest.awake()
+
+	// Re-running Main re-registers clone events but also replays XGo_Init.
+	// Save top-level user fields first, then restore them without changing
+	// the existing out.Set(in) reference semantics.
+	userState := snapshotSpriteUserFields(out)
+	runMain(outPtr.Main)
+	restoreSpriteUserFields(out, userState)
+	return dest
+}
+
+func instantiateStageSprite(out reflect.Value, source Sprite, shape coreproject.StageShape) (*SpriteImpl, Sprite) {
+	dest, outPtr := copySprite(out, source)
+	applySpriteProps(dest, shape)
+	dest.initRuntimeProxy()
+	return dest, outPtr
+}
+
+func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
+	in := reflect.ValueOf(source).Elem()
+	outPtr := out.Addr().Interface().(Sprite)
 	dest := spriteOf(outPtr)
 	func() {
 		out.Set(in)
@@ -94,27 +118,9 @@ func cloneSprite(out reflect.Value, outPtr Sprite, in reflect.Value, v coreproje
 	// even when it is numerically unchanged from the source layer.
 	dest.runtimeState.IsLayerDirty = true
 
-	src := spriteOf(in.Addr().Interface().(Sprite))
+	src := spriteOf(source)
 	dest.components.cloneFrom(src, dest)
-
-	if v != nil {
-		applySpriteProps(dest, v)
-	} else {
-		// The native proxy must stay hidden until the clone's initialization
-		// handlers have completed their first execution slice.
-		dest.beginCloneProxyPublication()
-	}
-	dest.initRuntimeProxy()
-	if v == nil {
-		dest.awake()
-		// Re-running Main re-registers clone events but also replays XGo_Init.
-		// Save top-level user fields first, then restore them without changing
-		// the existing out.Set(in) reference semantics.
-		userState := snapshotSpriteUserFields(out)
-		runMain(outPtr.Main)
-		restoreSpriteUserFields(out, userState)
-	}
-	return dest
+	return dest, outPtr
 }
 
 func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
@@ -186,10 +192,4 @@ func applySpriteProps(dest *SpriteImpl, v coreproject.StageShape) {
 		dest.setCostumeIndex(int(idx.(float64)))
 	}
 	dest.spriteState.Cloned = false
-}
-
-func applySprite(out reflect.Value, sprite Sprite, v coreproject.StageShape) (*SpriteImpl, Sprite) {
-	in := reflect.ValueOf(sprite).Elem()
-	outPtr := out.Addr().Interface().(Sprite)
-	return cloneSprite(out, outPtr, in, v), outPtr
 }
