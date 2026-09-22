@@ -35,7 +35,7 @@ import (
 
 // physicsComponent encapsulates all physics-related functionality.
 type physicsComponent struct {
-	componentBase
+	sprite *SpriteImpl
 
 	triggerInfo   physicConfig
 	collisionInfo physicConfig
@@ -56,7 +56,7 @@ type physicsComponent struct {
 
 // initialize initializes the physics component from config.
 func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	p.componentBase.initialize(sprite, spriteCfg)
+	p.sprite = sprite
 	p.initCollisionConfig(sprite, spriteCfg)
 	p.initTriggerConfig(sprite, spriteCfg)
 
@@ -104,25 +104,20 @@ func (p *physicsComponent) initTriggerConfig(sprite *SpriteImpl, spriteCfg *core
 	}
 }
 
-// cloneFrom creates a new physics component by cloning from source.
-func (p *physicsComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	srcPhysics := src.(*physicsComponent)
+// cloneFor creates a new physics component for newSprite.
+func (p *physicsComponent) cloneFor(newSprite *SpriteImpl) *physicsComponent {
 	newPhys := &physicsComponent{
-		componentBase:    componentBase{sprite: newSprite},
-		physicsMode:      srcPhysics.physicsMode,
-		mass:             srcPhysics.mass,
-		friction:         srcPhysics.friction,
-		airDrag:          srcPhysics.airDrag,
-		gravity:          srcPhysics.gravity,
+		sprite:           newSprite,
+		physicsMode:      p.physicsMode,
+		mass:             p.mass,
+		friction:         p.friction,
+		airDrag:          p.airDrag,
+		gravity:          p.gravity,
 		collisionTargets: make(map[string]bool),
 	}
-	newPhys.collisionInfo.copyFrom(&srcPhysics.collisionInfo)
-	newPhys.triggerInfo.copyFrom(&srcPhysics.triggerInfo)
+	newPhys.collisionInfo.copyFrom(&p.collisionInfo)
+	newPhys.triggerInfo.copyFrom(&p.triggerInfo)
 	return newPhys
-}
-
-// onDestroy cleans up when the component is destroyed.
-func (p *physicsComponent) onDestroy() {
 }
 
 // ============================================================================

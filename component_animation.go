@@ -43,7 +43,7 @@ type sharedAnimationData struct {
 }
 
 type animationComponent struct {
-	componentBase
+	sprite *SpriteImpl
 
 	// Shared animation configuration (read-only, shared across clones).
 	shared *sharedAnimationData
@@ -72,9 +72,8 @@ type tweenParams struct {
 
 // initialize initializes the animation component from configuration.
 func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	a.componentBase.initialize(sprite, spriteCfg)
+	a.sprite = sprite
 	a.initFromConfig(spriteCfg)
-	a.doneAnimations = make([]string, 0)
 }
 
 // initFromConfig initializes animations from sprite configuration.
@@ -105,15 +104,12 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
 }
 
-// cloneFrom creates a new animation component by cloning from source.
-func (a *animationComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	srcAnim := src.(*animationComponent)
-	newAnim := &animationComponent{
-		componentBase:  componentBase{sprite: newSprite},
-		shared:         srcAnim.shared,
-		doneAnimations: make([]string, 0),
+// cloneFor creates a new animation component for newSprite.
+func (a *animationComponent) cloneFor(newSprite *SpriteImpl) *animationComponent {
+	return &animationComponent{
+		sprite: newSprite,
+		shared: a.shared,
 	}
-	return newAnim
 }
 
 // onDestroy cleans up when the component is destroyed.

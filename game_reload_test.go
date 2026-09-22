@@ -303,6 +303,17 @@ func setupReloadCommitGame(t *testing.T, files reloadConfigFS) *reloadCommitGame
 	return game
 }
 
+func waitForReloadBootstrap(t *testing.T, game *Game) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for !game.lifecycleState.BootstrapDone.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("reload bootstrap did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func startReloadPreflightSentinelThread(t *testing.T, co *coroutine.Coroutines, owner any) (coroutine.Thread, func()) {
 	t.Helper()
 
@@ -696,6 +707,7 @@ func TestReloadCommitAppliesPreparedSpriteProperties(t *testing.T) {
 			if err := XGot_Game_Reload(game, strings.NewReader(project)); err != nil {
 				t.Fatalf("XGot_Game_Reload error = %v", err)
 			}
+			waitForReloadBootstrap(t, &game.Game)
 			sprite := &game.DirectCommitSprite.SpriteImpl
 			transform := sprite.transform()
 			if transform.x != test.wantX || transform.y != test.wantY ||
@@ -720,7 +732,7 @@ func TestReloadCommitAppliesPreparedStageSpriteGroupProperties(t *testing.T) {
 		"zorder":[
 			{"type":"sprites","target":"Empty","items":[]},
 			{"type":"sprites","target":"Sprites","items":[
-				{"x":7,"costumeIndex":0},
+				{"x":7,"visible":false,"costumeIndex":0},
 				{
 					"x":0,"y":0,"heading":0,"rotationStyle":"none",
 					"visible":false,"size":0,"costumeIndex":1
@@ -731,6 +743,7 @@ func TestReloadCommitAppliesPreparedStageSpriteGroupProperties(t *testing.T) {
 	if err != nil {
 		t.Fatalf("XGot_Game_Reload error = %v", err)
 	}
+	waitForReloadBootstrap(t, &game.Game)
 	if len(game.Sprites) != 2 {
 		t.Fatalf("stage sprite group length = %d, want 2", len(game.Sprites))
 	}
@@ -741,7 +754,7 @@ func TestReloadCommitAppliesPreparedStageSpriteGroupProperties(t *testing.T) {
 		size          float64
 		costume       int
 	}{
-		{x: 7, y: 20, heading: 30, style: LeftRight, visible: true, size: 2, costume: 0},
+		{x: 7, y: 20, heading: 30, style: LeftRight, size: 2, costume: 0},
 		{style: None, costume: 1},
 	}
 	for i, want := range wants {
@@ -775,6 +788,7 @@ func TestReloadCommitInitializesLazyPrototypeWithNewPhysicsSettings(t *testing.T
 	if err != nil {
 		t.Fatalf("XGot_Game_Reload error = %v", err)
 	}
+	waitForReloadBootstrap(t, &game.Game)
 	if got := engine.GetGame(); got != owner {
 		t.Fatalf("reload changed active game from %p to %p", owner, got)
 	}
@@ -823,6 +837,7 @@ func TestReloadCommitInitializesDirectSpriteWithNewPhysicsSettings(t *testing.T)
 			if err := XGot_Game_Reload(game, strings.NewReader(test.project)); err != nil {
 				t.Fatalf("XGot_Game_Reload error = %v", err)
 			}
+			waitForReloadBootstrap(t, &game.Game)
 			if game.DirectCommitSprite == nil {
 				t.Fatal("reload did not initialize direct sprite")
 			}
@@ -887,6 +902,7 @@ func TestReloadCommitReplacesConfiguredTilemap(t *testing.T) {
 			if err := XGot_Game_Reload(game, strings.NewReader(test.project)); err != nil {
 				t.Fatalf("XGot_Game_Reload error = %v", err)
 			}
+			waitForReloadBootstrap(t, &game.Game)
 			if got := game.TilemapName(); got != test.wantName {
 				t.Fatalf("TilemapName = %q, want %q", got, test.wantName)
 			}
@@ -909,6 +925,7 @@ func TestReloadCommitAllowsEmptyStageSpriteGroupWithoutPrototypeConfig(t *testin
 	if err != nil {
 		t.Fatalf("XGot_Game_Reload error = %v", err)
 	}
+	waitForReloadBootstrap(t, &game.Game)
 	if len(game.Empty) != 0 {
 		t.Fatalf("empty stage sprite group length = %d, want 0", len(game.Empty))
 	}

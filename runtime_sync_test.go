@@ -68,9 +68,9 @@ func TestFlushSyncBufferDoesNotSubmitSerializationFailure(t *testing.T) {
 func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
 	sprite := &SpriteImpl{}
 	sprite.components.transform = &transformComponent{
-		componentBase: componentBase{sprite: sprite},
-		x:             x,
-		y:             y,
+		sprite: sprite,
+		x:      x,
+		y:      y,
 	}
 	return sprite
 }

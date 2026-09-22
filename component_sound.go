@@ -16,10 +16,7 @@
 
 package spx
 
-import (
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
-)
+import engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 
 // ============================================================================
 // Sound Component
@@ -27,7 +24,7 @@ import (
 // This component encapsulates all sound-related functionality.
 
 type soundComponent struct {
-	componentBase
+	sprite *SpriteImpl
 
 	// Sound object.
 	soundObj engine.Object
@@ -40,21 +37,13 @@ type soundComponent struct {
 // Lifecycle
 // ============================================================================
 
-// initialize initializes the sound component from config.
-func (s *soundComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	s.componentBase.initialize(sprite, spriteCfg)
-	s.soundObj = 0
-	s.pendingAudios = nil
-}
-
-// cloneFrom creates a new sound component by cloning from source.
-func (s *soundComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	source := src.(*soundComponent)
+// cloneFor creates a new sound component for newSprite without sharing playback state.
+func (s *soundComponent) cloneFor(newSprite *SpriteImpl) *soundComponent {
 	cloned := &soundComponent{
-		componentBase: componentBase{sprite: newSprite},
+		sprite: newSprite,
 	}
-	if source.soundObj != 0 {
-		cloned.soundObj = newSprite.g.soundMgr.CloneSoundEffects(source.soundObj)
+	if s.soundObj != 0 {
+		cloned.soundObj = newSprite.g.soundMgr.CloneSoundEffects(s.soundObj)
 	}
 	return cloned
 }

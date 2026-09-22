@@ -19,7 +19,6 @@ package spx
 import (
 	"sync"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/ui"
 )
@@ -30,8 +29,8 @@ import (
 // This component manages Say/Think and Quote bubbles for sprites.
 
 type bubbleComponent struct {
-	componentBase
-	mu sync.Mutex
+	sprite *SpriteImpl
+	mu     sync.Mutex
 
 	textObj  *textBubble   // Text bubble object (Say/Think).
 	quoteObj *quoterBubble // Quote bubble object.
@@ -44,23 +43,6 @@ type bubbleShape interface {
 // ============================================================================
 // Lifecycle
 // ============================================================================
-
-// initialize initializes the bubble component.
-func (b *bubbleComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	b.componentBase.initialize(sprite, spriteCfg)
-	b.textObj = nil
-	b.quoteObj = nil
-}
-
-// cloneFrom creates a new bubble component by cloning from source.
-func (b *bubbleComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	newBubble := &bubbleComponent{
-		componentBase: componentBase{sprite: newSprite},
-		textObj:       nil,
-		quoteObj:      nil,
-	}
-	return newBubble
-}
 
 // onDestroy cleans up when the component is destroyed.
 func (b *bubbleComponent) onDestroy() {

@@ -22,8 +22,7 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	parentAnimations.defaultAnimation = "parent"
 	parentAnimation.shared = &parentAnimations
 	parentAnimation.curAnimState = &animState{Name: "playing"}
-	parentAnimation.curTweenState = &animState{Name: "moving"}
-	parentAnimation.activeTweenStates = []*animState{parentAnimation.curTweenState}
+	parentAnimation.activeTweenStates = []*animState{{Name: "moving"}}
 	parentAnimation.defaultAnimActive = true
 	parentAnimation.doneAnimations = []string{"completed"}
 	original.pen().penWidth = 7
@@ -43,9 +42,9 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	if childAnimation.shared != parentAnimation.shared {
 		t.Fatal("animation configuration did not come from the parent")
 	}
-	if childAnimation.curAnimState != nil || childAnimation.curTweenState != nil ||
-		len(childAnimation.activeTweenStates) != 0 || childAnimation.defaultAnimActive ||
-		len(childAnimation.doneAnimations) != 0 || len(child.physics().collisionTargets) != 0 {
+	if childAnimation.curAnimState != nil || len(childAnimation.activeTweenStates) != 0 ||
+		childAnimation.defaultAnimActive || len(childAnimation.doneAnimations) != 0 ||
+		len(child.physics().collisionTargets) != 0 {
 		t.Fatal("clone inherited parent collision or animation runtime state")
 	}
 
@@ -58,5 +57,43 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	}
 	if original.Xpos() != 0 || original.physics().mass != 1 || original.pen().penWidth != 7 || original.GetSoundEffect(SoundPanEffect) != 20 {
 		t.Fatal("changing descendant state changed the original")
+	}
+}
+
+func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	original := newCloneLimitSprite(game, "original")
+	originalBubble := original.bubble()
+	originalText := &textBubble{bubbleBase: original.newBubbleBase()}
+	originalBubble.textObj = originalText
+	game.addShape(originalText)
+
+	clone := createRuntimeClone(&original.SpriteImpl)
+	if clone.components.bubble != nil {
+		t.Fatal("clone inherited an allocated bubble component")
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("cloning changed the original bubble")
+	}
+
+	cloneBubble := clone.bubble()
+	if cloneBubble == originalBubble || cloneBubble.sprite != clone {
+		t.Fatal("lazy bubble component is not owned by the clone")
+	}
+	cloneText := &textBubble{bubbleBase: clone.newBubbleBase()}
+	cloneBubble.textObj = cloneText
+	game.addShape(cloneText)
+
+	clone.Destroy()
+	if cloneBubble.textObj != nil || cloneBubble.quoteObj != nil {
+		t.Fatal("destroy left clone bubble state active")
+	}
+	for _, shape := range game.getAllShapes() {
+		if shape == cloneText {
+			t.Fatal("destroy left the clone bubble in the shape list")
+		}
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("destroying the clone changed the original bubble")
 	}
 }

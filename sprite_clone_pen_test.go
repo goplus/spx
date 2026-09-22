@@ -56,14 +56,14 @@ func TestClonePenStateFromStageInstance(t *testing.T) {
 
 func TestStandaloneComponentsCloneWithoutRegistry(t *testing.T) {
 	sourceSprite, target := &SpriteImpl{}, &SpriteImpl{}
-	sound := &soundComponent{componentBase: componentBase{sprite: sourceSprite}}
-	clonedSound := sound.cloneFrom(sound, target).(*soundComponent)
+	sound := &soundComponent{sprite: sourceSprite}
+	clonedSound := sound.cloneFor(target)
 	if clonedSound.sprite != target || clonedSound.soundObj != 0 {
 		t.Fatal("standalone sound clone acquired resources")
 	}
-	pen := &penComponent{componentBase: componentBase{sprite: sourceSprite}}
+	pen := &penComponent{sprite: sourceSprite}
 	pen.penWidth = 7
-	clonedPen := pen.cloneFrom(pen, target).(*penComponent)
+	clonedPen := pen.cloneFor(target)
 	if clonedPen.sprite != target || clonedPen.penWidth != 7 {
 		t.Fatal("standalone pen clone lost state")
 	}

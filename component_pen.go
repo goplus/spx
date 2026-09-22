@@ -20,7 +20,6 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -55,7 +54,7 @@ type penState struct {
 }
 
 type penComponent struct {
-	componentBase
+	sprite *SpriteImpl
 	penState
 	penObj *gdx.Object
 }
@@ -64,23 +63,20 @@ type penComponent struct {
 // Lifecycle
 // ============================================================================
 
-// initialize initializes the pen component from config.
-func (p *penComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
-	p.componentBase.initialize(sprite, spriteCfg)
+// initialize initializes the pen component with Scratch-compatible defaults.
+func (p *penComponent) initialize(sprite *SpriteImpl) {
+	p.sprite = sprite
 	p.penColor = mathf.NewColorRGBAi(66, 133, 244, 255)
 	p.penWidth = 1
 	p.syncPenColorComponents()
 	p.legacyPenColor = newScratchLegacyPenState()
-	p.isPenDown = false
-	p.penObj = nil
 }
 
-// cloneFrom creates a new pen component by cloning from source.
-func (p *penComponent) cloneFrom(src component, newSprite *SpriteImpl) component {
-	srcPen := src.(*penComponent)
+// cloneFor creates a new pen component for newSprite without sharing drawing resources.
+func (p *penComponent) cloneFor(newSprite *SpriteImpl) *penComponent {
 	return &penComponent{
-		componentBase: componentBase{sprite: newSprite},
-		penState:      srcPen.penState,
+		sprite:   newSprite,
+		penState: p.penState,
 	}
 }
 
