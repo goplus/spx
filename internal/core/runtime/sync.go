@@ -56,17 +56,6 @@ func SyncBatchPositions[T any](
 	}
 }
 
-func FlushSerializedBuffer[T any](
-	updateCount int,
-	deleteCount int,
-	serialize func() T,
-	flush func(T),
-) {
-	if updateCount > 0 || deleteCount > 0 {
-		flush(serialize())
-	}
-}
-
 func ProcessTriggerPairs[T any](
 	pairs []engine.TriggerEvent,
 	resolve func(any) (T, bool),

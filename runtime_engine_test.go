@@ -37,6 +37,16 @@ type captureFlushSpriteMgr struct {
 	batches [][]float32
 }
 
+func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
+	t.Helper()
+	enginewrap.Init(func(call func()) { call() })
+	original := pkgengine.SpriteMgr
+	mgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	return mgr
+}
+
 type replayPauseTestExtMgr struct {
 	pauses int
 }
@@ -56,11 +66,7 @@ func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
 }
 
 func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
-	enginewrap.Init(func(call func()) { call() })
-	originalSpriteMgr := pkgengine.SpriteMgr
-	spriteMgr := &captureFlushSpriteMgr{}
-	pkgengine.SpriteMgr = spriteMgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
 	var game Game
 	game.lifecycleState.IsRunned.Store(true)
@@ -83,11 +89,7 @@ func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
 }
 
 func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
-	enginewrap.Init(func(call func()) { call() })
-	originalSpriteMgr := pkgengine.SpriteMgr
-	spriteMgr := &captureFlushSpriteMgr{}
-	pkgengine.SpriteMgr = spriteMgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
 	var game Game
 	game.lifecycleState.IsRunned.Store(true)
@@ -144,11 +146,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 	resetInputSessionState()
 	engine.SetGame(nil)
 	t.Cleanup(resetInputSessionState)
-	enginewrap.Init(func(call func()) { call() })
-	originalSpriteMgr := pkgengine.SpriteMgr
-	spriteMgr := &captureFlushSpriteMgr{}
-	pkgengine.SpriteMgr = spriteMgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = originalSpriteMgr })
+	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
 	var game Game
 	game.camera = &cameraImpl{g: &game}
