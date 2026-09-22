@@ -16,7 +16,54 @@
 
 package spx
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/goplus/spx/v3/internal/engine"
+)
+
+func setupSyncBufferCapture(t *testing.T) (*Game, *captureFlushSpriteMgr) {
+	t.Helper()
+	mgr := setupCaptureFlushSpriteMgr(t)
+	return &Game{syncBuffer: engine.NewSpriteSyncBuffer(1)}, mgr
+}
+
+func TestFlushSyncBufferOnlySubmitsChanges(t *testing.T) {
+	game, mgr := setupSyncBufferCapture(t)
+	game.flushSyncBuffer()
+	if len(mgr.batches) != 0 {
+		t.Fatalf("empty buffer submitted %d batches, want 0", len(mgr.batches))
+	}
+
+	game.syncBuffer.Add(1, 2, 3, 4, 5, 6, 7, 8, true)
+	game.flushSyncBuffer()
+	if len(mgr.batches) != 1 {
+		t.Fatalf("updated buffer submitted %d batches, want 1", len(mgr.batches))
+	}
+
+	game.syncBuffer.Clear()
+	game.syncBuffer.AddDelete(1)
+	game.flushSyncBuffer()
+	if len(mgr.batches) != 2 {
+		t.Fatalf("delete buffer submitted %d total batches, want 2", len(mgr.batches))
+	}
+}
+
+func TestFlushSyncBufferDoesNotSubmitSerializationFailure(t *testing.T) {
+	game, mgr := setupSyncBufferCapture(t)
+	invalidID := int64(1<<24 + 1)
+	game.syncBuffer.Add(invalidID, 0, 0, 0, 0, 0, 0, 0, false)
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("invalid sprite ID did not panic during serialization")
+		}
+		if len(mgr.batches) != 0 {
+			t.Fatalf("serialization failure submitted %d batches, want 0", len(mgr.batches))
+		}
+	}()
+	game.flushSyncBuffer()
+}
 
 func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
 	sprite := &SpriteImpl{}

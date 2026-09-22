@@ -79,12 +79,10 @@ func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
 
 // flushSyncBuffer sends batched updates to the engine if there are any changes.
 func (p *Game) flushSyncBuffer() {
-	coreruntime.FlushSerializedBuffer(
-		p.syncBuffer.UpdateCount(),
-		p.syncBuffer.DeleteCount(),
-		p.syncBuffer.Serialize,
-		engine.SyncBatchUpdateSprites,
-	)
+	if p.syncBuffer.UpdateCount() == 0 && p.syncBuffer.DeleteCount() == 0 {
+		return
+	}
+	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
 }
 
 // pullPhysicsPositions retrieves sprite positions from the physics engine in batch.

@@ -22,7 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -87,37 +86,25 @@ func TestLegacyBatchObjectIDs(t *testing.T) {
 	for _, serializer := range serializers {
 		for _, tc := range cases {
 			t.Run(fmt.Sprintf("%s/%d", serializer.name, tc.id), func(t *testing.T) {
-				flushed := false
 				defer func() {
 					recovered := recover()
 					if tc.valid {
 						if recovered != nil {
 							t.Fatalf("exactly representable ID caused panic: %v", recovered)
 						}
-						if !flushed {
-							t.Fatal("valid packet was not flushed")
-						}
 						return
 					}
 					if recovered == nil {
 						t.Fatal("invalid ID did not cause a panic")
 					}
-					if flushed {
-						t.Fatal("packet containing an invalid ID was partially submitted")
-					}
 					if !strings.Contains(fmt.Sprint(recovered), fmt.Sprint(tc.id)) {
 						t.Fatalf("panic %q does not identify original ID %d", recovered, tc.id)
 					}
 				}()
-				coreruntime.FlushSerializedBuffer(1, 0,
-					func() []float32 { return serializer.serialize(tc.id) },
-					func(packet []float32) {
-						flushed = true
-						if tc.valid && int64(packet[serializer.idIndex]) != tc.id {
-							t.Errorf("serialized ID %v does not round-trip to %d", packet[serializer.idIndex], tc.id)
-						}
-					},
-				)
+				packet := serializer.serialize(tc.id)
+				if tc.valid && int64(packet[serializer.idIndex]) != tc.id {
+					t.Errorf("serialized ID %v does not round-trip to %d", packet[serializer.idIndex], tc.id)
+				}
 			})
 		}
 	}
