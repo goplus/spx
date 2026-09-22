@@ -177,8 +177,6 @@ type AniConfig struct {
 	IFrameFrom int
 	IFrameTo   int
 
-	AdaptAnimBitmapResolution int
-
 	Speed float64
 	From  any
 	To    any

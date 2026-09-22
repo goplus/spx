@@ -177,18 +177,13 @@ func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnim
 		animation = t.sprite.getStateAnimName(StateStep)
 	}
 
-	// If no animation exists, move to target immediately.
-	if !t.sprite.hasAnim(animation) {
-		t.setPosition(x, y)
-		return
-	}
-
 	from := mathf.NewVec2(t.x, t.y)
 	to := mathf.NewVec2(x, y)
 	distance := from.DistanceTo(to)
 
 	ani, ok := t.sprite.getAnimation(animation)
 	if !ok {
+		t.setPosition(x, y)
 		return
 	}
 

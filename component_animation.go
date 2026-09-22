@@ -36,10 +36,9 @@ import (
 
 // sharedAnimationData stores read-only animation data shared across cloned sprites.
 type sharedAnimationData struct {
-	animations        map[SpriteAnimationName]*coreproject.AniConfig
-	animBindings      map[string]string
-	defaultAnimation  SpriteAnimationName
-	animationWrappers map[SpriteAnimationName]*animationWrapper
+	animations       map[SpriteAnimationName]*animationEntry
+	animBindings     map[string]string
+	defaultAnimation SpriteAnimationName
 }
 
 type animationComponent struct {
@@ -81,20 +80,12 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 // initFromConfig initializes animations from sprite configuration.
 func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig) {
 	a.shared = &sharedAnimationData{
-		defaultAnimation:  spriteCfg.DefaultAnimation,
-		animations:        make(map[SpriteAnimationName]*coreproject.AniConfig),
-		animBindings:      make(map[string]string),
-		animationWrappers: make(map[SpriteAnimationName]*animationWrapper),
+		defaultAnimation: spriteCfg.DefaultAnimation,
+		animations:       make(map[SpriteAnimationName]*animationEntry, len(spriteCfg.FAnimations)),
+		animBindings:     make(map[string]string),
 	}
 
-	anims := spriteCfg.FAnimations
-	for key, val := range anims {
-		var ani = val
-		_, ok := a.shared.animations[key]
-		if ok {
-			spxlog.Panicf("Animation key [%s] already exists", key)
-		}
-
+	for name, ani := range spriteCfg.FAnimations {
 		defaults.SetDefaultIfZero(&ani.FrameFps, 25)
 		defaults.SetDefaultIfZero(&ani.TurnToDuration, 1.0)
 		defaults.SetDefaultIfZero(&ani.StepDuration, 0.01)
@@ -102,19 +93,16 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 		ani.IFrameFrom, ani.IFrameTo = a.frameRange(ani.FrameFrom, ani.FrameTo)
 		ani.Speed = 1
 		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
-		a.shared.animations[key] = ani
-	}
-
-	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
-
-	for animName, ani := range a.shared.animations {
-		a.shared.animationWrappers[animName] = &animationWrapper{
+		a.shared.animations[name] = &animationEntry{
+			name:         name,
+			config:       ani,
 			spriteName:   a.sprite.name,
-			ani:          ani,
 			costumes:     a.sprite.costumes,
 			isCostumeSet: a.sprite.runtimeState.IsCostumeSet,
 		}
 	}
+
+	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
 }
 
 // cloneFrom creates a new animation component by cloning from source.
@@ -182,16 +170,16 @@ func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, block
 		spxlog.Debug(debugMsg, name)
 	}
 
-	ani, ok := a.shared.animations[name]
+	entry, ok := a.shared.animations[name]
 	if !ok {
 		spxlog.Warn("Animation not found: %s", name)
 		return
 	}
 
-	a.doAnimation(name, ani, loop, 1, blocking, true)
+	a.doAnimation(entry, entry.config, loop, 1, blocking, true)
 }
 
-func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) *animState {
+func (a *animationComponent) doAnimation(entry *animationEntry, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) *animState {
 	syncSprite := a.syncSpriteForPlayback()
 	if syncSprite == nil {
 		return nil
@@ -201,7 +189,7 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	a.defaultAnimActive = false
 	a.curAnimState = &animState{
 		AniType: coreproject.AniTypeFrame,
-		Name:    animName,
+		Name:    entry.name,
 		Speed:   speed,
 	}
 
@@ -211,9 +199,9 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	}
 
 	a.sprite.baseObj.applyCostumeUpdate()
-	a.prepareAnimationPlayback(animName, ani)
+	a.prepareAnimationPlayback(entry)
 
-	engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, loop, false)
+	engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
 	if isBlocking {
 		a.sprite.runtimeState.IsAnimating = true
 		for engine.Managers().SpriteMgr.IsPlayingAnim(syncSprite.GetId()) {
@@ -228,18 +216,17 @@ func (a *animationComponent) doAnimation(animName SpriteAnimationName, ani *core
 	return info
 }
 
-func (a *animationComponent) adaptAnimBitmapResolution(ani *coreproject.AniConfig) {
+func (a *animationComponent) adaptAnimBitmapResolution(bitmapResolution int) {
 	syncSprite := a.syncSprite()
 	if syncSprite == nil {
 		return
 	}
-	renderScale := a.sprite.getAnimRenderScale(ani.AdaptAnimBitmapResolution)
+	renderScale := a.sprite.getAnimRenderScale(bitmapResolution)
 	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
 }
 
-func (a *animationComponent) prepareAnimationPlayback(animName SpriteAnimationName, ani *coreproject.AniConfig) {
-	a.shared.animationWrappers[animName].ensureRegistered(animName, ani)
-	a.adaptAnimBitmapResolution(ani)
+func (a *animationComponent) prepareAnimationPlayback(entry *animationEntry) {
+	a.adaptAnimBitmapResolution(entry.ensureRegistered())
 }
 
 // ============================================================================
@@ -275,9 +262,9 @@ func (a *animationComponent) playDefaultAnim() {
 		animName = a.shared.defaultAnimation
 	}
 
-	if ani, ok := a.shared.animations[animName]; ok {
-		a.prepareAnimationPlayback(animName, ani)
-		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), animName, speed, true, false)
+	if entry, ok := a.shared.animations[animName]; ok {
+		a.prepareAnimationPlayback(entry)
+		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, true, false)
 		a.defaultAnimActive = true
 	} else {
 		a.defaultAnimActive = false
@@ -408,8 +395,11 @@ func (a *animationComponent) hasAnim(animName string) bool {
 }
 
 func (a *animationComponent) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
-	ani, ok := a.shared.animations[animName]
-	return ani, ok
+	entry, ok := a.shared.animations[animName]
+	if !ok {
+		return nil, false
+	}
+	return entry.config, true
 }
 
 func (a *animationComponent) getStateAnimName(stateName string) string {
@@ -486,8 +476,8 @@ func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *corep
 	a.registerTweenState(info)
 
 	var ownedPlayback *animState
-	if a.hasAnim(name) {
-		ownedPlayback = a.doAnimation(name, ani, ani.IsLoop, ani.Speed, false, false)
+	if entry, ok := a.shared.animations[name]; ok {
+		ownedPlayback = a.doAnimation(entry, ani, ani.IsLoop, ani.Speed, false, false)
 		a.playAnimationAudio(ani, info)
 	}
 
