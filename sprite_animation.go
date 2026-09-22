@@ -28,12 +28,14 @@ import (
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
-type animationWrapper struct {
-	spriteName   string
-	ani          *coreproject.AniConfig
-	costumes     []*costume
-	isCostumeSet bool
-	loadOnce     sync.Once
+type animationEntry struct {
+	name                  SpriteAnimationName
+	config                *coreproject.AniConfig
+	spriteName            string
+	costumes              []*costume
+	isCostumeSet          bool
+	loadOnce              sync.Once
+	adaptBitmapResolution int
 }
 
 type animState struct {
@@ -117,33 +119,29 @@ func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfi
 // -----------------------------------------------------------------------------
 // Animation Data
 // -----------------------------------------------------------------------------
-func (aw *animationWrapper) ensureRegistered(animName string, callerAni *coreproject.AniConfig) {
-	aw.loadOnce.Do(func() {
+func (e *animationEntry) ensureRegistered() int {
+	e.loadOnce.Do(func() {
 		payloadJSON, maxBitmap, err := intani.BuildPayloadJSON(
 			intani.Config{
-				FrameFrom: aw.ani.IFrameFrom,
-				FrameTo:   aw.ani.IFrameTo,
+				FrameFrom: e.config.IFrameFrom,
+				FrameTo:   e.config.IFrameTo,
 			},
-			buildAnimationSources(aw.costumes),
-			aw.isCostumeSet,
+			buildAnimationSources(e.costumes),
+			e.isCostumeSet,
 		)
 		if err != nil {
 			panic(err)
 		}
-		aw.ani.AdaptAnimBitmapResolution = maxBitmap
-		// Registration computes AdaptAnimBitmapResolution and copies it to callerAni
-		// when callerAni is a distinct config.
-		if callerAni != nil && callerAni != aw.ani {
-			callerAni.AdaptAnimBitmapResolution = aw.ani.AdaptAnimBitmapResolution
-		}
+		e.adaptBitmapResolution = maxBitmap
 		engine.Managers().ResMgr.CreateAnimation(
-			aw.spriteName,
-			animName,
+			e.spriteName,
+			e.name,
 			payloadJSON,
-			int64(aw.ani.FrameFps),
-			aw.isCostumeSet,
+			int64(e.config.FrameFps),
+			e.isCostumeSet,
 		)
 	})
+	return e.adaptBitmapResolution
 }
 
 func buildAnimationSources(costumes []*costume) []intani.FrameSource {

@@ -17,10 +17,15 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	parent.SetSoundEffect(SoundPanEffect, 80)
 
 	// Give the parent distinct read-only configuration and per-instance runtime state.
-	parentAnimations := *parent.animation().shared
+	parentAnimation := parent.animation()
+	parentAnimations := *parentAnimation.shared
 	parentAnimations.defaultAnimation = "parent"
-	parent.animation().shared = &parentAnimations
-	parent.animation().doneAnimations = []string{"completed"}
+	parentAnimation.shared = &parentAnimations
+	parentAnimation.curAnimState = &animState{Name: "playing"}
+	parentAnimation.curTweenState = &animState{Name: "moving"}
+	parentAnimation.activeTweenStates = []*animState{parentAnimation.curTweenState}
+	parentAnimation.defaultAnimActive = true
+	parentAnimation.doneAnimations = []string{"completed"}
 	original.pen().penWidth = 7
 	original.SetSoundEffect(SoundPanEffect, 20)
 
@@ -34,10 +39,13 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	if child.physics().mass != 7 {
 		t.Fatalf("mass = %v, want parent mass 7", child.physics().mass)
 	}
-	if child.animation().shared != parent.animation().shared {
+	childAnimation := child.animation()
+	if childAnimation.shared != parentAnimation.shared {
 		t.Fatal("animation configuration did not come from the parent")
 	}
-	if len(child.physics().collisionTargets) != 0 || len(child.animation().doneAnimations) != 0 {
+	if childAnimation.curAnimState != nil || childAnimation.curTweenState != nil ||
+		len(childAnimation.activeTweenStates) != 0 || childAnimation.defaultAnimActive ||
+		len(childAnimation.doneAnimations) != 0 || len(child.physics().collisionTargets) != 0 {
 		t.Fatal("clone inherited parent collision or animation runtime state")
 	}
 

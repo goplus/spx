@@ -45,10 +45,9 @@ func newTestAnimationComponent() *animationComponent {
 	anim := &animationComponent{
 		componentBase: componentBase{sprite: sprite},
 		shared: &sharedAnimationData{
-			defaultAnimation:  "idle",
-			animations:        map[SpriteAnimationName]*coreproject.AniConfig{},
-			animBindings:      map[string]string{},
-			animationWrappers: map[SpriteAnimationName]*animationWrapper{},
+			defaultAnimation: "idle",
+			animations:       map[SpriteAnimationName]*animationEntry{},
+			animBindings:     map[string]string{},
 		},
 		activeTweenStates: make([]*animState, 0),
 		doneAnimations:    make([]string, 0),
@@ -63,6 +62,42 @@ func newTestAnimationComponent() *animationComponent {
 		physicsMode:   NoPhysics,
 	}
 	return anim
+}
+
+func TestInitFromConfigBuildsSingleAnimationEntryMap(t *testing.T) {
+	sprite := &SpriteImpl{name: "TestSprite"}
+	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
+	walk := &coreproject.AniConfig{FrameFrom: 0, FrameTo: 0}
+	idle := &coreproject.AniConfig{FrameFrom: 0, FrameTo: 0}
+	config := &coreproject.SpriteConfig{
+		DefaultAnimation: "idle",
+		FAnimations: map[string]*coreproject.AniConfig{
+			"idle": idle,
+			"walk": walk,
+		},
+	}
+
+	anim := &animationComponent{componentBase: componentBase{sprite: sprite}}
+	anim.initFromConfig(config)
+
+	if len(anim.shared.animations) != 2 {
+		t.Fatalf("animation entries = %d, want 2", len(anim.shared.animations))
+	}
+	for name, wantConfig := range config.FAnimations {
+		entry := anim.shared.animations[name]
+		if entry == nil || entry.name != name || entry.config != wantConfig {
+			t.Fatalf("animation entry %q = %+v, want config %p", name, entry, wantConfig)
+		}
+		if entry.spriteName != sprite.name || len(entry.costumes) != 1 {
+			t.Fatalf("animation entry %q registration data = %+v", name, entry)
+		}
+	}
+	if got, ok := anim.getAnimation("walk"); !ok || got != walk {
+		t.Fatalf("getAnimation(walk) = (%p, %v), want (%p, true)", got, ok, walk)
+	}
+	if got, ok := anim.getAnimation("missing"); ok || got != nil {
+		t.Fatalf("getAnimation(missing) = (%p, %v), want (nil, false)", got, ok)
+	}
 }
 
 func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
