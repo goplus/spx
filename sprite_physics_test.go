@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -38,7 +39,8 @@ func (m *polygonColliderSpriteMgr) SetTriggerEnabled(_ pkgengine.Object, enabled
 	m.triggerEnabled = append(m.triggerEnabled, enabled)
 }
 
-func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
+func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSpriteMgr) {
+	t.Helper()
 	original := pkgengine.SpriteMgr
 	mgr := &polygonColliderSpriteMgr{}
 	pkgengine.SpriteMgr = mgr
@@ -51,6 +53,19 @@ func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
 	sprite.runtimeState.SyncSprite = &internalengine.Sprite{
 		Sprite: pkgengine.Sprite{Id: 1},
 	}
+	return sprite, mgr
+}
+
+func assertColliderParams(t *testing.T, sprite *SpriteImpl, isTrigger bool, wantType ColliderShapeType, want []float64) {
+	t.Helper()
+	typ, got := sprite.ColliderShape(isTrigger)
+	if typ != wantType || !slices.Equal(got, want) {
+		t.Fatalf("shape(trigger=%t) = type %d params %v, want type %d params %v", isTrigger, typ, got, wantType, want)
+	}
+}
+
+func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
+	sprite, mgr := newPolygonColliderTestSprite(t)
 	points := []float64{-1, -2, 3, -4, 5, 6}
 
 	sprite.physics().collisionInfo.Pivot = mathf.NewVec2(2, 3)
@@ -85,4 +100,88 @@ func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
 	if !slices.Equal(mgr.collisionPoints, wantRescaledPoints) || !slices.Equal(mgr.triggerPoints, wantRescaledPoints) {
 		t.Fatalf("rescaled polygons = (%v, %v), want %v", mgr.collisionPoints, mgr.triggerPoints, wantRescaledPoints)
 	}
+}
+
+func TestSetColliderShapeRejectsInvalidParamsAtomically(t *testing.T) {
+	sprite, mgr := newPolygonColliderTestSprite(t)
+	valid := []float64{-1, -2, 3, -4, 5, 6}
+	if err := sprite.SetColliderShape(false, PolygonCollider, valid); err != nil {
+		t.Fatalf("SetColliderShape(collision) failed: %v", err)
+	}
+	if err := sprite.SetColliderShape(true, PolygonCollider, valid); err != nil {
+		t.Fatalf("SetColliderShape(trigger) failed: %v", err)
+	}
+
+	collisionType, collisionParams := sprite.ColliderShape(false)
+	triggerType, triggerParams := sprite.ColliderShape(true)
+	collisionPoints := slices.Clone(mgr.collisionPoints)
+	triggerPoints := slices.Clone(mgr.triggerPoints)
+	collisionEnabledCalls := slices.Clone(mgr.collisionEnabled)
+	triggerEnabledCalls := slices.Clone(mgr.triggerEnabled)
+	collisionParamsStorage := &sprite.physics().collisionInfo.Params[0]
+	triggerParamsStorage := &sprite.physics().triggerInfo.Params[0]
+
+	if err := sprite.SetColliderShape(false, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil {
+		t.Fatal("SetColliderShape(collision) accepted an invalid polygon")
+	}
+	if err := sprite.SetColliderShape(true, PolygonCollider, []float64{1, 2, 3, 4, 5}); err == nil {
+		t.Fatal("SetColliderShape(trigger) accepted an invalid polygon")
+	}
+
+	gotCollisionType, gotCollisionParams := sprite.ColliderShape(false)
+	if gotCollisionType != collisionType || !slices.Equal(gotCollisionParams, collisionParams) {
+		t.Fatalf("collision shape changed after rejection: type=%d params=%v, want type=%d params=%v", gotCollisionType, gotCollisionParams, collisionType, collisionParams)
+	}
+	gotTriggerType, gotTriggerParams := sprite.ColliderShape(true)
+	if gotTriggerType != triggerType || !slices.Equal(gotTriggerParams, triggerParams) {
+		t.Fatalf("trigger shape changed after rejection: type=%d params=%v, want type=%d params=%v", gotTriggerType, gotTriggerParams, triggerType, triggerParams)
+	}
+	if &sprite.physics().collisionInfo.Params[0] != collisionParamsStorage || &sprite.physics().triggerInfo.Params[0] != triggerParamsStorage {
+		t.Fatal("rejected shape replaced live parameter storage")
+	}
+	if !slices.Equal(mgr.collisionPoints, collisionPoints) || !slices.Equal(mgr.triggerPoints, triggerPoints) {
+		t.Fatalf("engine proxy points changed after rejection: collision=%v trigger=%v", mgr.collisionPoints, mgr.triggerPoints)
+	}
+	if !slices.Equal(mgr.collisionEnabled, collisionEnabledCalls) || !slices.Equal(mgr.triggerEnabled, triggerEnabledCalls) {
+		t.Fatalf("engine proxy enabled calls changed after rejection: collision=%v trigger=%v", mgr.collisionEnabled, mgr.triggerEnabled)
+	}
+}
+
+func TestSetColliderShapeCopiesInputParams(t *testing.T) {
+	sprite := newRenderOffsetTestSprite()
+	tests := []struct {
+		name      string
+		isTrigger bool
+		params    []float64
+	}{
+		{name: "collision", params: []float64{-1, -2, 3, -4, 5, 6}},
+		{name: "trigger", isTrigger: true, params: []float64{1, 2, 3, 4, 5, 6}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := slices.Clone(tt.params)
+			if err := sprite.SetColliderShape(tt.isTrigger, PolygonCollider, tt.params); err != nil {
+				t.Fatalf("SetColliderShape failed: %v", err)
+			}
+			tt.params[0] = 99
+			assertColliderParams(t, sprite, tt.isTrigger, PolygonCollider, want)
+		})
+	}
+}
+
+func TestPhysicsInitializationCopiesShapeParams(t *testing.T) {
+	collisionParams := []float64{-1, -2, 3, -4, 5, 6}
+	triggerParams := []float64{1, 2, 3, 4, 5, 6}
+	sprite := &SpriteImpl{g: &Game{}}
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
+		CollisionShapeType:   "polygon",
+		CollisionShapeParams: collisionParams,
+		TriggerShapeType:     "polygon",
+		TriggerShapeParams:   triggerParams,
+	})
+
+	collisionParams[0] = 99
+	triggerParams[0] = 101
+	assertColliderParams(t, sprite, false, PolygonCollider, []float64{-1, -2, 3, -4, 5, 6})
+	assertColliderParams(t, sprite, true, PolygonCollider, []float64{1, 2, 3, 4, 5, 6})
 }

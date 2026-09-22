@@ -19,6 +19,7 @@ package spx
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -164,12 +165,8 @@ func (cfg *physicConfig) String() string {
 }
 
 func (cfg *physicConfig) copyFrom(src *physicConfig) {
-	cfg.Mask = src.Mask
-	cfg.Layer = src.Layer
-	cfg.Type = src.Type
-	cfg.Pivot = src.Pivot
-	cfg.Params = make([]float64, len(src.Params))
-	copy(cfg.Params, src.Params)
+	*cfg = *src
+	cfg.Params = slices.Clone(src.Params)
 }
 
 // validateShape validates if shape parameters match the type.
