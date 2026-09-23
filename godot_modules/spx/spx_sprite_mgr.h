@@ -39,7 +39,8 @@
 #include <functional>
 #include <unordered_set>
 
-typedef std::function<bool(GdColor, GdColor)> ColorCheckFunc;
+using ColorCheckFunc = std::function<bool(GdColor, GdColor)>;
+using ColorMatchFunc = std::function<bool(GdColor)>;
 
 class SpxSprite;
 class ISortableSprite;
@@ -104,11 +105,8 @@ private:
 	// 3+ = faster but may miss small collisions
 	int pixel_collision_sampling_step;
 
-	Ref<Image> _get_current_frame_image(AnimatedSprite2D *sprite);
-	Rect2 _get_sprite_aabb(AnimatedSprite2D *anim2d);
 	GdBool _check_collision(GdObj obj, ColorCheckFunc check_func);
-	GdBool _check_scene_color_collision(GdObj obj, ColorCheckFunc check_func);
-	bool _check_pixel_collision_between(SpxSprite *sprite_a, SpxSprite *sprite_b, GdFloat alpha_threshold);
+	GdBool _check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches);
 	void _notify_pixel_collision_enter(const TriggerPair &pair);
 	void _notify_pixel_collision_exit(const TriggerPair &pair, GdObj skip_id = NULL_OBJECT_ID);
 	bool _erase_pixel_collision_pair(const TriggerPair &pair);
