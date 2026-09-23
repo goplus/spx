@@ -53,7 +53,23 @@ func fetchURLToFile(url, dst string) error {
 	return fetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
 }
 
-func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
+func fetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
+	return DownloadURL(url, dst, maxBytes, nil)
+}
+
+// HTTPStatusError reports a failed HTTP download response.
+type HTTPStatusError struct {
+	URL        string
+	StatusCode int
+	Status     string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("download %s failed: %s", e.URL, e.Status)
+}
+
+// DownloadURL saves a bounded response atomically. progress receives written and declared bytes.
+func DownloadURL(url, dst string, maxBytes int64, progress func(int64, int64)) (err error) {
 	if maxBytes <= 0 {
 		return fmt.Errorf("invalid download size limit %d", maxBytes)
 	}
@@ -68,7 +84,7 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download %s failed: %s", url, resp.Status)
+		return &HTTPStatusError{URL: url, StatusCode: resp.StatusCode, Status: resp.Status}
 	}
 	if resp.ContentLength > maxBytes {
 		return fmt.Errorf("%w: download %s declares %d bytes, limit %d", runtimebundle.ErrArchiveLimit, url, resp.ContentLength, maxBytes)
@@ -91,15 +107,27 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 		}
 	}()
 
-	downloaded, err := io.Copy(file, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
+	var output io.Writer = file
+	if progress != nil && resp.ContentLength > 0 {
+		var downloaded int64
+		output = writerFunc(func(p []byte) (int, error) {
+			n, writeErr := file.Write(p)
+			downloaded += int64(n)
+			if n > 0 && downloaded <= maxBytes {
+				progress(downloaded, resp.ContentLength)
+			}
+			return n, writeErr
+		})
+	}
+	downloaded, err := io.Copy(output, io.LimitReader(resp.Body, downloadLimitWithOverflow(maxBytes)))
 	if downloaded > maxBytes {
 		return fmt.Errorf("%w: download %s exceeds limit %d", runtimebundle.ErrArchiveLimit, url, maxBytes)
 	}
-	if resp.ContentLength > 0 && downloaded != resp.ContentLength {
-		return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
-	}
 	if err != nil {
 		return err
+	}
+	if resp.ContentLength > 0 && downloaded != resp.ContentLength {
+		return fmt.Errorf("download %s ended after %d bytes, want %d: %w", url, downloaded, resp.ContentLength, io.ErrUnexpectedEOF)
 	}
 	if err := file.Close(); err != nil {
 		return err
@@ -108,6 +136,10 @@ func fetchURLToFileWithLimit(url, dst string, maxBytes int64) (err error) {
 
 	return replaceFile(tmpPath, dst)
 }
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 
 func downloadLimitWithOverflow(maxBytes int64) int64 {
 	if maxBytes == math.MaxInt64 {
