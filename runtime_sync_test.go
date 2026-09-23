@@ -17,8 +17,10 @@
 package spx
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -63,6 +65,44 @@ func TestFlushSyncBufferDoesNotSubmitSerializationFailure(t *testing.T) {
 		}
 	}()
 	game.flushSyncBuffer()
+}
+
+func TestProxyTransformQueryAndBatchMatch(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	configurePenRenderOffsetSprite(sprite)
+	sprite.spriteState.IsVisible = true
+	sprite.transform().direction = 45
+	sprite.transform().rotationStyle = Normal
+
+	sprite.ensureProxyQueryStateSynced()
+	if got, want := spy.spriteMgr.position, mathf.NewVec2(50, 60); got != want {
+		t.Fatalf("query position = %v, want %v", got, want)
+	}
+	if got, want := spy.spriteMgr.rotation, engine.DegToRad(-45); got != want {
+		t.Fatalf("query rotation = %v, want %v", got, want)
+	}
+	if got, want := spy.spriteMgr.scale, mathf.NewVec2(1, 1); got != want {
+		t.Fatalf("query scale = %v, want %v", got, want)
+	}
+	if got, want := spy.spriteMgr.renderOffset, mathf.NewVec2(37, -24); got != want {
+		t.Fatalf("query offset = %v, want %v", got, want)
+	}
+	if !spy.spriteMgr.visible {
+		t.Fatal("query transform hid a visible sprite")
+	}
+
+	buffer := engine.NewSpriteSyncBuffer(1)
+	sprite.collectProxyUpdate(buffer)
+	if buffer.UpdateCount() != 0 {
+		t.Fatal("batch repeated an already synchronized transform")
+	}
+	sprite.markProxyDirty()
+	sprite.collectProxyUpdate(buffer)
+	want := []float32{1, 0, 101, 50, 60, float32(spy.spriteMgr.rotation), 1, 1, 37, -24, 1}
+	if got := buffer.Serialize(); !slices.Equal(got, want) {
+		t.Fatalf("batch transform = %v, want %v", got, want)
+	}
 }
 
 func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
