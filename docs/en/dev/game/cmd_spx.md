@@ -39,8 +39,8 @@ Most project commands accept `--path <directory>` and default to the current dir
 | Command | Description |
 | --- | --- |
 | `buildweb` | Build the project's WASM output. |
-| `runweb` | Build and serve a Web project. |
-| `runwebworker` | Build and serve in Web Worker mode. |
+| `runweb` | Package and serve a Web project. |
+| `runwebworker` | Package and serve in Web Worker mode. |
 | `exportweb` | Export the standard Web package. |
 | `exportwebworker` | Export the Web Worker package. |
 | `exporttemplateweb` | Export Web template assets. |

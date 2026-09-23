@@ -136,20 +136,12 @@ func (cmd *CmdTool) Reimport() error {
 }
 
 func (cmd *CmdTool) shouldSkipProjectImport() bool {
-	if cmd.RuntimeMode || cmd.usesPureEngine() {
+	spec, _ := findCommand(cmd.Args.CmdName)
+	if cmd.RuntimeMode || cmd.usesPureEngine() || spec.setup == webExportSetup {
 		return true
 	}
 	switch cmd.Args.CmdName {
 	case "buildtinygo", "buildweb":
-		return true
-	default:
-		return false
-	}
-}
-
-func shouldBuildWasmForProjectImport(cmdName string) bool {
-	switch cmdName {
-	case "runweb", "exportweb":
 		return true
 	default:
 		return false
@@ -161,14 +153,10 @@ func (cmd *CmdTool) projectImportCachePath() string {
 }
 
 func (cmd *CmdTool) buildProjectImportArtifacts() error {
-	switch {
-	case cmd.shouldSkipProjectImport():
+	if cmd.shouldSkipProjectImport() {
 		return nil
-	case shouldBuildWasmForProjectImport(cmd.Args.CmdName):
-		return cmd.BuildWasm()
-	default:
-		return cmd.BuildDll()
 	}
+	return cmd.BuildDll()
 }
 
 func (cmd *CmdTool) runProjectImport() error {
@@ -578,29 +566,6 @@ func resolveAppPath(gobinDir, tag, version string) (string, string, error) {
 		}
 	}
 	return binPostfix, cmdPath, nil
-}
-
-func (cmd *CmdTool) getProjectWasmPath() string {
-	return path.Join(cmd.ProjectDir, ".builds", "web", "ispx.wasm")
-}
-
-// getWasmPaths prefers project-local wasm.
-func (cmd *CmdTool) getWasmPaths() (string, string) {
-	projectWasmPath := cmd.getProjectWasmPath()
-	if util.IsFileExist(projectWasmPath) {
-		projectWasmBrPath := projectWasmPath + ".br"
-		if util.IsFileExist(projectWasmBrPath) {
-			return projectWasmPath, projectWasmBrPath
-		}
-		return projectWasmPath, ""
-	}
-
-	wasmPath := path.Join(cmd.GoBinPath, "ispx.wasm")
-	wasmBrPath := wasmPath + ".br"
-	if util.IsFileExist(wasmBrPath) {
-		return wasmPath, wasmBrPath
-	}
-	return wasmPath, ""
 }
 
 // getIspxWebDir returns the installed web runtime.
