@@ -58,11 +58,16 @@ func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
 
 func CopyInto[T any](dst, src []T, minCap int) []T {
 	requiredCap := max(minCap, len(src))
-	if cap(dst) < requiredCap {
+	oldLen := len(dst)
+	reused := cap(dst) >= requiredCap
+	if !reused {
 		dst = make([]T, len(src), requiredCap)
 	} else {
 		dst = dst[:len(src)]
 	}
 	copy(dst, src)
+	if reused && len(src) < oldLen {
+		clear(dst[:oldLen][len(src):])
+	}
 	return dst
 }

@@ -55,32 +55,25 @@ type shapeManager struct {
 	pendingClonePublications atomic.Bool
 }
 
+func resetSlice[T any](items []T, initialCap int) []T {
+	if items == nil && initialCap > 0 {
+		return make([]T, 0, initialCap)
+	}
+	clear(items)
+	return items[:0]
+}
+
 // init prepares internal buffers while preserving existing allocations when possible.
 func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
 	s.pendingClonePublications.Store(false)
-	if s.items == nil {
-		s.items = make([]Shape, 0, 64)
-	} else {
-		s.items = s.items[:0]
-	}
-	if s.tempItems == nil {
-		s.tempItems = make([]Shape, 0, 50)
-	} else {
-		s.tempItems = s.tempItems[:0]
-	}
-	if s.destroyItems == nil {
-		s.destroyItems = make([]Shape, 0, 16)
-	} else {
-		s.destroyItems = s.destroyItems[:0]
-	}
-	clear(s.textBubbles)
-	s.textBubbles = s.textBubbles[:0]
-	clear(s.activeTextBubbles)
-	s.activeTextBubbles = s.activeTextBubbles[:0]
-	clear(s.sayLayouts)
-	s.sayLayouts = s.sayLayouts[:0]
+	s.items = resetSlice(s.items, 64)
+	s.tempItems = resetSlice(s.tempItems, 50)
+	s.destroyItems = resetSlice(s.destroyItems, 16)
+	s.textBubbles = resetSlice(s.textBubbles, 0)
+	s.activeTextBubbles = resetSlice(s.activeTextBubbles, 0)
+	s.sayLayouts = resetSlice(s.sayLayouts, 0)
 	s.nextTextBubbleLayoutID = 0
 }
 
@@ -121,10 +114,8 @@ func (s *shapeManager) flushActivate(items []Shape) {
 }
 
 func (s *shapeManager) layoutTextBubbles(items []Shape) {
-	clear(s.textBubbles)
-	s.textBubbles = s.textBubbles[:0]
-	clear(s.sayLayouts)
-	s.sayLayouts = s.sayLayouts[:0]
+	s.textBubbles = resetSlice(s.textBubbles, 0)
+	s.sayLayouts = resetSlice(s.sayLayouts, 0)
 
 	for _, item := range items {
 		bubble, ok := item.(*textBubble)
@@ -145,8 +136,7 @@ func (s *shapeManager) layoutTextBubbles(items []Shape) {
 		}
 	}
 	if topologyChanged {
-		clear(s.activeTextBubbles)
-		s.activeTextBubbles = append(s.activeTextBubbles[:0], s.textBubbles...)
+		s.activeTextBubbles = append(resetSlice(s.activeTextBubbles, 0), s.textBubbles...)
 	}
 	if len(s.textBubbles) == 0 {
 		return
@@ -199,7 +189,7 @@ func (s *shapeManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
 		}
 	}
 
-	s.destroyItems = s.destroyItems[:0]
+	s.destroyItems = resetSlice(s.destroyItems, 0)
 }
 
 // add adds a shape immediately to the active list.
@@ -220,11 +210,6 @@ func (s *shapeManager) add(shape Shape) {
 // remove schedules a shape for destruction at the end of the frame.
 func (s *shapeManager) remove(shape Shape) {
 	s.destroyItems = append(s.destroyItems, shape)
-}
-
-// addShape delegates to add; kept for call-site consistency.
-func (s *shapeManager) addShape(child Shape) {
-	s.add(child)
 }
 
 // addClonedShape inserts a clone immediately behind the target it copied. This
