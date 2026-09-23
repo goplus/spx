@@ -26,6 +26,8 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
+const minCircleRadius = 0.01
+
 type PhysicsMode = int64
 
 const (
@@ -268,7 +270,7 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 	switch cfg.Type {
 	case physicsColliderCircle:
 		if len(cfg.Params) >= 1 {
-			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, 0.01))
+			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
 		}
 	case physicsColliderRect:
 		if len(cfg.Params) >= 2 {

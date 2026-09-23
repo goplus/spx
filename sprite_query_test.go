@@ -47,6 +47,7 @@ type touchingSyncSpriteMgr struct {
 	setTextureAtlasPathByID map[pkgengine.Object]string
 	collisionChecks         int
 	onCollision             func()
+	collisionResult         func(pkgengine.Object, pkgengine.Object) bool
 	onColorCollision        func()
 	panicVisibleTrue        any
 	panicVisibleFalse       any
@@ -141,6 +142,15 @@ func (s *touchingSyncSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf
 
 func (s *touchingSyncSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
 
+func (s *touchingSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
+
+func (s *touchingSyncSpriteMgr) SetMaterialParamsVec(pkgengine.Object, string, float64, float64, float64, float64) {
+}
+
+func (s *touchingSyncSpriteMgr) SetTriggerEnabled(pkgengine.Object, bool) {}
+
+func (s *touchingSyncSpriteMgr) SetCollisionEnabled(pkgengine.Object, bool) {}
+
 func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effect string, vec4 mathf.Vec4) {
 }
 
@@ -157,6 +167,9 @@ func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Obj
 	}
 	if !s.visible[obj] || !s.visible[objB] {
 		return false
+	}
+	if s.collisionResult != nil {
+		return s.collisionResult(obj, objB)
 	}
 	a, b := s.positions[obj], s.positions[objB]
 	return math.Abs(a.X-b.X) < 1e-9 && math.Abs(a.Y-b.Y) < 1e-9
@@ -175,7 +188,7 @@ func (s *touchingSyncSpriteMgr) CheckCollisionByColors(obj pkgengine.Object, spr
 	return s.CheckCollisionByColor(obj, targetColor, colorThreshold, alphaThreshold)
 }
 
-func installTouchingSyncSpriteMgr(t *testing.T, mgr *touchingSyncSpriteMgr) {
+func installTouchingSyncSpriteMgr(t testing.TB, mgr *touchingSyncSpriteMgr) {
 	t.Helper()
 
 	enginewrap.Init(func(call func()) {

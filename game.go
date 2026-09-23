@@ -26,7 +26,6 @@ import (
 	_ "github.com/goplus/spx/v3/fs/zip"
 
 	"github.com/goplus/spx/v3/internal/audio"
-	"github.com/goplus/spx/v3/internal/base/collision"
 	corestate "github.com/goplus/spx/v3/internal/core/state"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -126,7 +125,6 @@ type Game struct {
 	physicsPull   physicsPullBuffer
 	penSyncBuffer *engine.PenSyncBuffer
 	triggerEvents []engine.TriggerEvent
-	spatialHash   *collision.SpatialHash[*SpriteImpl]
 }
 
 func (p *Game) setDebugFlags(flags dbgFlags) {

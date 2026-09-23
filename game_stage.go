@@ -335,13 +335,6 @@ func (p *Game) touchingPoint(dst *SpriteImpl, x, y float64) bool {
 	return dst.touchPoint(x, y)
 }
 
-func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
-	if dst == nil {
-		return nil
-	}
-	return p.findTouchingSpriteOptimized(dst, name)
-}
-
 // -----------------------------------------------------------------------------
 // Path Finding
 // -----------------------------------------------------------------------------
