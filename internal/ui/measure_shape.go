@@ -28,19 +28,10 @@ type measureShape struct {
 	panel *UiMeasure
 }
 
-func NewMeasureShape(v coreproject.StageShape) any {
-	size := v["size"].(float64)
-	scale := coreproject.ShapeValue(v, "scale", 1.0).(float64)
-	text := strconv.FormatFloat(size, 'f', 1, 64)
+func NewMeasureShape(v coreproject.MeasureShape) any {
+	text := strconv.FormatFloat(v.Size, 'f', 1, 64)
 	text = strings.TrimSuffix(text, ".0")
-	heading := coreproject.ShapeValue(v, "heading", 0.0).(float64)
-	color, err := mathf.NewColorAny(coreproject.ShapeValue(v, "color", 0.0))
-	if err != nil {
-		panic(err)
-	}
-
-	pos := mathf.NewVec2(v["x"].(float64), v["y"].(float64))
 	panel := NewUiMeasure()
-	panel.UpdateInfo(pos, size*scale, heading, text, color)
+	panel.UpdateInfo(mathf.NewVec2(v.X, v.Y), v.Size*v.Scale, v.Heading, text, v.Color)
 	return &measureShape{panel: panel}
 }

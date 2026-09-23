@@ -186,7 +186,7 @@ func TestMonitorGetterVisibilityTakesEffectNextRefresh(t *testing.T) {
 	}
 }
 
-func TestParseMonitorAppearance(t *testing.T) {
+func TestMonitorAppearance(t *testing.T) {
 	tests := []struct {
 		name  string
 		mode  int
@@ -210,8 +210,8 @@ func TestParseMonitorAppearance(t *testing.T) {
 			if test.style != nil {
 				shape["style"] = test.style
 			}
-			if got := parseMonitorAppearance(shape); got != test.want {
-				t.Fatalf("parseMonitorAppearance(%v) = %v, want %v", shape, got, test.want)
+			if got := monitorAppearance(testMonitorShape(t, shape)); got != test.want {
+				t.Fatalf("monitorAppearance(%v) = %v, want %v", shape, got, test.want)
 			}
 		})
 	}
@@ -252,7 +252,7 @@ func TestStageMonitorFixture(t *testing.T) {
 			continue
 		}
 		got := monitorFixture{
-			appearance: parseMonitorAppearance(shape),
+			appearance: monitorAppearance(testMonitorShape(t, shape)),
 			target:     shape["target"].(string),
 			value:      shape["val"].(string),
 			x:          shape["x"].(float64),
@@ -271,4 +271,20 @@ func TestStageMonitorFixture(t *testing.T) {
 func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
 	binding, _ := bindMonitor(g, target, val, appearance)
 	return binding.read
+}
+
+func testMonitorShape(t *testing.T, fields coreproject.StageShape) coreproject.MonitorShape {
+	t.Helper()
+	shape := coreproject.StageShape{
+		"target": "", "val": "score", "name": "score", "label": "score",
+		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
+	}
+	for key, value := range fields {
+		shape[key] = value
+	}
+	parsed, err := coreproject.ParseMonitorShape(shape)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
 }

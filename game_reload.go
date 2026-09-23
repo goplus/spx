@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	tm "github.com/goplus/spx/v3/internal/tilemap"
 )
@@ -66,8 +65,14 @@ func (p *reloadPlan) validateZOrder(g *Game, shadow reflect.Value) error {
 		},
 		func(layer int, shape coreproject.StageShape) error {
 			err := coreproject.DispatchStageShape(shape, coreproject.StageShapeHandlers{
-				StageMonitor: validateReloadMonitor,
-				Measure:      validateReloadMeasure,
+				StageMonitor: func(shape coreproject.StageShape) error {
+					_, err := coreproject.ParseMonitorShape(shape)
+					return err
+				},
+				Measure: func(shape coreproject.StageShape) error {
+					_, err := coreproject.ParseMeasureShape(shape)
+					return err
+				},
 				Sprite: func(shape coreproject.StageShape) error {
 					return p.validateStageSprite(shape, shadow, layer)
 				},
@@ -366,58 +371,6 @@ func validateReloadAnimationFrame(kind, animation, field string, value any, layo
 	costumeCount := len(layout.Frames)
 	if index < 0 || index >= costumeCount {
 		return fmt.Errorf("%s[%q].%s index %d is outside %d costumes", kind, animation, field, index, costumeCount)
-	}
-	return nil
-}
-
-func validateReloadMonitor(shape coreproject.StageShape) error {
-	for _, key := range []string{"target", "val", "name", "label"} {
-		if err := validateReloadShapeField(shape, key, true, reflect.TypeFor[string]()); err != nil {
-			return err
-		}
-	}
-	if shape["mode"] != "list" && shape["mode"] != "slider" {
-		if err := validateReloadShapeField(shape, "mode", true, reflect.TypeFor[float64]()); err != nil {
-			return err
-		}
-	}
-	for _, key := range []string{"x", "y"} {
-		if err := validateReloadShapeField(shape, key, true, reflect.TypeFor[float64]()); err != nil {
-			return err
-		}
-	}
-	return validateReloadShapeField(shape, "visible", true, reflect.TypeFor[bool]())
-}
-
-func validateReloadMeasure(shape coreproject.StageShape) error {
-	for _, key := range []string{"size", "x", "y"} {
-		if err := validateReloadShapeField(shape, key, true, reflect.TypeFor[float64]()); err != nil {
-			return err
-		}
-	}
-	for _, key := range []string{"scale", "heading"} {
-		if err := validateReloadShapeField(shape, key, false, reflect.TypeFor[float64]()); err != nil {
-			return err
-		}
-	}
-	if color, ok := shape["color"]; ok {
-		if _, err := mathf.NewColorAny(color); err != nil {
-			return fmt.Errorf("stage shape field %q: %w", "color", err)
-		}
-	}
-	return nil
-}
-
-func validateReloadShapeField(shape coreproject.StageShape, key string, required bool, want reflect.Type) error {
-	value, ok := shape[key]
-	if !ok {
-		if required {
-			return fmt.Errorf("stage shape field %q is required", key)
-		}
-		return nil
-	}
-	if reflect.TypeOf(value) != want {
-		return fmt.Errorf("stage shape field %q has type %T, want %s", key, value, want)
 	}
 	return nil
 }
