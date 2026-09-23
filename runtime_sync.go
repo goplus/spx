@@ -129,10 +129,7 @@ func (p *Game) processPhysicsTriggers() {
 			return sprite, ok
 		},
 		isSpriteTouchable,
-		func(srcSprite, dstSprite *SpriteImpl) {
-			srcSprite.spriteState.HasOnTouchStart = true
-			srcSprite.fireTouchStart(dstSprite)
-		},
+		(*SpriteImpl).fireTouchStart,
 		func() {
 			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
 		},
