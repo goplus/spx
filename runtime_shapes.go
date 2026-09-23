@@ -23,7 +23,7 @@ func (p *SpriteImpl) getAllShapes() []Shape {
 }
 
 func (p *Game) addShape(child Shape) {
-	p.shapeMgr.addShape(child)
+	p.shapeMgr.add(child)
 }
 
 func (p *Game) addClonedShape(src, clone Shape) {

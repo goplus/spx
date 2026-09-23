@@ -287,7 +287,7 @@ func (p *Game) addSpecialShape(
 				spxlog.Error("Skip monitor %q: %v", config.Name, err)
 				return nil
 			}
-			p.shapeMgr.addShape(sm)
+			p.shapeMgr.add(sm)
 			return nil
 		},
 		Measure: func(shape coreproject.StageShape) error {
@@ -295,7 +295,7 @@ func (p *Game) addSpecialShape(
 			if err != nil {
 				return err
 			}
-			p.shapeMgr.addShape(ui.NewMeasureShape(config))
+			p.shapeMgr.add(ui.NewMeasureShape(config))
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
@@ -329,7 +329,7 @@ func (p *Game) addStageSprite(
 		}
 		dest := spriteOf(sp)
 		applySpriteProperties(dest, properties)
-		p.shapeMgr.addShape(dest)
+		p.shapeMgr.add(dest)
 		added = sp
 		return nil
 	})
@@ -372,7 +372,7 @@ func (p *Game) addStageSprites(
 			itemIndex++
 			spr := p.getSpriteProto(newItem.Type(), g, loadSprite)
 			dest, sp := instantiateStageSprite(newItem, spr, properties)
-			p.shapeMgr.addShape(dest)
+			p.shapeMgr.add(dest)
 			items = append(items, sp)
 			return nil
 		},

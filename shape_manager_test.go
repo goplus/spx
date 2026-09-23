@@ -35,6 +35,36 @@ func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
 	return game, sprites
 }
 
+func TestShapeManagerInitClearsReferences(t *testing.T) {
+	marker := &struct{}{}
+	s := shapeManager{
+		items:        []Shape{marker},
+		tempItems:    []Shape{marker},
+		destroyItems: []Shape{marker},
+	}
+	itemCap, tempCap, destroyCap := cap(s.items), cap(s.tempItems), cap(s.destroyItems)
+	s.init()
+	for name, shapes := range map[string][]Shape{
+		"items": s.items, "tempItems": s.tempItems, "destroyItems": s.destroyItems,
+	} {
+		if len(shapes) != 0 || shapes[:1][0] != nil {
+			t.Fatalf("%s retained a shape reference", name)
+		}
+	}
+	if cap(s.items) != itemCap || cap(s.tempItems) != tempCap || cap(s.destroyItems) != destroyCap {
+		t.Fatal("init changed reusable shape capacities")
+	}
+}
+
+func TestShapeManagerFlushDestroyClearsQueue(t *testing.T) {
+	marker := &struct{}{}
+	s := shapeManager{destroyItems: []Shape{marker}}
+	s.flushDestroy(nil)
+	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
+		t.Fatal("flushDestroy retained a shape reference")
+	}
+}
+
 func spriteOrderNames(shapes []Shape) []string {
 	names := make([]string, 0, len(shapes))
 	for _, shape := range shapes {

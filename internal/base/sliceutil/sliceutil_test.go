@@ -72,3 +72,27 @@ func TestCopyIntoHonorsMinCapForReusableSlices(t *testing.T) {
 		t.Fatalf("CopyInto cap = %d, want at least 4", cap(got))
 	}
 }
+
+func TestCopyIntoClearsTailAfterShortCopy(t *testing.T) {
+	a, b, c := new(int), new(int), new(int)
+	dst := []*int{a, b, c}
+	got := CopyInto(dst, []*int{a}, 0)
+	if len(got) != 1 || got[0] != a || cap(got) != cap(dst) {
+		t.Fatalf("CopyInto = %v, cap %d", got, cap(got))
+	}
+	if tail := got[:len(dst)][1:]; tail[0] != nil || tail[1] != nil {
+		t.Fatalf("CopyInto retained old tail: %v", tail)
+	}
+}
+
+func TestCopyIntoOverlappingSource(t *testing.T) {
+	a, b, c, d := new(int), new(int), new(int), new(int)
+	dst := []*int{a, b, c, d}
+	got := CopyInto(dst, dst[1:3], 0)
+	if len(got) != 2 || got[0] != b || got[1] != c {
+		t.Fatalf("CopyInto overlapping = %v", got)
+	}
+	if tail := got[:len(dst)][2:]; tail[0] != nil || tail[1] != nil {
+		t.Fatalf("CopyInto retained old tail: %v", tail)
+	}
+}

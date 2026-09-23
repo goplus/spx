@@ -144,8 +144,8 @@ func TestListMonitorVisibility(t *testing.T) {
 	g := &Game{}
 	global := &Monitor{target: "", val: "getVar:items"}
 	local := &Monitor{target: "Monkey", val: "items"}
-	g.shapeMgr.addShape(global)
-	g.shapeMgr.addShape(local)
+	g.shapeMgr.add(global)
+	g.shapeMgr.add(local)
 	g.ShowVar("items")
 	if !global.Visible() || local.Visible() || !global.isDirty {
 		t.Fatal("ShowVar did not select the global list")
