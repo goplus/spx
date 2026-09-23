@@ -505,12 +505,15 @@ func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepareReload error = %v", err)
 	}
-	loaded, ok := plan.spriteConfigs["Sprite"]
+	prepared, ok := plan.preparedSprites["Sprite"]
 	if !ok {
-		t.Fatal("reload plan does not contain Sprite config")
+		t.Fatal("reload plan does not contain prepared Sprite")
 	}
-	if got, want := loaded.Config.CostumeSet.Path, "sprites/Sprite/sprite.png"; got != want {
+	if got, want := prepared.config.CostumeSet.Path, "sprites/Sprite/sprite.png"; got != want {
 		t.Fatalf("normalized sprite path = %q, want %q", got, want)
+	}
+	if prepared.layout == nil || len(prepared.layout.Frames) != 2 {
+		t.Fatalf("prepared Sprite layout = %v, want two frames", prepared.layout)
 	}
 	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
 	finishThread()
