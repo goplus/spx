@@ -27,14 +27,18 @@ import (
 
 type reloadPlan struct {
 	project                  coreproject.ProjectConfig
-	spriteConfigs            map[string]coreproject.LoadedSpriteConfig
-	costumeLayouts           map[string]*coreproject.CostumeLayout
+	preparedSprites          map[string]preparedSprite
 	configNames              []string
 	directSprites            map[string]reflect.Type
 	prototypeByName          map[string]reflect.Type
 	costumeOverrides         []reloadCostumeOverride
 	preparedSpriteProperties stageSpriteProperties
 	tilemap                  tm.LoadResult
+}
+
+type preparedSprite struct {
+	config coreproject.SpriteConfig
+	layout *coreproject.CostumeLayout
 }
 
 type reloadCostumeOverride struct {
@@ -44,10 +48,10 @@ type reloadCostumeOverride struct {
 }
 
 func (p *reloadPlan) requireSpriteConfig(name string) {
-	if _, ok := p.spriteConfigs[name]; ok {
+	if _, ok := p.preparedSprites[name]; ok {
 		return
 	}
-	p.spriteConfigs[name] = coreproject.LoadedSpriteConfig{}
+	p.preparedSprites[name] = preparedSprite{}
 	p.configNames = append(p.configNames, name)
 }
 
@@ -167,11 +171,11 @@ func (p *reloadPlan) recordCostumeOverride(sprite, location string, properties s
 
 func (p *reloadPlan) validateCostumeOverrides() error {
 	for _, override := range p.costumeOverrides {
-		layout, ok := p.costumeLayouts[override.sprite]
+		prepared, ok := p.preparedSprites[override.sprite]
 		if !ok {
 			return fmt.Errorf("%s has no sprite configuration", override.location)
 		}
-		count := len(layout.Frames)
+		count := len(prepared.layout.Frames)
 		if override.index < 0 || override.index >= count {
 			return fmt.Errorf("%s costumeIndex %d is outside %d costumes", override.location, override.index, count)
 		}
@@ -225,15 +229,11 @@ func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 
 func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
 	return func(sprite Sprite, name string, gamer reflect.Value) error {
-		loaded, ok := p.spriteConfigs[name]
+		prepared, ok := p.preparedSprites[name]
 		if !ok {
 			return fmt.Errorf("reload plan has no sprite config for %q", name)
 		}
-		layout, ok := p.costumeLayouts[name]
-		if !ok {
-			return fmt.Errorf("reload plan has no costume layout for %q", name)
-		}
-		return g.loadSpriteConfigWithLayout(sprite, name, gamer, &loaded.Config, layout)
+		return g.loadSpriteConfigWithLayout(sprite, name, gamer, &prepared.config, prepared.layout)
 	}
 }
 
@@ -243,8 +243,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 	}
 
 	plan := &reloadPlan{
-		spriteConfigs:   make(map[string]coreproject.LoadedSpriteConfig),
-		costumeLayouts:  make(map[string]*coreproject.CostumeLayout),
+		preparedSprites: make(map[string]preparedSprite),
 		directSprites:   make(map[string]reflect.Type),
 		prototypeByName: make(map[string]reflect.Type),
 	}
@@ -293,8 +292,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
 		}
-		plan.spriteConfigs[name] = loaded
-		plan.costumeLayouts[name] = costumeLayout
+		plan.preparedSprites[name] = preparedSprite{config: loaded.Config, layout: costumeLayout}
 	}
 	if err := plan.validateCostumeOverrides(); err != nil {
 		return nil, fmt.Errorf("reload preflight: %w", err)
