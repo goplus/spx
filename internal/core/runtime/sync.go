@@ -16,45 +16,7 @@
 
 package runtime
 
-import (
-	"math"
-
-	"github.com/goplus/spx/v3/internal/engine"
-)
-
-func SyncBatchPositions[T any](
-	items []T,
-	shouldSync func(T) bool,
-	idOf func(T) int64,
-	fetchPositions func([]int64) []float32,
-	applyPosition func(T, float64, float64),
-) {
-	spriteIDs := make([]int64, 0, len(items))
-	targets := make([]T, 0, len(items))
-	for _, item := range items {
-		if !shouldSync(item) {
-			continue
-		}
-		spriteIDs = append(spriteIDs, idOf(item))
-		targets = append(targets, item)
-	}
-	if len(spriteIDs) == 0 {
-		return
-	}
-
-	positions := fetchPositions(spriteIDs)
-	for i, target := range targets {
-		if i*2+1 >= len(positions) {
-			return
-		}
-		x := float64(positions[i*2])
-		y := float64(positions[i*2+1])
-		if math.IsNaN(x) || math.IsNaN(y) {
-			continue
-		}
-		applyPosition(target, x, y)
-	}
-}
+import "github.com/goplus/spx/v3/internal/engine"
 
 func ProcessTriggerPairs[T any](
 	pairs []engine.TriggerEvent,
