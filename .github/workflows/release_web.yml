@@ -58,17 +58,7 @@ jobs:
         uses: ./.github/actions/install-linux-dependencies
         timeout-minutes: 20
         with:
-          packages: |
-            gcc
-            libgl1-mesa-dev
-            libegl1-mesa-dev
-            libgles2-mesa-dev
-            libx11-dev
-            xorg-dev
-            libasound2-dev
-            libopenal-dev
-            binaryen
-            brotli
+          profile: web
 
       - name: Set up toolchain and engine assets
         uses: ./.github/actions/deps

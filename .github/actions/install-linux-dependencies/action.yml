@@ -2,9 +2,14 @@ name: Install Linux dependencies
 description: Install APT packages with bounded retries and hard timeouts
 
 inputs:
+  profile:
+    description: Predefined package set (web or native)
+    required: false
+    default: ''
   packages:
-    description: Whitespace-separated APT package names
-    required: true
+    description: Whitespace-separated APT package names when no profile is set
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -12,9 +17,25 @@ runs:
     - name: Install APT packages
       shell: bash
       env:
+        APT_PROFILE: ${{ inputs.profile }}
         APT_PACKAGES: ${{ inputs.packages }}
       run: |
         set -Eeuo pipefail
+
+        base_packages='gcc libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libx11-dev xorg-dev libasound2-dev libopenal-dev'
+        case "$APT_PROFILE" in
+          web)
+            APT_PACKAGES="$base_packages binaryen brotli"
+            ;;
+          native)
+            APT_PACKAGES="$base_packages zip"
+            ;;
+          '') ;;
+          *)
+            echo "::error::Unknown APT profile: $APT_PROFILE"
+            exit 2
+            ;;
+        esac
 
         mapfile -t packages < <(
           printf '%s\n' "$APT_PACKAGES" |
