@@ -64,6 +64,7 @@ public:
 	}
 
 	void set_mode(LayerSortMode mode);
+	bool is_enabled() const { return sort_mode != LayerSortMode::NONE; }
 	void update(const Vector<ISortableSprite *> &sortables);
 
 	void add_static_sprite(ISortableSprite *sp);
