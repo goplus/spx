@@ -163,10 +163,12 @@ func (p *physicsComponent) setGravity(gravity float64) {
 // ============================================================================
 
 func (p *physicsComponent) setCollisionLayer(layer int64) {
+	p.collisionInfo.Layer = layer
 	p.sprite.runtimeState.SyncSprite.SetCollisionLayer(layer)
 }
 
 func (p *physicsComponent) setCollisionMask(mask int64) {
+	p.collisionInfo.Mask = mask
 	p.sprite.runtimeState.SyncSprite.SetCollisionMask(mask)
 }
 
@@ -191,10 +193,12 @@ func (p *physicsComponent) setTriggerEnabled(trigger bool) {
 }
 
 func (p *physicsComponent) setTriggerLayer(layer int64) {
+	p.triggerInfo.Layer = layer
 	p.sprite.runtimeState.SyncSprite.SetTriggerLayer(layer)
 }
 
 func (p *physicsComponent) setTriggerMask(mask int64) {
+	p.triggerInfo.Mask = mask
 	p.sprite.runtimeState.SyncSprite.SetTriggerMask(mask)
 }
 
@@ -215,7 +219,7 @@ func (p *physicsComponent) isTriggerEnabled() bool {
 // ============================================================================
 
 func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeType, params []float64) error {
-	config := p.getPhysicConfig(isTrigger)
+	config := p.colliderConfig(isTrigger)
 	candidate := *config
 	candidate.Type = ctype
 	candidate.Params = slices.Clone(params)
@@ -230,14 +234,14 @@ func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeT
 }
 
 func (p *physicsComponent) getColliderShape(isTrigger bool) (ColliderShapeType, []float64) {
-	config := p.getPhysicConfig(isTrigger)
+	config := p.colliderConfig(isTrigger)
 	params := make([]float64, len(config.Params))
 	copy(params, config.Params)
 	return config.Type, params
 }
 
 func (p *physicsComponent) setColliderPivot(isTrigger bool, offsetX, offsetY float64) {
-	config := p.getPhysicConfig(isTrigger)
+	config := p.colliderConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
 	if p.sprite.runtimeState.SyncSprite != nil {
 		p.applyPhysicShape(isTrigger)
@@ -245,19 +249,11 @@ func (p *physicsComponent) setColliderPivot(isTrigger bool, offsetX, offsetY flo
 }
 
 func (p *physicsComponent) getColliderPivot(isTrigger bool) (offsetX, offsetY float64) {
-	config := p.getPhysicConfig(isTrigger)
+	config := p.colliderConfig(isTrigger)
 	return config.Pivot.X, config.Pivot.Y
 }
 
-func (p *physicsComponent) getTriggerInfo() *physicConfig {
-	return &p.triggerInfo
-}
-
-func (p *physicsComponent) getCollisionInfo() *physicConfig {
-	return &p.collisionInfo
-}
-
-func (p *physicsComponent) getPhysicConfig(isTrigger bool) *physicConfig {
+func (p *physicsComponent) colliderConfig(isTrigger bool) *physicConfig {
 	if isTrigger {
 		return &p.triggerInfo
 	}
@@ -265,7 +261,7 @@ func (p *physicsComponent) getPhysicConfig(isTrigger bool) *physicConfig {
 }
 
 func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
-	config := p.getPhysicConfig(isTrigger)
+	config := p.colliderConfig(isTrigger)
 	if p.sprite.runtimeState.SyncSprite == nil {
 		return
 	}
