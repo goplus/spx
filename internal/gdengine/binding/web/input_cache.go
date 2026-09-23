@@ -29,10 +29,11 @@ var (
 	// Missing keys are unknown; false means released.
 	keyDown = map[int64]bool{}
 
-	actionMu    sync.Mutex
-	actionFrame uint64
-	actionBool  = map[string]bool{}
-	actionAxis  = map[string]float64{}
+	actionMu         sync.Mutex
+	actionFrame      uint64
+	actionGeneration uint64
+	actionBool       = map[string]bool{}
+	actionAxis       = map[string]float64{}
 )
 
 func RecordWebKeyState(key int64, pressed bool) {
@@ -102,10 +103,10 @@ func cachedActionBool(kind, action string, fallback func() bool) bool {
 	})
 }
 
-// Read unlocked to allow callbacks; discard cache writes if the frame changes.
+// Read unlocked to allow callbacks; discard writes after a frame or reset change.
 func cachedAction[T any](values map[string]T, key string, read func() T) T {
 	actionMu.Lock()
-	frame := actionFrame
+	generation := actionGeneration
 	value, ok := values[key]
 	actionMu.Unlock()
 	if ok {
@@ -115,7 +116,7 @@ func cachedAction[T any](values map[string]T, key string, read func() T) T {
 	value = read()
 
 	actionMu.Lock()
-	if actionFrame == frame {
+	if actionGeneration == generation {
 		values[key] = value
 	}
 	actionMu.Unlock()
@@ -129,6 +130,17 @@ func clearActionCache(frame uint64) {
 		return
 	}
 	actionFrame = frame
+	clearCachedActions()
+}
+
+func resetActionCache() {
+	actionMu.Lock()
+	defer actionMu.Unlock()
+	clearCachedActions()
+}
+
+func clearCachedActions() {
+	actionGeneration++
 	clear(actionBool)
 	clear(actionAxis)
 }

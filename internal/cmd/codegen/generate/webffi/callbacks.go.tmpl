@@ -41,6 +41,9 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		SyncWebInputSnapshot()
 		{{ else if or (eq $cbName "OnEngineStart") (eq $cbName "OnEngineDestroy") (eq $cbName "OnEngineReset") -}}
 		contactEventGeneration++
+		{{ if or (eq $cbName "OnEngineDestroy") (eq $cbName "OnEngineReset") -}}
+		defer resetActionCache()
+		{{ end -}}
 		{{ else if eq $cbName "OnKeyPressed" -}}
 		arg0 := JsTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
 		RecordWebKeyState(arg0, true)

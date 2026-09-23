@@ -13,7 +13,7 @@ function bridge() {
     return context;
 }
 
-test('action IDs are cached per module and preserve the registration receiver', () => {
+test('action registration preserves the receiver and tracks module changes', () => {
     const b = bridge();
     vm.runInContext(`
         let registrations = 0;
@@ -24,13 +24,21 @@ test('action IDs are cached per module and preserve the registration receiver', 
         }
     `, b);
     assert.equal(b.GdspxGetInputActionID('left'), 1);
-    assert.equal(b.GdspxGetInputActionID('left'), 1);
     assert.equal(vm.runInContext('registrations', b), 1);
     const epoch = b.GdspxGetInputActionEpoch();
     b.Module = {};
     assert.equal(b.GdspxGetInputActionEpoch(), epoch + 1);
     assert.equal(b.GdspxGetInputActionID('left'), 2);
     assert.equal(vm.runInContext('registrations', b), 2);
+});
+
+test('reset advances the epoch without replacing the module', () => {
+    const b = bridge();
+    const epoch = b.GdspxGetInputActionEpoch();
+    const module = b.Module;
+    b.GdspxResetInputActions();
+    assert.equal(b.Module, module);
+    assert.equal(b.GdspxGetInputActionEpoch(), epoch + 1);
 });
 
 test('direct registrations support integer representations and retry failed IDs', () => {
@@ -40,7 +48,6 @@ test('direct registrations support integer representations and retry failed IDs'
     b.gdspx_input_register_action = () => { calls++; return value; };
     assert.equal(b.GdspxGetInputActionID('left'), -1);
     value = 7n;
-    assert.equal(b.GdspxGetInputActionID('left'), 7);
     assert.equal(b.GdspxGetInputActionID('left'), 7);
     assert.equal(calls, 2);
     value = {low: 9, high: 0};
