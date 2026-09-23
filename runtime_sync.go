@@ -287,6 +287,25 @@ func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
 	}
 }
 
+type proxyTransform struct {
+	position, scale, renderOffset mathf.Vec2
+	rotation                      float64
+	visible                       bool
+}
+
+func (p *SpriteImpl) proxyTransform() proxyTransform {
+	x, y := p.getXY()
+	offsetX, offsetY := getRenderOffset(p)
+	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
+	return proxyTransform{
+		position:     mathf.NewVec2(x, y),
+		scale:        mathf.NewVec2(scaleX, scaleY),
+		renderOffset: mathf.NewVec2(offsetX, offsetY),
+		rotation:     engine.DegToRad(rotation),
+		visible:      p.effectiveProxyVisibility(),
+	}
+}
+
 func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
@@ -301,16 +320,14 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 		return
 	}
 
-	x, y := p.getXY()
-	renderOffsetX, renderOffsetY := getRenderOffset(p)
-	rot, scaleX, scaleY := getRenderRotationAndScale(p)
+	transform := p.proxyTransform()
 
 	p.runtimeState.SyncSprite.SetTransform(
-		mathf.NewVec2(x, y),
-		engine.DegToRad(rot),
-		mathf.NewVec2(scaleX, scaleY),
-		p.effectiveProxyVisibility(),
-		mathf.NewVec2(renderOffsetX, renderOffsetY),
+		transform.position,
+		transform.rotation,
+		transform.scale,
+		transform.visible,
+		transform.renderOffset,
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }
@@ -341,16 +358,14 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 }
 
 func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
-	x, y := p.getXY()
-	renderOffsetX, renderOffsetY := getRenderOffset(p)
-	rot, scaleX, scaleY := getRenderRotationAndScale(p)
+	transform := p.proxyTransform()
 	buffer.Add(
 		int64(p.runtimeState.SyncSprite.Id),
-		x, y,
-		engine.DegToRad(rot),
-		scaleX, scaleY,
-		renderOffsetX, renderOffsetY,
-		p.effectiveProxyVisibility(),
+		transform.position.X, transform.position.Y,
+		transform.rotation,
+		transform.scale.X, transform.scale.Y,
+		transform.renderOffset.X, transform.renderOffset.Y,
+		transform.visible,
 	)
 	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
 }
