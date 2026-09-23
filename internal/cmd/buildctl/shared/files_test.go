@@ -183,6 +183,8 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 
 	if err := fetchURLToFile(server.URL, dst); err == nil {
 		t.Fatal("expected interrupted download to fail")
+	} else if strings.Contains(err.Error(), "ended after") {
+		t.Fatalf("download hid the interrupted response error: %v", err)
 	}
 
 	content, err := os.ReadFile(dst)
@@ -259,5 +261,39 @@ func TestFetchURLToFileWithLimitRejectsChunkedBodyAboveLimit(t *testing.T) {
 	}
 	if matches, globErr := filepath.Glob(filepath.Join(tempDir, "ndk.zip.tmp-*")); globErr != nil || len(matches) != 0 {
 		t.Fatalf("temporary download files = %v, err = %v; want none", matches, globErr)
+	}
+}
+
+func TestDownloadURLReportsProgress(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "8")
+		_, _ = w.Write([]byte("contents"))
+	}))
+	defer server.Close()
+
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	var done, total int64
+	err := DownloadURL(server.URL, dst, 8, func(n, size int64) {
+		done, total = n, size
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done != 8 || total != 8 {
+		t.Fatalf("last progress = (%d, %d), want (8, 8)", done, total)
+	}
+	if data, err := os.ReadFile(dst); err != nil || string(data) != "contents" {
+		t.Fatalf("downloaded content = %q, err = %v", data, err)
+	}
+}
+
+func TestDownloadURLReturnsHTTPStatus(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	var statusErr *HTTPStatusError
+	err := DownloadURL(server.URL, filepath.Join(t.TempDir(), "asset.zip"), 8, nil)
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusNotFound {
+		t.Fatalf("DownloadURL error = %v, want typed HTTP 404", err)
 	}
 }

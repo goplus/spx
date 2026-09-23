@@ -70,7 +70,7 @@ func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
 			return err
 		}
 	}
-	return replaceDownloadedFile(tmpPath, dst)
+	return shared.ReplaceFile(tmpPath, dst)
 }
 
 func setLocalAssetDir(env *engineDownloadEnv, repoRoot, assetDir string, allowMissingManifest bool) error {
@@ -98,13 +98,13 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 	manifestPath := filepath.Join(env.cacheDir, lock.Manifest)
 	if env.assetDir == "" {
 		if err := fetchURLToFileWithLimit(env.urlPrefix+lock.Manifest, manifestPath, maxRuntimeManifestBytes); err != nil {
-			var statusErr *downloadHTTPStatusError
-			if errors.As(err, &statusErr) && statusErr.statusCode == http.StatusNotFound {
+			var statusErr *shared.HTTPStatusError
+			if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
 				return fmt.Errorf(
 					"locked runtime %s is unavailable: %s returned %s\n"+
 						"Published-asset setup requires a complete runtime release.\n"+
 						"Publish the locked runtime, or build from source with %q.",
-					lock.RuntimeReleaseTag(), lock.Manifest, statusErr.status, "make dev MODE=normal",
+					lock.RuntimeReleaseTag(), lock.Manifest, statusErr.Status, "make dev MODE=normal",
 				)
 			}
 			return fmt.Errorf("download runtime manifest: %w", err)
@@ -234,11 +234,7 @@ func copyEngineAssetAtomically(src, dst string) (err error) {
 		return err
 	}
 	output = nil
-	return replaceDownloadedFile(tmpPath, dst)
-}
-
-func replaceDownloadedFile(src, dst string) error {
-	return shared.ReplaceFile(src, dst)
+	return shared.ReplaceFile(tmpPath, dst)
 }
 
 func linkOrCopyFile(src, dst string) error {
