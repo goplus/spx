@@ -23,6 +23,7 @@ type polygonColliderSpriteMgr struct {
 	triggerEnabled   []bool
 	triggerLayer     int64
 	triggerMask      int64
+	triggerRectSize  mathf.Vec2
 }
 
 func (m *polygonColliderSpriteMgr) SetCollisionLayer(_ pkgengine.Object, layer int64) {
@@ -61,6 +62,10 @@ func (m *polygonColliderSpriteMgr) SetTriggerPolygon(_ pkgengine.Object, center 
 
 func (m *polygonColliderSpriteMgr) SetTriggerEnabled(_ pkgengine.Object, enabled bool) {
 	m.triggerEnabled = append(m.triggerEnabled, enabled)
+}
+
+func (m *polygonColliderSpriteMgr) SetTriggerRect(_ pkgengine.Object, _ mathf.Vec2, size mathf.Vec2) {
+	m.triggerRectSize = size
 }
 
 func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSpriteMgr) {
@@ -148,6 +153,51 @@ func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
 	wantRescaledPoints := []float32{-3, -6, 9, -12, 15, 18}
 	if !slices.Equal(mgr.collisionPoints, wantRescaledPoints) || !slices.Equal(mgr.triggerPoints, wantRescaledPoints) {
 		t.Fatalf("rescaled polygons = (%v, %v), want %v", mgr.collisionPoints, mgr.triggerPoints, wantRescaledPoints)
+	}
+}
+
+func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
+	sprite, mgr := newPolygonColliderTestSprite(t)
+	params := []float64{-1, -2, 3, -4, 5, 6}
+	for _, trigger := range []bool{false, true} {
+		if err := sprite.SetColliderShape(trigger, PolygonCollider, params); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sprite.SetCollisionEnabled(false)
+	sprite.SetTriggerEnabled(false)
+
+	sprite.runtimeState.Scale = 3
+	sprite.updatePhysicsShapesScale()
+	sprite.SetColliderPivot(false, 1, 2)
+	sprite.SetColliderPivot(true, 3, 4)
+	if !slices.Equal(mgr.collisionEnabled, []bool{true, false}) || !slices.Equal(mgr.triggerEnabled, []bool{true, false}) {
+		t.Fatalf("shape refresh changed enabled state: collision=%v trigger=%v", mgr.collisionEnabled, mgr.triggerEnabled)
+	}
+
+	if err := sprite.SetColliderShape(false, PolygonCollider, params); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(mgr.collisionEnabled, []bool{true, false, true}) {
+		t.Fatalf("explicit shape change did not enable collision: %v", mgr.collisionEnabled)
+	}
+}
+
+func TestCostumeRefreshKeepsTriggerDisabled(t *testing.T) {
+	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite.costumes[0].setIndex = -1
+	previous := cachedBounds
+	cachedBounds = map[string]mathf.Rect2{
+		sprite.costumes[0].path: {Size: mathf.NewVec2(20, 30)},
+	}
+	t.Cleanup(func() { cachedBounds = previous })
+	sprite.physics().triggerInfo.Params = []float64{1, 1}
+	sprite.SetTriggerEnabled(false)
+
+	sprite.markAutoPhysicsShapesDirty()
+	sprite.syncAutoPhysicsShapesAfterCostumeChange()
+	if !slices.Equal(mgr.triggerEnabled, []bool{false}) || mgr.triggerRectSize != mathf.NewVec2(44, 64) {
+		t.Fatalf("costume refresh: enabled=%v size=%v", mgr.triggerEnabled, mgr.triggerRectSize)
 	}
 }
 

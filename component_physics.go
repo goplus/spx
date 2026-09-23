@@ -229,7 +229,10 @@ func (p *physicsComponent) setColliderShape(isTrigger bool, ctype ColliderShapeT
 	}
 
 	*config = candidate
-	p.applyPhysicShape(isTrigger)
+	if proxy := p.sprite.runtimeState.SyncSprite; proxy != nil {
+		proxy.SetColliderEnabled(isTrigger, ctype != physicsColliderNone)
+		config.applyShape(proxy, isTrigger, p.sprite)
+	}
 	return nil
 }
 
@@ -243,8 +246,8 @@ func (p *physicsComponent) getColliderShape(isTrigger bool) (ColliderShapeType, 
 func (p *physicsComponent) setColliderPivot(isTrigger bool, offsetX, offsetY float64) {
 	config := p.colliderConfig(isTrigger)
 	config.Pivot = mathf.NewVec2(offsetX, offsetY)
-	if p.sprite.runtimeState.SyncSprite != nil {
-		p.applyPhysicShape(isTrigger)
+	if proxy := p.sprite.runtimeState.SyncSprite; proxy != nil {
+		config.applyShape(proxy, isTrigger, p.sprite)
 	}
 }
 
@@ -258,14 +261,6 @@ func (p *physicsComponent) colliderConfig(isTrigger bool) *physicConfig {
 		return &p.triggerInfo
 	}
 	return &p.collisionInfo
-}
-
-func (p *physicsComponent) applyPhysicShape(isTrigger bool) {
-	config := p.colliderConfig(isTrigger)
-	if p.sprite.runtimeState.SyncSprite == nil {
-		return
-	}
-	config.applyShape(p.sprite.runtimeState.SyncSprite, isTrigger, p.sprite)
 }
 
 // ============================================================================
