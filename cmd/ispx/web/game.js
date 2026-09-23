@@ -233,12 +233,24 @@ class GameApp {
     }
 
     async initEngine() {
-        await profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
-
         if (this.stopGameTask > 0) {
-            this.logVerbose("stopGame is called before runing game");
+            this.logVerbose("stopGame was called before engine initialization");
             return;
         }
+        if (this.game) {
+            this.logVerbose('A game is already running. Close it first');
+            return;
+        }
+
+        const engineReady = profiler.profile('onRunPrepareEngineWasm', () => this.onRunPrepareEngineWasm());
+        const logicReady = !this.workerMode && !this.minigameMode
+            ? fetch(this.wasmURL('ispx.wasm')) : null;
+        const packReady = fetch(this.assetURLs[this.packName]).then(response => response.arrayBuffer());
+        // Handle early rejections until these downloads are awaited.
+        if (logicReady) logicReady.catch(() => {});
+        packReady.catch(() => {});
+        await engineReady;
+        if (this.stopGameTask > 0) return;
 
         let args = [
             '--main-pack', this.persistentPath + "/" + this.packName,
@@ -248,12 +260,6 @@ class GameApp {
         }
 
         this.logVerbose("RunGame ", args);
-        if (this.game) {
-            this.logVerbose('A game is already running. Close it first');
-            resolve();
-            return;
-        }
-
         this.onProgress(0.5);
         this.game = new Engine(this.gameConfig);
         let curGame = this.game;
@@ -269,14 +275,15 @@ class GameApp {
             }
         });
 
-        await profiler.profile('onRunBeforeInit', () => this.onRunBeforeInit());
+        await profiler.profile('onRunBeforeInit', () => this.onRunBeforeInit(logicReady));
         this.onProgress(0.5);
 
         await profiler.profile('curGame.init',  () => curGame.init());
 
         this.onProgress(0.6);
 
-        await profiler.profile('unpackData', () => this.unpackEngineData(curGame));
+        await profiler.profile('unpackData', () => packReady.then(data =>
+            curGame.unpackEngineData(this.persistentPath, this.packName, data)));
 
         this.onProgress(0.7);
 
@@ -460,12 +467,6 @@ class GameApp {
         }
     }
 
-    async unpackEngineData(game) {
-        let packUrl = this.assetURLs[this.packName]
-        let pckData = await (await fetch(packUrl)).arrayBuffer()
-        await game.unpackEngineData(this.persistentPath, this.packName, pckData)
-    }
-
     ensureInputReplaySupported() {
         if (!this.normalMode) {
             throw new Error('Input recording and replay are only supported in normal Web mode')
@@ -551,12 +552,13 @@ class GameApp {
         }
     }
 
-    async onRunPrepareEngineWasm() {
-        let url = this.assetURLs["engine.wasm"]
-        if (isWasmCompressed) {
-            url += ".br"
-        }
+    wasmURL(name) {
+        const url = this.assetURLs[name]
+        return isWasmCompressed ? url + '.br' : url
+    }
 
+    async onRunPrepareEngineWasm() {
+        const url = this.wasmURL('engine.wasm')
         if (this.minigameMode) {
             this.gameConfig.wasmEngine = url
         } else if (!this.gameConfig.wasmEngine) {
@@ -564,13 +566,13 @@ class GameApp {
         }
     }
 
-    async onRunBeforeInit() {
+    async onRunBeforeInit(logicReady) {
         if (this.minigameMode) {
             GameGlobal.engine = this.game;
             godotSdk.set_engine(this.game);
             self['initExtensionWasm'] = function () { }
         } else if (!this.workerMode) {
-            await profiler.profile('loadLogicWasm', () => this.loadLogicWasm());
+            await profiler.profile('loadLogicWasm', () => this.loadLogicWasm(logicReady));
             await profiler.profile('runLogicWasm', () => this.runLogicWasm());
             self['initExtensionWasm'] = function () { }
         }
@@ -604,11 +606,8 @@ class GameApp {
         }
     }
 
-    async loadLogicWasm() {
-        let url = this.config.assetURLs["ispx.wasm"];
-        if (isWasmCompressed) {
-            url += ".br"
-        }
+    async loadLogicWasm(logicReady) {
+        const url = this.wasmURL('ispx.wasm')
         this.go = new Go();
         if (this.minigameMode) {
             // load wasm in miniEngine
@@ -623,7 +622,7 @@ class GameApp {
                 configurable: true
             });
         } else {
-            const { instance } = await WebAssembly.instantiateStreaming(fetch(url), this.go.importObject);
+            const { instance } = await WebAssembly.instantiateStreaming(logicReady || fetch(url), this.go.importObject);
             this.logicWasmInstance = instance;
         }
     }
