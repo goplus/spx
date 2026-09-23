@@ -37,16 +37,21 @@ func TestInputActionCache(t *testing.T) {
 	for _, kind := range []string{"pressed", "just_pressed", "just_released", "axis"} {
 		t.Run(kind, func(t *testing.T) {
 			previousAPI, previousIDs := API, actionIDs
-			previousFrame, previousBool, previousAxis := actionFrame, actionBool, actionAxis
+			previousFrame, previousGeneration := actionFrame, actionGeneration
+			previousBool, previousAxis := actionBool, actionAxis
+			previousReset, previousDestroy := callbacks.OnEngineReset, callbacks.OnEngineDestroy
 			API.SpxInputIsActionPressedId = js.Undefined()
 			API.SpxInputIsActionJustPressedId = js.Undefined()
 			API.SpxInputIsActionJustReleasedId = js.Undefined()
 			API.SpxInputGetAxisId = js.Undefined()
 			actionIDs = map[string]int{"left": 1, "right": 2}
-			actionFrame, actionBool, actionAxis = 1, map[string]bool{}, map[string]float64{}
+			actionFrame, actionGeneration = 1, 0
+			actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 			t.Cleanup(func() {
 				API, actionIDs = previousAPI, previousIDs
-				actionFrame, actionBool, actionAxis = previousFrame, previousBool, previousAxis
+				actionFrame, actionGeneration = previousFrame, previousGeneration
+				actionBool, actionAxis = previousBool, previousAxis
+				callbacks.OnEngineReset, callbacks.OnEngineDestroy = previousReset, previousDestroy
 			})
 			query := func(fallback func() float64) float64 {
 				if kind == "axis" {
@@ -92,6 +97,32 @@ func TestInputActionCache(t *testing.T) {
 			if query(fallback) != 0 || calls != 3 {
 				t.Fatal("a read spanning frames must not populate the new frame")
 			}
+
+			callbacks.OnEngineReset = func() {
+				if query(func() float64 { calls++; return 1 }) != 0 || calls != 3 {
+					t.Fatal("teardown callback must see the current frame")
+				}
+			}
+			gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineReset})
+			callbacks.OnEngineReset = nil
+			if query(fallback) != 0 || calls != 4 {
+				t.Fatal("reset must refresh cached results within the same frame")
+			}
+			gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineDestroy})
+			if query(fallback) != 0 || calls != 5 {
+				t.Fatal("destroy must refresh cached results within the same frame")
+			}
+			gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineReset})
+			if query(func() float64 {
+				gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineReset})
+				return 1
+			}) != 1 {
+				t.Fatal("a read spanning reset must still return its result")
+			}
+			if query(fallback) != 0 || calls != 6 {
+				t.Fatal("a read spanning reset must not populate the cache")
+			}
+
 			clearActionCache(5)
 			func() {
 				defer func() {
@@ -102,7 +133,7 @@ func TestInputActionCache(t *testing.T) {
 				query(func() float64 { panic("read failed") })
 			}()
 			query(fallback)
-			if calls != 4 {
+			if calls != 7 {
 				t.Fatal("failed reads must not populate the cache")
 			}
 		})

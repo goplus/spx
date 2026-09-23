@@ -43,7 +43,6 @@ var (
 func SyncWebInputSnapshot() {
 	inputSnap.frame++
 	clearActionCache(inputSnap.frame)
-	syncActionIDCache()
 
 	bindings := js.Global().Get("GdspxFuncs")
 	if bindings.Type() != js.TypeFunction {
@@ -99,11 +98,12 @@ func webActionBool(kind, action string) (bool, bool) {
 }
 
 func webActionAxis(neg, pos string) (float64, bool) {
-	negID, ok := webActionID(neg)
+	syncActionIDCache()
+	negID, ok := lookupActionID(neg)
 	if !ok {
 		return 0, false
 	}
-	posID, ok := webActionID(pos)
+	posID, ok := lookupActionID(pos)
 	if !ok {
 		return 0, false
 	}
@@ -121,17 +121,13 @@ func webActionAxis(neg, pos string) (float64, bool) {
 }
 
 func webActionID(action string) (int, bool) {
+	syncActionIDCache()
+	return lookupActionID(action)
+}
+
+func lookupActionID(action string) (int, bool) {
 	actionIDMu.RLock()
 	id, ok := actionIDs[action]
-	actionIDMu.RUnlock()
-	if ok {
-		return id, true
-	}
-
-	syncActionIDCache()
-
-	actionIDMu.RLock()
-	id, ok = actionIDs[action]
 	actionIDMu.RUnlock()
 	if ok {
 		return id, true

@@ -220,6 +220,25 @@ test('runtime notifications keep dedicated exports and numeric exit codes', () =
     ]);
 });
 
+test('reset and destroy advance action IDs after teardown callbacks', () => {
+    const b = engineBridge();
+    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.input.js'), 'utf8'));
+    const calls = [];
+    const epoch = b.context.GdspxGetInputActionEpoch();
+    b.context.FFI = {
+        gdspx_on_runtime_reset: () => calls.push(['runtime', b.context.GdspxGetInputActionEpoch()]),
+        gdspx_dispatch: event => calls.push([event, b.context.GdspxGetInputActionEpoch()]),
+    };
+    b.callbacks.godot_js_spx_on_engine_reset();
+    b.callbacks.godot_js_spx_on_reset_done(0n);
+    b.callbacks.godot_js_spx_on_engine_destroy();
+    b.callbacks.godot_js_spx_on_engine_destroyed();
+    assert.deepEqual(calls, [
+        ['OnEngineReset', epoch], ['runtime', epoch + 1],
+        ['OnEngineDestroy', epoch + 1], ['OnEngineDestroyed', epoch + 2],
+    ]);
+});
+
 for (const batched of [true, false]) {
     test(`contacts preserve signed IDs and order before frame dispatch (batched=${batched})`, () => {
         const b = engineBridge();

@@ -62,6 +62,48 @@ func TestActionQueriesUseGeneratedBindings(t *testing.T) {
 	}
 }
 
+func TestActionIDsRefreshAfterReset(t *testing.T) {
+	global := js.Global()
+	previousEpoch := global.Get("GdspxGetInputActionEpoch")
+	previousRegister := global.Get("GdspxGetInputActionID")
+	previousIDs, previousID := actionIDs, actionEpoch
+	t.Cleanup(func() {
+		global.Set("GdspxGetInputActionEpoch", previousEpoch)
+		global.Set("GdspxGetInputActionID", previousRegister)
+		actionIDs, actionEpoch = previousIDs, previousID
+	})
+
+	epoch, id, registrations := 1, 7, 0
+	epochFn := js.FuncOf(func(js.Value, []js.Value) any { return epoch })
+	registerFn := js.FuncOf(func(js.Value, []js.Value) any {
+		registrations++
+		return id
+	})
+	defer epochFn.Release()
+	defer registerFn.Release()
+	global.Set("GdspxGetInputActionEpoch", epochFn)
+	global.Set("GdspxGetInputActionID", registerFn)
+	actionIDs = map[string]int{}
+	actionEpoch = 0
+
+	for range 2 {
+		if got, ok := webActionID("left"); !ok || got != 7 {
+			t.Fatalf("before reset: got (%d, %v)", got, ok)
+		}
+	}
+	if registrations != 1 {
+		t.Fatalf("registered %d times before reset", registrations)
+	}
+
+	epoch, id = 2, 9
+	if got, ok := webActionID("left"); !ok || got != 9 {
+		t.Fatalf("after reset: got (%d, %v)", got, ok)
+	}
+	if registrations != 2 {
+		t.Fatalf("registered %d times after reset", registrations)
+	}
+}
+
 func TestInputSnapshotUsesGeneratedOutputReader(t *testing.T) {
 	previousBindings, previousSnapshot := js.Global().Get("GdspxFuncs"), inputSnap
 	t.Cleanup(func() {

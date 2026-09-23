@@ -119,6 +119,13 @@ const GodotGdspx = {
 			}
 		},
 
+		resetInputActions: function () {
+			const reset = globalThis['GdspxResetInputActions'];
+			if (typeof reset === 'function') {
+				reset();
+			}
+		},
+
 		contactEvents: [],
 		contactSessionActive: true,
 		contactSessionGeneration: 0,
@@ -248,6 +255,7 @@ const GodotGdspx = {
 	godot_js_spx_on_engine_destroy__sig: 'v',
 	godot_js_spx_on_engine_destroy: function () {
 		GodotGdspx.endContactSession("OnEngineDestroy");
+		GodotGdspx.resetInputActions();
 	},
 
 	godot_js_spx_on_engine_destroyed__sig: 'v',
@@ -258,6 +266,7 @@ const GodotGdspx = {
 	godot_js_spx_on_engine_reset__sig: 'v',
 	godot_js_spx_on_engine_reset: function () {
 		GodotGdspx.endContactSession("OnEngineReset");
+		GodotGdspx.resetInputActions();
 	},
 
 	godot_js_spx_on_reset_done__sig: 'vj',

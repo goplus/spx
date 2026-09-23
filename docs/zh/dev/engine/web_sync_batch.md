@@ -94,6 +94,7 @@ action name 已增加注册表：
 - JS 将 action name 转成 Godot string 并调用 `gdspx_input_register_action`。
 - Godot 保存 `action id -> StringName`。
 - 后续 `IsActionPressed` / `IsActionJustPressed` / `IsActionJustReleased` / `GetAxis` 只传数字 id。
+- 引擎重置或销毁后，JS 更新注册代数；Go 下次查询时重新注册 action id。
 
 这把 action 字符串跨桥成本限制在首次注册，普通帧只走数字参数。
 
