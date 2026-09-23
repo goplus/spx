@@ -146,10 +146,13 @@ func TestShouldReimport(t *testing.T) {
 	}{
 		{name: "skips buildweb", cmdName: "buildweb", want: false},
 		{name: "reimports web template export", cmdName: "exporttemplateweb", want: true},
-		{name: "reimports exportweb when cache missing", cmdName: "exportweb", want: true},
+		{name: "skips exportweb", cmdName: "exportweb", want: false},
+		{name: "skips exportwebworker", cmdName: "exportwebworker", want: false},
+		{name: "skips exportminigame", cmdName: "exportminigame", want: false},
+		{name: "skips exportminiprogram", cmdName: "exportminiprogram", want: false},
 		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
 		{name: "skips pure engine mode", cmdName: "build", tags: "pure_engine", want: false},
-		{name: "skips when cache exists", cmdName: "exportweb", cacheExists: true, want: false},
+		{name: "skips when cache exists", cmdName: "exporttemplateweb", cacheExists: true, want: false},
 	}
 
 	for _, tt := range tests {

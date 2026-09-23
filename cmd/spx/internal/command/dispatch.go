@@ -29,6 +29,7 @@ const (
 	pathSetup
 	projectSetup
 	interpretedSetup
+	webExportSetup
 )
 
 type commandBuild uint8
@@ -63,18 +64,18 @@ var commandSpecs = []commandSpec{
 	{name: "editor", group: "Development & Building", summary: "Open the project in editor mode", setup: projectSetup, build: dllBuild, run: (*CmdTool).executeEditor},
 	{name: "rune", group: "Development & Building", summary: "Run with engine after importing assets", setup: projectSetup, build: dllBuild, run: (*CmdTool).executeRune},
 	{name: "buildweb", group: "Web Development", summary: "Build for WebAssembly (WASM)", setup: projectSetup, build: wasmBuild},
-	{name: "runweb", group: "Web Development", summary: "Launch the web server", setup: projectSetup, build: wasmBuild, runtime: true, run: (*CmdTool).RunWeb},
-	{name: "runwebworker", group: "Web Development", summary: "Run with a web worker", setup: projectSetup, build: wasmBuild, runtime: true, run: (*CmdTool).RunWebWorker},
-	{name: "exportweb", group: "Web Development", summary: "Export the web package", setup: projectSetup, build: wasmBuild, run: (*CmdTool).ExportWeb},
-	{name: "exportwebworker", group: "Web Development", summary: "Export the web worker package", setup: projectSetup, run: (*CmdTool).ExportWebWorker},
+	{name: "runweb", group: "Web Development", summary: "Launch the web server", setup: webExportSetup, runtime: true, run: (*CmdTool).RunWeb},
+	{name: "runwebworker", group: "Web Development", summary: "Run with a web worker", setup: webExportSetup, runtime: true, run: (*CmdTool).RunWebWorker},
+	{name: "exportweb", group: "Web Development", summary: "Export the web package", setup: webExportSetup, run: (*CmdTool).ExportWeb},
+	{name: "exportwebworker", group: "Web Development", summary: "Export the web worker package", setup: webExportSetup, run: (*CmdTool).ExportWebWorker},
 	{name: "exporttemplateweb", group: "Web Development", summary: "Export the web template project", setup: projectSetup, run: (*CmdTool).ExportTemplateWeb},
 	{name: "stopweb", group: "Web Development", summary: "Stop the web server", setup: pathSetup, run: (*CmdTool).StopWeb},
 	{name: "export", group: "Export & Distribution", summary: "Export the PC package", setup: projectSetup, build: dllBuild, run: (*CmdTool).Export},
 	{name: "exportpack", group: "Export & Distribution", summary: "Export project data for the desktop runtime", setup: projectSetup, build: dllBuild, hidden: true, run: (*CmdTool).ExportPack},
 	{name: "exportapk", group: "Export & Distribution", summary: "Export an Android APK", setup: projectSetup, run: (*CmdTool).ExportApk},
 	{name: "exportios", group: "Export & Distribution", summary: "Export an iOS package", setup: projectSetup, run: (*CmdTool).ExportIos},
-	{name: "exportminigame", group: "Export & Distribution", summary: "Export a minigame package", setup: projectSetup, run: (*CmdTool).ExportMinigame},
-	{name: "exportminiprogram", group: "Export & Distribution", summary: "Export a mini program package", setup: projectSetup, run: (*CmdTool).ExportMiniprogram},
+	{name: "exportminigame", group: "Export & Distribution", summary: "Export a minigame package", setup: webExportSetup, run: (*CmdTool).ExportMinigame},
+	{name: "exportminiprogram", group: "Export & Distribution", summary: "Export a mini program package", setup: webExportSetup, run: (*CmdTool).ExportMiniprogram},
 	{name: "exportbot", group: "Export & Distribution", summary: "Reserved; not implemented", unavailable: true},
 	{name: "runm", group: "Multiplayer", summary: "Reserved; not implemented", unavailable: true},
 }
@@ -114,7 +115,7 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 		return nil
 	case interpretedSetup:
 		return cmd.setupInterpretedPaths(dstRelDir)
-	case pathSetup, projectSetup:
+	case pathSetup, projectSetup, webExportSetup:
 		if err := cmd.setupPaths(dstRelDir); err != nil {
 			return err
 		}
@@ -131,6 +132,9 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	// Work around goplus/spx#619.
 	os.Setenv("GODEBUG", "asyncpreemptoff=1")
 	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
+	if spec.setup == webExportSetup {
+		return nil
+	}
 	return cmd.SetupEnv(cmd.Version, cmd.ProjectFS, fsRelDir, dstRelDir)
 }
 

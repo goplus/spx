@@ -17,11 +17,122 @@
 package command
 
 import (
+	"archive/zip"
 	"bytes"
+	"embed"
+	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+//go:embed template/project/* template/project/.godot/* template/platform/web/* template/platform/webnormal/*
+var webExportTestFS embed.FS
+
+func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
+	projectRoot := t.TempDir()
+	t.Chdir(projectRoot)
+	if err := os.MkdirAll(filepath.Join(projectRoot, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{
+		"main.spx":          "onStart => {}\n",
+		"assets/index.json": "{}\n",
+		"go.sum":            "existing sums\n",
+	} {
+		if err := os.WriteFile(filepath.Join(projectRoot, name), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".temp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, ".temp", "keep"), []byte("session"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectRoot, "project"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectRoot, "project", "old.txt"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	goPath := t.TempDir()
+	binDir := filepath.Join(goPath, "bin")
+	runtimeDir := filepath.Join(binDir, "gdspxrttest_webnormal")
+	for _, dir := range []string{runtimeDir, filepath.Join(binDir, "ispx")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, data := range map[string]string{
+		filepath.Join(runtimeDir, "godot.editor.html"): "<html>runtime</html>",
+		filepath.Join(binDir, "ispx", "runner.js"):     "interpreter runtime",
+		filepath.Join(binDir, "ispx.wasm"):             "interpreter wasm",
+	} {
+		if err := os.WriteFile(name, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOPATH", goPath)
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
+
+	previousFlags, previousArgs := flag.CommandLine, os.Args
+	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = []string{"spx", "exportweb", "--path", projectRoot}
+	t.Cleanup(func() { flag.CommandLine, os.Args = previousFlags, previousArgs })
+
+	cmd := &CmdTool{PlatformFS: webExportTestFS}
+	if err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project"); err != nil {
+		t.Fatalf("exportweb: %v", err)
+	}
+	webDir := filepath.Join(projectRoot, "project", ".builds", "web")
+	for name, want := range map[string]string{
+		"index.html": "<html>runtime</html>",
+		"ispx.wasm":  "interpreter wasm",
+		"base.txt":   "web test base\n",
+		"normal.txt": "web test normal\n",
+		"runner.js":  "interpreter runtime",
+	} {
+		got, err := os.ReadFile(filepath.Join(webDir, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("exported %s = %q, %v; want %q", name, got, err, want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, "project", ".godot", "gdspx_web_server.py")); err != nil {
+		t.Fatalf("web server template is missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, "project", "old.txt")); !os.IsNotExist(err) {
+		t.Fatalf("stale web project file remains: %v", err)
+	}
+	for _, name := range []string{"go.sum", ".temp"} {
+		if _, err := os.Stat(filepath.Join(projectRoot, name)); !os.IsNotExist(err) {
+			t.Fatalf("transient %s remains: %v", name, err)
+		}
+	}
+
+	archive, err := zip.OpenReader(filepath.Join(webDir, "game.zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	found := map[string]bool{}
+	for _, entry := range archive.File {
+		found[entry.Name] = true
+	}
+	for _, name := range []string{"main.spx", "assets/index.json"} {
+		if !found[name] {
+			t.Fatalf("game.zip is missing %s", name)
+		}
+	}
+	for _, name := range []string{"go.sum", ".temp/", ".temp/keep", "project/old.txt"} {
+		if found[name] {
+			t.Fatalf("game.zip contains transient %s", name)
+		}
+	}
+}
 
 func TestWebLogicAssetsUseInterpreterRuntime(t *testing.T) {
 	targetDir := t.TempDir()
@@ -36,7 +147,7 @@ func TestWebLogicAssetsUseInterpreterRuntime(t *testing.T) {
 	}
 
 	projectWasm := []byte("project-compiled-wasm")
-	projectWasmPath := cmd.getProjectWasmPath()
+	projectWasmPath := filepath.Join(webDir, "ispx.wasm")
 	if err := os.MkdirAll(filepath.Dir(projectWasmPath), 0o755); err != nil {
 		t.Fatalf("mkdir project wasm dir: %v", err)
 	}

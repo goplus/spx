@@ -250,16 +250,20 @@ func TestCommandRuntimeMode(t *testing.T) {
 	}
 }
 
-func TestCommandWasmBuild(t *testing.T) {
+func TestWebCommandSetup(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmdName string
-		want    bool
+		name, cmdName string
+		setup         commandSetup
+		build         commandBuild
 	}{
-		{name: "buildweb", cmdName: "buildweb", want: true},
-		{name: "exportweb", cmdName: "exportweb", want: true},
-		{name: "runweb", cmdName: "runweb", want: true},
-		{name: "runwebworker", cmdName: "runwebworker", want: true},
+		{name: "buildweb", cmdName: "buildweb", setup: projectSetup, build: wasmBuild},
+		{name: "exportweb", cmdName: "exportweb", setup: webExportSetup},
+		{name: "runweb", cmdName: "runweb", setup: webExportSetup},
+		{name: "runwebworker", cmdName: "runwebworker", setup: webExportSetup},
+		{name: "exportwebworker", cmdName: "exportwebworker", setup: webExportSetup},
+		{name: "exportminigame", cmdName: "exportminigame", setup: webExportSetup},
+		{name: "exportminiprogram", cmdName: "exportminiprogram", setup: webExportSetup},
+		{name: "exporttemplateweb", cmdName: "exporttemplateweb", setup: projectSetup},
 	}
 
 	for _, tt := range tests {
@@ -268,8 +272,8 @@ func TestCommandWasmBuild(t *testing.T) {
 			if !ok {
 				t.Fatalf("command %q not found", tt.cmdName)
 			}
-			if got := spec.build == wasmBuild; got != tt.want {
-				t.Fatalf("command %q builds WASM = %v, want %v", tt.cmdName, got, tt.want)
+			if spec.setup != tt.setup || spec.build != tt.build {
+				t.Fatalf("command %q setup/build = %v/%v, want %v/%v", tt.cmdName, spec.setup, spec.build, tt.setup, tt.build)
 			}
 		})
 	}
@@ -667,65 +671,6 @@ func mustWriteAssetIndex(t *testing.T, projectDir string) {
 	}
 	if err := os.WriteFile(filepath.Join(assetDir, "index.json"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatalf("write assets/index.json: %v", err)
-	}
-}
-
-func TestGetWasmPathsPrefersProjectBuild(t *testing.T) {
-	projectDir := t.TempDir()
-	cmd := CmdTool{
-		ProjectDir: projectDir,
-		GoBinPath:  filepath.Join(projectDir, "gobin"),
-	}
-
-	projectWasm := filepath.Join(projectDir, ".builds", "web", "ispx.wasm")
-	if err := os.MkdirAll(filepath.Dir(projectWasm), 0755); err != nil {
-		t.Fatalf("mkdir project wasm dir: %v", err)
-	}
-	if err := os.WriteFile(projectWasm, []byte("project"), 0644); err != nil {
-		t.Fatalf("write project wasm: %v", err)
-	}
-	if err := os.WriteFile(projectWasm+".br", []byte("project-br"), 0644); err != nil {
-		t.Fatalf("write project wasm br: %v", err)
-	}
-
-	if err := os.MkdirAll(cmd.GoBinPath, 0755); err != nil {
-		t.Fatalf("mkdir gobin: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(cmd.GoBinPath, "ispx.wasm"), []byte("gobin"), 0644); err != nil {
-		t.Fatalf("write gobin wasm: %v", err)
-	}
-
-	gotWasm, gotWasmBr := cmd.getWasmPaths()
-	if gotWasm != projectWasm {
-		t.Fatalf("getWasmPaths wasm = %s, want %s", gotWasm, projectWasm)
-	}
-	if gotWasmBr != projectWasm+".br" {
-		t.Fatalf("getWasmPaths wasm br = %s, want %s", gotWasmBr, projectWasm+".br")
-	}
-}
-
-func TestGetWasmPathsFallsBackToGoBin(t *testing.T) {
-	projectDir := t.TempDir()
-	goBinPath := filepath.Join(projectDir, "gobin")
-	cmd := CmdTool{
-		ProjectDir: projectDir,
-		GoBinPath:  goBinPath,
-	}
-
-	if err := os.MkdirAll(goBinPath, 0755); err != nil {
-		t.Fatalf("mkdir gobin: %v", err)
-	}
-	goBinWasm := filepath.Join(goBinPath, "ispx.wasm")
-	if err := os.WriteFile(goBinWasm, []byte("gobin"), 0644); err != nil {
-		t.Fatalf("write gobin wasm: %v", err)
-	}
-
-	gotWasm, gotWasmBr := cmd.getWasmPaths()
-	if gotWasm != goBinWasm {
-		t.Fatalf("getWasmPaths wasm = %s, want %s", gotWasm, goBinWasm)
-	}
-	if gotWasmBr != "" {
-		t.Fatalf("getWasmPaths wasm br = %s, want empty", gotWasmBr)
 	}
 }
 
