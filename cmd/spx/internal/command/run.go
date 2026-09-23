@@ -35,10 +35,6 @@ import (
 	"github.com/goplus/spx/v3/internal/interpruntime"
 )
 
-func (cmd *CmdTool) Run(arg string) (err error) {
-	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, arg)
-}
-
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 	return cmd.runInterpretedEngine(cmd.RuntimeCmdPath, cmd.LibPath, "native", pargs...)
 }
@@ -116,10 +112,6 @@ func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
 
 	binaryPath := filepath.Join(cmd.GoDir, binaryName)
 	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
-}
-
-func (cmd *CmdTool) RunWithAiMode(pargs ...string) error {
-	return cmd.RunPackMode(pargs...)
 }
 
 // RunInterpreted runs the project with a prebuilt runtime.

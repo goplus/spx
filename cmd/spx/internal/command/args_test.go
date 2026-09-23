@@ -41,9 +41,9 @@ func TestParseCommandLineArgsRejectsRemovedGoEnv(t *testing.T) {
 	}
 }
 
-func TestCheckCmdAcceptsInternalExportPack(t *testing.T) {
-	cmd := &CmdTool{Args: ExtraArgs{CmdName: "exportpack"}}
-	if !cmd.CheckCmd() {
-		t.Fatal("internal exportpack command was rejected")
+func TestInternalExportPackCommand(t *testing.T) {
+	spec, ok := findCommand("exportpack")
+	if !ok || !spec.hidden || spec.run == nil {
+		t.Fatalf("exportpack spec = %+v, found %v", spec, ok)
 	}
 }

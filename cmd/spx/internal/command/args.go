@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 )
 
@@ -79,33 +78,6 @@ func (e *ExtraArgs) String() []string {
 	return args
 }
 
-// CheckCmd reports whether the command is supported.
-func (cmd *CmdTool) CheckCmd(ext ...string) bool {
-	cmds := []string{
-		"help", "version", "editor",
-		"init", "clear", "clearbuild",
-		"build", "buildtinygo", "rune", "export", "exportpack", "buildlauncher",
-		"runweb", "buildweb", "exportweb", "stopweb", "runwebworker",
-		"runm", "exportbot", "exportapk", "exportios",
-		"run", "runnative", "exporttemplateweb", "exportminigame", "exportminiprogram", "exportwebworker",
-	}
-	cmds = append(cmds, ext...)
-
-	cmdName := cmd.Args.CmdName
-	return slices.Contains(cmds, cmdName)
-}
-func (cmd *CmdTool) CheckCmdWithError(ext ...string) (err error) {
-	if len(os.Args) <= 1 {
-		cmd.ShowHelpInfo()
-		return
-	}
-	if !cmd.CheckCmd(ext...) {
-		logErrorf("Invalid command; please refer to help")
-		cmd.ShowHelpInfo()
-	}
-	return
-}
-
 func (cmd *CmdTool) SafeTagArgs() string {
 	tags := cmd.Args.Tags
 	if tags == nil || *tags == "" {
@@ -118,51 +90,19 @@ func (cmd *CmdTool) SafeTagArgs() string {
 func (cmd *CmdTool) ShowHelpInfo() {
 	cmdName := cmd.AppName
 	version := cmd.Version
+	fmt.Printf("%s Version = %s\n\nUsage:\n\n    %s <command> [arguments]\n\nAvailable commands:\n", cmdName, version, cmdName)
+	group := ""
+	for _, spec := range commandSpecs {
+		if spec.hidden {
+			continue
+		}
+		if spec.group != group {
+			group = spec.group
+			fmt.Printf("\n    %s:\n", group)
+		}
+		fmt.Printf("    - %-17s # %s\n", spec.name, spec.summary)
+	}
 	msg := `
-Usage:
-
-    #CMDNAME <command> [arguments]
-
-Available commands:
-
-    Basic Commands:
-    - help            # Display help information
-    - version         # Display version information
-
-    Project Management:
-    - init            # Create a #CMDNAME project in the current directory
-    - clear           # Clear the project
-    - clearbuild      # Clear build artifacts
-
-    Development & Building:
-    - build           # Build the dynamic library
-    - buildlauncher   # Build a launcher without Godot or an XGo driver
-    - buildtinygo     # Build static library using TinyGo for ESP32
-    - run             # Run the current project in interpreted mode
-    - runnative       # Run the current project with the native PC runtime
-    - editor          # Open the current project in editor mode
-    - rune            # Run with engine after import all assets
-
-    Web Development:
-    - buildweb        # Build for WebAssembly (WASM)
-    - runweb          # Launch the web server
-    - runwebworker    # Run web worker
-    - exportweb       # Export the web package
-    - exportwebworker # Export web worker package
-    - exporttemplateweb # Export template web package
-    - stopweb         # Stop the web server
-
-    Export & Distribution:
-    - export          # Export the PC package (macOS, Windows, Linux)
-    - exportapk       # Export Android APK
-    - exportios       # Export iOS package
-    - exportminigame  # Export minigame package (supports -build=fast for faster build)
-    - exportminiprogram # Export mini program package
-    - exportbot       # Export the bot package
-
-    Multiplayer:
-    - runm            # Run the project in multiplayer mode
-
 Examples:
 
     #CMDNAME init                         # Create a project in current path
@@ -177,7 +117,7 @@ Examples:
     #CMDNAME runnative -tags=pure_engine  # Run in pure engine mode
     #CMDNAME export --fullscreen          # Export with fullscreen mode
 	`
-	fmt.Println(cmdName + " Version = " + version + "\n" + strings.ReplaceAll(msg, "#CMDNAME", cmdName))
+	fmt.Println(strings.ReplaceAll(msg, "#CMDNAME", cmdName))
 
 	fmt.Println("Available Arguments:")
 	flag.PrintDefaults()
@@ -210,10 +150,10 @@ func (cmd *CmdTool) initializeFlags() *bool {
 	return help
 }
 
-// parseCommandLineArgs parses the CLI input.
-func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
-	if len(os.Args) == 1 || os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "h" {
-		cmd.ShowHelpInfo()
+// parseCommandLineArgs parses flags and selects the command.
+func (cmd *CmdTool) parseCommandLineArgs(help *bool) error {
+	if len(os.Args) <= 1 || os.Args[1] == "help" || os.Args[1] == "-h" || os.Args[1] == "h" {
+		cmd.Args.CmdName = "help"
 		return nil
 	}
 
@@ -223,12 +163,7 @@ func (cmd *CmdTool) parseCommandLineArgs(help *bool, ext ...string) error {
 	}
 
 	if *help {
-		cmd.ShowHelpInfo()
-		return nil
-	}
-
-	if !cmd.CheckCmd(ext...) {
-		return fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
+		cmd.Args.CmdName = "help"
 	}
 
 	return nil

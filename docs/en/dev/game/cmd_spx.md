@@ -8,7 +8,7 @@ spx help
 spx version
 ```
 
-Most project commands accept `--path <directory>` and default to the current directory. The command list follows `cmd/spx/internal/command/args.go` and the command execution switch. `runm` and `exportbot` are accepted for compatibility but currently have no execution implementation.
+Most project commands accept `--path <directory>` and default to the current directory. The command list follows `cmd/spx/internal/command/dispatch.go`. The reserved commands `runm` and `exportbot` return a "not implemented" error and exit unsuccessfully.
 
 ## Command groups
 
@@ -32,7 +32,7 @@ Most project commands accept `--path <directory>` and default to the current dir
 | `runnative` | Run with the native desktop runtime. |
 | `rune` | Import assets and run with the editor runtime. |
 | `export` | Export a desktop package. |
-| `runm` | Not implemented; currently performs no multiplayer work. |
+| `runm` | Reserved; exits with a "not implemented" error. |
 
 ### Web development
 
@@ -54,7 +54,7 @@ Most project commands accept `--path <directory>` and default to the current dir
 | `exportios` | Export an iOS package. |
 | `exportminigame` | Export a mini-game package. |
 | `exportminiprogram` | Export a mini-program package. |
-| `exportbot` | Not implemented; currently produces no bot package. |
+| `exportbot` | Reserved; exits with a "not implemented" error. |
 | `buildtinygo` | Build a TinyGo static library for the selected board. |
 
 ## Command details
@@ -90,7 +90,7 @@ The host must have the matching desktop export template/runtime assets.
 
 ### Multiplayer
 
-`runm` is currently retained as a parsed command name but does not start a server or client. The `--onlys`, `--onlyc`, and `--serveraddr` flags do not enable multiplayer until the command is implemented.
+`runm` is reserved and returns an error without starting a server or client. The `--onlys`, `--onlyc`, and `--serveraddr` flags do not enable multiplayer until the command is implemented.
 
 ### Web
 

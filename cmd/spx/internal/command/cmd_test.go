@@ -60,3 +60,84 @@ func TestRunCmdPropagatesSpecialCommandErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRunCmdHelpSkipsProjectSetup(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"no command", []string{"spx"}},
+		{"help command", []string{"spx", "help"}},
+		{"short help", []string{"spx", "-h"}},
+		{"command help", []string{"spx", "build", "-h"}},
+		{"version", []string{"spx", "version"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Chdir(root)
+			oldFlags, oldArgs := flag.CommandLine, os.Args
+			flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+			flag.CommandLine.SetOutput(io.Discard)
+			os.Args = tt.args
+			t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+
+			cmd := &CmdTool{}
+			if err := cmd.RunCmd("spx", ".spx", "test", embed.FS{}, "", "project"); err != nil {
+				t.Fatalf("RunCmd(%v): %v", tt.args, err)
+			}
+			if cmd.ProjectDir != "" || cmd.TargetDir != "" {
+				t.Fatalf("help prepared a project: ProjectDir=%q TargetDir=%q", cmd.ProjectDir, cmd.TargetDir)
+			}
+			if cwd, err := os.Getwd(); err != nil || cwd != root {
+				t.Fatalf("working directory = %q, %v; want %q", cwd, err, root)
+			}
+		})
+	}
+}
+
+func TestRunCmdRejectsUnavailableAndUnknownCommands(t *testing.T) {
+	for _, tt := range []struct{ name, want string }{
+		{"runm", "not implemented"},
+		{"exportbot", "not implemented"},
+		{"typo", "unknown command"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Chdir(root)
+			oldFlags, oldArgs := flag.CommandLine, os.Args
+			flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+			flag.CommandLine.SetOutput(io.Discard)
+			os.Args = []string{"spx", tt.name}
+			t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+
+			cmd := &CmdTool{}
+			err := cmd.RunCmd("spx", ".spx", "test", embed.FS{}, "", "project")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("RunCmd(%s) error = %v; want %q", tt.name, err, tt.want)
+			}
+			if cmd.ProjectDir != "" || cmd.TargetDir != "" {
+				t.Fatalf("rejected command prepared a project: ProjectDir=%q TargetDir=%q", cmd.ProjectDir, cmd.TargetDir)
+			}
+		})
+	}
+}
+
+func TestCommandSpecsHaveExecution(t *testing.T) {
+	seen := make(map[string]bool)
+	for _, spec := range commandSpecs {
+		if spec.name == "" || spec.group == "" || spec.summary == "" {
+			t.Errorf("command has incomplete help metadata: %+v", spec)
+		}
+		if seen[spec.name] {
+			t.Errorf("command %q appears more than once", spec.name)
+		}
+		seen[spec.name] = true
+		if spec.run == nil && spec.build == noBuild && !spec.unavailable && spec.name != "help" && spec.name != "version" {
+			t.Errorf("command %q can succeed without doing work", spec.name)
+		}
+		if spec.unavailable && (spec.setup != noSetup || spec.build != noBuild || spec.run != nil) {
+			t.Errorf("unavailable command %q has execution steps", spec.name)
+		}
+	}
+}

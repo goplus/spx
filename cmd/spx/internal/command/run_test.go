@@ -224,7 +224,7 @@ func TestHasInstalledWebRuntimeAssetsIsModeSpecific(t *testing.T) {
 	}
 }
 
-func TestIsRuntimeModeCommand(t *testing.T) {
+func TestCommandRuntimeMode(t *testing.T) {
 	tests := []struct {
 		name    string
 		cmdName string
@@ -239,14 +239,18 @@ func TestIsRuntimeModeCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isRuntimeModeCommand(tt.cmdName); got != tt.want {
-				t.Fatalf("isRuntimeModeCommand(%q) = %v, want %v", tt.cmdName, got, tt.want)
+			spec, ok := findCommand(tt.cmdName)
+			if !ok {
+				t.Fatalf("command %q not found", tt.cmdName)
+			}
+			if spec.runtime != tt.want {
+				t.Fatalf("command %q runtime = %v, want %v", tt.cmdName, spec.runtime, tt.want)
 			}
 		})
 	}
 }
 
-func TestShouldBuildWasmForCommand(t *testing.T) {
+func TestCommandWasmBuild(t *testing.T) {
 	tests := []struct {
 		name    string
 		cmdName string
@@ -260,8 +264,12 @@ func TestShouldBuildWasmForCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := shouldBuildWasmForCommand(tt.cmdName); got != tt.want {
-				t.Fatalf("shouldBuildWasmForCommand(%q) = %v, want %v", tt.cmdName, got, tt.want)
+			spec, ok := findCommand(tt.cmdName)
+			if !ok {
+				t.Fatalf("command %q not found", tt.cmdName)
+			}
+			if got := spec.build == wasmBuild; got != tt.want {
+				t.Fatalf("command %q builds WASM = %v, want %v", tt.cmdName, got, tt.want)
 			}
 		})
 	}
