@@ -8,7 +8,7 @@
 spx <命令> [参数]
 ```
 
-本文中的命令清单以 `cmd/spx/internal/command/args.go` 和命令执行逻辑为准。`runm` 和 `exportbot` 目前虽然会被命令行解析器接受，但没有实际执行逻辑，下面会单独标注为“未实现”。
+本文中的命令清单以 `cmd/spx/internal/command/dispatch.go` 为准。保留命令 `runm` 和 `exportbot` 当前会返回“未实现”错误，并以非零状态退出。
 
 ## 命令分类
 
@@ -35,7 +35,7 @@ SPX 命令工具提供以下几类命令：
 | `runnative` | 以原生 PC 运行时运行当前项目 |
 | `rune` | 在编辑器模式下运行当前项目 |
 | `export` | 导出 PC 包（macOS、Windows、Linux） |
-| `runm` | 未实现；当前不会启动多人模式 |
+| `runm` | 保留命令；返回“未实现”错误 |
 
 ### Web 开发命令
 
@@ -53,13 +53,13 @@ SPX 命令工具提供以下几类命令：
 
 | 命令 | 描述 |
 | --- | --- |
-| `exportbot` | 导出机器人包 |
+| `exportbot` | 保留命令；返回“未实现”错误 |
 | `exportapk` | 导出 Android APK |
 | `exportios` | 导出 iOS 包 |
 | `exportminigame` | 导出微信小游戏包 |
 | `exportminiprogram` | 导出微信小程序包 |
 
-`exportbot` 当前与 `runm` 一样只被解析器保留，尚未实现导出逻辑。
+`exportbot` 与 `runm` 一样仅保留命令名称，尚未实现导出逻辑。
 
 ## 命令详细说明
 
@@ -186,11 +186,11 @@ spx export
 
 #### `runm`
 
-当前命令解析器保留了 `runm` 名称，但没有多人模式执行逻辑，执行不会启动服务器或客户端。`--onlys`、`--onlyc` 和 `--serveraddr` 只是已注册的通用参数，不能使该命令获得多人模式功能。
+当前保留了 `runm` 命令名称，但没有多人模式执行逻辑。执行时会返回“未实现”错误，不会启动服务器或客户端。`--onlys`、`--onlyc` 和 `--serveraddr` 只是已注册的通用参数，不能使该命令获得多人模式功能。
 
 ```bash
 # 运行多人模式
-spx runm  # 当前未实现，不建议用于实际运行
+spx runm  # 当前返回错误，不会启动多人模式
 ```
 
 ### Web 开发命令
@@ -259,10 +259,10 @@ spx exporttemplateweb
 
 #### `exportbot`
 
-当前命令解析器保留了 `exportbot` 名称，但没有机器人导出逻辑，执行不会生成机器人包。
+当前保留了 `exportbot` 命令名称，但没有机器人导出逻辑。执行时会返回“未实现”错误，不会生成机器人包。
 
 ```bash
-spx exportbot  # 当前未实现，不建议使用
+spx exportbot  # 当前返回错误，不会生成机器人包
 ```
 
 #### `exportapk`

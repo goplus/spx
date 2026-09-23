@@ -68,7 +68,7 @@ type CmdTool struct {
 }
 
 // RunCmd runs the CLI.
-func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS, fsRelDir string, dstRelDir string, ext ...string) (err error) {
+func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS, fsRelDir string, dstRelDir string) error {
 	cmd.AppName = projectName
 	cmd.FileSuffix = fileSuffix
 	cmd.Version = version
@@ -82,83 +82,25 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	cmd.GoBinPath, _ = filepath.Abs(filepath.Join(paths[0], "bin"))
 
 	cmd.Args = ExtraArgs{}
-	if len(os.Args) < 2 {
-		cmd.ShowHelpInfo()
-		return
-	}
-
 	help := cmd.initializeFlags()
-
-	err = cmd.parseCommandLineArgs(help, ext...)
-	if err != nil {
+	if err := cmd.parseCommandLineArgs(help); err != nil {
 		logErrorf("%v", err)
 		return err
 	}
 	if cmd.Args.Verbose != nil && *cmd.Args.Verbose {
 		enableDebugLogging()
 	}
-	if cmd.Args.CmdName == "buildlauncher" {
-		if *help {
-			return nil
-		}
-		if err := cmd.runBuildLauncher(); err != nil {
-			logErrorf("Building launcher: %v", err)
-			return err
-		}
-		return nil
-	}
-
-	if cmd.Args.CmdName == "init" {
-		err = cmd.Init()
-		if err != nil {
-			logErrorf("Initializing project: %v", err)
-		}
+	spec, ok := findCommand(cmd.Args.CmdName)
+	if !ok {
+		err := fmt.Errorf("unknown command: %s", cmd.Args.CmdName)
+		logErrorf("%v", err)
 		return err
 	}
-	if isInterpretedRunCommand(cmd.Args.CmdName) {
-		err = cmd.setupInterpretedPaths(dstRelDir)
-		if err != nil {
-			logErrorf("Setting up interpreted paths: %v", err)
-			return err
-		}
-		err = cmd.handleInterpretedRunCommand()
-		if err != nil {
-			logErrorf("Executing interpreted run command: %v", err)
-		}
+	if err := cmd.dispatch(spec, fsRelDir, dstRelDir); err != nil {
+		logErrorf("Executing %s: %v", spec.name, err)
 		return err
 	}
-
-	err = cmd.setupPaths(dstRelDir)
-	if err != nil {
-		logErrorf("Setting up paths: %v", err)
-		return err
-	}
-
-	if handled, err := cmd.handleSpecialCommands(); handled {
-		return err
-	}
-	if isRuntimeModeCommand(cmd.Args.CmdName) {
-		cmd.RuntimeMode = true
-	}
-
-	err = cmd.CheckEnv()
-	if err != nil {
-		logErrorf("Environment check failed: %v", err)
-		return err
-	}
-
-	// Work around goplus/spx#619.
-	os.Setenv("GODEBUG", "asyncpreemptoff=1")
-
-	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
-
-	err = cmd.SetupEnv(version, fs, fsRelDir, dstRelDir)
-	if err != nil {
-		logErrorf("Setting up environment: %v", err)
-		return err
-	}
-
-	return cmd.executeCommand()
+	return nil
 }
 
 // setupInterpretedPaths resolves the source and session roots without changing
@@ -174,114 +116,6 @@ func (cmd *CmdTool) setupInterpretedPaths(dstRelDir string) error {
 	cmd.Args.Path = &cmd.TargetDir
 	cmd.ProjectDir = filepath.Join(cmd.TargetAbsDir, dstRelDir)
 	return nil
-}
-
-// handleSpecialCommands handles commands without setup.
-func (cmd *CmdTool) handleSpecialCommands() (handled bool, err error) {
-	switch cmd.Args.CmdName {
-	case "help", "version":
-		cmd.ShowHelpInfo()
-		return true, nil
-	case "clear":
-		err = cmd.Clear()
-		if err != nil {
-			logErrorf("Clearing project: %v", err)
-		}
-		return true, err
-	case "clearbuild":
-		err = cmd.ClearBuild()
-		if err != nil {
-			logErrorf("Clearing build artifacts: %v", err)
-		}
-		return true, err
-	case "stopweb":
-		err = cmd.StopWeb()
-		if err != nil {
-			logErrorf("Stopping web server: %v", err)
-		}
-		return true, err
-	}
-	return false, nil
-}
-
-// executeCommand runs the main command flow.
-func (cmd *CmdTool) executeCommand() error {
-	if err := cmd.handleBuildPhase(); err != nil {
-		return err
-	}
-
-	err := cmd.handleExecutionPhase()
-	if err != nil {
-		logErrorf("Executing command: %v", err)
-	}
-	return err
-
-}
-
-// handleBuildPhase runs the build step.
-func (cmd *CmdTool) handleBuildPhase() error {
-	logDebugf("Handling build phase: command=%s %s", cmd.Args.CmdName, cmd.SafeTagArgs())
-
-	switch cmd.Args.CmdName {
-	case "buildtinygo":
-		logDebugf("Running TinyGo library build")
-		return cmd.BuildTinyGoLib()
-	case "editor", "rune", "export", "exportpack", "build", "runnative":
-		logDebugf("Checking DLL build conditions")
-		if cmd.Args.Tags == nil || !strings.Contains(*cmd.Args.Tags, "pure_engine") {
-			logDebugf("Running DLL build")
-			return cmd.BuildDll()
-		} else {
-			logDebugf("Skipping DLL build for pure_engine mode")
-		}
-	default:
-		if shouldBuildWasmForCommand(cmd.Args.CmdName) {
-			logDebugf("Running WebAssembly build")
-			return cmd.BuildWasm()
-		}
-		logDebugf("No build phase needed for command: %s", cmd.Args.CmdName)
-	}
-	return nil
-}
-
-// handleExecutionPhase runs the command step.
-func (cmd *CmdTool) handleExecutionPhase() error {
-	switch cmd.Args.CmdName {
-	case "buildtinygo":
-		return nil
-	case "editor":
-		return cmd.executeEditor()
-	case "rune":
-		return cmd.executeRune()
-	case "run":
-		return nil
-	case "runnative":
-		return cmd.executeRunNative()
-	case "runweb":
-		return cmd.RunWeb()
-	case "runwebworker":
-		return cmd.RunWebWorker()
-	case "export":
-		return cmd.Export()
-	case "exportpack":
-		return cmd.ExportPack()
-	case "exporttemplateweb":
-		return cmd.ExportTemplateWeb()
-	case "exportweb":
-		return cmd.ExportWeb()
-	case "exportwebworker":
-		return cmd.ExportWebWorker()
-	case "exportapk":
-		return cmd.ExportApk()
-	case "exportios":
-		return cmd.ExportIos()
-	case "exportminigame":
-		return cmd.ExportMinigame()
-	case "exportminiprogram":
-		return cmd.ExportMiniprogram()
-	default:
-		return nil
-	}
 }
 
 // executeEditor runs the editor command.
@@ -323,35 +157,6 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 		args = append(args, "--write-movie", fpath)
 	}
 	return args
-}
-
-func isInterpretedRunCommand(cmdName string) bool {
-	switch cmdName {
-	case "run":
-		return true
-	default:
-		return false
-	}
-}
-
-// isRuntimeModeCommand reports whether the command uses runtime assets.
-func isRuntimeModeCommand(cmdName string) bool {
-	switch cmdName {
-	case "runnative", "runweb", "runwebworker":
-		return true
-	default:
-		return false
-	}
-}
-
-// shouldBuildWasmForCommand reports whether the command needs wasm output.
-func shouldBuildWasmForCommand(cmdName string) bool {
-	switch cmdName {
-	case "buildweb", "exportweb", "runweb", "runwebworker":
-		return true
-	default:
-		return false
-	}
 }
 
 // handleInterpretedRunCommand runs the interpreted-mode command with minimal setup.
