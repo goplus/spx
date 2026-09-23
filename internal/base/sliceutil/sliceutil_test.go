@@ -88,11 +88,23 @@ func TestCopyIntoClearsTailAfterShortCopy(t *testing.T) {
 func TestCopyIntoOverlappingSource(t *testing.T) {
 	a, b, c, d := new(int), new(int), new(int), new(int)
 	dst := []*int{a, b, c, d}
-	got := CopyInto(dst, dst[1:3], 0)
+	src := dst[1:3]
+	got := CopyInto(dst, src, 0)
 	if len(got) != 2 || got[0] != b || got[1] != c {
 		t.Fatalf("CopyInto overlapping = %v", got)
 	}
-	if tail := got[:len(dst)][2:]; tail[0] != nil || tail[1] != nil {
-		t.Fatalf("CopyInto retained old tail: %v", tail)
+	if src[0] != b || src[1] != c || !reflect.DeepEqual(dst, []*int{a, b, c, d}) {
+		t.Fatal("CopyInto changed overlapping source")
+	}
+	if &got[0] == &dst[0] {
+		t.Fatal("CopyInto reused overlapping storage")
+	}
+}
+
+func TestCopyIntoOverlappingEmptyDestination(t *testing.T) {
+	backing := []int{1, 2, 3}
+	got := CopyInto(backing[:0], backing[1:], 0)
+	if !reflect.DeepEqual(got, []int{2, 3}) || !reflect.DeepEqual(backing, []int{1, 2, 3}) {
+		t.Fatalf("CopyInto = %v, backing = %v", got, backing)
 	}
 }
