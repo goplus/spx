@@ -215,6 +215,12 @@ func (p *SpriteImpl) stopIfCurrentCoroutine() {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
+var spriteImplType = reflect.TypeFor[SpriteImpl]()
+
+func isSpriteBaseField(typ reflect.Type, index int) bool {
+	return index >= 0 && index < typ.NumField() && typ.Field(index).Type == spriteImplType
+}
+
 func spriteOf(sprite Sprite) *SpriteImpl {
 	vSpr := reflect.ValueOf(sprite)
 	if vSpr.Kind() == reflect.Pointer {
@@ -223,10 +229,10 @@ func spriteOf(sprite Sprite) *SpriteImpl {
 	if vSpr.Kind() != reflect.Struct {
 		return nil
 	}
-	for i, n := 0, vSpr.NumField(); i < n; i++ {
-		fld := vSpr.Field(i)
-		if fld.Kind() == reflect.Struct && fld.Type() == reflect.TypeOf(SpriteImpl{}) {
-			return fld.Addr().Interface().(*SpriteImpl)
+	typ := vSpr.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		if isSpriteBaseField(typ, i) {
+			return vSpr.Field(i).Addr().Interface().(*SpriteImpl)
 		}
 	}
 	return nil

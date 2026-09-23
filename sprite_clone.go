@@ -23,8 +23,6 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-var spriteImplType = reflect.TypeFor[SpriteImpl]()
-
 func (p *SpriteImpl) Clone__0() {
 	p.CloneWith(nil)
 }
@@ -123,10 +121,11 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 }
 
 func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
-	out := make(map[int]reflect.Value, v.NumField())
-	for i := 0; i < v.NumField(); i++ {
-		fieldType := v.Type().Field(i).Type
-		if fieldType == spriteImplType {
+	count := v.NumField()
+	out := make(map[int]reflect.Value, count)
+	typ := v.Type()
+	for i := 0; i < count; i++ {
+		if isSpriteBaseField(typ, i) {
 			continue
 		}
 		field := settableSpriteField(v.Field(i))
