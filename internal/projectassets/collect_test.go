@@ -172,6 +172,15 @@ func TestResolveFallsBackToMissingPackedChildren(t *testing.T) {
 	}
 }
 
+func TestResolveRejectsUnsafePackedEntryName(t *testing.T) {
+	projectDir := t.TempDir()
+	writeAssetTestFile(t, projectDir, "assets/index_pack.json", `{"sprites":{"../Hero":{}}}`)
+	_, err := Resolve(Config{ProjectDir: projectDir, PackDir: "assets", PackIndex: "index.json"})
+	if err == nil || !strings.Contains(err.Error(), `unsafe entry name "../Hero"`) {
+		t.Fatalf("Resolve() error = %v, want unsafe packed entry name", err)
+	}
+}
+
 func TestCollectRejectsUnsafeTypedReferences(t *testing.T) {
 	for _, test := range []struct {
 		name      string
