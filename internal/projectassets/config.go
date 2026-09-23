@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/goplus/spx/v3/internal/assetindex"
 )
 
 type resourceConfig struct {
@@ -64,15 +66,8 @@ func parseConfig(sourceName string, sourceData []byte, packedName string, packed
 		return packedConfig{}, err
 	}
 
-	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
-	for key, value := range sourceRoot {
-		merged[key] = value
-	}
-	for key, value := range packedRoot {
-		merged[key] = value
-	}
 	var config packedConfig
-	if err := decodeProjectConfig(merged, &config.project); err != nil {
+	if err := assetindex.DecodeRoot(assetindex.Merge(sourceRoot, packedRoot), &config.project); err != nil {
 		name := sourceName
 		if len(packedData) != 0 {
 			name = packedName
@@ -106,21 +101,13 @@ func parseRoot(name string, data []byte) (map[string]json.RawMessage, error) {
 	return root, nil
 }
 
-func decodeProjectConfig(root map[string]json.RawMessage, dest *projectConfig) error {
-	data, err := json.Marshal(root)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, dest)
-}
-
 func decodePackedObjects[T any](indexName, section string, raw json.RawMessage) (map[string]T, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	var entries map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &entries); err != nil {
+	entries, err := assetindex.ParseEntries(raw)
+	if err != nil {
 		return nil, fmt.Errorf("projectassets: decode %q section %q: %w", indexName, section, err)
+	}
+	if entries == nil {
+		return nil, nil
 	}
 	names := make([]string, 0, len(entries))
 	for name := range entries {

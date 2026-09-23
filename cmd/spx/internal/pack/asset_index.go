@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"slices"
 
+	"github.com/goplus/spx/v3/internal/assetindex"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
@@ -201,10 +202,10 @@ func readPackedAssetIndex(assetRoot string) (packedAssetIndex, bool, error) {
 	if err != nil {
 		return packedAssetIndex{}, false, err
 	}
-	mergedRoot := mergePackedRootSections(root, sourceRoot)
+	mergedRoot := assetindex.Merge(sourceRoot, root)
 
 	var packed packedAssetIndex
-	if err := decodePackedAssetSection(mergedRoot, &packed.Project); err != nil {
+	if err := assetindex.DecodeRoot(mergedRoot, &packed.Project); err != nil {
 		return packedAssetIndex{}, false, fmt.Errorf("parse %s root: %w", packedPath, err)
 	}
 	packed.Sprites = make(map[string]coreproject.SpriteConfig)
@@ -239,39 +240,9 @@ func readSourceAssetIndexRoot(assetRoot string) (map[string]json.RawMessage, err
 	return root, nil
 }
 
-func mergePackedRootSections(packedRoot, sourceRoot map[string]json.RawMessage) map[string]json.RawMessage {
-	if len(sourceRoot) == 0 {
-		return packedRoot
-	}
-
-	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
-	for key, value := range sourceRoot {
-		merged[key] = value
-	}
-	for key, value := range packedRoot {
-		merged[key] = value
-	}
-	return merged
-}
-
-func decodePackedAssetSection(root map[string]json.RawMessage, dest *coreproject.ProjectConfig) error {
-	if len(root) == 0 {
-		return nil
-	}
-	raw, err := json.Marshal(root)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(raw, dest)
-}
-
 func decodePackedAssetObjects[T any](raw json.RawMessage, dest map[string]T) error {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil
-	}
-
-	entries := make(map[string]json.RawMessage)
-	if err := json.Unmarshal(raw, &entries); err != nil {
+	entries, err := assetindex.ParseEntries(raw)
+	if err != nil {
 		return err
 	}
 	for name, entry := range entries {
