@@ -21,7 +21,6 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/tools"
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
@@ -29,11 +28,6 @@ import (
 // Constants
 // -----------------------------------------------------------------------------
 const (
-	monitorModeDefault = 1
-	monitorModeLarge   = 2
-	monitorModeSlider  = 3
-	monitorModeList    = 4
-
 	// Style selects the appearance of default and large monitors.
 	// Slider and list monitors always use the Scratch appearance.
 	monitorStyleCompatible = "scratch"
@@ -178,47 +172,22 @@ func (pself *Monitor) setXYpos(x float64, y float64) {
 // -----------------------------------------------------------------------------
 // Construction
 // -----------------------------------------------------------------------------
-/*
-"type": "Monitor",
-"target": "",
-"val": "getVar:score",
-"color": 15629590,
-"label": "score",
-"mode": 1,
-"sliderMin": 0,
-"sliderMax": 100,
-"x": 5,
-"y": 5,
-"isDiscrete": true,
-"visible": true
-*/
-func newMonitor(g reflect.Value, v coreproject.StageShape) (*Monitor, error) {
-	target := v["target"].(string)
-	val := v["val"].(string)
-	name := v["name"].(string)
-	size := 1.0
-	if v["size"] != nil {
-		size, _ = tools.GetFloat(v["size"])
-	}
-	appearance := parseMonitorAppearance(v)
-	binding, err := bindMonitor(g, target, val, appearance)
+func newMonitor(g reflect.Value, shape coreproject.StageShape, v coreproject.MonitorShape) (*Monitor, error) {
+	appearance := monitorAppearance(v)
+	binding, err := bindMonitor(g, v.Target, v.Val, appearance)
 	if err != nil {
 		return nil, err
 	}
-	color := parseMonitorColor(v, appearance)
-	label := v["label"].(string)
-	x := v["x"].(float64)
-	y := v["y"].(float64)
-	visible := v["visible"].(bool)
+	color := parseMonitorColor(shape, appearance)
 
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
-		target: target, val: val, eval: binding.read, name: name, size: size,
-		visible: visible, pos: mathf.NewVec2(x, y), panel: panel,
+		target: v.Target, val: v.Val, eval: binding.read, name: v.Name, size: v.Size,
+		visible: v.Visible, pos: mathf.NewVec2(v.X, v.Y), panel: panel,
 		style: ui.MonitorStyle{
-			Appearance: appearance, Label: label, Color: color,
-			Dimensions: parseListMonitorDimensions(v),
-			Slider:     parseMonitorSlider(v),
+			Appearance: appearance, Label: v.Label, Color: color,
+			Dimensions: parseListMonitorDimensions(shape),
+			Slider:     parseMonitorSlider(shape),
 		},
 		isDirty: true, // Initial dirty state to ensure first render.
 	}

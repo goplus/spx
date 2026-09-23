@@ -278,16 +278,24 @@ func (p *Game) addSpecialShape(
 ) ([]Sprite, error) {
 	return coreproject.AppendStageItems(inits, v, coreproject.StageItemHandlers[Sprite]{
 		StageMonitor: func(shape coreproject.StageShape) error {
-			sm, err := newMonitor(g, shape)
+			config, err := coreproject.ParseMonitorShape(shape)
 			if err != nil {
-				spxlog.Error("AddSpecialShape type: %s", shape["type"])
+				return err
+			}
+			sm, err := newMonitor(g, shape, config)
+			if err != nil {
+				spxlog.Error("Skip monitor %q: %v", config.Name, err)
 				return nil
 			}
 			p.shapeMgr.addShape(sm)
 			return nil
 		},
 		Measure: func(shape coreproject.StageShape) error {
-			p.shapeMgr.addShape(ui.NewMeasureShape(shape))
+			config, err := coreproject.ParseMeasureShape(shape)
+			if err != nil {
+				return err
+			}
+			p.shapeMgr.addShape(ui.NewMeasureShape(config))
 			return nil
 		},
 		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {

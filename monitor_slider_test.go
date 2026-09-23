@@ -28,7 +28,7 @@ import (
 
 func TestMonitorSliderConfig(t *testing.T) {
 	for _, mode := range []any{"slider", float64(3)} {
-		if got := parseMonitorAppearance(coreproject.StageShape{"mode": mode}); got != ui.MonitorAppearanceSlider {
+		if got := monitorAppearance(testMonitorShape(t, coreproject.StageShape{"mode": mode})); got != ui.MonitorAppearanceSlider {
 			t.Fatalf("mode %v: %v", mode, got)
 		}
 	}
@@ -114,13 +114,13 @@ func TestReloadMonitorModes(t *testing.T) {
 	shape := coreproject.StageShape{"target": "", "val": "score", "name": "score", "label": "score", "x": 0.0, "y": 0.0, "visible": true}
 	for _, mode := range []any{1.0, 2.0, 3.0, 4.0, "slider", "list"} {
 		shape["mode"] = mode
-		if err := validateReloadMonitor(shape); err != nil {
+		if _, err := coreproject.ParseMonitorShape(shape); err != nil {
 			t.Errorf("mode %v: %v", mode, err)
 		}
 	}
 	for _, mode := range []any{nil, true, "unknown"} {
 		shape["mode"] = mode
-		if err := validateReloadMonitor(shape); err == nil {
+		if _, err := coreproject.ParseMonitorShape(shape); err == nil {
 			t.Errorf("accepted invalid mode %v", mode)
 		}
 	}

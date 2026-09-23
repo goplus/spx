@@ -25,22 +25,21 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
-func parseMonitorAppearance(v coreproject.StageShape) ui.MonitorAppearance {
-	if v["mode"] == "slider" || v["mode"] == float64(monitorModeSlider) {
+func monitorAppearance(v coreproject.MonitorShape) ui.MonitorAppearance {
+	if v.Mode == coreproject.MonitorModeSlider {
 		return ui.MonitorAppearanceSlider
 	}
-	if v["mode"] == "list" || v["mode"] == float64(monitorModeList) {
+	if v.Mode == coreproject.MonitorModeList {
 		return ui.MonitorAppearanceList
 	}
-	mode := int(v["mode"].(float64))
-	style, _ := coreproject.ShapeValue(v, "style", "default").(string)
-	if style == monitorStyleCompatible {
-		if mode == monitorModeLarge {
+	mode := int(v.Mode)
+	if v.Style == monitorStyleCompatible {
+		if mode == coreproject.MonitorModeLarge {
 			return ui.MonitorAppearanceCompatibleLarge
 		}
 		return ui.MonitorAppearanceCompatible
 	}
-	if mode == monitorModeDefault {
+	if mode == coreproject.MonitorModeDefault {
 		return ui.MonitorAppearanceDefault
 	}
 	return ui.MonitorAppearanceDefaultLarge

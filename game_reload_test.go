@@ -561,6 +561,18 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			wantError: `stage shape field "size" has type string`,
 		},
 		{
+			name:      "invalid measure scale",
+			project:   `{"zorder":[{"type":"measure","size":10,"x":0,"y":0,"scale":"large"}]}`,
+			files:     reloadConfigFS{},
+			wantError: `stage shape field "scale" has type string`,
+		},
+		{
+			name:      "invalid monitor mode",
+			project:   `{"zorder":[{"type":"monitor","target":"","val":"score","name":"score","label":"score","mode":null,"x":0,"y":0,"visible":true}]}`,
+			files:     reloadConfigFS{},
+			wantError: `stage shape field "mode" has type`,
+		},
+		{
 			name:      "invalid stage sprite property",
 			project:   `{"zorder":[{"type":"sprite","target":"Sprite","x":"left"}]}`,
 			files:     reloadConfigFS{"sprites/Sprite/index.json": validSprite},

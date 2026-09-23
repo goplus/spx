@@ -120,7 +120,7 @@ func TestListMonitorEvalTracksChanges(t *testing.T) {
 
 func TestListMonitorConfiguration(t *testing.T) {
 	for _, mode := range []any{"list", float64(4)} {
-		if got := parseMonitorAppearance(coreproject.StageShape{"mode": mode}); got != ui.MonitorAppearanceList {
+		if got := monitorAppearance(testMonitorShape(t, coreproject.StageShape{"mode": mode})); got != ui.MonitorAppearanceList {
 			t.Errorf("mode %v: %v", mode, got)
 		}
 	}
