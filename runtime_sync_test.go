@@ -19,6 +19,7 @@ package spx
 import (
 	"math"
 	"slices"
+	"sync/atomic"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -199,6 +200,124 @@ func TestPullPhysicsPositionsFiltersAndKeepsIDOrder(t *testing.T) {
 	game.pullPhysicsPositions()
 	if mgr.calls != 3 {
 		t.Fatalf("empty physics pull made an engine query: %d total calls, want 3", mgr.calls)
+	}
+}
+
+type reentrantPullPositionMgr struct {
+	enginewrap.SpriteMgrImpl
+	game   *Game
+	nested *SpriteImpl
+	calls  int
+}
+
+func (m *reentrantPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	m.calls++
+	if m.calls == 1 {
+		items := m.game.shapeMgr.items
+		m.game.shapeMgr.items = []Shape{m.nested}
+		m.game.pullPhysicsPositions()
+		m.game.shapeMgr.items = items
+	}
+	for i, id := range ids {
+		out[i*2], out[i*2+1] = float32(id*10), float32(id*10+1)
+	}
+	return true
+}
+
+func TestPullPhysicsPositionsReentrant(t *testing.T) {
+	setupPullPositionSpriteMgr(t)
+	game := &Game{syncBuffer: engine.NewSpriteSyncBuffer(2)}
+	first := newPullPhysicsSprite(1, DynamicPhysics, 0, 0)
+	second := newPullPhysicsSprite(2, DynamicPhysics, 0, 0)
+	nested := newPullPhysicsSprite(3, DynamicPhysics, 0, 0)
+	game.shapeMgr.items = []Shape{first, second}
+	mgr := &reentrantPullPositionMgr{game: game, nested: nested}
+	pkgengine.SpriteMgr = mgr
+
+	game.pullPhysicsPositions()
+	if mgr.calls != 2 {
+		t.Fatalf("position queries = %d, want 2", mgr.calls)
+	}
+	for _, tt := range []struct {
+		sprite *SpriteImpl
+		x, y   float64
+	}{{first, 10, 11}, {second, 20, 21}, {nested, 30, 31}} {
+		if x, y := tt.sprite.transform().getXY(); x != tt.x || y != tt.y {
+			t.Errorf("position = (%v, %v), want (%v, %v)", x, y, tt.x, tt.y)
+		}
+	}
+	if game.physicsPull.busy.Load() || len(game.physicsPull.sprites) != 0 || game.physicsPull.sprites[:cap(game.physicsPull.sprites)][0] != nil {
+		t.Fatal("position pull retained a sprite")
+	}
+}
+
+type concurrentPullPositionMgr struct {
+	enginewrap.SpriteMgrImpl
+	started chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+}
+
+func (m *concurrentPullPositionMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	if m.calls.Add(1) == 1 {
+		close(m.started)
+		<-m.release
+	}
+	out[0], out[1] = float32(ids[0]*10), float32(ids[0]*10+1)
+	return true
+}
+
+func TestPullPhysicsPositionsConcurrent(t *testing.T) {
+	setupPullPositionSpriteMgr(t)
+	game := &Game{syncBuffer: engine.NewSpriteSyncBuffer(1)}
+	sprite := newPullPhysicsSprite(1, DynamicPhysics, 0, 0)
+	game.shapeMgr.items = []Shape{sprite}
+	mgr := &concurrentPullPositionMgr{started: make(chan struct{}), release: make(chan struct{})}
+	pkgengine.SpriteMgr = mgr
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		game.pullPhysicsPositions()
+	}()
+	<-mgr.started
+	game.pullPhysicsPositions()
+	close(mgr.release)
+	<-done
+	if mgr.calls.Load() != 2 {
+		t.Fatalf("position queries = %d, want 2", mgr.calls.Load())
+	}
+	if x, y := sprite.transform().getXY(); x != 10 || y != 11 {
+		t.Fatalf("position = (%v, %v), want (10, 11)", x, y)
+	}
+}
+
+func BenchmarkPullPhysicsPositions(b *testing.B) {
+	enginewrap.Init(func(call func()) { call() })
+	previous := pkgengine.SpriteMgr
+	mgr := &pullPositionSpriteMgr{positions: make([]float32, 600)}
+	pkgengine.SpriteMgr = mgr
+	b.Cleanup(func() { pkgengine.SpriteMgr = previous })
+
+	for _, scenario := range []struct {
+		name   string
+		active int
+	}{{"none", 0}, {"one", 1}, {"all", 300}} {
+		b.Run(scenario.name, func(b *testing.B) {
+			game := &Game{syncBuffer: engine.NewSpriteSyncBuffer(300)}
+			for i := range 300 {
+				mode := NoPhysics
+				if i < scenario.active {
+					mode = DynamicPhysics
+				}
+				game.shapeMgr.items = append(game.shapeMgr.items, newPullPhysicsSprite(int64(i+1), mode, 0, 0))
+			}
+			game.pullPhysicsPositions()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				game.pullPhysicsPositions()
+			}
+		})
 	}
 }
 

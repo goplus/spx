@@ -86,23 +86,41 @@ func (p *Game) flushSyncBuffer() {
 	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
 }
 
-// pullPhysicsPositions retrieves sprite positions from the physics engine in batch.
+type physicsPullBuffer struct {
+	ids     []int64
+	sprites []*SpriteImpl
+	busy    atomic.Bool
+}
+
+// pullPhysicsPositions reads sprite positions in one batch.
 func (p *Game) pullPhysicsPositions() {
-	shapes := p.getTempShapes()
-	ids := make([]int64, 0, len(shapes))
-	sprites := make([]*SpriteImpl, 0, len(shapes))
-	for _, shape := range shapes {
+	pull := &p.physicsPull
+	buffer := p.syncBuffer
+	reuse := pull.busy.CompareAndSwap(false, true)
+	if !reuse {
+		pull = &physicsPullBuffer{}
+		buffer = &engine.SpriteSyncBuffer{}
+	}
+	pull.ids = pull.ids[:0]
+	defer func() {
+		clear(pull.sprites)
+		pull.sprites = pull.sprites[:0]
+		if reuse {
+			pull.busy.Store(false)
+		}
+	}()
+	for _, shape := range p.shapeMgr.items {
 		sprite, ok := shape.(*SpriteImpl)
 		if !ok || !sprite.shouldPullPhysicsPosition() {
 			continue
 		}
-		ids = append(ids, sprite.runtimeState.SyncSprite.Id)
-		sprites = append(sprites, sprite)
+		pull.ids = append(pull.ids, sprite.runtimeState.SyncSprite.Id)
+		pull.sprites = append(pull.sprites, sprite)
 	}
-	if len(ids) == 0 {
+	if len(pull.ids) == 0 {
 		return
 	}
-	applyPhysicsPositions(sprites, p.syncBuffer.GetPositions(ids))
+	applyPhysicsPositions(pull.sprites, buffer.GetPositions(pull.ids))
 }
 
 func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
