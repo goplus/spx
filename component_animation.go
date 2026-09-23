@@ -27,7 +27,6 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 	"github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/tools"
 )
 
 // ============================================================================
@@ -57,8 +56,11 @@ type animationComponent struct {
 	doneAnimations []string
 }
 
-// tweenParams holds pre-calculated parameters for tween animations.
+// tweenParams holds typed endpoints and derived velocity.
 type tweenParams struct {
+	aniType      coreproject.AniType
+	duration     float64
+	speed        float64
 	moveFrom     mathf.Vec2
 	moveTo       mathf.Vec2
 	moveVelocity mathf.Vec2
@@ -424,75 +426,53 @@ func (a *animationComponent) unregisterTweenState(state *animState) bool {
 // Tween Execution
 // ============================================================================
 
-func (a *animationComponent) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
-	params, ok := a.prepareTweenParams(ani)
+func (a *animationComponent) doTween(name SpriteAnimationName, base *coreproject.AniConfig, params tweenParams) {
+	params, ok := prepareTweenParams(params)
 	if !ok {
 		return
 	}
 
-	info, ownedPlayback := a.initTweenState(name, ani)
-	a.executeTweenLoop(info, ani, params)
-	a.cleanupTween(info, ownedPlayback, name, ani)
+	info, ownedPlayback := a.initTweenState(name, base, params)
+	a.executeTweenLoop(info, &params)
+	a.cleanupTween(info, ownedPlayback, name, base)
 }
 
-func (a *animationComponent) initTweenState(name SpriteAnimationName, ani *coreproject.AniConfig) (*animState, *animState) {
+func (a *animationComponent) initTweenState(name SpriteAnimationName, base *coreproject.AniConfig, params tweenParams) (*animState, *animState) {
 	info := &animState{
-		AniType: ani.AniType,
+		AniType: params.aniType,
 		Name:    name,
-		Speed:   ani.Speed,
+		Speed:   params.speed,
 	}
 	a.activeTweenStates = append(a.activeTweenStates, info)
 
 	var ownedPlayback *animState
 	if entry, ok := a.shared.animations[name]; ok {
-		ownedPlayback = a.doAnimation(entry, ani, ani.IsLoop, ani.Speed, false, false)
-		a.playAnimationAudio(ani, info)
+		ownedPlayback = a.doAnimation(entry, base, true, params.speed, false, false)
+		if base != nil {
+			a.playAnimationAudio(base, info)
+		}
 	}
 
 	return info, ownedPlayback
 }
 
-func (a *animationComponent) prepareTweenParams(ani *coreproject.AniConfig) (*tweenParams, bool) {
-	duration := ani.Duration
+func prepareTweenParams(params tweenParams) (tweenParams, bool) {
+	duration := params.duration
 	if duration <= 0 {
 		spxlog.Warn("Invalid animation duration: %v", duration)
-		return nil, false
+		return tweenParams{}, false
 	}
 
-	params := &tweenParams{}
-
-	switch ani.AniType {
-	case coreproject.AniTypeMove, coreproject.AniTypeGlide:
-		src, srcOk := tools.GetVec2(ani.From)
-		dst, dstOk := tools.GetVec2(ani.To)
-		if !srcOk || !dstOk {
-			spxlog.Warn("Invalid 'From' or 'To' for move/glide animation: not a *mathf.Vec2")
-			return nil, false
-		}
-
-		params.moveFrom = src
-		params.moveTo = dst
-		if ani.AniType == coreproject.AniTypeMove {
-			params.moveVelocity = dst.Sub(src).Mulf(1 / duration)
-		}
-	case coreproject.AniTypeTurn:
-		src, srcOk := tools.GetFloat(ani.From)
-		dst, dstOk := tools.GetFloat(ani.To)
-		if !srcOk || !dstOk {
-			spxlog.Warn("Invalid 'From' or 'To' for turn animation: not a float")
-			return nil, false
-		}
-
-		params.turnFrom = src
-		params.turnTo = dst
+	if params.aniType == coreproject.AniTypeMove {
+		params.moveVelocity = params.moveTo.Sub(params.moveFrom).Mulf(1 / duration)
 	}
 
 	return params, true
 }
 
-func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.AniConfig, params *tweenParams) {
+func (a *animationComponent) executeTweenLoop(info *animState, params *tweenParams) {
 	timer := 0.0
-	duration := ani.Duration
+	duration := params.duration
 
 	for timer < duration {
 		if info.IsCanceled {
@@ -502,13 +482,13 @@ func (a *animationComponent) executeTweenLoop(info *animState, ani *coreproject.
 		timer += time.DeltaTime()
 		percent := mathf.Clamp01f(timer / duration)
 
-		a.applyTweenStep(ani.AniType, percent, params)
+		a.applyTweenStep(percent, params)
 		engine.WaitNextFrame()
 	}
 }
 
-func (a *animationComponent) applyTweenStep(aniType coreproject.AniType, percent float64, params *tweenParams) {
-	switch aniType {
+func (a *animationComponent) applyTweenStep(percent float64, params *tweenParams) {
+	switch params.aniType {
 	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
 		if a.sprite.g.physicsEnabled && physicsMode != NoPhysics && physicsMode != StaticPhysics {
@@ -532,8 +512,8 @@ func (a *animationComponent) applyTweenHeading(percent float64, params *tweenPar
 	a.sprite.SetHeading(mathf.Lerpf(params.turnFrom, params.turnTo, percent))
 }
 
-func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, ani *coreproject.AniConfig) {
-	a.stopMoveTweenVelocity(ani)
+func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, base *coreproject.AniConfig) {
+	a.stopMoveTweenVelocity(info.AniType)
 	a.stopAnimState(info)
 	stoppedOwnedPlayback := a.stopOwnedTweenPlaybackIfCurrent(ownedPlayback)
 
@@ -544,13 +524,13 @@ func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name S
 		return
 	}
 
-	if name != a.shared.defaultAnimation && !ani.IsKeepOnStop {
+	if name != a.shared.defaultAnimation && (base == nil || !base.IsKeepOnStop) {
 		a.playDefaultAnimIfIdle()
 	}
 }
 
-func (a *animationComponent) stopMoveTweenVelocity(ani *coreproject.AniConfig) {
-	if ani.AniType != coreproject.AniTypeMove {
+func (a *animationComponent) stopMoveTweenVelocity(aniType coreproject.AniType) {
+	if aniType != coreproject.AniTypeMove {
 		return
 	}
 

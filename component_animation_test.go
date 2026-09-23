@@ -319,46 +319,31 @@ func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
 	}
 }
 
-func TestDoTweenRejectsInvalidInputBeforeSideEffects(t *testing.T) {
-	from := mathf.NewVec2(0, 0)
-	to := mathf.NewVec2(10, 10)
-	tests := []struct {
-		name string
-		ani  *coreproject.AniConfig
+func TestDoTweenRejectsNonPositiveDurationBeforeSideEffects(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		duration float64
 	}{
-		{
-			name: "duration",
-			ani: &coreproject.AniConfig{
-				AniType:  coreproject.AniTypeGlide,
-				Duration: 0,
-				From:     &from,
-				To:       &to,
-			},
-		},
-		{
-			name: "parameters",
-			ani: &coreproject.AniConfig{
-				AniType:  coreproject.AniTypeGlide,
-				Duration: 1,
-				From:     "invalid",
-				To:       &to,
-				OnPlay:   &coreproject.ActionConfig{Play: "step"},
-			},
-		},
-	}
-
-	for _, tt := range tests {
+		{"zero", 0},
+		{"negative", -1},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
 			anim := newTestAnimationComponent()
 			backend := &animationAudioBackend{}
 			initTestAnimationAudio(anim, backend)
 			anim.sprite.runtimeState.SyncSprite = nil
+			base := &coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "step"}}
 			anim.shared.animations[StateGlide] = &animationEntry{
 				name:   StateGlide,
-				config: tt.ani,
+				config: base,
 			}
 
-			anim.doTween(StateGlide, tt.ani)
+			anim.doTween(StateGlide, base, tweenParams{
+				aniType:  coreproject.AniTypeGlide,
+				duration: tt.duration,
+				moveFrom: mathf.NewVec2(0, 0),
+				moveTo:   mathf.NewVec2(10, 10),
+			})
 
 			if len(anim.activeTweenStates) != 0 {
 				t.Fatalf("invalid tween left active states: %+v", anim.activeTweenStates)
@@ -373,12 +358,50 @@ func TestDoTweenRejectsInvalidInputBeforeSideEffects(t *testing.T) {
 	}
 }
 
+func TestPrepareTweenParamsUsesTypedEndpointsAndDuration(t *testing.T) {
+	params, ok := prepareTweenParams(tweenParams{
+		aniType:  coreproject.AniTypeMove,
+		duration: 2,
+		speed:    3,
+		moveFrom: mathf.NewVec2(3, 4),
+		moveTo:   mathf.NewVec2(9, 10),
+	})
+	if !ok || params.moveVelocity != mathf.NewVec2(3, 3) {
+		t.Fatalf("prepared move = %+v, valid %v; want velocity (3, 3)", params, ok)
+	}
+	if params.duration != 2 || params.speed != 3 || params.moveFrom != mathf.NewVec2(3, 4) || params.moveTo != mathf.NewVec2(9, 10) {
+		t.Fatalf("prepared move changed supplied execution values: %+v", params)
+	}
+}
+
+func TestMissingTweenAnimationUsesDirectMotion(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.IsVisible = false
+	initTestMotionComponents(anim.sprite, 0, 0)
+	transform := anim.sprite.transform()
+
+	transform.stepToPos(8, 3, 1, "missing")
+	if x, y := transform.getXY(); x != 8 || y != 3 {
+		t.Fatalf("position = (%v, %v), want (8, 3)", x, y)
+	}
+
+	called := false
+	transform.doTurnAnimation(0, 90, 1, "missing", func() { called = true })
+	if !called {
+		t.Fatal("missing turn animation did not run direct motion")
+	}
+}
+
 func TestTweenStateRegistrationAndUnregistrationOrder(t *testing.T) {
 	anim := newTestAnimationComponent()
-	ani := &coreproject.AniConfig{AniType: coreproject.AniTypeGlide, Duration: 1}
-	first, _ := anim.initTweenState(StateGlide, ani)
-	middle, _ := anim.initTweenState(StateStep, ani)
-	last, _ := anim.initTweenState(StateTurn, ani)
+	params := tweenParams{aniType: coreproject.AniTypeGlide, duration: 1, speed: 2}
+	base := &coreproject.AniConfig{Speed: 7}
+	first, _ := anim.initTweenState(StateGlide, base, params)
+	middle, _ := anim.initTweenState(StateStep, base, params)
+	last, _ := anim.initTweenState(StateTurn, base, params)
+	if first.Speed != 2 || middle.Speed != 2 || last.Speed != 2 || base.Speed != 7 {
+		t.Fatalf("execution speed changed: states=(%v, %v, %v), definition=%v", first.Speed, middle.Speed, last.Speed, base.Speed)
+	}
 
 	if anim.getCurTweenState() != last {
 		t.Fatal("latest registered tween is not current")
@@ -412,11 +435,12 @@ func TestApplyTweenStepGlideUsesAbsolutePosition(t *testing.T) {
 	initTestMotionComponents(anim.sprite, 100, 20)
 
 	params := &tweenParams{
+		aniType:  coreproject.AniTypeGlide,
 		moveFrom: mathf.NewVec2(10, 20),
 		moveTo:   mathf.NewVec2(100, 20),
 	}
 
-	anim.applyTweenStep(coreproject.AniTypeGlide, 0.5, params)
+	anim.applyTweenStep(0.5, params)
 
 	x, y := anim.sprite.getXY()
 	if x != 55 || y != 20 {
@@ -430,11 +454,12 @@ func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
 	initTestMotionComponents(anim.sprite, 100, 20)
 
 	params := &tweenParams{
+		aniType:  coreproject.AniTypeMove,
 		moveFrom: mathf.NewVec2(10, 20),
 		moveTo:   mathf.NewVec2(100, 20),
 	}
 
-	anim.applyTweenStep(coreproject.AniTypeMove, 0.5, params)
+	anim.applyTweenStep(0.5, params)
 
 	x, y := anim.sprite.getXY()
 	if x != 55 || y != 20 {
@@ -449,11 +474,12 @@ func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
 	anim.sprite.components.transform.direction = 100
 
 	params := &tweenParams{
+		aniType:  coreproject.AniTypeTurn,
 		turnFrom: 10,
 		turnTo:   100,
 	}
 
-	anim.applyTweenStep(coreproject.AniTypeTurn, 0.5, params)
+	anim.applyTweenStep(0.5, params)
 
 	if heading := anim.sprite.Heading(); heading != 55 {
 		t.Fatalf("heading = %v, want 55", heading)
@@ -484,14 +510,9 @@ func TestCleanupTweenStopsStaleOwnedPlayback(t *testing.T) {
 
 func TestCleanupTweenRestoresPreviousActiveTweenState(t *testing.T) {
 	anim := newTestAnimationComponent()
-	first, _ := anim.initTweenState(StateGlide, &coreproject.AniConfig{
-		AniType:  coreproject.AniTypeGlide,
-		Duration: 1,
-	})
-	second, _ := anim.initTweenState(StateGlide, &coreproject.AniConfig{
-		AniType:  coreproject.AniTypeGlide,
-		Duration: 1,
-	})
+	params := tweenParams{aniType: coreproject.AniTypeGlide, duration: 1}
+	first, _ := anim.initTweenState(StateGlide, nil, params)
+	second, _ := anim.initTweenState(StateGlide, nil, params)
 
 	anim.cleanupTween(second, nil, StateGlide, &coreproject.AniConfig{AniType: coreproject.AniTypeGlide})
 

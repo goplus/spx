@@ -16,18 +16,7 @@
 
 package tools
 
-import (
-	"strconv"
-
-	"github.com/goplus/spbase/mathf"
-)
-
-func GetVec2(unk any) (mathf.Vec2, bool) {
-	if vec, ok := unk.(*mathf.Vec2); ok {
-		return *vec, true
-	}
-	return mathf.Vec2{}, false
-}
+import "strconv"
 
 func GetFloat(unk any) (float64, bool) {
 	switch i := unk.(type) {
