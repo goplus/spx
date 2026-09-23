@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
@@ -87,20 +88,35 @@ func (p *Game) flushSyncBuffer() {
 
 // pullPhysicsPositions retrieves sprite positions from the physics engine in batch.
 func (p *Game) pullPhysicsPositions() {
-	coreruntime.SyncBatchPositions(
-		p.getTempShapes(),
-		func(item Shape) bool {
-			sprite, ok := item.(*SpriteImpl)
-			return ok && sprite.shouldPullPhysicsPosition()
-		},
-		func(item Shape) int64 {
-			return int64(item.(*SpriteImpl).runtimeState.SyncSprite.Id)
-		},
-		p.syncBuffer.GetPositions,
-		func(item Shape, x, y float64) {
-			item.(*SpriteImpl).applyPhysicsPosition(x, y)
-		},
-	)
+	shapes := p.getTempShapes()
+	ids := make([]int64, 0, len(shapes))
+	sprites := make([]*SpriteImpl, 0, len(shapes))
+	for _, shape := range shapes {
+		sprite, ok := shape.(*SpriteImpl)
+		if !ok || !sprite.shouldPullPhysicsPosition() {
+			continue
+		}
+		ids = append(ids, sprite.runtimeState.SyncSprite.Id)
+		sprites = append(sprites, sprite)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	applyPhysicsPositions(sprites, p.syncBuffer.GetPositions(ids))
+}
+
+func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
+	for i, sprite := range sprites {
+		at := i * 2
+		if at+1 >= len(positions) {
+			return
+		}
+		x, y := float64(positions[at]), float64(positions[at+1])
+		if math.IsNaN(x) || math.IsNaN(y) {
+			continue
+		}
+		sprite.applyPhysicsPosition(x, y)
+	}
 }
 
 // processPhysicsTriggers consumes trigger events and fires collision callbacks.
