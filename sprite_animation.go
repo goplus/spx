@@ -112,10 +112,6 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 	return buffer[:0]
 }
 
-func (p *SpriteImpl) doTween(name SpriteAnimationName, ani *coreproject.AniConfig) {
-	p.animation().doTween(name, ani)
-}
-
 // -----------------------------------------------------------------------------
 // Animation Data
 // -----------------------------------------------------------------------------

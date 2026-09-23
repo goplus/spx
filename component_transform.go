@@ -128,19 +128,13 @@ func (t *transformComponent) glide(x, y float64, secs float64) {
 	}
 
 	x0, y0 := t.getXY()
-	from := mathf.NewVec2(x0, y0)
-	to := mathf.NewVec2(x, y)
-
-	aniCopy := coreproject.AniConfig{
-		Duration: secs,
-		From:     &from,
-		To:       &to,
-		AniType:  coreproject.AniTypeGlide,
-		IsLoop:   true,
-	}
-
 	animName := t.sprite.getStateAnimName(StateGlide)
-	t.sprite.animation().doTween(animName, &aniCopy)
+	t.sprite.animation().doTween(animName, nil, tweenParams{
+		aniType:  coreproject.AniTypeGlide,
+		duration: secs,
+		moveFrom: mathf.NewVec2(x0, y0),
+		moveTo:   mathf.NewVec2(x, y),
+	})
 }
 
 func (t *transformComponent) glideToTarget(target Target, secs float64) {
@@ -176,8 +170,15 @@ func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnim
 		return
 	}
 
-	duration := math.Abs(distance) * ani.StepDuration / math.Max(speed, minSpeed)
-	t.doAnimatedTween(animation, ani, &from, &to, coreproject.AniTypeMove, duration, speed)
+	speed = math.Max(speed, minSpeed)
+	duration := math.Abs(distance) * ani.StepDuration / speed
+	t.sprite.animation().doTween(animation, ani, tweenParams{
+		aniType:  coreproject.AniTypeMove,
+		duration: duration,
+		speed:    speed,
+		moveFrom: from,
+		moveTo:   to,
+	})
 }
 
 func (t *transformComponent) stepToTarget(target Target, speed float64, animation SpriteAnimationName) {
@@ -539,30 +540,15 @@ func (t *transformComponent) doTurnAnimation(
 	}
 
 	absDelta := math.Abs(from - to)
-	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / math.Max(speed, minSpeed)
-	t.doAnimatedTween(animation, ani, from, to, coreproject.AniTypeTurn, duration, speed)
-}
-
-// doAnimatedTween creates and executes a tween animation with the given parameters.
-func (t *transformComponent) doAnimatedTween(
-	name SpriteAnimationName,
-	base *coreproject.AniConfig,
-	from, to any,
-	aniType coreproject.AniType,
-	duration float64,
-	speed float64,
-) {
 	speed = math.Max(speed, minSpeed)
-
-	aniCopy := *base
-	aniCopy.From = from
-	aniCopy.To = to
-	aniCopy.AniType = aniType
-	aniCopy.Duration = duration
-	aniCopy.IsLoop = true
-	aniCopy.Speed = speed
-
-	t.sprite.doTween(name, &aniCopy)
+	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / speed
+	t.sprite.animation().doTween(animation, ani, tweenParams{
+		aniType:  coreproject.AniTypeTurn,
+		duration: duration,
+		speed:    speed,
+		turnFrom: from,
+		turnTo:   to,
+	})
 }
 
 // ============================================================================
