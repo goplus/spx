@@ -324,7 +324,7 @@ func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
 		return fmt.Errorf("invalid sprite type %T", sprite)
 	}
 	v := reflect.ValueOf(sprite).Elem()
-	if v.NumField() == 0 || v.Field(0).Type() != reflect.TypeFor[SpriteImpl]() {
+	if !isSpriteBaseField(v.Type(), 0) {
 		return fmt.Errorf("sprite %s is missing leading SpriteImpl field", typ)
 	}
 	return bindSpriteOwner(v, gamer)
