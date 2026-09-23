@@ -16,10 +16,34 @@ type polygonColliderSpriteMgr struct {
 	collisionCenter  mathf.Vec2
 	collisionPoints  []float32
 	collisionEnabled []bool
+	collisionLayer   int64
+	collisionMask    int64
 	triggerCenter    mathf.Vec2
 	triggerPoints    []float32
 	triggerEnabled   []bool
+	triggerLayer     int64
+	triggerMask      int64
 }
+
+func (m *polygonColliderSpriteMgr) SetCollisionLayer(_ pkgengine.Object, layer int64) {
+	m.collisionLayer = layer
+}
+
+func (m *polygonColliderSpriteMgr) SetCollisionMask(_ pkgengine.Object, mask int64) {
+	m.collisionMask = mask
+}
+
+func (m *polygonColliderSpriteMgr) SetTriggerLayer(_ pkgengine.Object, layer int64) {
+	m.triggerLayer = layer
+}
+
+func (m *polygonColliderSpriteMgr) SetTriggerMask(_ pkgengine.Object, mask int64) {
+	m.triggerMask = mask
+}
+
+func (m *polygonColliderSpriteMgr) SetGravityScale(pkgengine.Object, float64) {}
+
+func (m *polygonColliderSpriteMgr) SetPhysicsMode(pkgengine.Object, int64) {}
 
 func (m *polygonColliderSpriteMgr) SetColliderPolygon(_ pkgengine.Object, center mathf.Vec2, points pkgengine.Array) {
 	m.collisionCenter = center
@@ -61,6 +85,31 @@ func assertColliderParams(t *testing.T, sprite *SpriteImpl, isTrigger bool, want
 	typ, got := sprite.ColliderShape(isTrigger)
 	if typ != wantType || !slices.Equal(got, want) {
 		t.Fatalf("shape(trigger=%t) = type %d params %v, want type %d params %v", isTrigger, typ, got, wantType, want)
+	}
+}
+
+func TestPhysicsLayersSurviveClone(t *testing.T) {
+	sprite, mgr := newPolygonColliderTestSprite(t)
+	sprite.SetCollisionLayer(2)
+	sprite.SetCollisionMask(4)
+	sprite.SetTriggerLayer(8)
+	sprite.SetTriggerMask(16)
+
+	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
+		t.Fatalf("proxy layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
+	}
+
+	clone := sprite.physics().cloneFor(&SpriteImpl{})
+	if clone.collisionInfo.Layer != 2 || clone.collisionInfo.Mask != 4 || clone.triggerInfo.Layer != 8 || clone.triggerInfo.Mask != 16 {
+		t.Fatalf("clone layers = (%d, %d, %d, %d)", clone.collisionInfo.Layer, clone.collisionInfo.Mask, clone.triggerInfo.Layer, clone.triggerInfo.Mask)
+	}
+
+	mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask = 0, 0, 0, 0
+	sprite.physics().collisionInfo.Type = physicsColliderNone
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.SyncSprite)
+	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
+		t.Fatalf("replayed layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
 	}
 }
 

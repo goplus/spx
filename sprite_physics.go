@@ -348,8 +348,8 @@ func (p *SpriteImpl) updatePhysicsShapesScale() {
 		return
 	}
 	physics := p.physics()
-	physics.getTriggerInfo().applyShape(p.runtimeState.SyncSprite, true, p)
-	physics.getCollisionInfo().applyShape(p.runtimeState.SyncSprite, false, p)
+	physics.colliderConfig(true).applyShape(p.runtimeState.SyncSprite, true, p)
+	physics.colliderConfig(false).applyShape(p.runtimeState.SyncSprite, false, p)
 }
 
 // toPhysicsMode converts string to PhysicsMode.

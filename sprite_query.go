@@ -115,7 +115,7 @@ func (p *SpriteImpl) fenceBounds() *mathf.Rect2 {
 }
 
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {
-	triggerInfo := p.physics().getTriggerInfo()
+	triggerInfo := p.physics().colliderConfig(true)
 
 	if triggerInfo.Type == physicsColliderNone {
 		applyRenderOffset(p, x, y)
