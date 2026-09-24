@@ -32,6 +32,8 @@
 #define SPX_PIXEL_QUERY_H
 
 #include "scene/2d/animated_sprite_2d.h"
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace SpxPixelQuery {
@@ -52,6 +54,15 @@ struct Snapshot {
 	bool image_premultiplied = false;
 };
 
+struct ImageEntry {
+	// Keeps pointer keys alive for this pass.
+	Ref<Texture2D> texture;
+	Ref<Image> image;
+	uint64_t version;
+};
+
+using ImageCache = std::unordered_map<const Texture2D *, ImageEntry>;
+
 struct Layer {
 	enum Order {
 		BACKDROP,
@@ -70,7 +81,7 @@ Ref<Texture2D> frame_texture(AnimatedSprite2D *p_animation);
 Rect2 local_rect(AnimatedSprite2D *p_animation, const Vector2 &p_texture_size);
 Rect2 world_bounds(const Transform2D &p_transform, const Rect2 &p_local_rect);
 bool capture(AnimatedSprite2D *p_animation, bool p_apply_collision_alpha, Snapshot &r_snapshot);
-bool load_image(Snapshot &r_snapshot);
+bool load_image(Snapshot &r_snapshot, ImageCache *p_cache = nullptr);
 
 // Select world pixel centers, not pixel edges. Sampling is x-major and keeps
 // its origin at this rectangle's first center even when the step exceeds one.

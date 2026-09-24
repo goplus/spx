@@ -31,6 +31,7 @@
 #include "spx_pixel_query.h"
 
 #include "scene/resources/material.h"
+#include "spx_image_texture.h"
 
 namespace SpxPixelQuery {
 
@@ -134,7 +135,7 @@ bool capture(AnimatedSprite2D *p_anim2d, bool p_apply_collision_alpha, Snapshot 
 	return true;
 }
 
-bool load_image(Snapshot &r_query) {
+bool load_image(Snapshot &r_query, ImageCache *p_cache) {
 	if (r_query.image.is_valid()) {
 		return true;
 	}
@@ -142,7 +143,24 @@ bool load_image(Snapshot &r_query) {
 		return false;
 	}
 
-	r_query.image = r_query.texture->get_image();
+	const SpxImageTexture *texture = p_cache != nullptr ? dynamic_cast<const SpxImageTexture *>(r_query.texture.ptr()) : nullptr;
+	const uint64_t version = texture != nullptr ? texture->image_version() : 0;
+	if (texture != nullptr) {
+		const auto it = p_cache->find(texture);
+		if (it != p_cache->end() && it->second.version == version) {
+			r_query.image = it->second.image;
+		}
+	}
+	if (r_query.image.is_null()) {
+		r_query.image = r_query.texture->get_image();
+		if (texture != nullptr) {
+			if (r_query.image.is_valid()) {
+				(*p_cache)[texture] = { r_query.texture, r_query.image, version };
+			} else {
+				p_cache->erase(texture);
+			}
+		}
+	}
 	if (r_query.image.is_null()) {
 		return false;
 	}
@@ -205,7 +223,10 @@ Color composite(
 	real_t remaining_alpha = 1.0f;
 
 	for (const Layer &query : p_queries) {
-		if (remaining_alpha <= 0.0f || !query.pixel_query.bounds.has_point(p_world_pos)) {
+		if (remaining_alpha <= 0.0f) {
+			break;
+		}
+		if (!query.pixel_query.bounds.has_point(p_world_pos)) {
 			continue;
 		}
 

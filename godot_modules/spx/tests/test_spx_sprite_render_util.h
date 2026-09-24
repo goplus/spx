@@ -35,6 +35,7 @@
 #include "../spx_collision_debug_overlay.h"
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "../spx_engine.h"
+#include "../spx_pixel_query.h"
 #include "../spx_res_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
@@ -342,6 +343,10 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 			fixture.resources->load_texture("spx_visual.png");
 	REQUIRE(texture.is_valid());
 	CHECK(texture->is_pixel_opaque(0, 0));
+	SpxPixelQuery::ImageCache images;
+	SpxPixelQuery::Snapshot before_png;
+	before_png.texture = texture;
+	REQUIRE(SpxPixelQuery::load_image(before_png, &images));
 	Ref<Image> replacement =
 			Image::create_empty(12, 10, false, Image::FORMAT_RGBA8);
 	replacement->fill(Color(0, 0, 1));
@@ -351,6 +356,10 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 	CHECK(texture == fixture.resources->load_texture("spx_visual.png"));
 	CHECK(texture->get_size() == Vector2(12, 10));
 	CHECK(texture->get_image()->get_pixel(0, 0) == Color(0, 0, 1));
+	SpxPixelQuery::Snapshot after_png;
+	after_png.texture = texture;
+	REQUIRE(SpxPixelQuery::load_image(after_png, &images));
+	CHECK(after_png.image->get_pixel(0, 0) == Color(0, 0, 1));
 	CHECK_FALSE(texture->is_pixel_opaque(1, 0));
 	VisualFixture::write_text(fixture.png_path, "invalid PNG");
 	ERR_PRINT_OFF
@@ -366,6 +375,9 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 			sprite->get_anim2d()->get_sprite_frames()->get_frame_texture("default",
 					0);
 	REQUIRE(svg_texture.is_valid());
+	SpxPixelQuery::Snapshot before_svg;
+	before_svg.texture = svg_texture;
+	REQUIRE(SpxPixelQuery::load_image(before_svg, &images));
 	VisualFixture::write_text(
 			fixture.svg_path,
 			"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" "
@@ -376,11 +388,41 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 					0));
 	CHECK(svg_texture->get_size() == Vector2(24, 20));
 	CHECK(svg_texture->get_image()->get_pixel(0, 0) == Color(0, 0, 1));
+	SpxPixelQuery::Snapshot after_svg;
+	after_svg.texture = svg_texture;
+	REQUIRE(SpxPixelQuery::load_image(after_svg, &images));
+	CHECK(after_svg.image->get_pixel(0, 0) == Color(0, 0, 1));
 	VisualFixture::write_text(fixture.svg_path, "invalid SVG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture("spx_visual.svg");
 	ERR_PRINT_ON
 	CHECK(svg_texture->get_size() == Vector2(24, 20));
+}
+
+TEST_CASE("[SceneTree][SPX] Color sensing filters the source and excludes it from the scene") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	fixture.resources->set_game_datas(fixture.png_path.get_base_dir(), Vector<String>());
+	SpxSprite *self = fixture.create_sprite();
+	self->set_texture("spx_visual.png");
+
+	Ref<Image> blue = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
+	blue->fill(Color(0, 0, 1));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", ImageTexture::create_from_image(blue));
+	SpxSprite *other = fixture.create_sprite();
+	other->get_anim2d()->set_sprite_frames(frames);
+
+	const GdObj id = self->get_gid();
+	CHECK(fixture.sprites->check_collision_by_color(id, Color(0, 0, 1), 0.01, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(1, 0, 0), 0.01, 0.99));
+	CHECK(fixture.sprites->check_collision_by_colors(id, Color(1, 0, 0), Color(0, 0, 1), 0.01, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_colors(id, Color(0, 1, 0), Color(0, 0, 1), 0.01, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_colors(id, Color(1, 0, 0), Color(0, 0, 1), 0.0, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_colors(id, Color(1, 0, 0), Color(0, 0, 1), 0.01, 1.0));
+	other->hide();
+	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(0, 0, 1), 0.01, 0.99));
 }
 
 TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preserve from-end playback") {

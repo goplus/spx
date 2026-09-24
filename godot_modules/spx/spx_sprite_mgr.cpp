@@ -96,6 +96,28 @@ bool capture_sprite_pixels(SpxSprite *p_sprite, Snapshot &r_snapshot, bool p_req
 	return SpxPixelQuery::capture(p_sprite->get_anim2d(), p_apply_collision_alpha, r_snapshot);
 }
 
+bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_threshold, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
+	Snapshot query_a;
+	Snapshot query_b;
+	if (!capture_sprite_pixels(p_a, query_a, true, false) ||
+			!capture_sprite_pixels(p_b, query_b, true, false)) {
+		return false;
+	}
+
+	const Rect2i overlap_rect = SpxPixelQuery::overlap(query_a.bounds, query_b.bounds);
+	if (!overlap_rect.has_area() || !SpxPixelQuery::load_image(query_a, p_cache) || !SpxPixelQuery::load_image(query_b, p_cache)) {
+		return false;
+	}
+	return SpxPixelQuery::any_pixel_center(overlap_rect, p_step, [&](const Vector2 &sample_pos) {
+		Color color_a;
+		if (!SpxPixelQuery::sample(query_a, sample_pos, color_a) || color_a.a <= p_alpha_threshold) {
+			return false;
+		}
+		Color color_b;
+		return SpxPixelQuery::sample(query_b, sample_pos, color_b) && color_b.a > p_alpha_threshold;
+	});
+}
+
 } // namespace
 
 void SpxSpriteMgr::on_awake() {
@@ -938,32 +960,6 @@ GdBool SpxSpriteMgr::is_trigger_enabled(GdObj obj) {
 	return sprite->is_trigger_enabled();
 }
 
-Ref<Image> SpxSpriteMgr::_get_current_frame_image(AnimatedSprite2D *sprite) {
-	Ref<Texture2D> texture = SpxPixelQuery::frame_texture(sprite);
-	if (texture.is_null()) {
-		return Ref<Image>();
-	}
-
-	Ref<Image> image = texture->get_image();
-	if (image.is_null()) {
-		return Ref<Image>();
-	}
-	return image;
-}
-
-Rect2 SpxSpriteMgr::_get_sprite_aabb(AnimatedSprite2D *anim2d) {
-	if (!anim2d) {
-		return Rect2();
-	}
-
-	Ref<Texture2D> texture = SpxPixelQuery::frame_texture(anim2d);
-	if (texture.is_null()) {
-		return Rect2();
-	}
-
-	return SpxPixelQuery::world_bounds(anim2d->get_global_transform(), SpxPixelQuery::local_rect(anim2d, texture->get_size()));
-}
-
 GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat alpha_threshold, GdBool use_pixel_perfect) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 	SPX_REQUIRE_TARGET_SPRITE_RETURN(obj_b, false)
@@ -976,55 +972,21 @@ GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat
 		return sprite->check_collision(sprite_target, false, false);
 	}
 
-	return _check_pixel_collision_between(sprite, sprite_target, alpha_threshold);
-}
-
-bool SpxSpriteMgr::_check_pixel_collision_between(SpxSprite *sprite_a, SpxSprite *sprite_b, GdFloat alpha_threshold) {
-	Snapshot query_a;
-	Snapshot query_b;
-	if (!capture_sprite_pixels(sprite_a, query_a, true, false) ||
-			!capture_sprite_pixels(sprite_b, query_b, true, false)) {
-		return false;
-	}
-
-	const Rect2i overlap_rect = SpxPixelQuery::overlap(query_a.bounds, query_b.bounds);
-	if (!overlap_rect.has_area()) {
-		return false;
-	}
-	if (!SpxPixelQuery::load_image(query_a) || !SpxPixelQuery::load_image(query_b)) {
-		return false;
-	}
-	return SpxPixelQuery::any_pixel_center(overlap_rect, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
-		Color color_a;
-		if (!SpxPixelQuery::sample(query_a, sample_pos, color_a) || color_a.a <= alpha_threshold) {
-			return false;
-		}
-		Color color_b;
-		return SpxPixelQuery::sample(query_b, sample_pos, color_b) && color_b.a > alpha_threshold;
-	});
+	return check_pixel_collision(sprite, sprite_target, alpha_threshold, pixel_collision_sampling_step);
 }
 
 GdBool SpxSpriteMgr::check_collision_by_color(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold) {
 	const GdFloat threshold_sq = color_threshold * color_threshold;
-	return _check_scene_color_collision(obj, [=](GdColor a, GdColor b) -> bool {
-		if (a.a <= alpha_threshold) {
-			return false;
-		}
-		return color_rgb_distance_squared(color, b) < threshold_sq;
-	});
+	return _check_scene_color_collision(obj,
+			[=](GdColor self) { return !(self.a <= alpha_threshold); },
+			[=](GdColor scene) { return color_rgb_distance_squared(color, scene) < threshold_sq; });
 }
 
 GdBool SpxSpriteMgr::check_collision_by_colors(GdObj obj, GdColor sprite_color, GdColor target_color, GdFloat color_threshold, GdFloat alpha_threshold) {
 	const GdFloat threshold_sq = color_threshold * color_threshold;
-	return _check_scene_color_collision(obj, [=](GdColor a, GdColor b) -> bool {
-		if (a.a <= alpha_threshold) {
-			return false;
-		}
-		if (color_rgb_distance_squared(sprite_color, a) >= threshold_sq) {
-			return false;
-		}
-		return color_rgb_distance_squared(target_color, b) < threshold_sq;
-	});
+	return _check_scene_color_collision(obj,
+			[=](GdColor self) { return !(self.a <= alpha_threshold) && !(color_rgb_distance_squared(sprite_color, self) >= threshold_sq); },
+			[=](GdColor scene) { return color_rgb_distance_squared(target_color, scene) < threshold_sq; });
 }
 
 GdBool SpxSpriteMgr::check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold) {
@@ -1033,7 +995,7 @@ GdBool SpxSpriteMgr::check_collision_by_alpha(GdObj obj, GdFloat alpha_threshold
 	});
 }
 
-GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc check_func) {
+GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches) {
 	SPX_REQUIRE_SPRITE_RETURN(false)
 
 	Snapshot self_query;
@@ -1044,7 +1006,6 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	if (!SpxPixelQuery::load_image(self_query)) {
 		return false;
 	}
-
 	std::vector<Layer> scene_queries;
 	scene_queries.reserve((size_t)id_objects.size() + 1);
 	for (const auto &item : id_objects) {
@@ -1083,7 +1044,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorCheckFunc chec
 	return SpxPixelQuery::any_pixel_center(SpxPixelQuery::pixel_centers(self_query.bounds), pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 		Color self_color;
 		return SpxPixelQuery::sample_premultiplied(self_query, sample_pos, self_color) &&
-				check_func(self_color, SpxPixelQuery::composite(scene_queries, sample_pos));
+				self_matches(self_color) && scene_matches(SpxPixelQuery::composite(scene_queries, sample_pos));
 	});
 }
 
@@ -1200,6 +1161,7 @@ void SpxSpriteMgr::_check_pixel_collision_events() {
 
 	Vector<TriggerPair> enter_triggers;
 	Vector<TriggerPair> exit_triggers;
+	SpxPixelQuery::ImageCache image_cache;
 
 	for (auto it = bounding_collision_pairs.begin(); it != bounding_collision_pairs.end();) {
 		const TriggerPair trigger = *it;
@@ -1211,7 +1173,7 @@ void SpxSpriteMgr::_check_pixel_collision_events() {
 			continue;
 		}
 
-		if (_check_pixel_collision_between(sprite1, sprite2, DEFAULT_COLLISION_ALPHA_THRESHOLD)) {
+		if (check_pixel_collision(sprite1, sprite2, DEFAULT_COLLISION_ALPHA_THRESHOLD, pixel_collision_sampling_step, &image_cache)) {
 			if (pixel_collision_pairs.insert(trigger).second) {
 				enter_triggers.push_back(trigger);
 			}
