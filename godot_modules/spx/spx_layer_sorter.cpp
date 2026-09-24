@@ -42,7 +42,7 @@ void SpxLayerSorter::set_mode(LayerSortMode mode) {
 }
 
 void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
-	if (sort_mode == LayerSortMode::NONE) {
+	if (!is_enabled()) {
 		return;
 	}
 

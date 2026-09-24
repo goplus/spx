@@ -144,6 +144,10 @@ void SpxSpriteMgr::on_destroy() {
 
 void SpxSpriteMgr::on_update(float delta) {
 	_check_pixel_collision_events();
+	auto &sorter = SpxLayerSorter::instance();
+	if (!sorter.is_enabled()) {
+		return;
+	}
 
 	Vector<ISortableSprite *> all_sortables;
 
@@ -154,7 +158,7 @@ void SpxSpriteMgr::on_update(float delta) {
 	}
 
 	sceneMgr->collect_sortable_sprites(all_sortables);
-	SpxLayerSorter::instance().update(all_sortables);
+	sorter.update(all_sortables);
 }
 
 void SpxSpriteMgr::on_reset(int reset_code) {
