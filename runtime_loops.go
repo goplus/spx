@@ -79,8 +79,8 @@ func (p *Game) logicLoop(coroutine.Thread) {
 			return sprite.flushCompletedAnimations(tempAnimations)
 		},
 		NextTimer: itime.NextTimer,
-		FireTimer: func(targetTimer float64) {
-			p.fireEvent(&eventTimer{Time: targetTimer})
+		FireTimer: func(timestamp int64) {
+			p.fireEvent(&eventTimer{Timestamp: timestamp})
 		},
 		ShowDebugPanel: p.showDebugPanel,
 	})

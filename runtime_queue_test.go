@@ -11,12 +11,12 @@ import (
 func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	game.events = make(chan event, 1)
-	game.events <- &eventTimer{Time: 1}
+	game.events <- &eventTimer{Timestamp: 1}
 	game.eventQueueState.EventQueuePolicy = coreevent.QueueBlock
 
 	done := make(chan bool, 1)
 	thread := co.Create("managed-producer", func(coroutine.Thread) {
-		done <- game.queueEventWithPolicy(&eventTimer{Time: 2})
+		done <- game.queueEventWithPolicy(&eventTimer{Timestamp: 2})
 	})
 
 	select {
@@ -34,7 +34,7 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 	if got := game.eventQueueState.EventQueueStats.DroppedTotal(); got != 1 {
 		t.Fatalf("DroppedTotal = %d, want 1", got)
 	}
-	if got := <-game.events; got.(*eventTimer).Time != 1 {
+	if got := <-game.events; got.(*eventTimer).Timestamp != 1 {
 		t.Fatal("managed fallback changed the existing queue item")
 	}
 }
@@ -42,14 +42,14 @@ func TestQueueBlockDoesNotBlockManagedCoroutine(t *testing.T) {
 func TestQueueBlockStillBlocksExternalCaller(t *testing.T) {
 	_, game := setupRuntimeEventGame(t)
 	game.events = make(chan event, 1)
-	game.events <- &eventTimer{Time: 1}
+	game.events <- &eventTimer{Timestamp: 1}
 	game.eventQueueState.EventQueuePolicy = coreevent.QueueBlock
 
 	started := make(chan struct{})
 	done := make(chan bool, 1)
 	go func() {
 		close(started)
-		done <- game.queueEventWithPolicy(&eventTimer{Time: 2})
+		done <- game.queueEventWithPolicy(&eventTimer{Timestamp: 2})
 	}()
 	select {
 	case <-started:

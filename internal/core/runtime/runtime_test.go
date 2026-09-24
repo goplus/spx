@@ -310,8 +310,8 @@ func TestHandleLeftButtonDownBlockedTargetGate(t *testing.T) {
 }
 
 func TestProcessLogicFrame(t *testing.T) {
-	var fired []float64
-	nextTimers := []float64{2.5, 3}
+	var fired []int64
+	nextTimers := []int64{2500, 3000}
 	nextTimerIndex := 0
 	audios, animations := ProcessLogicFrame(LogicFrameConfig[int]{
 		Items:          []int{1, 2},
@@ -323,7 +323,7 @@ func TestProcessLogicFrame(t *testing.T) {
 		FlushCompletedAnimations: func(item int, acc []string) []string {
 			return append(acc, "n")
 		},
-		NextTimer: func() (float64, bool) {
+		NextTimer: func() (int64, bool) {
 			if nextTimerIndex >= len(nextTimers) {
 				return 0, false
 			}
@@ -331,7 +331,7 @@ func TestProcessLogicFrame(t *testing.T) {
 			nextTimerIndex++
 			return timer, true
 		},
-		FireTimer: func(v float64) { fired = append(fired, v) },
+		FireTimer: func(v int64) { fired = append(fired, v) },
 	})
 
 	if len(audios) != 3 {
@@ -340,7 +340,7 @@ func TestProcessLogicFrame(t *testing.T) {
 	if len(animations) != 3 {
 		t.Fatalf("animations len = %d, want 3", len(animations))
 	}
-	if len(fired) != 2 || fired[0] != 2.5 || fired[1] != 3 {
+	if len(fired) != 2 || fired[0] != 2500 || fired[1] != 3000 {
 		t.Fatalf("unexpected fired timers: %+v", fired)
 	}
 }

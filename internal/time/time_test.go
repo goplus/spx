@@ -18,6 +18,7 @@ package time
 
 import (
 	"math"
+	"slices"
 	"sync"
 	"testing"
 	stdtime "time"
@@ -37,8 +38,8 @@ func resetStateForTest() {
 	lastTimestamp = stdtime.Time{}
 	fps = 0
 	timerBaseTime = 0
-	timestamps = nil
-	nextTimerIndex = 0
+	registeredTimers = nil
+	pendingTimers = nil
 }
 
 func TestStartInitializesTimeState(t *testing.T) {
@@ -52,8 +53,8 @@ func TestStartInitializesTimeState(t *testing.T) {
 	curFrame.Store(4)
 	fps = 3
 	timerBaseTime = 1
-	timestamps = []int64{100, 200}
-	nextTimerIndex = 1
+	registeredTimers = []int64{100, 200}
+	pendingTimers = []int64{200}
 
 	Start(nil)
 
@@ -87,8 +88,8 @@ func TestStartInitializesTimeState(t *testing.T) {
 	if startTimestamp.IsZero() {
 		t.Fatal("expected non-zero start timestamp")
 	}
-	if nextTimerIndex != 0 {
-		t.Fatalf("nextTimerIndex = %d, want 0", nextTimerIndex)
+	if !slices.Equal(pendingTimers, registeredTimers) {
+		t.Fatalf("pending timers = %v, want %v", pendingTimers, registeredTimers)
 	}
 }
 
@@ -225,6 +226,18 @@ func TestTimeScaleSupportsConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
+func assertTimers(t *testing.T, want ...int64) {
+	t.Helper()
+	for _, timestamp := range want {
+		if got, ok := NextTimer(); !ok || got != timestamp {
+			t.Fatalf("NextTimer() = (%v, %v), want (%v, true)", got, ok, timestamp)
+		}
+	}
+	if got, ok := NextTimer(); ok {
+		t.Fatalf("unexpected timer: %v", got)
+	}
+}
+
 func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	resetStateForTest()
 	Start(nil)
@@ -234,33 +247,25 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	if got := Timer(); got != 0.4 {
 		t.Fatalf("Timer() = %v, want 0.4", got)
 	}
-	if _, ok := NextTimer(); ok {
-		t.Fatal("did not expect timer to fire before reaching target")
-	}
+	assertTimers(t)
 
 	Update(0.1, 60)
 	if got := Timer(); got != 0.5 {
 		t.Fatalf("Timer() = %v, want 0.5", got)
 	}
-	if got, ok := NextTimer(); !ok || got != 0.5 {
-		t.Fatalf("NextTimer() = (%v, %v), want (0.5, true)", got, ok)
-	}
+	assertTimers(t, 500)
 
 	ResetTimer()
 	if got := Timer(); got != 0 {
 		t.Fatalf("Timer() after ResetTimer = %v, want 0", got)
 	}
-	if _, ok := NextTimer(); ok {
-		t.Fatal("did not expect timer to fire immediately after reset")
-	}
+	assertTimers(t)
 
 	Update(0.5, 60)
 	if got := Timer(); got != 0.5 {
 		t.Fatalf("Timer() after reset update = %v, want 0.5", got)
 	}
-	if got, ok := NextTimer(); !ok || got != 0.5 {
-		t.Fatalf("NextTimer() after reset = (%v, %v), want (0.5, true)", got, ok)
-	}
+	assertTimers(t, 500)
 }
 
 func TestOnReloadClearsRegisteredTimers(t *testing.T) {
@@ -274,10 +279,42 @@ func TestOnReloadClearsRegisteredTimers(t *testing.T) {
 	if got := Timer(); got != 0 {
 		t.Fatalf("Timer() = %v, want 0", got)
 	}
-	if len(timestamps) != 0 {
-		t.Fatalf("len(timestamps) = %d, want 0", len(timestamps))
+	if len(registeredTimers) != 0 {
+		t.Fatalf("registered timers = %v, want none", registeredTimers)
 	}
-	if _, ok := NextTimer(); ok {
-		t.Fatal("did not expect any timers after reload")
+	assertTimers(t)
+}
+
+func TestTimerRegistrationAfterDispatch(t *testing.T) {
+	resetStateForTest()
+	Start(nil)
+	RegisterTimer(1)
+	RegisterTimer(2)
+	Update(1, 60)
+	assertTimers(t, 1000)
+
+	RegisterTimer(0.5)
+	RegisterTimer(1.5)
+	RegisterTimer(1)
+	assertTimers(t, 500)
+
+	Update(1, 60)
+	assertTimers(t, 1500, 2000)
+
+	ResetTimer()
+	Update(2, 60)
+	assertTimers(t, 500, 1000, 1500, 2000)
+}
+
+func TestTimerRegistrationAfterDrain(t *testing.T) {
+	resetStateForTest()
+	Start(nil)
+	RegisterTimer(0.5)
+	Update(1, 60)
+	assertTimers(t, 500)
+
+	for _, at := range []float64{0.75, 0.25, 0.5009, 0.25} {
+		RegisterTimer(at)
 	}
+	assertTimers(t, 250, 750)
 }

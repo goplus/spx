@@ -53,7 +53,7 @@ type eventMouseMove struct {
 }
 
 type eventTimer struct {
-	Time float64
+	Timestamp int64
 }
 
 var (

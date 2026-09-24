@@ -16,10 +16,7 @@
 
 package event
 
-import (
-	"math"
-	"slices"
-)
+import "slices"
 
 func NewSink(owner any, handler any, cond ...func(any) bool) Sink {
 	sink := Sink{
@@ -58,13 +55,6 @@ func MatchAnyOf[T comparable](values []T) func(any) bool {
 			return false
 		}
 		return slices.Contains(values, got)
-	}
-}
-
-func MatchApproxFloat(want, tolerance float64) func(any) bool {
-	return func(data any) bool {
-		got, ok := data.(float64)
-		return ok && math.Abs(got-want) < tolerance
 	}
 }
 

@@ -16,79 +16,52 @@
 
 package time
 
-import (
-	"sort"
-)
+import "slices"
 
 const timePrecision = 1000
 
 var (
-	timerBaseTime  float64
-	timestamps     []int64
-	nextTimerIndex int
+	timerBaseTime    float64
+	registeredTimers []int64
+	pendingTimers    []int64
 )
 
 func Timer() float64 {
-	return timestampToTimerValue(currentTimerTimestamp())
+	return float64(timerMillis()) / timePrecision
 }
 
 func ResetTimer() {
 	timerBaseTime = timeSinceLevelLoad
-	nextTimerIndex = 0
+	pendingTimers = append(pendingTimers[:0], registeredTimers...)
 }
 
 func OnReload() {
+	registeredTimers = registeredTimers[:0]
 	ResetTimer()
-	timestamps = timestamps[:0]
 }
 
-func RegisterTimer(timer float64) {
-	timestamp := timerValueToTimestamp(timer)
-
-	insertIndex := sort.Search(len(timestamps), func(i int) bool {
-		return timestamps[i] >= timestamp
-	})
-
-	if insertIndex < len(timestamps) && timestamps[insertIndex] == timestamp {
-		return
+// RegisterTimer returns a millisecond key that fires once per reset.
+// New overdue keys fire on the next poll.
+func RegisterTimer(timer float64) int64 {
+	timestamp := int64(timer * timePrecision)
+	i, exists := slices.BinarySearch(registeredTimers, timestamp)
+	if !exists {
+		registeredTimers = slices.Insert(registeredTimers, i, timestamp)
+		i, _ = slices.BinarySearch(pendingTimers, timestamp)
+		pendingTimers = slices.Insert(pendingTimers, i, timestamp)
 	}
-
-	timestamps = append(timestamps, 0)
-	copy(timestamps[insertIndex+1:], timestamps[insertIndex:])
-	timestamps[insertIndex] = timestamp
+	return timestamp
 }
 
-func NextTimer() (float64, bool) {
-	if len(timestamps) == 0 {
+func NextTimer() (int64, bool) {
+	if len(pendingTimers) == 0 || pendingTimers[0] > timerMillis() {
 		return 0, false
 	}
-
-	if nextTimerIndex >= len(timestamps) {
-		return 0, false
-	}
-
-	targetTimer := timestamps[nextTimerIndex]
-	currentTime := currentTimerTimestamp()
-	if targetTimer > currentTime {
-		return 0, false
-	}
-
-	nextTimerIndex++
-	return timestampToTimerValue(targetTimer), true
+	timestamp := pendingTimers[0]
+	pendingTimers = pendingTimers[1:]
+	return timestamp, true
 }
 
-func currentTimerTimestamp() int64 {
-	currentTimer := timeSinceLevelLoad - timerBaseTime
-	if currentTimer <= 0 {
-		return 0
-	}
-	return timerValueToTimestamp(currentTimer)
-}
-
-func timerValueToTimestamp(timer float64) int64 {
-	return int64(timer * timePrecision)
-}
-
-func timestampToTimerValue(timestamp int64) float64 {
-	return float64(timestamp) / timePrecision
+func timerMillis() int64 {
+	return int64(max(timeSinceLevelLoad-timerBaseTime, 0) * timePrecision)
 }
