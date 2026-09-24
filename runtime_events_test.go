@@ -228,6 +228,43 @@ func TestAwakeNilDispatchesEveryOwner(t *testing.T) {
 	}
 }
 
+func TestOnTimerMatchesMilliseconds(t *testing.T) {
+	previous := gco
+	gco = nil
+	itime.Start(nil)
+	itime.OnReload()
+	t.Cleanup(func() {
+		gco = previous
+		itime.OnReload()
+	})
+
+	var game Game
+	game.bindScriptEvents()
+	times := []float64{0.5009, 0.5011, 0.5001, 1.0019, 1.0021}
+	calls := make([]int, len(times))
+	for i, at := range times {
+		game.OnTimer(at, func() { calls[i]++ })
+	}
+	game.OnTimer(0.5, nil)
+
+	for round := 1; round <= 2; round++ {
+		itime.Update(2, 60)
+		for {
+			at, ok := itime.NextTimer()
+			if !ok {
+				break
+			}
+			game.handleEvent(&eventTimer{Timestamp: at})
+		}
+		for i, got := range calls {
+			if got != round {
+				t.Errorf("timer %v after round %d: %d calls, want %d", times[i], round, got, round)
+			}
+		}
+		itime.ResetTimer()
+	}
+}
+
 func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
 	co := setupRuntimeEventScheduler(t)
 

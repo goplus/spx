@@ -39,9 +39,6 @@ func TestSinkMatchers(t *testing.T) {
 	if !MatchAnyOf([]int{1, 2, 3})(2) || MatchAnyOf([]int{1, 2, 3})(4) {
 		t.Fatal("MatchAnyOf mismatch")
 	}
-	if !MatchApproxFloat(1.5, 0.01)(1.5001) || MatchApproxFloat(1.5, 0.01)(1.6) {
-		t.Fatal("MatchApproxFloat mismatch")
-	}
 }
 
 func TestMatchRisingEdge(t *testing.T) {

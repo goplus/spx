@@ -69,16 +69,16 @@ type LogicFrameConfig[T any] struct {
 	TempAnimations           []string
 	FlushPendingAudio        func(T, []string) []string
 	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (float64, bool)
-	FireTimer                func(float64)
+	NextTimer                func() (int64, bool)
+	FireTimer                func(int64)
 }
 
 type LogicLoopConfig[T any] struct {
 	Items                    func() []T
 	FlushPendingAudio        func(T, []string) []string
 	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (float64, bool)
-	FireTimer                func(float64)
+	NextTimer                func() (int64, bool)
+	FireTimer                func(int64)
 	ShowDebugPanel           func()
 }
 

@@ -97,10 +97,10 @@ func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 }
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
-	itime.RegisterTimer(time)
+	timestamp := itime.RegisterTimer(time)
 	p.scriptEventRegistry.manager.Add(coreevent.BucketTimer, coreevent.NewSink(
 		p.owner,
-		func(float64) {
+		func() {
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnTimer: %s", nameOf(p.owner))
 			}
@@ -108,7 +108,7 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 				call()
 			}
 		},
-		coreevent.MatchApproxFloat(time, 0.001),
+		coreevent.MatchValue(timestamp),
 	))
 }
 
@@ -353,7 +353,7 @@ func (p *Game) handleEvent(ev event) {
 			gco.Join(dispatcher)
 		}
 	case *eventTimer:
-		p.scriptEvents.doWhenTimer(e.Time)
+		p.scriptEvents.doWhenTimer(e.Timestamp)
 	}
 }
 
@@ -395,12 +395,12 @@ func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
 	})
 }
 
-func (p *scriptEventRegistry) doWhenTimer(time float64) {
+func (p *scriptEventRegistry) doWhenTimer(timestamp int64) {
 	p.dispatchGlobal(coreevent.BucketTimer, scriptEventDispatch{
 		mode:      coroutine.BatchAsync,
-		matchData: time,
+		matchData: timestamp,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			ev.Handler.(func(float64))(time)
+			ev.Handler.(func())()
 		},
 	})
 }
