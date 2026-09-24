@@ -332,6 +332,8 @@ jobs:
     name: Static checks
     needs: setup
     uses: ./.github/workflows/static_checks.yml
+    with:
+      check_export_types: true
 
   godot-runtime-build:
     name: Build locked Godot runtime

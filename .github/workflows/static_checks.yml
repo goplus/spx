@@ -2,6 +2,11 @@ name: Static Checks
 
 on:
   workflow_call:
+    inputs:
+      check_export_types:
+        description: Require the embedded SPX type snapshot to match generated output byte for byte
+        type: boolean
+        default: false
 
 jobs:
   static-checks:
@@ -36,7 +41,12 @@ jobs:
         working-directory: cmd/ispx
         run: go generate ./...
 
-      - name: Ensure working tree is clean
+      # Embedded type data also changes for private implementation edits.
+      - name: Restore committed SPX type snapshot in regular CI
+        if: ${{ !inputs.check_export_types }}
+        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v3/export.types
+
+      - name: Ensure generated files are up to date
         run: git diff --exit-code
 
       - name: Check shell scripts
