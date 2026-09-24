@@ -123,6 +123,7 @@ type Game struct {
 	tilemapMgr     gameTilemapMgr
 
 	syncBuffer    *engine.SpriteSyncBuffer
+	physicsPull   physicsPullBuffer
 	penSyncBuffer *engine.PenSyncBuffer
 	triggerEvents []engine.TriggerEvent
 	spatialHash   *collision.SpatialHash[*SpriteImpl]
