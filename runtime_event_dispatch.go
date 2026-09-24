@@ -84,11 +84,17 @@ func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scri
 
 func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any, event scriptEventDispatch) {
 	sinks := p.manager.Snapshot(bucket)
-	owned := make([]eventSink, 0, len(sinks))
+	var owned []eventSink
 	for _, sink := range sinks {
 		if sink.Owner == owner {
+			if owned == nil {
+				owned = make([]eventSink, 0, min(len(sinks), 8))
+			}
 			owned = append(owned, sink)
 		}
+	}
+	if len(owned) == 0 {
+		return
 	}
 	p.dispatchSinks(owned, event)
 }
