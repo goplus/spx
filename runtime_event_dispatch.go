@@ -172,10 +172,8 @@ func sinksInTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	}
 
 	shapes := game.getAllShapes()
-	// Group by links into the immutable snapshot instead of allocating a slice
-	// per sprite. Clone-heavy broadcasts otherwise allocate hundreds of small
-	// slices before any handler runs, creating avoidable GC work on Web.
-	// Indices are one-based so zero is the end of a group.
+	// Link immutable snapshot entries to avoid per-sprite slices.
+	// Indices are one-based; zero ends a group.
 	heads := make(map[*SpriteImpl]int, len(shapes))
 	for _, shape := range shapes {
 		if sprite, ok := shape.(*SpriteImpl); ok {

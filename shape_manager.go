@@ -36,12 +36,7 @@ const (
 // Scratch shares one limit across all sprites, including hidden clones.
 const maxClones = 300
 
-// shapeManager manages the lifecycle of all runtime shapes.
-// It is responsible for:
-//   - activation (delayed add)
-//   - destruction (delayed remove)
-//   - render layer grouping
-//   - minimizing per-frame allocations
+// shapeManager tracks active shapes and reusable frame buffers.
 type shapeManager struct {
 	cloneCount               int
 	pendingClones            int
@@ -87,8 +82,7 @@ func (s *shapeManager) takeCloneProxyPublications() bool {
 	return s.pendingClonePublications.Swap(false)
 }
 
-// reset clears all internal state while keeping allocated memory.
-// It is safe to call between scenes or rounds.
+// reset clears the scene and reuses frame buffers.
 func (s *shapeManager) reset() {
 	engine.ClearAllSprites()
 	s.init()
@@ -262,18 +256,13 @@ func (s *shapeManager) removeShape(child Shape) {
 
 // activateShape moves a shape to the end of the active list.
 func (s *shapeManager) activateShape(child Shape) {
-	items := s.items
-	for idx, item := range items {
-		if item == child {
-			if idx == len(items)-1 {
-				return
-			}
-			s.items = sliceutil.MoveToEnd(s.items, idx)
-			clear(s.named)
-			s.updateRenderLayers()
-			return
-		}
+	idx := s.findShapeIndex(child)
+	if idx < 0 || idx == len(s.items)-1 {
+		return
 	}
+	s.items = sliceutil.MoveToEnd(s.items, idx)
+	clear(s.named)
+	s.updateRenderLayers()
 }
 
 // goBackLayers moves a sprite forward or backward by n layers.

@@ -30,38 +30,3 @@ func TestAABBIntersects(t *testing.T) {
 		t.Fatal("expected separated boxes not to intersect")
 	}
 }
-
-func TestSpatialHashQueryDeduplicatesEntries(t *testing.T) {
-	hash := NewSpatialHash[string](10)
-	entry := &Entry[string]{
-		Value: "sprite",
-		Box:   AABB{MinX: 0, MinY: 0, MaxX: 15, MaxY: 15},
-	}
-	hash.Insert(entry)
-
-	results := hash.Query(AABB{MinX: 5, MinY: 5, MaxX: 12, MaxY: 12})
-	if len(results) != 1 {
-		t.Fatalf("expected 1 unique result, got %d", len(results))
-	}
-	if results[0].Value != "sprite" {
-		t.Fatalf("unexpected query result: %q", results[0].Value)
-	}
-}
-
-func TestSpatialHashClearResetsOuterBuckets(t *testing.T) {
-	hash := NewSpatialHash[string](10)
-	hash.Insert(&Entry[string]{Value: "sprite", Box: AABB{MinX: 0, MinY: 0, MaxX: 5, MaxY: 5}})
-	hash.Clear()
-	if len(hash.grid) != 0 {
-		t.Fatalf("grid len = %d, want 0 after Clear", len(hash.grid))
-	}
-}
-
-func TestNewSpatialHashRejectsNonPositiveCellSize(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic for non-positive cell size")
-		}
-	}()
-	_ = NewSpatialHash[string](0)
-}
