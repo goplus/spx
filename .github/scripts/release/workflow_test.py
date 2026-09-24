@@ -11,6 +11,9 @@ from pathlib import Path
 
 WORKFLOW_PATH = Path(__file__).resolve().parents[2] / "workflows" / "release.yml"
 RUNNER_WORKFLOW_PATH = Path(__file__).resolve().parents[2] / "workflows" / "runner.yml"
+STATIC_CHECKS_WORKFLOW_PATH = (
+    Path(__file__).resolve().parents[2] / "workflows" / "static_checks.yml"
+)
 ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
 WEB_PACKAGE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
@@ -88,12 +91,12 @@ def step_script(block, name):
     return "\n".join(body)
 
 
-def workflow_dispatch_input_block(text, name):
+def workflow_input_block(text, name):
     lines = text.splitlines()
     try:
         start = lines.index(f"      {name}:")
     except ValueError as exc:
-        raise AssertionError(f"missing workflow_dispatch input {name!r}") from exc
+        raise AssertionError(f"missing workflow input {name!r}") from exc
 
     body = [lines[start]]
     for line in lines[start + 1 :]:
@@ -112,15 +115,35 @@ class ReleaseWorkflowTest(unittest.TestCase):
         cls.jobs = job_blocks(cls.workflow)
         cls.runner_workflow = RUNNER_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.runner_jobs = job_blocks(cls.runner_workflow)
+        cls.static_checks_workflow = STATIC_CHECKS_WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.static_checks_jobs = job_blocks(cls.static_checks_workflow)
         cls.web_package_workflow = WEB_PACKAGE_WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.web_package_jobs = job_blocks(cls.web_package_workflow)
 
+    def test_export_types_snapshot_is_checked_at_release(self):
+        input_block = workflow_input_block(self.static_checks_workflow, "check_export_types")
+        self.assertIn("        type: boolean", input_block)
+        self.assertIn("        default: false", input_block)
+        self.assertIn("      check_export_types: true", self.jobs["static-checks"])
+        self.assertNotIn("check_export_types: true", self.runner_jobs["static-checks"])
+
+        steps = self.static_checks_jobs["static-checks"]
+        restore = (
+            "      - name: Restore committed SPX type snapshot in regular CI\n"
+            "        if: ${{ !inputs.check_export_types }}\n"
+            "        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v3/export.types"
+        )
+        check = "      - name: Ensure generated files are up to date\n        run: git diff --exit-code"
+        self.assertIn(restore, steps)
+        self.assertIn(check, steps)
+        self.assertLess(steps.index(restore), steps.index(check))
+
     def test_publish_dev_input_contract(self):
-        release_tag = workflow_dispatch_input_block(self.workflow, "release_tag")
+        release_tag = workflow_input_block(self.workflow, "release_tag")
         self.assertIn("        required: false", release_tag)
         self.assertIn("        default: ''", release_tag)
 
-        operation = workflow_dispatch_input_block(self.workflow, "operation")
+        operation = workflow_input_block(self.workflow, "operation")
         self.assertIn("          - publish-dev-npm", operation)
 
     def test_runner_selects_current_build_for_an_incompatible_runtime(self):
