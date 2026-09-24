@@ -48,7 +48,7 @@ class RuntimeBuildContractTest(unittest.TestCase):
         self.assertEqual(
             outputs,
             {
-                "go-version": "1.25.8",
+                "go-version": "1.26.5",
                 "xgo-version": "1.7.5",
                 "scons-version": "4.8.1",
                 "emsdk-version": "3.1.62",
