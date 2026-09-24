@@ -21,9 +21,9 @@ function loadManager() {
     manager.setPThreads({
         runningWorkers: [{ postMessage: (message) => messages.push(message) }],
     });
-    const game = { rtenv: {} };
-    manager.bindMainThreadCallbacks(game);
-    return { context, window, manager, messages, errors, call: game.rtenv._spxOnMainCall };
+    const engine = { rtenv: {} };
+    manager.bindMainThreadCallbacks(engine);
+    return { context, window, manager, messages, errors, call: engine.rtenv._spxOnMainCall };
 }
 
 const settleCallbacks = () => new Promise(setImmediate);

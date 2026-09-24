@@ -1,5 +1,5 @@
 
-function handleGameAppMessage(data) {
+function handleGameRunnerMessage(data) {
   const workerId = (typeof Module !== 'undefined' && Module['workerID']) || 'unknown';
   const threadInfo = typeof importScripts !== 'undefined' ? 'Worker' : 'MainThread';
   try {
@@ -14,11 +14,11 @@ function handleGameAppMessage(data) {
         handleCallResponse(data);
         break;
       default:
-        console.warn(`[Thread ${threadInfo}-${workerId}] Unknown GameApp command:`, data.cmd || data.type);
+        console.warn(`[Thread ${threadInfo}-${workerId}] Unknown GameRunner command:`, data.cmd || data.type);
         break;
     }
   } catch (error) {
-    console.error(`[Thread ${threadInfo}-${workerId}] Error handling GameApp message:`, error);
+    console.error(`[Thread ${threadInfo}-${workerId}] Error handling GameRunner message:`, error);
   }
 }
 

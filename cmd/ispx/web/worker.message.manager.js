@@ -14,8 +14,8 @@ class WorkerMessageManager {
     }
 
     // === PThread Worker message sending related methods ===
-    bindMainThreadCallbacks(game) {
-        game.rtenv["_spxOnMainCall"] = window._spxOnMainCall
+    bindMainThreadCallbacks(engine) {
+        engine.rtenv["_spxOnMainCall"] = window._spxOnMainCall
     }
 
     callWorkerProjectDataUpdate(projectData, assetURLs) {
@@ -139,7 +139,7 @@ class WorkerMessageManager {
                     // Adds unique identifier and target info to each message
                     let enhancedMessage = {
                         ...message,
-                        _gameAppMessageId: ++this.workerMessageId,
+                        _gameRunnerMessageId: ++this.workerMessageId,
                         _targetWorkerIndex: index,
                         _timestamp: Date.now()
                     };
