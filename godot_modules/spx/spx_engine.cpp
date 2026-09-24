@@ -417,7 +417,9 @@ TextureRect *SpxEngine::_create_freeze_texture(const Ref<Image> &img) const {
 	Ref<ImageTexture> tex = ImageTexture::create_from_image(img);
 	TextureRect *screen = memnew(TextureRect);
 	screen->set_texture(tex);
-	screen->set_stretch_mode(TextureRect::STRETCH_SCALE);
+	// Reset disables content scaling, so keep the captured viewport's aspect ratio.
+	screen->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
+	screen->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
 	screen->set_anchors_and_offsets_preset(Control::PRESET_FULL_RECT);
 	screen->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
 	return screen;
