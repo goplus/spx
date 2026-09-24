@@ -16,6 +16,8 @@
 
 package sliceutil
 
+import "unsafe"
+
 func InsertAt[T any](slice []T, idx int, item T) []T {
 	var zero T
 	slice = append(slice, zero)
@@ -56,18 +58,28 @@ func MoveToIndex[T any](slice []T, oldIdx, newIdx int) []T {
 	return slice
 }
 
+// CopyInto reuses disjoint storage and clears unused elements.
 func CopyInto[T any](dst, src []T, minCap int) []T {
 	requiredCap := max(minCap, len(src))
-	oldLen := len(dst)
-	reused := cap(dst) >= requiredCap
-	if !reused {
+	if cap(dst) < requiredCap || overlaps(dst[:max(len(dst), len(src))], src) {
 		dst = make([]T, len(src), requiredCap)
-	} else {
-		dst = dst[:len(src)]
+	} else if len(src) < len(dst) {
+		clear(dst[len(src):])
 	}
+	dst = dst[:len(src)]
 	copy(dst, src)
-	if reused && len(src) < oldLen {
-		clear(dst[:oldLen][len(src):])
-	}
 	return dst
+}
+
+func overlaps[T any](a, b []T) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	size := unsafe.Sizeof(a[0])
+	if size == 0 {
+		return false
+	}
+	aStart := uintptr(unsafe.Pointer(unsafe.SliceData(a)))
+	bStart := uintptr(unsafe.Pointer(unsafe.SliceData(b)))
+	return aStart < bStart+uintptr(len(b))*size && bStart < aStart+uintptr(len(a))*size
 }
