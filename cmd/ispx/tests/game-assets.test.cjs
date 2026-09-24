@@ -14,7 +14,7 @@ function file(lastModified, text) {
     return { lastModified, content: Uint8Array.from(Buffer.from(text)).buffer }
 }
 
-function newApp() {
+function newRunner() {
     const files = new Map()
     const writes = []
     const deleted = []
@@ -58,31 +58,31 @@ function newApp() {
         deleteDirRecursive: vm.runInContext('GodotGdspx.removeDirRecursive', context),
         updateGameDatas: vm.runInContext('GodotGdspx.updateGameDatas', context),
     }
-    const app = new context.GameApp()
-    app.game = new context.Engine()
-    app.game.rtenv = runtime
-    return { app, files, writes, deleted, fs, runtime }
+    const runner = new context.GameRunner()
+    runner.engine = new context.Engine()
+    runner.engine.rtenv = runtime
+    return { runner, files, writes, deleted, fs, runtime }
 }
 
 test('syncs changed files, removes old files, and skips unchanged files and directories', () => {
-    const { app, files, writes, deleted } = newApp()
+    const { runner, files, writes, deleted } = newRunner()
     const keep = file(1, 'keep')
-    app.updateEngineFiles({ keep, old: file(1, 'old') })
+    runner.updateEngineFiles({ keep, old: file(1, 'old') })
     writes.length = 0
 
     const next = { keep, added: file(2, 'new'), 'directory/': file(2, '') }
-    app.updateEngineFiles(next)
-    app.updateEngineFiles(next)
+    runner.updateEngineFiles(next)
+    runner.updateEngineFiles(next)
 
     assert.deepEqual([...files], [['engine/keep', 'keep'], ['engine/added', 'new']])
     assert.deepEqual(writes, ['engine/added'])
     assert.deepEqual(deleted, ['engine/old'])
-    assert.deepEqual(Object.keys(app.projectFilesMeta).sort(), ['added', 'keep'])
+    assert.deepEqual(Object.keys(runner.projectFilesMeta).sort(), ['added', 'keep'])
 })
 
 for (const method of ['copyToFS', 'updateGameDatas']) {
     test(`${method} failure rejects InitGame and retries the same timestamp`, async () => {
-        const { app, files, writes, runtime } = newApp()
+        const { runner, files, writes, runtime } = newRunner()
         const original = runtime[method]
         const error = new Error('asset sync failed')
         runtime[method] = (...args) => {
@@ -90,26 +90,26 @@ for (const method of ['copyToFS', 'updateGameDatas']) {
             throw error
         }
         let builds = 0
-        app.buildGame = () => { builds++ }
+        runner.buildGame = () => { builds++ }
         const next = { sprite: file(1, 'new') }
 
-        await assert.rejects(app.InitGame(next), error)
+        await assert.rejects(runner.InitGame(next), error)
         assert.equal(builds, 0)
         const attempts = writes.length
         runtime[method] = original
-        await app.InitGame(next)
+        await runner.InitGame(next)
 
         assert.equal(files.get('engine/sprite'), 'new')
         assert.equal(writes.length, attempts + 1)
         assert.equal(builds, 1)
-        assert.equal(app.projectFilesMeta.sprite.lastModified, 1)
+        assert.equal(runner.projectFilesMeta.sprite.lastModified, 1)
     })
 }
 
 test('retrying an older version after partial writes restores files and removes new paths', () => {
-    const { app, files, runtime } = newApp()
+    const { runner, files, runtime } = newRunner()
     const previous = { sprite: file(1, 'old') }
-    app.updateEngineFiles(previous)
+    runner.updateEngineFiles(previous)
     const copy = runtime.copyToFS
     const error = new Error('write failed')
     runtime.copyToFS = (name, data) => {
@@ -117,22 +117,22 @@ test('retrying an older version after partial writes restores files and removes 
         if (name === 'engine/broken') throw error
     }
 
-    assert.throws(() => app.updateEngineFiles({
+    assert.throws(() => runner.updateEngineFiles({
         sprite: file(2, 'changed'),
         added: file(2, 'new'),
         broken: file(2, 'partial'),
     }), error)
     runtime.copyToFS = copy
-    app.updateEngineFiles(previous)
+    runner.updateEngineFiles(previous)
 
     assert.deepEqual([...files], [['engine/sprite', 'old']])
-    assert.equal(app.projectFilesMeta.sprite.lastModified, 1)
+    assert.equal(runner.projectFilesMeta.sprite.lastModified, 1)
 })
 
 test('retrying after partial deletion restores files with unchanged timestamps', () => {
-    const { app, files, fs } = newApp()
+    const { runner, files, fs } = newRunner()
     const previous = { first: file(1, 'first'), second: file(1, 'second') }
-    app.updateEngineFiles(previous)
+    runner.updateEngineFiles(previous)
     const unlink = fs.unlink
     const error = Object.assign(new Error('delete failed'), { errno: 29 })
     fs.unlink = name => {
@@ -140,28 +140,28 @@ test('retrying after partial deletion restores files with unchanged timestamps',
         if (name === 'engine/second') throw error
     }
 
-    assert.throws(() => app.updateEngineFiles({}), error)
+    assert.throws(() => runner.updateEngineFiles({}), error)
     fs.unlink = unlink
-    app.updateEngineFiles(previous)
+    runner.updateEngineFiles(previous)
 
     assert.deepEqual([...files], [['engine/first', 'first'], ['engine/second', 'second']])
 })
 
 test('deleting an already missing file succeeds', () => {
-    const { app, files } = newApp()
-    app.updateEngineFiles({ sprite: file(1, 'old') })
+    const { runner, files } = newRunner()
+    runner.updateEngineFiles({ sprite: file(1, 'old') })
     files.clear()
-    app.updateEngineFiles({})
-    assert.deepEqual(Object.keys(app.projectFilesMeta), [])
+    runner.updateEngineFiles({})
+    assert.deepEqual(Object.keys(runner.projectFilesMeta), [])
 })
 
 test('recursive deletion propagates child errors', () => {
-    const { app, fs } = newApp()
+    const { runner, fs } = newRunner()
     const error = Object.assign(new Error('permission denied'), { errno: 2 })
     fs.stat = name => ({ mode: name === 'engine/tree' ? 'directory' : 'file' })
     fs.readdir = () => ['.', '..', 'child']
     fs.unlink = () => { throw error }
     fs.rmdir = () => assert.fail('must stop after the child fails')
 
-    assert.throws(() => app.game.deleteAssetsData('engine', ['tree']), error)
+    assert.throws(() => runner.engine.deleteAssetsData('engine', ['tree']), error)
 })

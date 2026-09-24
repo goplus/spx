@@ -51,7 +51,7 @@
 	<script>
 		"use strict";
 
-		let gameApp = null
+		let gameRunner = null
 		let isShowEditor = false
 		const captureBridge = createCaptureBridge(() => window.getScreenshot())
 
@@ -72,7 +72,7 @@
 				document.getElementById('tab-editor').style.display = 'none';
 				document.getElementById('tab-loader').style.display = 'none';
 				let canvas = null
-				if (gameApp.isEditor) {
+				if (gameRunner.isEditor) {
 					if (isShowEditor) {
 						document.getElementById('tab-editor').style.display = 'block';
 					}
@@ -96,8 +96,8 @@
 		let onEngineCrash = null;
 		const MAX_RESTART_ATTEMPTS = 3;
 		async function restartEngineAfterCrash(reason, code) {
-			if (gameApp != null) {
-				gameApp.onRuntimeReset(code)
+			if (gameRunner != null) {
+				gameRunner.onRuntimeReset(code)
 			}
 			if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
 				console.error("Max restart attempts reached.  Please reload manually.");
@@ -109,7 +109,7 @@
 			restartAttempts++;
 
 			console.warn(`Crash detected. Reason: ${reason}, Exit code: ${code}`);
-			gameApp = null;
+			gameRunner = null;
 			try {
 				await window.initEngine(lastAssetURLs, lastConfig);
 				restartAttempts = 0; 
@@ -144,8 +144,8 @@
 		}
 
 		window.gdspx_on_runtime_reset = async (code) => {
-			if (gameApp != null) {
-				gameApp.onRuntimeReset(code)
+			if (gameRunner != null) {
+				gameRunner.onRuntimeReset(code)
 			}
 			if (onGameExit != null) {
 				onGameExit(code)
@@ -159,20 +159,20 @@
 		window.initEngine = async (assetURLs = null, config = {}) => {
 			isShowEditor = false
 			
-			if (gameApp != null) {
-				await gameApp.ResetGame();
+			if (gameRunner != null) {
+				await gameRunner.ResetGame();
 				return;
 			}
 
 			if(EnginePackMode == "worker"){
 				window.xbuilder_set_ai_description = function (description) {
-					gameApp.callWorkerFunction("xbuilder_set_ai_description", description)
+					gameRunner.callWorkerFunction("xbuilder_set_ai_description", description)
 				}
 				window.xbuilder_set_ai_interaction_api_endpoint = function (endpoint) {
-					gameApp.callWorkerFunction("xbuilder_set_ai_interaction_api_endpoint", endpoint)
+					gameRunner.callWorkerFunction("xbuilder_set_ai_interaction_api_endpoint", endpoint)
 				}
 				window.xbuilder_set_ai_interaction_api_token_provider = function (tokenProviderFunction) {
-					gameApp.callWorkerFunction("xbuilder_set_ai_interaction_api_token_provider", tokenProviderFunction)
+					gameRunner.callWorkerFunction("xbuilder_set_ai_interaction_api_token_provider", tokenProviderFunction)
 				}
 
 				window.on_wasm_loaded = function () {}
@@ -203,13 +203,13 @@
 			lastAssetURLs = assetURLs
 			lastConfig = config
 			Object.assign(finalConfig, config);
-			gameApp = new GameApp(finalConfig);
-			await gameApp.InitEngine();
+			gameRunner = new GameRunner(finalConfig);
+			await gameRunner.InitEngine();
 		}
 
 		window.initGame = async (files) => {
-			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
-			await gameApp.InitGame(files)
+			if (gameRunner == null) throw new Error("Engine is not initialized; call initEngine first")
+			await gameRunner.InitGame(files)
 		}
 
 		async function captureScreenshot() {
@@ -237,27 +237,27 @@
 		}
 
 		window.startGame = async (options = {}) => {
-			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
-			await gameApp.StartGame(spxInputSession.normalizeStartOptions(options));
+			if (gameRunner == null) throw new Error("Engine is not initialized; call initEngine first")
+			await gameRunner.StartGame(spxInputSession.normalizeStartOptions(options));
 		}
 
 		window.getInputSessionStatus = async () => {
-			if (gameApp == null) return { mode: 'idle', completed: false, currentTick: null, nextFrame: 0, frameCount: 0 }
-			return gameApp.getInputSessionStatus()
+			if (gameRunner == null) return { mode: 'idle', completed: false, currentTick: null, nextFrame: 0, frameCount: 0 }
+			return gameRunner.getInputSessionStatus()
 		}
 
 		window.waitInputSessionCompleted = async (options = {}) => {
-			if (gameApp == null) throw new Error("gameApp is null, should call initEngine first")
-			const status = await gameApp.waitInputSessionCompleted(options)
+			if (gameRunner == null) throw new Error("Engine is not initialized; call initEngine first")
+			const status = await gameRunner.waitInputSessionCompleted(options)
 			await captureBridge.flush()
 			return status
 		}
 
 		window.stopGame = async () => {
-			if (gameApp == null) {
-				throw new Error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				throw new Error("Engine is not initialized; call initEngine first")
 			}
-			const result = await gameApp.StopGame(() => captureBridge.flush());
+			const result = await gameRunner.StopGame(() => captureBridge.flush());
 			await captureBridge.flush()
 			return {
 				...result,
@@ -266,63 +266,63 @@
 		}
 
 		window.startRecording = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return
 			}
-			gameApp.startRecording()
+			gameRunner.startRecording()
 		}
 
 		window.stopRecording = async () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return
 			}
-			return gameApp.stopRecording()
+			return gameRunner.stopRecording()
 		}
 
 		window.getRecordedVideo = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return null
 			}
-			return gameApp.getRecordedVideo()
+			return gameRunner.getRecordedVideo()
 		}
 
 		window.downloadRecordedVideo = (filename) => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return null
 			}
-			gameApp.downloadRecordedVideo(filename)
+			gameRunner.downloadRecordedVideo(filename)
 		}
 
 		window.pauseGame = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return
 			}
-			gameApp.pause();
+			gameRunner.pause();
 		}
 
 		window.isGamePaused = () => {
-			return gameApp != null && gameApp.isPaused();
+			return gameRunner != null && gameRunner.isPaused();
 		}
 
 		window.resumeGame = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return
 			}
-			gameApp.resume();
+			gameRunner.resume();
 		}
 
 		window.stepNextFrame = () => {
-			if (gameApp == null) {
-				console.error("gameApp is null, should call startGame first")
+			if (gameRunner == null) {
+				console.error("Engine is not initialized; call initEngine first")
 				return
 			}
-			gameApp.stepNextFrame();
+			gameRunner.stepNextFrame();
 		}
 		
 		// Inform the parent window that the runner is ready (methods on the window object are callable)
