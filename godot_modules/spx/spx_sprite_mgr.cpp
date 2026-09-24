@@ -171,16 +171,10 @@ void SpxSpriteMgr::on_update(float delta) {
 		return;
 	}
 
-	Vector<ISortableSprite *> all_sortables;
-
-	for (auto &pair : id_objects) {
-		if (pair.value && !pair.value->is_queued_for_deletion()) {
-			all_sortables.push_back(pair.value);
-		}
-	}
-
-	sceneMgr->collect_sortable_sprites(all_sortables);
-	sorter.update(all_sortables);
+	Vector<ISortableSprite *> sortables;
+	collect_sortable_sprites(sortables);
+	sceneMgr->collect_sortable_sprites(sortables);
+	sorter.update(sortables);
 }
 
 void SpxSpriteMgr::on_reset(int reset_code) {
