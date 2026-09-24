@@ -1,0 +1,7 @@
+interface:
+  display_name: "spx project"
+  short_description: "Write user-facing spx project code"
+  default_prompt: "Use $spx-project to write or modify a user-facing spx project."
+
+policy:
+  allow_implicit_invocation: true
