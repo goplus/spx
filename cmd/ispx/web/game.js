@@ -13,7 +13,7 @@ var Module = null
 
 /**
  * @typedef {{ [path: string]: FileWithMeta }} Files - File entries only; directories should be omitted.
- * @typedef {{ [path: string]: FileMeta }} FilesMeta
+ * @typedef {{ [path: string]: FileMeta | null }} FilesMeta - Null entries need resync.
  */
 
 class GameApp {
@@ -60,7 +60,7 @@ class GameApp {
          * Project files meta
          * @type FilesMeta
          */
-        this.projectFilesMeta = {};
+        this.projectFilesMeta = Object.create(null);
     }
 
     async InitEngine() {
@@ -314,33 +314,33 @@ class GameApp {
     updateEngineFiles(files) {
         /** @type Array<{ name: string, data: Uint8Array }> */
         const updatedFiles = [];
-        const savedFilesMeta = this.projectFilesMeta;
+        const previousMeta = this.projectFilesMeta;
         /** @type FilesMeta */
-        const filesMeta = {};
-        Object.entries(files).forEach(([path, { lastModified, content }]) => {
-            // ZIP readers expose directory entries with a trailing slash. They
-            // are not files and cannot be written to the engine filesystem.
+        const nextMeta = Object.create(null);
+        for (const [path, { lastModified, content }] of Object.entries(files)) {
+            // ZIP archives may include directory entries.
             if (path.endsWith('/')) {
-                return;
+                continue;
             }
-            filesMeta[path] = { lastModified };
-            const savedFileMeta = savedFilesMeta[path];
-            if (savedFileMeta != null && savedFileMeta.lastModified === lastModified) {
-                return; // file not changed, skip
+            nextMeta[path] = { lastModified };
+            const saved = previousMeta[path];
+            if (saved != null && saved.lastModified === lastModified) {
+                continue;
             }
             updatedFiles.push({ name: path, data: new Uint8Array(content) });
-        });
-        this.game.updateAssetsData(this.persistentPath, updatedFiles)
-        this.projectFilesMeta = filesMeta;
+        }
+        const removedPaths = Object.keys(previousMeta).filter(path => nextMeta[path] == null);
 
-        /** @type Array<string> */
-        const removedFilePaths = [];
-        Object.entries(savedFilesMeta).forEach(([path, _]) => {
-            if (filesMeta[path] == null) {
-                removedFilePaths.push(path);
-            }
-        });
-        this.game.deleteAssetsData(this.persistentPath, removedFilePaths);
+        try {
+            this.game.updateAssetsData(this.persistentPath, updatedFiles);
+            this.game.deleteAssetsData(this.persistentPath, removedPaths);
+        } catch (error) {
+            // Retry all known paths after partial changes.
+            const paths = Object.keys({ ...previousMeta, ...nextMeta });
+            this.projectFilesMeta = Object.fromEntries(paths.map(path => [path, null]));
+            throw error;
+        }
+        this.projectFilesMeta = nextMeta;
     }
 
     /**

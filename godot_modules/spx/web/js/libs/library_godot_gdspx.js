@@ -75,7 +75,7 @@ const GodotGdspx = {
 				FS.rmdir(path);
 			} catch (error) {
 				if (error.errno !== GodotFS.ENOENT) {
-					GodotRuntime.error(`Failed to remove ${path}`, error);
+					throw error;
 				}
 			}
 		},
