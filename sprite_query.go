@@ -72,8 +72,12 @@ func (p *SpriteImpl) ShowVar(name PropertyName) {
 // -----------------------------------------------------------------------------
 // Internal Queries
 // -----------------------------------------------------------------------------
+func (p *SpriteImpl) hasCostume() bool {
+	return p.costumeIndex >= 0 && p.costumeIndex < len(p.costumes) && p.costumes[p.costumeIndex] != nil
+}
+
 func (p *SpriteImpl) bounds() *mathf.Rect2 {
-	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
+	if !p.hasCostume() {
 		return nil
 	}
 
@@ -89,8 +93,16 @@ func (p *SpriteImpl) bounds() *mathf.Rect2 {
 // fenceBounds returns the axis-aligned bounds of the rendered costume. Scratch
 // fences drawables by their full skin bounds, independent of collision shapes.
 func (p *SpriteImpl) fenceBounds() *mathf.Rect2 {
-	if len(p.costumes) == 0 || p.costumeIndex < 0 || p.costumeIndex >= len(p.costumes) {
+	bounds, ok := p.renderBounds()
+	if !ok {
 		return nil
+	}
+	return &bounds
+}
+
+func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
+	if !p.hasCostume() {
+		return mathf.Rect2{}, false
 	}
 
 	costume := p.currentCostume()
@@ -108,10 +120,10 @@ func (p *SpriteImpl) fenceBounds() *mathf.Rect2 {
 	aabbWidth := math.Abs(cos)*width + math.Abs(sin)*height
 	aabbHeight := math.Abs(sin)*width + math.Abs(cos)*height
 
-	return &mathf.Rect2{
+	return mathf.Rect2{
 		Position: mathf.NewVec2(centerX-aabbWidth/2, centerY-aabbHeight/2),
 		Size:     mathf.NewVec2(aabbWidth, aabbHeight),
-	}
+	}, true
 }
 
 func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, height float64) {

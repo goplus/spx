@@ -46,6 +46,7 @@ type shapeManager struct {
 	cloneCount               int
 	pendingClones            int
 	items                    []Shape
+	named                    map[string][]*SpriteImpl
 	tempItems                []Shape
 	destroyItems             []Shape
 	textBubbles              []*textBubble
@@ -68,6 +69,7 @@ func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
 	s.pendingClonePublications.Store(false)
+	s.named = nil
 	s.items = resetSlice(s.items, 64)
 	s.tempItems = resetSlice(s.tempItems, 50)
 	s.destroyItems = resetSlice(s.destroyItems, 16)
@@ -205,6 +207,7 @@ func (s *shapeManager) add(shape Shape) {
 		bubble.layoutID = s.nextTextBubbleLayoutID
 	}
 	s.items = append(s.items, shape)
+	clear(s.named)
 }
 
 // remove schedules a shape for destruction at the end of the frame.
@@ -224,6 +227,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 	}
 
 	s.items = sliceutil.InsertAt(s.items, idx, clone)
+	clear(s.named)
 	if sprite, ok := clone.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount++
 	}
@@ -248,6 +252,7 @@ func (s *shapeManager) removeShape(child Shape) {
 	}
 
 	s.items = sliceutil.DeleteAt(s.items, idx)
+	clear(s.named)
 	if sprite, ok := child.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount--
 	}
@@ -264,6 +269,7 @@ func (s *shapeManager) activateShape(child Shape) {
 				return
 			}
 			s.items = sliceutil.MoveToEnd(s.items, idx)
+			clear(s.named)
 			s.updateRenderLayers()
 			return
 		}
@@ -290,6 +296,7 @@ func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 	}
 
 	s.items = sliceutil.MoveToIndex(s.items, idx, newIdx)
+	clear(s.named)
 	s.updateRenderLayers()
 }
 
@@ -322,6 +329,28 @@ func (s *shapeManager) getTempShapes() []Shape {
 // count returns the number of active shapes.
 func (s *shapeManager) count() int {
 	return len(s.items)
+}
+
+func (s *shapeManager) spritesNamed(name string) []*SpriteImpl {
+	if len(s.items) == 0 {
+		return nil
+	}
+	if sprites, ok := s.named[name]; ok {
+		return sprites
+	}
+	var sprites []*SpriteImpl
+	for _, item := range s.items {
+		if sp, ok := item.(*SpriteImpl); ok && sp.name == name {
+			sprites = append(sprites, sp)
+		}
+	}
+	if s.named == nil {
+		s.named = make(map[string][]*SpriteImpl)
+	} else if len(s.named) > len(s.items) {
+		clear(s.named)
+	}
+	s.named[name] = sprites
+	return sprites
 }
 
 // findSprite finds a sprite by name (only non-cloned sprites).
