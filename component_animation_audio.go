@@ -81,7 +81,7 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 	engine.Unlock()
 
 	if canceled {
-		a.sprite.sound().stopAudioPlayback(nextID)
+		a.sprite.g.soundMgr.StopID(nextID)
 	}
 }
 
@@ -103,7 +103,7 @@ func (a *animationComponent) stopOnPlayAudio(state *animState) {
 		a.sprite.g.soundMgr.PruneStoppedIDs([]int64{id})
 		return
 	}
-	a.sprite.sound().stopAudioPlayback(id)
+	a.sprite.g.soundMgr.StopID(id)
 }
 
 // ============================================================================
