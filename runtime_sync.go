@@ -213,17 +213,12 @@ func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
 	return p.cloneProxyPublicationState() != cloneProxyPublished
 }
 
-func (p *SpriteImpl) isCloneProxyPublicationReady() bool {
-	return p.cloneProxyPublicationState() == cloneProxyReady
-}
-
 func (p *SpriteImpl) initRuntimeProxy() {
 	p.rebuildRuntimeProxy(true)
 }
 
 func (p *SpriteImpl) awake() {
 	p.animation().playDefaultAnimIfIdle()
-	p.spriteState.IsAwakened = true
 }
 
 func (p *SpriteImpl) rebuildRuntimeProxy(applyCostume bool) {
