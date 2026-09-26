@@ -117,18 +117,18 @@ func (p *SpriteImpl) SetLayer__1(dir dirAction, delta int) {
 		} else {
 			delta = -delta
 		}
-		p.g.goBackLayers(p, delta)
+		p.g.shapeMgr.goBackLayers(p, delta)
 	case Backward:
-		p.g.goBackLayers(p, delta)
+		p.g.shapeMgr.goBackLayers(p, delta)
 	}
 }
 
 func (p *SpriteImpl) SetLayerTo(layer layerAction) {
 	switch layer {
 	case Front:
-		p.g.gotoFront(p)
+		p.g.shapeMgr.goBackLayers(p, math.MinInt32)
 	case Back:
-		p.g.gotoBack(p)
+		p.g.shapeMgr.goBackLayers(p, math.MaxInt32)
 	}
 }
 

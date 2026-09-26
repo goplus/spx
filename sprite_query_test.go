@@ -299,8 +299,8 @@ func TestPendingCloneSensingByNameIsIndependentFromRenderPublication(t *testing.
 	target := newTouchingQuerySprite("target", 0, 0, 2)
 	receiver.g = game
 	target.g = game
-	game.addShape(&receiver.SpriteImpl)
-	game.addShape(&target.SpriteImpl)
+	game.shapeMgr.add(&receiver.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
 	mgr.positions[1] = mathf.NewVec2(0, 0)
 	mgr.positions[2] = mathf.NewVec2(0, 0)
 

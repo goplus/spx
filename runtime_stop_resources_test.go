@@ -134,7 +134,7 @@ func TestStopAllClearsExistingSoundEffectsWithoutAllocating(t *testing.T) {
 func TestStopAllRemovesEveryCloneFromMixedShapes(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	left := newCloneLimitSprite(game, "left")
-	game.addShape(&struct{}{})
+	game.shapeMgr.add(&struct{}{})
 	right := newCloneLimitSprite(game, "right")
 	originals := slices.Clone(game.getAllShapes())
 	var clones []*SpriteImpl
@@ -174,8 +174,8 @@ func TestStopAllClearsGraphicEffects(t *testing.T) {
 		BrightnessEffect: 25,
 	}
 
-	g.addShape(left)
-	g.addShape(right)
+	g.shapeMgr.add(left)
+	g.shapeMgr.add(right)
 
 	g.stopAllResources()
 

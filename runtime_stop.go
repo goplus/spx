@@ -66,7 +66,7 @@ func (p *Game) stopAllResources() {
 	p.soundMgr.StopAll()
 	p.clearSoundEffects(p.audioState.SoundObj)
 	// Destroying clones removes shapes from the live list.
-	for _, shape := range p.getTempShapes() {
+	for _, shape := range p.shapeMgr.getTempShapes() {
 		sprite, ok := shape.(*SpriteImpl)
 		if !ok {
 			continue

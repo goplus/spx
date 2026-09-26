@@ -173,9 +173,9 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	laser := newSprite("Laser")
 	transition := newSprite("Transition")
 	levels := newSprite("Levels")
-	game.addShape(laser)
-	game.addShape(transition)
-	game.addShape(levels)
+	game.shapeMgr.add(laser)
+	game.shapeMgr.add(transition)
+	game.shapeMgr.add(levels)
 	transition.spriteState.IsVisible = true
 
 	level := 7.0
@@ -1045,8 +1045,8 @@ func TestFindClickTargetKeepsTopmostSpriteWithoutClickHandler(t *testing.T) {
 
 	bottom := newClickTestSprite(&g, "bottom", 1, true)
 	top := newClickTestSprite(&g, "top", 2, false)
-	g.addShape(bottom)
-	g.addShape(top)
+	g.shapeMgr.add(bottom)
+	g.shapeMgr.add(top)
 
 	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
 	if !ok {
@@ -1071,8 +1071,8 @@ func TestFindClickTargetKeepsTopmostClickableSprite(t *testing.T) {
 
 	bottom := newClickTestSprite(&g, "bottom", 1, true)
 	top := newClickTestSprite(&g, "top", 2, true)
-	g.addShape(bottom)
-	g.addShape(top)
+	g.shapeMgr.add(bottom)
+	g.shapeMgr.add(top)
 
 	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
 	if !ok {
@@ -1097,8 +1097,8 @@ func TestFindClickTargetFollowsChangedSpriteLayerOrder(t *testing.T) {
 
 	bottom := newClickTestSprite(&g, "bottom", 1, true)
 	top := newClickTestSprite(&g, "top", 2, true)
-	g.addShape(bottom)
-	g.addShape(top)
+	g.shapeMgr.add(bottom)
+	g.shapeMgr.add(top)
 	top.SetLayerTo(Back)
 
 	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
@@ -1122,8 +1122,8 @@ func TestFindClickTargetSkipsFullyGhostedSpriteEvenWithClickHandler(t *testing.T
 	bottom := newClickTestSprite(&g, "bottom", 1, true)
 	top := newClickTestSprite(&g, "top", 2, true)
 	top.greffUniforms = map[EffectKind]float64{GhostEffect: 100}
-	g.addShape(bottom)
-	g.addShape(top)
+	g.shapeMgr.add(bottom)
+	g.shapeMgr.add(top)
 
 	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
 	if !ok {
