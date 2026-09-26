@@ -205,7 +205,7 @@ func (p *Game) loadAndInitSprites(
 			sp := p.getSpriteProtoByName(name, g, loadSprite)
 			spr := spriteOf(sp)
 			spr.setLayer(layer + firstSpriteLayer)
-			p.addShape(spr)
+			p.shapeMgr.add(spr)
 			inits = append(inits, sp)
 			return nil
 		},

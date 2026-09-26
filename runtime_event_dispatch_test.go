@@ -32,7 +32,7 @@ func BenchmarkTargetOrder(b *testing.B) {
 	sinks := make([]eventSink, 0, 202)
 	for range 100 {
 		sprite := &SpriteImpl{g: game}
-		game.addShape(sprite)
+		game.shapeMgr.add(sprite)
 		sinks = append(sinks, eventSink{Owner: sprite}, eventSink{Owner: sprite})
 	}
 	sinks = append(sinks, eventSink{Owner: game}, eventSink{Owner: "external"})
@@ -154,8 +154,8 @@ func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	game.initShapeMgr()
 	back, front := &SpriteImpl{g: game}, &SpriteImpl{g: game}
 	removed := &SpriteImpl{g: game}
-	game.addShape(back)
-	game.addShape(front)
+	game.shapeMgr.add(back)
+	game.shapeMgr.add(front)
 	sinks := []eventSink{
 		{Owner: game, Handler: "stage-1"},
 		{Owner: back, Handler: "back-1"},

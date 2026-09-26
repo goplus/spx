@@ -64,7 +64,7 @@ func createRuntimeClone(src *SpriteImpl) *SpriteImpl {
 	}
 	out := reflect.New(reflect.TypeOf(src.sprite).Elem()).Elem()
 	dest := instantiateRuntimeClone(out, src.sprite)
-	src.g.addClonedShape(src, dest)
+	src.g.shapeMgr.addClonedShape(src, dest)
 	return dest
 }
 

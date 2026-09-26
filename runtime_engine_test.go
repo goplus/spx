@@ -98,7 +98,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
 
 	shape := &captureFlushTestShape{}
-	game.addShape(shape)
+	game.shapeMgr.add(shape)
 	destroyed := &SpriteImpl{}
 	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
 	game.shapeMgr.remove(destroyed)
@@ -153,7 +153,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 	game.initShapeMgr()
 	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
 	shape := &captureFlushTestShape{}
-	game.addShape(shape)
+	game.shapeMgr.add(shape)
 	destroyed := &SpriteImpl{}
 	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
 	game.shapeMgr.remove(destroyed)

@@ -196,7 +196,7 @@ func (p *SpriteImpl) destroy() {
 	p.setVisible(false)
 	p.clearHandlers()
 	p.components.destroyComponents()
-	p.g.removeShape(p)
+	p.g.shapeMgr.removeShape(p)
 	if syncSprite := p.runtimeState.SyncSprite; syncSprite != nil {
 		p.g.inputMgr.removeClickTarget(syncSprite.GetId())
 	}

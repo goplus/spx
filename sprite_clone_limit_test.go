@@ -65,7 +65,7 @@ func newCloneLimitSprite(game *Game, name string) *cloneLimitSprite {
 	s.components.initComponents(&s.SpriteImpl, &coreproject.SpriteConfig{})
 	s.physics().collisionInfo.Type = physicsColliderNone
 	s.physics().triggerInfo.Type = physicsColliderNone
-	game.addShape(&s.SpriteImpl)
+	game.shapeMgr.add(&s.SpriteImpl)
 	return s
 }
 
@@ -73,7 +73,7 @@ func TestCloneLimitSharedAcrossSprites(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	a := newCloneLimitSprite(game, "A")
 	b := newCloneLimitSprite(game, "B")
-	game.addShape(&struct{}{}) // Non-sprite shapes do not use clone slots.
+	game.shapeMgr.add(&struct{}{}) // Non-sprite shapes do not use clone slots.
 	var initialized, started int
 	for _, s := range []*cloneLimitSprite{a, b} {
 		s.onInit = func(*cloneLimitSprite) { initialized++ }
@@ -118,8 +118,8 @@ func TestCloneLimitReleasesSlotOnDeletionAndReset(t *testing.T) {
 	}
 	clone := game.getAllShapes()[0].(*SpriteImpl)
 	clone.DeleteThisClone()
-	game.removeShape(clone) // Removing an already deleted shape is a no-op.
-	source.Clone__0()       // Reuse before the deferred native deletion flush.
+	game.shapeMgr.removeShape(clone) // Removing an already deleted shape is a no-op.
+	source.Clone__0()                // Reuse before the deferred native deletion flush.
 	source.Clone__0()
 	if started != 301 || game.shapeMgr.cloneCount != 300 {
 		t.Fatalf("after deletion: started %d, active %d; want 301, 300", started, game.shapeMgr.cloneCount)

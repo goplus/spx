@@ -174,7 +174,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 func (c *cameraImpl) follow(obj any) {
 	switch v := obj.(type) {
 	case SpriteName:
-		sp := c.g.findSprite(v)
+		sp := c.g.shapeMgr.findSprite(v)
 		if sp == nil {
 			spxlog.Warn("Camera.Follow: sprite not found - %s", v)
 			return
