@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/assetindex"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -238,6 +239,9 @@ func sortFontFamilyNames(names []string) {
 func validateFontFamilyName(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("font family name must be non-empty")
+	}
+	if !assetindex.ValidEntryName(name) {
+		return "", fmt.Errorf("font family name %q must be a single directory name", name)
 	}
 	folded := asciiFold(name)
 	if folded == defaultFontFamilyName {

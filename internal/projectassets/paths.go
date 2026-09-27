@@ -22,6 +22,8 @@ import (
 	"os"
 	"path"
 	"strings"
+
+	"github.com/goplus/spx/v3/internal/assetindex"
 )
 
 func (r *resolver) addReference(source, base, reference string) error {
@@ -72,14 +74,14 @@ func validateConfig(cfg Config) error {
 	if cfg.PackDir == "" || cfg.PackDir == "." || strings.Contains(cfg.PackDir, "\\") || path.IsAbs(cfg.PackDir) || path.Clean(cfg.PackDir) != cfg.PackDir || cfg.PackDir == ".." || strings.HasPrefix(cfg.PackDir, "../") {
 		return fmt.Errorf("projectassets: PackDir must be a clean non-empty relative slash path: %q", cfg.PackDir)
 	}
-	if cfg.PackIndex == "" || cfg.PackIndex == "." || cfg.PackIndex == ".." || strings.ContainsAny(cfg.PackIndex, "/\\\x00") {
+	if !assetindex.ValidEntryName(cfg.PackIndex) {
 		return fmt.Errorf("projectassets: PackIndex must be a plain file name: %q", cfg.PackIndex)
 	}
 	return nil
 }
 
 func validateConfigEntryName(section, name string) error {
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\\x00") {
+	if !assetindex.ValidEntryName(name) {
 		return fmt.Errorf("projectassets: section %q has unsafe entry name %q", section, name)
 	}
 	return nil

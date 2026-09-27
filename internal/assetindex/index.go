@@ -16,7 +16,15 @@
 
 package assetindex
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
+
+// ValidEntryName reports whether name is a single asset entry name.
+func ValidEntryName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
+}
 
 // Merge overlays packed root fields on source fields.
 func Merge(source, packed map[string]json.RawMessage) map[string]json.RawMessage {
