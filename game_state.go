@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package state
+package spx
 
 import (
 	"sync"
@@ -25,7 +25,7 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
-type GameLifecycleState struct {
+type gameLifecycleState struct {
 	RunOnce         sync.Once
 	OncePathFinder  sync.Once
 	BootstrapDone   atomic.Bool
@@ -33,7 +33,7 @@ type GameLifecycleState struct {
 	IsRunned        atomic.Bool
 }
 
-type GameDisplayState struct {
+type gameDisplayState struct {
 	WorldWidth   int
 	WorldHeight  int
 	MinWorldX    int
@@ -45,12 +45,12 @@ type GameDisplayState struct {
 	StretchMode  bool
 }
 
-type GameDialogState struct {
+type gameDialogState struct {
 	AskPanel  *ui.UiAsk
 	AnswerVal string
 }
 
-type GameDebugState struct {
+type gameDebugState struct {
 	Debug      bool
 	DebugPanel *ui.UiDebug
 	DebugInstr bool
@@ -58,18 +58,18 @@ type GameDebugState struct {
 	DebugPerf  bool
 }
 
-type GameEventQueueState struct {
+type gameEventQueueState struct {
 	EventQueueMu     sync.Mutex
 	EventQueuePolicy coreevent.QueuePolicy
 	EventQueueStats  coreevent.QueueStats
 }
 
-type GamePathfindingState struct {
+type gamePathfindingState struct {
 	PathCellSizeX int
 	PathCellSizeY int
 }
 
-type GameAudioState struct {
+type gameAudioState struct {
 	AudioAttenuation float64
 	AudioMaxDistance float64
 	SoundObj         engine.Object

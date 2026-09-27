@@ -26,7 +26,6 @@ import (
 	_ "github.com/goplus/spx/v3/fs/zip"
 
 	"github.com/goplus/spx/v3/internal/audio"
-	corestate "github.com/goplus/spx/v3/internal/core/state"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -81,13 +80,13 @@ type Game struct {
 	scriptEventBindings
 	fs spxfs.Dir
 
-	lifecycleState     corestate.GameLifecycleState
-	displayState       corestate.GameDisplayState
-	dialogState        corestate.GameDialogState
-	debugState         corestate.GameDebugState
-	eventQueueState    corestate.GameEventQueueState
-	pathfindingState   corestate.GamePathfindingState
-	audioState         corestate.GameAudioState
+	lifecycleState     gameLifecycleState
+	displayState       gameDisplayState
+	dialogState        gameDialogState
+	debugState         gameDebugState
+	eventQueueState    gameEventQueueState
+	pathfindingState   gamePathfindingState
+	audioState         gameAudioState
 	runtimeConfigInput Config
 	physicsEnabled     bool
 
