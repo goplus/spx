@@ -246,11 +246,11 @@ func (a *animationComponent) playDefaultAnim() {
 	} else {
 		switch tweenState.AniType {
 		case coreproject.AniTypeMove:
-			animName = a.sprite.getStateAnimName(StateStep)
+			animName = a.getStateAnimName(StateStep)
 		case coreproject.AniTypeTurn:
-			animName = a.sprite.getStateAnimName(StateTurn)
+			animName = a.getStateAnimName(StateTurn)
 		case coreproject.AniTypeGlide:
-			animName = a.sprite.getStateAnimName(StateGlide)
+			animName = a.getStateAnimName(StateGlide)
 		}
 		speed = tweenState.Speed
 	}
