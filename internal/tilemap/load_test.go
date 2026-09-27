@@ -19,7 +19,9 @@ package tilemap
 import (
 	"errors"
 	"io"
+	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -214,5 +216,65 @@ func TestCalcWorldBoundsNoTiles(t *testing.T) {
 
 	if _, ok := CalcWorldBounds(data); ok {
 		t.Fatal("CalcWorldBounds ok = true, want false")
+	}
+}
+
+func TestLoadTilemapsWidensCoordinateProducts(t *testing.T) {
+	data := &TscnMapData{TileMap: tileMapData{
+		TileSize: tileSize{Width: 64, Height: 64},
+		TileSet:  tileSet{Sources: []tileSource{{ID: 1, TexturePath: "terrain.png"}}},
+		Layers: []tilemapLayer{{TileData: []int32{
+			1, 1 << 26, -(1 << 26), 0, 0,
+			1, math.MinInt32, math.MaxInt32, 0, 0,
+		}}},
+	}}
+	var positions []float64
+	LoadTilemaps(data, func(string, []float64) {}, func(int64) {}, func(got []float64, _ string, _ int64) {
+		positions = append(positions, got...)
+	})
+	want := []float64{4294967296, -4294967296, -137438953472, 137438953408}
+	if !reflect.DeepEqual(positions, want) {
+		t.Fatalf("tile positions = %v, want %v", positions, want)
+	}
+}
+
+func TestCalcWorldBoundsIntegerEdges(t *testing.T) {
+	tests := []struct {
+		name                   string
+		minX, maxX, minY, maxY int32
+		width, height          int32
+		want                   [4]int64
+		bits                   int
+	}{
+		{"ordinary negative", -2, 1, -1, 2, 32, 16, [4]int64{-64, -32, 128, 64}, 32},
+		{"upper x edge", math.MaxInt32, math.MaxInt32, 0, 0, 1, 1, [4]int64{math.MaxInt32, -1, 1, 1}, 64},
+		{"lower y edge", 0, 0, math.MinInt32, math.MinInt32, 1, 1, [4]int64{0, -2147483649, 1, 1}, 64},
+		{"top negation", 0, 0, math.MinInt32 + 1, math.MinInt32 + 1, 1, 1, [4]int64{0, math.MinInt32, 1, 1}, 64},
+		{"wide span", math.MinInt32, math.MaxInt32, 0, 0, 1, 1, [4]int64{math.MinInt32, -1, 4294967296, 1}, 64},
+		{"negative tile size", math.MinInt32, math.MinInt32, math.MaxInt32, math.MaxInt32, -1, -1, [4]int64{2147483648, -2147483646, -1, -1}, 64},
+		{"maximum positive span", math.MinInt32, math.MaxInt32, math.MinInt32, math.MaxInt32, math.MaxInt32, math.MaxInt32, [4]int64{-4611686016279904256, -4611686018427387903, 9223372032559808512, 9223372032559808512}, 64},
+		{"minimum negative span", math.MinInt32, math.MaxInt32, math.MinInt32, math.MaxInt32, math.MinInt32, math.MinInt32, [4]int64{4611686018427387904, 4611686020574871552, math.MinInt64, math.MinInt64}, 64},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			data := &TscnMapData{TileMap: tileMapData{
+				TileSize: tileSize{Width: test.width, Height: test.height},
+				Layers: []tilemapLayer{{TileData: []int32{
+					1, test.minX, test.minY, 0, 0,
+					1, test.maxX, test.maxY, 0, 0,
+				}}},
+			}}
+			got, ok := CalcWorldBounds(data)
+			if strconv.IntSize < test.bits {
+				if ok || got != (WorldBounds{}) {
+					t.Fatalf("unrepresentable bounds = (%+v, %v), want zero/false", got, ok)
+				}
+				return
+			}
+			want := WorldBounds{int(test.want[0]), int(test.want[1]), int(test.want[2]), int(test.want[3])}
+			if !ok || got != want {
+				t.Fatalf("bounds = (%+v, %v), want (%+v, true)", got, ok, want)
+			}
+		})
 	}
 }

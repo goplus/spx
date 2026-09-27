@@ -227,7 +227,7 @@ func (p *gameTilemapMgr) calcWorldSize() {
 	}
 	bounds, ok := tm.CalcWorldBounds(p.datas)
 	if !ok {
-		spxlog.Debug("Tilemap: no tiles found in any layer")
+		spxlog.Debug("Tilemap: no representable tile bounds")
 		return
 	}
 	p.g.displayState.MinWorldX = bounds.MinWorldX
