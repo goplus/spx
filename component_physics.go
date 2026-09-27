@@ -41,9 +41,6 @@ type physicsComponent struct {
 	collisionInfo physicConfig
 
 	physicsMode     PhysicsMode
-	mass            float64
-	friction        float64
-	airDrag         float64
 	gravity         float64
 	autoShapesDirty bool
 
@@ -61,10 +58,7 @@ func (p *physicsComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject
 	p.initTriggerConfig(sprite, spriteCfg)
 
 	p.physicsMode = toPhysicsMode(spriteCfg.PhysicsMode)
-	p.airDrag = defaults.OrDefault(spriteCfg.AirDrag, 1)
 	p.gravity = defaults.OrDefault(spriteCfg.Gravity, 1)
-	p.friction = defaults.OrDefault(spriteCfg.Friction, 1)
-	p.mass = defaults.OrDefault(spriteCfg.Mass, 1)
 	p.collisionTargets = make(map[string]bool)
 }
 
@@ -109,9 +103,6 @@ func (p *physicsComponent) cloneFor(newSprite *SpriteImpl) *physicsComponent {
 	newPhys := &physicsComponent{
 		sprite:           newSprite,
 		physicsMode:      p.physicsMode,
-		mass:             p.mass,
-		friction:         p.friction,
-		airDrag:          p.airDrag,
 		gravity:          p.gravity,
 		collisionTargets: make(map[string]bool),
 	}
