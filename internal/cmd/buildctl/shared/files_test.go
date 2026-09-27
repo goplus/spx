@@ -181,7 +181,7 @@ func TestFetchURLToFileLeavesDestinationUntouchedOnInterruptedDownload(t *testin
 	}))
 	defer server.Close()
 
-	if err := fetchURLToFile(server.URL, dst); err == nil {
+	if err := FetchURLToFile(server.URL, dst); err == nil {
 		t.Fatal("expected interrupted download to fail")
 	} else if strings.Contains(err.Error(), "ended after") {
 		t.Fatalf("download hid the interrupted response error: %v", err)
@@ -212,8 +212,8 @@ func TestFetchURLToFileReplacesExistingDestination(t *testing.T) {
 	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := fetchURLToFile(server.URL, dst); err != nil {
-		t.Fatalf("fetchURLToFile returned error: %v", err)
+	if err := FetchURLToFile(server.URL, dst); err != nil {
+		t.Fatalf("FetchURLToFile returned error: %v", err)
 	}
 	if data, err := os.ReadFile(dst); err != nil || string(data) != "replacement" {
 		t.Fatalf("destination content = %q, err = %v", data, err)
@@ -228,9 +228,9 @@ func TestFetchURLToFileWithLimitRejectsDeclaredSizeBeforeCreatingTempFile(t *tes
 	defer server.Close()
 
 	parent := filepath.Join(t.TempDir(), "missing")
-	err := fetchURLToFileWithLimit(server.URL, filepath.Join(parent, "ndk.zip"), 4)
+	err := FetchURLToFileWithLimit(server.URL, filepath.Join(parent, "ndk.zip"), 4)
 	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
-		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+		t.Fatalf("FetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
 	}
 	if _, err := os.Stat(parent); !os.IsNotExist(err) {
 		t.Fatalf("download directory was created before Content-Length rejection: %v", err)
@@ -252,9 +252,9 @@ func TestFetchURLToFileWithLimitRejectsChunkedBodyAboveLimit(t *testing.T) {
 	if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := fetchURLToFileWithLimit(server.URL, dst, 4)
+	err := FetchURLToFileWithLimit(server.URL, dst, 4)
 	if !errors.Is(err, runtimebundle.ErrArchiveLimit) {
-		t.Fatalf("fetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
+		t.Fatalf("FetchURLToFileWithLimit error = %v, want ErrArchiveLimit", err)
 	}
 	if content, readErr := os.ReadFile(dst); readErr != nil || string(content) != "existing" {
 		t.Fatalf("destination content = %q, err = %v; want original content", content, readErr)

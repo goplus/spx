@@ -97,7 +97,7 @@ func moveFile(src, dst string) error {
 	return windows.MoveFileEx(srcName, dstName, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
 }
 
-func replaceFile(src, dst string) error {
+func ReplaceFile(src, dst string) error {
 	if _, err := os.Lstat(dst); err == nil {
 		if err := replaceExistingFile(src, dst); err == nil {
 			return nil

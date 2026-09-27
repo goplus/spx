@@ -29,19 +29,29 @@ import (
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
-func copyDir(src, dst string) error {
+// ZipLimits controls bounded verification and extraction of untrusted ZIPs.
+type ZipLimits = runtimebundle.Limits
+
+// ZipExtractOptions controls bounded extraction of an untrusted ZIP.
+type ZipExtractOptions struct {
+	Limits ZipLimits
+	// MaterializeSymlinksAsFiles writes vetted symlink targets as regular files.
+	MaterializeSymlinksAsFiles bool
+}
+
+func CopyDir(src, dst string) error {
 	return fileutil.CopyDir(src, dst)
 }
 
-func zipDirectory(srcDir, dstZip string) (err error) {
+func ZipDirectory(srcDir, dstZip string) error {
 	return fileutil.ZipDirectory(srcDir, dstZip)
 }
 
-func extractZip(srcZip, dstDir string) error {
-	return extractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})
+func ExtractZip(srcZip, dstDir string) error {
+	return ExtractZipWithOptions(srcZip, dstDir, ZipExtractOptions{})
 }
 
-func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
+func ExtractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) error {
 	_, err := runtimebundle.ExtractZip(srcZip, dstDir, runtimebundle.VerifyOptions{
 		Limits:                     options.Limits,
 		MaterializeSymlinksAsFiles: options.MaterializeSymlinksAsFiles,
@@ -49,11 +59,12 @@ func extractZipWithOptions(srcZip, dstDir string, options ZipExtractOptions) err
 	return err
 }
 
-func fetchURLToFile(url, dst string) error {
-	return fetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
+func FetchURLToFile(url, dst string) error {
+	return FetchURLToFileWithLimit(url, dst, runtimebundle.MaxArchiveBytes)
 }
 
-func fetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
+// FetchURLToFileWithLimit downloads atomically within maxBytes.
+func FetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
 	return DownloadURL(url, dst, maxBytes, nil)
 }
 
@@ -134,7 +145,7 @@ func DownloadURL(url, dst string, maxBytes int64, progress func(int64, int64)) (
 	}
 	file = nil
 
-	return replaceFile(tmpPath, dst)
+	return ReplaceFile(tmpPath, dst)
 }
 
 type writerFunc func([]byte) (int, error)

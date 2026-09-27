@@ -20,6 +20,7 @@ package shared
 
 import "os"
 
-func replaceFile(src, dst string) error {
+// ReplaceFile atomically replaces dst with a same-filesystem src.
+func ReplaceFile(src, dst string) error {
 	return os.Rename(src, dst)
 }
