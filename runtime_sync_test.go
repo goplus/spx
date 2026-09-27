@@ -141,6 +141,43 @@ func TestProxyTransformQueryAndBatchMatch(t *testing.T) {
 	}
 }
 
+func TestProxyRebuildAndDestroySubmitOnlyPendingTransforms(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	mgr := setupCloneSpriteMgr(t)
+	sprite := newCloneAwakeOrderSprite(&game, "Sprite")
+	buffer := engine.NewSpriteSyncBuffer(1)
+	collect := func(want int) {
+		t.Helper()
+		buffer.Clear()
+		sprite.collectProxyUpdate(buffer)
+		if got := buffer.UpdateCount(); got != want {
+			t.Fatalf("collected %d transforms, want %d", got, want)
+		}
+	}
+
+	collect(0)
+	sprite.initRuntimeProxy()
+	collect(1)
+	collect(0)
+	oldProxy := sprite.runtimeState.SyncSprite
+	sprite.rebuildRuntimeProxy(true)
+	if sprite.runtimeState.SyncSprite == oldProxy {
+		t.Fatal("rebuild reused the old proxy")
+	}
+	collect(1)
+	collect(0)
+
+	sprite.Show()
+	sprite.destroy()
+	operations := len(mgr.recordedOperations())
+	sprite.ensureProxyQueryStateSynced()
+	collect(0)
+	if got := len(mgr.recordedOperations()); got != operations {
+		t.Fatalf("destroyed sprite made %d proxy calls", got-operations)
+	}
+}
+
 func newPhysicsPositionTestSprite(x, y float64) *SpriteImpl {
 	sprite := &SpriteImpl{}
 	sprite.components.transform = &transformComponent{
@@ -180,7 +217,7 @@ func TestPullPhysicsPositionsFiltersAndKeepsIDOrder(t *testing.T) {
 		if x != tt.x || y != tt.y || tt.sprite.spriteState.VisualVersion != tt.version {
 			t.Errorf("sprite position=(%v,%v) visual version=%d, want (%v,%v) version %d", x, y, tt.sprite.spriteState.VisualVersion, tt.x, tt.y, tt.version)
 		}
-		if tt.sprite.spriteState.IsDirty || tt.sprite.spriteState.DirtyVersion != 0 {
+		if tt.sprite.spriteState.DirtyVersion != 0 {
 			t.Errorf("physics pull dirtied proxy: %+v", tt.sprite.spriteState)
 		}
 	}
@@ -347,12 +384,8 @@ func TestApplyPhysicsPositionInvalidatesVisualsOnlyWhenChanged(t *testing.T) {
 	if sprite.spriteState.VisualVersion != 1 {
 		t.Fatalf("changed position visual version = %d, want 1", sprite.spriteState.VisualVersion)
 	}
-	if sprite.spriteState.IsDirty || sprite.spriteState.DirtyVersion != 0 {
-		t.Fatalf(
-			"physics writeback dirtied proxy state: IsDirty=%t, DirtyVersion=%d",
-			sprite.spriteState.IsDirty,
-			sprite.spriteState.DirtyVersion,
-		)
+	if sprite.spriteState.DirtyVersion != 0 {
+		t.Fatalf("physics writeback dirtied proxy state: DirtyVersion=%d", sprite.spriteState.DirtyVersion)
 	}
 	if x, y := sprite.transform().getXY(); x != 3 || y != 4 {
 		t.Fatalf("physics position = (%v, %v), want (3, 4)", x, y)

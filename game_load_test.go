@@ -1227,6 +1227,24 @@ func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
 	if got := serialized[len(serialized)-1]; got != 0 {
 		t.Fatalf("pending clone batch visibility = %v, want 0", got)
 	}
+
+	// Both query and batch synchronization have already consumed the logical
+	// transform. Opening the publication gate must still submit visibility.
+	clone.finishCloneInitialization()
+	buffer.Clear()
+	clone.collectProxyUpdate(buffer)
+	if got := buffer.UpdateCount(); got != 1 {
+		t.Fatalf("publication batched %d updates, want 1", got)
+	}
+	serialized = buffer.Serialize()
+	if got := serialized[len(serialized)-1]; got != 1 {
+		t.Fatalf("published clone batch visibility = %v, want 1", got)
+	}
+	buffer.Clear()
+	clone.collectProxyUpdate(buffer)
+	if got := buffer.UpdateCount(); got != 0 {
+		t.Fatalf("published clone batched %d repeated updates, want 0", got)
+	}
 }
 
 func TestCloneProxyPublicationReadyCanRaceProxyCollection(t *testing.T) {

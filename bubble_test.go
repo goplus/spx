@@ -16,7 +16,11 @@
 
 package spx
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/goplus/spx/v3/internal/engine"
+)
 
 func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
 	sprite := &SpriteImpl{}
@@ -44,26 +48,22 @@ func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
 	}
 }
 
-func TestBubbleObservesSpriteChangesAfterProxyDirtyFlagIsCleared(t *testing.T) {
-	sprite := &SpriteImpl{}
-	sprite.spriteState.IsVisible = true
+func TestBubbleObservesSpriteChangesAfterProxySync(t *testing.T) {
+	installTouchingSyncSpriteMgr(t, newTouchingSyncSpriteMgr())
+	sprite := newTouchingTestSprite("sprite", 0, 0, 1)
 	camera := &cameraImpl{}
 	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
 	bubble.markClean()
 
 	sprite.markProxyDirty()
-	sprite.spriteState.IsDirty = false
+	buffer := engine.NewSpriteSyncBuffer(1)
+	sprite.collectProxyUpdate(buffer)
+	if got := buffer.UpdateCount(); got != 1 {
+		t.Fatalf("proxy sync batched %d transforms, want 1", got)
+	}
 	if !bubble.checkNeedsUpdate() {
-		t.Fatal("sprite change was lost when its proxy dirty flag was cleared")
+		t.Fatal("sprite change was lost after its proxy was synchronized")
 	}
-	if sprite.spriteState.DirtyVersion != 1 || sprite.spriteState.VisualVersion != 1 {
-		t.Fatalf(
-			"sprite versions = (proxy %d, visual %d), want (1, 1)",
-			sprite.spriteState.DirtyVersion,
-			sprite.spriteState.VisualVersion,
-		)
-	}
-
 	bubble.markClean()
 	if bubble.checkNeedsUpdate() {
 		t.Fatal("bubble still needs an update after observing the sprite change")

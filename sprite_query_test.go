@@ -498,9 +498,6 @@ func TestTouchingSpriteSyncsDirtyTransformImmediately(t *testing.T) {
 	if got := buffer.UpdateCount(); got != 0 {
 		t.Fatalf("collectProxyUpdate() batched %d updates, want 0 after immediate query sync", got)
 	}
-	if mover.spriteState.IsDirty {
-		t.Fatal("spriteState.IsDirty = true, want false after frame-end collection")
-	}
 }
 
 func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {

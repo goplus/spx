@@ -20,7 +20,6 @@ type SpriteRuntimeState struct {
 	IsVisible           bool
 	Cloned              bool
 	IsDying             bool
-	IsDirty             bool
 	DirtyVersion        uint64
 	ProxySyncVersion    uint64
 	VisualVersion       uint64

@@ -81,7 +81,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 					t.Fatalf("iteration %d ran at frame %d, want %d", i, frame, want)
 				}
 			}
-			if !sprite.spriteState.IsDirty {
+			if sprite.spriteState.DirtyVersion == 0 {
 				t.Fatal("rotation style did not mark the render proxy dirty")
 			}
 		})

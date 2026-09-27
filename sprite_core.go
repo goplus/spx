@@ -108,7 +108,6 @@ func (p *SpriteImpl) setDying() {
 func (p *SpriteImpl) markProxyDirty() {
 	p.markVisualDirty()
 	p.spriteState.DirtyVersion++
-	p.spriteState.IsDirty = true
 }
 
 func (p *SpriteImpl) markVisualDirty() {
