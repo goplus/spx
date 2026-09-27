@@ -25,15 +25,8 @@ import (
 )
 
 func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		gco = original
-		engine.SetCoroutines(original)
-		ResetRandomSeed()
-	})
+	t.Cleanup(ResetRandomSeed)
+	co := setupRuntimeScheduler(t)
 
 	runScenario := func(extraDraws int) []float64 {
 		t.Helper()
@@ -78,15 +71,8 @@ func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
 }
 
 func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		gco = original
-		engine.SetCoroutines(original)
-		ResetRandomSeed()
-	})
+	t.Cleanup(ResetRandomSeed)
+	co := setupRuntimeScheduler(t)
 
 	runScenario := func(drawOutsideCoroutine bool) []float64 {
 		t.Helper()

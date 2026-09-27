@@ -33,7 +33,7 @@ func TestSchedWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
 
 func testMainExecutionTimeoutDemotion(t *testing.T, sched func() int) {
 	t.Helper()
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	thread := co.Create("main", func(thread coroutine.Thread) {
 		end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
 		defer end()

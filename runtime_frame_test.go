@@ -20,21 +20,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	ran := false
 	engine.SetGame(struct{}{})
@@ -304,15 +295,7 @@ func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 }
 
 func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)
@@ -359,15 +342,7 @@ func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
 }
 
 func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)

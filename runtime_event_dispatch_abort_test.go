@@ -29,7 +29,7 @@ import (
 )
 
 func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	platform := &eventDispatchPlatform{}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform

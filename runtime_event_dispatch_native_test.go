@@ -59,7 +59,7 @@ func (f eventLifecycleFunc) Start(thread coroutine.Thread) func() {
 }
 
 func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
@@ -158,7 +158,7 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 }
 
 func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = &eventDispatchPlatform{}
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestProcedureConsumesStopThisScript(t *testing.T) {
@@ -53,17 +52,7 @@ func TestProcedurePropagatesOtherPanics(t *testing.T) {
 }
 
 func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("coroutines did not stop")
-		}
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	done := make(chan string, 1)
 	co.Create("stop-this-script", func(coroutine.Thread) {
@@ -96,16 +85,7 @@ func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {
 	co := coroutine.New(func(coroutine.PanicReport) {
 		panicReported <- struct{}{}
 	})
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("coroutines did not stop")
-		}
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	installRuntimeScheduler(t, co, nil)
 
 	var script scriptEventBindings
 	script.bind(&scriptEventRegistry{}, "owner")

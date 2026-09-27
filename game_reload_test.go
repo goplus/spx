@@ -196,12 +196,13 @@ func (*reloadCommitSceneMgr) ClearPureSprites() {}
 func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPreflightGame, *reloadPreflightSprite, *coroutine.Coroutines) {
 	t.Helper()
 
-	originalScheduler := gco
 	originalGame := engine.GetGame()
 	originalPlatformMgr := pkgengine.PlatformMgr
-	co := coroutine.New(nil)
-	gco = co
-	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		pkgengine.PlatformMgr = originalPlatformMgr
+	})
+	co := setupRuntimeScheduler(t)
 	pkgengine.PlatformMgr = &reloadCommitPlatformMgr{}
 
 	game := &reloadPreflightGame{}
@@ -224,15 +225,6 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	sprite.costumeIndex = 3
 	engine.SetGame(&game.Game)
 
-	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("reload preflight test coroutines did not stop")
-		}
-		gco = originalScheduler
-		engine.SetCoroutines(originalScheduler)
-		engine.SetGame(originalGame)
-		pkgengine.PlatformMgr = originalPlatformMgr
-	})
 	return game, sprite, co
 }
 
@@ -266,12 +258,13 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 		pkgengine.ResMgr = originalResMgr
 	})
 
-	originalScheduler := gco
 	originalGame := engine.GetGame()
 	originalBounds := cachedBounds
-	co := coroutine.New(nil)
-	gco = co
-	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		cachedBounds = originalBounds
+	})
+	installRuntimeScheduler(t, coroutine.New(nil), engine.ClearAllSprites)
 	cachedBounds = make(map[string]mathf.Rect2)
 
 	base := game.baseGame().initGame(sprites)
@@ -283,16 +276,6 @@ func setupReloadCommitRuntime(t *testing.T, files reloadConfigFS, game Gamer, sp
 	base.physicsEnabled = physics
 	base.lifecycleState.IsRunned.Store(true)
 
-	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("reload commit test coroutines did not stop")
-		}
-		engine.ClearAllSprites()
-		gco = originalScheduler
-		engine.SetCoroutines(originalScheduler)
-		engine.SetGame(originalGame)
-		cachedBounds = originalBounds
-	})
 	return base
 }
 

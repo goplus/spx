@@ -53,7 +53,7 @@ func setupCloneLimitGame(t *testing.T) *Game {
 	original := engine.GetGame()
 	engine.SetGame(game)
 	t.Cleanup(func() { engine.SetGame(original) })
-	setupRuntimeEventScheduler(t)
+	setupRuntimeScheduler(t)
 	return game
 }
 
