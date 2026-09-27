@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -377,7 +378,53 @@ func TestPenComponentDefaultHSVStillMaterializesPen(t *testing.T) {
 			if spy.setColorCalls != 1 {
 				t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
 			}
+			sprite.SetPenColor__1(tt.kind, tt.value(sprite.pen()))
+			sprite.ChangePenColor(tt.kind, 0)
+			if spy.setColorCalls != 1 {
+				t.Fatalf("unchanged HSV emitted %d color updates, want 1", spy.setColorCalls)
+			}
 		})
+	}
+}
+
+func TestPenColorParametersPreserveNonFiniteValues(t *testing.T) {
+	for _, parameter := range []struct {
+		name               string
+		kind               PenColorParam
+		value              func(*penComponent) float64
+		positive, negative float64
+	}{
+		{"hue", PenHue, func(p *penComponent) float64 { return p.penHue }, math.NaN(), math.NaN()},
+		{"saturation", PenSaturation, func(p *penComponent) float64 { return p.penSaturation }, 100, 0},
+		{"brightness", PenBrightness, func(p *penComponent) float64 { return p.penBrightness }, 100, 0},
+		{"transparency", PenTransparency, func(p *penComponent) float64 { return p.penTransparency }, 100, 0},
+	} {
+		for _, input := range []struct {
+			name        string
+			value, want float64
+		}{
+			{"nan", math.NaN(), math.NaN()},
+			{"positive infinity", math.Inf(1), parameter.positive},
+			{"negative infinity", math.Inf(-1), parameter.negative},
+		} {
+			t.Run(parameter.name+"/"+input.name, func(t *testing.T) {
+				spy := setupSpyPenMgr(t)
+				sprite := newPenTestSprite()
+				sprite.SetPenColor__1(parameter.kind, input.value)
+				got := parameter.value(sprite.pen())
+				if got != input.want && !(math.IsNaN(got) && math.IsNaN(input.want)) {
+					t.Fatalf("parameter = %v, want %v", got, input.want)
+				}
+				sprite.SetPenColor__1(parameter.kind, input.value)
+				wantCalls := 1
+				if math.IsNaN(input.want) {
+					wantCalls = 2
+				}
+				if spy.setColorCalls != wantCalls {
+					t.Fatalf("color updates = %d, want %d", spy.setColorCalls, wantCalls)
+				}
+			})
+		}
 	}
 }
 

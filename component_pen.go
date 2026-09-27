@@ -191,72 +191,45 @@ func (p *penComponent) changePenShade(delta float64) {
 // HSV Color
 
 func (p *penComponent) setPenColorParam(kind PenColorParam, value float64) {
-	switch kind {
-	case PenHue:
-		p.setPenHueParam(value)
-	case PenSaturation:
-		p.setPenSaturation(value)
-	case PenBrightness:
-		p.setPenBrightness(value)
-	case PenTransparency:
-		p.setPenTransparency(value)
-	case PenNone:
+	component := p.colorParam(kind)
+	if component == nil {
 		return
 	}
-}
-
-func (p *penComponent) changePenColor(kind PenColorParam, delta float64) {
-	switch kind {
-	case PenHue:
-		p.changePenHueParam(delta)
-	case PenSaturation:
-		p.changePenSaturation(delta)
-	case PenBrightness:
-		p.changePenBrightness(delta)
-	case PenTransparency:
-		p.changePenTransparency(delta)
-	case PenNone:
-		return
+	if kind == PenHue {
+		value = wrapPenColorPercent(value)
+	} else {
+		value = mathf.Clamp(value, 0, 100)
 	}
-}
-
-func (p *penComponent) setPenHueParam(value float64) {
-	nextValue := wrapPenColorPercent(value)
-	if p.penObj != nil && nearlyEqualPenValue(p.penHue, nextValue) {
+	if p.penObj != nil && nearlyEqualPenValue(*component, value) {
 		return
 	}
 	p.ensureClonePenReady()
-	p.penHue = nextValue
-	p.legacyPenColor.hue = p.penHue
+	*component = value
+	if kind == PenHue {
+		p.legacyPenColor.hue = value
+	}
 	p.applyPenHsvProperty()
 }
 
-func (p *penComponent) changePenHueParam(delta float64) {
-	p.setPenHueParam(p.penHue + delta)
+func (p *penComponent) changePenColor(kind PenColorParam, delta float64) {
+	if component := p.colorParam(kind); component != nil {
+		p.setPenColorParam(kind, *component+delta)
+	}
 }
 
-func (p *penComponent) setPenSaturation(value float64) {
-	p.setPenHsvComponent(&p.penSaturation, value)
-}
-
-func (p *penComponent) changePenSaturation(delta float64) {
-	p.setPenSaturation(p.penSaturation + delta)
-}
-
-func (p *penComponent) setPenBrightness(value float64) {
-	p.setPenHsvComponent(&p.penBrightness, value)
-}
-
-func (p *penComponent) changePenBrightness(delta float64) {
-	p.setPenBrightness(p.penBrightness + delta)
-}
-
-func (p *penComponent) setPenTransparency(value float64) {
-	p.setPenHsvComponent(&p.penTransparency, value)
-}
-
-func (p *penComponent) changePenTransparency(delta float64) {
-	p.setPenTransparency(p.penTransparency + delta)
+func (p *penComponent) colorParam(kind PenColorParam) *float64 {
+	switch kind {
+	case PenHue:
+		return &p.penHue
+	case PenSaturation:
+		return &p.penSaturation
+	case PenBrightness:
+		return &p.penBrightness
+	case PenTransparency:
+		return &p.penTransparency
+	default:
+		return nil
+	}
 }
 
 // ============================================================================
@@ -328,16 +301,6 @@ func (p *penComponent) applyLegacyPenColor() {
 	p.syncPenColorComponents()
 	p.legacyPenColor.hue = p.penHue
 	p.updatePenColor()
-}
-
-func (p *penComponent) setPenHsvComponent(component *float64, value float64) {
-	nextValue := mathf.Clamp(value, 0, 100)
-	if p.penObj != nil && nearlyEqualPenValue(*component, nextValue) {
-		return
-	}
-	p.ensureClonePenReady()
-	*component = nextValue
-	p.applyPenHsvProperty()
 }
 
 func (p *penComponent) syncPenAppearance() {
