@@ -17,10 +17,16 @@
 package common
 
 import (
+	_ "embed"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
+
+// ManagerTemplate is the shared manager registration and method skeleton.
+//
+//go:embed manager.go.tmpl
+var ManagerTemplate string
 
 // ManagerMethodSignature renders a manager method with its receiver.
 func (c *GenerationContext) ManagerMethodSignature(function *clang.TypedefFunction) string {

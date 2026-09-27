@@ -1,0 +1,34 @@
+func BindMgr(mgrs []IManager) {
+	for _, mgr := range mgrs {
+		switch v := mgr.(type) {
+{{- range $name := .Managers }}
+		case I{{camelCase $name}}Mgr:
+			{{camelCase $name}}Mgr = v
+{{ end }}
+		default:
+			panic(fmt.Sprintf("engine init error : unknown manager type %s", reflect.TypeOf(mgr).String()))
+		}
+	}
+}
+
+{{ range $name := .Managers -}}
+type {{$name}}Mgr struct {
+	baseMgr
+}
+{{ end }}
+
+func createMgrs() []IManager {
+{{- range $name := .Managers }}
+	addManager(&{{$name}}Mgr{})
+{{- end }}
+	return mgrs
+}
+
+// call gdextension interface functions
+{{range $f := .AST.CollectGDExtensionInterfaceFunctions -}}
+{{ if isManagerMethod $f }}
+func {{ managerSignature $f }} {
+{{ managerBody $f }}
+}
+{{- end -}}
+{{- end -}}
