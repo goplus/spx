@@ -23,6 +23,79 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNativeArgumentTypes(t *testing.T) {
+	// A dash denotes a rejected spelling; void legitimately maps to an empty type.
+	for _, tt := range []struct{ cType, value, pointer string }{
+		{"void", "", "unsafe.Pointer"},
+		{"float", "float32", "*float32"},
+		{"real_t", "float32", "*float32"},
+		{"size_t", "uint64", "-"},
+		{"char", "-", "string"},
+		{"int32_t", "int32", "-"},
+		{"char16_t", "-", "*Char16T"},
+		{"char32_t", "Char32T", "*Char32T"},
+		{"wchar_t", "-", "*WcharT"},
+		{"uint8_t", "Uint8T", "*Uint8T"},
+		{"int", "int32", "*int32"},
+		{"uint32_t", "Uint32T", "*Uint32T"},
+		{"uint64_t", "Uint64T", "*Uint64T"},
+		{"GdArray", "GdArray", "*GdArray"},
+		{"GdObj", "GdObj", "*GdObj"},
+		{"double", "double", "*double"},
+		{"int64_t", "int64_t", "*int64_t"},
+		{"CustomType", "CustomType", "*CustomType"},
+	} {
+		t.Run(tt.cType, func(t *testing.T) {
+			for _, pointer := range []bool{false, true} {
+				cType := clang.PrimitiveType{Name: " " + tt.cType + " ", IsPointer: pointer}
+				want := tt.value
+				if pointer {
+					want = tt.pointer
+				}
+				if want == "-" {
+					require.PanicsWithValue(t, "unhandled type: "+cType.CStyleString(), func() { GoArgumentType(cType, "value") })
+				} else {
+					require.Equal(t, want, GoArgumentType(cType, "value"), "pointer=%t", pointer)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeStringArgumentOwnership(t *testing.T) {
+	for _, tt := range []struct{ name, goType, cast, cleanup string }{
+		{"text", "string", "C.CString(text)", "C.free(unsafe.Pointer(arg2))"},
+		{"r_text", "*Char", "(*C.char)(r_text)", ""},
+		// Ownership follows the declared name, even when the fallback has an r_ prefix.
+		{"", "string", "C.CString(r_fallback)", "C.free(unsafe.Pointer(arg2))"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			primitive := clang.PrimitiveType{Name: " char ", IsPointer: true}
+			arg := clang.Argument{Name: tt.name, Type: clang.Type{Primitive: &primitive}}
+			require.Equal(t, tt.goType, GoArgumentType(primitive, tt.name))
+			require.Equal(t, tt.cast, CgoCastArgument(arg, "r_fallback"))
+			require.Equal(t, tt.cleanup, CgoCleanUpArgument(arg, 2))
+		})
+	}
+}
+
+func TestNativeArrayArgumentCasts(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		pointer bool
+		cast    string
+	}{
+		{"array", false, "(C.GdArray)(array)"},
+		{"array", true, "(*C.GdArray)(array)"},
+		{"", false, "(C.GdArray)(inArg1)"},
+		{"", true, "(*C.GdArray)(inArg1)"},
+	} {
+		arg := clang.Argument{Name: tt.name, Type: clang.Type{Primitive: &clang.PrimitiveType{Name: " GdArray ", IsPointer: tt.pointer}}}
+		require.Equal(t, tt.cast, CgoCastArgument(arg, "inArg1"))
+		require.Empty(t, CgoCleanUpArgument(arg, 1))
+	}
+}
+
 func TestNativeReturnConversions(t *testing.T) {
 	for _, tt := range []struct{ cType, goType, cast string }{
 		{"float", "float32", "float32(result)"},
