@@ -176,7 +176,7 @@ func reloadGame(game Gamer, g *Game, index any) error {
 			return err
 		}
 		g.tilemapMgr.replaceMap(plan.tilemap)
-		g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.preparedSpriteProperties)
+		g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.stage)
 		return nil
 	}, func() {
 		g.initEventLoop()

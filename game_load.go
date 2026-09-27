@@ -69,14 +69,14 @@ func (p *Game) loadStage(
 	proj *coreproject.ProjectConfig,
 	generation uint64,
 	loadSprite spriteLoader,
-	preparedProperties stageSpriteProperties,
+	entries []preparedStageEntry,
 ) {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 
-	inits := p.loadAndInitSprites(g, proj, loadSprite, preparedProperties)
+	inits := p.loadAndInitSprites(g, proj, loadSprite, entries)
 	p.runSpriteCallbacks(inits, proj, g, generation)
 }
 
@@ -192,40 +192,6 @@ func (p *Game) applyStageGeometry() {
 // -----------------------------------------------------------------------------
 // Sprite Setup
 // -----------------------------------------------------------------------------
-func (p *Game) loadAndInitSprites(
-	g reflect.Value,
-	proj *coreproject.ProjectConfig,
-	loadSprite spriteLoader,
-	preparedProperties stageSpriteProperties,
-) []Sprite {
-	inits := make([]Sprite, 0, len(proj.Zorder))
-	err := coreproject.WalkZOrder(
-		proj.Zorder,
-		func(layer int, name string) error {
-			sp := p.getSpriteProtoByName(name, g, loadSprite)
-			spr := spriteOf(sp)
-			spr.setLayer(layer + firstSpriteLayer)
-			p.shapeMgr.add(spr)
-			inits = append(inits, sp)
-			return nil
-		},
-		func(layer int, shape coreproject.StageShape) error {
-			var err error
-			inits, err = p.addSpecialShape(g, shape, inits, loadSprite, layer, preparedProperties)
-			if err != nil {
-				return fmt.Errorf("addSpecialShape: %w", err)
-			}
-			return nil
-		},
-	)
-	if err != nil {
-		engine.Panic(err)
-	}
-	// Rebuild expanded z-order entries into contiguous sprite layers above the shared pen canvas.
-	p.shapeMgr.updateRenderLayers()
-	return inits
-}
-
 func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
 	var onLoaded func()
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
@@ -268,121 +234,6 @@ func (p *Game) applyTilemap() {
 	p.applyStageGeometry()
 }
 
-func (p *Game) addSpecialShape(
-	g reflect.Value,
-	v coreproject.StageShape,
-	inits []Sprite,
-	loadSprite spriteLoader,
-	layer int,
-	preparedProperties stageSpriteProperties,
-) ([]Sprite, error) {
-	return coreproject.AppendStageItems(inits, v, coreproject.StageItemHandlers[Sprite]{
-		StageMonitor: func(shape coreproject.StageShape) error {
-			config, err := coreproject.ParseMonitorShape(shape)
-			if err != nil {
-				return err
-			}
-			sm, err := newMonitor(g, shape, config)
-			if err != nil {
-				spxlog.Error("Skip monitor %q: %v", config.Name, err)
-				return nil
-			}
-			p.shapeMgr.add(sm)
-			return nil
-		},
-		Measure: func(shape coreproject.StageShape) error {
-			config, err := coreproject.ParseMeasureShape(shape)
-			if err != nil {
-				return err
-			}
-			p.shapeMgr.add(ui.NewMeasureShape(config))
-			return nil
-		},
-		Sprites: func(shape coreproject.StageShape) ([]Sprite, error) {
-			return p.addStageSprites(g, shape, loadSprite, layer, preparedProperties)
-		},
-		Sprite: func(shape coreproject.StageShape) (Sprite, error) {
-			return p.addStageSprite(g, shape, layer, preparedProperties)
-		},
-	})
-}
-
-func (p *Game) addStageSprite(
-	g reflect.Value,
-	v coreproject.StageShape,
-	layer int,
-	preparedProperties stageSpriteProperties,
-) (Sprite, error) {
-	target, err := stageShapeTarget(v)
-	if err != nil {
-		return nil, err
-	}
-	properties, err := preparedProperties.resolve(layer, 0, v)
-	if err != nil {
-		return nil, err
-	}
-	var added Sprite
-	err = coreproject.BindStageSprite(g, target, coreproject.FindObjectPtr, func(val any) error {
-		sp, ok := val.(Sprite)
-		if !ok {
-			return fmt.Errorf("stage sprite target is not a sprite")
-		}
-		dest := spriteOf(sp)
-		applySpriteProperties(dest, properties)
-		p.shapeMgr.add(dest)
-		added = sp
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("addStageSprite: %w", err)
-	}
-	return added, nil
-}
-
-func (p *Game) addStageSprites(
-	g reflect.Value,
-	v coreproject.StageShape,
-	loadSprite spriteLoader,
-	layer int,
-	preparedProperties stageSpriteProperties,
-) ([]Sprite, error) {
-	target, err := stageShapeTarget(v)
-	if err != nil {
-		return nil, err
-	}
-	rawItems, err := stageShapeItems(v)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]Sprite, 0, len(rawItems))
-	itemIndex := 0
-	err = coreproject.BindStageSprites(
-		g,
-		target,
-		rawItems,
-		coreproject.FindFieldPtr,
-		func(typ reflect.Type) bool {
-			return typ.Implements(tySprite)
-		},
-		func(newItem reflect.Value, shape coreproject.StageShape) error {
-			properties, err := preparedProperties.resolve(layer, itemIndex, shape)
-			if err != nil {
-				return err
-			}
-			itemIndex++
-			spr := p.getSpriteProto(newItem.Type(), g, loadSprite)
-			dest, sp := instantiateStageSprite(newItem, spr, properties)
-			p.shapeMgr.add(dest)
-			items = append(items, sp)
-			return nil
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("addStageSprites: %w", err)
-	}
-	return items, nil
-}
-
 func bindSpriteOwner(spriteValue reflect.Value, gamer reflect.Value) error {
 	if spriteValue.NumField() < 2 {
 		return fmt.Errorf("sprite %s is missing owner field", spriteValue.Type())
@@ -405,20 +256,4 @@ func bindSpriteOwner(spriteValue reflect.Value, gamer reflect.Value) error {
 	// reflect.NewAt gives us a typed, settable view over the same storage.
 	reflect.NewAt(ownerField.Type(), unsafe.Pointer(ownerField.UnsafeAddr())).Elem().Set(gamerPtr)
 	return nil
-}
-
-func stageShapeTarget(shape coreproject.StageShape) (string, error) {
-	target, ok := shape["target"].(string)
-	if !ok || target == "" {
-		return "", fmt.Errorf("stage shape target must be a non-empty string")
-	}
-	return target, nil
-}
-
-func stageShapeItems(shape coreproject.StageShape) ([]any, error) {
-	items, ok := shape["items"].([]any)
-	if !ok {
-		return nil, fmt.Errorf("stage shape items must be an array")
-	}
-	return items, nil
 }

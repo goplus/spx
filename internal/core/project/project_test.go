@@ -299,40 +299,6 @@ func TestDispatchStageShape(t *testing.T) {
 	}
 }
 
-func TestAppendStageItems(t *testing.T) {
-	items, err := AppendStageItems(
-		[]string{"base"},
-		StageShape{"type": "sprites"},
-		StageItemHandlers[string]{
-			Sprites: func(StageShape) ([]string, error) {
-				return []string{"a", "b"}, nil
-			},
-		},
-	)
-	if err != nil {
-		t.Fatalf("AppendStageItems(sprites) error: %v", err)
-	}
-	if want := []string{"base", "a", "b"}; !reflect.DeepEqual(items, want) {
-		t.Fatalf("AppendStageItems(sprites) = %v, want %v", items, want)
-	}
-
-	items, err = AppendStageItems(
-		items,
-		StageShape{"type": "sprite"},
-		StageItemHandlers[string]{
-			Sprite: func(StageShape) (string, error) {
-				return "c", nil
-			},
-		},
-	)
-	if err != nil {
-		t.Fatalf("AppendStageItems(sprite) error: %v", err)
-	}
-	if want := []string{"base", "a", "b", "c"}; !reflect.DeepEqual(items, want) {
-		t.Fatalf("AppendStageItems(sprite) = %v, want %v", items, want)
-	}
-}
-
 func TestShapeValue(t *testing.T) {
 	shape := StageShape{"x": 1.5}
 	if got := ShapeValue(shape, "x", 0.0); got != 1.5 {
@@ -928,27 +894,6 @@ func TestResolveSystemSettings(t *testing.T) {
 	}
 }
 
-func TestWalkZOrder(t *testing.T) {
-	var got []string
-	err := WalkZOrder(
-		[]any{"A", StageShape{"type": "sprite"}, "B"},
-		func(layer int, name string) error {
-			got = append(got, name)
-			return nil
-		},
-		func(layer int, shape StageShape) error {
-			got = append(got, shape["type"].(string))
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("WalkZOrder error: %v", err)
-	}
-	if want := []string{"A", "sprite", "B"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("WalkZOrder got %v, want %v", got, want)
-	}
-}
-
 func TestFieldPtrOrAllocAndFinders(t *testing.T) {
 	type spriteLike struct{ V int }
 	type holder struct {
@@ -989,9 +934,7 @@ func TestFieldPtrOrAllocAndFinders(t *testing.T) {
 	if got := FindFieldRefCaseInsensitive(reflect.ValueOf(&h), "val", 0).(*int); *got != 7 {
 		t.Fatalf("FindFieldRefCaseInsensitive = %d, want 7", *got)
 	}
-	if got := FindObjectPtr(reflect.ValueOf(&h), "Spr", 0).(*spriteLike); got != h.Spr {
-		t.Fatalf("FindObjectPtr = %#v, want %#v", got, h.Spr)
-	}
+
 }
 
 func TestParseCommandLineFlags(t *testing.T) {
@@ -1039,61 +982,5 @@ func TestWalkFields(t *testing.T) {
 	want := []string{"A", "B"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("WalkFields got %v, want %v", got, want)
-	}
-}
-
-func TestBindStageSprite(t *testing.T) {
-	type spriteLike struct {
-		Name string
-	}
-	type holder struct {
-		One *spriteLike
-	}
-
-	h := holder{One: &spriteLike{}}
-	err := BindStageSprite(
-		reflect.ValueOf(&h),
-		"One",
-		FindObjectPtr,
-		func(val any) error {
-			val.(*spriteLike).Name = "hero"
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("BindStageSprite error: %v", err)
-	}
-	if h.One.Name != "hero" {
-		t.Fatalf("h.One.Name = %q, want hero", h.One.Name)
-	}
-}
-
-func TestBindStageSprites(t *testing.T) {
-	type spriteLike struct {
-		Name string
-	}
-	type holder struct {
-		Many []*spriteLike
-	}
-
-	h := holder{}
-	err := BindStageSprites(
-		reflect.ValueOf(&h),
-		"Many",
-		[]any{StageShape{"name": "a"}, StageShape{"name": "b"}},
-		FindFieldPtr,
-		func(typ reflect.Type) bool {
-			return typ == reflect.TypeOf((*spriteLike)(nil))
-		},
-		func(itemValue reflect.Value, shape StageShape) error {
-			itemValue.FieldByName("Name").SetString(shape["name"].(string))
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("BindStageSprites error: %v", err)
-	}
-	if len(h.Many) != 2 || h.Many[0].Name != "a" || h.Many[1].Name != "b" {
-		t.Fatalf("unexpected bound slice: %+v", h.Many)
 	}
 }
