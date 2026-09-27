@@ -20,13 +20,13 @@ import (
 	"fmt"
 )
 
-func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
-	env, err := resolveEngineDownloadEnv(repoRoot, cfg.platform)
+func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
+	env, err := resolveEngineDownloadEnv(repoRoot, cfg.Platform)
 	if err != nil {
 		return err
 	}
-	if cfg.assetDir != "" {
-		if err := setLocalAssetDir(&env, repoRoot, cfg.assetDir, cfg.sameRunArtifacts); err != nil {
+	if cfg.AssetDir != "" {
+		if err := setLocalAssetDir(&env, repoRoot, cfg.AssetDir, cfg.SameRunArtifacts); err != nil {
 			return err
 		}
 	}
@@ -36,11 +36,11 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 		}
 	}
 
-	if cfg.runtime {
+	if cfg.Runtime {
 		if err := downloadHostRuntimeAssets(env); err != nil {
 			return err
 		}
-		if cfg.skipRuntimePack {
+		if cfg.SkipRuntimePack {
 			return nil
 		}
 		if err := downloadRuntimePack(env); err != nil {
@@ -49,7 +49,7 @@ func downloadEngineAssets(cfg engineDownloadConfig, repoRoot string) error {
 		return nil
 	}
 
-	return downloadPlatformAssets(env, cfg.mode, false)
+	return downloadPlatformAssets(env, cfg.Mode, false)
 }
 
 func downloadHostRuntimeAssets(env engineDownloadEnv) error {

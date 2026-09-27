@@ -30,15 +30,6 @@ var osStderr = os.Stderr
 
 var errUsage = shared.ErrUsage
 
-type engineDownloadConfig struct {
-	runtime          bool
-	skipRuntimePack  bool
-	platform         string
-	mode             string
-	assetDir         string
-	sameRunArtifacts bool
-}
-
 func Run(args []string) error {
 	if len(args) == 0 {
 		printEngineUsage()
@@ -59,33 +50,33 @@ func Run(args []string) error {
 	}
 }
 
-func (cfg *engineDownloadConfig) validate() error {
-	if cfg.assetDir != "" {
-		cfg.assetDir = filepath.Clean(cfg.assetDir)
+func (cfg *DownloadConfig) validate() error {
+	if cfg.AssetDir != "" {
+		cfg.AssetDir = filepath.Clean(cfg.AssetDir)
 	}
-	if cfg.sameRunArtifacts && cfg.assetDir == "" {
+	if cfg.SameRunArtifacts && cfg.AssetDir == "" {
 		return errors.New("--same-run-artifacts requires --asset-dir")
 	}
-	if cfg.skipRuntimePack && !cfg.runtime {
+	if cfg.SkipRuntimePack && !cfg.Runtime {
 		return errors.New("--skip-runtime-pack requires --runtime")
 	}
-	if cfg.runtime && cfg.platform != "" {
+	if cfg.Runtime && cfg.Platform != "" {
 		return errors.New("--runtime cannot be combined with --platform")
 	}
-	if cfg.runtime && cfg.mode != "" {
+	if cfg.Runtime && cfg.Mode != "" {
 		return errors.New("--runtime cannot be combined with --mode")
 	}
-	if err := shared.ValidateOptionalPlatform(cfg.platform); err != nil {
+	if err := shared.ValidateOptionalPlatform(cfg.Platform); err != nil {
 		return err
 	}
-	if cfg.platform == "web" && cfg.mode == "" {
-		cfg.mode = "normal"
+	if cfg.Platform == "web" && cfg.Mode == "" {
+		cfg.Mode = "normal"
 	}
-	if cfg.mode != "" {
-		if cfg.platform != "web" {
+	if cfg.Mode != "" {
+		if cfg.Platform != "web" {
 			return errors.New("--mode requires --platform web")
 		}
-		if err := shared.ValidateWebMode(cfg.mode); err != nil {
+		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
 			return err
 		}
 	}
@@ -114,33 +105,33 @@ func runEngineDownload(args []string) error {
 		return err
 	}
 
-	return downloadEngineAssets(cfg, repoRoot)
+	return DownloadEngineAssets(cfg, repoRoot)
 }
 
-func parseEngineDownloadArgs(args []string) (engineDownloadConfig, error) {
-	cfg := engineDownloadConfig{}
+func parseEngineDownloadArgs(args []string) (DownloadConfig, error) {
+	cfg := DownloadConfig{}
 
 	fs := flag.NewFlagSet("engine download", flag.ContinueOnError)
 	fs.SetOutput(osStderr)
-	fs.BoolVar(&cfg.runtime, "runtime", false, "download runtime assets for the current host platform")
-	fs.BoolVar(&cfg.skipRuntimePack, "skip-runtime-pack", false, "skip downloading the published runtime asset bundle")
-	fs.StringVar(&cfg.platform, "platform", "", "download templates for android, ios, web, linux, windows, or macos")
-	fs.StringVar(&cfg.mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
-	fs.StringVar(&cfg.assetDir, "asset-dir", "", "read release assets from a local directory instead of GitHub")
-	fs.BoolVar(&cfg.sameRunArtifacts, "same-run-artifacts", false, "allow a local current-workflow artifact directory without a final runtime manifest")
+	fs.BoolVar(&cfg.Runtime, "runtime", false, "download runtime assets for the current host platform")
+	fs.BoolVar(&cfg.SkipRuntimePack, "skip-runtime-pack", false, "skip downloading the published runtime asset bundle")
+	fs.StringVar(&cfg.Platform, "platform", "", "download templates for android, ios, web, linux, windows, or macos")
+	fs.StringVar(&cfg.Mode, "mode", "", "web mode: normal, worker, minigame, or miniprogram")
+	fs.StringVar(&cfg.AssetDir, "asset-dir", "", "read release assets from a local directory instead of GitHub")
+	fs.BoolVar(&cfg.SameRunArtifacts, "same-run-artifacts", false, "allow a local current-workflow artifact directory without a final runtime manifest")
 	fs.Usage = func() {
 		fmt.Fprintln(osStderr, "Usage: buildctl engine download [--runtime] [--skip-runtime-pack] [--platform android|ios|web|linux|windows|macos] [--mode normal|worker|minigame|miniprogram] [--asset-dir path] [--same-run-artifacts]")
 	}
 
 	if err := fs.Parse(args); err != nil {
-		return engineDownloadConfig{}, err
+		return DownloadConfig{}, err
 	}
 	if fs.NArg() != 0 {
 		fs.Usage()
-		return engineDownloadConfig{}, errUsage
+		return DownloadConfig{}, errUsage
 	}
 	if err := cfg.validate(); err != nil {
-		return engineDownloadConfig{}, err
+		return DownloadConfig{}, err
 	}
 	return cfg, nil
 }

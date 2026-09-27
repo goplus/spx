@@ -32,14 +32,14 @@ func TestParseEngineDownloadArgsDefault(t *testing.T) {
 		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
 	}
 
-	if cfg.runtime {
+	if cfg.Runtime {
 		t.Fatal("runtime should default to false")
 	}
-	if cfg.platform != "" {
-		t.Fatalf("unexpected platform: %s", cfg.platform)
+	if cfg.Platform != "" {
+		t.Fatalf("unexpected platform: %s", cfg.Platform)
 	}
-	if cfg.mode != "" {
-		t.Fatalf("unexpected mode: %s", cfg.mode)
+	if cfg.Mode != "" {
+		t.Fatalf("unexpected mode: %s", cfg.Mode)
 	}
 }
 
@@ -49,16 +49,16 @@ func TestParseEngineDownloadArgsRuntimeSkipsPack(t *testing.T) {
 		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
 	}
 
-	if !cfg.runtime {
+	if !cfg.Runtime {
 		t.Fatal("runtime should be true")
 	}
-	if !cfg.skipRuntimePack {
+	if !cfg.SkipRuntimePack {
 		t.Fatal("skipRuntimePack should be true")
 	}
-	if cfg.assetDir != filepath.Clean("artifacts/runtime") {
-		t.Fatalf("assetDir = %q, want %q", cfg.assetDir, filepath.Clean("artifacts/runtime"))
+	if cfg.AssetDir != filepath.Clean("artifacts/runtime") {
+		t.Fatalf("assetDir = %q, want %q", cfg.AssetDir, filepath.Clean("artifacts/runtime"))
 	}
-	if !cfg.sameRunArtifacts {
+	if !cfg.SameRunArtifacts {
 		t.Fatal("sameRunArtifacts should be true")
 	}
 }
@@ -81,8 +81,8 @@ func TestParseEngineDownloadArgsWebDefaultMode(t *testing.T) {
 		t.Fatalf("parseEngineDownloadArgs returned error: %v", err)
 	}
 
-	if cfg.mode != "normal" {
-		t.Fatalf("expected normal mode, got %s", cfg.mode)
+	if cfg.Mode != "normal" {
+		t.Fatalf("expected normal mode, got %s", cfg.Mode)
 	}
 }
 
