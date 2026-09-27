@@ -68,9 +68,8 @@ type tileSet struct {
 
 // tileInstance represents a placed tile in the map
 type tileInstance struct {
-	TileCoords  vec2i `json:"tile_coords"`
-	SourceID    int32 `json:"source_id"`
-	AtlasCoords vec2i `json:"atlas_coords"`
+	TileCoords vec2i
+	SourceID   int32
 }
 
 // tilemapLayer represents a tilemap layer with compact tile data format
@@ -141,13 +140,6 @@ func (v Vec2) Sub(other Vec2) Vec2 {
 	return Vec2{X: v.X - other.X, Y: v.Y - other.Y}
 }
 
-// Runtime utilities for parsing tile data
-func ConvertData(data *TscnMapData) {
-	for _, item := range data.Decorators {
-		item.Path = toTilemapPath(item.Path)
-	}
-}
-
 func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, points []float64), funcSetLayer func(layerIndex int64),
 	funcPlaceTiles func(positions []float64, texturePath string, layerIndex int64)) {
 	paths := make(map[int32]string)
@@ -199,35 +191,15 @@ func toTilemapPath(p string) string {
 	return path.Join(tilemapRelDir, p)
 }
 
-// TileMapParser provides utilities for parsing compact tile data
-// ParseTileData converts compact tile data array to tile instances
-// New format: [source_id, tile_x, tile_y, atlas_x, atlas_y] (5 elements per tile)
-// Where source_id is the ID of the tileset source,
-// tile_x and tile_y are the tile coordinates in the map,
-// and atlas_x and atlas_y are the coordinates in the tileset texture.
+// parseTileData reads complete [source_id, tile_x, tile_y, atlas_x, atlas_y]
+// records. Placement uses the source and map coordinates only.
 func parseTileData(tileData []int32) []tileInstance {
-	tileCount := len(tileData) / 5
-	tiles := make([]tileInstance, 0, tileCount)
-
-	for i := 0; i < len(tileData); i += 5 {
-		if i+4 >= len(tileData) {
-			break
-		}
-
-		sourceID := tileData[i]
-		tileX := tileData[i+1]
-		tileY := tileData[i+2]
-		atlasX := tileData[i+3]
-		atlasY := tileData[i+4]
-
-		tile := tileInstance{
-			TileCoords:  vec2i{X: tileX, Y: tileY},
-			SourceID:    sourceID,
-			AtlasCoords: vec2i{X: atlasX, Y: atlasY},
-		}
-
-		tiles = append(tiles, tile)
+	tiles := make([]tileInstance, 0, len(tileData)/5)
+	for i := 0; i+4 < len(tileData); i += 5 {
+		tiles = append(tiles, tileInstance{
+			TileCoords: vec2i{X: tileData[i+1], Y: tileData[i+2]},
+			SourceID:   tileData[i],
+		})
 	}
-
 	return tiles
 }

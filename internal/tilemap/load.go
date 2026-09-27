@@ -76,7 +76,6 @@ func Load(fs spxfs.Dir, mapDir string) (LoadResult, error) {
 	if err := coreproject.LoadJSON(&data, fs, mapDir); err != nil {
 		return LoadResult{}, err
 	}
-	ConvertData(&data)
 	return LoadResult{
 		Data:       &data,
 		TilemapDir: path.Dir(mapDir),
