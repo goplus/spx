@@ -45,18 +45,20 @@ func (p *Game) inputEventLoop(coroutine.Thread) {
 		IsLeftButtonPressed: func() bool {
 			return engine.IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
 		},
-		FireLeftButtonDown: func(point mathf.Vec2) {
-			p.fireEvent(&eventLeftButtonDown{Pos: point})
+		InputFrameHooks: coreruntime.InputFrameHooks{
+			FireLeftButtonDown: func(point mathf.Vec2) {
+				p.fireEvent(&eventLeftButtonDown{Pos: point})
+			},
+			FireLeftButtonUp: func(point mathf.Vec2) {
+				p.fireEvent(&eventLeftButtonUp{Pos: point})
+			},
+			SetMousePos: p.inputMgr.setMousePos,
+			OnMouseMove: p.inputMgr.onMouseMove,
+			OnKeyPressed: func(keyID int64) {
+				p.fireEvent(&eventKeyDown{Key: Key(keyID)})
+			},
 		},
-		FireLeftButtonUp: func(point mathf.Vec2) {
-			p.fireEvent(&eventLeftButtonUp{Pos: point})
-		},
-		SetMousePos:  p.inputMgr.setMousePos,
-		OnMouseMove:  p.inputMgr.onMouseMove,
-		GetKeyEvents: engine.GetKeyEvents,
-		OnKeyPressed: func(keyID int64) {
-			p.fireEvent(&eventKeyDown{Key: Key(keyID)})
-		},
+		GetKeyEvents:           engine.GetKeyEvents,
 		MouseMovementThreshold: mouseMovementThreshold,
 	})
 }

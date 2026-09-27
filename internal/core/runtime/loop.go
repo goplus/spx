@@ -43,16 +43,12 @@ type InputFrameHooks struct {
 }
 
 type InputLoopConfig struct {
+	InputFrameHooks
 	BeginFrame             func() bool
 	EndFrame               func()
 	CurrentMousePos        func() mathf.Vec2
 	IsLeftButtonPressed    func() bool
-	FireLeftButtonDown     func(mathf.Vec2)
-	FireLeftButtonUp       func(mathf.Vec2)
-	SetMousePos            func(mathf.Vec2)
-	OnMouseMove            func(mathf.Vec2)
 	GetKeyEvents           func([]engine.KeyEvent) []engine.KeyEvent
-	OnKeyPressed           func(int64)
 	MouseMovementThreshold float64
 }
 
@@ -228,13 +224,7 @@ func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
 				KeyEvents:                state.keyEvents,
 				MouseMovementThreshold:   cfg.MouseMovementThreshold,
 			},
-			InputFrameHooks{
-				FireLeftButtonDown: cfg.FireLeftButtonDown,
-				FireLeftButtonUp:   cfg.FireLeftButtonUp,
-				SetMousePos:        cfg.SetMousePos,
-				OnMouseMove:        cfg.OnMouseMove,
-				OnKeyPressed:       cfg.OnKeyPressed,
-			},
+			cfg.InputFrameHooks,
 		)
 	}
 	state.keyEvents = state.keyEvents[:0]
