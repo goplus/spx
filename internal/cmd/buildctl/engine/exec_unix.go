@@ -50,7 +50,6 @@ func terminateTrackedProcessGroup(process *os.Process) {
 	pid := process.Pid
 	_ = syscall.Kill(-pid, syscall.SIGTERM)
 	time.Sleep(time.Second)
-	if syscall.Kill(pid, 0) == nil {
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
-	}
+	// The leader may have exited while descendants still need SIGKILL.
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
 }
