@@ -65,7 +65,7 @@ func (f PreprocessorHeaderFileAST) Eval(isCpp bool) string {
 		vars["__cplusplus"] = struct{}{}
 	}
 
-	return f.eval(vars)
+	return evalDirectives(f.Directives, vars)
 }
 
 func (d Directive) Eval(vars PreprocVars) string {
@@ -87,16 +87,10 @@ func (d IfndefDirective) Eval(vars PreprocVars) string {
 		panic("#ifndef missing variable")
 	}
 
-	sb := strings.Builder{}
-
 	if _, ok := vars[d.Name]; !ok {
-		for _, c := range d.Directives {
-			sb.WriteString(c.Eval(vars))
-			sb.WriteString("\n")
-		}
+		return evalDirectives(d.Directives, vars)
 	}
-
-	return sb.String()
+	return ""
 }
 
 func (d IfdefDirective) Eval(vars PreprocVars) string {
@@ -104,16 +98,10 @@ func (d IfdefDirective) Eval(vars PreprocVars) string {
 		panic("#ifdef missing variable")
 	}
 
-	sb := strings.Builder{}
-
 	if _, ok := vars[d.Name]; ok {
-		for _, c := range d.Directives {
-			sb.WriteString(c.Eval(vars))
-			sb.WriteString("\n")
-		}
+		return evalDirectives(d.Directives, vars)
 	}
-
-	return sb.String()
+	return ""
 }
 
 func (d DefineDirective) Eval(vars PreprocVars) string {
@@ -121,9 +109,7 @@ func (d DefineDirective) Eval(vars PreprocVars) string {
 		panic("#define missing variable")
 	}
 
-	if _, ok := vars[d.Name]; !ok {
-		vars[d.Name] = struct{}{}
-	}
+	vars[d.Name] = struct{}{}
 
 	return ""
 }
@@ -167,10 +153,10 @@ func ParsePreprocessorString(s string) (*PreprocessorHeaderFileAST, error) {
 	return ast, nil
 }
 
-func (f PreprocessorHeaderFileAST) eval(vars PreprocVars) string {
+func evalDirectives(directives []Directive, vars PreprocVars) string {
 	sb := strings.Builder{}
 
-	for _, d := range f.Directives {
+	for _, d := range directives {
 		sb.WriteString(d.Eval(vars))
 		sb.WriteString("\n")
 	}

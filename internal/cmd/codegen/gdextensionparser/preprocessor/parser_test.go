@@ -102,3 +102,85 @@ func TestParseCommentRegression(t *testing.T) {
 	require.Equal(t, "const i int = 5;\n\tconst j int = 6;\n\tconst k int = 7;\n\n\t/* typed arrays */\n\tconst x int = 1;\n\tconst y int = 2;\n\n\t", ast.Directives[0].Ifndef.Directives[0].Source)
 	require.Equal(t, "const i int = 5;\n\tconst j int = 6;\n\tconst k int = 7;\n\n\t/* typed arrays */\n\tconst x int = 1;\n\tconst y int = 2;\n\n\t\n\n", ast.Eval(false))
 }
+
+func TestConditionalDirectiveEvaluation(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		directive Directive
+		vars      PreprocVars
+		want      string
+		wantVars  PreprocVars
+	}{
+		{
+			name: "nested definitions affect later siblings",
+			directive: Directive{Ifndef: &IfndefDirective{Name: "ROOT", Directives: []Directive{
+				{Define: &DefineDirective{Name: "READY"}},
+				{Ifdef: &IfdefDirective{Name: "READY", Directives: []Directive{{Source: "ready"}}}},
+				{Ifndef: &IfndefDirective{Name: "READY", Directives: []Directive{{Source: "hidden"}}}},
+			}}},
+			vars: PreprocVars{}, want: "\nready\n\n\n", wantVars: PreprocVars{"READY": {}},
+		},
+		{
+			name: "disabled ifdef skips definitions and invalid children",
+			directive: Directive{Ifdef: &IfdefDirective{Name: "MISSING", Directives: []Directive{
+				{Define: &DefineDirective{Name: "HIDDEN"}},
+				{Ifndef: &IfndefDirective{}},
+			}}},
+			vars: PreprocVars{}, wantVars: PreprocVars{},
+		},
+		{
+			name: "disabled ifndef skips definitions",
+			directive: Directive{Ifndef: &IfndefDirective{Name: "READY", Directives: []Directive{
+				{Define: &DefineDirective{Name: "HIDDEN"}},
+			}}},
+			vars: PreprocVars{"READY": {}}, wantVars: PreprocVars{"READY": {}},
+		},
+		{
+			name:      "repeated definitions preserve existing variables",
+			directive: Directive{Define: &DefineDirective{Name: "READY"}},
+			vars:      PreprocVars{"READY": {}, "OTHER": {}}, wantVars: PreprocVars{"READY": {}, "OTHER": {}},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.directive.Eval(tt.vars))
+			require.Equal(t, tt.wantVars, tt.vars)
+		})
+	}
+}
+
+func TestPreprocessorEvalInitialVariables(t *testing.T) {
+	ast := PreprocessorHeaderFileAST{Directives: []Directive{
+		{Ifndef: &IfndefDirective{Name: "SEEN", Directives: []Directive{
+			{Source: "first"},
+			{Define: &DefineDirective{Name: "SEEN"}},
+		}}},
+		{Ifdef: &IfdefDirective{Name: "__cplusplus", Directives: []Directive{{Source: "cpp"}}}},
+	}}
+	// Definitions from either language mode must not survive the next evaluation.
+	require.Equal(t, "first\n\n\n\n", ast.Eval(false))
+	require.Equal(t, "first\n\n\ncpp\n\n", ast.Eval(true))
+	require.Equal(t, "first\n\n\n\n", ast.Eval(false))
+}
+
+func TestPreprocessorEvalEmptyDirectives(t *testing.T) {
+	require.Empty(t, (PreprocessorHeaderFileAST{}).Eval(false))
+	ast := PreprocessorHeaderFileAST{Directives: []Directive{
+		{}, {Include: &IncludeDirective{Name: "test.h"}}, {Source: "source\n"},
+	}}
+	require.Equal(t, "\n\nsource\n\n", ast.Eval(false))
+}
+
+func TestDirectiveMissingNames(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		directive Directive
+	}{
+		{"ifndef", Directive{Ifndef: &IfndefDirective{}}},
+		{"ifdef", Directive{Ifdef: &IfdefDirective{}}},
+		{"define", Directive{Define: &DefineDirective{}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.PanicsWithValue(t, "#"+tt.name+" missing variable", func() { tt.directive.Eval(PreprocVars{}) })
+		})
+	}
+}
