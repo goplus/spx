@@ -79,24 +79,17 @@ func (s *SwipeState[T]) Finish(point mathf.Vec2, hooks SwipeHooks[T]) {
 	dispatchSwipeResult(result, target, hooks)
 }
 
-func (s *SwipeState[T]) OnMouseMove(pos mathf.Vec2, hooks SwipeHooks[T]) {
+func (s *SwipeState[T]) Expire() {
 	s.mu.Lock()
 	if !s.recognizer.IsTracking() {
 		s.mu.Unlock()
 		return
 	}
-	result, ok := s.recognizer.OnMouseMove(pos)
-	if !ok {
-		if !s.recognizer.IsTracking() {
-			s.target = zeroValue[T]()
-		}
-		s.mu.Unlock()
-		return
+	s.recognizer.Expire()
+	if !s.recognizer.IsTracking() {
+		s.target = zeroValue[T]()
 	}
-	target := s.target
-	s.target = zeroValue[T]()
 	s.mu.Unlock()
-	dispatchSwipeResult(result, target, hooks)
 }
 
 func dispatchSwipeResult[T comparable](result inputstate.SwipeResult, target T, hooks SwipeHooks[T]) {

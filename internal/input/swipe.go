@@ -42,7 +42,6 @@ type SwipeRecognizer struct {
 	isTracking bool
 	startTime  time.Time
 	startPoint mathf.Vec2
-	endPoint   mathf.Vec2
 	now        func() time.Time
 }
 
@@ -63,7 +62,6 @@ func (sr *SwipeRecognizer) InitWithClock(now func() time.Time) {
 	sr.isTracking = false
 	sr.startTime = time.Time{}
 	sr.startPoint = mathf.Vec2{}
-	sr.endPoint = mathf.Vec2{}
 	sr.now = now
 }
 
@@ -71,7 +69,6 @@ func (sr *SwipeRecognizer) StartTracking(startPos mathf.Vec2) {
 	sr.isTracking = true
 	sr.startTime = sr.nowTime()
 	sr.startPoint = startPos
-	sr.endPoint = startPos
 }
 
 func (sr *SwipeRecognizer) StopTracking() {
@@ -82,29 +79,26 @@ func (sr *SwipeRecognizer) IsTracking() bool {
 	return sr.isTracking
 }
 
-func (sr *SwipeRecognizer) OnMouseMove(pos mathf.Vec2) (SwipeResult, bool) {
+// Expire stops tracking if the gesture has exceeded its time limit.
+func (sr *SwipeRecognizer) Expire() {
 	if !sr.isTracking {
-		return SwipeResult{}, false
+		return
 	}
 	if sr.enableTimeLimit && sr.timeToSwipe > 0 && sr.elapsedSeconds() > sr.timeToSwipe {
 		sr.StopTracking()
-		return SwipeResult{}, false
 	}
-	sr.endPoint = pos
-	return SwipeResult{}, false
 }
 
 func (sr *SwipeRecognizer) Finish(point mathf.Vec2) (SwipeResult, bool) {
 	if !sr.isTracking {
 		return SwipeResult{}, false
 	}
-	sr.endPoint = point
-	result, ok := sr.checkForSwipeCompletion()
+	result, ok := sr.checkForSwipeCompletion(point)
 	sr.StopTracking()
 	return result, ok
 }
 
-func (sr *SwipeRecognizer) checkForSwipeCompletion() (SwipeResult, bool) {
+func (sr *SwipeRecognizer) checkForSwipeCompletion(point mathf.Vec2) (SwipeResult, bool) {
 	elapsed := sr.elapsedSeconds()
 	if elapsed <= 0 {
 		return SwipeResult{}, false
@@ -113,19 +107,19 @@ func (sr *SwipeRecognizer) checkForSwipeCompletion() (SwipeResult, bool) {
 		return SwipeResult{}, false
 	}
 
-	dx := sr.endPoint.X - sr.startPoint.X
-	dy := sr.endPoint.Y - sr.startPoint.Y
+	dx := point.X - sr.startPoint.X
+	dy := point.Y - sr.startPoint.Y
 	distance := math.Sqrt(dx*dx + dy*dy)
 	if distance < sr.minimumDistance || distance > sr.maximumDistance {
 		return SwipeResult{}, false
 	}
 
 	return SwipeResult{
-		Direction: calculateDirection(sr.startPoint, sr.endPoint),
+		Direction: calculateDirection(sr.startPoint, point),
 		Velocity:  distance / elapsed,
 		Distance:  distance,
 		StartPos:  sr.startPoint,
-		EndPos:    sr.endPoint,
+		EndPos:    point,
 	}, true
 }
 
