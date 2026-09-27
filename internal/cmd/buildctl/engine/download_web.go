@@ -24,17 +24,13 @@ import (
 )
 
 func downloadWebAssets(env engineDownloadEnv, mode string) error {
-	templateName, err := webModeReleaseTemplateName(mode)
+	spec, err := shared.ResolveWebMode(mode)
 	if err != nil {
 		return err
 	}
-	cachedName, err := webModeCachedTemplatePath(env.version, mode)
-	if err != nil {
-		return err
-	}
-	cachedZip := filepath.Join(env.goBinDir, cachedName)
+	cachedZip := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s_%s", env.version, spec.CacheSuffix))
 	if shouldDownloadPreparedAsset(cachedZip) {
-		if err := fetchEngineAsset(env, templateName, env.urlPrefix+templateName, cachedZip); err != nil {
+		if err := fetchEngineAsset(env, spec.ReleaseTemplate, env.urlPrefix+spec.ReleaseTemplate, cachedZip); err != nil {
 			return err
 		}
 	}
@@ -54,29 +50,4 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 		}
 	}
 	return nil
-}
-
-func webModeReleaseTemplateName(mode string) (string, error) {
-	switch mode {
-	case "normal":
-		return "web.zip", nil
-	case "worker":
-		return "web-worker.zip", nil
-	case "minigame":
-		return "web-minigame.zip", nil
-	case "miniprogram":
-		return "web-miniprogram.zip", nil
-	default:
-		return "", fmt.Errorf("unsupported web-mode: %s", mode)
-	}
-}
-
-func webModeCachedTemplatePath(version, mode string) (string, error) {
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", err
-	}
-	if mode == "normal" {
-		return fmt.Sprintf("gdspx%s_webpack.zip", version), nil
-	}
-	return fmt.Sprintf("gdspx%s_web%s.zip", version, mode), nil
 }
