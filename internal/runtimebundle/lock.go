@@ -297,7 +297,9 @@ func acquireOpenedPlatformFileLock(ctx context.Context, file platformLockFile, m
 	}
 }
 
-func lockSidecarPath(key string) string { return key + ".lock" }
+const lockSidecarSuffix = ".lock"
+
+func lockSidecarPath(key string) string { return key + lockSidecarSuffix }
 
 func openPlatformLockFile(path string) (platformLockFile, error) {
 	parentPath := filepath.Dir(path)
