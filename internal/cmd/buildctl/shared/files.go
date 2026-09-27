@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v3/internal/httpclient"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
@@ -84,7 +85,11 @@ func DownloadURL(url, dst string, maxBytes int64, progress func(int64, int64)) (
 	if maxBytes <= 0 {
 		return fmt.Errorf("invalid download size limit %d", maxBytes)
 	}
-	resp, err := GetURL(&http.Client{Timeout: 30 * time.Minute}, url)
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := httpclient.Do(&http.Client{Timeout: 30 * time.Minute}, request)
 	if err != nil {
 		return err
 	}

@@ -17,15 +17,65 @@
 package launchpack
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/httpclient"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
+
+func TestFetchReleaseURLRejectsHTTPSDowngrade(t *testing.T) {
+	var insecureRequests atomic.Int32
+	insecure := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		insecureRequests.Add(1)
+		_, _ = io.WriteString(w, "untrusted manifest")
+	}))
+	defer insecure.Close()
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, insecure.URL, http.StatusFound)
+	}))
+	defer secure.Close()
+	previous := runtimeHTTPClient
+	runtimeHTTPClient = secure.Client()
+	t.Cleanup(func() { runtimeHTTPClient = previous })
+
+	var downloaded bytes.Buffer
+	err := fetchRuntimeURL(context.Background(), secure.URL, &downloaded)
+	if !errors.Is(err, httpclient.ErrInsecureRedirect) || runtimeReleaseUnavailable(err) {
+		t.Errorf("fetch error = %v, want terminal transport security error", err)
+	}
+	if insecureRequests.Load() != 0 || downloaded.Len() != 0 {
+		t.Errorf("insecure requests = %d, downloaded = %q", insecureRequests.Load(), downloaded.String())
+	}
+}
+
+func TestFetchReleaseURLPreservesHTTPSRedirects(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/start" {
+			http.Redirect(w, req, "/payload", http.StatusFound)
+			return
+		}
+		_, _ = io.WriteString(w, "verified transport")
+	}))
+	defer server.Close()
+	previous := runtimeHTTPClient
+	runtimeHTTPClient = server.Client()
+	t.Cleanup(func() { runtimeHTTPClient = previous })
+
+	var downloaded bytes.Buffer
+	if err := fetchRuntimeURL(context.Background(), server.URL+"/start", &downloaded); err != nil {
+		t.Fatal(err)
+	}
+	if got := downloaded.String(); got != "verified transport" {
+		t.Fatalf("downloaded = %q", got)
+	}
+}
 
 func TestFetchReleaseURLClassifiesUnavailableRelease(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {

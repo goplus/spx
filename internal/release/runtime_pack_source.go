@@ -42,6 +42,7 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/shared/api.go":                 {},
 	"internal/cmd/buildctl/shared/build_env.go":           {},
 	"internal/cmd/buildctl/shared/command_runner.go":      {},
+	"internal/cmd/buildctl/shared/files.go":               {},
 	"internal/cmd/buildctl/shared/macos_go_toolchain.go":  {},
 	"internal/cmd/buildctl/shared/repo.go":                {},
 	"internal/cmd/buildctl/shared/runtime_api.go":         {},
@@ -54,6 +55,7 @@ var runtimeBuildRecipePrefixes = []string{
 	".github/actions/setup-buildctl/",
 	"internal/base/fileutil/",
 	"internal/base/quoted/",
+	"internal/httpclient/",
 }
 
 var runtimePackSourceFiles = map[string]struct{}{

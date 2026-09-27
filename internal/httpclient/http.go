@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package shared
+package httpclient
 
 import (
 	"errors"
@@ -25,13 +25,12 @@ import (
 )
 
 // ErrInsecureRedirect reports an HTTP redirect that weakens transport security.
-var ErrInsecureRedirect = errors.New("buildctl: insecure redirect")
+var ErrInsecureRedirect = errors.New("download: insecure redirect")
 
-// GetURL performs a GET without allowing an HTTPS redirect to downgrade.
-func GetURL(base *http.Client, rawURL string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
+// Do performs a request without allowing an HTTPS redirect to downgrade.
+func Do(base *http.Client, req *http.Request) (*http.Response, error) {
+	if req == nil || req.URL == nil {
+		return nil, errors.New("download: request URL is required")
 	}
 
 	if base == nil {

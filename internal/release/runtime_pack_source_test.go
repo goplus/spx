@@ -164,6 +164,8 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/shared/macos_go_toolchain.go", true},
 		{"internal/base/quoted/quoted.go", true},
 		{"internal/base/quoted/quoted_test.go", false},
+		{"internal/httpclient/http.go", true},
+		{"internal/httpclient/http_test.go", false},
 		{".github/scripts/release/assemble.sh", false},
 		{".github/scripts/runtime/manifest.go", false},
 		{".github/scripts/runtime/digest.go", false},
@@ -185,7 +187,7 @@ func TestRuntimeBuildRecipePathSeparatesRecipeFromSources(t *testing.T) {
 		{"internal/cmd/buildctl/shared/api.go", true},
 		{"internal/cmd/buildctl/shared/build_api.go", false},
 		{"internal/cmd/buildctl/shared/command_runner.go", true},
-		{"internal/cmd/buildctl/shared/files.go", false},
+		{"internal/cmd/buildctl/shared/files.go", true},
 		{"internal/cmd/buildctl/shared/runtime_api.go", true},
 		{"internal/cmd/buildctl/shared/runtime_files.go", true},
 		{"internal/cmd/buildctl/shared/runner.go", false},
@@ -401,6 +403,36 @@ func TestRuntimeBuildRecipeIgnoresReleaseMappings(t *testing.T) {
 	}
 	if beforeDigest != afterDigest {
 		t.Fatalf("release mapping changed runtime build recipe: %s != %s", beforeDigest, afterDigest)
+	}
+}
+
+func TestRuntimeBuildRecipeTracksDownloadPolicy(t *testing.T) {
+	t.Parallel()
+
+	const recipeEntry = "100644 blob 1111111111111111111111111111111111111111\t.github/scripts/runtime/build_pack.sh"
+	for _, name := range []string{
+		"internal/cmd/buildctl/shared/files.go",
+		"internal/httpclient/http.go",
+	} {
+		t.Run(name, func(t *testing.T) {
+			before, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(
+				recipeEntry,
+				"100644 blob 2222222222222222222222222222222222222222\t"+name,
+			))
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := runtimeBuildRecipeTreeSHA256(gitTreeFixture(
+				recipeEntry,
+				"100644 blob 3333333333333333333333333333333333333333\t"+name,
+			))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if before == after {
+				t.Fatalf("change to %q did not change the runtime build recipe", name)
+			}
+		})
 	}
 }
 

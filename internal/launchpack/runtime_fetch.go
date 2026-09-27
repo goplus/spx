@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/goplus/spx/v3/internal/httpclient"
 	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
@@ -152,10 +153,13 @@ func fetchRuntimeURL(ctx context.Context, url string, dst io.Writer) error {
 	if err != nil {
 		return err
 	}
-	response, err := runtimeHTTPClient.Do(request)
+	response, err := httpclient.Do(runtimeHTTPClient, request)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
+		}
+		if errors.Is(err, httpclient.ErrInsecureRedirect) {
+			return err
 		}
 		return fmt.Errorf("%w: GET %s: %w", errReleaseUnavailable, url, err)
 	}
