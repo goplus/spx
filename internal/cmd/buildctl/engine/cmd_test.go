@@ -129,7 +129,7 @@ func TestLoadEngineAssetManifestRequiresExplicitSameRunTrust(t *testing.T) {
 func TestDownloadRuntimePackRejectsMissingPCK(t *testing.T) {
 	root := t.TempDir()
 	env := engineDownloadEnv{
-		version:  mustDefaultRuntimeVersion(t),
+		version:  release.DefaultRuntimeLock().RuntimeVersion,
 		goBinDir: filepath.Join(root, "bin"),
 		cacheDir: filepath.Join(root, "cache"),
 		assetDir: filepath.Join(root, "assets"),

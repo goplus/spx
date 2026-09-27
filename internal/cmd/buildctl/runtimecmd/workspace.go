@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 const (
@@ -44,10 +45,7 @@ func runRepoSPXCommand(runner shared.ScriptRunner, projectDir string, args ...st
 }
 
 func prepareRuntimeWorkspace(repoRoot string, includeRuntimeExtension bool) (runtimeWorkspace, func(), error) {
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		return runtimeWorkspace{}, nil, err
-	}
+	version := release.DefaultRuntimeLock().RuntimeVersion
 	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return runtimeWorkspace{}, nil, err

@@ -22,13 +22,14 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestCleanInstalledAssetsRemovesKnownArtifactsOnly(t *testing.T) {
 	root := t.TempDir()
 	gopath := filepath.Join(root, "gopath")
 	t.Setenv("GOPATH", gopath)
-	version := mustDefaultRuntimeVersion(t)
+	version := release.DefaultRuntimeLock().RuntimeVersion
 
 	binDir := filepath.Join(gopath, "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {

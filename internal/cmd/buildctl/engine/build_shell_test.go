@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestParseEnvExportEngineBuildShellArgsWebDefaultMode(t *testing.T) {
@@ -128,7 +130,7 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
 	t.Setenv("HOME", repoRoot)
 	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-	version := mustDefaultRuntimeVersion(t)
+	version := release.DefaultRuntimeLock().RuntimeVersion
 
 	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{Target: "editor"})
 	if err != nil {

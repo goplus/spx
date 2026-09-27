@@ -51,6 +51,9 @@ func TestResolveBuildEnvironmentUsesGodotSrcOverride(t *testing.T) {
 		t.Fatalf("ResolveBuildEnvironment returned error: %v", err)
 	}
 
+	if want := release.DefaultRuntimeLock().RuntimeVersion; env.Version != want {
+		t.Fatalf("runtime version = %q, want locked version %q", env.Version, want)
+	}
 	wantEngineDir := filepath.Join(repoRoot, "custom-godot")
 	if env.EngineDir != wantEngineDir {
 		t.Fatalf("unexpected engine dir: got %s want %s", env.EngineDir, wantEngineDir)
@@ -83,7 +86,6 @@ func TestResolveBuildEnvironmentUsesSPXModuleSourceOverride(t *testing.T) {
 }
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
-	version := mustDefaultRuntimeVersion(t)
 	runtimeLock := release.DefaultRuntimeLock()
 	env := shared.BuildEnvironment{
 		ProjectDir:      "/repo",
@@ -92,7 +94,7 @@ func TestBuildEnvironmentShellExports(t *testing.T) {
 		SPXModuleSrc:    "/repo/custom modules/spx",
 		EngineVersion:   runtimeLock.Godot.Version,
 		GoPath:          "/tmp/go path",
-		Version:         version,
+		Version:         runtimeLock.RuntimeVersion,
 		GodotRepository: runtimeLock.Godot.Repository,
 		GodotRef:        runtimeLock.Godot.Ref,
 		GodotCommit:     runtimeLock.Godot.Commit,

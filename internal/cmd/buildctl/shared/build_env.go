@@ -64,10 +64,6 @@ func (env buildEnvironment) shellExports() string {
 
 func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
 	runtimeLock := release.DefaultRuntimeLock()
-	version, err := defaultRuntimeVersion()
-	if err != nil {
-		return buildEnvironment{}, err
-	}
 	goPath, err := ensureGoPath()
 	if err != nil {
 		return buildEnvironment{}, err
@@ -110,7 +106,7 @@ func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEn
 		GodotSrc:        engineDir,
 		SPXModuleSrc:    spxModuleSrc,
 		GoPath:          goPath,
-		Version:         version,
+		Version:         runtimeLock.RuntimeVersion,
 		GodotRepository: runtimeLock.Godot.Repository,
 		GodotRef:        runtimeLock.Godot.Ref,
 		GodotCommit:     runtimeLock.Godot.Commit,
