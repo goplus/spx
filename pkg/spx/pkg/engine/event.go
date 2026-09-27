@@ -24,20 +24,14 @@ import (
 type Action0 func()
 
 type Event0 struct {
-	actions     map[int]Action0
-	nextID      int
-	mutex       sync.Mutex
-	tempActions []Action0
-	tempIds     []int
+	actions map[int]Action0
+	nextID  int
+	mutex   sync.Mutex
 }
 
 func NewEvent0() *Event0 {
 	return &Event0{
-		actions:     make(map[int]Action0),
-		nextID:      0,
-		mutex:       sync.Mutex{},
-		tempActions: make([]Action0, 0),
-		tempIds:     make([]int, 0),
+		actions: make(map[int]Action0),
 	}
 }
 
@@ -67,47 +61,24 @@ func (e *Event0) UnsubscribeAll() {
 
 func (e *Event0) Trigger() {
 	e.mutex.Lock()
-	for id := range e.actions {
-		e.tempIds = append(e.tempIds, id)
-	}
-	sort.Ints(e.tempIds)
-	count := len(e.tempIds)
-	curCount := len(e.tempActions)
-	for i := curCount; i < count; i++ {
-		e.tempActions = append(e.tempActions, nil)
-	}
-	for i, id := range e.tempIds {
-		e.tempActions[i] = e.actions[id]
-	}
+	actions := snapshotEventActions(e.actions)
 	e.mutex.Unlock()
-	for i := range count {
-		e.tempActions[i]()
+	for _, action := range actions {
+		action()
 	}
-	e.mutex.Lock()
-	clearEventTempActions(e.tempActions)
-	e.tempIds = e.tempIds[:0]
-	e.mutex.Unlock()
 }
 
 type Action1[T any] func(data T)
 
 type Event1[T any] struct {
-	name        string
-	actions     map[int]Action1[T]
-	nextID      int
-	mutex       sync.Mutex
-	tempActions []Action1[T]
-	tempIds     []int
+	actions map[int]Action1[T]
+	nextID  int
+	mutex   sync.Mutex
 }
 
 func NewEvent1[T any]() *Event1[T] {
 	return &Event1[T]{
-		name:        "aaa",
-		actions:     make(map[int]Action1[T]),
-		nextID:      0,
-		mutex:       sync.Mutex{},
-		tempActions: make([]Action1[T], 0),
-		tempIds:     make([]int, 0),
+		actions: make(map[int]Action1[T]),
 	}
 }
 
@@ -136,45 +107,24 @@ func (e *Event1[T]) UnsubscribeAll() {
 
 func (e *Event1[T]) Trigger(data T) {
 	e.mutex.Lock()
-	for id := range e.actions {
-		e.tempIds = append(e.tempIds, id)
-	}
-	sort.Ints(e.tempIds)
-	count := len(e.tempIds)
-	curCount := len(e.tempActions)
-	for i := curCount; i < count; i++ {
-		e.tempActions = append(e.tempActions, nil)
-	}
-	for i, id := range e.tempIds {
-		e.tempActions[i] = e.actions[id]
-	}
+	actions := snapshotEventActions(e.actions)
 	e.mutex.Unlock()
-	for i := range count {
-		e.tempActions[i](data)
+	for _, action := range actions {
+		action(data)
 	}
-	e.mutex.Lock()
-	clearEventTempActions(e.tempActions)
-	e.tempIds = e.tempIds[:0]
-	e.mutex.Unlock()
 }
 
 type Action2[T1 any, T2 any] func(data1 T1, data2 T2)
 
 type Event2[T1 any, T2 any] struct {
-	actions     map[int]Action2[T1, T2]
-	nextID      int
-	mutex       sync.Mutex
-	tempActions []Action2[T1, T2]
-	tempIds     []int
+	actions map[int]Action2[T1, T2]
+	nextID  int
+	mutex   sync.Mutex
 }
 
 func NewEvent2[T1 any, T2 any]() *Event2[T1, T2] {
 	return &Event2[T1, T2]{
-		actions:     make(map[int]Action2[T1, T2]),
-		nextID:      0,
-		mutex:       sync.Mutex{},
-		tempActions: make([]Action2[T1, T2], 0),
-		tempIds:     make([]int, 0),
+		actions: make(map[int]Action2[T1, T2]),
 	}
 }
 
@@ -204,31 +154,24 @@ func (e *Event2[T1, T2]) UnsubscribeAll() {
 
 func (e *Event2[T1, T2]) Trigger(data1 T1, data2 T2) {
 	e.mutex.Lock()
-	for id := range e.actions {
-		e.tempIds = append(e.tempIds, id)
-	}
-	sort.Ints(e.tempIds)
-	count := len(e.tempIds)
-	curCount := len(e.tempActions)
-	for i := curCount; i < count; i++ {
-		e.tempActions = append(e.tempActions, nil)
-	}
-	for i, id := range e.tempIds {
-		e.tempActions[i] = e.actions[id]
-	}
+	actions := snapshotEventActions(e.actions)
 	e.mutex.Unlock()
-	for i := range count {
-		e.tempActions[i](data1, data2)
+	for _, action := range actions {
+		action(data1, data2)
 	}
-	e.mutex.Lock()
-	clearEventTempActions(e.tempActions)
-	e.tempIds = e.tempIds[:0]
-	e.mutex.Unlock()
 }
 
-func clearEventTempActions[T any](actions []T) {
-	var zero T
-	for i := range actions {
-		actions[i] = zero
+// snapshotEventActions is called under the event's mutex. Each dispatch owns its
+// callbacks, so nested or concurrent triggers cannot change an active snapshot.
+func snapshotEventActions[T any](registered map[int]T) []T {
+	ids := make([]int, 0, len(registered))
+	for id := range registered {
+		ids = append(ids, id)
 	}
+	sort.Ints(ids)
+	actions := make([]T, 0, len(ids))
+	for _, id := range ids {
+		actions = append(actions, registered[id])
+	}
+	return actions
 }
