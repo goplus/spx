@@ -39,10 +39,13 @@ func TestSpriteBaseLayoutKeepsLookupAndReloadRules(t *testing.T) {
 	}
 
 	fields := snapshotSpriteUserFields(reflect.ValueOf(sprite).Elem())
-	if got := fields[0].Int(); got != 7 {
-		t.Fatalf("saved user field = %d, want 7", got)
+	sprite.value = 11
+	sprite.spriteState.IsVisible = true
+	restoreSpriteUserFields(fields)
+	if sprite.value != 7 {
+		t.Fatalf("restored user field = %d, want 7", sprite.value)
 	}
-	if _, ok := fields[1]; ok {
-		t.Fatal("saved user fields include SpriteImpl")
+	if !sprite.spriteState.IsVisible {
+		t.Fatal("restoring user fields overwrote SpriteImpl")
 	}
 }
