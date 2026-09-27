@@ -24,102 +24,40 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
 )
 
-func (g *Generator) getManagerImplPure(function *clang.TypedefFunction, className string) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
+func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string, pure bool) string {
 	lowerManagerName := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := g.Parameters(function)
+	funcName := function.Name[len("GDExtensionSpx")+len(mgrName):]
 	retType := g.EffectiveGoReturnType(function)
-	fmt.Fprintf(&sb, "func (pself *%s) %s(", className, funcName)
-	wroteArg := false
-	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
-			continue
-		}
+	var params, callArgs []string
+	for i, arg := range g.Parameters(function) {
 		if arg.IsLength {
 			continue
 		}
-		if wroteArg {
-			sb.WriteString(", ")
+		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
+			callArgs = append(callArgs, "pself.Id")
+			continue
 		}
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := arg.MustGoType(function.Name)
-		sb.WriteString(typeName)
-		wroteArg = true
+		params = append(params, arg.Name+" "+arg.MustGoType(function.Name))
+		callArgs = append(callArgs, arg.Name)
 	}
-	sb.WriteString(") ")
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "func (pself *%s) %s(%s)", className, funcName, strings.Join(params, ", "))
 	if retType != "" {
-		sb.WriteString(retType)
-		sb.WriteByte(' ')
+		fmt.Fprintf(&sb, " %s", retType)
 	}
-	sb.WriteString("{\n")
-	if retType != "" {
-		fmt.Fprintf(&sb, "\treturn %s\n", goZeroValue(retType))
+	sb.WriteString(" {\n")
+	if pure {
+		if retType != "" {
+			fmt.Fprintf(&sb, "\treturn %s\n", goZeroValue(retType))
+		}
+	} else {
+		sb.WriteByte('\t')
+		if retType != "" {
+			sb.WriteString("return ")
+		}
+		fmt.Fprintf(&sb, "%sMgr.%s(%s)\n", mgrName, funcName, strings.Join(callArgs, ", "))
 	}
 	sb.WriteString("}\n")
-	return sb.String()
-}
-
-func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string) string {
-	prefix := "GDExtensionSpx"
-	sb := strings.Builder{}
-	lowerManagerName := g.GetManagerName(function.Name)
-	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
-	funcName := function.Name[len(prefix)+len(mgrName):]
-	args := g.Parameters(function)
-	retType := g.EffectiveGoReturnType(function)
-
-	hasObjArg := len(args) > 0 && args[0].Name == "obj" && args[0].Buffer == nil
-
-	fmt.Fprintf(&sb, "func (pself *%s) %s(", className, funcName)
-	wroteArg := false
-	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
-			continue
-		}
-		if arg.IsLength {
-			continue
-		}
-		if wroteArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(arg.Name)
-		sb.WriteString(" ")
-		typeName := arg.MustGoType(function.Name)
-		sb.WriteString(typeName)
-		wroteArg = true
-	}
-	sb.WriteString(") ")
-	if retType != "" {
-		sb.WriteString(retType)
-		sb.WriteByte(' ')
-	}
-	sb.WriteString("{\n\t")
-	if retType != "" {
-		sb.WriteString("return ")
-	}
-	fmt.Fprintf(&sb, "%sMgr.%s(", mgrName, funcName)
-	wroteCallArg := false
-	if hasObjArg {
-		sb.WriteString("pself.Id")
-		wroteCallArg = true
-	}
-	for i, arg := range args {
-		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
-			continue
-		}
-		if arg.IsLength {
-			continue
-		}
-		if wroteCallArg {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(arg.Name)
-		wroteCallArg = true
-	}
-	sb.WriteString(")\n}\n")
 	return sb.String()
 }
