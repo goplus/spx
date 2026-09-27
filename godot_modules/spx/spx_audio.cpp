@@ -135,7 +135,7 @@ bool SpxAudio::has_audio(GdInt aid) const {
 
 GdBool SpxAudio::is_playing(GdInt aid) {
 	SPX_AUDIO_LOOKUP_RETURN(aid, __func__, false)
-	return audio->is_playing();
+	return audio->is_playing() || audio->get_stream_paused();
 }
 
 void SpxAudio::pause(GdInt aid) {
