@@ -42,12 +42,14 @@ func TestSessionExtensionListUsesPackedProjectEntry(t *testing.T) {
 }
 
 func TestSessionRuntimeGDExtensionPinsLibrariesToSession(t *testing.T) {
-	got := SessionRuntimeGDExtension()
-	if !strings.Contains(got, `"res://gdspx-darwin-amd64.dylib"`) {
-		t.Fatalf("SessionRuntimeGDExtension() does not use res:// libraries:\n%s", got)
+	const section = "[libraries]\n\n"
+	header, libraries, ok := strings.Cut(RuntimeGDExtension(), section)
+	if !ok {
+		t.Fatal("RuntimeGDExtension() is missing its libraries section")
 	}
-	if strings.Contains(RuntimeGDExtension(), `"res://gdspx-darwin-amd64.dylib"`) {
-		t.Fatal("legacy RuntimeGDExtension unexpectedly changed")
+	want := header + section + strings.ReplaceAll(libraries, ` = "`, ` = "res://`)
+	if got := SessionRuntimeGDExtension(); got != want {
+		t.Fatalf("SessionRuntimeGDExtension() = %q, want %q", got, want)
 	}
 }
 
