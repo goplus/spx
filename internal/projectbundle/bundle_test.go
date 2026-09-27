@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -295,22 +296,93 @@ func TestCollectorRejectsCanonicalEntryNameCollisions(t *testing.T) {
 	}
 
 	for _, test := range []struct {
-		name   string
-		first  string
-		second string
+		name, first, second, diagnostic string
 	}{
-		{name: "case folded", first: "Shared/File.txt", second: "shared/file.TXT"},
-		{name: "unicode canonical", first: "café.txt", second: "cafe\u0301.txt"},
+		{"exact", "same.txt", "same.txt", `duplicate path "same.txt" (already declared as "same.txt")`},
+		{"case folded", "Shared/File.txt", "shared/file.TXT", `case-folded paths "Shared/File.txt" and "shared/file.TXT"`},
+		{"unicode canonical", "café.txt", "cafe\u0301.txt", "Unicode-canonical paths \"café.txt\" and \"cafe\u0301.txt\""},
+		{"reverse canonical", "cafe\u0301.txt", "café.txt", "Unicode-canonical paths \"cafe\u0301.txt\" and \"café.txt\""},
+		{"unicode fold", "Straße.txt", "STRASSE.TXT", `case-folded paths "Straße.txt" and "STRASSE.TXT"`},
+		{"canonical and fold", "CAFÉ.txt", "cafe\u0301.txt", "case-folded paths \"CAFÉ.txt\" and \"cafe\u0301.txt\""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			collector := newCollector(limits)
 			if err := collector.reserveName(test.first); err != nil {
 				t.Fatal(err)
 			}
-			if err := collector.reserveName(test.second); !errors.Is(err, ErrCollision) {
-				t.Fatalf("reserveName(%q) error = %v, want ErrCollision", test.second, err)
+			for range 2 {
+				err := collector.reserveName(test.second)
+				if want := ErrCollision.Error() + ": " + test.diagnostic; !errors.Is(err, ErrCollision) || err.Error() != want {
+					t.Fatalf("reserveName(%q) = %v, want %s", test.second, err, want)
+				}
+			}
+			// A rejected alias must not replace the original spelling.
+			err := collector.reserveName(test.first)
+			want := fmt.Sprintf("%s: duplicate path %q (already declared as %q)", ErrCollision, test.first, test.first)
+			if !errors.Is(err, ErrCollision) || err.Error() != want {
+				t.Fatalf("reserveName(%q) after collision = %v, want %s", test.first, err, want)
 			}
 		})
+	}
+}
+
+func TestCollectorKeepsNameReservedAfterLimitFailure(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		limits Limits
+	}{
+		{"entry count", Limits{MaxEntries: 1}},
+		{"file bytes", Limits{MaxFileBytes: 1}},
+		{"total bytes", Limits{MaxTotalBytes: 2}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			limits, err := resolveLimits(test.limits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			collector := newCollector(limits)
+			if err := collector.addData("first", []byte("x")); err != nil {
+				t.Fatal(err)
+			}
+			if err := collector.addData("Reserved", []byte("xx")); !errors.Is(err, ErrLimit) {
+				t.Fatalf("addData oversized input = %v, want ErrLimit", err)
+			}
+			assertReservedCollectorName(t, collector)
+		})
+	}
+}
+
+func TestCollectorKeepsNameReservedAfterOpenFailure(t *testing.T) {
+	observation, err := observeRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := openSafeRoot(observation.path, observation.info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	limits, err := resolveLimits(Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := newCollector(limits)
+	if err := collector.addFile(root, "missing", "Reserved"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("addFile missing input = %v, want not-exist error", err)
+	}
+	assertReservedCollectorName(t, collector)
+}
+
+func assertReservedCollectorName(t *testing.T, collector *collector) {
+	t.Helper()
+	for _, test := range []struct{ name, diagnostic string }{
+		{"Reserved", `duplicate path "Reserved" (already declared as "Reserved")`},
+		{"reserved", `case-folded paths "Reserved" and "reserved"`},
+	} {
+		err := collector.addData(test.name, nil)
+		if want := ErrCollision.Error() + ": " + test.diagnostic; !errors.Is(err, ErrCollision) || err.Error() != want {
+			t.Fatalf("addData(%q) after failed addition = %v, want %s", test.name, err, want)
+		}
 	}
 }
 

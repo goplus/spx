@@ -26,19 +26,17 @@ import (
 var unicodeFold = cases.Fold()
 
 func (c *collector) reserveName(name string) error {
-	if previous, ok := c.exact[name]; ok {
-		return fmt.Errorf("%w: duplicate path %q (already declared as %q)", ErrCollision, name, previous)
-	}
 	canonical := norm.NFC.String(name)
-	if previous, ok := c.canonical[canonical]; ok {
-		return fmt.Errorf("%w: Unicode-canonical paths %q and %q", ErrCollision, previous, name)
-	}
 	folded := unicodeFold.String(canonical)
 	if previous, ok := c.folded[folded]; ok {
+		if previous == name {
+			return fmt.Errorf("%w: duplicate path %q (already declared as %q)", ErrCollision, name, previous)
+		}
+		if norm.NFC.String(previous) == canonical {
+			return fmt.Errorf("%w: Unicode-canonical paths %q and %q", ErrCollision, previous, name)
+		}
 		return fmt.Errorf("%w: case-folded paths %q and %q", ErrCollision, previous, name)
 	}
-	c.exact[name] = name
-	c.canonical[canonical] = name
 	c.folded[folded] = name
 	return nil
 }
