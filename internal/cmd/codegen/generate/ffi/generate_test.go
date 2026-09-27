@@ -81,6 +81,47 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
 }
 
+func TestGenerateSyncAPIVariants(t *testing.T) {
+	ast := clang.CHeaderFileAST{Expr: []clang.Expr{
+		{Function: managerFunction("GDExtensionSpxSpriteSetTriggerEnabled", "void",
+			managerArgument("obj", "GdObj"), managerArgument("trigger", "GdBool"))},
+		{Function: managerFunction("GDExtensionSpxSpriteIsCollisionEnabled", "GdBool",
+			managerArgument("obj", "GdObj"))},
+	}}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast,
+		common.GenerationMetadata{ManagerNames: []string{"sprite"}})}
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.writeSyncAPI(codegenDir))
+
+	for _, variant := range []struct {
+		filename string
+		buildTag string
+		pure     bool
+	}{
+		{"sync.gen.go", "!pure_engine", false},
+		{"sync_pure.gen.go", "pure_engine", true},
+	} {
+		t.Run(variant.filename, func(t *testing.T) {
+			path := filepath.Join(codegenDir, common.EngineWrapRelDir, variant.filename)
+			generated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Contains(t, string(generated), "//go:build "+variant.buildTag+"\n// +build "+variant.buildTag+"\n")
+			setter := generatedMethod(t, path, generated, "SetTriggerEnabled")
+			getter := generatedMethod(t, path, generated, "IsCollisionEnabled")
+			require.Contains(t, setter, "func (*spriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)")
+			require.Contains(t, getter, "func (*spriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool")
+			if variant.pure {
+				require.Contains(t, setter, "{}")
+				require.Contains(t, getter, "return false")
+				require.NotContains(t, string(generated), "callInMainThread")
+			} else {
+				require.Contains(t, setter, "callInMainThread(func() {\n\t\tgdx.SpriteMgr.SetTriggerEnabled(obj, trigger)\n\t})")
+				require.Contains(t, getter, "callInMainThread(func() {\n\t\t_ret1 = gdx.SpriteMgr.IsCollisionEnabled(obj)\n\t})\n\treturn _ret1")
+			}
+		})
+	}
+}
+
 func TestNativeStringArgumentRetainsTemporaryOwnership(t *testing.T) {
 	function := managerFunction("GDExtensionSpxExampleAcceptText", "void", managerArgument("text", "GdString"))
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}
