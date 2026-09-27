@@ -133,7 +133,12 @@ func clearActionCache(frame uint64) {
 	clearCachedActions()
 }
 
-func resetActionCache() {
+func resetInputCache() {
+	keyMu.Lock()
+	clear(keyDown)
+	keyMu.Unlock()
+	inputSnap.ok = false
+
 	actionMu.Lock()
 	defer actionMu.Unlock()
 	clearCachedActions()

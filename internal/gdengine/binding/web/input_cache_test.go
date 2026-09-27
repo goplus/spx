@@ -5,7 +5,79 @@ package webffi
 import (
 	"syscall/js"
 	"testing"
+
+	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
+
+func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
+	previousDown, previousSnapshot, previousCallbacks := keyDown, inputSnap, callbacks
+	previousFrame, previousGeneration := actionFrame, actionGeneration
+	previousBool, previousAxis := actionBool, actionAxis
+	previousAPI, previousIDs := API, actionIDs
+	t.Cleanup(func() {
+		keyDown, inputSnap, callbacks = previousDown, previousSnapshot, previousCallbacks
+		actionFrame, actionGeneration = previousFrame, previousGeneration
+		actionBool, actionAxis = previousBool, previousAxis
+		API, actionIDs = previousAPI, previousIDs
+	})
+	API.SpxInputIsActionPressedId = js.Undefined()
+	actionIDs = map[string]int{"left": 1}
+	for _, event := range []string{"OnEngineStart", "OnEngineReset", "OnEngineDestroy"} {
+		for _, withHandler := range []bool{false, true} {
+			name := event + "/without_handler"
+			if withHandler {
+				name = event + "/with_handler"
+			}
+			t.Run(name, func(t *testing.T) {
+				keyDown = map[int64]bool{1: true, 2: false}
+				inputSnap = inputSnapshot{mouse: mathf.NewVec2(11, 22), mouseBits: 1, ok: true, frame: 3}
+				actionFrame = 3
+				actionBool, actionAxis = map[string]bool{"pressed\x00left": true}, map[string]float64{}
+				assertInput := func(wantOld bool) {
+					t.Helper()
+					if got := CachedInputGetKey(1, func() bool { return false }); got != wantOld {
+						t.Errorf("pressed key = %v, want %v", got, wantOld)
+					}
+					if got := CachedInputGetKey(2, func() bool { return true }); got == wantOld {
+						t.Errorf("released key = %v, want %v", got, !wantOld)
+					}
+					wantMouse := mathf.NewVec2(-1, -2)
+					if wantOld {
+						wantMouse = mathf.NewVec2(11, 22)
+					}
+					if got := CachedInputGetGlobalMousePos(func() mathf.Vec2 { return mathf.NewVec2(-1, -2) }); got != wantMouse {
+						t.Errorf("mouse = %v, want %v", got, wantMouse)
+					}
+					if got := CachedInputGetMouseState(1, func() bool { return false }); got != wantOld {
+						t.Errorf("mouse button = %v, want %v", got, wantOld)
+					}
+					if got := CachedInputIsActionPressed("left", func() bool { return false }); got != wantOld {
+						t.Errorf("action = %v, want %v", got, wantOld)
+					}
+				}
+				callbacks = engine.CallbackInfo{}
+				calls := 0
+				if withHandler {
+					handler := func() { calls++; assertInput(event != "OnEngineStart") }
+					switch event {
+					case "OnEngineStart":
+						callbacks.OnEngineStart = handler
+					case "OnEngineReset":
+						callbacks.OnEngineReset = handler
+					case "OnEngineDestroy":
+						callbacks.OnEngineDestroy = handler
+					}
+				}
+				gdspxDispatch(js.Undefined(), []js.Value{js.ValueOf(event)})
+				assertInput(false)
+				if withHandler && calls != 1 {
+					t.Fatalf("handler calls = %d, want 1", calls)
+				}
+			})
+		}
+	}
+}
 
 func TestInputCacheKeyState(t *testing.T) {
 	previousDown := keyDown
