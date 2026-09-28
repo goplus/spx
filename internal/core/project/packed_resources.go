@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/internal/assetindex"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -193,24 +194,12 @@ func mergePackedProjectRoot(data []byte, packedRoot map[string]json.RawMessage, 
 		return data, nil
 	}
 
-	merged := make(map[string]json.RawMessage, len(sourceRoot)+len(packedRoot))
-	for key, value := range sourceRoot {
-		merged[key] = value
-	}
-	for key, value := range packedRoot {
-		merged[key] = value
-	}
-	return json.Marshal(merged)
+	return json.Marshal(assetindex.Merge(sourceRoot, packedRoot))
 }
 
 func parsePackedSection(root map[string]json.RawMessage, key string) (map[string]json.RawMessage, error) {
-	raw, ok := root[key]
-	if !ok || len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-
-	var section map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &section); err != nil {
+	section, err := assetindex.ParseEntries(root[key])
+	if err != nil {
 		return nil, fmt.Errorf("%s must be an object: %w", key, err)
 	}
 	return section, nil

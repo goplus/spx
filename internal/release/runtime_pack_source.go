@@ -84,6 +84,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"fs/asset":                         {},
 	"fs/zip":                           {},
 	"internal/animation":               {},
+	"internal/assetindex":              {},
 	"internal/assets":                  {},
 	"internal/audio":                   {},
 	"internal/base/collision":          {},
