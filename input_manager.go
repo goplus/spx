@@ -191,8 +191,8 @@ func (p *inputManager) finishSwipeTracking(point mathf.Vec2) {
 	p.swipe.Finish(point, p.swipeHooks())
 }
 
-func (p *inputManager) onMouseMove(pos mathf.Vec2) {
-	p.swipe.OnMouseMove(pos, p.swipeHooks())
+func (p *inputManager) onMouseMove(mathf.Vec2) {
+	p.swipe.Expire()
 }
 
 func (p *inputManager) swipeHooks() coreruntime.SwipeHooks[*SpriteImpl] {

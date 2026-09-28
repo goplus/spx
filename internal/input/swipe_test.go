@@ -34,9 +34,7 @@ func TestSwipeRecognizerFinishDetectsRightSwipe(t *testing.T) {
 
 	sr.StartTracking(start)
 	now = now.Add(100 * time.Millisecond)
-	if _, ok := sr.OnMouseMove(end); ok {
-		t.Fatal("expected move-only tracking not to emit swipe before finish")
-	}
+	sr.Expire()
 
 	now = now.Add(10 * time.Millisecond)
 	result, ok := sr.Finish(end)
@@ -68,9 +66,7 @@ func TestSwipeRecognizerTimeLimitStopsTracking(t *testing.T) {
 	sr.StartTracking(mathf.NewVec2(0, 0))
 	now = now.Add(600 * time.Millisecond)
 
-	if _, ok := sr.OnMouseMove(mathf.NewVec2(100, 0)); ok {
-		t.Fatal("expected expired swipe not to emit a result")
-	}
+	sr.Expire()
 	if sr.IsTracking() {
 		t.Fatal("expected expired swipe tracking to stop")
 	}
@@ -82,7 +78,7 @@ func TestSwipeRecognizerInitWithClockResetsTrackingAndNilUsesDefault(t *testing.
 	sr.InitWithClock(func() time.Time { return now })
 	sr.StartTracking(mathf.NewVec2(1, 2))
 	now = now.Add(100 * time.Millisecond)
-	sr.OnMouseMove(mathf.NewVec2(3, 4))
+	sr.Expire()
 
 	sr.InitWithClock(nil)
 	if sr.IsTracking() {
@@ -91,8 +87,8 @@ func TestSwipeRecognizerInitWithClockResetsTrackingAndNilUsesDefault(t *testing.
 	if !sr.startTime.IsZero() {
 		t.Fatalf("startTime = %v, want zero", sr.startTime)
 	}
-	if sr.startPoint != (mathf.Vec2{}) || sr.endPoint != (mathf.Vec2{}) {
-		t.Fatalf("tracking points = %v/%v, want zero values", sr.startPoint, sr.endPoint)
+	if sr.startPoint != (mathf.Vec2{}) {
+		t.Fatalf("startPoint = %v, want zero value", sr.startPoint)
 	}
 	if sr.now == nil {
 		t.Fatal("nil clock was not replaced with the default clock")

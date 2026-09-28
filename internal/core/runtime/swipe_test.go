@@ -33,7 +33,7 @@ func TestSwipeStateFinishDispatchesTarget(t *testing.T) {
 	var state SwipeState[string]
 	state.Init()
 	state.Begin(mathf.Vec2{}, "sprite")
-	state.OnMouseMove(mathf.Vec2{X: 100}, SwipeHooks[string]{})
+	state.Expire()
 	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[string]{
 		Debug: func(ev SwipeEvent[string]) {
 			debugged = append(debugged, ev)
@@ -71,7 +71,7 @@ func TestSwipeStateFinishDispatchesStage(t *testing.T) {
 	var state SwipeState[*int]
 	state.Init()
 	state.Begin(mathf.Vec2{}, nil)
-	state.OnMouseMove(mathf.Vec2{X: 100}, SwipeHooks[*int]{})
+	state.Expire()
 	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[*int]{
 		Debug: func(ev SwipeEvent[*int]) {
 			debugged = append(debugged, ev)
@@ -122,5 +122,30 @@ func TestSwipeStateInitWithClockControlsTimeAndResetsState(t *testing.T) {
 	}
 	if state.recognizer.IsTracking() {
 		t.Fatal("expected reinitialization to stop tracking")
+	}
+}
+
+func TestSwipeStateMovementExpiresTargetBeforeFinish(t *testing.T) {
+	now := time.Unix(0, 0)
+	var state SwipeState[string]
+	state.InitWithClock(func() time.Time { return now })
+	state.Begin(mathf.Vec2{}, "sprite")
+
+	dispatches := 0
+	hooks := SwipeHooks[string]{
+		DispatchTarget: func(float64, string) { dispatches++ },
+		DispatchStage:  func(float64) { dispatches++ },
+	}
+	now = now.Add(600 * time.Millisecond)
+	state.Expire()
+	if state.target != "" || state.recognizer.IsTracking() {
+		t.Fatal("expired movement did not clear the target and tracking")
+	}
+
+	// A later clock correction cannot revive an expired gesture.
+	now = now.Add(-500 * time.Millisecond)
+	state.Finish(mathf.Vec2{X: 100}, hooks)
+	if dispatches != 0 {
+		t.Fatalf("expired gesture dispatched %d times", dispatches)
 	}
 }
