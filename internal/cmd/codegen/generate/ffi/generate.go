@@ -144,17 +144,17 @@ func (g *Generator) writeManagerImpl(codegenDir, className string) error {
 		return strings.Compare(a.Name, b.Name)
 	})
 	data := implData{Methods: methods, ClassName: className}
+	funcs := template.FuncMap{"getManagerImpl": g.getManagerImpl}
 	variants := []struct {
 		suffix string
 		text   string
-		funcs  template.FuncMap
 	}{
-		{".gen.go", implGoFileText, template.FuncMap{"getManagerImpl": g.getManagerImpl}},
-		{"_pure.gen.go", implPureGoFileText, template.FuncMap{"getManagerImplPure": g.getManagerImplPure}},
+		{".gen.go", implGoFileText},
+		{"_pure.gen.go", implPureGoFileText},
 	}
 	for _, variant := range variants {
 		filename := strings.ToLower(className) + variant.suffix
-		if err := common.GenerateFile(variant.funcs, filename, variant.text, data,
+		if err := common.GenerateFile(funcs, filename, variant.text, data,
 			filepath.Join(codegenDir, common.EnginePkgRelDir, filename)); err != nil {
 			return fmt.Errorf("generate %s: %w", filename, err)
 		}
