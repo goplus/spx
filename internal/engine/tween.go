@@ -33,7 +33,7 @@ type tweenCallInfo struct {
 	id         Object
 	startValue Vec2
 	callback   func()
-	curIndex   int64
+	curIndex   int
 	timer      float64
 	infos      []posTweenInfo
 }
@@ -47,12 +47,8 @@ func (info *posTweenInfo) getEndTime() float64 {
 	return info.startTime + info.duration
 }
 
-func (info *tweenCallInfo) getCount() int64 {
-	return int64(len(info.infos))
-}
-
 func (info *tweenCallInfo) isDone() bool {
-	return info.curIndex >= info.getCount()
+	return info.curIndex >= len(info.infos)
 }
 
 func (info *tweenCallInfo) updateStartInfo() {
@@ -85,6 +81,9 @@ func updateTweens(delta float64) {
 		curTween := tempTweenInfos[i]
 		curTween.timer += delta
 		for curTween.timer >= curTween.infos[curTween.curIndex].getEndTime() {
+			if sprite := lookupSprite(curTween.id); sprite != nil {
+				sprite.SetPosition(curTween.infos[curTween.curIndex].value)
+			}
 			curTween.curIndex++
 			curTween.updateStartInfo()
 			if curTween.isDone() {
@@ -125,8 +124,7 @@ func tweenPos2(node gdx.ISpriter, pos Vec2, duration float64, pos2 Vec2, duratio
 	}
 	info.updateStartInfo()
 	for i := 1; i < len(info.infos); i++ {
-		lastInfo := info.infos[i-1]
-		info.infos[i].startTime = lastInfo.startTime + lastInfo.duration
+		info.infos[i].startTime = info.infos[i-1].getEndTime()
 	}
 	tweenInfos = append(tweenInfos, info)
 }
