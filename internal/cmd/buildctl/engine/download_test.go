@@ -485,3 +485,35 @@ func TestShouldRefreshPreparedAssetsAllowsExplicitEnableLocally(t *testing.T) {
 		t.Fatal("expected SPX_PREPARE_FORCE_REFRESH=1 to force refresh locally")
 	}
 }
+
+func TestDownloadWebModeAssetNames(t *testing.T) {
+	for _, tt := range []struct{ mode, release, cached string }{
+		{"normal", "web.zip", "gdspxtest_webpack.zip"},
+		{"worker", "web-worker.zip", "gdspxtest_webworker.zip"},
+		{"minigame", "web-minigame.zip", "gdspxtest_webminigame.zip"},
+		{"miniprogram", "web-miniprogram.zip", "gdspxtest_webminiprogram.zip"},
+	} {
+		t.Run(tt.mode, func(t *testing.T) {
+			root := t.TempDir()
+			env := engineDownloadEnv{
+				version: "test", platform: "web", assetDir: root,
+				goBinDir: filepath.Join(root, "bin"), templateDir: filepath.Join(root, "templates"),
+			}
+			if err := os.WriteFile(filepath.Join(root, tt.release), []byte("template"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := downloadWebAssets(env, tt.mode); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(env.goBinDir, tt.cached))
+			if err != nil || string(data) != "template" {
+				t.Fatalf("cached template = %q, %v", data, err)
+			}
+		})
+	}
+	for _, mode := range []string{"", "unknown"} {
+		if err := downloadWebAssets(engineDownloadEnv{}, mode); err == nil || err.Error() != "unsupported web-mode: "+mode {
+			t.Fatalf("mode %q error = %v", mode, err)
+		}
+	}
+}

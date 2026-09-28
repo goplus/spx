@@ -72,11 +72,7 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) er
 		return err
 	}
 
-	spxCommand, err := webModeSPXCommand(cfg.mode)
-	if err != nil {
-		return err
-	}
-	outputZip, err := webModeOutputZip(cfg.mode)
+	spec, err := shared.ResolveWebMode(cfg.mode)
 	if err != nil {
 		return err
 	}
@@ -87,39 +83,9 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) er
 	}
 	defer cleanup()
 
-	if err := runRepoSPXCommand(runner, workspace.workDir, spxCommand); err != nil {
+	if err := runRepoSPXCommand(runner, workspace.workDir, spec.ExportCommand); err != nil {
 		return err
 	}
 
-	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, outputZip))
-}
-
-func webModeOutputZip(mode string) (string, error) {
-	switch mode {
-	case "normal":
-		return "spx_web.zip", nil
-	case "worker":
-		return "spx_web_worker.zip", nil
-	case "minigame":
-		return "spx_web_minigame.zip", nil
-	case "miniprogram":
-		return "spx_web_miniprogram.zip", nil
-	default:
-		return "", fmt.Errorf("unsupported web-mode: %s", mode)
-	}
-}
-
-func webModeSPXCommand(mode string) (string, error) {
-	switch mode {
-	case "normal":
-		return "exportweb", nil
-	case "worker":
-		return "exportwebworker", nil
-	case "minigame":
-		return "exportminigame", nil
-	case "miniprogram":
-		return "exportminiprogram", nil
-	default:
-		return "", fmt.Errorf("unsupported web-mode: %s", mode)
-	}
+	return shared.ZipDirectory(filepath.Join(workspace.workDir, "project", ".builds", "web"), filepath.Join(workspace.repoRoot, spec.ExportZip))
 }

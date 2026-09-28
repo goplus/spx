@@ -108,24 +108,44 @@ func TestParseRuntimeExportWebArgsDefault(t *testing.T) {
 }
 
 func TestRuntimeExportWebSequence(t *testing.T) {
-	runner := newRuntimeFixtureRunner(t)
-	cfg := runtimeExportWebConfig{mode: "worker"}
-
-	if err := exportWebRuntime(cfg, runner); err != nil {
-		t.Fatalf("exportWebRuntime returned error: %v", err)
+	for _, tt := range []struct{ mode, command, output string }{
+		{"normal", "exportweb", "spx_web.zip"},
+		{"worker", "exportwebworker", "spx_web_worker.zip"},
+		{"minigame", "exportminigame", "spx_web_minigame.zip"},
+		{"miniprogram", "exportminiprogram", "spx_web_miniprogram.zip"},
+	} {
+		t.Run(tt.mode, func(t *testing.T) {
+			runner := newRuntimeFixtureRunner(t)
+			if err := exportWebRuntime(runtimeExportWebConfig{mode: tt.mode}, runner); err != nil {
+				t.Fatal(err)
+			}
+			expectedCalls := []recordedCall{
+				{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
+			}
+			if !reflect.DeepEqual(runner.calls, expectedCalls) {
+				t.Fatalf("unexpected calls: %#v", runner.calls)
+			}
+			assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{tt.command})
+			if !shared.FileExists(filepath.Join(runner.repoRoot, tt.output)) {
+				t.Fatalf("expected export zip %s to exist", tt.output)
+			}
+		})
 	}
+}
 
-	expectedCalls := []recordedCall{
-		{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}},
-	}
-	if !reflect.DeepEqual(runner.calls, expectedCalls) {
-		t.Fatalf("unexpected calls: %#v", runner.calls)
-	}
-
-	assertSingleRuntimeWorkspaceCommand(t, runner, "spx", []string{"exportwebworker"})
-
-	if !shared.FileExists(filepath.Join(runner.repoRoot, "spx_web_worker.zip")) {
-		t.Fatalf("expected export zip to exist")
+func TestRuntimeExportWebInvalidModeInstallsToolsBeforeRejecting(t *testing.T) {
+	for _, mode := range []string{"", "unknown"} {
+		t.Run(mode, func(t *testing.T) {
+			runner := &recordingRunner{}
+			err := exportWebRuntime(runtimeExportWebConfig{mode: mode}, runner)
+			if err == nil || err.Error() != "unsupported web-mode: "+mode {
+				t.Fatalf("error = %v", err)
+			}
+			want := []recordedCall{{script: "cmd/spx/install.sh", args: []string{"--web", "--no-embed-runtime"}}}
+			if !reflect.DeepEqual(runner.calls, want) || len(runner.commands) != 0 {
+				t.Fatalf("calls = %#v; commands = %#v", runner.calls, runner.commands)
+			}
+		})
 	}
 }
 

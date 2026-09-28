@@ -40,10 +40,6 @@ func MacOSVulkanSDKShellExports(sdkRoot string) string {
 	return macOSVulkanSDKShellExports(sdkRoot)
 }
 
-func ValidateWebMode(mode string) error {
-	return validateWebMode(mode)
-}
-
 func ValidateOptionalPlatform(platform string) error {
 	return validateOptionalPlatform(platform)
 }

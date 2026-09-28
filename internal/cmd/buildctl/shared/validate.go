@@ -38,15 +38,6 @@ func ParseNoArgs(name, usage string, args []string, output io.Writer) error {
 	return nil
 }
 
-func validateWebMode(mode string) error {
-	switch mode {
-	case "normal", "worker", "minigame", "miniprogram":
-		return nil
-	default:
-		return fmt.Errorf("unsupported web-mode: %s", mode)
-	}
-}
-
 func validateOptionalPlatform(platform string) error {
 	switch platform {
 	case "", "android", "ios", "web", "linux", "windows", "macos":

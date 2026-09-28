@@ -33,36 +33,6 @@ func TestParseEnvExportEngineBuildShellArgsWebDefaultMode(t *testing.T) {
 	}
 }
 
-func TestResolveEngineBuildShellPlanWebWorker(t *testing.T) {
-	repoRoot := t.TempDir()
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
-	t.Setenv("HOME", repoRoot)
-	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-	version := mustDefaultRuntimeVersion(t)
-
-	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
-		Target:   "template",
-		Platform: "web",
-		Mode:     "worker",
-	})
-	if err != nil {
-		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
-	}
-
-	if plan.WebThreads != "yes" {
-		t.Fatalf("web threads = %s, want yes", plan.WebThreads)
-	}
-	if !plan.WebProxyToPThread {
-		t.Fatal("expected proxy_to_pthread to be enabled for worker mode")
-	}
-	if plan.WebThreadSuffix != "" {
-		t.Fatalf("web thread suffix = %s, want empty", plan.WebThreadSuffix)
-	}
-	if got, want := plan.WebCachedTemplateZip, filepath.Join(repoRoot, "gopath", "bin", "gdspx"+version+"_webpack.zip"); got != want {
-		t.Fatalf("cached template zip = %s, want %s", got, want)
-	}
-}
-
 func TestResolveEngineBuildShellPlanTreatsWebEditorAsTemplate(t *testing.T) {
 	repoRoot := t.TempDir()
 	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
@@ -95,62 +65,6 @@ func TestResolveEngineBuildShellPlanTreatsEnvironmentWebEditorAsTemplate(t *test
 	}
 	if plan.Target != "template" || plan.Platform != "web" || plan.WebThreads != "no" {
 		t.Fatalf("environment-selected Web editor build plan = %#v, want normal Web template plan", plan)
-	}
-}
-
-func TestResolveEngineBuildShellPlanWebNormal(t *testing.T) {
-	repoRoot := t.TempDir()
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
-	t.Setenv("HOME", repoRoot)
-	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-	version := mustDefaultRuntimeVersion(t)
-
-	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
-		Target:   "template",
-		Platform: "web",
-		Mode:     "normal",
-	})
-	if err != nil {
-		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
-	}
-
-	if plan.WebThreads != "no" {
-		t.Fatalf("web threads = %s, want no", plan.WebThreads)
-	}
-	if plan.WebProxyToPThread {
-		t.Fatal("proxy_to_pthread should be disabled for normal mode")
-	}
-	if plan.WebThreadSuffix != ".nothreads" {
-		t.Fatalf("web thread suffix = %s, want .nothreads", plan.WebThreadSuffix)
-	}
-	if got, want := plan.WebCachedTemplateZip, filepath.Join(repoRoot, "gopath", "bin", "gdspx"+version+"_webpack.zip"); got != want {
-		t.Fatalf("cached template zip = %s, want %s", got, want)
-	}
-}
-
-func TestResolveEngineBuildShellPlanWebMiniGame(t *testing.T) {
-	repoRoot := t.TempDir()
-	t.Setenv("GOPATH", filepath.Join(repoRoot, "gopath"))
-	t.Setenv("HOME", repoRoot)
-	t.Setenv("APPDATA", filepath.Join(repoRoot, "AppData"))
-
-	plan, err := ResolveEngineBuildShellPlan(repoRoot, BuildConfig{
-		Target:   "template",
-		Platform: "web",
-		Mode:     "minigame",
-	})
-	if err != nil {
-		t.Fatalf("resolveEngineBuildShellPlan returned error: %v", err)
-	}
-
-	if plan.WebThreads != "no" {
-		t.Fatalf("web threads = %s, want no", plan.WebThreads)
-	}
-	if plan.WebProxyToPThread {
-		t.Fatal("proxy_to_pthread should be disabled for minigame mode")
-	}
-	if plan.WebThreadSuffix != ".nothreads" {
-		t.Fatalf("web thread suffix = %s, want .nothreads", plan.WebThreadSuffix)
 	}
 }
 
@@ -252,5 +166,37 @@ func TestResolveEngineBuildShellPlanEditorUsesHostArtifactNames(t *testing.T) {
 		if !plan.EditorUseVSProj {
 			t.Fatal("vsproj should be enabled on windows")
 		}
+	}
+}
+
+func TestWebBuildModeDefaultsAndThreading(t *testing.T) {
+	for _, tt := range []struct {
+		mode, threads, suffix string
+		proxy                 bool
+	}{
+		{"", "no", ".nothreads", false},
+		{"normal", "no", ".nothreads", false},
+		{"worker", "yes", "", true},
+		{"minigame", "no", ".nothreads", false},
+		{"miniprogram", "no", ".nothreads", false},
+	} {
+		t.Run(tt.mode, func(t *testing.T) {
+			plan, err := resolveEngineBuildShellPlan(buildEnvironment{GoPath: "go", Version: "test"}, BuildConfig{
+				Target: "template", Platform: "web", Mode: tt.mode,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.WebThreads != tt.threads || plan.WebProxyToPThread != tt.proxy || plan.WebThreadSuffix != tt.suffix {
+				t.Fatalf("unexpected threading: %#v", plan)
+			}
+			if want := filepath.Join("go", "bin", "gdspxtest_webpack.zip"); plan.WebCachedTemplateZip != want {
+				t.Fatalf("cached template = %q, want %q", plan.WebCachedTemplateZip, want)
+			}
+		})
+	}
+	_, err := resolveEngineBuildShellPlan(buildEnvironment{}, BuildConfig{Target: "template", Platform: "web", Mode: "unknown"})
+	if err == nil || err.Error() != "unsupported web-mode: unknown" {
+		t.Fatalf("error = %v", err)
 	}
 }

@@ -170,13 +170,19 @@ func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildSh
 			plan.TemplateDestination = templateDestination
 		}
 		if effectivePlatform == "web" {
-			webThreads, webProxy, webThreadSuffix, err := resolveWebTemplateBuildConfig(cfg.Mode)
+			mode := cfg.Mode
+			if mode == "" {
+				mode = "normal"
+			}
+			spec, err := shared.ResolveWebMode(mode)
 			if err != nil {
 				return BuildShellPlan{}, err
 			}
-			plan.WebThreads = webThreads
-			plan.WebProxyToPThread = webProxy
-			plan.WebThreadSuffix = webThreadSuffix
+			plan.WebThreads, plan.WebThreadSuffix = "no", ".nothreads"
+			plan.WebProxyToPThread = spec.Threaded
+			if spec.Threaded {
+				plan.WebThreads, plan.WebThreadSuffix = "yes", ""
+			}
 			plan.WebCachedTemplateZip = filepath.Join(env.GoPath, "bin", fmt.Sprintf("gdspx%s_webpack.zip", env.Version))
 		}
 		if effectivePlatform == "ios" {
@@ -235,23 +241,6 @@ func resolveDesktopTemplateBuildPaths(env buildEnvironment, platform string) (sc
 			nil
 	default:
 		return "", "", "", fmt.Errorf("unsupported desktop template platform: %s", platform)
-	}
-}
-
-func resolveWebTemplateBuildConfig(mode string) (threads string, proxyToPThread bool, threadSuffix string, err error) {
-	if mode == "" {
-		mode = "normal"
-	}
-	if err := shared.ValidateWebMode(mode); err != nil {
-		return "", false, "", err
-	}
-	switch mode {
-	case "normal", "minigame", "miniprogram":
-		return "no", false, ".nothreads", nil
-	case "worker":
-		return "yes", true, "", nil
-	default:
-		return "", false, "", fmt.Errorf("unsupported web-mode: %s", mode)
 	}
 }
 
