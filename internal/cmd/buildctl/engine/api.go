@@ -31,10 +31,6 @@ type BuildConfig struct {
 	Mode     string
 }
 
-func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
-	return downloadEngineAssets(engineDownloadConfig{runtime: cfg.Runtime, skipRuntimePack: cfg.SkipRuntimePack, platform: cfg.Platform, mode: cfg.Mode, assetDir: cfg.AssetDir, sameRunArtifacts: cfg.SameRunArtifacts}, repoRoot)
-}
-
 func ShouldRefreshPreparedAssets() bool {
 	return shouldRefreshPreparedAssets()
 }
