@@ -73,12 +73,8 @@ func (info *tweenCallInfo) update() {
 }
 
 func updateTweens(delta float64) {
-	tempTweenInfos = tempTweenInfos[:0]
-	count := len(tweenInfos)
-	tempTweenInfos = append(tempTweenInfos, tweenInfos...)
-	tweenInfos = tweenInfos[:0]
-	for i := range count {
-		curTween := tempTweenInfos[i]
+	tweenInfos, tempTweenInfos = tempTweenInfos[:0], tweenInfos
+	for _, curTween := range tempTweenInfos {
 		curTween.timer += delta
 		for curTween.timer >= curTween.infos[curTween.curIndex].getEndTime() {
 			if sprite := lookupSprite(curTween.id); sprite != nil {
@@ -95,11 +91,12 @@ func updateTweens(delta float64) {
 			tweenInfos = append(tweenInfos, curTween)
 		}
 	}
-	for i := range count {
-		if tempTweenInfos[i].isDone() && IsNodeExist(tempTweenInfos[i].id) {
-			tempTweenInfos[i].callback()
+	for _, curTween := range tempTweenInfos {
+		if curTween.isDone() && IsNodeExist(curTween.id) {
+			curTween.callback()
 		}
 	}
+	clear(tempTweenInfos)
 	tempTweenInfos = tempTweenInfos[:0]
 }
 

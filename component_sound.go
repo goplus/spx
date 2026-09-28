@@ -112,16 +112,6 @@ func (s *soundComponent) changeSoundEffect(kind SoundEffectKind, delta float64) 
 // Internal Playback Management
 // ============================================================================
 
-func (s *soundComponent) restartOrPlayLoopedAudio(name SoundName, id int64) int64 {
-	if name == "" {
-		return 0
-	}
-	if id != 0 && s.sprite.g.soundMgr.RestartID(id) {
-		return id
-	}
-	return s.play(name, true)
-}
-
 func (s *soundComponent) addPendingAudio(audioName string) {
 	s.pendingAudios = append(s.pendingAudios, audioName)
 }

@@ -26,24 +26,17 @@ import (
 // ============================================================================
 
 func (a *animationComponent) playAnimationAudio(ani *coreproject.AniConfig, state *animState) {
-	a.playOnStartAudio(ani.OnStart, state)
-	a.playOnPlayAudio(ani.OnPlay, state)
-}
-
-func (a *animationComponent) playOnStartAudio(action *coreproject.ActionConfig, state *animState) {
-	if action == nil || action.Play == "" || state == nil {
+	if state == nil {
 		return
 	}
-	state.OnStartReplayAudioName = action.Play
-	a.sprite.sound().play(action.Play, false)
-}
-
-func (a *animationComponent) playOnPlayAudio(action *coreproject.ActionConfig, state *animState) {
-	if action == nil || action.Play == "" || state == nil {
-		return
+	if action := ani.OnStart; action != nil && action.Play != "" {
+		state.OnStartReplayAudioName = action.Play
+		a.sprite.sound().play(action.Play, false)
 	}
-	state.OnPlayReplayAudioName = action.Play
-	a.restartOnPlayAudio(state)
+	if action := ani.OnPlay; action != nil && action.Play != "" {
+		state.OnPlayReplayAudioName = action.Play
+		a.restartOnPlayAudio(state)
+	}
 }
 
 func (a *animationComponent) restartOnPlayAudio(state *animState) {
@@ -53,7 +46,7 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 
 	engine.Lock()
 	name := state.OnPlayReplayAudioName
-	prevID := state.OnPlayAudioPlaybackID
+	nextID := state.OnPlayAudioPlaybackID
 	canceled := state.IsCanceled
 	engine.Unlock()
 
@@ -61,7 +54,9 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 		return
 	}
 
-	nextID := a.sprite.sound().restartOrPlayLoopedAudio(name, prevID)
+	if !a.sprite.g.soundMgr.RestartID(nextID) {
+		nextID = a.sprite.sound().play(name, true)
+	}
 	if nextID == 0 {
 		return
 	}
@@ -78,54 +73,34 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 	}
 }
 
-func (a *animationComponent) stopAnimationAudio(state *animState) {
-	if state == nil {
-		return
-	}
-
-	engine.Lock()
-	state.OnPlayAudioRestartPending = false
-	id := state.OnPlayAudioPlaybackID
-	state.OnPlayAudioPlaybackID = 0
-	engine.Unlock()
-
+func (a *animationComponent) stopAnimationAudio(id int64) {
 	if id == 0 || a.sprite == nil || a.sprite.g == nil {
 		return
 	}
-	if !a.sprite.g.soundMgr.IsPlaying(id) {
-		a.sprite.g.soundMgr.PruneStoppedIDs([]int64{id})
-		return
-	}
-	a.sprite.g.soundMgr.StopID(id)
+	gco.CleanupMainThread(func() {
+		if !a.sprite.g.soundMgr.IsPlaying(id) {
+			a.sprite.g.soundMgr.PruneStoppedIDs([]int64{id})
+			return
+		}
+		a.sprite.g.soundMgr.StopID(id)
+	})
 }
 
 // ============================================================================
 // Pending Replay State
 // ============================================================================
 
-func (a *animationComponent) markOnPlayAudioRestartPending(state *animState) {
-	if state == nil || state.OnPlayReplayAudioName == "" {
-		return
+func (a *animationComponent) takePendingOnPlayAudioStates() (states [2]*animState) {
+	states = [2]*animState{a.curAnimState, a.getCurTweenState()}
+	for i, state := range states {
+		if state == nil || !state.OnPlayAudioRestartPending {
+			states[i] = nil
+			continue
+		}
+		state.OnPlayAudioRestartPending = false
+		if state.IsCanceled || state.OnPlayReplayAudioName == "" {
+			states[i] = nil
+		}
 	}
-	state.OnPlayAudioRestartPending = true
-}
-
-func (a *animationComponent) takePendingOnPlayAudioStates(buffer []*animState) []*animState {
-	buffer = a.takePendingOnPlayAudioState(buffer[:0], a.curAnimState)
-	tweenState := a.getCurTweenState()
-	if tweenState != a.curAnimState {
-		buffer = a.takePendingOnPlayAudioState(buffer, tweenState)
-	}
-	return buffer
-}
-
-func (a *animationComponent) takePendingOnPlayAudioState(buffer []*animState, state *animState) []*animState {
-	if state == nil || !state.OnPlayAudioRestartPending {
-		return buffer
-	}
-	state.OnPlayAudioRestartPending = false
-	if state.IsCanceled || state.OnPlayReplayAudioName == "" {
-		return buffer
-	}
-	return append(buffer, state)
+	return
 }

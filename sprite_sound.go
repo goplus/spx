@@ -100,16 +100,14 @@ func (p *SpriteImpl) queueAnimationLoopAudio(state *animState) {
 		p.sound().addPendingAudio(state.OnStartReplayAudioName)
 	}
 	if state.OnPlayReplayAudioName != "" {
-		p.animation().markOnPlayAudioRestartPending(state)
+		state.OnPlayAudioRestartPending = true
 	}
 }
 
 func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
-	var pendingOnPlayStates [2]*animState
-
 	engine.Lock()
 	buffer = p.sound().takePendingAudios(buffer)
-	pendingOnPlayAudioStates := p.animation().takePendingOnPlayAudioStates(pendingOnPlayStates[:0])
+	pendingOnPlayAudioStates := p.animation().takePendingOnPlayAudioStates()
 	engine.Unlock()
 
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {

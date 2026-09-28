@@ -242,8 +242,8 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.runtimeState.SyncSprite.Name = p.name
 	p.runtimeState.SyncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
-	p.animation().registerOnAnimationLooped(p.handleAnimationLooped)
-	p.animation().registerOnAnimationFinished(p.handleAnimationFinished)
+	p.runtimeState.SyncSprite.RegisterOnAnimationLooped(p.handleAnimationLooped)
+	p.runtimeState.SyncSprite.RegisterOnAnimationFinished(p.handleAnimationFinished)
 	p.markProxyDirty()
 }
 
@@ -276,7 +276,7 @@ func (p *SpriteImpl) handleAnimationFinished() {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	state := p.animation().getCurAnimState()
+	state := p.animation().curAnimState
 	if state != nil && state.Name != "" {
 		p.animation().addDoneAnimation(state.Name)
 	}
@@ -289,7 +289,7 @@ func (p *SpriteImpl) handleAnimationLooped() {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
-	p.queueAnimationLoopAudio(p.animation().getCurAnimState())
+	p.queueAnimationLoopAudio(p.animation().curAnimState)
 	p.queueAnimationLoopAudio(p.animation().getCurTweenState())
 }
 
