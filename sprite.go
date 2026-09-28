@@ -136,7 +136,7 @@ const (
 // Speed is a motion speed multiplier, where 1 is the default speed
 type Speed = float64
 
-// XGo method overloads for Sprite interface
+// XGo method overloads shared by Sprite and SpriteImpl.
 const (
 	XGoo_Sprite_GlideWith    = ".GlideToTarget,.GlideToXYpos"
 	XGoo_Sprite_StepToWith   = ".StepToTarget,.StepToXYpos"
@@ -144,11 +144,11 @@ const (
 	XGoo_Sprite_SetLayerWith = ".SetLayerTo,.SetLayer__1"
 	XGoo_Sprite_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
 
-	XGoo_SpriteImpl_GlideWith    = ".GlideToTarget,.GlideToXYpos"
-	XGoo_SpriteImpl_StepToWith   = ".StepToTarget,.StepToXYpos"
-	XGoo_SpriteImpl_TurnToWith   = ".TurnToDir,.TurnToTarget,.TurnToXYpos"
-	XGoo_SpriteImpl_SetLayerWith = ".SetLayerTo,.SetLayer__1"
-	XGoo_SpriteImpl_QuoteWith    = ".QuoteMsg,.QuoteMsgEx"
+	XGoo_SpriteImpl_GlideWith    = XGoo_Sprite_GlideWith
+	XGoo_SpriteImpl_StepToWith   = XGoo_Sprite_StepToWith
+	XGoo_SpriteImpl_TurnToWith   = XGoo_Sprite_TurnToWith
+	XGoo_SpriteImpl_SetLayerWith = XGoo_Sprite_SetLayerWith
+	XGoo_SpriteImpl_QuoteWith    = XGoo_Sprite_QuoteWith
 )
 
 // -----------------------------------------------------------------------------
