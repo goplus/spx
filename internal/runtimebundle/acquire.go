@@ -273,6 +273,12 @@ func validateAcquireSpec(spec FetchSpec) error {
 	if strings.ContainsAny(spec.Name, `/\\`) {
 		return fmt.Errorf("runtimebundle: acquired asset name must be a basename: %q", spec.Name)
 	}
+	if err := validatePortableComponent(spec.Name); err != nil {
+		return fmt.Errorf("runtimebundle: invalid acquired asset name %q: %w", spec.Name, err)
+	}
+	if strings.EqualFold(filepath.Ext(spec.Name), lockSidecarSuffix) {
+		return fmt.Errorf("runtimebundle: acquired asset name uses reserved lock suffix: %q", spec.Name)
+	}
 	if spec.Size <= 0 {
 		return fmt.Errorf("runtimebundle: asset size must be positive for %q", spec.Name)
 	}
