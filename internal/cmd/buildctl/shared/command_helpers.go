@@ -32,11 +32,11 @@ func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...
 	return cmd.CombinedOutput()
 }
 
-func runCommandOutput(name string, args ...string) ([]byte, error) {
+func RunCommandOutput(name string, args ...string) ([]byte, error) {
 	return RunCommandOutputWithEnv("", os.Environ(), name, args...)
 }
 
-func runStreamingCommand(workdir, name string, args ...string) error {
+func RunStreamingCommand(workdir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	if workdir != "" {
 		cmd.Dir = workdir

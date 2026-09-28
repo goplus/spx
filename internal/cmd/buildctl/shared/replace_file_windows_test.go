@@ -85,8 +85,8 @@ func TestReplaceFileWindows(t *testing.T) {
 				}
 			}
 
-			if err := replaceFile(src, dst); err != nil {
-				t.Fatalf("replaceFile returned error: %v", err)
+			if err := ReplaceFile(src, dst); err != nil {
+				t.Fatalf("ReplaceFile returned error: %v", err)
 			}
 			if data, err := os.ReadFile(dst); err != nil || string(data) != "replacement" {
 				t.Fatalf("destination content = %q, err = %v", data, err)
