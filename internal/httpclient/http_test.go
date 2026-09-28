@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package shared
+package httpclient
 
 import (
 	"errors"
@@ -33,7 +33,7 @@ func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
 
-func TestGetURLPreservesClientForHTTPRedirects(t *testing.T) {
+func TestDoPreservesClientForHTTPRedirects(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("payload"))
 	}))
@@ -53,7 +53,7 @@ func TestGetURLPreservesClientForHTTPRedirects(t *testing.T) {
 		},
 	}
 	transport := client.Transport
-	resp, err := GetURL(client, server.URL)
+	resp, err := getURL(client, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,26 +66,26 @@ func TestGetURLPreservesClientForHTTPRedirects(t *testing.T) {
 		t.Fatalf("body = %q, callback calls = %d", data, callbackCalls)
 	}
 	if client.Transport != transport || client.Timeout != time.Second || client.CheckRedirect == nil {
-		t.Fatal("GetURL modified its input client")
+		t.Fatal("Do modified its input client")
 	}
 }
 
-func TestGetURLRetainsDefaultRedirectLimit(t *testing.T) {
+func TestDoRetainsDefaultRedirectLimit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "/next", http.StatusFound)
 	}))
 	defer server.Close()
 
-	resp, err := GetURL(&http.Client{}, server.URL)
+	resp, err := getURL(&http.Client{}, server.URL)
 	if resp != nil {
 		closeResponseBody(resp)
 	}
 	if err == nil || !strings.Contains(err.Error(), "stopped after 10 redirects") {
-		t.Fatalf("GetURL error = %v, want default redirect limit", err)
+		t.Fatalf("Do error = %v, want default redirect limit", err)
 	}
 }
 
-func TestGetURLRechecksRedirectAfterCustomCallback(t *testing.T) {
+func TestDoRechecksRedirectAfterCustomCallback(t *testing.T) {
 	insecure := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Error("downgraded redirect was followed")
 	}))
@@ -111,19 +111,19 @@ func TestGetURLRechecksRedirectAfterCustomCallback(t *testing.T) {
 		req.URL = cloneURL(insecureURL)
 		return nil
 	}
-	resp, err := GetURL(client, server.URL)
+	resp, err := getURL(client, server.URL)
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
 	if !errors.Is(err, ErrInsecureRedirect) {
-		t.Fatalf("GetURL error = %v, want HTTPS downgrade rejection", err)
+		t.Fatalf("Do error = %v, want HTTPS downgrade rejection", err)
 	}
 	if !callbackCalled {
 		t.Fatal("custom CheckRedirect was not called")
 	}
 }
 
-func TestGetURLChecksFinalResponseURL(t *testing.T) {
+func TestDoChecksFinalResponseURL(t *testing.T) {
 	insecureURL, err := url.Parse("http://example.invalid/archive.zip")
 	if err != nil {
 		t.Fatal(err)
@@ -137,16 +137,16 @@ func TestGetURLChecksFinalResponseURL(t *testing.T) {
 		}, nil
 	})}
 
-	resp, err := GetURL(client, "https://example.invalid/archive.zip")
+	resp, err := getURL(client, "https://example.invalid/archive.zip")
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
 	if !errors.Is(err, ErrInsecureRedirect) {
-		t.Fatalf("GetURL error = %v, want final URL downgrade rejection", err)
+		t.Fatalf("Do error = %v, want final URL downgrade rejection", err)
 	}
 }
 
-func TestGetURLRejectsMissingFinalURLWithoutBody(t *testing.T) {
+func TestDoRejectsMissingFinalURLWithoutBody(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -155,11 +155,27 @@ func TestGetURLRejectsMissingFinalURLWithoutBody(t *testing.T) {
 		}, nil
 	})}
 
-	resp, err := GetURL(client, "https://example.invalid/archive.zip")
+	resp, err := getURL(client, "https://example.invalid/archive.zip")
 	if resp != nil {
 		closeResponseBody(resp)
 	}
 	if !errors.Is(err, ErrInsecureRedirect) {
-		t.Fatalf("GetURL error = %v, want missing final URL rejection", err)
+		t.Fatalf("Do error = %v, want missing final URL rejection", err)
+	}
+}
+
+func getURL(client *http.Client, rawURL string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return Do(client, req)
+}
+
+func TestDoRejectsMissingRequestURL(t *testing.T) {
+	for _, req := range []*http.Request{nil, {}} {
+		if _, err := Do(nil, req); err == nil {
+			t.Fatal("Do accepted a request without a URL")
+		}
 	}
 }
