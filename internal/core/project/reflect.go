@@ -144,17 +144,19 @@ func findPromotedFieldPtr(v reflect.Value, name string, from int) any {
 	// Second pass: BFS through exported anonymous fields.
 	// `from` only restricts direct field access at the top level; all
 	// embedded fields are searched starting from index 0.
+	// Track values, not types: distinct instances can expose different paths.
+	seen := make(map[reflect.Value]bool)
 	for queue := embeddedStructs(v); len(queue) > 0; {
 		var next []reflect.Value
-		var found any
 		for _, ev := range queue {
-			if result := FindFieldPtr(ev, name, 0); result != nil && found == nil {
-				found = result
+			if seen[ev] {
+				continue
+			}
+			seen[ev] = true
+			if result := FindFieldPtr(ev, name, 0); result != nil {
+				return result
 			}
 			next = append(next, embeddedStructs(ev)...)
-		}
-		if found != nil {
-			return found
 		}
 		queue = next
 	}
