@@ -20,8 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 type recordedCall struct {
@@ -161,14 +159,4 @@ func mustWriteFile(t *testing.T, path string, data []byte) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
-}
-
-func mustDefaultRuntimeVersion(t *testing.T) string {
-	t.Helper()
-
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return version
 }

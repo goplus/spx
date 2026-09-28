@@ -26,7 +26,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/release"
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
 
@@ -64,16 +63,6 @@ func writeExtractZipFixture(t *testing.T, entries ...extractZipFixture) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-func TestDefaultRuntimeVersionUsesRuntimeLock(t *testing.T) {
-	got, err := defaultRuntimeVersion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := release.DefaultRuntimeLock().RuntimeVersion; got != want {
-		t.Fatalf("default runtime version = %q, want locked version %q", got, want)
-	}
 }
 
 func TestExtractZipWithOptionsRejectsResourceExhaustion(t *testing.T) {

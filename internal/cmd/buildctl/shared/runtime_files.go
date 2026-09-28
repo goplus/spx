@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/base/fileutil"
-	"github.com/goplus/spx/v3/internal/release"
 )
 
 func ensureGoPath() (string, error) {
@@ -40,10 +39,6 @@ func ensureGoPath() (string, error) {
 		return "", fmt.Errorf("missing GOPATH")
 	}
 	return goPath, nil
-}
-
-func defaultRuntimeVersion() (string, error) {
-	return release.DefaultRuntimeLock().RuntimeVersion, nil
 }
 
 func copyFile(src, dst string) error {

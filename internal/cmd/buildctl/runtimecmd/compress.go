@@ -25,13 +25,11 @@ import (
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func compressWasmArtifacts() error {
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		return err
-	}
+	version := release.DefaultRuntimeLock().RuntimeVersion
 	goPath, err := shared.EnsureGoPath()
 	if err != nil {
 		return err

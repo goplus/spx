@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 const defaultTemplateProjectDir = "cmd/spx/template/project"
@@ -40,10 +41,7 @@ func openTemplateEditorWorkflow(cfg workflowOpenTemplateEditorConfig, runner sha
 		return err
 	}
 
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		return err
-	}
+	version := release.DefaultRuntimeLock().RuntimeVersion
 
 	fmt.Fprintf(os.Stdout, "Opening template project directly: %s\n", templateProjectDir)
 	return runner.RunCommand(

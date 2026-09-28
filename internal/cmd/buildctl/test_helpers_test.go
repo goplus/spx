@@ -20,19 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
-
-func mustDefaultRuntimeVersion(t *testing.T) string {
-	t.Helper()
-
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return version
-}
 
 func mustMkdirAll(t *testing.T, path string) {
 	t.Helper()

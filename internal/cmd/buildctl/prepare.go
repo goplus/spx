@@ -23,6 +23,7 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 type setupConfig struct {
@@ -78,10 +79,7 @@ func ensureRuntimePack(runner shared.ScriptRunner) error {
 	if err != nil {
 		return err
 	}
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		return err
-	}
+	version := release.DefaultRuntimeLock().RuntimeVersion
 	packPath := filepath.Join(goPath, "bin", fmt.Sprintf("gdspxrt%s.pck", version))
 	if !engine.ShouldRefreshPreparedAssets() && shared.FileExists(packPath) {
 		return nil

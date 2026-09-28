@@ -28,16 +28,6 @@ func fileExists(path string) bool {
 	return shared.FileExists(path)
 }
 
-func mustDefaultRuntimeVersion(t *testing.T) string {
-	t.Helper()
-
-	version, err := shared.DefaultRuntimeVersion()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return version
-}
-
 func mustMkdirAll(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

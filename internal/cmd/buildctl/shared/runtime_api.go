@@ -32,10 +32,6 @@ func EnsureGoPath() (string, error) {
 	return ensureGoPath()
 }
 
-func DefaultRuntimeVersion() (string, error) {
-	return defaultRuntimeVersion()
-}
-
 func CopyFile(src, dst string) error {
 	return copyFile(src, dst)
 }
