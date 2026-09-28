@@ -1,5 +1,4 @@
-
-import FakeBlob from "./adpter";
+import "./adpter";
 import GodotSDK from "./sdk";
 import "./engine";
 import "./fflate";
@@ -12,38 +11,32 @@ function buildFilesFromZip(data) {
     const files = {};
     const now = Date.now();
     const unzipped = globalThis.fflate.unzipSync(new Uint8Array(data));
-    Object.entries(unzipped).forEach(([path, entry]) => {
-        if (path.endsWith('/')) return;
+    for (const [path, entry] of Object.entries(unzipped)) {
+        if (path.endsWith('/')) continue;
         const content = (entry.byteOffset === 0 && entry.byteLength === entry.buffer.byteLength)
             ? entry.buffer
             : entry.slice().buffer;
         files[path] = { lastModified: now, content };
-    });
+    }
     return files;
 }
 
-class GameRunner {
+class MiniGameRunner {
     constructor() {
         this.godotSdk = new GodotSDK();
         GameGlobal.godotSdk = this.godotSdk;
-        this.gameApp = null;
+        this.gameRunner = null;
         this.syncfsInterval = null;
     }
+
     async onGameStart() {
-        console.log("====>onStart")
-        this.godotSdk.syncfs(() => {
-        }, (error) => {
-            console.error(error)
-        });
+        console.log('Game started')
+        const syncFiles = () => this.godotSdk.syncfs(() => {}, error => console.error(error));
+        syncFiles();
         if (this.syncfsInterval != null) {
             clearInterval(this.syncfsInterval);
         }
-        this.syncfsInterval = setInterval(() => {
-            this.godotSdk.syncfs(() => {
-            }, (error) => {
-                console.error(error)
-            });
-        }, 5000)
+        this.syncfsInterval = setInterval(syncFiles, 5000)
     }
 
     async startGame(onProgress) {
@@ -53,34 +46,29 @@ class GameRunner {
         }
         const zipped = await response.arrayBuffer();
         const files = buildFilesFromZip(zipped);
-        let assetURLs = null
         const config = {
-            'projectName': "spx_game",
-            'onProgress': onProgress,
-            "gameCanvas": canvas,
-            "logLevel": 0,
-            "isRuntimeMode": true,
-            "assetURLs": {
+            projectName: "spx_game",
+            onProgress,
+            gameCanvas: canvas,
+            logLevel: 0,
+            isRuntimeMode: true,
+            assetURLs: {
                 "engine.zip": "engine/engine.zip",
                 "game.zip": "engine/game.zip",
                 "ispx.wasm": "engine/ispx.wasm",
                 "engine.wasm": "engine/engine.wasm",
             },
         };
-        if (assetURLs != null) {
-            config.assetURLs = assetURLs
+        if (this.gameRunner != null) {
+            await this.gameRunner.ResetGame();
         }
 
-        if (this.gameApp != null) {
-            await this.gameApp.ResetGame();
-        }
-
-        this.gameApp = new GameApp(config);
-        await this.gameApp.InitEngine();
-        await this.gameApp.InitGame(files);
-        await this.gameApp.StartGame();
+        this.gameRunner = new globalThis.GameRunner(config);
+        await this.gameRunner.InitEngine();
+        await this.gameRunner.InitGame(files);
+        await this.gameRunner.StartGame();
         await this.onGameStart();
     }
 }
 
-export default GameRunner;
+export default MiniGameRunner;

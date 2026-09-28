@@ -155,9 +155,9 @@ func (s *collisionLayerOrderSprite) Main() {
 }
 
 func (s *bootstrapAwakeOrderSprite) Main() {
-	s.sawSelfAwake = s.spriteState.IsAwakened
+	s.sawSelfAwake = s.CostumeIndex() == 0
 	if s.peer != nil {
-		s.sawPeerAwake = s.peer.spriteState.IsAwakened
+		s.sawPeerAwake = s.peer.CostumeIndex() == 0
 	}
 }
 
@@ -166,7 +166,7 @@ func (s *cloneAwakeOrderSprite) Main() {
 		return
 	}
 	if s.sawAwakeInMain != nil {
-		*s.sawAwakeInMain = s.spriteState.IsAwakened
+		*s.sawAwakeInMain = s.CostumeIndex() == 0
 	}
 	s.OnCloned__0(func() {
 		if s.onClonedFired != nil {
@@ -395,7 +395,17 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	sprite.sprite = sprite
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	prepareAwakeCostumes(&sprite.SpriteImpl)
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
 	return sprite
+}
+
+func prepareAwakeCostumes(sprite *SpriteImpl) {
+	// With no default animation, awake restores the default costume. Start on
+	// another costume so lifecycle tests observe that effect instead of a flag.
+	sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	sprite.setCostumeIndex(1)
+	sprite.spriteState.IsVisible = true
 }
 
 func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
@@ -406,7 +416,6 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 		onClonedFired:  &onCloned,
 		clonedDone:     make(chan struct{}),
 	}
-	sprite.baseObj.initWithSize(1, 1)
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
@@ -414,6 +423,7 @@ func newCloneAwakeOrderSprite(g *Game, name string) *cloneAwakeOrderSprite {
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
+	prepareAwakeCostumes(&sprite.SpriteImpl)
 	return sprite
 }
 
@@ -885,7 +895,6 @@ func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
 	setupCloneSpriteMgr(t)
 
 	sprite := newCloneAwakeOrderSprite(&game, "SpriteA")
-	sprite.spriteState.IsVisible = true
 
 	sprite.initRuntimeProxy()
 
@@ -902,7 +911,6 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	mgr := setupCloneSpriteMgr(t)
 
 	source := newCloneAwakeOrderSprite(&game, "SpriteA")
-	source.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
 	source.costumeIndex = 0
 
 	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
@@ -949,7 +957,7 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	setupCloneSpriteMgr(t)
 	source := newCloneAwakeOrderSprite(&game, "SpriteA")
 	out := reflect.New(reflect.TypeOf(source).Elem()).Elem()
-	properties, err := parseSpriteProperties(coreproject.StageShape{"visible": false})
+	properties, err := parseSpriteProperties(coreproject.StageShape{"visible": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -961,8 +969,8 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	if dest.isCloneProxyPublicationBlocked() {
 		t.Fatal("stage instance has clone publication state")
 	}
-	if dest.spriteState.IsAwakened {
-		t.Fatal("stage instantiation ran runtime clone awake lifecycle")
+	if got := dest.CostumeIndex(); got != 1 {
+		t.Fatalf("stage instance costume = %d, want 1 before awake", got)
 	}
 	if dest.spriteState.HasOnCloned || *source.sawAwakeInMain {
 		t.Fatal("stage instantiation ran sprite Main")
@@ -983,8 +991,8 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	if !dest.IsCloned() {
 		t.Fatal("runtime clone is not marked cloned")
 	}
-	if !dest.spriteState.IsAwakened {
-		t.Fatal("runtime clone did not run awake lifecycle")
+	if got := dest.CostumeIndex(); got != 0 {
+		t.Fatalf("runtime clone costume = %d, want default costume 0 after awake", got)
 	}
 	if !dest.spriteState.HasOnCloned || !*source.sawAwakeInMain {
 		t.Fatal("runtime clone did not run Main after awake")
@@ -1023,8 +1031,7 @@ func TestCloneProxyStaysHiddenUntilOnClonedFirstSlice(t *testing.T) {
 		t.Fatal("clone publication waited for the entire onCloned handler")
 	default:
 	}
-	if clone == nil || !clone.isCloneProxyPublicationBlocked() ||
-		!clone.isCloneProxyPublicationReady() {
+	if clone == nil || clone.cloneProxyPublicationState() != cloneProxyReady {
 		t.Fatal("clone did not reach the first-slice publication barrier")
 	}
 	for _, op := range mgr.recordedOperations() {
@@ -1120,8 +1127,7 @@ func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
 	if clone == nil || game.shapeMgr.findShapeIndex(clone) < 0 {
 		t.Fatal("canceled creator lost its initialized clone")
 	}
-	if !clone.isCloneProxyPublicationBlocked() ||
-		!clone.isCloneProxyPublicationReady() {
+	if clone.cloneProxyPublicationState() != cloneProxyReady {
 		t.Fatal("canceled creator stranded clone before the publication batch")
 	}
 	for _, op := range mgr.recordedOperations() {
@@ -1194,8 +1200,7 @@ func TestCloneProxyWithoutOnClonedIsReadyImmediately(t *testing.T) {
 	if clone == nil {
 		t.Fatal("clone callback did not capture cloned sprite")
 	}
-	if !clone.isCloneProxyPublicationBlocked() ||
-		!clone.isCloneProxyPublicationReady() {
+	if clone.cloneProxyPublicationState() != cloneProxyReady {
 		t.Fatal("clone without onCloned handler was not immediately ready")
 	}
 	flushCloneProxyUpdates(&game)
@@ -1371,7 +1376,6 @@ func TestCloneSpriteSynchronizesFinalLayerBeforePublication(t *testing.T) {
 	source.sawAwakeInMain = nil
 	source.onClonedFired = nil
 	source.clonedDone = nil
-	source.spriteState.IsVisible = true
 	source.runtimeState.Layer = firstSpriteLayer + 6
 	source.runtimeState.IsLayerDirty = true
 	source.initRuntimeProxy()

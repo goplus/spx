@@ -65,7 +65,7 @@
 	<script src="wxsdk.js"></script>
 	<script>
 		"use strict";
-		let gameApp = null;
+		let gameRunner = null;
 		let isShowEditor = false;
 		let onGameErrorCallback = null;
 
@@ -164,15 +164,15 @@
 				},
 			};
 
-			if (gameApp != null) {
-				await gameApp.ResetGame();
+			if (gameRunner != null) {
+				await gameRunner.ResetGame();
 			}
 
 			try {
-				gameApp = new GameApp(config);
-				await gameApp.InitEngine();
-				await gameApp.InitGame(files);
-				await gameApp.StartGame();
+				gameRunner = new GameRunner(config);
+				await gameRunner.InitEngine();
+				await gameRunner.InitGame(files);
+				await gameRunner.StartGame();
 			} catch (error) {
 				console.error("Stack trace:", error.stack);
 				throw error;

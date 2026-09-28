@@ -66,7 +66,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.original = src.originalSprite()
 	p.spriteState.Cloned = true
 	p.spriteState.IsDying = false
-	p.spriteState.IsAwakened = false
 
 	p.spriteState.DirtyVersion = 0
 	p.spriteState.VisualVersion = 0
@@ -74,8 +73,6 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.proxyPublication = nil
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false
-	p.spriteState.HasOnTouching = false
-	p.spriteState.HasOnTouchEnd = false
 }
 
 func (p *SpriteImpl) Die() {
@@ -140,7 +137,6 @@ func (p *SpriteImpl) init(ctx spriteInitContext) {
 	p.g, p.name, p.sprite = ctx.game, ctx.name, ctx.sprite
 	p.runtimeState.Scale = ctx.config.Size
 	p.spriteState.IsVisible = ctx.config.Visible
-	p.spriteState.IsAwakened = false
 
 	p.components.initComponents(p, ctx.config)
 	p.initRuntimeProxy()

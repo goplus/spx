@@ -243,7 +243,7 @@ func (cmd *CmdTool) patchWebWorkerEngine(insertCode string) error {
 	if !strings.Contains(engineStr, keyStr) {
 		return fmt.Errorf("engine.js missing worker hook anchor: %s", keyStr)
 	}
-	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameAppMessageId) {handleGameAppMessage(e.data);}")
+	engineStr = strings.ReplaceAll(engineStr, keyStr, keyStr+"else if(e.data._gameRunnerMessageId) {handleGameRunnerMessage(e.data);}")
 
 	keyStr = ";throw ex}}self.onmessage=handleMessage}"
 	if !strings.Contains(engineStr, keyStr) {

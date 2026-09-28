@@ -87,7 +87,10 @@ func (c *costume) isAtlas() bool {
 
 // newCostumeWithSize creates a costume with specified dimensions (no image file).
 func newCostumeWithSize(width, height int) *costume {
-	frame := assetutil.NewSizedFrame(width, height)
+	return newCostumeFromFrame(assetutil.NewSizedFrame(width, height))
+}
+
+func newCostumeFromFrame(frame assetutil.FrameDescriptor) *costume {
 	return &costume{
 		setIndex:         -1,
 		width:            frame.Width,
@@ -116,46 +119,29 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 		bitmapResolution,
 		costumeImageSize,
 	)
-	return &costume{
-		path:             img.path,
-		name:             name,
-		setIndex:         frameIndex,
-		faceRight:        faceRight,
-		bitmapResolution: frame.BitmapResolution,
-		imageSize:        frame.ImageSize,
-		width:            frame.Width,
-		height:           frame.Height,
-		posX:             frame.PosX,
-		posY:             frame.PosY,
-		atlasUVRect:      frame.AtlasUVRect,
-		center:           frame.Center,
-	}
+	c := newCostumeFromFrame(frame)
+	c.path = img.path
+	c.name = name
+	c.setIndex = frameIndex
+	c.faceRight = faceRight
+	return c
 }
 
 // newCostume creates a costume from a costume configuration.
 func newCostume(config *coreproject.CostumeConfig) *costume {
-	fullPath := config.Path
 	frame := assetutil.NewStandaloneFrame(
 		config.ImageWidth,
 		config.ImageHeight,
-		fullPath,
+		config.Path,
 		config.BitmapResolution,
 		costumeImageSize,
 	)
-	return &costume{
-		name:             config.Name,
-		setIndex:         -1,
-		center:           mathf.Vec2{X: config.X, Y: config.Y},
-		faceRight:        config.FaceRight,
-		bitmapResolution: frame.BitmapResolution,
-		path:             fullPath,
-		imageSize:        frame.ImageSize,
-		width:            frame.Width,
-		height:           frame.Height,
-		posX:             frame.PosX,
-		posY:             frame.PosY,
-		atlasUVRect:      frame.AtlasUVRect,
-	}
+	c := newCostumeFromFrame(frame)
+	c.name = config.Name
+	c.center = mathf.Vec2{X: config.X, Y: config.Y}
+	c.faceRight = config.FaceRight
+	c.path = config.Path
+	return c
 }
 
 func newBackdropCostume(config *coreproject.BackdropConfig) *costume {
