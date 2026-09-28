@@ -52,9 +52,6 @@ var (
 
 	//go:embed sync.go.tmpl
 	syncAPIText string
-
-	//go:embed sync_pure.go.tmpl
-	syncPureAPIText string
 )
 
 type implData struct {
@@ -79,7 +76,6 @@ func (g *Generator) Generate(codegenDir string) error {
 		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
 		{"manager interface", func() error { return g.writeManagerInterface(codegenDir) }},
 		{"synchronized API", func() error { return g.writeSyncAPI(codegenDir) }},
-		{"pure synchronized API", func() error { return g.writePureSyncAPI(codegenDir) }},
 	}
 	for _, generator := range generators {
 		if err := generator.fn(); err != nil {
@@ -116,25 +112,30 @@ func (g *Generator) writeManagerInterface(codegenDir string) error {
 }
 
 func (g *Generator) writeSyncAPI(codegenDir string) error {
-	funcs := template.FuncMap{
-		"lowerCamelCase":         strcase.ToLowerCamel,
-		"camelCase":              strcase.ToCamel,
-		"genSyncAPIWrapFunction": g.genSyncAPIWrapFunction,
+	variants := []struct {
+		filename     string
+		buildTag     string
+		wrapFunction func(*clang.TypedefFunction) string
+	}{
+		{"sync.gen.go", "!pure_engine", g.genSyncAPIWrapFunction},
+		{"sync_pure.gen.go", "pure_engine", g.genSyncPureAPIWrapFunction},
 	}
-
-	return common.GenerateFile(funcs, "sync.gen.go", syncAPIText, g.ManagerData(),
-		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync.gen.go"))
-}
-
-func (g *Generator) writePureSyncAPI(codegenDir string) error {
-	funcs := template.FuncMap{
-		"lowerCamelCase":             strcase.ToLowerCamel,
-		"camelCase":                  strcase.ToCamel,
-		"genSyncPureAPIWrapFunction": g.genSyncPureAPIWrapFunction,
+	for _, variant := range variants {
+		funcs := template.FuncMap{
+			"lowerCamelCase":         strcase.ToLowerCamel,
+			"camelCase":              strcase.ToCamel,
+			"genSyncAPIWrapFunction": variant.wrapFunction,
+		}
+		data := struct {
+			common.ManagerData
+			BuildTag string
+		}{g.ManagerData(), variant.buildTag}
+		if err := common.GenerateFile(funcs, variant.filename, syncAPIText, data,
+			filepath.Join(codegenDir, common.EngineWrapRelDir, variant.filename)); err != nil {
+			return fmt.Errorf("generate %s: %w", variant.filename, err)
+		}
 	}
-
-	return common.GenerateFile(funcs, "sync_pure.gen.go", syncPureAPIText, g.ManagerData(),
-		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync_pure.gen.go"))
+	return nil
 }
 
 func (g *Generator) writeManagerImpl(codegenDir, className string) error {
