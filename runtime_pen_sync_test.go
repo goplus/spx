@@ -69,6 +69,43 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	}
 }
 
+func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	original := newPenTestSprite()
+	original.SetPenColor__0(HSBA(20, 80, 90, 25))
+	original.PenDown()
+
+	clone := newPenTestSprite()
+	clone.components.pen = original.pen().cloneFor(&clone.SpriteImpl)
+	clone.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
+	clone.ChangePenColor(PenTransparency, 10)
+	clone.g.flushPenCommands()
+
+	if len(spy.batches) != 1 {
+		t.Fatalf("batches = %d, want 1", len(spy.batches))
+	}
+	batch := spy.batches[0]
+	wantOps := []int{
+		internalengine.PenBatchSetSize,
+		internalengine.PenBatchColor,
+		internalengine.PenBatchMove,
+		internalengine.PenBatchDown,
+		internalengine.PenBatchColor,
+	}
+	if got := penBatchOperations(batch); !reflect.DeepEqual(got, wantOps) {
+		t.Fatalf("commands = %v, want %v", got, wantOps)
+	}
+	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
+		t.Fatalf("initial alpha = %v, want 0.25", got)
+	}
+	if got := batch[1+4*internalengine.PenBatchFields+6]; got != float32(0.15) {
+		t.Fatalf("changed alpha = %v, want 0.15", got)
+	}
+	if original.pen().penColor.A != 0.25 {
+		t.Fatal("clone color change modified the original")
+	}
+}
+
 func TestPenBatchBarriersPreserveOrder(t *testing.T) {
 	tests := []struct {
 		name   string
