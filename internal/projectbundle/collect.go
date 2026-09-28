@@ -24,12 +24,10 @@ import (
 )
 
 type collector struct {
-	limits    resolvedLimits
-	entries   []collectedEntry
-	total     int64
-	exact     map[string]string
-	canonical map[string]string
-	folded    map[string]string
+	limits  resolvedLimits
+	entries []collectedEntry
+	total   int64
+	folded  map[string]string
 }
 
 func (c *collector) addFile(root *safeDir, sourcePath, archiveName string) error {
@@ -129,9 +127,7 @@ func (c *collector) addTree(root *safeDir, prefix string) error {
 
 func newCollector(limits resolvedLimits) *collector {
 	return &collector{
-		limits:    limits,
-		exact:     make(map[string]string),
-		canonical: make(map[string]string),
-		folded:    make(map[string]string),
+		limits: limits,
+		folded: make(map[string]string),
 	}
 }
