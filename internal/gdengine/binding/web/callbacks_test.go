@@ -12,8 +12,8 @@ import (
 )
 
 func TestContactEventsDecodePackedBytes(t *testing.T) {
-	previousCallbacks, previousEventBuffer := callbacks, contactEventBuffer
-	t.Cleanup(func() { callbacks, contactEventBuffer = previousCallbacks, previousEventBuffer })
+	previousCallbacks := callbacks
+	t.Cleanup(func() { callbacks = previousCallbacks })
 	type contact struct {
 		kind        int
 		self, other int64
@@ -139,6 +139,49 @@ func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
 			t.Fatalf("contacts after rebind = %v, want [101 102]", newContacts)
 		}
 	})
+}
+
+func TestContactBatchReentryPreservesPendingEvents(t *testing.T) {
+	previousCallbacks := callbacks
+	t.Cleanup(func() { BindCallback(previousCallbacks) })
+	registerWebGlobals()
+	batch := js.Global().Get("gdspx_on_contact_events")
+	pack := func(ids ...int64) js.Value {
+		data := make([]byte, len(ids)*contactEventBytes)
+		for i, id := range ids {
+			entry := data[i*contactEventBytes:]
+			binary.LittleEndian.PutUint32(entry, contactTriggerEnter)
+			binary.LittleEndian.PutUint64(entry[4:], uint64(id))
+			binary.LittleEndian.PutUint64(entry[12:], 99)
+		}
+		packed := jsUint8Array.New(len(data))
+		js.CopyBytesToJS(packed, data)
+		return packed
+	}
+	for _, tc := range []struct {
+		name string
+		ids  []int64
+	}{
+		{"smaller", []int64{201, 202}},
+		{"same size", []int64{201, 202, 203}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			outer, inner := pack(101, 102, 103), pack(tc.ids...)
+			var got []int64
+			BindCallback(engine.CallbackInfo{OnTriggerEnter: func(self, other int64) {
+				got = append(got, self)
+				if self == 101 {
+					batch.Invoke(inner)
+				}
+			}})
+			batch.Invoke(outer)
+			want := append([]int64{101}, tc.ids...)
+			want = append(want, 102, 103)
+			if !slices.Equal(got, want) {
+				t.Fatalf("nested contact dispatch = %v, want %v", got, want)
+			}
+		})
+	}
 }
 
 func TestDispatcherSyncsFrameInput(t *testing.T) {

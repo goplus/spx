@@ -34,7 +34,6 @@ const (
 )
 
 var contactEventsHandle js.Func
-var contactEventBuffer []byte
 var contactEventGeneration uint64
 
 func registerContactEventQueue() {
@@ -57,10 +56,8 @@ func gdspxContactEvents(this js.Value, args []js.Value) any {
 		return nil
 	}
 
-	if cap(contactEventBuffer) < length {
-		contactEventBuffer = make([]byte, length)
-	}
-	buf := contactEventBuffer[:length]
+	// A callback can submit another batch before this one finishes dispatching.
+	buf := make([]byte, length)
 	js.CopyBytesToGo(buf, events)
 
 	// A callback may synchronously reset/destroy the engine or rebind callbacks.
