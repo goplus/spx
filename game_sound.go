@@ -186,14 +186,6 @@ func (p *Game) stopSound(name SoundName) {
 	})
 }
 
-func (p *Game) stopSoundPlayback(id int64) {
-	p.soundMgr.StopID(id)
-}
-
-func (p *Game) restartSoundPlayback(id int64) bool {
-	return p.soundMgr.RestartID(id)
-}
-
 func (p *Game) ensureSoundObject(soundObj *engine.Object) {
 	if *soundObj == invalidSoundObject {
 		*soundObj = p.soundMgr.AllocSound()

@@ -48,15 +48,15 @@ func (p *SpriteImpl) PlayAndWait(name SoundName) {
 }
 
 func (p *SpriteImpl) PausePlaying(name SoundName) {
-	p.sound().pausePlaying(name)
+	p.g.pauseSound(name)
 }
 
 func (p *SpriteImpl) ResumePlaying(name SoundName) {
-	p.sound().resumePlaying(name)
+	p.g.resumeSound(name)
 }
 
 func (p *SpriteImpl) StopPlaying(name SoundName) {
-	p.sound().stopPlaying(name)
+	p.g.stopSound(name)
 }
 
 // -----------------------------------------------------------------------------

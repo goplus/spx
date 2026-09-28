@@ -70,18 +70,6 @@ func (s *soundComponent) playAndWait(name SoundName) {
 	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
 }
 
-func (s *soundComponent) pausePlaying(name SoundName) {
-	s.sprite.g.pauseSound(name)
-}
-
-func (s *soundComponent) resumePlaying(name SoundName) {
-	s.sprite.g.resumeSound(name)
-}
-
-func (s *soundComponent) stopPlaying(name SoundName) {
-	s.sprite.g.stopSound(name)
-}
-
 // ============================================================================
 // Volume
 // ============================================================================
@@ -124,19 +112,11 @@ func (s *soundComponent) changeSoundEffect(kind SoundEffectKind, delta float64) 
 // Internal Playback Management
 // ============================================================================
 
-func (s *soundComponent) stopAudioPlayback(id int64) {
-	s.sprite.g.stopSoundPlayback(id)
-}
-
-func (s *soundComponent) restartAudioPlayback(id int64) bool {
-	return s.sprite.g.restartSoundPlayback(id)
-}
-
 func (s *soundComponent) restartOrPlayLoopedAudio(name SoundName, id int64) int64 {
 	if name == "" {
 		return 0
 	}
-	if id != 0 && s.restartAudioPlayback(id) {
+	if id != 0 && s.sprite.g.soundMgr.RestartID(id) {
 		return id
 	}
 	return s.play(name, true)
