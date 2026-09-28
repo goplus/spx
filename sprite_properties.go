@@ -46,25 +46,6 @@ type spriteProperties struct {
 	costumeIndex  int
 }
 
-// stageSpriteProperties contains values prepared during reload preflight. A
-// nil slice means this is a regular load and properties still need parsing.
-type stageSpriteProperties [][]spriteProperties
-
-func (p stageSpriteProperties) resolve(
-	layer, item int,
-	shape coreproject.StageShape,
-) (spriteProperties, error) {
-	if p == nil {
-		return parseSpriteProperties(shape)
-	}
-	if layer < 0 || layer >= len(p) || item < 0 || item >= len(p[layer]) {
-		return spriteProperties{}, fmt.Errorf(
-			"prepared sprite properties are missing for zorder[%d] item[%d]", layer, item,
-		)
-	}
-	return p[layer][item], nil
-}
-
 func parseSpriteProperties(shape coreproject.StageShape) (spriteProperties, error) {
 	var props spriteProperties
 	floatFields := [...]struct {

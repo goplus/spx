@@ -20,7 +20,6 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
@@ -172,23 +171,19 @@ func (pself *Monitor) setXYpos(x float64, y float64) {
 // -----------------------------------------------------------------------------
 // Construction
 // -----------------------------------------------------------------------------
-func newMonitor(g reflect.Value, shape coreproject.StageShape, v coreproject.MonitorShape) (*Monitor, error) {
-	appearance := monitorAppearance(v)
+func newMonitor(g reflect.Value, prepared preparedMonitor) (*Monitor, error) {
+	v := prepared.config
+	appearance := prepared.style.Appearance
 	binding, err := bindMonitor(g, v.Target, v.Val, appearance)
 	if err != nil {
 		return nil, err
 	}
-	color := parseMonitorColor(shape, appearance)
 
 	panel := ui.NewUiMonitor()
 	monitor := &Monitor{
 		target: v.Target, val: v.Val, eval: binding.read, name: v.Name, size: v.Size,
 		visible: v.Visible, pos: mathf.NewVec2(v.X, v.Y), panel: panel,
-		style: ui.MonitorStyle{
-			Appearance: appearance, Label: v.Label, Color: color,
-			Dimensions: parseListMonitorDimensions(shape),
-			Slider:     parseMonitorSlider(shape),
-		},
+		style:   prepared.style,
 		isDirty: true, // Initial dirty state to ensure first render.
 	}
 	if binding.write != nil {

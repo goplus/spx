@@ -25,6 +25,23 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
+type preparedMonitor struct {
+	config coreproject.MonitorShape
+	style  ui.MonitorStyle
+}
+
+func prepareMonitor(shape coreproject.StageShape) (preparedMonitor, error) {
+	config, err := coreproject.ParseMonitorShape(shape)
+	if err != nil {
+		return preparedMonitor{}, err
+	}
+	appearance := monitorAppearance(config)
+	return preparedMonitor{config: config, style: ui.MonitorStyle{
+		Appearance: appearance, Label: config.Label, Color: parseMonitorColor(shape, appearance),
+		Dimensions: parseListMonitorDimensions(shape), Slider: parseMonitorSlider(shape),
+	}}, nil
+}
+
 func monitorAppearance(v coreproject.MonitorShape) ui.MonitorAppearance {
 	if v.Mode == coreproject.MonitorModeSlider {
 		return ui.MonitorAppearanceSlider

@@ -1629,7 +1629,6 @@ func TestClonedSpriteCollisionTargetRegistrationDoesNotRefreshCollisionLayers(t 
 }
 
 func TestMalformedDisplayShapeReturnsLoadError(t *testing.T) {
-	game := &Game{}
 	for _, test := range []struct {
 		name  string
 		shape coreproject.StageShape
@@ -1639,7 +1638,7 @@ func TestMalformedDisplayShapeReturnsLoadError(t *testing.T) {
 		{"monitor", coreproject.StageShape{"type": "monitor", "target": "", "val": "score", "name": "score", "label": "Score", "mode": nil, "x": 0.0, "y": 0.0, "visible": true}, `stage shape field "mode"`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := game.addSpecialShape(reflect.Value{}, test.shape, nil, nil, 0, nil)
+			_, err := prepareStageEntries(reflect.Value{}, []any{test.shape})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("load error = %v, want %q", err, test.want)
 			}
@@ -1653,7 +1652,11 @@ func TestMissingMonitorBindingStillSkipsShape(t *testing.T) {
 		"type": "monitor", "target": "", "val": "missing", "name": "missing", "label": "Missing",
 		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
 	}
-	_, err := game.addSpecialShape(reflect.ValueOf(&monitorEvalFixture{}).Elem(), shape, nil, nil, 0, nil)
+	gamer := reflect.ValueOf(&monitorEvalFixture{}).Elem()
+	entries, err := prepareStageEntries(gamer, []any{shape})
+	if err == nil {
+		game.loadAndInitSprites(gamer, nil, nil, entries)
+	}
 	if err != nil {
 		t.Fatalf("missing monitor binding changed load behavior: %v", err)
 	}
