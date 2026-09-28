@@ -36,15 +36,13 @@ func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	// Keep any caller-provided attributes, but make the child the leader of a
 	// private process group. Forwarding to -pid then reaches the Engine and
 	// descendants without ever signalling this wrapper's process group.
-	attr := cmd.SysProcAttr
-	if attr == nil {
-		attr = &syscall.SysProcAttr{}
-	} else {
-		copy := *attr
-		attr = &copy
+	var attr syscall.SysProcAttr
+	if cmd.SysProcAttr != nil {
+		attr = *cmd.SysProcAttr
 	}
 	attr.Setpgid = true
-	cmd.SysProcAttr = attr
+	attr.Pgid = 0
+	cmd.SysProcAttr = &attr
 
 	// CommandContext's default Cancel kills only the leader. Replace it with a
 	// request that this supervisor turns into TERM -> grace -> KILL for the

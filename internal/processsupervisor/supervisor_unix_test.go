@@ -164,6 +164,45 @@ func TestRunContextEscalatesIgnoredTerm(t *testing.T) {
 	waitForProcessGone(t, readHelperPID(t, marker))
 }
 
+func TestRunCreatesPrivateGroupWithCallerPgid(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	marker := filepath.Join(t.TempDir(), "leader")
+	command := exec.Command(os.Args[0], "-test.run=^TestProcessSupervisorHelper$", "--")
+	command.Env = append(os.Environ(), "SPX_PROCESS_SUPERVISOR_HELPER=ignore-term", "SPX_PROCESS_SUPERVISOR_MARKER="+marker)
+	inherited := &syscall.SysProcAttr{Pgid: syscall.Getpgrp()}
+	command.SysProcAttr = inherited
+	done := make(chan error, 1)
+	go func() {
+		_, err := Run(ctx, command)
+		done <- err
+	}()
+	pid := readHelperPID(t, marker)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
+	pgid, err := syscall.Getpgid(pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pgid != pid {
+		t.Errorf("child group = %d, child pid = %d; want private group", pgid, pid)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("cancel child: %v", err)
+		}
+	case <-time.After(time.Second):
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		<-done
+		t.Error("Run did not stop the child after cancellation")
+	}
+	if inherited.Setpgid || inherited.Pgid != syscall.Getpgrp() {
+		t.Errorf("caller SysProcAttr mutated: %+v", inherited)
+	}
+	waitForProcessGone(t, pid)
+}
+
 func TestProcessSupervisorHelper(t *testing.T) {
 	if os.Getenv("SPX_PROCESS_SUPERVISOR_GRANDCHILD") == "ignore-term" {
 		runIgnoringTermHelper()
