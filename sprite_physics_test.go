@@ -183,7 +183,7 @@ func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
 	}
 }
 
-func TestCostumeRefreshKeepsTriggerDisabled(t *testing.T) {
+func TestProxyCollectionRefreshesAutoShapesWithoutTransformChanges(t *testing.T) {
 	sprite, mgr := newPolygonColliderTestSprite(t)
 	sprite.costumes[0].setIndex = -1
 	previous := cachedBounds
@@ -195,7 +195,11 @@ func TestCostumeRefreshKeepsTriggerDisabled(t *testing.T) {
 	sprite.SetTriggerEnabled(false)
 
 	sprite.markAutoPhysicsShapesDirty()
-	sprite.syncAutoPhysicsShapesAfterCostumeChange()
+	buffer := internalengine.NewSpriteSyncBuffer(1)
+	sprite.collectProxyUpdate(buffer)
+	if got := buffer.UpdateCount(); got != 0 {
+		t.Fatalf("auto shape refresh batched %d transforms, want 0", got)
+	}
 	if !slices.Equal(mgr.triggerEnabled, []bool{false}) || mgr.triggerRectSize != mathf.NewVec2(44, 64) {
 		t.Fatalf("costume refresh: enabled=%v size=%v", mgr.triggerEnabled, mgr.triggerRectSize)
 	}

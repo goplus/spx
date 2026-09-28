@@ -339,9 +339,6 @@ func (p *SpriteImpl) ensureProxyQueryStateSynced() {
 	// Query paths need the latest silhouette even when the sprite is hidden.
 	p.baseObj.applyCostumeUpdate()
 	p.syncAutoPhysicsShapesAfterCostumeChange()
-	if !p.spriteState.IsDirty {
-		return
-	}
 	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
 		return
 	}
@@ -374,16 +371,10 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
 		// gate opens so visibility cannot be skipped by version coalescing.
 		p.markProxyDirty()
 	}
-	if !p.spriteState.IsDirty {
+	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
 		return
 	}
-	if p.spriteState.ProxySyncVersion != p.spriteState.DirtyVersion {
-		p.appendTransformUpdate(buffer)
-	}
-	p.spriteState.IsDirty = false
-}
 
-func (p *SpriteImpl) appendTransformUpdate(buffer *engine.SpriteSyncBuffer) {
 	transform := p.proxyTransform()
 	buffer.Add(
 		int64(p.runtimeState.SyncSprite.Id),

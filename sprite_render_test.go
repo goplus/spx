@@ -43,8 +43,8 @@ func TestSpriteSetCostumeInvalidNameIsNoOp(t *testing.T) {
 	if got := sprite.spriteState.DefaultCostumeIndex; got != 0 {
 		t.Fatalf("DefaultCostumeIndex = %d, want 0", got)
 	}
-	if sprite.spriteState.IsDirty {
-		t.Fatal("IsDirty = true, want false")
+	if sprite.spriteState.DirtyVersion != 0 {
+		t.Fatal("invalid costume changed the proxy version")
 	}
 	if sprite.runtimeState.IsCostumeDirty {
 		t.Fatal("IsCostumeDirty = true, want false")
@@ -63,8 +63,8 @@ func TestSpriteSetCostumeValidNameUpdatesState(t *testing.T) {
 	if got := sprite.spriteState.DefaultCostumeIndex; got != 0 {
 		t.Fatalf("DefaultCostumeIndex = %d, want 0", got)
 	}
-	if !sprite.spriteState.IsDirty {
-		t.Fatal("IsDirty = false, want true")
+	if sprite.spriteState.DirtyVersion != 1 {
+		t.Fatal("costume change did not advance the proxy version")
 	}
 	if !sprite.runtimeState.IsCostumeDirty {
 		t.Fatal("IsCostumeDirty = false, want true")
