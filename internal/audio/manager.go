@@ -47,6 +47,7 @@ type Backend interface {
 	Stop(aid int64)
 	Restart(aid int64) bool
 	SetLoop(aid int64, loop bool)
+	// IsPlaying reports unfinished playback, including paused playback.
 	IsPlaying(aid int64) bool
 	StopAll()
 }
