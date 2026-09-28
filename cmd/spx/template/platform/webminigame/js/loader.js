@@ -1,4 +1,4 @@
-import GameRunner from "./runner";
+import MiniGameRunner from "./runner";
 
 
 const LoaderConfig = {
@@ -302,7 +302,7 @@ class Loader {
       })
       .then(async () => {
         this.onProgress(0.2);
-        await new GameRunner().startGame(this.onProgress.bind(this));
+        await new MiniGameRunner().startGame(this.onProgress.bind(this));
       });
   }
 }
