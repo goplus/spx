@@ -81,7 +81,7 @@ func instantiateRuntimeClone(out reflect.Value, source Sprite) *SpriteImpl {
 	// the existing out.Set(in) reference semantics.
 	userState := snapshotSpriteUserFields(out)
 	runMain(outPtr.Main)
-	restoreSpriteUserFields(out, userState)
+	restoreSpriteUserFields(userState)
 	return dest
 }
 
@@ -96,19 +96,17 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	in := reflect.ValueOf(source).Elem()
 	outPtr := out.Addr().Interface().(Sprite)
 	dest := spriteOf(outPtr)
-	func() {
-		out.Set(in)
-		for i, n := 0, out.NumField(); i < n; i++ {
-			dstField := settableSpriteField(out.Field(i))
-			srcField := settableSpriteField(in.Field(i))
-			if !dstField.IsValid() || !srcField.IsValid() {
-				continue
-			}
-			if ini := dstField.Addr().MethodByName("InitFrom"); ini.IsValid() {
-				ini.Call([]reflect.Value{srcField.Addr()})
-			}
+	out.Set(in)
+	for i, n := 0, out.NumField(); i < n; i++ {
+		dstField := settableSpriteField(out.Field(i))
+		srcField := settableSpriteField(in.Field(i))
+		if !dstField.IsValid() || !srcField.IsValid() {
+			continue
 		}
-	}()
+		if ini := dstField.Addr().MethodByName("InitFrom"); ini.IsValid() {
+			ini.Call([]reflect.Value{srcField.Addr()})
+		}
+	}
 	dest.sprite = outPtr
 	dest.runtimeState.IsCostumeDirty = true
 	// The clone gets a fresh engine proxy, so its copied layer must be pushed
@@ -120,9 +118,14 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	return dest, outPtr
 }
 
-func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
+type spriteUserFieldSnapshot struct {
+	field reflect.Value
+	value reflect.Value
+}
+
+func snapshotSpriteUserFields(v reflect.Value) []spriteUserFieldSnapshot {
 	count := v.NumField()
-	out := make(map[int]reflect.Value, count)
+	out := make([]spriteUserFieldSnapshot, 0, count)
 	typ := v.Type()
 	for i := 0; i < count; i++ {
 		if isSpriteBaseField(typ, i) {
@@ -134,18 +137,14 @@ func snapshotSpriteUserFields(v reflect.Value) map[int]reflect.Value {
 		}
 		saved := reflect.New(field.Type()).Elem()
 		saved.Set(field)
-		out[i] = saved
+		out = append(out, spriteUserFieldSnapshot{field: field, value: saved})
 	}
 	return out
 }
 
-func restoreSpriteUserFields(v reflect.Value, state map[int]reflect.Value) {
-	for i, saved := range state {
-		field := settableSpriteField(v.Field(i))
-		if !field.IsValid() {
-			continue
-		}
-		field.Set(saved)
+func restoreSpriteUserFields(state []spriteUserFieldSnapshot) {
+	for _, saved := range state {
+		saved.field.Set(saved.value)
 	}
 }
 
