@@ -31,27 +31,10 @@ import (
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-func setupRuntimeEventScheduler(t *testing.T) *coroutine.Coroutines {
-	t.Helper()
-
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("coroutines did not stop")
-		}
-		gco = original
-		engine.SetCoroutines(original)
-	})
-	return co
-}
-
 func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	t.Helper()
 
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	game := new(Game)
 	game.bindScriptEvents()
 	engine.SetGame(game)
@@ -94,7 +77,7 @@ func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, do
 }
 
 func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()
@@ -129,7 +112,7 @@ func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
 }
 
 func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()
@@ -266,7 +249,7 @@ func TestOnTimerMatchesMilliseconds(t *testing.T) {
 }
 
 func TestOnCondRisingEdgeAndOwnerIsolation(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var registry scriptEventRegistry
 	var left, right scriptEventBindings
@@ -349,7 +332,7 @@ func pollRuntimeEventConditions(game *Game) {
 }
 
 func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()
@@ -403,7 +386,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 }
 
 func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()
@@ -462,7 +445,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 }
 
 func TestOnStartIgnoresStaleBootstrapGeneration(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()
@@ -505,7 +488,7 @@ func TestOnStartWithoutSchedulerDoesNotCrossReset(t *testing.T) {
 }
 
 func TestOnStartCompletionDoesNotCrossReset(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 
 	var game Game
 	game.bindScriptEvents()

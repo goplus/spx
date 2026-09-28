@@ -45,7 +45,7 @@ func TestStopIfCurrentCoroutineOutsideCoroutine(t *testing.T) {
 }
 
 func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	sprite := &SpriteImpl{}
 	started := make(chan struct{})
 	release := make(chan struct{})

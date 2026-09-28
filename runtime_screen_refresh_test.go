@@ -21,18 +21,10 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	type result struct {
 		repeatCalls int
@@ -42,7 +34,7 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	th := co.Create("run-without-screen-refresh", func(me coroutine.Thread) {
+	co.Create("run-without-screen-refresh", func(me coroutine.Thread) {
 		flagDuring := false
 		repeatCalls := 0
 		condCalls := 0
@@ -64,11 +56,6 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 			flagAfter:   IsRunWithoutScreenRefresh(),
 		}
 	})
-	t.Cleanup(func() {
-		co.StopIf(func(candidate coroutine.Thread) bool {
-			return candidate == th
-		})
-	})
 
 	select {
 	case got := <-done:
@@ -87,14 +74,7 @@ func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 }
 
 func TestWarpRestoresPreviousState(t *testing.T) {
-	co := coroutine.New(nil)
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		gco = original
-		engine.SetCoroutines(original)
-	})
+	co := setupRuntimeScheduler(t)
 
 	type result struct {
 		prev        bool
@@ -105,7 +85,7 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 	}
 
 	done := make(chan result, 1)
-	th := co.Create("run-without-screen-refresh-state", func(me coroutine.Thread) {
+	co.Create("run-without-screen-refresh-state", func(me coroutine.Thread) {
 		prev := SetRunWithoutScreenRefresh(true)
 		outerDuring := IsRunWithoutScreenRefresh()
 
@@ -123,11 +103,6 @@ func TestWarpRestoresPreviousState(t *testing.T) {
 			callAfter:   callAfter,
 			restored:    IsRunWithoutScreenRefresh(),
 		}
-	})
-	t.Cleanup(func() {
-		co.StopIf(func(candidate coroutine.Thread) bool {
-			return candidate == th
-		})
 	})
 
 	select {

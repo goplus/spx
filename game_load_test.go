@@ -510,21 +510,6 @@ func flushCloneProxyUpdates(game *Game) {
 	game.flushSyncBuffer()
 }
 
-func setupBootstrapScheduler(t *testing.T) {
-	t.Helper()
-
-	co := coroutine.New(nil)
-
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
-		gco = original
-		engine.SetCoroutines(original)
-	})
-}
-
 func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64) {
 	t.Helper()
 
@@ -616,7 +601,7 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 }
 
 func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
-	setupBootstrapScheduler(t)
+	setupRuntimeScheduler(t)
 
 	game := &collisionLayerOrderGame{}
 	game.initShapeMgr()
@@ -680,7 +665,7 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 }
 
 func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
-	setupBootstrapScheduler(t)
+	setupRuntimeScheduler(t)
 
 	var game Game
 
@@ -809,7 +794,7 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 }
 
 func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T) {
-	setupBootstrapScheduler(t)
+	setupRuntimeScheduler(t)
 
 	var game Game
 	blocked := make(chan struct{})
@@ -850,7 +835,7 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 }
 
 func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
-	setupBootstrapScheduler(t)
+	setupRuntimeScheduler(t)
 
 	var game Game
 	game.initEventQueueState()
@@ -1006,7 +991,7 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 }
 
 func TestCloneProxyStaysHiddenUntilOnClonedFirstSlice(t *testing.T) {
-	setupRuntimeEventScheduler(t)
+	setupRuntimeScheduler(t)
 	var game Game
 	game.initShapeMgr()
 	originalGame := engine.GetGame()
@@ -1068,7 +1053,7 @@ func TestCloneProxyStaysHiddenUntilOnClonedFirstSlice(t *testing.T) {
 }
 
 func TestCloneDeletedDuringFirstSliceIsNeverPublished(t *testing.T) {
-	setupRuntimeEventScheduler(t)
+	setupRuntimeScheduler(t)
 	var game Game
 	game.initShapeMgr()
 	originalGame := engine.GetGame()
@@ -1095,7 +1080,7 @@ func TestCloneDeletedDuringFirstSliceIsNeverPublished(t *testing.T) {
 }
 
 func TestCloneStopDuringFirstSliceStillReachesPublicationBatch(t *testing.T) {
-	co := setupRuntimeEventScheduler(t)
+	co := setupRuntimeScheduler(t)
 	var game Game
 	game.initShapeMgr()
 	originalGame := engine.GetGame()
