@@ -19,26 +19,14 @@
 package webffi
 
 import (
-	"encoding/json"
 	"strings"
 	"syscall/js"
 
 	. "github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 var jsObject = js.Global().Get("Object")
-
-func PrintJs(rect js.Value) {
-	rectMap := jsValue2Go(rect)
-	jsonData, err := json.Marshal(rectMap)
-	if err != nil {
-		spxlog.Error("Error converting to JSON: %v", err)
-		return
-	}
-	spxlog.Debug("%s", string(jsonData))
-}
 
 func JsFromGdObj(val Object) js.Value {
 	return JsFromGdInt(int64(val))
@@ -189,27 +177,6 @@ func JsToGdFloat32(val js.Value) float32 {
 
 func JsToGdInt64(val js.Value) int64 {
 	return int64(val.Int())
-}
-
-func jsValue2Go(value js.Value) any {
-	switch value.Type() {
-	case js.TypeObject:
-		obj := make(map[string]any)
-		keys := jsObject.Call("keys", value)
-		for i := 0; i < keys.Length(); i++ {
-			key := keys.Index(i).String()
-			obj[key] = jsValue2Go(value.Get(key)) // Recursively process nested objects
-		}
-		return obj
-	case js.TypeString:
-		return value.String()
-	case js.TypeNumber:
-		return value.Float()
-	case js.TypeBoolean:
-		return value.Bool()
-	default:
-		return nil
-	}
 }
 
 // gdIntFromParts reconstructs the 64-bit GdInt/GdObj value from the web
