@@ -18,6 +18,7 @@ package tilemap
 
 import (
 	"encoding/json"
+	"math"
 	"path"
 	"strings"
 
@@ -83,39 +84,31 @@ func Load(fs spxfs.Dir, mapDir string) (LoadResult, error) {
 	}, nil
 }
 
+// CalcWorldBounds reports tile bounds representable by the runtime's int coordinates.
+// Empty maps and bounds whose size or edges exceed that range return false.
 func CalcWorldBounds(data *TscnMapData) (WorldBounds, bool) {
 	if data == nil || len(data.TileMap.Layers) == 0 {
 		return WorldBounds{}, false
 	}
 
-	tileSizeX := int(data.TileMap.TileSize.Width)
-	tileSizeY := int(data.TileMap.TileSize.Height)
+	tileSizeX := int64(data.TileMap.TileSize.Width)
+	tileSizeY := int64(data.TileMap.TileSize.Height)
 
-	var minX, maxX, minY, maxY int32
+	var minX, maxX, minY, maxY int64
 	hasAnyTiles := false
 
 	for _, layer := range data.TileMap.Layers {
 		for i := 0; i+4 < len(layer.TileData); i += 5 {
-			tileX := layer.TileData[i+1]
-			tileY := layer.TileData[i+2]
+			tileX := int64(layer.TileData[i+1])
+			tileY := int64(layer.TileData[i+2])
 			if !hasAnyTiles {
 				minX, maxX = tileX, tileX
 				minY, maxY = tileY, tileY
 				hasAnyTiles = true
 				continue
 			}
-			if tileX < minX {
-				minX = tileX
-			}
-			if tileX > maxX {
-				maxX = tileX
-			}
-			if tileY < minY {
-				minY = tileY
-			}
-			if tileY > maxY {
-				maxY = tileY
-			}
+			minX, maxX = min(minX, tileX), max(maxX, tileX)
+			minY, maxY = min(minY, tileY), max(maxY, tileY)
 		}
 	}
 
@@ -123,15 +116,22 @@ func CalcWorldBounds(data *TscnMapData) (WorldBounds, bool) {
 		return WorldBounds{}, false
 	}
 
-	minWorldX := int(minX) * tileSizeX
-	maxWorldX := int(maxX+1) * tileSizeX
-	minWorldY := int(minY-1) * tileSizeY
-	maxWorldY := int(maxY) * tileSizeY
+	minWorldX := minX * tileSizeX
+	maxWorldX := (maxX + 1) * tileSizeX
+	minWorldY := (minY - 1) * tileSizeY
+	maxWorldY := maxY * tileSizeY
+	width, height := maxWorldX-minWorldX, maxWorldY-minWorldY
+	// The runtime also adds the width and negates the vertical edges.
+	for _, value := range [...]int64{minWorldX, minWorldY, maxWorldX, -minWorldY, -maxWorldY, width, height} {
+		if value < math.MinInt || value > math.MaxInt {
+			return WorldBounds{}, false
+		}
+	}
 	return WorldBounds{
-		MinWorldX:   minWorldX,
-		MinWorldY:   minWorldY,
-		WorldWidth:  maxWorldX - minWorldX,
-		WorldHeight: maxWorldY - minWorldY,
+		MinWorldX:   int(minWorldX),
+		MinWorldY:   int(minWorldY),
+		WorldWidth:  int(width),
+		WorldHeight: int(height),
 	}, true
 }
 

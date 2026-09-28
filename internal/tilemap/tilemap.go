@@ -158,7 +158,7 @@ func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, point
 		layerId := int64(layer.ZIndex)
 		funcSetLayer(layerId)
 		tileData := layer.TileData
-		tileSizeX, tileSizeY := datas.TileMap.TileSize.Width, datas.TileMap.TileSize.Height
+		tileSizeX, tileSizeY := int64(datas.TileMap.TileSize.Width), int64(datas.TileMap.TileSize.Height)
 		tiles := parseTileData(tileData)
 		slices.SortFunc(tiles, func(a, b tileInstance) int {
 			return int(a.SourceID - b.SourceID)
@@ -175,7 +175,7 @@ func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, point
 				lastId = tile.SourceID
 				path = paths[tile.SourceID]
 			}
-			x, y := tile.TileCoords.X*tileSizeX, tile.TileCoords.Y*tileSizeY
+			x, y := int64(tile.TileCoords.X)*tileSizeX, int64(tile.TileCoords.Y)*tileSizeY
 			positions = append(positions, float64(x), float64(y))
 		}
 		if len(positions) > 0 {
