@@ -183,8 +183,7 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 	}
 
 	entries := make([]verifiedEntry, 0, len(archive.File))
-	seen := make(map[string]Entry, len(archive.File))
-	seenNames := make(map[string]string, len(archive.File))
+	seen := make(entryIndex, len(archive.File))
 	var ranges []zipDataRange
 	var total int64
 	emptyDigest := sha256.Sum256(nil)
@@ -204,11 +203,8 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 		if err != nil {
 			return verifiedArchive{}, err
 		}
-		if previous, ok := seenNames[key]; ok {
-			if previous == name {
-				return verifiedArchive{}, fmt.Errorf("%w: duplicate entry %q", ErrUnsafeArchive, name)
-			}
-			return verifiedArchive{}, fmt.Errorf("%w: case-fold/normalization collision between %q and %q", ErrUnsafeArchive, previous, name)
+		if err := seen.checkName(key, name); err != nil {
+			return verifiedArchive{}, err
 		}
 
 		materializedSymlink := options.MaterializeSymlinksAsFiles && file.Mode()&fs.ModeType == fs.ModeSymlink
@@ -224,7 +220,6 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 				Name: name, Mode: mode, Size: 0, SHA256: hex.EncodeToString(emptyDigest[:]),
 			}
 			seen[key] = entry
-			seenNames[key] = name
 			entries = append(entries, verifiedEntry{entry: entry, file: file})
 			continue
 		}
@@ -259,7 +254,6 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 			Name: name, Mode: mode, Size: actualSize, SHA256: digest,
 		}
 		seen[key] = entry
-		seenNames[key] = name
 		entries = append(entries, verifiedEntry{entry: entry, file: file})
 	}
 	sort.Slice(ranges, func(i, j int) bool {
@@ -274,18 +268,8 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 			return verifiedArchive{}, fmt.Errorf("%w: entries %q and %q overlap compressed data", ErrUnsafeArchive, previous.name, current.name)
 		}
 	}
-	for key, entry := range seen {
-		parent := key
-		for {
-			index := strings.LastIndexByte(parent, '/')
-			if index < 0 {
-				break
-			}
-			parent = parent[:index]
-			if parentEntry, ok := seen[parent]; ok && !parentEntry.isDir() {
-				return verifiedArchive{}, fmt.Errorf("%w: file %q is also a parent of %q", ErrUnsafeArchive, parentEntry.Name, entry.Name)
-			}
-		}
+	if err := seen.checkParents(); err != nil {
+		return verifiedArchive{}, err
 	}
 
 	bundle := Bundle{Schema: SchemaV1, Entries: make([]Entry, 0, len(entries))}

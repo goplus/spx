@@ -144,8 +144,7 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 	if len(b.Entries) > limits.MaxEntries {
 		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(b.Entries), limits.MaxEntries)
 	}
-	seen := make(map[string]Entry, len(b.Entries))
-	seenNames := make(map[string]string, len(b.Entries))
+	seen := make(entryIndex, len(b.Entries))
 	var total int64
 	for _, original := range b.Entries {
 		entry, key, err := original.normalized()
@@ -159,27 +158,13 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 			return fmt.Errorf("%w: total size exceeds limit %d", ErrArchiveLimit, limits.MaxTotalSize)
 		}
 		total += entry.Size
-		if previous, ok := seenNames[key]; ok {
-			if previous == entry.Name {
-				return fmt.Errorf("%w: duplicate entry %q", ErrUnsafeArchive, entry.Name)
-			}
-			return fmt.Errorf("%w: case-fold/normalization collision between %q and %q", ErrUnsafeArchive, previous, entry.Name)
+		if err := seen.checkName(key, entry.Name); err != nil {
+			return err
 		}
 		seen[key] = entry
-		seenNames[key] = entry.Name
 	}
-	for key, entry := range seen {
-		parent := key
-		for {
-			index := strings.LastIndexByte(parent, '/')
-			if index < 0 {
-				break
-			}
-			parent = parent[:index]
-			if parentEntry, ok := seen[parent]; ok && !parentEntry.isDir() {
-				return fmt.Errorf("%w: file %q is also a parent of %q", ErrUnsafeArchive, parentEntry.Name, entry.Name)
-			}
-		}
+	if err := seen.checkParents(); err != nil {
+		return err
 	}
 	if b.Digest != "" {
 		if err := validateSHA256(b.Digest); err != nil {

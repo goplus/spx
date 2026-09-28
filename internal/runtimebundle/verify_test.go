@@ -113,16 +113,88 @@ func TestVerifyZipBuildsFullManifestAndRejectsUnsafeNames(t *testing.T) {
 	}
 }
 
-func TestVerifyZipRejectsDuplicatesCollisionsAndSpecialFiles(t *testing.T) {
+func TestManifestAndZipEntryConflicts(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		entries []testZipEntry
+		problem string
+	}{
+		{"valid", []testZipEntry{{name: "a/", mode: fs.ModeDir}, {name: "a/b", data: "x"}}, ""},
+		{"valid-directory-after-child", []testZipEntry{{name: "a/b", data: "x"}, {name: "a/", mode: fs.ModeDir}}, ""},
+		{"duplicate", []testZipEntry{{name: "a", data: "1"}, {name: "a", data: "2"}}, `duplicate entry "a"`},
+		{"duplicate-directory", []testZipEntry{{name: "a/", mode: fs.ModeDir}, {name: "a/", mode: fs.ModeDir}}, `duplicate entry "a/"`},
+		{"case-fold", []testZipEntry{{name: "A", data: "1"}, {name: "a", data: "2"}}, `case-fold/normalization collision between "A" and "a"`},
+		{"unicode-normalization", []testZipEntry{{name: "café", data: "1"}, {name: "cafe\u0301", data: "2"}}, "case-fold/normalization collision between \"café\" and \"cafe\u0301\""},
+		{"file-directory-alias", []testZipEntry{{name: "a", data: "1"}, {name: "a/", mode: fs.ModeDir}}, `case-fold/normalization collision between "a" and "a/"`},
+		{"directory-file-alias", []testZipEntry{{name: "a/", mode: fs.ModeDir}, {name: "a", data: "1"}}, `case-fold/normalization collision between "a/" and "a"`},
+		{"file-parent", []testZipEntry{{name: "a", data: "1"}, {name: "a/b", data: "2"}}, `file "a" is also a parent of "a/b"`},
+		{"file-after-child", []testZipEntry{{name: "a/b", data: "2"}, {name: "a", data: "1"}}, `file "a" is also a parent of "a/b"`},
+		{"folded-parent", []testZipEntry{{name: "A", data: "1"}, {name: "a/b/c", data: "2"}}, `file "A" is also a parent of "a/b/c"`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			bundle := Bundle{}
+			for _, item := range tt.entries {
+				bundle.Entries = append(bundle.Entries, Entry{
+					Name: item.name, Mode: uint32(item.mode), Size: int64(len(item.data)), SHA256: testDigest(item.data),
+				})
+			}
+			manifest, err := json.Marshal(bundle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, manifestErr := ParseManifest(manifest)
+			_, zipErr := VerifyZip(writeTestZip(t, tt.entries...))
+			for input, err := range map[string]error{"manifest": manifestErr, "zip": zipErr} {
+				if tt.problem == "" {
+					if err != nil {
+						t.Fatalf("%s: %v", input, err)
+					}
+				} else if !errors.Is(err, ErrUnsafeArchive) || !strings.HasSuffix(err.Error(), ErrUnsafeArchive.Error()+": "+tt.problem) {
+					t.Fatalf("%s: error = %v, want unsafe archive: %s", input, err, tt.problem)
+				}
+			}
+		})
+	}
+}
+
+func TestVerifyZipRejectsDuplicateBeforeModeAndContent(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		mode    fs.FileMode
+		corrupt bool
+	}{
+		{name: "mode", mode: fs.ModeSymlink | 0o777},
+		{name: "content", corrupt: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeTestZip(t, testZipEntry{name: "a", data: "first"}, testZipEntry{name: "a", mode: tt.mode, data: "second"})
+			if tt.corrupt {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				offset := bytes.Index(data, []byte("second"))
+				if offset < 0 {
+					t.Fatal("missing stored payload")
+				}
+				data[offset] ^= 1
+				if err := os.WriteFile(path, data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := VerifyZip(path)
+			if !errors.Is(err, ErrUnsafeArchive) || !strings.HasSuffix(err.Error(), `duplicate entry "a"`) {
+				t.Fatalf("error = %v, want duplicate before mode/content validation", err)
+			}
+		})
+	}
+}
+
+func TestVerifyZipRejectsReservedNamesAndSpecialFiles(t *testing.T) {
 	tests := []struct {
 		name    string
 		entries []testZipEntry
 	}{
-		{"duplicate", []testZipEntry{{name: "a", data: "1"}, {name: "a", data: "2"}}},
-		{"case-fold", []testZipEntry{{name: "A", data: "1"}, {name: "a", data: "2"}}},
-		{"unicode-normalization", []testZipEntry{{name: "caf\u00e9", data: "1"}, {name: "cafe\u0301", data: "2"}}},
-		{"file-directory-alias", []testZipEntry{{name: "a", data: "1"}, {name: "a/", mode: fs.ModeDir}}},
-		{"file-parent", []testZipEntry{{name: "a", data: "1"}, {name: "a/b", data: "2"}}},
 		{"reserved-complete", []testZipEntry{{name: completeMarkerName, data: "x"}}},
 		{"reserved-manifest", []testZipEntry{{name: cacheManifestName, data: "x"}}},
 		{"symlink", []testZipEntry{{name: "link", mode: fs.ModeSymlink | 0o777, data: "target"}}},
