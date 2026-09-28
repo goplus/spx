@@ -21,19 +21,15 @@ import (
 	"slices"
 )
 
-// InputReplayController resolves one immutable recording or replay stream. A
+// InputReplayController records or consumes one controller-owned stream. A
 // Game-owned input session serializes access and resets the controller only at
 // the end of that Game lifecycle.
 type InputReplayController struct {
-	mode      InputSessionMode
-	exhausted bool
-	next      int64
-	elapsed   float64
-	cursor    int
-	record    InputReplay
-	replay    InputReplay
-	last      InputReplayFrame
-	resolved  bool
+	mode     InputSessionMode
+	next     int64
+	elapsed  float64
+	stream   InputReplay
+	resolved bool
 }
 
 func (c *InputReplayController) StartRecording(initial InputReplayState, fixedTimestep float64) error {
@@ -47,7 +43,7 @@ func (c *InputReplayController) StartRecording(initial InputReplayState, fixedTi
 		return ErrInputSessionActive
 	}
 	c.mode = InputSessionModeRecording
-	c.record = InputReplay{
+	c.stream = InputReplay{
 		Format:        InputReplayFormat,
 		Version:       InputReplayVersion,
 		FixedTimestep: fixedTimestep,
@@ -62,7 +58,7 @@ func (c *InputReplayController) Recording() (InputReplay, error) {
 	if c.mode != InputSessionModeRecording {
 		return InputReplay{}, ErrInputSessionNotRecording
 	}
-	return cloneInputReplay(c.record), nil
+	return cloneInputReplay(c.stream), nil
 }
 
 func (c *InputReplayController) SynchronizeRecordingInitial(initial InputReplayState) error {
@@ -75,7 +71,7 @@ func (c *InputReplayController) SynchronizeRecordingInitial(initial InputReplayS
 	if c.next != 0 {
 		return fmt.Errorf("cannot synchronize initial state after recording tick zero")
 	}
-	c.record.Initial = cloneInputReplayState(initial)
+	c.stream.Initial = cloneInputReplayState(initial)
 	return nil
 }
 
@@ -87,8 +83,7 @@ func (c *InputReplayController) StartReplay(replay InputReplay) error {
 		return ErrInputSessionActive
 	}
 	c.mode = InputSessionModeReplaying
-	c.replay = cloneInputReplay(replay)
-	c.last = InputReplayFrame{Frame: -1, State: c.replay.Initial}
+	c.stream = cloneInputReplay(replay)
 	return nil
 }
 
@@ -98,18 +93,12 @@ func (c *InputReplayController) Reset() {
 
 func (c *InputReplayController) Status() InputReplayControllerStatus {
 	mode := c.modeValue()
-	status := InputReplayControllerStatus{
-		Mode:      mode,
-		Exhausted: c.exhausted,
-		NextFrame: c.next,
+	return InputReplayControllerStatus{
+		Mode:       mode,
+		Exhausted:  mode == InputSessionModeReplaying && c.resolved && c.next == int64(len(c.stream.Frames)),
+		NextFrame:  c.next,
+		FrameCount: len(c.stream.Frames),
 	}
-	switch mode {
-	case InputSessionModeRecording:
-		status.FrameCount = len(c.record.Frames)
-	case InputSessionModeReplaying:
-		status.FrameCount = len(c.replay.Frames)
-	}
-	return status
 }
 
 func (c *InputReplayController) Resolve(
@@ -160,7 +149,7 @@ func (c *InputReplayController) ResolveWithMouseEvents(
 		MouseEvents: slices.Clone(mouseEvents),
 		KeyEvents:   slices.Clone(keyEvents),
 	}
-	c.record.Frames = append(c.record.Frames, cloneInputReplayFrame(effective))
+	c.stream.Frames = append(c.stream.Frames, cloneInputReplayFrame(effective))
 	c.next++
 	return effective, firstTick, nil
 }
@@ -173,25 +162,22 @@ func (c *InputReplayController) modeValue() InputSessionMode {
 }
 
 func (c *InputReplayController) resolveReplay() (InputReplayFrame, bool, error) {
-	if c.cursor >= len(c.replay.Frames) {
-		c.exhausted = true
-		frozen := cloneInputReplayFrame(c.last)
-		frozen.MouseEvents = nil
-		frozen.KeyEvents = nil
-		firstTick := !c.resolved
-		c.resolved = true
-		return frozen, firstTick, nil
+	firstTick := !c.resolved
+	c.resolved = true
+	if c.next < int64(len(c.stream.Frames)) {
+		frame := cloneInputReplayFrame(c.stream.Frames[c.next])
+		c.next++
+		return frame, firstTick, nil
 	}
 
-	firstTick := c.cursor == 0
-	frame := cloneInputReplayFrame(c.replay.Frames[c.cursor])
-	// The replay is controller-owned and immutable; only caller snapshots need copies.
-	c.last = c.replay.Frames[c.cursor]
-	c.cursor++
-	c.next = int64(c.cursor)
-	c.exhausted = c.cursor == len(c.replay.Frames)
-	c.resolved = true
-	return frame, firstTick, nil
+	frozen := InputReplayFrame{Frame: -1, State: c.stream.Initial}
+	if c.next > 0 {
+		frozen = c.stream.Frames[c.next-1]
+	}
+	// Reuse the immutable stream's last state without repeating edge events.
+	frozen.MouseEvents = nil
+	frozen.KeyEvents = nil
+	return cloneInputReplayFrame(frozen), firstTick, nil
 }
 
 func cloneInputReplay(replay InputReplay) InputReplay {

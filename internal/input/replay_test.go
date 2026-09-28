@@ -187,6 +187,9 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	if err := controller.StartReplay(replay); err != nil {
 		t.Fatal(err)
 	}
+	if got := controller.Status(); got != (InputReplayControllerStatus{Mode: InputSessionModeReplaying, FrameCount: 2}) {
+		t.Fatalf("initial replay status = %+v", got)
+	}
 	replay.Frames[0].State.KeysDown[0] = 999
 
 	frame0, first, err := controller.Resolve(
@@ -199,6 +202,9 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	}
 	if !first || frame0.Frame != 0 || frame0.State.KeysDown[0] != 10 {
 		t.Fatalf("first replay frame = (%+v, %v)", frame0, first)
+	}
+	if got := controller.Status(); got != (InputReplayControllerStatus{Mode: InputSessionModeReplaying, NextFrame: 1, FrameCount: 2}) {
+		t.Fatalf("replay status after first tick = %+v", got)
 	}
 	frame0.State.KeysDown[0] = 999
 	frame0.KeyEvents[0].Key = 999
@@ -384,6 +390,46 @@ func TestInputReplayControllerIdleResolveReturnsIsolatedLiveFrame(t *testing.T) 
 	events[0].Key = 2
 	if frame.State.KeysDown[0] != 1 || frame.KeyEvents[0].Key != 1 {
 		t.Fatalf("idle Resolve aliased live input: %+v", frame)
+	}
+}
+
+func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
+	var controller InputReplayController
+	if err := controller.StartRecording(InputReplayState{}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controller.Resolve(InputReplayState{}, nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	before, err := controller.Recording()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []struct {
+		name  string
+		state InputReplayState
+		delta float64
+	}{
+		{name: "invalid live state", state: InputReplayState{KeysDown: []int64{-1}}, delta: 1},
+		{name: "invalid delta", delta: math.NaN()},
+		{name: "time overflow", delta: maxInputReplayTime + 1},
+	} {
+		t.Run(invalid.name, func(t *testing.T) {
+			if _, _, err := controller.Resolve(invalid.state, nil, invalid.delta); err == nil {
+				t.Fatal("invalid tick was accepted")
+			}
+			if got := controller.Status(); got != (InputReplayControllerStatus{Mode: InputSessionModeRecording, NextFrame: 1, FrameCount: 1}) {
+				t.Fatalf("rejected tick changed status: %+v", got)
+			}
+			after, err := controller.Recording()
+			if err != nil || !reflect.DeepEqual(after, before) {
+				t.Fatalf("rejected tick changed recording: %+v, %v", after, err)
+			}
+		})
+	}
+	frame, first, err := controller.Resolve(InputReplayState{}, nil, 0.25)
+	if err != nil || first || frame.Frame != 1 || frame.Time != 0.25 {
+		t.Fatalf("next valid tick = (%+v, %v, %v)", frame, first, err)
 	}
 }
 
