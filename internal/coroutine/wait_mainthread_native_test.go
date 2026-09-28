@@ -263,6 +263,50 @@ func TestWaitMainThreadCanceledCoroutineDropsQueuedCall(t *testing.T) {
 	}
 }
 
+func TestCleanupMainThreadRunsAfterQueuedCallCancellation(t *testing.T) {
+	setMainThreadForTest(t, false)
+	co := New(nil)
+	var called, cleaned, continued atomic.Bool
+	thread := co.Create("caller", func(Thread) {
+		defer co.CleanupMainThread(func() {
+			cleaned.Store(true)
+			defer func() {
+				if got := recover(); got != ErrReentrantWait {
+					t.Errorf("cleanup drain panic = %v, want %v", got, ErrReentrantWait)
+				}
+			}()
+			co.StopAllAndWait(time.Millisecond)
+		})
+		co.WaitMainThread(func() { called.Store(true) })
+		continued.Store(true)
+	})
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobs.Count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("caller did not queue its engine call")
+		}
+		runtime.Gosched()
+	}
+	co.Stop(thread)
+	for {
+		select {
+		case <-thread.done:
+			if called.Load() || continued.Load() || !cleaned.Load() {
+				t.Fatalf("called=%v continued=%v cleaned=%v", called.Load(), continued.Load(), cleaned.Load())
+			}
+			if !co.RunAfterStopAll(time.Second, nil) {
+				t.Fatal("cleanup did not drain")
+			}
+			return
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("canceled cleanup did not finish")
+		}
+		co.Update()
+	}
+}
+
 func TestWaitMainThreadCancellationWaitsForRunningCall(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)

@@ -64,14 +64,14 @@ func (p *SpriteImpl) AnimateWith(name SpriteAnimationName, __xgo_optional_loop b
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Animate: %s", name)
 	}
-	p.animation().animate(name, __xgo_optional_loop)
+	p.animation().playAnimation(name, __xgo_optional_loop, false)
 }
 
 func (p *SpriteImpl) AnimateAndWait(name SpriteAnimationName) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("AnimateAndWait: %s", name)
 	}
-	p.animation().animateAndWait(name)
+	p.animation().playAnimation(name, false, true)
 }
 
 func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {

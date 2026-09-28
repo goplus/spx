@@ -50,6 +50,7 @@ type animationComponent struct {
 	// Animation state (per-instance).
 	curAnimState      *animState
 	activeTweenStates []*animState
+	velocityOwner     *animState
 	defaultAnimActive bool
 
 	// Animation tracking (per-instance).
@@ -83,7 +84,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 	a.shared = &sharedAnimationData{
 		defaultAnimation: spriteCfg.DefaultAnimation,
 		animations:       make(map[SpriteAnimationName]*animationEntry, len(spriteCfg.FAnimations)),
-		animBindings:     make(map[string]string),
+		animBindings:     maps.Clone(spriteCfg.AnimBindings),
 	}
 
 	for name, ani := range spriteCfg.FAnimations {
@@ -91,7 +92,7 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 		defaults.SetDefaultIfZero(&ani.TurnToDuration, 1.0)
 		defaults.SetDefaultIfZero(&ani.StepDuration, 0.01)
 
-		ani.IFrameFrom, ani.IFrameTo = a.frameRange(ani.FrameFrom, ani.FrameTo)
+		ani.IFrameFrom, ani.IFrameTo = a.costumeIndex(ani.FrameFrom), a.costumeIndex(ani.FrameTo)
 		ani.Speed = 1
 		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
 		a.shared.animations[name] = &animationEntry{
@@ -102,8 +103,6 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 			isCostumeSet: a.sprite.runtimeState.IsCostumeSet,
 		}
 	}
-
-	maps.Copy(a.shared.animBindings, spriteCfg.AnimBindings)
 }
 
 // cloneFor creates a new animation component for newSprite.
@@ -121,21 +120,15 @@ func (a *animationComponent) onDestroy() {
 		a.stopAnimState(state)
 	}
 	a.activeTweenStates = nil
-	a.unregisterOnAnimationLooped()
-	a.unregisterOnAnimationFinished()
+	if syncSprite := a.syncSprite(); syncSprite != nil {
+		syncSprite.UnRegisterOnAnimationLooped()
+		syncSprite.UnRegisterOnAnimationFinished()
+	}
 }
 
 // ============================================================================
 // Animation Control
 // ============================================================================
-
-func (a *animationComponent) animate(name SpriteAnimationName, loop bool) {
-	a.playAnimation(name, loop, false, "Animation: %s")
-}
-
-func (a *animationComponent) animateAndWait(name SpriteAnimationName) {
-	a.playAnimation(name, false, true, "AnimateAndWait: %s")
-}
 
 func (a *animationComponent) stopAnimation(name SpriteAnimationName) {
 	if name == "" || !a.hasAnim(name) {
@@ -161,21 +154,17 @@ func (a *animationComponent) stopAnimation(name SpriteAnimationName) {
 // Animation Playback
 // ============================================================================
 
-func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, blocking bool, debugMsg string) {
-	if isDebugInstrEnabled() {
-		spxlog.Debug(debugMsg, name)
-	}
-
+func (a *animationComponent) playAnimation(name SpriteAnimationName, loop, blocking bool) {
 	entry, ok := a.shared.animations[name]
 	if !ok {
 		spxlog.Warn("Animation not found: %s", name)
 		return
 	}
 
-	a.doAnimation(entry, entry.config, loop, 1, blocking, true)
+	a.doAnimation(entry, loop, 1, blocking, true)
 }
 
-func (a *animationComponent) doAnimation(entry *animationEntry, ani *coreproject.AniConfig, loop bool, speed float64, isBlocking bool, playAudio bool) *animState {
+func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed float64, isBlocking bool, playAudio bool) *animState {
 	syncSprite := a.syncSpriteForPlayback()
 	if syncSprite == nil {
 		return nil
@@ -190,14 +179,35 @@ func (a *animationComponent) doAnimation(entry *animationEntry, ani *coreproject
 	}
 
 	info := a.curAnimState
-	if playAudio {
-		a.playAnimationAudio(ani, info)
-	}
+	completed := false
+	playbackStarted := false
+	defer func() {
+		if completed && !isBlocking {
+			return
+		}
+		current := a.curAnimState == info
+		audioID := a.cancelAnimState(info)
+		if !completed && current {
+			a.curAnimState = nil
+		}
+		gco.CleanupMainThread(func() {
+			a.stopAnimationAudio(audioID)
+			if !completed && playbackStarted && current && a.syncSpriteForPlayback() != nil {
+				syncSprite.PauseAnim()
+			}
+		})
+	}()
 
-	a.sprite.baseObj.applyCostumeUpdate()
-	a.prepareAnimationPlayback(entry)
-
-	engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
+	// Capture resources before cancellation can discard an engine-call result.
+	engine.WaitMainThread(func() {
+		if playAudio {
+			a.playAnimationAudio(entry.config, info)
+		}
+		a.sprite.baseObj.applyCostumeUpdate()
+		a.prepareAnimationPlayback(entry, syncSprite)
+		playbackStarted = true
+		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
+	})
 	if isBlocking {
 		a.sprite.runtimeState.IsAnimating = true
 		for engine.Managers().SpriteMgr.IsPlayingAnim(syncSprite.GetId()) {
@@ -206,23 +216,15 @@ func (a *animationComponent) doAnimation(entry *animationEntry, ani *coreproject
 			}
 			engine.WaitNextFrame()
 		}
-		a.sprite.runtimeState.IsAnimating = false
-		a.stopAnimState(info)
 	}
+	completed = true
 	return info
 }
 
-func (a *animationComponent) adaptAnimBitmapResolution(bitmapResolution int) {
-	syncSprite := a.syncSprite()
-	if syncSprite == nil {
-		return
-	}
+func (a *animationComponent) prepareAnimationPlayback(entry *animationEntry, syncSprite *engine.Sprite) {
+	bitmapResolution := entry.ensureRegistered()
 	renderScale := a.sprite.getAnimRenderScale(bitmapResolution)
 	syncSprite.SetRenderScale(engine.UniformVec2(renderScale))
-}
-
-func (a *animationComponent) prepareAnimationPlayback(entry *animationEntry) {
-	a.adaptAnimBitmapResolution(entry.ensureRegistered())
 }
 
 // ============================================================================
@@ -239,19 +241,9 @@ func (a *animationComponent) playDefaultAnim() {
 		return
 	}
 
-	tweenState := a.getCurTweenState()
 	speed := 1.0
-	if tweenState == nil {
-		animName = a.shared.defaultAnimation
-	} else {
-		switch tweenState.AniType {
-		case coreproject.AniTypeMove:
-			animName = a.getStateAnimName(StateStep)
-		case coreproject.AniTypeTurn:
-			animName = a.getStateAnimName(StateTurn)
-		case coreproject.AniTypeGlide:
-			animName = a.getStateAnimName(StateGlide)
-		}
+	if tweenState := a.getCurTweenState(); tweenState != nil {
+		animName = a.getTweenAnimName(tweenState.AniType)
 		speed = tweenState.Speed
 	}
 
@@ -260,7 +252,7 @@ func (a *animationComponent) playDefaultAnim() {
 	}
 
 	if entry, ok := a.shared.animations[animName]; ok {
-		a.prepareAnimationPlayback(entry)
+		a.prepareAnimationPlayback(entry, syncSprite)
 		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, true, false)
 		a.defaultAnimActive = true
 	} else {
@@ -277,39 +269,12 @@ func (a *animationComponent) playDefaultAnimIfIdle() {
 }
 
 func (a *animationComponent) hasActiveAnimationPlayback() bool {
-	if a.defaultAnimActive {
-		return true
-	}
-	return a.curAnimState != nil && !a.curAnimState.IsCanceled
+	return a.defaultAnimActive || (a.curAnimState != nil && !a.curAnimState.IsCanceled)
 }
 
 // ============================================================================
 // Animation Events
 // ============================================================================
-
-func (a *animationComponent) registerOnAnimationLooped(f func()) {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.RegisterOnAnimationLooped(f)
-	}
-}
-
-func (a *animationComponent) unregisterOnAnimationLooped() {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.UnRegisterOnAnimationLooped()
-	}
-}
-
-func (a *animationComponent) registerOnAnimationFinished(f func()) {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.RegisterOnAnimationFinished(f)
-	}
-}
-
-func (a *animationComponent) unregisterOnAnimationFinished() {
-	if syncSprite := a.syncSprite(); syncSprite != nil {
-		syncSprite.UnRegisterOnAnimationFinished()
-	}
-}
 
 func (a *animationComponent) onAnimationDone(animName string) {
 	if a.syncSpriteForPlayback() == nil {
@@ -341,27 +306,35 @@ func (a *animationComponent) takeDoneAnimations(buffer []string) []string {
 // Animation State
 // ============================================================================
 
-func (a *animationComponent) getCurAnimState() *animState {
-	return a.curAnimState
-}
-
 func (a *animationComponent) stopCurrentAnimState(state *animState) bool {
-	a.stopAnimState(state)
-	if a.curAnimState != state {
-		return false
+	current := a.curAnimState == state
+	id := a.cancelAnimState(state)
+	if current {
+		a.curAnimState = nil
 	}
-	a.curAnimState = nil
-	return true
+	a.stopAnimationAudio(id)
+	return current
 }
 
 func (a *animationComponent) stopAnimState(state *animState) {
+	a.stopAnimationAudio(a.cancelAnimState(state))
+}
+
+// cancelAnimState detaches local state before any engine cleanup can fail.
+func (a *animationComponent) cancelAnimState(state *animState) int64 {
 	if state == nil {
-		return
+		return 0
 	}
 	engine.Lock()
 	state.IsCanceled = true
+	state.OnPlayAudioRestartPending = false
+	id := state.OnPlayAudioPlaybackID
+	state.OnPlayAudioPlaybackID = 0
+	if a.curAnimState == state {
+		a.sprite.runtimeState.IsAnimating = false
+	}
 	engine.Unlock()
-	a.stopAnimationAudio(state)
+	return id
 }
 
 // ============================================================================
@@ -374,10 +347,6 @@ func (a *animationComponent) costumeIndex(nameOrIndex any) int {
 		spxlog.Panicf("FindCostume failed for %s", nameOrIndex)
 	}
 	return index
-}
-
-func (a *animationComponent) frameRange(from, to any) (int, int) {
-	return a.costumeIndex(from), a.costumeIndex(to)
 }
 
 func (a *animationComponent) hasAnim(animName string) bool {
@@ -400,6 +369,18 @@ func (a *animationComponent) getStateAnimName(stateName string) string {
 	return stateName
 }
 
+func (a *animationComponent) getTweenAnimName(aniType coreproject.AniType) string {
+	switch aniType {
+	case coreproject.AniTypeMove:
+		return a.getStateAnimName(StateStep)
+	case coreproject.AniTypeTurn:
+		return a.getStateAnimName(StateTurn)
+	case coreproject.AniTypeGlide:
+		return a.getStateAnimName(StateGlide)
+	}
+	return ""
+}
+
 // ============================================================================
 // Tween State
 // ============================================================================
@@ -412,14 +393,12 @@ func (a *animationComponent) getCurTweenState() *animState {
 }
 
 func (a *animationComponent) unregisterTweenState(state *animState) bool {
-	for i := len(a.activeTweenStates) - 1; i >= 0; i-- {
-		if a.activeTweenStates[i] != state {
-			continue
-		}
-		a.activeTweenStates = slices.Delete(a.activeTweenStates, i, i+1)
-		return true
+	i := slices.Index(a.activeTweenStates, state)
+	if i < 0 {
+		return false
 	}
-	return false
+	a.activeTweenStates = slices.Delete(a.activeTweenStates, i, i+1)
+	return true
 }
 
 // ============================================================================
@@ -432,28 +411,23 @@ func (a *animationComponent) doTween(name SpriteAnimationName, base *coreproject
 		return
 	}
 
-	info, ownedPlayback := a.initTweenState(name, base, params)
-	a.executeTweenLoop(info, &params)
-	a.cleanupTween(info, ownedPlayback, name, base)
-}
-
-func (a *animationComponent) initTweenState(name SpriteAnimationName, base *coreproject.AniConfig, params tweenParams) (*animState, *animState) {
-	info := &animState{
-		AniType: params.aniType,
-		Name:    name,
-		Speed:   params.speed,
-	}
+	info := &animState{AniType: params.aniType, Name: name, Speed: params.speed}
 	a.activeTweenStates = append(a.activeTweenStates, info)
-
 	var ownedPlayback *animState
+	completed := false
+	defer func() { a.cleanupTween(info, ownedPlayback, base, !completed) }()
 	if entry, ok := a.shared.animations[name]; ok {
-		ownedPlayback = a.doAnimation(entry, base, true, params.speed, false, false)
+		ownedPlayback = a.doAnimation(entry, true, params.speed, false, false)
 		if base != nil {
-			a.playAnimationAudio(base, info)
+			engine.WaitMainThread(func() { a.playAnimationAudio(base, info) })
 		}
 	}
-
-	return info, ownedPlayback
+	for elapsed := 0.0; elapsed < params.duration && !info.IsCanceled; {
+		elapsed += time.DeltaTime()
+		a.applyTweenStep(info, mathf.Clamp01f(elapsed/params.duration), &params)
+		engine.WaitNextFrame()
+	}
+	completed = true
 }
 
 func prepareTweenParams(params tweenParams) (tweenParams, bool) {
@@ -470,83 +444,55 @@ func prepareTweenParams(params tweenParams) (tweenParams, bool) {
 	return params, true
 }
 
-func (a *animationComponent) executeTweenLoop(info *animState, params *tweenParams) {
-	timer := 0.0
-	duration := params.duration
-
-	for timer < duration {
-		if info.IsCanceled {
-			return
-		}
-
-		timer += time.DeltaTime()
-		percent := mathf.Clamp01f(timer / duration)
-
-		a.applyTweenStep(percent, params)
-		engine.WaitNextFrame()
-	}
-}
-
-func (a *animationComponent) applyTweenStep(percent float64, params *tweenParams) {
+func (a *animationComponent) applyTweenStep(info *animState, percent float64, params *tweenParams) {
 	switch params.aniType {
 	case coreproject.AniTypeMove:
 		physicsMode := a.sprite.PhysicsMode()
 		if a.sprite.g.physicsEnabled && physicsMode != NoPhysics && physicsMode != StaticPhysics {
+			a.velocityOwner = info
 			a.sprite.SetVelocity(params.moveVelocity.X, params.moveVelocity.Y)
-		} else {
-			a.applyTweenPosition(percent, params)
+			return
 		}
+		fallthrough
 	case coreproject.AniTypeGlide:
-		a.applyTweenPosition(percent, params)
+		pos := params.moveFrom.Lerp(params.moveTo, percent)
+		a.sprite.SetXYpos(pos.X, pos.Y)
 	case coreproject.AniTypeTurn:
-		a.applyTweenHeading(percent, params)
+		a.sprite.SetHeading(mathf.Lerpf(params.turnFrom, params.turnTo, percent))
 	}
 }
 
-func (a *animationComponent) applyTweenPosition(percent float64, params *tweenParams) {
-	pos := params.moveFrom.Lerp(params.moveTo, percent)
-	a.sprite.SetXYpos(pos.X, pos.Y)
-}
-
-func (a *animationComponent) applyTweenHeading(percent float64, params *tweenParams) {
-	a.sprite.SetHeading(mathf.Lerpf(params.turnFrom, params.turnTo, percent))
-}
-
-func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, name SpriteAnimationName, base *coreproject.AniConfig) {
-	a.stopMoveTweenVelocity(info.AniType)
-	a.stopAnimState(info)
-	stoppedOwnedPlayback := a.stopOwnedTweenPlaybackIfCurrent(ownedPlayback)
-
-	if !a.unregisterTweenState(info) {
-		if stoppedOwnedPlayback {
+func (a *animationComponent) cleanupTween(info, ownedPlayback *animState, base *coreproject.AniConfig, interrupted bool) {
+	registered := a.unregisterTweenState(info)
+	stopVelocity := a.velocityOwner == info
+	if stopVelocity {
+		a.velocityOwner = nil
+	}
+	audioID := a.cancelAnimState(info)
+	stoppedOwnedPlayback := ownedPlayback != nil && a.curAnimState == ownedPlayback
+	if stoppedOwnedPlayback {
+		a.stopCurrentAnimState(ownedPlayback)
+	}
+	restoreDefault := stoppedOwnedPlayback
+	if registered {
+		restoreDefault = info.Name != a.shared.defaultAnimation && (base == nil || !base.IsKeepOnStop)
+	}
+	gco.CleanupMainThread(func() {
+		a.stopAnimationAudio(audioID)
+		syncSprite := a.syncSpriteForPlayback()
+		if syncSprite == nil {
+			return
+		}
+		if interrupted && stoppedOwnedPlayback {
+			syncSprite.PauseAnim()
+		}
+		if stopVelocity {
+			a.sprite.SetVelocity(0, 0)
+		}
+		if restoreDefault {
 			a.playDefaultAnimIfIdle()
 		}
-		return
-	}
-
-	if name != a.shared.defaultAnimation && (base == nil || !base.IsKeepOnStop) {
-		a.playDefaultAnimIfIdle()
-	}
-}
-
-func (a *animationComponent) stopMoveTweenVelocity(aniType coreproject.AniType) {
-	if aniType != coreproject.AniTypeMove {
-		return
-	}
-
-	physicsMode := a.sprite.PhysicsMode()
-	if a.sprite.g.physicsEnabled && physicsMode != NoPhysics && physicsMode != StaticPhysics {
-		a.sprite.SetVelocity(0, 0)
-	}
-}
-
-func (a *animationComponent) stopOwnedTweenPlaybackIfCurrent(ownedPlayback *animState) bool {
-	if ownedPlayback == nil || a.curAnimState != ownedPlayback {
-		return false
-	}
-
-	a.stopCurrentAnimState(ownedPlayback)
-	return true
+	})
 }
 
 // ============================================================================

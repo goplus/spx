@@ -27,12 +27,26 @@ import (
 // WaitMainThread runs call on the engine thread, directly when the platform allows.
 // Managed callers retain their script slice while waiting.
 func (p *Coroutines) WaitMainThread(call func()) {
+	p.waitMainThread(call, p.callerThread())
+}
+
+// CleanupMainThread ignores cancellation; shutdown waits for it to finish.
+// The call runs on the engine thread and must not yield.
+func (p *Coroutines) CleanupMainThread(call func()) {
+	p.waitMainThread(func() {
+		id, previous := p.enterCallback(callbackExclusive)
+		defer p.leaveCallback(id, previous)
+		call()
+	}, nil)
+}
+
+func (p *Coroutines) waitMainThread(call func(), caller Thread) {
 	if platform.TryCallEngineDirectly(call) {
 		return
 	}
 
 	pending := &mainThreadCall{
-		caller: p.callerThread(),
+		caller: caller,
 		done:   make(chan taskResult, 1),
 	}
 	p.enqueuePriorityJob(&WaitJob{
