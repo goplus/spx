@@ -176,8 +176,8 @@ func (p *SpriteImpl) bubble() *bubbleComponent {
 // -----------------------------------------------------------------------------
 
 func (p *SpriteImpl) playStateAnimationAndWait(stateName string) {
-	animName := p.getStateAnimName(stateName)
-	if animName == "" || !p.hasAnim(animName) {
+	animName := p.animation().getStateAnimName(stateName)
+	if animName == "" || !p.animation().hasAnim(animName) {
 		return
 	}
 	p.AnimateAndWait(animName)

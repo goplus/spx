@@ -81,22 +81,6 @@ func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
 // -----------------------------------------------------------------------------
 // Internal State
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) getStateAnimName(stateName string) string {
-	return p.animation().getStateAnimName(stateName)
-}
-
-func (p *SpriteImpl) hasAnim(animName string) bool {
-	return p.animation().hasAnim(animName)
-}
-
-func (p *SpriteImpl) getAnimation(animName SpriteAnimationName) (*coreproject.AniConfig, bool) {
-	return p.animation().getAnimation(animName)
-}
-
-func (p *SpriteImpl) onAnimationDone(animName string) {
-	p.animation().onAnimationDone(animName)
-}
-
 func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 	engine.Lock()
 	buffer = p.animation().takeDoneAnimations(buffer)
@@ -107,7 +91,7 @@ func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
 	}
 
 	for _, animName := range buffer {
-		p.onAnimationDone(animName)
+		p.animation().onAnimationDone(animName)
 	}
 	return buffer[:0]
 }

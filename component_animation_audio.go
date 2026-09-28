@@ -46,13 +46,6 @@ func (a *animationComponent) playOnPlayAudio(action *coreproject.ActionConfig, s
 	a.restartOnPlayAudio(state)
 }
 
-func (a *animationComponent) stopAnimationAudio(state *animState) {
-	if state == nil {
-		return
-	}
-	a.stopOnPlayAudio(state)
-}
-
 func (a *animationComponent) restartOnPlayAudio(state *animState) {
 	if state == nil {
 		return
@@ -85,7 +78,7 @@ func (a *animationComponent) restartOnPlayAudio(state *animState) {
 	}
 }
 
-func (a *animationComponent) stopOnPlayAudio(state *animState) {
+func (a *animationComponent) stopAnimationAudio(state *animState) {
 	if state == nil {
 		return
 	}

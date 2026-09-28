@@ -128,7 +128,7 @@ func (t *transformComponent) glide(x, y float64, secs float64) {
 	}
 
 	x0, y0 := t.getXY()
-	animName := t.sprite.getStateAnimName(StateGlide)
+	animName := t.sprite.animation().getStateAnimName(StateGlide)
 	t.sprite.animation().doTween(animName, nil, tweenParams{
 		aniType:  coreproject.AniTypeGlide,
 		duration: secs,
@@ -157,14 +157,14 @@ func (t *transformComponent) step(step, speed float64, animation SpriteAnimation
 
 func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnimationName) {
 	if animation == "" {
-		animation = t.sprite.getStateAnimName(StateStep)
+		animation = t.sprite.animation().getStateAnimName(StateStep)
 	}
 
 	from := mathf.NewVec2(t.x, t.y)
 	to := mathf.NewVec2(x, y)
 	distance := from.DistanceTo(to)
 
-	ani, ok := t.sprite.getAnimation(animation)
+	ani, ok := t.sprite.animation().getAnimation(animation)
 	if !ok {
 		t.setPosition(x, y)
 		return
@@ -530,10 +530,10 @@ func (t *transformComponent) doTurnAnimation(
 	fallback func(),
 ) {
 	if animation == "" {
-		animation = t.sprite.getStateAnimName(StateTurn)
+		animation = t.sprite.animation().getStateAnimName(StateTurn)
 	}
 
-	ani, ok := t.sprite.getAnimation(animation)
+	ani, ok := t.sprite.animation().getAnimation(animation)
 	if !ok {
 		fallback()
 		return
