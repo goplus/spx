@@ -97,7 +97,7 @@ func (g *Generator) writeManager(codegenDir string) error {
 		"managerBody":      g.managerBody,
 	}
 
-	return common.GenerateFile(funcs, "manager_native.gen.go", managerNativeText, g.ManagerData(),
+	return common.GenerateFile(funcs, "manager_native.gen.go", managerNativeText+common.ManagerTemplate, g.ManagerData(),
 		filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go"))
 }
 
