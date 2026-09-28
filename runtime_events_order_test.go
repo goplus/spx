@@ -73,8 +73,8 @@ func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImp
 
 	back := newEventOrderSprite(game, "back")
 	front := newEventOrderSprite(game, "front")
-	game.addShape(back)
-	game.addShape(front)
+	game.shapeMgr.add(back)
+	game.shapeMgr.add(front)
 	game.shapeMgr.updateRenderLayers()
 	return co, game, back, front
 }
@@ -217,7 +217,7 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	var log eventOrderLog
 
 	front := newEventOrderSprite(game, "front")
-	game.addShape(front)
+	game.shapeMgr.add(front)
 	game.shapeMgr.updateRenderLayers()
 
 	game.OnMsg__1("clone-order", func() { log.add("stage") })
@@ -230,7 +230,7 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	clone := newEventOrderSprite(game, "source-clone")
 	clone.spriteState.Cloned = true
 	clone.OnMsg__1("clone-order", func() { log.add("clone") })
-	game.addClonedShape(source, clone)
+	game.shapeMgr.addClonedShape(source, clone)
 
 	if got, want := game.getAllShapes(), []Shape{back, clone, source, front}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("test clone layer order = %v, want %v", got, want)

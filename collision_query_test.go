@@ -33,8 +33,8 @@ func newTouchingPair(t *testing.T, physics bool) (*Game, *touchingSyncSpriteMgr,
 	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
 	target := newTouchingQuerySprite("target", 0, 0, 2)
 	receiver.g, target.g = game, game
-	game.addShape(&receiver.SpriteImpl)
-	game.addShape(&target.SpriteImpl)
+	game.shapeMgr.add(&receiver.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
 	mgr.positions[1] = mathf.NewVec2(0, 0)
 	mgr.positions[2] = mathf.NewVec2(0, 0)
 	return game, mgr, receiver, target
@@ -67,11 +67,11 @@ func TestTouchingNameReadsCurrentState(t *testing.T) {
 	if !receiver.Touching__1("target") {
 		t.Fatal("same-frame show was missed")
 	}
-	game.removeShape(&target.SpriteImpl)
+	game.shapeMgr.removeShape(&target.SpriteImpl)
 	if receiver.Touching__1("target") {
 		t.Fatal("removed target touched receiver")
 	}
-	game.addShape(&target.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
 	if !receiver.Touching__1("target") {
 		t.Fatal("re-added target was missed")
 	}
@@ -196,11 +196,11 @@ func TestTouchingNameSeesCloneImmediately(t *testing.T) {
 	clone.g = game
 	clone.spriteState.Cloned = true
 	mgr.positions[3] = mathf.NewVec2(0, 0)
-	game.addShape(&clone.SpriteImpl)
+	game.shapeMgr.add(&clone.SpriteImpl)
 	if !receiver.Touching__1("target") {
 		t.Fatal("new clone was missed")
 	}
-	game.removeShape(&clone.SpriteImpl)
+	game.shapeMgr.removeShape(&clone.SpriteImpl)
 	if receiver.Touching__1("target") {
 		t.Fatal("removed clone still touched receiver")
 	}
@@ -219,13 +219,13 @@ func TestTouchingNameFollowsShapeOrder(t *testing.T) {
 	clone := newTouchingQuerySprite("target", 0, 0, 3)
 	clone.g = game
 	clone.spriteState.Cloned = true
-	game.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
+	game.shapeMgr.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
 	first(&clone.SpriteImpl)
-	game.activateShape(&clone.SpriteImpl)
+	game.shapeMgr.activateShape(&clone.SpriteImpl)
 	first(&target.SpriteImpl)
-	game.goBackLayers(&target.SpriteImpl, -1)
+	game.shapeMgr.goBackLayers(&target.SpriteImpl, -1)
 	first(&clone.SpriteImpl)
-	game.removeShape(&target.SpriteImpl)
+	game.shapeMgr.removeShape(&target.SpriteImpl)
 	first(&clone.SpriteImpl)
 	game.shapeMgr.init()
 	if game.shapeMgr.named != nil {
@@ -259,7 +259,7 @@ func BenchmarkTouchingName(b *testing.B) {
 			game.initShapeMgr()
 			receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
 			receiver.g = game
-			game.addShape(&receiver.SpriteImpl)
+			game.shapeMgr.add(&receiver.SpriteImpl)
 			mgr.positions[1] = mathf.NewVec2(0, 0)
 			for i := range 300 {
 				name := "other"
@@ -268,7 +268,7 @@ func BenchmarkTouchingName(b *testing.B) {
 				}
 				target := newTouchingQuerySprite(name, float64(1000+i*10), 0, int64(i+2))
 				target.g = game
-				game.addShape(&target.SpriteImpl)
+				game.shapeMgr.add(&target.SpriteImpl)
 			}
 			b.ReportAllocs()
 			b.ResetTimer()

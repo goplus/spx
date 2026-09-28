@@ -63,7 +63,7 @@ func (p *Game) inputEventLoop(coroutine.Thread) {
 
 func (p *Game) logicLoop(coroutine.Thread) {
 	coreruntime.RunLogicLoop(coreruntime.LogicLoopConfig[Shape]{
-		Items: p.getTempShapes,
+		Items: p.shapeMgr.getTempShapes,
 		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
 			sprite, ok := item.(*SpriteImpl)
 			if !ok {

@@ -242,8 +242,8 @@ func TestGameGetTargetReturnsNamedSprite(t *testing.T) {
 	var game Game
 	clone := newTargetLookupSprite(&game, "Hero", true)
 	target := newTargetLookupSprite(&game, "Hero", false)
-	game.addShape(&clone.SpriteImpl)
-	game.addShape(&target.SpriteImpl)
+	game.shapeMgr.add(&clone.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
 
 	if got := game.GetTarget("Hero"); got != &target.SpriteImpl {
 		t.Fatalf("GetTarget(%q) = %v, want %v", "Hero", got, &target.SpriteImpl)
@@ -252,7 +252,7 @@ func TestGameGetTargetReturnsNamedSprite(t *testing.T) {
 
 func TestGameGetTargetReturnsNilWithoutMatch(t *testing.T) {
 	var game Game
-	game.addShape(&newTargetLookupSprite(&game, "Hero", true).SpriteImpl)
+	game.shapeMgr.add(&newTargetLookupSprite(&game, "Hero", true).SpriteImpl)
 
 	for _, target := range []string{"", "Missing", "hero"} {
 		if got := game.GetTarget(target); got != nil {
@@ -265,10 +265,10 @@ func TestGameGetTargetReturnsNilAfterTargetIsRemoved(t *testing.T) {
 	var game Game
 	target := newTargetLookupSprite(&game, "Hero", false)
 	clone := newTargetLookupSprite(&game, "Hero", true)
-	game.addShape(&target.SpriteImpl)
-	game.addShape(&clone.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
+	game.shapeMgr.add(&clone.SpriteImpl)
 
-	game.removeShape(&target.SpriteImpl)
+	game.shapeMgr.removeShape(&target.SpriteImpl)
 
 	if got := game.GetTarget("Hero"); got != nil {
 		t.Fatalf("GetTarget(%q) after target removal = %v, want nil", "Hero", got)

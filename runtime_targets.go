@@ -21,7 +21,7 @@ func (p *Game) resolveTargetPosition(target Target) (float64, float64, bool) {
 	var targetSprite *SpriteImpl
 	switch target := target.(type) {
 	case SpriteName:
-		targetSprite = p.findSprite(target)
+		targetSprite = p.shapeMgr.findSprite(target)
 	case Sprite:
 		targetSprite = spriteOf(target)
 	case specialObj:

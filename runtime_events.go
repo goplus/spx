@@ -268,7 +268,7 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 }
 
 func (p *Game) findClickTarget(point mathf.Vec2) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
-	return coreruntime.FindClickTarget(p.getTempShapes(), func(item Shape) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
+	return coreruntime.FindClickTarget(p.shapeMgr.getTempShapes(), func(item Shape) (coreruntime.ClickSelection[clicker, *SpriteImpl], bool) {
 		o, ok := item.(clicker)
 		if !ok {
 			return coreruntime.ClickSelection[clicker, *SpriteImpl]{}, false

@@ -16,6 +16,14 @@
 
 package spx
 
+func (p *Game) getAllShapes() []Shape {
+	return p.shapeMgr.all()
+}
+
+func (p *SpriteImpl) getAllShapes() []Shape {
+	return p.g.shapeMgr.all()
+}
+
 // GetWidget returns the widget instance with given name. It panics if not found.
 // Instead of being used directly, it is meant to be called by `XGot_Game_XGox_GetWidget` only.
 // We extract `GetWidget` to keep `XGot_Game_XGox_GetWidget` simple, which simplifies work in ispx,

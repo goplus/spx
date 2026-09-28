@@ -66,7 +66,7 @@ func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
 	originalBubble := original.bubble()
 	originalText := &textBubble{bubbleBase: original.newBubbleBase()}
 	originalBubble.textObj = originalText
-	game.addShape(originalText)
+	game.shapeMgr.add(originalText)
 
 	clone := createRuntimeClone(&original.SpriteImpl)
 	if clone.components.bubble != nil {
@@ -82,7 +82,7 @@ func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
 	}
 	cloneText := &textBubble{bubbleBase: clone.newBubbleBase()}
 	cloneBubble.textObj = cloneText
-	game.addShape(cloneText)
+	game.shapeMgr.add(cloneText)
 
 	clone.Destroy()
 	if cloneBubble.textObj != nil || cloneBubble.quoteObj != nil {

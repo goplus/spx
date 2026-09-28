@@ -146,7 +146,7 @@ func TestCloneSoundEffectsFromStageInstance(t *testing.T) {
 	template.SetSoundEffect(SoundPanEffect, -40)
 	var instance cloneLimitSprite
 	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteProperties{})
-	game.addShape(&instance.SpriteImpl)
+	game.shapeMgr.add(&instance.SpriteImpl)
 	instance.SetSoundEffect(SoundPanEffect, 20)
 	child := createRuntimeClone(&instance.SpriteImpl)
 	if child.GetSoundEffect(SoundPanEffect) != 20 {

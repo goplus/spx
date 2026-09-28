@@ -198,7 +198,7 @@ func (p *Game) Answer() string {
 // GetTarget returns the implementation of the first active, non-cloned sprite
 // with the specified name. It returns nil if no matching sprite exists.
 func (p *Game) GetTarget(target string) *SpriteImpl {
-	return p.findSprite(target)
+	return p.shapeMgr.findSprite(target)
 }
 
 func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
@@ -254,7 +254,7 @@ func (p *Game) getMousePos() (x, y float64) {
 func (p *Game) ask(isSprite bool, question string, callback func(string)) {
 	if p.dialogState.AskPanel == nil {
 		p.dialogState.AskPanel = ui.NewUiAsk()
-		p.addShape(p.dialogState.AskPanel)
+		p.shapeMgr.add(p.dialogState.AskPanel)
 	}
 	hasAnswer := false
 	p.dialogState.AskPanel.Show(isSprite, question, func(msg string) {

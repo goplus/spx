@@ -46,7 +46,7 @@ func TestClonePenStateFromStageInstance(t *testing.T) {
 	template.pen().penWidth = 5
 	var instance cloneLimitSprite
 	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteProperties{})
-	game.addShape(&instance.SpriteImpl)
+	game.shapeMgr.add(&instance.SpriteImpl)
 	instance.pen().penWidth = 10
 	child := createRuntimeClone(&instance.SpriteImpl)
 	if child.pen().penWidth != 10 {

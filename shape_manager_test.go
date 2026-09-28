@@ -29,7 +29,7 @@ func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
 	for _, name := range names {
 		spr := &SpriteImpl{g: game, name: name}
 		sprites[name] = spr
-		game.addShape(spr)
+		game.shapeMgr.add(spr)
 	}
 	game.shapeMgr.updateRenderLayers()
 	return game, sprites
@@ -173,7 +173,7 @@ func TestRemovingSpriteReindexesRemainingLayersAbovePen(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			game, sprites := newLayerOrderTestGame("A", "B", "C")
-			game.removeShape(sprites[tt.remove])
+			game.shapeMgr.removeShape(sprites[tt.remove])
 			assertLayerOrder(t, game, tt.want)
 		})
 	}

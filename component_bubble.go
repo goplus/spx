@@ -79,10 +79,10 @@ func (b *bubbleComponent) upsertText(msg string, style int) {
 	b.mu.Unlock()
 
 	if created {
-		b.sprite.g.addShape(textObj)
+		b.sprite.g.shapeMgr.add(textObj)
 		return
 	}
-	b.sprite.g.activateShape(textObj)
+	b.sprite.g.shapeMgr.activateShape(textObj)
 }
 
 func (b *bubbleComponent) upsertQuote(message, description string) {
@@ -107,10 +107,10 @@ func (b *bubbleComponent) upsertQuote(message, description string) {
 	b.mu.Unlock()
 
 	if created {
-		b.sprite.g.addShape(quoteObj)
+		b.sprite.g.shapeMgr.add(quoteObj)
 		return
 	}
-	b.sprite.g.activateShape(quoteObj)
+	b.sprite.g.shapeMgr.activateShape(quoteObj)
 }
 
 func (b *bubbleComponent) stopText() {
@@ -147,5 +147,5 @@ func (b *bubbleComponent) stopAll() {
 func (b *bubbleComponent) stopBubble(obj bubbleShape) {
 	engine.RequestRedraw()
 	obj.destroyPanel()
-	b.sprite.g.removeShape(obj)
+	b.sprite.g.shapeMgr.removeShape(obj)
 }
