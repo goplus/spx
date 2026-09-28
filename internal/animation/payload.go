@@ -73,73 +73,49 @@ func BuildPayloadJSON(cfg Config, costumes []FrameSource, isAtlas bool) (string,
 		)
 	}
 
-	payload, maxBitmap := buildPayload(cfg, costumes, isAtlas)
+	payload := buildPayload(cfg, costumes, isAtlas)
 	bin, err := json.Marshal(payload)
 	if err != nil {
 		return "", 0, fmt.Errorf("createAnimation: failed to marshal animation payload: %w", err)
 	}
-	return string(bin), maxBitmap, nil
+	return string(bin), int(payload.MaxBitmap), nil
 }
 
-func buildPayload(cfg Config, costumes []FrameSource, isAtlas bool) (payload, int) {
+func buildPayload(cfg Config, costumes []FrameSource, isAtlas bool) payload {
+	result := payload{}
 	if isAtlas {
-		return buildAtlasPayload(cfg, costumes), 1
+		result.BasePath = engine.ToAssetPath(costumes[0].Path)
+		result.MaxBitmap = 1
 	}
-	return buildNormalPayload(cfg, costumes)
-}
-
-func buildNormalPayload(cfg Config, costumes []FrameSource) (payload, int) {
-	maxBitmap := 0
 	step := 1
 	if cfg.FrameTo < cfg.FrameFrom {
 		step = -1
 	}
 	frameCount := (cfg.FrameTo-cfg.FrameFrom)*step + 1
-	frames := make([]any, 0, frameCount)
+	result.Frames = make([]any, 0, frameCount)
 	for i := cfg.FrameFrom; i != cfg.FrameTo+step; i += step {
 		c := costumes[i]
-		b := assetutil.ToBitmapResolution(c.BitmapResolution)
-		if b > maxBitmap {
-			maxBitmap = b
+		if isAtlas {
+			result.Frames = append(result.Frames, frameAtlas{
+				X: int64(c.PosX),
+				Y: int64(c.PosY),
+				W: int64(c.Width),
+				H: int64(c.Height),
+			})
+			continue
 		}
+		b := int64(assetutil.ToBitmapResolution(c.BitmapResolution))
+		result.MaxBitmap = max(result.MaxBitmap, b)
 		path := engine.ToAssetPath(c.Path)
 		half := mathf.Vec2.Mulf(c.ImageSize, 0.5)
-		frames = append(frames, frameNormal{
+		result.Frames = append(result.Frames, frameNormal{
 			Path: path,
 			Offset: [2]float64{
 				c.Center.X - half.X,
 				-(c.Center.Y - half.Y),
 			},
-			Bitmap: int64(b),
+			Bitmap: b,
 		})
 	}
-	return payload{
-		Frames:    frames,
-		MaxBitmap: int64(maxBitmap),
-	}, maxBitmap
-}
-
-func buildAtlasPayload(cfg Config, costumes []FrameSource) payload {
-	base := engine.ToAssetPath(costumes[0].Path)
-	step := 1
-	if cfg.FrameTo < cfg.FrameFrom {
-		step = -1
-	}
-	frameCount := (cfg.FrameTo-cfg.FrameFrom)*step + 1
-	frames := make([]any, 0, frameCount)
-	for i := cfg.FrameFrom; i != cfg.FrameTo+step; i += step {
-		c := costumes[i]
-		frames = append(frames, frameAtlas{
-			X:      int64(c.PosX),
-			Y:      int64(c.PosY),
-			W:      int64(c.Width),
-			H:      int64(c.Height),
-			Offset: [2]float64{0, 0},
-		})
-	}
-	return payload{
-		BasePath:  base,
-		Frames:    frames,
-		MaxBitmap: 1,
-	}
+	return result
 }

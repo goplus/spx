@@ -18,6 +18,10 @@ package animation
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -152,8 +156,65 @@ func TestBuildPayloadJSONNormalReverse(t *testing.T) {
 }
 
 func TestBuildPayloadJSONBoundsError(t *testing.T) {
-	_, _, err := BuildPayloadJSON(Config{FrameFrom: -1, FrameTo: 0}, nil, false)
-	if err == nil {
-		t.Fatal("BuildPayloadJSON error = nil, want non-nil")
+	tests := []struct {
+		name     string
+		config   Config
+		costumes []FrameSource
+		want     string
+	}{
+		{"empty", Config{FrameFrom: -1}, nil, "createAnimation: no costumes configured"},
+		{"negative from", Config{FrameFrom: -1}, []FrameSource{{}}, "createAnimation: frame index out of bounds (from=-1, to=0, costumes=1)"},
+		{"negative to", Config{FrameTo: -1}, []FrameSource{{}}, "createAnimation: frame index out of bounds (from=0, to=-1, costumes=1)"},
+		{"from past end", Config{FrameFrom: 1}, []FrameSource{{}}, "createAnimation: frame index out of bounds (from=1, to=0, costumes=1)"},
+		{"to past end", Config{FrameTo: 1}, []FrameSource{{}}, "createAnimation: frame index out of bounds (from=0, to=1, costumes=1)"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, isAtlas := range []bool{false, true} {
+				got, bitmap, err := BuildPayloadJSON(test.config, test.costumes, isAtlas)
+				if err == nil || err.Error() != test.want || got != "" || bitmap != 0 {
+					t.Fatalf("BuildPayloadJSON(atlas=%v) = (%q, %d, %v), want empty/0/%q", isAtlas, got, bitmap, err, test.want)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildPayloadJSONAtlasIgnoresNormalMetadata(t *testing.T) {
+	costumes := []FrameSource{
+		{Path: "sprites/base.png"},
+		{
+			Path: "sprites/other.png", PosX: 10, PosY: 20, Width: 30, Height: 40,
+			BitmapResolution: 8, Center: mathf.NewVec2(math.NaN(), 0), ImageSize: mathf.NewVec2(0, math.Inf(1)),
+		},
+		{Path: "sprites/another.png", PosX: 50, PosY: 60, Width: 70, Height: 80},
+	}
+	const first = `{"x":10,"y":20,"w":30,"h":40,"offset":[0,0]}`
+	const second = `{"x":50,"y":60,"w":70,"h":80,"offset":[0,0]}`
+	tests := []struct {
+		name   string
+		config Config
+		frames string
+	}{
+		{"single", Config{FrameFrom: 1, FrameTo: 1}, "[" + first + "]"},
+		{"forward", Config{FrameFrom: 1, FrameTo: 2}, "[" + first + "," + second + "]"},
+		{"reverse", Config{FrameFrom: 2, FrameTo: 1}, "[" + second + "," + first + "]"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, bitmap, err := BuildPayloadJSON(test.config, costumes, true)
+			want := `{"base_path":` + strconv.Quote(engine.ToAssetPath(costumes[0].Path)) + `,"frames":` + test.frames + `,"max_bitmap":1}`
+			if err != nil || got != want || bitmap != 1 {
+				t.Fatalf("BuildPayloadJSON() = (%q, %d, %v), want (%q, 1, nil)", got, bitmap, err, want)
+			}
+		})
+	}
+}
+
+func TestBuildPayloadJSONRejectsNonFiniteNormalOffset(t *testing.T) {
+	got, bitmap, err := BuildPayloadJSON(Config{}, []FrameSource{{Center: mathf.NewVec2(math.NaN(), 0)}}, false)
+	var unsupported *json.UnsupportedValueError
+	if !errors.As(err, &unsupported) || !strings.HasPrefix(err.Error(), "createAnimation: failed to marshal animation payload:") || got != "" || bitmap != 0 {
+		t.Fatalf("BuildPayloadJSON() = (%q, %d, %v), want empty/0/wrapped JSON error", got, bitmap, err)
 	}
 }
