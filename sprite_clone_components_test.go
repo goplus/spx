@@ -11,7 +11,7 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	parent := createRuntimeClone(&original.SpriteImpl)
 	parent.SetXYpos(30, -15)
 	parent.SetHeading(90)
-	parent.physics().mass = 7
+	parent.SetPhysicsMode(DynamicPhysics)
 	parent.physics().collisionTargets["touching"] = true
 	parent.pen().penWidth = 50
 	parent.SetSoundEffect(SoundPanEffect, 80)
@@ -35,8 +35,8 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	if child.Xpos() != 30 || child.Ypos() != -15 || child.Heading() != 90 {
 		t.Fatalf("transform = (%v, %v, %v), want parent transform (30, -15, 90)", child.Xpos(), child.Ypos(), child.Heading())
 	}
-	if child.physics().mass != 7 {
-		t.Fatalf("mass = %v, want parent mass 7", child.physics().mass)
+	if child.PhysicsMode() != DynamicPhysics {
+		t.Fatalf("physics mode = %v, want parent mode %v", child.PhysicsMode(), DynamicPhysics)
 	}
 	childAnimation := child.animation()
 	if childAnimation.shared != parentAnimation.shared {
@@ -49,13 +49,13 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	}
 
 	child.SetXpos(99)
-	child.physics().mass = 9
+	child.SetPhysicsMode(StaticPhysics)
 	child.pen().penWidth = 9
 	child.SetSoundEffect(SoundPanEffect, 90)
-	if parent.Xpos() != 30 || parent.physics().mass != 7 || parent.pen().penWidth != 50 || parent.GetSoundEffect(SoundPanEffect) != 80 {
+	if parent.Xpos() != 30 || parent.PhysicsMode() != DynamicPhysics || parent.pen().penWidth != 50 || parent.GetSoundEffect(SoundPanEffect) != 80 {
 		t.Fatal("changing descendant state changed the parent")
 	}
-	if original.Xpos() != 0 || original.physics().mass != 1 || original.pen().penWidth != 7 || original.GetSoundEffect(SoundPanEffect) != 20 {
+	if original.Xpos() != 0 || original.PhysicsMode() != NoPhysics || original.pen().penWidth != 7 || original.GetSoundEffect(SoundPanEffect) != 20 {
 		t.Fatal("changing descendant state changed the original")
 	}
 }
