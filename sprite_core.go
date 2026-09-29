@@ -20,7 +20,6 @@ import (
 	"maps"
 	"reflect"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	corestate "github.com/goplus/spx/v3/internal/core/state"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
@@ -113,32 +112,6 @@ func (p *SpriteImpl) markProxyDirty() {
 func (p *SpriteImpl) markVisualDirty() {
 	p.requestRedrawIfVisible()
 	p.spriteState.VisualVersion++
-}
-
-// -----------------------------------------------------------------------------
-// Initialization
-// -----------------------------------------------------------------------------
-type spriteInitContext struct {
-	game          *Game
-	name          string
-	owner         reflect.Value
-	sprite        Sprite
-	config        *coreproject.SpriteConfig
-	costumeLayout *coreproject.CostumeLayout
-}
-
-func (p *SpriteImpl) init(ctx spriteInitContext) {
-	p.baseObj.initSpriteCostumes(ctx.config, ctx.costumeLayout)
-	p.spriteState.DefaultCostumeIndex = p.baseObj.costumeIndex
-	p.scriptEventBindings.bind(&ctx.game.scriptEvents, p)
-
-	p.gamer = ctx.owner
-	p.g, p.name, p.sprite = ctx.game, ctx.name, ctx.sprite
-	p.runtimeState.Scale = ctx.config.Size
-	p.spriteState.IsVisible = ctx.config.Visible
-
-	p.components.initComponents(p, ctx.config)
-	p.initRuntimeProxy()
 }
 
 // -----------------------------------------------------------------------------

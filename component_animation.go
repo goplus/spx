@@ -18,11 +18,9 @@ package spx
 
 import (
 	"maps"
-	"math"
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -73,14 +71,9 @@ type tweenParams struct {
 // Lifecycle
 // ============================================================================
 
-// initialize initializes the animation component from configuration.
+// initialize initializes the animation component from prepared configuration.
 func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	a.sprite = sprite
-	a.initFromConfig(spriteCfg)
-}
-
-// initFromConfig initializes animations from sprite configuration.
-func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig) {
 	a.shared = &sharedAnimationData{
 		defaultAnimation: spriteCfg.DefaultAnimation,
 		animations:       make(map[SpriteAnimationName]*animationEntry, len(spriteCfg.FAnimations)),
@@ -88,13 +81,6 @@ func (a *animationComponent) initFromConfig(spriteCfg *coreproject.SpriteConfig)
 	}
 
 	for name, ani := range spriteCfg.FAnimations {
-		defaults.SetDefaultIfZero(&ani.FrameFps, 25)
-		defaults.SetDefaultIfZero(&ani.TurnToDuration, 1.0)
-		defaults.SetDefaultIfZero(&ani.StepDuration, 0.01)
-
-		ani.IFrameFrom, ani.IFrameTo = a.costumeIndex(ani.FrameFrom), a.costumeIndex(ani.FrameTo)
-		ani.Speed = 1
-		ani.Duration = (math.Abs(float64(ani.IFrameFrom-ani.IFrameTo)) + 1) / float64(ani.FrameFps)
 		a.shared.animations[name] = &animationEntry{
 			name:         name,
 			config:       ani,
@@ -340,14 +326,6 @@ func (a *animationComponent) cancelAnimState(state *animState) int64 {
 // ============================================================================
 // Animation Lookup
 // ============================================================================
-
-func (a *animationComponent) costumeIndex(nameOrIndex any) int {
-	index, ok := a.sprite.costumeLayout.ResolveFrameIndex(nameOrIndex)
-	if !ok {
-		spxlog.Panicf("FindCostume failed for %s", nameOrIndex)
-	}
-	return index
-}
 
 func (a *animationComponent) hasAnim(animName string) bool {
 	_, ok := a.shared.animations[animName]

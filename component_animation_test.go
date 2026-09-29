@@ -102,21 +102,25 @@ func newTestAnimationComponent() *animationComponent {
 	return anim
 }
 
-func TestInitFromConfigBuildsSingleAnimationEntryMap(t *testing.T) {
+func TestAnimationInitializeBuildsSingleAnimationEntryMap(t *testing.T) {
 	sprite := &SpriteImpl{name: "TestSprite"}
 	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
-	walk := &coreproject.AniConfig{FrameFrom: 0, FrameTo: 0}
-	idle := &coreproject.AniConfig{FrameFrom: 0, FrameTo: 0}
-	config := &coreproject.SpriteConfig{
+	prepared, err := prepareSpriteConfig(&coreproject.SpriteConfig{
+		Costumes:         []*coreproject.CostumeConfig{{Name: "default"}},
 		DefaultAnimation: "idle",
 		FAnimations: map[string]*coreproject.AniConfig{
-			"idle": idle,
-			"walk": walk,
+			"idle": {FrameFrom: 0, FrameTo: 0},
+			"walk": {FrameFrom: 0, FrameTo: 0},
 		},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
+	config := &prepared.config
+	walk := config.FAnimations["walk"]
 
-	anim := &animationComponent{sprite: sprite}
-	anim.initFromConfig(config)
+	anim := &animationComponent{}
+	anim.initialize(sprite, config)
 
 	if len(anim.shared.animations) != 2 {
 		t.Fatalf("animation entries = %d, want 2", len(anim.shared.animations))
