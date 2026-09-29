@@ -18,9 +18,13 @@ package spx
 
 import (
 	"fmt"
+	"maps"
+	"math"
 	"reflect"
+	"slices"
 	"unsafe"
 
+	"github.com/goplus/spx/v3/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/engine/platform"
@@ -30,36 +34,99 @@ import (
 
 type spriteLoader func(sprite Sprite, name string, gamer reflect.Value) error
 
+type preparedSprite struct {
+	config coreproject.SpriteConfig
+	layout *coreproject.CostumeLayout
+}
+
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
 	spxlog.Debug("LoadSprite: %s", name)
 	loaded, err := coreproject.LoadSpriteConfig(p.fs, name)
 	if err != nil {
 		return err
 	}
-	return p.loadSpriteConfig(sprite, name, gamer, &loaded.Config)
-}
-
-func (p *Game) loadSpriteConfig(sprite Sprite, name string, gamer reflect.Value, cfg *coreproject.SpriteConfig) error {
-	layout, err := coreproject.PrepareCostumeLayout(cfg)
+	prepared, err := prepareSpriteConfig(&loaded.Config)
 	if err != nil {
-		return fmt.Errorf("prepare sprite %q costumes: %w", name, err)
+		return fmt.Errorf("sprite config %q: %w", name, err)
 	}
-	return p.loadSpriteConfigWithLayout(sprite, name, gamer, cfg, layout)
+	return p.loadPreparedSprite(sprite, name, gamer, &prepared)
 }
 
-func (p *Game) loadSpriteConfigWithLayout(sprite Sprite, name string, gamer reflect.Value, cfg *coreproject.SpriteConfig, layout *coreproject.CostumeLayout) error {
+func prepareSpriteConfig(config *coreproject.SpriteConfig) (preparedSprite, error) {
+	layout, err := coreproject.PrepareCostumeLayout(config)
+	if err != nil {
+		return preparedSprite{}, err
+	}
+	preparedAnimations, err := prepareFrameAnimations(config.FAnimations, layout)
+	if err != nil {
+		return preparedSprite{}, err
+	}
+	preparedConfig := *config
+	preparedConfig.FAnimations = preparedAnimations
+	return preparedSprite{config: preparedConfig, layout: layout}, nil
+}
+
+func prepareFrameAnimations(animations map[string]*coreproject.AniConfig, layout *coreproject.CostumeLayout) (map[string]*coreproject.AniConfig, error) {
+	if animations == nil {
+		return nil, nil
+	}
+	prepared := make(map[string]*coreproject.AniConfig, len(animations))
+	for _, name := range slices.Sorted(maps.Keys(animations)) {
+		animation := animations[name]
+		if animation == nil {
+			return nil, fmt.Errorf("fAnimations[%q] is null", name)
+		}
+		frameFrom, err := prepareAnimationFrame(name, "frameFrom", animation.FrameFrom, layout)
+		if err != nil {
+			return nil, err
+		}
+		frameTo, err := prepareAnimationFrame(name, "frameTo", animation.FrameTo, layout)
+		if err != nil {
+			return nil, err
+		}
+
+		definition := *animation
+		defaults.SetDefaultIfZero(&definition.FrameFps, 25)
+		defaults.SetDefaultIfZero(&definition.TurnToDuration, 1.0)
+		defaults.SetDefaultIfZero(&definition.StepDuration, 0.01)
+		definition.IFrameFrom = frameFrom
+		definition.IFrameTo = frameTo
+		definition.Speed = 1
+		definition.Duration = (math.Abs(float64(frameFrom-frameTo)) + 1) / float64(definition.FrameFps)
+		prepared[name] = &definition
+	}
+	return prepared, nil
+}
+
+func prepareAnimationFrame(animation, field string, value any, layout *coreproject.CostumeLayout) (int, error) {
+	index, ok := layout.ResolveFrameIndex(value)
+	if !ok {
+		return 0, fmt.Errorf("fAnimations[%q].%s references missing costume %q", animation, field, value)
+	}
+	costumeCount := len(layout.Frames)
+	if index < 0 || index >= costumeCount {
+		return 0, fmt.Errorf("fAnimations[%q].%s index %d is outside %d costumes", animation, field, index, costumeCount)
+	}
+	return index, nil
+}
+
+func (p *Game) loadPreparedSprite(sprite Sprite, name string, gamer reflect.Value, prepared *preparedSprite) error {
 	vSpr := reflect.ValueOf(sprite).Elem()
 	vSpr.Set(reflect.Zero(vSpr.Type()))
 	base := vSpr.Field(0).Addr().Interface().(*SpriteImpl)
-	// Paths in cfg are already normalized by coreproject.LoadSpriteConfig.
-	base.init(spriteInitContext{
-		game:          p,
-		name:          name,
-		owner:         gamer,
-		sprite:        sprite,
-		config:        cfg,
-		costumeLayout: layout,
-	})
+	// Paths in config are already normalized by coreproject.LoadSpriteConfig.
+	config := &prepared.config
+	base.initSpriteCostumes(config, prepared.layout)
+	base.spriteState.DefaultCostumeIndex = base.costumeIndex
+	base.scriptEventBindings.bind(&p.scriptEvents, base)
+
+	base.gamer = gamer
+	base.g, base.name, base.sprite = p, name, sprite
+	base.runtimeState.Scale = config.Size
+	base.spriteState.IsVisible = config.Visible
+
+	base.components.initComponents(base, config)
+	base.initRuntimeProxy()
 	p.sprs[name] = sprite
 	return bindSpriteOwner(vSpr, gamer)
 }

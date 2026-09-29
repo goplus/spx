@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -27,10 +28,25 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-func (p *Game) loadGame(resource any, generation uint64) error {
+func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	opened, err := coreproject.OpenBuilderResources(resource, nil)
 	if err != nil {
 		return err
+	}
+	ownsResources := true
+	defer func() {
+		if !ownsResources {
+			return
+		}
+		if closeErr := opened.FS.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close project resources: %w", closeErr))
+		}
+	}()
+
+	conf, proj := &opened.Config, &opened.Project
+	parseCommandLineFlags(conf)
+	if err := validateProjectConfig(proj); err != nil {
+		return fmt.Errorf("project config: %w", err)
 	}
 	if opened.AssetDir != "" {
 		engine.SetAssetDir(opened.AssetDir)
@@ -40,12 +56,11 @@ func (p *Game) loadGame(resource any, generation uint64) error {
 		return fmt.Errorf("apply project fonts: %w", err)
 	}
 
-	conf, proj := &opened.Config, &opened.Project
-	parseCommandLineFlags(conf)
 	p.applyRuntimeConfig(conf, proj)
 	setupGameSystems(p, proj)
 	gamer := reflect.ValueOf(p.gamer).Elem()
 	loadGameSprites(p, gamer, opened.FS, proj)
+	ownsResources = false
 	p.loadStage(gamer, proj, generation, p.loadSprite, nil)
 
 	platform := &engine.Managers().PlatformMgr
@@ -71,13 +86,23 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 // -----------------------------------------------------------------------------
 func setupGameSystems(g *Game, proj *coreproject.ProjectConfig) {
 	settings := coreproject.ResolveSystemSettings(proj)
-	if settings.AutoSetCollisionLayer == g.physicsEnabled {
-		engine.Panic("invalid configuration: autoSetCollisionLayer and physics enabled state must not be the same")
-	}
 	engine.SetLayerSortMode(settings.LayerSortMode)
 	g.applyPathFinderSettings(settings)
 	g.applyAudioSettings(settings)
 	g.applyPhysicsSettings(settings)
+}
+
+func validateProjectConfig(project *coreproject.ProjectConfig) error {
+	for i, backdrop := range project.Backdrops {
+		if backdrop == nil {
+			return fmt.Errorf("backdrops[%d] is null", i)
+		}
+	}
+	settings := coreproject.ResolveSystemSettings(project)
+	if settings.AutoSetCollisionLayer == project.Physics {
+		return fmt.Errorf("autoSetCollisionLayer and physics must have different enabled states")
+	}
+	return nil
 }
 
 // -----------------------------------------------------------------------------

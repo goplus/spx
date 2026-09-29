@@ -938,7 +938,7 @@ func TestReloadCommitAllowsEmptyStageSpriteGroupWithoutPrototypeConfig(t *testin
 	}
 }
 
-func TestValidateReloadSpriteConfigLayout(t *testing.T) {
+func TestPrepareSpriteConfigRejectsInvalidLayout(t *testing.T) {
 	tests := []struct {
 		name      string
 		config    coreproject.SpriteConfig
@@ -986,15 +986,15 @@ func TestValidateReloadSpriteConfigLayout(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := validateReloadSpriteConfig(&test.config)
+			_, err := prepareSpriteConfig(&test.config)
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
-				t.Fatalf("validateReloadSpriteConfig error = %v, want substring %q", err, test.wantError)
+				t.Fatalf("prepareSpriteConfig error = %v, want substring %q", err, test.wantError)
 			}
 		})
 	}
 }
 
-func TestValidateReloadSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
+func TestPrepareSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
 	tests := []coreproject.SpriteConfig{
 		{Costumes: []*coreproject.CostumeConfig{{Name: "idle"}}},
 		{CostumeSet: &coreproject.CostumeSet{Nx: 2}},
@@ -1008,8 +1008,8 @@ func TestValidateReloadSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
 	}
 
 	for i := range tests {
-		if _, err := validateReloadSpriteConfig(&tests[i]); err != nil {
-			t.Errorf("validateReloadSpriteConfig(config %d) error = %v", i, err)
+		if _, err := prepareSpriteConfig(&tests[i]); err != nil {
+			t.Errorf("prepareSpriteConfig(config %d) error = %v", i, err)
 		}
 	}
 }

@@ -34,11 +34,6 @@ type reloadPlan struct {
 	tilemap         tm.LoadResult
 }
 
-type preparedSprite struct {
-	config coreproject.SpriteConfig
-	layout *coreproject.CostumeLayout
-}
-
 func (p *reloadPlan) requireSpriteConfig(name string) {
 	if _, ok := p.preparedSprites[name]; ok {
 		return
@@ -159,7 +154,7 @@ func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
 		if !ok {
 			return fmt.Errorf("reload plan has no sprite config for %q", name)
 		}
-		return g.loadSpriteConfigWithLayout(sprite, name, gamer, &prepared.config, prepared.layout)
+		return g.loadPreparedSprite(sprite, name, gamer, &prepared)
 	}
 }
 
@@ -176,7 +171,7 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 	if err := coreproject.LoadConfig(&plan.project, g.fs, index); err != nil {
 		return nil, fmt.Errorf("reload preflight: load project config: %w", err)
 	}
-	if err := validateReloadProjectConfig(&plan.project); err != nil {
+	if err := validateProjectConfig(&plan.project); err != nil {
 		return nil, fmt.Errorf("reload preflight: project config: %w", err)
 	}
 	loadedTilemap, err := tm.Load(g.fs, plan.project.TilemapPath)
@@ -213,29 +208,16 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
 		}
-		costumeLayout, err := validateReloadSpriteConfig(&loaded.Config)
+		prepared, err := prepareSpriteConfig(&loaded.Config)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
 		}
-		plan.preparedSprites[name] = preparedSprite{config: loaded.Config, layout: costumeLayout}
+		plan.preparedSprites[name] = prepared
 	}
 	if err := plan.validateCostumeOverrides(); err != nil {
 		return nil, fmt.Errorf("reload preflight: %w", err)
 	}
 	return plan, nil
-}
-
-func validateReloadProjectConfig(project *coreproject.ProjectConfig) error {
-	for i, backdrop := range project.Backdrops {
-		if backdrop == nil {
-			return fmt.Errorf("backdrops[%d] is null", i)
-		}
-	}
-	settings := coreproject.ResolveSystemSettings(project)
-	if settings.AutoSetCollisionLayer == project.Physics {
-		return fmt.Errorf("autoSetCollisionLayer and physics must have different enabled states")
-	}
-	return nil
 }
 
 func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
@@ -248,47 +230,4 @@ func validateReloadSprite(sprite Sprite, gamer reflect.Value) error {
 		return fmt.Errorf("sprite %s is missing leading SpriteImpl field", typ)
 	}
 	return bindSpriteOwner(v, gamer)
-}
-
-// validateReloadSpriteConfig rejects values that would panic during init.
-func validateReloadSpriteConfig(cfg *coreproject.SpriteConfig) (*coreproject.CostumeLayout, error) {
-	layout, err := coreproject.PrepareCostumeLayout(cfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateReloadAnimationMap("fAnimations", cfg.FAnimations, layout); err != nil {
-		return nil, err
-	}
-	return layout, nil
-}
-
-func validateReloadAnimationMap(kind string, animations map[string]*coreproject.AniConfig, layout *coreproject.CostumeLayout) error {
-	for name, animation := range animations {
-		if animation == nil {
-			return fmt.Errorf("%s[%q] is null", kind, name)
-		}
-		if err := validateReloadAnimationFrame(kind, name, "frameFrom", animation.FrameFrom, layout); err != nil {
-			return err
-		}
-		if err := validateReloadAnimationFrame(kind, name, "frameTo", animation.FrameTo, layout); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateReloadAnimationFrame(kind, animation, field string, value any, layout *coreproject.CostumeLayout) error {
-	if value == nil {
-		return nil
-	}
-
-	index, ok := layout.ResolveFrameIndex(value)
-	if !ok {
-		return fmt.Errorf("%s[%q].%s references missing costume %q", kind, animation, field, value)
-	}
-	costumeCount := len(layout.Frames)
-	if index < 0 || index >= costumeCount {
-		return fmt.Errorf("%s[%q].%s index %d is outside %d costumes", kind, animation, field, index, costumeCount)
-	}
-	return nil
 }
