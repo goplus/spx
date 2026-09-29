@@ -179,7 +179,7 @@ func (s *inputSession) close(reason string) InputSessionStatus {
 	s.environment.stop()
 	ResetRandomSeed()
 	engine.DiscardPendingKeyEvents()
-	engine.SetMouseEventCaptureEnabled(false)
+	engine.DiscardPendingMouseEvents()
 	return status
 }
 
@@ -457,9 +457,9 @@ func newInputSession(plan *inputSessionPlan, generation uint64) (*inputSession, 
 	}
 
 	engine.DiscardPendingKeyEvents()
+	engine.DiscardPendingMouseEvents()
 	session.environment.start(fixedTimestep)
 	setDeterministicRandomSeed(defaultInputSessionRandomSeed)
-	engine.SetMouseEventCaptureEnabled(true)
 	return session, nil
 }
 

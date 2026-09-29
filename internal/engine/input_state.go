@@ -41,12 +41,11 @@ type keyInputState struct {
 }
 
 type mouseInputState struct {
-	mu             sync.Mutex
-	buttons        [4]atomic.Bool
-	pending        []MouseEvent
-	ready          []MouseEvent
-	cachedButtons  uint8
-	captureEnabled bool
+	mu            sync.Mutex
+	buttons       [4]atomic.Bool
+	pending       []MouseEvent
+	ready         []MouseEvent
+	cachedButtons uint8
 }
 
 var (
@@ -93,9 +92,10 @@ func DiscardPendingKeyEvents() {
 	keyInput.discard()
 }
 
-// SetMouseEventCaptureEnabled switches ordered mouse-edge capture at a clean boundary.
-func SetMouseEventCaptureEnabled(enabled bool) {
-	mouseInput.setCaptureEnabled(enabled)
+// DiscardPendingMouseEvents starts a clean input-consumer boundary while
+// preserving the current held-button snapshot.
+func DiscardPendingMouseEvents() {
+	mouseInput.discard()
 }
 
 // ResetInputState clears process-wide input state at a game lifecycle boundary.
@@ -144,9 +144,7 @@ func queueMouseEvent(id int64, pressed bool) {
 		return
 	}
 	mouseInput.buttons[id].Store(pressed)
-	if mouseInput.captureEnabled {
-		mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
-	}
+	mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
 	mouseInput.mu.Unlock()
 }
 
@@ -156,12 +154,6 @@ func cacheKeyEvents() {
 
 func cacheMouseEvents() {
 	mouseInput.cache()
-}
-
-func resetMouseButtonStates() {
-	mouseInput.mu.Lock()
-	mouseInput.resetButtonsLocked()
-	mouseInput.mu.Unlock()
 }
 
 func (s *keyInputState) drain(dst []KeyEvent) []KeyEvent {
@@ -226,18 +218,19 @@ func (s *mouseInputState) drainInput(dst []MouseEvent) ([]MouseEvent, uint8) {
 	return dst, buttons
 }
 
-func (s *mouseInputState) setCaptureEnabled(enabled bool) {
+func (s *mouseInputState) discard() {
 	s.mu.Lock()
 	s.pending = s.pending[:0]
 	s.ready = s.ready[:0]
 	s.cachedButtons = s.buttonMask()
-	s.captureEnabled = enabled
 	s.mu.Unlock()
 }
 
 func (s *mouseInputState) reset() {
 	s.mu.Lock()
-	s.resetButtonsLocked()
+	for i := range s.buttons {
+		s.buttons[i].Store(false)
+	}
 	s.pending = nil
 	s.ready = nil
 	s.cachedButtons = 0
@@ -260,10 +253,4 @@ func (s *mouseInputState) buttonMask() uint8 {
 		}
 	}
 	return buttons
-}
-
-func (s *mouseInputState) resetButtonsLocked() {
-	for i := range s.buttons {
-		s.buttons[i].Store(false)
-	}
 }

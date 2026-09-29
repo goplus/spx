@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spbase/mathf"
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -212,6 +214,52 @@ func TestInputReplayRuntimePreservesShortClickWithinOneTick(t *testing.T) {
 	if status := session.status(); status.Phase != InputSessionPhaseFinishing || status.Completed || !status.Exhausted ||
 		!status.HasCurrentTick || status.CurrentTick != replayedTick.frame.Frame {
 		t.Fatalf("final replay tick status = %+v", status)
+	}
+}
+
+func TestLiveAndReplayInputSamplesMapToEquivalentEvents(t *testing.T) {
+	point := mathf.Vec2{X: 4, Y: 5}
+	mouseEvents := []engine.MouseEvent{
+		{Id: 1, IsPressed: true},
+		{Id: 1, IsPressed: false},
+	}
+	keyEvents := []engine.KeyEvent{
+		{Id: int64(KeyA), IsPressed: true},
+		{Id: int64(KeyB), IsPressed: false},
+	}
+	liveFrame := coreruntime.InputFrame{
+		Point:                  point,
+		MouseEvents:            mouseEvents,
+		KeyEvents:              keyEvents,
+		MouseMovementThreshold: mouseMovementThreshold,
+	}
+	replayFrame := coreruntime.InputFrame{
+		Point:                  point,
+		MouseEvents:            engineMouseEventsFromReplay(replayMouseEventsFromEngine(mouseEvents), nil),
+		KeyEvents:              engineKeyEventsFromReplay(replayKeyEventsFromEngine(keyEvents), nil),
+		MouseMovementThreshold: mouseMovementThreshold,
+	}
+
+	var liveState, replayState coreruntime.InputFrameState
+	var liveEvents, replayEvents []event
+	liveState.Process(liveFrame, inputFrameEventHooks(func(ev event) {
+		liveEvents = append(liveEvents, ev)
+	}))
+	replayState.Process(replayFrame, inputFrameEventHooks(func(ev event) {
+		replayEvents = append(replayEvents, ev)
+	}))
+
+	want := []event{
+		&eventLeftButtonDown{Pos: point},
+		&eventLeftButtonUp{Pos: point},
+		&eventMouseMove{Pos: point},
+		&eventKeyDown{Key: KeyA},
+	}
+	if !reflect.DeepEqual(liveEvents, want) {
+		t.Fatalf("live events = %#v, want %#v", liveEvents, want)
+	}
+	if !reflect.DeepEqual(replayEvents, liveEvents) {
+		t.Fatalf("replay events = %#v, live events = %#v", replayEvents, liveEvents)
 	}
 }
 
