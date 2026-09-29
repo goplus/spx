@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v3/fs"
@@ -34,8 +35,24 @@ import (
 const packedIndexJSON = "index_pack.json"
 
 type packedConfigDir struct {
-	base  spxfs.Dir
+	spxfs.Dir
 	index packedConfigIndex
+}
+
+type adaptedConfigDir interface {
+	isAdaptedConfigDir()
+}
+
+// rawConfigDir keeps engine-specific lookup below packedConfigDir so all
+// decoded configuration still passes through the installed overlay.
+type rawConfigDir struct {
+	spxfs.Dir
+	assetDir string
+}
+
+type rawReadDirConfigDir struct {
+	*rawConfigDir
+	spxfs.ReadDirer
 }
 
 type packedConfigIndex struct {
@@ -58,22 +75,20 @@ func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
 	if raw, ok := p.lookupPackedChild(name); ok {
 		return io.NopCloser(bytes.NewReader(raw)), nil
 	}
-	return openConfigReader(p.base, name)
+	return openConfigReader(p.Dir, name)
 }
 
-func (p *packedConfigDir) Close() error {
-	return p.base.Close()
-}
+func (*packedConfigDir) isAdaptedConfigDir() {}
 
 func (p *packedConfigDir) GetPath() string {
-	if gdDir, ok := p.base.(spxfs.GdDir); ok {
+	if gdDir, ok := p.Dir.(spxfs.GdDir); ok {
 		return gdDir.GetPath()
 	}
 	return ""
 }
 
 func (p *packedConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	reader, ok := p.base.(spxfs.ReadDirer)
+	reader, ok := p.Dir.(spxfs.ReadDirer)
 	if !ok {
 		return nil, nil
 	}
@@ -114,12 +129,34 @@ func (p *packedConfigDir) projectFontFamilyNames() ([]string, bool) {
 	return names, true
 }
 
-func wrapPackedConfigDir(fs spxfs.Dir) (spxfs.Dir, bool, error) {
-	index, ok, err := loadPackedConfigIndex(fs)
-	if err != nil || !ok {
-		return fs, ok, err
+func adaptConfigDir(fs spxfs.Dir) spxfs.Dir {
+	if _, ok := fs.(adaptedConfigDir); ok {
+		return fs
 	}
-	return &packedConfigDir{base: fs, index: index}, true, nil
+	assetDir, ok := gdAssetDir(fs)
+	if !ok || !shouldReadConfigFromEngine(assetDir) {
+		return fs
+	}
+	raw := &rawConfigDir{Dir: fs, assetDir: assetDir}
+	if reader, ok := fs.(spxfs.ReadDirer); ok {
+		return &rawReadDirConfigDir{rawConfigDir: raw, ReadDirer: reader}
+	}
+	return raw
+}
+
+func (p *rawConfigDir) Open(name string) (io.ReadCloser, error) {
+	for _, filePath := range configAssetPaths(p.assetDir, name) {
+		if engine.HasFile(filePath) {
+			return io.NopCloser(strings.NewReader(engine.ReadAllText(filePath))), nil
+		}
+	}
+	return p.Dir.Open(name)
+}
+
+func (*rawConfigDir) isAdaptedConfigDir() {}
+
+func (p *rawConfigDir) GetPath() string {
+	return p.assetDir
 }
 
 func loadPackedConfigIndex(fs spxfs.Dir) (packedConfigIndex, bool, error) {
@@ -131,12 +168,9 @@ func loadPackedConfigIndex(fs spxfs.Dir) (packedConfigIndex, bool, error) {
 		return packedConfigIndex{}, false, nil
 	}
 
-	sourceData, ok, err := readConfigBytes(fs, "index.json")
+	sourceData, _, err := readConfigBytes(fs, "index.json")
 	if err != nil {
 		return packedConfigIndex{}, false, err
-	}
-	if !ok {
-		sourceData = nil
 	}
 
 	index, err := parsePackedConfigIndex(data, sourceData)
@@ -221,15 +255,6 @@ func openConfigReader(fs spxfs.Dir, file string) (io.ReadCloser, error) {
 }
 
 func readConfigBytes(fs spxfs.Dir, file string) ([]byte, bool, error) {
-	if assetDir, ok := gdAssetDir(fs); ok && shouldReadConfigFromEngine(assetDir) {
-		for _, filePath := range configAssetPaths(assetDir, file) {
-			if filePath == "" || !engine.HasFile(filePath) {
-				continue
-			}
-			return []byte(engine.ReadAllText(filePath)), true, nil
-		}
-	}
-
 	f, err := fs.Open(file)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -254,17 +279,11 @@ func configAssetPaths(assetDir, file string) []string {
 		engine.ToAssetPath(normalizedFile),
 	}
 
-	var ret []string
-	seen := make(map[string]struct{}, len(paths))
+	ret := paths[:0]
 	for _, candidate := range paths {
-		if candidate == "" {
-			continue
+		if candidate != "" && !slices.Contains(ret, candidate) {
+			ret = append(ret, candidate)
 		}
-		if _, ok := seen[candidate]; ok {
-			continue
-		}
-		seen[candidate] = struct{}{}
-		ret = append(ret, candidate)
 	}
 	return ret
 }

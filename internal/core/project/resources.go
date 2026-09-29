@@ -25,7 +25,6 @@ import (
 	"syscall"
 
 	spxfs "github.com/goplus/spx/v3/fs"
-	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
@@ -75,10 +74,14 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 	if err != nil {
 		return OpenedBuilderResources{}, err
 	}
-	fs, _, err = wrapPackedConfigDir(fs)
+	fs = adaptConfigDir(fs)
+	index, packed, err := loadPackedConfigIndex(fs)
 	if err != nil {
 		fs.Close()
 		return OpenedBuilderResources{}, err
+	}
+	if packed {
+		fs = &packedConfigDir{Dir: fs, index: index}
 	}
 	opened.FS = fs
 
@@ -92,17 +95,7 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 }
 
 func LoadJSON(ret any, fs spxfs.Dir, file string) error {
-	if assetDir, ok := gdAssetDir(fs); ok && shouldReadConfigFromEngine(assetDir) {
-		filePath := joinAssetConfigPath(assetDir, normalizePackedConfigPath(file))
-		if filePath == "" {
-			filePath = engine.ToAssetPath(file)
-		}
-		if engine.HasFile(filePath) {
-			value := engine.ReadAllText(filePath)
-			return json.Unmarshal([]byte(value), ret)
-		}
-	}
-
+	fs = adaptConfigDir(fs)
 	f, err := fs.Open(file)
 	if err != nil {
 		spxlog.Error("Failed to open file %s: %v", file, err)
