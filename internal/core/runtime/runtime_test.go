@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -234,23 +233,6 @@ func TestRunInputLoopFrameEndsBoundaryAfterPanic(t *testing.T) {
 	}
 }
 
-func TestInitLoopsSkipsDisabledLoop(t *testing.T) {
-	var names []string
-	noop := func(coroutine.Thread) {}
-	InitLoops(
-		func(obj coroutine.ThreadObj, fn func(coroutine.Thread)) coroutine.Thread {
-			names = append(names, obj.(string))
-			return nil
-		},
-		LoopTasks{Event: noop, Logic: noop},
-	)
-
-	want := []string{"eventLoop", "logicLoop"}
-	if !reflect.DeepEqual(names, want) {
-		t.Fatalf("created loops = %v, want %v", names, want)
-	}
-}
-
 func TestFindClickTarget(t *testing.T) {
 	selection, ok := FindClickTarget([]int{1, 2, 3}, func(item int) (ClickSelection[int, int], bool) {
 		if item >= 2 {
@@ -425,7 +407,11 @@ func TestHandleLeftButtonDownBlockedTargetGate(t *testing.T) {
 }
 
 func TestProcessLogicFrame(t *testing.T) {
-	var fired []int64
+	type step struct {
+		phase string
+		value int64
+	}
+	var steps []step
 	nextTimers := []int64{2500, 3000}
 	nextTimerIndex := 0
 	audios, animations := ProcessLogicFrame(LogicFrameConfig[int]{
@@ -433,12 +419,15 @@ func TestProcessLogicFrame(t *testing.T) {
 		TempAudios:     []string{"seed"},
 		TempAnimations: []string{"seed"},
 		FlushPendingAudio: func(item int, acc []string) []string {
+			steps = append(steps, step{"audio", int64(item)})
 			return append(acc, "a")
 		},
 		FlushCompletedAnimations: func(item int, acc []string) []string {
+			steps = append(steps, step{"animation", int64(item)})
 			return append(acc, "n")
 		},
 		NextTimer: func() (int64, bool) {
+			steps = append(steps, step{phase: "nextTimer"})
 			if nextTimerIndex >= len(nextTimers) {
 				return 0, false
 			}
@@ -446,7 +435,9 @@ func TestProcessLogicFrame(t *testing.T) {
 			nextTimerIndex++
 			return timer, true
 		},
-		FireTimer: func(v int64) { fired = append(fired, v) },
+		FireTimer: func(v int64) {
+			steps = append(steps, step{"timer", v})
+		},
 	})
 
 	if len(audios) != 3 {
@@ -455,9 +446,47 @@ func TestProcessLogicFrame(t *testing.T) {
 	if len(animations) != 3 {
 		t.Fatalf("animations len = %d, want 3", len(animations))
 	}
-	if len(fired) != 2 || fired[0] != 2500 || fired[1] != 3000 {
-		t.Fatalf("unexpected fired timers: %+v", fired)
+	wantSteps := []step{
+		{"audio", 1},
+		{"audio", 2},
+		{"animation", 1},
+		{"animation", 2},
+		{phase: "nextTimer"},
+		{"timer", 2500},
+		{phase: "nextTimer"},
+		{"timer", 3000},
+		{phase: "nextTimer"},
 	}
+	if !reflect.DeepEqual(steps, wantSteps) {
+		t.Fatalf("steps = %+v, want %+v", steps, wantSteps)
+	}
+}
+
+func TestProcessLogicFramePreservesNonNilEmptyScratch(t *testing.T) {
+	assertEmpty := func(kind string, scratch []string) {
+		t.Helper()
+		if scratch == nil || len(scratch) != 0 {
+			t.Fatalf("%s scratch = %#v, want non-nil empty slice", kind, scratch)
+		}
+	}
+
+	audios, animations := ProcessLogicFrame(LogicFrameConfig[int]{
+		Items:          []int{1},
+		TempAudios:     []string{},
+		TempAnimations: []string{},
+		FlushPendingAudio: func(_ int, scratch []string) []string {
+			assertEmpty("audio", scratch)
+			return scratch
+		},
+		FlushCompletedAnimations: func(_ int, scratch []string) []string {
+			assertEmpty("animation", scratch)
+			return scratch
+		},
+		NextTimer: func() (int64, bool) { return 0, false },
+		FireTimer: func(int64) {},
+	})
+	assertEmpty("returned audio", audios)
+	assertEmpty("returned animation", animations)
 }
 
 func TestMainExecutionTimedOut(t *testing.T) {

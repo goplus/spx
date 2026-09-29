@@ -25,15 +25,16 @@ import (
 )
 
 func (p *Game) initEventLoop() {
-	coreruntime.InitLoops(gco.Create, coreruntime.LoopTasks{
-		Event: p.eventLoop,
-		Input: p.inputEventLoop,
-		Logic: p.logicLoop,
-	})
+	gco.Create("eventLoop", p.eventLoop)
+	gco.Create("inputEventLoop", p.inputEventLoop)
+	gco.Create("logicLoop", p.logicLoop)
 }
 
 func (p *Game) eventLoop(coroutine.Thread) {
-	coreruntime.RunEventLoop(p.events, p.handleEvent)
+	events := p.events
+	for {
+		p.handleEvent(engine.WaitForChan(events))
+	}
 }
 
 func (p *Game) inputEventLoop(coroutine.Thread) {
@@ -71,26 +72,31 @@ func inputFrameEventHooks(emit func(event)) coreruntime.InputFrameHooks {
 }
 
 func (p *Game) logicLoop(coroutine.Thread) {
-	coreruntime.RunLogicLoop(coreruntime.LogicLoopConfig[Shape]{
-		Items: p.shapeMgr.getTempShapes,
+	frame := coreruntime.LogicFrameConfig[Shape]{
+		TempAudios:     []string{},
+		TempAnimations: []string{},
 		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
-			sprite, ok := item.(*SpriteImpl)
-			if !ok {
-				return tempAudios
+			if sprite, ok := item.(*SpriteImpl); ok {
+				return sprite.flushPendingAudios(tempAudios)
 			}
-			return sprite.flushPendingAudios(tempAudios)
+			return tempAudios
 		},
 		FlushCompletedAnimations: func(item Shape, tempAnimations []string) []string {
-			sprite, ok := item.(*SpriteImpl)
-			if !ok {
-				return tempAnimations
+			if sprite, ok := item.(*SpriteImpl); ok {
+				return sprite.flushCompletedAnimations(tempAnimations)
 			}
-			return sprite.flushCompletedAnimations(tempAnimations)
+			return tempAnimations
 		},
 		NextTimer: itime.NextTimer,
 		FireTimer: func(timestamp int64) {
 			p.fireEvent(&eventTimer{Timestamp: timestamp})
 		},
-		ShowDebugPanel: p.showDebugPanel,
-	})
+	}
+
+	for {
+		frame.Items = p.shapeMgr.getTempShapes()
+		frame.TempAudios, frame.TempAnimations = coreruntime.ProcessLogicFrame(frame)
+		engine.WaitNextFrame()
+		p.showDebugPanel()
+	}
 }
