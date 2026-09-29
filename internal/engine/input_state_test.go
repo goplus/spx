@@ -94,13 +94,9 @@ func TestDiscardPendingKeyEventsPreservesHeldState(t *testing.T) {
 	}
 }
 
-func TestMouseEventsPreserveShortClickWithinOneInputTick(t *testing.T) {
-	resetMouseButtonStates()
-	SetMouseEventCaptureEnabled(true)
-	t.Cleanup(func() {
-		resetMouseButtonStates()
-		SetMouseEventCaptureEnabled(false)
-	})
+func TestMouseInputPreservesShortClickForOrdinaryConsumer(t *testing.T) {
+	mouseInput.reset()
+	t.Cleanup(mouseInput.reset)
 	onMousePressed(1)
 	onMouseReleased(1)
 	cacheMouseEvents()
@@ -118,19 +114,14 @@ func TestMouseEventsPreserveShortClickWithinOneInputTick(t *testing.T) {
 	}
 }
 
-func TestMouseEventCaptureSwitchDefinesSessionBoundary(t *testing.T) {
-	resetMouseButtonStates()
-	SetMouseEventCaptureEnabled(true)
-	t.Cleanup(func() {
-		resetMouseButtonStates()
-		SetMouseEventCaptureEnabled(false)
-	})
+func TestDiscardPendingMouseEventsDefinesConsumerBoundary(t *testing.T) {
+	mouseInput.reset()
+	t.Cleanup(mouseInput.reset)
 	onMousePressed(1)
 	cacheMouseEvents()
 	onMouseReleased(1)
 
-	SetMouseEventCaptureEnabled(false)
-	SetMouseEventCaptureEnabled(true)
+	DiscardPendingMouseEvents()
 	onMousePressed(2)
 	cacheMouseEvents()
 
@@ -140,23 +131,19 @@ func TestMouseEventCaptureSwitchDefinesSessionBoundary(t *testing.T) {
 	}
 }
 
-func TestMouseEventsAreNotQueuedOutsideCaptureSession(t *testing.T) {
-	resetMouseButtonStates()
-	SetMouseEventCaptureEnabled(false)
-	t.Cleanup(func() {
-		resetMouseButtonStates()
-		SetMouseEventCaptureEnabled(false)
-	})
+func TestDiscardPendingMouseEventsPreservesHeldState(t *testing.T) {
+	mouseInput.reset()
+	t.Cleanup(mouseInput.reset)
 
 	onMousePressed(1)
-	onMouseReleased(1)
 	cacheMouseEvents()
+	DiscardPendingMouseEvents()
 	events, buttons := GetMouseInput(nil)
 	if len(events) != 0 {
-		t.Fatalf("mouse events outside capture session = %+v, want none", events)
+		t.Fatalf("mouse events after boundary = %+v, want none", events)
 	}
-	if buttons != 0 {
-		t.Fatalf("mouse buttons outside capture session = %#x, want released", buttons)
+	if buttons != 1 {
+		t.Fatalf("mouse buttons after boundary = %#x, want left held", buttons)
 	}
 }
 
@@ -164,11 +151,7 @@ func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
 	isolateGameBinding(t)
 	setupExecuteTest(t)
 	ResetInputState()
-	SetMouseEventCaptureEnabled(true)
-	t.Cleanup(func() {
-		ResetInputState()
-		SetMouseEventCaptureEnabled(false)
-	})
+	t.Cleanup(ResetInputState)
 
 	binding, err := bindGame(new(bindingTestGame), new(struct{}))
 	if err != nil {

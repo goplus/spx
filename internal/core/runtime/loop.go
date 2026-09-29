@@ -25,19 +25,23 @@ import (
 )
 
 type InputFrame struct {
-	Point                    mathf.Vec2
-	LastMousePos             mathf.Vec2
-	LastLeftButtonPressed    bool
-	CurrentLeftButtonPressed bool
-	MouseEvents              []engine.MouseEvent
-	KeyEvents                []engine.KeyEvent
-	MouseMovementThreshold   float64
+	Point                  mathf.Vec2
+	LeftButtonPressed      bool
+	MouseEvents            []engine.MouseEvent
+	KeyEvents              []engine.KeyEvent
+	MouseMovementThreshold float64
+}
+
+// InputFrameState is the consumer-local history used to normalize input
+// snapshots and ordered edges into one stream of input events.
+type InputFrameState struct {
+	lastMousePos      mathf.Vec2
+	leftButtonPressed bool
 }
 
 type InputFrameHooks struct {
 	FireLeftButtonDown func(mathf.Vec2)
 	FireLeftButtonUp   func(mathf.Vec2)
-	SetMousePos        func(mathf.Vec2)
 	OnMouseMove        func(mathf.Vec2)
 	OnKeyPressed       func(int64)
 }
@@ -47,16 +51,17 @@ type InputLoopConfig struct {
 	BeginFrame             func() bool
 	EndFrame               func()
 	CurrentMousePos        func() mathf.Vec2
-	IsLeftButtonPressed    func() bool
+	SetMousePos            func(mathf.Vec2)
+	GetMouseInput          func([]engine.MouseEvent) ([]engine.MouseEvent, uint8)
 	GetKeyEvents           func([]engine.KeyEvent) []engine.KeyEvent
 	MouseMovementThreshold float64
 }
 
 type inputLoopState struct {
-	lastLeftButtonPressed bool
-	lastMousePos          mathf.Vec2
-	keyEvents             []engine.KeyEvent
-	wasSuspended          bool
+	frameState   InputFrameState
+	mouseEvents  []engine.MouseEvent
+	keyEvents    []engine.KeyEvent
+	wasSuspended bool
 }
 
 type LogicFrameConfig[T any] struct {
@@ -84,8 +89,12 @@ func RunEventLoop[T any](events chan T, handle func(T)) {
 	}
 }
 
-func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, bool) {
-	leftPressed := frame.LastLeftButtonPressed
+func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
+	*s = InputFrameState{lastMousePos: point, leftButtonPressed: leftButtonPressed}
+}
+
+func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
+	leftPressed := s.leftButtonPressed
 	for _, event := range frame.MouseEvents {
 		if event.Id != 1 || event.IsPressed == leftPressed {
 			continue
@@ -99,7 +108,7 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 	}
 	// Old replay files contain only held-state snapshots. This reconciliation
 	// also guards against a platform that reports a state change without an edge.
-	if frame.CurrentLeftButtonPressed != leftPressed {
+	if frame.LeftButtonPressed != leftPressed {
 		if leftPressed {
 			hooks.FireLeftButtonUp(frame.Point)
 		} else {
@@ -107,13 +116,11 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 		}
 	}
 
-	lastMousePos := frame.LastMousePos
-	dx := frame.Point.X - frame.LastMousePos.X
-	dy := frame.Point.Y - frame.LastMousePos.Y
+	dx := frame.Point.X - s.lastMousePos.X
+	dy := frame.Point.Y - s.lastMousePos.Y
 	if math.Abs(dx) > frame.MouseMovementThreshold || math.Abs(dy) > frame.MouseMovementThreshold {
-		hooks.SetMousePos(frame.Point)
 		hooks.OnMouseMove(frame.Point)
-		lastMousePos = frame.Point
+		s.lastMousePos = frame.Point
 	}
 
 	for _, ev := range frame.KeyEvents {
@@ -122,11 +129,11 @@ func ProcessInputFrame(frame InputFrame, hooks InputFrameHooks) (mathf.Vec2, boo
 		}
 	}
 
-	return lastMousePos, frame.CurrentLeftButtonPressed
+	s.leftButtonPressed = frame.LeftButtonPressed
 }
 
 func RunInputLoop(cfg InputLoopConfig) {
-	state := inputLoopState{keyEvents: make([]engine.KeyEvent, 0)}
+	state := inputLoopState{}
 
 	for {
 		if cfg.BeginFrame != nil && !cfg.BeginFrame() {
@@ -206,26 +213,25 @@ func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
 	// Keep the cached mouse position in sync with the engine every frame,
 	// so callers don't need a second engine-side mouse query elsewhere.
 	cfg.SetMousePos(point)
-	state.keyEvents = cfg.GetKeyEvents(state.keyEvents)
-	currentLeftButtonPressed := cfg.IsLeftButtonPressed()
+	var buttons uint8
+	state.mouseEvents, buttons = cfg.GetMouseInput(state.mouseEvents[:0])
+	state.keyEvents = cfg.GetKeyEvents(state.keyEvents[:0])
+	leftButtonPressed := buttons&1 != 0
 	if state.wasSuspended {
 		// The suspended consumer owns all edges. Resume from the current held
 		// state without manufacturing events at the handoff boundary.
-		state.lastMousePos = point
-		state.lastLeftButtonPressed = currentLeftButtonPressed
+		state.frameState.Reset(point, leftButtonPressed)
 		state.wasSuspended = false
 	} else {
-		state.lastMousePos, state.lastLeftButtonPressed = ProcessInputFrame(
+		state.frameState.Process(
 			InputFrame{
-				Point:                    point,
-				LastMousePos:             state.lastMousePos,
-				LastLeftButtonPressed:    state.lastLeftButtonPressed,
-				CurrentLeftButtonPressed: currentLeftButtonPressed,
-				KeyEvents:                state.keyEvents,
-				MouseMovementThreshold:   cfg.MouseMovementThreshold,
+				Point:                  point,
+				LeftButtonPressed:      leftButtonPressed,
+				MouseEvents:            state.mouseEvents,
+				KeyEvents:              state.keyEvents,
+				MouseMovementThreshold: cfg.MouseMovementThreshold,
 			},
 			cfg.InputFrameHooks,
 		)
 	}
-	state.keyEvents = state.keyEvents[:0]
 }

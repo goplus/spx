@@ -28,11 +28,10 @@ import (
 // inputSessionInput is the session-local adapter state needed to dispatch
 // resolved input through the ordinary SPX event hooks.
 type inputSessionInput struct {
-	lastMousePos          mathf.Vec2
-	lastLeftButtonPressed bool
-	mouseEvents           []engine.MouseEvent
-	keyEvents             []engine.KeyEvent
-	pending               *inputSessionFrame // engine frame thread only
+	frameState  coreruntime.InputFrameState
+	mouseEvents []engine.MouseEvent
+	keyEvents   []engine.KeyEvent
+	pending     *inputSessionFrame // engine frame thread only
 }
 
 type inputSessionFrame struct {
@@ -87,7 +86,6 @@ func (p *inputManager) resolveInputSessionTick(session *inputSession, delta floa
 		return nil, err
 	}
 	effectivePoint := mathf.Vec2{X: resolved.frame.State.Mouse.X, Y: resolved.frame.State.Mouse.Y}
-	effectiveLeftPressed := resolved.frame.State.Buttons&(1<<0) != 0
 	if resolved.firstTick {
 		p.resetInputSessionDerivedState(session, resolved.initial)
 	}
@@ -96,33 +94,18 @@ func (p *inputManager) resolveInputSessionTick(session *inputSession, delta floa
 	p.setMousePos(effectivePoint)
 	inputEvents := make([]event, 0, len(c.mouseEvents)+len(c.keyEvents)+3)
 
-	c.lastMousePos, c.lastLeftButtonPressed = coreruntime.ProcessInputFrame(
+	c.frameState.Process(
 		coreruntime.InputFrame{
-			Point:                    effectivePoint,
-			LastMousePos:             c.lastMousePos,
-			LastLeftButtonPressed:    c.lastLeftButtonPressed,
-			CurrentLeftButtonPressed: effectiveLeftPressed,
-			MouseEvents:              c.mouseEvents,
-			KeyEvents:                c.keyEvents,
-			MouseMovementThreshold:   mouseMovementThreshold,
+			Point:                  effectivePoint,
+			LeftButtonPressed:      resolved.frame.State.Buttons&1 != 0,
+			MouseEvents:            c.mouseEvents,
+			KeyEvents:              c.keyEvents,
+			MouseMovementThreshold: mouseMovementThreshold,
 		},
-		coreruntime.InputFrameHooks{
-			FireLeftButtonDown: func(point mathf.Vec2) {
-				inputEvents = append(inputEvents, &eventLeftButtonDown{Pos: point})
-			},
-			FireLeftButtonUp: func(point mathf.Vec2) {
-				inputEvents = append(inputEvents, &eventLeftButtonUp{Pos: point})
-			},
-			SetMousePos: p.setMousePos,
-			OnMouseMove: func(point mathf.Vec2) {
-				inputEvents = append(inputEvents, &eventMouseMove{Pos: point})
-			},
-			OnKeyPressed: func(keyID int64) {
-				inputEvents = append(inputEvents, &eventKeyDown{Key: Key(keyID)})
-			},
-		},
+		inputFrameEventHooks(func(ev event) {
+			inputEvents = append(inputEvents, ev)
+		}),
 	)
-	c.clearEvents()
 	return &inputSessionFrame{events: inputEvents, keyEvents: resolved.frame.KeyEvents}, nil
 }
 
@@ -135,11 +118,6 @@ func (s *inputSession) captureConfiguredKeyPresses(events []InputReplayKeyEvent)
 			Snapshot("", nil)
 		}
 	}
-}
-
-func (c *inputSessionInput) clearEvents() {
-	c.mouseEvents = c.mouseEvents[:0]
-	c.keyEvents = c.keyEvents[:0]
 }
 
 func (p *inputManager) dispatchInputSessionEvents(events []event) {
@@ -163,8 +141,7 @@ func (p *inputManager) dispatchInputSessionEvents(events []event) {
 func (p *inputManager) resetInputSessionDerivedState(session *inputSession, state InputReplayState) {
 	point := mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
 	p.mousePos = point
-	session.input.lastMousePos = point
-	session.input.lastLeftButtonPressed = state.Buttons&(1<<0) != 0
+	session.input.frameState.Reset(point, state.Buttons&1 != 0)
 	p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
 	p.swipe.InitWithClock(p.g.inputClock)
 }

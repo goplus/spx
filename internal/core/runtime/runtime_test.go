@@ -26,19 +26,18 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-func TestProcessInputFrame(t *testing.T) {
+func TestInputFrameStateProcess(t *testing.T) {
 	var (
 		downs []mathf.Vec2
 		moves []mathf.Vec2
 		keys  []int64
 	)
+	var state InputFrameState
 
-	lastMousePos, lastPressed := ProcessInputFrame(
+	state.Process(
 		InputFrame{
-			Point:                    mathf.Vec2{X: 10, Y: 20},
-			LastMousePos:             mathf.Vec2{},
-			LastLeftButtonPressed:    false,
-			CurrentLeftButtonPressed: true,
+			Point:             mathf.Vec2{X: 10, Y: 20},
+			LeftButtonPressed: true,
 			KeyEvents: []engine.KeyEvent{
 				{Id: 1, IsPressed: true},
 				{Id: 2, IsPressed: false},
@@ -48,8 +47,7 @@ func TestProcessInputFrame(t *testing.T) {
 		InputFrameHooks{
 			FireLeftButtonDown: func(pos mathf.Vec2) { downs = append(downs, pos) },
 			FireLeftButtonUp:   func(mathf.Vec2) {},
-			SetMousePos:        func(pos mathf.Vec2) { moves = append(moves, pos) },
-			OnMouseMove:        func(mathf.Vec2) {},
+			OnMouseMove:        func(pos mathf.Vec2) { moves = append(moves, pos) },
 			OnKeyPressed:       func(key int64) { keys = append(keys, key) },
 		},
 	)
@@ -63,21 +61,21 @@ func TestProcessInputFrame(t *testing.T) {
 	if len(keys) != 1 || keys[0] != 1 {
 		t.Fatalf("unexpected key presses: %+v", keys)
 	}
-	if lastMousePos.X != 10 || lastMousePos.Y != 20 {
-		t.Fatalf("lastMousePos = %+v, want {10 20}", lastMousePos)
+	if state.lastMousePos.X != 10 || state.lastMousePos.Y != 20 {
+		t.Fatalf("lastMousePos = %+v, want {10 20}", state.lastMousePos)
 	}
-	if !lastPressed {
+	if !state.leftButtonPressed {
 		t.Fatal("expected left button state to update")
 	}
 }
 
-func TestProcessInputFramePreservesPressAndReleaseWithinOneTick(t *testing.T) {
+func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.T) {
 	var edges []string
-	_, pressed := ProcessInputFrame(
+	var state InputFrameState
+	state.Process(
 		InputFrame{
-			Point:                    mathf.Vec2{X: 7, Y: 8},
-			LastLeftButtonPressed:    false,
-			CurrentLeftButtonPressed: false,
+			Point:             mathf.Vec2{X: 7, Y: 8},
+			LeftButtonPressed: false,
 			MouseEvents: []engine.MouseEvent{
 				{Id: 1, IsPressed: true},
 				{Id: 1, IsPressed: false},
@@ -86,7 +84,6 @@ func TestProcessInputFramePreservesPressAndReleaseWithinOneTick(t *testing.T) {
 		InputFrameHooks{
 			FireLeftButtonDown: func(mathf.Vec2) { edges = append(edges, "down") },
 			FireLeftButtonUp:   func(mathf.Vec2) { edges = append(edges, "up") },
-			SetMousePos:        func(mathf.Vec2) {},
 			OnMouseMove:        func(mathf.Vec2) {},
 			OnKeyPressed:       func(int64) {},
 		},
@@ -94,8 +91,126 @@ func TestProcessInputFramePreservesPressAndReleaseWithinOneTick(t *testing.T) {
 	if !reflect.DeepEqual(edges, []string{"down", "up"}) {
 		t.Fatalf("mouse edges = %v, want [down up]", edges)
 	}
-	if pressed {
+	if state.leftButtonPressed {
 		t.Fatal("short click left button remained pressed")
+	}
+}
+
+func TestLiveAndSessionInputSamplesAreEquivalent(t *testing.T) {
+	type observedEvent struct {
+		kind  string
+		point mathf.Vec2
+		key   int64
+	}
+	recordingHooks := func(events *[]observedEvent) InputFrameHooks {
+		return InputFrameHooks{
+			FireLeftButtonDown: func(point mathf.Vec2) {
+				*events = append(*events, observedEvent{kind: "down", point: point})
+			},
+			FireLeftButtonUp: func(point mathf.Vec2) {
+				*events = append(*events, observedEvent{kind: "up", point: point})
+			},
+			OnMouseMove: func(point mathf.Vec2) {
+				*events = append(*events, observedEvent{kind: "move", point: point})
+			},
+			OnKeyPressed: func(key int64) {
+				*events = append(*events, observedEvent{kind: "key", key: key})
+			},
+		}
+	}
+
+	frames := []InputFrame{
+		{
+			Point:                  mathf.Vec2{X: 2, Y: 3},
+			LeftButtonPressed:      true,
+			MouseEvents:            []engine.MouseEvent{{Id: 1, IsPressed: true}},
+			KeyEvents:              []engine.KeyEvent{{Id: 10, IsPressed: true}, {Id: 11, IsPressed: false}},
+			MouseMovementThreshold: 1,
+		},
+		{
+			Point:                  mathf.Vec2{X: 2.5, Y: 3},
+			LeftButtonPressed:      true,
+			MouseMovementThreshold: 1,
+		},
+		{
+			Point:             mathf.Vec2{X: 6, Y: 8},
+			LeftButtonPressed: false,
+			MouseEvents: []engine.MouseEvent{
+				{Id: 1, IsPressed: false},
+				{Id: 1, IsPressed: true},
+				{Id: 1, IsPressed: false},
+			},
+			KeyEvents:              []engine.KeyEvent{{Id: 12, IsPressed: true}},
+			MouseMovementThreshold: 1,
+		},
+		{
+			Point:                  mathf.Vec2{X: 6, Y: 8},
+			LeftButtonPressed:      true, // Legacy replay snapshot without mouse edges.
+			MouseMovementThreshold: 1,
+		},
+	}
+
+	var liveState inputLoopState
+	var sessionState InputFrameState
+	var liveEvents, sessionEvents []observedEvent
+	for _, frame := range frames {
+		runInputLoopFrame(InputLoopConfig{
+			InputFrameHooks: recordingHooks(&liveEvents),
+			CurrentMousePos: func() mathf.Vec2 { return frame.Point },
+			SetMousePos:     func(mathf.Vec2) {},
+			GetMouseInput: func(dst []engine.MouseEvent) ([]engine.MouseEvent, uint8) {
+				dst = append(dst, frame.MouseEvents...)
+				var buttons uint8
+				if frame.LeftButtonPressed {
+					buttons = 1
+				}
+				return dst, buttons
+			},
+			GetKeyEvents: func(dst []engine.KeyEvent) []engine.KeyEvent {
+				return append(dst, frame.KeyEvents...)
+			},
+			MouseMovementThreshold: frame.MouseMovementThreshold,
+		}, &liveState)
+		sessionState.Process(frame, recordingHooks(&sessionEvents))
+	}
+
+	if !reflect.DeepEqual(liveEvents, sessionEvents) {
+		t.Fatalf("live events = %+v, session events = %+v", liveEvents, sessionEvents)
+	}
+	if liveState.frameState != sessionState {
+		t.Fatalf("live state = %+v, session state = %+v", liveState.frameState, sessionState)
+	}
+}
+
+func TestRunInputLoopFrameDropsEdgesAtConsumerHandoff(t *testing.T) {
+	state := inputLoopState{wasSuspended: true}
+	var edges []string
+	runInputLoopFrame(InputLoopConfig{
+		InputFrameHooks: InputFrameHooks{
+			FireLeftButtonDown: func(mathf.Vec2) { edges = append(edges, "down") },
+			FireLeftButtonUp:   func(mathf.Vec2) { edges = append(edges, "up") },
+			OnMouseMove:        func(mathf.Vec2) { edges = append(edges, "move") },
+			OnKeyPressed:       func(int64) { edges = append(edges, "key") },
+		},
+		CurrentMousePos: func() mathf.Vec2 { return mathf.Vec2{X: 5, Y: 6} },
+		SetMousePos:     func(mathf.Vec2) {},
+		GetMouseInput: func(dst []engine.MouseEvent) ([]engine.MouseEvent, uint8) {
+			return append(dst,
+				engine.MouseEvent{Id: 1, IsPressed: true},
+				engine.MouseEvent{Id: 1, IsPressed: false},
+			), 0
+		},
+		GetKeyEvents: func(dst []engine.KeyEvent) []engine.KeyEvent {
+			return append(dst, engine.KeyEvent{Id: 10, IsPressed: true})
+		},
+		MouseMovementThreshold: 1,
+	}, &state)
+
+	if len(edges) != 0 {
+		t.Fatalf("handoff replayed consumed edges: %v", edges)
+	}
+	if state.frameState.lastMousePos != (mathf.Vec2{X: 5, Y: 6}) || state.frameState.leftButtonPressed {
+		t.Fatalf("handoff state = %+v", state.frameState)
 	}
 }
 
