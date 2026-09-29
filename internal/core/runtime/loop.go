@@ -20,7 +20,6 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -72,21 +71,6 @@ type LogicFrameConfig[T any] struct {
 	FlushCompletedAnimations func(T, []string) []string
 	NextTimer                func() (int64, bool)
 	FireTimer                func(int64)
-}
-
-type LogicLoopConfig[T any] struct {
-	Items                    func() []T
-	FlushPendingAudio        func(T, []string) []string
-	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (int64, bool)
-	FireTimer                func(int64)
-	ShowDebugPanel           func()
-}
-
-func RunEventLoop[T any](events chan T, handle func(T)) {
-	for {
-		handle(engine.WaitForChan(events))
-	}
 }
 
 func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
@@ -165,44 +149,6 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 		cfg.FireTimer(targetTimer)
 	}
 	return tempAudios, tempAnimations
-}
-
-func RunLogicLoop[T any](cfg LogicLoopConfig[T]) {
-	tempAudios := []string{}
-	tempAnimations := []string{}
-
-	for {
-		tempAudios, tempAnimations = ProcessLogicFrame(LogicFrameConfig[T]{
-			Items:                    cfg.Items(),
-			TempAudios:               tempAudios,
-			TempAnimations:           tempAnimations,
-			FlushPendingAudio:        cfg.FlushPendingAudio,
-			FlushCompletedAnimations: cfg.FlushCompletedAnimations,
-			NextTimer:                cfg.NextTimer,
-			FireTimer:                cfg.FireTimer,
-		})
-		engine.WaitNextFrame()
-		cfg.ShowDebugPanel()
-	}
-}
-
-type LoopTasks struct {
-	Event func(coroutine.Thread)
-	Input func(coroutine.Thread)
-	Logic func(coroutine.Thread)
-}
-
-// InitLoops registers enabled loops in event, input, then logic order.
-func InitLoops(create func(coroutine.ThreadObj, func(coroutine.Thread)) coroutine.Thread, tasks LoopTasks) {
-	if tasks.Event != nil {
-		create("eventLoop", tasks.Event)
-	}
-	if tasks.Input != nil {
-		create("inputEventLoop", tasks.Input)
-	}
-	if tasks.Logic != nil {
-		create("logicLoop", tasks.Logic)
-	}
 }
 
 func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
