@@ -84,19 +84,33 @@ func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scri
 
 func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any, event scriptEventDispatch) {
 	sinks := p.manager.Snapshot(bucket)
-	var owned []eventSink
-	for _, sink := range sinks {
+	// Resolve ownership before entering the registration barrier.
+	var ownerIndexes []int
+	for i, sink := range sinks {
 		if sink.Owner == owner {
-			if owned == nil {
-				owned = make([]eventSink, 0, min(len(sinks), 8))
+			if ownerIndexes == nil {
+				ownerIndexes = make([]int, 0, min(len(sinks), 8))
 			}
-			owned = append(owned, sink)
+			ownerIndexes = append(ownerIndexes, i)
 		}
 	}
-	if len(owned) == 0 {
+	if len(ownerIndexes) == 0 {
 		return
 	}
-	p.dispatchSinks(owned, event)
+	withEventRegistrationBarrier(p.game, func() {
+		// Complete matching before starting user handlers.
+		var matched []eventSink
+		for _, i := range ownerIndexes {
+			sink := sinks[i]
+			if sink.Cond == nil || sink.Cond(event.matchData) {
+				if matched == nil {
+					matched = make([]eventSink, 0, len(ownerIndexes))
+				}
+				matched = append(matched, sink)
+			}
+		}
+		dispatchMatchedScriptEventBatch(matched, event)
+	})
 }
 
 func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEventDispatch) {

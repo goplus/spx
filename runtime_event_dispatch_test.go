@@ -149,6 +149,46 @@ func TestTargetDispatchMutation(t *testing.T) {
 	}
 }
 
+func TestTargetDispatchCompletesMatchingBeforeHandlers(t *testing.T) {
+	setupRuntimeScheduler(t)
+
+	var registry scriptEventRegistry
+	owner, other := &SpriteImpl{}, &SpriteImpl{}
+	enabled := true
+	var steps []string
+	registry.manager.Add(coreevent.BucketClick, eventSink{Owner: owner, Handler: "first"})
+	registry.manager.Add(coreevent.BucketClick, eventSink{
+		Owner: other,
+		Cond: func(any) bool {
+			steps = append(steps, "check-other")
+			return false
+		},
+	})
+	registry.manager.Add(coreevent.BucketClick, eventSink{
+		Owner: owner,
+		Cond: func(any) bool {
+			steps = append(steps, "check-second")
+			return enabled
+		},
+		Handler: "second",
+	})
+
+	registry.dispatchTarget(coreevent.BucketClick, owner, scriptEventDispatch{
+		mode: coroutine.BatchWaitDone,
+		run: func(_ coroutine.Thread, sink *eventSink) {
+			name := sink.Handler.(string)
+			steps = append(steps, "run-"+name)
+			if name == "first" {
+				enabled = false
+			}
+		},
+	})
+
+	if want := []string{"check-second", "run-first", "run-second"}; !slices.Equal(steps, want) {
+		t.Fatalf("dispatch steps = %v, want %v", steps, want)
+	}
+}
+
 func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	game := &Game{}
 	game.initShapeMgr()
