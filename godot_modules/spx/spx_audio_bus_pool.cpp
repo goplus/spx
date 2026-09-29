@@ -53,6 +53,15 @@ Ref<AudioEffectPanner> find_panner(AudioServer *p_audio_server, int p_bus_id) {
 	}
 	return Ref<AudioEffectPanner>();
 }
+
+int append_bus(AudioServer *p_audio_server) {
+	const int bus_id = p_audio_server->get_bus_count();
+	// AudioServer::add_bus() does not synchronize its bus array mutation with
+	// the audio thread in the locked Godot version. set_bus_count() does.
+	p_audio_server->set_bus_count(bus_id + 1);
+	ERR_FAIL_COND_V(p_audio_server->get_bus_count() != bus_id + 1, -1);
+	return bus_id;
+}
 }
 
 SpxAudioBusPool *SpxAudioBusPool::get_singleton() {
@@ -234,10 +243,9 @@ int SpxAudioBusPool::ensure_bus(const StringName &p_name) {
 		return bus_id;
 	}
 
-	audio_server->add_bus();
-	bus_id = audio_server->get_bus_count() - 1;
+	bus_id = append_bus(audio_server);
+	ERR_FAIL_COND_V(bus_id < 0, -1);
 	audio_server->set_bus_name(bus_id, p_name);
-	audio_server->set_bus_send(bus_id, STR_BUS_MASTER);
 	created_buses.insert(p_name);
 	return bus_id;
 }
@@ -253,10 +261,9 @@ void SpxAudioBusPool::expand_buses(int p_count) {
 			bus_name = String(SPX_BUS_PREFIX) + itos(name_index++);
 		} while (audio_server->get_bus_index(bus_name) >= 0);
 
-		audio_server->add_bus();
-		const int bus_id = audio_server->get_bus_count() - 1;
+		const int bus_id = append_bus(audio_server);
+		ERR_FAIL_COND(bus_id < 0);
 		audio_server->set_bus_name(bus_id, bus_name);
-		audio_server->set_bus_send(bus_id, STR_BUS_MASTER);
 		created_buses.insert(bus_name);
 		pooled_buses.insert(bus_name);
 		free_buses.push_back(bus_name);

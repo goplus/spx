@@ -40,10 +40,16 @@
 namespace TestSpxAudioBusPool {
 
 static int add_bus(AudioServer *p_audio_server, const StringName &p_name, const StringName &p_send = "Master") {
-	p_audio_server->add_bus();
-	const int bus_id = p_audio_server->get_bus_count() - 1;
+	const int bus_id = p_audio_server->get_bus_count();
+	// Keep bus array growth synchronized with the audio mixing thread.
+	p_audio_server->set_bus_count(bus_id + 1);
+	ERR_FAIL_COND_V(p_audio_server->get_bus_count() != bus_id + 1, -1);
 	p_audio_server->set_bus_name(bus_id, p_name);
-	p_audio_server->set_bus_send(bus_id, p_send);
+	if (p_send != StringName("Master")) {
+		p_audio_server->lock();
+		p_audio_server->set_bus_send(bus_id, p_send);
+		p_audio_server->unlock();
+	}
 	return bus_id;
 }
 
@@ -108,6 +114,9 @@ TEST_CASE("[Audio][SPX] Audio bus pool owns, reuses, resets, and removes its bus
 	SpxAudioBusPool *pool = SpxAudioBusPool::get_singleton();
 	REQUIRE(pool != nullptr);
 	CHECK_EQ(audio_server->get_bus_count(), 4);
+	for (int bus_id = 1; bus_id < audio_server->get_bus_count(); ++bus_id) {
+		CHECK_EQ(audio_server->get_bus_send(bus_id), StringName("Master"));
+	}
 
 	const StringName first_bus = pool->alloc();
 	REQUIRE(!first_bus.is_empty());
