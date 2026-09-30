@@ -31,9 +31,8 @@ import (
 type baseObj struct {
 	runtimeState corestate.BaseObjRuntimeState
 
-	costumes      []*costume
-	costumeIndex  int
-	costumeLayout *coreproject.CostumeLayout
+	costumes     []*costume
+	costumeIndex int
 
 	// Effects
 	greffUniforms map[EffectKind]float64 // graphic effects uniforms
@@ -83,7 +82,6 @@ func (p *baseObj) markDestroyed() {
 // initSpriteCostumes creates costumes from a layout prepared before any engine
 // state is mutated.
 func (p *baseObj) initSpriteCostumes(sprite *coreproject.SpriteConfig, layout *coreproject.CostumeLayout) {
-	p.costumeLayout = layout
 	if sprite.Costumes != nil {
 		p.init(sprite.Costumes, sprite.GetCostumeIndex())
 		return
@@ -167,7 +165,6 @@ func (p *baseObj) initWithSize(width, height int) {
 // initFrom initializes from another base object (cloning).
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.costumeLayout = src.costumeLayout
 	p.runtimeState.HasShader = false
 	p.setCostumeIndex(src.costumeIndex)
 }
