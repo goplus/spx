@@ -65,7 +65,9 @@ func (cmd *CmdTool) ExportIos() error {
 	if err := cmd.prepareExport(); err != nil {
 		return err
 	}
-	cmd.BuildDll()
+	if err := cmd.BuildDll(); err != nil {
+		return err
+	}
 	if err := cmd.renameIosArtifacts(); err != nil {
 		return err
 	}
