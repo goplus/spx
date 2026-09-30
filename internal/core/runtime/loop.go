@@ -48,7 +48,6 @@ type InputFrameHooks struct {
 type InputLoopConfig struct {
 	InputFrameHooks
 	BeginFrame             func() bool
-	EndFrame               func()
 	CurrentMousePos        func() mathf.Vec2
 	SetMousePos            func(mathf.Vec2)
 	GetMouseInput          func([]engine.MouseEvent) ([]engine.MouseEvent, uint8)
@@ -152,9 +151,6 @@ func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
 }
 
 func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
-	if cfg.EndFrame != nil {
-		defer cfg.EndFrame()
-	}
 	point := cfg.CurrentMousePos()
 	// Keep the cached mouse position in sync with the engine every frame,
 	// so callers don't need a second engine-side mouse query elsewhere.
