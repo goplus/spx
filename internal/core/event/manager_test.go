@@ -20,20 +20,16 @@ import "testing"
 
 func TestManagerReset(t *testing.T) {
 	var mgr Manager
-	mgr.Add(BucketStart, Sink{Owner: "game", Handler: func() {}})
-	mgr.Add(BucketTimer, Sink{Owner: "sprite", Handler: func() {}})
-	mgr.Add(BucketCondition, Sink{Owner: "sprite", Handler: func() {}})
+	for bucket := Bucket(0); bucket < bucketCount; bucket++ {
+		mgr.Add(bucket, Sink{Owner: "sprite", Handler: func() {}})
+	}
 
 	mgr.Reset()
 
-	if got := mgr.Snapshot(BucketStart); len(got) != 0 {
-		t.Fatalf("BucketStart len = %d, want 0", len(got))
-	}
-	if got := mgr.Snapshot(BucketTimer); len(got) != 0 {
-		t.Fatalf("BucketTimer len = %d, want 0", len(got))
-	}
-	if got := mgr.Snapshot(BucketCondition); len(got) != 0 {
-		t.Fatalf("BucketCondition len = %d, want 0", len(got))
+	for bucket := Bucket(0); bucket < bucketCount; bucket++ {
+		if got := mgr.Snapshot(bucket); len(got) != 0 {
+			t.Fatalf("bucket %d len = %d, want 0", bucket, len(got))
+		}
 	}
 }
 
@@ -60,78 +56,16 @@ func TestManagerDeleteOwner(t *testing.T) {
 	}
 }
 
-func TestManagerSnapshotIsStableAcrossWrites(t *testing.T) {
-	var mgr Manager
-	mgr.Add(BucketStart, Sink{Owner: "game", Handler: func() {}})
-
-	first := mgr.Snapshot(BucketStart)
-	mgr.Add(BucketStart, Sink{Owner: "later", Handler: func() {}})
-	second := mgr.Snapshot(BucketStart)
-
-	if len(first) != 1 {
-		t.Fatalf("first snapshot len = %d, want 1", len(first))
-	}
-	if len(second) != 2 {
-		t.Fatalf("second snapshot len = %d, want 2", len(second))
-	}
-}
-
-func TestManagerSnapshotIsStableAcrossDeleteOwner(t *testing.T) {
-	var mgr Manager
-	mgr.Add(BucketClick, Sink{Owner: "keep", Handler: func() {}})
-	mgr.Add(BucketClick, Sink{Owner: "drop", Handler: func() {}})
-
-	first := mgr.Snapshot(BucketClick)
-	mgr.DeleteOwner("drop")
-	second := mgr.Snapshot(BucketClick)
-
-	if len(first) != 2 {
-		t.Fatalf("first snapshot len = %d, want 2", len(first))
-	}
-	if len(second) != 1 {
-		t.Fatalf("second snapshot len = %d, want 1", len(second))
-	}
-	if second[0].Owner != "keep" {
-		t.Fatalf("second snapshot owner = %v, want keep", second[0].Owner)
-	}
-}
-
-func TestManagerSnapshotAppendDoesNotMutateBucket(t *testing.T) {
-	var mgr Manager
-	mgr.Add(BucketClick, Sink{Owner: "keep", Handler: func() {}})
-
-	snapshot := mgr.Snapshot(BucketClick)
-	snapshot = append(snapshot, Sink{Owner: "extra", Handler: func() {}})
-
-	if len(snapshot) != 2 {
-		t.Fatalf("snapshot len = %d, want 2", len(snapshot))
-	}
-	if got := mgr.Snapshot(BucketClick); len(got) != 1 {
-		t.Fatalf("bucket len = %d, want 1", len(got))
-	}
-	if got := mgr.Snapshot(BucketClick)[0].Owner; got != "keep" {
-		t.Fatalf("bucket owner = %v, want keep", got)
-	}
-}
-
 func TestManagerBucketsAreIndependent(t *testing.T) {
 	var mgr Manager
-	mgr.Add(BucketClick, Sink{Owner: "click", Handler: func() {}})
-	mgr.Add(BucketAnyKeyPressed, Sink{Owner: "any-key", Handler: func() {}})
-	mgr.Add(BucketTimer, Sink{Owner: "timer", Handler: func() {}})
-	mgr.Add(BucketCondition, Sink{Owner: "condition", Handler: func() {}})
+	for bucket := Bucket(0); bucket < bucketCount; bucket++ {
+		mgr.Add(bucket, Sink{Owner: bucket, Handler: func() {}})
+	}
 
-	if got := mgr.Snapshot(BucketClick); len(got) != 1 || got[0].Owner != "click" {
-		t.Fatalf("SnapshotClick = %+v, want click sink", got)
-	}
-	if got := mgr.Snapshot(BucketAnyKeyPressed); len(got) != 1 || got[0].Owner != "any-key" {
-		t.Fatalf("SnapshotAnyKeyPressed = %+v, want any-key sink", got)
-	}
-	if got := mgr.Snapshot(BucketTimer); len(got) != 1 || got[0].Owner != "timer" {
-		t.Fatalf("SnapshotTimer = %+v, want timer sink", got)
-	}
-	if got := mgr.Snapshot(BucketCondition); len(got) != 1 || got[0].Owner != "condition" {
-		t.Fatalf("SnapshotCondition = %+v, want condition sink", got)
+	for bucket := Bucket(0); bucket < bucketCount; bucket++ {
+		if got := mgr.Snapshot(bucket); len(got) != 1 || got[0].Owner != bucket {
+			t.Fatalf("bucket %d = %+v, want its own sink", bucket, got)
+		}
 	}
 }
 

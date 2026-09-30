@@ -6,74 +6,55 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
-func TestGameGoSetBackdropRandomChoosesDifferentBackdrop(t *testing.T) {
-	game := &Game{
-		baseObj: baseObj{
-			costumes: []*costume{
-				{name: "backdrop1"},
-				{name: "backdrop2"},
-				{name: "backdrop3"},
-			},
-			costumeIndex: 1,
+func TestGameGoSetBackdropRandom(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		selector any
+		costumes []*costume
+		initial  int
+	}{
+		{
+			name: "action", selector: Random, initial: 1,
+			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}, {name: "backdrop3"}},
 		},
-	}
+		{
+			name: "float64", selector: float64(Random),
+			costumes: []*costume{{name: "backdrop1"}, {name: "backdrop2"}},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &Game{baseObj: baseObj{costumes: test.costumes, costumeIndex: test.initial}}
+			SetRandomSeed(1)
+			t.Cleanup(ResetRandomSeed)
 
-	SetRandomSeed(1)
-	defer ResetRandomSeed()
-	if ok := game.goSetBackdrop(Random); !ok {
-		t.Fatal("goSetBackdrop(Random) = false, want true")
-	}
-
-	if got := game.costumeIndex; got < 0 || got >= len(game.costumes) {
-		t.Fatalf("costumeIndex = %d, want in [0, %d)", got, len(game.costumes))
-	}
-	if got := game.costumeIndex; got == 1 {
-		t.Fatalf("costumeIndex = %d, want a different backdrop", got)
+			if !game.goSetBackdrop(test.selector) {
+				t.Fatal("goSetBackdrop(Random) = false, want true")
+			}
+			if got := game.costumeIndex; got < 0 || got >= len(game.costumes) || got == test.initial {
+				t.Fatalf("costumeIndex = %d, want in [0, %d) and different from %d", got, len(game.costumes), test.initial)
+			}
+		})
 	}
 }
 
-func TestGameGoSetBackdropRandomFloat64ChoosesDifferentBackdrop(t *testing.T) {
-	game := &Game{
-		baseObj: baseObj{
-			costumes: []*costume{
-				{name: "backdrop1"},
-				{name: "backdrop2"},
-			},
-			costumeIndex: 0,
-		},
-	}
-
-	SetRandomSeed(1)
-	defer ResetRandomSeed()
-	if ok := game.goSetBackdrop(float64(Random)); !ok {
-		t.Fatal("goSetBackdrop(float64(Random)) = false, want true")
-	}
-
-	if got := game.costumeIndex; got != 1 {
-		t.Fatalf("costumeIndex = %d, want 1", got)
-	}
-}
-
-func TestGameSetRandomBackdropWithNoBackdropsFails(t *testing.T) {
-	var game Game
-	if ok := game.setRandomBackdrop(); ok {
-		t.Fatal("setRandomBackdrop() = true, want false")
-	}
-}
-
-func TestGameSetRandomBackdropWithSingleBackdropIsNoOp(t *testing.T) {
-	game := &Game{
-		baseObj: baseObj{
-			costumes:     []*costume{{name: "backdrop1"}},
-			costumeIndex: 0,
-		},
-	}
-
-	if ok := game.setRandomBackdrop(); !ok {
-		t.Fatal("setRandomBackdrop() = false, want true")
-	}
-	if got := game.costumeIndex; got != 0 {
-		t.Fatalf("costumeIndex = %d, want 0", got)
+func TestGameSetRandomBackdropWithoutChoice(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		costumes []*costume
+		wantOK   bool
+	}{
+		{name: "no backdrops"},
+		{name: "single backdrop", costumes: []*costume{{name: "backdrop1"}}, wantOK: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &Game{baseObj: baseObj{costumes: test.costumes}}
+			if got := game.setRandomBackdrop(); got != test.wantOK {
+				t.Fatalf("setRandomBackdrop() = %v, want %v", got, test.wantOK)
+			}
+			if got := game.costumeIndex; got != 0 {
+				t.Fatalf("costumeIndex = %d, want unchanged index 0", got)
+			}
+		})
 	}
 }
 
