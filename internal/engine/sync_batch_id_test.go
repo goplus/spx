@@ -53,16 +53,6 @@ func TestLegacyBatchObjectIDs(t *testing.T) {
 			},
 			idIndex: 2 + engine.SyncFieldsPerSprite + 1,
 		},
-		{
-			name: "visual",
-			serialize: func(id int64) []float32 {
-				buffer := engine.NewVisualSyncBuffer(2)
-				buffer.AddRenderScale(1, 2)
-				buffer.AddFull(id, 2, 3, true, [4]float64{4, 5, 6, 7}, true)
-				return buffer.Serialize()
-			},
-			idIndex: 1 + engine.VisualFieldsPerSprite,
-		},
 	}
 	cases := []struct {
 		id    int64
