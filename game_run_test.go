@@ -23,28 +23,31 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
-func TestSchedNowWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
-	testMainExecutionTimeoutDemotion(t, SchedNow)
-}
+func TestMainExecutionTimeout(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		schedule func() int
+	}{
+		{"SchedNow", SchedNow},
+		{"Sched", Sched},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co := setupRuntimeScheduler(t)
+			thread := co.Create("main", func(thread coroutine.Thread) {
+				end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
+				defer end()
 
-func TestSchedWarnsInsteadOfPanickingOnMainExecutionTimeout(t *testing.T) {
-	testMainExecutionTimeoutDemotion(t, Sched)
-}
+				tt.schedule()
 
-func testMainExecutionTimeoutDemotion(t *testing.T, sched func() int) {
-	t.Helper()
-	co := setupRuntimeScheduler(t)
-	thread := co.Create("main", func(thread coroutine.Thread) {
-		end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
-		defer end()
-		sched()
-		if !thread.MainStartedAt().IsZero() {
-			t.Error("timed-out Main execution was not demoted")
-		}
-	})
-	co.Join(thread)
-	if !thread.Stopped() && thread.Context().Err() == nil {
-		t.Fatal("Main timeout test coroutine did not finish")
+				if !thread.MainStartedAt().IsZero() {
+					t.Error("timed-out Main execution was not demoted")
+				}
+			})
+			co.Join(thread)
+			if !thread.Stopped() && thread.Context().Err() == nil {
+				t.Fatal("Main timeout test coroutine did not finish")
+			}
+		})
 	}
 }
 
