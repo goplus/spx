@@ -27,9 +27,11 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/ffi"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/webffi"
-	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 	"github.com/goplus/spx/v3/internal/release"
 )
+
+var codegenLogger = spxlog.NewWithOutputs("SPX-CODEGEN", spxlog.LevelInfo, os.Stdout, os.Stderr)
 
 // codegenConfig contains the paths for one generation run.
 type codegenConfig struct {
@@ -107,7 +109,7 @@ func generateCode(config codegenConfig) error {
 		return err
 	}
 
-	spxlog.Info("SPX module source %q selected", config.spxModulePath)
+	codegenLogger.Info("SPX module source %q selected", config.spxModulePath)
 	headers, err := gdext.PrepareHeaders(config.spxModulePath)
 	if err != nil {
 		return fmt.Errorf("prepare GDExtension headers: %w", err)
@@ -134,6 +136,6 @@ func generateCode(config codegenConfig) error {
 		return fmt.Errorf("generate GDExtension sources: %w", err)
 	}
 
-	spxlog.Info("Code generation completed")
+	codegenLogger.Info("Code generation completed")
 	return nil
 }

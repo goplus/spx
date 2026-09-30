@@ -25,10 +25,12 @@ import (
 	"strconv"
 	"text/template"
 
+	"github.com/goplus/spx/v3/internal/base/licenseheader"
 	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/internal/licenseheader"
-	spxlog "github.com/goplus/spx/v3/internal/cmd/codegen/internal/log"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
+
+var codegenLogger = spxlog.NewWithOutputs("SPX-CODEGEN", spxlog.LevelInfo, os.Stdout, os.Stderr)
 
 const (
 	NativeRelDir       = "../../gdengine/binding/native"
@@ -74,7 +76,7 @@ func WriteGeneratedFile(dstPath string, output []byte, mode os.FileMode) error {
 	if err := os.WriteFile(dstPath, output, mode); err != nil {
 		return fmt.Errorf("write generated file %q: %w", dstPath, err)
 	}
-	spxlog.Info("Generated file: %s", dstPath)
+	codegenLogger.Info("Generated file: %s", dstPath)
 	return nil
 }
 
