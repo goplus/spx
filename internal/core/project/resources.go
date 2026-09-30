@@ -137,7 +137,7 @@ func LoadSoundConfig(fs spxfs.Dir, name string) (LoadedSoundConfig, error) {
 	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
 		return LoadedSoundConfig{}, err
 	}
-	conf.Path = normalizeConfigPath(baseDir, conf.Path)
+	conf.Path = NormalizeConfigPath(baseDir, conf.Path)
 	return LoadedSoundConfig{
 		BaseDir: baseDir,
 		Config:  conf,
@@ -172,7 +172,8 @@ func shouldReadConfigFromEngine(assetDir string) bool {
 	return schema != ""
 }
 
-func normalizeConfigPath(configDir, relPath string) string {
+// NormalizeConfigPath resolves a relative project config path from configDir.
+func NormalizeConfigPath(configDir, relPath string) string {
 	if relPath == "" {
 		return ""
 	}
@@ -194,10 +195,10 @@ func normalizeProjectConfigPaths(conf *ProjectConfig) {
 		if backdrop == nil {
 			continue
 		}
-		backdrop.Path = normalizeConfigPath("", backdrop.Path)
+		backdrop.Path = NormalizeConfigPath("", backdrop.Path)
 	}
-	conf.Bgm = normalizeConfigPath("", conf.Bgm)
-	conf.TilemapPath = normalizeConfigPath("", conf.TilemapPath)
+	conf.Bgm = NormalizeConfigPath("", conf.Bgm)
+	conf.TilemapPath = NormalizeConfigPath("", conf.TilemapPath)
 }
 
 func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
@@ -209,12 +210,12 @@ func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
 		if costume == nil {
 			continue
 		}
-		costume.Path = normalizeConfigPath(configDir, costume.Path)
+		costume.Path = NormalizeConfigPath(configDir, costume.Path)
 	}
 	if conf.CostumeSet != nil {
-		conf.CostumeSet.Path = normalizeConfigPath(configDir, conf.CostumeSet.Path)
+		conf.CostumeSet.Path = NormalizeConfigPath(configDir, conf.CostumeSet.Path)
 	}
 	if conf.CostumeMPSet != nil {
-		conf.CostumeMPSet.Path = normalizeConfigPath(configDir, conf.CostumeMPSet.Path)
+		conf.CostumeMPSet.Path = NormalizeConfigPath(configDir, conf.CostumeMPSet.Path)
 	}
 }

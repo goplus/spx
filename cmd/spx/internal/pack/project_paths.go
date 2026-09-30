@@ -19,11 +19,11 @@ package pack
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v3/fs"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
 const (
@@ -83,7 +83,7 @@ func collectExternalAssetPathsWithConfig(baseFolder string, existingZipPaths map
 	}()
 
 	for _, ref := range refs {
-		normalized := normalizeConfigPath(ref.configDir, ref.path)
+		normalized := coreproject.NormalizeConfigPath(ref.configDir, ref.path)
 		sourcePath, zipPath, ok := resolveExternalAssetPath(assetRoot, compatibilityRoot, extAssetDir, normalized)
 		if !ok {
 			continue
@@ -216,20 +216,6 @@ func relConfigDir(assetRoot, configDir string) (string, error) {
 		return "", err
 	}
 	return normalizeZipPath(rel), nil
-}
-
-// normalizeConfigPath matches runtime path rules.
-func normalizeConfigPath(configDir, relPath string) string {
-	if relPath == "" {
-		return ""
-	}
-	if strings.HasPrefix(relPath, "/") {
-		return relPath
-	}
-	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
-		return relPath
-	}
-	return path.Clean(path.Join(configDir, relPath))
 }
 
 func cleanFilesystemPath(name string) string {

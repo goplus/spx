@@ -76,7 +76,7 @@ func ensureBrotliAvailable() error {
 			return err
 		}
 	case "darwin":
-		if err := runStreamingCommand("", "brew", "install", "brotli"); err != nil {
+		if err := shared.RunStreamingCommand("", "brew", "install", "brotli"); err != nil {
 			return err
 		}
 	default:
@@ -99,29 +99,29 @@ func installBrotliLinux() error {
 		lower := strings.ToLower(string(content))
 		switch {
 		case strings.Contains(lower, "id=ubuntu"), strings.Contains(lower, "id=debian"):
-			if err := runStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
+			if err := shared.RunStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
 				return err
 			}
-			return runStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
+			return shared.RunStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
 		case strings.Contains(lower, "id=fedora"), strings.Contains(lower, "id=rhel"), strings.Contains(lower, "id=centos"):
 			if _, err := exec.LookPath("dnf"); err == nil {
-				return runStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
+				return shared.RunStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
 			}
-			return runStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
+			return shared.RunStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
 		}
 	}
 
 	if _, err := exec.LookPath("apt-get"); err == nil {
-		if err := runStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
+		if err := shared.RunStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
 			return err
 		}
-		return runStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
+		return shared.RunStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
 	}
 	if _, err := exec.LookPath("dnf"); err == nil {
-		return runStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
+		return shared.RunStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
 	}
 	if _, err := exec.LookPath("yum"); err == nil {
-		return runStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
+		return shared.RunStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
 	}
 	return fmt.Errorf("unable to install brotli automatically on linux: no supported package manager found")
 }
@@ -138,20 +138,9 @@ func compressWithBrotli(inputFile, outputFile string) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "Compressing %s with brotli...\n", inputFile)
-	if err := runStreamingCommand("", "brotli", "-q", "11", "-o", outputFile, inputFile); err != nil {
+	if err := shared.RunStreamingCommand("", "brotli", "-q", "11", "-o", outputFile, inputFile); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Created %s\n", outputFile)
 	return nil
-}
-
-func runStreamingCommand(workdir, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
 }
