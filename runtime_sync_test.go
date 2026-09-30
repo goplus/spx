@@ -161,7 +161,7 @@ func TestProxyRebuildAndDestroySubmitOnlyPendingTransforms(t *testing.T) {
 	collect(1)
 	collect(0)
 	oldProxy := sprite.runtimeState.SyncSprite
-	sprite.rebuildRuntimeProxy(true)
+	sprite.initRuntimeProxy()
 	if sprite.runtimeState.SyncSprite == oldProxy {
 		t.Fatal("rebuild reused the old proxy")
 	}

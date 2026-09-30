@@ -214,21 +214,15 @@ func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
 }
 
 func (p *SpriteImpl) initRuntimeProxy() {
-	p.rebuildRuntimeProxy(true)
+	p.runtimeState.SyncSprite = nil
+	engine.WaitMainThread(func() {
+		p.ensureProxyInitialized()
+		p.baseObj.applyCostumeUpdate()
+	})
 }
 
 func (p *SpriteImpl) awake() {
 	p.animation().playDefaultAnimIfIdle()
-}
-
-func (p *SpriteImpl) rebuildRuntimeProxy(applyCostume bool) {
-	p.runtimeState.SyncSprite = nil
-	engine.WaitMainThread(func() {
-		p.ensureProxyInitialized()
-		if applyCostume {
-			p.baseObj.applyCostumeUpdate()
-		}
-	})
 }
 
 // ensureProxyInitialized initializes the sprite's engine proxy if it hasn't been created yet.
