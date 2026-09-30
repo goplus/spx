@@ -24,6 +24,47 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
+// setupSnapshotInputSessionTest extends the replay fixture with capture cleanup.
+func setupSnapshotInputSessionTest(t *testing.T) {
+	t.Helper()
+	resetInputSessionTest(t)
+	reset := func() {
+		engine.ResetFrameRuntime()
+		engine.SetCaptureHandler(nil)
+	}
+	reset()
+	t.Cleanup(reset)
+}
+
+func TestSnapshotInputSessionFixtureClearsGameAndPendingCaptures(t *testing.T) {
+	setupSnapshotInputSessionTest(t)
+
+	t.Run("recording", func(t *testing.T) {
+		setupSnapshotInputSessionTest(t)
+		if _, err := PrepareInputRecording(30); err != nil {
+			t.Fatal(err)
+		}
+		claimPreparedSession(t, &Game{})
+		Snapshot("pending-cleanup", nil)
+		if !engine.HasPendingCaptures() {
+			t.Fatal("recording fixture did not queue the capture")
+		}
+	})
+
+	if game := engine.GetGame(); game != nil {
+		t.Errorf("Game after fixture cleanup = %T, want nil", game)
+	}
+	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
+		t.Errorf("input session after fixture cleanup = %+v, want idle", status)
+	}
+	if _, fixed := itime.FixedDeltaTime(); fixed {
+		t.Error("fixture cleanup left the fixed timestep enabled")
+	}
+	if engine.HasPendingCaptures() {
+		t.Error("fixture cleanup left pending captures")
+	}
+}
+
 func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 
@@ -78,32 +119,25 @@ func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
 }
 
 func TestSnapshotUsesCurrentInputReplayTick(t *testing.T) {
-	resetInputSessionState()
-	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.ResetFrameRuntime()
-	})
+	setupSnapshotInputSessionTest(t)
 
 	var got []engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req)
 		return nil
 	})
-	t.Cleanup(func() { engine.SetCaptureHandler(nil) })
 
 	if _, err := PrepareInputRecording(30); err != nil {
 		t.Fatal(err)
 	}
 	game := &Game{}
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
+	claimPreparedSession(t, game)
 	Snapshot("before-tick", nil)
 	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("captures before tick zero = %d, want 1", len(got))
 	}
 	if got[0].InputTick != nil {
 		t.Fatalf("capture before tick zero has input tick %d", *got[0].InputTick)
@@ -120,21 +154,16 @@ func TestSnapshotUsesCurrentInputReplayTick(t *testing.T) {
 	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)
 	}
+	if len(got) != 2 {
+		t.Fatalf("captures after tick zero = %d, want 2", len(got))
+	}
 	if got[1].InputTick == nil || *got[1].InputTick != 0 {
 		t.Fatalf("capture input tick = %v, want 0", got[1].InputTick)
 	}
 }
 
 func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
-	resetInputSessionState()
-	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.SetGame(nil)
-		engine.ResetFrameRuntime()
-		engine.SetCaptureHandler(nil)
-	})
+	setupSnapshotInputSessionTest(t)
 
 	var got engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
@@ -145,10 +174,7 @@ func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	game := &Game{}
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
+	claimPreparedSession(t, game)
 	if _, err := consumeInputTick(InputReplayState{}, nil, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -162,15 +188,7 @@ func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
 }
 
 func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
-	resetInputSessionState()
-	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.SetGame(nil)
-		engine.ResetFrameRuntime()
-		engine.SetCaptureHandler(nil)
-	})
+	setupSnapshotInputSessionTest(t)
 
 	var got []engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
@@ -181,11 +199,7 @@ func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	game := &Game{}
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	session := game.currentInputSession()
+	session := claimPreparedSession(t, game)
 	recordedTick, err := consumeInputTick(
 		InputReplayState{KeysDown: []int64{int64(KeyP)}},
 		[]InputReplayKeyEvent{{Key: int64(KeyP), Pressed: true}},
@@ -205,10 +219,7 @@ func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyP}); err != nil {
 		t.Fatal(err)
 	}
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	session = game.currentInputSession()
+	session = claimPreparedSession(t, game)
 	replayedTick, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0)
 	if err != nil {
 		t.Fatal(err)
@@ -228,15 +239,7 @@ func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 }
 
 func TestSnapshotDoesNotInheritInputTickAcrossGameReset(t *testing.T) {
-	resetInputSessionState()
-	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.SetGame(nil)
-		engine.ResetFrameRuntime()
-		engine.SetCaptureHandler(nil)
-	})
+	setupSnapshotInputSessionTest(t)
 
 	var got []engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
@@ -247,10 +250,7 @@ func TestSnapshotDoesNotInheritInputTickAcrossGameReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	game := &Game{}
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
+	claimPreparedSession(t, game)
 	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0); err != nil {
 		t.Fatal(err)
 	}
