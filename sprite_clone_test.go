@@ -419,7 +419,6 @@ func setupCloneSpriteMgr(t *testing.T) *spyCloneSpriteMgr {
 }
 
 func flushCloneProxyUpdates(game *Game) {
-	game.shapeMgr.takeCloneProxyPublications()
 	if game.syncBuffer == nil {
 		game.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
 	}
@@ -451,6 +450,44 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	}
 	if !dest.isCloneProxyPublicationBlocked() {
 		t.Fatal("runtime clone publication state was not created")
+	}
+}
+
+func TestFinishCloneInitializationPreservesPublicationState(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		initial   uint32
+		destroyed bool
+		want      uint32
+	}{
+		{"pending becomes ready", cloneProxyPending, false, cloneProxyReady},
+		{"ready stays ready", cloneProxyReady, false, cloneProxyReady},
+		{"published stays published", cloneProxyPublished, false, cloneProxyPublished},
+		{"destroyed stays pending", cloneProxyPending, true, cloneProxyPending},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite := &SpriteImpl{
+				g:                &Game{},
+				proxyPublication: &cloneProxyPublication{state: tt.initial},
+			}
+			if tt.destroyed {
+				sprite.markDestroyed()
+			}
+			for range 2 {
+				sprite.finishCloneInitialization()
+				if got := sprite.cloneProxyPublicationState(); got != tt.want {
+					t.Fatalf("publication state = %d, want %d", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestFinishCloneInitializationLeavesOrdinarySpriteUngated(t *testing.T) {
+	sprite := &SpriteImpl{g: &Game{}}
+	sprite.finishCloneInitialization()
+	if sprite.proxyPublication != nil || sprite.isCloneProxyPublicationBlocked() {
+		t.Fatal("ordinary sprite acquired a clone publication gate")
 	}
 }
 

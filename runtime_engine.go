@@ -99,7 +99,6 @@ func (p *Game) OnEngineRender(float64) {
 		return
 	}
 	// Flush coroutine changes before drawing.
-	p.shapeMgr.takeCloneProxyPublications()
 	p.syncPostCoroutineVisuals()
 	// Drain bootstrap collisions before OnStart.
 	p.processPhysicsTriggers()

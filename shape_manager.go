@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"sync/atomic"
-
 	"github.com/goplus/spx/v3/internal/base/sliceutil"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -38,17 +36,16 @@ const maxClones = 300
 
 // shapeManager tracks active shapes and reusable frame buffers.
 type shapeManager struct {
-	cloneCount               int
-	pendingClones            int
-	items                    []Shape
-	named                    map[string][]*SpriteImpl
-	tempItems                []Shape
-	destroyItems             []Shape
-	textBubbles              []*textBubble
-	activeTextBubbles        []*textBubble
-	sayLayouts               []ui.SayBubbleLayout
-	nextTextBubbleLayoutID   uint64
-	pendingClonePublications atomic.Bool
+	cloneCount             int
+	pendingClones          int
+	items                  []Shape
+	named                  map[string][]*SpriteImpl
+	tempItems              []Shape
+	destroyItems           []Shape
+	textBubbles            []*textBubble
+	activeTextBubbles      []*textBubble
+	sayLayouts             []ui.SayBubbleLayout
+	nextTextBubbleLayoutID uint64
 }
 
 func resetSlice[T any](items []T, initialCap int) []T {
@@ -63,7 +60,6 @@ func resetSlice[T any](items []T, initialCap int) []T {
 func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
-	s.pendingClonePublications.Store(false)
 	s.named = nil
 	s.items = resetSlice(s.items, 64)
 	s.tempItems = resetSlice(s.tempItems, 50)
@@ -72,14 +68,6 @@ func (s *shapeManager) init() {
 	s.activeTextBubbles = resetSlice(s.activeTextBubbles, 0)
 	s.sayLayouts = resetSlice(s.sayLayouts, 0)
 	s.nextTextBubbleLayoutID = 0
-}
-
-func (s *shapeManager) markCloneProxyPublicationReady() {
-	s.pendingClonePublications.Store(true)
-}
-
-func (s *shapeManager) takeCloneProxyPublications() bool {
-	return s.pendingClonePublications.Swap(false)
 }
 
 // reset clears the scene and reuses frame buffers.
@@ -234,6 +222,7 @@ func (s *shapeManager) reserveClone() bool {
 	if s.cloneCount+s.pendingClones >= maxClones {
 		return false
 	}
+
 	s.pendingClones++
 	return true
 }
@@ -260,6 +249,7 @@ func (s *shapeManager) activateShape(child Shape) {
 	if idx < 0 || idx == len(s.items)-1 {
 		return
 	}
+
 	s.items = sliceutil.MoveToEnd(s.items, idx)
 	clear(s.named)
 	s.updateRenderLayers()

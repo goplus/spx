@@ -256,11 +256,11 @@ func (p *SpriteImpl) effectiveProxyVisibility() bool {
 // The batch applies costume and layer changes before it submits visibility, so
 // no render can observe the inherited initialization state or stale peer layers.
 func (p *SpriteImpl) finishCloneInitialization() {
-	if p.isDestroyed() || p.proxyPublication == nil ||
-		!atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyPending, cloneProxyReady) {
+	if p.isDestroyed() || p.proxyPublication == nil {
 		return
 	}
-	p.g.shapeMgr.markCloneProxyPublicationReady()
+	// The render pass scans the per-clone publication state unconditionally.
+	atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyPending, cloneProxyReady)
 }
 
 // handleAnimationFinished records completed animation events from the proxy.
