@@ -17,9 +17,10 @@
 package spx
 
 import (
-	"reflect"
+	"slices"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -56,7 +57,7 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 		internalengine.PenBatchUp,
 	}
 	gotOps := penBatchOperations(batch)
-	if !reflect.DeepEqual(gotOps, wantOps) {
+	if !slices.Equal(gotOps, wantOps) {
 		t.Fatalf("command operations = %v, want %v", gotOps, wantOps)
 	}
 
@@ -92,7 +93,7 @@ func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
 		internalengine.PenBatchDown,
 		internalengine.PenBatchColor,
 	}
-	if got := penBatchOperations(batch); !reflect.DeepEqual(got, wantOps) {
+	if got := penBatchOperations(batch); !slices.Equal(got, wantOps) {
 		t.Fatalf("commands = %v, want %v", got, wantOps)
 	}
 	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
@@ -145,7 +146,7 @@ func TestPenBatchBarriersPreserveOrder(t *testing.T) {
 
 			tt.action(sprite)
 
-			if got, want := spy.events, []string{"batch", tt.last}; !reflect.DeepEqual(got, want) {
+			if got, want := spy.events, []string{"batch", tt.last}; !slices.Equal(got, want) {
 				t.Fatalf("events = %v, want %v", got, want)
 			}
 		})
@@ -162,7 +163,7 @@ func TestOnEngineRenderFlushesPendingPenCommandsOnEarlyReturn(t *testing.T) {
 	if spy.batchCalls != 1 {
 		t.Fatalf("batch calls = %d, want 1", spy.batchCalls)
 	}
-	if got, want := penBatchOperations(spy.batches[0]), []int{internalengine.PenBatchUp}; !reflect.DeepEqual(got, want) {
+	if got, want := penBatchOperations(spy.batches[0]), []int{internalengine.PenBatchUp}; !slices.Equal(got, want) {
 		t.Fatalf("command operations = %v, want %v", got, want)
 	}
 }
@@ -199,6 +200,35 @@ func TestPenBatchFlushesAtCommandLimit(t *testing.T) {
 	}
 	if got, want := int(spy.batches[1][0]), 1; got != want {
 		t.Fatalf("second batch command count = %d, want %d", got, want)
+	}
+}
+
+func TestSyncPenCanvasToWorldUsesLogicalStageSize(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.displayState.WindowWidth = 480
+	game.displayState.WindowHeight = 360
+
+	game.syncPenCanvasToWorld()
+
+	if spy.canvasCalls != 1 || spy.canvasWidth != 640 || spy.canvasHeight != 480 {
+		t.Fatalf("pen canvas calls/size = %d/%dx%d, want 1/640x480", spy.canvasCalls, spy.canvasWidth, spy.canvasHeight)
+	}
+}
+
+func TestSyncPenCanvasToWorldFlushesPendingCommandsFirst(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	game := &Game{penSyncBuffer: internalengine.NewPenSyncBuffer(1)}
+	game.displayState.WorldWidth = 640
+	game.displayState.WorldHeight = 480
+	game.queuePenMove(1, mathf.NewVec2(10, 20))
+
+	game.syncPenCanvasToWorld()
+
+	if want := []string{"batch", "canvas"}; !slices.Equal(spy.events, want) {
+		t.Fatalf("events = %v, want %v", spy.events, want)
 	}
 }
 
