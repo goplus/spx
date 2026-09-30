@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	internalaudio "github.com/goplus/spx/v3/internal/audio"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 	spxapi "github.com/goplus/spx/v3/pkg/spx"
@@ -118,49 +117,42 @@ func (f *fakeAudioBackend) SetLoop(aid int64, loop bool) {}
 func (f *fakeAudioBackend) IsPlaying(aid int64) bool     { return false }
 func (f *fakeAudioBackend) StopAll()                     {}
 
-func TestGameClearSoundEffectsResetsPanAndPitch(t *testing.T) {
-	backend := &fakeAudioBackend{pan: 0.4, pitch: 1.25}
-	var g Game
-	g.soundMgr = internalaudio.Manager{}
-	g.soundMgr.Init(backend)
-	g.audioState.SoundObj = 9
+func TestGameClearSoundEffects(t *testing.T) {
+	for _, test := range []struct {
+		name                   string
+		soundObj, wantSoundObj internalengine.Object
+		wantCreateCalls        int
+	}{
+		{name: "existing handle", soundObj: 9, wantSoundObj: 9},
+		{name: "unused handle", wantSoundObj: 77, wantCreateCalls: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			backend := &fakeAudioBackend{pan: 0.4, pitch: 1.25}
+			var g Game
+			g.soundMgr.Init(backend)
+			g.audioState.SoundObj = test.soundObj
 
-	g.ClearSoundEffects()
+			g.ClearSoundEffects()
 
-	if backend.pan != 0 {
-		t.Fatalf("pan = %v, want 0", backend.pan)
-	}
-	if backend.pitch != 1 {
-		t.Fatalf("pitch = %v, want 1", backend.pitch)
-	}
-}
-
-func TestGameClearSoundEffectsAllocatesWhenUnused(t *testing.T) {
-	backend := &fakeAudioBackend{pan: 0.4, pitch: 1.25}
-	var g Game
-	g.soundMgr = internalaudio.Manager{}
-	g.soundMgr.Init(backend)
-
-	g.ClearSoundEffects()
-
-	if backend.createCalls != 1 {
-		t.Fatalf("CreateAudio calls = %d, want 1", backend.createCalls)
-	}
-	if g.audioState.SoundObj != 77 {
-		t.Fatalf("SoundObj = %d, want 77", g.audioState.SoundObj)
-	}
-	if backend.pan != 0 {
-		t.Fatalf("pan = %v, want 0", backend.pan)
-	}
-	if backend.pitch != 1 {
-		t.Fatalf("pitch = %v, want 1", backend.pitch)
+			if backend.createCalls != test.wantCreateCalls {
+				t.Fatalf("CreateAudio calls = %d, want %d", backend.createCalls, test.wantCreateCalls)
+			}
+			if got := g.audioState.SoundObj; got != test.wantSoundObj {
+				t.Fatalf("SoundObj = %d, want %d", got, test.wantSoundObj)
+			}
+			if backend.pan != 0 {
+				t.Fatalf("pan = %v, want 0", backend.pan)
+			}
+			if backend.pitch != 1 {
+				t.Fatalf("pitch = %v, want 1", backend.pitch)
+			}
+		})
 	}
 }
 
 func TestGameSoundHandleIsLazyReusedAndReleased(t *testing.T) {
 	backend := &fakeAudioBackend{}
 	var g Game
-	g.soundMgr = internalaudio.Manager{}
 	g.soundMgr.Init(backend)
 
 	g.SetVolume(60)
@@ -194,7 +186,6 @@ func TestGameSoundHandleIsLazyReusedAndReleased(t *testing.T) {
 func TestGamePlayUsesStageAudioParameters(t *testing.T) {
 	backend := &fakeAudioBackend{}
 	var g Game
-	g.soundMgr = internalaudio.Manager{}
 	g.soundMgr.Init(backend)
 	g.sounds = map[string]sound{
 		"stage": &coreproject.SoundConfig{Path: "sounds/stage.wav"},

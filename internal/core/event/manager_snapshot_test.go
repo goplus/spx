@@ -32,44 +32,60 @@ var registrationMethods = []struct {
 		mgr.Add(BucketClick, sink)
 		return true
 	}},
+	{"AddStart", BucketStart, func(mgr *Manager, sink Sink) bool {
+		mgr.Add(BucketStart, sink)
+		return true
+	}},
 	{"TryAddStart", BucketStart, (*Manager).TryAddStart},
 }
 
 func TestManagerSnapshotsAcrossRepeatedAppend(t *testing.T) {
 	for _, method := range registrationMethods {
-		t.Run(method.name, func(t *testing.T) {
-			var mgr Manager
-			// Leave spare capacity to exercise readers sharing an array with
-			// subsequent appends, including an initially empty snapshot.
-			mgr.buckets[method.bucket] = make([]Sink, 0, 16)
-			var snapshots [][]Sink
-			for i := range 12 {
-				snapshot := mgr.Snapshot(method.bucket)
-				if len(snapshot) != cap(snapshot) {
-					t.Fatalf("snapshot len = %d, cap = %d", len(snapshot), cap(snapshot))
+		for _, initial := range []struct {
+			name     string
+			capacity int
+		}{
+			{"zero value", 0},
+			{"spare capacity", 16},
+		} {
+			t.Run(method.name+"/"+initial.name, func(t *testing.T) {
+				var mgr Manager
+				if initial.capacity > 0 {
+					mgr.buckets[method.bucket] = make([]Sink, 0, initial.capacity)
 				}
-				snapshots = append(snapshots, snapshot)
-				// Appending to a snapshot must not reserve or overwrite the
-				// next registration, even when the bucket has spare capacity.
-				local := append(snapshot, Sink{Owner: "local"})
-				if !method.add(&mgr, Sink{Owner: i, Handler: i}) {
-					t.Fatal("registration unexpectedly rejected")
-				}
-				if local[i].Owner != "local" {
-					t.Fatalf("registration overwrote snapshot append: %+v", local[i])
-				}
-			}
-			for n, snapshot := range snapshots {
-				if len(snapshot) != n {
-					t.Fatalf("snapshot %d len = %d", n, len(snapshot))
-				}
-				for i, sink := range snapshot {
-					if sink.Owner != i || sink.Handler != i {
-						t.Fatalf("snapshot %d element %d changed: %+v", n, i, sink)
+				var snapshots [][]Sink
+				for i := range 12 {
+					snapshot := mgr.Snapshot(method.bucket)
+					if len(snapshot) != cap(snapshot) {
+						t.Fatalf("snapshot len = %d, cap = %d", len(snapshot), cap(snapshot))
+					}
+					snapshots = append(snapshots, snapshot)
+					// A local append must neither change the bucket nor be
+					// overwritten by the next registration.
+					local := append(snapshot, Sink{Owner: "local"})
+					if got := mgr.Snapshot(method.bucket); !reflect.DeepEqual(got, snapshot) {
+						t.Fatalf("local append changed bucket: %+v, want %+v", got, snapshot)
+					}
+					if !method.add(&mgr, Sink{Owner: i, Handler: i}) {
+						t.Fatal("registration unexpectedly rejected")
+					}
+					if local[i].Owner != "local" {
+						t.Fatalf("registration overwrote snapshot append: %+v", local[i])
 					}
 				}
-			}
-		})
+				snapshots = append(snapshots, mgr.Snapshot(method.bucket))
+				for n, snapshot := range snapshots {
+					if len(snapshot) != n {
+						t.Fatalf("snapshot %d len = %d, want %d", n, len(snapshot), n)
+					}
+					for i, sink := range snapshot {
+						if sink.Owner != i || sink.Handler != i {
+							t.Fatalf("snapshot %d element %d changed: %+v", n, i, sink)
+						}
+					}
+				}
+			})
+		}
 	}
 }
 
