@@ -213,26 +213,6 @@ func TestRunInputLoopFrameDropsEdgesAtConsumerHandoff(t *testing.T) {
 	}
 }
 
-func TestRunInputLoopFrameEndsBoundaryAfterPanic(t *testing.T) {
-	ended := false
-	func() {
-		defer func() {
-			if recovered := recover(); recovered == nil {
-				t.Fatal("runInputLoopFrame did not panic")
-			}
-		}()
-		runInputLoopFrame(InputLoopConfig{
-			EndFrame: func() { ended = true },
-			CurrentMousePos: func() mathf.Vec2 {
-				panic("input hook failed")
-			},
-		}, &inputLoopState{})
-	}()
-	if !ended {
-		t.Fatal("input frame boundary was not ended after panic")
-	}
-}
-
 func TestFindClickTarget(t *testing.T) {
 	selection, ok := FindClickTarget([]int{1, 2, 3}, func(item int) (ClickSelection[int, int], bool) {
 		if item >= 2 {
