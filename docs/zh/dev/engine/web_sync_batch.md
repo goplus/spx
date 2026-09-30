@@ -34,24 +34,6 @@ Web 端同步主要分为两条方向：
 
 这是最适合批量同步的主路径，因为它具备高频、多对象、固定字段、无需字符串的特点。
 
-### Sprite visual
-
-当前已有视觉批量缓冲，用于同步：
-
-- sprite id
-- render scale
-- z index
-- uv remap
-- flags
-
-对应入口：
-
-- Go: `VisualSyncBuffer.Serialize`
-- Go: `engine.SyncBatchUpdateVisuals`
-- Godot: `SpxSpriteMgr::batch_update_visuals`
-
-它适合继续扩展成更多 sprite 视觉属性，但 texture path、animation name 这类字符串字段不应混入这个 float buffer。
-
 ### Physics position pull
 
 当前 Godot -> SPX 已有批量位置拉取：
@@ -115,28 +97,23 @@ Web 端 collision / trigger callback 已改成 JS 侧 event queue：
 
 Godot 触发事件时先写入 JS 数组队列，在 engine update / fixed update 前批量 flush 给 Go。若 Go direct handler 尚未注册，则回退到原有 `gdspx_dispatch` 逐条派发。
 
+## 保留但未接入 Go 运行时的批量接口
+
+底层引擎提供批量接口，不等于 Go 运行时已经使用该批次。没有生产调用的 `VisualSyncBuffer`、`PhysicsSyncBuffer` 及视觉提交包装已移除；下面的 Godot ABI 和生成绑定仍保留，不能将此清理理解为删除引擎能力。
+
+### Sprite visual
+
+保留的底层入口为生成接口 `SpriteMgr.BatchUpdateVisuals` 和 Godot 的 `SpxSpriteMgr::batch_update_visuals`。
+
+协议为 `[count, entry0..., entry1..., ...]`，每条记录包含 `spriteId, renderScaleX, renderScaleY, zIndex, flags, uvX, uvY, uvW, uvH`。Go 运行时的服装、层级和材质更新继续使用现有直接更新路径，不为保留一个缓冲类型而额外接入批次。texture path、animation name 等字符串字段不应混入该 float buffer。
+
 ### Sprite physics config
 
-Web 端新增 sprite physics command buffer，用于批量同步：
+保留的底层入口为生成接口 `SpriteMgr.BatchUpdatePhysics`、Godot 的 `SpxSpriteMgr::batch_update_physics` 和 Web raw export `gdspx_sprite_batch_update_physics`。
 
-- velocity
-- gravity / gravity scale
-- mass
-- physics mode
-- drag / friction
-- collision layer / mask
-- trigger layer / mask
-- collision enabled / trigger enabled
+协议为 `[count, cmd, spriteIdLowBits, spriteIdHighBits, a, b, reserved0, ...]`。sprite id 和 layer / mask / mode 等整数使用 `float32` lane 的 raw bits 编码。命令编号由接收端协议定义，范围为 1 到 14，不能将未来 Go 常量的自身取值作为跨端一致性的唯一测试依据。
 
-对应入口：
-
-- Go: `PhysicsSyncBuffer.Serialize`
-- Go: `engine.SyncBatchUpdatePhysics`
-- Go Web wrapper: `WebSpriteBatchUpdatePhysics`
-- Godot: `SpxSpriteMgr::batch_update_physics`
-- Godot Web raw export: `gdspx_sprite_batch_update_physics`
-
-buffer 格式为 `[count, cmd, spriteIdLowBits, spriteIdHighBits, a, b, reserved0, ...]`。sprite id 和 layer / mask / mode 这类整数使用 `float32` lane 的 raw bits 编码，避免按数值转成 `float32` 时丢失高位。polygon points、collider shape 参数这类可变长 payload 暂不进入该 fixed record buffer。
+以后确有生产调用需求时，应同时提交调用路径和跨端命令编号/参数语义测试，而不是恢复独立、未接入的序列化器。polygon points、collider shape 参数等可变长 payload 不属于该 fixed record buffer。
 
 ## 适合新增批量同步的数据
 
@@ -208,7 +185,7 @@ Tilemap 本身已有数组型批量接口空间，适合继续二进制化：
 
 该方案减少了一次中间 `Uint8Array -> Module.HEAPU8` 拷贝。在线程版 Godot Web 构建中，Godot wasm heap 的底层 buffer 是 `SharedArrayBuffer`；非线程构建中是普通 `ArrayBuffer`，但协议和调用路径保持一致。
 
-变换、删除和视觉批次使用旧协议，将精灵 ID 作为数值存储在 `float32` 中。序列化要求 ID 非负且能够精确往返转换；非法 ID 会在提交数据包之前触发包含原始 ID 的 panic。引擎回调的 panic 处理器会报告错误并请求运行时退出或重置。这项检查保留现有传输格式；物理批次已使用两个位通道无损编码 ID。
+变换和删除批次的 Go 序列化仍使用旧协议，将精灵 ID 作为数值存储在 `float32` 中。序列化要求 ID 非负且能够精确往返转换；非法 ID 会在提交数据包之前触发包含原始 ID 的 panic。引擎回调的 panic 处理器会报告错误并请求运行时退出或重置。保留的底层视觉批次也使用数值 ID；底层物理批次使用两个位通道无损编码 ID。本次 Go 封装清理不改变这些 ABI。
 
 ## 后续优先级
 
