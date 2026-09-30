@@ -29,7 +29,9 @@ import (
 )
 
 func (cmd *CmdTool) BuildWasm() error {
-	cmd.genGo()
+	if _, err := cmd.genGo(); err != nil {
+		return err
+	}
 
 	webBuildDir := path.Join(cmd.ProjectDir, ".builds/web/")
 	if err := os.MkdirAll(webBuildDir, 0755); err != nil {
@@ -37,18 +39,19 @@ func (cmd *CmdTool) BuildWasm() error {
 	}
 	filePath := path.Join(webBuildDir, "ispx.wasm")
 
-	return cmd.withGoDir(func() error {
-		logDebugf("Building WebAssembly binary: %s", filePath)
-		envVars := []string{"GOOS=js", "GOARCH=wasm"}
-
-		util.RunGolang(envVars, "build", "-o", filePath)
-		return nil
-	})
+	logDebugf("Building WebAssembly binary: %s", filePath)
+	envVars := []string{"GOOS=js", "GOARCH=wasm"}
+	if err := util.ExecCommand(util.CommandOptions{Dir: cmd.GoDir, Env: envVars}, "go", "build", "-o", filePath); err != nil {
+		return fmt.Errorf("webassembly build failed: %w", err)
+	}
+	return nil
 }
 
 // BuildTinyGoLib builds a TinyGo static library.
 func (cmd *CmdTool) BuildTinyGoLib() error {
-	cmd.genGo()
+	if _, err := cmd.genGo(); err != nil {
+		return err
+	}
 
 	target := *cmd.Args.Target
 	if target == "" || target == "esp32" {
@@ -76,15 +79,9 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 	args = append(args, ".")
 
 	envVars := []string{"GODEBUG=gotypesalias=0"}
-
-	if err := cmd.withGoDir(func() error {
-		logInfof("Building TinyGo static library for target: %s", target)
-		if err := util.RunTinyGo(envVars, args...); err != nil {
-			return fmt.Errorf("tinygo build failed: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return err
+	logInfof("Building TinyGo static library for target: %s", target)
+	if err := util.ExecCommand(util.CommandOptions{Dir: cmd.GoDir, Env: envVars}, "tinygo", args...); err != nil {
+		return fmt.Errorf("tinygo build failed: %w", err)
 	}
 
 	logInfof("Built TinyGo static library: %s", outputPath)
@@ -99,37 +96,17 @@ func (cmd *CmdTool) BuildDll() error {
 		return err
 	}
 
-	tagStr := cmd.genGo()
-
-	return cmd.withGoDir(func() error {
-		if err := cmd.executeDllBuild(targetArchs, tagStr); err != nil {
-			return err
-		}
-		if cmd.LibPath == "" {
-			return fmt.Errorf("build error: cannot find matched dylib for runtime arch %s", runtime.GOARCH)
-		}
-		return nil
-	})
-}
-
-// withGoDir runs f in cmd.GoDir.
-func (cmd *CmdTool) withGoDir(f func() error) error {
-	rawdir, err := os.Getwd()
+	tagStr, err := cmd.genGo()
 	if err != nil {
-		return fmt.Errorf("failed to get current working directory: %w", err)
+		return err
 	}
-
-	if err := os.Chdir(cmd.GoDir); err != nil {
-		return fmt.Errorf("failed to change directory to GoDir %s: %w", cmd.GoDir, err)
+	if err := cmd.executeDllBuild(targetArchs, tagStr); err != nil {
+		return err
 	}
-
-	defer func() {
-		if err := os.Chdir(rawdir); err != nil {
-			logWarnf("Failed to restore working directory to %s: %v", rawdir, err)
-		}
-	}()
-
-	return f()
+	if cmd.LibPath == "" {
+		return fmt.Errorf("build error: cannot find matched dylib for runtime arch %s", runtime.GOARCH)
+	}
+	return nil
 }
 
 // hideIOSFiles renames ios* files to .txt files.
@@ -184,45 +161,29 @@ func (cmd *CmdTool) determineTargetArchs() ([]string, error) {
 		tarArch, runtime.GOOS, strings.Join(validArchs, ","))
 }
 
-func (cmd *CmdTool) genGo() string {
-	rawdir, err := os.Getwd()
-	if err != nil {
-		logFatalf("Failed to get current working directory: %v", err)
-	}
-
+func (cmd *CmdTool) genGo() (string, error) {
 	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
-
-	if err := cmd.genGoUsingXgoCLI(rawdir, spxProjPath); err != nil {
-		logFatalf("Code generation failed using xgo CLI: %v", err)
+	if err := cmd.genGoUsingXgoCLI(spxProjPath); err != nil {
+		return "", fmt.Errorf("code generation failed using xgo CLI: %w", err)
 	}
-
-	return cmd.SafeTagArgs()
+	return cmd.SafeTagArgs(), nil
 }
 
-// genGoUsingXgoCLI generates code with xgo.
-func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
+// genGoUsingXgoCLI generates code with xgo without changing the process directory.
+func (cmd *CmdTool) genGoUsingXgoCLI(spxProjPath string) error {
 	if err := cmd.ensureBuilderAIModuleFiles(spxProjPath); err != nil {
 		return err
 	}
 
-	if err := os.Chdir(spxProjPath); err != nil {
-		return fmt.Errorf("failed to change directory to project root for XGo: %w", err)
-	}
-	defer func() {
-		if err := os.Chdir(rawdir); err != nil {
-			logWarnf("Failed to restore working directory to %s: %v", rawdir, err)
-		}
-	}()
-
 	tagStr := cmd.SafeTagArgs()
 	logDebugf("GenGo tags: %s", tagStr)
-	envVars := []string{""}
-
 	args := []string{"go"}
 	if tagStr != "" {
 		args = append(args, tagStr)
 	}
-	util.RunXGo(envVars, args...)
+	if err := util.ExecCommand(util.CommandOptions{Dir: spxProjPath}, "xgo", args...); err != nil {
+		return fmt.Errorf("xgo generation failed: %w", err)
+	}
 
 	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
 		return fmt.Errorf("failed to create GoDir: %w", err)
@@ -236,7 +197,9 @@ func (cmd *CmdTool) genGoUsingXgoCLI(rawdir, spxProjPath string) error {
 	}
 
 	if cmd.shouldRunGoModTidy() {
-		util.RunGolang(nil, "mod", "tidy")
+		if err := util.ExecCommand(util.CommandOptions{Dir: spxProjPath}, "go", "mod", "tidy"); err != nil {
+			return fmt.Errorf("go mod tidy failed: %w", err)
+		}
 	}
 
 	return nil
@@ -276,7 +239,9 @@ func (cmd *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 		currentArgs := append(buildArgs, "-o", newPath)
 
 		logDebugf("Building shared library: envs=%s, args=%s", envs, currentArgs)
-		util.RunGolang(envs, currentArgs...)
+		if err := util.ExecCommand(util.CommandOptions{Dir: cmd.GoDir, Env: envs}, "go", currentArgs...); err != nil {
+			return fmt.Errorf("go shared-library build for %s failed: %w", arch, err)
+		}
 	}
 	return nil
 }

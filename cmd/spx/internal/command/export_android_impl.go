@@ -46,7 +46,9 @@ func (cmd *CmdTool) ExportApk() error {
 	if err := cmd.prepareExport(); err != nil {
 		return err
 	}
-	cmd.BuildDll()
+	if err := cmd.BuildDll(); err != nil {
+		return err
+	}
 	if err := cmd.buildAndroidLibraries(); err != nil {
 		return fmt.Errorf("failed to build Android libraries: %w", err)
 	}
