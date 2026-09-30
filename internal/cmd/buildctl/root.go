@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/dockercmd"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
@@ -46,8 +45,6 @@ func runOtherRootCommand(args []string) error {
 		return toolpkg.Run(args[1:])
 	case "engine":
 		return engine.Run(args[1:])
-	case "docker":
-		return dockercmd.Run(args[1:])
 	case "workflow":
 		return workflow.Run(args[1:])
 	case "help", "-h", "--help":
@@ -70,6 +67,5 @@ func printRootUsage() {
 	fmt.Fprintln(os.Stderr, "  tool       Install build tooling")
 	fmt.Fprintln(os.Stderr, "  engine     Download engine assets and manage the build lock")
 	fmt.Fprintln(os.Stderr, "  runtime    Export runtime artifacts")
-	fmt.Fprintln(os.Stderr, "  docker     Run unsupported legacy container workflows (independent toolchain)")
 	fmt.Fprintln(os.Stderr, "  workflow   Run higher-level local build workflows")
 }
