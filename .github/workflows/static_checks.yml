@@ -56,6 +56,7 @@ jobs:
           bash -n .github/scripts/runtime/build_pack.sh
           bash -n .github/scripts/npm/prepare_package.sh
           bash -n .github/scripts/release/assemble.sh
+          bash -n .github/scripts/test_go.sh
 
       - name: Set up Node.js for Web bridge tests
         uses: actions/setup-node@v7
@@ -89,5 +90,4 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/driverbundle/workflow_test.py
           go run .github/scripts/runtime/digest.go pack-source HEAD >/dev/null
           go run .github/scripts/runtime/digest.go build-recipe HEAD >/dev/null
-          go test -v $(go list ./... | grep -v /internal/webffi)
-          cd cmd/ispx && go test -v ./...
+          bash .github/scripts/test_go.sh -v
