@@ -65,7 +65,7 @@ func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
 	m.batches = append(m.batches, append([]float32(nil), buffer...))
 }
 
-func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
+func TestOnEngineRenderFlushesWithoutClonePublicationSignal(t *testing.T) {
 	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
 	var game Game
@@ -76,15 +76,14 @@ func TestOnEngineRenderFlushesReadyClonePublications(t *testing.T) {
 	destroyed := &SpriteImpl{}
 	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
 	game.shapeMgr.remove(destroyed)
-	game.shapeMgr.markCloneProxyPublicationReady()
 
 	game.OnEngineRender(0)
 
 	if destroyed.runtimeState.SyncSprite != nil {
-		t.Fatal("ready clone publication did not trigger the post-coroutine proxy flush")
+		t.Fatal("post-coroutine proxy flush required a clone publication signal")
 	}
 	if len(spriteMgr.batches) != 1 {
-		t.Fatalf("ready clone publication batches = %d, want 1", len(spriteMgr.batches))
+		t.Fatalf("proxy batches without a clone publication signal = %d, want 1", len(spriteMgr.batches))
 	}
 }
 
