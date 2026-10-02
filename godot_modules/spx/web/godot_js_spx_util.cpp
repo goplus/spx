@@ -90,6 +90,7 @@ struct GdArrayStringSlotSnapshot {
 // Trusted array metadata and ownership.
 struct GdArrayMetadataSnapshot {
     GdArrayInfo *info = nullptr;
+    GdArray *owner = nullptr; // Null while managers are constructing the array.
     int32_t size = 0;
     int32_t type = GD_ARRAY_TYPE_UNKNOWN;
     void *data = nullptr;
@@ -102,7 +103,6 @@ struct GdArrayMetadataSnapshot {
 // Private bindings prevent forged wrapper metadata.
 static std::unordered_map<GdArray *, GdArrayInfo *> gdspxArrayBindings;
 static std::unordered_map<GdArrayInfo *, GdArrayMetadataSnapshot> gdspxArraySnapshots;
-static std::unordered_map<GdArrayInfo *, GdArray *> gdspxArrayOwners;
 
 enum class GdStringReleaseKind {
     NONE,
@@ -324,10 +324,9 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
         return false;
     }
 
-    auto owner_it = gdspxArrayOwners.find(info);
     if (expected_owner == nullptr) {
         // Manager-side release is valid only before wrapper binding.
-        if (owner_it != gdspxArrayOwners.end()) {
+        if (snapshot_it->second.owner != nullptr) {
             return false;
         }
 
@@ -341,11 +340,10 @@ static bool release_array_snapshot(GdArrayInfo *info, GdArray *expected_owner) {
             }
         }
     } else {
-        if (owner_it == gdspxArrayOwners.end() || owner_it->second != expected_owner) {
+        if (snapshot_it->second.owner != expected_owner) {
             return false;
         }
         gdspxArrayBindings.erase(expected_owner);
-        gdspxArrayOwners.erase(owner_it);
         if (arrayPool.is_active(expected_owner)) {
             *expected_owner = nullptr;
         }
@@ -388,8 +386,7 @@ extern "C" bool gdspx_bind_array_wrapper(GdArray *wrapper) {
         return false;
     }
 
-    auto owner_it = gdspxArrayOwners.find(info);
-    if (owner_it != gdspxArrayOwners.end() && owner_it->second != wrapper) {
+    if (snapshot_it->second.owner != nullptr && snapshot_it->second.owner != wrapper) {
         // A payload may have only one owner.
         return false;
     }
@@ -399,11 +396,11 @@ extern "C" bool gdspx_bind_array_wrapper(GdArray *wrapper) {
     if (!make_array_snapshot(info, sealed_snapshot)) {
         return false;
     }
+    sealed_snapshot.owner = wrapper;
     sealed_snapshot.owns_data = snapshot_it->second.owns_data;
     sealed_snapshot.owns_strings = snapshot_it->second.owns_strings;
     snapshot_it->second = std::move(sealed_snapshot);
 
-    gdspxArrayOwners[info] = wrapper;
     gdspxArrayBindings[wrapper] = info;
     return true;
 }
@@ -422,10 +419,8 @@ extern "C" bool gdspx_validate_array_wrapper(GdArray *wrapper) {
         return false;
     }
 
-    auto owner_it = gdspxArrayOwners.find(binding_it->second);
     auto snapshot_it = gdspxArraySnapshots.find(binding_it->second);
-    return owner_it != gdspxArrayOwners.end() && owner_it->second == wrapper &&
-            snapshot_it != gdspxArraySnapshots.end() &&
+    return snapshot_it != gdspxArraySnapshots.end() && snapshot_it->second.owner == wrapper &&
             array_snapshot_matches_live(snapshot_it->second);
 }
 
@@ -443,7 +438,7 @@ extern "C" bool gdspx_validate_array_info(GdArray array) {
         return false;
     }
     // Managers may fill string slots before binding; bound arrays are sealed.
-    if (gdspxArrayOwners.find(array) == gdspxArrayOwners.end()) {
+    if (snapshot_it->second.owner == nullptr) {
         return array_header_matches_snapshot(snapshot_it->second);
     }
     return array_snapshot_matches_live(snapshot_it->second);
@@ -456,7 +451,7 @@ extern "C" bool gdspx_register_array_info(GdArray array) {
 
     auto snapshot_it = gdspxArraySnapshots.find(array);
     if (snapshot_it != gdspxArraySnapshots.end()) {
-        return gdspxArrayOwners.find(array) == gdspxArrayOwners.end() &&
+        return snapshot_it->second.owner == nullptr &&
                 array_header_matches_snapshot(snapshot_it->second);
     }
 
@@ -959,11 +954,6 @@ GdArray* gdspx_alloc_array() {
             GdArrayInfo *stale_info = binding_it->second;
             if (!release_array_snapshot(stale_info, wrapper)) {
                 gdspxArrayBindings.erase(wrapper);
-                auto owner_it = gdspxArrayOwners.find(stale_info);
-                if (owner_it != gdspxArrayOwners.end() && owner_it->second == wrapper &&
-                        gdspxArraySnapshots.find(stale_info) == gdspxArraySnapshots.end()) {
-                    gdspxArrayOwners.erase(owner_it);
-                }
             }
         }
         *wrapper = nullptr;
