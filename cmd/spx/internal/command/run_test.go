@@ -693,16 +693,7 @@ func TestStopWebIgnoresInvalidPIDFile(t *testing.T) {
 func TestWebServerPIDPathUsesAbsoluteTargetDir(t *testing.T) {
 	targetDir := t.TempDir()
 	otherDir := t.TempDir()
-	restoreDir := t.TempDir()
-	if err := os.Chdir(restoreDir); err != nil {
-		t.Fatalf("chdir restore dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(restoreDir)
-	})
-	if err := os.Chdir(otherDir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
+	t.Chdir(otherDir)
 
 	cmd := CmdTool{TargetDir: ".", TargetAbsDir: targetDir}
 	got := cmd.webServerPIDPath()

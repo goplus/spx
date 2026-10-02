@@ -98,7 +98,7 @@ func main() {print(&spx.Game{})}
 	os.Chdir(cmd.TargetDir)
 
 	if cmd.shouldRunGoModTidy() {
-		util.RunGolang(nil, "mod", "tidy")
+		util.RunCommand(nil, "", "go", "mod", "tidy")
 	}
 
 	os.Remove(tempFile)
