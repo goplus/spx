@@ -17,10 +17,12 @@
 package shared
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -261,6 +263,68 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS"
 		if got := values[key]; got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestRunMacOSXcrun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix executable fixture")
+	}
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "xcrun"), `#!/bin/sh
+if [ "$#" -ne 4 ] || [ "$1" != "--sdk" ] || [ "$2" != "macosx" ] || [ "$3" != "--find" ] || [ "$4" != "clang with spaces" ]; then
+  echo "unexpected arguments: $*" >&2
+  exit 90
+fi
+if [ "${SDKROOT+x}" = x ] || [ "$EXTRA" != "kept=value" ]; then
+  echo "unexpected child environment" >&2
+  exit 91
+fi
+if [ "$FAKE_EXIT" = 0 ]; then
+  printf '%s' "$FAKE_OUTPUT"
+else
+  printf '%s' "$FAKE_OUTPUT" >&2
+fi
+exit "$FAKE_EXIT"
+`)
+	for _, test := range []struct {
+		name, output string
+		exitCode     int
+	}{
+		{"success", " \t/tool path/clang \n", 0},
+		{"error detail", " \tSDK lookup failed \n", 7},
+		{"empty error", "", 7},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := map[string]string{
+				"PATH":        binDir,
+				"SDKROOT":     "/stale/SDK",
+				"EXTRA":       "kept=value",
+				"FAKE_OUTPUT": test.output,
+				"FAKE_EXIT":   strconv.Itoa(test.exitCode),
+			}
+			got, err := runMacOSXcrun(env, "--find", "clang with spaces")
+			if env["SDKROOT"] != "/stale/SDK" || env["EXTRA"] != "kept=value" {
+				t.Fatalf("caller environment changed: %v", env)
+			}
+			if test.exitCode == 0 {
+				if err != nil || got != "/tool path/clang" {
+					t.Fatalf("runMacOSXcrun() = %q, %v", got, err)
+				}
+				return
+			}
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != test.exitCode {
+				t.Fatalf("error = %v, want wrapped exit status %d", err, test.exitCode)
+			}
+			wantErr := "xcrun --find clang with spaces: exit status 7"
+			if test.output != "" {
+				wantErr += ": SDK lookup failed"
+			}
+			if got != "" || err.Error() != wantErr {
+				t.Fatalf("runMacOSXcrun() = %q, %v; want empty output and %q", got, err, wantErr)
+			}
+		})
 	}
 }
 

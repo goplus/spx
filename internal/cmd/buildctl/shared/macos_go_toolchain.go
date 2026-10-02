@@ -106,7 +106,7 @@ func runMacOSXcrun(env map[string]string, args ...string) (string, error) {
 	commandEnv := cloneStringMap(env)
 	delete(commandEnv, "SDKROOT")
 	cmd := exec.Command(xcrunPath, append([]string{"--sdk", "macosx"}, args...)...)
-	cmd.Env = envMapToSlice(commandEnv)
+	cmd.Env = EnvMapToSlice(commandEnv)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		detail := strings.TrimSpace(string(output))

@@ -20,8 +20,6 @@ import "errors"
 
 var ErrUsage = errors.New("usage")
 
-type BuildEnvironment = buildEnvironment
-
 type ScriptRunner interface {
 	RunScript(relativePath string, args ...string) error
 	RunCommand(workdir string, name string, args ...string) error

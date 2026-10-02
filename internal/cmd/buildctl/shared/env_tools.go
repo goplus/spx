@@ -28,13 +28,13 @@ import (
 	"github.com/goplus/spx/v3/internal/release"
 )
 
-func ensureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
+func EnsureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
 	engineDir, err := resolveGodotSrc(repoRoot)
 	if err != nil {
 		return err
 	}
 	lock := release.DefaultRuntimeLock()
-	if fileExists(engineDir) {
+	if FileExists(engineDir) {
 		head, err := gitHead(engineDir)
 		if err != nil {
 			return fmt.Errorf("inspect existing Godot source %s: %w", engineDir, err)
@@ -97,8 +97,8 @@ func gitHead(dir string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func resolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {
-	if envSDK != "" && fileExists(filepath.Join(envSDK, "bin", "vulkaninfo")) {
+func ResolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {
+	if envSDK != "" && FileExists(filepath.Join(envSDK, "bin", "vulkaninfo")) {
 		return envSDK, nil
 	}
 
@@ -119,17 +119,17 @@ func resolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {
 
 	for _, version := range versions {
 		candidate := filepath.Join(sdkParent, version, "macOS")
-		if fileExists(filepath.Join(candidate, "bin", "vulkaninfo")) {
+		if FileExists(filepath.Join(candidate, "bin", "vulkaninfo")) {
 			return candidate, nil
 		}
 	}
 	return "", fmt.Errorf("macOS Vulkan SDK not found under %s", sdkParent)
 }
 
-func macOSVulkanSDKShellExports(sdkRoot string) string {
+func MacOSVulkanSDKShellExports(sdkRoot string) string {
 	return strings.Join([]string{
-		"export VULKAN_SDK=" + shellQuote(sdkRoot),
-		"export PATH=" + shellQuote(filepath.Join(sdkRoot, "bin")+":"+os.Getenv("PATH")),
+		"export VULKAN_SDK=" + ShellQuote(sdkRoot),
+		"export PATH=" + ShellQuote(filepath.Join(sdkRoot, "bin")+":"+os.Getenv("PATH")),
 	}, "\n") + "\n"
 }
 
