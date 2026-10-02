@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -195,4 +196,55 @@ func TestLoadGameSpriteLoadPanicClosesResources(t *testing.T) {
 		}
 	}()
 	_ = base.loadGame(resource, base.bootstrapGeneration())
+}
+
+type loadGamePanicExtMgr struct {
+	pkgengine.IExtMgr
+	messages []string
+	exits    []int64
+}
+
+func (m *loadGamePanicExtMgr) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
+}
+
+func (m *loadGamePanicExtMgr) RequestExit(code int64) { m.exits = append(m.exits, code) }
+
+func TestLoadGameSpritesStopsAtFirstErrorWhenPanicReturns(t *testing.T) {
+	game := &struct {
+		Game
+		Skipped *reloadPreflightSprite
+		Data    any
+		First   *reloadPreflightSprite
+		Later   *reloadPreflightSprite
+	}{}
+	files := reloadConfigFS{}
+	base := setupReloadCommitRuntime(t, files, game, nil, false)
+	base.typs["Data"] = reflect.TypeFor[int]()
+	base.typs["First"] = reflect.TypeFor[reloadPreflightSprite]()
+	base.typs["Later"] = reflect.TypeFor[reloadPreflightSprite]()
+	base.tilemapMgr = gameTilemapMgr{}
+	panicMgr := &loadGamePanicExtMgr{}
+	pkgengine.ExtMgr = panicMgr
+
+	loadGameSprites(base, reflect.ValueOf(game).Elem(), files, &coreproject.ProjectConfig{})
+
+	if game.Skipped == nil || game.First == nil {
+		t.Fatal("sprite fields were not allocated before filtering and loading")
+	}
+	if _, ok := game.Data.(*int); !ok {
+		t.Fatalf("non-sprite interface field = %T, want *int", game.Data)
+	}
+	if game.Later != nil {
+		t.Fatal("sprite traversal continued after the first load error")
+	}
+	if want := []string{"file not found: sprites/First/index.json"}; !reflect.DeepEqual(panicMgr.messages, want) {
+		t.Fatalf("runtime panic messages = %v, want %v", panicMgr.messages, want)
+	}
+	if want := []int64{1}; !reflect.DeepEqual(panicMgr.exits, want) {
+		t.Fatalf("runtime exit codes = %v, want %v", panicMgr.exits, want)
+	}
+	if base.tilemapMgr.g != base || base.tilemapMgr.fs == nil {
+		t.Fatal("tilemap initialization was skipped after the panic handler returned")
+	}
 }
