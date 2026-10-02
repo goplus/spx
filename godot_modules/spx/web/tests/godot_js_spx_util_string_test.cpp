@@ -198,6 +198,82 @@ static void test_owned_array_result() {
     assert(gdspxTestAllocations.count(data) == 0 && gdspxTestAllocations.count(info) == 0);
 }
 
+static void test_array_owner_binding() {
+    auto *info = static_cast<GdArrayInfo *>(gdspx_test_malloc(sizeof(GdArrayInfo)));
+    info->size = 1;
+    info->type = GD_ARRAY_TYPE_FLOAT;
+    void *data = info->data = gdspx_test_malloc(sizeof(float));
+    assert(gdspx_register_array_info(info));
+    assert(gdspx_register_array_info(info));
+
+    GdArray *owner = gdspx_alloc_array();
+    GdArray *alias = gdspx_alloc_array();
+    *owner = *alias = info;
+    assert(gdspx_bind_array_wrapper(owner));
+    assert(gdspx_bind_array_wrapper(owner));
+    assert(!gdspx_bind_array_wrapper(alias));
+    assert(!gdspx_validate_array_wrapper(alias));
+    assert(!gdspx_register_array_info(info));
+    assert(!gdspx_release_array_info(info));
+    gdspx_free_array(alias);
+    gdspx_free_array(alias);
+    assert(gdspx_validate_array_wrapper(owner));
+    assert(gdspxTestAllocations.count(info) == 1 && gdspxTestAllocations.count(data) == 1);
+
+    gdspx_free_array(owner);
+    gdspx_free_array(owner);
+    assert(gdspxTestAllocations.count(info) == 0 && gdspxTestAllocations.count(data) == 0);
+    GdArray *reused = gdspx_alloc_array();
+    assert(*reused == nullptr && gdspx_prepare_array_wrapper(reused));
+    assert(gdspx_bind_array_wrapper(reused));
+    gdspx_free_array(reused);
+}
+
+static void test_owned_string_array_lifecycle() {
+    // Managers fill string slots after registering the descriptor. Both release
+    // before binding and sealing into a wrapper must capture those final slots.
+    for (int mode = 0; mode < 5; ++mode) {
+        auto *info = static_cast<GdArrayInfo *>(gdspx_test_malloc(sizeof(GdArrayInfo)));
+        auto **slots = static_cast<char **>(gdspx_test_malloc(2 * sizeof(char *)));
+        slots[0] = slots[1] = nullptr;
+        info->size = 2;
+        info->type = GD_ARRAY_TYPE_STRING;
+        info->data = slots;
+        assert(gdspx_register_array_info(info));
+        char *value = static_cast<char *>(gdspx_test_malloc(6));
+        std::memcpy(value, "value", 6);
+        slots[0] = slots[1] = value; // Aliased slots must release the allocation once.
+        assert(gdspx_validate_array_info(info));
+
+        if (mode == 0) {
+            assert(gdspx_release_array_info(info));
+            assert(!gdspx_release_array_info(info));
+        } else {
+            GdArray *wrapper = gdspx_alloc_array();
+            *wrapper = info;
+            assert(gdspx_bind_array_wrapper(wrapper));
+            assert(gdspx_validate_array_wrapper(wrapper));
+            assert(!gdspx_release_array_info(info));
+            if (mode == 2) {
+                info->data = const_cast<void *>(invalid_nested_pointer(11));
+            } else if (mode == 3) {
+                slots[0] = static_cast<char *>(const_cast<void *>(invalid_nested_pointer(13)));
+            } else if (mode == 4) {
+                *wrapper = static_cast<GdArrayInfo *>(const_cast<void *>(invalid_nested_pointer(15)));
+            }
+            if (mode != 1) {
+                assert(!gdspx_validate_array_wrapper(wrapper));
+            }
+            // Even tampered live pointers must release only the trusted data.
+            gdspx_free_array(wrapper);
+            gdspx_free_array(wrapper);
+        }
+        assert(gdspxTestAllocations.count(info) == 0);
+        assert(gdspxTestAllocations.count(slots) == 0);
+        assert(gdspxTestAllocations.count(value) == 0);
+    }
+}
+
 static void clear_string_cache() {
     while (!gdspxStringCache.empty()) {
         assert(gdspxStringCache.front().refcount == 0);
@@ -213,7 +289,9 @@ int main() {
     test_borrowed_native_arrays();
     test_borrowed_string_arrays();
     test_owned_array_result();
-    assert(gdspxArraySnapshots.empty() && gdspxArrayBindings.empty() && gdspxArrayOwners.empty());
+    test_array_owner_binding();
+    test_owned_string_array_lifecycle();
+    assert(gdspxArraySnapshots.empty() && gdspxArrayBindings.empty());
     clear_string_cache();
     assert(gdspxStringSnapshots.empty());
     assert(gdspxTestAllocations.empty());
