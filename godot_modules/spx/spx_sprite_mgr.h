@@ -105,6 +105,7 @@ private:
 	// 3+ = faster but may miss small collisions
 	int pixel_collision_sampling_step;
 
+	static void _apply_transform(SpxSprite *sprite, GdVec2 pos, GdFloat rot, GdVec2 scale, GdBool visible, GdVec2 pivot);
 	GdBool _check_collision(GdObj obj, ColorCheckFunc check_func);
 	GdBool _check_scene_color_collision(GdObj obj, ColorMatchFunc self_matches, ColorMatchFunc scene_matches);
 	void _notify_pixel_collision_enter(const TriggerPair &pair);
