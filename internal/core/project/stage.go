@@ -16,48 +16,7 @@
 
 package project
 
-import "fmt"
-
 type StageShape = map[string]any
-
-type StageShapeHandlers struct {
-	StageMonitor func(StageShape) error
-	Measure      func(StageShape) error
-	Sprites      func(StageShape) error
-	Sprite       func(StageShape) error
-}
-
-func DispatchStageShape(shape StageShape, handlers StageShapeHandlers) error {
-	typ, ok := shape["type"].(string)
-	if !ok {
-		return fmt.Errorf("invalid stage shape type")
-	}
-
-	switch typ {
-	case "stageMonitor", "monitor":
-		if handlers.StageMonitor == nil {
-			return fmt.Errorf("missing stage monitor handler")
-		}
-		return handlers.StageMonitor(shape)
-	case "measure":
-		if handlers.Measure == nil {
-			return fmt.Errorf("missing measure handler")
-		}
-		return handlers.Measure(shape)
-	case "sprites":
-		if handlers.Sprites == nil {
-			return fmt.Errorf("missing sprites handler")
-		}
-		return handlers.Sprites(shape)
-	case "sprite":
-		if handlers.Sprite == nil {
-			return fmt.Errorf("missing sprite handler")
-		}
-		return handlers.Sprite(shape)
-	default:
-		return fmt.Errorf("unknown shape - %s", typ)
-	}
-}
 
 func ShapeValue(shape StageShape, key string, defaultVal ...any) any {
 	if v, ok := shape[key]; ok {
