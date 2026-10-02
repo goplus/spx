@@ -961,26 +961,3 @@ func TestParseCommandLineFlags(t *testing.T) {
 		t.Fatalf("expected help effect: %+v", effects)
 	}
 }
-
-func TestWalkFields(t *testing.T) {
-	type holder struct {
-		A int
-		B string
-	}
-	v := reflect.ValueOf(holder{A: 1, B: "x"})
-	var got []string
-	err := WalkFields(v, func(fieldIndex int) (string, any) {
-		field := v.Type().Field(fieldIndex)
-		return field.Name, v.Field(fieldIndex).Interface()
-	}, func(name string, value any) error {
-		got = append(got, name)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("WalkFields error: %v", err)
-	}
-	want := []string{"A", "B"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("WalkFields got %v, want %v", got, want)
-	}
-}

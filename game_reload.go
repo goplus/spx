@@ -137,15 +137,17 @@ func (p *reloadPlan) addPrototype(name string, typ reflect.Type, shadow reflect.
 
 func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 	loadSprite := p.spriteLoader(g)
-	return coreproject.WalkFields(gamer, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, gamer, fieldIndex)
-	}, func(name string, val any) error {
+	for i, n := 0, gamer.NumField(); i < n; i++ {
+		name, val := getFieldPtrOrAlloc(g, gamer, i)
 		sprite, ok := val.(Sprite)
 		if !ok {
-			return nil
+			continue
 		}
-		return loadSprite(sprite, name, gamer)
-	})
+		if err := loadSprite(sprite, name, gamer); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *reloadPlan) spriteLoader(g *Game) spriteLoader {
@@ -182,22 +184,17 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 
 	// Mirror the field layout without changing the live game.
 	shadow := reflect.New(gamer.Type()).Elem()
-	err = coreproject.WalkFields(shadow, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, shadow, fieldIndex)
-	}, func(name string, val any) error {
+	for i, n := 0, shadow.NumField(); i < n; i++ {
+		name, val := getFieldPtrOrAlloc(g, shadow, i)
 		sprite, ok := val.(Sprite)
 		if !ok {
-			return nil
+			continue
 		}
 		if err := validateReloadSprite(sprite, shadow); err != nil {
-			return fmt.Errorf("sprite field %q: %w", name, err)
+			return nil, fmt.Errorf("reload preflight: sprite field %q: %w", name, err)
 		}
 		plan.directSprites[name] = reflect.TypeOf(sprite)
 		plan.requireSpriteConfig(name)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("reload preflight: %w", err)
 	}
 	if err := plan.validateZOrder(g, shadow); err != nil {
 		return nil, fmt.Errorf("reload preflight: %w", err)
