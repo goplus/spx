@@ -146,23 +146,24 @@ type uiMgr struct {
 	baseMgr
 }
 
-func createMgrs() []IManager {
-	addManager(&audioMgr{})
-	addManager(&cameraMgr{})
-	addManager(&debugMgr{})
-	addManager(&extMgr{})
-	addManager(&inputMgr{})
-	addManager(&navigationMgr{})
-	addManager(&penMgr{})
-	addManager(&physicsMgr{})
-	addManager(&platformMgr{})
-	addManager(&resMgr{})
-	addManager(&sceneMgr{})
-	addManager(&spriteMgr{})
-	addManager(&tilemapMgr{})
-	addManager(&tilemapparserMgr{})
-	addManager(&uiMgr{})
-	return mgrs
+func CreateMgrs() []IManager {
+	return []IManager{
+		&audioMgr{},
+		&cameraMgr{},
+		&debugMgr{},
+		&extMgr{},
+		&inputMgr{},
+		&navigationMgr{},
+		&penMgr{},
+		&physicsMgr{},
+		&platformMgr{},
+		&resMgr{},
+		&sceneMgr{},
+		&spriteMgr{},
+		&tilemapMgr{},
+		&tilemapparserMgr{},
+		&uiMgr{},
+	}
 }
 
 // call gdextension interface functions
