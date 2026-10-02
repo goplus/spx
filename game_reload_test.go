@@ -502,6 +502,95 @@ func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
 	finishThread()
 }
 
+func TestReloadLoadSpritesStopsAtFirstError(t *testing.T) {
+	game := &struct {
+		Game
+		Data  any
+		First *reloadPreflightSprite
+		Later *reloadPreflightSprite
+	}{}
+	game.typs = map[string]reflect.Type{"Data": reflect.TypeFor[int]()}
+	plan := &reloadPlan{}
+
+	err := plan.loadSprites(&game.Game, reflect.ValueOf(game).Elem())
+	if want := `reload plan has no sprite config for "First"`; err == nil || err.Error() != want {
+		t.Fatalf("loadSprites error = %v, want %s", err, want)
+	}
+	if _, ok := game.Data.(*int); !ok {
+		t.Fatalf("non-sprite interface field = %T, want *int", game.Data)
+	}
+	if game.First == nil || game.Later != nil {
+		t.Fatal("reload did not allocate fields in order and stop at the first error")
+	}
+}
+
+type ReloadFieldsGroup struct {
+	Nested *reloadFieldsSprite
+}
+
+type reloadFieldsGame struct {
+	Game
+	ReloadFieldsGroup
+	Data         any
+	Value        reloadFieldsSprite
+	Pointer      *reloadFieldsSprite
+	Dynamic      Sprite
+	Unregistered Sprite
+}
+
+type reloadFieldsSprite struct {
+	SpriteImpl
+	*reloadFieldsGame
+}
+
+func (*reloadFieldsSprite) Main() {}
+
+func TestPrepareReloadVisitsSpriteFieldsInDeclarationOrder(t *testing.T) {
+	game := &reloadFieldsGame{}
+	game.typs = map[string]reflect.Type{
+		"Data":    reflect.TypeFor[int](),
+		"Dynamic": reflect.TypeFor[reloadFieldsSprite](),
+	}
+	game.fs = reloadConfigFS{
+		"sprites/Value/index.json":   `{"costumeSet":{"path":"sprite.png","nx":1}}`,
+		"sprites/Pointer/index.json": `{"costumeSet":{"path":"sprite.png","nx":1}}`,
+		"sprites/Dynamic/index.json": `{"costumeSet":{"path":"sprite.png","nx":1}}`,
+	}
+
+	plan, err := prepareReload(&game.Game, reflect.ValueOf(game).Elem(), strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Value", "Pointer", "Dynamic"}; !reflect.DeepEqual(plan.configNames, want) {
+		t.Fatalf("sprite config order = %v, want %v", plan.configNames, want)
+	}
+	if plan.directSprites["Nested"] != nil || plan.directSprites["Unregistered"] != nil {
+		t.Fatalf("preflight discovered nested or unregistered sprites: %v", plan.directSprites)
+	}
+	if game.Data != nil || game.Value.reloadFieldsGame != nil || game.Pointer != nil || game.Dynamic != nil {
+		t.Fatal("reload preflight allocated or bound live fields")
+	}
+	if game.Nested != nil || game.Unregistered != nil {
+		t.Fatal("reload preflight allocated nested or unregistered sprite fields")
+	}
+}
+
+func TestPrepareReloadStopsAtFirstInvalidSpriteField(t *testing.T) {
+	game := &struct {
+		Game
+		First *shiftedSprite
+		Later Sprite
+	}{}
+	game.fs = reloadConfigFS{}
+	// Resolving Later would panic because *int cannot be assigned to Sprite.
+	game.typs = map[string]reflect.Type{"Later": reflect.TypeFor[int]()}
+
+	_, err := prepareReload(&game.Game, reflect.ValueOf(game).Elem(), strings.NewReader(`{}`))
+	if want := `reload preflight: sprite field "First": sprite *spx.shiftedSprite is missing leading SpriteImpl field`; err == nil || err.Error() != want {
+		t.Fatalf("prepareReload error = %v, want %s", err, want)
+	}
+}
+
 func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 	validSprite := `{"costumeSet":{"path":"sprite.png","nx":1}}`
 	tests := []struct {

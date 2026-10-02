@@ -110,17 +110,16 @@ func validateProjectConfig(project *coreproject.ProjectConfig) error {
 // -----------------------------------------------------------------------------
 func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) {
 	g.startLoad(fs)
-	err := coreproject.WalkFields(v, func(fieldIndex int) (string, any) {
-		return getFieldPtrOrAlloc(g, v, fieldIndex)
-	}, func(name string, val any) error {
+	for i := range v.NumField() {
+		name, val := getFieldPtrOrAlloc(g, v, i)
 		fld, ok := val.(Sprite)
 		if !ok || g.typs[name] == nil {
-			return nil
+			continue
 		}
-		return g.loadSprite(fld, name, v)
-	})
-	if err != nil {
-		engine.Panic(err)
+		if err := g.loadSprite(fld, name, v); err != nil {
+			engine.Panic(err)
+			break
+		}
 	}
 	g.tilemapMgr.init(g, fs, proj.TilemapPath)
 }
