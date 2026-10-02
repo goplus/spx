@@ -204,11 +204,11 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 	}
 
 	for _, name := range plan.configNames {
-		loaded, err := coreproject.LoadSpriteConfig(g.fs, name)
+		config, err := coreproject.LoadSpriteConfig(g.fs, name)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: load sprite config %q: %w", name, err)
 		}
-		prepared, err := prepareSpriteConfig(&loaded.Config)
+		prepared, err := prepareSpriteConfig(&config)
 		if err != nil {
 			return nil, fmt.Errorf("reload preflight: sprite config %q: %w", name, err)
 		}

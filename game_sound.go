@@ -130,12 +130,12 @@ func (p *Game) loadSound(name SoundName) (media sound, err error) {
 	}
 
 	spxlog.Debug("LoadSound: %s", name)
-	loaded, err := coreproject.LoadSoundConfig(p.fs, name)
+	config, err := coreproject.LoadSoundConfig(p.fs, name)
 	if err != nil {
 		spxlog.Error("LoadSound failed: %v", err)
 		return
 	}
-	media = &loaded.Config
+	media = &config
 	p.sounds[name] = media
 	return
 }

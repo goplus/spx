@@ -34,16 +34,6 @@ type OpenedBuilderResources struct {
 	LoadedBuilderProject
 }
 
-type LoadedSpriteConfig struct {
-	BaseDir string
-	Config  SpriteConfig
-}
-
-type LoadedSoundConfig struct {
-	BaseDir string
-	Config  SoundConfig
-}
-
 func AssetDirFromResource(resource any) (string, bool) {
 	switch v := resource.(type) {
 	case string:
@@ -118,30 +108,24 @@ func LoadConfig(ret any, fs spxfs.Dir, index any) error {
 	}
 }
 
-func LoadSpriteConfig(fs spxfs.Dir, name string) (LoadedSpriteConfig, error) {
+func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
 	baseDir := path.Join("sprites", name) + "/"
 	var conf SpriteConfig
 	if err := LoadJSON(&conf, fs, baseDir+"index.json"); err != nil {
-		return LoadedSpriteConfig{}, err
+		return SpriteConfig{}, err
 	}
 	normalizeSpriteConfigPaths(&conf, strings.TrimSuffix(baseDir, "/"))
-	return LoadedSpriteConfig{
-		BaseDir: baseDir,
-		Config:  conf,
-	}, nil
+	return conf, nil
 }
 
-func LoadSoundConfig(fs spxfs.Dir, name string) (LoadedSoundConfig, error) {
+func LoadSoundConfig(fs spxfs.Dir, name string) (SoundConfig, error) {
 	baseDir := path.Join("sounds", name)
 	var conf SoundConfig
 	if err := LoadJSON(&conf, fs, path.Join(baseDir, "index.json")); err != nil {
-		return LoadedSoundConfig{}, err
+		return SoundConfig{}, err
 	}
 	conf.Path = NormalizeConfigPath(baseDir, conf.Path)
-	return LoadedSoundConfig{
-		BaseDir: baseDir,
-		Config:  conf,
-	}, nil
+	return conf, nil
 }
 
 func decodeJSON(r io.Reader, ret any) error {
