@@ -26,18 +26,16 @@ import (
 // Sprite methods must run on the main thread.
 type Sprite struct {
 	gdx.Sprite
-	Name    string
-	PicPath string
-	Target  any
+	Target any
 }
 
 func (s *Sprite) UpdateTexture(path string, renderScale float64, updateTexture bool) {
 	if path == "" {
 		return
 	}
-	s.PicPath = ToAssetPath(path)
+	assetPath := ToAssetPath(path)
 	if updateTexture {
-		s.SetTexture(s.PicPath)
+		s.SetTexture(assetPath)
 	}
 	s.SetRenderScale(UniformVec2(renderScale))
 }
@@ -46,9 +44,9 @@ func (s *Sprite) UpdateTextureAtlas(path string, rect Rect2, renderScale float64
 	if path == "" {
 		return
 	}
-	s.PicPath = ToAssetPath(path)
+	assetPath := ToAssetPath(path)
 	if updateTexture {
-		s.SetTextureAtlas(s.PicPath, rect)
+		s.SetTextureAtlas(assetPath, rect)
 	}
 	s.SetRenderScale(UniformVec2(renderScale))
 }

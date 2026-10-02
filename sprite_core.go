@@ -39,8 +39,7 @@ type SpriteImpl struct {
 	name             string
 	components       spriteComponents
 
-	g     *Game
-	gamer reflect.Value
+	g *Game
 }
 
 // -----------------------------------------------------------------------------
