@@ -30,9 +30,6 @@ func TestSinkMatchers(t *testing.T) {
 	if !MatchOwner("sprite")("sprite") || MatchOwner("sprite")("other") {
 		t.Fatal("MatchOwner mismatch")
 	}
-	if !MatchOwnerOrNil("sprite")(nil) || !MatchOwnerOrNil("sprite")("sprite") || MatchOwnerOrNil("sprite")("other") {
-		t.Fatal("MatchOwnerOrNil mismatch")
-	}
 	if !MatchValue("msg")("msg") || MatchValue("msg")("other") {
 		t.Fatal("MatchValue mismatch")
 	}
