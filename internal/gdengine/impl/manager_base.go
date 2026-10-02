@@ -16,16 +16,6 @@
 
 package impl
 
-//lint:file-ignore ST1001 Godot manager glue intentionally dot-imports engine API types.
-
-import (
-	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
-)
-
-var (
-	mgrs []IManager
-)
-
 type baseMgr struct{}
 
 func (pself *baseMgr) OnStart() {}
@@ -37,14 +27,3 @@ func (pself *baseMgr) OnFixedUpdate(delta float64) {}
 func (pself *baseMgr) OnDestroy() {}
 
 func (pself *baseMgr) OnPause(isPaused bool) {}
-
-func CreateMgrs() []IManager {
-	// Make repeated calls deterministic.
-	mgrs = mgrs[:0]
-	return createMgrs()
-}
-
-func addManager[T IManager](mgr T) T {
-	mgrs = append(mgrs, mgr)
-	return mgr
-}

@@ -17,11 +17,12 @@ type {{$name}}Mgr struct {
 }
 {{ end }}
 
-func createMgrs() []IManager {
+func CreateMgrs() []IManager {
+	return []IManager{
 {{- range $name := .Managers }}
-	addManager(&{{$name}}Mgr{})
+		&{{$name}}Mgr{},
 {{- end }}
-	return mgrs
+	}
 }
 
 // call gdextension interface functions
