@@ -78,9 +78,6 @@ func bindCallbacks() CallbackInfo {
 }
 
 func onEngineStart() {
-	for _, mgr := range mgrs {
-		mgr.OnStart()
-	}
 	if coreCallbacks.OnEngineStart != nil {
 		coreCallbacks.OnEngineStart()
 	}
@@ -91,9 +88,6 @@ func onEngineUpdate(delta float64) {
 	// session is active, keeping scripts, timers, tweens, and engine-facing
 	// updates aligned.
 	delta = itime.EffectiveLogicalDeltaTime(delta)
-	for _, mgr := range mgrs {
-		mgr.OnUpdate(delta)
-	}
 	AdvanceTimeSinceGameStart(delta)
 	sprites = sprites[:0]
 	for _, sprite := range Sprites() {
@@ -111,9 +105,6 @@ func onEngineUpdate(delta float64) {
 func onEngineFixedUpdate(delta float64) {
 	// Fixed-update callbacks intentionally keep Godot's raw physics delta.
 	// Input replay virtualizes only SPX logical update time.
-	for _, mgr := range mgrs {
-		mgr.OnFixedUpdate(delta)
-	}
 	sprites = sprites[:0]
 	for _, sprite := range Sprites() {
 		sprites = append(sprites, sprite)
@@ -137,9 +128,6 @@ func onEngineDestroy() {
 	for _, sprite := range sprites {
 		sprite.OnDestroy()
 	}
-	for _, mgr := range mgrs {
-		mgr.OnDestroy()
-	}
 }
 
 func onEngineDestroyed() {
@@ -157,10 +145,6 @@ func onEngineReset() {
 func onEnginePause(isPaused bool) {
 	if coreCallbacks.OnEnginePause != nil {
 		coreCallbacks.OnEnginePause(isPaused)
-	}
-
-	for _, mgr := range mgrs {
-		mgr.OnPause(isPaused)
 	}
 }
 
