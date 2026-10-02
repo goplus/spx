@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -132,6 +133,51 @@ func TestShouldRunGoModTidy(t *testing.T) {
 	externalCmd := CmdTool{TargetDir: externalTargetDir, TargetAbsDir: externalTargetDir}
 	if !externalCmd.shouldRunGoModTidy() {
 		t.Fatal("shouldRunGoModTidy returned false outside local repo, want true")
+	}
+}
+
+func TestPrepareEnvRunsGoModTidyInTargetDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake Go tool uses a POSIX shell script")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	targetDir := filepath.Join(root, "source project")
+	binDir := filepath.Join(root, "tools")
+	for _, dir := range []string{targetDir, binDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const script = `#!/bin/sh
+set -eu
+test -f xgo_autogen.go
+printf '%s|%s|%s\n' "$PWD" "$*" "$SPX_TIDY_TEST_VALUE" > "$SPX_TIDY_TEST_LOG"
+`
+	if err := os.WriteFile(filepath.Join(binDir, "go"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(root, "tidy.log")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SPX_TIDY_TEST_LOG", logPath)
+	t.Setenv("SPX_TIDY_TEST_VALUE", "inherited value")
+	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir, ProjectFS: webExportTestFS}
+	cmd.PrepareEnv("template/project", filepath.Join(targetDir, "project"))
+	got, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := targetDir + "|mod tidy|inherited value\n"; string(got) != want {
+		t.Fatalf("Go invocation = %q, want %q", got, want)
+	}
+	if cwd, err := os.Getwd(); err != nil || cwd != root {
+		t.Fatalf("working directory = %q (%v), want %q", cwd, err, root)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "xgo_autogen.go")); !os.IsNotExist(err) {
+		t.Fatalf("temporary generated source was not removed: %v", err)
 	}
 }
 
