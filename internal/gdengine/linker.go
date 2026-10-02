@@ -28,7 +28,6 @@ import (
 )
 
 var (
-	mgrs                []IManager
 	coreCallbacks       CoreCallbackInfo
 	sprites             = make([]ISpriter, 0)
 	isWebIntepreterMode bool
@@ -81,7 +80,6 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	defer func() {
 		if !committed {
 			backend.Unlink()
-			mgrs = nil
 			coreCallbacks = CoreCallbackInfo{}
 			isWebIntepreterMode = false
 		}
@@ -90,8 +88,8 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	isWebIntepreterMode = interpreter
 	coreCallbacks = coreCallbackInfo
 	facade.RegisterCallbacks(bindCallbacks())
-	mgrs = engineimpl.CreateMgrs()
-	engineimpl.BindMgr(mgrs)
+	// These Go adapters have no lifecycle behavior; the backend owns its managers.
+	engineimpl.BindMgr(engineimpl.CreateMgrs())
 	activeLink = session
 	committed = true
 	return session
@@ -112,7 +110,6 @@ func (s *LinkSession) Unlink() {
 		return
 	}
 	activeLink = nil
-	mgrs = nil
 	coreCallbacks = CoreCallbackInfo{}
 	isWebIntepreterMode = false
 }
