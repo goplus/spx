@@ -392,3 +392,70 @@ func TestMissingMonitorBindingStillSkipsShape(t *testing.T) {
 		t.Fatalf("missing monitor binding changed load behavior: %v", err)
 	}
 }
+
+func TestLoadSoundCachesIndependentConfigs(t *testing.T) {
+	fs := reloadConfigFS{
+		"sounds/Jump/index.json": `{"path":"jump.wav","rate":1,"sampleCount":10}`,
+		"sounds/Land/index.json": `{"path":"land.wav","rate":2,"sampleCount":20}`,
+	}
+	game := &Game{fs: fs, sounds: make(map[string]sound)}
+	jump, err := game.loadSound("Jump")
+	if err != nil {
+		t.Fatal(err)
+	}
+	land, err := game.loadSound("Land")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jump == land {
+		t.Fatal("different sounds share a config pointer")
+	}
+	if jump.Path != "sounds/Jump/jump.wav" || jump.Rate != 1 || jump.SampleCount != 10 {
+		t.Fatalf("jump config changed after loading land: %+v", jump)
+	}
+	if land.Path != "sounds/Land/land.wav" || land.Rate != 2 || land.SampleCount != 20 {
+		t.Fatalf("land config = %+v", land)
+	}
+	jump.Rate = 3
+	if land.Rate != 2 {
+		t.Fatal("changing jump affected land")
+	}
+	delete(fs, "sounds/Jump/index.json")
+	cached, err := game.loadSound("Jump")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cached != jump || cached.Rate != 3 {
+		t.Fatalf("cached config = %+v, want original pointer %+v", cached, jump)
+	}
+}
+
+func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
+	for _, tt := range []struct{ name, content string }{
+		{"missing", ""},
+		{"malformed", `{`},
+		{"trailing value", `{"path":"jump.wav"} {}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := reloadConfigFS{}
+			if tt.content != "" {
+				fs["sounds/Jump/index.json"] = tt.content
+			}
+			game := &Game{fs: fs, sounds: make(map[string]sound)}
+			if media, err := game.loadSound("Jump"); err == nil || media != nil {
+				t.Fatalf("failed load = %+v, %v; want nil config and an error", media, err)
+			}
+			if _, ok := game.sounds["Jump"]; ok {
+				t.Fatal("failed load was cached")
+			}
+			fs["sounds/Jump/index.json"] = `{"path":"jump.wav"}`
+			media, err := game.loadSound("Jump")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if media.Path != "sounds/Jump/jump.wav" || game.sounds["Jump"] != media {
+				t.Fatalf("retry did not cache the normalized config: %+v", media)
+			}
+		})
+	}
+}

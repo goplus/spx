@@ -41,11 +41,11 @@ type preparedSprite struct {
 
 func (p *Game) loadSprite(sprite Sprite, name string, gamer reflect.Value) error {
 	spxlog.Debug("LoadSprite: %s", name)
-	loaded, err := coreproject.LoadSpriteConfig(p.fs, name)
+	config, err := coreproject.LoadSpriteConfig(p.fs, name)
 	if err != nil {
 		return err
 	}
-	prepared, err := prepareSpriteConfig(&loaded.Config)
+	prepared, err := prepareSpriteConfig(&config)
 	if err != nil {
 		return fmt.Errorf("sprite config %q: %w", name, err)
 	}
