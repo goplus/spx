@@ -121,6 +121,51 @@ TEST_CASE("[SceneTree][SPX] Position batches reject invalid output before writin
 	ERR_PRINT_ON;
 }
 
+TEST_CASE("[SceneTree][SPX] Single and batch transforms produce the same node state") {
+	SpriteMgrProbe manager;
+	SpxSprite *single = memnew(SpxSprite);
+	SpxSprite *batched = memnew(SpxSprite);
+	constexpr GdObj single_id = 6;
+	constexpr GdObj batch_id = 7;
+	single->set_gid(single_id);
+	batched->set_gid(batch_id);
+	for (SpxSprite *sprite : { single, batched }) {
+		SceneTree::get_singleton()->get_root()->add_child(sprite);
+		manager.register_sprite(sprite);
+	}
+
+	// Each row has the eight transform lanes after the ID. Exercise both Y
+	// conversions and repeated visibility changes on the same pair of nodes.
+	const float transforms[][8] = {
+		{ 12.5f, -24.0f, 0.5f, 2.0f, 3.0f, -4.0f, 5.0f, 1.0f },
+		{ -7.0f, 9.5f, -0.75f, 0.5f, 1.5f, 6.0f, -8.0f, 0.0f },
+		{ 3.0f, -2.0f, 1.25f, 4.0f, 0.25f, -1.0f, 2.0f, 0.0f },
+		{ 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f },
+	};
+	for (const auto &values : transforms) {
+		const GdVec2 pos(values[0], values[1]);
+		const GdVec2 scale(values[3], values[4]);
+		const GdVec2 pivot(values[5], values[6]);
+		const bool visible = values[7] != 0.0f;
+		manager.set_transform(single_id, pos, values[2], scale, visible, pivot);
+		const float batch[] = {
+			1.0f, 0.0f, static_cast<float>(batch_id),
+			values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
+		};
+		manager.batch_update_transforms(batch, sizeof(batch) / sizeof(batch[0]));
+
+		for (SpxSprite *sprite : { single, batched }) {
+			CHECK(sprite->get_position() == Vector2(pos.x, -pos.y));
+			CHECK(sprite->get_rotation() == doctest::Approx(values[2]));
+			CHECK(sprite->get_scale().is_equal_approx(scale));
+			CHECK(sprite->get_render_offset() == Vector2(pivot.x, -pivot.y));
+			CHECK_EQ(sprite->is_visible(), visible);
+		}
+	}
+	manager.destroy_sprite(single_id);
+	manager.destroy_sprite(batch_id);
+}
+
 TEST_CASE("[SceneTree][SPX] Transform batch uses destroy-wins semantics") {
 	SpriteMgrProbe manager;
 	SpxSprite *sprite = memnew(SpxSprite);
