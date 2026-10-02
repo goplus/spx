@@ -162,6 +162,7 @@ type animationAudioBackend struct {
 	stops       []int64
 	playing     map[int64]bool
 	onPlay      func(id int64)
+	onStop      func(id int64)
 	onRestart   func(id int64)
 }
 
@@ -231,6 +232,9 @@ func (f *animationAudioBackend) Stop(aid int64) {
 		f.playing[aid] = false
 	}
 	f.stops = append(f.stops, aid)
+	if f.onStop != nil {
+		f.onStop(aid)
+	}
 }
 
 func (f *animationAudioBackend) Restart(aid int64) bool {

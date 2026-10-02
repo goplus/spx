@@ -62,16 +62,6 @@ type inputLoopState struct {
 	wasSuspended bool
 }
 
-type LogicFrameConfig[T any] struct {
-	Items                    []T
-	TempAudios               []string
-	TempAnimations           []string
-	FlushPendingAudio        func(T, []string) []string
-	FlushCompletedAnimations func(T, []string) []string
-	NextTimer                func() (int64, bool)
-	FireTimer                func(int64)
-}
-
 func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
 	*s = InputFrameState{lastMousePos: point, leftButtonPressed: leftButtonPressed}
 }
@@ -127,27 +117,6 @@ func RunInputLoop(cfg InputLoopConfig) {
 		runInputLoopFrame(cfg, &state)
 		engine.WaitNextFrame()
 	}
-}
-
-func ProcessLogicFrame[T any](cfg LogicFrameConfig[T]) ([]string, []string) {
-	tempAudios := cfg.TempAudios
-	for _, item := range cfg.Items {
-		tempAudios = cfg.FlushPendingAudio(item, tempAudios)
-	}
-
-	tempAnimations := cfg.TempAnimations
-	for _, item := range cfg.Items {
-		tempAnimations = cfg.FlushCompletedAnimations(item, tempAnimations)
-	}
-
-	for {
-		targetTimer, ok := cfg.NextTimer()
-		if !ok {
-			break
-		}
-		cfg.FireTimer(targetTimer)
-	}
-	return tempAudios, tempAnimations
 }
 
 func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
