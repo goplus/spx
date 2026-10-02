@@ -17,6 +17,7 @@
 package ispx
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -24,14 +25,18 @@ import (
 )
 
 func TestHostInputRecordingBridgePreparesNextGame(t *testing.T) {
-	preparation, err := prepareHostInputRecording(60)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { cancelPreparedHostInputSession(preparation) })
-	status := getHostInputSessionStatus()
-	if status.Mode != "recording" || status.Phase != "prepared" || status.Completed || status.NextFrame != 0 {
-		t.Fatalf("prepared recording status = %+v", status)
+	for _, fps := range []float64{60, 0} {
+		t.Run(fmt.Sprint(fps), func(t *testing.T) {
+			preparation, err := prepareHostInputRecording(fps)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { preparation.Cancel() })
+			status := spx.GetInputSessionStatus()
+			if status.Mode != spx.InputSessionModeRecording || status.Phase != spx.InputSessionPhasePrepared || status.Completed || status.NextFrame != 0 {
+				t.Fatalf("prepared recording status = %+v", status)
+			}
+		})
 	}
 }
 
@@ -49,9 +54,9 @@ func TestHostInputReplayBridgeValidatesAndPreparesNextGame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cancelPreparedHostInputSession(preparation) })
-	status := getHostInputSessionStatus()
-	if status.Mode != "replaying" || status.Phase != "prepared" || status.Completed || status.FrameCount != 0 || status.HasCurrentTick {
+	t.Cleanup(func() { preparation.Cancel() })
+	status := spx.GetInputSessionStatus()
+	if status.Mode != spx.InputSessionModeReplaying || status.Phase != spx.InputSessionPhasePrepared || status.Completed || status.FrameCount != 0 || status.HasCurrentTick {
 		t.Fatalf("prepared replay status = %+v", status)
 	}
 }
@@ -60,7 +65,7 @@ func TestHostInputRecordingBridgeRejectsInvalidFPS(t *testing.T) {
 	for _, fps := range []float64{-1, math.NaN(), math.Inf(1)} {
 		preparation, err := prepareHostInputRecording(fps)
 		if err == nil {
-			cancelPreparedHostInputSession(preparation)
+			preparation.Cancel()
 			t.Fatalf("prepareHostInputRecording(%v) succeeded", fps)
 		}
 	}
