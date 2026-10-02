@@ -12,12 +12,12 @@ import (
 
 func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
 	previousDown, previousSnapshot, previousCallbacks := keyDown, inputSnap, callbacks
-	previousFrame, previousGeneration := actionFrame, actionGeneration
+	previousGeneration := actionGeneration
 	previousBool, previousAxis := actionBool, actionAxis
 	previousAPI, previousIDs := API, actionIDs
 	t.Cleanup(func() {
 		keyDown, inputSnap, callbacks = previousDown, previousSnapshot, previousCallbacks
-		actionFrame, actionGeneration = previousFrame, previousGeneration
+		actionGeneration = previousGeneration
 		actionBool, actionAxis = previousBool, previousAxis
 		API, actionIDs = previousAPI, previousIDs
 	})
@@ -31,8 +31,7 @@ func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				keyDown = map[int64]bool{1: true, 2: false}
-				inputSnap = inputSnapshot{mouse: mathf.NewVec2(11, 22), mouseBits: 1, ok: true, frame: 3}
-				actionFrame = 3
+				inputSnap = inputSnapshot{mouse: mathf.NewVec2(11, 22), mouseBits: 1, ok: true}
 				actionBool, actionAxis = map[string]bool{"pressed\x00left": true}, map[string]float64{}
 				assertInput := func(wantOld bool) {
 					t.Helper()
@@ -109,7 +108,10 @@ func TestInputActionCache(t *testing.T) {
 	for _, kind := range []string{"pressed", "just_pressed", "just_released", "axis"} {
 		t.Run(kind, func(t *testing.T) {
 			previousAPI, previousIDs := API, actionIDs
-			previousFrame, previousGeneration := actionFrame, actionGeneration
+			previousBindings := js.Global().Get("GdspxFuncs")
+			js.Global().Set("GdspxFuncs", js.Undefined())
+			previousSnapshot := inputSnap
+			previousGeneration := actionGeneration
 			previousBool, previousAxis := actionBool, actionAxis
 			previousReset, previousDestroy := callbacks.OnEngineReset, callbacks.OnEngineDestroy
 			API.SpxInputIsActionPressedId = js.Undefined()
@@ -117,11 +119,13 @@ func TestInputActionCache(t *testing.T) {
 			API.SpxInputIsActionJustReleasedId = js.Undefined()
 			API.SpxInputGetAxisId = js.Undefined()
 			actionIDs = map[string]int{"left": 1, "right": 2}
-			actionFrame, actionGeneration = 1, 0
+			actionGeneration = 0
 			actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 			t.Cleanup(func() {
 				API, actionIDs = previousAPI, previousIDs
-				actionFrame, actionGeneration = previousFrame, previousGeneration
+				js.Global().Set("GdspxFuncs", previousBindings)
+				inputSnap = previousSnapshot
+				actionGeneration = previousGeneration
 				actionBool, actionAxis = previousBool, previousAxis
 				callbacks.OnEngineReset, callbacks.OnEngineDestroy = previousReset, previousDestroy
 			})
@@ -151,19 +155,18 @@ func TestInputActionCache(t *testing.T) {
 			if first != 0 || cached != 0 || calls != 1 {
 				t.Fatal("zero/false results must be cached")
 			}
-			clearActionCache(1)
 			query(fallback)
 			if calls != 1 {
 				t.Fatal("same frame must retain cached results")
 			}
-			clearActionCache(2)
+			SyncWebInputSnapshot()
 			query(fallback)
 			if calls != 2 {
 				t.Fatal("next frame must refresh cached results")
 			}
 
-			clearActionCache(3)
-			if query(func() float64 { clearActionCache(4); return 1 }) != 1 {
+			SyncWebInputSnapshot()
+			if query(func() float64 { SyncWebInputSnapshot(); return 1 }) != 1 {
 				t.Fatal("a read spanning frames must still return its result")
 			}
 			if query(fallback) != 0 || calls != 3 {
@@ -195,7 +198,7 @@ func TestInputActionCache(t *testing.T) {
 				t.Fatal("a read spanning reset must not populate the cache")
 			}
 
-			clearActionCache(5)
+			SyncWebInputSnapshot()
 			func() {
 				defer func() {
 					if recover() != "read failed" {
