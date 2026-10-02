@@ -81,11 +81,6 @@ func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, proje
 		return err
 	}
 
-	if cmd.ShouldReimport() {
-		if err := cmd.Reimport(); err != nil {
-			return err
-		}
-	}
 	return
 }
 

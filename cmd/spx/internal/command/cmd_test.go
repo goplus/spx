@@ -362,3 +362,138 @@ fi
 		}
 	}
 }
+
+func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake build tools use POSIX shell scripts")
+	}
+	type testCase struct {
+		name, command, tags, failure string
+		cache                        bool
+		want, errorContext           string
+	}
+	// BuildDll builds both host architectures on macOS.
+	dllBuild := "dll"
+	if runtime.GOOS == "darwin" {
+		dllBuild = "dll dll"
+	}
+	built := "tidy generate tidy " + dllBuild
+	var cases []testCase
+	for _, command := range []string{"build", "editor", "rune", "export", "exportpack"} {
+		action := " run"
+		if command == "build" {
+			action = ""
+		}
+		cases = append(cases,
+			testCase{name: command + "/fresh", command: command, want: built + " import" + action},
+			testCase{name: command + "/cached", command: command, cache: true, want: built + action},
+		)
+	}
+	cases = append(cases,
+		testCase{name: "generation failure", command: "editor", failure: "generate", want: "tidy generate", errorContext: "code generation failed"},
+		testCase{name: "tidy failure", command: "editor", failure: "tidy:2", want: "tidy generate tidy", errorContext: "go mod tidy failed"},
+		testCase{name: "build failure", command: "editor", failure: "dll", want: "tidy generate tidy dll", errorContext: "go shared-library build"},
+		testCase{name: "import failure", command: "editor", failure: "import", want: built + " import", errorContext: "godot import failed"},
+		testCase{name: "cached generation failure", command: "editor", cache: true, failure: "generate", want: "tidy generate", errorContext: "code generation failed"},
+		testCase{name: "cached tidy failure", command: "editor", cache: true, failure: "tidy:2", want: "tidy generate tidy", errorContext: "go mod tidy failed"},
+		testCase{name: "cached build failure", command: "editor", cache: true, failure: "dll", want: "tidy generate tidy dll", errorContext: "go shared-library build"},
+		testCase{name: "template fresh", command: "exporttemplateweb", want: built + " import run"},
+		testCase{name: "template cached", command: "exporttemplateweb", cache: true, want: "tidy run"},
+		testCase{name: "runtime skips import", command: "runnative", want: built + " run"},
+		testCase{name: "pure engine skips import and DLL", command: "build", tags: "pure_engine", want: "tidy"},
+		testCase{name: "wasm skips import", command: "buildweb", want: "tidy generate tidy wasm"},
+		testCase{name: "tinygo skips import", command: "buildtinygo", want: "tidy generate tidy tinygo"},
+		testCase{name: "init skips import", command: "init"},
+		testCase{name: "clear skips import", command: "clear"},
+		testCase{name: "clearbuild skips import", command: "clearbuild"},
+		// Mobile exports still build after staging assets; stop before SDK work.
+		testCase{name: "apk retains export build", command: "exportapk", failure: "generate:2", want: built + " import generate", errorContext: "code generation failed"},
+		testCase{name: "ios retains export build", command: "exportios", failure: "generate:2", want: built + " import generate", errorContext: "code generation failed"},
+	)
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Chdir(root)
+			project := filepath.Join(root, "source project")
+			binDir := filepath.Join(root, "gopath", "bin")
+			logPath := filepath.Join(root, "commands.log")
+			for _, dir := range []string{filepath.Join(project, "assets"), binDir} {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, name := range []string{"main.spx", filepath.Join("assets", "index.json")} {
+				if err := os.WriteFile(filepath.Join(project, name), []byte("{}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tt.cache {
+				writeProjectImportCache(t, filepath.Join(project, "project"))
+			}
+			const script = `#!/bin/sh
+set -eu
+tool="${0##*/}"
+case "$tool:$1" in
+    gdspxtest:--version) exit 0 ;;
+    xgo:go) action=generate ;;
+    go:mod) action=tidy ;;
+    go:build) action=wasm; for arg in "$@"; do if [ "$arg" = -buildmode=c-shared ]; then action=dll; fi; done ;;
+    tinygo:build) action=tinygo ;;
+    gdspx*) action=run; for arg in "$@"; do if [ "$arg" = --import ]; then action=import; fi; done ;;
+    *) exit 97 ;;
+esac
+printf '%s\n' "$action" >> "$SPX_TEST_ORDER_LOG"
+count=0
+while IFS= read -r previous; do
+    if [ "$previous" = "$action" ]; then count=$((count + 1)); fi
+done < "$SPX_TEST_ORDER_LOG"
+if [ "$SPX_TEST_ORDER_FAIL" = "$action" ] || [ "$SPX_TEST_ORDER_FAIL" = "$action:$count" ]; then exit 23; fi
+if [ "$action" = generate ]; then printf 'package main\n' > xgo_autogen.go; fi
+if [ "$action" = dll ]; then
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = -o ]; then mkdir -p "${2%/*}"; printf 'fake bridge\n' > "$2"; break; fi
+        shift
+    done
+fi
+`
+			for _, tool := range []string{"go", "xgo", "tinygo", "gdspxtest", "gdspxrttest"} {
+				if err := os.WriteFile(filepath.Join(binDir, tool), []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("GOPATH", filepath.Dir(binDir))
+			t.Setenv(projectImportTimeoutEnvVar, "0")
+			t.Setenv("SPX_TEST_ORDER_LOG", logPath)
+			t.Setenv("SPX_TEST_ORDER_FAIL", tt.failure)
+			for _, key := range []string{"GOOS", "GOARCH", "GODEBUG"} {
+				t.Setenv(key, "")
+			}
+			oldFlags, oldArgs := flag.CommandLine, os.Args
+			flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+			flag.CommandLine.SetOutput(io.Discard)
+			os.Args = []string{"spx", tt.command, "--path", project, "--tags", tt.tags}
+			t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+
+			cmd := &CmdTool{}
+			err = cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project")
+			if tt.errorContext == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.errorContext) {
+				t.Fatalf("RunCmd error = %v, want %q", err, tt.errorContext)
+			}
+			data, err := os.ReadFile(logPath)
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if got := strings.Join(strings.Fields(string(data)), " "); got != tt.want {
+				t.Fatalf("command order = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
