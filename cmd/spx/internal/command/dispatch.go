@@ -100,7 +100,7 @@ func (cmd *CmdTool) dispatch(spec commandSpec, fsRelDir, dstRelDir string) error
 	if err := cmd.prepareCommand(spec, fsRelDir, dstRelDir); err != nil {
 		return err
 	}
-	if err := cmd.buildCommand(spec.build); err != nil {
+	if err := cmd.buildCommand(spec); err != nil {
 		return err
 	}
 	if spec.run == nil {
@@ -138,8 +138,17 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	return cmd.SetupEnv(cmd.Version, cmd.ProjectFS, fsRelDir, dstRelDir)
 }
 
-func (cmd *CmdTool) buildCommand(build commandBuild) error {
-	switch build {
+func (cmd *CmdTool) buildCommand(spec commandSpec) error {
+	if spec.setup == projectSetup && cmd.ShouldReimport() {
+		if err := cmd.Reimport(); err != nil {
+			return err
+		}
+		// Reimport already built the shared library before importing assets.
+		if spec.build == dllBuild {
+			return nil
+		}
+	}
+	switch spec.build {
 	case noBuild:
 		return nil
 	case dllBuild:
@@ -152,6 +161,6 @@ func (cmd *CmdTool) buildCommand(build commandBuild) error {
 	case tinyGoBuild:
 		return cmd.BuildTinyGoLib()
 	default:
-		return fmt.Errorf("invalid command build phase %d", build)
+		return fmt.Errorf("invalid command build phase %d", spec.build)
 	}
 }
