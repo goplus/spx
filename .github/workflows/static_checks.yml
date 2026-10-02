@@ -70,7 +70,7 @@ jobs:
         env:
           GOOS: js
           GOARCH: wasm
-        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web
+        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web ./pkg/ispx
 
       - name: Test Web ABI memory ownership
         env:
