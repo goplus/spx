@@ -233,7 +233,6 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
 	p.applyPhysicsProxyConfig()
 	p.runtimeState.SyncSprite.SetVisible(p.effectiveProxyVisibility())
-	p.runtimeState.SyncSprite.Name = p.name
 	p.runtimeState.SyncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
 	p.runtimeState.SyncSprite.RegisterOnAnimationLooped(p.handleAnimationLooped)
