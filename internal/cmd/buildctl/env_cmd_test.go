@@ -17,8 +17,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,42 +89,38 @@ func TestResolveBuildEnvironmentUsesSPXModuleSourceOverride(t *testing.T) {
 }
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
-	runtimeLock := release.DefaultRuntimeLock()
 	env := shared.BuildEnvironment{
-		ProjectDir:      "/repo",
-		EngineDir:       "/repo/godot src",
-		GodotSrc:        "/repo/godot src",
-		SPXModuleSrc:    "/repo/custom modules/spx",
-		EngineVersion:   runtimeLock.Godot.Version,
-		GoPath:          "/tmp/go path",
-		Version:         runtimeLock.RuntimeVersion,
-		GodotRepository: runtimeLock.Godot.Repository,
-		GodotRef:        runtimeLock.Godot.Ref,
-		GodotCommit:     runtimeLock.Godot.Commit,
-		TemplateDir:     "/tmp/templates",
+		RepoRoot:        "not exported",
+		ProjectDir:      "/project with spaces",
+		EngineDir:       "/engine's source",
+		GodotSrc:        "/godot",
+		SPXModuleSrc:    "/module",
+		EngineVersion:   "4.5.stable",
+		GoPath:          "/go",
+		Version:         "v1",
+		GodotRepository: "https://example.com/godot",
+		GodotRef:        "refs/heads/main",
+		GodotCommit:     "abc123",
+		TemplateDir:     "",
 		Platform:        "linux",
 		Arch:            "x86_64",
 	}
-
-	out := env.ShellExports()
-	for _, key := range []string{
-		"export PROJ_DIR=",
-		"export ENGINE_DIR=",
-		"export GODOT_SRC=",
-		"export SPX_MODULE_SRC=",
-		"export ENGINE_VERSION=",
-		"export GOPATH=",
-		"export VERSION=",
-		"export GODOT_REPOSITORY=",
-		"export GODOT_REF=",
-		"export GODOT_COMMIT=",
-		"export TEMPLATE_DIR=",
-		"export PLATFORM=",
-		"export ARCH=",
-	} {
-		if !strings.Contains(out, key) {
-			t.Fatalf("missing key %s in shell exports: %s", key, out)
-		}
+	const want = `export PROJ_DIR='/project with spaces'
+export ENGINE_DIR='/engine'"'"'s source'
+export GODOT_SRC='/godot'
+export SPX_MODULE_SRC='/module'
+export ENGINE_VERSION='4.5.stable'
+export GOPATH='/go'
+export VERSION='v1'
+export GODOT_REPOSITORY='https://example.com/godot'
+export GODOT_REF='refs/heads/main'
+export GODOT_COMMIT='abc123'
+export TEMPLATE_DIR=''
+export PLATFORM='linux'
+export ARCH='x86_64'
+`
+	if got := env.ShellExports(); got != want {
+		t.Fatalf("ShellExports() = %q, want %q", got, want)
 	}
 }
 
@@ -231,5 +230,95 @@ func TestResolveJDKShellExportsIncludesPATHWhenJavaHomeExists(t *testing.T) {
 	}
 	if !strings.Contains(exports["PATH"], binDir) {
 		t.Fatalf("PATH export does not include java bin: %s", exports["PATH"])
+	}
+}
+
+func TestBuildEnvironmentRetainsTypeIdentity(t *testing.T) {
+	env := shared.BuildEnvironment{}
+	if got, want := reflect.TypeOf(env).Name(), "buildEnvironment"; got != want {
+		t.Fatalf("type name = %q, want %q", got, want)
+	}
+	if got, want := fmt.Sprintf("%T", env), "shared.buildEnvironment"; got != want {
+		t.Fatalf("formatted type = %q, want %q", got, want)
+	}
+}
+
+func TestShellQuoteExact(t *testing.T) {
+	tests := []struct{ value, want string }{
+		{"", "''"},
+		{"plain", "'plain'"},
+		{"a b", "'a b'"},
+		{"a'b", `'a'"'"'b'`},
+		{"$HOME;$(command)", "'$HOME;$(command)'"},
+		{"line 1\nline 2", "'line 1\nline 2'"},
+	}
+	for _, test := range tests {
+		if got := shared.ShellQuote(test.value); got != test.want {
+			t.Errorf("ShellQuote(%q) = %q, want %q", test.value, got, test.want)
+		}
+	}
+}
+
+func TestMacOSVulkanSDKShellExportsExact(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/path with spaces")
+	const sdk = "/sdk's root"
+	want := "export VULKAN_SDK='/sdk'\"'\"'s root'\n" +
+		"export PATH=" + shared.ShellQuote(filepath.Join(sdk, "bin")+":/usr/bin:/path with spaces") + "\n"
+	if got := shared.MacOSVulkanSDKShellExports(sdk); got != want {
+		t.Fatalf("MacOSVulkanSDKShellExports() = %q, want %q", got, want)
+	}
+}
+
+func TestCurrentBuildEnvReturnsIndependentCopy(t *testing.T) {
+	const key = "SPX_SHARED_ENV_COPY_TEST"
+	t.Setenv(key, "original=value")
+	// Provide valid Darwin inputs so this test does not depend on xcrun.
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SDKROOT", t.TempDir())
+	t.Setenv("CC", shared.ShellQuote(executable))
+	t.Setenv("CXX", shared.ShellQuote(executable))
+	for _, name := range []string{"CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
+		t.Setenv(name, "")
+	}
+	first, err := shared.CurrentBuildEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := first[key]; got != "original=value" {
+		t.Fatalf("environment value = %q, want original=value", got)
+	}
+	first[key] = "changed"
+	if got := os.Getenv(key); got != "original=value" {
+		t.Fatalf("process environment was changed to %q", got)
+	}
+	second, err := shared.CurrentBuildEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := second[key]; got != "original=value" {
+		t.Fatalf("second environment was changed to %q", got)
+	}
+}
+
+func TestEnvMapToSliceSortsAndCopies(t *testing.T) {
+	env := map[string]string{"Z": "last", "A": "first=part", "EMPTY": ""}
+	want := []string{"A=first=part", "EMPTY=", "Z=last"}
+	got := shared.EnvMapToSlice(env)
+	if !slices.Equal(got, want) {
+		t.Fatalf("EnvMapToSlice() = %q, want %q", got, want)
+	}
+	got[0] = "changed"
+	if env["A"] != "first=part" {
+		t.Fatal("result changed the input map")
+	}
+	env["Z"] = "changed"
+	if got[2] != "Z=last" {
+		t.Fatal("input map changed the result")
+	}
+	if got := shared.EnvMapToSlice(nil); got == nil || len(got) != 0 {
+		t.Fatalf("EnvMapToSlice(nil) = %#v, want an empty non-nil slice", got)
 	}
 }

@@ -38,7 +38,7 @@ func ParseNoArgs(name, usage string, args []string, output io.Writer) error {
 	return nil
 }
 
-func validateOptionalPlatform(platform string) error {
+func ValidateOptionalPlatform(platform string) error {
 	switch platform {
 	case "", "android", "ios", "web", "linux", "windows", "macos":
 		return nil

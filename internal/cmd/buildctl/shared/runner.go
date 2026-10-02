@@ -35,6 +35,6 @@ func (r CommandRunner) RunScript(relativePath string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = envMapToSlice(env)
+	cmd.Env = EnvMapToSlice(env)
 	return cmd.Run()
 }

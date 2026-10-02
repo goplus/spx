@@ -24,7 +24,7 @@ import (
 	"github.com/goplus/spx/v3/internal/release"
 )
 
-func resolveSPXModuleSource(repoRoot string) (string, error) {
+func ResolveSPXModuleSource(repoRoot string) (string, error) {
 	return resolveSPXModuleSourcePath(repoRoot, os.Getenv("SPX_MODULE_SRC"))
 }
 
