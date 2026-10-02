@@ -81,7 +81,7 @@ func ispxStart(this js.Value, args []js.Value) any {
 		return err
 	}
 	go func() {
-		defer cancelPreparedHostInputSession(preparation)
+		defer preparation.Cancel()
 		defer func() {
 			if r := recover(); r != nil {
 				reportRuntimeError(fmt.Errorf("interpreter exited with panic: %v", r))
@@ -163,10 +163,13 @@ func ispxInputRecordingFinish(this js.Value, args []js.Value) any {
 }
 
 func ispxInputSessionStatus(this js.Value, args []js.Value) any {
-	status := getHostInputSessionStatus()
+	return inputSessionStatusToJS(spx.GetInputSessionStatus())
+}
+
+func inputSessionStatusToJS(status spx.InputSessionStatus) js.Value {
 	result := jsTypeObject.New()
-	result.Set("mode", status.Mode)
-	result.Set("phase", status.Phase)
+	result.Set("mode", string(status.Mode))
+	result.Set("phase", string(status.Phase))
 	result.Set("completed", status.Completed)
 	result.Set("exhausted", status.Exhausted)
 	result.Set("currentTick", nil)
