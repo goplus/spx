@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -40,7 +39,6 @@ const projectImportTimeoutEnvVar = "SPX_GODOT_IMPORT_TIMEOUT"
 const defaultProjectImportTimeout = 10 * time.Minute
 
 var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", "", "\r", "")
-var spxModuleReplaceLinePattern = regexp.MustCompile(`^(\s*)(replace\s+)?github\.com/goplus/spx/v3\s*=>\s*(\S+)(\s*//.*)?$`)
 
 // CheckEnv validates the target directory.
 func (cmd *CmdTool) CheckEnv() error {
@@ -379,10 +377,9 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 	return nil
 }
 
-// adaptGoMod patches go.mod for local development.
+// adaptGoMod creates a missing module scaffold outside a local SPX repository.
 func (cmd *CmdTool) adaptGoMod() {
-	spxPath := cmd.findSpxRoot()
-	if spxPath != "" {
+	if cmd.findSpxRoot() != "" {
 		return
 	}
 
@@ -391,77 +388,6 @@ func (cmd *CmdTool) adaptGoMod() {
 		if err := cmd.createDefaultGoMod(cmd.TargetDir, false); err != nil {
 			return
 		}
-	}
-
-	absTargetDir := cmd.TargetAbsDir
-	content, err := os.ReadFile(rootGoModPath)
-	if err != nil {
-		return
-	}
-
-	relPath, err := filepath.Rel(absTargetDir, spxPath)
-	if err != nil {
-		return
-	}
-
-	strContent := ensureSpxModuleReplace(string(content), filepath.ToSlash(relPath))
-	if strContent == string(content) {
-		return
-	}
-	if err := os.WriteFile(rootGoModPath, []byte(strContent), 0644); err != nil {
-		return
-	}
-}
-
-// ensureSpxModuleReplace idempotently upserts the local spx replace directive,
-// repairing stale single-line or block entries while preserving newline style.
-func ensureSpxModuleReplace(content, relPath string) string {
-	const replaceLine = "github.com/goplus/spx/v3 => "
-
-	wantLine := replaceLine + relPath
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		hasCR := strings.HasSuffix(line, "\r")
-		trimmed := strings.TrimSuffix(line, "\r")
-		match := spxModuleReplaceLinePattern.FindStringSubmatch(trimmed)
-		if match == nil {
-			continue
-		}
-
-		if match[3] == relPath {
-			return content
-		}
-
-		replacePrefix := match[1]
-		if match[2] != "" {
-			replacePrefix += "replace "
-		}
-
-		lines[i] = replacePrefix + wantLine + match[4]
-		if hasCR {
-			lines[i] += "\r"
-		}
-		return strings.Join(lines, "\n")
-	}
-
-	return appendSpxModuleReplace(content, "replace "+wantLine)
-}
-
-func appendSpxModuleReplace(content, replaceLine string) string {
-	lineEnding := "\n"
-	if strings.Contains(content, "\r\n") {
-		lineEnding = "\r\n"
-	}
-
-	switch {
-	case content == "":
-		return replaceLine + lineEnding
-	case strings.HasSuffix(content, lineEnding+lineEnding):
-		return content + replaceLine + lineEnding
-	case strings.HasSuffix(content, lineEnding):
-		return content + lineEnding + replaceLine + lineEnding
-	default:
-		return content + lineEnding + lineEnding + replaceLine + lineEnding
 	}
 }
 
