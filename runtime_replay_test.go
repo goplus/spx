@@ -29,6 +29,51 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
+// resetInputSessionState isolates tests without adding a production path for
+// resetting input independently of the Game lifecycle.
+func resetInputSessionState() {
+	preparedInputSession.Lock()
+	preparedInputSession.plan = nil
+	preparedInputSession.claimed = false
+	preparedInputSession.Unlock()
+	if game := currentGame(); game != nil {
+		game.abortInputSession("input session reset")
+		game.inputSessionMu.Lock()
+		game.inputTerminal = InputSessionStatus{}
+		game.inputSessionMu.Unlock()
+	}
+}
+
+// consumeSampledInputTick holds the session boundary while the engine state is
+// sampled and resolved into one effective input tick.
+func (s *inputSession) consumeSampledInputTick(
+	delta float64,
+	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
+) (inputSessionTick, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	return s.consumeSampledInputTickLocked(delta, sample)
+}
+
+func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
+	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
+}
+
+func consumeInputTickWithMouseEvents(
+	live InputReplayState,
+	mouseEvents []InputReplayMouseEvent,
+	keyEvents []InputReplayKeyEvent,
+	delta float64,
+) (inputSessionTick, error) {
+	session := activeInputSession()
+	if session == nil {
+		return inputSessionTick{}, errors.New("no active input session")
+	}
+	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return live, mouseEvents, keyEvents
+	})
+}
+
 func resetInputSessionTest(t *testing.T) {
 	t.Helper()
 	resetInputSessionState()
@@ -431,17 +476,34 @@ func TestVariableTimestepReplayOverridesAndRestoresFixedTime(t *testing.T) {
 	}
 }
 
-func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
+func TestPreparedInputSessionIsConsumedOncePerGameLifecycle(t *testing.T) {
 	resetInputSessionTest(t)
 	if _, err := PrepareInputRecording(30); err != nil {
 		t.Fatal(err)
 	}
 	game := &Game{}
 	first := claimPreparedSession(t, game)
-	if first.generation != game.bootstrapGeneration() {
-		t.Fatalf("session generation = %d, want %d", first.generation, game.bootstrapGeneration())
+	if err := game.attachPreparedInputSession(); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("second attachment error = %v, want %v", err, ErrInputSessionActive)
 	}
-	game.abortInputSession("generation ended")
+	for i := 0; i < 2; i++ {
+		if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tick, ok := currentInputSessionTickForCapture(); !ok || tick != 1 {
+		t.Fatalf("first session capture tick = (%d, %v), want (1, true)", tick, ok)
+	}
+	game.abortInputSession("lifecycle ended")
+	if game.currentInputSession() != nil {
+		t.Fatal("ended input session is still attached")
+	}
+	if _, err := first.consumeSampledInputTick(1.0/30, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		t.Fatal("ended input session sampled live input")
+		return InputReplayState{}, nil, nil
+	}); err == nil {
+		t.Fatal("ended input session accepted another tick")
+	}
 	game.resetBootstrap()
 	if err := game.attachPreparedInputSession(); err != nil {
 		t.Fatal(err)
@@ -450,9 +512,9 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 		t.Fatal("one-shot session descriptor was consumed twice")
 	}
 	if status := GetInputSessionStatus(); status.Mode != InputSessionModeIdle {
-		t.Fatalf("ordinary generation retained terminal input status: %+v", status)
+		t.Fatalf("ordinary lifecycle retained terminal input status: %+v", status)
 	}
-	game.abortInputSession("ordinary generation ended")
+	game.abortInputSession("ordinary lifecycle ended")
 	game.resetBootstrap()
 
 	if _, err := PrepareInputReplay(validRuntimeReplay()); err != nil {
@@ -460,13 +522,19 @@ func TestPreparedInputSessionIsConsumedOncePerGameGeneration(t *testing.T) {
 	}
 	second := claimPreparedSession(t, game)
 	if second == first {
-		t.Fatal("new Game generation reused the previous input session")
+		t.Fatal("new Game lifecycle reused the previous input session")
 	}
-	if second.generation != game.bootstrapGeneration() {
-		t.Fatalf("second generation = %d, want current generation %d", second.generation, game.bootstrapGeneration())
+	if status := second.status(); status.Phase != InputSessionPhaseRunning || status.NextFrame != 0 || status.HasCurrentTick {
+		t.Fatalf("new session inherited previous input state: %+v", status)
 	}
-	if status := second.status(); status.NextFrame != 0 {
-		t.Fatalf("new session did not start at tick zero: %+v", status)
+	if tick, ok := currentInputSessionTickForCapture(); ok {
+		t.Fatalf("new session inherited capture tick %d", tick)
+	}
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30); err != nil {
+		t.Fatal(err)
+	}
+	if tick, ok := currentInputSessionTickForCapture(); !ok || tick != 0 {
+		t.Fatalf("new session capture tick = (%d, %v), want (0, true)", tick, ok)
 	}
 }
 
@@ -549,7 +617,7 @@ func TestGameAbortInvalidatesRecordingAndRestoresEnvironment(t *testing.T) {
 	if got := GetInputSessionStatus(); got != wantStatus {
 		t.Fatalf("repeated abort changed public status: %+v", got)
 	}
-	if _, err := session.finishRecording(nil); err == nil {
+	if _, err := session.finishRecordingResult(nil); err == nil {
 		t.Fatal("aborted recording produced a commit result")
 	}
 	if got, ok := itime.FixedDeltaTime(); !ok || got != 1.0/60 {
@@ -600,7 +668,7 @@ func TestFinishRecordingRequiresAClosedEngineFrame(t *testing.T) {
 	}
 	session.endFrame()
 	phaseDuringFreeze := InputSessionPhase("")
-	if _, err := session.finishRecording(func() {
+	if _, err := session.finishRecordingResult(func() {
 		phaseDuringFreeze = session.status().Phase
 	}); err != nil {
 		t.Fatal(err)
@@ -735,8 +803,8 @@ func TestFinishRecordingWaitsForCurrentInputOperation(t *testing.T) {
 
 	finishDone := make(chan error, 1)
 	go func() {
-		replay, err := session.finishRecording(nil)
-		if err == nil && len(replay.Frames) != 1 {
+		result, err := session.finishRecordingResult(nil)
+		if err == nil && len(result.replay.Frames) != 1 {
 			err = errors.New("recording finished without the current tick")
 		}
 		finishDone <- err
