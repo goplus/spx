@@ -196,21 +196,6 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	}
 }
 
-func TestAwakeNilDispatchesEveryOwner(t *testing.T) {
-	_, game := setupRuntimeEventGame(t)
-	sprite := &SpriteImpl{name: "sprite", g: game}
-	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-	var calls []string
-
-	game.scriptEventBindings.onAwake(func() { calls = append(calls, "stage") })
-	sprite.scriptEventBindings.onAwake(func() { calls = append(calls, "sprite") })
-	game.scriptEvents.doWhenAwake(nil)
-
-	if want := []string{"sprite", "stage"}; !reflect.DeepEqual(calls, want) {
-		t.Fatalf("Awake(nil) calls = %v, want %v", calls, want)
-	}
-}
-
 func TestOnTimerMatchesMilliseconds(t *testing.T) {
 	previous := gco
 	gco = nil

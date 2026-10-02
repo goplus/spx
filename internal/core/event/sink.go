@@ -35,12 +35,6 @@ func MatchOwner(owner any) func(any) bool {
 	}
 }
 
-func MatchOwnerOrNil(owner any) func(any) bool {
-	return func(data any) bool {
-		return data == nil || data == owner
-	}
-}
-
 func MatchValue[T comparable](want T) func(any) bool {
 	return func(data any) bool {
 		got, ok := data.(T)
