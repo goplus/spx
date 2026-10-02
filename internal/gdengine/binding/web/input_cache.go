@@ -30,7 +30,6 @@ var (
 	keyDown = map[int64]bool{}
 
 	actionMu         sync.Mutex
-	actionFrame      uint64
 	actionGeneration uint64
 	actionBool       = map[string]bool{}
 	actionAxis       = map[string]float64{}
@@ -123,28 +122,19 @@ func cachedAction[T any](values map[string]T, key string, read func() T) T {
 	return value
 }
 
-func clearActionCache(frame uint64) {
-	actionMu.Lock()
-	defer actionMu.Unlock()
-	if actionFrame == frame {
-		return
-	}
-	actionFrame = frame
-	clearCachedActions()
-}
-
 func resetInputCache() {
 	keyMu.Lock()
 	clear(keyDown)
 	keyMu.Unlock()
 	inputSnap.ok = false
 
-	actionMu.Lock()
-	defer actionMu.Unlock()
-	clearCachedActions()
+	clearActionCache()
 }
 
-func clearCachedActions() {
+// Each snapshot refresh or session boundary starts a new cache generation.
+func clearActionCache() {
+	actionMu.Lock()
+	defer actionMu.Unlock()
 	actionGeneration++
 	clear(actionBool)
 	clear(actionAxis)

@@ -29,7 +29,6 @@ type inputSnapshot struct {
 	mouse     mathf.Vec2
 	mouseBits uint32
 	ok        bool
-	frame     uint64
 }
 
 var (
@@ -41,8 +40,7 @@ var (
 )
 
 func SyncWebInputSnapshot() {
-	inputSnap.frame++
-	clearActionCache(inputSnap.frame)
+	clearActionCache()
 
 	bindings := js.Global().Get("GdspxFuncs")
 	if bindings.Type() != js.TypeFunction {
