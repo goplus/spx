@@ -24,104 +24,69 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-func TestSwipeStateFinishDispatchesTarget(t *testing.T) {
-	var (
-		debugged []SwipeEvent[string]
-		targets  []string
-		stages   []float64
-	)
-	var state SwipeState[string]
-	state.Init()
-	state.Begin(mathf.Vec2{}, "sprite")
-	state.Expire()
-	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[string]{
-		Debug: func(ev SwipeEvent[string]) {
-			debugged = append(debugged, ev)
-		},
-		DispatchTarget: func(direction float64, target string) {
-			targets = append(targets, target)
-			if direction != 90 {
-				t.Fatalf("direction = %v, want 90", direction)
+func TestSwipeStateFinishReturnsGestureAndTarget(t *testing.T) {
+	for _, target := range []string{"sprite", ""} {
+		t.Run(target, func(t *testing.T) {
+			now := time.Unix(0, 0)
+			var state SwipeState[string]
+			state.InitWithClock(func() time.Time { return now })
+			start, end := mathf.Vec2{X: 10, Y: 20}, mathf.Vec2{X: 110, Y: 20}
+			state.Begin(start, target)
+			now = now.Add(100 * time.Millisecond)
+			state.Expire()
+			result, gotTarget, ok := state.Finish(end)
+			if !ok || gotTarget != target || result.Direction != 90 || result.Distance != 100 ||
+				math.Abs(result.Velocity-1000) > 1e-9 || result.StartPos != start || result.EndPos != end {
+				t.Fatalf("Finish = (%+v, %q, %v), want complete gesture for %q", result, gotTarget, ok, target)
 			}
-		},
-		DispatchStage: func(direction float64) {
-			stages = append(stages, direction)
-		},
-	})
-
-	if len(debugged) != 1 || debugged[0].Target != "sprite" {
-		t.Fatalf("debugged = %+v, want target event", debugged)
-	}
-	if len(targets) != 1 || targets[0] != "sprite" {
-		t.Fatalf("targets = %+v, want [sprite]", targets)
-	}
-	if len(stages) != 0 {
-		t.Fatalf("stages = %+v, want none", stages)
-	}
-	if state.target != "" {
-		t.Fatalf("state.target = %q, want cleared", state.target)
-	}
-}
-
-func TestSwipeStateFinishDispatchesStage(t *testing.T) {
-	var (
-		debugged []SwipeEvent[*int]
-		stageDir []float64
-	)
-	var state SwipeState[*int]
-	state.Init()
-	state.Begin(mathf.Vec2{}, nil)
-	state.Expire()
-	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[*int]{
-		Debug: func(ev SwipeEvent[*int]) {
-			debugged = append(debugged, ev)
-		},
-		DispatchStage: func(direction float64) {
-			stageDir = append(stageDir, direction)
-		},
-	})
-
-	if len(debugged) != 1 || debugged[0].Target != nil {
-		t.Fatalf("debugged = %+v, want stage event", debugged)
-	}
-	if len(stageDir) != 1 || stageDir[0] != 90 {
-		t.Fatalf("stageDir = %+v, want [90]", stageDir)
+			if state.target != "" || state.recognizer.IsTracking() {
+				t.Fatal("successful finish retained target or tracking")
+			}
+		})
 	}
 }
 
 func TestSwipeStateFinishClearsTargetWhenSwipeFails(t *testing.T) {
-	var state SwipeState[string]
-	state.Init()
-	state.Begin(mathf.Vec2{}, "sprite")
-	state.Finish(mathf.Vec2{}, SwipeHooks[string]{})
-
-	if state.target != "" {
-		t.Fatalf("state.target = %q, want cleared", state.target)
+	for _, tt := range []struct {
+		name    string
+		elapsed time.Duration
+		point   mathf.Vec2
+	}{
+		{"short", 100 * time.Millisecond, mathf.Vec2{X: 10}},
+		{"zero elapsed", 0, mathf.Vec2{X: 100}},
+		{"negative elapsed", -100 * time.Millisecond, mathf.Vec2{X: 100}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Unix(0, 0)
+			var state SwipeState[string]
+			state.InitWithClock(func() time.Time { return now })
+			state.Begin(mathf.Vec2{}, "sprite")
+			now = now.Add(tt.elapsed)
+			if _, _, ok := state.Finish(tt.point); ok {
+				t.Fatal("invalid gesture succeeded")
+			}
+			if state.target != "" || state.recognizer.IsTracking() {
+				t.Fatal("failed finish retained target or tracking")
+			}
+		})
 	}
 }
 
-func TestSwipeStateInitWithClockControlsTimeAndResetsState(t *testing.T) {
-	now := time.Unix(0, 0)
+func TestSwipeStateUntrackedFinishDoesNotReadClock(t *testing.T) {
 	var state SwipeState[string]
-	state.InitWithClock(func() time.Time { return now })
-	state.Begin(mathf.Vec2{}, "sprite")
-	now = now.Add(100 * time.Millisecond)
-
-	var got SwipeEvent[string]
-	state.Finish(mathf.Vec2{X: 100}, SwipeHooks[string]{
-		Debug: func(ev SwipeEvent[string]) { got = ev },
-	})
-	if got.Target != "sprite" || got.Direction != 90 || math.Abs(got.Velocity-1000) > 1e-9 {
-		t.Fatalf("swipe event = %+v, want target sprite, direction 90, velocity 1000", got)
+	state.InitWithClock(func() time.Time { panic("untracked gesture read the clock") })
+	if _, _, ok := state.Finish(mathf.Vec2{X: 100}); ok {
+		t.Fatal("untracked gesture succeeded")
 	}
+}
 
+func TestSwipeStateInitWithClockResetsState(t *testing.T) {
+	var state SwipeState[string]
+	state.InitWithClock(func() time.Time { return time.Unix(0, 0) })
 	state.Begin(mathf.Vec2{}, "stale")
 	state.InitWithClock(nil)
-	if state.target != "" {
-		t.Fatalf("state.target = %q, want cleared after reinitialization", state.target)
-	}
-	if state.recognizer.IsTracking() {
-		t.Fatal("expected reinitialization to stop tracking")
+	if state.target != "" || state.recognizer.IsTracking() {
+		t.Fatal("reinitialization retained target or tracking")
 	}
 }
 
@@ -130,12 +95,6 @@ func TestSwipeStateMovementExpiresTargetBeforeFinish(t *testing.T) {
 	var state SwipeState[string]
 	state.InitWithClock(func() time.Time { return now })
 	state.Begin(mathf.Vec2{}, "sprite")
-
-	dispatches := 0
-	hooks := SwipeHooks[string]{
-		DispatchTarget: func(float64, string) { dispatches++ },
-		DispatchStage:  func(float64) { dispatches++ },
-	}
 	now = now.Add(600 * time.Millisecond)
 	state.Expire()
 	if state.target != "" || state.recognizer.IsTracking() {
@@ -144,8 +103,7 @@ func TestSwipeStateMovementExpiresTargetBeforeFinish(t *testing.T) {
 
 	// A later clock correction cannot revive an expired gesture.
 	now = now.Add(-500 * time.Millisecond)
-	state.Finish(mathf.Vec2{X: 100}, hooks)
-	if dispatches != 0 {
-		t.Fatalf("expired gesture dispatched %d times", dispatches)
+	if _, _, ok := state.Finish(mathf.Vec2{X: 100}); ok {
+		t.Fatal("expired gesture revived after clock correction")
 	}
 }

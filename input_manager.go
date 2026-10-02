@@ -188,31 +188,25 @@ func (p *inputManager) beginSwipeTracking(startPos mathf.Vec2, targetSprite *Spr
 }
 
 func (p *inputManager) finishSwipeTracking(point mathf.Vec2) {
-	p.swipe.Finish(point, p.swipeHooks())
+	result, target, ok := p.swipe.Finish(point)
+	if !ok {
+		return
+	}
+	if isDebugEventEnabled() {
+		targetName := "stage"
+		if target != nil {
+			targetName = target.name
+		}
+		spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
+			Direction(result.Direction), result.Velocity, result.Distance, targetName)
+	}
+	if target != nil {
+		target.doWhenSwipe(Direction(result.Direction), target)
+	} else {
+		p.g.scriptEvents.doWhenSwipe(Direction(result.Direction), p.g)
+	}
 }
 
 func (p *inputManager) onMouseMove(mathf.Vec2) {
 	p.swipe.Expire()
-}
-
-func (p *inputManager) swipeHooks() coreruntime.SwipeHooks[*SpriteImpl] {
-	return coreruntime.SwipeHooks[*SpriteImpl]{
-		Debug: func(ev coreruntime.SwipeEvent[*SpriteImpl]) {
-			if !isDebugEventEnabled() {
-				return
-			}
-			targetName := "stage"
-			if ev.Target != nil {
-				targetName = ev.Target.name
-			}
-			spxlog.Debug("Swipe detected: direction=%v, velocity=%.2f, distance=%.2f, target=%s",
-				Direction(ev.Direction), ev.Velocity, ev.Distance, targetName)
-		},
-		DispatchTarget: func(direction float64, targetSprite *SpriteImpl) {
-			targetSprite.doWhenSwipe(Direction(direction), targetSprite)
-		},
-		DispatchStage: func(direction float64) {
-			p.g.scriptEvents.doWhenSwipe(Direction(direction), p.g)
-		},
-	}
 }
