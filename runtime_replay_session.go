@@ -43,12 +43,11 @@ var preparedInputSession struct {
 	claimed   bool
 }
 
-// inputSession belongs to exactly one Game bootstrap generation.
+// inputSession belongs to exactly one Game lifecycle.
 type inputSession struct {
 	operationMu sync.Mutex
 	mu          sync.Mutex
 
-	generation uint64
 	mode       InputSessionMode
 	phase      InputSessionPhase
 	captureKey Key
@@ -94,7 +93,7 @@ func (p *Game) attachPreparedInputSession() error {
 		return nil
 	}
 	defer completePreparedInputSessionClaim(plan)
-	session, err := newInputSession(plan, p.bootstrapGeneration())
+	session, err := newInputSession(plan)
 	if err != nil {
 		p.setInputSessionTerminal(InputSessionStatus{
 			Mode:  plan.mode,
@@ -181,11 +180,6 @@ func (s *inputSession) close(reason string) InputSessionStatus {
 	engine.DiscardPendingKeyEvents()
 	engine.DiscardPendingMouseEvents()
 	return status
-}
-
-func (s *inputSession) finishRecording(freeze func()) (InputReplay, error) {
-	result, err := s.finishRecordingResult(freeze)
-	return result.replay, err
 }
 
 func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResult, error) {
@@ -406,13 +400,6 @@ func cancelPreparedInputSession(token uint64) bool {
 	return true
 }
 
-func clearPreparedInputSession() {
-	preparedInputSession.Lock()
-	preparedInputSession.plan = nil
-	preparedInputSession.claimed = false
-	preparedInputSession.Unlock()
-}
-
 func preparedInputSessionStatus() (InputSessionStatus, bool) {
 	preparedInputSession.Lock()
 	defer preparedInputSession.Unlock()
@@ -429,9 +416,8 @@ func preparedInputSessionStatus() (InputSessionStatus, bool) {
 	return status, true
 }
 
-func newInputSession(plan *inputSessionPlan, generation uint64) (*inputSession, error) {
+func newInputSession(plan *inputSessionPlan) (*inputSession, error) {
 	session := &inputSession{
-		generation: generation,
 		mode:       plan.mode,
 		phase:      InputSessionPhaseRunning,
 		captureKey: plan.captureKey,
@@ -497,18 +483,6 @@ func freezeInputSession(freeze func()) (err error) {
 	}()
 	freeze()
 	return nil
-}
-
-// resetInputSessionState is retained as an internal cleanup seam. Product
-// callers end the Game instead of resetting input independently.
-func resetInputSessionState() {
-	clearPreparedInputSession()
-	if game := currentGame(); game != nil {
-		game.abortInputSession("input session reset")
-		game.inputSessionMu.Lock()
-		game.inputTerminal = InputSessionStatus{}
-		game.inputSessionMu.Unlock()
-	}
 }
 
 func activeInputSession() *inputSession {

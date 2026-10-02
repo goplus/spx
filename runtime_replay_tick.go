@@ -30,17 +30,6 @@ type inputSessionTick struct {
 	firstTick bool
 }
 
-// consumeSampledInputTick holds the session boundary while the engine state is
-// sampled and resolved into one effective input tick.
-func (s *inputSession) consumeSampledInputTick(
-	delta float64,
-	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
-) (inputSessionTick, error) {
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	return s.consumeSampledInputTickLocked(delta, sample)
-}
-
 func (s *inputSession) consumeSampledInputTickLocked(
 	delta float64,
 	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
@@ -113,25 +102,6 @@ func (p *Game) inputClock() time.Time {
 		return session.logicalClock()
 	}
 	return time.Now()
-}
-
-func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
-	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
-}
-
-func consumeInputTickWithMouseEvents(
-	live InputReplayState,
-	mouseEvents []InputReplayMouseEvent,
-	keyEvents []InputReplayKeyEvent,
-	delta float64,
-) (inputSessionTick, error) {
-	session := activeInputSession()
-	if session == nil {
-		return inputSessionTick{}, fmt.Errorf("no active input session")
-	}
-	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return live, mouseEvents, keyEvents
-	})
 }
 
 // currentInputSessionTickForCapture returns the latest tick owned by the active
