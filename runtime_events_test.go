@@ -1031,15 +1031,12 @@ func TestFindClickTargetKeepsTopmostSpriteWithoutClickHandler(t *testing.T) {
 	g.shapeMgr.add(bottom)
 	g.shapeMgr.add(top)
 
-	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
-	if !ok {
+	target := g.findClickTarget(mathf.NewVec2(0, 0))
+	if target == nil {
 		t.Fatal("expected click target")
 	}
-	if selection.Target != top {
-		t.Fatalf("target = %p, want top %p", selection.Target, top)
-	}
-	if selection.SwipeTarget != top {
-		t.Fatalf("swipe target = %p, want top %p", selection.SwipeTarget, top)
+	if target != top {
+		t.Fatalf("target = %p, want top %p", target, top)
 	}
 }
 
@@ -1057,15 +1054,12 @@ func TestFindClickTargetKeepsTopmostClickableSprite(t *testing.T) {
 	g.shapeMgr.add(bottom)
 	g.shapeMgr.add(top)
 
-	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
-	if !ok {
+	target := g.findClickTarget(mathf.NewVec2(0, 0))
+	if target == nil {
 		t.Fatal("expected click target")
 	}
-	if selection.Target != top {
-		t.Fatalf("target = %p, want top %p", selection.Target, top)
-	}
-	if selection.SwipeTarget != top {
-		t.Fatalf("swipe target = %p, want top %p", selection.SwipeTarget, top)
+	if target != top {
+		t.Fatalf("target = %p, want top %p", target, top)
 	}
 }
 
@@ -1084,12 +1078,12 @@ func TestFindClickTargetFollowsChangedSpriteLayerOrder(t *testing.T) {
 	g.shapeMgr.add(top)
 	top.SetLayerTo(Back)
 
-	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
-	if !ok {
+	target := g.findClickTarget(mathf.NewVec2(0, 0))
+	if target == nil {
 		t.Fatal("expected click target")
 	}
-	if selection.Target != bottom {
-		t.Fatalf("target = %p, want reordered top sprite %p", selection.Target, bottom)
+	if target != bottom {
+		t.Fatalf("target = %p, want reordered top sprite %p", target, bottom)
 	}
 }
 
@@ -1108,15 +1102,12 @@ func TestFindClickTargetSkipsFullyGhostedSpriteEvenWithClickHandler(t *testing.T
 	g.shapeMgr.add(bottom)
 	g.shapeMgr.add(top)
 
-	selection, ok := g.findClickTarget(mathf.NewVec2(0, 0))
-	if !ok {
+	target := g.findClickTarget(mathf.NewVec2(0, 0))
+	if target == nil {
 		t.Fatal("expected click target")
 	}
-	if selection.Target != bottom {
-		t.Fatalf("target = %p, want bottom %p", selection.Target, bottom)
-	}
-	if selection.SwipeTarget != bottom {
-		t.Fatalf("swipe target = %p, want bottom %p", selection.SwipeTarget, bottom)
+	if target != bottom {
+		t.Fatalf("target = %p, want bottom %p", target, bottom)
 	}
 }
 
@@ -1150,5 +1141,145 @@ func TestPointHitsClickTargetUsesClickQuery(t *testing.T) {
 	}
 	if got := mgr.lastIsTrigger[1]; !got {
 		t.Fatalf("pointHitsClickTarget used sensing query, want click query")
+	}
+}
+
+func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous })
+
+	for _, tt := range []struct {
+		name       string
+		hit        bool
+		noHandler  bool
+		blocked    []pkgengine.Object
+		wantClicks []string
+		wantGates  int
+	}{
+		{name: "target", hit: true, wantClicks: []string{"target"}, wantGates: 2},
+		{name: "target without handler", hit: true, noHandler: true, wantGates: 2},
+		{name: "stage", wantClicks: []string{"stage"}, wantGates: 2},
+		{name: "global blocks target", hit: true, blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
+		{name: "target blocked", hit: true, blocked: []pkgengine.Object{7}, wantGates: 2},
+		{name: "global blocks stage", blocked: []pkgengine.Object{clickTimerGlobal}, wantGates: 1},
+		{name: "stage blocked", blocked: []pkgengine.Object{clickTimerStage}, wantGates: 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: tt.hit})
+			var game Game
+			game.initShapeMgr()
+			game.bindScriptEvents()
+			game.inputMgr.g = &game
+			now := time.Unix(100, 0)
+			var steps, clicks, swipes []string
+			game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
+				steps = append(steps, "gate")
+				return now
+			})
+			game.inputMgr.swipe.InitWithClock(func() time.Time {
+				steps = append(steps, "swipe")
+				return now
+			})
+			sprite := newClickTestSprite(&game, "target", 7, false)
+			if !tt.noHandler {
+				sprite.OnClick(func() { clicks = append(clicks, "target") })
+			}
+			sprite.OnSwipe__0(90, func() { swipes = append(swipes, "target") })
+			game.shapeMgr.add(sprite)
+			game.OnClick(func() { clicks = append(clicks, "stage") })
+			game.OnSwipe__0(90, func() { swipes = append(swipes, "stage") })
+			for _, id := range tt.blocked {
+				game.inputMgr.clickGate.Allow(id)
+			}
+			steps = nil
+
+			game.doWhenLeftButtonDown(&eventLeftButtonDown{Pos: mathf.Vec2{X: 10, Y: 20}})
+			wantSteps := []string{"swipe"}
+			for range tt.wantGates {
+				wantSteps = append(wantSteps, "gate")
+			}
+			if !reflect.DeepEqual(steps, wantSteps) {
+				t.Fatalf("dispatch steps = %v, want %v", steps, wantSteps)
+			}
+			if !reflect.DeepEqual(clicks, tt.wantClicks) {
+				t.Fatalf("clicks = %v, want %v", clicks, tt.wantClicks)
+			}
+			// A blocked global gate must not consume the target/stage gate.
+			routedID := pkgengine.Object(clickTimerStage)
+			if tt.hit {
+				routedID = 7
+			}
+			if allowed := game.inputMgr.clickGate.Allow(routedID); allowed != (tt.wantGates == 1) {
+				t.Fatalf("routed gate remains available = %v, want %v", allowed, tt.wantGates == 1)
+			}
+			// The global gate is always consumed, including when the routed gate blocks.
+			if game.inputMgr.clickGate.Allow(clickTimerGlobal) {
+				t.Fatal("global gate was not consumed before routing")
+			}
+			now = now.Add(100 * time.Millisecond)
+			game.doWhenLeftButtonUp(&eventLeftButtonUp{Pos: mathf.Vec2{X: 110, Y: 20}})
+			wantSwipe := "stage"
+			if tt.hit {
+				wantSwipe = "target"
+			}
+			if !reflect.DeepEqual(swipes, []string{wantSwipe}) {
+				t.Fatalf("swipes = %v, want [%s]", swipes, wantSwipe)
+			}
+		})
+	}
+}
+
+type disappearingClickTarget struct {
+	proxy      engine.Sprite
+	proxyReads int
+	clicks     int
+}
+
+func (c *disappearingClickTarget) getProxy() *engine.Sprite {
+	c.proxyReads++
+	if c.proxyReads > 1 {
+		return nil
+	}
+	return &c.proxy
+}
+
+func (c *disappearingClickTarget) Visible() bool              { return true }
+func (c *disappearingClickTarget) doWhenClick(this threadObj) { c.clicks++ }
+
+func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous })
+	setupClickThroughSpriteMgr(t, map[pkgengine.Object]bool{7: true})
+
+	for _, blocked := range []bool{false, true} {
+		var game Game
+		game.initShapeMgr()
+		game.bindScriptEvents()
+		game.inputMgr.init(&game)
+		game.inputMgr.clickGate.InitWithClock(mouseClickInterval, func() time.Time {
+			return time.Unix(100, 0)
+		})
+		if blocked {
+			game.inputMgr.clickGate.Allow(clickTimerGlobal)
+		}
+		target := &disappearingClickTarget{}
+		target.proxy.SetId(7)
+		game.shapeMgr.add(target)
+		stageClicks := 0
+		game.OnClick(func() { stageClicks++ })
+
+		game.doWhenLeftButtonDown(&eventLeftButtonDown{})
+		wantReads := 2
+		if blocked {
+			wantReads = 1
+		}
+		if target.proxyReads != wantReads || target.clicks != 0 || stageClicks != 0 {
+			t.Fatalf("global blocked %v: proxy reads / target clicks / stage clicks = %d / %d / %d, want %d / 0 / 0", blocked, target.proxyReads, target.clicks, stageClicks, wantReads)
+		}
+		if !game.inputMgr.clickGate.Allow(clickTimerStage) {
+			t.Fatalf("global blocked %v: missing target proxy consumed the stage gate", blocked)
+		}
 	}
 }
