@@ -53,32 +53,26 @@ func prepareStageEntry(gamer reflect.Value, raw any) (preparedStageEntry, error)
 	if name, ok := raw.(string); ok {
 		return preparedStageEntry{kind: stageNamedSprite, name: name}, nil
 	}
-	var entry preparedStageEntry
 	shape, ok := raw.(coreproject.StageShape)
 	if !ok {
-		return entry, fmt.Errorf("invalid zorder entry type %T", raw)
+		return preparedStageEntry{}, fmt.Errorf("invalid zorder entry type %T", raw)
 	}
-	err := coreproject.DispatchStageShape(shape, coreproject.StageShapeHandlers{
-		StageMonitor: func(shape coreproject.StageShape) (err error) {
-			entry.kind = stageMonitor
-			entry.monitor, err = prepareMonitor(shape)
-			return
-		},
-		Measure: func(shape coreproject.StageShape) (err error) {
-			entry.kind = stageMeasure
-			entry.measure, err = coreproject.ParseMeasureShape(shape)
-			return
-		},
-		Sprite: func(shape coreproject.StageShape) (err error) {
-			entry, err = prepareStageSprite(gamer, shape, false)
-			return
-		},
-		Sprites: func(shape coreproject.StageShape) (err error) {
-			entry, err = prepareStageSprite(gamer, shape, true)
-			return
-		},
-	})
-	return entry, err
+	typ, ok := shape["type"].(string)
+	if !ok {
+		return preparedStageEntry{}, fmt.Errorf("invalid stage shape type")
+	}
+	switch typ {
+	case "stageMonitor", "monitor":
+		monitor, err := prepareMonitor(shape)
+		return preparedStageEntry{kind: stageMonitor, monitor: monitor}, err
+	case "measure":
+		measure, err := coreproject.ParseMeasureShape(shape)
+		return preparedStageEntry{kind: stageMeasure, measure: measure}, err
+	case "sprite", "sprites":
+		return prepareStageSprite(gamer, shape, typ == "sprites")
+	default:
+		return preparedStageEntry{}, fmt.Errorf("unknown shape - %s", typ)
+	}
 }
 
 func prepareStageSprite(gamer reflect.Value, shape coreproject.StageShape, multiple bool) (preparedStageEntry, error) {

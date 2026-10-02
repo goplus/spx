@@ -279,26 +279,6 @@ func TestResourceDirAndLoadConfig(t *testing.T) {
 	}
 }
 
-func TestDispatchStageShape(t *testing.T) {
-	called := ""
-	err := DispatchStageShape(StageShape{"type": "sprites"}, StageShapeHandlers{
-		Sprites: func(StageShape) error {
-			called = "sprites"
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatalf("DispatchStageShape error: %v", err)
-	}
-	if called != "sprites" {
-		t.Fatalf("called = %q, want sprites", called)
-	}
-
-	if err := DispatchStageShape(StageShape{"type": "unknown"}, StageShapeHandlers{}); err == nil {
-		t.Fatal("expected unknown shape error")
-	}
-}
-
 func TestShapeValue(t *testing.T) {
 	shape := StageShape{"x": 1.5}
 	if got := ShapeValue(shape, "x", 0.0); got != 1.5 {

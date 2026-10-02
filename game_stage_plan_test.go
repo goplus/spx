@@ -24,7 +24,9 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 	"github.com/goplus/spx/v3/internal/ui"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type stagePlanGame struct {
@@ -195,5 +197,148 @@ func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
 	game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{Zorder: []any{
 		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
 	}}, func(Sprite, string, reflect.Value) error { return want }, nil)
+	t.Fatal("cold stage load unexpectedly succeeded")
+}
+
+func TestPrepareStageEntryKinds(t *testing.T) {
+	game := &stagePlanGame{Dynamic: &collisionLayerOrderSprite{}}
+	monitorShape := func(kind string) coreproject.StageShape {
+		return coreproject.StageShape{
+			"type": kind, "target": "", "val": "score", "name": "score", "label": "Score",
+			"mode": 1.0, "x": 2.0, "y": 3.0, "visible": true,
+		}
+	}
+	tests := []struct {
+		name string
+		raw  any
+		kind stageEntryKind
+	}{
+		{"named sprite", "Sprite", stageNamedSprite},
+		{"empty sprite name", "", stageNamedSprite},
+		{"monitor", monitorShape("monitor"), stageMonitor},
+		{"stage monitor alias", monitorShape("stageMonitor"), stageMonitor},
+		{"measure", coreproject.StageShape{"type": "measure", "size": 10.0, "x": 20.0, "y": 30.0}, stageMeasure},
+		{"value sprite", coreproject.StageShape{"type": "sprite", "target": "Value", "x": 4.0}, stageSprite},
+		{"pointer sprite", coreproject.StageShape{"type": "sprite", "target": "Pointer"}, stageSprite},
+		{"interface sprite", coreproject.StageShape{"type": "sprite", "target": "Dynamic"}, stageSprite},
+		{"value sprites", coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{coreproject.StageShape{"x": 4.0}}}, stageSprites},
+		{"pointer sprites", coreproject.StageShape{"type": "sprites", "target": "pointers", "items": []any{coreproject.StageShape{}}}, stageSprites},
+		{"empty sprites", coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, stageSprites},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			entry, err := prepareStageEntry(reflect.ValueOf(game).Elem(), test.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry.kind != test.kind {
+				t.Fatalf("kind = %v, want %v", entry.kind, test.kind)
+			}
+			switch entry.kind {
+			case stageNamedSprite:
+				if entry.name != test.raw.(string) {
+					t.Fatalf("name = %q, want %q", entry.name, test.raw)
+				}
+			case stageMonitor:
+				if entry.monitor.config.Name != "score" || entry.monitor.config.X != 2 || entry.monitor.config.Y != 3 {
+					t.Fatalf("monitor = %+v", entry.monitor)
+				}
+			case stageMeasure:
+				if entry.measure.Size != 10 || entry.measure.X != 20 || entry.measure.Y != 30 || entry.measure.Scale != 1 {
+					t.Fatalf("measure = %+v", entry.measure)
+				}
+			case stageSprite, stageSprites:
+				shape := test.raw.(coreproject.StageShape)
+				if entry.name != shape["target"] || reflect.TypeOf(game).Elem().Field(entry.fieldIndex).Name != entry.name {
+					t.Fatalf("sprite target = %q, field index = %d", entry.name, entry.fieldIndex)
+				}
+				count := 1
+				if entry.kind == stageSprites {
+					count = len(shape["items"].([]any))
+					if entry.spriteType != reflect.TypeFor[collisionLayerOrderSprite]() {
+						t.Fatalf("sprite type = %v", entry.spriteType)
+					}
+				}
+				if len(entry.properties) != count {
+					t.Fatalf("properties count = %d, want %d", len(entry.properties), count)
+				}
+			}
+		})
+	}
+}
+
+func TestPrepareStageEntryErrors(t *testing.T) {
+	game := &struct {
+		Sprite   *collisionLayerOrderSprite
+		Number   int
+		BadItems []int
+		Sprites  []*collisionLayerOrderSprite
+	}{}
+	tests := []struct {
+		name string
+		raw  any
+		want string
+	}{
+		{"nil", nil, "invalid zorder entry type <nil>"},
+		{"number", 42, "invalid zorder entry type int"},
+		{"boolean", false, "invalid zorder entry type bool"},
+		{"array", []any{}, "invalid zorder entry type []interface {}"},
+		{"nil shape", coreproject.StageShape(nil), "invalid stage shape type"},
+		{"missing type", coreproject.StageShape{}, "invalid stage shape type"},
+		{"null type", coreproject.StageShape{"type": nil}, "invalid stage shape type"},
+		{"non-string type", coreproject.StageShape{"type": 1.0}, "invalid stage shape type"},
+		{"unknown shape", coreproject.StageShape{"type": "unknown"}, "unknown shape - unknown"},
+		{"case-sensitive alias", coreproject.StageShape{"type": "StageMonitor"}, "unknown shape - StageMonitor"},
+		{"empty type", coreproject.StageShape{"type": ""}, "unknown shape - "},
+		{"monitor validation", coreproject.StageShape{"type": "monitor"}, `stage shape field "target" is required`},
+		{"alias validation", coreproject.StageShape{"type": "stageMonitor"}, `stage shape field "target" is required`},
+		{"measure validation", coreproject.StageShape{"type": "measure", "size": "large"}, `stage shape field "size" has type string, want float64`},
+		{"missing target", coreproject.StageShape{"type": "sprite"}, "stage shape target must be a non-empty string"},
+		{"empty target", coreproject.StageShape{"type": "sprite", "target": ""}, "stage shape target must be a non-empty string"},
+		{"non-string target", coreproject.StageShape{"type": "sprites", "target": 1.0}, "stage shape target must be a non-empty string"},
+		{"unknown sprite", coreproject.StageShape{"type": "sprite", "target": "Missing"}, `stage sprite target "Missing" is not defined`},
+		{"non-sprite field", coreproject.StageShape{"type": "sprite", "target": "Number"}, `stage sprite target "Number" is not a sprite field`},
+		{"sprite property", coreproject.StageShape{"type": "sprite", "target": "Sprite", "x": "left"}, `stage shape field "x" has type string, want float64`},
+		{"missing items", coreproject.StageShape{"type": "sprites", "target": "Sprites"}, "stage shape items must be an array"},
+		{"null items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": nil}, "stage shape items must be an array"},
+		{"non-array items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": false}, "stage shape items must be an array"},
+		{"unknown sprites", coreproject.StageShape{"type": "sprites", "target": "Missing", "items": []any{}}, `stage sprites target "Missing" is not defined`},
+		{"non-slice field", coreproject.StageShape{"type": "sprites", "target": "Sprite", "items": []any{}}, `stage sprites target "Sprite" is not a slice`},
+		{"non-sprite items", coreproject.StageShape{"type": "sprites", "target": "BadItems", "items": []any{}}, `stage sprites target "BadItems" has invalid item type int`},
+		{"invalid item", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, false}}, `stage sprites target "Sprites" item[1] has invalid type bool`},
+		{"item property", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, coreproject.StageShape{"x": "left"}}}, `stage sprites target "Sprites" item[1]: stage shape field "x" has type string, want float64`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := prepareStageEntry(reflect.ValueOf(game).Elem(), test.raw)
+			if err == nil || err.Error() != test.want {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+type stageEntryPanicExtMgr struct{ pkgengine.IExtMgr }
+
+func (*stageEntryPanicExtMgr) OnRuntimePanic(message string) { panic(message) }
+
+func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
+	enginewrap.Init(func(call func()) { call() })
+	originalExtMgr, originalPlatformMgr := pkgengine.ExtMgr, pkgengine.PlatformMgr
+	pkgengine.ExtMgr, pkgengine.PlatformMgr = &stageEntryPanicExtMgr{}, &reloadCommitPlatformMgr{}
+	t.Cleanup(func() {
+		pkgengine.ExtMgr, pkgengine.PlatformMgr = originalExtMgr, originalPlatformMgr
+	})
+	game := &stagePlanGame{}
+	game.initShapeMgr()
+	defer func() {
+		got := recover()
+		if got != "zorder[1]: invalid stage shape type" {
+			t.Fatalf("cold load failure = %v, want indexed stage shape error", got)
+		}
+	}()
+	game.loadAndInitSprites(reflect.ValueOf(game).Elem(), &coreproject.ProjectConfig{Zorder: []any{
+		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
+	}}, nil, nil)
 	t.Fatal("cold stage load unexpectedly succeeded")
 }
