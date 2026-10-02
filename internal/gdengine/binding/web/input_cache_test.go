@@ -3,6 +3,7 @@
 package webffi
 
 import (
+	"slices"
 	"syscall/js"
 	"testing"
 
@@ -12,12 +13,12 @@ import (
 
 func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
 	previousDown, previousSnapshot, previousCallbacks := keyDown, inputSnap, callbacks
-	previousFrame, previousGeneration := actionFrame, actionGeneration
+	previousGeneration := actionGeneration
 	previousBool, previousAxis := actionBool, actionAxis
 	previousAPI, previousIDs := API, actionIDs
 	t.Cleanup(func() {
 		keyDown, inputSnap, callbacks = previousDown, previousSnapshot, previousCallbacks
-		actionFrame, actionGeneration = previousFrame, previousGeneration
+		actionGeneration = previousGeneration
 		actionBool, actionAxis = previousBool, previousAxis
 		API, actionIDs = previousAPI, previousIDs
 	})
@@ -31,8 +32,7 @@ func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				keyDown = map[int64]bool{1: true, 2: false}
-				inputSnap = inputSnapshot{mouse: mathf.NewVec2(11, 22), mouseBits: 1, ok: true, frame: 3}
-				actionFrame = 3
+				inputSnap = inputSnapshot{mouse: mathf.NewVec2(11, 22), mouseBits: 1, ok: true}
 				actionBool, actionAxis = map[string]bool{"pressed\x00left": true}, map[string]float64{}
 				assertInput := func(wantOld bool) {
 					t.Helper()
@@ -109,7 +109,10 @@ func TestInputActionCache(t *testing.T) {
 	for _, kind := range []string{"pressed", "just_pressed", "just_released", "axis"} {
 		t.Run(kind, func(t *testing.T) {
 			previousAPI, previousIDs := API, actionIDs
-			previousFrame, previousGeneration := actionFrame, actionGeneration
+			previousBindings := js.Global().Get("GdspxFuncs")
+			js.Global().Set("GdspxFuncs", js.Undefined())
+			previousSnapshot := inputSnap
+			previousGeneration := actionGeneration
 			previousBool, previousAxis := actionBool, actionAxis
 			previousReset, previousDestroy := callbacks.OnEngineReset, callbacks.OnEngineDestroy
 			API.SpxInputIsActionPressedId = js.Undefined()
@@ -117,11 +120,13 @@ func TestInputActionCache(t *testing.T) {
 			API.SpxInputIsActionJustReleasedId = js.Undefined()
 			API.SpxInputGetAxisId = js.Undefined()
 			actionIDs = map[string]int{"left": 1, "right": 2}
-			actionFrame, actionGeneration = 1, 0
+			actionGeneration = 0
 			actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 			t.Cleanup(func() {
 				API, actionIDs = previousAPI, previousIDs
-				actionFrame, actionGeneration = previousFrame, previousGeneration
+				js.Global().Set("GdspxFuncs", previousBindings)
+				inputSnap = previousSnapshot
+				actionGeneration = previousGeneration
 				actionBool, actionAxis = previousBool, previousAxis
 				callbacks.OnEngineReset, callbacks.OnEngineDestroy = previousReset, previousDestroy
 			})
@@ -151,19 +156,14 @@ func TestInputActionCache(t *testing.T) {
 			if first != 0 || cached != 0 || calls != 1 {
 				t.Fatal("zero/false results must be cached")
 			}
-			clearActionCache(1)
-			query(fallback)
-			if calls != 1 {
-				t.Fatal("same frame must retain cached results")
-			}
-			clearActionCache(2)
+			SyncWebInputSnapshot()
 			query(fallback)
 			if calls != 2 {
 				t.Fatal("next frame must refresh cached results")
 			}
 
-			clearActionCache(3)
-			if query(func() float64 { clearActionCache(4); return 1 }) != 1 {
+			SyncWebInputSnapshot()
+			if query(func() float64 { SyncWebInputSnapshot(); return 1 }) != 1 {
 				t.Fatal("a read spanning frames must still return its result")
 			}
 			if query(fallback) != 0 || calls != 3 {
@@ -195,7 +195,7 @@ func TestInputActionCache(t *testing.T) {
 				t.Fatal("a read spanning reset must not populate the cache")
 			}
 
-			clearActionCache(5)
+			SyncWebInputSnapshot()
 			func() {
 				defer func() {
 					if recover() != "read failed" {
@@ -209,5 +209,101 @@ func TestInputActionCache(t *testing.T) {
 				t.Fatal("failed reads must not populate the cache")
 			}
 		})
+	}
+}
+
+func TestActionQueriesUseGeneratedBindings(t *testing.T) {
+	previousAPI, previousIDs := API, actionIDs
+	actionIDs = map[string]int{"left": 7, "right": 9}
+	t.Cleanup(func() { API, actionIDs = previousAPI, previousIDs })
+
+	var args []int
+	query := js.FuncOf(func(_ js.Value, values []js.Value) any {
+		args = nil
+		for _, value := range values {
+			args = append(args, value.Int())
+		}
+		return true
+	})
+	defer query.Release()
+	API.SpxInputIsActionPressedId = query.Value
+	API.SpxInputIsActionJustPressedId = query.Value
+	API.SpxInputIsActionJustReleasedId = query.Value
+	for _, kind := range []string{"pressed", "just_pressed", "just_released"} {
+		if value, ok := webActionBool(kind, "left"); !ok || !value {
+			t.Fatalf("%s: got (%v, %v)", kind, value, ok)
+		}
+		if !slices.Equal(args, []int{7, 0}) {
+			t.Fatalf("%s: flattened ID arguments = %v", kind, args)
+		}
+	}
+	if _, ok := webActionBool("unknown", "left"); ok {
+		t.Fatal("unknown action kind should use fallback")
+	}
+
+	axis := js.FuncOf(func(_ js.Value, values []js.Value) any {
+		args = nil
+		for _, value := range values {
+			args = append(args, value.Int())
+		}
+		return -0.5
+	})
+	defer axis.Release()
+	API.SpxInputGetAxisId = axis.Value
+	if value, ok := webActionAxis("left", "right"); !ok || value != -0.5 {
+		t.Fatalf("axis: got (%v, %v)", value, ok)
+	}
+	if !slices.Equal(args, []int{7, 0, 9, 0}) {
+		t.Fatalf("flattened axis arguments = %v", args)
+	}
+	API.SpxInputGetAxisId = js.Undefined()
+	API.SpxInputIsActionPressedId = js.Undefined()
+	if _, ok := webActionAxis("left", "right"); ok {
+		t.Fatal("missing axis binding should use fallback")
+	}
+	if _, ok := webActionBool("pressed", "left"); ok {
+		t.Fatal("missing action binding should use fallback")
+	}
+}
+
+func TestActionIDsRefreshAfterReset(t *testing.T) {
+	global := js.Global()
+	previousEpoch := global.Get("GdspxGetInputActionEpoch")
+	previousRegister := global.Get("GdspxGetInputActionID")
+	previousIDs, previousID := actionIDs, actionEpoch
+	t.Cleanup(func() {
+		global.Set("GdspxGetInputActionEpoch", previousEpoch)
+		global.Set("GdspxGetInputActionID", previousRegister)
+		actionIDs, actionEpoch = previousIDs, previousID
+	})
+
+	epoch, id, registrations := 1, 7, 0
+	epochFn := js.FuncOf(func(js.Value, []js.Value) any { return epoch })
+	registerFn := js.FuncOf(func(js.Value, []js.Value) any {
+		registrations++
+		return id
+	})
+	defer epochFn.Release()
+	defer registerFn.Release()
+	global.Set("GdspxGetInputActionEpoch", epochFn)
+	global.Set("GdspxGetInputActionID", registerFn)
+	actionIDs = map[string]int{}
+	actionEpoch = 0
+
+	for range 2 {
+		if got, ok := webActionID("left"); !ok || got != 7 {
+			t.Fatalf("before reset: got (%d, %v)", got, ok)
+		}
+	}
+	if registrations != 1 {
+		t.Fatalf("registered %d times before reset", registrations)
+	}
+
+	epoch, id = 2, 9
+	if got, ok := webActionID("left"); !ok || got != 9 {
+		t.Fatalf("after reset: got (%d, %v)", got, ok)
+	}
+	if registrations != 2 {
+		t.Fatalf("registered %d times after reset", registrations)
 	}
 }
