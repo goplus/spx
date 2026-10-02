@@ -45,7 +45,6 @@ var runtimeBuildRecipeFiles = map[string]struct{}{
 	"internal/cmd/buildctl/shared/files.go":               {},
 	"internal/cmd/buildctl/shared/macos_go_toolchain.go":  {},
 	"internal/cmd/buildctl/shared/repo.go":                {},
-	"internal/cmd/buildctl/shared/runtime_api.go":         {},
 	"internal/cmd/buildctl/shared/runtime_files.go":       {},
 	"internal/release/runtime_asset.go":                   {},
 	"internal/release/runtime_lock.go":                    {},

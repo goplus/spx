@@ -36,12 +36,12 @@ func TestEnsureEngineSourceChecksOutLockedCommit(t *testing.T) {
 		args []string
 	}
 	var got []invocation
-	err := ensureEngineSource(repoRoot, func(name string, args ...string) error {
+	err := EnsureEngineSource(repoRoot, func(name string, args ...string) error {
 		got = append(got, invocation{name: name, args: append([]string(nil), args...)})
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ensureEngineSource returned error: %v", err)
+		t.Fatalf("EnsureEngineSource returned error: %v", err)
 	}
 
 	lock := release.DefaultRuntimeLock()
@@ -70,7 +70,7 @@ func TestEnsureEngineSourceDeepensLockedRefWhenCommitFetchFails(t *testing.T) {
 
 	lock := release.DefaultRuntimeLock()
 	var got [][]string
-	err := ensureEngineSource(repoRoot, func(_ string, args ...string) error {
+	err := EnsureEngineSource(repoRoot, func(_ string, args ...string) error {
 		got = append(got, append([]string(nil), args...))
 		if len(args) > 0 && args[len(args)-1] == lock.Godot.Commit && slices.Contains(args, "fetch") {
 			return errors.New("unadvertised object")
@@ -78,7 +78,7 @@ func TestEnsureEngineSourceDeepensLockedRefWhenCommitFetchFails(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ensureEngineSource returned error: %v", err)
+		t.Fatalf("EnsureEngineSource returned error: %v", err)
 	}
 	if len(got) != 6 {
 		t.Fatalf("git invocation count = %d, want 6: %#v", len(got), got)
@@ -95,7 +95,7 @@ func TestEnsureEngineSourceCleansFailedClone(t *testing.T) {
 	t.Setenv("GODOT_SRC", engineDir)
 
 	wantErr := errors.New("fetch failed")
-	err := ensureEngineSource(repoRoot, func(_ string, args ...string) error {
+	err := EnsureEngineSource(repoRoot, func(_ string, args ...string) error {
 		for _, arg := range args {
 			if arg == "fetch" {
 				return wantErr
@@ -104,7 +104,7 @@ func TestEnsureEngineSourceCleansFailedClone(t *testing.T) {
 		return nil
 	})
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("ensureEngineSource error = %v", err)
+		t.Fatalf("EnsureEngineSource error = %v", err)
 	}
 	if _, err := os.Stat(engineDir); !os.IsNotExist(err) {
 		t.Fatalf("failed clone left target directory: %v", err)

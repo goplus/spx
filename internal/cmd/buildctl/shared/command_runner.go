@@ -48,7 +48,7 @@ func (r CommandRunner) RunCommand(workdir string, name string, args ...string) e
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = envMapToSlice(env)
+	cmd.Env = EnvMapToSlice(env)
 	return cmd.Run()
 }
 
@@ -86,11 +86,11 @@ func PrependToPath(pathValue string, dirs ...string) string {
 }
 
 func buildctlCommandEnv() (map[string]string, error) {
-	env, err := currentBuildEnv()
+	env, err := CurrentBuildEnv()
 	if err != nil {
 		return nil, err
 	}
-	goPath, err := ensureGoPath()
+	goPath, err := EnsureGoPath()
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func buildctlCommandEnv() (map[string]string, error) {
 	return env, nil
 }
 
-func currentBuildEnv() (map[string]string, error) {
+func CurrentBuildEnv() (map[string]string, error) {
 	env := CurrentEnvMap()
 	if err := configureCurrentMacOSGoToolchainEnv(env); err != nil {
 		return nil, fmt.Errorf("configure macOS Go toolchain: %w", err)
@@ -201,7 +201,7 @@ func setPathEnv(env map[string]string, value string) {
 	env["PATH"] = value
 }
 
-func envMapToSlice(env map[string]string) []string {
+func EnvMapToSlice(env map[string]string) []string {
 	keys := make([]string, 0, len(env))
 	for key := range env {
 		keys = append(keys, key)

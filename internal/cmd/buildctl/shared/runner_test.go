@@ -49,7 +49,7 @@ func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {
 		t.Fatalf("runCommand returned error: %v", err)
 	}
 
-	if !fileExists(outPath) {
+	if !FileExists(outPath) {
 		t.Fatalf("expected fake command output at %s", outPath)
 	}
 }
