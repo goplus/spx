@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -24,6 +25,10 @@ type polygonColliderSpriteMgr struct {
 	triggerLayer     int64
 	triggerMask      int64
 	triggerRectSize  mathf.Vec2
+	rectCalls        int
+	rectCenter       mathf.Vec2
+	rectSize         mathf.Vec2
+	rectIsTrigger    bool
 }
 
 func (m *polygonColliderSpriteMgr) SetCollisionLayer(_ pkgengine.Object, layer int64) {
@@ -64,8 +69,15 @@ func (m *polygonColliderSpriteMgr) SetTriggerEnabled(_ pkgengine.Object, enabled
 	m.triggerEnabled = append(m.triggerEnabled, enabled)
 }
 
-func (m *polygonColliderSpriteMgr) SetTriggerRect(_ pkgengine.Object, _ mathf.Vec2, size mathf.Vec2) {
+func (m *polygonColliderSpriteMgr) SetTriggerRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
 	m.triggerRectSize = size
+	m.rectCalls++
+	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, true
+}
+
+func (m *polygonColliderSpriteMgr) SetColliderRect(_ pkgengine.Object, center mathf.Vec2, size mathf.Vec2) {
+	m.rectCalls++
+	m.rectCenter, m.rectSize, m.rectIsTrigger = center, size, false
 }
 
 func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSpriteMgr) {
@@ -287,4 +299,74 @@ func TestPhysicsInitializationCopiesShapeParams(t *testing.T) {
 	triggerParams[0] = 101
 	assertColliderParams(t, sprite, false, PolygonCollider, []float64{-1, -2, 3, -4, 5, 6})
 	assertColliderParams(t, sprite, true, PolygonCollider, []float64{1, 2, 3, 4, 5, 6})
+}
+
+func TestPhysicsConfigDimensions(t *testing.T) {
+	for _, shape := range []struct {
+		name                string
+		kind                ColliderShapeType
+		one, full, negative mathf.Vec2
+	}{
+		{"rect", physicsColliderRect, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"auto", physicsColliderAuto, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"none", physicsColliderNone, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"polygon", physicsColliderPolygon, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"unknown", 99, mathf.Vec2{}, mathf.NewVec2(2, 3), mathf.NewVec2(0, 3)},
+		{"circle", physicsColliderCircle, mathf.NewVec2(4, 4), mathf.NewVec2(4, 4), mathf.Vec2{}},
+		{"capsule", physicsColliderCapsule, mathf.Vec2{}, mathf.NewVec2(4, 3), mathf.NewVec2(0, 3)},
+	} {
+		t.Run(shape.name, func(t *testing.T) {
+			for _, tt := range []struct {
+				name   string
+				params []float64
+				want   mathf.Vec2
+			}{
+				{"nil", nil, mathf.Vec2{}},
+				{"empty", []float64{}, mathf.Vec2{}},
+				{"one", []float64{2}, shape.one},
+				{"two", []float64{2, 3}, shape.full},
+				{"extra", []float64{2, 3, 4}, shape.full},
+				{"negative", []float64{-2, 3}, shape.negative},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					cfg := physicConfig{Type: shape.kind, Params: tt.params}
+					x, y := cfg.getDimensions()
+					if got := mathf.NewVec2(x, y); got != tt.want {
+						t.Fatalf("dimensions = %v, want %v", got, tt.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestPhysicsApplyRectAndAutoShapes(t *testing.T) {
+	for _, shape := range []struct {
+		name  string
+		kind  ColliderShapeType
+		pivot mathf.Vec2
+	}{
+		{"rect", physicsColliderRect, mathf.NewVec2(6, 8)},
+		{"auto", physicsColliderAuto, mathf.NewVec2(80, -40)},
+	} {
+		for _, trigger := range []bool{false, true} {
+			for _, params := range [][]float64{nil, {}, {2}, {2, 3}, {-2, 3, 4}} {
+				t.Run(fmt.Sprintf("%s/trigger=%t/params=%v", shape.name, trigger, params), func(t *testing.T) {
+					sprite, mgr := newPolygonColliderTestSprite(t)
+					cfg := physicConfig{Type: shape.kind, Pivot: mathf.NewVec2(3, 4), Params: params}
+					cfg.applyShape(sprite.runtimeState.SyncSprite, trigger, sprite)
+					if len(params) < 2 {
+						if mgr.rectCalls != 0 {
+							t.Fatalf("short params caused %d rect calls", mgr.rectCalls)
+						}
+						return
+					}
+					wantSize := mathf.NewVec2(params[0]*2, params[1]*2)
+					if mgr.rectCalls != 1 || mgr.rectIsTrigger != trigger || mgr.rectCenter != shape.pivot || mgr.rectSize != wantSize {
+						t.Fatalf("rect calls=%d trigger=%t pivot=%v size=%v, want 1/%t/%v/%v", mgr.rectCalls, mgr.rectIsTrigger, mgr.rectCenter, mgr.rectSize, trigger, shape.pivot, wantSize)
+					}
+				})
+			}
+		}
+	}
 }
