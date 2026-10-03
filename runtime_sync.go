@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
@@ -140,18 +139,27 @@ func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
 // processPhysicsTriggers consumes trigger events and fires collision callbacks.
 func (p *Game) processPhysicsTriggers() {
 	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents[:0])
-	coreruntime.ProcessTriggerPairs(
-		p.triggerEvents,
-		func(target any) (*SpriteImpl, bool) {
-			sprite, ok := target.(*SpriteImpl)
-			return sprite, ok
-		},
-		isSpriteTouchable,
-		(*SpriteImpl).fireTouchStart,
-		func() {
+	p.dispatchPhysicsTriggers()
+}
+
+// dispatchPhysicsTriggers keeps the batch intact if a touch dispatch panics.
+func (p *Game) dispatchPhysicsTriggers() {
+	for _, pair := range p.triggerEvents {
+		if pair.Src == nil || pair.Dst == nil {
 			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
-		},
-	)
+			continue
+		}
+		src, ok1 := pair.Src.Target.(*SpriteImpl)
+		dst, ok2 := pair.Dst.Target.(*SpriteImpl)
+		if !ok1 || !ok2 {
+			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
+			continue
+		}
+		if !isSpriteTouchable(src) || !isSpriteTouchable(dst) {
+			continue
+		}
+		src.fireTouchStart(dst)
+	}
 	clear(p.triggerEvents)
 	p.triggerEvents = p.triggerEvents[:0]
 }
