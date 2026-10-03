@@ -333,9 +333,6 @@ func (l Limits) withDefaults() (Limits, error) {
 	if l.MaxEntries < 0 || l.MaxEntrySize < 0 || l.MaxTotalSize < 0 || l.MaxArchiveBytes < 0 || l.MaxCentralDirectoryBytes < 0 || l.MaxManifestBytes < 0 {
 		return Limits{}, fmt.Errorf("runtimebundle: negative archive limit")
 	}
-	if l.MaxEntries == 0 || l.MaxEntrySize == 0 || l.MaxTotalSize == 0 || l.MaxArchiveBytes == 0 || l.MaxCentralDirectoryBytes == 0 || l.MaxManifestBytes == 0 || l.MaxCompressionRatio == 0 {
-		return Limits{}, fmt.Errorf("runtimebundle: archive limits must be positive")
-	}
 	if l.MaxEntrySize > l.MaxTotalSize {
 		return Limits{}, fmt.Errorf("runtimebundle: max entry size %d exceeds max total size %d", l.MaxEntrySize, l.MaxTotalSize)
 	}
