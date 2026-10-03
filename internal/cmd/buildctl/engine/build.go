@@ -125,7 +125,7 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 		}
 		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.TemplateSource), plan.TemplateDestination)
 	case "ios":
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
+		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, "bash", "-lc", templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
 		return shared.CopyFile(filepath.Join(buildEnv.EngineDir, "bin", "godot_ios.zip"), filepath.Join(buildEnv.TemplateDir, "ios.zip"))
@@ -138,11 +138,11 @@ func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string
 			return fmt.Errorf("resolve JDK build environment: %w", err)
 		}
 		commandEnv = mergeStringMaps(commandEnv, jdkExports)
-		if err := runLockedEngineScriptWithEnv(buildEnv.EngineDir, commandEnv, templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
+		if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, "bash", "-lc", templateSConsBuildScript(sconsCommand, module, plan.TemplateSConsCommands)); err != nil {
 			return err
 		}
 		if len(plan.TemplatePostCommands) > 0 {
-			if err := runLockedEngineScriptWithEnv(filepath.Join(buildEnv.EngineDir, plan.TemplatePostDir), commandEnv, strings.Join(plan.TemplatePostCommands, "\n")); err != nil {
+			if err := runLockedEngineCommandWithEnv(filepath.Join(buildEnv.EngineDir, plan.TemplatePostDir), commandEnv, "bash", "-lc", strings.Join(plan.TemplatePostCommands, "\n")); err != nil {
 				return err
 			}
 		}
@@ -209,16 +209,6 @@ func runLockedEngineCommandWithEnv(workdir string, env map[string]string, name s
 	}
 	return withEngineBuildLock(lockDir, func() error {
 		return runTrackedEngineCommandWithEnv(workdir, env, name, args...)
-	})
-}
-
-func runLockedEngineScriptWithEnv(workdir string, env map[string]string, script string) error {
-	lockDir := filepath.Join(filepath.Dir(workdir), ".spx_build_lock")
-	if filepath.Base(workdir) == "godot" {
-		lockDir = filepath.Join(workdir, ".spx_build_lock")
-	}
-	return withEngineBuildLock(lockDir, func() error {
-		return runTrackedEngineCommandWithEnv(workdir, env, "bash", "-lc", script)
 	})
 }
 
