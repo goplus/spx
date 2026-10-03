@@ -553,3 +553,70 @@ func TestManifestMethodsEnforceSerializedLimit(t *testing.T) {
 		t.Fatalf("CanonicalBytesWithLimits error = %v, want ErrArchiveLimit", err)
 	}
 }
+
+func TestLimitsWithDefaults(t *testing.T) {
+	defaults := Limits{
+		MaxEntries:               MaxEntries,
+		MaxEntrySize:             MaxEntrySize,
+		MaxTotalSize:             MaxTotalSize,
+		MaxArchiveBytes:          MaxArchiveBytes,
+		MaxCentralDirectoryBytes: MaxCentralDirectoryBytes,
+		MaxManifestBytes:         MaxManifestBytes,
+		MaxCompressionRatio:      MaxCompressionRatio,
+	}
+	custom := Limits{
+		MaxEntries: 1, MaxEntrySize: 2, MaxTotalSize: 3,
+		MaxArchiveBytes: 4, MaxCentralDirectoryBytes: 5,
+		MaxManifestBytes: 6, MaxCompressionRatio: 7,
+	}
+	mixed := defaults
+	mixed.MaxEntries = 1
+	mixed.MaxCompressionRatio = 1
+	equalSizes := defaults
+	equalSizes.MaxEntrySize = MaxTotalSize
+	for _, tt := range []struct {
+		name  string
+		input Limits
+		want  Limits
+	}{
+		{"all defaults", Limits{}, defaults},
+		{"all positive", custom, custom},
+		{"mixed defaults", Limits{MaxEntries: 1, MaxCompressionRatio: 1}, mixed},
+		{"equal entry and total size", Limits{MaxEntrySize: MaxTotalSize}, equalSizes},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.input.withDefaults()
+			if err != nil || got != tt.want {
+				t.Fatalf("withDefaults() = (%+v, %v), want (%+v, nil)", got, err, tt.want)
+			}
+			again, err := got.withDefaults()
+			if err != nil || again != got {
+				t.Fatalf("withDefaults() not idempotent: (%+v, %v)", again, err)
+			}
+		})
+	}
+}
+
+func TestLimitsWithDefaultsRejectsInvalidLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		limits Limits
+		want   string
+	}{
+		{"entries", Limits{MaxEntries: -1}, "runtimebundle: negative archive limit"},
+		{"entry size", Limits{MaxEntrySize: -1}, "runtimebundle: negative archive limit"},
+		{"total size", Limits{MaxTotalSize: -1}, "runtimebundle: negative archive limit"},
+		{"archive bytes", Limits{MaxArchiveBytes: -1}, "runtimebundle: negative archive limit"},
+		{"directory bytes", Limits{MaxCentralDirectoryBytes: -1}, "runtimebundle: negative archive limit"},
+		{"manifest bytes", Limits{MaxManifestBytes: -1}, "runtimebundle: negative archive limit"},
+		{"entry exceeds total", Limits{MaxEntrySize: 2, MaxTotalSize: 1}, "runtimebundle: max entry size 2 exceeds max total size 1"},
+		{"negative error takes precedence", Limits{MaxEntries: -1, MaxEntrySize: 2, MaxTotalSize: 1}, "runtimebundle: negative archive limit"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.limits.withDefaults()
+			if err == nil || err.Error() != tt.want || got != (Limits{}) {
+				t.Fatalf("withDefaults() = (%+v, %v), want (Limits{}, %q)", got, err, tt.want)
+			}
+		})
+	}
+}
