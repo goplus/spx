@@ -135,45 +135,20 @@ func (b Bundle) ValidateWithLimits(limits Limits) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidManifest, err)
 	}
-	if b.Schema != "" && b.Schema != SchemaV1 {
-		return fmt.Errorf("%w: unsupported schema %q", ErrInvalidManifest, b.Schema)
-	}
-	if b.Namespace != "" && !b.Namespace.valid() {
-		return fmt.Errorf("%w: unsupported namespace %q", ErrInvalidManifest, b.Namespace)
-	}
-	if len(b.Entries) > limits.MaxEntries {
-		return fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(b.Entries), limits.MaxEntries)
-	}
-	seen := make(entryIndex, len(b.Entries))
-	var total int64
-	for _, original := range b.Entries {
-		entry, key, err := original.normalized()
-		if err != nil {
-			return err
-		}
-		if entry.Size > limits.MaxEntrySize {
-			return fmt.Errorf("%w: entry %q size %d exceeds limit %d", ErrArchiveLimit, entry.Name, entry.Size, limits.MaxEntrySize)
-		}
-		if entry.Size > limits.MaxTotalSize-total {
-			return fmt.Errorf("%w: total size exceeds limit %d", ErrArchiveLimit, limits.MaxTotalSize)
-		}
-		total += entry.Size
-		if err := seen.checkName(key, entry.Name); err != nil {
-			return err
-		}
-		seen[key] = entry
-	}
-	if err := seen.checkParents(); err != nil {
+	entries, err := b.normalizedEntries(limits)
+	if err != nil {
 		return err
 	}
 	if b.Digest != "" {
 		if err := validateSHA256(b.Digest); err != nil {
 			return fmt.Errorf("%w: bundle digest: %v", ErrInvalidManifest, err)
 		}
-		digest, err := b.IdentityDigestWithLimits(limits)
+		data, err := b.canonical(entries).bytesWithLimits(limits)
 		if err != nil {
 			return err
 		}
+		sum := sha256.Sum256(data)
+		digest := hex.EncodeToString(sum[:])
 		if b.Digest != digest {
 			return fmt.Errorf("%w: manifest digest %s does not match identity %s", ErrDigestMismatch, b.Digest, digest)
 		}
@@ -198,7 +173,11 @@ func (b Bundle) CanonicalBytesWithLimits(limits Limits) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := json.Marshal(canonical)
+	return canonical.bytesWithLimits(limits)
+}
+
+func (b canonicalBundle) bytesWithLimits(limits Limits) ([]byte, error) {
+	data, err := json.Marshal(b)
 	if err != nil {
 		return nil, err
 	}
@@ -282,30 +261,70 @@ func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
 	return b, nil
 }
 
+// normalizedEntries validates the identity fields and entries, retaining the
+// normalized entries already needed for collision and parent checks. Limits
+// must have their defaults applied. Digest is deliberately checked separately.
+func (b Bundle) normalizedEntries(limits Limits) (entryIndex, error) {
+	if b.Schema != "" && b.Schema != SchemaV1 {
+		return nil, fmt.Errorf("%w: unsupported schema %q", ErrInvalidManifest, b.Schema)
+	}
+	if b.Namespace != "" && !b.Namespace.valid() {
+		return nil, fmt.Errorf("%w: unsupported namespace %q", ErrInvalidManifest, b.Namespace)
+	}
+	if len(b.Entries) > limits.MaxEntries {
+		return nil, fmt.Errorf("%w: %d entries exceeds limit %d", ErrArchiveLimit, len(b.Entries), limits.MaxEntries)
+	}
+	seen := make(entryIndex, len(b.Entries))
+	var total int64
+	for _, original := range b.Entries {
+		entry, key, err := original.normalized()
+		if err != nil {
+			return nil, err
+		}
+		if entry.Size > limits.MaxEntrySize {
+			return nil, fmt.Errorf("%w: entry %q size %d exceeds limit %d", ErrArchiveLimit, entry.Name, entry.Size, limits.MaxEntrySize)
+		}
+		if entry.Size > limits.MaxTotalSize-total {
+			return nil, fmt.Errorf("%w: total size exceeds limit %d", ErrArchiveLimit, limits.MaxTotalSize)
+		}
+		total += entry.Size
+		if err := seen.checkName(key, entry.Name); err != nil {
+			return nil, err
+		}
+		seen[key] = entry
+	}
+	if err := seen.checkParents(); err != nil {
+		return nil, err
+	}
+	return seen, nil
+}
+
 func (b Bundle) canonicalWithLimits(limits Limits) (canonicalBundle, error) {
-	// Digest is a checksum over this canonical form, so it must not be
-	// validated while constructing the form itself (otherwise validation would
-	// recurse through IdentityDigest indefinitely).
-	withoutDigest := b
-	withoutDigest.Digest = ""
-	if err := withoutDigest.ValidateWithLimits(limits); err != nil {
+	limits, err := limits.withDefaults()
+	if err != nil {
+		return canonicalBundle{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
+	entries, err := b.normalizedEntries(limits)
+	if err != nil {
 		return canonicalBundle{}, err
 	}
-	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(b.Entries))}
+	return b.canonical(entries), nil
+}
+
+// canonical consumes the normalized entries from this call's validation. It
+// excludes Digest so computing identity never validates the checksum itself.
+func (b Bundle) canonical(entries entryIndex) canonicalBundle {
+	out := canonicalBundle{Schema: b.Schema, Namespace: b.Namespace, Entries: make([]Entry, 0, len(entries))}
 	if out.Schema == "" {
 		out.Schema = SchemaV1
 	}
-	for _, original := range b.Entries {
-		entry, _, err := original.normalized()
-		if err != nil {
-			return canonicalBundle{}, err
-		}
+	for _, entry := range entries {
 		out.Entries = append(out.Entries, entry)
 	}
 	sort.Slice(out.Entries, func(i, j int) bool {
 		return out.Entries[i].Name < out.Entries[j].Name
 	})
-	return out, nil
+	return out
 }
 
 func (l Limits) withDefaults() (Limits, error) {
