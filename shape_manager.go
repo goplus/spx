@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"slices"
+
 	"github.com/goplus/spx/v3/internal/base/sliceutil"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -110,15 +112,7 @@ func (s *shapeManager) layoutTextBubbles(items []Shape) {
 	}
 
 	sortTextBubblesByLayoutID(s.textBubbles)
-	topologyChanged := len(s.textBubbles) != len(s.activeTextBubbles)
-	if !topologyChanged {
-		for i, bubble := range s.textBubbles {
-			if bubble != s.activeTextBubbles[i] {
-				topologyChanged = true
-				break
-			}
-		}
-	}
+	topologyChanged := !slices.Equal(s.textBubbles, s.activeTextBubbles)
 	if topologyChanged {
 		s.activeTextBubbles = append(resetSlice(s.activeTextBubbles, 0), s.textBubbles...)
 	}
