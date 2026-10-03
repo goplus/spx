@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -57,7 +56,7 @@ func PackProject(baseFolder string, dstZipPath string) error {
 	for _, dirInfo := range paths {
 		existingZipPaths[zipEntryName(baseFolder, dirInfo)] = struct{}{}
 	}
-	extraPaths, err := collectExternalAssetPathsWithConfig(baseFolder, existingZipPaths, &extAssetDir)
+	extraPaths, err := collectExternalAssetPathsWithConfig(baseFolder, existingZipPaths, extAssetDir)
 	if err != nil {
 		return err
 	}
@@ -86,35 +85,9 @@ func PackProject(baseFolder string, dstZipPath string) error {
 	return nil
 }
 
+// packZip requires each collected entry to have a root and a root-relative path.
+// The caller keeps the roots open for the entire call.
 func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
-	baseRootPath := filepath.Clean(baseFolder)
-	var defaultRoot *os.Root
-	for i := range paths {
-		if paths[i].root != nil {
-			continue
-		}
-		if defaultRoot == nil {
-			var err error
-			defaultRoot, err = openPackRoot(baseRootPath)
-			if err != nil {
-				return err
-			}
-		}
-		rel, err := filepath.Rel(baseRootPath, filepath.Clean(paths[i].path))
-		if err != nil {
-			defaultRoot.Close()
-			return fmt.Errorf("project entry %s: resolve path relative to base folder: %w", paths[i].path, err)
-		}
-		if rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			defaultRoot.Close()
-			return fmt.Errorf("project entry %s is outside base folder", paths[i].path)
-		}
-		paths[i].root = defaultRoot
-		paths[i].rootPath = rel
-	}
-	if defaultRoot != nil {
-		defer defaultRoot.Close()
-	}
 	baseFolder = strings.ReplaceAll(baseFolder, "\\", "/")
 	seenNames := make(map[string]struct{}, len(paths))
 	slices.SortFunc(paths, func(a, b dirInfo) int {

@@ -40,7 +40,7 @@ type assetPathRef struct {
 	path      string
 }
 
-func collectExternalAssetPathsWithConfig(baseFolder string, existingZipPaths map[string]struct{}, configuredExtAssetDir *string) (extraPaths []dirInfo, err error) {
+func collectExternalAssetPathsWithConfig(baseFolder string, existingZipPaths map[string]struct{}, extAssetDir string) (extraPaths []dirInfo, err error) {
 	assetRoot := filepath.Join(baseFolder, packDirName)
 	info, err := os.Lstat(assetRoot)
 	if os.IsNotExist(err) {
@@ -57,17 +57,6 @@ func collectExternalAssetPathsWithConfig(baseFolder string, existingZipPaths map
 	if err != nil {
 		return nil, fmt.Errorf("projectassets: validate asset indexes: %w", err)
 	}
-	extAssetDir := ""
-	if configuredExtAssetDir != nil {
-		extAssetDir = *configuredExtAssetDir
-	} else {
-		extAssetDir, err = readExtAssetDir(baseFolder)
-		if err != nil {
-			configPath := filepath.Join(baseFolder, projectConfigName)
-			return nil, fmt.Errorf("projectpolicy: parse project config %q: %w", configPath, err)
-		}
-	}
-
 	seen := make(map[string]struct{}, len(existingZipPaths))
 	for zipPath := range existingZipPaths {
 		seen[zipPath] = struct{}{}
