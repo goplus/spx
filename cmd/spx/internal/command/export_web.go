@@ -294,20 +294,18 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	if err := pack.PackProject(cmd.TargetDir, filepath.Join(cmd.WebDir, "game.zip")); err != nil {
 		return err
 	}
-	return cmd.writeWebLogicAssets()
+	return cmd.writeWebLogicAssets(mode)
 }
 
-func (cmd *CmdTool) writeWebLogicAssets() error {
+func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
 	wasmDstPath := filepath.Join(cmd.WebDir, "ispx.wasm")
 	wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
 	wasmBrPath := wasmPath + ".br"
-	if !util.IsFileExist(wasmBrPath) {
-		wasmBrPath = ""
-	}
 	if err := util.CopyFile(wasmPath, wasmDstPath); err != nil {
 		return fmt.Errorf("failed to copy interpreter wasm from %s: %w", wasmPath, err)
 	}
-	if wasmBrPath != "" {
+	// Minigame exports either use raw wasm or recompress it during preparation.
+	if mode != webMinigameMode && util.IsFileExist(wasmBrPath) {
 		if err := util.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
 			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
 		}
