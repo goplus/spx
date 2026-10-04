@@ -236,20 +236,12 @@ func (m *Manager) SetPan(soundObj engine.Object, value float64) {
 	m.backend.SetPan(soundObj, value/100)
 }
 
-func (m *Manager) ChangePan(soundObj engine.Object, delta float64) {
-	m.SetPan(soundObj, m.GetPan(soundObj)+delta)
-}
-
 func (m *Manager) GetPitch(soundObj engine.Object) float64 {
 	return pitchScaleToEffect(m.backend.GetPitch(soundObj))
 }
 
 func (m *Manager) SetPitch(soundObj engine.Object, value float64) {
 	m.backend.SetPitch(soundObj, pitchEffectToScale(value))
-}
-
-func (m *Manager) ChangePitch(soundObj engine.Object, delta float64) {
-	m.SetPitch(soundObj, m.GetPitch(soundObj)+delta)
 }
 
 func (m *Manager) GetVolume(soundObj engine.Object) float64 {
