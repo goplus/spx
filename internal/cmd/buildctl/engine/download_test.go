@@ -509,6 +509,12 @@ func TestDownloadWebModeAssetNames(t *testing.T) {
 			if err != nil || string(data) != "template" {
 				t.Fatalf("cached template = %q, %v", data, err)
 			}
+			for _, name := range webTemplateNames {
+				data, err := os.ReadFile(filepath.Join(env.templateDir, name))
+				if err != nil || string(data) != "template" {
+					t.Fatalf("template alias %s = %q, %v", name, data, err)
+				}
+			}
 		})
 	}
 	for _, mode := range []string{"", "unknown"} {
