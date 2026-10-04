@@ -31,13 +31,7 @@ func (p *Game) queuePenMove(obj engine.Object, position mathf.Vec2) {
 	}
 }
 
-func (p *Game) queuePenDown(obj engine.Object, moveByMouse bool) {
-	if moveByMouse {
-		p.penCommandBarrier(func() {
-			engine.Managers().PenMgr.PenDown(obj, true)
-		})
-		return
-	}
+func (p *Game) queuePenDown(obj engine.Object) {
 	if p.penSyncBuffer == nil {
 		engine.Managers().PenMgr.PenDown(obj, false)
 		return

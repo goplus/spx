@@ -34,6 +34,9 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	sprite.pen().setPenColor(HSB(20, 80, 90))
 	sprite.pen().penDown()
 	sprite.pen().penUp()
+	if len(spy.events) != 0 {
+		t.Fatalf("engine calls before flush = %v, want none", spy.events)
+	}
 	sprite.g.flushPenCommands()
 
 	if spy.batchCalls != 1 {
@@ -59,6 +62,10 @@ func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
 	gotOps := penBatchOperations(batch)
 	if !slices.Equal(gotOps, wantOps) {
 		t.Fatalf("command operations = %v, want %v", gotOps, wantOps)
+	}
+
+	if got := batch[1+4*internalengine.PenBatchFields+3]; got != 0 {
+		t.Fatalf("pen down moveByMouse = %v, want 0", got)
 	}
 
 	move := batch[1+3*internalengine.PenBatchFields : 1+4*internalengine.PenBatchFields]
@@ -95,6 +102,9 @@ func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
 	}
 	if got := penBatchOperations(batch); !slices.Equal(got, wantOps) {
 		t.Fatalf("commands = %v, want %v", got, wantOps)
+	}
+	if got := batch[1+3*internalengine.PenBatchFields+3]; got != 0 {
+		t.Fatalf("clone pen down moveByMouse = %v, want 0", got)
 	}
 	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
 		t.Fatalf("initial alpha = %v, want 0.25", got)

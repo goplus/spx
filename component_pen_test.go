@@ -2,6 +2,7 @@ package spx
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -18,6 +19,7 @@ type spyPenMgr struct {
 	createCalls      int
 	moveCalls        int
 	penDownCalls     int
+	penDownModes     []bool
 	penUpCalls       int
 	setColorCalls    int
 	setSizeCalls     int
@@ -101,18 +103,23 @@ func (s *spyPenMgr) PenStamp(obj engine.Object) {}
 func (s *spyPenMgr) MovePenTo(obj engine.Object, position mathf.Vec2) {
 	s.moveCalls++
 	s.lastMove = position
+	s.events = append(s.events, "move")
 }
 
 func (s *spyPenMgr) PenDown(obj engine.Object, moveByMouse bool) {
 	s.penDownCalls++
+	s.penDownModes = append(s.penDownModes, moveByMouse)
+	s.events = append(s.events, "down")
 }
 
 func (s *spyPenMgr) PenUp(obj engine.Object) {
 	s.penUpCalls++
+	s.events = append(s.events, "up")
 }
 
 func (s *spyPenMgr) SetPenColorTo(obj engine.Object, color mathf.Color) {
 	s.setColorCalls++
+	s.events = append(s.events, "color")
 }
 
 func (s *spyPenMgr) ChangePenBy(obj engine.Object, property int64, amount float64) {}
@@ -123,6 +130,7 @@ func (s *spyPenMgr) ChangePenSizeBy(obj engine.Object, amount float64) {}
 
 func (s *spyPenMgr) SetPenSizeTo(obj engine.Object, size float64) {
 	s.setSizeCalls++
+	s.events = append(s.events, "size")
 }
 
 func (s *spyPenMgr) SetPenStampTexture(obj engine.Object, texturePath string) {}
@@ -562,12 +570,21 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	}
 }
 
-func TestPenComponentPenDownUsesLogicalPosition(t *testing.T) {
+func TestPenComponentDirectCommandsUseLogicalPosition(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
 
 	sprite.pen().penDown()
+	sprite.pen().penUp()
+	sprite.g.flushPenCommands()
+
+	if want := []string{"size", "color", "move", "down", "up"}; !slices.Equal(spy.events, want) {
+		t.Fatalf("events = %v, want %v", spy.events, want)
+	}
+	if want := []bool{false}; !slices.Equal(spy.penDownModes, want) {
+		t.Fatalf("pen down mouse modes = %v, want %v", spy.penDownModes, want)
+	}
 
 	want := mathf.NewVec2(50, 60)
 	if spy.lastMove != want {
