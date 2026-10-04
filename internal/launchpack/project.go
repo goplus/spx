@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/goplus/spx/v3/internal/projectassets"
@@ -68,9 +67,8 @@ func collectProjectAllowlist(cfg Config) ([]string, error) {
 		return nil, err
 	}
 	projectFiles = append(projectFiles, external...)
-	sort.Strings(projectFiles)
-	projectFiles = compactStrings(projectFiles)
-	return projectFiles, nil
+	slices.Sort(projectFiles)
+	return slices.Compact(projectFiles), nil
 }
 
 func topLevelProjectName(projectDir, projectFile string) (string, error) {
@@ -113,17 +111,4 @@ func collectReferencedProjectFiles(cfg Config) ([]string, error) {
 		return nil, fmt.Errorf("launchpack: collect typed project resources: %w", err)
 	}
 	return referenced, nil
-}
-
-func compactStrings(values []string) []string {
-	if len(values) == 0 {
-		return values
-	}
-	output := values[:1]
-	for _, value := range values[1:] {
-		if value != output[len(output)-1] {
-			output = append(output, value)
-		}
-	}
-	return output
 }

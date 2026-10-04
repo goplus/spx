@@ -19,35 +19,44 @@ package launchpack
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/projectpolicy"
 )
 
-func TestProjectBundleIncludesAllTopLevelSourcesAndPack(t *testing.T) {
-	projectDir := t.TempDir()
-	writeProjectTestFile(t, filepath.Join(projectDir, "main.spx"), "main")
-	writeProjectTestFile(t, filepath.Join(projectDir, "Hero.spx"), "hero")
-	writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}")
-	writeProjectTestFile(t, filepath.Join(projectDir, "assets", "hero.png"), "asset")
-	snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
-	bundle, err := prepareProjectBundleConfig(cfg, snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bundle.PackDir != "assets" {
-		t.Fatalf("PackDir = %q", bundle.PackDir)
-	}
-	got := map[string]bool{}
-	for _, name := range bundle.ProjectFiles {
-		got[name] = true
-	}
-	if !got["main.spx"] || !got["Hero.spx"] {
-		t.Fatalf("project files = %#v", bundle.ProjectFiles)
+func TestProjectBundleIncludesSortedUniqueSourcesAndResources(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		index string
+		want  []string
+	}{
+		{"no references", `{}`, []string{"Hero.spx", "main.spx"}},
+		{"only source references", `{"backdrops":[{"path":"res://main.spx"},{"path":"res://Hero.spx"}]}`, []string{"Hero.spx", "main.spx"}},
+		{"mixed references", `{"backdrops":[{"path":"res://main.spx"},{"path":"res://z.png"},{"path":"res://Hero.spx"},{"path":"res://a.png"}]}`, []string{"Hero.spx", "a.png", "main.spx", "z.png"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			for _, name := range []string{"main.spx", "Hero.spx", "a.png", "z.png", "assets/hero.png"} {
+				writeProjectTestFile(t, filepath.Join(projectDir, name), name)
+			}
+			writeProjectTestFile(t, filepath.Join(projectDir, "assets", "index.json"), tc.index)
+			snapshot, err := projectpolicy.SnapshotPortableConfig(projectDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := Config{ProjectDir: projectDir, ProjectFile: filepath.Join(projectDir, "main.spx"), ProjectExt: ".spx", PackDir: "assets", PackIndex: "index.json"}
+			bundle, err := prepareProjectBundleConfig(cfg, snapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bundle.PackDir != "assets" {
+				t.Fatalf("PackDir = %q, want assets", bundle.PackDir)
+			}
+			if !slices.Equal(bundle.ProjectFiles, tc.want) {
+				t.Fatalf("project files = %q, want %q", bundle.ProjectFiles, tc.want)
+			}
+		})
 	}
 }
 
