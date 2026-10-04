@@ -35,7 +35,6 @@
 #include "scene/2d/node_2d.h"
 #include "spx_sprite.h"
 #include <algorithm>
-#include <functional>
 #include <unordered_set>
 #include <vector>
 
@@ -56,8 +55,6 @@ enum class LayerSortMode {
 
 class SpxLayerSorter {
 public:
-	using VisibilityCallback = std::function<void(ISortableSprite *, bool visible)>;
-
 	static SpxLayerSorter &instance() {
 		static SpxLayerSorter inst;
 		return inst;
@@ -75,14 +72,10 @@ public:
 		dynamic_sorted.clear();
 		dynamic_dirty.clear();
 		dynamic_dirty_ids.clear();
-		visible_ids.clear();
 		_clear_drawer();
 	}
 	_FORCE_INLINE_ void set_screen_rect(const Rect2 &rect) {
 		screen_rect = rect;
-	}
-	_FORCE_INLINE_ void set_visibility_callback(VisibilityCallback cb) {
-		visibility_callback = std::move(cb);
 	}
 
 private:
@@ -92,8 +85,6 @@ private:
 	std::unordered_set<GdObj> dynamic_dirty_ids;
 
 	Rect2 screen_rect;
-	std::unordered_set<GdObj> visible_ids;
-	VisibilityCallback visibility_callback;
 
 	LayerSorterDebugDrawer *drawer = nullptr;
 
@@ -109,7 +100,6 @@ private:
 	}
 
 	void _mark_dirty(ISortableSprite *sp);
-	void _update_visibility(const Vector<ISortableSprite *> &sortables);
 	void _collect_sprites(const Vector<ISortableSprite *> &sortables);
 	void _incremental_sort_dynamic();
 	void _full_sort_dynamic();
