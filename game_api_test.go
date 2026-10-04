@@ -314,3 +314,55 @@ func TestGameResetCollisionLayerStateClearsCollisionLayerState(t *testing.T) {
 		t.Fatalf("sprCollisionData = %#v, want nil", g.sprCollisionData)
 	}
 }
+
+func TestTryRaycastResult(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		data    internalengine.Array
+		want    rayCastResult
+		wantErr string
+	}{
+		{
+			name: "hit",
+			data: []int64{
+				1, 42,
+				internalengine.ConvertToInt64(12.5), internalengine.ConvertToInt64(-7.25),
+				internalengine.ConvertToInt64(0.6), internalengine.ConvertToInt64(0.8),
+			},
+			want: rayCastResult{Hited: true, SpriteId: 42, PosX: 12.5, PosY: -7.25},
+		},
+		{
+			name: "negative hit marker",
+			data: []int64{-2, 43, 0, 0, 0, 0},
+			want: rayCastResult{Hited: true, SpriteId: 43},
+		},
+		{name: "no hit", data: make([]int64, 6)},
+		{
+			name: "no hit retains payload",
+			data: []int64{0, 44, internalengine.ConvertToInt64(-5), internalengine.ConvertToInt64(9), 0, 0},
+			want: rayCastResult{SpriteId: 44, PosX: -5, PosY: 9},
+		},
+		{name: "nil", wantErr: "array type error: expected []int64 but got <nil>"},
+		{name: "wrong type", data: make([]float64, 6), wantErr: "array type error: expected []int64 but got []float64"},
+		{name: "empty", data: []int64{}, wantErr: "array len error: expected 6 but got 0"},
+		{name: "missing normal", data: make([]int64, 4), wantErr: "array len error: expected 6 but got 4"},
+		{name: "short", data: make([]int64, 5), wantErr: "array len error: expected 6 but got 5"},
+		{name: "long", data: make([]int64, 7), wantErr: "array len error: expected 6 but got 7"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := tryRaycastResult(test.data)
+			if test.wantErr != "" {
+				if got != nil || err == nil || err.Error() != test.wantErr {
+					t.Fatalf("result = %+v, error = %v; want nil, %q", got, err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got == nil || *got != test.want {
+				t.Fatalf("raycast result = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
