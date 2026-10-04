@@ -87,3 +87,27 @@ func TestSchedNowExternalCallerDoesNotDriveActiveCoroutine(t *testing.T) {
 	close(release)
 	co.Join(thread)
 }
+
+func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	var game Game
+	for _, flags := range []dbgFlags{
+		DbgFlagInstr | DbgFlagEvent | DbgFlagPerf,
+		DbgFlagInstr,
+		DbgFlagEvent,
+		DbgFlagPerf,
+		0,
+	} {
+		game.setDebugFlags(flags)
+		co.Update()
+		if got, want := co.GetLastUpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
+			t.Errorf("flags %v: performance statistics enabled = %v, want %v", flags, got, want)
+		}
+		if got, want := game.debugState.DebugInstr, flags&DbgFlagInstr != 0; got != want {
+			t.Errorf("flags %v: DebugInstr = %v, want %v", flags, got, want)
+		}
+		if got, want := game.debugState.DebugEvent, flags&DbgFlagEvent != 0; got != want {
+			t.Errorf("flags %v: DebugEvent = %v, want %v", flags, got, want)
+		}
+	}
+}

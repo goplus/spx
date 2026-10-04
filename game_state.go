@@ -55,7 +55,6 @@ type gameDebugState struct {
 	DebugPanel *ui.UiDebug
 	DebugInstr bool
 	DebugEvent bool
-	DebugPerf  bool
 }
 
 type gameEventQueueState struct {

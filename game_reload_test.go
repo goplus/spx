@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -162,12 +163,15 @@ func (*reloadCommitPenMgr) SetCanvasSize(int64, int64) {}
 
 type reloadCommitPhysicsMgr struct {
 	pkgengine.IPhysicsMgr
+	collisionModes []bool
 }
 
-func (*reloadCommitPhysicsMgr) SetCollisionSystemType(bool) {}
-func (*reloadCommitPhysicsMgr) SetGlobalGravity(float64)    {}
-func (*reloadCommitPhysicsMgr) SetGlobalFriction(float64)   {}
-func (*reloadCommitPhysicsMgr) SetGlobalAirDrag(float64)    {}
+func (m *reloadCommitPhysicsMgr) SetCollisionSystemType(byPixel bool) {
+	m.collisionModes = append(m.collisionModes, byPixel)
+}
+func (*reloadCommitPhysicsMgr) SetGlobalGravity(float64)  {}
+func (*reloadCommitPhysicsMgr) SetGlobalFriction(float64) {}
+func (*reloadCommitPhysicsMgr) SetGlobalAirDrag(float64)  {}
 
 type reloadCommitResMgr struct {
 	pkgengine.IResMgr
@@ -865,6 +869,18 @@ func TestReloadCommitAppliesPreparedStageSpriteGroupProperties(t *testing.T) {
 			t.Fatalf("stage sprite %d properties were misaligned: transform=%+v visible=%v size=%v costume=%d",
 				i, transform, sprite.spriteState.IsVisible, sprite.runtimeState.Scale, sprite.costumeIndex)
 		}
+	}
+}
+
+func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
+	game := setupReloadCommitGame(t, nil)
+	mgr := pkgengine.PhysicsMgr.(*reloadCommitPhysicsMgr)
+	want := []bool{true, false, true}
+	for _, byPixel := range want {
+		game.applyPhysicsSettings(coreproject.SystemSettings{CollisionByPixel: byPixel})
+	}
+	if !slices.Equal(mgr.collisionModes, want) {
+		t.Fatalf("collision modes = %v, want %v", mgr.collisionModes, want)
 	}
 }
 
