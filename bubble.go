@@ -35,6 +35,10 @@ type bubbleBase struct {
 	isDirty               bool
 	observedSpriteVersion uint64
 	observedCameraVersion uint64
+
+	timedRemovalPending bool
+	timedRemovalFrame   int64
+	generation          uint64
 }
 
 type textBubble struct {
@@ -42,10 +46,11 @@ type textBubble struct {
 	msg        string
 	style      int // styleSay, styleThink
 	panel      *ui.UiSay
-	layoutID   uint64
-	content    ui.SayBubbleContent
-	layout     ui.SayBubbleLayout
-	hasLayout  bool
+
+	layoutID  uint64
+	content   ui.SayBubbleContent
+	layout    ui.SayBubbleLayout
+	hasLayout bool
 }
 
 type quoterBubble struct {
@@ -93,6 +98,10 @@ func (pself *textBubble) destroyPanel() {
 	}
 }
 
+func (pself *textBubble) flushPendingRemoval(frame int64) {
+	pself.sprite.bubble().flushPendingTextRemoval(pself, frame)
+}
+
 func (pself *textBubble) onUpdate(delta float64) {
 	if pself.checkNeedsUpdate() {
 		pself.refresh()
@@ -130,6 +139,10 @@ func (pself *quoterBubble) destroyPanel() {
 	}
 }
 
+func (pself *quoterBubble) flushPendingRemoval(frame int64) {
+	pself.sprite.bubble().flushPendingQuoteRemoval(pself, frame)
+}
+
 func (pself *quoterBubble) onUpdate(delta float64) {
 	if pself.checkNeedsUpdate() {
 		pself.refresh()
@@ -151,19 +164,24 @@ func (p *SpriteImpl) newBubbleBase() bubbleBase {
 	return bubbleBase{sprite: p, camera: p.g.camera, isDirty: true}
 }
 
-func (p *SpriteImpl) sayOrThink(msg any, style int) {
+func (p *SpriteImpl) sayOrThink(msg any, style int) bubbleToken {
 	msgStr := dialogText(msg)
 	if msgStr == "" {
 		p.doStopText()
-		return
+		return bubbleToken{}
 	}
 
 	bubble := p.bubble()
-	bubble.upsertText(msgStr, style)
+	return bubble.upsertText(msgStr, style)
 }
 
-func (p *SpriteImpl) waitStopText(secs float64) {
-	waitAndStop(secs, p.doStopText)
+func (p *SpriteImpl) waitAndExpireText(secs float64, token bubbleToken) {
+	engine.Wait(secs)
+	bubble := p.components.bubble
+	if bubble != nil {
+		// Expire only the generation displayed by this call.
+		bubble.expireText(token)
+	}
 }
 
 func (p *SpriteImpl) doStopText() {
@@ -173,13 +191,17 @@ func (p *SpriteImpl) doStopText() {
 	}
 }
 
-func (p *SpriteImpl) quote(message, description string) {
+func (p *SpriteImpl) quote(message, description string) bubbleToken {
 	bubble := p.bubble()
-	bubble.upsertQuote(message, description)
+	return bubble.upsertQuote(message, description)
 }
 
-func (p *SpriteImpl) waitStopQuote(secs float64) {
-	waitAndStop(secs, p.doStopQuote)
+func (p *SpriteImpl) waitAndExpireQuote(secs float64, token bubbleToken) {
+	engine.Wait(secs)
+	bubble := p.components.bubble
+	if bubble != nil {
+		bubble.expireQuote(token)
+	}
 }
 
 func (p *SpriteImpl) doStopQuote() {
@@ -194,10 +216,4 @@ func dialogText(msg any) string {
 		return msgStr
 	}
 	return fmt.Sprint(msg)
-}
-
-// waitAndStop waits before stopping a bubble.
-func waitAndStop(secs float64, stopFunc func()) {
-	engine.Wait(secs)
-	stopFunc()
 }

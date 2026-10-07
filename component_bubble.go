@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
@@ -38,6 +39,18 @@ type bubbleComponent struct {
 
 type bubbleShape interface {
 	destroyPanel()
+	onUpdate(float64)
+	flushPendingRemoval(int64)
+}
+
+// bubbleToken limits timed removal to one displayed generation.
+type bubbleToken struct {
+	bubble     *bubbleBase
+	generation uint64
+}
+
+func (t bubbleToken) matches(bubble *bubbleBase) bool {
+	return bubble != nil && t.bubble == bubble && t.generation == bubble.generation
 }
 
 // ============================================================================
@@ -53,7 +66,7 @@ func (b *bubbleComponent) onDestroy() {
 // Bubble Control
 // ============================================================================
 
-func (b *bubbleComponent) upsertText(msg string, style int) {
+func (b *bubbleComponent) upsertText(msg string, style int) bubbleToken {
 	b.sprite.requestRedrawIfVisible()
 	b.mu.Lock()
 	textObj := b.textObj
@@ -76,16 +89,25 @@ func (b *bubbleComponent) upsertText(msg string, style int) {
 		textObj.style = style
 		textObj.markDirty()
 	}
+	// Every call supersedes older timed removals, even if the content is unchanged.
+	textObj.generation++
+	if textObj.generation == 0 {
+		// Zero represents an invalid token.
+		textObj.generation++
+	}
+	textObj.timedRemovalPending = false
+	token := bubbleToken{bubble: &textObj.bubbleBase, generation: textObj.generation}
 	b.mu.Unlock()
 
 	if created {
 		b.sprite.g.shapeMgr.add(textObj)
-		return
+		return token
 	}
 	b.sprite.g.shapeMgr.activateShape(textObj)
+	return token
 }
 
-func (b *bubbleComponent) upsertQuote(message, description string) {
+func (b *bubbleComponent) upsertQuote(message, description string) bubbleToken {
 	b.sprite.requestRedrawIfVisible()
 	b.mu.Lock()
 	quoteObj := b.quoteObj
@@ -104,19 +126,29 @@ func (b *bubbleComponent) upsertQuote(message, description string) {
 		quoteObj.description = description
 		quoteObj.markDirty()
 	}
+	quoteObj.generation++
+	if quoteObj.generation == 0 {
+		quoteObj.generation++
+	}
+	quoteObj.timedRemovalPending = false
+	token := bubbleToken{bubble: &quoteObj.bubbleBase, generation: quoteObj.generation}
 	b.mu.Unlock()
 
 	if created {
 		b.sprite.g.shapeMgr.add(quoteObj)
-		return
+		return token
 	}
 	b.sprite.g.shapeMgr.activateShape(quoteObj)
+	return token
 }
 
 func (b *bubbleComponent) stopText() {
 	b.mu.Lock()
 	textObj := b.textObj
 	b.textObj = nil
+	if textObj != nil {
+		textObj.timedRemovalPending = false
+	}
 	b.mu.Unlock()
 	if textObj == nil {
 		return
@@ -124,10 +156,69 @@ func (b *bubbleComponent) stopText() {
 	b.stopBubble(textObj)
 }
 
+// expireText defers removal so the next frame can renew the bubble.
+func (b *bubbleComponent) expireText(token bubbleToken) {
+	b.mu.Lock()
+	if b.textObj == nil || !token.matches(&b.textObj.bubbleBase) {
+		b.mu.Unlock()
+		return
+	}
+	token.bubble.timedRemovalPending = true
+	token.bubble.timedRemovalFrame = itime.Frame()
+	b.mu.Unlock()
+
+	engine.RequestRedraw()
+}
+
+// flushPendingTextRemoval commits expirations after their grace frame.
+func (b *bubbleComponent) flushPendingTextRemoval(textObj *textBubble, frame int64) {
+	b.mu.Lock()
+	if b.textObj != textObj || !textObj.timedRemovalPending || textObj.timedRemovalFrame >= frame {
+		b.mu.Unlock()
+		return
+	}
+	b.textObj = nil
+	textObj.timedRemovalPending = false
+	b.mu.Unlock()
+
+	b.stopBubble(textObj)
+}
+
+// expireQuote defers removal so the next frame can renew the bubble.
+func (b *bubbleComponent) expireQuote(token bubbleToken) {
+	b.mu.Lock()
+	if b.quoteObj == nil || !token.matches(&b.quoteObj.bubbleBase) {
+		b.mu.Unlock()
+		return
+	}
+	token.bubble.timedRemovalPending = true
+	token.bubble.timedRemovalFrame = itime.Frame()
+	b.mu.Unlock()
+
+	engine.RequestRedraw()
+}
+
+// flushPendingQuoteRemoval commits expirations after their grace frame.
+func (b *bubbleComponent) flushPendingQuoteRemoval(quoteObj *quoterBubble, frame int64) {
+	b.mu.Lock()
+	if b.quoteObj != quoteObj || !quoteObj.timedRemovalPending || quoteObj.timedRemovalFrame >= frame {
+		b.mu.Unlock()
+		return
+	}
+	b.quoteObj = nil
+	quoteObj.timedRemovalPending = false
+	b.mu.Unlock()
+
+	b.stopBubble(quoteObj)
+}
+
 func (b *bubbleComponent) stopQuote() {
 	b.mu.Lock()
 	quoteObj := b.quoteObj
 	b.quoteObj = nil
+	if quoteObj != nil {
+		quoteObj.timedRemovalPending = false
+	}
 	b.mu.Unlock()
 	if quoteObj == nil {
 		return

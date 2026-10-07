@@ -49,9 +49,9 @@ func (p *SpriteImpl) SayWith(msg any, __xgo_optional_secs Seconds) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Say: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
 	}
-	p.sayOrThink(msg, ui.StyleSay)
+	token := p.sayOrThink(msg, ui.StyleSay)
 	if __xgo_optional_secs > 0 {
-		p.waitStopText(__xgo_optional_secs)
+		p.waitAndExpireText(__xgo_optional_secs, token)
 	}
 }
 
@@ -67,9 +67,9 @@ func (p *SpriteImpl) ThinkWith(msg any, __xgo_optional_secs Seconds) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Think: sprite=%s, msg=%v, secs=%v", p.name, msg, __xgo_optional_secs)
 	}
-	p.sayOrThink(msg, ui.StyleThink)
+	token := p.sayOrThink(msg, ui.StyleThink)
 	if __xgo_optional_secs > 0 {
-		p.waitStopText(__xgo_optional_secs)
+		p.waitAndExpireText(__xgo_optional_secs, token)
 	}
 }
 
@@ -101,8 +101,8 @@ func (p *SpriteImpl) QuoteMsgEx(message, description string, __xgo_optional_secs
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Quote: sprite=%s, message=%s, description=%s, secs=%v", p.name, message, description, __xgo_optional_secs)
 	}
-	p.quote(message, description)
+	token := p.quote(message, description)
 	if __xgo_optional_secs > 0 {
-		p.waitStopQuote(__xgo_optional_secs)
+		p.waitAndExpireQuote(__xgo_optional_secs, token)
 	}
 }
