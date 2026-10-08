@@ -186,11 +186,11 @@ func TestContactBatchReentryPreservesPendingEvents(t *testing.T) {
 
 func TestDispatcherSyncsFrameInput(t *testing.T) {
 	previousCallbacks, previousSnapshot := callbacks, inputSnap
-	previousFrame, previousBool, previousAxis := actionFrame, actionBool, actionAxis
+	previousGeneration, previousBool, previousAxis := actionGeneration, actionBool, actionAxis
 	previousBindings := js.Global().Get("GdspxFuncs")
 	t.Cleanup(func() {
 		callbacks, inputSnap = previousCallbacks, previousSnapshot
-		actionFrame, actionBool, actionAxis = previousFrame, previousBool, previousAxis
+		actionGeneration, actionBool, actionAxis = previousGeneration, previousBool, previousAxis
 		js.Global().Set("GdspxFuncs", previousBindings)
 	})
 
@@ -200,25 +200,24 @@ func TestDispatcherSyncsFrameInput(t *testing.T) {
 	reader := js.FuncOf(func(js.Value, []js.Value) any {
 		reads++
 		data := jsUint8Array.New(12)
-		js.CopyBytesToJS(data, []byte{0, 0, 192, 63, 0, 0, 32, 192, 0, 0, 128, 63})
+		js.CopyBytesToJS(data, []byte{0, 0, 192, 63, 0, 0, 32, 192, 0, 0, 224, 64})
 		return map[string]any{arrayTag: true, "type": GdArrayTypeFloat, "count": 3, "data": data}
 	})
 	defer reader.Release()
 	bindings.Set("arrayOutputs", map[string]any{"gdspx_input_write_snapshot": reader})
 	js.Global().Set("GdspxFuncs", bindings)
 
-	assertSynced := func(frame uint64) {
+	assertSynced := func() {
 		t.Helper()
-		if !inputSnap.ok || inputSnap.mouse.X != 1.5 || inputSnap.mouse.Y != -2.5 || inputSnap.mouseBits != 1 {
+		if !inputSnap.ok || inputSnap.mouse.X != 1.5 || inputSnap.mouse.Y != -2.5 || inputSnap.mouseBits != 7 {
 			t.Fatalf("input snapshot = %+v", inputSnap)
 		}
-		if inputSnap.frame != frame || actionFrame != frame || len(actionBool) != 0 || len(actionAxis) != 0 {
-			t.Fatalf("frame = (%d, %d), cache sizes = (%d, %d)", inputSnap.frame, actionFrame, len(actionBool), len(actionAxis))
+		if len(actionBool) != 0 || len(actionAxis) != 0 {
+			t.Fatalf("cache sizes = (%d, %d)", len(actionBool), len(actionAxis))
 		}
 	}
 
-	inputSnap = inputSnapshot{frame: 10}
-	actionFrame = 10
+	inputSnap = inputSnapshot{}
 	actionBool = map[string]bool{"pressed\x00left": true}
 	actionAxis = map[string]float64{"left\x00right": -1}
 	callbacks = engine.CallbackInfo{}
@@ -226,7 +225,7 @@ func TestDispatcherSyncsFrameInput(t *testing.T) {
 		if delta != 0.25 {
 			t.Fatalf("delta = %v, want 0.25", delta)
 		}
-		assertSynced(11)
+		assertSynced()
 	}
 	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineUpdate, js.ValueOf(0.25)})
 
@@ -234,9 +233,43 @@ func TestDispatcherSyncsFrameInput(t *testing.T) {
 	actionBool["pressed\x00left"] = true
 	actionAxis["left\x00right"] = -1
 	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnEngineFixedUpdate, js.ValueOf(0.25)})
-	assertSynced(12)
+	assertSynced()
 	if reads != 2 {
 		t.Fatalf("snapshot reads = %d, want 2", reads)
+	}
+
+	invalidReader := js.FuncOf(func(js.Value, []js.Value) any { return nil })
+	defer invalidReader.Release()
+	shortReader := js.FuncOf(func(js.Value, []js.Value) any {
+		return map[string]any{arrayTag: true, "type": GdArrayTypeFloat, "count": 2, "data": jsUint8Array.New(8)}
+	})
+	defer shortReader.Release()
+	for _, test := range []struct {
+		name    string
+		binding any
+		outputs any
+	}{
+		{"missing bindings", js.Undefined(), nil},
+		{"nonfunction bindings", map[string]any{}, nil},
+		{"missing outputs", bindings, js.Undefined()},
+		{"null outputs", bindings, nil},
+		{"missing reader", bindings, map[string]any{}},
+		{"invalid snapshot", bindings, map[string]any{"gdspx_input_write_snapshot": invalidReader}},
+		{"short snapshot", bindings, map[string]any{"gdspx_input_write_snapshot": shortReader}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			js.Global().Set("GdspxFuncs", test.binding)
+			bindings.Set("arrayOutputs", test.outputs)
+			for _, event := range []js.Value{jsEventOnEngineUpdate, jsEventOnEngineFixedUpdate} {
+				inputSnap.ok = true
+				actionBool["pressed\x00left"] = true
+				actionAxis["left\x00right"] = -1
+				gdspxDispatch(js.Undefined(), []js.Value{event, js.ValueOf(0.25)})
+				if inputSnap.ok || len(actionBool) != 0 || len(actionAxis) != 0 {
+					t.Fatalf("unavailable snapshot retained input: valid=%v, cache sizes=(%d, %d)", inputSnap.ok, len(actionBool), len(actionAxis))
+				}
+			}
+		})
 	}
 }
 
