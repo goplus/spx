@@ -18,9 +18,11 @@ package spx
 
 import (
 	"testing"
+	"time"
 
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
+	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -142,9 +144,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 }
 
 func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
-	resetInputSessionState()
-	engine.SetGame(nil)
-	t.Cleanup(resetInputSessionState)
+	resetInputSessionTest(t)
 	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
 	var game Game
@@ -160,15 +160,8 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	engine.SetGame(&game)
-	defer engine.SetGame(nil)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	session := game.currentInputSession()
-	if _, err := session.consumeSampledInputTick(1, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return InputReplayState{}, nil, nil
-	}); err != nil {
+	session := claimPreparedSession(t, &game)
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	game.lifecycleState.IsRunned.Store(true)
@@ -195,5 +188,163 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 	}
 	if status := session.status(); status.Phase != InputSessionPhaseCompleted || !status.Completed {
 		t.Fatalf("EOF session status = %+v", status)
+	}
+}
+
+func TestAtFrameSchedulesCallbackForActiveGame(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+
+	ran := false
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	base := engine.CurrentFrame()
+
+	AtFrame(base+1, func() {
+		ran = true
+	})
+	if ran {
+		t.Fatal("AtFrame ran callback before target frame")
+	}
+
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+	co.Update()
+
+	if !ran {
+		t.Fatal("AtFrame did not run callback at target frame")
+	}
+}
+
+func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
+	var got []string
+	engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = append(got, "capture:"+req.Name)
+		return nil
+	})
+	defer engine.SetCaptureHandler(nil)
+
+	Snapshot("step_001.png", func() error {
+		got = append(got, "body")
+		return nil
+	})
+
+	want := []string{"body", "capture:step_001.png"}
+	if len(got) != len(want) {
+		t.Fatalf("Snapshot order = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Snapshot order = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
+	var got []string
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		got = append(got, req.Name)
+		return nil
+	})
+	defer engine.SetCaptureHandler(nil)
+
+	Snapshot("step_001.png", nil)
+	if len(got) != 0 {
+		t.Fatalf("Snapshot ran immediately: %v", got)
+	}
+
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "step_001.png" {
+		t.Fatalf("FlushCaptures = %v, want [step_001.png]", got)
+	}
+}
+
+func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	base := itime.Frame()
+
+	bodyStarted := false
+	bodyCompleted := false
+	var captured []engine.CaptureRequest
+	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+		captured = append(captured, req)
+		return nil
+	})
+	defer engine.SetCaptureHandler(nil)
+
+	AtFrame(base+1, func() {
+		Snapshot("yielded.png", func() error {
+			bodyStarted = true
+			engine.WaitYield()
+			bodyCompleted = true
+			return nil
+		})
+	})
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+
+	co.Update()
+	if !bodyStarted {
+		t.Fatal("capture body did not start on its target frame")
+	}
+	if !bodyCompleted {
+		t.Fatal("capture body did not resume from yield during scheduler update")
+	}
+	if !engine.HasPendingCaptures() {
+		t.Fatal("capture was not queued after its body completed")
+	}
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(captured) != 1 || captured[0].Name != "yielded.png" || captured[0].Frame != base+1 {
+		t.Fatalf("captured requests = %+v, want yielded.png at frame %d", captured, base+1)
+	}
+}
+
+func TestAtFrameCallbackCanWaitForMainThread(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+
+	engine.SetGame(struct{}{})
+	defer engine.SetGame(nil)
+	engine.ResetFrameRuntime()
+	defer engine.ResetFrameRuntime()
+	base := itime.Frame()
+
+	mainThreadCallRan := false
+	AtFrame(base+1, func() {
+		engine.WaitMainThread(func() {
+			mainThreadCallRan = true
+		})
+	})
+	itime.Update(0, 0)
+	engine.RunFrameCallbacks()
+
+	updateDone := make(chan struct{})
+	go func() {
+		co.Update()
+		close(updateDone)
+	}()
+	select {
+	case <-updateDone:
+	case <-time.After(time.Second):
+		t.Fatal("AtFrame callback deadlocked while waiting for the main thread")
+	}
+	if !mainThreadCallRan {
+		t.Fatal("AtFrame callback did not complete its main-thread call")
 	}
 }
