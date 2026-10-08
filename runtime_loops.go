@@ -72,31 +72,33 @@ func inputFrameEventHooks(emit func(event)) coreruntime.InputFrameHooks {
 }
 
 func (p *Game) logicLoop(coroutine.Thread) {
-	frame := coreruntime.LogicFrameConfig[Shape]{
-		TempAudios:     []string{},
-		TempAnimations: []string{},
-		FlushPendingAudio: func(item Shape, tempAudios []string) []string {
-			if sprite, ok := item.(*SpriteImpl); ok {
-				return sprite.flushPendingAudios(tempAudios)
-			}
-			return tempAudios
-		},
-		FlushCompletedAnimations: func(item Shape, tempAnimations []string) []string {
-			if sprite, ok := item.(*SpriteImpl); ok {
-				return sprite.flushCompletedAnimations(tempAnimations)
-			}
-			return tempAnimations
-		},
-		NextTimer: itime.NextTimer,
-		FireTimer: func(timestamp int64) {
-			p.fireEvent(&eventTimer{Timestamp: timestamp})
-		},
-	}
-
+	tempAudios, tempAnimations := []string{}, []string{}
 	for {
-		frame.Items = p.shapeMgr.getTempShapes()
-		frame.TempAudios, frame.TempAnimations = coreruntime.ProcessLogicFrame(frame)
+		tempAudios, tempAnimations = p.processLogicFrame(tempAudios, tempAnimations)
 		engine.WaitNextFrame()
 		p.showDebugPanel()
 	}
+}
+
+func (p *Game) processLogicFrame(tempAudios, tempAnimations []string) ([]string, []string) {
+	items := p.shapeMgr.getTempShapes()
+	// Flush all pending audio before completing any animations.
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			tempAudios = sprite.flushPendingAudios(tempAudios)
+		}
+	}
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			tempAnimations = sprite.flushCompletedAnimations(tempAnimations)
+		}
+	}
+	for {
+		timestamp, ok := itime.NextTimer()
+		if !ok {
+			break
+		}
+		p.fireEvent(&eventTimer{Timestamp: timestamp})
+	}
+	return tempAudios, tempAnimations
 }
