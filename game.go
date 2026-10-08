@@ -108,7 +108,6 @@ type Game struct {
 	pendingBootstrap        []func()
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	sprCollisionData        []*spriteCollisionData
-	isCollisionByPixel      bool
 	isAutoSetCollisionLayer bool
 
 	inputMgr       inputManager
@@ -129,8 +128,7 @@ type Game struct {
 func (p *Game) setDebugFlags(flags dbgFlags) {
 	p.debugState.DebugInstr = flags&DbgFlagInstr != 0
 	p.debugState.DebugEvent = flags&DbgFlagEvent != 0
-	p.debugState.DebugPerf = flags&DbgFlagPerf != 0
-	gco.SetPerfDebug(p.debugState.DebugPerf)
+	gco.SetPerfDebug(flags&DbgFlagPerf != 0)
 }
 
 func (p *Game) newSpriteAndLoad(
