@@ -17,14 +17,18 @@
 package engine
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestBuildEngineRejectsInvalidProfileBeforePreparingEnvironment(t *testing.T) {
@@ -94,6 +98,223 @@ func loadEngineTestSPXModule(t *testing.T, profile string) (shared.SPXModule, st
 		t.Fatalf("LoadSPXModule returned error: %v", err)
 	}
 	return module, moduleSource
+}
+
+func writeEngineTestTool(t *testing.T, path, script string) {
+	t.Helper()
+	mustWriteFile(t, path, []byte("#!/bin/sh\n"+script))
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertEngineTestCommandRecord(t *testing.T, path string, want []string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if got := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"); err != nil || !slices.Equal(got, want) {
+		t.Fatalf("command record = %q (%v), want %q", data, err, want)
+	}
+}
+
+func TestBuildEngineDesktopCommands(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture executables require a POSIX shell")
+	}
+	module, moduleSource := loadEngineTestSPXModule(t, `{
+  "schema": 1, "common": ["optimize=size"],
+  "editor_release": ["debug_symbols=true"], "template_release": ["debug_symbols=false"]
+}`)
+	for _, target := range []string{"editor", "template"} {
+		for _, platform := range []string{"linux", "macos", "windows"} {
+			for _, failure := range []string{"success", "build"} {
+				t.Run(target+"/"+platform+"/"+failure, func(t *testing.T) {
+					root, err := filepath.EvalSymlinks(t.TempDir())
+					if err != nil {
+						t.Fatal(err)
+					}
+					buildEnv := buildEnvironment{
+						EngineDir: filepath.Join(root, "godot"), GoPath: filepath.Join(root, "go path"),
+						Platform: platform, Arch: "arm64", Version: "test",
+					}
+					plan, err := resolveEngineBuildShellPlan(buildEnv, BuildConfig{Target: target, Platform: platform})
+					if err != nil {
+						t.Fatal(err)
+					}
+					source, destination := plan.EditorSource, plan.EditorDestination
+					wantArgs := []string{"optimize=size", "debug_symbols=true", "target=editor", "dev_build=yes"}
+					if plan.EditorUseVSProj {
+						wantArgs = append(wantArgs, "vsproj=yes")
+					}
+					if target == "template" {
+						source, destination = plan.TemplateSource, plan.TemplateDestination
+						wantArgs = []string{"optimize=size", "debug_symbols=false", "platform=" + plan.TemplateSConsPlatform, "target=template_release"}
+					}
+					source = filepath.Join(buildEnv.EngineDir, source)
+					wantArgs = append(wantArgs, "custom_modules="+moduleSource)
+					mustWriteFile(t, source, []byte("stale"))
+					mustWriteFile(t, destination, []byte("old installation"))
+					scons := filepath.Join(root, "build tools", "scons")
+					writeEngineTestTool(t, scons, `set -eu
+test -s .spx_build_lock/pid
+printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_BUILD_RECORD"
+if [ "$SPX_FAILURE" = build ]; then exit 23; fi
+printf built > "$SPX_ARTIFACT"
+`)
+					env := shared.CurrentEnvMap()
+					env["SPX_MARKER"] = "space ' quote $literal"
+					env["SPX_FAILURE"] = failure
+					env["SPX_ARTIFACT"] = source
+					env["SPX_BUILD_RECORD"] = filepath.Join(root, "build record")
+					if target == "editor" {
+						err = buildEngineEditor(buildEnv, env, scons, module, plan)
+					} else {
+						err = buildEngineTemplate(buildEnv, env, scons, module, plan)
+					}
+					wantOutput := "built"
+					if failure == "success" {
+						if err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						var exitErr *exec.ExitError
+						if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 {
+							t.Fatalf("build error = %v, want exit 23", err)
+						}
+						wantOutput = "old installation"
+					}
+					wantRecord := append([]string{buildEnv.EngineDir, env["SPX_MARKER"]}, wantArgs...)
+					assertEngineTestCommandRecord(t, env["SPX_BUILD_RECORD"], wantRecord)
+					data, err := os.ReadFile(destination)
+					if err != nil || string(data) != wantOutput {
+						t.Fatalf("installed artifact = %q (%v), want %q", data, err, wantOutput)
+					}
+					if _, err := os.Stat(filepath.Join(buildEnv.EngineDir, ".spx_build_lock")); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("build lock was not released: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestBuildEngineMobileTemplateCommands(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture executables require a POSIX shell")
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is unavailable")
+	}
+	module, moduleSource := loadEngineTestSPXModule(t, `{
+  "schema": 1, "common": ["optimize=size"],
+  "editor_release": [], "template_release": ["debug_symbols=false"]
+}`)
+	for _, tt := range []struct{ platform, failure string }{
+		{"ios", "success"}, {"ios", "build"},
+		{"android", "success"}, {"android", "build"}, {"android", "post"},
+	} {
+		t.Run(tt.platform+"/"+tt.failure, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			buildEnv := buildEnvironment{
+				EngineDir: filepath.Join(root, "godot"), TemplateDir: filepath.Join(root, "templates"),
+			}
+			plan := BuildShellPlan{
+				Platform:              tt.platform,
+				TemplateSConsCommands: []string{"platform=" + tt.platform + " target=template_release arch=arm64"},
+				TemplatePostDir:       filepath.Join("platform", "android", "java"),
+				TemplatePostCommands:  []string{"./gradlew generateGodotTemplates"},
+			}
+			postDir := filepath.Join(buildEnv.EngineDir, plan.TemplatePostDir)
+			mustMkdirAll(t, buildEnv.TemplateDir)
+			for _, name := range []string{"godot_ios.zip", "android_debug.apk", "android_release.apk", "android_source.zip"} {
+				// Existing artifacts must not be copied when either command fails.
+				mustWriteFile(t, filepath.Join(buildEnv.EngineDir, "bin", name), []byte("stale"))
+			}
+			javaHome := filepath.Join(root, "test jdk")
+			writeEngineTestTool(t, filepath.Join(javaHome, "bin", "java"),
+				"printf '%s\\n' 'openjdk version \""+release.DefaultRuntimeLock().Toolchain.JDK+".0.0\"'\n")
+			t.Setenv("JAVA_HOME", javaHome)
+			t.Setenv("PATH", shared.PrependToPath(os.Getenv("PATH"), filepath.Join(javaHome, "bin")))
+			scons := filepath.Join(root, "build tools", "scons")
+			writeEngineTestTool(t, scons, `set -eu
+test -s .spx_build_lock/pid
+printf '%s\n' "$PWD" "$SPX_MARKER" "$JAVA_HOME" "$@" > "$SPX_BUILD_RECORD"
+if [ "$SPX_FAILURE" = build ]; then exit 23; fi
+for name in godot_ios.zip android_debug.apk android_release.apk android_source.zip; do
+  printf built > "bin/$name"
+done
+`)
+			writeEngineTestTool(t, filepath.Join(postDir, "gradlew"), `set -eu
+test -s ../.spx_build_lock/pid
+test ! -e "$SPX_ENGINE_DIR/.spx_build_lock"
+test -s "$SPX_BUILD_RECORD"
+printf '%s\n' "$PWD" "$SPX_MARKER" "$JAVA_HOME" "$@" > "$SPX_POST_RECORD"
+if [ "$SPX_FAILURE" = post ]; then exit 23; fi
+printf post > "$SPX_ENGINE_DIR/bin/android_source.zip"
+`)
+			env := shared.CurrentEnvMap()
+			env["JAVA_HOME"] = "caller java home"
+			env["SPX_MARKER"] = "space ' quote $literal"
+			env["SPX_FAILURE"] = tt.failure
+			env["SPX_ENGINE_DIR"] = buildEnv.EngineDir
+			env["SPX_BUILD_RECORD"] = filepath.Join(root, "build-record")
+			env["SPX_POST_RECORD"] = filepath.Join(root, "post-record")
+			err = buildEngineTemplate(buildEnv, env, scons, module, plan)
+			if tt.failure == "success" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 {
+					t.Fatalf("build error = %v, want exit 23", err)
+				}
+			}
+			wantJavaHome := env["JAVA_HOME"]
+			if tt.platform == "android" {
+				wantJavaHome = javaHome
+			}
+			assertEngineTestCommandRecord(t, env["SPX_BUILD_RECORD"], []string{
+				buildEnv.EngineDir, env["SPX_MARKER"], wantJavaHome, "optimize=size", "debug_symbols=false",
+				"platform=" + tt.platform, "target=template_release", "arch=arm64", "custom_modules=" + moduleSource,
+			})
+			if tt.platform == "android" && tt.failure != "build" {
+				assertEngineTestCommandRecord(t, env["SPX_POST_RECORD"], []string{postDir, env["SPX_MARKER"], javaHome, "generateGodotTemplates"})
+			} else if fileExists(env["SPX_POST_RECORD"]) {
+				t.Fatal("unexpected post-build command")
+			}
+			if env["JAVA_HOME"] != "caller java home" {
+				t.Fatal("JDK exports mutated the caller environment")
+			}
+			for _, lock := range []string{
+				filepath.Join(buildEnv.EngineDir, ".spx_build_lock"),
+				filepath.Join(filepath.Dir(postDir), ".spx_build_lock"),
+			} {
+				if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("build lock %s was not released: %v", lock, err)
+				}
+			}
+			outputs := map[string]string{}
+			if tt.failure == "success" {
+				outputs["ios.zip"] = "built"
+				if tt.platform == "android" {
+					outputs = map[string]string{"android_debug.apk": "built", "android_release.apk": "built", "android_source.zip": "post"}
+				}
+			}
+			entries, err := os.ReadDir(buildEnv.TemplateDir)
+			if err != nil || len(entries) != len(outputs) {
+				t.Fatalf("template outputs = %v (%v), want %v", entries, err, outputs)
+			}
+			for name, want := range outputs {
+				data, err := os.ReadFile(filepath.Join(buildEnv.TemplateDir, name))
+				if err != nil || string(data) != want {
+					t.Fatalf("template %s = %q (%v), want %q", name, data, err, want)
+				}
+			}
+		})
+	}
 }
 
 func TestShellJoinRoundTrip(t *testing.T) {

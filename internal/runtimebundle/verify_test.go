@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
+ * Copyright (c) 2021-2026 The XGo Authors (xgo.dev). All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -210,6 +210,14 @@ func TestVerifyZipRejectsReservedNamesAndSpecialFiles(t *testing.T) {
 	}
 }
 
+// Preserve each archive format's existing Unicode folding policy.
+func TestPortableComponentKelvinSignPolicy(t *testing.T) {
+	err := validatePortableComponent("CLOCK$")
+	if err == nil {
+		t.Fatalf("Unicode device-name policy changed: %v", err)
+	}
+}
+
 func TestVerifyZipMaterializedSymlinkRejectsSpecialPermissions(t *testing.T) {
 	archive := writeTestZip(t, testZipEntry{
 		name: "link",
@@ -350,12 +358,30 @@ func TestVerifyZipExpectedIdentityIsStrict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := VerifyZip(path, VerifyOptions{Expected: &bundle}); err != nil {
-		t.Fatal(err)
-	}
-	bundle.Digest = strings.Repeat("0", sha256.Size*2)
-	if _, err := VerifyZip(path, VerifyOptions{Expected: &bundle}); !errors.Is(err, ErrDigestMismatch) {
-		t.Fatalf("digest error = %v", err)
+	wrongDigest := bundle
+	wrongDigest.Digest = strings.Repeat("0", sha256.Size*2)
+	invalid := Bundle{Entries: []Entry{{Name: "x", Size: -1}}, Digest: wrongDigest.Digest}
+	for _, tt := range []struct {
+		name     string
+		expected Bundle
+		limits   Limits
+		want     error
+		message  string
+	}{
+		{name: "matching", expected: bundle},
+		{name: "digest mismatch", expected: wrongDigest, want: ErrDigestMismatch},
+		{name: "invalid entry before identity comparison", expected: invalid, want: ErrInvalidManifest, message: `"x" has negative size`},
+		{name: "negative limits before expected validation", expected: invalid, limits: Limits{MaxEntries: -1}, message: "negative archive limit"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := VerifyZip(path, VerifyOptions{Limits: tt.limits, Expected: &tt.expected})
+			if (tt.want != nil || tt.message == "") && !errors.Is(err, tt.want) {
+				t.Fatalf("VerifyZip error = %v, want %v", err, tt.want)
+			}
+			if tt.message != "" && (err == nil || !strings.Contains(err.Error(), tt.message)) {
+				t.Fatalf("VerifyZip error = %v, want %q", err, tt.message)
+			}
+		})
 	}
 }
 

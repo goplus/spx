@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,107 @@ func TestDetectStaleEngineBuildLockMissingPIDAfterGracePeriod(t *testing.T) {
 	}
 	if !strings.Contains(message, "missing pid metadata") {
 		t.Fatalf("unexpected stale lock message: %s", message)
+	}
+}
+
+func TestDetectStaleEngineBuildLockMissingPIDWithinGracePeriod(t *testing.T) {
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	mustMkdirAll(t, lockDir)
+	freshTime := time.Now()
+	if err := os.Chtimes(lockDir, freshTime, freshTime); err != nil {
+		t.Fatal(err)
+	}
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if time.Since(freshTime) >= 4*time.Second {
+		t.Skip("scheduler delay consumed the fresh lock's grace period")
+	}
+	if err != nil || stale || message != "" {
+		t.Fatalf("fresh lock = (%v, %q, %v), want non-stale with no message", stale, message, err)
+	}
+}
+
+func TestDetectStaleEngineBuildLockProtectsLivePID(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("trackedProcessExists opens the process without SYNCHRONIZE, which WaitForSingleObject requires")
+	}
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	pidPath := filepath.Join(lockDir, "pid")
+	pidData := fmt.Sprintf("  %d\n", os.Getpid())
+	mustWriteFile(t, pidPath, []byte(pidData))
+	oldTime := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(lockDir, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if err != nil || stale || message != "" {
+		t.Fatalf("live lock = (%v, %q, %v), want non-stale with no message", stale, message, err)
+	}
+	if data, err := os.ReadFile(pidPath); err != nil || string(data) != pidData {
+		t.Fatalf("live lock metadata = %q (%v), want %q", data, err, pidData)
+	}
+}
+
+func TestEngineBuildLockRecoversExitedPID(t *testing.T) {
+	// Reap a real helper rather than assuming an arbitrary PID is unused.
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run helper: %v\n%s", err, output)
+	}
+	pid := cmd.Process.Pid
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	mustWriteFile(t, filepath.Join(lockDir, "pid"), []byte(fmt.Sprintf("%d\n", pid)))
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if err != nil || !stale || !strings.Contains(message, fmt.Sprintf("pid %d is dead", pid)) {
+		t.Fatalf("exited PID lock = (%v, %q, %v), want stale dead-PID message", stale, message, err)
+	}
+	t.Cleanup(func() { releaseEngineBuildLock(lockDir) })
+	for i := 0; i < 2; i++ {
+		if err := acquireEngineBuildLock(lockDir); err != nil {
+			t.Fatalf("acquire lock (attempt %d): %v", i+1, err)
+		}
+		wantPID := fmt.Sprintf("%d\n", os.Getpid())
+		if data, err := os.ReadFile(filepath.Join(lockDir, "pid")); err != nil || string(data) != wantPID {
+			t.Fatalf("acquired lock metadata = %q (%v), want %q", data, err, wantPID)
+		}
+		releaseEngineBuildLock(lockDir)
+		if _, err := os.Lstat(lockDir); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("released lock still exists: %v", err)
+		}
+	}
+}
+
+func TestEngineBuildLockReplacesSymlinkWithoutRemovingTarget(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "preserved")
+	pidData := fmt.Sprintf("%d\n", os.Getpid())
+	mustWriteFile(t, filepath.Join(target, "pid"), []byte(pidData))
+	mustWriteFile(t, filepath.Join(target, "artifact"), []byte("preserved artifact"))
+	lockDir := filepath.Join(root, ".spx_build_lock")
+	if err := os.Symlink(target, lockDir); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if err != nil || !stale || !strings.Contains(message, "invalid build lock symlink") {
+		t.Fatalf("symlink lock = (%v, %q, %v), want stale symlink message", stale, message, err)
+	}
+	if err := acquireEngineBuildLock(lockDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { releaseEngineBuildLock(lockDir) })
+	if info, err := os.Lstat(lockDir); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("replacement lock is not a directory: %v (%v)", info, err)
+	}
+	releaseEngineBuildLock(lockDir)
+	if _, err := os.Lstat(lockDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("released lock still exists: %v", err)
+	}
+	for name, want := range map[string]string{"pid": pidData, "artifact": "preserved artifact"} {
+		if data, err := os.ReadFile(filepath.Join(target, name)); err != nil || string(data) != want {
+			t.Fatalf("symlink target %s = %q (%v), want %q", name, data, err, want)
+		}
 	}
 }
 
