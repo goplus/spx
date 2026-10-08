@@ -553,3 +553,61 @@ func TestManifestMethodsEnforceSerializedLimit(t *testing.T) {
 		t.Fatalf("CanonicalBytesWithLimits error = %v, want ErrArchiveLimit", err)
 	}
 }
+
+func TestLimitsWithDefaults(t *testing.T) {
+	defaults := Limits{
+		MaxEntries: MaxEntries, MaxEntrySize: MaxEntrySize, MaxTotalSize: MaxTotalSize,
+		MaxArchiveBytes: MaxArchiveBytes, MaxCentralDirectoryBytes: MaxCentralDirectoryBytes,
+		MaxManifestBytes: MaxManifestBytes, MaxCompressionRatio: MaxCompressionRatio,
+	}
+	if MaxEntries <= 0 || MaxEntrySize <= 0 || MaxTotalSize <= 0 || MaxArchiveBytes <= 0 ||
+		MaxCentralDirectoryBytes <= 0 || MaxManifestBytes <= 0 || MaxCompressionRatio == 0 {
+		t.Fatal("default archive limits must be positive")
+	}
+	custom := Limits{
+		MaxEntries: 1, MaxEntrySize: 2, MaxTotalSize: 3,
+		MaxArchiveBytes: 4, MaxCentralDirectoryBytes: 5,
+		MaxManifestBytes: 6, MaxCompressionRatio: 7,
+	}
+	mixed := defaults
+	mixed.MaxEntries, mixed.MaxCompressionRatio = 1, 1
+	equalSizes := defaults
+	equalSizes.MaxEntrySize = MaxTotalSize
+	const negative = "runtimebundle: negative archive limit"
+	for _, tt := range []struct {
+		name    string
+		input   Limits
+		want    Limits
+		wantErr string
+	}{
+		{"all defaults", Limits{}, defaults, ""},
+		{"all positive", custom, custom, ""},
+		{"mixed defaults", Limits{MaxEntries: 1, MaxCompressionRatio: 1}, mixed, ""},
+		{"equal entry and total size", Limits{MaxEntrySize: MaxTotalSize}, equalSizes, ""},
+		{"negative entries", Limits{MaxEntries: -1}, Limits{}, negative},
+		{"negative entry size", Limits{MaxEntrySize: -1}, Limits{}, negative},
+		{"negative total size", Limits{MaxTotalSize: -1}, Limits{}, negative},
+		{"negative archive bytes", Limits{MaxArchiveBytes: -1}, Limits{}, negative},
+		{"negative directory bytes", Limits{MaxCentralDirectoryBytes: -1}, Limits{}, negative},
+		{"negative manifest bytes", Limits{MaxManifestBytes: -1}, Limits{}, negative},
+		{"entry exceeds total", Limits{MaxEntrySize: 2, MaxTotalSize: 1}, Limits{}, "runtimebundle: max entry size 2 exceeds max total size 1"},
+		{"negative error takes precedence", Limits{MaxEntries: -1, MaxEntrySize: 2, MaxTotalSize: 1}, Limits{}, negative},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.input.withDefaults()
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr || got != tt.want {
+					t.Fatalf("withDefaults() = (%+v, %v), want (%+v, %q)", got, err, tt.want, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Fatalf("withDefaults() = (%+v, %v), want (%+v, nil)", got, err, tt.want)
+			}
+			again, err := got.withDefaults()
+			if err != nil || again != got {
+				t.Fatalf("withDefaults() not idempotent: (%+v, %v)", again, err)
+			}
+		})
+	}
+}
