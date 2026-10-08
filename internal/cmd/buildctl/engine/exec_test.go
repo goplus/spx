@@ -17,11 +17,16 @@
 package engine
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
 func TestParseEngineExecArgsCommand(t *testing.T) {
@@ -87,5 +92,61 @@ func TestDetectStaleEngineBuildLockMissingPIDAfterGracePeriod(t *testing.T) {
 	}
 	if !strings.Contains(message, "missing pid metadata") {
 		t.Fatalf("unexpected stale lock message: %s", message)
+	}
+}
+
+func TestLockedEngineScriptCommand(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is unavailable")
+	}
+	for _, tt := range []struct{ name, workdir, lockDir string }{
+		{"engine", "godot", "godot/.spx_build_lock"},
+		{"android-post", "godot/platform/android/java", "godot/platform/android/.spx_build_lock"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			workdir := filepath.Join(root, tt.workdir)
+			mustMkdirAll(t, workdir)
+			lockDir := filepath.Join(root, tt.lockDir)
+			env := shared.CurrentEnvMap()
+			env["SPX_EXPECTED_DIR"] = workdir
+			env["SPX_EXPECTED_LOCK"] = lockDir
+			env["SPX_MARKER"] = "space ' quote $literal"
+			for _, exitCode := range []int{0, 23} {
+				t.Run(fmt.Sprintf("exit-%d", exitCode), func(t *testing.T) {
+					script := fmt.Sprintf(`[[ "$PWD" == "$SPX_EXPECTED_DIR" ]] || exit 90
+[[ -d "$SPX_EXPECTED_LOCK" && -s "$SPX_EXPECTED_LOCK/pid" ]] || exit 91
+printf '%%s' "$SPX_MARKER" > captured
+exit %d`, exitCode)
+					err := runLockedEngineCommandWithEnv(workdir, env, "bash", "-lc", script)
+					if exitCode == 0 {
+						if err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						var exitErr *exec.ExitError
+						if !errors.As(err, &exitErr) || exitErr.ExitCode() != exitCode {
+							t.Fatalf("command error = %v, want exit %d", err, exitCode)
+						}
+					}
+					got, err := os.ReadFile(filepath.Join(workdir, "captured"))
+					if err != nil || string(got) != env["SPX_MARKER"] {
+						t.Fatalf("command environment = %q (%v)", got, err)
+					}
+					if _, err := os.Stat(lockDir); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("lock was not released: %v", err)
+					}
+				})
+			}
+			if err := runLockedEngineCommandWithEnv(workdir, env, filepath.Join(root, "missing-command")); err == nil {
+				t.Fatal("missing command succeeded")
+			}
+			if _, err := os.Stat(lockDir); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("start failure retained lock: %v", err)
+			}
+		})
 	}
 }
