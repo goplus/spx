@@ -555,7 +555,7 @@ func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
 			installTouchingSyncSpriteMgr(t, mgr)
 			sprite := newTouchingTestSprite("sensor", 0, 0, 1)
 			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
-			sprite.g.queuePenDown(7, false)
+			sprite.g.queuePenDown(7)
 			sprite.g.queuePenMove(7, mathf.NewVec2(10, 20))
 			mgr.onColorCollision = func() {
 				if pen.batchCalls != 1 {

@@ -110,7 +110,7 @@ func (p *penComponent) penDown() {
 	x, y := p.sprite.getXY()
 	p.syncPenPosition(x, y)
 	p.isPenDown = true
-	p.sprite.g.queuePenDown(*p.penObj, false)
+	p.sprite.g.queuePenDown(*p.penObj)
 }
 
 func (p *penComponent) stamp() {
@@ -316,7 +316,7 @@ func (p *penComponent) ensureClonePenReady() {
 	p.syncPenAppearance()
 	x, y := p.sprite.getXY()
 	p.syncPenPosition(x, y)
-	p.sprite.g.queuePenDown(*p.penObj, false)
+	p.sprite.g.queuePenDown(*p.penObj)
 }
 
 func (p *penComponent) syncLegacyPenStateFromColor() {
