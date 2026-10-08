@@ -30,7 +30,7 @@ type Bucket int
 
 const (
 	BucketStart Bucket = iota
-	BucketAwake
+	BucketAwake        // Reserved for the retired Awake event channel; keep subsequent bucket values stable.
 	BucketKeyPressed
 	BucketAnyKeyPressed
 	BucketSwipe

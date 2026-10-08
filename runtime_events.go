@@ -226,11 +226,6 @@ func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj)
 	p.scriptEventRegistry.doWhenSwipe(direction, target)
 }
 
-func (p *scriptEventBindings) onAwake(onAwake func()) {
-	owner := p.owner
-	p.scriptEventRegistry.manager.Add(coreevent.BucketAwake, coreevent.NewSink(owner, onAwake, coreevent.MatchOwnerOrNil(owner)))
-}
-
 func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
 	if len(keys) == 0 {
 		return
@@ -376,19 +371,6 @@ func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bo
 			}
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
-			}
-			ev.Handler.(func())()
-		},
-	})
-}
-
-func (p *scriptEventRegistry) doWhenAwake(this threadObj) {
-	p.dispatchGlobal(coreevent.BucketAwake, scriptEventDispatch{
-		mode:      coroutine.BatchWaitDone,
-		matchData: this,
-		run: func(_ coroutine.Thread, ev *eventSink) {
-			if isDebugEventEnabled() {
-				spxlog.Debug("OnAwake: %s", nameOf(ev.Owner))
 			}
 			ev.Handler.(func())()
 		},

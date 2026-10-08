@@ -261,9 +261,6 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	if !spriteB.sawSelfAwake || !spriteB.sawPeerAwake {
 		t.Fatalf("SpriteB main saw awake state self=%v peer=%v, want both true", spriteB.sawSelfAwake, spriteB.sawPeerAwake)
 	}
-	if got := game.scriptEvents.manager.Snapshot(coreevent.BucketAwake); len(got) != 0 {
-		t.Fatalf("SnapshotAwake len = %d, want 0 for initial sprites", len(got))
-	}
 }
 
 func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
