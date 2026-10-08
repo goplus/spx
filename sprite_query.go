@@ -106,7 +106,7 @@ func (p *SpriteImpl) renderBounds() (mathf.Rect2, bool) {
 	}
 
 	costume := p.currentCostume()
-	width, height := costume.getSizeF()
+	width, height := costume.logicalSize()
 	width *= p.runtimeState.Scale
 	height *= p.runtimeState.Scale
 
@@ -131,7 +131,7 @@ func (p *SpriteImpl) adjustPositionAndGetDimensions(x, y *float64) (width, heigh
 
 	if triggerInfo.Type == physicsColliderNone {
 		applyRenderOffset(p, x, y)
-		width, height := p.costumes[p.costumeIndex].getSizeF()
+		width, height := p.costumes[p.costumeIndex].logicalSize()
 		return width * p.runtimeState.Scale, height * p.runtimeState.Scale
 	}
 

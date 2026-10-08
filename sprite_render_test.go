@@ -138,16 +138,16 @@ func TestGetCostumeRenderOffsetUsesPivot(t *testing.T) {
 
 func TestCostumeRenderAnchorConvertsAssetCoordinatesToSPX(t *testing.T) {
 	costume := newCostume(&coreproject.CostumeConfig{
-		ImageWidth: 201, ImageHeight: 121, BitmapResolution: 2,
+		ImageWidth: 201.5, ImageHeight: 121.25, BitmapResolution: 2,
 		X: 80, Y: 40,
 	})
 
-	want := mathf.NewVec2(-10.25, 10.25)
+	want := mathf.NewVec2(-10.375, 10.3125)
 	if got := costume.renderAnchorInSPX(); got != want {
 		t.Fatalf("renderAnchorInSPX = %v, want %v", got, want)
 	}
-	if width, height := costume.getSizeF(); width != 100.5 || height != 60.5 {
-		t.Fatalf("logical size = (%v, %v), want (100.5, 60.5)", width, height)
+	if width, height := costume.logicalSize(); width != 100.75 || height != 60.625 {
+		t.Fatalf("logical size = (%v, %v), want (100.75, 60.625)", width, height)
 	}
 	if costume.isAtlas() {
 		t.Fatal("standalone costume is marked as an atlas")
@@ -185,7 +185,7 @@ func TestAtlasCostumePreservesFrameGeometry(t *testing.T) {
 	if width, height := c.getSize(); width != 21 || height != 21 {
 		t.Fatalf("integer size = (%d, %d), want (21, 21)", width, height)
 	}
-	if width, height := c.getSizeF(); width != 21.5 || height != 21.5 {
+	if width, height := c.logicalSize(); width != 21.5 || height != 21.5 {
 		t.Fatalf("logical size = (%v, %v), want (21.5, 21.5)", width, height)
 	}
 	if got := c.renderAnchorInSPX(); got != (mathf.Vec2{}) {

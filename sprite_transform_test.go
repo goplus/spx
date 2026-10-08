@@ -240,6 +240,31 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 	}
 }
 
+func TestFixWorldRangePreservesFractionalSVGSize(t *testing.T) {
+	sprite := newTestTransformSprite(-393, 5)
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.g.displayState.MinWorldX = -240
+	sprite.g.displayState.MinWorldY = -180
+	sprite.baseObj.costumes = []*costume{{
+		// Values from the second obstacle costume in .tmp/11.
+		width:            247,
+		height:           476,
+		imageSize:        mathf.NewVec2(247.24325, 476.42829),
+		bitmapResolution: 1,
+		center:           mathf.NewVec2(76.0323911558041, 208.79720845345383),
+		setIndex:         -1,
+	}}
+	sprite.baseObj.costumeIndex = 0
+	sprite.runtimeState.Scale = 1
+	sprite.transform().direction = 90
+
+	sprite.transform().changeX(-5)
+	if got := sprite.Xpos(); got != -396 {
+		t.Fatalf("x position after crossing the left fence = %v, want -396", got)
+	}
+}
+
 func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 	sprite.baseObj.costumes = []*costume{{

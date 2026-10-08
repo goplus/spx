@@ -272,7 +272,7 @@ func (t *transformComponent) clampSpriteScale(size float64) float64 {
 		return size
 	}
 
-	costumeWidth, costumeHeight := t.sprite.currentCostume().getSizeF()
+	costumeWidth, costumeHeight := t.sprite.currentCostume().logicalSize()
 	if costumeWidth <= 0 || costumeHeight <= 0 {
 		return size
 	}

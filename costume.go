@@ -63,20 +63,28 @@ func (c *costume) getSize() (int, int) {
 	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
 }
 
-// getSizeF returns the exact logical costume size without truncating partial
-// pixels introduced by bitmap resolution scaling.
-func (c *costume) getSizeF() (float64, float64) {
-	resolution := float64(c.bitmapResolution)
-	return float64(c.width) / resolution, float64(c.height) / resolution
+// sourceSize returns the costume size in asset coordinates.
+func (c *costume) sourceSize() (float64, float64) {
+	if !c.isAtlas() && c.imageSize.X > 0 && c.imageSize.Y > 0 {
+		return c.imageSize.X, c.imageSize.Y
+	}
+	return float64(c.width), float64(c.height)
 }
 
-// renderAnchorInSPX converts the costume center from top-left, Y-down asset
-// coordinates into a local SPX anchor relative to the geometric image center.
+// logicalSize returns the exact size in SPX coordinates.
+func (c *costume) logicalSize() (float64, float64) {
+	width, height := c.sourceSize()
+	resolution := float64(c.bitmapResolution)
+	return width / resolution, height / resolution
+}
+
+// renderAnchorInSPX converts the asset center to an SPX-local anchor.
 func (c *costume) renderAnchorInSPX() mathf.Vec2 {
+	width, height := c.sourceSize()
 	resolution := float64(c.bitmapResolution)
 	return mathf.NewVec2(
-		(c.center.X-float64(c.width)/2)/resolution,
-		(float64(c.height)/2-c.center.Y)/resolution,
+		(c.center.X-width/2)/resolution,
+		(height/2-c.center.Y)/resolution,
 	)
 }
 

@@ -115,6 +115,7 @@ func LoadSpriteConfig(fs spxfs.Dir, name string) (SpriteConfig, error) {
 		return SpriteConfig{}, err
 	}
 	normalizeSpriteConfigPaths(&conf, baseDir)
+	fillMissingSVGCostumeSizes(fs, conf.Costumes)
 	return conf, nil
 }
 
