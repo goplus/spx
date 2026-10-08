@@ -547,6 +547,12 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 			wantError: `zorder[0]: sprite "Missing" is not defined`,
 		},
 		{
+			name:      "later malformed shape precedes first sprite config failure",
+			project:   `{"zorder":["Sprite",{"type":"measure","size":"large","x":0,"y":0}]}`,
+			files:     reloadConfigFS{"sprites/Sprite/index.json": `{`},
+			wantError: `zorder[1]: stage shape field "size" has type string, want float64`,
+		},
+		{
 			name:      "invalid z-order shape",
 			project:   `{"zorder":[{"type":"measure","size":"large","x":0,"y":0}]}`,
 			files:     reloadConfigFS{},
