@@ -210,12 +210,7 @@ void SpxSpriteMgr::batch_update_transforms(const float *buffer_data, int len) {
 			continue;
 		}
 
-		sprite->set_position(spx_to_godot_vec2(GdVec2(x, y)));
-		sprite->set_rotation(rotation);
-		sprite->set_scale(GdVec2(scale_x, scale_y));
-		sprite->set_visible(visible);
-		sprite->on_set_visible(visible);
-		sprite->set_render_offset(spx_to_godot_vec2(GdVec2(render_offset_x, render_offset_y)));
+		_apply_transform(sprite, GdVec2(x, y), rotation, GdVec2(scale_x, scale_y), visible, GdVec2(render_offset_x, render_offset_y));
 	}
 }
 
