@@ -17,9 +17,14 @@
 package spx
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	"github.com/goplus/spx/v3/internal/ui"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
@@ -87,5 +92,70 @@ func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
 	shapes.flushBubbleVisuals(items)
 	if bubble.isDirty {
 		t.Fatal("frame-end phase did not commit bubble visuals")
+	}
+}
+
+func TestLayoutTextBubblesPreservesEmptyActiveSlice(t *testing.T) {
+	for _, active := range [][]*textBubble{nil, {}} {
+		shapes := shapeManager{activeTextBubbles: active}
+		shapes.layoutTextBubbles(nil)
+		if len(shapes.activeTextBubbles) != 0 || (shapes.activeTextBubbles == nil) != (active == nil) {
+			t.Fatalf("empty topology changed active slice: before=%#v after=%#v", active, shapes.activeTextBubbles)
+		}
+	}
+}
+
+type bubbleLayoutCameraMgr struct{ pkgengine.ICameraMgr }
+
+func (bubbleLayoutCameraMgr) GetCameraPosition() mathf.Vec2 { return mathf.Vec2{} }
+func (bubbleLayoutCameraMgr) GetCameraZoom() mathf.Vec2     { return mathf.NewVec2(1, 1) }
+
+func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
+	enginewrap.Init(func(call func()) { call() })
+	original := pkgengine.CameraMgr
+	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
+	t.Cleanup(func() { pkgengine.CameraMgr = original })
+	newBubble := func(id uint64) *textBubble {
+		sprite := newRenderOffsetTestSprite()
+		sprite.spriteState.IsVisible = true
+		sprite.g.displayState.WindowWidth = 480
+		sprite.g.displayState.WindowHeight = 360
+		return &textBubble{
+			bubbleBase: bubbleBase{sprite: sprite},
+			layoutID:   id,
+			panel:      &ui.UiSay{},
+			content:    ui.NewSayBubbleContent("same message", ui.StyleSay),
+		}
+	}
+	first, second := newBubble(1), newBubble(2)
+	shapes := shapeManager{}
+	shapes.layoutTextBubbles([]Shape{second, first})
+	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{first, second}) || !first.hasLayout || !second.hasLayout {
+		t.Fatal("new bubbles were not laid out in stable ID order")
+	}
+	storage := &shapes.activeTextBubbles[0]
+	firstLayout, secondLayout := first.layout, second.layout
+	shapes.layoutTextBubbles([]Shape{first, second})
+	if &shapes.activeTextBubbles[0] != storage || first.layout != firstLayout || second.layout != secondLayout {
+		t.Fatal("unchanged bubble identities replaced storage or resolved cached layouts")
+	}
+
+	replacement := *first
+	shapes.layoutTextBubbles([]Shape{second, &replacement})
+	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement, second}) {
+		t.Fatal("equal-valued replacement bubble was not detected by pointer identity")
+	}
+	second.sprite.spriteState.IsVisible = false
+	shapes.layoutTextBubbles([]Shape{&replacement, second})
+	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement}) {
+		t.Fatal("hidden bubble remained active")
+	}
+	if shapes.activeTextBubbles[:2][1] != nil {
+		t.Fatal("removed bubble reference was retained in reusable storage")
+	}
+	replacement.panel = nil
+	shapes.layoutTextBubbles([]Shape{&replacement, second})
+	if len(shapes.activeTextBubbles) != 0 || shapes.activeTextBubbles[:1][0] != nil {
+		t.Fatal("panel removal did not clear the final active bubble")
 	}
 }
