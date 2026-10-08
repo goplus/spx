@@ -120,7 +120,6 @@ func (p *Game) loadPreparedSprite(sprite Sprite, name string, gamer reflect.Valu
 	base.spriteState.DefaultCostumeIndex = base.costumeIndex
 	base.scriptEventBindings.bind(&p.scriptEvents, base)
 
-	base.gamer = gamer
 	base.g, base.name, base.sprite = p, name, sprite
 	base.runtimeState.Scale = config.Size
 	base.spriteState.IsVisible = config.Visible
