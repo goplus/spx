@@ -211,10 +211,6 @@ func (cfg *physicConfig) validateShape() bool {
 // getDimensions calculates width and height based on type and shape parameters.
 func (cfg *physicConfig) getDimensions() (float64, float64) {
 	switch cfg.Type {
-	case physicsColliderRect:
-		if len(cfg.Params) >= 2 {
-			return math.Max(cfg.Params[0], 0), math.Max(cfg.Params[1], 0)
-		}
 	case physicsColliderCircle:
 		if len(cfg.Params) >= 1 {
 			radius := math.Max(cfg.Params[0], 0)
@@ -272,7 +268,7 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 		if len(cfg.Params) >= 1 {
 			syncProxy.SetColliderShapeCircle(isTrigger, pivot, math.Max(cfg.Params[0]*scale, minCircleRadius))
 		}
-	case physicsColliderRect:
+	case physicsColliderRect, physicsColliderAuto:
 		if len(cfg.Params) >= 2 {
 			syncProxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
 		}
@@ -287,10 +283,6 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 				points[i] = coordinate * scale
 			}
 			syncProxy.SetColliderShapePolygon(isTrigger, pivot, points)
-		}
-	case physicsColliderAuto:
-		if len(cfg.Params) >= 2 {
-			syncProxy.SetColliderShapeRect(isTrigger, pivot, mathf.NewVec2(cfg.Params[0]*scale, cfg.Params[1]*scale))
 		}
 	}
 }
