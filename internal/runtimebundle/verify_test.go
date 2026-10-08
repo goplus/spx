@@ -26,6 +26,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -551,6 +552,141 @@ func TestManifestMethodsEnforceSerializedLimit(t *testing.T) {
 	}
 	if _, err := bundle.CanonicalBytesWithLimits(limits); !errors.Is(err, ErrArchiveLimit) {
 		t.Fatalf("CanonicalBytesWithLimits error = %v, want ErrArchiveLimit", err)
+	}
+}
+
+func TestManifestCanonicalGolden(t *testing.T) {
+	const want = `{"schema":"runtimebundle/v1","namespace":"engine","entries":[{"name":"a/","mode":2147484141,"size":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},{"name":"cafe` + "\u0301" + `","mode":384,"size":0,"sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},{"name":"z.bin","mode":420,"size":3,"sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}]}`
+	const wantDigest = "a35f70020c5b539bc58dfb6a6be7e9a28f0228de3a907ff685491599a8d7d4d9"
+	bundle := Bundle{Namespace: NamespaceEngine, Entries: []Entry{
+		{Name: "z.bin", Mode: 0o644, Size: 3, SHA256: testDigest("abc")},
+		{Name: "cafe\u0301", Mode: 0o600, SHA256: testDigest("")},
+		{Name: "a/", Mode: uint32(fs.ModeDir | 0o755), SHA256: testDigest("")},
+	}}
+	originalEntries := append([]Entry(nil), bundle.Entries...)
+	for _, suppliedDigest := range []string{"", "not-a-digest", strings.Repeat("0", 64), wantDigest} {
+		bundle.Digest = suppliedDigest
+		data, err := bundle.CanonicalBytes()
+		if err != nil || string(data) != want {
+			t.Fatalf("CanonicalBytes with digest %q = %s, %v; want %s", suppliedDigest, data, err, want)
+		}
+		digest, err := bundle.IdentityDigest()
+		if err != nil || digest != wantDigest {
+			t.Fatalf("IdentityDigest = %q, %v; want %q", digest, err, wantDigest)
+		}
+		withDigest, err := bundle.WithDigest()
+		if err != nil || withDigest.Schema != SchemaV1 || withDigest.Digest != wantDigest {
+			t.Fatalf("WithDigest = %#v, %v", withDigest, err)
+		}
+		if !reflect.DeepEqual(withDigest.Entries, originalEntries) || !reflect.DeepEqual(bundle.Entries, originalEntries) {
+			t.Fatal("digest methods changed caller entry order or names")
+		}
+		if err := withDigest.Validate(); err != nil {
+			t.Fatalf("Validate with identity digest: %v", err)
+		}
+	}
+}
+
+func TestManifestEmptyEntries(t *testing.T) {
+	for _, entries := range [][]Entry{nil, {}} {
+		bundle := Bundle{Entries: entries}
+		data, err := bundle.CanonicalBytes()
+		if err != nil || string(data) != `{"schema":"runtimebundle/v1","entries":[]}` {
+			t.Fatalf("CanonicalBytes = %s, %v", data, err)
+		}
+		withDigest, err := bundle.WithDigest()
+		if err != nil || !reflect.DeepEqual(withDigest.Entries, entries) {
+			t.Fatalf("WithDigest changed nil/empty entries: %#v, %v", withDigest, err)
+		}
+		encoded, err := json.Marshal(withDigest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := ParseManifest(encoded)
+		if err != nil || !reflect.DeepEqual(parsed, withDigest) {
+			t.Fatalf("ParseManifest = %#v, %v; want %#v", parsed, err, withDigest)
+		}
+	}
+}
+
+func TestManifestValidationErrorOrder(t *testing.T) {
+	entry := Entry{Name: "a", Size: 1, SHA256: testDigest("a")}
+	wrongDigest := Bundle{Entries: []Entry{entry}, Digest: strings.Repeat("0", 64)}
+	digest, err := wrongDigest.IdentityDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		bundle  Bundle
+		limits  Limits
+		want    error
+		message string
+	}{
+		{"limits-before-schema", Bundle{Schema: "bad"}, Limits{MaxEntries: -1}, ErrInvalidManifest, "runtimebundle: negative archive limit"},
+		{"schema-before-namespace", Bundle{Schema: "bad", Namespace: "bad"}, Limits{}, ErrInvalidManifest, `unsupported schema "bad"`},
+		{"namespace-before-count", Bundle{Namespace: "bad", Entries: []Entry{entry, entry}}, Limits{MaxEntries: 1}, ErrInvalidManifest, `unsupported namespace "bad"`},
+		{"count-before-entry", Bundle{Entries: []Entry{{}, {}}}, Limits{MaxEntries: 1}, ErrArchiveLimit, "2 entries exceeds limit 1"},
+		{"entry-before-digest", Bundle{Entries: []Entry{{Name: "a", Size: -1}}, Digest: "bad"}, Limits{}, ErrInvalidManifest, `"a" has negative size`},
+		{"entry-before-collision", Bundle{Entries: []Entry{entry, {Name: "a", Size: -1}}}, Limits{}, ErrInvalidManifest, `"a" has negative size`},
+		{"size-before-collision", Bundle{Entries: []Entry{entry, {Name: "a", Size: 2, SHA256: entry.SHA256}}}, Limits{MaxEntrySize: 1}, ErrArchiveLimit, `entry "a" size 2 exceeds limit 1`},
+		{"total-before-collision", Bundle{Entries: []Entry{entry, entry}}, Limits{MaxEntrySize: 1, MaxTotalSize: 1}, ErrArchiveLimit, "total size exceeds limit 1"},
+		{"collision-before-parent", Bundle{Entries: []Entry{entry, {Name: "a/b", SHA256: entry.SHA256}, entry}}, Limits{}, ErrUnsafeArchive, `duplicate entry "a"`},
+		{"parent-before-digest", Bundle{Entries: []Entry{entry, {Name: "a/b", SHA256: entry.SHA256}}, Digest: "bad"}, Limits{}, ErrUnsafeArchive, `file "a" is also a parent of "a/b"`},
+		{"digest-before-serialized-limit", Bundle{Entries: []Entry{entry}, Digest: "bad"}, Limits{MaxManifestBytes: 1}, ErrInvalidManifest, "bundle digest: sha256 must be a full 64-hex-character digest"},
+		{"unsigned-manifest-skips-serialized-limit", Bundle{Entries: []Entry{entry}}, Limits{MaxManifestBytes: 1}, nil, ""},
+		{"serialized-limit-before-digest-mismatch", wrongDigest, Limits{MaxManifestBytes: 1}, ErrArchiveLimit, ""},
+		{"digest-mismatch", wrongDigest, Limits{}, ErrDigestMismatch, "manifest digest " + wrongDigest.Digest + " does not match identity " + digest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bundle.ValidateWithLimits(tt.limits)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("ValidateWithLimits error = %v; want %v", err, tt.want)
+			}
+			if tt.message != "" && err.Error() != tt.want.Error()+": "+tt.message {
+				t.Fatalf("ValidateWithLimits error = %v; want %v: %s", err, tt.want, tt.message)
+			}
+		})
+	}
+}
+
+func BenchmarkManifest(b *testing.B) {
+	for _, count := range []int{1, 1000, 10000} {
+		bundle := Bundle{Namespace: NamespaceEngine, Entries: make([]Entry, count)}
+		for i := range bundle.Entries {
+			bundle.Entries[i] = Entry{Name: "runtime/entry-" + strconv.Itoa(count-i), SHA256: testDigest("")}
+		}
+		withDigest, err := bundle.WithDigest()
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.Run(strconv.Itoa(count), func(b *testing.B) {
+			b.Run("canonical", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if _, err := bundle.CanonicalBytes(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+			b.Run("validate", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if err := bundle.Validate(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+			b.Run("validate-digest", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if err := withDigest.Validate(); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+		})
 	}
 }
 
