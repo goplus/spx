@@ -124,20 +124,20 @@ func (p *Game) applyAudioSettings(settings coreproject.SystemSettings) {
 // -----------------------------------------------------------------------------
 // Internals
 // -----------------------------------------------------------------------------
-func (p *Game) loadSound(name SoundName) (media sound, err error) {
+func (p *Game) loadSound(name SoundName) (sound, error) {
 	if media, ok := p.sounds[name]; ok {
 		return media, nil
 	}
 
 	spxlog.Debug("LoadSound: %s", name)
-	loaded, err := coreproject.LoadSoundConfig(p.fs, name)
+	config, err := coreproject.LoadSoundConfig(p.fs, name)
 	if err != nil {
 		spxlog.Error("LoadSound failed: %v", err)
-		return
+		return nil, err
 	}
-	media = &loaded.Config
+	media := &config
 	p.sounds[name] = media
-	return
+	return media, nil
 }
 
 func (p *Game) playSound(sprite *engine.Sprite, soundObj engine.Object, name SoundName, isLoop bool, attenuation, maxDistance float64) int64 {

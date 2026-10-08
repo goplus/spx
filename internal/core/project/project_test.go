@@ -17,6 +17,8 @@
 package project
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"os"
@@ -574,22 +576,16 @@ func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSpriteConfig(packed) error: %v", err)
 	}
-	if sprite.BaseDir != "sprites/Hero/" {
-		t.Fatalf("sprite.BaseDir = %q, want sprites/Hero/", sprite.BaseDir)
-	}
-	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/hero.png" {
-		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/hero.png", got)
+	if got := sprite.Costumes[0].Path; got != "sprites/Hero/hero.png" {
+		t.Fatalf("sprite.Costumes[0].Path = %q, want sprites/Hero/hero.png", got)
 	}
 
 	sound, err := LoadSoundConfig(opened.FS, "Jump")
 	if err != nil {
 		t.Fatalf("LoadSoundConfig(packed) error: %v", err)
 	}
-	if sound.BaseDir != "sounds/Jump" {
-		t.Fatalf("sound.BaseDir = %q, want sounds/Jump", sound.BaseDir)
-	}
-	if got := sound.Config.Path; got != "sounds/Jump/jump.wav" {
-		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/jump.wav", got)
+	if got := sound.Path; got != "sounds/Jump/jump.wav" {
+		t.Fatalf("sound.Path = %q, want sounds/Jump/jump.wav", got)
 	}
 }
 
@@ -659,22 +655,22 @@ func TestOpenBuilderResourcesPrefersPackedConfigOverSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSpriteConfig(prefer packed) error: %v", err)
 	}
-	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/packed.png" {
-		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/packed.png", got)
+	if got := sprite.Costumes[0].Path; got != "sprites/Hero/packed.png" {
+		t.Fatalf("sprite.Costumes[0].Path = %q, want sprites/Hero/packed.png", got)
 	}
-	if sprite.Config.Size != 80 {
-		t.Fatalf("sprite.Config.Size = %v, want 80", sprite.Config.Size)
+	if sprite.Size != 80 {
+		t.Fatalf("sprite.Size = %v, want 80", sprite.Size)
 	}
 
 	sound, err := LoadSoundConfig(opened.FS, "Jump")
 	if err != nil {
 		t.Fatalf("LoadSoundConfig(prefer packed) error: %v", err)
 	}
-	if got := sound.Config.Path; got != "sounds/Jump/packed.wav" {
-		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/packed.wav", got)
+	if got := sound.Path; got != "sounds/Jump/packed.wav" {
+		t.Fatalf("sound.Path = %q, want sounds/Jump/packed.wav", got)
 	}
-	if sound.Config.Rate != 2 {
-		t.Fatalf("sound.Config.Rate = %d, want 2", sound.Config.Rate)
+	if sound.Rate != 2 {
+		t.Fatalf("sound.Rate = %d, want 2", sound.Rate)
 	}
 }
 
@@ -705,22 +701,22 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 	if err != nil {
 		t.Fatalf("LoadSpriteConfig(fallback child) error: %v", err)
 	}
-	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/source.png" {
-		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
+	if got := sprite.Costumes[0].Path; got != "sprites/Hero/source.png" {
+		t.Fatalf("sprite.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
 	}
-	if sprite.Config.Size != 60 {
-		t.Fatalf("sprite.Config.Size = %v, want 60", sprite.Config.Size)
+	if sprite.Size != 60 {
+		t.Fatalf("sprite.Size = %v, want 60", sprite.Size)
 	}
 
 	sound, err := LoadSoundConfig(opened.FS, "Jump")
 	if err != nil {
 		t.Fatalf("LoadSoundConfig(fallback child) error: %v", err)
 	}
-	if got := sound.Config.Path; got != "sounds/Jump/source.wav" {
-		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/source.wav", got)
+	if got := sound.Path; got != "sounds/Jump/source.wav" {
+		t.Fatalf("sound.Path = %q, want sounds/Jump/source.wav", got)
 	}
-	if sound.Config.Rate != 1 {
-		t.Fatalf("sound.Config.Rate = %d, want 1", sound.Config.Rate)
+	if sound.Rate != 1 {
+		t.Fatalf("sound.Rate = %d, want 1", sound.Rate)
 	}
 }
 
@@ -755,8 +751,8 @@ func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) 
 	if err != nil {
 		t.Fatalf("LoadSpriteConfig(string resource) error: %v", err)
 	}
-	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/source.png" {
-		t.Fatalf("sprite.Config.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
+	if got := sprite.Costumes[0].Path; got != "sprites/Hero/source.png" {
+		t.Fatalf("sprite.Costumes[0].Path = %q, want sprites/Hero/source.png", got)
 	}
 }
 
@@ -796,46 +792,89 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestLoadSpriteAndSoundConfig(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "sprites", "Hero"), 0o755); err != nil {
-		t.Fatal(err)
+func TestLoadSpriteAndSoundConfigNormalizesPaths(t *testing.T) {
+	for _, tt := range []struct {
+		name, input, spritePath, soundPath string
+	}{
+		{"relative", "./images/../asset.png", "sprites/Hero/asset.png", "sounds/Jump/asset.png"},
+		{"parent", "../shared/asset.png", "sprites/shared/asset.png", "sounds/shared/asset.png"},
+		{"outside project", "../../../../res/hero.png", "../../res/hero.png", "../../res/hero.png"},
+		{"absolute", "/shared/asset.png", "/shared/asset.png", "/shared/asset.png"},
+		{"engine", "res://shared/asset.png", "res://shared/asset.png", "res://shared/asset.png"},
+		{"empty", "", "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			quoted, err := json.Marshal(tt.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeProjectFile(t, dir, "sprites/Hero/index.json", `{
+                "size":80,
+                "costumes":[null,{"path":`+string(quoted)+`}],
+                "costumeSet":{"path":`+string(quoted)+`},
+                "costumeMPSet":{"path":`+string(quoted)+`}
+            }`)
+			writeProjectFile(t, dir, "sounds/Jump/index.json", `{"path":`+string(quoted)+`,"rate":1}`)
+			fs := localDir{base: dir}
+			sprite, err := LoadSpriteConfig(fs, "Hero")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sprite.Size != 80 {
+				t.Fatalf("sprite.Size = %v, want 80", sprite.Size)
+			}
+			if sprite.Costumes[0] != nil {
+				t.Fatal("null costume was changed")
+			}
+			for _, got := range []string{sprite.Costumes[1].Path, sprite.CostumeSet.Path, sprite.CostumeMPSet.Path} {
+				if got != tt.spritePath {
+					t.Errorf("sprite asset path = %q, want %q", got, tt.spritePath)
+				}
+			}
+			sound, err := LoadSoundConfig(fs, "Jump")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sound.Rate != 1 {
+				t.Fatalf("sound.Rate = %v, want 1", sound.Rate)
+			}
+			if sound.Path != tt.soundPath {
+				t.Errorf("sound path = %q, want %q", sound.Path, tt.soundPath)
+			}
+		})
 	}
-	if err := os.WriteFile(filepath.Join(dir, "sprites", "Hero", "index.json"), []byte(`{"size":80,"costumeSet":{"path":"../../../../res/hero.png"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "sounds", "Jump"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "sounds", "Jump", "index.json"), []byte(`{"path":"jump.wav","rate":1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+}
 
-	loadFS := localDir{base: dir}
-
-	sprite, err := LoadSpriteConfig(loadFS, "Hero")
-	if err != nil {
-		t.Fatalf("LoadSpriteConfig error: %v", err)
-	}
-	if sprite.BaseDir != "sprites/Hero/" {
-		t.Fatalf("sprite.BaseDir = %q, want sprites/Hero/", sprite.BaseDir)
-	}
-	if sprite.Config.Size != 80 {
-		t.Fatalf("sprite.Config.Size = %v, want 80", sprite.Config.Size)
-	}
-	if sprite.Config.CostumeSet == nil || sprite.Config.CostumeSet.Path != "../../res/hero.png" {
-		t.Fatalf("sprite.Config.CostumeSet.Path = %q, want ../../res/hero.png", sprite.Config.CostumeSet.Path)
-	}
-
-	sound, err := LoadSoundConfig(loadFS, "Jump")
-	if err != nil {
-		t.Fatalf("LoadSoundConfig error: %v", err)
-	}
-	if sound.BaseDir != "sounds/Jump" {
-		t.Fatalf("sound.BaseDir = %q, want sounds/Jump", sound.BaseDir)
-	}
-	if sound.Config.Path != "sounds/Jump/jump.wav" {
-		t.Fatalf("sound.Config.Path = %q, want sounds/Jump/jump.wav", sound.Config.Path)
+func TestLoadSpriteAndSoundConfigErrorsReturnZeroValues(t *testing.T) {
+	for _, tt := range []struct {
+		name, content string
+	}{
+		{"missing", ""},
+		{"malformed", `{`},
+		{"wrong type", `[1,2,3]`},
+		{"trailing value", `{"size":80,"path":"jump.wav"} {}`},
+		{"trailing garbage", `{"size":80,"path":"jump.wav"} trailing`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tt.name != "missing" {
+				writeProjectFile(t, dir, "sprites/Hero/index.json", tt.content)
+				writeProjectFile(t, dir, "sounds/Jump/index.json", tt.content)
+			}
+			fs := localDir{base: dir}
+			sprite, spriteErr := LoadSpriteConfig(fs, "Hero")
+			sound, soundErr := LoadSoundConfig(fs, "Jump")
+			if spriteErr == nil || soundErr == nil {
+				t.Fatalf("loader errors = %v, %v; want both to fail", spriteErr, soundErr)
+			}
+			if !reflect.DeepEqual(sprite, SpriteConfig{}) || sound != (SoundConfig{}) {
+				t.Fatalf("failed loads returned nonzero configs: sprite=%+v sound=%+v", sprite, sound)
+			}
+			if tt.name == "missing" && (!errors.Is(spriteErr, os.ErrNotExist) || !errors.Is(soundErr, os.ErrNotExist)) {
+				t.Fatalf("missing config errors = %v, %v; want os.ErrNotExist", spriteErr, soundErr)
+			}
+		})
 	}
 }
 

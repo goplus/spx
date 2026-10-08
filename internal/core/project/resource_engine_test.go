@@ -115,14 +115,14 @@ func TestOpenBuilderResourcesKeepsEngineReadsBelowPackedOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sprite.Config.Costumes[0].Path; got != "sprites/Hero/packed.png" {
+	if got := sprite.Costumes[0].Path; got != "sprites/Hero/packed.png" {
 		t.Fatalf("sprite costume = %q, want packed costume", got)
 	}
 	sound, err := LoadSoundConfig(opened.FS, "Jump")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sound.Config.Path; got != "sounds/Jump/packed.wav" {
+	if got := sound.Path; got != "sounds/Jump/packed.wav" {
 		t.Fatalf("sound path = %q, want packed sound", got)
 	}
 
