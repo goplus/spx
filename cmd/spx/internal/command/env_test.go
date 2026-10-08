@@ -71,47 +71,115 @@ func TestClearBuildRemovesArtifactsOnly(t *testing.T) {
 	}
 }
 
-func TestAdaptGoModRepairsStaleLocalReplacePath(t *testing.T) {
-	targetDir := setupAdaptGoModFixture(t)
-
-	goModPath := filepath.Join(targetDir, "go.mod")
-	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace github.com/goplus/spx/v3 => ../../..\n"
-	if err := os.WriteFile(goModPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("WriteFile(go.mod) returned error: %v", err)
+func TestAdaptGoModPreservesExistingModule(t *testing.T) {
+	for _, location := range []string{"local repository", "external project"} {
+		for _, module := range []struct{ name, content string }{
+			{"single-line replacement", "module example.com/game\n\n// Keep the selected dependency.\nreplace github.com/goplus/spx/v3 => ../../.. // stale local path\n"},
+			{"CRLF replacement block", "module example.com/game\r\n\r\nreplace (\r\n\tgithub.com/goplus/spx/v3 => ../../.. // keep this comment\r\n)\r\n\r\n"},
+			{"no replacement", "// User-owned module without a replacement.\nmodule example.com/game\n"},
+		} {
+			t.Run(location+"/"+module.name, func(t *testing.T) {
+				content := module.content
+				targetDir := t.TempDir()
+				if location == "local repository" {
+					targetDir = setupAdaptGoModFixture(t)
+				}
+				goModPath := filepath.Join(targetDir, "go.mod")
+				if err := os.WriteFile(goModPath, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir, GoModTemplate: "must not replace existing content"}
+				cmd.adaptGoMod()
+				got, err := os.ReadFile(goModPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != content {
+					t.Fatalf("go.mod changed: got %q, want %q", got, content)
+				}
+			})
+		}
 	}
+}
 
-	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir}
+func TestAdaptGoModCreatesExternalScaffoldOnce(t *testing.T) {
+	targetDir := t.TempDir()
+	const template = "module example.com/game\r\n\r\n// Exact scaffold bytes.\r\n"
+	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir, GoModTemplate: template}
+	for range 2 {
+		cmd.adaptGoMod()
+		got, err := os.ReadFile(filepath.Join(targetDir, "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != template {
+			t.Fatalf("go.mod = %q, want %q", got, template)
+		}
+		cmd.GoModTemplate = "must not replace the existing scaffold"
+	}
+}
+
+func TestAdaptGoModIgnoresScaffoldErrors(t *testing.T) {
+	targetDir := filepath.Join(t.TempDir(), "missing parent", "project")
+	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir, GoModTemplate: "module example.com/game\n"}
 	cmd.adaptGoMod()
+	if _, err := os.Stat(targetDir); !os.IsNotExist(err) {
+		t.Fatalf("failed scaffold unexpectedly created the target: %v", err)
+	}
 
-	_, err := os.ReadFile(goModPath)
+	targetDir = t.TempDir()
+	goModPath := filepath.Join(targetDir, "go.mod")
+	if err := os.Mkdir(goModPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd.TargetDir, cmd.TargetAbsDir = targetDir, targetDir
+	cmd.adaptGoMod()
+	if info, err := os.Stat(goModPath); err != nil || !info.IsDir() {
+		t.Fatalf("non-file go.mod was changed: %v", err)
+	}
+}
+
+func TestPrepareCommandNormalizesRelativeProjectPath(t *testing.T) {
+	targetDir, err := filepath.EvalSymlinks(setupAdaptGoModFixture(t))
 	if err != nil {
-		t.Fatalf("ReadFile(go.mod) returned error: %v", err)
+		t.Fatal(err)
 	}
-}
-
-func TestEnsureSpxModuleReplaceRepairsIndentedReplaceBlock(t *testing.T) {
-	content := "module github.com/goplus/spxdemo\n\ngo 1.25.0\n\nreplace (\n\tgithub.com/goplus/spx/v3 => ../../..\n)\n"
-
-	updated := ensureSpxModuleReplace(content, "../..")
-
-	if strings.Contains(updated, "../../..") {
-		t.Fatalf("updated content = %q, stale replace path still present", updated)
+	t.Chdir(filepath.Dir(targetDir))
+	relativePath := filepath.Base(targetDir)
+	wantAbsDir, err := filepath.Abs(relativePath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(updated, "\tgithub.com/goplus/spx/v3 => ../..") {
-		t.Fatalf("updated content = %q, want repaired indented replace path ../..", updated)
+	if err := os.WriteFile(filepath.Join(targetDir, "main.spx"), nil, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if count := strings.Count(updated, "github.com/goplus/spx/v3 =>"); count != 1 {
-		t.Fatalf("updated content has %d replace directives, want 1", count)
+	t.Setenv("GOOS", "linux")
+	t.Setenv("GOARCH", "amd64")
+	t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
+	serverAddr, tags := "", "pure_engine"
+	cmd := CmdTool{
+		FileSuffix: "spx", Version: "test", ProjectFS: webExportTestFS,
+		GoModTemplate: "must not create a nested local module",
+		Args:          ExtraArgs{CmdName: "build", Path: &relativePath, ServerAddr: &serverAddr, Tags: &tags},
 	}
-}
-
-func TestEnsureSpxModuleReplacePreservesTrailingBlankLinesAndCRLF(t *testing.T) {
-	content := "module github.com/goplus/spxdemo\r\n\r\ngo 1.25.0\r\n\r\n"
-
-	updated := ensureSpxModuleReplace(content, "../..")
-	want := content + "replace github.com/goplus/spx/v3 => ../..\r\n"
-	if updated != want {
-		t.Fatalf("updated content = %q, want %q", updated, want)
+	spec, ok := findCommand("build")
+	if !ok {
+		t.Fatal("build command is not registered")
+	}
+	if err := cmd.prepareCommand(spec, "template/project", "project"); err != nil {
+		t.Fatal(err)
+	}
+	if cmd.TargetAbsDir != wantAbsDir || !filepath.IsAbs(cmd.TargetAbsDir) {
+		t.Fatalf("TargetAbsDir = %q, want %q", cmd.TargetAbsDir, wantAbsDir)
+	}
+	if cmd.TargetDir != "." || *cmd.Args.Path != "." {
+		t.Fatalf("relative command paths = %q, %q, want .", cmd.TargetDir, *cmd.Args.Path)
+	}
+	if cmd.ProjectDir != filepath.Join(wantAbsDir, "project") {
+		t.Fatalf("ProjectDir = %q, want generated project below %q", cmd.ProjectDir, wantAbsDir)
+	}
+	if _, err := os.Stat(filepath.Join(wantAbsDir, "go.mod")); !os.IsNotExist(err) {
+		t.Fatalf("relative local project unexpectedly received a nested module: %v", err)
 	}
 }
 
@@ -267,7 +335,7 @@ func setupAdaptGoModFixture(t *testing.T) string {
 	t.Helper()
 
 	repoRoot := t.TempDir()
-	// Keep the fixture two levels below the temp repo root so filepath.Rel resolves to ../...
+	// Keep the fixture nested so root detection must search parent directories.
 	targetDir := filepath.Join(repoRoot, "tutorial", "05-Animation")
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%s) returned error: %v", targetDir, err)
