@@ -189,25 +189,3 @@ func newSayBubbleLayoutContext(
 		},
 	}
 }
-
-func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, style int, preferredIsLeft bool) SayBubbleLayout {
-	content := SayBubbleContent{
-		formattedMessage: formattedMessage,
-		style:            style,
-		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
-	}
-	return SayBubbleLayout{
-		position:        position,
-		isLeft:          preferredIsLeft,
-		preferredIsLeft: preferredIsLeft,
-		content:         content,
-		extent:          content.baseExtent,
-		renderScale:     mathf.NewVec2(1, 1),
-		viewport: sayBubbleRect{
-			left:   -float64(winSize.X) / 2,
-			right:  float64(winSize.X) / 2,
-			bottom: -float64(winSize.Y) / 2,
-			top:    float64(winSize.Y) / 2,
-		},
-	}
-}
