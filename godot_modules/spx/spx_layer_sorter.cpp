@@ -116,40 +116,6 @@ void SpxLayerSorter::_mark_dirty(ISortableSprite *sp) {
 	dynamic_dirty_ids.insert(id);
 }
 
-void SpxLayerSorter::_update_visibility(const Vector<ISortableSprite *> &sortables) {
-	std::unordered_set<GdObj> new_visible;
-
-	auto in_screen = [&](ISortableSprite *sp) -> bool {
-		if (!sp) {
-			return false;
-		}
-		return screen_rect.has_point(sp->get_sort_position());
-	};
-
-	for (auto sp : sortables) {
-		if (!sp || !sp->is_node_valid()) {
-			continue;
-		}
-
-		if (in_screen(sp)) {
-			new_visible.insert(sp->get_sort_id());
-			if (visible_ids.find(sp->get_sort_id()) == visible_ids.end()) {
-				if (visibility_callback) {
-					visibility_callback(sp, true);
-				}
-			}
-		} else {
-			if (visible_ids.find(sp->get_sort_id()) != visible_ids.end()) {
-				if (visibility_callback) {
-					visibility_callback(sp, false);
-				}
-			}
-		}
-	}
-
-	visible_ids.swap(new_visible);
-}
-
 void SpxLayerSorter::_collect_sprites(const Vector<ISortableSprite *> &sortables) {
 	auto remove_invalid = [&](std::vector<SortInfo> &arr, bool remove_offscreen) {
 		arr.erase(

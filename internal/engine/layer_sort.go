@@ -25,12 +25,6 @@ const (
 	layerSortModeVertical
 )
 
-type LayerSortInfo struct {
-	X      float64
-	Y      float64
-	Sprite *Sprite
-}
-
 var currentLayerSortMode layerSortMode
 
 // SetLayerSortMode selects sprite sorting by name.
