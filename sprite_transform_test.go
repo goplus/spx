@@ -40,6 +40,62 @@ func newTestTransformSprite(x, y float64) *SpriteImpl {
 	return sprite
 }
 
+func TestMotionInputsTreatNaNAsZero(t *testing.T) {
+	tests := []struct {
+		name         string
+		apply        func(*SpriteImpl)
+		wantX, wantY float64
+	}{
+		{
+			name:  "set position",
+			apply: func(sprite *SpriteImpl) { sprite.SetXYpos(math.NaN(), math.NaN()) },
+			wantX: 0,
+			wantY: 0,
+		},
+		{
+			name:  "set x",
+			apply: func(sprite *SpriteImpl) { sprite.SetXpos(math.NaN()) },
+			wantX: 0,
+			wantY: -8,
+		},
+		{
+			name:  "set y",
+			apply: func(sprite *SpriteImpl) { sprite.SetYpos(math.NaN()) },
+			wantX: 12,
+			wantY: 0,
+		},
+		{
+			name:  "change position",
+			apply: func(sprite *SpriteImpl) { sprite.ChangeXYpos(math.NaN(), math.NaN()) },
+			wantX: 12,
+			wantY: -8,
+		},
+		{
+			name:  "change x",
+			apply: func(sprite *SpriteImpl) { sprite.ChangeXpos(math.NaN()) },
+			wantX: 12,
+			wantY: -8,
+		},
+		{
+			name:  "change y",
+			apply: func(sprite *SpriteImpl) { sprite.ChangeYpos(math.NaN()) },
+			wantX: 12,
+			wantY: -8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite := newTestTransformSprite(12, -8)
+			tt.apply(sprite)
+
+			if gotX, gotY := sprite.getXY(); gotX != tt.wantX || gotY != tt.wantY {
+				t.Fatalf("position = (%v, %v), want (%v, %v)", gotX, gotY, tt.wantX, tt.wantY)
+			}
+		})
+	}
+}
+
 func TestSpriteDirectionToPosNormalizesAngle(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 

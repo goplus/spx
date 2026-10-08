@@ -228,27 +228,27 @@ func (t *transformComponent) getY() float64 {
 }
 
 func (t *transformComponent) setPosition(x, y float64) {
-	t.moveTo(x, y)
+	t.moveTo(normalizeMotionValue(x), normalizeMotionValue(y))
 }
 
 func (t *transformComponent) setX(x float64) {
-	t.moveTo(x, t.y)
+	t.moveTo(normalizeMotionValue(x), t.y)
 }
 
 func (t *transformComponent) setY(y float64) {
-	t.moveTo(t.x, y)
+	t.moveTo(t.x, normalizeMotionValue(y))
 }
 
 func (t *transformComponent) changePosition(dx, dy float64) {
-	t.moveTo(t.x+dx, t.y+dy)
+	t.moveTo(t.x+normalizeMotionValue(dx), t.y+normalizeMotionValue(dy))
 }
 
 func (t *transformComponent) changeX(dx float64) {
-	t.moveTo(t.x+dx, t.y)
+	t.moveTo(t.x+normalizeMotionValue(dx), t.y)
 }
 
 func (t *transformComponent) changeY(dy float64) {
-	t.moveTo(t.x, t.y+dy)
+	t.moveTo(t.x, t.y+normalizeMotionValue(dy))
 }
 
 func (t *transformComponent) distanceToTarget(target Target) float64 {
@@ -554,6 +554,16 @@ func (t *transformComponent) doTurnAnimation(
 // ============================================================================
 // Transform Helpers
 // ============================================================================
+
+// Treat an invalid numeric motion input as zero displacement. Expressions can
+// produce NaN directly (for example, 0 / abs(0)), which must not corrupt the
+// sprite transform.
+func normalizeMotionValue(value float64) float64 {
+	if math.IsNaN(value) {
+		return 0
+	}
+	return value
+}
 
 func toRotationStyle(style string) RotationStyle {
 	switch style {
