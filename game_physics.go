@@ -46,8 +46,6 @@ type rayCastResult struct {
 	SpriteId int64
 	PosX     float64
 	PosY     float64
-	NormalX  float64
-	NormalY  float64
 }
 
 type spriteCollisionInfo struct {
@@ -293,15 +291,14 @@ func tryRaycastResult(ary engine.Array) (*rayCastResult, error) {
 	if !succ {
 		return nil, fmt.Errorf("array type error: expected []int64 but got %T", ary)
 	}
-	p := &rayCastResult{}
+	// The engine returns six fields, including the unused surface normal.
 	if len(dataAry) != 6 {
 		return nil, fmt.Errorf("array len error: expected 6 but got %d", len(dataAry))
 	}
-	p.Hited = dataAry[0] != 0
-	p.SpriteId = dataAry[1]
-	p.PosX = engine.ConvertToFloat64(dataAry[2])
-	p.PosY = engine.ConvertToFloat64(dataAry[3])
-	p.NormalX = engine.ConvertToFloat64(dataAry[4])
-	p.NormalY = engine.ConvertToFloat64(dataAry[5])
-	return p, nil
+	return &rayCastResult{
+		Hited:    dataAry[0] != 0,
+		SpriteId: dataAry[1],
+		PosX:     engine.ConvertToFloat64(dataAry[2]),
+		PosY:     engine.ConvertToFloat64(dataAry[3]),
+	}, nil
 }
