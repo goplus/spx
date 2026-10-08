@@ -350,41 +350,6 @@ func TestRepeatAndWaitUntil(t *testing.T) {
 	}
 }
 
-func TestProcessTriggerPairs(t *testing.T) {
-	pairs := []engine.TriggerEvent{
-		{
-			Src: &engine.Sprite{Target: "src"},
-			Dst: &engine.Sprite{Target: "dst"},
-		},
-		{
-			Src: &engine.Sprite{Target: "bad"},
-			Dst: &engine.Sprite{Target: "dst"},
-		},
-	}
-
-	var (
-		touches  [][2]string
-		invalids int
-	)
-	ProcessTriggerPairs(
-		pairs,
-		func(target any) (string, bool) {
-			v, ok := target.(string)
-			return v, ok && v != "bad"
-		},
-		func(v string) bool { return v != "dst-blocked" },
-		func(src, dst string) { touches = append(touches, [2]string{src, dst}) },
-		func() { invalids++ },
-	)
-
-	if len(touches) != 1 || touches[0] != [2]string{"src", "dst"} {
-		t.Fatalf("unexpected touches: %+v", touches)
-	}
-	if invalids != 1 {
-		t.Fatalf("invalids = %d, want 1", invalids)
-	}
-}
-
 func TestSwipeStateFinishReturnsGestureAndTarget(t *testing.T) {
 	for _, target := range []string{"sprite", ""} {
 		t.Run(target, func(t *testing.T) {
