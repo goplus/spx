@@ -758,7 +758,7 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	}
 	proj := &ProjectConfig{FullScreen: true, Physics: true}
 	runtime := ResolveRuntimeConfig(conf, proj, "/tmp/demo", "env-key")
-	if runtime.Title != "demo (by XGo Builder)" {
+	if runtime.Title != "demo (by spx)" {
 		t.Fatalf("runtime.Title = %q", runtime.Title)
 	}
 	if !runtime.FullScreen || !runtime.PhysicsEnabled {
@@ -769,6 +769,11 @@ func TestResolveRuntimeConfig(t *testing.T) {
 	}
 	if runtime.ScreenshotKey != "env-key" {
 		t.Fatalf("runtime.ScreenshotKey = %q, want env-key", runtime.ScreenshotKey)
+	}
+	conf.Title = "My Game"
+	runtime = ResolveRuntimeConfig(conf, proj, "/tmp/demo", "env-key")
+	if runtime.Title != conf.Title {
+		t.Fatalf("runtime.Title = %q, want %q", runtime.Title, conf.Title)
 	}
 }
 

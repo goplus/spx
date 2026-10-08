@@ -83,10 +83,10 @@ func LoadBuilderProject(fs spxfs.Dir, gameConf *Config) (LoadedBuilderProject, e
 	return loaded, nil
 }
 
-func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, cwd string, screenshotEnv string) RuntimeConfig {
+func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, projectDir string, screenshotEnv string) RuntimeConfig {
 	title := conf.Title
 	if title == "" {
-		title = filepath.Base(cwd) + " (by XGo Builder)"
+		title = filepath.Base(projectDir) + " (by spx)"
 	}
 
 	key := conf.ScreenshotKey

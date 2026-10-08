@@ -49,6 +49,7 @@
 			"isDiscrete": true,
 			"label": "gid",
 			"mode": 1,
+			"style": "scratch",
 			"name": "monitor-1",
 			"size": 1,
 			"sliderMax": 100,
