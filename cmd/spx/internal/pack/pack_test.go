@@ -354,9 +354,17 @@ func TestPackZipRejectsFileReplacedAfterCollection(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "asset.txt")
 	writeTestFile(t, filePath, "inside")
-	info, err := os.Lstat(filePath)
+	root, err := openPackRoot(tmpDir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	defer root.Close()
+	paths, err := collectProjectPaths(tmpDir, filepath.Join(tmpDir, "game.zip"), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0].root != root || paths[0].rootPath != "asset.txt" {
+		t.Fatalf("collected paths = %+v, want asset.txt with its project root", paths)
 	}
 	externalPath := filepath.Join(t.TempDir(), "external.txt")
 	writeTestFile(t, externalPath, "outside")
@@ -369,7 +377,7 @@ func TestPackZipRejectsFileReplacedAfterCollection(t *testing.T) {
 
 	var output strings.Builder
 	zipWriter := zip.NewWriter(&output)
-	err = packZip(zipWriter, tmpDir, []dirInfo{{path: filePath, info: info}})
+	err = packZip(zipWriter, tmpDir, paths)
 	_ = zipWriter.Close()
 	if err == nil || !strings.Contains(err.Error(), "changed after collection") {
 		t.Fatalf("PackZip() error = %v, want replaced-file rejection", err)
@@ -386,13 +394,20 @@ func TestPackZipRejectsExternalParentReplacedByOutsideSymlink(t *testing.T) {
 	sharedDir := filepath.Join(tmpDir, "shared")
 	writeTestFile(t, filepath.Join(sharedDir, "bg.png"), "inside")
 
-	extraPaths, err := collectExternalAssetPathsWithConfig(projectDir, nil, nil)
+	extAssetDir, err := validateLegacyPackInputs(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extraPaths, err := collectExternalAssetPaths(projectDir, nil, extAssetDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closePackRoots(extraPaths)
 	if len(extraPaths) != 1 {
 		t.Fatalf("collected %d external paths, want 1", len(extraPaths))
+	}
+	if extraPaths[0].root == nil || extraPaths[0].rootPath != filepath.Join("shared", "bg.png") {
+		t.Fatalf("external path = %+v, want shared/bg.png with its compatibility root", extraPaths[0])
 	}
 
 	outsideDir := filepath.Join(t.TempDir(), "shared")
@@ -423,6 +438,73 @@ func TestPackZipRejectsExternalParentReplacedByOutsideSymlink(t *testing.T) {
 	}
 	if snapshot := readZipSnapshot(t, zipPath); snapshot.counts["shared/bg.png"] != 0 {
 		t.Fatalf("escaped external asset was packed: %+v", snapshot.contents)
+	}
+}
+
+func TestPackZipRejectsInvalidCollectedNames(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		zipName string
+		wantErr string
+	}{
+		{name: "parent traversal", zipName: "../asset.txt", wantErr: "unsafe zip name"},
+		{name: "nested traversal", zipName: "nested/../../asset.txt", wantErr: "unsafe zip name"},
+		{name: "duplicate", zipName: "same.txt", wantErr: "duplicates zip name"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projectDir := t.TempDir()
+			writeTestFile(t, filepath.Join(projectDir, "first.txt"), "first")
+			writeTestFile(t, filepath.Join(projectDir, "second.txt"), "second")
+			root, err := openPackRoot(projectDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			paths, err := collectProjectPaths(projectDir, filepath.Join(projectDir, "game.zip"), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range paths {
+				paths[i].zipPath = tc.zipName
+			}
+			zipWriter := zip.NewWriter(io.Discard)
+			err = packZip(zipWriter, projectDir, paths)
+			_ = zipWriter.Close()
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("packZip() error = %v, want %q", err, tc.wantErr)
+			}
+			if _, err := root.Stat("."); err != nil {
+				t.Fatalf("packZip() closed the caller's root: %v", err)
+			}
+		})
+	}
+}
+
+func TestPackProjectPreservesValidationOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		destinationIsDir bool
+		wantErr          string
+	}{
+		{"config before asset indexes", false, "parse project config"},
+		{"destination before config", true, "must be a file"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			projectDir := filepath.Join(tmpDir, "Game")
+			writeTestFile(t, filepath.Join(projectDir, ".config"), "{not-json")
+			writeTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{not-json")
+			zipPath := filepath.Join(tmpDir, "game.zip")
+			if tc.destinationIsDir {
+				if err := os.Mkdir(zipPath, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := PackProject(projectDir, zipPath)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("PackProject() error = %v, want %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 
