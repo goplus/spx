@@ -18,12 +18,13 @@ package command
 
 import (
 	"archive/zip"
-	"bytes"
 	"embed"
 	"flag"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -134,132 +135,155 @@ func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 	}
 }
 
-func TestWebLogicAssetsUseInterpreterRuntime(t *testing.T) {
-	targetDir := t.TempDir()
-	projectDir := filepath.Join(targetDir, "project")
-	webDir := filepath.Join(projectDir, ".builds", "web")
-	goBinDir := filepath.Join(targetDir, "gobin")
-	cmd := CmdTool{
-		TargetDir:  targetDir,
-		ProjectDir: projectDir,
-		WebDir:     webDir,
-		GoBinPath:  goBinDir,
-	}
+func TestWebLogicAssetsUseInstalledInterpreter(t *testing.T) {
+	for _, mode := range []string{webNormalMode, webWorkerMode, webMinigameMode, webMiniprogramMode} {
+		for _, sibling := range []string{"absent", "stale", "invalid"} {
+			t.Run(mode+"/"+sibling, func(t *testing.T) {
+				cmd := CmdTool{GoBinPath: t.TempDir(), WebDir: t.TempDir()}
+				wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
+				if err := os.WriteFile(wasmPath, []byte("interpreter-wasm"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				switch sibling {
+				case "stale":
+					if err := os.WriteFile(wasmPath+".br", []byte("stale-installed-compression"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				case "invalid":
+					if err := os.Mkdir(wasmPath+".br", 0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := os.WriteFile(filepath.Join(cmd.WebDir, "ispx.wasm"), []byte("project-compiled-wasm"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				compressedPath := filepath.Join(cmd.WebDir, "ispx.wasm.br")
+				if err := os.WriteFile(compressedPath, []byte("stale-export-compression"), 0o644); err != nil {
+					t.Fatal(err)
+				}
 
-	projectWasm := []byte("project-compiled-wasm")
-	projectWasmPath := filepath.Join(webDir, "ispx.wasm")
-	if err := os.MkdirAll(filepath.Dir(projectWasmPath), 0o755); err != nil {
-		t.Fatalf("mkdir project wasm dir: %v", err)
-	}
-	if err := os.WriteFile(projectWasmPath, projectWasm, 0o644); err != nil {
-		t.Fatalf("write project wasm: %v", err)
-	}
-	wantWasm := []byte("interpreter-wasm")
-	wantWasmBr := []byte("compressed-interpreter-wasm")
-	if err := os.MkdirAll(goBinDir, 0o755); err != nil {
-		t.Fatalf("mkdir gobin: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinDir, "ispx.wasm"), wantWasm, 0o644); err != nil {
-		t.Fatalf("write interpreter wasm: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinDir, "ispx.wasm.br"), wantWasmBr, 0o644); err != nil {
-		t.Fatalf("write compressed interpreter wasm: %v", err)
-	}
-	if err := os.MkdirAll(webDir, 0o755); err != nil {
-		t.Fatalf("mkdir exported web dir: %v", err)
-	}
-	if err := cmd.writeWebLogicAssets(); err != nil {
-		t.Fatalf("writeWebLogicAssets: %v", err)
-	}
-
-	gotWasm, err := os.ReadFile(filepath.Join(webDir, "ispx.wasm"))
-	if err != nil {
-		t.Fatalf("read exported project wasm: %v", err)
-	}
-	if !bytes.Equal(gotWasm, wantWasm) {
-		t.Fatalf("exported wasm = %q, want %q", gotWasm, wantWasm)
-	}
-	gotWasmBr, err := os.ReadFile(filepath.Join(webDir, "ispx.wasm.br"))
-	if err != nil {
-		t.Fatalf("read compressed exported interpreter wasm: %v", err)
-	}
-	if !bytes.Equal(gotWasmBr, wantWasmBr) {
-		t.Fatalf("compressed exported wasm = %q, want %q", gotWasmBr, wantWasmBr)
+				err := cmd.writeWebLogicAssets(mode)
+				if sibling == "invalid" && mode != webMinigameMode {
+					if err == nil || !strings.Contains(err.Error(), "failed to copy compressed ispx wasm") {
+						t.Fatalf("writeWebLogicAssets error = %v, want compressed copy error", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("writeWebLogicAssets: %v", err)
+				}
+				if got, err := os.ReadFile(filepath.Join(cmd.WebDir, "ispx.wasm")); err != nil || string(got) != "interpreter-wasm" {
+					t.Fatalf("exported wasm = %q, %v", got, err)
+				}
+				if mode == webMinigameMode || sibling == "absent" {
+					if _, err := os.Stat(compressedPath); !os.IsNotExist(err) {
+						t.Fatalf("unused compressed wasm remains: %v", err)
+					}
+				} else if got, err := os.ReadFile(compressedPath); err != nil || string(got) != "stale-installed-compression" {
+					t.Fatalf("exported compressed wasm = %q, %v", got, err)
+				}
+			})
+		}
 	}
 }
 
-func TestWebLogicAssetsRemoveStaleCompression(t *testing.T) {
-	targetDir := t.TempDir()
-	projectDir := filepath.Join(targetDir, "project")
-	webDir := filepath.Join(projectDir, ".builds", "web")
-	goBinDir := filepath.Join(targetDir, "gobin")
-	if err := os.MkdirAll(goBinDir, 0o755); err != nil {
-		t.Fatalf("mkdir gobin: %v", err)
+func TestMinigameEngineAssetsCompression(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake brotli uses a shell script")
 	}
-	if err := os.WriteFile(filepath.Join(goBinDir, "ispx.wasm"), []byte("interpreter-wasm"), 0o644); err != nil {
-		t.Fatalf("write fallback wasm: %v", err)
-	}
-
-	cmd := CmdTool{
-		TargetDir:  targetDir,
-		ProjectDir: projectDir,
-		WebDir:     webDir,
-		GoBinPath:  goBinDir,
-	}
-	if err := os.MkdirAll(webDir, 0o755); err != nil {
-		t.Fatalf("mkdir web dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(webDir, "ispx.wasm.br"), []byte("stale"), 0o644); err != nil {
-		t.Fatalf("write stale compressed wasm: %v", err)
-	}
-	if err := cmd.writeWebLogicAssets(); err != nil {
-		t.Fatalf("writeWebLogicAssets: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(webDir, "ispx.wasm.br")); !os.IsNotExist(err) {
-		t.Fatalf("stale compressed wasm still exists: %v", err)
-	}
-}
-
-func TestWebLogicAssetsCopyCompressedInterpreter(t *testing.T) {
-	targetDir := t.TempDir()
-	projectDir := filepath.Join(targetDir, "project")
-	webDir := filepath.Join(projectDir, ".builds", "web")
-	goBinDir := filepath.Join(targetDir, "gobin")
-	if err := os.MkdirAll(goBinDir, 0o755); err != nil {
-		t.Fatalf("mkdir gobin: %v", err)
-	}
-	wantWasm := []byte("interpreter-wasm")
-	wantWasmBr := []byte("compressed-interpreter-wasm")
-	if err := os.WriteFile(filepath.Join(goBinDir, "ispx.wasm"), wantWasm, 0o644); err != nil {
-		t.Fatalf("write fallback wasm: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinDir, "ispx.wasm.br"), wantWasmBr, 0o644); err != nil {
-		t.Fatalf("write compressed fallback wasm: %v", err)
-	}
-	if err := os.MkdirAll(webDir, 0o755); err != nil {
-		t.Fatalf("mkdir web dir: %v", err)
-	}
-
-	cmd := CmdTool{
-		TargetDir:  targetDir,
-		ProjectDir: projectDir,
-		WebDir:     webDir,
-		GoBinPath:  goBinDir,
-	}
-	if err := cmd.writeWebLogicAssets(); err != nil {
-		t.Fatalf("writeWebLogicAssets: %v", err)
-	}
-
-	for name, want := range map[string][]byte{
-		"ispx.wasm":    wantWasm,
-		"ispx.wasm.br": wantWasmBr,
+	for _, tt := range []struct {
+		name, buildMode, failFile string
+		staleCompression          bool
+	}{
+		{name: "fast", buildMode: "fast"},
+		{name: "fast-stale", buildMode: "fast", staleCompression: true},
+		{name: "normal", buildMode: "normal"},
+		{name: "normal-stale", buildMode: "normal", staleCompression: true},
+		{name: "engine-failure", buildMode: "normal", failFile: "engine.wasm", staleCompression: true},
+		{name: "interpreter-failure", buildMode: "normal", failFile: "ispx.wasm", staleCompression: true},
 	} {
-		got, err := os.ReadFile(filepath.Join(webDir, name))
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("%s = %q, want %q", name, got, want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			paths := minigamePaths{rawWebDir: t.TempDir(), engineDir: t.TempDir()}
+			cmd := CmdTool{GoBinPath: t.TempDir(), WebDir: paths.rawWebDir}
+			if err := os.WriteFile(filepath.Join(cmd.GoBinPath, "ispx.wasm"), []byte("ispx.wasm"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"engine.wasm", "game.zip"} {
+				if err := os.WriteFile(filepath.Join(paths.rawWebDir, name), []byte(name), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if tt.staleCompression && strings.HasSuffix(name, ".wasm") {
+					if err := os.WriteFile(filepath.Join(paths.rawWebDir, name+".br"), []byte("stale"), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if tt.staleCompression {
+				if err := os.WriteFile(filepath.Join(cmd.GoBinPath, "ispx.wasm.br"), []byte("stale-installed-compression"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := cmd.writeWebLogicAssets(webMinigameMode); err != nil {
+				t.Fatal(err)
+			}
+			binDir := t.TempDir()
+			logPath := filepath.Join(t.TempDir(), "brotli.log")
+			const script = `#!/bin/sh
+if [ "$#" != 4 ] || [ "$1 $2 $3" != "-f -q 11" ]; then exit 2; fi
+printf '%s\n' "${4##*/}" >> "$SPX_TEST_BROTLI_LOG"
+if [ "${4##*/}" = "$SPX_TEST_BROTLI_FAIL" ]; then exit 1; fi
+printf 'compressed ' > "$4.br"
+cat "$4" >> "$4.br"
+`
+			if err := os.WriteFile(filepath.Join(binDir, "brotli"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("SPX_TEST_BROTLI_LOG", logPath)
+			t.Setenv("SPX_TEST_BROTLI_FAIL", tt.failFile)
+
+			err := cmd.prepareMinigameEngineAssets(paths, tt.buildMode)
+			if tt.failFile != "" {
+				if err == nil || !strings.Contains(err.Error(), "failed to compress "+filepath.Join(paths.rawWebDir, tt.failFile)) {
+					t.Fatalf("prepareMinigameEngineAssets error = %v, want compression failure", err)
+				}
+				wantCalls := "engine.wasm\n"
+				if tt.failFile == "ispx.wasm" {
+					wantCalls += "ispx.wasm\n"
+				}
+				if got, err := os.ReadFile(logPath); err != nil || string(got) != wantCalls {
+					t.Fatalf("brotli calls after failure = %q, %v; want %q", got, err, wantCalls)
+				}
+				if entries, err := os.ReadDir(paths.engineDir); err != nil || len(entries) != 0 {
+					t.Fatalf("failed compression published engine assets: %v, %v", entries, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("prepareMinigameEngineAssets: %v", err)
+			}
+			if tt.buildMode == "fast" {
+				if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+					t.Fatalf("fast build invoked brotli: %v", err)
+				}
+			} else if got, err := os.ReadFile(logPath); err != nil || string(got) != "engine.wasm\nispx.wasm\n" {
+				t.Fatalf("brotli calls = %q, %v", got, err)
+			}
+			for _, name := range []string{"engine.wasm", "ispx.wasm", "game.zip"} {
+				want := name
+				if tt.buildMode != "fast" && strings.HasSuffix(name, ".wasm") {
+					want = "compressed " + name
+					name += ".br"
+				}
+				if got, err := os.ReadFile(filepath.Join(paths.engineDir, name)); err != nil || string(got) != want {
+					t.Fatalf("%s = %q, %v; want %q", name, got, err, want)
+				}
+			}
+			if tt.buildMode == "fast" {
+				if matches, err := filepath.Glob(filepath.Join(paths.engineDir, "*.br")); err != nil || len(matches) != 0 {
+					t.Fatalf("fast build exported compressed wasm: %v, %v", matches, err)
+				}
+			}
+		})
 	}
 }
