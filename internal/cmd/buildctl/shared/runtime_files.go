@@ -25,7 +25,7 @@ import (
 	"github.com/goplus/spx/v3/internal/base/fileutil"
 )
 
-func ensureGoPath() (string, error) {
+func EnsureGoPath() (string, error) {
 	if goPath := os.Getenv("GOPATH"); goPath != "" {
 		return goPath, nil
 	}
@@ -41,10 +41,10 @@ func ensureGoPath() (string, error) {
 	return goPath, nil
 }
 
-func copyFile(src, dst string) error {
+func CopyFile(src, dst string) error {
 	return fileutil.CopyFile(src, dst)
 }
 
-func writeNamedZip(dst string, namedFiles map[string]string) error {
+func WriteNamedZip(dst string, namedFiles map[string]string) error {
 	return fileutil.WriteNamedZip(dst, namedFiles)
 }

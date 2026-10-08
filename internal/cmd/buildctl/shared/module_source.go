@@ -24,17 +24,13 @@ import (
 	"github.com/goplus/spx/v3/internal/release"
 )
 
-func resolveSPXModuleSource(repoRoot string) (string, error) {
-	return resolveSPXModuleSourcePath(repoRoot, os.Getenv("SPX_MODULE_SRC"))
-}
-
-func resolveSPXModuleSourcePath(repoRoot, override string) (string, error) {
+func ResolveSPXModuleSource(repoRoot string) (string, error) {
 	absRepoRoot, err := filepath.Abs(repoRoot)
 	if err != nil {
 		return "", err
 	}
 
-	moduleSource := strings.TrimSpace(override)
+	moduleSource := strings.TrimSpace(os.Getenv("SPX_MODULE_SRC"))
 	if moduleSource == "" {
 		moduleSource = filepath.Join(absRepoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path))
 	} else if !filepath.IsAbs(moduleSource) {

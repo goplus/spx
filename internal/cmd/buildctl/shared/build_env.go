@@ -26,6 +26,8 @@ import (
 	"github.com/goplus/spx/v3/internal/release"
 )
 
+type BuildEnvironment = buildEnvironment
+
 type buildEnvironment struct {
 	RepoRoot        string
 	ProjectDir      string
@@ -43,28 +45,28 @@ type buildEnvironment struct {
 	Arch            string
 }
 
-func (env buildEnvironment) shellExports() string {
+func (env BuildEnvironment) ShellExports() string {
 	lines := []string{
-		"export PROJ_DIR=" + shellQuote(env.ProjectDir),
-		"export ENGINE_DIR=" + shellQuote(env.EngineDir),
-		"export GODOT_SRC=" + shellQuote(env.GodotSrc),
-		"export SPX_MODULE_SRC=" + shellQuote(env.SPXModuleSrc),
-		"export ENGINE_VERSION=" + shellQuote(env.EngineVersion),
-		"export GOPATH=" + shellQuote(env.GoPath),
-		"export VERSION=" + shellQuote(env.Version),
-		"export GODOT_REPOSITORY=" + shellQuote(env.GodotRepository),
-		"export GODOT_REF=" + shellQuote(env.GodotRef),
-		"export GODOT_COMMIT=" + shellQuote(env.GodotCommit),
-		"export TEMPLATE_DIR=" + shellQuote(env.TemplateDir),
-		"export PLATFORM=" + shellQuote(env.Platform),
-		"export ARCH=" + shellQuote(env.Arch),
+		"export PROJ_DIR=" + ShellQuote(env.ProjectDir),
+		"export ENGINE_DIR=" + ShellQuote(env.EngineDir),
+		"export GODOT_SRC=" + ShellQuote(env.GodotSrc),
+		"export SPX_MODULE_SRC=" + ShellQuote(env.SPXModuleSrc),
+		"export ENGINE_VERSION=" + ShellQuote(env.EngineVersion),
+		"export GOPATH=" + ShellQuote(env.GoPath),
+		"export VERSION=" + ShellQuote(env.Version),
+		"export GODOT_REPOSITORY=" + ShellQuote(env.GodotRepository),
+		"export GODOT_REF=" + ShellQuote(env.GodotRef),
+		"export GODOT_COMMIT=" + ShellQuote(env.GodotCommit),
+		"export TEMPLATE_DIR=" + ShellQuote(env.TemplateDir),
+		"export PLATFORM=" + ShellQuote(env.Platform),
+		"export ARCH=" + ShellQuote(env.Arch),
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEnvironment, error) {
+func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
 	runtimeLock := release.DefaultRuntimeLock()
-	goPath, err := ensureGoPath()
+	goPath, err := EnsureGoPath()
 	if err != nil {
 		return buildEnvironment{}, err
 	}
@@ -72,7 +74,7 @@ func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEn
 	if err != nil {
 		return buildEnvironment{}, err
 	}
-	spxModuleSrc, err := resolveSPXModuleSource(repoRoot)
+	spxModuleSrc, err := ResolveSPXModuleSource(repoRoot)
 	if err != nil {
 		return buildEnvironment{}, err
 	}
@@ -95,7 +97,7 @@ func resolveBuildEnvironment(repoRoot string, requestedPlatform string) (buildEn
 			return buildEnvironment{}, err
 		}
 	}
-	if err := validateOptionalPlatform(platform); err != nil {
+	if err := ValidateOptionalPlatform(platform); err != nil {
 		return buildEnvironment{}, err
 	}
 
@@ -178,9 +180,6 @@ func detectGodotTemplateDir(engineVersion string) (string, error) {
 	}
 }
 
-func shellQuote(value string) string {
-	if value == "" {
-		return "''"
-	}
+func ShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }

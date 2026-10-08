@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 )
 
-func findRepoRoot() (string, error) {
+func FindRepoRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -42,12 +42,12 @@ func findRepoRoot() (string, error) {
 }
 
 func isRepoRoot(dir string) bool {
-	return fileExists(filepath.Join(dir, "go.mod")) &&
-		fileExists(filepath.Join(dir, "cmd", "spx", "install.sh")) &&
-		fileExists(filepath.Join(dir, "internal", "tools"))
+	return FileExists(filepath.Join(dir, "go.mod")) &&
+		FileExists(filepath.Join(dir, "cmd", "spx", "install.sh")) &&
+		FileExists(filepath.Join(dir, "internal", "tools"))
 }
 
-func fileExists(path string) bool {
+func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }

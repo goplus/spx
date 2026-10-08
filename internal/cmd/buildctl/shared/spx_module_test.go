@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-package shared
+package shared_test
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v3/internal/release"
 )
 
 func writeSPXModuleFixture(t *testing.T, root string) string {
@@ -40,17 +43,55 @@ func writeSPXModuleFixture(t *testing.T, root string) string {
   "editor_release": ["debug_symbols=true"],
   "template_release": ["debug_symbols=false"]
 }`)
-	if err := os.WriteFile(filepath.Join(source, SConsProfileFilename), profile, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(source, shared.SConsProfileFilename), profile, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return source
 }
 
+func TestResolveSPXModuleSource(t *testing.T) {
+	repoRoot := t.TempDir()
+	absolute := filepath.Join(t.TempDir(), "spx")
+	tests := []struct {
+		name     string
+		override string
+		want     string
+	}{
+		{
+			name: "default",
+			want: filepath.Join(repoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path)),
+		},
+		{
+			name:     "relative override",
+			override: filepath.Join("custom", "spx"),
+			want:     filepath.Join(repoRoot, "custom", "spx"),
+		},
+		{
+			name:     "absolute override",
+			override: absolute,
+			want:     absolute,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SPX_MODULE_SRC", tt.override)
+			got, err := shared.ResolveSPXModuleSource(repoRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("module source = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveSPXModuleKeepsSourceAndProfileTogether(t *testing.T) {
+	t.Setenv("SPX_MODULE_SRC", "")
 	repoRoot := t.TempDir()
 	wantSource := writeSPXModuleFixture(t, repoRoot)
 
-	module, err := ResolveSPXModule(repoRoot)
+	module, err := shared.ResolveSPXModule(repoRoot)
 	if err != nil {
 		t.Fatalf("ResolveSPXModule returned error: %v", err)
 	}
@@ -65,7 +106,7 @@ func TestResolveSPXModuleKeepsSourceAndProfileTogether(t *testing.T) {
 }
 
 func TestLoadSPXModuleRejectsIncompleteBuildContract(t *testing.T) {
-	for _, missing := range []string{"SCsub", "config.py", SConsProfileFilename} {
+	for _, missing := range []string{"SCsub", "config.py", shared.SConsProfileFilename} {
 		t.Run(missing, func(t *testing.T) {
 			repoRoot := t.TempDir()
 			source := writeSPXModuleFixture(t, repoRoot)
@@ -73,7 +114,7 @@ func TestLoadSPXModuleRejectsIncompleteBuildContract(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err := LoadSPXModule(source)
+			_, err := shared.LoadSPXModule(source)
 			if err == nil || !strings.Contains(err.Error(), missing) {
 				t.Fatalf("LoadSPXModule error = %v, want missing %s", err, missing)
 			}
@@ -82,7 +123,7 @@ func TestLoadSPXModuleRejectsIncompleteBuildContract(t *testing.T) {
 }
 
 func TestLoadSPXModuleRejectsEmptySource(t *testing.T) {
-	if _, err := LoadSPXModule("  "); err == nil || !strings.Contains(err.Error(), "must not be empty") {
+	if _, err := shared.LoadSPXModule("  "); err == nil || !strings.Contains(err.Error(), "must not be empty") {
 		t.Fatalf("LoadSPXModule empty source error = %v", err)
 	}
 }

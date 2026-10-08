@@ -57,7 +57,7 @@ func (module SPXModule) TemplateBuildArgsAt(moduleSource string, buildArgs ...st
 // ResolveSPXModule resolves SPX_MODULE_SRC once and validates the external
 // module build contract at that location.
 func ResolveSPXModule(repoRoot string) (SPXModule, error) {
-	source, err := resolveSPXModuleSource(repoRoot)
+	source, err := ResolveSPXModuleSource(repoRoot)
 	if err != nil {
 		return SPXModule{}, err
 	}
