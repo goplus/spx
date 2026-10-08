@@ -31,6 +31,93 @@ import (
 	"time"
 )
 
+func TestCacheMaterializeRejectsInvalidRequestBeforeWriting(t *testing.T) {
+	zipPath := writeTestZip(t, testZipEntry{name: "x", data: "payload"})
+	invalid := Bundle{Entries: []Entry{{Name: "x", Size: -1}}, Digest: strings.Repeat("0", sha256.Size*2)}
+	for _, tt := range []struct {
+		name    string
+		limits  Limits
+		message string
+	}{
+		{"negative limits before expected validation", Limits{MaxEntries: -1}, "negative archive limit"},
+		{"invalid expected before digest validation", Limits{}, `"x" has negative size`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+			cache.Limits = tt.limits
+			materialized, err := cache.Materialize(context.Background(), NamespaceEngine, zipPath, &invalid)
+			if materialized != nil {
+				_ = materialized.Close()
+				t.Fatal("Materialize returned a lease for an invalid request")
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("Materialize error = %v, want %q", err, tt.message)
+			}
+			if _, err := os.Lstat(cache.Root); !os.IsNotExist(err) {
+				t.Fatalf("invalid request created cache storage: %v", err)
+			}
+		})
+	}
+}
+
+func TestCacheMaterializeRejectsInvalidIdentityBeforeWriting(t *testing.T) {
+	zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
+	bundle, err := VerifyZip(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name        string
+		namespace   Namespace
+		wrongDigest bool
+		message     string
+	}{
+		{
+			name:      "namespace mismatch",
+			namespace: NamespaceBridge,
+			message:   `expected namespace "bridge" does not match "engine"`,
+		},
+		{
+			name:        "bare wrong digest",
+			wrongDigest: true,
+			message:     "namespace-empty expected digest",
+		},
+		{
+			name:        "namespaced wrong digest",
+			namespace:   NamespaceEngine,
+			wrongDigest: true,
+			message:     "expected manifest digest",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			expected := bundle
+			expected.Namespace = tt.namespace
+			expected, err := expected.WithDigest()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.wrongDigest {
+				expected.Digest = strings.Repeat("0", sha256.Size*2)
+			}
+			cache := NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+			materialized, err := cache.Materialize(context.Background(), NamespaceEngine, zipPath, &expected)
+			if materialized != nil {
+				_ = materialized.Close()
+				t.Fatal("Materialize returned a lease for an invalid identity")
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("Materialize error = %v, want %q", err, tt.message)
+			}
+			if errors.Is(err, ErrDigestMismatch) != tt.wrongDigest {
+				t.Errorf("Materialize error = %v, want digest mismatch = %v", err, tt.wrongDigest)
+			}
+			if _, err := os.Lstat(cache.Root); !os.IsNotExist(err) {
+				t.Errorf("invalid identity created cache storage: %v", err)
+			}
+		})
+	}
+}
+
 func TestCacheMaterializeRepairsSameSizeTamper(t *testing.T) {
 	zipPath := writeTestZip(t, testZipEntry{name: "runtime", mode: 0o755, data: "trusted"})
 	bundle, err := VerifyZip(zipPath)

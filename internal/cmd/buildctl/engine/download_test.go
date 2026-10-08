@@ -135,6 +135,103 @@ func writeRawZipFixture(t *testing.T, declaredSize uint64) string {
 	return zipPath
 }
 
+func TestDownloadBinariesFromZipValidatesBeforeInstalling(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		files   map[string]string
+		single  bool
+		wantErr error
+		message string
+	}{
+		{
+			name:  "complete archive",
+			files: map[string]string{"release": "new release", "debug": "new debug"},
+		},
+		{
+			name:   "single binary wrapper",
+			files:  map[string]string{"release": "new release"},
+			single: true,
+		},
+		{
+			name:    "missing second binary",
+			files:   map[string]string{"release": "new release"},
+			wantErr: os.ErrNotExist,
+			message: "missing debug",
+		},
+		{
+			name:    "second binary is a directory",
+			files:   map[string]string{"release": "new release", "debug/": ""},
+			message: "entry debug is not a regular file",
+		},
+		{
+			name:    "invalid ZIP",
+			wantErr: runtimebundle.ErrUnsafeArchive,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			env := engineDownloadEnv{
+				assetDir: filepath.Join(root, "assets"),
+				cacheDir: filepath.Join(root, "cache"),
+				goBinDir: filepath.Join(root, "bin"),
+			}
+			mustMkdirAll(t, env.assetDir)
+			const zipName = "binaries.zip"
+			zipPath := filepath.Join(env.assetDir, zipName)
+			if tt.files == nil {
+				mustWriteFile(t, zipPath, []byte("not a ZIP archive"))
+			} else if err := writeZipFixture(zipPath, tt.files); err != nil {
+				t.Fatal(err)
+			}
+			installs := []binaryInstall{
+				{assetName: "release", dst: filepath.Join(env.goBinDir, "runtime")},
+				{assetName: "debug", dst: filepath.Join(env.goBinDir, "runtime-debug")},
+			}
+			if tt.single {
+				installs = installs[:1]
+			}
+			for _, install := range installs {
+				mustWriteFile(t, install.dst, []byte("old "+install.assetName))
+			}
+
+			var err error
+			if tt.single {
+				err = downloadBinaryFromZip(env, zipName, installs[0].assetName, installs[0].dst)
+			} else {
+				err = downloadBinariesFromZip(env, zipName, installs)
+			}
+			wantFailure := tt.wantErr != nil || tt.message != ""
+			if (err != nil) != wantFailure {
+				t.Fatalf("downloadBinariesFromZip error = %v, want failure = %v", err, wantFailure)
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("downloadBinariesFromZip error = %v, want %v", err, tt.wantErr)
+			}
+			if tt.message != "" && !strings.Contains(err.Error(), tt.message) {
+				t.Errorf("downloadBinariesFromZip error = %v, want %q", err, tt.message)
+			}
+			for _, install := range installs {
+				want := "new " + install.assetName
+				if wantFailure {
+					want = "old " + install.assetName
+				}
+				if content, err := os.ReadFile(install.dst); err != nil || string(content) != want {
+					t.Errorf("installed %s = %q, err = %v; want %q", install.assetName, content, err, want)
+				}
+			}
+			if entries, err := os.ReadDir(env.cacheDir); err != nil || len(entries) != 0 {
+				t.Errorf("cache contents = %v, err = %v; want no downloaded ZIP or extraction files", entries, err)
+			}
+			if entries, err := os.ReadDir(env.goBinDir); err != nil || len(entries) != len(installs) {
+				t.Errorf("binary directory contents = %v, err = %v; want only installed binaries", entries, err)
+			}
+			if _, err := os.Stat(zipPath); err != nil {
+				t.Errorf("local source archive was removed: %v", err)
+			}
+		})
+	}
+}
+
 func TestDownloadLinuxAssetsRequiresLinuxPlatform(t *testing.T) {
 	for _, env := range []engineDownloadEnv{{platform: "darwin", arch: linuxRuntimePackArch}} {
 		if err := downloadLinuxAssets(env, false); err == nil {
@@ -488,12 +585,17 @@ func TestShouldRefreshPreparedAssetsAllowsExplicitEnableLocally(t *testing.T) {
 
 func TestDownloadWebModeAssetNames(t *testing.T) {
 	for _, tt := range []struct{ mode, release, cached string }{
+		{"", "web.zip", "gdspxtest_webpack.zip"},
 		{"normal", "web.zip", "gdspxtest_webpack.zip"},
 		{"worker", "web-worker.zip", "gdspxtest_webworker.zip"},
 		{"minigame", "web-minigame.zip", "gdspxtest_webminigame.zip"},
 		{"miniprogram", "web-miniprogram.zip", "gdspxtest_webminiprogram.zip"},
 	} {
-		t.Run(tt.mode, func(t *testing.T) {
+		name := tt.mode
+		if name == "" {
+			name = "default"
+		}
+		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			env := engineDownloadEnv{
 				version: "test", platform: "web", assetDir: root,
@@ -502,7 +604,7 @@ func TestDownloadWebModeAssetNames(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(root, tt.release), []byte("template"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := downloadWebAssets(env, tt.mode); err != nil {
+			if err := downloadPlatformAssets(env, tt.mode, false); err != nil {
 				t.Fatal(err)
 			}
 			data, err := os.ReadFile(filepath.Join(env.goBinDir, tt.cached))
@@ -520,6 +622,229 @@ func TestDownloadWebModeAssetNames(t *testing.T) {
 	for _, mode := range []string{"", "unknown"} {
 		if err := downloadWebAssets(engineDownloadEnv{}, mode); err == nil || err.Error() != "unsupported web-mode: "+mode {
 			t.Fatalf("mode %q error = %v", mode, err)
+		}
+	}
+}
+
+func TestDownloadHostRuntimeAssetsDesktopLifecycle(t *testing.T) {
+	for _, tt := range []struct {
+		platform, binaryPlatform, suffix string
+		templates                        map[string]string
+	}{
+		{"linux", "linuxbsd", "", map[string]string{
+			"linux_debug.x86_64": "debug", "linux_release.x86_64": "release",
+		}},
+		{"windows", "windows", ".exe", map[string]string{
+			"windows_debug_x86_64.exe": "debug", "windows_debug_x86_64_console.exe": "debug",
+			"windows_release_x86_64.exe": "release", "windows_release_x86_64_console.exe": "release",
+		}},
+		{"macos", "macos", "", map[string]string{"macos.zip": "templates"}},
+	} {
+		t.Run(tt.platform, func(t *testing.T) {
+			t.Setenv("SPX_PREPARE_FORCE_REFRESH", "0")
+			env := newEngineDownloadFixture(t, tt.platform)
+			templateArchive := tt.platform + "-x86_64.zip"
+			binaries := map[string]string{
+				"godot." + tt.binaryPlatform + ".template_release.x86_64" + tt.suffix: "release",
+			}
+			want := map[string]string{
+				filepath.Join(env.goBinDir, "gdspxrttest"+tt.suffix): "release",
+				filepath.Join(env.goBinDir, "gdspxtest"+tt.suffix):   "editor",
+			}
+			if tt.platform != "macos" {
+				binaries["godot."+tt.binaryPlatform+".template_debug.x86_64"+tt.suffix] = "debug"
+				want[filepath.Join(env.goBinDir, "gdspxrtdbgtest"+tt.suffix)] = "debug"
+			}
+			for name, content := range tt.templates {
+				want[filepath.Join(env.templateDir, name)] = content
+			}
+			writeAssets := func(revision string) {
+				t.Helper()
+				for name, files := range map[string]map[string]string{
+					templateArchive:             binaries,
+					"editor-" + templateArchive: {"godot." + tt.binaryPlatform + ".editor.x86_64" + tt.suffix: "editor"},
+				} {
+					contents := make(map[string]string, len(files))
+					for name, content := range files {
+						contents[name] = revision + " " + content
+					}
+					if err := writeZipFixture(filepath.Join(env.assetDir, name), contents); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if tt.platform == "macos" {
+					mustWriteFile(t, filepath.Join(env.assetDir, "macos.zip"), []byte(revision+" templates"))
+				}
+			}
+			checkInstalled := func(revision string) {
+				t.Helper()
+				if err := downloadHostRuntimeAssets(env); err != nil {
+					t.Fatalf("downloadHostRuntimeAssets(%s): %v", revision, err)
+				}
+				contents := make(map[string]string, len(want))
+				for path, content := range want {
+					contents[path] = revision + " " + content
+				}
+				assertEngineDownloadFiles(t, env, contents)
+			}
+
+			// A template failure must stop the host download before installing the editor.
+			writeAssets("initial")
+			if err := os.Remove(filepath.Join(env.assetDir, templateArchive)); err != nil {
+				t.Fatal(err)
+			}
+			if err := downloadHostRuntimeAssets(env); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("missing template error = %v, want ErrNotExist", err)
+			}
+			assertEngineDownloadFiles(t, env, nil)
+
+			writeAssets("initial")
+			checkInstalled("initial")
+			if err := os.RemoveAll(env.assetDir); err != nil {
+				t.Fatal(err)
+			}
+			if tt.platform != "macos" {
+				// Recreate aliases from installed binaries without reading an archive.
+				if err := os.RemoveAll(env.templateDir); err != nil {
+					t.Fatal(err)
+				}
+			}
+			checkInstalled("initial")
+
+			writeAssets("refreshed")
+			t.Setenv("SPX_PREPARE_FORCE_REFRESH", "1")
+			checkInstalled("refreshed")
+		})
+	}
+}
+
+func TestDownloadPlatformAssetsInstallsMobileTemplates(t *testing.T) {
+	for _, platform := range []string{"android", "ios"} {
+		t.Run(platform, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, platform)
+			files := map[string]string{"template": "ios template"}
+			if platform == "android" {
+				files = map[string]string{
+					"android_debug.apk": "debug", "android_release.apk": "release", "android_source.zip": "source",
+				}
+			}
+			archive := filepath.Join(env.assetDir, platform+".zip")
+			if err := writeZipFixture(archive, files); err != nil {
+				t.Fatal(err)
+			}
+			want := make(map[string]string)
+			if platform == "ios" {
+				data, err := os.ReadFile(archive)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want[filepath.Join(env.templateDir, "ios.zip")] = string(data)
+			} else {
+				for name, content := range files {
+					want[filepath.Join(env.templateDir, name)] = content
+				}
+			}
+			if err := downloadPlatformAssets(env, "", false); err != nil {
+				t.Fatal(err)
+			}
+			assertEngineDownloadFiles(t, env, want)
+			if _, err := os.Stat(archive); err != nil {
+				t.Fatalf("source archive was removed: %v", err)
+			}
+		})
+	}
+
+	t.Run("unsupported platform", func(t *testing.T) {
+		env := newEngineDownloadFixture(t, "unsupported")
+		if err := downloadPlatformAssets(env, "", false); err == nil || err.Error() != "unsupported platform for engine download: unsupported" {
+			t.Fatalf("unsupported platform error = %v", err)
+		}
+		assertEngineDownloadFiles(t, env, nil)
+	})
+}
+
+func TestDownloadRuntimePackValidatesBeforeInstalling(t *testing.T) {
+	for _, tt := range []struct {
+		name, assetName, message string
+		files                   map[string]string
+		wantErr                 error
+	}{
+		{name: "complete bundle", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},
+		{name: "custom asset name", assetName: "custom-runtime.zip", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},
+		{name: "missing extension", files: map[string]string{"gdspxrt.pck": "new pack"}, message: "missing runtime.gdextension"},
+		{name: "unsupported entry", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension", "extra.txt": "unexpected"}, message: "unsupported entry"},
+		{name: "pack is a directory", files: map[string]string{"gdspxrt.pck/": "", "runtime.gdextension": "new extension"}, message: "unsupported entry"},
+		{name: "invalid ZIP", wantErr: runtimebundle.ErrUnsafeArchive},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, "")
+			env.runtimePackAsset = tt.assetName
+			assetName := tt.assetName
+			if assetName == "" {
+				assetName = release.RuntimeAssetZipName
+			}
+			archive := filepath.Join(env.assetDir, assetName)
+			if tt.files == nil {
+				mustWriteFile(t, archive, []byte("not a ZIP"))
+			} else if err := writeZipFixture(archive, tt.files); err != nil {
+				t.Fatal(err)
+			}
+			want := map[string]string{
+				filepath.Join(env.goBinDir, "gdspxrttest.pck"):     "old pack",
+				filepath.Join(env.goBinDir, "runtime.gdextension"): "old extension",
+			}
+			for path, content := range want {
+				mustWriteFile(t, path, []byte(content))
+			}
+			err := downloadRuntimePack(env)
+			wantFailure := tt.message != "" || tt.wantErr != nil
+			if (err != nil) != wantFailure {
+				t.Fatalf("downloadRuntimePack error = %v, want failure = %v", err, wantFailure)
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("downloadRuntimePack error = %v, want %v", err, tt.wantErr)
+			}
+			if tt.message != "" && !strings.Contains(err.Error(), tt.message) {
+				t.Errorf("downloadRuntimePack error = %v, want %q", err, tt.message)
+			}
+			if !wantFailure {
+				want[filepath.Join(env.goBinDir, "gdspxrttest.pck")] = "new pack"
+				want[filepath.Join(env.goBinDir, "runtime.gdextension")] = "new extension"
+			}
+			assertEngineDownloadFiles(t, env, want)
+			if _, err := os.Stat(archive); err != nil {
+				t.Fatalf("source archive was removed: %v", err)
+			}
+		})
+	}
+}
+
+func newEngineDownloadFixture(t *testing.T, platform string) engineDownloadEnv {
+	t.Helper()
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		version: "test", platform: platform, arch: "x86_64",
+		assetDir: filepath.Join(root, "assets"), cacheDir: filepath.Join(root, "cache"),
+		goBinDir: filepath.Join(root, "bin"), templateDir: filepath.Join(root, "templates"),
+	}
+	for _, dir := range []string{env.assetDir, env.cacheDir, env.goBinDir, env.templateDir} {
+		mustMkdirAll(t, dir)
+	}
+	return env
+}
+
+func assertEngineDownloadFiles(t *testing.T, env engineDownloadEnv, want map[string]string) {
+	t.Helper()
+	counts := make(map[string]int)
+	for path, content := range want {
+		counts[filepath.Dir(path)]++
+		if data, err := os.ReadFile(path); err != nil || string(data) != content {
+			t.Errorf("installed %s = %q, err = %v; want %q", path, data, err, content)
+		}
+	}
+	for _, dir := range []string{env.cacheDir, env.goBinDir, env.templateDir} {
+		if entries, err := os.ReadDir(dir); err != nil || len(entries) != counts[dir] {
+			t.Errorf("directory %s = %v, err = %v; want %d files and no temporary artifacts", dir, entries, err, counts[dir])
 		}
 	}
 }
