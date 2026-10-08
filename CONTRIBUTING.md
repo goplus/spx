@@ -210,6 +210,41 @@ GitHub Actions runs generation checks, Go tests, cross-platform builds, and the
 appropriate published-runtime or current-module integration path. All required
 checks must pass before merge.
 
+### Go coverage
+
+CI collects atomic Go statement coverage and uploads it to
+[Codecov](https://codecov.io/gh/goplus/spx).
+
+To reproduce host coverage using the same package selection as CI:
+
+```sh
+bash .github/scripts/test_go.sh -coverprofile=coverage.out -covermode=atomic
+go tool cover -func=coverage.out
+go tool cover -html=coverage.out
+(cd cmd/ispx && go tool cover -func=coverage.out)
+```
+
+Keep the profile path relative so the root module and `cmd/ispx` write separate
+files; an absolute path would overwrite the first report. CI also records
+Node/WASM Go binding tests and `.github/scripts` Go tools in separate profiles.
+
+Coverage includes Linux host Go tests (excluding `internal/webffi`) and
+`internal/gdengine/binding/web` under Node/WASM, subject to Go build tags.
+It excludes Godot end-to-end, browser, C++, JavaScript, and other-platform
+coverage. The nested `cmd/ispx` module is tested separately, but its Web-only
+entry point and the `internal/cmd/codegen` module are outside this coverage.
+Packages without tests may report zero coverage or no instrumented statements.
+
+Raw profiles include generated Go files. Codecov applies
+[`.github/codecov.yml`](.github/codecov.yml) to exclude examples, fixtures,
+generated bindings, metadata, and interpreter exports. Handwritten runtime,
+CLI, build tools, and Web bindings remain in scope; Codecov totals can therefore
+differ from local coverage totals.
+
+Like [XGo](https://github.com/goplus/xgo), uploads omit a token. Codecov may
+require repository or organization setup. The `dev` badge needs a successful
+upload from `dev`.
+
 ## Working across SPX and Godot
 
 SPX spans two repositories:

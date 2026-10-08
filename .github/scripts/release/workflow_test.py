@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ STATIC_CHECKS_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "static_checks.yml"
 )
 ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
+GO_TEST_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "test_go.sh"
 WEB_PACKAGE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
 )
@@ -612,6 +614,113 @@ esac
                     check=False,
                 )
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
+
+
+class GoCoverageTest(unittest.TestCase):
+    def test_go_coverage_preserves_test_selection_and_uploads_every_profile(self):
+        workflow = STATIC_CHECKS_WORKFLOW_PATH.read_text(encoding="utf-8")
+        steps = job_blocks(workflow)["static-checks"]
+        test_script = step_script(steps, "Test Go code")
+        for name in ("manifest", "resolution", "version"):
+            self.assertIn(
+                f".github/scripts/runtime/{name}.go .github/scripts/runtime/{name}_test.go",
+                test_script,
+            )
+        self.assertIn("./.github/scripts/driverbundle", test_script)
+        self.assertIn(
+            "bash .github/scripts/test_go.sh -v -coverprofile=coverage.out -covermode=atomic",
+            test_script,
+        )
+        self.assertIn(
+            '-exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web',
+            steps,
+        )
+        commands = [line for line in steps.splitlines() if "-coverprofile=" in line]
+        self.assertEqual(len(commands), 6)
+        for command in commands:
+            self.assertIn("-covermode=atomic", command)
+        profiles = re.findall(r"-coverprofile=(\S+)", "\n".join(commands))
+        # test_go.sh runs a second module with the same relative profile name.
+        profiles.append("cmd/ispx/coverage.out")
+        codecov = steps.split("      - name: Upload coverage to Codecov\n", 1)[1]
+        files = re.search(r"^          files: (.+)$", codecov, re.MULTILINE).group(1)
+        self.assertCountEqual(files.split(","), profiles)
+        self.assertIn("slug: goplus/spx", codecov)
+        self.assertIn("disable_search: true", codecov)
+        self.assertLess(steps.index("- name: Test Go code"), steps.index("- name: Upload coverage to Codecov"))
+
+
+class GoTestScriptTest(unittest.TestCase):
+    def setUp(self):
+        workspace = tempfile.TemporaryDirectory(prefix="spx test coverage ")
+        self.addCleanup(workspace.cleanup)
+        self.root = Path(workspace.name).resolve() / "repository"
+        self.script = self.root / ".github" / "scripts" / "test_go.sh"
+        self.script.parent.mkdir(parents=True)
+        self.script.write_text(GO_TEST_SCRIPT_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        (self.root / "cmd" / "ispx").mkdir(parents=True)
+        self.log = self.root / "go-calls.jsonl"
+        self.bin = Path(workspace.name) / "bin"
+        self.bin.mkdir()
+        fake_go = self.bin / "go"
+        fake_go.write_text(
+            f"#!{sys.executable}\n" + r"""import json
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+directory = Path.cwd().relative_to(Path(os.environ["MOCK_ROOT"])).as_posix()
+with Path(os.environ["MOCK_LOG"]).open("a", encoding="utf-8") as log:
+    log.write(json.dumps({"directory": directory, "args": args}) + "\n")
+if args == ["list", "./..."]:
+    print(os.environ["MOCK_PACKAGES"])
+elif args[0] == "test":
+    for argument in args[1:]:
+        if argument.startswith("-coverprofile="):
+            Path(argument.split("=", 1)[1]).write_text(
+                "mode: atomic\n" + directory + "/source.go:1.1,2.1 1 1\n",
+                encoding="utf-8",
+            )
+else:
+    sys.exit(99)
+""",
+            encoding="utf-8",
+        )
+        fake_go.chmod(0o755)
+
+    def test_coverage_preserves_package_selection_arguments_and_module_reports(self):
+        arguments = ("-v", "-coverprofile=coverage.out", "-covermode=atomic", "-run", "Test With Spaces")
+        completed = subprocess.run(
+            ["bash", str(self.script), *arguments],
+            cwd=self.bin,
+            env={
+                **os.environ,
+                "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                "MOCK_ROOT": str(self.root),
+                "MOCK_LOG": str(self.log),
+                "MOCK_PACKAGES": (
+                    "example.com/spx\n\nexample.com/spx/internal/webffi\n"
+                    "example.com/spx/internal/webffi/generated\nexample.com/spx/fs"
+                ),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        calls = [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(calls, [
+            {"directory": ".", "args": ["list", "./..."]},
+            {"directory": ".", "args": ["test", *arguments, "example.com/spx", "example.com/spx/fs"]},
+            {"directory": "cmd/ispx", "args": ["test", *arguments, "./..."]},
+        ])
+        for directory in (".", "cmd/ispx"):
+            with self.subTest(directory=directory):
+                self.assertEqual(
+                    (self.root / directory / "coverage.out").read_text(encoding="utf-8"),
+                    f"mode: atomic\n{directory}/source.go:1.1,2.1 1 1\n",
+                )
 
 
 if __name__ == "__main__":

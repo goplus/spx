@@ -1,0 +1,15 @@
+# Keep coverage focused on maintained Go implementation code.
+# These filters apply in Codecov; raw profiles stay unfiltered.
+ignore:
+  # Example projects and test fixtures.
+  - "tutorial/"
+  - "test/"
+  - "(.*/)?_?testdata/"
+
+  # Generated bindings, version metadata, and XGo project output.
+  - "**/*.gen.go"
+  - "**/*_gen.go"
+  - "xgo_autogen*.go"
+  - "**/xgo_autogen*.go"
+  - "pkg/ispx/internal/pkg/"
+  - "cmd/ispx/internal/pkg/"
