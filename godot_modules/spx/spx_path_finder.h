@@ -46,7 +46,6 @@ class SpxPathFinder : public RefCounted {
 
 private:
 	Ref<AStarGrid2D> astar;
-	bool is_precise_check = false;
 	PathDebugDrawer *drawer = nullptr;
 
 	Vector2 cached_cell_size{ 16, 16 };
@@ -101,7 +100,6 @@ public:
 private:
 	Vector2i _world_to_cell(const Vector2 &pos) const;
 	Vector2 _cell_to_world(const Vector2i &cell) const;
-	Vector2 _cell_to_world_tl(const Vector2i &cell) const;
 	void _set_point_solid(int cx, int cy, PackedVector2Array &world_poly);
 
 	void _setup_astar(Node *root, Vector2i &grid_size, Vector2i &cell_size);

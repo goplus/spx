@@ -186,30 +186,10 @@ Vector2 SpxPathFinder::_cell_to_world(const Vector2i &cell) const {
 			cell.y * cached_cell_size.y + cached_cell_size.y * 0.5);
 }
 
-Vector2 SpxPathFinder::_cell_to_world_tl(const Vector2i &cell) const {
-	return Vector2(
-			cell.x * cached_cell_size.x,
-			cell.y * cached_cell_size.y);
-}
-
 void SpxPathFinder::_set_point_solid(int cx, int cy, PackedVector2Array &world_poly) {
 	Vector2 center = _cell_to_world(Vector2i(cx, cy));
 	if (Geometry2D::is_point_in_polygon(center, world_poly)) {
 		astar->set_point_solid(Vector2i(cx, cy), true);
-		return;
-	}
-
-	if (!is_precise_check) {
-		return;
-	}
-
-	Vector2 tl = _cell_to_world_tl(Vector2i(cx, cy));
-	for (int i = 0; i < 4; ++i) {
-		Vector2 corner = tl + cached_cell_size * Vector2((i & 1), (i >> 1));
-		if (Geometry2D::is_point_in_polygon(corner, world_poly)) {
-			astar->set_point_solid(Vector2i(cx, cy), true);
-			break;
-		}
 	}
 }
 
