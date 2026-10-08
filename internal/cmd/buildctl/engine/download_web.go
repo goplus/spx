@@ -23,6 +23,17 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
 
+var webTemplateNames = [...]string{
+	"web_dlink_nothreads_debug.zip",
+	"web_dlink_nothreads_release.zip",
+	"web_nothreads_debug.zip",
+	"web_nothreads_release.zip",
+	"web_dlink_debug.zip",
+	"web_dlink_release.zip",
+	"web_debug.zip",
+	"web_release.zip",
+}
+
 func downloadWebAssets(env engineDownloadEnv, mode string) error {
 	spec, err := shared.ResolveWebMode(mode)
 	if err != nil {
@@ -35,16 +46,7 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 		}
 	}
 
-	for _, name := range []string{
-		"web_dlink_nothreads_debug.zip",
-		"web_dlink_nothreads_release.zip",
-		"web_nothreads_debug.zip",
-		"web_nothreads_release.zip",
-		"web_dlink_debug.zip",
-		"web_dlink_release.zip",
-		"web_debug.zip",
-		"web_release.zip",
-	} {
+	for _, name := range webTemplateNames {
 		if err := linkOrCopyFile(cachedZip, filepath.Join(env.templateDir, name)); err != nil {
 			return err
 		}

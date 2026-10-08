@@ -138,6 +138,10 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 	if fileExists(filepath.Join(root, "web_old.zip")) {
 		t.Fatal("expected old web zip to be removed")
 	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{
 		"web_dlink_nothreads_debug.zip",
 		"web_dlink_nothreads_release.zip",
@@ -158,6 +162,13 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 		}
 		if string(content) != "zip" {
 			t.Fatalf("%s content = %q, want zip", name, string(content))
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.SameFile(srcInfo, info) {
+			t.Fatalf("%s is a hard link, want an independent copy", name)
 		}
 	}
 }

@@ -248,17 +248,7 @@ func populateWebTemplateCopies(srcZip, templateDir string) error {
 		}
 	}
 
-	names := []string{
-		"web_dlink_nothreads_debug.zip",
-		"web_dlink_nothreads_release.zip",
-		"web_nothreads_debug.zip",
-		"web_nothreads_release.zip",
-		"web_dlink_debug.zip",
-		"web_dlink_release.zip",
-		"web_debug.zip",
-		"web_release.zip",
-	}
-	for _, name := range names {
+	for _, name := range webTemplateNames {
 		if err := shared.CopyFile(srcZip, filepath.Join(templateDir, name)); err != nil {
 			return err
 		}
