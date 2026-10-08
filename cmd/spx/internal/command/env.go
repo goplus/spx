@@ -57,7 +57,7 @@ func (cmd *CmdTool) CheckEnv() error {
 }
 
 // SetupEnv prepares command state.
-func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) (err error) {
+func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) error {
 	cmd.ProjectFS = fs
 	cmd.Version = version
 	cmd.ProjectRelPath = projectRelPath
@@ -77,16 +77,7 @@ func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, proje
 
 	cmd.PrepareEnv(fsRelDir, cmd.ProjectDir)
 
-	if err := cmd.updateProjectName(); err != nil {
-		return err
-	}
-
-	if cmd.ShouldReimport() {
-		if err := cmd.Reimport(); err != nil {
-			return err
-		}
-	}
-	return
+	return cmd.updateProjectName()
 }
 
 // PrepareEnv syncs project files.
