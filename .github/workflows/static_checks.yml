@@ -70,7 +70,7 @@ jobs:
         env:
           GOOS: js
           GOARCH: wasm
-        run: go test -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web
+        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web
 
       - name: Test Web ABI memory ownership
         env:
@@ -80,14 +80,22 @@ jobs:
       - name: Test Go code
         shell: bash
         run: |
-          go test -v ./.github/scripts/driverbundle
-          go test -v .github/scripts/runtime/manifest.go .github/scripts/runtime/manifest_test.go
-          go test -v .github/scripts/runtime/resolution.go .github/scripts/runtime/resolution_test.go
-          go test -v .github/scripts/runtime/version.go .github/scripts/runtime/version_test.go
+          go test -v -coverprofile=coverage-driverbundle.out -covermode=atomic ./.github/scripts/driverbundle
+          go test -v -coverprofile=coverage-manifest.out -covermode=atomic .github/scripts/runtime/manifest.go .github/scripts/runtime/manifest_test.go
+          go test -v -coverprofile=coverage-resolution.out -covermode=atomic .github/scripts/runtime/resolution.go .github/scripts/runtime/resolution_test.go
+          go test -v -coverprofile=coverage-version.out -covermode=atomic .github/scripts/runtime/version.go .github/scripts/runtime/version_test.go
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/runtime_build_contract_test.py
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release/workflow_test.py
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_bump_test.py
           PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/driverbundle/workflow_test.py
           go run .github/scripts/runtime/digest.go pack-source HEAD >/dev/null
           go run .github/scripts/runtime/digest.go build-recipe HEAD >/dev/null
-          bash .github/scripts/test_go.sh -v
+          # Relative profiles keep the root and cmd/ispx modules separate.
+          bash .github/scripts/test_go.sh -v -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
+          disable_search: true
