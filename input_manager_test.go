@@ -16,10 +16,117 @@
 
 package spx
 
-import "testing"
+import (
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/engine"
+)
 
 func TestKeyFromStringRecognizesExclam(t *testing.T) {
 	if got := KeyFromString("!"); got != KeyExclam {
 		t.Fatalf("KeyFromString(\"!\") = %v, want %v", got, KeyExclam)
+	}
+}
+
+func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous })
+	for _, tt := range []struct {
+		name        string
+		spriteFirst bool
+		debug       bool
+	}{
+		{"stage first with debug", false, true},
+		{"sprite first without debug", true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			game := &Game{}
+			game.debugState.DebugEvent = tt.debug
+			previousGame := engine.GetGame()
+			engine.SetGame(game)
+			t.Cleanup(func() { engine.SetGame(previousGame) })
+			game.bindScriptEvents()
+			sprite := &SpriteImpl{name: "target", g: game}
+			sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+			game.inputMgr.g = game
+			now := time.Unix(100, 0)
+			game.inputMgr.swipe.InitWithClock(func() time.Time { return now })
+			var routes []string
+			record := func(name string, next *SpriteImpl) {
+				routes = append(routes, name)
+				if len(routes) == 1 {
+					game.inputMgr.beginSwipeTracking(mathf.Vec2{X: 100}, next)
+				}
+			}
+			game.OnSwipe__0(90, func() { record("stage", sprite) })
+			sprite.OnSwipe__0(90, func() { record("sprite", nil) })
+			var target *SpriteImpl
+			want := []string{"stage", "sprite"}
+			if tt.spriteFirst {
+				target = sprite
+				want = []string{"sprite", "stage"}
+			}
+			game.inputMgr.beginSwipeTracking(mathf.Vec2{}, target)
+			now = now.Add(100 * time.Millisecond)
+			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 100})
+			now = now.Add(100 * time.Millisecond)
+			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 200})
+			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 300})
+			if !slices.Equal(routes, want) {
+				t.Fatalf("routes = %v, want %v without duplicate finish dispatch", routes, want)
+			}
+		})
+	}
+}
+
+func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous })
+	for _, tt := range []struct {
+		name     string
+		elapsed  time.Duration
+		distance float64
+		expire   bool
+	}{
+		{"short", 100 * time.Millisecond, 10, false},
+		{"zero elapsed", 0, 100, false},
+		{"expired", 600 * time.Millisecond, 100, false},
+		{"expired then clock rollback", 600 * time.Millisecond, 100, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			game := &Game{}
+			game.debugState.DebugEvent = true
+			previousGame := engine.GetGame()
+			engine.SetGame(game)
+			t.Cleanup(func() { engine.SetGame(previousGame) })
+			game.bindScriptEvents()
+			sprite := &SpriteImpl{name: "target", g: game}
+			sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+			game.inputMgr.g = game
+			now := time.Unix(100, 0)
+			game.inputMgr.swipe.InitWithClock(func() time.Time { return now })
+			calls := 0
+			game.OnSwipe__0(90, func() { calls++ })
+			sprite.OnSwipe__0(90, func() { calls++ })
+			for _, target := range []*SpriteImpl{nil, sprite} {
+				game.inputMgr.beginSwipeTracking(mathf.Vec2{}, target)
+				now = now.Add(tt.elapsed)
+				if tt.expire {
+					game.inputMgr.onMouseMove(mathf.Vec2{X: 50})
+					now = now.Add(-500 * time.Millisecond)
+				}
+				game.inputMgr.finishSwipeTracking(mathf.Vec2{X: tt.distance})
+				now = now.Add(100 * time.Millisecond)
+				game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 100})
+			}
+			if calls != 0 {
+				t.Fatalf("invalid gestures dispatched %d handlers", calls)
+			}
+		})
 	}
 }
