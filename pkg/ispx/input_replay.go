@@ -20,18 +20,6 @@ import spx "github.com/goplus/spx/v3"
 
 const defaultHostInputRecordingFPS = 30
 
-type hostInputSessionStatus struct {
-	Mode           string
-	Phase          string
-	Completed      bool
-	Exhausted      bool
-	CurrentTick    int64
-	HasCurrentTick bool
-	NextFrame      int64
-	FrameCount     int
-	Error          string
-}
-
 func prepareHostInputRecording(fps float64, options ...spx.InputSessionOptions) (spx.InputSessionPreparation, error) {
 	if fps == 0 {
 		fps = defaultHostInputRecordingFPS
@@ -53,23 +41,4 @@ func prepareHostInputReplay(data []byte, options ...spx.InputSessionOptions) (sp
 		return spx.InputSessionPreparation{}, err
 	}
 	return spx.PrepareInputReplay(replay, options...)
-}
-
-func cancelPreparedHostInputSession(preparation spx.InputSessionPreparation) {
-	preparation.Cancel()
-}
-
-func getHostInputSessionStatus() hostInputSessionStatus {
-	status := spx.GetInputSessionStatus()
-	return hostInputSessionStatus{
-		Mode:           string(status.Mode),
-		Phase:          string(status.Phase),
-		Completed:      status.Completed,
-		Exhausted:      status.Exhausted,
-		CurrentTick:    status.CurrentTick,
-		HasCurrentTick: status.HasCurrentTick,
-		NextFrame:      status.NextFrame,
-		FrameCount:     status.FrameCount,
-		Error:          status.Error,
-	}
 }

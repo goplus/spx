@@ -23,15 +23,33 @@ import (
 	spx "github.com/goplus/spx/v3"
 )
 
-func TestHostInputRecordingBridgePreparesNextGame(t *testing.T) {
-	preparation, err := prepareHostInputRecording(60)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { cancelPreparedHostInputSession(preparation) })
-	status := getHostInputSessionStatus()
-	if status.Mode != "recording" || status.Phase != "prepared" || status.Completed || status.NextFrame != 0 {
-		t.Fatalf("prepared recording status = %+v", status)
+func TestHostInputRecordingBridge(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		fps     float64
+		wantErr bool
+	}{
+		{"explicit FPS", 60, false},
+		{"default FPS", 0, false},
+		{"negative FPS", -1, true},
+		{"NaN FPS", math.NaN(), true},
+		{"infinite FPS", math.Inf(1), true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			preparation, err := prepareHostInputRecording(test.fps)
+			t.Cleanup(func() { preparation.Cancel() })
+			if (err != nil) != test.wantErr {
+				t.Fatalf("prepareHostInputRecording(%v) error = %v, want error = %v", test.fps, err, test.wantErr)
+			}
+			want := spx.InputSessionStatus{Mode: spx.InputSessionModeIdle}
+			if !test.wantErr {
+				want.Mode = spx.InputSessionModeRecording
+				want.Phase = spx.InputSessionPhasePrepared
+			}
+			if status := spx.GetInputSessionStatus(); status != want {
+				t.Fatalf("recording status = %+v, want %+v", status, want)
+			}
+		})
 	}
 }
 
@@ -45,23 +63,29 @@ func TestHostInputReplayBridgeValidatesAndPreparesNextGame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preparation, err := prepareHostInputReplay([]byte(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { cancelPreparedHostInputSession(preparation) })
-	status := getHostInputSessionStatus()
-	if status.Mode != "replaying" || status.Phase != "prepared" || status.Completed || status.FrameCount != 0 || status.HasCurrentTick {
-		t.Fatalf("prepared replay status = %+v", status)
-	}
-}
-
-func TestHostInputRecordingBridgeRejectsInvalidFPS(t *testing.T) {
-	for _, fps := range []float64{-1, math.NaN(), math.Inf(1)} {
-		preparation, err := prepareHostInputRecording(fps)
-		if err == nil {
-			cancelPreparedHostInputSession(preparation)
-			t.Fatalf("prepareHostInputRecording(%v) succeeded", fps)
-		}
+	for _, state := range []string{"idle", "prepared"} {
+		t.Run(state, func(t *testing.T) {
+			want := spx.InputSessionStatus{Mode: spx.InputSessionModeIdle}
+			if state == "prepared" {
+				preparation, err := prepareHostInputReplay([]byte(data))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { preparation.Cancel() })
+				want.Mode = spx.InputSessionModeReplaying
+				want.Phase = spx.InputSessionPhasePrepared
+			}
+			if status := spx.GetInputSessionStatus(); status != want {
+				t.Fatalf("replay status = %+v, want %+v", status, want)
+			}
+			preparation, err := prepareHostInputReplay([]byte("{"))
+			t.Cleanup(func() { preparation.Cancel() })
+			if err == nil {
+				t.Fatal("malformed replay was accepted")
+			}
+			if status := spx.GetInputSessionStatus(); status != want {
+				t.Fatalf("malformed replay changed status to %+v, want %+v", status, want)
+			}
+		})
 	}
 }
