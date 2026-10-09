@@ -335,6 +335,7 @@ typedef void (*GDExtensionSpxResSetLoadMode)(GdBool is_direct_mode);
 typedef void (*GDExtensionSpxResGetLoadMode)(GdBool *ret_value);
 typedef void (*GDExtensionSpxResGetBoundFromAlpha)(GdString p_path, GdRect2 *ret_value);
 typedef void (*GDExtensionSpxResGetImageSize)(GdString p_path, GdVec2 *ret_value);
+typedef void (*GDExtensionSpxResGetImageLogicalSize)(GdString p_path, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxResReadAllText)(GdString p_path, GdString *ret_value);
 typedef void (*GDExtensionSpxResHasFile)(GdString p_path, GdBool *ret_value);
 typedef void (*GDExtensionSpxResListDirectories)(GdString p_path, GdString *ret_value);

@@ -158,6 +158,7 @@ type GDExtensionInterface struct {
 	SpxResGetLoadMode                           js.Value
 	SpxResGetBoundFromAlpha                     js.Value
 	SpxResGetImageSize                          js.Value
+	SpxResGetImageLogicalSize                   js.Value
 	SpxResReadAllText                           js.Value
 	SpxResHasFile                               js.Value
 	SpxResListDirectories                       js.Value
@@ -495,6 +496,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResGetLoadMode = resolveJSFunc("gdspx_res_get_load_mode")
 	x.SpxResGetBoundFromAlpha = resolveJSFunc("gdspx_res_get_bound_from_alpha")
 	x.SpxResGetImageSize = resolveJSFunc("gdspx_res_get_image_size")
+	x.SpxResGetImageLogicalSize = resolveJSFunc("gdspx_res_get_image_logical_size")
 	x.SpxResReadAllText = resolveJSFunc("gdspx_res_read_all_text")
 	x.SpxResHasFile = resolveJSFunc("gdspx_res_has_file")
 	x.SpxResListDirectories = resolveJSFunc("gdspx_res_list_directories")

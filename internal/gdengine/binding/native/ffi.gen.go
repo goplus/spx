@@ -154,6 +154,7 @@ type GDExtensionInterface struct {
 	SpxResGetLoadMode                           GDExtensionSpxResGetLoadMode
 	SpxResGetBoundFromAlpha                     GDExtensionSpxResGetBoundFromAlpha
 	SpxResGetImageSize                          GDExtensionSpxResGetImageSize
+	SpxResGetImageLogicalSize                   GDExtensionSpxResGetImageLogicalSize
 	SpxResReadAllText                           GDExtensionSpxResReadAllText
 	SpxResHasFile                               GDExtensionSpxResHasFile
 	SpxResListDirectories                       GDExtensionSpxResListDirectories
@@ -491,6 +492,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxResGetLoadMode = (GDExtensionSpxResGetLoadMode)(resolveCFunc("spx_res_get_load_mode"))
 	x.SpxResGetBoundFromAlpha = (GDExtensionSpxResGetBoundFromAlpha)(resolveCFunc("spx_res_get_bound_from_alpha"))
 	x.SpxResGetImageSize = (GDExtensionSpxResGetImageSize)(resolveCFunc("spx_res_get_image_size"))
+	x.SpxResGetImageLogicalSize = (GDExtensionSpxResGetImageLogicalSize)(resolveCFunc("spx_res_get_image_logical_size"))
 	x.SpxResReadAllText = (GDExtensionSpxResReadAllText)(resolveCFunc("spx_res_read_all_text"))
 	x.SpxResHasFile = (GDExtensionSpxResHasFile)(resolveCFunc("spx_res_has_file"))
 	x.SpxResListDirectories = (GDExtensionSpxResListDirectories)(resolveCFunc("spx_res_list_directories"))

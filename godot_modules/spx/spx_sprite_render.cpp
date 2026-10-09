@@ -35,6 +35,8 @@
 
 #include "spx_camera_mgr.h"
 #include "spx_engine.h"
+#include "spx_image_texture.h"
+#include "spx_pixel_query.h"
 #include "spx_res_mgr.h"
 #include "spx_sprite_render_util.h"
 
@@ -48,14 +50,13 @@ void SpxSprite::set_render_offset(GdVec2 p_render_offset) {
 		render_root->set_position(render_offset);
 	}
 	if (enable_dynamic_frame_offset) {
-		_on_frame_changed();
+		_update_frame_transform();
 	}
 }
 
 void SpxSprite::set_render_scale(GdVec2 p_scale) {
 	_render_scale = p_scale;
-	_update_anim_scale();
-	_on_frame_changed();
+	_update_render_scale();
 }
 
 GdVec2 SpxSprite::get_render_scale() {
@@ -64,15 +65,7 @@ GdVec2 SpxSprite::get_render_scale() {
 
 void SpxSprite::set_dynamic_frame_offset_enabled(GdBool p_enabled) {
 	enable_dynamic_frame_offset = p_enabled;
-
-	if (enable_dynamic_frame_offset) {
-		_on_frame_changed();
-		return;
-	}
-
-	if (anim2d != nullptr) {
-		anim2d->set_offset(base_offset);
-	}
+	_update_frame_transform();
 }
 
 GdBool SpxSprite::is_dynamic_frame_offset_enabled() const {
@@ -84,38 +77,37 @@ void SpxSprite::_commit_visual(const PreparedVisual &p_visual) {
 	source_sprite_frames = p_visual.shared_frames;
 	anim2d->set_sprite_frames(p_visual.frames);
 	anim2d->set_animation(p_visual.animation);
-	anim2d->set_scale(_render_scale / visual_source.raster_scale);
-	_on_frame_changed();
+	_update_frame_transform();
 	_update_current_frame_shader_uv_rect();
 }
 
-void SpxSprite::_update_anim_scale() {
+void SpxSprite::_update_render_scale() {
 	if (anim2d == nullptr) {
 		return;
 	}
 	if (visual_source.is_svg()) {
-		const int target_scale = _get_actual_match_render_scale();
-		if (target_scale != visual_source.raster_scale) {
-			_update_svg_scale_content(target_scale);
+		const int raster_scale = _get_required_raster_scale();
+		if (raster_scale != visual_source.raster_scale && _set_svg_raster_scale(raster_scale)) {
+			return; // Committing the new visual already updated its frame transform.
 		}
 	}
 	// Failed rasterization retains the old source and its actual raster scale.
-	anim2d->set_scale(_render_scale / visual_source.raster_scale);
+	_update_frame_transform();
 }
 
-bool SpxSprite::_update_svg_scale_content(int p_target_scale) {
+bool SpxSprite::_set_svg_raster_scale(int p_raster_scale) {
 	PreparedVisual visual;
 	if (visual_source.is_single_image()) {
-		Ref<Texture2D> texture = resMgr->load_svg_texture(visual_source.key, p_target_scale);
+		Ref<Texture2D> texture = resMgr->load_svg_texture(visual_source.key, p_raster_scale);
 		if (texture.is_null()) {
 			return false;
 		}
 		VisualSource source = visual_source;
-		source.raster_scale = p_target_scale;
+		source.raster_scale = p_raster_scale;
 		_prepare_texture(texture, source, visual);
 	} else {
 		if (!_prepare_animation(visual_source.animation_name, visual,
-					p_target_scale)) {
+					p_raster_scale)) {
 			return false;
 		}
 		const Ref<SpriteFrames> old_frames = anim2d->get_sprite_frames();
@@ -134,43 +126,56 @@ bool SpxSprite::_update_svg_scale_content(int p_target_scale) {
 			anim2d->pause();
 		}
 		anim2d->set_frame_and_progress(frame, progress);
-		_on_frame_changed();
+		_update_frame_transform();
 		_update_current_frame_shader_uv_rect();
 	}
 	return true;
 }
 
-int SpxSprite::_get_actual_match_render_scale() {
-	return SpxSvgCache::raster_scale(_get_actual_render_scale());
-}
-
-Vector2 SpxSprite::_get_actual_render_scale() {
+int SpxSprite::_get_required_raster_scale() {
 	if (anim2d == nullptr) {
-		return Vector2(1.0f, 1.0f);
+		return 1;
 	}
 
-	Vector2 global_scale = get_global_transform().get_scale() * _render_scale;
+	Vector2 screen_scale = get_global_transform().get_scale() * _render_scale;
 	SpxEngine *engine = SpxEngine::get_singleton();
 	if (engine != nullptr) {
 		SpxCameraMgr *camera_mgr = engine->get_camera();
 		if (camera_mgr != nullptr) {
-			global_scale *= camera_mgr->get_camera_zoom();
+			screen_scale *= camera_mgr->get_camera_zoom();
 		}
 	}
 
-	return global_scale;
+	return SpxSvgCache::raster_scale(screen_scale);
 }
 
-void SpxSprite::_on_frame_changed() {
-	if (anim2d == nullptr || !enable_dynamic_frame_offset) {
+void SpxSprite::_update_frame_transform() {
+	if (anim2d == nullptr) {
 		return;
 	}
 
-	String current_anim = String(anim2d->get_animation());
-	int current_frame = anim2d->get_frame();
-	Vector2 frame_offset = resMgr->get_animation_frame_offset(current_anim, current_frame);
-	Vector2 final_offset = spx_compute_anim_offset(visual_source.is_single_image(), base_offset, render_offset, frame_offset, _render_scale);
-	anim2d->set_offset(final_offset);
+	const Ref<Texture2D> texture = SpxPixelQuery::frame_texture(anim2d);
+	if (texture != current_frame_texture) {
+		const Callable changed = callable_mp(this, &SpxSprite::_update_frame_transform);
+		if (current_frame_texture.is_valid()) {
+			current_frame_texture->disconnect("changed", changed);
+		}
+		current_frame_texture = texture;
+		if (current_frame_texture.is_valid()) {
+			current_frame_texture->connect("changed", changed);
+		}
+	}
+	const Vector2 pixel_to_logical = SpxImageTexture::get_pixel_to_logical_scale(texture);
+	// Raster rounding must not change the frame's size in the game world.
+	anim2d->set_scale(_render_scale * pixel_to_logical / visual_source.raster_scale);
+
+	Vector2 offset = base_offset;
+	if (enable_dynamic_frame_offset) {
+		const Vector2 frame_offset = resMgr->get_animation_frame_offset(anim2d->get_animation(), anim2d->get_frame());
+		offset = spx_compute_anim_offset(visual_source.is_single_image(), base_offset, render_offset, frame_offset, _render_scale);
+	}
+	// AnimatedSprite2D offsets are measured in texture pixels.
+	anim2d->set_offset(offset / pixel_to_logical);
 }
 
 void SpxSprite::_update_current_frame_shader_uv_rect() {

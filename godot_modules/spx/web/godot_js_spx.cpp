@@ -653,6 +653,14 @@ void gdspx_res_get_image_size(GdString *p_path, GdVec2 *ret_val) {
 	*ret_val = resMgr->get_image_size(gdspx_string_arg_0);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_res_get_image_logical_size(GdString *p_path, GdVec2 *ret_val) {
+	GdString gdspx_string_arg_0 = nullptr;
+	if (!gdspx_get_string_value(p_path, &gdspx_string_arg_0)) {
+		return;
+	}
+	*ret_val = resMgr->get_image_logical_size(gdspx_string_arg_0);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_res_read_all_text(GdString *p_path, GdString *ret_val) {
 	if (!gdspx_prepare_string_wrapper(ret_val)) {
 		return;

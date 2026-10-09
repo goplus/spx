@@ -213,6 +213,7 @@ type GDExtensionSpxResSetLoadMode C.GDExtensionSpxResSetLoadMode
 type GDExtensionSpxResGetLoadMode C.GDExtensionSpxResGetLoadMode
 type GDExtensionSpxResGetBoundFromAlpha C.GDExtensionSpxResGetBoundFromAlpha
 type GDExtensionSpxResGetImageSize C.GDExtensionSpxResGetImageSize
+type GDExtensionSpxResGetImageLogicalSize C.GDExtensionSpxResGetImageLogicalSize
 type GDExtensionSpxResReadAllText C.GDExtensionSpxResReadAllText
 type GDExtensionSpxResHasFile C.GDExtensionSpxResHasFile
 type GDExtensionSpxResListDirectories C.GDExtensionSpxResListDirectories
@@ -1568,6 +1569,16 @@ func CallResGetImageSize(
 	arg1 := (C.GdString)(p_path)
 	var ret_val C.GdVec2
 	C.cgo_callfn_GDExtensionSpxResGetImageSize(arg0, arg1, &ret_val)
+
+	return (GdVec2)(ret_val)
+}
+func CallResGetImageLogicalSize(
+	p_path GdString,
+) GdVec2 {
+	arg0 := (C.GDExtensionSpxResGetImageLogicalSize)(api.SpxResGetImageLogicalSize)
+	arg1 := (C.GdString)(p_path)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxResGetImageLogicalSize(arg0, arg1, &ret_val)
 
 	return (GdVec2)(ret_val)
 }

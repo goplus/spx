@@ -59,7 +59,7 @@ bool SpxSprite::_prepare_animation(const String &p_name,
 			r_visual.source.kind = VisualKind::SVG_ANIMATION;
 			r_visual.source.raster_scale = p_raster_scale > 0
 					? p_raster_scale
-					: _get_actual_match_render_scale();
+					: _get_required_raster_scale();
 			shared_frames =
 					resMgr->get_animation_frames(key, r_visual.source.raster_scale);
 		} else {
@@ -97,7 +97,7 @@ void SpxSprite::_play_prepared_animation(const PreparedVisual &p_visual, GdFloat
 		// for a new clip even when its effective playback speed is positive.
 		anim2d->set_frame_and_progress(p_visual.frames->get_frame_count(p_visual.animation) - 1, 1.0);
 	}
-	_on_frame_changed();
+	_update_frame_transform();
 	_update_current_frame_shader_uv_rect();
 }
 
@@ -159,7 +159,7 @@ GdString SpxSprite::get_anim() const {
 void SpxSprite::set_anim_frame(GdInt p_frame) {
 	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
 	anim2d->set_frame(p_frame);
-	_on_frame_changed();
+	_update_frame_transform();
 	_update_current_frame_shader_uv_rect();
 }
 
@@ -195,13 +195,7 @@ GdBool SpxSprite::is_anim_centered() const {
 
 void SpxSprite::set_anim_offset(GdVec2 p_offset) {
 	base_offset = p_offset;
-	if (enable_dynamic_frame_offset) {
-		_on_frame_changed();
-		return;
-	}
-
-	ERR_FAIL_NULL_MSG(anim2d, "SpxSprite: AnimatedSprite2D component is missing.");
-	anim2d->set_offset(p_offset);
+	_update_frame_transform();
 }
 
 GdVec2 SpxSprite::get_anim_offset() const {

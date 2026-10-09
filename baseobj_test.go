@@ -25,8 +25,8 @@ func TestBaseObjGetCostumeAssetPath(t *testing.T) {
 
 func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 	assetPath := costumeAssetPath("sprites/hero.png")
-	costumeSizeCache.Store(assetPath, mathf.NewVec2(20, 10))
-	t.Cleanup(func() { costumeSizeCache.Delete(assetPath) })
+	costumeSizeCache.Store(costumeSizeKey{path: assetPath}, mathf.NewVec2(20, 10))
+	t.Cleanup(func() { costumeSizeCache.Delete(costumeSizeKey{path: assetPath}) })
 
 	config := &coreproject.SpriteConfig{
 		CostumeMPSet: &coreproject.CostumeMPSet{

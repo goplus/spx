@@ -317,7 +317,7 @@ Ref<Texture2D> SpxResMgr::_load_texture_direct(const String &p_path, bool p_allo
 }
 Ref<Texture2D> SpxResMgr::_reload_texture(String path) {
 	if (SpxSvgCache::is_svg_path(path)) {
-		return svg_cache.reload_image(_to_engine_path(path));
+		return svg_cache.reload_texture(_to_engine_path(path));
 	}
 	path = _to_engine_path(path);
 	Ref<Image> image;
@@ -370,7 +370,7 @@ void SpxResMgr::update_caches(const Vector<String> &files) {
 		auto path = _to_engine_path(file);
 		cached_texture.erase(path);
 		cached_audio.erase(path);
-		svg_cache.invalidate_image(path);
+		svg_cache.invalidate_texture(path);
 	}
 }
 
@@ -399,7 +399,7 @@ Ref<SpriteFrames> SpxResMgr::get_animation_frames(const String &p_key, int p_ras
 }
 
 Ref<ImageTexture> SpxResMgr::load_svg_texture(const String &p_path, int p_raster_scale) {
-	return svg_cache.load_image(_to_engine_path(p_path), p_raster_scale);
+	return svg_cache.load_texture(_to_engine_path(p_path), p_raster_scale);
 }
 
 String SpxResMgr::get_anim_key_name(const String &sprite_type_name, const String &anim_name) {
@@ -483,7 +483,8 @@ GdRect2 SpxResMgr::get_bound_from_alpha(GdString path) {
 		return Rect2();
 	}
 
-	return Rect2(Vector2(min_x, min_y), Vector2(max_x - min_x + 1, max_y - min_y + 1));
+	const Vector2 pixel_to_logical = SpxImageTexture::get_pixel_to_logical_scale(image);
+	return Rect2(Vector2(min_x, min_y) * pixel_to_logical, Vector2(max_x - min_x + 1, max_y - min_y + 1) * pixel_to_logical);
 }
 
 GdVec2 SpxResMgr::get_image_size(GdString path) {
@@ -494,6 +495,12 @@ GdVec2 SpxResMgr::get_image_size(GdString path) {
 	}
 	print_error("can not find a texture: " + path_str);
 	return GdVec2(1, 1);
+}
+
+GdVec2 SpxResMgr::get_image_logical_size(GdString p_path) {
+	Ref<Texture2D> texture = load_texture(SpxStr(p_path));
+	ERR_FAIL_COND_V(texture.is_null(), GdVec2(1, 1));
+	return SpxImageTexture::get_logical_size(texture);
 }
 
 GdString SpxResMgr::read_all_text(GdString p_path) {

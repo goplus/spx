@@ -536,6 +536,10 @@ static void gdextension_spx_res_get_image_size(GdString p_path, GdVec2 *ret_val)
 	*ret_val = resMgr->get_image_size(p_path);
 }
 
+static void gdextension_spx_res_get_image_logical_size(GdString p_path, GdVec2 *ret_val) {
+	*ret_val = resMgr->get_image_logical_size(p_path);
+}
+
 static void gdextension_spx_res_read_all_text(GdString p_path, GdString *ret_val) {
 	*ret_val = resMgr->read_all_text(p_path);
 }
@@ -1522,6 +1526,7 @@ void gdextension_spx_setup_interface() {
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_load_mode);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_bound_from_alpha);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_image_size);
+	REGISTER_SPX_INTERFACE_FUNC(spx_res_get_image_logical_size);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_read_all_text);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_has_file);
 	REGISTER_SPX_INTERFACE_FUNC(spx_res_list_directories);

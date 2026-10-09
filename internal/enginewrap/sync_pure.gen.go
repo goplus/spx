@@ -404,6 +404,9 @@ func (*resMgrImpl) GetBoundFromAlpha(p_path string) Rect2 {
 func (*resMgrImpl) GetImageSize(p_path string) Vec2 {
 	return Vec2{}
 }
+func (*resMgrImpl) GetImageLogicalSize(p_path string) Vec2 {
+	return Vec2{}
+}
 func (*resMgrImpl) ReadAllText(p_path string) string {
 	return ""
 }

@@ -1021,6 +1021,15 @@ func (pself *resMgr) GetImageSize(p_path string) Vec2 {
 		return ToVec2(retValue)
 	})
 }
+func (pself *resMgr) GetImageLogicalSize(p_path string) Vec2 {
+	return enginewrap.CallInMainThreadValue(func() Vec2 {
+		arg0Str := C.CString(p_path)
+		arg0 := (GdString)(arg0Str)
+		defer C.free(unsafe.Pointer(arg0Str))
+		retValue := CallResGetImageLogicalSize(arg0)
+		return ToVec2(retValue)
+	})
+}
 func (pself *resMgr) ReadAllText(p_path string) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0Str := C.CString(p_path)

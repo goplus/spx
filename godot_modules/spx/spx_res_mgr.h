@@ -107,8 +107,12 @@ public:
 	SPX_BIND void create_animation(GdString p_sprite_type, GdString p_anim_name, GdString p_json_ctx, GdInt fps, GdBool is_atlas);
 	SPX_BIND void set_load_mode(GdBool is_direct_mode);
 	SPX_BIND GdBool get_load_mode();
+	// Alpha bounds use logical asset coordinates, independent of raster resolution.
 	SPX_BIND GdRect2 get_bound_from_alpha(GdString p_path);
+	// Pixel size for atlas regions and other raster operations.
 	SPX_BIND GdVec2 get_image_size(GdString p_path);
+	// Logical asset size before bitmap-resolution scaling, retaining fractional dimensions.
+	SPX_BIND GdVec2 get_image_logical_size(GdString p_path);
 	SPX_BIND GdString read_all_text(GdString p_path);
 	SPX_BIND GdBool has_file(GdString p_path);
 	SPX_BIND GdString list_directories(GdString p_path);

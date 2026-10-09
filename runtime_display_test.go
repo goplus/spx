@@ -6,6 +6,48 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
+func TestDisplaySizesDefaultToBackdropAndPreserveConfiguredValues(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		display       gameDisplayState
+		window, world [2]int
+	}{
+		{
+			name: "backdrop defaults", window: [2]int{320, 240}, world: [2]int{320, 240},
+		},
+		{
+			name:    "configured window",
+			display: gameDisplayState{WindowWidth: 384, WindowHeight: 216},
+			window:  [2]int{384, 216}, world: [2]int{320, 240},
+		},
+		{
+			name:    "configured world",
+			display: gameDisplayState{WorldWidth: 1024, WorldHeight: 768},
+			window:  [2]int{320, 240}, world: [2]int{1024, 768},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			game := &Game{
+				baseObj: baseObj{costumes: []*costume{newCostume(&coreproject.CostumeConfig{
+					ImageWidth:       641.5,
+					ImageHeight:      481.25,
+					BitmapResolution: 2,
+				})}},
+				displayState: tt.display,
+			}
+
+			windowW, windowH := game.windowSize()
+			if got := [2]int{windowW, windowH}; got != tt.window {
+				t.Fatalf("windowSize() = %v, want %v", got, tt.window)
+			}
+			worldW, worldH := game.worldSize()
+			if got := [2]int{worldW, worldH}; got != tt.world {
+				t.Fatalf("worldSize() = %v, want %v", got, tt.world)
+			}
+		})
+	}
+}
+
 func TestGameGoSetBackdropRandom(t *testing.T) {
 	for _, test := range []struct {
 		name     string

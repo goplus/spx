@@ -194,6 +194,7 @@ type IResMgr interface {
 	GetLoadMode() bool
 	GetBoundFromAlpha(p_path string) Rect2
 	GetImageSize(p_path string) Vec2
+	GetImageLogicalSize(p_path string) Vec2
 	ReadAllText(p_path string) string
 	HasFile(p_path string) bool
 	ListDirectories(p_path string) string

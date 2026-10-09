@@ -182,6 +182,76 @@ struct VisualFixture {
 	}
 };
 
+TEST_CASE("[SceneTree][SPX] Fractional SVG render bounds and pixel queries share logical geometry") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	VisualFixture::write_text(fixture.svg_path, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\" fill=\"red\"/></svg>");
+	const CharString path = fixture.svg_path.utf8();
+	CHECK(fixture.resources->get_image_size(path.get_data()) == Vector2(11, 7));
+	CHECK(fixture.resources->get_image_logical_size(path.get_data()) == Vector2(10.75, 6.25));
+	const Rect2 alpha = fixture.resources->get_bound_from_alpha(path.get_data());
+	CHECK(alpha.position == Vector2());
+	CHECK(alpha.size == Vector2(10.75, 6.25));
+	SpxSprite *sprite = fixture.create_sprite();
+	sprite->set_texture(path.get_data());
+	for (float scale : { 1.0f, 2.0f, 3.0f, 8.0f, 0.5f }) {
+		sprite->set_render_scale(Vector2(scale, scale));
+		// Asset pivot (2, 3), measured from the top-left.
+		sprite->set_render_offset(Vector2(3.375, 0.125) * scale);
+		SpxPixelQuery::Snapshot query;
+		REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
+		CHECK(query.bounds.position.is_equal_approx(Vector2(-2, -3) * scale));
+		CHECK(query.bounds.size.is_equal_approx(Vector2(10.75, 6.25) * scale));
+		REQUIRE(SpxPixelQuery::load_image(query));
+		Color color;
+		CHECK(SpxPixelQuery::sample(query, query.bounds.get_center(), color));
+		CHECK(color.r == doctest::Approx(1));
+		CHECK(color.a == doctest::Approx(1));
+		CHECK_FALSE(SpxPixelQuery::sample(query, query.bounds.position - Vector2(0.01, 0), color));
+	}
+
+	// Pixel APIs and atlas regions retain their existing units.
+	sprite->set_texture_atlas(path.get_data(), Rect2(1, 2, 4, 3));
+	sprite->set_render_scale(Vector2(1, 1));
+	SpxPixelQuery::Snapshot atlas;
+	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, atlas));
+	CHECK(atlas.bounds.size == Vector2(4, 3));
+	const CharString png_path = fixture.png_path.utf8();
+	CHECK(fixture.resources->get_image_logical_size(png_path.get_data()) == Vector2(8, 6));
+}
+
+TEST_CASE("[SceneTree][SPX] SVG frame changes and reloads retain fractional logical dimensions") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	VisualFixture::write_text(fixture.svg_path, "<svg width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	VisualFixture::write_text(fixture.retry_path, "<svg width=\"17.125\" height=\"9.75\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	fixture.create_clip("fractional", fixture.svg_path, fixture.retry_path);
+	SpxSprite *sprite = fixture.create_sprite();
+	sprite->set_render_scale(Vector2(3, 3));
+	sprite->play_anim("fractional", 1, false, false);
+	SpxPixelQuery::Snapshot query;
+	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
+	CHECK(query.bounds.size.is_equal_approx(Vector2(10.75, 6.25) * 3));
+	sprite->set_anim_frame(1);
+	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
+	CHECK(query.bounds.size.is_equal_approx(Vector2(17.125, 9.75) * 3));
+	const Ref<Texture2D> texture = query.texture;
+
+	VisualFixture::write_text(fixture.retry_path, "<svg width=\"12.5\" height=\"10.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	const CharString path = fixture.retry_path.utf8();
+	fixture.resources->reload_texture(path.get_data());
+	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
+	CHECK(query.texture == texture);
+	CHECK(query.bounds.size.is_equal_approx(Vector2(12.5, 10.25) * 3));
+	CHECK(fixture.resources->get_image_logical_size(path.get_data()) == Vector2(12.5, 10.25));
+	VisualFixture::write_text(fixture.retry_path, "invalid SVG");
+	ERR_PRINT_OFF
+	fixture.resources->reload_texture(path.get_data());
+	ERR_PRINT_ON
+	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
+	CHECK(query.bounds.size.is_equal_approx(Vector2(12.5, 10.25) * 3));
+}
+
 TEST_CASE("[SceneTree][SPX] Animation players isolate loop metadata and share "
 		  "textures") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());

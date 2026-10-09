@@ -138,16 +138,16 @@ func TestGetCostumeRenderOffsetUsesPivot(t *testing.T) {
 
 func TestCostumeRenderAnchorConvertsAssetCoordinatesToSPX(t *testing.T) {
 	costume := newCostume(&coreproject.CostumeConfig{
-		ImageWidth: 201, ImageHeight: 121, BitmapResolution: 2,
+		ImageWidth: 201.5, ImageHeight: 121.25, BitmapResolution: 2,
 		X: 80, Y: 40,
 	})
 
-	want := mathf.NewVec2(-10.25, 10.25)
+	want := mathf.NewVec2(-10.375, 10.3125)
 	if got := costume.renderAnchorInSPX(); got != want {
 		t.Fatalf("renderAnchorInSPX = %v, want %v", got, want)
 	}
-	if width, height := costume.getSizeF(); width != 100.5 || height != 60.5 {
-		t.Fatalf("logical size = (%v, %v), want (100.5, 60.5)", width, height)
+	if width, height := costume.sizeInSPX(); width != 100.75 || height != 60.625 {
+		t.Fatalf("logical size = (%v, %v), want (100.75, 60.625)", width, height)
 	}
 	if costume.isAtlas() {
 		t.Fatal("standalone costume is marked as an atlas")
@@ -156,7 +156,7 @@ func TestCostumeRenderAnchorConvertsAssetCoordinatesToSPX(t *testing.T) {
 
 func TestSizedCostumeUsesImageCenter(t *testing.T) {
 	costume := newCostumeWithSize(7, 5)
-	if width, height := costume.getSize(); width != 7 || height != 5 {
+	if width, height := costume.displaySize(); width != 7 || height != 5 {
 		t.Fatalf("sized costume = (%d, %d), want (7, 5)", width, height)
 	}
 	if got := costume.renderAnchorInSPX(); got != (mathf.Vec2{}) {
@@ -182,10 +182,10 @@ func TestAtlasCostumePreservesFrameGeometry(t *testing.T) {
 	if got, want := obj.getCostumeAtlasUvRemap(), mathf.NewRect2(59.0/256, 8.0/128, 43.0/256, 43.0/128); got != want {
 		t.Fatalf("atlas UV remap = %v, want %v", got, want)
 	}
-	if width, height := c.getSize(); width != 21 || height != 21 {
+	if width, height := c.displaySize(); width != 21 || height != 21 {
 		t.Fatalf("integer size = (%d, %d), want (21, 21)", width, height)
 	}
-	if width, height := c.getSizeF(); width != 21.5 || height != 21.5 {
+	if width, height := c.sizeInSPX(); width != 21.5 || height != 21.5 {
 		t.Fatalf("logical size = (%v, %v), want (21.5, 21.5)", width, height)
 	}
 	if got := c.renderAnchorInSPX(); got != (mathf.Vec2{}) {

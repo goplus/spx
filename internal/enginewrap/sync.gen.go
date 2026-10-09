@@ -873,6 +873,13 @@ func (*resMgrImpl) GetImageSize(p_path string) Vec2 {
 	})
 	return _ret1
 }
+func (*resMgrImpl) GetImageLogicalSize(p_path string) Vec2 {
+	var _ret1 Vec2
+	callInMainThread(func() {
+		_ret1 = gdx.ResMgr.GetImageLogicalSize(p_path)
+	})
+	return _ret1
+}
 func (*resMgrImpl) ReadAllText(p_path string) string {
 	var _ret1 string
 	callInMainThread(func() {
