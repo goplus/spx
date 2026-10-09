@@ -23,69 +23,94 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
-func TestMainExecutionTimeout(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		schedule func() int
+func TestScheduling(t *testing.T) {
+	for _, schedule := range []struct {
+		name string
+		call func() int
 	}{
 		{"SchedNow", SchedNow},
 		{"Sched", Sched},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			co := setupRuntimeScheduler(t)
-			thread := co.Create("main", func(thread coroutine.Thread) {
-				end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
-				defer end()
+		for _, tt := range []struct {
+			name    string
+			offset  time.Duration
+			demoted bool
+		}{
+			{"active", time.Minute, false},
+			{"expired", -2 * mainExecTimeoutSec * time.Second, true},
+		} {
+			t.Run(schedule.name+"/Main/"+tt.name, func(t *testing.T) {
+				co := setupRuntimeScheduler(t)
+				thread := co.Create("main", func(thread coroutine.Thread) {
+					started := time.Now().Add(tt.offset)
+					end := thread.BeginMain(started)
+					defer end()
 
-				tt.schedule()
-
-				if !thread.MainStartedAt().IsZero() {
-					t.Error("timed-out Main execution was not demoted")
+					if got := schedule.call(); got != 0 {
+						t.Errorf("%s() = %d, want 0", schedule.name, got)
+					}
+					want := started
+					if tt.demoted {
+						want = time.Time{}
+					}
+					if got := thread.MainStartedAt(); !got.Equal(want) {
+						t.Errorf("MainStartedAt = %v, want %v", got, want)
+					}
+				})
+				co.Join(thread)
+				if !thread.Stopped() && thread.Context().Err() == nil {
+					t.Fatal("Main timeout test coroutine did not finish")
 				}
 			})
-			co.Join(thread)
-			if !thread.Stopped() && thread.Context().Err() == nil {
-				t.Fatal("Main timeout test coroutine did not finish")
+		}
+
+		t.Run(schedule.name+"/ExternalCaller", func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			started := make(chan struct{})
+			release := make(chan struct{})
+			thread := co.Create(game, func(thread coroutine.Thread) {
+				end := thread.BeginMain(time.Now().Add(-2 * mainExecTimeoutSec * time.Second))
+				defer end()
+				close(started)
+				<-release
+			})
+			defer func() {
+				close(release)
+				co.Join(thread)
+			}()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("active coroutine did not start")
+			}
+
+			result := make(chan any, 1)
+			go func() {
+				defer func() { result <- recover() }()
+				schedule.call()
+			}()
+			select {
+			case recovered := <-result:
+				if recovered != nil {
+					t.Fatalf("external %s panicked: %v", schedule.name, recovered)
+				}
+			case <-time.After(time.Second):
+				t.Fatalf("external %s did not return", schedule.name)
+			}
+			if thread.Stopped() || thread.MainStartedAt().IsZero() {
+				t.Fatalf("external %s changed the active coroutine", schedule.name)
+			}
+		})
+
+		t.Run(schedule.name+"/WithoutManager", func(t *testing.T) {
+			original := gco
+			gco = nil
+			defer func() { gco = original }()
+			if got := schedule.call(); got != 0 {
+				t.Errorf("%s() = %d, want 0", schedule.name, got)
 			}
 		})
 	}
-}
-
-func TestSchedNowExternalCallerDoesNotDriveActiveCoroutine(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
-	started := make(chan struct{})
-	release := make(chan struct{})
-	thread := co.Create(game, func(thread coroutine.Thread) {
-		end := thread.BeginMain(time.Now().Add(-2 * time.Duration(mainExecTimeoutSec) * time.Second))
-		defer end()
-		close(started)
-		<-release
-	})
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("active coroutine did not start")
-	}
-
-	result := make(chan any, 1)
-	go func() {
-		defer func() { result <- recover() }()
-		SchedNow()
-	}()
-	select {
-	case recovered := <-result:
-		if recovered != nil {
-			t.Fatalf("external SchedNow panicked: %v", recovered)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("external SchedNow did not return")
-	}
-	if thread.Stopped() {
-		t.Fatal("external SchedNow stopped the active coroutine")
-	}
-
-	close(release)
-	co.Join(thread)
 }
 
 func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
