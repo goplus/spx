@@ -33,11 +33,13 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	if err != nil {
 		return err
 	}
-	ownsResources := true
+	previousFS := p.fs
 	defer func() {
-		if !ownsResources {
+		if opened.FS == nil {
 			return
 		}
+		// A failed sprite load must not leave the game holding the closed directory.
+		p.fs = previousFS
 		if closeErr := opened.FS.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close project resources: %w", closeErr))
 		}
@@ -59,8 +61,10 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	p.applyRuntimeConfig(conf, proj)
 	setupGameSystems(p, proj)
 	gamer := reflect.ValueOf(p.gamer).Elem()
-	loadGameSprites(p, gamer, opened.FS, proj)
-	ownsResources = false
+	if err := loadGameSprites(p, gamer, opened.FS, proj); err != nil {
+		return err
+	}
+	opened.FS = nil // The game now owns the directory.
 	p.loadStage(gamer, proj, generation, p.loadSprite, nil)
 
 	platform := &engine.Managers().PlatformMgr
@@ -108,7 +112,7 @@ func validateProjectConfig(project *coreproject.ProjectConfig) error {
 // -----------------------------------------------------------------------------
 // Loading
 // -----------------------------------------------------------------------------
-func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) {
+func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) error {
 	g.startLoad(fs)
 	for i := range v.NumField() {
 		name, val := getFieldPtrOrAlloc(g, v, i)
@@ -117,11 +121,11 @@ func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.P
 			continue
 		}
 		if err := g.loadSprite(fld, name, v); err != nil {
-			engine.Panic(err)
-			break
+			return fmt.Errorf("load sprite %q: %w", name, err)
 		}
 	}
 	g.tilemapMgr.init(g, fs, proj.TilemapPath)
+	return nil
 }
 
 func parseCommandLineFlags(conf *Config) {
