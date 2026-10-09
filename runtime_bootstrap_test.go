@@ -19,6 +19,7 @@ package spx
 import (
 	"reflect"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -163,17 +164,21 @@ func TestGameBootstrapCompletionIgnoresStaleGeneration(t *testing.T) {
 	var game Game
 	stale := game.bootstrapGeneration()
 
+	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.BootstrapDone.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
 	game.resetBootstrap()
 
+	if game.markGameStarted(stale) {
+		t.Fatal("stale bootstrap generation was marked running")
+	}
 	if game.completeBootstrap(stale) {
 		t.Fatal("stale bootstrap generation was marked done")
 	}
 	if game.markStartDispatched(stale) {
 		t.Fatal("stale bootstrap generation was marked started")
 	}
-	if game.lifecycleState.BootstrapDone.Load() || game.lifecycleState.StartDispatched.Load() {
+	if game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() || game.lifecycleState.StartDispatched.Load() {
 		t.Fatal("stale generation reopened lifecycle gates")
 	}
 }
@@ -220,7 +225,6 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 		game.runBootstrapTasks(generation)
 		close(done)
 	}()
-
 	deadline := time.Now().Add(time.Second)
 	for {
 		select {
@@ -228,11 +232,9 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 			return
 		default:
 		}
-
 		if time.Now().After(deadline) {
 			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
 		}
-
 		gco.Update()
 		time.Sleep(time.Millisecond)
 	}
@@ -240,12 +242,10 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 
 func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	var game Game
-
 	spriteA := newBootstrapAwakeOrderSprite(&game, "SpriteA")
 	spriteB := newBootstrapAwakeOrderSprite(&game, "SpriteB")
 	spriteA.peer = spriteB
 	spriteB.peer = spriteA
-
 	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
@@ -254,7 +254,6 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 		generation,
 	)
 	game.runBootstrapTasks(generation)
-
 	if !spriteA.sawSelfAwake || !spriteA.sawPeerAwake {
 		t.Fatalf("SpriteA main saw awake state self=%v peer=%v, want both true", spriteA.sawSelfAwake, spriteA.sawPeerAwake)
 	}
@@ -265,12 +264,9 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 
 func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
 	setupRuntimeScheduler(t)
-
 	var game Game
-
 	blocked := make(chan struct{})
 	defer close(blocked)
-
 	var spriteASeenThreadCount int64
 	var spriteBSeenThreadCount int64
 	spriteA := newCollisionLayerOrderSprite(&game, "SpriteA", func() {
@@ -280,7 +276,6 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", func() {
 		spriteBSeenThreadCount = gco.LastThreadID()
 	})
-
 	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
@@ -288,9 +283,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
-
 	runBootstrapTasksWithScheduler(t, &game, generation)
-
 	if spriteASeenThreadCount != 1 {
 		t.Fatalf("SpriteA saw %d created threads before its first yield, want 1", spriteASeenThreadCount)
 	}
@@ -301,11 +294,9 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 
 func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T) {
 	setupRuntimeScheduler(t)
-
 	var game Game
 	blocked := make(chan struct{})
 	defer close(blocked)
-
 	stageStarted := make(chan struct{})
 	stageResumed := make(chan struct{})
 	followingTaskRan := make(chan struct{})
@@ -320,9 +311,7 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	game.queueBootstrap(generation, func() {
 		close(followingTaskRan)
 	})
-
 	runBootstrapTasksWithScheduler(t, &game, generation)
-
 	select {
 	case <-stageStarted:
 	default:
@@ -342,14 +331,11 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 
 func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	setupRuntimeScheduler(t)
-
 	var game Game
 	game.initEventQueueState()
 	game.events = make(chan event, eventBufferSize)
-
 	blocked := make(chan struct{})
 	defer close(blocked)
-
 	started := make(chan struct{})
 	var spriteA *collisionLayerOrderSprite
 	spriteA = newCollisionLayerOrderSprite(&game, "SpriteA", func() {
@@ -359,7 +345,6 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 		engine.WaitForChan(blocked)
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
-
 	generation := game.bootstrapGeneration()
 	game.runSpriteCallbacks(
 		[]Sprite{spriteA, spriteB},
@@ -367,16 +352,69 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 		reflect.ValueOf(&game).Elem(),
 		generation,
 	)
-
 	runBootstrapTasksWithScheduler(t, &game, generation)
-
 	game.completeBootstrap(generation)
 	game.dispatchStartEventIfNeeded()
 	gco.Update()
-
 	select {
 	case <-started:
 	case <-time.After(time.Second):
 		t.Fatal("OnStart did not run after Main yielded once")
+	}
+}
+
+func TestBootstrapStateTaskSnapshots(t *testing.T) {
+	var state gameBootstrapState
+	generation := state.bootstrapGeneration()
+	var got []string
+	if state.queueBootstrap(generation, nil) || state.queueBootstrap(generation+1, func() {}) {
+		t.Fatal("accepted a nil task or a task for a different generation")
+	}
+	state.queueBootstrap(generation, func() { got = append(got, "first") })
+	if tasks := state.takeBootstrapTasks(generation + 1); len(tasks) != 0 {
+		t.Fatal("a different generation consumed current tasks")
+	}
+	first := state.takeBootstrapTasks(generation)
+	state.queueBootstrap(generation, func() { got = append(got, "second") })
+	for _, task := range first {
+		task()
+	}
+	if !slices.Equal(got, []string{"first"}) {
+		t.Fatalf("snapshot = %v, want [first]", got)
+	}
+	for _, task := range state.takeBootstrapTasks(generation) {
+		task()
+	}
+	if !slices.Equal(got, []string{"first", "second"}) {
+		t.Fatalf("task order = %v, want [first second]", got)
+	}
+	if len(state.takeBootstrapTasks(generation)) != 0 {
+		t.Fatal("consumed tasks were returned again")
+	}
+}
+
+func TestBootstrapStateConcurrentClaim(t *testing.T) {
+	var state gameBootstrapState
+	generation := state.bootstrapGeneration()
+	if state.claimBootstrap(generation + 1) {
+		t.Fatal("claimed a different generation")
+	}
+	var claims atomic.Int32
+	var workers sync.WaitGroup
+	for range 32 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			if state.claimBootstrap(generation) {
+				claims.Add(1)
+			}
+		}()
+	}
+	workers.Wait()
+	if got := claims.Load(); got != 1 {
+		t.Fatalf("successful claims = %d, want 1", got)
+	}
+	if !state.isCurrentBootstrap(generation) || state.isCurrentBootstrap(generation+1) {
+		t.Fatal("claiming bootstrap changed the generation")
 	}
 }

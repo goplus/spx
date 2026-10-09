@@ -73,3 +73,84 @@ type gameAudioState struct {
 	AudioMaxDistance float64
 	SoundObj         engine.Object
 }
+
+// gameBootstrapState owns generation-scoped admission and task execution.
+// Game coordinates lifecycle gates under the same mutex; callbacks run unlocked.
+type gameBootstrapState struct {
+	bootstrapMu      sync.Mutex
+	bootstrapGen     uint64
+	bootstrapStarted bool
+	startScheduled   bool
+	pendingBootstrap []func()
+}
+
+func (p *gameBootstrapState) queueBootstrap(generation uint64, call func()) bool {
+	if call == nil {
+		return false
+	}
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	p.pendingBootstrap = append(p.pendingBootstrap, call)
+	return true
+}
+
+func (p *gameBootstrapState) bootstrapGeneration() uint64 {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	return p.bootstrapGen
+}
+
+// Validate and publish under the reset lock so stale work cannot reopen a gate.
+func (p *gameBootstrapState) markBootstrapFlag(generation uint64, flag *atomic.Bool) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return false
+	}
+	flag.Store(true)
+	return true
+}
+
+func (p *gameBootstrapState) takeBootstrapTasks(generation uint64) []func() {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen {
+		return nil
+	}
+	tasks := p.pendingBootstrap
+	p.pendingBootstrap = nil
+	return tasks
+}
+
+func (p *gameBootstrapState) runBootstrapTasks(generation uint64) {
+	for {
+		tasks := p.takeBootstrapTasks(generation)
+		if len(tasks) == 0 {
+			return
+		}
+		// Also drain tasks queued by earlier tasks.
+		for _, task := range tasks {
+			if !p.isCurrentBootstrap(generation) {
+				return
+			}
+			task()
+		}
+	}
+}
+
+func (p *gameBootstrapState) isCurrentBootstrap(generation uint64) bool {
+	return generation == p.bootstrapGeneration()
+}
+
+func (p *gameBootstrapState) claimBootstrap(generation uint64) bool {
+	p.bootstrapMu.Lock()
+	defer p.bootstrapMu.Unlock()
+	if generation != p.bootstrapGen || p.bootstrapStarted {
+		return false
+	}
+	p.bootstrapStarted = true
+	return true
+}
