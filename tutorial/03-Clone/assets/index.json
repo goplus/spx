@@ -15,6 +15,7 @@
       "color": 15629590,
       "label": "gid",
       "mode": 1,
+      "style": "scratch",
       "sliderMin": 0,
       "sliderMax": 100,
       "x": -240,

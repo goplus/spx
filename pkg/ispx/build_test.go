@@ -17,6 +17,7 @@
 package ispx
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -24,6 +25,47 @@ import (
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 )
+
+func TestReadmeTutorialExamplesMatchSource(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ignore presentation indentation, but preserve the source text on each line.
+	normalize := func(source string) string {
+		lines := strings.Split(strings.TrimSpace(source), "\n")
+		for i := range lines {
+			lines[i] = strings.TrimSpace(lines[i])
+		}
+		return strings.Join(lines, "\n")
+	}
+	examples := make(map[string]bool)
+	for _, block := range strings.Split(string(readme), "```coffee\n")[1:] {
+		code, _, ok := strings.Cut(block, "\n```")
+		if !ok {
+			t.Fatal("unclosed README code block")
+		}
+		examples[normalize(code)] = true
+	}
+	// These examples are presented as complete source files in the README.
+	for _, path := range []string{
+		"02-Dragon/Dragon.spx",
+		"03-Clone/main.spx",
+		"03-Clone/Arrow.spx",
+		"04-Bullet/MyAircraft.spx",
+		"04-Bullet/Bullet.spx",
+	} {
+		t.Run(path, func(t *testing.T) {
+			source, err := os.ReadFile("../../tutorial/" + path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !examples[normalize(string(source))] {
+				t.Errorf("README must include the complete current source of tutorial/%s", path)
+			}
+		})
+	}
+}
 
 func TestBuildAutoClosureConditions(t *testing.T) {
 	ctx := ixgo.NewContext(xgobuild.StaticLoad)

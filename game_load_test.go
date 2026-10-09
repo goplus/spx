@@ -436,6 +436,7 @@ func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
 
 func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	t.Setenv("SPX_SCREENSHOT_KEY", "")
+	t.Setenv("SPX_PROJECT_DIR", "")
 
 	conf := Config{
 		Width:            640,
@@ -450,7 +451,7 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	game.applyRuntimeConfig(&conf, &proj)
 
 	cwd, _ := os.Getwd()
-	wantTitle := filepath.Base(cwd) + " (by XGo Builder)"
+	wantTitle := filepath.Base(cwd) + " (by spx)"
 	if game.runtimeConfigInput.Title != wantTitle {
 		t.Fatalf("runtimeConfigInput.Title = %q, want %q", game.runtimeConfigInput.Title, wantTitle)
 	}
@@ -471,6 +472,38 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	}
 	if game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 480 {
 		t.Fatalf("reapplied window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)
+	}
+}
+
+func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
+	projectDir := filepath.Join(t.TempDir(), "02-Dragon")
+	sessionDir := filepath.Join(projectDir, ".temp")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sessionDir)
+	t.Setenv("SPX_PROJECT_DIR", projectDir)
+	t.Setenv("SPX_SCREENSHOT_KEY", "")
+
+	for _, title := range []string{"", "My Dragon Game"} {
+		t.Run(title, func(t *testing.T) {
+			var game Game
+			proj := coreproject.ProjectConfig{}
+			game.applyRuntimeConfig(&Config{Title: title}, &proj)
+			want := title
+			if want == "" {
+				want = "02-Dragon (by spx)"
+			}
+			if got := game.runtimeConfigInput.Title; got != want {
+				t.Fatalf("title = %q, want %q", got, want)
+			}
+			// Reload must retain the resolved title even if the environment changes.
+			t.Setenv("SPX_PROJECT_DIR", filepath.Join(projectDir, "other"))
+			game.applyStoredRuntimeConfig(&proj)
+			if got := game.runtimeConfigInput.Title; got != want {
+				t.Fatalf("reloaded title = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

@@ -268,6 +268,62 @@ func TestStageMonitorFixture(t *testing.T) {
 	}
 }
 
+func TestTutorialMonitorFixtures(t *testing.T) {
+	fixtures := []struct {
+		demo   string
+		config coreproject.MonitorShape
+	}{
+		{"02-Dragon", coreproject.MonitorShape{
+			Target: "Dragon", Val: "getVar:score", Name: "monitor-1", Label: "score",
+			Mode: 1, Style: "scratch", Size: 1, X: -240, Y: 180, Visible: true,
+		}},
+		{"03-Clone", coreproject.MonitorShape{
+			Target: "", Val: "getVar:gid", Name: "monitor-1", Label: "gid",
+			Mode: 1, Style: "scratch", Size: 1, X: -240, Y: 180, Visible: true,
+		}},
+	}
+	for _, fixture := range fixtures {
+		for _, filename := range []string{"index.json", "index_pack.json"} {
+			t.Run(fixture.demo+"/"+filename, func(t *testing.T) {
+				data, err := os.ReadFile("tutorial/" + fixture.demo + "/assets/" + filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var project struct {
+					ZOrder []any `json:"zorder"`
+				}
+				if err := json.Unmarshal(data, &project); err != nil {
+					t.Fatal(err)
+				}
+				monitors := 0
+				for _, entry := range project.ZOrder {
+					shape, ok := entry.(map[string]any)
+					if !ok || shape["type"] != "monitor" {
+						continue
+					}
+					monitors++
+					got, err := prepareMonitor(shape)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got.config != fixture.config {
+						t.Errorf("monitor config = %+v, want %+v", got.config, fixture.config)
+					}
+					if got.style.Appearance != ui.MonitorAppearanceCompatible {
+						t.Errorf("monitor appearance = %v, want Scratch", got.style.Appearance)
+					}
+					if got.style.Label != fixture.config.Label || got.style.Color != mathf.NewColorRGBAi(0xee, 0x7d, 0x16, 0xff) {
+						t.Errorf("monitor label or color changed: %+v", got.style)
+					}
+				}
+				if monitors != 1 {
+					t.Errorf("monitor count = %d, want 1", monitors)
+				}
+			})
+		}
+	}
+}
+
 func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
 	binding, _ := bindMonitor(g, target, val, appearance)
 	return binding.read

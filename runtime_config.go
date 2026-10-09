@@ -51,6 +51,10 @@ func (p *Game) applyStoredRuntimeConfig(proj *coreproject.ProjectConfig) {
 }
 
 func resolveGameRuntimeConfig(conf Config, proj *coreproject.ProjectConfig) coreproject.RuntimeConfig {
-	cwd, _ := os.Getwd()
-	return coreproject.ResolveRuntimeConfig(&conf, proj, cwd, os.Getenv("SPX_SCREENSHOT_KEY"))
+	// Desktop sessions run from a temporary directory, separate from the project.
+	projectDir := os.Getenv("SPX_PROJECT_DIR")
+	if projectDir == "" {
+		projectDir, _ = os.Getwd()
+	}
+	return coreproject.ResolveRuntimeConfig(&conf, proj, projectDir, os.Getenv("SPX_SCREENSHOT_KEY"))
 }
