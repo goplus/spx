@@ -584,12 +584,14 @@ func toRadian(dir float64) float64 {
 	return math.Pi * dir / 180
 }
 
-// normalizeDirection normalizes a direction angle to the range (-180, 180].
+// normalizeDirection wraps finite angles to (-180, 180], preserving non-finite inputs.
 func normalizeDirection(dir float64) float64 {
-	if dir <= -180 {
-		dir += 360
-	} else if dir > 180 {
-		dir -= 360
+	if math.IsInf(dir, 0) {
+		return dir
+	}
+	dir = math.Remainder(dir, fullCircleDegrees)
+	if dir == -halfCircleDegrees {
+		return halfCircleDegrees
 	}
 	return dir
 }

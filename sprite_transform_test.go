@@ -356,3 +356,57 @@ func TestFractionalCostumeFenceUsesLogicalGeometry(t *testing.T) {
 		t.Fatalf("fenced X = %v, want -396", got)
 	}
 }
+
+func TestNormalizeDirection(t *testing.T) {
+	for _, tt := range []struct {
+		input, want float64
+	}{
+		{0, 0}, {90, 90}, {-90, -90}, {180, 180}, {-180, 180},
+		{181, -179}, {-181, 179}, {360, 0}, {-360, 0},
+		{540, 180}, {-540, 180}, {1080, 0}, {-1080, 0},
+		{0.5, 0.5}, {-0.5, -0.5}, {720.5, 0.5}, {-720.5, -0.5},
+		{1080.5, 0.5}, {-1080.5, -0.5},
+		{math.MaxFloat64, 128}, {-math.MaxFloat64, -128},
+		{math.Inf(1), math.Inf(1)}, {math.Inf(-1), math.Inf(-1)},
+	} {
+		got := normalizeDirection(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeDirection(%v) = %v, want %v", tt.input, got, tt.want)
+		}
+		if again := normalizeDirection(got); again != got {
+			t.Errorf("normalization is not idempotent: %v -> %v -> %v", tt.input, got, again)
+		}
+	}
+	if got := normalizeDirection(math.NaN()); !math.IsNaN(got) {
+		t.Errorf("normalizeDirection(NaN) = %v, want NaN", got)
+	}
+}
+
+func TestNormalizeDirectionPeriodicity(t *testing.T) {
+	for _, angle := range []float64{-180, -90.5, 0, 90.5, 180} {
+		want := normalizeDirection(angle)
+		for turns := -10; turns <= 10; turns++ {
+			input := angle + float64(turns)*fullCircleDegrees
+			if got := normalizeDirection(input); got != want {
+				t.Errorf("normalizeDirection(%v) = %v, want %v", input, got, want)
+			}
+		}
+	}
+}
+
+func TestSpriteHeadingMultipleRevolutions(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.SetHeading(1080.5)
+	if got := sprite.Heading(); got != 0.5 {
+		t.Fatalf("SetHeading: got %v, want 0.5", got)
+	}
+	sprite.ChangeHeading(-720.5)
+	if got := sprite.Heading(); got != 0 {
+		t.Fatalf("ChangeHeading: got %v, want 0", got)
+	}
+	version := sprite.spriteState.DirtyVersion
+	sprite.SetHeading(1080)
+	if sprite.spriteState.DirtyVersion != version {
+		t.Fatal("equivalent heading dirtied the sprite proxy")
+	}
+}
