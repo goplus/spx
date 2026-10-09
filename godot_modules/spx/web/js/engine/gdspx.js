@@ -1086,6 +1086,20 @@ gdspx_res_get_image_size(p_path) {
 		if (_resultPtr) FreeGdVec2(_resultPtr);
 	}
 }
+gdspx_res_get_image_logical_size(p_path) {
+	var _call = Module['_gdspx_res_get_image_logical_size'];
+	var _arg0;
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdVec2();
+		_arg0 = ToGdString(p_path);
+		_call(_arg0, _resultPtr);
+		return ToJsVec2(_resultPtr);
+	} finally {
+		if (_arg0) FreeGdString(_arg0);
+		if (_resultPtr) FreeGdVec2(_resultPtr);
+	}
+}
 gdspx_res_read_all_text(p_path) {
 	var _call = Module['_gdspx_res_read_all_text'];
 	var _arg0;
@@ -3386,6 +3400,7 @@ GdspxFuncs.prototype['gdspx_res_set_load_mode'] = GdspxFuncs.prototype.gdspx_res
 GdspxFuncs.prototype['gdspx_res_get_load_mode'] = GdspxFuncs.prototype.gdspx_res_get_load_mode;
 GdspxFuncs.prototype['gdspx_res_get_bound_from_alpha'] = GdspxFuncs.prototype.gdspx_res_get_bound_from_alpha;
 GdspxFuncs.prototype['gdspx_res_get_image_size'] = GdspxFuncs.prototype.gdspx_res_get_image_size;
+GdspxFuncs.prototype['gdspx_res_get_image_logical_size'] = GdspxFuncs.prototype.gdspx_res_get_image_logical_size;
 GdspxFuncs.prototype['gdspx_res_read_all_text'] = GdspxFuncs.prototype.gdspx_res_read_all_text;
 GdspxFuncs.prototype['gdspx_res_has_file'] = GdspxFuncs.prototype.gdspx_res_has_file;
 GdspxFuncs.prototype['gdspx_res_list_directories'] = GdspxFuncs.prototype.gdspx_res_list_directories;

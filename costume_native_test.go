@@ -19,6 +19,8 @@
 package spx
 
 import (
+	"flag"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +41,12 @@ type costumeSizeResMgr struct {
 
 func (m *costumeSizeResMgr) GetImageSize(path string) mathf.Vec2 {
 	m.calls++
+	size := m.sizes[path]
+	return mathf.NewVec2(math.Ceil(size.X), math.Ceil(size.Y))
+}
+
+func (m *costumeSizeResMgr) GetImageLogicalSize(path string) mathf.Vec2 {
+	m.calls++
 	return m.sizes[path]
 }
 
@@ -46,6 +54,10 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 	// Isolate the process-wide filesystem roots from other runtime tests.
 	if os.Getenv("SPX_TEST_COSTUME_ASSET_ROOTS") != "1" {
 		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestCostumeSizeCacheSeparatesAssetRoots$")
+		// Include the isolated test's counters in the parent coverage report.
+		if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
+			cmd.Args = append(cmd.Args, "-test.gocoverdir="+coverDir.Value.String())
+		}
 		cmd.Env = append(os.Environ(), "SPX_TEST_COSTUME_ASSET_ROOTS=1")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("asset-root regression: %v\n%s", err, output)
@@ -57,7 +69,7 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 	resources := &costumeSizeResMgr{sizes: make(map[string]mathf.Vec2)}
 	pkgengine.ResMgr = resources
 	projects := []string{t.TempDir(), t.TempDir()}
-	sizes := []mathf.Vec2{mathf.NewVec2(32, 48), mathf.NewVec2(96, 128)}
+	sizes := []mathf.Vec2{mathf.NewVec2(32.75, 48.25), mathf.NewVec2(96.5, 128.125)}
 	for i, project := range projects {
 		assetDir := filepath.Join(project, "assets")
 		if err := os.Mkdir(assetDir, 0o755); err != nil {
@@ -77,12 +89,19 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 		}
 		for _, path := range []string{"image.png", "./image.png"} {
 			costume := newCostume(&coreproject.CostumeConfig{Path: path})
-			if costume.width != int(sizes[i].X) || costume.height != int(sizes[i].Y) {
+			if costume.imageSize != sizes[i] || costume.width != int(sizes[i].X) || costume.height != int(sizes[i].Y) {
 				t.Fatalf("project %d, %q: costume size = %dx%d, want %v", i, path, costume.width, costume.height, sizes[i])
 			}
 		}
 	}
 	if resources.calls != len(projects) {
 		t.Fatalf("image-size loads = %d, want one per asset root (%d)", resources.calls, len(projects))
+	}
+	// Atlas regions must still see pixel dimensions for the same resource.
+	if got := costumePixelSize("image.png"); got != mathf.NewVec2(33, 49) {
+		t.Fatalf("atlas image size = %v, want {33 49}", got)
+	}
+	if resources.calls != len(projects)+1 {
+		t.Fatalf("logical and pixel queries shared a cache entry: calls = %d", resources.calls)
 	}
 }

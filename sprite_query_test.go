@@ -27,6 +27,30 @@ import (
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
+func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
+	sprite := newTestTransformSprite(10, 20)
+	sprite.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
+		ImageWidth:       10.5,
+		ImageHeight:      6.25,
+		X:                2,
+		Y:                1.5,
+		BitmapResolution: 2,
+	})}
+	sprite.runtimeState.Scale = 1.5
+	sprite.transform().direction = 90
+	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+
+	got := sprite.bounds()
+	want := mathf.Rect2{
+		Position: mathf.NewVec2(7.75, 16.8125),
+		Size:     mathf.NewVec2(7.875, 4.6875),
+	}
+	if got == nil || *got != want {
+		t.Fatalf("bounds() = %v, want %v", got, want)
+	}
+}
+
 type touchingSyncSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
 	positions               map[pkgengine.Object]mathf.Vec2

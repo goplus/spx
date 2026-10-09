@@ -54,7 +54,7 @@ TEST_CASE("[SPX] SVG loading keeps unpremultiplied RGBA data") {
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"2\" height=\"3\"><rect width=\"2\" height=\"3\" fill=\"#ff000080\"/></svg>";
 	const ScalableImageMemLoadFunc global_svg_loader = Image::_svg_scalable_mem_loader_func;
 
-	CHECK(SpxImageLoaderSVG::create_image_from_string(image, svg, 2.0f, false, HashMap<Color, Color>()) == OK);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 2.0f, HashMap<Color, Color>()) == OK);
 	CHECK(Image::_svg_scalable_mem_loader_func == global_svg_loader);
 	CHECK(image->get_width() == 4);
 	CHECK(image->get_height() == 6);
@@ -70,7 +70,7 @@ TEST_CASE("[SPX] SVG loading turns a zero-sized costume into a transparent textu
 	Ref<Image> image = memnew(Image());
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"0\" height=\"0\" viewBox=\"0 0 0 0\"><g fill=\"none\"/></svg>";
 
-	CHECK(SpxImageLoaderSVG::create_image_from_string(image, svg, 1.0f, false, HashMap<Color, Color>()) == OK);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f, HashMap<Color, Color>()) == OK);
 	CHECK(image->get_width() == 1);
 	CHECK(image->get_height() == 1);
 	CHECK(image->get_pixel(0, 0).a == 0.0f);
@@ -80,7 +80,35 @@ TEST_CASE("[SPX] SVG loading rejects oversized rasterization") {
 	Ref<Image> image = memnew(Image());
 	const String svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20000\" height=\"20000\"><rect width=\"20000\" height=\"20000\" fill=\"#000\"/></svg>";
 
-	CHECK(SpxImageLoaderSVG::create_image_from_string(image, svg, 1.0f, false, HashMap<Color, Color>()) == ERR_INVALID_DATA);
+	CHECK(SpxImageLoaderSVG::rasterize(image, svg, 1.0f, HashMap<Color, Color>()) == ERR_INVALID_DATA);
+}
+
+TEST_CASE("[SPX] SVG logical dimensions are independent of raster rounding") {
+	struct Case {
+		const char *attributes;
+		Vector2 size;
+	};
+	const Case cases[] = {
+		{ "width=\"10.75\" height=\"6.25\"", Vector2(10.75, 6.25) },
+		{ "width=\"10.75px\" height=\"6.25px\"", Vector2(10.75, 6.25) },
+		{ "viewBox=\"0 0 10.75 6.25\"", Vector2(10.75, 6.25) },
+		{ "width=\"21.5\" viewBox=\"0 0 10.75 6.25\"", Vector2(21.5, 12.5) },
+		{ "height=\"12.5\" viewBox=\"0 0 10.75 6.25\"", Vector2(21.5, 12.5) },
+		{ "width=\"7.5pt\" height=\"15pt\"", Vector2(10, 20) },
+		{ "width=\"0.25\" height=\"0.5\"", Vector2(0.25, 0.5) },
+	};
+	for (const Case &entry : cases) {
+		const String svg = String("<svg xmlns=\"http://www.w3.org/2000/svg\" ") + entry.attributes + "><rect width=\"100%\" height=\"100%\" fill=\"red\"/></svg>";
+		for (float scale : { 1.0f, 2.0f, 8.0f }) {
+			Ref<Image> image = memnew(Image());
+			Vector2 logical_size;
+			REQUIRE(SpxImageLoaderSVG::rasterize(image, svg, scale, {}, &logical_size) == OK);
+			CHECK(logical_size.is_equal_approx(entry.size * scale));
+			CHECK(image->get_width() == Math::ceil(entry.size.x * scale));
+			CHECK(image->get_height() == Math::ceil(entry.size.y * scale));
+			CHECK(image->get_used_rect().has_area());
+		}
+	}
 }
 
 struct LunaSVGTextConfigurationReset {

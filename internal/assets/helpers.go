@@ -126,7 +126,7 @@ func NewStandaloneFrame(
 		Height:           int(imageSize.Y),
 		BitmapResolution: ToBitmapResolution(bitmapResolution),
 		ImageSize:        imageSize,
-		Center:           mathf.NewVec2(float64(int(imageSize.X))/2, float64(int(imageSize.Y))/2),
+		Center:           imageSize.Mulf(0.5),
 		AtlasUVRect:      DefaultAtlasUV(),
 	}
 }

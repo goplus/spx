@@ -41,7 +41,7 @@ type costume struct {
 	name          SpriteCostumeName
 	width, height int
 	center        mathf.Vec2 // center point
-	imageSize     mathf.Vec2 // actual image dimensions
+	imageSize     mathf.Vec2 // standalone logical size or atlas image pixel size
 	pivot         mathf.Vec2
 
 	faceRight        float64
@@ -58,26 +58,35 @@ func (c *costume) getAssetPath() string {
 	return costumeAssetPath(c.path)
 }
 
-// getSize returns the size of the costume accounting for bitmap resolution.
-func (c *costume) getSize() (int, int) {
+// displaySize returns integer dimensions for the stage and window.
+func (c *costume) displaySize() (int, int) {
 	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
 }
 
-// getSizeF returns the exact logical costume size without truncating partial
-// pixels introduced by bitmap resolution scaling.
-func (c *costume) getSizeF() (float64, float64) {
+// sizeInSPX returns the frame size in SPX coordinates, retaining fractional pixels.
+func (c *costume) sizeInSPX() (float64, float64) {
 	resolution := float64(c.bitmapResolution)
-	return float64(c.width) / resolution, float64(c.height) / resolution
+	size := c.frameSizeInAsset()
+	return size.X / resolution, size.Y / resolution
 }
 
 // renderAnchorInSPX converts the costume center from top-left, Y-down asset
 // coordinates into a local SPX anchor relative to the geometric image center.
 func (c *costume) renderAnchorInSPX() mathf.Vec2 {
+	size := c.frameSizeInAsset()
 	resolution := float64(c.bitmapResolution)
 	return mathf.NewVec2(
-		(c.center.X-float64(c.width)/2)/resolution,
-		(float64(c.height)/2-c.center.Y)/resolution,
+		(c.center.X-size.X/2)/resolution,
+		(size.Y/2-c.center.Y)/resolution,
 	)
+}
+
+// frameSizeInAsset returns standalone logical dimensions or atlas frame pixel dimensions.
+func (c *costume) frameSizeInAsset() mathf.Vec2 {
+	if !c.isAtlas() && c.imageSize.X > 0 && c.imageSize.Y > 0 {
+		return c.imageSize
+	}
+	return mathf.NewVec2(float64(c.width), float64(c.height))
 }
 
 // isAtlas returns true if this costume is part of an atlas/set.
@@ -117,7 +126,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 		img.nx,
 		frameIndex,
 		bitmapResolution,
-		costumeImageSize,
+		costumePixelSize,
 	)
 	c := newCostumeFromFrame(frame)
 	c.path = img.path
@@ -134,7 +143,7 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 		config.ImageHeight,
 		config.Path,
 		config.BitmapResolution,
-		costumeImageSize,
+		costumeLogicalSize,
 	)
 	c := newCostumeFromFrame(frame)
 	c.name = config.Name
@@ -154,12 +163,31 @@ func costumeAssetPath(path string) string {
 	return engine.ToAssetPath(path)
 }
 
-func costumeImageSize(imagePath string) mathf.Vec2 {
+func costumePixelSize(imagePath string) mathf.Vec2 {
+	return cachedCostumeSize(imagePath, false)
+}
+
+func costumeLogicalSize(imagePath string) mathf.Vec2 {
+	return cachedCostumeSize(imagePath, true)
+}
+
+type costumeSizeKey struct {
+	path    string
+	logical bool
+}
+
+func cachedCostumeSize(imagePath string, logical bool) mathf.Vec2 {
 	assetPath := costumeAssetPath(imagePath)
-	if value, ok := costumeSizeCache.Load(assetPath); ok {
+	key := costumeSizeKey{path: assetPath, logical: logical}
+	if value, ok := costumeSizeCache.Load(key); ok {
 		return value.(mathf.Vec2)
 	}
-	size := engine.Managers().ResMgr.GetImageSize(assetPath)
-	costumeSizeCache.Store(assetPath, size)
+	var size mathf.Vec2
+	if logical {
+		size = engine.Managers().ResMgr.GetImageLogicalSize(assetPath)
+	} else {
+		size = engine.Managers().ResMgr.GetImageSize(assetPath)
+	}
+	costumeSizeCache.Store(key, size)
 	return size
 }

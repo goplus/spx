@@ -259,8 +259,7 @@ void SpxSprite::on_start() {
 	_is_trigger_enabled = !trigger2d->is_disabled();
 
 	_connect_runtime_signals();
-	_update_anim_scale();
-	_on_frame_changed();
+	_update_render_scale();
 	_update_current_frame_shader_uv_rect();
 	_update_physics_mode();
 	_update_trigger_disabled_state();
@@ -333,11 +332,11 @@ void SpxSprite::_on_sprite_animation_changed() {
 }
 
 void SpxSprite::_on_sprite_frame_changed() {
+	_update_frame_transform();
 	if (!Spx::is_initialized()) {
 		return;
 	}
 
-	_on_frame_changed();
 	SPX_CALLBACK->func_on_sprite_frame_changed(gid);
 	_update_current_frame_shader_uv_rect();
 }

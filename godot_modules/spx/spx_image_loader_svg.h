@@ -41,13 +41,10 @@ class SpxImageLoaderSVG {
 public:
 	static void set_forced_color_map(const HashMap<Color, Color> &p_color_map);
 
-	static Error create_image_from_utf8_buffer(Ref<Image> p_image, const uint8_t *p_buffer, int p_buffer_size, float p_scale, bool p_upsample);
-	static Error create_image_from_utf8_buffer(Ref<Image> p_image, const PackedByteArray &p_buffer, float p_scale, bool p_upsample);
+	// Optional output is the logical canvas size at p_raster_scale, before raster rounding.
+	static Error rasterize(Ref<Image> p_image, String p_svg, float p_raster_scale, const HashMap<Color, Color> &p_color_map, Vector2 *r_logical_size = nullptr);
 
-	static Error create_image_from_string(Ref<Image> p_image, String p_string, float p_scale, bool p_upsample, const HashMap<Color, Color> &p_color_map);
-
-	static Error load_image(Ref<Image> p_image, Ref<FileAccess> p_fileaccess, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_scale);
-	static Error load_image(const String &p_path, Ref<Image> p_image, BitField<ImageFormatLoader::LoaderFlags> p_flags = ImageFormatLoader::FLAG_NONE, float p_scale = 1.0f);
+	static Error load_image(const String &p_path, Ref<Image> p_image, BitField<ImageFormatLoader::LoaderFlags> p_flags = ImageFormatLoader::FLAG_NONE, float p_raster_scale = 1.0f, Vector2 *r_logical_size = nullptr);
 };
 
 #endif // SPX_IMAGE_LOADER_SVG_H

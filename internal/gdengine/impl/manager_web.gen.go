@@ -716,6 +716,11 @@ func (pself *resMgr) GetImageSize(p_path string) Vec2 {
 	_result := API.SpxResGetImageSize.Invoke(arg0)
 	return JsToGdVec2(_result)
 }
+func (pself *resMgr) GetImageLogicalSize(p_path string) Vec2 {
+	arg0 := JsFromGdString(p_path)
+	_result := API.SpxResGetImageLogicalSize.Invoke(arg0)
+	return JsToGdVec2(_result)
+}
 func (pself *resMgr) ReadAllText(p_path string) string {
 	arg0 := JsFromGdString(p_path)
 	_result := API.SpxResReadAllText.Invoke(arg0)

@@ -720,6 +720,12 @@ void cgo_callfn_GDExtensionSpxResGetImageSize(const GDExtensionSpxResGetImageSiz
 	}
 	fn(p_path, ret_val);
 }
+void cgo_callfn_GDExtensionSpxResGetImageLogicalSize(const GDExtensionSpxResGetImageLogicalSize fn, GdString p_path, GdVec2* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(p_path, ret_val);
+}
 void cgo_callfn_GDExtensionSpxResReadAllText(const GDExtensionSpxResReadAllText fn, GdString p_path, GdString* ret_val) {
 	if (!fn) {
 		return;

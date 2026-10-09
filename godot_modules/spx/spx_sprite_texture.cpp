@@ -64,7 +64,7 @@ void SpxSprite::set_texture_direct(GdString p_path, GdBool p_direct) {
 	source.key = SpxStr(p_path);
 	source.kind = SpxSvgCache::is_svg_path(source.key) ? VisualKind::SVG_TEXTURE
 												  : VisualKind::TEXTURE;
-	source.raster_scale = source.is_svg() ? _get_actual_match_render_scale() : 1;
+	source.raster_scale = source.is_svg() ? _get_required_raster_scale() : 1;
 	Ref<Texture2D> texture =
 			source.is_svg() ? Ref<Texture2D>(resMgr->load_svg_texture(
 									  source.key, source.raster_scale))

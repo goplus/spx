@@ -320,12 +320,11 @@ private:
 	void _prepare_texture(const Ref<Texture2D> &p_texture,
 			const VisualSource &p_source, PreparedVisual &r_visual);
 	void _commit_visual(const PreparedVisual &p_visual);
-	void _update_anim_scale();
-	bool _update_svg_scale_content(int p_target_scale);
-	void _on_frame_changed();
+	void _update_render_scale();
+	bool _set_svg_raster_scale(int p_raster_scale);
+	void _update_frame_transform();
 	void _update_current_frame_shader_uv_rect();
-	Vector2 _get_actual_render_scale();
-	int _get_actual_match_render_scale();
+	int _get_required_raster_scale();
 
 	// State
 	GdObj gid = 0;
@@ -354,6 +353,7 @@ private:
 	String spx_type_name;
 	VisualSource visual_source;
 	Ref<SpriteFrames> source_sprite_frames;
+	Ref<Texture2D> current_frame_texture;
 	float playback_speed = 1.0f;
 
 	Ref<SpriteFrames> default_sprite_frames;

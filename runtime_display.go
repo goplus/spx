@@ -110,7 +110,7 @@ func (p *Game) windowSize() (int, int) {
 func (p *Game) doWindowSize() {
 	if p.displayState.WindowWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.displayState.WindowWidth, p.displayState.WindowHeight = c.getSize()
+		p.displayState.WindowWidth, p.displayState.WindowHeight = c.displaySize()
 	}
 }
 
@@ -133,6 +133,6 @@ func (p *Game) worldBounds() (left, top, right, bottom int) {
 func (p *Game) doWorldSize() {
 	if p.displayState.WorldWidth == 0 {
 		c := p.costumes[p.costumeIndex]
-		p.displayState.WorldWidth, p.displayState.WorldHeight = c.getSize()
+		p.displayState.WorldWidth, p.displayState.WorldHeight = c.displaySize()
 	}
 }

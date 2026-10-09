@@ -274,8 +274,7 @@ func (p *baseObj) getCurrentBitmapResolution() int {
 
 // getCostumeSize returns the size of the current costume.
 func (p *baseObj) getCostumeSize() (float64, float64) {
-	x, y := p.currentCostume().getSize()
-	return float64(x), float64(y)
+	return p.currentCostume().sizeInSPX()
 }
 
 // isCostumeAtlas returns true if the current costume is part of an atlas.

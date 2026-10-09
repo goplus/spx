@@ -8,7 +8,7 @@
 
 // Owned by SpxResMgr. Paths entering this cache are already engine paths.
 class SpxSvgCache {
-	HashMap<String, HashMap<int, Ref<ImageTexture>>> images;
+	HashMap<String, HashMap<int, Ref<ImageTexture>>> textures;
 	HashMap<String, HashMap<int, Ref<SpriteFrames>>> animations;
 
 public:
@@ -16,10 +16,10 @@ public:
 	static int raster_scale(Vector2 p_required_scale);
 	static int raster_scale(float p_required_scale);
 
-	Ref<ImageTexture> load_image(const String &p_path, int p_scale);
-	Ref<ImageTexture> reload_image(const String &p_path);
+	Ref<ImageTexture> load_texture(const String &p_path, int p_scale);
+	Ref<ImageTexture> reload_texture(const String &p_path);
 	Ref<SpriteFrames> load_animation(const String &p_key, const Ref<SpriteFrames> &p_source, const Vector<int> &p_frame_scales, int p_scale);
-	void invalidate_image(const String &p_path);
+	void invalidate_texture(const String &p_path);
 	void clear();
 };
 

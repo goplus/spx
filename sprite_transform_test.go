@@ -336,3 +336,23 @@ func TestClampSpriteScaleToMaxScale(t *testing.T) {
 		t.Fatalf("clampSpriteScale(3) = %v, want 1.5", got)
 	}
 }
+
+func TestFractionalCostumeFenceUsesLogicalGeometry(t *testing.T) {
+	sprite := newTestTransformSprite(-393, 5)
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.g.displayState.MinWorldX = -240
+	sprite.g.displayState.MinWorldY = -180
+	sprite.baseObj.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
+		ImageWidth: 247.24325, ImageHeight: 476.42829,
+		X: 76.0323911558041, Y: 208.79720845345383,
+		BitmapResolution: 1,
+	})}
+	sprite.baseObj.costumeIndex = 0
+	sprite.runtimeState.Scale = 1
+	sprite.transform().direction = 90
+	sprite.transform().changeX(-5)
+	if got := sprite.Xpos(); got != -396 {
+		t.Fatalf("fenced X = %v, want -396", got)
+	}
+}

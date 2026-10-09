@@ -31,8 +31,6 @@
 #include "spx_image_loader_svg.h"
 
 #include "core/io/file_access.h"
-#include "core/os/memory.h"
-#include "core/variant/variant.h"
 #include "spx_svg_utils.h"
 
 #include <lunasvg.h>
@@ -71,35 +69,46 @@ void SpxImageLoaderSVG::_replace_color_property(const HashMap<Color, Color> &p_c
 	}
 }
 
-Error SpxImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const uint8_t *p_buffer, int p_buffer_size, float p_scale, bool p_upsample) {
-	ERR_FAIL_COND_V_MSG(Math::is_zero_approx(p_scale), ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Can't load SVG with a scale of 0.");
-	ERR_FAIL_COND_V_MSG(p_scale < 0.0f, ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Can't load SVG with a negative scale.");
+Error SpxImageLoaderSVG::rasterize(Ref<Image> p_image, String p_svg, float p_raster_scale, const HashMap<Color, Color> &p_color_map, Vector2 *r_logical_size) {
+	if (!p_color_map.is_empty()) {
+		_replace_color_property(p_color_map, "stop-color=\"", p_svg);
+		_replace_color_property(p_color_map, "fill=\"", p_svg);
+		_replace_color_property(p_color_map, "stroke=\"", p_svg);
+	}
+
+	ERR_FAIL_COND_V_MSG(Math::is_zero_approx(p_raster_scale), ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Can't load SVG with a scale of 0.");
+	ERR_FAIL_COND_V_MSG(!Math::is_finite(p_raster_scale) || p_raster_scale < 0.0f, ERR_INVALID_PARAMETER, "SpxImageLoaderSVG: Scale must be finite and positive.");
 
 	ERR_FAIL_COND_V_MSG(!SpxSvgUtils::ensure_font_faces_registered(), ERR_CANT_CREATE,
 			"SpxImageLoaderSVG: Failed to install the complete project font snapshot.");
 
-	auto document = lunasvg::Document::loadFromData((const char *)p_buffer, p_buffer_size);
+	const CharString bytes = p_svg.utf8();
+	auto document = lunasvg::Document::loadFromData(bytes.get_data(), bytes.length());
 	if (document == nullptr) {
 		return ERR_INVALID_DATA;
 	}
 
-	uint32_t width = document->width();
-	uint32_t height = document->height();
+	const double width = document->width();
+	const double height = document->height();
+	ERR_FAIL_COND_V_MSG(!Math::is_finite(width) || !Math::is_finite(height) || width < 0 || height < 0, ERR_INVALID_DATA, "SpxImageLoaderSVG: Invalid SVG dimensions.");
 	// Treat Scratch's zero-sized costumes as transparent images.
 	if (width == 0 || height == 0) {
 		PackedByteArray transparent_pixel;
 		transparent_pixel.resize(4);
 		transparent_pixel.fill(0);
 		p_image->set_data(1, 1, false, Image::FORMAT_RGBA8, transparent_pixel);
+		if (r_logical_size != nullptr) {
+			*r_logical_size = Vector2(1, 1);
+		}
 		return OK;
 	}
 
-	const double scaled_width = (double)width * p_scale;
-	const double scaled_height = (double)height * p_scale;
+	const double scaled_width = width * p_raster_scale;
+	const double scaled_height = height * p_raster_scale;
 	ERR_FAIL_COND_V_MSG(scaled_width > Image::MAX_WIDTH || scaled_height > Image::MAX_HEIGHT, ERR_INVALID_DATA, "SpxImageLoaderSVG: SVG dimensions are too large.");
 
-	const uint32_t requested_width = scaled_width;
-	const uint32_t requested_height = scaled_height;
+	const uint32_t requested_width = Math::ceil(scaled_width);
+	const uint32_t requested_height = Math::ceil(scaled_height);
 	ERR_FAIL_COND_V_MSG(requested_width == 0 || requested_height == 0, ERR_INVALID_DATA, "SpxImageLoaderSVG: SVG dimensions became empty after scaling.");
 
 	const uint64_t requested_pixel_count = (uint64_t)requested_width * requested_height;
@@ -132,32 +141,19 @@ Error SpxImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const
 	}
 
 	p_image->set_data(bitmap_width, bitmap_height, false, Image::FORMAT_RGBA8, result);
+	if (r_logical_size != nullptr) {
+		*r_logical_size = Vector2(scaled_width, scaled_height);
+	}
 
 	return OK;
 }
 
-Error SpxImageLoaderSVG::create_image_from_utf8_buffer(Ref<Image> p_image, const PackedByteArray &p_buffer, float p_scale, bool p_upsample) {
-	return create_image_from_utf8_buffer(p_image, p_buffer.ptr(), p_buffer.size(), p_scale, p_upsample);
-}
-
-Error SpxImageLoaderSVG::create_image_from_string(Ref<Image> p_image, String p_string, float p_scale, bool p_upsample, const HashMap<Color, Color> &p_color_map) {
-	if (p_color_map.size()) {
-		_replace_color_property(p_color_map, "stop-color=\"", p_string);
-		_replace_color_property(p_color_map, "fill=\"", p_string);
-		_replace_color_property(p_color_map, "stroke=\"", p_string);
-	}
-
-	PackedByteArray bytes = p_string.to_utf8_buffer();
-
-	return create_image_from_utf8_buffer(p_image, bytes, p_scale, p_upsample);
-}
-
-Error SpxImageLoaderSVG::load_image(Ref<Image> p_image, Ref<FileAccess> p_fileaccess, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_scale) {
-	ERR_FAIL_COND_V(p_fileaccess.is_null(), ERR_CANT_OPEN);
-	const uint64_t len = p_fileaccess->get_length() - p_fileaccess->get_position();
+Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_raster_scale, Vector2 *r_logical_size) {
+	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ);
+	ERR_FAIL_COND_V_MSG(file.is_null(), ERR_CANT_OPEN, "SpxImageLoaderSVG: Cannot open SVG file: " + p_path);
 	Vector<uint8_t> buffer;
-	buffer.resize(len);
-	p_fileaccess->get_buffer(buffer.ptrw(), buffer.size());
+	buffer.resize(file->get_length());
+	file->get_buffer(buffer.ptrw(), buffer.size());
 
 	String svg;
 	Error err = svg.parse_utf8((const char *)buffer.ptr(), buffer.size());
@@ -165,15 +161,13 @@ Error SpxImageLoaderSVG::load_image(Ref<Image> p_image, Ref<FileAccess> p_fileac
 		return err;
 	}
 
-	if (p_flags & ImageFormatLoader::FLAG_CONVERT_COLORS) {
-		err = create_image_from_string(p_image, svg, p_scale, false, forced_color_map);
-	} else {
-		err = create_image_from_string(p_image, svg, p_scale, false, HashMap<Color, Color>());
-	}
-
+	const HashMap<Color, Color> empty_color_map;
+	const HashMap<Color, Color> &color_map = p_flags & ImageFormatLoader::FLAG_CONVERT_COLORS ? forced_color_map : empty_color_map;
+	err = rasterize(p_image, svg, p_raster_scale, color_map, r_logical_size);
 	if (err != OK) {
 		return err;
-	} else if (p_image->is_empty()) {
+	}
+	if (p_image->is_empty()) {
 		return ERR_INVALID_DATA;
 	}
 
@@ -181,10 +175,4 @@ Error SpxImageLoaderSVG::load_image(Ref<Image> p_image, Ref<FileAccess> p_fileac
 		p_image->srgb_to_linear();
 	}
 	return OK;
-}
-
-Error SpxImageLoaderSVG::load_image(const String &p_path, Ref<Image> p_image, BitField<ImageFormatLoader::LoaderFlags> p_flags, float p_scale) {
-	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ);
-	ERR_FAIL_COND_V_MSG(file.is_null(), ERR_CANT_OPEN, "SpxImageLoaderSVG: Cannot open SVG file: " + p_path);
-	return load_image(p_image, file, p_flags, p_scale);
 }
