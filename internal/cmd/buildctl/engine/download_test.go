@@ -766,8 +766,8 @@ func TestDownloadPlatformAssetsInstallsMobileTemplates(t *testing.T) {
 func TestDownloadRuntimePackValidatesBeforeInstalling(t *testing.T) {
 	for _, tt := range []struct {
 		name, assetName, message string
-		files                   map[string]string
-		wantErr                 error
+		files                    map[string]string
+		wantErr                  error
 	}{
 		{name: "complete bundle", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},
 		{name: "custom asset name", assetName: "custom-runtime.zip", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},

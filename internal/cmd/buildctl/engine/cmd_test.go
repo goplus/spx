@@ -87,9 +87,9 @@ func TestParseEngineDownloadArgs(t *testing.T) {
 func TestFindLocalEngineAsset(t *testing.T) {
 	for _, tt := range []struct {
 		name, asset, want, message string
-		files                     []string
-		missingRoot               bool
-		wantErr                   error
+		files                      []string
+		missingRoot                bool
+		wantErr                    error
 	}{
 		{name: "direct", asset: "web.zip", files: []string{"web.zip"}, want: "web.zip"},
 		{name: "nested", asset: "web.zip", files: []string{"one/web.zip"}, want: "one/web.zip"},
@@ -218,7 +218,7 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			for _, tt := range []struct {
 				name, content, message string
-				unpublished, missing  bool
+				unpublished, missing   bool
 			}{
 				{name: "verified", content: verified},
 				{name: "wrong size", content: "short", message: "size ="},
