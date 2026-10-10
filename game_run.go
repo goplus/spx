@@ -19,7 +19,6 @@ package spx
 import (
 	"errors"
 	"reflect"
-	"runtime"
 	"time"
 
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
@@ -85,54 +84,29 @@ func XGot_Game_Reload(game Gamer, index any) (err error) {
 // Scheduling
 // -----------------------------------------------------------------------------
 func SchedNow() int {
-	now := time.Now()
-	err := coreruntime.SchedNow(
-		mainScheduleState(now),
-		coreruntime.SchedulerHooks{
-			SchedCurrent: func() {
-				if gco.IsInCoroutine() {
-					if me := gco.Current(); me != nil {
-						gco.Sched(me)
-					}
-				}
-			},
-		},
-	)
-	if handleMainExecutionTimeout(err) {
-		return 0
-	}
-	if err != nil && !errors.Is(err, coreruntime.ErrLoopExecutionTimedOut) {
-		engine.Panic(err.Error())
+	if thread := currentScriptThread(); thread != nil && !handleMainExecutionTimeout(thread) {
+		gco.Sched(thread)
 	}
 	return 0
 }
 
 func Sched() int {
-	err := coreruntime.Sched(
-		mainScheduleState(time.Now()),
-		schedTimeoutMs,
-		coreruntime.SchedulerHooks{
-			IsSchedTimeout: func(ms float64) bool {
-				if gco.IsInCoroutine() {
-					if me := gco.Current(); me != nil {
-						return me.IsSchedTimeout(ms)
-					}
-				}
-				return false
-			},
-			OnSchedTimeout: func() {
-				spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, debug.GetStackTrace())
-				engine.WaitNextFrame()
-			},
-		},
-	)
-	if handleMainExecutionTimeout(err) {
+	thread := currentScriptThread()
+	if thread == nil || handleMainExecutionTimeout(thread) || !thread.IsSchedTimeout(schedTimeoutMs) {
 		return 0
 	}
-	if err != nil {
-		engine.Panic(err.Error())
-	}
+	spxlog.Warn("%s\n%s", coreruntime.LoopExecutionTimedOutMsg, debug.GetStackTrace())
+	engine.WaitNextFrame()
+	engine.Panic(coreruntime.LoopExecutionTimedOutMsg)
 	return 0
+}
+
+// Current identifies the execution-lock owner, not necessarily the caller.
+func currentScriptThread() coroutine.Thread {
+	if gco == nil || !gco.IsInCoroutine() {
+		return nil
+	}
+	return gco.Current()
 }
 
 func Forever(call func()) {
@@ -189,35 +163,15 @@ func reloadGame(game Gamer, g *Game, index any) error {
 	return nil
 }
 
-func handleMainExecutionTimeout(err error) bool {
-	if !errors.Is(err, coreruntime.ErrMainExecutionTimedOut) {
+func handleMainExecutionTimeout(thread coroutine.Thread) bool {
+	if !coreruntime.MainExecutionTimedOut(thread.MainStartedAt(), time.Now(), mainExecTimeoutSec*time.Second) {
 		return false
 	}
 	spxlog.Warn("%s\n%s", coreruntime.MainExecutionTimedOutMsg, debug.GetStackTrace())
 	// Warn once, then schedule Main as a regular coroutine.
-	if gco != nil && gco.IsInCoroutine() {
-		if thread := gco.Current(); thread != nil {
-			thread.DisableMainTimeout()
-			gco.Sched(thread)
-		}
-	} else {
-		runtime.Gosched()
-	}
+	thread.DisableMainTimeout()
+	gco.Sched(thread)
 	return true
-}
-
-func mainScheduleState(now time.Time) coreruntime.ScheduleState {
-	var startedAt time.Time
-	if gco != nil && gco.IsInCoroutine() {
-		if thread := gco.Current(); thread != nil {
-			startedAt = thread.MainStartedAt()
-		}
-	}
-	return coreruntime.ScheduleState{
-		MainStartedAt:   startedAt,
-		Now:             now,
-		MainExecTimeout: time.Second * mainExecTimeoutSec,
-	}
 }
 
 func init() {

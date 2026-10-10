@@ -215,89 +215,24 @@ func TestRunInputLoopFrameDropsEdgesAtConsumerHandoff(t *testing.T) {
 }
 
 func TestMainExecutionTimedOut(t *testing.T) {
-	now := time.Unix(20, 0)
-	if !MainExecutionTimedOut(ScheduleState{
-		MainStartedAt:   time.Unix(10, 0),
-		Now:             now,
-		MainExecTimeout: 5 * time.Second,
-	}) {
-		t.Fatal("expected Main execution timeout")
-	}
-	if MainExecutionTimedOut(ScheduleState{
-		Now:             now,
-		MainExecTimeout: 5 * time.Second,
-	}) {
-		t.Fatal("unexpected timeout outside Main")
-	}
-}
-
-func TestSchedNow(t *testing.T) {
-	scheduled := false
-	err := SchedNow(
-		ScheduleState{
-			Now:             time.Unix(1, 0),
-			MainExecTimeout: time.Second,
-		},
-		SchedulerHooks{
-			SchedCurrent: func() { scheduled = true },
-		},
-	)
-	if err != nil {
-		t.Fatalf("SchedNow error: %v", err)
-	}
-	if !scheduled {
-		t.Fatal("expected current thread to be scheduled")
-	}
-
-	err = SchedNow(
-		ScheduleState{
-			MainStartedAt:   time.Unix(1, 0),
-			Now:             time.Unix(5, 0),
-			MainExecTimeout: 2 * time.Second,
-		},
-		SchedulerHooks{},
-	)
-	if err != ErrMainExecutionTimedOut {
-		t.Fatalf("SchedNow timeout error = %v, want %v", err, ErrMainExecutionTimedOut)
-	}
-}
-
-func TestSched(t *testing.T) {
-	called := false
-	err := Sched(
-		ScheduleState{
-			Now:             time.Unix(1, 0),
-			MainExecTimeout: time.Second,
-		},
-		3000,
-		SchedulerHooks{
-			IsSchedTimeout: func(ms float64) bool {
-				return ms == 3000
-			},
-			OnSchedTimeout: func() {
-				called = true
-			},
-		},
-	)
-	if err != ErrLoopExecutionTimedOut {
-		t.Fatalf("Sched error = %v, want %v", err, ErrLoopExecutionTimedOut)
-	}
-	if !called {
-		t.Fatal("expected sched timeout hook to run")
-	}
-
-	err = Sched(
-		ScheduleState{
-			Now:             time.Unix(1, 0),
-			MainExecTimeout: time.Second,
-		},
-		3000,
-		SchedulerHooks{
-			IsSchedTimeout: func(float64) bool { return true },
-		},
-	)
-	if err != ErrLoopExecutionTimedOut {
-		t.Fatalf("Sched timeout error = %v, want %v", err, ErrLoopExecutionTimedOut)
+	started := time.Unix(10, 0)
+	for _, tt := range []struct {
+		name    string
+		started time.Time
+		elapsed time.Duration
+		want    bool
+	}{
+		{"outside Main", time.Time{}, 10 * time.Second, false},
+		{"before deadline", started, 5*time.Second - time.Nanosecond, false},
+		{"at deadline", started, 5 * time.Second, true},
+		{"after deadline", started, 10 * time.Second, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MainExecutionTimedOut(tt.started, started.Add(tt.elapsed), 5*time.Second)
+			if got != tt.want {
+				t.Fatalf("MainExecutionTimedOut = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

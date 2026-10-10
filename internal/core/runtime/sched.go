@@ -16,59 +16,15 @@
 
 package runtime
 
-import (
-	"errors"
-	"time"
-)
+import "time"
 
 const (
 	MainExecutionTimedOutMsg = "Main execution timed out. Please check if there is an infinite loop in the code."
 	LoopExecutionTimedOutMsg = "For loop execution timed out. Please check if there is an infinite loop in the code."
 )
 
-//lint:ignore ST1005 This wraps a user-facing runtime message kept as a complete sentence.
-var ErrMainExecutionTimedOut = errors.New(MainExecutionTimedOutMsg)
-
-//lint:ignore ST1005 This wraps a user-facing runtime message kept as a complete sentence.
-var ErrLoopExecutionTimedOut = errors.New(LoopExecutionTimedOutMsg)
-
-type ScheduleState struct {
-	MainStartedAt   time.Time
-	Now             time.Time
-	MainExecTimeout time.Duration
-}
-
-type SchedulerHooks struct {
-	SchedCurrent   func()
-	IsSchedTimeout func(float64) bool
-	OnSchedTimeout func()
-}
-
-func MainExecutionTimedOut(state ScheduleState) bool {
-	return !state.MainStartedAt.IsZero() && state.Now.Sub(state.MainStartedAt) >= state.MainExecTimeout
-}
-
-func SchedNow(state ScheduleState, hooks SchedulerHooks) error {
-	if MainExecutionTimedOut(state) {
-		return ErrMainExecutionTimedOut
-	}
-	if hooks.SchedCurrent != nil {
-		hooks.SchedCurrent()
-	}
-	return nil
-}
-
-func Sched(state ScheduleState, schedTimeoutMs float64, hooks SchedulerHooks) error {
-	if MainExecutionTimedOut(state) {
-		return ErrMainExecutionTimedOut
-	}
-	if hooks.IsSchedTimeout != nil && hooks.IsSchedTimeout(schedTimeoutMs) {
-		if hooks.OnSchedTimeout != nil {
-			hooks.OnSchedTimeout()
-		}
-		return ErrLoopExecutionTimedOut
-	}
-	return nil
+func MainExecutionTimedOut(startedAt, now time.Time, timeout time.Duration) bool {
+	return !startedAt.IsZero() && now.Sub(startedAt) >= timeout
 }
 
 func Forever(call func(), yield func()) {

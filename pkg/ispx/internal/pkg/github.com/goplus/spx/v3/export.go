@@ -82,7 +82,6 @@ func init() {
 			"os":          "os",
 			"path":        "path",
 			"reflect":     "reflect",
-			"runtime":     "runtime",
 			"slices":      "slices",
 			"sort":        "sort",
 			"strconv":     "strconv",
