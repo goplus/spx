@@ -210,7 +210,7 @@ func (m *loadGamePanicExtMgr) OnRuntimePanic(message string) {
 
 func (m *loadGamePanicExtMgr) RequestExit(code int64) { m.exits = append(m.exits, code) }
 
-func TestLoadGameSpritesStopsAtFirstErrorWhenPanicReturns(t *testing.T) {
+func TestLoadGameSpritesReturnsFirstError(t *testing.T) {
 	game := &struct {
 		Game
 		Skipped *reloadPreflightSprite
@@ -227,8 +227,10 @@ func TestLoadGameSpritesStopsAtFirstErrorWhenPanicReturns(t *testing.T) {
 	panicMgr := &loadGamePanicExtMgr{}
 	pkgengine.ExtMgr = panicMgr
 
-	loadGameSprites(base, reflect.ValueOf(game).Elem(), files, &coreproject.ProjectConfig{})
-
+	err := loadGameSprites(base, reflect.ValueOf(game).Elem(), loadGameFS{files}, &coreproject.ProjectConfig{})
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), `load sprite "First"`) {
+		t.Fatalf("loadGameSprites error = %v, want named sprite error wrapping os.ErrNotExist", err)
+	}
 	if game.Skipped == nil || game.First == nil {
 		t.Fatal("sprite fields were not allocated before filtering and loading")
 	}
@@ -238,13 +240,59 @@ func TestLoadGameSpritesStopsAtFirstErrorWhenPanicReturns(t *testing.T) {
 	if game.Later != nil {
 		t.Fatal("sprite traversal continued after the first load error")
 	}
-	if want := []string{"file not found: sprites/First/index.json"}; !reflect.DeepEqual(panicMgr.messages, want) {
-		t.Fatalf("runtime panic messages = %v, want %v", panicMgr.messages, want)
+	if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
+		t.Fatalf("loading helper reported a fatal error: messages=%v exits=%v", panicMgr.messages, panicMgr.exits)
 	}
-	if want := []int64{1}; !reflect.DeepEqual(panicMgr.exits, want) {
-		t.Fatalf("runtime exit codes = %v, want %v", panicMgr.exits, want)
+	if base.tilemapMgr.g != nil || base.tilemapMgr.fs != nil {
+		t.Fatal("tilemap initialization continued after the sprite load error")
 	}
-	if base.tilemapMgr.g != base || base.tilemapMgr.fs == nil {
-		t.Fatal("tilemap initialization was skipped after the panic handler returned")
+}
+
+func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
+	closeErr := errors.New("close failed")
+	for _, tt := range []struct {
+		name     string
+		closeErr error
+	}{
+		{"close succeeds", nil},
+		{"close fails", closeErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			files := reloadConfigFS{"index.json": `{}`}
+			game := &reloadDirectCommitGame{}
+			base := setupReloadCommitRuntime(t, files, game, []Sprite{&DirectCommitSprite{}}, false)
+			platform := &loadGamePlatformMgr{title: "unchanged"}
+			pkgengine.PlatformMgr = platform
+			pkgengine.ResMgr = &loadGameResMgr{}
+			setupLoadGameFlags(t)
+			base.lifecycleState.IsRunned.Store(false)
+			base.tilemapMgr = gameTilemapMgr{}
+			previousFS := &closingLoadGameFS{}
+			base.fs = previousFS
+			resource := &closingLoadGameFS{
+				loadGameFS: loadGameFS{files},
+				closeErr:   tt.closeErr,
+			}
+
+			err := base.loadGame(resource, base.bootstrapGeneration())
+			if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "DirectCommitSprite") {
+				t.Fatalf("loadGame error = %v, want original sprite load error", err)
+			}
+			if tt.closeErr != nil && !errors.Is(err, tt.closeErr) {
+				t.Fatalf("loadGame error = %v, want joined close error", err)
+			}
+			if resource.closeCalls != 1 {
+				t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
+			}
+			if base.fs != previousFS || previousFS.closeCalls != 0 {
+				t.Fatal("failed load did not preserve the previous resource directory")
+			}
+			if base.tilemapMgr.g != nil || len(base.pendingBootstrap) != 0 || gco.LastThreadID() != 0 {
+				t.Fatal("sprite load failure continued into tilemap, bootstrap, or script initialization")
+			}
+			if platform.title != "unchanged" {
+				t.Fatalf("failed load changed the window title to %q", platform.title)
+			}
+		})
 	}
 }
