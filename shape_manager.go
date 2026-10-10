@@ -44,6 +44,7 @@ type shapeManager struct {
 	named                  map[string][]*SpriteImpl
 	tempItems              []Shape
 	destroyItems           []Shape
+	bubbles                []bubbleShape
 	textBubbles            []*textBubble
 	activeTextBubbles      []*textBubble
 	sayLayouts             []ui.SayBubbleLayout
@@ -66,6 +67,7 @@ func (s *shapeManager) init() {
 	s.items = resetSlice(s.items, 64)
 	s.tempItems = resetSlice(s.tempItems, 50)
 	s.destroyItems = resetSlice(s.destroyItems, 16)
+	s.bubbles = resetSlice(s.bubbles, 0)
 	s.textBubbles = resetSlice(s.textBubbles, 0)
 	s.activeTextBubbles = resetSlice(s.activeTextBubbles, 0)
 	s.sayLayouts = resetSlice(s.sayLayouts, 0)
@@ -99,17 +101,32 @@ func (s *shapeManager) flushActivate(items []Shape) {
 	}
 }
 
-func (s *shapeManager) layoutTextBubbles(items []Shape) {
+func (s *shapeManager) collectBubbles(items []Shape) {
+	s.bubbles = resetSlice(s.bubbles, 0)
 	s.textBubbles = resetSlice(s.textBubbles, 0)
-	s.sayLayouts = resetSlice(s.sayLayouts, 0)
-
 	for _, item := range items {
-		bubble, ok := item.(*textBubble)
-		if !ok || bubble.panel == nil || !bubble.sprite.Visible() {
+		bubble, ok := item.(bubbleShape)
+		if !ok {
 			continue
 		}
-		s.textBubbles = append(s.textBubbles, bubble)
+		s.bubbles = append(s.bubbles, bubble)
+		if textBubble, ok := bubble.(*textBubble); ok {
+			s.textBubbles = append(s.textBubbles, textBubble)
+		}
 	}
+}
+
+func (s *shapeManager) layoutTextBubbles() {
+	s.sayLayouts = resetSlice(s.sayLayouts, 0)
+
+	visible := s.textBubbles[:0]
+	for _, bubble := range s.textBubbles {
+		if bubble.panel == nil || !bubble.sprite.Visible() {
+			continue
+		}
+		visible = append(visible, bubble)
+	}
+	s.textBubbles = visible
 
 	sortTextBubblesByLayoutID(s.textBubbles)
 	topologyChanged := !slices.Equal(s.textBubbles, s.activeTextBubbles)
@@ -375,16 +392,19 @@ func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
 
 // flushBubbleVisuals commits final bubble layout and UI state for the current frame.
 func (s *shapeManager) flushBubbleVisuals(items []Shape) {
-	s.layoutTextBubbles(items)
+	s.collectBubbles(items)
+
+	frame := itime.Frame()
+	// Remove expired bubbles before resolving this frame's layouts.
+	for _, bubble := range s.bubbles {
+		bubble.flushPendingRemoval(frame)
+	}
+
+	s.layoutTextBubbles()
 
 	delta := itime.DeltaTime()
-	for _, item := range items {
-		switch bubble := item.(type) {
-		case *textBubble:
-			bubble.onUpdate(delta)
-		case *quoterBubble:
-			bubble.onUpdate(delta)
-		}
+	for _, bubble := range s.bubbles {
+		bubble.onUpdate(delta)
 	}
 }
 
