@@ -24,7 +24,7 @@ import (
 	"syscall/js"
 	_ "unsafe"
 
-	spx "github.com/goplus/spx/v3"
+	"github.com/goplus/spx/v3"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
