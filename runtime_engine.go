@@ -140,25 +140,6 @@ func runSpriteMainsUntilYield(inits []Sprite) {
 	}
 }
 
-func (p *Game) queueBootstrap(generation uint64, call func()) bool {
-	if call == nil {
-		return false
-	}
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
-	}
-	p.pendingBootstrap = append(p.pendingBootstrap, call)
-	return true
-}
-
-func (p *Game) bootstrapGeneration() uint64 {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	return p.bootstrapGen
-}
-
 func (p *Game) resetBootstrap() {
 	p.bootstrapMu.Lock()
 	p.bootstrapGen++
@@ -171,55 +152,12 @@ func (p *Game) resetBootstrap() {
 	p.bootstrapMu.Unlock()
 }
 
-func (p *Game) runBootstrapTasks(generation uint64) {
-	for {
-		tasks := p.takeBootstrapTasks(generation)
-		if len(tasks) == 0 {
-			return
-		}
-		// Also drain tasks queued by earlier tasks.
-		for _, task := range tasks {
-			if !p.isCurrentBootstrap(generation) {
-				return
-			}
-			task()
-		}
-	}
-}
-
-func (p *Game) takeBootstrapTasks(generation uint64) []func() {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return nil
-	}
-	tasks := p.pendingBootstrap
-	p.pendingBootstrap = nil
-	return tasks
-}
-
-func (p *Game) isCurrentBootstrap(generation uint64) bool {
-	return generation == p.bootstrapGeneration()
-}
-
 func (p *Game) completeBootstrap(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
-	}
-	p.lifecycleState.BootstrapDone.Store(true)
-	return true
+	return p.markBootstrapFlag(generation, &p.lifecycleState.BootstrapDone)
 }
 
 func (p *Game) markGameStarted(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
-	}
-	p.lifecycleState.IsRunned.Store(true)
-	return true
+	return p.markBootstrapFlag(generation, &p.lifecycleState.IsRunned)
 }
 
 func (p *Game) scheduleStartEvent() *eventStart {
@@ -242,23 +180,7 @@ func (p *Game) takeStartSinks(generation uint64) ([]eventSink, bool) {
 }
 
 func (p *Game) markStartDispatched(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen {
-		return false
-	}
-	p.lifecycleState.StartDispatched.Store(true)
-	return true
-}
-
-func (p *Game) claimBootstrap(generation uint64) bool {
-	p.bootstrapMu.Lock()
-	defer p.bootstrapMu.Unlock()
-	if generation != p.bootstrapGen || p.bootstrapStarted {
-		return false
-	}
-	p.bootstrapStarted = true
-	return true
+	return p.markBootstrapFlag(generation, &p.lifecycleState.StartDispatched)
 }
 
 func (p *Game) startBootstrap(generation uint64) {

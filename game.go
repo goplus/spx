@@ -78,6 +78,7 @@ const (
 type Game struct {
 	baseObj
 	scriptEventBindings
+	gameBootstrapState
 	fs spxfs.Dir
 
 	lifecycleState     gameLifecycleState
@@ -101,11 +102,6 @@ type Game struct {
 
 	scriptEvents            scriptEventRegistry
 	gamer                   Gamer
-	bootstrapMu             sync.Mutex
-	bootstrapGen            uint64
-	bootstrapStarted        bool
-	startScheduled          bool
-	pendingBootstrap        []func()
 	sprCollisionInfos       map[string]*spriteCollisionInfo
 	sprCollisionData        []*spriteCollisionData
 	isAutoSetCollisionLayer bool
