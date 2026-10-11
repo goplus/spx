@@ -16,48 +16,14 @@
 
 package engine
 
-import (
-	"fmt"
-	"os"
-	"path/filepath"
-)
+import "path/filepath"
 
 func downloadAndroidAssets(env engineDownloadEnv) error {
-	url := env.urlPrefix + "android.zip"
-	zipPath := filepath.Join(env.cacheDir, "android.zip")
-	if err := fetchEngineAsset(env, "android.zip", url, zipPath); err != nil {
-		return err
-	}
-	defer os.Remove(zipPath)
-
-	extractDir, err := os.MkdirTemp(env.cacheDir, "android-assets-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(extractDir)
-
-	if err := extractZip(zipPath, extractDir); err != nil {
-		return err
-	}
-
-	requiredFiles := []string{"android_debug.apk", "android_release.apk", "android_source.zip"}
-	for _, name := range requiredFiles {
-		src := filepath.Join(extractDir, name)
-		info, err := os.Stat(src)
-		if err != nil {
-			return fmt.Errorf("Android asset bundle is missing %s: %w", name, err)
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("Android asset bundle entry %s is not a regular file", name)
-		}
-	}
-	for _, name := range requiredFiles {
-		src := filepath.Join(extractDir, name)
-		if err := copyEngineAssetAtomically(src, filepath.Join(env.templateDir, name)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return downloadBinariesFromZip(env, "android.zip", []binaryInstall{
+		{"android_debug.apk", filepath.Join(env.templateDir, "android_debug.apk")},
+		{"android_release.apk", filepath.Join(env.templateDir, "android_release.apk")},
+		{"android_source.zip", filepath.Join(env.templateDir, "android_source.zip")},
+	})
 }
 
 func downloadIOSAssets(env engineDownloadEnv) error {
