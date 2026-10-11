@@ -600,13 +600,57 @@ func TestPlayAnimAudioStartsAndStopsOnPlaySound(t *testing.T) {
 		t.Fatalf("loop calls = %+v, want one loop call for playback %d", backend.loops, playID)
 	}
 
-	anim.onAnimationDone("walk")
+	anim.onAnimationDone(state)
 
 	if len(backend.stops) != 1 || backend.stops[0] != playID {
 		t.Fatalf("stops = %+v, want [%d]", backend.stops, playID)
 	}
 	if anim.curAnimState != nil {
 		t.Fatal("onAnimationDone did not clear the finished animation state")
+	}
+}
+
+func TestFlushCompletedAnimationsKeepsPlaybackIdentity(t *testing.T) {
+	for _, inactive := range []string{"", "destroyed", "unbound"} {
+		t.Run(inactive, func(t *testing.T) {
+			anim := newTestAnimationComponent()
+			old := &animState{Name: "walk"}
+			anim.curAnimState = old
+			anim.sprite.handleAnimationFinished()
+			anim.sprite.handleAnimationFinished()
+			replacement := &animState{Name: "walk"}
+			anim.curAnimState = replacement
+			switch inactive {
+			case "destroyed":
+				anim.sprite.markDestroyed()
+			case "unbound":
+				anim.sprite.runtimeState.SyncSprite = nil
+			}
+			queued := anim.doneAnimations
+			buffer := make([]*animState, 0, 2)
+			buffer = anim.sprite.flushCompletedAnimations(buffer)
+			if anim.curAnimState != replacement || replacement.IsCanceled {
+				t.Fatal("queued completion canceled the replacement playback")
+			}
+			if len(anim.doneAnimations) != 0 || len(buffer) != 0 {
+				t.Fatal("completed animation buffers were not drained")
+			}
+			for _, states := range [][]*animState{queued, buffer[:cap(buffer)]} {
+				for _, state := range states {
+					if state != nil {
+						t.Fatal("reusable buffer retained completed playback")
+					}
+				}
+			}
+			if inactive == "" {
+				anim.sprite.handleAnimationFinished()
+				anim.sprite.handleAnimationFinished()
+				anim.sprite.flushCompletedAnimations(buffer)
+				if anim.curAnimState != nil || !replacement.IsCanceled {
+					t.Fatal("current playback did not complete")
+				}
+			}
+		})
 	}
 }
 
@@ -717,7 +761,7 @@ func TestHandleAnimationLoopedRestartsOnPlaySound(t *testing.T) {
 		t.Fatalf("loop calls = %+v, want one loop playback setup for id %d", backend.loops, firstID)
 	}
 
-	anim.onAnimationDone("walk")
+	anim.onAnimationDone(state)
 
 	if len(backend.stops) != 1 || backend.stops[0] != firstID {
 		t.Fatalf("stops = %+v, want [%d]", backend.stops, firstID)

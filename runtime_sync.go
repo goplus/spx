@@ -279,7 +279,7 @@ func (p *SpriteImpl) handleAnimationFinished() {
 	}
 	state := p.animation().curAnimState
 	if state != nil && state.Name != "" {
-		p.animation().addDoneAnimation(state.Name)
+		p.animation().addDoneAnimation(state)
 	}
 }
 
