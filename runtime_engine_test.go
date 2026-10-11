@@ -368,7 +368,7 @@ func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
 		game.sounds[name] = &coreproject.SoundConfig{Path: name + ".wav"}
 		sprite.sound().pendingAudios = []string{name}
 		anim.curAnimState = &animState{Name: name}
-		anim.doneAnimations = []string{name}
+		anim.doneAnimations = []*animState{anim.curAnimState}
 		return sprite
 	}
 	first, second, late := newSprite("first"), newSprite("second"), newSprite("late")
@@ -408,7 +408,7 @@ func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
 	itime.RegisterTimer(0.1)
 	itime.RegisterTimer(0.3)
 	itime.Update(0.2, 30)
-	audios, animations := make([]string, 0, 4), make([]string, 0, 4)
+	audios, animations := make([]string, 0, 4), make([]*animState, 0, 4)
 	audioStorage, animationStorage := &audios[:cap(audios)][0], &animations[:cap(animations)][0]
 	audios, animations = game.processLogicFrame(audios, animations)
 	want := []string{"play:" + engine.ToAssetPath("first.wav"), "play:" + engine.ToAssetPath("second.wav"), "complete:1", "complete:2"}
@@ -455,7 +455,7 @@ func TestLogicFramePreservesEmptyScratch(t *testing.T) {
 	for _, items := range [][]Shape{nil, {struct{}{}}} {
 		game := &Game{}
 		game.shapeMgr.items = items
-		audios, animations := game.processLogicFrame([]string{}, []string{})
+		audios, animations := game.processLogicFrame([]string{}, []*animState{})
 		if audios == nil || animations == nil || len(audios) != 0 || len(animations) != 0 {
 			t.Fatalf("scratch = %#v, %#v, want non-nil empty slices", audios, animations)
 		}

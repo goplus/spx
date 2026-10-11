@@ -72,7 +72,7 @@ func inputFrameEventHooks(emit func(event)) coreruntime.InputFrameHooks {
 }
 
 func (p *Game) logicLoop(coroutine.Thread) {
-	tempAudios, tempAnimations := []string{}, []string{}
+	tempAudios, tempAnimations := []string{}, []*animState{}
 	for {
 		tempAudios, tempAnimations = p.processLogicFrame(tempAudios, tempAnimations)
 		engine.WaitNextFrame()
@@ -80,7 +80,7 @@ func (p *Game) logicLoop(coroutine.Thread) {
 	}
 }
 
-func (p *Game) processLogicFrame(tempAudios, tempAnimations []string) ([]string, []string) {
+func (p *Game) processLogicFrame(tempAudios []string, tempAnimations []*animState) ([]string, []*animState) {
 	items := p.shapeMgr.getTempShapes()
 	// Flush all pending audio before completing any animations.
 	for _, item := range items {

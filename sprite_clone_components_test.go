@@ -24,7 +24,7 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	parentAnimation.curAnimState = &animState{Name: "playing"}
 	parentAnimation.activeTweenStates = []*animState{{Name: "moving"}}
 	parentAnimation.defaultAnimActive = true
-	parentAnimation.doneAnimations = []string{"completed"}
+	parentAnimation.doneAnimations = []*animState{{Name: "completed"}}
 	original.pen().penWidth = 7
 	original.SetSoundEffect(SoundPanEffect, 20)
 

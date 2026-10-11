@@ -81,17 +81,14 @@ func (p *SpriteImpl) StopAnimation(name SpriteAnimationName) {
 // -----------------------------------------------------------------------------
 // Internal State
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) flushCompletedAnimations(buffer []string) []string {
+func (p *SpriteImpl) flushCompletedAnimations(buffer []*animState) []*animState {
 	engine.Lock()
 	buffer = p.animation().takeDoneAnimations(buffer)
 	engine.Unlock()
+	defer clear(buffer)
 
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
-		return buffer[:0]
-	}
-
-	for _, animName := range buffer {
-		p.animation().onAnimationDone(animName)
+	for _, state := range buffer {
+		p.animation().onAnimationDone(state)
 	}
 	return buffer[:0]
 }
