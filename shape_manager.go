@@ -119,14 +119,9 @@ func (s *shapeManager) collectBubbles(items []Shape) {
 func (s *shapeManager) layoutTextBubbles() {
 	s.sayLayouts = resetSlice(s.sayLayouts, 0)
 
-	visible := s.textBubbles[:0]
-	for _, bubble := range s.textBubbles {
-		if bubble.panel == nil || !bubble.sprite.Visible() {
-			continue
-		}
-		visible = append(visible, bubble)
-	}
-	s.textBubbles = visible
+	s.textBubbles = slices.DeleteFunc(s.textBubbles, func(bubble *textBubble) bool {
+		return bubble.panel == nil || !bubble.sprite.Visible()
+	})
 
 	sortTextBubblesByLayoutID(s.textBubbles)
 	topologyChanged := !slices.Equal(s.textBubbles, s.activeTextBubbles)

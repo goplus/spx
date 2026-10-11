@@ -348,11 +348,14 @@ func TestQuoteBubbleTokenOnlyExpiresCurrentGeneration(t *testing.T) {
 
 func TestLayoutTextBubblesPreservesEmptyActiveSlice(t *testing.T) {
 	for _, active := range [][]*textBubble{nil, {}} {
-		shapes := shapeManager{activeTextBubbles: active}
+		shapes := shapeManager{activeTextBubbles: active, textBubbles: active}
 		shapes.collectBubbles(nil)
 		shapes.layoutTextBubbles()
 		if len(shapes.activeTextBubbles) != 0 || (shapes.activeTextBubbles == nil) != (active == nil) {
 			t.Fatalf("empty topology changed active slice: before=%#v after=%#v", active, shapes.activeTextBubbles)
+		}
+		if len(shapes.textBubbles) != 0 || (shapes.textBubbles == nil) != (active == nil) {
+			t.Fatalf("empty topology changed collected slice: before=%#v after=%#v", active, shapes.textBubbles)
 		}
 	}
 }
@@ -406,12 +409,47 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement}) {
 		t.Fatal("hidden bubble remained active")
 	}
-	if shapes.activeTextBubbles[:2][1] != nil {
+	if shapes.activeTextBubbles[:2][1] != nil || shapes.textBubbles[:2][1] != nil {
 		t.Fatal("removed bubble reference was retained in reusable storage")
 	}
 	replacement.panel = nil
 	layout([]Shape{&replacement, second})
 	if len(shapes.activeTextBubbles) != 0 || shapes.activeTextBubbles[:1][0] != nil {
 		t.Fatal("panel removal did not clear the final active bubble")
+	}
+	for _, bubble := range shapes.textBubbles[:cap(shapes.textBubbles)] {
+		if bubble != nil {
+			t.Fatal("filtered bubble remained in collected storage")
+		}
+	}
+
+	for _, reason := range []string{"hidden", "panel-less"} {
+		for removed, position := range []string{"first", "middle", "last"} {
+			t.Run(reason+"/"+position, func(t *testing.T) {
+				first, second, third := newBubble(1), newBubble(2), newBubble(3)
+				bubbles := []*textBubble{first, second, third}
+				if reason == "hidden" {
+					bubbles[removed].sprite.spriteState.IsVisible = false
+				} else {
+					bubbles[removed].panel = nil
+				}
+				var shapes shapeManager
+				shapes.collectBubbles([]Shape{first, second, third})
+				storage := shapes.textBubbles[:cap(shapes.textBubbles)]
+				shapes.layoutTextBubbles()
+				want := slices.Delete(slices.Clone(bubbles), removed, removed+1)
+				if !slices.Equal(shapes.textBubbles, want) || &shapes.textBubbles[0] != &storage[0] || storage[2] != nil {
+					t.Fatal("filtering lost order, replaced storage, or retained removed bubble")
+				}
+				shapes.collectBubbles(nil)
+				shapes.layoutTextBubbles()
+				shapes.init()
+				for _, bubble := range storage {
+					if bubble != nil {
+						t.Fatal("empty frame and reset retained bubble")
+					}
+				}
+			})
+		}
 	}
 }
