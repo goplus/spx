@@ -52,7 +52,7 @@ type animationComponent struct {
 	defaultAnimActive bool
 
 	// Animation tracking (per-instance).
-	doneAnimations []string
+	doneAnimations []*animState
 }
 
 // tweenParams holds typed endpoints and derived velocity.
@@ -262,11 +262,11 @@ func (a *animationComponent) hasActiveAnimationPlayback() bool {
 // Animation Events
 // ============================================================================
 
-func (a *animationComponent) onAnimationDone(animName string) {
+func (a *animationComponent) onAnimationDone(state *animState) {
 	if a.syncSpriteForPlayback() == nil {
 		return
 	}
-	if state := a.curAnimState; state != nil && state.Name == animName {
+	if state != nil && a.curAnimState == state {
 		if !a.stopCurrentAnimState(state) {
 			return
 		}
@@ -278,12 +278,13 @@ func (a *animationComponent) onAnimationDone(animName string) {
 // Animation Completion
 // ============================================================================
 
-func (a *animationComponent) addDoneAnimation(animName string) {
-	a.doneAnimations = append(a.doneAnimations, animName)
+func (a *animationComponent) addDoneAnimation(state *animState) {
+	a.doneAnimations = append(a.doneAnimations, state)
 }
 
-func (a *animationComponent) takeDoneAnimations(buffer []string) []string {
+func (a *animationComponent) takeDoneAnimations(buffer []*animState) []*animState {
 	buffer = append(buffer, a.doneAnimations...)
+	clear(a.doneAnimations)
 	a.doneAnimations = a.doneAnimations[:0]
 	return buffer
 }

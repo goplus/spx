@@ -11,6 +11,7 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
+	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -229,5 +230,55 @@ func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testi
 	joinAnimationThread(t, co, thread)
 	if continued || anim.curAnimState != nil || len(audio.stops) != 1 || audio.playing[1] || sprites.playing {
 		t.Fatalf("canceled initialization continued=%v, state=%v, stops=%v", continued, anim.curAnimState, audio.stops)
+	}
+}
+
+// TestAnimationConditionReplacementSurvivesQueuedCompletion exercises the native
+// scheduling phases rather than assigning curAnimState directly.
+func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
+	co, anim, _, audio := setupAnimationLifecycle(t)
+	itime.OnReload()
+	itime.Start(nil)
+	t.Cleanup(itime.OnReload)
+	game := anim.sprite.g
+	game.bindScriptEvents()
+	game.shapeMgr.items = []Shape{anim.sprite}
+	if !co.TryRunFromEngine(anim.sprite, func() { anim.sprite.AnimateWith("walk", false) }) {
+		t.Fatal("fixture did not use native engine dispatch")
+	}
+	old := anim.curAnimState
+	if old == nil {
+		t.Fatal("original public playback did not start")
+	}
+
+	// This is the existing logic loop's WaitNextFrame -> processLogicFrame order.
+	logic := co.Create(game, func(coroutine.Thread) {
+		engine.WaitNextFrame()
+		game.processLogicFrame(nil, nil)
+	})
+	co.JoinYieldedOrDone(logic)
+	anim.sprite.handleAnimationFinished()
+
+	var replacement *animState
+	var playbackID int64
+	game.OnCond(func() bool { return true }, func() {
+		anim.sprite.AnimateWith("walk", false)
+		replacement = anim.curAnimState
+		if replacement != nil {
+			playbackID = replacement.OnPlayAudioPlaybackID
+		}
+	})
+	// Actual engine phase order: sample, advance clock, dispatch condition,
+	// then update coroutine jobs including the waiting logic loop.
+	game.scriptEvents.sampleConditions()
+	itime.Update(1.0/60.0, 60)
+	game.scriptEvents.dispatchConditions()
+	co.Update()
+	co.Join(logic)
+	if replacement == nil || replacement == old {
+		t.Fatalf("condition did not retain a distinct playback: old=%p replacement=%p current=%p", old, replacement, anim.curAnimState)
+	}
+	if anim.curAnimState != replacement || replacement.IsCanceled || !audio.playing[playbackID] {
+		t.Fatalf("completion canceled OnCond same-name replacement: current=%p replacement=%p canceled=%v audioPlaying=%v", anim.curAnimState, replacement, replacement.IsCanceled, audio.playing[playbackID])
 	}
 }
