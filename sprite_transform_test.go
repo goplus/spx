@@ -22,7 +22,9 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func newTestTransformSprite(x, y float64) *SpriteImpl {
@@ -129,6 +131,58 @@ func TestSpriteTurnToXYposFacesCoordinateTarget(t *testing.T) {
 	if got := sprite.Heading(); got != -135 {
 		t.Fatalf("Heading() = %v, want -135", got)
 	}
+}
+
+func TestSpriteHeadingMultipleRevolutions(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.SetHeading(1080.5)
+	if got := sprite.Heading(); got != 0.5 {
+		t.Fatalf("SetHeading: got %v, want 0.5", got)
+	}
+	sprite.ChangeHeading(-720.5)
+	if got := sprite.Heading(); got != 0 {
+		t.Fatalf("ChangeHeading: got %v, want 0", got)
+	}
+	version := sprite.spriteState.DirtyVersion
+	sprite.SetHeading(1080)
+	if sprite.spriteState.DirtyVersion != version {
+		t.Fatal("equivalent heading dirtied the sprite proxy")
+	}
+}
+
+func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
+	t.Cleanup(func() { itime.Start(nil) })
+	co := setupRuntimeScheduler(t)
+	sprite := newTestTransformSprite(0, 0)
+	sprite.SetHeading(-10)
+	sprite.animation().shared.animations[StateTurn] = &animationEntry{
+		name:   StateTurn,
+		config: &coreproject.AniConfig{TurnToDuration: 360},
+	}
+
+	// At one degree per second, the shortest turn passes through zero after
+	// ten seconds and reaches the target after twenty.
+	itime.Update(10, 30)
+	returned := false
+	thread := co.Create(sprite, func(coroutine.Thread) {
+		sprite.TurnToDir(-710, nil)
+		returned = true
+	})
+	co.Update()
+	if got := sprite.Heading(); got != 0 {
+		t.Fatalf("halfway heading = %v, want 0", got)
+	}
+	itime.Update(10, 30)
+	co.Update()
+	if got := sprite.Heading(); got != 10 {
+		t.Fatalf("final heading = %v, want 10", got)
+	}
+	itime.Update(0, 30)
+	co.Update()
+	if !returned {
+		t.Fatal("TurnToDir did not return after its final animation frame")
+	}
+	co.Join(thread)
 }
 
 func TestMotionOptions(t *testing.T) {
@@ -394,19 +448,32 @@ func TestNormalizeDirectionPeriodicity(t *testing.T) {
 	}
 }
 
-func TestSpriteHeadingMultipleRevolutions(t *testing.T) {
-	sprite := newTestTransformSprite(0, 0)
-	sprite.SetHeading(1080.5)
-	if got := sprite.Heading(); got != 0.5 {
-		t.Fatalf("SetHeading: got %v, want 0.5", got)
+func TestNormalizeAngleRangePreservesShortestPathAndHalfTurnDirection(t *testing.T) {
+	for _, tt := range []struct {
+		from, to, wantDelta float64
+	}{
+		{-10, -710, 20}, {10, 710, -20},
+		{-730, 730, 20}, {730, -730, -20},
+		{90, -90, 180}, {-90, 90, -180},
+		{0, -180, 180}, {180, 0, -180},
+		{-180, 540, 0},
+		{0, 1e-14, 1e-14},
+		{math.MaxFloat64, -math.MaxFloat64, 104},
+		{-math.MaxFloat64, math.MaxFloat64, -104},
+	} {
+		from, to := normalizeAngleRange(tt.from, tt.to)
+		if delta := to - from; delta != tt.wantDelta {
+			t.Errorf("normalizeAngleRange(%v, %v) turns %v degrees, want %v", tt.from, tt.to, delta, tt.wantDelta)
+		}
 	}
-	sprite.ChangeHeading(-720.5)
-	if got := sprite.Heading(); got != 0 {
-		t.Fatalf("ChangeHeading: got %v, want 0", got)
-	}
-	version := sprite.spriteState.DirtyVersion
-	sprite.SetHeading(1080)
-	if sprite.spriteState.DirtyVersion != version {
-		t.Fatal("equivalent heading dirtied the sprite proxy")
+	for _, angle := range []float64{math.Inf(-1), math.Inf(1), math.NaN()} {
+		from, to := normalizeAngleRange(angle, 90)
+		if !math.IsNaN(from) || to != 90 {
+			t.Errorf("normalizeAngleRange(%v, 90) = (%v, %v), want (NaN, 90)", angle, from, to)
+		}
+		from, to = normalizeAngleRange(90, angle)
+		if from != 90 || !math.IsNaN(to) {
+			t.Errorf("normalizeAngleRange(90, %v) = (%v, %v), want (90, NaN)", angle, from, to)
+		}
 	}
 }

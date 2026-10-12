@@ -28,18 +28,23 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
+// -----------------------------------------------------------------------------
+// Loading
+// -----------------------------------------------------------------------------
 func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	opened, err := coreproject.OpenBuilderResources(resource, nil)
 	if err != nil {
 		return err
 	}
 	previousFS := p.fs
+	previousTilemap := p.tilemapMgr
 	defer func() {
 		if opened.FS == nil {
 			return
 		}
-		// A failed sprite load must not leave the game holding the closed directory.
+		// Failed loading must not retain the closed resource directory.
 		p.fs = previousFS
+		p.tilemapMgr = previousTilemap
 		if closeErr := opened.FS.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close project resources: %w", closeErr))
 		}
@@ -61,11 +66,15 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	p.applyRuntimeConfig(conf, proj)
 	setupGameSystems(p, proj)
 	gamer := reflect.ValueOf(p.gamer).Elem()
-	if err := loadGameSprites(p, gamer, opened.FS, proj); err != nil {
+	p.startLoad(opened.FS)
+	if err := p.loadSpriteFields(gamer); err != nil {
+		return err
+	}
+	p.tilemapMgr.init(p, opened.FS, proj.TilemapPath)
+	if err := p.loadStage(gamer, proj, generation, p.loadSprite, nil); err != nil {
 		return err
 	}
 	opened.FS = nil // The game now owns the directory.
-	p.loadStage(gamer, proj, generation, p.loadSprite, nil)
 
 	platform := &engine.Managers().PlatformMgr
 	if !conf.DontRunOnUnfocused {
@@ -83,6 +92,34 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.events = make(chan event, eventBufferSize)
 	p.eventQueueState.EventQueueStats.Reset()
 	p.fs = fs
+}
+
+func (p *Game) loadSpriteFields(gamer reflect.Value) error {
+	for i := range gamer.NumField() {
+		name, sprite := p.allocSpriteField(gamer, i)
+		if sprite == nil || p.typs[name] == nil {
+			continue
+		}
+		if err := p.loadSprite(sprite, name, gamer); err != nil {
+			return fmt.Errorf("load sprite %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// Allocate before filtering so registered non-sprite interface fields are initialized too.
+func (g *Game) allocSpriteField(v reflect.Value, i int) (string, Sprite) {
+	name, val := coreproject.FieldPtrOrAlloc(v, i, coreproject.FieldAllocConfig{
+		IsPointerSpriteType: func(typ reflect.Type) bool {
+			return typ.Implements(tySprite)
+		},
+		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
+			typ, ok := g.typs[fieldName]
+			return typ, ok
+		},
+	})
+	sprite, _ := val.(Sprite)
+	return name, sprite
 }
 
 // -----------------------------------------------------------------------------
@@ -109,25 +146,6 @@ func validateProjectConfig(project *coreproject.ProjectConfig) error {
 	return nil
 }
 
-// -----------------------------------------------------------------------------
-// Loading
-// -----------------------------------------------------------------------------
-func loadGameSprites(g *Game, v reflect.Value, fs spxfs.Dir, proj *coreproject.ProjectConfig) error {
-	g.startLoad(fs)
-	for i := range v.NumField() {
-		name, val := getFieldPtrOrAlloc(g, v, i)
-		fld, ok := val.(Sprite)
-		if !ok || g.typs[name] == nil {
-			continue
-		}
-		if err := g.loadSprite(fld, name, v); err != nil {
-			return fmt.Errorf("load sprite %q: %w", name, err)
-		}
-	}
-	g.tilemapMgr.init(g, fs, proj.TilemapPath)
-	return nil
-}
-
 func parseCommandLineFlags(conf *Config) {
 	f := flag.CommandLine
 	effects, err := coreproject.ParseCommandLineFlags(f, os.Args[1:], conf)
@@ -144,16 +162,4 @@ func parseCommandLineFlags(conf *Config) {
 	if effects.Verbose {
 		SetDebug(DbgFlagAll)
 	}
-}
-
-func getFieldPtrOrAlloc(g *Game, v reflect.Value, i int) (name string, val any) {
-	return coreproject.FieldPtrOrAlloc(v, i, coreproject.FieldAllocConfig{
-		IsPointerSpriteType: func(typ reflect.Type) bool {
-			return typ.Implements(tySprite)
-		},
-		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
-			typ, ok := g.typs[fieldName]
-			return typ, ok
-		},
-	})
 }

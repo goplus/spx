@@ -138,9 +138,8 @@ func (p *reloadPlan) addPrototype(name string, typ reflect.Type, shadow reflect.
 func (p *reloadPlan) loadSprites(g *Game, gamer reflect.Value) error {
 	loadSprite := p.spriteLoader(g)
 	for i := range gamer.NumField() {
-		name, val := getFieldPtrOrAlloc(g, gamer, i)
-		sprite, ok := val.(Sprite)
-		if !ok {
+		name, sprite := g.allocSpriteField(gamer, i)
+		if sprite == nil {
 			continue
 		}
 		if err := loadSprite(sprite, name, gamer); err != nil {
@@ -185,9 +184,8 @@ func prepareReload(g *Game, gamer reflect.Value, index any) (*reloadPlan, error)
 	// Mirror the field layout without changing the live game.
 	shadow := reflect.New(gamer.Type()).Elem()
 	for i := range shadow.NumField() {
-		name, val := getFieldPtrOrAlloc(g, shadow, i)
-		sprite, ok := val.(Sprite)
-		if !ok {
+		name, sprite := g.allocSpriteField(shadow, i)
+		if sprite == nil {
 			continue
 		}
 		if err := validateReloadSprite(sprite, shadow); err != nil {

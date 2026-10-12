@@ -22,6 +22,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
@@ -290,6 +291,74 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 	if spriteBSeenThreadCount != 2 {
 		t.Fatalf("SpriteB saw %d created threads before its first yield, want 2", spriteBSeenThreadCount)
 	}
+}
+
+type bootstrapOnLoadedGame struct {
+	Game
+	onLoaded func(*bootstrapOnLoadedGame)
+}
+
+func (g *bootstrapOnLoadedGame) OnLoaded() { g.onLoaded(g) }
+
+func TestRunSpriteCallbacksRunsOnLoadedAfterAllMainsYield(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		co := setupRuntimeScheduler(t)
+		game := &bootstrapOnLoadedGame{}
+		blocked := make(chan struct{})
+		var calls []string
+		var loadedReceiver *bootstrapOnLoadedGame
+		loadedCalls, resumed := 0, 0
+		game.onLoaded = func(receiver *bootstrapOnLoadedGame) {
+			loadedReceiver = receiver
+			loadedCalls++
+			calls = append(calls, "OnLoaded")
+		}
+
+		var sprites []Sprite
+		for _, name := range []string{"SpriteA", "SpriteB"} {
+			sprite := newCollisionLayerOrderSprite(&game.Game, name, func() {
+				for _, peer := range sprites {
+					if spriteOf(peer).CostumeIndex() != 0 {
+						t.Errorf("%s Main ran before every sprite was awake", name)
+					}
+				}
+				calls = append(calls, name)
+				engine.WaitForChan(blocked)
+				resumed++
+			})
+			prepareAwakeCostumes(&sprite.SpriteImpl)
+			sprite.runtimeState.SyncSprite = &engine.Sprite{}
+			sprites = append(sprites, sprite)
+		}
+
+		generation := game.bootstrapGeneration()
+		game.runSpriteCallbacks(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
+		if len(calls) != 0 || co.LastThreadID() != 0 {
+			t.Fatal("queuing bootstrap callbacks started user code")
+		}
+		for _, sprite := range sprites {
+			if spriteOf(sprite).CostumeIndex() != 1 {
+				t.Fatal("queuing bootstrap callbacks woke a sprite")
+			}
+		}
+
+		game.runBootstrapTasks(generation)
+		game.runBootstrapTasks(generation)
+		if want := []string{"SpriteA", "SpriteB", "OnLoaded"}; !slices.Equal(calls, want) {
+			t.Fatalf("bootstrap callbacks = %v, want %v", calls, want)
+		}
+		if loadedReceiver != game || loadedCalls != 1 {
+			t.Fatalf("OnLoaded receiver = %p, calls = %d; want %p once", loadedReceiver, loadedCalls, game)
+		}
+		if resumed != 0 {
+			t.Fatal("OnLoaded waited for Main completion instead of its first yield")
+		}
+		close(blocked)
+		synctest.Wait()
+		if resumed != len(sprites) {
+			t.Fatalf("completed sprite mains = %d, want %d", resumed, len(sprites))
+		}
+	})
 }
 
 func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T) {

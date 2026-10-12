@@ -41,6 +41,7 @@ func TestScheduling(t *testing.T) {
 		} {
 			t.Run(schedule.name+"/Main/"+tt.name, func(t *testing.T) {
 				co := setupRuntimeScheduler(t)
+				returned := false
 				thread := co.Create("main", func(thread coroutine.Thread) {
 					started := time.Now().Add(tt.offset)
 					end := thread.BeginMain(started)
@@ -56,19 +57,20 @@ func TestScheduling(t *testing.T) {
 					if got := thread.MainStartedAt(); !got.Equal(want) {
 						t.Errorf("MainStartedAt = %v, want %v", got, want)
 					}
+					returned = true
 				})
 				co.Join(thread)
-				if !thread.Stopped() && thread.Context().Err() == nil {
-					t.Fatal("Main timeout test coroutine did not finish")
+				if !returned {
+					t.Fatal("Main scheduling stopped the coroutine before its assertions completed")
 				}
 			})
 		}
 
 		t.Run(schedule.name+"/ExternalCaller", func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			co := setupRuntimeScheduler(t)
 			started := make(chan struct{})
 			release := make(chan struct{})
-			thread := co.Create(game, func(thread coroutine.Thread) {
+			thread := co.Create("main", func(thread coroutine.Thread) {
 				end := thread.BeginMain(time.Now().Add(-2 * mainExecTimeoutSec * time.Second))
 				defer end()
 				close(started)

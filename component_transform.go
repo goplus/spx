@@ -28,7 +28,6 @@ import (
 // ============================================================================
 // Transform Component
 // ============================================================================
-// This component manages sprite position, rotation, and scale state.
 
 const (
 	// minSpeed is the minimum allowed speed value to prevent division by zero.
@@ -40,10 +39,7 @@ const (
 	// minBounceComponent prevents sprites from getting stuck at boundaries.
 	minBounceComponent = 0.2
 
-	// fullCircleDegrees represents a complete rotation in degrees.
 	fullCircleDegrees = 360.0
-
-	// halfCircleDegrees represents half a rotation in degrees.
 	halfCircleDegrees = 180.0
 
 	// fenceWidth matches Scratch's keepInFence margin.
@@ -56,8 +52,6 @@ const (
 	maxStageScale = 1.5
 )
 
-// transformComponent encapsulates all position, rotation, and scale functionality
-// for sprites in the game world.
 type transformComponent struct {
 	sprite *SpriteImpl
 
@@ -76,7 +70,6 @@ type transformComponent struct {
 // Lifecycle
 // ============================================================================
 
-// initialize initializes the transform component from configuration.
 func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproject.SpriteConfig) {
 	t.sprite = sprite
 
@@ -87,16 +80,10 @@ func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 	t.pivot = spriteCfg.Pivot
 }
 
-// cloneFor creates a new transform component for newSprite.
 func (t *transformComponent) cloneFor(newSprite *SpriteImpl) *transformComponent {
-	return &transformComponent{
-		sprite:        newSprite,
-		x:             t.x,
-		y:             t.y,
-		direction:     t.direction,
-		rotationStyle: t.rotationStyle,
-		pivot:         t.pivot,
-	}
+	cloned := *t
+	cloned.sprite = newSprite
+	return &cloned
 }
 
 // ============================================================================
@@ -106,11 +93,6 @@ func (t *transformComponent) cloneFor(newSprite *SpriteImpl) *transformComponent
 // markDirty publishes a transform change to the sprite proxy.
 func (t *transformComponent) markDirty() {
 	t.sprite.markProxyDirty()
-}
-
-// getPivot returns the current pivot point.
-func (t *transformComponent) getPivot() mathf.Vec2 {
-	return t.pivot
 }
 
 // ============================================================================
@@ -217,14 +199,6 @@ func (t *transformComponent) changeSize(delta float64) {
 
 func (t *transformComponent) getXY() (x, y float64) {
 	return t.x, t.y
-}
-
-func (t *transformComponent) getX() float64 {
-	return t.x
-}
-
-func (t *transformComponent) getY() float64 {
-	return t.y
 }
 
 func (t *transformComponent) setPosition(x, y float64) {
@@ -363,16 +337,20 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 // Rotation
 // ============================================================================
 
-func (t *transformComponent) heading() Direction {
-	return t.direction
-}
-
+// setHeading normalizes the direction and reports whether it changed.
 func (t *transformComponent) setHeading(dir Direction) bool {
-	return t.applyDirection(dir)
+	dir = normalizeDirection(dir)
+	if t.direction == dir {
+		return false
+	}
+
+	t.direction = dir
+	t.markDirty()
+	return true
 }
 
 func (t *transformComponent) changeHeading(delta Direction) bool {
-	return t.applyDirection(t.direction + delta)
+	return t.setHeading(t.direction + delta)
 }
 
 func (t *transformComponent) setRotationStyle(style RotationStyle) {
@@ -398,10 +376,10 @@ func (t *transformComponent) turnTo(target any, speed float64, animation SpriteA
 	if !ok {
 		return
 	}
-	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetDirection)
+	fromAngle, toAngle := normalizeAngleRange(t.direction, targetDirection)
 
 	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
-		if t.applyDirection(targetDirection) && isDebugInstrEnabled() {
+		if t.setHeading(targetDirection) && isDebugInstrEnabled() {
 			spxlog.Debug("TurnTo: sprite=%s, target=%v", t.sprite.name, target)
 		}
 	})
@@ -409,10 +387,10 @@ func (t *transformComponent) turnTo(target any, speed float64, animation SpriteA
 
 func (t *transformComponent) turnToPos(x, y, speed float64, animation SpriteAnimationName) {
 	targetAngle := t.calculateTargetAngleToPos(x, y)
-	fromAngle, toAngle := t.normalizeAngleRange(t.direction, targetAngle)
+	fromAngle, toAngle := normalizeAngleRange(t.direction, targetAngle)
 
 	t.doTurnAnimation(fromAngle, toAngle, speed, animation, func() {
-		if t.applyDirection(targetAngle) && isDebugInstrEnabled() {
+		if t.setHeading(targetAngle) && isDebugInstrEnabled() {
 			spxlog.Debug("TurnToPos: sprite=%s, x=%v, y=%v", t.sprite.name, x, y)
 		}
 	})
@@ -432,7 +410,7 @@ func (t *transformComponent) bounceOffEdge(area string) {
 	dx := math.Cos(radians)
 	dy := -math.Sin(radians)
 
-	dx, dy = t.calculateBounceDirection(nearestEdge, dx, dy)
+	dx, dy = calculateBounceDirection(nearestEdge, dx, dy)
 
 	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
 	t.direction = normalizeDirection(newDirection)
@@ -443,18 +421,6 @@ func (t *transformComponent) bounceOffEdge(area string) {
 // ============================================================================
 // Rotation Helpers
 // ============================================================================
-
-// applyDirection normalizes the direction and reports whether it changed.
-func (t *transformComponent) applyDirection(dir float64) bool {
-	dir = normalizeDirection(dir)
-	if t.direction == dir {
-		return false
-	}
-
-	t.direction = dir
-	t.markDirty()
-	return true
-}
 
 func (t *transformComponent) directionToTarget(target Target) Direction {
 	direction, ok := t.resolveTargetDirection(target)
@@ -469,16 +435,14 @@ func (t *transformComponent) directionToPos(x, y float64) Direction {
 }
 
 func (t *transformComponent) resolveTargetDirection(target any) (Direction, bool) {
-	switch target := target.(type) {
-	case Direction:
-		return target, true
-	default:
-		x, y, ok := t.sprite.g.resolveTargetPosition(target)
-		if !ok {
-			return 0, false
-		}
-		return t.calculateTargetAngleToPos(x, y), true
+	if direction, ok := target.(Direction); ok {
+		return direction, true
 	}
+	x, y, ok := t.sprite.g.resolveTargetPosition(target)
+	if !ok {
+		return 0, false
+	}
+	return t.calculateTargetAngleToPos(x, y), true
 }
 
 func (t *transformComponent) calculateTargetAngleToPos(x, y float64) float64 {
@@ -486,36 +450,6 @@ func (t *transformComponent) calculateTargetAngleToPos(x, y float64) float64 {
 		return t.direction
 	}
 	return engine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
-}
-
-// normalizeAngleRange chooses equivalent angles with the shortest rotation path.
-func (t *transformComponent) normalizeAngleRange(from, to float64) (float64, float64) {
-	fromNorm := math.Mod(from+fullCircleDegrees, fullCircleDegrees)
-	toNorm := math.Mod(to+fullCircleDegrees, fullCircleDegrees)
-
-	if toNorm-fromNorm > halfCircleDegrees {
-		fromNorm += fullCircleDegrees
-	} else if fromNorm-toNorm > halfCircleDegrees {
-		toNorm += fullCircleDegrees
-	}
-
-	return fromNorm, toNorm
-}
-
-// calculateBounceDirection calculates the new direction vector after bouncing
-// off the specified edge.
-func (t *transformComponent) calculateBounceDirection(edge int, dx, dy float64) (float64, float64) {
-	switch edge {
-	case touchingScreenLeft:
-		dx = math.Max(minBounceComponent, math.Abs(dx))
-	case touchingScreenTop:
-		dy = math.Max(minBounceComponent, math.Abs(dy))
-	case touchingScreenRight:
-		dx = -math.Max(minBounceComponent, math.Abs(dx))
-	case touchingScreenBottom:
-		dy = -math.Max(minBounceComponent, math.Abs(dy))
-	}
-	return dx, dy
 }
 
 // ============================================================================
@@ -555,14 +489,18 @@ func (t *transformComponent) doTurnAnimation(
 // Transform Helpers
 // ============================================================================
 
-// Treat an invalid numeric motion input as zero displacement. Expressions can
-// produce NaN directly (for example, 0 / abs(0)), which must not corrupt the
-// sprite transform.
-func normalizeMotionValue(value float64) float64 {
-	if math.IsNaN(value) {
-		return 0
+func calculateBounceDirection(edge int, dx, dy float64) (float64, float64) {
+	switch edge {
+	case touchingScreenLeft:
+		dx = math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenTop:
+		dy = math.Max(minBounceComponent, math.Abs(dy))
+	case touchingScreenRight:
+		dx = -math.Max(minBounceComponent, math.Abs(dx))
+	case touchingScreenBottom:
+		dy = -math.Max(minBounceComponent, math.Abs(dy))
 	}
-	return value
+	return dx, dy
 }
 
 func toRotationStyle(style string) RotationStyle {
@@ -579,9 +517,18 @@ func toRotationStyle(style string) RotationStyle {
 	}
 }
 
-// toRadian converts degrees to radians.
 func toRadian(dir float64) float64 {
 	return math.Pi * dir / 180
+}
+
+// Treat an invalid numeric motion input as zero displacement. Expressions can
+// produce NaN directly (for example, 0 / abs(0)), which must not corrupt the
+// sprite transform.
+func normalizeMotionValue(value float64) float64 {
+	if math.IsNaN(value) {
+		return 0
+	}
+	return value
 }
 
 // normalizeDirection wraps finite angles to (-180, 180], preserving non-finite inputs.
@@ -594,4 +541,25 @@ func normalizeDirection(dir float64) float64 {
 		return halfCircleDegrees
 	}
 	return dir
+}
+
+// normalizeAngleRange chooses equivalent angles with the shortest rotation path.
+func normalizeAngleRange(from, to float64) (float64, float64) {
+	// Keep [0, 360) endpoints to preserve the direction of exact half turns.
+	from = math.Mod(from, fullCircleDegrees)
+	to = math.Mod(to, fullCircleDegrees)
+	if from < 0 {
+		from += fullCircleDegrees
+	}
+	if to < 0 {
+		to += fullCircleDegrees
+	}
+
+	if to-from > halfCircleDegrees {
+		from += fullCircleDegrees
+	} else if from-to > halfCircleDegrees {
+		to += fullCircleDegrees
+	}
+
+	return from, to
 }

@@ -36,17 +36,17 @@ import (
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-type schedTimeoutExtMgr struct {
+type runtimePanicRecorder struct {
 	pkgengine.IExtMgr
 	messages []string
 	exits    []int64
 }
 
-func (m *schedTimeoutExtMgr) OnRuntimePanic(message string) {
+func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
 	m.messages = append(m.messages, message)
 }
 
-func (m *schedTimeoutExtMgr) RequestExit(code int64) {
+func (m *runtimePanicRecorder) RequestExit(code int64) {
 	m.exits = append(m.exits, code)
 }
 
@@ -56,7 +56,7 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var warnings bytes.Buffer
 		spxlog.SetStdoutOutput(&warnings)
-		recorder := &schedTimeoutExtMgr{}
+		recorder := &runtimePanicRecorder{}
 		originalExt := pkgengine.ExtMgr
 		pkgengine.ExtMgr = recorder
 		enginewrap.Init(engine.WaitMainThread)

@@ -28,7 +28,8 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 		run  func(*cloneLimitSprite)
 	}{
 		{"step", func(sprite *cloneLimitSprite) { sprite.StepTo__1("missing") }},
-		{"glide", func(sprite *cloneLimitSprite) { sprite.Glide__1("missing", 0) }},
+		{"glide zero duration", func(sprite *cloneLimitSprite) { sprite.Glide__1("missing", 0) }},
+		{"glide nonzero duration", func(sprite *cloneLimitSprite) { sprite.Glide__1("missing", 60) }},
 		{"turn", func(sprite *cloneLimitSprite) { sprite.TurnTo__1("missing") }},
 	} {
 		t.Run(action.name, func(t *testing.T) {
@@ -41,10 +42,64 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 				action.run(sprite)
 				finished = true
 			})
-			gco.Join(thread)
+			gco.JoinYieldedOrDone(thread)
 
 			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.DirtyVersion != dirtyVersion {
 				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.DirtyVersion)
+			}
+		})
+	}
+}
+
+func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
+	for _, mode := range []struct {
+		name  string
+		debug bool
+	}{
+		{"normal", false},
+		{"debug instructions", true},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			for _, action := range []struct {
+				name string
+				run  func(*cloneLimitSprite)
+			}{
+				{"named target", func(sprite *cloneLimitSprite) { sprite.TurnToTarget("target", nil) }},
+				{"coordinates", func(sprite *cloneLimitSprite) { sprite.TurnToXYpos(-10, -10, nil) }},
+				{"direction", func(sprite *cloneLimitSprite) { sprite.TurnToDir(945, nil) }},
+			} {
+				t.Run(action.name, func(t *testing.T) {
+					game := setupCloneLimitGame(t)
+					originalDebug := game.debugState.DebugInstr
+					game.debugState.DebugInstr = mode.debug
+					t.Cleanup(func() { game.debugState.DebugInstr = originalDebug })
+					sprite := newCloneLimitSprite(game, "source")
+					sprite.SetHeading(60)
+					target := newCloneLimitSprite(game, "target")
+					target.SetXYpos(-10, -10)
+					wantDirty := sprite.spriteState.DirtyVersion + 1
+
+					// Both the initial turn and the unchanged heading must return
+					// without waiting; only the initial turn publishes a change.
+					for attempt := 0; attempt < 2; attempt++ {
+						finished := false
+						thread := gco.Create(sprite, func(coroutine.Thread) {
+							action.run(sprite)
+							finished = true
+						})
+						gco.JoinYieldedOrDone(thread)
+						if !finished {
+							t.Fatalf("turn %d yielded without an animation", attempt+1)
+						}
+						gco.Join(thread)
+						if sprite.Heading() != -135 || sprite.spriteState.DirtyVersion != wantDirty {
+							t.Fatalf("turn %d: heading=%v dirty=%v, want -135 and %v", attempt+1, sprite.Heading(), sprite.spriteState.DirtyVersion, wantDirty)
+						}
+						if sprite.Xpos() != 0 || sprite.Ypos() != 0 {
+							t.Fatalf("turn moved sprite to (%v, %v)", sprite.Xpos(), sprite.Ypos())
+						}
+					}
+				})
 			}
 		})
 	}
@@ -68,20 +123,6 @@ func TestSpriteNamedTargetIgnoresClones(t *testing.T) {
 
 	if got := sprite.DistanceTo__1("target"); got != 50 {
 		t.Fatalf("DistanceTo__1(target) = %v, want 50", got)
-	}
-}
-
-func TestSpriteGlideToMissingTargetReturnsWithoutYielding(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	sprite := newCloneLimitSprite(game, "source")
-	finished := false
-	thread := gco.Create(sprite, func(coroutine.Thread) {
-		sprite.Glide__1("missing", 60)
-		finished = true
-	})
-	gco.JoinYieldedOrDone(thread)
-	if !finished {
-		t.Fatal("Glide__1 yielded for a missing target")
 	}
 }
 

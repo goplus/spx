@@ -28,7 +28,6 @@ import (
 	"github.com/goplus/spx/v3/internal/audio"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
@@ -125,40 +124,6 @@ func (p *Game) setDebugFlags(flags dbgFlags) {
 	p.debugState.DebugInstr = flags&DbgFlagInstr != 0
 	p.debugState.DebugEvent = flags&DbgFlagEvent != 0
 	gco.SetPerfDebug(flags&DbgFlagPerf != 0)
-}
-
-func (p *Game) newSpriteAndLoad(
-	name string,
-	tySpr reflect.Type,
-	g reflect.Value,
-	loadSprite spriteLoader,
-) Sprite {
-	spr := reflect.New(tySpr).Interface().(Sprite)
-	if err := loadSprite(spr, name, g); err != nil {
-		panic(err)
-	}
-	return spr
-}
-
-func (p *Game) getSpriteProto(tySpr reflect.Type, g reflect.Value, loadSprite spriteLoader) Sprite {
-	name := tySpr.Name()
-	spr, ok := p.sprs[name]
-	if !ok {
-		spr = p.newSpriteAndLoad(name, tySpr, g, loadSprite)
-	}
-	return spr
-}
-
-func (p *Game) getSpriteProtoByName(name string, g reflect.Value, loadSprite spriteLoader) Sprite {
-	spr, ok := p.sprs[name]
-	if !ok {
-		tySpr, ok := p.typs[name]
-		if !ok {
-			spxlog.Panicf("Sprite %s is not defined", name)
-		}
-		spr = p.newSpriteAndLoad(name, tySpr, g, loadSprite)
-	}
-	return spr
 }
 
 func (p *Game) reset() {

@@ -208,7 +208,7 @@ func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
 }
 
 func (p *SpriteImpl) Xpos() float64 {
-	return p.transform().getX()
+	return p.transform().x
 }
 
 func (p *SpriteImpl) SetXpos(x float64) {
@@ -220,7 +220,7 @@ func (p *SpriteImpl) ChangeXpos(dx float64) {
 }
 
 func (p *SpriteImpl) Ypos() float64 {
-	return p.transform().getY()
+	return p.transform().y
 }
 
 func (p *SpriteImpl) SetYpos(y float64) {
@@ -239,7 +239,7 @@ func (p *SpriteImpl) SetRotationStyle(style RotationStyle) {
 }
 
 func (p *SpriteImpl) Heading() Direction {
-	return p.transform().heading()
+	return p.transform().direction
 }
 
 func (p *SpriteImpl) Turn__0(dir Direction) {
@@ -357,7 +357,7 @@ func (p *SpriteImpl) getXY() (x, y float64) {
 }
 
 func (p *SpriteImpl) getPivot() mathf.Vec2 {
-	return p.transform().getPivot()
+	return p.transform().pivot
 }
 
 func motionOptions(opts *MotionOptions) (speed Speed, animation SpriteAnimationName) {
