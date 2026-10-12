@@ -60,5 +60,9 @@ func DecodeInputReplay(data []byte) (InputReplay, error) {
 	if err := replay.Validate(); err != nil {
 		return InputReplay{}, err
 	}
-	return cloneInputReplay(replay), nil
+	// The decoder owns the replay data; only normalize absent frames.
+	if replay.Frames == nil {
+		replay.Frames = []InputReplayFrame{}
+	}
+	return replay, nil
 }

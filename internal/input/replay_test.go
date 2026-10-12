@@ -80,18 +80,7 @@ func TestInputReplayValidateRejectsInvalidData(t *testing.T) {
 }
 
 func TestInputReplayJSONRoundTripIsStrict(t *testing.T) {
-	want := validInputReplay()
-	data, err := EncodeInputReplay(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := DecodeInputReplay(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("round trip = %+v, want %+v", got, want)
-	}
+	data := assertInputReplayRoundTrip(t, validInputReplay())
 
 	unknown := strings.Replace(string(data), `"version":1`, `"version":1,"unknown":true`, 1)
 	if _, err := DecodeInputReplay([]byte(unknown)); err == nil || !strings.Contains(err.Error(), "unknown field") {
@@ -102,6 +91,55 @@ func TestInputReplayJSONRoundTripIsStrict(t *testing.T) {
 	}
 	if _, err := DecodeInputReplay(make([]byte, MaxInputReplayJSONSize+1)); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("oversize error = %v", err)
+	}
+}
+
+func TestDecodeInputReplayPreservesEmptySlices(t *testing.T) {
+	for _, frames := range []string{"", `,"frames":null`, `,"frames":[]`} {
+		data := []byte(`{"format":"spx-input-replay","version":1` + frames + `}`)
+		replay, err := DecodeInputReplay(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if replay.Frames == nil || len(replay.Frames) != 0 {
+			t.Fatalf("decoded frames = %#v, want non-nil empty slice", replay.Frames)
+		}
+		encoded, err := EncodeInputReplay(replay)
+		if err != nil || !strings.Contains(string(encoded), `"frames":[]`) {
+			t.Fatalf("encoded replay = %s, error = %v; want empty frames array", encoded, err)
+		}
+	}
+	for _, keys := range [][]int64{nil, {}} {
+		assertInputReplayRoundTrip(t, InputReplay{
+			Format: InputReplayFormat, Version: InputReplayVersion,
+			Initial: InputReplayState{KeysDown: keys},
+			Frames:  []InputReplayFrame{{State: InputReplayState{KeysDown: keys}}},
+		})
+	}
+}
+
+func TestDecodeInputReplayOwnsDecodedData(t *testing.T) {
+	want := validInputReplay()
+	data, err := EncodeInputReplay(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := DecodeInputReplay(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := DecodeInputReplay(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Initial.KeysDown[0] = 999
+	first.Frames[0].State.KeysDown[0] = 999
+	first.Frames[0].MouseEvents[0].Button = 999
+	first.Frames[0].KeyEvents[0].Key = 999
+	first.Frames[1] = InputReplayFrame{}
+	clear(data)
+	if !reflect.DeepEqual(second, want) {
+		t.Fatalf("separate decode shares mutable storage: got %+v, want %+v", second, want)
 	}
 }
 
@@ -277,17 +315,7 @@ func TestInputReplayPreservesShortClickEdgesWithUnchangedHeldState(t *testing.T)
 			},
 		}},
 	}
-	data, err := EncodeInputReplay(replay)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := DecodeInputReplay(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(decoded.Frames[0].MouseEvents, replay.Frames[0].MouseEvents) {
-		t.Fatalf("short-click edges = %+v, want %+v", decoded.Frames[0].MouseEvents, replay.Frames[0].MouseEvents)
-	}
+	assertInputReplayRoundTrip(t, replay)
 }
 
 func TestInputReplayControllerEmptyReplayFreezesInitialState(t *testing.T) {
@@ -433,6 +461,23 @@ func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
 	}
 }
 
+func assertInputReplayRoundTrip(t *testing.T, want InputReplay) []byte {
+	t.Helper()
+	data, err := EncodeInputReplay(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecodeInputReplay(data)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip = %+v, error = %v; want %+v", got, err, want)
+	}
+	encoded, err := EncodeInputReplay(got)
+	if err != nil || string(encoded) != string(data) {
+		t.Fatalf("round-trip encoding changed: got %s, error = %v; want %s", encoded, err, data)
+	}
+	return data
+}
+
 func validInputReplay() InputReplay {
 	return InputReplay{
 		Format:        InputReplayFormat,
@@ -467,5 +512,32 @@ func validInputReplay() InputReplay {
 				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
 			},
 		},
+	}
+}
+
+func BenchmarkDecodeInputReplay(b *testing.B) {
+	replay := InputReplay{
+		Format: InputReplayFormat, Version: InputReplayVersion,
+		Initial: InputReplayState{KeysDown: []int64{1}},
+		Frames:  make([]InputReplayFrame, 10000),
+	}
+	for i := range replay.Frames {
+		replay.Frames[i] = InputReplayFrame{
+			Frame: int64(i), Time: float64(i) / 60,
+			State:       InputReplayState{KeysDown: []int64{1}},
+			KeyEvents:   []InputReplayKeyEvent{{Key: 1, Pressed: true}},
+			MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
+		}
+	}
+	data, err := EncodeInputReplay(replay)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(data)))
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := DecodeInputReplay(data); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
