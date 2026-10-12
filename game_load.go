@@ -22,7 +22,6 @@ import (
 	"math"
 	"reflect"
 	"slices"
-	"unsafe"
 
 	"github.com/goplus/spx/v3/internal/base/defaults"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
@@ -136,14 +135,18 @@ func (p *Game) loadStage(
 	generation uint64,
 	loadSprite spriteLoader,
 	entries []preparedStageEntry,
-) {
+) error {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 
-	inits := p.loadAndInitSprites(g, proj, loadSprite, entries)
+	inits, err := p.loadAndInitSprites(g, proj, loadSprite, entries)
+	if err != nil {
+		return err
+	}
 	p.runSpriteCallbacks(inits, proj, g, generation)
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -259,29 +262,24 @@ func (p *Game) applyStageGeometry() {
 // Sprite Setup
 // -----------------------------------------------------------------------------
 func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
-	var onLoaded func()
-	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
-		onLoaded = loader.OnLoaded
-	}
-	queueBootstrap := func(call func()) {
-		p.queueBootstrap(generation, call)
-	}
 	// Bootstrap hooks may override the initial camera target.
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.Follow__1(proj.Camera.On)
 	}
-	queueBootstrap(func() {
+	p.queueBootstrap(generation, func() {
 		p.setupCollisionData(inits)
 	})
 	for _, ini := range inits {
 		if spr := spriteOf(ini); spr != nil {
-			queueBootstrap(spr.awake)
+			p.queueBootstrap(generation, spr.awake)
 		}
 	}
-	queueBootstrap(func() {
+	p.queueBootstrap(generation, func() {
 		runSpriteMainsUntilYield(inits)
 	})
-	queueBootstrap(onLoaded)
+	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
+		p.queueBootstrap(generation, loader.OnLoaded)
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -318,8 +316,7 @@ func bindSpriteOwner(spriteValue reflect.Value, gamer reflect.Value) error {
 		)
 	}
 
-	// ownerField may be unexported in generated sprite structs, so Set would panic.
-	// reflect.NewAt gives us a typed, settable view over the same storage.
-	reflect.NewAt(ownerField.Type(), unsafe.Pointer(ownerField.UnsafeAddr())).Elem().Set(gamerPtr)
+	// Owner fields may be unexported in generated sprite structs.
+	settableSpriteField(ownerField).Set(gamerPtr)
 	return nil
 }

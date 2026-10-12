@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -139,17 +140,35 @@ func TestSpriteTouchingTargetDefaultsToStageArea(t *testing.T) {
 }
 
 func TestSpriteBounceOffEdgeDefaultsToStageArea(t *testing.T) {
-	installEdgePhysicsMgr(t, &fakeEdgePhysicsMgr{
-		stageNearest:  touchingScreenLeft,
-		cameraNearest: touchingScreenRight,
-	})
+	for _, tt := range []struct {
+		name          string
+		stage, camera int64
+		from, want    Direction
+	}{
+		{"left", touchingScreenLeft, touchingScreenRight, -90, 90},
+		{"right", touchingScreenRight, touchingScreenLeft, 90, -90},
+		{"top", touchingScreenTop, touchingScreenBottom, 0, 180},
+		{"bottom", touchingScreenBottom, touchingScreenTop, 180, 0},
+		{"top diagonal", touchingScreenTop, touchingScreenBottom, 45, 135},
+		{"bottom diagonal", touchingScreenBottom, touchingScreenTop, 135, 45},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			installEdgePhysicsMgr(t, &fakeEdgePhysicsMgr{
+				stageNearest:  tt.stage,
+				cameraNearest: tt.camera,
+			})
+			sprite := newEdgeTestSprite(tt.from)
+			version := sprite.spriteState.DirtyVersion
 
-	sprite := newEdgeTestSprite(-90)
+			sprite.BounceOffEdge()
 
-	sprite.BounceOffEdge()
-
-	if got := sprite.Heading(); got != 90 {
-		t.Fatalf("BounceOffEdge() heading = %v, want 90", got)
+			if got := sprite.Heading(); math.IsNaN(got) || math.Abs(got-tt.want) > 1e-9 {
+				t.Fatalf("BounceOffEdge() heading = %v, want %v", got, tt.want)
+			}
+			if sprite.spriteState.DirtyVersion == version {
+				t.Fatal("bounce did not publish the transform change")
+			}
+		})
 	}
 }
 

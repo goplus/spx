@@ -22,7 +22,6 @@ import (
 	"unsafe"
 
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 	"github.com/goplus/spx/v3/internal/ui"
 )
@@ -77,17 +76,17 @@ func prepareStageEntry(gamer reflect.Value, raw any) (preparedStageEntry, error)
 
 func prepareStageSprite(gamer reflect.Value, shape coreproject.StageShape, multiple bool) (preparedStageEntry, error) {
 	entry := preparedStageEntry{kind: stageSprite, fieldIndex: -1}
-	target, err := stageShapeTarget(shape)
-	if err != nil {
-		return entry, err
+	target, ok := shape["target"].(string)
+	if !ok || target == "" {
+		return entry, fmt.Errorf("stage shape target must be a non-empty string")
 	}
 	entry.name = target
 	var items []any
 	if multiple {
 		entry.kind = stageSprites
-		items, err = stageShapeItems(shape)
-		if err != nil {
-			return entry, err
+		items, ok = shape["items"].([]any)
+		if !ok {
+			return entry, fmt.Errorf("stage shape items must be an array")
 		}
 	}
 	for i := range gamer.NumField() {
@@ -150,7 +149,7 @@ func stageSpriteValue(field reflect.Value) any {
 	return field.Addr().Interface()
 }
 
-func (p *Game) loadAndInitSprites(gamer reflect.Value, project *coreproject.ProjectConfig, loadSprite spriteLoader, entries []preparedStageEntry) []Sprite {
+func (p *Game) loadAndInitSprites(gamer reflect.Value, project *coreproject.ProjectConfig, loadSprite spriteLoader, entries []preparedStageEntry) ([]Sprite, error) {
 	count := len(entries)
 	if entries == nil {
 		count = len(project.Zorder)
@@ -158,28 +157,33 @@ func (p *Game) loadAndInitSprites(gamer reflect.Value, project *coreproject.Proj
 	inits := make([]Sprite, 0, count)
 	for layer := range count {
 		var entry preparedStageEntry
+		var err error
 		if entries == nil {
 			// Cold loading preserves lazy loading and failure order between entries.
-			var err error
 			entry, err = prepareStageEntry(gamer, project.Zorder[layer])
 			if err != nil {
-				engine.Panic(fmt.Errorf("zorder[%d]: %w", layer, err))
-				break
+				return nil, fmt.Errorf("zorder[%d]: %w", layer, err)
 			}
 		} else {
 			entry = entries[layer]
 		}
-		inits = p.appendStageEntry(gamer, entry, loadSprite, layer, inits)
+		inits, err = p.appendStageEntry(gamer, entry, loadSprite, layer, inits)
+		if err != nil {
+			return nil, fmt.Errorf("zorder[%d]: %w", layer, err)
+		}
 	}
 	// Expanded stage groups occupy contiguous layers above the shared pen canvas.
 	p.shapeMgr.updateRenderLayers()
-	return inits
+	return inits, nil
 }
 
-func (p *Game) appendStageEntry(gamer reflect.Value, entry preparedStageEntry, loadSprite spriteLoader, layer int, inits []Sprite) []Sprite {
+func (p *Game) appendStageEntry(gamer reflect.Value, entry preparedStageEntry, loadSprite spriteLoader, layer int, inits []Sprite) ([]Sprite, error) {
 	switch entry.kind {
 	case stageNamedSprite:
-		sp := p.getSpriteProtoByName(entry.name, gamer, loadSprite)
+		sp, err := p.getSpriteProto(entry.name, p.typs[entry.name], gamer, loadSprite)
+		if err != nil {
+			return nil, err
+		}
 		spr := spriteOf(sp)
 		spr.setLayer(layer + firstSpriteLayer)
 		p.shapeMgr.add(spr)
@@ -193,13 +197,20 @@ func (p *Game) appendStageEntry(gamer reflect.Value, entry preparedStageEntry, l
 	case stageSprites:
 		field := stageField(gamer, entry.fieldIndex)
 		items := reflect.MakeSlice(field.Type(), len(entry.properties), len(entry.properties))
+		var prototype Sprite
+		if len(entry.properties) != 0 {
+			var err error
+			prototype, err = p.getSpriteProto(entry.spriteType.Name(), entry.spriteType, gamer, loadSprite)
+			if err != nil {
+				return nil, err
+			}
+		}
 		for i, properties := range entry.properties {
 			item := items.Index(i)
 			if item.Kind() == reflect.Pointer {
 				item.Set(reflect.New(entry.spriteType))
 				item = item.Elem()
 			}
-			prototype := p.getSpriteProto(entry.spriteType, gamer, loadSprite)
 			dest, sp := instantiateStageSprite(item, prototype, properties)
 			p.shapeMgr.add(dest)
 			inits = append(inits, sp)
@@ -209,27 +220,25 @@ func (p *Game) appendStageEntry(gamer reflect.Value, entry preparedStageEntry, l
 		monitor, err := newMonitor(gamer, entry.monitor)
 		if err != nil {
 			spxlog.Error("Skip monitor %q: %v", entry.monitor.config.Name, err)
-			return inits
+			return inits, nil
 		}
 		p.shapeMgr.add(monitor)
 	case stageMeasure:
 		p.shapeMgr.add(ui.NewMeasureShape(entry.measure))
 	}
-	return inits
+	return inits, nil
 }
 
-func stageShapeTarget(shape coreproject.StageShape) (string, error) {
-	target, ok := shape["target"].(string)
-	if !ok || target == "" {
-		return "", fmt.Errorf("stage shape target must be a non-empty string")
+func (p *Game) getSpriteProto(name string, typ reflect.Type, gamer reflect.Value, loadSprite spriteLoader) (Sprite, error) {
+	if spr, ok := p.sprs[name]; ok {
+		return spr, nil
 	}
-	return target, nil
-}
-
-func stageShapeItems(shape coreproject.StageShape) ([]any, error) {
-	items, ok := shape["items"].([]any)
-	if !ok {
-		return nil, fmt.Errorf("stage shape items must be an array")
+	if typ == nil {
+		return nil, fmt.Errorf("sprite %q is not defined", name)
 	}
-	return items, nil
+	spr := reflect.New(typ).Interface().(Sprite)
+	if err := loadSprite(spr, name, gamer); err != nil {
+		return nil, fmt.Errorf("load sprite %q: %w", name, err)
+	}
+	return spr, nil
 }

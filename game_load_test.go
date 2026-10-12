@@ -27,9 +27,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/enginewrap"
 	"github.com/goplus/spx/v3/internal/ui"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type cameraFollowOverrideGame struct {
@@ -201,9 +199,12 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 		"Front": front,
 	}
 
-	inits := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
+	inits, err := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
 		Zorder: []any{"Back", "Front"},
 	}, game.loadSprite, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got, want := len(inits), 2; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
 	}
@@ -237,7 +238,7 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 		"collisionLayerOrderSprite": groupProto,
 	}
 
-	inits := game.loadAndInitSprites(reflect.ValueOf(&game).Elem(), &coreproject.ProjectConfig{
+	inits, err := game.loadAndInitSprites(reflect.ValueOf(&game).Elem(), &coreproject.ProjectConfig{
 		Zorder: []any{
 			"Back",
 			coreproject.StageShape{
@@ -252,6 +253,9 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 			"Front",
 		},
 	}, game.loadSprite, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if got, want := len(inits), 5; got != want {
 		t.Fatalf("initialized sprite count = %d, want %d", got, want)
@@ -572,7 +576,10 @@ func TestPreparedStageUsesLiveFieldsAndOwnsParsedValues(t *testing.T) {
 				}
 				raw[i] = nil
 			}
-			inits := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), nil, nil, entries)
+			inits, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), nil, nil, entries)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if len(inits) != 8 {
 				t.Fatalf("initialized %d sprites, want 8", len(inits))
 			}
@@ -653,7 +660,9 @@ func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
 	game := &reloadDirectCommitGame{}
 	files := reloadConfigFS{}
 	setupReloadCommitRuntime(t, files, game, nil, false)
-	loadGameSprites(&game.Game, reflect.ValueOf(game).Elem(), files, &coreproject.ProjectConfig{})
+	if err := game.loadSpriteFields(reflect.ValueOf(game).Elem()); err != nil {
+		t.Fatal(err)
+	}
 	if game.DirectCommitSprite == nil {
 		t.Fatal("cold load did not allocate the sprite field")
 	}
@@ -671,7 +680,10 @@ func TestReloadStageDoesNotReadProjectZOrderDuringCommit(t *testing.T) {
 	}
 	clear(plan.project.Zorder[0].(coreproject.StageShape))
 	plan.project.Zorder = []any{false}
-	inits := game.loadAndInitSprites(gamer, &plan.project, plan.spriteLoader(&game.Game), plan.stage)
+	inits, err := game.loadAndInitSprites(gamer, &plan.project, plan.spriteLoader(&game.Game), plan.stage)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(inits) != 2 || len(game.Sprites) != 2 || game.Sprites[0].Xpos() != 7 || game.Sprites[1].Xpos() != 9 {
 		t.Fatalf("reload did not commit prepared stage entries: %v", game.Sprites)
 	}
@@ -683,15 +695,23 @@ func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
 	game.sprs = make(map[string]Sprite)
 	game.typs = map[string]reflect.Type{"Sprite": reflect.TypeFor[collisionLayerOrderSprite]()}
 	want := errors.New("first sprite config failed")
-	defer func() {
-		if got := recover(); got != want {
-			t.Fatalf("cold load failure = %v, want first sprite config error", got)
-		}
-	}()
-	game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{Zorder: []any{
+	_, err := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{Zorder: []any{
 		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
 	}}, func(Sprite, string, reflect.Value) error { return want }, nil)
-	t.Fatal("cold stage load unexpectedly succeeded")
+	if !errors.Is(err, want) || !strings.Contains(err.Error(), `zorder[0]: load sprite "Sprite"`) {
+		t.Fatalf("cold load failure = %v, want indexed first sprite config error", err)
+	}
+}
+
+func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
+	game := &stagePlanGame{}
+	game.initShapeMgr()
+	_, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), &coreproject.ProjectConfig{Zorder: []any{
+		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
+	}}, nil, nil)
+	if err == nil || err.Error() != "zorder[1]: invalid stage shape type" {
+		t.Fatalf("cold load failure = %v, want indexed stage shape error", err)
+	}
 }
 
 func TestPrepareStageEntryEmptyValues(t *testing.T) {
@@ -775,27 +795,4 @@ func TestPrepareStageEntryErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-type stageEntryPanicExtMgr struct{ pkgengine.IExtMgr }
-
-func (*stageEntryPanicExtMgr) OnRuntimePanic(message string) { panic(message) }
-
-func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
-	enginewrap.Init(func(call func()) { call() })
-	originalExtMgr := pkgengine.ExtMgr
-	pkgengine.ExtMgr = &stageEntryPanicExtMgr{}
-	t.Cleanup(func() { pkgengine.ExtMgr = originalExtMgr })
-	game := &stagePlanGame{}
-	game.initShapeMgr()
-	defer func() {
-		got := recover()
-		if got != "zorder[1]: invalid stage shape type" {
-			t.Fatalf("cold load failure = %v, want indexed stage shape error", got)
-		}
-	}()
-	game.loadAndInitSprites(reflect.ValueOf(game).Elem(), &coreproject.ProjectConfig{Zorder: []any{
-		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
-	}}, nil, nil)
-	t.Fatal("cold stage load unexpectedly succeeded")
 }

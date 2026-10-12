@@ -150,8 +150,7 @@ func reloadGame(game Gamer, g *Game, index any) error {
 			return err
 		}
 		g.tilemapMgr.replaceMap(plan.tilemap)
-		g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.stage)
-		return nil
+		return g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.stage)
 	}, func() {
 		g.initEventLoop()
 		g.lifecycleState.IsRunned.Store(true)
