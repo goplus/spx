@@ -399,26 +399,43 @@ func TestDownloadRuntimePackRejectsMissingPCK(t *testing.T) {
 	assertEngineDownloadFiles(t, env, want)
 }
 
-func TestDownloadAndroidAssetsRequiresCompleteBundle(t *testing.T) {
-	for _, missing := range []string{"android_debug.apk", "android_release.apk", "android_source.zip"} {
-		t.Run(missing, func(t *testing.T) {
-			env := newEngineDownloadFixture(t, "android")
-			files := map[string]string{"android_debug.apk": "debug", "android_release.apk": "release", "android_source.zip": "source"}
-			want := make(map[string]string, len(files))
-			for name := range files {
-				path := filepath.Join(env.templateDir, name)
-				want[path] = "stable:" + name
-				mustWriteFile(t, path, []byte(want[path]))
-			}
-			delete(files, missing)
-			if err := writeZipFixture(filepath.Join(env.assetDir, "android.zip"), files); err != nil {
-				t.Fatal(err)
-			}
-			if err := downloadAndroidAssets(env); err == nil || !strings.Contains(err.Error(), "missing "+missing) {
-				t.Fatalf("downloadAndroidAssets error = %v, want missing %s", err, missing)
-			}
-			assertEngineDownloadFiles(t, env, want)
-		})
+func TestDownloadAndroidAssetsValidatesBeforeInstalling(t *testing.T) {
+	assets := []string{"android_debug.apk", "android_release.apk", "android_source.zip"}
+	for _, invalid := range []string{"missing", "directory"} {
+		for _, name := range assets {
+			t.Run(invalid+"/"+name, func(t *testing.T) {
+				env := newEngineDownloadFixture(t, "android")
+				files := make(map[string]string, len(assets))
+				want := make(map[string]string, len(assets))
+				for _, asset := range assets {
+					files[asset] = "replacement:" + asset
+					path := filepath.Join(env.templateDir, asset)
+					want[path] = "stable:" + asset
+					mustWriteFile(t, path, []byte(want[path]))
+				}
+				delete(files, name)
+				message := "missing " + name
+				if invalid == "directory" {
+					files[name+"/"] = ""
+					message = "entry " + name + " is not a regular file"
+				}
+				archive := filepath.Join(env.assetDir, "android.zip")
+				if err := writeZipFixture(archive, files); err != nil {
+					t.Fatal(err)
+				}
+				err := downloadAndroidAssets(env)
+				if err == nil || !strings.Contains(err.Error(), message) {
+					t.Fatalf("downloadAndroidAssets error = %v, want %q", err, message)
+				}
+				if invalid == "missing" && !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("downloadAndroidAssets error = %v, want ErrNotExist", err)
+				}
+				assertEngineDownloadFiles(t, env, want)
+				if _, err := os.Stat(archive); err != nil {
+					t.Errorf("source archive was removed: %v", err)
+				}
+			})
+		}
 	}
 }
 
