@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/goplus/spbase/mathf"
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
@@ -25,8 +25,6 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-// inputSessionInput is the session-local adapter state needed to dispatch
-// resolved input through the ordinary SPX event hooks.
 type inputSessionInput struct {
 	frameState  coreruntime.InputFrameState
 	mouseEvents []engine.MouseEvent
@@ -151,11 +149,8 @@ func (p *inputManager) effectiveKeyPressed(key Key) bool {
 		if key == KeyAny {
 			return len(state.KeysDown) != 0
 		}
-		keyID := int64(key)
-		index := sort.Search(len(state.KeysDown), func(i int) bool {
-			return state.KeysDown[i] >= keyID
-		})
-		return index < len(state.KeysDown) && state.KeysDown[index] == keyID
+		_, pressed := slices.BinarySearch(state.KeysDown, int64(key))
+		return pressed
 	}
 	return engine.Managers().InputMgr.GetKey(int64(key))
 }
@@ -164,7 +159,7 @@ func (p *inputManager) effectiveMousePos() mathf.Vec2 {
 	if state, replaying := p.g.currentInputPlaybackState(); replaying {
 		return mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
 	}
-	return p.currentMousePos()
+	return p.mousePos
 }
 
 func (p *inputManager) effectiveMousePressed() bool {

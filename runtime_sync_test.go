@@ -424,6 +424,22 @@ func TestCameraFollowObservesPhysicsPositionChanges(t *testing.T) {
 	}
 }
 
+func TestCameraFollowObservesMousePositionChanges(t *testing.T) {
+	game := new(Game)
+	camera := &cameraImpl{g: game, followTarget: Mouse}
+
+	for _, want := range []mathf.Vec2{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)} {
+		game.inputMgr.setMousePos(want)
+		changed, pos := camera.getFollowPos()
+		if !changed {
+			t.Fatal("mouse follow did not update without a camera dirty flag")
+		}
+		if pos != want {
+			t.Fatalf("camera follow position = %v, want cached mouse position %v", pos, want)
+		}
+	}
+}
+
 func newPhysicsTriggerTestGame(t *testing.T) *Game {
 	t.Helper()
 	previous := gco

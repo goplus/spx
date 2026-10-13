@@ -83,7 +83,6 @@ func init() {
 			"path":        "path",
 			"reflect":     "reflect",
 			"slices":      "slices",
-			"sort":        "sort",
 			"strconv":     "strconv",
 			"strings":     "strings",
 			"sync":        "sync",

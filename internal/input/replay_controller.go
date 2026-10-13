@@ -21,9 +21,7 @@ import (
 	"slices"
 )
 
-// InputReplayController records or consumes one controller-owned stream. A
-// Game-owned input session serializes access and resets the controller only at
-// the end of that Game lifecycle.
+// The owning input session serializes access to InputReplayController.
 type InputReplayController struct {
 	mode     InputSessionMode
 	next     int64
@@ -103,14 +101,6 @@ func (c *InputReplayController) Status() InputReplayControllerStatus {
 
 func (c *InputReplayController) Resolve(
 	live InputReplayState,
-	keyEvents []InputReplayKeyEvent,
-	delta float64,
-) (InputReplayFrame, bool, error) {
-	return c.ResolveWithMouseEvents(live, nil, keyEvents, delta)
-}
-
-func (c *InputReplayController) ResolveWithMouseEvents(
-	live InputReplayState,
 	mouseEvents []InputReplayMouseEvent,
 	keyEvents []InputReplayKeyEvent,
 	delta float64,
@@ -125,13 +115,14 @@ func (c *InputReplayController) ResolveWithMouseEvents(
 	if err := validateFiniteNonNegative("live delta", delta); err != nil {
 		return InputReplayFrame{}, false, err
 	}
+	effective = InputReplayFrame{
+		Frame:       -1,
+		State:       cloneInputReplayState(live),
+		MouseEvents: slices.Clone(mouseEvents),
+		KeyEvents:   slices.Clone(keyEvents),
+	}
 	if mode == InputSessionModeIdle {
-		return InputReplayFrame{
-			Frame:       -1,
-			State:       cloneInputReplayState(live),
-			MouseEvents: slices.Clone(mouseEvents),
-			KeyEvents:   slices.Clone(keyEvents),
-		}, false, nil
+		return effective, false, nil
 	}
 
 	firstTick = c.next == 0
@@ -142,13 +133,8 @@ func (c *InputReplayController) ResolveWithMouseEvents(
 		}
 		c.elapsed = nextElapsed
 	}
-	effective = InputReplayFrame{
-		Frame:       c.next,
-		Time:        c.elapsed,
-		State:       cloneInputReplayState(live),
-		MouseEvents: slices.Clone(mouseEvents),
-		KeyEvents:   slices.Clone(keyEvents),
-	}
+	effective.Frame = c.next
+	effective.Time = c.elapsed
 	c.stream.Frames = append(c.stream.Frames, cloneInputReplayFrame(effective))
 	c.next++
 	return effective, firstTick, nil

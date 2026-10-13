@@ -19,10 +19,7 @@ package ui
 import (
 	"bufio"
 	"math"
-	"os"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -162,7 +159,7 @@ func assertMonitorPayload(t *testing.T, spy *monitorRenderSpy, view monitorView,
 }
 
 func TestUiMonitorSceneContract(t *testing.T) {
-	scene := readMonitorScene(t)
+	scene := readUITemplateScene(t, "UiMonitor")
 	parsed := parseMonitorScene(t, scene)
 
 	_, bound := newBoundMonitor(t)
@@ -276,20 +273,6 @@ var (
 	monitorResourceHeader = regexp.MustCompile(`^\[sub_resource [^]]*id="([^"]+)"\]$`)
 	monitorExternalHeader = regexp.MustCompile(`^\[ext_resource [^]]*id="([^"]+)"\]$`)
 )
-
-func readMonitorScene(t *testing.T) string {
-	t.Helper()
-	_, sourceFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not resolve test source path")
-	}
-	path := filepath.Join(filepath.Dir(sourceFile), "..", "..", "cmd", "spx", "template", "project", "engine", "ui", "UiMonitor.tscn")
-	data, err := os.ReadFile(filepath.Clean(path))
-	if err != nil {
-		t.Fatalf("read UiMonitor scene: %v", err)
-	}
-	return string(data)
-}
 
 func parseMonitorScene(t *testing.T, source string) parsedMonitorScene {
 	t.Helper()

@@ -33,47 +33,66 @@
 #include "core/os/keyboard.h"
 #include "spx_engine.h"
 
-// Printable Unicode is normalized through fix_keycode() so shifted symbols
-// such as '!' map correctly before falling back to label, logical, then physical keycodes.
+// Prefer Unicode so shifted symbols such as '!' keep their character code.
 static GdInt normalize_key_event_code(const Ref<InputEventKey> &p_event) {
 	const char32_t unicode = p_event->get_unicode();
 	if (unicode >= 0x20 && unicode != 0x7F) {
 		return (GdInt)fix_keycode(unicode, p_event->get_keycode());
 	}
-	Key key = p_event->get_key_label();
-	if (key == Key::NONE) {
-		key = p_event->get_keycode();
-		if (key == Key::NONE) {
-			key = p_event->get_physical_keycode();
-		}
+	const Key label = p_event->get_key_label();
+	if (label != Key::NONE) {
+		return (GdInt)label;
 	}
-	return (GdInt)key;
+	const Key keycode = p_event->get_keycode();
+	return (GdInt)(keycode != Key::NONE ? keycode : p_event->get_physical_keycode());
 }
 
-void SpxInputProxy::ready() {
-	set_process_input(true);
+void SpxInputProxy::_notification(int p_what) {
+	if (p_what == NOTIFICATION_ENTER_TREE) {
+		mouse_buttons_awaiting_release.clear();
+		set_process_input(true);
+		set_process_unhandled_input(true);
+	}
 }
 
 void SpxInputProxy::input(const Ref<InputEvent> &p_event) {
-	Ref<InputEventKey> k = p_event;
-	if (k.is_valid()) {
-		const GdInt keyid = normalize_key_event_code(k);
-		if (k->is_pressed()) {
-			SPX_CALLBACK->func_on_key_pressed(keyid);
-		} else if (k->is_released()) {
-			SPX_CALLBACK->func_on_key_released(keyid);
+	Ref<InputEventKey> key_event = p_event;
+	if (key_event.is_valid()) {
+		const GdInt keycode = normalize_key_event_code(key_event);
+		if (key_event->is_pressed()) {
+			SPX_CALLBACK->func_on_key_pressed(keycode);
+		} else if (key_event->is_released()) {
+			SPX_CALLBACK->func_on_key_released(keycode);
 		}
 		return;
 	}
 
-	Ref<InputEventMouseButton> mb = p_event;
-	if (!mb.is_valid()) {
+	Ref<InputEventMouseButton> mouse_event = p_event;
+	if (mouse_event.is_null() || mouse_event->is_pressed()) {
 		return;
 	}
 
-	if (mb->is_pressed()) {
-		SPX_CALLBACK->func_on_mouse_pressed((GdInt)mb->get_button_index());
-	} else if (mb->is_released()) {
-		SPX_CALLBACK->func_on_mouse_released((GdInt)mb->get_button_index());
+	const MouseButton button = mouse_event->get_button_index();
+	const MouseButtonMask mask = mouse_button_to_mask(button);
+	if (!mouse_buttons_awaiting_release.has_flag(mask)) {
+		return;
 	}
+	// Release forwarded presses before GUI handling to avoid stuck buttons.
+	mouse_buttons_awaiting_release.clear_flag(mask);
+	SPX_CALLBACK->func_on_mouse_released((GdInt)button);
+}
+
+void SpxInputProxy::unhandled_input(const Ref<InputEvent> &p_event) {
+	Ref<InputEventMouseButton> mouse_event = p_event;
+	if (mouse_event.is_null() || !mouse_event->is_pressed()) {
+		return;
+	}
+
+	const MouseButton button = mouse_event->get_button_index();
+	const MouseButtonMask mask = mouse_button_to_mask(button);
+	if (mask == MouseButtonMask::NONE) {
+		return;
+	}
+	mouse_buttons_awaiting_release.set_flag(mask);
+	SPX_CALLBACK->func_on_mouse_pressed((GdInt)button);
 }

@@ -18,7 +18,7 @@ package spx
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/engine"
@@ -51,7 +51,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		s.initialPending = false
 	}
 
-	frame, firstTick, err := s.controller.ResolveWithMouseEvents(live, mouseEvents, keyEvents, delta)
+	frame, firstTick, err := s.controller.Resolve(live, mouseEvents, keyEvents, delta)
 	if err != nil {
 		return inputSessionTick{}, err
 	}
@@ -158,7 +158,7 @@ func sortedPressedKeys(keys map[int64]bool) []int64 {
 			pressed = append(pressed, key)
 		}
 	}
-	sort.Slice(pressed, func(i, j int) bool { return pressed[i] < pressed[j] })
+	slices.Sort(pressed)
 	return pressed
 }
 
@@ -169,7 +169,7 @@ func inputStateBeforeEvents(
 	mouseEvents []InputReplayMouseEvent,
 	keyEvents []InputReplayKeyEvent,
 ) InputReplayState {
-	initial := cloneInputReplayState(live)
+	initial := live
 	buttons := live.Buttons
 	for i := len(mouseEvents) - 1; i >= 0; i-- {
 		event := mouseEvents[i]

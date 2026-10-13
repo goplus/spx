@@ -31,6 +31,22 @@ func TestKeyFromStringRecognizesExclam(t *testing.T) {
 	}
 }
 
+func TestMouseCoordinatesUseLatestLiveInput(t *testing.T) {
+	var game Game
+	game.inputMgr.init(&game)
+	for _, point := range []mathf.Vec2{{X: 12.5, Y: -8}, {X: -20, Y: 31.25}} {
+		game.inputMgr.setMousePos(point)
+		if x, y := game.MouseX(), game.MouseY(); x != point.X || y != point.Y {
+			t.Fatalf("mouse coordinates = (%v, %v), want (%v, %v)", x, y, point.X, point.Y)
+		}
+	}
+
+	game.inputMgr.init(&game)
+	if x, y := game.MouseX(), game.MouseY(); x != 0 || y != 0 {
+		t.Fatalf("mouse coordinates after reinitialization = (%v, %v), want (0, 0)", x, y)
+	}
+}
+
 func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
 	previous := gco
 	gco = nil
@@ -59,7 +75,7 @@ func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
 			record := func(name string, next *SpriteImpl) {
 				routes = append(routes, name)
 				if len(routes) == 1 {
-					game.inputMgr.beginSwipeTracking(mathf.Vec2{X: 100}, next)
+					game.inputMgr.swipe.Begin(mathf.Vec2{X: 100}, next)
 				}
 			}
 			game.OnSwipe__0(90, func() { record("stage", sprite) })
@@ -70,12 +86,12 @@ func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
 				target = sprite
 				want = []string{"sprite", "stage"}
 			}
-			game.inputMgr.beginSwipeTracking(mathf.Vec2{}, target)
+			game.inputMgr.swipe.Begin(mathf.Vec2{}, target)
 			now = now.Add(100 * time.Millisecond)
-			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 100})
+			game.inputMgr.onLeftButtonUp(mathf.Vec2{X: 100})
 			now = now.Add(100 * time.Millisecond)
-			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 200})
-			game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 300})
+			game.inputMgr.onLeftButtonUp(mathf.Vec2{X: 200})
+			game.inputMgr.onLeftButtonUp(mathf.Vec2{X: 300})
 			if !slices.Equal(routes, want) {
 				t.Fatalf("routes = %v, want %v without duplicate finish dispatch", routes, want)
 			}
@@ -114,15 +130,15 @@ func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
 			game.OnSwipe__0(90, func() { calls++ })
 			sprite.OnSwipe__0(90, func() { calls++ })
 			for _, target := range []*SpriteImpl{nil, sprite} {
-				game.inputMgr.beginSwipeTracking(mathf.Vec2{}, target)
+				game.inputMgr.swipe.Begin(mathf.Vec2{}, target)
 				now = now.Add(tt.elapsed)
 				if tt.expire {
 					game.inputMgr.onMouseMove(mathf.Vec2{X: 50})
 					now = now.Add(-500 * time.Millisecond)
 				}
-				game.inputMgr.finishSwipeTracking(mathf.Vec2{X: tt.distance})
+				game.inputMgr.onLeftButtonUp(mathf.Vec2{X: tt.distance})
 				now = now.Add(100 * time.Millisecond)
-				game.inputMgr.finishSwipeTracking(mathf.Vec2{X: 100})
+				game.inputMgr.onLeftButtonUp(mathf.Vec2{X: 100})
 			}
 			if calls != 0 {
 				t.Fatalf("invalid gestures dispatched %d handlers", calls)

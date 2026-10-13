@@ -158,7 +158,7 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 	}
 	events0 := []InputReplayKeyEvent{{Key: 2, Pressed: true}}
 	mouseEvents0 := []InputReplayMouseEvent{{Button: 1, Pressed: true}}
-	frame0, first, err := controller.ResolveWithMouseEvents(live0, mouseEvents0, events0, 100)
+	frame0, first, err := controller.Resolve(live0, mouseEvents0, events0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 	frame0.MouseEvents[0].Button = 3
 	frame0.KeyEvents[0].Key = 777
 
-	frame1, first, err := controller.ResolveWithMouseEvents(
+	frame1, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: 11, Y: 21}, KeysDown: []int64{2}},
 		[]InputReplayMouseEvent{{Button: 1, Pressed: false}},
 		[]InputReplayKeyEvent{{Key: 1, Pressed: false}},
@@ -184,7 +184,7 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 	if first || frame1.Frame != 1 || frame1.Time != 0.25 {
 		t.Fatalf("second Resolve = (%+v, %v), want frame 1/time .25", frame1, first)
 	}
-	frame2, _, err := controller.Resolve(InputReplayState{}, nil, 0.5)
+	frame2, _, err := controller.Resolve(InputReplayState{}, nil, nil, 0.5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,6 +232,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 
 	frame0, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: math.NaN()}},
+		nil,
 		[]InputReplayKeyEvent{{Key: 999, Pressed: true}},
 		math.NaN(),
 	)
@@ -247,7 +248,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	frame0.State.KeysDown[0] = 999
 	frame0.KeyEvents[0].Key = 999
 
-	frame1, first, err := controller.Resolve(InputReplayState{}, nil, 1)
+	frame1, first, err := controller.Resolve(InputReplayState{}, nil, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,6 +267,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 
 	frozen, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: 999, Y: 999}, KeysDown: []int64{999}},
+		nil,
 		[]InputReplayKeyEvent{{Key: 999, Pressed: true}},
 		999,
 	)
@@ -282,7 +284,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 		t.Fatalf("frozen frame repeated mouse events: %+v", frozen.MouseEvents)
 	}
 	frozen.State.KeysDown[0] = 888
-	frozenAgain, _, err := controller.Resolve(InputReplayState{}, nil, 0)
+	frozenAgain, _, err := controller.Resolve(InputReplayState{}, nil, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +334,7 @@ func TestInputReplayControllerEmptyReplayFreezesInitialState(t *testing.T) {
 	if controller.Status().Exhausted {
 		t.Fatal("empty replay exhausted before its first effective tick")
 	}
-	frame, first, err := controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, 1)
+	frame, first, err := controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +345,7 @@ func TestInputReplayControllerEmptyReplayFreezesInitialState(t *testing.T) {
 		t.Fatal("empty replay did not exhaust after its first effective tick")
 	}
 	frame.State.KeysDown[0] = 888
-	frame, first, err = controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, 1)
+	frame, first, err = controller.Resolve(InputReplayState{KeysDown: []int64{9}}, nil, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +390,7 @@ func TestInputReplayControllerSynchronizesInitialBeforeTickZero(t *testing.T) {
 	if err := controller.SynchronizeRecordingInitial(initial); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Resolve(initial, nil, 1); err != nil {
+	if _, _, err := controller.Resolve(initial, nil, nil, 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := controller.SynchronizeRecordingInitial(InputReplayState{}); err == nil {
@@ -407,7 +409,7 @@ func TestInputReplayControllerIdleResolveReturnsIsolatedLiveFrame(t *testing.T) 
 	var controller InputReplayController
 	live := InputReplayState{KeysDown: []int64{1}}
 	events := []InputReplayKeyEvent{{Key: 1, Pressed: true}}
-	frame, first, err := controller.Resolve(live, events, 0.1)
+	frame, first, err := controller.Resolve(live, nil, events, 0.1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +428,7 @@ func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
 	if err := controller.StartRecording(InputReplayState{}, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := controller.Resolve(InputReplayState{}, nil, 0); err != nil {
+	if _, _, err := controller.Resolve(InputReplayState{}, nil, nil, 0); err != nil {
 		t.Fatal(err)
 	}
 	before, err := controller.Recording()
@@ -443,7 +445,7 @@ func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
 		{name: "time overflow", delta: maxInputReplayTime + 1},
 	} {
 		t.Run(invalid.name, func(t *testing.T) {
-			if _, _, err := controller.Resolve(invalid.state, nil, invalid.delta); err == nil {
+			if _, _, err := controller.Resolve(invalid.state, nil, nil, invalid.delta); err == nil {
 				t.Fatal("invalid tick was accepted")
 			}
 			if got := controller.Status(); got != (InputReplayControllerStatus{Mode: InputSessionModeRecording, NextFrame: 1, FrameCount: 1}) {
@@ -455,7 +457,7 @@ func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
 			}
 		})
 	}
-	frame, first, err := controller.Resolve(InputReplayState{}, nil, 0.25)
+	frame, first, err := controller.Resolve(InputReplayState{}, nil, nil, 0.25)
 	if err != nil || first || frame.Frame != 1 || frame.Time != 0.25 {
 		t.Fatalf("next valid tick = (%+v, %v, %v)", frame, first, err)
 	}
