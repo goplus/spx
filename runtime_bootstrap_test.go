@@ -401,6 +401,7 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	setupRuntimeScheduler(t)
 	var game Game
+	game.bindScriptEvents()
 	game.initEventQueueState()
 	game.events = make(chan event, eventBufferSize)
 	blocked := make(chan struct{})

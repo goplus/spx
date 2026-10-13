@@ -37,6 +37,7 @@ func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	co := setupRuntimeScheduler(t)
 	game := new(Game)
 	game.bindScriptEvents()
+	game.inputMgr.init(game)
 	engine.SetGame(game)
 	t.Cleanup(func() { engine.SetGame(nil) })
 	return co, game

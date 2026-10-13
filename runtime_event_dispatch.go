@@ -121,12 +121,7 @@ func (p *scriptEventRegistry) dispatchSinks(sinks []eventSink, event scriptEvent
 	})
 }
 
-func (p *scriptEventRegistry) dispatchStartSinks(sinks []eventSink, event scriptEventDispatch) {
-	withEventRegistrationBarrier(p.game, func() {
-		p.dispatchStartEventBatch(sinks, event)
-	})
-}
-
+// The start dispatcher already runs in a managed coroutine when gco is non-nil.
 func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event scriptEventDispatch) {
 	matched := matchingEventSinks(sinks, event.matchData)
 	if len(matched) == 0 || gco == nil {
