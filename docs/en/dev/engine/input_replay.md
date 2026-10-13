@@ -32,6 +32,19 @@ Do not replay into an already-running game because prior state is not part of th
 
 Replay uses the SPX input tick, not browser event timestamps or render frames. All input consumed by one logical update belongs to the same tick. This keeps the stream stable when browser scheduling or rendering frequency changes.
 
+Live input, recording, and replay freeze their input batch in `OnEngineBeforeUpdate`,
+before condition sampling. After clock advancement, `OnEngineUpdate` completes
+event routing and handler registration before script scheduling. The same-frame
+guarantee does not cover handler completion; see
+[Script scheduling](scheduling.md#input-and-timer-frame-boundaries) for the limits.
+
+Sharing an event batch does not freeze every input query. With live input or
+recording, `MouseX` / `MouseY` read the sampled position, `KeyPressed` calls the
+backend's `GetKey`, and `MousePressed` reads the current atomic button state.
+During replay, these queries read the resolved session state. The sampling barrier
+only excludes scripts; external input arriving after the snapshot cutoff can still
+change live query results.
+
 ## Version 1 data
 
 The v1 stream covers the SPX input snapshot used by game logic, including supported pointer, keyboard, and action state. The exact schema is versioned; readers must reject incompatible future formats rather than guessing.

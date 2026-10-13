@@ -36,13 +36,12 @@ type LoadedBuilderProject struct {
 }
 
 type RuntimeConfig struct {
-	Title            string
-	FullScreen       bool
-	PhysicsEnabled   bool
-	EventQueuePolicy string
-	WindowWidth      int
-	WindowHeight     int
-	ScreenshotKey    string
+	Title          string
+	FullScreen     bool
+	PhysicsEnabled bool
+	WindowWidth    int
+	WindowHeight   int
+	ScreenshotKey  string
 }
 
 type SystemSettings struct {
@@ -95,13 +94,12 @@ func ResolveRuntimeConfig(conf *Config, proj *ProjectConfig, projectDir string, 
 	}
 
 	return RuntimeConfig{
-		Title:            title,
-		FullScreen:       proj.FullScreen || conf.FullScreen,
-		PhysicsEnabled:   proj.Physics,
-		EventQueuePolicy: conf.EventQueuePolicy,
-		WindowWidth:      conf.Width,
-		WindowHeight:     conf.Height,
-		ScreenshotKey:    key,
+		Title:          title,
+		FullScreen:     proj.FullScreen || conf.FullScreen,
+		PhysicsEnabled: proj.Physics,
+		WindowWidth:    conf.Width,
+		WindowHeight:   conf.Height,
+		ScreenshotKey:  key,
 	}
 }
 

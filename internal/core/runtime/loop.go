@@ -45,23 +45,6 @@ type InputFrameHooks struct {
 	OnKeyPressed       func(int64)
 }
 
-type InputLoopConfig struct {
-	InputFrameHooks
-	BeginFrame             func() bool
-	CurrentMousePos        func() mathf.Vec2
-	SetMousePos            func(mathf.Vec2)
-	GetMouseInput          func([]engine.MouseEvent) ([]engine.MouseEvent, uint8)
-	GetKeyEvents           func([]engine.KeyEvent) []engine.KeyEvent
-	MouseMovementThreshold float64
-}
-
-type inputLoopState struct {
-	frameState   InputFrameState
-	mouseEvents  []engine.MouseEvent
-	keyEvents    []engine.KeyEvent
-	wasSuspended bool
-}
-
 func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
 	*s = InputFrameState{lastMousePos: point, leftButtonPressed: leftButtonPressed}
 }
@@ -103,46 +86,4 @@ func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
 	}
 
 	s.leftButtonPressed = frame.LeftButtonPressed
-}
-
-func RunInputLoop(cfg InputLoopConfig) {
-	state := inputLoopState{}
-
-	for {
-		if cfg.BeginFrame != nil && !cfg.BeginFrame() {
-			state.wasSuspended = true
-			engine.WaitNextFrame()
-			continue
-		}
-		runInputLoopFrame(cfg, &state)
-		engine.WaitNextFrame()
-	}
-}
-
-func runInputLoopFrame(cfg InputLoopConfig, state *inputLoopState) {
-	point := cfg.CurrentMousePos()
-	// Keep the cached mouse position in sync with the engine every frame,
-	// so callers don't need a second engine-side mouse query elsewhere.
-	cfg.SetMousePos(point)
-	var buttons uint8
-	state.mouseEvents, buttons = cfg.GetMouseInput(state.mouseEvents[:0])
-	state.keyEvents = cfg.GetKeyEvents(state.keyEvents[:0])
-	leftButtonPressed := buttons&1 != 0
-	if state.wasSuspended {
-		// The suspended consumer owns all edges. Resume from the current held
-		// state without manufacturing events at the handoff boundary.
-		state.frameState.Reset(point, leftButtonPressed)
-		state.wasSuspended = false
-	} else {
-		state.frameState.Process(
-			InputFrame{
-				Point:                  point,
-				LeftButtonPressed:      leftButtonPressed,
-				MouseEvents:            state.mouseEvents,
-				KeyEvents:              state.keyEvents,
-				MouseMovementThreshold: cfg.MouseMovementThreshold,
-			},
-			cfg.InputFrameHooks,
-		)
-	}
 }

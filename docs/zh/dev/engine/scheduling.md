@@ -84,13 +84,37 @@ timeout 限制清理通知的等待，不是整个调用的硬期限：取得锁
 一次 engine update 推进一次帧时钟，其中可以包含多轮脚本执行。
 开始下一轮不会推进帧号或计时器。
 
-1. 缓存引擎输入并读取本帧录制或回放的输入 tick。启动脚本到达首次让出或结束后，
-   使用本帧输入在帧时钟推进前采样条件事件。
-2. 推进时钟，派发已匹配的条件处理函数、输入 session 事件和截图快捷键请求，
-   执行启动事件或已到期的帧回调。
+1. 缓存引擎输入，为普通输入、录制或回放冻结同一种帧输入批次。
+   启动脚本到达首次让出或结束后，使用本帧输入在帧时钟推进前采样条件事件。
+   输入准备和条件匹配共用一次 `RunBetweenScripts` 采样阶段。
+2. 推进时钟并处理截图快捷键请求；冻结此阶段已到期的 Timer，登记已匹配的条件
+   处理函数，再路由本帧输入和 Timer。整批登记完成后，执行启动事件或已到期的帧回调。
 3. 处理可运行的协程，以及满足条件的后续循环轮次。
 4. 同步截图所需的视觉状态，派发截图队列，再完成输入 session 的帧收尾。
    Web host 等待渲染屏障后读取画布。
+
+### 输入与 Timer 的帧归属
+
+输入快照截止前采集的边沿属于本帧，截止后到达的输入留到下一帧。
+鼠标边沿、鼠标移动、按键和到期 Timer 按此顺序路由，不保证用户处理函数的全局执行顺序。
+派发期间新登记或由 `ResetTimer` 重新激活的 Timer 在后续帧批次检查。
+Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已完成动画仍由
+`logicLoop` 收尾，不保证该收尾先于 Timer 登记或回调。
+
+整批 `handleEvent` 路由和处理函数登记持有脚本执行权，在本帧脚本调度前完成。
+输入不再经过容量为 16 的 `Game.events` 通道及其异步接收 worker。
+处理函数仍使用 `BatchAsync`；正常的 `Update` 会等待可运行的处理函数首次让出或结束。
+`Wait`、`WaitNextFrame` 和外部任务等待可以把后续工作留到未来帧。
+取消、停止、重入策略及 watchdog 提前收尾仍然生效，登记完成不保证每个处理函数已运行或执行完毕。
+点击命中和 50 ms 点击节流规则保持生效。
+
+整批登记不等于每个输入边沿都执行回调。按键注册采用 `IgnoreWhileRunning`，
+已有调用未结束时忽略新调用；空闲的同一份 `OnAnyKey` 或多键 `OnKey` 注册，
+在同批中只接纳第一个匹配事件。
+
+升级时移除 Go 配置中的 `EventQueuePolicy` 引用和 JSON 中的 `eventQueuePolicy`。
+该 Go 字段已删除；当前项目 JSON 加载器会忽略旧字段。帧批次不再提供
+`DropNewest`、`DropOldest` 或 `Block` 队列策略，处理函数仍独立应用上述接纳规则。
 
 ## 循环、重绘与等待
 
@@ -140,6 +164,7 @@ timeout 限制清理通知的等待，不是整个调用的硬期限：取得锁
 | 等待任务处理与调度统计 | `internal/coroutine/update.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
+| 帧输入采样、统一输入与 Timer 派发 | `runtime_input.go`、`runtime_replay_input.go` |
 | 条件注册、状态采样与已匹配事件派发 | `runtime_conditions.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
 
@@ -165,7 +190,7 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 
 ## 适用范围
 
-这些规则覆盖普通循环、显式等待、重绘边界和条件事件。启动、取消、广播和克隆仍有各自的
+这些规则覆盖帧输入、Timer、普通循环、显式等待、重绘边界和条件事件。启动、取消、广播和克隆仍有各自的
 生命周期契约；跨帧等待任务的排序不代表外部事件或全部协程遵循全局 FIFO 顺序。实现位于 Go 层，
 无需改变 Godot C++ 接口。
 
@@ -182,6 +207,7 @@ host 接入方式见[《Web 端截图与固定帧接入说明》](web_capture.md
 - 跨帧等待保留注册顺序；尚未到期的等待不会阻塞可恢复的脚本。
 - 预算耗尽后脚本可在后续帧继续执行，并保留取消能力。
 - 条件与处理函数分别观察时钟推进前、后的状态；慢帧不破坏阶段顺序。
+- 普通输入、录制和回放共享帧批次；整批路由与登记在脚本调度前完成，Timer 使用推进后的时钟。
 - 条件事件维持上升沿、防重入和拥有者隔离语义。
 - 采样阶段不会因待处理的主线程调用发生死锁。
 - 同步引擎调用保持脚本片段连续；取消不会让正在执行的调用越过重置屏障。
@@ -199,7 +225,9 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
 核心回归位于 `runtime_scratch_scheduler_test.go`、`runtime_events_test.go`、
-`runtime_events_order_test.go`、`sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
+`runtime_events_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
+`runtime_event_dispatch_native_test.go`、
+`sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
 `internal/coroutine/order_test.go`。
 取消与重启覆盖位于 `internal/coroutine/wait_cancel_test.go`、`join_cancel_test.go`、
 `handler_order_test.go` 和 `internal/engine/execute_test.go`。

@@ -140,6 +140,7 @@ type inputManager struct {
 
 	clickGate inputstate.ClickGate
 	swipe     coreruntime.SwipeState[*SpriteImpl]
+	frame     inputFrameState
 }
 
 // KeyFromString returns KeyMax for an unrecognized key name.
@@ -156,6 +157,7 @@ func KeyFromString(key string) Key {
 func (p *inputManager) init(g *Game) {
 	p.mousePos = mathf.Vec2{}
 	p.g = g
+	p.frame = inputFrameState{}
 	p.clickGate.InitWithClock(mouseClickInterval, g.inputClock)
 	p.swipe.InitWithClock(g.inputClock)
 }

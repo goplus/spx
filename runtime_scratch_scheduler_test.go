@@ -18,6 +18,7 @@ package spx
 
 import (
 	"testing"
+	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -294,7 +295,7 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {
 				game.OnEngineBeforeUpdate(1.0 / 30)
 				itime.Update(delta, 30)
-				game.scriptEvents.dispatchConditions()
+				withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 				co.Update()
 			}
 			if fired != 0 {
@@ -304,16 +305,52 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 			co.StopIf(func(th coroutine.Thread) bool { return th.Obj == game })
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(0.1, 30)
-			game.scriptEvents.dispatchConditions()
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 			co.Update()
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(0.1, 30)
-			game.scriptEvents.dispatchConditions()
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 			co.Update()
 			if fired != 1 {
 				t.Fatalf("stopped tracking hat fired %d times, want 1", fired)
 			}
 		})
+	}
+}
+
+func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	started, release := make(chan struct{}), make(chan struct{})
+	var returned chan struct{}
+	t.Cleanup(func() {
+		close(release)
+		if returned != nil {
+			<-returned
+		}
+	})
+	co.Create(game, func(coroutine.Thread) {
+		close(started)
+		<-release
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("bootstrap script did not start")
+	}
+	samples := 0
+	game.OnCond(func() bool { samples++; return true }, func() {})
+	returned = make(chan struct{})
+	go func() {
+		game.OnEngineBeforeUpdate(1.0 / 30)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("unstarted frame waited for a script sampling barrier")
+	}
+	if samples != 0 {
+		t.Fatalf("bootstrap condition samples = %d, want 0", samples)
 	}
 }
 
@@ -329,7 +366,7 @@ func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 		t.Fatal("handler ran in predicate phase")
 	}
 	itime.Update(0.05, 30)
-	game.scriptEvents.dispatchConditions()
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 	co.Update()
 	if sampled != 0.05 || handled != 0.1 {
 		t.Fatalf("predicate/handler time = %v/%v, want 0.05/0.1", sampled, handled)
@@ -352,7 +389,7 @@ func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
 	poll := func() {
 		game.OnEngineBeforeUpdate(1.0 / 30)
 		itime.Update(1.0/30, 30)
-		game.scriptEvents.dispatchConditions()
+		withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 		co.Update()
 	}
 	poll()

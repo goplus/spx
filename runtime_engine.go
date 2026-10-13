@@ -65,28 +65,30 @@ func (p *Game) OnEngineReset() {
 // OnEngineBeforeUpdate samples input and conditions before the clock advances.
 func (p *Game) OnEngineBeforeUpdate(delta float64) {
 	p.scriptEvents.pendingConditions = nil
-	if p.lifecycleState.IsRunned.Load() {
-		if session := p.currentInputSession(); session != nil && !p.inputMgr.prepareInputSessionTick(session, delta) {
+	running := p.lifecycleState.IsRunned.Load()
+	if !running && !p.lifecycleState.StartDispatched.Load() {
+		return
+	}
+	sample := func() {
+		if running && !p.inputMgr.prepareInputFrame(delta) {
 			return
 		}
+		if p.lifecycleState.StartDispatched.Load() {
+			p.scriptEvents.sampleConditions()
+		}
 	}
-	if p.lifecycleState.StartDispatched.Load() {
-		p.scriptEvents.sampleConditions()
+	if gco == nil {
+		sample()
+	} else {
+		gco.RunBetweenScripts(sample)
 	}
 }
 
 func (p *Game) OnEngineUpdate(float64) {
-	if !p.lifecycleState.IsRunned.Load() {
+	if !p.lifecycleState.IsRunned.Load() || p.inputMgr.frame.pending == nil {
 		return
 	}
-	session := p.currentInputSession()
-	if session != nil && session.input.pending == nil {
-		return
-	}
-	p.scriptEvents.dispatchConditions()
-	if session != nil {
-		p.inputMgr.dispatchInputSessionTick(session)
-	}
+	p.dispatchFrameEvents()
 	p.soundMgr.Update()
 	p.runFrameScripts()
 	p.updateSpriteProxies()
