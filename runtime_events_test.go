@@ -37,6 +37,7 @@ func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	co := setupRuntimeScheduler(t)
 	game := new(Game)
 	game.bindScriptEvents()
+	game.inputMgr.init(game)
 	engine.SetGame(game)
 	t.Cleanup(func() { engine.SetGame(nil) })
 	return co, game
@@ -108,6 +109,46 @@ func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
 	want := []string{"first", "second"}
 	if !reflect.DeepEqual(callbacks, want) {
 		t.Fatalf("frame callbacks = %v, want %v", callbacks, want)
+	}
+}
+
+func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	game.debugState.DebugEvent = true
+	release := co.NewLatch()
+
+	var order []string
+	completed := 0
+	for _, name := range []string{"first", "second"} {
+		game.OnStart(func() {
+			order = append(order, name)
+			release.Wait()
+			completed++
+		})
+	}
+
+	dispatchedOnReturn := false
+	co.Create(game, func(coroutine.Thread) {
+		game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+		dispatchedOnReturn = game.lifecycleState.StartDispatched.Load()
+		order = append(order, "caller")
+	})
+	co.Update()
+
+	if want := []string{"first", "second", "caller"}; !reflect.DeepEqual(order, want) {
+		t.Fatalf("startup order = %v, want %v", order, want)
+	}
+	if !dispatchedOnReturn {
+		t.Fatal("caller resumed before start dispatch was marked complete")
+	}
+	if completed != 0 {
+		t.Fatalf("completed handlers = %d, want 0 before release", completed)
+	}
+
+	release.Open()
+	co.Update()
+	if completed != 2 {
+		t.Fatalf("completed handlers = %d, want 2 after release", completed)
 	}
 }
 

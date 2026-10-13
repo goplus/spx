@@ -221,10 +221,6 @@ func (p *scriptEventBindings) clearHandlers() {
 	p.scriptEventRegistry.manager.DeleteOwner(p.owner)
 }
 
-func (p *scriptEventBindings) doWhenSwipe(direction Direction, target threadObj) {
-	p.scriptEventRegistry.doWhenSwipe(direction, target)
-}
-
 func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) {
 	if len(keys) == 0 {
 		return
@@ -286,29 +282,9 @@ func (p *Game) handleEvent(ev event) {
 	case *eventMouseMove:
 		p.inputMgr.onMouseMove(e.Pos)
 	case *eventKeyDown:
-		// Note: key-up callbacks are not part of the current event sink API.
-		p.scriptEvents.doWhenKeyPressed(e.Key)
+		p.inputMgr.onKeyDown(e.Key)
 	case *eventStart:
-		runStartPhase := func() {
-			sinks, ok := p.takeStartSinks(e.generation)
-			if !ok {
-				return
-			}
-			p.scriptEvents.doWhenStart(sinks, func() bool {
-				return p.isCurrentBootstrap(e.generation)
-			})
-			p.markStartDispatched(e.generation)
-		}
-		if gco == nil {
-			runStartPhase()
-			break
-		}
-		dispatcher := gco.Create(startEventDispatcher{}, func(coroutine.Thread) {
-			runStartPhase()
-		})
-		if gco.IsInCoroutine() {
-			gco.Join(dispatcher)
-		}
+		p.scriptEvents.doWhenStart(e.generation)
 	case *eventTimer:
 		p.scriptEvents.doWhenTimer(e.Timestamp)
 	}
@@ -324,19 +300,34 @@ func (p *Game) fireEvent(ev event) {
 }
 
 // Event Dispatch
-func (p *scriptEventRegistry) doWhenStart(sinks []eventSink, shouldRun func() bool) {
-	p.dispatchStartSinks(sinksInTargetOrder(p.game, sinks), scriptEventDispatch{
-		mode: coroutine.BatchWaitFirstSlice,
-		run: func(_ coroutine.Thread, ev *eventSink) {
-			if shouldRun != nil && !shouldRun() {
-				return
-			}
-			if isDebugEventEnabled() {
-				spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
-			}
-			ev.Handler.(func())()
-		},
-	})
+func (p *scriptEventRegistry) doWhenStart(generation uint64) {
+	runStartPhase := func(coroutine.Thread) {
+		sinks, ok := p.game.takeStartSinks(generation)
+		if !ok {
+			return
+		}
+		p.dispatchStartEventBatch(sinksInTargetOrder(p.game, sinks), scriptEventDispatch{
+			mode: coroutine.BatchWaitFirstSlice,
+			run: func(_ coroutine.Thread, ev *eventSink) {
+				if !p.game.isCurrentBootstrap(generation) {
+					return
+				}
+				if isDebugEventEnabled() {
+					spxlog.Debug("OnStart: %s", nameOf(ev.Owner))
+				}
+				ev.Handler.(func())()
+			},
+		})
+		p.game.markStartDispatched(generation)
+	}
+	if gco == nil {
+		runStartPhase(nil)
+		return
+	}
+	dispatcher := gco.Create(startEventDispatcher{}, runStartPhase)
+	if gco.IsInCoroutine() {
+		gco.Join(dispatcher)
+	}
 }
 
 func (p *scriptEventRegistry) doWhenTimer(timestamp int64) {
