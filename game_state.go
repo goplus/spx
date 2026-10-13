@@ -20,7 +20,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/ui"
 )
@@ -55,12 +54,6 @@ type gameDebugState struct {
 	DebugPanel *ui.UiDebug
 	DebugInstr bool
 	DebugEvent bool
-}
-
-type gameEventQueueState struct {
-	EventQueueMu     sync.Mutex
-	EventQueuePolicy coreevent.QueuePolicy
-	EventQueueStats  coreevent.QueueStats
 }
 
 type gamePathfindingState struct {

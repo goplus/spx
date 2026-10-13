@@ -40,32 +40,21 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 	))
 }
 
-// sampleConditions reads a consistent snapshot before the frame clock advances.
+// sampleConditions matches predicates within the caller's sampling barrier,
+// before the frame clock advances.
 func (p *scriptEventRegistry) sampleConditions() {
-	read := func() {
-		p.pendingConditions = matchingEventSinks(p.globalSinks(coreevent.BucketCondition), nil)
-	}
-	if gco == nil {
-		read()
-	} else {
-		gco.RunBetweenScripts(read)
-	}
+	p.pendingConditions = matchingEventSinks(p.globalSinks(coreevent.BucketCondition), nil)
 }
 
-// dispatchConditions starts matched handlers without reevaluating conditions.
+// dispatchConditions registers sampled handlers within the caller's event barrier,
+// without reevaluating conditions.
 func (p *scriptEventRegistry) dispatchConditions() {
 	sinks := p.pendingConditions
 	p.pendingConditions = nil
-	if len(sinks) == 0 {
-		return
-	}
-	event := scriptEventDispatch{
+	dispatchMatchedScriptEventBatch(sinks, scriptEventDispatch{
 		mode: coroutine.BatchAsync,
 		run: func(_ coroutine.Thread, sink *eventSink) {
 			sink.Handler.(func())()
 		},
-	}
-	withEventRegistrationBarrier(p.game, func() {
-		dispatchMatchedScriptEventBatch(sinks, event)
 	})
 }

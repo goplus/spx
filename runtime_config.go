@@ -19,7 +19,6 @@ package spx
 import (
 	"os"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
 )
@@ -38,7 +37,6 @@ func (p *Game) applyStoredRuntimeConfig(proj *coreproject.ProjectConfig) {
 	p.runtimeConfigInput.Title = runtimeCfg.Title
 	proj.FullScreen = runtimeCfg.FullScreen
 	p.physicsEnabled = runtimeCfg.PhysicsEnabled
-	p.eventQueueState.EventQueuePolicy = coreevent.ParsePolicy(runtimeCfg.EventQueuePolicy)
 	p.displayState.WindowHeight = runtimeCfg.WindowHeight
 	p.displayState.WindowWidth = runtimeCfg.WindowWidth
 

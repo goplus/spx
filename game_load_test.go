@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/ui"
 )
@@ -443,10 +442,9 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	t.Setenv("SPX_PROJECT_DIR", "")
 
 	conf := Config{
-		Width:            640,
-		Height:           480,
-		FullScreen:       true,
-		EventQueuePolicy: "block",
+		Width:      640,
+		Height:     480,
+		FullScreen: true,
 	}
 
 	var game Game
@@ -461,9 +459,6 @@ func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	}
 	if !proj.FullScreen {
 		t.Fatal("applyRuntimeConfig did not propagate fullscreen override")
-	}
-	if got := game.eventQueueState.EventQueuePolicy; got != coreevent.QueueBlock {
-		t.Fatalf("EventQueuePolicy = %v, want block", got)
 	}
 	if game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 480 {
 		t.Fatalf("window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)

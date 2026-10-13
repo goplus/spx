@@ -124,7 +124,7 @@ const status = await runnerWindow.getInputSessionStatus()
 // }
 ```
 
-`currentTick` 是最近消费的 effective input tick，首个 tick 前为 `null`。`exhausted` 只表示回放输入已经读完；`completed` 表示最后一帧的脚本、协程、视觉同步和截图派发均已完成。
+`currentTick` 是最近消费的 effective input tick，首个 tick 前为 `null`。`exhausted` 只表示回放输入已经读完；`completed` 表示最后一帧的调度、视觉同步和截图派发已收尾，不表示跨帧等待的脚本也已结束。
 
 `Completed` / `Aborted` 诊断状态属于当前 Game generation，会保留到下一局开始；下一局认领输入生命周期后重置为它自己的 `Prepared` / `Running`，普通启动则回到 `Idle`。
 
@@ -161,11 +161,19 @@ const status = await runnerWindow.getInputSessionStatus()
 Input Session 使用独立的 input tick，不等同于 `spx.CurrentFrame()`：
 
 - `Prepared` 不产生 tick；
-- 第一条通过 `IsRunned` 门槛的有效 `OnEngineUpdate` 消费 tick `0`；
+- 第一条通过 `IsRunned` 门槛的有效 `OnEngineBeforeUpdate` 消费 tick `0`；
 - 此后每个有效 update 前进一个 tick；
 - 资源加载、bootstrap 和 engine frame 不会改变 tick 编号。
 
-输入在 `OnEngineUpdate` 开头解析，之后才执行当帧的 SPX 脚本逻辑。
+普通输入、录制和回放统一在 `OnEngineBeforeUpdate` 冻结输入批次，再采样条件事件。
+时钟推进后，`OnEngineUpdate` 在脚本调度前完成事件路由与处理函数登记。
+同帧保证不包括处理函数执行完毕，具体边界见
+[脚本调度](scheduling.md#输入与-timer-的帧归属)。
+
+共享事件批次不代表所有输入查询都读取该批快照。普通输入和录制中，`MouseX` / `MouseY`
+读取采样缓存，`KeyPressed` 调用后端 `GetKey`，`MousePressed` 读取即时按钮原子状态；
+回放期间这几项查询均读取 session 的已解析状态。采样屏障只隔离脚本执行，
+快照截止后的外部输入仍可能改变即时查询结果。
 
 ```text
 Initial         = tick 0 有序输入边沿发生前的状态
@@ -185,7 +193,7 @@ Frames[0].Time  = 0
 - 左、中、右键当前状态及有序 press/release 边沿；
 - 当前按键集合及有序 key press/release 边沿。
 
-完整快照用于轮询 API，有序边沿用于保留同一 tick 内的短点击。回放期间仍会排空真实输入队列，但不会把真实输入交给游戏。
+回放期间，完整快照用于轮询 API，有序边沿用于保留同一 tick 内的短点击。真实输入队列仍会排空，但不会把真实输入交给游戏。
 
 v1 不记录鼠标与键盘事件之间的全局交错顺序。鼠标位置也是每 tick 一份快照，不是每条边沿一份坐标。
 
@@ -201,7 +209,7 @@ Replay JSON 使用严格字段校验，编解码和 Web 参数均限制为 16 Mi
 4. Go capture 请求派发到 Web；
 5. `OnEngineFrameEnd` 将 Session 标记为 `Completed` 并暂停引擎。
 
-因此上层不会在最后一条输入刚取出时过早停止游戏，也不会截断最后一帧的点击回调或截图。
+完成通知不等待处理函数中的未来帧；watchdog 提前结束调度时，仍可能有处理函数尚未执行。
 
 Replay EOF 后不恢复实时输入。需要提前取消回放时，直接结束整局游戏。
 

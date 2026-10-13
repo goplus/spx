@@ -193,6 +193,30 @@ func TestResetInputStateClearsMouseStateAndEvents(t *testing.T) {
 	}
 }
 
+func TestMouseInputSnapshotExcludesReleaseAfterCacheBoundary(t *testing.T) {
+	mouseInput.reset()
+	t.Cleanup(mouseInput.reset)
+	onMousePressed(1)
+	cacheMouseEvents()
+	onMouseReleased(1)
+
+	events, buttons := GetMouseInput(nil)
+	if len(events) != 1 || events[0] != (MouseEvent{Id: 1, IsPressed: true}) || buttons != 1 {
+		t.Fatalf("cached input = %v, buttons %#x, want press and left held", events, buttons)
+	}
+	if IsMouseButtonPressed(1) || AnyMouseButtonPressed() {
+		t.Fatal("instantaneous mouse queries did not observe the release")
+	}
+	if events, buttons := GetMouseInput(nil); len(events) != 0 || buttons != 1 {
+		t.Fatalf("second drain = %v, buttons %#x, want consumed edges and unchanged snapshot", events, buttons)
+	}
+	cacheMouseEvents()
+	events, buttons = GetMouseInput(nil)
+	if len(events) != 1 || events[0] != (MouseEvent{Id: 1}) || buttons != 0 {
+		t.Fatalf("next cached input = %v, buttons %#x, want release and no held buttons", events, buttons)
+	}
+}
+
 func TestDiscardPendingMouseEventsDefinesConsumerBoundary(t *testing.T) {
 	mouseInput.reset()
 	t.Cleanup(mouseInput.reset)

@@ -63,7 +63,6 @@ const (
 )
 
 const (
-	eventBufferSize             = 16
 	schedTimeoutMs              = 3000
 	mainExecTimeoutSec          = 3
 	mouseMovementThreshold      = 1.0
@@ -84,7 +83,6 @@ type Game struct {
 	displayState       gameDisplayState
 	dialogState        gameDialogState
 	debugState         gameDebugState
-	eventQueueState    gameEventQueueState
 	pathfindingState   gamePathfindingState
 	audioState         gameAudioState
 	runtimeConfigInput Config
@@ -96,8 +94,6 @@ type Game struct {
 	typs   map[string]reflect.Type
 	sprs   map[string]Sprite
 	sounds map[string]sound
-
-	events chan event
 
 	scriptEvents            scriptEventRegistry
 	gamer                   Gamer
@@ -149,8 +145,7 @@ func (p *Game) reset() {
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
 	costumeSizeCache.Clear()
-	p.eventQueueState.EventQueueStats.Reset()
-	p.events = nil
+	p.inputMgr.init(p)
 
 	itime.OnReload()
 }
@@ -163,7 +158,6 @@ func (p *Game) initGame(sprites []Sprite) *Game {
 	}
 	p.initShapeMgr()
 	p.setDebugFlags(dbgFlags(defaultDebugFlags.Load()))
-	p.initEventQueueState()
 	p.bindScriptEvents()
 	p.sprs = make(map[string]Sprite)
 	p.sounds = make(map[string]sound)

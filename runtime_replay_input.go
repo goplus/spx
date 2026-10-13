@@ -20,128 +20,29 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
-	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-type inputSessionInput struct {
-	frameState  coreruntime.InputFrameState
-	mouseEvents []engine.MouseEvent
-	keyEvents   []engine.KeyEvent
-	pending     *inputSessionFrame // engine frame thread only
-}
-
-type inputSessionFrame struct {
-	events    []event
-	keyEvents []InputReplayKeyEvent
-}
-
-// Prepare one input tick before condition sampling, deferring user handlers and
-// capture requests until the engine clock has advanced.
-func (p *inputManager) prepareInputSessionTick(session *inputSession, delta float64) bool {
-	if !session.beginFrame() {
-		return false
-	}
-	frame, err := p.resolveInputSessionTick(session, delta)
-	if err != nil {
-		session.endFrame()
-		engine.Panic(err)
-		return false
-	}
-	session.input.pending = frame
-	return true
-}
-
-func (p *inputManager) dispatchInputSessionTick(session *inputSession) {
-	frame := session.input.pending
-	session.input.pending = nil
-	session.captureConfiguredKeyPresses(frame.keyEvents)
-	p.dispatchInputSessionEvents(frame.events)
-}
-
-func (p *inputManager) resolveInputSessionTick(session *inputSession, delta float64) (*inputSessionFrame, error) {
+func (p *inputManager) resolveInputSessionState(session *inputSession, delta float64) (InputReplayState, error) {
 	session.operationMu.Lock()
 	defer session.operationMu.Unlock()
-	c := &session.input
+	c := &p.frame
 	resolved, err := session.consumeSampledInputTickLocked(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		pointValue := engine.Managers().InputMgr.GetGlobalMousePos()
-		var buttons uint8
-		c.mouseEvents, buttons = engine.GetMouseInput(c.mouseEvents[:0])
-		var keysDown []int64
-		c.keyEvents, keysDown = engine.GetKeyInput(c.keyEvents[:0])
-
-		return InputReplayState{
-			Mouse: InputReplayMouse{
-				X: float64(pointValue.X),
-				Y: float64(pointValue.Y),
-			},
-			Buttons:  buttons,
-			KeysDown: keysDown,
-		}, replayMouseEventsFromEngine(c.mouseEvents), replayKeyEventsFromEngine(c.keyEvents)
+		state := p.sampleInputState()
+		return state, replayMouseEventsFromEngine(c.mouseEvents), replayKeyEventsFromEngine(c.keyEvents)
 	})
 	if err != nil {
-		return nil, err
+		return InputReplayState{}, err
 	}
-	effectivePoint := mathf.Vec2{X: resolved.frame.State.Mouse.X, Y: resolved.frame.State.Mouse.Y}
 	if resolved.firstTick {
-		p.resetInputSessionDerivedState(session, resolved.initial)
+		point := mathf.Vec2{X: resolved.initial.Mouse.X, Y: resolved.initial.Mouse.Y}
+		c.history.Reset(point, resolved.initial.Buttons&1 != 0)
+		p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
+		p.swipe.InitWithClock(p.g.inputClock)
 	}
 	c.mouseEvents = engineMouseEventsFromReplay(resolved.frame.MouseEvents, c.mouseEvents)
 	c.keyEvents = engineKeyEventsFromReplay(resolved.frame.KeyEvents, c.keyEvents)
-	p.setMousePos(effectivePoint)
-	inputEvents := make([]event, 0, len(c.mouseEvents)+len(c.keyEvents)+3)
-
-	c.frameState.Process(
-		coreruntime.InputFrame{
-			Point:                  effectivePoint,
-			LeftButtonPressed:      resolved.frame.State.Buttons&1 != 0,
-			MouseEvents:            c.mouseEvents,
-			KeyEvents:              c.keyEvents,
-			MouseMovementThreshold: mouseMovementThreshold,
-		},
-		inputFrameEventHooks(func(ev event) {
-			inputEvents = append(inputEvents, ev)
-		}),
-	)
-	return &inputSessionFrame{events: inputEvents, keyEvents: resolved.frame.KeyEvents}, nil
-}
-
-func (s *inputSession) captureConfiguredKeyPresses(events []InputReplayKeyEvent) {
-	if s.captureKey == 0 {
-		return
-	}
-	for _, event := range events {
-		if event.Pressed && Key(event.Key) == s.captureKey {
-			Snapshot("", nil)
-		}
-	}
-}
-
-func (p *inputManager) dispatchInputSessionEvents(events []event) {
-	if len(events) == 0 {
-		return
-	}
-	dispatch := func() {
-		for _, event := range events {
-			p.g.handleEvent(event)
-		}
-	}
-	if gco == nil {
-		dispatch()
-		return
-	}
-	gco.Create(p.g, func(coroutine.Thread) {
-		dispatch()
-	})
-}
-
-func (p *inputManager) resetInputSessionDerivedState(session *inputSession, state InputReplayState) {
-	point := mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
-	p.mousePos = point
-	session.input.frameState.Reset(point, state.Buttons&1 != 0)
-	p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
-	p.swipe.InitWithClock(p.g.inputClock)
+	return resolved.frame.State, nil
 }
 
 func (p *inputManager) effectiveKeyPressed(key Key) bool {

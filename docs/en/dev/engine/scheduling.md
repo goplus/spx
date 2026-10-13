@@ -104,15 +104,46 @@ waiting for its own task can still prevent progress.
 An engine update advances the frame clock once. It may contain several script
 rounds; starting another round does not advance the frame number or timer.
 
-1. Cache engine input and resolve the current recording or replay tick. After
-   startup scripts first yield or finish, sample condition events using that
-   input before advancing the frame clock.
-2. Advance the clock. Dispatch matched condition handlers, input-session events
-   and capture-key requests, and run the startup or due frame callbacks.
+1. Cache engine input and freeze the same kind of input batch for live input,
+   recording, or replay. After startup scripts first yield or finish, sample
+   condition events using that input before advancing the frame clock. Input
+   preparation and condition matching share one `RunBetweenScripts` phase.
+2. Advance the clock and handle capture-key requests. Freeze timers due at this
+   phase, register matched condition handlers, then route this frame's input and
+   timers. Finish registration before running the startup or due frame callbacks.
 3. Process runnable coroutines and eligible loop rounds.
 4. Synchronize visual state needed by captures, dispatch queued capture requests,
    and finalize input-session frame completion. The Web host waits for its
    render fence before reading the canvas.
+
+### Input and timer frame boundaries
+
+Edges sampled before the input snapshot cutoff belong to this frame; later input
+belongs to the next. Routing order is mouse edges, mouse movement, keys, then due
+timers; this does not impose a global order on user handlers. Timers registered
+or reactivated by `ResetTimer` during dispatch are checked in a subsequent batch.
+Timers are routed at the start of `OnEngineUpdate`. Pending audio and completed
+animations are still flushed by `logicLoop`; that work is not guaranteed to precede
+timer registration or callbacks.
+
+The batch holds script execution ownership while completing `handleEvent` routing
+and handler registration before this frame's script scheduling. Input no longer
+passes through the 16-item `Game.events` channel and its asynchronous receive worker.
+Handlers still use `BatchAsync`; normally, `Update` waits for runnable handlers
+to yield or finish. `Wait`, `WaitNextFrame`, and external-task waits can defer their
+continuation to future frames. Cancellation, stop rules, reentry policies, and
+early watchdog exit still apply: registration does not guarantee that every handler
+has started or finished. Click hit testing and the 50 ms throttle remain in effect.
+
+Batch registration does not mean one callback per input edge. Key registrations
+use `IgnoreWhileRunning`, rejecting new calls while an earlier invocation remains
+active. An idle `OnAnyKey` or multi-key `OnKey` registration accepts only its first
+matching event in a batch.
+
+When upgrading, remove `EventQueuePolicy` from Go configuration and
+`eventQueuePolicy` from JSON. The Go field has been removed; the current project
+JSON loader ignores the old field. Frame batches no longer offer `DropNewest`,
+`DropOldest`, or `Block` queue policies. Handler admission still follows the rules above.
 
 ## Loops, redraws, and waits
 
@@ -175,6 +206,7 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Wait-job processing and scheduler statistics | `internal/coroutine/update.go` |
 | Control-flow integration | `internal/engine/coro.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
+| Frame input sampling, unified input and timer dispatch | `runtime_input.go`, `runtime_replay_input.go` |
 | Condition registration, sampling, and matched-handler dispatch | `runtime_conditions.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
 
@@ -207,7 +239,7 @@ semantics, but it does not remove variation caused by wall-clock scheduling.
 
 ## Scope
 
-These rules cover ordinary loops, explicit waits, redraw boundaries, and
+These rules cover frame input, timers, ordinary loops, explicit waits, redraw boundaries, and
 condition events. Startup, cancellation, broadcasts, and cloning retain their
 respective lifecycle contracts; ordering waits across frames does not impose a
 global FIFO order on external events or all coroutines. The implementation is
@@ -231,6 +263,8 @@ control; it does not provide preemption or a hard timeout.
 - Scripts continue in later frames after budget exhaustion and remain cancellable.
 - Predicates and handlers observe the states before and after clock advancement,
   respectively; slow frames preserve this phase ordering.
+- Live input, recording, and replay share frame batches; routing and registration
+  finish before script scheduling, and timers use the advanced clock.
 - Condition events preserve rising edges, non-reentrancy, and owner isolation.
 - Pending main-thread calls cannot deadlock the sampling phase.
 - Concurrent drain waiters all receive completion notifications; reset waits for
@@ -252,6 +286,7 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 
 Core regression coverage is in `runtime_scratch_scheduler_test.go`,
 `runtime_events_test.go`, `runtime_events_order_test.go`,
+`runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_native_test.go`,
 `sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
 `internal/coroutine/order_test.go`.
 Cancellation and restart coverage is in `internal/coroutine/wait_cancel_test.go`,

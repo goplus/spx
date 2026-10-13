@@ -65,7 +65,6 @@ type inputSession struct {
 	frameOpen      bool
 	terminalStatus InputSessionStatus
 
-	input       inputSessionInput
 	environment inputSessionEnvironment
 }
 

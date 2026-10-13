@@ -214,7 +214,7 @@ func setupReloadPreflightGame(t *testing.T, files reloadConfigFS) (*reloadPrefli
 	game.Sprite = sprite
 	game.Game.gamer = game
 	game.Game.fs = files
-	game.Game.events = make(chan event, eventBufferSize)
+	game.Game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeySpace}}}
 	game.Game.sprs = map[string]Sprite{"Sprite": sprite}
 	game.Game.typs = map[string]reflect.Type{
 		"reloadPreflightSprite": reflect.TypeFor[reloadPreflightSprite](),
@@ -336,28 +336,18 @@ func assertReloadPreflightPreservedLiveState(
 	game *reloadPreflightGame,
 	sprite *reloadPreflightSprite,
 	thread coroutine.Thread,
-	events chan event,
+	pending *inputFrame,
 ) {
 	t.Helper()
 
 	if thread.Stopped() {
 		t.Fatal("reload preflight stopped a live coroutine")
 	}
-	if game.Game.events != events {
-		t.Fatal("reload preflight replaced the live event channel")
+	if pending == nil || game.Game.inputMgr.frame.pending != pending || len(pending.events) != 1 {
+		t.Fatal("reload preflight changed the pending input frame")
 	}
-	select {
-	case _, ok := <-events:
-		if !ok {
-			t.Fatal("reload preflight closed the live event channel")
-		}
-		t.Fatal("live event channel unexpectedly contained an event")
-	default:
-	}
-	marker := new(struct{})
-	events <- marker
-	if got := <-events; got != marker {
-		t.Fatalf("live event channel returned %T, want sentinel marker", got)
+	if key, ok := pending.events[0].(*eventKeyDown); !ok || key.Key != KeySpace {
+		t.Fatalf("reload preflight changed pending input: %+v", pending.events)
 	}
 	if game.Game.sprs["Sprite"] != sprite {
 		t.Fatal("reload preflight cleared or replaced the live sprite map")
@@ -413,7 +403,7 @@ func TestReloadDoesNotCommitToReplacementBindingWithSameGame(t *testing.T) {
 		release:        make(chan struct{}),
 	}
 	game.Game.fs = blockingFS
-	events := game.Game.events
+	pending := game.Game.inputMgr.frame.pending
 	releasePreflight := sync.OnceFunc(func() { close(blockingFS.release) })
 	t.Cleanup(releasePreflight)
 
@@ -444,8 +434,8 @@ func TestReloadDoesNotCommitToReplacementBindingWithSameGame(t *testing.T) {
 	}
 	finishThread()
 
-	if game.Game.events != events {
-		t.Fatal("stale reload replaced the live event channel")
+	if game.Game.inputMgr.frame.pending != pending {
+		t.Fatal("stale reload replaced the pending input frame")
 	}
 	if game.Game.sprs["Sprite"] != sprite || game.Sprite != sprite || sprite.name != "live-sentinel" {
 		t.Fatal("stale reload mutated the live sprite state")
@@ -461,7 +451,7 @@ func TestReloadPreflightPanicRestoresLiveGame(t *testing.T) {
 	}
 	game, sprite, co := setupReloadPreflightGame(t, files)
 	game.Game.fs = panickingReloadConfigFS{}
-	events := game.Game.events
+	pending := game.Game.inputMgr.frame.pending
 	thread, finishThread := startReloadPreflightSentinelThread(t, co, game)
 
 	var recovered any
@@ -472,7 +462,7 @@ func TestReloadPreflightPanicRestoresLiveGame(t *testing.T) {
 	if recovered != "reload preflight failure" {
 		t.Fatalf("reload panic = %v, want reload preflight failure", recovered)
 	}
-	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
+	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, pending)
 	assertReloadAvailable(t, &game.Game)
 	finishThread()
 }
@@ -485,7 +475,7 @@ func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
 		}`,
 	}
 	game, sprite, co := setupReloadPreflightGame(t, files)
-	events := game.Game.events
+	pending := game.Game.inputMgr.frame.pending
 	thread, finishThread := startReloadPreflightSentinelThread(t, co, game)
 
 	plan, err := prepareReload(&game.Game, reflect.ValueOf(game).Elem(), strings.NewReader(`{"zorder":["Sprite"]}`))
@@ -502,7 +492,7 @@ func TestPrepareReloadSuccessDoesNotMutateLiveGame(t *testing.T) {
 	if prepared.layout == nil || len(prepared.layout.Frames) != 2 {
 		t.Fatalf("prepared Sprite layout = %v, want two frames", prepared.layout)
 	}
-	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
+	assertReloadPreflightPreservedLiveState(t, game, sprite, thread, pending)
 	finishThread()
 }
 
@@ -744,14 +734,14 @@ func TestReloadPreflightFailurePreservesLiveGame(t *testing.T) {
 				files["sprites/Sprite/index.json"] = validSprite
 			}
 			game, sprite, co := setupReloadPreflightGame(t, files)
-			events := game.Game.events
+			pending := game.Game.inputMgr.frame.pending
 			thread, finishThread := startReloadPreflightSentinelThread(t, co, game)
 
 			err := XGot_Game_Reload(game, strings.NewReader(test.project))
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("XGot_Game_Reload error = %v, want substring %q", err, test.wantError)
 			}
-			assertReloadPreflightPreservedLiveState(t, game, sprite, thread, events)
+			assertReloadPreflightPreservedLiveState(t, game, sprite, thread, pending)
 			assertReloadAvailable(t, &game.Game)
 			finishThread()
 		})

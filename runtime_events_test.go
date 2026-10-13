@@ -348,13 +348,13 @@ func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 }
 
 func pollRuntimeConditions(registry *scriptEventRegistry) {
-	registry.sampleConditions()
-	registry.dispatchConditions()
+	gco.RunBetweenScripts(registry.sampleConditions)
+	withEventRegistrationBarrier(registry.game, registry.dispatchConditions)
 }
 
 func pollRuntimeEventConditions(game *Game) {
 	game.OnEngineBeforeUpdate(1.0 / 30)
-	game.scriptEvents.dispatchConditions()
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 }
 
 func TestOnCondStartsAfterOnStartPhase(t *testing.T) {

@@ -101,8 +101,8 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	if len(base.pendingBootstrap) == 0 || base.lifecycleState.BootstrapDone.Load() {
 		t.Fatal("load must queue bootstrap hooks without running them")
 	}
-	if got := gco.LastThreadID(); got != 3 {
-		t.Fatalf("game loops = %d, want 3", got)
+	if got := gco.LastThreadID(); got != 1 {
+		t.Fatalf("game loops = %d, want 1", got)
 	}
 }
 
@@ -112,15 +112,16 @@ func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	pkgengine.ResMgr = &loadGameResMgr{fontError: "font unavailable"}
 	setupLoadGameFlags(t)
 	resource := &loadGameFS{reloadConfigFS: files}
-	events := game.events
+	pending := &inputFrame{events: []event{&eventKeyDown{Key: KeySpace}}}
+	game.inputMgr.frame.pending = pending
 	if err := game.loadGame(resource, game.bootstrapGeneration()); err == nil || !strings.Contains(err.Error(), "font unavailable") {
 		t.Fatalf("loadGame error = %v", err)
 	}
 	if resource.closeCalls != 1 {
 		t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
 	}
-	if game.events != events || gco.LastThreadID() != 0 {
-		t.Fatal("font failure changed the game loops")
+	if game.inputMgr.frame.pending != pending || gco.LastThreadID() != 0 {
+		t.Fatal("font failure changed pending input or the game loops")
 	}
 }
 

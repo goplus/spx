@@ -290,15 +290,6 @@ func (p *Game) handleEvent(ev event) {
 	}
 }
 
-func (p *Game) fireEvent(ev event) {
-	if p.queueEventWithPolicy(ev) {
-		return
-	}
-	if isDebugInstrEnabled() {
-		spxlog.Warn("Event dropped (policy=%s): %v", p.eventQueueState.EventQueuePolicy, ev)
-	}
-}
-
 // Event Dispatch
 func (p *scriptEventRegistry) doWhenStart(generation uint64) {
 	runStartPhase := func(coroutine.Thread) {

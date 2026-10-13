@@ -80,7 +80,7 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	if !conf.DontRunOnUnfocused {
 		platform.SetRunnableOnUnfocused(true)
 	}
-	p.initEventLoop()
+	p.initLogicLoop()
 	platform.SetWindowTitle(p.runtimeConfigInput.Title)
 	return nil
 }
@@ -89,8 +89,6 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.soundMgr.Init(&engine.Managers().AudioMgr)
 	p.sounds = make(map[string]sound)
 	p.inputMgr.init(p)
-	p.events = make(chan event, eventBufferSize)
-	p.eventQueueState.EventQueueStats.Reset()
 	p.fs = fs
 }
 

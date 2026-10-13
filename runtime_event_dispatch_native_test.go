@@ -26,7 +26,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spbase/mathf"
+	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
@@ -56,6 +61,58 @@ type eventLifecycleFunc func(coroutine.Thread) func()
 
 func (f eventLifecycleFunc) Start(thread coroutine.Thread) func() {
 	return f(thread)
+}
+
+func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
+	co, game, input := setupInputSourceTest(t)
+	platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
+	previousPlatform := pkgengine.PlatformMgr
+	pkgengine.PlatformMgr = platform
+	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+	var returned chan struct{}
+	t.Cleanup(func() {
+		co.StopAll()
+		if returned != nil {
+			<-returned
+		}
+	})
+	game.lifecycleState.IsRunned.Store(true)
+	game.lifecycleState.StartDispatched.Store(true)
+	value, sampled, handled := 0, 0, 0
+	game.OnCond(func() bool {
+		sampled = value
+		return game.MouseX() == 23
+	}, func() { handled++ })
+	co.Create(game, func(coroutine.Thread) {
+		co.WaitMainThread(func() { input.point.X = 23 })
+		value = 42
+	})
+	select {
+	case <-platform.workerSeen:
+	case <-time.After(time.Second):
+		t.Fatal("script did not request the main thread")
+	}
+	returned = make(chan struct{})
+	go func() {
+		platform.useCurrentAsMainThread()
+		game.OnEngineBeforeUpdate(1.0 / 30)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("input and condition sampling deadlocked behind an engine call")
+	}
+	platform.useCurrentAsMainThread()
+	if sampled != 42 || handled != 0 {
+		t.Fatalf("sampled value/handlers = %d/%d, want 42/0", sampled, handled)
+	}
+	itime.Update(1.0/30, 30)
+	game.dispatchFrameEvents()
+	co.Update()
+	if handled != 1 {
+		t.Fatalf("condition handlers = %d, want 1", handled)
+	}
 }
 
 func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
@@ -171,5 +228,55 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	}
 	if called {
 		t.Fatal("event dispatch ran while coroutine admission was closed")
+	}
+}
+
+type inputFrameSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	platform    *eventDispatchPlatform
+	queries     atomic.Int32
+	wrongThread atomic.Bool
+}
+
+func (p *inputFrameSpriteMgr) CheckCollisionWithPoint(pkgengine.Object, mathf.Vec2, bool) bool {
+	p.queries.Add(1)
+	if !p.platform.IsMainThread() {
+		p.wrongThread.Store(true)
+	}
+	return true
+}
+
+func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
+	_, game := setupInputFrameGame(t)
+	platform := &eventDispatchPlatform{}
+	mgr := &inputFrameSpriteMgr{platform: platform}
+	previousPlatform, previousSprites := pkgengine.PlatformMgr, pkgengine.SpriteMgr
+	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, mgr
+	enginewrap.Init(engine.WaitMainThread)
+	t.Cleanup(func() {
+		pkgengine.PlatformMgr, pkgengine.SpriteMgr = previousPlatform, previousSprites
+		enginewrap.Init(func(call func()) { call() })
+	})
+	sprite := newClickTestSprite(game, "button", 1, false)
+	game.shapeMgr.items = []Shape{sprite}
+	var routed atomic.Bool
+	game.scriptEvents.manager.Add(coreevent.BucketClick, coreevent.NewSink(sprite, nil, func(any) bool {
+		routed.Store(true)
+		return false
+	}))
+	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventLeftButtonDown{}}}
+	returned := make(chan struct{})
+	go func() {
+		platform.useCurrentAsMainThread()
+		game.dispatchFrameEvents()
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("frame input dispatch deadlocked on an engine-thread click query")
+	}
+	if mgr.queries.Load() != 1 || mgr.wrongThread.Load() || !routed.Load() {
+		t.Fatalf("dispatch returned with queries=%d, wrongThread=%v, routed=%v", mgr.queries.Load(), mgr.wrongThread.Load(), routed.Load())
 	}
 }

@@ -301,6 +301,69 @@ func TestKeyListHandlersRouteKeyAnyToAnyPhase(t *testing.T) {
 	requireEventOrder(t, &log, []string{"with-key-a", "without-key"})
 }
 
+func TestFrameBatchSharedKeyHandlerAdmitsFirstMatchingEdge(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		keys  []Key
+		edges []Key
+	}{
+		{"any key", nil, []Key{KeyA, KeyB}},
+		{"multiple keys", []Key{KeyA, KeyB}, []Key{KeyA, KeyB}},
+		{"repeated key", []Key{KeyA}, []Key{KeyA, KeyA}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co, game := setupInputFrameGame(t)
+			var got []Key
+			handler := func(key Key) { got = append(got, key) }
+			if tt.keys == nil {
+				game.OnAnyKey(handler)
+			} else {
+				game.OnKey__1(tt.keys, handler)
+			}
+			var want []Key
+			// Once the first invocation finishes, the registration accepts a new frame.
+			for _, edges := range [][]Key{tt.edges, {tt.edges[len(tt.edges)-1]}} {
+				itime.Update(1.0/30, 30)
+				batch := &inputFrame{}
+				for _, key := range edges {
+					batch.events = append(batch.events, &eventKeyDown{Key: key})
+				}
+				game.inputMgr.frame.pending = batch
+				game.dispatchFrameEvents()
+				co.Update()
+				want = append(want, edges[0])
+				if !slices.Equal(got, want) {
+					t.Fatalf("handler keys = %v, want %v", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFrameBatchSharedKeyHandlerIgnoresInputUntilPreviousInvocationFinishes(t *testing.T) {
+	co, game := setupInputFrameGame(t)
+	var got []Key
+	finished := false
+	game.OnAnyKey(func(key Key) {
+		got = append(got, key)
+		if key == KeyA {
+			engine.WaitNextFrame()
+			finished = true
+		}
+	})
+	want := [][]Key{{KeyA}, {KeyA}, {KeyA, KeyB}}
+	for frame, key := range []Key{KeyA, KeyB, KeyB} {
+		itime.Update(1.0/30, 30)
+		game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: key}}}
+		game.dispatchFrameEvents()
+		co.Update()
+		if !slices.Equal(got, want[frame]) || finished != (frame > 0) {
+			t.Fatalf("frame %d: handler keys = %v, first finished = %v, want %v and %v",
+				frame, got, finished, want[frame], frame > 0)
+		}
+	}
+}
+
 func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 	co, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog

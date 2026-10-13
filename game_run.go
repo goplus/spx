@@ -141,8 +141,6 @@ func reloadGame(game Gamer, g *Game, index any) error {
 			return err
 		}
 
-		g.events = make(chan event, eventBufferSize)
-
 		proj := &plan.project
 		g.applyStoredRuntimeConfig(proj)
 		setupGameSystems(g, proj)
@@ -152,7 +150,7 @@ func reloadGame(game Gamer, g *Game, index any) error {
 		g.tilemapMgr.replaceMap(plan.tilemap)
 		return g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.stage)
 	}, func() {
-		g.initEventLoop()
+		g.initLogicLoop()
 		g.lifecycleState.IsRunned.Store(true)
 	})
 	if err != nil {

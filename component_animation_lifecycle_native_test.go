@@ -270,9 +270,9 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	})
 	// Actual engine phase order: sample, advance clock, dispatch condition,
 	// then update coroutine jobs including the waiting logic loop.
-	game.scriptEvents.sampleConditions()
+	co.RunBetweenScripts(game.scriptEvents.sampleConditions)
 	itime.Update(1.0/60.0, 60)
-	game.scriptEvents.dispatchConditions()
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 	co.Update()
 	co.Join(logic)
 	if replacement == nil || replacement == old {

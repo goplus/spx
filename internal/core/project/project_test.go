@@ -752,9 +752,8 @@ func TestOpenBuilderResourcesFailsOnInvalidPackedConfig(t *testing.T) {
 
 func TestResolveRuntimeConfig(t *testing.T) {
 	conf := &Config{
-		Width:            640,
-		Height:           480,
-		EventQueuePolicy: "block",
+		Width:  640,
+		Height: 480,
 	}
 	proj := &ProjectConfig{FullScreen: true, Physics: true}
 	runtime := ResolveRuntimeConfig(conf, proj, "/tmp/demo", "env-key")

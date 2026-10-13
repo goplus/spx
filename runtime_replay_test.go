@@ -20,13 +20,17 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 	itime "github.com/goplus/spx/v3/internal/time"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 // resetInputSessionState isolates tests without adding a production path for
@@ -227,96 +231,88 @@ func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
 	}
 }
 
-func TestInputReplayRuntimePreservesShortClickWithinOneTick(t *testing.T) {
-	resetInputSessionTest(t)
-	if _, err := PrepareInputRecording(30); err != nil {
+func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
+	co, game, _ := setupInputSourceTest(t)
+	if _, err := PrepareInputRecording(10); err != nil {
 		t.Fatal(err)
 	}
-	game := &Game{}
 	claimPreparedSession(t, game)
-	wantEdges := []InputReplayMouseEvent{
-		{Button: 1, Pressed: true},
-		{Button: 1, Pressed: false},
+	point := mathf.Vec2{X: 7, Y: 8}
+	samples := []struct {
+		state InputReplayState
+		mouse []InputReplayMouseEvent
+		keys  []InputReplayKeyEvent
+		want  []event
+	}{
+		{
+			mouse: []InputReplayMouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
+			keys:  []InputReplayKeyEvent{{Key: int64(KeyB), Pressed: true}, {Key: int64(KeyB), Pressed: false}},
+			want:  []event{&eventLeftButtonDown{Pos: point}, &eventLeftButtonUp{Pos: point}, &eventKeyDown{Key: KeyB}},
+		},
+		{
+			state: InputReplayState{Buttons: 1, KeysDown: []int64{int64(KeyA)}},
+			mouse: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
+			keys:  []InputReplayKeyEvent{{Key: int64(KeyA), Pressed: true}},
+			want:  []event{&eventLeftButtonDown{Pos: point}, &eventKeyDown{Key: KeyA}},
+		},
+		{
+			mouse: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
+			keys:  []InputReplayKeyEvent{{Key: int64(KeyA), Pressed: false}},
+			want:  []event{&eventLeftButtonUp{Pos: point}},
+		},
 	}
-	recordedTick, err := consumeInputTickWithMouseEvents(InputReplayState{}, wantEdges, nil, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !recordedTick.firstTick || !reflect.DeepEqual(recordedTick.frame.MouseEvents, wantEdges) {
-		t.Fatalf("recorded short click tick = %+v, want edges %+v", recordedTick, wantEdges)
+	// Supply input edges at the session sampling boundary.
+	for _, sample := range samples {
+		sample.state.Mouse = InputReplayMouse{X: point.X, Y: point.Y}
+		if _, err := consumeInputTickWithMouseEvents(sample.state, sample.mouse, sample.keys, 0.1); err != nil {
+			t.Fatal(err)
+		}
 	}
 	replay, err := FinishInputRecording()
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(replay.Frames) != len(samples) {
+		t.Fatalf("recorded %d frames, want %d", len(replay.Frames), len(samples))
+	}
+	for i, sample := range samples {
+		if !reflect.DeepEqual(replay.Frames[i].MouseEvents, sample.mouse) || !reflect.DeepEqual(replay.Frames[i].KeyEvents, sample.keys) {
+			t.Fatalf("recorded frame %d did not preserve its mouse/key edges", i)
+		}
+	}
 	game.abortInputSession("recording game ended")
 	game.resetBootstrap()
-
 	if _, err := PrepareInputReplay(replay); err != nil {
 		t.Fatal(err)
 	}
 	session := claimPreparedSession(t, game)
-	replayedTick, err := consumeInputTickWithMouseEvents(
-		InputReplayState{Buttons: 1},
-		[]InputReplayMouseEvent{{Button: 1, Pressed: true}},
-		nil,
-		1,
-	)
-	if err != nil {
-		t.Fatal(err)
+	clicks := 0
+	var keys []Key
+	game.OnClick(func() { clicks++ })
+	game.OnAnyKey(func(key Key) { keys = append(keys, key) })
+	for i, sample := range samples {
+		if !game.inputMgr.prepareInputFrame(0.1) {
+			t.Fatalf("replay frame %d was not prepared", i)
+		}
+		if got := game.inputMgr.frame.pending.events; !reflect.DeepEqual(got, sample.want) {
+			t.Fatalf("frame %d events = %+v, want %+v", i, got, sample.want)
+		}
+		if game.MousePressed() != (sample.state.Buttons != 0) || game.KeyPressed(KeyA) != (i == 1) || game.KeyPressed(KeyB) {
+			t.Fatalf("frame %d held state does not match recorded input", i)
+		}
+		itime.Update(0.1, 10)
+		game.dispatchFrameEvents()
+		co.Update()
+		game.dispatchFrameEvents()
+		co.Update()
+		session.endFrame()
 	}
-	if !reflect.DeepEqual(replayedTick.frame.MouseEvents, wantEdges) || replayedTick.frame.State.Buttons != 0 {
-		t.Fatalf("replayed short click tick = %+v, want released state and edges %+v", replayedTick, wantEdges)
+	if clicks != 2 || !reflect.DeepEqual(keys, []Key{KeyB, KeyA}) {
+		t.Fatalf("replayed handlers = %d clicks, keys %v, want 2 clicks and [B A] once", clicks, keys)
 	}
 	if status := session.status(); status.Phase != InputSessionPhaseFinishing || status.Completed || !status.Exhausted ||
-		!status.HasCurrentTick || status.CurrentTick != replayedTick.frame.Frame {
+		!status.HasCurrentTick || status.CurrentTick != int64(len(samples)-1) {
 		t.Fatalf("final replay tick status = %+v", status)
-	}
-}
-
-func TestLiveAndReplayInputSamplesMapToEquivalentEvents(t *testing.T) {
-	point := mathf.Vec2{X: 4, Y: 5}
-	mouseEvents := []engine.MouseEvent{
-		{Id: 1, IsPressed: true},
-		{Id: 1, IsPressed: false},
-	}
-	keyEvents := []engine.KeyEvent{
-		{Id: int64(KeyA), IsPressed: true},
-		{Id: int64(KeyB), IsPressed: false},
-	}
-	liveFrame := coreruntime.InputFrame{
-		Point:                  point,
-		MouseEvents:            mouseEvents,
-		KeyEvents:              keyEvents,
-		MouseMovementThreshold: mouseMovementThreshold,
-	}
-	replayFrame := coreruntime.InputFrame{
-		Point:                  point,
-		MouseEvents:            engineMouseEventsFromReplay(replayMouseEventsFromEngine(mouseEvents), nil),
-		KeyEvents:              engineKeyEventsFromReplay(replayKeyEventsFromEngine(keyEvents), nil),
-		MouseMovementThreshold: mouseMovementThreshold,
-	}
-
-	var liveState, replayState coreruntime.InputFrameState
-	var liveEvents, replayEvents []event
-	liveState.Process(liveFrame, inputFrameEventHooks(func(ev event) {
-		liveEvents = append(liveEvents, ev)
-	}))
-	replayState.Process(replayFrame, inputFrameEventHooks(func(ev event) {
-		replayEvents = append(replayEvents, ev)
-	}))
-
-	want := []event{
-		&eventLeftButtonDown{Pos: point},
-		&eventLeftButtonUp{Pos: point},
-		&eventMouseMove{Pos: point},
-		&eventKeyDown{Key: KeyA},
-	}
-	if !reflect.DeepEqual(liveEvents, want) {
-		t.Fatalf("live events = %#v, want %#v", liveEvents, want)
-	}
-	if !reflect.DeepEqual(replayEvents, liveEvents) {
-		t.Fatalf("replay events = %#v, live events = %#v", replayEvents, liveEvents)
 	}
 }
 
@@ -895,52 +891,56 @@ func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
 }
 
 func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
-	setupSnapshotInputSessionTest(t)
-
+	_, game, _ := setupInputSourceTest(t)
+	engine.ResetFrameRuntime()
+	t.Cleanup(func() {
+		engine.ResetFrameRuntime()
+		engine.SetCaptureHandler(nil)
+	})
 	var got []engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req)
 		return nil
 	})
-	if _, err := PrepareInputRecording(30, InputSessionOptions{CaptureKey: KeyP}); err != nil {
-		t.Fatal(err)
-	}
-	game := &Game{}
-	session := claimPreparedSession(t, game)
-	recordedTick, err := consumeInputTick(
-		InputReplayState{KeysDown: []int64{int64(KeyP)}},
-		[]InputReplayKeyEvent{{Key: int64(KeyP), Pressed: true}},
-		1.0/30.0,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	session.captureConfiguredKeyPresses(recordedTick.frame.KeyEvents)
-	replay, err := FinishInputRecording()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	game.abortInputSession("recording ended")
-	game.resetBootstrap()
+	// Real input has no key edges. Playback supplies two separate presses of
+	// the capture key, its release, and unrelated key edges in the same tick.
+	replay := validRuntimeReplay(InputReplayFrame{
+		Frame: 0,
+		State: InputReplayState{KeysDown: []int64{int64(KeyP)}},
+		KeyEvents: []InputReplayKeyEvent{
+			{Key: int64(KeyP), Pressed: true},
+			{Key: int64(KeyP), Pressed: false},
+			{Key: int64(KeyP), Pressed: true},
+			{Key: int64(KeyA), Pressed: true},
+			{Key: int64(KeyA), Pressed: false},
+		},
+	})
 	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyP}); err != nil {
 		t.Fatal(err)
 	}
-	session = claimPreparedSession(t, game)
-	replayedTick, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0)
-	if err != nil {
-		t.Fatal(err)
+	claimPreparedSession(t, game)
+	frame := itime.Frame() + 1
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("capture-key replay frame was not prepared")
 	}
-	session.captureConfiguredKeyPresses(replayedTick.frame.KeyEvents)
+	if engine.HasPendingCaptures() || len(got) != 0 {
+		t.Fatal("capture key requested a screenshot before clock advancement")
+	}
+	itime.Update(1.0/30, 30)
+	game.dispatchFrameEvents()
+	if !engine.HasPendingCaptures() || len(got) != 0 {
+		t.Fatal("capture key did not queue screenshots for the end of the frame")
+	}
+	game.dispatchFrameEvents()
 	if err := engine.FlushCaptures(); err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("configured capture requests = %+v", got)
+		t.Fatalf("configured capture requests = %+v, want one per matching press", got)
 	}
 	for i, request := range got {
-		if request.InputTick == nil || *request.InputTick != 0 {
-			t.Fatalf("configured capture %d input tick = %v, want 0", i, request.InputTick)
+		if request.Frame != frame || request.InputTick == nil || *request.InputTick != 0 {
+			t.Fatalf("capture %d = %+v, want engine frame %d and input tick 0", i, request, frame)
 		}
 	}
 }
@@ -1050,5 +1050,344 @@ func TestResetBeforeFinalFrameEndAbortsReplay(t *testing.T) {
 	}
 	if completed {
 		t.Fatal("aborted replay completed after reset")
+	}
+}
+
+type inputSourceTestManager struct {
+	pkgengine.IInputMgr
+	point   mathf.Vec2
+	samples int
+}
+
+func (m *inputSourceTestManager) GetGlobalMousePos() mathf.Vec2 {
+	m.samples++
+	return m.point
+}
+
+func setupInputSourceTest(t *testing.T) (*coroutine.Coroutines, *Game, *inputSourceTestManager) {
+	t.Helper()
+	resetInputSessionTest(t)
+	co, game := setupInputFrameGame(t)
+	mgr := setupInputSourceManager(t)
+	t.Cleanup(func() { game.abortInputSession("test finished") })
+	return co, game, mgr
+}
+
+func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
+	t.Helper()
+	enginewrap.Init(func(call func()) { call() })
+	original := pkgengine.InputMgr
+	mgr := &inputSourceTestManager{}
+	pkgengine.InputMgr = mgr
+	engine.ResetInputState()
+	t.Cleanup(func() {
+		engine.ResetInputState()
+		pkgengine.InputMgr = original
+	})
+	return mgr
+}
+
+func BenchmarkPrepareInputFrame(b *testing.B) {
+	mgr := setupInputSourceManager(b)
+	for _, scenario := range []struct {
+		name string
+		step float64
+	}{{"idle", 0}, {"moving", mouseMovementThreshold + 1}} {
+		b.Run(scenario.name, func(b *testing.B) {
+			game := &Game{}
+			game.inputMgr.g = game
+			mgr.point = mathf.Vec2{}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				mgr.point.X += scenario.step
+				game.inputMgr.prepareInputFrame(1.0 / 30)
+			}
+		})
+	}
+}
+
+func TestPrepareInputFrameSharesLiveRecordingAndReplayConversion(t *testing.T) {
+	points := []mathf.Vec2{{}, {X: 5, Y: 6}, {X: 5.5, Y: 6}, {X: 9, Y: 12}}
+	want := [][]event{
+		{},
+		{&eventMouseMove{Pos: points[1]}},
+		{},
+		{&eventMouseMove{Pos: points[3]}},
+	}
+	for _, mode := range []string{"live", "recording", "replay"} {
+		t.Run(mode, func(t *testing.T) {
+			_, game, mgr := setupInputSourceTest(t)
+			var session *inputSession
+			switch mode {
+			case "recording":
+				if _, err := PrepareInputRecording(30); err != nil {
+					t.Fatal(err)
+				}
+				session = claimPreparedSession(t, game)
+			case "replay":
+				frames := make([]InputReplayFrame, len(points))
+				for i, point := range points {
+					frames[i] = InputReplayFrame{
+						Frame: int64(i), Time: float64(i) / 30,
+						State: InputReplayState{Mouse: InputReplayMouse{X: point.X, Y: point.Y}},
+					}
+				}
+				if _, err := PrepareInputReplay(validRuntimeReplay(frames...)); err != nil {
+					t.Fatal(err)
+				}
+				session = claimPreparedSession(t, game)
+			}
+			for i, point := range points {
+				mgr.point = point
+				if mode == "replay" {
+					// Playback must use the recording even when real input disagrees.
+					mgr.point = mathf.Vec2{X: 100, Y: -100}
+				}
+				if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+					t.Fatalf("frame %d was not prepared", i)
+				}
+				batch := game.inputMgr.frame.pending
+				if batch == nil {
+					t.Fatalf("frame %d has no input batch", i)
+				}
+				if len(batch.events) != len(want[i]) || len(want[i]) > 0 && !reflect.DeepEqual(batch.events, want[i]) {
+					t.Fatalf("frame %d events = %+v, want %+v", i, batch, want[i])
+				}
+				if got := game.inputMgr.mousePos; got != point {
+					t.Fatalf("frame %d mouse = %v, want %v", i, got, point)
+				}
+				game.dispatchFrameEvents()
+				if game.inputMgr.frame.pending != nil {
+					t.Fatal("dispatch retained its prepared input frame")
+				}
+				if session != nil {
+					session.endFrame()
+				}
+			}
+		})
+	}
+}
+
+func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
+	_, game, mgr := setupInputSourceTest(t)
+	first, next := mathf.Vec2{X: 7, Y: 8}, mathf.Vec2{X: 40, Y: -30}
+	mgr.point = first
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("first frame was not prepared")
+	}
+	batch := game.inputMgr.frame.pending
+	want := []event{&eventMouseMove{Pos: first}}
+	mgr.point = next
+	game.dispatchFrameEvents()
+	if !reflect.DeepEqual(batch.events, want) || game.MouseX() != first.X || game.MouseY() != first.Y || mgr.samples != 1 {
+		t.Fatal("input arriving after prepare changed the frozen frame")
+	}
+	if game.inputMgr.frame.pending != nil {
+		t.Fatal("dispatch retained its prepared input frame")
+	}
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("next frame was not prepared")
+	}
+	if got := game.inputMgr.frame.pending.events; !reflect.DeepEqual(got, []event{&eventMouseMove{Pos: next}}) {
+		t.Fatalf("next frame events = %+v, want mouse move to %v", got, next)
+	}
+	if !reflect.DeepEqual(batch.events, want) {
+		t.Fatal("next sample reused the prior frame's event storage")
+	}
+}
+
+func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(t *testing.T) {
+	co, game, mgr := setupInputSourceTest(t)
+	engine.ResetFrameRuntime()
+	t.Cleanup(engine.ResetFrameRuntime)
+	replay := validRuntimeReplay(InputReplayFrame{
+		Frame: 0,
+		State: InputReplayState{
+			Mouse: InputReplayMouse{X: 7, Y: 8}, KeysDown: []int64{int64(KeyA)},
+		},
+		KeyEvents: []InputReplayKeyEvent{{Key: int64(KeyA), Pressed: true}},
+	})
+	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyA}); err != nil {
+		t.Fatal(err)
+	}
+	session := claimPreparedSession(t, game)
+	calls := 0
+	game.OnKey__0(KeyA, func() { calls++ })
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("replay frame was not prepared")
+	}
+	if pending := game.inputMgr.frame.pending; len(pending.events) == 0 || pending.captures != 1 {
+		t.Fatalf("pending frame = %+v, want input and a screenshot request", pending)
+	}
+	session.endFrame()
+	if completed, err := session.completeReplayFrame(nil); err != nil || !completed {
+		t.Fatalf("complete replay = %v, %v", completed, err)
+	}
+	history, status := game.inputMgr.frame.history, session.status()
+	point, samples := game.inputMgr.mousePos, mgr.samples
+	mgr.point = mathf.Vec2{X: 40, Y: -30}
+
+	if game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("completed replay accepted another frame")
+	}
+	if game.inputMgr.frame.pending != nil {
+		t.Fatal("rejected frame retained the previous input batch")
+	}
+	if mgr.samples != samples || session.status() != status {
+		t.Fatal("rejected frame sampled live input or advanced the replay")
+	}
+	if game.inputMgr.frame.history != history || !game.inputMgr.frame.hadSession || game.inputMgr.mousePos != point {
+		t.Fatal("rejected frame changed input history or mouse position")
+	}
+	game.dispatchFrameEvents()
+	co.Update()
+	if calls != 0 || engine.HasPendingCaptures() {
+		t.Fatal("rejected frame dispatched old input or screenshot requests")
+	}
+}
+
+type inputFrameFailureExtMgr struct {
+	replayPauseTestExtMgr
+	messages []string
+	exits    []int64
+}
+
+func (m *inputFrameFailureExtMgr) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
+}
+
+func (m *inputFrameFailureExtMgr) RequestExit(code int64) {
+	m.exits = append(m.exits, code)
+}
+
+type inputFrameFailurePlatform struct{ pkgengine.IPlatformMgr }
+
+func (inputFrameFailurePlatform) IsMainThread() bool { return true }
+
+func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
+	if runtime.GOOS == "js" {
+		t.Skip("Web runtime errors reset the game asynchronously instead of requesting exit")
+	}
+	for _, tt := range []struct {
+		name    string
+		point   mathf.Vec2
+		delta   float64
+		message string
+	}{
+		{"invalid mouse", mathf.Vec2{X: math.NaN()}, 1.0 / 30, "mouse coordinates must be finite"},
+		{"invalid delta", mathf.Vec2{X: 40, Y: -30}, math.Inf(1), "live delta must be finite and non-negative"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co, game, mgr := setupInputSourceTest(t)
+			engine.ResetFrameRuntime()
+			t.Cleanup(engine.ResetFrameRuntime)
+			originalExt, originalPlatform := pkgengine.ExtMgr, pkgengine.PlatformMgr
+			recorder := &inputFrameFailureExtMgr{}
+			pkgengine.ExtMgr = recorder
+			pkgengine.PlatformMgr = inputFrameFailurePlatform{originalPlatform}
+			t.Cleanup(func() {
+				pkgengine.ExtMgr, pkgengine.PlatformMgr = originalExt, originalPlatform
+			})
+			if _, err := PrepareInputRecording(30); err != nil {
+				t.Fatal(err)
+			}
+			session := claimPreparedSession(t, game)
+			mgr.point = mathf.Vec2{X: 7, Y: 8}
+			if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+				t.Fatal("initial recording frame was not prepared")
+			}
+			session.endFrame()
+			history, status := game.inputMgr.frame.history, session.status()
+			point := game.inputMgr.mousePos
+			game.inputMgr.frame.pending = &inputFrame{
+				events: []event{&eventKeyDown{Key: KeyA}}, captures: 1,
+			}
+			calls := 0
+			game.OnKey__0(KeyA, func() { calls++ })
+			mgr.point = tt.point
+
+			if game.inputMgr.prepareInputFrame(tt.delta) {
+				t.Fatal("invalid recording sample was accepted")
+			}
+			if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], tt.message) || !reflect.DeepEqual(recorder.exits, []int64{1}) {
+				t.Fatalf("runtime error = %v, exits = %v, want %q and exit 1", recorder.messages, recorder.exits, tt.message)
+			}
+			if game.inputMgr.frame.pending != nil {
+				t.Fatal("failed frame retained the previous input batch")
+			}
+			if session.status() != status || game.inputMgr.frame.history != history || !game.inputMgr.frame.hadSession || game.inputMgr.mousePos != point {
+				t.Fatal("failed sample advanced the recording or changed published input state")
+			}
+			if !session.beginFrame() {
+				t.Fatal("failed sample left the session frame open")
+			}
+			session.endFrame()
+			game.dispatchFrameEvents()
+			co.Update()
+			if calls != 0 || engine.HasPendingCaptures() {
+				t.Fatal("failed frame dispatched old input or screenshot requests")
+			}
+		})
+	}
+}
+
+func TestPrepareInputFramePreservesInitialHeldStateAndLiveHandoff(t *testing.T) {
+	_, game, mgr := setupInputSourceTest(t)
+	initial := InputReplayState{
+		Mouse: InputReplayMouse{X: 7, Y: 8}, Buttons: 0b111,
+		KeysDown: []int64{int64(KeyA)},
+	}
+	replay := validRuntimeReplay(InputReplayFrame{Frame: 0, State: initial})
+	replay.Initial = initial
+	if _, err := PrepareInputReplay(replay); err != nil {
+		t.Fatal(err)
+	}
+	claimPreparedSession(t, game)
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("initial replay frame was not prepared")
+	}
+	if got := game.inputMgr.frame.pending.events; len(got) != 0 {
+		t.Fatalf("initial held state manufactured edges: %+v", got)
+	}
+	if !game.MousePressed() || !game.KeyPressed(KeyA) {
+		t.Fatal("initial held state was not visible to game input queries")
+	}
+	game.dispatchFrameEvents()
+	game.abortInputSession("return to live input")
+	mgr.point = mathf.Vec2{X: 40, Y: -30}
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("live handoff frame was not prepared")
+	}
+	if got := game.inputMgr.frame.pending.events; len(got) != 0 {
+		t.Fatalf("handoff manufactured release/movement edges: %+v", got)
+	}
+	if game.inputMgr.mousePos != mgr.point {
+		t.Fatal("handoff retained replay input state")
+	}
+	game.dispatchFrameEvents()
+	mgr.point.X += 5
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("next live frame was not prepared")
+	}
+	if got, want := game.inputMgr.frame.pending.events, []event{&eventMouseMove{Pos: mgr.point}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("live input after handoff = %+v, want %+v", got, want)
+	}
+}
+
+func TestGameResetClearsPreparedInputFrame(t *testing.T) {
+	resetInputSessionTest(t)
+	game := setupReloadCommitGame(t, reloadConfigFS{})
+	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeyA}}}
+	game.inputMgr.frame.history.Reset(mathf.Vec2{X: 7, Y: 8}, true)
+	game.reset()
+	if game.inputMgr.frame.pending != nil {
+		t.Fatal("game reset retained a pending frame")
+	}
+	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+		t.Fatal("fresh input frame was not prepared after reset")
+	}
+	if got := game.inputMgr.frame.pending.events; len(got) != 0 {
+		t.Fatalf("game reset leaked previous held state into new input: %+v", got)
 	}
 }

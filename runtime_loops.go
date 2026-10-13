@@ -17,58 +17,12 @@
 package spx
 
 import (
-	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-func (p *Game) initEventLoop() {
-	gco.Create("eventLoop", p.eventLoop)
-	gco.Create("inputEventLoop", p.inputEventLoop)
+func (p *Game) initLogicLoop() {
 	gco.Create("logicLoop", p.logicLoop)
-}
-
-func (p *Game) eventLoop(coroutine.Thread) {
-	events := p.events
-	for {
-		p.handleEvent(engine.WaitForChan(events))
-	}
-}
-
-func (p *Game) inputEventLoop(coroutine.Thread) {
-	hooks := inputFrameEventHooks(p.fireEvent)
-	// Mouse movement updates swipe state synchronously; other live events stay queued.
-	hooks.OnMouseMove = p.inputMgr.onMouseMove
-	coreruntime.RunInputLoop(coreruntime.InputLoopConfig{
-		BeginFrame: func() bool {
-			return p.currentInputSession() == nil
-		},
-		CurrentMousePos:        engine.Managers().InputMgr.GetGlobalMousePos,
-		InputFrameHooks:        hooks,
-		SetMousePos:            p.inputMgr.setMousePos,
-		GetMouseInput:          engine.GetMouseInput,
-		GetKeyEvents:           engine.GetKeyEvents,
-		MouseMovementThreshold: mouseMovementThreshold,
-	})
-}
-
-func inputFrameEventHooks(emit func(event)) coreruntime.InputFrameHooks {
-	return coreruntime.InputFrameHooks{
-		FireLeftButtonDown: func(point mathf.Vec2) {
-			emit(&eventLeftButtonDown{Pos: point})
-		},
-		FireLeftButtonUp: func(point mathf.Vec2) {
-			emit(&eventLeftButtonUp{Pos: point})
-		},
-		OnMouseMove: func(point mathf.Vec2) {
-			emit(&eventMouseMove{Pos: point})
-		},
-		OnKeyPressed: func(keyID int64) {
-			emit(&eventKeyDown{Key: Key(keyID)})
-		},
-	}
 }
 
 func (p *Game) logicLoop(coroutine.Thread) {
@@ -92,13 +46,6 @@ func (p *Game) processLogicFrame(tempAudios []string, tempAnimations []*animStat
 		if sprite, ok := item.(*SpriteImpl); ok {
 			tempAnimations = sprite.flushCompletedAnimations(tempAnimations)
 		}
-	}
-	for {
-		timestamp, ok := itime.NextTimer()
-		if !ok {
-			break
-		}
-		p.fireEvent(&eventTimer{Timestamp: timestamp})
 	}
 	return tempAudios, tempAnimations
 }
