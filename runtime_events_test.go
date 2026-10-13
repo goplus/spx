@@ -1123,7 +1123,7 @@ func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
 			}
 			steps = nil
 
-			game.doWhenLeftButtonDown(&eventLeftButtonDown{Pos: mathf.Vec2{X: 10, Y: 20}})
+			game.handleEvent(&eventLeftButtonDown{Pos: mathf.Vec2{X: 10, Y: 20}})
 			wantSteps := []string{"swipe"}
 			for range tt.wantGates {
 				wantSteps = append(wantSteps, "gate")
@@ -1147,7 +1147,7 @@ func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
 				t.Fatal("global gate was not consumed before routing")
 			}
 			now = now.Add(100 * time.Millisecond)
-			game.doWhenLeftButtonUp(&eventLeftButtonUp{Pos: mathf.Vec2{X: 110, Y: 20}})
+			game.handleEvent(&eventLeftButtonUp{Pos: mathf.Vec2{X: 110, Y: 20}})
 			wantSwipe := "stage"
 			if tt.hit {
 				wantSwipe = "target"
@@ -1199,7 +1199,7 @@ func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T)
 		stageClicks := 0
 		game.OnClick(func() { stageClicks++ })
 
-		game.doWhenLeftButtonDown(&eventLeftButtonDown{})
+		game.handleEvent(&eventLeftButtonDown{})
 		wantReads := 2
 		if blocked {
 			wantReads = 1

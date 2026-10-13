@@ -27,7 +27,6 @@ import (
 	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
-// Keyboard key constants
 const (
 	Key0            Key = engine.Key0
 	Key1            Key = engine.Key1
@@ -133,12 +132,8 @@ const (
 	KeyAny          Key = -1
 )
 
-const (
-	// Minimum interval between two mouse click events.
-	mouseClickInterval = 50 * time.Millisecond
-)
+const mouseClickInterval = 50 * time.Millisecond
 
-// inputManager handles runtime input state and delegates specialized logic to helpers.
 type inputManager struct {
 	g        *Game
 	mousePos mathf.Vec2
@@ -147,9 +142,7 @@ type inputManager struct {
 	swipe     coreruntime.SwipeState[*SpriteImpl]
 }
 
-// KeyFromString converts a string to its corresponding Key code.
-// It supports key names like "A", "Space", "Enter", "Left", etc.
-// Returns KeyMax if the key name is not recognized.
+// KeyFromString returns KeyMax for an unrecognized key name.
 func KeyFromString(key string) Key {
 	if key == "Any" {
 		return KeyAny
@@ -167,27 +160,31 @@ func (p *inputManager) init(g *Game) {
 	p.swipe.InitWithClock(g.inputClock)
 }
 
-func (p *inputManager) currentMousePos() mathf.Vec2 {
-	return p.mousePos
-}
-
 func (p *inputManager) setMousePos(pos mathf.Vec2) {
 	p.mousePos = pos
 }
 
-func (p *inputManager) canTriggerClickEvent(id engine.Object) bool {
-	return p.clickGate.Allow(id)
+func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
+	target := p.g.findClickTarget(point)
+	swipeTarget, _ := target.(*SpriteImpl)
+	p.swipe.Begin(point, swipeTarget)
+	if !p.clickGate.Allow(clickTimerGlobal) {
+		return
+	}
+	if target != nil {
+		proxy := target.getProxy()
+		if proxy == nil || !p.clickGate.Allow(proxy.GetId()) {
+			return
+		}
+		target.doWhenClick(target)
+		return
+	}
+	if p.clickGate.Allow(clickTimerStage) {
+		p.g.scriptEvents.doWhenClick(p.g)
+	}
 }
 
-func (p *inputManager) removeClickTarget(id engine.Object) {
-	p.clickGate.Remove(id)
-}
-
-func (p *inputManager) beginSwipeTracking(startPos mathf.Vec2, targetSprite *SpriteImpl) {
-	p.swipe.Begin(startPos, targetSprite)
-}
-
-func (p *inputManager) finishSwipeTracking(point mathf.Vec2) {
+func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
 	result, target, ok := p.swipe.Finish(point)
 	if !ok {
 		return

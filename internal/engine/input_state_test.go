@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -114,6 +115,84 @@ func TestMouseInputPreservesShortClickForOrdinaryConsumer(t *testing.T) {
 	}
 }
 
+func TestMouseInputKeepsLiveAndFrameStatesSeparate(t *testing.T) {
+	mouseInput.reset()
+	t.Cleanup(mouseInput.reset)
+	for _, id := range []int64{-1, 0, 4, 32, 1 << 40} {
+		onMousePressed(id)
+		if IsMouseButtonPressed(id) {
+			t.Errorf("invalid mouse button %d reported held", id)
+		}
+		onMouseReleased(id)
+	}
+	onMousePressed(3)
+	onMousePressed(3)
+	if !IsMouseButtonPressed(3) || AnyMouseButtonPressed() {
+		t.Fatal("middle button must be held without a primary button")
+	}
+	if events, buttons := GetMouseInput(nil); len(events) != 0 || buttons != 0 {
+		t.Fatalf("input before frame boundary = (%v, %#x), want empty", events, buttons)
+	}
+
+	cacheMouseEvents()
+	onMouseReleased(3)
+	onMouseReleased(3)
+	onMousePressed(1)
+	onMousePressed(1)
+	onMousePressed(2)
+	if IsMouseButtonPressed(3) || !IsMouseButtonPressed(1) || !IsMouseButtonPressed(2) || !AnyMouseButtonPressed() {
+		t.Fatal("live input must reflect released middle and held left/right buttons")
+	}
+	events, buttons := GetMouseInput(nil)
+	want := []MouseEvent{{Id: 3, IsPressed: true}}
+	if !slices.Equal(events, want) || buttons != 0b100 {
+		t.Fatalf("cached input = (%v, %#x), want (%v, 0b100)", events, buttons, want)
+	}
+
+	cacheMouseEvents()
+	events, buttons = GetMouseInput(nil)
+	want = []MouseEvent{{Id: 3}, {Id: 1, IsPressed: true}, {Id: 2, IsPressed: true}}
+	if !slices.Equal(events, want) || buttons != 0b011 {
+		t.Fatalf("next frame input = (%v, %#x), want (%v, 0b011)", events, buttons, want)
+	}
+	onMouseReleased(1)
+	if !AnyMouseButtonPressed() {
+		t.Fatal("right button must remain held after left release")
+	}
+	onMouseReleased(2)
+	if AnyMouseButtonPressed() {
+		t.Fatal("no primary button should remain held")
+	}
+	cacheMouseEvents()
+	events, buttons = GetMouseInput(nil)
+	want = []MouseEvent{{Id: 1}, {Id: 2}}
+	if !slices.Equal(events, want) || buttons != 0 {
+		t.Fatalf("released input = (%v, %#x), want (%v, 0)", events, buttons, want)
+	}
+}
+
+func TestResetInputStateClearsMouseStateAndEvents(t *testing.T) {
+	ResetInputState()
+	t.Cleanup(ResetInputState)
+	onMousePressed(1)
+	cacheMouseEvents()
+	onMousePressed(2)
+	onMousePressed(3)
+
+	ResetInputState()
+	if IsMouseButtonPressed(1) || IsMouseButtonPressed(2) || IsMouseButtonPressed(3) || AnyMouseButtonPressed() {
+		t.Fatal("reset left a mouse button held")
+	}
+	if events, buttons := GetMouseInput(nil); len(events) != 0 || buttons != 0 {
+		t.Fatalf("input after reset = (%v, %#x), want empty", events, buttons)
+	}
+
+	cacheMouseEvents()
+	if events, buttons := GetMouseInput(nil); len(events) != 0 || buttons != 0 {
+		t.Fatalf("next frame after reset = (%v, %#x), want empty", events, buttons)
+	}
+}
+
 func TestDiscardPendingMouseEventsDefinesConsumerBoundary(t *testing.T) {
 	mouseInput.reset()
 	t.Cleanup(mouseInput.reset)
@@ -125,7 +204,7 @@ func TestDiscardPendingMouseEventsDefinesConsumerBoundary(t *testing.T) {
 	onMousePressed(2)
 	cacheMouseEvents()
 
-	events := GetMouseEvents(nil)
+	events, _ := GetMouseInput(nil)
 	if len(events) != 1 || events[0] != (MouseEvent{Id: 2, IsPressed: true}) {
 		t.Fatalf("mouse events after boundary = %+v, want button 2 pressed", events)
 	}

@@ -7,11 +7,13 @@
 
 [node name="Say" type="Control"]
 layout_mode = 3
+mouse_filter = 2
 anchors_preset = 0
 
 [node name="VL" type="VBoxContainer" parent="."]
 visible = false
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -21,16 +23,19 @@ grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VL"]
 layout_mode = 2
+mouse_filter = 2
 theme = ExtResource("1_wmn3a")
 
 [node name="Label" type="Label" parent="VL/BG"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+mouse_filter = 2
 text_direction = 1
 
 [node name="VR" type="VBoxContainer" parent="."]
 visible = false
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
@@ -43,15 +48,18 @@ grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VR"]
 layout_mode = 2
+mouse_filter = 2
 theme = ExtResource("2_xtsac")
 
 [node name="Label" type="Label" parent="VR/BG"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+mouse_filter = 2
 text_direction = 1
 
 [node name="VLThink" type="VBoxContainer" parent="."]
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
@@ -61,10 +69,12 @@ grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VLThink"]
 layout_mode = 2
+mouse_filter = 2
 theme = ExtResource("4_ng6xm")
 
 [node name="MC" type="MarginContainer" parent="VLThink/BG"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 32
 theme_override_constants/margin_right = 32
@@ -73,18 +83,22 @@ theme_override_constants/margin_bottom = 32
 [node name="Label" type="Label" parent="VLThink/BG/MC"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+mouse_filter = 2
 text_direction = 1
 
 [node name="HC" type="HBoxContainer" parent="VLThink"]
 layout_mode = 2
+mouse_filter = 2
 
 [node name="TextureRect" type="TextureRect" parent="VLThink/HC"]
 layout_mode = 2
+mouse_filter = 2
 texture = ExtResource("5_ng6xm")
 flip_h = true
 
 [node name="VRThink" type="VBoxContainer" parent="."]
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
@@ -97,10 +111,12 @@ grow_vertical = 0
 
 [node name="BG" type="PanelContainer" parent="VRThink"]
 layout_mode = 2
+mouse_filter = 2
 theme = ExtResource("4_ng6xm")
 
 [node name="MC" type="MarginContainer" parent="VRThink/BG"]
 layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 32
 theme_override_constants/margin_right = 32
@@ -109,12 +125,15 @@ theme_override_constants/margin_bottom = 32
 [node name="Label" type="Label" parent="VRThink/BG/MC"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+mouse_filter = 2
 text_direction = 1
 
 [node name="HC" type="HBoxContainer" parent="VRThink"]
 layout_mode = 2
+mouse_filter = 2
 alignment = 2
 
 [node name="TextureRect" type="TextureRect" parent="VRThink/HC"]
 layout_mode = 2
+mouse_filter = 2
 texture = ExtResource("5_ng6xm")

@@ -31,17 +31,20 @@
 #ifndef SPX_INPUT_PROXY_H
 #define SPX_INPUT_PROXY_H
 
+#include "core/input/input_enums.h"
 #include "gdextension_spx_ext.h"
 #include "scene/main/node.h"
 
 class SpxInputProxy : public Node {
 	GDCLASS(SpxInputProxy, Node);
 
-public:
-	void ready();
+	// Buttons whose presses reached SPX and still need matching releases.
+	BitField<MouseButtonMask> mouse_buttons_awaiting_release;
 
 protected:
+	void _notification(int p_what);
 	void input(const Ref<InputEvent> &p_event) override;
+	void unhandled_input(const Ref<InputEvent> &p_event) override;
 };
 
 #endif //SPX_INPUT_PROXY_H

@@ -32,10 +32,8 @@ type SwipeResult struct {
 	EndPos    mathf.Vec2
 }
 
-// SwipeRecognizer handles swipe gesture detection and recognition.
 type SwipeRecognizer struct {
 	timeToSwipe     float64
-	enableTimeLimit bool
 	minimumDistance float64
 	maximumDistance float64
 
@@ -49,14 +47,12 @@ func (sr *SwipeRecognizer) Init() {
 	sr.InitWithClock(nil)
 }
 
-// InitWithClock initializes the recognizer with a caller-provided clock.
 // A nil clock falls back to the system clock.
 func (sr *SwipeRecognizer) InitWithClock(now func() time.Time) {
 	if now == nil {
 		now = time.Now
 	}
 	sr.timeToSwipe = 0.5
-	sr.enableTimeLimit = true
 	sr.minimumDistance = 50.0
 	sr.maximumDistance = 500.0
 	sr.isTracking = false
@@ -84,7 +80,7 @@ func (sr *SwipeRecognizer) Expire() {
 	if !sr.isTracking {
 		return
 	}
-	if sr.enableTimeLimit && sr.timeToSwipe > 0 && sr.elapsedSeconds() > sr.timeToSwipe {
+	if sr.timeToSwipe > 0 && sr.elapsedSeconds() > sr.timeToSwipe {
 		sr.StopTracking()
 	}
 }
@@ -93,17 +89,12 @@ func (sr *SwipeRecognizer) Finish(point mathf.Vec2) (SwipeResult, bool) {
 	if !sr.isTracking {
 		return SwipeResult{}, false
 	}
-	result, ok := sr.checkForSwipeCompletion(point)
-	sr.StopTracking()
-	return result, ok
-}
-
-func (sr *SwipeRecognizer) checkForSwipeCompletion(point mathf.Vec2) (SwipeResult, bool) {
 	elapsed := sr.elapsedSeconds()
+	sr.StopTracking()
 	if elapsed <= 0 {
 		return SwipeResult{}, false
 	}
-	if sr.enableTimeLimit && sr.timeToSwipe > 0 && elapsed > sr.timeToSwipe {
+	if sr.timeToSwipe > 0 && elapsed > sr.timeToSwipe {
 		return SwipeResult{}, false
 	}
 

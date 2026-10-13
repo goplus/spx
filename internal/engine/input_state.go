@@ -42,7 +42,7 @@ type keyInputState struct {
 
 type mouseInputState struct {
 	mu            sync.Mutex
-	buttons       [4]atomic.Bool
+	buttons       atomic.Uint32
 	pending       []MouseEvent
 	ready         []MouseEvent
 	cachedButtons uint8
@@ -55,15 +55,15 @@ var (
 
 // IsMouseButtonPressed reports whether the button is held.
 func IsMouseButtonPressed(id int64) bool {
-	if id < 0 || id >= int64(len(mouseInput.buttons)) {
+	if id < 1 || id > 3 {
 		return false
 	}
-	return mouseInput.buttons[id].Load()
+	return mouseInput.buttons.Load()&(1<<(id-1)) != 0
 }
 
 // AnyMouseButtonPressed reports whether a primary mouse button is held.
 func AnyMouseButtonPressed() bool {
-	return IsMouseButtonPressed(1) || IsMouseButtonPressed(2)
+	return mouseInput.buttons.Load()&0b011 != 0
 }
 
 // GetKeyEvents drains the ordered key edges for the current update.
@@ -79,12 +79,6 @@ func GetKeyInput(dst []KeyEvent) ([]KeyEvent, []int64) {
 // GetMouseInput drains button edges and returns the held-button snapshot.
 func GetMouseInput(dst []MouseEvent) ([]MouseEvent, uint8) {
 	return mouseInput.drainInput(dst)
-}
-
-// GetMouseEvents drains the ordered mouse-button edges for the current update.
-func GetMouseEvents(dst []MouseEvent) []MouseEvent {
-	events, _ := GetMouseInput(dst)
-	return events
 }
 
 // DiscardPendingKeyEvents starts a clean input-session boundary.
@@ -135,15 +129,22 @@ func onMouseReleased(id int64) {
 }
 
 func queueMouseEvent(id int64, pressed bool) {
-	if !acceptsRuntimeWork() || id < 1 || id >= int64(len(mouseInput.buttons)) {
+	if !acceptsRuntimeWork() || id < 1 || id > 3 {
 		return
 	}
 	mouseInput.mu.Lock()
-	if mouseInput.buttons[id].Load() == pressed {
+	buttons := mouseInput.buttons.Load()
+	mask := uint32(1) << (id - 1)
+	if (buttons&mask != 0) == pressed {
 		mouseInput.mu.Unlock()
 		return
 	}
-	mouseInput.buttons[id].Store(pressed)
+	if pressed {
+		buttons |= mask
+	} else {
+		buttons &^= mask
+	}
+	mouseInput.buttons.Store(buttons)
 	mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
 	mouseInput.mu.Unlock()
 }
@@ -222,15 +223,13 @@ func (s *mouseInputState) discard() {
 	s.mu.Lock()
 	s.pending = s.pending[:0]
 	s.ready = s.ready[:0]
-	s.cachedButtons = s.buttonMask()
+	s.cachedButtons = uint8(s.buttons.Load())
 	s.mu.Unlock()
 }
 
 func (s *mouseInputState) reset() {
 	s.mu.Lock()
-	for i := range s.buttons {
-		s.buttons[i].Store(false)
-	}
+	s.buttons.Store(0)
 	s.pending = nil
 	s.ready = nil
 	s.cachedButtons = 0
@@ -241,16 +240,6 @@ func (s *mouseInputState) cache() {
 	s.mu.Lock()
 	s.ready = append(s.ready, s.pending...)
 	s.pending = s.pending[:0]
-	s.cachedButtons = s.buttonMask()
+	s.cachedButtons = uint8(s.buttons.Load())
 	s.mu.Unlock()
-}
-
-func (s *mouseInputState) buttonMask() uint8 {
-	var buttons uint8
-	for id := 1; id < len(s.buttons); id++ {
-		if s.buttons[id].Load() {
-			buttons |= 1 << (id - 1)
-		}
-	}
-	return buttons
 }

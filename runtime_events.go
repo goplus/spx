@@ -270,30 +270,6 @@ func (p *Game) findClickTarget(point mathf.Vec2) clicker {
 	return nil
 }
 
-func (p *Game) doWhenLeftButtonUp(ev *eventLeftButtonUp) {
-	p.inputMgr.finishSwipeTracking(ev.Pos)
-}
-
-func (p *Game) doWhenLeftButtonDown(ev *eventLeftButtonDown) {
-	target := p.findClickTarget(ev.Pos)
-	swipeTarget, _ := target.(*SpriteImpl)
-	p.inputMgr.beginSwipeTracking(ev.Pos, swipeTarget)
-	if !p.inputMgr.canTriggerClickEvent(clickTimerGlobal) {
-		return
-	}
-	if target != nil {
-		proxy := target.getProxy()
-		if proxy == nil || !p.inputMgr.canTriggerClickEvent(proxy.GetId()) {
-			return
-		}
-		target.doWhenClick(target)
-		return
-	}
-	if p.inputMgr.canTriggerClickEvent(clickTimerStage) {
-		p.scriptEvents.doWhenClick(p)
-	}
-}
-
 func (p *Game) doBroadcast(msg MsgName, data any, wait bool) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("Broadcast: msg=%s, wait=%v", msg, wait)
@@ -301,13 +277,12 @@ func (p *Game) doBroadcast(msg MsgName, data any, wait bool) {
 	p.scriptEvents.doWhenIReceive(msg, data, wait)
 }
 
-// Event Routing
 func (p *Game) handleEvent(ev event) {
 	switch e := ev.(type) {
 	case *eventLeftButtonUp:
-		p.doWhenLeftButtonUp(e)
+		p.inputMgr.onLeftButtonUp(e.Pos)
 	case *eventLeftButtonDown:
-		p.doWhenLeftButtonDown(e)
+		p.inputMgr.onLeftButtonDown(e.Pos)
 	case *eventMouseMove:
 		p.inputMgr.onMouseMove(e.Pos)
 	case *eventKeyDown:

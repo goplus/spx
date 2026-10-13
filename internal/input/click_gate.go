@@ -35,7 +35,6 @@ func (g *ClickGate) Init(minInterval time.Duration) {
 	g.InitWithClock(minInterval, nil)
 }
 
-// InitWithClock initializes the click gate with a caller-provided clock.
 // A nil clock falls back to the system clock.
 func (g *ClickGate) InitWithClock(minInterval time.Duration, now func() time.Time) {
 	if now == nil {
@@ -56,14 +55,9 @@ func (g *ClickGate) Allow(id engine.Object) bool {
 		return true
 	}
 
-	if g.lastClickMs == nil {
-		g.lastClickMs = make(map[engine.Object]int64)
-	}
 	g.pruneLocked(currentTimeMs - g.minIntervalMs)
-	if lastTimeMs, ok := g.lastClickMs[id]; ok {
-		if currentTimeMs-lastTimeMs < g.minIntervalMs {
-			return false
-		}
+	if lastTimeMs, ok := g.lastClickMs[id]; ok && currentTimeMs-lastTimeMs < g.minIntervalMs {
+		return false
 	}
 	g.lastClickMs[id] = currentTimeMs
 	return true

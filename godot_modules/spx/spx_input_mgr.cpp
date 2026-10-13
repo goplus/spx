@@ -38,40 +38,44 @@
 #include "spx_engine.h"
 
 void SpxInputMgr::on_start() {
-	if (input_proxy && !input_proxy->is_queued_for_deletion()) {
+	if (!input_proxy) {
+		input_proxy = memnew(SpxInputProxy);
+		input_proxy->set_name("input_proxy");
+	}
+	if (input_proxy->get_parent()) {
 		return;
 	}
-	input_proxy = memnew(SpxInputProxy);
-	input_proxy->set_name("input_proxy");
 	get_spx_root()->add_child(input_proxy);
-	input_proxy->ready();
 }
 
 void SpxInputMgr::on_destroy() {
-	on_reset(0);
+	if (input_proxy) {
+		if (input_proxy->get_parent()) {
+			input_proxy->get_parent()->remove_child(input_proxy);
+		}
+		input_proxy->queue_free();
+		input_proxy = nullptr;
+	}
 }
 
 void SpxInputMgr::on_reset(int reset_code) {
-	if (input_proxy) {
-		input_proxy->queue_free();
-		input_proxy = nullptr;
+	// Stop input immediately while keeping the proxy for the next run.
+	if (input_proxy && input_proxy->get_parent()) {
+		input_proxy->get_parent()->remove_child(input_proxy);
 	}
 	action_names.clear();
 	action_ids.clear();
 }
 
-// input
 GdVec2 SpxInputMgr::get_global_mouse_pos() {
 	auto mouse_pos = cameraMgr->get_global_mouse_position();
 	return godot_to_spx_vec2(mouse_pos);
 }
 
 GdBool SpxInputMgr::get_mouse_state(GdInt mouse_id) {
-	if (mouse_id < (int)MouseButton::LEFT && (int)MouseButton::RIGHT < mouse_id) {
-		print_error("unknown mouse id " + itos(mouse_id));
-	}
 	return Input::get_singleton()->is_mouse_button_pressed((MouseButton)mouse_id);
 }
+
 GdBool SpxInputMgr::get_key(GdInt key) {
 	Input *input = Input::get_singleton();
 	if (key == KEY_ANY) {
@@ -80,6 +84,7 @@ GdBool SpxInputMgr::get_key(GdInt key) {
 	return input->is_key_pressed((Key)key) ||
 			input->is_key_label_pressed((Key)key);
 }
+
 GdInt SpxInputMgr::get_key_state(GdInt key) {
 	return get_key(key) ? 1 : 0;
 }
@@ -102,8 +107,8 @@ GdBool SpxInputMgr::is_action_just_released(GdString action) {
 
 GdInt SpxInputMgr::register_action(GdString action) {
 	StringName name(SpxStr(action));
-	if (action_ids.has(name)) {
-		return action_ids[name];
+	if (const GdInt *id = action_ids.getptr(name)) {
+		return *id;
 	}
 
 	GdInt id = action_names.size();
@@ -142,13 +147,11 @@ void SpxInputMgr::write_snapshot(float out[3]) {
 	}
 
 	GdVec2 pos = get_global_mouse_pos();
-	uint32_t mouse_bits = 0;
+	BitField<MouseButtonMask> mouse_bits;
 	Input *input = Input::get_singleton();
-	for (int i = (int)MouseButton::LEFT; i <= (int)MouseButton::MIDDLE; i++) {
-		if (input->is_mouse_button_pressed((MouseButton)i)) {
-			// Compact the hot-path snapshot to zero-based button lanes:
-			// bit 0 = left, bit 1 = right, bit 2 = middle.
-			mouse_bits |= 1u << (i - (int)MouseButton::LEFT);
+	for (MouseButton button : { MouseButton::LEFT, MouseButton::RIGHT, MouseButton::MIDDLE }) {
+		if (input->is_mouse_button_pressed(button)) {
+			mouse_bits.set_flag(mouse_button_to_mask(button));
 		}
 	}
 

@@ -4,11 +4,13 @@
 
 [node name="Debug" type="Control"]
 layout_mode = 3
+mouse_filter = 2
 anchors_preset = 0
 
 [node name="Label" type="Label" parent="."]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
+mouse_filter = 2
 offset_top = 13.0
 offset_right = 41.0
 offset_bottom = 27.0

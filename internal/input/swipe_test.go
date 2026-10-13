@@ -58,6 +58,43 @@ func TestSwipeRecognizerFinishDetectsRightSwipe(t *testing.T) {
 	}
 }
 
+func TestSwipeRecognizerFinishConsumesInvalidGesture(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		elapsed  time.Duration
+		distance float64
+	}{
+		{"zero elapsed", 0, 100},
+		{"negative elapsed", -time.Millisecond, 100},
+		{"expired", time.Second, 100},
+		{"too short", 100 * time.Millisecond, 10},
+		{"too long", 100 * time.Millisecond, 600},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			now := time.Unix(0, 0)
+			var sr SwipeRecognizer
+			sr.InitWithClock(func() time.Time {
+				if !sr.IsTracking() {
+					t.Fatal("clock called after tracking stopped")
+				}
+				return now
+			})
+			sr.StartTracking(mathf.NewVec2(0, 0))
+			now = now.Add(test.elapsed)
+			result, ok := sr.Finish(mathf.NewVec2(test.distance, 0))
+			if ok || result != (SwipeResult{}) {
+				t.Fatalf("invalid gesture returned (%+v, %v)", result, ok)
+			}
+			if sr.IsTracking() {
+				t.Fatal("invalid gesture left tracking active")
+			}
+			if _, ok := sr.Finish(mathf.NewVec2(100, 0)); ok {
+				t.Fatal("finished gesture was consumed twice")
+			}
+		})
+	}
+}
+
 func TestSwipeRecognizerTimeLimitStopsTracking(t *testing.T) {
 	now := time.Unix(0, 0)
 	var sr SwipeRecognizer

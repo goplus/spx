@@ -4,6 +4,7 @@
 
 [node name="UiQuote" type="Control"]
 layout_mode = 3
+mouse_filter = 2
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -18,12 +19,14 @@ grow_vertical = 2
 
 [node name="C" type="Control" parent="."]
 anchors_preset = 0
+mouse_filter = 2
 offset_right = 100.0
 offset_bottom = 100.0
 
 [node name="LabelDes" type="Label" parent="C"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 10
 anchor_right = 1.0
 offset_left = -1.0
@@ -42,6 +45,7 @@ text_direction = 1
 [node name="LabelMsg" type="Label" parent="C"]
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -62,6 +66,7 @@ text_direction = 1
 
 [node name="ImageL" type="NinePatchRect" parent="C"]
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 9
 anchor_bottom = 1.0
 offset_right = 35.0
@@ -74,6 +79,7 @@ patch_margin_bottom = 13
 
 [node name="ImageR" type="NinePatchRect" parent="C"]
 layout_mode = 1
+mouse_filter = 2
 anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
