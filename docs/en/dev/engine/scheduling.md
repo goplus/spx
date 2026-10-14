@@ -57,16 +57,18 @@ the current coroutine.
 
 ### Callbacks and synchronous waits
 
-`Setup` runs synchronously on the creator after registration and before the task
-starts. Its returned cleanup runs when the task exits, including cancellation
-before execution. `Setup` must not wait for tasks in its batch: execution requires
-all of that batch's setup callbacks to return.
+`RegisterInvocation` runs synchronously on the creator after the thread is
+registered with the scheduler and before the task executes. Its returned cleanup
+runs when the task exits, including cancellation before execution.
+`RegisterInvocation` must not wait for tasks in its batch: execution requires all
+of that batch's registration callbacks to return.
 
-Workers, setup, cleanup, final panic handlers, shutdown callbacks, and callbacks
-holding exclusive script ownership cannot synchronously drain. Such calls panic
-with `ErrReentrantWait` before canceling tasks or changing admission. Exclusive
-callbacks also cannot synchronously execute scripts or block on Join / Latch,
-since those scripts cannot acquire execution ownership. Completed waits may return.
+Workers, registration callbacks, cleanup, final panic handlers, shutdown
+callbacks, and callbacks holding exclusive script ownership cannot synchronously
+drain. Such calls panic with `ErrReentrantWait` before canceling tasks or changing
+admission. Exclusive callbacks also cannot synchronously execute scripts or block
+on Join / Latch, since those scripts cannot acquire execution ownership.
+Completed waits may return.
 
 Shutdown callbacks run with admission closed but without holding the admission
 lock. They may call `StopAll`; new tasks are rejected. Normal return, panic, and
@@ -80,8 +82,8 @@ events to a separate goroutine and return to the host.
 
 The timeout bounds waiting for drain notifications, not the entire call. Lock
 acquisition, running callbacks, and reacquiring script ownership remain
-cooperative. Arbitrary blocking Go code, circular user dependencies, and setup
-waiting for its own task can still prevent progress.
+cooperative. Arbitrary blocking Go code, circular user dependencies, and
+registration callbacks waiting for their own tasks can still prevent progress.
 
 ### Concurrency invariants
 

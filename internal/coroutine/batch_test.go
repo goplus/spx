@@ -63,8 +63,8 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	caller := co.Create("caller", func(Thread) {
 		threads = co.StartBatch([]Task{
 			{
-				Owner: "first",
-				Setup: setup,
+				Owner:              "first",
+				RegisterInvocation: setup,
 				Run: func(Thread) {
 					registered = len(co.snapshotThreads())
 					createdBeforeRun = created
@@ -73,8 +73,8 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 				},
 			},
 			{
-				Owner: "second",
-				Setup: setup,
+				Owner:              "second",
+				RegisterInvocation: setup,
 				Run: func(Thread) {
 					order = append(order, "second")
 				},
@@ -96,7 +96,7 @@ func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 		t.Fatalf("threads registered before first Run = %d, want 3", registered)
 	}
 	if createdBeforeRun != 2 {
-		t.Fatalf("Setup calls before first Run = %d, want 2", createdBeforeRun)
+		t.Fatalf("RegisterInvocation calls before first Run = %d, want 2", createdBeforeRun)
 	}
 
 	close(releaseFirst)
@@ -112,7 +112,7 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 	parent := co.Create("parent", func(parent Thread) {
 		batchDone <- co.StartBatch([]Task{
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
 					co.Stop(parent)
 					return nil
@@ -120,7 +120,7 @@ func TestStartBatchSnapshotsParentAdmission(t *testing.T) {
 				Run: func(Thread) { ran.Add(1) },
 			},
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
 					return nil
 				},
@@ -233,7 +233,7 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 	go func() {
 		co.StartBatch([]Task{{
 			Owner: "task",
-			Setup: func(thread Thread) func() {
+			RegisterInvocation: func(thread Thread) func() {
 				registered <- thread
 				<-releaseRegistration
 				return nil
@@ -295,7 +295,7 @@ func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 	go func() {
 		finished <- co.StartBatch([]Task{
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
 					co.StopAll()
 					return func() { cleaned.Add(1) }
@@ -303,7 +303,7 @@ func TestStartBatchRegistrationCanStopAll(t *testing.T) {
 				Run: func(Thread) { ran.Add(1) },
 			},
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					registered.Add(1)
 					return func() { cleaned.Add(1) }
 				},
@@ -345,7 +345,7 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	for _, release := range releases {
 		go func() {
 			threads := co.StartBatch([]Task{{
-				Setup: func(thread Thread) func() {
+				RegisterInvocation: func(thread Thread) func() {
 					registered <- thread
 					<-release
 					return func() { cleaned.Add(1) }
@@ -440,13 +440,13 @@ func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 		defer close(done)
 		co.StartBatch([]Task{
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					return func() { cleaned.Add(1) }
 				},
 				Run: func(Thread) { ran.Add(1) },
 			},
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					co.StopAll()
 					runtime.Goexit()
 					return nil
@@ -492,13 +492,13 @@ func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 		defer func() { recovered <- recover() }()
 		co.StartBatch([]Task{
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					return func() { cleaned.Add(1) }
 				},
 				Run: func(Thread) { ran.Add(1) },
 			},
 			{
-				Setup: func(Thread) func() {
+				RegisterInvocation: func(Thread) func() {
 					co.StopAll()
 					panic("registration failure")
 				},
@@ -546,7 +546,7 @@ func TestStartBatchFinalizesRegisteredTaskBeforeFirstRun(t *testing.T) {
 
 	caller := co.Create("caller", func(Thread) {
 		threads := co.StartBatch([]Task{{
-			Setup: func(Thread) func() {
+			RegisterInvocation: func(Thread) func() {
 				close(registered)
 				return func() { cleaned.Add(1) }
 			},
@@ -584,7 +584,7 @@ func TestStartBatchCleanupPanicStillFinishesThread(t *testing.T) {
 	reported := make(chan any, 1)
 	co := New(func(report PanicReport) { reported <- report.Value })
 	thread := co.StartBatch([]Task{{
-		Setup: func(Thread) func() {
+		RegisterInvocation: func(Thread) func() {
 			return func() { panic("cleanup failure") }
 		},
 		Run: func(Thread) {},

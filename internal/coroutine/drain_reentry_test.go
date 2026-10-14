@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestSetupRejectsSynchronousDrain(t *testing.T) {
+func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 	for _, managed := range []bool{false, true} {
 		name := "external"
 		if managed {
@@ -19,7 +19,7 @@ func TestSetupRejectsSynchronousDrain(t *testing.T) {
 				ran := false
 				start := func() {
 					threads = co.StartBatch([]Task{{
-						Setup: func(Thread) func() {
+						RegisterInvocation: func(Thread) func() {
 							recovered = catchDrainPanic(func() { co.StopAllAndWait(0) })
 							return nil
 						},
@@ -53,7 +53,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		co := New(nil)
 		var recovered any
 		threads := co.StartBatch([]Task{{
-			Setup: func(Thread) func() {
+			RegisterInvocation: func(Thread) func() {
 				return func() {
 					recovered = catchDrainPanic(func() { co.StopAllAndWait(0) })
 				}
@@ -88,8 +88,8 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 				ran = true
 			}))
 			threads = append(threads, co.StartBatch([]Task{{
-				Setup: func(Thread) func() { setup = true; return nil },
-				Run:   func(Thread) { ran = true },
+				RegisterInvocation: func(Thread) func() { setup = true; return nil },
+				Run:                func(Thread) { ran = true },
 			}}, BatchAsync)...)
 		})
 		for _, thread := range threads {

@@ -27,7 +27,7 @@ const (
 )
 
 // StartBatch registers tasks before running them in order; wait modes require a
-// managed caller. Setup may cancel work but must not wait for its task.
+// managed caller. RegisterInvocation may cancel work but must not wait for its task.
 func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
@@ -62,12 +62,12 @@ func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
 	admission := p.captureAdmission()
 	for i, task := range tasks {
 		current, next := progress[i], progress[i+1]
-		if setup := task.Setup; setup != nil {
+		if registerInvocation := task.RegisterInvocation; registerInvocation != nil {
 			// Publish the slot before invoking the callback, preserving the
 			// registration order visible to callbacks.
-			task.Setup = func(thread Thread) func() {
+			task.RegisterInvocation = func(thread Thread) func() {
 				threads[i] = thread
-				return setup(thread)
+				return registerInvocation(thread)
 			}
 		}
 		run := task.Run

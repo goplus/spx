@@ -44,7 +44,7 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 				defer close(batchDone)
 				co.StartBatch([]Task{{
 					Owner: "target",
-					Setup: func(th Thread) func() {
+					RegisterInvocation: func(th Thread) func() {
 						registered <- th
 						<-release
 						return nil

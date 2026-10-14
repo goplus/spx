@@ -41,9 +41,9 @@ func NewHandlerState(policy HandlerPolicy) HandlerState {
 	return HandlerState{policy: policy}
 }
 
-// Start admits or cancels a registered invocation and returns its cleanup.
+// RegisterInvocation admits or cancels an invocation and returns its cleanup.
 // Cleanup from an older invocation cannot release a newer invocation's state.
-func (p *HandlerState) Start(thread Thread) func() {
+func (p *HandlerState) RegisterInvocation(thread Thread) func() {
 	p.mu.Lock()
 	previous := p.active
 	if p.policy == IgnoreWhileRunning && previous != nil && !previous.Stopped() {

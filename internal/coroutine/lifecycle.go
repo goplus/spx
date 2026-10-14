@@ -22,13 +22,14 @@ import (
 	"github.com/visualfc/gid"
 )
 
-// Task describes a coroutine's owner, setup, and execution.
+// Task describes a coroutine's owner, invocation registration, and execution.
 type Task struct {
 	Owner ThreadObj
-	// Setup runs synchronously after registration and returns optional cleanup.
+	// RegisterInvocation runs synchronously after the thread is registered and
+	// returns optional cleanup.
 	// Cleanup runs once on thread exit, even if Run never starts.
-	Setup func(Thread) (cleanup func())
-	Run   func(Thread)
+	RegisterInvocation func(Thread) (cleanup func())
+	Run                func(Thread)
 }
 
 // Create creates a coroutine without explicitly yielding execution to it.
@@ -61,7 +62,7 @@ func (p *Coroutines) captureAdmission() threadAdmission {
 	}
 }
 
-// createThread admits a thread before setup or execution.
+// createThread admits a thread before invocation registration or execution.
 func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 	th := p.newThread(task.Owner)
 	var cleanup func()
@@ -73,13 +74,13 @@ func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 		th.Cancel()
 	} else {
 		p.registerThread(th)
-		if task.Setup != nil {
+		if task.RegisterInvocation != nil {
 			p.pendingSetups.Add(1)
 		}
 	}
 	p.admissionMu.RUnlock()
 
-	if !rejected && task.Setup != nil {
+	if !rejected && task.RegisterInvocation != nil {
 		id, previous := p.enterCallback(callbackSetup)
 		defer p.leaveCallback(id, previous)
 		setupReturned := false
@@ -89,7 +90,7 @@ func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 			}
 			p.finishSetup()
 		}()
-		cleanup = task.Setup(th)
+		cleanup = task.RegisterInvocation(th)
 		setupReturned = true
 	}
 	return th

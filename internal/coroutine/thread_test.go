@@ -323,7 +323,7 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 	var registered, ran bool
 	thread := co.createThread(admission, Task{
 		Owner: "stale",
-		Setup: func(Thread) func() {
+		RegisterInvocation: func(Thread) func() {
 			registered = true
 			return nil
 		},
