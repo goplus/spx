@@ -185,7 +185,7 @@ func (p *Game) Dayssince2000() float64 {
 // -----------------------------------------------------------------------------
 func (p *Game) Ask(msg any) {
 	msgStr := dialogText(msg)
-	p.ask(false, msgStr, func(answer string) {})
+	p.ask(true, msgStr, func(answer string) {})
 }
 
 func (p *Game) Answer() string {
@@ -251,13 +251,14 @@ func (p *Game) getMousePos() (x, y float64) {
 	return p.MouseX(), p.MouseY()
 }
 
-func (p *Game) ask(isSprite bool, question string, callback func(string)) {
+// showQuestionInPanel controls whether the question appears in the bottom Ask panel.
+func (p *Game) ask(showQuestionInPanel bool, question string, callback func(string)) {
 	if p.dialogState.AskPanel == nil {
 		p.dialogState.AskPanel = ui.NewUiAsk()
 		p.shapeMgr.add(p.dialogState.AskPanel)
 	}
 	hasAnswer := false
-	p.dialogState.AskPanel.Show(isSprite, question, func(msg string) {
+	p.dialogState.AskPanel.Show(showQuestionInPanel, question, func(msg string) {
 		p.dialogState.AnswerVal = msg
 		callback(msg)
 		hasAnswer = true

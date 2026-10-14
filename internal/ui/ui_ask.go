@@ -55,9 +55,9 @@ func (pself *UiAsk) Update() {
 	pself.lastEnterState = enterPressed
 }
 
-func (pself *UiAsk) Show(isSprite bool, question string, onCheck func(string)) {
+func (pself *UiAsk) Show(showQuestionInPanel bool, question string, onCheck func(string)) {
 	pself.OnCheck = onCheck
-	showQuestion := !isSprite && question != ""
+	showQuestion := showQuestionInPanel && question != ""
 	engine.Managers().UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
 	if showQuestion {
 		engine.Managers().UiMgr.SetText(pself.askLabel.GetId(), question)

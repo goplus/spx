@@ -31,8 +31,13 @@ func (p *SpriteImpl) Ask(msg any) {
 		spxlog.Debug("Ask: sprite=%s, msg=%v", p.name, msg)
 	}
 	msgStr := dialogText(msg)
-	p.sayOrThink(msgStr, ui.StyleSay)
-	p.g.ask(true, msgStr, func(answer string) {
+
+	isVisible := p.Visible()
+	if isVisible {
+		p.sayOrThink(msgStr, ui.StyleSay)
+	}
+	showQuestionInPanel := !isVisible
+	p.g.ask(showQuestionInPanel, msgStr, func(answer string) {
 		p.doStopText()
 	})
 }
