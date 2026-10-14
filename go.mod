@@ -13,10 +13,10 @@ require (
 	github.com/visualfc/funcval v0.1.5
 	github.com/visualfc/gid v0.3.6
 	golang.org/x/mobile v0.0.0-20220518205345-8578da9835fd
-	golang.org/x/mod v0.41.0
-	golang.org/x/sys v0.48.0
-	golang.org/x/text v0.42.0
-	golang.org/x/tools v0.51.0
+	golang.org/x/mod v0.42.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
+	golang.org/x/tools v0.52.0
 )
 
 require (
