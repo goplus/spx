@@ -45,11 +45,11 @@ channel 接收复用受管理的外部任务，只在脚本正常恢复后提交
 
 ### 回调与同步等待
 
-`Setup` 在创建方同步执行，此时任务已登记但尚未启动；它返回的 cleanup 在任务退出时
-执行，启动前被取消的任务也会执行 cleanup。`Setup` 不得等待本批任务，因为本批执行
-需要全部 `Setup` 返回。
+`RegisterInvocation` 在创建方同步执行，此时线程已登记到调度器，但尚未执行任务；
+它返回的 cleanup 在任务退出时执行，执行前被取消的任务也会执行 cleanup。
+`RegisterInvocation` 不得等待本批任务，因为本批执行需要全部登记回调返回。
 
-worker、`Setup`、cleanup、最终异常处理、停机回调和独占脚本执行权的回调不能同步
+worker、`RegisterInvocation`、cleanup、最终异常处理、停机回调和独占脚本执行权的回调不能同步
 drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。独占回调也不能再次
 同步执行脚本或等待未完成的 Join / Latch，否则脚本无法取得执行权；已经完成的等待可直接返回。
 
@@ -61,7 +61,7 @@ drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。�
 转到独立 goroutine，并让当前 JS 回调返回。
 
 timeout 限制清理通知的等待，不是整个调用的硬期限：取得锁、正在运行的回调和脚本
-重新取得执行权仍依赖协作。任意 Go 阻塞、用户代码构成的循环等待，以及 `Setup`
+重新取得执行权仍依赖协作。任意 Go 阻塞、用户代码构成的循环等待，以及 `RegisterInvocation`
 等待自身任务，仍可能阻止进展。
 
 ### 并发约束

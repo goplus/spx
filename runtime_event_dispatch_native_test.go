@@ -59,7 +59,7 @@ func (p *eventDispatchPlatform) useCurrentAsMainThread() {
 
 type eventLifecycleFunc func(coroutine.Thread) func()
 
-func (f eventLifecycleFunc) Start(thread coroutine.Thread) func() {
+func (f eventLifecycleFunc) RegisterInvocation(thread coroutine.Thread) func() {
 	return f(thread)
 }
 

@@ -275,7 +275,12 @@ func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfi
 		}
 	}
 	p.queueBootstrap(generation, func() {
-		runSpriteMainsUntilYield(inits)
+		// Preserve load/Z-order while letting each Main run until its first yield.
+		for _, sprite := range inits {
+			if spr := spriteOf(sprite); spr != nil {
+				runMainUntilYield(spr.owner, sprite.Main)
+			}
+		}
 	})
 	if loader, ok := g.Addr().Interface().(interface{ OnLoaded() }); ok {
 		p.queueBootstrap(generation, loader.OnLoaded)

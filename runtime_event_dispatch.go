@@ -26,7 +26,7 @@ import (
 // scriptEventLifecycle registers an invocation before it can run and returns
 // its cleanup. Handlers without this interface allow overlapping invocations.
 type scriptEventLifecycle interface {
-	Start(coroutine.Thread) func()
+	RegisterInvocation(coroutine.Thread) func()
 }
 
 // Each registration owns its execution state; clones re-register their handlers.
@@ -54,7 +54,7 @@ func (event scriptEventDispatch) task(sink eventSink) coroutine.Task {
 		Run:   func(thread coroutine.Thread) { event.run(thread, &sink) },
 	}
 	if handler, ok := sink.Handler.(scriptEventLifecycle); ok {
-		task.Setup = handler.Start
+		task.RegisterInvocation = handler.RegisterInvocation
 	}
 	return task
 }
@@ -140,7 +140,7 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 	for i, sink := range matched {
 		task := event.task(sink)
 		run := task.Run
-		task.Setup = func(thread coroutine.Thread) func() {
+		task.RegisterInvocation = func(thread coroutine.Thread) func() {
 			p.pendingStartThreads.Store(thread, struct{}{})
 			threads = append(threads, thread)
 			return nil

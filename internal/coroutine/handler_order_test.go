@@ -53,8 +53,8 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 			var order []string
 			startHandler := func(name string, completed bool) Thread {
 				return co.createThread(co.captureAdmission(), Task{
-					Owner: name,
-					Setup: state.Start,
+					Owner:              name,
+					RegisterInvocation: state.RegisterInvocation,
 					Run: func(Thread) {
 						if !completed {
 							co.WaitNextFrame()

@@ -25,6 +25,9 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
+// -----------------------------------------------------------------------------
+// Engine Callbacks
+// -----------------------------------------------------------------------------
 func (p *Game) OnEngineStart() {
 	p.lifecycleState.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
@@ -115,6 +118,9 @@ func (p *Game) OnEnginePause(bool) {
 	// Pause is handled by engine managers.
 }
 
+// -----------------------------------------------------------------------------
+// Frame Execution
+// -----------------------------------------------------------------------------
 func (p *Game) runFrameScripts() {
 	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
 		p.dispatchStartEventIfNeeded()
@@ -123,23 +129,17 @@ func (p *Game) runFrameScripts() {
 	engine.RunFrameCallbacks()
 }
 
-func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
-	thread := gco.Create(owner, func(coroutine.Thread) {
-		runMain(mainFn)
-	})
-	gco.JoinYieldedOrDone(thread)
-}
-
-func runSpriteMainsUntilYield(inits []Sprite) {
-	// Preserve load/Z-order while letting each Main run until its first yield.
-	for _, ini := range inits {
-		spr := spriteOf(ini)
-		if spr == nil {
-			continue
+// -----------------------------------------------------------------------------
+// Bootstrap
+// -----------------------------------------------------------------------------
+func (p *Game) startBootstrap(generation uint64) {
+	engine.Go(p, func(context.Context) {
+		if currentGame() != p || !p.claimBootstrap(generation) {
+			return
 		}
-
-		runMainUntilYield(spr.owner, ini.Main)
-	}
+		p.runBootstrapTasks(generation)
+		p.completeBootstrap(generation)
+	})
 }
 
 func (p *Game) resetBootstrap() {
@@ -162,6 +162,9 @@ func (p *Game) markGameStarted(generation uint64) bool {
 	return p.markBootstrapFlag(generation, &p.lifecycleState.IsRunned)
 }
 
+// -----------------------------------------------------------------------------
+// Start Events
+// -----------------------------------------------------------------------------
 func (p *Game) scheduleStartEvent() *eventStart {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
@@ -185,23 +188,23 @@ func (p *Game) markStartDispatched(generation uint64) bool {
 	return p.markBootstrapFlag(generation, &p.lifecycleState.StartDispatched)
 }
 
-func (p *Game) startBootstrap(generation uint64) {
-	engine.Go(p, func(context.Context) {
-		if currentGame() != p || !p.claimBootstrap(generation) {
-			return
-		}
-		p.runBootstrapTasks(generation)
-		p.completeBootstrap(generation)
+// -----------------------------------------------------------------------------
+// Main Execution Helpers
+// -----------------------------------------------------------------------------
+
+// runMainUntilYield starts Main in its own coroutine and waits for its first yield or exit.
+func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
+	thread := gco.Create(owner, func(coroutine.Thread) {
+		runMain(mainFn)
 	})
+	gco.JoinYieldedOrDone(thread)
 }
 
+// runMain calls Main synchronously while tracking its execution timeout.
 func runMain(call func()) {
-	if gco == nil || !gco.IsInCoroutine() {
-		call()
-		return
+	if thread := currentScriptThread(); thread != nil {
+		end := thread.BeginMain(time.Now())
+		defer end()
 	}
-	thread := gco.Current()
-	end := thread.BeginMain(time.Now())
-	defer end()
 	call()
 }

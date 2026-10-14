@@ -42,7 +42,7 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	handler := &messageEventHandler{}
 	lifecycle := eventLifecycleFunc(func(thread coroutine.Thread) func() {
 		registered.Store(true)
-		return handler.Start(thread)
+		return handler.RegisterInvocation(thread)
 	})
 	event := scriptEventDispatch{
 		mode: coroutine.BatchAsync,
@@ -89,9 +89,9 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 		t.Fatal("rejected nested handler ran after abort")
 	}
 	co.StartBatch([]coroutine.Task{{
-		Owner: handler,
-		Setup: handler.Start,
-		Run:   func(coroutine.Thread) { ran.Store(true) },
+		Owner:              handler,
+		RegisterInvocation: handler.RegisterInvocation,
+		Run:                func(coroutine.Thread) { ran.Store(true) },
 	}}, coroutine.BatchAsync)
 	co.Update()
 	if !ran.Load() {
