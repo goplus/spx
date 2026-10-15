@@ -60,6 +60,44 @@ func TestDisplayMonitorsStopMouse(t *testing.T) {
 	}
 }
 
+func TestAskSceneContract(t *testing.T) {
+	parsed := parseMonitorScene(t, readUITemplateScene(t, "UiAsk"))
+
+	assertMonitorSceneProperties(t, parsed.nodes["."], map[string]string{
+		"mouse_filter": "2",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["MF"], map[string]string{
+		"offset_top": "-106.0",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["MF/Frame"], map[string]string{
+		"scale":        "Vector2(0.5, 0.5)",
+		"mouse_filter": "2",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["MF/Frame/AskBody"], map[string]string{
+		"scale": "Vector2(2, 2)",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["M"], map[string]string{
+		"offset_top":    "-57.0",
+		"offset_bottom": "-25.0",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["M/Input"], map[string]string{
+		"mouse_filter":                        "0",
+		"theme_override_font_sizes/font_size": "12",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["M/Input/Check"], map[string]string{
+		"offset_left":   "-26.0",
+		"offset_top":    "-12.0",
+		"offset_right":  "-2.0",
+		"offset_bottom": "12.0",
+		"mouse_filter":  "0",
+	})
+
+	scriptID := monitorSceneReference(t, monitorSceneProperty(parsed.nodes["."], "script"), "ExtResource")
+	if external := parsed.externals[scriptID]; !strings.Contains(external, `path="res://engine/scripts/ui_ask.gd"`) {
+		t.Errorf("UiAsk script = %q, want ui_ask.gd", external)
+	}
+}
+
 func readUITemplateScene(t *testing.T, name string) string {
 	t.Helper()
 	_, sourceFile, _, ok := runtime.Caller(0)
