@@ -322,8 +322,31 @@ func TestManagerVolumeAndEffects(t *testing.T) {
 	if !almostEqual(backend.pitch, 2) {
 		t.Fatalf("SetPitch backend = %v, want 2", backend.pitch)
 	}
-	if got := backend.volumes[len(backend.volumes)-1]; got != 0.01 {
-		t.Fatalf("SetVolume backend = %v, want 0.01", got)
+	if got := backend.volumes[len(backend.volumes)-1]; got != 0 {
+		t.Fatalf("SetVolume backend = %v, want 0", got)
+	}
+}
+
+func TestManagerChangeVolume(t *testing.T) {
+	backend := &fakeBackend{volume: 0.9}
+	var mgr Manager
+	mgr.Init(backend)
+	for _, step := range []struct {
+		name        string
+		delta, want float64
+	}{
+		{"NaN preserves volume", math.NaN(), 90},
+		{"upper bound", 30, 100},
+		{"decrease after upper bound", -10, 90},
+		{"lower bound", -120, 0},
+		{"increase after lower bound", 10, 10},
+		{"positive infinity", math.Inf(1), 100},
+		{"negative infinity", math.Inf(-1), 0},
+	} {
+		mgr.ChangeVolume(1, step.delta)
+		if got := mgr.GetVolume(1); !almostEqual(got, step.want) {
+			t.Fatalf("%s: volume = %g, want %g", step.name, got, step.want)
+		}
 	}
 }
 
@@ -556,5 +579,45 @@ func TestManagerCanReplayAfterRepeatedStopAll(t *testing.T) {
 		if backend.IsPlaying(id) || len(backend.destroys) != round {
 			t.Fatalf("round %d: playing=%v destroyed=%v", round, backend.IsPlaying(id), backend.destroys)
 		}
+	}
+}
+
+func TestManagerControlRanges(t *testing.T) {
+	backend := &fakeBackend{}
+	var mgr Manager
+	mgr.Init(backend)
+	for _, control := range []struct {
+		name                        string
+		set                         func(engine.Object, float64)
+		backendValue                func(engine.Object) float64
+		low, high                   float64
+		wantLow, wantHigh, wantZero float64
+	}{
+		{"volume", mgr.SetVolume, backend.GetVolume, 0, 100, 0, 1, 0},
+		{"pan", mgr.SetPan, backend.GetPan, -100, 100, -1, 1, 0},
+		{"pitch", mgr.SetPitch, backend.GetPitch, -360, 360, 0.125, 8, 1},
+	} {
+		t.Run(control.name, func(t *testing.T) {
+			for _, tt := range []struct {
+				name        string
+				input, want float64
+			}{
+				{"zero", 0, control.wantZero},
+				{"minimum", control.low, control.wantLow},
+				{"maximum", control.high, control.wantHigh},
+				{"below minimum", control.low - 30, control.wantLow},
+				{"above maximum", control.high + 30, control.wantHigh},
+				{"negative infinity", math.Inf(-1), control.wantLow},
+				{"positive infinity", math.Inf(1), control.wantHigh},
+				{"NaN", math.NaN(), control.wantZero},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					control.set(1, tt.input)
+					if got := control.backendValue(1); !almostEqual(got, tt.want) {
+						t.Errorf("backend value = %g, want %g", got, tt.want)
+					}
+				})
+			}
+		})
 	}
 }

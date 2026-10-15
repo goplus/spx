@@ -1039,6 +1039,8 @@ class Bus {
 		this.isSolo = false;
 		/** @type {Bus?} */
 		this._send = null;
+		this._pan = 0;
+		this._panner = null;
 
 		/** @type {GainNode} */
 		this._gainNode = GodotAudio.ctx.createGain();
@@ -1078,6 +1080,41 @@ class Bus {
 		if (isFinite(linear)) {
 			this._gainNode.gain.value = linear;
 		}
+	}
+
+	/**
+	 * Applies Scratch panning while keeping existing sample and bus inputs connected.
+	 * @param {number} pan Pan from -1 to 1; zero preserves the original channels.
+	 */
+	setPan(pan) {
+		if (pan === this._pan) {
+			return;
+		}
+		if (pan !== 0 && this._panner == null) {
+			const input = GodotAudio.ctx.createGain();
+			// SampleNodeBus emits six channels even for stereo sounds. Keep L/R
+			// before ChannelMerger applies Scratch's stereo-to-mono downmix.
+			input.channelCount = 2;
+			input.channelCountMode = 'explicit';
+			input.channelInterpretation = 'discrete';
+			const left = GodotAudio.ctx.createGain();
+			const right = GodotAudio.ctx.createGain();
+			const merger = GodotAudio.ctx.createChannelMerger(2);
+			input.connect(left).connect(merger, 0, 0);
+			input.connect(right).connect(merger, 0, 1);
+			merger.connect(this._soloNode);
+			this._panner = { input, left, right };
+		}
+		if (pan !== 0) {
+			const angle = (pan + 1) * Math.PI / 4;
+			this._panner.left.gain.value = Math.cos(angle);
+			this._panner.right.gain.value = Math.sin(angle);
+		}
+		if ((pan === 0) !== (this._pan === 0)) {
+			this._gainNode.disconnect();
+			this._gainNode.connect(pan === 0 ? this._soloNode : this._panner.input);
+		}
+		this._pan = pan;
 	}
 
 	/**
@@ -2025,6 +2062,15 @@ const _GodotAudio = {
 	 */
 	godot_audio_sample_bus_set_volume_db: function (bus, volumeDb) {
 		GodotAudio.set_sample_bus_volume_db(bus, volumeDb);
+	},
+
+	spx_audio_sample_bus_set_pan__proxy: 'sync',
+	spx_audio_sample_bus_set_pan__sig: 'vif',
+	spx_audio_sample_bus_set_pan: function (busIndex, pan) {
+		const bus = GodotAudio.Bus.getBusOrNull(busIndex);
+		if (bus != null) {
+			bus.setPan(pan);
+		}
 	},
 
 	godot_audio_sample_bus_set_solo__proxy: 'sync',

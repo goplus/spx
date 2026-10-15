@@ -89,6 +89,10 @@ func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	p.sound().changeSoundEffect(kind, delta)
 }
 
+func (p *SpriteImpl) ClearSoundEffects() {
+	p.sound().clearSoundEffects()
+}
+
 // -----------------------------------------------------------------------------
 // Internals
 // -----------------------------------------------------------------------------

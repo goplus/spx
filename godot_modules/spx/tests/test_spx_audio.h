@@ -61,7 +61,20 @@ public:
 	}
 };
 
-TEST_CASE("[SceneTree][SPX] Paused audio retains its playback lifetime") {
+static void start_stream_playback(AudioStreamPlayer2D *player, float offset) {
+	// The test driver mixes streams; production keeps the platform default.
+	CHECK_EQ(player->get_playback_type(), AudioServer::PLAYBACK_TYPE_DEFAULT);
+	player->stop();
+	player->set_playback_type(AudioServer::PLAYBACK_TYPE_STREAM);
+	player->play(offset);
+	// Publish queued playback so pause assertions exercise an active stream.
+	PhysicsServer2D *physics = PhysicsServer2D::get_singleton();
+	physics->sync();
+	player->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
+	physics->end_sync();
+}
+
+TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	AudioDriverManager::initialize(AudioDriverManager::get_driver_count() - 1);
 	::AudioDriver *previous_driver = ::AudioDriver::get_singleton();
 	AudioDriver driver;
@@ -111,17 +124,22 @@ TEST_CASE("[SceneTree][SPX] Paused audio retains its playback lifetime") {
 	AudioStreamPlayer2D *player =
 			Object::cast_to<AudioStreamPlayer2D>(players[0]);
 	REQUIRE(player != nullptr);
-	player->stop();
-	player->set_playback_type(AudioServer::PLAYBACK_TYPE_STREAM);
-	player->play();
-	// Publish pending playback before pausing: queued playback alone reports
-	// playing even when paused, hiding the active-stream lifetime regression.
-	PhysicsServer2D::get_singleton()->sync();
-	player->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
-	PhysicsServer2D::get_singleton()->end_sync();
+	start_stream_playback(player, 0.5f);
 	REQUIRE(audio->is_playing(playback));
+	const Ref<AudioStreamPlayback> playing_stream = player->get_stream_playback();
+	const GdFloat position = audio->get_timer(playback);
+	audio->set_pitch(object, 1.5f);
+	CHECK_EQ(audio->get_pitch(object), 1.5f);
+	CHECK_EQ(player->get_pitch_scale(), 1.5f);
+	CHECK(player->get_stream_playback() == playing_stream);
+	CHECK_EQ(audio->get_timer(playback), position);
+	CHECK(audio->is_playing(playback));
 
 	audio->pause(playback);
+	audio->set_pitch(object, 0.5f);
+	CHECK_EQ(player->get_pitch_scale(), 0.5f);
+	CHECK(player->get_stream_playback() == playing_stream);
+	CHECK_EQ(audio->get_timer(playback), position);
 	CHECK(player->get_stream_paused());
 	CHECK_FALSE(player->is_playing());
 	CHECK(audio->is_playing(playback));
@@ -144,6 +162,46 @@ TEST_CASE("[SceneTree][SPX] Paused audio retains its playback lifetime") {
 	}
 	SUBCASE("Destroy the audio object") {
 		audio->destroy_audio(object);
+	}
+	SUBCASE("Pitch updates concurrent, looping and future playbacks") {
+		const GdInt looping = audio->play_with_attenuation(
+				object, "res://spx_paused_audio_test.wav", 0, 0, 100);
+		REQUIRE(looping != 0);
+		players = root->find_children("*", "AudioStreamPlayer2D", true, false);
+		REQUIRE_EQ(players.size(), 2);
+		AudioStreamPlayer2D *loop_player =
+				Object::cast_to<AudioStreamPlayer2D>(players[1]);
+		REQUIRE(loop_player != nullptr);
+		CHECK_EQ(loop_player->get_pitch_scale(), 0.5f);
+		start_stream_playback(loop_player, 0.25f);
+		audio->set_loop(looping, true);
+		const Ref<AudioStreamPlayback> loop_stream = loop_player->get_stream_playback();
+		const GdFloat loop_position = audio->get_timer(looping);
+		audio->set_pitch(object, 2.0f);
+		CHECK_EQ(player->get_pitch_scale(), 2.0f);
+		CHECK(player->get_stream_paused());
+		CHECK(player->get_stream_playback() == playing_stream);
+		CHECK_EQ(loop_player->get_pitch_scale(), 2.0f);
+		CHECK(loop_player->get_stream_playback() == loop_stream);
+		CHECK_EQ(audio->get_timer(looping), loop_position);
+		CHECK(audio->is_playing(looping));
+		CHECK(audio->get_loop(looping));
+		loop_player->stop();
+		audio->on_update(0.1f);
+		CHECK(audio->is_playing(looping));
+		CHECK_EQ(loop_player->get_pitch_scale(), 2.0f);
+		audio->stop_all();
+	}
+	SUBCASE("Pitch ignores queued players") {
+		player->queue_free();
+		audio->set_pitch(object, 2.0f);
+		CHECK_EQ(player->get_pitch_scale(), 0.5f);
+		audio->on_update(0.1f);
+	}
+	SUBCASE("Pitch tolerates deleted players") {
+		memdelete(player);
+		audio->set_pitch(object, 2.0f);
+		audio->on_update(0.1f);
 	}
 	CHECK_FALSE(audio->is_playing(playback));
 }

@@ -36,6 +36,10 @@
 #include "spx_engine.h"
 #include "spx_res_mgr.h"
 
+#ifdef WEB_ENABLED
+extern "C" void spx_audio_sample_bus_set_pan(int p_bus, float p_pan);
+#endif
+
 StringName SpxAudioBusPool::STR_BUS_MASTER;
 StringName SpxAudioBusPool::STR_BUS_SFX;
 StringName SpxAudioBusPool::STR_BUS_MUSIC;
@@ -43,11 +47,46 @@ StringName SpxAudioBusPool::STR_BUS_MUSIC;
 namespace {
 constexpr char SPX_BUS_PREFIX[] = "_spx_audio_bus_";
 
+class SpxAudioPannerInstance : public AudioEffectInstance {
+	Ref<AudioEffectPanner> panner;
+
+public:
+	explicit SpxAudioPannerInstance(const Ref<AudioEffectPanner> &p_panner) :
+			panner(p_panner) {}
+
+	void process(const AudioFrame *p_src_frames, AudioFrame *p_dst_frames, int p_frame_count) override {
+		const float pan = panner->get_pan();
+		if (pan == 0.0f) {
+			// Scratch bypasses the effect at zero, preserving the original stereo image.
+			for (int i = 0; i < p_frame_count; i++) {
+				p_dst_frames[i] = p_src_frames[i];
+			}
+			return;
+		}
+
+		const double angle = (pan + 1.0) * Math_PI / 4.0;
+		const AudioFrame gains(Math::cos(angle), Math::sin(angle));
+		for (int i = 0; i < p_frame_count; i++) {
+			// Scratch's ChannelMerger downmixes each input to mono before panning.
+			const float mono = (p_src_frames[i].left + p_src_frames[i].right) * 0.5f;
+			p_dst_frames[i] = gains * mono;
+		}
+	}
+};
+
+// Uses Scratch's equal-power panning curve.
+class SpxAudioPanner : public AudioEffectPanner {
+public:
+	Ref<AudioEffectInstance> instantiate() override {
+		return memnew(SpxAudioPannerInstance(Ref<AudioEffectPanner>(this)));
+	}
+};
+
 Ref<AudioEffectPanner> find_panner(AudioServer *p_audio_server, int p_bus_id) {
 	const int effect_count = p_audio_server->get_bus_effect_count(p_bus_id);
 	for (int i = 0; i < effect_count; i++) {
-		Ref<AudioEffect> effect = p_audio_server->get_bus_effect(p_bus_id, i);
-		if (effect.is_valid() && effect->is_class("AudioEffectPanner")) {
+		Ref<AudioEffectPanner> effect = p_audio_server->get_bus_effect(p_bus_id, i);
+		if (effect.is_valid()) {
 			return effect;
 		}
 	}
@@ -210,18 +249,20 @@ void SpxAudioBusPool::set_pan(const StringName &p_name, GdFloat p_pan) {
 		return;
 	}
 
-	// Clamp pan between -1 and 1
 	p_pan = CLAMP(p_pan, -1.0f, 1.0f);
 
 	AudioServer *audio_server = AudioServer::get_singleton();
 	Ref<AudioEffectPanner> panner = find_panner(audio_server, bus_id);
 	if (panner.is_null()) {
-		panner.instantiate();
+		panner = memnew(SpxAudioPanner);
 		audio_server->add_bus_effect(bus_id, panner);
 	}
 
-	// Set the pan value
 	panner->set_pan(p_pan);
+#ifdef WEB_ENABLED
+	// Web sample playback bypasses Godot's effect processing.
+	spx_audio_sample_bus_set_pan(bus_id, p_pan);
+#endif
 }
 
 GdFloat SpxAudioBusPool::get_pan(const StringName &p_name) {
@@ -280,6 +321,9 @@ void SpxAudioBusPool::reset_bus(int p_id) {
 	if (panner.is_valid()) {
 		panner->set_pan(0.0);
 	}
+#ifdef WEB_ENABLED
+	spx_audio_sample_bus_set_pan(p_id, 0.0f);
+#endif
 }
 
 int SpxAudioBusPool::get_valid_bus_id(const StringName &p_name) const {

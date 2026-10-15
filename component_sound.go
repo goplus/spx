@@ -108,6 +108,10 @@ func (s *soundComponent) changeSoundEffect(kind SoundEffectKind, delta float64) 
 	s.sprite.g.changeSoundEffect(s.soundObj, kind, delta)
 }
 
+func (s *soundComponent) clearSoundEffects() {
+	s.sprite.g.clearSoundEffects(s.soundObj)
+}
+
 // ============================================================================
 // Internal Playback Management
 // ============================================================================

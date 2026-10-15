@@ -19,6 +19,7 @@ package audio
 import (
 	"math"
 
+	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
@@ -233,15 +234,20 @@ func (m *Manager) GetPan(soundObj engine.Object) float64 {
 }
 
 func (m *Manager) SetPan(soundObj engine.Object, value float64) {
-	m.backend.SetPan(soundObj, value/100)
+	m.backend.SetPan(soundObj, clampControl(value, -100, 100)/100)
 }
 
 func (m *Manager) GetPitch(soundObj engine.Object) float64 {
-	return pitchScaleToEffect(m.backend.GetPitch(soundObj))
+	scale := m.backend.GetPitch(soundObj)
+	if scale <= 0 {
+		return 0
+	}
+	return pitchStepsPerOctave * math.Log2(scale)
 }
 
 func (m *Manager) SetPitch(soundObj engine.Object, value float64) {
-	m.backend.SetPitch(soundObj, pitchEffectToScale(value))
+	value = clampControl(value, -360, 360)
+	m.backend.SetPitch(soundObj, math.Pow(2, value/pitchStepsPerOctave))
 }
 
 func (m *Manager) GetVolume(soundObj engine.Object) float64 {
@@ -249,14 +255,13 @@ func (m *Manager) GetVolume(soundObj engine.Object) float64 {
 }
 
 func (m *Manager) SetVolume(soundObj engine.Object, value float64) {
-	val := value / 100
-	if val <= 0 {
-		val = 0.01
-	}
-	m.backend.SetVolume(soundObj, val)
+	m.backend.SetVolume(soundObj, clampControl(value, 0, 100)/100)
 }
 
 func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
+	if math.IsNaN(delta) {
+		delta = 0
+	}
 	m.SetVolume(soundObj, m.GetVolume(soundObj)+delta)
 }
 
@@ -344,13 +349,9 @@ func (m *Manager) preparePlaybacksForRelease(soundObj engine.Object) {
 	}
 }
 
-func pitchEffectToScale(value float64) float64 {
-	return math.Pow(2, value/pitchStepsPerOctave)
-}
-
-func pitchScaleToEffect(scale float64) float64 {
-	if scale <= 0 {
-		return 0
+func clampControl(value, low, high float64) float64 {
+	if math.IsNaN(value) {
+		value = 0
 	}
-	return pitchStepsPerOctave * math.Log2(scale)
+	return mathf.Clamp(value, low, high)
 }

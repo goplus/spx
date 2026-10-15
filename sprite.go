@@ -366,6 +366,7 @@ type Sprite interface {
 	GetSoundEffect(kind SoundEffectKind) float64
 	SetSoundEffect(kind SoundEffectKind, value float64)
 	ChangeSoundEffect(kind SoundEffectKind, delta float64)
+	ClearSoundEffects()
 
 	Play__0(name SoundName)
 	Play__1(name SoundName, loop bool)
