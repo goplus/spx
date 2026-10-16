@@ -397,6 +397,137 @@ func TestRepositoryWebBridgeKeepsCrossCompilationABIStable(t *testing.T) {
 	require.NotContains(t, audioLibrary, "positionWorker.onMessage")
 }
 
+func TestRepositoryWebSampleBusPanning(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node.js is required to execute the Web audio library")
+	}
+	library, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "godot_modules", "spx", "web", "js", "libs", "library_godot_audio.js"))
+	require.NoError(t, err)
+	script := `const assert = require('node:assert/strict');
+const vm = require('node:vm');
+// Web Audio uses different downmix gains for stereo and six-channel input.
+function downmix(channels) {
+    if (channels.length === 6) {
+        const [left, right, center, , rearLeft, rearRight] = channels;
+        return Math.SQRT1_2 * (left + right) + center + 0.5 * (rearLeft + rearRight);
+    }
+    return channels.length === 1 ? channels[0] : (channels[0] + channels[1]) / 2;
+}
+class AudioNode {
+    constructor(channels = 0) {
+        this.channels = channels;
+        this.inputs = [];
+        this.outputs = [];
+        this.gain = {value: 1};
+    }
+    connect(target, output = 0, input = 0) {
+        assert.equal(output, 0);
+        const edge = {source: this, target, input};
+        this.outputs.push(edge);
+        target.inputs.push(edge);
+        return target;
+    }
+    disconnect() {
+        for (const edge of this.outputs) {
+            edge.target.inputs = edge.target.inputs.filter(e => e !== edge);
+        }
+        this.outputs = [];
+    }
+    render() {
+        if (this.frame) return this.frame;
+        if (this.channels) {
+            const result = Array(this.channels).fill(0);
+            for (const edge of this.inputs) result[edge.input] += downmix(edge.source.render());
+            return result;
+        }
+        const signals = this.inputs.map(edge => edge.source.render());
+        const explicit = this.channelCountMode === 'explicit';
+        const count = explicit ? this.channelCount : Math.max(2, ...signals.map(s => s.length));
+        if (explicit) assert.equal(this.channelInterpretation, 'discrete');
+        return Array.from({length: count}, (_, i) =>
+            signals.reduce((sum, signal) => sum + (signal[i] || 0), 0) * this.gain.value);
+    }
+}
+const context = vm.createContext({
+    autoAddDeps() {},
+    mergeInto(target, library) { Object.assign(target, library); },
+    LibraryManager: {library: {}},
+});
+vm.runInContext(` + strconv.Quote(string(library)) + `, context);
+const bindings = context.LibraryManager.library;
+const audio = context.GodotAudio = bindings.$GodotAudio;
+audio.ctx = {
+    createGain: () => new AudioNode(),
+    createChannelMerger: channels => new AudioNode(channels),
+    destination: new AudioNode(),
+};
+audio.buses = [];
+audio.Bus.setCount(3);
+const bus = audio.Bus.getBus(1), sender = audio.Bus.getBus(2);
+const frame = (left, right) => [left, right, 0, 0, 0, 0];
+const source = new AudioNode();
+source.frame = frame(1, 0);
+const sample = {getOutputNode: () => source};
+bus.addSampleNode(sample);
+const input = bus.getInputNode(), connection = source.outputs[0];
+const setPan = pan => bindings.spx_audio_sample_bus_set_pan(bus.getId(), pan);
+function expectOutput(expected) {
+    const actual = bus.getOutputNode().render();
+    expected.forEach((value, i) => {
+        assert.ok(Math.abs(actual[i] - value) < 1e-6, actual + ' != ' + expected);
+    });
+}
+assert.equal(bindings.spx_audio_sample_bus_set_pan__sig, 'vif');
+assert.equal(bindings.spx_audio_sample_bus_set_pan__proxy, 'sync');
+setPan(0);
+assert.equal(bus._panner, null);
+for (const [pan, leftGain, rightGain] of [
+    [-1, 1, 0], [-0.5, 0.92387953, 0.38268343],
+    [0.5, 0.38268343, 0.92387953],
+    [1, 0, 1], [0, 0, 0],
+]) {
+    setPan(pan);
+    for (const [left, right] of [[1, 0], [0, 1], [1, 1], [1, -1], [-0.25, -0.75]]) {
+        source.frame = frame(left, right);
+        const mono = (left + right) / 2;
+        expectOutput(pan === 0 ? [left, right] : [mono * leftGain, mono * rightGain]);
+    }
+    assert.equal(bus.getInputNode(), input);
+    assert.equal(source.outputs.length, 1);
+    assert.equal(source.outputs[0], connection);
+    assert.equal(bus._sampleNodes.has(sample), true);
+}
+// Reset and reuse nodes while the source remains connected.
+const panner = bus._panner;
+source.frame = frame(1, 0);
+for (const pan of [0.5, 0, 0, -1]) setPan(pan);
+assert.equal(bus._panner, panner);
+expectOutput([0.5, 0]);
+audio.set_sample_bus_volume_db(bus.getId(), 20 * Math.log10(0.5));
+expectOutput([0.25, 0]);
+audio.set_sample_bus_mute(bus.getId(), true);
+expectOutput([0, 0]);
+audio.set_sample_bus_mute(bus.getId(), false);
+audio.set_sample_bus_solo(sender.getId(), true);
+expectOutput([0, 0]);
+audio.set_sample_bus_solo(sender.getId(), false);
+expectOutput([0.25, 0]);
+// Bus sends and later samples enter the same panner.
+audio.set_sample_bus_send(sender.getId(), bus.getId());
+const incoming = new AudioNode();
+incoming.frame = frame(0, 1);
+sender.addSampleNode({getOutputNode: () => incoming});
+expectOutput([0.5, 0]);
+setPan(0);
+expectOutput([0.5, 0.5]);
+for (const invalidBus of [-1, 100]) bindings.spx_audio_sample_bus_set_pan(invalidBus, 0.5);
+expectOutput([0.5, 0.5]);
+`
+	output, err := exec.Command(node, "-e", script).CombinedOutput()
+	require.NoError(t, err, "%s", output)
+}
+
 func TestIndependentNativeBuffersPreserveOrderingAndAccess(t *testing.T) {
 	dir := t.TempDir()
 	const params = "const GdObj *objs, int count, const uint8_t *mask_data, int mask_len, float *out, int out_len, int64_t *indices, int indices_len"

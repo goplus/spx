@@ -166,6 +166,65 @@ TEST_CASE("[Audio][SPX] Audio bus pool owns, reuses, resets, and removes its bus
 	CHECK_EQ(audio_server->get_bus_count(), 1);
 }
 
+TEST_CASE("[Audio][SPX] Panning follows Scratch equal-power mixing and zero bypass") {
+	AudioServer *audio_server = AudioServer::get_singleton();
+	REQUIRE(audio_server != nullptr);
+	REQUIRE(SpxAudioBusPool::get_singleton() == nullptr);
+	SpxAudioBusPool::init();
+	struct Cleanup {
+		~Cleanup() { SpxAudioBusPool::shutdown(); }
+	} cleanup;
+	SpxAudioBusPool *pool = SpxAudioBusPool::get_singleton();
+	const StringName bus = pool->alloc();
+	pool->set_pan(bus, 0.5f);
+	const int bus_id = audio_server->get_bus_index(bus);
+	REQUIRE(bus_id > 0);
+	REQUIRE_EQ(audio_server->get_bus_effect_count(bus_id), 1);
+	Ref<AudioEffectInstance> effect = audio_server->get_bus_effect(bus_id, 0)->instantiate();
+	REQUIRE(effect.is_valid());
+
+	const AudioFrame input[] = {
+		AudioFrame(1, 0), AudioFrame(0, 1), AudioFrame(1, 1),
+		AudioFrame(1, -1), AudioFrame(0.25f, 0.75f), AudioFrame(-0.25f, -0.75f),
+	};
+	const float mono[] = { 0.5f, 0.5f, 1.0f, 0.0f, 0.5f, -0.5f };
+	constexpr int frame_count = sizeof(input) / sizeof(input[0]);
+	static_assert(sizeof(mono) / sizeof(mono[0]) == frame_count);
+	AudioFrame output[frame_count];
+	const struct {
+		float pan;
+		float left_gain;
+		float right_gain;
+	} cases[] = {
+		{ -1.0f, 1.0f, 0.0f },
+		{ -0.5f, 0.92387953f, 0.38268343f },
+		{ 0.5f, 0.38268343f, 0.92387953f },
+		{ 1.0f, 0.0f, 1.0f },
+		{ 0.0f, 0.0f, 0.0f }, // Clearing pan restores stereo instead of downmixing.
+	};
+	for (const auto &test : cases) {
+		pool->set_pan(bus, test.pan);
+		effect->process(input, output, frame_count);
+		for (int i = 0; i < frame_count; i++) {
+			const AudioFrame expected = test.pan == 0.0f ? input[i] : AudioFrame(mono[i] * test.left_gain, mono[i] * test.right_gain);
+			CHECK(Math::is_equal_approx(output[i].left, expected.left));
+			CHECK(Math::is_equal_approx(output[i].right, expected.right));
+		}
+		if (test.pan != 0.0f) {
+			CHECK(Math::is_equal_approx(output[2].left * output[2].left + output[2].right * output[2].right, 1.0f));
+		}
+	}
+
+	pool->set_pan(bus, 0.5f);
+	pool->free(bus);
+	CHECK_EQ(pool->alloc(), bus);
+	effect->process(input, output, frame_count);
+	for (int i = 0; i < frame_count; i++) {
+		CHECK_EQ(output[i].left, input[i].left);
+		CHECK_EQ(output[i].right, input[i].right);
+	}
+}
+
 } // namespace TestSpxAudioBusPool
 
 #endif // TEST_SPX_AUDIO_BUS_POOL_H

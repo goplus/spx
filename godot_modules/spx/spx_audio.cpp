@@ -184,7 +184,12 @@ void SpxAudio::set_timer(GdInt aid, GdFloat time) {
 
 void SpxAudio::set_pitch(GdFloat pitch) {
 	cur_pitch = pitch;
-	// is need to update the pitch of the all audios ?
+	for (const KeyValue<GdInt, Voice> &entry : voices) {
+		AudioStreamPlayer2D *player = _get_aid_audio(entry.key);
+		if (player != nullptr) {
+			player->set_pitch_scale(pitch);
+		}
+	}
 }
 
 GdFloat SpxAudio::get_pitch() {

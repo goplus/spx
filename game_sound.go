@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"math"
+
 	internalaudio "github.com/goplus/spx/v3/internal/audio"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -223,5 +225,8 @@ func (p *Game) setSoundEffect(soundObj engine.Object, kind SoundEffectKind, valu
 }
 
 func (p *Game) changeSoundEffect(soundObj engine.Object, kind SoundEffectKind, delta float64) {
+	if math.IsNaN(delta) {
+		delta = 0
+	}
 	p.setSoundEffect(soundObj, kind, p.getSoundEffect(soundObj, kind)+delta)
 }

@@ -47,6 +47,56 @@ func (b *cloneSoundBackend) DestroyAudio(id engine.Object) {
 	delete(b.settings, id)
 }
 
+func TestSpriteClearSoundEffects(t *testing.T) {
+	type testGame struct{ Game }
+	type testSprite struct {
+		SpriteImpl
+		*testGame
+	}
+	backend := &cloneSoundBackend{}
+	game := &testGame{}
+	game.soundMgr.Init(backend)
+	game.SetVolume(60)
+	game.SetSoundEffect(SoundPanEffect, 20)
+	game.SetSoundEffect(SoundPitchEffect, 120)
+	stageSettings := backend.settings[game.audioState.SoundObj]
+
+	other := &SpriteImpl{g: &game.Game}
+	other.components.sound = &soundComponent{sprite: other}
+	other.SetVolume(40)
+	other.SetSoundEffect(SoundPanEffect, -40)
+	other.SetSoundEffect(SoundPitchEffect, -120)
+	otherSettings := backend.settings[other.sound().soundObj]
+
+	// Generated sprites embed both SpriteImpl and a game that embeds Game.
+	sprite := &testSprite{testGame: game}
+	sprite.g = &game.Game
+	sprite.components.sound = &soundComponent{sprite: &sprite.SpriteImpl}
+	allocated := backend.next
+	sprite.ClearSoundEffects()
+	if sprite.sound().soundObj != 0 || backend.next != allocated {
+		t.Fatal("clearing unused effects allocated an audio object")
+	}
+
+	sprite.SetVolume(25)
+	sprite.SetSoundEffect(SoundPanEffect, 80)
+	sprite.SetSoundEffect(SoundPitchEffect, 240)
+	sprite.ClearSoundEffects()
+	for _, tt := range []struct {
+		name     string
+		soundObj engine.Object
+		want     cloneSoundSettings
+	}{
+		{"sprite", sprite.sound().soundObj, cloneSoundSettings{volume: 0.25, pitch: 1}},
+		{"stage", game.audioState.SoundObj, stageSettings},
+		{"other sprite", other.sound().soundObj, otherSettings},
+	} {
+		if got := backend.settings[tt.soundObj]; got != tt.want {
+			t.Fatalf("%s sound settings = %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestCloneInheritsIndependentSoundEffects(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	backend := &cloneSoundBackend{}

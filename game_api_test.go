@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -180,6 +181,64 @@ func TestGameSoundHandleIsLazyReusedAndReleased(t *testing.T) {
 	}
 	if got := g.Volume(); got != 100 || backend.createCalls != 2 {
 		t.Fatalf("Volume() after release = %v with %d allocations, want 100 and 2", got, backend.createCalls)
+	}
+}
+
+func TestSoundControlChanges(t *testing.T) {
+	type soundControls interface {
+		Volume() float64
+		SetVolume(float64)
+		ChangeVolume(float64)
+		GetSoundEffect(SoundEffectKind) float64
+		SetSoundEffect(SoundEffectKind, float64)
+		ChangeSoundEffect(SoundEffectKind, float64)
+	}
+	for _, target := range []string{"game", "sprite"} {
+		t.Run(target, func(t *testing.T) {
+			var g Game
+			g.soundMgr.Init(&fakeAudioBackend{})
+			var controls soundControls = &g
+			if target == "sprite" {
+				sprite := &SpriteImpl{g: &g}
+				sprite.components.sound = &soundComponent{sprite: sprite}
+				controls = sprite
+			}
+			for _, control := range []struct {
+				name        string
+				set, change func(float64)
+				get         func() float64
+				low, high   float64
+			}{
+				{"volume", controls.SetVolume, controls.ChangeVolume, controls.Volume, 0, 100},
+				{"pan",
+					func(v float64) { controls.SetSoundEffect(SoundPanEffect, v) },
+					func(v float64) { controls.ChangeSoundEffect(SoundPanEffect, v) },
+					func() float64 { return controls.GetSoundEffect(SoundPanEffect) }, -100, 100},
+				{"pitch",
+					func(v float64) { controls.SetSoundEffect(SoundPitchEffect, v) },
+					func(v float64) { controls.ChangeSoundEffect(SoundPitchEffect, v) },
+					func() float64 { return controls.GetSoundEffect(SoundPitchEffect) }, -360, 360},
+			} {
+				t.Run(control.name, func(t *testing.T) {
+					control.set(control.high - 10)
+					for _, step := range []struct {
+						name        string
+						delta, want float64
+					}{
+						{"NaN preserves value", math.NaN(), control.high - 10},
+						{"upper bound", 30, control.high},
+						{"decrease after upper bound", -10, control.high - 10},
+						{"lower bound", -1000, control.low},
+						{"increase after lower bound", 10, control.low + 10},
+					} {
+						control.change(step.delta)
+						if got := control.get(); math.IsNaN(got) || math.Abs(got-step.want) >= 1e-9 {
+							t.Fatalf("%s: got %g, want %g", step.name, got, step.want)
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
