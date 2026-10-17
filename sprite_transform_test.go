@@ -98,6 +98,69 @@ func TestMotionInputsTreatNaNAsZero(t *testing.T) {
 	}
 }
 
+func TestScratchImmediateGlide(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		duration     float64
+		x, y         float64
+		wantX, wantY float64
+	}{
+		{name: "zero", duration: 0, x: 30, y: 40, wantX: 30, wantY: 40},
+		{name: "negative", duration: -1, x: 30, y: 40, wantX: 30, wantY: 40},
+		{name: "NaN duration", duration: math.NaN(), x: 30, y: 40, wantX: 30, wantY: 40},
+		{name: "NaN x", x: math.NaN(), y: 40, wantX: 0, wantY: 40},
+		{name: "NaN y", x: 30, y: math.NaN(), wantX: 30, wantY: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co := setupRuntimeScheduler(t)
+			sprite := newTestTransformSprite(12, -8)
+			finished := false
+			thread := co.Create(sprite, func(coroutine.Thread) {
+				sprite.GlideToXYpos(tt.x, tt.y, tt.duration)
+				finished = true
+			})
+			co.JoinYieldedOrDone(thread)
+			if !finished || sprite.Xpos() != tt.wantX || sprite.Ypos() != tt.wantY {
+				t.Fatalf("immediate glide: finished=%v position=(%v,%v)", finished, sprite.Xpos(), sprite.Ypos())
+			}
+			if sprite.animation().getCurTweenState() != nil {
+				t.Fatal("immediate glide left an active tween")
+			}
+		})
+	}
+}
+
+func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
+	itime.Start(nil)
+	t.Cleanup(func() { itime.Start(nil) })
+	co := setupRuntimeScheduler(t)
+	sprite := newTestTransformSprite(12, -8)
+	finished := false
+	itime.Update(0.5, 30)
+	thread := co.Create(sprite, func(coroutine.Thread) {
+		sprite.GlideToXYpos(30, 40, 1)
+		finished = true
+	})
+	co.Update()
+	if finished || sprite.Xpos() != 21 || sprite.Ypos() != 16 {
+		t.Fatalf("halfway glide: finished=%v position=(%v,%v)", finished, sprite.Xpos(), sprite.Ypos())
+	}
+	if sprite.animation().getCurTweenState() == nil {
+		t.Fatal("positive-duration glide has no active tween")
+	}
+	itime.Update(0.5, 30)
+	co.Update()
+	if sprite.Xpos() != 30 || sprite.Ypos() != 40 {
+		t.Fatalf("final glide position=(%v,%v), want (30,40)", sprite.Xpos(), sprite.Ypos())
+	}
+	itime.Update(0, 30)
+	co.Update()
+	if !finished || sprite.animation().getCurTweenState() != nil {
+		t.Fatal("glide did not finish and release its tween after the final frame")
+	}
+	co.Join(thread)
+}
+
 func TestSpriteDirectionToPosNormalizesAngle(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 
