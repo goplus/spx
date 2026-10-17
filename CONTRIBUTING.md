@@ -226,10 +226,11 @@ go tool cover -html=coverage.out
 
 Keep the profile path relative so the root module and `cmd/ispx` write separate
 files; an absolute path would overwrite the first report. CI also records
-Node/WASM Go binding tests and `.github/scripts` Go tools in separate profiles.
+Node/WASM Go tests and `.github/scripts` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests (excluding `internal/webffi`) and
-`internal/gdengine/binding/web` under Node/WASM, subject to Go build tags.
+`internal/coroutine`, `internal/gdengine/binding/web`, and `pkg/ispx` under
+Node/WASM, subject to Go build tags.
 It excludes Godot end-to-end, browser, C++, JavaScript, and other-platform
 coverage. The nested `cmd/ispx` module is tested separately, but its Web-only
 entry point and the `internal/cmd/codegen` module are outside this coverage.

@@ -127,7 +127,7 @@ func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
 	} {
 		game.setDebugFlags(flags)
 		co.Update()
-		if got, want := co.GetLastUpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
+		if got, want := co.UpdateStats().GCStatsEnabled, flags&DbgFlagPerf != 0; got != want {
 			t.Errorf("flags %v: performance statistics enabled = %v, want %v", flags, got, want)
 		}
 		if got, want := game.debugState.DebugInstr, flags&DbgFlagInstr != 0; got != want {

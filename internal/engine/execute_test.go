@@ -16,6 +16,13 @@ type executeWorkerPlatform struct{ gdx.IPlatformMgr }
 
 func (executeWorkerPlatform) IsMainThread() bool { return false }
 
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
 func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
 	t.Helper()
 	co := coroutine.New(nil)
@@ -23,7 +30,7 @@ func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
 	SetCoroutines(co)
 	gdx.PlatformMgr = executeWorkerPlatform{}
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if err := co.RunAfterStop(testContext(t), nil); err != nil {
 			t.Error("Execute test coroutines did not stop")
 		}
 		SetCoroutines(previous)
@@ -63,7 +70,7 @@ func TestExecuteReturnsWhenStoppedBeforeStart(t *testing.T) {
 	deadline := time.Now().Add(time.Second)
 	for !stopped {
 		co.StopIf(func(thread coroutine.Thread) bool {
-			if thread.Obj == "pending" {
+			if thread.Owner == "pending" {
 				stopped = true
 				return true
 			}
@@ -88,7 +95,9 @@ func TestExecuteReturnsWhenStoppedBeforeStart(t *testing.T) {
 func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 	co := setupExecuteTest(t)
 	blockExecuteScheduler(t, co)
-	if co.RunAfterStopAll(10*time.Millisecond, nil) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if err := co.RunAfterStop(ctx, nil); err == nil {
 		t.Fatal("shutdown completed while the blocker was running")
 	}
 	returned := make(chan struct{})
@@ -137,7 +146,7 @@ func TestExecuteWaitsForCompletionWithDefaultOwner(t *testing.T) {
 	go func() {
 		Execute(nil, func(ctx context.Context, owner any) {
 			callbackContext = ctx
-			if !IsInCoroutine() || owner != game || GetCoroutineOwner() != game {
+			if !IsInCoroutine() || owner != game || currentThread().Owner != game {
 				t.Error("Execute did not use a managed coroutine owned by the game")
 			}
 			close(started)

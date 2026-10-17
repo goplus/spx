@@ -101,7 +101,7 @@ func currentFrameCallbackOrigin() frameCallbackOrigin {
 	origin := frameCallbackOrigin{owner: GetGame()}
 	if thread := currentThread(); thread != nil {
 		origin.thread = thread
-		origin.owner = thread.Obj
+		origin.owner = thread.Owner
 	}
 	return origin
 }
@@ -137,6 +137,6 @@ func executeFrameCallback(callback frameCallback) {
 	// The engine thread cannot wait here because the callback may need
 	// WaitMainThread. Coroutine callers still preserve immediate semantics.
 	if gco.IsInCoroutine() {
-		gco.JoinYieldedOrDone(thread)
+		gco.JoinFirstSlice(thread)
 	}
 }

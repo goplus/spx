@@ -39,7 +39,7 @@ func (p *scriptEventBindings) Stop(kind StopKind) {
 		caller = gco.Current()
 	}
 	shouldStop := func(thread coroutine.Thread) bool {
-		return filter(thread.Obj, thread == caller)
+		return filter(thread.Owner, thread == caller)
 	}
 
 	if kind == AllStop {

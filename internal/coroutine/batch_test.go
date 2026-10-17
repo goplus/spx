@@ -47,6 +47,84 @@ func TestStartBatchRejectsInvalidMode(t *testing.T) {
 	}
 }
 
+func TestStartBatchRejectedByShutdown(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		mode BatchMode
+	}{
+		{"async", BatchAsync},
+		{"done", BatchWaitDone},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			checkDrainReentry(t, func() {
+				co := New(nil)
+				task := Task{
+					RegisterInvocation: func(Thread) func() {
+						t.Error("rejected batch ran its registration callback")
+						return nil
+					},
+					Run: func(Thread) { t.Error("rejected batch ran a script") },
+				}
+				err := co.RunAfterStop(drainTestContext(t), func() {
+					threads := co.StartBatch([]Task{task, task}, test.mode)
+					if len(threads) != 2 {
+						t.Errorf("rejected batch returned %d threads, want 2", len(threads))
+					}
+					for _, thread := range threads {
+						if !thread.Stopped() || thread.Context().Err() == nil {
+							t.Error("rejected batch returned an uncanceled thread")
+						}
+						for _, done := range []<-chan struct{}{thread.firstSliceDone, thread.done} {
+							select {
+							case <-done:
+							default:
+								t.Error("rejected batch returned an unfinished thread")
+							}
+						}
+					}
+					if co.hasPendingWork() || !co.admissionClosed() {
+						t.Error("rejected batch registered work or reopened admission")
+					}
+				})
+				if err != nil || co.admissionClosed() {
+					t.Errorf("shutdown did not finish and reopen admission: %v", err)
+				}
+			})
+		})
+	}
+}
+
+func TestStartBatchWaitFirstSliceRequiresManagedCaller(t *testing.T) {
+	co := New(nil)
+	var registered, ran atomic.Int32
+	var panicValue any
+	func() {
+		defer func() { panicValue = recover() }()
+		co.StartBatch([]Task{{
+			RegisterInvocation: func(Thread) func() {
+				registered.Add(1)
+				return nil
+			},
+			Run: func(Thread) { ran.Add(1) },
+		}}, BatchWaitFirstSlice)
+	}()
+	if want := "coroutine: FirstSlice requires a managed caller"; panicValue != want {
+		t.Errorf("host FirstSlice panic = %v, want %q", panicValue, want)
+	}
+	if got := co.LastThreadID(); got != 0 {
+		t.Errorf("host FirstSlice allocated %d threads before rejection", got)
+	}
+	if err := co.RunAfterStop(drainTestContext(t), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := registered.Load(); got != 0 {
+		t.Errorf("host FirstSlice registered %d invocations before rejection", got)
+	}
+	if got := ran.Load(); got != 0 {
+		t.Errorf("host FirstSlice ran %d tasks before rejection", got)
+	}
+}
+
 func TestStartBatchWaitsForOrderedFirstSlices(t *testing.T) {
 	co := New(nil)
 	releaseFirst := make(chan struct{})
@@ -159,7 +237,7 @@ func TestStartBatchWaitFirstSliceSurvivesFinalCancellation(t *testing.T) {
 				Owner: "first",
 				Run: func(Thread) {
 					order = append(order, "first")
-					co.StopIf(func(thread Thread) bool { return thread.Obj == "last" })
+					co.StopIf(func(thread Thread) bool { return thread.Owner == "last" })
 				},
 			},
 			{
@@ -251,7 +329,7 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 	}
 	stopDone := make(chan bool, 1)
 	go func() {
-		stopDone <- co.StopAllAndWait(time.Second)
+		stopDone <- co.RunAfterStop(drainTestContext(t), nil) == nil
 	}()
 	deadline := time.Now().Add(time.Second)
 	for !thread.Stopped() {
@@ -461,7 +539,7 @@ func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration Goexit did not unwind the batch")
 	}
-	if !co.waitForDrain(time.Second, nil) {
+	if co.drain(drainTestContext(t)) != nil {
 		t.Fatal("registration Goexit leaked its batch")
 	}
 	if got := co.pendingSetups.Load(); got != 0 {
@@ -515,7 +593,7 @@ func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration panic did not return")
 	}
-	if !co.waitForDrain(time.Second, nil) {
+	if co.drain(drainTestContext(t)) != nil {
 		t.Fatal("registration panic leaked its batch")
 	}
 	if got := ran.Load(); got != 0 {

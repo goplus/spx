@@ -19,7 +19,6 @@ package coroutine
 import (
 	"sync/atomic"
 	"testing"
-	"time"
 
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -27,7 +26,7 @@ import (
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
-	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
+	t.Cleanup(func() { co.RunAfterStop(drainTestContext(t), nil) })
 	iterations := 0
 	th := co.Create(nil, func(me Thread) {
 		for {
@@ -35,7 +34,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 			co.YieldLoopFor(me)
 		}
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	if iterations <= 1 || th.Stopped() {
 		t.Fatalf("iterations = %d, stopped = %v", iterations, th.Stopped())
@@ -51,7 +50,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
-	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
+	t.Cleanup(func() { co.RunAfterStop(drainTestContext(t), nil) })
 
 	var rounds []uint64
 	th := co.Create(nil, func(me Thread) {
@@ -60,7 +59,7 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 			co.YieldLoopFor(me)
 		}
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 
 	if len(rounds) != 3 || rounds[1] <= rounds[0] || rounds[2] <= rounds[1] {
@@ -71,14 +70,14 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
-	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
+	t.Cleanup(func() { co.RunAfterStop(drainTestContext(t), nil) })
 
 	resumed := false
 	th := co.Create(nil, func(me Thread) {
 		co.YieldToNextRoundFor(me)
 		resumed = true
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	if resumed {
 		t.Fatal("passive round wait admitted its own round")
@@ -94,7 +93,7 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
-	t.Cleanup(func() { co.StopAllAndWait(time.Second) })
+	t.Cleanup(func() { co.RunAfterStop(drainTestContext(t), nil) })
 
 	passiveResumed := false
 	passive := co.Create(nil, func(me Thread) {
@@ -106,7 +105,7 @@ func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 		co.YieldLoopFor(me)
 		loopResumed = true
 	})
-	joinYieldedOrDoneAll(co, []Thread{passive, loop})
+	joinFirstSliceAll(co, []Thread{passive, loop})
 	co.Update()
 	if !passiveResumed || !loopResumed {
 		t.Fatalf("same-frame round resumed passive=%v loop=%v", passiveResumed, loopResumed)
@@ -118,13 +117,13 @@ func TestRunBetweenScriptsSkipsCanceledMainThreadCall(t *testing.T) {
 	canceled := co.newThread("canceled")
 	canceled.stopped.Store(true)
 	var called atomic.Bool
-	co.enqueuePriorityJob(&WaitJob{
-		Th:   canceled,
-		Type: waitTypeMainThread,
-		Call: func() { called.Store(true) },
+	co.enqueuePriorityJob(&waitJob{
+		thread: canceled,
+		kind:   waitMainThread,
+		call:   func() { called.Store(true) },
 	})
 
-	co.runMainThreadJob(co.takeMainThreadJob())
+	co.pumpMainThread()
 	if called.Load() {
 		t.Fatal("canceled coroutine's main-thread callback ran")
 	}

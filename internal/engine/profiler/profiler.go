@@ -129,17 +129,6 @@ func EndSample(sampleName ...string) {
 		(gco != nil && timingData["CoroUpdateJobs"].ActualCall > 10 &&
 			timingData["CoroUpdateJobs"].ActualCall > 2*getCoroStatsTotal()) {
 		printTimingInfo()
-
-		// If detailed statistics printing is enabled, print coroutine statistics
-		if printDetailedStats && gco != nil {
-			coroInfo := TimingInfo{
-				PreCall:    timingData["CoroUpdateJobs"].PreCall,
-				ActualCall: timingData["CoroUpdateJobs"].ActualCall,
-				PostCall:   timingData["CoroUpdateJobs"].PostCall,
-				GCStats:    timingData["CoroUpdateJobs"].GCStats,
-			}
-			printCoroStats(coroInfo)
-		}
 	}
 
 	lastUpdateDuration = total
@@ -201,7 +190,7 @@ func getCoroStatsTotal() float64 {
 		return 0
 	}
 
-	stats := gco.GetLastUpdateStats()
+	stats := gco.UpdateStats()
 	return stats.InitTime + stats.LoopTime + stats.MoveTime
 }
 
@@ -259,76 +248,44 @@ func printCoroStats(coroInfo TimingInfo) {
 	}
 
 	// Import coroutine module statistics
-	stats := gco.GetLastUpdateStats()
-
-	// Calculate the difference between the engine's measured total time and the coroutine's internal measured time
-	coroInfo, ok := timingData["CoroUpdateJobs"]
-	if !ok {
-		return
-	}
+	stats := gco.UpdateStats()
 
 	// Calculate the engine's measured total time
 	engineMeasuredTotal := coroInfo.PreCall + coroInfo.ActualCall + coroInfo.PostCall
 
-	// The coroutine's internal measured total time may contain two types of data:
-	// 1. If there is a TotalTime field, use it as the coroutine's internal measured total time
-	// 2. Otherwise, use the sum of the parts
-	var coroInternalTotal float64
-	var coroInternalParts float64
-
-	if stats.TotalTime > 0 {
-		coroInternalTotal = stats.TotalTime
-		coroInternalParts = stats.InitTime + stats.LoopTime + stats.MoveTime
-	} else {
-		coroInternalTotal = stats.InitTime + stats.LoopTime + stats.MoveTime
-		coroInternalParts = coroInternalTotal
-	}
-
 	// Calculate the difference
-	difference := engineMeasuredTotal - coroInternalTotal
-
-	// Calculate the coroutine's internal difference
-	coroInternalDifference := 0.0
-	if stats.TotalTime > 0 {
-		coroInternalDifference = stats.TotalTime - coroInternalParts
-	}
+	difference := engineMeasuredTotal - stats.TotalTime
 
 	spxlog.Info("========== Coroutine Module Detailed Statistics ==========")
 	spxlog.Info("Engine measured total time: %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms Last total time %.3fms)",
 		engineMeasuredTotal, coroInfo.PreCall, coroInfo.ActualCall, coroInfo.PostCall, lastUpdateDuration)
-	spxlog.Info("Coroutine internal measured total time: %.3fms", coroInternalTotal)
+	spxlog.Info("Coroutine internal measured total time: %.3fms", stats.TotalTime)
 	spxlog.Info("Time difference: %.3fms (%.2f%%)",
 		difference, (difference/engineMeasuredTotal)*100)
 
-	// If there is an internal difference, display it
-	if stats.TotalTime > 0 && coroInternalDifference > 0.1 {
-		spxlog.Info("Coroutine internal difference: %.3fms (%.2f%%)",
-			coroInternalDifference, (coroInternalDifference/stats.TotalTime)*100)
-	}
-
 	spxlog.Info("Coroutine internal detailed time distribution:")
 	spxlog.Info("  Initialization: %.3fms (%.2f%%)",
-		stats.InitTime, (stats.InitTime/coroInternalTotal)*100)
+		stats.InitTime, (stats.InitTime/stats.TotalTime)*100)
 	spxlog.Info("  Main loop: %.3fms (%.2f%%)",
-		stats.LoopTime, (stats.LoopTime/coroInternalTotal)*100)
+		stats.LoopTime, (stats.LoopTime/stats.TotalTime)*100)
 
 	if stats.LoopIterations > 0 {
 		spxlog.Info("    - Loop iterations: %d", stats.LoopIterations)
 	}
 
 	spxlog.Info("    - Task processing: %.3fms (Task count: %d)",
-		stats.TaskProcessing, stats.TaskCounts)
+		stats.JobTime, stats.JobCount)
 	spxlog.Info("    - Wait time: %.3fms", stats.WaitTime)
 	spxlog.Info("  Queue movement: %.3fms (%.2f%%, Next frame tasks: %d)",
-		stats.MoveTime, (stats.MoveTime/coroInternalTotal)*100, stats.NextCount)
+		stats.MoveTime, (stats.MoveTime/stats.TotalTime)*100, stats.DeferredCount)
 
 	if stats.ExternalTime > 0 {
 		spxlog.Info("  External time: %.3fms (%.2f%%)",
-			stats.ExternalTime, (stats.ExternalTime/coroInternalTotal)*100)
+			stats.ExternalTime, (stats.ExternalTime/stats.TotalTime)*100)
 	}
 
 	if stats.GCCount > 0 {
-		spxlog.Info("  GC: %d times, Pause: %.3fms", stats.GCCount, stats.GCPauses)
+		spxlog.Info("  GC: %d times, Pause: %.3fms", stats.GCCount, stats.GCPauseTime)
 	}
 
 	// Analyze possible reasons for the difference
@@ -345,7 +302,7 @@ func printCoroStats(coroInfo TimingInfo) {
 		// Check coroutine internal GC
 		if stats.GCCount > 0 {
 			spxlog.Info("  - Coroutine internal GC: %d GCs occurred during the coroutine's measurement, total pause time %.3fms",
-				stats.GCCount, stats.GCPauses)
+				stats.GCCount, stats.GCPauseTime)
 		}
 
 		// Check function call overhead
@@ -360,7 +317,7 @@ func printCoroStats(coroInfo TimingInfo) {
 		}
 
 		// Check if there are unaccounted parts in the coroutine
-		unaccountedTime := stats.LoopTime - (stats.TaskProcessing + stats.WaitTime)
+		unaccountedTime := stats.LoopTime - (stats.JobTime + stats.WaitTime)
 		if unaccountedTime > 5 {
 			spxlog.Info("  - There are unaccounted parts in the coroutine: approximately %.3fms", unaccountedTime)
 		}

@@ -558,12 +558,12 @@ func TestQueuedRuntimeWorkRechecksPhaseBeforeRunning(t *testing.T) {
 
 	releaseScheduler := blockExecuteScheduler(t, co)
 	var calls atomic.Int32
-	Go("queued-before-close", func(context.Context) { calls.Add(1) })
+	Go("queued-before-close", func(context.Context, any) { calls.Add(1) })
 	if !beginGameClose(binding) {
 		t.Fatal("failed to close the active binding")
 	}
 	releaseScheduler()
-	if !co.RunAfterStopAll(time.Second, nil) {
+	if err := co.RunAfterStop(testContext(t), nil); err != nil {
 		t.Fatal("queued runtime work did not drain")
 	}
 	if got := calls.Load(); got != 0 {
@@ -581,7 +581,7 @@ func TestQueuedRuntimeWorkCannotRunInReplacementGame(t *testing.T) {
 
 	releaseScheduler := blockExecuteScheduler(t, co)
 	var calls atomic.Int32
-	Go("queued-for-first", func(context.Context) { calls.Add(1) })
+	Go("queued-for-first", func(context.Context, any) { calls.Add(1) })
 	releaseGame(first)
 	second, err := bindGame(new(bindingTestGame), new(struct{}))
 	if err != nil {
@@ -590,315 +590,11 @@ func TestQueuedRuntimeWorkCannotRunInReplacementGame(t *testing.T) {
 	t.Cleanup(func() { releaseGame(second) })
 
 	releaseScheduler()
-	if !co.RunAfterStopAll(time.Second, nil) {
+	if err := co.RunAfterStop(testContext(t), nil); err != nil {
 		t.Fatal("queued runtime work did not drain")
 	}
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("stale work ran in the replacement game: calls = %d", got)
-	}
-}
-
-func TestReloadGatesRuntimeWorkAndRestarts(t *testing.T) {
-	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { releaseGame(binding) })
-
-	var calls atomic.Int32
-	checkGated := func(phase gamePhase) {
-		t.Helper()
-		if got := binding.loadPhase(); got != phase {
-			t.Fatalf("reload phase = %d, want %d", got, phase)
-		}
-		threadID := co.LastThreadID()
-		Go("reload-go", func(context.Context) { calls.Add(1) })
-		Execute("reload-execute", func(context.Context, any) { calls.Add(1) })
-		onPause(true)
-		if calls.Load() != 0 || co.LastThreadID() != threadID || game.paused.Load() {
-			t.Fatal("reload admitted runtime work before activation finished")
-		}
-	}
-	var activated coroutine.Thread
-	err = Reload(GetGame(), time.Second, func() error {
-		checkGated(gameReloading)
-		return nil
-	}, func() error {
-		checkGated(gameReloading)
-		return nil
-	}, func() {
-		checkGated(gameReloading)
-		activated = co.Create("new-loop", func(coroutine.Thread) {
-			calls.Add(1)
-		})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	co.Join(activated)
-	Execute("after-reload", func(context.Context, any) { calls.Add(1) })
-	onPause(true)
-	if calls.Load() != 2 || !game.paused.Load() || binding.loadPhase() != gameRunning {
-		t.Fatalf("runtime after reload: calls=%d, paused=%v, phase=%d", calls.Load(), game.paused.Load(), binding.loadPhase())
-	}
-}
-
-func TestReloadPrepareFailurePreservesRunningPhase(t *testing.T) {
-	failure := errors.New("prepare failure")
-	for _, panics := range []bool{false, true} {
-		t.Run(map[bool]string{false: "error", true: "panic"}[panics], func(t *testing.T) {
-			isolateGameBinding(t)
-			binding, err := bindGame(new(bindingTestGame), new(struct{}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			func() {
-				defer func() {
-					if got := recover(); panics && got != failure || !panics && got != nil {
-						t.Fatalf("prepare panic = %v", got)
-					}
-				}()
-				err = Reload(GetGame(), time.Second, func() error {
-					if panics {
-						panic(failure)
-					}
-					return failure
-				}, func() error {
-					t.Error("failed preparation ran rebuild")
-					return nil
-				}, nil)
-			}()
-			if !panics && !errors.Is(err, failure) {
-				t.Fatalf("reload error = %v, want %v", err, failure)
-			}
-			if got := binding.loadPhase(); got != gameRunning {
-				t.Fatalf("phase after failed preparation = %d, want running", got)
-			}
-		})
-	}
-}
-
-func TestReloadWaitsForInFlightUpdate(t *testing.T) {
-	isolateGameBinding(t)
-	binding, err := bindGame(new(bindingTestGame), new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { releaseGame(binding) })
-
-	updateMu.Lock()
-	unlock := sync.OnceFunc(updateMu.Unlock)
-	t.Cleanup(unlock)
-	prepared := make(chan struct{})
-	canceled := errors.New("cancel preparation")
-	reloadDone := make(chan error, 1)
-	go func() {
-		reloadDone <- Reload(GetGame(), time.Second, func() error {
-			close(prepared)
-			return canceled
-		}, nil, nil)
-	}()
-	select {
-	case <-prepared:
-		t.Fatal("reload prepared before the in-flight update finished")
-	case <-time.After(25 * time.Millisecond):
-	}
-	unlock()
-	select {
-	case err := <-reloadDone:
-		if !errors.Is(err, canceled) {
-			t.Fatalf("reload error = %v, want %v", err, canceled)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("reload did not proceed after the update finished")
-	}
-}
-
-func TestReloadRejectsUnavailableRuntime(t *testing.T) {
-	isolateGameBinding(t)
-	owner := new(int)
-	binding, err := bindGame(new(bindingTestGame), owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { releaseGame(binding) })
-	t.Cleanup(func() { updateBusy.Store(false) })
-
-	for _, activeFrame := range []bool{false, true} {
-		updateBusy.Store(activeFrame)
-		requestedOwner := owner
-		if !activeFrame {
-			requestedOwner = new(int)
-		}
-		err := Reload(requestedOwner, time.Second, func() error {
-			t.Error("rejected reload ran preparation")
-			return nil
-		}, nil, nil)
-		if !errors.Is(err, ErrReloadUnavailable) || binding.loadPhase() != gameRunning {
-			t.Fatalf("rejected reload: error=%v, phase=%d", err, binding.loadPhase())
-		}
-	}
-}
-
-func TestReloadDefersResetUntilRebuildReturns(t *testing.T) {
-	isolateGameBinding(t)
-	setupExecuteTest(t)
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rebuildEntered := make(chan struct{})
-	releaseRebuild := make(chan struct{})
-	finishRebuild := sync.OnceFunc(func() { close(releaseRebuild) })
-	t.Cleanup(finishRebuild)
-	reloadDone := make(chan error, 1)
-	var activated atomic.Bool
-	go func() {
-		reloadDone <- Reload(GetGame(), time.Second, nil, func() error {
-			close(rebuildEntered)
-			<-releaseRebuild
-			return nil
-		}, func() { activated.Store(true) })
-	}()
-	<-rebuildEntered
-
-	resetDone := make(chan struct{})
-	go func() {
-		onReset()
-		close(resetDone)
-	}()
-	deadline := time.Now().Add(time.Second)
-	for binding.loadPhase() != gameClosing && time.Now().Before(deadline) {
-		runtime.Gosched()
-	}
-	if binding.loadPhase() != gameClosing || game.reset.Load() != 0 {
-		t.Fatal("reset did not defer cleanup until rebuild finished")
-	}
-	finishRebuild()
-	if err := <-reloadDone; !errors.Is(err, ErrReloadUnavailable) {
-		t.Fatalf("reload error = %v, want %v", err, ErrReloadUnavailable)
-	}
-	select {
-	case <-resetDone:
-	case <-time.After(time.Second):
-		t.Fatal("reset cleanup did not run after rebuild")
-	}
-	if activated.Load() || game.reset.Load() != 1 || activeGame.Load() != nil {
-		t.Fatal("reload activated a closing game or reset did not release it")
-	}
-}
-
-func TestReloadRejectsReplacementBindingWithSameOwner(t *testing.T) {
-	isolateGameBinding(t)
-	owner := new(struct{})
-	first, err := bindGame(new(bindingTestGame), owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var second *gameBinding
-	err = Reload(owner, time.Second, func() error {
-		releaseGame(first)
-		var err error
-		second, err = bindGame(new(bindingTestGame), owner)
-		return err
-	}, func() error {
-		t.Error("stale reload ran rebuild")
-		return nil
-	}, func() { t.Error("stale reload ran activation") })
-	if !errors.Is(err, ErrReloadUnavailable) {
-		t.Fatalf("stale reload error = %v, want %v", err, ErrReloadUnavailable)
-	}
-	if second == nil || activeGame.Load() != second || second.loadPhase() != gameRunning {
-		t.Fatal("stale reload changed the replacement binding")
-	}
-}
-
-func TestReloadDrainTimeoutRemainsStoppedUntilReset(t *testing.T) {
-	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	started := make(chan struct{})
-	release := make(chan struct{})
-	finish := sync.OnceFunc(func() { close(release) })
-	t.Cleanup(finish)
-	blocker := co.Create("reload-timeout", func(coroutine.Thread) {
-		close(started)
-		<-release
-	})
-	<-started
-	err = Reload(GetGame(), 20*time.Millisecond, nil, func() error {
-		t.Error("timed-out reload ran rebuild")
-		return nil
-	}, func() { t.Error("timed-out reload ran activation") })
-	if !errors.Is(err, ErrReloadTimeout) || binding.loadPhase() != gameStopped {
-		t.Fatalf("timed-out reload: error=%v, phase=%d", err, binding.loadPhase())
-	}
-	finish()
-	co.Join(blocker)
-	if got := binding.loadPhase(); got != gameStopped {
-		t.Fatalf("phase after coroutine exit = %d, want stopped", got)
-	}
-	if err := Reload(GetGame(), time.Second, nil, nil, nil); !errors.Is(err, ErrReloadUnavailable) {
-		t.Fatalf("reload of stopped game = %v, want unavailable", err)
-	}
-	onReset()
-	if activeGame.Load() != nil || game.reset.Load() != 1 {
-		t.Fatal("reset did not clean up the stopped reload")
-	}
-}
-
-func TestReloadFailureKeepsGameStopped(t *testing.T) {
-	failure := errors.New("reload failure")
-	for _, stage := range []string{"rebuild error", "rebuild panic", "activation panic"} {
-		t.Run(stage, func(t *testing.T) {
-			isolateGameBinding(t)
-			setupExecuteTest(t)
-			binding, err := bindGame(new(bindingTestGame), new(struct{}))
-			if err != nil {
-				t.Fatal(err)
-			}
-			func() {
-				defer func() {
-					if got := recover(); stage != "rebuild error" && got != failure || stage == "rebuild error" && got != nil {
-						t.Fatalf("reload panic = %v", got)
-					}
-				}()
-				err = Reload(GetGame(), time.Second, nil, func() error {
-					switch stage {
-					case "rebuild error":
-						return failure
-					case "rebuild panic":
-						panic(failure)
-					}
-					return nil
-				}, func() {
-					if stage != "activation panic" {
-						t.Error("failed rebuild ran activation")
-					}
-					panic(failure)
-				})
-			}()
-			if stage == "rebuild error" && !errors.Is(err, failure) {
-				t.Fatalf("reload error = %v, want %v", err, failure)
-			}
-			if binding.loadPhase() != gameStopped {
-				t.Fatalf("phase after reload failure = %d, want stopped", binding.loadPhase())
-			}
-			onReset()
-			if activeGame.Load() != nil {
-				t.Fatal("reset did not release the failed reload")
-			}
-		})
 	}
 }
 
@@ -917,7 +613,7 @@ func TestDestroyRejectsRuntimeWorkUntilBackendTeardown(t *testing.T) {
 	}
 	threadID := co.LastThreadID()
 	var calls atomic.Int32
-	Go("destroy-go", func(context.Context) { calls.Add(1) })
+	Go("destroy-go", func(context.Context, any) { calls.Add(1) })
 	Execute("destroy-execute", func(context.Context, any) { calls.Add(1) })
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("runtime work ran during destroy: calls = %d", got)

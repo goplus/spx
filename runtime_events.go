@@ -39,7 +39,7 @@ type eventSink = coreevent.Sink
 
 type scriptEventBindings struct {
 	*scriptEventRegistry
-	owner threadObj
+	owner any
 }
 
 type scriptEventRegistry struct {
@@ -69,8 +69,7 @@ type startEventDispatcher struct{}
 
 // Click Dispatch
 type clicker interface {
-	threadObj
-	doWhenClick(this threadObj)
+	doWhenClick(this any)
 	getProxy() *engine.Sprite
 	Visible() bool
 }
@@ -212,7 +211,7 @@ func (p *Game) bindScriptEvents() {
 	p.scriptEventBindings.bind(&p.scriptEvents, p)
 }
 
-func (p *scriptEventBindings) bind(registry *scriptEventRegistry, owner threadObj) {
+func (p *scriptEventBindings) bind(registry *scriptEventRegistry, owner any) {
 	p.scriptEventRegistry = registry
 	p.owner = owner
 }
@@ -343,7 +342,7 @@ func (p *scriptEventRegistry) doWhenKeyPressed(key Key) {
 	})
 }
 
-func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this threadObj) {
+func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this any) {
 	p.dispatchTarget(coreevent.BucketSwipe, this, scriptEventDispatch{
 		mode:      coroutine.BatchAsync,
 		matchData: direction,
@@ -353,7 +352,7 @@ func (p *scriptEventRegistry) doWhenSwipe(direction Direction, this threadObj) {
 	})
 }
 
-func (p *scriptEventRegistry) doWhenClick(this threadObj) {
+func (p *scriptEventRegistry) doWhenClick(this any) {
 	p.dispatchTarget(coreevent.BucketClick, this, scriptEventDispatch{
 		mode:      coroutine.BatchAsync,
 		matchData: this,
@@ -366,7 +365,7 @@ func (p *scriptEventRegistry) doWhenClick(this threadObj) {
 	})
 }
 
-func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) {
+func (p *scriptEventRegistry) doWhenTouchStart(this any, obj *SpriteImpl) {
 	p.dispatchTarget(coreevent.BucketTouchStart, this, scriptEventDispatch{
 		mode:      coroutine.BatchAsync,
 		matchData: this,
@@ -379,7 +378,7 @@ func (p *scriptEventRegistry) doWhenTouchStart(this threadObj, obj *SpriteImpl) 
 	})
 }
 
-func (p *scriptEventRegistry) doWhenCloned(this threadObj, data any) {
+func (p *scriptEventRegistry) doWhenCloned(this any, data any) {
 	p.dispatchTarget(coreevent.BucketCloned, this, scriptEventDispatch{
 		mode:      coroutine.BatchWaitFirstSlice,
 		matchData: this,

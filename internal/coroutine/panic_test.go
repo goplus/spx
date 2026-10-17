@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/visualfc/gid"
 )
 
 func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
@@ -19,7 +21,7 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 				panicWithValue(value)
 			})
 			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-			if !co.StopAllAndWait(time.Second) {
+			if co.RunAfterStop(drainTestContext(t), nil) != nil {
 				t.Fatal("panic handler did not finish")
 			}
 			select {
@@ -54,7 +56,7 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	co.debug = true
 	worker := co.Create("runtime-panic-worker", panicWithNilDereference)
 	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-	if !co.StopAllAndWait(time.Second) {
+	if co.RunAfterStop(drainTestContext(t), nil) != nil {
 		t.Fatal("panic handler did not finish")
 	}
 	select {
@@ -91,7 +93,7 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 			}
 		})
 		waitForThreadSignal(t, worker.done, "coroutine did not finish")
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Fatal("coroutine did not drain")
 		}
 		select {
@@ -99,5 +101,46 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 			t.Errorf("normal termination %v reported as panic: %+v", value, report)
 		default:
 		}
+	}
+}
+
+func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
+	co := New(func(PanicReport) {
+		panic("panic handler failure")
+	})
+	worker := co.newThread("panicking-worker")
+	co.registerThread(worker)
+
+	recovered := make(chan any, 1)
+	go func() {
+		goroutineID := gid.Get()
+		co.goroutineThreads.Store(goroutineID, worker)
+		co.runMu.Lock()
+		co.current.Store(worker)
+		defer func() { recovered <- recover() }()
+		co.finishThread(worker, goroutineID, "worker failure")
+	}()
+
+	select {
+	case got := <-recovered:
+		if got != "panic handler failure" {
+			t.Fatalf("panic handler panic = %v, want %q", got, "panic handler failure")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("panicking handler did not return control")
+	}
+	if co.hasPendingWork() {
+		t.Fatal("thread remained registered after panic handler panicked")
+	}
+	finalizing := 0
+	co.callbacks.Range(func(any, any) bool {
+		finalizing++
+		return true
+	})
+	if finalizing != 0 {
+		t.Fatalf("finalizing goroutine markers = %d, want 0", finalizing)
+	}
+	if co.RunAfterStop(drainTestContext(t), nil) != nil {
+		t.Fatal("manager remained blocked after panic handler panicked")
 	}
 }

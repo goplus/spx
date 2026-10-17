@@ -17,9 +17,9 @@
 package coroutine
 
 import (
+	"context"
 	"runtime"
 	"sync/atomic"
-	"time"
 
 	"github.com/goplus/spx/v3/internal/engine/platform"
 )
@@ -40,73 +40,11 @@ func (p *Coroutines) CleanupMainThread(call func()) {
 	}, nil)
 }
 
-func (p *Coroutines) waitMainThread(call func(), caller Thread) {
-	if platform.TryCallEngineDirectly(call) {
-		return
-	}
-
-	pending := &mainThreadCall{
-		caller: caller,
-		done:   make(chan taskResult, 1),
-	}
-	p.enqueuePriorityJob(&WaitJob{
-		Th:   pending.caller,
-		Type: waitTypeMainThread,
-		Call: func() { pending.run(p, call) },
-	})
-	pending.wait(p)
-}
-
-type mainThreadCall struct {
-	caller  Thread
-	done    chan taskResult
-	claimed atomic.Bool
-}
-
-func (c *mainThreadCall) run(p *Coroutines, call func()) {
-	if !c.claimed.CompareAndSwap(false, true) {
-		return
-	}
-	result := taskResult{}
-	// Notify the waiter even if call exits the engine goroutine with Goexit.
-	defer func() { c.done <- result }()
-	if p.isThreadCanceled(c.caller) {
-		return
-	}
-	if c.caller != nil {
-		id, previous := p.enterCallback(callbackExclusive)
-		defer p.leaveCallback(id, previous)
-	}
-	result = p.runExternalTask(call)
-}
-
-func (c *mainThreadCall) wait(p *Coroutines) {
-	var canceled <-chan struct{}
-	if c.caller != nil {
-		canceled = c.caller.Context().Done()
-	}
-	select {
-	case result := <-c.done:
-		if p.isThreadCanceled(c.caller) {
-			panic(ErrAbortThread)
-		}
-		if result.panicked {
-			panic(result.panicValue)
-		}
-	case <-canceled:
-		if !c.claimed.CompareAndSwap(false, true) {
-			// Keep script ownership until the running call returns.
-			<-c.done
-		}
-		panic(ErrAbortThread)
-	}
-}
-
 // RunBetweenScripts runs call on the caller between script slices while
 // servicing queued engine-thread jobs. Native callers must use the engine thread.
 // Calls that already hold a script slice are rejected.
 func (p *Coroutines) RunBetweenScripts(call func()) {
-	if p.callerThread() != nil || p.currentCallback()&callbackExclusive != 0 {
+	if p.callerThread() != nil || p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}
 	if hasMainThreadQueue {
@@ -126,11 +64,11 @@ func (p *Coroutines) RunBetweenScripts(call func()) {
 // TryRunFromEngine runs call in a managed coroutine when the caller
 // has direct engine access. While waiting, it services engine jobs without
 // advancing frames. It reports handled when shutdown skips the call.
-func (p *Coroutines) TryRunFromEngine(owner ThreadObj, call func()) bool {
+func (p *Coroutines) TryRunFromEngine(owner any, call func()) bool {
 	if p.admissionClosed() {
 		return true
 	}
-	if p.callerThread() != nil || p.currentCallback()&callbackExclusive != 0 {
+	if p.callerThread() != nil || p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}
 	return platform.TryCallEngineDirectly(func() {
@@ -141,112 +79,123 @@ func (p *Coroutines) TryRunFromEngine(owner ThreadObj, call func()) bool {
 		dispatcher := p.Create(owner, func(Thread) {
 			call()
 		})
-		p.joinOnEngine(dispatcher)
+		p.waitForSignal(context.Background(), dispatcher.done)
 	})
 }
 
-// joinOnEngine serves engine calls until thread completes, without advancing frames.
-func (p *Coroutines) joinOnEngine(thread Thread) {
-	if !hasMainThreadQueue {
-		<-thread.done
+type mainThreadCall struct {
+	caller  Thread
+	done    chan callbackResult
+	claimed atomic.Bool // Claimed by execution or cancellation.
+}
+
+func (p *Coroutines) waitMainThread(call func(), caller Thread) {
+	if platform.TryCallEngineDirectly(call) {
 		return
 	}
-	for {
-		select {
-		case <-thread.done:
-			return
-		default:
+
+	pending := &mainThreadCall{
+		caller: caller,
+		done:   make(chan callbackResult, 1),
+	}
+	p.enqueuePriorityJob(&waitJob{
+		thread: pending.caller,
+		kind:   waitMainThread,
+		call:   func() { pending.run(p, call) },
+	})
+	pending.wait()
+}
+
+func (c *mainThreadCall) run(p *Coroutines, call func()) {
+	if !c.claimed.CompareAndSwap(false, true) {
+		return
+	}
+	result := callbackResult{}
+	// Notify the waiter even if call exits the engine goroutine with Goexit.
+	defer func() { c.done <- result }()
+	if c.caller.canceled() {
+		return
+	}
+	scope := callbackNoDrain
+	if c.caller != nil {
+		scope |= callbackExclusive
+	}
+	result = p.invokeCallback(scope, call)
+}
+
+func (c *mainThreadCall) wait() {
+	var canceled <-chan struct{}
+	if c.caller != nil {
+		canceled = c.caller.Context().Done()
+	}
+	select {
+	case result := <-c.done:
+		if c.caller.canceled() {
+			panic(ErrAbortThread)
 		}
-		p.pumpMainThread()
+		if result.panicked {
+			panic(result.panicValue)
+		}
+	case <-canceled:
+		if !c.claimed.CompareAndSwap(false, true) {
+			// Keep script ownership until the running call returns.
+			<-c.done
+		}
+		panic(ErrAbortThread)
 	}
 }
 
-// lockShutdown keeps engine-thread work moving while it waits for the barrier.
-func (p *Coroutines) lockShutdown(timeout time.Duration) (remaining time.Duration, locked bool) {
-	var deadline time.Time
-	if timeout > 0 {
-		deadline = time.Now().Add(timeout)
-	}
-	tryLock := func(wait func()) bool {
-		for !p.shutdownMu.TryLock() {
-			if !deadline.IsZero() && time.Now().After(deadline) {
-				return false
-			}
-			wait()
-		}
-		return true
-	}
-	var acquired bool
-	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
-		acquired = tryLock(p.pumpMainThread)
-	}) {
-		locked = acquired
-	} else if deadline.IsZero() {
-		p.shutdownMu.Lock()
-		locked = true
-	} else {
-		locked = tryLock(func() {
-			time.Sleep(min(time.Millisecond, time.Until(deadline)))
-		})
-	}
-	if !locked || deadline.IsZero() {
-		return 0, locked
-	}
-	remaining = time.Until(deadline)
-	if remaining > 0 {
-		return remaining, true
-	}
-	p.shutdownMu.Unlock()
-	return 0, false
-}
-
-func (p *Coroutines) waitForDrainChange(changed <-chan struct{}, timedOut <-chan time.Time) bool {
-	wasChanged := false
+// waitForSignal serves native engine jobs while waiting, without advancing frames.
+// Other callers park so the host can progress.
+func (p *Coroutines) waitForSignal(ctx context.Context, ready <-chan struct{}) (err error) {
+	canceled := ctx.Done()
 	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
 		for {
 			select {
-			case <-changed:
-				wasChanged = true
+			case <-ready:
 				return
-			case <-timedOut:
+			case <-canceled:
+				err = ctx.Err()
 				return
 			default:
 				p.pumpMainThread()
 			}
 		}
 	}) {
-		return wasChanged
+		return err
 	}
 	select {
-	case <-changed:
-		return true
-	case <-timedOut:
-		return false
+	case <-ready:
+		return nil
+	case <-canceled:
+		return ctx.Err()
 	}
 }
 
 // pumpMainThread serves only engine jobs; it never advances script rounds or frames.
 func (p *Coroutines) pumpMainThread() {
-	if job := p.takeMainThreadJob(); job != nil {
-		p.runMainThreadJob(job)
-	} else {
+	job := p.takeMainThreadJob()
+	if job == nil {
 		runtime.Gosched()
-	}
-}
-
-// Skip canceled callers when serving engine calls outside Update.
-func (p *Coroutines) runMainThreadJob(job *WaitJob) {
-	if job == nil || (job.Th != nil && p.isThreadCanceled(job.Th)) {
 		return
 	}
-	job.Call()
+	if !job.thread.canceled() {
+		job.call()
+	}
 }
 
-func (p *Coroutines) takeMainThreadJob() *WaitJob {
+func (p *Coroutines) enqueuePriorityJob(job *waitJob) {
+	p.schedulerMu.Lock()
+	p.currentJobs.pushFront(job)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
+}
+
+func (p *Coroutines) takeMainThreadJob() *waitJob {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
-	if job, ok := p.currentJobs.PeekFront(); ok && job.Type == waitTypeMainThread {
-		return p.currentJobs.PopFront()
+	if job, ok := p.currentJobs.peekFront(); ok && job.kind == waitMainThread {
+		return p.currentJobs.popFront()
 	}
 	return nil
 }

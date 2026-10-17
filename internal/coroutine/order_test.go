@@ -20,7 +20,6 @@ import (
 	"runtime"
 	"slices"
 	"testing"
-	"time"
 
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -29,7 +28,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("coroutines did not stop")
 		}
 	})
@@ -60,7 +59,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 				co.RequestRedraw()
 			}
 		})
-		co.JoinYieldedOrDone(thread)
+		co.JoinFirstSlice(thread)
 	}
 
 	// Enqueue in reverse registration order.
@@ -89,7 +88,7 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("coroutines did not stop")
 		}
 	})
@@ -110,12 +109,12 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 		}, BatchWaitFirstSlice)
 		order = append(order, "parent continued")
 	})
-	co.JoinYieldedOrDone(parent)
+	co.JoinFirstSlice(parent)
 	sibling := co.Create("sibling", func(Thread) {
 		co.WaitNextFrame()
 		order = append(order, "sibling")
 	})
-	co.JoinYieldedOrDone(sibling)
+	co.JoinFirstSlice(sibling)
 	co.Update()
 	itime.Update(1.0/30, 30)
 	co.Update()

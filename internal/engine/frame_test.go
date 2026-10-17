@@ -119,7 +119,7 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
+		co.RunAfterStop(testContext(t), nil)
 		SetCoroutines(original)
 	})
 
@@ -142,7 +142,7 @@ func TestFrameCallbackRunsInCapturedCoroutineAndMayYield(t *testing.T) {
 		ScheduleFrame(base+1, func() {
 			observed <- observation{
 				inCoroutine: IsInCoroutine(),
-				owner:       GetCoroutineOwner(),
+				owner:       currentThread().Owner,
 			}
 			WaitYield()
 			close(done)
@@ -181,7 +181,7 @@ func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 	original := gco
 	SetCoroutines(co)
 	t.Cleanup(func() {
-		co.StopAllAndWait(time.Second)
+		co.RunAfterStop(testContext(t), nil)
 		SetCoroutines(original)
 	})
 
@@ -200,7 +200,7 @@ func TestFrameCallbackSkipsExplicitlyStoppedRegistration(t *testing.T) {
 		co.WaitYield(me)
 	})
 	<-registered
-	co.JoinYieldedOrDone(source)
+	co.JoinFirstSlice(source)
 	co.StopIf(func(candidate coroutine.Thread) bool { return candidate == source })
 	co.Join(source)
 

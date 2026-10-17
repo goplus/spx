@@ -26,14 +26,19 @@ const (
 	BatchWaitDone
 )
 
-// StartBatch registers tasks before running them in order; wait modes require a
-// managed caller. RegisterInvocation may cancel work but must not wait for its task.
+// StartBatch registers tasks before running them in order.
+// BatchWaitFirstSlice requires a managed caller for non-empty batches.
+// BatchWaitDone yields managed callers and blocks other callers.
+// RegisterInvocation may cancel work but must not wait for its task.
 func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
 		panic("coroutine: invalid batch mode")
 	}
 	if len(tasks) == 0 {
 		return nil
+	}
+	if mode == BatchWaitFirstSlice && p.callerThread() == nil {
+		panic("coroutine: FirstSlice requires a managed caller")
 	}
 
 	threads, progress := p.registerBatch(tasks)
@@ -49,7 +54,10 @@ func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 }
 
 func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
-	progress := newLatchSet(p, len(tasks)+1)
+	progress := make([]*Latch, len(tasks)+1)
+	for i := range progress {
+		progress[i] = p.NewLatch()
+	}
 	threads := make([]Thread, len(tasks))
 	batchCreated := false
 	defer func() {
@@ -63,8 +71,7 @@ func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
 	for i, task := range tasks {
 		current, next := progress[i], progress[i+1]
 		if registerInvocation := task.RegisterInvocation; registerInvocation != nil {
-			// Publish the slot before invoking the callback, preserving the
-			// registration order visible to callbacks.
+			// Publish each slot before its registration callback.
 			task.RegisterInvocation = func(thread Thread) func() {
 				threads[i] = thread
 				return registerInvocation(thread)
@@ -81,14 +88,6 @@ func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
 	}
 	batchCreated = true
 	return threads, progress
-}
-
-func newLatchSet(p *Coroutines, size int) []*Latch {
-	latches := make([]*Latch, size)
-	for i := range latches {
-		latches[i] = p.NewLatch()
-	}
-	return latches
 }
 
 // Advance canceled tasks in order so later tasks cannot bypass an unfinished prefix.

@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -65,8 +66,10 @@ func TestMessageExecutionContextReleasedOnCancelAndReset(t *testing.T) {
 	if started != 3 {
 		t.Fatalf("started receivers = %d, want 3", started)
 	}
-	if !co.StopAllAndWait(time.Second) {
-		t.Fatal("canceled receivers did not finish cleanup")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := co.RunAfterStop(ctx, nil); err != nil {
+		t.Fatalf("canceled receivers did not finish cleanup: %v", err)
 	}
 	if cleaned != 3 || len(game.scriptEvents.messageExecutions) != 0 {
 		t.Fatalf("after cancellation: cleaned = %d, retained contexts = %d", cleaned, len(game.scriptEvents.messageExecutions))

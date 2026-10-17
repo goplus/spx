@@ -29,7 +29,7 @@ func TestExitDuringReloadPreventsActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = Reload(game, time.Second, nil, func() error {
+	err = Reload(testContext(t), game, nil, func() error {
 		RequestExit(7)
 		return nil
 	}, func() { t.Error("reload activated after exit was requested") })
@@ -102,7 +102,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			gdx.PlatformMgr, gdx.ExtMgr = platform, recorder
 			enginewrap.Init(WaitMainThread)
 			t.Cleanup(func() {
-				if !co.StopAllAndWait(time.Second) {
+				if err := co.RunAfterStop(testContext(t), nil); err != nil {
 					t.Error("startup coroutine did not stop")
 				}
 				SetCoroutines(previousCo)
@@ -145,7 +145,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("first frame did not return after startup exit")
 			}
-			if !co.StopAllAndWait(time.Second) {
+			if err := co.RunAfterStop(testContext(t), nil); err != nil {
 				t.Fatal("startup coroutine did not finish after exit")
 			}
 			if !test.beforeFrame && !exitedInFrame.Load() {

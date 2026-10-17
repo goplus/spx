@@ -119,7 +119,7 @@ func TestScratchImmediateGlide(t *testing.T) {
 				sprite.GlideToXYpos(tt.x, tt.y, tt.duration)
 				finished = true
 			})
-			co.JoinYieldedOrDone(thread)
+			co.JoinFirstSlice(thread)
 			if !finished || sprite.Xpos() != tt.wantX || sprite.Ypos() != tt.wantY {
 				t.Fatalf("immediate glide: finished=%v position=(%v,%v)", finished, sprite.Xpos(), sprite.Ypos())
 			}
