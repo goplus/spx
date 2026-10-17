@@ -5,13 +5,28 @@ import "github.com/visualfc/gid"
 type callbackScope uint8
 
 const (
-	callbackExternal callbackScope = 1 << iota
-	callbackSetup
-	callbackCleanup
-	callbackFinalizing
-	callbackShutdown
+	callbackNoDrain callbackScope = 1 << iota
 	callbackExclusive
 )
+
+type callbackResult struct {
+	panicValue any
+	panicked   bool
+}
+
+// invokeCallback invokes fn with drain protection and captures panics.
+func (p *Coroutines) invokeCallback(fn func()) (result callbackResult) {
+	id, previous := p.enterCallback(callbackNoDrain)
+	defer p.leaveCallback(id, previous)
+	// Distinguish panic(nil) from a normal return.
+	result.panicked = true
+	defer func() {
+		result.panicValue = recover()
+	}()
+	fn()
+	result.panicked = false
+	return result
+}
 
 // Nested callbacks retain their caller's waiting restrictions.
 func (p *Coroutines) enterCallback(scope callbackScope) (id uint64, previous callbackScope) {
@@ -31,7 +46,7 @@ func (p *Coroutines) leaveCallback(id uint64, previous callbackScope) {
 	}
 }
 
-func (p *Coroutines) currentCallback() callbackScope {
+func (p *Coroutines) callbackScope() callbackScope {
 	if value, ok := p.callbacks.Load(gid.Get()); ok {
 		return value.(callbackScope)
 	}
@@ -39,19 +54,7 @@ func (p *Coroutines) currentCallback() callbackScope {
 }
 
 func (p *Coroutines) requireDrainCaller() {
-	if p.currentCallback() != 0 {
+	if p.callbackScope() != 0 {
 		panic(ErrReentrantWait)
 	}
-}
-
-func (p *Coroutines) waitOutsideScript(done <-chan struct{}) {
-	select {
-	case <-done:
-		return
-	default:
-	}
-	if p.currentCallback()&callbackExclusive != 0 {
-		panic(ErrReentrantWait)
-	}
-	<-done
 }

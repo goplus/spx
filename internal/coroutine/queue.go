@@ -26,9 +26,8 @@ type node[T any] struct {
 	next  *node[T]
 }
 
-// Queue is thread-safe and supports insertion at either end. Its zero value is ready for use.
-type Queue[T any] struct {
-	mu    sync.Mutex
+// queue is a deque whose caller owns synchronization. Its zero value is ready for use.
+type queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]
 	count int
@@ -37,122 +36,46 @@ type Queue[T any] struct {
 	sortBuffer []T
 }
 
-// Move appends every value from src to the receiving queue and empties src.
-// Concurrent moves between two queues must use a consistent direction.
-func (q *Queue[T]) Move(src *Queue[T]) {
-	if q == src {
-		return
-	}
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	src.mu.Lock()
-	defer src.mu.Unlock()
-
-	if src.count == 0 {
-		return
-	}
-
-	if q.count == 0 {
-		q.head = src.head
-		q.tail = src.tail
-	} else {
-		q.tail.next = src.head
-		q.tail = src.tail
-	}
-	q.count += src.count
-
-	src.head = nil
-	src.tail = nil
-	src.count = 0
+func newQueue[T any]() *queue[T] {
+	q := &queue[T]{}
+	q.ensurePool()
+	return q
 }
 
-// Count returns the number of values in the queue.
-func (q *Queue[T]) Count() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (q *queue[T]) len() int {
 	return q.count
 }
 
-// PeekFront returns the first value without removing it.
-func (q *Queue[T]) PeekFront() (value T, ok bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (q *queue[T]) peekFront() (value T, ok bool) {
 	if q.head == nil {
 		return value, false
 	}
 	return q.head.value, true
 }
 
-// SortStable orders values while preserving ties.
-func (q *Queue[T]) SortStable(compare func(T, T) int) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.count < 2 {
-		return
-	}
-	values := slices.Grow(q.sortBuffer[:0], q.count)
-	for n := q.head; n != nil; n = n.next {
-		values = append(values, n.value)
-	}
-	q.sortBuffer = values
-	defer clear(values)
-	slices.SortStableFunc(values, compare)
-	n := q.head
-	for _, value := range values {
-		n.value = value
-		n = n.next
-	}
-}
-
-// Any reports whether a queued value satisfies match.
-func (q *Queue[T]) Any(match func(T) bool) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	for node := q.head; node != nil; node = node.next {
-		if match(node.value) {
-			return true
-		}
-	}
-	return false
-}
-
-// PushBack adds value to the back of the queue.
-func (q *Queue[T]) PushBack(value T) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
+func (q *queue[T]) pushBack(value T) {
 	newNode := q.acquireNode(value)
 	if q.count == 0 {
 		q.head = newNode
-		q.tail = newNode
 	} else {
 		q.tail.next = newNode
-		q.tail = newNode
 	}
+	q.tail = newNode
 	q.count++
 }
 
-// PushFront adds value to the front of the queue.
-func (q *Queue[T]) PushFront(value T) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
+func (q *queue[T]) pushFront(value T) {
 	newNode := q.acquireNode(value)
+	newNode.next = q.head
+	q.head = newNode
 	if q.count == 0 {
-		q.head = newNode
 		q.tail = newNode
-	} else {
-		newNode.next = q.head
-		q.head = newNode
 	}
 	q.count++
 }
 
-// PopFront removes and returns the front value. It panics if the queue is empty.
-func (q *Queue[T]) PopFront() T {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
+// popFront removes and returns the front value. It panics if the queue is empty.
+func (q *queue[T]) popFront() T {
 	if q.count == 0 {
 		panic("queue is empty")
 	}
@@ -170,14 +93,56 @@ func (q *Queue[T]) PopFront() T {
 	return value
 }
 
-// NewQueue creates an empty queue.
-func NewQueue[T any]() *Queue[T] {
-	q := &Queue[T]{}
-	q.ensurePool()
-	return q
+// appendFrom appends every value from src to the receiving queue and empties src.
+func (q *queue[T]) appendFrom(src *queue[T]) {
+	if q == src {
+		return
+	}
+	if src.count == 0 {
+		return
+	}
+
+	if q.count == 0 {
+		q.head = src.head
+	} else {
+		q.tail.next = src.head
+	}
+	q.tail = src.tail
+	q.count += src.count
+
+	src.head = nil
+	src.tail = nil
+	src.count = 0
 }
 
-func (q *Queue[T]) ensurePool() {
+func (q *queue[T]) any(match func(T) bool) bool {
+	for node := q.head; node != nil; node = node.next {
+		if match(node.value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *queue[T]) sortStable(compare func(T, T) int) {
+	if q.count < 2 {
+		return
+	}
+	values := slices.Grow(q.sortBuffer[:0], q.count)
+	for n := q.head; n != nil; n = n.next {
+		values = append(values, n.value)
+	}
+	q.sortBuffer = values
+	defer clear(values)
+	slices.SortStableFunc(values, compare)
+	n := q.head
+	for _, value := range values {
+		n.value = value
+		n = n.next
+	}
+}
+
+func (q *queue[T]) ensurePool() {
 	if q.pool == nil {
 		q.pool = &sync.Pool{New: func() any {
 			return new(node[T])
@@ -185,7 +150,7 @@ func (q *Queue[T]) ensurePool() {
 	}
 }
 
-func (q *Queue[T]) acquireNode(value T) *node[T] {
+func (q *queue[T]) acquireNode(value T) *node[T] {
 	q.ensurePool()
 	n := q.pool.Get().(*node[T])
 	n.value = value
@@ -193,7 +158,7 @@ func (q *Queue[T]) acquireNode(value T) *node[T] {
 	return n
 }
 
-func (q *Queue[T]) releaseNode(n *node[T]) {
+func (q *queue[T]) releaseNode(n *node[T]) {
 	var zero T
 	n.value = zero
 	n.next = nil

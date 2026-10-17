@@ -36,7 +36,7 @@ func TestTweenCancellationUnregistersState(t *testing.T) {
 		anim.doTween(StateGlide, nil, tweenParams{aniType: coreproject.AniTypeGlide, duration: 10})
 		continued = true
 	})
-	co.JoinYieldedOrDone(thread)
+	co.JoinFirstSlice(thread)
 	state := anim.getCurTweenState()
 	if state == nil {
 		t.Fatal("tween did not reach its first wait")
@@ -450,7 +450,7 @@ func TestTweenStateRegistrationAndUnregistrationOrder(t *testing.T) {
 	initTestMotionComponents(anim.sprite, 0, 0)
 	start := func(name string) *animState {
 		thread := co.Create(anim.sprite, func(coroutine.Thread) { anim.doTween(name, base, params) })
-		co.JoinYieldedOrDone(thread)
+		co.JoinFirstSlice(thread)
 		return anim.getCurTweenState()
 	}
 	first := start(StateGlide)

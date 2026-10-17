@@ -28,20 +28,16 @@ import (
 	"github.com/goplus/spx/v3/internal/time"
 )
 
-// ThreadObj is the owner associated with a Thread. String values and owners
-// implementing Name() also provide the thread's diagnostic name.
-type ThreadObj any
-
 type suspendState uint8
 
 const (
-	suspendStateRunning suspendState = iota
-	suspendStateSuspended
-	suspendStateSignaled
+	suspendRunning suspendState = iota
+	suspendWaiting
+	suspendSignaled
 )
 
 type threadImpl struct {
-	Obj ThreadObj
+	Owner any // Strings and Name() provide the diagnostic name.
 
 	id    int64
 	name  string
@@ -67,22 +63,22 @@ type threadImpl struct {
 	warpStart       atomic.Int64
 	stopAtNextYield atomic.Bool
 
-	joinWaiters   waiterSet
-	yieldWaiters  waiterSet
-	yieldedOrDone chan struct{}
+	joinWaiters       waiterSet
+	firstSliceWaiters waiterSet
+	firstSliceDone    chan struct{}
 }
 
 // Thread represents a coroutine.
 type Thread = *threadImpl
 
-func (p *Coroutines) newThread(obj ThreadObj) Thread {
+func (p *Coroutines) newThread(owner any) Thread {
 	th := &threadImpl{
-		Obj:           obj,
-		id:            p.nextThreadID.Add(1),
-		schedFrame:    -1,
-		name:          resolveThreadName(obj),
-		done:          make(chan struct{}),
-		yieldedOrDone: make(chan struct{}),
+		Owner:          owner,
+		id:             p.nextThreadID.Add(1),
+		schedFrame:     -1,
+		name:           threadName(owner),
+		done:           make(chan struct{}),
+		firstSliceDone: make(chan struct{}),
 	}
 	th.resumeOrder = th.id
 	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
@@ -93,16 +89,36 @@ func (p *Coroutines) newThread(obj ThreadObj) Thread {
 	return th
 }
 
+// ID returns the thread's manager-local ID.
+func (th Thread) ID() int64 {
+	return th.id
+}
+
+// Name returns the thread's resolved name.
+func (th Thread) Name() string {
+	return th.name
+}
+
+// String returns the thread's ID and name.
+func (th Thread) String() string {
+	return fmt.Sprintf("id=%d name=%s ", th.id, th.name)
+}
+
 // Context returns the thread's cancellation context.
-func (th *threadImpl) Context() context.Context {
+func (th Thread) Context() context.Context {
 	if th.ctx == nil {
 		return context.Background()
 	}
 	return th.ctx
 }
 
+// Stopped reports whether the thread has been requested to stop.
+func (th Thread) Stopped() bool {
+	return th.stopped.Load()
+}
+
 // Cancel requests a stop and wakes the thread if it is suspended.
-func (th *threadImpl) Cancel() {
+func (th Thread) Cancel() {
 	th.suspendMu.Lock()
 	defer th.suspendMu.Unlock()
 	if th.stopped.Load() {
@@ -113,44 +129,13 @@ func (th *threadImpl) Cancel() {
 	th.suspendCond.Signal()
 }
 
-func (th *threadImpl) cancelContext() {
-	if th.cancelFunc != nil {
-		th.cancelFunc()
-	}
-}
-
-// String returns the thread's ID and name.
-func (th *threadImpl) String() string {
-	return fmt.Sprintf("id=%d name=%s ", th.id, th.name)
-}
-
-// Name returns the thread's resolved name.
-func (th *threadImpl) Name() string {
-	return th.name
-}
-
-// ID returns the thread's manager-local ID.
-func (th *threadImpl) ID() int64 {
-	return th.id
-}
-
-// Stack returns the creation stack, if one was captured.
-func (th *threadImpl) Stack() string {
-	return th.stack
-}
-
-// Stopped reports whether the thread has been requested to stop.
-func (th *threadImpl) Stopped() bool {
-	return th.stopped.Load()
-}
-
-// RunWithoutScreenRefresh reports whether the thread is in warp mode.
-func (th *threadImpl) RunWithoutScreenRefresh() bool {
+// Warp reports whether screen refresh is suppressed.
+func (th Thread) Warp() bool {
 	return th.warp.Load()
 }
 
-// SetRunWithoutScreenRefresh changes warp mode and returns its previous value.
-func (th *threadImpl) SetRunWithoutScreenRefresh(enabled bool) bool {
+// SetWarp changes warp mode and returns its previous value.
+func (th Thread) SetWarp(enabled bool) bool {
 	previous := th.warp.Swap(enabled)
 	if enabled != previous {
 		th.warpStart.Store(0)
@@ -158,10 +143,9 @@ func (th *threadImpl) SetRunWithoutScreenRefresh(enabled bool) bool {
 	return previous
 }
 
-// ShouldWaitNextFrame reports whether the thread should yield at a loop edge.
-// Warp mode suppresses the yield until budget is exhausted.
-func (th *threadImpl) ShouldWaitNextFrame(budget stime.Duration) bool {
-	if !th.RunWithoutScreenRefresh() {
+// ShouldYield checks a loop edge, resetting the warp budget when exhausted.
+func (th Thread) ShouldYield(budget stime.Duration) bool {
+	if !th.Warp() {
 		return true
 	}
 
@@ -175,7 +159,6 @@ func (th *threadImpl) ShouldWaitNextFrame(budget stime.Duration) bool {
 		return false
 	}
 
-	// Exhausting a warp budget forces one yield, then starts a new window.
 	th.warpStart.Store(0)
 	return true
 }
@@ -209,22 +192,39 @@ func (th Thread) DisableMainTimeout() {
 	th.mainStartedAt = stime.Time{}
 }
 
-type threadNamer interface {
-	Name() string
+// canceled also recognizes normal completion, which cancels the thread context.
+func (th Thread) canceled() bool {
+	if th == nil {
+		return false
+	}
+	if th.stopped.Load() {
+		return true
+	}
+	select {
+	case <-th.Context().Done():
+		return true
+	default:
+		return false
+	}
 }
 
-func resolveThreadName(obj ThreadObj) string {
-	if obj == nil {
+func (th Thread) cancelContext() {
+	if th.cancelFunc != nil {
+		th.cancelFunc()
+	}
+}
+
+func threadName(owner any) string {
+	switch owner := owner.(type) {
+	case nil:
 		return ""
-	}
-	if name, ok := obj.(string); ok {
-		return name
-	}
-	if named, ok := obj.(threadNamer); ok {
-		return named.Name()
+	case string:
+		return owner
+	case interface{ Name() string }:
+		return owner.Name()
 	}
 
-	typ := reflect.TypeOf(obj)
+	typ := reflect.TypeOf(owner)
 	if typ.Kind() != reflect.Pointer || typ.Elem().Name() == "" {
 		return ""
 	}

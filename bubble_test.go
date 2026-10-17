@@ -143,7 +143,7 @@ func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 		sprite.Quote__3("quote", "description", 0.01)
 		done = true
 	})
-	co.JoinYieldedOrDone(thread)
+	co.JoinFirstSlice(thread)
 	co.Update()
 	if done {
 		t.Fatal("timed bubble calls completed in their issuing frame")

@@ -24,7 +24,7 @@ import (
 
 // Task describes a coroutine's owner, invocation registration, and execution.
 type Task struct {
-	Owner ThreadObj
+	Owner any
 	// RegisterInvocation runs synchronously after the thread is registered and
 	// returns optional cleanup.
 	// Cleanup runs once on thread exit, even if Run never starts.
@@ -32,10 +32,15 @@ type Task struct {
 	Run                func(Thread)
 }
 
+type threadAdmission struct {
+	epoch   uint64
+	allowed bool
+}
+
 // Create creates a coroutine without explicitly yielding execution to it.
-func (p *Coroutines) Create(obj ThreadObj, fn func(me Thread)) Thread {
+func (p *Coroutines) Create(owner any, fn func(me Thread)) Thread {
 	return p.createThread(p.captureAdmission(), Task{
-		Owner: obj,
+		Owner: owner,
 		Run:   fn,
 	})
 }
@@ -45,43 +50,29 @@ func (p *Coroutines) LastThreadID() int64 {
 	return p.nextThreadID.Load()
 }
 
-type threadAdmission struct {
-	epoch   uint64
-	allowed bool
-}
-
-func (a threadAdmission) valid(epoch uint64) bool {
-	return a.allowed && a.epoch == epoch
-}
-
-func (p *Coroutines) captureAdmission() threadAdmission {
-	epoch := p.admissionEpoch.Load()
-	return threadAdmission{
-		epoch:   epoch,
-		allowed: epoch&1 == 0 && !p.isThreadCanceled(p.callerThread()),
-	}
-}
-
 // createThread admits a thread before invocation registration or execution.
 func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 	th := p.newThread(task.Owner)
-	var cleanup func()
-	defer func() { go p.runThread(th, task.Run, cleanup) }()
-
 	p.admissionMu.RLock()
-	rejected := !admission.valid(p.admissionEpoch.Load())
-	if rejected {
+	if !admission.valid(p.admissionEpoch.Load()) {
+		p.admissionMu.RUnlock()
+		// The rejected thread has not been published, so it has no waiters to wake.
 		th.Cancel()
-	} else {
-		p.registerThread(th)
-		if task.RegisterInvocation != nil {
-			p.pendingSetups.Add(1)
-		}
+		th.firstSliceWaiters.close(th.firstSliceDone)
+		th.joinWaiters.close(th.done)
+		return th
+	}
+	p.registerThread(th)
+	if task.RegisterInvocation != nil {
+		p.pendingSetups.Add(1)
 	}
 	p.admissionMu.RUnlock()
 
-	if !rejected && task.RegisterInvocation != nil {
-		id, previous := p.enterCallback(callbackSetup)
+	var cleanup func()
+	// Registered threads also need async cleanup if setup panics or calls Goexit.
+	defer func() { go p.runThread(th, task.Run, cleanup) }()
+	if task.RegisterInvocation != nil {
+		id, previous := p.enterCallback(callbackNoDrain)
 		defer p.leaveCallback(id, previous)
 		setupReturned := false
 		defer func() {
@@ -100,13 +91,13 @@ func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
 	p.runMu.Lock()
-	p.setCurrent(th)
+	p.current.Store(th)
 	defer func() {
 		p.finishThread(th, gid, recover())
 	}()
 	if cleanup != nil {
 		defer func() {
-			id, previous := p.enterCallback(callbackCleanup)
+			id, previous := p.enterCallback(callbackNoDrain)
 			defer p.leaveCallback(id, previous)
 			cleanup()
 		}()
@@ -119,22 +110,16 @@ func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 }
 
 func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
-	for waiter := range th.yieldWaiters.close(th.yieldedOrDone) {
-		p.markRunnableAndResume(waiter)
-	}
-	for waiter := range th.joinWaiters.close(nil) {
-		p.markRunnableAndResume(waiter)
-	}
+	p.wakeWaiters(th.firstSliceWaiters.close(th.firstSliceDone))
+	p.wakeWaiters(th.joinWaiters.close(nil))
 	// Make waiters runnable before removing the target's scheduler state.
 	th.cancelContext()
 	close(th.done)
-	p.removeThreadState(th)
-	p.setCurrent(nil)
+	p.removeRunnable(th)
+	p.current.Store(nil)
 	// Draining also waits for the panic handler below.
 	defer p.unregisterThread(th)
 	p.runMu.Unlock()
-	id, previous := p.enterCallback(callbackFinalizing)
-	defer p.leaveCallback(id, previous)
 	p.goroutineThreads.Delete(gid)
 	p.handleThreadPanic(th, recovered)
 }
@@ -144,6 +129,8 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 		return
 	}
 	if p.onPanic != nil {
+		id, previous := p.enterCallback(callbackNoDrain)
+		defer p.leaveCallback(id, previous)
 		p.onPanic(PanicReport{
 			Value:         recovered,
 			Name:          th.name,
@@ -153,6 +140,18 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 		return
 	}
 	panic(recovered)
+}
+
+func (p *Coroutines) captureAdmission() threadAdmission {
+	epoch := p.admissionEpoch.Load()
+	return threadAdmission{
+		epoch:   epoch,
+		allowed: epoch&1 == 0 && !p.callerThread().canceled(),
+	}
+}
+
+func (a threadAdmission) valid(epoch uint64) bool {
+	return a.allowed && a.epoch == epoch
 }
 
 func (p *Coroutines) finishSetup() {
@@ -184,44 +183,17 @@ func (p *Coroutines) registerThread(th Thread) {
 	p.allThreads[th] = struct{}{}
 	p.threadsMu.Unlock()
 	// Update must observe the new runnable thread before its goroutine starts.
-	p.setThreadState(th, threadRunnable)
+	p.schedulerMu.Lock()
+	p.runnableThreads[th] = struct{}{}
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 }
 
 func (p *Coroutines) unregisterThread(th Thread) {
 	p.threadsMu.Lock()
-	if _, registered := p.allThreads[th]; registered {
-		delete(p.allThreads, th)
-		p.notifyDrainLocked()
-	}
-	p.threadsMu.Unlock()
-}
-
-// admitWorker registers external work under the admission barrier.
-func (p *Coroutines) admitWorker(me Thread) bool {
-	p.admissionMu.RLock()
-	defer p.admissionMu.RUnlock()
-	if p.admissionClosed() || p.isThreadCanceled(me) {
-		return false
-	}
-	p.threadsMu.Lock()
-	p.workerCount++
-	p.threadsMu.Unlock()
-	return true
-}
-
-// WaitToDo pairs each admission with one deferred finish in the worker.
-func (p *Coroutines) finishWorker() {
-	p.threadsMu.Lock()
-	p.workerCount--
+	delete(p.allThreads, th)
 	p.notifyDrainLocked()
 	p.threadsMu.Unlock()
-}
-
-func (p *Coroutines) notifyDrainLocked() {
-	if p.lifecycleChanged != nil {
-		close(p.lifecycleChanged)
-		p.lifecycleChanged = nil
-	}
 }
 
 func (p *Coroutines) snapshotThreads() []Thread {
@@ -232,4 +204,11 @@ func (p *Coroutines) snapshotThreads() []Thread {
 	}
 	p.threadsMu.Unlock()
 	return threads
+}
+
+func (p *Coroutines) notifyDrainLocked() {
+	if p.lifecycleChanged != nil {
+		close(p.lifecycleChanged)
+		p.lifecycleChanged = nil
+	}
 }

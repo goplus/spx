@@ -19,7 +19,6 @@ package engine
 import (
 	"slices"
 	"testing"
-	"time"
 )
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
@@ -262,7 +261,7 @@ func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
 	}
 	t.Cleanup(func() { releaseGame(binding) })
 
-	if err := Reload(GetGame(), time.Second, func() error {
+	if err := Reload(testContext(t), GetGame(), func() error {
 		onKeyPressed(7)
 		onMousePressed(1)
 		return nil

@@ -20,6 +20,7 @@ import (
 	"math"
 	"runtime"
 	sdebug "runtime/debug"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func isSuspended(thread Thread) bool {
 		return false
 	}
 	defer thread.suspendMu.Unlock()
-	return thread.suspendState == suspendStateSuspended
+	return thread.suspendState == suspendWaiting
 }
 
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
@@ -52,7 +53,7 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	if calls != 0 {
 		t.Fatalf("expected GC stats collection to be disabled by default, got %d calls", calls)
 	}
-	if co.GetLastUpdateStats().GCStatsEnabled {
+	if co.UpdateStats().GCStatsEnabled {
 		t.Fatal("expected GC stats to be marked disabled by default")
 	}
 
@@ -61,19 +62,19 @@ func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("expected GC stats to be read twice when perf debug is enabled, got %d calls", calls)
 	}
-	if !co.GetLastUpdateStats().GCStatsEnabled {
+	if !co.UpdateStats().GCStatsEnabled {
 		t.Fatal("expected GC stats to be marked enabled when perf debug is on")
 	}
 }
 
-func TestLastUpdateStatsAreScopedToManager(t *testing.T) {
+func TestUpdateStatsAreScopedToManager(t *testing.T) {
 	first := New(nil)
 	first.SetPerfDebug(true)
 	first.readGCStats = func(*sdebug.GCStats) {}
 	first.Update()
 
 	second := New(nil)
-	if second.GetLastUpdateStats().GCStatsEnabled {
+	if second.UpdateStats().GCStatsEnabled {
 		t.Fatal("a new manager inherited update statistics from another manager")
 	}
 }
@@ -190,7 +191,7 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 		resumed.Store(true)
 	})
 
-	co.JoinYieldedOrDone(thread)
+	co.JoinFirstSlice(thread)
 	if !thread.Stopped() {
 		t.Fatal("yield boundary was published before the coroutine was stopped")
 	}
@@ -253,8 +254,8 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	b := co.newThread("b")
 	co.registerThread(a)
 	co.registerThread(b)
-	a.yieldWaiters.add(b)
-	b.yieldWaiters.add(a)
+	a.firstSliceWaiters.add(b)
+	b.firstSliceWaiters.add(a)
 
 	// Keep A between releasing runMu and publishing its suspension. B can then
 	// publish its own suspension and try to wake A. Yield must not hold B's
@@ -358,9 +359,9 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 		co := New(nil)
 		var ran atomic.Bool
 
-		co.enqueueJob(&WaitJob{
-			Type: waitTypeMainThread,
-			Call: func() {
+		co.enqueueJob(&waitJob{
+			kind: waitMainThread,
+			call: func() {
 				co.Create("spawned", func(me Thread) {
 					ran.Store(true)
 				})
@@ -381,7 +382,7 @@ func TestUpdateReturnsForStartupOutcomes(t *testing.T) {
 			panicReported := make(chan PanicReport, 1)
 			co := New(func(report PanicReport) { panicReported <- report })
 			t.Cleanup(func() {
-				if !co.StopAllAndWait(time.Second) {
+				if co.RunAfterStop(drainTestContext(t), nil) != nil {
 					t.Error("startup coroutine did not stop")
 				}
 			})
@@ -433,7 +434,7 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("startup coroutine did not stop")
 		}
 	})
@@ -463,7 +464,7 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("startup coroutine did not stop")
 		}
 	})
@@ -483,31 +484,38 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 
 func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	co := New(nil)
+	itime.Start(nil)
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("coroutines did not stop during cleanup")
 		}
 	})
+
+	deferredResumed := make(chan struct{})
+	deferred := co.Create("next-frame", func(me Thread) {
+		co.WaitNextFrameFor(me)
+		close(deferredResumed)
+	})
+	co.JoinFirstSlice(deferred)
+
+	now := time.Now()
+	co.updateWatchdogNow = func() time.Time { return now }
+	co.enqueueJob(&waitJob{kind: waitMainThread, call: func() {
+		now = now.Add(updateWatchdogTimeout)
+	}})
 
 	resumed := make(chan struct{})
 	thread := co.Create("slow-frame", func(me Thread) {
 		co.WaitYield(me)
 		close(resumed)
 	})
-	waitForThreadSignal(t, thread.yieldedOrDone, "script did not reach its yield")
+	waitForThreadSignal(t, thread.firstSliceDone, "script did not reach its yield")
 
-	queuedRan, deferredRan := false, false
-	co.enqueueJob(&WaitJob{Type: waitTypeMainThread, Call: func() { queuedRan = true }})
-	co.deferredJobs.PushBack(&WaitJob{Type: waitTypeYield, Call: func() { deferredRan = true }})
-
-	now := time.Now()
-	co.updateWatchdogNow = func() time.Time { return now }
-	co.enqueuePriorityJob(&WaitJob{Type: waitTypeMainThread, Call: func() {
-		now = now.Add(updateWatchdogTimeout)
-	}})
+	queuedRan := false
+	co.enqueueJob(&waitJob{kind: waitMainThread, call: func() { queuedRan = true }})
 	co.Update()
 
-	if thread.Stopped() {
+	if thread.Stopped() || deferred.Stopped() {
 		t.Fatal("watchdog canceled a script after a slow frame")
 	}
 	select {
@@ -515,7 +523,12 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 		t.Fatal("script resumed after the frame budget was exhausted")
 	default:
 	}
-	if queuedRan || deferredRan {
+	select {
+	case <-deferredResumed:
+		t.Fatal("frame wait resumed before the next frame")
+	default:
+	}
+	if queuedRan {
 		t.Fatal("Update processed remaining work after the frame budget was exhausted")
 	}
 
@@ -523,10 +536,12 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	if created.Stopped() {
 		t.Fatal("watchdog rejected a new script")
 	}
+	itime.Update(1.0/30, 30)
 	co.Update()
 	waitForThreadSignal(t, resumed, "script did not resume on the next Update")
-	if !queuedRan || !deferredRan {
-		t.Fatal("queued or deferred work was lost after a slow frame")
+	waitForThreadSignal(t, deferredResumed, "deferred wait was lost after a slow frame")
+	if !queuedRan {
+		t.Fatal("queued work was lost after a slow frame")
 	}
 }
 
@@ -550,7 +565,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 
 	t.Cleanup(func() {
 		keepSpawning.Store(false)
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("recursive spawn chain did not stop during cleanup")
 		}
 	})
@@ -573,27 +588,36 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	}()
 	waitForThreadSignal(t, updateDone, "Update did not return after a retry exhausted the frame budget")
 	keepSpawning.Store(false)
-	if !co.waitForDrain(time.Second, nil) {
+	if co.drain(drainTestContext(t)) != nil {
 		t.Fatal("recursive spawn chain did not finish")
 	}
 	if clockCalls.Load() < 2 || spawned.Load() == 0 {
 		t.Fatal("test did not exercise the watchdog on a recursive spawn retry")
 	}
-	if stats := co.GetLastUpdateStats(); stats.TaskCounts != 0 || stats.LoopIterations != 1 {
-		t.Fatalf("processed %d wait jobs over %d iterations, want one retry", stats.TaskCounts, stats.LoopIterations)
+	if stats := co.UpdateStats(); stats.JobCount != 0 || stats.LoopIterations != 1 {
+		t.Fatalf("processed %d wait jobs over %d iterations, want one retry", stats.JobCount, stats.LoopIterations)
 	}
 }
 
-func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
+func TestResumeIgnoresCanceledThread(t *testing.T) {
+	co := New(nil)
+	thread := co.newThread("canceled")
+	thread.Cancel()
+	co.Resume(thread)
+	if thread.suspendState != suspendRunning {
+		t.Fatal("Resume left a wake signal on a canceled thread")
+	}
+}
+
+func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
 	co := New(nil)
 
 	thread := co.Create("completed", func(Thread) {})
-	resume := &WaitJob{Th: thread, Type: waitTypeYield}
-	if !co.waitForDrain(time.Second, nil) {
+	if co.drain(drainTestContext(t)) != nil {
 		t.Fatal("coroutine did not complete")
 	}
 
-	co.runWaitJob(resume)
+	co.wakeThread(thread)
 	co.schedulerMu.Lock()
 	_, exists := co.runnableThreads[thread]
 	co.schedulerMu.Unlock()
@@ -602,54 +626,90 @@ func TestResumeJobDoesNotRestoreCompletedThreadState(t *testing.T) {
 	}
 }
 
-func TestWaitJobPreservesCustomAction(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		kind int
-	}{
-		{"loop", waitTypeLoop},
-		{"frame", waitTypeFrame},
-		{"time", waitTypeTime},
-		{"yield", waitTypeYield},
-		{"main thread", waitTypeMainThread},
-		{"next round", waitTypeNextRound},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			co := New(nil)
-			var calls int
-			job := &WaitJob{
-				Type: test.kind,
-				Call: func() { calls++ },
-			}
-			co.processWaitJob(&updateState{frame: 1, levelTime: 1}, &UpdateJobsStats{}, job)
-			if calls != 1 {
-				t.Fatalf("custom action called %d times; want 1", calls)
+func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
+	co := New(nil)
+	itime.Start(nil)
+	t.Cleanup(func() {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
+			t.Error("coroutines did not stop")
+		}
+	})
+
+	const producerCount, jobsPerProducer = 4, 100
+	var resumed atomic.Int64
+	for range producerCount {
+		thread := co.Create("next-frame", func(me Thread) {
+			co.WaitNextFrameFor(me)
+			resumed.Add(1)
+		})
+		co.JoinFirstSlice(thread)
+	}
+
+	var calls [producerCount * jobsPerProducer]atomic.Int64
+	var producers sync.WaitGroup
+	for producer := range producerCount {
+		producers.Go(func() {
+			for index := range jobsPerProducer {
+				co.enqueuePriorityJob(&waitJob{kind: waitMainThread, call: func() {
+					calls[producer*jobsPerProducer+index].Add(1)
+				}})
 			}
 		})
+	}
+	stopPump, pumpDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(pumpDone)
+		for {
+			select {
+			case <-stopPump:
+				return
+			default:
+				co.pumpMainThread()
+			}
+		}
+	}()
+	for range jobsPerProducer {
+		co.Update()
+	}
+	producers.Wait()
+	close(stopPump)
+	waitForThreadSignal(t, pumpDone, "engine job service did not stop")
+	co.Update()
+	for index := range calls {
+		if got := calls[index].Load(); got != 1 {
+			t.Fatalf("engine job %d ran %d times, want once", index, got)
+		}
+	}
+	if resumed.Load() != 0 {
+		t.Fatal("deferred waits resumed in their issuing frame")
+	}
+	itime.Update(1.0/30, 30)
+	co.Update()
+	if got := resumed.Load(); got != producerCount {
+		t.Fatalf("resumed %d deferred waits, want %d", got, producerCount)
 	}
 }
 
 func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	co := New(nil)
+	itime.Start(nil)
 
-	thread := co.Create("completed", func(Thread) {})
-	if !co.waitForDrain(time.Second, nil) {
-		t.Fatal("coroutine did not complete")
-	}
-
-	called := false
-	co.enqueueJob(&WaitJob{
-		Th:   thread,
-		Type: waitTypeTime,
-		Time: math.MaxFloat64,
-		Call: func() { called = true },
+	resumed := false
+	thread := co.Create("waiting", func(Thread) {
+		co.Wait(math.MaxFloat64)
+		resumed = true
 	})
+	co.JoinFirstSlice(thread)
+	thread.Cancel()
+	if co.drain(drainTestContext(t)) != nil {
+		t.Fatal("coroutine did not stop")
+	}
 	co.Update()
 
-	if called {
-		t.Fatal("canceled wait job callback ran")
+	if resumed {
+		t.Fatal("canceled wait resumed")
 	}
-	if current, deferred := co.currentJobs.Count(), co.deferredJobs.Count(); current != 0 || deferred != 0 {
+	if current, deferred := co.currentJobCount(), co.deferredJobs.len(); current != 0 || deferred != 0 {
 		t.Fatalf("canceled wait job remained queued: current=%d deferred=%d", current, deferred)
 	}
 }
@@ -663,9 +723,9 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 		co := New(nil)
 		var waiterRan atomic.Bool
 
-		co.enqueueJob(&WaitJob{
-			Type: waitTypeMainThread,
-			Call: func() {
+		co.enqueueJob(&waitJob{
+			kind: waitMainThread,
+			call: func() {
 				co.Create("controller", func(controller Thread) {
 					var target Thread
 					co.Create("waiter", func(waiter Thread) {
@@ -682,5 +742,25 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 		if !waiterRan.Load() {
 			t.Fatalf("run %d: Update returned before the Join waiter resumed", run)
 		}
+	}
+}
+
+// enqueueJob injects scheduler work without publishing a blocked thread.
+func (p *Coroutines) enqueueJob(job *waitJob) {
+	p.schedulerMu.Lock()
+	p.currentJobs.pushBack(job)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
+}
+
+func (p *Coroutines) currentJobCount() int {
+	p.schedulerMu.Lock()
+	defer p.schedulerMu.Unlock()
+	return p.currentJobs.len()
+}
+
+func joinFirstSliceAll(co *Coroutines, threads []Thread) {
+	for _, thread := range threads {
+		co.JoinFirstSlice(thread)
 	}
 }

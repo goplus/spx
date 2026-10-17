@@ -20,6 +20,8 @@
 package spx
 
 import (
+	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,12 +65,14 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 		t.Fatal("outer dispatcher callback did not start")
 	}
 
-	stopDone := make(chan bool, 1)
-	go func() { stopDone <- co.RunAfterStopAll(20*time.Millisecond, nil) }()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	stopDone := make(chan error, 1)
+	go func() { stopDone <- co.RunAfterStop(ctx, nil) }()
 	select {
-	case completed := <-stopDone:
-		if completed {
-			t.Fatal("shutdown barrier completed while callback was blocked")
+	case err := <-stopDone:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("blocked shutdown returned %v, want deadline exceeded", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("shutdown barrier did not time out")
@@ -82,8 +86,10 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	if registered.Load() {
 		t.Fatal("rejected nested handler ran lifecycle registration after abort")
 	}
-	if !co.RunAfterStopAll(time.Second, nil) {
-		t.Fatal("explicit recovery barrier did not complete")
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := co.RunAfterStop(ctx, nil); err != nil {
+		t.Fatalf("explicit recovery barrier did not complete: %v", err)
 	}
 	if ran.Load() {
 		t.Fatal("rejected nested handler ran after abort")

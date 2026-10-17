@@ -173,7 +173,7 @@ func (p *SpriteImpl) destroy() {
 func (p *SpriteImpl) stopIfCurrentCoroutine() {
 	if gco.IsInCoroutine() {
 		current := gco.Current()
-		if current != nil && p == current.Obj {
+		if current != nil && p == current.Owner {
 			gco.StopCurrent()
 		}
 	}
