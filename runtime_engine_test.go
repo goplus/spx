@@ -20,14 +20,17 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/engine/profiler"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -72,6 +75,65 @@ func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
 
 func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
 	m.batches = append(m.batches, append([]float32(nil), buffer...))
+}
+
+type debugPanelUiMgr struct {
+	pkgengine.IUiMgr
+	text      string
+	destroyed []pkgengine.Object
+}
+
+func (m *debugPanelUiMgr) SetText(_ pkgengine.Object, text string) { m.text = text }
+func (*debugPanelUiMgr) SetScale(pkgengine.Object, mathf.Vec2)     {}
+func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
+	m.destroyed = append(m.destroyed, id)
+	return m.IUiMgr.DestroyNode(id)
+}
+
+func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
+	installBubbleTestUiMgr(t)
+	mgr := &debugPanelUiMgr{IUiMgr: pkgengine.UiMgr}
+	pkgengine.UiMgr = mgr
+	previousDebug := profiler.Debug
+	t.Cleanup(func() { profiler.Debug = previousDebug })
+	co := setupRuntimeScheduler(t)
+	thread := co.Create("debug", func(me coroutine.Thread) {
+		co.WaitYield(me)
+		co.WaitNextFrameFor(me)
+	})
+	co.JoinFirstSlice(thread)
+	var game Game
+	game.debugState.Debug = true
+	for range 2 {
+		co.Update()
+		game.showDebugPanel()
+		panel := game.debugState.DebugPanel
+		game.showDebugPanel()
+		if panel == nil || game.debugState.DebugPanel != panel || !profiler.Debug {
+			t.Fatal("debug panel was not created and reused")
+		}
+		stats := co.UpdateStats()
+		for _, want := range []string{
+			fmt.Sprintf("coro: MoveTime: %.2f\n", stats.MoveTime),
+			fmt.Sprintf("coro: WaitTime: %.2f\n", stats.WaitTime),
+			fmt.Sprintf("coro: TaskProcessing: %.2f\n", stats.JobTime),
+			fmt.Sprintf("coro: TaskCounts: %d\n", stats.JobCount),
+			fmt.Sprintf("coro: WaitFrameCount: %d\n", stats.FrameWaitCount),
+			fmt.Sprintf("coro: WaitMainCount: %d\n", stats.MainThreadCount),
+			fmt.Sprintf("coro: NextCount: %d\n", stats.DeferredCount),
+		} {
+			if !strings.Contains(mgr.text, want) {
+				t.Errorf("debug panel missing %q: %s", want, mgr.text)
+			}
+		}
+	}
+	id := game.debugState.DebugPanel.GetId()
+	game.debugState.Debug = false
+	game.showDebugPanel()
+	game.showDebugPanel()
+	if profiler.Debug || game.debugState.DebugPanel != nil || !slices.Equal(mgr.destroyed, []pkgengine.Object{id}) {
+		t.Fatal("disabling debug did not destroy the panel exactly once")
+	}
 }
 
 func TestOnEngineRenderFlushesWithoutClonePublicationSignal(t *testing.T) {
@@ -731,7 +793,7 @@ func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 		engine.WaitNextFrame()
 		game.processLogicFrame(nil, nil)
 	})
-	co.JoinYieldedOrDone(logic)
+	co.JoinFirstSlice(logic)
 	game.scriptEvents.manager.Add(coreevent.BucketTimer, coreevent.NewSink(game, nil, func(any) bool {
 		phases.add("timer-route")
 		return false

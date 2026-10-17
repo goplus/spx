@@ -20,6 +20,7 @@
 package spx
 
 import (
+	"context"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -221,10 +222,12 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	called := false
-	if !co.RunAfterStopAll(time.Second, func() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := co.RunAfterStop(ctx, func() {
 		withEventRegistrationBarrier(nil, func() { called = true })
-	}) {
-		t.Fatal("shutdown barrier did not complete")
+	}); err != nil {
+		t.Fatalf("shutdown barrier did not complete: %v", err)
 	}
 	if called {
 		t.Fatal("event dispatch ran while coroutine admission was closed")

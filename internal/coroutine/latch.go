@@ -38,16 +38,12 @@ func (p *Latch) Done() <-chan struct{} {
 	return p.done
 }
 
-// Open opens the latch and resumes every registered waiter. Repeated calls are
-// safe and have no effect.
+// Open opens the latch once and resumes all waiters.
 func (p *Latch) Open() {
-	for waiter := range p.waiters.close(p.done) {
-		p.manager.markRunnableAndResume(waiter)
-	}
+	p.manager.wakeWaiters(p.waiters.close(p.done))
 }
 
-// Wait suspends the current managed coroutine until the latch opens. Calls
-// outside this latch's coroutine manager block the calling goroutine.
+// Wait yields inside this manager and blocks other callers until the latch opens.
 func (p *Latch) Wait() {
 	manager := p.manager
 	me := manager.callerThread()

@@ -12,21 +12,23 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 
 ## 执行权与结束
 
-每个脚本使用一个 Go goroutine 保存调用栈，通过 `runMu` 串行执行脚本片段。
+每个获准执行的脚本使用一个 Go goroutine 保存调用栈，通过 `runMu` 串行执行脚本片段。
 `Yield` 释放执行权；被唤醒的脚本重新取得执行权后才能继续。`Current()` 表示当前
 执行权的拥有者，不代表调用 API 的 goroutine 身份。
+`Task.Owner` 和 `Thread.Owner` 表示任务的逻辑归属对象。
 
 普通时间、帧、Join 和外部任务等待会让出执行权。`WaitMainThread` 是同步引擎调用，
 等待期间保留当前脚本片段：尚未开始的请求可以取消，已经开始的请求必须完成后，
 调用脚本才能退出。主线程等待脚本时继续处理引擎请求，不推进未来帧。
 
 channel 接收复用受管理的外部任务，只在脚本正常恢复后提交接收结果；等待因取消
-退出时不会写入调用方的数据。Join 和 Latch 的等待登记在正常返回或取消时都会解除。
+退出时不会写入调用方的数据。`JoinFirstSlice(thread)` 等待目标首次让出或结束。
+Join 和 Latch 的等待登记在正常返回或取消时都会解除。
 `Execute` 等待任务生命周期结束，因此任务启动前被取消或拒绝也能返回。
 
 请求取消、脚本结束和运行时清理完成是三个阶段。`Cancel` 与 `Stop` 都请求停止并
 唤醒挂起脚本，但不能强制终止任意 Go 阻塞调用。重置屏障等待脚本、外部工作和最终
-异常处理收尾。普通脚本可以调用 `StopAllAndWait`，等待范围排除自身。
+异常处理收尾。宿主通过 `RunAfterStop(ctx, nil)` 等待全部已登记工作退出；脚本使用不等待收尾的停止接口。
 `WaitToDo` 的 worker 若通过 `Goexit` 退出，会取消并唤醒所属脚本，使其执行收尾。
 
 ### 停止接口
@@ -37,35 +39,70 @@ channel 接收复用受管理的外部任务，只在脚本正常恢复后提交
 | `StopCurrent` | 退出当前协程，穿透自定义过程边界。 |
 | `StopThisScript` | 退出最近的自定义过程并让外层继续；没有过程边界时结束协程。 |
 | `StopAll` | 请求全部已登记协程停止，不等待收尾。 |
-| `StopAllAndWait` | 请求全部停止并等待脚本和 worker 收尾；当前协程也会被取消，但不等待自身退出。 |
-| `RunAfterStopAll` | 关闭准入、请求停止、等待收尾，再执行回调；用于外部重置屏障。 |
+| `RunAfterStop(ctx, call)` | 宿主关闭准入、请求停止、等待脚本和 worker 收尾，再执行非 nil 回调；受管理脚本调用会在改变状态前被拒绝。 |
+| `RunAfterStopIf(ctx, condition, call)` | 取得停止屏障后重新检查条件，返回是否已开始停止及等待错误；条件不成立则不改变现有工作。 |
 
 `Stop` 表达脚本操作，`Cancel` 传递取消，内部 `drain` 等待收尾。
 `ErrAbortThread` 保留为退出当前协程的控制流信号。
+
+### 停止等待的 context
+
+`ctx` 控制停止屏障的取得和清理等待，必须独立于被停止工作的 context；
+否则停止请求也会取消等待。`context.Background()` 表示无期限等待。
+`RunAfterStop` 返回 `error`，
+`RunAfterStopIf` 返回 `(stopStarted bool, err error)`：
+
+| 发生阶段 | 条件版本的结果与状态 |
+| --- | --- |
+| 开始停止前取消，包括等待前一次屏障期间 | `false, err`；不改变现有工作或准入。 |
+| 取得屏障后条件不成立 | `false, nil`；不开始停止。 |
+| 开始停止后取消，仍有工作未注销 | `true, err`；不执行回调，准入保持关闭，直到后续屏障成功。 |
+| 最后一个注销与取消竞争 | 重新检查登记；已经清空可判定成功。 |
+
+用 `errors.Is` 识别 `context.Canceled` 或 `context.DeadlineExceeded`；清理未完成时，
+错误还包含剩余线程的 ID、名称和 worker 数量。等待取消不代表工作已经退出。
+返回或包装的是 `ctx.Err()` 标准取消错误，不传递 `context.Cause(ctx)` 中的自定义原因。
+完整重置使用外部入口，并在同一个屏障内关闭准入、取消、等待和执行回调。
+两个停止等待接口都遵循这一宿主调用契约，脚本不能同步等待其他脚本收尾。
+
+宿主在调用 `engine.Reload(ctx, owner, ...)` 前用 `context.WithTimeout` 设置两秒的
+`reloadTimeout`。预算包含准备耗时，但不会中断准备或重建回调。
+准备结束时已取消则不停止原游戏；准备耗尽预算会返回超时错误，即使后续清理本可很快完成。
+重建开始后可以完成激活。开始停止后的失败保持游戏停止。
+
+两秒不是端到端的返回时限。引擎生命周期锁和帧锁不支持 context 取消，只能在取得锁后检查。
+context 在阶段之间检查取消，并约束停止屏障与清理等待。
 
 ### 回调与同步等待
 
 `RegisterInvocation` 在创建方同步执行，此时线程已登记到调度器，但尚未执行任务；
 它返回的 cleanup 在任务退出时执行，执行前被取消的任务也会执行 cleanup。
 `RegisterInvocation` 不得等待本批任务，因为本批执行需要全部登记回调返回。
+准入拒绝直接返回已取消、已完成的线程，不启动 goroutine，也不调用登记和执行回调。
+两种 Join 等待都立即完成，包括来自受管脚本的等待。
 
-worker、`RegisterInvocation`、cleanup、最终异常处理、停机回调和独占脚本执行权的回调不能同步
-drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。独占回调也不能再次
+worker、`RegisterInvocation`、cleanup、最终异常处理、停止条件检查、停机回调和独占脚本执行权的
+回调不能同步 drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。
+停止条件在屏障内求值，不应自行改变生命周期状态。独占回调也不能再次
 同步执行脚本或等待未完成的 Join / Latch，否则脚本无法取得执行权；已经完成的等待可直接返回。
 
 停机回调期间，准入保持关闭，但不持有准入锁。回调可以调用 `StopAll`，新任务会被拒绝；
-正常返回、panic 或 `Goexit` 都会恢复准入。drain 超时则保持关闭，直到之后一次
-`RunAfterStopAll` 成功。原生引擎主线程等待停机锁或清理通知时继续处理主线程任务，
-不推进帧或脚本轮次。Web 无需处理原生主线程队列，后台等待会挂起 Go goroutine，
-让 JS 事件循环继续处理异步回调。从 JS 同步回调进入时，依赖后续 JS 事件的工作仍须
-转到独立 goroutine，并让当前 JS 回调返回。
+正常返回、panic 或 `Goexit` 都会恢复准入。
 
-timeout 限制清理通知的等待，不是整个调用的硬期限：取得锁、正在运行的回调和脚本
-重新取得执行权仍依赖协作。任意 Go 阻塞、用户代码构成的循环等待，以及 `RegisterInvocation`
-等待自身任务，仍可能阻止进展。
+取消直接唤醒挂起脚本，无需未来的 `Update`。原生引擎主线程等待屏障和清理时继续
+处理主线程任务，不推进帧或脚本轮次；这允许在帧号不变时完成，不保证在一帧的时间预算内完成。
+Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，须把等待转到独立 goroutine 后返回。
+
+deadline 不能打断已经开始的引擎调用、条件检查或停机回调，脚本重新取得执行权也依赖协作。
+外部 worker 必须响应工作 context 或操作自身的取消机制；任意阻塞和循环等待仍可能阻止清理。
 
 ### 并发约束
 
+- `schedulerMu` 保护 runnable 状态和共享的当前任务队列；Update 与引擎等待者在
+  锁内选择并取出任务，解锁后执行。引擎串行调用 Update，由它独占延后和下一轮队列；
+  队列不再单独加锁。
+- 准入读锁允许并行登记，原子计数 `pendingSetups` 将重新开放准入推迟到所有登记回调结束。
+  登记回调在锁外执行；原子 epoch 使准入重新开放后仍能拒绝停止前的过期请求。
 - 等待登记与 blocked 状态一起发布，锁序为 `schedulerMu` → `waiterSet.mu`。
   关闭等待集合时移交等待者，解锁后再唤醒，避免与登记形成锁序环。
 - 任务结束时先把 Join 等待者标为 runnable，再取消 context、关闭完成通知并移除
@@ -158,15 +195,19 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 
 | 职责 | 位置 |
 | --- | --- |
-| 准入与任务生命周期、停止与清理屏障 | `internal/coroutine/lifecycle.go`、`shutdown.go` |
-| 回调重入限制、主线程调用与等待 | `internal/coroutine/callback.go`、`mainthread.go` |
-| 帧等待、循环轮次、重绘预算、帧边界回调 | `internal/coroutine/frame.go` |
-| 等待任务处理与调度统计 | `internal/coroutine/update.go` |
+| 协程准入与生命周期、停止与清理屏障 | `internal/coroutine/lifecycle.go`、`shutdown.go` |
+| 回调重入限制、主线程调用、帧边界回调 | `internal/coroutine/callback.go`、`mainthread.go` |
+| 定时与通道等待、worker 生命周期 | `internal/coroutine/wait.go` |
+| 帧等待、循环轮次、重绘预算 | `internal/coroutine/frame.go` |
+| 等待任务处理与调度统计 | `internal/coroutine/update.go`、`stats.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
 | 帧输入采样、统一输入与 Timer 派发 | `runtime_input.go`、`runtime_replay_input.go` |
 | 条件注册、状态采样与已匹配事件派发 | `runtime_conditions.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
+
+`UpdateStats()` 返回最近一次更新的统计，耗时单位为毫秒。
+`queue`、`waitJob` 和 `waitKind` 是调度器的私有实现。
 
 帧边界回调与脚本执行互斥，同时处理已排队的引擎主线程调用，
 避免正在等待引擎调用的脚本阻塞条件采样。该阶段不推进循环或帧等待任务。
@@ -229,8 +270,9 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 `runtime_event_dispatch_native_test.go`、
 `sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
 `internal/coroutine/order_test.go`。
-取消与重启覆盖位于 `internal/coroutine/wait_cancel_test.go`、`join_cancel_test.go`、
-`handler_order_test.go` 和 `internal/engine/execute_test.go`。
+取消与重启覆盖位于 `internal/coroutine/thread_test.go`、
+`internal/coroutine/worker_test.go`、`internal/coroutine/join_test.go`、
+`internal/coroutine/handler_test.go` 和 `internal/engine/execute_test.go`。
 WASM 编译检查不替代浏览器运行验证。
 
 ## 参考实现

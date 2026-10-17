@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"context"
 	"errors"
 	"io"
 	"reflect"
@@ -370,7 +371,9 @@ func assertReloadPreflightPreservedLiveState(
 func assertReloadAvailable(t *testing.T, game *Game) {
 	t.Helper()
 	canceled := errors.New("cancel reload probe")
-	err := engine.Reload(game, time.Second, func() error { return canceled }, nil, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := engine.Reload(ctx, game, func() error { return canceled }, nil, nil)
 	if !errors.Is(err, canceled) {
 		t.Fatalf("reload probe error = %v, want running game", err)
 	}

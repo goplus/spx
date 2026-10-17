@@ -15,8 +15,8 @@ func BenchmarkUpdateSleepingThreads(b *testing.B) {
 			// Measure scheduler bookkeeping without goroutine startup or script work.
 			for range count {
 				thread := co.newThread("sleeper")
-				co.setThreadState(thread, threadBlocked)
-				co.currentJobs.PushBack(&WaitJob{Th: thread, Type: waitTypeTime, Time: 1e12})
+				co.removeRunnable(thread)
+				co.enqueueJob(&waitJob{thread: thread, kind: waitTime, deadline: 1e12})
 			}
 			co.Update()
 			b.ReportAllocs()

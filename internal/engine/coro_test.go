@@ -20,12 +20,14 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-func TestResolveCoroutineOwnerPreservesNilCoroutineOwner(t *testing.T) {
+func TestResolveOwnerPreservesNilCoroutineOwner(t *testing.T) {
 	co := coroutine.New(nil)
 	previousCo, previousGame := gco, GetGame()
 	SetCoroutines(co)
@@ -37,11 +39,186 @@ func TestResolveCoroutineOwnerPreservesNilCoroutineOwner(t *testing.T) {
 
 	resolved := make(chan any, 1)
 	thread := co.Create(nil, func(coroutine.Thread) {
-		resolved <- ResolveCoroutineOwner(nil)
+		resolved <- resolveOwner(nil)
 	})
 	co.Join(thread)
 	if owner := <-resolved; owner != nil {
 		t.Fatalf("owner = %v, want nil", owner)
+	}
+}
+
+func TestGoWithOwnerResolvesOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		parent     any
+		owner      any
+		want       any
+		fromThread bool
+	}{
+		{name: "explicit", owner: "explicit", want: "explicit"},
+		{name: "game", want: "game"},
+		{name: "inherited", parent: "parent", want: "parent", fromThread: true},
+		{name: "override", parent: "parent", owner: "explicit", want: "explicit", fromThread: true},
+		{name: "nil", fromThread: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			isolateGameBinding(t)
+			co := setupExecuteTest(t)
+			SetGame("game")
+			done := make(chan struct{})
+			start := func() {
+				GoWithOwner(tc.owner, func(ctx context.Context, owner any) {
+					defer close(done)
+					thread := currentThread()
+					if thread == nil || thread.Owner != tc.want || owner != tc.want {
+						t.Errorf("callback owner = %v, thread = %v, want owner %v", owner, thread, tc.want)
+					} else if ctx != thread.Context() || ctx.Err() != nil {
+						t.Error("callback did not receive its live coroutine context")
+					}
+				})
+			}
+			if tc.fromThread {
+				co.Join(co.Create(tc.parent, func(coroutine.Thread) { start() }))
+			} else {
+				start()
+			}
+			select {
+			case <-done:
+			case <-testContext(t).Done():
+				t.Fatal("owned coroutine did not run")
+			}
+		})
+	}
+}
+
+func TestWarpRestoresStateAfterPanic(t *testing.T) {
+	for _, initial := range []bool{false, true} {
+		t.Run(map[bool]string{false: "disabled", true: "enabled"}[initial], func(t *testing.T) {
+			co := setupExecuteTest(t)
+			if IsRunWithoutScreenRefresh() || SetRunWithoutScreenRefresh(true) || !ShouldWaitNextFrame() {
+				t.Fatal("warp mode affected a caller outside its coroutine")
+			}
+			thread := co.Create("warp", func(coroutine.Thread) {
+				if SetRunWithoutScreenRefresh(initial) {
+					t.Error("new coroutine started in warp mode")
+				}
+				func() {
+					defer func() {
+						if got := recover(); got != "warp failure" {
+							t.Errorf("warp panic = %v, want warp failure", got)
+						}
+					}()
+					RunWithoutScreenRefresh(func() {
+						if !IsRunWithoutScreenRefresh() || ShouldWaitNextFrame() {
+							t.Error("warp did not suppress the initial frame wait")
+						}
+						RunWithoutScreenRefresh(func() { panic("warp failure") })
+					})
+				}()
+				if IsRunWithoutScreenRefresh() != initial || SetRunWithoutScreenRefresh(false) != initial || !ShouldWaitNextFrame() {
+					t.Error("warp did not restore the previous state after panic")
+				}
+			})
+			co.Join(thread)
+		})
+	}
+}
+
+func TestControlFlowWaiterFollowsWarpMode(t *testing.T) {
+	co := setupExecuteTest(t)
+	warpDone, done := make(chan struct{}), make(chan struct{})
+	thread := co.Create("loop", func(coroutine.Thread) {
+		wait := NewControlFlowWaiter()
+		SetRunWithoutScreenRefresh(true)
+		wait()
+		close(warpDone)
+		SetRunWithoutScreenRefresh(false)
+		wait()
+		close(done)
+	})
+	co.JoinFirstSlice(thread)
+	select {
+	case <-warpDone:
+	default:
+		t.Fatal("warp loop yielded before its budget was exhausted")
+	}
+	select {
+	case <-done:
+		t.Fatal("normal loop did not yield")
+	default:
+	}
+	advanceEngineFrameTo(t, CurrentFrame()+1)
+	co.Update()
+	co.Join(thread)
+	select {
+	case <-done:
+	default:
+		t.Fatal("normal loop did not resume in the next frame")
+	}
+}
+
+func TestWarpWaiterYieldsAfterBudget(t *testing.T) {
+	defer itime.Start(nil)
+	synctest.Test(t, func(t *testing.T) {
+		itime.Start(nil)
+		co := setupExecuteTest(t)
+		done := make(chan struct{})
+		thread := co.Create("warp", func(coroutine.Thread) {
+			SetRunWithoutScreenRefresh(true)
+			wait := NewControlFlowWaiter()
+			wait()
+			time.Sleep(warpBudget + time.Nanosecond)
+			wait()
+			close(done)
+		})
+		co.JoinFirstSlice(thread)
+		co.Update()
+		select {
+		case <-done:
+			t.Fatal("exhausted warp budget resumed in the same frame")
+		default:
+		}
+		advanceEngineFrameTo(t, CurrentFrame()+1)
+		co.Update()
+		co.Join(thread)
+		select {
+		case <-done:
+		default:
+			t.Fatal("exhausted warp budget did not resume in the next frame")
+		}
+	})
+}
+
+func TestStopThisScriptPreservesOtherPanics(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		signal any
+		want   any
+	}{
+		{name: "normal"},
+		{name: "stop", signal: coroutine.ErrStopThisScript},
+		{name: "abort", signal: coroutine.ErrAbortThread, want: coroutine.ErrAbortThread},
+		{name: "panic", signal: "failure", want: "failure"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got any
+			returned := false
+			func() {
+				defer func() { got = recover() }()
+				RunStopThisScript(func() {
+					if tc.signal != nil {
+						panic(tc.signal)
+					}
+				})
+				returned = true
+			}()
+			if got != tc.want || returned != (tc.want == nil) {
+				t.Fatalf("procedure boundary: panic=%v, returned=%v, want panic %v", got, returned, tc.want)
+			}
+			if IsAbortThreadError(got) != (tc.want == coroutine.ErrAbortThread) {
+				t.Fatalf("abort classification changed for %v", got)
+			}
+		})
 	}
 }
 

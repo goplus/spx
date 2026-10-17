@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"time"
@@ -29,7 +30,7 @@ import (
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-const reloadDrainTimeout = 2 * time.Second
+const reloadTimeout = 2 * time.Second
 
 var (
 	errReloadInactiveGame = errors.New("game reload requires the active game")
@@ -130,7 +131,9 @@ func reloadGame(game Gamer, g *Game, index any) error {
 	v := reflect.ValueOf(game).Elem()
 	var plan *reloadPlan
 	var generation uint64
-	err := engine.Reload(g, reloadDrainTimeout, func() error {
+	ctx, cancel := context.WithTimeout(context.Background(), reloadTimeout)
+	defer cancel()
+	err := engine.Reload(ctx, g, func() error {
 		var err error
 		plan, err = prepareReload(g, v, index)
 		return err

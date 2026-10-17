@@ -16,7 +16,7 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 	})
 	t.Cleanup(func() {
 		close(release)
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Fatal("coroutine did not stop during cleanup")
 		}
 	})
@@ -47,8 +47,8 @@ func TestExternalCallerCannotYieldCurrentCoroutine(t *testing.T) {
 		co.Yield(current)
 		return nil
 	}()
-	if panicValue != ErrCannotYieldANonrunningThread {
-		t.Fatalf("external Yield panic = %v, want %v", panicValue, ErrCannotYieldANonrunningThread)
+	if panicValue != ErrNotCurrent {
+		t.Fatalf("external Yield panic = %v, want %v", panicValue, ErrNotCurrent)
 	}
 
 	_ = th
@@ -64,7 +64,7 @@ func TestExternalWaitDoesNotChangeSchedulerState(t *testing.T) {
 	<-started
 	t.Cleanup(func() {
 		close(release)
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("coroutine did not stop")
 		}
 	})
@@ -83,13 +83,13 @@ func TestExternalWaitDoesNotChangeSchedulerState(t *testing.T) {
 				defer func() { recovered = recover() }()
 				test.wait(thread)
 			}()
-			if recovered != ErrCannotYieldANonrunningThread {
+			if recovered != ErrNotCurrent {
 				t.Fatalf("panic = %v, want invalid caller", recovered)
 			}
 			co.schedulerMu.Lock()
 			defer co.schedulerMu.Unlock()
 			_, runnable := co.runnableThreads[thread]
-			if !runnable || co.currentJobs.Count() != 0 {
+			if !runnable || co.currentJobs.len() != 0 {
 				t.Fatal("rejected wait changed the running script or queued work")
 			}
 		})

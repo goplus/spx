@@ -37,7 +37,7 @@ type scriptEventHandler[F any] struct {
 
 type messageEventHandler = scriptEventHandler[func(string, any)]
 
-func newScriptEventSink[F any](owner threadObj, run F, policy coroutine.HandlerPolicy, cond ...func(any) bool) eventSink {
+func newScriptEventSink[F any](owner any, run F, policy coroutine.HandlerPolicy, cond ...func(any) bool) eventSink {
 	handler := &scriptEventHandler[F]{HandlerState: coroutine.NewHandlerState(policy), run: run}
 	return coreevent.NewSink(owner, handler, cond...)
 }

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
 )
 
 func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
@@ -80,7 +79,7 @@ func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 
 		done := make(chan []float64, 1)
 		co.Create("wait-to-do-random", func(me coroutine.Thread) {
-			engine.WaitToDo(func() {
+			co.WaitToDo(func() {
 				if drawOutsideCoroutine {
 					_ = Rand__1(0, 1)
 				}

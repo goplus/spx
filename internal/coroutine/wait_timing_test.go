@@ -31,7 +31,7 @@ func TestWaitResumesAtLogicalDeadline(t *testing.T) {
 		co.Wait(1)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	itime.Update(1, 30)
 	co.Update()
@@ -48,7 +48,7 @@ func TestWaitWholeSecondAtFixedFPSDoesNotDriftOneFrame(t *testing.T) {
 		co.Wait(1)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	for frame := 1; frame <= 31; frame++ {
 		itime.Update(1.0/30, 30)
@@ -72,7 +72,7 @@ func TestConsecutiveWholeSecondWaitsDoNotAccumulateFrameDrift(t *testing.T) {
 			resumedFrames = append(resumedFrames, itime.Frame())
 		}
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	for range 90 {
 		itime.Update(1.0/30, 30)
@@ -93,7 +93,7 @@ func TestLongFixedStepWaitDoesNotDrift(t *testing.T) {
 		co.Wait(2400)
 		resumedFrame = itime.Frame()
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	for range 71_999 {
 		itime.Update(1.0/30, 30)
@@ -118,7 +118,7 @@ func TestWaitDoesNotResumeBeforeDeadline(t *testing.T) {
 		co.Wait(1)
 		resumed = true
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 
 	itime.Update(1-5e-10, 30)
@@ -144,7 +144,7 @@ func TestWaitAlwaysCrossesTheIssuingFrame(t *testing.T) {
 				co.Wait(duration)
 				resumed = true
 			})
-			co.JoinYieldedOrDone(th)
+			co.JoinFirstSlice(th)
 			co.Update()
 			if resumed {
 				t.Fatal("wait resumed in its issuing frame")

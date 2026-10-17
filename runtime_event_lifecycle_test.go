@@ -158,7 +158,7 @@ func TestKeyHandlerIdentityIncludesRegistrationAndOwner(t *testing.T) {
 	if started != 3 {
 		t.Fatalf("started %d scripts, want one per registration and owner", started)
 	}
-	co.StopIf(func(th coroutine.Thread) bool { return th.Obj == clone })
+	co.StopIf(func(th coroutine.Thread) bool { return th.Owner == clone })
 	game.scriptEvents.doWhenKeyPressed(KeySpace)
 	co.Update()
 	if started != 4 {

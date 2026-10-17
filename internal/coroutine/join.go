@@ -23,15 +23,7 @@ func (p *Coroutines) Join(target Thread) {
 		return
 	}
 
-	me := p.callerThread()
-	if me == nil {
-		p.waitOutsideScript(target.done)
-		return
-	}
-	if me == target {
-		return
-	}
-	p.waitOn(me, &target.joinWaiters)
+	p.join(target, target.done, &target.joinWaiters)
 }
 
 // JoinAll waits for each target to finish.
@@ -41,19 +33,23 @@ func (p *Coroutines) JoinAll(targets []Thread) {
 	}
 }
 
-// JoinYieldedOrDone waits until target first yields or finishes.
-func (p *Coroutines) JoinYieldedOrDone(target Thread) {
+// JoinFirstSlice waits until target first yields or finishes.
+func (p *Coroutines) JoinFirstSlice(target Thread) {
 	if target == nil {
 		return
 	}
 
+	p.join(target, target.firstSliceDone, &target.firstSliceWaiters)
+}
+
+func (p *Coroutines) join(target Thread, done <-chan struct{}, waiters *waiterSet) {
 	me := p.callerThread()
 	if me == nil {
-		p.waitOutsideScript(target.yieldedOrDone)
+		p.waitOutsideScript(done)
 		return
 	}
 	if me == target {
 		return
 	}
-	p.waitOn(me, &target.yieldWaiters)
+	p.waitOn(me, waiters)
 }

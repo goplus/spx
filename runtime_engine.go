@@ -193,11 +193,11 @@ func (p *Game) markStartDispatched(generation uint64) bool {
 // -----------------------------------------------------------------------------
 
 // runMainUntilYield starts Main in its own coroutine and waits for its first yield or exit.
-func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
+func runMainUntilYield(owner any, mainFn func()) {
 	thread := gco.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)
 	})
-	gco.JoinYieldedOrDone(thread)
+	gco.JoinFirstSlice(thread)
 }
 
 // runMain calls Main synchronously while tracking its execution timeout.

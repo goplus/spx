@@ -18,12 +18,31 @@ package coroutine
 
 import (
 	"cmp"
-	sdebug "runtime/debug"
 	stime "time"
 
 	"github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
+
+type waitKind int
+
+const (
+	waitFrame waitKind = iota
+	waitTime
+	waitMainThread
+	waitYield
+	waitLoop
+	waitNextRound
+)
+
+// waitJob holds a script wait or engine-thread call.
+type waitJob struct {
+	thread   Thread // Waiting coroutine; may be nil for waitMainThread.
+	kind     waitKind
+	call     func()  // Engine-thread action, only for waitMainThread.
+	deadline float64 // Level-time deadline for a time job.
+	frame    int64   // Issuing frame for frame-gated jobs.
+}
 
 type updateState struct {
 	frame            int64
@@ -38,34 +57,23 @@ const (
 	updateProcessJob updateAction = iota
 	updateRetry
 	updateComplete
-
-	updateWatchdogTimeout = stime.Second
 )
 
+const updateWatchdogTimeout = stime.Second
+
 // Update processes queued wait jobs and resumes eligible coroutines.
+// The engine must serialize Update calls.
 func (p *Coroutines) Update() {
 	start := stime.Now()
-	gcStatsBefore := p.readGCStatsBeforeUpdate()
+	gcStatsBefore := p.captureGCStats()
 
 	stats, state := p.beginUpdate()
 	stats.GCStatsEnabled = gcStatsBefore != nil
 	p.runUpdateLoop(&stats, &state)
-	p.finishUpdate(&stats, start, gcStatsBefore)
-	p.statsMu.Lock()
-	p.lastUpdateStats = stats
-	p.statsMu.Unlock()
+	p.finishStats(&stats, start, gcStatsBefore)
 }
 
-func (p *Coroutines) readGCStatsBeforeUpdate() *sdebug.GCStats {
-	if !p.perfDebug.Load() {
-		return nil
-	}
-	stats := &sdebug.GCStats{}
-	p.readGCStats(stats)
-	return stats
-}
-
-func (p *Coroutines) beginUpdate() (UpdateJobsStats, updateState) {
+func (p *Coroutines) beginUpdate() (UpdateStats, updateState) {
 	start := stime.Now()
 	state := updateState{
 		frame:            itime.Frame(),
@@ -73,31 +81,35 @@ func (p *Coroutines) beginUpdate() (UpdateJobsStats, updateState) {
 		watchdogDeadline: p.updateWatchdogNow().Add(updateWatchdogTimeout),
 		workDeadline:     start.Add(loopWorkBudget),
 	}
-	return UpdateJobsStats{InitTime: elapsedMillis(start)}, state
+	return UpdateStats{InitTime: elapsedMillis(start)}, state
 }
 
-func (p *Coroutines) runUpdateLoop(stats *UpdateJobsStats, state *updateState) {
+func (p *Coroutines) runUpdateLoop(stats *UpdateStats, state *updateState) {
 	start := stime.Now()
 	iterations := 0
 
 updateLoop:
 	for {
 		iterations++
-		switch p.nextUpdateAction(stats) {
+		action, job := p.nextUpdateAction(stats)
+		switch action {
 		case updateComplete:
-			if p.queueNextScriptRound(state) {
+			if p.queueNextRound(state) {
 				continue
 			}
 			break updateLoop
 		case updateProcessJob:
-			p.processNextWaitJob(state, stats)
+			start := stime.Now()
+			stats.JobCount++
+			p.processJob(state, stats, job)
+			stats.JobTime += elapsedMillis(start)
 		case updateRetry:
 		}
 
 		if !p.updateWatchdogNow().Before(state.watchdogDeadline) {
 			// A slow frame is not necessarily a runaway script. Leave queued work
 			// for the next Update without canceling scripts or waiting for cleanup.
-			log.Warn("engine update exceeded 1 second - deferring remaining work to next frame (waitMainCount=%d)", stats.WaitMainCount)
+			log.Warn("engine update exceeded 1 second - deferring remaining work to next frame (waitMainCount=%d)", stats.MainThreadCount)
 			break updateLoop
 		}
 	}
@@ -107,98 +119,69 @@ updateLoop:
 	p.promoteDeferredJobs(stats)
 }
 
-func (p *Coroutines) nextUpdateAction(stats *UpdateJobsStats) updateAction {
+func (p *Coroutines) nextUpdateAction(stats *UpdateStats) (updateAction, *waitJob) {
 	start := stime.Now()
 	action := updateProcessJob
 	p.schedulerMu.Lock()
-	job, queued := p.currentJobs.PeekFront()
+	job, queued := p.currentJobs.peekFront()
 	// Service engine calls before waiting for scripts, including startup, to yield.
-	if (!queued || job.Type != waitTypeMainThread) && p.hasRunnableThreadLocked() {
+	if (!queued || job.kind != waitMainThread) && p.hasRunnableLocked() {
 		p.schedulerCond.Wait()
 		action = updateRetry
 	} else if !queued {
 		action = updateComplete
+	} else {
+		// Engine waiters may also take jobs, so select and remove under one lock.
+		job = p.currentJobs.popFront()
 	}
 	p.schedulerMu.Unlock()
 	stats.WaitTime += elapsedMillis(start)
-	return action
+	return action, job
 }
 
-func (p *Coroutines) processNextWaitJob(state *updateState, stats *UpdateJobsStats) {
-	start := stime.Now()
-	job := p.currentJobs.PopFront()
-	stats.TaskCounts++
-	p.processWaitJob(state, stats, job)
-	stats.TaskProcessing += elapsedMillis(start)
-}
-
-func (p *Coroutines) processWaitJob(state *updateState, stats *UpdateJobsStats, job *WaitJob) {
-	if job.Th != nil && p.isThreadCanceled(job.Th) {
+func (p *Coroutines) processJob(state *updateState, stats *UpdateStats, job *waitJob) {
+	if job.thread.canceled() {
 		return
 	}
 
-	switch job.Type {
-	case waitTypeLoop, waitTypeNextRound:
-		if job.Frame < state.frame {
-			p.runWaitJob(job)
+	switch job.kind {
+	case waitLoop, waitNextRound:
+		if job.frame < state.frame {
+			p.wakeThread(job.thread)
 		} else {
-			p.roundJobs.PushBack(job)
+			p.roundJobs.pushBack(job)
 		}
-	case waitTypeFrame:
-		if job.Frame >= state.frame {
-			p.deferredJobs.PushBack(job)
+	case waitFrame:
+		if job.frame >= state.frame {
+			p.deferredJobs.pushBack(job)
 		} else {
-			p.runWaitJob(job)
-			stats.WaitFrameCount++
+			p.wakeThread(job.thread)
+			stats.FrameWaitCount++
 		}
-	case waitTypeTime:
-		if job.Frame >= state.frame || job.Time > state.levelTime {
-			p.deferredJobs.PushBack(job)
+	case waitTime:
+		if job.frame >= state.frame || job.deadline > state.levelTime {
+			p.deferredJobs.pushBack(job)
 		} else {
-			p.runWaitJob(job)
+			p.wakeThread(job.thread)
 		}
-	case waitTypeYield:
-		p.runWaitJob(job)
-	case waitTypeMainThread:
-		job.Call()
-		stats.WaitMainCount++
+	case waitYield:
+		p.wakeThread(job.thread)
+	case waitMainThread:
+		job.call()
+		stats.MainThreadCount++
 	}
 }
 
-func (p *Coroutines) runWaitJob(job *WaitJob) {
-	if job.Call != nil {
-		job.Call()
-	} else {
-		p.markRunnableAndResume(job.Th)
-	}
-}
-
-func (p *Coroutines) promoteDeferredJobs(stats *UpdateJobsStats) {
+func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
 	start := stime.Now()
-	p.deferredJobs.Move(p.roundJobs)
+	p.deferredJobs.appendFrom(p.roundJobs)
 	// Deferred waits retain script order, including restarted handlers.
-	p.deferredJobs.SortStable(func(a, b *WaitJob) int {
-		return cmp.Compare(a.threadOrder(), b.threadOrder())
+	p.deferredJobs.sortStable(func(a, b *waitJob) int {
+		return cmp.Compare(a.thread.resumeOrder, b.thread.resumeOrder)
 	})
-	stats.NextCount = p.deferredJobs.Count()
-	p.currentJobs.Move(p.deferredJobs)
+	stats.DeferredCount = p.deferredJobs.len()
+	p.schedulerMu.Lock()
+	p.currentJobs.appendFrom(p.deferredJobs)
+	p.schedulerMu.Unlock()
 	stats.MoveTime = elapsedMillis(start)
-}
-
-func (p *Coroutines) finishUpdate(stats *UpdateJobsStats, start stime.Time, before *sdebug.GCStats) {
-	if before != nil {
-		var after sdebug.GCStats
-		p.readGCStats(&after)
-		stats.GCCount = int(after.NumGC - before.NumGC)
-		stats.GCPauses = float64(after.PauseTotal-before.PauseTotal) / float64(stime.Millisecond)
-	}
-
-	total := elapsedMillis(start)
-	accounted := stats.InitTime + stats.LoopTime + stats.MoveTime
-	stats.TotalTime = total
-	stats.ExternalTime = total - accounted
-}
-
-func elapsedMillis(start stime.Time) float64 {
-	return stime.Since(start).Seconds() * 1000
 }

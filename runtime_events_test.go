@@ -690,7 +690,7 @@ func TestNestedAsyncBroadcastCycleYieldsAtRoundBoundary(t *testing.T) {
 		if !reflect.DeepEqual(calls, want) {
 			t.Fatalf("calls after frame %d = %v, want %v", frame, calls, want)
 		}
-		if frame < 3 && co.GetLastUpdateStats().NextCount == 0 {
+		if frame < 3 && co.UpdateStats().DeferredCount == 0 {
 			t.Fatalf("recursive receiver was not deferred after frame %d", frame)
 		}
 	}
@@ -736,7 +736,7 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 			co.YieldLoopFor(me)
 		}
 	})
-	co.JoinYieldedOrDone(driver)
+	co.JoinFirstSlice(driver)
 
 	calls := 0
 	game.OnMsg__1("a", func() {
@@ -757,7 +757,7 @@ func TestNestedAsyncBroadcastCycleHonorsScriptRoundBudget(t *testing.T) {
 	if calls < 4 {
 		t.Fatalf("recursive broadcast calls = %d, want multiple script rounds", calls)
 	}
-	if co.GetLastUpdateStats().NextCount == 0 {
+	if co.UpdateStats().DeferredCount == 0 {
 		t.Fatal("recursive broadcast did not leave its next round queued")
 	}
 }
@@ -767,7 +767,7 @@ func TestNestedAsyncBroadcastCycleResetsContextAtRoundBoundary(t *testing.T) {
 	driver := co.Create(nil, func(me coroutine.Thread) {
 		co.YieldLoopFor(me)
 	})
-	co.JoinYieldedOrDone(driver)
+	co.JoinFirstSlice(driver)
 
 	var calls []string
 	game.OnMsg__1("a", func() {
@@ -1214,8 +1214,8 @@ func (c *disappearingClickTarget) getProxy() *engine.Sprite {
 	return &c.proxy
 }
 
-func (c *disappearingClickTarget) Visible() bool              { return true }
-func (c *disappearingClickTarget) doWhenClick(this threadObj) { c.clicks++ }
+func (c *disappearingClickTarget) Visible() bool        { return true }
+func (c *disappearingClickTarget) doWhenClick(this any) { c.clicks++ }
 
 func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T) {
 	previous := gco

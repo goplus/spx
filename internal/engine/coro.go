@@ -52,52 +52,38 @@ func IsInCoroutine() bool {
 	return gco != nil && gco.IsInCoroutine()
 }
 
-func GetCoroutineOwner() any {
-	if thread := currentThread(); thread != nil {
-		return thread.Obj
-	}
-	return nil
-}
-
-func GetCurrentThreadContext() context.Context {
-	if thread := currentThread(); thread != nil {
-		return thread.Context()
-	}
-	return context.Background()
-}
-
 func SetCoroutines(co *coroutine.Coroutines) {
 	gco = co
 	profiler.SetGco(co)
 }
 
-func Go(tobj coroutine.ThreadObj, fn func(ctx context.Context)) {
+func Go(owner any, fn func(ctx context.Context)) {
 	binding, ok := captureRuntimeWork()
 	if !ok {
 		return
 	}
-	gco.Create(tobj, func(me coroutine.Thread) {
+	gco.Create(owner, func(me coroutine.Thread) {
 		if isRuntimeWorkCurrent(binding) {
 			fn(me.Context())
 		}
 	})
 }
 
-func ResolveCoroutineOwner(owner any) any {
+func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
+	owner = resolveOwner(owner)
+	Go(owner, func(ctx context.Context) {
+		fn(ctx, owner)
+	})
+}
+
+func resolveOwner(owner any) any {
 	if owner != nil {
 		return owner
 	}
 	if thread := currentThread(); thread != nil {
-		return thread.Obj
+		return thread.Owner
 	}
 	return GetGame()
-}
-
-func GoWithOwner(owner any, fn func(ctx context.Context, owner any)) {
-	owner = ResolveCoroutineOwner(owner)
-	Go(owner, func(ctx context.Context) {
-		fn(ctx, owner)
-	})
 }
 
 func currentThread() coroutine.Thread {
