@@ -15,10 +15,10 @@ apply to all projects using the corresponding APIs.
 
 ## Execution ownership and completion
 
-Each script uses a Go goroutine to preserve its stack. `runMu` serializes script
-slices. `Yield` releases execution ownership; a resumed script must acquire it
+Each admitted script uses a Go goroutine to preserve its stack. `runMu` serializes
+script slices. `yield` releases execution ownership; a resumed script must acquire it
 again before continuing. `Current()` identifies that owner, not the goroutine
-calling an API.
+calling an API. `Task.Owner` and `Thread.Owner` identify the logical task owner.
 
 Time, frame, Join, and external-task waits release execution ownership.
 `WaitMainThread` is a synchronous engine call and retains the script slice while
@@ -29,6 +29,7 @@ without advancing future frames.
 Channel receives use managed external tasks and publish their result only after
 the script resumes normally. A wait that exits through cancellation does not
 write its result to the caller.
+`JoinFirstSlice(thread)` waits for the target's first yield or completion.
 Join and Latch unregister waiters on completion or cancellation. `Execute` waits
 for task completion even when admission rejects the task or cancellation prevents
 its callback from starting.
@@ -36,9 +37,10 @@ its callback from starting.
 Cancellation, script completion, and runtime drain are separate stages. Both
 `Cancel` and `Stop` request termination and wake suspended scripts; they cannot
 interrupt arbitrary blocking Go code. Reset barriers wait for scripts, external
-work, and final panic handling. Ordinary scripts may call `StopAllAndWait`, which
-excludes the calling script. A `WaitToDo` worker that exits through `Goexit`
-cancels and wakes its script so the script can clean up.
+work, and final panic handling. The host uses `RunAfterStop(ctx, nil)` to wait for
+all registered work; scripts use the non-waiting stop operations. A `WaitToDo`
+worker that exits through `Goexit` cancels and wakes its script so the script can
+clean up.
 
 ### Stop operations
 
@@ -48,12 +50,47 @@ cancels and wakes its script so the script can clean up.
 | `StopCurrent` | Exit the current coroutine through procedure boundaries. |
 | `StopThisScript` | Exit the nearest custom procedure and resume its caller; without a procedure boundary, end the coroutine. |
 | `StopAll` | Request cancellation of all registered coroutines without waiting. |
-| `StopAllAndWait` | Request cancellation and wait for scripts and workers; a managed caller is also canceled but excluded from the wait. |
-| `RunAfterStopAll` | Close admission, request cancellation, drain work, then run a callback as an external reset barrier. |
+| `RunAfterStop(ctx, call)` | From the host, close admission, request cancellation, drain scripts and workers, then run a callback if non-nil. Managed callers are rejected before changing state. |
+| `RunAfterStopIf(ctx, condition, call)` | Recheck a condition after acquiring the shutdown barrier; return whether stopping began and any wait error. A false condition leaves work unchanged. |
 
 `Stop` names script operations, `Cancel` signals cancellation, and internal drain
 waits cover cleanup. `ErrAbortThread` remains the control-flow signal for exiting
 the current coroutine.
+
+### Contexts for shutdown waits
+
+`ctx` controls barrier acquisition and drain waiting. It must be independent
+of the work context being stopped, or the stop request also cancels the wait.
+`context.Background()` waits without a deadline.
+`RunAfterStop` returns an `error`;
+`RunAfterStopIf` returns `(stopStarted bool, err error)`:
+
+| Phase | Conditional result and state |
+| --- | --- |
+| Canceled before stopping, including while waiting for an earlier barrier | `false, err`; existing work and admission remain unchanged. |
+| Condition fails after acquiring the barrier | `false, nil`; no stop begins. |
+| Canceled after stopping begins while work remains registered | `true, err`; skip the callback and keep admission closed until a later barrier succeeds. |
+| Final unregistration races cancellation | Recheck the registry; an already completed drain can succeed. |
+
+Use `errors.Is` to recognize `context.Canceled` or `context.DeadlineExceeded`.
+These are the standard `ctx.Err()` errors; custom `context.Cause(ctx)` values
+are not propagated.
+An incomplete-drain error also includes remaining thread IDs, names, and worker
+count. Canceling the wait does not prove that work has exited. Complete reset
+requires an external entry point and one barrier covering admission closure,
+cancellation, drain, and callback. Both shutdown waits use this host-only
+contract; scripts cannot synchronously drain their peers.
+
+Before calling `engine.Reload(ctx, owner, ...)`, the host uses `context.WithTimeout`
+with a two-second `reloadTimeout`. Preparation consumes this budget, but running
+preparation or rebuild callbacks are not interrupted. A preparation that consumes
+the budget leaves the original game running and returns a deadline error, even if
+the subsequent drain would have been quick. Once rebuilding starts, activation
+can finish. Failure after stopping leaves the game stopped.
+
+This budget is not an end-to-end return-time limit. Engine lifecycle and frame
+mutexes are not context-aware; cancellation is checked after acquiring them.
+The context is checked between phases and bounds shutdown barrier and drain waits.
 
 ### Callbacks and synchronous waits
 
@@ -62,31 +99,49 @@ registered with the scheduler and before the task executes. Its returned cleanup
 runs when the task exits, including cancellation before execution.
 `RegisterInvocation` must not wait for tasks in its batch: execution requires all
 of that batch's registration callbacks to return.
+Admission rejection returns a canceled, completed thread without starting a
+goroutine or invoking registration and execution callbacks. Both Join waits
+therefore complete immediately, including for managed callers.
 
-Workers, registration callbacks, cleanup, final panic handlers, shutdown
-callbacks, and callbacks holding exclusive script ownership cannot synchronously
-drain. Such calls panic with `ErrReentrantWait` before canceling tasks or changing
-admission. Exclusive callbacks also cannot synchronously execute scripts or block
-on Join / Latch, since those scripts cannot acquire execution ownership.
+For non-empty batches, `BatchWaitFirstSlice` requires a managed caller: its return
+depends on reacquiring script ownership after the batch's first slices. Host calls
+are rejected before any task is registered. `BatchAsync` and `BatchWaitDone` also
+accept host callers; empty batches return immediately in every mode.
+
+Scripts, workers, registration callbacks, cleanup, final panic handlers, shutdown condition
+checks, shutdown callbacks, and callbacks holding exclusive script ownership cannot
+synchronously drain. Such calls panic with `ErrReentrantWait` before canceling tasks
+or changing admission. Shutdown conditions run inside the barrier and must not
+change lifecycle state themselves. Exclusive callbacks also cannot synchronously
+execute scripts or block on Join / Latch, since those scripts cannot acquire execution ownership.
 Completed waits may return.
 
 Shutdown callbacks run with admission closed but without holding the admission
 lock. They may call `StopAll`; new tasks are rejected. Normal return, panic, and
-`Goexit` all restore admission. A drain timeout keeps admission closed until a
-later successful `RunAfterStopAll`. While waiting for the shutdown lock or drain
-notifications, the native engine thread services main-thread jobs without
-advancing frames or script rounds. Web has no native main-thread queue to service;
-background waits park the Go goroutine so the JS event loop can process asynchronous
-callbacks. A synchronous JS callback must still move work that depends on later JS
-events to a separate goroutine and return to the host.
+`Goexit` all restore admission.
 
-The timeout bounds waiting for drain notifications, not the entire call. Lock
-acquisition, running callbacks, and reacquiring script ownership remain
-cooperative. Arbitrary blocking Go code, circular user dependencies, and
-registration callbacks waiting for their own tasks can still prevent progress.
+Cancellation wakes suspended scripts without a future `Update`. While waiting for
+the barrier or drain, the native engine thread services main-thread jobs without
+advancing frames or script rounds. Drain can finish at the same frame number;
+this does not guarantee completion within one frame's time budget. Web background
+waits park the Go goroutine. A synchronous JS callback that needs later events
+must move its wait to a separate goroutine and return to the host.
+
+The deadline cannot interrupt running engine calls, condition checks, or shutdown
+callbacks; reacquiring script ownership also remains cooperative. External workers
+must observe their work context or use the operation's cancellation mechanism.
+Arbitrary blocking code and circular dependencies can still prevent cleanup.
 
 ### Concurrency invariants
 
+- `schedulerMu` protects runnable state and the shared current-job queue. Update
+  and engine waiters select and remove a job under that lock, then execute it
+  after unlocking. The engine serializes Update calls, which own the deferred
+  and next-round queues; queues have no separate locks.
+- Admission readers may register concurrently; `pendingSetups` is atomic and
+  delays reopening until all registration callbacks finish. Callbacks run outside
+  the admission lock. The atomic epoch rejects requests from before a stop,
+  even after admission reopens.
 - Waiter registration and the blocked state are published together, with lock
   order `schedulerMu` → `waiterSet.mu`. Closing a set transfers its waiters;
   waking them after unlocking avoids reversing this order.
@@ -97,9 +152,9 @@ registration callbacks waiting for their own tasks can still prevent progress.
   Canceling its script cannot decrement the work count early;
   reset must wait for the work itself to finish.
 - Drain waits check their predicate and subscribe under the lifecycle registry
-  lock to avoid missed notifications. Actual unregistration notifies waiters,
-  including after final panic handling; the script's completion channel is not
-  a substitute.
+  lock to avoid missed notifications. Admission stays closed during the wait;
+  the last thread or worker to unregister notifies all waiters, including after
+  final panic handling. The script's completion channel is not a substitute.
 
 ## Frame phases
 
@@ -202,15 +257,19 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 
 | Responsibility | Location |
 | --- | --- |
-| Admission and task lifecycle, stop and drain barriers | `internal/coroutine/lifecycle.go`, `shutdown.go` |
-| Callback reentry guards, engine-thread calls and waits | `internal/coroutine/callback.go`, `mainthread.go` |
-| Frame waits, loop rounds, redraw budget, frame-boundary callbacks | `internal/coroutine/frame.go` |
-| Wait-job processing and scheduler statistics | `internal/coroutine/update.go` |
+| Thread admission and lifecycle, stop and drain barriers | `internal/coroutine/lifecycle.go`, `shutdown.go` |
+| Callback reentry guards, engine-thread calls, frame-boundary callbacks | `internal/coroutine/callback.go`, `mainthread.go` |
+| Timed and channel waits, worker lifecycle | `internal/coroutine/wait.go` |
+| Frame waits, loop rounds, redraw budget | `internal/coroutine/frame.go` |
+| Wait-job processing and scheduler statistics | `internal/coroutine/update.go`, `stats.go` |
 | Control-flow integration | `internal/engine/coro.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Frame input sampling, unified input and timer dispatch | `runtime_input.go`, `runtime_replay_input.go` |
 | Condition registration, sampling, and matched-handler dispatch | `runtime_conditions.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
+
+`UpdateStats()` returns statistics from the latest update, with durations in
+milliseconds. `queue`, `waitJob`, and `waitKind` are private scheduler details.
 
 Frame-boundary callbacks exclude script execution while servicing queued
 engine main-thread calls. A script waiting on such a call must not block
@@ -291,8 +350,9 @@ Core regression coverage is in `runtime_scratch_scheduler_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_native_test.go`,
 `sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
 `internal/coroutine/order_test.go`.
-Cancellation and restart coverage is in `internal/coroutine/wait_cancel_test.go`,
-`join_cancel_test.go`, `handler_order_test.go`, and `internal/engine/execute_test.go`.
+Cancellation and restart coverage is in `internal/coroutine/thread_test.go`,
+`internal/coroutine/worker_test.go`, `internal/coroutine/join_test.go`,
+`internal/coroutine/handler_test.go`, and `internal/engine/execute_test.go`.
 WASM compilation does not replace browser runtime verification.
 
 ## Reference implementation

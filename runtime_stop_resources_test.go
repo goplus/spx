@@ -42,8 +42,8 @@ func TestStopAllCleansResourcesBeforeAbortingCaller(t *testing.T) {
 				gate.Wait()
 				peerFinished = true
 			})
-			gco.JoinYieldedOrDone(peer)
-			caller, stopScripts := threadObj(game), game.Stop
+			gco.JoinFirstSlice(peer)
+			caller, stopScripts := any(game), game.Stop
 			if target == "clone" {
 				caller, stopScripts = clone, clone.Stop
 			}

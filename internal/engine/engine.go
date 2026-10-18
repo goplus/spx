@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -259,7 +260,7 @@ func drainCoroutines(cleanup func()) {
 		cleanup()
 		return
 	}
-	gco.RunAfterStopAll(0, cleanup)
+	gco.RunAfterStop(context.Background(), cleanup)
 }
 
 func (b *gameBinding) loadPhase() gamePhase {

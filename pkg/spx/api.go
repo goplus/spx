@@ -89,7 +89,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 //	})
 func Go(owner any, fn func(ctx context.Context, owner any)) {
 	if isSpxEnv() {
-		engine.GoWithOwner(owner, fn)
+		engine.Go(owner, fn)
 	} else {
 		go fn(context.Background(), owner)
 	}

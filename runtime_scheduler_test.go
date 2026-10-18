@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -39,8 +40,10 @@ func installRuntimeScheduler(t *testing.T, co *coroutine.Coroutines, beforeResto
 	gco = co
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
-			t.Error("coroutines did not stop")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := co.RunAfterStop(ctx, nil); err != nil {
+			t.Errorf("coroutines did not stop: %v", err)
 		}
 		if beforeRestore != nil {
 			beforeRestore()

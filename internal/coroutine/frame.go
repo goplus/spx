@@ -25,6 +25,12 @@ import (
 // Scratch budgets 75% of the default stepping interval for script rounds.
 const loopWorkBudget = stime.Second * 3 / (4 * time.DefaultFPS)
 
+// ScriptRound counts additional script rounds within engine frames.
+// Pair it with the frame number to identify a scheduling round.
+func (p *Coroutines) ScriptRound() uint64 {
+	return p.scriptRound.Load()
+}
+
 // WaitNextFrame suspends the current coroutine until the next frame.
 func (p *Coroutines) WaitNextFrame() {
 	p.WaitNextFrameFor(p.callerThread())
@@ -32,17 +38,17 @@ func (p *Coroutines) WaitNextFrame() {
 
 // WaitNextFrameFor suspends me until the next frame.
 func (p *Coroutines) WaitNextFrameFor(me Thread) {
-	p.yieldAtFrame(me, waitTypeFrame)
+	p.yieldAtFrame(me, waitFrame)
 }
 
 // YieldLoopFor yields until the next eligible script round.
 func (p *Coroutines) YieldLoopFor(me Thread) {
-	p.yieldAtFrame(me, waitTypeLoop)
+	p.yieldAtFrame(me, waitLoop)
 }
 
 // YieldToNextRoundFor waits for the next frame or a round admitted by a loop continuation.
 func (p *Coroutines) YieldToNextRoundFor(me Thread) {
-	p.yieldAtFrame(me, waitTypeNextRound)
+	p.yieldAtFrame(me, waitNextRound)
 }
 
 // RequestRedraw ends additional script rounds after the current round finishes.
@@ -50,28 +56,29 @@ func (p *Coroutines) RequestRedraw() {
 	p.redrawFrame.Store(time.Frame())
 }
 
-func (p *Coroutines) yieldAtFrame(me Thread, kind int) {
-	p.enqueueAndYield(&WaitJob{Th: me, Type: kind, Frame: time.Frame()})
+func (p *Coroutines) yieldAtFrame(me Thread, kind waitKind) {
+	p.enqueueAndYield(&waitJob{thread: me, kind: kind, frame: time.Frame()})
 }
 
 // Admit a new round only after all runnable scripts have yielded.
-func (p *Coroutines) queueNextScriptRound(state *updateState) bool {
+func (p *Coroutines) queueNextRound(state *updateState) bool {
 	if p.redrawFrame.Load() == state.frame ||
 		!stime.Now().Before(state.workDeadline) || !p.hasLoopContinuation() {
 		return false
 	}
 	// A script round does not advance the frame clock.
 	p.scriptRound.Add(1)
-	for p.roundJobs.Count() > 0 {
-		job := p.roundJobs.PopFront()
-		job.Type = waitTypeYield
-		p.currentJobs.PushBack(job)
+	for n := p.roundJobs.head; n != nil; n = n.next {
+		n.value.kind = waitYield
 	}
+	p.schedulerMu.Lock()
+	p.currentJobs.appendFrom(p.roundJobs)
+	p.schedulerMu.Unlock()
 	return true
 }
 
 func (p *Coroutines) hasLoopContinuation() bool {
-	return p.roundJobs.Any(func(job *WaitJob) bool {
-		return job.Type == waitTypeLoop && !p.isThreadCanceled(job.Th)
+	return p.roundJobs.any(func(job *waitJob) bool {
+		return job.kind == waitLoop && !job.thread.canceled()
 	})
 }

@@ -1,9 +1,23 @@
 package coroutine
 
 import (
+	"context"
 	"runtime"
 	"testing"
+	"time"
 )
+
+func TestInvokeCallbackTracksNilPanic(t *testing.T) {
+	t.Setenv("GODEBUG", "panicnil=1")
+	co := New(nil)
+	result := co.invokeCallback(callbackNoDrain, func() { panic(nil) })
+	if !result.panicked {
+		t.Fatal("invokeCallback treated a nil panic as successful completion")
+	}
+	if result.panicValue != nil {
+		t.Fatalf("panic value = %v, want nil", result.panicValue)
+	}
+}
 
 func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 	for _, managed := range []bool{false, true} {
@@ -20,7 +34,7 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 				start := func() {
 					threads = co.StartBatch([]Task{{
 						RegisterInvocation: func(Thread) func() {
-							recovered = catchDrainPanic(func() { co.StopAllAndWait(0) })
+							recovered = catchPanic(func() { co.RunAfterStop(context.Background(), nil) })
 							return nil
 						},
 						Run: func(Thread) { ran = true },
@@ -55,7 +69,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		threads := co.StartBatch([]Task{{
 			RegisterInvocation: func(Thread) func() {
 				return func() {
-					recovered = catchDrainPanic(func() { co.StopAllAndWait(0) })
+					recovered = catchPanic(func() { co.RunAfterStop(context.Background(), nil) })
 				}
 			},
 			Run: func(Thread) {},
@@ -67,7 +81,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		if threads[0].Stopped() || co.admissionClosed() {
 			t.Error("rejected cleanup drain canceled the thread or closed admission")
 		}
-		if !co.RunAfterStopAll(0, nil) {
+		if co.RunAfterStop(context.Background(), nil) != nil {
 			t.Error("thread did not drain after cleanup")
 		}
 		co.callbacks.Range(func(_, _ any) bool {
@@ -82,7 +96,7 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 		co := New(nil)
 		var threads []Thread
 		setup, ran := false, false
-		completed := co.RunAfterStopAll(0, func() {
+		completed := co.RunAfterStop(context.Background(), func() {
 			co.StopAll()
 			threads = append(threads, co.Create("rejected", func(Thread) {
 				ran = true
@@ -91,7 +105,7 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 				RegisterInvocation: func(Thread) func() { setup = true; return nil },
 				Run:                func(Thread) { ran = true },
 			}}, BatchAsync)...)
-		})
+		}) == nil
 		for _, thread := range threads {
 			<-thread.done
 			if !thread.Stopped() {
@@ -101,7 +115,7 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 		if !completed || setup || ran {
 			t.Errorf("shutdown completed=%v, setup=%v, ran=%v", completed, setup, ran)
 		}
-		if co.admissionClosed() || !co.RunAfterStopAll(0, nil) {
+		if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
 			t.Error("shutdown callback did not restore admission and caller scope")
 		}
 	})
@@ -112,26 +126,26 @@ func TestShutdownCallbackRejectsNestedDrain(t *testing.T) {
 		name string
 		call func(*Coroutines)
 	}{
-		{"StopAllAndWait", func(co *Coroutines) { co.StopAllAndWait(0) }},
-		{"RunAfterStopAll", func(co *Coroutines) { co.RunAfterStopAll(0, nil) }},
+		{"RunAfterStop", func(co *Coroutines) { co.RunAfterStop(context.Background(), nil) }},
+		{"RunAfterStopIf", func(co *Coroutines) { co.RunAfterStopIf(context.Background(), nil, nil) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			checkDrainReentry(t, func() {
 				co := New(nil)
 				var recovered any
-				if !co.RunAfterStopAll(0, func() {
-					recovered = catchDrainPanic(func() { test.call(co) })
+				if co.RunAfterStop(context.Background(), func() {
+					recovered = catchPanic(func() { test.call(co) })
 					if !co.admissionClosed() {
 						t.Error("nested drain reopened the outer shutdown barrier")
 					}
-				}) {
+				}) != nil {
 					t.Error("outer shutdown did not finish")
 				}
 				if recovered != ErrReentrantWait {
 					t.Errorf("nested drain panic = %v, want %v", recovered, ErrReentrantWait)
 				}
-				if !co.RunAfterStopAll(0, nil) {
-					t.Error("shutdown scope remained after the callback returned")
+				if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
+					t.Error("shutdown did not restore admission and caller scope after the callback returned")
 				}
 			})
 		})
@@ -156,7 +170,7 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 					if recovered := recover(); recovered != test.want {
 						t.Errorf("shutdown panic = %v, want %v", recovered, test.want)
 					}
-					if co.admissionClosed() || !co.RunAfterStopAll(0, nil) {
+					if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
 						t.Error("unwinding shutdown did not restore admission and caller scope")
 					}
 					thread := co.Create("after-unwind", func(Thread) {})
@@ -165,14 +179,90 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 						t.Error("unwinding shutdown rejected a fresh thread")
 					}
 				}()
-				co.RunAfterStopAll(0, test.exit)
+				co.RunAfterStop(context.Background(), test.exit)
 				t.Error("abnormal shutdown callback returned normally")
 			})
 		})
 	}
 }
 
-func catchDrainPanic(call func()) (recovered any) {
+func TestExclusiveCallbackRejectsBlockedWaits(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		wait func(*Coroutines, Thread, *Latch)
+	}{
+		{"join", func(co *Coroutines, th Thread, _ *Latch) { co.Join(th) }},
+		{"first yield", func(co *Coroutines, th Thread, _ *Latch) { co.JoinFirstSlice(th) }},
+		{"latch", func(_ *Coroutines, _ Thread, latch *Latch) { latch.Wait() }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co := New(nil)
+			latch := co.NewLatch()
+			finished := make(chan struct{})
+			guarded := make(chan any, 1)
+			go func() {
+				defer close(finished)
+				var thread Thread
+				co.RunBetweenScripts(func() {
+					thread = co.Create("child", func(Thread) {})
+					func() {
+						defer func() { guarded <- recover() }()
+						test.wait(co, thread, latch)
+					}()
+				})
+				co.Join(thread)
+				latch.Open()
+				// Completed waits are safe even when the callback owns runMu.
+				co.RunBetweenScripts(func() { test.wait(co, thread, latch) })
+			}()
+			select {
+			case recovered := <-guarded:
+				if recovered != ErrReentrantWait {
+					t.Fatalf("blocked wait panic = %v", recovered)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("callback waited for a script while holding its execution lock")
+			}
+			waitForThreadSignal(t, finished, "callback did not release its execution lock")
+		})
+	}
+}
+
+func TestEngineEntryRejectsReentry(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		enter func(*Coroutines, func())
+	}{
+		{"RunBetweenScripts", func(co *Coroutines, call func()) { co.RunBetweenScripts(call) }},
+		{"TryRunFromEngine", func(co *Coroutines, call func()) { co.TryRunFromEngine(nil, call) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, managed := range []bool{true, false} {
+				co := New(nil)
+				called := false
+				var recovered any
+				attempt := func() {
+					recovered = catchPanic(func() { test.enter(co, func() { called = true }) })
+				}
+				if managed {
+					caller := co.Create("caller", func(Thread) { attempt() })
+					waitForThreadSignal(t, caller.done, "rejected engine entry blocked its caller")
+				} else {
+					co.RunBetweenScripts(attempt)
+				}
+				if recovered != ErrReentrantWait || called {
+					t.Fatalf("managed=%v: reentry panic=%v, callback ran=%v", managed, recovered, called)
+				}
+				co.RunBetweenScripts(func() { called = true })
+				if !called {
+					t.Fatal("rejected reentry prevented a subsequent engine call")
+				}
+			}
+		})
+	}
+}
+
+func catchPanic(call func()) (recovered any) {
 	defer func() { recovered = recover() }()
 	call()
 	return

@@ -32,7 +32,7 @@ func TestLatchResumesManagedWaitersOnce(t *testing.T) {
 		latch.Wait()
 		order = append(order, "after")
 	})
-	co.JoinYieldedOrDone(waiter)
+	co.JoinFirstSlice(waiter)
 	if want := []string{"before"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order before Open = %v, want %v", order, want)
 	}
@@ -60,7 +60,7 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 	co := New(nil)
 	latch := co.NewLatch()
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if co.RunAfterStop(drainTestContext(t), nil) != nil {
 			t.Error("latch waiter did not stop")
 		}
 	})
@@ -69,7 +69,7 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 		latch.Wait()
 		resumed++
 	})
-	co.JoinYieldedOrDone(waiter)
+	co.JoinFirstSlice(waiter)
 
 	const callers = 32
 	start := make(chan struct{})
@@ -103,7 +103,7 @@ func TestLatchCanceledWaiterIsRemoved(t *testing.T) {
 	waiter := co.Create("waiter", func(Thread) {
 		latch.Wait()
 	})
-	co.JoinYieldedOrDone(waiter)
+	co.JoinFirstSlice(waiter)
 	co.StopIf(func(thread Thread) bool { return thread == waiter })
 	co.Join(waiter)
 

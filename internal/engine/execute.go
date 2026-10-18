@@ -36,7 +36,7 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 		return
 	}
 
-	owner = ResolveCoroutineOwner(owner)
+	owner = resolveOwner(owner)
 	call := func() {
 		if isRuntimeWorkCurrent(binding) {
 			fn(co.Current().Context(), owner)
@@ -56,18 +56,14 @@ func WaitMainThread(call func()) {
 	gco.WaitMainThread(call)
 }
 
-func WaitToDo(call func()) {
-	gco.WaitToDo(call)
-}
-
 func ExecuteNative(fn func(ctx context.Context, owner any)) {
 	thread := currentThread()
 	if thread == nil {
 		fn(context.Background(), nil)
 		return
 	}
-	ctx, owner := thread.Context(), thread.Obj
-	WaitToDo(func() {
+	ctx, owner := thread.Context(), thread.Owner
+	gco.WaitToDo(func() {
 		fn(ctx, owner)
 	})
 }

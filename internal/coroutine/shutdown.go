@@ -17,7 +17,10 @@
 package coroutine
 
 import (
-	stime "time"
+	"context"
+	"fmt"
+	"slices"
+	"strings"
 )
 
 // StopCurrent exits the current coroutine with ErrAbortThread.
@@ -64,49 +67,48 @@ func (p *Coroutines) StopAll() {
 	p.admissionMu.Unlock()
 }
 
-// StopAllAndWait stops scripts and waits for scripts and workers to finish.
-// The managed caller is excluded from the wait. A non-positive timeout waits indefinitely.
-// Runtime callbacks must not drain; reentry panics with ErrReentrantWait.
-func (p *Coroutines) StopAllAndWait(timeout stime.Duration) bool {
-	p.requireDrainCaller()
-	caller := p.callerThread()
-	if caller != nil {
-		p.StopAll()
-		return p.waitForPeerDrain(timeout, caller)
-	}
-	return p.RunAfterStopAll(timeout, nil)
+// RunAfterStop stops scripts and drains all scripts and workers with admission closed.
+// It then runs call if non-nil; pass nil to only stop and wait.
+// Call outside scripts and callbacks with an independent host context.
+// Cancellation before stopping leaves work and admission unchanged.
+// Failed drains keep admission closed until a successful retry.
+// The context bounds waiting, not callbacks or engine calls.
+func (p *Coroutines) RunAfterStop(ctx context.Context, call func()) error {
+	_, err := p.RunAfterStopIf(ctx, nil, call)
+	return err
 }
 
-// RunAfterStopAll drains scripts and workers, then runs call with admission
-// closed. Call it outside managed coroutines and runtime callbacks. A drain timeout
-// leaves admission closed until a later successful call. The timeout covers
-// barrier acquisition and draining, but not call.
-func (p *Coroutines) RunAfterStopAll(timeout stime.Duration, call func()) bool {
-	_, completed := p.RunAfterStopAllIf(timeout, nil, call)
-	return completed
-}
-
-// RunAfterStopAllIf drains only if condition still holds after earlier barriers.
-// selected is false if condition fails or the barrier cannot be acquired in time.
-func (p *Coroutines) RunAfterStopAllIf(timeout stime.Duration, condition func() bool, call func()) (selected, completed bool) {
+// RunAfterStopIf checks condition under the RunAfterStop barrier.
+// A false condition returns false, nil; stopStarted reports whether stopping began.
+// Drain completion wins concurrent cancellation; errors.Is identifies context errors.
+func (p *Coroutines) RunAfterStopIf(ctx context.Context, condition func() bool, call func()) (stopStarted bool, err error) {
 	p.requireDrainCaller()
-	if p.callerThread() != nil {
-		panic("coroutine: RunAfterStopAll requires an external caller")
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
-	remaining, locked := p.lockShutdown(timeout)
-	if !locked {
-		return false, false
+	if err := p.waitForSignal(ctx, p.shutdownGate); err != nil {
+		return false, err
 	}
-	defer p.shutdownMu.Unlock()
+	defer func() { p.shutdownGate <- struct{}{} }()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	// Holding the gate forbids reentrant drains.
+	id, previous := p.enterCallback(callbackNoDrain)
+	defer p.leaveCallback(id, previous)
 	if condition != nil && !condition() {
-		return false, false
+		return false, nil
 	}
 
 	p.admissionMu.Lock()
+	if err := ctx.Err(); err != nil {
+		p.admissionMu.Unlock()
+		return false, err
+	}
 	p.beginStoppingLocked()
 	p.admissionMu.Unlock()
-	if !p.waitForDrain(remaining, nil) {
-		return true, false
+	if err := p.drain(ctx); err != nil {
+		return true, err
 	}
 	defer func() {
 		p.admissionMu.Lock()
@@ -114,25 +116,18 @@ func (p *Coroutines) RunAfterStopAllIf(timeout stime.Duration, condition func() 
 		p.admissionMu.Unlock()
 	}()
 	if call != nil {
-		id, previous := p.enterCallback(callbackShutdown)
-		defer p.leaveCallback(id, previous)
 		call()
 	}
-	return true, true
+	return true, nil
 }
 
 func (p *Coroutines) beginStoppingLocked() {
-	if !p.stopping {
-		p.stopping = true
-		p.closeAdmissionLocked()
-	}
+	p.stopping = true
+	p.closeAdmissionLocked()
 	p.cancelAllLocked()
 }
 
 func (p *Coroutines) endStoppingLocked() {
-	if !p.stopping {
-		return
-	}
 	p.openAdmissionLocked()
 	p.stopping = false
 }
@@ -143,54 +138,44 @@ func (p *Coroutines) cancelAllLocked() {
 	}
 }
 
-func (p *Coroutines) waitForPeerDrain(timeout stime.Duration, caller Thread) bool {
-	// Release runMu so canceled peers can unregister.
-	p.setCurrent(nil)
-	p.runMu.Unlock()
-	completed := p.waitForDrain(timeout, caller)
-	p.runMu.Lock()
-	p.setCurrent(caller)
-	return completed
-}
-
-func (p *Coroutines) waitForDrain(timeout stime.Duration, skip Thread) bool {
-	var timedOut <-chan stime.Time
-	if timeout > 0 {
-		timer := stime.NewTimer(timeout)
-		defer timer.Stop()
-		timedOut = timer.C
-	}
-
-	for {
-		p.threadsMu.Lock()
-		if !p.hasPendingWorkLocked(skip) {
-			p.threadsMu.Unlock()
-			return true
-		}
-		// Subscribe while holding the predicate lock so completion cannot be lost.
-		if p.lifecycleChanged == nil {
-			p.lifecycleChanged = make(chan struct{})
-		}
-		changed := p.lifecycleChanged
-		p.threadsMu.Unlock()
-
-		if !p.waitForDrainChange(changed, timedOut) {
-			// Completion may have raced the timeout; the registry is authoritative.
-			return !p.hasPendingWork(skip)
-		}
-	}
-}
-
-func (p *Coroutines) hasPendingWork(skip Thread) bool {
+// drain waits for registered work to exit; it does not cancel it.
+// Callers must prevent new admissions while waiting.
+func (p *Coroutines) drain(ctx context.Context) error {
 	p.threadsMu.Lock()
-	defer p.threadsMu.Unlock()
-	return p.hasPendingWorkLocked(skip)
+	if !p.hasPendingWorkLocked() {
+		p.threadsMu.Unlock()
+		return nil
+	}
+	// Check and subscribe under one lock to avoid lost wakeups.
+	if p.drainDone == nil {
+		p.drainDone = make(chan struct{})
+	}
+	done := p.drainDone
+	p.threadsMu.Unlock()
+
+	if err := p.waitForSignal(ctx, done); err != nil {
+		// Recheck completion before reporting cancellation.
+		return p.drainError(err)
+	}
+	return nil
 }
 
-func (p *Coroutines) hasPendingWorkLocked(skip Thread) bool {
-	remaining := len(p.allThreads)
-	if _, registered := p.allThreads[skip]; registered {
-		remaining--
+func (p *Coroutines) drainError(cause error) error {
+	p.threadsMu.Lock()
+	if !p.hasPendingWorkLocked() {
+		p.threadsMu.Unlock()
+		return nil
 	}
-	return remaining != 0 || p.workerCount != 0
+	names := make([]string, 0, len(p.allThreads))
+	for th := range p.allThreads {
+		names = append(names, fmt.Sprintf("id=%d name=%q", th.ID(), th.Name()))
+	}
+	workers := p.workerCount
+	p.threadsMu.Unlock()
+	slices.Sort(names)
+	return fmt.Errorf("coroutine: drain incomplete: %d threads [%s], %d workers: %w", len(names), strings.Join(names, ", "), workers, cause)
+}
+
+func (p *Coroutines) hasPendingWorkLocked() bool {
+	return len(p.allThreads) != 0 || p.workerCount != 0
 }

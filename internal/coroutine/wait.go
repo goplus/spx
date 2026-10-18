@@ -16,40 +16,7 @@
 
 package coroutine
 
-import (
-	"github.com/goplus/spx/v3/internal/time"
-)
-
-const (
-	waitTypeFrame = iota
-	waitTypeTime
-	waitTypeMainThread
-	waitTypeYield
-	waitTypeLoop
-	waitTypeNextRound
-)
-
-// WaitJob describes work consumed by Update.
-type WaitJob struct {
-	Th    Thread  // Coroutine waiting on the job, if any.
-	Type  int     // Scheduler-internal job kind.
-	Call  func()  // Action when eligible; nil resumes Th for non-main-thread jobs.
-	Time  float64 // Level-time deadline for a time job.
-	Frame int64   // Issuing frame for frame-gated jobs.
-}
-
-// Jobs without a thread sort first.
-func (job *WaitJob) threadOrder() int64 {
-	if job.Th == nil {
-		return 0
-	}
-	return job.Th.resumeOrder
-}
-
-type taskResult struct {
-	panicValue any
-	panicked   bool
-}
+import "github.com/goplus/spx/v3/internal/time"
 
 // Wait suspends the current coroutine for t seconds of level time.
 func (p *Coroutines) Wait(t float64) {
@@ -57,17 +24,17 @@ func (p *Coroutines) Wait(t float64) {
 	if me == nil {
 		return
 	}
-	p.enqueueAndYield(&WaitJob{
-		Th:    me,
-		Type:  waitTypeTime,
-		Time:  time.TimeSinceLevelLoad() + max(t, 0),
-		Frame: time.Frame(),
+	p.enqueueAndYield(&waitJob{
+		thread:   me,
+		kind:     waitTime,
+		deadline: time.TimeSinceLevelLoad() + max(t, 0),
+		frame:    time.Frame(),
 	})
 }
 
 // WaitYield suspends me until an Update pass processes its yield job.
 func (p *Coroutines) WaitYield(me Thread) {
-	p.enqueueAndYield(&WaitJob{Th: me, Type: waitTypeYield})
+	p.enqueueAndYield(&waitJob{thread: me, kind: waitYield})
 }
 
 // WaitToDo runs fn in a worker and yields when called from a coroutine.
@@ -81,25 +48,25 @@ func (p *Coroutines) WaitToDo(fn func()) {
 	if !p.admitWorker(me) {
 		panic(ErrAbortThread)
 	}
-	results := make(chan taskResult, 1)
-	p.setThreadState(me, threadBlocked)
+	results := make(chan callbackResult, 1)
+	p.removeRunnable(me)
 	go func() {
 		defer p.finishWorker()
-		var result taskResult
+		var result callbackResult
 		returned := false
 		defer func() {
 			if !returned {
-				// Goexit ends the worker without returning a result to its script.
+				// Goexit cancels the waiting script.
 				me.Cancel()
 			}
 			// Publish before waking; buffering lets canceled waiters exit.
 			results <- result
-			p.markRunnableAndResume(me)
+			p.wakeThread(me)
 		}()
-		result = p.runExternalTask(fn)
+		result = p.invokeCallback(callbackNoDrain, fn)
 		returned = true
 	}()
-	p.Yield(me)
+	p.yield(me)
 	result := <-results
 	if result.panicked {
 		panic(result.panicValue)
@@ -125,39 +92,35 @@ func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
 	return value
 }
 
-func (p *Coroutines) enqueueAndYield(job *WaitJob) {
-	me := job.Th
+// admitWorker registers external work under the admission barrier.
+func (p *Coroutines) admitWorker(me Thread) bool {
+	p.admissionMu.RLock()
+	defer p.admissionMu.RUnlock()
+	if p.admissionClosed() || me.canceled() {
+		return false
+	}
+	p.threadsMu.Lock()
+	p.workerCount++
+	p.threadsMu.Unlock()
+	return true
+}
+
+// WaitToDo pairs each admission with one deferred finish in the worker.
+func (p *Coroutines) finishWorker() {
+	p.threadsMu.Lock()
+	p.workerCount--
+	p.notifyDrainLocked()
+	p.threadsMu.Unlock()
+}
+
+func (p *Coroutines) enqueueAndYield(job *waitJob) {
+	me := job.thread
 	p.requireCurrent(me)
 	// Publish blocking and its wake-up job atomically.
 	p.schedulerMu.Lock()
-	p.setThreadStateLocked(me, threadBlocked)
-	p.currentJobs.PushBack(job)
+	delete(p.runnableThreads, me)
+	p.currentJobs.pushBack(job)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
-	p.Yield(me)
-}
-
-func (p *Coroutines) enqueuePriorityJob(job *WaitJob) {
-	p.schedulerMu.Lock()
-	p.currentJobs.PushFront(job)
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
-}
-
-// runExternalTask calls fn here; nested calls retain the outer drain guard.
-func (p *Coroutines) runExternalTask(fn func()) taskResult {
-	id, previous := p.enterCallback(callbackExternal)
-	defer p.leaveCallback(id, previous)
-	return runTask(fn)
-}
-
-func runTask(fn func()) (result taskResult) {
-	// Distinguish panic(nil) from a normal return.
-	result.panicked = true
-	defer func() {
-		result.panicValue = recover()
-	}()
-	fn()
-	result.panicked = false
-	return result
+	p.yield(me)
 }

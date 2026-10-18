@@ -23,10 +23,10 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
-const runWithoutScreenRefreshBudget = 500 * stdtime.Millisecond
+const warpBudget = 500 * stdtime.Millisecond
 
 func IsAbortThreadError(err any) bool {
-	return coroutine.IsAbortThreadError(err)
+	return err == coroutine.ErrAbortThread
 }
 
 func Wait(secs float64) float64 {
@@ -53,12 +53,12 @@ func WaitNextFrameIfNeeded() float64 {
 
 func IsRunWithoutScreenRefresh() bool {
 	thread := currentThread()
-	return thread != nil && thread.RunWithoutScreenRefresh()
+	return thread != nil && thread.Warp()
 }
 
 func SetRunWithoutScreenRefresh(enabled bool) (previous bool) {
 	if thread := currentThread(); thread != nil {
-		return thread.SetRunWithoutScreenRefresh(enabled)
+		return thread.SetWarp(enabled)
 	}
 	return false
 }
@@ -84,7 +84,7 @@ func RunStopThisScript(call func()) {
 		if !panicked {
 			return
 		}
-		if !coroutine.IsStopThisScriptError(recovered) {
+		if recovered != coroutine.ErrStopThisScript {
 			panic(recovered)
 		}
 	}()
@@ -94,7 +94,7 @@ func RunStopThisScript(call func()) {
 
 func ShouldWaitNextFrame() bool {
 	if thread := currentThread(); thread != nil {
-		return thread.ShouldWaitNextFrame(runWithoutScreenRefreshBudget)
+		return thread.ShouldYield(warpBudget)
 	}
 	return true
 }
@@ -112,9 +112,9 @@ func NewControlFlowWaiter() func() {
 
 	thread := co.Current()
 	return func() {
-		if !thread.RunWithoutScreenRefresh() {
+		if !thread.Warp() {
 			co.YieldLoopFor(thread)
-		} else if thread.ShouldWaitNextFrame(runWithoutScreenRefreshBudget) {
+		} else if thread.ShouldYield(warpBudget) {
 			co.WaitNextFrameFor(thread)
 		}
 	}

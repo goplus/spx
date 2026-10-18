@@ -16,32 +16,70 @@
 
 package coroutine
 
-// UpdateJobsStats reports timings and job counts for one Update call. Durations
-// are expressed in milliseconds.
-type UpdateJobsStats struct {
-	InitTime       float64 // Time spent preparing the update.
-	LoopTime       float64 // Time spent in the update loop.
-	MoveTime       float64 // Time spent promoting deferred jobs.
-	WaitTime       float64 // Time spent waiting for runnable work.
-	TaskProcessing float64 // Time spent processing jobs.
-	GCPauses       float64 // GC pause time observed during the update.
-	ExternalTime   float64 // Unaccounted time, including runtime scheduling overhead.
-	TotalTime      float64 // Total update time.
-	TaskCounts     int     // Number of jobs processed.
-	WaitFrameCount int     // Number of frame-wait jobs resumed.
-	WaitMainCount  int     // Number of main-thread jobs executed.
-	NextCount      int     // Number of jobs deferred at the end of the update loop.
-	GCCount        int     // Number of GC cycles observed during the update.
-	GCStatsEnabled bool    // Whether GCCount and GCPauses were collected.
-	LoopIterations int     // Number of update-loop iterations.
+import (
+	sdebug "runtime/debug"
+	stime "time"
+)
+
+// UpdateStats reports timings in milliseconds and job counts for one Update.
+type UpdateStats struct {
+	InitTime        float64 // Update preparation.
+	LoopTime        float64 // Update loop.
+	MoveTime        float64 // Promoting deferred jobs.
+	WaitTime        float64 // Selecting jobs, including scheduler waits.
+	JobTime         float64 // Processing dequeued jobs.
+	GCPauseTime     float64 // GC pauses during the update.
+	ExternalTime    float64 // Unaccounted time, including runtime scheduling overhead.
+	TotalTime       float64 // Total update time.
+	JobCount        int     // Dequeued jobs, including canceled jobs.
+	FrameWaitCount  int     // Frame-wait jobs processed.
+	MainThreadCount int     // Main-thread jobs processed.
+	DeferredCount   int     // Jobs deferred at the end of the update loop.
+	GCCount         int     // GC cycles during the update.
+	GCStatsEnabled  bool    // GCCount and GCPauseTime are valid only when true.
+	LoopIterations  int     // Update-loop iterations.
 }
 
-// GetLastUpdateStats returns this manager's statistics from its most recent
-// Update call. GCCount and GCPauses are meaningful only when GCStatsEnabled is
-// true.
-func (p *Coroutines) GetLastUpdateStats() UpdateJobsStats {
+// SetPerfDebug enables or disables GC statistics collection during Update.
+func (p *Coroutines) SetPerfDebug(enabled bool) {
+	p.perfDebug.Store(enabled)
+}
+
+// UpdateStats returns this manager's most recent update statistics.
+func (p *Coroutines) UpdateStats() UpdateStats {
 	p.statsMu.RLock()
 	stats := p.lastUpdateStats
 	p.statsMu.RUnlock()
 	return stats
+}
+
+func (p *Coroutines) captureGCStats() *sdebug.GCStats {
+	if !p.perfDebug.Load() {
+		return nil
+	}
+	stats := &sdebug.GCStats{}
+	p.readGCStats(stats)
+	return stats
+}
+
+func (p *Coroutines) finishStats(stats *UpdateStats, start stime.Time, before *sdebug.GCStats) {
+	if before != nil {
+		var after sdebug.GCStats
+		p.readGCStats(&after)
+		stats.GCCount = int(after.NumGC - before.NumGC)
+		stats.GCPauseTime = float64(after.PauseTotal-before.PauseTotal) / float64(stime.Millisecond)
+	}
+
+	total := elapsedMillis(start)
+	accounted := stats.InitTime + stats.LoopTime + stats.MoveTime
+	stats.TotalTime = total
+	stats.ExternalTime = total - accounted
+
+	p.statsMu.Lock()
+	p.lastUpdateStats = *stats
+	p.statsMu.Unlock()
+}
+
+func elapsedMillis(start stime.Time) float64 {
+	return stime.Since(start).Seconds() * 1000
 }

@@ -35,7 +35,7 @@ func TestNonVisualLoopsShareFrame(t *testing.T) {
 		th := co.Create(nil, func(coroutine.Thread) {
 			Repeat(5, func() { counts[i]++ })
 		})
-		co.JoinYieldedOrDone(th)
+		co.JoinFirstSlice(th)
 	}
 	co.Update()
 	if counts != [2]int{5, 5} {
@@ -65,7 +65,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 					frames = append(frames, itime.Frame())
 				})
 			})
-			co.JoinYieldedOrDone(th)
+			co.JoinFirstSlice(th)
 			for range 3 {
 				co.Update()
 				itime.Update(1.0/30, 30)
@@ -177,11 +177,11 @@ func TestRedrawFinishesWholeRound(t *testing.T) {
 			engine.RequestRedraw()
 		})
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	th = co.Create(nil, func(coroutine.Thread) {
 		Forever(func() { nonVisual++ })
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	co.Update()
 	for frame := 1; frame <= 4; frame++ {
 		if visual != frame || nonVisual != frame {
@@ -202,7 +202,7 @@ func TestExplicitWaitStillCrossesFrame(t *testing.T) {
 			engine.Wait(0)
 		})
 	})
-	co.JoinYieldedOrDone(th)
+	co.JoinFirstSlice(th)
 	for want := 1; want <= 3; want++ {
 		co.Update()
 		if count != want {
@@ -223,7 +223,7 @@ func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 			th := co.Create(sprite, func(coroutine.Thread) {
 				Repeat(5, func() { count++; sprite.markProxyDirty() })
 			})
-			co.JoinYieldedOrDone(th)
+			co.JoinFirstSlice(th)
 			co.Update()
 			want := 5
 			if visible {
@@ -261,7 +261,7 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 					count++
 				})
 			})
-			co.JoinYieldedOrDone(th)
+			co.JoinFirstSlice(th)
 			for range frames {
 				co.Update()
 				itime.Update(1.0/30, 30)
@@ -302,7 +302,7 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 				t.Fatalf("tracking hat fired %d times", fired)
 			}
 			// Stopping tracking allows a timer edge to fire.
-			co.StopIf(func(th coroutine.Thread) bool { return th.Obj == game })
+			co.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
 			game.OnEngineBeforeUpdate(1.0 / 30)
 			itime.Update(0.1, 30)
 			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)

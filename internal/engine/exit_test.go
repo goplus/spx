@@ -80,7 +80,7 @@ func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingEx
 	gdx.ExtMgr = recorder
 	enginewrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		if !co.StopAllAndWait(time.Second) {
+		if err := co.RunAfterStop(testContext(t), nil); err != nil {
 			t.Error("test coroutines did not stop")
 		}
 		SetCoroutines(original)
@@ -303,10 +303,11 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 
 	peerYielding := make(chan struct{})
 	peerDone := make(chan struct{})
-	co.Create("peer", func(peer coroutine.Thread) {
+	peerLatch := co.NewLatch()
+	co.Create("peer", func(coroutine.Thread) {
 		defer close(peerDone)
 		close(peerYielding)
-		co.Yield(peer)
+		peerLatch.Wait()
 	})
 
 	select {

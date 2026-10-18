@@ -42,7 +42,7 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 				action.run(sprite)
 				finished = true
 			})
-			gco.JoinYieldedOrDone(thread)
+			gco.JoinFirstSlice(thread)
 
 			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.DirtyVersion != dirtyVersion {
 				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.DirtyVersion)
@@ -87,7 +87,7 @@ func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
 							action.run(sprite)
 							finished = true
 						})
-						gco.JoinYieldedOrDone(thread)
+						gco.JoinFirstSlice(thread)
 						if !finished {
 							t.Fatalf("turn %d yielded without an animation", attempt+1)
 						}

@@ -17,20 +17,30 @@
 package engine
 
 import (
+	"context"
 	"errors"
-	"time"
 )
 
 var (
 	ErrReloadUnavailable = errors.New("game reload is unavailable during a lifecycle transition")
-	ErrReloadTimeout     = errors.New("game reload aborted: existing coroutines did not stop")
+	ErrReloadIncomplete  = errors.New("game reload aborted: cleanup of existing work is incomplete")
 )
 
-// Reload prepares a replacement, drains scripts, rebuilds the game, then starts
-// its new loops. Only preparation is reversible: once scripts are canceled,
-// failure leaves the game stopped until reset or backend teardown.
-func Reload(owner any, timeout time.Duration, prepare, rebuild func() error, activate func()) error {
+// Reload prepares, drains, rebuilds, and activates the game.
+// ctx is checked between phases and bounds the shutdown barrier and drain waits.
+// Its deadline includes preparation, but cannot interrupt callbacks or acquisition
+// of the engine lifecycle and frame locks; it is not a return-time guarantee.
+// Once rebuilding starts, activation can finish after ctx expires.
+// Failure after stopping leaves the game stopped until reset or backend teardown.
+func Reload(ctx context.Context, owner any, prepare, rebuild func() error, activate func()) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	bindingMu.Lock()
+	if err := ctx.Err(); err != nil {
+		bindingMu.Unlock()
+		return err
+	}
 	binding := activeGame.Load()
 	if binding == nil || binding.owner != owner || binding.loadPhase() != gameRunning || updateBusy.Load() {
 		bindingMu.Unlock()
@@ -48,21 +58,27 @@ func Reload(owner any, timeout time.Duration, prepare, rebuild func() error, act
 	if !binding.isCurrent(gameReloading) {
 		return ErrReloadUnavailable
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if prepare != nil {
 		if err := prepare(); err != nil {
 			return err
 		}
 	}
-
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	var rebuildErr error
 	stop := func() bool {
 		if !binding.isCurrent(gameReloading) {
 			return false
 		}
+		// Keep the game stopped if native cleanup panics or calls Goexit.
 		failurePhase = gameStopped
 		return true
 	}
-	apply := func() {
+	rebuildGame := func() {
 		if !binding.isCurrent(gameReloading) {
 			rebuildErr = ErrReloadUnavailable
 		} else if rebuild != nil {
@@ -73,14 +89,18 @@ func Reload(owner any, timeout time.Duration, prepare, rebuild func() error, act
 		if !stop() {
 			return ErrReloadUnavailable
 		}
-		apply()
+		rebuildGame()
 	} else {
-		selected, completed := gco.RunAfterStopAllIf(timeout, stop, apply)
-		if !selected {
+		stopStarted, err := gco.RunAfterStopIf(ctx, stop, rebuildGame)
+		if !stopStarted {
+			failurePhase = gameRunning
+			if err != nil {
+				return err
+			}
 			return ErrReloadUnavailable
 		}
-		if !completed {
-			return ErrReloadTimeout
+		if err != nil {
+			return errors.Join(ErrReloadIncomplete, err)
 		}
 	}
 	if rebuildErr != nil {

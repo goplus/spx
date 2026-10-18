@@ -32,7 +32,7 @@ func (p *Game) OnEngineStart() {
 	p.lifecycleState.RunOnce.Do(func() {
 		cachedBounds = make(map[string]mathf.Rect2)
 		generation := p.bootstrapGeneration()
-		engine.Go(p, func(context.Context) {
+		engine.Go(p, func(context.Context, any) {
 			if !p.isCurrentBootstrap(generation) {
 				return
 			}
@@ -133,7 +133,7 @@ func (p *Game) runFrameScripts() {
 // Bootstrap
 // -----------------------------------------------------------------------------
 func (p *Game) startBootstrap(generation uint64) {
-	engine.Go(p, func(context.Context) {
+	engine.Go(p, func(context.Context, any) {
 		if currentGame() != p || !p.claimBootstrap(generation) {
 			return
 		}
@@ -193,11 +193,11 @@ func (p *Game) markStartDispatched(generation uint64) bool {
 // -----------------------------------------------------------------------------
 
 // runMainUntilYield starts Main in its own coroutine and waits for its first yield or exit.
-func runMainUntilYield(owner coroutine.ThreadObj, mainFn func()) {
+func runMainUntilYield(owner any, mainFn func()) {
 	thread := gco.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)
 	})
-	gco.JoinYieldedOrDone(thread)
+	gco.JoinFirstSlice(thread)
 }
 
 // runMain calls Main synchronously while tracking its execution timeout.

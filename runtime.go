@@ -18,15 +18,12 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
 // -----------------------------------------------------------------------------
 // Shared Types
 // -----------------------------------------------------------------------------
-type threadObj = coroutine.ThreadObj
-
 type event any
 
 // -----------------------------------------------------------------------------
@@ -74,12 +71,12 @@ func nameOf(this any) string {
 	return ""
 }
 
-func isGame(obj threadObj) bool {
+func isGame(obj any) bool {
 	_, ok := obj.(*Game)
 	return ok
 }
 
-func isSprite(obj threadObj) bool {
+func isSprite(obj any) bool {
 	_, ok := obj.(*SpriteImpl)
 	return ok
 }
