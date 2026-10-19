@@ -19,23 +19,20 @@
 package xgolauncher
 
 import (
-	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
 )
 
 func TestRunEmbeddedPayloadAndRepairCache(t *testing.T) {
@@ -120,8 +117,7 @@ func TestExitReproducesSignal(t *testing.T) {
 		Exit(ProcessStatus{Signal: int(syscall.SIGTERM)})
 		return
 	}
-	command := exec.Command(os.Args[0], "-test.run=^TestExitReproducesSignal$")
-	command.Env = append(os.Environ(), "SPX_LAUNCHER_EXIT_HELPER=1")
+	command := launcherTestCommand(t, "SPX_LAUNCHER_EXIT_HELPER=1")
 	err := command.Run()
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
@@ -133,108 +129,135 @@ func TestExitReproducesSignal(t *testing.T) {
 	}
 }
 
-func launcherTestPayload(t *testing.T, engineScript string) ([]byte, string, string, runtimepayload.Manifest) {
-	t.Helper()
-	engineFiles := []launcherTestFile{
-		{Name: "runtime-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
-		{Name: "engine", Mode: 0o755, Data: []byte(engineScript)},
-		{Name: "engine.pck", Mode: 0o644, Data: []byte("pack")},
+func TestRunUsesDefaultCache(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("XDG_CACHE_HOME controls the default cache on Linux")
 	}
-	bridgeFiles := []launcherTestFile{
-		{Name: "bridge-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-bridge/v1"}`)},
-		{Name: "bridge.so", Mode: 0o755, Data: []byte("bridge")},
+	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, `#!/bin/sh
+IFS= read -r line
+printf 'input:<%s>\n' "$line"
+printf 'engine stderr\n' >&2
+`)
+	cacheHome := t.TempDir()
+	tempRoot := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+	launcherTestTempDir(t, tempRoot)
+	var stdout, stderr bytes.Buffer
+	status, err := Run(Config{
+		Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
+		Stdin: strings.NewReader("hello launcher\n"), Stdout: &stdout, Stderr: &stderr,
+	})
+	if err != nil || !status.Success() {
+		t.Fatalf("Run() = (%+v, %v), want success", status, err)
 	}
-	projectFiles := []launcherTestFile{
-		{Name: "main.spx", Mode: 0o644, Data: []byte("onStart => {}")},
-		{Name: "assets/index.json", Mode: 0o644, Data: []byte(`{"zorder":[]}`)},
+	if stdout.String() != "input:<hello launcher>\n" || stderr.String() != "engine stderr\n" {
+		t.Fatalf("stdout = %q, stderr = %q, want forwarded I/O", stdout.String(), stderr.String())
 	}
-	engineZIP := launcherTestZIP(t, engineFiles)
-	bridgeZIP := launcherTestZIP(t, bridgeFiles)
-	projectZIP := launcherTestZIP(t, projectFiles)
-	engine := launcherTestBundle(t, engineZIP, runtimebundle.NamespaceEngine)
-	bridge := launcherTestBundle(t, bridgeZIP, runtimebundle.NamespaceBridge)
-	project := launcherTestBundle(t, projectZIP, runtimebundle.NamespaceProject)
-	projectSum := sha256.Sum256(projectZIP)
-	interfaceSum := sha256.Sum256([]byte("interface"))
-	config := runtimepayload.BuildConfig{
-		SPX:    runtimepayload.SourceIdentity{SelectedPath: "github.com/goplus/spx/v3", EffectivePath: "github.com/goplus/spx/v3", SourceMode: true},
-		Target: runtimepayload.Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
-		Engine: runtimepayload.Engine{
-			RuntimeVersion: "test", RuntimeABI: 1, EngineInterfaceDigest: hex.EncodeToString(interfaceSum[:]),
-			Executable: "engine", Pack: "engine.pck", BundleDigest: engine.Digest,
-		},
-		Bridge: runtimepayload.Bridge{File: "bridge.so", BundleDigest: bridge.Digest},
-		Project: runtimepayload.Project{
-			PackDirectory: "assets", BundleDigest: project.Digest, ArchiveSHA256: hex.EncodeToString(projectSum[:]),
-		},
+	engine := filepath.Join(cacheHome, "spx", "runtimebundle", string(runtimebundle.NamespaceEngine), manifest.Engine.BundleDigest, manifest.Engine.Executable)
+	if _, err := os.Stat(engine); err != nil {
+		t.Fatalf("engine in default cache: %v", err)
 	}
-	sources := launcherTestSources(
-		launcherTestFile{Name: "engine/runtime-manifest.json", Mode: 0o644, Data: engineFiles[0].Data},
-		launcherTestFile{Name: "engine/engine", Mode: 0o755, Data: engineFiles[1].Data},
-		launcherTestFile{Name: "engine/engine.pck", Mode: 0o644, Data: engineFiles[2].Data},
-		launcherTestFile{Name: "bridge/bridge-manifest.json", Mode: 0o644, Data: bridgeFiles[0].Data},
-		launcherTestFile{Name: "bridge/bridge.so", Mode: 0o755, Data: bridgeFiles[1].Data},
-		launcherTestFile{Name: runtimepayload.ProjectZipPath, Mode: 0o644, Data: projectZIP},
-	)
-	var payload bytes.Buffer
-	payloadDigest, manifestDigest, err := runtimepayload.BuildTo(&payload, config, sources)
+	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary files = %v, error = %v, want work and session cleanup", entries, err)
+	}
+}
+
+func TestRunEngineStartError(t *testing.T) {
+	missingInterpreter := filepath.Join(t.TempDir(), "missing-interpreter")
+	payload, payloadDigest, manifestDigest, _ := launcherTestPayload(t, "#!"+missingInterpreter+"\n")
+	cacheRoot := filepath.Join(t.TempDir(), "cache")
+	tempRoot := t.TempDir()
+	launcherTestTempDir(t, tempRoot)
+	status, err := run(t.Context(), Config{
+		Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
+	}, cacheRoot)
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "run Engine:") || status != (ProcessStatus{}) {
+		t.Fatalf("run() = (%+v, %v), want engine start error", status, err)
+	}
+	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary files = %v, error = %v, want work and session cleanup", entries, err)
+	}
+}
+
+func TestRunSessionDirectoryErrorReleasesLeases(t *testing.T) {
+	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, "#!/bin/sh\nexit 0\n")
+	// The temporary root is a literal path, even when its name contains glob metacharacters.
+	tempRoot := filepath.Join(t.TempDir(), "[launcher]")
+	if err := os.Mkdir(tempRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := t.TempDir()
+	t.Setenv("TMPDIR", tempRoot)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	locks := runtimebundle.CrossProcessLockProvider{}
+	held, err := locks.AcquireExclusive(ctx, filepath.Join(cacheRoot, string(runtimebundle.NamespaceProject), manifest.Project.BundleDigest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	payloadBytes := append([]byte(nil), payload.Bytes()...)
-	verified, err := runtimepayload.Verify(payloadBytes, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return payloadBytes, payloadDigest, manifestDigest, verified.Manifest
-}
-
-type launcherTestFile struct {
-	Name string
-	Mode os.FileMode
-	Data []byte
-}
-
-func launcherTestSources(files ...launcherTestFile) []runtimepayload.FileSource {
-	sources := make([]runtimepayload.FileSource, len(files))
-	for i, file := range files {
-		sources[i] = runtimepayload.FileSource{
-			Name: file.Name, Mode: file.Mode, ReaderAt: bytes.NewReader(file.Data), Size: int64(len(file.Data)),
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		_ = held.Close()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("launcher goroutine did not stop")
 		}
-	}
-	return sources
-}
-
-func launcherTestZIP(t *testing.T, files []launcherTestFile) []byte {
-	t.Helper()
-	files = append([]launcherTestFile(nil), files...)
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
-	var data bytes.Buffer
-	writer := zip.NewWriter(&data)
-	canonicalTime := time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
-	for _, file := range files {
-		header := &zip.FileHeader{Name: file.Name, Method: zip.Store}
-		header.SetMode(file.Mode)
-		header.SetModTime(canonicalTime)
-		entry, err := writer.CreateHeader(header)
+	})
+	var status ProcessStatus
+	var runErr error
+	go func() {
+		status, runErr = run(ctx, Config{
+			Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
+		}, cacheRoot)
+		close(done)
+	}()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		matches, err := fs.Glob(os.DirFS(tempRoot), "spx-launcher-*/project.zip")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := entry.Write(file.Data); err != nil {
+		if len(matches) == 1 {
+			break
+		}
+		select {
+		case <-done:
+			t.Fatalf("run returned before project materialization: (%+v, %v)", status, runErr)
+		case <-ctx.Done():
+			t.Fatal("launcher did not reach project materialization")
+		case <-ticker.C:
+		}
+	}
+	// The project lease prevents session creation until TMPDIR is unavailable.
+	t.Setenv("TMPDIR", filepath.Join(tempRoot, "missing"))
+	if err := held.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("launcher did not return after the project lease was released")
+	}
+	if status != (ProcessStatus{}) || !errors.Is(runErr, os.ErrNotExist) || !strings.Contains(runErr.Error(), "xgolauncher: create Engine session:") {
+		t.Fatalf("run = (%+v, %v), want session directory creation error", status, runErr)
+	}
+	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary directories after run = %v, %v; want none", entries, err)
+	}
+	for namespace, digest := range map[runtimebundle.Namespace]string{
+		runtimebundle.NamespaceEngine:  manifest.Engine.BundleDigest,
+		runtimebundle.NamespaceBridge:  manifest.Bridge.BundleDigest,
+		runtimebundle.NamespaceProject: manifest.Project.BundleDigest,
+	} {
+		lease, err := locks.AcquireExclusive(ctx, filepath.Join(cacheRoot, string(namespace), digest))
+		if err != nil {
+			t.Fatalf("acquire exclusive %s lease after run: %v", namespace, err)
+		}
+		if err := lease.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return data.Bytes()
-}
-
-func launcherTestBundle(t *testing.T, data []byte, namespace runtimebundle.Namespace) runtimebundle.Bundle {
-	t.Helper()
-	bundle, err := runtimepayload.ComponentBundleReaderAt(bytes.NewReader(data), int64(len(data)), namespace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return bundle
 }
