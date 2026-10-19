@@ -17,6 +17,7 @@
 package runtimecmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,6 +28,61 @@ import (
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
 )
+
+func TestRuntimeDispatchAndArgumentErrors(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: errUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown runtime command "unknown"`},
+		{name: "export-pack help", args: []string{"export-pack", "--help"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := Run(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("Run(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains == "" {
+				if err != nil {
+					t.Fatalf("Run(%q) returned error: %v", test.args, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("Run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name     string
+		parse    func([]string) error
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "build-wasm positional", parse: func(args []string) error { _, err := parseRuntimeBuildWasmArgs(args); return err }, args: []string{"extra"}, wantErr: errUsage},
+		{name: "export-pack positional", parse: func(args []string) error { _, err := parseRuntimeExportPackArgs(args); return err }, args: []string{"extra"}, wantErr: errUsage},
+		{name: "export-web invalid mode", parse: func(args []string) error { _, err := parseRuntimeExportWebArgs(args); return err }, args: []string{"--mode", "invalid"}, contains: "unsupported web-mode"},
+	} {
+		t.Run("reject/"+test.name, func(t *testing.T) {
+			err := test.parse(test.args)
+			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
+				t.Fatalf("parse(%q) error = %v, want %v", test.args, err, test.wantErr)
+			}
+			if test.contains != "" && (err == nil || !strings.Contains(err.Error(), test.contains)) {
+				t.Fatalf("parse(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+}
 
 func TestParseRuntimeBuildWasmArgsDefault(t *testing.T) {
 	cfg, err := parseRuntimeBuildWasmArgs(nil)

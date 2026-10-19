@@ -96,6 +96,39 @@ func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.
 	}
 }
 
+func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *testing.T) {
+	var state InputFrameState
+	state.Reset(mathf.Vec2{}, true)
+	var ups int
+	state.Process(
+		InputFrame{
+			Point:             mathf.Vec2{X: 4, Y: 5},
+			LeftButtonPressed: false,
+			MouseEvents: []engine.MouseEvent{
+				{Id: 2, IsPressed: false},
+				{Id: 1, IsPressed: true},
+			},
+		},
+		InputFrameHooks{
+			FireLeftButtonDown: func(mathf.Vec2) { t.Error("unchanged left-button edge fired a down callback") },
+			FireLeftButtonUp:   func(mathf.Vec2) { ups++ },
+			OnMouseMove:        func(mathf.Vec2) {},
+			OnKeyPressed:       func(int64) {},
+		},
+	)
+	if ups != 1 || state.leftButtonPressed {
+		t.Fatalf("reconciled release count/state = %d/%v, want 1/false", ups, state.leftButtonPressed)
+	}
+}
+
+func TestInputFrameStateResetReplacesSessionState(t *testing.T) {
+	var state InputFrameState
+	state.Reset(mathf.Vec2{X: 3, Y: 4}, true)
+	if state.lastMousePos != (mathf.Vec2{X: 3, Y: 4}) || !state.leftButtonPressed {
+		t.Fatalf("reset state = %+v, want point {3 4} and pressed", state)
+	}
+}
+
 func TestMainExecutionTimedOut(t *testing.T) {
 	started := time.Unix(10, 0)
 	for _, tt := range []struct {
@@ -167,6 +200,47 @@ func TestRepeatAndWaitUntil(t *testing.T) {
 	}
 }
 
+func TestScheduleHelpersIgnoreNilAndEmptyCallbacks(t *testing.T) {
+	called := 0
+	yielded := 0
+	Forever(nil, func() { yielded++ })
+	Repeat(3, nil, func() { yielded++ })
+	Repeat(-1, func() { called++ }, func() { yielded++ })
+	RepeatUntil(nil, func() { called++ }, func() { yielded++ })
+	RepeatUntil(func() bool { return false }, nil, func() { yielded++ })
+	WaitUntil(nil, func() { yielded++ })
+	if called != 0 || yielded != 0 {
+		t.Fatalf("nil/empty callbacks ran: called=%d yielded=%d", called, yielded)
+	}
+}
+
+func TestForeverRunsUntilYieldStops(t *testing.T) {
+	type stopForever struct{}
+	calls, yields := 0, 0
+	completed := make(chan any, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() { completed <- recover() }()
+		Forever(func() { calls++ }, func() {
+			yields++
+			panic(stopForever{})
+		})
+	}()
+	select {
+	case recovered := <-completed:
+		if recovered != (stopForever{}) {
+			t.Fatalf("Forever panic = %v, want stop sentinel", recovered)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Forever did not return after yield")
+	}
+	<-done
+	if calls != 1 || yields != 1 {
+		t.Fatalf("Forever iterations = calls %d, yields %d; want 1/1", calls, yields)
+	}
+}
+
 func TestSwipeStateFinishReturnsGestureAndTarget(t *testing.T) {
 	for _, target := range []string{"sprite", ""} {
 		t.Run(target, func(t *testing.T) {
@@ -218,6 +292,7 @@ func TestSwipeStateFinishClearsTargetWhenSwipeFails(t *testing.T) {
 func TestSwipeStateUntrackedFinishDoesNotReadClock(t *testing.T) {
 	var state SwipeState[string]
 	state.InitWithClock(func() time.Time { panic("untracked gesture read the clock") })
+	state.Expire()
 	if _, _, ok := state.Finish(mathf.Vec2{X: 100}); ok {
 		t.Fatal("untracked gesture succeeded")
 	}

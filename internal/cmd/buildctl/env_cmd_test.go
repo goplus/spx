@@ -17,12 +17,49 @@
 package main
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
 )
+
+func TestRunEnvDispatchAndArgumentErrors(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: shared.ErrUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "export shell help", args: []string{"export-shell", "--help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown env command "unknown"`},
+		{name: "invalid platform", args: []string{"export-shell", "--platform", "plan9"}, contains: "unsupported platform"},
+		{name: "extra argument", args: []string{"export-jdk-shell", "extra"}, wantErr: shared.ErrUsage},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := runEnv(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("runEnv(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains != "" {
+				if err == nil || !strings.Contains(err.Error(), test.contains) {
+					t.Fatalf("runEnv(%q) error = %v, want substring %q", test.args, err, test.contains)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("runEnv(%q) returned error: %v", test.args, err)
+			}
+		})
+	}
+}
 
 func TestParseEnvExportShellArgsDefault(t *testing.T) {
 	cfg, err := parseEnvExportShellArgs(nil)

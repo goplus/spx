@@ -28,9 +28,15 @@ type recordedCall struct {
 }
 
 type recordingRunner struct {
-	calls    []recordedCall
-	commands []recordedCommand
-	repoRoot string
+	calls      []recordedCall
+	commands   []recordedCommand
+	repoRoot   string
+	demos      []string
+	stopCalls  int
+	scriptErr  error
+	commandErr error
+	listErr    error
+	stopErr    error
 }
 
 func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
@@ -38,7 +44,7 @@ func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
 		script: relativePath,
 		args:   append([]string(nil), args...),
 	})
-	return nil
+	return r.scriptErr
 }
 
 func (r *recordingRunner) RunCommand(workdir string, name string, args ...string) error {
@@ -51,7 +57,7 @@ func (r *recordingRunner) RunCommand(workdir string, name string, args ...string
 		name: name,
 		args: append([]string(nil), args...),
 	})
-	return nil
+	return r.commandErr
 }
 
 func (r *recordingRunner) RepoRootDir() string {
@@ -59,6 +65,15 @@ func (r *recordingRunner) RepoRootDir() string {
 		return "."
 	}
 	return r.repoRoot
+}
+
+func (r *recordingRunner) ListDemoDirs() ([]string, error) {
+	return append([]string(nil), r.demos...), r.listErr
+}
+
+func (r *recordingRunner) StopWebServers() error {
+	r.stopCalls++
+	return r.stopErr
 }
 
 func mustMkdirAll(t *testing.T, path string) {

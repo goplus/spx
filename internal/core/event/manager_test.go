@@ -292,7 +292,13 @@ func TestNewSink(t *testing.T) {
 	handler := "handler"
 	sink := NewSink("owner", handler)
 	if sink.Owner != "owner" || sink.Handler != handler || sink.Cond != nil {
-		t.Fatalf("NewSink = %+v", sink)
+		t.Fatalf("NewSink without condition = %+v", sink)
+	}
+
+	cond := MatchValue("match")
+	sink = NewSink("owner", handler, cond)
+	if sink.Owner != "owner" || sink.Handler != handler || sink.Cond == nil || !sink.Cond("match") {
+		t.Fatalf("NewSink with condition = %+v", sink)
 	}
 }
 
@@ -300,7 +306,8 @@ func TestSinkMatchers(t *testing.T) {
 	if !MatchValue("msg")("msg") || MatchValue("msg")("other") {
 		t.Fatal("MatchValue mismatch")
 	}
-	if !MatchAnyOf([]int{1, 2, 3})(2) || MatchAnyOf([]int{1, 2, 3})(4) {
+	matchAnyOf := MatchAnyOf([]int{1, 2, 3})
+	if !matchAnyOf(2) || matchAnyOf(4) || matchAnyOf("2") {
 		t.Fatal("MatchAnyOf mismatch")
 	}
 }

@@ -164,6 +164,45 @@ func TestSetFixedDeltaTimeDisablesNonPositiveValues(t *testing.T) {
 	}
 }
 
+func TestSetTimeScaleInvokesCallback(t *testing.T) {
+	resetStateForTest()
+	defer resetStateForTest()
+	var got float64
+	Start(func(value float64) { got = value })
+
+	SetTimeScale(1.75)
+	if got != 1.75 {
+		t.Fatalf("SetTimeScale callback value = %v, want 1.75", got)
+	}
+	if scale := TimeScale(); scale != 1.75 {
+		t.Fatalf("TimeScale() = %v, want 1.75", scale)
+	}
+}
+
+func TestRealtimeAccessorsAndNonFiniteLogicalTime(t *testing.T) {
+	resetStateForTest()
+	defer resetStateForTest()
+
+	Start(nil)
+	Sleep(0)
+	if got := RealTimeSinceStart(); got < 0 {
+		t.Fatalf("RealTimeSinceStart() = %v, want non-negative", got)
+	}
+	if got := RealTimeSinceCurFrame(); got < 0 {
+		t.Fatalf("RealTimeSinceCurFrame() = %v, want non-negative", got)
+	}
+	if got := RealTimeSinceCurFrameMs(); got < 0 {
+		t.Fatalf("RealTimeSinceCurFrameMs() = %v, want non-negative", got)
+	}
+
+	timeSinceLevelLoad = 1
+	logicalTimeCompensation = 0.25
+	advanceLogicalTime(math.Inf(1))
+	if !math.IsInf(timeSinceLevelLoad, 1) || logicalTimeCompensation != 0 {
+		t.Fatalf("non-finite advance state = (time=%v, compensation=%v), want (+Inf, 0)", timeSinceLevelLoad, logicalTimeCompensation)
+	}
+}
+
 func TestEffectiveLogicalDeltaTimeUsesFixedValueWhenEnabled(t *testing.T) {
 	resetStateForTest()
 	SetFixedDeltaTime(0.1)

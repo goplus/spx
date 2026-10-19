@@ -65,6 +65,7 @@ func TestInputReplayValidateRejectsInvalidData(t *testing.T) {
 		{"mouse event state mismatch", func(r *InputReplay) { r.Frames[0].State.Buttons = 0 }, "do not match buttons"},
 		{"invalid key event", func(r *InputReplay) { r.Frames[0].KeyEvents[0].Key = 0 }, "invalid key"},
 		{"key event state mismatch", func(r *InputReplay) { r.Frames[0].KeyEvents = nil }, "do not match keysDown"},
+		{"same-size key event state mismatch", func(r *InputReplay) { r.Frames[0].State.KeysDown = []int64{10, 30} }, "do not match keysDown"},
 	}
 
 	for _, tt := range tests {
@@ -89,8 +90,35 @@ func TestInputReplayJSONRoundTripIsStrict(t *testing.T) {
 	if _, err := DecodeInputReplay(append(data, []byte(` {}`)...)); err == nil || !strings.Contains(err.Error(), "trailing") {
 		t.Fatalf("trailing-data error = %v", err)
 	}
+	if _, err := DecodeInputReplay(append(data, []byte(" !")...)); err == nil || !strings.Contains(err.Error(), "trailing data") {
+		t.Fatalf("malformed-trailing-data error = %v", err)
+	}
+	invalid := []byte(`{"format":"spx-input-replay","version":2}`)
+	if _, err := DecodeInputReplay(invalid); err == nil || !strings.Contains(err.Error(), "version") {
+		t.Fatalf("decoded-invalid-replay error = %v", err)
+	}
 	if _, err := DecodeInputReplay(make([]byte, MaxInputReplayJSONSize+1)); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("oversize error = %v", err)
+	}
+}
+
+func TestEncodeInputReplayRejectsInvalidAndOversizedReplays(t *testing.T) {
+	if _, err := EncodeInputReplay(InputReplay{}); err == nil || !strings.Contains(err.Error(), "format") {
+		t.Fatalf("invalid replay error = %v, want format validation error", err)
+	}
+
+	const keyCount = (MaxInputReplayJSONSize / 20) + 1
+	keys := make([]int64, keyCount)
+	for i := range keys {
+		keys[i] = int64(math.MaxInt64-keyCount) + int64(i)
+	}
+	oversized := InputReplay{
+		Format:  InputReplayFormat,
+		Version: InputReplayVersion,
+		Initial: InputReplayState{KeysDown: keys},
+	}
+	if _, err := EncodeInputReplay(oversized); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
+		t.Fatalf("oversized replay error = %v; want size-limit error", err)
 	}
 }
 
@@ -378,6 +406,53 @@ func TestInputReplayControllerModeErrorsAndReset(t *testing.T) {
 	controller.Reset()
 	if status := controller.Status(); status.Mode != InputSessionModeIdle {
 		t.Fatalf("status after Reset = %+v", status)
+	}
+}
+
+func TestInputReplayControllerRejectsInvalidLifecycleInputs(t *testing.T) {
+	var controller InputReplayController
+	for _, test := range []struct {
+		name string
+		call func() error
+		want string
+	}{
+		{
+			name: "negative timestep",
+			call: func() error { return controller.StartRecording(InputReplayState{}, -1) },
+			want: "fixed timestep",
+		},
+		{
+			name: "invalid initial state",
+			call: func() error { return controller.StartRecording(InputReplayState{KeysDown: []int64{0}}, 0) },
+			want: "initial input state",
+		},
+		{
+			name: "invalid replay",
+			call: func() error { return controller.StartReplay(InputReplay{}) },
+			want: "input replay format",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.call(); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+
+	if err := controller.SynchronizeRecordingInitial(InputReplayState{}); !errors.Is(err, ErrInputSessionNotRecording) {
+		t.Fatalf("idle SynchronizeRecordingInitial error = %v, want %v", err, ErrInputSessionNotRecording)
+	}
+	if err := controller.StartRecording(InputReplayState{}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.SynchronizeRecordingInitial(InputReplayState{KeysDown: []int64{0}}); err == nil || !strings.Contains(err.Error(), "initial input state") {
+		t.Fatalf("invalid synchronized state error = %v", err)
+	}
+	if err := controller.StartRecording(InputReplayState{}, 0); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("active StartRecording error = %v, want %v", err, ErrInputSessionActive)
+	}
+	if err := controller.SynchronizeRecordingInitial(InputReplayState{}); err != nil {
+		t.Fatal(err)
 	}
 }
 

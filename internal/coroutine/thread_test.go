@@ -140,6 +140,16 @@ func TestShouldYield(t *testing.T) {
 	})
 }
 
+func TestIsSchedTimeoutUsesFrameTimestampAndThreshold(t *testing.T) {
+	thread := New(nil).newThread("scheduler")
+	if thread.IsSchedTimeout(float64(time.Hour / time.Millisecond)) {
+		t.Fatal("new scheduler frame was already timed out")
+	}
+	if !thread.IsSchedTimeout(-1) {
+		t.Fatal("negative scheduler timeout did not expire immediately")
+	}
+}
+
 func TestBeginMainRestoresEnclosingStart(t *testing.T) {
 	thread := New(nil).newThread("main")
 	outerStartedAt := time.Unix(10, 0)
@@ -178,6 +188,27 @@ func TestCancelStopsSuspendedThread(t *testing.T) {
 	if !thread.Stopped() || thread.Context().Err() == nil {
 		t.Fatal("Cancel did not publish a stop request")
 	}
+}
+
+func TestIsInCoroutineTracksCaller(t *testing.T) {
+	co := New(nil)
+	if co.IsInCoroutine() {
+		t.Fatal("external caller was reported as a coroutine")
+	}
+
+	managed := make(chan bool, 1)
+	co.Create("managed", func(Thread) {
+		managed <- co.IsInCoroutine()
+	})
+	select {
+	case got := <-managed:
+		if !got {
+			t.Fatal("managed caller was not reported as a coroutine")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("managed caller did not run")
+	}
+	co.RunAfterStop(nil)
 }
 
 func TestExternalCallsPreserveActiveThread(t *testing.T) {

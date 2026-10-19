@@ -109,6 +109,23 @@ func TestWaitForChanReceivesValue(t *testing.T) {
 	}
 }
 
+func TestExternalWaitPathsDoNotEnterScheduler(t *testing.T) {
+	co := New(nil)
+	co.Wait(1)
+
+	ch := make(chan int, 1)
+	ch <- 7
+	if got := WaitForChan(co, ch); got != 7 {
+		t.Fatalf("external WaitForChan = %d, want 7", got)
+	}
+	co.schedulerMu.Lock()
+	queued := co.currentJobs.len() + co.deferredJobs.len() + co.roundJobs.len()
+	co.schedulerMu.Unlock()
+	if queued != 0 {
+		t.Fatalf("external waits queued %d scheduler jobs", queued)
+	}
+}
+
 func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 	co := New(nil)
 	ch := make(chan int)

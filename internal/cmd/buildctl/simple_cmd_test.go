@@ -18,14 +18,51 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
 	"github.com/goplus/spx/v3/internal/release"
 )
+
+func TestRunDispatchesUsageAndUnknownCommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: shared.ErrUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown command "unknown"`},
+		{name: "runtime help", args: []string{"runtime", "help"}},
+		{name: "runtime unknown", args: []string{"runtime", "unknown"}, contains: `unknown runtime command "unknown"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := run(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("run(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains == "" {
+				if err != nil {
+					t.Fatalf("run(%q) returned error: %v", test.args, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+}
 
 func TestParseSetupCommandArgs(t *testing.T) {
 	tests := []struct {

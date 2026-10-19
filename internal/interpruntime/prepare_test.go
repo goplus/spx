@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/scaffold"
@@ -135,6 +136,70 @@ func TestPrepareCommandRejectsEnginePathByDefault(t *testing.T) {
 		}); err == nil {
 			t.Fatalf("PrepareCommand(%q) accepted reserved --path", args)
 		}
+	}
+}
+
+func TestPrepareCommandRejectsInvalidContextExecutableAndPolicy(t *testing.T) {
+	roots := testRoots(t)
+	executable := filepath.Join(t.TempDir(), "engine")
+	if err := os.WriteFile(executable, []byte("engine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name       string
+		ctx        context.Context
+		executable string
+		policy     PathPolicy
+		want       string
+	}{
+		{name: "nil context", executable: executable, ctx: nil, want: "nil context"},
+		{name: "missing executable", executable: filepath.Join(t.TempDir(), "missing"), ctx: context.Background(), want: "lstat Executable"},
+		{name: "directory executable", executable: t.TempDir(), ctx: context.Background(), want: "not a regular"},
+		{name: "unknown path policy", executable: executable, ctx: context.Background(), policy: PathPolicy(99), want: "unknown Engine path policy"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := PrepareCommand(tt.ctx, CommandConfig{
+				Roots: roots, Executable: tt.executable, PathPolicy: tt.policy,
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("PrepareCommand() error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestEngineArgsReplacesTrailingPathOption(t *testing.T) {
+	args, err := engineArgs([]string{"--headless", "--path"}, "/session", ReplacePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--headless", "--path", "/session", "--no-header"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("engineArgs() = %#v, want %#v", args, want)
+	}
+	if _, err := engineArgs(nil, "/session", PathPolicy(99)); err == nil || !strings.Contains(err.Error(), "unknown Engine path policy") {
+		t.Fatalf("unknown path policy error = %v", err)
+	}
+}
+
+func TestPrepareSessionRejectsInvalidBridgeInputs(t *testing.T) {
+	roots := testRoots(t)
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "missing", path: filepath.Join(t.TempDir(), "missing.bridge"), want: "lstat BridgePath"},
+		{name: "directory", path: t.TempDir(), want: "not a regular"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := PrepareSession(SessionConfig{Roots: roots, BridgePath: tt.path})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("PrepareSession() error = %v, want containing %q", err, tt.want)
+			}
+		})
 	}
 }
 

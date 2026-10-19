@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+func TestStopThisScriptPanicsWithSentinel(t *testing.T) {
+	co := New(nil)
+	defer func() {
+		if recovered := recover(); recovered != ErrStopThisScript {
+			t.Fatalf("StopThisScript panic = %v, want %v", recovered, ErrStopThisScript)
+		}
+	}()
+	co.StopThisScript()
+}
+
 func TestDrainWakesMultipleWaiters(t *testing.T) {
 	co := New(nil)
 	workerStarted, release := make(chan struct{}), make(chan struct{})

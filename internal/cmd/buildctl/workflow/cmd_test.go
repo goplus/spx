@@ -17,9 +17,11 @@
 package workflow
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -29,49 +31,103 @@ type recordedCommand struct {
 	args []string
 }
 
-type workflowRecordingRunner struct {
-	calls     []recordedCall
-	commands  []recordedCommand
-	demos     []string
-	repoRoot  string
-	stopCalls int
-}
-
-func (r *workflowRecordingRunner) RunScript(relativePath string, args ...string) error {
-	r.calls = append(r.calls, recordedCall{
-		script: relativePath,
-		args:   append([]string(nil), args...),
-	})
-	return nil
-}
-
-func (r *workflowRecordingRunner) RunCommand(workdir string, name string, args ...string) error {
-	dir := workdir
-	if r.repoRoot != "" && !filepath.IsAbs(dir) {
-		dir = filepath.Join(r.repoRoot, dir)
+func TestWorkflowDispatchAndArgumentErrors(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: errUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown workflow command "unknown"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := Run(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("Run(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains == "" {
+				if err != nil {
+					t.Fatalf("Run(%q) returned error: %v", test.args, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("Run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
 	}
-	r.commands = append(r.commands, recordedCommand{
-		dir:  dir,
-		name: name,
-		args: append([]string(nil), args...),
-	})
-	return nil
-}
 
-func (r *workflowRecordingRunner) RepoRootDir() string {
-	if r.repoRoot == "" {
-		return "."
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing index", args: nil, contains: "--demo-index must be greater than 0"},
+		{name: "zero index", args: []string{"--demo-index", "0"}, contains: "--demo-index must be greater than 0"},
+		{name: "invalid mode", args: []string{"--demo-index", "1", "--mode", "unknown"}, contains: "unsupported demo mode"},
+		{name: "invalid port", args: []string{"--demo-index", "1", "--port", "0"}, contains: "--port must be greater than 0"},
+		{name: "positional argument", args: []string{"--demo-index", "1", "extra"}, wantErr: errUsage},
+	} {
+		t.Run("run-demo/reject/"+test.name, func(t *testing.T) {
+			_, err := parseWorkflowRunDemoArgs(test.args)
+			if err == nil {
+				t.Fatalf("parseWorkflowRunDemoArgs(%q) succeeded", test.args)
+			}
+			if test.wantErr != nil && !errors.Is(err, test.wantErr) {
+				t.Fatalf("parseWorkflowRunDemoArgs(%q) error = %v, want %v", test.args, err, test.wantErr)
+			}
+			if test.contains != "" && !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("parseWorkflowRunDemoArgs(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
 	}
-	return r.repoRoot
 }
 
-func (r *workflowRecordingRunner) ListDemoDirs() ([]string, error) {
-	return append([]string(nil), r.demos...), nil
-}
+func TestWorkflowLifecycleAndRunnerErrors(t *testing.T) {
+	runner := &recordingRunner{demos: []string{"tutorial/00-Hello", "tutorial/01-Weather"}}
+	if err := listDemosWorkflow(runner); err != nil {
+		t.Fatalf("listDemosWorkflow returned error: %v", err)
+	}
+	if err := stopWebWorkflow(runner); err != nil {
+		t.Fatalf("stopWebWorkflow returned error: %v", err)
+	}
+	if runner.stopCalls != 1 {
+		t.Fatalf("stopWebServers calls = %d, want 1", runner.stopCalls)
+	}
 
-func (r *workflowRecordingRunner) StopWebServers() error {
-	r.stopCalls++
-	return nil
+	if err := runDemoWorkflow(workflowRunDemoConfig{demoIndex: 3, mode: "run", movie: "false"}, runner); err == nil || !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("out-of-range demo error = %v, want range error", err)
+	}
+
+	sentinel := errors.New("runner failed")
+	for _, test := range []struct {
+		name string
+		run  func(*recordingRunner) error
+		set  func(*recordingRunner)
+	}{
+		{name: "list", set: func(r *recordingRunner) { r.listErr = sentinel }, run: func(r *recordingRunner) error { return listDemosWorkflow(r) }},
+		{name: "stop", set: func(r *recordingRunner) { r.stopErr = sentinel }, run: func(r *recordingRunner) error { return stopWebWorkflow(r) }},
+		{name: "command", set: func(r *recordingRunner) { r.commandErr = sentinel }, run: func(r *recordingRunner) error {
+			return runDemoWorkflow(workflowRunDemoConfig{demoIndex: 1, mode: "run", movie: "false"}, r)
+		}},
+		{name: "script", set: func(r *recordingRunner) { r.scriptErr = sentinel }, run: func(r *recordingRunner) error {
+			return runDemoWorkflow(workflowRunDemoConfig{demoIndex: 1, mode: "web", movie: "false", port: 8106}, r)
+		}},
+	} {
+		t.Run("propagate/"+test.name, func(t *testing.T) {
+			failed := &recordingRunner{demos: []string{"tutorial/00-Hello"}}
+			test.set(failed)
+			if err := test.run(failed); !errors.Is(err, sentinel) {
+				t.Fatalf("error = %v, want runner error", err)
+			}
+		})
+	}
 }
 
 func TestBuildRejectsUnknownTarget(t *testing.T) {
@@ -108,7 +164,7 @@ func TestInstallAPKWorkflow(t *testing.T) {
 		t.Fatalf("MkdirAll returned error: %v", err)
 	}
 
-	runner := &workflowRecordingRunner{repoRoot: repoRoot}
+	runner := &recordingRunner{repoRoot: repoRoot}
 	if err := installAPKWorkflow(workflowInstallAPKConfig{}, runner); err != nil {
 		t.Fatalf("installAPKWorkflow returned error: %v", err)
 	}
@@ -122,7 +178,7 @@ func TestInstallAPKWorkflow(t *testing.T) {
 }
 
 func TestRunDemoWorkflowInterpreted(t *testing.T) {
-	runner := &workflowRecordingRunner{
+	runner := &recordingRunner{
 		demos: []string{"tutorial/00-Hello", "tutorial/01-Weather"},
 	}
 
@@ -148,7 +204,7 @@ func TestRunDemoWorkflowInterpreted(t *testing.T) {
 }
 
 func TestRunDemoWorkflowNative(t *testing.T) {
-	runner := &workflowRecordingRunner{
+	runner := &recordingRunner{
 		demos: []string{"tutorial/00-Hello", "tutorial/01-Weather"},
 	}
 
@@ -174,7 +230,7 @@ func TestRunDemoWorkflowNative(t *testing.T) {
 }
 
 func TestRunDemoWorkflowWebWorker(t *testing.T) {
-	runner := &workflowRecordingRunner{
+	runner := &recordingRunner{
 		demos: []string{"tutorial/00-Hello"},
 	}
 
@@ -207,7 +263,7 @@ func TestRunDemoWorkflowWebWorker(t *testing.T) {
 }
 
 func TestRunDemoWorkflowWeb(t *testing.T) {
-	runner := &workflowRecordingRunner{
+	runner := &recordingRunner{
 		demos: []string{"tutorial/00-Hello"},
 	}
 
