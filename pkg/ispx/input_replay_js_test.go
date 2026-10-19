@@ -19,13 +19,17 @@
 package ispx
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"reflect"
+	"strings"
 	"syscall/js"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/goplus/ixgo"
 	spx "github.com/goplus/spx/v3"
 )
 
@@ -119,15 +123,8 @@ func TestExportedInputSessionStatusReadsRuntime(t *testing.T) {
 	const idle = `{"mode":"idle","phase":"","completed":false,"exhausted":false,"currentTick":null,"nextFrame":0,"frameCount":0}`
 	const recording = `{"mode":"recording","phase":"prepared","completed":false,"exhausted":false,"currentTick":null,"nextFrame":0,"frameCount":0}`
 	const replaying = `{"mode":"replaying","phase":"prepared","completed":false,"exhausted":false,"currentTick":null,"nextFrame":0,"frameCount":1}`
-	replay, err := spx.EncodeInputReplay(spx.InputReplay{
-		Format: spx.InputReplayFormat, Version: spx.InputReplayVersion, FixedTimestep: 1.0 / 30,
-		Frames: []spx.InputReplayFrame{{Frame: 0, Time: 0}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	replayBytes := jsTypeUint8Array.New(len(replay))
-	js.CopyBytesToJS(replayBytes, []byte(replay))
+	replay := hostInputReplayJSON(t, spx.InputReplayFrame{Frame: 0, Time: 0})
+	replayBytes := copyBytesToJS([]byte(replay))
 
 	for _, test := range []struct {
 		name  string
@@ -181,11 +178,7 @@ func TestExportedStartRejectsInvalidInputSession(t *testing.T) {
 			if status := spx.GetInputSessionStatus(); status != idle {
 				t.Fatalf("initial input status = %+v, want idle", status)
 			}
-			result := start.Invoke(test.input)
-			if result.Type() != js.TypeObject || !result.InstanceOf(jsTypeError) {
-				t.Fatalf("ispx_start = %v, want JavaScript Error", result)
-			}
-			if message := result.Get("message").String(); message != test.wantError {
+			if message := assertJSError(t, start.Invoke(test.input)); message != test.wantError {
 				t.Fatalf("error message = %q, want %q", message, test.wantError)
 			}
 			if status := spx.GetInputSessionStatus(); status != idle {
@@ -196,33 +189,14 @@ func TestExportedStartRejectsInvalidInputSession(t *testing.T) {
 }
 
 func TestStartFailureCancelsPreparedInputSession(t *testing.T) {
-	mu.Lock()
-	previousInterp := ixgoInterp
-	ixgoInterp = nil
-	mu.Unlock()
-	t.Cleanup(func() {
-		mu.Lock()
-		ixgoInterp = previousInterp
-		mu.Unlock()
-	})
-
+	isolateInterpreter(t)
 	reported := make(chan string, 1)
-	onPanic := js.FuncOf(func(_ js.Value, args []js.Value) any {
+	setJSFunction(t, "gdspx_ext_on_runtime_panic", func(_ js.Value, args []js.Value) any {
 		reported <- args[0].String()
 		return nil
 	})
-	onReset := js.FuncOf(func(_ js.Value, _ []js.Value) any { return nil })
+	setJSFunction(t, "gdspx_ext_request_reset", func(_ js.Value, _ []js.Value) any { return nil })
 	global := js.Global()
-	previousPanic := global.Get("gdspx_ext_on_runtime_panic")
-	previousReset := global.Get("gdspx_ext_request_reset")
-	global.Set("gdspx_ext_on_runtime_panic", onPanic)
-	global.Set("gdspx_ext_request_reset", onReset)
-	t.Cleanup(func() {
-		global.Set("gdspx_ext_on_runtime_panic", previousPanic)
-		global.Set("gdspx_ext_request_reset", previousReset)
-		onPanic.Release()
-		onReset.Release()
-	})
 
 	if result := global.Get("ispx_start").Invoke(map[string]any{"mode": "record"}); !result.IsNull() {
 		t.Fatalf("ispx_start = %v, want null", result)
@@ -272,4 +246,220 @@ func assertInputSessionStatusJSON(t *testing.T, value js.Value, want string) {
 	if keys.Length() != len(wantJSON) {
 		t.Fatalf("status has %d properties, want %d: %s", keys.Length(), len(wantJSON), encoded)
 	}
+}
+
+func setJSFunction(t *testing.T, name string, fn func(js.Value, []js.Value) any) {
+	t.Helper()
+	global := js.Global()
+	previous := global.Get(name)
+	hadOwn := jsTypeObject.Get("prototype").Get("hasOwnProperty").Call("call", global, name).Bool()
+	callback := js.FuncOf(fn)
+	global.Set(name, callback)
+	t.Cleanup(func() {
+		if hadOwn {
+			global.Set(name, previous)
+		} else {
+			global.Delete(name)
+		}
+		callback.Release()
+	})
+}
+
+func assertJSError(t *testing.T, value js.Value) string {
+	t.Helper()
+	if value.Type() != js.TypeObject || !value.InstanceOf(jsTypeError) {
+		t.Fatalf("result = %v, want JavaScript Error", value)
+	}
+	return value.Get("message").String()
+}
+
+func TestJSBinaryCopiesOwnTheirStorage(t *testing.T) {
+	for _, kind := range []string{"string", "Uint8Array view", "ArrayBuffer"} {
+		t.Run(kind, func(t *testing.T) {
+			source := copyBytesToJS([]byte{9, 1, 2, 3, 8})
+			view := source.Call("subarray", 1, 4)
+			value := js.ValueOf("abc")
+			want := []byte("abc")
+			switch kind {
+			case "Uint8Array view":
+				value, want = view, []byte{1, 2, 3}
+			case "ArrayBuffer":
+				value, want = source.Get("buffer"), []byte{9, 1, 2, 3, 8}
+			}
+			data, err := copyJSReplayData(value)
+			if err != nil || !bytes.Equal(data, want) {
+				t.Fatalf("copied replay = %v, %v; want %v", data, err, want)
+			}
+			source.SetIndex(1, 255)
+			if !bytes.Equal(data, want) {
+				t.Fatal("JavaScript buffer mutation changed the Go copy")
+			}
+		})
+	}
+	original := []byte{1, 2, 3}
+	copied := copyBytesToJS(original)
+	original[0] = 255
+	if copied.Index(0).Int() != 1 {
+		t.Fatal("Go slice mutation changed the JavaScript copy")
+	}
+	copied.SetIndex(1, 255)
+	if original[1] != 2 {
+		t.Fatal("JavaScript mutation changed the original Go slice")
+	}
+	if empty := copyBytesToJS(nil); !empty.InstanceOf(jsTypeUint8Array) || empty.Length() != 0 {
+		t.Fatalf("empty copy = %v, want empty Uint8Array", empty)
+	}
+}
+
+func TestJSFilesConversionPreservesBinaryData(t *testing.T) {
+	source := copyBytesToJS([]byte{9, 0, 255, 8})
+	input := js.ValueOf(map[string]any{
+		"view.bin":   source.Call("subarray", 1, 3),
+		"buffer.bin": source.Get("buffer"),
+		"empty.bin":  jsTypeUint8Array.New(0),
+	})
+	files, err := convertJSFilesToMap(input)
+	want := map[string][]byte{"view.bin": {0, 255}, "buffer.bin": {9, 0, 255, 8}, "empty.bin": {}}
+	if err != nil || !reflect.DeepEqual(files, want) {
+		t.Fatalf("files = %v, %v; want %v", files, err, want)
+	}
+	source.SetIndex(1, 42)
+	if !reflect.DeepEqual(files, want) {
+		t.Fatal("JavaScript file mutation changed the Go snapshot")
+	}
+}
+
+func TestExportedBuildValidatesAndBuildsFiles(t *testing.T) {
+	isolateInterpreter(t)
+	if err := Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	build := js.Global().Get("ispx_build")
+	for _, test := range []struct {
+		name string
+		args []any
+		want string
+	}{
+		{"missing files", nil, "missing files argument"},
+		{"null", []any{nil}, "invalid files argument type"},
+		{"array", []any{[]any{}}, "invalid files argument type"},
+		{"text file", []any{map[string]any{"main.go": "package main"}}, `failed to convert files: unsupported file value type for "main.go"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if message := assertJSError(t, build.Invoke(test.args...)); !strings.Contains(message, test.want) {
+				t.Fatalf("build error = %q, want %q", message, test.want)
+			}
+		})
+	}
+	// Compilation may perform asynchronous filesystem operations in Node, so
+	// call the Go handler without suspending JavaScript's event loop in Invoke.
+	invalid := js.ValueOf(map[string]any{"main.xgo": copyBytesToJS([]byte("func main( {"))})
+	if err, ok := ispxBuild(js.Undefined(), []js.Value{invalid}).(error); !ok || !strings.Contains(err.Error(), "failed to build: failed to build XGo source") {
+		t.Fatalf("invalid source error = %v", err)
+	}
+	files := js.ValueOf(map[string]any{"main.xgo": copyBytesToJS([]byte("func main() {}\n"))})
+	if result := ispxBuild(js.Undefined(), []js.Value{files}); result != nil {
+		t.Fatalf("successful build = %v, want nil", result)
+	}
+	mu.Lock()
+	built := ixgoInterp != nil
+	mu.Unlock()
+	if !built {
+		t.Fatal("JavaScript build did not publish an interpreter")
+	}
+}
+
+func TestJSInputSessionDefaultsAndFinishErrors(t *testing.T) {
+	for _, args := range [][]js.Value{nil, {js.Undefined()}, {js.Null()}} {
+		preparation, err := prepareHostInputSession(args)
+		if err != nil || preparation.Cancel() || spx.GetInputSessionStatus().Mode != spx.InputSessionModeIdle {
+			t.Fatalf("absent input preparation = %+v, %v", preparation, err)
+		}
+	}
+	input := js.ValueOf(map[string]any{"mode": "record", "fps": nil, "captureKey": nil})
+	preparation, err := prepareHostInputSession([]js.Value{input})
+	t.Cleanup(func() { preparation.Cancel() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := spx.GetInputSessionStatus()
+	finish := js.Global().Get("ispx_input_recording_finish")
+	if message := assertJSError(t, finish.Invoke()); message != spx.ErrInputSessionNotRecording.Error() {
+		t.Fatalf("finish error = %q", message)
+	}
+	if status := spx.GetInputSessionStatus(); status != before {
+		t.Fatalf("failed finish changed status: %+v, want %+v", status, before)
+	}
+}
+
+func TestJSLookupReportsErrorBeforeReset(t *testing.T) {
+	var calls []string
+	setJSFunction(t, "gdspx_ext_on_runtime_panic", func(_ js.Value, args []js.Value) any {
+		calls = append(calls, args[0].String())
+		return nil
+	})
+	setJSFunction(t, "gdspx_ext_request_reset", func(_ js.Value, args []js.Value) any {
+		if len(args) != 1 || args[0].Int() != 1 {
+			t.Errorf("reset args = %v, want exit code 1", args)
+		}
+		calls = append(calls, "reset")
+		return nil
+	})
+	if dir, found := defaultIXGoContextLookup("unused", "missing/package"); dir != "" || found {
+		t.Fatalf("lookup = %q, %v; want empty, false", dir, found)
+	}
+	want := []string{`failed to resolve package import "missing/package"`, "reset"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("lookup callbacks = %v, want %v", calls, want)
+	}
+}
+
+func TestExportedStartReportsInterpreterFailure(t *testing.T) {
+	isolateInterpreter(t)
+	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
+	pkg, err := ctx.LoadFile("main.go", `package main; func main() { panic("bridge failure") }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interp, err := ctx.NewInterp(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	ixgoCtx, ixgoInterp = ctx, interp
+	mu.Unlock()
+	messages := make(chan string, 1)
+	reset := make(chan struct{}, 1)
+	setJSFunction(t, "gdspx_ext_on_runtime_panic", func(_ js.Value, args []js.Value) any {
+		messages <- args[0].String()
+		return nil
+	})
+	setJSFunction(t, "gdspx_ext_request_reset", func(_ js.Value, _ []js.Value) any { reset <- struct{}{}; return nil })
+	if result := js.Global().Get("ispx_start").Invoke(); !result.IsNull() {
+		t.Fatalf("ispx_start = %v, want null", result)
+	}
+	select {
+	case <-reset:
+	case <-time.After(3 * time.Second):
+		t.Fatal("interpreter failure did not request a runtime reset")
+	}
+	if message := <-messages; !strings.Contains(message, "interpreter exited with code") || !strings.Contains(message, "bridge failure") {
+		t.Fatalf("interpreter failure = %q", message)
+	}
+	mu.Lock()
+	running := runDone != nil
+	mu.Unlock()
+	if running {
+		t.Fatal("failed interpreter still reports a running instance")
+	}
+}
+
+func TestJSStopWithNoRunningInterpreter(t *testing.T) {
+	isolateInterpreter(t)
+	synctest.Test(t, func(t *testing.T) {
+		if result := ispxStop(js.Undefined(), nil); result != nil {
+			t.Fatalf("ispx_stop = %v, want nil", result)
+		}
+		synctest.Wait()
+	})
 }

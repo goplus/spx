@@ -210,7 +210,7 @@ func TestWorldRenderOffsetAppliesRootFlipAndRotation(t *testing.T) {
 	x, y = getWorldRenderOffset(sprite)
 	wantX := 61 / math.Sqrt2
 	wantY := 13 / math.Sqrt2
-	if math.Abs(x-wantX) > 1e-9 || math.Abs(y-wantY) > 1e-9 {
+	if !(math.Abs(x-wantX) <= 1e-9 && math.Abs(y-wantY) <= 1e-9) {
 		t.Fatalf("rotated world render offset = (%v, %v), want (%v, %v)", x, y, wantX, wantY)
 	}
 }
@@ -243,5 +243,48 @@ func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
 	config.Type = physicsColliderAuto
 	if got, want := config.shapePivot(sprite), mathf.NewVec2(80, -40); got != want {
 		t.Fatalf("auto shape pivot = %v, want %v", got, want)
+	}
+}
+
+func TestSpriteRenderingOverloadsAndDebugPreserveState(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	game.debugState.DebugInstr = true
+	installBubbleTestUiMgr(t)
+	sprite := newCloneLimitSprite(game, "actor")
+	sprite.costumes = []*costume{{name: "first"}, {name: "second"}, {name: "third"}}
+	for _, tt := range []struct {
+		run  func()
+		want string
+	}{
+		{func() { sprite.SetCostume__1(1) }, "second"},
+		{func() { sprite.SetCostume__2(2) }, "third"},
+		{func() { sprite.SetCostume__3(Next) }, "first"},
+	} {
+		tt.run()
+		if sprite.CostumeName() != tt.want {
+			t.Fatalf("costume=%q, want %q", sprite.CostumeName(), tt.want)
+		}
+	}
+	if sprite.ResolveCostumeIndex("second") != 1 {
+		t.Fatal("debug costume lookup changed indexing")
+	}
+	sprite.SetGraphicEffect(GhostEffect, 20)
+	sprite.ChangeGraphicEffect(GhostEffect, 30)
+	if sprite.greffUniforms[GhostEffect] != 50 {
+		t.Fatalf("ghost effect = %v, want 50", sprite.greffUniforms[GhostEffect])
+	}
+	sprite.ClearGraphicEffects()
+	if sprite.greffUniforms[GhostEffect] != 0 {
+		t.Fatalf("effects remained after clear: %v", sprite.greffUniforms)
+	}
+	sprite.Show()
+	sprite.Say__0("visible bubble")
+	sprite.Hide()
+	if sprite.Visible() || sprite.bubble().textObj != nil {
+		t.Fatal("hiding sprite did not hide and clear its bubble")
+	}
+	sprite.SetLayer__0(Front)
+	if game.shapeMgr.findShapeIndex(&sprite.SpriteImpl) != len(game.shapeMgr.items)-1 {
+		t.Fatal("front layer overload did not place sprite last")
 	}
 }

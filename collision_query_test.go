@@ -306,3 +306,33 @@ func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
 		})
 	}
 }
+
+func TestCollisionQueriesRejectUnavailableOrInvalidGeometry(t *testing.T) {
+	game, _, receiver, _ := newTouchingPair(t, true)
+	if game.touchingSpriteBy(nil, "target") != nil || game.touchingSpriteBy(&SpriteImpl{}, "target") != nil {
+		t.Fatal("unbound receiver participated in collision query")
+	}
+	sprite := &receiver.SpriteImpl
+	for _, cfg := range []physicConfig{
+		{Type: physicsColliderRect, Params: []float64{0, 1}},
+		{Type: physicsColliderCircle, Params: []float64{0}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1, 2, 2, 3}},
+	} {
+		sprite.physics().collisionInfo = cfg
+		if _, bounded := sprite.queryBounds(false); bounded {
+			t.Errorf("invalid geometry %v produced usable bounds", cfg)
+		}
+	}
+	sprite.physics().collisionInfo = physicConfig{Type: physicsColliderCapsule, Params: []float64{3, 2}}
+	sprite.runtimeState.Scale = 1
+	sprite.transform().direction = 90
+	box, bounded := sprite.queryBounds(false)
+	if !bounded || box != (collision.AABB{MinX: -3, MinY: -3, MaxX: 3, MaxY: 3}) {
+		t.Fatalf("short capsule bounds = %v, %v, want diameter-sized square", box, bounded)
+	}
+	sprite.costumes = nil
+	if _, bounded := sprite.queryBounds(true); bounded {
+		t.Fatal("pixel bounds without costume should be unavailable")
+	}
+}

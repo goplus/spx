@@ -1013,9 +1013,7 @@ func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
 func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
 	t.Helper()
 
-	enginewrap.Init(func(call func()) {
-		call()
-	})
+	setupImmediateEngineCalls(t)
 
 	original := pkgengine.SpriteMgr
 	mgr := &clickThroughSpriteMgr{
@@ -1305,5 +1303,61 @@ func TestTouchStartGate(t *testing.T) {
 	}
 	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketTouchStart)); got != 2 {
 		t.Fatalf("touch handlers = %d, want 2", got)
+	}
+}
+
+func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
+	_, game := setupRuntimeEventGame(t)
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous })
+	game.debugState.DebugEvent = true
+	game.debugState.DebugInstr = true
+	sprite := &SpriteImpl{g: game, name: "actor"}
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+	game.shapeMgr.add(sprite)
+	var got []string
+	game.OnTimer(0, func() { got = append(got, "timer") })
+	game.OnKey__0(KeyA, func() { got = append(got, "key") })
+	game.OnKey__1([]Key{KeyA}, func(Key) { got = append(got, "keys") })
+	game.OnKey__1(nil, func(Key) { t.Error("empty key set invoked") })
+	game.OnSwipe__0(90, func() { got = append(got, "swipe") })
+	game.OnMsg__1("message", func() { got = append(got, "message") })
+	game.OnBackdrop__1("scene", func() { got = append(got, "backdrop") })
+	game.OnClick(func() { got = append(got, "click") })
+	sprite.OnCloned__1(func(any) { got = append(got, "clone") })
+	sprite.register(coreevent.BucketTouchStart, sprite, func(Sprite) { got = append(got, "touch") })
+	game.scriptEvents.doWhenTimer(0)
+	game.scriptEvents.doWhenKeyPressed(KeyA)
+	game.scriptEvents.doWhenSwipe(90, game)
+	game.Broadcast__1("message", 123)
+	game.BroadcastAndWait__1("message", 456)
+	game.scriptEvents.doWhenBackdropChanged("scene", true)
+	game.scriptEvents.doWhenClick(game)
+	game.scriptEvents.doWhenCloned(sprite, nil)
+	game.scriptEvents.doWhenTouchStart(sprite, &SpriteImpl{name: "peer"})
+	want := []string{"timer", "key", "keys", "swipe", "message", "message", "backdrop", "click", "clone", "touch"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debug handlers = %v, want %v", got, want)
+	}
+	game.scriptEvents.manager.SnapshotStartOnce()
+	sprite.spriteState.Cloned = true
+	sprite.OnStart(func() { t.Error("late clone start ran") })
+	game.OnStart(func() { t.Error("late game start ran") })
+	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketStart)); got != 0 {
+		t.Fatalf("late start handlers registered = %d, want 0", got)
+	}
+	game.Stop(StopKind(-999))
+}
+
+func TestPointHitsClickTargetRejectsMissingOrHiddenProxy(t *testing.T) {
+	game := &Game{}
+	if game.pointHitsClickTarget(&SpriteImpl{}, mathf.Vec2{}) {
+		t.Fatal("missing proxy accepted a click")
+	}
+	sprite := newClickTestSprite(game, "hidden", 1, false)
+	sprite.spriteState.IsVisible = false
+	if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
+		t.Fatal("hidden sprite accepted a click")
 	}
 }

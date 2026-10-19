@@ -19,8 +19,6 @@ package command
 import (
 	"archive/zip"
 	"embed"
-	"flag"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,56 +32,30 @@ var webExportTestFS embed.FS
 func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 	projectRoot := t.TempDir()
 	t.Chdir(projectRoot)
-	if err := os.MkdirAll(filepath.Join(projectRoot, "assets"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	for name, data := range map[string]string{
 		"main.spx":          "onStart => {}\n",
 		"assets/index.json": "{}\n",
 		"go.sum":            "existing sums\n",
+		".temp/keep":        "session",
+		"project/old.txt":   "stale",
 	} {
-		if err := os.WriteFile(filepath.Join(projectRoot, name), []byte(data), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Join(projectRoot, ".temp"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectRoot, ".temp", "keep"), []byte("session"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(projectRoot, "project"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(projectRoot, "project", "old.txt"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
+		writeCommandTestFile(t, filepath.Join(projectRoot, name), data)
 	}
 
 	goPath := t.TempDir()
 	binDir := filepath.Join(goPath, "bin")
 	runtimeDir := filepath.Join(binDir, "gdspxrttest_webnormal")
-	for _, dir := range []string{runtimeDir, filepath.Join(binDir, "ispx")} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
 	for name, data := range map[string]string{
 		filepath.Join(runtimeDir, "godot.editor.html"): "<html>runtime</html>",
 		filepath.Join(binDir, "ispx", "runner.js"):     "interpreter runtime",
 		filepath.Join(binDir, "ispx.wasm"):             "interpreter wasm",
 	} {
-		if err := os.WriteFile(name, []byte(data), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeCommandTestFile(t, name, data)
 	}
 	t.Setenv("GOPATH", goPath)
 	t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
 
-	previousFlags, previousArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = []string{"spx", "exportweb", "--path", projectRoot}
-	t.Cleanup(func() { flag.CommandLine, os.Args = previousFlags, previousArgs })
+	setTestCommandLine(t, "spx", "exportweb", "--path", projectRoot)
 
 	cmd := &CmdTool{PlatformFS: webExportTestFS}
 	if err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project"); err != nil {
@@ -285,5 +257,121 @@ cat "$4" >> "$4.br"
 				}
 			}
 		})
+	}
+}
+
+func TestWebWorkerBundleAndEnginePatch(t *testing.T) {
+	cmd := &CmdTool{WebDir: t.TempDir()}
+	ext := filepath.Join(cmd.WebDir, "worker")
+	for name, content := range map[string]string{
+		"go.wasm.exec.js":         "runtime();",
+		"worker/a.js":             "first();",
+		"worker/z.js":             "last();",
+		"worker/readme":           "ignored text",
+		"worker/sub.js/nested.js": "ignored nested code",
+	} {
+		writeCommandTestFile(t, filepath.Join(cmd.WebDir, name), content)
+	}
+	bundle, err := cmd.readWebWorkerBundle(ext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "\n\n\nfirst();\n\n\nruntime();\n\n\nlast();"; bundle != want {
+		t.Fatalf("worker bundle = %q, want %q", bundle, want)
+	}
+	if _, err := os.Stat(filepath.Join(cmd.WebDir, "go.wasm.exec.js")); !os.IsNotExist(err) {
+		t.Fatalf("runtime script was not moved to bundle directory: %v", err)
+	}
+	const hook = "{if(initializedJS){checkMailbox()}}"
+	const end = ";throw ex}}self.onmessage=handleMessage}"
+	engine := filepath.Join(cmd.WebDir, "engine.js")
+	writeCommandTestFile(t, engine, "before"+hook+"middle"+end+"after")
+	if err := cmd.patchWebWorkerEngine(bundle); err != nil {
+		t.Fatal(err)
+	}
+	want := "before" + hook + "else if(e.data._gameRunnerMessageId) {handleGameRunnerMessage(e.data);}" + "middle" + end + bundle + "after"
+	if got := readTestFile(t, engine); got != want {
+		t.Fatalf("patched worker = %q, want %q", got, want)
+	}
+}
+
+func TestWebWorkerReportsMissingRuntimeAndAnchors(t *testing.T) {
+	cmd := &CmdTool{WebDir: t.TempDir()}
+	if _, err := cmd.readWebWorkerBundle(t.TempDir()); err == nil || !strings.Contains(err.Error(), "failed to move go.wasm.exec.js") {
+		t.Fatalf("missing runtime error = %v", err)
+	}
+	if err := cmd.patchWebWorkerEngine(""); err == nil || !strings.Contains(err.Error(), "failed to read engine.js") {
+		t.Fatalf("missing engine error = %v", err)
+	}
+	for _, tt := range []struct{ name, content, want string }{
+		{"message anchor", "original engine", "missing worker hook anchor"},
+		{"bundle anchor", "{if(initializedJS){checkMailbox()}}", "missing worker bundle anchor"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := filepath.Join(cmd.WebDir, "engine.js")
+			writeCommandTestFile(t, engine, tt.content)
+			if err := cmd.patchWebWorkerEngine("injected();"); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("invalid engine error = %v, want %q", err, tt.want)
+			}
+			if got := readTestFile(t, engine); got != tt.content {
+				t.Fatalf("failed patch changed engine: %q", got)
+			}
+		})
+	}
+}
+
+func TestFinalizeMinigameJS(t *testing.T) {
+	for _, mode := range []string{"raw", "compressed"} {
+		t.Run(mode, func(t *testing.T) {
+			paths := minigamePaths{rawWebDir: t.TempDir(), jsDir: t.TempDir()}
+			for name, content := range map[string]string{
+				"header.js": "header();", "engine.js": "engine();", "go.wasm.exec.js": "runtime();", "game.js": "game();",
+			} {
+				writeCommandTestFile(t, filepath.Join(paths.rawWebDir, name), content)
+			}
+			cmd := &CmdTool{}
+			compressed := mode == "compressed"
+			if err := cmd.finalizeMinigameJS(paths, compressed); err != nil {
+				t.Fatal(err)
+			}
+			flag := "false"
+			if compressed {
+				flag = "true"
+			}
+			want := "globalThis['FFI'] = null;\nconst isWasmCompressed = " + flag + ";\n\nheader();engine();runtime();game();"
+			if got := readTestFile(t, filepath.Join(paths.jsDir, "engine.js")); got != want {
+				t.Fatalf("merged script = %q, want %q", got, want)
+			}
+			for _, file := range []string{paths.rawWebDir, filepath.Join(paths.jsDir, "header.js"), filepath.Join(paths.jsDir, "go.wasm.exec.js"), filepath.Join(paths.jsDir, "game.js"), filepath.Join(paths.jsDir, "engine_new.js")} {
+				if _, err := os.Stat(file); !os.IsNotExist(err) {
+					t.Errorf("temporary input/output remains: %s: %v", file, err)
+				}
+			}
+		})
+	}
+}
+
+func TestWebAssetMoveAndMergeFailures(t *testing.T) {
+	cmd := &CmdTool{}
+	source, destination := t.TempDir(), t.TempDir()
+	if err := cmd.moveFilesByPattern(source, destination, "["); err == nil {
+		t.Fatal("invalid asset pattern accepted")
+	}
+	writeCommandTestFile(t, filepath.Join(source, "engine.js"), "engine();")
+	missing := filepath.Join(destination, "missing")
+	if err := cmd.moveFilesByPattern(source, missing, "*.js"); err == nil {
+		t.Fatal("asset moved into a missing directory")
+	}
+	if got := readTestFile(t, filepath.Join(source, "engine.js")); got != "engine();" {
+		t.Fatalf("failed move changed source: %q", got)
+	}
+	if err := cmd.mergeJSFiles(missing, false); err == nil {
+		t.Fatal("merge accepted a missing output directory")
+	}
+	if err := os.Mkdir(filepath.Join(destination, "header.js"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.mergeJSFiles(destination, false); err == nil {
+		t.Fatal("merge accepted a directory in place of a script")
 	}
 }

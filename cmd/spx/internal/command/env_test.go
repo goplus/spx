@@ -18,8 +18,6 @@ package command
 
 import (
 	"embed"
-	"flag"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -347,13 +345,7 @@ func setupAdaptGoModFixture(t *testing.T) string {
 func writeProjectImportCache(t *testing.T, projectDir string) {
 	t.Helper()
 
-	cachePath := filepath.Join(projectDir, ".godot", "uid_cache.bin")
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
-		t.Fatalf("mkdir cache dir: %v", err)
-	}
-	if err := os.WriteFile(cachePath, []byte("cache"), 0o644); err != nil {
-		t.Fatalf("write cache: %v", err)
-	}
+	writeCommandTestFile(t, filepath.Join(projectDir, ".godot", "uid_cache.bin"), "cache")
 }
 
 func TestRunCmdRejectsInvalidTargetBeforeClearing(t *testing.T) {
@@ -381,11 +373,7 @@ func TestRunCmdRejectsInvalidTargetBeforeClearing(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				oldFlags, oldArgs := flag.CommandLine, os.Args
-				flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
-				flag.CommandLine.SetOutput(io.Discard)
-				os.Args = []string{"spx", command, "--path", target}
-				t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+				setTestCommandLine(t, "spx", command, "--path", target)
 
 				err := (&CmdTool{}).RunCmd("spx", ".spx", "test", embed.FS{}, "", "project")
 				if err == nil {
@@ -398,5 +386,77 @@ func TestRunCmdRejectsInvalidTargetBeforeClearing(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestEnsureBuilderAIModuleFiles(t *testing.T) {
+	const template = `module github.com/goplus/spxdemo
+
+go 1.25.0
+
+require github.com/goplus/spx/v3 v3.0.0-test //xgo:class
+`
+	for _, test := range []struct {
+		name, description string
+		existing, local   bool
+	}{
+		{name: "new module", description: builderai.DescriptionFile},
+		{name: "existing module", description: builderai.DescriptionFile, existing: true},
+		{name: "raw description filename", description: builderai.DescriptionFileRaw},
+		{name: "local SPX replacement", description: builderai.DescriptionFile, local: true},
+		{name: "no description"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			projectRoot := t.TempDir()
+			if test.local {
+				projectRoot = setupAdaptGoModFixture(t)
+			}
+			godotProjectDir := filepath.Join(projectRoot, "project")
+			if err := os.MkdirAll(godotProjectDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if test.description != "" {
+				writeCommandTestFile(t, filepath.Join(projectRoot, test.description), "summary")
+			}
+			if test.existing {
+				writeCommandTestFile(t, filepath.Join(projectRoot, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\n")
+				writeCommandTestFile(t, filepath.Join(projectRoot, "go.mod"), `module demo
+
+go 1.25.0
+
+require (
+	github.com/goplus/spx/v3 v3.0.0-test //xgo:class
+)
+`)
+			}
+			cmd := CmdTool{ProjectDir: godotProjectDir, GoModTemplate: template}
+			if err := cmd.ensureBuilderAIModuleFiles(projectRoot); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"gox.mod", "go.mod"} {
+				if _, err := os.Stat(filepath.Join(godotProjectDir, name)); !os.IsNotExist(err) {
+					t.Errorf("%s should not be generated in project/ subdir: %v", name, err)
+				}
+				if test.description == "" {
+					if _, err := os.Stat(filepath.Join(projectRoot, name)); !os.IsNotExist(err) {
+						t.Errorf("%s should not be generated without description: %v", name, err)
+					}
+				}
+			}
+			if test.description == "" {
+				return
+			}
+			goxMod := readTestFile(t, filepath.Join(projectRoot, "gox.mod"))
+			if !strings.Contains(goxMod, `import "`+builderai.ModulePath+`"`) || strings.Contains(goxMod, "\nrunner ") {
+				t.Fatalf("gox.mod must import builder AI without a legacy runner:\n%s", goxMod)
+			}
+			goMod := readTestFile(t, filepath.Join(projectRoot, "go.mod"))
+			if !strings.Contains(goMod, builderai.ModulePath+" "+builderai.Version) || strings.Contains(goMod, "//xgo:class") {
+				t.Fatalf("go.mod must require builder AI without the SPX class marker:\n%s", goMod)
+			}
+			if test.local && !strings.Contains(goMod, "replace github.com/goplus/spx/v3 => ../..") {
+				t.Fatalf("go.mod must retain the local SPX replacement:\n%s", goMod)
+			}
+		})
 	}
 }

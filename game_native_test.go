@@ -1,16 +1,44 @@
 //go:build !js && !pure_engine
 
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package spx
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
+	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -333,5 +361,221 @@ func TestLoadSpriteFieldsReturnsFirstError(t *testing.T) {
 	}
 	if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
 		t.Fatalf("loading helper reported a fatal error: messages=%v exits=%v", panicMgr.messages, panicMgr.exits)
+	}
+}
+
+type reloadWorkerPlatformMgr struct {
+	pkgengine.IPlatformMgr
+}
+
+func (*reloadWorkerPlatformMgr) IsMainThread() bool { return false }
+
+func TestReloadRejectsNonEngineThreadBeforePreflight(t *testing.T) {
+	game, sprite, _ := setupReloadPreflightGame(t, nil)
+	pkgengine.PlatformMgr = &reloadWorkerPlatformMgr{}
+
+	err := XGot_Game_Reload(game, strings.NewReader("{"))
+	if !errors.Is(err, errReloadWrongThread) {
+		t.Fatalf("XGot_Game_Reload error = %v, want %v", err, errReloadWrongThread)
+	}
+	if game.Game.sprs["Sprite"] != sprite || game.Sprite != sprite {
+		t.Fatal("off-thread reload mutated the live game")
+	}
+	assertReloadAvailable(t, &game.Game)
+}
+
+type runtimePanicRecorder struct {
+	pkgengine.IExtMgr
+	messages []string
+	exits    []int64
+}
+
+func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
+}
+
+func (m *runtimePanicRecorder) RequestExit(code int64) {
+	m.exits = append(m.exits, code)
+}
+
+func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
+	// Restore real frame timing after the bubble advances it with its fake clock.
+	t.Cleanup(func() { itime.Start(nil) })
+	synctest.Test(t, func(t *testing.T) {
+		var warnings bytes.Buffer
+		spxlog.SetStdoutOutput(&warnings)
+		recorder := &runtimePanicRecorder{}
+		originalExt := pkgengine.ExtMgr
+		pkgengine.ExtMgr = recorder
+		enginewrap.Init(engine.WaitMainThread)
+		t.Cleanup(func() {
+			pkgengine.ExtMgr = originalExt
+			spxlog.SetStdoutOutput(os.Stdout)
+		})
+		co := setupRuntimeScheduler(t)
+		timedOut := make(chan struct{})
+		returned := false
+		thread := co.Create("loop", func(coroutine.Thread) {
+			// Start the frame's timeout clock, then expire it without advancing a frame.
+			if got := Sched(); got != 0 {
+				t.Errorf("initial Sched() = %d, want 0", got)
+			}
+			time.Sleep(schedTimeoutMs*time.Millisecond + time.Nanosecond)
+			close(timedOut)
+			if got := Sched(); got != 0 {
+				t.Errorf("timed-out Sched() = %d, want 0", got)
+			}
+			returned = true
+		})
+		<-timedOut
+		synctest.Wait()
+
+		if got := warnings.String(); !strings.Contains(got, "[WARN] [SPX] "+coreruntime.LoopExecutionTimedOutMsg) {
+			t.Fatalf("timeout warning = %q, want loop timeout warning", got)
+		}
+		// Processing the current frame must leave the timeout suspended.
+		co.Update()
+		synctest.Wait()
+		if returned || len(recorder.messages) != 0 || len(recorder.exits) != 0 || thread.Stopped() {
+			t.Fatalf("timeout reported before the next frame: returned=%v, messages=%v, exits=%v, stopped=%v",
+				returned, recorder.messages, recorder.exits, thread.Stopped())
+		}
+
+		itime.Update(0, 0)
+		co.Update()
+		synctest.Wait()
+		if want := []string{coreruntime.LoopExecutionTimedOutMsg}; !slices.Equal(recorder.messages, want) {
+			t.Errorf("runtime panic messages = %v, want %v", recorder.messages, want)
+		}
+		if want := []int64{1}; !slices.Equal(recorder.exits, want) {
+			t.Errorf("runtime exit codes = %v, want %v", recorder.exits, want)
+		}
+		if !returned || !thread.Stopped() {
+			t.Errorf("timeout completion: returned=%v, stopped=%v, want both true", returned, thread.Stopped())
+		}
+	})
+}
+
+func isolatedGameTest(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("SPX_TEST_NATIVE_GAME_CASE") == t.Name() {
+		return false
+	}
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
+	// Keep native startup and os.Exit coverage in the same report as the parent.
+	if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
+		command.Args = append(command.Args, "-test.gocoverdir="+coverDir.Value.String())
+		command.Env = append(os.Environ(), "GOCOVERDIR="+coverDir.Value.String())
+	} else {
+		command.Env = os.Environ()
+	}
+	command.Env = append(command.Env, "SPX_TEST_NATIVE_GAME_CASE="+t.Name())
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("isolated game test: %v\n%s", err, output)
+	}
+	return true
+}
+
+func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupRuntimeScheduler(t)
+	game := &reloadCommitGame{}
+	XGot_Game_Main(game, &reloadCommitSprite{})
+	if engine.GetGame() != &game.Game || game.gamer != game || game.typs["reloadCommitSprite"] != reflect.TypeFor[reloadCommitSprite]() {
+		t.Fatal("main did not bind and initialize the game")
+	}
+	defer func() {
+		if err, ok := recover().(error); !ok || !errors.Is(err, engine.ErrGameAlreadyRunning) {
+			t.Fatalf("second startup panic=%v", err)
+		}
+	}()
+	XGot_Game_Main(&reloadCommitGame{})
+}
+
+func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupLoadGameFlags(t)
+	setupImmediateEngineCalls(t)
+	var game Game
+	if err := game.loadGame(42, 0); err == nil || !strings.Contains(err.Error(), "unsupported resource") {
+		t.Fatalf("invalid resource=%v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resources := &loadGameAssetResMgr{loadGameResMgr: loadGameResMgr{fontError: "font rejected"}}
+	pkgengine.ResMgr = resources
+	if err := game.loadGame(dir, 0); err == nil || !strings.Contains(err.Error(), "font rejected") {
+		t.Fatalf("asset directory load=%v", err)
+	}
+	if !resources.filesystemMode {
+		t.Fatal("asset directory did not select filesystem loading")
+	}
+}
+
+type loadGameAssetResMgr struct {
+	loadGameResMgr
+	filesystemMode bool
+}
+
+func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) { m.filesystemMode = filesystem }
+func (*loadGameAssetResMgr) HasFile(string) bool           { return false }
+
+func TestGameCommandLineHelp(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupLoadGameFlags(t, "-h")
+	parseCommandLineFlags(&Config{})
+	t.Fatal("help returned instead of terminating successfully")
+}
+
+func TestGameCommandLineVerboseAndErrors(t *testing.T) {
+	for _, arg := range []string{"-v", "-unknown"} {
+		t.Run(arg, func(t *testing.T) {
+			recorder := setupRuntimeFailureRecorder(t)
+			co := gco
+			engine.SetCoroutines(nil)
+			t.Cleanup(func() { engine.SetCoroutines(co) })
+			originalFlags := defaultDebugFlags.Load()
+			t.Cleanup(func() { defaultDebugFlags.Store(originalFlags); spxlog.SetLevel(spxlog.LevelInfo) })
+			setupLoadGameFlags(t, arg)
+			parseCommandLineFlags(&Config{})
+			if arg == "-v" {
+				if defaultDebugFlags.Load() != uint32(DbgFlagInstr|DbgFlagEvent|DbgFlagPerf) {
+					t.Fatalf("verbose flags=%v", defaultDebugFlags.Load())
+				}
+			} else if len(recorder.messages) != 1 || !slices.Equal(recorder.exits, []int64{1}) {
+				t.Fatalf("parse error messages=%v, exits=%v", recorder.messages, recorder.exits)
+			}
+		})
+	}
+}
+
+func TestGameInitializationReportsClaimedInput(t *testing.T) {
+	recorder := setupRuntimeFailureRecorder(t)
+	co := gco
+	engine.SetCoroutines(nil)
+	t.Cleanup(func() { engine.SetCoroutines(co) })
+	game := &Game{inputClaimed: true}
+	game.initGame(nil)
+	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], ErrInputSessionActive.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("claimed input panic=%v, exits=%v", recorder.messages, recorder.exits)
+	}
+}
+
+func TestUnknownSpriteCollisionReportsRuntimeFailure(t *testing.T) {
+	recorder := setupRuntimeFailureRecorder(t)
+	co := gco
+	engine.SetCoroutines(nil)
+	t.Cleanup(func() { engine.SetCoroutines(co) })
+	info := new(Game).getSpriteCollisionInfo("missing")
+	if *info != (spriteCollisionInfo{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("unknown collision=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
 	}
 }

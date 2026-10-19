@@ -22,13 +22,13 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
 	itime "github.com/goplus/spx/v3/internal/time"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -1075,7 +1075,7 @@ func setupInputSourceTest(t *testing.T) (*coroutine.Coroutines, *Game, *inputSou
 
 func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
 	t.Helper()
-	enginewrap.Init(func(call func()) { call() })
+	setupImmediateEngineCalls(t)
 	original := pkgengine.InputMgr
 	mgr := &inputSourceTestManager{}
 	pkgengine.InputMgr = mgr
@@ -1389,5 +1389,281 @@ func TestGameResetClearsPreparedInputFrame(t *testing.T) {
 	}
 	if got := game.inputMgr.frame.pending.events; len(got) != 0 {
 		t.Fatalf("game reset leaked previous held state into new input: %+v", got)
+	}
+}
+
+func TestInputSessionRejectsInvalidModesAndLifecycleStates(t *testing.T) {
+	resetInputSessionTest(t)
+	for _, plan := range []*inputSessionPlan{
+		{mode: InputSessionModeIdle},
+		{mode: InputSessionModeRecording, fixedTimestep: -1},
+		{mode: InputSessionModeReplaying, replay: InputReplay{}},
+	} {
+		if session, err := newInputSession(plan); err == nil || session != nil {
+			t.Fatalf("invalid plan %+v: session=%v error=%v", plan, session, err)
+		}
+	}
+	if _, err := PrepareInputReplay(InputReplay{}); err == nil {
+		t.Fatal("invalid replay accepted")
+	}
+	if _, err := PrepareInputReplay(validRuntimeReplay(), InputSessionOptions{}, InputSessionOptions{}); err == nil {
+		t.Fatal("multiple options accepted")
+	}
+	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
+		t.Fatalf("recording without game: %v", err)
+	}
+	engine.SetGame(&Game{})
+	if _, err := FinishInputRecording(); !errors.Is(err, ErrInputSessionNotRecording) {
+		t.Fatalf("recording without session: %v", err)
+	}
+	var missing *Game
+	if missing.inputSessionUnavailable() || missing.currentInputSession() != nil {
+		t.Fatal("nil game has an input session")
+	}
+	missing.abortInputSession("absent")
+	for _, tt := range []struct {
+		name    string
+		session inputSession
+		want    string
+	}{
+		{"replay", inputSession{mode: InputSessionModeReplaying}, "not recording"},
+		{"aborted", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "stopped"}, "stopped"},
+		{"prepared", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhasePrepared}, "phase"},
+		{"uninitialized controller", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}, "not recording"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("finish error = %v, want %q", err, tt.want)
+			}
+			if tt.name == "uninitialized controller" && tt.session.phase != InputSessionPhaseRunning {
+				t.Fatal("failed finish did not roll back phase")
+			}
+		})
+	}
+}
+
+func TestInputPreparationTokenWrapAndFailedAttachment(t *testing.T) {
+	resetInputSessionTest(t)
+	old := preparedInputSession.nextToken
+	t.Cleanup(func() { preparedInputSession.nextToken = old })
+	preparedInputSession.nextToken = ^uint64(0)
+	prepared, err := prepareInputSession(inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: -1})
+	if err != nil || prepared.token != 1 {
+		t.Fatalf("wrapped token = %+v, %v", prepared, err)
+	}
+	game := &Game{}
+	if err := game.attachPreparedInputSession(); err == nil {
+		t.Fatal("invalid prepared plan attached")
+	}
+	status, ok := game.terminalInputSessionStatus()
+	if !ok || status.Mode != InputSessionModeRecording || status.Phase != InputSessionPhaseAborted || status.Error == "" {
+		t.Fatalf("failed attachment status: %+v", status)
+	}
+	if _, exists := preparedInputSessionStatus(); exists {
+		t.Fatal("failed attachment retained the prepared plan")
+	}
+}
+
+func TestInputSessionFreezeFailures(t *testing.T) {
+	resetInputSessionTest(t)
+	freeze := func() { panic("host pause failed") }
+	if err := freezeInputSession(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := freezeInputSession(freeze); err == nil || !strings.Contains(err.Error(), "host pause failed") {
+		t.Fatalf("freeze error = %v", err)
+	}
+	recording, err := newInputSession(&inputSessionPlan{mode: InputSessionModeRecording, fixedTimestep: 1.0 / 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recording.close("done")
+	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.resultJSON != nil || len(recording.result.Frames) != 0 {
+		t.Fatalf("failed finish left partial result: %+v, %v", recording.status(), err)
+	}
+	if _, err := recording.finishRecordingResult(nil); err != nil {
+		t.Fatalf("retry finishing: %v", err)
+	}
+	replay, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replay.close("done")
+	if _, err := replay.consumeSampledInputTick(1.0/30, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if complete, err := replay.completeReplayFrame(freeze); complete || err == nil || replay.phase != InputSessionPhaseAborted {
+		t.Fatalf("failed replay freeze: %v, %v, %+v", complete, err, replay.status())
+	}
+	if _, ok := replay.playbackState(); ok {
+		t.Fatal("aborted replay still overrides input")
+	}
+}
+
+func TestInputSessionPendingReplayAndTickErrors(t *testing.T) {
+	resetInputSessionTest(t)
+	session, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay(InputReplayFrame{Frame: 0})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.close("done")
+	session.phase = InputSessionPhaseFinishing
+	if completed, err := session.completeReplayFrame(func() { t.Fatal("non-exhausted replay paused") }); completed || err != nil {
+		t.Fatalf("premature completion = %v, %v", completed, err)
+	}
+	session.phase = InputSessionPhaseAborted
+	game := &Game{inputSession: session}
+	engine.SetGame(game)
+	if _, ok := currentInputSessionTickForCapture(); ok {
+		t.Fatal("aborted session retained capture tick")
+	}
+	if _, err := session.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		t.Fatal("inactive session sampled input")
+		return InputReplayState{}, nil, nil
+	}); err == nil {
+		t.Fatal("aborted session accepted a tick")
+	}
+	recording := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning, initialPending: true}
+	if _, err := recording.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err == nil {
+		t.Fatal("uninitialized recorder synchronized initial state")
+	}
+	initial := inputStateBeforeEvents(InputReplayState{Buttons: 1}, []InputReplayMouseEvent{{Button: 0}, {Button: 4}}, nil)
+	if initial.Buttons != 1 {
+		t.Fatal("invalid mouse events changed initial state")
+	}
+}
+
+func TestReplayInputQueriesUseFrozenState(t *testing.T) {
+	_, game, mgr := setupInputSourceTest(t)
+	resetInputSessionTest(t)
+	mgr.point = mathf.Vec2{X: 90, Y: 80}
+	game.inputMgr.mousePos = mathf.Vec2{X: 3, Y: 4}
+	if got := game.inputMgr.effectiveMousePos(); got != (mathf.Vec2{X: 3, Y: 4}) {
+		t.Fatalf("live position = %v", got)
+	}
+	pkgengine.InputMgr = &replayQueryInputMgr{mgr}
+	if game.inputMgr.effectiveKeyPressed(KeyA) || !game.inputMgr.effectiveKeyPressed(KeyB) {
+		t.Fatal("live key query ignored backend")
+	}
+	_ = game.inputMgr.effectiveMousePressed()
+	game.inputSession = &inputSession{mode: InputSessionModeReplaying, phase: InputSessionPhaseRunning, current: InputReplayState{KeysDown: []int64{int64(KeyA)}, Mouse: InputReplayMouse{X: 5, Y: 6}, Buttons: 2}}
+	if !game.inputMgr.effectiveKeyPressed(KeyAny) || !game.inputMgr.effectiveKeyPressed(KeyA) || game.inputMgr.effectiveKeyPressed(KeyB) || !game.inputMgr.effectiveMousePressed() || game.inputMgr.effectiveMousePos() != (mathf.Vec2{X: 5, Y: 6}) {
+		t.Fatal("queries ignored frozen replay state")
+	}
+	game.inputSession = nil
+}
+
+type replayQueryInputMgr struct{ *inputSourceTestManager }
+
+func (*replayQueryInputMgr) GetKey(key int64) bool { return key == int64(KeyB) }
+
+func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(30); err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{}
+	scriptRandom.mu.Lock()
+	unlock := sync.OnceFunc(scriptRandom.mu.Unlock)
+	done := make(chan error, 1)
+	workerDone := make(chan struct{})
+	t.Cleanup(func() {
+		unlock()
+		select {
+		case <-workerDone:
+		case <-time.After(time.Second):
+			t.Error("attachment worker did not stop")
+		}
+	})
+	go func() {
+		defer close(workerDone)
+		done <- game.attachPreparedInputSession()
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if delta, enabled := itime.FixedDeltaTime(); enabled && delta == 1.0/30 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("attachment did not reach environment setup")
+		}
+		runtime.Gosched()
+	}
+	game.abortInputSession("closed during preparation")
+	unlock()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "lifecycle ended") {
+			t.Fatalf("attachment error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("attachment did not unwind")
+	}
+	if game.currentInputSession() != nil {
+		t.Fatal("canceled game retained input session")
+	}
+	if _, enabled := itime.FixedDeltaTime(); enabled {
+		t.Fatal("failed attachment did not restore environment")
+	}
+}
+
+func TestRecordingTooLargeToEncodeRollsBackFinish(t *testing.T) {
+	// A valid recording may exceed the codec's payload limit even though each
+	// individual input sample passes validation.
+	const keyCount = (16<<20)/20 + 1
+	keys := make([]int64, keyCount)
+	for i := range keys {
+		keys[i] = math.MaxInt64 - int64(keyCount) + int64(i)
+	}
+	session := &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}
+	if err := session.controller.StartRecording(InputReplayState{KeysDown: keys}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
+		t.Fatalf("encoding error = %v", err)
+	}
+	if session.phase != InputSessionPhaseRunning || session.resultJSON != nil {
+		t.Fatal("failed serialization committed a recording")
+	}
+}
+
+func TestInputPreparationRejectsUnrepresentableTimestepAndDuplicates(t *testing.T) {
+	resetInputSessionTest(t)
+	if _, err := PrepareInputRecording(math.SmallestNonzeroFloat64); err == nil {
+		t.Fatal("FPS with infinite timestep accepted")
+	}
+	first, err := PrepareInputRecording(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PrepareInputReplay(validRuntimeReplay()); !errors.Is(err, ErrInputSessionActive) {
+		t.Fatalf("duplicate preparation error = %v", err)
+	}
+	if !first.Cancel() {
+		t.Fatal("duplicate preparation replaced the original descriptor")
+	}
+	(&Game{}).OnEngineFrameEnd()
+}
+
+func TestInputEdgeConversionPreservesOrderAndPayload(t *testing.T) {
+	keys := []engine.KeyEvent{{Id: int64(KeyB), IsPressed: true}, {Id: int64(KeyA), IsPressed: false}}
+	mouse := []engine.MouseEvent{{Id: 3, IsPressed: true}, {Id: 1, IsPressed: false}}
+	wantKeys := []InputReplayKeyEvent{{Key: int64(KeyB), Pressed: true}, {Key: int64(KeyA), Pressed: false}}
+	wantMouse := []InputReplayMouseEvent{{Button: 3, Pressed: true}, {Button: 1, Pressed: false}}
+	if got := replayKeyEventsFromEngine(keys); !reflect.DeepEqual(got, wantKeys) {
+		t.Fatalf("key edges = %v", got)
+	}
+	if got := replayMouseEventsFromEngine(mouse); !reflect.DeepEqual(got, wantMouse) {
+		t.Fatalf("mouse edges = %v", got)
+	}
+	if got := engineKeyEventsFromReplay(wantKeys, make([]engine.KeyEvent, 3)); !reflect.DeepEqual(got, keys) {
+		t.Fatalf("engine key edges = %v", got)
+	}
+	if got := engineMouseEventsFromReplay(wantMouse, make([]engine.MouseEvent, 3)); !reflect.DeepEqual(got, mouse) {
+		t.Fatalf("engine mouse edges = %v", got)
 	}
 }

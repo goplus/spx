@@ -87,6 +87,26 @@ func AbortCallbacks(hook, body func(), failure error) []any {
 		func(name string, v any) { hook(); body() },
 	}
 }
+
+func UpdateInventory(items *spx.List) []any {
+	var previous spx.List
+	previous.InitFrom(items)
+	items.Insert(0, spx.NewValue("Apple"))
+	price := spx.NewValue("03.5")
+	price.Set(spx.NewValue("04.5"))
+	items.Append(price)
+	items.Set(items.IndexOf("coin"), "gold")
+	items.Delete(items.IndexOf("potion"))
+	return []any{
+		&previous, items.String(), items.Len(), items.Contains("apple"),
+		items.At(spx.Last).Float(), price.Int(), price.Equal(4.5), items.At(0).String(),
+	}
+}
+
+func ClearInventory(items *spx.List) {
+	items.Clear()
+}
+
 `
 
 func newDirectFuncInterp(t testing.TB, mode ixgo.Mode) *ixgo.Interp {
@@ -345,4 +365,142 @@ func BenchmarkDirectFuncEvents(b *testing.B) {
 			message("message", nil)
 		}
 	})
+}
+
+const procedureStopSource = `package main
+
+import "github.com/goplus/spx/v3"
+
+var game spx.Game
+var sprite spx.SpriteImpl
+
+func Run() int {
+	n := 0
+	spx.Procedure(func() {
+		n++
+		spx.Procedure(func() {
+			n += 10
+			game.Stop(spx.ThisScript)
+			n += 1000
+		})
+		n += 100
+		spx.Repeat(3, func() {
+			sprite.Stop(spx.ThisScript)
+			n += 1000
+		})
+		n += 1000
+	})
+	return n
+}
+
+func OtherPanic() (result string) {
+	defer func() { result = recover().(string) }()
+	spx.Procedure(func() { panic("user panic") })
+	return "unreachable"
+}
+
+func NilGame() (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	var p *spx.Game
+	spx.Procedure(func() { p.Stop(spx.ThisScript) })
+	return
+}
+
+func NilSprite() (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	var p *spx.SpriteImpl
+	spx.Procedure(func() { p.Stop(spx.ThisScript) })
+	return
+}
+
+func PromotedAndDynamic() int {
+	var p struct { spx.Game }
+	var target interface { Stop(spx.StopKind) } = &p
+	stop := target.Stop
+	count := 0
+	spx.Procedure(func() {
+		p.Stop(spx.StopKind(12345)) // Unknown kinds remain a no-op.
+		count++
+		stop(spx.ThisScript)
+		count++
+	})
+	return count
+}
+
+func RunStops(n int) int {
+	count := 0
+	for i := 0; i < n; i++ {
+		spx.Procedure(func() {
+			count++
+			game.Stop(spx.ThisScript)
+		})
+	}
+	return count
+}
+`
+
+func newProcedureStopInterp(t testing.TB) *ixgo.Interp {
+	t.Helper()
+	ctx := ixgo.NewContext(ixgo.EnableCachedReg | ixgo.SupportMultipleInterp)
+	i, err := ctx.LoadInterp("main.go", procedureStopSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(i.UnsafeRelease)
+	return i
+}
+
+func TestInterpretedProcedureStop(t *testing.T) {
+	i := newProcedureStopInterp(t)
+	for _, test := range []struct {
+		name string
+		want any
+	}{
+		{"Run", 111},
+		{"OtherPanic", "user panic"},
+		{"NilGame", true},
+		{"NilSprite", true},
+		{"PromotedAndDynamic", 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := directFuncRun(t, i, test.name)
+			if got != test.want {
+				t.Fatalf("result = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func BenchmarkInterpretedProcedureStop(b *testing.B) {
+	i := newProcedureStopInterp(b)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		got, err := i.RunFunc("RunStops", 1000)
+		if err != nil || got != 1000 {
+			b.Fatalf("RunStops = %v, %v", got, err)
+		}
+	}
+}
+
+func TestInterpretedListMutation(t *testing.T) {
+	i := newDirectFuncInterp(t, ixgo.EnableCachedReg)
+	items := spx.NewList("coin", "potion")
+	result := directFuncRun(t, i, "UpdateInventory", &items).([]any)
+	previous := result[0].(*spx.List)
+	if got := previous.String(); got != "coin potion" {
+		t.Fatalf("snapshot changed with the inventory: %q", got)
+	}
+	want := []any{"Apple gold 04.5", 3, true, 4.5, 4, true, "Apple"}
+	if !reflect.DeepEqual(result[1:], want) {
+		t.Fatalf("interpreted inventory = %#v, want %#v", result[1:], want)
+	}
+	directFuncRun(t, i, "ClearInventory", previous)
+	if previous.Len() != 0 || items.String() != "Apple gold 04.5" {
+		t.Fatalf("clearing the returned snapshot changed inventory: snapshot=%q inventory=%q", previous.String(), items.String())
+	}
+	directFuncRun(t, i, "ClearInventory", &items)
+	if items.Len() != 0 {
+		t.Fatal("interpreter did not clear the host inventory")
+	}
 }

@@ -146,3 +146,12 @@ func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
 		})
 	}
 }
+
+func TestKeyFromStringSpecialAndUnknownNames(t *testing.T) {
+	if KeyFromString("Any") != KeyAny {
+		t.Fatal("Any did not resolve to wildcard")
+	}
+	if KeyFromString("not a keyboard key") != KeyMax {
+		t.Fatal("unknown key did not return KeyMax")
+	}
+}

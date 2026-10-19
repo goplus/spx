@@ -3,6 +3,7 @@ package spx
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -365,6 +366,128 @@ func TestPhysicsApplyRectAndAutoShapes(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+type spritePhysicsAPIManager struct {
+	polygonColliderSpriteMgr
+	velocity, impulse mathf.Vec2
+	gravity           float64
+	floor             bool
+	circleRadius      float64
+	capsuleSize       mathf.Vec2
+	shapeCenter       mathf.Vec2
+	shapeTrigger      bool
+}
+
+func (m *spritePhysicsAPIManager) GetVelocity(pkgengine.Object) mathf.Vec2      { return m.velocity }
+func (m *spritePhysicsAPIManager) SetVelocity(_ pkgengine.Object, v mathf.Vec2) { m.velocity = v }
+func (m *spritePhysicsAPIManager) AddImpulse(_ pkgengine.Object, v mathf.Vec2)  { m.impulse = v }
+func (m *spritePhysicsAPIManager) GetGravity(pkgengine.Object) float64          { return m.gravity }
+func (m *spritePhysicsAPIManager) SetGravity(_ pkgengine.Object, v float64)     { m.gravity = v }
+func (m *spritePhysicsAPIManager) IsOnFloor(pkgengine.Object) bool              { return m.floor }
+func (m *spritePhysicsAPIManager) GetCollisionLayer(pkgengine.Object) int64     { return m.collisionLayer }
+func (m *spritePhysicsAPIManager) GetCollisionMask(pkgengine.Object) int64      { return m.collisionMask }
+func (m *spritePhysicsAPIManager) IsCollisionEnabled(pkgengine.Object) bool {
+	return m.collisionEnabled[len(m.collisionEnabled)-1]
+}
+func (m *spritePhysicsAPIManager) GetTriggerLayer(pkgengine.Object) int64 { return m.triggerLayer }
+func (m *spritePhysicsAPIManager) GetTriggerMask(pkgengine.Object) int64  { return m.triggerMask }
+func (m *spritePhysicsAPIManager) IsTriggerEnabled(pkgengine.Object) bool {
+	return m.triggerEnabled[len(m.triggerEnabled)-1]
+}
+func (m *spritePhysicsAPIManager) SetColliderCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
+	m.shapeCenter = c
+	m.circleRadius = r
+	m.shapeTrigger = false
+}
+func (m *spritePhysicsAPIManager) SetTriggerCircle(_ pkgengine.Object, c mathf.Vec2, r float64) {
+	m.shapeCenter = c
+	m.circleRadius = r
+	m.shapeTrigger = true
+}
+func (m *spritePhysicsAPIManager) SetColliderCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
+	m.shapeCenter = c
+	m.capsuleSize = s
+	m.shapeTrigger = false
+}
+func (m *spritePhysicsAPIManager) SetTriggerCapsule(_ pkgengine.Object, c, s mathf.Vec2) {
+	m.shapeCenter = c
+	m.capsuleSize = s
+	m.shapeTrigger = true
+}
+
+func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	sprite, _ := newPolygonColliderTestSprite(t)
+	mgr := &spritePhysicsAPIManager{floor: true}
+	pkgengine.SpriteMgr = mgr
+	sprite.SetVelocity(3, 4)
+	sprite.AddImpulse(-2, 5)
+	sprite.SetGravity(0.25)
+	if x, y := sprite.Velocity(); x != 3 || y != 4 || mgr.impulse != mathf.NewVec2(-2, 5) || sprite.Gravity() != 0.25 || !sprite.IsOnFloor() {
+		t.Fatal("physics API lost backend values")
+	}
+	sprite.SetCollisionLayer(2)
+	sprite.SetCollisionMask(4)
+	sprite.SetCollisionEnabled(true)
+	sprite.SetTriggerLayer(8)
+	sprite.SetTriggerMask(16)
+	sprite.SetTriggerEnabled(false)
+	if sprite.CollisionLayer() != 2 || sprite.CollisionMask() != 4 || !sprite.CollisionEnabled() || sprite.TriggerLayer() != 8 || sprite.TriggerMask() != 16 || sprite.TriggerEnabled() {
+		t.Fatal("collision/trigger API mixed independent settings")
+	}
+	for _, trigger := range []bool{false, true} {
+		for _, tt := range []struct {
+			kind   ColliderShapeType
+			params []float64
+		}{{physicsColliderCircle, []float64{3}}, {physicsColliderCapsule, []float64{3, 8}}} {
+			if err := sprite.SetColliderShape(trigger, tt.kind, tt.params); err != nil {
+				t.Fatal(err)
+			}
+			sprite.SetColliderPivot(trigger, 3, 4)
+			if x, y := sprite.ColliderPivot(trigger); x != 3 || y != 4 {
+				t.Fatalf("collider pivot=(%v,%v),want(3,4)", x, y)
+			}
+			if mgr.shapeCenter != mathf.NewVec2(6, 8) || mgr.shapeTrigger != trigger {
+				t.Fatalf("shape center=%v, trigger=%v", mgr.shapeCenter, mgr.shapeTrigger)
+			}
+			if tt.kind == physicsColliderCircle && mgr.circleRadius != 6 {
+				t.Fatalf("scaled circle radius=%v,want6", mgr.circleRadius)
+			}
+			if tt.kind == physicsColliderCapsule && mgr.capsuleSize != mathf.NewVec2(12, 16) {
+				t.Fatalf("scaled capsule=%v,want(12,16)", mgr.capsuleSize)
+			}
+		}
+	}
+	cfg := physicConfig{Layer: 2, Mask: 4, Type: physicsColliderCircle, Params: []float64{3}, Pivot: mathf.NewVec2(1, 2)}
+	if got := cfg.String(); !strings.Contains(got, "Mask: 4, Layer: 2") || !strings.Contains(got, "Params: [3]") || !strings.Contains(got, fmt.Sprint(cfg.Pivot)) {
+		t.Fatalf("missing config diagnostics: %s", got)
+	}
+	sprite.runtimeState.SyncSprite = nil
+	sprite.updatePhysicsShapesScale()
+}
+
+func TestPhysicsShapeValidationRejectsWrongArity(t *testing.T) {
+	for _, tt := range []struct {
+		kind   ColliderShapeType
+		params []float64
+		valid  bool
+	}{
+		{physicsColliderRect, []float64{2, 3}, true}, {physicsColliderRect, []float64{2}, false},
+		{physicsColliderCircle, []float64{2}, true}, {physicsColliderCircle, []float64{2, 3}, false},
+		{physicsColliderCapsule, []float64{2, 3}, true}, {physicsColliderCapsule, []float64{2}, false},
+		{ColliderShapeType(99), nil, false},
+	} {
+		cfg := physicConfig{Type: tt.kind, Params: tt.params}
+		if got := cfg.validateShape(); got != tt.valid {
+			t.Errorf("shape %v valid=%v,want%v", cfg, got, tt.valid)
+		}
+	}
+	for name, want := range map[string]PhysicsMode{"kinematic": KinematicPhysics, "dynamic": DynamicPhysics, "static": StaticPhysics, "no": NoPhysics, "unknown": NoPhysics} {
+		if got := toPhysicsMode(name); got != want {
+			t.Errorf("physics mode %s=%v,want%v", name, got, want)
 		}
 	}
 }

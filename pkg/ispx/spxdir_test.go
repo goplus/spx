@@ -17,7 +17,9 @@
 package ispx
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"reflect"
 	"testing"
 	"testing/fstest"
@@ -25,69 +27,39 @@ import (
 	spxfs "github.com/goplus/spx/v3/fs"
 )
 
-func TestNewSpxDir(t *testing.T) {
-	fsys := fstest.MapFS{}
-	dir := newSpxDir(fsys, "")
-	if dir == nil {
-		t.Fatal("expected non-nil dir")
-	}
-}
-
 func TestSpxDirOpen(t *testing.T) {
 	fsys := fstest.MapFS{
-		"file.txt":        &fstest.MapFile{Data: []byte("hello")},
-		"subdir/file.txt": &fstest.MapFile{Data: []byte("world")},
+		"file.txt":        {Data: []byte("hello")},
+		"subdir/file.txt": {Data: []byte("world")},
 	}
-
-	t.Run("WithoutPrefix", func(t *testing.T) {
-		dir := newSpxDir(fsys, "")
-		rc, err := dir.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer rc.Close()
-
-		data, err := io.ReadAll(rc)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if string(data) != "hello" {
-			t.Errorf("got %q, want %q", string(data), "hello")
-		}
-	})
-
-	t.Run("WithPrefix", func(t *testing.T) {
-		dir := newSpxDir(fsys, "subdir")
-		rc, err := dir.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer rc.Close()
-
-		data, err := io.ReadAll(rc)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if string(data) != "world" {
-			t.Errorf("got %q, want %q", string(data), "world")
-		}
-	})
-
-	t.Run("FileNotFound", func(t *testing.T) {
-		dir := newSpxDir(fsys, "")
-		_, err := dir.Open("nonexistent.txt")
-		if err == nil {
-			t.Fatal("expected error for nonexistent file")
-		}
-	})
-}
-
-func TestSpxDirClose(t *testing.T) {
-	fsys := fstest.MapFS{}
-	dir := newSpxDir(fsys, "")
-	spxDir := dir.(*spxDir)
-	if err := spxDir.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	for _, tt := range []struct{ name, prefix, content string }{
+		{"WithoutPrefix", "", "hello"},
+		{"WithPrefix", "subdir", "world"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := newSpxDir(fsys, tt.prefix)
+			if dir == nil {
+				t.Fatal("expected non-nil dir")
+			}
+			if path := dir.(spxfs.GdDir).GetPath(); path != tt.prefix {
+				t.Fatalf("GetPath = %q, want %q", path, tt.prefix)
+			}
+			reader, err := dir.Open("file.txt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, readErr := io.ReadAll(reader)
+			closeErr := reader.Close()
+			if readErr != nil || closeErr != nil || string(data) != tt.content {
+				t.Fatalf("file = %q, read=%v close=%v; want %q", data, readErr, closeErr, tt.content)
+			}
+			if _, err := dir.Open("nonexistent.txt"); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("missing file error = %v", err)
+			}
+			if err := dir.Close(); err != nil {
+				t.Fatalf("Close: %v", err)
+			}
+		})
 	}
 }
 
@@ -117,5 +89,49 @@ func TestSpxDirResourceCapabilities(t *testing.T) {
 	want := []spxfs.DirEntry{{Name: "Pixel", IsDir: true}, {Name: "Serif", IsDir: true}}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("entries = %#v, want %#v", entries, want)
+	}
+	entries, err = reader.ReadDir(".")
+	want = []spxfs.DirEntry{{Name: "fonts", IsDir: true}, {Name: "index.json"}}
+	if err != nil || !reflect.DeepEqual(entries, want) {
+		t.Fatalf("resource root entries = %#v, %v; want %#v", entries, err, want)
+	}
+	if _, err := reader.ReadDir("missing"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing resource directory error = %v", err)
+	}
+}
+
+func TestXGoParserFileSystem(t *testing.T) {
+	parser := newXGoParserFS(fstest.MapFS{
+		"sources/main.spx": {Data: []byte("onStart => {}")},
+	})
+	if parser == nil {
+		t.Fatal("expected non-nil parser filesystem")
+	}
+	data, err := parser.ReadFile("sources/main.spx")
+	if err != nil || string(data) != "onStart => {}" {
+		t.Fatalf("parser source = %q, %v", data, err)
+	}
+	entries, err := parser.ReadDir("sources")
+	if err != nil || len(entries) != 1 || entries[0].Name() != "main.spx" || entries[0].IsDir() {
+		t.Fatalf("parser directory = %v, %v", entries, err)
+	}
+	if _, err := parser.ReadFile("missing.spx"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing source error = %v", err)
+	}
+	if _, err := parser.ReadDir("missing"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("missing source directory error = %v", err)
+	}
+	if joined := parser.Join("sources", "nested", "..", "main.spx"); joined != "sources/main.spx" {
+		t.Fatalf("joined parser path = %q", joined)
+	}
+	for _, tt := range []struct{ name, base string }{
+		{"sources/main.spx", "main.spx"}, {"sources/", "sources"}, {"", "."},
+	} {
+		if base := parser.Base(tt.name); base != tt.base {
+			t.Errorf("Base(%q) = %q, want %q", tt.name, base, tt.base)
+		}
+	}
+	if absolute, err := parser.Abs("sources/main.spx"); absolute != "" || !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatalf("absolute parser path = %q, %v; want unsupported", absolute, err)
 	}
 }

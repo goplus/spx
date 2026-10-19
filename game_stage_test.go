@@ -1,0 +1,700 @@
+/*
+ * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package spx
+
+import (
+	"errors"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v3/internal/ui"
+	spxapi "github.com/goplus/spx/v3/pkg/spx"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+)
+
+type targetPropertyActor struct {
+	Score int
+	Power float64
+}
+
+type targetLookupSprite struct {
+	SpriteImpl
+}
+
+func (*targetLookupSprite) Main() {}
+
+func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
+	sprite := &targetLookupSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.spriteState.Cloned = cloned
+	return sprite
+}
+
+func (a *targetPropertyActor) Health() float64 {
+	return a.Power
+}
+
+type targetPropertyGame struct {
+	Game
+	StageScore int
+	Actor      targetPropertyActor
+}
+
+func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
+	previous := spxapi.Username()
+	t.Cleanup(func() { spxapi.SetUsername(previous) })
+
+	spxapi.SetUsername("scratch-user")
+
+	var g Game
+	if got := g.Username(); got != "scratch-user" {
+		t.Fatalf("Game.Username() = %q, want %q", got, "scratch-user")
+	}
+}
+
+func TestGameDayssince2000(t *testing.T) {
+	var g Game
+	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	lower := time.Since(base).Hours() / 24
+	got := g.Dayssince2000()
+	upper := time.Since(base).Hours() / 24
+
+	if got < lower || got > upper {
+		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
+	}
+}
+
+func TestGameWidgetLookup(t *testing.T) {
+	var game Game
+	first := &Monitor{name: "score"}
+	game.shapeMgr.add(42)
+	game.shapeMgr.add(&Monitor{name: "other"})
+	game.shapeMgr.add(first)
+	game.shapeMgr.add(&Monitor{name: "score"})
+	sprite := &SpriteImpl{g: &game}
+	for _, test := range []struct {
+		name string
+		root ShapeGetter
+	}{
+		{"game", &game},
+		{"sprite", sprite},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := GetWidget(test.root, "score"); got != first {
+				t.Fatalf("GetWidget = %p, want first matching widget %p", got, first)
+			}
+			if got := XGot_Game_XGox_GetWidget[Monitor](test.root, "score"); got != first {
+				t.Fatalf("typed GetWidget = %p, want %p", got, first)
+			}
+		})
+	}
+	for _, test := range []struct {
+		name string
+		call func()
+		want string
+	}{
+		{"missing", func() { GetWidget(&game, "missing") }, "GetWidget: widget not found - missing"},
+		{"case sensitive", func() { GetWidget(&game, "Score") }, "GetWidget: widget not found - Score"},
+		{"wrong type", func() { XGot_Game_XGox_GetWidget[struct{}](&game, "score") }, "GetWidget: type mismatch - score"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != test.want {
+					t.Fatalf("panic = %v, want %q", got, test.want)
+				}
+			}()
+			test.call()
+		})
+	}
+}
+
+func TestGameGetTargetPropertyMissing(t *testing.T) {
+	game := &targetPropertyGame{}
+	game.gamer = game
+	for _, target := range []string{"", "Actor", "Missing"} {
+		if got := game.GetTargetProperty(target, "Missing"); got.data != nil {
+			t.Errorf("GetTargetProperty(%q, Missing) = %v, want empty value", target, got)
+		}
+	}
+}
+
+func TestGameGetTargetReturnsNamedSprite(t *testing.T) {
+	var game Game
+	clone := newTargetLookupSprite(&game, "Hero", true)
+	target := newTargetLookupSprite(&game, "Hero", false)
+	game.shapeMgr.add(&clone.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
+
+	if got := game.GetTarget("Hero"); got != &target.SpriteImpl {
+		t.Fatalf("GetTarget(%q) = %v, want %v", "Hero", got, &target.SpriteImpl)
+	}
+}
+
+func TestGameGetTargetReturnsNilWithoutMatch(t *testing.T) {
+	var game Game
+	game.shapeMgr.add(&newTargetLookupSprite(&game, "Hero", true).SpriteImpl)
+
+	for _, target := range []string{"", "Missing", "hero"} {
+		if got := game.GetTarget(target); got != nil {
+			t.Errorf("GetTarget(%q) = %v, want nil", target, got)
+		}
+	}
+}
+
+func TestGameGetTargetReturnsNilAfterTargetIsRemoved(t *testing.T) {
+	var game Game
+	target := newTargetLookupSprite(&game, "Hero", false)
+	clone := newTargetLookupSprite(&game, "Hero", true)
+	game.shapeMgr.add(&target.SpriteImpl)
+	game.shapeMgr.add(&clone.SpriteImpl)
+
+	game.shapeMgr.removeShape(&target.SpriteImpl)
+
+	if got := game.GetTarget("Hero"); got != nil {
+		t.Fatalf("GetTarget(%q) after target removal = %v, want nil", "Hero", got)
+	}
+}
+
+func TestGameGetTargetPropertyStageField(t *testing.T) {
+	g := &targetPropertyGame{StageScore: 23}
+	g.gamer = g
+
+	got := g.GetTargetProperty("", "StageScore")
+	if got.Int() != 23 {
+		t.Fatalf("StageScore = %d, want 23", got.Int())
+	}
+}
+
+func TestGameGetTargetPropertyTargetField(t *testing.T) {
+	g := &targetPropertyGame{Actor: targetPropertyActor{Score: 9}}
+	g.gamer = g
+
+	got := g.GetTargetProperty("Actor", "Score")
+	if got.Int() != 9 {
+		t.Fatalf("Actor.Score = %d, want 9", got.Int())
+	}
+}
+
+func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
+	g := &targetPropertyGame{Actor: targetPropertyActor{Power: 3.5}}
+	g.gamer = g
+
+	got := g.GetTargetProperty("Actor", "Health")
+	if got.Float() != 3.5 {
+		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
+	}
+}
+
+type stagePlanGame struct {
+	Game
+	Value    collisionLayerOrderSprite
+	Pointer  *collisionLayerOrderSprite
+	Dynamic  Sprite
+	values   []collisionLayerOrderSprite
+	pointers []*collisionLayerOrderSprite
+}
+
+func prepareStageEntries(gamer reflect.Value, zorder []any) ([]preparedStageEntry, error) {
+	entries := make([]preparedStageEntry, len(zorder))
+	for i, raw := range zorder {
+		entry, err := prepareStageEntry(gamer, raw)
+		if err != nil {
+			return nil, err
+		}
+		entries[i] = entry
+	}
+	return entries, nil
+}
+
+func TestPreparedStageUsesLiveFieldsAndOwnsParsedValues(t *testing.T) {
+	for _, shadow := range []bool{false, true} {
+		name := "cold"
+		if shadow {
+			name = "reload shadow"
+		}
+		t.Run(name, func(t *testing.T) {
+			setupCloneSpriteMgr(t)
+			game := &stagePlanGame{}
+			game.initShapeMgr()
+			game.Value = *newCollisionLayerOrderSprite(&game.Game, "Value", nil)
+			game.Pointer = newCollisionLayerOrderSprite(&game.Game, "Pointer", nil)
+			game.Dynamic = newCollisionLayerOrderSprite(&game.Game, "Dynamic", nil)
+			back := newCollisionLayerOrderSprite(&game.Game, "Back", nil)
+			front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
+			prototype := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
+			prototype.baseObj.initWithSize(1, 1)
+			prototype.physics().collisionInfo.Type = physicsColliderNone
+			prototype.physics().triggerInfo.Type = physicsColliderNone
+			game.sprs = map[string]Sprite{"Back": back, "Front": front, "collisionLayerOrderSprite": prototype}
+			raw := []any{
+				"Back",
+				coreproject.StageShape{"type": "sprite", "target": "Value", "x": 1.0},
+				coreproject.StageShape{"type": "sprite", "target": "Pointer", "x": 2.0},
+				coreproject.StageShape{"type": "sprite", "target": "Dynamic", "x": 3.0},
+				coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{coreproject.StageShape{"x": 4.0}, coreproject.StageShape{"x": 5.0}}},
+				coreproject.StageShape{"type": "sprites", "target": "pointers", "items": []any{coreproject.StageShape{"x": 6.0}}},
+				coreproject.StageShape{"type": "monitor", "target": "", "val": "missing", "name": "missing", "label": "Missing", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true},
+				"Front",
+			}
+			source := game
+			if shadow {
+				source = &stagePlanGame{Dynamic: &collisionLayerOrderSprite{}}
+			}
+			entries, err := prepareStageEntries(reflect.ValueOf(source).Elem(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, value := range raw {
+				if shape, ok := value.(coreproject.StageShape); ok {
+					clear(shape)
+				}
+				raw[i] = nil
+			}
+			inits, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), nil, nil, entries)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(inits) != 8 {
+				t.Fatalf("initialized %d sprites, want 8", len(inits))
+			}
+			if len(game.values) != 2 || len(game.pointers) != 1 {
+				t.Fatalf("group sizes = %d, %d", len(game.values), len(game.pointers))
+			}
+			want := []Sprite{back, &game.Value, game.Pointer, game.Dynamic, &game.values[0], &game.values[1], game.pointers[0], front}
+			shapes := game.getAllShapes()
+			for i, sprite := range want {
+				if inits[i] != sprite || shapes[i] != spriteOf(sprite) {
+					t.Fatalf("sprite %d bound to wrong live object", i)
+				}
+				if spriteOf(sprite).runtimeState.Layer != firstSpriteLayer+i {
+					t.Fatalf("sprite %d layer = %d", i, spriteOf(sprite).runtimeState.Layer)
+				}
+				if i > 0 && i < 7 && spriteOf(sprite).Xpos() != float64(i) {
+					t.Fatalf("sprite %d x = %v", i, spriteOf(sprite).Xpos())
+				}
+			}
+		})
+	}
+}
+
+func TestPreparedDisplayShapesOwnAllConfiguration(t *testing.T) {
+	for _, kind := range []string{"monitor", "stageMonitor"} {
+		t.Run(kind, func(t *testing.T) {
+			shape := coreproject.StageShape{
+				"type": kind, "target": "", "val": "score", "name": "score", "label": "Score", "mode": "slider",
+				"x": 2.0, "y": 3.0, "visible": true, "color": "#123456", "width": 120.0, "height": 90.0,
+				"sliderMin": 4.0, "sliderMax": 8.0, "isDiscrete": false,
+			}
+			entry, err := prepareStageEntry(reflect.Value{}, shape)
+			if err != nil {
+				t.Fatal(err)
+			}
+			clear(shape)
+			if entry.kind != stageMonitor {
+				t.Fatalf("kind = %v, want stageMonitor", entry.kind)
+			}
+			got := entry.monitor
+			if got.config.Name != "score" || got.config.X != 2 || got.config.Y != 3 || !got.config.Visible {
+				t.Fatalf("prepared monitor config = %+v", got.config)
+			}
+			color, _ := mathf.NewColorAny("#123456")
+			if got.style.Appearance != ui.MonitorAppearanceSlider || got.style.Color != color || got.style.Dimensions != mathf.NewVec2(120, 90) || got.style.Slider != (ui.MonitorSlider{Min: 4, Max: 8, Step: 0.01}) {
+				t.Fatalf("prepared monitor style = %+v", got.style)
+			}
+		})
+	}
+	t.Run("measure", func(t *testing.T) {
+		shape := coreproject.StageShape{"type": "measure", "size": 10.0, "x": 20.0, "y": 30.0, "scale": 2.0, "heading": 45.0}
+		entry, err := prepareStageEntry(reflect.Value{}, shape)
+		if err != nil {
+			t.Fatal(err)
+		}
+		clear(shape)
+		if entry.kind != stageMeasure {
+			t.Fatalf("kind = %v, want stageMeasure", entry.kind)
+		}
+		got := entry.measure
+		if got.Size != 10 || got.X != 20 || got.Y != 30 || got.Scale != 2 || got.Heading != 45 {
+			t.Fatalf("prepared measure = %+v", got)
+		}
+	})
+}
+
+func TestPreparedStagePreservesDirectFieldLookup(t *testing.T) {
+	type embedded struct{ Target *collisionLayerOrderSprite }
+	type holder struct{ embedded }
+	game := holder{embedded{Target: &collisionLayerOrderSprite{}}}
+	_, err := prepareStageEntries(reflect.ValueOf(&game).Elem(), []any{coreproject.StageShape{"type": "sprite", "target": "Target"}})
+	if err == nil {
+		t.Fatal("promoted field unexpectedly accepted as direct stage target")
+	}
+}
+
+func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
+	game := &reloadDirectCommitGame{}
+	files := reloadConfigFS{}
+	setupReloadCommitRuntime(t, files, game, nil, false)
+	if err := game.loadSpriteFields(reflect.ValueOf(game).Elem()); err != nil {
+		t.Fatal(err)
+	}
+	if game.DirectCommitSprite == nil {
+		t.Fatal("cold load did not allocate the sprite field")
+	}
+	if len(game.sprs) != 0 {
+		t.Fatalf("cold load initialized unregistered sprites: %v", game.sprs)
+	}
+}
+
+func TestReloadStageDoesNotReadProjectZOrderDuringCommit(t *testing.T) {
+	game := setupReloadCommitGame(t, reloadConfigFS{"sprites/reloadCommitSprite/index.json": preparedPropertiesSpriteConfig})
+	gamer := reflect.ValueOf(game).Elem()
+	plan, err := prepareReload(&game.Game, gamer, strings.NewReader(`{"zorder":[{"type":"sprites","target":"Sprites","items":[{"x":7},{"x":9}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clear(plan.project.Zorder[0].(coreproject.StageShape))
+	plan.project.Zorder = []any{false}
+	inits, err := game.loadAndInitSprites(gamer, &plan.project, plan.spriteLoader(&game.Game), plan.stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inits) != 2 || len(game.Sprites) != 2 || game.Sprites[0].Xpos() != 7 || game.Sprites[1].Xpos() != 9 {
+		t.Fatalf("reload did not commit prepared stage entries: %v", game.Sprites)
+	}
+}
+
+func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
+	var game Game
+	game.initShapeMgr()
+	game.sprs = make(map[string]Sprite)
+	game.typs = map[string]reflect.Type{"Sprite": reflect.TypeFor[collisionLayerOrderSprite]()}
+	want := errors.New("first sprite config failed")
+	_, err := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{Zorder: []any{
+		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
+	}}, func(Sprite, string, reflect.Value) error { return want }, nil)
+	if !errors.Is(err, want) || !strings.Contains(err.Error(), `zorder[0]: load sprite "Sprite"`) {
+		t.Fatalf("cold load failure = %v, want indexed first sprite config error", err)
+	}
+}
+
+func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
+	game := &stagePlanGame{}
+	game.initShapeMgr()
+	_, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), &coreproject.ProjectConfig{Zorder: []any{
+		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
+	}}, nil, nil)
+	if err == nil || err.Error() != "zorder[1]: invalid stage shape type" {
+		t.Fatalf("cold load failure = %v, want indexed stage shape error", err)
+	}
+}
+
+func TestPrepareStageEntryEmptyValues(t *testing.T) {
+	game := &stagePlanGame{}
+	gamer := reflect.ValueOf(game).Elem()
+	for _, test := range []struct {
+		name   string
+		raw    any
+		kind   stageEntryKind
+		target string
+	}{
+		{"empty sprite name", "", stageNamedSprite, ""},
+		{"empty value sprite group", coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, stageSprites, "values"},
+		{"empty pointer sprite group", coreproject.StageShape{"type": "sprites", "target": "pointers", "items": []any{}}, stageSprites, "pointers"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			entry, err := prepareStageEntry(gamer, test.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry.kind != test.kind || entry.name != test.target || len(entry.properties) != 0 {
+				t.Fatalf("entry = %+v, want kind %v, target %q and no properties", entry, test.kind, test.target)
+			}
+			if entry.kind == stageSprites {
+				if gamer.Type().Field(entry.fieldIndex).Name != test.target || entry.spriteType != reflect.TypeFor[collisionLayerOrderSprite]() {
+					t.Fatalf("empty group target = %q, field index = %d, sprite type = %v", entry.name, entry.fieldIndex, entry.spriteType)
+				}
+			}
+		})
+	}
+}
+
+func TestPrepareStageEntryErrors(t *testing.T) {
+	game := &struct {
+		Sprite   *collisionLayerOrderSprite
+		Number   int
+		BadItems []int
+		Sprites  []*collisionLayerOrderSprite
+	}{}
+	tests := []struct {
+		name string
+		raw  any
+		want string
+	}{
+		{"nil", nil, "invalid zorder entry type <nil>"},
+		{"number", 42, "invalid zorder entry type int"},
+		{"boolean", false, "invalid zorder entry type bool"},
+		{"array", []any{}, "invalid zorder entry type []interface {}"},
+		{"nil shape", coreproject.StageShape(nil), "invalid stage shape type"},
+		{"missing type", coreproject.StageShape{}, "invalid stage shape type"},
+		{"null type", coreproject.StageShape{"type": nil}, "invalid stage shape type"},
+		{"non-string type", coreproject.StageShape{"type": 1.0}, "invalid stage shape type"},
+		{"unknown shape", coreproject.StageShape{"type": "unknown"}, "unknown shape - unknown"},
+		{"case-sensitive alias", coreproject.StageShape{"type": "StageMonitor"}, "unknown shape - StageMonitor"},
+		{"empty type", coreproject.StageShape{"type": ""}, "unknown shape - "},
+		{"monitor validation", coreproject.StageShape{"type": "monitor"}, `stage shape field "target" is required`},
+		{"alias validation", coreproject.StageShape{"type": "stageMonitor"}, `stage shape field "target" is required`},
+		{"measure validation", coreproject.StageShape{"type": "measure", "size": "large"}, `stage shape field "size" has type string, want float64`},
+		{"measure color", coreproject.StageShape{"type": "measure", "size": 10.0, "x": 0.0, "y": 0.0, "color": []any{1.0}}, `stage shape field "color": unsupported color format`},
+		{"monitor mode", coreproject.StageShape{"type": "monitor", "target": "", "val": "score", "name": "score", "label": "Score", "mode": nil, "x": 0.0, "y": 0.0, "visible": true}, `stage shape field "mode" has type <nil>, want float64`},
+		{"missing target", coreproject.StageShape{"type": "sprite"}, "stage shape target must be a non-empty string"},
+		{"empty target", coreproject.StageShape{"type": "sprite", "target": ""}, "stage shape target must be a non-empty string"},
+		{"non-string target", coreproject.StageShape{"type": "sprites", "target": 1.0}, "stage shape target must be a non-empty string"},
+		{"unknown sprite", coreproject.StageShape{"type": "sprite", "target": "Missing"}, `stage sprite target "Missing" is not defined`},
+		{"non-sprite field", coreproject.StageShape{"type": "sprite", "target": "Number"}, `stage sprite target "Number" is not a sprite field`},
+		{"sprite property", coreproject.StageShape{"type": "sprite", "target": "Sprite", "x": "left"}, `stage shape field "x" has type string, want float64`},
+		{"missing items", coreproject.StageShape{"type": "sprites", "target": "Sprites"}, "stage shape items must be an array"},
+		{"null items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": nil}, "stage shape items must be an array"},
+		{"non-array items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": false}, "stage shape items must be an array"},
+		{"unknown sprites", coreproject.StageShape{"type": "sprites", "target": "Missing", "items": []any{}}, `stage sprites target "Missing" is not defined`},
+		{"non-slice field", coreproject.StageShape{"type": "sprites", "target": "Sprite", "items": []any{}}, `stage sprites target "Sprite" is not a slice`},
+		{"non-sprite items", coreproject.StageShape{"type": "sprites", "target": "BadItems", "items": []any{}}, `stage sprites target "BadItems" has invalid item type int`},
+		{"invalid item", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, false}}, `stage sprites target "Sprites" item[1] has invalid type bool`},
+		{"item property", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, coreproject.StageShape{"x": "left"}}}, `stage sprites target "Sprites" item[1]: stage shape field "x" has type string, want float64`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := prepareStageEntry(reflect.ValueOf(game).Elem(), test.raw)
+			if err == nil || err.Error() != test.want {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestStagePlanInstantiatesDisplayWidgets(t *testing.T) {
+	setupGameWidgetUi(t)
+	game := &monitorEvalFixture{score: 3}
+	root := reflect.ValueOf(game).Elem()
+	shapes := []any{
+		coreproject.StageShape{"type": "monitor", "name": "score", "val": "score", "target": "", "label": "Score", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true},
+		coreproject.StageShape{"type": "measure", "size": 12.0, "x": 0.0, "y": 0.0},
+	}
+	entries, err := prepareStageEntries(root, shapes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inits, err := game.loadAndInitSprites(root, nil, nil, entries)
+	if err != nil || len(inits) != 0 || len(game.getAllShapes()) != 2 {
+		t.Fatalf("display widgets=%v, sprites=%v, error=%v", game.getAllShapes(), inits, err)
+	}
+	if got := GetWidget(&game.Game, "score"); got.GetName() != "score" {
+		t.Fatalf("widget=%v", got)
+	}
+}
+
+func TestGamePropertyResolutionScopes(t *testing.T) {
+	var plain Game
+	if got := plain.propertyRootValue(); got.Addr().Interface() != &plain {
+		t.Fatal("unbound game root changed")
+	}
+	if _, ok := plain.resolveTargetProperty("", ""); ok {
+		t.Fatal("empty property resolved")
+	}
+	if plain.setStageMonitor("", "missing", true) {
+		t.Fatal("missing monitor resolved")
+	}
+	game := &struct {
+		Game
+		Sprite reloadPreflightSprite
+	}{}
+	game.gamer = game
+	if got, from := game.resolvePropertyTarget("Sprite"); from != 2 || got.Addr().Interface() != &game.Sprite {
+		t.Fatalf("sprite scope=%v, %d", got, from)
+	}
+}
+
+type gameNavigationMgr struct {
+	pkgengine.INavigationMgr
+	grid, cell, from, to mathf.Vec2
+	jump, debug          bool
+	setups               int
+}
+
+func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
+	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
+	m.setups++
+}
+func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) pkgengine.Array {
+	m.from, m.to, m.jump = from, to, jump
+	return []float32{1, 2, 3, 4}
+}
+
+func TestGamePathFinderConfigurationAndQueries(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.NavigationMgr
+	manager := &gameNavigationMgr{}
+	pkgengine.NavigationMgr = manager
+	t.Cleanup(func() { pkgengine.NavigationMgr = previous })
+	game := &Game{displayState: gameDisplayState{WorldWidth: 480, WorldHeight: 360}, pathfindingState: gamePathfindingState{PathCellSizeX: 24, PathCellSizeY: 12}}
+	game.SetupPathFinder__0()
+	if manager.grid != mathf.NewVec2(20, 30) || manager.cell != mathf.NewVec2(24, 12) || !manager.jump || manager.debug {
+		t.Fatalf("default navigation=%+v", manager)
+	}
+	game.SetupPathFinder__1(10, 12, 3, 4, false, true)
+	if manager.grid != mathf.NewVec2(10, 12) || manager.cell != mathf.NewVec2(3, 4) || manager.jump || !manager.debug {
+		t.Fatalf("explicit navigation=%+v", manager)
+	}
+	for _, call := range []func() []float64{
+		func() []float64 { return game.FindPath__0(1, 2, 3, 4) },
+		func() []float64 { return game.FindPath__1(1, 2, 3, 4, true) },
+		func() []float64 { return game.FindPath__2(1, 2, 3, 4, false, false) },
+	} {
+		if got := call(); !slices.Equal(got, []float64{1, 2, 3, 4}) {
+			t.Fatalf("path=%v", got)
+		}
+	}
+	if manager.setups != 3 || manager.from != mathf.NewVec2(1, 2) || manager.to != mathf.NewVec2(3, 4) || manager.jump {
+		t.Fatalf("navigation query=%+v", manager)
+	}
+}
+
+func TestGameBackdropOverloads(t *testing.T) {
+	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	game := setupReloadCommitGame(t, reloadConfigFS{})
+	game.baseObj.initWithSize(480, 360)
+	manager := &gameBackdropSpriteMgr{ISpriteMgr: pkgengine.SpriteMgr}
+	pkgengine.SpriteMgr = manager
+	game.displayState.WorldWidth, game.displayState.WorldHeight = 960, 720
+	game.costumes = []*costume{newCostumeWithSize(480, 360), newCostumeWithSize(480, 360)}
+	game.costumes[0].name = "first"
+	game.costumes[1].name = "second"
+	game.runtimeState.SyncSprite = &engine.Sprite{Sprite: pkgengine.Sprite{Id: 89801}}
+	for _, test := range []struct {
+		name string
+		call func()
+		want int
+	}{
+		{"name", func() { game.SetBackdrop__0("second") }, 1},
+		{"float", func() { game.SetBackdrop__1(0) }, 0},
+		{"int", func() { game.SetBackdrop__2(1) }, 1},
+		{"action", func() { game.SetBackdrop__3(Next) }, 0},
+		{"wait name", func() { game.SetBackdropAndWait__0("second") }, 1},
+		{"wait float", func() { game.SetBackdropAndWait__1(0) }, 0},
+		{"wait int", func() { game.SetBackdropAndWait__2(1) }, 1},
+		{"wait action", func() { game.SetBackdropAndWait__3(Next) }, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.want == 1 {
+				game.displayState.MapMode = coreproject.MapModeRepeat
+			} else {
+				game.displayState.MapMode = coreproject.MapModeActualSize
+			}
+			test.call()
+			if test.want == 1 && manager.repeat != (mathf.Vec4{X: 2, Y: 2}) {
+				t.Fatalf("repeat scale=%v", manager.repeat)
+			}
+			if test.want == 0 && (manager.positionCalls == 0 || manager.position != (mathf.Vec2{})) {
+				t.Fatalf("actual size position=%v (%d calls)", manager.position, manager.positionCalls)
+			}
+			if game.BackdropIndex() != test.want || game.BackdropName() != game.costumes[test.want].name {
+				t.Fatalf("backdrop index/name=%d/%s", game.BackdropIndex(), game.BackdropName())
+			}
+		})
+	}
+}
+
+func TestGameGraphicEffectsAndClock(t *testing.T) {
+	setupRuntimeScheduler(t)
+	itime.Start(nil)
+	t.Cleanup(func() { itime.Start(nil) })
+	var game Game
+	game.SetGraphicEffect(ColorEffect, 10)
+	game.ChangeGraphicEffect(ColorEffect, 5)
+	if game.greffUniforms[ColorEffect] != 15 {
+		t.Fatalf("effect=%v", game.greffUniforms)
+	}
+	game.ClearGraphicEffects()
+	for kind, value := range game.greffUniforms {
+		if value != 0 {
+			t.Fatalf("cleared %v=%v", kind, value)
+		}
+	}
+	game.ResetTimer()
+	if game.Timer() != 0 {
+		t.Fatalf("reset timer=%v", game.Timer())
+	}
+	before := time.Now()
+	got := game.Now()
+	after := time.Now()
+	if got.Before(before) || got.After(after) {
+		t.Fatalf("Now=%v outside %v..%v", got, before, after)
+	}
+}
+
+func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	itime.Start(nil)
+	t.Cleanup(func() { itime.Start(nil) })
+	var game Game
+	count := 0
+	finished := false
+	thread := co.Create(nil, func(coroutine.Thread) {
+		game.WaitNextFrame()
+		RepeatUntil(func() bool { return count == 3 }, func() { count++ })
+		finished = true
+	})
+	co.JoinFirstSlice(thread)
+	if finished {
+		t.Fatal("WaitNextFrame completed before a frame update")
+	}
+	for range 5 {
+		itime.Update(1.0/30, 30)
+		co.Update()
+	}
+	if !finished || count != 3 {
+		t.Fatalf("loop completed=%v, count=%d", finished, count)
+	}
+}
+
+type gameBackdropSpriteMgr struct {
+	pkgengine.ISpriteMgr
+	repeat        mathf.Vec4
+	position      mathf.Vec2
+	positionCalls int
+}
+
+func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect string, x, y, z, w float64) {
+	if effect == "repeat_scale" {
+		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
+	}
+}
+func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
+	m.position = pos
+	m.positionCalls++
+}

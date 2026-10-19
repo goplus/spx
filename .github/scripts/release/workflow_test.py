@@ -22,6 +22,26 @@ WEB_PACKAGE_WORKFLOW_PATH = (
 )
 
 
+def run_command(command, *, cwd=None, env=None, check=False):
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env={**os.environ, **(env or {})},
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def run_shell(script, *, cwd=None, env=None):
+    return run_command(["bash", "-euo", "pipefail", "-c", script], cwd=cwd, env=env)
+
+
+def write_executable(path, content):
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+
+
 def job_blocks(text):
     lines = text.splitlines()
     try:
@@ -175,10 +195,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         for runtime_state, module_result, web_result, succeeds in cases:
             with self.subTest(runtime_state=runtime_state):
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", gate],
+                completed = run_shell(
+                    gate,
                     env={
-                        **os.environ,
                         "STATIC_CHECKS_RESULT": "success",
                         "GO_BUILDS_RESULT": "success",
                         "RUNTIME_RESOLUTION_RESULT": "success",
@@ -187,9 +206,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
                         "MODULE_INTEGRATION_RESULT": module_result,
                         "WEB_BUILD_RESULT": web_result,
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(
                     completed.returncode == 0,
@@ -215,16 +231,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         for runtime_state, succeeds in cases:
             with self.subTest(runtime_state=runtime_state):
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", guard],
+                completed = run_shell(
+                    guard,
                     env={
-                        **os.environ,
                         "RUNTIME_STATE": runtime_state,
                         "RUNTIME_REASON": "runtime-v1.2.3 cannot be reused; bump runtime_version",
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(
                     completed.returncode == 0,
@@ -248,16 +260,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
             ("unknown", False),
         ):
             with self.subTest(dev_runtime_state=runtime_state):
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", policy],
+                completed = run_shell(
+                    policy,
                     env={
-                        **os.environ,
                         "RUNTIME_STATE": runtime_state,
                         "RUNTIME_REASON": "runtime-v1.2.3 cannot be reused; bump runtime_version",
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
                 if runtime_state == "missing":
@@ -384,18 +392,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         )
         for repository, ref, release_tag, succeeds in cases:
             with self.subTest(repository=repository, ref=ref, release_tag=release_tag):
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", guard],
+                completed = run_shell(
+                    guard,
                     cwd=WORKFLOW_PATH.parents[2],
                     env={
-                        **os.environ,
                         "CURRENT_REF": ref,
                         "CURRENT_REPOSITORY": repository,
                         "RELEASE_TAG_INPUT": release_tag,
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
 
@@ -422,17 +426,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 release_version=release_version,
                 release_artifact=release_artifact,
             ):
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", validate_target],
+                completed = run_shell(
+                    validate_target,
                     env={
-                        **os.environ,
                         "RELEASE_ARTIFACT": release_artifact,
                         "RELEASE_VERSION": release_version,
                         "TARGET": target,
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
 
@@ -448,39 +448,29 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 ("git", "tag", "v3.2.0"),
             ):
                 subprocess.run(command, cwd=repository, check=True)
-            target = subprocess.run(
+            target = run_command(
                 ("git", "rev-parse", "HEAD"),
                 cwd=repository,
-                capture_output=True,
-                text=True,
                 check=True,
             ).stdout.strip()
 
-            tagged = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", verify_source],
+            tagged = run_shell(
+                verify_source,
                 cwd=repository,
                 env={
-                    **os.environ,
                     "IS_DEVELOPMENT": "true",
                     "TARGET": target,
                 },
-                capture_output=True,
-                text=True,
-                check=False,
             )
             self.assertNotEqual(tagged.returncode, 0, tagged.stdout)
 
-            wrong_sha = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", verify_source],
+            wrong_sha = run_shell(
+                verify_source,
                 cwd=repository,
                 env={
-                    **os.environ,
                     "IS_DEVELOPMENT": "false",
                     "TARGET": "b" * 40,
                 },
-                capture_output=True,
-                text=True,
-                check=False,
             )
             self.assertNotEqual(wrong_sha.returncode, 0, wrong_sha.stdout)
             self.assertIn("instead of publication target", wrong_sha.stderr)
@@ -491,17 +481,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            untagged = subprocess.run(
-                ["bash", "-euo", "pipefail", "-c", verify_source],
+            untagged = run_shell(
+                verify_source,
                 cwd=repository,
                 env={
-                    **os.environ,
                     "IS_DEVELOPMENT": "true",
                     "TARGET": target,
                 },
-                capture_output=True,
-                text=True,
-                check=False,
             )
             self.assertEqual(untagged.returncode, 0, untagged.stderr)
 
@@ -510,14 +496,12 @@ class ReleaseWorkflowTest(unittest.TestCase):
             workspace_path = Path(workspace)
             npm_scripts_path = workspace_path / ".github" / "scripts" / "npm"
             npm_scripts_path.mkdir(parents=True)
-            prepare = npm_scripts_path / "prepare_package.sh"
-            prepare.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            prepare.chmod(0o755)
+            write_executable(npm_scripts_path / "prepare_package.sh", "#!/bin/sh\nexit 0\n")
 
             fake_bin = workspace_path / "fake-bin"
             fake_bin.mkdir()
-            fake_npm = fake_bin / "npm"
-            fake_npm.write_text(
+            write_executable(
+                fake_bin / "npm",
                 """#!/bin/sh
 set -eu
 case "$1:$3" in
@@ -538,27 +522,21 @@ case "$1:$3" in
     ;;
 esac
 """,
-                encoding="utf-8",
             )
-            fake_npm.chmod(0o755)
 
             version = "3.2.1-0.20260814000000-aaaaaaaaaaaa"
             for remote_dist_tag, succeeds in ((version, True), ("older", False)):
                 with self.subTest(remote_dist_tag=remote_dist_tag):
-                    completed = subprocess.run(
-                        ["bash", "-euo", "pipefail", "-c", publish],
+                    completed = run_shell(
+                        publish,
                         cwd=workspace,
                         env={
-                            **os.environ,
                             "IS_RELEASE": "false",
                             "MOCK_DIST_TAG": remote_dist_tag,
                             "MOCK_VERSION": version,
                             "PATH": f"{fake_bin}:{os.environ['PATH']}",
                             "SPX_VERSION": f"v{version}",
                         },
-                        capture_output=True,
-                        text=True,
-                        check=False,
                     )
                     self.assertEqual(
                         completed.returncode == 0,
@@ -602,16 +580,12 @@ esac
                     job: {"result": results.get(job, "skipped")}
                     for job in terminal_jobs
                 }
-                completed = subprocess.run(
-                    ["bash", "-euo", "pipefail", "-c", script],
+                completed = run_shell(
+                    script,
                     env={
-                        **os.environ,
                         "OPERATION": operation,
                         "NEEDS_JSON": json.dumps(needs_json),
                     },
-                    capture_output=True,
-                    text=True,
-                    check=False,
                 )
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
 
@@ -636,10 +610,24 @@ class GoCoverageTest(unittest.TestCase):
             steps,
         )
         commands = [line for line in steps.splitlines() if "-coverprofile=" in line]
-        self.assertEqual(len(commands), 6)
+        self.assertEqual(len(commands), 7)
         for command in commands:
             self.assertIn("-covermode=atomic", command)
-        profiles = re.findall(r"-coverprofile=(\S+)", "\n".join(commands))
+        profiles = []
+        for step in steps.split("      - name: ")[1:]:
+            directory = re.search(r"^        working-directory: (.+)$", step, re.MULTILINE)
+            base = Path(directory.group(1)) if directory else Path(".")
+            profiles.extend(
+                (base / profile).as_posix()
+                for profile in re.findall(r"-coverprofile=(\S+)", step)
+            )
+        self.assertIn("cmd/ispx/coverage-web.out", profiles)
+        web_interpreter = steps.split("      - name: Test Go Web interpreter\n", 1)[1].split(
+            "      - name:", 1
+        )[0]
+        self.assertIn("GOOS: js", web_interpreter)
+        self.assertIn("GOARCH: wasm", web_interpreter)
+        self.assertIn('-exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...', web_interpreter)
         # test_go.sh runs a second module with the same relative profile name.
         profiles.append("cmd/ispx/coverage.out")
         codecov = steps.split("      - name: Upload coverage to Codecov\n", 1)[1]
@@ -662,8 +650,8 @@ class GoTestScriptTest(unittest.TestCase):
         self.log = self.root / "go-calls.jsonl"
         self.bin = Path(workspace.name) / "bin"
         self.bin.mkdir()
-        fake_go = self.bin / "go"
-        fake_go.write_text(
+        write_executable(
+            self.bin / "go",
             f"#!{sys.executable}\n" + r"""import json
 import os
 import sys
@@ -675,6 +663,7 @@ with Path(os.environ["MOCK_LOG"]).open("a", encoding="utf-8") as log:
     log.write(json.dumps({"directory": directory, "args": args}) + "\n")
 if args == ["list", "./..."]:
     print(os.environ["MOCK_PACKAGES"])
+    sys.exit(int(os.environ.get("MOCK_LIST_EXIT", "0")))
 elif args[0] == "test":
     for argument in args[1:]:
         if argument.startswith("-coverprofile="):
@@ -682,37 +671,48 @@ elif args[0] == "test":
                 "mode: atomic\n" + directory + "/source.go:1.1,2.1 1 1\n",
                 encoding="utf-8",
             )
+    if directory == ".":
+        sys.exit(int(os.environ.get("MOCK_TEST_EXIT", "0")))
 else:
     sys.exit(99)
 """,
-            encoding="utf-8",
         )
-        fake_go.chmod(0o755)
 
-    def test_coverage_preserves_package_selection_arguments_and_module_reports(self):
-        arguments = ("-v", "-coverprofile=coverage.out", "-covermode=atomic", "-run", "Test With Spaces")
-        completed = subprocess.run(
+    def run_script(self, packages, *arguments, **environment):
+        self.log.unlink(missing_ok=True)
+        return run_command(
             ["bash", str(self.script), *arguments],
             cwd=self.bin,
             env={
-                **os.environ,
                 "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                 "MOCK_ROOT": str(self.root),
                 "MOCK_LOG": str(self.log),
-                "MOCK_PACKAGES": (
-                    "example.com/spx\n\nexample.com/spx/internal/webffi\n"
-                    "example.com/spx/internal/webffi/generated\nexample.com/spx/fs"
-                ),
+                "MOCK_PACKAGES": "\n".join(packages),
+                **environment,
             },
-            capture_output=True,
-            text=True,
-            check=False,
         )
+
+    def recorded_calls(self):
+        return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def test_coverage_preserves_package_selection_arguments_and_module_reports(self):
+        module = "github.com/goplus/spx/v3"
+        included = [
+            module, f"{module}/fs", f"{module}/testing", f"{module}/tutorials",
+            f"{module}/pkg/ispx/internal/pkgextra", "example.com/other/test",
+        ]
+        excluded = [
+            "", f"{module}/internal/webffi", f"{module}/internal/webffi/generated",
+            f"{module}/test", f"{module}/test/project", f"{module}/tutorial",
+            f"{module}/tutorial/01-Hello", f"{module}/pkg/ispx/internal/pkg",
+            f"{module}/pkg/ispx/internal/pkg/github.com/goplus/spx/v3",
+        ]
+        arguments = ("-v", "-coverprofile=coverage.out", "-covermode=atomic", "-run", "Test With Spaces")
+        completed = self.run_script([*included, *excluded], *arguments)
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        calls = [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
-        self.assertEqual(calls, [
+        self.assertEqual(self.recorded_calls(), [
             {"directory": ".", "args": ["list", "./..."]},
-            {"directory": ".", "args": ["test", *arguments, "example.com/spx", "example.com/spx/fs"]},
+            {"directory": ".", "args": ["test", *arguments, *included]},
             {"directory": "cmd/ispx", "args": ["test", *arguments, "./..."]},
         ])
         for directory in (".", "cmd/ispx"):
@@ -721,6 +721,28 @@ else:
                     (self.root / directory / "coverage.out").read_text(encoding="utf-8"),
                     f"mode: atomic\n{directory}/source.go:1.1,2.1 1 1\n",
                 )
+
+    def test_discovery_errors_and_empty_selection_stop_before_testing(self):
+        for name, packages, environment, code in (
+            ("partial discovery", ["github.com/goplus/spx/v3"], {"MOCK_LIST_EXIT": "7"}, 7),
+            ("empty discovery", [], {}, 1),
+            ("only excluded packages", ["github.com/goplus/spx/v3/tutorial"], {}, 1),
+        ):
+            with self.subTest(name=name):
+                completed = self.run_script(packages, **environment)
+                self.assertEqual(completed.returncode, code, completed.stderr)
+                self.assertEqual(self.recorded_calls(), [{"directory": ".", "args": ["list", "./..."]}])
+                if code == 1:
+                    self.assertIn("No Go packages selected for testing", completed.stderr)
+
+    def test_failed_root_tests_do_not_run_the_second_module(self):
+        module = "github.com/goplus/spx/v3"
+        completed = self.run_script([module], "-race", MOCK_TEST_EXIT="5")
+        self.assertEqual(completed.returncode, 5, completed.stderr)
+        self.assertEqual(self.recorded_calls(), [
+            {"directory": ".", "args": ["list", "./..."]},
+            {"directory": ".", "args": ["test", "-race", module]},
+        ])
 
 
 if __name__ == "__main__":

@@ -22,14 +22,20 @@ package spx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	spxfs "github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v3/fs/asset"
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
@@ -404,5 +410,211 @@ func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
 	}
 	if mgr.queries.Load() != 1 || mgr.wrongThread.Load() || !routed.Load() {
 		t.Fatalf("dispatch returned with queries=%d, wrongThread=%v, routed=%v", mgr.queries.Load(), mgr.wrongThread.Load(), routed.Load())
+	}
+}
+
+func TestSnapshotReportsBodyAndCaptureFailures(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		activeGame bool
+		bodyError  bool
+	}{
+		{name: "body without game", bodyError: true},
+		{name: "body with game", activeGame: true, bodyError: true},
+		{name: "capture backend"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setupSnapshotInputSessionTest(t)
+			setupImmediateEngineCalls(t)
+			original := pkgengine.ExtMgr
+			recorder := &inputFrameFailureExtMgr{}
+			pkgengine.ExtMgr = recorder
+			t.Cleanup(func() { pkgengine.ExtMgr = original })
+			setupRuntimeScheduler(t)
+			if tt.activeGame {
+				engine.SetGame(struct{}{})
+			}
+			failure := errors.New("snapshot " + tt.name + " failed")
+			bodyCalls, captures := 0, 0
+			engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+				captures++
+				if req.Name != "failed.png" {
+					t.Errorf("capture name = %q, want failed.png", req.Name)
+				}
+				return failure
+			})
+			Snapshot("failed.png", func() error {
+				bodyCalls++
+				if tt.bodyError {
+					return failure
+				}
+				return nil
+			})
+			if !slices.Equal(recorder.messages, []string{failure.Error()}) || !slices.Equal(recorder.exits, []int64{1}) {
+				t.Fatalf("runtime errors = %v, exits = %v; want %q and exit 1", recorder.messages, recorder.exits, failure)
+			}
+			wantCaptures := 1
+			if tt.bodyError {
+				wantCaptures = 0
+			}
+			if bodyCalls != 1 || captures != wantCaptures || engine.HasPendingCaptures() {
+				t.Fatalf("body calls = %d, captures = %d, pending = %v; want 1, %d, false", bodyCalls, captures, engine.HasPendingCaptures(), wantCaptures)
+			}
+		})
+	}
+}
+
+func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
+	t.Helper()
+	previousGame := engine.GetGame()
+	engine.SetGame(nil)
+	t.Cleanup(func() { engine.SetGame(previousGame) })
+	setupRuntimeScheduler(t)
+	setupImmediateEngineCalls(t)
+	old := pkgengine.ExtMgr
+	recorder := &inputFrameFailureExtMgr{}
+	pkgengine.ExtMgr = recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = old })
+	return recorder
+}
+
+func TestRuntimeInvalidConfigurationAndIdentityReportErrors(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		call func()
+	}{
+		{"invalid environment value", func() {
+			(&Game{}).applyRuntimeConfig(&Config{ScreenshotKey: "bad\x00key"}, &coreproject.ProjectConfig{})
+		}},
+		{"invalid script owner", func() {
+			if got := nameOf(struct{}{}); got != "" {
+				t.Errorf("invalid owner name = %q", got)
+			}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := setupRuntimeFailureRecorder(t)
+			tt.call()
+			if len(recorder.messages) != 1 || recorder.messages[0] == "" || !slices.Equal(recorder.exits, []int64{1}) {
+				t.Fatalf("errors=%v exits=%v", recorder.messages, recorder.exits)
+			}
+		})
+	}
+}
+
+func TestExitOverloadsForwardExitCodes(t *testing.T) {
+	for _, code := range []int{0, 7} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			recorder := setupRuntimeFailureRecorder(t)
+			if code == 0 {
+				Exit__0()
+			} else {
+				Exit__1(code)
+			}
+			if !slices.Equal(recorder.exits, []int64{int64(code)}) || len(recorder.messages) != 0 {
+				t.Fatalf("exit forwarded: %v / %v", recorder.exits, recorder.messages)
+			}
+		})
+	}
+}
+
+type failingPauseExtMgr struct{ inputFrameFailureExtMgr }
+
+func (*failingPauseExtMgr) Pause() { panic("pause unavailable") }
+
+func TestFinishingInputSessionReportsPauseFailure(t *testing.T) {
+	resetInputSessionTest(t)
+	setupRuntimeScheduler(t)
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.ExtMgr
+	recorder := &failingPauseExtMgr{}
+	pkgengine.ExtMgr = recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = previous })
+	session, err := newInputSession(&inputSessionPlan{mode: InputSessionModeReplaying, replay: validRuntimeReplay()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	game := &Game{inputSession: session}
+	engine.SetGame(game)
+	if _, err := session.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return InputReplayState{}, nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	game.OnEngineFrameEnd()
+	if session.phase != InputSessionPhaseAborted || len(recorder.messages) != 1 || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("failed completion: %+v, %v, %v", session.status(), recorder.messages, recorder.exits)
+	}
+	game.inputSession = &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "recording failed"}
+	game.lifecycleState.IsRunned.Store(true)
+	if _, err := FinishInputRecording(); err == nil || !strings.Contains(err.Error(), "recording failed") {
+		t.Fatalf("finish error = %v", err)
+	}
+}
+
+func TestOnEngineStartReportsResourceLoadFailure(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	co, game := setupRuntimeEventGame(t)
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.ExtMgr
+	recorder := &runtimePanicRecorder{}
+	pkgengine.ExtMgr = recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = previous })
+	failure := errors.New("startup resources unavailable")
+	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) {
+		if path != "assets" {
+			t.Errorf("startup resource path=%q,want assets", path)
+		}
+		return nil, failure
+	})
+	t.Cleanup(func() { spxfs.RegisterSchema("", asset.Open) })
+	game.OnEngineStart()
+	co.Update()
+	if len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], failure.Error()) || !slices.Equal(recorder.exits, []int64{1}) {
+		t.Fatalf("startup failure messages=%v exits=%v", recorder.messages, recorder.exits)
+	}
+	if game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() {
+		t.Fatal("failed resource load completed startup")
+	}
+}
+
+type resetDuringStartupPlatform struct {
+	loadGamePlatformMgr
+	onTitle func()
+}
+
+func (p *resetDuringStartupPlatform) SetWindowTitle(title string) {
+	p.loadGamePlatformMgr.SetWindowTitle(title)
+	p.onTitle()
+}
+
+func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
+	if isolatedGameTest(t) {
+		return
+	}
+	setupLoadGameFlags(t)
+	files := reloadConfigFS{"index.json": `{"run":{"title":"stale startup"}}`}
+	gamer := &engineStartTestGame{Game: &Game{}}
+	game := setupReloadCommitRuntime(t, files, gamer, nil, false)
+	game.lifecycleState.IsRunned.Store(false)
+	generation := game.bootstrapGeneration()
+	platform := &resetDuringStartupPlatform{onTitle: game.resetBootstrap}
+	pkgengine.PlatformMgr = platform
+	pkgengine.ResMgr = &loadGameAssetResMgr{}
+	previousAudio := pkgengine.AudioMgr
+	pkgengine.AudioMgr = &loadGameAudioMgr{}
+	t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
+	resource := &loadGameFS{reloadConfigFS: files}
+	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) { return resource, nil })
+	t.Cleanup(func() { spxfs.RegisterSchema("", asset.Open) })
+	game.OnEngineStart()
+	gco.Update()
+	if platform.title != "stale startup" || game.fs != resource || resource.closeCalls != 0 {
+		t.Fatalf("resource loading did not finish: title=%q fs=%v closes=%d", platform.title, game.fs, resource.closeCalls)
+	}
+	if game.bootstrapGeneration() != generation+1 || game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() || gamer.mainCalls != 0 {
+		t.Fatalf("stale startup survived reset: generation=%d running=%v bootstrap=%v main=%d", game.bootstrapGeneration(), game.lifecycleState.IsRunned.Load(), game.lifecycleState.BootstrapDone.Load(), gamer.mainCalls)
 	}
 }

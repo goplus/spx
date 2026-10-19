@@ -179,7 +179,7 @@ func TestSpriteDirectionToPosNormalizesAngle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sprite.DirectionTo__4(tt.x, tt.y); math.Abs(got-tt.want) > 1e-9 {
+			if got := sprite.DirectionTo__4(tt.x, tt.y); !(math.Abs(got-tt.want) <= 1e-9) {
 				t.Fatalf("DirectionTo__4(%v, %v) = %v, want %v", tt.x, tt.y, got, tt.want)
 			}
 		})
@@ -429,8 +429,8 @@ func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 	if got == nil {
 		t.Fatal("fenceBounds() = nil")
 	}
-	if math.Abs(got.Position.X+20) > 1e-9 || math.Abs(got.Position.Y+50) > 1e-9 ||
-		math.Abs(got.Size.X-40) > 1e-9 || math.Abs(got.Size.Y-100) > 1e-9 {
+	if !(math.Abs(got.Position.X+20) <= 1e-9 && math.Abs(got.Position.Y+50) <= 1e-9 &&
+		math.Abs(got.Size.X-40) <= 1e-9 && math.Abs(got.Size.Y-100) <= 1e-9) {
 		t.Fatalf("fenceBounds() = %+v, want position (-20, -50), size (40, 100)", *got)
 	}
 }
@@ -538,5 +538,236 @@ func TestNormalizeAngleRangePreservesShortestPathAndHalfTurnDirection(t *testing
 		if from != 90 || !math.IsNaN(to) {
 			t.Errorf("normalizeAngleRange(90, %v) = (%v, %v), want (90, NaN)", angle, from, to)
 		}
+	}
+}
+
+func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
+	for _, action := range []struct {
+		name string
+		run  func(*cloneLimitSprite)
+	}{
+		{"step", func(sprite *cloneLimitSprite) { sprite.StepTo__1("missing") }},
+		{"glide zero duration", func(sprite *cloneLimitSprite) { sprite.Glide__1("missing", 0) }},
+		{"glide nonzero duration", func(sprite *cloneLimitSprite) { sprite.Glide__1("missing", 60) }},
+		{"turn", func(sprite *cloneLimitSprite) { sprite.TurnTo__1("missing") }},
+	} {
+		t.Run(action.name, func(t *testing.T) {
+			game := setupCloneLimitGame(t)
+			sprite := newCloneLimitSprite(game, "source")
+			sprite.transform().x, sprite.transform().y, sprite.transform().direction = 30, 40, 60
+			dirtyVersion := sprite.spriteState.DirtyVersion
+			finished := false
+			thread := gco.Create(sprite, func(coroutine.Thread) {
+				action.run(sprite)
+				finished = true
+			})
+			gco.JoinFirstSlice(thread)
+
+			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.DirtyVersion != dirtyVersion {
+				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.DirtyVersion)
+			}
+		})
+	}
+}
+
+func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
+	for _, mode := range []struct {
+		name  string
+		debug bool
+	}{
+		{"normal", false},
+		{"debug instructions", true},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			for _, action := range []struct {
+				name string
+				run  func(*cloneLimitSprite)
+			}{
+				{"named target", func(sprite *cloneLimitSprite) { sprite.TurnToTarget("target", nil) }},
+				{"coordinates", func(sprite *cloneLimitSprite) { sprite.TurnToXYpos(-10, -10, nil) }},
+				{"direction", func(sprite *cloneLimitSprite) { sprite.TurnToDir(945, nil) }},
+			} {
+				t.Run(action.name, func(t *testing.T) {
+					game := setupCloneLimitGame(t)
+					originalDebug := game.debugState.DebugInstr
+					game.debugState.DebugInstr = mode.debug
+					t.Cleanup(func() { game.debugState.DebugInstr = originalDebug })
+					sprite := newCloneLimitSprite(game, "source")
+					sprite.SetHeading(60)
+					target := newCloneLimitSprite(game, "target")
+					target.SetXYpos(-10, -10)
+					wantDirty := sprite.spriteState.DirtyVersion + 1
+
+					// Both the initial turn and the unchanged heading must return
+					// without waiting; only the initial turn publishes a change.
+					for attempt := 0; attempt < 2; attempt++ {
+						finished := false
+						thread := gco.Create(sprite, func(coroutine.Thread) {
+							action.run(sprite)
+							finished = true
+						})
+						gco.JoinFirstSlice(thread)
+						if !finished {
+							t.Fatalf("turn %d yielded without an animation", attempt+1)
+						}
+						gco.Join(thread)
+						if sprite.Heading() != -135 || sprite.spriteState.DirtyVersion != wantDirty {
+							t.Fatalf("turn %d: heading=%v dirty=%v, want -135 and %v", attempt+1, sprite.Heading(), sprite.spriteState.DirtyVersion, wantDirty)
+						}
+						if sprite.Xpos() != 0 || sprite.Ypos() != 0 {
+							t.Fatalf("turn moved sprite to (%v, %v)", sprite.Xpos(), sprite.Ypos())
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestSpriteDistanceToMissingTarget(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	sprite := newCloneLimitSprite(game, "source")
+	if got := sprite.DistanceTo__1("missing"); got != 10000 {
+		t.Fatalf("DistanceTo__1(missing) = %v, want 10000", got)
+	}
+}
+
+func TestSpriteNamedTargetIgnoresClones(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	sprite := newCloneLimitSprite(game, "source")
+	sprite.transform().x, sprite.transform().y = 30, 40
+	target := newCloneLimitSprite(game, "target")
+	clone := createRuntimeClone(&target.SpriteImpl)
+	clone.transform().x = 300
+
+	if got := sprite.DistanceTo__1("target"); got != 50 {
+		t.Fatalf("DistanceTo__1(target) = %v, want 50", got)
+	}
+}
+
+func TestSpriteNilTargetIsMissing(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	sprite := newCloneLimitSprite(game, "source")
+	var target *cloneLimitSprite
+	if got := sprite.DistanceTo__0(target); got != 10000 {
+		t.Fatalf("DistanceTo__0(nil) = %v, want 10000", got)
+	}
+}
+
+func TestSpriteDirectionToMissingTargetKeepsHeading(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	sprite := newCloneLimitSprite(game, "source")
+	sprite.transform().direction = 60
+	if got := sprite.DirectionTo__1("missing"); got != 60 {
+		t.Fatalf("DirectionTo__1(missing) = %v, want 60", got)
+	}
+}
+
+func TestSpriteMotionOverloadsKeepTargetAndOptionSemantics(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	game.debugState.DebugInstr = true
+	game.displayState.WorldWidth, game.displayState.WorldHeight = 1, 1
+	target := newCloneLimitSprite(game, "target")
+	sprite := newCloneLimitSprite(game, "source")
+	// A one-pixel world makes Random deterministic without changing the RNG.
+	// Remove costumes so movement is not fenced by that small test world.
+	sprite.costumes = nil
+	options := &MotionOptions{Speed: 2, Animation: "missing"}
+	for _, tt := range []struct {
+		name string
+		run  func()
+	}{
+		{"step sprite", func() { sprite.StepTo__0(target) }},
+		{"step mouse", func() { sprite.StepTo__2(Mouse) }},
+		{"step xy", func() { sprite.StepTo__3(0, 0) }},
+		{"step sprite speed", func() { sprite.StepTo__4(target, 2) }},
+		{"step name speed", func() { sprite.StepTo__5("target", 2) }},
+		{"step mouse speed", func() { sprite.StepTo__6(Mouse, 2) }},
+		{"step xy speed", func() { sprite.StepTo__7(0, 0, 2) }},
+		{"step sprite animation", func() { sprite.StepTo__8(target, 2, "missing") }},
+		{"step name animation", func() { sprite.StepTo__9("target", 2, "missing") }},
+		{"step mouse animation", func() { sprite.StepTo__a(Mouse, 2, "missing") }},
+		{"step xy animation", func() { sprite.StepTo__b(0, 0, 2, "missing") }},
+		{"step random speed", func() { sprite.StepTo__d(Random, 2) }},
+		{"step random animation", func() { sprite.StepTo__e(Random, 2, "missing") }},
+		{"step target options", func() { sprite.StepToTarget(target, options) }},
+		{"step xy options", func() { sprite.StepToXYpos(0, 0, options) }},
+		{"glide sprite", func() { sprite.Glide__0(target, 0) }},
+		{"glide mouse", func() { sprite.Glide__2(Mouse, 0) }},
+		{"glide random", func() { sprite.Glide__3(Random, 0) }},
+		{"glide xy", func() { sprite.Glide__4(0, 0, 0) }},
+		{"glide target", func() { sprite.GlideToTarget(target, 0) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite.SetXYpos(-10, -20)
+			tt.run()
+			if sprite.Xpos() != 0 || sprite.Ypos() != 0 {
+				t.Fatalf("position = (%v, %v), want origin", sprite.Xpos(), sprite.Ypos())
+			}
+		})
+	}
+	for _, tt := range []struct {
+		name string
+		run  func()
+	}{
+		{"move float", func() { sprite.Move__0(2) }},
+		{"move integer", func() { sprite.Move__1(2) }},
+		{"step speed", func() { sprite.Step__1(2, 3) }},
+		{"step animation", func() { sprite.Step__2(2, 3, "missing") }},
+		{"step options", func() { sprite.StepWith(2, options) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite.SetXYpos(0, 0)
+			sprite.SetHeading(90)
+			tt.run()
+			if !(math.Abs(sprite.Xpos()-2) <= 1e-12 && math.Abs(sprite.Ypos()) <= 1e-12) {
+				t.Fatalf("forward movement = (%v, %v), want (2, 0)", sprite.Xpos(), sprite.Ypos())
+			}
+		})
+	}
+	for _, tt := range []struct {
+		name string
+		run  func()
+	}{
+		{"turn", func() { sprite.Turn__0(90) }},
+		{"turn speed", func() { sprite.Turn__1(90, 2) }},
+		{"turn animation", func() { sprite.Turn__2(90, 2, "missing") }},
+		{"turn options", func() { sprite.TurnWith(90, options) }},
+		{"turn sprite", func() { sprite.TurnTo__0(target) }},
+		{"turn direction", func() { sprite.TurnTo__2(90) }},
+		{"turn mouse", func() { sprite.TurnTo__3(Mouse) }},
+		{"turn sprite speed", func() { sprite.TurnTo__4(target, 2) }},
+		{"turn name speed", func() { sprite.TurnTo__5("target", 2) }},
+		{"turn direction speed", func() { sprite.TurnTo__6(90, 2) }},
+		{"turn mouse speed", func() { sprite.TurnTo__7(Mouse, 2) }},
+		{"turn sprite animation", func() { sprite.TurnTo__8(target, 2, "missing") }},
+		{"turn name animation", func() { sprite.TurnTo__9("target", 2, "missing") }},
+		{"turn direction animation", func() { sprite.TurnTo__a(90, 2, "missing") }},
+		{"turn mouse animation", func() { sprite.TurnTo__b(Mouse, 2, "missing") }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite.SetXYpos(-10, 0)
+			sprite.SetHeading(0)
+			tt.run()
+			if sprite.Heading() != 90 {
+				t.Fatalf("heading = %v, want 90", sprite.Heading())
+			}
+		})
+	}
+	sprite.SetXYpos(0, -10)
+	for name, got := range map[string]float64{"mouse": sprite.DistanceTo__2(Mouse), "random": sprite.DistanceTo__3(Random), "target": sprite.DistanceToWith(target)} {
+		if got != 10 {
+			t.Errorf("%s distance = %v, want 10", name, got)
+		}
+	}
+	for name, got := range map[string]float64{"sprite": sprite.DirectionTo__0(target), "mouse": sprite.DirectionTo__2(Mouse), "random": sprite.DirectionTo__3(Random), "target": sprite.DirectionToWith(target)} {
+		if got != 0 {
+			t.Errorf("%s direction = %v, want 0", name, got)
+		}
+	}
+	sprite.SetSize(2)
+	sprite.ChangeSize(3)
+	if sprite.Size() != 5 {
+		t.Fatalf("size = %v, want 5", sprite.Size())
 	}
 }

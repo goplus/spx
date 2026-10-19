@@ -4,6 +4,7 @@ package spx
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -283,5 +284,132 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	}
 	if anim.curAnimState != replacement || replacement.IsCanceled || !audio.playing[playbackID] {
 		t.Fatalf("completion canceled OnCond same-name replacement: current=%p replacement=%p canceled=%v audioPlaying=%v", anim.curAnimState, replacement, replacement.IsCanceled, audio.playing[playbackID])
+	}
+}
+
+type animationRegistrationResMgr struct {
+	pkgengine.IResMgr
+	calls   atomic.Int32
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (m *animationRegistrationResMgr) CreateAnimation(string, string, string, int64, bool) {
+	if m.calls.Add(1) == 1 {
+		close(m.entered)
+	}
+	<-m.release
+}
+
+func TestClonedAnimationEntryRegistersOnceConcurrently(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	resources := &animationRegistrationResMgr{
+		entered: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	originalResMgr := pkgengine.ResMgr
+	pkgengine.ResMgr = resources
+	t.Cleanup(func() { pkgengine.ResMgr = originalResMgr })
+
+	frame := newCostumeWithSize(1, 1)
+	frame.bitmapResolution = 4
+	frame.path = "walk.png"
+	sprite := &SpriteImpl{name: "TestSprite"}
+	sprite.costumes = []*costume{frame}
+	original := &animationComponent{}
+	prepared, err := prepareSpriteConfig(&coreproject.SpriteConfig{
+		Costumes: []*coreproject.CostumeConfig{{Name: "default"}},
+		FAnimations: map[string]*coreproject.AniConfig{
+			"walk": {FrameFrom: 0, FrameTo: 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original.initialize(sprite, &prepared.config)
+	clone := original.cloneFor(&SpriteImpl{name: sprite.name})
+
+	originalEntry := original.shared.animations["walk"]
+	cloneEntry := clone.shared.animations["walk"]
+	if originalEntry != cloneEntry {
+		t.Fatal("clone did not share the original animation entry")
+	}
+
+	start := make(chan struct{})
+	started := make(chan struct{}, 2)
+	results := make(chan int, 2)
+	for _, entry := range []*animationEntry{originalEntry, cloneEntry} {
+		go func() {
+			<-start
+			started <- struct{}{}
+			results <- entry.ensureRegistered()
+		}()
+	}
+	close(start)
+	<-started
+	<-started
+	<-resources.entered
+	close(resources.release)
+
+	for range 2 {
+		if got := <-results; got != 4 {
+			t.Errorf("bitmap resolution = %d, want 4", got)
+		}
+	}
+	if got := resources.calls.Load(); got != 1 {
+		t.Fatalf("animation registrations = %d, want 1", got)
+	}
+}
+
+func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
+	for _, mode := range []string{"empty", "unknown", "not playing", "other animation", "unbound", "matching"} {
+		t.Run(mode, func(t *testing.T) {
+			_, anim, sprites, _ := setupAnimationLifecycle(t)
+			state := &animState{Name: "walk"}
+			anim.curAnimState = state
+			name := "walk"
+			switch mode {
+			case "empty":
+				name = ""
+			case "unknown":
+				name = "missing"
+			case "not playing":
+				anim.curAnimState = nil
+			case "other animation":
+				state.Name = "other"
+			case "unbound":
+				anim.sprite.runtimeState.SyncSprite = nil
+			}
+			anim.stopAnimation(name)
+			if mode == "matching" {
+				if !state.IsCanceled || anim.curAnimState != nil || sprites.pauses != 1 {
+					t.Fatal("matching animation was not canceled and paused")
+				}
+			} else if state.IsCanceled || sprites.pauses != 0 {
+				t.Fatal("unrelated or unbound animation was paused")
+			}
+		})
+	}
+}
+
+func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
+	co, anim, sprites, _ := setupAnimationLifecycle(t)
+	anim.sprite.spriteState.IsVisible = true
+	anim.shared.defaultAnimation = "walk"
+	anim.playDefaultAnim()
+	if !anim.defaultAnimActive || !sprites.playing {
+		t.Fatal("configured default animation did not start")
+	}
+	anim.sprite.spriteState.IsVisible = false
+	sprites.play = func() { anim.cancelAnimState(anim.curAnimState) }
+	finished := false
+	thread := co.Create(anim.sprite, func(coroutine.Thread) {
+		anim.playAnimation("walk", false, true)
+		finished = true
+	})
+	co.Update()
+	joinAnimationThread(t, co, thread)
+	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.IsAnimating {
+		t.Fatal("cancellation during start did not release the blocking animation")
 	}
 }

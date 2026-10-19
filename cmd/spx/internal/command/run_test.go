@@ -30,116 +30,54 @@ import (
 	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
-func TestRunWebCommandRunsExportBeforeServer(t *testing.T) {
-	var calls []string
-
-	err := runWebCommand(
-		func() error {
-			calls = append(calls, "export")
-			return nil
-		},
-		func() error {
-			calls = append(calls, "serve")
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("runWebCommand returned error: %v", err)
-	}
-
-	want := []string{"export", "serve"}
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("unexpected call order: got %v, want %v", calls, want)
-	}
-}
-
-func TestRunWebCommandRunsSetupBeforeExportAndServer(t *testing.T) {
-	var calls []string
-
-	err := runWebCommandWithSetup(
-		func() error {
-			calls = append(calls, "setup")
-			return nil
-		},
-		func() error {
-			calls = append(calls, "export")
-			return nil
-		},
-		func() error {
-			calls = append(calls, "serve")
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("runWebCommandWithSetup returned error: %v", err)
-	}
-
-	want := []string{"setup", "export", "serve"}
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("unexpected call order: got %v, want %v", calls, want)
-	}
-}
-
-func TestRunWebCommandStopsOnSetupError(t *testing.T) {
-	wantErr := errors.New("setup failed")
-	exportCalled := false
-	serverCalled := false
-
-	err := runWebCommandWithSetup(
-		func() error {
-			return wantErr
-		},
-		func() error {
-			exportCalled = true
-			return nil
-		},
-		func() error {
-			serverCalled = true
-			return nil
-		},
-	)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("runWebCommandWithSetup error = %v, want %v", err, wantErr)
-	}
-	if exportCalled {
-		t.Fatal("export should not start when setup fails")
-	}
-	if serverCalled {
-		t.Fatal("server should not start when setup fails")
-	}
-}
-
-func TestRunWebCommandStopsOnExportError(t *testing.T) {
-	wantErr := errors.New("export failed")
-	serverCalled := false
-
-	err := runWebCommand(
-		func() error {
-			return wantErr
-		},
-		func() error {
-			serverCalled = true
-			return nil
-		},
-	)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("runWebCommand error = %v, want %v", err, wantErr)
-	}
-	if serverCalled {
-		t.Fatal("server should not start when export fails")
+func TestRunWebCommandOrderAndErrors(t *testing.T) {
+	failure := errors.New("step failed")
+	for _, tt := range []struct {
+		name, failAt string
+		setup        bool
+		want         []string
+	}{
+		{"export before server", "", false, []string{"export", "serve"}},
+		{"setup before export and server", "", true, []string{"setup", "export", "serve"}},
+		{"setup failure", "setup", true, []string{"setup"}},
+		{"export failure", "export", false, []string{"export"}},
+		{"export failure after setup", "export", true, []string{"setup", "export"}},
+		{"server failure", "serve", false, []string{"export", "serve"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls []string
+			step := func(name string) func() error {
+				return func() error {
+					calls = append(calls, name)
+					if name == tt.failAt {
+						return failure
+					}
+					return nil
+				}
+			}
+			var err error
+			if tt.setup {
+				err = runWebCommandWithSetup(step("setup"), step("export"), step("serve"))
+			} else {
+				err = runWebCommand(step("export"), step("serve"))
+			}
+			if tt.failAt == "" && err != nil || tt.failAt != "" && !errors.Is(err, failure) {
+				t.Fatalf("run error = %v, failing step %q", err, tt.failAt)
+			}
+			if !reflect.DeepEqual(calls, tt.want) {
+				t.Fatalf("call order = %v, want %v", calls, tt.want)
+			}
+		})
 	}
 }
 
 func writeLocalSpxRepoMarker(t *testing.T, root string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Join(root, "cmd", "spx"), 0755); err != nil {
-		t.Fatalf("mkdir cmd/spx: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/goplus/spx/v3\n"), 0644); err != nil {
-		t.Fatalf("write go.mod: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
-		t.Fatalf("write install.sh: %v", err)
+	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v3\n")
+	script := filepath.Join(root, "cmd", "spx", "install.sh")
+	writeCommandTestFile(t, script, "#!/bin/bash\n")
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -279,40 +217,21 @@ func TestWebCommandSetup(t *testing.T) {
 	}
 }
 
-func TestBrowserOpenCommandsDarwinPrefersChromeThenDefault(t *testing.T) {
-	url := "http://127.0.0.1:8060"
-
-	got := browserOpenCommands("darwin", url)
-	want := []browserOpenCommand{
-		{name: "open", args: []string{"-a", "Google Chrome", url}},
-		{name: "open", args: []string{url}},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("browserOpenCommands(darwin) = %#v, want %#v", got, want)
-	}
-}
-
-func TestBrowserOpenCommandsLinuxUsesXdgOpen(t *testing.T) {
-	url := "http://127.0.0.1:8060"
-
-	got := browserOpenCommands("linux", url)
-	want := []browserOpenCommand{
-		{name: "xdg-open", args: []string{url}},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("browserOpenCommands(linux) = %#v, want %#v", got, want)
-	}
-}
-
-func TestBrowserOpenCommandsWindowsUsesRundll32(t *testing.T) {
-	url := "http://127.0.0.1:8060"
-
-	got := browserOpenCommands("windows", url)
-	want := []browserOpenCommand{
-		{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("browserOpenCommands(windows) = %#v, want %#v", got, want)
+func TestBrowserOpenCommands(t *testing.T) {
+	const url = "http://127.0.0.1:8060"
+	for _, tt := range []struct {
+		goos string
+		want []browserOpenCommand
+	}{
+		{"darwin", []browserOpenCommand{{name: "open", args: []string{"-a", "Google Chrome", url}}, {name: "open", args: []string{url}}}},
+		{"linux", []browserOpenCommand{{name: "xdg-open", args: []string{url}}}},
+		{"windows", []browserOpenCommand{{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}}}},
+	} {
+		t.Run(tt.goos, func(t *testing.T) {
+			if got := browserOpenCommands(tt.goos, url); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("browser commands = %#v, want %#v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -833,5 +752,42 @@ func assertSameDirectory(t *testing.T, got, want string) {
 	}
 	if !os.SameFile(gotInfo, wantInfo) {
 		t.Fatalf("runtime working directory = %q, want %q", got, want)
+	}
+}
+
+func TestInterpretedRootsResolveDefaultsAndRelativePaths(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	for _, tt := range []struct {
+		name             string
+		cmd              CmdTool
+		project, session string
+	}{
+		{"logical root", CmdTool{TargetAbsDir: root}, root, filepath.Join(root, ".temp")},
+		{"relative root", CmdTool{TargetDir: "game"}, filepath.Join(root, "game"), filepath.Join(root, "game", ".temp")},
+		{"relative session", CmdTool{TargetAbsDir: root, RuntimeTempDir: "session"}, root, filepath.Join(root, "session")},
+		{"explicit session", CmdTool{TargetAbsDir: root, RuntimeTempDir: filepath.Join(root, "other")}, root, filepath.Join(root, "other")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.cmd.interpretedRoots()
+			if err != nil || got.ProjectDir != tt.project || got.AssetDir != filepath.Join(tt.project, "assets") || got.SessionDir != tt.session {
+				t.Fatalf("interpreted roots = %+v, %v; want project %q, session %q", got, err, tt.project, tt.session)
+			}
+		})
+	}
+	if _, err := (&CmdTool{}).interpretedRoots(); err == nil || !strings.Contains(err.Error(), "project directory is not configured") {
+		t.Fatalf("missing roots error = %v", err)
+	}
+}
+
+func TestRuntimePackFilenames(t *testing.T) {
+	for _, tt := range []struct{ executable, pack string }{
+		{"gdspxrt", "gdspxrt.pck"},
+		{"gdspxrt.exe", "gdspxrt.pck"},
+		{"gdspxrt.exe.extra", "gdspxrt.exe.extra.pck"},
+	} {
+		if got := runtimePackFileName(tt.executable); got != tt.pack {
+			t.Errorf("pack filename for %q = %q, want %q", tt.executable, got, tt.pack)
+		}
 	}
 }

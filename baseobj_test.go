@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -20,6 +21,87 @@ func TestBaseObjGetCostumeAssetPath(t *testing.T) {
 	want := engine.ToAssetPath("sprites/Eat/costume1.svg")
 	if got != want {
 		t.Fatalf("getCostumeAssetPath() = %q, want %q", got, want)
+	}
+}
+
+func TestBaseObjCostumeSelectionRejectsInvalidInputWithoutChangingState(t *testing.T) {
+	obj := baseObj{costumes: []*costume{{name: "first"}, {name: "second"}}}
+	for _, tt := range []struct {
+		value any
+		index int
+		ok    bool
+	}{
+		{Prev, 1, true}, {Next, 0, true}, {1.9, 1, true},
+		{-1, 1, false}, {2, 1, false}, {struct{}{}, 1, false},
+		{"first", 0, true},
+	} {
+		if got := obj.goSetCostume(tt.value); got != tt.ok || obj.getCostumeIndex() != tt.index {
+			t.Fatalf("select %v: ok=%v index=%d, want %v/%d", tt.value, got, obj.getCostumeIndex(), tt.ok, tt.index)
+		}
+		if obj.getCostumeName() != obj.costumes[tt.index].name {
+			t.Fatal("selected costume name does not match its index")
+		}
+	}
+}
+
+func TestBaseObjInitialCostumeIndexFallsBackToFirst(t *testing.T) {
+	for _, index := range []int{-1, 2} {
+		t.Run(fmt.Sprint(index), func(t *testing.T) {
+			cfg := &coreproject.CostumeConfig{Name: "first", ImageWidth: 20, ImageHeight: 10}
+			var sprite, stage baseObj
+			sprite.init([]*coreproject.CostumeConfig{cfg}, index)
+			stage.initBackdrops([]*coreproject.BackdropConfig{{CostumeConfig: *cfg}}, index)
+			for _, obj := range []*baseObj{&sprite, &stage} {
+				if obj.costumeIndex != 0 || obj.getCostumeName() != "first" || !obj.runtimeState.IsCostumeDirty {
+					t.Fatalf("initial costume = %d/%q, dirty=%v", obj.costumeIndex, obj.getCostumeName(), obj.runtimeState.IsCostumeDirty)
+				}
+			}
+		})
+	}
+}
+
+func TestBaseObjInitializesSingleCostumeSetWithRect(t *testing.T) {
+	config := &coreproject.SpriteConfig{
+		CostumeIndex: 9,
+		CostumeSet: &coreproject.CostumeSet{
+			Path: "hero.png", ImageWidth: 100, ImageHeight: 40, Nx: 2,
+			BitmapResolution: 2, FaceRight: 90,
+			Rect: &coreproject.CostumeSetRect{X: 20, Y: 10, W: 40, H: 20},
+		},
+	}
+	layout, err := coreproject.PrepareCostumeLayout(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj baseObj
+	obj.initSpriteCostumes(config, layout)
+	if !obj.runtimeState.IsCostumeSet || len(obj.costumes) != 2 || obj.costumeIndex != 0 {
+		t.Fatalf("costume set = %v, frames = %d, initial = %d", obj.runtimeState.IsCostumeSet, len(obj.costumes), obj.costumeIndex)
+	}
+	for i, costume := range obj.costumes {
+		if costume.posX != 20+i*20 || costume.posY != 10 || costume.width != 20 || costume.height != 20 || costume.bitmapResolution != 2 || costume.faceRight != 90 {
+			t.Fatalf("frame %d = %+v", i, costume)
+		}
+	}
+}
+
+func TestBaseObjGraphicEffectsAccumulateBeforeProxyExists(t *testing.T) {
+	var obj baseObj
+	obj.changeGraphicEffect(ColorEffect, 25)
+	obj.changeGraphicEffect(ColorEffect, -75)
+	if obj.greffUniforms[ColorEffect] != -50 {
+		t.Fatalf("accumulated color effect = %v, want -50", obj.greffUniforms[ColorEffect])
+	}
+	if got := normalizeEffectValue(ColorEffect, -50); got != 0.75 {
+		t.Fatalf("wrapped color effect = %v, want 0.75", got)
+	}
+	if got := normalizeEffectValue(EffectKind(999), 42); got != 42 {
+		t.Fatalf("unknown effect = %v, want unchanged 42", got)
+	}
+	obj.setMaterialParams("color", 0.75, true)
+	obj.setMaterialParamsVec4("remap", mathf.Vec4{X: 1}, false)
+	if obj.runtimeState.HasShader {
+		t.Fatal("unbound material update created a shader")
 	}
 }
 

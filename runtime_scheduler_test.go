@@ -23,6 +23,8 @@ import (
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func setupRuntimeScheduler(t *testing.T) *coroutine.Coroutines {
@@ -100,4 +102,393 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("restored scheduler did not start a coroutine")
 	}
+}
+
+func TestNonVisualLoopsShareFrame(t *testing.T) {
+	co, _ := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	counts := [2]int{}
+	for i := range counts {
+		th := co.Create(nil, func(coroutine.Thread) {
+			Repeat(5, func() { counts[i]++ })
+		})
+		co.JoinFirstSlice(th)
+	}
+	co.Update()
+	if counts != [2]int{5, 5} {
+		t.Fatalf("same-frame iterations = %v, want [5 5]", counts)
+	}
+}
+
+func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
+	for _, visible := range []bool{false, true} {
+		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
+			co, _ := setupRuntimeEventGame(t)
+			itime.Start(nil)
+			sprite := new(SpriteImpl)
+			sprite.spriteState.IsVisible = visible
+			sprite.components.transform = &transformComponent{
+				sprite:    sprite,
+				direction: 45, rotationStyle: Normal,
+			}
+			var frames []int64
+			th := co.Create(sprite, func(coroutine.Thread) {
+				Repeat(3, func() {
+					if len(frames)%2 == 0 {
+						sprite.SetRotationStyle(None)
+					} else {
+						sprite.SetRotationStyle(Normal)
+					}
+					frames = append(frames, itime.Frame())
+				})
+			})
+			co.JoinFirstSlice(th)
+			for range 3 {
+				co.Update()
+				itime.Update(1.0/30, 30)
+			}
+			if len(frames) != 3 {
+				t.Fatalf("iterations = %d, want 3", len(frames))
+			}
+			for i, frame := range frames {
+				want := int64(0)
+				if visible {
+					want = int64(i)
+				}
+				if frame != want {
+					t.Fatalf("iteration %d ran at frame %d, want %d", i, frame, want)
+				}
+			}
+			if sprite.spriteState.DirtyVersion == 0 {
+				t.Fatal("rotation style did not mark the render proxy dirty")
+			}
+		})
+	}
+}
+
+func TestReplayFinalTickConditionBeforePause(t *testing.T) {
+	resetInputSessionTest(t)
+	co, game := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	engine.ResetFrameRuntime()
+	t.Cleanup(engine.ResetFrameRuntime)
+	setupImmediateEngineCalls(t)
+	originalInputMgr, originalExtMgr := pkgengine.InputMgr, pkgengine.ExtMgr
+	pkgengine.InputMgr = &reloadCommitInputMgr{}
+	extMgr := &replayPauseTestExtMgr{}
+	pkgengine.ExtMgr = extMgr
+	t.Cleanup(func() {
+		pkgengine.InputMgr, pkgengine.ExtMgr = originalInputMgr, originalExtMgr
+		engine.SetCaptureHandler(nil)
+	})
+	replay := validRuntimeReplay(
+		InputReplayFrame{Frame: 0, Time: 0},
+		InputReplayFrame{Frame: 1, Time: 0.05,
+			State:     InputReplayState{KeysDown: []int64{int64(KeyA)}},
+			KeyEvents: []InputReplayKeyEvent{{Key: int64(KeyA), Pressed: true}}},
+	)
+	replay.FixedTimestep = 0.05
+	if _, err := PrepareInputReplay(replay, InputSessionOptions{CaptureKey: KeyA}); err != nil {
+		t.Fatal(err)
+	}
+	session := claimPreparedSession(t, game)
+	game.inputMgr.init(game)
+	game.camera = &cameraImpl{g: game}
+	game.initShapeMgr()
+	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+	game.lifecycleState.IsRunned.Store(true)
+	game.lifecycleState.StartDispatched.Store(true)
+	var sampled, handled float64
+	var conditionCalls, keyCalls int
+	game.OnCond(func() bool {
+		if keyCalls != 0 {
+			t.Error("key handler ran before condition sampling")
+		}
+		sampled = game.Timer()
+		return game.KeyPressed(KeyA)
+	}, func() {
+		conditionCalls++
+		handled = game.Timer()
+	})
+	game.OnKey__0(KeyA, func() { keyCalls++ })
+	var captures []engine.CaptureRequest
+	engine.SetCaptureHandler(func(request engine.CaptureRequest) error {
+		captures = append(captures, request)
+		return nil
+	})
+	for range replay.Frames {
+		game.OnEngineBeforeUpdate(0.05)
+		if engine.HasPendingCaptures() {
+			t.Fatal("input capture was queued before the clock advanced")
+		}
+		itime.Update(0.05, 30)
+		game.OnEngineUpdate(0.05)
+		co.Update()
+		game.OnEngineRender(0.05)
+		if err := engine.FlushCaptures(); err != nil {
+			t.Fatal(err)
+		}
+		game.OnEngineFrameEnd()
+	}
+	if conditionCalls != 1 || keyCalls != 1 {
+		t.Fatalf("condition/key calls = %d/%d, want 1/1", conditionCalls, keyCalls)
+	}
+	if sampled != 0.05 || handled != 0.1 {
+		t.Fatalf("predicate/handler clock = %v/%v, want %v/%v", sampled, handled, 0.05, 0.1)
+	}
+	if len(captures) != 1 || captures[0].Frame != 2 || captures[0].InputTick == nil || *captures[0].InputTick != 1 {
+		t.Fatalf("final tick captures = %+v", captures)
+	}
+	if extMgr.pauses != 1 || session.status().Phase != InputSessionPhaseCompleted {
+		t.Fatalf("EOF pauses = %d, session = %+v", extMgr.pauses, session.status())
+	}
+}
+
+func TestRedrawFinishesWholeRound(t *testing.T) {
+	co, _ := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	var visual, nonVisual int
+	th := co.Create(nil, func(coroutine.Thread) {
+		Forever(func() {
+			visual++
+			engine.RequestRedraw()
+		})
+	})
+	co.JoinFirstSlice(th)
+	th = co.Create(nil, func(coroutine.Thread) {
+		Forever(func() { nonVisual++ })
+	})
+	co.JoinFirstSlice(th)
+	co.Update()
+	for frame := 1; frame <= 4; frame++ {
+		if visual != frame || nonVisual != frame {
+			t.Fatalf("frame %d: visual/nonvisual = %d/%d", frame, visual, nonVisual)
+		}
+		itime.Update(1.0/30, 30)
+		co.Update()
+	}
+}
+
+func TestExplicitWaitStillCrossesFrame(t *testing.T) {
+	co, _ := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	count := 0
+	th := co.Create(nil, func(coroutine.Thread) {
+		Repeat(3, func() {
+			count++
+			engine.Wait(0)
+		})
+	})
+	co.JoinFirstSlice(th)
+	for want := 1; want <= 3; want++ {
+		co.Update()
+		if count != want {
+			t.Fatalf("iterations = %d, want %d", count, want)
+		}
+		itime.Update(1.0/30, 30)
+	}
+}
+
+func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
+	for _, visible := range []bool{false, true} {
+		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
+			co, _ := setupRuntimeEventGame(t)
+			itime.Start(nil)
+			sprite := new(SpriteImpl)
+			sprite.spriteState.IsVisible = visible
+			count := 0
+			th := co.Create(sprite, func(coroutine.Thread) {
+				Repeat(5, func() { count++; sprite.markProxyDirty() })
+			})
+			co.JoinFirstSlice(th)
+			co.Update()
+			want := 5
+			if visible {
+				want = 1
+			}
+			if count != want {
+				t.Fatalf("iterations = %d, want %d", count, want)
+			}
+		})
+	}
+}
+
+func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		visible    bool
+		costume    any
+		wantFrames [3]int64
+	}{
+		{"visible", true, Next, [3]int64{0, 1, 2}},
+		{"hidden", false, Next, [3]int64{0, 0, 0}},
+		{"invalid", true, SpriteCostumeName("missing"), [3]int64{0, 0, 0}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co, _ := setupRuntimeEventGame(t)
+			itime.Start(nil)
+			sprite := newTestRenderSprite()
+			sprite.spriteState.IsVisible = tt.visible
+			var frames [3]int64
+			count := 0
+			th := co.Create(sprite, func(coroutine.Thread) {
+				Repeat(len(frames), func() {
+					sprite.setCostume(tt.costume)
+					frames[count] = itime.Frame()
+					count++
+				})
+			})
+			co.JoinFirstSlice(th)
+			for range frames {
+				co.Update()
+				itime.Update(1.0/30, 30)
+			}
+			if count != len(frames) || frames != tt.wantFrames {
+				t.Fatalf("costume iterations = %d at frames %v, want %d at %v", count, frames, len(frames), tt.wantFrames)
+			}
+		})
+	}
+}
+
+func TestTimerTrackingHatDoesNotFire(t *testing.T) {
+	for _, redraw := range []bool{false, true} {
+		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			itime.Start(nil)
+			var tracked float64
+			fired := 0
+			game.OnStart(func() {
+				Forever(func() {
+					tracked = game.Timer()
+					if redraw {
+						engine.RequestRedraw()
+					}
+				})
+			})
+			game.OnCond(func() bool { return game.Timer() > tracked+0.01 }, func() { fired++ })
+			game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
+			co.Update()
+			// Slow frames must preserve the same sampling order.
+			for _, delta := range []float64{1.0 / 30, 1.0 / 60, 0.25, 1.0 / 30} {
+				game.OnEngineBeforeUpdate(1.0 / 30)
+				itime.Update(delta, 30)
+				withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+				co.Update()
+			}
+			if fired != 0 {
+				t.Fatalf("tracking hat fired %d times", fired)
+			}
+			// Stopping tracking allows a timer edge to fire.
+			co.StopIf(func(th coroutine.Thread) bool { return th.Owner == game })
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			itime.Update(0.1, 30)
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+			co.Update()
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			itime.Update(0.1, 30)
+			withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+			co.Update()
+			if fired != 1 {
+				t.Fatalf("stopped tracking hat fired %d times, want 1", fired)
+			}
+		})
+	}
+}
+
+func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	started, release := make(chan struct{}), make(chan struct{})
+	var returned chan struct{}
+	t.Cleanup(func() {
+		close(release)
+		if returned != nil {
+			<-returned
+		}
+	})
+	co.Create(game, func(coroutine.Thread) {
+		close(started)
+		<-release
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("bootstrap script did not start")
+	}
+	samples := 0
+	game.OnCond(func() bool { samples++; return true }, func() {})
+	returned = make(chan struct{})
+	go func() {
+		game.OnEngineBeforeUpdate(1.0 / 30)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("unstarted frame waited for a script sampling barrier")
+	}
+	if samples != 0 {
+		t.Fatalf("bootstrap condition samples = %d, want 0", samples)
+	}
+}
+
+func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	game.lifecycleState.StartDispatched.Store(true)
+	var sampled, handled float64
+	game.OnCond(func() bool { sampled = game.Timer(); return sampled > 0.01 }, func() { handled = game.Timer() })
+	itime.Update(0.05, 30)
+	game.OnEngineBeforeUpdate(1.0 / 30)
+	if handled != 0 {
+		t.Fatal("handler ran in predicate phase")
+	}
+	itime.Update(0.05, 30)
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+	co.Update()
+	if sampled != 0.05 || handled != 0.1 {
+		t.Fatalf("predicate/handler time = %v/%v, want 0.05/0.1", sampled, handled)
+	}
+}
+
+func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	itime.Start(nil)
+	game.lifecycleState.StartDispatched.Store(true)
+	value := true
+	evaluations, calls := 0, 0
+	release := make(chan struct{}, 2)
+	completed := make(chan struct{}, 2)
+	game.OnCond(func() bool { evaluations++; return value }, func() {
+		calls++
+		defer func() { completed <- struct{}{} }()
+		engine.WaitForChan(release)
+	})
+	poll := func() {
+		game.OnEngineBeforeUpdate(1.0 / 30)
+		itime.Update(1.0/30, 30)
+		withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+		co.Update()
+	}
+	poll()
+	value = false
+	poll()
+	value = true
+	poll()
+	if calls != 1 || evaluations != 1 {
+		t.Fatalf("running hat: calls/evaluations = %d/%d, want 1/1", calls, evaluations)
+	}
+	release <- struct{}{}
+	<-completed
+	poll()
+	if calls != 1 {
+		t.Fatal("sustained true condition restarted a completed handler")
+	}
+	value = false
+	poll()
+	value = true
+	poll()
+	if calls != 2 {
+		t.Fatalf("new rising edge calls = %d, want 2", calls)
+	}
+	release <- struct{}{}
 }

@@ -17,10 +17,13 @@
 package spx
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
 func TestScheduling(t *testing.T) {
@@ -136,5 +139,37 @@ func TestSetDebugFlagsForwardsPerfMode(t *testing.T) {
 		if got, want := game.debugState.DebugEvent, flags&DbgFlagEvent != 0; got != want {
 			t.Errorf("flags %v: DebugEvent = %v, want %v", flags, got, want)
 		}
+	}
+}
+
+func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	originalGame, originalFlags := engine.GetGame(), defaultDebugFlags.Load()
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		defaultDebugFlags.Store(originalFlags)
+		spxlog.SetLevel(spxlog.LevelInfo)
+	})
+	engine.SetGame(nil)
+	SetDebug(DbgFlagPerf | dbgFlags(1<<20))
+	co.Update()
+	if defaultDebugFlags.Load() != uint32(DbgFlagPerf) || !co.UpdateStats().GCStatsEnabled {
+		t.Fatal("default debug flags did not filter unknown flags or enable profiling")
+	}
+	var game Game
+	engine.SetGame(&game)
+	SetDebug(DbgFlagInstr | DbgFlagEvent)
+	if !game.debugState.DebugInstr || !game.debugState.DebugEvent {
+		t.Fatalf("game debug=%+v", game.debugState)
+	}
+}
+
+func TestReloadRejectsCallingCoroutine(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	var got error
+	thread := co.Create(nil, func(coroutine.Thread) { got = XGot_Game_Reload(&Game{}, nil) })
+	co.Join(thread)
+	if got == nil || !strings.Contains(got.Error(), "active coroutine") {
+		t.Fatalf("reload error=%v", got)
 	}
 }
