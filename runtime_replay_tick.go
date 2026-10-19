@@ -104,19 +104,19 @@ func (p *Game) inputClock() time.Time {
 	return time.Now()
 }
 
-// currentInputSessionTickForCapture returns the latest tick owned by the active
-// Game lifecycle. A new Game can never inherit the previous run's tick.
-func currentInputSessionTickForCapture() (int64, bool) {
+// captureInputTick returns a copy of the active game's latest input tick, or nil.
+func captureInputTick() *int64 {
 	session := activeInputSession()
 	if session == nil {
-		return 0, false
+		return nil
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if !session.hasCurrentTick || session.phase == InputSessionPhaseAborted {
-		return 0, false
+		return nil
 	}
-	return session.currentTick, true
+	tick := session.currentTick
+	return &tick
 }
 
 func replayKeyEventsFromEngine(events []engine.KeyEvent) []InputReplayKeyEvent {

@@ -63,7 +63,7 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 		return fmt.Errorf("apply project fonts: %w", err)
 	}
 
-	p.applyRuntimeConfig(conf, proj)
+	title := p.applyRuntimeConfig(conf, proj)
 	setupGameSystems(p, proj)
 	gamer := reflect.ValueOf(p.gamer).Elem()
 	p.startLoad(opened.FS)
@@ -71,7 +71,7 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 		return err
 	}
 	p.tilemapMgr.init(p, opened.FS, proj.TilemapPath)
-	if err := p.loadStage(gamer, proj, generation, p.loadSprite, nil); err != nil {
+	if err := p.loadStage(gamer, proj, generation); err != nil {
 		return err
 	}
 	opened.FS = nil // The game now owns the directory.
@@ -81,7 +81,7 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 		platform.SetRunnableOnUnfocused(true)
 	}
 	p.initLogicLoop()
-	platform.SetWindowTitle(p.runtimeConfigInput.Title)
+	platform.SetWindowTitle(title)
 	return nil
 }
 

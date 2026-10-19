@@ -32,9 +32,9 @@ import (
 
 func setupInputFrameGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	t.Helper()
-	itime.OnReload()
+	itime.ClearTimers()
 	itime.Start(nil)
-	t.Cleanup(itime.OnReload)
+	t.Cleanup(itime.ClearTimers)
 	co, game := setupRuntimeEventGame(t)
 	game.inputMgr.init(game)
 	return co, game
@@ -87,33 +87,30 @@ func TestOnEngineUpdateKeepsInputPendingBeforeStart(t *testing.T) {
 
 func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 	co, game, _ := setupInputSourceTest(t)
-	engine.ResetFrameRuntime()
-	t.Cleanup(engine.ResetFrameRuntime)
 	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
 	game.camera = &cameraImpl{g: game}
 	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
-	samples, conditions, timers, callbacks := 0, 0, 0, 0
+	samples, conditions, timers := 0, 0, 0
 	game.OnCond(func() bool { samples++; return true }, func() { conditions++ })
 	game.OnTimer(0.1, func() { timers++ })
-	frame := engine.CurrentFrame() + 1
-	AtFrame(frame, func() { callbacks++ })
+	frame := itime.Frame() + 1
 
 	game.OnEngineBeforeUpdate(0.1)
 	if pending := game.inputMgr.frame.pending; pending == nil || len(pending.events) != 0 {
 		t.Fatalf("prepared input = %+v, want a valid empty frame", pending)
 	}
-	if samples != 1 || conditions != 0 || timers != 0 || callbacks != 0 {
-		t.Fatalf("before clock: samples/conditions/timers/callbacks = %d/%d/%d/%d, want 1/0/0/0", samples, conditions, timers, callbacks)
+	if samples != 1 || conditions != 0 || timers != 0 {
+		t.Fatalf("before clock: samples/conditions/timers = %d/%d/%d, want 1/0/0", samples, conditions, timers)
 	}
 	itime.Update(0.1, 30)
 	for update := range 2 {
 		game.OnEngineUpdate(0.1)
 		co.Update()
-		if samples != 1 || conditions != 1 || timers != 1 || callbacks != 1 {
-			t.Fatalf("update %d: samples/conditions/timers/callbacks = %d/%d/%d/%d, want 1/1/1/1", update+1, samples, conditions, timers, callbacks)
+		if samples != 1 || conditions != 1 || timers != 1 {
+			t.Fatalf("update %d: samples/conditions/timers = %d/%d/%d, want 1/1/1", update+1, samples, conditions, timers)
 		}
-		if game.inputMgr.frame.pending != nil || engine.CurrentFrame() != frame {
+		if game.inputMgr.frame.pending != nil || itime.Frame() != frame {
 			t.Fatal("update retained the consumed frame or advanced the clock")
 		}
 	}
@@ -121,8 +118,6 @@ func TestOnEngineUpdateDispatchesEmptyInputFrame(t *testing.T) {
 
 func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	co, game, _ := setupInputSourceTest(t)
-	engine.ResetFrameRuntime()
-	t.Cleanup(engine.ResetFrameRuntime)
 	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{
 		Frame:     0,
 		State:     InputReplayState{KeysDown: []int64{int64(KeyA)}},
@@ -133,7 +128,7 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 	session := claimPreparedSession(t, game)
 	game.lifecycleState.IsRunned.Store(true)
 	game.lifecycleState.StartDispatched.Store(true)
-	samples, conditions, keys, callbacks := 0, 0, 0, 0
+	samples, conditions, keys := 0, 0, 0
 	game.OnCond(func() bool { samples++; return true }, func() { conditions++ })
 	game.OnKey__0(KeyA, func() { keys++ })
 	game.OnEngineBeforeUpdate(1.0 / 30)
@@ -145,13 +140,15 @@ func TestOnEngineUpdateStopsAfterReplayEOF(t *testing.T) {
 		t.Fatalf("replay completion = %v, %v", completed, err)
 	}
 
-	AtFrame(engine.CurrentFrame()+1, func() { callbacks++ })
 	game.OnEngineBeforeUpdate(1.0 / 30)
 	itime.Update(1.0/30, 30)
 	game.OnEngineUpdate(1.0 / 30)
 	co.Update()
-	if samples != 1 || conditions != 1 || keys != 1 || callbacks != 0 {
-		t.Fatalf("samples/conditions/keys/callbacks=%d/%d/%d/%d, want 1/1/1/0", samples, conditions, keys, callbacks)
+	if samples != 1 || conditions != 1 || keys != 1 {
+		t.Fatalf("samples/conditions/keys=%d/%d/%d, want 1/1/1", samples, conditions, keys)
+	}
+	if game.inputMgr.frame.pending != nil {
+		t.Fatal("replay EOF prepared another input frame")
 	}
 }
 

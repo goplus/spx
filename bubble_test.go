@@ -637,7 +637,7 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	originalInput := pkgengine.InputMgr
 	pkgengine.InputMgr = askDelayedInputMgr{}
 	t.Cleanup(func() { pkgengine.InputMgr = originalInput })
-	t.Cleanup(itime.OnReload)
+	t.Cleanup(itime.ClearTimers)
 	co := setupRuntimeScheduler(t)
 	itime.Start(nil)
 	game := &Game{}

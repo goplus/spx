@@ -1419,7 +1419,6 @@ func TestCloneRejectsNilSprite(t *testing.T) {
 
 func TestSpriteSnapshotSkipsUnaddressableUserFields(t *testing.T) {
 	value := struct {
-		SpriteImpl
 		value int
 	}{value: 42}
 	if got := snapshotSpriteUserFields(reflect.ValueOf(value)); len(got) != 0 {

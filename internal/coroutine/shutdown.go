@@ -16,13 +16,6 @@
 
 package coroutine
 
-import (
-	"context"
-	"fmt"
-	"slices"
-	"strings"
-)
-
 // StopCurrent exits the current coroutine with ErrAbortThread.
 func (p *Coroutines) StopCurrent() {
 	panic(ErrAbortThread)
@@ -68,68 +61,32 @@ func (p *Coroutines) StopAll() {
 }
 
 // RunAfterStop stops scripts and drains all scripts and workers with admission closed.
-// It then runs call if non-nil; pass nil to only stop and wait.
-// Call outside scripts and callbacks with an independent host context.
-// Cancellation before stopping leaves work and admission unchanged.
-// Failed drains keep admission closed until a successful retry.
-// The context bounds waiting, not callbacks or engine calls.
-func (p *Coroutines) RunAfterStop(ctx context.Context, call func()) error {
-	_, err := p.RunAfterStopIf(ctx, nil, call)
-	return err
-}
-
-// RunAfterStopIf checks condition under the RunAfterStop barrier.
-// A false condition returns false, nil; stopStarted reports whether stopping began.
-// Drain completion wins concurrent cancellation; errors.Is identifies context errors.
-func (p *Coroutines) RunAfterStopIf(ctx context.Context, condition func() bool, call func()) (stopStarted bool, err error) {
+// It then runs call if non-nil.
+// Call outside scripts and callbacks. An interrupted drain keeps admission closed;
+// a completed drain restores admission even if call panics or exits its goroutine.
+func (p *Coroutines) RunAfterStop(call func()) {
 	p.requireDrainCaller()
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	if err := p.waitForSignal(ctx, p.shutdownGate); err != nil {
-		return false, err
-	}
+	p.waitForSignal(p.shutdownGate)
 	defer func() { p.shutdownGate <- struct{}{} }()
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	// Holding the gate forbids reentrant drains.
+	// Reject nested drains while holding the gate.
 	id, previous := p.enterCallback(callbackNoDrain)
 	defer p.leaveCallback(id, previous)
-	if condition != nil && !condition() {
-		return false, nil
-	}
-
 	p.admissionMu.Lock()
-	if err := ctx.Err(); err != nil {
-		p.admissionMu.Unlock()
-		return false, err
-	}
-	p.beginStoppingLocked()
+	p.stopping = true
+	p.closeAdmissionLocked()
+	p.cancelAllLocked()
 	p.admissionMu.Unlock()
-	if err := p.drain(ctx); err != nil {
-		return true, err
-	}
+	p.drain()
+	// Do not reopen admission if a pumped engine call interrupted the drain.
 	defer func() {
 		p.admissionMu.Lock()
-		p.endStoppingLocked()
+		p.openAdmissionLocked()
+		p.stopping = false
 		p.admissionMu.Unlock()
 	}()
 	if call != nil {
 		call()
 	}
-	return true, nil
-}
-
-func (p *Coroutines) beginStoppingLocked() {
-	p.stopping = true
-	p.closeAdmissionLocked()
-	p.cancelAllLocked()
-}
-
-func (p *Coroutines) endStoppingLocked() {
-	p.openAdmissionLocked()
-	p.stopping = false
 }
 
 func (p *Coroutines) cancelAllLocked() {
@@ -140,11 +97,11 @@ func (p *Coroutines) cancelAllLocked() {
 
 // drain waits for registered work to exit; it does not cancel it.
 // Callers must prevent new admissions while waiting.
-func (p *Coroutines) drain(ctx context.Context) error {
+func (p *Coroutines) drain() {
 	p.threadsMu.Lock()
 	if !p.hasPendingWorkLocked() {
 		p.threadsMu.Unlock()
-		return nil
+		return
 	}
 	// Check and subscribe under one lock to avoid lost wakeups.
 	if p.drainDone == nil {
@@ -153,27 +110,7 @@ func (p *Coroutines) drain(ctx context.Context) error {
 	done := p.drainDone
 	p.threadsMu.Unlock()
 
-	if err := p.waitForSignal(ctx, done); err != nil {
-		// Recheck completion before reporting cancellation.
-		return p.drainError(err)
-	}
-	return nil
-}
-
-func (p *Coroutines) drainError(cause error) error {
-	p.threadsMu.Lock()
-	if !p.hasPendingWorkLocked() {
-		p.threadsMu.Unlock()
-		return nil
-	}
-	names := make([]string, 0, len(p.allThreads))
-	for th := range p.allThreads {
-		names = append(names, fmt.Sprintf("id=%d name=%q", th.ID(), th.Name()))
-	}
-	workers := p.workerCount
-	p.threadsMu.Unlock()
-	slices.Sort(names)
-	return fmt.Errorf("coroutine: drain incomplete: %d threads [%s], %d workers: %w", len(names), strings.Join(names, ", "), workers, cause)
+	p.waitForSignal(done)
 }
 
 func (p *Coroutines) hasPendingWorkLocked() bool {

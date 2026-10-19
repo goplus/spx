@@ -186,7 +186,7 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 }
 
 func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
-	t.Cleanup(itime.OnReload)
+	t.Cleanup(itime.ClearTimers)
 	co := setupRuntimeScheduler(t)
 	itime.Start(nil)
 	sprite := newTestTransformSprite(0, 0)
@@ -212,7 +212,7 @@ func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 }
 
 func TestTransformComponentDebugVisualOperations(t *testing.T) {
-	t.Cleanup(itime.OnReload)
+	t.Cleanup(itime.ClearTimers)
 	game := setupCloneLimitGame(t)
 	game.debugState.DebugInstr = true
 	sprite := newCloneLimitSprite(game, "moving")

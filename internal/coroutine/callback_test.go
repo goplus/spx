@@ -1,7 +1,6 @@
 package coroutine
 
 import (
-	"context"
 	"runtime"
 	"testing"
 	"time"
@@ -34,7 +33,7 @@ func TestRegisterInvocationRejectsSynchronousDrain(t *testing.T) {
 				start := func() {
 					threads = co.StartBatch([]Task{{
 						RegisterInvocation: func(Thread) func() {
-							recovered = catchPanic(func() { co.RunAfterStop(context.Background(), nil) })
+							recovered = catchPanic(func() { co.RunAfterStop(nil) })
 							return nil
 						},
 						Run: func(Thread) { ran = true },
@@ -69,7 +68,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		threads := co.StartBatch([]Task{{
 			RegisterInvocation: func(Thread) func() {
 				return func() {
-					recovered = catchPanic(func() { co.RunAfterStop(context.Background(), nil) })
+					recovered = catchPanic(func() { co.RunAfterStop(nil) })
 				}
 			},
 			Run: func(Thread) {},
@@ -81,9 +80,7 @@ func TestCleanupRejectsSynchronousDrain(t *testing.T) {
 		if threads[0].Stopped() || co.admissionClosed() {
 			t.Error("rejected cleanup drain canceled the thread or closed admission")
 		}
-		if co.RunAfterStop(context.Background(), nil) != nil {
-			t.Error("thread did not drain after cleanup")
-		}
+		co.RunAfterStop(nil)
 		co.callbacks.Range(func(_, _ any) bool {
 			t.Error("cleanup left a callback scope registered")
 			return false
@@ -96,7 +93,7 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 		co := New(nil)
 		var threads []Thread
 		setup, ran := false, false
-		completed := co.RunAfterStop(context.Background(), func() {
+		co.RunAfterStop(func() {
 			co.StopAll()
 			threads = append(threads, co.Create("rejected", func(Thread) {
 				ran = true
@@ -105,51 +102,41 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 				RegisterInvocation: func(Thread) func() { setup = true; return nil },
 				Run:                func(Thread) { ran = true },
 			}}, BatchAsync)...)
-		}) == nil
+		})
 		for _, thread := range threads {
 			<-thread.done
 			if !thread.Stopped() {
 				t.Error("shutdown callback admitted a thread")
 			}
 		}
-		if !completed || setup || ran {
-			t.Errorf("shutdown completed=%v, setup=%v, ran=%v", completed, setup, ran)
+		if setup || ran {
+			t.Errorf("shutdown admitted setup=%v, ran=%v", setup, ran)
 		}
-		if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
+		if co.admissionClosed() {
 			t.Error("shutdown callback did not restore admission and caller scope")
 		}
+		co.RunAfterStop(nil)
 	})
 }
 
 func TestShutdownCallbackRejectsNestedDrain(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		call func(*Coroutines)
-	}{
-		{"RunAfterStop", func(co *Coroutines) { co.RunAfterStop(context.Background(), nil) }},
-		{"RunAfterStopIf", func(co *Coroutines) { co.RunAfterStopIf(context.Background(), nil, nil) }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			checkDrainReentry(t, func() {
-				co := New(nil)
-				var recovered any
-				if co.RunAfterStop(context.Background(), func() {
-					recovered = catchPanic(func() { test.call(co) })
-					if !co.admissionClosed() {
-						t.Error("nested drain reopened the outer shutdown barrier")
-					}
-				}) != nil {
-					t.Error("outer shutdown did not finish")
-				}
-				if recovered != ErrReentrantWait {
-					t.Errorf("nested drain panic = %v, want %v", recovered, ErrReentrantWait)
-				}
-				if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
-					t.Error("shutdown did not restore admission and caller scope after the callback returned")
-				}
-			})
+	checkDrainReentry(t, func() {
+		co := New(nil)
+		var recovered any
+		co.RunAfterStop(func() {
+			recovered = catchPanic(func() { co.RunAfterStop(nil) })
+			if !co.admissionClosed() {
+				t.Error("nested drain reopened the outer shutdown barrier")
+			}
 		})
-	}
+		if recovered != ErrReentrantWait {
+			t.Errorf("nested drain panic = %v, want %v", recovered, ErrReentrantWait)
+		}
+		if co.admissionClosed() {
+			t.Error("shutdown did not restore admission and caller scope after the callback returned")
+		}
+		co.RunAfterStop(nil)
+	})
 }
 
 func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
@@ -170,16 +157,17 @@ func TestShutdownCallbackUnwindRestoresAdmission(t *testing.T) {
 					if recovered := recover(); recovered != test.want {
 						t.Errorf("shutdown panic = %v, want %v", recovered, test.want)
 					}
-					if co.admissionClosed() || co.RunAfterStop(context.Background(), nil) != nil {
+					if co.admissionClosed() {
 						t.Error("unwinding shutdown did not restore admission and caller scope")
 					}
+					co.RunAfterStop(nil)
 					thread := co.Create("after-unwind", func(Thread) {})
 					<-thread.done
 					if thread.Stopped() {
 						t.Error("unwinding shutdown rejected a fresh thread")
 					}
 				}()
-				co.RunAfterStop(context.Background(), test.exit)
+				co.RunAfterStop(test.exit)
 				t.Error("abnormal shutdown callback returned normally")
 			})
 		})

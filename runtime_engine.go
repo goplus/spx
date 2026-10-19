@@ -93,7 +93,7 @@ func (p *Game) OnEngineUpdate(float64) {
 	}
 	p.dispatchFrameEvents()
 	p.soundMgr.Update()
-	p.runFrameScripts()
+	p.dispatchStartEventIfNeeded()
 	p.updateSpriteProxies()
 	p.pullPhysicsPositions()
 }
@@ -116,17 +116,6 @@ func (p *Game) OnEngineFrameEnd() {
 
 func (p *Game) OnEnginePause(bool) {
 	// Pause is handled by engine managers.
-}
-
-// -----------------------------------------------------------------------------
-// Frame Execution
-// -----------------------------------------------------------------------------
-func (p *Game) runFrameScripts() {
-	if p.lifecycleState.BootstrapDone.Load() && !p.lifecycleState.StartDispatched.Load() {
-		p.dispatchStartEventIfNeeded()
-		return
-	}
-	engine.RunFrameCallbacks()
 }
 
 // -----------------------------------------------------------------------------

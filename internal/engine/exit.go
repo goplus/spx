@@ -17,8 +17,6 @@
 package engine
 
 import (
-	"context"
-
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine/platform"
 )
@@ -67,7 +65,7 @@ func finishWebReset(co *coroutine.Coroutines, binding *gameBinding, exitCode int
 	if binding.startDone != nil && binding.link == nil {
 		return
 	}
-	co.RunAfterStop(context.Background(), func() {
+	co.RunAfterStop(func() {
 		co.WaitMainThread(func() { Managers().ExtMgr.RequestReset(exitCode) })
 	})
 }

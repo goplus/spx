@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -43,16 +44,16 @@ import (
 )
 
 type loadGameFS struct {
-	reloadConfigFS
+	gameTestFS
 	closeCalls int
 	closeErr   error
 }
 
 func (f *loadGameFS) Open(name string) (io.ReadCloser, error) {
-	if _, ok := f.reloadConfigFS[name]; !ok {
+	if _, ok := f.gameTestFS[name]; !ok {
 		return nil, os.ErrNotExist
 	}
-	return f.reloadConfigFS.Open(name)
+	return f.gameTestFS.Open(name)
 }
 
 func (f *loadGameFS) Close() error {
@@ -61,7 +62,7 @@ func (f *loadGameFS) Close() error {
 }
 
 type loadGameResMgr struct {
-	reloadCommitResMgr
+	gameTestResMgr
 	fontError  string
 	applyCalls int
 }
@@ -72,7 +73,7 @@ func (m *loadGameResMgr) ApplyProjectFonts(string, pkgengine.Array, pkgengine.Ar
 }
 
 type loadGamePlatformMgr struct {
-	reloadCommitPlatformMgr
+	gameTestPlatformMgr
 	title string
 }
 
@@ -96,12 +97,12 @@ func setupLoadGameFlags(t *testing.T, args ...string) {
 }
 
 func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
-	files := reloadConfigFS{
-		"index.json":                            `{"run":{"title":"loaded game"},"zorder":["DirectCommitSprite"]}`,
-		"sprites/DirectCommitSprite/index.json": `{"costumes":[{"name":"default","path":"sprite.png","imageWidth":10,"imageHeight":10}]}`,
+	files := gameTestFS{
+		"index.json":                          `{"run":{"title":"loaded game"},"zorder":["DirectLoadSprite"]}`,
+		"sprites/DirectLoadSprite/index.json": `{"costumes":[{"name":"default","path":"sprite.png","imageWidth":10,"imageHeight":10}]}`,
 	}
-	game := &reloadDirectCommitGame{}
-	base := setupReloadCommitRuntime(t, files, game, []Sprite{&DirectCommitSprite{}}, false)
+	game := &directSpriteTestGame{}
+	base := setupGameTestRuntime(t, files, game, []Sprite{&DirectLoadSprite{}}, false)
 	platform := &loadGamePlatformMgr{}
 	pkgengine.PlatformMgr = platform
 	pkgengine.ResMgr = &loadGameResMgr{}
@@ -112,7 +113,7 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	})
 	setupLoadGameFlags(t)
 	base.lifecycleState.IsRunned.Store(false)
-	resource := &loadGameFS{reloadConfigFS: files}
+	resource := &loadGameFS{gameTestFS: files}
 
 	if err := base.loadGame(resource, base.bootstrapGeneration()); err != nil {
 		t.Fatal(err)
@@ -120,7 +121,7 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	if resource.closeCalls != 0 || base.fs != resource {
 		t.Fatalf("resource ownership not transferred: close calls = %d, game fs = %T", resource.closeCalls, base.fs)
 	}
-	if game.DirectCommitSprite == nil || game.DirectCommitSprite.g != base {
+	if game.DirectLoadSprite == nil || game.DirectLoadSprite.g != base {
 		t.Fatal("stage sprite was not bound to its game")
 	}
 	if platform.title != "loaded game" {
@@ -134,12 +135,56 @@ func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
 	}
 }
 
+func TestLoadGameAppliesPhysicsBeforeLoadingSprites(t *testing.T) {
+	for _, physics := range []bool{false, true} {
+		for _, test := range []struct {
+			name       string
+			game       Gamer
+			sprite     Sprite
+			spriteName string
+		}{
+			{"direct", &directSpriteTestGame{}, &DirectLoadSprite{}, "DirectLoadSprite"},
+			{"lazy", &stageLoadTestGame{}, &stageLoadTestSprite{}, "stageLoadTestSprite"},
+		} {
+			t.Run(fmt.Sprintf("%s/physics=%v", test.name, physics), func(t *testing.T) {
+				files := gameTestFS{
+					"index.json": fmt.Sprintf(`{"physics":%v,"autoSetCollisionLayer":%v,"zorder":[%q]}`,
+						physics, !physics, test.spriteName),
+					"sprites/" + test.spriteName + "/index.json": `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}],"size":1,"visible":true}`,
+				}
+				base := setupGameTestRuntime(t, files, test.game, []Sprite{test.sprite}, !physics)
+				pkgengine.PlatformMgr = &loadGamePlatformMgr{}
+				pkgengine.ResMgr = &loadGameResMgr{}
+				previousAudio := pkgengine.AudioMgr
+				pkgengine.AudioMgr = &loadGameAudioMgr{}
+				t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
+				setupLoadGameFlags(t)
+
+				if err := base.loadGame(&loadGameFS{gameTestFS: files}, base.bootstrapGeneration()); err != nil {
+					t.Fatal(err)
+				}
+				sprite := spriteOf(base.sprs[test.spriteName])
+				if sprite == nil || sprite.g != base {
+					t.Fatal("loaded sprite is not bound to its game")
+				}
+				wantCollider := int64(physicsColliderNone)
+				if physics {
+					wantCollider = physicsColliderAuto
+				}
+				if got := sprite.physics().collisionInfo.Type; got != wantCollider {
+					t.Fatalf("default collider = %d, want %d", got, wantCollider)
+				}
+			})
+		}
+	}
+}
+
 func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
-	files := reloadConfigFS{"index.json": `{}`}
-	game := setupReloadCommitGame(t, files)
+	files := gameTestFS{"index.json": `{}`}
+	game := setupStageLoadTestGame(t, files)
 	pkgengine.ResMgr = &loadGameResMgr{fontError: "font unavailable"}
 	setupLoadGameFlags(t)
-	resource := &loadGameFS{reloadConfigFS: files}
+	resource := &loadGameFS{gameTestFS: files}
 	pending := &inputFrame{events: []event{&eventKeyDown{Key: KeySpace}}}
 	game.inputMgr.frame.pending = pending
 	if err := game.loadGame(resource, game.bootstrapGeneration()); err == nil || !strings.Contains(err.Error(), "font unavailable") {
@@ -153,65 +198,60 @@ func TestLoadGameFontFailureDoesNotStartScripts(t *testing.T) {
 	}
 }
 
-func TestLoadGameAndReloadShareProjectValidation(t *testing.T) {
-	const project = `{"physics":true}`
-	files := reloadConfigFS{"index.json": project}
+func TestLoadGameValidatesProjectSettings(t *testing.T) {
+	files := gameTestFS{"index.json": `{"physics":true}`}
 	setupLoadGameFlags(t)
-
-	initialErr := new(Game).loadGame(&loadGameFS{reloadConfigFS: files}, 0)
-	if initialErr == nil {
-		t.Fatal("loadGame accepted invalid project settings")
-	}
-	reloadGame := &Game{fs: files}
-	_, reloadErr := prepareReload(reloadGame, reflect.Value{}, strings.NewReader(project))
-	if reloadErr == nil {
-		t.Fatal("prepareReload accepted invalid project settings")
-	}
-
-	initialReason := strings.TrimPrefix(initialErr.Error(), "project config: ")
-	reloadReason := strings.TrimPrefix(reloadErr.Error(), "reload preflight: project config: ")
-	if initialReason != reloadReason {
-		t.Fatalf("project validation differs: initial=%q reload=%q", initialReason, reloadReason)
+	err := new(Game).loadGame(&loadGameFS{gameTestFS: files}, 0)
+	const want = "project config: autoSetCollisionLayer and physics must have different enabled states"
+	if err == nil || err.Error() != want {
+		t.Fatalf("loadGame error = %v, want %q", err, want)
 	}
 }
 
 func TestLoadGameProjectValidationClosesResources(t *testing.T) {
-	closeErr := errors.New("close failed")
-	setupLoadGameFlags(t, "-f")
-	previousResMgr := pkgengine.ResMgr
-	resMgr := &loadGameResMgr{}
-	pkgengine.ResMgr = resMgr
-	t.Cleanup(func() { pkgengine.ResMgr = previousResMgr })
-	resource := &loadGameFS{
-		reloadConfigFS: reloadConfigFS{"index.json": `{"physics":true}`},
-		closeErr:       closeErr,
-	}
+	for _, test := range []struct{ name, project, want string }{
+		{"physics settings", `{"physics":true}`, "autoSetCollisionLayer and physics"},
+		{"null backdrop", `{"backdrops":[{"name":"valid"},null]}`, "backdrops[1] is null"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			closeErr := errors.New("close failed")
+			setupLoadGameFlags(t, "-f")
+			previousResMgr := pkgengine.ResMgr
+			resMgr := &loadGameResMgr{}
+			pkgengine.ResMgr = resMgr
+			t.Cleanup(func() { pkgengine.ResMgr = previousResMgr })
+			resource := &loadGameFS{
+				gameTestFS: gameTestFS{"index.json": test.project},
+				closeErr:   closeErr,
+			}
 
-	err := new(Game).loadGame(resource, 0)
-	if err == nil || !strings.Contains(err.Error(), "autoSetCollisionLayer and physics") {
-		t.Fatalf("loadGame error = %v, want project validation failure", err)
-	}
-	if !errors.Is(err, closeErr) {
-		t.Fatalf("loadGame error = %v, want joined close error", err)
-	}
-	if resource.closeCalls != 1 {
-		t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
-	}
-	if fullscreen := flag.CommandLine.Lookup("f"); fullscreen == nil || fullscreen.Value.String() != "true" {
-		t.Fatal("command-line flags were not parsed before project validation")
-	}
-	if resMgr.applyCalls != 0 {
-		t.Fatalf("project fonts applied %d times before project validation", resMgr.applyCalls)
+			err := new(Game).loadGame(resource, 0)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("loadGame error = %v, want %q", err, test.want)
+			}
+			if !errors.Is(err, closeErr) {
+				t.Fatalf("loadGame error = %v, want joined close error", err)
+			}
+			if resource.closeCalls != 1 {
+				t.Fatalf("resource close calls = %d, want 1", resource.closeCalls)
+			}
+			if fullscreen := flag.CommandLine.Lookup("f"); fullscreen == nil || fullscreen.Value.String() != "true" {
+				t.Fatal("command-line flags were not parsed before project validation")
+			}
+			if resMgr.applyCalls != 0 {
+				t.Fatalf("project fonts applied %d times before project validation", resMgr.applyCalls)
+			}
+		})
 	}
 }
 
 func TestLoadGameSpriteLoadPanicClosesResources(t *testing.T) {
-	files := reloadConfigFS{"index.json": `{}`}
+	files := gameTestFS{"index.json": `{}`}
 	game := &stagePlanGame{}
-	base := setupReloadCommitRuntime(t, files, game, nil, false)
+	base := setupGameTestRuntime(t, files, game, nil, false)
 	base.typs["Dynamic"] = reflect.TypeFor[int]()
 	setupLoadGameFlags(t)
-	resource := &loadGameFS{reloadConfigFS: files}
+	resource := &loadGameFS{gameTestFS: files}
 
 	defer func() {
 		if recovered := recover(); recovered == nil {
@@ -234,9 +274,9 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 		{"close fails", closeErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			files := reloadConfigFS{"index.json": `{}`}
-			game := &reloadDirectCommitGame{}
-			base := setupReloadCommitRuntime(t, files, game, []Sprite{&DirectCommitSprite{}}, false)
+			files := gameTestFS{"index.json": `{}`}
+			game := &directSpriteTestGame{}
+			base := setupGameTestRuntime(t, files, game, []Sprite{&DirectLoadSprite{}}, false)
 			platform := &loadGamePlatformMgr{title: "unchanged"}
 			pkgengine.PlatformMgr = platform
 			pkgengine.ResMgr = &loadGameResMgr{}
@@ -246,12 +286,12 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 			previousFS := &loadGameFS{}
 			base.fs = previousFS
 			resource := &loadGameFS{
-				reloadConfigFS: files,
-				closeErr:       tt.closeErr,
+				gameTestFS: files,
+				closeErr:   tt.closeErr,
 			}
 
 			err := base.loadGame(resource, base.bootstrapGeneration())
-			if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "DirectCommitSprite") {
+			if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "DirectLoadSprite") {
 				t.Fatalf("loadGame error = %v, want original sprite load error", err)
 			}
 			if tt.closeErr != nil && !errors.Is(err, tt.closeErr) {
@@ -280,14 +320,14 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 		want    string
 		cause   error
 	}{
-		{"named sprite", `{"zorder":["reloadCommitSprite"]}`, `zorder[0]: load sprite "reloadCommitSprite"`, os.ErrNotExist},
-		{"sprite group", `{"zorder":[{"type":"sprites","target":"Sprites","items":[{}]}]}`, `zorder[0]: load sprite "reloadCommitSprite"`, os.ErrNotExist},
+		{"named sprite", `{"zorder":["stageLoadTestSprite"]}`, `zorder[0]: load sprite "stageLoadTestSprite"`, os.ErrNotExist},
+		{"sprite group", `{"zorder":[{"type":"sprites","target":"Sprites","items":[{}]}]}`, `zorder[0]: load sprite "stageLoadTestSprite"`, os.ErrNotExist},
 		{"undefined sprite", `{"zorder":["Missing"]}`, `zorder[0]: sprite "Missing" is not defined`, nil},
 		{"malformed entry after empty group", `{"zorder":[{"type":"sprites","target":"Empty","items":[]},{}]}`, `zorder[1]: invalid stage shape type`, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			files := reloadConfigFS{"index.json": tt.project}
-			game := setupReloadCommitGame(t, files)
+			files := gameTestFS{"index.json": tt.project}
+			game := setupStageLoadTestGame(t, files)
 			platform := &loadGamePlatformMgr{title: "unchanged"}
 			pkgengine.PlatformMgr = platform
 			pkgengine.ResMgr = &loadGameResMgr{}
@@ -304,7 +344,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			game.tilemapMgr.currentMap = "previous"
 			previousTilemap := game.tilemapMgr
 			closeErr := errors.New("close failed")
-			resource := &loadGameFS{reloadConfigFS: files, closeErr: closeErr}
+			resource := &loadGameFS{gameTestFS: files, closeErr: closeErr}
 
 			err := game.loadGame(resource, game.bootstrapGeneration())
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
@@ -332,19 +372,19 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 func TestLoadSpriteFieldsReturnsFirstError(t *testing.T) {
 	game := &struct {
 		Game
-		Skipped *reloadPreflightSprite
+		Skipped *spriteLoadTestSprite
 		Data    any
-		First   *reloadPreflightSprite
-		Later   *reloadPreflightSprite
+		First   *spriteLoadTestSprite
+		Later   *spriteLoadTestSprite
 	}{}
-	files := reloadConfigFS{}
-	base := setupReloadCommitRuntime(t, files, game, nil, false)
+	files := gameTestFS{}
+	base := setupGameTestRuntime(t, files, game, nil, false)
 	base.typs["Data"] = reflect.TypeFor[int]()
-	base.typs["First"] = reflect.TypeFor[reloadPreflightSprite]()
-	base.typs["Later"] = reflect.TypeFor[reloadPreflightSprite]()
+	base.typs["First"] = reflect.TypeFor[spriteLoadTestSprite]()
+	base.typs["Later"] = reflect.TypeFor[spriteLoadTestSprite]()
 	panicMgr := &runtimePanicRecorder{}
 	pkgengine.ExtMgr = panicMgr
-	base.startLoad(&loadGameFS{reloadConfigFS: files})
+	base.startLoad(&loadGameFS{gameTestFS: files})
 
 	err := base.loadSpriteFields(reflect.ValueOf(game).Elem())
 	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), `load sprite "First"`) {
@@ -362,26 +402,6 @@ func TestLoadSpriteFieldsReturnsFirstError(t *testing.T) {
 	if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
 		t.Fatalf("loading helper reported a fatal error: messages=%v exits=%v", panicMgr.messages, panicMgr.exits)
 	}
-}
-
-type reloadWorkerPlatformMgr struct {
-	pkgengine.IPlatformMgr
-}
-
-func (*reloadWorkerPlatformMgr) IsMainThread() bool { return false }
-
-func TestReloadRejectsNonEngineThreadBeforePreflight(t *testing.T) {
-	game, sprite, _ := setupReloadPreflightGame(t, nil)
-	pkgengine.PlatformMgr = &reloadWorkerPlatformMgr{}
-
-	err := XGot_Game_Reload(game, strings.NewReader("{"))
-	if !errors.Is(err, errReloadWrongThread) {
-		t.Fatalf("XGot_Game_Reload error = %v, want %v", err, errReloadWrongThread)
-	}
-	if game.Game.sprs["Sprite"] != sprite || game.Sprite != sprite {
-		t.Fatal("off-thread reload mutated the live game")
-	}
-	assertReloadAvailable(t, &game.Game)
 }
 
 type runtimePanicRecorder struct {
@@ -481,9 +501,9 @@ func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
 		return
 	}
 	setupRuntimeScheduler(t)
-	game := &reloadCommitGame{}
-	XGot_Game_Main(game, &reloadCommitSprite{})
-	if engine.GetGame() != &game.Game || game.gamer != game || game.typs["reloadCommitSprite"] != reflect.TypeFor[reloadCommitSprite]() {
+	game := &stageLoadTestGame{}
+	XGot_Game_Main(game, &stageLoadTestSprite{})
+	if engine.GetGame() != &game.Game || game.gamer != game || game.typs["stageLoadTestSprite"] != reflect.TypeFor[stageLoadTestSprite]() {
 		t.Fatal("main did not bind and initialize the game")
 	}
 	defer func() {
@@ -491,7 +511,7 @@ func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
 			t.Fatalf("second startup panic=%v", err)
 		}
 	}()
-	XGot_Game_Main(&reloadCommitGame{})
+	XGot_Game_Main(&stageLoadTestGame{})
 }
 
 func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {

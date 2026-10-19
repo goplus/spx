@@ -4,7 +4,6 @@ package engine
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -98,12 +97,13 @@ func TestEngineDrainServicesWorkerMainThreadCleanup(t *testing.T) {
 		})
 	})
 	waitForEngineSignal(t, started, "worker did not start")
-	drained := make(chan error, 1)
+	drained := make(chan struct{})
 	go func() {
 		platform.mainGID.Store(gid.Get())
-		drained <- co.RunAfterStop(testContext(t), nil)
+		co.RunAfterStop(nil)
+		close(drained)
 	}()
-	waitForEngineDrain(t, drained)
+	waitForEngineSignal(t, drained, "engine drain did not return")
 	if !called {
 		t.Fatal("drain did not service worker cleanup on the main thread")
 	}
@@ -136,16 +136,12 @@ func TestEngineDrainStopsWaitsWithoutUpdate(t *testing.T) {
 			})
 			co.JoinFirstSlice(thread)
 			frame, round := itime.Frame(), co.ScriptRound()
-			waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
-			defer cancelWait()
-			if err := co.RunAfterStop(waitCtx, func() {
+			co.RunAfterStop(func() {
 				afterCalled = true
 				if !cleaned {
 					t.Error("shutdown callback ran before script cleanup")
 				}
-			}); err != nil {
-				t.Fatalf("shutdown did not finish without Update: %v", err)
-			}
+			})
 			if !thread.Stopped() || !afterCalled {
 				t.Fatalf("shutdown stopped=%v after=%v", thread.Stopped(), afterCalled)
 			}
@@ -174,71 +170,27 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 		})
 	})
 	waitForEngineSignal(t, started, "worker did not start")
-	first := make(chan error, 1)
-	go func() { first <- co.RunAfterStop(testContext(t), nil) }()
+	first := make(chan struct{})
+	go func() {
+		co.RunAfterStop(nil)
+		close(first)
+	}()
 	// Cancellation proves the first drain owns the shutdown gate before the engine waits.
 	waitForEngineSignal(t, canceled, "first drain did not cancel the caller")
 	engineStarted := make(chan struct{})
-	second := make(chan error, 1)
+	second := make(chan struct{})
 	go func() {
 		platform.mainGID.Store(gid.Get())
 		close(engineStarted)
-		second <- co.RunAfterStop(testContext(t), nil)
+		co.RunAfterStop(nil)
+		close(second)
 	}()
 	waitForEngineSignal(t, engineStarted, "engine drain did not start")
 	unblock()
-	waitForEngineDrain(t, first)
-	waitForEngineDrain(t, second)
+	waitForEngineSignal(t, first, "first engine drain did not return")
+	waitForEngineSignal(t, second, "second engine drain did not return")
 	if !called {
 		t.Fatal("waiting for the shutdown gate prevented worker cleanup on the main thread")
-	}
-}
-
-func TestReloadCleanupGoexit(t *testing.T) {
-	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	platform := &executeMainThreadPlatform{}
-	gdx.PlatformMgr = platform
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	started := make(chan struct{})
-	thread := co.Create("reload-cleanup-goexit", func(thread coroutine.Thread) {
-		defer co.CleanupMainThread(runtime.Goexit)
-		close(started)
-		<-thread.Context().Done()
-	})
-	waitForEngineSignal(t, started, "script did not start")
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		platform.mainGID.Store(gid.Get())
-		waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
-		defer cancelWait()
-		Reload(waitCtx, GetGame(), nil, func() error {
-			t.Error("reload rebuilt after cleanup exited the engine goroutine")
-			return nil
-		}, func() { t.Error("reload activated after cleanup exited the engine goroutine") })
-		t.Error("reload returned after cleanup called Goexit")
-	}()
-	waitForEngineSignal(t, done, "reload did not service cleanup on the engine thread")
-	co.Join(thread)
-	if binding.loadPhase() != gameStopped {
-		t.Fatalf("phase after cleanup exited reload = %d, want stopped", binding.loadPhase())
-	}
-	rejected := co.Create("rejected-after-cleanup-goexit", func(coroutine.Thread) {
-		t.Error("incomplete reload reopened coroutine admission")
-	})
-	if !rejected.Stopped() {
-		t.Fatal("incomplete reload admitted a new coroutine")
-	}
-	co.Join(rejected)
-	onReset()
-	if activeGame.Load() != nil || game.reset.Load() != 1 {
-		t.Fatal("reset did not recover the interrupted reload")
 	}
 }
 
@@ -248,17 +200,5 @@ func waitForEngineSignal(t *testing.T, done <-chan struct{}, failure string) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal(failure)
-	}
-}
-
-func waitForEngineDrain(t *testing.T, done <-chan error) {
-	t.Helper()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("engine drain failed before worker cleanup: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("engine drain did not return")
 	}
 }

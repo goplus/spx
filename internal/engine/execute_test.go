@@ -30,9 +30,7 @@ func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
 	SetCoroutines(co)
 	gdx.PlatformMgr = executeWorkerPlatform{}
 	t.Cleanup(func() {
-		if err := co.RunAfterStop(testContext(t), nil); err != nil {
-			t.Error("Execute test coroutines did not stop")
-		}
+		co.RunAfterStop(nil)
 		SetCoroutines(previous)
 		gdx.PlatformMgr = previousPlatform
 	})
@@ -94,11 +92,29 @@ func TestExecuteReturnsWhenStoppedBeforeStart(t *testing.T) {
 
 func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 	co := setupExecuteTest(t)
-	blockExecuteScheduler(t, co)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	if err := co.RunAfterStop(ctx, nil); err == nil {
-		t.Fatal("shutdown completed while the blocker was running")
+	started, canceled, unblock := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(unblock) })
+	t.Cleanup(release)
+	co.Create("blocker", func(thread coroutine.Thread) {
+		close(started)
+		<-thread.Context().Done()
+		close(canceled)
+		<-unblock
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("scheduler blocker did not start")
+	}
+	drained := make(chan struct{})
+	go func() {
+		co.RunAfterStop(nil)
+		close(drained)
+	}()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not cancel the blocker")
 	}
 	returned := make(chan struct{})
 	var called atomic.Bool
@@ -113,6 +129,17 @@ func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 	}
 	if called.Load() {
 		t.Fatal("Execute ran a rejected callback")
+	}
+	select {
+	case <-drained:
+		t.Fatal("shutdown completed before the blocker exited")
+	default:
+	}
+	release()
+	select {
+	case <-drained:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after the blocker exited")
 	}
 }
 

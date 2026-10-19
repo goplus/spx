@@ -48,9 +48,7 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 			releaseTarget := func() { releaseOnce.Do(func() { close(release) }) }
 			t.Cleanup(func() {
 				releaseTarget()
-				if co.RunAfterStop(drainTestContext(t), nil) != nil {
-					t.Error("coroutines did not stop during cleanup")
-				}
+				co.RunAfterStop(nil)
 				waitForThreadSignal(t, batchDone, "batch registration did not finish")
 			})
 

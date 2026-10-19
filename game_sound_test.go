@@ -38,7 +38,7 @@ func (b *soundControlBackend) StopAll()             { b.actions = append(b.actio
 
 func TestGameSoundPlaybackControls(t *testing.T) {
 	backend := &soundControlBackend{}
-	game := &Game{fs: reloadConfigFS{}, sounds: map[string]sound{
+	game := &Game{fs: gameTestFS{}, sounds: map[string]sound{
 		"Jump": &coreproject.SoundConfig{Path: "sounds/jump.wav"},
 	}}
 	game.soundMgr.Init(backend)
@@ -286,7 +286,7 @@ func TestGamePlayUsesStageAudioParameters(t *testing.T) {
 }
 
 func TestLoadSoundCachesIndependentConfigs(t *testing.T) {
-	fs := reloadConfigFS{
+	fs := gameTestFS{
 		"sounds/Jump/index.json": `{"path":"jump.wav","rate":1,"sampleCount":10}`,
 		"sounds/Land/index.json": `{"path":"land.wav","rate":2,"sampleCount":20}`,
 	}
@@ -329,7 +329,7 @@ func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
 		{"trailing value", `{"path":"jump.wav"} {}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := reloadConfigFS{}
+			fs := gameTestFS{}
 			if tt.content != "" {
 				fs["sounds/Jump/index.json"] = tt.content
 			}

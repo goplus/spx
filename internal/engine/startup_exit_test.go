@@ -3,7 +3,6 @@
 package engine
 
 import (
-	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,43 +12,6 @@ import (
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
-
-func TestExitDuringReloadPreventsActivation(t *testing.T) {
-	isolateGameBinding(t)
-	setupExecuteTest(t)
-	previousExt := gdx.ExtMgr
-	recorder := &panicRecordingExt{exits: make(chan int64, 1)}
-	gdx.PlatformMgr = resetDirectPlatform{}
-	gdx.ExtMgr = recorder
-	enginewrap.Init(WaitMainThread)
-	t.Cleanup(func() { gdx.ExtMgr = previousExt })
-
-	game := new(bindingTestGame)
-	binding, err := bindGame(game, game)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = Reload(testContext(t), game, nil, func() error {
-		RequestExit(7)
-		return nil
-	}, func() { t.Error("reload activated after exit was requested") })
-	if !errors.Is(err, ErrReloadUnavailable) || binding.loadPhase() != gameStopped {
-		t.Fatalf("reload after exit: error=%v, phase=%d", err, binding.loadPhase())
-	}
-	select {
-	case code := <-recorder.exits:
-		if code != 7 {
-			t.Fatalf("exit code = %d, want 7", code)
-		}
-	default:
-		t.Fatal("reload did not deliver the backend exit request")
-	}
-	onDestroy()
-	onDestroyed()
-	if activeGame.Load() != nil || game.destroyed.Load() != 1 {
-		t.Fatal("backend teardown did not release the stopped reload")
-	}
-}
 
 type startupExitPlatform struct {
 	gdx.IPlatformMgr
@@ -102,22 +64,20 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			gdx.PlatformMgr, gdx.ExtMgr = platform, recorder
 			enginewrap.Init(WaitMainThread)
 			t.Cleanup(func() {
-				if err := co.RunAfterStop(testContext(t), nil); err != nil {
-					t.Error("startup coroutine did not stop")
-				}
+				co.RunAfterStop(nil)
 				SetCoroutines(previousCo)
 				gdx.PlatformMgr, gdx.ExtMgr = previousPlatform, previousExt
 			})
 
 			game := new(startupExitGame)
-			var started, exitedInFrame atomic.Bool
+			var started, inFrame, exitedInFrame atomic.Bool
 			game.start = func() {
 				co.Create(game, func(coroutine.Thread) {
 					if test.beforeFrame {
 						test.exit()
 					} else {
 						WaitMainThread(func() {
-							exitedInFrame.Store(updateBusy.Load())
+							exitedInFrame.Store(inFrame.Load())
 							test.exit()
 						})
 					}
@@ -137,7 +97,9 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 					// Queue the exit request before the first frame.
 					<-platform.workerCall
 				}
+				inFrame.Store(true)
 				onUpdate(1.0 / 30)
+				inFrame.Store(false)
 				close(updated)
 			}()
 			select {
@@ -145,9 +107,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("first frame did not return after startup exit")
 			}
-			if err := co.RunAfterStop(testContext(t), nil); err != nil {
-				t.Fatal("startup coroutine did not finish after exit")
-			}
+			co.RunAfterStop(nil)
 			if !test.beforeFrame && !exitedInFrame.Load() {
 				t.Fatal("startup exit did not run inside the first frame")
 			}

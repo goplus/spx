@@ -939,7 +939,7 @@ func TestAnimationAudioRejectsCanceledEmptyAndMissingReplay(t *testing.T) {
 	anim := newTestAnimationComponent()
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
-	anim.sprite.g.fs = reloadConfigFS{}
+	anim.sprite.g.fs = gameTestFS{}
 	anim.playAnimationAudio(&coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "walk"}}, nil)
 	for _, state := range []*animState{
 		{IsCanceled: true, OnPlayReplayAudioName: "walk"},

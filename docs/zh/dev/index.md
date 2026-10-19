@@ -42,7 +42,7 @@
 - 引擎架构
 - [SPX 脚本调度](./engine/scheduling.md) - 了解帧阶段、循环让出、条件事件及截图回放的保证范围
 - 构建系统
-- [Web 端截图与固定帧接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
+- [Web 端截图接入说明](./engine/web_capture.md) - 了解外部页面如何像模板 `index.html` 一样接入截图 host、baseline/runs 保存与对比流程
 - [输入录制与回放说明](./engine/input_replay.md) - 了解 Web host 固定 FPS 输入录制、逐 tick 回放与截图测试配合方式
 - [SPX 坐标系统与 Godot 边界](./engine/coordinate_system.md) - 了解逻辑、资产、渲染、物理和 Godot 坐标的所有权与转换规则
 - [代码生成器说明](./engine/code_generator.md) - 了解生成代码和接口绑定规则

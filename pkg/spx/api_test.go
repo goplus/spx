@@ -358,11 +358,7 @@ func newAPICoroutines(t *testing.T, game any) *coroutine.Coroutines {
 	engine.SetGame(game)
 	engine.SetCoroutines(co)
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := co.RunAfterStop(ctx, nil); err != nil {
-			t.Errorf("stop test coroutines: %v", err)
-		}
+		co.RunAfterStop(nil)
 		engine.SetCoroutines(nil)
 		engine.SetGame(previousGame)
 	})

@@ -28,9 +28,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("coroutines did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	waits := []struct {
@@ -88,9 +86,7 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("coroutines did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	var order []string

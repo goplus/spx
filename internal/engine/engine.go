@@ -17,7 +17,6 @@
 package engine
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -40,8 +39,6 @@ const Float2IntFactor = gdx.Float2IntFactor
 var (
 	activeGame atomic.Pointer[gameBinding]
 	bindingMu  sync.Mutex
-	updateMu   sync.Mutex
-	updateBusy atomic.Bool
 	logicMu    sync.Mutex
 )
 
@@ -52,7 +49,6 @@ type gamePhase uint32
 const (
 	gameStarting gamePhase = iota
 	gameRunning
-	gameReloading
 	gameStopped
 	gameClosing
 )
@@ -151,10 +147,6 @@ func onStart() {
 
 func onUpdate(delta float64) {
 	defer CheckPanic()
-	updateMu.Lock()
-	defer updateMu.Unlock()
-	updateBusy.Store(true)
-	defer updateBusy.Store(false)
 	binding := runningBinding()
 	if binding == nil {
 		return
@@ -204,7 +196,7 @@ func onDestroy() {
 	waitForGameStart(binding)
 	drainCoroutines(func() {
 		defer func() {
-			ResetFrameRuntime()
+			ResetCaptures()
 			binding.destroyReady.Store(true)
 			releaseDestroyedGame(binding)
 		}()
@@ -260,7 +252,7 @@ func drainCoroutines(cleanup func()) {
 		cleanup()
 		return
 	}
-	gco.RunAfterStop(context.Background(), cleanup)
+	gco.RunAfterStop(cleanup)
 }
 
 func (b *gameBinding) loadPhase() gamePhase {
@@ -273,16 +265,6 @@ func (b *gameBinding) storePhase(phase gamePhase) {
 
 func (b *gameBinding) isCurrent(phase gamePhase) bool {
 	return activeGame.Load() == b && b.loadPhase() == phase
-}
-
-func (b *gameBinding) transition(from, to gamePhase) bool {
-	bindingMu.Lock()
-	defer bindingMu.Unlock()
-	if !b.isCurrent(from) {
-		return false
-	}
-	b.storePhase(to)
-	return true
 }
 
 func runningBinding() *gameBinding {

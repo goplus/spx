@@ -24,7 +24,7 @@ This directory contains development documentation for SPX users and engine contr
 - [Web platform modes](engine/web.md)
 - [Web Worker mode](engine/web_worker_mode.md)
 - [Web batch synchronization](engine/web_sync_batch.md)
-- [Web capture and fixed-frame integration](engine/web_capture.md)
+- [Web capture integration](engine/web_capture.md)
 - [Input recording and replay](engine/input_replay.md)
 
 ## Platform compatibility notes

@@ -17,7 +17,7 @@ reset / panic / crash └────────→ Aborted
 - Session 必须在解释器和游戏 bootstrap 启动前准备。
 - 同一局中不能从 live input 切换到 record/replay，也不能在回放后切回 live input。
 - Game reset、destroy、panic 或 crash 会中止 Session；未完成的录制不能作为 baseline。
-- 同一个 `*Game` 在 reload 时可能被复用，但新的 bootstrap generation 会获得新的 Session 和 tick `0`。
+- 同一个 `*Game` 在 reset 后可以重新启动；新的游戏生命周期重新领取准备好的 Session，并从 tick `0` 开始。
 
 runner 的 `defaultMode` 默认为 `normal`。不传 `input` 时会使用这个默认模式；显式传 `input: null` 则始终强制普通实时输入，此时 `Game.inputSession == nil`。
 
@@ -158,7 +158,7 @@ const status = await runnerWindow.getInputSessionStatus()
 
 ## Input tick
 
-Input Session 使用独立的 input tick，不等同于 `spx.CurrentFrame()`：
+Input Session 使用独立的 input tick，不等同于截图元数据中的 engine-session 帧号：
 
 - `Prepared` 不产生 tick；
 - 第一条通过 `IsRunned` 门槛的有效 `OnEngineBeforeUpdate` 消费 tick `0`；

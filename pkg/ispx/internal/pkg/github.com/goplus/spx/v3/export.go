@@ -151,11 +151,9 @@ func init() {
 			"ErrInputSessionNotRecording": reflect.ValueOf(&q.ErrInputSessionNotRecording),
 		},
 		Funcs: map[string]reflect.Value{
-			"AtFrame":                    reflect.ValueOf(q.AtFrame),
 			"CharAt":                     reflect.ValueOf(q.CharAt),
 			"Compare":                    reflect.ValueOf(q.Compare),
 			"Contains":                   reflect.ValueOf(q.Contains),
-			"CurrentFrame":               reflect.ValueOf(q.CurrentFrame),
 			"DecodeInputReplay":          reflect.ValueOf(q.DecodeInputReplay),
 			"DeltaTime":                  reflect.ValueOf(q.DeltaTime),
 			"EncodeInputReplay":          reflect.ValueOf(q.EncodeInputReplay),
@@ -195,7 +193,6 @@ func init() {
 			"WaitUntil":                  reflect.ValueOf(q.WaitUntil),
 			"Warp":                       reflect.ValueOf(q.Warp),
 			"XGot_Game_Main":             reflect.ValueOf(q.XGot_Game_Main),
-			"XGot_Game_Reload":           reflect.ValueOf(q.XGot_Game_Reload),
 		},
 		TypedConsts: map[string]ixgo.TypedConst{
 			"AllOtherScripts":            {Typ: reflect.TypeOf(q.AllOtherScripts), Value: constant.MakeInt64(int64(q.AllOtherScripts))},
@@ -610,11 +607,9 @@ func init() {
 		"(Value).Float":                method_Value_Float,
 		"(Value).Int":                  method_Value_Int,
 		"(Value).String":               method_Value_String,
-		"AtFrame":                      func_AtFrame,
 		"CharAt":                       func_CharAt,
 		"Compare":                      func_Compare,
 		"Contains":                     func_Contains,
-		"CurrentFrame":                 func_CurrentFrame,
 		"DeltaTime":                    func_DeltaTime,
 		"Equal":                        func_Equal,
 		"Exit__0":                      func_Exit__0,
@@ -646,12 +641,7 @@ func init() {
 		"WaitUntil":                    func_WaitUntil,
 		"Warp":                         func_Warp,
 		"XGot_Game_Main":               func_XGot_Game_Main,
-		"XGot_Game_Reload":             func_XGot_Game_Reload,
 	})
-}
-
-func func_AtFrame(ctx ixgo.DirectCallContext) {
-	q.AtFrame(ixgo.DirectCallArg[int64](ctx, 0), ixgo.DirectCallArg[func()](ctx, 1))
 }
 
 func func_CharAt(ctx ixgo.DirectCallContext) {
@@ -664,10 +654,6 @@ func func_Compare(ctx ixgo.DirectCallContext) {
 
 func func_Contains(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.Contains(ixgo.DirectCallArg[string](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
-}
-
-func func_CurrentFrame(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.CurrentFrame())
 }
 
 func func_DeltaTime(ctx ixgo.DirectCallContext) {
@@ -1008,8 +994,4 @@ func func_Warp(ctx ixgo.DirectCallContext) {
 
 func func_XGot_Game_Main(ctx ixgo.DirectCallContext) {
 	q.XGot_Game_Main(ixgo.DirectCallArg[q.Gamer](ctx, 0), ixgo.DirectCallArg[[]q.Sprite](ctx, 1)...)
-}
-
-func func_XGot_Game_Reload(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.XGot_Game_Reload(ixgo.DirectCallArg[q.Gamer](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
 }

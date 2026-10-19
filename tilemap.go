@@ -110,10 +110,6 @@ func (p *Game) TilemapName() string {
 func (p *gameTilemapMgr) init(g *Game, fs spxfs.Dir, tilemapPath string) {
 	p.g = g
 	p.fs = fs
-	if tilemapPath == "" {
-		return
-	}
-	// Load the default tilemap specified in config
 	p.loadMap(tilemapPath)
 }
 
@@ -136,15 +132,6 @@ func (p *gameTilemapMgr) loadMap(mapDir string) {
 	if err != nil {
 		spxlog.Panicf("Failed to load tilemap JSON file %s: %v", mapDir, err)
 	}
-	p.setMap(loaded)
-}
-
-func (p *gameTilemapMgr) replaceMap(loaded tm.LoadResult) {
-	p.unloadMap()
-	p.setMap(loaded)
-}
-
-func (p *gameTilemapMgr) setMap(loaded tm.LoadResult) {
 	p.datas = loaded.Data
 	p.decoratorDatas = loaded.DecoratorData
 	p.useNewLoader = loaded.UseNewLoader
@@ -175,14 +162,6 @@ func (p *gameTilemapMgr) unloadMap() {
 	p.useNewLoader = false
 }
 
-func (p *gameTilemapMgr) loadTilemaps(datas *tm.TscnMapData) {
-	tm.LoadTilemaps(datas, p.g.setTileInfo, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
-}
-
-func (p *gameTilemapMgr) loadDecorators(datas *tm.TscnMapData) {
-	p.loadDecoratorNodes(datas.Decorators, "tilemaps")
-}
-
 func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilemapDir string) {
 	const headingOffset = -90.0
 	for _, item := range decorators {
@@ -198,24 +177,18 @@ func (p *gameTilemapMgr) loadDecoratorNodes(decorators []tm.DecoratorNode, tilem
 	}
 }
 
-// loadDecoratorsFromJSON loads decorators from the separate decorator.json file (new format).
-func (p *gameTilemapMgr) loadDecoratorsFromJSON() {
-	if p.decoratorDatas == nil || len(p.decoratorDatas.Decorators) == 0 {
-		return
-	}
-	p.loadDecoratorNodes(p.decoratorDatas.Decorators, p.tilemapDir)
-}
-
 func (p *gameTilemapMgr) parseTilemap() {
 	if p.useNewLoader {
-		p.loadDecoratorsFromJSON()
+		if p.decoratorDatas != nil {
+			p.loadDecoratorNodes(p.decoratorDatas.Decorators, p.tilemapDir)
+		}
 		return
 	}
 	if p.datas == nil {
 		return
 	}
-	p.loadTilemaps(p.datas)
-	p.loadDecorators(p.datas)
+	tm.LoadTilemaps(p.datas, p.g.setTileInfo, p.g.setTileMapLayerIndex, p.g.PlaceTiles__1)
+	p.loadDecoratorNodes(p.datas.Decorators, "tilemaps")
 	p.calcWorldSize()
 }
 

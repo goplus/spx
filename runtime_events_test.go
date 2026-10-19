@@ -77,41 +77,6 @@ func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, do
 	}
 }
 
-func TestStartHandlersRegisterAbsoluteEngineFrames(t *testing.T) {
-	co := setupRuntimeScheduler(t)
-
-	var game Game
-	game.bindScriptEvents()
-	engine.SetGame(&game)
-	defer engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
-
-	var callbacks []string
-	base := itime.Frame()
-	game.OnStart(func() {
-		AtFrame(base+1, func() { callbacks = append(callbacks, "first") })
-		engine.WaitYield()
-	})
-	game.OnStart(func() {
-		AtFrame(base+1, func() { callbacks = append(callbacks, "second") })
-	})
-
-	game.handleEvent(&eventStart{generation: game.bootstrapGeneration()})
-	co.Update()
-	if !game.lifecycleState.StartDispatched.Load() {
-		t.Fatal("start event was not marked dispatched")
-	}
-
-	itime.Update(0, 0)
-	engine.RunFrameCallbacks()
-	co.Update()
-	want := []string{"first", "second"}
-	if !reflect.DeepEqual(callbacks, want) {
-		t.Fatalf("frame callbacks = %v, want %v", callbacks, want)
-	}
-}
-
 func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	game.debugState.DebugEvent = true
@@ -149,38 +114,6 @@ func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
 	co.Update()
 	if completed != 2 {
 		t.Fatalf("completed handlers = %d, want 2 after release", completed)
-	}
-}
-
-func TestOnStartReachesCoroutineBoundaryBeforePostBootstrapFrames(t *testing.T) {
-	co := setupRuntimeScheduler(t)
-
-	var game Game
-	game.bindScriptEvents()
-	game.completeBootstrap(game.bootstrapGeneration())
-	engine.SetGame(&game)
-	defer engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
-
-	var phases []string
-	base := itime.Frame()
-	AtFrame(base+1, func() {
-		phases = append(phases, "frame")
-		engine.WaitYield()
-	})
-	game.OnStart(func() {
-		phases = append(phases, "start")
-	})
-
-	itime.Update(0, 0)
-	game.runFrameScripts()
-	co.Update()
-	game.runFrameScripts()
-	co.Update()
-
-	if want := []string{"start", "frame"}; !reflect.DeepEqual(phases, want) {
-		t.Fatalf("frame/start phases = %v, want %v", phases, want)
 	}
 }
 
@@ -241,10 +174,10 @@ func TestOnTimerMatchesMilliseconds(t *testing.T) {
 	previous := gco
 	gco = nil
 	itime.Start(nil)
-	itime.OnReload()
+	itime.ClearTimers()
 	t.Cleanup(func() {
 		gco = previous
-		itime.OnReload()
+		itime.ClearTimers()
 	})
 
 	var game Game
@@ -386,7 +319,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("condition evaluated %d times before OnStart, want 0", evaluations)
 	}
 
-	game.runFrameScripts()
+	game.dispatchStartEventIfNeeded()
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
 	if want := []string{"start"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order before condition polling = %v, want %v", order, want)
@@ -453,7 +386,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	}
 
 	game.completeBootstrap(generation)
-	game.runFrameScripts()
+	game.dispatchStartEventIfNeeded()
 	updateRuntimeEventSchedulerUntil(t, co, game.lifecycleState.StartDispatched.Load)
 	if want := []string{"top-level", "start"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after OnStart = %v, want %v", order, want)

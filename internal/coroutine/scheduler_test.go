@@ -382,9 +382,7 @@ func TestUpdateReturnsForStartupOutcomes(t *testing.T) {
 			panicReported := make(chan PanicReport, 1)
 			co := New(func(report PanicReport) { panicReported <- report })
 			t.Cleanup(func() {
-				if co.RunAfterStop(drainTestContext(t), nil) != nil {
-					t.Error("startup coroutine did not stop")
-				}
+				co.RunAfterStop(nil)
 			})
 
 			if outcome != "idle" {
@@ -434,9 +432,7 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("startup coroutine did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	updated := make(chan struct{})
@@ -464,9 +460,7 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 		completed.Store(true)
 	})
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("startup coroutine did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 	for frame := 0; frame < 2; frame++ {
 		updated := make(chan struct{})
@@ -486,9 +480,7 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("coroutines did not stop during cleanup")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	deferredResumed := make(chan struct{})
@@ -565,9 +557,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 
 	t.Cleanup(func() {
 		keepSpawning.Store(false)
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("recursive spawn chain did not stop during cleanup")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	var spawned atomic.Int64
@@ -588,9 +578,7 @@ func TestUpdateWatchdogReturnsOnRecursiveSpawnRetry(t *testing.T) {
 	}()
 	waitForThreadSignal(t, updateDone, "Update did not return after a retry exhausted the frame budget")
 	keepSpawning.Store(false)
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("recursive spawn chain did not finish")
-	}
+	co.drain()
 	if clockCalls.Load() < 2 || spawned.Load() == 0 {
 		t.Fatal("test did not exercise the watchdog on a recursive spawn retry")
 	}
@@ -613,9 +601,7 @@ func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
 	co := New(nil)
 
 	thread := co.Create("completed", func(Thread) {})
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("coroutine did not complete")
-	}
+	co.drain()
 
 	co.wakeThread(thread)
 	co.schedulerMu.Lock()
@@ -630,9 +616,7 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	co := New(nil)
 	itime.Start(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("coroutines did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 
 	const producerCount, jobsPerProducer = 4, 100
@@ -701,9 +685,7 @@ func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	})
 	co.JoinFirstSlice(thread)
 	thread.Cancel()
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("coroutine did not stop")
-	}
+	co.drain()
 	co.Update()
 
 	if resumed {

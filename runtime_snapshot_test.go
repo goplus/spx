@@ -19,6 +19,7 @@ package spx
 import (
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -26,8 +27,8 @@ import (
 func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
 	var got []string
 	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
+	engine.ResetCaptures()
+	defer engine.ResetCaptures()
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, "capture:"+req.Name)
 		return nil
@@ -54,8 +55,8 @@ func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
+	engine.ResetCaptures()
+	defer engine.ResetCaptures()
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req.Name)
 		return nil
@@ -75,49 +76,65 @@ func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 	}
 }
 
-func TestSnapshotBodyMayYieldInsideFrameCallback(t *testing.T) {
-	co := setupRuntimeScheduler(t)
+func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
+	for _, stopOwner := range []bool{false, true} {
+		name := "resume"
+		if stopOwner {
+			name = "stop owner"
+		}
+		t.Run(name, func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			engine.ResetCaptures()
+			t.Cleanup(engine.ResetCaptures)
+			base := itime.Frame()
 
-	engine.SetGame(struct{}{})
-	defer engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
-	base := itime.Frame()
+			bodyStarted, bodyCompleted := false, false
+			var captured []engine.CaptureRequest
+			engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
+				captured = append(captured, req)
+				return nil
+			})
+			t.Cleanup(func() { engine.SetCaptureHandler(nil) })
 
-	bodyStarted := false
-	bodyCompleted := false
-	var captured []engine.CaptureRequest
-	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
-		captured = append(captured, req)
-		return nil
-	})
-	defer engine.SetCaptureHandler(nil)
+			thread := co.Create(game, func(coroutine.Thread) {
+				Snapshot("yielded.png", func() error {
+					bodyStarted = true
+					engine.WaitNextFrame()
+					bodyCompleted = true
+					return nil
+				})
+			})
+			co.JoinFirstSlice(thread)
+			if !bodyStarted || bodyCompleted {
+				t.Fatal("capture body did not suspend at its next-frame wait")
+			}
+			if engine.HasPendingCaptures() {
+				t.Fatal("capture was queued before its body completed")
+			}
 
-	AtFrame(base+1, func() {
-		Snapshot("yielded.png", func() error {
-			bodyStarted = true
-			engine.WaitYield()
-			bodyCompleted = true
-			return nil
+			if stopOwner {
+				game.Stop(OtherScriptsInGame)
+			}
+			itime.Update(0, 0)
+			co.Update()
+			co.Join(thread)
+			if stopOwner {
+				if !thread.Stopped() || bodyCompleted || engine.HasPendingCaptures() {
+					t.Fatal("stopped owner's capture body resumed or queued a screenshot")
+				}
+			} else if !bodyCompleted || !engine.HasPendingCaptures() {
+				t.Fatal("capture was not queued after its body completed")
+			}
+			if err := engine.FlushCaptures(); err != nil {
+				t.Fatal(err)
+			}
+			if stopOwner {
+				if len(captured) != 0 {
+					t.Fatalf("stopped owner's captured requests = %+v, want none", captured)
+				}
+			} else if len(captured) != 1 || captured[0].Name != "yielded.png" || captured[0].Frame != base+1 {
+				t.Fatalf("captured requests = %+v, want yielded.png at frame %d", captured, base+1)
+			}
 		})
-	})
-	itime.Update(0, 0)
-	engine.RunFrameCallbacks()
-
-	co.Update()
-	if !bodyStarted {
-		t.Fatal("capture body did not start on its target frame")
-	}
-	if !bodyCompleted {
-		t.Fatal("capture body did not resume from yield during scheduler update")
-	}
-	if !engine.HasPendingCaptures() {
-		t.Fatal("capture was not queued after its body completed")
-	}
-	if err := engine.FlushCaptures(); err != nil {
-		t.Fatal(err)
-	}
-	if len(captured) != 1 || captured[0].Name != "yielded.png" || captured[0].Frame != base+1 {
-		t.Fatalf("captured requests = %+v, want yielded.png at frame %d", captured, base+1)
 	}
 }

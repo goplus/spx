@@ -23,7 +23,7 @@ The template host provides default replay behavior. An embedding page may overri
 3. Stop and save the versioned recording.
 4. Relaunch from a clean state with deterministic environment settings.
 5. Load and replay the recording.
-6. Capture at selected ticks or at replay completion.
+6. Replay the recorded capture-key presses or request screenshots from game scripts.
 7. Compare output with the baseline.
 
 Do not replay into an already-running game because prior state is not part of the input recording.
@@ -63,7 +63,7 @@ The Go runtime owns replay state and tick consumption. The Web host bridge start
 
 ## Capture integration
 
-Replay is designed to work with the fixed-frame capture API. Select capture ticks relative to the replay session and wait for the runtime's frame-complete signal before reading pixels. See [Web capture](web_capture.md).
+Configure `captureKey` to request screenshots on recorded key presses, or call `spx.Snapshot` from game scripts. Requests carry the latest consumed input tick and are dispatched after visual-state synchronization. The Web bridge waits for rendering before reading pixels. See [Web capture](web_capture.md).
 
 ## Not supported in v1
 

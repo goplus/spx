@@ -31,8 +31,6 @@ import (
 	"github.com/goplus/spx/v3/internal/ui"
 )
 
-type spriteLoader func(sprite Sprite, name string, gamer reflect.Value) error
-
 type preparedSprite struct {
 	config coreproject.SpriteConfig
 	layout *coreproject.CostumeLayout
@@ -133,19 +131,17 @@ func (p *Game) loadStage(
 	g reflect.Value,
 	proj *coreproject.ProjectConfig,
 	generation uint64,
-	loadSprite spriteLoader,
-	entries []preparedStageEntry,
 ) error {
 	p.setupDisplayConfig(proj)
 	p.setupWorldAndWindow(proj)
 	p.setupPlatformAndCamera(proj)
 	p.setupAudioAndTilemap(proj)
 
-	inits, err := p.loadAndInitSprites(g, proj, loadSprite, entries)
+	sprites, err := p.loadStageEntries(g, proj.Zorder)
 	if err != nil {
 		return err
 	}
-	p.runSpriteCallbacks(inits, proj, g, generation)
+	p.prepareStageBootstrap(sprites, proj, g, generation)
 	return nil
 }
 
@@ -176,16 +172,13 @@ func (p *Game) applyWorldWindowMetrics(metrics coreproject.WorldWindowMetrics) {
 }
 
 func (p *Game) setupWorldAndWindow(proj *coreproject.ProjectConfig) {
-	proj.Map = coreproject.ResolveMapConfig(proj.Map, p.tilemapMgr.hasData(), baseScreenWidth, baseScreenHeight)
-	backdrops := proj.GetBackdrops()
-	if p.tilemapMgr.hasData() {
-		backdrops = make([]*coreproject.BackdropConfig, 0)
-	}
+	hasTilemap := p.tilemapMgr.hasData()
+	proj.Map = coreproject.ResolveMapConfig(proj.Map, hasTilemap, baseScreenWidth, baseScreenHeight)
 
 	p.displayState.WorldWidth = proj.Map.Width
 	p.displayState.WorldHeight = proj.Map.Height
 
-	if len(backdrops) > 0 {
+	if backdrops := proj.GetBackdrops(); !hasTilemap && len(backdrops) > 0 {
 		p.baseObj.initBackdrops(backdrops, proj.GetBackdropIndex())
 		p.doWorldSize()
 	} else {
@@ -259,24 +252,24 @@ func (p *Game) applyStageGeometry() {
 }
 
 // -----------------------------------------------------------------------------
-// Sprite Setup
+// Bootstrap
 // -----------------------------------------------------------------------------
-func (p *Game) runSpriteCallbacks(inits []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
+func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.ProjectConfig, g reflect.Value, generation uint64) {
 	// Bootstrap hooks may override the initial camera target.
 	if proj.Camera != nil && proj.Camera.On != "" {
 		p.Camera.Follow__1(proj.Camera.On)
 	}
 	p.queueBootstrap(generation, func() {
-		p.setupCollisionData(inits)
+		p.setupCollisionData(sprites)
 	})
-	for _, ini := range inits {
-		if spr := spriteOf(ini); spr != nil {
+	for _, sprite := range sprites {
+		if spr := spriteOf(sprite); spr != nil {
 			p.queueBootstrap(generation, spr.awake)
 		}
 	}
 	p.queueBootstrap(generation, func() {
-		// Preserve load/Z-order while letting each Main run until its first yield.
-		for _, sprite := range inits {
+		// Start each Main in stage order.
+		for _, sprite := range sprites {
 			if spr := spriteOf(sprite); spr != nil {
 				runMainUntilYield(spr.owner, sprite.Main)
 			}

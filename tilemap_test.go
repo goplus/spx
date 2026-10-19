@@ -57,7 +57,7 @@ func newPenCanvasTilemapTestGame(t *testing.T) (*Game, *spyPenMgr, *penCanvasCam
 	})
 
 	const tilemapPath = "tilemaps/map1.json"
-	fs := reloadConfigFS{
+	fs := gameTestFS{
 		tilemapPath: `{
 			"tilemap": {
 				"tile_size": {"width": 32, "height": 16},
@@ -115,6 +115,46 @@ func TestTilemapSyncsPenCanvasAfterWorldSize(t *testing.T) {
 	}
 }
 
+func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
+	for _, test := range []struct{ name, decorators string }{
+		{"missing decorators", ""},
+		{"empty decorators", `{"decorators":[]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := gameTestFS{"tilemaps/map/tilemap.json": `{}`}
+			if test.decorators != "" {
+				files["tilemaps/map/decorator.json"] = test.decorators
+			}
+			game := setupStageLoadTestGame(t, files)
+			previousParser := gdx.TilemapparserMgr
+			parser := &gameTestTilemapparserMgr{}
+			gdx.TilemapparserMgr = parser
+			t.Cleanup(func() { gdx.TilemapparserMgr = previousParser })
+			project := &coreproject.ProjectConfig{
+				TilemapPath: "tilemaps/map",
+				Map:         coreproject.MapConfig{Width: 640, Height: 480},
+				Backdrops: []*coreproject.BackdropConfig{{CostumeConfig: coreproject.CostumeConfig{
+					Name: "unused", Path: "unused.png", ImageWidth: 10, ImageHeight: 10,
+				}}},
+			}
+			game.tilemapMgr.init(&game.Game, files, project.TilemapPath)
+			if err := game.loadStage(reflect.ValueOf(game).Elem(), project, game.bootstrapGeneration()); err != nil {
+				t.Fatal(err)
+			}
+			if game.TilemapName() != "map" || parser.loadedPath != internalengine.ToAssetPath("tilemaps/map/tilemap.json") {
+				t.Fatalf("native tilemap name/path = %q/%q", game.TilemapName(), parser.loadedPath)
+			}
+			if game.getCostumePath() != "" || game.displayState.WorldWidth != 640 || game.displayState.WorldHeight != 480 {
+				t.Fatalf("tilemap stage used backdrop: path=%q, world=%dx%d",
+					game.getCostumePath(), game.displayState.WorldWidth, game.displayState.WorldHeight)
+			}
+			if parser.destroyCalls != 0 {
+				t.Fatalf("initial tilemap was destroyed %d times", parser.destroyCalls)
+			}
+		})
+	}
+}
+
 type tilemapUnloadSceneMgr struct {
 	gdx.ISceneMgr
 	clearCalls int
@@ -135,7 +175,7 @@ func TestUnloadTilemapClearsStateOnce(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			previousScene, previousParser := gdx.SceneMgr, gdx.TilemapparserMgr
 			scene := &tilemapUnloadSceneMgr{}
-			parser := &reloadCommitTilemapparserMgr{}
+			parser := &gameTestTilemapparserMgr{}
 			gdx.SceneMgr, gdx.TilemapparserMgr = scene, parser
 			t.Cleanup(func() { gdx.SceneMgr, gdx.TilemapparserMgr = previousScene, previousParser })
 			var game Game
@@ -248,8 +288,8 @@ func TestTilemapDecoratorCoordinates(t *testing.T) {
 	gdx.SceneMgr, gdx.ResMgr = scene, &decoratorResMgr{}
 	t.Cleanup(func() { gdx.SceneMgr, gdx.ResMgr = previousScene, previousRes })
 	var game Game
-	game.tilemapMgr = gameTilemapMgr{g: &game, tilemapDir: "tilemaps/map", decoratorDatas: &DecoratorJSON{Decorators: []tm.DecoratorNode{{Path: "tree.png", Position: tm.Vec2{X: 3, Y: 4}, Pivot: tm.Vec2{X: 12, Y: 8}, Scale: tm.Vec2{X: 2, Y: 3}, Ratation: 120, ZIndex: 7, ColliderType: "rect", ColliderPivot: tm.Vec2{X: 1, Y: 2}, ColliderParams: []float64{4, 5}}}}}
-	game.tilemapMgr.loadDecoratorsFromJSON()
+	game.tilemapMgr = gameTilemapMgr{g: &game, useNewLoader: true, tilemapDir: "tilemaps/map", decoratorDatas: &DecoratorJSON{Decorators: []tm.DecoratorNode{{Path: "tree.png", Position: tm.Vec2{X: 3, Y: 4}, Pivot: tm.Vec2{X: 12, Y: 8}, Scale: tm.Vec2{X: 2, Y: 3}, Ratation: 120, ZIndex: 7, ColliderType: "rect", ColliderPivot: tm.Vec2{X: 1, Y: 2}, ColliderParams: []float64{4, 5}}}}}
+	game.tilemapMgr.parseTilemap()
 	if scene.path != internalengine.ToAssetPath("tilemaps/map/tree.png") || scene.position != mathf.NewVec2(3, 4) || scene.pivot != mathf.NewVec2(2, 3) || scene.rotation != 30 || scene.scale != mathf.NewVec2(2, 3) || scene.layer != 7 || scene.collider != physicsColliderRect || scene.colliderPivot != mathf.NewVec2(13, 10) || !reflect.DeepEqual(scene.params, []float64{4, 5}) {
 		t.Fatalf("decorator=%+v", scene)
 	}
@@ -257,7 +297,7 @@ func TestTilemapDecoratorCoordinates(t *testing.T) {
 
 func TestTilemapLoadAndEmptyBounds(t *testing.T) {
 	var game Game
-	files := reloadConfigFS{"map.json": `{"tilemap":{"layers":[]}}`}
+	files := gameTestFS{"map.json": `{"tilemap":{"layers":[]}}`}
 	game.tilemapMgr.init(&game, files, "map.json")
 	if game.TilemapName() != "map" {
 		t.Fatalf("map name=%q", game.TilemapName())

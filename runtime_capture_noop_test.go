@@ -26,12 +26,12 @@ import (
 
 func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {
 	engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
+	engine.ResetCaptures()
+	defer engine.ResetCaptures()
 
 	engine.SetCaptureHandler(ignoreCaptureRequest)
 
-	if err := engine.EnqueueCapture("step_001.png"); err != nil {
-		t.Fatalf("enqueueCapture returned error on native platform: %v", err)
+	if err := engine.EnqueueCapture("step_001.png", nil); err != nil {
+		t.Fatalf("EnqueueCapture returned error on native platform: %v", err)
 	}
 }

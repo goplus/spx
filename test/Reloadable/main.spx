@@ -1,3 +1,0 @@
-onKey KeySpace, => {
-	reload "ch-2.json"
-}
