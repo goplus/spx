@@ -213,7 +213,7 @@ func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
 	}
 	game := &Game{}
 	claimPreparedSession(t, game)
-	recorded := []float64{Rand__0(1, 100), Rand__1(0, 1), Rand__0(1, 100)}
+	recorded := []any{Rand__0(1, 100), Rand__1(0, 1), Rand__0(1, 100)}
 	replay, err := FinishInputRecording()
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	claimPreparedSession(t, game)
-	replayed := []float64{Rand__0(1, 100), Rand__1(0, 1), Rand__0(1, 100)}
+	replayed := []any{Rand__0(1, 100), Rand__1(0, 1), Rand__0(1, 100)}
 	if !reflect.DeepEqual(replayed, recorded) {
 		t.Fatalf("replay random = %v, want recording random %v", replayed, recorded)
 	}
