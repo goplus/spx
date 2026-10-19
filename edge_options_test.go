@@ -22,7 +22,6 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -100,9 +99,7 @@ func (f *fakeEdgePhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignoreSprit
 func installEdgePhysicsMgr(t *testing.T, mgr pkgengine.IPhysicsMgr) {
 	t.Helper()
 
-	enginewrap.Init(func(call func()) {
-		call()
-	})
+	setupImmediateEngineCalls(t)
 
 	original := pkgengine.PhysicsMgr
 	pkgengine.PhysicsMgr = mgr
@@ -118,6 +115,27 @@ func newEdgeTestSprite(direction Direction) *SpriteImpl {
 	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
 	sprite.runtimeState.SyncSprite.SetId(42)
 	return sprite
+}
+
+func TestNormalizeEdgeArea(t *testing.T) {
+	for _, tt := range []struct {
+		area, want string
+	}{
+		{"", edgeAreaStage},
+		{"stage", edgeAreaStage},
+		{"STAGE", edgeAreaStage},
+		{"camera", edgeAreaCamera},
+		{"CaMeRa", edgeAreaCamera},
+		{"viewport", edgeAreaCamera},
+		{"VIEWPORT", edgeAreaCamera},
+		{"unknown", edgeAreaStage},
+	} {
+		t.Run(tt.area, func(t *testing.T) {
+			if got := normalizeEdgeArea(tt.area); got != tt.want {
+				t.Fatalf("normalizeEdgeArea(%q) = %q, want %q", tt.area, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestSpriteTouchingTargetDefaultsToStageArea(t *testing.T) {

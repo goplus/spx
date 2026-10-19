@@ -33,13 +33,19 @@ func TestNewColorUsesMathfPackedNumberBehavior(t *testing.T) {
 	assertColor(t, NewColor(float64(0x1000000)), Color{0, 0, 0, 1.0 / 255})
 }
 
+func TestNewColorRejectsInvalidValues(t *testing.T) {
+	for _, value := range []any{"not a color", struct{}{}, nil} {
+		assertColor(t, NewColor(value), Color{})
+	}
+}
+
 func assertColor(t *testing.T, got, want Color) {
 	t.Helper()
 	const epsilon = 1e-12
-	if math.Abs(got.X_0-want.X_0) > epsilon ||
-		math.Abs(got.X_1-want.X_1) > epsilon ||
-		math.Abs(got.X_2-want.X_2) > epsilon ||
-		math.Abs(got.X_3-want.X_3) > epsilon {
+	if !(math.Abs(got.X_0-want.X_0) <= epsilon &&
+		math.Abs(got.X_1-want.X_1) <= epsilon &&
+		math.Abs(got.X_2-want.X_2) <= epsilon &&
+		math.Abs(got.X_3-want.X_3) <= epsilon) {
 		t.Fatalf("Color = %#v, want %#v", got, want)
 	}
 }

@@ -18,13 +18,59 @@ package spx
 
 import (
 	"math"
+	"slices"
 	"testing"
-	"time"
 
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
-	spxapi "github.com/goplus/spx/v3/pkg/spx"
 )
+
+type soundControlBackend struct {
+	fakeAudioBackend
+	actions []string
+}
+
+func (b *soundControlBackend) IsPlaying(int64) bool { return true }
+func (b *soundControlBackend) Pause(int64)          { b.actions = append(b.actions, "pause") }
+func (b *soundControlBackend) Resume(int64)         { b.actions = append(b.actions, "resume") }
+func (b *soundControlBackend) Stop(int64)           { b.actions = append(b.actions, "stop") }
+func (b *soundControlBackend) StopAll()             { b.actions = append(b.actions, "stop all") }
+
+func TestGameSoundPlaybackControls(t *testing.T) {
+	backend := &soundControlBackend{}
+	game := &Game{fs: reloadConfigFS{}, sounds: map[string]sound{
+		"Jump": &coreproject.SoundConfig{Path: "sounds/jump.wav"},
+	}}
+	game.soundMgr.Init(backend)
+	game.Play__0("Jump")
+	game.PausePlaying("Jump")
+	game.ResumePlaying("Jump")
+	game.StopPlaying("Jump")
+	game.StopAllSounds()
+	want := []string{"pause", "resume", "stop", "stop all"}
+	if !slices.Equal(backend.actions, want) || len(backend.plays) != 1 {
+		t.Fatalf("playback = %d plays, actions %v; want 1 play, %v", len(backend.plays), backend.actions, want)
+	}
+	game.Play__0("Missing")
+	game.PausePlaying("Missing")
+	game.ResumePlaying("Missing")
+	game.StopPlaying("Missing")
+	if !slices.Equal(backend.actions, want) || len(backend.plays) != 1 {
+		t.Fatal("missing sound reached the audio backend")
+	}
+}
+
+func TestGamePlayAndWaitReturnsForFinishedSound(t *testing.T) {
+	backend := &fakeAudioBackend{}
+	game := &Game{sounds: map[string]sound{
+		"Jump": &coreproject.SoundConfig{Path: "sounds/jump.wav"},
+	}}
+	game.soundMgr.Init(backend)
+	game.PlayAndWait("Jump")
+	if len(backend.plays) != 1 || backend.createCalls != 1 {
+		t.Fatalf("PlayAndWait: plays = %d, allocations = %d; want 1 each", len(backend.plays), backend.createCalls)
+	}
+}
 
 type fakeAudioBackend struct {
 	pan          float64
@@ -39,36 +85,6 @@ type fakeAudioPlay struct {
 	owner       internalengine.Object
 	attenuation float64
 	maxDistance float64
-}
-
-type targetPropertyActor struct {
-	Score int
-	Power float64
-}
-
-type targetLookupSprite struct {
-	SpriteImpl
-}
-
-func (*targetLookupSprite) Main() {}
-
-func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
-	sprite := &targetLookupSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.spriteState.Cloned = cloned
-	return sprite
-}
-
-func (a *targetPropertyActor) Health() float64 {
-	return a.Power
-}
-
-type targetPropertyGame struct {
-	Game
-	StageScore int
-	Actor      targetPropertyActor
 }
 
 func (f *fakeAudioBackend) CreateAudio() internalengine.Object {
@@ -110,13 +126,19 @@ func (f *fakeAudioBackend) PlayWithAttenuation(obj internalengine.Object, path s
 	return 1
 }
 
-func (f *fakeAudioBackend) Pause(aid int64)              {}
-func (f *fakeAudioBackend) Resume(aid int64)             {}
-func (f *fakeAudioBackend) Stop(aid int64)               {}
-func (f *fakeAudioBackend) Restart(aid int64) bool       { return false }
+func (f *fakeAudioBackend) Pause(aid int64) {}
+
+func (f *fakeAudioBackend) Resume(aid int64) {}
+
+func (f *fakeAudioBackend) Stop(aid int64) {}
+
+func (f *fakeAudioBackend) Restart(aid int64) bool { return false }
+
 func (f *fakeAudioBackend) SetLoop(aid int64, loop bool) {}
-func (f *fakeAudioBackend) IsPlaying(aid int64) bool     { return false }
-func (f *fakeAudioBackend) StopAll()                     {}
+
+func (f *fakeAudioBackend) IsPlaying(aid int64) bool { return false }
+
+func (f *fakeAudioBackend) StopAll() {}
 
 func TestGameClearSoundEffects(t *testing.T) {
 	for _, test := range []struct {
@@ -263,165 +285,94 @@ func TestGamePlayUsesStageAudioParameters(t *testing.T) {
 	}
 }
 
-func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
-	previous := spxapi.Username()
-	t.Cleanup(func() { spxapi.SetUsername(previous) })
-
-	spxapi.SetUsername("scratch-user")
-
-	var g Game
-	if got := g.Username(); got != "scratch-user" {
-		t.Fatalf("Game.Username() = %q, want %q", got, "scratch-user")
+func TestLoadSoundCachesIndependentConfigs(t *testing.T) {
+	fs := reloadConfigFS{
+		"sounds/Jump/index.json": `{"path":"jump.wav","rate":1,"sampleCount":10}`,
+		"sounds/Land/index.json": `{"path":"land.wav","rate":2,"sampleCount":20}`,
+	}
+	game := &Game{fs: fs, sounds: make(map[string]sound)}
+	jump, err := game.loadSound("Jump")
+	if err != nil {
+		t.Fatal(err)
+	}
+	land, err := game.loadSound("Land")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if jump == land {
+		t.Fatal("different sounds share a config pointer")
+	}
+	if jump.Path != "sounds/Jump/jump.wav" || jump.Rate != 1 || jump.SampleCount != 10 {
+		t.Fatalf("jump config changed after loading land: %+v", jump)
+	}
+	if land.Path != "sounds/Land/land.wav" || land.Rate != 2 || land.SampleCount != 20 {
+		t.Fatalf("land config = %+v", land)
+	}
+	jump.Rate = 3
+	if land.Rate != 2 {
+		t.Fatal("changing jump affected land")
+	}
+	delete(fs, "sounds/Jump/index.json")
+	cached, err := game.loadSound("Jump")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cached != jump || cached.Rate != 3 {
+		t.Fatalf("cached config = %+v, want original pointer %+v", cached, jump)
 	}
 }
 
-func TestGameDayssince2000(t *testing.T) {
-	var g Game
-	base := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	lower := time.Since(base).Hours() / 24
-	got := g.Dayssince2000()
-	upper := time.Since(base).Hours() / 24
-
-	if got < lower || got > upper {
-		t.Fatalf("Dayssince2000 = %v, want in [%v, %v]", got, lower, upper)
-	}
-}
-
-func TestGameGetTargetReturnsNamedSprite(t *testing.T) {
-	var game Game
-	clone := newTargetLookupSprite(&game, "Hero", true)
-	target := newTargetLookupSprite(&game, "Hero", false)
-	game.shapeMgr.add(&clone.SpriteImpl)
-	game.shapeMgr.add(&target.SpriteImpl)
-
-	if got := game.GetTarget("Hero"); got != &target.SpriteImpl {
-		t.Fatalf("GetTarget(%q) = %v, want %v", "Hero", got, &target.SpriteImpl)
-	}
-}
-
-func TestGameGetTargetReturnsNilWithoutMatch(t *testing.T) {
-	var game Game
-	game.shapeMgr.add(&newTargetLookupSprite(&game, "Hero", true).SpriteImpl)
-
-	for _, target := range []string{"", "Missing", "hero"} {
-		if got := game.GetTarget(target); got != nil {
-			t.Errorf("GetTarget(%q) = %v, want nil", target, got)
-		}
-	}
-}
-
-func TestGameGetTargetReturnsNilAfterTargetIsRemoved(t *testing.T) {
-	var game Game
-	target := newTargetLookupSprite(&game, "Hero", false)
-	clone := newTargetLookupSprite(&game, "Hero", true)
-	game.shapeMgr.add(&target.SpriteImpl)
-	game.shapeMgr.add(&clone.SpriteImpl)
-
-	game.shapeMgr.removeShape(&target.SpriteImpl)
-
-	if got := game.GetTarget("Hero"); got != nil {
-		t.Fatalf("GetTarget(%q) after target removal = %v, want nil", "Hero", got)
-	}
-}
-
-func TestGameGetTargetPropertyStageField(t *testing.T) {
-	g := &targetPropertyGame{StageScore: 23}
-	g.gamer = g
-
-	got := g.GetTargetProperty("", "StageScore")
-	if got.Int() != 23 {
-		t.Fatalf("StageScore = %d, want 23", got.Int())
-	}
-}
-
-func TestGameGetTargetPropertyTargetField(t *testing.T) {
-	g := &targetPropertyGame{Actor: targetPropertyActor{Score: 9}}
-	g.gamer = g
-
-	got := g.GetTargetProperty("Actor", "Score")
-	if got.Int() != 9 {
-		t.Fatalf("Actor.Score = %d, want 9", got.Int())
-	}
-}
-
-func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
-	g := &targetPropertyGame{Actor: targetPropertyActor{Power: 3.5}}
-	g.gamer = g
-
-	got := g.GetTargetProperty("Actor", "Health")
-	if got.Float() != 3.5 {
-		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
-	}
-}
-
-func TestGameResetCollisionLayerStateClearsCollisionLayerState(t *testing.T) {
-	var g Game
-	g.sprCollisionInfos = map[string]*spriteCollisionInfo{
-		"SpriteA": {Index: 0, Layer: 1 << 0, Mask: 1 << 1},
-	}
-	g.sprCollisionData = []*spriteCollisionData{{
-		info: g.sprCollisionInfos["SpriteA"],
-	}}
-
-	g.resetCollisionLayerState()
-
-	if g.sprCollisionInfos != nil {
-		t.Fatalf("sprCollisionInfos = %#v, want nil", g.sprCollisionInfos)
-	}
-	if g.sprCollisionData != nil {
-		t.Fatalf("sprCollisionData = %#v, want nil", g.sprCollisionData)
-	}
-}
-
-func TestTryRaycastResult(t *testing.T) {
-	for _, test := range []struct {
-		name    string
-		data    internalengine.Array
-		want    rayCastResult
-		wantErr string
-	}{
-		{
-			name: "hit",
-			data: []int64{
-				1, 42,
-				internalengine.ConvertToInt64(12.5), internalengine.ConvertToInt64(-7.25),
-				internalengine.ConvertToInt64(0.6), internalengine.ConvertToInt64(0.8),
-			},
-			want: rayCastResult{Hited: true, SpriteId: 42, PosX: 12.5, PosY: -7.25},
-		},
-		{
-			name: "negative hit marker",
-			data: []int64{-2, 43, 0, 0, 0, 0},
-			want: rayCastResult{Hited: true, SpriteId: 43},
-		},
-		{name: "no hit", data: make([]int64, 6)},
-		{
-			name: "no hit retains payload",
-			data: []int64{0, 44, internalengine.ConvertToInt64(-5), internalengine.ConvertToInt64(9), 0, 0},
-			want: rayCastResult{SpriteId: 44, PosX: -5, PosY: 9},
-		},
-		{name: "nil", wantErr: "array type error: expected []int64 but got <nil>"},
-		{name: "wrong type", data: make([]float64, 6), wantErr: "array type error: expected []int64 but got []float64"},
-		{name: "empty", data: []int64{}, wantErr: "array len error: expected 6 but got 0"},
-		{name: "missing normal", data: make([]int64, 4), wantErr: "array len error: expected 6 but got 4"},
-		{name: "short", data: make([]int64, 5), wantErr: "array len error: expected 6 but got 5"},
-		{name: "long", data: make([]int64, 7), wantErr: "array len error: expected 6 but got 7"},
+func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
+	for _, tt := range []struct{ name, content string }{
+		{"missing", ""},
+		{"malformed", `{`},
+		{"trailing value", `{"path":"jump.wav"} {}`},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := tryRaycastResult(test.data)
-			if test.wantErr != "" {
-				if got != nil || err == nil || err.Error() != test.wantErr {
-					t.Fatalf("result = %+v, error = %v; want nil, %q", got, err, test.wantErr)
-				}
-				return
+		t.Run(tt.name, func(t *testing.T) {
+			fs := reloadConfigFS{}
+			if tt.content != "" {
+				fs["sounds/Jump/index.json"] = tt.content
 			}
+			game := &Game{fs: fs, sounds: make(map[string]sound)}
+			if media, err := game.loadSound("Jump"); err == nil || media != nil {
+				t.Fatalf("failed load = %+v, %v; want nil config and an error", media, err)
+			}
+			if _, ok := game.sounds["Jump"]; ok {
+				t.Fatal("failed load was cached")
+			}
+			fs["sounds/Jump/index.json"] = `{"path":"jump.wav"}`
+			media, err := game.loadSound("Jump")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got == nil || *got != test.want {
-				t.Fatalf("raycast result = %+v, want %+v", got, test.want)
+			if media.Path != "sounds/Jump/jump.wav" || game.sounds["Jump"] != media {
+				t.Fatalf("retry did not cache the normalized config: %+v", media)
 			}
+		})
+	}
+}
+
+func TestGameSoundUnsupportedControls(t *testing.T) {
+	var game Game
+	game.soundMgr.Init(&fakeAudioBackend{})
+	if game.Loudness() != 0 {
+		t.Fatal("unsupported microphone loudness must be zero")
+	}
+	for _, test := range []struct {
+		name string
+		call func()
+		want string
+	}{
+		{"get", func() { game.GetSoundEffect(SoundEffectKind(-1)) }, "GetSoundEffect: invalid kind"},
+		{"set", func() { game.SetSoundEffect(SoundEffectKind(-1), 1) }, "SetSoundEffect: invalid kind"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != test.want {
+					t.Fatalf("panic=%v, want %q", got, test.want)
+				}
+			}()
+			test.call()
 		})
 	}
 }

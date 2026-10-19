@@ -23,6 +23,63 @@ import (
 	"github.com/goplus/spx/v3/internal/coroutine"
 )
 
+func TestProcedureConsumesStopThisScript(t *testing.T) {
+	Procedure(func() {
+		panic(coroutine.ErrStopThisScript)
+	})
+}
+
+func TestProcedurePropagatesOtherPanics(t *testing.T) {
+	tests := []struct {
+		name  string
+		panic any
+	}{
+		{name: "abort thread", panic: coroutine.ErrAbortThread},
+		{name: "user panic", panic: "user panic"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if got := recover(); got != test.panic {
+					t.Fatalf("panic = %v, want %v", got, test.panic)
+				}
+			}()
+			Procedure(func() {
+				panic(test.panic)
+			})
+		})
+	}
+}
+
+func TestProcedureScopesStopThisScriptAcrossRepeat(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+
+	done := make(chan string, 1)
+	co.Create("stop-this-script", func(coroutine.Thread) {
+		trace := "outer-before;"
+		Procedure(func() {
+			trace += "inner-before;"
+			Repeat(1, func() {
+				// Match a stop nested in a converted repeat callback.
+				co.StopThisScript()
+				trace += "inner-bad;"
+			})
+			trace += "inner-bad2;"
+		})
+		trace += "outer-after;"
+		done <- trace
+	})
+
+	select {
+	case got := <-done:
+		if want := "outer-before;inner-before;outer-after;"; got != want {
+			t.Fatalf("trace = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stop-this-script boundary did not return from procedure")
+	}
+}
+
 func TestWarpSkipsControlFlowFrameWaits(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 

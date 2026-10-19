@@ -2,6 +2,7 @@ package spx
 
 import (
 	"math"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -188,9 +189,7 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 func setupSpyPenMgr(t *testing.T) *spyPenMgr {
 	t.Helper()
 
-	enginewrap.Init(func(call func()) {
-		call()
-	})
+	setupImmediateEngineCalls(t)
 
 	spy := &spyPenMgr{spriteMgr: &spyStampSpriteMgr{effects: make(map[string]float64)}}
 	original := engine.PenMgr
@@ -737,5 +736,95 @@ func assertNearlyEqualPenValue(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if !nearlyEqualPenValue(got, want) {
 		t.Fatalf("%s = %v, want %v", name, got, want)
+	}
+}
+
+func TestClonePenStateComesFromOriginal(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	original := newCloneLimitSprite(game, "original")
+	original.pen().penState = penState{
+		penColor:        toMathfColor(HSB(20, 80, 90)),
+		penWidth:        5,
+		penHue:          20,
+		legacyPenColor:  legacyPenState{hue: 20, shade: 40},
+		penSaturation:   80,
+		penBrightness:   90,
+		penTransparency: 30,
+		isPenDown:       true,
+	}
+	penObj := internalengine.Object(42)
+	original.pen().penObj = &penObj
+	parent := createRuntimeClone(&original.SpriteImpl)
+	parent.pen().penWidth = 50
+	parent.pen().penHue = 80
+	parent.pen().isPenDown = false
+	original.pen().penWidth = 7
+	child := createRuntimeClone(parent)
+	if got, want := child.pen().penState, original.pen().penState; got != want {
+		t.Fatalf("descendant pen state = %+v, want current original state %+v", got, want)
+	}
+	if child.pen().penObj != nil {
+		t.Fatal("cloning allocated or shared a drawing resource")
+	}
+	child.pen().penWidth = 9
+	if original.pen().penWidth != 7 || parent.pen().penWidth != 50 {
+		t.Fatal("clone pen state aliases an ancestor")
+	}
+}
+
+func TestClonePenStateFromStageInstance(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	template := newCloneLimitSprite(game, "template")
+	template.pen().penWidth = 5
+	var instance cloneLimitSprite
+	instantiateStageSprite(reflect.ValueOf(&instance).Elem(), template, spriteProperties{})
+	game.shapeMgr.add(&instance.SpriteImpl)
+	instance.pen().penWidth = 10
+	child := createRuntimeClone(&instance.SpriteImpl)
+	if child.pen().penWidth != 10 {
+		t.Fatal("clone used template state instead of its original instance")
+	}
+}
+
+func TestPenStateWithoutAllocatedResourceDoesNotSubmitCommands(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	pen := sprite.pen()
+	pen.isPenDown = true
+	pen.penUp()
+	pen.syncPenPosition(10, 20)
+	sprite.g.flushPenCommands()
+	if pen.isPenDown || pen.penObj != nil || spy.createCalls != 0 || spy.batchCalls != 0 {
+		t.Fatal("unallocated pen operation created or submitted a resource")
+	}
+}
+
+func TestLegacyPenHueResetsTransparencyAndSkipsUnchangedProperties(t *testing.T) {
+	spy := setupSpyPenMgr(t)
+	sprite := newPenTestSprite()
+	pen := sprite.pen()
+	pen.setPenColorParam(PenTransparency, 60)
+	pen.setPenHue(-20)
+	sprite.g.flushPenCommands()
+	if pen.legacyPenColor.hue != 90 || pen.penTransparency != 0 || pen.penColor.A != 1 {
+		t.Fatalf("legacy hue/transparency/color = %v/%v/%v", pen.legacyPenColor.hue, pen.penTransparency, pen.penColor)
+	}
+	batches := spy.batchCalls
+	pen.setPenHue(-20)
+	pen.changePenHue(0)
+	pen.setPenShade(pen.legacyPenColor.shade)
+	sprite.g.flushPenCommands()
+	if spy.batchCalls != batches {
+		t.Fatal("unchanged legacy appearance submitted another pen batch")
+	}
+	if got := wrapLegacyPenShade(-25); got != 175 {
+		t.Fatalf("wrapped shade = %v, want 175", got)
+	}
+	for _, shade := range []float64{25, 175} {
+		got := makeLegacyPenColor(0, shade, 25)
+		want := mathf.NewColor(35.0/60, 0, 0, 0.75)
+		if !samePenColor(got, want) {
+			t.Fatalf("legacy shade %v = %v, want %v", shade, got, want)
+		}
 	}
 }

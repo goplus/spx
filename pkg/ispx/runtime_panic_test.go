@@ -38,32 +38,10 @@ func TestLogRuntimePanicFields(t *testing.T) {
 		Column:   3,
 	})
 
-	var entry map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-
-	if got, want := entry["level"], "ERROR"; got != want {
-		t.Fatalf("level = %v, want %v", got, want)
-	}
-	if got, want := entry["msg"], "panic"; got != want {
-		t.Fatalf("msg = %v, want %v", got, want)
-	}
-	if got, want := entry["error"], "boom"; got != want {
-		t.Fatalf("error = %v, want %v", got, want)
-	}
-	if got, want := entry["function"], "main.(*Game).Main"; got != want {
-		t.Fatalf("function = %v, want %v", got, want)
-	}
-	if got, want := entry["file"], "Game.spx"; got != want {
-		t.Fatalf("file = %v, want %v", got, want)
-	}
-	if got, want := entry["line"], float64(12); got != want {
-		t.Fatalf("line = %v, want %v", got, want)
-	}
-	if got, want := entry["column"], float64(3); got != want {
-		t.Fatalf("column = %v, want %v", got, want)
-	}
+	checkRuntimePanicLog(t, &buf, map[string]any{
+		"error": "boom", "function": "main.(*Game).Main", "file": "Game.spx",
+		"line": float64(12), "column": float64(3),
+	})
 }
 
 func TestShouldLogRuntimePanic(t *testing.T) {
@@ -113,79 +91,89 @@ func TestShouldLogRuntimePanic(t *testing.T) {
 	}
 }
 
-func TestLogRuntimePanic_RuntimeError(t *testing.T) {
-	entry := runAndCaptureRuntimePanicLog(t, `package main
-func foo() {
-	var p *int
-	println(*p)
-}
-func main() { foo() }
-`)
-
-	if got, want := entry["msg"], "panic"; got != want {
-		t.Fatalf("msg = %v, want %v", got, want)
-	}
-	if got, want := entry["error"], "runtime error: invalid memory address or nil pointer dereference"; got != want {
-		t.Fatalf("error = %v, want %v", got, want)
-	}
-	if got, want := entry["function"], "main.foo"; got != want {
-		t.Fatalf("function = %v, want %v", got, want)
-	}
-	if got, want := entry["file"], "main.go"; got != want {
-		t.Fatalf("file = %v, want %v", got, want)
-	}
-	if got, want := entry["line"], float64(4); got != want {
-		t.Fatalf("line = %v, want %v", got, want)
+func TestLogRuntimePanic(t *testing.T) {
+	for _, test := range []struct {
+		name, body, wantError string
+		line                  float64
+	}{
+		{"runtime error", "var p *int\n\tprintln(*p)", "runtime error: invalid memory address or nil pointer dereference", 4},
+		{"explicit panic", `panic("boom")`, "boom", 3},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			buf := captureRuntimePanicLog(t)
+			ctx := ixgo.NewContext(0)
+			ctx.SetPanic(logRuntimePanic)
+			source := "package main\nfunc foo() {\n\t" + test.body + "\n}\nfunc main() { foo() }\n"
+			if _, err := ctx.RunFile("main.go", source, nil); err == nil {
+				t.Fatal("RunFile() error = nil, want panic error")
+			}
+			checkRuntimePanicLog(t, buf, map[string]any{
+				"error": test.wantError, "function": "main.foo", "file": "main.go", "line": test.line,
+			})
+		})
 	}
 }
 
-func TestLogRuntimePanic_ExplicitPanic(t *testing.T) {
-	entry := runAndCaptureRuntimePanicLog(t, `package main
-func foo() {
-	panic("boom")
-}
-func main() { foo() }
-`)
-
-	if got, want := entry["error"], "boom"; got != want {
-		t.Fatalf("error = %v, want %v", got, want)
+func TestLogRuntimePanicFromHostCallback(t *testing.T) {
+	buf := captureRuntimePanicLog(t)
+	ctx := ixgo.NewContext(0)
+	ctx.SetPanic(logRuntimePanic)
+	i, err := ctx.LoadInterp("host.go", "package main\nfunc Run(callback func()) { callback() }\n")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got, want := entry["function"], "main.foo"; got != want {
-		t.Fatalf("function = %v, want %v", got, want)
+	t.Cleanup(i.UnsafeRelease)
+	_, err = i.RunFunc("Run", func() { panic("host failure") })
+	var fatal ixgo.FatalError
+	if !errors.As(err, &fatal) || fatal.Value != "host failure" {
+		t.Fatalf("host callback error = %v, want fatal carrying host failure", err)
 	}
-	if got, want := entry["file"], "main.go"; got != want {
-		t.Fatalf("file = %v, want %v", got, want)
-	}
-	if got, want := entry["line"], float64(3); got != want {
-		t.Fatalf("line = %v, want %v", got, want)
-	}
+	checkRuntimePanicLog(t, buf, map[string]any{
+		"error": "host failure", "function": "main.Run", "file": "host.go", "line": float64(2),
+	})
 }
 
-func runAndCaptureRuntimePanicLog(t *testing.T, src string) map[string]any {
+func TestLogRuntimePanicSkipsAbsentOrAlreadyReportedErrors(t *testing.T) {
+	buf := captureRuntimePanicLog(t)
+	for _, info := range []*ixgo.PanicInfo{
+		nil,
+		{Error: ixgo.FatalError{Value: ixgo.RuntimeError("runtime error")}},
+		{Error: ixgo.FatalError{Value: ixgo.PlainError("plain error")}},
+		{Error: ixgo.FatalError{Value: ixgo.PanicError{}}},
+	} {
+		logRuntimePanic(info)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("absent or previously reported errors were logged: %s", buf.String())
+	}
+	if got := runtimePanicFunction(nil); got != "" {
+		t.Fatalf("missing panic function = %q, want empty", got)
+	}
+}
+
+func captureRuntimePanicLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
-
 	var buf bytes.Buffer
 	prev := runtimePanicLogger
 	runtimePanicLogger = newRuntimePanicLogger(&buf)
-	t.Cleanup(func() {
-		runtimePanicLogger = prev
-	})
+	t.Cleanup(func() { runtimePanicLogger = prev })
+	return &buf
+}
 
-	ctx := ixgo.NewContext(0)
-	ctx.SetPanic(logRuntimePanic)
-
-	if _, err := ctx.RunFile("main.go", src, nil); err == nil {
-		t.Fatal("RunFile() error = nil, want panic error")
-	}
-
+func checkRuntimePanicLog(t *testing.T, buf *bytes.Buffer, want map[string]any) {
+	t.Helper()
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if got, want := len(lines), 1; got != want {
-		t.Fatalf("log lines = %d, want %d\nlogs:\n%s", got, want, buf.String())
+	if len(lines) != 1 {
+		t.Fatalf("log lines = %d, want 1\nlogs:\n%s", len(lines), buf.String())
 	}
-
 	var entry map[string]any
 	if err := json.Unmarshal([]byte(lines[0]), &entry); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	return entry
+	want["level"], want["msg"] = "ERROR", "panic"
+	for key, value := range want {
+		if entry[key] != value {
+			t.Errorf("log %s = %v, want %v", key, entry[key], value)
+		}
+	}
 }

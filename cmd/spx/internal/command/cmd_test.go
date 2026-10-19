@@ -25,9 +25,29 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func writeCommandTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
 
 func setTestCommandLine(t *testing.T, args ...string) {
 	t.Helper()
@@ -38,13 +58,53 @@ func setTestCommandLine(t *testing.T, args ...string) {
 	t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
 }
 
-func TestParseCommandLineArgsRejectsRemovedGoEnv(t *testing.T) {
-	setTestCommandLine(t, "spx", "run", "--goenv", "/tmp/goenv")
+func TestRunCmdRejectsInvalidFlags(t *testing.T) {
+	for _, args := range [][]string{
+		{"--goenv", "/tmp/goenv"},
+		{"--headless=invalid"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			setTestCommandLine(t, append([]string{"spx", "run"}, args...)...)
+			cmd := &CmdTool{}
+			if err := cmd.RunCmd("spx", ".spx", "test", embed.FS{}, "", "project"); err == nil {
+				t.Fatalf("RunCmd accepted invalid flags %v", args)
+			}
+			if cmd.ProjectDir != "" || cmd.TargetDir != "" {
+				t.Fatalf("invalid flags prepared a project: %+v", cmd)
+			}
+		})
+	}
+}
 
-	cmd := &CmdTool{}
-	help := cmd.initializeFlags()
-	if err := cmd.parseCommandLineArgs(help); err == nil {
-		t.Fatal("legacy --goenv flag was accepted")
+func TestExtraArgsString(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{"defaults", nil, []string{"--path", "."}},
+		{"empty path", []string{"--path="}, nil},
+		{
+			"runtime flags",
+			[]string{"--path", "game with spaces", "-serveraddr", "localhost:1234", "-servermode", "-controller", "Player", "--headless", "--nomap", "--debugweb", "--fullscreen", "-v"},
+			[]string{"--path", "game with spaces", "-serveraddr", "localhost:1234", "-servermode", "-controller", "Player", "--headless", "--nomap", "--debugweb", "--fullscreen", "-v"},
+		},
+		{
+			"build flags stay in CLI",
+			[]string{"--path=", "-arch", "arm64", "-tags", "pure_engine", "-target", "board", "-build", "fast", "-mode", "worker", "-o", "launcher", "-install", "-onlys", "-onlyc", "-movie"},
+			nil,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setTestCommandLine(t, append([]string{"spx", "run"}, test.args...)...)
+			cmd := &CmdTool{}
+			if err := cmd.parseCommandLineArgs(cmd.initializeFlags()); err != nil {
+				t.Fatal(err)
+			}
+			if got := cmd.Args.String(); !slices.Equal(got, test.want) {
+				t.Fatalf("runtime arguments = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -503,6 +563,74 @@ fi
 			}
 			if got := strings.Join(strings.Fields(string(data)), " "); got != tt.want {
 				t.Fatalf("command order = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInitCreatesProjectScaffold(t *testing.T) {
+	for _, mode := range []string{"current", "relative", "absolute"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			t.Chdir(root)
+			target, projectDir := ".", root
+			if mode != "current" {
+				projectDir = filepath.Join(root, "nested", "project")
+				target = filepath.Join("nested", "project")
+				if mode == "absolute" {
+					target = projectDir
+				}
+			} else {
+				for _, name := range []string{"go.mod", "main.spx", "assets/index.json"} {
+					writeCommandTestFile(t, filepath.Join(projectDir, name), "stale")
+				}
+			}
+			const module = "module example.com/new-game\n\ngo 1.23\n"
+			cmd := &CmdTool{Args: ExtraArgs{Path: &target}, GoModTemplate: module}
+			if err := cmd.Init(); err != nil {
+				t.Fatal(err)
+			}
+			if got := readTestFile(t, filepath.Join(projectDir, "go.mod")); got != module {
+				t.Fatalf("go.mod = %q, want %q", got, module)
+			}
+			main := readTestFile(t, filepath.Join(projectDir, "main.spx"))
+			if !strings.Contains(main, "onStart => {") || !strings.Contains(main, `println("Hello, SPX!")`) {
+				t.Fatalf("main.spx is missing the startup example: %q", main)
+			}
+			index := readTestFile(t, filepath.Join(projectDir, "assets", "index.json"))
+			if !strings.Contains(index, `"width":480`) || !strings.Contains(index, `"height":360`) {
+				t.Fatalf("project dimensions are missing: %q", index)
+			}
+			assertWorkingDirectory(t, root)
+		})
+	}
+}
+
+func TestInitReportsScaffoldWriteFailures(t *testing.T) {
+	for _, tt := range []struct {
+		name, blocked, want string
+		file                bool
+	}{
+		{"target directory", "", "failed to create target directory", true},
+		{"assets directory", "assets", "failed to create assets directory", true},
+		{"asset index", "assets/index.json", "failed to create assets/index.json", false},
+		{"main program", "main.spx", "failed to create main.spx", false},
+		{"module file", "go.mod", "failed to create go.mod", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			target := filepath.Join(t.TempDir(), "project")
+			blocked := filepath.Join(target, tt.blocked)
+			if tt.file {
+				writeCommandTestFile(t, blocked, "occupied")
+			} else if err := os.MkdirAll(blocked, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			cmd := &CmdTool{Args: ExtraArgs{Path: &target}, GoModTemplate: "module example.com/new-game\n"}
+			if err := cmd.Init(); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Init error = %v, want %q", err, tt.want)
+			}
+			if tt.file && readTestFile(t, blocked) != "occupied" {
+				t.Fatal("initialization overwrote the blocking file")
 			}
 		})
 	}

@@ -31,6 +31,7 @@ import (
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
@@ -1115,5 +1116,149 @@ func TestPrepareSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
 		if _, err := prepareSpriteConfig(&tests[i]); err != nil {
 			t.Errorf("prepareSpriteConfig(config %d) error = %v", i, err)
 		}
+	}
+}
+
+func TestReloadPlanPrototypeValidation(t *testing.T) {
+	shadow := reflect.ValueOf(&reloadPreflightGame{}).Elem()
+	typ := reflect.TypeFor[reloadPreflightSprite]()
+	for _, test := range []struct {
+		name             string
+		typ              reflect.Type
+		direct, previous reflect.Type
+		want             string
+	}{
+		{"non struct", reflect.TypeFor[int](), nil, nil, "invalid type"},
+		{"non sprite", reflect.TypeFor[struct{}](), nil, nil, "does not implement Sprite"},
+		{"invalid owner", reflect.TypeFor[targetLookupSprite](), nil, nil, "missing owner field"},
+		{"direct match", typ, reflect.PointerTo(typ), nil, ""},
+		{"direct mismatch", typ, reflect.TypeFor[*targetLookupSprite](), nil, "conflicts with field type"},
+		{"prototype match", typ, nil, reflect.PointerTo(typ), ""},
+		{"prototype mismatch", typ, nil, reflect.TypeFor[*targetLookupSprite](), "conflicting types"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			plan := &reloadPlan{preparedSprites: map[string]preparedSprite{}, directSprites: map[string]reflect.Type{}, prototypeByName: map[string]reflect.Type{}}
+			if test.direct != nil {
+				plan.directSprites["Sprite"] = test.direct
+			}
+			if test.previous != nil {
+				plan.prototypeByName["Sprite"] = test.previous
+			}
+			err := plan.addPrototype("Sprite", test.typ, shadow, 3)
+			if test.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error=%v, want %q", err, test.want)
+			}
+		})
+	}
+	plan := &reloadPlan{preparedSprites: map[string]preparedSprite{}}
+	plan.requireSpriteConfig("same")
+	plan.requireSpriteConfig("same")
+	if !slices.Equal(plan.configNames, []string{"same"}) {
+		t.Fatalf("duplicate configs=%v", plan.configNames)
+	}
+	if err := validateReloadSprite(nil, shadow); err == nil {
+		t.Fatal("nil sprite accepted")
+	}
+	if _, err := prepareReload(&Game{}, shadow, nil); err == nil || !strings.Contains(err.Error(), "not initialized") {
+		t.Fatalf("uninitialized reload=%v", err)
+	}
+	properties, err := parseSpriteProperties(coreproject.StageShape{"costumeIndex": 0.0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.stage = []preparedStageEntry{{kind: stageSprite, name: "Missing", properties: []spriteProperties{properties}}}
+	if err := plan.validateCostumeOverrides(); err == nil || !strings.Contains(err.Error(), "no sprite configuration") {
+		t.Fatalf("missing config=%v", err)
+	}
+}
+
+func TestReloadPlanZOrderRejectsInvalidPrototype(t *testing.T) {
+	shadow := reflect.ValueOf(&reloadPreflightGame{}).Elem()
+	for _, test := range []struct {
+		name   string
+		zorder []any
+		typs   map[string]reflect.Type
+		want   string
+	}{
+		{"named", []any{"Bad"}, map[string]reflect.Type{"Bad": reflect.TypeFor[int]()}, "invalid type"},
+		{"direct", []any{coreproject.StageShape{"type": "sprite", "target": "Sprite"}}, nil, "not reloadable"},
+		{"group", []any{coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}}}}, nil, "conflicting types"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			plan := &reloadPlan{project: coreproject.ProjectConfig{Zorder: test.zorder}, preparedSprites: map[string]preparedSprite{}, directSprites: map[string]reflect.Type{}, prototypeByName: map[string]reflect.Type{"reloadPreflightSprite": reflect.TypeFor[*targetLookupSprite]()}}
+			err := plan.validateZOrder(&Game{typs: test.typs}, shadow)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error=%v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestReloadStopsWhenInputSessionCannotAttach(t *testing.T) {
+	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	game := setupReloadCommitGame(t, reloadConfigFS{})
+	preparedInputSession.Lock()
+	previousPlan, previousClaimed := preparedInputSession.plan, preparedInputSession.claimed
+	preparedInputSession.plan = &inputSessionPlan{mode: InputSessionMode("unsupported")}
+	preparedInputSession.claimed = false
+	preparedInputSession.Unlock()
+	t.Cleanup(func() {
+		preparedInputSession.Lock()
+		preparedInputSession.plan, preparedInputSession.claimed = previousPlan, previousClaimed
+		preparedInputSession.Unlock()
+	})
+	err := XGot_Game_Reload(game, strings.NewReader(`{}`))
+	if err == nil || !strings.Contains(err.Error(), "unsupported input session mode") {
+		t.Fatalf("reload input error=%v", err)
+	}
+	if game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() {
+		t.Fatal("failed reload activated game scripts")
+	}
+}
+
+type reloadDynamicGame struct {
+	Game
+	Dynamic Sprite
+}
+type reloadDynamicSprite struct {
+	SpriteImpl
+	*reloadDynamicGame
+}
+
+func (*reloadDynamicSprite) Main() {}
+
+type reloadDynamicWrongOwnerSprite struct {
+	SpriteImpl
+	Owner *Game
+}
+
+func (*reloadDynamicWrongOwnerSprite) Main() {}
+
+type reloadFieldChangingExtMgr struct {
+	reloadCommitExtMgr
+	replace func()
+}
+
+func (m *reloadFieldChangingExtMgr) SetLayerSorterMode(int64) { m.replace() }
+
+func TestReloadStopsWhenSpriteBindingFailsDuringRebuild(t *testing.T) {
+	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	game := &reloadDynamicGame{}
+	files := reloadConfigFS{"sprites/Dynamic/index.json": `{"costumes":[{"name":"default","path":"sprite.png","imageWidth":10,"imageHeight":10}]}`}
+	base := setupReloadCommitRuntime(t, files, game, []Sprite{&reloadDynamicSprite{}}, false)
+	base.typs["Dynamic"] = reflect.TypeFor[reloadDynamicSprite]()
+	// Simulate an engine callback replacing the sprite registration after preflight.
+	// Rebuild must report the incompatible owner instead of activating scripts.
+	pkgengine.ExtMgr = &reloadFieldChangingExtMgr{replace: func() { base.typs["Dynamic"] = reflect.TypeFor[reloadDynamicWrongOwnerSprite]() }}
+	err := XGot_Game_Reload(game, strings.NewReader(`{}`))
+	if err == nil || !strings.Contains(err.Error(), "cannot hold") {
+		t.Fatalf("reload sprite binding=%v", err)
+	}
+	if base.lifecycleState.IsRunned.Load() || base.lifecycleState.BootstrapDone.Load() {
+		t.Fatal("failed sprite rebuild activated game scripts")
 	}
 }

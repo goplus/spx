@@ -250,3 +250,36 @@ func penBatchOperations(batch []float32) []int {
 	}
 	return operations
 }
+
+func TestEveryPenCommandFlushesAtBatchLimit(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		op   int
+		add  func(*Game)
+	}{
+		{"move", internalengine.PenBatchMove, func(g *Game) { g.queuePenMove(1, mathf.NewVec2(2, 3)) }},
+		{"down", internalengine.PenBatchDown, func(g *Game) { g.queuePenDown(1) }},
+		{"color", internalengine.PenBatchColor, func(g *Game) { g.queuePenColor(1, mathf.NewColorRGBA(1, 0, 0, 1)) }},
+		{"size", internalengine.PenBatchSetSize, func(g *Game) { g.queuePenSize(1, 3) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := setupSpyPenMgr(t)
+			game := &Game{penSyncBuffer: internalengine.NewPenSyncBuffer(1)}
+			for range 1024 {
+				tt.add(game)
+			}
+			if spy.batchCalls != 1 || len(spy.batches) != 1 || int(spy.batches[0][0]) != 1024 {
+				t.Fatalf("full batch was not flushed once: %d", spy.batchCalls)
+			}
+			for _, op := range penBatchOperations(spy.batches[0]) {
+				if op != tt.op {
+					t.Fatalf("operation = %d, want %d", op, tt.op)
+				}
+			}
+			game.flushPenCommands()
+			if spy.batchCalls != 1 {
+				t.Fatal("flushed batch was replayed")
+			}
+		})
+	}
+}

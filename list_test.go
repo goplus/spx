@@ -18,9 +18,91 @@ package spx
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"testing"
 )
+
+func TestListInitFromOwnsElementStorage(t *testing.T) {
+	var source, copied List
+	source.Init("first", "second")
+	copied.InitFrom(&source)
+	source.Set(0, "source")
+	copied.Set(1, "copy")
+	if source.String() != "source second" || copied.String() != "first copy" {
+		t.Fatalf("InitFrom shares element storage: source=%q, copy=%q", source.String(), copied.String())
+	}
+	copied.InitFrom(&copied)
+	if copied.String() != "first copy" {
+		t.Fatalf("InitFrom self lost items: %q", copied.String())
+	}
+	var empty List
+	copied.InitFrom(&empty)
+	if copied.Len() != 0 {
+		t.Fatalf("InitFrom empty left %d items", copied.Len())
+	}
+}
+
+func TestListInsertPositions(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		index Pos
+		want  []any
+	}{
+		{"first", 0, []any{"new", "a", "b"}},
+		{"middle", 1, []any{"a", "new", "b"}},
+		{"end", 2, []any{"a", "b", "new"}},
+		{"past end", 10, []any{"a", "b", "new"}},
+		{"last", Last, []any{"a", "b", "new"}},
+		{"invalid", Invalid, []any{"a", "b"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			list := NewList("a", "b")
+			list.Insert(test.index, NewValue("new"))
+			if !slices.Equal(list.data, test.want) {
+				t.Fatalf("Insert(%d) = %v, want %v", test.index, list.data, test.want)
+			}
+		})
+	}
+	var empty List
+	empty.Insert(Last, "first")
+	if empty.Len() != 1 || empty.At(Last).String() != "first" {
+		t.Fatalf("Insert(Last) into empty list = %v", empty.data)
+	}
+}
+
+func TestListDeleteAndReadPositions(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		index Pos
+		want  []any
+	}{
+		{"first", 0, []any{"b", "c"}},
+		{"middle", 1, []any{"a", "c"}},
+		{"last", Last, []any{"a", "b"}},
+		{"all", All, []any{}},
+		{"invalid", Invalid, []any{"a", "b", "c"}},
+		{"past end", 3, []any{"a", "b", "c"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			list := NewList("a", "b", "c")
+			list.Delete(test.index)
+			if !slices.Equal(list.data, test.want) {
+				t.Fatalf("Delete(%d) = %v, want %v", test.index, list.data, test.want)
+			}
+			for _, invalid := range []Pos{Invalid, All, Pos(list.Len())} {
+				if got := list.At(invalid); got.data != nil {
+					t.Errorf("At(%d) = %v, want empty value", invalid, got)
+				}
+			}
+			list.Clear()
+			list.Delete(Last)
+			if list.Len() != 0 || list.At(Last).data != nil {
+				t.Fatal("empty list retained elements")
+			}
+		})
+	}
+}
 
 func TestStyleListEquality(t *testing.T) {
 	list := NewList(1, "02", "Apple")
@@ -95,61 +177,39 @@ func TestValueEqualUsesCompatibilitySemantics(t *testing.T) {
 	}
 }
 
-// TestValueBoolToInt tests bool to int conversion in Value.Int()
-func TestValueBoolToInt(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    bool
-		expected int
+func TestValueNumericConversions(t *testing.T) {
+	for _, test := range []struct {
+		input any
+		want  int
 	}{
-		{
-			name:     "true converts to 1",
-			input:    true,
-			expected: 1,
-		},
-		{
-			name:     "false converts to 0",
-			input:    false,
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.input)
-			result := v.Int()
-			if result != tt.expected {
-				t.Errorf("NewValue(%v).Int() = %d, want %d", tt.input, result, tt.expected)
+		{true, 1},
+		{false, 0},
+		{int(7), 7},
+		{int8(7), 7},
+		{int16(7), 7},
+		{int32(7), 7},
+		{int64(7), 7},
+		{uint(7), 7},
+		{uint8(7), 7},
+		{uint16(7), 7},
+		{uint32(7), 7},
+		{uint64(7), 7},
+		{float32(7), 7},
+		{float64(7), 7},
+	} {
+		t.Run(fmt.Sprintf("%T(%v)", test.input, test.input), func(t *testing.T) {
+			value := NewValue(test.input)
+			if got := value.Int(); got != test.want {
+				t.Errorf("Value.Int() = %d, want %d", got, test.want)
 			}
-		})
-	}
-}
-
-// TestValueBoolToFloat tests bool to float64 conversion in Value.Float()
-func TestValueBoolToFloat(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    bool
-		expected float64
-	}{
-		{
-			name:     "true converts to 1.0",
-			input:    true,
-			expected: 1.0,
-		},
-		{
-			name:     "false converts to 0.0",
-			input:    false,
-			expected: 0.0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := NewValue(tt.input)
-			result := v.Float()
-			if result != tt.expected {
-				t.Errorf("NewValue(%v).Float() = %f, want %f", tt.input, result, tt.expected)
+			if got := value.Float(); got != float64(test.want) {
+				t.Errorf("Value.Float() = %g, want %d", got, test.want)
+			}
+			if got, ok := toIntAny(test.input); !ok || got != test.want {
+				t.Errorf("toIntAny() = %d, %v; want %d, true", got, ok, test.want)
+			}
+			if got, ok := toFloat64Any(test.input); !ok || got != float64(test.want) {
+				t.Errorf("toFloat64Any() = %g, %v; want %d, true", got, ok, test.want)
 			}
 		})
 	}
@@ -177,107 +237,24 @@ func TestValueConversionFailureReturnsZero(t *testing.T) {
 	}
 }
 
-// TestToIntAnyBool tests toIntAny function with bool values
-func TestToIntAnyBool(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    any
-		expected int
-		shouldOk bool
+func TestFloatStringConversion(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		input string
+		want  float64
+		ok    bool
 	}{
-		{
-			name:     "true",
-			input:    true,
-			expected: 1,
-			shouldOk: true,
-		},
-		{
-			name:     "false",
-			input:    false,
-			expected: 0,
-			shouldOk: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, ok := toIntAny(tt.input)
-			if ok != tt.shouldOk {
-				t.Errorf("toIntAny(%v) ok = %v, want %v", tt.input, ok, tt.shouldOk)
+		{"double minus becomes positive", "--5.5", 5.5, true},
+		{"plus minus becomes negative", "+-12", -12, true},
+		{"generated negation pattern on negative value", "-" + fmt.Sprintf("%v", -18.25), 18.25, true},
+		{"empty after trimming", " ", 0, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got, ok := parseFloatString(test.input); ok != test.ok || got != test.want {
+				t.Errorf("parseFloatString(%q) = %g, %v; want %g, %v", test.input, got, ok, test.want, test.ok)
 			}
-			if result != tt.expected {
-				t.Errorf("toIntAny(%v) = %d, want %d", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestToFloat64AnyBool tests toFloat64Any function with bool values
-func TestToFloat64AnyBool(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    any
-		expected float64
-		shouldOk bool
-	}{
-		{
-			name:     "true",
-			input:    true,
-			expected: 1.0,
-			shouldOk: true,
-		},
-		{
-			name:     "false",
-			input:    false,
-			expected: 0.0,
-			shouldOk: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, ok := toFloat64Any(tt.input)
-			if ok != tt.shouldOk {
-				t.Errorf("toFloat64Any(%v) ok = %v, want %v", tt.input, ok, tt.shouldOk)
-			}
-			if result != tt.expected {
-				t.Errorf("toFloat64Any(%v) = %f, want %f", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestToFloat64AnyCompoundSignString(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected float64
-	}{
-		{
-			name:     "double minus becomes positive",
-			input:    "--5.5",
-			expected: 5.5,
-		},
-		{
-			name:     "plus minus becomes negative",
-			input:    "+-12",
-			expected: -12,
-		},
-		{
-			name:     "generated negation pattern on negative value",
-			input:    "-" + fmt.Sprintf("%v", -18.25),
-			expected: 18.25,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, ok := toFloat64Any(tt.input)
-			if !ok {
-				t.Fatalf("toFloat64Any(%q) ok = false, want true", tt.input)
-			}
-			if result != tt.expected {
-				t.Fatalf("toFloat64Any(%q) = %f, want %f", tt.input, result, tt.expected)
+			if got, ok := toFloat64Any(test.input); ok != test.ok || got != test.want {
+				t.Errorf("toFloat64Any(%q) = %g, %v; want %g, %v", test.input, got, ok, test.want, test.ok)
 			}
 		})
 	}
@@ -337,46 +314,25 @@ func TestNormalizeNumericStringSigns(t *testing.T) {
 
 func TestParseIntString(t *testing.T) {
 	maxInt := int(^uint(0) >> 1)
-	tests := []struct {
-		name     string
-		input    string
-		expected int
-		shouldOk bool
+	for _, test := range []struct {
+		name  string
+		input string
+		want  int
+		ok    bool
 	}{
-		{
-			name:     "compound sign integer",
-			input:    "--7",
-			expected: 7,
-			shouldOk: true,
-		},
-		{
-			name:     "float string truncates like int conversion",
-			input:    "--7.9",
-			expected: 7,
-			shouldOk: true,
-		},
-		{
-			name:     "max int preserved",
-			input:    strconv.Itoa(maxInt),
-			expected: maxInt,
-			shouldOk: true,
-		},
-		{
-			name:     "signs only invalid",
-			input:    "--",
-			expected: 0,
-			shouldOk: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, ok := parseIntString(tt.input)
-			if ok != tt.shouldOk {
-				t.Fatalf("parseIntString(%q) ok = %v, want %v", tt.input, ok, tt.shouldOk)
-			}
-			if result != tt.expected {
-				t.Fatalf("parseIntString(%q) = %d, want %d", tt.input, result, tt.expected)
+		{"compound sign integer", "--7", 7, true},
+		{"float string truncates like int conversion", "--7.9", 7, true},
+		{"max int preserved", strconv.Itoa(maxInt), maxInt, true},
+		{"signs only invalid", "--", 0, false},
+		{"empty", "", 0, false},
+		{"empty after trimming", "  ", 0, false},
+		{"plus only invalid", "+", 0, false},
+		{"positive overflow", "1e30", 0, false},
+		{"negative overflow", "-1e30", 0, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got, ok := parseIntString(test.input); ok != test.ok || got != test.want {
+				t.Fatalf("parseIntString(%q) = %d, %v; want %d, %v", test.input, got, ok, test.want, test.ok)
 			}
 		})
 	}
@@ -450,5 +406,45 @@ func TestToIntAnyPreservesLargeIntegerStringPrecision(t *testing.T) {
 				t.Fatalf("toIntAny(%q) = %d, want %d", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestValueSet(t *testing.T) {
+	var absent *Value
+	absent.Set("ignored")
+	value := NewValue("old")
+	value.Set(NewValue("new"))
+	if value.String() != "new" {
+		t.Fatalf("Set = %v", value)
+	}
+}
+
+func TestToIntAnyOutOfRange(t *testing.T) {
+	inputs := []any{^uint(0), ^uint64(0), float32(1e30), float64(1e30), float32(-1e30), float64(-1e30)}
+	if strconv.IntSize == 32 {
+		inputs = append(inputs, int64(1<<40), int64(-1<<31)-1, uint32(1<<31))
+	}
+	for _, input := range inputs {
+		t.Run(fmt.Sprintf("%T(%v)", input, input), func(t *testing.T) {
+			if got, ok := toIntAny(input); ok || got != 0 {
+				t.Fatalf("toIntAny() = %d, %v; want 0, false", got, ok)
+			}
+		})
+	}
+}
+
+func TestListRandomPositionUsesValidElement(t *testing.T) {
+	previous := scriptRandom
+	scriptRandom = newRandomState()
+	t.Cleanup(func() { scriptRandom = previous })
+	list := NewList("a", "b", "c")
+	for range 20 {
+		if item := list.At(Random); !list.Contains(item.data) {
+			t.Fatalf("random item = %v", item)
+		}
+	}
+	list.Clear()
+	if list.At(Random).data != nil {
+		t.Fatal("empty list has a random item")
 	}
 }

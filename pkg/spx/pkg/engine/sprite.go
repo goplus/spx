@@ -40,6 +40,7 @@ func (pself *Sprite) onCreate() {
 	pself.OnFrameChangedEvent = NewEvent0()
 	pself.OnAnimationLoopedEvent = NewEvent0()
 	pself.OnAnimationFinishedEvent = NewEvent0()
+	pself.OnVfxFinishedEvent = NewEvent0()
 }
 
 func (pself *Sprite) V_OnScreenExited() {

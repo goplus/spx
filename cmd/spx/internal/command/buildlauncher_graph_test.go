@@ -28,7 +28,7 @@ import (
 
 func TestResolveSPXSourceModes(t *testing.T) {
 	root := t.TempDir()
-	writeLauncherTestFile(t, filepath.Join(root, "cmd", "ispxnative", "main.go"), "package main\n")
+	writeCommandTestFile(t, filepath.Join(root, "cmd", "ispxnative", "main.go"), "package main\n")
 	wantRoot, err := canonicalDirectory(root)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestGraphFlagsFromEnvQuotedModfile(t *testing.T) {
 	workDir := t.TempDir()
 	modDir := filepath.Join(workDir, "module with spaces")
 	modfile := filepath.Join(modDir, "go.mod")
-	writeLauncherTestFile(t, modfile, "module example.com/game\n\ngo 1.25.0\n")
+	writeCommandTestFile(t, modfile, "module example.com/game\n\ngo 1.25.0\n")
 	canonical, err := canonicalFile(modfile)
 	if err != nil {
 		t.Fatal(err)
@@ -142,12 +142,12 @@ func TestLauncherGraphVerifier(t *testing.T) {
 	goMod := filepath.Join(root, "go.mod")
 	metadata := filepath.Join(root, "gox.mod")
 	dependency := filepath.Join(t.TempDir(), "dependency")
-	writeLauncherTestFile(t, filepath.Join(dependency, "go.mod"), "module example.com/dependency\n\ngo 1.25.0\n")
+	writeCommandTestFile(t, filepath.Join(dependency, "go.mod"), "module example.com/dependency\n\ngo 1.25.0\n")
 	moduleText := func(version string) string {
 		return "module example.com/game\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/goplus/spx/v3 v3.0.0\n\texample.com/dependency " + version + "\n)\nreplace github.com/goplus/spx/v3 => " + filepath.ToSlash(findSPXRoot(t)) + "\nreplace example.com/dependency => " + filepath.ToSlash(dependency) + "\n"
 	}
-	writeLauncherTestFile(t, goMod, moduleText("v1.0.0"))
-	writeLauncherTestFile(t, metadata, "xgo 1.8.0\n")
+	writeCommandTestFile(t, goMod, moduleText("v1.0.0"))
+	writeCommandTestFile(t, metadata, "xgo 1.8.0\n")
 	goCommand, err := resolveGoCommand()
 	if err != nil {
 		t.Fatal(err)
@@ -163,16 +163,16 @@ func TestLauncherGraphVerifier(t *testing.T) {
 	if err := verifier.verify(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	writeLauncherTestFile(t, filepath.Join(root, "go.sum"), "")
+	writeCommandTestFile(t, filepath.Join(root, "go.sum"), "")
 	if err := verifier.verify(context.Background()); err != nil {
 		t.Fatalf("go.sum changed graph identity: %v", err)
 	}
-	writeLauncherTestFile(t, goMod, moduleText("v1.1.0"))
+	writeCommandTestFile(t, goMod, moduleText("v1.1.0"))
 	if err := verifier.verify(context.Background()); err == nil || !strings.Contains(err.Error(), "module selection changed") {
 		t.Fatalf("module selection change error = %v", err)
 	}
-	writeLauncherTestFile(t, goMod, moduleText("v1.0.0"))
-	writeLauncherTestFile(t, metadata, "xgo 1.9.0\n")
+	writeCommandTestFile(t, goMod, moduleText("v1.0.0"))
+	writeCommandTestFile(t, metadata, "xgo 1.9.0\n")
 	if err := verifier.verify(context.Background()); err == nil || !strings.Contains(err.Error(), "module input changed") {
 		t.Fatalf("metadata change error = %v", err)
 	}
@@ -182,11 +182,11 @@ func TestLauncherGraphVerifierVendorMetadata(t *testing.T) {
 	root := t.TempDir()
 	spxRoot := filepath.Join(root, "spx")
 	moduleRoot := filepath.Join(root, "game")
-	writeLauncherTestFile(t, filepath.Join(spxRoot, "go.mod"), "module "+spxModulePath+"\n\ngo 1.25.0\n")
-	writeLauncherTestFile(t, filepath.Join(spxRoot, "cmd", "ispxnative", "main.go"), "package ispxnative\n")
+	writeCommandTestFile(t, filepath.Join(spxRoot, "go.mod"), "module "+spxModulePath+"\n\ngo 1.25.0\n")
+	writeCommandTestFile(t, filepath.Join(spxRoot, "cmd", "ispxnative", "main.go"), "package ispxnative\n")
 	goMod := filepath.Join(moduleRoot, "go.mod")
-	writeLauncherTestFile(t, goMod, "module example.com/game\n\ngo 1.25.0\n\nrequire "+spxModulePath+" v3.0.0\nreplace "+spxModulePath+" => "+filepath.ToSlash(spxRoot)+"\n")
-	writeLauncherTestFile(t, filepath.Join(moduleRoot, "main.go"), "package main\nimport _ \""+spxModulePath+"/cmd/ispxnative\"\nfunc main() {}\n")
+	writeCommandTestFile(t, goMod, "module example.com/game\n\ngo 1.25.0\n\nrequire "+spxModulePath+" v3.0.0\nreplace "+spxModulePath+" => "+filepath.ToSlash(spxRoot)+"\n")
+	writeCommandTestFile(t, filepath.Join(moduleRoot, "main.go"), "package main\nimport _ \""+spxModulePath+"/cmd/ispxnative\"\nfunc main() {}\n")
 	goCommand, err := resolveGoCommand()
 	if err != nil {
 		t.Fatal(err)

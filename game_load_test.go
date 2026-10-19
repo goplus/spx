@@ -17,16 +17,17 @@
 package spx
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/ui"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v3/internal/log"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type cameraFollowOverrideGame struct {
@@ -370,73 +371,6 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	}
 }
 
-func TestLoadSoundCachesIndependentConfigs(t *testing.T) {
-	fs := reloadConfigFS{
-		"sounds/Jump/index.json": `{"path":"jump.wav","rate":1,"sampleCount":10}`,
-		"sounds/Land/index.json": `{"path":"land.wav","rate":2,"sampleCount":20}`,
-	}
-	game := &Game{fs: fs, sounds: make(map[string]sound)}
-	jump, err := game.loadSound("Jump")
-	if err != nil {
-		t.Fatal(err)
-	}
-	land, err := game.loadSound("Land")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if jump == land {
-		t.Fatal("different sounds share a config pointer")
-	}
-	if jump.Path != "sounds/Jump/jump.wav" || jump.Rate != 1 || jump.SampleCount != 10 {
-		t.Fatalf("jump config changed after loading land: %+v", jump)
-	}
-	if land.Path != "sounds/Land/land.wav" || land.Rate != 2 || land.SampleCount != 20 {
-		t.Fatalf("land config = %+v", land)
-	}
-	jump.Rate = 3
-	if land.Rate != 2 {
-		t.Fatal("changing jump affected land")
-	}
-	delete(fs, "sounds/Jump/index.json")
-	cached, err := game.loadSound("Jump")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cached != jump || cached.Rate != 3 {
-		t.Fatalf("cached config = %+v, want original pointer %+v", cached, jump)
-	}
-}
-
-func TestLoadSoundDoesNotCacheErrors(t *testing.T) {
-	for _, tt := range []struct{ name, content string }{
-		{"missing", ""},
-		{"malformed", `{`},
-		{"trailing value", `{"path":"jump.wav"} {}`},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			fs := reloadConfigFS{}
-			if tt.content != "" {
-				fs["sounds/Jump/index.json"] = tt.content
-			}
-			game := &Game{fs: fs, sounds: make(map[string]sound)}
-			if media, err := game.loadSound("Jump"); err == nil || media != nil {
-				t.Fatalf("failed load = %+v, %v; want nil config and an error", media, err)
-			}
-			if _, ok := game.sounds["Jump"]; ok {
-				t.Fatal("failed load was cached")
-			}
-			fs["sounds/Jump/index.json"] = `{"path":"jump.wav"}`
-			media, err := game.loadSound("Jump")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if media.Path != "sounds/Jump/jump.wav" || game.sounds["Jump"] != media {
-				t.Fatalf("retry did not cache the normalized config: %+v", media)
-			}
-		})
-	}
-}
-
 func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
 	t.Setenv("SPX_SCREENSHOT_KEY", "")
 	t.Setenv("SPX_PROJECT_DIR", "")
@@ -506,288 +440,175 @@ func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
 	}
 }
 
-type stagePlanGame struct {
-	Game
-	Value    collisionLayerOrderSprite
-	Pointer  *collisionLayerOrderSprite
-	Dynamic  Sprite
-	values   []collisionLayerOrderSprite
-	pointers []*collisionLayerOrderSprite
-}
-
-func prepareStageEntries(gamer reflect.Value, zorder []any) ([]preparedStageEntry, error) {
-	entries := make([]preparedStageEntry, len(zorder))
-	for i, raw := range zorder {
-		entry, err := prepareStageEntry(gamer, raw)
-		if err != nil {
-			return nil, err
-		}
-		entries[i] = entry
-	}
-	return entries, nil
-}
-
-func TestPreparedStageUsesLiveFieldsAndOwnsParsedValues(t *testing.T) {
-	for _, shadow := range []bool{false, true} {
-		name := "cold"
-		if shadow {
-			name = "reload shadow"
-		}
-		t.Run(name, func(t *testing.T) {
-			setupCloneSpriteMgr(t)
-			game := &stagePlanGame{}
-			game.initShapeMgr()
-			game.Value = *newCollisionLayerOrderSprite(&game.Game, "Value", nil)
-			game.Pointer = newCollisionLayerOrderSprite(&game.Game, "Pointer", nil)
-			game.Dynamic = newCollisionLayerOrderSprite(&game.Game, "Dynamic", nil)
-			back := newCollisionLayerOrderSprite(&game.Game, "Back", nil)
-			front := newCollisionLayerOrderSprite(&game.Game, "Front", nil)
-			prototype := newCollisionLayerOrderSprite(&game.Game, "collisionLayerOrderSprite", nil)
-			prototype.baseObj.initWithSize(1, 1)
-			prototype.physics().collisionInfo.Type = physicsColliderNone
-			prototype.physics().triggerInfo.Type = physicsColliderNone
-			game.sprs = map[string]Sprite{"Back": back, "Front": front, "collisionLayerOrderSprite": prototype}
-			raw := []any{
-				"Back",
-				coreproject.StageShape{"type": "sprite", "target": "Value", "x": 1.0},
-				coreproject.StageShape{"type": "sprite", "target": "Pointer", "x": 2.0},
-				coreproject.StageShape{"type": "sprite", "target": "Dynamic", "x": 3.0},
-				coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{coreproject.StageShape{"x": 4.0}, coreproject.StageShape{"x": 5.0}}},
-				coreproject.StageShape{"type": "sprites", "target": "pointers", "items": []any{coreproject.StageShape{"x": 6.0}}},
-				coreproject.StageShape{"type": "monitor", "target": "", "val": "missing", "name": "missing", "label": "Missing", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true},
-				"Front",
-			}
-			source := game
-			if shadow {
-				source = &stagePlanGame{Dynamic: &collisionLayerOrderSprite{}}
-			}
-			entries, err := prepareStageEntries(reflect.ValueOf(source).Elem(), raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for i, value := range raw {
-				if shape, ok := value.(coreproject.StageShape); ok {
-					clear(shape)
-				}
-				raw[i] = nil
-			}
-			inits, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), nil, nil, entries)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(inits) != 8 {
-				t.Fatalf("initialized %d sprites, want 8", len(inits))
-			}
-			if len(game.values) != 2 || len(game.pointers) != 1 {
-				t.Fatalf("group sizes = %d, %d", len(game.values), len(game.pointers))
-			}
-			want := []Sprite{back, &game.Value, game.Pointer, game.Dynamic, &game.values[0], &game.values[1], game.pointers[0], front}
-			shapes := game.getAllShapes()
-			for i, sprite := range want {
-				if inits[i] != sprite || shapes[i] != spriteOf(sprite) {
-					t.Fatalf("sprite %d bound to wrong live object", i)
-				}
-				if spriteOf(sprite).runtimeState.Layer != firstSpriteLayer+i {
-					t.Fatalf("sprite %d layer = %d", i, spriteOf(sprite).runtimeState.Layer)
-				}
-				if i > 0 && i < 7 && spriteOf(sprite).Xpos() != float64(i) {
-					t.Fatalf("sprite %d x = %v", i, spriteOf(sprite).Xpos())
-				}
-			}
-		})
-	}
-}
-
-func TestPreparedDisplayShapesOwnAllConfiguration(t *testing.T) {
-	for _, kind := range []string{"monitor", "stageMonitor"} {
-		t.Run(kind, func(t *testing.T) {
-			shape := coreproject.StageShape{
-				"type": kind, "target": "", "val": "score", "name": "score", "label": "Score", "mode": "slider",
-				"x": 2.0, "y": 3.0, "visible": true, "color": "#123456", "width": 120.0, "height": 90.0,
-				"sliderMin": 4.0, "sliderMax": 8.0, "isDiscrete": false,
-			}
-			entry, err := prepareStageEntry(reflect.Value{}, shape)
-			if err != nil {
-				t.Fatal(err)
-			}
-			clear(shape)
-			if entry.kind != stageMonitor {
-				t.Fatalf("kind = %v, want stageMonitor", entry.kind)
-			}
-			got := entry.monitor
-			if got.config.Name != "score" || got.config.X != 2 || got.config.Y != 3 || !got.config.Visible {
-				t.Fatalf("prepared monitor config = %+v", got.config)
-			}
-			color, _ := mathf.NewColorAny("#123456")
-			if got.style.Appearance != ui.MonitorAppearanceSlider || got.style.Color != color || got.style.Dimensions != mathf.NewVec2(120, 90) || got.style.Slider != (ui.MonitorSlider{Min: 4, Max: 8, Step: 0.01}) {
-				t.Fatalf("prepared monitor style = %+v", got.style)
-			}
-		})
-	}
-	t.Run("measure", func(t *testing.T) {
-		shape := coreproject.StageShape{"type": "measure", "size": 10.0, "x": 20.0, "y": 30.0, "scale": 2.0, "heading": 45.0}
-		entry, err := prepareStageEntry(reflect.Value{}, shape)
-		if err != nil {
-			t.Fatal(err)
-		}
-		clear(shape)
-		if entry.kind != stageMeasure {
-			t.Fatalf("kind = %v, want stageMeasure", entry.kind)
-		}
-		got := entry.measure
-		if got.Size != 10 || got.X != 20 || got.Y != 30 || got.Scale != 2 || got.Heading != 45 {
-			t.Fatalf("prepared measure = %+v", got)
-		}
-	})
-}
-
-func TestPreparedStagePreservesDirectFieldLookup(t *testing.T) {
-	type embedded struct{ Target *collisionLayerOrderSprite }
-	type holder struct{ embedded }
-	game := holder{embedded{Target: &collisionLayerOrderSprite{}}}
-	_, err := prepareStageEntries(reflect.ValueOf(&game).Elem(), []any{coreproject.StageShape{"type": "sprite", "target": "Target"}})
-	if err == nil {
-		t.Fatal("promoted field unexpectedly accepted as direct stage target")
-	}
-}
-
-func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
-	game := &reloadDirectCommitGame{}
-	files := reloadConfigFS{}
-	setupReloadCommitRuntime(t, files, game, nil, false)
-	if err := game.loadSpriteFields(reflect.ValueOf(game).Elem()); err != nil {
-		t.Fatal(err)
-	}
-	if game.DirectCommitSprite == nil {
-		t.Fatal("cold load did not allocate the sprite field")
-	}
-	if len(game.sprs) != 0 {
-		t.Fatalf("cold load initialized unregistered sprites: %v", game.sprs)
-	}
-}
-
-func TestReloadStageDoesNotReadProjectZOrderDuringCommit(t *testing.T) {
-	game := setupReloadCommitGame(t, reloadConfigFS{"sprites/reloadCommitSprite/index.json": preparedPropertiesSpriteConfig})
-	gamer := reflect.ValueOf(game).Elem()
-	plan, err := prepareReload(&game.Game, gamer, strings.NewReader(`{"zorder":[{"type":"sprites","target":"Sprites","items":[{"x":7},{"x":9}]}]}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	clear(plan.project.Zorder[0].(coreproject.StageShape))
-	plan.project.Zorder = []any{false}
-	inits, err := game.loadAndInitSprites(gamer, &plan.project, plan.spriteLoader(&game.Game), plan.stage)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(inits) != 2 || len(game.Sprites) != 2 || game.Sprites[0].Xpos() != 7 || game.Sprites[1].Xpos() != 9 {
-		t.Fatalf("reload did not commit prepared stage entries: %v", game.Sprites)
-	}
-}
-
-func TestColdStageKeepsLazyLoadFailureBeforeLaterParseFailure(t *testing.T) {
-	var game Game
-	game.initShapeMgr()
-	game.sprs = make(map[string]Sprite)
-	game.typs = map[string]reflect.Type{"Sprite": reflect.TypeFor[collisionLayerOrderSprite]()}
-	want := errors.New("first sprite config failed")
-	_, err := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{Zorder: []any{
-		"Sprite", coreproject.StageShape{"type": "measure", "size": "invalid"},
-	}}, func(Sprite, string, reflect.Value) error { return want }, nil)
-	if !errors.Is(err, want) || !strings.Contains(err.Error(), `zorder[0]: load sprite "Sprite"`) {
-		t.Fatalf("cold load failure = %v, want indexed first sprite config error", err)
-	}
-}
-
-func TestColdStageWrapsEntryFailureWithLayer(t *testing.T) {
-	game := &stagePlanGame{}
-	game.initShapeMgr()
-	_, err := game.loadAndInitSprites(reflect.ValueOf(game).Elem(), &coreproject.ProjectConfig{Zorder: []any{
-		coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, coreproject.StageShape{},
-	}}, nil, nil)
-	if err == nil || err.Error() != "zorder[1]: invalid stage shape type" {
-		t.Fatalf("cold load failure = %v, want indexed stage shape error", err)
-	}
-}
-
-func TestPrepareStageEntryEmptyValues(t *testing.T) {
-	game := &stagePlanGame{}
-	gamer := reflect.ValueOf(game).Elem()
-	for _, test := range []struct {
-		name   string
-		raw    any
-		kind   stageEntryKind
-		target string
-	}{
-		{"empty sprite name", "", stageNamedSprite, ""},
-		{"empty value sprite group", coreproject.StageShape{"type": "sprites", "target": "values", "items": []any{}}, stageSprites, "values"},
-		{"empty pointer sprite group", coreproject.StageShape{"type": "sprites", "target": "pointers", "items": []any{}}, stageSprites, "pointers"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			entry, err := prepareStageEntry(gamer, test.raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if entry.kind != test.kind || entry.name != test.target || len(entry.properties) != 0 {
-				t.Fatalf("entry = %+v, want kind %v, target %q and no properties", entry, test.kind, test.target)
-			}
-			if entry.kind == stageSprites {
-				if gamer.Type().Field(entry.fieldIndex).Name != test.target || entry.spriteType != reflect.TypeFor[collisionLayerOrderSprite]() {
-					t.Fatalf("empty group target = %q, field index = %d, sprite type = %v", entry.name, entry.fieldIndex, entry.spriteType)
-				}
-			}
-		})
-	}
-}
-
-func TestPrepareStageEntryErrors(t *testing.T) {
-	game := &struct {
-		Sprite   *collisionLayerOrderSprite
-		Number   int
-		BadItems []int
-		Sprites  []*collisionLayerOrderSprite
-	}{}
+func TestInitialLoadAndReloadShareSpritePreparationErrors(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  any
-		want string
+		name       string
+		configJSON string
+		want       string
 	}{
-		{"nil", nil, "invalid zorder entry type <nil>"},
-		{"number", 42, "invalid zorder entry type int"},
-		{"boolean", false, "invalid zorder entry type bool"},
-		{"array", []any{}, "invalid zorder entry type []interface {}"},
-		{"nil shape", coreproject.StageShape(nil), "invalid stage shape type"},
-		{"missing type", coreproject.StageShape{}, "invalid stage shape type"},
-		{"null type", coreproject.StageShape{"type": nil}, "invalid stage shape type"},
-		{"non-string type", coreproject.StageShape{"type": 1.0}, "invalid stage shape type"},
-		{"unknown shape", coreproject.StageShape{"type": "unknown"}, "unknown shape - unknown"},
-		{"case-sensitive alias", coreproject.StageShape{"type": "StageMonitor"}, "unknown shape - StageMonitor"},
-		{"empty type", coreproject.StageShape{"type": ""}, "unknown shape - "},
-		{"monitor validation", coreproject.StageShape{"type": "monitor"}, `stage shape field "target" is required`},
-		{"alias validation", coreproject.StageShape{"type": "stageMonitor"}, `stage shape field "target" is required`},
-		{"measure validation", coreproject.StageShape{"type": "measure", "size": "large"}, `stage shape field "size" has type string, want float64`},
-		{"measure color", coreproject.StageShape{"type": "measure", "size": 10.0, "x": 0.0, "y": 0.0, "color": []any{1.0}}, `stage shape field "color": unsupported color format`},
-		{"monitor mode", coreproject.StageShape{"type": "monitor", "target": "", "val": "score", "name": "score", "label": "Score", "mode": nil, "x": 0.0, "y": 0.0, "visible": true}, `stage shape field "mode" has type <nil>, want float64`},
-		{"missing target", coreproject.StageShape{"type": "sprite"}, "stage shape target must be a non-empty string"},
-		{"empty target", coreproject.StageShape{"type": "sprite", "target": ""}, "stage shape target must be a non-empty string"},
-		{"non-string target", coreproject.StageShape{"type": "sprites", "target": 1.0}, "stage shape target must be a non-empty string"},
-		{"unknown sprite", coreproject.StageShape{"type": "sprite", "target": "Missing"}, `stage sprite target "Missing" is not defined`},
-		{"non-sprite field", coreproject.StageShape{"type": "sprite", "target": "Number"}, `stage sprite target "Number" is not a sprite field`},
-		{"sprite property", coreproject.StageShape{"type": "sprite", "target": "Sprite", "x": "left"}, `stage shape field "x" has type string, want float64`},
-		{"missing items", coreproject.StageShape{"type": "sprites", "target": "Sprites"}, "stage shape items must be an array"},
-		{"null items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": nil}, "stage shape items must be an array"},
-		{"non-array items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": false}, "stage shape items must be an array"},
-		{"unknown sprites", coreproject.StageShape{"type": "sprites", "target": "Missing", "items": []any{}}, `stage sprites target "Missing" is not defined`},
-		{"non-slice field", coreproject.StageShape{"type": "sprites", "target": "Sprite", "items": []any{}}, `stage sprites target "Sprite" is not a slice`},
-		{"non-sprite items", coreproject.StageShape{"type": "sprites", "target": "BadItems", "items": []any{}}, `stage sprites target "BadItems" has invalid item type int`},
-		{"invalid item", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, false}}, `stage sprites target "Sprites" item[1] has invalid type bool`},
-		{"item property", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": []any{coreproject.StageShape{}, coreproject.StageShape{"x": "left"}}}, `stage sprites target "Sprites" item[1]: stage shape field "x" has type string, want float64`},
+		{
+			name:       "null animation",
+			configJSON: `{"costumeSet":{"nx":1},"fAnimations":{"walk":null}}`,
+			want:       `fAnimations["walk"] is null`,
+		},
+		{
+			name:       "missing frame name",
+			configJSON: `{"costumeSet":{"nx":1},"fAnimations":{"walk":{"frameFrom":"missing"}}}`,
+			want:       `fAnimations["walk"].frameFrom references missing costume "missing"`,
+		},
+		{
+			name:       "frame index out of range",
+			configJSON: `{"costumeSet":{"nx":1},"fAnimations":{"walk":{"frameTo":1}}}`,
+			want:       `fAnimations["walk"].frameTo index 1 is outside 1 costumes`,
+		},
+		{
+			name:       "missing costume declaration",
+			configJSON: `{}`,
+			want:       "configuration must define costumes, costumeSet, or costumeMPSet",
+		},
+		{
+			name:       "multiple invalid animations use stable order",
+			configJSON: `{"costumeSet":{"nx":1},"fAnimations":{"z":null,"a":null}}`,
+			want:       `fAnimations["a"] is null`,
+		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := prepareStageEntry(reflect.ValueOf(game).Elem(), test.raw)
-			if err == nil || err.Error() != test.want {
-				t.Fatalf("error = %v, want %q", err, test.want)
+			files := reloadConfigFS{"sprites/Sprite/index.json": test.configJSON}
+			game, _, _ := setupReloadPreflightGame(t, files)
+			gamer := reflect.ValueOf(game).Elem()
+
+			initialSprite := &reloadPreflightSprite{reloadPreflightGame: game}
+			initialErr := game.loadSprite(initialSprite, "Sprite", gamer)
+			if initialErr == nil {
+				t.Fatal("initial load accepted invalid sprite config")
+			}
+			_, reloadErr := prepareReload(&game.Game, gamer, strings.NewReader(`{"zorder":["Sprite"]}`))
+			if reloadErr == nil {
+				t.Fatal("reload accepted invalid sprite config")
+			}
+
+			want := `sprite config "Sprite": ` + test.want
+			reloadReason := strings.TrimPrefix(reloadErr.Error(), "reload preflight: ")
+			if initialErr.Error() != want || reloadReason != want {
+				t.Fatalf("sprite preparation errors: initial=%q reload=%q, want %q", initialErr, reloadReason, want)
 			}
 		})
+	}
+}
+
+func TestPrepareSpriteConfigBuildsStableAnimationDefinitions(t *testing.T) {
+	sourceAnimation := &coreproject.AniConfig{FrameFrom: "idle", FrameTo: "walk"}
+	source := coreproject.SpriteConfig{
+		Costumes: []*coreproject.CostumeConfig{{Name: "idle"}, {Name: "walk"}},
+		FAnimations: map[string]*coreproject.AniConfig{
+			"walk": sourceAnimation,
+		},
+	}
+	sourceSnapshot := *sourceAnimation
+
+	first, err := prepareSpriteConfig(&source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := prepareSpriteConfig(&source)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstAnimation := first.config.FAnimations["walk"]
+	secondAnimation := second.config.FAnimations["walk"]
+	if firstAnimation == sourceAnimation || secondAnimation == sourceAnimation || firstAnimation == secondAnimation {
+		t.Fatal("preparation reused a mutable input or prior prepared animation definition")
+	}
+	if !reflect.DeepEqual(*sourceAnimation, sourceSnapshot) {
+		t.Fatalf("preparation mutated source animation: got %+v, want %+v", *sourceAnimation, sourceSnapshot)
+	}
+	if !reflect.DeepEqual(*firstAnimation, *secondAnimation) {
+		t.Fatalf("repeated preparation differs: first=%+v second=%+v", *firstAnimation, *secondAnimation)
+	}
+	if firstAnimation.FrameFps != 25 || firstAnimation.TurnToDuration != 1 || firstAnimation.StepDuration != 0.01 ||
+		firstAnimation.IFrameFrom != 0 || firstAnimation.IFrameTo != 1 || firstAnimation.Speed != 1 ||
+		firstAnimation.Duration != 2.0/25 {
+		t.Fatalf("prepared animation = %+v", *firstAnimation)
+	}
+
+	definitionSnapshot := *firstAnimation
+	sprite := &SpriteImpl{name: "Sprite"}
+	sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	animation := &animationComponent{}
+	animation.initialize(sprite, &first.config)
+	child := animation.cloneFor(&SpriteImpl{name: "child"})
+	grandchild := child.cloneFor(&SpriteImpl{name: "grandchild"})
+	if child.shared != animation.shared || grandchild.shared != animation.shared {
+		t.Fatal("animation clones did not share the prepared definitions")
+	}
+	if !reflect.DeepEqual(*firstAnimation, definitionSnapshot) {
+		t.Fatalf("initialization or cloning mutated prepared animation: got %+v, want %+v", *firstAnimation, definitionSnapshot)
+	}
+}
+
+func TestBindSpriteOwnerRejectsInvalidStorage(t *testing.T) {
+	game := reflect.ValueOf(&Game{}).Elem()
+	for _, test := range []struct {
+		name   string
+		sprite reflect.Value
+		want   string
+	}{
+		{"missing", reflect.ValueOf(&struct{ SpriteImpl }{}).Elem(), "missing owner field"},
+		{"unaddressable", reflect.ValueOf(struct {
+			SpriteImpl
+			Owner *Game
+		}{}), "not addressable"},
+		{"wrong type", reflect.ValueOf(&struct {
+			SpriteImpl
+			Owner *int
+		}{}).Elem(), "cannot hold"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := bindSpriteOwner(test.sprite, game)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error=%v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+type gameDisplayPlatformMgr struct {
+	reloadCommitPlatformMgr
+	width, height int64
+	fullscreen    bool
+}
+
+func (m *gameDisplayPlatformMgr) SetWindowSize(width, height int64, _ bool) {
+	m.width, m.height = width, height
+}
+func (m *gameDisplayPlatformMgr) SetWindowFullscreen(value bool) { m.fullscreen = value }
+func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
+	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	game := setupReloadCommitGame(t, reloadConfigFS{})
+	manager := &gameDisplayPlatformMgr{}
+	pkgengine.PlatformMgr = manager
+	previousScale := engine.WindowScale()
+	t.Cleanup(func() {
+		engine.SetWindowScale(previousScale)
+		engine.SetDebugMode(false)
+		spxlog.SetLevel(spxlog.LevelInfo)
+	})
+	project := &coreproject.ProjectConfig{Debug: true, FullScreen: true, WindowScale: 2, Bgm: "theme", Map: coreproject.MapConfig{Width: 480, Height: 360}}
+	backend := &fakeAudioBackend{}
+	game.soundMgr.Init(backend)
+	game.sounds["theme"] = &coreproject.SoundConfig{Path: "sounds/theme.wav"}
+	game.setupDisplayConfig(project)
+	game.setupWorldAndWindow(project)
+	game.setupPlatformAndCamera(project)
+	game.setupAudioAndTilemap(project)
+	if !game.debugState.Debug || !manager.fullscreen || len(backend.plays) != 1 {
+		t.Fatalf("debug=%v fullscreen=%v music plays=%v", game.debugState.Debug, manager.fullscreen, backend.plays)
+	}
+	game.SetWindowSize(640, 480)
+	if manager.width != 640 || manager.height != 480 {
+		t.Fatalf("window=%dx%d", manager.width, manager.height)
 	}
 }

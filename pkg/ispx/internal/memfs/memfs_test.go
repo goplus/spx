@@ -20,8 +20,11 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"path"
+	"slices"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 func TestNew(t *testing.T) {
@@ -31,754 +34,272 @@ func TestNew(t *testing.T) {
 		"subdir/sub/a.txt": []byte("a"),
 	}
 	fsys := New(files)
-	if fsys == nil {
-		t.Fatal("expected non-nil FS")
-	}
-	if fsys.files == nil {
-		t.Fatal("expected non-nil files map")
+	if fsys == nil || fsys.files == nil {
+		t.Fatal("expected non-nil FS and files map")
 	}
 	if err := fstest.TestFS(fsys, "file.txt", "subdir/file.txt", "subdir/sub/a.txt"); err != nil {
-		t.Errorf("fstest.TestFS failed: %v", err)
+		t.Fatal(err)
 	}
 }
 
-func TestFSOpen(t *testing.T) {
-	t.Run("File", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		f, err := fsys.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		data, err := io.ReadAll(f)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if string(data) != "hello" {
-			t.Errorf("got %q, want %q", string(data), "hello")
+func openTestFile(t *testing.T, fsys *FS, name string) fs.File {
+	t.Helper()
+	file, err := fsys.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("Close(%q): %v", name, err)
 		}
 	})
-
-	t.Run("Directory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("world"),
-		})
-		f, err := fsys.Open("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			t.Fatalf("failed to stat: %v", err)
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-	})
-
-	t.Run("RootDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		f, err := fsys.Open(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			t.Fatalf("failed to stat: %v", err)
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-	})
-
-	t.Run("NotExist", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.Open("nonexistent.txt")
-		if err == nil {
-			t.Fatal("expected error for nonexistent file")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrNotExist {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrNotExist)
-		}
-	})
-
-	t.Run("InvalidPath", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.Open("../invalid")
-		if err == nil {
-			t.Fatal("expected error for invalid path")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrInvalid {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrInvalid)
-		}
-	})
+	return file
 }
 
-func TestFSReadDir(t *testing.T) {
-	t.Run("RootDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"a.txt":            []byte("a"),
-			"b.txt":            []byte("bb"),
-			"subdir/c.txt":     []byte("ccc"),
-			"subdir/d.txt":     []byte("dddd"),
-			"subdir/sub/e.txt": []byte("eeeee"),
-		})
-		entries, err := fsys.ReadDir(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(entries) != 3 {
-			t.Fatalf("got %d entries, want 3", len(entries))
-		}
-
-		expected := []struct {
-			name  string
-			isDir bool
-		}{
-			{"a.txt", false},
-			{"b.txt", false},
-			{"subdir", true},
-		}
-		for i, e := range expected {
-			if entries[i].Name() != e.name {
-				t.Errorf("entry %d: got name %q, want %q", i, entries[i].Name(), e.name)
-			}
-			if entries[i].IsDir() != e.isDir {
-				t.Errorf("entry %d: got isDir %v, want %v", i, entries[i].IsDir(), e.isDir)
-			}
-		}
-	})
-
-	t.Run("Subdirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/c.txt":     []byte("ccc"),
-			"subdir/d.txt":     []byte("dddd"),
-			"subdir/sub/e.txt": []byte("eeeee"),
-		})
-		entries, err := fsys.ReadDir("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(entries) != 3 {
-			t.Fatalf("got %d entries, want 3", len(entries))
-		}
-
-		expected := []struct {
-			name  string
-			isDir bool
-		}{
-			{"c.txt", false},
-			{"d.txt", false},
-			{"sub", true},
-		}
-		for i, e := range expected {
-			if entries[i].Name() != e.name {
-				t.Errorf("entry %d: got name %q, want %q", i, entries[i].Name(), e.name)
-			}
-			if entries[i].IsDir() != e.isDir {
-				t.Errorf("entry %d: got isDir %v, want %v", i, entries[i].IsDir(), e.isDir)
-			}
-		}
-	})
-
-	t.Run("NotExist", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.ReadDir("nonexistent")
-		if err == nil {
-			t.Fatal("expected error for nonexistent directory")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrNotExist {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrNotExist)
-		}
-	})
-
-	t.Run("InvalidPath", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.ReadDir("../invalid")
-		if err == nil {
-			t.Fatal("expected error for invalid path")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrInvalid {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrInvalid)
-		}
-	})
+func assertFileInfo(t *testing.T, info fs.FileInfo, name string, size int64, mode fs.FileMode) {
+	t.Helper()
+	if info.Name() != name || info.Size() != size || info.Mode() != mode || info.IsDir() != mode.IsDir() {
+		t.Errorf("metadata = (%q, %d, %v, directory=%v), want (%q, %d, %v)", info.Name(), info.Size(), info.Mode(), info.IsDir(), name, size, mode)
+	}
+	if !info.ModTime().Equal(time.Unix(0, 0)) || info.Sys() != nil {
+		t.Errorf("metadata time/sys = (%v, %v), want Unix epoch and nil", info.ModTime(), info.Sys())
+	}
 }
 
-func TestFSStat(t *testing.T) {
-	t.Run("File", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
+func assertPathError(t *testing.T, err error, op, name string, want error) {
+	t.Helper()
+	var pathErr *fs.PathError
+	if !errors.As(err, &pathErr) || pathErr.Op != op || pathErr.Path != name || pathErr.Err != want || !errors.Is(err, want) {
+		t.Fatalf("error = %v, want PathError{%q, %q, %v}", err, op, name, want)
+	}
+}
+
+func TestFileAndDirectoryMetadata(t *testing.T) {
+	fsys := New(map[string][]byte{
+		"file.txt":        []byte("hello"),
+		"subdir/file.txt": []byte("world"),
+		"a/b/c/file.txt":  []byte("nested"),
+	})
+	for _, tt := range []struct {
+		name, content string
+		mode          fs.FileMode
+	}{
+		{"file.txt", "hello", fileMode},
+		{"subdir/file.txt", "world", fileMode},
+		{".", "", dirMode},
+		{"subdir", "", dirMode},
+		{"a/b", "", dirMode},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := fsys.Stat(tt.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertFileInfo(t, info, path.Base(tt.name), int64(len(tt.content)), tt.mode)
+			file := openTestFile(t, fsys, tt.name)
+			info, err = file.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertFileInfo(t, info, path.Base(tt.name), int64(len(tt.content)), tt.mode)
+			if !tt.mode.IsDir() {
+				data, err := io.ReadAll(file)
+				if err != nil || string(data) != tt.content {
+					t.Fatalf("content = %q, %v; want %q", data, err, tt.content)
+				}
+			}
 		})
-		fi, err := fsys.Stat("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if fi.Name() != "file.txt" {
-			t.Errorf("got name %q, want %q", fi.Name(), "file.txt")
-		}
-		if fi.Size() != 5 {
-			t.Errorf("got size %d, want 5", fi.Size())
-		}
-		if fi.IsDir() {
-			t.Error("expected file, not directory")
-		}
-		if fi.Mode() != fileMode {
-			t.Errorf("got mode %v, want %v", fi.Mode(), fileMode)
-		}
-	})
+	}
+}
 
-	t.Run("FileInSubdirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("world"),
+func TestFilesystemPathErrors(t *testing.T) {
+	fsys := New(nil)
+	for op, call := range map[string]func(string) error{
+		"open":    func(name string) error { _, err := fsys.Open(name); return err },
+		"readdir": func(name string) error { _, err := fsys.ReadDir(name); return err },
+		"stat":    func(name string) error { _, err := fsys.Stat(name); return err },
+	} {
+		for _, tt := range []struct {
+			name string
+			err  error
+		}{
+			{"nonexistent.txt", fs.ErrNotExist},
+			{"../invalid", fs.ErrInvalid},
+			{"", fs.ErrInvalid},
+			{"/absolute", fs.ErrInvalid},
+		} {
+			t.Run(op+"/"+tt.name, func(t *testing.T) {
+				assertPathError(t, call(tt.name), op, tt.name, tt.err)
+			})
+		}
+	}
+}
+
+func TestFSReadDirEntries(t *testing.T) {
+	fsys := New(map[string][]byte{
+		"a.txt": []byte("a"), "b.txt": []byte("bb"),
+		"subdir/c.txt": []byte("ccc"), "subdir/d.txt": []byte("dddd"),
+		"subdir/sub/e.txt": []byte("eeeee"),
+	})
+	for _, tt := range []struct {
+		name  string
+		names []string
+		sizes []int64
+	}{
+		{".", []string{"a.txt", "b.txt", "subdir"}, []int64{1, 2, 0}},
+		{"subdir", []string{"c.txt", "d.txt", "sub"}, []int64{3, 4, 0}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			entries, err := fsys.ReadDir(tt.name)
+			if err != nil || len(entries) != len(tt.names) {
+				t.Fatalf("ReadDir = %v, %v; want %d entries", entries, err, len(tt.names))
+			}
+			for i, entry := range entries {
+				mode := fileMode
+				if i == len(entries)-1 {
+					mode = dirMode
+				}
+				if entry.Name() != tt.names[i] || entry.IsDir() != mode.IsDir() || entry.Type() != mode.Type() {
+					t.Errorf("entry %d = (%q, directory=%v, %v), want (%q, %v)", i, entry.Name(), entry.IsDir(), entry.Type(), tt.names[i], mode.Type())
+				}
+				info, err := entry.Info()
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertFileInfo(t, info, tt.names[i], tt.sizes[i], mode)
+			}
 		})
-		fi, err := fsys.Stat("subdir/file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if fi.Name() != "file.txt" {
-			t.Errorf("got name %q, want %q", fi.Name(), "file.txt")
-		}
-		if fi.Size() != 5 {
-			t.Errorf("got size %d, want 5", fi.Size())
-		}
-	})
+	}
+}
 
-	t.Run("Directory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("world"),
-		})
-		fi, err := fsys.Stat("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if fi.Name() != "subdir" {
-			t.Errorf("got name %q, want %q", fi.Name(), "subdir")
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-		if fi.Mode() != dirMode {
-			t.Errorf("got mode %v, want %v", fi.Mode(), dirMode)
-		}
+func TestReadDirIgnoresEmptyNamesAndPrefersDirectoryEntries(t *testing.T) {
+	fsys := New(map[string][]byte{
+		"": nil, "/ignored": nil, "shared": []byte("file"), "shared/child": nil,
 	})
-
-	t.Run("RootDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		fi, err := fsys.Stat(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if fi.Name() != "." {
-			t.Errorf("got name %q, want %q", fi.Name(), ".")
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-	})
-
-	t.Run("NotExist", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.Stat("nonexistent.txt")
-		if err == nil {
-			t.Fatal("expected error for nonexistent file")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrNotExist {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrNotExist)
-		}
-	})
-
-	t.Run("InvalidPath", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		_, err := fsys.Stat("../invalid")
-		if err == nil {
-			t.Fatal("expected error for invalid path")
-		}
-		var pathErr *fs.PathError
-		if !errors.As(err, &pathErr) {
-			t.Fatalf("expected *fs.PathError, got %T", err)
-		}
-		if pathErr.Err != fs.ErrInvalid {
-			t.Errorf("got %v, want %v", pathErr.Err, fs.ErrInvalid)
-		}
-	})
+	entries, err := fsys.ReadDir(".")
+	if err != nil || len(entries) != 1 || entries[0].Name() != "shared" || !entries[0].IsDir() {
+		t.Fatalf("directory entries = %v, %v; want only shared directory", entries, err)
+	}
 }
 
 func TestFSHasDir(t *testing.T) {
-	t.Run("RootDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{})
-		if !fsys.hasDir(".") {
-			t.Error("expected root directory to exist")
-		}
-	})
-
-	t.Run("ExistingDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("hello"),
+	for _, tt := range []struct {
+		name, file string
+		want       bool
+	}{
+		{".", "", true},
+		{"subdir", "subdir/file.txt", true},
+		{"a", "a/b/c/file.txt", true},
+		{"a/b", "a/b/c/file.txt", true},
+		{"a/b/c", "a/b/c/file.txt", true},
+		{"nonexistent", "subdir/file.txt", false},
+		{"file.txt", "file.txt", false},
+		{"subdir", "subdir-other/file.txt", false},
+	} {
+		t.Run(tt.name+"/"+tt.file, func(t *testing.T) {
+			files := map[string][]byte{}
+			if tt.file != "" {
+				files[tt.file] = []byte("hello")
+			}
+			if got := New(files).hasDir(tt.name); got != tt.want {
+				t.Fatalf("hasDir(%q) = %v, want %v", tt.name, got, tt.want)
+			}
 		})
-		if !fsys.hasDir("subdir") {
-			t.Error("expected subdir to exist")
-		}
-	})
-
-	t.Run("NestedDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"a/b/c/file.txt": []byte("hello"),
-		})
-		if !fsys.hasDir("a") {
-			t.Error("expected a to exist")
-		}
-		if !fsys.hasDir("a/b") {
-			t.Error("expected a/b to exist")
-		}
-		if !fsys.hasDir("a/b/c") {
-			t.Error("expected a/b/c to exist")
-		}
-	})
-
-	t.Run("NonExistentDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("hello"),
-		})
-		if fsys.hasDir("nonexistent") {
-			t.Error("expected nonexistent directory to not exist")
-		}
-	})
-
-	t.Run("FileNotDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		if fsys.hasDir("file.txt") {
-			t.Error("expected file to not be a directory")
-		}
-	})
-
-	t.Run("SimilarPrefix", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir-other/file.txt": []byte("hello"),
-		})
-		if fsys.hasDir("subdir") {
-			t.Error("expected subdir to not exist when only subdir-other exists")
-		}
-	})
-}
-
-func TestFileStat(t *testing.T) {
-	fsys := New(map[string][]byte{
-		"file.txt": []byte("hello"),
-	})
-	f, err := fsys.Open("file.txt")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil {
-		t.Fatalf("failed to stat: %v", err)
-	}
-	if fi.Name() != "file.txt" {
-		t.Errorf("got name %q, want %q", fi.Name(), "file.txt")
-	}
-	if fi.Size() != 5 {
-		t.Errorf("got size %d, want 5", fi.Size())
-	}
-	if fi.IsDir() {
-		t.Error("expected file, not directory")
 	}
 }
 
 func TestFileRead(t *testing.T) {
+	fsys := New(map[string][]byte{"file.txt": []byte("hello world"), "empty.txt": nil})
 	t.Run("ReadAll", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello world"),
-		})
-		f, err := fsys.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		data, err := io.ReadAll(f)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if string(data) != "hello world" {
-			t.Errorf("got %q, want %q", string(data), "hello world")
+		data, err := io.ReadAll(openTestFile(t, fsys, "file.txt"))
+		if err != nil || string(data) != "hello world" {
+			t.Fatalf("ReadAll = %q, %v", data, err)
 		}
 	})
-
-	t.Run("ReadPartial", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello world"),
-		})
-		f, err := fsys.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		buf := make([]byte, 5)
-		n, err := f.Read(buf)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if n != 5 {
-			t.Errorf("got %d bytes, want 5", n)
-		}
-		if string(buf) != "hello" {
-			t.Errorf("got %q, want %q", string(buf), "hello")
-		}
-
-		n, err = f.Read(buf)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-		if n != 5 {
-			t.Errorf("got %d bytes, want 5", n)
-		}
-		if string(buf) != " worl" {
-			t.Errorf("got %q, want %q", string(buf), " worl")
+	t.Run("ReadPartialAndEOF", func(t *testing.T) {
+		file := openTestFile(t, fsys, "file.txt")
+		for _, tt := range []struct {
+			size int
+			data string
+			err  error
+		}{
+			{0, "", nil}, {5, "hello", nil}, {5, " worl", nil}, {5, "d", nil}, {1, "", io.EOF},
+		} {
+			buffer := make([]byte, tt.size)
+			n, err := file.Read(buffer)
+			if n != len(tt.data) || string(buffer[:n]) != tt.data || err != tt.err {
+				t.Fatalf("Read(%d) = (%q, %d, %v), want (%q, %v)", tt.size, buffer[:n], n, err, tt.data, tt.err)
+			}
 		}
 	})
-
-	t.Run("ReadEOF", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello world"),
-		})
-		f, err := fsys.Open("file.txt")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+	t.Run("ReadEOFAfterReadAll", func(t *testing.T) {
+		file := openTestFile(t, fsys, "file.txt")
+		if _, err := io.ReadAll(file); err != nil {
+			t.Fatal(err)
 		}
-		defer f.Close()
-
-		_, err = io.ReadAll(f)
-		if err != nil {
-			t.Fatalf("failed to read: %v", err)
-		}
-
-		buf := make([]byte, 1)
-		n, err := f.Read(buf)
-		if n != 0 {
-			t.Errorf("got %d bytes, want 0", n)
-		}
-		if err != io.EOF {
-			t.Errorf("got %v, want io.EOF", err)
+		if n, err := file.Read(make([]byte, 1)); n != 0 || err != io.EOF {
+			t.Fatalf("read after EOF = (%d, %v)", n, err)
 		}
 	})
-}
-
-func TestFileClose(t *testing.T) {
-	fsys := New(map[string][]byte{
-		"file.txt": []byte("hello"),
-	})
-	f, err := fsys.Open("file.txt")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestDirStat(t *testing.T) {
-	t.Run("Subdirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("hello"),
-		})
-		f, err := fsys.Open("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			t.Fatalf("failed to stat: %v", err)
-		}
-		if fi.Name() != "subdir" {
-			t.Errorf("got name %q, want %q", fi.Name(), "subdir")
-		}
-		if fi.Size() != 0 {
-			t.Errorf("got size %d, want 0", fi.Size())
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-		if fi.Mode() != dirMode {
-			t.Errorf("got mode %v, want %v", fi.Mode(), dirMode)
-		}
-	})
-
-	t.Run("RootDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		f, err := fsys.Open(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			t.Fatalf("failed to stat: %v", err)
-		}
-		if fi.Name() != "." {
-			t.Errorf("got name %q, want %q", fi.Name(), ".")
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
-		}
-	})
-
-	t.Run("NestedDirectory", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"a/b/c/file.txt": []byte("hello"),
-		})
-		f, err := fsys.Open("a/b")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		fi, err := f.Stat()
-		if err != nil {
-			t.Fatalf("failed to stat: %v", err)
-		}
-		if fi.Name() != "b" {
-			t.Errorf("got name %q, want %q", fi.Name(), "b")
-		}
-		if !fi.IsDir() {
-			t.Error("expected directory")
+	t.Run("EmptyFile", func(t *testing.T) {
+		if n, err := openTestFile(t, fsys, "empty.txt").Read(make([]byte, 1)); n != 0 || err != io.EOF {
+			t.Fatalf("empty file read = (%d, %v)", n, err)
 		}
 	})
 }
 
 func TestDirRead(t *testing.T) {
-	fsys := New(map[string][]byte{
-		"subdir/file.txt": []byte("hello"),
-	})
-	f, err := fsys.Open("subdir")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	file := openTestFile(t, New(map[string][]byte{"subdir/file.txt": []byte("hello")}), "subdir")
+	n, err := file.Read(make([]byte, 1))
+	if n != 0 {
+		t.Fatalf("directory read = %d bytes, want 0", n)
 	}
-	defer f.Close()
-
-	buf := make([]byte, 1)
-	_, err = f.Read(buf)
-	if err == nil {
-		t.Fatal("expected error when reading directory")
-	}
-	var pathErr *fs.PathError
-	if !errors.As(err, &pathErr) {
-		t.Fatalf("expected *fs.PathError, got %T", err)
-	}
-	if pathErr.Err != fs.ErrInvalid {
-		t.Errorf("got %v, want %v", pathErr.Err, fs.ErrInvalid)
-	}
-}
-
-func TestDirClose(t *testing.T) {
-	fsys := New(map[string][]byte{
-		"subdir/file.txt": []byte("hello"),
-	})
-	f, err := fsys.Open("subdir")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	assertPathError(t, err, "read", "subdir", fs.ErrInvalid)
 }
 
 func TestDirReadDir(t *testing.T) {
-	t.Run("ReadAll", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/a.txt": []byte("a"),
-			"subdir/b.txt": []byte("bb"),
-			"subdir/c.txt": []byte("ccc"),
+	type read struct {
+		count int
+		names []string
+		err   error
+	}
+	for _, tt := range []struct {
+		name  string
+		reads []read
+	}{
+		{"ReadAll", []read{{-1, []string{"a.txt", "b.txt", "c.txt"}, nil}}},
+		{"ReadPartial", []read{{2, []string{"a.txt", "b.txt"}, nil}, {2, []string{"c.txt"}, nil}, {2, nil, io.EOF}}},
+		{"ReadRemaining", []read{{1, []string{"a.txt"}, nil}, {0, []string{"b.txt", "c.txt"}, nil}, {-1, nil, nil}, {1, nil, io.EOF}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fsys := New(map[string][]byte{"subdir/a.txt": []byte("a"), "subdir/b.txt": []byte("bb"), "subdir/c.txt": []byte("ccc")})
+			file := openTestFile(t, fsys, "subdir").(fs.ReadDirFile)
+			for _, read := range tt.reads {
+				entries, err := file.ReadDir(read.count)
+				names := make([]string, len(entries))
+				for i, entry := range entries {
+					names[i] = entry.Name()
+				}
+				if err != read.err || !slices.Equal(names, read.names) {
+					t.Fatalf("ReadDir(%d) = (%v, %v), want (%v, %v)", read.count, names, err, read.names, read.err)
+				}
+			}
 		})
-		f, err := fsys.Open("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		dirFile := f.(fs.ReadDirFile)
-		entries, err := dirFile.ReadDir(-1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(entries) != 3 {
-			t.Fatalf("got %d entries, want 3", len(entries))
-		}
-	})
-
-	t.Run("ReadPartial", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/a.txt": []byte("a"),
-			"subdir/b.txt": []byte("bb"),
-			"subdir/c.txt": []byte("ccc"),
-		})
-		f, err := fsys.Open("subdir")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		defer f.Close()
-
-		dirFile := f.(fs.ReadDirFile)
-		entries, err := dirFile.ReadDir(2)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(entries) != 2 {
-			t.Fatalf("got %d entries, want 2", len(entries))
-		}
-
-		entries, err = dirFile.ReadDir(2)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("got %d entries, want 1", len(entries))
-		}
-
-		entries, err = dirFile.ReadDir(2)
-		if err != io.EOF {
-			t.Fatalf("got %v, want io.EOF", err)
-		}
-		if len(entries) != 0 {
-			t.Fatalf("got %d entries, want 0", len(entries))
-		}
-	})
-}
-
-func TestFileInfo(t *testing.T) {
-	fsys := New(map[string][]byte{
-		"file.txt": []byte("hello"),
-	})
-	fi, err := fsys.Stat("file.txt")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if fi.Name() != "file.txt" {
-		t.Errorf("got name %q, want %q", fi.Name(), "file.txt")
-	}
-	if fi.Size() != 5 {
-		t.Errorf("got size %d, want 5", fi.Size())
-	}
-	if fi.Mode() != fileMode {
-		t.Errorf("got mode %v, want %v", fi.Mode(), fileMode)
-	}
-	if fi.ModTime().IsZero() {
-		t.Error("expected non-zero mod time")
-	}
-	if fi.IsDir() {
-		t.Error("expected file, not directory")
-	}
-	if fi.Sys() != nil {
-		t.Errorf("got sys %v, want nil", fi.Sys())
 	}
 }
 
-func TestDirEntry(t *testing.T) {
-	t.Run("FileEntry", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"file.txt": []byte("hello"),
-		})
-		entries, err := fsys.ReadDir(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		var fileEntry fs.DirEntry
-		for _, e := range entries {
-			if e.Name() == "file.txt" {
-				fileEntry = e
-				break
-			}
-		}
-		if fileEntry == nil {
-			t.Fatal("file.txt entry not found")
-		}
-
-		if fileEntry.IsDir() {
-			t.Error("expected file, not directory")
-		}
-		if fileEntry.Type() != fileMode.Type() {
-			t.Errorf("got type %v, want %v", fileEntry.Type(), fileMode.Type())
-		}
-
-		fi, err := fileEntry.Info()
-		if err != nil {
-			t.Fatalf("failed to get info: %v", err)
-		}
-		if fi.Name() != "file.txt" {
-			t.Errorf("got name %q, want %q", fi.Name(), "file.txt")
-		}
-		if fi.Size() != 5 {
-			t.Errorf("got size %d, want 5", fi.Size())
-		}
-	})
-
-	t.Run("DirEntry", func(t *testing.T) {
-		fsys := New(map[string][]byte{
-			"subdir/file.txt": []byte("world"),
-		})
-		entries, err := fsys.ReadDir(".")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		var dirEntry fs.DirEntry
-		for _, e := range entries {
-			if e.Name() == "subdir" {
-				dirEntry = e
-				break
-			}
-		}
-		if dirEntry == nil {
-			t.Fatal("subdir entry not found")
-		}
-
-		if !dirEntry.IsDir() {
-			t.Error("expected directory")
-		}
-		if dirEntry.Type() != dirMode.Type() {
-			t.Errorf("got type %v, want %v", dirEntry.Type(), dirMode.Type())
-		}
-	})
+func TestDirReadDirReportsRemovedDirectoryAndCanRetry(t *testing.T) {
+	files := map[string][]byte{"subdir/file.txt": []byte("content")}
+	directory := openTestFile(t, New(files), "subdir").(fs.ReadDirFile)
+	delete(files, "subdir/file.txt")
+	entries, err := directory.ReadDir(1)
+	if entries != nil {
+		t.Fatalf("removed directory returned entries: %v", entries)
+	}
+	assertPathError(t, err, "readdir", "subdir", fs.ErrNotExist)
+	files["subdir/restored.txt"] = []byte("restored")
+	entries, err = directory.ReadDir(1)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "restored.txt" {
+		t.Fatalf("retry after failed listing = %v, %v", entries, err)
+	}
 }

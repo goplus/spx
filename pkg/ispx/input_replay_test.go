@@ -17,6 +17,7 @@
 package ispx
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -54,15 +55,7 @@ func TestHostInputRecordingBridge(t *testing.T) {
 }
 
 func TestHostInputReplayBridgeValidatesAndPreparesNextGame(t *testing.T) {
-	replay := spx.InputReplay{
-		Format:        spx.InputReplayFormat,
-		Version:       spx.InputReplayVersion,
-		FixedTimestep: 1.0 / 30,
-	}
-	data, err := spx.EncodeInputReplay(replay)
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := hostInputReplayJSON(t)
 	for _, state := range []string{"idle", "prepared"} {
 		t.Run(state, func(t *testing.T) {
 			want := spx.InputSessionStatus{Mode: spx.InputSessionModeIdle}
@@ -87,5 +80,74 @@ func TestHostInputReplayBridgeValidatesAndPreparesNextGame(t *testing.T) {
 				t.Fatalf("malformed replay changed status to %+v, want %+v", status, want)
 			}
 		})
+	}
+}
+
+func hostInputReplayJSON(t *testing.T, frames ...spx.InputReplayFrame) string {
+	t.Helper()
+	data, err := spx.EncodeInputReplay(spx.InputReplay{
+		Format: spx.InputReplayFormat, Version: spx.InputReplayVersion,
+		FixedTimestep: 1.0 / 30, Frames: frames,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func TestHostInputRecordingFinishRequiresActiveRecording(t *testing.T) {
+	for _, mode := range []string{"idle", "recording prepared", "replay prepared"} {
+		t.Run(mode, func(t *testing.T) {
+			var preparation spx.InputSessionPreparation
+			var err error
+			switch mode {
+			case "recording prepared":
+				preparation, err = prepareHostInputRecording(30)
+			case "replay prepared":
+				preparation, err = prepareHostInputReplay([]byte(hostInputReplayJSON(t)))
+			}
+			t.Cleanup(func() { preparation.Cancel() })
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := spx.GetInputSessionStatus()
+			if data, err := finishHostInputRecording(); !errors.Is(err, spx.ErrInputSessionNotRecording) || data != nil {
+				t.Fatalf("finish recording = %q, %v; want nil, ErrInputSessionNotRecording", data, err)
+			}
+			if got := spx.GetInputSessionStatus(); got != before {
+				t.Fatalf("failed finish changed status: %+v, want %+v", got, before)
+			}
+		})
+	}
+}
+
+func TestHostInputSessionForwardsOptions(t *testing.T) {
+	for _, mode := range []string{"record", "replay"} {
+		for _, test := range []struct {
+			name    string
+			options []spx.InputSessionOptions
+			wantErr bool
+		}{
+			{"capture key", []spx.InputSessionOptions{{CaptureKey: spx.KeyP}}, false},
+			{"invalid capture key", []spx.InputSessionOptions{{CaptureKey: spx.KeyMax}}, true},
+			{"multiple options", []spx.InputSessionOptions{{}, {}}, true},
+		} {
+			t.Run(mode+"/"+test.name, func(t *testing.T) {
+				var preparation spx.InputSessionPreparation
+				var err error
+				if mode == "record" {
+					preparation, err = prepareHostInputRecording(30, test.options...)
+				} else {
+					preparation, err = prepareHostInputReplay([]byte(hostInputReplayJSON(t)), test.options...)
+				}
+				t.Cleanup(func() { preparation.Cancel() })
+				if (err != nil) != test.wantErr {
+					t.Fatalf("preparation error = %v, want error = %v", err, test.wantErr)
+				}
+				if test.wantErr && spx.GetInputSessionStatus().Mode != spx.InputSessionModeIdle {
+					t.Fatal("invalid options prepared an input session")
+				}
+			})
+		}
 	}
 }

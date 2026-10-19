@@ -3,9 +3,12 @@ package spx
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 type cloneSoundSettings struct{ volume, pan, pitch float64 }
@@ -201,5 +204,106 @@ func TestCloneSoundEffectsFromStageInstance(t *testing.T) {
 	child := createRuntimeClone(&instance.SpriteImpl)
 	if child.GetSoundEffect(SoundPanEffect) != 20 {
 		t.Fatal("clone inherited template effects instead of its original instance")
+	}
+}
+
+func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	anim.sprite.g.audioState.AudioAttenuation = 0.35
+	anim.sprite.g.audioState.AudioMaxDistance = 640
+	anim.sprite.runtimeState.SyncSprite.Id = 42
+
+	anim.sprite.Play__1("walk", true)
+	playID := anim.sprite.sound().play("walk", true)
+	if playID == 0 {
+		t.Fatal("play returned no playback id")
+	}
+	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
+		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)
+	}
+	if anim.sprite.g.audioState.SoundObj != 0 {
+		t.Fatalf("sprite playback initialized game sound object %d", anim.sprite.g.audioState.SoundObj)
+	}
+	if len(backend.plays) != 2 {
+		t.Fatalf("plays = %d, want 2", len(backend.plays))
+	}
+	first, second := backend.plays[0], backend.plays[1]
+	if first != second {
+		t.Fatalf("play parameters differ: first=%+v second=%+v", first, second)
+	}
+	if first.soundObj != 77 || first.owner != 42 || first.attenation != 0.35 || first.maxDist != 640 {
+		t.Fatalf("sprite playback parameters = %+v", first)
+	}
+	if len(backend.loops) != 2 || !backend.loops[0].loop || !backend.loops[1].loop {
+		t.Fatalf("loop parameters = %+v, want two looping plays", backend.loops)
+	}
+}
+
+func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	sprite := anim.sprite
+	sprite.runtimeState.SyncSprite.Id = 42
+	sprite.g.audioState.AudioAttenuation = 0.35
+	sprite.g.audioState.AudioMaxDistance = 640
+	finished := false
+	thread := co.Create(sprite, func(coroutine.Thread) {
+		sprite.PlayAndWait("walk")
+		finished = true
+	})
+	co.JoinFirstSlice(thread)
+	if finished || len(backend.plays) != 1 {
+		t.Fatalf("blocking playback finished = %v, plays = %d; want false and 1", finished, len(backend.plays))
+	}
+	play := backend.plays[0]
+	if play.soundObj != 77 || play.owner != 42 || play.attenation != 0.35 || play.maxDist != 640 || len(backend.loops) != 0 {
+		t.Fatalf("blocking playback parameters = %+v, loops = %v", play, backend.loops)
+	}
+	itime.Update(0, 0)
+	co.Update()
+	if finished {
+		t.Fatal("PlayAndWait returned while the backend still reported active playback")
+	}
+	backend.playing[backend.nextID] = false
+	itime.Update(0, 0)
+	co.Update()
+	if !finished {
+		t.Fatal("PlayAndWait did not resume after playback completed")
+	}
+}
+
+type spritePlaybackBackend struct {
+	animationAudioBackend
+	paused, resumed []int64
+}
+
+func (b *spritePlaybackBackend) Pause(id int64)  { b.paused = append(b.paused, id) }
+func (b *spritePlaybackBackend) Resume(id int64) { b.resumed = append(b.resumed, id) }
+
+func TestSpritePlaybackControlsResolveSoundNames(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &spritePlaybackBackend{}
+	initTestAnimationAudio(anim, &backend.animationAudioBackend)
+	anim.sprite.g.soundMgr.Init(backend)
+	sprite := anim.sprite
+	sprite.Play__0("walk")
+	firstID := backend.nextID
+	sprite.PlayWith("step", true)
+	secondID := backend.nextID
+	sprite.PausePlaying("walk")
+	sprite.ResumePlaying("walk")
+	sprite.StopPlaying("walk")
+	if !slices.Equal(backend.paused, []int64{firstID}) || !slices.Equal(backend.resumed, []int64{firstID}) || !slices.Equal(backend.stops, []int64{firstID}) {
+		t.Fatalf("sound controls addressed wrong playback: pause=%v resume=%v stop=%v", backend.paused, backend.resumed, backend.stops)
+	}
+	if backend.playing[firstID] || !backend.playing[secondID] {
+		t.Fatalf("stopping walk changed unrelated sound: playing=%v", backend.playing)
+	}
+	if len(backend.loops) != 1 || backend.loops[0] != (animationLoopCall{id: secondID, loop: true}) {
+		t.Fatalf("loop settings = %v, want only the second playback looping", backend.loops)
 	}
 }

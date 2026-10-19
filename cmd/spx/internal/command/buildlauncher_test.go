@@ -19,11 +19,10 @@ package command
 import (
 	"context"
 	"embed"
-	"flag"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -35,23 +34,19 @@ func TestBuildLauncherDispatchesBeforeLegacySetup(t *testing.T) {
 	projectDir := t.TempDir()
 	otherModule := t.TempDir()
 	repoRoot := findSPXRoot(t)
-	writeLauncherTestFile(t, filepath.Join(projectDir, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\n\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(repoRoot)+"\n")
-	writeLauncherTestFile(t, filepath.Join(otherModule, "go.mod"), "module example.com/other\n\ngo 1.25.0\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\n\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(repoRoot)+"\n")
+	writeCommandTestFile(t, filepath.Join(otherModule, "go.mod"), "module example.com/other\n\ngo 1.25.0\n")
 	goWork := filepath.Join(t.TempDir(), "go.work")
-	writeLauncherTestFile(t, goWork, "go 1.25.0\n\nuse (\n\t"+filepath.ToSlash(projectDir)+"\n\t"+filepath.ToSlash(otherModule)+"\n)\n")
+	writeCommandTestFile(t, goWork, "go 1.25.0\n\nuse (\n\t"+filepath.ToSlash(projectDir)+"\n\t"+filepath.ToSlash(otherModule)+"\n)\n")
 	t.Setenv("GOWORK", goWork)
-	writeLauncherTestFile(t, filepath.Join(projectDir, "gox.mod"), "xgo 1.8.0\n\nproject main.spx Game github.com/goplus/spx/v3 math\n\nclass -embed *.spx SpriteImpl\n\npack assets index.json\n")
-	writeLauncherTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n")
-	writeLauncherTestFile(t, filepath.Join(projectDir, "Hero.spx"), "when green flag => {}\n")
-	writeLauncherTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n")
-	writeLauncherTestFile(t, filepath.Join(projectDir, "assets", "hero.png"), "asset")
+	writeCommandTestFile(t, filepath.Join(projectDir, "gox.mod"), "xgo 1.8.0\n\nproject main.spx Game github.com/goplus/spx/v3 math\n\nclass -embed *.spx SpriteImpl\n\npack assets index.json\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "Hero.spx"), "when green flag => {}\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "assets", "hero.png"), "asset")
 	output := filepath.Join(projectDir, "bin", "game"+executableSuffix(runtime.GOOS))
 
-	oldFlags, oldArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = []string{"spx", "buildlauncher", "--path", projectDir, "-o", output, "-v"}
-	t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+	setTestCommandLine(t, "spx", "buildlauncher", "--path", projectDir, "-o", output, "-v")
 
 	canonicalProjectDir, err := canonicalDirectory(projectDir)
 	if err != nil {
@@ -122,11 +117,7 @@ func TestValidateBuildLauncherArgs(t *testing.T) {
 }
 
 func TestBuildLauncherRejectsPositionalArgs(t *testing.T) {
-	oldFlags, oldArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = []string{"spx", "buildlauncher", "extra"}
-	t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+	setTestCommandLine(t, "spx", "buildlauncher", "extra")
 
 	err := (&CmdTool{}).RunCmd("spx", ".spx", "test", embed.FS{}, "", "project")
 	if err == nil || !strings.Contains(err.Error(), "unexpected positional arguments") {
@@ -140,37 +131,6 @@ func TestBuildLauncherBuildFlags(t *testing.T) {
 	}
 	if got := buildLauncherBuildFlags(ExtraArgs{}); got != nil {
 		t.Fatalf("default build flags = %#v, want nil", got)
-	}
-}
-
-func TestBuildLauncherFailurePreservesExistingOutput(t *testing.T) {
-	projectDir := t.TempDir()
-	output := filepath.Join(projectDir, "game")
-	writeLauncherTestFile(t, output, "old")
-	stage, cleanup, err := stageLauncherOutput(output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(stage, []byte("new"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cleanup()
-	if got, err := os.ReadFile(output); err != nil || string(got) != "old" {
-		t.Fatalf("existing output = %q, err = %v", got, err)
-	}
-	stage, cleanup, err = stageLauncherOutput(output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	if err := os.WriteFile(stage, []byte("new"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := commitLauncherOutput(stage, output, launcherOutputProtection{}); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := os.ReadFile(output); err != nil || string(got) != "new" {
-		t.Fatalf("committed output = %q, err = %v", got, err)
 	}
 }
 
@@ -194,16 +154,113 @@ func findSPXRoot(t *testing.T) string {
 	}
 }
 
-func writeLauncherTestFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func launcherStringPointer(value string) *string { return &value }
 
 func launcherBoolPointer(value bool) *bool { return &value }
+
+func TestLoadLauncherProject(t *testing.T) {
+	const project = "project main.spx Game github.com/goplus/spx/v3 math\n"
+	const wildcard = "project *.spx Game github.com/goplus/spx/v3 math\n"
+	const pack = "pack assets index.json\n"
+	for _, test := range []struct {
+		name, metadata, filename string
+		sources                  []string
+		wantFile, wantError      string
+	}{
+		{"explicit entry", project + pack, "gox.mod", []string{"main.spx", "Hero.spx", "notes.txt"}, "main.spx", ""},
+		{"legacy metadata", project + pack, "gop.mod", []string{"main.spx"}, "main.spx", ""},
+		{"wildcard prefers main", wildcard + pack, "gox.mod", []string{"main.spx", "Hero.spx"}, "main.spx", ""},
+		{"single candidate", wildcard + pack, "gox.mod", []string{"Game.spx"}, "Game.spx", ""},
+		{"ignores other project kinds", "project *.gmx Game example.com/other\n" + project + pack, "gox.mod", []string{"main.spx"}, "main.spx", ""},
+		{"invalid metadata", "unknown directive\n", "gox.mod", nil, "", "parse project metadata"},
+		{"no SPX project", "xgo 1.8.0\n", "gox.mod", nil, "", "no .spx project"},
+		{"multiple projects", project + pack + wildcard + pack, "gox.mod", nil, "", "multiple .spx projects"},
+		{"missing pack", project, "gox.mod", nil, "", "must declare 'pack assets index.json'"},
+		{"missing entry", project + pack, "gox.mod", nil, "", "no project file matching"},
+		{"class files are not entrypoints", project + "class -embed *.spx SpriteImpl\n" + pack, "gox.mod", []string{"Hero.spx"}, "", "no project file matching"},
+		{"ambiguous entry", wildcard + pack, "gox.mod", []string{"First.spx", "Second.spx"}, "", "multiple project files"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeCommandTestFile(t, filepath.Join(root, test.filename), test.metadata)
+			for _, name := range test.sources {
+				writeCommandTestFile(t, filepath.Join(root, name), "onStart => {}\n")
+			}
+			got, err := loadLauncherProject(root, root)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("loadLauncherProject error = %v, want %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.dir != root || got.file != filepath.Join(root, test.wantFile) || got.metadataFile != filepath.Join(root, test.filename) || got.extension != ".spx" || got.packDir != "assets" || got.packIndex != "index.json" {
+				t.Fatalf("launcher project = %+v", got)
+			}
+			var wantSources []string
+			for _, name := range test.sources {
+				if filepath.Ext(name) == ".spx" {
+					wantSources = append(wantSources, filepath.Join(root, name))
+				}
+			}
+			slices.Sort(wantSources)
+			if !slices.Equal(got.sourceFiles, wantSources) {
+				t.Fatalf("source files = %q, want %q", got.sourceFiles, wantSources)
+			}
+		})
+	}
+}
+
+func TestLoadLauncherProjectRejectsInvalidFiles(t *testing.T) {
+	const metadata = "project main.spx Game github.com/goplus/spx/v3 math\npack assets index.json\n"
+	for _, kind := range []string{"missing metadata", "both metadata files", "metadata directory", "metadata symlink", "source directory", "source symlink", "missing source directory"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			projectDir := root
+			metaPath := filepath.Join(root, "gox.mod")
+			writeCommandTestFile(t, metaPath, metadata)
+			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "onStart => {}\n")
+			want := "not a regular non-symlink file"
+			switch kind {
+			case "missing metadata":
+				if err := os.Remove(metaPath); err != nil {
+					t.Fatal(err)
+				}
+				want = "no gox.mod or gop.mod"
+			case "both metadata files":
+				writeCommandTestFile(t, filepath.Join(root, "gop.mod"), metadata)
+				want = "has both"
+			case "metadata directory", "metadata symlink":
+				if err := os.Remove(metaPath); err != nil {
+					t.Fatal(err)
+				}
+				if kind == "metadata directory" {
+					if err := os.Mkdir(metaPath, 0o755); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					writeCommandTestFile(t, filepath.Join(root, "metadata"), metadata)
+					if err := os.Symlink("metadata", metaPath); err != nil {
+						t.Skipf("symlinks unavailable: %v", err)
+					}
+				}
+			case "source directory":
+				if err := os.Mkdir(filepath.Join(root, "Hero.spx"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "source symlink":
+				if err := os.Symlink("main.spx", filepath.Join(root, "Hero.spx")); err != nil {
+					t.Skipf("symlinks unavailable: %v", err)
+				}
+			case "missing source directory":
+				projectDir = filepath.Join(root, "missing")
+				want = "read project directory"
+			}
+			if _, err := loadLauncherProject(root, projectDir); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("loadLauncherProject error = %v, want %q", err, want)
+			}
+		})
+	}
+}

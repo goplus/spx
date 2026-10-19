@@ -52,11 +52,14 @@ jobs:
       - name: Check shell scripts
         shell: bash
         run: |
-          bash -n .github/actions/standalone/lib/platform.sh
-          bash -n .github/scripts/runtime/build_pack.sh
-          bash -n .github/scripts/npm/prepare_package.sh
-          bash -n .github/scripts/release/assemble.sh
-          bash -n .github/scripts/test_go.sh
+          for script in \
+            .github/actions/standalone/lib/platform.sh \
+            .github/scripts/runtime/build_pack.sh \
+            .github/scripts/npm/prepare_package.sh \
+            .github/scripts/release/assemble.sh \
+            .github/scripts/test_go.sh; do
+            bash -n "$script"
+          done
 
       - name: Set up Node.js for Web bridge tests
         uses: actions/setup-node@v7
@@ -72,6 +75,13 @@ jobs:
           GOARCH: wasm
         run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web ./pkg/ispx ./internal/coroutine
 
+      - name: Test Go Web interpreter
+        working-directory: cmd/ispx
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...
+
       - name: Test Web ABI memory ownership
         env:
           GDSPX_SANITIZERS: address,undefined
@@ -84,12 +94,16 @@ jobs:
           go test -v -coverprofile=coverage-manifest.out -covermode=atomic .github/scripts/runtime/manifest.go .github/scripts/runtime/manifest_test.go
           go test -v -coverprofile=coverage-resolution.out -covermode=atomic .github/scripts/runtime/resolution.go .github/scripts/runtime/resolution_test.go
           go test -v -coverprofile=coverage-version.out -covermode=atomic .github/scripts/runtime/version.go .github/scripts/runtime/version_test.go
-          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/runtime_build_contract_test.py
-          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release/workflow_test.py
-          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/release_bump_test.py
-          PYTHONDONTWRITEBYTECODE=1 python3 .github/scripts/driverbundle/workflow_test.py
-          go run .github/scripts/runtime/digest.go pack-source HEAD >/dev/null
-          go run .github/scripts/runtime/digest.go build-recipe HEAD >/dev/null
+          for script in \
+            .github/scripts/runtime_build_contract_test.py \
+            .github/scripts/release/workflow_test.py \
+            .github/scripts/release_bump_test.py \
+            .github/scripts/driverbundle/workflow_test.py; do
+            PYTHONDONTWRITEBYTECODE=1 python3 "$script"
+          done
+          for digest in pack-source build-recipe; do
+            go run .github/scripts/runtime/digest.go "$digest" HEAD >/dev/null
+          done
           # Relative profiles keep the root and cmd/ispx modules separate.
           bash .github/scripts/test_go.sh -v -coverprofile=coverage.out -covermode=atomic
 
@@ -97,5 +111,5 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           slug: goplus/spx
-          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
+          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,cmd/ispx/coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
           disable_search: true

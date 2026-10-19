@@ -20,6 +20,13 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v3/internal/ui"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
@@ -176,5 +183,97 @@ func TestRemovingSpriteReindexesRemainingLayersAbovePen(t *testing.T) {
 			game.shapeMgr.removeShape(sprites[tt.remove])
 			assertLayerOrder(t, game, tt.want)
 		})
+	}
+}
+
+type shapeUpdateSpy struct {
+	calls int
+	delta float64
+}
+
+func (s *shapeUpdateSpy) onUpdate(delta float64) { s.calls++; s.delta = delta }
+
+type shapeLayerSortManager struct{ pkgengine.IExtMgr }
+
+func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
+
+func TestShapeManagerUpdatesCustomShapesAndMonitors(t *testing.T) {
+	spy := &shapeUpdateSpy{}
+	panel := &monitorPanelSpy{}
+	monitor := &Monitor{visible: true, isDirty: true, panel: panel, eval: func() ui.MonitorValue { return ui.MonitorValue{Text: "42"} }}
+	manager := shapeManager{}
+	manager.flushActivate([]Shape{&SpriteImpl{}, &textBubble{}, &quoterBubble{}, monitor, spy, &struct{}{}})
+	if spy.calls != 1 || spy.delta != itime.DeltaTime() || panel.value.Text != "42" || monitor.isDirty {
+		t.Fatalf("shape update calls=%d delta=%v monitor=%+v", spy.calls, spy.delta, panel)
+	}
+}
+
+func TestShapeManagerCachesBoundedNamesAndWrapsBubbleIDs(t *testing.T) {
+	manager := shapeManager{nextTextBubbleLayoutID: ^uint64(0)}
+	bubble := &textBubble{}
+	manager.add(bubble)
+	if bubble.layoutID != 1 {
+		t.Fatalf("wrapped layout id=%d,want1", bubble.layoutID)
+	}
+	for _, name := range []string{"missing1", "missing2", "missing3"} {
+		if len(manager.spritesNamed(name)) != 0 {
+			t.Fatal("missing name found sprites")
+		}
+	}
+	if len(manager.named) != 1 || manager.named["missing3"] != nil {
+		t.Fatalf("name miss cache grew without bound: %v", manager.named)
+	}
+}
+
+func TestShapeManagerLayerSortPreservesAutomaticOrder(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.ExtMgr
+	pkgengine.ExtMgr = &shapeLayerSortManager{}
+	mode := "none"
+	if engine.HasLayerSortMethod() {
+		mode = "vertical"
+	}
+	t.Cleanup(func() { _ = engine.SetLayerSortMode(mode); pkgengine.ExtMgr = previous })
+	game, sprites := newLayerOrderTestGame("a", "b")
+	game.shapeMgr.goBackLayers(&SpriteImpl{}, 1)
+	if err := engine.SetLayerSortMode("vertical"); err != nil {
+		t.Fatal(err)
+	}
+	sprites["a"].runtimeState.Layer = 17
+	game.shapeMgr.goBackLayers(sprites["a"], -1)
+	game.shapeMgr.updateRenderLayers()
+	if got := spriteOrderNames(game.shapeMgr.items); !reflect.DeepEqual(got, []string{"a", "b"}) || sprites["a"].runtimeState.Layer != 17 {
+		t.Fatalf("manual layering overrode automatic order: %v", got)
+	}
+}
+
+func TestShapeManagerCloningDeletedSourceStopsScript(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	manager := shapeManager{}
+	reached := false
+	thread := co.Create(nil, func(coroutine.Thread) { manager.addClonedShape(&SpriteImpl{}, &SpriteImpl{}); reached = true })
+	co.Join(thread)
+	if reached || len(manager.items) != 0 {
+		t.Fatal("cloning removed source continued or inserted a clone")
+	}
+}
+
+func TestShapeManagerRelayoutsChangedBubbleInput(t *testing.T) {
+	mgr := setupCameraTestMgr(t)
+	mgr.zoom = mathf.NewVec2(1, 1)
+	previousScale := engine.WindowScale()
+	engine.SetWindowScale(1)
+	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
+	sprite := newRenderOffsetTestSprite()
+	sprite.spriteState.IsVisible = true
+	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
+	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
+	manager := shapeManager{textBubbles: []*textBubble{bubble}}
+	manager.layoutTextBubbles()
+	previous := bubble.layout
+	sprite.SetXYpos(80, 60)
+	manager.layoutTextBubbles()
+	if bubble.layout.SameInput(previous) {
+		t.Fatal("moving bubble owner did not refresh cached layout input")
 	}
 }

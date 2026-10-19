@@ -45,7 +45,7 @@ func (m *pullPositionSpriteMgr) BatchRetrievePositions(ids []int64, out []float3
 
 func setupPullPositionSpriteMgr(t *testing.T) *pullPositionSpriteMgr {
 	t.Helper()
-	enginewrap.Init(func(call func()) { call() })
+	setupImmediateEngineCalls(t)
 	original := pkgengine.SpriteMgr
 	mgr := &pullPositionSpriteMgr{}
 	pkgengine.SpriteMgr = mgr
@@ -330,7 +330,7 @@ func TestPullPhysicsPositionsConcurrent(t *testing.T) {
 }
 
 func BenchmarkPullPhysicsPositions(b *testing.B) {
-	enginewrap.Init(func(call func()) { call() })
+	setupImmediateEngineCalls(b)
 	previous := pkgengine.SpriteMgr
 	mgr := &pullPositionSpriteMgr{positions: make([]float32, 600)}
 	pkgengine.SpriteMgr = mgr
@@ -638,4 +638,19 @@ func TestDispatchPhysicsTriggersPanicRetainsBatch(t *testing.T) {
 			game.dispatchPhysicsTriggers()
 		})
 	}
+}
+
+func TestProxyCallbacksIgnoreMissingAndDestroyedSprites(t *testing.T) {
+	destroyed := &SpriteImpl{}
+	destroyed.markDestroyed()
+	for _, sprite := range []*SpriteImpl{{}, destroyed} {
+		sprite.handleAnimationFinished()
+		sprite.handleAnimationLooped()
+		if sprite.runtimeState.SyncSprite != nil {
+			t.Fatal("stale callback created a proxy")
+		}
+	}
+	sprite := &SpriteImpl{}
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.ensureProxyInitialized()
 }

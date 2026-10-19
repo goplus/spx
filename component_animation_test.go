@@ -487,31 +487,21 @@ func TestTweenStateRegistrationAndUnregistrationOrder(t *testing.T) {
 }
 
 func TestApplyTweenStepGlideUsesAbsolutePosition(t *testing.T) {
-	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
-	initTestMotionComponents(anim.sprite, 100, 20)
-
-	params := &tweenParams{
-		aniType:  coreproject.AniTypeGlide,
-		moveFrom: mathf.NewVec2(10, 20),
-		moveTo:   mathf.NewVec2(100, 20),
-	}
-
-	anim.applyTweenStep(nil, 0.5, params)
-
-	x, y := anim.sprite.getXY()
-	if x != 55 || y != 20 {
-		t.Fatalf("glide position = (%v, %v), want (55, 20)", x, y)
-	}
+	assertTweenStepUsesAbsolutePosition(t, coreproject.AniTypeGlide)
 }
 
 func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
+	assertTweenStepUsesAbsolutePosition(t, coreproject.AniTypeMove)
+}
+
+func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
+	t.Helper()
 	anim := newTestAnimationComponent()
 	anim.sprite.spriteState.IsVisible = false
 	initTestMotionComponents(anim.sprite, 100, 20)
 
 	params := &tweenParams{
-		aniType:  coreproject.AniTypeMove,
+		aniType:  kind,
 		moveFrom: mathf.NewVec2(10, 20),
 		moveTo:   mathf.NewVec2(100, 20),
 	}
@@ -520,7 +510,7 @@ func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
 
 	x, y := anim.sprite.getXY()
 	if x != 55 || y != 20 {
-		t.Fatalf("move position = (%v, %v), want (55, 20)", x, y)
+		t.Fatalf("%v tween position = (%v, %v), want (55, 20)", kind, x, y)
 	}
 }
 
@@ -651,40 +641,6 @@ func TestFlushCompletedAnimationsKeepsPlaybackIdentity(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
-	anim := newTestAnimationComponent()
-	backend := &animationAudioBackend{}
-	initTestAnimationAudio(anim, backend)
-	anim.sprite.g.audioState.AudioAttenuation = 0.35
-	anim.sprite.g.audioState.AudioMaxDistance = 640
-	anim.sprite.runtimeState.SyncSprite.Id = 42
-
-	anim.sprite.Play__1("walk", true)
-	playID := anim.sprite.sound().play("walk", true)
-	if playID == 0 {
-		t.Fatal("play returned no playback id")
-	}
-	if backend.createCalls != 1 || anim.sprite.components.sound.soundObj != 77 {
-		t.Fatalf("sprite sound allocations = %d, object = %d; want 1 and 77", backend.createCalls, anim.sprite.components.sound.soundObj)
-	}
-	if anim.sprite.g.audioState.SoundObj != 0 {
-		t.Fatalf("sprite playback initialized game sound object %d", anim.sprite.g.audioState.SoundObj)
-	}
-	if len(backend.plays) != 2 {
-		t.Fatalf("plays = %d, want 2", len(backend.plays))
-	}
-	first, second := backend.plays[0], backend.plays[1]
-	if first != second {
-		t.Fatalf("play parameters differ: first=%+v second=%+v", first, second)
-	}
-	if first.soundObj != 77 || first.owner != 42 || first.attenation != 0.35 || first.maxDist != 640 {
-		t.Fatalf("sprite playback parameters = %+v", first)
-	}
-	if len(backend.loops) != 2 || !backend.loops[0].loop || !backend.loops[1].loop {
-		t.Fatalf("loop parameters = %+v, want two looping plays", backend.loops)
 	}
 }
 
@@ -949,5 +905,60 @@ func TestStopAnimStateLeavesOnStartSoundAlone(t *testing.T) {
 	}
 	if len(backend.stops) != 0 {
 		t.Fatalf("stops = %+v, want none", backend.stops)
+	}
+}
+
+func TestAnimationLookupBindingsAndUnboundLifecycle(t *testing.T) {
+	anim := newTestAnimationComponent()
+	anim.shared.animBindings = map[string]string{StateStep: "walking", StateTurn: "turning"}
+	for _, tt := range []struct {
+		kind coreproject.AniType
+		want string
+	}{
+		{coreproject.AniTypeMove, "walking"}, {coreproject.AniTypeTurn, "turning"},
+		{coreproject.AniTypeGlide, StateGlide}, {coreproject.AniTypeFrame, ""},
+	} {
+		if got := anim.getTweenAnimName(tt.kind); got != tt.want {
+			t.Fatalf("tween %v animation = %q, want %q", tt.kind, got, tt.want)
+		}
+	}
+	anim.curAnimState = &animState{Name: "running"}
+	anim.playAnimation("absent", false, false)
+	if anim.curAnimState.Name != "running" || anim.curAnimState.IsCanceled {
+		t.Fatal("unknown animation changed active playback")
+	}
+	unbound := &animationComponent{activeTweenStates: []*animState{{Name: "unbound"}}}
+	state := unbound.activeTweenStates[0]
+	unbound.onDestroy()
+	if !state.IsCanceled || unbound.activeTweenStates != nil || unbound.syncSprite() != nil {
+		t.Fatal("destroying an unbound animation retained its tween")
+	}
+}
+
+func TestAnimationAudioRejectsCanceledEmptyAndMissingReplay(t *testing.T) {
+	anim := newTestAnimationComponent()
+	backend := &animationAudioBackend{}
+	initTestAnimationAudio(anim, backend)
+	anim.sprite.g.fs = reloadConfigFS{}
+	anim.playAnimationAudio(&coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "walk"}}, nil)
+	for _, state := range []*animState{
+		{IsCanceled: true, OnPlayReplayAudioName: "walk"},
+		{}, {OnPlayReplayAudioName: "missing"},
+	} {
+		anim.restartOnPlayAudio(state)
+		if state.OnPlayAudioPlaybackID != 0 {
+			t.Fatalf("invalid replay acquired playback %d", state.OnPlayAudioPlaybackID)
+		}
+	}
+	if len(backend.plays) != 0 || len(backend.restarts) != 0 {
+		t.Fatal("invalid animation replay reached the audio backend")
+	}
+	anim.curAnimState = &animState{IsCanceled: true, OnPlayReplayAudioName: "walk", OnPlayAudioRestartPending: true}
+	anim.activeTweenStates = []*animState{{OnPlayAudioRestartPending: true}}
+	if states := anim.takePendingOnPlayAudioStates(); states != [2]*animState{} {
+		t.Fatalf("invalid replay states survived filtering: %v", states)
+	}
+	if anim.curAnimState.OnPlayAudioRestartPending || anim.activeTweenStates[0].OnPlayAudioRestartPending {
+		t.Fatal("invalid replay requests were not consumed")
 	}
 }

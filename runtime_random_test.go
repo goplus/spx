@@ -104,3 +104,18 @@ func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
 		}
 	}
 }
+
+func TestRandomWithoutSchedulerAndInt31Sequence(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous; ResetRandomSeed() })
+	if currentCoroutineID() != 0 || lastAllocatedCoroutineID() != 0 {
+		t.Fatal("scheduler-free random has a coroutine identity")
+	}
+	SetRandomSeed(91)
+	first := randomInt31n(1000)
+	SetRandomSeed(91)
+	if second := randomInt31n(1000); second != first || second < 0 || second >= 1000 {
+		t.Fatalf("int31 sequence changed: %d/%d", first, second)
+	}
+}

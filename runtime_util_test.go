@@ -17,6 +17,7 @@
 package spx
 
 import (
+	itime "github.com/goplus/spx/v3/internal/time"
 	"math"
 	"testing"
 )
@@ -310,5 +311,31 @@ func TestPenColorParamFromString(t *testing.T) {
 				t.Errorf("PenColorParamFromString(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestNumericAndClockUtilities(t *testing.T) {
+	for _, tt := range []struct {
+		value float64
+		want  int
+	}{{0, 0}, {1.49, 1}, {1.5, 2}, {-1.49, -1}, {-1.5, -2}} {
+		if got := Iround(tt.value); got != tt.want {
+			t.Errorf("Iround(%v) = %d, want %d", tt.value, got, tt.want)
+		}
+	}
+	SetRandomSeed(7)
+	t.Cleanup(ResetRandomSeed)
+	for range 20 {
+		if got := Rand__1(5, -2); got < -2 || got >= 5 {
+			t.Fatalf("reversed float bounds: %v", got)
+		}
+	}
+	if got := Compare("z", "a"); got != 1 {
+		t.Fatalf("lexical comparison = %d, want 1", got)
+	}
+	itime.Start(nil)
+	itime.Update(0.25, 30)
+	if DeltaTime() != 0.25 || TimeSinceLevelLoad() != 0.25 {
+		t.Fatalf("logical clock = %v/%v", DeltaTime(), TimeSinceLevelLoad())
 	}
 }

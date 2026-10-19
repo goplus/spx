@@ -195,68 +195,102 @@ func TestCommitLauncherOutputRequiresExecutableStageAndCleansDirectory(t *testin
 	}
 }
 
-func TestCommitLauncherOutputRejectsStagedSymlink(t *testing.T) {
-	parent := t.TempDir()
-	final := filepath.Join(parent, "launcher")
-	stage, cleanup, err := stageLauncherOutput(final)
-	if err != nil {
-		t.Fatal(err)
-	}
-	target := filepath.Join(parent, "other")
-	if err := os.WriteFile(target, []byte("target"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(target, stage); err != nil {
-		cleanup()
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	defer cleanup()
-	if err := commitLauncherOutput(stage, final, launcherOutputProtection{}); err == nil || !strings.Contains(err.Error(), "regular file") {
-		t.Fatalf("staged symlink error = %v", err)
+func TestCommitLauncherOutputRejectsInvalidStage(t *testing.T) {
+	for _, kind := range []string{"missing", "directory", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			parent := t.TempDir()
+			final := filepath.Join(parent, "launcher")
+			stage := stageLauncherTestOutput(t, final)
+			want := "regular file"
+			switch kind {
+			case "missing":
+				want = "inspect staged output"
+			case "directory":
+				if err := os.Mkdir(stage, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				target := filepath.Join(parent, "other")
+				if err := os.WriteFile(target, []byte("target"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(target, stage); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+			}
+			if err := commitLauncherOutput(stage, final, launcherOutputProtection{}); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("invalid stage error = %v, want %q", err, want)
+			}
+			if _, err := os.Lstat(final); !os.IsNotExist(err) {
+				t.Fatalf("invalid stage created final output: %v", err)
+			}
+		})
 	}
 }
 
 func TestCommitLauncherOutputRechecksProtectedInputs(t *testing.T) {
-	parent := t.TempDir()
-	final := filepath.Join(parent, "main.spx")
-	if err := os.WriteFile(final, []byte("source"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	stage, cleanup, err := stageLauncherOutput(filepath.Join(parent, "launcher"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanup()
-	if err := os.WriteFile(stage, []byte("launcher"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	protection := launcherOutputProtection{Files: []string{final}}
-	if err := commitLauncherOutput(stage, final, protection); err == nil || !strings.Contains(err.Error(), "build input") {
-		t.Fatalf("protected commit error = %v", err)
-	}
-	if data, err := os.ReadFile(final); err != nil || string(data) != "source" {
-		t.Fatalf("protected input = %q, err = %v", data, err)
+	for _, kind := range []string{"file", "root"} {
+		t.Run(kind, func(t *testing.T) {
+			parent := t.TempDir()
+			final := filepath.Join(parent, "main.spx")
+			protection := launcherOutputProtection{Files: []string{final}}
+			if kind == "root" {
+				root := filepath.Join(parent, "source")
+				final = filepath.Join(root, "main.go")
+				protection = launcherOutputProtection{Roots: []string{root}}
+			}
+			writeCommandTestFile(t, final, "source")
+			stage := stageLauncherTestOutput(t, filepath.Join(parent, "launcher"))
+			if err := os.WriteFile(stage, []byte("launcher"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := commitLauncherOutput(stage, final, protection); err == nil || !strings.Contains(err.Error(), "build input") {
+				t.Fatalf("protected commit error = %v", err)
+			}
+			if got := readTestFile(t, final); got != "source" {
+				t.Fatalf("protected input = %q, want source", got)
+			}
+		})
 	}
 }
 
-func TestCommitLauncherOutputRechecksProtectedRoot(t *testing.T) {
-	parent := t.TempDir()
-	root := filepath.Join(parent, "source")
-	final := filepath.Join(root, "main.go")
-	writeLauncherTestFile(t, final, "source")
-	stage, cleanup, err := stageLauncherOutput(filepath.Join(parent, "launcher"))
+func stageLauncherTestOutput(t *testing.T, final string) string {
+	t.Helper()
+	stage, cleanup, err := stageLauncherOutput(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	return stage
+}
+
+func TestBuildLauncherFailurePreservesExistingOutput(t *testing.T) {
+	projectDir := t.TempDir()
+	output := filepath.Join(projectDir, "game")
+	writeCommandTestFile(t, output, "old")
+	stage, cleanup, err := stageLauncherOutput(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stage, []byte("new"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cleanup()
+	if got, err := os.ReadFile(output); err != nil || string(got) != "old" {
+		t.Fatalf("existing output = %q, err = %v", got, err)
+	}
+	stage, cleanup, err = stageLauncherOutput(output)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	if err := os.WriteFile(stage, []byte("launcher"), 0o755); err != nil {
+	if err := os.WriteFile(stage, []byte("new"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	protection := launcherOutputProtection{Roots: []string{root}}
-	if err := commitLauncherOutput(stage, final, protection); err == nil || !strings.Contains(err.Error(), "build input") {
-		t.Fatalf("protected root commit error = %v", err)
+	if err := commitLauncherOutput(stage, output, launcherOutputProtection{}); err != nil {
+		t.Fatal(err)
 	}
-	if data, err := os.ReadFile(final); err != nil || string(data) != "source" {
-		t.Fatalf("protected root input = %q, err = %v", data, err)
+	if got, err := os.ReadFile(output); err != nil || string(got) != "new" {
+		t.Fatalf("committed output = %q, err = %v", got, err)
 	}
 }

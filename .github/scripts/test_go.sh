@@ -4,12 +4,18 @@ set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
 
+module_path=github.com/goplus/spx/v3
+
 # Keep discovery separate so an error cannot silently run a partial package list.
 packages="$(go list ./...)"
 test_packages=()
 while IFS= read -r package; do
-  case "$package" in
-    ""|*/internal/webffi*) continue ;;
+  # A trailing slash matches both a package tree's root and its children.
+  case "$package/" in
+    # Exclude examples and generated bindings (covered through pkg/ispx).
+    /|*/internal/webffi*|\
+    "$module_path"/test/*|"$module_path"/tutorial/*|\
+    "$module_path"/pkg/ispx/internal/pkg/*) continue ;;
   esac
   test_packages+=("$package")
 done <<< "$packages"
