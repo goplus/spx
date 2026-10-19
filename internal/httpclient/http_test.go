@@ -179,3 +179,77 @@ func TestDoRejectsMissingRequestURL(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateHTTPSRedirects(t *testing.T) {
+	request := func(rawURL string) *http.Request {
+		t.Helper()
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Request{URL: parsed}
+	}
+
+	tests := []struct {
+		name    string
+		next    *http.Request
+		via     []*http.Request
+		wantErr bool
+	}{
+		{name: "missing next", wantErr: true},
+		{name: "no redirect history", next: request("https://example.test/next")},
+		{name: "missing prior URL", next: request("https://example.test/next"), via: []*http.Request{nil}, wantErr: true},
+		{
+			name:    "intermediate downgrade",
+			next:    request("https://example.test/final"),
+			via:     []*http.Request{request("https://example.test/start"), request("http://example.test/middle")},
+			wantErr: true,
+		},
+		{
+			name:    "final downgrade",
+			next:    request("http://example.test/final"),
+			via:     []*http.Request{request("https://example.test/start")},
+			wantErr: true,
+		},
+		{
+			name: "secure chain",
+			next: request("https://example.test/final"),
+			via:  []*http.Request{request("https://example.test/start"), request("https://example.test/middle")},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateHTTPSRedirects(test.next, test.via)
+			if test.wantErr {
+				if !errors.Is(err, ErrInsecureRedirect) {
+					t.Fatalf("validateHTTPSRedirects() error = %v, want %v", err, ErrInsecureRedirect)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateHTTPSRedirects() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestURLHelpers(t *testing.T) {
+	if requestURL(nil) != nil {
+		t.Fatal("requestURL(nil) returned a URL")
+	}
+	original, err := url.Parse("https://example.test/path")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clone := cloneURL(original)
+	if clone == original || clone.String() != original.String() {
+		t.Fatalf("cloneURL() = %p, %q; want distinct equal URL", clone, clone)
+	}
+	clone.Path = "/changed"
+	if original.Path != "/path" {
+		t.Fatalf("cloneURL shared mutable URL state: original path = %q", original.Path)
+	}
+	if cloneURL(nil) != nil {
+		t.Fatal("cloneURL(nil) returned a URL")
+	}
+}

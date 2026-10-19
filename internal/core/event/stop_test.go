@@ -51,4 +51,14 @@ func TestResolveStop(t *testing.T) {
 	if !stopCaller || filter != nil {
 		t.Fatal("ThisScript resolution mismatch")
 	}
+
+	filter, stopCaller = ResolveStop(OtherScriptsInGame, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("game", false) || filter("game", true) || filter("owner", false) {
+		t.Fatal("OtherScriptsInGame resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(StopKind(999), "owner", isSprite, isGame)
+	if stopCaller || filter != nil {
+		t.Fatal("unknown stop kind resolution mismatch")
+	}
 }

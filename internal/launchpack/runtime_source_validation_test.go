@@ -268,6 +268,24 @@ func TestResolveGoBinUsesFirstGOPATHEntry(t *testing.T) {
 	}
 }
 
+func TestResolveGoBinRejectsUnavailableCommand(t *testing.T) {
+	workDir := t.TempDir()
+	for _, test := range []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{name: "missing command", cfg: Config{}, want: "Go command is unavailable"},
+		{name: "missing executable", cfg: Config{GoCommand: filepath.Join(workDir, "missing-go"), WorkDir: workDir}, want: "resolve Go bin"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := resolveGoBin(context.Background(), test.cfg, nil); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("resolveGoBin() error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
 func sourceRuntimeConfig(sourceRoot, cacheRoot string) Config {
 	return Config{
 		RuntimeSourceRoot: sourceRoot,

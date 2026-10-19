@@ -108,6 +108,17 @@ func TestFetchReleaseURLPreservesDestinationFailure(t *testing.T) {
 	}
 }
 
+func TestWriteErrorTrackerDetectsShortWrite(t *testing.T) {
+	tracker := &writeErrorTracker{writer: shortWriteWriter{}}
+	payload := []byte("payload")
+	if n, err := tracker.Write(payload); err != nil || n != len(payload)-1 {
+		t.Fatalf("Write() = (%d, %v), want (%d, nil)", n, err, len(payload)-1)
+	}
+	if !errors.Is(tracker.err, io.ErrShortWrite) {
+		t.Fatalf("tracker error = %v, want %v", tracker.err, io.ErrShortWrite)
+	}
+}
+
 func TestRuntimeReleaseUnavailableClassification(t *testing.T) {
 	for _, err := range []error{
 		io.ErrShortWrite,
@@ -129,3 +140,12 @@ func TestRuntimeReleaseUnavailableClassification(t *testing.T) {
 type errorWriter struct{ err error }
 
 func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+type shortWriteWriter struct{}
+
+func (shortWriteWriter) Write(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, nil
+	}
+	return len(data) - 1, nil
+}

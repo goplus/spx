@@ -84,6 +84,40 @@ func TestParseEngineDownloadArgs(t *testing.T) {
 	}
 }
 
+func TestEngineDispatchAndHelp(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: errUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "download help", args: []string{"download", "--help"}},
+		{name: "exec help", args: []string{"exec", "--help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown engine command "unknown"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := Run(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("Run(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains == "" {
+				if err != nil {
+					t.Fatalf("Run(%q) returned error: %v", test.args, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("Run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+}
+
 func TestFindLocalEngineAsset(t *testing.T) {
 	for _, tt := range []struct {
 		name, asset, want, message string

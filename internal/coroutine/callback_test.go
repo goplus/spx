@@ -119,6 +119,22 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 	})
 }
 
+func TestTryRunFromEngineSkipsWhenAdmissionIsClosed(t *testing.T) {
+	co := New(nil)
+	called := false
+	co.RunAfterStop(func() {
+		if !co.admissionClosed() {
+			t.Fatal("shutdown callback ran with admission open")
+		}
+		if !co.TryRunFromEngine("rejected", func() { called = true }) {
+			t.Fatal("TryRunFromEngine did not report a handled shutdown call")
+		}
+	})
+	if called {
+		t.Fatal("TryRunFromEngine ran a callback after admission closed")
+	}
+}
+
 func TestShutdownCallbackRejectsNestedDrain(t *testing.T) {
 	checkDrainReentry(t, func() {
 		co := New(nil)

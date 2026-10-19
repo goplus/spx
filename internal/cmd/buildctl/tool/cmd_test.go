@@ -20,15 +20,96 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 )
+
+type toolRecordedCall struct {
+	path string
+	args []string
+}
+
+type toolRecordingRunner struct {
+	calls []toolRecordedCall
+	err   error
+}
+
+func (r *toolRecordingRunner) RunScript(path string, args ...string) error {
+	r.calls = append(r.calls, toolRecordedCall{path: path, args: append([]string(nil), args...)})
+	return r.err
+}
+
+func (r *toolRecordingRunner) RunCommand(string, string, ...string) error { return nil }
+
+func (r *toolRecordingRunner) RepoRootDir() string { return "." }
+
+func TestToolDispatchAndInstallArguments(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		args     []string
+		wantErr  error
+		contains string
+	}{
+		{name: "missing command", wantErr: errUsage},
+		{name: "help", args: []string{"help"}},
+		{name: "clean help", args: []string{"clean-assets", "--help"}},
+		{name: "install help", args: []string{"install", "--help"}},
+		{name: "unknown", args: []string{"unknown"}, contains: `unknown tool command "unknown"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := Run(test.args)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("Run(%q) error = %v, want %v", test.args, err, test.wantErr)
+				}
+				return
+			}
+			if test.contains == "" {
+				if err != nil {
+					t.Fatalf("Run(%q) returned error: %v", test.args, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.contains) {
+				t.Fatalf("Run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name string
+		cfg  InstallConfig
+		args []string
+	}{
+		{name: "default", args: nil},
+		{name: "web without embed", cfg: InstallConfig{Web: true, NoEmbedRuntime: true}, args: []string{"--web", "--no-embed-runtime"}},
+	} {
+		t.Run("install/"+test.name, func(t *testing.T) {
+			runner := &toolRecordingRunner{}
+			if err := InstallTools(test.cfg, runner); err != nil {
+				t.Fatalf("InstallTools returned error: %v", err)
+			}
+			want := []toolRecordedCall{{path: "cmd/spx/install.sh", args: test.args}}
+			if !reflect.DeepEqual(runner.calls, want) {
+				t.Fatalf("recorded calls = %#v, want %#v", runner.calls, want)
+			}
+		})
+	}
+
+	sentinel := errors.New("runner failed")
+	runner := &toolRecordingRunner{err: sentinel}
+	if err := InstallTools(InstallConfig{}, runner); !errors.Is(err, sentinel) {
+		t.Fatalf("InstallTools error = %v, want runner error", err)
+	}
+}
 
 func TestParseToolSetupNDKArgsDefault(t *testing.T) {
 	cfg, err := parseToolSetupNDKArgs(nil)

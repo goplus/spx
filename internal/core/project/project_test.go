@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -275,6 +276,12 @@ func TestResourceDirAndLoadConfig(t *testing.T) {
 	if cfg.Name != "reader" {
 		t.Fatalf("cfg.Name = %q, want reader", cfg.Name)
 	}
+	if err := LoadConfig(&cfg, loadFS, "index.json"); err != nil {
+		t.Fatalf("LoadConfig(path) error: %v", err)
+	}
+	if err := LoadConfig(&cfg, loadFS, 123); err != syscall.EINVAL {
+		t.Fatalf("LoadConfig(unsupported index) error = %v, want %v", err, syscall.EINVAL)
+	}
 
 	if _, err := ResourceDir(123); err == nil {
 		t.Fatal("expected ResourceDir to reject unsupported resource type")
@@ -402,6 +409,12 @@ func TestResolveMapConfigAndMetrics(t *testing.T) {
 	}
 	if metrics.MapMode != MapModeRepeat {
 		t.Fatalf("unexpected map mode: %+v", metrics)
+	}
+	if !IsWindowWorldSizeEqual(1000, 700, 1000, 700) {
+		t.Fatal("IsWindowWorldSizeEqual(equal) = false")
+	}
+	if IsWindowWorldSizeEqual(1000, 700, 1000, 600) {
+		t.Fatal("IsWindowWorldSizeEqual(different height) = true")
 	}
 }
 

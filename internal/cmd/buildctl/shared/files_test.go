@@ -286,3 +286,19 @@ func TestDownloadURLReturnsHTTPStatus(t *testing.T) {
 		t.Fatalf("DownloadURL error = %v, want typed HTTP 404", err)
 	}
 }
+
+func TestDownloadURLRejectsInvalidInputBeforeRequest(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "asset.zip")
+	if err := DownloadURL("https://example.test/asset.zip", dst, 0, nil); err == nil || !strings.Contains(err.Error(), "invalid download size limit") {
+		t.Fatalf("zero limit error = %v, want invalid limit", err)
+	}
+	if err := DownloadURL("https://example.test/asset.zip", dst, -1, nil); err == nil || !strings.Contains(err.Error(), "invalid download size limit") {
+		t.Fatalf("negative limit error = %v, want invalid limit", err)
+	}
+	if err := DownloadURL("://invalid", dst, 1, nil); err == nil {
+		t.Fatal("invalid URL was accepted")
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatalf("destination changed after invalid input: %v", err)
+	}
+}

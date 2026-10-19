@@ -69,6 +69,16 @@ func TestQueuePushPopPreservesOrder(t *testing.T) {
 	}
 }
 
+func TestQueuePopFrontPanicsWhenEmpty(t *testing.T) {
+	var q queue[int]
+	defer func() {
+		if recovered := recover(); recovered != "queue is empty" {
+			t.Fatalf("empty PopFront panic = %v, want queue is empty", recovered)
+		}
+	}()
+	q.popFront()
+}
+
 func TestQueueSupportsZeroValueWithPooling(t *testing.T) {
 	var q queue[int]
 

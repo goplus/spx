@@ -39,3 +39,49 @@ func TestParseNoArgs(t *testing.T) {
 		t.Fatalf("ParseNoArgs --help error = %v, want flag.ErrHelp", err)
 	}
 }
+
+func TestValidateOptionalPlatform(t *testing.T) {
+	for _, platform := range []string{"", "android", "ios", "web", "linux", "windows", "macos"} {
+		t.Run("accept/"+platform, func(t *testing.T) {
+			if err := ValidateOptionalPlatform(platform); err != nil {
+				t.Fatalf("ValidateOptionalPlatform(%q) returned error: %v", platform, err)
+			}
+		})
+	}
+	if err := ValidateOptionalPlatform("plan9"); err == nil || !strings.Contains(err.Error(), "unsupported platform: plan9") {
+		t.Fatalf("ValidateOptionalPlatform(plan9) error = %v, want unsupported-platform error", err)
+	}
+}
+
+func TestResolveWebModeContract(t *testing.T) {
+	want := map[string]WebModeSpec{
+		"normal":      {ReleaseTemplate: "web.zip", CacheSuffix: "webpack.zip", ExportCommand: "exportweb", ExportZip: "spx_web.zip"},
+		"worker":      {ReleaseTemplate: "web-worker.zip", CacheSuffix: "webworker.zip", ExportCommand: "exportwebworker", ExportZip: "spx_web_worker.zip", Threaded: true},
+		"minigame":    {ReleaseTemplate: "web-minigame.zip", CacheSuffix: "webminigame.zip", ExportCommand: "exportminigame", ExportZip: "spx_web_minigame.zip"},
+		"miniprogram": {ReleaseTemplate: "web-miniprogram.zip", CacheSuffix: "webminiprogram.zip", ExportCommand: "exportminiprogram", ExportZip: "spx_web_miniprogram.zip"},
+	}
+	for mode, expected := range want {
+		t.Run(mode, func(t *testing.T) {
+			got, err := ResolveWebMode(mode)
+			if err != nil {
+				t.Fatalf("ResolveWebMode(%q) returned error: %v", mode, err)
+			}
+			if got != expected {
+				t.Fatalf("ResolveWebMode(%q) = %#v, want %#v", mode, got, expected)
+			}
+			if err := ValidateWebMode(mode); err != nil {
+				t.Fatalf("ValidateWebMode(%q) returned error: %v", mode, err)
+			}
+		})
+	}
+	for _, mode := range []string{"", "unknown"} {
+		t.Run("reject/"+mode, func(t *testing.T) {
+			if _, err := ResolveWebMode(mode); err == nil || !strings.Contains(err.Error(), "unsupported web-mode") {
+				t.Fatalf("ResolveWebMode(%q) error = %v, want unsupported-web-mode error", mode, err)
+			}
+			if err := ValidateWebMode(mode); err == nil {
+				t.Fatalf("ValidateWebMode(%q) succeeded", mode)
+			}
+		})
+	}
+}
