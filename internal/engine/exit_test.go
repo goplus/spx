@@ -80,9 +80,7 @@ func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingEx
 	gdx.ExtMgr = recorder
 	enginewrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		if err := co.RunAfterStop(testContext(t), nil); err != nil {
-			t.Error("test coroutines did not stop")
-		}
+		co.RunAfterStop(nil)
 		SetCoroutines(original)
 		gdx.PlatformMgr = originalPlatform
 		gdx.ExtMgr = originalExt

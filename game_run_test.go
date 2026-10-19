@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -161,15 +160,5 @@ func TestSetDebugUpdatesDefaultAndRunningGame(t *testing.T) {
 	SetDebug(DbgFlagInstr | DbgFlagEvent)
 	if !game.debugState.DebugInstr || !game.debugState.DebugEvent {
 		t.Fatalf("game debug=%+v", game.debugState)
-	}
-}
-
-func TestReloadRejectsCallingCoroutine(t *testing.T) {
-	co := setupRuntimeScheduler(t)
-	var got error
-	thread := co.Create(nil, func(coroutine.Thread) { got = XGot_Game_Reload(&Game{}, nil) })
-	co.Join(thread)
-	if got == nil || !strings.Contains(got.Error(), "active coroutine") {
-		t.Fatalf("reload error=%v", got)
 	}
 }

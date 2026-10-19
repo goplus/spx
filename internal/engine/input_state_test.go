@@ -250,42 +250,37 @@ func TestDiscardPendingMouseEventsPreservesHeldState(t *testing.T) {
 }
 
 func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
-	isolateGameBinding(t)
-	setupExecuteTest(t)
-	ResetInputState()
-	t.Cleanup(ResetInputState)
+	for _, test := range []struct {
+		name  string
+		phase gamePhase
+	}{
+		{"starting", gameStarting},
+		{"stopped", gameStopped},
+		{"closing", gameClosing},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateGameBinding(t)
+			ResetInputState()
+			t.Cleanup(ResetInputState)
 
-	binding, err := bindGame(new(bindingTestGame), new(struct{}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { releaseGame(binding) })
+			binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), test.phase)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { releaseGame(binding) })
+			onKeyPressed(7)
+			onMousePressed(1)
 
-	if err := Reload(testContext(t), GetGame(), func() error {
-		onKeyPressed(7)
-		onMousePressed(1)
-		return nil
-	}, func() error {
-		onKeyPressed(9)
-		onMousePressed(3)
-		return nil
-	}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if !beginGameClose(binding) {
-		t.Fatal("failed to close the active game")
-	}
-	onKeyPressed(8)
-	onMousePressed(2)
-
-	cacheKeyEvents()
-	cacheMouseEvents()
-	keyEvents, keysDown := GetKeyInput(nil)
-	mouseEvents, buttons := GetMouseInput(nil)
-	if len(keyEvents) != 0 || len(keysDown) != 0 {
-		t.Fatalf("transition key state = events %v, held %v; want empty", keyEvents, keysDown)
-	}
-	if len(mouseEvents) != 0 || buttons != 0 || IsMouseButtonPressed(1) || IsMouseButtonPressed(2) {
-		t.Fatalf("transition mouse state = events %v, buttons %#x; want empty", mouseEvents, buttons)
+			cacheKeyEvents()
+			cacheMouseEvents()
+			keyEvents, keysDown := GetKeyInput(nil)
+			mouseEvents, buttons := GetMouseInput(nil)
+			if len(keyEvents) != 0 || len(keysDown) != 0 {
+				t.Fatalf("transition key state = events %v, held %v; want empty", keyEvents, keysDown)
+			}
+			if len(mouseEvents) != 0 || buttons != 0 || IsMouseButtonPressed(1) {
+				t.Fatalf("transition mouse state = events %v, buttons %#x; want empty", mouseEvents, buttons)
+			}
+		})
 	}
 }

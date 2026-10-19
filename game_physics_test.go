@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	coreproject "github.com/goplus/spx/v3/internal/core/project"
 	internalengine "github.com/goplus/spx/v3/internal/engine"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -285,5 +286,17 @@ func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	sprite.runtimeState.SyncSprite.Target = (*SpriteImpl)(nil)
 	if got := game.checkCollision([]internalengine.Object{sprite.getSpriteId()}); len(got) != 0 {
 		t.Fatalf("nil target collision=%v", got)
+	}
+}
+
+func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
+	game := setupStageLoadTestGame(t, nil)
+	mgr := pkgengine.PhysicsMgr.(*gameTestPhysicsMgr)
+	want := []bool{true, false, true}
+	for _, byPixel := range want {
+		game.applyPhysicsSettings(coreproject.SystemSettings{CollisionByPixel: byPixel})
+	}
+	if !slices.Equal(mgr.collisionModes, want) {
+		t.Fatalf("collision modes = %v, want %v", mgr.collisionModes, want)
 	}
 }

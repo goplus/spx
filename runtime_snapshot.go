@@ -18,16 +18,12 @@ package spx
 
 import "github.com/goplus/spx/v3/internal/engine"
 
-// Snapshot runs fn and, if it succeeds, queues a screenshot for the end of the
-// current engine frame. Without an active game, the request is dispatched
-// immediately. After an input recording or replay session has consumed its
-// first effective tick, the request is also associated with the most recently
-// consumed input tick.
-//
-// The fn parameter is the decorated function body supplied by XGo. It may be
-// nil when Snapshot is called directly. If fn returns an error, the runtime
-// reports that error and does not request a screenshot. Snapshot only declares
-// the screenshot point; the platform decides whether to store or compare it.
+// Snapshot runs fn and requests a screenshot if it succeeds. fn is the decorated
+// XGo function body and may be nil when called directly. Body errors are reported
+// without requesting a screenshot.
+// The input tick is read after fn returns. Dispatch occurs at engine frame end,
+// or immediately without an active game. The platform decides whether to store
+// or compare the screenshot.
 func Snapshot(name string, fn func() error) {
 	if fn != nil {
 		if err := fn(); err != nil {
@@ -36,14 +32,7 @@ func Snapshot(name string, fn func() error) {
 		}
 	}
 
-	inputTick, hasInputTick := currentInputSessionTickForCapture()
-	var err error
-	if hasInputTick {
-		err = engine.EnqueueCaptureAtInputTick(name, inputTick)
-	} else {
-		err = engine.EnqueueCapture(name)
-	}
-	if err != nil {
+	if err := engine.EnqueueCapture(name, captureInputTick()); err != nil {
 		engine.Panic(err)
 	}
 }

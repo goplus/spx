@@ -3,7 +3,6 @@ package spx
 import (
 	"reflect"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -103,13 +102,10 @@ type shiftedSprite struct {
 
 func (*shiftedSprite) Main() {}
 
-func TestSpriteBaseLayoutKeepsLookupAndReloadRules(t *testing.T) {
+func TestSpriteBaseLayoutKeepsLookupAndUserFields(t *testing.T) {
 	sprite := &shiftedSprite{value: 7}
 	if got := spriteOf(sprite); got != &sprite.SpriteImpl {
 		t.Fatalf("spriteOf = %p, want embedded SpriteImpl %p", got, &sprite.SpriteImpl)
-	}
-	if err := validateReloadSprite(sprite, reflect.ValueOf(&reloadPreflightGame{}).Elem()); err == nil || !strings.Contains(err.Error(), "missing leading SpriteImpl field") {
-		t.Fatalf("validateReloadSprite error = %v, want leading field error", err)
 	}
 
 	fields := snapshotSpriteUserFields(reflect.ValueOf(sprite).Elem())

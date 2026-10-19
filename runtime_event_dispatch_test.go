@@ -17,11 +17,9 @@
 package spx
 
 import (
-	"context"
 	"reflect"
 	"slices"
 	"testing"
-	"time"
 
 	coreevent "github.com/goplus/spx/v3/internal/core/event"
 	"github.com/goplus/spx/v3/internal/coroutine"
@@ -443,8 +441,8 @@ func TestEventHandlerRetriggerPolicies(t *testing.T) {
 				game.OnMsg__0(func(MsgName, any) { run() })
 				fire = func() { game.Broadcast__0("msg") }
 			case "timer":
-				itime.OnReload()
-				t.Cleanup(itime.OnReload)
+				itime.ClearTimers()
+				t.Cleanup(itime.ClearTimers)
 				game.OnTimer(0, run)
 				fire = func() { game.scriptEvents.doWhenTimer(0) }
 			case "swipe":
@@ -614,11 +612,7 @@ func TestMessageExecutionContextReleasedOnCancelAndReset(t *testing.T) {
 	if started != 3 {
 		t.Fatalf("started receivers = %d, want 3", started)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := co.RunAfterStop(ctx, nil); err != nil {
-		t.Fatalf("canceled receivers did not finish cleanup: %v", err)
-	}
+	co.RunAfterStop(nil)
 	if cleaned != 3 || len(game.scriptEvents.messageExecutions) != 0 {
 		t.Fatalf("after cancellation: cleaned = %d, retained contexts = %d", cleaned, len(game.scriptEvents.messageExecutions))
 	}

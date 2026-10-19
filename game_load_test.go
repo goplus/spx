@@ -17,13 +17,17 @@
 package spx
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
 	"github.com/goplus/spx/v3/internal/enginewrap"
 	spxlog "github.com/goplus/spx/v3/internal/log"
@@ -86,7 +90,7 @@ func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisio
 	return sprite
 }
 
-func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
+func TestPrepareStageBootstrapKeepsManualCameraFollowLast(t *testing.T) {
 	game := &cameraFollowOverrideGame{}
 	game.initShapeMgr()
 	game.camera = &cameraImpl{g: &game.Game}
@@ -98,7 +102,7 @@ func TestRunSpriteCallbacksKeepsManualCameraFollowLast(t *testing.T) {
 	game.shapeMgr.add(spriteOf(spriteB))
 
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{Camera: &coreproject.CameraConfig{On: "SpriteA"}},
 		reflect.ValueOf(game).Elem(),
@@ -133,7 +137,7 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 	spriteB.physics().addCollisionTarget("SpriteA")
 
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
@@ -150,7 +154,7 @@ func TestRefreshCollisionLayersUsesCurrentTargetsFromSetupCollisionData(t *testi
 	}
 }
 
-func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
+func TestPrepareStageBootstrapRefreshesCollisionLayersRegisteredInMain(t *testing.T) {
 	setupRuntimeScheduler(t)
 
 	game := &collisionLayerOrderGame{}
@@ -170,7 +174,7 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 	game.shapeMgr.add(spriteOf(spriteB))
 
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(game).Elem(),
@@ -186,7 +190,7 @@ func TestRunSpriteCallbacksRefreshesCollisionLayersRegisteredInMain(t *testing.T
 	}
 }
 
-func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
+func TestLoadStageEntriesReservesLayerZeroForPen(t *testing.T) {
 	const penCanvasLayer = 0
 
 	var game Game
@@ -199,14 +203,12 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 		"Front": front,
 	}
 
-	inits, err := game.loadAndInitSprites(reflect.Value{}, &coreproject.ProjectConfig{
-		Zorder: []any{"Back", "Front"},
-	}, game.loadSprite, nil)
+	sprites, err := game.loadStageEntries(reflect.Value{}, []any{"Back", "Front"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := len(inits), 2; got != want {
-		t.Fatalf("initialized sprite count = %d, want %d", got, want)
+	if got, want := len(sprites), 2; got != want {
+		t.Fatalf("loaded sprite count = %d, want %d", got, want)
 	}
 	if got, want := back.runtimeState.Layer, penCanvasLayer+1; got != want {
 		t.Fatalf("back layer = %d, want %d", got, want)
@@ -219,7 +221,7 @@ func TestLoadAndInitSpritesReservesLayerZeroForPen(t *testing.T) {
 	}
 }
 
-func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *testing.T) {
+func TestLoadStageEntriesAssignsContiguousLayersToExpandedStageSprites(t *testing.T) {
 	setupCloneSpriteMgr(t)
 
 	var game stageLayerOrderGame
@@ -238,27 +240,25 @@ func TestLoadAndInitSpritesAssignsContiguousLayersToExpandedStageSprites(t *test
 		"collisionLayerOrderSprite": groupProto,
 	}
 
-	inits, err := game.loadAndInitSprites(reflect.ValueOf(&game).Elem(), &coreproject.ProjectConfig{
-		Zorder: []any{
-			"Back",
-			coreproject.StageShape{
-				"type":   "sprites",
-				"target": "Group",
-				"items": []any{
-					coreproject.StageShape{"x": float64(-10)},
-					coreproject.StageShape{"x": float64(10)},
-				},
+	sprites, err := game.loadStageEntries(reflect.ValueOf(&game).Elem(), []any{
+		"Back",
+		coreproject.StageShape{
+			"type":   "sprites",
+			"target": "Group",
+			"items": []any{
+				coreproject.StageShape{"x": float64(-10)},
+				coreproject.StageShape{"x": float64(10)},
 			},
-			coreproject.StageShape{"type": "sprite", "target": "Middle"},
-			"Front",
 		},
-	}, game.loadSprite, nil)
+		coreproject.StageShape{"type": "sprite", "target": "Middle"},
+		"Front",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got, want := len(inits), 5; got != want {
-		t.Fatalf("initialized sprite count = %d, want %d", got, want)
+	if got, want := len(sprites), 5; got != want {
+		t.Fatalf("loaded sprite count = %d, want %d", got, want)
 	}
 	if got, want := len(game.Group), 2; got != want {
 		t.Fatalf("expanded group size = %d, want %d", got, want)
@@ -371,43 +371,6 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	}
 }
 
-func TestApplyStoredRuntimeConfigReusesResolvedInput(t *testing.T) {
-	t.Setenv("SPX_SCREENSHOT_KEY", "")
-	t.Setenv("SPX_PROJECT_DIR", "")
-
-	conf := Config{
-		Width:      640,
-		Height:     480,
-		FullScreen: true,
-	}
-
-	var game Game
-
-	proj := coreproject.ProjectConfig{}
-	game.applyRuntimeConfig(&conf, &proj)
-
-	cwd, _ := os.Getwd()
-	wantTitle := filepath.Base(cwd) + " (by spx)"
-	if game.runtimeConfigInput.Title != wantTitle {
-		t.Fatalf("runtimeConfigInput.Title = %q, want %q", game.runtimeConfigInput.Title, wantTitle)
-	}
-	if !proj.FullScreen {
-		t.Fatal("applyRuntimeConfig did not propagate fullscreen override")
-	}
-	if game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 480 {
-		t.Fatalf("window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)
-	}
-
-	proj = coreproject.ProjectConfig{}
-	game.applyStoredRuntimeConfig(&proj)
-	if !proj.FullScreen {
-		t.Fatal("applyStoredRuntimeConfig did not reuse stored fullscreen override")
-	}
-	if game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 480 {
-		t.Fatalf("reapplied window size = %dx%d, want 640x480", game.displayState.WindowWidth, game.displayState.WindowHeight)
-	}
-}
-
 func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
 	projectDir := filepath.Join(t.TempDir(), "02-Dragon")
 	sessionDir := filepath.Join(projectDir, ".temp")
@@ -422,25 +385,19 @@ func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
 		t.Run(title, func(t *testing.T) {
 			var game Game
 			proj := coreproject.ProjectConfig{}
-			game.applyRuntimeConfig(&Config{Title: title}, &proj)
+			got := game.applyRuntimeConfig(&Config{Title: title}, &proj)
 			want := title
 			if want == "" {
 				want = "02-Dragon (by spx)"
 			}
-			if got := game.runtimeConfigInput.Title; got != want {
+			if got != want {
 				t.Fatalf("title = %q, want %q", got, want)
-			}
-			// Reload must retain the resolved title even if the environment changes.
-			t.Setenv("SPX_PROJECT_DIR", filepath.Join(projectDir, "other"))
-			game.applyStoredRuntimeConfig(&proj)
-			if got := game.runtimeConfigInput.Title; got != want {
-				t.Fatalf("reloaded title = %q, want %q", got, want)
 			}
 		})
 	}
 }
 
-func TestInitialLoadAndReloadShareSpritePreparationErrors(t *testing.T) {
+func TestInitialLoadRejectsInvalidSpriteConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		configJSON string
@@ -475,24 +432,24 @@ func TestInitialLoadAndReloadShareSpritePreparationErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			files := reloadConfigFS{"sprites/Sprite/index.json": test.configJSON}
-			game, _, _ := setupReloadPreflightGame(t, files)
+			files := gameTestFS{"sprites/Sprite/index.json": test.configJSON}
+			game := &spriteLoadTestGame{Game: Game{fs: files}}
 			gamer := reflect.ValueOf(game).Elem()
 
-			initialSprite := &reloadPreflightSprite{reloadPreflightGame: game}
+			initialSprite := &spriteLoadTestSprite{spriteLoadTestGame: game}
+			initialSprite.name = "existing"
+			initialSprite.spriteState.IsVisible = true
 			initialErr := game.loadSprite(initialSprite, "Sprite", gamer)
 			if initialErr == nil {
 				t.Fatal("initial load accepted invalid sprite config")
 			}
-			_, reloadErr := prepareReload(&game.Game, gamer, strings.NewReader(`{"zorder":["Sprite"]}`))
-			if reloadErr == nil {
-				t.Fatal("reload accepted invalid sprite config")
-			}
 
 			want := `sprite config "Sprite": ` + test.want
-			reloadReason := strings.TrimPrefix(reloadErr.Error(), "reload preflight: ")
-			if initialErr.Error() != want || reloadReason != want {
-				t.Fatalf("sprite preparation errors: initial=%q reload=%q, want %q", initialErr, reloadReason, want)
+			if initialErr.Error() != want {
+				t.Fatalf("sprite preparation error = %q, want %q", initialErr, want)
+			}
+			if initialSprite.spriteLoadTestGame != game || initialSprite.name != "existing" || !initialSprite.spriteState.IsVisible {
+				t.Fatal("invalid sprite configuration modified the existing instance")
 			}
 		})
 	}
@@ -576,7 +533,7 @@ func TestBindSpriteOwnerRejectsInvalidStorage(t *testing.T) {
 }
 
 type gameDisplayPlatformMgr struct {
-	reloadCommitPlatformMgr
+	gameTestPlatformMgr
 	width, height int64
 	fullscreen    bool
 }
@@ -587,7 +544,7 @@ func (m *gameDisplayPlatformMgr) SetWindowSize(width, height int64, _ bool) {
 func (m *gameDisplayPlatformMgr) SetWindowFullscreen(value bool) { m.fullscreen = value }
 func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
 	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
-	game := setupReloadCommitGame(t, reloadConfigFS{})
+	game := setupStageLoadTestGame(t, gameTestFS{})
 	manager := &gameDisplayPlatformMgr{}
 	pkgengine.PlatformMgr = manager
 	previousScale := engine.WindowScale()
@@ -611,4 +568,273 @@ func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
 	if manager.width != 640 || manager.height != 480 {
 		t.Fatalf("window=%dx%d", manager.width, manager.height)
 	}
+}
+
+func TestPrepareSpriteConfigRejectsInvalidLayout(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    coreproject.SpriteConfig
+		wantError string
+	}{
+		{
+			name:      "empty costumes",
+			config:    coreproject.SpriteConfig{Costumes: []*coreproject.CostumeConfig{}},
+			wantError: "costumes must not be empty",
+		},
+		{
+			name:      "null costume",
+			config:    coreproject.SpriteConfig{Costumes: []*coreproject.CostumeConfig{nil}},
+			wantError: "costumes[0] is null",
+		},
+		{
+			name:      "invalid costume set frame count",
+			config:    coreproject.SpriteConfig{CostumeSet: &coreproject.CostumeSet{}},
+			wantError: "invalid frame count 0",
+		},
+		{
+			name: "incomplete costume set items",
+			config: coreproject.SpriteConfig{CostumeSet: &coreproject.CostumeSet{
+				Nx:    2,
+				Items: []coreproject.CostumeSetItem{{NamePrefix: "idle", N: 1}},
+			}},
+			wantError: "incomplete frame loading",
+		},
+		{
+			name:      "empty multipart costume set",
+			config:    coreproject.SpriteConfig{CostumeMPSet: &coreproject.CostumeMPSet{}},
+			wantError: "costumeMPSet.parts must not be empty",
+		},
+		{
+			name: "animation references missing costume",
+			config: coreproject.SpriteConfig{
+				CostumeSet: &coreproject.CostumeSet{Nx: 1},
+				FAnimations: map[string]*coreproject.AniConfig{
+					"walk": {FrameFrom: "missing", FrameTo: "0"},
+				},
+			},
+			wantError: `frameFrom references missing costume "missing"`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := prepareSpriteConfig(&test.config)
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("prepareSpriteConfig error = %v, want substring %q", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestPrepareSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
+	tests := []coreproject.SpriteConfig{
+		{Costumes: []*coreproject.CostumeConfig{{Name: "idle"}}},
+		{CostumeSet: &coreproject.CostumeSet{Nx: 2}},
+		{CostumeMPSet: &coreproject.CostumeMPSet{Parts: []coreproject.CostumeSetPart{{Nx: 1}, {Nx: 2}}}},
+		{
+			CostumeSet: &coreproject.CostumeSet{Nx: 2, Items: []coreproject.CostumeSetItem{{NamePrefix: "walk", N: 2}}},
+			FAnimations: map[string]*coreproject.AniConfig{
+				"walk": {FrameFrom: "walk0", FrameTo: "walk1"},
+			},
+		},
+	}
+
+	for i := range tests {
+		if _, err := prepareSpriteConfig(&tests[i]); err != nil {
+			t.Errorf("prepareSpriteConfig(config %d) error = %v", i, err)
+		}
+	}
+}
+
+type gameTestFS map[string]string
+
+func (f gameTestFS) Open(name string) (io.ReadCloser, error) {
+	content, ok := f[name]
+	if !ok {
+		return nil, errors.New("file not found: " + name)
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (gameTestFS) Close() error { return nil }
+
+type spriteLoadTestGame struct {
+	Game
+}
+
+type spriteLoadTestSprite struct {
+	SpriteImpl
+	*spriteLoadTestGame
+}
+
+func (*spriteLoadTestSprite) Main() {}
+
+type stageLoadTestGame struct {
+	Game
+	Empty   []*stageLoadTestSprite
+	Sprites []*stageLoadTestSprite
+}
+
+type stageLoadTestSprite struct {
+	SpriteImpl
+	*stageLoadTestGame
+}
+
+func (*stageLoadTestSprite) Main() {}
+
+type directSpriteTestGame struct {
+	Game
+	DirectLoadSprite *DirectLoadSprite
+}
+
+type DirectLoadSprite struct {
+	SpriteImpl
+	*directSpriteTestGame
+}
+
+func (*DirectLoadSprite) Main() {}
+
+type gameTestSpriteMgr struct {
+	*spyCloneSpriteMgr
+}
+
+func (m *gameTestSpriteMgr) CreateBackdrop(string) pkgengine.Object {
+	return m.CreateBareSprite(mathf.Vec2{})
+}
+
+func (*gameTestSpriteMgr) DestroySprite(pkgengine.Object) bool   { return true }
+func (*gameTestSpriteMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+func (*gameTestSpriteMgr) SetColliderRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {
+}
+func (*gameTestSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
+func (*gameTestSpriteMgr) SetPixelCollisionSamplingStep(int64)                     {}
+
+type gameTestExtMgr struct {
+	pkgengine.IExtMgr
+}
+
+func (*gameTestExtMgr) SetLayerSorterMode(int64) {}
+
+type gameTestPlatformMgr struct {
+	pkgengine.IPlatformMgr
+}
+
+func (*gameTestPlatformMgr) IsMainThread() bool               { return true }
+func (*gameTestPlatformMgr) GetWindowSize() mathf.Vec2        { return mathf.NewVec2(480, 360) }
+func (*gameTestPlatformMgr) SetWindowSize(int64, int64, bool) {}
+func (*gameTestPlatformMgr) SetWindowFullscreen(bool)         {}
+func (*gameTestPlatformMgr) SetMaxFps(int64)                  {}
+func (*gameTestPlatformMgr) SetStretch(bool, int64, int64)    {}
+func (*gameTestPlatformMgr) SetDebugMode(bool)                {}
+
+type gameTestCameraMgr struct {
+	pkgengine.ICameraMgr
+}
+
+func (*gameTestCameraMgr) SetCameraZoom(mathf.Vec2)    {}
+func (*gameTestCameraMgr) SetCameraLimit(int64, int64) {}
+func (*gameTestCameraMgr) SetCameraSmoothing(bool)     {}
+
+type gameTestInputMgr struct {
+	pkgengine.IInputMgr
+}
+
+func (*gameTestInputMgr) GetGlobalMousePos() mathf.Vec2 { return mathf.Vec2{} }
+func (*gameTestInputMgr) GetMouseState(int64) bool      { return false }
+
+type gameTestPenMgr struct {
+	pkgengine.IPenMgr
+}
+
+func (*gameTestPenMgr) DestroyAllPens()            {}
+func (*gameTestPenMgr) SetCanvasSize(int64, int64) {}
+
+type gameTestPhysicsMgr struct {
+	pkgengine.IPhysicsMgr
+	collisionModes []bool
+}
+
+func (m *gameTestPhysicsMgr) SetCollisionSystemType(byPixel bool) {
+	m.collisionModes = append(m.collisionModes, byPixel)
+}
+func (*gameTestPhysicsMgr) SetGlobalGravity(float64)  {}
+func (*gameTestPhysicsMgr) SetGlobalFriction(float64) {}
+func (*gameTestPhysicsMgr) SetGlobalAirDrag(float64)  {}
+
+type gameTestResMgr struct {
+	pkgengine.IResMgr
+}
+
+func (*gameTestResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
+	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
+}
+
+type gameTestTilemapparserMgr struct {
+	pkgengine.ITilemapparserMgr
+	loadedPath   string
+	destroyCalls int
+}
+
+func (m *gameTestTilemapparserMgr) LoadTilemap(path string) {
+	m.loadedPath = path
+}
+
+func (m *gameTestTilemapparserMgr) DestroyAllTilemaps() { m.destroyCalls++ }
+
+func setupGameTestRuntime(t *testing.T, files gameTestFS, game Gamer, sprites []Sprite, physics bool) *Game {
+	t.Helper()
+
+	cloneMgr := setupCloneSpriteMgr(t)
+	originalExtMgr := pkgengine.ExtMgr
+	originalPlatformMgr := pkgengine.PlatformMgr
+	originalCameraMgr := pkgengine.CameraMgr
+	originalInputMgr := pkgengine.InputMgr
+	originalPenMgr := pkgengine.PenMgr
+	originalPhysicsMgr := pkgengine.PhysicsMgr
+	originalResMgr := pkgengine.ResMgr
+	pkgengine.SpriteMgr = &gameTestSpriteMgr{spyCloneSpriteMgr: cloneMgr}
+	pkgengine.ExtMgr = &gameTestExtMgr{}
+	pkgengine.PlatformMgr = &gameTestPlatformMgr{}
+	pkgengine.CameraMgr = &gameTestCameraMgr{}
+	pkgengine.InputMgr = &gameTestInputMgr{}
+	pkgengine.PenMgr = &gameTestPenMgr{}
+	pkgengine.PhysicsMgr = &gameTestPhysicsMgr{}
+	pkgengine.ResMgr = &gameTestResMgr{}
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = cloneMgr
+		pkgengine.ExtMgr = originalExtMgr
+		pkgengine.PlatformMgr = originalPlatformMgr
+		pkgengine.CameraMgr = originalCameraMgr
+		pkgengine.InputMgr = originalInputMgr
+		pkgengine.PenMgr = originalPenMgr
+		pkgengine.PhysicsMgr = originalPhysicsMgr
+		pkgengine.ResMgr = originalResMgr
+	})
+
+	originalGame := engine.GetGame()
+	originalBounds := cachedBounds
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		cachedBounds = originalBounds
+	})
+	installRuntimeScheduler(t, coroutine.New(nil), engine.ClearAllSprites)
+	cachedBounds = make(map[string]mathf.Rect2)
+
+	base := game.baseGame().initGame(sprites)
+	engine.SetGame(base)
+	base.gamer = game
+	base.startLoad(files)
+	base.soundMgr.Init(&fakeAudioBackend{})
+	base.tilemapMgr.init(base, files, "")
+	base.physicsEnabled = physics
+	base.lifecycleState.IsRunned.Store(true)
+
+	return base
+}
+
+func setupStageLoadTestGame(t *testing.T, files gameTestFS) *stageLoadTestGame {
+	t.Helper()
+	game := &stageLoadTestGame{}
+	setupGameTestRuntime(t, files, game, []Sprite{&stageLoadTestSprite{}}, false)
+	return game
 }

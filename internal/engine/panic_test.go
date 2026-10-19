@@ -30,9 +30,7 @@ func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
 	gdx.ExtMgr = recorder
 	enginewrap.Init(WaitMainThread)
 	t.Cleanup(func() {
-		if err := co.RunAfterStop(testContext(t), nil); err != nil {
-			t.Error("panicking coroutine did not finish")
-		}
+		co.RunAfterStop(nil)
 		SetCoroutines(originalCo)
 		gdx.PlatformMgr, gdx.ExtMgr = originalPlatform, originalExt
 	})

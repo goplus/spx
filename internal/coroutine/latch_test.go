@@ -60,9 +60,7 @@ func TestLatchConcurrentOpenPublishesCompletion(t *testing.T) {
 	co := New(nil)
 	latch := co.NewLatch()
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("latch waiter did not stop")
-		}
+		co.RunAfterStop(nil)
 	})
 	var resumed int
 	waiter := co.Create("waiter", func(Thread) {

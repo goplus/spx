@@ -21,9 +21,7 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 				panicWithValue(value)
 			})
 			waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-			if co.RunAfterStop(drainTestContext(t), nil) != nil {
-				t.Fatal("panic handler did not finish")
-			}
+			co.RunAfterStop(nil)
 			select {
 			case report := <-reports:
 				if !reflect.DeepEqual(report.Value, value) {
@@ -56,9 +54,7 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	co.debug = true
 	worker := co.Create("runtime-panic-worker", panicWithNilDereference)
 	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
-	if co.RunAfterStop(drainTestContext(t), nil) != nil {
-		t.Fatal("panic handler did not finish")
-	}
+	co.RunAfterStop(nil)
 	select {
 	case report := <-reports:
 		if _, ok := report.Value.(runtime.Error); !ok {
@@ -93,9 +89,7 @@ func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
 			}
 		})
 		waitForThreadSignal(t, worker.done, "coroutine did not finish")
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Fatal("coroutine did not drain")
-		}
+		co.RunAfterStop(nil)
 		select {
 		case report := <-reports:
 			t.Errorf("normal termination %v reported as panic: %+v", value, report)
@@ -140,7 +134,5 @@ func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
 	if finalizing != 0 {
 		t.Fatalf("finalizing goroutine markers = %d, want 0", finalizing)
 	}
-	if co.RunAfterStop(drainTestContext(t), nil) != nil {
-		t.Fatal("manager remained blocked after panic handler panicked")
-	}
+	co.RunAfterStop(nil)
 }

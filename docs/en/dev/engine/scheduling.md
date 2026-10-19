@@ -10,7 +10,7 @@ explicit waits, redraw requests, and condition events determine when a script
 can continue.
 
 This document describes the current SPX runtime, including frame phases, loop
-rounds, and the limits of fixed-frame capture and input replay. These rules
+rounds, and the limits of capture and input replay. These rules
 apply to all projects using the corresponding APIs.
 
 ## Execution ownership and completion
@@ -37,7 +37,7 @@ its callback from starting.
 Cancellation, script completion, and runtime drain are separate stages. Both
 `Cancel` and `Stop` request termination and wake suspended scripts; they cannot
 interrupt arbitrary blocking Go code. Reset barriers wait for scripts, external
-work, and final panic handling. The host uses `RunAfterStop(ctx, nil)` to wait for
+work, and final panic handling. The host uses `RunAfterStop(nil)` to wait for
 all registered work; scripts use the non-waiting stop operations. A `WaitToDo`
 worker that exits through `Goexit` cancels and wakes its script so the script can
 clean up.
@@ -50,47 +50,23 @@ clean up.
 | `StopCurrent` | Exit the current coroutine through procedure boundaries. |
 | `StopThisScript` | Exit the nearest custom procedure and resume its caller; without a procedure boundary, end the coroutine. |
 | `StopAll` | Request cancellation of all registered coroutines without waiting. |
-| `RunAfterStop(ctx, call)` | From the host, close admission, request cancellation, drain scripts and workers, then run a callback if non-nil. Managed callers are rejected before changing state. |
-| `RunAfterStopIf(ctx, condition, call)` | Recheck a condition after acquiring the shutdown barrier; return whether stopping began and any wait error. A false condition leaves work unchanged. |
+| `RunAfterStop(call)` | From the host, close admission, request cancellation, drain scripts and workers, then run a callback if non-nil. Managed callers are rejected before changing state. |
 
 `Stop` names script operations, `Cancel` signals cancellation, and internal drain
 waits cover cleanup. `ErrAbortThread` remains the control-flow signal for exiting
 the current coroutine.
 
-### Contexts for shutdown waits
+### Shutdown barriers
 
-`ctx` controls barrier acquisition and drain waiting. It must be independent
-of the work context being stopped, or the stop request also cancels the wait.
-`context.Background()` waits without a deadline.
-`RunAfterStop` returns an `error`;
-`RunAfterStopIf` returns `(stopStarted bool, err error)`:
+`RunAfterStop` is a host-only, synchronous barrier with no timeout or return value.
+It closes admission, cancels registered scripts, waits for scripts, workers, and
+final panic handling to exit, then invokes the cleanup callback. Scripts use the
+non-waiting stop operations; their cancellation contexts remain independent of
+this host barrier.
 
-| Phase | Conditional result and state |
-| --- | --- |
-| Canceled before stopping, including while waiting for an earlier barrier | `false, err`; existing work and admission remain unchanged. |
-| Condition fails after acquiring the barrier | `false, nil`; no stop begins. |
-| Canceled after stopping begins while work remains registered | `true, err`; skip the callback and keep admission closed until a later barrier succeeds. |
-| Final unregistration races cancellation | Recheck the registry; an already completed drain can succeed. |
-
-Use `errors.Is` to recognize `context.Canceled` or `context.DeadlineExceeded`.
-These are the standard `ctx.Err()` errors; custom `context.Cause(ctx)` values
-are not propagated.
-An incomplete-drain error also includes remaining thread IDs, names, and worker
-count. Canceling the wait does not prove that work has exited. Complete reset
-requires an external entry point and one barrier covering admission closure,
-cancellation, drain, and callback. Both shutdown waits use this host-only
-contract; scripts cannot synchronously drain their peers.
-
-Before calling `engine.Reload(ctx, owner, ...)`, the host uses `context.WithTimeout`
-with a two-second `reloadTimeout`. Preparation consumes this budget, but running
-preparation or rebuild callbacks are not interrupted. A preparation that consumes
-the budget leaves the original game running and returns a deadline error, even if
-the subsequent drain would have been quick. Once rebuilding starts, activation
-can finish. Failure after stopping leaves the game stopped.
-
-This budget is not an end-to-end return-time limit. Engine lifecycle and frame
-mutexes are not context-aware; cancellation is checked after acquiring them.
-The context is checked between phases and bounds shutdown barrier and drain waits.
+If engine-thread cleanup exits the waiting goroutine before drain completes,
+admission remains closed. A later successful barrier can finish cleanup and
+restore admission. The callback runs only after all registered work has exited.
 
 ### Callbacks and synchronous waits
 
@@ -108,11 +84,10 @@ depends on reacquiring script ownership after the batch's first slices. Host cal
 are rejected before any task is registered. `BatchAsync` and `BatchWaitDone` also
 accept host callers; empty batches return immediately in every mode.
 
-Scripts, workers, registration callbacks, cleanup, final panic handlers, shutdown condition
-checks, shutdown callbacks, and callbacks holding exclusive script ownership cannot
-synchronously drain. Such calls panic with `ErrReentrantWait` before canceling tasks
-or changing admission. Shutdown conditions run inside the barrier and must not
-change lifecycle state themselves. Exclusive callbacks also cannot synchronously
+Scripts, workers, registration callbacks, cleanup, final panic handlers, shutdown
+callbacks, and callbacks holding exclusive script ownership cannot synchronously
+drain. Such calls panic with `ErrReentrantWait` before canceling tasks or changing
+admission. Exclusive callbacks also cannot synchronously
 execute scripts or block on Join / Latch, since those scripts cannot acquire execution ownership.
 Completed waits may return.
 
@@ -127,10 +102,10 @@ this does not guarantee completion within one frame's time budget. Web backgroun
 waits park the Go goroutine. A synchronous JS callback that needs later events
 must move its wait to a separate goroutine and return to the host.
 
-The deadline cannot interrupt running engine calls, condition checks, or shutdown
-callbacks; reacquiring script ownership also remains cooperative. External workers
-must observe their work context or use the operation's cancellation mechanism.
-Arbitrary blocking code and circular dependencies can still prevent cleanup.
+Shutdown waits for running engine calls and callbacks to finish; reacquiring
+script ownership also remains cooperative. External workers must observe their
+work context or use the operation's cancellation mechanism. Arbitrary blocking
+code and circular dependencies can still prevent cleanup.
 
 ### Concurrency invariants
 
@@ -167,7 +142,7 @@ rounds; starting another round does not advance the frame number or timer.
    preparation and condition matching share one `RunBetweenScripts` phase.
 2. Advance the clock and handle capture-key requests. Freeze timers due at this
    phase, register matched condition handlers, then route this frame's input and
-   timers. Finish registration before running the startup or due frame callbacks.
+   timers. Finish registration before dispatching startup handlers.
 3. Process runnable coroutines and eligible loop rounds.
 4. Synchronize visual state needed by captures, dispatch queued capture requests,
    and finalize input-session frame completion. The Web host waits for its
@@ -278,13 +253,13 @@ Frame-boundary callbacks run on the caller. External native event dispatch uses
 a managed coroutine and services only engine-thread jobs while waiting, so a
 synchronous dispatch cannot wait for a future frame.
 
-## Fixed-frame capture and input replay
+## Capture and input replay
 
-During an active game, `AtFrame` schedules a callback for an engine-session
-frame. `Snapshot` queues a request for dispatch after visual-state synchronization
-at the end of the frame. These APIs select a frame boundary; they do not fix
-how much script work occurs before it. See [Web capture](web_capture.md) for
-host integration.
+During an active game, `Snapshot` queues a request for dispatch after visual-state
+synchronization at the end of the frame. A configured `captureKey` requests
+screenshots from recorded or replayed key presses at the same input ticks.
+These requests do not fix how much script work occurs before capture.
+See [Web capture](web_capture.md) for host integration.
 
 [Input recording and replay](input_replay.md) fix the input stream, logical
 timestep, and script random seed. They do not fix or record the number of

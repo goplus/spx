@@ -72,14 +72,15 @@ func TestApplyRuntimeConfig(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("SPX_SCREENSHOT_KEY", "F8")
-			game := &Game{runtimeConfigInput: Config{Title: "stale", Width: 99, Height: 88, FullScreen: true}}
+			game := &Game{}
+			game.displayState.WindowWidth, game.displayState.WindowHeight = 99, 88
 			var original Config
 			if tt.config != nil {
 				original = *tt.config
 			}
-			game.applyRuntimeConfig(tt.config, &tt.project)
-			if game.runtimeConfigInput.Title != tt.wantTitle || game.displayState.WindowWidth != tt.wantWidth || game.displayState.WindowHeight != tt.wantHeight {
-				t.Fatalf("runtime config = title %q, window %dx%d; want %q, %dx%d", game.runtimeConfigInput.Title, game.displayState.WindowWidth, game.displayState.WindowHeight, tt.wantTitle, tt.wantWidth, tt.wantHeight)
+			title := game.applyRuntimeConfig(tt.config, &tt.project)
+			if title != tt.wantTitle || game.displayState.WindowWidth != tt.wantWidth || game.displayState.WindowHeight != tt.wantHeight {
+				t.Fatalf("runtime config = title %q, window %dx%d; want %q, %dx%d", title, game.displayState.WindowWidth, game.displayState.WindowHeight, tt.wantTitle, tt.wantWidth, tt.wantHeight)
 			}
 			if tt.project.FullScreen != tt.wantFull || game.physicsEnabled != tt.project.Physics {
 				t.Fatalf("fullscreen/physics = %v/%v, want %v/%v", tt.project.FullScreen, game.physicsEnabled, tt.wantFull, tt.project.Physics)
@@ -94,31 +95,14 @@ func TestApplyRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestStoredRuntimeConfigSurvivesProjectReload(t *testing.T) {
-	t.Setenv("SPX_PROJECT_DIR", filepath.Join(t.TempDir(), "original"))
-	t.Setenv("SPX_SCREENSHOT_KEY", "")
-	config := Config{Width: 640, Height: 360}
-	game := &Game{}
-	game.applyRuntimeConfig(&config, &coreproject.ProjectConfig{Physics: true})
-	config.Title, config.Width = "changed by caller", 1
-	t.Setenv("SPX_PROJECT_DIR", filepath.Join(t.TempDir(), "replacement"))
-	game.applyStoredRuntimeConfig(&coreproject.ProjectConfig{FullScreen: true})
-	if game.runtimeConfigInput.Title != "original (by spx)" || game.displayState.WindowWidth != 640 || game.displayState.WindowHeight != 360 {
-		t.Fatalf("reload lost stored config: %+v, display %+v", game.runtimeConfigInput, game.displayState)
-	}
-	if game.physicsEnabled {
-		t.Fatal("reload retained the previous project's physics setting")
-	}
-}
-
 func TestRuntimeConfigTitleFallsBackToWorkingDirectory(t *testing.T) {
 	t.Setenv("SPX_PROJECT_DIR", "")
 	t.Setenv("SPX_SCREENSHOT_KEY", "")
 	dir := t.TempDir()
 	t.Chdir(dir)
-	got := resolveGameRuntimeConfig(Config{}, &coreproject.ProjectConfig{})
-	if want := filepath.Base(dir) + " (by spx)"; got.Title != want {
-		t.Fatalf("title = %q, want %q", got.Title, want)
+	got := new(Game).applyRuntimeConfig(nil, &coreproject.ProjectConfig{})
+	if want := filepath.Base(dir) + " (by spx)"; got != want {
+		t.Fatalf("title = %q, want %q", got, want)
 	}
 }
 

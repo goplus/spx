@@ -1,14 +1,14 @@
-# Web Capture and Fixed-Frame Integration
+# Web Capture Integration
 
-SPX Web exports provide a host-facing capture workflow for fixed-frame screenshots and visual regression tests. The runtime selects a logical frame; the browser host captures the rendered canvas only after that frame has completed.
+SPX Web exports provide a host-facing capture workflow for screenshots and visual regression tests. The runtime dispatches screenshot requests after the current frame's visual-state synchronization; the browser host waits for a render fence before reading the canvas.
 
-Selecting the same frame or input tick does not guarantee identical script state. The scheduler uses a wall-clock budget for loop rounds, which input recording and replay do not fix or record. If visible state depends on the number of iterations completed within that budget, screenshots can vary between runs. See [SPX script scheduling](scheduling.md#fixed-frame-capture-and-input-replay).
+Selecting the same frame or input tick does not guarantee identical script state. The scheduler uses a wall-clock budget for loop rounds, which input recording and replay do not fix or record. If visible state depends on the number of iterations completed within that budget, screenshots can vary between runs. See [SPX script scheduling](scheduling.md#capture-and-input-replay).
 
 ## 1. SPX capability
 
-Game code or host configuration can request capture at selected ticks. Runtime events identify session state, the target tick, completion, and errors. Capture scheduling belongs to the logical SPX frame pipeline rather than an arbitrary JavaScript timeout.
+Game scripts call `spx.Snapshot(name, fn)` at the step they want to capture. It runs `fn` if non-nil, then queues a screenshot if the body succeeds. A body that yields can finish in a later frame; the request records the frame and latest input tick when the body returns. Without an active game, the request is dispatched immediately.
 
-Future decorators may provide a shorter game-code syntax, but the host protocol remains the integration boundary.
+Recording and replay can also use a configured `captureKey` (the Web runner defaults to `P`). Its press edges are part of the recorded input, so replay requests screenshots at the same input ticks without script-side scheduling. The internal engine frame counter is retained as screenshot metadata and includes loading and bootstrap updates.
 
 ## 2. Web bridge
 
@@ -16,7 +16,7 @@ The template Web host receives runtime messages from the Go/WASM and engine brid
 
 ## 3. Request shape
 
-A request should include a stable capture name and target tick/frame information. A host may add session, replay, baseline, or run identifiers. Treat unknown fields as host metadata; do not make game determinism depend on storage-specific values.
+A request includes a capture name, sequence, engine frame, and the latest consumed input tick when available. The host uses `inputTick` to pair recording and replay images; it uses `frame` to share one rendered image between requests from the same engine frame. A host may add session, replay, baseline, or run identifiers. Treat unknown fields as host metadata; do not make game determinism depend on storage-specific values.
 
 ## 4. Minimal integration
 

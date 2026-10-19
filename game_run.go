@@ -17,24 +17,13 @@
 package spx
 
 import (
-	"context"
-	"errors"
-	"reflect"
 	"time"
 
 	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/debug"
 	"github.com/goplus/spx/v3/internal/engine"
-	engineplatform "github.com/goplus/spx/v3/internal/engine/platform"
 	spxlog "github.com/goplus/spx/v3/internal/log"
-)
-
-const reloadTimeout = 2 * time.Second
-
-var (
-	errReloadInactiveGame = errors.New("game reload requires the active game")
-	errReloadWrongThread  = errors.New("game reload requires the engine main thread")
 )
 
 // -----------------------------------------------------------------------------
@@ -62,23 +51,6 @@ func XGot_Game_Main(game Gamer, sprites ...Sprite) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-// XGot_Game_Reload reloads the game with new configuration.
-func XGot_Game_Reload(game Gamer, index any) (err error) {
-	if gco.IsInCoroutine() {
-		return errors.New("game reload cannot be called from an active coroutine")
-	}
-	g := game.baseGame()
-	if currentGame() != g {
-		return errReloadInactiveGame
-	}
-	if !engineplatform.TryCallEngineDirectly(func() {
-		err = reloadGame(game, g, index)
-	}) {
-		return errReloadWrongThread
-	}
-	return err
 }
 
 // -----------------------------------------------------------------------------
@@ -125,42 +97,6 @@ func RepeatUntil(__xgo_autoclosure_condition func() bool, call func()) {
 
 func WaitUntil(__xgo_autoclosure_condition func() bool) {
 	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
-}
-
-func reloadGame(game Gamer, g *Game, index any) error {
-	v := reflect.ValueOf(game).Elem()
-	var plan *reloadPlan
-	var generation uint64
-	ctx, cancel := context.WithTimeout(context.Background(), reloadTimeout)
-	defer cancel()
-	err := engine.Reload(ctx, g, func() error {
-		var err error
-		plan, err = prepareReload(g, v, index)
-		return err
-	}, func() error {
-		g.reset()
-		generation = g.bootstrapGeneration()
-		if err := g.attachPreparedInputSession(); err != nil {
-			return err
-		}
-
-		proj := &plan.project
-		g.applyStoredRuntimeConfig(proj)
-		setupGameSystems(g, proj)
-		if err := plan.loadSprites(g, v); err != nil {
-			return err
-		}
-		g.tilemapMgr.replaceMap(plan.tilemap)
-		return g.loadStage(v, proj, generation, plan.spriteLoader(g), plan.stage)
-	}, func() {
-		g.initLogicLoop()
-		g.lifecycleState.IsRunned.Store(true)
-	})
-	if err != nil {
-		return err
-	}
-	g.startBootstrap(generation)
-	return nil
 }
 
 func handleMainExecutionTimeout(thread coroutine.Thread) bool {

@@ -17,26 +17,41 @@
 package coroutine
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
 
-func TestThreadNameUsesNameMethodWithoutReflectionCall(t *testing.T) {
-	if got := threadName(&namedOwner{}); got != "named-thread" {
-		t.Fatalf("expected name from interface method, got %q", got)
-	}
-}
-
-func TestThreadNameFallsBackForInvalidNameSignature(t *testing.T) {
-	if got := threadName(&invalidNamedOwner{}); got != "*invalidNamedOwner" {
-		t.Fatalf("expected fallback type name, got %q", got)
-	}
-}
-
-func TestThreadString(t *testing.T) {
-	thread := New(nil).newThread(&namedOwner{})
-	if got := thread.String(); got != "id=1 name=named-thread " {
-		t.Fatalf("thread diagnostic = %q, want ID and resolved owner name", got)
+func TestThreadIdentity(t *testing.T) {
+	co := New(nil)
+	var wantID int64
+	for _, test := range []struct {
+		name  string
+		owner any
+		want  string
+	}{
+		{"nil owner", nil, ""},
+		{"string owner", "script", "script"},
+		{"named owner", &namedOwner{}, "named-thread"},
+		{"invalid Name signature", &invalidNamedOwner{}, "*invalidNamedOwner"},
+		{"value owner", struct{}{}, ""},
+		{"anonymous pointer", &struct{}{}, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			wantID++
+			thread := co.newThread(test.owner)
+			t.Cleanup(thread.Cancel)
+			if got := thread.ID(); got != wantID {
+				t.Errorf("ID = %d, want %d", got, wantID)
+			}
+			if got := thread.Name(); got != test.want {
+				t.Errorf("Name = %q, want %q", got, test.want)
+			}
+			want := fmt.Sprintf("id=%d name=%s ", wantID, test.want)
+			if got := thread.String(); got != want {
+				t.Errorf("String = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -156,12 +171,63 @@ func TestCancelStopsSuspendedThread(t *testing.T) {
 		co.WaitYield(me)
 		t.Error("canceled script continued")
 	})
-	t.Cleanup(func() { co.RunAfterStop(drainTestContext(t), nil) })
+	t.Cleanup(func() { co.RunAfterStop(nil) })
 	co.JoinFirstSlice(thread)
 	thread.Cancel()
 	waitForThreadSignal(t, thread.done, "Cancel did not wake the suspended script")
 	if !thread.Stopped() || thread.Context().Err() == nil {
 		t.Fatal("Cancel did not publish a stop request")
+	}
+}
+
+func TestExternalCallsPreserveActiveThread(t *testing.T) {
+	co := New(nil)
+	started, release := make(chan struct{}), make(chan struct{})
+	thread := co.Create("active", func(Thread) {
+		close(started)
+		<-release
+	})
+	t.Cleanup(func() {
+		close(release)
+		co.RunAfterStop(nil)
+	})
+	waitForThreadSignal(t, started, "coroutine did not start")
+	if co.Current() != thread {
+		t.Fatalf("Current() = %v, want running coroutine %v", co.Current(), thread)
+	}
+
+	called := false
+	for _, test := range []struct {
+		name      string
+		call      func(Thread)
+		wantPanic any
+		wantCall  bool
+	}{
+		{"worker", func(Thread) { co.WaitToDo(func() { called = true }) }, nil, true},
+		{"yield", co.yield, ErrNotCurrent, false},
+		{"wait yield", co.WaitYield, ErrNotCurrent, false},
+		{"frame", co.WaitNextFrameFor, ErrNotCurrent, false},
+		{"loop", co.YieldLoopFor, ErrNotCurrent, false},
+		{"round", co.YieldToNextRoundFor, ErrNotCurrent, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called = false
+			if recovered := catchPanic(func() { test.call(thread) }); recovered != test.wantPanic {
+				t.Fatalf("panic = %v, want %v", recovered, test.wantPanic)
+			}
+			if called != test.wantCall {
+				t.Fatalf("callback called = %v, want %v", called, test.wantCall)
+			}
+			if co.Current() != thread || co.callerThread() != nil {
+				t.Fatal("external call changed script ownership or caller identity")
+			}
+			co.schedulerMu.Lock()
+			defer co.schedulerMu.Unlock()
+			_, runnable := co.runnableThreads[thread]
+			if !runnable || co.currentJobs.len() != 0 {
+				t.Fatal("external call changed the running script or queued work")
+			}
+		})
 	}
 }
 

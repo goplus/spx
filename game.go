@@ -79,14 +79,13 @@ type Game struct {
 	gameBootstrapState
 	fs spxfs.Dir
 
-	lifecycleState     gameLifecycleState
-	displayState       gameDisplayState
-	dialogState        gameDialogState
-	debugState         gameDebugState
-	pathfindingState   gamePathfindingState
-	audioState         gameAudioState
-	runtimeConfigInput Config
-	physicsEnabled     bool
+	lifecycleState   gameLifecycleState
+	displayState     gameDisplayState
+	dialogState      gameDialogState
+	debugState       gameDebugState
+	pathfindingState gamePathfindingState
+	audioState       gameAudioState
+	physicsEnabled   bool
 
 	Camera Camera
 	camera *cameraImpl
@@ -140,18 +139,18 @@ func (p *Game) reset() {
 	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
-	engine.ResetFrameRuntime()
+	engine.ResetCaptures()
 	engine.ResetInputState()
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
 	costumeSizeCache.Clear()
 	p.inputMgr.init(p)
 
-	itime.OnReload()
+	itime.ClearTimers()
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
-	engine.ResetFrameRuntime()
+	engine.ResetCaptures()
 	costumeSizeCache.Clear()
 	if err := p.attachPreparedInputSession(); err != nil {
 		engine.Panic(err)

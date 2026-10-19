@@ -1,7 +1,6 @@
 package coroutine
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -9,9 +8,7 @@ import (
 func BenchmarkWaitToDo(b *testing.B) {
 	co := New(nil)
 	b.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(b), nil) != nil {
-			b.Error("external tasks did not drain")
-		}
+		co.RunAfterStop(nil)
 	})
 	work := func() {}
 	b.ReportAllocs()
@@ -35,9 +32,7 @@ func BenchmarkCreateParallel(b *testing.B) {
 		b.Run(name, func(b *testing.B) {
 			co := New(nil)
 			b.Cleanup(func() {
-				if err := co.RunAfterStop(drainTestContext(b), nil); err != nil {
-					b.Fatal(err)
-				}
+				co.RunAfterStop(nil)
 			})
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -59,11 +54,6 @@ func BenchmarkDrainExternalTask(b *testing.B) {
 		}
 		// Include a short external operation; timer precision depends on the host.
 		time.AfterFunc(100*time.Microsecond, co.finishWorker)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		err := co.drain(ctx)
-		cancel()
-		if err != nil {
-			b.Fatal("external task did not drain")
-		}
+		co.drain()
 	}
 }

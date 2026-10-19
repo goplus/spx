@@ -96,7 +96,7 @@ func setupSnapshotInputSessionTest(t *testing.T) {
 	t.Helper()
 	resetInputSessionTest(t)
 	reset := func() {
-		engine.ResetFrameRuntime()
+		engine.ResetCaptures()
 		engine.SetCaptureHandler(nil)
 	}
 	reset()
@@ -863,6 +863,27 @@ func TestSnapshotUsesCurrentInputReplayTick(t *testing.T) {
 	if got[1].InputTick == nil || *got[1].InputTick != 0 {
 		t.Fatalf("capture input tick = %v, want 0", got[1].InputTick)
 	}
+
+	savedTick := captureInputTick()
+	if savedTick == nil || *savedTick != 0 {
+		t.Fatalf("current capture tick = %v, want 0", savedTick)
+	}
+	Snapshot("after-body", func() error {
+		_, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0)
+		return err
+	})
+	if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30.0); err != nil {
+		t.Fatal(err)
+	}
+	if *savedTick != 0 {
+		t.Fatalf("saved capture tick changed to %d after input advanced", *savedTick)
+	}
+	if err := engine.FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[2].Name != "after-body" || got[2].InputTick == nil || *got[2].InputTick != 1 {
+		t.Fatalf("captures after body = %+v, want after-body at tick 1 before the next input tick", got)
+	}
 }
 
 func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
@@ -892,9 +913,9 @@ func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
 
 func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 	_, game, _ := setupInputSourceTest(t)
-	engine.ResetFrameRuntime()
+	engine.ResetCaptures()
 	t.Cleanup(func() {
-		engine.ResetFrameRuntime()
+		engine.ResetCaptures()
 		engine.SetCaptureHandler(nil)
 	})
 	var got []engine.CaptureRequest
@@ -1199,8 +1220,8 @@ func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
 
 func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(t *testing.T) {
 	co, game, mgr := setupInputSourceTest(t)
-	engine.ResetFrameRuntime()
-	t.Cleanup(engine.ResetFrameRuntime)
+	engine.ResetCaptures()
+	t.Cleanup(engine.ResetCaptures)
 	replay := validRuntimeReplay(InputReplayFrame{
 		Frame: 0,
 		State: InputReplayState{
@@ -1280,8 +1301,8 @@ func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			co, game, mgr := setupInputSourceTest(t)
-			engine.ResetFrameRuntime()
-			t.Cleanup(engine.ResetFrameRuntime)
+			engine.ResetCaptures()
+			t.Cleanup(engine.ResetCaptures)
 			originalExt, originalPlatform := pkgengine.ExtMgr, pkgengine.PlatformMgr
 			recorder := &inputFrameFailureExtMgr{}
 			pkgengine.ExtMgr = recorder
@@ -1377,7 +1398,7 @@ func TestPrepareInputFramePreservesInitialHeldStateAndLiveHandoff(t *testing.T) 
 
 func TestGameResetClearsPreparedInputFrame(t *testing.T) {
 	resetInputSessionTest(t)
-	game := setupReloadCommitGame(t, reloadConfigFS{})
+	game := setupStageLoadTestGame(t, gameTestFS{})
 	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeyA}}}
 	game.inputMgr.frame.history.Reset(mathf.Vec2{X: 7, Y: 8}, true)
 	game.reset()
@@ -1423,13 +1444,13 @@ func TestInputSessionRejectsInvalidModesAndLifecycleStates(t *testing.T) {
 	missing.abortInputSession("absent")
 	for _, tt := range []struct {
 		name    string
-		session inputSession
+		session *inputSession
 		want    string
 	}{
-		{"replay", inputSession{mode: InputSessionModeReplaying}, "not recording"},
-		{"aborted", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "stopped"}, "stopped"},
-		{"prepared", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhasePrepared}, "phase"},
-		{"uninitialized controller", inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}, "not recording"},
+		{"replay", &inputSession{mode: InputSessionModeReplaying}, "not recording"},
+		{"aborted", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseAborted, abortReason: "stopped"}, "stopped"},
+		{"prepared", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhasePrepared}, "phase"},
+		{"uninitialized controller", &inputSession{mode: InputSessionModeRecording, phase: InputSessionPhaseRunning}, "not recording"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := tt.session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), tt.want) {
@@ -1516,7 +1537,7 @@ func TestInputSessionPendingReplayAndTickErrors(t *testing.T) {
 	session.phase = InputSessionPhaseAborted
 	game := &Game{inputSession: session}
 	engine.SetGame(game)
-	if _, ok := currentInputSessionTickForCapture(); ok {
+	if captureInputTick() != nil {
 		t.Fatal("aborted session retained capture tick")
 	}
 	if _, err := session.consumeSampledInputTick(0, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {

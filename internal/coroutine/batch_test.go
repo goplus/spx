@@ -65,7 +65,7 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 					},
 					Run: func(Thread) { t.Error("rejected batch ran a script") },
 				}
-				err := co.RunAfterStop(drainTestContext(t), func() {
+				co.RunAfterStop(func() {
 					threads := co.StartBatch([]Task{task, task}, test.mode)
 					if len(threads) != 2 {
 						t.Errorf("rejected batch returned %d threads, want 2", len(threads))
@@ -86,8 +86,8 @@ func TestStartBatchRejectedByShutdown(t *testing.T) {
 						t.Error("rejected batch registered work or reopened admission")
 					}
 				})
-				if err != nil || co.admissionClosed() {
-					t.Errorf("shutdown did not finish and reopen admission: %v", err)
+				if co.admissionClosed() {
+					t.Error("shutdown did not reopen admission")
 				}
 			})
 		})
@@ -114,9 +114,7 @@ func TestStartBatchWaitFirstSliceRequiresManagedCaller(t *testing.T) {
 	if got := co.LastThreadID(); got != 0 {
 		t.Errorf("host FirstSlice allocated %d threads before rejection", got)
 	}
-	if err := co.RunAfterStop(drainTestContext(t), nil); err != nil {
-		t.Fatal(err)
-	}
+	co.RunAfterStop(nil)
 	if got := registered.Load(); got != 0 {
 		t.Errorf("host FirstSlice registered %d invocations before rejection", got)
 	}
@@ -327,15 +325,16 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("batch task was not registered")
 	}
-	stopDone := make(chan bool, 1)
+	stopDone := make(chan struct{})
 	go func() {
-		stopDone <- co.RunAfterStop(drainTestContext(t), nil) == nil
+		co.RunAfterStop(nil)
+		close(stopDone)
 	}()
 	deadline := time.Now().Add(time.Second)
 	for !thread.Stopped() {
 		select {
-		case completed := <-stopDone:
-			t.Fatalf("shutdown returned %v before stopping the registered task", completed)
+		case <-stopDone:
+			t.Fatal("shutdown returned before stopping the registered task")
 		default:
 		}
 		if time.Now().After(deadline) {
@@ -344,8 +343,8 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 		runtime.Gosched()
 	}
 	select {
-	case completed := <-stopDone:
-		t.Fatalf("shutdown returned %v before registration finished", completed)
+	case <-stopDone:
+		t.Fatal("shutdown returned before registration finished")
 	default:
 	}
 
@@ -356,10 +355,7 @@ func TestStartBatchShutdownWaitsForRegistration(t *testing.T) {
 		t.Fatal("batch registration did not finish")
 	}
 	select {
-	case completed := <-stopDone:
-		if !completed {
-			t.Fatal("shutdown timed out after registration")
-		}
+	case <-stopDone:
 	case <-time.After(time.Second):
 		t.Fatal("shutdown did not finish after registration")
 	}
@@ -539,9 +535,7 @@ func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration Goexit did not unwind the batch")
 	}
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("registration Goexit leaked its batch")
-	}
+	co.drain()
 	if got := co.pendingSetups.Load(); got != 0 {
 		t.Fatalf("pending registration hooks = %d, want 0", got)
 	}
@@ -593,9 +587,7 @@ func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("registration panic did not return")
 	}
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("registration panic leaked its batch")
-	}
+	co.drain()
 	if got := ran.Load(); got != 0 {
 		t.Fatalf("tasks ran %d times after registration panic", got)
 	}

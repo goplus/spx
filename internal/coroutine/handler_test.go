@@ -98,9 +98,7 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 			co := New(nil)
 			itime.Start(nil)
 			t.Cleanup(func() {
-				if co.RunAfterStop(drainTestContext(t), nil) != nil {
-					t.Error("coroutines did not stop")
-				}
+				co.RunAfterStop(nil)
 			})
 			state := NewHandlerState(test.policy)
 			var order []string

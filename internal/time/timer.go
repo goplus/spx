@@ -35,7 +35,8 @@ func ResetTimer() {
 	pendingTimers = append(pendingTimers[:0], registeredTimers...)
 }
 
-func OnReload() {
+// ClearTimers resets the timer and removes all timer registrations.
+func ClearTimers() {
 	registeredTimers = registeredTimers[:0]
 	ResetTimer()
 }

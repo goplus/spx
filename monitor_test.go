@@ -454,7 +454,7 @@ func TestMonitorSliderTargetScope(t *testing.T) {
 	}
 }
 
-func TestReloadMonitorModes(t *testing.T) {
+func TestParseMonitorModes(t *testing.T) {
 	shape := coreproject.StageShape{"target": "", "val": "score", "name": "score", "label": "score", "x": 0.0, "y": 0.0, "visible": true}
 	for _, mode := range []any{1.0, 2.0, 3.0, 4.0, "slider", "list"} {
 		shape["mode"] = mode

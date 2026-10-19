@@ -123,16 +123,16 @@ func TestUpdateRefreshesRealTimeState(t *testing.T) {
 	}
 }
 
-func TestOnReloadKeepsEngineFrame(t *testing.T) {
+func TestClearTimersKeepsEngineFrame(t *testing.T) {
 	resetStateForTest()
 	Start(nil)
 	Update(0.1, 60)
 	before := Frame()
 
-	OnReload()
+	ClearTimers()
 
 	if got := Frame(); got != before {
-		t.Fatalf("Frame() after OnReload = %d, want unchanged %d", got, before)
+		t.Fatalf("Frame() after ClearTimers = %d, want unchanged %d", got, before)
 	}
 }
 
@@ -268,13 +268,13 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	assertTimers(t, 500)
 }
 
-func TestOnReloadClearsRegisteredTimers(t *testing.T) {
+func TestClearTimersClearsRegisteredTimers(t *testing.T) {
 	resetStateForTest()
 	Start(nil)
 	RegisterTimer(0.1)
 	Update(0.2, 60)
 
-	OnReload()
+	ClearTimers()
 
 	if got := Timer(); got != 0 {
 		t.Fatalf("Timer() = %v, want 0", got)

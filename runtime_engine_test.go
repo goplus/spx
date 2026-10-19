@@ -221,8 +221,8 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 
 	engine.SetGame(&game)
 	defer engine.SetGame(nil)
-	engine.ResetFrameRuntime()
-	defer engine.ResetFrameRuntime()
+	engine.ResetCaptures()
+	defer engine.ResetCaptures()
 	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
 	defer engine.SetCaptureHandler(nil)
 
@@ -240,7 +240,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	destroyedWithCapture := &SpriteImpl{}
 	destroyedWithCapture.runtimeState.SyncSprite = &engine.Sprite{}
 	game.shapeMgr.remove(destroyedWithCapture)
-	if err := engine.EnqueueCapture("after-coroutine"); err != nil {
+	if err := engine.EnqueueCapture("after-coroutine", nil); err != nil {
 		t.Fatal(err)
 	}
 	game.OnEngineRender(0)
@@ -308,7 +308,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 
 func TestEngineResetClearsBootstrapAndAllowsStartupAgain(t *testing.T) {
 	installBubbleTestUiMgr(t)
-	game := setupReloadCommitGame(t, reloadConfigFS{}).baseGame()
+	game := setupStageLoadTestGame(t, gameTestFS{}).baseGame()
 	// Reset owns both registries, even when prior tests left native proxies.
 	pkgengine.CreateEmptySprite[engine.Sprite](mathf.Vec2{})
 	pkgengine.CreateUI[pkgengine.UiNode]("reset")

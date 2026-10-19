@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
-	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 type bindingTestGame struct {
@@ -105,6 +104,37 @@ func TestSetGameCannotReplaceRuntimeBinding(t *testing.T) {
 		}
 	}()
 	SetGame(new(struct{}))
+}
+
+func TestInactiveGameRejectsRuntimeWork(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		phase gamePhase
+	}{
+		{"starting", gameStarting},
+		{"stopped", gameStopped},
+		{"closing", gameClosing},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			isolateGameBinding(t)
+			co := setupExecuteTest(t)
+			game := new(bindingTestGame)
+			binding, err := bindGameAtPhase(game, game, test.phase)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { releaseGame(binding) })
+
+			var calls atomic.Int32
+			threadID := co.LastThreadID()
+			Go(game, func(context.Context, any) { calls.Add(1) })
+			Execute(game, func(context.Context, any) { calls.Add(1) })
+			onPause(true)
+			if calls.Load() != 0 || co.LastThreadID() != threadID || game.paused.Load() {
+				t.Fatal("inactive game admitted runtime work or forwarded pause")
+			}
+		})
+	}
 }
 
 func TestBindGameHasSingleConcurrentWinner(t *testing.T) {
@@ -311,7 +341,7 @@ func TestBackendTeardownCannotReleaseBeforeCoroutinesDrain(t *testing.T) {
 	}
 }
 
-func TestDestroyClearsProcessWideFrameWork(t *testing.T) {
+func TestDestroyClearsPendingCapturesBeforeRebinding(t *testing.T) {
 	isolateGameBinding(t)
 	setupExecuteTest(t)
 	_, err := bindGame(new(bindingTestGame), new(struct{}))
@@ -319,10 +349,17 @@ func TestDestroyClearsProcessWideFrameWork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ResetFrameRuntime()
-	defer ResetFrameRuntime()
-	ran := false
-	ScheduleFrame(CurrentFrame()+1, func() { ran = true })
+	ResetCaptures()
+	defer ResetCaptures()
+	var got []CaptureRequest
+	SetCaptureHandler(func(request CaptureRequest) error {
+		got = append(got, request)
+		return nil
+	})
+	defer SetCaptureHandler(nil)
+	if err := EnqueueCapture("old.png", nil); err != nil {
+		t.Fatal(err)
+	}
 
 	onDestroy()
 	onDestroyed()
@@ -338,10 +375,20 @@ func TestDestroyClearsProcessWideFrameWork(t *testing.T) {
 		}
 	}()
 
-	itime.Update(0, 0)
-	RunFrameCallbacks()
-	if ran {
-		t.Fatal("frame callback from destroyed game ran after rebinding")
+	if err := FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("capture from destroyed game dispatched after rebinding: %v", got)
+	}
+	if err := EnqueueCapture("new.png", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := FlushCaptures(); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Name != "new.png" || got[0].Sequence != 1 {
+		t.Fatalf("captures after rebinding = %v, want new.png with sequence 1", got)
 	}
 }
 
@@ -563,9 +610,7 @@ func TestQueuedRuntimeWorkRechecksPhaseBeforeRunning(t *testing.T) {
 		t.Fatal("failed to close the active binding")
 	}
 	releaseScheduler()
-	if err := co.RunAfterStop(testContext(t), nil); err != nil {
-		t.Fatal("queued runtime work did not drain")
-	}
+	co.RunAfterStop(nil)
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("queued work ran after closing: calls = %d", got)
 	}
@@ -590,9 +635,7 @@ func TestQueuedRuntimeWorkCannotRunInReplacementGame(t *testing.T) {
 	t.Cleanup(func() { releaseGame(second) })
 
 	releaseScheduler()
-	if err := co.RunAfterStop(testContext(t), nil); err != nil {
-		t.Fatal("queued runtime work did not drain")
-	}
+	co.RunAfterStop(nil)
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("stale work ran in the replacement game: calls = %d", got)
 	}

@@ -20,7 +20,6 @@
 package spx
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -276,27 +275,26 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
 	called := false
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := co.RunAfterStop(ctx, func() {
+	co.RunAfterStop(func() {
 		withEventRegistrationBarrier(nil, func() { called = true })
-	}); err != nil {
-		t.Fatalf("shutdown barrier did not complete: %v", err)
-	}
+	})
 	if called {
 		t.Fatal("event dispatch ran while coroutine admission was closed")
 	}
 }
 
-func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *testing.T) {
+func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 	platform := &eventDispatchPlatform{}
 	previousPlatform := pkgengine.PlatformMgr
 	pkgengine.PlatformMgr = platform
 	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
 
-	callbackStarted := make(chan struct{})
+	callbackStarted := make(chan coroutine.Thread, 1)
 	releaseCallback := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseCallback) }) }
+	defer release()
 	registrationDone := make(chan struct{})
 	var registered, ran atomic.Bool
 	handler := &scriptEventHandler{}
@@ -311,46 +309,52 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	go func() {
 		platform.useCurrentAsMainThread()
 		co.TryRunFromEngine("outer", func() {
-			close(callbackStarted)
+			callbackStarted <- co.Current()
 			<-releaseCallback
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
 			close(registrationDone)
 		})
 	}()
+	var outer coroutine.Thread
 	select {
-	case <-callbackStarted:
+	case outer = <-callbackStarted:
 	case <-time.After(time.Second):
 		t.Fatal("outer dispatcher callback did not start")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
-	stopDone := make(chan error, 1)
-	go func() { stopDone <- co.RunAfterStop(ctx, nil) }()
+	stopDone := make(chan struct{})
+	go func() {
+		co.RunAfterStop(nil)
+		close(stopDone)
+	}()
+	// Cancellation is the handshake that admission has closed. The outer callback
+	// remains blocked so shutdown cannot finish before the nested registration.
 	select {
-	case err := <-stopDone:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("blocked shutdown returned %v, want deadline exceeded", err)
-		}
+	case <-outer.Context().Done():
 	case <-time.After(time.Second):
-		t.Fatal("shutdown barrier did not time out")
+		t.Fatal("shutdown did not cancel the outer dispatcher")
 	}
-	close(releaseCallback)
+	select {
+	case <-stopDone:
+		t.Fatal("shutdown returned before the outer dispatcher exited")
+	default:
+	}
+	release()
 	select {
 	case <-registrationDone:
 	case <-time.After(time.Second):
 		t.Fatal("nested batch registration did not finish")
 	}
 	if registered.Load() {
-		t.Fatal("rejected nested handler ran lifecycle registration after abort")
+		t.Fatal("rejected nested handler ran lifecycle registration during shutdown")
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := co.RunAfterStop(ctx, nil); err != nil {
-		t.Fatalf("explicit recovery barrier did not complete: %v", err)
+	select {
+	case <-stopDone:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after the outer dispatcher exited")
 	}
 	if ran.Load() {
-		t.Fatal("rejected nested handler ran after abort")
+		t.Fatal("rejected nested handler ran during shutdown")
 	}
 	co.StartBatch([]coroutine.Task{{
 		Owner:              handler,
@@ -359,7 +363,7 @@ func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *tes
 	}}, coroutine.BatchAsync)
 	co.Update()
 	if !ran.Load() {
-		t.Fatal("handler could not run after the shutdown barrier recovered")
+		t.Fatal("handler could not run after shutdown reopened admission")
 	}
 }
 
@@ -595,9 +599,9 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 		return
 	}
 	setupLoadGameFlags(t)
-	files := reloadConfigFS{"index.json": `{"run":{"title":"stale startup"}}`}
+	files := gameTestFS{"index.json": `{"run":{"title":"stale startup"}}`}
 	gamer := &engineStartTestGame{Game: &Game{}}
-	game := setupReloadCommitRuntime(t, files, gamer, nil, false)
+	game := setupGameTestRuntime(t, files, gamer, nil, false)
 	game.lifecycleState.IsRunned.Store(false)
 	generation := game.bootstrapGeneration()
 	platform := &resetDuringStartupPlatform{onTitle: game.resetBootstrap}
@@ -606,7 +610,7 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	previousAudio := pkgengine.AudioMgr
 	pkgengine.AudioMgr = &loadGameAudioMgr{}
 	t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
-	resource := &loadGameFS{reloadConfigFS: files}
+	resource := &loadGameFS{gameTestFS: files}
 	spxfs.RegisterSchema("", func(path string) (spxfs.Dir, error) { return resource, nil })
 	t.Cleanup(func() { spxfs.RegisterSchema("", asset.Open) })
 	game.OnEngineStart()

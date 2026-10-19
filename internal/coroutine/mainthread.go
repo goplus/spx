@@ -17,7 +17,6 @@
 package coroutine
 
 import (
-	"context"
 	"runtime"
 	"sync/atomic"
 
@@ -30,8 +29,8 @@ func (p *Coroutines) WaitMainThread(call func()) {
 	p.waitMainThread(call, p.callerThread())
 }
 
-// CleanupMainThread ignores cancellation; shutdown waits for it to finish.
-// The call runs on the engine thread and must not yield.
+// CleanupMainThread runs call on the engine thread, ignoring script cancellation.
+// Call must not yield; shutdown waits for managed callers to finish.
 func (p *Coroutines) CleanupMainThread(call func()) {
 	p.waitMainThread(func() {
 		id, previous := p.enterCallback(callbackExclusive)
@@ -79,7 +78,7 @@ func (p *Coroutines) TryRunFromEngine(owner any, call func()) bool {
 		dispatcher := p.Create(owner, func(Thread) {
 			call()
 		})
-		p.waitForSignal(context.Background(), dispatcher.done)
+		p.waitForSignal(dispatcher.done)
 	})
 }
 
@@ -147,29 +146,20 @@ func (c *mainThreadCall) wait() {
 
 // waitForSignal serves native engine jobs while waiting, without advancing frames.
 // Other callers park so the host can progress.
-func (p *Coroutines) waitForSignal(ctx context.Context, ready <-chan struct{}) (err error) {
-	canceled := ctx.Done()
+func (p *Coroutines) waitForSignal(ready <-chan struct{}) {
 	if hasMainThreadQueue && platform.TryCallEngineDirectly(func() {
 		for {
 			select {
 			case <-ready:
-				return
-			case <-canceled:
-				err = ctx.Err()
 				return
 			default:
 				p.pumpMainThread()
 			}
 		}
 	}) {
-		return err
+		return
 	}
-	select {
-	case <-ready:
-		return nil
-	case <-canceled:
-		return ctx.Err()
-	}
+	<-ready
 }
 
 // pumpMainThread serves only engine jobs; it never advances script rounds or frames.

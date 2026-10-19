@@ -3,7 +3,6 @@
 package spx
 
 import (
-	"context"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -114,15 +113,11 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 				id := state.OnPlayAudioPlaybackID
 				state.OnPlayAudioRestartPending = true
 				if shutdown {
-					ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-					defer cancel()
-					if err := co.RunAfterStop(ctx, func() {
+					co.RunAfterStop(func() {
 						if audio.playing[id] || sprites.velocity != (mathf.Vec2{}) {
-							t.Error("rebuild ran before resource cleanup")
+							t.Error("shutdown callback ran before resource cleanup")
 						}
-					}); err != nil {
-						t.Fatalf("shutdown did not drain cleanup: %v", err)
-					}
+					})
 				} else {
 					stopper := co.Create(anim.sprite, func(coroutine.Thread) { anim.sprite.Stop(OtherScriptsInSprite) })
 					co.Update()
@@ -241,9 +236,9 @@ func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testi
 // scheduling phases rather than assigning curAnimState directly.
 func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	co, anim, _, audio := setupAnimationLifecycle(t)
-	itime.OnReload()
+	itime.ClearTimers()
 	itime.Start(nil)
-	t.Cleanup(itime.OnReload)
+	t.Cleanup(itime.ClearTimers)
 	game := anim.sprite.g
 	game.bindScriptEvents()
 	game.shapeMgr.items = []Shape{anim.sprite}

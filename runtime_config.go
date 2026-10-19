@@ -23,36 +23,26 @@ import (
 	"github.com/goplus/spx/v3/internal/engine"
 )
 
-func (p *Game) applyRuntimeConfig(conf *Config, proj *coreproject.ProjectConfig) {
-	if conf != nil {
-		p.runtimeConfigInput = *conf
-	} else {
-		p.runtimeConfigInput = Config{}
+// applyRuntimeConfig applies startup settings and returns the window title.
+func (p *Game) applyRuntimeConfig(conf *Config, proj *coreproject.ProjectConfig) string {
+	if conf == nil {
+		conf = &Config{}
 	}
-	p.applyStoredRuntimeConfig(proj)
-}
-
-func (p *Game) applyStoredRuntimeConfig(proj *coreproject.ProjectConfig) {
-	runtimeCfg := resolveGameRuntimeConfig(p.runtimeConfigInput, proj)
-	p.runtimeConfigInput.Title = runtimeCfg.Title
-	proj.FullScreen = runtimeCfg.FullScreen
-	p.physicsEnabled = runtimeCfg.PhysicsEnabled
-	p.displayState.WindowHeight = runtimeCfg.WindowHeight
-	p.displayState.WindowWidth = runtimeCfg.WindowWidth
-
-	if runtimeCfg.ScreenshotKey == "" {
-		return
-	}
-	if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
-		engine.Panic(err)
-	}
-}
-
-func resolveGameRuntimeConfig(conf Config, proj *coreproject.ProjectConfig) coreproject.RuntimeConfig {
 	// Desktop sessions run from a temporary directory, separate from the project.
 	projectDir := os.Getenv("SPX_PROJECT_DIR")
 	if projectDir == "" {
 		projectDir, _ = os.Getwd()
 	}
-	return coreproject.ResolveRuntimeConfig(&conf, proj, projectDir, os.Getenv("SPX_SCREENSHOT_KEY"))
+	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, projectDir, os.Getenv("SPX_SCREENSHOT_KEY"))
+	proj.FullScreen = runtimeCfg.FullScreen
+	p.physicsEnabled = runtimeCfg.PhysicsEnabled
+	p.displayState.WindowHeight = runtimeCfg.WindowHeight
+	p.displayState.WindowWidth = runtimeCfg.WindowWidth
+
+	if runtimeCfg.ScreenshotKey != "" {
+		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
+			engine.Panic(err)
+		}
+	}
+	return runtimeCfg.Title
 }

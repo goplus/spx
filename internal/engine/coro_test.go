@@ -147,13 +147,40 @@ func TestControlFlowWaiterFollowsWarpMode(t *testing.T) {
 		t.Fatal("normal loop did not yield")
 	default:
 	}
-	advanceEngineFrameTo(t, CurrentFrame()+1)
+	itime.Update(0, 0)
 	co.Update()
 	co.Join(thread)
 	select {
 	case <-done:
 	default:
 		t.Fatal("normal loop did not resume in the next frame")
+	}
+}
+
+func TestWaitYieldResumesWithoutAdvancingFrame(t *testing.T) {
+	co := setupExecuteTest(t)
+	frame := itime.Frame()
+	done := make(chan struct{})
+	thread := co.Create("yield", func(coroutine.Thread) {
+		WaitYield()
+		close(done)
+	})
+	co.JoinFirstSlice(thread)
+	select {
+	case <-done:
+		t.Fatal("WaitYield returned before the scheduler resumed the coroutine")
+	default:
+	}
+
+	co.Update()
+	select {
+	case <-done:
+	case <-testContext(t).Done():
+		t.Fatal("yielding coroutine did not resume")
+	}
+	co.Join(thread)
+	if got := itime.Frame(); got != frame {
+		t.Fatalf("frame after WaitYield = %d, want unchanged frame %d", got, frame)
 	}
 }
 
@@ -178,7 +205,7 @@ func TestWarpWaiterYieldsAfterBudget(t *testing.T) {
 			t.Fatal("exhausted warp budget resumed in the same frame")
 		default:
 		}
-		advanceEngineFrameTo(t, CurrentFrame()+1)
+		itime.Update(0, 0)
 		co.Update()
 		co.Join(thread)
 		select {

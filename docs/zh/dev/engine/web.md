@@ -31,11 +31,11 @@
  - 小程序 -> web-view 需要通过 url参数 进行传递
  - web-view -> 小程序 需要通过 postMessage 进行传递（但是只能在特定时机生效）
 
-#### 5. Web 截图与固定帧接入
+#### 5. Web 截图接入
 
-如果需要在外部页面中接入固定帧截图、baseline/runs 保存或截图对比，请参考：
+如果需要在外部页面中接入帧末截图、baseline/runs 保存或截图对比，请参考：
 
-- [Web 端截图与固定帧接入说明](./web_capture.md)
+- [Web 端截图接入说明](./web_capture.md)
 
 ### web平台适配代码规范
 `cmd/spx/template/platform/` 目录下是多平台的适配代码

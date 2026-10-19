@@ -1,8 +1,6 @@
 package coroutine
 
 import (
-	"context"
-	"errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -18,9 +16,7 @@ func TestWaitToDoRejectsCanceledCaller(t *testing.T) {
 		co.WaitToDo(func() { called = true })
 		continued = true
 	})
-	if err := co.drain(drainTestContext(t)); err != nil {
-		t.Fatalf("canceled caller did not drain: %v", err)
-	}
+	co.drain()
 	if !caller.Stopped() || called || continued {
 		t.Fatalf("stopped=%v, worker ran=%v, caller continued=%v", caller.Stopped(), called, continued)
 	}
@@ -29,9 +25,7 @@ func TestWaitToDoRejectsCanceledCaller(t *testing.T) {
 func TestWaitToDoGoexitStopsCaller(t *testing.T) {
 	co := New(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("worker and caller did not drain")
-		}
+		co.RunAfterStop(nil)
 	})
 	var continued atomic.Bool
 	cleaned := make(chan struct{})
@@ -45,9 +39,7 @@ func TestWaitToDoGoexitStopsCaller(t *testing.T) {
 	if !thread.Stopped() || continued.Load() {
 		t.Fatal("caller continued after its worker exited without a result")
 	}
-	if co.drain(drainTestContext(t)) != nil {
-		t.Fatal("exited worker remained registered")
-	}
+	co.drain()
 	co.callbacks.Range(func(any, any) bool {
 		t.Error("worker Goexit retained callback scope")
 		return false
@@ -60,7 +52,7 @@ func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 	thread := co.Create("caller", func(Thread) {
 		co.WaitToDo(func() {
 			defer func() { guarded <- recover() }()
-			co.RunAfterStop(context.Background(), nil)
+			co.RunAfterStop(nil)
 		})
 	})
 	waitForThreadSignal(t, thread.done, "caller did not finish")
@@ -70,9 +62,7 @@ func TestWaitToDoRejectsSynchronousDrain(t *testing.T) {
 	if thread.Stopped() {
 		t.Fatal("rejected drain canceled its own caller")
 	}
-	if co.RunAfterStop(drainTestContext(t), nil) != nil {
-		t.Fatal("external drain did not recover after the worker returned")
-	}
+	co.RunAfterStop(nil)
 }
 
 func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
@@ -91,9 +81,7 @@ func TestWaitToDoPropagatesWorkerPanic(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("worker panic did not complete the waiting coroutine")
 	}
-	if co.RunAfterStop(drainTestContext(t), nil) != nil {
-		t.Fatal("coroutine did not stop during cleanup")
-	}
+	co.RunAfterStop(nil)
 }
 
 func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
@@ -119,108 +107,40 @@ func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 
 func TestRunAfterStopWaitsForWaitToDoWorker(t *testing.T) {
 	co := New(nil)
-	workerStarted := make(chan struct{})
-	workerDone := make(chan struct{})
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	releaseWorker := func() { releaseOnce.Do(func() { close(release) }) }
-	caller := co.Create("caller", func(Thread) {
+	started, releaseWorker := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(releaseWorker) })
+	caller := co.Create("worker-owner", func(Thread) {
 		co.WaitToDo(func() {
-			close(workerStarted)
-			<-release
-			close(workerDone)
+			close(started)
+			<-releaseWorker
 		})
 	})
-	defer func() {
-		releaseWorker()
-		select {
-		case <-workerDone:
-		case <-time.After(time.Second):
-			t.Error("WaitToDo worker did not finish during cleanup")
-		}
-		select {
-		case <-caller.done:
-		case <-time.After(time.Second):
-			t.Error("WaitToDo caller did not finish during cleanup")
-		}
-	}()
-
-	select {
-	case <-workerStarted:
-	case <-time.After(time.Second):
-		t.Fatal("WaitToDo worker did not start")
-	}
-
-	callbackRan := make(chan struct{}, 1)
-	completed := make(chan error, 1)
+	t.Cleanup(func() {
+		release()
+		co.RunAfterStop(nil)
+	})
+	waitForThreadSignal(t, started, "worker did not start")
+	callback, drained := make(chan struct{}), make(chan struct{})
 	go func() {
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		defer cancel()
-		completed <- co.RunAfterStop(timeoutCtx, func() {
-			callbackRan <- struct{}{}
-		})
+		co.RunAfterStop(func() { close(callback) })
+		close(drained)
 	}()
+	waitForThreadSignal(t, caller.done, "shutdown did not stop the worker's caller")
+	assertShutdownRejectsCreation(t, co)
 	select {
-	case err := <-completed:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("worker drain error = %v, want context.DeadlineExceeded", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not time out while WaitToDo worker was blocked")
+	case <-callback:
+		t.Fatal("shutdown callback ran before the worker exited")
+	case <-drained:
+		t.Fatal("shutdown returned before the worker exited")
+	case <-time.After(20 * time.Millisecond):
 	}
-	select {
-	case <-callbackRan:
-		t.Fatal("shutdown callback ran before WaitToDo worker drained")
-	default:
-	}
-
-	var rejectedRan atomic.Bool
-	rejected := co.Create("during-timeout", func(Thread) {
-		rejectedRan.Store(true)
-	})
-	if !rejected.Stopped() {
-		t.Fatal("creation was admitted while native work was still running")
-	}
-	select {
-	case <-rejected.done:
-	case <-time.After(time.Second):
-		t.Fatal("rejected creation did not finish")
-	}
-	if rejectedRan.Load() {
-		t.Fatal("creation during native drain ran user code")
-	}
-
-	releaseWorker()
-	select {
-	case <-workerDone:
-	case <-time.After(time.Second):
-		t.Fatal("WaitToDo worker did not finish after release")
-	}
-	select {
-	case <-caller.done:
-	case <-time.After(time.Second):
-		t.Fatal("canceled WaitToDo caller did not finish")
-	}
-
-	stillRejected := co.Create("after-drain-before-recovery", func(Thread) {
-		t.Fatal("creation ran while the manager remained quarantined")
-	})
-	if !stillRejected.Stopped() {
-		t.Fatal("admission reopened after a fatal barrier timed out")
-	}
-	select {
-	case <-stillRejected.done:
-	case <-time.After(time.Second):
-		t.Fatal("quarantined creation did not finish")
-	}
-	if co.RunAfterStop(drainTestContext(t), nil) != nil {
-		t.Fatal("explicit recovery barrier did not complete after native drain")
-	}
-	next := co.Create("after-recovery", func(Thread) {})
-	select {
-	case <-next.done:
-	case <-time.After(time.Second):
-		t.Fatal("post-drain coroutine did not finish")
+	release()
+	waitForThreadSignal(t, drained, "shutdown did not finish after the worker exited")
+	waitForThreadSignal(t, callback, "shutdown did not run its callback")
+	fresh := co.Create("after-drain", func(Thread) {})
+	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
+	if fresh.Stopped() || co.admissionClosed() {
+		t.Fatal("shutdown did not reopen admission after the worker exited")
 	}
 }
 
@@ -245,9 +165,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 				for _, releaseWorker := range release {
 					releaseWorker()
 				}
-				if co.RunAfterStop(drainTestContext(t), nil) != nil {
-					t.Error("workers did not drain during cleanup")
-				}
+				co.RunAfterStop(nil)
 			})
 
 			var callers [2]Thread
@@ -274,29 +192,25 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 			}
 
 			reset := make(chan struct{})
-			drained := make(chan bool, 1)
+			drained := make(chan struct{})
 			go func() {
-				workerCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				drained <- co.RunAfterStop(workerCtx, func() { close(reset) }) == nil
+				co.RunAfterStop(func() { close(reset) })
+				close(drained)
 			}()
 			release[0]()
 			waitForThreadSignal(t, finished[0], "first native worker did not finish")
 			select {
 			case <-reset:
 				t.Fatal("reset ran while the last native worker was still running")
-			case completed := <-drained:
-				t.Fatalf("drain returned %v before the last native worker finished", completed)
+			case <-drained:
+				t.Fatal("drain returned before the last native worker finished")
 			case <-time.After(25 * time.Millisecond):
 			}
 
 			release[1]()
 			waitForThreadSignal(t, finished[1], "last native worker did not finish")
 			select {
-			case completed := <-drained:
-				if !completed {
-					t.Fatal("runtime did not drain after the last native worker finished")
-				}
+			case <-drained:
 			case <-time.After(time.Second):
 				t.Fatal("drain did not wake after the last native worker finished")
 			}
@@ -308,9 +222,7 @@ func TestDrainWaitsForLastWorkerAfterCallerCancellation(t *testing.T) {
 func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 	co := New(nil)
 	t.Cleanup(func() {
-		if co.RunAfterStop(drainTestContext(t), nil) != nil {
-			t.Error("receive did not drain")
-		}
+		co.RunAfterStop(nil)
 	})
 	input := make(chan int)
 	value := 0
@@ -366,15 +278,13 @@ func TestWaitForChanTracksPendingReceive(t *testing.T) {
 	if pending != 1 {
 		t.Errorf("tracked receivers = %d, want 1", pending)
 	}
-	if co.RunAfterStop(drainTestContext(t), func() {
+	co.RunAfterStop(func() {
 		co.threadsMu.Lock()
 		defer co.threadsMu.Unlock()
 		if co.workerCount != 0 {
 			t.Error("reset ran before the receiver drained")
 		}
-	}) != nil {
-		t.Fatal("pending receive did not stop")
-	}
+	})
 	if value != 7 {
 		t.Fatalf("canceled receive changed its result: %d", value)
 	}

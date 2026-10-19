@@ -241,14 +241,14 @@ func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64)
 	}
 }
 
-func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
+func TestPrepareStageBootstrapAwakesAllSpritesBeforeMain(t *testing.T) {
 	var game Game
 	spriteA := newBootstrapAwakeOrderSprite(&game, "SpriteA")
 	spriteB := newBootstrapAwakeOrderSprite(&game, "SpriteB")
 	spriteA.peer = spriteB
 	spriteB.peer = spriteA
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
@@ -263,7 +263,7 @@ func TestRunSpriteCallbacksAwakesAllSpritesBeforeMain(t *testing.T) {
 	}
 }
 
-func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
+func TestPrepareStageBootstrapRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) {
 	setupRuntimeScheduler(t)
 	var game Game
 	blocked := make(chan struct{})
@@ -278,7 +278,7 @@ func TestRunSpriteCallbacksRunsSpriteMainsInZOrderUntilFirstYield(t *testing.T) 
 		spriteBSeenThreadCount = gco.LastThreadID()
 	})
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
@@ -300,7 +300,7 @@ type bootstrapOnLoadedGame struct {
 
 func (g *bootstrapOnLoadedGame) OnLoaded() { g.onLoaded(g) }
 
-func TestRunSpriteCallbacksRunsOnLoadedAfterAllMainsYield(t *testing.T) {
+func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		co := setupRuntimeScheduler(t)
 		game := &bootstrapOnLoadedGame{}
@@ -332,7 +332,7 @@ func TestRunSpriteCallbacksRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 		}
 
 		generation := game.bootstrapGeneration()
-		game.runSpriteCallbacks(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
+		game.prepareStageBootstrap(sprites, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem(), generation)
 		if len(calls) != 0 || co.LastThreadID() != 0 {
 			t.Fatal("queuing bootstrap callbacks started user code")
 		}
@@ -398,7 +398,7 @@ func TestRunBootstrapMainUntilYieldReleasesFollowingBootstrapTasks(t *testing.T)
 	}
 }
 
-func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
+func TestPrepareStageBootstrapAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	setupRuntimeScheduler(t)
 	var game Game
 	game.bindScriptEvents()
@@ -414,7 +414,7 @@ func TestRunSpriteCallbacksAllowsOnStartAfterMainFirstYield(t *testing.T) {
 	})
 	spriteB := newCollisionLayerOrderSprite(&game, "SpriteB", nil)
 	generation := game.bootstrapGeneration()
-	game.runSpriteCallbacks(
+	game.prepareStageBootstrap(
 		[]Sprite{spriteA, spriteB},
 		&coreproject.ProjectConfig{},
 		reflect.ValueOf(&game).Elem(),
