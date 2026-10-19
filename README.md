@@ -115,7 +115,7 @@ var (
 onStart => {
     score = 0
     for {
-        turn rand(-30, 30)
+        turn float64(rand(-30, 30))
         step 5
         if touching("Shark") {
             waitNextFrame
