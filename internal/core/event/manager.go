@@ -17,6 +17,7 @@
 package event
 
 import (
+	"slices"
 	"sync"
 )
 
@@ -30,7 +31,6 @@ type Bucket int
 
 const (
 	BucketStart Bucket = iota
-	BucketAwake        // Reserved for the retired Awake event channel; keep subsequent bucket values stable.
 	BucketKeyPressed
 	BucketAnyKeyPressed
 	BucketSwipe
@@ -61,9 +61,7 @@ func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for i := range m.buckets {
-		m.buckets[i] = nil
-	}
+	clear(m.buckets[:])
 	m.startFired = false
 }
 
@@ -98,7 +96,7 @@ func (m *Manager) TryAddStart(sink Sink) bool {
 // Objects referenced by a Sink, including its Handler, are not made immutable.
 func (m *Manager) Snapshot(bucket Bucket) []Sink {
 	m.mu.RLock()
-	out := readOnlySnapshot(m.buckets[bucket])
+	out := slices.Clip(m.buckets[bucket])
 	m.mu.RUnlock()
 	return out
 }
@@ -112,11 +110,7 @@ func (m *Manager) SnapshotStartOnce() []Sink {
 		return nil
 	}
 	m.startFired = true
-	return readOnlySnapshot(m.buckets[BucketStart])
-}
-
-func readOnlySnapshot(sinks []Sink) []Sink {
-	return sinks[:len(sinks):len(sinks)]
+	return slices.Clip(m.buckets[BucketStart])
 }
 
 func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
@@ -124,13 +118,7 @@ func deleteOwnerCopy(sinks []Sink, owner any) []Sink {
 		return nil
 	}
 
-	firstMatch := -1
-	for i, sink := range sinks {
-		if sink.Owner == owner {
-			firstMatch = i
-			break
-		}
-	}
+	firstMatch := slices.IndexFunc(sinks, func(sink Sink) bool { return sink.Owner == owner })
 	if firstMatch < 0 {
 		return sinks
 	}

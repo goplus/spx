@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 func TestEventHandlerNonMatchingTriggerPreservesInvocation(t *testing.T) {
@@ -87,15 +88,71 @@ func TestKeyHandlerSharesAdmissionAcrossRegisteredKeys(t *testing.T) {
 	}
 }
 
+func TestTargetEventHandlersStayWithTheirOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		register func(*SpriteImpl, func())
+		fire     func(*SpriteImpl, *SpriteImpl)
+	}{
+		{"click", func(s *SpriteImpl, run func()) { s.OnClick(run) }, func(s, _ *SpriteImpl) {
+			s.doWhenClick(s)
+		}},
+		{"swipe", func(s *SpriteImpl, run func()) { s.OnSwipe__0(90, run) }, func(s, _ *SpriteImpl) {
+			s.doWhenSwipe(90, s)
+		}},
+		{"cloned", func(s *SpriteImpl, run func()) { s.OnCloned__0(run) }, func(s, _ *SpriteImpl) {
+			s.doWhenCloned(s, nil)
+		}},
+		{"touch", func(s *SpriteImpl, run func()) { s.addTouchStartHandler(func(Sprite) { run() }) }, func(s, other *SpriteImpl) {
+			s.fireTouchStart(other)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			first := &newTouchEventSprite(game, "first").SpriteImpl
+			second := &newTouchEventSprite(game, "second").SpriteImpl
+			var calls [2]int
+			tc.register(first, func() { calls[0]++ })
+			tc.register(second, func() { calls[1]++ })
+			tc.fire(first, second)
+			co.Update()
+			if calls != [2]int{1, 0} {
+				t.Fatalf("first target: calls=%v, want [1 0]", calls)
+			}
+			tc.fire(second, first)
+			co.Update()
+			if calls != [2]int{1, 1} {
+				t.Fatalf("second target: calls=%v, want [1 1]", calls)
+			}
+		})
+	}
+}
+
 func TestEventHandlerRetriggerPolicies(t *testing.T) {
-	for _, kind := range []string{"key", "any key", "click", "backdrop", "message"} {
-		t.Run(kind, func(t *testing.T) {
+	for _, tc := range []struct {
+		kind         string
+		wantStarted  int
+		wantFinished int
+	}{
+		{"key", 1, 1},
+		{"any key", 1, 1},
+		{"click", 2, 1},
+		{"backdrop", 2, 1},
+		{"any backdrop", 2, 1},
+		{"message", 2, 1},
+		{"any message", 2, 1},
+		{"timer", 2, 2},
+		{"swipe", 2, 2},
+		{"cloned", 2, 2},
+		{"touch", 2, 2},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
 			co, game := setupRuntimeEventGame(t)
 			gate := co.NewLatch()
 			started, finished := 0, 0
 			run := func() { started++; gate.Wait(); finished++ }
 			var fire func()
-			switch kind {
+			switch tc.kind {
 			case "key":
 				game.OnKey__0(KeySpace, run)
 				fire = func() { game.scriptEvents.doWhenKeyPressed(KeySpace) }
@@ -108,33 +165,52 @@ func TestEventHandlerRetriggerPolicies(t *testing.T) {
 			case "backdrop":
 				game.OnBackdrop__1("scene", run)
 				fire = func() { game.scriptEvents.doWhenBackdropChanged("scene", false) }
+			case "any backdrop":
+				game.OnBackdrop__0(func(BackdropName) { run() })
+				fire = func() { game.scriptEvents.doWhenBackdropChanged("scene", false) }
 			case "message":
 				game.OnMsg__1("msg", run)
 				fire = func() { game.Broadcast__0("msg") }
+			case "any message":
+				game.OnMsg__0(func(MsgName, any) { run() })
+				fire = func() { game.Broadcast__0("msg") }
+			case "timer":
+				itime.OnReload()
+				t.Cleanup(itime.OnReload)
+				game.OnTimer(0, run)
+				fire = func() { game.scriptEvents.doWhenTimer(0) }
+			case "swipe":
+				game.OnSwipe__0(90, run)
+				fire = func() { game.scriptEvents.doWhenSwipe(90, game) }
+			case "cloned":
+				sprite := newTouchEventSprite(game, "clone")
+				sprite.OnCloned__0(run)
+				fire = func() { sprite.doWhenCloned(&sprite.SpriteImpl, nil) }
+			case "touch":
+				sprite := newTouchEventSprite(game, "source")
+				other := newTouchEventSprite(game, "target")
+				sprite.addTouchStartHandler(func(Sprite) { run() })
+				fire = func() { sprite.fireTouchStart(&other.SpriteImpl) }
 			}
 			fire()
 			co.Update()
-			if started != 1 {
-				t.Fatalf("first trigger started %d scripts", started)
+			if started != 1 || finished != 0 {
+				t.Fatalf("first trigger: started=%d finished=%d, want 1/0", started, finished)
 			}
 			fire()
 			co.Update()
-			want := 2
-			if kind == "key" || kind == "any key" {
-				want = 1
-			}
-			if started != want {
-				t.Fatalf("retrigger started %d scripts, want %d", started, want)
+			if started != tc.wantStarted || finished != 0 {
+				t.Fatalf("retrigger: started=%d finished=%d, want %d/0", started, finished, tc.wantStarted)
 			}
 			gate.Open()
 			co.Update()
-			if finished != 1 {
-				t.Fatalf("finished %d scripts, want 1", finished)
+			if finished != tc.wantFinished {
+				t.Fatalf("finished %d scripts, want %d", finished, tc.wantFinished)
 			}
 			fire()
 			co.Update()
-			if started != want+1 || finished != 2 {
-				t.Fatalf("after completion: started=%d finished=%d", started, finished)
+			if started != tc.wantStarted+1 || finished != tc.wantFinished+1 {
+				t.Fatalf("after completion: started=%d finished=%d, want %d/%d", started, finished, tc.wantStarted+1, tc.wantFinished+1)
 			}
 		})
 	}

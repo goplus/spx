@@ -189,6 +189,47 @@ func TestTargetDispatchCompletesMatchingBeforeHandlers(t *testing.T) {
 	}
 }
 
+func TestStartBatchCleansPendingThreadCanceledBeforeRun(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	var registry scriptEventRegistry
+	var canceled coroutine.Thread
+	var pendingBeforeCancel, runningMarkedPending, canceledRan bool
+	dispatcher := co.Create("dispatcher", func(coroutine.Thread) {
+		registry.dispatchStartEventBatch([]eventSink{{Owner: "first"}, {Owner: "canceled"}}, scriptEventDispatch{
+			mode: coroutine.BatchWaitFirstSlice,
+			run: func(thread coroutine.Thread, sink *eventSink) {
+				if sink.Owner == "canceled" {
+					canceledRan = true
+					return
+				}
+				runningMarkedPending = registry.isPendingStartThread(thread)
+				co.StopIf(func(thread coroutine.Thread) bool {
+					if thread.Owner != "canceled" {
+						return false
+					}
+					canceled = thread
+					pendingBeforeCancel = registry.isPendingStartThread(thread)
+					return true
+				})
+			},
+		})
+	})
+	co.Join(dispatcher)
+	if canceled == nil || !pendingBeforeCancel {
+		t.Fatal("later start thread was not registered as pending before cancellation")
+	}
+	co.Join(canceled)
+	if canceledRan {
+		t.Fatal("canceled start handler ran")
+	}
+	if registry.isPendingStartThread(canceled) {
+		t.Fatal("canceled start thread retained its pending marker after cleanup")
+	}
+	if runningMarkedPending {
+		t.Fatal("running start handler retained its pending marker")
+	}
+}
+
 func TestTargetOrderPreservesGroupsAndSnapshot(t *testing.T) {
 	game := &Game{}
 	game.initShapeMgr()
