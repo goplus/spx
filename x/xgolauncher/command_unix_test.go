@@ -20,6 +20,7 @@ package xgolauncher
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -33,24 +34,37 @@ import (
 )
 
 func TestRunCommandCancelsCleanupBeforeReturningSignal(t *testing.T) {
-	cleaned := false
-	status, err := RunCommand(context.Background(), func(ctx context.Context) (ProcessStatus, error) {
-		defer func() { cleaned = true }()
-		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
-			return ProcessStatus{}, err
-		}
-		select {
-		case <-ctx.Done():
-			return ProcessStatus{}, ctx.Err()
-		case <-time.After(5 * time.Second):
-			return ProcessStatus{}, context.DeadlineExceeded
-		}
-	})
-	if err != nil || status.Signal != int(syscall.SIGTERM) {
-		t.Fatalf("RunCommand() = (%+v, %v), want SIGTERM", status, err)
-	}
-	if !cleaned {
-		t.Fatal("RunCommand returned before deferred cleanup")
+	for _, sig := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT} {
+		t.Run(sig.String(), func(t *testing.T) {
+			if runCommandTestInSubprocess(t) {
+				return
+			}
+			cleaned := false
+			var commandCtx context.Context
+			status, err := RunCommand(t.Context(), func(ctx context.Context) (ProcessStatus, error) {
+				commandCtx = ctx
+				defer func() { cleaned = true }()
+				if err := syscall.Kill(os.Getpid(), sig); err != nil {
+					return ProcessStatus{}, err
+				}
+				select {
+				case <-ctx.Done():
+					return ProcessStatus{Code: 42}, ctx.Err()
+				case <-time.After(5 * time.Second):
+					return ProcessStatus{}, context.DeadlineExceeded
+				}
+			})
+			if err != nil || status != (ProcessStatus{Signal: int(sig)}) {
+				t.Fatalf("RunCommand() = (%+v, %v), want signal %v and nil error", status, err, sig)
+			}
+			if !cleaned {
+				t.Fatal("RunCommand returned before deferred cleanup")
+			}
+			var cause *processsupervisor.SignalCause
+			if !errors.As(context.Cause(commandCtx), &cause) || cause.Signal != sig {
+				t.Fatalf("callback cancellation cause = %v, want SignalCause for %v", context.Cause(commandCtx), sig)
+			}
+		})
 	}
 }
 
@@ -59,6 +73,11 @@ func TestRunCommandIsSoleSignalOwnerForSupervisor(t *testing.T) {
 		runSignalRecordingHelper()
 		return
 	}
+	if runCommandTestInSubprocess(t) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
 	root := t.TempDir()
 	started := filepath.Join(root, "started")
 	recorded := filepath.Join(root, "signals")
@@ -67,9 +86,19 @@ func TestRunCommandIsSoleSignalOwnerForSupervisor(t *testing.T) {
 		err    error
 	}
 	result := make(chan commandResult, 1)
+	finished := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Error("RunCommand did not finish child cleanup")
+		}
+	})
 	go func() {
-		status, err := RunCommand(context.Background(), func(ctx context.Context) (ProcessStatus, error) {
-			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRunCommandIsSoleSignalOwnerForSupervisor$")
+		defer close(finished)
+		status, err := RunCommand(ctx, func(ctx context.Context) (ProcessStatus, error) {
+			command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRunCommandIsSoleSignalOwnerForSupervisor$", "-test.timeout=5s")
 			command.Env = append(os.Environ(),
 				"SPX_LAUNCHER_SIGNAL_HELPER=1",
 				"SPX_LAUNCHER_SIGNAL_STARTED="+started,
@@ -99,6 +128,31 @@ func TestRunCommandIsSoleSignalOwnerForSupervisor(t *testing.T) {
 	if got, want := strings.Fields(string(data)), []string{syscall.SIGINT.String()}; len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("child signals = %q, want exactly %q", got, want)
 	}
+}
+
+func TestExitFallsBackForNonTerminatingSignal(t *testing.T) {
+	if os.Getenv("SPX_LAUNCHER_EXIT_FALLBACK") == "1" {
+		Exit(ProcessStatus{Code: 42, Signal: int(syscall.SIGCONT)})
+		t.Fatal("Exit returned")
+	}
+	command := launcherTestCommand(t, "SPX_LAUNCHER_EXIT_FALLBACK=1")
+	output, err := command.CombinedOutput()
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) || exitError.ExitCode() != 128+int(syscall.SIGCONT) {
+		t.Fatalf("Exit(SIGCONT): %v, want exit code %d\n%s", err, 128+int(syscall.SIGCONT), output)
+	}
+}
+
+func runCommandTestInSubprocess(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("SPX_LAUNCHER_COMMAND_TEST") == t.Name() {
+		return false
+	}
+	command := launcherTestCommand(t, "SPX_LAUNCHER_COMMAND_TEST="+t.Name())
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("command helper: %v\n%s", err, output)
+	}
+	return true
 }
 
 func runSignalRecordingHelper() {
