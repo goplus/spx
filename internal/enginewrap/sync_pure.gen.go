@@ -778,7 +778,10 @@ func (*uiMgrImpl) DestroyNode(obj gdx.Object) bool {
 func (*uiMgrImpl) GetType(obj gdx.Object) int64 {
 	return 0
 }
-func (*uiMgrImpl) SetText(obj gdx.Object, text string)                                     {}
+func (*uiMgrImpl) SetText(obj gdx.Object, text string) {}
+func (*uiMgrImpl) SetTextMaxWidth(obj gdx.Object, text string, max_width float64) float64 {
+	return 0
+}
 func (*uiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, color Color) {}
 func (*uiMgrImpl) SetRange(obj gdx.Object, minimum float64, maximum float64, step float64, value float64) {
 }
@@ -825,6 +828,9 @@ func (*uiMgrImpl) GetAnchorsPreset(obj gdx.Object) int64 {
 }
 func (*uiMgrImpl) SetAnchorsPreset(obj gdx.Object, value int64) {}
 func (*uiMgrImpl) GetScale(obj gdx.Object) Vec2 {
+	return Vec2{}
+}
+func (*uiMgrImpl) GetCanvasScale(obj gdx.Object) Vec2 {
 	return Vec2{}
 }
 func (*uiMgrImpl) SetScale(obj gdx.Object, value Vec2) {}

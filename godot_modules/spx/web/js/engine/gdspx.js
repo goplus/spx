@@ -2967,6 +2967,20 @@ gdspx_ui_set_text(obj_low,obj_high,text) {
 		if (_arg1) FreeGdString(_arg1);
 	}
 }
+gdspx_ui_set_text_max_width(obj_low,obj_high,text,max_width) {
+	var _call = Module['_gdspx_ui_set_text_max_width'];
+	var _arg1;
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdFloat();
+		_arg1 = ToGdString(text);
+		_call(GdInt64FromParts(obj_low, obj_high), _arg1, max_width, _resultPtr);
+		return ToJsFloat(_resultPtr);
+	} finally {
+		if (_arg1) FreeGdString(_arg1);
+		if (_resultPtr) FreeGdFloat(_resultPtr);
+	}
+}
 gdspx_ui_set_list_items(obj_low,obj_high,label,items,color) {
 	var _call = Module['_gdspx_ui_set_list_items'];
 	var _arg1;
@@ -3164,6 +3178,17 @@ gdspx_ui_set_anchors_preset(obj_low,obj_high,value_low,value_high) {
 }
 gdspx_ui_get_scale(obj_low,obj_high) {
 	var _call = Module['_gdspx_ui_get_scale'];
+	var _resultPtr;
+	try {
+		_resultPtr = AllocGdVec2();
+		_call(GdInt64FromParts(obj_low, obj_high), _resultPtr);
+		return ToJsVec2(_resultPtr);
+	} finally {
+		if (_resultPtr) FreeGdVec2(_resultPtr);
+	}
+}
+gdspx_ui_get_canvas_scale(obj_low,obj_high) {
+	var _call = Module['_gdspx_ui_get_canvas_scale'];
 	var _resultPtr;
 	try {
 		_resultPtr = AllocGdVec2();
@@ -3583,6 +3608,7 @@ GdspxFuncs.prototype['gdspx_ui_create_input'] = GdspxFuncs.prototype.gdspx_ui_cr
 GdspxFuncs.prototype['gdspx_ui_destroy_node'] = GdspxFuncs.prototype.gdspx_ui_destroy_node;
 GdspxFuncs.prototype['gdspx_ui_get_type'] = GdspxFuncs.prototype.gdspx_ui_get_type;
 GdspxFuncs.prototype['gdspx_ui_set_text'] = GdspxFuncs.prototype.gdspx_ui_set_text;
+GdspxFuncs.prototype['gdspx_ui_set_text_max_width'] = GdspxFuncs.prototype.gdspx_ui_set_text_max_width;
 GdspxFuncs.prototype['gdspx_ui_set_list_items'] = GdspxFuncs.prototype.gdspx_ui_set_list_items;
 GdspxFuncs.prototype['gdspx_ui_set_range'] = GdspxFuncs.prototype.gdspx_ui_set_range;
 GdspxFuncs.prototype['gdspx_ui_get_range_value'] = GdspxFuncs.prototype.gdspx_ui_get_range_value;
@@ -3606,6 +3632,7 @@ GdspxFuncs.prototype['gdspx_ui_set_layout_mode'] = GdspxFuncs.prototype.gdspx_ui
 GdspxFuncs.prototype['gdspx_ui_get_anchors_preset'] = GdspxFuncs.prototype.gdspx_ui_get_anchors_preset;
 GdspxFuncs.prototype['gdspx_ui_set_anchors_preset'] = GdspxFuncs.prototype.gdspx_ui_set_anchors_preset;
 GdspxFuncs.prototype['gdspx_ui_get_scale'] = GdspxFuncs.prototype.gdspx_ui_get_scale;
+GdspxFuncs.prototype['gdspx_ui_get_canvas_scale'] = GdspxFuncs.prototype.gdspx_ui_get_canvas_scale;
 GdspxFuncs.prototype['gdspx_ui_set_scale'] = GdspxFuncs.prototype.gdspx_ui_set_scale;
 GdspxFuncs.prototype['gdspx_ui_get_position'] = GdspxFuncs.prototype.gdspx_ui_get_position;
 GdspxFuncs.prototype['gdspx_ui_set_position'] = GdspxFuncs.prototype.gdspx_ui_set_position;

@@ -1648,6 +1648,12 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 	arg1 := JsFromGdString(text)
 	API.SpxUiSetText.Invoke(arg0Low, arg0High, arg1)
 }
+func (pself *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) float64 {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdString(text)
+	_result := API.SpxUiSetTextMaxWidth.Invoke(arg0Low, arg0High, arg1, float32(max_width))
+	return JsToGdFloat(_result)
+}
 func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	arg1 := JsFromGdString(label)
@@ -1760,6 +1766,11 @@ func (pself *uiMgr) SetAnchorsPreset(obj Object, value int64) {
 func (pself *uiMgr) GetScale(obj Object) Vec2 {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	_result := API.SpxUiGetScale.Invoke(arg0Low, arg0High)
+	return JsToGdVec2(_result)
+}
+func (pself *uiMgr) GetCanvasScale(obj Object) Vec2 {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	_result := API.SpxUiGetCanvasScale.Invoke(arg0Low, arg0High)
 	return JsToGdVec2(_result)
 }
 func (pself *uiMgr) SetScale(obj Object, value Vec2) {

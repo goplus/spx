@@ -74,6 +74,7 @@ public:
 
 	SPX_BIND GdInt get_type(GdObj obj);
 	SPX_BIND void set_text(GdObj obj, GdString text);
+	SPX_BIND GdFloat set_text_max_width(GdObj obj, GdString text, GdFloat max_width);
 	SPX_BIND void set_list_items(GdObj obj, GdString label, GdArray items, GdColor color);
 	SPX_BIND void set_range(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value);
 	SPX_BIND GdFloat get_range_value(GdObj obj);
@@ -98,6 +99,8 @@ public:
 	SPX_BIND GdInt get_anchors_preset(GdObj obj);
 	SPX_BIND void set_anchors_preset(GdObj obj, GdInt value);
 	SPX_BIND GdVec2 get_scale(GdObj obj);
+	// Returns the effective canvas scale of the Control represented by obj.
+	SPX_BIND GdVec2 get_canvas_scale(GdObj obj);
 	SPX_BIND void set_scale(GdObj obj, GdVec2 value);
 	SPX_BIND GdVec2 get_position(GdObj obj);
 	SPX_BIND void set_position(GdObj obj, GdVec2 value);

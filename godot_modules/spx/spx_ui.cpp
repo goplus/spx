@@ -57,6 +57,8 @@ Control *SpxUi::get_control_item() const {
 Error SpxUi::set_control_item(Control *p_control, SpxUiBindingListener *p_listener) {
 	ERR_FAIL_NULL_V(p_control, ERR_INVALID_PARAMETER);
 	detach_control_binding();
+	text_custom_minimum_size = Size2();
+	text_custom_minimum_size_initialized = false;
 
 	control_id = p_control->get_instance_id();
 	SpxUiBinding *binding = memnew(SpxUiBinding);
@@ -223,6 +225,39 @@ void SpxUi::set_text(GdString text) {
 	}
 }
 
+GdFloat SpxUi::set_text_max_width(GdString text, GdFloat max_width) {
+	if (type != (int)ESpxUiType::Label) {
+		print_error(String("SpxUi type mismatch in ") + String(__func__) +
+				": expected Label, got " + itos(type));
+		return 0;
+	}
+
+	SpxLabel *label = get_label();
+	ERR_FAIL_NULL_V(label, 0);
+
+	if (!text_custom_minimum_size_initialized) {
+		text_custom_minimum_size = label->get_custom_minimum_size();
+		text_custom_minimum_size_initialized = true;
+	}
+	// Restore the authored minimum before measuring. This also lets a value
+	// shrink back to its natural width after a previous wrap.
+	label->set_autowrap_mode(TextServer::AUTOWRAP_OFF);
+	label->set_custom_minimum_size(text_custom_minimum_size);
+	label->set_text(SpxStr(text));
+	const GdFloat natural_width = label->get_minimum_size().x;
+	if (!Math::is_finite(max_width) || max_width <= 0 || natural_width <= max_width) {
+		return natural_width;
+	}
+
+	const GdFloat wrapped_width =
+			MAX((GdFloat)text_custom_minimum_size.x, MAX((GdFloat)1, max_width));
+	label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	label->set_custom_minimum_size(Size2(wrapped_width, text_custom_minimum_size.y));
+	label->set_size(Size2(wrapped_width, label->get_size().y));
+	label->update_minimum_size();
+	return wrapped_width;
+}
+
 GdString SpxUi::get_text() {
 	String value = "";
 	auto etype = (ESpxUiType)type;
@@ -323,6 +358,13 @@ void SpxUi::set_anchors_preset(GdInt value) {
 
 GdVec2 SpxUi::get_scale() {
 	return get_control()->get_scale();
+}
+
+GdVec2 SpxUi::get_canvas_scale() {
+	// Unlike get_scale(), this includes the complete transform up to the
+	// canvas, which is the scale used when converting Viewport widths to local
+	// Control widths.
+	return get_control()->get_global_transform_with_canvas().get_scale();
 }
 
 void SpxUi::set_scale(GdVec2 value) {

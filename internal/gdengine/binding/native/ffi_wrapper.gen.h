@@ -1818,6 +1818,12 @@ void cgo_callfn_GDExtensionSpxUiSetText(const GDExtensionSpxUiSetText fn, GdObj 
 	}
 	fn(obj, text);
 }
+void cgo_callfn_GDExtensionSpxUiSetTextMaxWidth(const GDExtensionSpxUiSetTextMaxWidth fn, GdObj obj, GdString text, GdFloat max_width, GdFloat* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, text, max_width, ret_val);
+}
 void cgo_callfn_GDExtensionSpxUiSetListItems(const GDExtensionSpxUiSetListItems fn, GdObj obj, GdString label, GdArray items, GdColor color) {
 	if (!fn) {
 		return;
@@ -1951,6 +1957,12 @@ void cgo_callfn_GDExtensionSpxUiSetAnchorsPreset(const GDExtensionSpxUiSetAnchor
 	fn(obj, value);
 }
 void cgo_callfn_GDExtensionSpxUiGetScale(const GDExtensionSpxUiGetScale fn, GdObj obj, GdVec2* ret_val) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, ret_val);
+}
+void cgo_callfn_GDExtensionSpxUiGetCanvasScale(const GDExtensionSpxUiGetCanvasScale fn, GdObj obj, GdVec2* ret_val) {
 	if (!fn) {
 		return;
 	}

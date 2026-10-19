@@ -333,6 +333,11 @@ void SpxUiMgr::set_text(GdObj obj, GdString text) {
 	node->set_text(text);
 }
 
+GdFloat SpxUiMgr::set_text_max_width(GdObj obj, GdString text, GdFloat max_width) {
+	SPX_REQUIRE_UI_RETURN(0)
+	return node->set_text_max_width(text, max_width);
+}
+
 void SpxUiMgr::set_list_items(GdObj obj, GdString label, GdArray items, GdColor color) {
 	SPX_REQUIRE_UI_VOID();
 	auto monitor = Object::cast_to<SpxListMonitor>(node->get_control());
@@ -437,6 +442,11 @@ void SpxUiMgr::set_anchors_preset(GdObj obj, GdInt value) {
 GdVec2 SpxUiMgr::get_scale(GdObj obj) {
 	SPX_REQUIRE_UI_RETURN(GdVec2())
 	return node->get_scale();
+}
+
+GdVec2 SpxUiMgr::get_canvas_scale(GdObj obj) {
+	SPX_REQUIRE_UI_RETURN(GdVec2())
+	return node->get_canvas_scale();
 }
 
 void SpxUiMgr::set_scale(GdObj obj, GdVec2 value) {

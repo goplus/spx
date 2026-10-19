@@ -143,9 +143,10 @@ func (pself *Monitor) onUpdate(delta float64) {
 	// A getter can change visibility; apply that change on the next refresh.
 	visible := pself.visible
 	if visible {
-		pself.panel.Render(pself.style, pself.eval())
+		value := pself.eval()
 		pself.panel.UpdateScale(pself.size)
 		pself.panel.UpdatePos(pself.pos)
+		pself.panel.Render(pself.style, value)
 	}
 	pself.panel.SetVisible(visible)
 	pself.isDirty = false

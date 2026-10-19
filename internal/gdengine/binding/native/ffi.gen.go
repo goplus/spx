@@ -337,6 +337,7 @@ type GDExtensionInterface struct {
 	SpxUiDestroyNode                            GDExtensionSpxUiDestroyNode
 	SpxUiGetType                                GDExtensionSpxUiGetType
 	SpxUiSetText                                GDExtensionSpxUiSetText
+	SpxUiSetTextMaxWidth                        GDExtensionSpxUiSetTextMaxWidth
 	SpxUiSetListItems                           GDExtensionSpxUiSetListItems
 	SpxUiSetRange                               GDExtensionSpxUiSetRange
 	SpxUiGetRangeValue                          GDExtensionSpxUiGetRangeValue
@@ -360,6 +361,7 @@ type GDExtensionInterface struct {
 	SpxUiGetAnchorsPreset                       GDExtensionSpxUiGetAnchorsPreset
 	SpxUiSetAnchorsPreset                       GDExtensionSpxUiSetAnchorsPreset
 	SpxUiGetScale                               GDExtensionSpxUiGetScale
+	SpxUiGetCanvasScale                         GDExtensionSpxUiGetCanvasScale
 	SpxUiSetScale                               GDExtensionSpxUiSetScale
 	SpxUiGetPosition                            GDExtensionSpxUiGetPosition
 	SpxUiSetPosition                            GDExtensionSpxUiSetPosition
@@ -675,6 +677,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiDestroyNode = (GDExtensionSpxUiDestroyNode)(resolveCFunc("spx_ui_destroy_node"))
 	x.SpxUiGetType = (GDExtensionSpxUiGetType)(resolveCFunc("spx_ui_get_type"))
 	x.SpxUiSetText = (GDExtensionSpxUiSetText)(resolveCFunc("spx_ui_set_text"))
+	x.SpxUiSetTextMaxWidth = (GDExtensionSpxUiSetTextMaxWidth)(resolveCFunc("spx_ui_set_text_max_width"))
 	x.SpxUiSetListItems = (GDExtensionSpxUiSetListItems)(resolveCFunc("spx_ui_set_list_items"))
 	x.SpxUiSetRange = (GDExtensionSpxUiSetRange)(resolveCFunc("spx_ui_set_range"))
 	x.SpxUiGetRangeValue = (GDExtensionSpxUiGetRangeValue)(resolveCFunc("spx_ui_get_range_value"))
@@ -698,6 +701,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiGetAnchorsPreset = (GDExtensionSpxUiGetAnchorsPreset)(resolveCFunc("spx_ui_get_anchors_preset"))
 	x.SpxUiSetAnchorsPreset = (GDExtensionSpxUiSetAnchorsPreset)(resolveCFunc("spx_ui_set_anchors_preset"))
 	x.SpxUiGetScale = (GDExtensionSpxUiGetScale)(resolveCFunc("spx_ui_get_scale"))
+	x.SpxUiGetCanvasScale = (GDExtensionSpxUiGetCanvasScale)(resolveCFunc("spx_ui_get_canvas_scale"))
 	x.SpxUiSetScale = (GDExtensionSpxUiSetScale)(resolveCFunc("spx_ui_set_scale"))
 	x.SpxUiGetPosition = (GDExtensionSpxUiGetPosition)(resolveCFunc("spx_ui_get_position"))
 	x.SpxUiSetPosition = (GDExtensionSpxUiSetPosition)(resolveCFunc("spx_ui_set_position"))

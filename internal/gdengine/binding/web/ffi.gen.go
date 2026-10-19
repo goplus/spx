@@ -341,6 +341,7 @@ type GDExtensionInterface struct {
 	SpxUiDestroyNode                            js.Value
 	SpxUiGetType                                js.Value
 	SpxUiSetText                                js.Value
+	SpxUiSetTextMaxWidth                        js.Value
 	SpxUiSetListItems                           js.Value
 	SpxUiSetRange                               js.Value
 	SpxUiGetRangeValue                          js.Value
@@ -364,6 +365,7 @@ type GDExtensionInterface struct {
 	SpxUiGetAnchorsPreset                       js.Value
 	SpxUiSetAnchorsPreset                       js.Value
 	SpxUiGetScale                               js.Value
+	SpxUiGetCanvasScale                         js.Value
 	SpxUiSetScale                               js.Value
 	SpxUiGetPosition                            js.Value
 	SpxUiSetPosition                            js.Value
@@ -679,6 +681,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiDestroyNode = resolveJSFunc("gdspx_ui_destroy_node")
 	x.SpxUiGetType = resolveJSFunc("gdspx_ui_get_type")
 	x.SpxUiSetText = resolveJSFunc("gdspx_ui_set_text")
+	x.SpxUiSetTextMaxWidth = resolveJSFunc("gdspx_ui_set_text_max_width")
 	x.SpxUiSetListItems = resolveJSFunc("gdspx_ui_set_list_items")
 	x.SpxUiSetRange = resolveJSFunc("gdspx_ui_set_range")
 	x.SpxUiGetRangeValue = resolveJSFunc("gdspx_ui_get_range_value")
@@ -702,6 +705,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxUiGetAnchorsPreset = resolveJSFunc("gdspx_ui_get_anchors_preset")
 	x.SpxUiSetAnchorsPreset = resolveJSFunc("gdspx_ui_set_anchors_preset")
 	x.SpxUiGetScale = resolveJSFunc("gdspx_ui_get_scale")
+	x.SpxUiGetCanvasScale = resolveJSFunc("gdspx_ui_get_canvas_scale")
 	x.SpxUiSetScale = resolveJSFunc("gdspx_ui_set_scale")
 	x.SpxUiGetPosition = resolveJSFunc("gdspx_ui_get_position")
 	x.SpxUiSetPosition = resolveJSFunc("gdspx_ui_set_position")
