@@ -29,12 +29,6 @@ func NewSink(owner any, handler any, cond ...func(any) bool) Sink {
 	return sink
 }
 
-func MatchOwner(owner any) func(any) bool {
-	return func(data any) bool {
-		return data == owner
-	}
-}
-
 func MatchValue[T comparable](want T) func(any) bool {
 	return func(data any) bool {
 		got, ok := data.(T)

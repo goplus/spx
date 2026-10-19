@@ -297,9 +297,6 @@ func TestNewSink(t *testing.T) {
 }
 
 func TestSinkMatchers(t *testing.T) {
-	if !MatchOwner("sprite")("sprite") || MatchOwner("sprite")("other") {
-		t.Fatal("MatchOwner mismatch")
-	}
 	if !MatchValue("msg")("msg") || MatchValue("msg")("other") {
 		t.Fatal("MatchValue mismatch")
 	}

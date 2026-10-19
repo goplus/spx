@@ -57,12 +57,12 @@ type scriptEventRegistry struct {
 type messageDispatchContext struct {
 	frame     int64
 	round     uint64
-	receivers map[*messageEventHandler]struct{}
+	receivers map[*scriptEventHandler]struct{}
 }
 
 type messageReceiverExecution struct {
 	context  *messageDispatchContext
-	receiver *messageEventHandler
+	receiver *scriptEventHandler
 }
 
 type startEventDispatcher struct{}
@@ -86,8 +86,7 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 }
 
 func (p *scriptEventBindings) OnClick(onClick func()) {
-	owner := p.owner
-	p.scriptEventRegistry.manager.Add(coreevent.BucketClick, newScriptEventSink(owner, onClick, coroutine.RestartExisting, coreevent.MatchOwner(owner)))
+	p.register(coreevent.BucketClick, p.owner, onClick)
 }
 
 func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
@@ -96,8 +95,7 @@ func (p *scriptEventBindings) OnAnyKey(onKey func(key Key)) {
 
 func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 	timestamp := itime.RegisterTimer(time)
-	p.scriptEventRegistry.manager.Add(coreevent.BucketTimer, coreevent.NewSink(
-		p.owner,
+	p.register(coreevent.BucketTimer, p.owner,
 		func() {
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnTimer: %s", nameOf(p.owner))
@@ -107,7 +105,7 @@ func (p *scriptEventBindings) OnTimer(time float64, call func()) {
 			}
 		},
 		coreevent.MatchValue(timestamp),
-	))
+	)
 }
 
 func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
@@ -123,8 +121,7 @@ func (p *scriptEventBindings) OnKey__0(key Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
-	p.scriptEventRegistry.manager.Add(coreevent.BucketSwipe, coreevent.NewSink(
-		p.owner,
+	p.register(coreevent.BucketSwipe, p.owner,
 		func(Direction) {
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnSwipe: %v, %s", direction, nameOf(p.owner))
@@ -134,7 +131,7 @@ func (p *scriptEventBindings) OnSwipe__0(direction Direction, onSwipe func()) {
 			}
 		},
 		coreevent.MatchValue(direction),
-	))
+	)
 }
 
 func (p *scriptEventBindings) OnKey__1(keys []Key, onKey func(Key)) {
@@ -154,11 +151,11 @@ func (p *scriptEventBindings) OnKey__2(keys []Key, onKey func()) {
 }
 
 func (p *scriptEventBindings) OnMsg__0(onMsg func(msg MsgName, data any)) {
-	p.registerMessageHandler(onMsg)
+	p.register(coreevent.BucketIReceive, p.owner, onMsg)
 }
 
 func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
-	p.registerMessageHandler(
+	p.register(coreevent.BucketIReceive, p.owner,
 		func(msg string, _ any) {
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnMsg: %s, %s", msg, nameOf(p.owner))
@@ -172,7 +169,7 @@ func (p *scriptEventBindings) OnMsg__1(msg MsgName, onMsg func()) {
 }
 
 func (p *scriptEventBindings) OnBackdrop__0(onBackdrop func(name BackdropName)) {
-	p.scriptEventRegistry.manager.Add(coreevent.BucketBackdropChanged, newScriptEventSink(p.owner, onBackdrop, coroutine.RestartExisting))
+	p.register(coreevent.BucketBackdropChanged, p.owner, onBackdrop)
 }
 
 func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()) {
@@ -184,9 +181,7 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 			onBackdrop()
 		}
 	}
-	p.scriptEventRegistry.manager.Add(coreevent.BucketBackdropChanged, newScriptEventSink(
-		p.owner, handler, coroutine.RestartExisting, coreevent.MatchValue(name),
-	))
+	p.register(coreevent.BucketBackdropChanged, p.owner, handler, coreevent.MatchValue(name))
 }
 
 // Message Broadcast
@@ -224,19 +219,11 @@ func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) 
 	if len(keys) == 0 {
 		return
 	}
-	sink := newScriptEventSink(p.owner, handler, coroutine.IgnoreWhileRunning)
 	if slices.Contains(keys, KeyAny) {
-		p.scriptEventRegistry.manager.Add(coreevent.BucketAnyKeyPressed, sink)
+		p.register(coreevent.BucketAnyKeyPressed, p.owner, handler)
 		return
 	}
-	sink.Cond = coreevent.MatchAnyOf(slices.Clone(keys))
-	p.scriptEventRegistry.manager.Add(coreevent.BucketKeyPressed, sink)
-}
-
-func (p *scriptEventBindings) registerMessageHandler(handler func(string, any), cond ...func(any) bool) {
-	p.scriptEventRegistry.manager.Add(coreevent.BucketIReceive, newScriptEventSink(
-		p.owner, handler, coroutine.RestartExisting, cond...,
-	))
+	p.register(coreevent.BucketKeyPressed, p.owner, handler, coreevent.MatchAnyOf(slices.Clone(keys)))
 }
 
 func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
@@ -337,7 +324,8 @@ func (p *scriptEventRegistry) doWhenKeyPressed(key Key) {
 		mode:      coroutine.BatchAsync,
 		matchData: key,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			ev.Handler.(*scriptEventHandler[func(Key)]).run(key)
+			handler := ev.Handler.(*scriptEventHandler)
+			handler.run.(func(Key))(key)
 		},
 	})
 }
@@ -360,7 +348,8 @@ func (p *scriptEventRegistry) doWhenClick(this any) {
 			if isDebugEventEnabled() {
 				spxlog.Debug("OnClick: %s", nameOf(this))
 			}
-			ev.Handler.(*scriptEventHandler[func()]).run()
+			handler := ev.Handler.(*scriptEventHandler)
+			handler.run.(func())()
 		},
 	})
 }
@@ -397,7 +386,7 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 		mode:      eventBatchMode(wait),
 		matchData: msg,
 		run: func(thread coroutine.Thread, ev *eventSink) {
-			receiver := ev.Handler.(*messageEventHandler)
+			receiver := ev.Handler.(*scriptEventHandler)
 			if thread != nil {
 				context.waitForTurn(thread, receiver)
 				if p.messageExecutions == nil {
@@ -411,7 +400,7 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 				// runThread releases it only after Run and its defers finish.
 				defer delete(p.messageExecutions, thread)
 			}
-			receiver.run(msg, data)
+			receiver.run.(func(string, any))(msg, data)
 		},
 	})
 }
@@ -428,20 +417,20 @@ func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchCo
 	return execution.context
 }
 
-func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *messageEventHandler) {
+func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *scriptEventHandler) {
 	for !p.claimTurn(receiver) {
 		gco.YieldToNextRoundFor(thread)
 	}
 }
 
-func (p *messageDispatchContext) claimTurn(receiver *messageEventHandler) bool {
+func (p *messageDispatchContext) claimTurn(receiver *scriptEventHandler) bool {
 	frame, round := itime.Frame(), gco.ScriptRound()
 	if p.frame != frame || p.round != round {
 		p.frame, p.round = frame, round
 		clear(p.receivers)
 	}
 	if p.receivers == nil {
-		p.receivers = make(map[*messageEventHandler]struct{})
+		p.receivers = make(map[*scriptEventHandler]struct{})
 	}
 	if _, claimed := p.receivers[receiver]; claimed {
 		return false
@@ -455,7 +444,8 @@ func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool
 		mode:      eventBatchMode(wait),
 		matchData: name,
 		run: func(_ coroutine.Thread, ev *eventSink) {
-			ev.Handler.(*scriptEventHandler[func(BackdropName)]).run(name)
+			handler := ev.Handler.(*scriptEventHandler)
+			handler.run.(func(BackdropName))(name)
 		},
 	})
 }

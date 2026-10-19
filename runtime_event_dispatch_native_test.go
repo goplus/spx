@@ -21,6 +21,7 @@ package spx
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -215,6 +216,53 @@ func TestExternalAsyncEventDispatchRunsMainThreadRoundTrips(t *testing.T) {
 	co.Join(active)
 }
 
+func TestWorkerAsyncEventDispatchRegistersBeforeReturning(t *testing.T) {
+	previousPlatform := pkgengine.PlatformMgr
+	pkgengine.PlatformMgr = &eventDispatchPlatform{}
+	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+	co := setupRuntimeScheduler(t)
+	gate := co.NewLatch()
+	var registered int
+	var dispatcherOwner any
+	var finished atomic.Bool
+	handler := eventLifecycleFunc(func(coroutine.Thread) func() {
+		registered++
+		if co.IsInCoroutine() {
+			dispatcherOwner = co.Current().Owner
+		}
+		return nil
+	})
+	returned := make(chan struct{})
+	go func() {
+		withEventRegistrationBarrier("dispatcher", func() {
+			dispatchMatchedScriptEventBatch([]eventSink{{Owner: "handler", Handler: handler}}, scriptEventDispatch{
+				mode: coroutine.BatchAsync,
+				run: func(coroutine.Thread, *eventSink) {
+					gate.Wait()
+					finished.Store(true)
+				},
+			})
+		})
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("worker event dispatch waited for the async handler to finish")
+	}
+	if registered != 1 || dispatcherOwner != "dispatcher" {
+		t.Fatalf("registration count/dispatcher owner = %d/%v, want 1/dispatcher", registered, dispatcherOwner)
+	}
+	if finished.Load() {
+		t.Fatal("handler finished before its gate opened")
+	}
+	gate.Open()
+	co.Update()
+	if !finished.Load() {
+		t.Fatal("registered handler did not finish after its gate opened")
+	}
+}
+
 func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 	previousPlatform := pkgengine.PlatformMgr
@@ -231,6 +279,81 @@ func TestExternalAsyncEventDispatchSkipsShutdownBarrier(t *testing.T) {
 	}
 	if called {
 		t.Fatal("event dispatch ran while coroutine admission was closed")
+	}
+}
+
+func TestAsyncDispatchAbortAfterCallbackStartsDoesNotRunRejectedLifecycle(t *testing.T) {
+	co := setupRuntimeScheduler(t)
+	platform := &eventDispatchPlatform{}
+	previousPlatform := pkgengine.PlatformMgr
+	pkgengine.PlatformMgr = platform
+	t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+
+	callbackStarted := make(chan struct{})
+	releaseCallback := make(chan struct{})
+	registrationDone := make(chan struct{})
+	var registered, ran atomic.Bool
+	handler := &scriptEventHandler{}
+	lifecycle := eventLifecycleFunc(func(thread coroutine.Thread) func() {
+		registered.Store(true)
+		return handler.RegisterInvocation(thread)
+	})
+	event := scriptEventDispatch{
+		mode: coroutine.BatchAsync,
+		run:  func(coroutine.Thread, *eventSink) { ran.Store(true) },
+	}
+	go func() {
+		platform.useCurrentAsMainThread()
+		co.TryRunFromEngine("outer", func() {
+			close(callbackStarted)
+			<-releaseCallback
+			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
+			close(registrationDone)
+		})
+	}()
+	select {
+	case <-callbackStarted:
+	case <-time.After(time.Second):
+		t.Fatal("outer dispatcher callback did not start")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	stopDone := make(chan error, 1)
+	go func() { stopDone <- co.RunAfterStop(ctx, nil) }()
+	select {
+	case err := <-stopDone:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("blocked shutdown returned %v, want deadline exceeded", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shutdown barrier did not time out")
+	}
+	close(releaseCallback)
+	select {
+	case <-registrationDone:
+	case <-time.After(time.Second):
+		t.Fatal("nested batch registration did not finish")
+	}
+	if registered.Load() {
+		t.Fatal("rejected nested handler ran lifecycle registration after abort")
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := co.RunAfterStop(ctx, nil); err != nil {
+		t.Fatalf("explicit recovery barrier did not complete: %v", err)
+	}
+	if ran.Load() {
+		t.Fatal("rejected nested handler ran after abort")
+	}
+	co.StartBatch([]coroutine.Task{{
+		Owner:              handler,
+		RegisterInvocation: handler.RegisterInvocation,
+		Run:                func(coroutine.Thread) { ran.Store(true) },
+	}}, coroutine.BatchAsync)
+	co.Update()
+	if !ran.Load() {
+		t.Fatal("handler could not run after the shutdown barrier recovered")
 	}
 }
 

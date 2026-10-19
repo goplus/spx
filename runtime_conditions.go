@@ -29,15 +29,14 @@ func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, on
 	}
 	running := false
 	edge := coreevent.MatchRisingEdge(__xgo_autoclosure_condition)
-	p.scriptEventRegistry.manager.Add(coreevent.BucketCondition, coreevent.NewSink(
-		p.owner,
+	p.register(coreevent.BucketCondition, p.owner,
 		func() {
 			running = true
 			defer func() { running = false }()
 			onCondition()
 		},
 		func(data any) bool { return !running && edge(data) },
-	))
+	)
 }
 
 // sampleConditions matches predicates within the caller's sampling barrier,

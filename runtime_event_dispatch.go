@@ -30,16 +30,9 @@ type scriptEventLifecycle interface {
 }
 
 // Each registration owns its execution state; clones re-register their handlers.
-type scriptEventHandler[F any] struct {
+type scriptEventHandler struct {
 	coroutine.HandlerState
-	run F
-}
-
-type messageEventHandler = scriptEventHandler[func(string, any)]
-
-func newScriptEventSink[F any](owner any, run F, policy coroutine.HandlerPolicy, cond ...func(any) bool) eventSink {
-	handler := &scriptEventHandler[F]{HandlerState: coroutine.NewHandlerState(policy), run: run}
-	return coreevent.NewSink(owner, handler, cond...)
+	run any
 }
 
 type scriptEventDispatch struct {
@@ -59,23 +52,23 @@ func (event scriptEventDispatch) task(sink eventSink) coroutine.Task {
 	return task
 }
 
-// Register all handlers before returning; keep engine calls live while waiting.
-func withEventRegistrationBarrier(owner any, dispatch func()) {
-	if gco == nil || gco.IsInCoroutine() {
-		dispatch()
-		return
+// Retrigger behavior belongs to the event kind; execution state belongs to
+// each registration. Events without a policy keep their plain callbacks.
+func (p *scriptEventRegistry) register(bucket coreevent.Bucket, owner, run any, cond ...func(any) bool) {
+	handler := run
+	switch bucket {
+	case coreevent.BucketClick, coreevent.BucketBackdropChanged, coreevent.BucketIReceive:
+		handler = &scriptEventHandler{
+			HandlerState: coroutine.NewHandlerState(coroutine.RestartExisting),
+			run:          run,
+		}
+	case coreevent.BucketKeyPressed, coreevent.BucketAnyKeyPressed:
+		handler = &scriptEventHandler{
+			HandlerState: coroutine.NewHandlerState(coroutine.IgnoreWhileRunning),
+			run:          run,
+		}
 	}
-	if gco.TryRunFromEngine(owner, dispatch) {
-		return
-	}
-	dispatcher := gco.Create(owner, func(coroutine.Thread) {
-		dispatch()
-	})
-	gco.Join(dispatcher)
-}
-
-func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
-	return sinksInTargetOrder(p.game, p.manager.Snapshot(bucket))
+	p.manager.Add(bucket, coreevent.NewSink(owner, handler, cond...))
 }
 
 func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
@@ -131,28 +124,22 @@ func (p *scriptEventRegistry) dispatchStartEventBatch(sinks []eventSink, event s
 
 	baseline := p.stopAllEpoch.Load()
 	tasks := make([]coroutine.Task, len(matched))
-	threads := make([]coroutine.Thread, 0, len(matched))
-	defer func() {
-		for _, thread := range threads {
-			p.pendingStartThreads.Delete(thread)
-		}
-	}()
 	for i, sink := range matched {
-		task := event.task(sink)
-		run := task.Run
-		task.RegisterInvocation = func(thread coroutine.Thread) func() {
-			p.pendingStartThreads.Store(thread, struct{}{})
-			threads = append(threads, thread)
-			return nil
+		tasks[i] = coroutine.Task{
+			Owner: sink.Owner,
+			RegisterInvocation: func(thread coroutine.Thread) func() {
+				p.pendingStartThreads.Store(thread, struct{}{})
+				// A canceled start may exit before Run clears its pending marker.
+				return func() { p.pendingStartThreads.Delete(thread) }
+			},
+			Run: func(thread coroutine.Thread) {
+				p.pendingStartThreads.Delete(thread)
+				if p.stopAllEpoch.Load() != baseline {
+					gco.StopAtNextYield(thread)
+				}
+				event.run(thread, &sink)
+			},
 		}
-		task.Run = func(thread coroutine.Thread) {
-			p.pendingStartThreads.Delete(thread)
-			if p.stopAllEpoch.Load() != baseline {
-				gco.StopAtNextYield(thread)
-			}
-			run(thread)
-		}
-		tasks[i] = task
 	}
 
 	gco.StartBatch(tasks, event.mode)
@@ -163,11 +150,58 @@ func (p *scriptEventRegistry) isPendingStartThread(thread coroutine.Thread) bool
 	return ok
 }
 
+func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
+	return sinksInTargetOrder(p.game, p.manager.Snapshot(bucket))
+}
+
+// Register all handlers before returning; keep engine calls live while waiting.
+func withEventRegistrationBarrier(owner any, dispatch func()) {
+	if gco == nil || gco.IsInCoroutine() {
+		dispatch()
+		return
+	}
+	if gco.TryRunFromEngine(owner, dispatch) {
+		return
+	}
+	dispatcher := gco.Create(owner, func(coroutine.Thread) {
+		dispatch()
+	})
+	gco.Join(dispatcher)
+}
+
+func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispatch) {
+	if len(matched) == 0 {
+		return
+	}
+	if gco == nil {
+		for i := range matched {
+			event.run(nil, &matched[i])
+		}
+		return
+	}
+
+	tasks := make([]coroutine.Task, len(matched))
+	for i, sink := range matched {
+		tasks[i] = event.task(sink)
+	}
+	gco.StartBatch(tasks, event.mode)
+}
+
 func eventBatchMode(wait bool) coroutine.BatchMode {
 	if wait {
 		return coroutine.BatchWaitDone
 	}
 	return coroutine.BatchAsync
+}
+
+func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
+	matched := make([]eventSink, 0, len(sinks))
+	for _, sink := range sinks {
+		if sink.Cond == nil || sink.Cond(matchData) {
+			matched = append(matched, sink)
+		}
+	}
+	return matched
 }
 
 // sinksInTargetOrder uses the live front-to-back sprite order and puts
@@ -222,32 +256,4 @@ func sinksInTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	appendGroup(unknown)
 	appendGroup(stage)
 	return ordered
-}
-
-func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
-	matched := make([]eventSink, 0, len(sinks))
-	for _, sink := range sinks {
-		if sink.Cond == nil || sink.Cond(matchData) {
-			matched = append(matched, sink)
-		}
-	}
-	return matched
-}
-
-func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispatch) {
-	if len(matched) == 0 {
-		return
-	}
-	if gco == nil {
-		for i := range matched {
-			event.run(nil, &matched[i])
-		}
-		return
-	}
-
-	tasks := make([]coroutine.Task, len(matched))
-	for i, sink := range matched {
-		tasks[i] = event.task(sink)
-	}
-	gco.StartBatch(tasks, event.mode)
 }
