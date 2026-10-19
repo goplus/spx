@@ -18,8 +18,8 @@ package zip
 
 import (
 	archivezip "archive/zip"
-	"os"
-	"path/filepath"
+	"bytes"
+	"io/fs"
 	"reflect"
 	"testing"
 
@@ -27,44 +27,73 @@ import (
 )
 
 func TestReadDirReturnsDirectChildren(t *testing.T) {
-	zipPath := filepath.Join(t.TempDir(), "fonts.zip")
-	file, err := os.Create(zipPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := archivezip.NewWriter(file)
+	var contents bytes.Buffer
+	writer := archivezip.NewWriter(&contents)
 	for _, name := range []string{
+		"other.txt",
+		"fonts/Scratch/index.json",
 		"fonts/Basic/index.json",
 		"fonts/Basic/basic.ttf",
-		"fonts/Scratch/index.json",
+		"fonts/Empty/",
+		"fonts/",
 		"index.json",
+		"fontscript/unrelated",
+		"mode-dir",
 	} {
-		entry, err := writer.Create(name)
-		if err != nil {
-			t.Fatal(err)
+		header := &archivezip.FileHeader{Name: name, Method: archivezip.Store}
+		if name == "mode-dir" {
+			header.SetMode(fs.ModeDir | 0o755)
 		}
-		if _, err := entry.Write([]byte(name)); err != nil {
+		if _, err := writer.CreateHeader(header); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := file.Close(); err != nil {
+	reader, err := archivezip.NewReader(bytes.NewReader(contents.Bytes()), int64(contents.Len()))
+	if err != nil {
 		t.Fatal(err)
 	}
+	dir := &FS{Reader: reader}
+	root := []spxfs.DirEntry{
+		{Name: "fonts", IsDir: true},
+		{Name: "fontscript", IsDir: true},
+		{Name: "index.json"},
+		{Name: "mode-dir", IsDir: true},
+		{Name: "other.txt"},
+	}
+	fonts := []spxfs.DirEntry{{Name: "Basic", IsDir: true}, {Name: "Empty", IsDir: true}, {Name: "Scratch", IsDir: true}}
+	for _, tt := range []struct {
+		name string
+		want []spxfs.DirEntry
+	}{
+		{name: "", want: root},
+		{name: ".", want: root},
+		{name: "/", want: root},
+		{name: "./fonts/..", want: root},
+		{name: "fonts", want: fonts},
+		{name: "/fonts//", want: fonts},
+		{name: "fonts/./Basic/", want: []spxfs.DirEntry{{Name: "basic.ttf"}, {Name: "index.json"}}},
+		{name: "fonts/Basic/../Scratch", want: []spxfs.DirEntry{{Name: "index.json"}}},
+		{name: "fonts/Empty", want: []spxfs.DirEntry{}},
+		{name: "mode-dir", want: []spxfs.DirEntry{}},
+		{name: "index.json", want: []spxfs.DirEntry{}},
+		{name: "absent", want: []spxfs.DirEntry{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			entries, err := dir.ReadDir(tt.name)
+			if err != nil || !reflect.DeepEqual(entries, tt.want) {
+				t.Fatalf("ReadDir(%q) = %#v, %v, want %#v, nil", tt.name, entries, err, tt.want)
+			}
+		})
+	}
+}
 
-	dir, err := Open(zipPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dir.Close()
-	entries, err := dir.(spxfs.ReadDirer).ReadDir("fonts")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []spxfs.DirEntry{{Name: "Basic", IsDir: true}, {Name: "Scratch", IsDir: true}}
-	if !reflect.DeepEqual(entries, want) {
-		t.Fatalf("entries = %#v, want %#v", entries, want)
+func TestReadDirEmptyArchive(t *testing.T) {
+	dir := &FS{Reader: &archivezip.Reader{}}
+	entries, err := dir.ReadDir(".")
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("ReadDir = %#v, %v, want no entries or error", entries, err)
 	}
 }
