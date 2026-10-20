@@ -508,6 +508,46 @@ func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	})
 }
 
+func TestWaitedBroadcastRunsNestedAsyncBeforeCallerContinues(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	game.initShapeMgr()
+
+	scene := newEventOrderSprite(game, "Scene_Manager")
+	questions := newEventOrderSprite(game, "Questions")
+	fade := newEventOrderSprite(game, "Fade")
+	game.shapeMgr.add(scene)
+	game.shapeMgr.add(questions)
+	game.shapeMgr.add(fade)
+	game.shapeMgr.updateRenderLayers()
+
+	var log eventOrderLog
+	fade.OnMsg__1("Fade in", func() {
+		log.add("fade-in")
+		game.Broadcast__0("Fade out")
+	})
+	fade.OnMsg__1("Fade out", func() { log.add("fade-out") })
+	questions.OnMsg__1("Fade out", func() {
+		log.add("questions-fade-out")
+		questions.Stop(OtherScriptsInSprite)
+	})
+	questions.OnMsg__1("Scene 1", func() { log.add("question-appears") })
+	scene.OnMsg__1("Game Begins", func() {
+		game.BroadcastAndWait__0("Fade in")
+		log.add("fade-done")
+		game.Broadcast__0("Scene 1")
+	})
+
+	game.Broadcast__0("Game Begins")
+	waitForEventOrderEntries(t, co, &log, 5)
+	requireEventOrder(t, &log, []string{
+		"fade-in",
+		"fade-out",
+		"questions-fade-out",
+		"fade-done",
+		"question-appears",
+	})
+}
+
 func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
 	co, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog

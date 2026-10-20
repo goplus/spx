@@ -58,6 +58,7 @@ type messageDispatchContext struct {
 	frame     int64
 	round     uint64
 	receivers map[*scriptEventHandler]struct{}
+	waitDepth int
 }
 
 type messageReceiverExecution struct {
@@ -382,8 +383,16 @@ func (p *scriptEventRegistry) doWhenCloned(this any, data any) {
 
 func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 	context := p.currentMessageDispatchContext()
+	if wait {
+		context.waitDepth++
+		defer func() { context.waitDepth-- }()
+	}
+	mode := eventBatchMode(wait)
+	if !wait && context.waitDepth > 0 {
+		mode = coroutine.BatchWaitFirstSlice
+	}
 	p.dispatchGlobal(coreevent.BucketIReceive, scriptEventDispatch{
-		mode:      eventBatchMode(wait),
+		mode:      mode,
 		matchData: msg,
 		run: func(thread coroutine.Thread, ev *eventSink) {
 			receiver := ev.Handler.(*scriptEventHandler)
