@@ -38,8 +38,7 @@ func BenchmarkTargetOrder(b *testing.B) {
 	}
 	sinks = append(sinks, eventSink{Owner: game}, eventSink{Owner: "external"})
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if got := sinksInTargetOrder(game, sinks); len(got) != len(sinks) {
 			b.Fatal(len(got))
 		}
@@ -77,7 +76,7 @@ func BenchmarkTargetDispatch(b *testing.B) {
 			}
 			event := scriptEventDispatch{run: func(coroutine.Thread, *eventSink) {}}
 			b.ReportAllocs()
-			for range b.N {
+			for b.Loop() {
 				registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
 			}
 		})
@@ -92,7 +91,7 @@ func BenchmarkTargetDispatchMissingManaged(b *testing.B) {
 	owner := &SpriteImpl{}
 	event := scriptEventDispatch{mode: coroutine.BatchAsync}
 	b.ReportAllocs()
-	for range b.N {
+	for b.Loop() {
 		registry.dispatchTarget(coreevent.BucketTouchStart, owner, event)
 	}
 }

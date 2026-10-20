@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build unix
 
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
@@ -31,6 +31,14 @@ const (
 	unixShutdownGrace = 200 * time.Millisecond
 	unixGroupPoll     = 10 * time.Millisecond
 )
+
+func signalFromContext(ctx context.Context) (os.Signal, bool) {
+	var cause *SignalCause
+	if !errors.As(context.Cause(ctx), &cause) || cause == nil || cause.Signal == nil {
+		return nil, false
+	}
+	return cause.Signal, true
+}
 
 func run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	// Keep any caller-provided attributes, but make the child the leader of a

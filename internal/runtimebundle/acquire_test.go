@@ -759,6 +759,26 @@ func TestAcquireFileInvalidRequestAndCancellation(t *testing.T) {
 	})
 }
 
+func TestAcquireLockedPathPreservesInspectionError(t *testing.T) {
+	root := t.TempDir()
+	cacheRoot, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cacheRoot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	spec := acquireTestSpec("asset", "payload")
+	spec.Fetch = func(context.Context, string, io.Writer) error {
+		t.Error("inspection failure triggered a download")
+		return nil
+	}
+	path, err := acquireLockedPath(t.Context(), root, cacheRoot, spec)
+	if path != "" || !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("closed acquisition root = %q, %v; want empty path and os.ErrClosed", path, err)
+	}
+}
+
 type acquireTestWriter func([]byte) (int, error)
 
 func (w acquireTestWriter) Write(data []byte) (int, error) { return w(data) }

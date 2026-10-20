@@ -75,6 +75,12 @@ jobs:
           GOARCH: wasm
         run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web ./pkg/ispx ./internal/coroutine
 
+      - name: Test Go Web process fallbacks
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: go test -coverprofile=coverage-web-process.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" -run 'UnsupportedPlatform|^TestRunRejectsInvalidInput$|^TestRunCommand|^TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs$' ./internal/cmd/buildctl/engine ./internal/processsupervisor ./x/xgolauncher
+
       - name: Test Go Web interpreter
         working-directory: cmd/ispx
         env:
@@ -111,5 +117,5 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           slug: goplus/spx
-          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,cmd/ispx/coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
+          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,coverage-web-process.out,cmd/ispx/coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
           disable_search: true

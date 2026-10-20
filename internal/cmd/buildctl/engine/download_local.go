@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
@@ -103,7 +102,7 @@ func loadEngineAssetManifest(env *engineDownloadEnv) error {
 				return fmt.Errorf(
 					"locked runtime %s is unavailable: %s returned %s\n"+
 						"Published-asset setup requires a complete runtime release.\n"+
-						"Publish the locked runtime, or build from source with %q.",
+						"Publish the locked runtime, or build from source with %q",
 					lock.RuntimeReleaseTag(), lock.Manifest, statusErr.Status, "make dev MODE=normal",
 				)
 			}
@@ -249,8 +248,6 @@ func linkOrCopyFile(src, dst string) error {
 	}
 	if err := os.Link(src, dst); err == nil {
 		return nil
-	} else if !isLinkFallbackError(err) {
-		return err
 	}
 	return shared.CopyFile(src, dst)
 }
@@ -260,24 +257,5 @@ func removeIfExists(path string) error {
 		return nil
 	} else {
 		return err
-	}
-}
-
-func isLinkFallbackError(err error) bool {
-	switch {
-	case errors.Is(err, fs.ErrExist):
-		return true
-	case errors.Is(err, fs.ErrPermission):
-		return true
-	case errors.Is(err, syscall.EXDEV):
-		return true
-	case errors.Is(err, syscall.ENOTSUP):
-		return true
-	case errors.Is(err, syscall.EPERM):
-		return true
-	case errors.Is(err, syscall.EACCES):
-		return true
-	default:
-		return false
 	}
 }

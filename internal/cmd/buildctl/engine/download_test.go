@@ -28,7 +28,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -237,7 +236,7 @@ func TestDownloadLinuxAssetsRequiresLinuxPlatform(t *testing.T) {
 	for _, env := range []engineDownloadEnv{{platform: "darwin", arch: linuxRuntimePackArch}} {
 		if err := downloadLinuxAssets(env, false); err == nil {
 			t.Fatalf("downloadLinuxAssets accepted %s", env.platform)
-		} else if !strings.Contains(err.Error(), "Linux runtime assets require platform linux") {
+		} else if !strings.Contains(err.Error(), "downloading Linux runtime assets requires platform linux") {
 			t.Fatalf("downloadLinuxAssets error = %v", err)
 		}
 	}
@@ -350,7 +349,7 @@ func TestLoadEngineAssetManifestExplainsUnavailableRuntime(t *testing.T) {
 	}
 	want := "locked runtime " + release.DefaultRuntimeLock().RuntimeReleaseTag() + " is unavailable: runtime-manifest.json returned 404 Not Found\n" +
 		"Published-asset setup requires a complete runtime release.\n" +
-		"Publish the locked runtime, or build from source with \"make dev MODE=normal\"."
+		"Publish the locked runtime, or build from source with \"make dev MODE=normal\""
 	if err.Error() != want {
 		t.Fatalf("loadEngineAssetManifest error = %q, want %q", err, want)
 	}
@@ -544,6 +543,35 @@ func TestLinkOrCopyFileReplacesExistingHardLinkWithoutTruncatingSource(t *testin
 	}
 	if string(dstContent) != "content" {
 		t.Fatalf("destination content = %q, want copied content preserved", string(dstContent))
+	}
+}
+
+func TestLinkOrCopyFileFallsBackToCopy(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("cross-device fixture requires Linux shared memory")
+	}
+	dstDir, err := os.MkdirTemp("/dev/shm", "spx-link-copy-*")
+	if err != nil {
+		t.Skipf("shared memory unavailable: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dstDir) })
+	src := filepath.Join(t.TempDir(), "source")
+	mustWriteFile(t, src, []byte("preserved"))
+	if err := os.Link(src, filepath.Join(dstDir, "probe")); err == nil {
+		t.Skip("temporary directory and shared memory allow hard links")
+	}
+	dst := filepath.Join(dstDir, "destination")
+	if err := linkOrCopyFile(src, dst); err != nil {
+		t.Fatalf("copy fallback failed: %v", err)
+	}
+	if data, err := os.ReadFile(dst); err != nil || string(data) != "preserved" {
+		t.Fatalf("copied content = %q, %v", data, err)
+	}
+	if err := os.WriteFile(dst, []byte("changed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(src); err != nil || string(data) != "preserved" {
+		t.Fatalf("copy changed source: %q, %v", data, err)
 	}
 }
 
@@ -912,6 +940,23 @@ func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
 	}
 }
 
+func TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "missing")
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		want := fmt.Sprintf("preparing Linux runtime packs requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
+		if err := PrepareLinuxRuntimePackAssets(root, "assets"); err == nil || err.Error() != want {
+			t.Fatalf("unsupported host error = %v, want %q", err, want)
+		}
+		return
+	}
+	for _, assets := range []string{"", " \t\n"} {
+		want := "preparing Linux runtime packs requires an engine asset directory"
+		if err := PrepareLinuxRuntimePackAssets(root, assets); err == nil || err.Error() != want {
+			t.Errorf("asset directory %q: error = %v, want %q", assets, err, want)
+		}
+	}
+}
+
 func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		t.Skip("Linux/amd64 release preparation fixture")
@@ -965,11 +1010,6 @@ func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 			t.Fatalf("runtime pack error = %v, want wrapped missing asset", err)
 		}
 	})
-	t.Run("requires local assets", func(t *testing.T) {
-		if err := PrepareLinuxRuntimePackAssets(t.TempDir(), " \t"); err == nil || !strings.Contains(err.Error(), "requires an engine asset directory") {
-			t.Fatalf("missing local assets error = %v", err)
-		}
-	})
 	t.Run("invalid environment", func(t *testing.T) {
 		root := isolateEngineEnvironment(t)
 		t.Setenv("PLATFORM", "invalid")
@@ -997,14 +1037,6 @@ func TestDownloadSizeFormatting(t *testing.T) {
 }
 
 func TestLocalAssetLinkFailures(t *testing.T) {
-	for _, err := range []error{os.ErrExist, os.ErrPermission, syscall.EXDEV, syscall.ENOTSUP, syscall.EPERM, syscall.EACCES} {
-		if !isLinkFallbackError(fmt.Errorf("wrapped: %w", err)) {
-			t.Errorf("expected copy fallback for %v", err)
-		}
-	}
-	if isLinkFallbackError(os.ErrNotExist) || isLinkFallbackError(errors.New("unrelated")) {
-		t.Fatal("unexpected link fallback")
-	}
 	root := t.TempDir()
 	src := filepath.Join(root, "source")
 	mustWriteFile(t, src, []byte("preserved"))

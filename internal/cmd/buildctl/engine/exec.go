@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -188,7 +186,11 @@ func detectStaleEngineBuildLock(lockDir string) (bool, string, error) {
 		if parseErr != nil || pid <= 0 {
 			return true, "Removing stale build lock (invalid pid metadata)...", nil
 		}
-		if !engineProcessExists(pid) {
+		exists, err := trackedProcessExists(pid)
+		if err != nil {
+			return false, "", err
+		}
+		if !exists {
 			return true, fmt.Sprintf("Removing stale build lock (pid %d is dead)...", pid), nil
 		}
 		return false, "", nil
@@ -214,51 +216,6 @@ func releaseEngineBuildLock(lockDir string) {
 	_ = os.RemoveAll(lockDir)
 }
 
-func engineProcessExists(pid int) bool {
-	return trackedProcessExists(pid)
-}
-
 func runTrackedEngineCommand(workdir, name string, args ...string) error {
 	return runTrackedEngineCommandWithEnv(workdir, nil, name, args...)
-}
-
-func runTrackedEngineCommandWithEnv(workdir string, env map[string]string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = workdir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	if len(env) != 0 {
-		cmd.Env = shared.EnvMapToSlice(env)
-	}
-	configureTrackedCommand(cmd)
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, trackedSignals()...)
-	defer signal.Stop(sigCh)
-
-	select {
-	case err := <-done:
-		return err
-	case <-sigCh:
-		terminateTrackedProcess(cmd.Process)
-		err := <-done
-		if err != nil {
-			return err
-		}
-		return errors.New("engine build interrupted")
-	}
-}
-
-func terminateTrackedProcess(process *os.Process) {
-	terminateTrackedProcessGroup(process)
 }

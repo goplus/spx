@@ -52,7 +52,9 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	reports := make(chan PanicReport, 1)
 	co := New(func(report PanicReport) { reports <- report })
 	co.debug = true
-	worker := co.Create("runtime-panic-worker", panicWithNilDereference)
+	worker := co.Create("runtime-panic-worker", func(Thread) {
+		panicWithNilDereference(nil)
+	})
 	waitForThreadSignal(t, worker.done, "panicking coroutine did not finish")
 	co.RunAfterStop(nil)
 	select {
@@ -74,8 +76,7 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	}
 }
 
-func panicWithNilDereference(Thread) {
-	var pointer *int
+func panicWithNilDereference(pointer *int) {
 	_ = *pointer
 }
 

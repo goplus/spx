@@ -536,7 +536,7 @@ func TestSourceRuntimeFallbackPreservesResolutionErrors(t *testing.T) {
 		resolver   func(context.Context, Config, []string) (string, error)
 	}{
 		{name: "no source root", want: "SPX source root is unavailable"},
-		{name: "no resolver", want: "Go-bin resolver is unavailable", root: t.TempDir()},
+		{name: "no resolver", want: "cannot resolve Go bin: resolver is unavailable", root: t.TempDir()},
 		{name: "resolver failed", want: sentinel.Error(), root: t.TempDir(), resolver: func(context.Context, Config, []string) (string, error) { return "", sentinel }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

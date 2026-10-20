@@ -95,6 +95,7 @@ func buildctlCommandEnv() (map[string]string, error) {
 		return nil, err
 	}
 	pathDirs := []string{filepath.Join(goPath, "bin")}
+	//lint:ignore SA1019 Locally built buildctl deliberately prefers its build toolchain over Go binaries later in PATH.
 	if goRoot := runtime.GOROOT(); goRoot != "" {
 		pathDirs = append(pathDirs, filepath.Join(goRoot, "bin"))
 	}

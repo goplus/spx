@@ -93,7 +93,7 @@ func canonicalComponentZIP(files []testFile) ([]byte, error) {
 	for _, file := range files {
 		header := &zip.FileHeader{Name: file.Name, Method: zip.Store}
 		header.SetMode(canonicalFileMode(file.Mode))
-		header.SetModTime(canonicalTime)
+		header.Modified = canonicalTime.UTC()
 		entry, err := writer.CreateHeader(header)
 		if err != nil {
 			_ = writer.Close()
@@ -166,9 +166,9 @@ func TestBuildToRejectsShortReadWriteFailureAndSourceChange(t *testing.T) {
 
 func TestBuildToRejectsOuterLimitsBeforeReadingSources(t *testing.T) {
 	t.Run("entry count", func(t *testing.T) {
-		config, sources := fileSources(testBuildConfig(t))
+		config := testBuildConfig(t).BuildConfig
 		guard := &countingReaderAt{reader: bytes.NewReader([]byte("must not read"))}
-		sources = make([]FileSource, runtimebundle.MaxEntries)
+		sources := make([]FileSource, runtimebundle.MaxEntries)
 		sources[0] = FileSource{Name: "entry", ReaderAt: guard, Size: 0}
 		if _, _, err := BuildTo(io.Discard, config, sources); !errors.Is(err, runtimebundle.ErrArchiveLimit) {
 			t.Fatalf("BuildTo error = %v, want runtimebundle.ErrArchiveLimit", err)

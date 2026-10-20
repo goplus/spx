@@ -9,7 +9,7 @@ import (
 func TestInvokeCallbackTracksNilPanic(t *testing.T) {
 	t.Setenv("GODEBUG", "panicnil=1")
 	co := New(nil)
-	result := co.invokeCallback(callbackNoDrain, func() { panic(nil) })
+	result := co.invokeCallback(callbackNoDrain, func() { panicWithValue(nil) })
 	if !result.panicked {
 		t.Fatal("invokeCallback treated a nil panic as successful completion")
 	}

@@ -220,7 +220,7 @@ func inspectBuildConfiguration(repoRoot string, output io.Writer) error {
 		}
 		head := strings.TrimSpace(string(headOutput))
 		if head != env.GodotCommit {
-			return fmt.Errorf("Godot source %s is at %s, but runtime.lock.json requires %s", env.EngineDir, head, env.GodotCommit)
+			return fmt.Errorf("existing Godot source %s is at %s, but runtime.lock.json requires %s", env.EngineDir, head, env.GodotCommit)
 		}
 		engineStatus = "pinned commit ready"
 	}

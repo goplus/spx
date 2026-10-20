@@ -64,7 +64,7 @@ func main() {
 type payloadBuilder func(workDir string, dst io.Writer) (payloadDigest, manifestDigest string, err error)
 
 func renderGeneratedLauncher(payloadDigest, manifestDigest string) []byte {
-	return []byte(fmt.Sprintf(generatedLauncherTemplate, strconv.Quote(payloadDigest), strconv.Quote(manifestDigest)))
+	return fmt.Appendf(nil, generatedLauncherTemplate, strconv.Quote(payloadDigest), strconv.Quote(manifestDigest))
 }
 
 func compileLauncher(ctx context.Context, cfg Config, streams IO, buildPayload payloadBuilder) error {

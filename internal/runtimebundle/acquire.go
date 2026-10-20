@@ -181,7 +181,6 @@ func acquirePath(ctx context.Context, root string, spec FetchSpec) (string, erro
 		return "", fmt.Errorf("runtimebundle: pin acquisition root: %w", err)
 	}
 	defer cacheRoot.Close()
-	path := filepath.Join(root, spec.Name)
 	lease, err := acquirePlatformRootFileLock(ctx, root, cacheRoot, spec.Name, lockExclusive)
 	if err != nil {
 		return "", fmt.Errorf("runtimebundle: acquire lock for asset %q: %w", spec.Name, err)
@@ -190,6 +189,12 @@ func acquirePath(ctx context.Context, root string, spec FetchSpec) (string, erro
 	if err := checkPinnedRootPath(root, cacheRoot); err != nil {
 		return "", err
 	}
+	return acquireLockedPath(ctx, root, cacheRoot, spec)
+}
+
+// acquireLockedPath requires the caller to hold the asset's exclusive lock.
+func acquireLockedPath(ctx context.Context, root string, cacheRoot *os.Root, spec FetchSpec) (string, error) {
+	path := filepath.Join(root, spec.Name)
 	if info, err := cacheRoot.Lstat(spec.Name); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 			return "", fmt.Errorf("%w: cached asset %q is not a regular non-symlink file", ErrUnsafeArchive, path)
@@ -202,7 +207,7 @@ func acquirePath(ctx context.Context, root string, spec FetchSpec) (string, erro
 		} else if spec.Offline {
 			return "", fmt.Errorf("runtimebundle: offline cached asset %q failed verification: %w", path, err)
 		}
-	} else if err != nil && !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) {
 		return "", fmt.Errorf("runtimebundle: inspect cached asset %q: %w", path, err)
 	}
 	if spec.Offline {
@@ -219,27 +224,23 @@ func acquirePath(ctx context.Context, root string, spec FetchSpec) (string, erro
 		return "", fmt.Errorf("runtimebundle: create temporary asset %q: %w", spec.Name, err)
 	}
 	defer func() {
+		_ = tmp.Close()
 		_ = cacheRoot.Remove(tmpName)
 	}()
 	limiter := &acquireLimitWriter{destination: tmp, remaining: spec.Size}
 	if err := spec.Fetch(ctx, spec.URL, limiter); err != nil {
-		_ = tmp.Close()
 		return "", fmt.Errorf("runtimebundle: fetch %q: %w", spec.Name, err)
 	}
 	if limiter.exceeded {
-		_ = tmp.Close()
 		return "", errAcquireSizeLimit
 	}
 	if err := checkPinnedRootPath(root, cacheRoot); err != nil {
-		_ = tmp.Close()
 		return "", err
 	}
 	if err := ctx.Err(); err != nil {
-		_ = tmp.Close()
 		return "", err
 	}
 	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
 		return "", fmt.Errorf("runtimebundle: sync downloaded asset %q: %w", spec.Name, err)
 	}
 	if err := tmp.Close(); err != nil {

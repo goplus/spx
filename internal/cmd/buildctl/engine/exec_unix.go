@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build unix
 
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
@@ -19,6 +19,7 @@
 package engine
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
@@ -29,18 +30,21 @@ func configureTrackedCommand(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-func trackedSignals() []os.Signal {
-	return []os.Signal{
-		os.Interrupt,
-		syscall.SIGTERM,
-		syscall.SIGHUP,
-		syscall.SIGQUIT,
-		syscall.SIGTSTP,
-	}
+var trackedSignals = []os.Signal{
+	os.Interrupt,
+	syscall.SIGTERM,
+	syscall.SIGHUP,
+	syscall.SIGQUIT,
+	syscall.SIGTSTP,
 }
 
-func trackedProcessExists(pid int) bool {
-	return syscall.Kill(pid, 0) == nil
+func trackedProcessExists(pid int) (bool, error) {
+	err := syscall.Kill(pid, 0)
+	if errors.Is(err, syscall.ESRCH) {
+		return false, nil
+	}
+	// Permission and other probe errors cannot establish that the owner is dead.
+	return err == nil, err
 }
 
 func terminateTrackedProcessGroup(process *os.Process) {

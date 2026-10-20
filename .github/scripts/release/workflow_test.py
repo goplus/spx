@@ -618,7 +618,7 @@ class GoCoverageTest(unittest.TestCase):
             steps,
         )
         commands = [line for line in steps.splitlines() if "-coverprofile=" in line]
-        self.assertEqual(len(commands), 7)
+        self.assertEqual(len(commands), 8)
         for command in commands:
             self.assertIn("-covermode=atomic", command)
         profiles = []
@@ -630,6 +630,14 @@ class GoCoverageTest(unittest.TestCase):
                 for profile in re.findall(r"-coverprofile=(\S+)", step)
             )
         self.assertIn("cmd/ispx/coverage-web.out", profiles)
+        self.assertIn("coverage-web-process.out", profiles)
+        web_process = steps.split("      - name: Test Go Web process fallbacks\n", 1)[1].split(
+            "      - name:", 1
+        )[0]
+        self.assertIn("GOOS: js", web_process)
+        self.assertIn("GOARCH: wasm", web_process)
+        for package in ("internal/cmd/buildctl/engine", "internal/processsupervisor", "x/xgolauncher"):
+            self.assertIn(f"./{package}", web_process)
         web_interpreter = steps.split("      - name: Test Go Web interpreter\n", 1)[1].split(
             "      - name:", 1
         )[0]
