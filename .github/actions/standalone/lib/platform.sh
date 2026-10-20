@@ -22,14 +22,8 @@ log_error() {
 
 normalize_platform() {
   case "$1" in
-    darwin|macos|macOS)
+    darwin)
       printf 'macos\n'
-      ;;
-    linux|Linux)
-      printf 'linux\n'
-      ;;
-    windows|Windows)
-      printf 'windows\n'
       ;;
     *)
       printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]'
@@ -97,20 +91,12 @@ go_env_gopath_first() {
   normalize_path "$gopath_first"
 }
 
-go_env_bin_dir() {
+go_env_spx_path() {
   local goexe="$1"
   local gopath_first
 
   gopath_first="$(go_env_gopath_first "$goexe")"
-  printf '%s/bin\n' "$gopath_first"
-}
-
-go_env_spx_path() {
-  local goexe="$1"
-  local go_bin_dir
-
-  go_bin_dir="$(go_env_bin_dir "$goexe")"
-  printf '%s/spx%s\n' "$go_bin_dir" "$goexe"
+  printf '%s/bin/spx%s\n' "$gopath_first" "$goexe"
 }
 
 spx_binary_name_for_platform() {
@@ -160,6 +146,7 @@ assert_binary_arch() {
   local platform="$2"
   local arch="$3"
   local description
+  local expected_pattern
 
   if ! command -v file >/dev/null 2>&1; then
     log_error "File command is required to verify binary architecture"
@@ -171,29 +158,19 @@ assert_binary_arch() {
 
   case "$platform/$arch" in
     linux/x64)
-      case "$description" in
-        *"ELF 64-bit"*"x86-64"*) return ;;
-      esac
+      expected_pattern='*ELF 64-bit*x86-64*'
       ;;
     linux/x86)
-      case "$description" in
-        *"ELF 32-bit"*"Intel 80386"*) return ;;
-      esac
+      expected_pattern='*ELF 32-bit*Intel 80386*'
       ;;
     linux/arm64)
-      case "$description" in
-        *"ELF 64-bit"*"ARM aarch64"*) return ;;
-      esac
+      expected_pattern='*ELF 64-bit*ARM aarch64*'
       ;;
     windows/x64)
-      case "$description" in
-        *"PE32+ executable"*"x86-64"*) return ;;
-      esac
+      expected_pattern='*PE32+ executable*x86-64*'
       ;;
     windows/x86)
-      case "$description" in
-        *"PE32 executable"*"Intel 80386"*) return ;;
-      esac
+      expected_pattern='*PE32 executable*Intel 80386*'
       ;;
     macos/x64)
       assert_macos_binary_arch "$binary_path" "x86_64"
@@ -207,6 +184,10 @@ assert_binary_arch() {
       log_error "Unsupported binary architecture target: $platform/$arch"
       exit 1
       ;;
+  esac
+
+  case "$description" in
+    $expected_pattern) return ;;
   esac
 
   log_error "Binary architecture mismatch for $platform/$arch"
