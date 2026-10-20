@@ -18,6 +18,7 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -234,5 +235,247 @@ func TestAndroidBuildRejectsMissingNDKAndBlockedLibraryDirectory(t *testing.T) {
 	}
 	if readTestFile(t, lib) != "occupied" {
 		t.Fatal("failed build changed the blocking file")
+	}
+}
+
+func newMobileExportFixture(t *testing.T) (*CmdTool, string) {
+	t.Helper()
+	const script = `
+tool=${0##*/}
+step=$tool
+case "$tool" in
+  go) step="go:${GOOS-}:${GOARCH-}" ;;
+  xcrun) if [ "$1" = --sdk ]; then step="sdk:$2"; fi ;;
+  godot) case "$*" in *--editor*) step=import ;; *) step=export ;; esac ;;
+  adb) step="adb:$1" ;;
+esac
+printf '%s|%s|%s|%s|%s|%s|%s\n' "$step" "$PWD" "$*" "${CGO_ENABLED-}" "${CC-}" "${CGO_CFLAGS-}" "${CGO_LDFLAGS-}" >> "$SPX_MOBILE_LOG"
+if [ "$step" = "$SPX_MOBILE_FAIL" ]; then exit 29; fi
+case "$tool" in
+  xgo) printf 'package main\n' > xgo_autogen.go ;;
+  xcrun)
+    if [ "$1" = --sdk ]; then
+      printf '  /test-sdk/%s\n' "$2"
+    else
+      for arg do output=$arg; done
+      /bin/mkdir -p "$output"
+    fi ;;
+  godot)
+    if [ "$step" = export ] && [ "$SPX_MOBILE_OUTPUT" != missing ]; then
+      for arg do output=$arg; done
+      printf 'exported artifact' > "$output"
+    fi ;;
+  adb)
+    if [ "$1" = devices ]; then printf '%s\n' "$SPX_MOBILE_DEVICES"; fi
+    if [ "$1" = install ]; then test -f "$3"; fi ;;
+  ios-deploy) test -f "$2" ;;
+esac
+`
+	tools := map[string]string{}
+	for _, name := range []string{"go", "xgo", "godot", "xcrun", "lipo", "adb", "ios-deploy"} {
+		tools[name] = script
+	}
+	binDir := installCommandTestTools(t, tools)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(root, "commands.log")
+	t.Setenv("SPX_MOBILE_LOG", logPath)
+	t.Setenv("SPX_MOBILE_FAIL", "")
+	t.Setenv("SPX_MOBILE_OUTPUT", "artifact")
+	t.Setenv("SPX_MOBILE_DEVICES", "List of devices attached\ntest-device\tdevice")
+	t.Setenv("ANDROID_NDK_ROOT", filepath.Join(root, "ndk"))
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	for _, name := range []string{"GOOS", "GOARCH", "CGO_ENABLED", "CGO_CFLAGS", "CGO_LDFLAGS", "CC"} {
+		t.Setenv(name, "")
+	}
+	arch, tags, install := runtime.GOARCH, "", false
+	cmd := &CmdTool{
+		TargetDir: root, TargetAbsDir: root, ProjectDir: filepath.Join(root, "project"),
+		GoDir: filepath.Join(root, "project", "go"), LibPath: filepath.Join(root, "spx-test-"+arch+".so"),
+		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: &arch, Tags: &tags, Install: &install},
+	}
+	writeCommandTestFile(t, filepath.Join(root, "assets", "index.json"), "{}")
+	writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "project.godot"), "[application]\n")
+	writeCommandTestFile(t, filepath.Join(cmd.GoDir, "ios_bridge.m"), "bridge")
+	return cmd, logPath
+}
+
+func TestMobileExportToolWorkflows(t *testing.T) {
+	for _, platform := range []struct {
+		name, installStep string
+		export            func(*CmdTool) error
+		outputs, steps    []string
+	}{
+		{"ios", "ios-deploy", (*CmdTool).ExportIos,
+			[]string{"libgdspx-x86_64.a", "libgdspx-arm64-sim.a", "libgdspx-arm64.a"},
+			[]string{"sdk:iphonesimulator", "sdk:iphoneos", "go:darwin:amd64", "go:darwin:arm64", "lipo", "xcrun"}},
+		{"android", "adb:install", (*CmdTool).ExportApk,
+			[]string{"libgdspx-android-arm64.so", "libgdspx-android-arm32.so"},
+			[]string{"go:android:arm64", "go:android:arm"}},
+	} {
+		for _, scenario := range []struct {
+			name, failure, output, wantError string
+			install                          bool
+		}{
+			{name: "export"},
+			{name: "install", install: true},
+			{name: "import warning", failure: "import"},
+			{name: "export failure", failure: "export", wantError: "failed to export"},
+			{name: "missing output", output: "missing", wantError: "file not created"},
+			{name: "install failure", failure: platform.installStep, install: true, wantError: "failed to install"},
+		} {
+			t.Run(platform.name+"/"+scenario.name, func(t *testing.T) {
+				cmd, logPath := newMobileExportFixture(t)
+				*cmd.Args.Install = scenario.install
+				t.Setenv("SPX_MOBILE_FAIL", scenario.failure)
+				if scenario.output != "" {
+					t.Setenv("SPX_MOBILE_OUTPUT", scenario.output)
+				}
+				err := platform.export(cmd)
+				wantError := scenario.wantError
+				if wantError == "" && err != nil || wantError != "" && (err == nil || !strings.Contains(err.Error(), wantError)) {
+					t.Fatalf("export error = %v, want context %q", err, wantError)
+				}
+				calls := readTestFile(t, logPath)
+				if !strings.Contains(calls, "import|") || !strings.Contains(calls, "export|") {
+					t.Fatalf("missing import/export invocation: %s", calls)
+				}
+				if strings.Index(calls, "import|") > strings.Index(calls, "export|") {
+					t.Fatalf("export preceded import: %s", calls)
+				}
+				if got := readTestFile(t, filepath.Join(cmd.ProjectDir, "assets", "index.json")); got != "{}" {
+					t.Fatalf("staged asset = %q", got)
+				}
+				var mobileBuilds []string
+				for _, line := range strings.Split(strings.TrimSpace(calls), "\n") {
+					fields := strings.Split(line, "|")
+					if strings.HasPrefix(fields[0], "go:android:") || strings.HasPrefix(fields[0], "go:darwin:") {
+						mobileBuilds = append(mobileBuilds, fields[2])
+						if fields[1] != cmd.GoDir || fields[3] != "1" || !strings.Contains(fields[2], "-tags="+platform.name+",packmode") {
+							t.Fatalf("mobile build invocation = %q", line)
+						}
+						if platform.name == "android" && !strings.Contains(fields[4], "21-clang") {
+							t.Fatalf("missing NDK compiler: %q", line)
+						}
+						if platform.name == "ios" && (!strings.Contains(fields[5], "-isysroot /test-sdk/") || !strings.Contains(fields[6], "version-min=12.0")) {
+							t.Fatalf("missing iOS SDK flags: %q", line)
+						}
+					}
+				}
+				wantOutputs := platform.outputs
+				if len(mobileBuilds) != len(wantOutputs) {
+					t.Fatalf("mobile build count = %d, want %d: %v", len(mobileBuilds), len(wantOutputs), mobileBuilds)
+				}
+				for i, output := range wantOutputs {
+					if !strings.Contains(mobileBuilds[i], string(filepath.Separator)+output+" .") {
+						t.Errorf("mobile build %d = %q, want output %s", i, mobileBuilds[i], output)
+					}
+				}
+				for _, step := range []string{"ios-deploy", "adb:install"} {
+					installed := strings.Contains(calls, step+"|")
+					wantInstalled := scenario.install && step == platform.installStep
+					if installed != wantInstalled {
+						t.Fatalf("%s invoked = %v, want %v: %s", step, installed, wantInstalled, calls)
+					}
+				}
+				for _, step := range platform.steps {
+					if !strings.Contains(calls, step+"|") {
+						t.Errorf("missing %s stage %q: %s", platform.name, step, calls)
+					}
+				}
+				if platform.name == "ios" {
+					if _, err := os.Stat(cmd.iosLibraryPaths().buildDir); !os.IsNotExist(err) {
+						t.Fatalf("temporary iOS build directory retained: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestMobileLibraryBuildStopsAtFailedTool(t *testing.T) {
+	for _, tt := range []struct{ step, context string }{
+		{"sdk:iphonesimulator", "failed to get simulator SDK path"},
+		{"sdk:iphoneos", "failed to get device SDK path"},
+		{"go:darwin:amd64", "failed to build for iOS Simulator (x86_64)"},
+		{"go:darwin:arm64", "failed to build for iOS Simulator (arm64)"},
+		{"lipo", "failed to create fat binary"},
+		{"xcrun", "failed to create XCFramework"},
+		{"go:android:arm64", "failed to build for arm64-v8a"},
+		{"go:android:arm", "failed to build for armeabi-v7a"},
+	} {
+		t.Run(tt.step, func(t *testing.T) {
+			cmd, logPath := newMobileExportFixture(t)
+			t.Setenv("SPX_MOBILE_FAIL", tt.step)
+			var err error
+			if strings.Contains(tt.step, "android") {
+				err = cmd.ExportApk()
+			} else {
+				err = cmd.ExportIos()
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.context) {
+				t.Fatalf("build error = %v, want %q", err, tt.context)
+			}
+			calls := strings.Split(strings.TrimSpace(readTestFile(t, logPath)), "\n")
+			if !strings.HasPrefix(calls[len(calls)-1], tt.step+"|") {
+				t.Fatalf("commands continued after failed tool: %v", calls)
+			}
+		})
+	}
+}
+
+func TestAndroidDeviceChecksBeforeInstallation(t *testing.T) {
+	for _, scenario := range []string{"missing adb", "device lookup failure", "no connected device"} {
+		t.Run(scenario, func(t *testing.T) {
+			cmd, logPath := newMobileExportFixture(t)
+			*cmd.Args.Install = true
+			var want string
+			switch scenario {
+			case "missing adb":
+				if err := os.Remove(filepath.Join(filepath.Dir(cmd.CmdPath), "adb")); err != nil {
+					t.Fatal(err)
+				}
+				want = "adb command not found"
+			case "device lookup failure":
+				t.Setenv("SPX_MOBILE_FAIL", "adb:devices")
+				want = "failed to check connected devices"
+			case "no connected device":
+				t.Setenv("SPX_MOBILE_DEVICES", "List of devices attached\ntest-device\tunauthorized")
+				want = "no Android device connected"
+			}
+			if err := cmd.ExportApk(); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("install error = %v, want %q", err, want)
+			}
+			if calls := readTestFile(t, logPath); strings.Contains(calls, "adb:install|") {
+				t.Fatalf("install attempted before device validation: %s", calls)
+			}
+		})
+	}
+}
+
+func TestExportBuildInvokesRequestedPlatform(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			logPath := filepath.Join(t.TempDir(), "export.log")
+			t.Setenv("SPX_EXPORT_LOG", logPath)
+			script := `printf '%s\n' "$@" > "$SPX_EXPORT_LOG"`
+			if fail {
+				script += "\nexit 23"
+			}
+			binDir := installCommandTestTools(t, map[string]string{"godot": script})
+			cmd := &CmdTool{ProjectDir: t.TempDir(), CmdPath: filepath.Join(binDir, "godot")}
+			err := cmd.ExportBuild("Custom Platform")
+			if (err != nil) != fail {
+				t.Fatalf("platform export error = %v, want failure %v", err, fail)
+			}
+			if got := readTestFile(t, logPath); got != "--headless\n--quit\n--path\n"+cmd.ProjectDir+"\n--export-debug\nCustom Platform\n" {
+				t.Fatalf("platform export args = %q", got)
+			}
+			if info, err := os.Stat(filepath.Join(cmd.ProjectDir, ".builds", "custom platform")); err != nil || !info.IsDir() {
+				t.Fatalf("platform output directory missing: %v", err)
+			}
+		})
 	}
 }

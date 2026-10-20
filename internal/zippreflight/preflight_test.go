@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -56,6 +57,7 @@ func TestCheckRejectsInvalidInput(t *testing.T) {
 		{name: "typed nil reader", reader: typedNil, size: int64(len(valid)), limits: testLimits(), format: true},
 		{name: "negative size", reader: bytes.NewReader(valid), size: -1, limits: testLimits(), format: true},
 		{name: "missing end record", reader: bytes.NewReader([]byte("short")), size: 5, limits: testLimits(), format: true},
+		{name: "invalid end signature", reader: bytes.NewReader(make([]byte, directoryEndLen)), size: directoryEndLen, limits: testLimits(), format: true},
 		{name: "zero archive limit", reader: bytes.NewReader(valid), size: int64(len(valid)), limits: Limits{}},
 	}
 	for _, test := range tests {
@@ -111,10 +113,31 @@ func TestCheckEnforcesMetadataLimits(t *testing.T) {
 	})
 }
 
+func TestIsLimitRecognizesWrappedErrors(t *testing.T) {
+	data := makeZip(t, "", testEntry{name: "one"})
+	limits := testLimits()
+	limits.MaxArchiveBytes = int64(len(data) - 1)
+	err := Check(bytes.NewReader(data), int64(len(data)), limits)
+	wrapped := fmt.Errorf("read project bundle: %w", err)
+	if !IsLimit(wrapped) || !strings.Contains(wrapped.Error(), "archive size") {
+		t.Fatalf("wrapped error = %v, want identifiable archive-size limit", wrapped)
+	}
+	for _, err := range []error{nil, archivezip.ErrFormat, io.ErrUnexpectedEOF} {
+		if IsLimit(err) {
+			t.Errorf("IsLimit(%v) = true", err)
+		}
+	}
+}
+
 func TestCheckHandlesZip64Boundaries(t *testing.T) {
 	base := makeZip(t, "", testEntry{name: "one", data: "1"})
 	t.Run("standard offsets", func(t *testing.T) {
 		assertAccepted(t, makeZip64(t, base))
+	})
+	t.Run("ZIP64 size marker without space for locator", func(t *testing.T) {
+		data := makeZip(t, "")
+		binary.LittleEndian.PutUint32(data[12:16], math.MaxUint16)
+		assertFormatError(t, data)
 	})
 	for _, test := range []struct {
 		name string
@@ -272,26 +295,107 @@ func TestCheckRejectsZip64RecordConfusion(t *testing.T) {
 		data = append(data, base[locator:]...)
 		assertFormatError(t, data)
 	})
-	t.Run("locator offset overflow", func(t *testing.T) {
-		data := append([]byte(nil), base...)
-		locator := findEnd(t, data) - directory64LocLen
-		binary.LittleEndian.PutUint64(data[locator+8:locator+16], math.MaxUint64)
-		assertFormatError(t, data)
+	for _, test := range []struct {
+		name   string
+		mutate func(record, locator []byte)
+	}{
+		{"locator offset overflow", func(_, locator []byte) { binary.LittleEndian.PutUint64(locator[8:16], math.MaxUint64) }},
+		{"locator points into itself", func(_, locator []byte) {
+			binary.LittleEndian.PutUint64(locator[8:16], uint64(len(base)-directoryEndLen-directory64LocLen))
+		}},
+		{"invalid end signature", func(record, _ []byte) { binary.LittleEndian.PutUint32(record[:4], directoryEndSignature) }},
+		{"short end record", func(record, _ []byte) { binary.LittleEndian.PutUint64(record[4:12], directory64EndLen-13) }},
+		{"end record size overflow", func(record, _ []byte) { binary.LittleEndian.PutUint64(record[4:12], math.MaxUint64) }},
+		{"inconsistent entries", func(record, _ []byte) { binary.LittleEndian.PutUint64(record[24:32], 0) }},
+		{"multi disk", func(record, _ []byte) { binary.LittleEndian.PutUint32(record[16:20], 1) }},
+		{"central offset overflow", func(record, _ []byte) { binary.LittleEndian.PutUint64(record[48:56], math.MaxUint64) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data := append([]byte(nil), base...)
+			locator := findEnd(t, data) - directory64LocLen
+			record := int(binary.LittleEndian.Uint64(data[locator+8 : locator+16]))
+			test.mutate(data[record:record+directory64EndLen], data[locator:locator+directory64LocLen])
+			assertFormatError(t, data)
+		})
+	}
+	t.Run("entry limit", func(t *testing.T) {
+		data := makeZip64(t, makeZip(t, "", testEntry{name: "one"}, testEntry{name: "two"}))
+		limits := testLimits()
+		limits.MaxEntries = 1
+		if err := Check(bytes.NewReader(data), int64(len(data)), limits); !IsLimit(err) {
+			t.Fatalf("Check error = %v, want ZIP64 entry limit", err)
+		}
 	})
-	t.Run("inconsistent entries", func(t *testing.T) {
-		data := append([]byte(nil), base...)
-		locator := findEnd(t, data) - directory64LocLen
-		record := int(binary.LittleEndian.Uint64(data[locator+8 : locator+16]))
-		binary.LittleEndian.PutUint64(data[record+24:record+32], 0)
-		assertFormatError(t, data)
-	})
-	t.Run("multi disk", func(t *testing.T) {
-		data := append([]byte(nil), base...)
-		locator := findEnd(t, data) - directory64LocLen
-		record := int(binary.LittleEndian.Uint64(data[locator+8 : locator+16]))
-		binary.LittleEndian.PutUint32(data[record+16:record+20], 1)
-		assertFormatError(t, data)
-	})
+}
+
+func TestCheckRejectsMalformedCentralDirectory(t *testing.T) {
+	base := makeZip(t, "", testEntry{name: "one", data: "1"})
+	for _, test := range []struct {
+		name   string
+		mutate func(end, central []byte)
+	}{
+		{"size exceeds archive", func(end, _ []byte) { binary.LittleEndian.PutUint32(end[12:16], uint32(len(base)+1)) }},
+		{"size crosses end record", func(end, _ []byte) { binary.LittleEndian.PutUint32(end[12:16], uint32(len(base))) }},
+		{"truncated header", func(end, _ []byte) {
+			binary.LittleEndian.PutUint32(end[12:16], directoryHeaderLen-1)
+			binary.LittleEndian.PutUint32(end[16:20], uint32(len(base)-directoryEndLen-directoryHeaderLen+1))
+		}},
+		{"invalid header signature", func(_, central []byte) { binary.LittleEndian.PutUint32(central[:4], directoryEndSignature) }},
+		{"filename exceeds directory", func(_, central []byte) { binary.LittleEndian.PutUint16(central[28:30], math.MaxUint16) }},
+		{"extra exceeds directory", func(_, central []byte) { binary.LittleEndian.PutUint16(central[30:32], math.MaxUint16) }},
+		{"comment exceeds directory", func(_, central []byte) { binary.LittleEndian.PutUint16(central[32:34], math.MaxUint16) }},
+		{"declared entry missing", func(end, _ []byte) {
+			binary.LittleEndian.PutUint16(end[8:10], 2)
+			binary.LittleEndian.PutUint16(end[10:12], 2)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data := append([]byte(nil), base...)
+			end := findEnd(t, data)
+			central := int(binary.LittleEndian.Uint32(data[end+16 : end+20]))
+			test.mutate(data[end:], data[central:end])
+			assertFormatError(t, data)
+		})
+	}
+}
+
+type failingReaderAt struct {
+	io.ReaderAt
+	offset int64
+	length int
+	err    error
+}
+
+func (r failingReaderAt) ReadAt(p []byte, offset int64) (int, error) {
+	if offset == r.offset && len(p) == r.length {
+		return 0, r.err
+	}
+	return r.ReaderAt.ReadAt(p, offset)
+}
+
+func TestCheckRejectsUnreadableMetadata(t *testing.T) {
+	data := makeZip64(t, makeZip(t, "", testEntry{name: "one"}))
+	locator := findEnd(t, data) - directory64LocLen
+	record := int(binary.LittleEndian.Uint64(data[locator+8 : locator+16]))
+	central := int(binary.LittleEndian.Uint64(data[record+48 : record+56]))
+	readErr := errors.New("metadata storage unavailable")
+	for _, test := range []struct {
+		name           string
+		offset, length int
+		want           error
+	}{
+		{"end record search", 0, len(data), readErr},
+		{"ZIP64 locator", locator, directory64LocLen, readErr},
+		{"ZIP64 end record", record, directory64EndLen, archivezip.ErrFormat},
+		{"central header", central, directoryHeaderLen, archivezip.ErrFormat},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reader := failingReaderAt{bytes.NewReader(data), int64(test.offset), test.length, readErr}
+			if err := Check(reader, int64(len(data)), testLimits()); !errors.Is(err, test.want) {
+				t.Fatalf("Check error = %v, want %v", err, test.want)
+			}
+		})
+	}
 }
 
 func TestCheckRejectsAmbiguousBaseOffset(t *testing.T) {
@@ -329,8 +433,37 @@ func TestScanCentralDirectoryHonorsDeclaredEnd(t *testing.T) {
 	if firstLen == 0 {
 		t.Fatal("first central-directory header missing")
 	}
-	if err := scanCentralDirectory(bytes.NewReader(central), int64(len(central)), 0, firstLen, 1, testLimits()); err != nil {
-		t.Fatalf("scanCentralDirectory returned error: %v", err)
+	for _, test := range []struct {
+		name       string
+		start, end int64
+		maxBytes   int64
+		format     bool
+	}{
+		{"first entry only", 0, firstLen, firstLen, false},
+		{"metadata budget exhausted", 0, firstLen, firstLen - 1, false},
+		{"negative start", -1, firstLen, firstLen, true},
+		{"reversed bounds", firstLen, 0, firstLen, true},
+		{"end beyond archive", 0, int64(len(central)) + 1, firstLen, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			limits := testLimits()
+			limits.MaxCentralDirectoryBytes = test.maxBytes
+			err := scanCentralDirectory(bytes.NewReader(central), int64(len(central)), test.start, test.end, 1, limits)
+			switch {
+			case test.format:
+				if !errors.Is(err, archivezip.ErrFormat) {
+					t.Fatalf("scanCentralDirectory = %v, want format error", err)
+				}
+			case test.maxBytes < firstLen:
+				if !IsLimit(err) {
+					t.Fatalf("scanCentralDirectory = %v, want metadata limit", err)
+				}
+			default:
+				if err != nil {
+					t.Fatalf("scanCentralDirectory returned error: %v", err)
+				}
+			}
+		})
 	}
 }
 

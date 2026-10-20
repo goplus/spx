@@ -38,6 +38,8 @@ func (m *askShowUiMgr) SetText(id gdx.Object, text string) {
 	m.text[id] = text
 }
 
+func (m *askShowUiMgr) GetText(id gdx.Object) string { return m.text[id] }
+
 func TestUiAskShow(t *testing.T) {
 	enginewrap.Init(func(call func()) { call() })
 	original := gdx.UiMgr
@@ -97,7 +99,10 @@ func TestUiAskShow(t *testing.T) {
 			panel.lastEnterState = true
 			callbackCalled := false
 
-			panel.Show(test.showQuestionInPanel, test.question, func(string) {
+			panel.Show(test.showQuestionInPanel, test.question, func(answer string) {
+				if answer != "answer" || mgr.visible[rootID] {
+					t.Errorf("callback received %q with panel visible=%v", answer, mgr.visible[rootID])
+				}
 				callbackCalled = true
 			})
 
@@ -120,10 +125,58 @@ func TestUiAskShow(t *testing.T) {
 			if panel.lastEnterState {
 				t.Error("last Enter state was not reset")
 			}
-			panel.OnCheck("answer")
+			mgr.text[inputID] = "answer"
+			panel.handleCheck()
 			if !callbackCalled {
 				t.Error("Ask callback was not retained")
 			}
+			panel.OnCheck = nil
+			mgr.visible[rootID] = true
+			panel.handleCheck()
+			if !mgr.visible[rootID] {
+				t.Error("nil callback hid the panel")
+			}
 		})
+	}
+}
+
+type askInputMgr struct {
+	gdx.IInputMgr
+	pressed map[int64]bool
+}
+
+func (m *askInputMgr) GetKey(key int64) bool { return m.pressed[key] }
+func TestUiAskUpdateOnlySubmitsOnKeyEdge(t *testing.T) {
+	enginewrap.Init(func(f func()) { f() })
+	oldInput, oldUI := gdx.InputMgr, gdx.UiMgr
+	input := &askInputMgr{pressed: map[int64]bool{}}
+	mgr := &askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{2: "answer"}}
+	gdx.InputMgr, gdx.UiMgr = input, mgr
+	t.Cleanup(func() { gdx.InputMgr, gdx.UiMgr = oldInput, oldUI; enginewrap.Init(engine.WaitMainThread) })
+	field := &UiNode{}
+	field.SetId(2)
+	count := 0
+	panel := &UiAsk{input: field, OnCheck: func(s string) {
+		if s != "answer" {
+			t.Errorf("answer=%q", s)
+		}
+		count++
+	}}
+	panel.SetId(1)
+	for _, key := range []int64{int64(gdx.KeyEnter), int64(gdx.KeyKPEnter)} {
+		input.pressed[key] = true
+		panel.Update()
+		panel.Update()
+		delete(input.pressed, key)
+		panel.Update()
+	}
+	if count != 2 || panel.lastEnterState || mgr.visible[1] {
+		t.Fatalf("submissions=%d held=%v visible=%v", count, panel.lastEnterState, mgr.visible[1])
+	}
+	panel.OnCheck = nil
+	input.pressed[int64(gdx.KeyEnter)] = true
+	panel.Update()
+	if count != 2 {
+		t.Fatal("submitted without callback")
 	}
 }

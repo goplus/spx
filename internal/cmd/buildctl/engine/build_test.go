@@ -26,6 +26,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v3/internal/release"
@@ -282,7 +284,7 @@ printf post > "$SPX_ENGINE_DIR/bin/android_source.zip"
 			})
 			if tt.platform == "android" && tt.failure != "build" {
 				assertEngineTestCommandRecord(t, env["SPX_POST_RECORD"], []string{postDir, env["SPX_MARKER"], javaHome, "generateGodotTemplates"})
-			} else if fileExists(env["SPX_POST_RECORD"]) {
+			} else if shared.FileExists(env["SPX_POST_RECORD"]) {
 				t.Fatal("unexpected post-build command")
 			}
 			if env["JAVA_HOME"] != "caller java home" {
@@ -356,7 +358,7 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 	if err := populateWebTemplateCopies(src, root); err != nil {
 		t.Fatalf("populateWebTemplateCopies returned error: %v", err)
 	}
-	if fileExists(filepath.Join(root, "web_old.zip")) {
+	if shared.FileExists(filepath.Join(root, "web_old.zip")) {
 		t.Fatal("expected old web zip to be removed")
 	}
 	srcInfo, err := os.Stat(src)
@@ -374,7 +376,7 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 		"web_release.zip",
 	} {
 		path := filepath.Join(root, name)
-		if !fileExists(path) {
+		if !shared.FileExists(path) {
 			t.Fatalf("expected %s to exist", name)
 		}
 		content, err := os.ReadFile(path)
@@ -392,4 +394,229 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 			t.Fatalf("%s is a hard link, want an independent copy", name)
 		}
 	}
+}
+
+func TestBuildEngineEntryPoint(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("isolated Linux toolchain fixture")
+	}
+	for _, scenario := range []string{"editor", "template", "invalid platform", "invalid target", "template directory", "missing python", "missing source"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := isolateEngineEnvironment(t)
+			t.Chdir(root)
+			_, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":[],"editor_release":[],"template_release":[]}`)
+			t.Setenv("SPX_MODULE_SRC", moduleSource)
+			cfg := BuildConfig{Target: "template", Platform: "linux"}
+			if scenario == "editor" {
+				cfg.Target = "editor"
+			}
+			env, err := shared.ResolveBuildEnvironment(root, cfg.Platform)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := resolveEngineBuildShellPlan(env, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			lock := release.DefaultRuntimeLock()
+			bin := filepath.Join(root, "tools")
+			for _, name := range []string{"go", "xgo", "python3"} {
+				writeEngineTestTool(t, filepath.Join(bin, name), "exit 0\n")
+			}
+			// Any source acquisition is intercepted; no real git or installer is on PATH.
+			writeEngineTestTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
+			venvBin := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
+			writeEngineTestTool(t, filepath.Join(venvBin, "python"), "printf '%s\\n' '"+lock.Toolchain.SCons+"'\n")
+			record := filepath.Join(root, "scons-record")
+			t.Setenv("SPX_BUILD_RECORD", record)
+			writeEngineTestTool(t, filepath.Join(venvBin, "scons"), "[ \"$1\" = --version ] && exit 0\nprintf '%s\\n' \"$@\" > \"$SPX_BUILD_RECORD\"\n")
+			t.Setenv("PATH", bin)
+			source, destination := plan.TemplateSource, plan.TemplateDestination
+			if scenario == "editor" {
+				source, destination = plan.EditorSource, plan.EditorDestination
+			}
+			mustWriteFile(t, filepath.Join(env.EngineDir, source), []byte("built artifact"))
+			wantError := ""
+			switch scenario {
+			case "invalid platform":
+				cfg.Platform, wantError = "invalid", "unsupported platform"
+			case "invalid target":
+				cfg.Target, wantError = "invalid", "unsupported build target"
+			case "template directory":
+				mustWriteFile(t, filepath.Join(root, ".local"), []byte("blocked"))
+				wantError = "not a directory"
+			case "missing python":
+				if err := os.Remove(filepath.Join(bin, "python3")); err != nil {
+					t.Fatal(err)
+				}
+				wantError = "neither python3 nor python"
+			case "missing source":
+				writeEngineTestTool(t, filepath.Join(bin, "git"), "exit 73\n")
+				if err := os.RemoveAll(env.EngineDir); err != nil {
+					t.Fatal(err)
+				}
+				wantError = "exit status 73"
+			}
+			err = BuildEngine(cfg, root)
+			if wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), wantError) {
+					t.Fatalf("BuildEngine error = %v, want %q", err, wantError)
+				}
+				if shared.FileExists(record) || shared.FileExists(destination) {
+					t.Fatal("preparation failure ran the build or installed an artifact")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(destination); err != nil || string(data) != "built artifact" {
+				t.Fatalf("installed artifact = %q, %v", data, err)
+			}
+			if data, err := os.ReadFile(record); err != nil || !strings.Contains(string(data), "target="+map[string]string{"editor": "editor", "template": "template_release"}[scenario]) {
+				t.Fatalf("build command = %q, %v", data, err)
+			}
+		})
+	}
+}
+
+func TestBuildEngineWebTemplate(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("isolated Linux EMSDK fixture")
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is unavailable")
+	}
+	module, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":[],"editor_release":[],"template_release":["optimize=size"]}`)
+	for _, scenario := range []string{"normal", "worker", "sdk failure", "build failure", "cache failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := isolateEngineEnvironment(t)
+			sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
+			compilerBin := filepath.Join(sdk, "upstream", "emscripten")
+			t.Setenv("EM_CACHE", filepath.Join(root, "em-cache"))
+			t.Setenv("EM_CONFIG", filepath.Join(root, "em-config"))
+			version := release.DefaultRuntimeLock().Toolchain.EMSDK
+			for _, compiler := range []string{"emcc", "em++"} {
+				writeEngineTestTool(t, filepath.Join(compilerBin, compiler), "printf '%s\\n' 'emcc fixture "+version+"'\n")
+			}
+			mustWriteFile(t, filepath.Join(sdk, "emsdk_env.sh"), []byte("export EMSDK="+shared.ShellQuote(sdk)+"\nexport PATH="+shared.ShellQuote(compilerBin)+":\"$PATH\"\n"))
+			writeEngineTestTool(t, filepath.Join(sdk, "emsdk"), "[ \"$1\" = activate ] || exit 90\n[ \"$SPX_WEB_CASE\" != 'sdk failure' ] || exit 23\n")
+			t.Setenv("SPX_WEB_CASE", scenario)
+			env := buildEnvironment{EngineDir: filepath.Join(root, "godot"), TemplateDir: filepath.Join(root, "templates"), GoPath: filepath.Join(root, "go"), Version: "test"}
+			mode := "normal"
+			if scenario == "worker" {
+				mode = "worker"
+			}
+			plan, err := resolveEngineBuildShellPlan(env, BuildConfig{Target: "template", Platform: "web", Mode: mode})
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(env.EngineDir, "bin", "godot.web.template_release.wasm32"+plan.WebThreadSuffix+".zip")
+			mustWriteFile(t, source, []byte("web template"))
+			mustWriteFile(t, filepath.Join(env.TemplateDir, "web_old.zip"), []byte("stale"))
+			commandEnv := shared.CurrentEnvMap()
+			commandEnv["EMSDK"] = "old SDK"
+			commandEnv["SPX_BUILD_RECORD"] = filepath.Join(root, "build-record")
+			scons := filepath.Join(root, "scons")
+			writeEngineTestTool(t, scons, "[ \"$SPX_WEB_CASE\" != 'build failure' ] || exit 23\nprintf '%s\\n' \"$EMSDK\" \"$@\" > \"$SPX_BUILD_RECORD\"\n")
+			if scenario == "cache failure" {
+				mustWriteFile(t, filepath.Dir(plan.WebCachedTemplateZip), []byte("blocked"))
+			}
+			err = buildEngineTemplate(env, commandEnv, scons, module, plan)
+			if commandEnv["EMSDK"] != "old SDK" {
+				t.Fatal("SDK exports mutated the caller environment")
+			}
+			if strings.HasSuffix(scenario, "failure") {
+				if scenario == "cache failure" {
+					if err == nil || !strings.Contains(err.Error(), "not a directory") {
+						t.Fatalf("cache error = %v, want blocked destination", err)
+					}
+				} else {
+					var exitErr *exec.ExitError
+					if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 {
+						t.Fatalf("build error = %v, want exit 23", err)
+					}
+				}
+				if !shared.FileExists(filepath.Join(env.TemplateDir, "web_old.zip")) {
+					t.Fatal("failed build replaced existing templates")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantArgs := []string{sdk, "optimize=size", "platform=web", "target=template_release", "threads=" + plan.WebThreads}
+			if mode == "worker" {
+				wantArgs = append(wantArgs, "proxy_to_pthread=true")
+			}
+			wantArgs = append(wantArgs, "custom_modules="+moduleSource)
+			assertEngineTestCommandRecord(t, commandEnv["SPX_BUILD_RECORD"], wantArgs)
+			for _, destination := range append([]string{plan.WebCachedTemplateZip}, webTemplateNames[:]...) {
+				if !filepath.IsAbs(destination) {
+					destination = filepath.Join(env.TemplateDir, destination)
+				}
+				if data, err := os.ReadFile(destination); err != nil || string(data) != "web template" {
+					t.Fatalf("web template %s = %q, %v", destination, data, err)
+				}
+			}
+			if shared.FileExists(filepath.Join(env.TemplateDir, "web_old.zip")) {
+				t.Fatal("old template was retained")
+			}
+		})
+	}
+}
+
+func TestBuildArtifactHelpers(t *testing.T) {
+	root := t.TempDir()
+	if err := copyGlobMatches("[", root); err == nil {
+		t.Fatal("invalid glob accepted")
+	}
+	if err := copyGlobMatches(filepath.Join(root, "*.apk"), root); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "artifact.apk")
+	mustWriteFile(t, source, []byte("artifact"))
+	blocked := filepath.Join(root, "blocked")
+	mustWriteFile(t, blocked, nil)
+	if err := copyGlobMatches(filepath.Join(root, "*.apk"), blocked); err == nil {
+		t.Fatal("blocked copy destination accepted")
+	}
+	if err := populateWebTemplateCopies(filepath.Join(root, "missing"), filepath.Join(root, "templates")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing web artifact=%v", err)
+	}
+	if err := buildEngineTemplate(buildEnvironment{}, nil, "", shared.SPXModule{}, BuildShellPlan{Platform: "unsupported"}); err == nil || !strings.Contains(err.Error(), "unknown platform") {
+		t.Fatalf("unsupported template=%v", err)
+	}
+	if script := templateSConsBuildScript("scons", shared.SPXModule{}, []string{"", " \t"}); script != "" {
+		t.Fatalf("blank script=%q", script)
+	}
+}
+
+func TestWaitForNonEmptyFile(t *testing.T) {
+	root := t.TempDir()
+	empty := filepath.Join(root, "empty")
+	mustWriteFile(t, empty, nil)
+	for _, tt := range []struct {
+		path    string
+		message string
+	}{{filepath.Join(root, "missing"), "waiting for"}, {empty, "file is still empty"}, {root, "file is still empty"}} {
+		if err := waitForNonEmptyFile(tt.path, 0); err == nil || !strings.Contains(err.Error(), tt.message) {
+			t.Fatalf("wait %s=%v", tt.path, err)
+		}
+	}
+	synctest.Test(t, func(t *testing.T) {
+		ready := filepath.Join(root, "eventual")
+		done := make(chan error, 1)
+		go func() { done <- waitForNonEmptyFile(ready, time.Second) }()
+		synctest.Wait()
+		select {
+		case err := <-done:
+			t.Fatalf("wait completed before the file was ready: %v", err)
+		default:
+		}
+		mustWriteFile(t, ready, []byte("ready"))
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	})
 }

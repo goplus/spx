@@ -19,9 +19,13 @@ package ui
 import (
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func TestResolveSayBubbleLayoutsEscapesJointFlipLocalMinimum(t *testing.T) {
@@ -293,5 +297,217 @@ func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, s
 			bottom: -float64(winSize.Y) / 2,
 			top:    float64(winSize.Y) / 2,
 		},
+	}
+}
+
+func TestResolveSayBubbleLayoutsLargeComponent(t *testing.T) {
+	base := make([]SayBubbleLayout, sayBubbleExactLayoutLimit+1)
+	component := make([]int, len(base))
+	for i := range base {
+		base[i] = newSayBubbleLayout(mathf.NewVec2(480, 360), mathf.NewVec2(float64(i*4-24), 0), "crowded bubble", StyleSay, i%2 == 0)
+		base[i].stableID = uint64(i + 1)
+		base[i].hasPrevious = i%3 != 0
+		base[i].previousIsLeft = i%2 != 0
+		component[i] = i
+	}
+	preferred := scoreSayBubbleComponent(base, component)
+	var want map[uint64]bool
+	for _, reverse := range []bool{false, true} {
+		layouts := append([]SayBubbleLayout(nil), base...)
+		if reverse {
+			slices.Reverse(layouts)
+		}
+		ResolveSayBubbleLayouts(layouts)
+		if score := scoreSayBubbleComponent(layouts, component); preferred.less(score) {
+			t.Fatalf("fallback worsened preferred layout: %+v -> %+v", preferred, score)
+		}
+		got := make(map[uint64]bool, len(layouts))
+		for i, layout := range layouts {
+			got[layout.stableID] = layout.isLeft
+			current := scoreSayBubbleAt(layouts, component, i, layout.isLeft)
+			if alternate := scoreSayBubbleAt(layouts, component, i, !layout.isLeft); alternate.less(current) {
+				t.Fatalf("bubble %d still has an improving single flip: %+v -> %+v", layout.stableID, current, alternate)
+			}
+		}
+		if want == nil {
+			want = got
+		} else if !reflect.DeepEqual(got, want) {
+			t.Fatalf("input order changed fallback result: %v, want %v", got, want)
+		}
+		previous := append([]SayBubbleLayout(nil), layouts...)
+		ResolveSayBubbleLayouts(layouts)
+		if !reflect.DeepEqual(layouts, previous) {
+			t.Fatal("resolving the same input changed the layout")
+		}
+	}
+}
+
+func TestSayBubbleLayoutEqualityTracksInputsAndRendering(t *testing.T) {
+	base := newSayBubbleLayout(mathf.NewVec2(480, 360), mathf.NewVec2(0, 0), "message", StyleSay, true)
+	for _, tc := range []struct {
+		name             string
+		change           func(*SayBubbleLayout)
+		sameInput, equal bool
+	}{
+		{"unchanged", func(*SayBubbleLayout) {}, true, true},
+		{"stable ID", func(l *SayBubbleLayout) { l.stableID++ }, false, true},
+		{"position", func(l *SayBubbleLayout) { l.position.X++ }, false, false},
+		{"preference", func(l *SayBubbleLayout) { l.preferredIsLeft = !l.preferredIsLeft }, false, true},
+		{"direction", func(l *SayBubbleLayout) { l.isLeft = !l.isLeft }, true, false},
+		{"message", func(l *SayBubbleLayout) { l.content.formattedMessage += "!" }, false, false},
+		{"style", func(l *SayBubbleLayout) { l.content.style++ }, false, false},
+		{"extent", func(l *SayBubbleLayout) { l.extent.X++ }, false, true},
+		{"scale", func(l *SayBubbleLayout) { l.renderScale.X++ }, false, false},
+		{"viewport", func(l *SayBubbleLayout) { l.viewport = sayBubbleRect{} }, false, true},
+		{"history", func(l *SayBubbleLayout) { *l = l.WithPreviousDirection(base) }, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			other := base
+			tc.change(&other)
+			if got := base.SameInput(other); got != tc.sameInput || other.SameInput(base) != got {
+				t.Errorf("SameInput = %v, want symmetric %v", got, tc.sameInput)
+			}
+			if got := base.Equal(other); got != tc.equal || other.Equal(base) != got {
+				t.Errorf("Equal = %v, want symmetric %v", got, tc.equal)
+			}
+		})
+	}
+}
+
+type uiRenderSpy struct {
+	askShowUiMgr
+	positions map[gdx.Object]mathf.Vec2
+	scales    map[gdx.Object]mathf.Vec2
+	sizes     map[gdx.Object]mathf.Vec2
+	colors    map[gdx.Object]mathf.Color
+	rotations map[gdx.Object]float64
+}
+
+func (m *uiRenderSpy) SetPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
+func (m *uiRenderSpy) SetScale(id gdx.Object, v mathf.Vec2)    { m.scales[id] = v }
+
+func (m *uiRenderSpy) SetGlobalPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
+func (m *uiRenderSpy) SetSize(id gdx.Object, v mathf.Vec2)           { m.sizes[id] = v }
+func (m *uiRenderSpy) SetColor(id gdx.Object, v mathf.Color)         { m.colors[id] = v }
+func (m *uiRenderSpy) SetRotation(id gdx.Object, v float64)          { m.rotations[id] = v }
+
+type uiRenderCamera struct{ gdx.ICameraMgr }
+
+func (uiRenderCamera) GetViewportRect() mathf.Rect2 {
+	return mathf.Rect2{Position: mathf.NewVec2(10, 20), Size: mathf.NewVec2(480, 360)}
+}
+func (uiRenderCamera) GetCameraPosition() mathf.Vec2 { return mathf.NewVec2(10, 20) }
+func (uiRenderCamera) GetCameraZoom() mathf.Vec2     { return mathf.NewVec2(2, 2) }
+
+func setupUIRendering(t *testing.T) *uiRenderSpy {
+	t.Helper()
+	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
+	oldScale := engine.WindowScale()
+	oldWidth, oldHeight, oldClamp := baseScreenWidth, baseScreenHeight, clampUIPositionInScreen
+	enginewrap.Init(func(f func()) { f() })
+	mgr := &uiRenderSpy{askShowUiMgr: askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{}}, positions: map[gdx.Object]mathf.Vec2{}, scales: map[gdx.Object]mathf.Vec2{}, sizes: map[gdx.Object]mathf.Vec2{}, colors: map[gdx.Object]mathf.Color{}, rotations: map[gdx.Object]float64{}}
+	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
+	engine.SetWindowScale(2)
+	SetBaseScreenSize(480, 360)
+	ClampUIPositionInScreen(true)
+	t.Cleanup(func() {
+		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
+		engine.SetWindowScale(oldScale)
+		SetBaseScreenSize(oldWidth, oldHeight)
+		ClampUIPositionInScreen(oldClamp)
+		enginewrap.Init(engine.WaitMainThread)
+	})
+	return mgr
+}
+
+func TestSayBubbleRendering(t *testing.T) {
+	mgr := setupUIRendering(t)
+	node := func(id gdx.Object) *UiNode { n := &UiNode{}; n.SetId(id); return n }
+	say := &UiSay{left: sayNodes{node(2), node(3)}, right: sayNodes{node(4), node(5)}, leftThink: sayNodes{node(6), node(7)}, rightThink: sayNodes{node(8), node(9)}}
+	say.SetId(1)
+	for _, tc := range []struct {
+		name        string
+		left, think bool
+		vbox, label gdx.Object
+	}{{"say left", true, false, 2, 3}, {"say right", false, false, 4, 5}, {"think left", true, true, 6, 7}, {"think right", false, true, 8, 9}} {
+		t.Run(tc.name, func(t *testing.T) {
+			style := StyleSay
+			if tc.think {
+				style = StyleThink
+			}
+			layout := SayBubbleLayout{position: mathf.NewVec2(5, 7), renderScale: mathf.NewVec2(2, 3), isLeft: tc.left, content: NewSayBubbleContent("first\nsecond", style)}
+			say.SetTextLayout(layout)
+			for _, id := range []gdx.Object{2, 4, 6, 8} {
+				if mgr.visible[id] != (id == tc.vbox) {
+					t.Errorf("node%d visible=%v", id, mgr.visible[id])
+				}
+			}
+			if mgr.text[tc.label] != "first\nsecond" || mgr.positions[1] != mathf.NewVec2(240, 146) || mgr.scales[1] != layout.renderScale {
+				t.Fatalf("incorrect rendering: %+v", mgr)
+			}
+		})
+	}
+	win, pos, size := mathf.NewVec2(480, 360), mathf.NewVec2(30, 40), mathf.NewVec2(20, 30)
+	want := NewSayBubbleLayout(win, pos, size, "hello", StyleSay)
+	say.SetText(win, pos, size, "hello", StyleSay)
+	if mgr.positions[1] != ViewToUI(want.position) || mgr.scales[1] != want.renderScale {
+		t.Fatal("SetText did not apply display context")
+	}
+}
+
+func TestSayBubbleCanonicalOrdering(t *testing.T) {
+	for name, change := range map[string]func(*SayBubbleLayout){
+		"identity":           func(l *SayBubbleLayout) { l.stableID = 1 },
+		"x":                  func(l *SayBubbleLayout) { l.position.X = 1 },
+		"y":                  func(l *SayBubbleLayout) { l.position.Y = 1 },
+		"width":              func(l *SayBubbleLayout) { l.extent.X = 1 },
+		"height":             func(l *SayBubbleLayout) { l.extent.Y = 1 },
+		"direction":          func(l *SayBubbleLayout) { l.preferredIsLeft = true },
+		"style":              func(l *SayBubbleLayout) { l.content.style = 1 },
+		"message":            func(l *SayBubbleLayout) { l.content.formattedMessage = "a" },
+		"history":            func(l *SayBubbleLayout) { l.hasPrevious = true },
+		"previous direction": func(l *SayBubbleLayout) { l.previousIsLeft = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, b := SayBubbleLayout{}, SayBubbleLayout{}
+			change(&b)
+			if !sayBubbleCanonicalLess(a, b) || sayBubbleCanonicalLess(b, a) || sayBubbleCanonicalLess(b, b) {
+				t.Fatal("canonical comparison violates strict ordering")
+			}
+		})
+	}
+	for _, tc := range []struct {
+		a, b []bool
+		want bool
+	}{{nil, nil, false}, {[]bool{false, true}, []bool{true, false}, true}, {[]bool{true}, []bool{false}, false}, {[]bool{false, true}, []bool{false, true}, false}} {
+		if got := sayBubbleDirectionsLess(tc.a, tc.b); got != tc.want {
+			t.Errorf("directions %v < %v =%v", tc.a, tc.b, got)
+		}
+	}
+}
+
+func TestDecorativeUIRenderingUsesViewportAndScale(t *testing.T) {
+	mgr := setupUIRendering(t)
+	node := func(id engine.Object) *UiNode { n := &UiNode{}; n.SetId(id); return n }
+	debug := &UiDebug{input: node(2)}
+	debug.SetId(1)
+	for _, text := range []string{"diagnostic", ""} {
+		debug.Show(text)
+		if mgr.visible[2] != (text != "") || mgr.text[2] != text || mgr.scales[1] != mathf.NewVec2(2, 2) {
+			t.Fatal("debug panel did not update visibility, text and scale")
+		}
+	}
+	measure := &UiMeasure{container: node(3), imageLine: node(4), labelContainer: node(5), labelValue: node(6)}
+	measure.SetId(7)
+	color := mathf.NewColorRGBAi(255, 0, 0, 255)
+	measure.UpdateInfo(mathf.NewVec2(5, 7), 10, 90, "10", color)
+	if mgr.positions[3] != mathf.NewVec2(233, 146) || mgr.positions[5] != mathf.NewVec2(240, 146) || mgr.sizes[3] != mathf.NewVec2(18, 26) || mgr.rotations[3] != 0 || mgr.colors[3] != color || mgr.colors[5] != color || mgr.text[6] != "10" || mgr.scales[7] != mathf.NewVec2(2, 2) {
+		t.Fatalf("measurement rendering mismatch:%+v", mgr)
+	}
+	quote := &UiQuote{container: node(8), labelMsg: node(9), labelDes: node(10)}
+	quote.SetId(11)
+	quote.SetText(mathf.NewVec2(30, 40), mathf.NewVec2(5, 6), "message", "description")
+	if mgr.positions[8] != mathf.NewVec2(260, 108) || mgr.sizes[8] != mathf.NewVec2(10, 12) || mgr.text[9] != "message" || mgr.text[10] != "description" || mgr.scales[11] != mathf.NewVec2(2, 2) {
+		t.Fatalf("quote rendering mismatch:%+v", mgr)
 	}
 }

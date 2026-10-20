@@ -283,3 +283,133 @@ func runtimeManifestFixture(t *testing.T) (RuntimeLock, RuntimeProvenance, []Run
 	}
 	return lock, provenance, inputs, assetDir
 }
+
+func TestRuntimeManifestReleaseBindingAndRequiredAssets(t *testing.T) {
+	lock, provenance, inputs, _ := runtimeManifestFixture(t)
+	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseRuntimeManifestForRelease(data, lock.RuntimeVersion, lock.RequiredAssets)
+	if err != nil || !slices.Equal(parsed.Assets, manifest.Assets) {
+		t.Fatalf("release parse = %#v, %v", parsed, err)
+	}
+	for _, tt := range []struct {
+		name, version, want string
+		assets              []string
+		data                []byte
+	}{
+		{"malformed", lock.RuntimeVersion, "decode", lock.RequiredAssets, []byte("{")},
+		{"wrong version", "9.9.9", "does not match", lock.RequiredAssets, data},
+		{"invalid expected version", "bad version", "invalid expected", lock.RequiredAssets, data},
+		{"missing assets", lock.RuntimeVersion, "requires exactly", nil, data},
+		{"unsafe asset", lock.RuntimeVersion, "basename", []string{"../asset"}, data},
+		{"duplicate asset", lock.RuntimeVersion, "duplicate required", []string{"a.zip", "a.zip"}, data},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := ParseRuntimeManifestForRelease(tt.data, tt.version, tt.assets); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("release parse = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	required := slices.Clone(lock.RequiredAssets)
+	required[0] = "other.zip"
+	if err := manifest.ValidateRequiredAssets(required); err == nil || !strings.Contains(err.Error(), "not required") {
+		t.Fatalf("wrong required asset = %v", err)
+	}
+	if err := manifest.ValidateRequiredAssets(lock.RequiredAssets); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimeManifestRejectsLockMetadataDrift(t *testing.T) {
+	lock, provenance, inputs, _ := runtimeManifestFixture(t)
+	base, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name, want string
+		change     func(*RuntimeManifest)
+	}{
+		{"version", "version", func(m *RuntimeManifest) { m.RuntimeVersion = "9.9.9" }},
+		{"ABI", "identity", func(m *RuntimeManifest) { m.RuntimeABI++ }},
+		{"repository", "repository", func(m *RuntimeManifest) { m.ReleaseRepository = "other/repo" }},
+		{"lock digest", "lock SHA-256", func(m *RuntimeManifest) { m.LockSHA256 = strings.Repeat("0", 64) }},
+		{"Godot commit", "Godot commit", func(m *RuntimeManifest) { m.Provenance.GodotCommit = strings.Repeat("0", 40) }},
+		{"toolchain", "toolchain", func(m *RuntimeManifest) { m.Provenance.Toolchain.Go = "9.9.9" }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := base
+			tt.change(&manifest)
+			if err := manifest.ValidateForLock(lock); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("lock validation = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	if err := base.ValidateForLock(RuntimeLock{}); err == nil {
+		t.Fatal("invalid lock accepted")
+	}
+}
+
+func TestRuntimeManifestInvalidStructurePropagates(t *testing.T) {
+	m := RuntimeManifest{}
+	for _, err := range []error{
+		m.ValidateForVersion("1.2.3"), m.ValidateRequiredAssets(nil), m.ValidateForLock(DefaultRuntimeLock()),
+		m.VerifyAsset("asset", "missing"), m.VerifyFiles(t.TempDir()),
+		WriteRuntimeManifest(filepath.Join(t.TempDir(), "manifest"), m), WriteSHA256SUMS(filepath.Join(t.TempDir(), "sums"), m),
+	} {
+		if err == nil || !strings.Contains(err.Error(), "schema") {
+			t.Fatalf("invalid manifest boundary = %v", err)
+		}
+	}
+	if _, err := ParseRuntimeManifest([]byte(`{}`)); err == nil {
+		t.Fatal("invalid manifest parsed")
+	}
+}
+
+func TestRuntimeManifestFileFailures(t *testing.T) {
+	lock, provenance, inputs, assetDir := runtimeManifestFixture(t)
+	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := inputs[0]
+	for _, path := range []string{assetDir, filepath.Join(assetDir, "missing")} {
+		if err := manifest.VerifyAsset(asset.Name, path); err == nil || !strings.Contains(err.Error(), "verify runtime asset") {
+			t.Fatalf("invalid asset file = %v", err)
+		}
+	}
+	original, err := os.ReadFile(asset.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(asset.Path, bytes.Repeat([]byte("x"), len(original)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := manifest.VerifyFiles(assetDir); err == nil || !strings.Contains(err.Error(), "SHA-256") {
+		t.Fatalf("same-size tampering = %v", err)
+	}
+	missing := filepath.Join(t.TempDir(), "missing", "file")
+	if err := WriteRuntimeManifest(missing, manifest); err == nil || !strings.Contains(err.Error(), "write runtime manifest") {
+		t.Fatalf("write manifest = %v", err)
+	}
+	if err := WriteSHA256SUMS(missing, manifest); err == nil || !strings.Contains(err.Error(), "write SHA256SUMS") {
+		t.Fatalf("write sums = %v", err)
+	}
+	if _, err := LoadRuntimeManifest(missing); err == nil || !strings.Contains(err.Error(), "read runtime manifest") {
+		t.Fatalf("load manifest = %v", err)
+	}
+	for _, input := range []RuntimeAssetInput{{Name: "../asset", Path: asset.Path}, {Name: "asset.zip", Path: " "}, {Name: "asset.zip", Path: missing}, {Name: "asset.zip", Path: assetDir}} {
+		if _, err := GenerateRuntimeManifest(lock, provenance, []RuntimeAssetInput{input}); err == nil {
+			t.Errorf("invalid generation input accepted: %#v", input)
+		}
+	}
+	if _, err := GenerateRuntimeManifest(RuntimeLock{}, provenance, inputs); err == nil {
+		t.Fatal("invalid generation lock accepted")
+	}
+}

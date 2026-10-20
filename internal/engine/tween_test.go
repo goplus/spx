@@ -62,7 +62,7 @@ func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 			sprite := setupTweenTest(t)
 			want := mathf.NewVec2(10, 20)
 			calls := 0
-			tweenPos(sprite, want, test.duration, func() {
+			(runtimeBridge{}).TweenPos(sprite, want, test.duration, func() {
 				calls++
 				if sprite.position != want {
 					t.Errorf("callback observed position %v, want endpoint %v", sprite.position, want)
@@ -80,7 +80,7 @@ func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 func TestTweenSegmentsStartAtPreviousEndpoint(t *testing.T) {
 	sprite := setupTweenTest(t)
 	calls := 0
-	tweenPos2(sprite, mathf.NewVec2(10, 0), 1, mathf.NewVec2(20, 0), 1, func() { calls++ })
+	(runtimeBridge{}).TweenPos2(sprite, mathf.NewVec2(10, 0), 1, mathf.NewVec2(20, 0), 1, func() { calls++ })
 	for _, step := range []struct {
 		delta float64
 		want  float64

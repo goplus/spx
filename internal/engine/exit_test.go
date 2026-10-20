@@ -132,22 +132,14 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 		<-release
 	})
 	t.Cleanup(releaseWorker)
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("blocking coroutine did not start")
-	}
+	waitForEngineSignal(t, started, time.Second, "blocking coroutine did not start")
 
 	returned := make(chan struct{})
 	go func() {
 		resetWebRuntime(7)
 		close(returned)
 	}()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("external reset request waited for coroutine drain")
-	}
+	waitForEngineSignal(t, returned, time.Second, "external reset request waited for coroutine drain")
 	waitForResetAdmissionClose(t, co)
 	select {
 	case exitCode := <-recorder.calls:
@@ -156,11 +148,7 @@ func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
 	}
 
 	releaseWorker()
-	select {
-	case <-workerDone:
-	case <-time.After(time.Second):
-		t.Fatal("blocking coroutine did not finish after release")
-	}
+	waitForEngineSignal(t, workerDone, time.Second, "blocking coroutine did not finish after release")
 	waitForResetAdmissionOpen(t, co)
 }
 
@@ -177,24 +165,12 @@ func TestResetWebRuntimeStopsManagedCaller(t *testing.T) {
 		resetWebRuntime(9)
 		returned.Store(true)
 	})
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("managed caller did not start")
-	}
-	select {
-	case <-callerDone:
-	case <-time.After(time.Second):
-		t.Fatal("managed reset caller did not stop")
-	}
+	waitForEngineSignal(t, entered, time.Second, "managed caller did not start")
+	waitForEngineSignal(t, callerDone, time.Second, "managed reset caller did not stop")
 	if returned.Load() {
 		t.Fatal("managed reset caller returned normally")
 	}
-	select {
-	case <-caller.Context().Done():
-	case <-time.After(time.Second):
-		t.Fatal("managed reset caller context was not canceled")
-	}
+	waitForEngineSignal(t, caller.Context().Done(), time.Second, "managed reset caller context was not canceled")
 	select {
 	case exitCode := <-recorder.calls:
 		if exitCode != 9 {
@@ -308,11 +284,7 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 		peerLatch.Wait()
 	})
 
-	select {
-	case <-peerYielding:
-	case <-time.After(time.Second):
-		t.Fatal("peer coroutine did not reach yield")
-	}
+	waitForEngineSignal(t, peerYielding, time.Second, "peer coroutine did not reach yield")
 
 	callerDone := make(chan struct{})
 	var resetBeforeDrain atomic.Bool

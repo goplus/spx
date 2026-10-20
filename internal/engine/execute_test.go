@@ -23,6 +23,15 @@ func testContext(t *testing.T) context.Context {
 	return ctx
 }
 
+func waitForEngineSignal(t *testing.T, done <-chan struct{}, timeout time.Duration, failure string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatal(failure)
+	}
+}
+
 func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
 	t.Helper()
 	co := coroutine.New(nil)
@@ -46,11 +55,7 @@ func blockExecuteScheduler(t *testing.T, co *coroutine.Coroutines) func() {
 		close(started)
 		<-unblock
 	})
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("scheduler blocker did not start")
-	}
+	waitForEngineSignal(t, started, time.Second, "scheduler blocker did not start")
 	return release
 }
 
@@ -80,11 +85,7 @@ func TestExecuteReturnsWhenStoppedBeforeStart(t *testing.T) {
 		runtime.Gosched()
 	}
 	release()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("Execute remained blocked after its coroutine stopped before starting")
-	}
+	waitForEngineSignal(t, returned, time.Second, "Execute remained blocked after its coroutine stopped before starting")
 	if called.Load() {
 		t.Fatal("Execute ran a canceled callback")
 	}
@@ -101,32 +102,20 @@ func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 		close(canceled)
 		<-unblock
 	})
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("scheduler blocker did not start")
-	}
+	waitForEngineSignal(t, started, time.Second, "scheduler blocker did not start")
 	drained := make(chan struct{})
 	go func() {
 		co.RunAfterStop(nil)
 		close(drained)
 	}()
-	select {
-	case <-canceled:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not cancel the blocker")
-	}
+	waitForEngineSignal(t, canceled, time.Second, "shutdown did not cancel the blocker")
 	returned := make(chan struct{})
 	var called atomic.Bool
 	go func() {
 		Execute("rejected", func(context.Context, any) { called.Store(true) })
 		close(returned)
 	}()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("Execute remained blocked with coroutine admission closed")
-	}
+	waitForEngineSignal(t, returned, time.Second, "Execute remained blocked with coroutine admission closed")
 	if called.Load() {
 		t.Fatal("Execute ran a rejected callback")
 	}
@@ -136,11 +125,7 @@ func TestExecuteReturnsWhenAdmissionClosed(t *testing.T) {
 	default:
 	}
 	release()
-	select {
-	case <-drained:
-	case <-time.After(time.Second):
-		t.Fatal("shutdown did not finish after the blocker exited")
-	}
+	waitForEngineSignal(t, drained, time.Second, "shutdown did not finish after the blocker exited")
 }
 
 func TestExecuteKeepsCurrentCoroutineAndSuppliedOwner(t *testing.T) {
@@ -181,22 +166,14 @@ func TestExecuteWaitsForCompletionWithDefaultOwner(t *testing.T) {
 		})
 		close(returned)
 	}()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("Execute callback did not start")
-	}
+	waitForEngineSignal(t, started, time.Second, "Execute callback did not start")
 	select {
 	case <-returned:
 		t.Fatal("Execute returned while its callback was running")
 	default:
 	}
 	release()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("Execute did not return after its callback completed")
-	}
+	waitForEngineSignal(t, returned, time.Second, "Execute did not return after its callback completed")
 	if callbackContext.Err() == nil {
 		t.Fatal("Execute returned before its coroutine completed")
 	}

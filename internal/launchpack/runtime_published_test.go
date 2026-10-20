@@ -45,11 +45,7 @@ type publishedRuntimeFixture struct {
 
 func newPublishedRuntimeFixture(t *testing.T) publishedRuntimeFixture {
 	t.Helper()
-	lock := release.DefaultRuntimeLock()
-	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lock, spec := defaultHostRuntimeTest(t)
 	root := t.TempDir()
 	assets := make(map[string][]byte, len(lock.RequiredAssets))
 	for _, name := range lock.RequiredAssets {
@@ -105,36 +101,26 @@ type runtimeZipEntry struct {
 
 func writeRuntimeZip(t *testing.T, filePath string, entries ...runtimeZipEntry) []byte {
 	t.Helper()
-	file, err := os.Create(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	archive := zip.NewWriter(file)
+	var data bytes.Buffer
+	archive := zip.NewWriter(&data)
 	for _, entry := range entries {
 		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
 		header.SetMode(entry.Mode)
 		writer, err := archive.CreateHeader(header)
 		if err != nil {
-			_ = file.Close()
 			t.Fatal(err)
 		}
 		if _, err := writer.Write(entry.Data); err != nil {
-			_ = file.Close()
 			t.Fatal(err)
 		}
 	}
 	if err := archive.Close(); err != nil {
-		_ = file.Close()
 		t.Fatal(err)
 	}
-	if err := file.Close(); err != nil {
+	if err := os.WriteFile(filePath, data.Bytes(), 0o666); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
+	return data.Bytes()
 }
 
 func (f publishedRuntimeFixture) fetcher(replacements map[string][]byte, calls *int) func(context.Context, string, io.Writer) error {
@@ -402,5 +388,118 @@ func TestAcquireRuntimeAssetsRejectsAssetOutsideVersionedManifest(t *testing.T) 
 	}
 	if calls != 2 {
 		t.Fatalf("fetch count = %d, want manifest and rejected asset", calls)
+	}
+}
+
+func TestMaterializeRuntimeRejectsInvalidArchiveHandles(t *testing.T) {
+	fixture := newPublishedRuntimeFixture(t)
+	acquire := func(t *testing.T, data []byte) *runtimebundle.AcquiredFile {
+		t.Helper()
+		f, err := runtimebundle.AcquireFile(context.Background(), t.TempDir(), runtimebundle.FetchSpec{Name: "runtime.zip", URL: "https://example.invalid/runtime.zip", Size: int64(len(data)), SHA256: digestBytes(data), Fetch: func(_ context.Context, _ string, w io.Writer) error { _, err := w.Write(data); return err }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = f.Close() })
+		return f
+	}
+	for _, tt := range []struct{ name, want string }{
+		{"incomplete", "incomplete published runtime archive handles"},
+		{"unavailable temporary storage", "create runtime extraction directory"},
+		{"closed engine", "stat acquired Engine archive"},
+		{"closed pack", "stat acquired runtime pack archive"},
+		{"corrupt engine", "verify Engine archive"},
+		{"corrupt pack", "verify runtime pack archive"},
+		{"missing engine entry", "unavailable at"},
+		{"missing pack entry", "unavailable at"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			engineData, packData := fixture.assets[fixture.spec.ArchiveName], fixture.assets[release.RuntimeAssetZipName]
+			if tt.name == "corrupt engine" {
+				engineData = []byte("not a zip")
+			}
+			if tt.name == "corrupt pack" {
+				packData = []byte("not a zip")
+			}
+			if tt.name == "missing engine entry" {
+				engineData = writeRuntimeZip(t, filepath.Join(t.TempDir(), "engine.zip"), runtimeZipEntry{Name: "other", Mode: 0600, Data: []byte("other")})
+			}
+			if tt.name == "missing pack entry" {
+				packData = writeRuntimeZip(t, filepath.Join(t.TempDir(), "pack.zip"), runtimeZipEntry{Name: "other", Mode: 0600, Data: []byte("other")})
+			}
+			handles := &publishedRuntimeArchives{engine: acquire(t, engineData), pack: acquire(t, packData)}
+			switch tt.name {
+			case "incomplete":
+				handles.engine = nil
+			case "closed engine":
+				if err := handles.engine.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "closed pack":
+				if err := handles.pack.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			temp, cache := t.TempDir(), t.TempDir()
+			storage := temp
+			if tt.name == "unavailable temporary storage" {
+				storage = filepath.Join(temp, "missing")
+			}
+			for _, key := range []string{"TMPDIR", "TEMP", "TMP"} {
+				t.Setenv(key, storage)
+			}
+			_, err := materializeRuntimeBundle(context.Background(), cache, fixture.lock, fixture.spec, runtimeMaterializationInput{archives: handles})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("materialization = %v, want %q", err, tt.want)
+			}
+			entries, err := os.ReadDir(temp)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("extraction cleanup = %v, %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestMaterializeRuntimeRejectsInvalidLocalInputs(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Skip(err)
+	}
+	for _, tt := range []struct{ name, want string }{
+		{"missing engine", "hash Engine"}, {"missing pack", "hash runtime PCK"}, {"unavailable temporary storage", "create Engine bundle directory"}, {"invalid lock", "runtime"}, {"invalid entry name", "invalid"}, {"blocked cache", "materialize verified Engine bundle"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeInstalledRuntimeTest(t, spec, "engine", "pack")
+			input := runtimeMaterializationInput{enginePath: filepath.Join(root, spec.RuntimeName), packPath: filepath.Join(root, spec.PackName), engineSize: 6, engineSHA256: digestBytes([]byte("engine")), packSize: 4, packSHA256: digestBytes([]byte("pack"))}
+			testLock, testSpec := lock, spec
+			cache := filepath.Join(t.TempDir(), "cache")
+			switch tt.name {
+			case "missing engine":
+				input.enginePath += ".missing"
+			case "missing pack":
+				input.packPath += ".missing"
+			case "invalid lock":
+				testLock.RuntimeVersion = "invalid version"
+			case "invalid entry name":
+				testSpec.RuntimeName = "../engine"
+			case "blocked cache":
+				writeProjectTestFile(t, cache, "blocked")
+			case "unavailable temporary storage":
+				for _, key := range []string{"TMPDIR", "TEMP", "TMP"} {
+					t.Setenv(key, filepath.Join(root, "missing"))
+				}
+			}
+			if _, err := materializeRuntimeBundle(context.Background(), cache, testLock, testSpec, input); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("materialization = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	for _, without := range []string{spec.ArchiveName, release.RuntimeAssetZipName} {
+		fixture := newPublishedRuntimeFixture(t)
+		manifest := fixture.manifest
+		manifest.Assets = slices.DeleteFunc(manifest.Assets, func(a release.RuntimeAsset) bool { return a.Name == without })
+		if _, err := materializePublishedRuntime(context.Background(), t.TempDir(), lock, spec, runtimeAssetSource{manifest: manifest}, true); err == nil || !strings.Contains(err.Error(), "manifest has no") {
+			t.Fatalf("missing %s = %v", without, err)
+		}
 	}
 }

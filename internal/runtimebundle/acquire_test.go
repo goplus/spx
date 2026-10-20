@@ -17,6 +17,7 @@
 package runtimebundle
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -72,11 +73,7 @@ func TestAcquireRejectsDownloadedSizeAndDigestMismatchWithoutPublishing(t *testi
 			if fetches.Load() != 1 {
 				t.Fatalf("fetch count = %d, want 1", fetches.Load())
 			}
-			entries, err := os.ReadDir(root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			names := acquireTestEntryNames(entries)
+			names := acquireTestEntryNames(t, root)
 			if len(names) != 0 {
 				t.Fatalf("cache contents after rejected download = %v, want empty", names)
 			}
@@ -99,11 +96,7 @@ func TestAcquireRejectsResponseOverPinnedSizeWithoutPublishing(t *testing.T) {
 	if !errors.Is(err, errAcquireSizeLimit) {
 		t.Fatalf("Acquire over size limit error = %v", err)
 	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if names := acquireTestEntryNames(entries); len(names) != 0 {
+	if names := acquireTestEntryNames(t, root); len(names) != 0 {
 		t.Fatalf("cache contents after oversized response = %v, want empty", names)
 	}
 }
@@ -262,9 +255,7 @@ func TestAcquireRetriesAfterFetcherFailure(t *testing.T) {
 	if _, err := acquirePath(context.Background(), root, spec); err == nil {
 		t.Fatal("first fetch unexpectedly succeeded")
 	}
-	if entries, err := os.ReadDir(root); err != nil {
-		t.Fatal(err)
-	} else if names := acquireTestEntryNames(entries); len(names) != 0 {
+	if names := acquireTestEntryNames(t, root); len(names) != 0 {
 		t.Fatalf("cache contents after failed fetch = %v, want empty", names)
 	}
 	path, err := acquirePath(context.Background(), root, spec)
@@ -396,11 +387,7 @@ func TestAcquireFailsClosedWhenRootIsReplacedDuringFetch(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(replacement, "runtime.bin")); !os.IsNotExist(err) {
 		t.Fatalf("replacement root asset stat = %v, want not exist", err)
 	}
-	entries, err := os.ReadDir(originalRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if names := acquireTestEntryNames(entries); len(names) != 0 {
+	if names := acquireTestEntryNames(t, originalRoot); len(names) != 0 {
 		t.Fatalf("original root contents after replacement = %v, want no acquired assets", names)
 	}
 }
@@ -438,11 +425,7 @@ func TestAcquireFailsClosedWhenRootParentIsReplacedDuringFetch(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(root, "runtime.bin")); !os.IsNotExist(err) {
 		t.Fatalf("replacement parent asset stat = %v, want not exist", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(originalParent, "assets"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if names := acquireTestEntryNames(entries); len(names) != 0 {
+	if names := acquireTestEntryNames(t, filepath.Join(originalParent, "assets")); len(names) != 0 {
 		t.Fatalf("original root contents after parent replacement = %v, want no acquired assets", names)
 	}
 }
@@ -497,11 +480,7 @@ func TestAcquireConcurrentFetchesPublishCompleteAsset(t *testing.T) {
 	if string(got) != payload {
 		t.Fatalf("published concurrent asset = %q, want %q", got, payload)
 	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	names := acquireTestEntryNames(entries)
+	names := acquireTestEntryNames(t, root)
 	if len(names) != 1 || names[0] != name {
 		t.Fatalf("cache contents after concurrent acquisition = %v, want only %q", names, name)
 	}
@@ -659,7 +638,12 @@ func TestAcquireFileAllowsConcurrentReadAndClose(t *testing.T) {
 	}
 }
 
-func acquireTestEntryNames(entries []os.DirEntry) []string {
+func acquireTestEntryNames(t *testing.T, root string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".lock") {
@@ -668,4 +652,351 @@ func acquireTestEntryNames(entries []os.DirEntry) []string {
 		names = append(names, entry.Name())
 	}
 	return names
+}
+
+func TestAcquiredFileInvalidAndClosedState(t *testing.T) {
+	for _, file := range []*AcquiredFile{nil, {}} {
+		if n, err := file.Read(make([]byte, 1)); n != 0 || !errors.Is(err, os.ErrInvalid) {
+			t.Fatalf("invalid Read = %d, %v", n, err)
+		}
+		if n, err := file.ReadAt(make([]byte, 1), 0); n != 0 || !errors.Is(err, os.ErrInvalid) {
+			t.Fatalf("invalid ReadAt = %d, %v", n, err)
+		}
+		if info, err := file.Stat(); info != nil || !errors.Is(err, os.ErrInvalid) {
+			t.Fatalf("invalid Stat = %v, %v", info, err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatalf("empty Close = %v", err)
+		}
+	}
+	file, err := AcquireFile(context.Background(), t.TempDir(), acquireTestSpec("asset", "payload"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if info, err := file.Stat(); err != nil || info.Size() != int64(len("payload")) || !info.Mode().IsRegular() {
+		t.Fatalf("Stat = %v, %v", info, err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("closed Stat = %v, want os.ErrClosed", err)
+	}
+}
+
+func TestAcquiredFileClosePreservesBothErrors(t *testing.T) {
+	file, err := os.Create(filepath.Join(t.TempDir(), "asset"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	leaseErr := errors.New("lease close failure")
+	lease := &errorTestLease{err: leaseErr}
+	acquired := &AcquiredFile{file: file, lease: lease}
+	for i := 0; i < 2; i++ {
+		if err := acquired.Close(); !errors.Is(err, os.ErrClosed) || !errors.Is(err, leaseErr) {
+			t.Fatalf("Close = %v, want file and lease errors", err)
+		}
+	}
+	if lease.closes != 1 {
+		t.Fatalf("lease closes = %d, want 1", lease.closes)
+	}
+}
+
+func TestAcquireFileInvalidRequestAndCancellation(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		change func(*FetchSpec)
+		want   string
+	}{
+		{"zero size", func(s *FetchSpec) { s.Size = 0 }, "size must be positive"},
+		{"negative size", func(s *FetchSpec) { s.Size = -1 }, "size must be positive"},
+		{"invalid digest", func(s *FetchSpec) { s.SHA256 = "bad" }, "invalid asset SHA-256"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "cache")
+			spec := acquireTestSpec("asset", "payload")
+			tt.change(&spec)
+			if file, err := AcquireFile(context.Background(), root, spec); file != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("AcquireFile = %v, %v; want %q", file, err, tt.want)
+			}
+			if _, err := os.Lstat(root); !os.IsNotExist(err) {
+				t.Fatalf("invalid request created root: %v", err)
+			}
+		})
+	}
+	for _, root := range []string{"", "relative", t.TempDir() + string(filepath.Separator)} {
+		if _, err := AcquireFile(context.Background(), root, acquireTestSpec("asset", "payload")); err == nil || !strings.Contains(err.Error(), "absolute and clean") {
+			t.Fatalf("AcquireFile root %q = %v", root, err)
+		}
+	}
+	t.Run("missing fetcher", func(t *testing.T) {
+		spec := acquireTestSpec("asset", "payload")
+		spec.Fetch = nil
+		if _, err := acquirePath(nil, t.TempDir(), spec); err == nil || !strings.Contains(err.Error(), "no fetcher") {
+			t.Fatalf("missing fetcher = %v", err)
+		}
+	})
+	t.Run("cancel after fetch", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		root := t.TempDir()
+		spec := acquireTestSpec("asset", "payload")
+		spec.Fetch = func(_ context.Context, _ string, dst io.Writer) error {
+			_, err := io.WriteString(dst, "payload")
+			cancel()
+			return err
+		}
+		if _, err := AcquireFile(ctx, root, spec); !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled download = %v", err)
+		}
+		if names := acquireTestEntryNames(t, root); len(names) != 0 {
+			t.Fatalf("cancelled download left assets: %v", names)
+		}
+	})
+}
+
+type acquireTestWriter func([]byte) (int, error)
+
+func (w acquireTestWriter) Write(data []byte) (int, error) { return w(data) }
+
+func TestAcquireLimitWriter(t *testing.T) {
+	writeErr := errors.New("destination failed")
+	for _, tt := range []struct {
+		name         string
+		remaining    int64
+		data         string
+		write        acquireTestWriter
+		wantN        int
+		wantErr      error
+		wantExceeded bool
+	}{
+		{name: "empty after limit", data: ""},
+		{name: "exhausted", data: "x", wantErr: errAcquireSizeLimit, wantExceeded: true},
+		{name: "over limit", remaining: 2, data: "abc", wantN: 2, wantErr: errAcquireSizeLimit, wantExceeded: true},
+		{name: "exact limit", remaining: 3, data: "abc", wantN: 3},
+		{name: "short write", remaining: 3, data: "abc", write: func([]byte) (int, error) { return 1, nil }, wantN: 1, wantErr: io.ErrShortWrite},
+		{name: "writer error", remaining: 3, data: "abc", write: func([]byte) (int, error) { return 1, writeErr }, wantN: 1, wantErr: writeErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var dst bytes.Buffer
+			var writer io.Writer = &dst
+			if tt.write != nil {
+				writer = tt.write
+			}
+			limited := &acquireLimitWriter{destination: writer, remaining: tt.remaining}
+			n, err := limited.Write([]byte(tt.data))
+			if n != tt.wantN || !errors.Is(err, tt.wantErr) || limited.remaining != tt.remaining-int64(n) || limited.exceeded != tt.wantExceeded {
+				t.Fatalf("Write = %d, %v; remaining=%d, exceeded=%v", n, err, limited.remaining, limited.exceeded)
+			}
+			if tt.write == nil && dst.String() != tt.data[:tt.wantN] {
+				t.Fatalf("destination = %q, want %q", dst.String(), tt.data[:tt.wantN])
+			}
+		})
+	}
+}
+
+func TestAcquireRejectsDestinationReplacementDuringFetch(t *testing.T) {
+	for _, kind := range []string{"directory", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			outside := filepath.Join(t.TempDir(), "outside")
+			if err := os.WriteFile(outside, []byte("untouched"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			spec := acquireTestSpec("asset", "payload")
+			spec.Fetch = func(_ context.Context, _ string, dst io.Writer) error {
+				target := filepath.Join(root, spec.Name)
+				if kind == "directory" {
+					if err := os.Mkdir(target, 0o700); err != nil {
+						return err
+					}
+				} else if err := os.Symlink(outside, target); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+				_, err := io.WriteString(dst, "payload")
+				return err
+			}
+			if _, err := AcquireFile(context.Background(), root, spec); !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("publish onto replaced destination = %v, want ErrUnsafeArchive", err)
+			}
+			if data, err := os.ReadFile(outside); err != nil || string(data) != "untouched" {
+				t.Fatalf("outside file changed: %q, %v", data, err)
+			}
+			if names := acquireTestEntryNames(t, root); len(names) != 1 || names[0] != "asset" {
+				t.Fatalf("failed publication left temporary files: %v", names)
+			}
+		})
+	}
+}
+
+func TestReplaceAcquireFilePreservesSourceOnFailure(t *testing.T) {
+	for _, fault := range []string{"missing source", "directory source", "invalid destination", "missing destination parent"} {
+		t.Run(fault, func(t *testing.T) {
+			path := t.TempDir()
+			root, err := os.OpenRoot(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			source, destination := "source", "destination"
+			switch fault {
+			case "missing source":
+			case "directory source":
+				err = os.Mkdir(filepath.Join(path, source), 0o700)
+			default:
+				err = os.WriteFile(filepath.Join(path, source), []byte("trusted"), 0o600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch fault {
+			case "invalid destination":
+				destination = "invalid\x00"
+			case "missing destination parent":
+				destination = "missing/destination"
+			}
+			err = replaceAcquireRootFile(root, source, destination)
+			if err == nil {
+				t.Fatal("invalid replacement succeeded")
+			}
+			if fault == "directory source" && !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("directory source = %v", err)
+			}
+			if fault == "missing source" && !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("missing source = %v", err)
+			}
+			if fault == "invalid destination" || fault == "missing destination parent" {
+				if data, err := os.ReadFile(filepath.Join(path, source)); err != nil || string(data) != "trusted" {
+					t.Fatalf("source changed: %q, %v", data, err)
+				}
+			}
+		})
+	}
+}
+
+func TestAcquireRejectsRenamedRootBeforePublication(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "cache")
+	spec := acquireTestSpec("asset", "payload")
+	spec.Fetch = func(_ context.Context, _ string, dst io.Writer) error {
+		if err := os.Rename(root, root+".old"); err != nil {
+			return err
+		}
+		if err := os.Mkdir(root, 0o700); err != nil {
+			return err
+		}
+		_, err := io.WriteString(dst, "payload")
+		return err
+	}
+	if file, err := AcquireFile(context.Background(), root, spec); file != nil || !errors.Is(err, ErrUnsafeArchive) {
+		t.Fatalf("renamed acquisition root = %v, %v", file, err)
+	}
+	for _, path := range []string{root, root + ".old"} {
+		if names := acquireTestEntryNames(t, path); len(names) != 0 {
+			t.Fatalf("failed acquisition left assets in %s: %v", path, names)
+		}
+	}
+}
+
+func acquireTestSpec(name, body string) FetchSpec {
+	return FetchSpec{
+		Name: name, Size: int64(len(body)), SHA256: testDigest(body),
+		Fetch: func(_ context.Context, _ string, dst io.Writer) error {
+			_, err := io.WriteString(dst, body)
+			return err
+		},
+	}
+}
+
+func TestAcquireFileRejectsReservedAndNonportableNamesBeforeCreatingCache(t *testing.T) {
+	for _, name := range []string{
+		"", ".", "..", "/absolute", "nested/asset", `nested\asset`,
+		"asset.lock", "asset.LOCK", "asset.locK", ".lock",
+		"asset.lock.", "asset.lock ", "asset.lock:stream", "asset:stream",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "cache")
+			spec := acquireTestSpec(name, "payload")
+			fetched := false
+			spec.Fetch = func(context.Context, string, io.Writer) error {
+				fetched = true
+				return errors.New("fetch must not run")
+			}
+			file, err := AcquireFile(context.Background(), root, spec)
+			if file != nil {
+				file.Close()
+			}
+			if err == nil || fetched {
+				t.Fatalf("AcquireFile(%q): error %v, fetched %v; want rejection before fetch", name, err, fetched)
+			}
+			if _, err := os.Lstat(root); !os.IsNotExist(err) {
+				t.Fatalf("invalid name created cache: Lstat error = %v", err)
+			}
+		})
+	}
+}
+
+func TestAcquireFileLockNameCannotInvalidateSharedLease(t *testing.T) {
+	root := t.TempDir()
+	first, err := AcquireFile(context.Background(), root, acquireTestSpec("engine.bin", "old"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	lockPath := filepath.Join(root, "engine.bin.lock")
+	before, err := os.Stat(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collision, collisionErr := AcquireFile(context.Background(), root, acquireTestSpec("engine.bin.lock", "lock collision"))
+	if collision != nil {
+		defer collision.Close()
+	}
+	if collisionErr == nil {
+		t.Error("AcquireFile accepted another asset's lock sidecar name")
+	}
+	after, err := os.Stat(lockPath)
+	if err != nil || !os.SameFile(before, after) {
+		t.Errorf("sidecar identity changed while lease was held: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	replacement, err := AcquireFile(ctx, root, acquireTestSpec("engine.bin", "new"))
+	if replacement != nil {
+		replacement.Close()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("replacement while shared lease held = %v, want deadline exceeded", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err = AcquireFile(context.Background(), root, acquireTestSpec("engine.bin", "new"))
+	if err != nil {
+		t.Fatalf("replacement after lease close: %v", err)
+	}
+	defer replacement.Close()
+	data, err := io.ReadAll(replacement)
+	if err != nil || string(data) != "new" {
+		t.Fatalf("replacement contents = %q, %v; want new", data, err)
+	}
+}
+
+func TestAcquireFileAllowsNonreservedPortableNames(t *testing.T) {
+	for _, name := range []string{"asset.bin", "asset.lock.zip", ".lockfile", "ロック.bin"} {
+		t.Run(name, func(t *testing.T) {
+			file, err := AcquireFile(context.Background(), t.TempDir(), acquireTestSpec(name, "payload"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			data, err := io.ReadAll(file)
+			if err != nil || string(data) != "payload" {
+				t.Fatalf("acquired contents = %q, %v; want payload", data, err)
+			}
+		})
+	}
 }

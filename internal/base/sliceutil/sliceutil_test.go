@@ -46,10 +46,22 @@ func TestMoveToEnd(t *testing.T) {
 }
 
 func TestMoveToIndex(t *testing.T) {
-	got := MoveToIndex([]int{1, 2, 3, 4}, 3, 1)
-	want := []int{1, 4, 2, 3}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("MoveToIndex = %v, want %v", got, want)
+	for _, tc := range []struct {
+		name     string
+		from, to int
+		want     []int
+	}{
+		{"backward", 3, 1, []int{1, 4, 2, 3}},
+		{"forward", 0, 2, []int{2, 3, 1, 4}},
+		{"same index", 1, 1, []int{1, 2, 3, 4}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := []int{1, 2, 3, 4}
+			got := MoveToIndex(input, tc.from, tc.to)
+			if !reflect.DeepEqual(got, tc.want) || &got[0] != &input[0] {
+				t.Fatalf("MoveToIndex = %v, want in-place %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -106,5 +118,22 @@ func TestCopyIntoOverlappingEmptyDestination(t *testing.T) {
 	got := CopyInto(backing[:0], backing[1:], 0)
 	if !reflect.DeepEqual(got, []int{2, 3}) || !reflect.DeepEqual(backing, []int{1, 2, 3}) {
 		t.Fatalf("CopyInto = %v, backing = %v", got, backing)
+	}
+}
+
+func TestCopyIntoEmptyAndZeroSizedElements(t *testing.T) {
+	if got := CopyInto[int](nil, nil, 0); got != nil {
+		t.Fatalf("empty nil copy allocated storage: %v", got)
+	}
+	value := 7
+	backing := []*int{&value}
+	got := CopyInto(backing, nil, 0)
+	if len(got) != 0 || cap(got) != 1 || backing[0] != nil {
+		t.Fatalf("empty copy did not clear and retain storage: %v, cap=%d", backing, cap(got))
+	}
+	zeroSized := make([]struct{}, 2, 8)
+	copied := CopyInto(zeroSized, zeroSized[:1], 0)
+	if len(copied) != 1 || cap(copied) != cap(zeroSized) {
+		t.Fatalf("zero-sized copy len/cap = %d/%d, want 1/%d", len(copied), cap(copied), cap(zeroSized))
 	}
 }

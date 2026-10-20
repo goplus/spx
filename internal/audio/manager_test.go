@@ -17,6 +17,7 @@
 package audio
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -617,6 +618,74 @@ func TestManagerControlRanges(t *testing.T) {
 						t.Errorf("backend value = %g, want %g", got, tt.want)
 					}
 				})
+			}
+		})
+	}
+}
+
+type cloningBackend struct {
+	fakeBackend
+	pans, pitches map[engine.Object]float64
+}
+
+func (b *cloningBackend) GetPan(id engine.Object) float64          { return b.pans[id] }
+func (b *cloningBackend) SetPan(id engine.Object, value float64)   { b.pans[id] = value }
+func (b *cloningBackend) GetPitch(id engine.Object) float64        { return b.pitches[id] }
+func (b *cloningBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
+
+func TestManagerCloneAndInvalidPlayback(t *testing.T) {
+	backend := &cloningBackend{fakeBackend: fakeBackend{volume: 0.4}, pans: map[engine.Object]float64{9: 0.25}, pitches: map[engine.Object]float64{9: 2}}
+	var mgr Manager
+	mgr.Init(backend)
+	if got := mgr.CloneSoundEffects(InvalidSoundID); got != InvalidSoundID {
+		t.Fatalf("unallocated clone=%d", got)
+	}
+	if got := mgr.CloneSoundEffects(9); got != 77 || backend.pans[77] != 0.25 || backend.pitches[77] != 2 || backend.volume != 0.4 || len(backend.plays) != 0 || len(backend.volumes) != 0 {
+		t.Fatalf("clone=%d backend=%+v", got, backend)
+	}
+	mgr.ReleaseSound(InvalidSoundID)
+	mgr.StopID(InvalidSoundID)
+	if mgr.RestartID(InvalidSoundID) || mgr.IsPlaying(InvalidSoundID) || len(backend.stops) != 0 || len(backend.destroys) != 0 {
+		t.Fatal("invalid identifiers reached backend")
+	}
+	id := mgr.Play(9, "sound", false, false, 0, 0, 0)
+	if !mgr.IsPlaying(id) {
+		t.Fatal("live playback reported stopped")
+	}
+	backend.playing[id] = false
+	if mgr.IsPlaying(id) {
+		t.Fatal("stopped playback reported live")
+	}
+	var uninitialized Manager
+	if uninitialized.RestartID(1) {
+		t.Fatal("restarted without backend")
+	}
+	ids := []int64{1, 2}
+	if got := uninitialized.PruneStoppedIDs(ids); len(got) != 2 {
+		t.Fatal("pruned without backend")
+	}
+	uninitialized.Update()
+}
+
+type immediatePlaybackBackend struct {
+	fakeBackend
+	id int64
+}
+
+func (b *immediatePlaybackBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
+	return b.id
+}
+func TestManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
+	for _, id := range []int64{InvalidSoundID, 42} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			backend := &immediatePlaybackBackend{id: id}
+			var mgr Manager
+			mgr.Init(backend)
+			if got := mgr.Play(1, "sound", false, true, 0, 0, 0); got != id {
+				t.Fatalf("play=%d,want%d", got, id)
+			}
+			if len(mgr.playbacks) != 0 || len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 {
+				t.Fatal("failed/completed playback remained tracked")
 			}
 		})
 	}

@@ -19,6 +19,8 @@ package shared
 import (
 	"archive/zip"
 	"errors"
+	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -285,6 +287,9 @@ func TestDownloadURLReturnsHTTPStatus(t *testing.T) {
 	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusNotFound {
 		t.Fatalf("DownloadURL error = %v, want typed HTTP 404", err)
 	}
+	if !strings.Contains(err.Error(), server.URL) || !strings.Contains(err.Error(), "404 Not Found") {
+		t.Fatalf("status error lacks request context: %v", err)
+	}
 }
 
 func TestDownloadURLRejectsInvalidInputBeforeRequest(t *testing.T) {
@@ -300,5 +305,201 @@ func TestDownloadURLRejectsInvalidInputBeforeRequest(t *testing.T) {
 	}
 	if _, err := os.Stat(dst); !os.IsNotExist(err) {
 		t.Fatalf("destination changed after invalid input: %v", err)
+	}
+}
+
+func TestFileHelpersRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "source")
+	if err := os.MkdirAll(filepath.Join(src, "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	original := filepath.Join(src, "nested", "asset.txt")
+	if err := os.WriteFile(original, []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	copied := filepath.Join(root, "copy")
+	if err := CopyDir(src, copied); err != nil {
+		t.Fatal(err)
+	}
+	if !DirExists(copied) || DirExists(original) || DirExists(filepath.Join(root, "missing")) {
+		t.Fatal("incorrect directory classification")
+	}
+	single := filepath.Join(root, "single", "asset.txt")
+	if err := CopyFile(original, single); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		write func(string) error
+		entry string
+	}{
+		{"directory", func(dst string) error { return ZipDirectory(copied, dst) }, "nested/asset.txt"},
+		{"named", func(dst string) error { return WriteNamedZip(dst, map[string]string{"renamed.txt": single}) }, "renamed.txt"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			archive := filepath.Join(root, tc.name+".zip")
+			if err := tc.write(archive); err != nil {
+				t.Fatal(err)
+			}
+			out := filepath.Join(root, tc.name+"-extracted")
+			if err := ExtractZip(archive, out); err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(tc.entry))); err != nil || string(data) != "payload" {
+				t.Fatalf("round trip = %q, %v", data, err)
+			}
+		})
+	}
+	for name, call := range map[string]func() error{
+		"copy file":      func() error { return CopyFile(filepath.Join(root, "absent"), single) },
+		"copy directory": func() error { return CopyDir(filepath.Join(root, "absent"), copied) },
+		"zip directory":  func() error { return ZipDirectory(single, filepath.Join(root, "bad.zip")) },
+		"named zip": func() error {
+			return WriteNamedZip(filepath.Join(root, "bad.zip"), map[string]string{"missing": filepath.Join(root, "absent")})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := call(); err == nil {
+				t.Fatal("missing source or wrong kind accepted")
+			}
+		})
+	}
+}
+
+func TestDownloadLimitAvoidsOverflow(t *testing.T) {
+	for _, n := range []int64{1, 4096, math.MaxInt64 - 1, math.MaxInt64} {
+		want := n
+		if n < math.MaxInt64 {
+			want++
+		}
+		if got := downloadLimitWithOverflow(n); got != want {
+			t.Errorf("limit(%d)=%d, want%d", n, got, want)
+		}
+	}
+}
+
+type downloadRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f downloadRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type downloadResponseBody struct {
+	io.Reader
+	closeErr error
+	closed   bool
+}
+
+func (b *downloadResponseBody) Close() error {
+	b.closed = true
+	return b.closeErr
+}
+
+func TestDownloadURLPreservesErrorsAndDestination(t *testing.T) {
+	failure := errors.New("response failed")
+	for _, test := range []struct {
+		name          string
+		declared      int64
+		transportErr  error
+		closeErr      error
+		wantErr       error
+		wantCommitted bool
+	}{
+		{name: "transport failure", transportErr: failure, wantErr: failure},
+		{name: "short body", declared: 4, wantErr: io.ErrUnexpectedEOF},
+		{name: "long body", declared: 2, wantErr: io.ErrUnexpectedEOF},
+		{name: "close failure after commit", declared: 3, closeErr: failure, wantErr: failure, wantCommitted: true},
+		{name: "size error takes precedence over close", declared: 4, closeErr: failure, wantErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dst := filepath.Join(dir, "asset.zip")
+			if err := os.WriteFile(dst, []byte("existing"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			body := &downloadResponseBody{Reader: strings.NewReader("new"), closeErr: test.closeErr}
+			previous := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = previous })
+			calls := 0
+			http.DefaultTransport = downloadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls++
+				if test.transportErr != nil {
+					return nil, test.transportErr
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: body, ContentLength: test.declared, Request: req}, nil
+			})
+			if err := DownloadURL("https://example.invalid/asset.zip", dst, 8, nil); !errors.Is(err, test.wantErr) {
+				t.Fatalf("download error = %v, want %v", err, test.wantErr)
+			}
+			if calls != 1 || body.closed != (test.transportErr == nil) {
+				t.Fatalf("requests = %d, body closed = %v", calls, body.closed)
+			}
+			want := "existing"
+			if test.wantCommitted {
+				want = "new"
+			}
+			if data, err := os.ReadFile(dst); err != nil || string(data) != want {
+				t.Fatalf("destination = %q, %v; want %q", data, err, want)
+			}
+			if entries, err := os.ReadDir(dir); err != nil || len(entries) != 1 {
+				t.Fatalf("download left temporary files: %v, %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestDownloadURLRejectsUnusableDestination(t *testing.T) {
+	for _, kind := range []string{"parent file", "directory destination", "temporary name too long"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			dst, preserved := filepath.Join(dir, "asset.zip"), ""
+			switch kind {
+			case "parent file":
+				preserved = filepath.Join(dir, "parent")
+				dst = filepath.Join(preserved, "asset.zip")
+			case "directory destination":
+				if err := os.Mkdir(dst, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				preserved = filepath.Join(dst, "keep")
+			case "temporary name too long":
+				// Check the filesystem's name support before exercising the temporary suffix.
+				dst = filepath.Join(dir, strings.Repeat("a", 255))
+				preserved = dst
+			}
+			if err := os.WriteFile(preserved, []byte("preserved"), 0o644); err != nil {
+				if kind == "temporary name too long" {
+					t.Skipf("filesystem cannot create the long destination name: %v", err)
+				}
+				t.Fatal(err)
+			}
+			if kind == "temporary name too long" {
+				if probe, err := os.CreateTemp(dir, filepath.Base(dst)+".tmp-*"); err == nil {
+					if err := probe.Close(); err != nil {
+						t.Fatal(err)
+					}
+					t.Skip("filesystem also supports the longer temporary name")
+				}
+			}
+			body := &downloadResponseBody{Reader: strings.NewReader("new")}
+			previous := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = previous })
+			http.DefaultTransport = downloadRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: body, ContentLength: 3, Request: req}, nil
+			})
+			if err := DownloadURL("https://example.invalid/asset.zip", dst, 8, nil); err == nil {
+				t.Fatal("unusable destination accepted")
+			}
+			if !body.closed {
+				t.Fatal("response body was not closed after filesystem failure")
+			}
+			if data, err := os.ReadFile(preserved); err != nil || string(data) != "preserved" {
+				t.Fatalf("existing file changed: %q, %v", data, err)
+			}
+			if entries, err := os.ReadDir(dir); err != nil || len(entries) != 1 {
+				t.Fatalf("download left temporary files: %v, %v", entries, err)
+			}
+		})
 	}
 }

@@ -18,10 +18,12 @@ package fileutil
 
 import (
 	"archive/zip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -290,5 +292,90 @@ func assertSamePerm(t *testing.T, src, dst string) {
 	}
 	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
 		t.Fatalf("%s mode = %v, want %v from %s", dst, got, want, src)
+	}
+}
+
+func TestFileOperationsRejectInvalidSourcesAndBlockedDestinations(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	missing := filepath.Join(root, "missing")
+	blocked := filepath.Join(source, "child")
+	if err := os.WriteFile(source, []byte("preserved"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() error{
+		"copy missing":          func() error { return CopyFile(missing, filepath.Join(root, "out")) },
+		"copy directory":        func() error { return CopyFile(root, filepath.Join(root, "out")) },
+		"copy blocked parent":   func() error { return CopyFile(source, blocked) },
+		"copy onto directory":   func() error { return CopyFile(source, root) },
+		"tree missing":          func() error { return CopyDir(missing, filepath.Join(root, "copy")) },
+		"tree blocked":          func() error { return CopyDir(root, blocked) },
+		"archive missing":       func() error { return ZipDirectory(missing, filepath.Join(root, "out.zip")) },
+		"archive file":          func() error { return ZipDirectory(source, filepath.Join(root, "out.zip")) },
+		"archive bad ancestor":  func() error { return ZipDirectory(blocked, filepath.Join(root, "out.zip")) },
+		"archive blocked":       func() error { return ZipDirectory(root, blocked) },
+		"named archive blocked": func() error { return WriteNamedZip(blocked, nil) },
+		"named archive missing input": func() error {
+			return WriteNamedZip(filepath.Join(root, "bad.zip"), map[string]string{"entry": missing})
+		},
+		"named archive directory input": func() error {
+			return WriteNamedZip(filepath.Join(root, "bad-dir.zip"), map[string]string{"entry": root})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := call(); err == nil {
+				t.Fatal("invalid operation succeeded")
+			}
+			if data, err := os.ReadFile(source); err != nil || string(data) != "preserved" {
+				t.Fatalf("source changed=%q,%v", data, err)
+			}
+		})
+	}
+}
+
+func TestZipDirectoryPropagatesDanglingSymlinkError(t *testing.T) {
+	src := t.TempDir()
+	source := filepath.Join(src, "a.txt")
+	if err := os.WriteFile(source, []byte("preserved"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(src, "z.txt")
+	target := filepath.Join(src, "missing")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	err := ZipDirectory(src, filepath.Join(t.TempDir(), "out.zip"))
+	var pathErr *os.PathError
+	if !errors.Is(err, os.ErrNotExist) || !errors.As(err, &pathErr) || pathErr.Path != link {
+		t.Fatalf("ZipDirectory error = %v, want missing symlink target for %s", err, link)
+	}
+	if data, err := os.ReadFile(source); err != nil || string(data) != "preserved" {
+		t.Fatalf("source changed: content = %q, error = %v", data, err)
+	}
+	if got, err := os.Readlink(link); err != nil || got != target {
+		t.Fatalf("symlink changed: target = %q, error = %v", got, err)
+	}
+}
+
+func TestWriteZipFilePropagatesEntryFailure(t *testing.T) {
+	dir := t.TempDir()
+	failure := errors.New("entry rejected")
+	if err := writeZipFile(filepath.Join(dir, "out.zip"), func(*zip.Writer) error { return failure }); !errors.Is(err, failure) {
+		t.Fatalf("entry error=%v", err)
+	}
+	if err := writeZipFile(dir, func(*zip.Writer) error { t.Fatal("called entries after open failed"); return nil }); err == nil {
+		t.Fatal("directory accepted as output")
+	}
+	writer := zip.NewWriter(io.Discard)
+	src := filepath.Join(dir, "file")
+	if err := os.WriteFile(src, []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := addFileToZip(writer, src, strings.Repeat("a", 65536)); err == nil {
+		t.Fatal("oversized ZIP entry name accepted")
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
 	}
 }

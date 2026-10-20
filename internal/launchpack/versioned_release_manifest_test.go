@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/runtimebundle"
@@ -173,5 +174,196 @@ func writeVersionedReleaseManifestTestFile(t *testing.T, path string, data []byt
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestVersionedManifestRejectsInvalidInputs(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		change     func(*versionedReleaseManifestSpec)
+	}{
+		{"relative cache", "cache root", func(s *versionedReleaseManifestSpec) { s.CacheRoot = "relative" }},
+		{"namespace traversal", "namespace", func(s *versionedReleaseManifestSpec) { s.Namespace = ".." }},
+		{"version separator", "version", func(s *versionedReleaseManifestSpec) { s.Version = "1/2" }},
+		{"name whitespace", "name", func(s *versionedReleaseManifestSpec) { s.Name = " manifest.json" }},
+		{"name backslash", "name", func(s *versionedReleaseManifestSpec) { s.Name = "folder\\manifest.json" }},
+		{"relative mirror", "mirror", func(s *versionedReleaseManifestSpec) { s.MirrorDir = "relative" }},
+		{"zero budget", "size limit", func(s *versionedReleaseManifestSpec) { s.MaxSize = 0 }},
+		{"empty URL", "URL is required", func(s *versionedReleaseManifestSpec) { s.URL = " \t " }},
+		{"missing fetcher", "fetcher is required", func(s *versionedReleaseManifestSpec) {}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := testVersionedReleaseManifestSpec(t.TempDir())
+			tt.change(&spec)
+			if _, _, err := acquireTestVersionedReleaseManifest(spec); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("acquire error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	spec := testVersionedReleaseManifestSpec(t.TempDir())
+	parse := func(data []byte) (string, error) { return string(data), nil }
+	version := func(s string) string { return s }
+	if _, _, err := acquireVersionedReleaseManifest(nil, spec, parse, version); err == nil || !strings.Contains(err.Error(), "nil context") {
+		t.Fatalf("nil context: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := acquireVersionedReleaseManifest(ctx, spec, parse, version); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled context: %v", err)
+	}
+	if _, _, err := acquireVersionedReleaseManifest[string](context.Background(), spec, nil, version); err == nil || !strings.Contains(err.Error(), "parser") {
+		t.Fatalf("nil parser: %v", err)
+	}
+	if _, _, err := acquireVersionedReleaseManifest(context.Background(), spec, parse, nil); err == nil || !strings.Contains(err.Error(), "accessor") {
+		t.Fatalf("nil accessor: %v", err)
+	}
+}
+
+func TestVersionedManifestRejectsUnusableMirrorsAndCache(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		mirror     bool
+		setup      func(*testing.T, string)
+	}{
+		{"missing mirror", "read mirrored release manifest", true, func(*testing.T, string) {}},
+		{"oversized mirror", "exceeds size limit", true, func(t *testing.T, path string) {
+			writeVersionedReleaseManifestTestFile(t, path, bytes.Repeat([]byte("x"), 1025))
+		}},
+		{"malformed mirror", "read mirrored release manifest", true, func(t *testing.T, path string) { writeVersionedReleaseManifestTestFile(t, path, []byte("{")) }},
+		{"wrong mirror version", "does not match", true, func(t *testing.T, path string) {
+			writeVersionedReleaseManifestTestFile(t, path, []byte(`{"version":"9.9.9"}`))
+		}},
+		{"blocked cache ancestor", "inspect cached release manifest", false, func(t *testing.T, path string) {
+			writeVersionedReleaseManifestTestFile(t, filepath.Dir(path), []byte("blocked"))
+		}},
+		{"directory cache", "not a regular non-symlink file", false, func(t *testing.T, path string) {
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"symlink cache", "not a regular non-symlink file", false, func(t *testing.T, path string) {
+			writeVersionedReleaseManifestTestFile(t, path+".target", []byte(`{"version":"1.2.3"}`))
+			if err := os.Symlink(path+".target", path); err != nil {
+				t.Skip(err)
+			}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := testVersionedReleaseManifestSpec(t.TempDir())
+			spec.Offline = true
+			path := testVersionedReleaseManifestPath(spec)
+			if tt.mirror {
+				spec.MirrorDir = t.TempDir()
+				path = filepath.Join(spec.MirrorDir, spec.Name)
+			}
+			tt.setup(t, path)
+			if _, _, err := acquireTestVersionedReleaseManifest(spec); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("acquire error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestVersionedManifestDownloadFailuresDoNotPublish(t *testing.T) {
+	for _, name := range []string{"ignored size error", "invalid json", "cancelled after fetch"} {
+		t.Run(name, func(t *testing.T) {
+			spec := testVersionedReleaseManifestSpec(t.TempDir())
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			spec.Fetch = func(_ context.Context, _ string, w io.Writer) error {
+				switch name {
+				case "ignored size error":
+					_, _ = w.Write(bytes.Repeat([]byte("x"), 1025))
+				case "invalid json":
+					_, _ = io.WriteString(w, "{")
+				case "cancelled after fetch":
+					_, _ = io.WriteString(w, `{"version":"1.2.3"}`)
+					cancel()
+				}
+				return nil
+			}
+			_, _, err := acquireVersionedReleaseManifest(ctx, spec, func(data []byte) (testVersionedManifest, error) {
+				var m testVersionedManifest
+				err := json.Unmarshal(data, &m)
+				return m, err
+			}, func(m testVersionedManifest) string { return m.Version })
+			if err == nil {
+				t.Fatal("failed download accepted")
+			}
+			if name == "ignored size error" && !errors.Is(err, errVersionedReleaseManifestTooLarge) {
+				t.Fatalf("size failure = %v", err)
+			}
+			if name == "cancelled after fetch" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancellation = %v", err)
+			}
+			if _, err := os.Stat(testVersionedReleaseManifestPath(spec)); !os.IsNotExist(err) {
+				t.Fatalf("failed download published: %v", err)
+			}
+		})
+	}
+}
+
+func TestCachedVersionedManifestRevalidatesPersistedBytes(t *testing.T) {
+	for _, name := range []string{"parser error", "version mismatch", "size limit"} {
+		t.Run(name, func(t *testing.T) {
+			spec := testVersionedReleaseManifestSpec(t.TempDir())
+			data := []byte("1.2.3")
+			parse := func(data []byte) (string, error) {
+				if name == "parser error" {
+					return "", errors.New("invalid cached data")
+				}
+				return string(data), nil
+			}
+			version := func(s string) string {
+				if name == "version mismatch" {
+					return "9.9.9"
+				}
+				return s
+			}
+			if name == "size limit" {
+				spec.MaxSize = 1
+			}
+			_, _, err := acquireCachedVersionedReleaseManifest(context.Background(), t.TempDir(), spec, data, parse, version, false)
+			if err == nil {
+				t.Fatal("invalid persisted manifest accepted")
+			}
+			switch name {
+			case "parser error":
+				if !strings.Contains(err.Error(), "parse cached release manifest") {
+					t.Fatal(err)
+				}
+			case "version mismatch":
+				if !strings.Contains(err.Error(), "cached release manifest version") {
+					t.Fatal(err)
+				}
+			case "size limit":
+				if !errors.Is(err, errVersionedReleaseManifestTooLarge) {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func TestVersionedManifestOfflineDetectsReplacementAfterParsing(t *testing.T) {
+	spec := testVersionedReleaseManifestSpec(t.TempDir())
+	spec.Offline = true
+	spec.Fetch = func(context.Context, string, io.Writer) error {
+		t.Fatal("offline cache replacement triggered a fetch")
+		return nil
+	}
+	path := testVersionedReleaseManifestPath(spec)
+	writeVersionedReleaseManifestTestFile(t, path, []byte(`{"version":"1.2.3","value":"original"}`))
+	parse := func(data []byte) (testVersionedManifest, error) {
+		var m testVersionedManifest
+		err := json.Unmarshal(data, &m)
+		// Simulate another writer replacing the entry between the optimistic
+		// parse and acquisition of the locked, digest-checked cache handle.
+		writeVersionedReleaseManifestTestFile(t, path, []byte(`{"version":"1.2.3","value":"replaced"}`))
+		return m, err
+	}
+	_, data, err := acquireVersionedReleaseManifest(context.Background(), spec, parse, func(m testVersionedManifest) string { return m.Version })
+	if err == nil || !strings.Contains(err.Error(), "offline cached release manifest is invalid") || data != nil {
+		t.Fatalf("replaced cache = %q, %v", data, err)
 	}
 }

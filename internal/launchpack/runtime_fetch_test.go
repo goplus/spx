@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -148,4 +149,84 @@ func (shortWriteWriter) Write(data []byte) (int, error) {
 		return 0, nil
 	}
 	return len(data) - 1, nil
+}
+
+func TestFetchReleaseURLClassifiesInterruptedTransfers(t *testing.T) {
+	for _, name := range []string{"malformed URL", "connection failure", "truncated response", "cancelled response"} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			body := &failingRuntimeResponse{err: io.ErrUnexpectedEOF}
+			if name == "cancelled response" {
+				body.cancel = cancel
+			}
+			calls := 0
+			previous := runtimeHTTPClient
+			runtimeHTTPClient = &http.Client{Transport: runtimeRoundTripper(func(req *http.Request) (*http.Response, error) {
+				calls++
+				if name == "connection failure" {
+					return nil, io.ErrUnexpectedEOF
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: body, Request: req}, nil
+			})}
+			t.Cleanup(func() { runtimeHTTPClient = previous })
+			url := "https://example.invalid/runtime"
+			if name == "malformed URL" {
+				url = "://invalid"
+			}
+			err := fetchRuntimeURL(ctx, url, io.Discard)
+			switch name {
+			case "malformed URL":
+				if err == nil || runtimeReleaseUnavailable(err) || calls != 0 {
+					t.Fatalf("malformed URL = %v, transport calls = %d", err, calls)
+				}
+			case "cancelled response":
+				if !errors.Is(err, context.Canceled) || runtimeReleaseUnavailable(err) {
+					t.Fatalf("interrupted response = %v, want cancellation without fallback", err)
+				}
+			default:
+				if !errors.Is(err, io.ErrUnexpectedEOF) || !runtimeReleaseUnavailable(err) {
+					t.Fatalf("interrupted transfer = %v, want unavailable preserving read cause", err)
+				}
+			}
+			if strings.HasSuffix(name, "response") && !body.closed {
+				t.Fatal("failed response body was not closed")
+			}
+		})
+	}
+}
+
+type runtimeRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f runtimeRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type failingRuntimeResponse struct {
+	err    error
+	cancel func()
+	closed bool
+}
+
+func (r *failingRuntimeResponse) Read([]byte) (int, error) {
+	if r.cancel != nil {
+		r.cancel()
+	}
+	return 0, r.err
+}
+
+func (r *failingRuntimeResponse) Close() error { r.closed = true; return nil }
+
+func TestReadRuntimeMetadataEnforcesBoundedReads(t *testing.T) {
+	if _, err := readRuntimeMetadata(&failingRuntimeResponse{err: io.ErrUnexpectedEOF}, "manifest.json"); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("metadata read failure = %v", err)
+	}
+	for _, size := range []int{maxRuntimeManifestSize, maxRuntimeManifestSize + 1} {
+		data, err := readRuntimeMetadata(strings.NewReader(strings.Repeat("x", size)), "manifest.json")
+		if size == maxRuntimeManifestSize {
+			if err != nil || len(data) != size {
+				t.Fatalf("metadata at limit = %d bytes, %v", len(data), err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "exceeds") || data != nil {
+			t.Fatalf("oversized metadata = %d bytes, %v", len(data), err)
+		}
+	}
 }

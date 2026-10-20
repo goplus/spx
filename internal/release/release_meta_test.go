@@ -259,3 +259,32 @@ func TestStrictReleaseResolversRejectUnknownVersions(t *testing.T) {
 		}
 	}
 }
+
+func TestReleaseCatalogRejectsIncompleteMappings(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		releases   []RuntimeRelease
+		mappings   []spxRuntimeMapping
+	}{
+		{"empty runtime", "runtime release version", []RuntimeRelease{{}}, nil},
+		{"empty SPX", "SPX version", nil, []spxRuntimeMapping{{}}},
+		{"unknown runtime", "unknown runtime", nil, []spxRuntimeMapping{{spxVersion: "v1.2.3", runtimeVersion: "1.2.3"}}},
+		{"unmapped runtime", "no SPX release mapping", []RuntimeRelease{{Version: "1.2.3"}}, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := newReleaseCatalog(tt.releases, tt.mappings); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("catalog = %v, want %q", err, tt.want)
+			}
+			defer func() {
+				if recover() == nil {
+					t.Error("invalid embedded catalog did not panic")
+				}
+			}()
+			mustNewReleaseCatalog(tt.releases, tt.mappings)
+		})
+	}
+	meta := DefaultReleaseMeta()
+	if got := meta.RuntimeBinaryTag(); got != RuntimeTag+meta.Runtime.Version {
+		t.Fatalf("runtime tag = %q", got)
+	}
+}

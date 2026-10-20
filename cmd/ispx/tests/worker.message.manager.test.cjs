@@ -119,13 +119,58 @@ test('clearing the registry discards pending responses without disabling new cal
     ]);
 });
 
-test('callback errors preserve their request identity', async () => {
-    const { manager, messages, errors, call } = loadManager();
-    const callbackName = manager.processArguments(() => { throw new Error('sentinel'); })[1];
-    call(callbackName, 'failed-request');
-    await settleCallbacks();
-    assert.equal(messages.length, 1);
-    assert.equal(messages[0].responseId, 'failed-request');
-    assert.equal(messages[0].error, 'sentinel');
+for (const asynchronous of [false, true]) {
+    test(`callback errors preserve their request identity (async=${asynchronous})`, async () => {
+        const { manager, messages, errors, call } = loadManager();
+        const failure = new Error('sentinel');
+        const callbackName = manager.processArguments(() => {
+            if (asynchronous) return Promise.reject(failure);
+            throw failure;
+        })[1];
+        call(callbackName, 'failed-request');
+        await settleCallbacks();
+        assert.equal(messages.length, 1);
+        assert.equal(messages[0].responseId, 'failed-request');
+        assert.equal(messages[0].error, 'sentinel');
+        assert.equal(errors.length, 1);
+    });
+}
+
+test('broadcasts survive invalid or throwing workers without mutating the source message', () => {
+    const { manager, messages, errors } = loadManager();
+    const message = { cmd: 'customCall', data: { value: 42 } };
+    manager.setPThreads(null);
+    assert.deepEqual({ ...manager.postMessageToWorkers(message) }, { successCount: 0, errorCount: 0, totalWorkers: 0 });
+    manager.setPThreads({ runningWorkers: [
+        null,
+        { postMessage() { throw new Error('worker stopped'); } },
+        { postMessage: value => messages.push(value) },
+    ] });
+    assert.deepEqual({ ...manager.postMessageToWorkers(message) }, { successCount: 1, errorCount: 2, totalWorkers: 3 });
+    assert.deepEqual(message, { cmd: 'customCall', data: { value: 42 } });
+    assert.equal(messages[0]._targetWorkerIndex, 2);
+    assert.equal(messages[0]._gameRunnerMessageId, 2);
+    assert.equal(messages[0].data, message.data);
     assert.equal(errors.length, 1);
+    manager.postMessageToWorkers(message);
+    assert.equal(messages[1]._gameRunnerMessageId, 4);
+});
+
+test('transfer broadcasts clone only the visible bytes independently for each worker', () => {
+    const { manager } = loadManager();
+    const received = [];
+    manager.setPThreads({ runningWorkers: Array.from({ length: 2 }, () => ({
+        postMessage(message, transfer) {
+            received.push(structuredClone(message, { transfer }));
+        },
+    })) });
+    const backing = new Uint8Array([99, 1, 2, 88]);
+    const data = backing.subarray(1, 3);
+    const result = manager.postMessageToWorkers({ cmd: 'bytes', data }, [data.buffer], true);
+    assert.equal(result.successCount, 2);
+    assert.deepEqual(Array.from(backing), [99, 1, 2, 88], 'caller storage must not be detached');
+    assert.deepEqual(received.map(message => Array.from(message.data)), [[1, 2], [1, 2]]);
+    assert.notEqual(received[0].data.buffer, received[1].data.buffer);
+    received[0].data[0] = 42;
+    assert.equal(received[1].data[0], 1);
 });

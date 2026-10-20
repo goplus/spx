@@ -275,7 +275,44 @@ static void clear_string_cache() {
     }
 }
 
+static void test_string_cache_pressure() {
+    clear_string_cache();
+    std::vector<GdString *> held;
+    for (size_t i = 0; i < GDSPX_STRING_CACHE_MAX_ENTRIES; ++i) {
+        const std::string value = "held-" + std::to_string(i);
+        GdString *wrapper = gdspx_new_string(value.data(), static_cast<uint32_t>(value.size()));
+        assert(wrapper != nullptr);
+        held.push_back(wrapper);
+    }
+    assert(gdspxStringCache.size() == GDSPX_STRING_CACHE_MAX_ENTRIES);
+    // All cached entries are live: overflow must own independent storage.
+    GdString *overflow = gdspx_new_string("overflow", 8);
+    const char *overflow_data = gdspx_get_string(overflow);
+    assert(overflow_data != nullptr && find_cached_gdstring_by_ptr(overflow_data) == nullptr);
+    gdspx_free_string(overflow);
+    assert(gdspxTestAllocations.count(const_cast<char *>(overflow_data)) == 0);
+
+    gdspx_free_string(held[0]);
+    gdspx_free_string(held[1]);
+    // Reusing an idle entry makes it newer than the other released entry.
+    GdString *recent = gdspx_new_string("held-0", 6);
+    gdspx_free_string(recent);
+    GdString *replacement = gdspx_new_string("replacement", 11);
+    assert(find_cached_gdstring_by_value("held-1", 6) == nullptr);
+    assert(find_cached_gdstring_by_value("held-0", 6) != nullptr);
+    assert(gdspxStringCache.size() == GDSPX_STRING_CACHE_MAX_ENTRIES);
+    for (size_t i = 2; i < held.size(); ++i) {
+        const std::string value = "held-" + std::to_string(i);
+        assert(std::strcmp(gdspx_get_string(held[i]), value.c_str()) == 0);
+        gdspx_free_string(held[i]);
+    }
+    gdspx_free_string(replacement);
+    clear_string_cache();
+    assert(gdspxStringCacheByValue.empty() && gdspxStringCacheByPtr.empty());
+}
+
 int main() {
+    test_string_cache_pressure();
     test_uncached_nested_pointer_tamper();
     test_cached_nested_pointer_tamper();
     test_manager_bind_and_tamper();

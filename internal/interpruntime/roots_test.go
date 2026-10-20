@@ -31,7 +31,7 @@ func testRoots(t *testing.T) Roots {
 	assetDir := filepath.Join(projectDir, "assets")
 	sessionDir := filepath.Join(t.TempDir(), "session")
 	for _, dir := range []string{assetDir, sessionDir} {
-		if err := mkdirAll(dir); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}

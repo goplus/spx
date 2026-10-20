@@ -16,7 +16,9 @@
 
 package collision
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestParseColliderShapeType(t *testing.T) {
 	tests := []struct {
@@ -28,6 +30,9 @@ func TestParseColliderShapeType(t *testing.T) {
 		{name: "none", input: "none", def: ColliderAuto, want: ColliderNone},
 		{name: "auto", input: "auto", def: ColliderNone, want: ColliderAuto},
 		{name: "circle", input: "circle", def: ColliderNone, want: ColliderCircle},
+		{name: "rect", input: "rect", def: ColliderNone, want: ColliderRect},
+		{name: "capsule", input: "capsule", def: ColliderNone, want: ColliderCapsule},
+		{name: "polygon", input: "polygon", def: ColliderNone, want: ColliderPolygon},
 		{name: "empty default", input: "", def: ColliderRect, want: ColliderRect},
 		{name: "unknown default", input: "bad", def: ColliderCapsule, want: ColliderCapsule},
 	}
@@ -57,5 +62,18 @@ func TestParsePixelCollisionPrecision(t *testing.T) {
 		if got := ParsePixelCollisionPrecision(&input); got != tt.want {
 			t.Fatalf("ParsePixelCollisionPrecision(%q) = %d, want %d", input, got, tt.want)
 		}
+	}
+}
+
+func TestAABBIntersects(t *testing.T) {
+	a := AABB{MinX: 0, MinY: 0, MaxX: 10, MaxY: 10}
+	b := AABB{MinX: 5, MinY: 5, MaxX: 15, MaxY: 15}
+	c := AABB{MinX: 11, MinY: 11, MaxX: 20, MaxY: 20}
+
+	if !a.Intersects(b) {
+		t.Fatal("expected overlapping boxes to intersect")
+	}
+	if a.Intersects(c) {
+		t.Fatal("expected separated boxes not to intersect")
 	}
 }

@@ -17,6 +17,8 @@
 package engine
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -360,5 +362,27 @@ func TestWebBuildModeDefaultsAndThreading(t *testing.T) {
 	_, err := resolveEngineBuildShellPlan(buildEnvironment{}, BuildConfig{Target: "template", Platform: "web", Mode: "unknown"})
 	if err == nil || err.Error() != "unsupported web-mode: unknown" {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestBuildShellPlanRejectsInvalidConfiguration(t *testing.T) {
+	for _, args := range [][]string{{"--target", "unknown"}, {"--target", "template", "extra"}, {"--target", "template", "--platform", "unknown"}, {"--target", "template", "--mode", "normal"}, {"--target", "template", "--platform", "web", "--mode", "unknown"}, {"--invalid"}} {
+		if _, err := ParseEnvExportEngineBuildShellArgs(args); err == nil {
+			t.Fatalf("invalid configuration accepted: %q", args)
+		}
+	}
+	if _, err := ParseEnvExportEngineBuildShellArgs([]string{"--help"}); !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("help=%v", err)
+	}
+	root := isolateEngineEnvironment(t)
+	t.Setenv("PLATFORM", "unsupported")
+	if _, err := ResolveEngineBuildShellPlan(root, BuildConfig{Target: "template"}); err == nil {
+		t.Fatal("invalid environment accepted")
+	}
+	if _, err := resolveEngineBuildShellPlan(buildEnvironment{Platform: "ios"}, BuildConfig{Target: "editor"}); err == nil || !strings.Contains(err.Error(), "unsupported editor host platform") {
+		t.Fatalf("mobile editor error=%v", err)
+	}
+	if _, _, _, err := resolveDesktopTemplateBuildPaths(buildEnvironment{}, "ios"); err == nil {
+		t.Fatal("mobile desktop template accepted")
 	}
 }

@@ -5,8 +5,10 @@ package webffi
 import (
 	"encoding/binary"
 	"slices"
+	"sync"
 	"syscall/js"
 	"testing"
+	"time"
 
 	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -291,5 +293,86 @@ func TestDispatcherRecordsKeyState(t *testing.T) {
 	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyReleased, JsFromGdInt(key)})
 	if keyDown[key] {
 		t.Fatal("key release was not recorded without a handler")
+	}
+}
+
+func TestWebSessionStartupAndUnlink(t *testing.T) {
+	previousCallbacks, previousInitialized := callbacks, hasInitEngine
+	previousSnapshot, previousGeneration := inputSnap, actionGeneration
+	previousBool, previousAxis, previousContact := actionBool, actionAxis, contactEventGeneration
+	previousKeys := keyDown
+	keyDown = map[int64]bool{}
+	actionBool, actionAxis = map[string]bool{}, map[string]float64{}
+	t.Cleanup(func() {
+		callbacks, hasInitEngine = previousCallbacks, previousInitialized
+		inputSnap, actionGeneration = previousSnapshot, previousGeneration
+		actionBool, actionAxis, contactEventGeneration = previousBool, previousAxis, previousContact
+		keyDown = previousKeys
+	})
+	for _, interpreter := range []bool{false, true} {
+		starts := 0
+		BindCallback(engine.CallbackInfo{CoreCallbackInfo: engine.CoreCallbackInfo{OnEngineStart: func() { starts++ }}})
+		hasInitEngine = true
+		session := &LinkSession{exit: make(chan struct{}), interpreter: interpreter}
+		ready, done := make(chan struct{}), make(chan struct{})
+		go func() { session.Run(func() { close(ready) }); close(done) }()
+		finish := sync.OnceFunc(func() {
+			session.Unlink()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("session did not finish after unlink")
+			}
+		})
+		t.Cleanup(finish)
+		select {
+		case <-ready:
+		case <-time.After(5 * time.Second):
+			t.Fatal("session did not signal readiness")
+		}
+		want := 0
+		if interpreter {
+			want = 1
+		}
+		if starts != want {
+			t.Fatalf("interpreter=%v: start calls=%d, want %d", interpreter, starts, want)
+		}
+		select {
+		case <-done:
+			t.Fatal("session returned before unlink")
+		default:
+		}
+		finish()
+		if hasInitEngine {
+			t.Fatal("unlink retained initialized engine state")
+		}
+	}
+	goWasmInit(js.Undefined(), nil)
+	if !hasInitEngine {
+		t.Fatal("worker initialization did not set engine state")
+	}
+}
+
+func TestResolveJSFunctionRejectsMissingBindings(t *testing.T) {
+	const name = "spx_test_binding"
+	previous := js.Global().Get(name)
+	t.Cleanup(func() { js.Global().Set(name, previous) })
+	for _, value := range []js.Value{js.Undefined(), js.Null()} {
+		js.Global().Set(name, value)
+		func() {
+			defer func() {
+				if got := recover(); got != "JS function not found: "+name {
+					t.Errorf("missing binding panic=%v", got)
+				}
+			}()
+			resolveJSFunc(name)
+		}()
+	}
+	calls := 0
+	binding := js.FuncOf(func(js.Value, []js.Value) any { calls++; return 42 })
+	defer binding.Release()
+	js.Global().Set(name, binding)
+	if got := resolveJSFunc(name).Invoke().Int(); got != 42 || calls != 1 {
+		t.Fatalf("resolved binding result=%d, calls=%d", got, calls)
 	}
 }

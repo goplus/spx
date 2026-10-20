@@ -20,16 +20,20 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 type testZipEntry struct {
@@ -37,39 +41,31 @@ type testZipEntry struct {
 	mode   fs.FileMode
 	data   string
 	method uint16
+	flags  uint16
 }
 
 func writeTestZip(t *testing.T, entries ...testZipEntry) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "bundle.zip")
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := zip.NewWriter(file)
+	var data bytes.Buffer
+	writer := zip.NewWriter(&data)
 	for _, item := range entries {
-		header := &zip.FileHeader{Name: item.name, Method: item.method}
-		if header.Method == 0 {
-			header.Method = zip.Store
-		}
+		header := &zip.FileHeader{Name: item.name, Method: item.method, Flags: item.flags}
 		if item.mode != 0 {
 			header.SetMode(item.mode)
 		}
 		entry, err := writer.CreateHeader(header)
 		if err != nil {
-			_ = file.Close()
 			t.Fatal(err)
 		}
 		if _, err := entry.Write([]byte(item.data)); err != nil {
-			_ = file.Close()
 			t.Fatal(err)
 		}
 	}
 	if err := writer.Close(); err != nil {
-		_ = file.Close()
 		t.Fatal(err)
 	}
-	if err := file.Close(); err != nil {
+	if err := os.WriteFile(path, data.Bytes(), 0o666); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -100,6 +96,7 @@ func TestVerifyZipBuildsFullManifestAndRejectsUnsafeNames(t *testing.T) {
 	}
 
 	unsafe := []string{
+		"", "invalid\xff", "nul\x00name", "double//slash",
 		"../escape", "/absolute", `a\b`, "a/./b", "a/../b", "foo:bar",
 		"CON.txt", "CLOCK$.txt", "CONIN$.txt", "COM¹.txt", "bad<name",
 		"bad\x1fname", "file. ",
@@ -192,19 +189,21 @@ func TestVerifyZipRejectsDuplicateBeforeModeAndContent(t *testing.T) {
 }
 
 func TestVerifyZipRejectsReservedNamesAndSpecialFiles(t *testing.T) {
-	tests := []struct {
-		name    string
-		entries []testZipEntry
+	for _, tt := range []struct {
+		name  string
+		entry testZipEntry
+		want  error
 	}{
-		{"reserved-complete", []testZipEntry{{name: completeMarkerName, data: "x"}}},
-		{"reserved-manifest", []testZipEntry{{name: cacheManifestName, data: "x"}}},
-		{"symlink", []testZipEntry{{name: "link", mode: fs.ModeSymlink | 0o777, data: "target"}}},
-		{"device", []testZipEntry{{name: "device", mode: fs.ModeDevice | 0o600}}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := VerifyZip(writeTestZip(t, test.entries...)); err == nil {
-				t.Fatal("VerifyZip accepted unsafe archive")
+		{"reserved-complete", testZipEntry{name: completeMarkerName, data: "x"}, ErrUnsafeArchive},
+		{"reserved-manifest", testZipEntry{name: cacheManifestName, data: "x"}, ErrUnsafeArchive},
+		{"symlink", testZipEntry{name: "link", mode: fs.ModeSymlink | 0o777, data: "target"}, ErrUnsupportedArchiveEntry},
+		{"device", testZipEntry{name: "device", mode: fs.ModeDevice | 0o600}, ErrUnsupportedArchiveEntry},
+		{"encrypted", testZipEntry{name: "encrypted", flags: 1, data: "trusted"}, ErrUnsafeArchive},
+		{"directory mode without directory name", testZipEntry{name: "directory", mode: fs.ModeDir | 0o755}, ErrUnsupportedArchiveEntry},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := VerifyZip(writeTestZip(t, tt.entry)); !errors.Is(err, tt.want) {
+				t.Fatalf("VerifyZip = %v, want %v", err, tt.want)
 			}
 		})
 	}
@@ -459,32 +458,59 @@ func TestExtractZipRejectsDestinationSymlink(t *testing.T) {
 	}
 }
 
-func TestPinnedRootRejectsPathReplacement(t *testing.T) {
-	dst := filepath.Join(t.TempDir(), "dst")
-	if err := os.Mkdir(dst, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	root, err := openPinnedRoot(dst)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if err := os.Rename(dst, dst+".old"); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(dst, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := checkPinnedRootPath(dst, root); !errors.Is(err, ErrUnsafeArchive) {
-		t.Fatalf("replaced root check = %v", err)
+func TestPinnedRootRejectsChangedOrClosedPath(t *testing.T) {
+	for _, replacement := range []string{"directory", "file", "missing", "closed descriptor"} {
+		t.Run(replacement, func(t *testing.T) {
+			dst := filepath.Join(t.TempDir(), "dst")
+			if err := os.Mkdir(dst, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			root, err := openPinnedRoot(dst)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			if replacement == "closed descriptor" {
+				err = root.Close()
+			} else {
+				if err := os.Rename(dst, dst+".old"); err != nil {
+					t.Fatal(err)
+				}
+				switch replacement {
+				case "directory":
+					err = os.Mkdir(dst, 0o700)
+				case "file":
+					err = os.WriteFile(dst, []byte("replacement"), 0o600)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkPinnedRootPath(dst, root); !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("changed root check = %v, want ErrUnsafeArchive", err)
+			}
+		})
 	}
 }
 
-func TestVerifyZipEnforcesCompressionRatio(t *testing.T) {
-	path := writeTestZip(t, testZipEntry{name: "bomb", data: strings.Repeat("A", 16*1024), method: zip.Deflate})
-	_, err := VerifyZip(path, VerifyOptions{Limits: Limits{MaxCompressionRatio: 2}})
-	if !errors.Is(err, ErrArchiveLimit) {
-		t.Fatalf("compression ratio error = %v", err)
+func TestVerifyZipEnforcesContentLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		entries []testZipEntry
+		limits  Limits
+		message string
+	}{
+		{"compression ratio", []testZipEntry{{name: "bomb", data: strings.Repeat("A", 16*1024), method: zip.Deflate}}, Limits{MaxCompressionRatio: 2}, "compression ratio"},
+		{"entry size", []testZipEntry{{name: "large", data: "123"}}, Limits{MaxEntrySize: 2}, "entry"},
+		{"total size", []testZipEntry{{name: "one", data: "123"}, {name: "two", data: "456"}}, Limits{MaxEntrySize: 3, MaxTotalSize: 5}, "total size"},
+		{"manifest bytes", []testZipEntry{{name: "entry", data: "x"}}, Limits{MaxManifestBytes: 1}, "manifest size"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := VerifyZip(writeTestZip(t, tt.entries...), VerifyOptions{Limits: tt.limits})
+			if !errors.Is(err, ErrArchiveLimit) || !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("VerifyZip = %v, want ErrArchiveLimit with %q", err, tt.message)
+			}
+		})
 	}
 }
 
@@ -589,6 +615,9 @@ func TestManifestCanonicalGolden(t *testing.T) {
 		{Name: "cafe\u0301", Mode: 0o600, SHA256: testDigest("")},
 		{Name: "a/", Mode: uint32(fs.ModeDir | 0o755), SHA256: testDigest("")},
 	}}
+	if got := bundle.Identity(); got != wantDigest {
+		t.Fatalf("Identity = %q, want %q", got, wantDigest)
+	}
 	originalEntries := append([]Entry(nil), bundle.Entries...)
 	for _, suppliedDigest := range []string{"", "not-a-digest", strings.Repeat("0", 64), wantDigest} {
 		bundle.Digest = suppliedDigest
@@ -663,6 +692,11 @@ func TestManifestValidationErrorOrder(t *testing.T) {
 		{"unsigned-manifest-skips-serialized-limit", Bundle{Entries: []Entry{entry}}, Limits{MaxManifestBytes: 1}, nil, ""},
 		{"serialized-limit-before-digest-mismatch", wrongDigest, Limits{MaxManifestBytes: 1}, ErrArchiveLimit, ""},
 		{"digest-mismatch", wrongDigest, Limits{}, ErrDigestMismatch, "manifest digest " + wrongDigest.Digest + " does not match identity " + digest},
+		{"nonempty directory", Bundle{Entries: []Entry{{Name: "dir/", Mode: uint32(fs.ModeDir), Size: 1, SHA256: entry.SHA256}}}, Limits{}, ErrInvalidManifest, ""},
+		{"unsupported mode", Bundle{Entries: []Entry{{Name: "x", Mode: uint32(fs.ModeSymlink), SHA256: entry.SHA256}}}, Limits{}, ErrInvalidManifest, ""},
+		{"invalid entry digest", Bundle{Entries: []Entry{{Name: "x", SHA256: "invalid"}}}, Limits{}, ErrInvalidManifest, ""},
+		{"invalid entry name", Bundle{Entries: []Entry{{Name: "../x", SHA256: entry.SHA256}}}, Limits{}, ErrInvalidEntryName, ""},
+		{"file with directory name", Bundle{Entries: []Entry{{Name: "dir/", SHA256: entry.SHA256}}}, Limits{}, ErrInvalidManifest, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -769,6 +803,374 @@ func TestLimitsWithDefaults(t *testing.T) {
 			again, err := got.withDefaults()
 			if err != nil || again != got {
 				t.Fatalf("withDefaults() not idempotent: (%+v, %v)", again, err)
+			}
+		})
+	}
+}
+
+func TestZipEntryPointsValidateOptionsAndAgree(t *testing.T) {
+	path := writeTestZip(t, testZipEntry{name: "nested/bin/run", mode: 0o755, data: "trusted"})
+	want, err := (Bundle{Entries: []Entry{{Name: "nested/bin/run", Mode: 0o755, Size: 7, SHA256: testDigest("trusted")}}}).WithDigest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []string{"VerifyZip", "VerifyZipReader", "ExtractZip", "ExtractZipReader"} {
+		for _, test := range []string{"valid", "multiple options", "negative limits"} {
+			t.Run(operation+"/"+test, func(t *testing.T) {
+				dst := filepath.Join(t.TempDir(), "out")
+				var options []VerifyOptions
+				switch test {
+				case "multiple options":
+					options = []VerifyOptions{{}, {}}
+				case "negative limits":
+					options = []VerifyOptions{{Limits: Limits{MaxEntries: -1}}}
+				}
+				var bundle Bundle
+				var err error
+				switch operation {
+				case "VerifyZip":
+					bundle, err = VerifyZip(path, options...)
+				case "VerifyZipReader":
+					bundle, err = VerifyZipReader(bytes.NewReader(data), int64(len(data)), options...)
+				case "ExtractZip":
+					bundle, err = ExtractZip(path, dst, options...)
+				case "ExtractZipReader":
+					bundle, err = ExtractZipReader(bytes.NewReader(data), int64(len(data)), dst, options...)
+				}
+				if test != "valid" {
+					message := "negative archive limit"
+					if test == "multiple options" {
+						message = operation + " accepts at most one options value"
+					}
+					if err == nil || !strings.Contains(err.Error(), message) {
+						t.Fatalf("error = %v, want %q", err, message)
+					}
+					if _, err := os.Lstat(dst); !os.IsNotExist(err) {
+						t.Fatalf("invalid request created extraction destination: %v", err)
+					}
+					return
+				}
+				if err != nil || !reflect.DeepEqual(bundle, want) {
+					t.Fatalf("bundle = %+v, %v; want %+v", bundle, err, want)
+				}
+				if strings.HasPrefix(operation, "Extract") {
+					if payload, err := os.ReadFile(filepath.Join(dst, "nested/bin/run")); err != nil || string(payload) != "trusted" {
+						t.Fatalf("extracted payload = %q, %v", payload, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestExtractZipRejectsInvalidSourceAndDestination(t *testing.T) {
+	path := writeTestZip(t, testZipEntry{name: "bin/run", data: "trusted"})
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fromReader := range []bool{false, true} {
+		for _, destination := range []string{"empty", "file", "file parent", "existing output"} {
+			t.Run(strconv.FormatBool(fromReader)+"/"+destination, func(t *testing.T) {
+				dst := t.TempDir()
+				preserved := filepath.Join(dst, "bin")
+				switch destination {
+				case "empty":
+					dst = ""
+				case "file":
+					dst = filepath.Join(dst, "output")
+					preserved = dst
+				case "existing output":
+					if err := os.Mkdir(preserved, 0o700); err != nil {
+						t.Fatal(err)
+					}
+					preserved = filepath.Join(preserved, "run")
+				}
+				if err := os.WriteFile(preserved, []byte("untouched"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				if fromReader {
+					_, err = ExtractZipReader(bytes.NewReader(data), int64(len(data)), dst)
+				} else {
+					_, err = ExtractZip(path, dst)
+				}
+				switch destination {
+				case "empty":
+					if err == nil || !strings.Contains(err.Error(), "destination is empty") {
+						t.Fatalf("empty destination = %v", err)
+					}
+				case "existing output":
+					if !errors.Is(err, os.ErrExist) {
+						t.Fatalf("existing output = %v, want os.ErrExist", err)
+					}
+				default:
+					if !errors.Is(err, ErrUnsafeArchive) {
+						t.Fatalf("unsafe destination = %v, want ErrUnsafeArchive", err)
+					}
+				}
+				if data, err := os.ReadFile(preserved); err != nil || string(data) != "untouched" {
+					t.Fatalf("existing destination changed: %q, %v", data, err)
+				}
+			})
+		}
+	}
+	if _, err := ExtractZip(filepath.Join(t.TempDir(), "missing"), t.TempDir()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing ZIP = %v", err)
+	}
+}
+
+func TestHashReaderEnforcesSizeAndPreservesReadErrors(t *testing.T) {
+	readErr := errors.New("source failed")
+	for _, tt := range []struct {
+		name     string
+		reader   io.Reader
+		limit    int64
+		wantSize int64
+		wantErr  error
+	}{
+		{"empty", strings.NewReader(""), 0, 0, nil},
+		{"exact", strings.NewReader("abc"), 3, 3, nil},
+		{"too large", strings.NewReader("abc"), 2, 3, ErrDigestMismatch},
+		{"maximum limit", strings.NewReader("abc"), math.MaxInt64, 3, nil},
+		{"read failure", io.MultiReader(strings.NewReader("abc"), iotest.ErrReader(readErr)), 4, 3, readErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			digest, size, err := hashReader(tt.reader, tt.limit)
+			if size != tt.wantSize || !errors.Is(err, tt.wantErr) {
+				t.Fatalf("hashReader = %q, %d, %v; want size %d, error %v", digest, size, err, tt.wantSize, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				if digest != "" {
+					t.Fatalf("failed read returned digest %q", digest)
+				}
+			} else if digest != testDigest("abc"[:tt.wantSize]) {
+				t.Fatalf("digest = %q, want digest of verified bytes", digest)
+			}
+		})
+	}
+}
+
+// zipFailureReader exercises read and close errors through archive/zip's public
+// decompressor hook, rather than changing the verifier's implementation.
+type zipFailureReader struct {
+	io.Reader
+	closeErr error
+	closes   int
+}
+
+func (r *zipFailureReader) Close() error {
+	r.closes++
+	return r.closeErr
+}
+
+func TestZipReadersPreserveFailuresAndExtractionCleansUp(t *testing.T) {
+	const payload = "target"
+	zipPath := writeTestZip(t, testZipEntry{name: "asset", data: payload})
+	data, err := os.ReadFile(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("injected ZIP stream failure")
+	for _, operation := range []string{"hash", "symlink hash", "extract"} {
+		for _, fault := range []string{"open", "read", "close"} {
+			t.Run(operation+"/"+fault, func(t *testing.T) {
+				reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				file := reader.File[0]
+				file.Method = 99
+				stream := &zipFailureReader{Reader: strings.NewReader(payload)}
+				want := failure
+				switch fault {
+				case "open":
+					want = zip.ErrAlgorithm
+				case "read":
+					stream.Reader = iotest.ErrReader(failure)
+				case "close":
+					stream.closeErr = failure
+				}
+				if fault != "open" {
+					reader.RegisterDecompressor(99, func(io.Reader) io.ReadCloser { return stream })
+				}
+				switch operation {
+				case "hash":
+					_, _, err = hashZipEntry(file, 100)
+				case "symlink hash":
+					_, _, err = hashMaterializedSymlinkEntry(file, "asset")
+				case "extract":
+					destination := t.TempDir()
+					root, openErr := os.OpenRoot(destination)
+					if openErr != nil {
+						t.Fatal(openErr)
+					}
+					defer root.Close()
+					entry := Entry{Name: "asset", Size: int64(len(payload)), SHA256: testDigest(payload)}
+					err = extractVerifiedRoot(verifiedArchive{entries: []verifiedEntry{{entry: entry, file: file}}}, root)
+					if fault == "read" {
+						want = ErrDigestMismatch
+					}
+					if _, statErr := root.Lstat("asset"); !errors.Is(statErr, os.ErrNotExist) {
+						t.Fatalf("failed extraction left an asset: %v", statErr)
+					}
+				}
+				if !errors.Is(err, want) {
+					t.Fatalf("%s = %v, want %v", operation, err, want)
+				}
+				if fault != "open" && stream.closes != 1 {
+					t.Fatalf("ZIP stream closed %d times, want once", stream.closes)
+				}
+			})
+		}
+	}
+}
+
+func TestVerifyRejectsInvalidZIPDataLocations(t *testing.T) {
+	for _, fault := range []string{"missing local header", "nonempty directory", "overlapping entries"} {
+		t.Run(fault, func(t *testing.T) {
+			entries := []testZipEntry{{name: "a", data: "same"}, {name: "b", data: "same"}}
+			if fault == "nonempty directory" {
+				entries = []testZipEntry{{name: "directory/"}}
+			}
+			data, err := os.ReadFile(writeTestZip(t, entries...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			central := bytes.Index(data, []byte("PK\x01\x02"))
+			if central < 0 {
+				t.Fatal("fixture has no central directory")
+			}
+			switch fault {
+			case "missing local header":
+				data[0] = 'X'
+			case "nonempty directory":
+				binary.LittleEndian.PutUint32(data[central+24:], 1)
+			case "overlapping entries":
+				second := bytes.Index(data[central+4:], []byte("PK\x01\x02")) + central + 4
+				if second <= central+4 {
+					t.Fatal("fixture has no second central entry")
+				}
+				copy(data[second+42:second+46], data[central+42:central+46])
+			}
+			if _, err := VerifyZipReader(bytes.NewReader(data), int64(len(data))); !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("invalid ZIP location = %v, want ErrUnsafeArchive", err)
+			}
+		})
+	}
+	data, err := os.ReadFile(writeTestZip(t, testZipEntry{name: "asset", data: "payload"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := reader.File[0]
+	offset, err := file.DataOffset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, archiveSize := range []int64{offset - 1, offset + int64(file.CompressedSize64) - 1} {
+		if err := validateZipOffset(file, archiveSize); !errors.Is(err, ErrUnsafeArchive) {
+			t.Fatalf("archive boundary %d = %v, want ErrUnsafeArchive", archiveSize, err)
+		}
+	}
+}
+
+func TestEnsureNoSymlinkParentsRejectsEscapes(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "directory"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file"), []byte("untouched"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name   string
+		root   string
+		target string
+		want   error
+	}{
+		{"existing nested path", root, filepath.Join(root, "directory"), nil},
+		{"missing nested path", root, filepath.Join(root, "missing", "child"), nil},
+		{"outside path", root, filepath.Dir(root), ErrUnsafeArchive},
+		{"missing root", filepath.Join(root, "absent"), filepath.Join(root, "absent", "child"), os.ErrNotExist},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ensureNoSymlinkParents(tt.root, tt.target); !errors.Is(err, tt.want) {
+				t.Fatalf("ensureNoSymlinkParents = %v, want %v", err, tt.want)
+			}
+		})
+	}
+	if err := ensureNoSymlinkParents(root, filepath.Join(root, "file", "child")); err == nil || errors.Is(err, ErrUnsafeArchive) {
+		t.Fatalf("filesystem traversal error was lost: %v", err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := ensureNoSymlinkParents(root, filepath.Join(root, "link", "child")); !errors.Is(err, ErrUnsafeArchive) {
+		t.Fatalf("symlink parent = %v", err)
+	}
+	if opened, err := openPinnedRoot(filepath.Join(root, "file")); opened != nil || !errors.Is(err, ErrUnsafeArchive) {
+		t.Fatalf("pin regular file = %v, %v", opened, err)
+	}
+}
+
+func TestManifestCanonicalizationRejectsInvalidInputs(t *testing.T) {
+	valid := Bundle{Entries: []Entry{{Name: "asset", Size: 1, SHA256: testDigest("x")}}}
+	negative := Limits{MaxEntries: -1}
+	for name, operation := range map[string]func() error{
+		"canonical":      func() error { _, err := valid.CanonicalBytesWithLimits(negative); return err },
+		"parse":          func() error { _, err := ParseManifestWithLimits([]byte(`{}`), negative); return err },
+		"compare limits": func() error { return manifestEntriesEqualWithLimits(valid, valid, negative) },
+		"invalid left":   func() error { return manifestEntriesEqualWithLimits(Bundle{Schema: "invalid"}, valid, Limits{}) },
+		"invalid right":  func() error { return manifestEntriesEqualWithLimits(valid, Bundle{Schema: "invalid"}, Limits{}) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := operation(); !errors.Is(err, ErrInvalidManifest) {
+				t.Fatalf("invalid manifest = %v", err)
+			}
+		})
+	}
+	for _, other := range []Bundle{{}, {Namespace: NamespaceEngine, Entries: valid.Entries}} {
+		if err := manifestEntriesEqualWithLimits(valid, other, Limits{}); !errors.Is(err, ErrDigestMismatch) {
+			t.Fatalf("different manifest identity = %v", err)
+		}
+	}
+}
+
+func TestZipPreflightRejectsMalformedAndOverLimitArchives(t *testing.T) {
+	data, err := os.ReadFile(writeTestZip(t,
+		testZipEntry{name: "one", data: "1"},
+		testZipEntry{name: "two", data: "2"},
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name                      string
+		data                      []byte
+		limits                    Limits
+		wantPreflight, wantVerify error
+	}{
+		{"entry limit", data, Limits{MaxEntries: 1}, ErrArchiveLimit, ErrArchiveLimit},
+		{"trailing data", append(append([]byte(nil), data...), 0x7f), Limits{}, zip.ErrFormat, ErrUnsafeArchive},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			limits, err := tt.limits.withDefaults()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := preflightZipArchive(bytes.NewReader(tt.data), int64(len(tt.data)), limits); !errors.Is(err, tt.wantPreflight) {
+				t.Fatalf("preflightZipArchive = %v, want %v", err, tt.wantPreflight)
+			}
+			if _, err := VerifyZipReader(bytes.NewReader(tt.data), int64(len(tt.data)), VerifyOptions{Limits: tt.limits}); !errors.Is(err, tt.wantVerify) {
+				t.Fatalf("VerifyZipReader = %v, want %v", err, tt.wantVerify)
 			}
 		})
 	}

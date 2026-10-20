@@ -31,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/iotest"
 
 	"github.com/goplus/spx/v3/internal/runtimebundle"
 )
@@ -54,6 +55,15 @@ func buildPayload(config testPayload) ([]byte, string, string, error) {
 		return nil, "", "", err
 	}
 	return output.Bytes(), payloadDigest, manifestDigest, nil
+}
+
+func newTestPayload(t *testing.T) ([]byte, string, string) {
+	t.Helper()
+	payload, payloadDigest, manifestDigest, err := buildPayload(testBuildConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload, payloadDigest, manifestDigest
 }
 
 func componentBundleBytes(data []byte, namespace runtimebundle.Namespace) (runtimebundle.Bundle, error) {
@@ -215,10 +225,7 @@ func TestVerifyReaderAtRejectsOversizedArchiveBeforeReading(t *testing.T) {
 }
 
 func TestEstimatePayloadArchiveSizeMatchesBuild(t *testing.T) {
-	payload, _, _, err := buildPayload(testBuildConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	payload, _, _ := newTestPayload(t)
 	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
 	if err != nil {
 		t.Fatal(err)
@@ -342,10 +349,7 @@ func TestBuildVerifyCanonicalPayload(t *testing.T) {
 }
 
 func TestVerifyRejectsDigestTargetAndManifestTampering(t *testing.T) {
-	payload, payloadDigest, manifestDigest, err := buildPayload(testBuildConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	payload, payloadDigest, manifestDigest := newTestPayload(t)
 
 	t.Run("payload digest", func(t *testing.T) {
 		changed := append([]byte(nil), payload...)
@@ -365,7 +369,7 @@ func TestVerifyRejectsDigestTargetAndManifestTampering(t *testing.T) {
 		}
 	})
 	t.Run("entry table", func(t *testing.T) {
-		changed, changedPayloadDigest, changedManifestDigest := rewritePayloadManifest(t, payload, func(manifest *Manifest) {
+		changed, changedPayloadDigest, changedManifestDigest := rewritePayload(t, payload, func(manifest *Manifest, _ []testFile) {
 			manifest.Entries[0].SHA256 = strings.Repeat("0", sha256.Size*2)
 		})
 		if _, err := Verify(changed, changedPayloadDigest, changedManifestDigest, runtime.GOOS, runtime.GOARCH); err == nil || !strings.Contains(err.Error(), "entry table") {
@@ -373,7 +377,7 @@ func TestVerifyRejectsDigestTargetAndManifestTampering(t *testing.T) {
 		}
 	})
 	t.Run("component identity", func(t *testing.T) {
-		changed, changedPayloadDigest, changedManifestDigest := rewritePayloadManifest(t, payload, func(manifest *Manifest) {
+		changed, changedPayloadDigest, changedManifestDigest := rewritePayload(t, payload, func(manifest *Manifest, _ []testFile) {
 			manifest.Engine.BundleDigest = strings.Repeat("0", sha256.Size*2)
 		})
 		if _, err := Verify(changed, changedPayloadDigest, changedManifestDigest, runtime.GOOS, runtime.GOARCH); err == nil || !strings.Contains(err.Error(), "engine bundle digest mismatch") {
@@ -629,7 +633,7 @@ func testBuildConfig(t *testing.T) testPayload {
 	}
 }
 
-func rewritePayloadManifest(t *testing.T, payload []byte, mutate func(*Manifest)) ([]byte, string, string) {
+func rewritePayload(t *testing.T, payload []byte, mutate func(*Manifest, []testFile)) ([]byte, string, string) {
 	t.Helper()
 	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
 	if err != nil {
@@ -658,7 +662,7 @@ func rewritePayloadManifest(t *testing.T, payload []byte, mutate func(*Manifest)
 		}
 		files = append(files, testFile{Name: file.Name, Mode: file.Mode(), Data: data})
 	}
-	mutate(&manifest)
+	mutate(&manifest, files)
 	manifestData, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -671,4 +675,498 @@ func rewritePayloadManifest(t *testing.T, payload []byte, mutate func(*Manifest)
 	payloadSum := sha256.Sum256(archive)
 	manifestSum := sha256.Sum256(manifestData)
 	return archive, hex.EncodeToString(payloadSum[:]), hex.EncodeToString(manifestSum[:])
+}
+
+func TestBuildRejectsInvalidIdentityAndSourcesBeforeWriting(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		mutate func(*BuildConfig, *[]FileSource)
+		want   string
+	}{
+		{"missing identity", func(c *BuildConfig, _ *[]FileSource) { c.SPX.SelectedPath = "" }, "selected SPX path is empty"},
+		{"invalid ABI", func(c *BuildConfig, _ *[]FileSource) { c.Engine.RuntimeABI = 0 }, "ABI must be positive"},
+		{"nonhex digest", func(c *BuildConfig, _ *[]FileSource) { c.Engine.BundleDigest = strings.Repeat("g", 64) }, "invalid engine bundle digest"},
+		{"unsafe basename", func(c *BuildConfig, _ *[]FileSource) { c.Engine.Executable = "../engine" }, "unsafe component basename"},
+		{"nil reader", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].ReaderAt = nil }, "nil ReaderAt"},
+		{"negative size", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Size = -1 }, "negative size"},
+		{"long name", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Name = strings.Repeat("a", zipMaxNameBytes+1) }, "name is too long"},
+		{"invalid path", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Name = "/absolute" }, "invalid entry path"},
+		{"engine claim", func(c *BuildConfig, _ *[]FileSource) { c.Engine.BundleDigest = strings.Repeat("0", 64) }, "engine bundle digest does not match"},
+		{"bridge claim", func(c *BuildConfig, _ *[]FileSource) { c.Bridge.BundleDigest = strings.Repeat("0", 64) }, "bridge bundle digest does not match"},
+		{"project archive claim", func(c *BuildConfig, _ *[]FileSource) { c.Project.ArchiveSHA256 = strings.Repeat("0", 64) }, "project archive digest does not match"},
+		{"project bundle claim", func(c *BuildConfig, _ *[]FileSource) { c.Project.BundleDigest = strings.Repeat("0", 64) }, "project bundle digest does not match"},
+		{"missing engine", func(_ *BuildConfig, s *[]FileSource) { *s = (*s)[3:] }, "empty engine component"},
+		{"missing bridge", func(_ *BuildConfig, s *[]FileSource) { *s = append((*s)[:3], (*s)[5:]...) }, "empty bridge component"},
+		{"missing project", func(_ *BuildConfig, s *[]FileSource) { *s = (*s)[:5] }, "missing required entry"},
+		{"invalid project ZIP", func(c *BuildConfig, s *[]FileSource) {
+			data := []byte("not a ZIP")
+			(*s)[5].ReaderAt, (*s)[5].Size = bytes.NewReader(data), int64(len(data))
+			sum := sha256.Sum256(data)
+			c.Project.ArchiveSHA256 = hex.EncodeToString(sum[:])
+		}, "verify project archive"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config, sources := fileSources(testBuildConfig(t))
+			tt.mutate(&config, &sources)
+			var output bytes.Buffer
+			payloadDigest, manifestDigest, err := BuildTo(&output, config, sources)
+			if err == nil || !strings.Contains(err.Error(), tt.want) || output.Len() != 0 || payloadDigest != "" || manifestDigest != "" {
+				t.Fatalf("BuildTo = %q/%q, %v; output=%d, want %q before writing", payloadDigest, manifestDigest, err, output.Len(), tt.want)
+			}
+		})
+	}
+	config, sources := fileSources(testBuildConfig(t))
+	if _, _, err := BuildTo(nil, config, sources); err == nil || !strings.Contains(err.Error(), "nil payload writer") {
+		t.Fatalf("nil writer = %v", err)
+	}
+}
+
+func TestComponentBundleSourcesRejectsInvalidInputs(t *testing.T) {
+	good := FileSource{Name: "asset", ReaderAt: bytes.NewReader([]byte("x")), Size: 1}
+	for _, tt := range []struct {
+		name    string
+		sources []FileSource
+		want    string
+	}{
+		{"empty", nil, "empty"},
+		{"invalid path", []FileSource{{Name: "../asset"}}, "invalid entry path"},
+		{"duplicate", []FileSource{good, good}, "duplicate entry"},
+		{"nil reader", []FileSource{{Name: "asset"}}, "nil ReaderAt"},
+		{"negative size", []FileSource{{Name: "asset", ReaderAt: good.ReaderAt, Size: -1}}, "negative size"},
+		{"short read", []FileSource{{Name: "asset", ReaderAt: good.ReaderAt, Size: 2}}, "short read"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if bundle, err := ComponentBundleSources(tt.sources, runtimebundle.NamespaceEngine); bundle.Digest != "" || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("ComponentBundleSources = %+v, %v; want %q", bundle, err, tt.want)
+			}
+		})
+	}
+	if _, err := prepareSources([]FileSource{good}, good.Name); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("reserved source = %v", err)
+	}
+}
+
+func TestVerifyRejectsMalformedMetadataAndClaims(t *testing.T) {
+	payload, _, _ := newTestPayload(t)
+	for _, tt := range []struct {
+		name   string
+		mutate func(*Manifest)
+		want   string
+	}{
+		{"schema", func(m *Manifest) { m.Schema = "unknown" }, "unsupported manifest schema/protocol"},
+		{"protocol", func(m *Manifest) { m.Protocol = "unknown" }, "unsupported manifest schema/protocol"},
+		{"missing identity", func(m *Manifest) { m.SPX.EffectivePath = "" }, "effective SPX path is empty"},
+		{"missing entry table", func(m *Manifest) { m.Entries = nil }, "entry table does not match"},
+		{"required executable", func(m *Manifest) { m.Engine.Executable = "missing" }, "missing required entry"},
+		{"archive claim", func(m *Manifest) { m.Project.ArchiveSHA256 = strings.Repeat("0", 64) }, "project archive SHA-256 mismatch"},
+		{"project claim", func(m *Manifest) { m.Project.BundleDigest = strings.Repeat("0", 64) }, "project bundle digest mismatch"},
+		{"bridge claim", func(m *Manifest) { m.Bridge.BundleDigest = strings.Repeat("0", 64) }, "bridge bundle digest mismatch"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			changed, payloadDigest, manifestDigest := rewritePayload(t, payload, func(m *Manifest, _ []testFile) { tt.mutate(m) })
+			if result, err := Verify(changed, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH); result != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Verify = %v, %v; want %q", result, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestVerifyReaderAtRejectsInvalidInputs(t *testing.T) {
+	payload, payloadDigest, manifestDigest := newTestPayload(t)
+	for _, tt := range []struct {
+		name                          string
+		reader                        io.ReaderAt
+		size                          int64
+		payloadDigest, manifestDigest string
+		want                          string
+	}{
+		{"nil reader", nil, 0, payloadDigest, manifestDigest, "nil payload reader"},
+		{"negative size", bytes.NewReader(payload), -1, payloadDigest, manifestDigest, "negative payload size"},
+		{"invalid payload digest", bytes.NewReader(payload), int64(len(payload)), "bad", manifestDigest, "invalid expected payload SHA-256"},
+		{"invalid manifest digest", bytes.NewReader(payload), int64(len(payload)), payloadDigest, "bad", "invalid expected manifest SHA-256"},
+		{"truncated reader", bytes.NewReader(payload[:10]), int64(len(payload)), payloadDigest, manifestDigest, "hash payload"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if result, err := VerifyReaderAt(tt.reader, tt.size, tt.payloadDigest, tt.manifestDigest, runtime.GOOS, runtime.GOARCH); result != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("VerifyReaderAt = %v, %v; want %q", result, err, tt.want)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		name  string
+		files []testFile
+		want  string
+	}{
+		{"missing manifest", testBuildConfig(t).Files, "missing " + ManifestPath},
+		{"malformed manifest", []testFile{{Name: ManifestPath, Data: []byte("{")}}, "decode manifest"},
+		{"oversized manifest", []testFile{{Name: ManifestPath, Data: bytes.Repeat([]byte(" "), maxPayloadManifestBytes+1)}}, "read manifest"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := canonicalComponentZIP(tt.files)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payloadSum := sha256.Sum256(data)
+			manifestSum := sha256.Sum256(tt.files[0].Data)
+			if result, err := Verify(data, hex.EncodeToString(payloadSum[:]), hex.EncodeToString(manifestSum[:]), runtime.GOOS, runtime.GOARCH); result != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Verify = %v, %v; want %q", result, err, tt.want)
+			}
+		})
+	}
+	invalid := []byte("not a ZIP")
+	sum := sha256.Sum256(invalid)
+	if _, err := Verify(invalid, hex.EncodeToString(sum[:]), manifestDigest, runtime.GOOS, runtime.GOARCH); !errors.Is(err, runtimebundle.ErrUnsafeArchive) {
+		t.Fatalf("invalid ZIP = %v", err)
+	}
+}
+
+func TestVerifiedWritersRejectInvalidRequestsAndWriteFailures(t *testing.T) {
+	payload, payloadDigest, manifestDigest := newTestPayload(t)
+	verified, err := Verify(payload, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name string
+		call func() error
+		want string
+	}{
+		{"nil component", func() error { return (*Verified)(nil).WriteComponentZIP("engine/", io.Discard) }, "invalid component prefix"},
+		{"invalid prefix", func() error { return verified.WriteComponentZIP("project/", io.Discard) }, "invalid component prefix"},
+		{"nil component writer", func() error { return verified.WriteComponentZIP("engine/", nil) }, "nil component writer"},
+		{"empty component", func() error { return (&Verified{}).WriteComponentZIP("engine/", io.Discard) }, "empty component"},
+		{"missing component", func() error { return (&Verified{entries: verified.entries}).WriteComponentZIP("engine/", io.Discard) }, "missing component entry"},
+		{"nil project", func() error { return (*Verified)(nil).WriteProjectZIP(io.Discard) }, "nil verified payload"},
+		{"nil project writer", func() error { return verified.WriteProjectZIP(nil) }, "nil project writer"},
+		{"missing project", func() error { return (&Verified{}).WriteProjectZIP(io.Discard) }, "missing required entry"},
+		{"component sink failure", func() error { return verified.WriteComponentZIP("engine/", &failingWriter{}) }, "close component ZIP"},
+		{"project sink failure", func() error { return verified.WriteProjectZIP(&failingWriter{}) }, "copy entry"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	for _, kind := range []string{"size", "digest"} {
+		t.Run("changed project "+kind, func(t *testing.T) {
+			copy := *verified
+			copy.entries = append([]runtimebundle.Entry(nil), verified.entries...)
+			for i := range copy.entries {
+				if copy.entries[i].Name == ProjectZipPath {
+					if kind == "size" {
+						copy.entries[i].Size++
+					} else {
+						copy.entries[i].SHA256 = strings.Repeat("0", 64)
+					}
+				}
+			}
+			if err := copy.WriteProjectZIP(io.Discard); err == nil || !strings.Contains(err.Error(), kind+" changed") {
+				t.Fatalf("changed entry = %v, want %s failure", err, kind)
+			}
+		})
+	}
+}
+
+func TestPreparedPayloadLimits(t *testing.T) {
+	full := make([]runtimebundle.Entry, 8)
+	for i := range full {
+		full[i] = runtimebundle.Entry{Name: "entry", Size: runtimebundle.MaxEntrySize}
+	}
+	for _, tt := range []struct {
+		name         string
+		entries      []runtimebundle.Entry
+		manifestSize int64
+		want         string
+	}{
+		{"entry count", make([]runtimebundle.Entry, runtimebundle.MaxEntries), 0, "entries exceeds limit"},
+		{"negative manifest", nil, -1, "negative manifest size"},
+		{"large manifest", nil, maxPayloadManifestBytes + 1, "manifest size"},
+		{"negative entry", []runtimebundle.Entry{{Name: "x", Size: -1}}, 0, "negative size"},
+		{"large entry", []runtimebundle.Entry{{Name: "x", Size: runtimebundle.MaxEntrySize + 1}}, 0, "entry"},
+		{"total overflow", append(append([]runtimebundle.Entry(nil), full...), runtimebundle.Entry{Name: "extra", Size: 1}), 0, "total size"},
+		{"manifest in total", full, 1, "total size"},
+		{"long entry name", []runtimebundle.Entry{{Name: strings.Repeat("x", zipMaxNameBytes+1)}}, 0, "name is too long"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validatePreparedPayloadLimits(tt.entries, tt.manifestSize); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("limits = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestEstimatePayloadArchiveSizeZIP64AndOverflow(t *testing.T) {
+	const maxInt64 = int64(^uint64(0) >> 1)
+	for _, tt := range []struct {
+		name    string
+		entries []runtimebundle.Entry
+		want    int64
+		wantErr string
+	}{
+		{"empty", nil, 22, ""},
+		{"one byte", []runtimebundle.Entry{{Name: "x", Size: 1}}, 135, ""},
+		{"ZIP64 entry", []runtimebundle.Entry{{Name: "x", Size: int64(zip32Max)}}, int64(zip32Max) + 246, ""},
+		{"largest representable", []runtimebundle.Entry{{Name: "x", Size: maxInt64 - 246}}, maxInt64, ""},
+		{"negative entry", []runtimebundle.Entry{{Name: "x", Size: -1}}, 0, "negative size"},
+		{"long name", []runtimebundle.Entry{{Name: strings.Repeat("x", zipMaxNameBytes+1)}}, 0, "name is too long"},
+		{"local content overflow", []runtimebundle.Entry{{Name: "x", Size: maxInt64}}, 0, "overflow"},
+		{"descriptor overflow", []runtimebundle.Entry{{Name: "x", Size: maxInt64 - 40}}, 0, "overflow"},
+		{"offset overflow", []runtimebundle.Entry{{Name: "a", Size: maxInt64 / 2}, {Name: "b", Size: maxInt64 / 2}}, 0, "overflow"},
+		{"central directory overflow", []runtimebundle.Entry{{Name: "x", Size: maxInt64 - 64}}, 0, "overflow"},
+		{"end record overflow", []runtimebundle.Entry{{Name: "x", Size: maxInt64 - 148}}, 0, "overflow"},
+		{"ZIP64 end overflow", []runtimebundle.Entry{{Name: "x", Size: maxInt64 - 170}}, 0, "overflow"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := estimatePayloadArchiveSize(tt.entries)
+			if tt.wantErr != "" {
+				if got != 0 || err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("estimate = %d, %v; want %q", got, err, tt.wantErr)
+				}
+			} else if err != nil || got != tt.want {
+				t.Fatalf("estimate = %d, %v; want %d", got, err, tt.want)
+			}
+		})
+	}
+	if _, err := addPayloadSize(-1, 1); err == nil {
+		t.Fatal("negative summand accepted")
+	}
+}
+
+func TestBuildToPropagatesFailuresDuringZIPWriting(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		size int64
+		want string
+	}{
+		// Fill archive/zip's 4096-byte buffer at the end of the bridge
+		// manifest, or overflow it while writing that entry's body.
+		{"next header", 4096, "create entry"},
+		{"entry body", 8192, "write entry"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config, sources := fileSources(testBuildConfig(t))
+			resizeBridgeManifest := func(size int64) {
+				for i := range sources {
+					if sources[i].Name == "bridge/bridge-manifest.json" {
+						sources[i].ReaderAt = bytes.NewReader(bytes.Repeat([]byte("x"), int(size)))
+						sources[i].Size = size
+					}
+				}
+				bridge, err := ComponentBundleSources(componentSources(sources, "bridge/"), runtimebundle.NamespaceBridge)
+				if err != nil {
+					t.Fatal(err)
+				}
+				config.Bridge.BundleDigest = bridge.Digest
+			}
+			resizeBridgeManifest(tt.size)
+			if tt.name == "next header" {
+				var fixture bytes.Buffer
+				if _, _, err := BuildTo(&fixture, config, sources); err != nil {
+					t.Fatal(err)
+				}
+				archive, err := zip.NewReader(bytes.NewReader(fixture.Bytes()), int64(fixture.Len()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, file := range archive.File {
+					if file.Name == "bridge/bridge-manifest.json" {
+						offset, err := file.DataOffset()
+						if err != nil {
+							t.Fatal(err)
+						}
+						resizeBridgeManifest(4096 - offset)
+					}
+				}
+			}
+			payloadDigest, manifestDigest, err := BuildTo(&failingWriter{}, config, sources)
+			if !errors.Is(err, errWriteFailure) || !strings.Contains(err.Error(), tt.want) || payloadDigest != "" || manifestDigest != "" {
+				t.Fatalf("BuildTo = %q/%q, %v; want %q write failure", payloadDigest, manifestDigest, err, tt.want)
+			}
+		})
+	}
+}
+
+type payloadReaderAtFunc func([]byte, int64) (int, error)
+
+func (f payloadReaderAtFunc) ReadAt(data []byte, offset int64) (int, error) { return f(data, offset) }
+
+func TestSourceReadsPropagateErrorsAndRejectTruncation(t *testing.T) {
+	readErr := errors.New("source read failure")
+	failed := payloadReaderAtFunc(func([]byte, int64) (int, error) { return 0, readErr })
+	for _, tt := range []struct {
+		name   string
+		reader io.ReaderAt
+		size   int64
+		want   error
+	}{
+		{"read failure", failed, 1, readErr},
+		{"truncated", bytes.NewReader([]byte("x")), 2, io.ErrUnexpectedEOF},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			source := FileSource{Name: "x", ReaderAt: tt.reader, Size: tt.size}
+			for _, operation := range []func(FileSource) (string, error){hashSource, func(s FileSource) (string, error) { return writeSource(io.Discard, s) }} {
+				if digest, err := operation(source); digest != "" || !errors.Is(err, tt.want) {
+					t.Fatalf("source read = %q, %v; want %v", digest, err, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestVerifyDetectsSourceChangeOnFinalDigestPass(t *testing.T) {
+	payload, payloadDigest, manifestDigest := newTestPayload(t)
+	fullReads := 0
+	reader := payloadReaderAtFunc(func(data []byte, offset int64) (int, error) {
+		n, err := bytes.NewReader(payload).ReadAt(data, offset)
+		if offset == 0 && len(data) == len(payload) {
+			fullReads++
+			if fullReads > 1 {
+				data[0] ^= 1
+			}
+		}
+		return n, err
+	})
+	if result, err := VerifyReaderAt(reader, int64(len(payload)), payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH); result != nil || err == nil || !strings.Contains(err.Error(), "payload source changed during verification") || fullReads < 2 {
+		t.Fatalf("VerifyReaderAt = %v, %v; full reads=%d", result, err, fullReads)
+	}
+}
+
+type payloadCloseErrorReader struct {
+	io.Reader
+	err    error
+	closes int
+}
+
+func (r *payloadCloseErrorReader) Close() error { r.closes++; return r.err }
+
+func TestZipEntryReadsPreserveOpenReadAndCloseErrors(t *testing.T) {
+	data, err := canonicalComponentZIP([]testFile{{Name: "entry", Data: []byte("payload")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("entry stream failure")
+	for _, phase := range []string{"open", "read", "close"} {
+		for _, operation := range []string{"small entry", "verified copy"} {
+			t.Run(operation+"/"+phase, func(t *testing.T) {
+				archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				file := archive.File[0]
+				file.Method = 99
+				stream := &payloadCloseErrorReader{Reader: bytes.NewReader([]byte("payload"))}
+				want := failure
+				if phase == "open" {
+					want = zip.ErrAlgorithm
+				} else {
+					if phase == "close" {
+						stream.err = failure
+					} else {
+						stream.Reader = iotest.ErrReader(failure)
+					}
+					archive.RegisterDecompressor(99, func(io.Reader) io.ReadCloser { return stream })
+				}
+				if operation == "small entry" {
+					_, err = readSmallZipEntry(file, 100)
+				} else {
+					sum := sha256.Sum256([]byte("payload"))
+					err = copyVerifiedZipEntry(io.Discard, file, runtimebundle.Entry{Name: "entry", Size: 7, SHA256: hex.EncodeToString(sum[:])})
+				}
+				if !errors.Is(err, want) {
+					t.Fatalf("entry error = %v, want %v", err, want)
+				}
+				if phase != "open" && stream.closes != 1 {
+					t.Fatalf("stream closes = %d, want 1", stream.closes)
+				}
+			})
+		}
+	}
+}
+
+func TestStoredProjectEntryRejectsNoncanonicalZIP(t *testing.T) {
+	if _, _, err := (*Verified)(nil).storedEntryReaderAt(nil); err == nil {
+		t.Fatal("nil stored entry accepted")
+	}
+	payload, payloadDigest, manifestDigest := newTestPayload(t)
+	for _, phase := range []string{"compression method", "size mismatch", "missing component"} {
+		t.Run(phase, func(t *testing.T) {
+			verified, err := Verify(payload, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "canonical ZIP store mode"
+			switch phase {
+			case "compression method":
+				verified.files[ProjectZipPath].Method = zip.Deflate
+			case "size mismatch":
+				verified.files[ProjectZipPath].CompressedSize64++
+			case "missing component":
+				delete(verified.files, ProjectZipPath)
+				want = "component entries"
+			}
+			if err := verified.validateComponents(); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("component validation = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestVerifyRejectsMalformedProjectInsideAuthenticatedPayload(t *testing.T) {
+	payload, _, _ := newTestPayload(t)
+	changed, payloadDigest, manifestDigest := rewritePayload(t, payload, func(manifest *Manifest, files []testFile) {
+		invalidProject := []byte("not a project ZIP")
+		sum := sha256.Sum256(invalidProject)
+		digest := hex.EncodeToString(sum[:])
+		for i := range files {
+			if files[i].Name == ProjectZipPath {
+				files[i].Data = invalidProject
+			}
+		}
+		for i := range manifest.Entries {
+			if manifest.Entries[i].Name == ProjectZipPath {
+				manifest.Entries[i].Size = int64(len(invalidProject))
+				manifest.Entries[i].SHA256 = digest
+			}
+		}
+		manifest.Project.ArchiveSHA256 = digest
+	})
+	// The outer ZIP, payload digest, manifest digest, entry table, and project
+	// archive digest are all consistent. The embedded ZIP still needs validation.
+	if verified, err := Verify(changed, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH); verified != nil || !errors.Is(err, runtimebundle.ErrUnsafeArchive) || !strings.Contains(err.Error(), "verify project archive") {
+		t.Fatalf("Verify malformed embedded project = %v, %v", verified, err)
+	}
+}
+
+func TestVerifiedWritersDetectBackingSourceCorruption(t *testing.T) {
+	for _, tt := range []struct {
+		name, entry string
+		write       func(*Verified, io.Writer) error
+	}{
+		{"engine", "engine/engine", func(v *Verified, dst io.Writer) error { return v.WriteComponentZIP("engine/", dst) }},
+		{"bridge", "bridge/bridge.so", func(v *Verified, dst io.Writer) error { return v.WriteComponentZIP("bridge/", dst) }},
+		{"project", ProjectZipPath, (*Verified).WriteProjectZIP},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, payloadDigest, manifestDigest := newTestPayload(t)
+			verified, err := Verify(payload, payloadDigest, manifestDigest, runtime.GOOS, runtime.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			offset, err := verified.files[tt.entry].DataOffset()
+			if err != nil {
+				t.Fatal(err)
+			}
+			// VerifyReaderAt intentionally retains its source instead of copying it.
+			// A later change must not be silently written out as a trusted component.
+			payload[offset] ^= 1
+			if err := tt.write(verified, io.Discard); !errors.Is(err, zip.ErrChecksum) || !strings.Contains(err.Error(), tt.entry) {
+				t.Fatalf("write corrupted %s = %v, want entry-specific checksum failure", tt.entry, err)
+			}
+			payload[offset] ^= 1
+			if err := tt.write(verified, io.Discard); err != nil {
+				t.Fatalf("write restored %s = %v", tt.entry, err)
+			}
+		})
+	}
 }

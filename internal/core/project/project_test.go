@@ -286,6 +286,9 @@ func TestResourceDirAndLoadConfig(t *testing.T) {
 	if _, err := ResourceDir(123); err == nil {
 		t.Fatal("expected ResourceDir to reject unsupported resource type")
 	}
+	if opened, err := OpenBuilderResources(123, nil); err == nil || opened.FS != nil {
+		t.Fatalf("OpenBuilderResources(unsupported resource) = %+v, %v", opened, err)
+	}
 }
 
 func TestShapeValue(t *testing.T) {
@@ -318,17 +321,19 @@ func TestProjectConfigHelpers(t *testing.T) {
 		t.Fatalf("GetCostumeIndex = %d, want 3", got)
 	}
 
-	if got := ToMapMode("repeat"); got != MapModeRepeat {
-		t.Fatalf("ToMapMode(repeat) = %d, want %d", got, MapModeRepeat)
-	}
-	if got := ToMapMode("fillCut"); got != MapModeFillCut {
-		t.Fatalf("ToMapMode(fillCut) = %d, want %d", got, MapModeFillCut)
-	}
-	if got := ToMapMode("actualSize"); got != MapModeActualSize {
-		t.Fatalf("ToMapMode(actualSize) = %d, want %d", got, MapModeActualSize)
-	}
-	if got := ToMapMode("unknown"); got != MapModeFill {
-		t.Fatalf("ToMapMode(unknown) = %d, want %d", got, MapModeFill)
+	for _, tt := range []struct {
+		name string
+		want int
+	}{
+		{"repeat", MapModeRepeat},
+		{"fillCut", MapModeFillCut},
+		{"fillRatio", MapModeFillRatio},
+		{"actualSize", MapModeActualSize},
+		{"unknown", MapModeFill},
+	} {
+		if got := ToMapMode(tt.name); got != tt.want {
+			t.Errorf("ToMapMode(%q) = %d, want %d", tt.name, got, tt.want)
+		}
 	}
 }
 
@@ -452,27 +457,26 @@ func TestResolvePlatformLayout(t *testing.T) {
 }
 
 func TestResolveBackdropLayout(t *testing.T) {
-	repeat := ResolveBackdropLayout(100, 50, 400, 200, MapModeRepeat)
-	if repeat.RepeatScale == nil || repeat.RepeatScale.X != 4 || repeat.RepeatScale.Y != 4 {
-		t.Fatalf("unexpected repeat layout: %+v", repeat)
-	}
-	if repeat.ScaleX != 4 || repeat.ScaleY != 4 {
-		t.Fatalf("unexpected repeat scale: %+v", repeat)
-	}
-
-	fillCut := ResolveBackdropLayout(100, 50, 100, 100, MapModeFillCut)
-	if fillCut.ScaleX != 1 || fillCut.ScaleY != 1 {
-		t.Fatalf("unexpected fillCut layout: %+v", fillCut)
-	}
-
-	actualSize := ResolveBackdropLayout(100, 50, 400, 200, MapModeActualSize)
-	if actualSize.ScaleX != 1 || actualSize.ScaleY != 1 {
-		t.Fatalf("unexpected actualSize layout: %+v", actualSize)
-	}
-
-	fillRatio := ResolveBackdropLayout(100, 50, 100, 100, MapModeFillRatio)
-	if fillRatio.ScaleX != 2 || fillRatio.ScaleY != 2 {
-		t.Fatalf("unexpected fillRatio layout: %+v", fillRatio)
+	for _, tt := range []struct {
+		name       string
+		imgW, imgH float64
+		mode       int
+		want       BackdropLayout
+	}{
+		{"repeat", 100, 50, MapModeRepeat, BackdropLayout{ScaleX: 1, ScaleY: 2, RepeatScale: &mathf.Vec4{X: 1, Y: 2}}},
+		{"actual size", 100, 50, MapModeActualSize, BackdropLayout{ScaleX: 1, ScaleY: 1}},
+		{"fill wide", 100, 50, MapModeFill, BackdropLayout{ScaleX: 1, ScaleY: 2}},
+		{"fill cut wide", 100, 50, MapModeFillCut, BackdropLayout{ScaleX: 1, ScaleY: 1}},
+		{"fill cut tall", 50, 100, MapModeFillCut, BackdropLayout{ScaleX: 1, ScaleY: 1}},
+		{"fill ratio wide", 100, 50, MapModeFillRatio, BackdropLayout{ScaleX: 2, ScaleY: 2}},
+		{"fill ratio tall", 50, 100, MapModeFillRatio, BackdropLayout{ScaleX: 2, ScaleY: 2}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolveBackdropLayout(tt.imgW, tt.imgH, 100, 100, tt.mode)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("ResolveBackdropLayout() = %+v, want %+v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -505,23 +509,35 @@ func TestLoadBuilderProject(t *testing.T) {
 }
 
 func TestOpenBuilderResources(t *testing.T) {
-	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "index.json")
-	if err := os.WriteFile(indexPath, []byte(`{"run":{"title":"demo"}}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
-	if err != nil {
-		t.Fatalf("OpenBuilderResources error: %v", err)
-	}
-	defer opened.FS.Close()
-
-	if opened.AssetDir != "" {
-		t.Fatalf("opened.AssetDir = %q, want empty", opened.AssetDir)
-	}
-	if opened.Config.Title != "demo" {
-		t.Fatalf("opened.Config.Title = %q, want demo", opened.Config.Title)
+	for _, tt := range []struct {
+		name    string
+		packed  bool
+		listing bool
+	}{
+		{name: "source with listing", listing: true},
+		{name: "source without listing"},
+		{name: "packed with listing", packed: true, listing: true},
+		{name: "packed without listing", packed: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, "index.json", `{"run":{"title":"demo"}}`)
+			if tt.packed {
+				writeProjectFile(t, dir, packedIndexJSON, `{}`)
+			}
+			var resource spxfs.Dir = localDir{base: dir}
+			if !tt.listing {
+				resource = struct{ spxfs.Dir }{resource}
+			}
+			opened, err := OpenBuilderResources(resource, nil)
+			if err != nil {
+				t.Fatalf("OpenBuilderResources() error: %v", err)
+			}
+			defer opened.FS.Close()
+			if opened.AssetDir != "" || opened.Config.Title != "demo" || len(opened.Fonts.Families) != 0 {
+				t.Fatalf("unexpected loaded project: %+v", opened)
+			}
+		})
 	}
 }
 
@@ -554,6 +570,16 @@ func TestOpenBuilderResourcesFromPackedConfig(t *testing.T) {
 		t.Fatalf("OpenBuilderResources(packed) error: %v", err)
 	}
 	defer opened.FS.Close()
+
+	original, err := opened.FS.Open(packedIndexJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer original.Close()
+	data, err := io.ReadAll(original)
+	if err != nil || string(data) != packed {
+		t.Fatalf("original packed config = %s, %v; want %s", data, err, packed)
+	}
 
 	if opened.Config.Title != "packed-demo" {
 		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
@@ -680,6 +706,11 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 		"zorder":["Hero"]
 	}`)
 
+	writeProjectFile(t, dir, "custom/Settings/index.json", `{"name":"custom"}`)
+	if err := os.MkdirAll(filepath.Join(dir, "custom", "Broken", "index.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
 	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
 	if err != nil {
 		t.Fatalf("OpenBuilderResources(fallback child) error: %v", err)
@@ -711,6 +742,27 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 	if sound.Rate != 1 {
 		t.Fatalf("sound.Rate = %d, want 1", sound.Rate)
 	}
+	for _, tt := range []struct {
+		name    string
+		wantErr string
+	}{
+		{name: "Settings"},
+		{name: "Missing", wantErr: "does not exist"},
+		{name: "Broken", wantErr: "custom/Broken/index.json"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var config struct{ Name string }
+			err := LoadJSON(&config, opened.FS, "custom/"+tt.name+"/index.json")
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("LoadJSON() error = %v, want %q", err, tt.wantErr)
+				}
+			} else if err != nil || config.Name != "custom" {
+				t.Fatalf("LoadJSON() = %+v, %v; want custom config", config, err)
+			}
+		})
+	}
+
 }
 
 func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) {
@@ -749,17 +801,32 @@ func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) 
 	}
 }
 
-func TestOpenBuilderResourcesFailsOnInvalidPackedConfig(t *testing.T) {
-	dir := t.TempDir()
-	writeProjectFile(t, dir, "index.json", `{"run":{"title":"source-demo"}}`)
-	writeProjectFile(t, dir, packedIndexJSON, `{`)
-
-	_, err := OpenBuilderResources(localDir{base: dir}, nil)
-	if err == nil {
-		t.Fatal("OpenBuilderResources(invalid packed) error = nil, want error")
-	}
-	if !strings.Contains(err.Error(), packedIndexJSON) {
-		t.Fatalf("OpenBuilderResources(invalid packed) error = %q, want mention of %s", err, packedIndexJSON)
+func TestOpenBuilderResourcesFailsOnInvalidConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name, source, packed, directory, want string
+	}{
+		{name: "packed root", source: `{}`, packed: `{`, want: packedIndexJSON},
+		{name: "source root", source: `{`, packed: `{}`, want: "parse index.json"},
+		{name: "packed is directory", source: `{}`, directory: packedIndexJSON, want: packedIndexJSON},
+		{name: "source is directory", packed: `{}`, directory: "index.json", want: "index.json"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tt.source != "" {
+				writeProjectFile(t, dir, "index.json", tt.source)
+			}
+			if tt.packed != "" {
+				writeProjectFile(t, dir, packedIndexJSON, tt.packed)
+			}
+			if tt.directory != "" {
+				if err := os.Mkdir(filepath.Join(dir, tt.directory), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := OpenBuilderResources(localDir{base: dir}, nil); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("OpenBuilderResources() error = %v, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
@@ -878,7 +945,7 @@ func TestLoadSpriteAndSoundConfigErrorsReturnZeroValues(t *testing.T) {
 func TestLoadBuilderProjectNormalizesProjectPaths(t *testing.T) {
 	dir := t.TempDir()
 	indexJSON := `{
-		"backdrops":[{"name":"lake","path":"../../res/lake.jpg"}],
+		"backdrops":[{"name":"lake","path":"../../res/lake.jpg"},null],
 		"bgm":"../../res/theme.mp3",
 		"tilemapPath":"../maps/level1.json"
 	}`
@@ -893,6 +960,9 @@ func TestLoadBuilderProjectNormalizesProjectPaths(t *testing.T) {
 
 	if got := loaded.Project.Backdrops[0].Path; got != "../../res/lake.jpg" {
 		t.Fatalf("loaded.Project.Backdrops[0].Path = %q, want ../../res/lake.jpg", got)
+	}
+	if len(loaded.Project.Backdrops) != 2 || loaded.Project.Backdrops[1] != nil {
+		t.Fatalf("null backdrop was not preserved: %#v", loaded.Project.Backdrops)
 	}
 	if got := loaded.Project.Bgm; got != "../../res/theme.mp3" {
 		t.Fatalf("loaded.Project.Bgm = %q, want ../../res/theme.mp3", got)
@@ -970,30 +1040,74 @@ func TestFieldPtrOrAllocAndFinders(t *testing.T) {
 	if got := FindFieldRefCaseInsensitive(reflect.ValueOf(&h), "val", 0).(*int); *got != 7 {
 		t.Fatalf("FindFieldRefCaseInsensitive = %d, want 7", *got)
 	}
-
+	if got := FindFieldRefCaseInsensitive(reflect.ValueOf(&h), "missing", 0); got != nil {
+		t.Fatalf("missing case-insensitive field = %v, want nil", got)
+	}
 }
 
 func TestParseCommandLineFlags(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	conf := &Config{}
-	effects, err := ParseCommandLineFlags(fs, []string{"-v", "-f"}, conf)
-	if err != nil {
-		t.Fatalf("ParseCommandLineFlags error: %v", err)
+	for _, tt := range []struct {
+		name       string
+		args       []string
+		conf       Config
+		want       CommandLineEffects
+		fullscreen bool
+		wantErr    bool
+	}{
+		{name: "verbose fullscreen", args: []string{"-v", "-f"}, want: CommandLineEffects{Verbose: true}, fullscreen: true},
+		{name: "fullscreen alias", args: []string{"-fullscreen"}, fullscreen: true},
+		{name: "help", args: []string{"-h"}, want: CommandLineEffects{ShowHelp: true}},
+		{name: "preserve fullscreen", conf: Config{FullScreen: true}, fullscreen: true},
+		{name: "invalid flag", args: []string{"-f", "-unknown"}, wantErr: true},
+		{name: "disabled parsing", args: []string{"-unknown"}, conf: Config{DontParseFlags: true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			fs.SetOutput(io.Discard)
+			conf := tt.conf
+			effects, err := ParseCommandLineFlags(fs, tt.args, &conf)
+			if (err != nil) != tt.wantErr || effects != tt.want || conf.FullScreen != tt.fullscreen {
+				t.Fatalf("ParseCommandLineFlags() = (%+v, %v), fullscreen %v; want (%+v, error %v), fullscreen %v", effects, err, conf.FullScreen, tt.want, tt.wantErr, tt.fullscreen)
+			}
+			if tt.conf.DontParseFlags && fs.Lookup("v") != nil {
+				t.Fatal("disabled parsing registered flags")
+			}
+		})
 	}
-	if !effects.Verbose || effects.ShowHelp {
-		t.Fatalf("unexpected effects: %+v", effects)
-	}
-	if !conf.FullScreen {
-		t.Fatalf("expected fullscreen config update: %+v", conf)
-	}
+}
 
-	fs = flag.NewFlagSet("test", flag.ContinueOnError)
-	conf = &Config{}
-	effects, err = ParseCommandLineFlags(fs, []string{"-h"}, conf)
-	if err != nil {
-		t.Fatalf("ParseCommandLineFlags help error: %v", err)
+func TestLoadProjectFontsRejectsUnreadableAndMalformedFamilies(t *testing.T) {
+	for _, tc := range []struct{ name, config, want string }{
+		{"invalid JSON", "{", "load font family"},
+		{"missing face", `{"faces":[{"path":"missing.ttf"}]}`, "open font face"},
+		{"empty path", `{"faces":[{"path":""}]}`, "must not be empty"},
+		{"absolute path", `{"faces":[{"path":"/font.ttf"}]}`, "relative POSIX path"},
+		{"backslash path", `{"faces":[{"path":"dir\\font.ttf"}]}`, "relative POSIX path"},
+		{"dot path", `{"faces":[{"path":"."}]}`, "escapes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, "fonts/Family/index.json", tc.config)
+			if _, err := LoadProjectFonts(localDir{base: dir}, nil); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error=%v,want %q", err, tc.want)
+			}
+		})
 	}
-	if !effects.ShowHelp {
-		t.Fatalf("expected help effect: %+v", effects)
+	t.Run("font root is file", func(t *testing.T) {
+		dir := t.TempDir()
+		writeProjectFile(t, dir, "fonts", "not a directory")
+		if _, err := LoadProjectFonts(localDir{base: dir}, nil); err == nil || !strings.Contains(err.Error(), "scan fonts") {
+			t.Fatalf("LoadProjectFonts() error = %v, want scan fonts error", err)
+		}
+	})
+
+	dir := t.TempDir()
+	writeProjectFile(t, dir, "fonts/Family/index.json", `{"faces":[{"path":"font.ttf"}]}`)
+	writeProjectFile(t, dir, "fonts/Family/font.ttf", "font")
+	if _, err := LoadProjectFonts(localDir{base: dir}, []string{"unknown"}); err == nil {
+		t.Fatal("unknown preference accepted")
+	}
+	if _, err := validateFontFamilyName(""); err == nil {
+		t.Fatal("empty family accepted")
 	}
 }

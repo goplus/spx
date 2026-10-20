@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/goplus/spx/v3/internal/interpruntime"
 	"github.com/goplus/spx/v3/internal/scaffold"
@@ -68,76 +69,6 @@ func TestRunWebCommandOrderAndErrors(t *testing.T) {
 				t.Fatalf("call order = %v, want %v", calls, tt.want)
 			}
 		})
-	}
-}
-
-func writeLocalSpxRepoMarker(t *testing.T, root string) {
-	t.Helper()
-	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v3\n")
-	script := filepath.Join(root, "cmd", "spx", "install.sh")
-	writeCommandTestFile(t, script, "#!/bin/bash\n")
-	if err := os.Chmod(script, 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestFindSpxRootFindsCurrentDir(t *testing.T) {
-	root := t.TempDir()
-	writeLocalSpxRepoMarker(t, root)
-
-	cmd := CmdTool{}
-	cmd.TargetAbsDir = root
-	got := cmd.findSpxRoot()
-	if got != root {
-		t.Fatalf("findSpxRoot = %s, want %s", got, root)
-	}
-}
-
-func TestFindSpxRootFindsParentDir(t *testing.T) {
-	root := t.TempDir()
-	startDir := filepath.Join(root, "tutorial", "00-Hello")
-	if err := os.MkdirAll(startDir, 0755); err != nil {
-		t.Fatalf("mkdir start dir: %v", err)
-	}
-	writeLocalSpxRepoMarker(t, root)
-
-	cmd := CmdTool{}
-	cmd.TargetAbsDir = startDir
-	got := cmd.findSpxRoot()
-	if got != root {
-		t.Fatalf("findSpxRoot = %s, want %s", got, root)
-	}
-}
-
-func TestFindSpxRootReturnsEmptyWhenMissing(t *testing.T) {
-	root := t.TempDir()
-
-	cmd := CmdTool{}
-	cmd.TargetAbsDir = root
-	got := cmd.findSpxRoot()
-	if got != "" {
-		t.Fatalf("findSpxRoot = %s, want empty", got)
-	}
-}
-
-func TestFindSpxRootIgnoresProjectsThatOnlyReferenceSpx(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "cmd", "spx"), 0755); err != nil {
-		t.Fatalf("mkdir cmd/spx: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/demo\n"), 0644); err != nil {
-		t.Fatalf("write go.mod: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "gox.mod"), []byte("project main.spx Game github.com/goplus/spx/v3 math\n"), 0644); err != nil {
-		t.Fatalf("write gox.mod: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "cmd", "spx", "install.sh"), []byte("#!/bin/bash\n"), 0755); err != nil {
-		t.Fatalf("write install.sh: %v", err)
-	}
-
-	cmd := CmdTool{TargetAbsDir: root}
-	if got := cmd.findSpxRoot(); got != "" {
-		t.Fatalf("findSpxRoot = %s, want empty", got)
 	}
 }
 
@@ -322,7 +253,12 @@ func TestRunPureEngineBuildFailureKeepsWorkingDirectory(t *testing.T) {
 	goDir := filepath.Join(t.TempDir(), "missing")
 
 	before := workingDirectory(t)
-	err := (&CmdTool{GoDir: goDir, TargetDir: t.TempDir()}).RunPureEngine()
+	setTestCommandLine(t, "spx", "runnative", "-tags=pure_engine")
+	cmd := &CmdTool{GoDir: goDir, TargetDir: t.TempDir()}
+	if err := cmd.parseCommandLineArgs(cmd.initializeFlags()); err != nil {
+		t.Fatal(err)
+	}
+	err := cmd.executeRunNative()
 	if err == nil || !strings.Contains(err.Error(), "failed to build Go binary") {
 		t.Fatalf("RunPureEngine error = %v, want build failure context", err)
 	}
@@ -493,12 +429,8 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 	version := "9.9.9-failure-test"
 	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
 	runtimePath := filepath.Join(goBinPath, runtimeName)
-	if err := os.WriteFile(runtimePath, []byte("not an executable"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCommandTestFile(t, runtimePath, "not an executable")
+	writeCommandTestFile(t, filepath.Join(goBinPath, runtimePackFileName(runtimeName)), "runtime pack")
 	libPath := filepath.Join(goBinPath, libraryFileName(envName, runtime.GOOS, runtime.GOARCH))
 	if err := os.WriteFile(libPath, []byte("bridge"), 0o755); err != nil {
 		t.Fatal(err)
@@ -789,5 +721,345 @@ func TestRuntimePackFilenames(t *testing.T) {
 		if got := runtimePackFileName(tt.executable); got != tt.pack {
 			t.Errorf("pack filename for %q = %q, want %q", tt.executable, got, tt.pack)
 		}
+	}
+}
+
+func TestListeningPIDCommands(t *testing.T) {
+	for _, tt := range []struct {
+		name, tool, script string
+		windows            bool
+		want               []int
+		wantError          bool
+	}{
+		{"unix parsed", "lsof", `printf '31\ninvalid\n42\n'`, false, []int{31, 42}, false},
+		{"unix no listeners", "lsof", "exit 1", false, nil, false},
+		{"unix command failed", "lsof", "exit 2", false, nil, true},
+		{"unix missing command", "unused", "exit 0", false, nil, true},
+		{"windows parsed", "netstat", `printf '%s\n' 'Proto Local Address Foreign Address State PID' 'UDP 0.0.0.0:8060 *:* LISTENING 10' 'TCP 0.0.0.0:8061 *:* LISTENING 11' 'TCP 0.0.0.0:8060 *:* ESTABLISHED 12' 'TCP 0.0.0.0:8060 *:* LISTENING invalid' 'TCP 0.0.0.0:8060 *:* LISTENING 31' 'tcp [::]:8060 *:* listen 42' 'incomplete'`, true, []int{31, 42}, false},
+		{"windows command failed", "netstat", "exit 2", true, nil, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			installCommandTestTools(t, map[string]string{tt.tool: tt.script})
+			var got []int
+			var err error
+			if tt.windows {
+				got, err = listListeningPIDsWindows(8060)
+			} else {
+				got, err = listListeningPIDsUnix(8060)
+			}
+			if (err != nil) != tt.wantError || !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("listening PIDs = %v, %v; want %v, error %v", got, err, tt.want, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestWebServerProcessIdentification(t *testing.T) {
+	for _, tt := range []struct {
+		name, script string
+		want         bool
+	}{
+		{"matching server", `printf 'python gdspx_web_server.py -p 8060'`, true},
+		{"unrelated python", `printf 'python another-server.py'`, false},
+		{"process query failed", "exit 2", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			installCommandTestTools(t, map[string]string{"ps": tt.script, "powershell": tt.script})
+			if got := looksLikeGDSPXWebServerProcessUnix(37); got != tt.want {
+				t.Errorf("Unix process match = %v, want %v", got, tt.want)
+			}
+			if got := looksLikeGDSPXWebServerProcessWindows(37); got != tt.want {
+				t.Errorf("Windows process match = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunWebServerLifecycle(t *testing.T) {
+	for _, scenario := range []string{"running", "browser failure", "orphaned server", "python3 fallback", "early failure", "missing python", "start failure", "pid write failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			logPath := filepath.Join(t.TempDir(), "commands.log")
+			t.Setenv("SPX_SERVER_LOG", logPath)
+			const python = `printf '%s\n' "$*" >> "$SPX_SERVER_LOG"
+exec /bin/sleep 30
+`
+			tools := map[string]string{
+				"python":   python,
+				"lsof":     `printf '%s\n' "${SPX_ORPHAN_PID:-}"`,
+				"ps":       `printf 'python gdspx_web_server.py'`,
+				"xdg-open": `printf 'browser %s\n' "$*" >> "$SPX_SERVER_LOG"`,
+				"open":     `printf 'browser %s\n' "$*" >> "$SPX_SERVER_LOG"`,
+			}
+			wantError := ""
+			switch scenario {
+			case "browser failure":
+				tools["xdg-open"], tools["open"] = "exit 2", "exit 2"
+			case "python3 fallback":
+				delete(tools, "python")
+				tools["python3"] = "exit 0"
+				wantError = "exited unexpectedly without an error"
+			case "early failure":
+				tools["python"] = "exit 9"
+				wantError = "exited early"
+			case "missing python":
+				delete(tools, "python")
+				wantError = "neither python nor python3"
+			case "start failure":
+				tools["python"] = "exit 0"
+				wantError = "error starting server"
+			case "pid write failure":
+				wantError = "failed to record web server pid"
+			}
+			binDir := installCommandTestTools(t, tools)
+			if scenario == "start failure" {
+				// LookPath succeeds, but the executable's interpreter is missing.
+				if err := os.WriteFile(filepath.Join(binDir, "python"), []byte("#!/missing-spx-test-interpreter\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("SPX_ORPHAN_PID", "")
+			cmd := &CmdTool{TargetAbsDir: t.TempDir(), ProjectDir: t.TempDir()}
+			if scenario == "orphaned server" {
+				cmd.ServerPort = 8060
+			}
+			if scenario == "pid write failure" {
+				cmd.TargetAbsDir = filepath.Join(cmd.TargetAbsDir, "missing-parent")
+			}
+			t.Cleanup(func() {
+				if err := cmd.StopWeb(); err != nil {
+					t.Errorf("stop test server: %v", err)
+				}
+			})
+			var err error
+			if scenario == "python3 fallback" || scenario == "early failure" {
+				// Keep the startup grace period frozen while Wait observes the
+				// immediately exiting child, regardless of host process startup time.
+				synctest.Test(t, func(t *testing.T) { err = cmd.runWebServer() })
+			} else {
+				err = cmd.runWebServer()
+			}
+			if wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), wantError) {
+					t.Fatalf("server error = %v, want %q", err, wantError)
+				}
+				if _, err := os.Stat(cmd.webServerPIDPath()); !os.IsNotExist(err) {
+					t.Fatalf("failed server left pid file: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pid := strings.TrimSpace(readTestFile(t, cmd.webServerPIDPath())); pid == "" {
+				t.Fatal("running server has no recorded PID")
+			}
+			calls := readTestFile(t, logPath)
+			wantArgs := filepath.Join(cmd.ProjectDir, ".godot", "gdspx_web_server.py") + " -r " + filepath.Join(cmd.ProjectDir, ".builds", "web") + fmt.Sprintf(" -p %d --no-browser", cmd.ServerPort)
+			if !strings.Contains(calls, wantArgs) {
+				t.Fatalf("server invocation = %q, want %q", calls, wantArgs)
+			}
+			if scenario == "running" && (!strings.Contains(calls, "browser ") || !strings.Contains(calls, "http://127.0.0.1:0")) {
+				t.Fatalf("browser did not receive local URL: %s", calls)
+			}
+			if scenario == "orphaned server" {
+				// Discover only this test's owned process after its PID file is lost.
+				t.Setenv("SPX_ORPHAN_PID", strings.TrimSpace(readTestFile(t, cmd.webServerPIDPath())))
+				if err := os.Remove(cmd.webServerPIDPath()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := cmd.StopWeb(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(cmd.webServerPIDPath()); !os.IsNotExist(err) {
+				t.Fatalf("stopped server retained pid file: %v", err)
+			}
+		})
+	}
+}
+
+func TestStopWebHandlesUnreadableAndStalePID(t *testing.T) {
+	for _, scenario := range []string{"directory", "negative pid", "unrelated process", "missing pid", "invalid pid"} {
+		t.Run(scenario, func(t *testing.T) {
+			installCommandTestTools(t, map[string]string{"ps": "exit 1", "lsof": "exit 1"})
+			cmd := &CmdTool{TargetDir: t.TempDir(), ServerPort: 8060}
+			pidPath := cmd.webServerPIDPath()
+			switch scenario {
+			case "directory":
+				if err := os.Mkdir(pidPath, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "negative pid":
+				writeCommandTestFile(t, pidPath, "-1")
+			case "unrelated process":
+				writeCommandTestFile(t, pidPath, "37")
+			case "invalid pid":
+				writeCommandTestFile(t, pidPath, "invalid")
+			}
+			err := cmd.StopWeb()
+			if scenario == "directory" {
+				if err == nil || !strings.Contains(err.Error(), "failed to read web server pid") {
+					t.Fatalf("PID read error = %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+				t.Fatalf("stale PID file retained: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunWebExportsBeforeStartingServer(t *testing.T) {
+	for _, mode := range []string{webNormalMode, webWorkerMode} {
+		t.Run(mode, func(t *testing.T) {
+			cmd := newWebExportFixture(t, mode)
+			t.Setenv("SPX_SERVER_EXPECTED", filepath.Join(cmd.WebDir, "game.zip"))
+			installCommandTestTools(t, map[string]string{
+				"go":     `printf '%s\n' "$SPX_WEB_GOROOT"`,
+				"python": `test -f "$SPX_SERVER_EXPECTED"; exit 0`,
+			})
+			// The fake server must finish checking the export before the startup
+			// grace period elapses, even when launching a shell takes over 500ms.
+			synctest.Test(t, func(t *testing.T) {
+				var err error
+				if mode == webNormalMode {
+					err = cmd.RunWeb()
+				} else {
+					err = cmd.RunWebWorker()
+				}
+				if err == nil || !strings.Contains(err.Error(), "exited unexpectedly without an error") {
+					t.Fatalf("runweb result = %v, want successful export before test server exits", err)
+				}
+			})
+		})
+	}
+}
+
+func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
+	for _, scenario := range []string{"install", "installer failure", "installed", "external project"} {
+		t.Run(scenario, func(t *testing.T) {
+			root, bin := t.TempDir(), t.TempDir()
+			logPath := filepath.Join(t.TempDir(), "installer.log")
+			t.Setenv("SPX_INSTALLER_LOG", logPath)
+			script := `printf '%s\n' "$@" > "$SPX_INSTALLER_LOG"`
+			if scenario == "installer failure" {
+				script += "\nexit 19"
+			}
+			installCommandTestTools(t, map[string]string{"bash": script})
+			cmd := &CmdTool{TargetAbsDir: root, GoBinPath: bin, Version: "test"}
+			if scenario != "external project" {
+				writeLocalSpxRepoMarker(t, root)
+			}
+			if scenario == "installed" {
+				for _, name := range []string{"ispx", "ispx.wasm", "gdspxrttest_webnormal"} {
+					writeCommandTestFile(t, filepath.Join(bin, name), "installed")
+				}
+			}
+			err := cmd.installRepoWebRuntime(webNormalMode)
+			if (err != nil) != (scenario == "installer failure") {
+				t.Fatalf("installer error = %v, scenario %s", err, scenario)
+			}
+			if scenario == "installed" || scenario == "external project" {
+				if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+					t.Fatalf("unnecessary installer invocation: %v", err)
+				}
+			} else if got := readTestFile(t, logPath); got != filepath.Join(root, "cmd", "spx", "install.sh")+"\n--web\n" {
+				t.Fatalf("installer arguments = %q", got)
+			}
+		})
+	}
+}
+
+func TestInterpretedRuntimeReportsMissingAssetsAndInitializesCommand(t *testing.T) {
+	for _, kind := range []string{"runtime and library", "runtime pack", "library"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			cmd := &CmdTool{GoBinPath: root, Version: "9.9.9-missing-test"}
+			runtimeName, libName := "gdspxrt9.9.9-missing-test", "bridge.so"
+			if kind != "runtime and library" {
+				writeCommandTestFile(t, filepath.Join(root, runtimeName), "runtime")
+			}
+			if kind == "runtime pack" {
+				writeCommandTestFile(t, filepath.Join(root, libName), "bridge")
+			}
+			if kind == "library" {
+				writeCommandTestFile(t, filepath.Join(root, runtimePackFileName(runtimeName)), "pack")
+			}
+			runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
+			if err == nil || !strings.Contains(err.Error(), "interpreted runtime assets not available") || runtimePath != "" || libPath != "" {
+				t.Fatalf("assets = %q, %q, %v", runtimePath, libPath, err)
+			}
+			if kind == "runtime pack" && !strings.Contains(err.Error(), "runtime pack") {
+				t.Fatalf("missing pack reason = %v", err)
+			}
+			if kind != "runtime pack" && !strings.Contains(err.Error(), libName) {
+				t.Fatalf("missing library reason = %v", err)
+			}
+		})
+	}
+	for _, goos := range []string{"", "windows"} {
+		t.Run("command "+goos, func(t *testing.T) {
+			t.Setenv("GOOS", goos)
+			root := t.TempDir()
+			setTestCommandLine(t, "spx", "run", "-movie")
+			cmd := &CmdTool{TargetDir: root, GoBinPath: filepath.Join(root, "bin"), Version: "9.9.9-missing-test"}
+			if err := cmd.parseCommandLineArgs(cmd.initializeFlags()); err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.handleInterpretedRunCommand(); err == nil || !strings.Contains(err.Error(), "runtime assets not available") {
+				t.Fatalf("run error = %v", err)
+			}
+			suffix := executableSuffix(runtime.GOOS)
+			if goos != "" {
+				suffix = executableSuffix(goos)
+			}
+			if !cmd.RuntimeMode || cmd.RuntimeTempDir != filepath.Join(root, ".temp") || cmd.RuntimeCmdPath != filepath.Join(root, "bin", "gdspxrt"+cmd.Version+suffix) {
+				t.Fatalf("initialized command = %+v", cmd)
+			}
+			if info, err := os.Stat(filepath.Join(root, ".temp", "output")); err != nil || !info.IsDir() {
+				t.Fatalf("movie directory = %v, %v", info, err)
+			}
+		})
+	}
+}
+
+func TestRunPackModeRejectsIncompleteSessionBeforeStartingEngine(t *testing.T) {
+	for _, scenario := range []string{"missing project", "missing bridge", "missing engine"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			mustWriteAssetIndex(t, root)
+			log := filepath.Join(root, "engine.log")
+			bin := installCommandTestTools(t, map[string]string{"engine": `printf started > "$SPX_TEST_ENGINE_LOG"`})
+			t.Setenv("SPX_TEST_ENGINE_LOG", log)
+			cmd := &CmdTool{TargetAbsDir: root, RuntimeCmdPath: filepath.Join(bin, "engine"), LibPath: filepath.Join(root, "bridge.so")}
+			writeCommandTestFile(t, cmd.LibPath, "bridge")
+			want := ""
+			switch scenario {
+			case "missing project":
+				cmd.TargetAbsDir, want = "", "project directory is not configured"
+			case "missing bridge":
+				if err := os.Remove(cmd.LibPath); err != nil {
+					t.Fatal(err)
+				}
+				want = "BridgePath"
+			case "missing engine":
+				if err := os.Remove(cmd.RuntimeCmdPath); err != nil {
+					t.Fatal(err)
+				}
+				want = "Executable"
+			}
+			before := workingDirectory(t)
+			if err := cmd.RunPackMode(); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("session preparation error = %v, want %q", err, want)
+			}
+			assertWorkingDirectory(t, before)
+			if _, err := os.Stat(log); !os.IsNotExist(err) {
+				t.Fatalf("engine started after preparation failed: %v", err)
+			}
+		})
 	}
 }

@@ -17,6 +17,7 @@
 package project
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -37,32 +38,24 @@ func TestParseMonitorShape(t *testing.T) {
 		t.Fatalf("parsed monitor = %+v", got)
 	}
 
+	for _, tt := range []struct {
+		mode any
+		want float64
+	}{
+		{mode: "list", want: MonitorModeList},
+		{mode: 2.0, want: 2},
+	} {
+		shape["mode"] = tt.mode
+		got, err = ParseMonitorShape(shape)
+		if err != nil || got.Mode != tt.want {
+			t.Fatalf("mode %v parsed as %+v, %v", tt.mode, got, err)
+		}
+	}
+
 	shape["size"] = "invalid"
 	got, err = ParseMonitorShape(shape)
 	if err != nil || got.Size != 0 {
 		t.Fatalf("invalid monitor size changed its fallback: %+v, %v", got, err)
-	}
-
-	for _, test := range []struct {
-		field string
-		value any
-		want  string
-	}{
-		{"label", nil, `field "label" has type`},
-		{"mode", []any{"slider"}, `field "mode" has type`},
-		{"x", "left", `field "x" has type`},
-		{"visible", 1.0, `field "visible" has type`},
-	} {
-		t.Run(test.field, func(t *testing.T) {
-			bad := make(StageShape, len(shape))
-			for key, value := range shape {
-				bad[key] = value
-			}
-			bad[test.field] = test.value
-			if _, err := ParseMonitorShape(bad); err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("error = %v, want %q", err, test.want)
-			}
-		})
 	}
 }
 
@@ -93,5 +86,32 @@ func TestParseMeasureShape(t *testing.T) {
 	shape["color"] = []any{1.0}
 	if _, err := ParseMeasureShape(shape); err == nil || !strings.Contains(err.Error(), `field "color"`) {
 		t.Fatalf("color error = %v", err)
+	}
+}
+
+func TestShapeFieldsAreRequiredAndTyped(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		shape StageShape
+		parse func(StageShape) error
+	}{
+		{"monitor", StageShape{"target": "", "val": "score", "name": "score", "label": "Score", "mode": 1.0, "x": 0.0, "y": 0.0, "visible": true}, func(s StageShape) error { _, err := ParseMonitorShape(s); return err }},
+		{"measure", StageShape{"size": 10.0, "x": 0.0, "y": 0.0, "scale": 1.0, "heading": 90.0}, func(s StageShape) error { _, err := ParseMeasureShape(s); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for key := range tc.shape {
+				bad := maps.Clone(tc.shape)
+				bad[key] = struct{}{}
+				if err := tc.parse(bad); err == nil || !strings.Contains(err.Error(), `field "`+key+`" has type`) {
+					t.Errorf("invalid %s: %v", key, err)
+				}
+				if key != "scale" && key != "heading" {
+					delete(bad, key)
+					if err := tc.parse(bad); err == nil || !strings.Contains(err.Error(), `field "`+key+`" is required`) {
+						t.Errorf("missing %s: %v", key, err)
+					}
+				}
+			}
+		})
 	}
 }

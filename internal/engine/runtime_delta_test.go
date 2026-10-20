@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"slices"
 	"testing"
 
 	itime "github.com/goplus/spx/v3/internal/time"
@@ -94,5 +95,35 @@ func TestInternalUpdateEngineKeepsRealDeltaWithoutFixedTimestep(t *testing.T) {
 
 	if got := tweenInfos[0].timer; got != 0.25 {
 		t.Fatalf("tween timer = %v, want 0.25 with real delta", got)
+	}
+}
+
+func TestRuntimeBridgeTimersRespectObjectLifetime(t *testing.T) {
+	resetRuntimeDeltaTestState()
+	t.Cleanup(resetRuntimeDeltaTestState)
+	bridge := runtimeBridge{}
+	alive, removed := &gdx.Sprite{Id: 1}, &gdx.Sprite{Id: 2}
+	node := &gdx.UiNode{Id: 3}
+	state.sprites[1], state.sprites[2], state.uiNodes[3] = alive, removed, node
+	if bridge.Sprites()[1] != alive || bridge.UiNodes()[3] != node || bridge.GetUINode(3) != node || !IsNodeExist(3) {
+		t.Fatal("runtime registry adapters returned wrong nodes")
+	}
+	var calls []string
+	bridge.DelayCall(.25, func() { calls = append(calls, "global") })
+	bridge.DelaySpriteCall(.25, alive, func() { calls = append(calls, "alive") })
+	bridge.DelaySpriteCall(.25, removed, func() { calls = append(calls, "removed") })
+	bridge.DeleteSprite(2)
+	bridge.DeleteUINode(3)
+	bridge.InternalUpdateEngine(.125)
+	if len(calls) != 0 {
+		t.Fatal("timers fired before their deadline")
+	}
+	bridge.InternalUpdateEngine(.125)
+	bridge.InternalUpdateEngine(1)
+	if !slices.Equal(calls, []string{"global", "alive"}) || bridge.GetUINode(3) != nil {
+		t.Fatalf("timer calls=%v, deleted node=%v", calls, bridge.GetUINode(3))
+	}
+	if bridge.AdvanceTimeSinceGameStart(.5) != .5 || bridge.AdvanceTimeSinceGameStart(.25) != .75 || bridge.TimeSinceGameStarted() != .75 {
+		t.Fatal("runtime elapsed time did not accumulate")
 	}
 }

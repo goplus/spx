@@ -19,7 +19,10 @@ package ui
 import (
 	"bufio"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -366,3 +369,177 @@ func (p *monitorRenderSpy) SetRange(id engine.Object, min, max, step, value floa
 	p.ranges[id] = math.Max(min, math.Min(max, math.Floor((value-min)/step+0.5)*step+min))
 }
 func (p *monitorRenderSpy) GetRangeValue(id engine.Object) float64 { return p.ranges[id] }
+
+func TestListMonitorRender(t *testing.T) {
+	panel, bound := newBoundMonitor(t)
+	sink := newMonitorRenderSpy()
+	color := mathf.NewColorRGBAi(255, 102, 26, 255)
+	size := mathf.NewVec2(100, 200)
+	style := MonitorStyle{Appearance: MonitorAppearanceList, Label: "items", Color: color, Dimensions: size}
+	panel.render(sink, style, MonitorValue{Items: nil})
+	if sink.listCalls != 1 || sink.text[bound["ScratchList"]] != "items" || sink.color[bound["ScratchList"]] != color || sink.size[bound["ScratchList"]] != size {
+		t.Fatal("initial empty list render missing")
+	}
+	for _, view := range panel.views {
+		if sink.visible[view.root.GetId()] != (view.root.GetId() == bound["ScratchList"]) {
+			t.Fatal("wrong active monitor view")
+		}
+	}
+	items := []string{"one", "two"}
+	panel.render(sink, style, MonitorValue{Items: items})
+	panel.render(sink, style, MonitorValue{Items: items})
+	if sink.listCalls != 2 {
+		t.Fatal("unchanged list sent across the bridge")
+	}
+	items[0] = "changed"
+	panel.render(sink, style, MonitorValue{Items: items})
+	if sink.listCalls != 3 || !slices.Equal(sink.items[bound["ScratchList"]], items) {
+		t.Fatal("in-place update missed")
+	}
+	panel.render(sink, style, MonitorValue{Items: nil})
+	if sink.listCalls != 4 || len(sink.items[bound["ScratchList"]]) != 0 {
+		t.Fatal("clearing the list missed")
+	}
+}
+
+func TestMonitorSwitchesBetweenScalarAndList(t *testing.T) {
+	panel, _ := newBoundMonitor(t)
+	sink := newMonitorRenderSpy()
+	color := mathf.Color{}
+	size := mathf.NewVec2(100, 200)
+	style := MonitorStyle{Appearance: MonitorAppearanceList, Label: "items", Color: color, Dimensions: size}
+	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceCompatible, Label: "score", Color: color}, MonitorValue{Text: "1"})
+	panel.render(sink, style, MonitorValue{Items: nil})
+	panel.render(sink, style, MonitorValue{Items: []string{}})
+	if sink.listCalls != 1 || panel.active != MonitorAppearanceList {
+		t.Fatal("empty list must activate once, independently of its nil representation")
+	}
+	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceDefaultLarge, Label: "score", Color: color}, MonitorValue{Text: "2"})
+	panel.render(sink, style, MonitorValue{Items: nil})
+	if sink.listCalls != 2 || panel.active != MonitorAppearanceList {
+		t.Fatal("reactivating a list must restore its payload")
+	}
+}
+
+func TestSliderMonitorBidirectionalSync(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		config         MonitorSlider
+		text           string
+		position, want float64
+	}{
+		{"integer", MonitorSlider{0, 100, 1}, "25", 37, 37},
+		{"decimal", MonitorSlider{-1, 1, 0.01}, "0.25", 0.3, 0.3},
+		{"fractional minimum", MonitorSlider{0.5, 10.5, 1}, "2.5", 3.5, 3.5},
+		{"fractional decimal minimum", MonitorSlider{0.005, 1, 0.01}, "0.205", 0.305, 0.305},
+		{"nonaligned maximum", MonitorSlider{0, 10.5, 1}, "10.5", 9, 9},
+		{"out of range", MonitorSlider{0, 100, 1}, "200", 99, 99},
+		{"text", MonitorSlider{0, 100, 1}, "hello", 25, 25},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			panel, bound := newBoundMonitor(t)
+			sink := newMonitorRenderSpy()
+			style := MonitorStyle{Appearance: MonitorAppearanceSlider, Label: "score", Slider: tt.config}
+			panel.render(sink, style, MonitorValue{Text: tt.text})
+			if sink.text[bound["ScratchSlider/V/H/ValueMargin/C/LabelValue"]] != tt.text {
+				t.Fatal("displayed variable was clamped")
+			}
+			if _, changed := panel.readSliderChange(sink); changed {
+				t.Fatal("render produced user input")
+			}
+			sink.ranges[bound["ScratchSlider/V/Slider"]] = tt.position
+			got, changed := panel.readSliderChange(sink)
+			if !changed || math.Abs(got-tt.want) > 1e-12 {
+				t.Fatalf("input = %v, %v; want %v", got, changed, tt.want)
+			}
+			if _, changed = panel.readSliderChange(sink); changed {
+				t.Fatal("input replayed")
+			}
+			panel.render(sink, style, MonitorValue{Text: "-100"})
+			if _, changed := panel.readSliderChange(sink); changed {
+				t.Fatal("program update produced user input")
+			}
+		})
+	}
+}
+
+func TestSliderMonitorEqualBounds(t *testing.T) {
+	panel, _ := newBoundMonitor(t)
+	sink := newMonitorRenderSpy()
+	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceSlider, Slider: MonitorSlider{5, 5, 1}}, MonitorValue{Text: "20"})
+	if _, changed := panel.readSliderChange(sink); changed {
+		t.Fatal("fixed range changed variable")
+	}
+}
+
+func TestMonitorSwitchDiscardsInactiveSliderInput(t *testing.T) {
+	panel, bound := newBoundMonitor(t)
+	sink := newMonitorRenderSpy()
+	if _, changed := panel.readSliderChange(sink); changed {
+		t.Fatal("input before first render")
+	}
+	style := MonitorStyle{Appearance: MonitorAppearanceSlider, Slider: MonitorSlider{0, 100, 1}}
+	panel.render(sink, style, MonitorValue{Text: "25"})
+	sink.ranges[bound["ScratchSlider/V/Slider"]] = 37
+	panel.render(sink, MonitorStyle{Appearance: MonitorAppearanceList}, MonitorValue{Items: []string{"one"}})
+	if _, changed := panel.readSliderChange(sink); changed {
+		t.Fatal("inactive slider emitted input")
+	}
+	panel.render(sink, style, MonitorValue{Text: "42"})
+	if _, changed := panel.readSliderChange(sink); changed {
+		t.Fatal("reactivation replayed stale input")
+	}
+	if got := sink.ranges[bound["ScratchSlider/V/Slider"]]; got != 42 {
+		t.Fatalf("restored slider value = %v", got)
+	}
+}
+
+func TestDecorativeUIScenesIgnoreMouse(t *testing.T) {
+	for _, name := range []string{"UiDebug", "UiMeasure", "UiQuote", "UiSay"} {
+		t.Run(name, func(t *testing.T) {
+			parsed := parseMonitorScene(t, readUITemplateScene(t, name))
+			for path, node := range parsed.nodes {
+				if got := monitorSceneProperty(node, "mouse_filter"); got != "2" {
+					t.Errorf("%s mouse_filter = %q, want 2 (ignore)", path, got)
+				}
+			}
+		})
+	}
+}
+
+func TestDisplayMonitorsStopMouse(t *testing.T) {
+	parsed := parseMonitorScene(t, readUITemplateScene(t, "UiMonitor"))
+	if got := monitorSceneProperty(parsed.nodes["."], "mouse_filter"); got != "2" {
+		t.Errorf("monitor root mouse_filter = %q, want 2 (ignore)", got)
+	}
+	for _, root := range []string{"BG", "ValueOnly", "ScratchBG", "ScratchValueOnly"} {
+		if got := monitorSceneProperty(parsed.nodes[root], "mouse_filter"); got != "0" {
+			t.Errorf("%s mouse_filter = %q, want 0 (stop)", root, got)
+		}
+		for path, node := range parsed.nodes {
+			if !strings.HasPrefix(path, root+"/") {
+				continue
+			}
+			if got := monitorSceneProperty(node, "mouse_filter"); got != "2" {
+				t.Errorf("%s mouse_filter = %q, want 2 (ignore)", path, got)
+			}
+		}
+	}
+	if got := monitorSceneProperty(parsed.nodes["ScratchSlider/V/Slider"], "mouse_filter"); got != "0" {
+		t.Errorf("slider mouse_filter = %q, want 0 (stop)", got)
+	}
+}
+
+func readUITemplateScene(t *testing.T, name string) string {
+	t.Helper()
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not resolve test source path")
+	}
+	path := filepath.Join(filepath.Dir(sourceFile), "..", "..", "cmd", "spx", "template", "project", "engine", "ui", name+".tscn")
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatalf("read %s scene: %v", name, err)
+	}
+	return string(data)
+}

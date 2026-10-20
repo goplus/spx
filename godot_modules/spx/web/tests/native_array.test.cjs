@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.util.js'), 'utf8');
+const generatedSource = fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8');
 
 function bridge() {
     let offset = 64;
@@ -360,7 +361,6 @@ test('empty arrays preserve their type and malformed descriptors are rejected', 
 });
 
 test('generated wrappers release every acquired argument and result on failure', () => {
-    const generated = fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8');
     for (const failure of ['argument', 'call', 'result', null]) {
         const b = bridge();
         const allocated = [];
@@ -388,7 +388,7 @@ test('generated wrappers release every acquired argument and result on failure',
         b.module._gdspx_res_apply_project_fonts = () => {
             if (failure === 'call') throw new Error('call');
         };
-        b.run(generated);
+        b.run(generatedSource);
         const call = () => b.run('new GdspxFuncs().gdspx_res_apply_project_fonts("", [], [], [])');
         if (failure) assert.throws(call, new RegExp(failure));
         else assert.equal(call(), 'ok');
@@ -410,7 +410,7 @@ test('position batches pass independent native input and output counts without a
         if (success) b.module.HEAPF32.set([3, -4, NaN, NaN], outPtr / 4);
         b.module.HEAPU8[resultPtr] = success ? 1 : 0;
     };
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const objs = b.run('objs = GdspxBorrowNativeArray(6, 2, 16)');
     const out = b.run('out = GdspxBorrowNativeArray(2, 4, 16)');
     const ids = [0x7fc00001, 0x11223344, 999, 0];
@@ -426,7 +426,7 @@ test('position batches pass independent native input and output counts without a
 
 test('fixed output allocation uses generated metadata and preserves in-place calls', () => {
     const b = bridge();
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const calls = [];
     b.module._gdspx_input_write_snapshot = (...args) => {
         assert.equal(args.length, 1);
@@ -506,7 +506,7 @@ test('integer and object results preserve bits, reuse scope and heap growth', ()
     assert.equal(b.run('ToJsInt(ptr, result)'), first);
     assert.deepEqual({...first}, {low: 0xffffffff, high: 0x80000000});
 
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const released = [];
     Object.assign(b.context, {
         AllocGdInt: () => ptr,
@@ -532,7 +532,7 @@ test('integer and object results preserve bits, reuse scope and heap growth', ()
 
 test('structured results remain independent and release storage on failure', () => {
     const b = bridge();
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const released = [];
     Object.assign(b.context, {
         AllocGdVec2: () => b.module._cmalloc(8),
@@ -652,7 +652,7 @@ test('generated scalar inputs bypass pools even when the manager fails', () => {
             throw new Error('manager failed');
         },
     });
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const api = b.run('new GdspxFuncs()');
     api.gdspx_physics_set_global_gravity(9.81);
     api.gdspx_camera_set_camera_smoothing(true);
@@ -682,7 +682,7 @@ test('generated int64 inputs preserve signed precision and order for integers an
         _gdspx_alloc_bool: () => 64,
         _gdspx_free_bool: ptr => released.push(ptr),
     });
-    b.run(fs.readFileSync(path.join(__dirname, '../js/engine/gdspx.js'), 'utf8'));
+    b.run(generatedSource);
     const api = b.run('new GdspxFuncs()');
     const values = [0n, 1n, -1n, 0xffffffffn, 0x100000000n,
         9007199254740991n, 9007199254740992n, 9007199254740993n,
@@ -698,4 +698,70 @@ test('generated int64 inputs preserve signed precision and order for integers an
     }
     assert.deepEqual(released, values.map(() => 64), 'return values retain their existing output pool');
     assert.deepEqual(b.freed, []);
+});
+
+test('string bridges preserve UTF-8 byte lengths, embedded NULs, and refreshed heaps', () => {
+    const b = bridge();
+    const value = 'A\0雪😀';
+    const encoded = new TextEncoder().encode(value);
+    let temporary;
+    b.module._gdspx_new_string = (ptr, length) => {
+        temporary = ptr;
+        assert.equal(length, encoded.length);
+        assert.deepEqual(Array.from(b.module.HEAPU8.subarray(ptr, ptr + length + 1)), [...encoded, 0]);
+        b.heap(8 * 1024 * 1024);
+        const copy = b.module._cmalloc(length + 1);
+        b.module.HEAPU8.set(encoded, copy);
+        b.module._gdspx_get_string_len = () => length;
+        b.module._gdspx_get_string = () => copy;
+        return 16;
+    };
+    b.context.value = value;
+    assert.equal(b.run('ToJsString(ToGdString(value))'), value);
+    assert.deepEqual(b.freed, [temporary]);
+    b.module._gdspx_new_string = () => 0;
+    assert.throws(() => b.run('ToGdString("wrapper failure")'), /GdString wrapper/);
+    assert.equal(b.freed.length, 2, 'temporary bytes are released even when wrapper allocation fails');
+});
+
+test('string results reject malformed lengths and pointers before reading the heap', () => {
+    const b = bridge();
+    assert.equal(b.run('ToJsString(16)'), '');
+    for (const [length, ptr] of [
+        [-1, 64], [1.5, 64], [NaN, 64], [Infinity, 64], [268435457, 64],
+        [1, 0], [1, -1], [1, 1.5], [1, NaN], [2, b.module.HEAPU8.length - 1],
+    ]) {
+        b.module._gdspx_get_string_len = () => length;
+        b.module._gdspx_get_string = () => ptr;
+        assert.equal(b.run('ToJsString(16)'), '', `length=${length}, ptr=${ptr}`);
+    }
+    b.module._gdspx_get_string_len = () => { throw new Error('must not inspect a null wrapper'); };
+    assert.equal(b.run('ToJsString(0)'), '');
+});
+
+test('native result descriptors reject out-of-bounds headers, counts, and payloads', () => {
+    const b = bridge();
+    const info = b.module._cmalloc(12);
+    b.context.info = info;
+    for (const pointer of [1, b.module.HEAPU8.length - 4]) {
+        b.module._gdspx_get_array_info = () => pointer;
+        assert.equal(b.run('ToJsArray(info)'), null);
+    }
+    b.module._gdspx_get_array_info = value => value;
+    for (const fields of [
+        [16777217, 5, 64], [1, 99, 64], [1, 5, 0],
+        [2, 1, b.module.HEAPU8.length - 8], [1, 4, 65],
+    ]) {
+        b.module.HEAPU32.set(fields, info / 4);
+        assert.equal(b.run('ToJsArray(info)'), null, String(fields));
+    }
+    const slot = b.module._cmalloc(4);
+    const last = b.module.HEAPU8.length - 1;
+    b.module.HEAPU32.set([1, 4, slot], info / 4);
+    b.module.HEAPU32[slot / 4] = last;
+    b.module.HEAPU8[last] = 65;
+    assert.equal(b.run('ToJsArray(info)'), null, 'unterminated string at the heap boundary');
+    b.module.HEAPU8[last] = 0;
+    const result = b.run('ToJsArray(info)');
+    assert.deepEqual(Array.from(result.data), [8, 0, 0, 0, 0, 0, 0, 0, 0]);
 });

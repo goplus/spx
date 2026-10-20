@@ -17,16 +17,23 @@
 package project
 
 import (
+	"context"
+	"math"
+	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"testing"
+	"time"
 )
 
 type memberEvalFixture struct {
 	Score int
 }
 
-func (f *memberEvalFixture) Value() float64 { return 1.234 }
+func (f *memberEvalFixture) Value() float64  { return 1.234 }
+func (f *memberEvalFixture) Single() float32 { return 2.5 }
+func (f *memberEvalFixture) Text() string    { return "level complete" }
 
 // EmbeddedBase is embedded (anonymously) inside the fixtures below.
 // It must be exported so the anonymous field itself is exported, matching
@@ -74,12 +81,23 @@ func TestResolveMemberStringEvalField(t *testing.T) {
 
 func TestResolveMemberStringEvalAliasMethod(t *testing.T) {
 	fixture := memberEvalFixture{}
-	eval := ResolveMemberStringEval(reflect.ValueOf(&fixture).Elem(), "value", 0)
-	if eval == nil {
-		t.Fatal("expected eval function for aliased method")
-	}
-	if got := eval(); got != "1.23" {
-		t.Fatalf("unexpected alias method value: %s", got)
+	for _, tt := range []struct {
+		name string
+		want string
+	}{
+		{name: "value", want: "1.23"},
+		{name: "single", want: "2.50"},
+		{name: "text", want: "level complete"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			eval := ResolveMemberStringEval(reflect.ValueOf(&fixture).Elem(), tt.name, 0)
+			if eval == nil {
+				t.Fatal("expected eval function for aliased method")
+			}
+			if got := eval(); got != tt.want {
+				t.Fatalf("alias method value = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -201,6 +219,9 @@ func TestResolveMemberValueEvalField(t *testing.T) {
 	if got := eval(); got != 7 {
 		t.Fatalf("unexpected field value: %v", got)
 	}
+	if eval := ResolveMemberValueEval(reflect.ValueOf(&fixture).Elem(), "missing", 0); eval != nil {
+		t.Fatal("missing field resolved to a value evaluator")
+	}
 }
 
 func TestResolveMemberValueEvalAliasMethod(t *testing.T) {
@@ -222,5 +243,173 @@ func TestResolveMemberValueEvalOriginalMethod(t *testing.T) {
 	}
 	if got := eval(); got != 1.234 {
 		t.Fatalf("unexpected original method value: %v", got)
+	}
+}
+
+type CyclicMemberFixture struct {
+	*CyclicMemberFixture
+	*CycleMemberLeaf
+	Label string
+}
+
+func TestResolveMemberEvalEmbeddedRootIgnoresTopLevelFrom(t *testing.T) {
+	fixture := &CyclicMemberFixture{Label: "root"}
+	fixture.CyclicMemberFixture = fixture
+	if eval := ResolveMemberValueEval(reflect.ValueOf(fixture), "Label", 3); eval == nil || eval() != "root" {
+		t.Fatal("from must only restrict direct fields, including when an embedded pointer revisits the root")
+	}
+}
+
+func (*CyclicMemberFixture) Value() int { return 42 }
+
+type CycleMemberLeaf struct{ Score int }
+type CycleMemberBranch struct{ *CycleMemberLeaf }
+type CycleMemberLeft struct{ *CycleMemberBranch }
+type CycleMemberRight struct{ *CycleMemberBranch }
+
+func TestResolveMemberEvalCyclicEmbeddings(t *testing.T) {
+	if os.Getenv("SPX_TEST_MEMBER_CYCLES") != "1" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestResolveMemberEvalCyclicEmbeddings$", "-test.count=1")
+		cmd.Env = append(os.Environ(), "SPX_TEST_MEMBER_CYCLES=1")
+		output, err := cmd.CombinedOutput()
+		if ctx.Err() != nil {
+			t.Fatalf("cyclic member lookup did not terminate: %v\n%s", ctx.Err(), output)
+		}
+		if err != nil {
+			t.Fatalf("cyclic member lookup: %v\n%s", err, output)
+		}
+		return
+	}
+
+	self := &CyclicMemberFixture{}
+	self.CyclicMemberFixture = self
+	first, second := &CyclicMemberFixture{}, &CyclicMemberFixture{CycleMemberLeaf: &CycleMemberLeaf{Score: 17}}
+	first.CyclicMemberFixture, second.CyclicMemberFixture = second, first
+	for _, fixture := range []*CyclicMemberFixture{self, first} {
+		target := reflect.ValueOf(fixture)
+		if eval := ResolveMemberValueEval(target, "missing", 0); eval != nil {
+			t.Fatal("unexpected value evaluator for missing member")
+		}
+		if eval := ResolveMemberStringEval(target, "missing", 0); eval != nil {
+			t.Fatal("unexpected string evaluator for missing member")
+		}
+		if eval := ResolveMemberValueEval(target, "value", 0); eval == nil || eval() != 42 {
+			t.Fatal("cycle hid value getter")
+		}
+		if eval := ResolveMemberStringEval(target, "value", 0); eval == nil || eval() != "42" {
+			t.Fatal("cycle hid string getter")
+		}
+	}
+	if eval := ResolveMemberValueEval(reflect.ValueOf(first), "Score", 0); eval == nil || eval() != 17 {
+		t.Fatal("cycle hid field on distinct instance of the same embedded type")
+	}
+}
+
+func TestResolveMemberEvalPreservesEmbeddedInstanceOrder(t *testing.T) {
+	left, right := &CycleMemberBranch{}, &CycleMemberBranch{CycleMemberLeaf: &CycleMemberLeaf{Score: 9}}
+	fixture := struct {
+		CycleMemberLeft
+		CycleMemberRight
+	}{
+		CycleMemberLeft{left}, CycleMemberRight{right},
+	}
+	target := reflect.ValueOf(&fixture)
+	if eval := ResolveMemberValueEval(target, "Score", 0); eval == nil || eval() != 9 {
+		t.Fatal("missing field from second instance of the same embedded type")
+	}
+	left.CycleMemberLeaf = &CycleMemberLeaf{Score: 7}
+	if eval := ResolveMemberValueEval(target, "Score", 0); eval == nil || eval() != 7 {
+		t.Fatal("first field at equal depth must win")
+	}
+	shallow := struct {
+		CycleMemberLeft
+		*CycleMemberLeaf
+	}{
+		CycleMemberLeft{right}, &CycleMemberLeaf{Score: 3},
+	}
+	if eval := ResolveMemberValueEval(reflect.ValueOf(&shallow), "Score", 0); eval == nil || eval() != 3 {
+		t.Fatal("shallower field must win even in a later branch")
+	}
+}
+
+func TestMemberNumberSetter(t *testing.T) {
+	type fixture struct {
+		number   float64
+		single   float32
+		integer  int8
+		unsigned uint8
+		text     string
+		dynamic  any
+		flag     bool
+		values   []int
+		reporter interface{ Value() float64 }
+	}
+	reporter := &memberEvalFixture{}
+	f := fixture{reporter: reporter}
+	root := reflect.ValueOf(&f).Elem()
+	for _, name := range []string{"number", "single", "integer", "unsigned", "text", "dynamic"} {
+		set := ResolveMemberNumberSetter(root, name, 0)
+		if set == nil || !set(12.5) {
+			t.Fatalf("cannot set %s", name)
+		}
+		if set(math.NaN()) || set(math.Inf(1)) || set(math.Inf(-1)) {
+			t.Fatalf("accepted non-finite %s", name)
+		}
+	}
+	if f.number != 12.5 || f.single != 12.5 || f.integer != 12 || f.unsigned != 12 || f.text != "12.5" || f.dynamic != 12.5 {
+		t.Fatalf("unexpected values %+v", f)
+	}
+	for _, tt := range []struct {
+		name  string
+		value float64
+	}{
+		{name: "integer", value: 128},
+		{name: "integer", value: -129},
+		{name: "unsigned", value: 256},
+		{name: "unsigned", value: -1},
+		{name: "single", value: math.MaxFloat64},
+		{name: "single", value: -math.MaxFloat64},
+	} {
+		set := ResolveMemberNumberSetter(root, tt.name, 0)
+		eval := ResolveMemberValueEval(root, tt.name, 0)
+		before := eval()
+		if set(tt.value) {
+			t.Errorf("%s accepted out-of-range value %g", tt.name, tt.value)
+		}
+		if got := eval(); got != before {
+			t.Errorf("rejected %s update changed value to %v, want %v", tt.name, got, before)
+		}
+	}
+	for _, name := range []string{"missing", "flag", "values", "reporter"} {
+		if ResolveMemberNumberSetter(root, name, 0) != nil {
+			t.Fatalf("accepted %s", name)
+		}
+	}
+	if ResolveMemberNumberSetter(reflect.ValueOf(42), "number", 0) != nil {
+		t.Fatal("non-struct target accepted")
+	}
+	if f.reporter != reporter {
+		t.Fatal("non-empty interface changed")
+	}
+	if ResolveMemberNumberSetter(reflect.ValueOf(reporter).Elem(), "value", 0) != nil {
+		t.Fatal("reporter is not writable")
+	}
+}
+
+func TestMemberNumberSetterPromotedField(t *testing.T) {
+	f := embeddedPtrFixture{EmbeddedBase: &EmbeddedBase{Level: 1}}
+	set := ResolveMemberNumberSetter(reflect.ValueOf(&f).Elem(), "Level", 1)
+	if set == nil || !set(42) || f.Level != 42 {
+		t.Fatal("promoted field did not update")
+	}
+	f.EmbeddedBase = nil
+	if ResolveMemberNumberSetter(reflect.ValueOf(&f).Elem(), "Level", 1) != nil {
+		t.Fatal("nil embedded pointer accepted")
 	}
 }

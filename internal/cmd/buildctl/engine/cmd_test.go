@@ -517,3 +517,39 @@ func writeZipFixture(dst string, files map[string]string) error {
 	}
 	return writer.Close()
 }
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	mustMkdirAll(t, filepath.Dir(path))
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+// isolateEngineEnvironment keeps entry-point tests away from the checkout and
+// the developer's installed engines, tools, and export templates.
+func isolateEngineEnvironment(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]string{
+		"HOME": root, "USERPROFILE": root, "APPDATA": filepath.Join(root, "AppData"),
+		"GOPATH": filepath.Join(root, "go"), "GODOT_SRC": filepath.Join(root, "godot"),
+		"SPX_MODULE_SRC": filepath.Join(root, "module"), "PLATFORM": "", "SPX_PREPARE_FORCE_REFRESH": "false",
+	} {
+		t.Setenv(key, value)
+	}
+	mustWriteFile(t, filepath.Join(root, "go.mod"), nil)
+	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "install.sh"), nil)
+	mustMkdirAll(t, filepath.Join(root, "internal", "tools"))
+	return root
+}

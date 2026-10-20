@@ -19,6 +19,8 @@ package command
 import (
 	"context"
 	"embed"
+	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -260,6 +262,70 @@ func TestLoadLauncherProjectRejectsInvalidFiles(t *testing.T) {
 			}
 			if _, err := loadLauncherProject(root, projectDir); err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("loadLauncherProject error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestBuildLauncherFailureDoesNotPublishOutput(t *testing.T) {
+	for _, scenario := range []string{"builder failure", "missing stage", "portable config", "protected output", "invalid project", "missing Go"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(findSPXRoot(t))+"\n")
+			writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\npack assets index.json\n")
+			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "onStart => {}\n")
+			output := filepath.Join(root, "launcher")
+			writeCommandTestFile(t, output, "old launcher")
+			t.Setenv("GOWORK", "off")
+			t.Setenv("GOFLAGS", "-mod=mod")
+			setTestCommandLine(t, "spx", "buildlauncher")
+			if err := flag.CommandLine.Parse(nil); err != nil {
+				t.Fatal(err)
+			}
+			cmd := &CmdTool{Args: ExtraArgs{Path: &root, Output: &output}}
+			called := false
+			cmd.launcherBuilder = func(context.Context, launchpack.Config) (launchpack.Result, error) {
+				called = true
+				if scenario == "builder failure" {
+					return launchpack.Result{}, errors.New("compiler failed")
+				}
+				return launchpack.Result{}, nil
+			}
+			want := ""
+			switch scenario {
+			case "builder failure":
+				want = "compiler failed"
+			case "missing stage":
+				want = "inspect staged output"
+			case "portable config":
+				writeCommandTestFile(t, filepath.Join(root, ".config"), "{")
+				want = "portable config"
+			case "protected output":
+				output = filepath.Join(root, "main.spx")
+				want = "source extension"
+			case "invalid project":
+				root = filepath.Join(root, "missing")
+				want = "project path"
+			case "missing Go":
+				t.Setenv("PATH", t.TempDir())
+				want = "Go command"
+			}
+			before := readTestFile(t, output)
+			if err := cmd.runBuildLauncher(); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("buildlauncher error = %v, want %q", err, want)
+			}
+			if called != (scenario == "builder failure" || scenario == "missing stage") {
+				t.Fatalf("builder called = %v for %s", called, scenario)
+			}
+			if got := readTestFile(t, output); got != before {
+				t.Fatalf("failure replaced output: %q, want %q", got, before)
+			}
+			entries, err := filepath.Glob(filepath.Join(filepath.Dir(output), ".*.spx-launchpack-*"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("failed build retained staging paths: %q", entries)
 			}
 		})
 	}
