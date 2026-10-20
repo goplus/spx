@@ -21,7 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -347,5 +349,260 @@ func TestEnvMapToSliceSortsAndCopies(t *testing.T) {
 	}
 	if got := shared.EnvMapToSlice(nil); got == nil || len(got) != 0 {
 		t.Fatalf("EnvMapToSlice(nil) = %#v, want an empty non-nil slice", got)
+	}
+}
+
+func TestEnsureEngineSourcePreservesFailuresAndCleansStaging(t *testing.T) {
+	for _, stage := range []string{"init", "remote", "fallback", "checkout", "rename", "parent", "staging"} {
+		t.Run(stage, func(t *testing.T) {
+			root := t.TempDir()
+			destination := filepath.Join(root, "godot")
+			if stage == "parent" {
+				if err := os.WriteFile(destination, []byte("blocked"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				destination = filepath.Join(destination, "child")
+			}
+			if stage == "staging" {
+				destination = filepath.Join(root, strings.Repeat("x", 260))
+			}
+			t.Setenv("GODOT_SRC", destination)
+			sentinel := errors.New("Git fixture failed")
+			calls := 0
+			err := shared.EnsureEngineSource(root, func(_ string, args ...string) error {
+				calls++
+				if args[2] == stage || stage == "fallback" && calls >= 4 {
+					return sentinel
+				}
+				if stage == "rename" && args[2] == "checkout" {
+					return os.WriteFile(destination, []byte("keep"), 0600)
+				}
+				return nil
+			})
+			if err == nil {
+				t.Fatal("source setup failure ignored")
+			}
+			if stage == "init" || stage == "remote" || stage == "fallback" || stage == "checkout" {
+				if !errors.Is(err, sentinel) {
+					t.Fatalf("lost command failure: %v", err)
+				}
+			}
+			if stage == "fallback" && !strings.Contains(err.Error(), "ref fallback failed") {
+				t.Fatalf("fallback context missing: %v", err)
+			}
+			if stage == "parent" || stage == "staging" {
+				if calls != 0 {
+					t.Fatalf("commands ran before staging: %d", calls)
+				}
+			}
+			entries, readErr := os.ReadDir(root)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			for _, entry := range entries {
+				if strings.Contains(entry.Name(), ".clone-") {
+					t.Fatalf("staging leaked: %s", entry.Name())
+				}
+			}
+		})
+	}
+}
+
+func TestEnsureEngineSourceChecksExistingPinnedIdentity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX Git fixture")
+	}
+	for _, matches := range []bool{true, false} {
+		t.Run(strconv.FormatBool(matches), func(t *testing.T) {
+			root, bin := t.TempDir(), t.TempDir()
+			head := release.DefaultRuntimeLock().Godot.Commit
+			if !matches {
+				head = strings.Repeat("0", 40)
+			}
+			if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\nprintf '%s\\n' '"+head+"'\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin)
+			t.Setenv("GODOT_SRC", root)
+			err := shared.EnsureEngineSource(t.TempDir(), func(string, ...string) error { t.Fatal("existing checkout triggered clone"); return nil })
+			if matches {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "requires") {
+				t.Fatalf("unpinned checkout = %v", err)
+			}
+		})
+	}
+}
+
+func TestResolveBuildEnvironmentRejectsUnavailablePaths(t *testing.T) {
+	for _, scenario := range []string{"GOPATH", "home"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("HOME", root)
+			t.Setenv("USERPROFILE", root)
+			gopath := filepath.Join(root, "go")
+			t.Setenv("GOPATH", gopath)
+			if scenario == "GOPATH" {
+				t.Setenv("GOPATH", "")
+				t.Setenv("PATH", t.TempDir())
+			} else {
+				t.Setenv("HOME", "")
+				t.Setenv("USERPROFILE", "")
+			}
+			if _, err := shared.ResolveBuildEnvironment(root, "linux"); err == nil {
+				t.Fatal("invalid build environment accepted")
+			}
+		})
+	}
+}
+
+func TestVulkanSDKDiscoveryRejectsMissingInstallations(t *testing.T) {
+	home := t.TempDir()
+	if _, err := shared.ResolveMacOSVulkanSDKRoot(home, ""); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing SDK parent = %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(home, "VulkanSDK"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := shared.ResolveMacOSVulkanSDKRoot(home, ""); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("empty SDK parent = %v", err)
+	}
+}
+
+func writeSPXModuleFixture(t *testing.T, root string) string {
+	t.Helper()
+	source := filepath.Join(root, "godot_modules", "spx")
+	for _, name := range []string{"SCsub", "config.py"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(source, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(source, name), []byte("fixture\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	profile := []byte(`{
+  "schema": 1,
+  "common": ["optimize=size"],
+  "editor_release": ["debug_symbols=true"],
+  "template_release": ["debug_symbols=false"]
+}`)
+	if err := os.WriteFile(filepath.Join(source, shared.SConsProfileFilename), profile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return source
+}
+
+func TestResolveSPXModuleSource(t *testing.T) {
+	repoRoot := t.TempDir()
+	absolute := filepath.Join(t.TempDir(), "spx")
+	tests := []struct {
+		name     string
+		override string
+		want     string
+	}{
+		{
+			name: "default",
+			want: filepath.Join(repoRoot, filepath.FromSlash(release.DefaultRuntimeLock().Module.Path)),
+		},
+		{
+			name:     "relative override",
+			override: filepath.Join("custom", "spx"),
+			want:     filepath.Join(repoRoot, "custom", "spx"),
+		},
+		{
+			name:     "absolute override",
+			override: absolute,
+			want:     absolute,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SPX_MODULE_SRC", tt.override)
+			got, err := shared.ResolveSPXModuleSource(repoRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("module source = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveSPXModuleKeepsSourceAndProfileTogether(t *testing.T) {
+	t.Setenv("SPX_MODULE_SRC", "")
+	repoRoot := t.TempDir()
+	wantSource := writeSPXModuleFixture(t, repoRoot)
+
+	module, err := shared.ResolveSPXModule(repoRoot)
+	if err != nil {
+		t.Fatalf("ResolveSPXModule returned error: %v", err)
+	}
+	if module.Source() != wantSource {
+		t.Fatalf("module source = %s, want %s", module.Source(), wantSource)
+	}
+	wantLast := "custom_modules=" + wantSource
+	args := module.TemplateBuildArgs("platform=web", "target=template_release")
+	if args[len(args)-1] != wantLast {
+		t.Fatalf("last SCons argument = %q, want %q", args[len(args)-1], wantLast)
+	}
+}
+
+func TestLoadSPXModuleRejectsIncompleteBuildContract(t *testing.T) {
+	for _, missing := range []string{"SCsub", "config.py", shared.SConsProfileFilename} {
+		t.Run(missing, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			source := writeSPXModuleFixture(t, repoRoot)
+			if err := os.Remove(filepath.Join(source, missing)); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := shared.LoadSPXModule(source)
+			if err == nil || !strings.Contains(err.Error(), missing) {
+				t.Fatalf("LoadSPXModule error = %v, want missing %s", err, missing)
+			}
+		})
+	}
+}
+
+func TestLoadSPXModuleRejectsEmptySource(t *testing.T) {
+	if _, err := shared.LoadSPXModule("  "); err == nil || !strings.Contains(err.Error(), "must not be empty") {
+		t.Fatalf("LoadSPXModule empty source error = %v", err)
+	}
+}
+
+func TestLoadSPXModuleRejectsInvalidFileTypesAndProfile(t *testing.T) {
+	for _, scenario := range []string{"missing source", "file source", "directory build file", "invalid profile"} {
+		t.Run(scenario, func(t *testing.T) {
+			source := writeSPXModuleFixture(t, t.TempDir())
+			want := ""
+			switch scenario {
+			case "missing source":
+				source += ".missing"
+				want = "SPX module source"
+			case "file source":
+				source = filepath.Join(source, "SCsub")
+				want = "not a directory"
+			case "directory build file":
+				path := filepath.Join(source, "SCsub")
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+				want = "not a regular file"
+			case "invalid profile":
+				if err := os.WriteFile(filepath.Join(source, shared.SConsProfileFilename), []byte("{"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				want = "parse SCons profile"
+			}
+			if _, err := shared.LoadSPXModule(source); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("LoadSPXModule = %v, want %q", err, want)
+			}
+		})
 	}
 }

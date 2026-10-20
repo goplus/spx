@@ -18,23 +18,35 @@ package engine
 
 import (
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
+func isolateCaptureState(t *testing.T) {
+	t.Helper()
+	captureState.mu.Lock()
+	requests, sequence, handler := captureState.requests, captureState.sequence, captureState.handler
+	captureState.requests, captureState.sequence, captureState.handler = nil, 0, nil
+	captureState.mu.Unlock()
+	t.Cleanup(func() {
+		captureState.mu.Lock()
+		captureState.requests, captureState.sequence, captureState.handler = requests, sequence, handler
+		captureState.mu.Unlock()
+	})
+}
+
 func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 	SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 
 	var got CaptureRequest
 	SetCaptureHandler(func(req CaptureRequest) error {
 		got = req
 		return nil
 	})
-	defer SetCaptureHandler(nil)
 
 	tick := int64(0)
 	if err := EnqueueCapture("tick", &tick); err != nil {
@@ -51,15 +63,13 @@ func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 func TestCaptureCopiesInputTickAtEnqueue(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 
 	var got CaptureRequest
 	SetCaptureHandler(func(request CaptureRequest) error {
 		got = request
 		return nil
 	})
-	defer SetCaptureHandler(nil)
 
 	tick := int64(7)
 	if err := EnqueueCapture("copied", &tick); err != nil {
@@ -76,10 +86,7 @@ func TestCaptureCopiesInputTickAtEnqueue(t *testing.T) {
 
 func TestCaptureWithoutGameSupportsReentryAndReturnsErrors(t *testing.T) {
 	SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
-	SetCaptureHandler(nil)
-	defer SetCaptureHandler(nil)
+	isolateCaptureState(t)
 
 	if err := EnqueueCapture("missing-backend", nil); !errors.Is(err, errCaptureHandlerNotConfigured) {
 		t.Fatalf("capture without backend = %v, want backend error", err)
@@ -108,8 +115,7 @@ func TestCaptureWithoutGameSupportsReentryAndReturnsErrors(t *testing.T) {
 func TestConcurrentCaptureMetadataIsCoherentAndOrdered(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 	expectedFrame := itime.Frame()
 
 	var got []CaptureRequest
@@ -117,7 +123,6 @@ func TestConcurrentCaptureMetadataIsCoherentAndOrdered(t *testing.T) {
 		got = append(got, req)
 		return nil
 	})
-	defer SetCaptureHandler(nil)
 
 	const count = 32
 	var wg sync.WaitGroup
@@ -157,8 +162,7 @@ func TestConcurrentCaptureMetadataIsCoherentAndOrdered(t *testing.T) {
 func TestFlushCapturesContinuesAfterHandlerError(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 
 	firstErr := errors.New("first capture failed")
 	thirdErr := errors.New("third capture failed")
@@ -174,7 +178,6 @@ func TestFlushCapturesContinuesAfterHandlerError(t *testing.T) {
 			return nil
 		}
 	})
-	defer SetCaptureHandler(nil)
 
 	for _, name := range []string{"first", "second", "third"} {
 		if err := EnqueueCapture(name, nil); err != nil {
@@ -186,21 +189,15 @@ func TestFlushCapturesContinuesAfterHandlerError(t *testing.T) {
 		t.Fatalf("FlushCaptures error = %v, want both handler errors", err)
 	}
 	want := []string{"first", "second", "third"}
-	if len(got) != len(want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("dispatched captures = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("dispatched captures = %v, want %v", got, want)
-		}
 	}
 }
 
 func TestFlushCapturesSupportsReentrantResetAndHandlerChange(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 
 	firstErr := errors.New("first capture failed")
 	var got []CaptureRequest
@@ -218,7 +215,6 @@ func TestFlushCapturesSupportsReentrantResetAndHandlerChange(t *testing.T) {
 		})
 		return firstErr
 	})
-	defer SetCaptureHandler(nil)
 
 	for _, name := range []string{"first", "second"} {
 		if err := EnqueueCapture(name, nil); err != nil {
@@ -251,8 +247,7 @@ func TestFlushCapturesSupportsReentrantResetAndHandlerChange(t *testing.T) {
 func TestResetCapturesClearsCapturesAndResetsSequence(t *testing.T) {
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 	frame := itime.Frame()
 
 	var got []CaptureRequest
@@ -260,7 +255,6 @@ func TestResetCapturesClearsCapturesAndResetsSequence(t *testing.T) {
 		got = append(got, req)
 		return nil
 	})
-	defer SetCaptureHandler(nil)
 
 	if err := EnqueueCapture("old.png", nil); err != nil {
 		t.Fatal(err)
@@ -296,14 +290,12 @@ func TestCaptureRequestQueuesForActiveGame(t *testing.T) {
 	var got CaptureRequest
 	SetGame(struct{}{})
 	defer SetGame(nil)
-	ResetCaptures()
-	defer ResetCaptures()
+	isolateCaptureState(t)
 	expectedFrame := itime.Frame()
 	SetCaptureHandler(func(req CaptureRequest) error {
 		got = req
 		return nil
 	})
-	defer SetCaptureHandler(nil)
 
 	if err := EnqueueCapture("step_001.png", nil); err != nil {
 		t.Fatal(err)

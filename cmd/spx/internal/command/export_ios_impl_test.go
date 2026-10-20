@@ -17,9 +17,12 @@
 package command
 
 import (
+	"bytes"
 	"errors"
+	spxlog "github.com/goplus/spx/v3/internal/log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -356,5 +359,45 @@ func TestIosSDKAndArchiveConfiguration(t *testing.T) {
 	install = true
 	if err := cmd.installIosIPA("unused.ipa", true); err == nil || !strings.Contains(err.Error(), "cannot install IPA") {
 		t.Fatalf("project-only install error = %v", err)
+	}
+}
+
+func TestIosTemplateDiagnosticsFindOnlyVersionedIOSFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("APPDATA", home)
+	var templateDir string
+	switch runtime.GOOS {
+	case "darwin":
+		templateDir = filepath.Join(home, "Library", "Application Support", "Godot", "export_templates")
+	case "linux":
+		templateDir = filepath.Join(home, ".local", "share", "godot", "export_templates")
+	case "windows":
+		templateDir = filepath.Join(home, "Godot", "export_templates")
+	default:
+		t.Skip("no platform export-template location")
+	}
+	writeCommandTestFile(t, filepath.Join(templateDir, "4.5", "ios.zip"), "template")
+	writeCommandTestFile(t, filepath.Join(templateDir, "4.5", "linux.zip"), "other template")
+	writeCommandTestFile(t, filepath.Join(templateDir, "README"), "ignored root file")
+	var logs bytes.Buffer
+	spxlog.SetOutput(&logs)
+	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout); spxlog.SetStderrOutput(os.Stderr) })
+	(&CmdTool{}).logIosExportTemplates()
+	if got := logs.String(); !strings.Contains(got, "Templates for iOS in 4.5: [ios.zip]") || strings.Contains(got, "linux.zip") || strings.Contains(got, "Export template version: README") {
+		t.Fatalf("template diagnostics = %q", got)
+	}
+}
+
+func TestIosSDKLookupRejectsInvalidToolOutput(t *testing.T) {
+	for _, sdk := range []string{"iphonesimulator", "iphoneos"} {
+		t.Run(sdk, func(t *testing.T) {
+			t.Setenv("SPX_TEST_INVALID_SDK", sdk)
+			installCommandTestTools(t, map[string]string{"xcrun": `if [ "$2" = "$SPX_TEST_INVALID_SDK" ]; then echo '/invalid sdk'; else echo /valid/sdk; fi`})
+			if _, err := lookupIosSDKPaths(); err == nil || !strings.Contains(err.Error(), "whitespace") {
+				t.Fatalf("invalid SDK error = %v", err)
+			}
+		})
 	}
 }

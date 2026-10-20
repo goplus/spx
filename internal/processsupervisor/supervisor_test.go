@@ -19,8 +19,84 @@ package processsupervisor
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"testing"
 )
+
+func TestRunRejectsInvalidInput(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		ctx  context.Context
+		cmd  *exec.Cmd
+		want string
+	}{
+		{name: "nil context", cmd: &exec.Cmd{}, want: "processsupervisor: nil context"},
+		{name: "nil command", ctx: context.Background(), want: "processsupervisor: nil command"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			status, err := Run(tt.ctx, tt.cmd)
+			if status != (Status{}) || err == nil || err.Error() != tt.want {
+				t.Fatalf("Run() = (%+v, %v), want zero status and %q", status, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunRejectsStartedCommand(t *testing.T) {
+	command := exec.Command(os.Args[0], "-test.run=^TestStatusSuccess$")
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+	})
+	status, err := Run(context.Background(), command)
+	if status != (Status{}) || err == nil || err.Error() != "processsupervisor: command has already started" {
+		t.Fatalf("Run() = (%+v, %v), want zero status and already-started error", status, err)
+	}
+	if err := command.Wait(); err != nil {
+		t.Fatalf("caller could not wait for rejected command: %v", err)
+	}
+}
+
+func TestStatusSuccess(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status Status
+		want   bool
+	}{
+		{name: "zero exit", want: true},
+		{name: "nonzero exit", status: Status{Code: 1}},
+		{name: "signal", status: Status{Signal: 2}},
+		{name: "signal and code", status: Status{Code: 1, Signal: 2}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.status.Success(); got != tt.want {
+				t.Fatalf("Status(%+v).Success() = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSignalCauseError(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		cause *SignalCause
+		want  string
+	}{
+		{name: "nil cause", want: "processsupervisor: canceled by signal"},
+		{name: "nil signal", cause: &SignalCause{}, want: "processsupervisor: canceled by signal"},
+		{name: "interrupt", cause: &SignalCause{Signal: os.Interrupt}, want: "processsupervisor: canceled by signal interrupt"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cause.Error(); got != tt.want {
+				t.Fatalf("SignalCause.Error() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestCancellationError(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(context.Background())

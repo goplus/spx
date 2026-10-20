@@ -19,11 +19,14 @@
 package engine
 
 import (
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -85,7 +88,7 @@ func TestTerminateTrackedProcessGroupKillsDescendantAfterLeaderExit(t *testing.T
 }
 
 func TestTrackedProcessHelper(t *testing.T) {
-	switch os.Getenv("SPX_TRACKED_PROCESS_HELPER") {
+	switch mode := os.Getenv("SPX_TRACKED_PROCESS_HELPER"); mode {
 	case "leader":
 		lifetime := os.NewFile(3, "tracked-worker-lifetime")
 		defer lifetime.Close()
@@ -100,10 +103,92 @@ func TestTrackedProcessHelper(t *testing.T) {
 		if err := os.WriteFile(os.Getenv("SPX_TRACKED_PROCESS_MARKER"), []byte("ready"), 0o600); err != nil {
 			os.Exit(72)
 		}
+	case "interrupt-clean", "interrupt-error":
+		termination := make(chan os.Signal, 1)
+		if mode == "interrupt-clean" {
+			signal.Notify(termination, syscall.SIGTERM)
+			defer signal.Stop(termination)
+		} else {
+			signal.Ignore(syscall.SIGTERM)
+		}
+		if err := os.WriteFile(os.Getenv("SPX_TRACKED_PROCESS_MARKER"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if mode == "interrupt-clean" {
+			<-termination
+			// Avoid emitting a child test summary into the parent command output.
+			os.Exit(0)
+		}
 	default:
 		return
 	}
 	for {
 		time.Sleep(time.Second)
 	}
+}
+
+func TestTrackedEngineCommandInterrupted(t *testing.T) {
+	for _, mode := range []string{"interrupt-clean", "interrupt-error"} {
+		t.Run(mode, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "ready")
+			// The race runtime otherwise sleeps for the entire termination grace period.
+			t.Setenv("GORACE", "atexit_sleep_ms=0")
+			t.Setenv("SPX_TRACKED_PROCESS_HELPER", mode)
+			t.Setenv("SPX_TRACKED_PROCESS_MARKER", marker)
+			// Keep SIGINT intercepted even in the short intervals before and after
+			// the command installs its own handler. No unrelated process is signaled.
+			guard := make(chan os.Signal, 1)
+			signal.Notify(guard, os.Interrupt)
+			defer signal.Stop(guard)
+			done := make(chan error, 1)
+			go func() { done <- runTrackedEngineCommand("", os.Args[0], "-test.run=^TestTrackedProcessHelper$", "--") }()
+			deadline := time.Now().Add(5 * time.Second)
+			var pid int
+			for pid == 0 {
+				if data, err := os.ReadFile(marker); err == nil {
+					pid, _ = strconv.Atoi(string(data))
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("tracked helper did not become ready")
+				}
+				select {
+				case err := <-done:
+					t.Fatalf("tracked command exited before interrupt: %v", err)
+				default:
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+			finished := false
+			defer func() {
+				if !finished {
+					_ = syscall.Kill(-pid, syscall.SIGKILL)
+				}
+			}()
+			for {
+				if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case err := <-done:
+					finished = true
+					if mode == "interrupt-clean" {
+						if err == nil || !strings.Contains(err.Error(), "engine build interrupted") {
+							t.Fatalf("clean interrupt=%v", err)
+						}
+					} else {
+						var exitErr *exec.ExitError
+						if !errors.As(err, &exitErr) {
+							t.Fatalf("forced termination=%v", err)
+						}
+					}
+					return
+				case <-time.After(50 * time.Millisecond):
+					if time.Now().After(deadline) {
+						t.Fatal("tracked command ignored interrupt")
+					}
+				}
+			}
+		})
+	}
+	terminateTrackedProcess(nil)
 }

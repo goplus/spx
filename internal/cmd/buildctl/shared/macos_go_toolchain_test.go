@@ -22,9 +22,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/base/quoted"
 )
 
 func TestMacOSGoToolchainShellBootstrapDropsCGOFlags(t *testing.T) {
@@ -423,4 +426,135 @@ func parseKeyValueLines(t *testing.T, output string) map[string]string {
 		values[key] = value
 	}
 	return values
+}
+
+func TestResolveMacOSXcrunPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix executable fixture")
+	}
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "xcrun"), "#!/bin/sh\nprintf '%s' \"$FAKE_OUTPUT\"\nexit \"$FAKE_EXIT\"\n")
+	sdk := t.TempDir()
+	for _, test := range []struct {
+		name, output, exitCode, wantErr string
+	}{
+		{"valid directory", sdk + "\n", "0", ""},
+		{"empty", "", "0", "invalid macOS SDK"},
+		{"relative", "MacOSX.sdk", "0", "invalid macOS SDK"},
+		{"missing", filepath.Join(sdk, "missing"), "0", "invalid macOS SDK"},
+		{"multiple paths", sdk + "\n" + sdk, "0", "invalid macOS SDK"},
+		{"carriage return", sdk + "\rignored", "0", "invalid macOS SDK"},
+		{"command error", "SDK unavailable", "9", "resolve macOS SDK: xcrun --show-sdk-path: exit status 9: SDK unavailable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := map[string]string{"PATH": binDir, "FAKE_OUTPUT": test.output, "FAKE_EXIT": test.exitCode}
+			got, err := resolveMacOSXcrunPath(env, pathIsDirectory, "SDK", "--show-sdk-path")
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) || got != "" {
+					t.Fatalf("resolveMacOSXcrunPath() = %q, %v; want %q", got, err, test.wantErr)
+				}
+			} else if err != nil || got != sdk {
+				t.Fatalf("resolveMacOSXcrunPath() = %q, %v; want %q", got, err, sdk)
+			}
+		})
+	}
+	if _, err := runMacOSXcrun(map[string]string{"PATH": t.TempDir()}, "--show-sdk-path"); err == nil || !strings.Contains(err.Error(), "resolve xcrun") {
+		t.Fatalf("missing xcrun error = %v", err)
+	}
+}
+
+func TestMacOSCommandIsUsable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix executable permission checks")
+	}
+	binDir := t.TempDir()
+	compiler := filepath.Join(binDir, "clang with spaces")
+	writeExecutable(t, compiler, "#!/bin/sh\n")
+	plainFile := filepath.Join(binDir, "not-executable")
+	if err := os.WriteFile(plainFile, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"Path": string(os.PathListSeparator) + binDir}
+	for _, test := range []struct {
+		name, command string
+		want          bool
+	}{
+		{"absolute quoted compiler with arguments", strconv.Quote(compiler) + " -O2", true},
+		{"compiler from PATH", "'clang with spaces' -O2", true},
+		{"missing compiler", "missing-clang", false},
+		{"relative path", "./clang", false},
+		{"empty", "", false},
+		{"invalid quoting", "'clang", false},
+		{"directory", strconv.Quote(binDir), false},
+		{"non-executable", strconv.Quote(plainFile), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := macOSCommandIsUsable(test.command, env); got != test.want {
+				t.Fatalf("macOSCommandIsUsable(%q) = %v, want %v", test.command, got, test.want)
+			}
+		})
+	}
+	if pathIsDirectory("") || pathIsExecutable("") {
+		t.Fatal("an empty path must not be usable")
+	}
+}
+
+func TestNormalizeMacOSCGOFlags(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("macOS SDK flags use Unix paths")
+	}
+	root := t.TempDir()
+	sdk := filepath.Join(root, "Current SDK.sdk")
+	preserved := filepath.Join(root, "Installed.sdk")
+	for _, directory := range []string{sdk, preserved} {
+		if err := os.Mkdir(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missing := filepath.Join(root, "Missing.sdk")
+	for _, test := range []struct {
+		name, input string
+		want        []string
+		unchanged   bool
+	}{
+		{"unrelated formatting", " -O2\t'-DVALUE=two words'  ", []string{"-O2", "-DVALUE=two words"}, true},
+		{"valid separate root", "--sysroot " + strconv.Quote(preserved), []string{"--sysroot", preserved}, true},
+		{"stale separate root", "-O2 -isysroot " + strconv.Quote(missing), []string{"-O2", "-isysroot", sdk}, false},
+		{"relative root", "--sysroot relative.sdk", []string{"--sysroot", sdk}, false},
+		{"missing root argument", "-isysroot", []string{"-isysroot", sdk}, false},
+		{"root followed by flag", "--sysroot -O2", []string{"--sysroot", sdk, "-O2"}, false},
+		{"attached isysroot", "-isysroot" + missing, []string{"-isysroot" + sdk}, false},
+		{"attached sysroot", "--sysroot" + missing, []string{"--sysroot" + sdk}, false},
+		{"equals isysroot", "-isysroot=" + missing, []string{"-isysroot=" + sdk}, false},
+		{"equals sysroot", "--sysroot=" + missing, []string{"--sysroot=" + sdk}, false},
+		{"valid attached root", "--sysroot=" + preserved, []string{"--sysroot=" + preserved}, true},
+		{"SDK include suffix", "-I" + missing + "/usr/include", []string{"-I" + sdk + "/usr/include"}, false},
+		{"multiple embedded SDKs", "-Wl,-syslibroot," + missing + ",-rpath," + missing + "/usr/lib", []string{"-Wl,-syslibroot," + sdk + ",-rpath," + sdk + "/usr/lib"}, false},
+		{"preserve valid embedded SDK", "-L" + preserved + "/usr/lib", []string{"-L" + preserved + "/usr/lib"}, true},
+		{"SDK name without a path", "-DNAME=MacOSX.sdk", []string{"-DNAME=MacOSX.sdk"}, true},
+		{"case-insensitive suffix", "-I" + filepath.Join(root, "Missing.SDK") + "/include", []string{"-I" + sdk + "/include"}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := normalizeMacOSCGOFlags(test.input, sdk)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fields, err := quoted.Split(got)
+			if err != nil || !slices.Equal(fields, test.want) {
+				t.Fatalf("normalized fields = %q, %v; want %q", fields, err, test.want)
+			}
+			if test.unchanged && got != test.input {
+				t.Fatalf("unchanged flags reformatted: %q, want %q", got, test.input)
+			}
+			if again, err := normalizeMacOSCGOFlags(got, sdk); err != nil || again != got {
+				t.Fatalf("normalization is not idempotent: %q, %v; want %q", again, err, got)
+			}
+		})
+	}
+	if _, err := normalizeMacOSCGOFlags("'unterminated", sdk); err == nil {
+		t.Fatal("expected malformed quoted flags to fail")
+	}
+	if got, ok := normalizeAttachedSysroot("--sysroot", sdk); ok || got != "" {
+		t.Fatalf("bare sysroot flag treated as attached: %q, %v", got, ok)
+	}
 }

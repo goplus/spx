@@ -17,11 +17,14 @@
 package projectassets
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCollectTypedReferences(t *testing.T) {
@@ -227,5 +230,314 @@ func writeAssetTestFile(t *testing.T, root, relative, content string) {
 	}
 	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		configure  func(*Config)
+	}{
+		{"empty project", "ProjectDir is empty", func(c *Config) { c.ProjectDir = "" }},
+		{"missing project", "inspect ProjectDir", func(c *Config) { c.ProjectDir += ".missing" }},
+		{"file project", "not a real directory", func(c *Config) { c.ProjectDir = filepath.Join(c.ProjectDir, "assets", "index.json") }},
+		{"empty pack", "PackDir must", func(c *Config) { c.PackDir = "" }},
+		{"escaping pack", "PackDir must", func(c *Config) { c.PackDir = "../assets" }},
+		{"nested index", "PackIndex must", func(c *Config) { c.PackIndex = "child/index.json" }},
+		{"missing pack", "PackDir \"missing\" is missing", func(c *Config) { c.PackDir = "missing" }},
+		{"file pack", "non-directory component", func(c *Config) { c.PackDir = "assets/index.json" }},
+		{"missing packed index", "required config", func(c *Config) { c.PackIndex = "index_pack.json" }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeAssetTestFile(t, root, "assets/index.json", "{}")
+			cfg := Config{ProjectDir: root, PackDir: "assets", PackIndex: "index.json"}
+			tt.configure(&cfg)
+			if _, err := Resolve(cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Resolve = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	for _, name := range []string{"index.json", "index_pack.json"} {
+		t.Run("directory "+name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(root, "assets", name), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "regular non-symlink file") {
+				t.Fatalf("directory config = %v", err)
+			}
+		})
+	}
+}
+
+func TestResolveReportsMalformedTypedConfiguration(t *testing.T) {
+	for _, tt := range []struct{ name, file, data, want string }{
+		{"source JSON", "index.json", "{", "decode"},
+		{"packed JSON", "index_pack.json", "{", "decode"},
+		{"source root type", "index.json", `{"backdrops":1}`, "merged project"},
+		{"packed root type", "index_pack.json", `{"backdrops":1}`, "merged project"},
+		{"packed sprite section", "index_pack.json", `{"sprites":1}`, `section "sprites"`},
+		{"packed sound type", "index_pack.json", `{"sounds":{"Bell":1}}`, `entry "Bell"`},
+		{"packed font type", "index_pack.json", `{"fonts":{"Body":1}}`, `entry "Body"`},
+		{"source sprite", "sprites/Hero/index.json", "{", "decode"},
+		{"source sound", "sounds/Bell/index.json", "{", "decode"},
+		{"source font", "fonts/Body/index.json", "{", "decode"},
+		{"sprite costume", "index_pack.json", `{"sprites":{"Hero":{"costumes":[null,{"path":"res://missing"}]}}}`, "is missing"},
+		{"sprite set", "index_pack.json", `{"sprites":{"Hero":{"costumeSet":{"path":"res://missing"}}}}`, "is missing"},
+		{"sprite MP set", "sprites/Hero/index.json", `{"costumeMPSet":{"path":"res://missing"}}`, "is missing"},
+		{"packed sound", "index_pack.json", `{"sounds":{"Bell":{"path":"res://missing"}}}`, "is missing"},
+		{"packed font", "index_pack.json", `{"fonts":{"Body":{"faces":[{"path":"res://missing"}]}}}`, "is missing"},
+		{"music", "index.json", `{"bgm":"res://missing"}`, "is missing"},
+		{"empty resource", "index.json", `{"bgm":"res://"}`, "absolute resource"},
+		{"resource scheme", "index.json", `{"bgm":"res://file:private"}`, "unsupported resource"},
+		{"backslash", "index.json", `{"bgm":"a\\b"}`, "unsafe resource"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeAssetTestFile(t, root, "assets/index.json", "{}")
+			writeAssetTestFile(t, root, "assets/"+tt.file, tt.data)
+			if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Resolve = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveSourceSectionsRejectUnsafeLayouts(t *testing.T) {
+	for _, kind := range []string{"section file", "index directory", "symlink child", "unsafe child name", "ignored files and missing index"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			writeAssetTestFile(t, root, "assets/index.json", "{}")
+			switch kind {
+			case "section file":
+				writeAssetTestFile(t, root, "assets/sprites", "blocked")
+			case "index directory":
+				if err := os.MkdirAll(filepath.Join(root, "assets/sprites/Hero/index.json"), 0700); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink child":
+				writeAssetTestFile(t, root, "assets/sprites/target", "ignored")
+				if err := os.Symlink("target", filepath.Join(root, "assets/sprites/Hero")); err != nil {
+					t.Skip(err)
+				}
+			case "unsafe child name":
+				if filepath.Separator == '\\' {
+					t.Skip("backslash is a path separator on this platform")
+				}
+				writeAssetTestFile(t, root, `assets/sprites/Hero\Alias/index.json`, "{}")
+			case "ignored files and missing index":
+				writeAssetTestFile(t, root, "assets/sprites/notes.txt", "ignored")
+				if err := os.Mkdir(filepath.Join(root, "assets/sprites/Hero"), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := Resolve(Config{root, "assets", "index.json"})
+			if kind == "ignored files and missing index" {
+				if err != nil || len(got.Files) != 0 {
+					t.Fatalf("ignored entries: %#v, %v", got, err)
+				}
+			} else if err == nil {
+				t.Fatal("unsafe section accepted")
+			} else if kind == "unsafe child name" && !strings.Contains(err.Error(), "unsafe entry name") {
+				t.Fatalf("unsafe child name error = %v", err)
+			}
+		})
+	}
+}
+
+func TestPinnedProjectRootSurvivesPathReplacement(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not permit renaming directories held by os.Root")
+	}
+	container := t.TempDir()
+	rootDir := filepath.Join(container, "project")
+	writeAssetTestFile(t, rootDir, "assets/config.json", "original")
+	root, err := openProjectRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	if err := os.Rename(rootDir, filepath.Join(container, "original-project")); err != nil {
+		t.Fatal(err)
+	}
+	writeAssetTestFile(t, rootDir, "assets/replacement.json", "replacement")
+
+	data, found, err := readPinnedFile(root, "assets/config.json")
+	if err != nil || !found || string(data) != "original" {
+		t.Fatalf("pinned file = %q, %v, %v, want original contents", data, found, err)
+	}
+	entries, found, err := readPinnedDir(root, "assets")
+	if err != nil || !found || len(entries) != 1 || entries[0].Name() != "config.json" {
+		t.Fatalf("pinned directory = %v, %v, %v, want original config.json", entries, found, err)
+	}
+	if err := pinRegularFile(root, "assets/config.json"); err != nil {
+		t.Fatalf("pin original file: %v", err)
+	}
+	if data, found, err := readPinnedFile(root, "assets/replacement.json"); err != nil || found || data != nil {
+		t.Fatalf("replacement leaked into pinned root: %q, %v, %v", data, found, err)
+	}
+}
+
+func TestPinnedAssetsReportPermissionErrors(t *testing.T) {
+	for _, kind := range []string{"config file", "asset directory", "project root"} {
+		t.Run(kind, func(t *testing.T) {
+			rootDir := t.TempDir()
+			writeAssetTestFile(t, rootDir, "assets/config.json", "{}")
+			root, err := openProjectRoot(rootDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = root.Close() })
+			name := rootDir
+			switch kind {
+			case "config file":
+				name = filepath.Join(rootDir, "assets", "config.json")
+			case "asset directory":
+				name = filepath.Join(rootDir, "assets")
+			}
+			denyAssetRead(t, name)
+			switch kind {
+			case "config file":
+				data, found, err := readPinnedFile(root, "assets/config.json")
+				if !errors.Is(err, os.ErrPermission) || found || data != nil {
+					t.Fatalf("unreadable file = %q, %v, %v", data, found, err)
+				}
+				if err := pinRegularFile(root, "assets/config.json"); !errors.Is(err, os.ErrPermission) {
+					t.Fatalf("pin unreadable file = %v", err)
+				}
+			case "asset directory":
+				entries, found, err := readPinnedDir(root, "assets")
+				if !errors.Is(err, os.ErrPermission) || found || entries != nil {
+					t.Fatalf("unreadable directory = %v, %v, %v", entries, found, err)
+				}
+			case "project root":
+				opened, err := openProjectRoot(rootDir)
+				if opened != nil {
+					opened.Close()
+				}
+				if !errors.Is(err, os.ErrPermission) {
+					t.Fatalf("unreadable project root = %v", err)
+				}
+			}
+		})
+	}
+}
+
+func denyAssetRead(t *testing.T, name string) {
+	t.Helper()
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(name, info.Mode().Perm()); err != nil {
+			t.Error(err)
+		}
+	})
+	probe, err := os.Open(name)
+	if err == nil {
+		probe.Close()
+		t.Skip("filesystem or user permits reading mode-000 paths")
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("permission probe = %v", err)
+	}
+}
+
+func TestPinnedAssetPathsAndSnapshots(t *testing.T) {
+	rootDir := t.TempDir()
+	writeAssetTestFile(t, rootDir, "config.json", "{}")
+	root, err := openProjectRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	for _, name := range []string{"", ".", "..", "../outside", "/absolute", "a\\b", "a//b", "a\x00b"} {
+		if _, err := inspectPath(root, name, false); err == nil {
+			t.Errorf("unsafe path %q accepted", name)
+		}
+	}
+	before, err := inspectPath(root, "config.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if samePathSnapshot(before, nil) {
+		t.Fatal("different snapshot lengths match")
+	}
+	writeAssetTestFile(t, rootDir, "other.json", "{}")
+	other, err := inspectPath(root, "other.json", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if samePathSnapshot(before, other) {
+		t.Fatal("different files match")
+	}
+	name := filepath.Join(rootDir, "config.json")
+	t.Cleanup(func() {
+		if err := os.Chmod(name, 0600); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, change := range []struct {
+		name   string
+		mutate func() error
+	}{
+		{"size", func() error { return os.WriteFile(name, []byte("changed"), 0600) }},
+		{"mode", func() error { return os.Chmod(name, 0400) }},
+		{"modification time", func() error { return os.Chtimes(name, time.Unix(42, 0), time.Unix(42, 0)) }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			before, err := inspectPath(root, "config.json", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := change.mutate(); err != nil {
+				t.Fatal(err)
+			}
+			after, err := inspectPath(root, "config.json", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !os.SameFile(before[0], after[0]) {
+				t.Fatal("fixture replaced the file instead of changing metadata")
+			}
+			if samePathSnapshot(before, after) {
+				t.Fatal("changed file metadata matches")
+			}
+		})
+	}
+	if err := root.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := readPinnedFile(root, "config.json"); err == nil {
+		t.Fatal("closed root read accepted")
+	}
+	if _, _, err := readPinnedDir(root, "assets"); err == nil {
+		t.Fatal("closed root directory read accepted")
+	}
+	if err := pinRegularFile(root, "config.json"); err == nil {
+		t.Fatal("closed root pin accepted")
+	}
+}
+
+func TestResolveRejectsOversizedConfig(t *testing.T) {
+	root := t.TempDir()
+	writeAssetTestFile(t, root, "assets/index.json", strings.Repeat(" ", int(maxConfigBytes)+1))
+	if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized config = %v", err)
+	}
+}
+
+func TestResolveRequiresAtLeastOneIndex(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "assets"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "contains neither") {
+		t.Fatalf("missing indexes = %v", err)
 	}
 }

@@ -18,6 +18,7 @@ package assetindex
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -41,6 +42,54 @@ func TestMergeRootPrecedence(t *testing.T) {
 	}
 	if string(source["bgm"]) != `"source.wav"` {
 		t.Fatalf("source root changed: %s", source["bgm"])
+	}
+}
+
+func TestMergeOptionalRoots(t *testing.T) {
+	packed := map[string]json.RawMessage{"bgm": json.RawMessage(`"packed.wav"`)}
+	for _, tt := range []struct {
+		name   string
+		source map[string]json.RawMessage
+		packed map[string]json.RawMessage
+		want   map[string]json.RawMessage
+	}{
+		{name: "both absent"},
+		{name: "nil source", packed: packed, want: packed},
+		{name: "empty source", source: map[string]json.RawMessage{}, packed: packed, want: packed},
+		{name: "source only", source: packed, want: packed},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Merge(tt.source, tt.packed); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("Merge() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeRoot(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		root    map[string]json.RawMessage
+		want    string
+		wantErr bool
+	}{
+		{name: "nil root", want: "existing.wav"},
+		{name: "empty root", root: map[string]json.RawMessage{}, want: "existing.wav"},
+		{name: "valid field", root: map[string]json.RawMessage{"bgm": json.RawMessage(`"packed.wav"`)}, want: "packed.wav"},
+		{name: "malformed field", root: map[string]json.RawMessage{"bgm": json.RawMessage(`"unfinished`)}, want: "existing.wav", wantErr: true},
+		{name: "wrong field type", root: map[string]json.RawMessage{"bgm": json.RawMessage(`42`)}, want: "existing.wav", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config := struct {
+				Bgm string `json:"bgm"`
+			}{Bgm: "existing.wav"}
+			if err := DecodeRoot(tt.root, &config); (err != nil) != tt.wantErr {
+				t.Fatalf("DecodeRoot() error = %v, want error %v", err, tt.wantErr)
+			}
+			if config.Bgm != tt.want {
+				t.Fatalf("decoded bgm = %q, want %q", config.Bgm, tt.want)
+			}
+		})
 	}
 }
 

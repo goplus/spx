@@ -17,6 +17,8 @@
 package main
 
 import (
+	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -51,7 +53,7 @@ func TestGitHubRepositoryName(t *testing.T) {
 	if got, err := githubRepositoryName("https://github.com/goplus/godot.git"); err != nil || got != "goplus/godot" {
 		t.Fatalf("githubRepositoryName = %q, %v", got, err)
 	}
-	for _, invalid := range []string{"goplus/godot", "https://example.com/goplus/godot.git", "https://github.com/goplus/godot"} {
+	for _, invalid := range []string{"goplus/godot", "https://example.com/goplus/godot.git", "https://github.com/goplus/godot", "https://github.com/owner/nested/repository.git", "https://github.com//godot.git"} {
 		if _, err := githubRepositoryName(invalid); err == nil {
 			t.Errorf("githubRepositoryName(%q) succeeded", invalid)
 		}
@@ -100,5 +102,72 @@ func TestWriteGitHubOutputRejectsEmptyAndMultilineValues(t *testing.T) {
 				t.Fatalf("output was created after validation failure: %v", statErr)
 			}
 		})
+	}
+}
+
+func TestVersionMainModes(t *testing.T) {
+	originalArgs, originalFlags, originalStdout := os.Args, flag.CommandLine, os.Stdout
+	t.Cleanup(func() { os.Args, flag.CommandLine, os.Stdout = originalArgs, originalFlags, originalStdout })
+	lock, meta := release.DefaultRuntimeLock(), release.DefaultReleaseMeta()
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"default", nil, lock.RuntimeVersion},
+		{"SPX version", []string{"--spx-version"}, meta.SPXVersion},
+		{"runtime tag", []string{"--runtime-tag"}, lock.RuntimeReleaseTag()},
+		{"resolve SPX", []string{"--resolve-spx", meta.SPXVersion}, lock.RuntimeVersion},
+		{"JSON", []string{"--json"}, ""},
+		{"GitHub output", []string{"--github-output", filepath.Join(t.TempDir(), "outputs")}, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			output, err := os.CreateTemp(t.TempDir(), "stdout-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer output.Close()
+			os.Stdout = output
+			os.Args = append([]string{"version"}, test.args...)
+			flag.CommandLine = flag.NewFlagSet("version", flag.ContinueOnError)
+			main()
+			data, err := os.ReadFile(output.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch test.name {
+			case "JSON":
+				var got releaseDescription
+				if err := json.Unmarshal(data, &got); err != nil || got.RuntimeVersion != lock.RuntimeVersion || got.ReleaseTag != meta.SPXVersion {
+					t.Fatalf("JSON output = %s, error = %v", data, err)
+				}
+			case "GitHub output":
+				contents, err := os.ReadFile(test.args[1])
+				if err != nil || !strings.Contains(string(contents), "release_tag="+meta.SPXVersion+"\n") || len(data) != 0 {
+					t.Fatalf("GitHub output = %q, stdout = %q, error = %v", contents, data, err)
+				}
+			default:
+				if string(data) != test.want+"\n" {
+					t.Fatalf("stdout = %q, want %q", data, test.want+"\n")
+				}
+			}
+		})
+	}
+}
+
+func TestWriteGitHubOutputAppendsAndReportsOpenFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "output")
+	if err := os.WriteFile(path, []byte("existing=value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeGitHubOutput(path, []githubOutput{{name: "new", value: "value"}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "existing=value\nnew=value\n" {
+		t.Fatalf("appended output = %q, error = %v", data, err)
+	}
+	if err := writeGitHubOutput(t.TempDir(), []githubOutput{{name: "new", value: "value"}}); err == nil || !strings.Contains(err.Error(), "open GitHub output") {
+		t.Fatalf("open error = %v", err)
 	}
 }

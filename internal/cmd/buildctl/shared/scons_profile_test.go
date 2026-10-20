@@ -146,3 +146,14 @@ func TestRepositorySConsProfile(t *testing.T) {
 		t.Fatal("repository SCons profile must not contain the unsupported disable_3d_physics option")
 	}
 }
+
+func TestSConsProfileRejectsTruncatedAndTrailingJSON(t *testing.T) {
+	for _, data := range []string{"", `{"schema":`, `{"schema":1,`, `{} trailing`, `{1:1}`} {
+		if _, err := decodeSConsProfileFields([]byte(data)); err == nil {
+			t.Errorf("malformed JSON accepted: %q", data)
+		}
+	}
+	if validSConsKey("") {
+		t.Fatal("empty SCons key accepted")
+	}
+}

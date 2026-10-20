@@ -16,46 +16,88 @@
 
 package licenseheader
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
 
-func TestAddToGoSourceWithoutBuildTags(t *testing.T) {
-	src := []byte("package demo\n")
-
-	got := string(AddToGoSource(src))
-
-	if got != Text+"package demo\n" {
-		t.Fatalf("unexpected output:\n%s", got)
+func TestAddToGoSource(t *testing.T) {
+	const tags = "//go:build js\n// +build js\n"
+	for _, tc := range []struct{ name, source, want string }{
+		{"plain", "package demo\n", Text + "package demo\n"},
+		{"build tags", tags + "/* generated */\npackage demo\n", tags + "\n" + Text + "/* generated */\npackage demo\n"},
+		{"existing blank line", tags + "\npackage demo\n", tags + "\n" + Text + "package demo\n"},
+		{"existing header", Text + "package demo\n", Text + "package demo\n"},
+		{"UTF-8 BOM", "\xef\xbb\xbfpackage demo\n", "\xef\xbb\xbf" + Text + "package demo\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AddToGoSource([]byte(tc.source))
+			if string(got) != tc.want {
+				t.Fatalf("source = %q, want %q", got, tc.want)
+			}
+			if again := AddToGoSource(got); string(again) != tc.want {
+				t.Fatal("adding header twice changed the source")
+			}
+		})
 	}
 }
 
-func TestAddToGoSourceWithBuildTags(t *testing.T) {
-	src := []byte("//go:build js\n// +build js\n/* generated */\npackage demo\n")
-
-	got := string(AddToGoSource(src))
-	want := "//go:build js\n// +build js\n\n" + Text + "/* generated */\npackage demo\n"
-
-	if got != want {
-		t.Fatalf("unexpected output:\n%s", got)
+func TestAddToGoFileIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "source.go")
+	if err := AddToGoFile(path); !os.IsNotExist(err) {
+		t.Fatalf("missing source error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte("package demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddToGoFile(path); err != nil {
+		t.Fatal(err)
+	}
+	want := Text + "package demo\n"
+	if got, err := os.ReadFile(path); err != nil || string(got) != want {
+		t.Fatalf("file = %q, %v; want header and source", got, err)
+	}
+	stamp := time.Unix(1_600_000_000, 0)
+	if err := os.Chtimes(path, stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := AddToGoFile(path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Fatal("already licensed source was rewritten")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != want {
+		t.Fatalf("second pass changed file: %q, %v", got, err)
 	}
 }
 
-func TestAddToGoSourcePreservesExistingHeader(t *testing.T) {
-	src := []byte(Text + "package demo\n")
-
-	got := string(AddToGoSource(src))
-
-	if got != string(src) {
-		t.Fatalf("header duplicated:\n%s", got)
-	}
-}
-
-func TestAddToGoSourcePreservesUTF8BOM(t *testing.T) {
-	src := append([]byte{0xEF, 0xBB, 0xBF}, []byte("package demo\n")...)
-
-	got := AddToGoSource(src)
-	want := append([]byte{0xEF, 0xBB, 0xBF}, []byte(Text+"package demo\n")...)
-
-	if string(got) != string(want) {
-		t.Fatalf("unexpected output:\n%s", string(got))
+func TestHasOnlyInspectsHeaderWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		offset int
+		want   bool
+	}{
+		{"inside", 1024 - len(Phrase), true},
+		{"crosses boundary", 1025 - len(Phrase), false},
+		{"after window", 1024, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := strings.Repeat(" ", tc.offset) + Phrase + "package demo\n"
+			if got := Has([]byte(source)); got != tc.want {
+				t.Fatalf("Has = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

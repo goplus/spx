@@ -86,6 +86,7 @@ func TestPrepareCostumeLayoutRejectsInvalidDeclarations(t *testing.T) {
 		{name: "empty list", config: &SpriteConfig{Costumes: []*CostumeConfig{}}, wantError: "must not be empty"},
 		{name: "null costume", config: &SpriteConfig{Costumes: []*CostumeConfig{nil}}, wantError: "costumes[0] is null"},
 		{name: "empty multipart", config: &SpriteConfig{CostumeMPSet: &CostumeMPSet{}}, wantError: "parts must not be empty"},
+		{name: "invalid multipart count", config: &SpriteConfig{CostumeMPSet: &CostumeMPSet{Parts: []CostumeSetPart{{Nx: 1}, {Nx: 0}}}}, wantError: "costumeMPSet.parts[1]: invalid frame count 0"},
 		{name: "invalid count", config: &SpriteConfig{CostumeSet: &CostumeSet{}}, wantError: "invalid frame count 0"},
 		{
 			name: "negative item count",

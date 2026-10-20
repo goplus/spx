@@ -17,62 +17,83 @@
 package interpruntime
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/goplus/spx/v3/internal/scaffold"
 )
 
-func mkdirAll(path string) error {
-	return os.MkdirAll(path, 0o755)
+func testSessionConfig(t *testing.T) SessionConfig {
+	t.Helper()
+	bridge := filepath.Join(t.TempDir(), "bridge.so")
+	if err := os.WriteFile(bridge, []byte("bridge"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return SessionConfig{Roots: testRoots(t), BridgePath: bridge}
 }
 
 func TestPrepareSession(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
-		t.Fatal(err)
-	}
-	sessionDir := filepath.Join(t.TempDir(), "session")
-	bridgePath := filepath.Join(t.TempDir(), "gdspx-test.bridge")
-	if err := os.WriteFile(bridgePath, []byte("bridge"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	roots := Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir}
-
-	before, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := PrepareSession(SessionConfig{Roots: roots, BridgePath: bridgePath}); err != nil {
-		t.Fatal(err)
-	}
-	after, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if after != before {
-		t.Fatalf("working directory changed from %q to %q", before, after)
-	}
-
-	files := map[string]string{
-		filepath.Join(sessionDir, bridgeDirectory, filepath.Base(bridgePath)): "bridge",
-		filepath.Join(sessionDir, runtimeExtensionFile):                       scaffold.SessionRuntimeGDExtension(),
-		filepath.Join(sessionDir, projectExtensionFile):                       scaffold.ProjectGDExtension(),
-		filepath.Join(sessionDir, ".godot", extensionListFile):                scaffold.SessionExtensionList(),
-	}
-	for path, want := range files {
-		got, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s: %v", path, err)
-		}
-		if string(got) != want {
-			t.Fatalf("%s = %q, want %q", path, got, want)
-		}
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing=%t", existing), func(t *testing.T) {
+			cfg := testSessionConfig(t)
+			files := map[string]string{
+				filepath.Join(bridgeDirectory, filepath.Base(cfg.BridgePath)): "bridge",
+				runtimeExtensionFile:                       scaffold.SessionRuntimeGDExtension(),
+				projectExtensionFile:                       scaffold.ProjectGDExtension(),
+				filepath.Join(".godot", extensionListFile): scaffold.SessionExtensionList(),
+			}
+			if existing {
+				for name := range files {
+					path := filepath.Join(cfg.Roots.SessionDir, name)
+					if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, []byte("stale"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			} else if err := os.Remove(cfg.Roots.SessionDir); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Getwd()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := PrepareSession(cfg); err != nil {
+				t.Fatal(err)
+			}
+			if after, err := os.Getwd(); err != nil || after != before {
+				t.Fatalf("working directory = %q, %v; want %q", after, err, before)
+			}
+			for name, want := range files {
+				path := filepath.Join(cfg.Roots.SessionDir, name)
+				if got, err := os.ReadFile(path); err != nil || string(got) != want {
+					t.Errorf("%s = %q, %v; want %q", name, got, err, want)
+				}
+				if runtime.GOOS != "windows" {
+					mode := os.FileMode(0o600)
+					if filepath.Dir(name) == bridgeDirectory {
+						mode = 0o700
+					}
+					if info, err := os.Stat(path); err != nil || info.Mode().Perm() != mode {
+						t.Errorf("%s permissions = %v, %v; want %o", name, info, err, mode)
+					}
+				}
+			}
+			if got, err := os.ReadFile(cfg.BridgePath); err != nil || string(got) != "bridge" {
+				t.Fatalf("bridge source changed: %q, %v", got, err)
+			}
+		})
 	}
 }
 
@@ -87,12 +108,18 @@ func TestPrepareCommandUsesExplicitRootsWithoutGlobalMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	beforeEnv := os.Environ()
+	stdin := strings.NewReader("input")
+	var stdout, stderr bytes.Buffer
 	cmd, err := PrepareCommand(context.Background(), CommandConfig{
 		Roots:      roots,
 		Executable: executable,
 		Args:       []string{"--headless", "--path=/ignored", "--path", "/also-ignored"},
 		Env:        []string{"KEEP=value", ProjectDirEnv + "=/ignored"},
 		PathPolicy: ReplacePath,
+		Stdin:      stdin,
+		Stdout:     &stdout,
+		Stderr:     &stderr,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -103,6 +130,12 @@ func TestPrepareCommandUsesExplicitRootsWithoutGlobalMutation(t *testing.T) {
 	}
 	if after != before {
 		t.Fatalf("working directory changed from %q to %q", before, after)
+	}
+	if afterEnv := os.Environ(); !reflect.DeepEqual(afterEnv, beforeEnv) {
+		t.Fatal("process environment changed")
+	}
+	if cmd.Stdin != stdin || cmd.Stdout != &stdout || cmd.Stderr != &stderr {
+		t.Fatal("command did not retain the configured input and output streams")
 	}
 	if cmd.Dir != roots.SessionDir {
 		t.Fatalf("command Dir = %q, want %q", cmd.Dir, roots.SessionDir)
@@ -139,30 +172,36 @@ func TestPrepareCommandRejectsEnginePathByDefault(t *testing.T) {
 	}
 }
 
-func TestPrepareCommandRejectsInvalidContextExecutableAndPolicy(t *testing.T) {
+func TestPrepareCommandRejectsInvalidInputs(t *testing.T) {
 	roots := testRoots(t)
 	executable := filepath.Join(t.TempDir(), "engine")
 	if err := os.WriteFile(executable, []byte("engine"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
-		name       string
-		ctx        context.Context
-		executable string
-		policy     PathPolicy
-		want       string
+		name         string
+		ctx          context.Context
+		executable   string
+		policy       PathPolicy
+		invalidRoots bool
+		want         string
 	}{
 		{name: "nil context", executable: executable, ctx: nil, want: "nil context"},
+		{name: "invalid roots", executable: executable, ctx: context.Background(), invalidRoots: true, want: "ProjectDir is empty"},
 		{name: "missing executable", executable: filepath.Join(t.TempDir(), "missing"), ctx: context.Background(), want: "lstat Executable"},
 		{name: "directory executable", executable: t.TempDir(), ctx: context.Background(), want: "not a regular"},
 		{name: "unknown path policy", executable: executable, ctx: context.Background(), policy: PathPolicy(99), want: "unknown Engine path policy"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := PrepareCommand(tt.ctx, CommandConfig{
-				Roots: roots, Executable: tt.executable, PathPolicy: tt.policy,
+			input := roots
+			if tt.invalidRoots {
+				input = Roots{}
+			}
+			cmd, err := PrepareCommand(tt.ctx, CommandConfig{
+				Roots: input, Executable: tt.executable, PathPolicy: tt.policy,
 			})
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
+			if cmd != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("PrepareCommand() error = %v, want containing %q", err, tt.want)
 			}
 		})
@@ -183,178 +222,315 @@ func TestEngineArgsReplacesTrailingPathOption(t *testing.T) {
 	}
 }
 
-func TestPrepareSessionRejectsInvalidBridgeInputs(t *testing.T) {
-	roots := testRoots(t)
-	tests := []struct {
-		name string
-		path string
-		want string
+func TestPrepareSessionRejectsInvalidInputs(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		change func(*SessionConfig)
+		want   string
 	}{
-		{name: "missing", path: filepath.Join(t.TempDir(), "missing.bridge"), want: "lstat BridgePath"},
-		{name: "directory", path: t.TempDir(), want: "not a regular"},
-	}
-	for _, tt := range tests {
+		{"empty project", func(c *SessionConfig) { c.Roots.ProjectDir = "" }, "ProjectDir is empty"},
+		{"relative assets", func(c *SessionConfig) { c.Roots.AssetDir = "assets" }, "not absolute"},
+		{"unclean session", func(c *SessionConfig) { c.Roots.SessionDir += string(filepath.Separator) + "." }, "not clean"},
+		{"missing project", func(c *SessionConfig) { c.Roots.ProjectDir = filepath.Join(c.Roots.ProjectDir, "missing") }, "stat ProjectDir"},
+		{"missing assets", func(c *SessionConfig) { c.Roots.AssetDir = filepath.Join(c.Roots.ProjectDir, "missing") }, "stat AssetDir"},
+		{"file project", func(c *SessionConfig) { c.Roots.ProjectDir = c.BridgePath }, "not a directory"},
+		{"outside assets", func(c *SessionConfig) { c.Roots.AssetDir = filepath.Dir(c.BridgePath) }, "within ProjectDir"},
+		{"file session", func(c *SessionConfig) { c.Roots.SessionDir = c.BridgePath }, "not a directory"},
+		{"relative bridge", func(c *SessionConfig) { c.BridgePath = "bridge.so" }, "not absolute"},
+		{"missing bridge", func(c *SessionConfig) { c.BridgePath += ".missing" }, "lstat BridgePath"},
+		{"directory bridge", func(c *SessionConfig) { c.BridgePath = filepath.Dir(c.BridgePath) }, "not a regular"},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := PrepareSession(SessionConfig{Roots: roots, BridgePath: tt.path})
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("PrepareSession() error = %v, want containing %q", err, tt.want)
+			cfg := testSessionConfig(t)
+			original := cfg
+			tt.change(&cfg)
+			if err := PrepareSession(cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("PrepareSession = %v; want %q", err, tt.want)
+			}
+			if files, err := os.ReadDir(original.Roots.SessionDir); err != nil || len(files) != 0 {
+				t.Fatalf("invalid input wrote scaffold: %v, %v", files, err)
+			}
+			if got, err := os.ReadFile(original.BridgePath); err != nil || string(got) != "bridge" {
+				t.Fatalf("bridge source changed: %q, %v", got, err)
 			}
 		})
 	}
 }
 
-func TestPrepareSessionRejectsSymlinkScaffoldTarget(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
-		t.Fatal(err)
-	}
-	sessionDir := t.TempDir()
-	bridgePath := filepath.Join(t.TempDir(), "gdspx-test.bridge")
-	if err := os.WriteFile(bridgePath, []byte("bridge"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sentinel := filepath.Join(t.TempDir(), "sentinel")
-	if err := os.WriteFile(sentinel, []byte("unchanged"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(sentinel, filepath.Join(sessionDir, runtimeExtensionFile)); err != nil {
-		t.Skipf("symlink not supported: %v", err)
-	}
-
-	err := PrepareSession(SessionConfig{
-		Roots: Roots{
-			ProjectDir: projectDir,
-			AssetDir:   assetDir,
-			SessionDir: sessionDir,
-		},
-		BridgePath: bridgePath,
-	})
-	if err == nil {
-		t.Fatal("PrepareSession accepted symlink scaffold target")
-	}
-	got, err := os.ReadFile(sentinel)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "unchanged" {
-		t.Fatalf("symlink target was overwritten: %q", got)
+func TestPrepareSessionRejectsSymlinkPaths(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		directory bool
+	}{
+		{"session", true},
+		{"bridge source", false},
+		{bridgeDirectory, true},
+		{filepath.Join(bridgeDirectory, "bridge.so"), false},
+		{runtimeExtensionFile, false},
+		{projectExtensionFile, false},
+		{".godot", true},
+		{filepath.Join(".godot", extensionListFile), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testSessionConfig(t)
+			outside := t.TempDir()
+			sentinel := filepath.Join(outside, "sentinel")
+			if err := os.WriteFile(sentinel, []byte("unchanged"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(cfg.Roots.SessionDir, tt.name)
+			switch tt.name {
+			case "session":
+				link = cfg.Roots.SessionDir
+			case "bridge source":
+				link = cfg.BridgePath
+			}
+			if err := os.Remove(link); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			target := sentinel
+			if tt.directory {
+				target = outside
+			}
+			if err := os.Symlink(target, link); err != nil {
+				t.Skipf("symlink not supported: %v", err)
+			}
+			if err := PrepareSession(cfg); err == nil {
+				t.Fatal("PrepareSession accepted symlink path")
+			}
+			if info, err := os.Lstat(link); err != nil || info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("symlink was replaced: %v, %v", info, err)
+			}
+			if got, err := os.ReadFile(sentinel); err != nil || string(got) != "unchanged" {
+				t.Fatalf("symlink target was overwritten: %q, %v", got, err)
+			}
+			if entries, err := os.ReadDir(outside); err != nil || len(entries) != 1 {
+				t.Fatalf("symlink target was modified: %v, %v", entries, err)
+			}
+		})
 	}
 }
 
-func TestPrepareSessionReplacesExistingRegularScaffold(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
+func TestPrepareSessionRejectsUnsafeBridgeLocation(t *testing.T) {
+	for _, name := range []string{runtimeExtensionFile, ".godot", "within session"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := testSessionConfig(t)
+			path := filepath.Join(filepath.Dir(cfg.BridgePath), name)
+			want := "unsafe bridge base name"
+			if name == "within session" {
+				path = filepath.Join(cfg.Roots.SessionDir, "bridge.so")
+				want = "BridgePath must be outside SessionDir"
+			}
+			if err := os.Rename(cfg.BridgePath, path); err != nil {
+				t.Fatal(err)
+			}
+			cfg.BridgePath = path
+			if err := PrepareSession(cfg); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("PrepareSession = %v; want %q", err, want)
+			}
+			if got, err := os.ReadFile(path); err != nil || string(got) != "bridge" {
+				t.Fatalf("bridge source changed: %q, %v", got, err)
+			}
+			files, err := os.ReadDir(cfg.Roots.SessionDir)
+			wantCount := 0
+			if name == "within session" {
+				wantCount = 1
+			}
+			if err != nil || len(files) != wantCount {
+				t.Fatalf("invalid bridge wrote scaffold: %v, %v", files, err)
+			}
+		})
+	}
+}
+
+func TestReplaceRootFileFailurePreservesDestination(t *testing.T) {
+	dir := t.TempDir()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	sessionDir := t.TempDir()
-	bridgePath := filepath.Join(t.TempDir(), "gdspx-test.bridge")
-	if err := os.WriteFile(bridgePath, []byte("bridge-v2"), 0o700); err != nil {
+	defer root.Close()
+	if err := os.WriteFile(filepath.Join(dir, "asset"), []byte("old"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{runtimeExtensionFile, projectExtensionFile} {
-		if err := os.WriteFile(filepath.Join(sessionDir, name), []byte("stale"), 0o600); err != nil {
-			t.Fatal(err)
+	failure := errors.New("source interrupted")
+	if err := replaceRootFile(root, "asset", io.MultiReader(strings.NewReader("partial"), iotest.ErrReader(failure)), 0600); !errors.Is(err, failure) {
+		t.Fatalf("write failure=%v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, "asset")); err != nil || string(data) != "old" {
+		t.Fatalf("destination=%q,%v", data, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("temporary files leaked: %v,%v", entries, err)
+	}
+	for _, name := range []string{"", ".", "../escape", "nested/file"} {
+		if err := replaceRootFile(root, name, strings.NewReader("bad"), 0600); err == nil {
+			t.Errorf("accepted unsafe name%q", name)
 		}
 	}
-	if err := os.Mkdir(filepath.Join(sessionDir, bridgeDirectory), 0o700); err != nil {
+	if err := root.Mkdir("directory", 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sessionDir, bridgeDirectory, filepath.Base(bridgePath)), []byte("stale"), 0o600); err != nil {
+	if err := replaceRootFile(root, "directory", strings.NewReader("bad"), 0600); err == nil {
+		t.Fatal("replaced directory")
+	}
+	if err := root.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(sessionDir, ".godot"), 0o700); err != nil {
-		t.Fatal(err)
+	if err := replaceRootFile(root, "asset", strings.NewReader("bad"), 0600); err == nil {
+		t.Fatal("closed root accepted")
 	}
-	if err := os.WriteFile(filepath.Join(sessionDir, ".godot", extensionListFile), []byte("stale"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+}
 
-	err := PrepareSession(SessionConfig{
-		Roots:      Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir},
-		BridgePath: bridgePath,
-	})
+func TestPinnedDirectoryRejectsInvalidAndChangedRoots(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "file")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{file, filepath.Join(dir, "missing")} {
+		if root, err := openPinnedRoot("root", path); err == nil {
+			root.Close()
+			t.Errorf("accepted non-directory %s", path)
+		}
+	}
+	if err := ensureDirectoryNoSymlink("root", file, 0700); err == nil {
+		t.Fatal("accepted regular file as directory")
+	}
+	if err := ensureDirectoryNoSymlink("root", filepath.Join(file, "child"), 0700); err == nil {
+		t.Fatal("created directory below file")
+	}
+	root, err := os.OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := os.ReadFile(filepath.Join(sessionDir, bridgeDirectory, filepath.Base(bridgePath))); err != nil || string(got) != "bridge-v2" {
-		t.Fatalf("replaced bridge = %q, err=%v", got, err)
+	defer root.Close()
+	for _, name := range []string{"file", "file/child", "missing/child", "../escape"} {
+		if sub, err := ensurePinnedSubdirectory(root, name, 0700); err == nil {
+			sub.Close()
+			t.Errorf("accepted invalid subdirectory%q", name)
+		}
+	}
+	sub, err := ensurePinnedSubdirectory(root, "valid", 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Close()
+	if err := verifyPinnedSubdirectory(root, "file", sub); err == nil {
+		t.Fatal("accepted replaced subdirectory identity")
+	}
+	if err := verifyPinnedRootPath("root", file, root); err == nil {
+		t.Fatal("accepted replaced root identity")
+	}
+	if err := sub.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPinnedSubdirectory(root, "valid", sub); err == nil {
+		t.Fatal("accepted closed subdirectory")
+	}
+	if err := root.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPinnedRootPath("root", dir, root); err == nil {
+		t.Fatal("accepted closed root")
+	}
+	if sub, err := ensurePinnedSubdirectory(root, "valid", 0700); err == nil {
+		sub.Close()
+		t.Fatal("accepted closed parent")
 	}
 }
 
-func TestPrepareSessionRejectsSymlinkProjectDataDirectory(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
-		t.Fatal(err)
-	}
-	sessionDir := t.TempDir()
-	outside := t.TempDir()
-	if err := os.Symlink(outside, filepath.Join(sessionDir, ".godot")); err != nil {
-		t.Skipf("symlink not supported: %v", err)
-	}
-	bridgePath := filepath.Join(t.TempDir(), "gdspx-test.bridge")
-	if err := os.WriteFile(bridgePath, []byte("bridge"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	err := PrepareSession(SessionConfig{
-		Roots:      Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir},
-		BridgePath: bridgePath,
-	})
-	if err == nil {
-		t.Fatal("PrepareSession accepted a symlinked .godot directory")
-	}
-	if entries, readErr := os.ReadDir(outside); readErr != nil {
-		t.Fatal(readErr)
-	} else if len(entries) != 0 {
-		t.Fatalf("symlink target was modified: %#v", entries)
-	}
-}
-
-func TestPrepareSessionRejectsSymlinkBridgeSource(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
-		t.Fatal(err)
-	}
-	realBridge := filepath.Join(t.TempDir(), "bridge-real")
-	if err := os.WriteFile(realBridge, []byte("bridge"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	bridgeLink := filepath.Join(t.TempDir(), "bridge-link")
-	if err := os.Symlink(realBridge, bridgeLink); err != nil {
-		t.Skipf("symlink not supported: %v", err)
-	}
-	err := PrepareSession(SessionConfig{
-		Roots:      Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: filepath.Join(t.TempDir(), "session")},
-		BridgePath: bridgeLink,
-	})
-	if err == nil {
-		t.Fatal("PrepareSession accepted a symlink bridge source")
+func TestPrepareSessionRejectsBlockedScaffoldPaths(t *testing.T) {
+	for _, blocked := range []string{"lib", "lib/bridge.so", "runtime.gdextension", "gdspx.gdextension", ".godot/extension_list.cfg"} {
+		t.Run(blocked, func(t *testing.T) {
+			cfg := testSessionConfig(t)
+			target := filepath.Join(cfg.Roots.SessionDir, filepath.FromSlash(blocked))
+			if blocked == "lib" {
+				if err := os.WriteFile(target, []byte("preserved"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.MkdirAll(target, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := PrepareSession(cfg)
+			if err == nil {
+				t.Fatal("accepted blocked scaffold destination")
+			}
+			if blocked == "lib" {
+				if data, err := os.ReadFile(target); err != nil || string(data) != "preserved" {
+					t.Fatalf("conflicting file changed: %q,%v", data, err)
+				}
+			} else {
+				if info, err := os.Stat(target); err != nil || !info.IsDir() {
+					t.Fatalf("conflicting directory replaced: %v,%v", info, err)
+				}
+			}
+			if err := filepath.WalkDir(cfg.Roots.SessionDir, func(path string, entry os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if strings.Contains(entry.Name(), ".tmp-") {
+					t.Errorf("temporary scaffold leaked: %s", path)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
-func TestPrepareSessionRejectsBridgeSourceAsDestination(t *testing.T) {
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := mkdirAll(assetDir); err != nil {
-		t.Fatal(err)
-	}
-	sessionDir := t.TempDir()
-	bridgePath := filepath.Join(sessionDir, "bridge")
-	if err := os.WriteFile(bridgePath, []byte("unchanged"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	err := PrepareSession(SessionConfig{
-		Roots:      Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir},
-		BridgePath: bridgePath,
-	})
-	if err == nil {
-		t.Fatal("PrepareSession accepted BridgePath as its own destination")
-	}
-	if got, readErr := os.ReadFile(bridgePath); readErr != nil || string(got) != "unchanged" {
-		t.Fatalf("bridge source changed: %q, err=%v", got, readErr)
+func TestReplaceRootFileTemporaryNameCollisions(t *testing.T) {
+	// Keep this serial with scaffold tests: collision names use a shared sequence.
+	for _, collisions := range []int{1, 100} {
+		t.Run(fmt.Sprintf("collisions=%d", collisions), func(t *testing.T) {
+			dir := t.TempDir()
+			root, err := os.OpenRoot(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			const name = "asset"
+			if err := os.WriteFile(filepath.Join(dir, name), []byte("old"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// Reserve the next names without changing the sequence: an existing
+			// temporary file must never be overwritten or removed by a retry.
+			sequence := scaffoldTempSequence.Load()
+			reserved := make([]string, collisions)
+			for i := range reserved {
+				reserved[i] = fmt.Sprintf(".%s.tmp-%d-%d", name, os.Getpid(), sequence+uint64(i)+1)
+				if err := os.WriteFile(filepath.Join(dir, reserved[i]), []byte("reserved"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err = replaceRootFile(root, name, strings.NewReader("new"), 0o600)
+			want := "new"
+			if collisions == 100 {
+				want = "old"
+				if err == nil || !strings.Contains(err.Error(), "could not allocate temporary scaffold") {
+					t.Fatalf("exhausted retry error = %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(filepath.Join(dir, name)); err != nil || string(data) != want {
+				t.Fatalf("destination = %q, %v; want %q", data, err, want)
+			}
+			for _, reservedName := range reserved {
+				if data, err := os.ReadFile(filepath.Join(dir, reservedName)); err != nil || string(data) != "reserved" {
+					t.Errorf("reserved file %q = %q, %v", reservedName, data, err)
+				}
+			}
+			if entries, err := os.ReadDir(dir); err != nil || len(entries) != collisions+1 {
+				t.Fatalf("unexpected temporary files: %v, %v", entries, err)
+			}
+		})
 	}
 }

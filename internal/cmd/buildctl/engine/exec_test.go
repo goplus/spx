@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -251,4 +252,102 @@ exit %d`, exitCode)
 			}
 		})
 	}
+}
+
+func TestEngineExecEntryPoint(t *testing.T) {
+	for _, args := range [][]string{nil, {"--lock-dir", "lock"}, {"--lock-dir", "lock", "--script", "true", "echo"}, {"--invalid"}} {
+		if err := runEngineExec(args); err == nil {
+			t.Fatalf("invalid execution arguments accepted: %q", args)
+		}
+	}
+	t.Run("missing repository", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		if err := runEngineExec([]string{"--lock-dir", "lock", "--", os.Args[0], "-test.run=^$"}); err == nil || !strings.Contains(err.Error(), "repository root") {
+			t.Fatalf("repository error = %v", err)
+		}
+	})
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX command/script fixtures")
+	}
+	for _, mode := range []string{"default directory", "relative directory", "absolute directory", "script"} {
+		t.Run(mode, func(t *testing.T) {
+			root := isolateEngineEnvironment(t)
+			t.Chdir(root)
+			workdir := root
+			args := []string{"exec", "--lock-dir", "lock"}
+			switch mode {
+			case "relative directory":
+				workdir = filepath.Join(root, "work")
+				args = append(args, "--workdir", "work")
+			case "absolute directory":
+				workdir = filepath.Join(root, "work")
+				args = []string{"exec", "--lock-dir", filepath.Join(root, "lock"), "--workdir", workdir}
+			}
+			mustMkdirAll(t, workdir)
+			script := "printf '%s' \"$PWD\" > result"
+			if mode == "script" {
+				args = append(args, "--script", script)
+			} else {
+				args = append(args, "--", "sh", "-c", script)
+			}
+			if err := Run(args); err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(filepath.Join(workdir, "result")); err != nil || string(data) != workdir {
+				t.Fatalf("working directory = %q, %v; want %q", data, err, workdir)
+			}
+			if _, err := os.Stat(filepath.Join(root, "lock")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("lock was not released: %v", err)
+			}
+		})
+	}
+}
+
+func TestEngineLockFilesystemErrors(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "missing", "lock")
+	called := false
+	if err := withEngineBuildLock(missing, func() error { called = true; return nil }); !errors.Is(err, os.ErrNotExist) || called {
+		t.Fatalf("missing parent error=%v, callback=%v", err, called)
+	}
+	stale, message, err := detectStaleEngineBuildLock(missing)
+	if err != nil || stale || message != "" {
+		t.Fatalf("missing lock=(%v,%q,%v)", stale, message, err)
+	}
+	blocker := filepath.Join(root, "file")
+	mustWriteFile(t, blocker, nil)
+	if _, _, err := detectStaleEngineBuildLock(filepath.Join(blocker, "lock")); err == nil {
+		t.Fatal("invalid parent accepted")
+	}
+	lock := filepath.Join(root, "lock")
+	mustMkdirAll(t, filepath.Join(lock, "pid"))
+	if err := acquireEngineBuildLock(lock); err == nil {
+		t.Fatal("unreadable PID metadata accepted")
+	}
+}
+
+func TestEngineLockWaitsForActiveOwner(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("live-process check uses POSIX signals")
+	}
+	synctest.Test(t, func(t *testing.T) {
+		lock := filepath.Join(t.TempDir(), "lock")
+		mustWriteFile(t, filepath.Join(lock, "pid"), []byte(fmt.Sprint(os.Getpid())))
+		defer releaseEngineBuildLock(lock)
+		acquired := make(chan error, 1)
+		go func() { acquired <- acquireEngineBuildLock(lock) }()
+		synctest.Wait()
+		select {
+		case err := <-acquired:
+			t.Fatalf("lock acquisition completed before owner released it: %v", err)
+		default:
+		}
+		releaseEngineBuildLock(lock)
+		if err := <-acquired; err != nil {
+			t.Fatal(err)
+		}
+		if data, err := os.ReadFile(filepath.Join(lock, "pid")); err != nil || strings.TrimSpace(string(data)) != fmt.Sprint(os.Getpid()) {
+			t.Fatalf("acquired owner=%q,%v", data, err)
+		}
+	})
 }

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import release_bump
 import runtime_build_contract as contract
@@ -19,6 +21,10 @@ def accept_release_boundary(*_):
 
 def accept_post_write_validation(*_):
     return None
+
+
+def snapshot_files(directory):
+    return {path: path.read_bytes() for path in Path(directory).rglob("*") if path.is_file()}
 
 
 class ReleaseBumpTest(unittest.TestCase):
@@ -191,63 +197,40 @@ class ReleaseBumpTest(unittest.TestCase):
             for name, original in originals.items():
                 self.assertEqual(paths[name].read_bytes(), original)
 
-    def test_bump_rolls_back_when_post_write_validation_fails(self):
-        with tempfile.TemporaryDirectory() as directory:
-            paths = self.fixture(directory)
-            originals = {
-                name: paths[name].read_bytes()
-                for name in ("lock", "current", "meta", "current_snapshot")
-            }
-            target_runtime = self.next_patch(paths["current_runtime_version"])
-            target_snapshot = paths["snapshots"] / f"{target_runtime}.json"
-
-            def reject_validation(*_):
-                raise release_bump.ReleaseBumpError("catalog rejected")
-
-            with self.assertRaisesRegex(release_bump.ReleaseBumpError, "catalog rejected"):
-                release_bump.bump_release(
-                    self.next_patch(paths["current_spx_version"]),
-                    target_runtime,
-                    lock_path=paths["lock"],
-                    snapshot_directory=paths["snapshots"],
-                    current_spx_version_path=paths["current"],
-                    release_meta_path=paths["meta"],
-                    release_guard=accept_release_boundary,
-                    post_write_validator=reject_validation,
+    def test_bump_rolls_back_failed_or_interrupted_validation(self):
+        for failure in (release_bump.ReleaseBumpError("catalog rejected"), KeyboardInterrupt()):
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory() as directory:
+                paths = self.fixture(directory)
+                originals = snapshot_files(directory)
+                validator = mock.Mock(side_effect=failure)
+                with self.assertRaises(type(failure)):
+                    release_bump.bump_release(
+                        self.next_patch(paths["current_spx_version"]),
+                        self.next_patch(paths["current_runtime_version"]),
+                        lock_path=paths["lock"],
+                        snapshot_directory=paths["snapshots"],
+                        current_spx_version_path=paths["current"],
+                        release_meta_path=paths["meta"],
+                        release_guard=accept_release_boundary,
+                        post_write_validator=validator,
+                    )
+                validator.assert_called_once_with(paths["lock"], paths["snapshots"])
+                self.assertEqual(
+                    snapshot_files(directory),
+                    originals,
                 )
 
-            for name, original in originals.items():
-                self.assertEqual(paths[name].read_bytes(), original)
-            self.assertFalse(target_snapshot.exists())
-
-    def test_bump_rolls_back_when_post_write_validation_is_interrupted(self):
-        with tempfile.TemporaryDirectory() as directory:
-            paths = self.fixture(directory)
-            originals = {
-                name: paths[name].read_bytes()
-                for name in ("lock", "current", "meta", "current_snapshot")
-            }
-            target_runtime = self.next_patch(paths["current_runtime_version"])
-            target_snapshot = paths["snapshots"] / f"{target_runtime}.json"
-
-            def interrupt_validation(*_):
-                raise KeyboardInterrupt
-
-            with self.assertRaises(KeyboardInterrupt):
-                release_bump.bump_release(
-                    self.next_patch(paths["current_spx_version"]),
-                    target_runtime,
-                    lock_path=paths["lock"],
-                    snapshot_directory=paths["snapshots"],
-                    current_spx_version_path=paths["current"],
-                    release_meta_path=paths["meta"],
-                    release_guard=accept_release_boundary,
-                    post_write_validator=interrupt_validation,
+    def test_bump_rejects_non_increasing_abi_without_writing(self):
+        for offset in (0, -1):
+            with self.subTest(offset=offset), tempfile.TemporaryDirectory() as directory:
+                paths = self.fixture(directory)
+                originals = snapshot_files(directory)
+                with self.assertRaisesRegex(release_bump.ReleaseBumpError, "must be greater"):
+                    self.bump(paths, runtime_abi=paths["current_runtime_abi"] + offset)
+                self.assertEqual(
+                    snapshot_files(directory),
+                    originals,
                 )
-
-            for name, original in originals.items():
-                self.assertEqual(paths[name].read_bytes(), original)
-            self.assertFalse(target_snapshot.exists())
 
     def test_semver_prerelease_order_is_canonical(self):
         release_bump.require_newer_version(
@@ -265,68 +248,89 @@ class ReleaseBumpTest(unittest.TestCase):
         with self.assertRaises(release_bump.ReleaseBumpError):
             release_bump.parse_semver("2.5.0-rc.01", "runtime version")
 
+    def test_semver_precedence_handles_numeric_and_identifier_boundaries(self):
+        versions = (
+            "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta",
+            "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11",
+            "1.0.0-rc.1", "1.0.0", "1.0.1", "1.1.0", "2.0.0",
+        )
+        for left, right in zip(versions, versions[1:]):
+            with self.subTest(left=left, right=right):
+                parsed_left = release_bump.parse_semver(left, "version")
+                parsed_right = release_bump.parse_semver(right, "version")
+                self.assertEqual(release_bump.compare_semver(parsed_left, parsed_right), -1)
+                self.assertEqual(release_bump.compare_semver(parsed_right, parsed_left), 1)
+                self.assertEqual(release_bump.compare_semver(parsed_left, parsed_left), 0)
+
     def test_release_boundary_requires_public_current_and_unused_targets(self):
         repository = "goplus/spx"
-        current_spx = "v3.2.0"
-        current_runtime = "2.4.0"
-        new_spx = "v3.3.0"
-        new_runtime = "2.5.0"
-
-        class FakeGitHubClient:
-            def __init__(self, values):
-                self.values = values
-
-            def get(self, endpoint, allow_missing=False):
-                self.assert_missing_allowed = allow_missing
-                return self.values.get(endpoint)
-
+        versions = ("v3.2.0", "2.4.0", "v3.3.0", "2.5.0")
+        current_tags = (versions[0], f"runtime-v{versions[1]}")
+        target_tags = (versions[2], f"runtime-v{versions[3]}")
         current_values = {}
-        for tag in (current_spx, f"runtime-v{current_runtime}"):
+        for tag in current_tags:
             current_values[release_bump.github_release_endpoint(repository, tag)] = {
-                "tag_name": tag,
-                "draft": False,
+                "tag_name": tag, "draft": False,
             }
             current_values[release_bump.github_tag_endpoint(repository, tag)] = {
                 "ref": f"refs/tags/{tag}",
             }
-        release_bump.verify_release_boundary(
-            repository,
-            current_spx,
-            current_runtime,
-            new_spx,
-            new_runtime,
-            FakeGitHubClient(current_values),
+
+        def verify(values):
+            client = mock.Mock()
+            client.get.side_effect = lambda endpoint, allow_missing: values.get(endpoint)
+            release_bump.verify_release_boundary(repository, *versions, github_client=client)
+            return client
+
+        client = verify(current_values)
+        self.assertEqual(client.get.call_count, 8)
+        self.assertTrue(all(call.kwargs == {"allow_missing": True} for call in client.get.call_args_list))
+        for tag in current_tags:
+            release_endpoint = release_bump.github_release_endpoint(repository, tag)
+            tag_endpoint = release_bump.github_tag_endpoint(repository, tag)
+            for endpoint, value, error in (
+                (release_endpoint, None, "not public"),
+                (release_endpoint, {"tag_name": tag, "draft": True}, "not public"),
+                (release_endpoint, {"tag_name": "wrong", "draft": False}, "returned tag"),
+                (tag_endpoint, None, "no exact Git reference"),
+                (tag_endpoint, {"ref": "refs/heads/main"}, "no exact Git reference"),
+            ):
+                with self.subTest(tag=tag, value=value), self.assertRaisesRegex(release_bump.ReleaseBumpError, error):
+                    verify({**current_values, endpoint: value})
+        for tag in target_tags:
+            for endpoint in (
+                release_bump.github_release_endpoint(repository, tag),
+                release_bump.github_tag_endpoint(repository, tag),
+            ):
+                with self.subTest(occupied=endpoint), self.assertRaisesRegex(release_bump.ReleaseBumpError, "already exists"):
+                    verify({**current_values, endpoint: {}})
+
+    def test_github_client_distinguishes_missing_from_failed_requests(self):
+        cases = (
+            (0, '{"draft": false}', "", False, {"draft": False}),
+            (1, "", "HTTP 404: Not Found", True, None),
+            (1, "", "HTTP 404: Not Found", False, "request failed"),
+            (1, "", "HTTP 403: Forbidden", True, "request failed"),
+            (0, "not JSON", "", True, "invalid JSON"),
         )
-
-        draft_values = dict(current_values)
-        draft_values[release_bump.github_release_endpoint(repository, current_spx)] = {
-            "tag_name": current_spx,
-            "draft": True,
-        }
-        with self.assertRaisesRegex(release_bump.ReleaseBumpError, "not public"):
-            release_bump.verify_release_boundary(
-                repository,
-                current_spx,
-                current_runtime,
-                new_spx,
-                new_runtime,
-                FakeGitHubClient(draft_values),
-            )
-
-        occupied_values = dict(current_values)
-        new_runtime_tag = f"runtime-v{new_runtime}"
-        occupied_values[release_bump.github_tag_endpoint(repository, new_runtime_tag)] = {
-            "ref": f"refs/tags/{new_runtime_tag}",
-        }
-        with self.assertRaisesRegex(release_bump.ReleaseBumpError, "already exists"):
-            release_bump.verify_release_boundary(
-                repository,
-                current_spx,
-                current_runtime,
-                new_spx,
-                new_runtime,
-                FakeGitHubClient(occupied_values),
-            )
+        for code, stdout, stderr, allow_missing, expected in cases:
+            with self.subTest(code=code, stderr=stderr, allow_missing=allow_missing), mock.patch.object(
+                release_bump.subprocess, "run",
+                return_value=subprocess.CompletedProcess([], code, stdout, stderr),
+            ):
+                if isinstance(expected, str):
+                    with self.assertRaisesRegex(release_bump.ReleaseBumpError, expected):
+                        release_bump.GitHubClient().get("/test", allow_missing=allow_missing)
+                else:
+                    self.assertEqual(release_bump.GitHubClient().get("/test", allow_missing=allow_missing), expected)
+        for failure, message in (
+            (FileNotFoundError(), "CLI 'gh' is required"),
+            (subprocess.TimeoutExpired("gh", 30), "timed out"),
+        ):
+            with self.subTest(failure=type(failure).__name__), mock.patch.object(
+                release_bump.subprocess, "run", side_effect=failure,
+            ), self.assertRaisesRegex(release_bump.ReleaseBumpError, message):
+                release_bump.GitHubClient().get("/test")
 
 
 if __name__ == "__main__":

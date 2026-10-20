@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,7 +254,9 @@ func TestValidateRelativePathRejectsPortableAliases(t *testing.T) {
 		})
 	}
 
-	allowed := []string{".config", "console.txt", "com0.txt", "com10.txt", "lpt10.txt", "file name.txt", "caf\u00e9.txt"}
+	// Preserve project bundles' Unicode device-name folding policy: Kelvin
+	// sign stays distinct from ASCII K even though collision folding is broader.
+	allowed := []string{".config", "console.txt", "com0.txt", "com10.txt", "lpt10.txt", "file name.txt", "caf\u00e9.txt", "CLOCK$"}
 	for _, name := range allowed {
 		if got, err := validateRelativePath(name, "test"); err != nil || got != name {
 			t.Errorf("validateRelativePath(%q) = %q, %v", name, got, err)
@@ -639,5 +642,150 @@ func assertBundleTestFile(t *testing.T, name, want string) {
 	}
 	if got := string(data); got != want {
 		t.Fatalf("file %q = %q, want %q", name, got, want)
+	}
+}
+
+func TestArchiveRejectsInvalidInputsAndWriterFailures(t *testing.T) {
+	if digest, err := WriteArchive(io.Discard, Config{}); err == nil || digest != (Digest{}) {
+		t.Fatalf("invalid collection = %s, %v", digest, err)
+	}
+	limits, err := resolveLimits(Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name   string
+		bundle *bundle
+		writer io.Writer
+		want   string
+	}{
+		{"nil bundle", nil, io.Discard, "nil bundle"},
+		{"nil writer", &bundle{limits: limits}, nil, "nil writer"},
+		{"long entry name", &bundle{limits: limits, entries: []collectedEntry{{name: strings.Repeat("x", 65536)}}}, io.Discard, "create ZIP entry"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if digest, err := tt.bundle.writeZIP(tt.writer); err == nil || !strings.Contains(err.Error(), tt.want) || digest != (Digest{}) {
+				t.Fatalf("writeZIP = %s, %v, want %q", digest, err, tt.want)
+			}
+		})
+	}
+	sentinel := errors.New("destination unavailable")
+	data := make([]byte, 256<<10)
+	_, _ = rand.New(rand.NewSource(1)).Read(data)
+	b := &bundle{limits: limits, entries: []collectedEntry{{name: "large.bin", data: data}}}
+	if digest, err := b.writeZIP(bundleTestWriter{err: sentinel}); !errors.Is(err, sentinel) || !strings.Contains(err.Error(), "write ZIP entry") || digest != (Digest{}) {
+		t.Fatalf("streaming writer failure = %s, %v", digest, err)
+	}
+	writer := archiveLimitWriter{writer: bundleTestWriter{}, remaining: 10}
+	if n, err := writer.Write([]byte("abc")); n != 2 || !errors.Is(err, io.ErrShortWrite) || writer.remaining != 8 {
+		t.Fatalf("short write = %d, %v, remaining %d", n, err, writer.remaining)
+	}
+}
+
+type bundleTestWriter struct{ err error }
+
+func (w bundleTestWriter) Write(p []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	return len(p) - 1, nil
+}
+
+func TestBundleInputFailuresPreserveErrorKinds(t *testing.T) {
+	root := t.TempDir()
+	writeBundleTestFile(t, filepath.Join(root, "file"), "content", 0600)
+	for _, cfg := range []Config{
+		{ProjectDir: filepath.Join(root, "missing")},
+		{ProjectDir: filepath.Join(root, "file")},
+		{ProjectDir: root, IncludeConfig: true},
+		{ProjectDir: root, PackDir: "missing"},
+		{ProjectDir: root, PackDir: "../escape"},
+		{ProjectDir: root, IncludeConfig: true, ConfigBytes: []byte("large"), Limits: Limits{MaxFileBytes: 1}},
+	} {
+		if _, err := collect(cfg); err == nil {
+			t.Errorf("invalid config accepted: %#v", cfg)
+		}
+	}
+	for _, limits := range []Limits{{MaxFileBytes: 1<<63 - 1}, {MaxTotalBytes: 1<<63 - 1}} {
+		if _, err := resolveLimits(limits); !errors.Is(err, ErrLimit) {
+			t.Errorf("overflow allowance accepted: %v", err)
+		}
+	}
+	collector := newCollector(resolvedLimits{maxEntries: 10})
+	if err := collector.reserveEntry("../escape"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("unsafe entry = %v", err)
+	}
+	for _, name := range []string{"//host/share", `\\host\share`, "c:/file", `C:\file`} {
+		if !looksLikeWindowsAbsolutePath(name) {
+			t.Errorf("Windows absolute path missed: %q", name)
+		}
+	}
+	if isSameOrWithin("relative", root) {
+		t.Fatal("mixed absolute and relative paths considered within")
+	}
+	for _, tt := range []struct{ output, pack, want string }{
+		{filepath.Join(root, "bad\x00"), "", "canonicalize Output"},
+		{"", filepath.Join(root, "bad\x00"), "canonicalize input root"},
+	} {
+		if err := validateOutputs(root, tt.output, "", tt.pack); err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Fatalf("output validation = %v", err)
+		}
+	}
+}
+
+func TestReadRegularFileRejectsUnusableHandles(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "source")
+	writeBundleTestFile(t, path, "content", 0600)
+	for _, kind := range []string{"closed", "directory", "write only", "partial read"} {
+		t.Run(kind, func(t *testing.T) {
+			name, flag := path, os.O_RDONLY
+			if kind == "directory" {
+				name = root
+			}
+			if kind == "write only" {
+				flag = os.O_WRONLY
+			}
+			f, err := os.OpenFile(name, flag, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			if kind == "closed" {
+				if err := f.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind == "partial read" {
+				if _, err := f.Seek(1, io.SeekStart); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = readRegularFile(f, "source", 100, 100)
+			if err == nil {
+				t.Fatal("unusable source accepted")
+			}
+			if (kind == "directory" || kind == "partial read") && !errors.Is(err, ErrUnsafeFile) {
+				t.Fatalf("unsafe source error = %v", err)
+			}
+		})
+	}
+}
+
+func TestBundleRecursiveFailuresAndRelativeOutput(t *testing.T) {
+	root := t.TempDir()
+	writeBundleTestFile(t, filepath.Join(root, "pack", "nested", "asset"), "large", 0600)
+	if _, err := collect(Config{ProjectDir: root, PackDir: "pack", Output: "pack/output.zip"}); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("relative output within pack = %v", err)
+	}
+	if _, err := collect(Config{ProjectDir: root, PackDir: "pack", Limits: Limits{MaxFileBytes: 1}}); !errors.Is(err, ErrLimit) {
+		t.Fatalf("nested asset size error = %v", err)
+	}
+	broken := filepath.Join(root, "broken-link")
+	if err := os.Symlink(filepath.Join(root, "missing"), broken); err != nil {
+		t.Skip(err)
+	}
+	if _, err := canonicalFilesystemPath(broken); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dangling output link = %v", err)
 	}
 }

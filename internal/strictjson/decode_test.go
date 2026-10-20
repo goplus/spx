@@ -17,6 +17,9 @@
 package strictjson
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -90,5 +93,55 @@ func TestDecodeLetsDestinationDetermineTopLevelType(t *testing.T) {
 	var document testDocument
 	if err := Decode([]byte(`[1, 2, 3]`), &document); err == nil {
 		t.Fatal("Decode accepted an array for a struct destination")
+	}
+}
+
+func TestDecodeRejectsMalformedInputBeforeChangingDestination(t *testing.T) {
+	for _, tc := range []struct {
+		name, data string
+		truncated  bool
+	}{
+		{"empty", "", true},
+		{"object start", "{", true},
+		{"object value", `{"name":`, true},
+		{"nested object", `{"name":"new","nested":{`, true},
+		{"array start", "[", true},
+		{"array element", "[1,", true},
+		{"invalid key", `{"name":"new", invalid}`, false},
+		{"mismatched terminator", `{"items":[1}`, false},
+		{"malformed trailing input", `{"name":"new"} !`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := testDocument{Name: "preserved"}
+			document := before
+			err := Decode([]byte(tc.data), &document)
+			if err == nil {
+				t.Fatal("accepted malformed input")
+			}
+			if tc.truncated {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+					t.Fatalf("truncated input error = %v, want EOF", err)
+				}
+			} else {
+				var syntax *json.SyntaxError
+				if !errors.As(err, &syntax) {
+					t.Fatalf("malformed input error = %T: %v, want syntax error", err, err)
+				}
+			}
+			if !reflect.DeepEqual(document, before) {
+				t.Fatalf("malformed input changed destination: %+v", document)
+			}
+		})
+	}
+}
+
+func TestDecodeRejectsEscapedDuplicateKeys(t *testing.T) {
+	document := testDocument{Name: "preserved"}
+	err := Decode([]byte(`{"name":"first","na\u006de":"second"}`), &document)
+	if err == nil || !strings.Contains(err.Error(), `duplicate JSON key "name"`) {
+		t.Fatalf("escaped duplicate key error = %v", err)
+	}
+	if document.Name != "preserved" {
+		t.Fatalf("duplicate keys changed destination to %q", document.Name)
 	}
 }

@@ -17,6 +17,9 @@
 package driverbundle
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -140,6 +143,12 @@ func TestManifestValidationMutations(t *testing.T) {
 		name   string
 		mutate func(*Manifest)
 	}{
+		{"bundle count", func(m *Manifest) { m.Bundles = nil }},
+		{"bundle size", func(m *Manifest) { m.Bundles[0].Size = 0 }},
+		{"bundle digest", func(m *Manifest) { m.Bundles[0].SHA256 = strings.Repeat("z", 64) }},
+		{"bundle identity", func(m *Manifest) { m.Bundles[0].Name = "other.zip" }},
+		{"file identity", func(m *Manifest) { m.Bundles[0].Files[0].Name = "other" }},
+		{"file path", func(m *Manifest) { m.Bundles[0].Files[0].Name = "../bad" }},
 		{"schema", func(m *Manifest) { m.Schema++ }},
 		{"version", func(m *Manifest) { m.SPXVersion = "v3.2" }},
 		{"runtime", func(m *Manifest) { m.RuntimeVersion = "v2.4.4" }},
@@ -160,6 +169,22 @@ func TestManifestValidationMutations(t *testing.T) {
 			test.mutate(&candidate)
 			if err := candidate.Validate(); err == nil {
 				t.Fatal("accepted invalid manifest")
+			}
+			if _, err := candidate.JSON(); err == nil {
+				t.Fatal("serialized invalid manifest")
+			}
+			if _, err := candidate.BundleFor("linux", "amd64"); err == nil {
+				t.Fatal("looked up invalid manifest")
+			}
+			if err := candidate.ValidateVersions("v3.2.4", "2.4.4"); err == nil {
+				t.Fatal("bound invalid manifest")
+			}
+			data, err := json.Marshal(candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Parse(data); err == nil {
+				t.Fatal("parsed invalid manifest")
 			}
 		})
 	}
@@ -197,5 +222,61 @@ func TestHostSpecMatchesCanonicalBundleComponents(t *testing.T) {
 	}
 	if got := SupportedTargets(); len(got) != 4 || got[0].GOOS != "darwin" || got[3].GOOS != "windows" {
 		t.Fatalf("SupportedTargets = %#v", got)
+	}
+}
+
+func TestManifestBindingAndDigestInputs(t *testing.T) {
+	manifest := testManifest()
+	data, err := manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ParseForVersions(data, manifest.SPXVersion, manifest.RuntimeVersion); err != nil || got.SPXVersion != manifest.SPXVersion {
+		t.Fatalf("bound manifest=%+v,%v", got, err)
+	}
+	for _, tc := range []struct {
+		data         []byte
+		spx, runtime string
+	}{{[]byte("bad"), "v3.2.4", "2.4.4"}, {data, "v3.2.5", "2.4.4"}, {data, "v3.2.4", "bad"}} {
+		if _, err := ParseForVersions(tc.data, tc.spx, tc.runtime); err == nil {
+			t.Fatal("invalid binding accepted")
+		}
+	}
+	for _, b := range manifest.Bundles {
+		if err := b.ValidateForRuntime(manifest.RuntimeVersion); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.ValidateForRuntime("bad"); err == nil {
+			t.Fatal("invalid runtime accepted")
+		}
+	}
+	for _, b := range []Bundle{{}, {GOOS: "INVALID", GOARCH: "amd64"}} {
+		if _, err := b.JSON(); err == nil {
+			t.Fatal("serialized invalid bundle")
+		}
+		data, err := json.Marshal(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ParseBundle(data); err == nil {
+			t.Fatal("parsed invalid bundle")
+		}
+	}
+	if _, err := ParseBundle([]byte("invalid")); err == nil {
+		t.Fatal("invalid bundle JSON accepted")
+	}
+	engine, pack := []byte("engine"), []byte("pack")
+	a, b := sha256.Sum256(engine), sha256.Sum256(pack)
+	want, err := ComputeEngineInterfaceDigestFromSHA256(hex.EncodeToString(a[:]), hex.EncodeToString(b[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ComputeEngineInterfaceDigest(engine, pack); got != want || got == ComputeEngineInterfaceDigest(pack, engine) {
+		t.Fatal("digest lost pair identity or ordering")
+	}
+	for _, pair := range [][2]string{{"bad", testDigest}, {testDigest, "bad"}} {
+		if _, err := ComputeEngineInterfaceDigestFromSHA256(pair[0], pair[1]); err == nil {
+			t.Fatal("invalid component digest accepted")
+		}
 	}
 }

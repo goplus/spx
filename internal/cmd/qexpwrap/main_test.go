@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -178,4 +179,125 @@ func exportTestTypes(t *testing.T, filename string) []byte {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+func TestCanonicalizeOutputDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "example.com", "pkg")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(dir, "pkg.types")
+	if err := os.WriteFile(filename, exportTestTypes(t, filepath.Join(root, "source.go")), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "pkg.go")
+	if err := os.WriteFile(source, []byte("package pkg\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	untouched := filepath.Join(dir, "asset.txt")
+	if err := os.WriteFile(untouched, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonicalizeTypesInDir(root); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	pkg, err := gcexportdata.Read(bytes.NewReader(data), fset, make(map[string]*types.Package), "example.com/pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fset.Position(pkg.Scope().Lookup("Number").Pos()).Filename; got != "$ABS/source.go" {
+		t.Errorf("canonical path=%q", got)
+	}
+	if err := addHeadersInDir(root); err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(first, []byte("Licensed under the Apache License")) {
+		t.Fatal("missing license header")
+	}
+	if err := addHeadersInDir(root); err != nil {
+		t.Fatal(err)
+	}
+	if second, err := os.ReadFile(source); err != nil || !bytes.Equal(first, second) {
+		t.Fatal("header addition is not idempotent")
+	}
+	if got, err := os.ReadFile(untouched); err != nil || string(got) != "unchanged" {
+		t.Fatal("non-Go file changed")
+	}
+	for _, call := range []func(string) error{canonicalizeTypesInDir, addHeadersInDir} {
+		if err := call(filepath.Join(root, "missing")); err == nil {
+			t.Fatal("missing root accepted")
+		}
+	}
+	if err := canonicalizeTypesInDir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonicalizeTypesFile(filepath.Join(root, "missing.types"), "pkg", sourceRoots{}); err == nil {
+		t.Fatal("missing types accepted")
+	}
+	if err := os.WriteFile(filename, []byte("invalid export data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonicalizeTypesInDir(root); err == nil || !strings.Contains(err.Error(), "canonicalize") {
+		t.Fatalf("invalid export error=%v", err)
+	}
+}
+
+func TestQexpMainWithLocalGoFixture(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX command fixture")
+	}
+	bin := t.TempDir()
+	record := filepath.Join(t.TempDir(), "args")
+	script := "#!/bin/sh\nif [ \"$1\" = env ]; then printf '%s' \"$QEXP_ENV\"; exit 0; fi\nprintf '%s\\n' \"$@\" > \"$QEXP_ARGS\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "go"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("QEXP_ARGS", record)
+	t.Setenv("QEXP_ENV", `{"GOMOD":"/module/go.mod","GOROOT":"/sdk","GOMODCACHE":"/cache"}`)
+	roots, err := loadSourceRoots()
+	if err != nil || roots.moduleRoot != "/module" || roots.goRoot != "/sdk" || roots.moduleCache != "/cache" {
+		t.Fatalf("roots=%+v,%v", roots, err)
+	}
+	oldArgs := os.Args
+	t.Cleanup(func() { os.Args = oldArgs })
+	for _, args := range [][]string{{"qexpwrap", "example.com/pkg"}, {"qexpwrap", "-outdir", t.TempDir(), "example.com/pkg"}} {
+		os.Args = args
+		main()
+		got, err := os.ReadFile(record)
+		if err != nil || string(got) != "tool\nqexp\n"+strings.Join(args[1:], "\n")+"\n" {
+			t.Fatalf("delegated args=%q,%v", got, err)
+		}
+	}
+	t.Setenv("QEXP_ENV", "invalid")
+	if _, err := loadSourceRoots(); err == nil || !strings.Contains(err.Error(), "decode Go source roots") {
+		t.Fatalf("decode error=%v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if _, err := loadSourceRoots(); err == nil || !strings.Contains(err.Error(), "load Go source roots") {
+		t.Fatalf("command error=%v", err)
+	}
+}
+
+func TestFlagValue(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+		ok   bool
+	}{{nil, "", false}, {[]string{"-outdir"}, "", false}, {[]string{"-outdir="}, "", false}, {[]string{"-other", "x", "-outdir=out"}, "out", true}, {[]string{"-outdir", "out"}, "out", true}} {
+		got, ok := flagValue(tc.args, "-outdir")
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("flags%q=%q,%v", tc.args, got, ok)
+		}
+	}
 }

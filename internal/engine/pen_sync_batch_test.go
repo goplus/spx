@@ -159,3 +159,25 @@ func assertPenCommand(t *testing.T, data []float32, index, operation int, object
 		t.Fatalf("command %d reserved lane = %v, want 0", index, record[7])
 	}
 }
+
+func TestPenSyncBufferOptionalCallbacksPreserveQueuedCommands(t *testing.T) {
+	var absent *PenSyncBuffer
+	called := 0
+	absent.Flush(func([]float32) { t.Fatal("nil buffer flushed") })
+	absent.Discard()
+	absent.Barrier(nil, func() { called++ })
+	buffer := NewPenSyncBuffer(0)
+	buffer.AddUp(7)
+	buffer.Flush(nil)
+	buffer.Barrier(nil, func() { called++ })
+	buffer.Barrier(func([]float32) { t.Fatal("nil operation flushed commands") }, nil)
+	buffer.Flush(func(data []float32) {
+		if data[0] != 1 {
+			t.Fatalf("lost queued commands: %v", data)
+		}
+		called++
+	})
+	if called != 3 {
+		t.Fatalf("callback count=%d", called)
+	}
+}

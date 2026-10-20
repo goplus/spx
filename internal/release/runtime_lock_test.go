@@ -215,3 +215,168 @@ func TestParseRuntimeLockRejectsUnknownAndTrailingJSON(t *testing.T) {
 		t.Fatal("ParseRuntimeLock accepted a nested duplicate key")
 	}
 }
+
+func TestRuntimeLockRejectsInvalidSerializationAndSnapshots(t *testing.T) {
+	invalid := DefaultRuntimeLock()
+	invalid.RequiredAssets = []string{invalid.Manifest}
+	if _, err := invalid.JSON(); err == nil || !strings.Contains(err.Error(), "conflicts with manifest") {
+		t.Fatalf("invalid JSON = %v", err)
+	}
+	if _, err := invalid.SHA256(); err == nil {
+		t.Fatal("invalid lock hashed")
+	}
+	if _, err := ParseRuntimeLock([]byte(`{}`)); err == nil {
+		t.Fatal("empty lock parsed")
+	}
+	for _, tt := range []struct {
+		name  string
+		files fstest.MapFS
+		want  string
+	}{
+		{"empty", fstest.MapFS{}, "no runtime lock snapshots"},
+		{"directory", fstest.MapFS{"runtime_locks/1.2.3.json": {Mode: fs.ModeDir}}, "read runtime_locks/1.2.3.json"},
+		{"malformed", fstest.MapFS{"runtime_locks/1.2.3.json": {Data: []byte("{")}}, "parse runtime_locks"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := loadRuntimeLocks(tt.files); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("load snapshots = %v", err)
+			}
+			defer func() {
+				if recover() == nil {
+					t.Error("invalid embedded snapshots did not panic")
+				}
+			}()
+			mustLoadRuntimeLocks(tt.files, DefaultRuntimeLock())
+		})
+	}
+	lock := DefaultRuntimeLock()
+	data, err := lock.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := fstest.MapFS{"runtime_locks/" + lock.RuntimeVersion + ".json": {Data: data}}
+	for _, scenario := range []string{"missing current", "changed current", "invalid current"} {
+		t.Run(scenario, func(t *testing.T) {
+			current := lock
+			switch scenario {
+			case "missing current":
+				current.RuntimeVersion = "9.9.9"
+			case "changed current":
+				current.RuntimeABI++
+			case "invalid current":
+				current.RuntimeABI = 0
+			}
+			defer func() {
+				if recover() == nil {
+					t.Error("invalid current snapshot did not panic")
+				}
+			}()
+			mustLoadRuntimeLocks(files, current)
+		})
+	}
+	t.Run("invalid embedded lock", func(t *testing.T) {
+		defer func() {
+			if recover() == nil {
+				t.Error("invalid embedded lock did not panic")
+			}
+		}()
+		mustParseRuntimeLock([]byte("{"))
+	})
+}
+
+func TestHostRuntimeSpecFor(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	runtimeName := RuntimeTag + lock.RuntimeVersion
+	for _, test := range []struct {
+		goos        string
+		goarch      string
+		wantArchive string
+		wantBinary  string
+	}{
+		{goos: "linux", goarch: "amd64", wantArchive: "linux-x86_64.zip", wantBinary: "godot.linuxbsd.template_release.x86_64"},
+		{goos: "darwin", goarch: "amd64", wantArchive: "macos-x86_64.zip", wantBinary: "godot.macos.template_release.x86_64"},
+		{goos: "darwin", goarch: "arm64", wantArchive: "macos-arm64.zip", wantBinary: "godot.macos.template_release.arm64"},
+		{goos: "windows", goarch: "amd64", wantArchive: "windows-x86_64.zip", wantBinary: "godot.windows.template_release.x86_64.exe"},
+	} {
+		t.Run(test.goos+"/"+test.goarch, func(t *testing.T) {
+			spec, err := HostRuntimeSpecFor(lock, test.goos, test.goarch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.GOOS != test.goos || spec.GOARCH != test.goarch {
+				t.Fatalf("host identity = %s/%s, want %s/%s", spec.GOOS, spec.GOARCH, test.goos, test.goarch)
+			}
+			wantRuntime := runtimeName
+			if test.goos == "windows" {
+				wantRuntime += ".exe"
+			}
+			if spec.ArchiveName != test.wantArchive || spec.BinaryName != test.wantBinary || spec.RuntimeName != wantRuntime {
+				t.Fatalf("spec = %#v", spec)
+			}
+			if spec.PackName != runtimeName+".pck" {
+				t.Fatalf("pack name = %q", spec.PackName)
+			}
+		})
+	}
+}
+
+func TestHostRuntimeSpecForSupportsMissingReleaseAssetsWhenLocked(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	lock.RequiredAssets = append(lock.RequiredAssets, "linux-arm64.zip", "windows-arm64.zip")
+	slices.Sort(lock.RequiredAssets)
+
+	for _, test := range []struct {
+		goos        string
+		goarch      string
+		wantArchive string
+		wantBinary  string
+	}{
+		{goos: "linux", goarch: "arm64", wantArchive: "linux-arm64.zip", wantBinary: "godot.linuxbsd.template_release.arm64"},
+		{goos: "windows", goarch: "arm64", wantArchive: "windows-arm64.zip", wantBinary: "godot.windows.template_release.arm64.exe"},
+	} {
+		t.Run(test.goos+"/"+test.goarch, func(t *testing.T) {
+			spec, err := HostRuntimeSpecFor(lock, test.goos, test.goarch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.ArchiveName != test.wantArchive || spec.BinaryName != test.wantBinary {
+				t.Fatalf("spec = %#v", spec)
+			}
+		})
+	}
+}
+
+func TestHostRuntimeSpecForRejectsMissingAsset(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	if _, err := HostRuntimeSpecFor(lock, "linux", "arm64"); err == nil || !strings.Contains(err.Error(), "linux-arm64.zip") {
+		t.Fatalf("HostRuntimeSpecFor missing-asset error = %v", err)
+	}
+	if _, err := HostRuntimeSpecFor(lock, "windows", "arm64"); err == nil || !strings.Contains(err.Error(), "windows-arm64.zip") {
+		t.Fatalf("HostRuntimeSpecFor missing-asset error = %v", err)
+	}
+}
+
+func TestHostRuntimeSpecForRejectsUnsupportedHost(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	for _, test := range []struct {
+		goos   string
+		goarch string
+	}{
+		{goos: "freebsd", goarch: "amd64"},
+		{goos: "linux", goarch: "386"},
+	} {
+		t.Run(test.goos+"/"+test.goarch, func(t *testing.T) {
+			if _, err := HostRuntimeSpecFor(lock, test.goos, test.goarch); err == nil || !strings.Contains(err.Error(), "unsupported host platform") {
+				t.Fatalf("HostRuntimeSpecFor error = %v", err)
+			}
+		})
+	}
+}
+
+func TestHostRuntimeSpecForValidatesLock(t *testing.T) {
+	lock := DefaultRuntimeLock()
+	lock.RuntimeVersion = "invalid"
+	if _, err := HostRuntimeSpecFor(lock, "linux", "amd64"); err == nil || !strings.Contains(err.Error(), "invalid runtime version") {
+		t.Fatalf("HostRuntimeSpecFor invalid-lock error = %v", err)
+	}
+}

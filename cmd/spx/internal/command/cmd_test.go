@@ -283,7 +283,7 @@ fi
 					t.Setenv(key, "")
 				}
 
-				target, tags, arch := "", "", runtime.GOARCH
+				target, tags, arch := "", "fixture_tag", runtime.GOARCH
 				install := false
 				cmd := &CmdTool{
 					TargetDir:    projectRoot,
@@ -302,19 +302,12 @@ fi
 				const staleMain = "package main\n// previous generation\n"
 				if build.mobileExport {
 					// A failed regeneration must not export a previous main.go.
-					for _, dir := range []string{filepath.Join(projectRoot, "assets"), cmd.GoDir} {
-						if err := os.MkdirAll(dir, 0755); err != nil {
-							t.Fatal(err)
-						}
-					}
 					for name, content := range map[string]string{
 						filepath.Join(projectRoot, "assets", "index.json"): "{}",
 						filepath.Join(cmd.GoDir, "main.go"):                staleMain,
 						filepath.Join(cmd.GoDir, "ios_fixture.go.txt"):     "package main\n",
 					} {
-						if err := os.WriteFile(name, []byte(content), 0644); err != nil {
-							t.Fatal(err)
-						}
+						writeCommandTestFile(t, name, content)
 					}
 					t.Setenv("ANDROID_NDK_ROOT", filepath.Join(root, "ndk"))
 				}
@@ -362,6 +355,9 @@ fi
 					tool, dir, args := fields[0], fields[1], fields[2]
 					if failure != "" && tool+":"+strings.SplitN(args, " ", 2)[0] == failure && i != len(calls)-1 {
 						t.Fatalf("commands continued after %s failed: %v", failure, calls[i+1:])
+					}
+					if (tool == "xgo" || strings.HasPrefix(args, "build ") && build.name != "wasm") && !strings.Contains(args, "-tags="+tags) {
+						t.Fatalf("build omitted tags: %q", call)
 					}
 					if i == 0 && tool != "xgo" {
 						t.Fatalf("first command = %q, want xgo", call)
@@ -631,6 +627,137 @@ func TestInitReportsScaffoldWriteFailures(t *testing.T) {
 			}
 			if tt.file && readTestFile(t, blocked) != "occupied" {
 				t.Fatal("initialization overwrote the blocking file")
+			}
+		})
+	}
+}
+
+// installCommandTestTools isolates command lookup so no host SDK or browser can
+// accidentally run when a test exercises external-tool orchestration.
+func installCommandTestTools(t *testing.T, scripts map[string]string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake command tools use POSIX shell scripts")
+	}
+	binDir := t.TempDir()
+	for name, script := range scripts {
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte("#!/bin/sh\nset -eu\n"+script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", binDir)
+	return binDir
+}
+
+// Restrict only a temporary test fixture; restore its mode before TempDir cleanup.
+func restrictCommandTestPath(t *testing.T, name string, mode os.FileMode) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions enforced for an unprivileged user")
+	}
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, mode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(name, info.Mode().Perm()); err != nil && !os.IsNotExist(err) {
+			t.Errorf("restore fixture permissions: %v", err)
+		}
+	})
+}
+
+func TestCommandRejectsUnsupportedInternalModes(t *testing.T) {
+	cmd := &CmdTool{Args: ExtraArgs{Tags: launcherStringPointer("pure_engine")}}
+	for _, tc := range []struct {
+		name string
+		run  func() error
+	}{{"editor", cmd.executeEditor}, {"rune", cmd.executeRune}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.run(); err == nil || !strings.Contains(err.Error(), "not supported in pure_engine") {
+				t.Fatalf("mode error = %v", err)
+			}
+		})
+	}
+	if err := cmd.prepareCommand(commandSpec{name: "invalid", setup: 99}, "", ""); err == nil || !strings.Contains(err.Error(), "invalid setup") {
+		t.Fatalf("setup error = %v", err)
+	}
+	if err := cmd.buildCommand(commandSpec{build: 99}); err == nil || !strings.Contains(err.Error(), "invalid command build phase") {
+		t.Fatalf("build error = %v", err)
+	}
+	if got := cmd.SafeTagArgs(); got != "-tags=pure_engine" {
+		t.Fatalf("tag argument = %q", got)
+	}
+}
+
+func TestBuildRejectsBlockedGeneratedDirectories(t *testing.T) {
+	for _, scenario := range []string{"Go directory", "generated main", "wasm output", "TinyGo output"} {
+		t.Run(scenario, func(t *testing.T) {
+			installCommandTestTools(t, map[string]string{
+				"xgo": `printf 'package main\n' > xgo_autogen.go`,
+				"go":  `test "$*" = 'mod tidy'`,
+			})
+			root := t.TempDir()
+			target, tags := "", ""
+			cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"), Args: ExtraArgs{Target: &target, Tags: &tags}}
+			want := ""
+			switch scenario {
+			case "Go directory":
+				writeCommandTestFile(t, cmd.GoDir, "existing file")
+				want = "failed to create GoDir"
+			case "generated main":
+				writeCommandTestFile(t, filepath.Join(cmd.GoDir, "main.go", "keep"), "existing directory")
+				want = "failed to rename/move generated file"
+			default:
+				writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, ".builds"), "existing file")
+				want = "failed to create web build directory"
+				if scenario == "TinyGo output" {
+					want = "failed to create TinyGo build directory"
+				}
+			}
+			var err error
+			if scenario == "TinyGo output" {
+				err = cmd.BuildTinyGoLib()
+			} else {
+				err = cmd.BuildWasm()
+			}
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("build error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestSharedBuildArchitectureSelection(t *testing.T) {
+	var supported []string
+	switch runtime.GOOS {
+	case "darwin":
+		supported = []string{"amd64", "arm64"}
+	case "linux":
+		supported = []string{"amd64", "arm", "arm64", "386"}
+	case "windows":
+		supported = []string{"amd64", "386"}
+	default:
+		supported = []string{runtime.GOARCH}
+	}
+	for _, arch := range []string{"", "all", "invalid-architecture"} {
+		t.Run(arch, func(t *testing.T) {
+			cmd := &CmdTool{ProjectDir: t.TempDir(), Args: ExtraArgs{Arch: &arch}}
+			if arch == "invalid-architecture" && runtime.GOOS != "darwin" {
+				if err := cmd.BuildDll(); err == nil || !strings.Contains(err.Error(), "invalid arch") {
+					t.Fatalf("invalid architecture error = %v", err)
+				}
+				return
+			}
+			want := []string{runtime.GOARCH}
+			if arch == "all" || runtime.GOOS == "darwin" {
+				want = supported
+			}
+			got, err := cmd.determineTargetArchs()
+			if err != nil || !slices.Equal(got, want) {
+				t.Fatalf("architectures = %v, %v; want %v", got, err, want)
 			}
 		})
 	}

@@ -17,6 +17,8 @@
 package launchpack
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -25,17 +27,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v3/internal/runtimebundle"
 
 	"github.com/goplus/spx/v3/internal/release"
 )
 
 func TestAcquireRuntimeAssetsPrefersExplicitLocalManifest(t *testing.T) {
-	lock := release.DefaultRuntimeLock()
-	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lock, spec := defaultHostRuntimeTest(t)
 	root := t.TempDir()
 	sourceRoot := filepath.Join(root, "source")
 	explicitRoot := filepath.Join(root, "explicit")
@@ -127,11 +128,7 @@ func TestAcquireRuntimeAssetsRejectsInvalidExplicitManifestWithoutFetch(t *testi
 }
 
 func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *testing.T) {
-	lock := release.DefaultRuntimeLock()
-	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lock, spec := defaultHostRuntimeTest(t)
 	root := t.TempDir()
 	manifestPath := publishLocalRuntimeTest(t, root, filepath.Join(root, "engine-manifest.json"), spec, "local-engine", "local-pack")
 	cacheRoot := filepath.Join(root, "cache")
@@ -181,11 +178,7 @@ func TestAcquireRuntimeAssetsRejectsTamperedLocalRuntimeFilesWithoutFetch(t *tes
 }
 
 func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t *testing.T) {
-	lock := release.DefaultRuntimeLock()
-	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
+	lock, spec := defaultHostRuntimeTest(t)
 	sourceRoot := t.TempDir()
 	buildRoot := t.TempDir()
 	enginePath := filepath.Join(buildRoot, spec.RuntimeName)
@@ -239,6 +232,16 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	}
 }
 
+func defaultHostRuntimeTest(t *testing.T) (release.RuntimeLock, release.HostRuntimeSpec) {
+	t.Helper()
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lock, spec
+}
+
 func localRuntimeTestDependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
 	dependencies := defaultRuntimeAssetDependencies()
 	dependencies.fetch = fetch
@@ -273,4 +276,213 @@ func publishLocalRuntimeTest(t *testing.T, root, manifestPath string, spec relea
 		t.Fatal(err)
 	}
 	return manifestPath
+}
+
+func TestEngineBundleRejectsMissingFilesAndUnsafeDestinations(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		change     func(*testing.T, *string, *string, *string)
+	}{
+		{"missing destination parent", "", func(t *testing.T, out, engine, pack *string) {
+			*out = filepath.Join(t.TempDir(), "missing", "bundle.zip")
+		}},
+		{"missing engine", "add Engine to bundle", func(t *testing.T, out, engine, pack *string) { *engine += ".missing" }},
+		{"missing pack", "add runtime PCK to bundle", func(t *testing.T, out, engine, pack *string) { *pack += ".missing" }},
+		{"directory destination", "not a regular non-symlink file", func(t *testing.T, out, engine, pack *string) {
+			if err := os.Mkdir(*out, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"symlink destination", "not a regular non-symlink file", func(t *testing.T, out, engine, pack *string) {
+			if err := os.Symlink(*engine, *out); err != nil {
+				t.Skip(err)
+			}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			output, engine, pack := filepath.Join(root, "bundle.zip"), filepath.Join(root, "engine"), filepath.Join(root, "pack")
+			writeProjectTestFile(t, engine, "engine")
+			writeProjectTestFile(t, pack, "pack")
+			tt.change(t, &output, &engine, &pack)
+			err := writeEngineBundle(output, []byte("manifest"), "engine", "pack", engine, pack)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("writeEngineBundle = %v, want %q", err, tt.want)
+			}
+			if tt.name == "missing destination parent" && !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("missing destination parent: %v", err)
+			}
+			leaks, err := filepath.Glob(filepath.Join(root, ".spx-launchpack-engine-*"))
+			if err != nil || len(leaks) > 0 {
+				t.Fatalf("temporary bundles = %q, %v", leaks, err)
+			}
+		})
+	}
+	root := t.TempDir()
+	src, dst := filepath.Join(root, "src"), filepath.Join(root, "dst")
+	writeProjectTestFile(t, src, "new")
+	writeProjectTestFile(t, dst, "old")
+	if err := replaceRuntimeFile(src, dst, 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertRuntimeFile(t, dst, "new")
+	if err := replaceRuntimeFile(src, dst, 0600); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing replacement source: %v", err)
+	}
+	if err := validateRuntimeEntry(dst, "engine", runtimebundle.Bundle{}); err == nil || !strings.Contains(err.Error(), "archive is missing") {
+		t.Fatalf("unlisted runtime entry: %v", err)
+	}
+	if err := validateRuntimeEntry(filepath.Join(root, "missing"), "engine", runtimebundle.Bundle{}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing runtime file: %v", err)
+	}
+	if err := validateRuntimeFile(root, "Engine"); err == nil {
+		t.Fatal("runtime directory accepted")
+	}
+	if isRegularNonSymlink(nil) {
+		t.Fatal("nil metadata accepted")
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if err := addFileToZip(zw, "engine", root, 0600); err == nil {
+		t.Fatal("directory added as runtime file")
+	}
+	_ = zw.Close()
+}
+
+func TestPinnedRuntimeOperationPreservesFailures(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "engine")
+	writeProjectTestFile(t, path, "engine")
+	sentinel := errors.New("inspect failed")
+	if err := withPinnedFile("Engine", path, func(*pinnedFile) error { return sentinel }); !errors.Is(err, sentinel) {
+		t.Fatalf("callback error = %v", err)
+	}
+	if err := withPinnedFile("Engine", path, func(f *pinnedFile) error { return f.file.Close() }); err == nil || !strings.Contains(err.Error(), "stat Engine") {
+		t.Fatalf("closed pinned file = %v", err)
+	}
+	if _, _, err := hashRuntimeFile(path + ".missing"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing runtime hash = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := copyLocalRuntimeAsset(ctx, path, io.Discard); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled copy = %v", err)
+	}
+	if err := copyLocalRuntimeAsset(context.Background(), path, launchpackErrorWriter{sentinel}); !errors.Is(err, sentinel) {
+		t.Fatalf("copy destination error = %v", err)
+	}
+	if err := copyLocalRuntimeAsset(context.Background(), path+".missing", io.Discard); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing copy source = %v", err)
+	}
+}
+
+func TestRuntimeAcquisitionRejectsInvalidEnvironmentBeforeFetch(t *testing.T) {
+	for _, tt := range []struct {
+		name, want string
+		env        []string
+	}{
+		{"duplicate cache", "duplicate SPX_RUNTIME_CACHE", []string{runtimeCacheEnv + "=/one", runtimeCacheEnv + "=/two"}},
+		{"relative cache", "absolute clean path", []string{runtimeCacheEnv + "=relative"}},
+		{"duplicate offline", "duplicate SPX_RUNTIME_OFFLINE", []string{runtimeOfflineEnv + "=1", runtimeOfflineEnv + "=0"}},
+		{"invalid offline", "invalid SPX_RUNTIME_OFFLINE", []string{runtimeOfflineEnv + "=perhaps"}},
+		{"duplicate manifest", "duplicate SPX_RUNTIME_LOCAL_MANIFEST", []string{runtimeLocalManifestEnv + "=/one", runtimeLocalManifestEnv + "=/two"}},
+		{"relative manifest", "absolute clean path", []string{runtimeLocalManifestEnv + "=relative"}},
+		{"duplicate mirror", "duplicate SPX_RUNTIME_ASSET_DIR", []string{runtimeAssetDirEnv + "=/one", runtimeAssetDirEnv + "=/two"}},
+		{"empty mirror", "must not be empty", []string{runtimeAssetDirEnv + "="}},
+		{"relative mirror", "absolute clean path", []string{runtimeAssetDirEnv + "=relative"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			deps := localRuntimeTestDependencies(t.TempDir(), func(context.Context, string, io.Writer) error {
+				t.Fatal("invalid environment triggered a fetch")
+				return nil
+			})
+			if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{Env: tt.env}, release.DefaultRuntimeLock(), deps); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("acquisition error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	for _, value := range []string{"", "  ", "0", "false", "NO", "off"} {
+		if offline, err := runtimeOffline([]string{runtimeOfflineEnv + "=" + value}); err != nil || offline {
+			t.Fatalf("runtimeOffline(%q) = %v, %v", value, offline, err)
+		}
+	}
+	for _, value := range []string{"1", "true", " YES ", "on"} {
+		if offline, err := runtimeOffline([]string{runtimeOfflineEnv + "=" + value}); err != nil || !offline {
+			t.Fatalf("runtimeOffline(%q) = %v, %v", value, offline, err)
+		}
+	}
+	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{}, release.DefaultRuntimeLock(), runtimeAssetDependencies{}); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Fatalf("missing acquisition dependencies = %v", err)
+	}
+}
+
+func TestLocalRuntimeManifestRejectsUnsafeDiscoveryPaths(t *testing.T) {
+	lock, spec := defaultHostRuntimeTest(t)
+	for _, name := range []string{"directory", "symlink", "blocked ancestor", "oversized metadata"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			path, err := release.LocalRuntimeManifestPath(root, lock, spec.GOOS, spec.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			switch name {
+			case "directory":
+				err = os.Mkdir(path, 0700)
+			case "symlink":
+				writeProjectTestFile(t, path+".target", "{}")
+				if err := os.Symlink(path+".target", path); err != nil {
+					t.Skip(err)
+				}
+			case "blocked ancestor":
+				if err := os.Remove(filepath.Dir(path)); err != nil {
+					t.Fatal(err)
+				}
+				err = os.WriteFile(filepath.Dir(path), []byte("blocked"), 0600)
+			case "oversized metadata":
+				writeProjectTestFile(t, path, "{}")
+				err = os.Truncate(path, maxRuntimeManifestSize+1)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, explicit := range []bool{false, true} {
+				var found bool
+				if explicit {
+					_, found, err = readLocalRuntimeManifest(path, lock, spec, true)
+				} else {
+					_, found, err = findSourceLocalRuntimeManifest(root, lock, spec)
+				}
+				want := "not a regular non-symlink file"
+				if name == "blocked ancestor" {
+					want = "inspect local runtime manifest"
+				} else if name == "oversized metadata" {
+					want = "exceeds"
+				}
+				if err == nil || found || !strings.Contains(err.Error(), want) {
+					t.Fatalf("explicit=%v: found=%v, error=%v, want %q", explicit, found, err, want)
+				}
+			}
+		})
+	}
+	if _, found, err := findSourceLocalRuntimeManifest("relative", lock, spec); err == nil || found || !strings.Contains(err.Error(), "absolute and clean") {
+		t.Fatalf("relative source root: found=%v, error=%v", found, err)
+	}
+}
+
+func TestRuntimeAcquisitionRejectsInvalidLockBeforeResolution(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	lock.RuntimeVersion = "invalid version"
+	deps := localRuntimeTestDependencies(t.TempDir(), func(context.Context, string, io.Writer) error {
+		t.Fatal("invalid lock caused a download")
+		return nil
+	})
+	deps.cacheRoot = func() string {
+		t.Fatal("invalid lock resolved cache storage")
+		return ""
+	}
+	if _, err := acquireRuntimeAssetsWith(context.Background(), Config{}, IO{Env: []string{}}, lock, deps); err == nil {
+		t.Fatal("invalid runtime lock accepted")
+	}
 }

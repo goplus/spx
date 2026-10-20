@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 type bindingTestGame struct {
@@ -199,6 +201,12 @@ func TestDestroyRoutesCallbackBeforeReleasingBinding(t *testing.T) {
 	if got := GetGame(); got != owner {
 		t.Fatalf("active owner before backend teardown = %p, want %p", got, owner)
 	}
+	// Teardown notifications may repeat while the backend is still closing.
+	onDestroy()
+	onReset()
+	if game.destroyed.Load() != 1 || game.reset.Load() != 0 {
+		t.Fatalf("closing game received duplicate callbacks: destroy=%d reset=%d", game.destroyed.Load(), game.reset.Load())
+	}
 	onDestroyed()
 	if !game.paused.Load() || game.destroyed.Load() != 1 {
 		t.Fatalf("pause=%v destroyed=%d, want true/1", game.paused.Load(), game.destroyed.Load())
@@ -208,6 +216,16 @@ func TestDestroyRoutesCallbackBeforeReleasingBinding(t *testing.T) {
 	}
 	if got := GetGame(); got != nil {
 		t.Fatalf("active owner after destroy = %v, want nil", got)
+	}
+	// Late callbacks must remain harmless after ownership is released.
+	onStart()
+	onUpdate(0.25)
+	onPause(false)
+	onReset()
+	onDestroy()
+	onDestroyed()
+	if activeGame.Load() != nil || !game.paused.Load() || game.destroyed.Load() != 1 || game.reset.Load() != 0 {
+		t.Fatal("late callbacks changed a released game")
 	}
 }
 
@@ -265,11 +283,7 @@ func TestDestroyDuringStartPreventsActivation(t *testing.T) {
 		t.Fatalf("startup binding released before initialization finished: %p", got)
 	}
 	finishStart()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("destroyed callback did not finish after startup")
-	}
+	waitForEngineSignal(t, done, time.Second, "destroyed callback did not finish after startup")
 	if got := activeGame.Load(); got != nil {
 		t.Fatalf("startup binding after backend teardown = %p, want nil", got)
 	}
@@ -331,11 +345,7 @@ func TestBackendTeardownCannotReleaseBeforeCoroutinesDrain(t *testing.T) {
 	}
 
 	finish()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("destroy callback did not finish after coroutine drain")
-	}
+	waitForEngineSignal(t, done, time.Second, "destroy callback did not finish after coroutine drain")
 	if got := activeGame.Load(); got != nil {
 		t.Fatalf("binding after destroy and backend teardown = %p, want nil", got)
 	}
@@ -482,11 +492,7 @@ func TestDirectResetDrainsCoroutinesBeforeReleasingBinding(t *testing.T) {
 	}
 
 	releaseWorker()
-	select {
-	case <-resetDone:
-	case <-time.After(time.Second):
-		t.Fatal("reset did not finish after coroutines drained")
-	}
+	waitForEngineSignal(t, resetDone, time.Second, "reset did not finish after coroutines drained")
 	if got := game.reset.Load(); got != 1 {
 		t.Fatalf("reset callbacks = %d, want 1", got)
 	}
@@ -566,11 +572,7 @@ func TestResetDuringStartPreventsActivationAndDefersRelease(t *testing.T) {
 		t.Fatal("a closing startup prepared the engine link")
 	}
 	finishStart()
-	select {
-	case <-released:
-	case <-time.After(time.Second):
-		t.Fatal("reset did not release the binding after startup finished")
-	}
+	waitForEngineSignal(t, released, time.Second, "reset did not release the binding after startup finished")
 	if got := GetGame(); got != nil {
 		t.Fatalf("active owner after canceled startup = %v, want nil", got)
 	}
@@ -702,12 +704,89 @@ func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	case <-time.After(2200 * time.Millisecond):
 	}
 	finish()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("destroy did not finish after the script drained")
-	}
+	waitForEngineSignal(t, done, time.Second, "destroy did not finish after the script drained")
 	if activeGame.Load() != nil {
 		t.Fatal("destroy did not release the binding")
+	}
+}
+
+type frameRecordingGame struct {
+	bindingTestGame
+	step   func(string)
+	deltas []float64
+}
+
+func (g *frameRecordingGame) record(name string, delta float64) {
+	g.deltas = append(g.deltas, delta)
+	g.step(name)
+}
+func (g *frameRecordingGame) OnEngineBeforeUpdate(delta float64) { g.record("before", delta) }
+func (g *frameRecordingGame) OnEngineUpdate(delta float64)       { g.record("update", delta) }
+func (g *frameRecordingGame) OnEngineRender(delta float64)       { g.record("render", delta) }
+func (g *frameRecordingGame) OnEngineFrameEnd()                  { g.step("end") }
+
+func TestFramePipelineStopsWhenGameStops(t *testing.T) {
+	for _, stopAfter := range []string{"", "before", "update", "render", "capture"} {
+		t.Run("stop_after_"+stopAfter, func(t *testing.T) {
+			isolateGameBinding(t)
+			setupExecuteTest(t)
+			ResetInputState()
+			resetTriggerEvents()
+			itime.Start(nil)
+			t.Cleanup(func() { ResetInputState(); resetTriggerEvents(); itime.Start(nil) })
+			isolateCaptureState(t)
+			var steps []string
+			var binding *gameBinding
+			step := func(name string) {
+				steps = append(steps, name)
+				if name == stopAfter {
+					binding.storePhase(gameStopped)
+				}
+			}
+			game := &frameRecordingGame{step: step}
+			var err error
+			binding, err = bindGame(game, game)
+			if err != nil {
+				t.Fatal(err)
+			}
+			SetCaptureHandler(func(request CaptureRequest) error {
+				if request.Name != "frame.png" || request.Sequence != 1 {
+					t.Errorf("capture=%+v", request)
+				}
+				step("capture")
+				return nil
+			})
+			if err := EnqueueCapture("frame.png", nil); err != nil {
+				t.Fatal(err)
+			}
+			onUpdate(0.25)
+			want := []string{"before", "update", "render", "capture", "end"}
+			if stopAfter != "" {
+				want = want[:slices.Index(want, stopAfter)+1]
+			}
+			if !slices.Equal(steps, want) {
+				t.Fatalf("frame steps=%v, want %v", steps, want)
+			}
+			if wantDeltas := ([]float64{0.25, 0.25, 0.25})[:min(3, len(want))]; !slices.Equal(game.deltas, wantDeltas) {
+				t.Errorf("frame deltas=%v, want %v", game.deltas, wantDeltas)
+			}
+			wantPending := stopAfter == "before" || stopAfter == "update" || stopAfter == "render"
+			if HasPendingCaptures() != wantPending {
+				t.Errorf("pending capture=%v, want %v", HasPendingCaptures(), wantPending)
+			}
+			wantFrame := int64(1)
+			if stopAfter == "before" {
+				wantFrame = 0
+			}
+			if got := itime.Frame(); got != wantFrame {
+				t.Errorf("frame=%d, want %d", got, wantFrame)
+			}
+			if stopAfter != "" {
+				onUpdate(0.25)
+				if !slices.Equal(steps, want) {
+					t.Fatal("stopped game received another frame")
+				}
+			}
+		})
 	}
 }

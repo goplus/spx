@@ -16,20 +16,23 @@ function deferred() {
     return { promise, resolve, reject }
 }
 
-function newRunner() {
-    const calls = []
-    const replay = { data: 'recording' }
+function newRunner(overrides = {}) {
     const context = {
-        Error,
         EnginePackMode: 'normal',
         LOG_LEVEL_VERBOSE: 1,
         profiler: {},
         WorkerMessageManager: class {},
-        ispx_stop: () => { calls.push('stop') },
+        ...overrides,
     }
     context.window = context
     vm.runInNewContext(source, context)
-    const runner = new context.GameRunner()
+    return { runner: new context.GameRunner(), context }
+}
+
+function newRecordingRunner() {
+    const calls = []
+    const replay = { data: 'recording' }
+    const { runner, context } = newRunner({ Error, ispx_stop: () => { calls.push('stop') } })
     runner.engine = {}
     runner.finishInputRecording = () => {
         calls.push('recording')
@@ -40,7 +43,7 @@ function newRunner() {
 }
 
 test('finishes recording before the stop callback and waits for runtime exit', async () => {
-    const { runner, lifecycle, calls, replay } = newRunner()
+    const { runner, lifecycle, calls, replay } = newRecordingRunner()
     const ready = deferred()
     let settled = false
     const stopped = runner.StopGame(async result => {
@@ -68,7 +71,7 @@ test('finishes recording before the stop callback and waits for runtime exit', a
 })
 
 test('stops after a recording failure and keeps it ahead of a returned stop error', async () => {
-    const { runner, context, calls } = newRunner()
+    const { runner, context, calls } = newRecordingRunner()
     const error = new Error('recording failed')
     runner.finishInputRecording = () => { throw error }
     context.ispx_stop = () => {
@@ -82,7 +85,7 @@ test('stops after a recording failure and keeps it ahead of a returned stop erro
 })
 
 test('stops after a callback failure and keeps it ahead of an exit rejection', async () => {
-    const { runner, lifecycle, calls } = newRunner()
+    const { runner, lifecycle, calls } = newRecordingRunner()
     const exit = deferred()
     lifecycle.exit = exit.promise
     const error = new Error('callback failed')
@@ -96,7 +99,7 @@ test('stops after a callback failure and keeps it ahead of an exit rejection', a
 })
 
 test('reports a returned stop error without waiting for runtime exit', async () => {
-    const { runner, context, lifecycle } = newRunner()
+    const { runner, context, lifecycle } = newRecordingRunner()
     const error = new Error('stop failed')
     context.ispx_stop = () => error
 
@@ -106,7 +109,7 @@ test('reports a returned stop error without waiting for runtime exit', async () 
 })
 
 test('propagates a thrown stop error and releases the pending count', async () => {
-    const { runner, context, calls } = newRunner()
+    const { runner, context, calls } = newRecordingRunner()
     const error = new Error('stop threw')
     runner.finishInputRecording = () => { throw new Error('recording failed') }
     runner.recordingOnGameStart = true
@@ -125,7 +128,7 @@ test('propagates a thrown stop error and releases the pending count', async () =
 })
 
 test('reports an exit rejection when recording and the callback succeed', async () => {
-    const { runner, lifecycle, calls } = newRunner()
+    const { runner, lifecycle, calls } = newRecordingRunner()
     const exit = deferred()
     lifecycle.exit = exit.promise
     const error = new Error('exit failed')
@@ -139,7 +142,7 @@ test('reports an exit rejection when recording and the callback succeed', async 
 })
 
 test('rejects invalid stop callbacks without queuing a stop', async () => {
-    const { runner, calls } = newRunner()
+    const { runner, calls } = newRecordingRunner()
     const stopped = runner.StopGame('invalid')
     assert.equal(typeof stopped.then, 'function')
     assert.equal(runner.pendingStops, 0)
@@ -148,7 +151,7 @@ test('rejects invalid stop callbacks without queuing a stop', async () => {
 })
 
 test('resets without finishing input recording', async () => {
-    const { runner, calls } = newRunner()
+    const { runner, calls } = newRecordingRunner()
     const stopped = runner.ResetGame()
     await new Promise(setImmediate)
     assert.deepEqual(calls, ['stop'])
@@ -160,7 +163,7 @@ test('resets without finishing input recording', async () => {
 })
 
 test('completes a lifecycle once and reuses its recording when already stopped', async () => {
-    const { runner, lifecycle, calls, replay } = newRunner()
+    const { runner, lifecycle, calls, replay } = newRecordingRunner()
     lifecycle.inputReplay = replay
     assert.equal(runner.completeGameLifecycle(3), true)
     assert.equal(runner.completeGameLifecycle(9), false)
@@ -174,7 +177,7 @@ test('completes a lifecycle once and reuses its recording when already stopped',
 })
 
 test('starts after a queued stop exits and releases its pending count', async () => {
-    const { runner, context, calls } = newRunner()
+    const { runner, context, calls } = newRecordingRunner()
     context.profiler = { profile: (_, fn) => fn(), mark() {}, measure() {} }
     runner.canvas = { focus() {} }
     runner.restart = () => calls.push('restart')
@@ -192,4 +195,140 @@ test('starts after a queued stop exits and releases its pending count', async ()
 
     assert.deepEqual(calls, ['recording', 'stop', 'restart', 'start'])
     assert.equal(runner.pendingStops, 0)
+})
+
+const controls = {
+    restart: '_gdspx_ext_request_restart',
+    pause: '_gdspx_ext_pause',
+    resume: '_gdspx_ext_resume',
+    stepNextFrame: '_gdspx_ext_next_frame',
+    isPaused: '_gdspx_ext_is_paused',
+}
+
+test('calls runtime controls without a receiver and returns only pause status', () => {
+    const { runner } = newRunner()
+    const calls = []
+    runner.engine = { rtenv: {} }
+    for (const [method, name] of Object.entries(controls)) {
+        runner.engine.rtenv[name] = function () {
+            'use strict'
+            assert.equal(this, undefined)
+            calls.push(method)
+            return 1
+        }
+        assert.equal(runner[method](), method === 'isPaused' ? true : undefined)
+    }
+    assert.deepEqual(calls, Object.keys(controls))
+    runner.engine.rtenv._gdspx_ext_is_paused = () => 0
+    assert.equal(runner.isPaused(), false)
+})
+
+test('ignores absent exports and propagates runtime failures', () => {
+    const { runner } = newRunner()
+    runner.engine = { rtenv: {} }
+    const error = new Error('runtime failed')
+    for (const [method, name] of Object.entries(controls)) {
+        assert.equal(runner[method](), method === 'isPaused' ? false : undefined)
+        runner.engine.rtenv[name] = () => { throw error }
+        assert.throws(() => runner[method](), actual => actual === error)
+        runner.engine.rtenv[name] = 1
+        assert.throws(() => runner[method](), { name: 'TypeError' })
+    }
+})
+
+test('guards pause queries but requires a runtime for other controls', () => {
+    const { runner } = newRunner()
+    for (const engine of [null, {}]) {
+        runner.engine = engine
+        assert.equal(runner.pause(), undefined)
+        assert.equal(runner.isPaused(), false)
+        for (const method of ['restart', 'resume', 'stepNextFrame']) {
+            assert.throws(() => runner[method](), { name: 'TypeError' })
+        }
+    }
+})
+
+test('skips queued tasks after a rejection and allows retry', async () => {
+    const { runner } = newRunner()
+    const calls = []
+    const error = new Error('first task failed')
+    let reject
+    const pending = new Promise((_, fail) => { reject = fail })
+    const first = runner.enqueue(() => {
+        calls.push('first')
+        return pending
+    })
+    const second = runner.enqueue(() => {
+        calls.push('second')
+        return 2
+    })
+    const third = runner.enqueue(() => {
+        calls.push('third')
+        return 3
+    })
+    const settled = Promise.allSettled([first, second, third])
+
+    await new Promise(setImmediate)
+    assert.deepEqual(calls, ['first'])
+    reject(error)
+    assert.deepEqual(await settled, [
+        { status: 'rejected', reason: error },
+        { status: 'rejected', reason: error },
+        { status: 'rejected', reason: error },
+    ])
+    assert.equal(await runner.enqueue(() => {
+        calls.push('fourth')
+        return 4
+    }), 4)
+    assert.deepEqual(calls, ['first', 'fourth'])
+})
+
+test('recovers after repeated synchronous and asynchronous failures', async () => {
+    const { runner } = newRunner()
+    const syncError = new Error('sync failure')
+    const asyncError = new Error('async failure')
+    const first = runner.enqueue(() => { throw syncError })
+    await assert.rejects(first, error => error === syncError)
+    const second = runner.enqueue(() => Promise.reject(asyncError))
+    await assert.rejects(second, error => error === asyncError)
+    assert.equal(await runner.enqueue(() => 'done'), 'done')
+})
+
+test('allows immediate retry from a public failure handler after queued tasks are skipped', async () => {
+    const { runner } = newRunner()
+    const error = new Error('initial failure')
+    let calls = 0
+    runner.initGame = async () => {
+        if (++calls === 1) throw error
+        return 'ready'
+    }
+    const first = runner.InitGame({})
+    const queued = runner.InitGame({})
+    const retry = first.catch(() => runner.InitGame({}))
+
+    assert.deepEqual(await Promise.allSettled([first, queued, retry]), [
+        { status: 'rejected', reason: error },
+        { status: 'rejected', reason: error },
+        { status: 'fulfilled', value: 'ready' },
+    ])
+    assert.equal(calls, 2)
+})
+
+test('waits for successful asynchronous tasks and preserves their results', async () => {
+    const { runner } = newRunner()
+    const value = { ready: true }
+    let resolve
+    const pending = new Promise(done => { resolve = done })
+    const first = runner.enqueue(() => pending)
+    let secondStarted = false
+    const second = runner.enqueue(() => {
+        secondStarted = true
+        return 2
+    })
+
+    await new Promise(setImmediate)
+    assert.equal(secondStarted, false)
+    resolve(value)
+    assert.deepEqual(await Promise.all([first, second]), [value, 2])
+    assert.equal(secondStarted, true)
 })

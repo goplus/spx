@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -412,4 +414,170 @@ func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error)
 
 func roundTripClient(fn roundTripFunc) *http.Client {
 	return &http.Client{Transport: fn}
+}
+
+func TestRunRuntimeResolutionCLI(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	fixture := newRuntimeResolutionFixture(t)
+	server, _ := fixture.server(t, http.StatusOK, true, fixture.manifest, nil)
+	defer server.Close()
+	dir := t.TempDir()
+	invalidLock := filepath.Join(dir, "invalid-lock")
+	if err := os.WriteFile(invalidLock, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"unknown flag", []string{"--unknown"}, "flag provided but not defined"},
+		{"unexpected argument", []string{"extra"}, "unexpected positional arguments"},
+		{"missing lock", []string{"--lock", filepath.Join(dir, "missing")}, "read runtime lock"},
+		{"invalid lock", []string{"--lock", invalidLock}, "decode runtime lock"},
+		{"invalid API URL", []string{"--lock", fixture.config.LockPath, "--github-api-url", "://invalid"}, "invalid GitHub API URL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := runRuntimeResolution(test.args); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("runRuntimeResolution = %v, want %q", err, test.want)
+			}
+		})
+	}
+	args := []string{"--lock", fixture.config.LockPath, "--github-api-url", server.URL}
+	outputPath := filepath.Join(dir, "github-output")
+	if err := runRuntimeResolution(append(append([]string(nil), args...), "--github-output", outputPath)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(outputPath)
+	if err != nil || !strings.Contains(string(data), "runtime_state=missing\n") || !strings.Contains(string(data), "still a draft") {
+		t.Fatalf("GitHub output = %q, error = %v", data, err)
+	}
+	output, err := os.CreateTemp(dir, "stdout-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Close()
+	originalArgs, originalStdout := os.Args, os.Stdout
+	t.Cleanup(func() { os.Args, os.Stdout = originalArgs, originalStdout })
+	os.Args, os.Stdout = append([]string{"resolution"}, args...), output
+	main()
+	data, err = os.ReadFile(output.Name())
+	var got runtimeResolution
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &got); err != nil || got.State != runtimeStateMissing || got.Tag != fixture.lock.RuntimeReleaseTag() {
+		t.Fatalf("main JSON = %q, error = %v", data, err)
+	}
+}
+
+func TestFetchGitHubHeadersAndFailures(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.Header.Get("Accept") != "test/accept" || r.Header.Get("User-Agent") != "goplus-spx-runtime-resolution" || r.Header.Get("X-GitHub-Api-Version") != "2022-11-28" || r.Header.Get("Authorization") != "Bearer secret" {
+			t.Errorf("unexpected request: %s headers %v", r.Method, r.Header)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, "response")
+	}))
+	defer server.Close()
+	status, body, err := fetchGitHub(context.Background(), runtimeResolutionConfig{GitHubToken: " secret "}, server.URL, "test/accept")
+	if err != nil || status != http.StatusAccepted || string(body) != "response" {
+		t.Fatalf("fetchGitHub = %d, %q, %v", status, body, err)
+	}
+	failure := errors.New("read failed")
+	for _, test := range []struct {
+		name   string
+		url    string
+		client *http.Client
+		want   string
+	}{
+		{"invalid URL", "://invalid", nil, "missing protocol scheme"},
+		{"transport failure", server.URL, roundTripClient(func(*http.Request) (*http.Response, error) { return nil, failure }), "read failed"},
+		{"read failure", server.URL, roundTripClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: resolutionErrorReader{failure}}, nil
+		}), "read failed"},
+		{"oversized body", server.URL, roundTripClient(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(strings.Repeat("x", maxGitHubBodySize+1)))}, nil
+		}), "response exceeds"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, _, err := fetchGitHub(context.Background(), runtimeResolutionConfig{HTTPClient: test.client}, test.url, "test/accept"); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("fetchGitHub error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+type resolutionErrorReader struct{ err error }
+
+func (r resolutionErrorReader) Read([]byte) (int, error) { return 0, r.err }
+func (resolutionErrorReader) Close() error               { return nil }
+
+func TestResolveRuntimeRejectsMalformedReleaseResponses(t *testing.T) {
+	fixture := newRuntimeResolutionFixture(t)
+	for _, test := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{"malformed JSON", "{", "decode GitHub response"},
+		{"wrong tag", `{"tag_name":"runtime-v9.9.9"}`, "GitHub returned tag"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := fixture.config
+			config.GitHubAPIURL = "https://api.example.test"
+			config.HTTPClient = roundTripClient(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(test.body))}, nil
+			})
+			if _, err := resolveRuntime(context.Background(), config); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("resolveRuntime error = %v, want %q", err, test.want)
+			}
+		})
+	}
+	fixture.config.Revision = " \t"
+	if _, err := currentRuntimeIncompatibility(fixture.config, fixture.lock, fixture.manifest); err == nil || !strings.Contains(err.Error(), "must not be empty") {
+		t.Fatalf("empty revision error = %v", err)
+	}
+}
+
+func TestVerifyPublishedAssetNamesRejectsAmbiguity(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	var assets []gitHubAsset
+	for _, name := range append(append([]string(nil), lock.RequiredAssets...), lock.Manifest, release.SHA256SumsFileName) {
+		assets = append(assets, gitHubAsset{Name: name})
+	}
+	if _, err := verifyPublishedAssetNames(lock, assets); err == nil || !strings.Contains(err.Error(), "no download URL") {
+		t.Fatalf("missing manifest URL error = %v", err)
+	}
+	if _, err := verifyPublishedAssetNames(lock, append(assets, assets[0])); err == nil || !strings.Contains(err.Error(), "duplicate asset") {
+		t.Fatalf("duplicate asset error = %v", err)
+	}
+}
+
+func TestWriteRuntimeResolutionOutputsRejectsInvalidValues(t *testing.T) {
+	for _, result := range []runtimeResolution{
+		{State: "unknown", Reason: "reason"},
+		{State: runtimeStateReady},
+		{State: runtimeStateReady, Reason: "reason\nname=value"},
+		{State: runtimeStateReady, Reason: "reason\rname=value"},
+	} {
+		path := filepath.Join(t.TempDir(), "output")
+		if err := writeRuntimeResolutionOutputs(path, result); err == nil {
+			t.Fatalf("accepted %#v", result)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("created output for invalid result: %v", err)
+		}
+	}
+	if err := writeRuntimeResolutionOutputs(t.TempDir(), runtimeResolution{State: runtimeStateReady, Reason: "verified"}); err == nil || !strings.Contains(err.Error(), "open GitHub output") {
+		t.Fatalf("open failure = %v", err)
+	}
+	for _, base := range []string{"invalid", "https:///path", "://invalid"} {
+		if _, err := runtimeReleaseAPIURL(base, "owner/repo", "tag"); err == nil {
+			t.Fatalf("accepted API base %q", base)
+		}
+		if err := verifyReleaseRepository(context.Background(), runtimeResolutionConfig{GitHubAPIURL: base}, "owner/repo"); err == nil {
+			t.Fatalf("verified repository with API base %q", base)
+		}
+	}
 }

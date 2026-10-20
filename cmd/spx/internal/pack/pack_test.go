@@ -20,8 +20,11 @@ import (
 	"archive/zip"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -780,5 +783,409 @@ func TestPackedAssetIndexesRejectMalformedCategories(t *testing.T) {
 				t.Fatalf("packed index error = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestLegacyPackValidationRejectsInvalidFilesystemEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, want string
+		directory        bool
+	}{
+		{"missing project", "missing", "inspect project directory", false},
+		{"file project", "file", "must be a real directory", false},
+		{"missing assets", ".", "is missing", false},
+		{"file assets", "assets", "must be a real directory", false},
+		{"directory index", "assets/index.json", "regular non-symlink", true},
+		{"directory config", ".config", "regular non-symlink", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.directory {
+				if err := os.MkdirAll(filepath.Join(root, tc.path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			} else if tc.name == "file project" || tc.name == "file assets" {
+				writeTestFile(t, filepath.Join(root, tc.path), "file")
+			}
+			project := root
+			if tc.name == "missing project" || tc.name == "file project" {
+				project = filepath.Join(root, tc.path)
+			}
+			if _, err := validateLegacyPackInputs(project); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("validation error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	for _, check := range []struct {
+		name string
+		run  func(string) error
+	}{
+		{"project config", func(root string) error { _, err := validateLegacyProjectConfig(root); return err }},
+		{"external config", func(root string) error { _, err := readExtAssetDir(root); return err }},
+		{"external assets", func(root string) error { _, err := collectExternalAssetPaths(root, nil, ""); return err }},
+	} {
+		t.Run(check.name+" invalid path", func(t *testing.T) {
+			if err := check.run("invalid\x00path"); err == nil {
+				t.Fatal("accepted invalid path")
+			}
+		})
+	}
+}
+
+func TestCollectAssetRefsRejectsMalformedSourceCategories(t *testing.T) {
+	for _, category := range []string{"sprites", "sounds", "fonts"} {
+		t.Run(category, func(t *testing.T) {
+			root := t.TempDir()
+			writeTestFile(t, filepath.Join(root, category, "Broken", sourceIndexName), "{")
+			if _, err := collectAssetPathRefs(root); err == nil || !strings.Contains(err.Error(), "Broken") {
+				t.Fatalf("collect error = %v", err)
+			}
+		})
+	}
+	for _, read := range []struct {
+		name string
+		run  func(string) error
+	}{
+		{"source", func(root string) error { _, err := readSourceAssetIndexRoot(root); return err }},
+		{"packed", func(root string) error { _, _, err := readPackedAssetIndex(root); return err }},
+		{"refs", func(root string) error { _, err := collectAssetPathRefs(root); return err }},
+	} {
+		t.Run(read.name+" invalid path", func(t *testing.T) {
+			if err := read.run("invalid\x00path"); err == nil {
+				t.Fatal("accepted invalid path")
+			}
+		})
+	}
+}
+
+func TestCollectProjectPathsSkipsBuildMetadataAndOutputAliases(t *testing.T) {
+	rootDir := t.TempDir()
+	for _, name := range []string{".git", "project/generated.go", "assets/project/cache", "assets/.git/config", "assets/keep.png", "assets/keep.png.import", "nested/keep.txt", "archive.zip"} {
+		writeTestFile(t, filepath.Join(rootDir, name), name)
+	}
+	root, err := openPackRoot(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	output := filepath.Join(rootDir, "archive.zip")
+	if err := os.Link(output, filepath.Join(rootDir, "alias.zip")); err != nil {
+		t.Skipf("hard links unavailable: %v", err)
+	}
+	paths, err := collectProjectPaths(rootDir, output, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range paths {
+		got = append(got, filepath.ToSlash(p.rootPath))
+	}
+	if want := []string{"assets", "assets/keep.png", "nested", "nested/keep.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("collected = %q, want %q", got, want)
+	}
+	for _, tc := range []struct{ name, base, destination string }{
+		{"missing project", filepath.Join(rootDir, "missing"), output},
+		{"invalid destination", rootDir, "invalid\x00path"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := collectProjectPaths(tc.base, tc.destination, root); err == nil {
+				t.Fatal("accepted invalid walk")
+			}
+		})
+	}
+}
+
+func TestPackPathHelpersRejectMixedPathForms(t *testing.T) {
+	root := t.TempDir()
+	opened, err := openPackRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	if _, _, err := inspectExternalAssetPath(opened, root, "relative"); err == nil {
+		t.Fatal("accepted mismatched path forms")
+	}
+	if _, err := relConfigDir(root, "relative"); err == nil {
+		t.Fatal("accepted mismatched config path forms")
+	}
+	if isWithinRoot("relative", root) {
+		t.Fatal("relative path treated as inside absolute root")
+	}
+	if got := rewriteExtAssetZipPath("../..", "shared"); got != "" {
+		t.Fatalf("parent-only external path = %q", got)
+	}
+	if refs, err := collectExternalAssetPaths(root, nil, ""); err != nil || len(refs) != 0 {
+		t.Fatalf("missing assets = %v, %v", refs, err)
+	}
+	writeTestFile(t, filepath.Join(root, "assets"), "not a directory")
+	if _, err := collectExternalAssetPaths(root, nil, ""); err == nil || !strings.Contains(err.Error(), "real directory") {
+		t.Fatalf("file assets = %v", err)
+	}
+}
+
+type packWriteFunc func([]byte) (int, error)
+
+func (write packWriteFunc) Write(data []byte) (int, error) { return write(data) }
+
+func TestPackZipDetectsWriteFailuresAndConcurrentFileChanges(t *testing.T) {
+	for _, kind := range []string{"output failure", "file changed", "file header too long", "directory header too long", "root entry"} {
+		t.Run(kind, func(t *testing.T) {
+			directory := t.TempDir()
+			name := filepath.Join(directory, "asset")
+			writeTestFile(t, name, strings.Repeat("asset data", 2048))
+			if kind == "directory header too long" {
+				name = filepath.Join(directory, "folder")
+				if err := os.Mkdir(name, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind == "root entry" {
+				name = directory
+			}
+			root, err := openPackRoot(directory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			info, err := os.Lstat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			relative, err := filepath.Rel(directory, name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := dirInfo{path: name, info: info, root: root, rootPath: relative}
+			if strings.Contains(kind, "header too long") {
+				entry.zipPath = strings.Repeat("a", 1<<16)
+			}
+			writeErr := errors.New("archive destination failed")
+			writes := 0
+			writer := zip.NewWriter(packWriteFunc(func(data []byte) (int, error) {
+				writes++
+				if kind == "output failure" {
+					return 0, writeErr
+				}
+				if kind == "file changed" && writes == 1 {
+					if err := os.Truncate(name, 1); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return len(data), nil
+			}))
+			err = packZip(writer, directory, []dirInfo{entry})
+			_ = writer.Close()
+			switch kind {
+			case "root entry":
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "output failure":
+				if !errors.Is(err, writeErr) {
+					t.Fatalf("write failure = %v", err)
+				}
+			case "file changed":
+				if err == nil || !strings.Contains(err.Error(), "changed while packing") {
+					t.Fatalf("changed file error = %v", err)
+				}
+			default:
+				if err == nil || !strings.Contains(err.Error(), "FileHeader.Name too long") {
+					t.Fatalf("header error = %v", err)
+				}
+			}
+		})
+	}
+	for _, name := range []string{"", "/absolute"} {
+		if validZipEntryName(name) {
+			t.Fatalf("accepted zip name %q", name)
+		}
+	}
+}
+
+func TestExternalAssetReferencesDeduplicateAndRejectMissingFiles(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "Game")
+	writeTestFile(t, filepath.Join(project, "assets", "index.json"), `{"backdrops":[null,{"path":"../../shared/bg.png"},{"path":"../../shared/bg.png"}]}`)
+	writeTestFile(t, filepath.Join(root, "shared", "bg.png"), "background")
+	paths, err := collectExternalAssetPaths(project, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closePackRoots(paths)
+	if len(paths) != 1 || paths[0].zipPath != "shared/bg.png" {
+		t.Fatalf("external paths = %+v", paths)
+	}
+	duplicate, err := collectExternalAssetPaths(project, map[string]struct{}{"shared/bg.png": {}}, "")
+	if err != nil || len(duplicate) != 0 {
+		t.Fatalf("existing archive paths duplicated = %+v, %v", duplicate, err)
+	}
+	if err := os.Remove(filepath.Join(root, "shared", "bg.png")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectExternalAssetPaths(project, nil, ""); err == nil || !strings.Contains(err.Error(), "stat external asset") {
+		t.Fatalf("missing external asset error = %v", err)
+	}
+	if got, err := readExtAssetDir(project); err != nil || got != "" {
+		t.Fatalf("missing optional config = %q, %v", got, err)
+	}
+}
+
+func TestPackedSpritesOverrideSourceAndIncludeMultipartCostumes(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, packedIndexName), `{"sprites":{"Hero":{"costumes":[null],"costumeMPSet":{"path":"multipart.png"}}}}`)
+	writeTestFile(t, filepath.Join(root, "sprites", "Hero", sourceIndexName), "invalid shadowed source")
+	refs, err := collectAssetPathRefs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []assetPathRef{{configDir: "sprites/Hero", path: "multipart.png"}}
+	if !reflect.DeepEqual(refs, want) {
+		t.Fatalf("packed references = %+v, want %+v", refs, want)
+	}
+}
+
+func TestPackRejectsSocketEntries(t *testing.T) {
+	root := t.TempDir()
+	socket := filepath.Join(root, "socket")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Skipf("Unix sockets unavailable: %v", err)
+	}
+	defer listener.Close()
+	if err := validatePackDestination(socket); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("socket destination = %v", err)
+	}
+	opened, err := openPackRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	if _, err := collectProjectPaths(root, filepath.Join(root, "archive.zip"), opened); err == nil || !strings.Contains(err.Error(), "regular file or directory") {
+		t.Fatalf("socket project entry = %v", err)
+	}
+}
+
+func TestAssetReferenceScanRejectsInvalidPatternsAndSymlinkLoops(t *testing.T) {
+	_, err := collectIndexedAssetRefs[struct{}](t.TempDir(), "[", nil, func(refs []assetPathRef, _ string, _ struct{}) []assetPathRef { return refs }, true)
+	if err == nil {
+		t.Fatal("accepted malformed category pattern")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, sourceIndexName)
+	if err := os.Symlink(source, source); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := collectAssetPathRefs(root); err == nil || !strings.Contains(err.Error(), "stat ") {
+		t.Fatalf("source symlink loop = %v", err)
+	}
+	opened, err := openPackRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer opened.Close()
+	if _, _, err := inspectExternalAssetPath(opened, root, source); err == nil || !strings.Contains(err.Error(), "symlink at") {
+		t.Fatalf("external symlink = %v", err)
+	}
+}
+
+func TestExternalAssetCollectionRejectsSymlinkCompatibilityRoot(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Game", "assets", sourceIndexName), `{"backdrops":[{"path":"../../shared/bg.png"}]}`)
+	writeTestFile(t, filepath.Join(root, "shared", "bg.png"), "image")
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := collectExternalAssetPaths(filepath.Join(alias, "Game"), nil, ""); err == nil || !strings.Contains(err.Error(), "must be a real directory") {
+		t.Fatalf("symlink compatibility root = %v", err)
+	}
+	for _, name := range []string{"shared/bg.png", "../other/bg.png"} {
+		if got := rewriteExtAssetZipPath(name, "shared"); got != "" {
+			t.Fatalf("unconfigured external path %q = %q", name, got)
+		}
+	}
+}
+
+func TestPackProjectPreservesOutputWhenInputIsUnreadable(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions enforced for an unprivileged user")
+	}
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "assets", "index.json"), `{}`)
+	asset := filepath.Join(root, "private.txt")
+	writeTestFile(t, asset, "private asset")
+	if err := os.Chmod(asset, 0); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "game.zip")
+	writeTestFile(t, output, "previous archive")
+	if err := PackProject(root, output); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("pack unreadable input error = %v, want permission denied", err)
+	}
+	if got, err := os.ReadFile(output); err != nil || string(got) != "previous archive" {
+		t.Fatalf("failed pack changed existing output: %q, %v", got, err)
+	}
+	if matches, err := filepath.Glob(filepath.Join(filepath.Dir(output), ".game.zip.tmp-*")); err != nil || len(matches) != 0 {
+		t.Fatalf("failed pack retained temporary outputs: %v, %v", matches, err)
+	}
+}
+
+func TestReadJSONFileRejectsUnsafeInput(t *testing.T) {
+	root := t.TempDir()
+	large := filepath.Join(root, "large.json")
+	file, err := os.Create(large)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxPackJSONSize + 1); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := readJSONFile(large, new(any)); err == nil || !strings.Contains(err.Error(), "size limit") {
+		t.Fatalf("oversized JSON error = %v", err)
+	}
+
+	target := filepath.Join(root, "target.json")
+	if err := os.WriteFile(target, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := readJSONFile(link, new(any)); err == nil || !strings.Contains(err.Error(), "non-symlink") {
+		t.Fatalf("symlink JSON error = %v", err)
+	}
+}
+
+func TestReadJSONFileMissingAndMalformed(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct{ name, content string }{{"missing", ""}, {"malformed", "{"}, {"trailing JSON", "{}{}"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(root, tc.name+".json")
+			if tc.content != "" {
+				writeTestFile(t, path, tc.content)
+			}
+			if err := readJSONFile(path, new(any)); err == nil {
+				t.Fatal("accepted invalid JSON input")
+			}
+		})
+	}
+}
+
+func TestReadJSONFileReportsUnreadableInput(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions enforced for an unprivileged user")
+	}
+	name := filepath.Join(t.TempDir(), "protected.json")
+	writeTestFile(t, name, `{}`)
+	if err := os.Chmod(name, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := readJSONFile(name, new(any)); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("unreadable JSON error = %v, want permission denied", err)
 	}
 }

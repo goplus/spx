@@ -175,6 +175,75 @@ class RuntimeBuildContractTest(unittest.TestCase):
             with self.assertRaisesRegex(contract.ContractError, "orchestration-owned"):
                 contract.load_scons_profile(path)
 
+    def test_profile_rejects_malformed_tokens_and_duplicate_keys(self):
+        cases = (
+            (None, "must be an array"),
+            ([None], "non-empty token"),
+            ([""], "non-empty token"),
+            (["optimize=space size"], "without whitespace"),
+            (["optimize=size\x00"], "without whitespace"),
+            (["optimize"], "single key=value"),
+            (["optimize=size=extra"], "single key=value"),
+            (["optimize="], "valid non-empty key and value"),
+            (["-optimize=size"], "valid non-empty key and value"),
+            (["optimize=size", "optimize=speed"], "duplicate key"),
+        )
+        for group in contract.PROFILE_GROUPS:
+            for tokens, message in cases:
+                with self.subTest(group=group, tokens=tokens), tempfile.TemporaryDirectory() as directory:
+                    profile = {"schema": 1, "common": [], "editor_release": [], "template_release": []}
+                    profile[group] = tokens
+                    path = self.write_json(directory, "profile.json", profile)
+                    with self.assertRaisesRegex(contract.ContractError, message):
+                        contract.load_scons_profile(path)
+
+    def test_profile_allows_variant_overrides_only_between_siblings(self):
+        profile = {
+            "schema": 1, "common": [],
+            "editor_release": ["optimize=speed"],
+            "template_release": ["optimize=size"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_json(directory, "profile.json", profile)
+            self.assertEqual(contract.load_scons_profile(path), {
+                "common-flags": "", "editor-release-flags": "optimize=speed",
+                "template-release-flags": "optimize=size",
+            })
+            for variant in ("editor_release", "template_release"):
+                with self.subTest(variant=variant):
+                    conflicting = {"schema": 1, "common": ["optimize=size"], "editor_release": [], "template_release": []}
+                    conflicting[variant] = ["optimize=speed"]
+                    path = self.write_json(directory, "profile.json", conflicting)
+                    with self.assertRaisesRegex(contract.ContractError, f"common and {variant} contain duplicate"):
+                        contract.load_scons_profile(path)
+
+    def test_lock_rejects_boolean_schema_and_abi(self):
+        for field in ("schema", "runtime_abi"):
+            with self.subTest(field=field):
+                lock = copy.deepcopy(self.lock)
+                lock[field] = True
+                with self.assertRaisesRegex(contract.ContractError, "integer"):
+                    contract.validate_runtime_lock(lock)
+
+    def test_repository_normalization_preserves_the_github_trust_boundary(self):
+        for origin in (
+            "https://GITHUB.COM/GoPlus/Godot.git", "git@github.com:goplus/godot.git",
+            "ssh://git@github.com:22/goplus/godot", "github.com/goplus/godot/",
+        ):
+            with self.subTest(origin=origin):
+                self.assertEqual(contract.normalize_github_repository(origin, "origin"), "goplus/godot")
+        for origin in (
+            "https://github.com.evil.test/goplus/godot.git",
+            "https://github.com:444/goplus/godot.git",
+            "https://github.com/goplus/godot?ref=main",
+            "https://github.com/goplus/godot#main",
+            "ssh://root@github.com/goplus/godot",
+            "https://github.com/goplus/godot/tree/main",
+            "https://github.com/goplus/%2e%2e", "goplus/godot\n",
+        ):
+            with self.subTest(origin=origin), self.assertRaises(contract.ContractError):
+                contract.normalize_github_repository(origin, "origin")
+
     def test_profile_cli_emits_all_flag_groups(self):
         profile = {
             "schema": 1,

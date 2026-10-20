@@ -320,11 +320,7 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 		})
 	})
 
-	select {
-	case <-nativeStarted:
-	case <-time.After(time.Second):
-		t.Fatal("native function did not start")
-	}
+	waitForEngineSignal(t, nativeStarted, time.Second, "native function did not start")
 
 	select {
 	case <-done:
@@ -354,4 +350,62 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 	case <-time.After(time.Second):
 		t.Fatal("ExecuteNative did not resume after native work completed")
 	}
+}
+
+func TestWaitAdaptersResumeAfterFrameAndPreserveElapsedTime(t *testing.T) {
+	co := setupExecuteTest(t)
+	itime.Start(nil)
+	t.Cleanup(func() { itime.Start(nil) })
+	elapsed := make(chan float64, 3)
+	thread := co.Create("waits", func(coroutine.Thread) {
+		elapsed <- Wait(.1)
+		elapsed <- WaitNextFrame()
+		SetRunWithoutScreenRefresh(true)
+		elapsed <- WaitNextFrameIfNeeded()
+	})
+	co.JoinFirstSlice(thread)
+	itime.Update(.1, 60)
+	co.Update()
+	co.JoinFirstSlice(thread)
+	select {
+	case got := <-elapsed:
+		if got != .1 {
+			t.Fatalf("Wait elapsed=%g", got)
+		}
+	default:
+		t.Fatal("elapsed wait did not resume")
+	}
+	itime.Update(.25, 60)
+	co.Update()
+	co.Join(thread)
+	for range 2 {
+		if got := <-elapsed; got != .25 {
+			t.Fatalf("frame delta=%g", got)
+		}
+	}
+}
+
+func TestControlFlowOptionalCallsAndReadyChannel(t *testing.T) {
+	co := setupExecuteTest(t)
+	RunWithoutScreenRefresh(nil)
+	RunStopThisScript(nil)
+	ch := make(chan int, 1)
+	ch <- 42
+	if got := WaitForChan(ch); got != 42 {
+		t.Fatalf("channel value=%d", got)
+	}
+	RequestRedraw()
+	SetCoroutines(nil)
+	RequestRedraw()
+	SetCoroutines(co)
+	Lock()
+	if logicMu.TryLock() {
+		logicMu.Unlock()
+		t.Fatal("Lock did not acquire the engine mutex")
+	}
+	Unlock()
+	if !logicMu.TryLock() {
+		t.Fatal("Unlock retained the engine mutex")
+	}
+	logicMu.Unlock()
 }

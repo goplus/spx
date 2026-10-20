@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
@@ -51,7 +52,7 @@ func TestExtractZipRejectsPathTraversal(t *testing.T) {
 		t.Fatalf("extractZip error = %v, want ErrInvalidEntryName", err)
 	}
 
-	if fileExists(filepath.Join(tempDir, "evil.txt")) {
+	if shared.FileExists(filepath.Join(tempDir, "evil.txt")) {
 		t.Fatal("unexpected file extracted outside destination directory")
 	}
 }
@@ -846,5 +847,197 @@ func assertEngineDownloadFiles(t *testing.T, env engineDownloadEnv, want map[str
 		if entries, err := os.ReadDir(dir); err != nil || len(entries) != counts[dir] {
 			t.Errorf("directory %s = %v, err = %v; want %d files and no temporary artifacts", dir, entries, err, counts[dir])
 		}
+	}
+}
+
+func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux release artifact fixture")
+	}
+	for _, operation := range []string{"runtime", "skip runtime pack", "editor", "linux pack", "ios command"} {
+		t.Run(operation, func(t *testing.T) {
+			if operation == "linux pack" && runtime.GOARCH != "amd64" {
+				t.Skip("Linux runtime pack is amd64-only")
+			}
+			root := isolateEngineEnvironment(t)
+			t.Chdir(root)
+			env, err := resolveEngineDownloadEnv(root, "linux")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assets := filepath.Join(root, "assets")
+			for archive, files := range map[string]map[string]string{
+				"linux-" + env.arch + ".zip": {
+					"godot.linuxbsd.template_release." + env.arch: "runtime",
+					"godot.linuxbsd.template_debug." + env.arch:   "debug",
+				},
+				"editor-linux-" + env.arch + ".zip": {"godot.linuxbsd.editor." + env.arch: "editor"},
+				release.RuntimeAssetZipName:         {"gdspxrt.pck": "pack", "runtime.gdextension": "extension"},
+			} {
+				if err := writeZipFixture(filepath.Join(assets, archive), files); err != nil {
+					t.Fatal(err)
+				}
+			}
+			mustWriteFile(t, filepath.Join(assets, "ios.zip"), []byte("ios"))
+			want := map[string]string{}
+			switch operation {
+			case "editor":
+				err = PrepareHostEditorAsset(root, "assets")
+			case "linux pack":
+				err = PrepareLinuxRuntimePackAssets(root, "assets")
+			case "ios command":
+				err = Run([]string{"download", "--platform", "ios", "--asset-dir", "assets", "--same-run-artifacts"})
+				want[filepath.Join(env.templateDir, "ios.zip")] = "ios"
+			default:
+				err = DownloadEngineAssets(DownloadConfig{Runtime: true, SkipRuntimePack: operation == "skip runtime pack", AssetDir: "assets", SameRunArtifacts: true}, root)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if operation != "ios command" {
+				want[filepath.Join(env.goBinDir, "gdspx"+env.version)] = "editor"
+				if operation != "editor" {
+					want[filepath.Join(env.goBinDir, "gdspxrt"+env.version)] = "runtime"
+					want[filepath.Join(env.goBinDir, "gdspxrtdbg"+env.version)] = "debug"
+					want[filepath.Join(env.templateDir, "linux_release."+env.arch)] = "runtime"
+					want[filepath.Join(env.templateDir, "linux_debug."+env.arch)] = "debug"
+				}
+			}
+			if operation == "runtime" {
+				want[filepath.Join(env.goBinDir, "gdspxrt"+env.version+".pck")] = "pack"
+				want[filepath.Join(env.goBinDir, "runtime.gdextension")] = "extension"
+			}
+			assertEngineDownloadFiles(t, env, want)
+		})
+	}
+}
+
+func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("Linux/amd64 release preparation fixture")
+	}
+	for _, entry := range []struct {
+		name string
+		run  func(root, assets string) error
+	}{
+		{"download", func(root, assets string) error {
+			return DownloadEngineAssets(DownloadConfig{Runtime: true, AssetDir: assets, SameRunArtifacts: true}, root)
+		}},
+		{"editor", PrepareHostEditorAsset},
+		{"linux pack", PrepareLinuxRuntimePackAssets},
+	} {
+		for _, failure := range []string{"environment", "asset directory", "manifest", "missing binary"} {
+			t.Run(entry.name+"/"+failure, func(t *testing.T) {
+				root := isolateEngineEnvironment(t)
+				assets := filepath.Join(root, "assets")
+				mustMkdirAll(t, assets)
+				want := "not found"
+				switch failure {
+				case "environment":
+					mustWriteFile(t, os.Getenv("GOPATH"), []byte("blocked"))
+					want = "not a directory"
+				case "asset directory":
+					assets = filepath.Join(root, "missing")
+					want = "open engine asset directory"
+				case "manifest":
+					mustWriteFile(t, filepath.Join(assets, release.DefaultRuntimeLock().Manifest), []byte("malformed"))
+					want = "invalid character"
+				}
+				if err := entry.run(root, assets); err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("entry-point error = %v, want %q", err, want)
+				}
+			})
+		}
+	}
+	t.Run("runtime pack failure", func(t *testing.T) {
+		root := isolateEngineEnvironment(t)
+		env, err := resolveEngineDownloadEnv(root, "linux")
+		if err != nil {
+			t.Fatal(err)
+		}
+		assets := filepath.Join(root, "assets")
+		mustMkdirAll(t, assets)
+		for _, name := range []string{"gdspx", "gdspxrt", "gdspxrtdbg"} {
+			mustWriteFile(t, filepath.Join(env.goBinDir, name+env.version), []byte("cached"))
+		}
+		err = DownloadEngineAssets(DownloadConfig{Runtime: true, AssetDir: assets, SameRunArtifacts: true}, root)
+		if err == nil || !strings.Contains(err.Error(), "download runtime asset bundle") || !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("runtime pack error = %v, want wrapped missing asset", err)
+		}
+	})
+	t.Run("requires local assets", func(t *testing.T) {
+		if err := PrepareLinuxRuntimePackAssets(t.TempDir(), " \t"); err == nil || !strings.Contains(err.Error(), "requires an engine asset directory") {
+			t.Fatalf("missing local assets error = %v", err)
+		}
+	})
+	t.Run("invalid environment", func(t *testing.T) {
+		root := isolateEngineEnvironment(t)
+		t.Setenv("PLATFORM", "invalid")
+		if _, err := resolveEngineDownloadEnv(root, ""); err == nil || !strings.Contains(err.Error(), "unsupported platform") {
+			t.Fatalf("environment error = %v", err)
+		}
+		if err := DownloadEngineAssets(DownloadConfig{}, root); err == nil {
+			t.Fatal("download ignored environment resolution error")
+		}
+	})
+}
+
+func TestDownloadSizeFormatting(t *testing.T) {
+	for _, tt := range []struct {
+		size int64
+		want string
+	}{{0, "0B"}, {1023, "1023B"}, {1024, "1.0KB"}, {1536, "1.5KB"}, {1 << 20, "1.0MB"}, {1 << 30, "1.0GB"}} {
+		if got := formatDownloadSize(tt.size); got != tt.want {
+			t.Fatalf("formatDownloadSize(%d)=%q,want %q", tt.size, got, tt.want)
+		}
+	}
+	if err := fetchURLToFileWithLimit("unused", filepath.Join(t.TempDir(), "output"), 0); err == nil || !strings.Contains(err.Error(), "invalid download size limit") {
+		t.Fatalf("zero limit=%v", err)
+	}
+}
+
+func TestLocalAssetLinkFailures(t *testing.T) {
+	for _, err := range []error{os.ErrExist, os.ErrPermission, syscall.EXDEV, syscall.ENOTSUP, syscall.EPERM, syscall.EACCES} {
+		if !isLinkFallbackError(fmt.Errorf("wrapped: %w", err)) {
+			t.Errorf("expected copy fallback for %v", err)
+		}
+	}
+	if isLinkFallbackError(os.ErrNotExist) || isLinkFallbackError(errors.New("unrelated")) {
+		t.Fatal("unexpected link fallback")
+	}
+	root := t.TempDir()
+	src := filepath.Join(root, "source")
+	mustWriteFile(t, src, []byte("preserved"))
+	if err := linkOrCopyFile(src, src); err != nil {
+		t.Fatal(err)
+	}
+	blocker := filepath.Join(root, "blocker")
+	mustWriteFile(t, blocker, nil)
+	if err := linkOrCopyFile(src, filepath.Join(blocker, "target")); err == nil {
+		t.Fatal("invalid destination parent accepted")
+	}
+	occupied := filepath.Join(root, "occupied")
+	mustWriteFile(t, filepath.Join(occupied, "keep"), []byte("preserved"))
+	if err := linkOrCopyFile(src, occupied); err == nil {
+		t.Fatal("nonempty destination directory accepted")
+	}
+	if err := linkOrCopyFile(filepath.Join(root, "missing"), filepath.Join(root, "output")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing link source=%v", err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := linkOrCopyFile(occupied, filepath.Join(root, "directory-copy")); err == nil {
+			t.Fatal("directory source accepted")
+		}
+	}
+	if data, err := os.ReadFile(src); err != nil || string(data) != "preserved" {
+		t.Fatalf("source was changed: %q,%v", data, err)
+	}
+	env := newEngineDownloadFixture(t, "")
+	env.version = "unknown"
+	if err := loadEngineAssetManifest(&env); err == nil || !strings.Contains(err.Error(), "resolve runtime lock") {
+		t.Fatalf("unknown lock=%v", err)
+	}
+	if err := fetchEngineAsset(env, "asset.zip", "unused", filepath.Join(blocker, "asset")); err == nil {
+		t.Fatal("blocked fetch destination accepted")
 	}
 }

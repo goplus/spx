@@ -19,6 +19,7 @@
 package platform
 
 import (
+	"runtime"
 	"testing"
 
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -58,5 +59,20 @@ func TestTryCallEngineDirectlyUsesGodot(t *testing.T) {
 	}
 	if called {
 		t.Fatal("engine call ran on a Godot worker thread")
+	}
+}
+
+func TestPlatformPredicatesMatchBuildTarget(t *testing.T) {
+	want := PlatformTypeDesktop
+	switch runtime.GOOS {
+	case "js":
+		want = PlatformTypeWeb
+	case "android":
+		want = PlatformTypeAndroid
+	case "ios":
+		want = PlatformTypeIos
+	}
+	if GetPlatformType() != want || IsDesktop() != (want == PlatformTypeDesktop) || IsWeb() != (want == PlatformTypeWeb) || IsAndroid() != (want == PlatformTypeAndroid) || IsIos() != (want == PlatformTypeIos) || IsServer() || IsMobile() != (want == PlatformTypeAndroid || want == PlatformTypeIos) {
+		t.Fatalf("platform predicates disagree for %s", runtime.GOOS)
 	}
 }

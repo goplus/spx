@@ -19,6 +19,8 @@ package engine
 import (
 	"slices"
 	"testing"
+
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
@@ -282,5 +284,46 @@ func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
 				t.Fatalf("transition mouse state = events %v, buttons %#x; want empty", mouseEvents, buttons)
 			}
 		})
+	}
+}
+
+func TestTriggerEventsObserveFrameBoundary(t *testing.T) {
+	resetTriggerEvents()
+	t.Cleanup(resetTriggerEvents)
+
+	firstSrc, firstDst := &Sprite{}, &Sprite{}
+	secondSrc, secondDst := &Sprite{}, &Sprite{}
+	enqueueTriggerEvent(firstSrc, firstDst)
+	if events := GetTriggerEvents(nil); len(events) != 0 {
+		t.Fatalf("events before frame boundary = %+v, want none", events)
+	}
+
+	cacheTriggerEvents()
+	enqueueTriggerEvent(secondSrc, secondDst)
+	events := GetTriggerEvents(nil)
+	if len(events) != 1 || events[0].Src != firstSrc || events[0].Dst != firstDst {
+		t.Fatalf("current-frame events = %+v, want first event", events)
+	}
+	if events := GetTriggerEvents(nil); len(events) != 0 {
+		t.Fatalf("events after drain = %+v, want none", events)
+	}
+
+	cacheTriggerEvents()
+	events = GetTriggerEvents(nil)
+	if len(events) != 1 || events[0].Src != secondSrc || events[0].Dst != secondDst {
+		t.Fatalf("next-frame events = %+v, want second event", events)
+	}
+}
+
+func TestSpriteTriggerIgnoresOtherImplementations(t *testing.T) {
+	resetTriggerEvents()
+	t.Cleanup(resetTriggerEvents)
+	source, target := &Sprite{}, &Sprite{}
+	source.OnTriggerEnter(&gdx.Sprite{})
+	source.OnTriggerEnter(target)
+	cacheTriggerEvents()
+	events := GetTriggerEvents(nil)
+	if len(events) != 1 || events[0].Src != source || events[0].Dst != target {
+		t.Fatalf("trigger events=%v", events)
 	}
 }

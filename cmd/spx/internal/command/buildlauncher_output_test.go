@@ -294,3 +294,136 @@ func TestBuildLauncherFailurePreservesExistingOutput(t *testing.T) {
 		t.Fatalf("committed output = %q, err = %v", got, err)
 	}
 }
+
+func TestLauncherOutputRejectsInvalidParentsAndTargets(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, "file")
+	writeCommandTestFile(t, file, "existing")
+	for _, tc := range []struct{ name, path, want string }{
+		{"empty", "", "empty"},
+		{"file", file, "not a directory"},
+		{"missing", filepath.Join(root, "missing"), "does not exist"},
+		{"invalid", "invalid\x00path", "inspect output parent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateLauncherOutputParent(tc.path, false); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("parent error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	if err := validateLauncherOutputTarget("invalid\x00path"); err == nil || !strings.Contains(err.Error(), "inspect output") {
+		t.Fatalf("target error = %v", err)
+	}
+	if _, err := resolveLauncherOutput(launcherOutputInputs{ProjectDir: filepath.Join(root, "missing")}, "launcher"); err == nil || !strings.Contains(err.Error(), "resolve project directory") {
+		t.Fatalf("project error = %v", err)
+	}
+	if _, err := canonicalizeLauncherOutputAlias(filepath.Join("invalid\x00path", "launcher")); err == nil {
+		t.Fatal("accepted invalid parent")
+	}
+	for _, final := range []string{filepath.Join(file, "launcher"), root, filepath.Join("invalid\x00path", "launcher")} {
+		if _, cleanup, err := stageLauncherOutput(final); err == nil {
+			cleanup()
+			t.Fatalf("staged invalid output %q", final)
+		}
+	}
+	relative, err := filepath.Rel(workingDirectory(t), filepath.Join(root, "relative-launcher"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveLauncherOutput(launcherOutputInputs{ProjectDir: root, PackDir: "assets"}, relative)
+	if err != nil || got != filepath.Join(root, "relative-launcher") {
+		t.Fatalf("relative output = %q, %v", got, err)
+	}
+	if err := validateLauncherOutputProtection(file, launcherOutputProtection{Files: []string{""}, Roots: []string{"", "invalid\x00path"}}); err == nil || !strings.Contains(err.Error(), "compare output") {
+		t.Fatalf("protection error = %v", err)
+	}
+	if _, err := launcherPathWithinFilesystem(root, "invalid\x00path"); err == nil {
+		t.Fatal("ignored invalid target during containment check")
+	}
+}
+
+func TestCommitLauncherOutputRevalidatesDestinationAndCleanup(t *testing.T) {
+	for _, kind := range []string{"invalid parent", "missing parent", "directory target", "protected destination", "nonprivate stage"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			final := filepath.Join(root, "launcher")
+			stage := stageLauncherTestOutput(t, final)
+			if err := os.WriteFile(stage, []byte("new launcher"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			want := ""
+			switch kind {
+			case "invalid parent":
+				final = filepath.Join("invalid\x00path", "launcher")
+				want = "resolve output parent"
+			case "missing parent":
+				final = filepath.Join(root, "missing", "launcher")
+				want = "does not exist"
+			case "directory target":
+				if err := os.Mkdir(final, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				want = "not a regular file"
+			case "protected destination":
+				writeCommandTestFile(t, final, "previous launcher")
+				restrictCommandTestPath(t, root, 0o500)
+				want = "install output"
+			case "nonprivate stage":
+				if err := os.Chmod(filepath.Dir(stage), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				want = "clean staging directory"
+			}
+			if err := commitLauncherOutput(stage, final, launcherOutputProtection{}); err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("commit error = %v, want %q", err, want)
+			}
+			if kind == "protected destination" {
+				if got := readTestFile(t, final); got != "previous launcher" {
+					t.Fatalf("failed commit replaced destination: %q", got)
+				}
+				if got := readTestFile(t, stage); got != "new launcher" {
+					t.Fatalf("failed commit changed staged output: %q", got)
+				}
+			}
+			if kind == "nonprivate stage" {
+				if got := readTestFile(t, final); got != "new launcher" {
+					t.Fatalf("installed output = %q", got)
+				}
+			}
+		})
+	}
+	root := t.TempDir()
+	final := filepath.Join(root, "launcher")
+	for _, stage := range []string{filepath.Join(root, "unrelated", "stage"), filepath.Join(root, ".launcher.spx-launchpack-missing", "stage")} {
+		if err := removeLauncherStageDir(stage, final); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := validateLauncherStage(filepath.Join(root, "missing", "stage")); err == nil || !strings.Contains(err.Error(), "parent does not exist") {
+		t.Fatalf("missing staging parent = %v", err)
+	}
+}
+
+func TestStageLauncherOutputRejectsProtectedParent(t *testing.T) {
+	for _, parent := range []string{"existing", "missing"} {
+		t.Run(parent, func(t *testing.T) {
+			root := t.TempDir()
+			restrictCommandTestPath(t, root, 0o500)
+			final := filepath.Join(root, "launcher")
+			want := "create staging directory"
+			if parent == "missing" {
+				final = filepath.Join(root, "missing", "launcher")
+				want = "create output directory"
+			}
+			if _, cleanup, err := stageLauncherOutput(final); err == nil || !strings.Contains(err.Error(), want) {
+				if cleanup != nil {
+					cleanup()
+				}
+				t.Fatalf("staging error = %v, want %q", err, want)
+			}
+		})
+	}
+}

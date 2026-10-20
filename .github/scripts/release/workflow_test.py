@@ -186,32 +186,40 @@ class ReleaseWorkflowTest(unittest.TestCase):
         gate = step_script(
             self.runner_jobs["ci-gate"], "Verify required CI path passed"
         )
-        cases = (
-            ("ready", "skipped", "success", True),
-            ("missing", "success", "skipped", True),
-            ("incompatible", "success", "skipped", True),
-            ("incompatible", "skipped", "skipped", False),
-            ("unknown", "success", "skipped", False),
-        )
-        for runtime_state, module_result, web_result, succeeds in cases:
-            with self.subTest(runtime_state=runtime_state):
-                completed = run_shell(
-                    gate,
-                    env={
-                        "STATIC_CHECKS_RESULT": "success",
-                        "GO_BUILDS_RESULT": "success",
-                        "RUNTIME_RESOLUTION_RESULT": "success",
-                        "RUNTIME_STATE": runtime_state,
-                        "RUNTIME_REASON": "test runtime resolution",
-                        "MODULE_INTEGRATION_RESULT": module_result,
-                        "WEB_BUILD_RESULT": web_result,
-                    },
-                )
-                self.assertEqual(
-                    completed.returncode == 0,
-                    succeeds,
-                    completed.stderr,
-                )
+        base_env = {
+            "STATIC_CHECKS_RESULT": "success",
+            "GO_BUILDS_RESULT": "success",
+            "RUNTIME_RESOLUTION_RESULT": "success",
+            "RUNTIME_REASON": "test runtime resolution",
+        }
+        for state in ("ready", "missing", "incompatible"):
+            expected = {
+                **base_env, "RUNTIME_STATE": state,
+                "MODULE_INTEGRATION_RESULT": "skipped" if state == "ready" else "success",
+                "WEB_BUILD_RESULT": "success" if state == "ready" else "skipped",
+            }
+            with self.subTest(state=state):
+                completed = run_shell(gate, env=expected)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+            for job in (
+                "STATIC_CHECKS_RESULT", "GO_BUILDS_RESULT", "RUNTIME_RESOLUTION_RESULT",
+                "MODULE_INTEGRATION_RESULT", "WEB_BUILD_RESULT",
+            ):
+                for result in ("success", "failure", "cancelled", "skipped", ""):
+                    if result == expected[job]:
+                        continue
+                    with self.subTest(state=state, job=job, result=result):
+                        completed = run_shell(gate, env={**expected, job: result})
+                        self.assertNotEqual(completed.returncode, 0)
+                        self.assertIn("want " + expected[job], completed.stderr)
+        for state in ("unknown", ""):
+            with self.subTest(state=state):
+                completed = run_shell(gate, env={
+                    **base_env, "RUNTIME_STATE": state,
+                    "MODULE_INTEGRATION_RESULT": "success", "WEB_BUILD_RESULT": "skipped",
+                })
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("Unknown runtime state", completed.stderr)
 
     def test_release_rejects_an_incompatible_runtime_with_bump_guidance(self):
         setup = self.jobs["setup"]
