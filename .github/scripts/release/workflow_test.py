@@ -17,6 +17,7 @@ STATIC_CHECKS_WORKFLOW_PATH = (
 )
 ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
 GO_TEST_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "test_go.sh"
+GO_COVERAGE_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "test_go_coverage.sh"
 WEB_PACKAGE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
 )
@@ -100,16 +101,22 @@ def job_condition(block):
 def step_script(block, name):
     lines = block.splitlines()
     try:
-        start = lines.index(f"      - name: {name}")
-        run_line = lines.index("        run: |", start + 1)
-    except ValueError as exc:
+        start = next(index for index, line in enumerate(lines) if line.lstrip() == f"- name: {name}")
+        indent = len(lines[start]) - len(lines[start].lstrip()) + 2
+        end = next(
+            (index for index in range(start + 1, len(lines))
+             if lines[index].strip() and not lines[index].startswith(" " * indent)),
+            len(lines),
+        )
+        run_line = lines.index(" " * indent + "run: |", start + 1, end)
+    except (StopIteration, ValueError) as exc:
         raise AssertionError(f"missing literal run script for step {name!r}") from exc
 
     body = []
-    for line in lines[run_line + 1 :]:
-        if line and not line.startswith("          "):
+    for line in lines[run_line + 1 : end]:
+        if line and not line.startswith(" " * (indent + 2)):
             break
-        body.append(line[10:] if line else line)
+        body.append(line[indent + 2 :] if line else line)
     return "\n".join(body)
 
 
@@ -220,6 +227,39 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 })
                 self.assertNotEqual(completed.returncode, 0)
                 self.assertIn("Unknown runtime state", completed.stderr)
+
+    def test_release_platform_selection_preserves_output_order_and_validation(self):
+        script = step_script(self.jobs["setup"], "Resolve SPX package targets")
+        cases = (
+            ("dry-run", "all", ("web", "macos", "windows", "linux")),
+            ("dry-run", " WINDOWS , web ", ("web", "windows")),
+            ("dry-run", "linux", ("linux",)),
+            ("dry-run", "web,web", "Duplicate platform: web"),
+            ("dry-run", "other", "Unsupported platform: other"),
+            ("dry-run", "", "Platforms must not be empty"),
+            *(("dry-run", platforms, "Platforms must not contain empty values")
+              for platforms in (",", ",web", "web,,linux", "web,", "web, ,linux")),
+            ("publish-release", "all", ("web", "macos", "windows", "linux")),
+            ("publish-release", "web", "Publishing requires platforms=all"),
+            ("publish-runtime", "invalid,invalid", ()),
+        )
+        for operation, platforms, expected in cases:
+            with self.subTest(operation=operation, platforms=platforms), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                result = run_shell(script, env={
+                    "OPERATION_INPUT": operation, "PLATFORMS_INPUT": platforms,
+                    "GITHUB_OUTPUT": str(output),
+                })
+                if isinstance(expected, str):
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected, result.stderr)
+                    self.assertFalse(output.exists())
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(output.read_text().splitlines(), [
+                        f"run_{platform}={'true' if platform in expected else 'false'}"
+                        for platform in ("web", "macos", "windows", "linux")
+                    ])
 
     def test_release_rejects_an_incompatible_runtime_with_bump_guidance(self):
         setup = self.jobs["setup"]
@@ -598,60 +638,108 @@ esac
                 self.assertEqual(completed.returncode == 0, succeeds, completed.stderr)
 
 
-class GoCoverageTest(unittest.TestCase):
-    def test_go_coverage_preserves_test_selection_and_uploads_every_profile(self):
+class StepScriptTest(unittest.TestCase):
+    def test_extraction_stays_within_the_named_step(self):
+        for indent in ("    ", "      "):
+            for target in ("run: |\n  echo target", "uses: example/action@v1", "run: echo target"):
+                with self.subTest(indent=len(indent), target=target):
+                    block = (
+                        f"{indent}- name: Target\n"
+                        + "\n".join(indent + "  " + line for line in target.splitlines())
+                        + f"\n{indent}- id: other\n{indent}  run: |\n{indent}    echo other"
+                    )
+                    if target.startswith("run: |"):
+                        self.assertEqual(step_script(block, "Target"), "echo target")
+                    else:
+                        with self.assertRaisesRegex(AssertionError, "missing literal run script"):
+                            step_script(block, "Target")
+
+
+class StaticChecksWorkflowTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
         workflow = STATIC_CHECKS_WORKFLOW_PATH.read_text(encoding="utf-8")
-        steps = job_blocks(workflow)["static-checks"]
-        test_script = step_script(steps, "Test Go code")
-        for name in ("manifest", "resolution", "version"):
-            self.assertIn(
-                f".github/scripts/runtime/{name}.go .github/scripts/runtime/{name}_test.go",
-                test_script,
-            )
-        self.assertIn("./.github/scripts/driverbundle", test_script)
-        self.assertIn(
-            "bash .github/scripts/test_go.sh -v -coverprofile=coverage.out -covermode=atomic",
-            test_script,
+        cls.steps = job_blocks(workflow)["static-checks"]
+
+    def test_workflow_preserves_test_stages_and_uploads_suite_outputs(self):
+        steps = self.steps
+        blocks = {
+            block.splitlines()[0]: block
+            for block in steps.split("      - name: ")[1:]
+        }
+        names = [
+            "Test Web bridge",
+            "Test Go Web packages",
+            "Test Go Web process fallbacks",
+            "Test Go Web interpreter",
+            "Test Web ABI memory ownership",
+            "Test CI tooling",
+            "Test CI contracts",
+            "Check runtime fingerprints",
+            "Test Go modules",
+            "Upload coverage to Codecov",
+        ]
+        positions = [steps.index(f"- name: {name}\n") for name in names]
+        self.assertEqual(positions, sorted(positions))
+        suites = (
+            ("web", "web-tests", "Test Go Web packages"),
+            ("web-process", "web-process-tests", "Test Go Web process fallbacks"),
+            ("web-interpreter", "web-interpreter-tests", "Test Go Web interpreter"),
+            ("tools", "tool-tests", "Test CI tooling"),
+            ("native", "go-tests", "Test Go modules"),
         )
-        self.assertIn(
-            '-exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web',
-            steps,
-        )
-        commands = [line for line in steps.splitlines() if "-coverprofile=" in line]
-        self.assertEqual(len(commands), 8)
-        for command in commands:
-            self.assertIn("-covermode=atomic", command)
-        profiles = []
-        for step in steps.split("      - name: ")[1:]:
-            directory = re.search(r"^        working-directory: (.+)$", step, re.MULTILINE)
-            base = Path(directory.group(1)) if directory else Path(".")
-            profiles.extend(
-                (base / profile).as_posix()
-                for profile in re.findall(r"-coverprofile=(\S+)", step)
-            )
-        self.assertIn("cmd/ispx/coverage-web.out", profiles)
-        self.assertIn("coverage-web-process.out", profiles)
-        web_process = steps.split("      - name: Test Go Web process fallbacks\n", 1)[1].split(
-            "      - name:", 1
-        )[0]
-        self.assertIn("GOOS: js", web_process)
-        self.assertIn("GOARCH: wasm", web_process)
-        for package in ("internal/cmd/buildctl/engine", "internal/processsupervisor", "x/xgolauncher"):
-            self.assertIn(f"./{package}", web_process)
-        web_interpreter = steps.split("      - name: Test Go Web interpreter\n", 1)[1].split(
-            "      - name:", 1
-        )[0]
-        self.assertIn("GOOS: js", web_interpreter)
-        self.assertIn("GOARCH: wasm", web_interpreter)
-        self.assertIn('-exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...', web_interpreter)
-        # test_go.sh runs a second module with the same relative profile name.
-        profiles.append("cmd/ispx/coverage.out")
-        codecov = steps.split("      - name: Upload coverage to Codecov\n", 1)[1]
-        files = re.search(r"^          files: (.+)$", codecov, re.MULTILINE).group(1)
-        self.assertCountEqual(files.split(","), profiles)
+        for suite, step_id, name in suites:
+            with self.subTest(suite=suite):
+                block = blocks[name]
+                self.assertIn(f"        id: {step_id}\n", block)
+                self.assertIn(f"run: bash .github/scripts/test_go_coverage.sh {suite}", block)
+                self.assertNotIn("working-directory:", block)
+                self.assertNotIn("GOOS:", block)
+                self.assertNotIn("GOARCH:", block)
+        self.assertIn("node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs", blocks[names[0]])
+        self.assertIn("GDSPX_SANITIZERS: address,undefined", blocks[names[4]])
+        self.assertIn("bash godot_modules/spx/web/tests/run_string_abi_test.sh", blocks[names[4]])
+        self.assertIn(".github/scripts/test_go_coverage.sh", blocks["Check shell scripts"])
+        # Filenames belong to the runner; the workflow only combines its outputs.
+        self.assertNotRegex(steps, r"coverage(?:-[\w-]+)?\.out")
+        codecov = blocks["Upload coverage to Codecov"]
+        output_steps = re.findall(r"\$\{\{\s*steps\.([a-z-]+)\.outputs\.coverage\s*\}\}", codecov)
+        self.assertEqual(output_steps, [
+            "go-tests", "web-tests", "web-process-tests", "web-interpreter-tests", "tool-tests",
+        ])
+        self.assertEqual(steps.count("uses: codecov/codecov-action@v7"), 1)
         self.assertIn("slug: goplus/spx", codecov)
         self.assertIn("disable_search: true", codecov)
-        self.assertLess(steps.index("- name: Test Go code"), steps.index("- name: Upload coverage to Codecov"))
+
+    def test_contract_tests_preserve_order_and_stop_on_failure(self):
+        script = step_script(self.steps, "Test CI contracts")
+        expected = [
+            ".github/scripts/runtime_build_contract_test.py",
+            ".github/scripts/release/workflow_test.py",
+            ".github/scripts/release_bump_test.py",
+            ".github/scripts/driverbundle/workflow_test.py",
+        ]
+        trace = r'''python3() { printf '%s:%s\n' "$PYTHONDONTWRITEBYTECODE" "$*"; [ "$*" != "${FAIL_SCRIPT:-}" ]; }
+''' + script
+        for failed in (None, *range(len(expected))):
+            with self.subTest(failed=failed):
+                result = run_shell(trace, env={"FAIL_SCRIPT": expected[failed] if failed is not None else ""})
+                self.assertEqual(result.returncode, 0 if failed is None else 1, result.stderr)
+                count = len(expected) if failed is None else failed + 1
+                self.assertEqual(result.stdout.splitlines(), [f"1:{name}" for name in expected[:count]])
+
+    def test_runtime_fingerprints_preserve_order_and_stop_on_failure(self):
+        script = step_script(self.steps, "Check runtime fingerprints")
+        expected = [f"run .github/scripts/runtime/digest.go {name} HEAD" for name in ("pack-source", "build-recipe")]
+        trace = r'''go() { printf '%s\n' "$*" >&2; [ "$*" != "${FAIL_CALL:-}" ]; }
+''' + script
+        for failed in (None, *range(len(expected))):
+            with self.subTest(failed=failed):
+                result = run_shell(trace, env={"FAIL_CALL": expected[failed] if failed is not None else ""})
+                self.assertEqual(result.returncode, 0 if failed is None else 1, result.stderr)
+                count = len(expected) if failed is None else failed + 1
+                self.assertEqual(result.stderr.splitlines(), expected[:count])
+                self.assertEqual(result.stdout, "")
 
 
 class GoTestScriptTest(unittest.TestCase):
@@ -662,6 +750,9 @@ class GoTestScriptTest(unittest.TestCase):
         self.script = self.root / ".github" / "scripts" / "test_go.sh"
         self.script.parent.mkdir(parents=True)
         self.script.write_text(GO_TEST_SCRIPT_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        self.coverage_script = self.script.with_name("test_go_coverage.sh")
+        self.coverage_script.write_text(GO_COVERAGE_SCRIPT_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+        self.output = self.root / "github-output"
         (self.root / "cmd" / "ispx").mkdir(parents=True)
         self.log = self.root / "go-calls.jsonl"
         self.bin = Path(workspace.name) / "bin"
@@ -675,29 +766,37 @@ from pathlib import Path
 
 args = sys.argv[1:]
 directory = Path.cwd().relative_to(Path(os.environ["MOCK_ROOT"])).as_posix()
-with Path(os.environ["MOCK_LOG"]).open("a", encoding="utf-8") as log:
-    log.write(json.dumps({"directory": directory, "args": args}) + "\n")
-if args == ["list", "./..."]:
+call = {"directory": directory, "args": args}
+if os.environ.get("MOCK_CAPTURE_PLATFORM") == "1":
+    call.update({key: os.environ.get(key, "") for key in ("GOOS", "GOARCH")})
+log_path = Path(os.environ["MOCK_LOG"])
+with log_path.open("a", encoding="utf-8") as log:
+    log.write(json.dumps(call) + "\n")
+if args == ["env", "GOROOT"]:
+    print("/mock/go root")
+elif args == ["list", "./..."]:
     print(os.environ["MOCK_PACKAGES"])
-    sys.exit(int(os.environ.get("MOCK_LIST_EXIT", "0")))
 elif args[0] == "test":
     for argument in args[1:]:
         if argument.startswith("-coverprofile="):
-            Path(argument.split("=", 1)[1]).write_text(
+            profile = argument.split("=", 1)[1]
+            Path(profile).write_text(
                 "mode: atomic\n" + directory + "/source.go:1.1,2.1 1 1\n",
                 encoding="utf-8",
             )
-    if directory == ".":
-        sys.exit(int(os.environ.get("MOCK_TEST_EXIT", "0")))
 else:
     sys.exit(99)
+
+# Fail after producing partial output; call numbers start at one.
+if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get("MOCK_FAIL_CALL", "0")):
+    sys.exit(7)
 """,
         )
 
-    def run_script(self, packages, *arguments, **environment):
+    def run_script(self, packages, *arguments, script=None, **environment):
         self.log.unlink(missing_ok=True)
         return run_command(
-            ["bash", str(self.script), *arguments],
+            ["bash", str(script or self.script), *arguments],
             cwd=self.bin,
             env={
                 "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
@@ -740,7 +839,7 @@ else:
 
     def test_discovery_errors_and_empty_selection_stop_before_testing(self):
         for name, packages, environment, code in (
-            ("partial discovery", ["github.com/goplus/spx/v3"], {"MOCK_LIST_EXIT": "7"}, 7),
+            ("partial discovery", ["github.com/goplus/spx/v3"], {"MOCK_FAIL_CALL": "1"}, 7),
             ("empty discovery", [], {}, 1),
             ("only excluded packages", ["github.com/goplus/spx/v3/tutorial"], {}, 1),
         ):
@@ -753,12 +852,176 @@ else:
 
     def test_failed_root_tests_do_not_run_the_second_module(self):
         module = "github.com/goplus/spx/v3"
-        completed = self.run_script([module], "-race", MOCK_TEST_EXIT="5")
-        self.assertEqual(completed.returncode, 5, completed.stderr)
+        completed = self.run_script([module], "-race", MOCK_FAIL_CALL="2")
+        self.assertEqual(completed.returncode, 7, completed.stderr)
         self.assertEqual(self.recorded_calls(), [
             {"directory": ".", "args": ["list", "./..."]},
             {"directory": ".", "args": ["test", "-race", module]},
         ])
+
+    def coverage_suite_calls(self):
+        def covered(profile, *arguments, verbose=False):
+            return ["test", f"-coverprofile={profile}", "-covermode=atomic", *(["-v"] if verbose else []), *arguments]
+
+        executor = '-exec="/mock/go root/lib/wasm/go_js_wasm_exec"'
+        return {
+            "web": [
+                (".", ["env", "GOROOT"]),
+                (".", covered("coverage-web.out", executor, "./internal/gdengine/binding/web", "./pkg/ispx", "./internal/coroutine")),
+            ],
+            "web-process": [
+                (".", ["env", "GOROOT"]),
+                (".", covered("coverage-web-process.out", executor, "-run",
+                    "UnsupportedPlatform|^TestRunRejectsInvalidInput$|^TestRunCommand|^TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs$",
+                    "./internal/cmd/buildctl/engine", "./internal/processsupervisor", "./x/xgolauncher")),
+            ],
+            "web-interpreter": [
+                ("cmd/ispx", ["env", "GOROOT"]),
+                ("cmd/ispx", covered("coverage-web.out", executor, "./...")),
+            ],
+            "tools": [
+                (".", covered("coverage-driverbundle.out", "./.github/scripts/driverbundle", verbose=True)),
+                *[(".", covered(f"coverage-{name}.out", f".github/scripts/runtime/{name}.go",
+                    f".github/scripts/runtime/{name}_test.go", verbose=True)) for name in ("manifest", "resolution", "version")],
+            ],
+            "native": [
+                (".", ["list", "./..."]),
+                (".", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "github.com/goplus/spx/v3"]),
+                ("cmd/ispx", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "./..."]),
+            ],
+        }
+
+    def run_coverage_suite(self, suite, **environment):
+        self.output.unlink(missing_ok=True)
+        for profile in self.root.rglob("coverage*.out"):
+            profile.unlink()
+        return self.run_script(
+            ["github.com/goplus/spx/v3"], suite, script=self.coverage_script,
+            **{
+                "GITHUB_OUTPUT": str(self.output),
+                "GOOS": "",
+                "GOARCH": "",
+                "MOCK_CAPTURE_PLATFORM": "1",
+                **environment,
+            },
+        )
+
+    def test_coverage_suites_preserve_commands_platforms_and_report_every_profile(self):
+        all_profiles = []
+        for suite, calls in self.coverage_suite_calls().items():
+            with self.subTest(suite=suite):
+                result = self.run_coverage_suite(suite)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                web = suite.startswith("web")
+                self.assertEqual(self.recorded_calls(), [
+                    {"directory": directory, "args": arguments,
+                     "GOOS": "js" if web and arguments[0] == "test" else "",
+                     "GOARCH": "wasm" if web and arguments[0] == "test" else ""}
+                    for directory, arguments in calls
+                ])
+                profiles = [
+                    (Path(directory) / argument.split("=", 1)[1]).as_posix()
+                    for directory, arguments in calls
+                    for argument in arguments if argument.startswith("-coverprofile=")
+                ]
+                self.assertEqual(self.output.read_text(encoding="utf-8"), f"coverage={','.join(profiles)}\n")
+                actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
+                self.assertCountEqual(actual, profiles)
+                all_profiles.extend(profiles)
+        self.assertEqual(len(all_profiles), 9)
+        self.assertEqual(len(set(all_profiles)), 9)
+
+    def test_failed_coverage_commands_stop_the_suite_without_publishing_outputs(self):
+        for suite, calls in self.coverage_suite_calls().items():
+            for index in range(1, len(calls) + 1):
+                with self.subTest(suite=suite, call=index):
+                    result = self.run_coverage_suite(suite, MOCK_FAIL_CALL=str(index))
+                    self.assertEqual(result.returncode, 7, result.stderr)
+                    self.assertEqual(
+                        [(call["directory"], call["args"]) for call in self.recorded_calls()], calls[:index],
+                    )
+                    self.assertFalse(self.output.exists())
+
+    def test_coverage_runner_rejects_unknown_suites_and_supports_local_runs(self):
+        result = self.run_coverage_suite("unknown")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.log.exists())
+        self.assertFalse(self.output.exists())
+        result = self.run_coverage_suite("tools", GITHUB_OUTPUT="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.output.exists())
+
+
+class StandaloneActionTest(unittest.TestCase):
+    library = WORKFLOW_PATH.parents[1] / "actions/standalone/lib/platform.sh"
+
+    def test_binary_architecture_patterns(self):
+        script = '\n'.join((
+            'source "$LIBRARY"',
+            'file() { printf "%s\\n" "$DESCRIPTION"; }',
+            'assert_binary_arch "binary with spaces" "$PLATFORM" "$ARCH"',
+        ))
+        targets = (
+            ("linux", "x64", "ELF 64-bit LSB executable, x86-64"),
+            ("linux", "x86", "ELF 32-bit LSB executable, Intel 80386"),
+            ("linux", "arm64", "ELF 64-bit LSB executable, ARM aarch64"),
+            ("windows", "x64", "PE32+ executable (console) x86-64"),
+            ("windows", "x86", "PE32 executable (console) Intel 80386"),
+        )
+        for platform, arch, expected_description in targets:
+            for description in [*(item[2] for item in targets), "data"]:
+                with self.subTest(platform=platform, arch=arch, description=description):
+                    result = run_shell(script, env={
+                        "LIBRARY": str(self.library), "PLATFORM": platform,
+                        "ARCH": arch, "DESCRIPTION": description,
+                    })
+                    valid = description == expected_description
+                    self.assertEqual(result.returncode, 0 if valid else 1, result.stderr)
+                    if not valid:
+                        self.assertIn(f"Binary architecture mismatch for {platform}/{arch}", result.stderr)
+
+    def test_package_tool_precedence_and_failures(self):
+        action = self.library.parents[1] / "package/action.yml"
+        script = step_script(action.read_text(encoding="utf-8"), "Package standalone release")
+        mocks = """
+command() {
+  if [ "$1" = -v ]; then
+    case "$2" in
+      zip) [ "$HAS_ZIP" = true ]; return ;;
+      powershell.exe) [ "$HAS_POWERSHELL" = true ]; return ;;
+      cygpath) return 1 ;;
+    esac
+  fi
+  builtin command "$@"
+}
+zip() { echo zip; return "$TOOL_EXIT"; }
+powershell.exe() { echo powershell; return "$TOOL_EXIT"; }
+"""
+        for zip_available, powershell_available, tool_exit in (
+            (True, True, 0), (False, True, 0), (False, False, 0),
+            (True, True, 7), (False, True, 7),
+        ):
+            with self.subTest(zip=zip_available, powershell=powershell_available, exit=tool_exit):
+                with tempfile.TemporaryDirectory(prefix="standalone package ") as directory:
+                    root = Path(directory)
+                    library = root / ".github/actions/standalone/lib/platform.sh"
+                    library.parent.mkdir(parents=True)
+                    library.write_text(self.library.read_text(encoding="utf-8"), encoding="utf-8")
+                    binary = root / "spx.exe"
+                    binary.write_text("binary", encoding="utf-8")
+                    result = run_shell(mocks + script, cwd=root, env={
+                        "SPX_BIN": str(binary), "PACKAGE_FILE": "package with spaces.zip",
+                        "HAS_ZIP": str(zip_available).lower(),
+                        "HAS_POWERSHELL": str(powershell_available).lower(),
+                        "TOOL_EXIT": str(tool_exit),
+                    })
+                    available = zip_available or powershell_available
+                    self.assertEqual(result.returncode, tool_exit if available else 1, result.stderr)
+                    self.assertEqual(result.stdout.count("[ok] Packaged standalone SPX:"), int(available and tool_exit == 0))
+                    if available:
+                        self.assertIn("\nzip\n" if zip_available else "\npowershell\n", result.stdout)
+                    if zip_available:
+                        self.assertNotIn("\npowershell\n", result.stdout)
 
 
 if __name__ == "__main__":

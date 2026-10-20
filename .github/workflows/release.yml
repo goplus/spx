@@ -299,34 +299,39 @@ jobs:
             platforms="web,macos,windows,linux"
           fi
 
-          run_web=false
-          run_macos=false
-          run_windows=false
-          run_linux=false
-          declare -A seen=()
+          case "$platforms" in
+            ,*|*,,*|*,)
+              echo "[error] Platforms must not contain empty values" >&2
+              exit 1
+              ;;
+          esac
+
+          selected_platforms=,
           IFS=',' read -r -a items <<< "$platforms"
           for platform in "${items[@]}"; do
-            if [ -n "${seen[$platform]:-}" ]; then
-              echo "[error] Duplicate platform: $platform" >&2
-              exit 1
-            fi
-            seen[$platform]=1
             case "$platform" in
-              web) run_web=true ;;
-              macos) run_macos=true ;;
-              windows) run_windows=true ;;
-              linux) run_linux=true ;;
+              web|macos|windows|linux) ;;
               *)
                 echo "[error] Unsupported platform: $platform" >&2
                 exit 1
                 ;;
             esac
+            case "$selected_platforms" in
+              *",$platform,"*)
+                echo "[error] Duplicate platform: $platform" >&2
+                exit 1
+                ;;
+            esac
+            selected_platforms+="$platform,"
           done
 
-          echo "run_web=$run_web" >> "$GITHUB_OUTPUT"
-          echo "run_macos=$run_macos" >> "$GITHUB_OUTPUT"
-          echo "run_windows=$run_windows" >> "$GITHUB_OUTPUT"
-          echo "run_linux=$run_linux" >> "$GITHUB_OUTPUT"
+          for platform in web macos windows linux; do
+            case "$selected_platforms" in
+              *",$platform,"*) selected=true ;;
+              *) selected=false ;;
+            esac
+            echo "run_$platform=$selected" >> "$GITHUB_OUTPUT"
+          done
 
   static-checks:
     name: Static checks
@@ -767,29 +772,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          required=()
           case "$OPERATION" in
             dry-run)
-              required+=(setup assemble)
+              required_jobs=(setup assemble)
               ;;
             publish-runtime)
-              required+=(setup assemble publish-runtime)
+              required_jobs=(setup assemble publish-runtime)
               ;;
             publish-release)
-              required+=(setup assemble publish-runtime publish-spx publish-web-package finalize-spx)
+              required_jobs=(setup assemble publish-runtime publish-spx publish-web-package finalize-spx)
               ;;
             publish-dev-npm)
-              required+=(dev-npm-guard publish-dev-web-package)
+              required_jobs=(dev-npm-guard publish-dev-web-package)
               ;;
             *)
               echo "[error] Unsupported release operation: $OPERATION" >&2
               exit 1
               ;;
           esac
-          for job in "${required[@]}"; do
-            result="$(jq -r --arg job "$job" '.[$job].result // "missing"' <<<"$NEEDS_JSON")"
-            if [ "$result" != success ]; then
-              echo "[error] Required job did not succeed: $job ($result)" >&2
+          for job in "${required_jobs[@]}"; do
+            job_result="$(jq -r --arg job "$job" '.[$job].result // "missing"' <<<"$NEEDS_JSON")"
+            if [ "$job_result" != success ]; then
+              echo "[error] Required job did not succeed: $job ($job_result)" >&2
               exit 1
             fi
           done

@@ -12,3 +12,9 @@ The root-level Python files are intentionally stable entry points:
 - Tests for those Python entry points stay beside the files they exercise.
 
 Do not move a root entry point only for layout consistency. Update every SPX and Godot caller in the same release change first.
+
+## Tests and coverage
+
+- `test_go.sh` is the local and CI entry point for native Go tests in both modules; it owns package selection and forwards Go test arguments.
+- `test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, or `native` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After success, the script reports the suite's profiles through the `coverage` step output when `GITHUB_OUTPUT` is set.
+- `static_checks.yml` owns test ordering and passes those outputs to Codecov without a separate profile list. `.github/codecov.yml` owns reporting exclusions; raw profiles remain unfiltered.

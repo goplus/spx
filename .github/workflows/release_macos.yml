@@ -52,7 +52,7 @@ jobs:
           name: runtime-spx-assets
           path: runtime-assets
 
-      - name: Set up toolchain and engine assets
+      - name: Set up locked Go and XGo
         uses: ./.github/actions/deps
         with:
           setup-mode: none

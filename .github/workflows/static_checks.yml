@@ -57,7 +57,8 @@ jobs:
             .github/scripts/runtime/build_pack.sh \
             .github/scripts/npm/prepare_package.sh \
             .github/scripts/release/assemble.sh \
-            .github/scripts/test_go.sh; do
+            .github/scripts/test_go.sh \
+            .github/scripts/test_go_coverage.sh; do
             bash -n "$script"
           done
 
@@ -70,36 +71,33 @@ jobs:
         run: node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs
 
       - name: Test Go Web packages
-        env:
-          GOOS: js
-          GOARCH: wasm
-        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/gdengine/binding/web ./pkg/ispx ./internal/coroutine
+        id: web-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh web
 
       - name: Test Go Web process fallbacks
-        env:
-          GOOS: js
-          GOARCH: wasm
-        run: go test -coverprofile=coverage-web-process.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" -run 'UnsupportedPlatform|^TestRunRejectsInvalidInput$|^TestRunCommand|^TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs$' ./internal/cmd/buildctl/engine ./internal/processsupervisor ./x/xgolauncher
+        id: web-process-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh web-process
 
       - name: Test Go Web interpreter
-        working-directory: cmd/ispx
-        env:
-          GOOS: js
-          GOARCH: wasm
-        run: go test -coverprofile=coverage-web.out -covermode=atomic -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./...
+        id: web-interpreter-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh web-interpreter
 
       - name: Test Web ABI memory ownership
         env:
           GDSPX_SANITIZERS: address,undefined
         run: bash godot_modules/spx/web/tests/run_string_abi_test.sh
 
-      - name: Test Go code
+      - name: Test CI tooling
+        id: tool-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh tools
+
+      - name: Test CI contracts
         shell: bash
         run: |
-          go test -v -coverprofile=coverage-driverbundle.out -covermode=atomic ./.github/scripts/driverbundle
-          go test -v -coverprofile=coverage-manifest.out -covermode=atomic .github/scripts/runtime/manifest.go .github/scripts/runtime/manifest_test.go
-          go test -v -coverprofile=coverage-resolution.out -covermode=atomic .github/scripts/runtime/resolution.go .github/scripts/runtime/resolution_test.go
-          go test -v -coverprofile=coverage-version.out -covermode=atomic .github/scripts/runtime/version.go .github/scripts/runtime/version_test.go
           for script in \
             .github/scripts/runtime_build_contract_test.py \
             .github/scripts/release/workflow_test.py \
@@ -107,15 +105,22 @@ jobs:
             .github/scripts/driverbundle/workflow_test.py; do
             PYTHONDONTWRITEBYTECODE=1 python3 "$script"
           done
+
+      - name: Check runtime fingerprints
+        shell: bash
+        run: |
           for digest in pack-source build-recipe; do
             go run .github/scripts/runtime/digest.go "$digest" HEAD >/dev/null
           done
-          # Relative profiles keep the root and cmd/ispx modules separate.
-          bash .github/scripts/test_go.sh -v -coverprofile=coverage.out -covermode=atomic
+
+      - name: Test Go modules
+        id: go-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh native
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
           slug: goplus/spx
-          files: coverage.out,cmd/ispx/coverage.out,coverage-web.out,coverage-web-process.out,cmd/ispx/coverage-web.out,coverage-driverbundle.out,coverage-manifest.out,coverage-resolution.out,coverage-version.out
+          files: ${{ steps.go-tests.outputs.coverage }},${{ steps.web-tests.outputs.coverage }},${{ steps.web-process-tests.outputs.coverage }},${{ steps.web-interpreter-tests.outputs.coverage }},${{ steps.tool-tests.outputs.coverage }}
           disable_search: true

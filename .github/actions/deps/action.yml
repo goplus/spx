@@ -95,11 +95,8 @@ runs:
           host)
             setup_args=(host)
             ;;
-          web)
-            setup_args=(web --mode "$WEB_MODE")
-            ;;
-          full)
-            setup_args=(full --mode "$WEB_MODE")
+          web|full)
+            setup_args=("$SETUP_MODE" --mode "$WEB_MODE")
             ;;
           *)
             echo "[error] Unsupported setup mode: $SETUP_MODE" >&2

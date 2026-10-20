@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          require_result() {
+          require_job_result() {
             local job_name="$1"
             local actual="$2"
             local expected="$3"
@@ -112,25 +112,20 @@ jobs:
             fi
           }
 
-          require_result static-checks "$STATIC_CHECKS_RESULT" success
-          require_result go-builds "$GO_BUILDS_RESULT" success
-          require_result runtime-resolution "$RUNTIME_RESOLUTION_RESULT" success
+          require_job_result static-checks "$STATIC_CHECKS_RESULT" success
+          require_job_result go-builds "$GO_BUILDS_RESULT" success
+          require_job_result runtime-resolution "$RUNTIME_RESOLUTION_RESULT" success
 
           case "$RUNTIME_STATE" in
             ready)
-              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" skipped
-              require_result web-build "$WEB_BUILD_RESULT" success
+              require_job_result spx-module-integration "$MODULE_INTEGRATION_RESULT" skipped
+              require_job_result web-build "$WEB_BUILD_RESULT" success
               echo "[ok] Published runtime verified; Web normal smoke passed"
               ;;
-            missing)
-              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
-              require_result web-build "$WEB_BUILD_RESULT" skipped
-              echo "[ok] Runtime is unpublished; current SPX module integration passed"
-              ;;
-            incompatible)
-              require_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
-              require_result web-build "$WEB_BUILD_RESULT" skipped
-              echo "[ok] Published runtime is incompatible; current SPX module integration passed"
+            missing|incompatible)
+              require_job_result spx-module-integration "$MODULE_INTEGRATION_RESULT" success
+              require_job_result web-build "$WEB_BUILD_RESULT" skipped
+              echo "[ok] Published runtime is $RUNTIME_STATE; current SPX module integration passed"
               ;;
             *)
               echo "[error] Unknown runtime state: ${RUNTIME_STATE:-<empty>}" >&2
