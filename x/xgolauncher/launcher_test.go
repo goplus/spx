@@ -297,7 +297,7 @@ func launcherTestZIP(t *testing.T, files []launcherTestFile) []byte {
 	for _, file := range files {
 		header := &zip.FileHeader{Name: file.Name, Method: zip.Store}
 		header.SetMode(file.Mode)
-		header.SetModTime(canonicalTime)
+		header.Modified = canonicalTime.UTC()
 		entry, err := writer.CreateHeader(header)
 		if err != nil {
 			t.Fatal(err)

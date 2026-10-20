@@ -52,10 +52,8 @@ func TestInputReplayValidateRejectsInvalidData(t *testing.T) {
 		{"time over clock range", func(r *InputReplay) { r.Frames[1].Time = maxInputReplayTime + 1 }, "finite"},
 		{"decreasing time", func(r *InputReplay) {
 			r.Frames[0].Time = 0
-			r.Frames[1].Time = -0.0
-			r.Frames = append(r.Frames, InputReplayFrame{Frame: 2, Time: 0.1, State: InputReplayState{}})
 			r.Frames[1].Time = 0.2
-			r.Frames[2].Time = 0.1
+			r.Frames = append(r.Frames, InputReplayFrame{Frame: 2, Time: 0.1, State: InputReplayState{}})
 		}, "precedes"},
 		{"frame state", func(r *InputReplay) { r.Frames[1].State.KeysDown = []int64{3, 2} }, "frame 1 state"},
 		{"invalid mouse event", func(r *InputReplay) { r.Frames[0].MouseEvents[0].Button = 4 }, "invalid button"},

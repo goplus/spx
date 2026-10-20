@@ -100,6 +100,7 @@ func TestBuildctlCommandEnvPrependsGoBinDirs(t *testing.T) {
 
 	pathDirs := filepath.SplitList(pathEnvValue(env))
 	wantDirs := []string{filepath.Join(gopath, "bin")}
+	//lint:ignore SA1019 Verify that buildctl preserves the build toolchain's priority over the inherited PATH.
 	if goRoot := runtime.GOROOT(); goRoot != "" {
 		wantDirs = append(wantDirs, filepath.Join(goRoot, "bin"))
 	}

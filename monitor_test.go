@@ -45,7 +45,7 @@ func (g *monitorEvalFixture) Value() float64 {
 }
 
 func TestMonitorEvalPreservesFormatting(t *testing.T) {
-	g := monitorEvalFixture{score: 1.23456789}
+	g := monitorEvalFixture{score: 1.23456789, unset: nil}
 	root := reflect.ValueOf(&g).Elem()
 	for _, name := range []string{"score", "getVar:score"} {
 		eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceDefault)

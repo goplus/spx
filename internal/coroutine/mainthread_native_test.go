@@ -665,7 +665,7 @@ func TestWaitMainThreadPropagatesNilCallbackPanic(t *testing.T) {
 			_ = recover()
 			returned <- panicked
 		}()
-		co.WaitMainThread(func() { panic(nil) })
+		co.WaitMainThread(func() { panicWithValue(nil) })
 		panicked = false
 	}()
 

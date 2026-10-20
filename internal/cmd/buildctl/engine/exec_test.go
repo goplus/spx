@@ -60,6 +60,49 @@ func TestParseEngineExecArgsScript(t *testing.T) {
 	}
 }
 
+func TestEngineProcessTrackingUnsupportedPlatform(t *testing.T) {
+	switch runtime.GOOS {
+	case "js", "wasip1", "plan9":
+	default:
+		t.Skip("process tracking is supported on Unix and Windows")
+	}
+	t.Run("command", func(t *testing.T) {
+		err := runTrackedEngineCommand(t.TempDir(), "child")
+		if !errors.Is(err, errors.ErrUnsupported) {
+			t.Fatalf("runTrackedEngineCommand() = %v, want unsupported error", err)
+		}
+		if !strings.Contains(err.Error(), runtime.GOOS+"/"+runtime.GOARCH) {
+			t.Fatalf("runTrackedEngineCommand() error lacks platform: %v", err)
+		}
+	})
+	t.Run("preserves unknown PID lock", func(t *testing.T) {
+		assertEngineBuildLockPreservedOnProbeError(t, 123456789, errors.ErrUnsupported)
+	})
+}
+
+func assertEngineBuildLockPreservedOnProbeError(t *testing.T, pid int, wantErr error) {
+	t.Helper()
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	pidPath := filepath.Join(lockDir, "pid")
+	pidData := fmt.Sprintf("%d\n", pid)
+	mustWriteFile(t, pidPath, []byte(pidData))
+
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if !errors.Is(err, wantErr) || stale || message != "" {
+		t.Fatalf("lock probe = (%v, %q, %v), want %v without reclaiming lock", stale, message, err, wantErr)
+	}
+	err = withEngineBuildLock(lockDir, func() error {
+		t.Error("failed lock probe invoked the build callback")
+		return nil
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("lock acquisition = %v, want %v", err, wantErr)
+	}
+	if data, err := os.ReadFile(pidPath); err != nil || string(data) != pidData {
+		t.Fatalf("lock metadata = %q (%v), want unchanged %q", data, err, pidData)
+	}
+}
+
 func TestDetectStaleEngineBuildLockInvalidPID(t *testing.T) {
 	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
 	mustMkdirAll(t, lockDir)
@@ -114,9 +157,6 @@ func TestDetectStaleEngineBuildLockMissingPIDWithinGracePeriod(t *testing.T) {
 }
 
 func TestDetectStaleEngineBuildLockProtectsLivePID(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("trackedProcessExists opens the process without SYNCHRONIZE, which WaitForSingleObject requires")
-	}
 	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
 	pidPath := filepath.Join(lockDir, "pid")
 	pidData := fmt.Sprintf("  %d\n", os.Getpid())
@@ -142,7 +182,7 @@ func TestEngineBuildLockRecoversExitedPID(t *testing.T) {
 	}
 	pid := cmd.Process.Pid
 	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
-	mustWriteFile(t, filepath.Join(lockDir, "pid"), []byte(fmt.Sprintf("%d\n", pid)))
+	mustWriteFile(t, filepath.Join(lockDir, "pid"), fmt.Appendf(nil, "%d\n", pid))
 	stale, message, err := detectStaleEngineBuildLock(lockDir)
 	if err != nil || !stale || !strings.Contains(message, fmt.Sprintf("pid %d is dead", pid)) {
 		t.Fatalf("exited PID lock = (%v, %q, %v), want stale dead-PID message", stale, message, err)
@@ -327,9 +367,6 @@ func TestEngineLockFilesystemErrors(t *testing.T) {
 }
 
 func TestEngineLockWaitsForActiveOwner(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("live-process check uses POSIX signals")
-	}
 	synctest.Test(t, func(t *testing.T) {
 		lock := filepath.Join(t.TempDir(), "lock")
 		mustWriteFile(t, filepath.Join(lock, "pid"), []byte(fmt.Sprint(os.Getpid())))

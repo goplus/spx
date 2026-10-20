@@ -41,8 +41,10 @@ func TestQueueSortStable(t *testing.T) {
 		if first, ok := q.peekFront(); !ok || first != b || q.len() != 3 {
 			t.Fatal("PeekFront changed the sorted queue")
 		}
-		if q.popFront() != b || q.popFront() != a || q.popFront() != c {
-			t.Fatal("sorting lost equal-value order")
+		for i, want := range []*entry{b, a, c} {
+			if got := q.popFront(); got != want {
+				t.Errorf("PopFront %d after stable sort = %p, want %p", i+1, got, want)
+			}
 		}
 		for _, value := range q.sortBuffer {
 			if value != nil {

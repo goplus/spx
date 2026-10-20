@@ -558,8 +558,10 @@ func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
 					t.Fatalf("color query saw pen commands %v, want down then move", ops)
 				}
 			}
-			if !tt.query(sprite) || !tt.query(sprite) {
-				t.Fatal("color sensing returned false")
+			for query := range 2 {
+				if !tt.query(sprite) {
+					t.Errorf("color sensing query %d returned false", query+1)
+				}
 			}
 			sprite.g.flushPenCommands()
 			if pen.batchCalls != 1 {

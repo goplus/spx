@@ -291,7 +291,12 @@ func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	}()
 	<-aStarted
 	co.runMu.Lock()
+	current := co.Current()
 	co.runMu.Unlock()
+	if current != nil {
+		a.suspendMu.Unlock()
+		t.Fatal("A did not clear current before releasing runMu")
+	}
 
 	go func() {
 		co.runThread(b, func(me Thread) {

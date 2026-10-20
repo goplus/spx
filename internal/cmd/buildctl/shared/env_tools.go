@@ -40,7 +40,7 @@ func EnsureEngineSource(repoRoot string, run func(name string, args ...string) e
 			return fmt.Errorf("inspect existing Godot source %s: %w", engineDir, err)
 		}
 		if head != lock.Godot.Commit {
-			return fmt.Errorf("Godot source %s is at %s, but runtime.lock.json requires %s; update GODOT_SRC or the runtime lock", engineDir, head, lock.Godot.Commit)
+			return fmt.Errorf("existing Godot source %s is at %s, but runtime.lock.json requires %s; update GODOT_SRC or the runtime lock", engineDir, head, lock.Godot.Commit)
 		}
 		fmt.Fprintf(os.Stdout, "Using pinned Godot source: %s (%s)\n", engineDir, head)
 		return nil

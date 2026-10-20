@@ -205,7 +205,7 @@ func addFileToZip(writer *zip.Writer, src, name string) error {
 		Name:   name,
 		Method: zip.Deflate,
 	}
-	header.SetModTime(normalizedZipModTime)
+	header.Modified = normalizedZipModTime.UTC()
 	header.SetMode(normalizedZipMode(info.Mode()))
 
 	entry, err := writer.CreateHeader(header)

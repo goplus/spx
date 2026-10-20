@@ -71,14 +71,6 @@ func Run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	return run(ctx, cmd)
 }
 
-func signalFromContext(ctx context.Context) (os.Signal, bool) {
-	var cause *SignalCause
-	if !errors.As(context.Cause(ctx), &cause) || cause == nil || cause.Signal == nil {
-		return nil, false
-	}
-	return cause.Signal, true
-}
-
 func cancellationError(ctx context.Context, observed bool) error {
 	if !observed && ctx.Err() == nil {
 		return nil

@@ -21,6 +21,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +35,7 @@ func TestRunRejectsInvalidInput(t *testing.T) {
 	}{
 		{name: "nil context", cmd: &exec.Cmd{}, want: "processsupervisor: nil context"},
 		{name: "nil command", ctx: context.Background(), want: "processsupervisor: nil command"},
+		{name: "started command", ctx: context.Background(), cmd: &exec.Cmd{Process: &os.Process{}}, want: "processsupervisor: command has already started"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			status, err := Run(tt.ctx, tt.cmd)
@@ -40,6 +43,25 @@ func TestRunRejectsInvalidInput(t *testing.T) {
 				t.Fatalf("Run() = (%+v, %v), want zero status and %q", status, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunUnsupportedPlatform(t *testing.T) {
+	switch runtime.GOOS {
+	case "js", "wasip1", "plan9":
+	default:
+		t.Skip("process supervision is supported on Unix and Windows")
+	}
+	cmd := exec.Command("child")
+	status, err := Run(context.Background(), cmd)
+	if !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatalf("Run() = (%+v, %v), want unsupported error", status, err)
+	}
+	if !strings.Contains(err.Error(), runtime.GOOS+"/"+runtime.GOARCH) {
+		t.Fatalf("Run() error lacks platform: %v", err)
+	}
+	if status != (Status{}) || cmd.Process != nil || cmd.SysProcAttr != nil {
+		t.Fatalf("Run() changed command or status: status=%+v, command=%+v", status, cmd)
 	}
 }
 

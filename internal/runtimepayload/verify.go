@@ -89,7 +89,7 @@ func (v *Verified) WriteComponentZIP(prefix string, dst io.Writer) error {
 		}
 		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
 		header.SetMode(canonicalFileMode(fs.FileMode(entry.Mode)))
-		header.SetModTime(canonicalTime)
+		header.Modified = canonicalTime.UTC()
 		output, err := writer.CreateHeader(header)
 		if err != nil {
 			_ = writer.Close()

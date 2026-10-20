@@ -19,35 +19,44 @@
 package engine
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
-)
 
-const processQueryLimitedInformation = 0x1000
+	"golang.org/x/sys/windows"
+)
 
 func configureTrackedCommand(cmd *exec.Cmd) {}
 
-func trackedSignals() []os.Signal {
-	return []os.Signal{os.Interrupt}
-}
+var trackedSignals = []os.Signal{os.Interrupt}
 
-func trackedProcessExists(pid int) bool {
+func trackedProcessExists(pid int) (bool, error) {
 	if pid <= 0 {
-		return false
+		return false, nil
 	}
 
-	handle, err := syscall.OpenProcess(processQueryLimitedInformation, false, uint32(pid))
+	handle, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid))
 	if err != nil {
-		return false
+		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
+			return false, nil
+		}
+		return false, err
 	}
-	defer syscall.CloseHandle(handle)
+	defer windows.CloseHandle(handle)
 
-	waitStatus, err := syscall.WaitForSingleObject(handle, 0)
+	waitStatus, err := windows.WaitForSingleObject(handle, 0)
 	if err != nil {
-		return false
+		return false, err
 	}
-	return waitStatus == syscall.WAIT_TIMEOUT
+	switch waitStatus {
+	case uint32(windows.WAIT_TIMEOUT):
+		return true, nil
+	case windows.WAIT_OBJECT_0:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected wait status for process %d: %d", pid, waitStatus)
+	}
 }
 
 func terminateTrackedProcessGroup(process *os.Process) {

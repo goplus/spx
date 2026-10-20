@@ -351,15 +351,17 @@ func TestMemberNumberSetter(t *testing.T) {
 		reporter interface{ Value() float64 }
 	}
 	reporter := &memberEvalFixture{}
-	f := fixture{reporter: reporter}
+	f := fixture{flag: true, values: []int{1, 2}, reporter: reporter}
 	root := reflect.ValueOf(&f).Elem()
 	for _, name := range []string{"number", "single", "integer", "unsigned", "text", "dynamic"} {
 		set := ResolveMemberNumberSetter(root, name, 0)
 		if set == nil || !set(12.5) {
 			t.Fatalf("cannot set %s", name)
 		}
-		if set(math.NaN()) || set(math.Inf(1)) || set(math.Inf(-1)) {
-			t.Fatalf("accepted non-finite %s", name)
+		for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+			if set(value) {
+				t.Errorf("accepted %g for %s", value, name)
+			}
 		}
 	}
 	if f.number != 12.5 || f.single != 12.5 || f.integer != 12 || f.unsigned != 12 || f.text != "12.5" || f.dynamic != 12.5 {

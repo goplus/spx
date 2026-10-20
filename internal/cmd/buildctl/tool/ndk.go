@@ -73,7 +73,7 @@ func (archive androidNDKArchive) validate() error {
 		return fmt.Errorf("invalid Android NDK archive specification")
 	}
 	if !strings.HasPrefix(archive.hostTag, archive.archiveOS+"-") {
-		return fmt.Errorf("Android NDK host tag %q does not match archive OS %q", archive.hostTag, archive.archiveOS)
+		return fmt.Errorf("host tag %q for Android NDK does not match archive OS %q", archive.hostTag, archive.archiveOS)
 	}
 	digest, err := hex.DecodeString(archive.sha256)
 	if err != nil || len(digest) != sha256.Size || archive.sha256 != strings.ToLower(archive.sha256) {
@@ -535,7 +535,7 @@ func verifyInstalledNDK(root string, archive androidNDKArchive) error {
 		return err
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return fmt.Errorf("Android NDK root is not a regular directory: %s", root)
+		return fmt.Errorf("installed Android NDK root is not a regular directory: %s", root)
 	}
 	properties, err := readSmallRegularFile(filepath.Join(root, "source.properties"), maxNDKPropertiesBytes)
 	if err != nil {
@@ -575,7 +575,7 @@ func verifyInstalledNDKTools(root, canonicalRoot, hostTag string) error {
 			return err
 		}
 		if compiler.Mode().Perm()&0o111 == 0 {
-			return fmt.Errorf("Android NDK tool is not executable: %s", compilerName)
+			return fmt.Errorf("installed Android NDK tool is not executable: %s", compilerName)
 		}
 		compilerSize = compiler.Size()
 	}
@@ -591,10 +591,10 @@ func verifyInstalledNDKTools(root, canonicalRoot, hostTag string) error {
 			continue
 		}
 		if info.Mode().Perm()&0o111 == 0 {
-			return fmt.Errorf("Android NDK tool is not executable: %s", name)
+			return fmt.Errorf("installed Android NDK tool is not executable: %s", name)
 		}
 		if info.Size() != compilerSize {
-			return fmt.Errorf("Android NDK tool %s does not resolve to the compiler", name)
+			return fmt.Errorf("installed Android NDK tool %s does not resolve to the compiler", name)
 		}
 	}
 	return nil
@@ -610,7 +610,7 @@ func inspectInstalledNDKFile(root, canonicalRoot, name string) (os.FileInfo, err
 		return nil, fmt.Errorf("inspect Android NDK file %s: %w", name, err)
 	}
 	if !info.Mode().IsRegular() || info.Size() == 0 {
-		return nil, fmt.Errorf("Android NDK file is not a non-empty regular file: %s", name)
+		return nil, fmt.Errorf("installed Android NDK file is not a non-empty regular file: %s", name)
 	}
 	return info, nil
 }

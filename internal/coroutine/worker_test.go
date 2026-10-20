@@ -89,7 +89,7 @@ func TestWaitToDoPropagatesNilWorkerPanic(t *testing.T) {
 	co := New(func(PanicReport) {})
 	continued := make(chan struct{}, 1)
 	thread := co.Create("caller", func(Thread) {
-		co.WaitToDo(func() { panic(nil) })
+		co.WaitToDo(func() { panicWithValue(nil) })
 		continued <- struct{}{}
 	})
 

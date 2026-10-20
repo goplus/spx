@@ -37,7 +37,3 @@ func logWarnf(format string, args ...any) {
 func logErrorf(format string, args ...any) {
 	logutil.Errorf(format, args...)
 }
-
-func logFatalf(format string, args ...any) {
-	logutil.Fatalf(format, args...)
-}

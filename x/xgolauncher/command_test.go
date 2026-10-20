@@ -31,9 +31,9 @@ import (
 
 func TestRunCommand(t *testing.T) {
 	t.Run("nil command", func(t *testing.T) {
-		status, err := RunCommand(nil, nil)
+		status, err := RunCommand(t.Context(), nil)
 		if status != (ProcessStatus{}) || err == nil || err.Error() != "xgolauncher: nil command" {
-			t.Fatalf("RunCommand(nil, nil) = (%+v, %v), want zero status and nil command error", status, err)
+			t.Fatalf("RunCommand(ctx, nil) = (%+v, %v), want zero status and nil command error", status, err)
 		}
 	})
 

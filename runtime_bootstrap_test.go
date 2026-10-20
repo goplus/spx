@@ -435,8 +435,14 @@ func TestBootstrapStateTaskSnapshots(t *testing.T) {
 	var state gameBootstrapState
 	generation := state.bootstrapGeneration()
 	var got []string
-	if state.queueBootstrap(generation, nil) || state.queueBootstrap(generation+1, func() {}) {
-		t.Fatal("accepted a nil task or a task for a different generation")
+	if state.queueBootstrap(generation, nil) {
+		t.Error("accepted a nil bootstrap task")
+	}
+	if state.queueBootstrap(generation+1, func() {}) {
+		t.Error("accepted a bootstrap task for a different generation")
+	}
+	if t.Failed() {
+		return
 	}
 	state.queueBootstrap(generation, func() { got = append(got, "first") })
 	if tasks := state.takeBootstrapTasks(generation + 1); len(tasks) != 0 {

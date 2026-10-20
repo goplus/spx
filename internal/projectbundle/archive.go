@@ -78,7 +78,7 @@ func (b *bundle) writeZIP(w io.Writer) (Digest, error) {
 
 	for _, entry := range b.entries {
 		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
-		header.SetModTime(canonicalZipTime)
+		header.Modified = canonicalZipTime.UTC()
 		header.SetMode(0o644)
 		output, err := writer.CreateHeader(header)
 		if err != nil {

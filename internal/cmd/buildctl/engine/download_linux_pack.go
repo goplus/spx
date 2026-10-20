@@ -50,10 +50,10 @@ type engineDownloadEnv struct {
 // the release runtime pack workflow.
 func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return fmt.Errorf("Linux runtime pack preparation requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
+		return fmt.Errorf("preparing Linux runtime packs requires linux/amd64, got %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	if strings.TrimSpace(assetDir) == "" {
-		return fmt.Errorf("Linux runtime pack preparation requires an engine asset directory")
+		return fmt.Errorf("preparing Linux runtime packs requires an engine asset directory")
 	}
 
 	env, err := resolveEngineDownloadEnv(repoRoot, "linux")
@@ -109,7 +109,7 @@ func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, err
 
 func downloadLinuxAssets(env engineDownloadEnv, editor bool) error {
 	if env.platform != "linux" {
-		return fmt.Errorf("Linux runtime assets require platform linux, got %s", env.platform)
+		return fmt.Errorf("downloading Linux runtime assets requires platform linux, got %s", env.platform)
 	}
 
 	zipName := fmt.Sprintf("linux-%s.zip", env.arch)

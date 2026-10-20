@@ -22,26 +22,24 @@ import (
 	"strings"
 	"syscall/js"
 
-	. "github.com/goplus/spbase/mathf"
-	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 var jsObject = js.Global().Get("Object")
 
-func JsFromGdObj(val Object) js.Value {
+func JsFromGdObj(val engine.Object) js.Value {
 	return JsFromGdInt(int64(val))
 }
 
-func JsSplitGdObj(val Object) (uint32, uint32) {
+func JsSplitGdObj(val engine.Object) (uint32, uint32) {
 	return JsSplitGdInt(int64(val))
 }
 
 // JsSplitGdInt encodes a web bridge GdInt/GdObj as (low, high) uint32 parts.
 // JS wrappers rebuild a signed BigInt in this order for by-value Wasm inputs.
 func JsSplitGdInt(val int64) (uint32, uint32) {
-	low := uint32(val & 0xFFFFFFFF)
-	high := uint32((val >> 32) & 0xFFFFFFFF)
-	return low, high
+	return uint32(val), uint32(val >> 32)
 }
 
 func JsFromGdInt(val int64) js.Value {
@@ -52,8 +50,8 @@ func JsFromGdInt(val int64) js.Value {
 	return intJs
 }
 
-func JsToGdObject(val js.Value) Object {
-	return Object(JsToGdInt(val))
+func JsToGdObject(val js.Value) engine.Object {
+	return engine.Object(JsToGdInt(val))
 }
 
 func JsToGdObj(val js.Value) int64 {
@@ -70,14 +68,14 @@ func JsFromGdString(object string) js.Value {
 	return js.ValueOf(object)
 }
 
-func JsFromGdVec2(vec Vec2) js.Value {
+func JsFromGdVec2(vec mathf.Vec2) js.Value {
 	vec2Js := jsObject.New()
 	vec2Js.Set("x", float32(vec.X))
 	vec2Js.Set("y", float32(vec.Y))
 	return vec2Js
 }
 
-func JsFromGdVec3(vec Vec3) js.Value {
+func JsFromGdVec3(vec mathf.Vec3) js.Value {
 	vec3Js := jsObject.New()
 	vec3Js.Set("x", float32(vec.X))
 	vec3Js.Set("y", float32(vec.Y))
@@ -85,7 +83,7 @@ func JsFromGdVec3(vec Vec3) js.Value {
 	return vec3Js
 }
 
-func JsFromGdVec4(vec Vec4) js.Value {
+func JsFromGdVec4(vec mathf.Vec4) js.Value {
 	vec4Js := jsObject.New()
 	vec4Js.Set("x", float32(vec.X))
 	vec4Js.Set("y", float32(vec.Y))
@@ -94,7 +92,7 @@ func JsFromGdVec4(vec Vec4) js.Value {
 	return vec4Js
 }
 
-func JsFromGdColor(color Color) js.Value {
+func JsFromGdColor(color mathf.Color) js.Value {
 	colorJs := jsObject.New()
 	colorJs.Set("r", float32(color.R))
 	colorJs.Set("g", float32(color.G))
@@ -103,7 +101,7 @@ func JsFromGdColor(color Color) js.Value {
 	return colorJs
 }
 
-func JsFromGdRect2(rect Rect2) js.Value {
+func JsFromGdRect2(rect mathf.Rect2) js.Value {
 	rectJs := jsObject.New()
 	rectJs.Set("position", JsFromGdVec2(rect.Position))
 	rectJs.Set("size", JsFromGdVec2(rect.Size))
@@ -116,41 +114,41 @@ func JsToGdString(object js.Value) string {
 	return strings.TrimRight(s, "\x00")
 }
 
-func JsToGdVec2(vec js.Value) Vec2 {
-	return Vec2{
-		X: float64(vec.Get("x").Float()),
-		Y: float64(vec.Get("y").Float()),
+func JsToGdVec2(vec js.Value) mathf.Vec2 {
+	return mathf.Vec2{
+		X: vec.Get("x").Float(),
+		Y: vec.Get("y").Float(),
 	}
 }
 
-func JsToGdVec3(vec js.Value) Vec3 {
-	return Vec3{
-		X: float64(vec.Get("x").Float()),
-		Y: float64(vec.Get("y").Float()),
-		Z: float64(vec.Get("z").Float()),
+func JsToGdVec3(vec js.Value) mathf.Vec3 {
+	return mathf.Vec3{
+		X: vec.Get("x").Float(),
+		Y: vec.Get("y").Float(),
+		Z: vec.Get("z").Float(),
 	}
 }
 
-func JsToGdVec4(vec js.Value) Vec4 {
-	return Vec4{
-		X: float64(vec.Get("x").Float()),
-		Y: float64(vec.Get("y").Float()),
-		Z: float64(vec.Get("z").Float()),
-		W: float64(vec.Get("w").Float()),
+func JsToGdVec4(vec js.Value) mathf.Vec4 {
+	return mathf.Vec4{
+		X: vec.Get("x").Float(),
+		Y: vec.Get("y").Float(),
+		Z: vec.Get("z").Float(),
+		W: vec.Get("w").Float(),
 	}
 }
 
-func JsToGdColor(color js.Value) Color {
-	return Color{
-		R: float64(color.Get("r").Float()),
-		G: float64(color.Get("g").Float()),
-		B: float64(color.Get("b").Float()),
-		A: float64(color.Get("a").Float()),
+func JsToGdColor(color js.Value) mathf.Color {
+	return mathf.Color{
+		R: color.Get("r").Float(),
+		G: color.Get("g").Float(),
+		B: color.Get("b").Float(),
+		A: color.Get("a").Float(),
 	}
 }
 
-func JsToGdRect2(rect js.Value) Rect2 {
-	return Rect2{
+func JsToGdRect2(rect js.Value) mathf.Rect2 {
+	return mathf.Rect2{
 		Position: JsToGdVec2(rect.Get("position")),
 		Size:     JsToGdVec2(rect.Get("size")),
 	}
@@ -168,7 +166,7 @@ func JsToGdBool(val js.Value) bool {
 }
 
 func JsToGdFloat(val js.Value) float64 {
-	return float64(val.Float())
+	return val.Float()
 }
 
 func JsToGdFloat32(val js.Value) float32 {

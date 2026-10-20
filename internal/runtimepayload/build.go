@@ -87,7 +87,7 @@ func BuildTo(dst io.Writer, cfg BuildConfig, sources []FileSource) (payloadSHA25
 	for _, file := range all {
 		header := &zip.FileHeader{Name: file.source.Name, Method: zip.Store}
 		header.SetMode(file.source.Mode)
-		header.SetModTime(canonicalTime)
+		header.Modified = canonicalTime.UTC()
 		entry, createErr := writer.CreateHeader(header)
 		if createErr != nil {
 			_ = writer.Close()

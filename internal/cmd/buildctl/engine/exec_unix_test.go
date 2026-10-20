@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build unix
 
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
@@ -31,6 +31,14 @@ import (
 	"testing"
 	"time"
 )
+
+func TestEngineBuildLockPreservesPermissionDeniedOwner(t *testing.T) {
+	// PID 1 belongs to the system; a null signal only checks access.
+	if err := syscall.Kill(1, 0); !errors.Is(err, syscall.EPERM) {
+		t.Skipf("PID 1 is not protected from this user: %v", err)
+	}
+	assertEngineBuildLockPreservedOnProbeError(t, 1, syscall.EPERM)
+}
 
 func TestTerminateTrackedProcessGroupKillsDescendantAfterLeaderExit(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "grandchild")
@@ -190,5 +198,5 @@ func TestTrackedEngineCommandInterrupted(t *testing.T) {
 			}
 		})
 	}
-	terminateTrackedProcess(nil)
+	terminateTrackedProcessGroup(nil)
 }

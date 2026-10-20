@@ -33,10 +33,12 @@ jobs:
         shell: bash
         run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)
 
-      - name: Test Windows file replacement
+      - name: Test Windows file replacement and process tracking
         if: runner.os == 'Windows'
         shell: bash
-        run: go test -v ./internal/cmd/buildctl/shared -run '^(TestReplaceFileWindows|TestWindowsPath|TestFetchURLToFileReplacesExistingDestination)$'
+        run: |
+          go test -v ./internal/cmd/buildctl/shared -run '^(TestReplaceFileWindows|TestWindowsPath|TestFetchURLToFileReplacesExistingDestination)$'
+          go test -v ./internal/cmd/buildctl/engine -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$'
 
       - name: Build cmd/ispx
         if: runner.os == 'Linux'

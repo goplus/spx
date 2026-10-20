@@ -48,7 +48,7 @@ func acquireSourceRuntime(ctx context.Context, cfg Config, env []string, cacheRo
 		return assets, nil
 	}
 	if dependencies.goBin == nil {
-		return Assets{}, sourceRuntimeError(root, publishedErr, errors.New("Go-bin resolver is unavailable"))
+		return Assets{}, sourceRuntimeError(root, publishedErr, errors.New("cannot resolve Go bin: resolver is unavailable"))
 	}
 	bin, err := dependencies.goBin(ctx, cfg, env)
 	if err != nil {
@@ -82,7 +82,7 @@ func sourceRuntimeError(root string, publishedErr, localErr error) error {
 
 func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error) {
 	if cfg.GoCommand == "" {
-		return "", errors.New("Go command is unavailable")
+		return "", errors.New("cannot resolve Go bin: Go command is unavailable")
 	}
 	command := exec.CommandContext(ctx, cfg.GoCommand, "env", "GOPATH")
 	command.Dir = cfg.WorkDir
@@ -98,11 +98,11 @@ func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error)
 	}
 	paths := filepath.SplitList(strings.TrimSpace(string(output)))
 	if len(paths) == 0 || paths[0] == "" {
-		return "", errors.New("Go environment has no GOPATH")
+		return "", errors.New("cannot resolve Go bin: Go environment has no GOPATH")
 	}
 	bin := filepath.Join(paths[0], "bin")
 	if !filepath.IsAbs(bin) || filepath.Clean(bin) != bin {
-		return "", fmt.Errorf("Go bin must be an absolute clean path: %q", bin)
+		return "", fmt.Errorf("cannot resolve Go bin: expected an absolute clean path, got %q", bin)
 	}
 	return bin, nil
 }

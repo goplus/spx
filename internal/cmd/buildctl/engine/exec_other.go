@@ -1,4 +1,4 @@
-//go:build windows
+//go:build !unix && !windows
 
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
@@ -16,14 +16,21 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package engine
 
-import "os"
+import (
+	"errors"
+	"fmt"
+	"runtime"
+)
 
-// Exit terminates a Windows launcher with a conventional signal fallback.
-func Exit(status ProcessStatus) {
-	if status.Signal != 0 {
-		os.Exit(128 + status.Signal)
-	}
-	os.Exit(status.Code)
+var errProcessTrackingUnsupported = fmt.Errorf("engine: process tracking on %s/%s: %w", runtime.GOOS, runtime.GOARCH, errors.ErrUnsupported)
+
+func runTrackedEngineCommandWithEnv(string, map[string]string, string, ...string) error {
+	return errProcessTrackingUnsupported
+}
+
+func trackedProcessExists(int) (bool, error) {
+	// An unknown process must not make its build lock eligible for removal.
+	return false, errProcessTrackingUnsupported
 }
