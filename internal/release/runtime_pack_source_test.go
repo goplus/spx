@@ -90,6 +90,7 @@ func TestRuntimePackSourcePathSeparatesEngineAndOrchestration(t *testing.T) {
 		{"cmd/spx/internal/command/builderai/sync.go", false},
 		{"cmd/spx/internal/pack/pack.go", false},
 		{"cmd/spx/template/project/project.godot", true},
+		{"cmd/spx/template/project/engine/scripts/ui_ask.gd", true},
 		{"cmd/spx/template/project/engine/ui/UiAsk.tscn", true},
 		{"cmd/spx/template/project/engine/fonts/default.LICENSE.txt", false},
 		{"cmd/spx/template/project/engine/fonts/default.NOTICE.txt", false},
