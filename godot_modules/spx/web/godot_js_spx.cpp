@@ -1706,6 +1706,14 @@ void gdspx_ui_set_text(GdObj obj, GdString *text) {
 	 uiMgr->set_text(obj, gdspx_string_arg_1);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_ui_set_text_max_width(GdObj obj, GdString *text, GdFloat max_width, GdFloat *ret_val) {
+	GdString gdspx_string_arg_1 = nullptr;
+	if (!gdspx_get_string_value(text, &gdspx_string_arg_1)) {
+		return;
+	}
+	*ret_val = uiMgr->set_text_max_width(obj, gdspx_string_arg_1, max_width);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_list_items(GdObj obj, GdString *label, GdArray *items, GdColor *color) {
 	GdString gdspx_string_arg_1 = nullptr;
 	if (!gdspx_get_string_value(label, &gdspx_string_arg_1)) {
@@ -1819,6 +1827,10 @@ void gdspx_ui_set_anchors_preset(GdObj obj, GdInt value) {
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_get_scale(GdObj obj, GdVec2 *ret_val) {
 	*ret_val = uiMgr->get_scale(obj);
+}
+EMSCRIPTEN_KEEPALIVE
+void gdspx_ui_get_canvas_scale(GdObj obj, GdVec2 *ret_val) {
+	*ret_val = uiMgr->get_canvas_scale(obj);
 }
 EMSCRIPTEN_KEEPALIVE
 void gdspx_ui_set_scale(GdObj obj, GdVec2 *value) {

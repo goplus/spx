@@ -392,6 +392,7 @@ type IUiMgr interface {
 	DestroyNode(obj Object) bool
 	GetType(obj Object) int64
 	SetText(obj Object, text string)
+	SetTextMaxWidth(obj Object, text string, max_width float64) float64
 	SetListItems(obj Object, label string, items Array, color Color)
 	SetRange(obj Object, minimum float64, maximum float64, step float64, value float64)
 	GetRangeValue(obj Object) float64
@@ -415,6 +416,7 @@ type IUiMgr interface {
 	GetAnchorsPreset(obj Object) int64
 	SetAnchorsPreset(obj Object, value int64)
 	GetScale(obj Object) Vec2
+	GetCanvasScale(obj Object) Vec2
 	SetScale(obj Object, value Vec2)
 	GetPosition(obj Object) Vec2
 	SetPosition(obj Object, value Vec2)

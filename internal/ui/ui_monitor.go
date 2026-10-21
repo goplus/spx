@@ -19,6 +19,7 @@ package ui
 //lint:file-ignore ST1001 UI glue intentionally dot-imports mathf to mirror engine type names.
 
 import (
+	"math"
 	"slices"
 
 	. "github.com/goplus/spbase/mathf"
@@ -32,7 +33,21 @@ type UiMonitor struct {
 	active    MonitorAppearance
 	listItems []string
 	slider    monitorSliderState
+
+	maxValueLabelLocalWidth float64
 }
+
+const (
+	minValueLabelLocalWidth             = 1.0
+	scratchValueOnlyOuterContentMarginX = 2.0
+	scratchValueOnlyValueContentMarginX = 9.0
+
+	// These values mirror the horizontal content margins in
+	// UiMonitor.tscn: ScratchValueOnly's outer panel contributes 2+2 and
+	// its C child contributes 9+9 in the LabelValue local coordinate system.
+	scratchValueOnlyHorizontalLayoutOverhead = 2*scratchValueOnlyOuterContentMarginX +
+		2*scratchValueOnlyValueContentMarginX
+)
 
 // MonitorStyle describes the fixed presentation of a stage monitor.
 type MonitorStyle struct {
@@ -112,8 +127,10 @@ var monitorViewSpecs = [monitorAppearanceCount]monitorViewSpec{
 type monitorRenderSink interface {
 	SetVisible(engine.Object, bool)
 	SetText(engine.Object, string)
+	SetTextMaxWidth(engine.Object, string, float64) float64
 	SetColor(engine.Object, Color)
 	SetListItems(engine.Object, string, engine.Array, Color)
+	GetSize(engine.Object) Vec2
 	SetSize(engine.Object, Vec2)
 	SetRange(engine.Object, float64, float64, float64, float64)
 	GetRangeValue(engine.Object) float64
@@ -134,13 +151,39 @@ func (pself *UiMonitor) SetVisible(isOn bool) {
 	engine.Managers().UiMgr.SetVisible(pself.GetId(), isOn)
 }
 
-func (pself *UiMonitor) UpdateScale(x float64) {
-	x *= engine.WindowScale()
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(x))
+// getValueLabelCanvasScale returns the effective canvas scale of the value
+// label, including the scale inherited from its UI ancestors and canvas layer.
+// The width limit is calculated in Viewport coordinates and applied in the
+// label's local coordinate system, so this scale is the conversion factor.
+func (pself *UiMonitor) getValueLabelCanvasScale(view monitorView) float64 {
+	if view.value == nil {
+		return 0
+	}
+
+	scale := engine.Managers().UiMgr.GetCanvasScale(view.value.GetId())
+	return math.Abs(float64(scale.X))
 }
 
-func (pself *UiMonitor) UpdatePos(wpos Vec2) {
-	engine.Managers().UiMgr.SetGlobalPosition(pself.GetId(), ViewToUI(wpos))
+func (pself *UiMonitor) UpdateScale(monitorScale float64) {
+	windowScale := engine.WindowScale()
+	monitorScale *= windowScale
+	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(monitorScale))
+}
+
+func (pself *UiMonitor) UpdatePos(worldPos Vec2) {
+	uiPosition := ViewToUI(worldPos)
+	engine.Managers().UiMgr.SetGlobalPosition(pself.GetId(), uiPosition)
+
+	valueLabelCanvasScale := pself.getValueLabelCanvasScale(pself.views[MonitorAppearanceCompatibleLarge])
+
+	viewportRect := engine.Managers().CameraMgr.GetViewportRect()
+
+	pself.maxValueLabelLocalWidth = calculateMaxValueLabelLocalWidth(
+		float64(viewportRect.Size.X),
+		float64(uiPosition.X),
+		valueLabelCanvasScale,
+		scratchValueOnlyHorizontalLayoutOverhead,
+	)
 }
 
 func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
@@ -196,15 +239,52 @@ func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value
 		return
 	}
 
-	if view.label != nil {
-		sink.SetText(view.label.GetId(), style.Label)
-	}
-	if view.value != nil {
-		sink.SetText(view.value.GetId(), value.Text)
-	}
+	pself.renderScalarText(sink, appearance, view, style.Label, value.Text)
 	if view.colorTarget != nil {
 		sink.SetColor(view.colorTarget.GetId(), style.Color)
 	}
+}
+
+// renderScalarText applies the viewport-derived width only to the
+// ScratchValueOnly value label. Other appearances have different container
+// margins and continue to use their scene layout without this constraint.
+func (pself *UiMonitor) renderScalarText(sink monitorRenderSink, appearance MonitorAppearance, view monitorView, labelText, valueText string) {
+	maxValueLabelLocalWidth := pself.maxValueLabelLocalWidth
+
+	if maxValueLabelLocalWidth <= 0 || appearance != MonitorAppearanceCompatibleLarge {
+		if view.label != nil {
+			sink.SetText(view.label.GetId(), labelText)
+		}
+		if view.value != nil {
+			sink.SetText(view.value.GetId(), valueText)
+		}
+		return
+	}
+
+	if view.label != nil {
+		sink.SetTextMaxWidth(view.label.GetId(), labelText, maxValueLabelLocalWidth)
+	}
+	if view.value != nil {
+		sink.SetTextMaxWidth(view.value.GetId(), valueText, maxValueLabelLocalWidth)
+	}
+
+	sink.SetSize(view.root.GetId(), Vec2{})
+}
+
+// calculateMaxValueLabelLocalWidth converts the remaining Viewport width into
+// the LabelValue local coordinate system. The layout overhead is subtracted
+// after conversion because it is expressed in the scene's local units.
+func calculateMaxValueLabelLocalWidth(viewportWidth, monitorLeftX, valueLabelCanvasScale, localHorizontalOverhead float64) float64 {
+	if math.IsNaN(viewportWidth) || math.IsInf(viewportWidth, 0) || viewportWidth <= 0 ||
+		math.IsNaN(monitorLeftX) || math.IsInf(monitorLeftX, 0) ||
+		math.IsNaN(valueLabelCanvasScale) || math.IsInf(valueLabelCanvasScale, 0) || valueLabelCanvasScale <= 0 ||
+		math.IsNaN(localHorizontalOverhead) || math.IsInf(localHorizontalOverhead, 0) || localHorizontalOverhead < 0 {
+		return 0
+	}
+
+	available := math.Min(viewportWidth, viewportWidth-monitorLeftX)
+
+	return math.Max(minValueLabelLocalWidth, available/valueLabelCanvasScale-localHorizontalOverhead)
 }
 
 func normalizeMonitorAppearance(appearance MonitorAppearance) MonitorAppearance {

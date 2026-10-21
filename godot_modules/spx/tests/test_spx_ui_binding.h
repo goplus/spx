@@ -124,6 +124,35 @@ TEST_CASE("[SceneTree][SPX] UI wrapper resolves controls by ObjectID and uses st
 	CHECK(ui.get_control_item() == nullptr);
 }
 
+TEST_CASE("[SceneTree][SPX] UI label wraps only when its natural width exceeds the limit") {
+	SpxUi ui;
+	ui.set_gid(8);
+	ui.set_type((GdInt)ESpxUiType::Label);
+	Label *label = memnew(Label);
+	label->set_custom_minimum_size(Size2(7, 3));
+	SceneTree::get_singleton()->get_root()->add_child(label);
+	REQUIRE(ui.set_control_item(label, nullptr) == OK);
+
+	const char *text = "spaces stay  intact and averylongtokenstillwraps";
+	const GdFloat natural_width = ui.set_text_max_width((GdString)text, 10000);
+	REQUIRE(natural_width > 1);
+	CHECK(label->get_autowrap_mode() == TextServer::AUTOWRAP_OFF);
+	CHECK(label->get_text() == text);
+
+	const GdFloat max_width = natural_width / 2;
+	CHECK(ui.set_text_max_width((GdString)text, max_width) == doctest::Approx(max_width));
+	CHECK(label->get_autowrap_mode() == TextServer::AUTOWRAP_WORD_SMART);
+	CHECK(label->get_custom_minimum_size().x == doctest::Approx(max_width));
+	CHECK(label->get_text() == text);
+
+	CHECK(ui.set_text_max_width((GdString)"short", 10000) < max_width);
+	CHECK(label->get_autowrap_mode() == TextServer::AUTOWRAP_OFF);
+	CHECK(label->get_custom_minimum_size() == Size2(7, 3));
+
+	memdelete(label);
+	CHECK(ui.get_control_item() == nullptr);
+}
+
 } // namespace TestSpxUiBinding
 
 #endif // TEST_SPX_UI_BINDING_H

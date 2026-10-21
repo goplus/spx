@@ -1976,6 +1976,13 @@ func (*uiMgrImpl) SetText(obj gdx.Object, text string) {
 		gdx.UiMgr.SetText(obj, text)
 	})
 }
+func (*uiMgrImpl) SetTextMaxWidth(obj gdx.Object, text string, max_width float64) float64 {
+	var _ret1 float64
+	callInMainThread(func() {
+		_ret1 = gdx.UiMgr.SetTextMaxWidth(obj, text, max_width)
+	})
+	return _ret1
+}
 func (*uiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, color Color) {
 	callInMainThread(func() {
 		gdx.UiMgr.SetListItems(obj, label, items, color)
@@ -2112,6 +2119,13 @@ func (*uiMgrImpl) GetScale(obj gdx.Object) Vec2 {
 	var _ret1 Vec2
 	callInMainThread(func() {
 		_ret1 = gdx.UiMgr.GetScale(obj)
+	})
+	return _ret1
+}
+func (*uiMgrImpl) GetCanvasScale(obj gdx.Object) Vec2 {
+	var _ret1 Vec2
+	callInMainThread(func() {
+		_ret1 = gdx.UiMgr.GetCanvasScale(obj)
 	})
 	return _ret1
 }

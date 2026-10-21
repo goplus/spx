@@ -396,6 +396,7 @@ type GDExtensionSpxUiCreateInput C.GDExtensionSpxUiCreateInput
 type GDExtensionSpxUiDestroyNode C.GDExtensionSpxUiDestroyNode
 type GDExtensionSpxUiGetType C.GDExtensionSpxUiGetType
 type GDExtensionSpxUiSetText C.GDExtensionSpxUiSetText
+type GDExtensionSpxUiSetTextMaxWidth C.GDExtensionSpxUiSetTextMaxWidth
 type GDExtensionSpxUiSetListItems C.GDExtensionSpxUiSetListItems
 type GDExtensionSpxUiSetRange C.GDExtensionSpxUiSetRange
 type GDExtensionSpxUiGetRangeValue C.GDExtensionSpxUiGetRangeValue
@@ -419,6 +420,7 @@ type GDExtensionSpxUiSetLayoutMode C.GDExtensionSpxUiSetLayoutMode
 type GDExtensionSpxUiGetAnchorsPreset C.GDExtensionSpxUiGetAnchorsPreset
 type GDExtensionSpxUiSetAnchorsPreset C.GDExtensionSpxUiSetAnchorsPreset
 type GDExtensionSpxUiGetScale C.GDExtensionSpxUiGetScale
+type GDExtensionSpxUiGetCanvasScale C.GDExtensionSpxUiGetCanvasScale
 type GDExtensionSpxUiSetScale C.GDExtensionSpxUiSetScale
 type GDExtensionSpxUiGetPosition C.GDExtensionSpxUiGetPosition
 type GDExtensionSpxUiSetPosition C.GDExtensionSpxUiSetPosition
@@ -3574,6 +3576,20 @@ func CallUiSetText(
 	C.cgo_callfn_GDExtensionSpxUiSetText(arg0, arg1, arg2)
 
 }
+func CallUiSetTextMaxWidth(
+	obj GdObj,
+	text GdString,
+	max_width GdFloat,
+) GdFloat {
+	arg0 := (C.GDExtensionSpxUiSetTextMaxWidth)(api.SpxUiSetTextMaxWidth)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdString)(text)
+	arg3 := (C.GdFloat)(max_width)
+	var ret_val C.GdFloat
+	C.cgo_callfn_GDExtensionSpxUiSetTextMaxWidth(arg0, arg1, arg2, arg3, &ret_val)
+
+	return (GdFloat)(ret_val)
+}
 func CallUiSetListItems(
 	obj GdObj,
 	label GdString,
@@ -3822,6 +3838,16 @@ func CallUiGetScale(
 	arg1 := (C.GdObj)(obj)
 	var ret_val C.GdVec2
 	C.cgo_callfn_GDExtensionSpxUiGetScale(arg0, arg1, &ret_val)
+
+	return (GdVec2)(ret_val)
+}
+func CallUiGetCanvasScale(
+	obj GdObj,
+) GdVec2 {
+	arg0 := (C.GDExtensionSpxUiGetCanvasScale)(api.SpxUiGetCanvasScale)
+	arg1 := (C.GdObj)(obj)
+	var ret_val C.GdVec2
+	C.cgo_callfn_GDExtensionSpxUiGetCanvasScale(arg0, arg1, &ret_val)
 
 	return (GdVec2)(ret_val)
 }

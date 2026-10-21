@@ -29,36 +29,80 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v3/internal/enginewrap"
+	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type monitorRenderSpy struct {
-	visible   map[engine.Object]bool
-	text      map[engine.Object]string
-	color     map[engine.Object]mathf.Color
-	items     map[engine.Object][]string
-	size      map[engine.Object]mathf.Vec2
-	listCalls int
-	ranges    map[engine.Object]float64
+	visible      map[engine.Object]bool
+	text         map[engine.Object]string
+	color        map[engine.Object]mathf.Color
+	items        map[engine.Object][]string
+	size         map[engine.Object]mathf.Vec2
+	maxWidths    map[engine.Object][]float64
+	naturalWidth map[engine.Object]map[string]float64
+	appliedWidth map[engine.Object]float64
+	layouts      map[engine.Object]monitorRenderSpyLayout
+	listCalls    int
+	ranges       map[engine.Object]float64
+}
+
+type monitorRenderSpyLayout struct {
+	label, value       engine.Object
+	horizontalOverhead float64
+	minimum            float64
 }
 
 func newMonitorRenderSpy() *monitorRenderSpy {
 	return &monitorRenderSpy{
-		visible: make(map[engine.Object]bool),
-		ranges:  make(map[engine.Object]float64),
-		text:    make(map[engine.Object]string),
-		color:   make(map[engine.Object]mathf.Color),
-		items:   make(map[engine.Object][]string),
-		size:    make(map[engine.Object]mathf.Vec2),
+		visible:      make(map[engine.Object]bool),
+		ranges:       make(map[engine.Object]float64),
+		text:         make(map[engine.Object]string),
+		color:        make(map[engine.Object]mathf.Color),
+		items:        make(map[engine.Object][]string),
+		size:         make(map[engine.Object]mathf.Vec2),
+		maxWidths:    make(map[engine.Object][]float64),
+		naturalWidth: make(map[engine.Object]map[string]float64),
+		appliedWidth: make(map[engine.Object]float64),
+		layouts:      make(map[engine.Object]monitorRenderSpyLayout),
 	}
 }
 
 func (p *monitorRenderSpy) SetVisible(id engine.Object, visible bool) { p.visible[id] = visible }
 func (p *monitorRenderSpy) SetText(id engine.Object, text string)     { p.text[id] = text }
+func (p *monitorRenderSpy) SetTextMaxWidth(id engine.Object, text string, maxWidth float64) float64 {
+	p.text[id] = text
+	p.maxWidths[id] = append(p.maxWidths[id], maxWidth)
+	natural := float64(len([]rune(text)))
+	if widths := p.naturalWidth[id]; widths != nil {
+		if width, ok := widths[text]; ok {
+			natural = width
+		}
+	}
+	applied := math.Min(natural, maxWidth)
+	p.appliedWidth[id] = applied
+	return applied
+}
 func (p *monitorRenderSpy) SetColor(id engine.Object, color mathf.Color) {
 	p.color[id] = color
 }
 
-func (p *monitorRenderSpy) SetSize(id engine.Object, size mathf.Vec2) { p.size[id] = size }
+func (p *monitorRenderSpy) GetSize(id engine.Object) mathf.Vec2 { return p.size[id] }
+func (p *monitorRenderSpy) SetSize(id engine.Object, size mathf.Vec2) {
+	p.size[id] = size
+	if size != (mathf.Vec2{}) {
+		return
+	}
+	layout, ok := p.layouts[id]
+	if !ok {
+		return
+	}
+	width := layout.horizontalOverhead + p.appliedWidth[layout.label] + p.appliedWidth[layout.value]
+	if width < layout.minimum {
+		width = layout.minimum
+	}
+	p.size[id] = mathf.NewVec2(width, 0)
+}
 func (p *monitorRenderSpy) SetListItems(id engine.Object, name string, items engine.Array, color mathf.Color) {
 	p.listCalls++
 	p.items[id] = slices.Clone(items.([]string))
@@ -72,6 +116,8 @@ func (p *monitorRenderSpy) reset() {
 	clear(p.color)
 	clear(p.items)
 	clear(p.size)
+	clear(p.maxWidths)
+	clear(p.appliedWidth)
 	p.listCalls = 0
 }
 
@@ -110,6 +156,204 @@ func TestUiMonitorInvalidAppearanceFallsBackToDefault(t *testing.T) {
 
 	if panel.active != MonitorAppearanceDefault {
 		t.Fatalf("active appearance = %d, want default", panel.active)
+	}
+}
+
+func TestCalculateMaxValueLabelLocalWidth(t *testing.T) {
+	tests := []struct {
+		name                                                     string
+		viewportWidth, monitorLeftX, valueLabelCanvasScale, want float64
+	}{
+		{name: "left edge", viewportWidth: 480, monitorLeftX: 5, valueLabelCanvasScale: 0.45, want: (480-5)/0.45 - scratchValueOnlyHorizontalLayoutOverhead},
+		{name: "middle", viewportWidth: 480, monitorLeftX: 240, valueLabelCanvasScale: 0.45, want: (480-240)/0.45 - scratchValueOnlyHorizontalLayoutOverhead},
+		{name: "left of viewport", viewportWidth: 480, monitorLeftX: -20, valueLabelCanvasScale: 0.45, want: 480/0.45 - scratchValueOnlyHorizontalLayoutOverhead},
+		{name: "past right edge", viewportWidth: 480, monitorLeftX: 500, valueLabelCanvasScale: 0.45, want: minValueLabelLocalWidth},
+		{name: "invalid viewport", viewportWidth: 0, monitorLeftX: 0, valueLabelCanvasScale: 0.45, want: 0},
+		{name: "invalid scale", viewportWidth: 480, monitorLeftX: 0, valueLabelCanvasScale: 0, want: 0},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := calculateMaxValueLabelLocalWidth(
+				test.viewportWidth,
+				test.monitorLeftX,
+				test.valueLabelCanvasScale,
+				scratchValueOnlyHorizontalLayoutOverhead,
+			)
+			if math.Abs(got-test.want) > 1e-9 {
+				t.Fatalf("max value label width = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestUiMonitorScratchValueOnlyWrapsValueLabel(t *testing.T) {
+	panel, _ := newBoundMonitor(t)
+	view := panel.views[MonitorAppearanceCompatibleLarge]
+	spy := newMonitorRenderSpy()
+	spy.naturalWidth[view.value.GetId()] = map[string]float64{
+		"a long monitor value": 500,
+		"short":                80,
+	}
+	spy.layouts[view.root.GetId()] = monitorRenderSpyLayout{
+		value: view.value.GetId(), horizontalOverhead: scratchValueOnlyHorizontalLayoutOverhead, minimum: 111,
+	}
+	panel.maxValueLabelLocalWidth = 300
+
+	style := MonitorStyle{Appearance: MonitorAppearanceCompatibleLarge}
+	panel.render(spy, style, MonitorValue{Text: "a long monitor value"})
+	if got := spy.maxWidths[view.value.GetId()]; !slices.Equal(got, []float64{300}) {
+		t.Fatalf("value width limits = %v, want [300]", got)
+	}
+	if got := float64(spy.size[view.root.GetId()].X); got != 300+scratchValueOnlyHorizontalLayoutOverhead {
+		t.Fatalf("wrapped root width = %v, want %v", got, 300+scratchValueOnlyHorizontalLayoutOverhead)
+	}
+	if got := spy.text[view.value.GetId()]; got != "a long monitor value" {
+		t.Fatalf("wrapped text = %q, want original text", got)
+	}
+
+	spy.reset()
+	panel.render(spy, style, MonitorValue{Text: "short"})
+	if got := spy.maxWidths[view.value.GetId()]; !slices.Equal(got, []float64{300}) {
+		t.Fatalf("short value width limits = %v, want [300]", got)
+	}
+	if got := float64(spy.size[view.root.GetId()].X); got != 111 {
+		t.Fatalf("short root width = %v, want authored minimum 111", got)
+	}
+}
+
+func TestUiMonitorOtherAppearancesDoNotUseScratchValueOnlyWidth(t *testing.T) {
+	panel, _ := newBoundMonitor(t)
+	view := panel.views[MonitorAppearanceCompatible]
+	spy := newMonitorRenderSpy()
+	panel.maxValueLabelLocalWidth = 400
+
+	panel.render(spy, MonitorStyle{Appearance: MonitorAppearanceCompatible, Label: "score"}, MonitorValue{Text: "value"})
+	if got := spy.maxWidths[view.value.GetId()]; len(got) != 0 {
+		t.Fatalf("value width limits = %v, want no width limit", got)
+	}
+	if got := spy.maxWidths[view.label.GetId()]; len(got) != 0 {
+		t.Fatalf("label width limits = %v, want no width limit", got)
+	}
+	if got := spy.text[view.label.GetId()]; got != "score" {
+		t.Fatalf("label text = %q, want score", got)
+	}
+	if got := spy.text[view.value.GetId()]; got != "value" {
+		t.Fatalf("value text = %q, want value", got)
+	}
+}
+
+func TestUiMonitorRenderScalarTextConstrainsBothLabels(t *testing.T) {
+	panel, _ := newBoundMonitor(t)
+	view := panel.views[MonitorAppearanceCompatibleLarge]
+	label := &UiNode{}
+	label.SetId(99)
+	view.label = label
+	spy := newMonitorRenderSpy()
+	panel.maxValueLabelLocalWidth = 120
+
+	panel.renderScalarText(spy, MonitorAppearanceCompatibleLarge, view, "name", "value")
+
+	if got := spy.maxWidths[label.GetId()]; !slices.Equal(got, []float64{120}) {
+		t.Fatalf("label width limits = %v, want [120]", got)
+	}
+	if got := spy.maxWidths[view.value.GetId()]; !slices.Equal(got, []float64{120}) {
+		t.Fatalf("value width limits = %v, want [120]", got)
+	}
+}
+
+type monitorEngineUiSpy struct {
+	gdx.IUiMgr
+	canvasScale mathf.Vec2
+	visible     map[gdx.Object]bool
+	texts       map[gdx.Object]string
+	maxWidths   map[gdx.Object]float64
+	colors      map[gdx.Object]mathf.Color
+	sizes       map[gdx.Object]mathf.Vec2
+	scales      map[gdx.Object]mathf.Vec2
+	positions   map[gdx.Object]mathf.Vec2
+}
+
+func newMonitorEngineUiSpy() *monitorEngineUiSpy {
+	return &monitorEngineUiSpy{
+		canvasScale: mathf.NewVec2(0.5, 0.5),
+		visible:     make(map[gdx.Object]bool),
+		texts:       make(map[gdx.Object]string),
+		maxWidths:   make(map[gdx.Object]float64),
+		colors:      make(map[gdx.Object]mathf.Color),
+		sizes:       make(map[gdx.Object]mathf.Vec2),
+		scales:      make(map[gdx.Object]mathf.Vec2),
+		positions:   make(map[gdx.Object]mathf.Vec2),
+	}
+}
+
+func (m *monitorEngineUiSpy) GetCanvasScale(gdx.Object) mathf.Vec2 { return m.canvasScale }
+func (m *monitorEngineUiSpy) SetVisible(id gdx.Object, visible bool) {
+	m.visible[id] = visible
+}
+func (m *monitorEngineUiSpy) SetText(id gdx.Object, text string) { m.texts[id] = text }
+func (m *monitorEngineUiSpy) SetTextMaxWidth(id gdx.Object, text string, maxWidth float64) float64 {
+	m.texts[id] = text
+	m.maxWidths[id] = maxWidth
+	return maxWidth
+}
+func (m *monitorEngineUiSpy) SetColor(id gdx.Object, color mathf.Color) { m.colors[id] = color }
+func (m *monitorEngineUiSpy) SetSize(id gdx.Object, size mathf.Vec2)    { m.sizes[id] = size }
+func (m *monitorEngineUiSpy) SetScale(id gdx.Object, scale mathf.Vec2)  { m.scales[id] = scale }
+func (m *monitorEngineUiSpy) SetGlobalPosition(id gdx.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func setupMonitorEngine(t *testing.T) *monitorEngineUiSpy {
+	t.Helper()
+	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
+	oldScale := engine.WindowScale()
+	enginewrap.Init(func(call func()) { call() })
+	mgr := newMonitorEngineUiSpy()
+	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
+	engine.SetWindowScale(1)
+	t.Cleanup(func() {
+		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
+		engine.SetWindowScale(oldScale)
+		enginewrap.Init(engine.WaitMainThread)
+	})
+	return mgr
+}
+
+func TestUiMonitorEngineTransformsAndRender(t *testing.T) {
+	mgr := setupMonitorEngine(t)
+	panel, _ := newBoundMonitor(t)
+	panel.SetId(100)
+	view := panel.views[MonitorAppearanceCompatibleLarge]
+
+	if got := panel.getValueLabelCanvasScale(monitorView{}); got != 0 {
+		t.Fatalf("nil value canvas scale = %v, want 0", got)
+	}
+	if got := panel.getValueLabelCanvasScale(view); got != 0.5 {
+		t.Fatalf("value canvas scale = %v, want 0.5", got)
+	}
+
+	engine.SetWindowScale(2)
+	panel.UpdateScale(1.5)
+	if got := mgr.scales[panel.GetId()]; got != mathf.NewVec2(3, 3) {
+		t.Fatalf("monitor scale = %v, want (3, 3)", got)
+	}
+
+	engine.SetWindowScale(1)
+	panel.UpdatePos(mathf.NewVec2(10, 20))
+	wantPosition := mathf.NewVec2(240, 140)
+	if got := mgr.positions[panel.GetId()]; got != wantPosition {
+		t.Fatalf("monitor position = %v, want %v", got, wantPosition)
+	}
+	if got, want := panel.maxValueLabelLocalWidth, 458.0; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("max value label width = %v, want %v", got, want)
+	}
+
+	panel.Render(MonitorStyle{Appearance: MonitorAppearanceCompatibleLarge, Color: mathf.Color{}}, MonitorValue{Text: "value"})
+	if got := mgr.maxWidths[view.value.GetId()]; math.Abs(got-458) > 1e-9 {
+		t.Fatalf("rendered value width = %v, want 458", got)
+	}
+	if got := mgr.sizes[view.root.GetId()]; got != (mathf.Vec2{}) {
+		t.Fatalf("rendered root size = %v, want reset size", got)
 	}
 }
 
@@ -202,6 +446,9 @@ func TestUiMonitorSceneContract(t *testing.T) {
 	assertMonitorSceneProperties(t, parsed.nodes["ValueOnly"], map[string]string{
 		"custom_minimum_size": "Vector2(111, 54)",
 		"scale":               "Vector2(0.45, 0.45)",
+	})
+	assertMonitorSceneProperties(t, parsed.nodes["BG"], map[string]string{
+		"scale": "Vector2(0.45, 0.45)",
 	})
 	assertMonitorSceneProperties(t, parsed.nodes["ValueOnly/LabelValue"], map[string]string{
 		"theme_override_colors/font_color":    "Color(1, 1, 1, 1)",

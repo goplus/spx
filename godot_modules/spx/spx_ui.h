@@ -68,6 +68,8 @@ class SpxUi {
 	ObjectID binding_id;
 	GdObj gid = 0;
 	GdInt type = 0;
+	Size2 text_custom_minimum_size;
+	bool text_custom_minimum_size_initialized = false;
 
 public:
 	~SpxUi();
@@ -98,6 +100,7 @@ public:
 	void set_interactable(GdBool interactable);
 	GdBool is_interactable();
 	void set_text(GdString text);
+	GdFloat set_text_max_width(GdString text, GdFloat max_width);
 	GdString get_text();
 	void set_rect(GdRect2 rect);
 	GdRect2 get_rect();
@@ -120,6 +123,9 @@ public:
 	void set_anchors_preset(GdInt value);
 
 	GdVec2 get_scale();
+	// Returns the effective Control scale in canvas coordinates, including
+	// scales inherited from parent Controls and the canvas layer.
+	GdVec2 get_canvas_scale();
 	void set_scale(GdVec2 value);
 	GdVec2 get_position();
 	void set_position(GdVec2 value);

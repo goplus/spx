@@ -136,7 +136,7 @@ func TestMonitorRefreshLifecycle(t *testing.T) {
 					t.Fatalf("refresh(%v) calls = %v, want %v", delta, panel.events, want)
 				}
 			}
-			visible := []string{"eval", "render", "scale", "position", "show"}
+			visible := []string{"eval", "scale", "position", "render", "show"}
 			refresh(0, visible...)
 			if panel.style != m.style || !reflect.DeepEqual(panel.value, value) {
 				t.Fatal("style or value was lost during refresh")
@@ -178,7 +178,7 @@ func TestMonitorGetterVisibilityTakesEffectNextRefresh(t *testing.T) {
 		return ui.MonitorValue{Text: "hidden"}
 	}
 	m.onUpdate(0)
-	if !slices.Equal(panel.events, []string{"render", "scale", "position", "show"}) || m.visible || m.isDirty {
+	if !slices.Equal(panel.events, []string{"scale", "position", "render", "show"}) || m.visible || m.isDirty {
 		t.Fatal("getter changed the in-progress refresh's visibility")
 	}
 	panel.events = nil
@@ -505,6 +505,7 @@ type gameWidgetUiMgr struct {
 }
 
 func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2)                 {}
+func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2           { return mathf.NewVec2(1, 1) }
 func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2)        {}
 func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color)                {}
 func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2)                  {}

@@ -2553,6 +2553,17 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 		CallUiSetText(arg0, arg1)
 	})
 }
+func (pself *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) float64 {
+	return enginewrap.CallInMainThreadValue(func() float64 {
+		arg0 := ToGdObj(obj)
+		arg1Str := C.CString(text)
+		arg1 := (GdString)(arg1Str)
+		defer C.free(unsafe.Pointer(arg1Str))
+		arg2 := ToGdFloat(max_width)
+		retValue := CallUiSetTextMaxWidth(arg0, arg1, arg2)
+		return ToFloat64(retValue)
+	})
+}
 func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
@@ -2727,6 +2738,13 @@ func (pself *uiMgr) GetScale(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetScale(arg0)
+		return ToVec2(retValue)
+	})
+}
+func (pself *uiMgr) GetCanvasScale(obj Object) Vec2 {
+	return enginewrap.CallInMainThreadValue(func() Vec2 {
+		arg0 := ToGdObj(obj)
+		retValue := CallUiGetCanvasScale(arg0)
 		return ToVec2(retValue)
 	})
 }

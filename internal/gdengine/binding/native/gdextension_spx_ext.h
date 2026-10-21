@@ -523,6 +523,7 @@ typedef void (*GDExtensionSpxUiCreateInput)(GdString path, GdString text, GdObj 
 typedef void (*GDExtensionSpxUiDestroyNode)(GdObj obj, GdBool *ret_value);
 typedef void (*GDExtensionSpxUiGetType)(GdObj obj, GdInt *ret_value);
 typedef void (*GDExtensionSpxUiSetText)(GdObj obj, GdString text);
+typedef void (*GDExtensionSpxUiSetTextMaxWidth)(GdObj obj, GdString text, GdFloat max_width, GdFloat *ret_value);
 typedef void (*GDExtensionSpxUiSetListItems)(GdObj obj, GdString label, GdArray items, GdColor color);
 typedef void (*GDExtensionSpxUiSetRange)(GdObj obj, GdFloat minimum, GdFloat maximum, GdFloat step, GdFloat value);
 typedef void (*GDExtensionSpxUiGetRangeValue)(GdObj obj, GdFloat *ret_value);
@@ -546,6 +547,7 @@ typedef void (*GDExtensionSpxUiSetLayoutMode)(GdObj obj, GdInt value);
 typedef void (*GDExtensionSpxUiGetAnchorsPreset)(GdObj obj, GdInt *ret_value);
 typedef void (*GDExtensionSpxUiSetAnchorsPreset)(GdObj obj, GdInt value);
 typedef void (*GDExtensionSpxUiGetScale)(GdObj obj, GdVec2 *ret_value);
+typedef void (*GDExtensionSpxUiGetCanvasScale)(GdObj obj, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxUiSetScale)(GdObj obj, GdVec2 value);
 typedef void (*GDExtensionSpxUiGetPosition)(GdObj obj, GdVec2 *ret_value);
 typedef void (*GDExtensionSpxUiSetPosition)(GdObj obj, GdVec2 value);
