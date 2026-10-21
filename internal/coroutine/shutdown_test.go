@@ -143,8 +143,10 @@ func TestStopIfStopsActiveThread(t *testing.T) {
 
 func TestStopIsIdempotentForSuspendedThread(t *testing.T) {
 	co := New(nil)
-	thread := co.Create("worker", func(me Thread) {
-		co.yield(me)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	blocked := co.NewLatch()
+	thread := co.Create("worker", func(Thread) {
+		blocked.Wait()
 	})
 	waitForThreadSignal(t, thread.firstSliceDone, "coroutine did not suspend")
 
@@ -344,7 +346,7 @@ func TestRunAfterStopRejectsCreationDuringBarrier(t *testing.T) {
 	deadline := time.Now().Add(time.Second)
 	for !blocker.Stopped() {
 		if time.Now().After(deadline) {
-			co.removeRunnable(blocker)
+			co.blockThread(blocker)
 			co.unregisterThread(blocker)
 			t.Fatal("shutdown barrier did not start")
 		}
@@ -358,7 +360,7 @@ func TestRunAfterStopRejectsCreationDuringBarrier(t *testing.T) {
 	if !child.Stopped() {
 		t.Fatal("thread created during shutdown barrier was admitted")
 	}
-	co.removeRunnable(blocker)
+	co.blockThread(blocker)
 	co.unregisterThread(blocker)
 
 	select {

@@ -26,9 +26,9 @@ const (
 	BatchWaitDone
 )
 
-// StartBatch registers tasks before running them in order.
+// StartBatch registers all tasks before publishing them in script order.
 // BatchWaitFirstSlice requires a managed caller for non-empty batches.
-// BatchWaitDone yields managed callers and blocks other callers.
+// BatchWaitDone waits for completion; managed callers resume in script order.
 // RegisterInvocation may cancel work but must not wait for its task.
 func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if mode != BatchAsync && mode != BatchWaitFirstSlice && mode != BatchWaitDone {
@@ -41,27 +41,24 @@ func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 		panic("coroutine: FirstSlice requires a managed caller")
 	}
 
-	threads, progress := p.registerBatch(tasks)
-	relayBatchProgress(threads, progress[1:])
-	progress[0].Open()
+	threads := p.registerBatch(tasks)
+	p.publishThreads(threads)
 	switch mode {
 	case BatchWaitFirstSlice:
-		progress[len(tasks)].Wait()
+		for _, thread := range threads {
+			p.JoinFirstSlice(thread)
+		}
 	case BatchWaitDone:
 		p.JoinAll(threads)
 	}
 	return threads
 }
 
-func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
-	progress := make([]*Latch, len(tasks)+1)
-	for i := range progress {
-		progress[i] = p.NewLatch()
-	}
+func (p *Coroutines) registerBatch(tasks []Task) []Thread {
 	threads := make([]Thread, len(tasks))
-	batchCreated := false
+	registered := false
 	defer func() {
-		if !batchCreated {
+		if !registered {
 			for _, thread := range threads {
 				p.Stop(thread)
 			}
@@ -69,36 +66,15 @@ func (p *Coroutines) registerBatch(tasks []Task) ([]Thread, []*Latch) {
 	}()
 	admission := p.captureAdmission()
 	for i, task := range tasks {
-		current, next := progress[i], progress[i+1]
 		if registerInvocation := task.RegisterInvocation; registerInvocation != nil {
-			// Publish each slot before its registration callback.
+			// Record the task before its callback so panic cleanup can cancel it.
 			task.RegisterInvocation = func(thread Thread) func() {
 				threads[i] = thread
 				return registerInvocation(thread)
 			}
 		}
-		run := task.Run
-		task.Run = func(thread Thread) {
-			defer next.Open()
-			current.Wait()
-			next.Open()
-			run(thread)
-		}
-		threads[i] = p.createThread(admission, task)
+		threads[i] = p.registerTask(admission, task)
 	}
-	batchCreated = true
-	return threads, progress
-}
-
-// Advance canceled tasks in order so later tasks cannot bypass an unfinished prefix.
-func relayBatchProgress(threads []Thread, progress []*Latch) {
-	go func() {
-		for i, thread := range threads {
-			select {
-			case <-progress[i].Done():
-			case <-thread.Context().Done():
-				progress[i].Open()
-			}
-		}
-	}()
+	registered = true
+	return threads
 }

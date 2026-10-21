@@ -67,16 +67,18 @@ type Coroutines struct {
 	workerCount int
 	drainDone   chan struct{} // Created lazily by drains; closed when all work exits.
 
-	// schedulerMu guards runnableThreads, currentJobs, and their atomic publication.
+	// schedulerMu guards script selection, pendingExecution, readyQueue, and currentJobs.
 	// A single Update call owns roundJobs and deferredJobs.
-	schedulerMu     sync.Mutex
-	schedulerCond   *sync.Cond
-	runnableThreads map[Thread]struct{} // Cancellation is checked before execution.
-	currentJobs     *queue[*waitJob]
-	deferredJobs    *queue[*waitJob]
-	roundJobs       *queue[*waitJob]
-	redrawFrame     atomic.Int64
-	scriptRound     atomic.Uint64
+	schedulerMu      sync.Mutex
+	schedulerCond    *sync.Cond
+	pendingExecution map[Thread]struct{} // Scripts ready to run or finish cancellation cleanup.
+	readyQueue       readyQueue          // Published scripts waiting for execution.
+	selectedThread   Thread              // Scheduler permit owner; may still be waiting for runMu.
+	currentJobs      *queue[*waitJob]
+	deferredJobs     *queue[*waitJob]
+	roundJobs        *queue[*waitJob]
+	redrawFrame      atomic.Int64
+	scriptRound      atomic.Uint64
 
 	nextThreadID atomic.Int64
 
@@ -107,7 +109,7 @@ func New(onPanic func(PanicReport)) *Coroutines {
 		onPanic:           onPanic,
 		shutdownGate:      make(chan struct{}, 1),
 		allThreads:        make(map[Thread]struct{}),
-		runnableThreads:   make(map[Thread]struct{}),
+		pendingExecution:  make(map[Thread]struct{}),
 		currentJobs:       jobs,
 		deferredJobs:      &queue[*waitJob]{pool: jobs.pool},
 		roundJobs:         &queue[*waitJob]{pool: jobs.pool},

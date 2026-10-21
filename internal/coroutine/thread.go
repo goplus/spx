@@ -45,6 +45,10 @@ type threadImpl struct {
 
 	// Active handler restarts inherit this position without changing identity.
 	resumeOrder int64
+	published   bool // Under schedulerMu; registration is complete and published.
+	// Ready-queue membership under schedulerMu; nil readyHeap means unqueued.
+	readyHeap  *readyHeap
+	readyIndex int
 
 	stopped      atomic.Bool
 	suspendMu    sync.Mutex

@@ -243,9 +243,9 @@ func TestWaitForChanCommitsResultOnlyAfterResume(t *testing.T) {
 		deadline := time.Now().Add(time.Second)
 		for {
 			co.schedulerMu.Lock()
-			_, ready := co.runnableThreads[thread]
+			_, pending := co.pendingExecution[thread]
 			co.schedulerMu.Unlock()
-			if ready {
+			if pending {
 				break
 			}
 			if time.Now().After(deadline) {
