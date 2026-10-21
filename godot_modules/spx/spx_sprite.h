@@ -307,6 +307,14 @@ private:
 		bool is_single_image() const {
 			return kind == VisualKind::TEXTURE || kind == VisualKind::SVG_TEXTURE;
 		}
+
+		bool is_single_image_svg() const {
+			if (kind == VisualKind::SVG_TEXTURE) {
+				return true;
+			}
+			return kind == VisualKind::TEXTURE &&
+					key.get_extension().nocasecmp_to("svg") == 0;
+		}
 	};
 	struct PreparedVisual {
 		VisualSource source;

@@ -182,6 +182,36 @@ struct VisualFixture {
 	}
 };
 
+TEST_CASE("[SceneTree][SPX] Bitmap and SVG visuals select their sampling filters") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+
+	VisualFixture fixture;
+	fixture.create_clip("bitmap.svg", fixture.png_path, fixture.png_path);
+	fixture.create_clip("svg.png", fixture.svg_path, fixture.svg_path);
+	SpxSprite *sprite = fixture.create_sprite();
+	const CharString png_path = fixture.png_path.utf8();
+	const CharString svg_path = fixture.svg_path.utf8();
+
+	sprite->set_texture(png_path.get_data());
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+
+	sprite->set_texture(svg_path.get_data());
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+
+	sprite->set_texture_atlas(png_path.get_data(), Rect2(1, 1, 4, 3));
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+
+	sprite->set_texture_atlas(svg_path.get_data(), Rect2(1, 1, 4, 3));
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+
+	// Sampling follows the frame source, not the animation name's extension.
+	sprite->play_anim("bitmap.svg", 1, false, false);
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+
+	sprite->play_anim("svg.png", 1, false, false);
+	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+}
+
 TEST_CASE("[SceneTree][SPX] Fractional SVG render bounds and pixel queries share logical geometry") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
 	VisualFixture fixture;
