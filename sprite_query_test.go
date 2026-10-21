@@ -74,6 +74,9 @@ type touchingSyncSpriteMgr struct {
 	onCollision             func()
 	collisionResult         func(pkgengine.Object, pkgengine.Object) bool
 	onColorCollision        func()
+	lastColorThreshold      float64
+	lastAlphaThreshold      float64
+	colorQueryResult        *bool
 	panicVisibleTrue        any
 	panicVisibleFalse       any
 	panicCollision          any
@@ -204,7 +207,12 @@ func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, colo
 	if s.onColorCollision != nil {
 		s.onColorCollision()
 	}
+	s.lastColorThreshold = colorThreshold
+	s.lastAlphaThreshold = alphaThreshold
 	s.checkedTexturePaths[obj] = s.texturePaths[obj]
+	if s.colorQueryResult != nil {
+		return *s.colorQueryResult
+	}
 	expected, ok := s.expectedTexturePaths[obj]
 	return !ok || s.texturePaths[obj] == expected
 }
@@ -528,6 +536,24 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 	}
 	if got := mgr.setTextureCalls[1]; got != 1 {
 		t.Fatalf("SetTexture calls after second touchingColor = %d, want 1", got)
+	}
+}
+
+func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	sprite := newTouchingTestSprite("sensor", 0, 0, 1)
+
+	result := true
+	mgr.colorQueryResult = &result
+	if !sprite.touchingColor(mathf.NewColorRGB(1, 0, 0)) {
+		t.Fatal("touchingColor() = false, want the configured query result")
+	}
+	if got := mgr.lastColorThreshold; math.Abs(got-0.035) > 1e-12 {
+		t.Fatalf("color threshold = %v, want 0.035", got)
+	}
+	if got := mgr.lastAlphaThreshold; math.Abs(got-alphaThreshold) > 1e-12 {
+		t.Fatalf("alpha threshold = %v, want %v", got, alphaThreshold)
 	}
 }
 

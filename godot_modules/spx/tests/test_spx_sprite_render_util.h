@@ -495,6 +495,33 @@ TEST_CASE("[SceneTree][SPX] Color sensing filters the source and excludes it fro
 	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(0, 0, 1), 0.01, 0.99));
 }
 
+TEST_CASE("[SceneTree][SPX] Color sensing honors the configured color threshold") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	fixture.resources->set_game_datas(fixture.png_path.get_base_dir(), Vector<String>());
+	SpxSprite *self = fixture.create_sprite();
+	self->set_texture("spx_visual.png");
+
+	Ref<Image> near_color = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
+	near_color->fill(Color(1, 0.03, 0));
+	Ref<SpriteFrames> near_frames;
+	near_frames.instantiate();
+	near_frames->add_frame("default", ImageTexture::create_from_image(near_color));
+	SpxSprite *other = fixture.create_sprite();
+	other->get_anim2d()->set_sprite_frames(near_frames);
+
+	const GdObj id = self->get_gid();
+	CHECK(fixture.sprites->check_collision_by_color(id, Color(1, 0, 0), 0.035, 0.99));
+
+	Ref<Image> far_color = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
+	far_color->fill(Color(1, 0.04, 0));
+	Ref<SpriteFrames> far_frames;
+	far_frames.instantiate();
+	far_frames->add_frame("default", ImageTexture::create_from_image(far_color));
+	other->get_anim2d()->set_sprite_frames(far_frames);
+	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(1, 0, 0), 0.035, 0.99));
+}
+
 TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preserve from-end playback") {
 	// The SceneTree listener returns before Audio initialization. Cloning Area2D
 	// enumerates audio bus properties; the listener owns AudioServer teardown.
