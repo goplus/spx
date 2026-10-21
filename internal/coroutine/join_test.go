@@ -116,6 +116,46 @@ func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 	}
 }
 
+func TestCompletionResumesWaitersInScriptOrder(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		earlier, later func(*Coroutines, Thread)
+	}{
+		{"join before first slice", (*Coroutines).Join, (*Coroutines).JoinFirstSlice},
+		{"first slice before join", (*Coroutines).JoinFirstSlice, (*Coroutines).Join},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co := New(nil)
+			t.Cleanup(func() { co.RunAfterStop(nil) })
+			// An unpublished target can finish cancellation without a scheduler
+			// permit, making both kinds of waiters eligible at once.
+			target := co.registerTask(co.captureAdmission(), Task{
+				Run: func(Thread) { t.Error("unpublished canceled target ran") },
+			})
+			order := make(chan string, 2)
+			earlier := co.Create("earlier", func(Thread) {
+				test.earlier(co, target)
+				order <- "earlier"
+			})
+			waitForThreadSignal(t, earlier.firstSliceDone, "earlier waiter did not block")
+			later := co.Create("later", func(Thread) {
+				test.later(co, target)
+				order <- "later"
+			})
+			waitForThreadSignal(t, later.firstSliceDone, "later waiter did not block")
+			// Wait for the last yield to release its scheduler permit.
+			co.runMu.Lock()
+			co.runMu.Unlock()
+			target.Cancel()
+			waitForThreadSignal(t, earlier.done, "earlier waiter did not finish")
+			waitForThreadSignal(t, later.done, "later waiter did not finish")
+			if first, second := <-order, <-order; first != "earlier" || second != "later" {
+				t.Fatalf("resumption order = %s, %s; want earlier, later", first, second)
+			}
+		})
+	}
+}
+
 func TestJoinResumesCallerAfterPeerCompletes(t *testing.T) {
 	co := New(nil)
 	releasePeer := make(chan struct{})

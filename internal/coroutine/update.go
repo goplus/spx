@@ -123,9 +123,10 @@ func (p *Coroutines) nextUpdateAction(stats *UpdateStats) (updateAction, *waitJo
 	start := stime.Now()
 	action := updateProcessJob
 	p.schedulerMu.Lock()
+	pending := p.hasPendingExecutionLocked()
 	job, queued := p.currentJobs.peekFront()
 	// Service engine calls before waiting for scripts, including startup, to yield.
-	if (!queued || job.kind != waitMainThread) && p.hasRunnableLocked() {
+	if (!queued || job.kind != waitMainThread) && pending {
 		p.schedulerCond.Wait()
 		action = updateRetry
 	} else if !queued {

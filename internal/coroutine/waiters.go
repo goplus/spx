@@ -52,10 +52,9 @@ func (p *waiterSet) close(done chan struct{}) map[Thread]struct{} {
 // Cancellation unregisters even when Yield panics.
 func (p *Coroutines) waitOn(me Thread, waiters *waiterSet) {
 	p.schedulerMu.Lock()
-	delete(p.runnableThreads, me)
 	registered := waiters.add(me)
-	if !registered {
-		p.runnableThreads[me] = struct{}{}
+	if registered {
+		p.blockThreadLocked(me)
 	}
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
@@ -67,9 +66,10 @@ func (p *Coroutines) waitOn(me Thread, waiters *waiterSet) {
 }
 
 func (p *Coroutines) wakeWaiters(waiters map[Thread]struct{}) {
-	for waiter := range waiters {
-		p.wakeThread(waiter)
-	}
+	p.schedulerMu.Lock()
+	p.wakeWaitersLocked(waiters)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 }
 
 func (p *Coroutines) waitOutsideScript(done <-chan struct{}) {

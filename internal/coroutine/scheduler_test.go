@@ -169,10 +169,12 @@ func TestWaitForChanDoesNotKeepReceiverAfterCancel(t *testing.T) {
 
 func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 	co := New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
 	started := make(chan struct{})
 	done := make(chan struct{})
 
 	th := co.Create("worker", func(me Thread) {
+		co.blockThread(me)
 		close(started)
 		co.yield(me)
 		close(done)
@@ -190,7 +192,7 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 		t.Fatalf("Current while every coroutine is suspended = %v, want nil", current)
 	}
 
-	th.resume()
+	co.wakeThread(th)
 	select {
 	case <-done:
 	case <-time.After(time.Second):
@@ -200,12 +202,33 @@ func TestYieldClearsCurrentWhileCoroutineIsSuspended(t *testing.T) {
 
 func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 	co := New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
 	var resumed atomic.Bool
+	var publishedBeforeCancellation atomic.Bool
 
-	thread := co.Create("worker", func(me Thread) {
-		co.StopAtNextYield(me)
-		co.WaitYield(me)
-		resumed.Store(true)
+	thread := co.createThread(co.captureAdmission(), Task{
+		Owner: "worker",
+		RegisterInvocation: func(th Thread) func() {
+			cancel := th.cancelFunc
+			// Probe the first cancellation before completion calls cancel again.
+			var once sync.Once
+			th.cancelFunc = func() {
+				once.Do(func() {
+					select {
+					case <-th.firstSliceDone:
+						publishedBeforeCancellation.Store(true)
+					default:
+					}
+				})
+				cancel()
+			}
+			return nil
+		},
+		Run: func(me Thread) {
+			co.StopAtNextYield(me)
+			co.WaitYield(me)
+			resumed.Store(true)
+		},
 	})
 
 	co.JoinFirstSlice(thread)
@@ -216,6 +239,9 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 	case <-thread.done:
 	case <-time.After(time.Second):
 		t.Fatal("coroutine did not stop at its next yield")
+	}
+	if publishedBeforeCancellation.Load() {
+		t.Fatal("first slice was published before stop-at-yield cancellation")
 	}
 	co.Update()
 	if resumed.Load() {
@@ -233,11 +259,13 @@ func TestStopAtNextYieldStopsBeforeResume(t *testing.T) {
 
 func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 	co := New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
 	started := make(chan struct{})
 	proceed := make(chan struct{})
 	done := make(chan struct{})
 
 	th := co.Create("worker", func(me Thread) {
+		co.blockThread(me)
 		close(started)
 		<-proceed
 		co.yield(me)
@@ -247,7 +275,7 @@ func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 
 	resumeDone := make(chan struct{})
 	go func() {
-		th.resume()
+		co.wakeThread(th)
 		close(resumeDone)
 	}()
 	select {
@@ -267,63 +295,18 @@ func TestResumeBeforeYieldDoesNotBlockOrLoseWakeup(t *testing.T) {
 
 func TestMutualYieldWaitersDoNotDeadlock(t *testing.T) {
 	co := New(nil)
-	a := co.newThread("a")
-	b := co.newThread("b")
-	co.registerThread(a)
-	co.registerThread(b)
-	a.firstSliceWaiters.add(b)
-	b.firstSliceWaiters.add(a)
-
-	// Keep A between releasing runMu and publishing its suspension. B can then
-	// publish its own suspension and try to wake A. Yield must not hold B's
-	// suspendMu during that wake-up, or A and B can deadlock on each other's
-	// suspendMu.
-	a.suspendMu.Lock()
-	aStarted := make(chan struct{})
-	bStarted := make(chan struct{})
-	done := make(chan struct{}, 2)
-	go func() {
-		co.runThread(a, func(me Thread) {
-			close(aStarted)
-			co.yield(me)
-		}, nil)
-		done <- struct{}{}
-	}()
-	<-aStarted
-	co.runMu.Lock()
-	current := co.Current()
-	co.runMu.Unlock()
-	if current != nil {
-		a.suspendMu.Unlock()
-		t.Fatal("A did not clear current before releasing runMu")
-	}
-
-	go func() {
-		co.runThread(b, func(me Thread) {
-			close(bStarted)
-			co.yield(me)
-		}, nil)
-		done <- struct{}{}
-	}()
-	<-bStarted
-
-	deadline := time.Now().Add(time.Second)
-	for !isSuspended(b) {
-		if time.Now().After(deadline) {
-			a.suspendMu.Unlock()
-			t.Fatal("B did not publish its suspended state")
-		}
-		runtime.Gosched()
-	}
-	a.suspendMu.Unlock()
-
-	for range 2 {
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("mutual yield waiters deadlocked")
-		}
-	}
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	caller := co.Create("caller", func(Thread) {
+		// Publish both peers before the caller yields to either one. A's
+		// wait for B publishes A's first slice, allowing B's join to return.
+		var peers []Thread
+		peers = co.StartBatch([]Task{
+			{Owner: "a", Run: func(Thread) { co.JoinFirstSlice(peers[1]) }},
+			{Owner: "b", Run: func(Thread) { co.JoinFirstSlice(peers[0]) }},
+		}, BatchAsync)
+		co.JoinAll(peers)
+	})
+	waitForThreadSignal(t, caller.done, "mutual first-slice waiters deadlocked")
 }
 
 func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
@@ -338,6 +321,39 @@ func TestSchedResumesWithoutWaitingForUpdate(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("Sched waited for an Update pass")
+	}
+}
+
+func TestSchedSelfSelectionLetsWorkerProgress(t *testing.T) {
+	co := New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	polling := make(chan struct{})
+	var workerDone atomic.Bool
+	observed := make(chan bool, 1)
+
+	co.StartBatch([]Task{
+		{Run: func(Thread) {
+			co.WaitToDo(func() {
+				<-polling
+				workerDone.Store(true)
+			})
+		}},
+		{Run: func(me Thread) {
+			close(polling)
+			// Bound the poll so a missing Go scheduler handoff fails rather
+			// than hanging the WASM host, which lacks async preemption.
+			for range 10000 {
+				if workerDone.Load() {
+					break
+				}
+				co.Sched(me)
+			}
+			observed <- workerDone.Load()
+		}},
+	}, BatchWaitDone)
+
+	if !<-observed {
+		t.Fatal("self-selected script starved its WaitToDo worker")
 	}
 }
 
@@ -627,7 +643,7 @@ func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
 
 	co.wakeThread(thread)
 	co.schedulerMu.Lock()
-	_, exists := co.runnableThreads[thread]
+	_, exists := co.pendingExecution[thread]
 	co.schedulerMu.Unlock()
 	if exists {
 		t.Fatal("stale resume job restored scheduler state for a completed thread")

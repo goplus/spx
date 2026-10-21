@@ -50,8 +50,15 @@ func (p *Coroutines) LastThreadID() int64 {
 	return p.nextThreadID.Load()
 }
 
-// createThread admits a thread before invocation registration or execution.
 func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
+	th := p.registerTask(admission, task)
+	p.publishThreads([]Thread{th})
+	return th
+}
+
+// registerTask admits a thread before its registration callback. Its body waits
+// for publication; canceled work can unwind once registration returns.
+func (p *Coroutines) registerTask(admission threadAdmission, task Task) Thread {
 	th := p.newThread(task.Owner)
 	p.admissionMu.RLock()
 	if !admission.valid(p.admissionEpoch.Load()) {
@@ -70,7 +77,13 @@ func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 
 	var cleanup func()
 	// Registered threads also need async cleanup if setup panics or calls Goexit.
-	defer func() { go p.runThread(th, task.Run, cleanup) }()
+	defer func() {
+		if th.canceled() {
+			// Update must observe executable cleanup before its goroutine starts.
+			p.trackCleanup(th)
+		}
+		go p.runThread(th, task.Run, cleanup)
+	}()
 	if task.RegisterInvocation != nil {
 		id, previous := p.enterCallback(callbackNoDrain)
 		defer p.leaveCallback(id, previous)
@@ -87,11 +100,22 @@ func (p *Coroutines) createThread(admission threadAdmission, task Task) Thread {
 	return th
 }
 
+// publishThreads publishes each newly registered thread once, as a batch.
+func (p *Coroutines) publishThreads(threads []Thread) {
+	p.schedulerMu.Lock()
+	for _, th := range threads {
+		th.published = true
+		p.markPendingLocked(th)
+	}
+	p.scheduleLocked()
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
+}
+
 func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 	gid := gid.Get()
 	p.goroutineThreads.Store(gid, th)
-	p.runMu.Lock()
-	p.current.Store(th)
+	p.acquire(th)
 	defer func() {
 		p.finishThread(th, gid, recover())
 	}()
@@ -109,12 +133,21 @@ func (p *Coroutines) runThread(th Thread, fn func(Thread), cleanup func()) {
 }
 
 func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
-	p.wakeWaiters(th.firstSliceWaiters.close(th.firstSliceDone))
-	p.wakeWaiters(th.joinWaiters.close(nil))
-	// Make waiters runnable before removing the target's scheduler state.
+	p.schedulerMu.Lock()
+	// Both waiter groups participate in the same scheduler selection.
+	for waiter := range th.firstSliceWaiters.close(th.firstSliceDone) {
+		p.markPendingLocked(waiter)
+	}
+	for waiter := range th.joinWaiters.close(nil) {
+		p.markPendingLocked(waiter)
+	}
 	th.cancelFunc()
 	close(th.done)
-	p.removeRunnable(th)
+	p.readyQueue.remove(th)
+	delete(p.pendingExecution, th)
+	p.releaseLocked(th)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 	p.current.Store(nil)
 	// Draining also waits for the panic handler below.
 	defer p.unregisterThread(th)
@@ -181,11 +214,6 @@ func (p *Coroutines) registerThread(th Thread) {
 	p.threadsMu.Lock()
 	p.allThreads[th] = struct{}{}
 	p.threadsMu.Unlock()
-	// Update must observe the new runnable thread before its goroutine starts.
-	p.schedulerMu.Lock()
-	p.runnableThreads[th] = struct{}{}
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
 }
 
 func (p *Coroutines) unregisterThread(th Thread) {

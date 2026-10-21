@@ -225,8 +225,8 @@ func sinksInTargetOrder(game *Game, sinks []eventSink) []eventSink {
 	}
 	next := make([]int, len(sinks))
 	unknown, stage := 0, 0
-	for i := len(sinks) - 1; i >= 0; i-- {
-		switch owner := sinks[i].Owner.(type) {
+	for i, sink := range slices.Backward(sinks) {
+		switch owner := sink.Owner.(type) {
 		case *SpriteImpl:
 			if head, live := heads[owner]; live {
 				next[i], heads[owner] = head, i+1
@@ -248,8 +248,8 @@ func sinksInTargetOrder(game *Game, sinks []eventSink) []eventSink {
 			head = next[head-1]
 		}
 	}
-	for i := len(shapes) - 1; i >= 0; i-- {
-		if sprite, ok := shapes[i].(*SpriteImpl); ok {
+	for _, shape := range slices.Backward(shapes) {
+		if sprite, ok := shape.(*SpriteImpl); ok {
 			appendGroup(heads[sprite])
 		}
 	}

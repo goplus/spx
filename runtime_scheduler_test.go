@@ -38,7 +38,7 @@ func setupRuntimeScheduler(t *testing.T) *coroutine.Coroutines {
 
 // beforeRestore runs after the test's coroutines stop, while their scheduler
 // remains bound. Register other resource cleanup before installing the scheduler.
-func installRuntimeScheduler(t *testing.T, co *coroutine.Coroutines, beforeRestore func()) {
+func installRuntimeScheduler(t testing.TB, co *coroutine.Coroutines, beforeRestore func()) {
 	t.Helper()
 	original := gco
 	gco = co

@@ -17,11 +17,13 @@
 package spx
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -77,6 +79,31 @@ func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImp
 	game.shapeMgr.add(front)
 	game.shapeMgr.updateRenderLayers()
 	return co, game, back, front
+}
+
+func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
+	for _, handlers := range []int{1, 3, 10} {
+		b.Run(fmt.Sprintf("300-targets/%d-handlers", handlers), func(b *testing.B) {
+			co := coroutine.New(nil)
+			installRuntimeScheduler(b, co, nil)
+			game := new(Game)
+			game.bindScriptEvents()
+			game.initShapeMgr()
+			for i := range 300 {
+				sprite := newEventOrderSprite(game, fmt.Sprintf("target-%d", i))
+				game.shapeMgr.add(sprite)
+				for range handlers {
+					sprite.OnMsg__1("fan-out", func() {})
+				}
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				// Include dispatch and completion; no receiver overlaps the
+				// next broadcast. B.Loop excludes fixture setup and cleanup.
+				game.BroadcastAndWait__0("fan-out")
+			}
+		})
+	}
 }
 
 func waitForEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
@@ -506,6 +533,249 @@ func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 		"receiver-finish",
 		"waiter-after",
 	})
+}
+
+func TestBroadcastAndWaitResumesBeforeRestartedEarlierReceiver(t *testing.T) {
+	for _, stopOthers := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stop-others=%t", stopOthers), func(t *testing.T) {
+			co, game, actor, _ := setupEventOrderGame(t)
+			blocked := co.NewLatch()
+			var log eventOrderLog
+			childRuns := 0
+			actor.OnMsg__1("child", func() {
+				childRuns++
+				log.add("child-started")
+				if stopOthers && childRuns == 2 {
+					actor.Stop(OtherScriptsInSprite)
+					log.add("child-stopped-others")
+				}
+				blocked.Wait()
+			})
+			game.OnMsg__1("outer", func() {
+				game.Broadcast__0("child")
+				log.add("outer-returned")
+			})
+			co.Create(actor, func(coroutine.Thread) {
+				game.Broadcast__0("child")
+				engine.WaitNextFrame()
+				game.BroadcastAndWait__0("outer")
+				log.add("caller-resumed")
+			})
+			co.Update()
+			requireEventOrder(t, &log, []string{"child-started"})
+
+			// Restarting preserves child's earlier thread slot, which this
+			// round already visited. The caller resumes before child runs again.
+			itime.Update(0, 0)
+			co.Update()
+			want := []string{"child-started", "outer-returned", "caller-resumed", "child-started"}
+			if stopOthers {
+				want = append(want, "child-stopped-others")
+			}
+			requireEventOrder(t, &log, want)
+		})
+	}
+}
+
+func TestBroadcastAndWaitResumesSiblingReceiversInThreadOrder(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	var log eventOrderLog
+	for _, name := range []string{"A", "B"} {
+		game.OnMsg__1("fan-out", func() {
+			log.add(name + "-entered")
+			game.BroadcastAndWait__0("inner-" + name)
+			log.add(name + "-resumed")
+		})
+		game.OnMsg__1("inner-"+name, func() { log.add("inner-" + name) })
+	}
+	co.Create(game, func(coroutine.Thread) {
+		game.BroadcastAndWait__0("fan-out")
+		log.add("caller-resumed")
+	})
+	co.Update()
+
+	// Both inner receivers finish in one round. Their callers retain A/B
+	// thread order when the next round visits their waiting broadcasts.
+	requireEventOrder(t, &log, []string{
+		"A-entered", "B-entered", "inner-A", "inner-B",
+		"A-resumed", "B-resumed", "caller-resumed",
+	})
+}
+
+func TestBroadcastAndWaitPreservesQueuedCleanupOrder(t *testing.T) {
+	co, game, panel, transition := setupEventOrderGame(t)
+	var log eventOrderLog
+
+	transition.OnMsg__1("prepare-level", func() {
+		game.Broadcast__0("clear-panel")
+		log.add("preparation-returned")
+	})
+	panel.OnMsg__1("clear-panel", func() {
+		log.add("panel-cleared")
+		panel.Stop(OtherScriptsInSprite)
+	})
+	panel.OnMsg__1("open-level", func() { log.add("level-opened") })
+
+	co.Create(game, func(coroutine.Thread) {
+		game.BroadcastAndWait__0("prepare-level")
+		log.add("caller-resumed")
+		game.Broadcast__0("open-level")
+	})
+	co.Update()
+
+	// Cleanup already queued by the completed receiver must get its turn
+	// before the caller can register the panel's next script for cancellation.
+	requireEventOrder(t, &log, []string{
+		"preparation-returned", "panel-cleared", "caller-resumed", "level-opened",
+	})
+}
+
+func TestBroadcastAndWaitKeepsAsyncSenderAtomic(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	var log eventOrderLog
+	value := 0
+	game.OnMsg__1("publish", func() {
+		game.Broadcast__0("observe")
+		value = 1
+		log.add("sender-updated")
+	})
+	game.OnMsg__1("observe", func() { log.add(fmt.Sprintf("observed-%d", value)) })
+
+	co.Create(game, func(coroutine.Thread) {
+		game.BroadcastAndWait__0("publish")
+	})
+	co.Update()
+	requireEventOrder(t, &log, []string{"sender-updated", "observed-1"})
+}
+
+func TestBroadcastAndWaitDoesNotExposeSenderToEarlyStop(t *testing.T) {
+	co, game, actor, _ := setupEventOrderGame(t)
+	var log eventOrderLog
+	actor.OnMsg__1("work", func() {
+		game.Broadcast__0("cancel-actor-work")
+		log.add("sender-returned")
+	})
+	actor.OnMsg__1("cancel-actor-work", func() {
+		log.add("other-scripts-stopped")
+		actor.Stop(OtherScriptsInSprite)
+	})
+
+	co.Create(game, func(coroutine.Thread) {
+		game.BroadcastAndWait__0("work")
+	})
+	co.Update()
+	requireEventOrder(t, &log, []string{"sender-returned", "other-scripts-stopped"})
+}
+
+func TestBroadcastSiblingWaitDoesNotYieldAsyncSender(t *testing.T) {
+	co, game, publisher, waiter := setupEventOrderGame(t)
+	release := co.NewLatch()
+	var log eventOrderLog
+	value := 0
+
+	waiter.OnMsg__1("fan-out", func() {
+		log.add("waiter-entered")
+		game.BroadcastAndWait__0("hold-open")
+		log.add("waiter-returned")
+	})
+	publisher.OnMsg__1("fan-out", func() {
+		game.Broadcast__0("observe-sibling")
+		value = 1
+		log.add("publisher-updated")
+	})
+	game.OnMsg__1("hold-open", release.Wait)
+	game.OnMsg__1("observe-sibling", func() { log.add(fmt.Sprintf("observed-%d", value)) })
+
+	game.Broadcast__0("fan-out")
+	co.Update()
+	requireEventOrder(t, &log, []string{"waiter-entered", "publisher-updated", "observed-1"})
+
+	release.Open()
+	co.Update()
+	requireEventOrder(t, &log, []string{
+		"waiter-entered", "publisher-updated", "observed-1", "waiter-returned",
+	})
+}
+
+func TestBroadcastAndWaitRunsQueuedDescendantsWithoutJoiningThem(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	release := co.NewLatch()
+	var log eventOrderLog
+	game.OnMsg__1("parent", func() {
+		game.Broadcast__0("child")
+		log.add("parent-returned")
+	})
+	game.OnMsg__1("child", func() {
+		game.Broadcast__0("grandchild")
+		log.add("child-returned")
+	})
+	game.OnMsg__1("grandchild", func() {
+		log.add("grandchild-started")
+		release.Wait()
+		game.Broadcast__0("notify-complete")
+		log.add("grandchild-returned")
+	})
+	game.OnMsg__1("notify-complete", func() { log.add("notification-ran") })
+	co.Create(game, func(coroutine.Thread) {
+		game.BroadcastAndWait__0("parent")
+		log.add("caller-resumed")
+	})
+	co.Update()
+
+	// Every newly queued script gets its first turn, but the wait belongs
+	// only to the direct receiver and must not join its blocked descendants.
+	// A descendant can still resume and broadcast after the caller returns.
+	requireEventOrder(t, &log, []string{
+		"parent-returned", "child-returned", "grandchild-started", "caller-resumed",
+	})
+	release.Open()
+	co.Update()
+	requireEventOrder(t, &log, []string{
+		"parent-returned", "child-returned", "grandchild-started", "caller-resumed", "grandchild-returned", "notification-ran",
+	})
+}
+
+func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	release := co.NewLatch()
+	entered := make(chan struct{})
+	returned := make(chan struct{})
+	var log eventOrderLog
+	game.OnMsg__1("external-request", func() {
+		game.Broadcast__0("external-child")
+		close(entered)
+		release.Wait()
+		log.add("receiver-returned")
+	})
+	game.OnMsg__1("external-child", func() { log.add("child-ran") })
+	go func() {
+		game.BroadcastAndWait__0("external-request")
+		close(returned)
+	}()
+	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+		select {
+		case <-entered:
+			return true
+		default:
+			return false
+		}
+	})
+	co.Update()
+	requireEventOrder(t, &log, []string{"child-ran"})
+	select {
+	case <-returned:
+		t.Fatal("external broadcast returned while its receiver was blocked")
+	default:
+	}
+
+	release.Open()
+	co.Update()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("external broadcast did not return after its receiver completed")
+	}
+	requireEventOrder(t, &log, []string{"child-ran", "receiver-returned"})
 }
 
 func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {

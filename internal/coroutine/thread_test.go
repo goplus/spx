@@ -254,8 +254,8 @@ func TestExternalCallsPreserveActiveThread(t *testing.T) {
 			}
 			co.schedulerMu.Lock()
 			defer co.schedulerMu.Unlock()
-			_, runnable := co.runnableThreads[thread]
-			if !runnable || co.currentJobs.len() != 0 {
+			_, pending := co.pendingExecution[thread]
+			if !pending || co.currentJobs.len() != 0 {
 				t.Fatal("external call changed the running script or queued work")
 			}
 		})

@@ -16,54 +16,73 @@
 
 package coroutine
 
-import "github.com/visualfc/gid"
+import (
+	"runtime"
+
+	"github.com/visualfc/gid"
+)
 
 // Sched yields the current coroutine and resumes it without an Update pass.
 func (p *Coroutines) Sched(me Thread) {
 	p.requireCurrent(me)
-	// Publish blocked first so a fast wake-up cannot be lost.
-	p.removeRunnable(me)
-	go p.wakeThread(me)
+	// Requeue this script before advancing to the next runnable position.
+	p.schedulerMu.Lock()
+	p.blockThreadLocked(me)
+	p.markPendingLocked(me)
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 	p.yield(me)
 }
 
-// yield suspends me until resumed or canceled; me must be the current coroutine.
+// yield releases the current slice after its blocking state has been published.
 func (p *Coroutines) yield(me Thread) {
 	p.requireCurrent(me)
-	if me.stopAtNextYield.Swap(false) {
-		me.Cancel()
-	}
-
-	// Clear current before releasing the execution lock.
+	p.schedulerMu.Lock()
+	p.releaseLocked(me)
+	resumeSelf := p.selectedThread == me
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 	p.current.Store(nil)
 	p.runMu.Unlock()
+	if resumeSelf {
+		// The permit stays with this script, but consuming its own signal
+		// would not park the Go goroutine. Let workers progress on WASM too.
+		runtime.Gosched()
+	}
+	p.acquire(me)
+	if me.stopped.Load() {
+		panic(ErrAbortThread)
+	}
+}
 
-	// Publish suspension before notifying waiters; consume an early resume.
+// acquire consumes the scheduler's permit, then takes exclusive script access.
+// Cancellation also wakes a thread so its defers can unwind under runMu.
+func (p *Coroutines) acquire(me Thread) {
 	me.suspendMu.Lock()
 	if me.suspendState == suspendSignaled {
 		me.suspendState = suspendRunning
 	} else {
 		me.suspendState = suspendWaiting
 	}
-	me.suspendMu.Unlock()
-
-	p.wakeWaiters(me.firstSliceWaiters.close(me.firstSliceDone))
-
-	me.suspendMu.Lock()
 	for me.suspendState == suspendWaiting && !me.canceled() {
 		me.suspendCond.Wait()
 	}
-	if me.suspendState == suspendWaiting {
-		me.suspendState = suspendRunning
-	}
+	me.suspendState = suspendRunning
 	me.suspendMu.Unlock()
-
-	p.signalScheduler()
+	if me.canceled() {
+		// Cancellation can wake an unpublished or blocked script without
+		// a scheduler permit. Its cleanup is now executable work for Update.
+		p.trackCleanup(me)
+	}
 	p.runMu.Lock()
 	p.current.Store(me)
-	if me.stopped.Load() {
-		panic(ErrAbortThread)
-	}
+}
+
+func (p *Coroutines) trackCleanup(th Thread) {
+	p.schedulerMu.Lock()
+	p.pendingExecution[th] = struct{}{}
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
 }
 
 // StopAtNextYield cancels me when it next yields to the scheduler.
@@ -78,7 +97,7 @@ func (p *Coroutines) IsInCoroutine() bool {
 	return p.callerThread() != nil
 }
 
-// Current returns the coroutine that currently owns the scheduler, or nil.
+// Current returns the coroutine that currently owns runMu, or nil.
 func (p *Coroutines) Current() Thread {
 	return p.current.Load()
 }
@@ -98,38 +117,79 @@ func (p *Coroutines) requireCurrent(me Thread) {
 	}
 }
 
-// wakeThread marks th runnable before resuming it.
+// wakeThread marks th pending and schedules the next ready script.
 func (p *Coroutines) wakeThread(th Thread) {
 	p.schedulerMu.Lock()
-	if th.canceled() {
-		p.schedulerMu.Unlock()
+	p.markPendingLocked(th)
+	p.scheduleLocked()
+	p.schedulerCond.Signal()
+	p.schedulerMu.Unlock()
+}
+
+// Mark published work pending, queuing live scripts and retaining cancellation cleanup.
+func (p *Coroutines) markPendingLocked(th Thread) {
+	if _, pending := p.pendingExecution[th]; pending || !th.published {
 		return
 	}
-	p.runnableThreads[th] = struct{}{}
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
-	th.resume()
+	select {
+	case <-th.done:
+		return
+	default:
+	}
+	p.pendingExecution[th] = struct{}{}
+	if !th.canceled() {
+		p.readyQueue.add(th)
+	}
 }
 
-func (p *Coroutines) signalScheduler() {
+func (p *Coroutines) blockThread(th Thread) {
 	p.schedulerMu.Lock()
+	p.blockThreadLocked(th)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) removeRunnable(th Thread) {
-	p.schedulerMu.Lock()
-	delete(p.runnableThreads, th)
-	p.schedulerCond.Signal()
-	p.schedulerMu.Unlock()
+// Publish first-slice continuations together with the blocked script.
+func (p *Coroutines) blockThreadLocked(th Thread) {
+	if th.stopAtNextYield.Swap(false) {
+		th.Cancel()
+	}
+	p.readyQueue.remove(th)
+	if !th.canceled() {
+		delete(p.pendingExecution, th)
+	}
+	p.wakeWaitersLocked(th.firstSliceWaiters.close(th.firstSliceDone))
+}
+
+// Canceled threads can unwind under runMu without owning a scheduler permit.
+func (p *Coroutines) releaseLocked(th Thread) {
+	if p.selectedThread == th {
+		p.selectedThread = nil
+	}
+	p.scheduleLocked()
+}
+
+// Visit runnable scripts in their original order, wrapping after each round.
+// New scripts append to the round; restarted handlers retain their old position.
+func (p *Coroutines) scheduleLocked() {
+	if p.selectedThread != nil {
+		return
+	}
+	p.selectedThread = p.readyQueue.pop()
+	if p.selectedThread != nil {
+		p.selectedThread.resume()
+	}
+}
+
+func (p *Coroutines) wakeWaitersLocked(waiters map[Thread]struct{}) {
+	for waiter := range waiters {
+		p.markPendingLocked(waiter)
+	}
+	p.scheduleLocked()
 }
 
 // Caller must hold schedulerMu.
-func (p *Coroutines) hasRunnableLocked() bool {
-	for th := range p.runnableThreads {
-		if !th.canceled() {
-			return true
-		}
-	}
-	return false
+func (p *Coroutines) hasPendingExecutionLocked() bool {
+	// Canceled scripts remain pending until their executable cleanup finishes.
+	return p.selectedThread != nil || len(p.pendingExecution) != 0
 }

@@ -49,7 +49,7 @@ func (p *Coroutines) WaitToDo(fn func()) {
 		panic(ErrAbortThread)
 	}
 	results := make(chan callbackResult, 1)
-	p.removeRunnable(me)
+	p.blockThread(me)
 	go func() {
 		defer p.finishWorker()
 		var result callbackResult
@@ -118,8 +118,8 @@ func (p *Coroutines) enqueueAndYield(job *waitJob) {
 	p.requireCurrent(me)
 	// Publish blocking and its wake-up job atomically.
 	p.schedulerMu.Lock()
-	delete(p.runnableThreads, me)
 	p.currentJobs.pushBack(job)
+	p.blockThreadLocked(me)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 	p.yield(me)

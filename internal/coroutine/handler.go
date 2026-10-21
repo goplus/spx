@@ -57,12 +57,13 @@ func (p *HandlerState) RegisterInvocation(thread Thread) func() {
 		!previous.Stopped() && previous.Context().Err() == nil {
 		thread.resumeOrder = previous.resumeOrder
 	}
-	p.active = thread
-	p.mu.Unlock()
-
+	// Retire the previous invocation before another registration can inherit
+	// its position, keeping at most one live invocation at that position.
 	if previous != nil && previous != thread {
 		previous.Cancel()
 	}
+	p.active = thread
+	p.mu.Unlock()
 	return func() {
 		p.mu.Lock()
 		if p.active == thread {

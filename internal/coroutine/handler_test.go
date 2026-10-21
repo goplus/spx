@@ -18,7 +18,9 @@ package coroutine
 
 import (
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -41,6 +43,58 @@ func TestRestartHandlerIgnoresRetiredCleanup(t *testing.T) {
 	defer retireThird()
 	if !second.Stopped() || third.Stopped() {
 		t.Fatal("retired cleanup released the current invocation")
+	}
+}
+
+func TestConcurrentHandlerRestartWaitsForPreviousCancellation(t *testing.T) {
+	co := New(nil)
+	state := NewHandlerState(RestartExisting)
+	previous, first, latest := co.newThread("previous"), co.newThread("first"), co.newThread("latest")
+	state.RegisterInvocation(previous)
+	cancelEntered := make(chan struct{})
+	releaseCancel := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseCancel) }) }
+	t.Cleanup(func() {
+		release()
+		co.Stop(previous)
+		co.Stop(first)
+		co.Stop(latest)
+	})
+	cancel := previous.cancelFunc
+	previous.cancelFunc = func() {
+		close(cancelEntered)
+		<-releaseCancel
+		cancel()
+	}
+
+	firstDone := make(chan struct{})
+	go func() {
+		state.RegisterInvocation(first)
+		close(firstDone)
+	}()
+	waitForThreadSignal(t, cancelEntered, "first restart did not begin canceling its predecessor")
+	latestDone := make(chan struct{})
+	go func() {
+		state.RegisterInvocation(latest)
+		close(latestDone)
+	}()
+	returnedEarly := false
+	select {
+	case <-latestDone:
+		returnedEarly = true
+	case <-time.After(20 * time.Millisecond):
+	}
+	// Unblock both registrations before reporting a failure, so neither the
+	// canceled predecessor nor handler state remains locked during cleanup.
+	release()
+	waitForThreadSignal(t, firstDone, "first restart did not finish after cancellation")
+	waitForThreadSignal(t, latestDone, "latest restart did not finish after cancellation")
+	if returnedEarly {
+		t.Fatal("concurrent restart returned before the previous replacement finished canceling its predecessor")
+	}
+	if !first.Stopped() || latest.Stopped() {
+		t.Fatal("concurrent restarts did not retain only the latest invocation")
 	}
 }
 

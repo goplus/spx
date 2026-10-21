@@ -17,6 +17,7 @@
 package coroutine
 
 import (
+	"fmt"
 	"runtime"
 	"slices"
 	"testing"
@@ -117,5 +118,122 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 
 	if want := []string{"parent", "first handler", "second handler", "parent continued", "sibling"}; !slices.Equal(order, want) {
 		t.Fatalf("script order = %v, want %v", order, want)
+	}
+}
+
+func TestScriptOrderAcrossRoundsWithAddedAndCanceledPeers(t *testing.T) {
+	co := New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	var order []string
+	var peers []Thread
+	var added Thread
+	cleaned := 0
+	var run func(string) func(Thread)
+	run = func(name string) func(Thread) {
+		return func(me Thread) {
+			if name == "b" {
+				defer func() { cleaned++ }()
+			}
+			for turn := range 3 {
+				order = append(order, fmt.Sprintf("%s%d", name, turn))
+				if turn == 0 {
+					switch name {
+					case "a":
+						added = co.Create("d", run("d"))
+					case "c":
+						co.Stop(peers[1])
+					}
+				}
+				if turn < 2 {
+					co.Sched(me)
+				}
+			}
+		}
+	}
+	caller := co.Create("caller", func(Thread) {
+		peers = co.StartBatch([]Task{
+			{Run: run("a")}, {Run: run("b")}, {Run: run("c")},
+		}, BatchAsync)
+		co.JoinAll(peers)
+		co.Join(added)
+	})
+	waitForThreadSignal(t, caller.done, "script rounds did not complete without Update")
+	if want := []string{"a0", "b0", "c0", "d0", "a1", "c1", "d1", "a2", "c2", "d2"}; !slices.Equal(order, want) {
+		t.Fatalf("script order = %v, want %v", order, want)
+	}
+	if cleaned != 1 {
+		t.Fatalf("canceled peer cleanup count = %d, want 1", cleaned)
+	}
+}
+
+func TestPendingRestartsKeepPositionWhileRetiredInvocationsCleanUp(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		separateBatches bool
+	}{
+		{name: "same batch"},
+		{name: "separate batches", separateBatches: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co := New(nil)
+			t.Cleanup(func() { co.RunAfterStop(nil) })
+			state := NewHandlerState(RestartExisting)
+			blocked := co.NewLatch()
+			releaseSibling := co.NewLatch()
+			var order []string
+			cleaned := make(map[string]int)
+			task := func(name string) Task {
+				return Task{
+					RegisterInvocation: func(thread Thread) func() {
+						retire := state.RegisterInvocation(thread)
+						return func() {
+							retire()
+							cleaned[name]++
+						}
+					},
+					Run: func(Thread) {
+						order = append(order, name)
+						if name == "original" {
+							blocked.Wait()
+						}
+					},
+				}
+			}
+			original := co.StartBatch([]Task{task("original")}, BatchAsync)[0]
+			co.JoinFirstSlice(original)
+			sibling := co.Create("sibling", func(Thread) {
+				releaseSibling.Wait()
+				order = append(order, "sibling")
+			})
+			co.JoinFirstSlice(sibling)
+			caller := co.Create("caller", func(Thread) {
+				// Both retired invocations still need cleanup when their shared
+				// script position is handed to the latest invocation.
+				tasks := []Task{task("obsolete"), task("latest")}
+				var replacements []Thread
+				if tt.separateBatches {
+					// Publish the obsolete invocation before replacing it while
+					// the caller still holds execution, so both remain queued.
+					for _, replacement := range tasks {
+						replacements = append(replacements, co.StartBatch([]Task{replacement}, BatchAsync)...)
+					}
+				} else {
+					replacements = co.StartBatch(tasks, BatchAsync)
+				}
+				releaseSibling.Open()
+				co.JoinAll(replacements)
+			})
+			waitForThreadSignal(t, caller.done, "replacement batch did not finish")
+			waitForThreadSignal(t, original.done, "original invocation did not clean up")
+			waitForThreadSignal(t, sibling.done, "sibling did not resume")
+			if want := []string{"original", "latest", "sibling"}; !slices.Equal(order, want) {
+				t.Fatalf("restart order = %v, want %v", order, want)
+			}
+			for _, name := range []string{"original", "obsolete", "latest"} {
+				if cleaned[name] != 1 {
+					t.Fatalf("%s invocation cleanup count = %d, want 1", name, cleaned[name])
+				}
+			}
+		})
 	}
 }
