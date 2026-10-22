@@ -147,10 +147,22 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 	)
 	c := newCostumeFromFrame(frame)
 	c.name = config.Name
-	c.center = mathf.Vec2{X: config.X, Y: config.Y}
+	c.center = costumeCenterInAsset(frame, mathf.NewVec2(config.X, config.Y))
 	c.faceRight = config.FaceRight
 	c.path = config.Path
 	return c
+}
+
+// costumeCenterInAsset returns the rotation center to anchor a costume on. An empty
+// costume is imported as a 1x1 frame but can still carry a center sized for its
+// original canvas, which would displace the sprite, so pixel-less frames stay centered.
+// Both dimensions must degenerate: a 1xN line costume has real pixels and may anchor
+// outside its center.
+func costumeCenterInAsset(frame assetutil.FrameDescriptor, declared mathf.Vec2) mathf.Vec2 {
+	if frame.Width <= 1 && frame.Height <= 1 {
+		return mathf.NewVec2(float64(frame.Width)/2, float64(frame.Height)/2)
+	}
+	return declared
 }
 
 func newBackdropCostume(config *coreproject.BackdropConfig) *costume {
