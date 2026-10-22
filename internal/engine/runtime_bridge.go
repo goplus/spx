@@ -20,14 +20,34 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/coroutine"
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 type runtimeBridge struct{}
 
+// runtimeCallbacks invokes standalone callbacks directly and batches managed
+// callbacks so later callbacks can run when an earlier one yields.
+type runtimeCallbacks struct {
+	binding *gameBinding
+	tasks   []coroutine.Task
+}
+
+func init() {
+	gdx.SetRuntimeBridge(runtimeBridge{})
+}
+
 func (runtimeBridge) InternalUpdateEngine(delta float64) {
-	updateTimers(delta)
-	updateTweens(delta)
+	callbacks := runtimeCallbacks{binding: activeGame.Load()}
+	callbacks.update(delta)
+}
+
+// A nil sprite identifies a global callback; object callbacks recheck lifetime
+// when invoked, after state advancement or an asynchronous batch start.
+func invokeRuntimeCallback(sprite gdx.ISpriter, call func()) {
+	if sprite == nil || runtimeSpriteAlive(sprite) {
+		call()
+	}
 }
 
 func (runtimeBridge) ClearAllSprites() {
@@ -95,7 +115,7 @@ func (runtimeBridge) GetUINode(id Object) gdx.IUiNode {
 }
 
 func (runtimeBridge) DeleteSprite(id Object) {
-	delete(state.sprites, id)
+	deleteSprite(id)
 }
 
 func (runtimeBridge) DeleteUINode(id Object) {
@@ -111,6 +131,41 @@ func (runtimeBridge) TimeSinceGameStarted() float64 {
 	return state.timeSinceStart
 }
 
-func init() {
-	gdx.SetRuntimeBridge(runtimeBridge{})
+func (p *runtimeCallbacks) emit(sprite gdx.ISpriter, call func()) {
+	binding := p.binding
+	if binding == nil || binding.callbacks == nil {
+		invokeRuntimeCallback(sprite, call)
+		return
+	}
+	p.tasks = append(p.tasks, coroutine.Task{
+		Owner: resolveOwner(runtimeSpriteOwner(sprite)),
+		Run: func(coroutine.Thread) {
+			if isRuntimeWorkCurrent(binding) {
+				invokeRuntimeCallback(sprite, call)
+			}
+		},
+	})
+}
+
+func (p *runtimeCallbacks) update(delta float64) {
+	updateTimers(delta, p.emit)
+	updateTweens(delta, p.emit)
+	if len(p.tasks) != 0 && isRuntimeWorkCurrent(p.binding) {
+		gco.StartBatch(p.tasks, coroutine.BatchAsync)
+	}
+}
+
+func updateRuntime(delta float64) {
+	callbacks := runtimeCallbacks{binding: activeGame.Load()}
+	for _, sprite := range state.sprites {
+		switch sprite.(type) {
+		case *Sprite, *gdx.Sprite:
+			// Standard proxies inherit the empty OnUpdate method.
+			continue
+		}
+		// Each frame starts an independent update; waiting calls may overlap.
+		// Object deletion cancels every outstanding invocation.
+		callbacks.emit(sprite, func() { sprite.OnUpdate(delta) })
+	}
+	callbacks.update(delta)
 }

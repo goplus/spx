@@ -234,7 +234,7 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 
 	sprite, ok := target.(*SpriteImpl)
 	if ok {
-		sprite.ensureProxyQueryStateSynced()
+		sprite.syncProxyForQuery()
 		if sprite.isFullyGhosted() {
 			return false
 		}

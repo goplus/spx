@@ -36,6 +36,7 @@ type SpriteImpl struct {
 	// remains stable after clone construction so reflective cloning never copies
 	// publication state while it is in use.
 	proxyPublication *cloneProxyPublication
+	preparedVisual   preparedProxyVisual
 	name             string
 	components       spriteComponents
 
@@ -69,6 +70,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState.VisualVersion = 0
 	p.spriteState.ProxySyncVersion = 0
 	p.proxyPublication = nil
+	p.preparedVisual = preparedProxyVisual{}
 	p.spriteState.HasOnCloned = false
 	p.spriteState.HasOnTouchStart = false
 }

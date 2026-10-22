@@ -180,6 +180,7 @@ func TestBubbleObservesSpriteChangesAfterProxySync(t *testing.T) {
 }
 
 func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
+	_, game := setupRuntimeEventGame(t)
 	sprite := &SpriteImpl{}
 	sprite.spriteState.IsVisible = true
 	quote := &quoterBubble{
@@ -191,19 +192,18 @@ func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
 	component := &bubbleComponent{sprite: sprite, textObj: text}
 	sprite.components.bubble = component
 	items := []Shape{sprite, quote, text}
-	var shapes shapeManager
-
-	shapes.flushActivate(items)
+	game.shapeMgr.items = items
+	withEventRegistrationBarrier(game, game.dispatchShapeUpdates)
 	if !quote.isDirty || !text.isDirty {
 		t.Fatal("update phase unexpectedly committed bubble visuals")
 	}
 
-	shapes.flushBubbleVisuals(items)
+	game.shapeMgr.flushBubbleVisuals(items)
 	if quote.isDirty || text.isDirty {
 		t.Fatal("frame-end phase did not commit bubble visuals")
 	}
-	if len(shapes.bubbles) != 2 {
-		t.Fatalf("collected %d bubbles, want 2", len(shapes.bubbles))
+	if len(game.shapeMgr.bubbles) != 2 {
+		t.Fatalf("collected %d bubbles, want 2", len(game.shapeMgr.bubbles))
 	}
 }
 

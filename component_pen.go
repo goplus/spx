@@ -119,7 +119,7 @@ func (p *penComponent) stamp() {
 	}
 	engine.RequestRedraw()
 	p.sprite.g.penCommandBarrier(func() {
-		p.sprite.ensureProxyQueryStateSynced()
+		p.sprite.syncProxyForQuery()
 		engine.Managers().PenMgr.PenStampSprite(p.sprite.runtimeState.SyncSprite.Id)
 	})
 }

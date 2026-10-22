@@ -18,6 +18,16 @@ package sliceutil
 
 import "unsafe"
 
+// Reset clears elements and returns an empty slice, preserving its storage.
+// initialCap is used only when allocating a nil slice.
+func Reset[T any](items []T, initialCap int) []T {
+	if items == nil && initialCap > 0 {
+		return make([]T, 0, initialCap)
+	}
+	clear(items)
+	return items[:0]
+}
+
 func InsertAt[T any](slice []T, idx int, item T) []T {
 	var zero T
 	slice = append(slice, zero)

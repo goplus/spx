@@ -291,10 +291,7 @@ func pollRuntimeEventConditions(game *Game) {
 }
 
 func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
-	co := setupRuntimeScheduler(t)
-
-	var game Game
-	game.bindScriptEvents()
+	co, game, _ := setupInputSourceTest(t)
 	var order []string
 	evaluations := 0
 	game.OnCond(func() bool {
@@ -308,13 +305,14 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		order = append(order, "start")
 	})
 
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	if evaluations != 0 {
 		t.Fatalf("condition evaluated %d times during bootstrap, want 0", evaluations)
 	}
 
+	game.markGameStarted(game.bootstrapGeneration())
 	game.completeBootstrap(game.bootstrapGeneration())
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	if evaluations != 0 {
 		t.Fatalf("condition evaluated %d times before OnStart, want 0", evaluations)
 	}
@@ -325,7 +323,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("order before condition polling = %v, want %v", order, want)
 	}
 
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	co.Update()
 	if evaluations != 1 {
 		t.Fatalf("condition evaluated %d times after OnStart, want 1", evaluations)
@@ -334,7 +332,7 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 		t.Fatalf("startup order = %v, want %v", order, want)
 	}
 
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	co.Update()
 	if evaluations != 2 {
 		t.Fatalf("condition evaluated %d times after two polls, want 2", evaluations)
@@ -345,18 +343,16 @@ func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
 }
 
 func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
-	co := setupRuntimeScheduler(t)
-
-	var game Game
-	game.bindScriptEvents()
+	co, game, _ := setupInputSourceTest(t)
 	var order []string
 	ready := false
 	topLevelBlocked := make(chan struct{})
 	onStartBlocked := make(chan struct{})
 
 	generation := game.bootstrapGeneration()
+	game.markGameStarted(generation)
 	game.queueBootstrap(generation, func() {
-		runMainUntilYield(&game, func() {
+		runMainUntilYield(game, func() {
 			order = append(order, "top-level")
 			game.OnCond(func() bool {
 				order = append(order, "evaluate")
@@ -380,7 +376,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 	if want := []string{"top-level"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("order after top-level first yield = %v, want %v", order, want)
 	}
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	if want := []string{"top-level"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("condition ran before OnStart: %v", order)
 	}
@@ -392,7 +388,7 @@ func TestOnCondObservesTopLevelAndOnStartInitialization(t *testing.T) {
 		t.Fatalf("order after OnStart = %v, want %v", order, want)
 	}
 
-	pollRuntimeEventConditions(&game)
+	pollRuntimeEventConditions(game)
 	co.Update()
 	if want := []string{"top-level", "start", "evaluate", "condition"}; !reflect.DeepEqual(order, want) {
 		t.Fatalf("startup order = %v, want %v", order, want)

@@ -179,7 +179,7 @@ func TestAtlasCostumePreservesFrameGeometry(t *testing.T) {
 	if got, want := obj.getCostumeAtlasRegion(), mathf.NewRect2(59, 8, 43, 43); got != want {
 		t.Fatalf("atlas region = %v, want %v", got, want)
 	}
-	if got, want := obj.getCostumeAtlasUvRemap(), mathf.NewRect2(59.0/256, 8.0/128, 43.0/256, 43.0/128); got != want {
+	if got, want := c.atlasUVRect, mathf.NewVec4(59.0/256, 8.0/128, 43.0/256, 43.0/128); got != want {
 		t.Fatalf("atlas UV remap = %v, want %v", got, want)
 	}
 	if width, height := c.displaySize(); width != 21 || height != 21 {

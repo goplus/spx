@@ -48,6 +48,10 @@ func setupTweenTest(t *testing.T) *tweenTestSprite {
 	return sprite
 }
 
+func advanceTweenTest(delta float64) {
+	updateTweens(delta, invokeRuntimeCallback)
+}
+
 func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -68,8 +72,8 @@ func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 					t.Errorf("callback observed position %v, want endpoint %v", sprite.position, want)
 				}
 			})
-			updateTweens(test.delta)
-			updateTweens(1)
+			advanceTweenTest(test.delta)
+			advanceTweenTest(1)
 			if sprite.position != want || calls != 1 || len(tweenInfos) != 0 {
 				t.Fatalf("completion = position %v, callbacks %d, active %d; want %v, 1, 0", sprite.position, calls, len(tweenInfos), want)
 			}
@@ -86,7 +90,7 @@ func TestTweenSegmentsStartAtPreviousEndpoint(t *testing.T) {
 		want  float64
 		calls int
 	}{{0.5, 5, 0}, {0.75, 12.5, 0}, {0.75, 20, 1}} {
-		updateTweens(step.delta)
+		advanceTweenTest(step.delta)
 		if sprite.position != mathf.NewVec2(step.want, 0) || calls != step.calls {
 			t.Fatalf("after delta %v: position %v, callbacks %d; want %v, %d", step.delta, sprite.position, calls, step.want, step.calls)
 		}
@@ -103,7 +107,7 @@ func TestTweenCrossedSegmentsCommitInOrder(t *testing.T) {
 					t.Errorf("callback observed writes %v, want [%v %v]", sprite.positions, first, last)
 				}
 			})
-			updateTweens(durations[0] + durations[1])
+			advanceTweenTest(durations[0] + durations[1])
 			if !slices.Equal(sprite.positions, []mathf.Vec2{first, last}) {
 				t.Fatalf("writes = %v, want [%v %v]", sprite.positions, first, last)
 			}
@@ -127,11 +131,11 @@ func TestTweenCallbacksFollowAllUpdatesAndDeferNewTweens(t *testing.T) {
 			}
 		})
 	}
-	updateTweens(1)
+	advanceTweenTest(1)
 	if !slices.Equal(calls, []Object{1, 2}) || len(tweenInfos) != 1 || first.position.X != 10 {
 		t.Fatalf("callbacks %v, active %d, first %v; want [1 2], 1, (10,0)", calls, len(tweenInfos), first.position)
 	}
-	updateTweens(0.5)
+	advanceTweenTest(0.5)
 	if first.position.X != 20 {
 		t.Fatalf("new tween position = %v, want (20,0)", first.position)
 	}

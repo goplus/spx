@@ -95,12 +95,7 @@ func resetInputSessionTest(t *testing.T) {
 func setupSnapshotInputSessionTest(t *testing.T) {
 	t.Helper()
 	resetInputSessionTest(t)
-	reset := func() {
-		engine.ResetCaptures()
-		engine.SetCaptureHandler(nil)
-	}
-	reset()
-	t.Cleanup(reset)
+	setupCaptureTest(t)
 }
 
 func claimPreparedSession(t *testing.T, game *Game) *inputSession {
@@ -913,11 +908,7 @@ func TestSnapshotUsesSyntheticTickZeroForEmptyReplay(t *testing.T) {
 
 func TestInputSessionCaptureKeyRequestsSnapshots(t *testing.T) {
 	_, game, _ := setupInputSourceTest(t)
-	engine.ResetCaptures()
-	t.Cleanup(func() {
-		engine.ResetCaptures()
-		engine.SetCaptureHandler(nil)
-	})
+	setupCaptureTest(t)
 	var got []engine.CaptureRequest
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req)
@@ -1100,9 +1091,7 @@ func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
 	original := pkgengine.InputMgr
 	mgr := &inputSourceTestManager{}
 	pkgengine.InputMgr = mgr
-	engine.ResetInputState()
 	t.Cleanup(func() {
-		engine.ResetInputState()
 		pkgengine.InputMgr = original
 	})
 	return mgr
@@ -1220,8 +1209,7 @@ func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
 
 func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(t *testing.T) {
 	co, game, mgr := setupInputSourceTest(t)
-	engine.ResetCaptures()
-	t.Cleanup(engine.ResetCaptures)
+	setupCaptureTest(t)
 	replay := validRuntimeReplay(InputReplayFrame{
 		Frame: 0,
 		State: InputReplayState{
@@ -1301,8 +1289,7 @@ func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			co, game, mgr := setupInputSourceTest(t)
-			engine.ResetCaptures()
-			t.Cleanup(engine.ResetCaptures)
+			setupCaptureTest(t)
 			originalExt, originalPlatform := pkgengine.ExtMgr, pkgengine.PlatformMgr
 			recorder := &inputFrameFailureExtMgr{}
 			pkgengine.ExtMgr = recorder

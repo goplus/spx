@@ -41,6 +41,123 @@ func setupSpriteManagerTest(t *testing.T) {
 	})
 }
 
+type positionWriteSpy struct {
+	gdx.ISpriteMgr
+	position mathf.Vec2
+	fail     bool
+	writes   int
+}
+
+func (s *positionWriteSpy) GetPosition(Object) mathf.Vec2 { return s.position }
+
+func (s *positionWriteSpy) SetPosition(_ Object, position mathf.Vec2) {
+	if s.fail {
+		panic("position write failed")
+	}
+	s.position = position
+	s.writes++
+}
+
+func TestSpritePositionWritesMirrorAfterEngineWrite(t *testing.T) {
+	setupSpriteManagerTest(t)
+	for _, test := range []struct {
+		name  string
+		write func(*Sprite)
+		want  mathf.Vec2
+		axes  PositionAxes
+	}{
+		{"set position", func(s *Sprite) { var sprite gdx.ISpriter = s; sprite.SetPosition(mathf.NewVec2(30, 40)) }, mathf.NewVec2(30, 40), PositionXY},
+		{"add position", func(s *Sprite) { s.AddPos(3, 4) }, mathf.NewVec2(13, 24), PositionXY},
+		{"add x", func(s *Sprite) { s.AddPosX(3) }, mathf.NewVec2(13, 20), PositionX},
+		{"add y", func(s *Sprite) { s.AddPosY(4) }, mathf.NewVec2(10, 24), PositionY},
+		{"set x", func(s *Sprite) { s.SetPosX(30) }, mathf.NewVec2(30, 20), PositionX},
+		{"set y", func(s *Sprite) { s.SetPosY(40) }, mathf.NewVec2(10, 40), PositionY},
+		{"set same position", func(s *Sprite) { s.SetPosition(mathf.NewVec2(10, 20)) }, mathf.NewVec2(10, 20), PositionXY},
+		{"add zero position", func(s *Sprite) { s.AddPos(0, 0) }, mathf.NewVec2(10, 20), PositionXY},
+		{"add zero x", func(s *Sprite) { s.AddPosX(0) }, mathf.NewVec2(10, 20), PositionX},
+		{"add zero y", func(s *Sprite) { s.AddPosY(0) }, mathf.NewVec2(10, 20), PositionY},
+		{"set same x", func(s *Sprite) { s.SetPosX(10) }, mathf.NewVec2(10, 20), PositionX},
+		{"set same y", func(s *Sprite) { s.SetPosY(20) }, mathf.NewVec2(10, 20), PositionY},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			manager := &positionWriteSpy{position: mathf.NewVec2(10, 20)}
+			gdx.SpriteMgr = manager
+			sprite := &Sprite{Sprite: gdx.Sprite{Id: 1}}
+			calls := 0
+			sprite.MirrorPosition = func(proxy *Sprite, position mathf.Vec2, axes PositionAxes) {
+				calls++
+				if proxy != sprite || position != test.want || manager.position != position || manager.writes != 1 {
+					t.Fatalf("mirror observed proxy=%p position=%v engine=%v writes=%d", proxy, position, manager.position, manager.writes)
+				}
+				if axes != test.axes {
+					t.Fatalf("mirror observed axes=%v, want %v", axes, test.axes)
+				}
+			}
+			test.write(sprite)
+			if calls != 1 {
+				t.Fatalf("mirror notifications=%d, want 1", calls)
+			}
+		})
+	}
+}
+
+func TestSpritePositionWriteFailureDoesNotMirror(t *testing.T) {
+	setupSpriteManagerTest(t)
+	manager := &positionWriteSpy{fail: true}
+	gdx.SpriteMgr = manager
+	called := false
+	sprite := &Sprite{MirrorPosition: func(*Sprite, mathf.Vec2, PositionAxes) { called = true }}
+	func() {
+		defer func() {
+			if got := recover(); got != "position write failed" {
+				t.Fatalf("position write panic=%v", got)
+			}
+		}()
+		sprite.SetPosition(mathf.NewVec2(30, 40))
+	}()
+	if called {
+		t.Fatal("failed engine write changed the mirrored position")
+	}
+	manager.fail = false
+	sprite.MirrorPosition = nil
+	sprite.SetPosition(mathf.NewVec2(30, 40))
+	if manager.position != mathf.NewVec2(30, 40) || manager.writes != 1 {
+		t.Fatal("sprite without a mirror lost its engine write")
+	}
+}
+
+func TestTweenMirrorsProxyPositionBeforeCompletionCallback(t *testing.T) {
+	setupSpriteManagerTest(t)
+	resetRuntimeDeltaTestState()
+	t.Cleanup(resetRuntimeDeltaTestState)
+	manager := &positionWriteSpy{}
+	gdx.SpriteMgr = manager
+	var cached mathf.Vec2
+	sprite := &Sprite{Sprite: gdx.Sprite{Id: 1}, MirrorPosition: func(_ *Sprite, position mathf.Vec2, axes PositionAxes) {
+		if axes != PositionXY {
+			t.Fatalf("tween notified axes=%v, want %v", axes, PositionXY)
+		}
+		cached = position
+	}}
+	state.sprites[sprite.Id] = sprite
+	completed := false
+	want := mathf.NewVec2(30, 40)
+	tweenPos(sprite, want, 1, func() {
+		completed = true
+		if cached != want || manager.position != want {
+			t.Fatalf("tween completion observed cache=%v engine=%v, want %v", cached, manager.position, want)
+		}
+	})
+	advanceTweenTest(0.5)
+	if cached != want.Mulf(0.5) || manager.position != cached || completed {
+		t.Fatalf("tween midpoint: cache=%v engine=%v completed=%v", cached, manager.position, completed)
+	}
+	advanceTweenTest(0.5)
+	if !completed {
+		t.Fatal("tween did not invoke its completion callback")
+	}
+}
+
 type textureUpdateCall struct {
 	method string
 	id     gdx.Object

@@ -205,7 +205,7 @@ func TestFlushCapturesSupportsReentrantResetAndHandlerChange(t *testing.T) {
 	SetCaptureHandler(func(request CaptureRequest) error {
 		firstHandlerCalls++
 		got = append(got, request)
-		ResetCaptures()
+		resetCaptures()
 		if err := EnqueueCapture("after-reset", nil); err != nil {
 			t.Fatal(err)
 		}
@@ -259,9 +259,9 @@ func TestResetCapturesClearsCapturesAndResetsSequence(t *testing.T) {
 	if err := EnqueueCapture("old.png", nil); err != nil {
 		t.Fatal(err)
 	}
-	ResetCaptures()
+	resetCaptures()
 	if HasPendingCaptures() {
-		t.Fatal("ResetCaptures did not clear pending captures")
+		t.Fatal("resetCaptures did not clear pending captures")
 	}
 	if err := FlushCaptures(); err != nil {
 		t.Fatal(err)

@@ -80,7 +80,10 @@ func (p *Game) setupBackdrop() {
 		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
 	p.runtimeState.Scale = 1
-	p.baseObj.scheduleCostumeUpdate()
+	engine.WaitMainThread(func() {
+		p.applyLayerUpdate()
+		p.applyCostumeTexture()
+	})
 
 	if p.displayState.MapMode == coreproject.MapModeActualSize {
 		x, y := getCostumeRenderOffset(p.currentCostume(), p.currentCostume().pivot, layout.ScaleX, layout.ScaleY)
@@ -101,9 +104,7 @@ func (p *Game) getWindowSize() mathf.Vec2 {
 }
 
 func (p *Game) windowSize() (int, int) {
-	if p.displayState.WindowWidth == 0 {
-		p.doWindowSize()
-	}
+	p.doWindowSize()
 	return p.displayState.WindowWidth, p.displayState.WindowHeight
 }
 
@@ -115,9 +116,7 @@ func (p *Game) doWindowSize() {
 }
 
 func (p *Game) worldSize() (int, int) {
-	if p.displayState.WorldWidth == 0 {
-		p.doWorldSize()
-	}
+	p.doWorldSize()
 	return p.displayState.WorldWidth, p.displayState.WorldHeight
 }
 

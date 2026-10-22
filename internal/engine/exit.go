@@ -61,7 +61,7 @@ func resetWebRuntime(exitCode int64) {
 func finishWebReset(co *coroutine.Coroutines, binding *gameBinding, exitCode int64) {
 	defer CheckPanic()
 	waitForGameStart(binding)
-	defer finishDeferredReset(binding)
+	defer releaseGame(binding)
 	if binding.startDone != nil && binding.link == nil {
 		return
 	}

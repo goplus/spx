@@ -21,8 +21,9 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
 
 // ============================================================================
@@ -57,13 +58,17 @@ type transformComponent struct {
 
 	// Position coordinates in world space.
 	x, y float64
+	// Axis write versions; zero means no pending write.
+	pendingPosition positionVersions
 
-	// Rotation properties.
 	direction     float64
 	rotationStyle RotationStyle
 
-	// Transform origin.
 	pivot mathf.Vec2
+}
+
+type positionVersions struct {
+	x, y uint64
 }
 
 // ============================================================================
@@ -83,16 +88,9 @@ func (t *transformComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 func (t *transformComponent) cloneFor(newSprite *SpriteImpl) *transformComponent {
 	cloned := *t
 	cloned.sprite = newSprite
+	// New proxies start at the copied position with fresh versions.
+	cloned.pendingPosition = positionVersions{}
 	return &cloned
-}
-
-// ============================================================================
-// Transform State
-// ============================================================================
-
-// markDirty publishes a transform change to the sprite proxy.
-func (t *transformComponent) markDirty() {
-	t.sprite.markProxyDirty()
 }
 
 // ============================================================================
@@ -147,18 +145,16 @@ func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnim
 		animation = t.sprite.animation().getStateAnimName(StateStep)
 	}
 
-	from := mathf.NewVec2(t.x, t.y)
-	to := mathf.NewVec2(x, y)
-	distance := from.DistanceTo(to)
-
 	ani, ok := t.sprite.animation().getAnimation(animation)
 	if !ok {
 		t.setPosition(x, y)
 		return
 	}
 
+	from := mathf.NewVec2(t.x, t.y)
+	to := mathf.NewVec2(x, y)
 	speed = math.Max(speed, minSpeed)
-	duration := math.Abs(distance) * ani.StepDuration / speed
+	duration := from.DistanceTo(to) * ani.StepDuration / speed
 	t.sprite.animation().doTween(animation, ani, tweenParams{
 		aniType:  coreproject.AniTypeMove,
 		duration: duration,
@@ -191,7 +187,7 @@ func (t *transformComponent) setSize(size float64) {
 
 	t.sprite.runtimeState.Scale = size
 	t.sprite.runtimeState.IsCostumeDirty = true
-	t.markDirty()
+	t.sprite.markProxyDirty()
 	t.sprite.updatePhysicsShapesScale()
 }
 
@@ -211,11 +207,11 @@ func (t *transformComponent) setPosition(x, y float64) {
 }
 
 func (t *transformComponent) setX(x float64) {
-	t.moveTo(normalizeMotionValue(x), t.y)
+	t.moveAxes(normalizeMotionValue(x), t.y, engine.PositionX)
 }
 
 func (t *transformComponent) setY(y float64) {
-	t.moveTo(t.x, normalizeMotionValue(y))
+	t.moveAxes(t.x, normalizeMotionValue(y), engine.PositionY)
 }
 
 func (t *transformComponent) changePosition(dx, dy float64) {
@@ -223,11 +219,11 @@ func (t *transformComponent) changePosition(dx, dy float64) {
 }
 
 func (t *transformComponent) changeX(dx float64) {
-	t.moveTo(t.x+normalizeMotionValue(dx), t.y)
+	t.moveAxes(t.x+normalizeMotionValue(dx), t.y, engine.PositionX)
 }
 
 func (t *transformComponent) changeY(dy float64) {
-	t.moveTo(t.x, t.y+normalizeMotionValue(dy))
+	t.moveAxes(t.x, t.y+normalizeMotionValue(dy), engine.PositionY)
 }
 
 func (t *transformComponent) distanceToTarget(target Target) float64 {
@@ -288,13 +284,29 @@ func (t *transformComponent) setPositionRaw(x, y float64) bool {
 	return true
 }
 
-// moveTo moves the sprite to the specified position, handling pen movement
-// and transform updates.
 func (t *transformComponent) moveTo(x, y float64) {
+	t.moveAxes(x, y, engine.PositionXY)
+}
+
+func (t *transformComponent) moveAxes(x, y float64, axes engine.PositionAxes) {
 	x, y = t.fixWorldRange(x, y)
 	t.sprite.movePen(x, y)
+	// Fencing can move the other axis too.
+	if x != t.x {
+		axes |= engine.PositionX
+	}
+	if y != t.y {
+		axes |= engine.PositionY
+	}
 	t.x, t.y = x, y
-	t.markDirty()
+	// Same-value setters also own a new write version.
+	t.sprite.markProxyDirty()
+	if axes&engine.PositionX != 0 {
+		t.pendingPosition.x = t.sprite.spriteState.DirtyVersion
+	}
+	if axes&engine.PositionY != 0 {
+		t.pendingPosition.y = t.sprite.spriteState.DirtyVersion
+	}
 }
 
 // fixWorldRange mirrors Scratch's keepInFence behavior: a sprite may extend
@@ -342,15 +354,18 @@ func (t *transformComponent) fixWorldRange(x, y float64) (float64, float64) {
 // Rotation
 // ============================================================================
 
-// setHeading normalizes the direction and reports whether it changed.
+// setHeading ignores non-finite input and reports whether the normalized direction changed.
 func (t *transformComponent) setHeading(dir Direction) bool {
+	if math.IsNaN(dir) || math.IsInf(dir, 0) {
+		return false
+	}
 	dir = normalizeDirection(dir)
 	if t.direction == dir {
 		return false
 	}
 
 	t.direction = dir
-	t.markDirty()
+	t.sprite.markProxyDirty()
 	return true
 }
 
@@ -363,7 +378,7 @@ func (t *transformComponent) setRotationStyle(style RotationStyle) {
 		spxlog.Debug("SetRotationStyle: sprite=%s, style=%v", t.sprite.name, style)
 	}
 	t.rotationStyle = style
-	t.markDirty()
+	t.sprite.markProxyDirty()
 }
 
 func (t *transformComponent) turn(delta Direction, speed float64, animation SpriteAnimationName) {
@@ -417,7 +432,7 @@ func (t *transformComponent) bounceOffEdge(area string) {
 
 	dx, dy = calculateBounceDirection(nearestEdge, dx, dy)
 
-	newDirection := engine.RadToDeg(math.Atan2(dy, dx)) + 90
+	newDirection := pkgengine.RadToDeg(math.Atan2(dy, dx)) + 90
 	t.direction = normalizeDirection(newDirection)
 
 	t.moveTo(t.x, t.y)
@@ -454,20 +469,23 @@ func (t *transformComponent) calculateTargetAngleToPos(x, y float64) float64 {
 	if t.x == x && t.y == y {
 		return t.direction
 	}
-	return engine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
+	return pkgengine.HeadingToPoint(mathf.NewVec2(t.x, t.y), mathf.NewVec2(x, y))
 }
 
 // ============================================================================
 // Tween Helpers
 // ============================================================================
 
-// doTurnAnimation runs a turn tween and falls back to a direct heading change.
 func (t *transformComponent) doTurnAnimation(
 	from, to float64,
 	speed float64,
 	animation SpriteAnimationName,
 	fallback func(),
 ) {
+	absDelta := math.Abs(from - to)
+	if math.IsNaN(absDelta) || math.IsInf(absDelta, 0) {
+		return
+	}
 	if animation == "" {
 		animation = t.sprite.animation().getStateAnimName(StateTurn)
 	}
@@ -478,7 +496,6 @@ func (t *transformComponent) doTurnAnimation(
 		return
 	}
 
-	absDelta := math.Abs(from - to)
 	speed = math.Max(speed, minSpeed)
 	duration := ani.TurnToDuration / fullCircleDegrees * absDelta / speed
 	t.sprite.animation().doTween(animation, ani, tweenParams{

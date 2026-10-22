@@ -19,6 +19,9 @@ package gdengine
 //lint:file-ignore ST1001 Godot callback glue intentionally dot-imports engine API types.
 
 import (
+	"maps"
+	"slices"
+
 	spxlog "github.com/goplus/spx/v3/internal/log"
 	itime "github.com/goplus/spx/v3/internal/time"
 	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
@@ -84,31 +87,17 @@ func onEngineStart() {
 }
 
 func onEngineUpdate(delta float64) {
-	// Logical update callbacks share SPX's fixed delta while an input replay
-	// session is active, keeping scripts, timers, tweens, and engine-facing
-	// updates aligned.
+	// Replays use one logical delta for scripts, timers, and tweens.
 	delta = itime.EffectiveLogicalDeltaTime(delta)
 	AdvanceTimeSinceGameStart(delta)
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
-	for _, sprite := range sprites {
-		sprite.OnUpdate(delta)
-	}
 	if coreCallbacks.OnEngineUpdate != nil {
 		coreCallbacks.OnEngineUpdate(delta)
 	}
-	InternalUpdateEngine(delta)
 }
 
 func onEngineFixedUpdate(delta float64) {
-	// Fixed-update callbacks intentionally keep Godot's raw physics delta.
-	// Input replay virtualizes only SPX logical update time.
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
+	// Physics keeps Godot's delta even during input replay.
+	sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
 	for _, sprite := range sprites {
 		sprite.OnFixedUpdate(delta)
 	}
@@ -121,10 +110,7 @@ func onEngineDestroy() {
 	if coreCallbacks.OnEngineDestroy != nil {
 		coreCallbacks.OnEngineDestroy()
 	}
-	sprites = sprites[:0]
-	for _, sprite := range Sprites() {
-		sprites = append(sprites, sprite)
-	}
+	sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
 	for _, sprite := range sprites {
 		sprite.OnDestroy()
 	}
@@ -351,4 +337,20 @@ func onSpriteFramesSetChanged(id int64) {
 		sprite.V_OnFramesSetChanged()
 		sprite.OnFramesSetChanged()
 	}
+}
+
+// Preserve the synchronous update order for standalone engine clients.
+func standaloneCallbacks(callbacks CoreCallbackInfo) CoreCallbackInfo {
+	update := callbacks.OnEngineUpdate
+	callbacks.OnEngineUpdate = func(delta float64) {
+		sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
+		for _, sprite := range sprites {
+			sprite.OnUpdate(delta)
+		}
+		if update != nil {
+			update(delta)
+		}
+		InternalUpdateEngine(delta)
+	}
+	return callbacks
 }

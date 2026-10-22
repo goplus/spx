@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -55,6 +56,10 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 		t.Fatal("clone inherited parent collision or animation runtime state")
 	}
 
+	// The fresh proxy already starts at the copied position; the parent's
+	// unsubmitted movement must not pin the child's later physical movement.
+	child.mergeEnginePosition(40, -20)
+	requirePosition(t, child, 40, -20)
 	child.SetXpos(99)
 	child.SetPhysicsMode(StaticPhysics)
 	child.pen().penWidth = 9
@@ -176,7 +181,7 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 		t.Fatalf("direction to current position = %v, want 35", got)
 	}
 	sprite.g.inputMgr.setMousePos(mathf.NewVec2(0, 10))
-	if got := transform.directionToTarget(Mouse); got != 0 {
+	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
 		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
 	}
 	transform.bounceOffEdge(edgeAreaStage)

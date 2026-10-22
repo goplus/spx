@@ -21,13 +21,11 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v3/internal/base/sliceutil"
 	"github.com/goplus/spx/v3/internal/engine"
 	spxlog "github.com/goplus/spx/v3/internal/log"
 )
 
-// -----------------------------------------------------------------------------
-// Sprite Proxy Lifecycle
-// -----------------------------------------------------------------------------
 const (
 	cloneProxyPublished uint32 = iota
 	cloneProxyPending
@@ -35,54 +33,9 @@ const (
 )
 
 type cloneProxyPublication struct {
-	state uint32
-	// sensingVisibilityLeases is confined to the engine main thread. A count
-	// keeps temporary sensing visibility correct under nested bridge calls. It
-	// is atomic because generic proxy-sync paths may read effective visibility.
+	state atomic.Uint32
+	// Engine-thread lease count; atomic for proxy sync readers.
 	sensingVisibilityLeases atomic.Int32
-}
-
-// dispatchStartEventIfNeeded fires the start event once after bootstrap completes.
-func (p *Game) dispatchStartEventIfNeeded() {
-	if ev := p.scheduleStartEvent(); ev != nil {
-		p.handleEvent(ev)
-	}
-}
-
-// updateSpriteProxies activates pending shapes, batches dirty sprite proxy changes,
-// processes pending destroys, flushes the batch to the engine, and updates camera state.
-func (p *Game) updateSpriteProxies() {
-	p.camera.onUpdate()
-	activeShapes := p.shapeMgr.getTempShapes()
-	p.shapeMgr.flushActivate(activeShapes)
-	p.flushSpriteProxyChanges(activeShapes)
-}
-
-// syncPostCoroutineVisuals flushes visual changes without advancing frame logic.
-func (p *Game) syncPostCoroutineVisuals() {
-	p.camera.onUpdate()
-
-	activeShapes := p.shapeMgr.getTempShapes()
-
-	p.flushSpriteProxyChanges(activeShapes)
-
-	p.shapeMgr.flushBubbleVisuals(activeShapes)
-}
-
-func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
-	p.syncBuffer.Clear()
-	p.shapeMgr.collectProxyUpdates(activeShapes, p.syncBuffer)
-	p.shapeMgr.flushDestroy(p.syncBuffer)
-	p.flushSyncBuffer()
-	p.camera.setDirtyFlag(false)
-}
-
-// flushSyncBuffer sends batched updates to the engine if there are any changes.
-func (p *Game) flushSyncBuffer() {
-	if p.syncBuffer.UpdateCount() == 0 && p.syncBuffer.DeleteCount() == 0 {
-		return
-	}
-	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
 }
 
 type physicsPullBuffer struct {
@@ -91,7 +44,77 @@ type physicsPullBuffer struct {
 	busy    atomic.Bool
 }
 
-// pullPhysicsPositions reads sprite positions in one batch.
+type proxyChange struct {
+	sprite           *SpriteImpl
+	proxy            *engine.Sprite
+	dirtyVersion     uint64
+	positionVersions positionVersions
+	destroy          bool
+}
+
+type proxyBatch struct {
+	changes      []proxyChange
+	destroyCount int
+}
+
+type proxySnapshot struct {
+	proxyVisual
+	change   proxyChange
+	position mathf.Vec2
+	visible  bool
+}
+
+type proxyVisual struct {
+	scale, renderOffset mathf.Vec2
+	rotation            float64
+}
+
+// Keep the geometry paired with the texture actually sent to this proxy.
+type preparedProxyVisual struct {
+	proxyVisual
+	proxy        *engine.Sprite
+	dirtyVersion uint64
+	preparing    bool
+}
+
+// -----------------------------------------------------------------------------
+// Engine Callbacks
+// -----------------------------------------------------------------------------
+// mirrorPosition applies engine position writes without movement side effects.
+func (p *SpriteImpl) mirrorPosition(proxy *engine.Sprite, position mathf.Vec2, axes engine.PositionAxes) {
+	if p.isDestroyed() || p.runtimeState.SyncSprite != proxy {
+		return
+	}
+	pending := &p.transform().pendingPosition
+	if axes&engine.PositionX != 0 {
+		pending.x = 0
+	}
+	if axes&engine.PositionY != 0 {
+		pending.y = 0
+	}
+	p.mergeEnginePosition(position.X, position.Y)
+}
+
+// -----------------------------------------------------------------------------
+// Frame Sync
+// -----------------------------------------------------------------------------
+func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
+	batch := proxyBatch{changes: p.shapeMgr.proxyChangeBuffer}
+	p.shapeMgr.proxyChangeBuffer = nil
+	defer func() {
+		p.shapeMgr.proxyChangeBuffer = sliceutil.Reset(batch.changes, 0)
+	}()
+	p.syncBuffer.Clear()
+	p.shapeMgr.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
+	p.flushSyncBuffer()
+	p.shapeMgr.commitProxyChanges(batch)
+	p.camera.setDirtyFlag(false)
+}
+
+func (p *Game) flushSyncBuffer() {
+	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
+}
+
 func (p *Game) pullPhysicsPositions() {
 	pull := &p.physicsPull
 	buffer := p.syncBuffer
@@ -102,8 +125,7 @@ func (p *Game) pullPhysicsPositions() {
 	}
 	pull.ids = pull.ids[:0]
 	defer func() {
-		clear(pull.sprites)
-		pull.sprites = pull.sprites[:0]
+		pull.sprites = sliceutil.Reset(pull.sprites, 0)
 		if reuse {
 			pull.busy.Store(false)
 		}
@@ -122,23 +144,8 @@ func (p *Game) pullPhysicsPositions() {
 	applyPhysicsPositions(pull.sprites, buffer.GetPositions(pull.ids))
 }
 
-func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
-	for i, sprite := range sprites {
-		at := i * 2
-		if at+1 >= len(positions) {
-			return
-		}
-		x, y := float64(positions[at]), float64(positions[at+1])
-		if math.IsNaN(x) || math.IsNaN(y) {
-			continue
-		}
-		sprite.applyPhysicsPosition(x, y)
-	}
-}
-
-// processPhysicsTriggers consumes trigger events and fires collision callbacks.
 func (p *Game) processPhysicsTriggers() {
-	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents[:0])
+	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents)
 	p.dispatchPhysicsTriggers()
 }
 
@@ -160,53 +167,86 @@ func (p *Game) dispatchPhysicsTriggers() {
 		}
 		src.fireTouchStart(dst)
 	}
-	clear(p.triggerEvents)
-	p.triggerEvents = p.triggerEvents[:0]
+	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
 }
 
 // -----------------------------------------------------------------------------
 // Base Object Visual Sync
 // -----------------------------------------------------------------------------
-// scheduleCostumeUpdate schedules a costume update on the main thread.
-func (p *baseObj) scheduleCostumeUpdate() {
-	engine.WaitMainThread(func() {
-		p.applyCostumeUpdate()
+// applyDirtyUpdate consumes only this update, preserving reentrant changes and
+// restoring the retry flag if the engine write fails.
+func applyDirtyUpdate(dirty *bool, update func()) {
+	if !*dirty {
+		return
+	}
+	*dirty = false
+	completed := false
+	defer func() {
+		if !completed {
+			*dirty = true
+		}
+	}()
+	update()
+	completed = true
+}
+
+func (p *baseObj) applyLayerUpdate() {
+	applyDirtyUpdate(&p.runtimeState.IsLayerDirty, func() {
+		if !engine.HasLayerSortMethod() {
+			p.runtimeState.SyncSprite.SetZIndex(int64(p.runtimeState.Layer))
+		}
 	})
 }
 
-// applyCostumeUpdate pushes pending costume and layer changes to the proxy.
-func (p *baseObj) applyCostumeUpdate() {
-	syncSprite := p.runtimeState.SyncSprite
-	if p.runtimeState.IsLayerDirty {
-		if !engine.HasLayerSortMethod() {
-			syncSprite.SetZIndex(int64(p.runtimeState.Layer))
+func (p *baseObj) applyCostumeTexture() {
+	applyDirtyUpdate(&p.runtimeState.IsCostumeDirty, func() {
+		syncSprite := p.runtimeState.SyncSprite
+		path := p.getCostumePath()
+		renderScale := p.getCostumeRenderScale()
+		if p.isCostumeAtlas() {
+			rect := p.getCostumeAtlasRegion()
+			uvRemap := p.currentCostume().atlasUVRect
+			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
+			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
+		} else {
+			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
 		}
-		p.runtimeState.IsLayerDirty = false
+	})
+}
+
+func (p *SpriteImpl) applyCostumeUpdate() {
+	// Texture setters emit synchronous callbacks. Nested queries must not
+	// interleave another texture write with this preparation's scale and UVs.
+	if p.preparedVisual.proxy == p.runtimeState.SyncSprite && p.preparedVisual.preparing {
+		return
 	}
+	p.applyLayerUpdate()
+	// Hidden transforms can be acknowledged while their resources stay dirty.
+	// Preparing those resources must submit their matching geometry again.
+	if p.runtimeState.IsCostumeDirty && p.preparedVisual.proxy == p.runtimeState.SyncSprite &&
+		p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
+		p.markProxyDirty()
+	}
+	if !p.runtimeState.IsCostumeDirty && !p.hasCostume() {
+		return // Clean proxies without a costume use native collision fallback.
+	}
+	// Refresh geometry even when the texture is clean: later callbacks may
+	// change the costume after a heading-only update has already committed.
+	p.preparedVisual = p.captureProxyVisual()
 	if !p.runtimeState.IsCostumeDirty {
 		return
 	}
-	p.runtimeState.IsCostumeDirty = false
-	path := p.getCostumePath()
-	renderScale := p.getCostumeRenderScale()
-	if p.isCostumeAtlas() {
-		rect := p.getCostumeAtlasRegion()
-		syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
-		p.applyAtlasUVRemap()
-		return
-	}
-	syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
+	p.preparedVisual.preparing = true
+	defer func() { p.preparedVisual.preparing = false }()
+	p.applyCostumeTexture()
 }
 
-func (p *baseObj) applyAtlasUVRemap() {
-	uvRemap := p.getCostumeAtlasUvRemap()
-	val := mathf.NewVec4(uvRemap.Position.X, uvRemap.Position.Y, uvRemap.Size.X, uvRemap.Size.Y)
-	p.setMaterialParamsVec4("atlas_uv_rect2", val, true)
-}
-
+// -----------------------------------------------------------------------------
+// Sprite Proxy Lifecycle
+// -----------------------------------------------------------------------------
 func (p *SpriteImpl) beginCloneProxyPublication() {
 	publication := &cloneProxyPublication{}
-	atomic.StoreUint32(&publication.state, cloneProxyPending)
+	publication.state.Store(cloneProxyPending)
 	p.proxyPublication = publication
 }
 
@@ -214,7 +254,7 @@ func (p *SpriteImpl) cloneProxyPublicationState() uint32 {
 	if p.proxyPublication == nil {
 		return cloneProxyPublished
 	}
-	return atomic.LoadUint32(&p.proxyPublication.state)
+	return p.proxyPublication.state.Load()
 }
 
 func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
@@ -225,7 +265,7 @@ func (p *SpriteImpl) initRuntimeProxy() {
 	p.runtimeState.SyncSprite = nil
 	engine.WaitMainThread(func() {
 		p.ensureProxyInitialized()
-		p.baseObj.applyCostumeUpdate()
+		p.applyCostumeUpdate()
 	})
 }
 
@@ -233,12 +273,13 @@ func (p *SpriteImpl) awake() {
 	p.animation().playDefaultAnimIfIdle()
 }
 
-// ensureProxyInitialized initializes the sprite's engine proxy if it hasn't been created yet.
 func (p *SpriteImpl) ensureProxyInitialized() {
 	if p.runtimeState.SyncSprite != nil || p.isDestroyed() {
 		return
 	}
 	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
+	p.runtimeState.SyncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
+	p.runtimeState.SyncSprite.MirrorPosition = p.mirrorPosition
 	p.applyPhysicsProxyConfig()
 	p.runtimeState.SyncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.SyncSprite.SetTypeName(p.name)
@@ -253,24 +294,20 @@ func (p *SpriteImpl) effectiveProxyVisibility() bool {
 		return false
 	}
 	publication := p.proxyPublication
-	if publication == nil || atomic.LoadUint32(&publication.state) == cloneProxyPublished {
+	if publication == nil || publication.state.Load() == cloneProxyPublished {
 		return true
 	}
 	return publication.sensingVisibilityLeases.Load() > 0
 }
 
-// finishCloneInitialization makes the clone eligible for the next proxy batch.
-// The batch applies costume and layer changes before it submits visibility, so
-// no render can observe the inherited initialization state or stale peer layers.
+// finishCloneInitialization queues visibility for the next proxy batch.
 func (p *SpriteImpl) finishCloneInitialization() {
 	if p.isDestroyed() || p.proxyPublication == nil {
 		return
 	}
-	// The render pass scans the per-clone publication state unconditionally.
-	atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyPending, cloneProxyReady)
+	p.proxyPublication.state.CompareAndSwap(cloneProxyPending, cloneProxyReady)
 }
 
-// handleAnimationFinished records completed animation events from the proxy.
 func (p *SpriteImpl) handleAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
@@ -283,7 +320,6 @@ func (p *SpriteImpl) handleAnimationFinished() {
 	}
 }
 
-// handleAnimationLooped records audio work for animation loop boundaries.
 func (p *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
@@ -295,7 +331,7 @@ func (p *SpriteImpl) handleAnimationLooped() {
 }
 
 // -----------------------------------------------------------------------------
-// Sprite Sync Helpers
+// Sprite Sync
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) applyPhysicsProxyConfig() {
 	if p.runtimeState.SyncSprite == nil {
@@ -308,84 +344,170 @@ func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
 	return p.runtimeState.SyncSprite != nil && p.PhysicsMode() != NoPhysics
 }
 
-func (p *SpriteImpl) applyPhysicsPosition(x, y float64) {
-	if p.transform().setPositionRaw(x, y) {
+// mergeEnginePosition preserves pending Go writes per axis while merging engine coordinates.
+func (p *SpriteImpl) mergeEnginePosition(x, y float64) {
+	transform := p.transform()
+	if transform.pendingPosition.x != 0 {
+		x = transform.x
+	}
+	if transform.pendingPosition.y != 0 {
+		y = transform.y
+	}
+	if transform.setPositionRaw(x, y) {
 		p.markVisualDirty()
 	}
 }
 
-type proxyTransform struct {
-	position, scale, renderOffset mathf.Vec2
-	rotation                      float64
-	visible                       bool
+func (p *SpriteImpl) syncProxyForQuery() {
+	engine.WaitMainThread(func() {
+		if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+			return
+		}
+		// Queries need the latest silhouette even when the sprite is hidden.
+		p.applyCostumeUpdate()
+		p.syncAutoPhysicsShapesAfterCostumeChange()
+		if !p.needsProxyUpdate() {
+			return
+		}
+		// Read and submit in one engine job; queued queries may precede the frame pull.
+		if p.shouldPullPhysicsPosition() {
+			position := p.runtimeState.SyncSprite.GetPosition()
+			p.mergeEnginePosition(position.X, position.Y)
+		}
+		snapshot := p.snapshotProxy()
+		proxy := snapshot.change.proxy
+		engine.ValidateSpriteTransform(proxy.Id, snapshot.position, snapshot.rotation, snapshot.scale, snapshot.renderOffset)
+		proxy.SetTransform(
+			snapshot.position,
+			snapshot.rotation,
+			snapshot.scale,
+			snapshot.visible,
+			snapshot.renderOffset,
+		)
+		commitProxyChange(snapshot.change)
+	})
 }
 
-func (p *SpriteImpl) proxyTransform() proxyTransform {
-	x, y := p.getXY()
-	offsetX, offsetY := getRenderOffset(p)
-	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
-	return proxyTransform{
-		position:     mathf.NewVec2(x, y),
-		scale:        mathf.NewVec2(scaleX, scaleY),
-		renderOffset: mathf.NewVec2(offsetX, offsetY),
-		rotation:     engine.DegToRad(rotation),
-		visible:      p.effectiveProxyVisibility(),
-	}
-}
-
-func (p *SpriteImpl) ensureProxyQueryStateSynced() {
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
-		return
-	}
-	// Query paths need the latest silhouette even when the sprite is hidden.
-	p.baseObj.applyCostumeUpdate()
-	p.syncAutoPhysicsShapesAfterCostumeChange()
-	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
-		return
-	}
-
-	transform := p.proxyTransform()
-
-	p.runtimeState.SyncSprite.SetTransform(
-		transform.position,
-		transform.rotation,
-		transform.scale,
-		transform.visible,
-		transform.renderOffset,
-	)
-	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
-}
-
-func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) {
+func (p *SpriteImpl) prepareProxyUpdate() {
 	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
 		return
 	}
 	publishingClone := p.cloneProxyPublicationState() == cloneProxyReady
 	if p.spriteState.IsVisible || publishingClone {
-		p.baseObj.applyCostumeUpdate()
+		p.applyCostumeUpdate()
 	}
 	p.syncAutoPhysicsShapesAfterCostumeChange()
 	if publishingClone {
-		atomic.CompareAndSwapUint32(&p.proxyPublication.state, cloneProxyReady, cloneProxyPublished)
-		// Query synchronization may already have written the latest logical
-		// transform while keeping it hidden. Force a new batch entry after the
-		// gate opens so visibility cannot be skipped by version coalescing.
+		p.proxyPublication.state.CompareAndSwap(cloneProxyReady, cloneProxyPublished)
+		// Publish even if a query already synced the clone's hidden transform.
 		p.markProxyDirty()
 	}
-	if p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
-		return
+}
+
+func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) proxyChange {
+	if !p.needsProxyUpdate() {
+		return proxyChange{}
 	}
 
-	transform := p.proxyTransform()
+	snapshot := p.snapshotProxy()
 	buffer.Add(
-		int64(p.runtimeState.SyncSprite.Id),
-		transform.position.X, transform.position.Y,
-		transform.rotation,
-		transform.scale.X, transform.scale.Y,
-		transform.renderOffset.X, transform.renderOffset.Y,
-		transform.visible,
+		snapshot.change.proxy.Id,
+		snapshot.position.X, snapshot.position.Y,
+		snapshot.rotation,
+		snapshot.scale.X, snapshot.scale.Y,
+		snapshot.renderOffset.X, snapshot.renderOffset.Y,
+		snapshot.visible,
 	)
-	p.spriteState.ProxySyncVersion = p.spriteState.DirtyVersion
+	return snapshot.change
+}
+
+func (p *SpriteImpl) needsProxyUpdate() bool {
+	return !p.isDestroyed() && p.runtimeState.SyncSprite != nil &&
+		p.spriteState.ProxySyncVersion != p.spriteState.DirtyVersion
+}
+
+func (p *SpriteImpl) snapshotProxy() proxySnapshot {
+	prepared := &p.preparedVisual
+	visual := *prepared
+	resourcesReady := !p.runtimeState.IsCostumeDirty && !prepared.preparing
+	// Reentrant costume changes wait for their resources, while position and
+	// visibility still include writes made by later sprites' callbacks.
+	if prepared.proxy != p.runtimeState.SyncSprite || resourcesReady {
+		visual = p.captureProxyVisual()
+		if resourcesReady {
+			// Hidden heading updates also refresh the geometry that can later
+			// be published with these same, already prepared resources.
+			*prepared = visual
+		}
+	}
+	dirtyVersion := visual.dirtyVersion
+	if !p.spriteState.IsVisible && !prepared.preparing {
+		// Confirm the submitted transform, not deferred resource preparation.
+		// IsCostumeDirty independently keeps the next resource update pending.
+		dirtyVersion = p.spriteState.DirtyVersion
+	}
+	return proxySnapshot{
+		proxyVisual: visual.proxyVisual,
+		change: proxyChange{
+			sprite: p, proxy: visual.proxy,
+			dirtyVersion: dirtyVersion, positionVersions: p.transform().pendingPosition,
+		},
+		position: mathf.NewVec2(p.getXY()),
+		visible:  p.effectiveProxyVisibility(),
+	}
+}
+
+func (p *SpriteImpl) captureProxyVisual() preparedProxyVisual {
+	offsetX, offsetY := getRenderOffset(p)
+	rotation, scaleX, scaleY := getRenderRotationAndScale(p)
+	return preparedProxyVisual{
+		proxyVisual: proxyVisual{
+			scale:        mathf.NewVec2(scaleX, scaleY),
+			renderOffset: mathf.NewVec2(offsetX, offsetY),
+			rotation:     engine.DegToRad(rotation),
+		},
+		proxy:        p.runtimeState.SyncSprite,
+		dirtyVersion: p.spriteState.DirtyVersion,
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+func commitProxyChange(update proxyChange) {
+	p := update.sprite
+	if p == nil || p.runtimeState.SyncSprite != update.proxy {
+		return
+	}
+	if update.destroy {
+		p.runtimeState.SyncSprite = nil
+		return
+	}
+	if !p.preparedVisual.preparing && p.spriteState.DirtyVersion == update.dirtyVersion {
+		p.spriteState.ProxySyncVersion = update.dirtyVersion
+	}
+	// Confirm each axis separately; preserve writes made after collection.
+	pending := &p.transform().pendingPosition
+	if pending.x == update.positionVersions.x {
+		pending.x = 0
+	}
+	if pending.y == update.positionVersions.y {
+		pending.y = 0
+	}
+}
+
+func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
+	for i, sprite := range sprites {
+		at := i * 2
+		if at+1 >= len(positions) {
+			return
+		}
+		x, y := float64(positions[at]), float64(positions[at+1])
+		if math.IsNaN(x) || math.IsNaN(y) {
+			continue
+		}
+		sprite.mergeEnginePosition(x, y)
+	}
 }
 
 func isSpriteTouchable(sprite *SpriteImpl) bool {

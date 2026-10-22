@@ -16,14 +16,18 @@
 
 package engine
 
-import "math"
+import (
+	"fmt"
+	"math"
 
-const (
-	SyncFieldsPerSprite     = 9  // id, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY, visibility
-	DefaultDeleteBufferSize = 16 // initial capacity for sprite deletion buffer
+	"github.com/goplus/spbase/mathf"
 )
 
-// SpriteSyncData represents the data to sync for a single sprite
+const (
+	SyncFieldsPerSprite     = 9 // id, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY, visibility
+	DefaultDeleteBufferSize = 16
+)
+
 type SpriteSyncData struct {
 	SpriteID      int64
 	X             float32
@@ -36,7 +40,6 @@ type SpriteSyncData struct {
 	Visible       float32 // 0 or 1
 }
 
-// SpriteSyncBuffer collects sync data for batch processing
 type SpriteSyncBuffer struct {
 	data       []SpriteSyncData
 	deleteIDs  []int64
@@ -44,7 +47,6 @@ type SpriteSyncBuffer struct {
 	positions  []float32
 }
 
-// Add appends a sprite's sync data to the buffer
 func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY float64, visible bool) {
 	vis := float32(0.0)
 	if visible {
@@ -64,36 +66,30 @@ func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, renderO
 	})
 }
 
-// AddDelete appends a sprite ID to the deletion list
 func (b *SpriteSyncBuffer) AddDelete(id int64) {
 	b.deleteIDs = append(b.deleteIDs, id)
 }
 
-// Clear resets the buffer for reuse
 func (b *SpriteSyncBuffer) Clear() {
 	b.data = b.data[:0]
 	b.deleteIDs = b.deleteIDs[:0]
 }
 
-// UpdateCount returns the number of sprite updates in the buffer
 func (b *SpriteSyncBuffer) UpdateCount() int {
 	return len(b.data)
 }
 
-// DeleteCount returns the number of sprite deletions in the buffer
 func (b *SpriteSyncBuffer) DeleteCount() int {
 	return len(b.deleteIDs)
 }
 
-// GetDeleteIDs returns the list of sprite IDs to be deleted
 func (b *SpriteSyncBuffer) GetDeleteIDs() []int64 {
 	return b.deleteIDs
 }
 
 // Serialize encodes [updateCount, deleteCount, updates..., deleteIDs...] for FFI.
 // Each update contains [id, x, y, rotation, scaleX, scaleY, offsetX, offsetY, visible].
-// Panics before returning a packet if an ID is negative or cannot be represented
-// exactly in the legacy float32 format.
+// Panics on negative or inexact float32 IDs, or non-finite float32 transforms.
 func (b *SpriteSyncBuffer) Serialize() []float32 {
 	updateCount := len(b.data)
 	deleteCount := len(b.deleteIDs)
@@ -113,6 +109,13 @@ func (b *SpriteSyncBuffer) Serialize() []float32 {
 
 	for _, sprite := range b.data {
 		result[idx] = encodeLegacyBatchObjectID(sprite.SpriteID)
+		ValidateSpriteTransform(
+			sprite.SpriteID,
+			mathf.NewVec2(float64(sprite.X), float64(sprite.Y)),
+			float64(sprite.Rotation),
+			mathf.NewVec2(float64(sprite.ScaleX), float64(sprite.ScaleY)),
+			mathf.NewVec2(float64(sprite.RenderOffsetX), float64(sprite.RenderOffsetY)),
+		)
 		result[idx+1] = sprite.X
 		result[idx+2] = sprite.Y
 		result[idx+3] = sprite.Rotation
@@ -147,7 +150,28 @@ func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
 	return b.positions
 }
 
-// NewSpriteSyncBuffer creates a new sync buffer
+// ValidateSpriteTransform rejects values that cannot remain finite in the
+// float32 transform protocol shared by query and batch submissions.
+func ValidateSpriteTransform(id int64, position mathf.Vec2, rotation float64, scale, renderOffset mathf.Vec2) {
+	for _, field := range [...]struct {
+		name  string
+		value float64
+	}{
+		{"x", position.X},
+		{"y", position.Y},
+		{"rotation", rotation},
+		{"scale x", scale.X},
+		{"scale y", scale.Y},
+		{"offset x", renderOffset.X},
+		{"offset y", renderOffset.Y},
+	} {
+		value := float64(float32(field.value))
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			panic(fmt.Sprintf("sprite %d transform %s=%v must be finite after float32 conversion", id, field.name, field.value))
+		}
+	}
+}
+
 func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
 	serializedCapacity := 2 + capacity*SyncFieldsPerSprite + DefaultDeleteBufferSize
 	return &SpriteSyncBuffer{

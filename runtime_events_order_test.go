@@ -70,8 +70,7 @@ func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImp
 
 	co, game := setupRuntimeEventGame(t)
 	game.initShapeMgr()
-	engine.ResetCaptures()
-	t.Cleanup(engine.ResetCaptures)
+	setupCaptureTest(t)
 
 	back := newEventOrderSprite(game, "back")
 	front := newEventOrderSprite(game, "front")
@@ -428,8 +427,7 @@ func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 
 func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	engine.ResetCaptures()
-	t.Cleanup(engine.ResetCaptures)
+	setupCaptureTest(t)
 
 	var log eventOrderLog
 	register := func(name string) {
@@ -500,8 +498,7 @@ func TestSameSliceBroadcastKeepsLatestPendingReceiver(t *testing.T) {
 
 func TestBroadcastAndWaitJoinsRestartedReceiver(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
-	engine.ResetCaptures()
-	t.Cleanup(engine.ResetCaptures)
+	setupCaptureTest(t)
 
 	var log eventOrderLog
 	game.OnMsg__1("restart-and-wait", func() {

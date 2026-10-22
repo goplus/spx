@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v3/internal/coroutine"
+	gde "github.com/goplus/spx/v3/internal/gdengine"
 	itime "github.com/goplus/spx/v3/internal/time"
 	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
@@ -48,6 +49,55 @@ func TestExecuteOnEngineThreadServicesMainThreadCalls(t *testing.T) {
 	waitForEngineSignal(t, returned, time.Second, "Execute on the engine thread did not service main-thread calls")
 	if calls.Load() != 2 || wrongThread.Load() {
 		t.Fatalf("main-thread calls = %d, wrong thread = %v", calls.Load(), wrongThread.Load())
+	}
+}
+
+func TestFrameRuntimeCallbacksCanRegisterScriptsAndCallEngine(t *testing.T) {
+	isolateGameBinding(t)
+	co := setupExecuteTest(t)
+	platform := &executeMainThreadPlatform{}
+	gdx.PlatformMgr = platform
+	resetInputState()
+	resetTriggerEvents()
+	resetRuntimeDeltaTestState()
+	t.Cleanup(func() {
+		co.RunAfterStop(nil)
+		resetRuntimeDeltaTestState()
+		resetInputState()
+		resetTriggerEvents()
+	})
+	isolateCaptureState(t)
+
+	var runtimeManaged, nestedManaged, calledEngine, scriptRan, renderSawScript atomic.Bool
+	game := &frameRecordingGame{step: func(name string) {
+		if name == "render" {
+			renderSawScript.Store(scriptRan.Load())
+		}
+	}}
+	if _, err := bindGame(game, game); err != nil {
+		t.Fatal(err)
+	}
+	delayCall(0, func() {
+		runtimeManaged.Store(IsInCoroutine())
+		Execute(nil, func(context.Context, any) {
+			nestedManaged.Store(IsInCoroutine())
+			WaitMainThread(func() { calledEngine.Store(platform.IsMainThread()) })
+		})
+		// Model the asynchronous batch used by broadcasts.
+		co.StartBatch([]coroutine.Task{{Owner: game, Run: func(coroutine.Thread) {
+			WaitMainThread(func() { scriptRan.Store(platform.IsMainThread()) })
+		}}}, coroutine.BatchAsync)
+	})
+	returned := make(chan struct{})
+	go func() {
+		defer close(returned)
+		platform.mainGID.Store(gid.Get())
+		onUpdate(0.25)
+	}()
+	waitForEngineSignal(t, returned, time.Second, "frame callback did not complete its engine calls and registered scripts")
+	if !runtimeManaged.Load() || !nestedManaged.Load() || !calledEngine.Load() || !renderSawScript.Load() {
+		t.Fatalf("runtime managed=%v nested managed=%v engine call=%v render saw script=%v",
+			runtimeManaged.Load(), nestedManaged.Load(), calledEngine.Load(), renderSawScript.Load())
 	}
 }
 
@@ -228,5 +278,40 @@ func TestEngineDrainServicesJobsWhileAnotherDrainOwnsLock(t *testing.T) {
 	waitForEngineSignal(t, second, 2*time.Second, "second engine drain did not return")
 	if !called {
 		t.Fatal("waiting for the shutdown gate prevented worker cleanup on the main thread")
+	}
+}
+
+func TestLinkedGameResetReleasesBackendForNextGame(t *testing.T) {
+	isolateGameBinding(t)
+	previousCo := gco
+	SetCoroutines(nil)
+	previousAudio, previousCamera, previousDebug := gdx.AudioMgr, gdx.CameraMgr, gdx.DebugMgr
+	previousExt, previousInput, previousNavigation := gdx.ExtMgr, gdx.InputMgr, gdx.NavigationMgr
+	previousPen, previousPhysics, previousPlatform := gdx.PenMgr, gdx.PhysicsMgr, gdx.PlatformMgr
+	previousRes, previousScene, previousSprite := gdx.ResMgr, gdx.SceneMgr, gdx.SpriteMgr
+	previousTilemap, previousTilemapparser, previousUI := gdx.TilemapMgr, gdx.TilemapparserMgr, gdx.UiMgr
+	t.Cleanup(func() {
+		SetCoroutines(previousCo)
+		gdx.AudioMgr, gdx.CameraMgr, gdx.DebugMgr = previousAudio, previousCamera, previousDebug
+		gdx.ExtMgr, gdx.InputMgr, gdx.NavigationMgr = previousExt, previousInput, previousNavigation
+		gdx.PenMgr, gdx.PhysicsMgr, gdx.PlatformMgr = previousPen, previousPhysics, previousPlatform
+		gdx.ResMgr, gdx.SceneMgr, gdx.SpriteMgr = previousRes, previousScene, previousSprite
+		gdx.TilemapMgr, gdx.TilemapparserMgr, gdx.UiMgr = previousTilemap, previousTilemapparser, previousUI
+	})
+
+	for range 2 {
+		game := new(bindingTestGame)
+		binding, err := bindGame(game, game)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Preparing another real link would panic if the previous reset only
+		// cleared the game binding without releasing its backend session.
+		binding.link = gde.PrepareLink(gdx.CoreCallbackInfo{})
+		t.Cleanup(binding.link.Unlink)
+		onReset()
+		if game.reset.Load() != 1 || activeGame.Load() != nil {
+			t.Fatalf("reset callbacks=%d active binding=%p", game.reset.Load(), activeGame.Load())
+		}
 	}
 }

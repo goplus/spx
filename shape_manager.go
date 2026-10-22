@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"cmp"
 	"slices"
 
 	"github.com/goplus/spx/v3/internal/base/sliceutil"
@@ -36,14 +37,14 @@ const (
 // Scratch shares one limit across all sprites, including hidden clones.
 const maxClones = 300
 
-// shapeManager tracks active shapes and reusable frame buffers.
 type shapeManager struct {
 	cloneCount             int
 	pendingClones          int
 	items                  []Shape
 	named                  map[string][]*SpriteImpl
 	tempItems              []Shape
-	destroyItems           []Shape
+	destroyItems           []*SpriteImpl
+	proxyChangeBuffer      []proxyChange
 	bubbles                []bubbleShape
 	textBubbles            []*textBubble
 	activeTextBubbles      []*textBubble
@@ -51,59 +52,46 @@ type shapeManager struct {
 	nextTextBubbleLayoutID uint64
 }
 
-func resetSlice[T any](items []T, initialCap int) []T {
-	if items == nil && initialCap > 0 {
-		return make([]T, 0, initialCap)
-	}
-	clear(items)
-	return items[:0]
-}
-
-// init prepares internal buffers while preserving existing allocations when possible.
 func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
 	s.named = nil
-	s.items = resetSlice(s.items, 64)
-	s.tempItems = resetSlice(s.tempItems, 50)
-	s.destroyItems = resetSlice(s.destroyItems, 16)
-	s.bubbles = resetSlice(s.bubbles, 0)
-	s.textBubbles = resetSlice(s.textBubbles, 0)
-	s.activeTextBubbles = resetSlice(s.activeTextBubbles, 0)
-	s.sayLayouts = resetSlice(s.sayLayouts, 0)
+	s.items = sliceutil.Reset(s.items, 64)
+	s.tempItems = sliceutil.Reset(s.tempItems, 50)
+	s.destroyItems = sliceutil.Reset(s.destroyItems, 16)
+	s.proxyChangeBuffer = sliceutil.Reset(s.proxyChangeBuffer, 0)
+	s.bubbles = sliceutil.Reset(s.bubbles, 0)
+	s.textBubbles = sliceutil.Reset(s.textBubbles, 0)
+	s.activeTextBubbles = sliceutil.Reset(s.activeTextBubbles, 0)
+	s.sayLayouts = sliceutil.Reset(s.sayLayouts, 0)
 	s.nextTextBubbleLayoutID = 0
 }
 
-// reset clears the scene and reuses frame buffers.
 func (s *shapeManager) reset() {
 	engine.ClearAllSprites()
 	s.init()
 }
 
-// flushActivate advances active non-sprite, non-bubble shapes for the current frame.
-func (s *shapeManager) flushActivate(items []Shape) {
-	if len(items) == 0 {
-		return
+func (s *shapeManager) flushBubbleVisuals(items []Shape) {
+	s.collectBubbles(items)
+
+	frame := itime.Frame()
+	// Remove expired bubbles before resolving this frame's layouts.
+	for _, bubble := range s.bubbles {
+		bubble.flushPendingRemoval(frame)
 	}
 
+	s.layoutTextBubbles()
+
 	delta := itime.DeltaTime()
-	for _, item := range items {
-		switch v := item.(type) {
-		case *SpriteImpl, *textBubble, *quoterBubble:
-			continue
-		case *Monitor:
-			v.onUpdate(delta)
-		default:
-			if updater, ok := item.(interface{ onUpdate(float64) }); ok {
-				updater.onUpdate(delta)
-			}
-		}
+	for _, bubble := range s.bubbles {
+		bubble.onUpdate(delta)
 	}
 }
 
 func (s *shapeManager) collectBubbles(items []Shape) {
-	s.bubbles = resetSlice(s.bubbles, 0)
-	s.textBubbles = resetSlice(s.textBubbles, 0)
+	s.bubbles = sliceutil.Reset(s.bubbles, 0)
+	s.textBubbles = sliceutil.Reset(s.textBubbles, 0)
 	for _, item := range items {
 		bubble, ok := item.(bubbleShape)
 		if !ok {
@@ -117,16 +105,18 @@ func (s *shapeManager) collectBubbles(items []Shape) {
 }
 
 func (s *shapeManager) layoutTextBubbles() {
-	s.sayLayouts = resetSlice(s.sayLayouts, 0)
+	s.sayLayouts = sliceutil.Reset(s.sayLayouts, 0)
 
 	s.textBubbles = slices.DeleteFunc(s.textBubbles, func(bubble *textBubble) bool {
 		return bubble.panel == nil || !bubble.sprite.Visible()
 	})
 
-	sortTextBubblesByLayoutID(s.textBubbles)
+	slices.SortStableFunc(s.textBubbles, func(a, b *textBubble) int {
+		return cmp.Compare(a.layoutID, b.layoutID)
+	})
 	topologyChanged := !slices.Equal(s.textBubbles, s.activeTextBubbles)
 	if topologyChanged {
-		s.activeTextBubbles = append(resetSlice(s.activeTextBubbles, 0), s.textBubbles...)
+		s.activeTextBubbles = sliceutil.CopyInto(s.activeTextBubbles, s.textBubbles, 0)
 	}
 	if len(s.textBubbles) == 0 {
 		return
@@ -140,12 +130,8 @@ func (s *shapeManager) layoutTextBubbles() {
 		layout := context.NewLayout(bubble.layoutID, center, size, bubble.content)
 		if bubble.hasLayout {
 			layout = layout.WithPreviousDirection(bubble.layout)
-			if !bubble.layout.SameInput(layout) {
-				needsResolve = true
-			}
-		} else {
-			needsResolve = true
 		}
+		needsResolve = needsResolve || !bubble.hasLayout || !bubble.layout.SameInput(layout)
 		s.sayLayouts = append(s.sayLayouts, layout)
 	}
 	if !needsResolve {
@@ -158,31 +144,42 @@ func (s *shapeManager) layoutTextBubbles() {
 	}
 }
 
-func (s *shapeManager) collectProxyUpdates(items []Shape, buffer *engine.SpriteSyncBuffer) {
+func (s *shapeManager) collectProxyChanges(items []Shape, buffer *engine.SpriteSyncBuffer, batch *proxyBatch) {
+	// Prepare resources first, then capture the latest position and visibility.
+	// Each sprite keeps the geometry paired with its prepared resources.
 	for _, item := range items {
 		if sprite, ok := item.(*SpriteImpl); ok {
-			sprite.collectProxyUpdate(buffer)
+			sprite.prepareProxyUpdate()
 		}
 	}
-}
-
-// flushDestroy performs cleanup for shapes that have been scheduled for destruction.
-func (s *shapeManager) flushDestroy(buffer *engine.SpriteSyncBuffer) {
-	if len(s.destroyItems) == 0 {
-		return
-	}
-
-	for _, item := range s.destroyItems {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.runtimeState.SyncSprite != nil {
-			buffer.AddDelete(int64(sprite.runtimeState.SyncSprite.Id))
-			sprite.runtimeState.SyncSprite = nil
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			if update := sprite.collectProxyUpdate(buffer); update.sprite != nil {
+				batch.changes = append(batch.changes, update)
+			}
 		}
 	}
 
-	s.destroyItems = resetSlice(s.destroyItems, 0)
+	// Keep deletion requests pending until this batch commits.
+	batch.destroyCount = len(s.destroyItems)
+	for _, sprite := range s.destroyItems {
+		proxy := sprite.runtimeState.SyncSprite
+		if proxy == nil {
+			continue
+		}
+		buffer.AddDelete(proxy.Id)
+		batch.changes = append(batch.changes, proxyChange{sprite: sprite, proxy: proxy, destroy: true})
+	}
 }
 
-// add adds a shape immediately to the active list.
+func (s *shapeManager) commitProxyChanges(batch proxyBatch) {
+	for _, change := range batch.changes {
+		commitProxyChange(change)
+	}
+	// Deletions queued during submission belong to the next batch.
+	s.destroyItems = slices.Delete(s.destroyItems, 0, batch.destroyCount)
+}
+
 func (s *shapeManager) add(shape Shape) {
 	if sprite, ok := shape.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount++
@@ -196,11 +193,6 @@ func (s *shapeManager) add(shape Shape) {
 	}
 	s.items = append(s.items, shape)
 	clear(s.named)
-}
-
-// remove schedules a shape for destruction at the end of the frame.
-func (s *shapeManager) remove(shape Shape) {
-	s.destroyItems = append(s.destroyItems, shape)
 }
 
 // addClonedShape inserts a clone immediately behind the target it copied. This
@@ -233,7 +225,6 @@ func (s *shapeManager) reserveClone() bool {
 	return true
 }
 
-// removeShape removes a shape from the active list and schedules it for destruction.
 func (s *shapeManager) removeShape(child Shape) {
 	idx := s.findShapeIndex(child)
 	if idx < 0 {
@@ -242,14 +233,17 @@ func (s *shapeManager) removeShape(child Shape) {
 
 	s.items = sliceutil.DeleteAt(s.items, idx)
 	clear(s.named)
-	if sprite, ok := child.(*SpriteImpl); ok && sprite.IsCloned() {
-		s.cloneCount--
+	if sprite, ok := child.(*SpriteImpl); ok {
+		if sprite.IsCloned() {
+			s.cloneCount--
+		}
+		if sprite.runtimeState.SyncSprite != nil {
+			s.destroyItems = append(s.destroyItems, sprite)
+		}
 	}
-	s.remove(child)
 	s.updateRenderLayers()
 }
 
-// activateShape moves a shape to the end of the active list.
 func (s *shapeManager) activateShape(child Shape) {
 	idx := s.findShapeIndex(child)
 	if idx < 0 || idx == len(s.items)-1 {
@@ -261,7 +255,6 @@ func (s *shapeManager) activateShape(child Shape) {
 	s.updateRenderLayers()
 }
 
-// goBackLayers moves a sprite forward or backward by n layers.
 func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 	if engine.HasLayerSortMethod() {
 		spxlog.Debug("Cannot manually set sprite layer when a layer sort mode is active.")
@@ -285,7 +278,6 @@ func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 	s.updateRenderLayers()
 }
 
-// updateRenderLayers updates the layer index for all sprites.
 func (s *shapeManager) updateRenderLayers() {
 	if engine.HasLayerSortMethod() {
 		return
@@ -300,7 +292,6 @@ func (s *shapeManager) updateRenderLayers() {
 	}
 }
 
-// all returns all active shapes.
 func (s *shapeManager) all() []Shape {
 	return s.items
 }
@@ -311,7 +302,6 @@ func (s *shapeManager) getTempShapes() []Shape {
 	return s.tempItems
 }
 
-// count returns the number of active shapes.
 func (s *shapeManager) count() int {
 	return len(s.items)
 }
@@ -350,70 +340,20 @@ func (s *shapeManager) findSprite(name SpriteName) *SpriteImpl {
 	return nil
 }
 
-// findShapeIndex finds the index of a shape in the items slice.
 func (s *shapeManager) findShapeIndex(target Shape) int {
-	for i, item := range s.items {
-		if item == target {
-			return i
-		}
-	}
-	return -1
+	return slices.Index(s.items, target)
 }
 
-// calculateNewIndex calculates the new index after moving n sprite layers.
 func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
-	items := s.items
-	newIdx := currentIdx
-
-	if n > 0 {
-		for newIdx > 0 && n > 0 {
-			newIdx--
-			if _, ok := items[newIdx].(*SpriteImpl); ok {
-				n--
-			}
-		}
-	} else if n < 0 {
-		lastIdx := len(items) - 1
-		for newIdx < lastIdx && n < 0 {
-			newIdx++
-			if _, ok := items[newIdx].(*SpriteImpl); ok {
-				n++
-			}
+	direction := -1
+	if n < 0 {
+		direction = 1
+	}
+	for next := currentIdx + direction; n != 0 && next >= 0 && next < len(s.items); next += direction {
+		currentIdx = next
+		if _, ok := s.items[next].(*SpriteImpl); ok {
+			n += direction
 		}
 	}
-
-	return newIdx
-}
-
-// flushBubbleVisuals commits final bubble layout and UI state for the current frame.
-func (s *shapeManager) flushBubbleVisuals(items []Shape) {
-	s.collectBubbles(items)
-
-	frame := itime.Frame()
-	// Remove expired bubbles before resolving this frame's layouts.
-	for _, bubble := range s.bubbles {
-		bubble.flushPendingRemoval(frame)
-	}
-
-	s.layoutTextBubbles()
-
-	delta := itime.DeltaTime()
-	for _, bubble := range s.bubbles {
-		bubble.onUpdate(delta)
-	}
-}
-
-func sortTextBubblesByLayoutID(bubbles []*textBubble) {
-	// Bubble counts are normally tiny and already ordered. Insertion sort keeps
-	// the unchanged-frame path allocation-free while making activation order
-	// irrelevant to layout.
-	for i := 1; i < len(bubbles); i++ {
-		bubble := bubbles[i]
-		j := i
-		for j > 0 && bubbles[j-1].layoutID > bubble.layoutID {
-			bubbles[j] = bubbles[j-1]
-			j--
-		}
-		bubbles[j] = bubble
-	}
+	return currentIdx
 }

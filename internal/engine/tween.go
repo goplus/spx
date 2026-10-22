@@ -30,7 +30,7 @@ type posTweenInfo struct {
 }
 
 type tweenCallInfo struct {
-	id         Object
+	sprite     gdx.ISpriter
 	startValue Vec2
 	callback   func()
 	curIndex   int
@@ -51,49 +51,38 @@ func (info *tweenCallInfo) isDone() bool {
 	return info.curIndex >= len(info.infos)
 }
 
-func (info *tweenCallInfo) updateStartInfo() {
-	if info.isDone() {
-		return
+func (info *tweenCallInfo) advance(delta float64) {
+	info.timer += delta
+	for !info.isDone() && info.timer >= info.infos[info.curIndex].getEndTime() {
+		if runtimeSpriteAlive(info.sprite) {
+			info.sprite.SetPosition(info.infos[info.curIndex].value)
+		}
+		info.curIndex++
+		if !info.isDone() && runtimeSpriteAlive(info.sprite) {
+			info.startValue = info.sprite.GetPosition()
+		}
 	}
-	if sprite := lookupSprite(info.id); sprite != nil {
-		info.startValue = sprite.GetPosition()
-	}
-}
-
-func (info *tweenCallInfo) update() {
-	if info.isDone() {
-		return
-	}
-	curInfo := info.infos[info.curIndex]
-	percent := Clamp01f((info.timer - curInfo.startTime) / curInfo.duration)
-	if sprite := lookupSprite(info.id); sprite != nil {
-		pos := info.startValue.Lerpf(curInfo.value, percent)
-		sprite.SetPosition(pos)
+	if !info.isDone() && runtimeSpriteAlive(info.sprite) {
+		segment := info.infos[info.curIndex]
+		percent := Clamp01f((info.timer - segment.startTime) / segment.duration)
+		info.sprite.SetPosition(info.startValue.Lerpf(segment.value, percent))
 	}
 }
 
-func updateTweens(delta float64) {
+func updateTweens(delta float64, emit func(gdx.ISpriter, func())) {
 	tweenInfos, tempTweenInfos = tempTweenInfos[:0], tweenInfos
 	for _, curTween := range tempTweenInfos {
-		curTween.timer += delta
-		for curTween.timer >= curTween.infos[curTween.curIndex].getEndTime() {
-			if sprite := lookupSprite(curTween.id); sprite != nil {
-				sprite.SetPosition(curTween.infos[curTween.curIndex].value)
-			}
-			curTween.curIndex++
-			curTween.updateStartInfo()
-			if curTween.isDone() {
-				break
-			}
+		if !runtimeSpriteAlive(curTween.sprite) {
+			continue
 		}
-		curTween.update()
+		curTween.advance(delta)
 		if !curTween.isDone() {
 			tweenInfos = append(tweenInfos, curTween)
 		}
 	}
 	for _, curTween := range tempTweenInfos {
-		if curTween.isDone() && IsNodeExist(curTween.id) {
-			curTween.callback()
+		if curTween.isDone() {
+			emit(curTween.sprite, curTween.callback)
 		}
 	}
 	clear(tempTweenInfos)
@@ -101,25 +90,30 @@ func updateTweens(delta float64) {
 }
 
 func tweenPos(node gdx.ISpriter, pos Vec2, duration float64, callback func()) {
-	info := &tweenCallInfo{
-		id:       node.GetId(),
-		callback: callback,
-		infos:    []posTweenInfo{{value: pos, duration: duration}},
-	}
-	info.updateStartInfo()
-	tweenInfos = append(tweenInfos, info)
+	startPositionTween(node, callback, posTweenInfo{value: pos, duration: duration})
 }
 
 func tweenPos2(node gdx.ISpriter, pos Vec2, duration float64, pos2 Vec2, duration2 float64, callback func()) {
-	info := &tweenCallInfo{
-		id:       node.GetId(),
-		callback: callback,
-		infos: []posTweenInfo{
-			{value: pos, duration: duration},
-			{value: pos2, duration: duration2},
-		},
+	startPositionTween(node, callback,
+		posTweenInfo{value: pos, duration: duration},
+		posTweenInfo{value: pos2, duration: duration2},
+	)
+}
+
+func startPositionTween(sprite gdx.ISpriter, callback func(), segments ...posTweenInfo) {
+	sprite = resolveRuntimeSprite(sprite)
+	if sprite == nil {
+		return
 	}
-	info.updateStartInfo()
+
+	info := &tweenCallInfo{
+		sprite:   sprite,
+		callback: callback,
+		infos:    segments,
+	}
+	if runtimeSpriteAlive(sprite) {
+		info.startValue = sprite.GetPosition()
+	}
 	for i := 1; i < len(info.infos); i++ {
 		info.infos[i].startTime = info.infos[i-1].getEndTime()
 	}

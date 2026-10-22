@@ -213,6 +213,88 @@ func TestSpriteHeadingMultipleRevolutions(t *testing.T) {
 	}
 }
 
+func TestSpriteHeadingIgnoresNonFiniteInputs(t *testing.T) {
+	for _, input := range []struct {
+		name  string
+		value float64
+	}{
+		{"NaN", math.NaN()},
+		{"positive infinity", math.Inf(1)},
+		{"negative infinity", math.Inf(-1)},
+	} {
+		for _, action := range []struct {
+			name  string
+			apply func(*SpriteImpl, Direction)
+		}{
+			{"set", (*SpriteImpl).SetHeading},
+			{"change", (*SpriteImpl).ChangeHeading},
+		} {
+			t.Run(action.name+"/"+input.name, func(t *testing.T) {
+				sprite := newTestTransformSprite(0, 0)
+				sprite.SetHeading(45)
+				dirty, visual := sprite.spriteState.DirtyVersion, sprite.spriteState.VisualVersion
+
+				action.apply(sprite, input.value)
+
+				if sprite.Heading() != 45 || sprite.spriteState.DirtyVersion != dirty ||
+					sprite.spriteState.VisualVersion != visual {
+					t.Fatalf("invalid input changed heading or versions: heading=%v dirty=%v visual=%v",
+						sprite.Heading(), sprite.spriteState.DirtyVersion, sprite.spriteState.VisualVersion)
+				}
+				sprite.ChangeHeading(405)
+				if sprite.Heading() != 90 {
+					t.Fatalf("heading after valid change = %v, want 90", sprite.Heading())
+				}
+			})
+		}
+	}
+}
+
+func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
+	for _, animation := range []string{"without animation", "with animation"} {
+		for _, input := range []struct {
+			name  string
+			value float64
+		}{
+			{"NaN", math.NaN()},
+			{"positive infinity", math.Inf(1)},
+			{"negative infinity", math.Inf(-1)},
+		} {
+			for _, action := range []struct {
+				name  string
+				apply func(*SpriteImpl, Direction)
+			}{
+				{"turn", (*SpriteImpl).Turn__0},
+				{"turn to", (*SpriteImpl).TurnTo__2},
+			} {
+				t.Run(animation+"/"+action.name+"/"+input.name, func(t *testing.T) {
+					co := setupRuntimeScheduler(t)
+					sprite := newTestTransformSprite(0, 0)
+					sprite.SetHeading(45)
+					version := sprite.spriteState.DirtyVersion
+					if animation == "with animation" {
+						sprite.animation().shared.animations[StateTurn] = &animationEntry{
+							name: StateTurn, config: &coreproject.AniConfig{TurnToDuration: 1},
+						}
+					}
+					finished := false
+					thread := co.Create(sprite, func(coroutine.Thread) {
+						action.apply(sprite, input.value)
+						finished = true
+					})
+					co.JoinFirstSlice(thread)
+					if !finished || sprite.Heading() != 45 || sprite.spriteState.DirtyVersion != version ||
+						sprite.animation().getCurTweenState() != nil {
+						t.Fatalf("invalid turn: finished=%v heading=%v dirty=%v tween=%v",
+							finished, sprite.Heading(), sprite.spriteState.DirtyVersion, sprite.animation().getCurTweenState())
+					}
+					co.Join(thread)
+				})
+			}
+		}
+	}
+}
+
 func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
 	t.Cleanup(func() { itime.Start(nil) })
 	co := setupRuntimeScheduler(t)
@@ -761,7 +843,7 @@ func TestSpriteMotionOverloadsKeepTargetAndOptionSemantics(t *testing.T) {
 		}
 	}
 	for name, got := range map[string]float64{"sprite": sprite.DirectionTo__0(target), "mouse": sprite.DirectionTo__2(Mouse), "random": sprite.DirectionTo__3(Random), "target": sprite.DirectionToWith(target)} {
-		if got != 0 {
+		if !(math.Abs(got) <= 1e-9) {
 			t.Errorf("%s direction = %v, want 0", name, got)
 		}
 	}

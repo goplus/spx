@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -60,8 +61,6 @@ type gameBinding struct {
 	startDone            chan struct{}
 	link                 *gde.LinkSession
 	resetReleaseDeferred atomic.Bool
-	destroyReady         atomic.Bool
-	backendDestroyed     atomic.Bool
 }
 
 type IGame interface {
@@ -91,9 +90,9 @@ func Unlock() {
 	logicMu.Unlock()
 }
 
-// Main holds the single runtime from initialization through backend teardown.
+// Main reserves the runtime until backend teardown.
 func Main(game IGame, owner any, initialize func()) error {
-	binding, err := bindGameAtPhase(game, owner, gameStarting)
+	binding, err := beginGame(game, owner)
 	if err != nil {
 		return err
 	}
@@ -122,14 +121,20 @@ func Main(game IGame, owner any, initialize func()) error {
 		OnKeyPressed:      onKeyPressed,
 		OnKeyReleased:     onKeyReleased,
 	}
-	if !activateGame(binding, func() {
-		binding.link = gde.PrepareLink(callbacks)
-	}) {
+	if !activateGame(binding, callbacks) {
 		return nil
 	}
 	binding.link.Run(finishStart)
 	committed = true
 	return nil
+}
+
+func (b *gameBinding) loadPhase() gamePhase {
+	return gamePhase(b.phase.Load())
+}
+
+func (b *gameBinding) storePhase(phase gamePhase) {
+	b.phase.Store(uint32(phase))
 }
 
 func onStart() {
@@ -138,9 +143,6 @@ func onStart() {
 	if binding == nil {
 		return
 	}
-	ResetInputState()
-	resetTriggerEvents()
-
 	itime.Start(Managers().PlatformMgr.SetTimeScale)
 	binding.callbacks.OnEngineStart()
 }
@@ -153,35 +155,26 @@ func onUpdate(delta float64) {
 	}
 	profiler.BeginSample()
 	defer profiler.EndSample()
-	cacheTriggerEvents()
-	cacheKeyEvents()
-	cacheMouseEvents()
+	cacheFrameEvents()
 	binding.callbacks.OnEngineBeforeUpdate(delta)
-	if !binding.isCurrent(gameRunning) {
+	itime.Update(delta, profiler.Calcfps())
+	Execute(nil, func(context.Context, any) { updateRuntime(delta) })
+	if binding.loadPhase() != gameRunning {
 		return
 	}
-	itime.Update(delta, profiler.Calcfps())
 	profiler.MeasureFunctionTime("GameUpdate", func() {
 		binding.callbacks.OnEngineUpdate(delta)
 	})
-	if !binding.isCurrent(gameRunning) {
-		return
-	}
 	profiler.MeasureFunctionTime("CoroUpdateJobs", gco.Update)
-	if !binding.isCurrent(gameRunning) {
+	if binding.loadPhase() != gameRunning {
 		return
 	}
+	// Complete the frame once rendering starts.
 	profiler.MeasureFunctionTime("GameRender", func() {
 		binding.callbacks.OnEngineRender(delta)
 	})
-	if !binding.isCurrent(gameRunning) {
-		return
-	}
 	if err := FlushCaptures(); err != nil {
 		Panic(err)
-		return
-	}
-	if !binding.isCurrent(gameRunning) {
 		return
 	}
 	binding.callbacks.OnEngineFrameEnd()
@@ -194,25 +187,17 @@ func onDestroy() {
 		return
 	}
 	waitForGameStart(binding)
-	drainCoroutines(func() {
-		defer func() {
-			ResetCaptures()
-			binding.destroyReady.Store(true)
-			releaseDestroyedGame(binding)
-		}()
-		binding.callbacks.OnEngineDestroy()
-	})
+	drainCoroutines(binding.callbacks.OnEngineDestroy)
 }
 
-// onDestroyed releases the binding after backend teardown.
+// Called after Go cleanup and backend teardown.
 func onDestroyed() {
 	defer CheckPanic()
 	binding := activeGame.Load()
 	if binding == nil {
 		return
 	}
-	binding.backendDestroyed.Store(true)
-	releaseDestroyedGame(binding)
+	releaseGame(binding)
 }
 
 func onPause(paused bool) {
@@ -230,41 +215,40 @@ func onReset() {
 	if binding == nil || binding.callbacks == nil {
 		return
 	}
-	ownsRelease := beginGameClose(binding)
-	if !ownsRelease && !binding.resetReleaseDeferred.Load() {
-		return
-	}
+	directReset := beginGameClose(binding)
 	waitForGameStart(binding)
-	if !ownsRelease {
+	reset := func() {
+		resetCaptures()
+		resetInputState()
+		resetTriggerEvents()
 		binding.callbacks.OnEngineReset()
-		return
 	}
-
-	drainCoroutines(func() {
-		defer releaseGameAfter(binding, binding.unlink)
-		binding.callbacks.OnEngineReset()
-	})
+	switch {
+	case directReset:
+		// Direct editor reset.
+		drainCoroutines(func() {
+			defer releaseGame(binding)
+			reset()
+		})
+	case binding.resetReleaseDeferred.Load():
+		// Web exit handles draining and release.
+		reset()
+	}
 }
 
-// Keep cleanup on the caller thread and finish before backend teardown.
+func cacheFrameEvents() {
+	cacheTriggerEvents()
+	cacheKeyEvents()
+	cacheMouseEvents()
+}
+
+// Drain and clean up synchronously on the caller thread.
 func drainCoroutines(cleanup func()) {
 	if gco == nil {
 		cleanup()
 		return
 	}
 	gco.RunAfterStop(cleanup)
-}
-
-func (b *gameBinding) loadPhase() gamePhase {
-	return gamePhase(b.phase.Load())
-}
-
-func (b *gameBinding) storePhase(phase gamePhase) {
-	b.phase.Store(uint32(phase))
-}
-
-func (b *gameBinding) isCurrent(phase gamePhase) bool {
-	return activeGame.Load() == b && b.loadPhase() == phase
 }
 
 func runningBinding() *gameBinding {
@@ -293,7 +277,7 @@ func isRuntimeWorkCurrent(binding *gameBinding) bool {
 func beginGameClose(binding *gameBinding) bool {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
-	if binding == nil || activeGame.Load() != binding || binding.loadPhase() == gameClosing {
+	if activeGame.Load() != binding || binding.loadPhase() == gameClosing {
 		return false
 	}
 	binding.storePhase(gameClosing)
@@ -317,41 +301,30 @@ func beginDeferredReset() (*gameBinding, bool) {
 	return binding, true
 }
 
-func finishDeferredReset(binding *gameBinding) {
-	waitForGameStart(binding)
-	releaseGameAfter(binding, binding.unlink)
-}
-
-func (b *gameBinding) unlink() {
-	if b != nil && b.link != nil {
-		b.link.Unlink()
-	}
-}
-
-func bindGameAtPhase(callbacks IGame, owner any, phase gamePhase) (*gameBinding, error) {
+func beginGame(callbacks IGame, owner any) (*gameBinding, error) {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
 
 	if activeGame.Load() != nil {
 		return nil, ErrGameAlreadyRunning
 	}
-	binding := &gameBinding{callbacks: callbacks, owner: owner}
-	binding.storePhase(phase)
-	if phase == gameStarting {
-		binding.startDone = make(chan struct{})
+	binding := &gameBinding{
+		callbacks: callbacks,
+		owner:     owner,
+		startDone: make(chan struct{}),
 	}
 	activeGame.Store(binding)
 	return binding, nil
 }
 
-func activateGame(binding *gameBinding, prepare func()) bool {
+func activateGame(binding *gameBinding, callbacks gdx.CoreCallbackInfo) bool {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
 
-	if !binding.isCurrent(gameStarting) {
+	if binding.loadPhase() != gameStarting {
 		return false
 	}
-	prepare()
+	binding.link = gde.PrepareLink(callbacks)
 	binding.storePhase(gameRunning)
 	return true
 }
@@ -363,34 +336,24 @@ func abortGameStart(binding *gameBinding) {
 	if activeGame.Load() != binding || binding.loadPhase() == gameClosing {
 		return
 	}
-	binding.unlink()
+	binding.link.Unlink()
 	activeGame.Store(nil)
 }
 
 func waitForGameStart(binding *gameBinding) {
-	if binding != nil && binding.startDone != nil {
+	if binding.startDone != nil {
 		<-binding.startDone
 	}
 }
 
-func releaseDestroyedGame(binding *gameBinding) bool {
-	if binding == nil || !binding.destroyReady.Load() || !binding.backendDestroyed.Load() {
-		return false
-	}
-	return releaseGameAfter(binding, binding.unlink)
-}
-
-// releaseGameAfter clears the binding after teardown.
-func releaseGameAfter(binding *gameBinding, teardown func()) bool {
+func releaseGame(binding *gameBinding) bool {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
 
 	if activeGame.Load() != binding {
 		return false
 	}
-	if teardown != nil {
-		teardown()
-	}
+	binding.link.Unlink()
 	activeGame.Store(nil)
 	return true
 }

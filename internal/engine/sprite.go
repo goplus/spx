@@ -27,6 +27,47 @@ import (
 type Sprite struct {
 	gdx.Sprite
 	Target any
+	// CallbackAlive also rejects callbacks while logical deletion awaits a commit.
+	CallbackAlive func() bool
+	// MirrorPosition receives successful direct writes without movement effects.
+	MirrorPosition func(*Sprite, Vec2, PositionAxes)
+}
+
+// PositionAxes identifies the coordinates explicitly written by a position helper.
+type PositionAxes uint8
+
+const (
+	PositionX PositionAxes = 1 << iota
+	PositionY
+	PositionXY = PositionX | PositionY
+)
+
+func (s *Sprite) SetPosition(position Vec2) {
+	s.setPosition(position, PositionXY)
+}
+
+func (s *Sprite) AddPos(deltaX, deltaY float64) {
+	s.addPosition(deltaX, deltaY, PositionXY)
+}
+
+func (s *Sprite) AddPosX(delta float64) {
+	s.addPosition(delta, 0, PositionX)
+}
+
+func (s *Sprite) AddPosY(delta float64) {
+	s.addPosition(0, delta, PositionY)
+}
+
+func (s *Sprite) SetPosX(value float64) {
+	position := s.GetPosition()
+	position.X = value
+	s.setPosition(position, PositionX)
+}
+
+func (s *Sprite) SetPosY(value float64) {
+	position := s.GetPosition()
+	position.Y = value
+	s.setPosition(position, PositionY)
 }
 
 func (s *Sprite) UpdateTexture(path string, renderScale float64, updateTexture bool) {
@@ -115,4 +156,18 @@ func (s *Sprite) SetColliderEnabled(trigger bool, enabled bool) {
 	} else {
 		s.Sprite.SetCollisionEnabled(enabled)
 	}
+}
+
+func (s *Sprite) setPosition(position Vec2, axes PositionAxes) {
+	s.Sprite.SetPosition(position)
+	if s.MirrorPosition != nil {
+		s.MirrorPosition(s, position, axes)
+	}
+}
+
+func (s *Sprite) addPosition(deltaX, deltaY float64, axes PositionAxes) {
+	position := s.GetPosition()
+	position.X += deltaX
+	position.Y += deltaY
+	s.setPosition(position, axes)
 }

@@ -85,11 +85,12 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 }
 
 type monitorPanelSpy struct {
-	events []string
-	style  ui.MonitorStyle
-	value  ui.MonitorValue
-	scale  float64
-	pos    mathf.Vec2
+	visible bool
+	events  []string
+	style   ui.MonitorStyle
+	value   ui.MonitorValue
+	scale   float64
+	pos     mathf.Vec2
 }
 
 func (p *monitorPanelSpy) Render(style ui.MonitorStyle, value ui.MonitorValue) {
@@ -98,6 +99,7 @@ func (p *monitorPanelSpy) Render(style ui.MonitorStyle, value ui.MonitorValue) {
 }
 
 func (p *monitorPanelSpy) SetVisible(visible bool) {
+	p.visible = visible
 	if visible {
 		p.events = append(p.events, "show")
 	} else {
@@ -505,7 +507,7 @@ type gameWidgetUiMgr struct {
 }
 
 func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2)                 {}
-func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2           { return mathf.NewVec2(1, 1) }
+func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2            { return mathf.NewVec2(1, 1) }
 func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2)        {}
 func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color)                {}
 func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2)                  {}

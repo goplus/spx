@@ -139,8 +139,6 @@ func (p *Game) reset() {
 	p.lifecycleState.OncePathFinder = sync.Once{}
 	p.sprs = make(map[string]Sprite)
 
-	engine.ResetCaptures()
-	engine.ResetInputState()
 	p.abortInputSession("game reset")
 	p.resetCollisionLayerState()
 	costumeSizeCache.Clear()
@@ -150,7 +148,6 @@ func (p *Game) reset() {
 }
 
 func (p *Game) initGame(sprites []Sprite) *Game {
-	engine.ResetCaptures()
 	costumeSizeCache.Clear()
 	if err := p.attachPreparedInputSession(); err != nil {
 		engine.Panic(err)

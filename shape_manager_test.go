@@ -24,7 +24,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
 	"github.com/goplus/spx/v3/internal/ui"
 	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 )
@@ -47,28 +46,60 @@ func TestShapeManagerInitClearsReferences(t *testing.T) {
 	s := shapeManager{
 		items:        []Shape{marker},
 		tempItems:    []Shape{marker},
-		destroyItems: []Shape{marker},
+		destroyItems: []*SpriteImpl{{}},
 	}
 	itemCap, tempCap, destroyCap := cap(s.items), cap(s.tempItems), cap(s.destroyItems)
 	s.init()
 	for name, shapes := range map[string][]Shape{
-		"items": s.items, "tempItems": s.tempItems, "destroyItems": s.destroyItems,
+		"items": s.items, "tempItems": s.tempItems,
 	} {
 		if len(shapes) != 0 || shapes[:1][0] != nil {
 			t.Fatalf("%s retained a shape reference", name)
 		}
+	}
+	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
+		t.Fatal("destroyItems retained a sprite reference")
 	}
 	if cap(s.items) != itemCap || cap(s.tempItems) != tempCap || cap(s.destroyItems) != destroyCap {
 		t.Fatal("init changed reusable shape capacities")
 	}
 }
 
-func TestShapeManagerFlushDestroyClearsQueue(t *testing.T) {
-	marker := &struct{}{}
-	s := shapeManager{destroyItems: []Shape{marker}}
-	s.flushDestroy(nil)
+func TestShapeManagerOnlyQueuesSpritesWithProxies(t *testing.T) {
+	var s shapeManager
+	for _, shape := range []Shape{&struct{}{}, &SpriteImpl{}} {
+		s.add(shape)
+		s.removeShape(shape)
+	}
+	if len(s.items) != 0 || len(s.destroyItems) != 0 {
+		t.Fatal("removing shapes without proxies retained a shape or queued a deletion")
+	}
+	sprite := &SpriteImpl{}
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	s.add(sprite)
+	s.removeShape(sprite)
+	s.removeShape(sprite)
+	if len(s.items) != 0 || len(s.destroyItems) != 1 || s.destroyItems[0] != sprite {
+		t.Fatal("removing a sprite did not queue exactly one deletion")
+	}
+}
+
+func TestShapeManagerCommitsClearedProxyDeletion(t *testing.T) {
+	var s shapeManager
+	sprite := &SpriteImpl{}
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	s.add(sprite)
+	s.removeShape(sprite)
+	sprite.runtimeState.SyncSprite = nil
+
+	var batch proxyBatch
+	s.collectProxyChanges(nil, nil, &batch)
+	if batch.destroyCount != 1 || len(batch.changes) != 0 || len(s.destroyItems) != 1 {
+		t.Fatal("collection consumed a queued deletion or submitted a cleared proxy")
+	}
+	s.commitProxyChanges(batch)
 	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
-		t.Fatal("flushDestroy retained a shape reference")
+		t.Fatal("commit retained a deletion with a cleared proxy")
 	}
 }
 
@@ -186,27 +217,9 @@ func TestRemovingSpriteReindexesRemainingLayersAbovePen(t *testing.T) {
 	}
 }
 
-type shapeUpdateSpy struct {
-	calls int
-	delta float64
-}
-
-func (s *shapeUpdateSpy) onUpdate(delta float64) { s.calls++; s.delta = delta }
-
 type shapeLayerSortManager struct{ pkgengine.IExtMgr }
 
 func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
-
-func TestShapeManagerUpdatesCustomShapesAndMonitors(t *testing.T) {
-	spy := &shapeUpdateSpy{}
-	panel := &monitorPanelSpy{}
-	monitor := &Monitor{visible: true, isDirty: true, panel: panel, eval: func() ui.MonitorValue { return ui.MonitorValue{Text: "42"} }}
-	manager := shapeManager{}
-	manager.flushActivate([]Shape{&SpriteImpl{}, &textBubble{}, &quoterBubble{}, monitor, spy, &struct{}{}})
-	if spy.calls != 1 || spy.delta != itime.DeltaTime() || panel.value.Text != "42" || monitor.isDirty {
-		t.Fatalf("shape update calls=%d delta=%v monitor=%+v", spy.calls, spy.delta, panel)
-	}
-}
 
 func TestShapeManagerCachesBoundedNamesAndWrapsBubbleIDs(t *testing.T) {
 	manager := shapeManager{nextTextBubbleLayoutID: ^uint64(0)}

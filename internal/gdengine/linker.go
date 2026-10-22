@@ -63,10 +63,11 @@ func IsWebIntepreterMode() bool {
 }
 
 func Link(coreCallbackInfo CoreCallbackInfo) {
-	PrepareLink(coreCallbackInfo).Run(nil)
+	PrepareLink(standaloneCallbacks(coreCallbackInfo)).Run(nil)
 }
 
 // PrepareLink installs callbacks and managers before Run enters the backend.
+// Its OnEngineUpdate callback owns runtime advancement for each frame.
 func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	linkMu.Lock()
 	defer linkMu.Unlock()
@@ -114,7 +115,6 @@ func (s *LinkSession) Unlink() {
 	isWebIntepreterMode = false
 }
 
-// Unlink closes the active link.
 func Unlink() {
 	linkMu.Lock()
 	session := activeLink

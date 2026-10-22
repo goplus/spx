@@ -30,6 +30,9 @@ type Sprite struct {
 	OnVfxFinishedEvent       *Event0
 }
 
+// BaseSprite identifies the shared engine object behind embedded sprite views.
+func (pself *Sprite) BaseSprite() *Sprite { return pself }
+
 func (pself *Sprite) onCreate() {
 	pself.OnTriggerEnterEvent = NewEvent1[ISpriter]()
 	pself.OnTriggerExitEvent = NewEvent1[ISpriter]()

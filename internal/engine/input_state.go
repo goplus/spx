@@ -92,10 +92,18 @@ func DiscardPendingMouseEvents() {
 	mouseInput.discard()
 }
 
-// ResetInputState clears process-wide input state at a game lifecycle boundary.
-func ResetInputState() {
+// resetInputState clears process-wide input state at a game lifecycle boundary.
+func resetInputState() {
 	keyInput.reset()
 	mouseInput.reset()
+}
+
+func cacheKeyEvents() {
+	keyInput.cache()
+}
+
+func cacheMouseEvents() {
+	mouseInput.cache()
 }
 
 func onKeyPressed(id int64) {
@@ -104,6 +112,14 @@ func onKeyPressed(id int64) {
 
 func onKeyReleased(id int64) {
 	queueKeyEvent(id, false)
+}
+
+func onMousePressed(id int64) {
+	queueMouseEvent(id, true)
+}
+
+func onMouseReleased(id int64) {
+	queueMouseEvent(id, false)
 }
 
 func queueKeyEvent(id int64, pressed bool) {
@@ -118,14 +134,6 @@ func queueKeyEvent(id int64, pressed bool) {
 	}
 	keyInput.pending = append(keyInput.pending, KeyEvent{Id: id, IsPressed: pressed})
 	keyInput.mu.Unlock()
-}
-
-func onMousePressed(id int64) {
-	queueMouseEvent(id, true)
-}
-
-func onMouseReleased(id int64) {
-	queueMouseEvent(id, false)
 }
 
 func queueMouseEvent(id int64, pressed bool) {
@@ -147,14 +155,6 @@ func queueMouseEvent(id int64, pressed bool) {
 	mouseInput.buttons.Store(buttons)
 	mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
 	mouseInput.mu.Unlock()
-}
-
-func cacheKeyEvents() {
-	keyInput.cache()
-}
-
-func cacheMouseEvents() {
-	mouseInput.cache()
 }
 
 func (s *keyInputState) drain(dst []KeyEvent) []KeyEvent {

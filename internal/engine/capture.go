@@ -52,6 +52,34 @@ func SetCaptureHandler(handler CaptureHandler) {
 	captureState.mu.Unlock()
 }
 
+// EnqueueCapture queues a screenshot request for the end of the current frame,
+// or dispatches it immediately when no game is active. A non-nil inputTick is
+// copied into the request to associate it with an input recording/replay tick.
+func EnqueueCapture(name string, inputTick *int64) error {
+	enqueue := GetGame() != nil
+	captureState.mu.Lock()
+	captureState.sequence++
+	var tick *int64
+	if inputTick != nil {
+		value := *inputTick
+		tick = &value
+	}
+	request := CaptureRequest{
+		Name:      name,
+		InputTick: tick,
+		Frame:     itime.Frame(),
+		Sequence:  captureState.sequence,
+	}
+	if enqueue {
+		captureState.requests = append(captureState.requests, request)
+		captureState.mu.Unlock()
+		return nil
+	}
+	handler := captureState.handler
+	captureState.mu.Unlock()
+	return callCaptureHandler(handler, request)
+}
+
 // HasPendingCaptures reports whether capture requests are queued.
 func HasPendingCaptures() bool {
 	captureState.mu.Lock()
@@ -80,41 +108,13 @@ func FlushCaptures() error {
 	return errors.Join(errs...)
 }
 
-// ResetCaptures clears queued capture requests and resets their sequence,
+// resetCaptures clears queued capture requests and resets their sequence,
 // preserving the backend. It does not cancel an already flushing batch.
-func ResetCaptures() {
+func resetCaptures() {
 	captureState.mu.Lock()
 	captureState.requests = nil
 	captureState.sequence = 0
 	captureState.mu.Unlock()
-}
-
-// EnqueueCapture queues a screenshot request for the end of the current frame,
-// or dispatches it immediately when no game is active. A non-nil inputTick is
-// copied into the request to associate it with an input recording/replay tick.
-func EnqueueCapture(name string, inputTick *int64) error {
-	enqueue := GetGame() != nil
-	captureState.mu.Lock()
-	captureState.sequence++
-	var tick *int64
-	if inputTick != nil {
-		value := *inputTick
-		tick = &value
-	}
-	request := CaptureRequest{
-		Name:      name,
-		InputTick: tick,
-		Frame:     itime.Frame(),
-		Sequence:  captureState.sequence,
-	}
-	if enqueue {
-		captureState.requests = append(captureState.requests, request)
-		captureState.mu.Unlock()
-		return nil
-	}
-	handler := captureState.handler
-	captureState.mu.Unlock()
-	return callCaptureHandler(handler, request)
 }
 
 func callCaptureHandler(handler CaptureHandler, request CaptureRequest) error {
