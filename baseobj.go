@@ -282,17 +282,6 @@ func (p *baseObj) isCostumeAtlas() bool {
 	return p.currentCostume().isAtlas()
 }
 
-// getCostumeAtlasUvRemap returns the UV remap coordinates for the current costume.
-func (p *baseObj) getCostumeAtlasUvRemap() mathf.Rect2 {
-	costume := p.currentCostume()
-	return mathf.NewRect2(
-		costume.atlasUVRect.X,
-		costume.atlasUVRect.Y,
-		costume.atlasUVRect.Z,
-		costume.atlasUVRect.W,
-	)
-}
-
 // getCostumeAtlasRegion returns the pixel region of the current costume in the atlas.
 func (p *baseObj) getCostumeAtlasRegion() mathf.Rect2 {
 	costume := p.currentCostume()

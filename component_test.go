@@ -55,6 +55,10 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 		t.Fatal("clone inherited parent collision or animation runtime state")
 	}
 
+	// The fresh proxy already starts at the copied position; the parent's
+	// unsubmitted movement must not pin the child's later physical movement.
+	child.mergeEnginePosition(40, -20)
+	requirePosition(t, child, 40, -20)
 	child.SetXpos(99)
 	child.SetPhysicsMode(StaticPhysics)
 	child.pen().penWidth = 9

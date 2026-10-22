@@ -27,16 +27,22 @@ Web 端同步主要分为两条方向：
 
 对应入口：
 
-- Go: `Game.updateSpriteProxies`
+- Go: `Game.OnEngineRender` / `Game.flushSpriteProxyChanges`
 - Go: `SpriteSyncBuffer.Serialize`
 - Go: `engine.SyncBatchUpdateSprites`
 - Godot: `SpxSpriteMgr::batch_update_transforms`
 
 这是最适合批量同步的主路径，因为它具备高频、多对象、固定字段、无需字符串的特点。
 
+帧末提交发生在本帧唯一一次协程调度之后，也覆盖已登记碰撞处理器的本帧修改。每次提交使用独立的确认记录，成功后才确认脏状态、位置写入和删除。依赖即时几何状态的查询仍可提前同步单个精灵。
+
+查询和批量提交共用有限值校验，拒绝转换为 `float32` 后非有限的 transform，包括有限 Go 数值转换时溢出的情况；错误包含 sprite ID、字段名和值，失败不确认待提交写入。公开朝向设置接口忽略 NaN 和无穷大，保留上次有效朝向；提交层校验用于防止无效内部状态进入引擎，避免 Godot 拒绝整批却被 Go 误认为已提交。
+
 ### Physics position pull
 
 当前 Godot -> SPX 已有批量位置拉取：
+
+回读位于帧首、条件采样之前。尚未提交的显式 Go 位置修改按 X/Y 轴保留；仅修改可见性不会阻止读取最新物理坐标。完整阶段顺序见[脚本调度](scheduling.md#帧阶段)。
 
 - 输入：sprite id 列表
 - 输出：x, y 列表

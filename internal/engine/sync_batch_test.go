@@ -17,8 +17,11 @@
 package engine
 
 import (
+	"fmt"
 	"math"
 	"testing"
+
+	"github.com/goplus/spbase/mathf"
 )
 
 func TestSpriteSyncBufferSerializeReusesBuffer(t *testing.T) {
@@ -62,6 +65,63 @@ func TestSpriteSyncBufferSerializeReusesBuffer(t *testing.T) {
 	}
 	if got, want := second[2], float32(10); got != want {
 		t.Fatalf("sprite id = %v, want %v", got, want)
+	}
+}
+
+func TestSpriteSyncBufferRejectsNonFiniteTransforms(t *testing.T) {
+	for field, name := range []string{"x", "y", "rotation", "scale x", "scale y", "offset x", "offset y"} {
+		t.Run(name, func(t *testing.T) {
+			for _, invalid := range []struct {
+				name  string
+				value float64
+			}{
+				{"nan", math.NaN()},
+				{"positive infinity", math.Inf(1)},
+				{"negative infinity", math.Inf(-1)},
+				{"positive float32 overflow", math.MaxFloat64},
+				{"negative float32 overflow", -math.MaxFloat64},
+			} {
+				t.Run(invalid.name, func(t *testing.T) {
+					fields := [7]float64{1, 2, 3, 4, 5, 6, 7}
+					fields[field] = invalid.value
+					buffer := NewSpriteSyncBuffer(1)
+					buffer.Add(73, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6], true)
+					defer func() {
+						want := fmt.Sprintf("sprite 73 transform %s=%v must be finite after float32 conversion", name, float64(float32(invalid.value)))
+						if got := recover(); got != want {
+							t.Fatalf("serialization panic = %v, want %q", got, want)
+						}
+					}()
+					buffer.Serialize()
+				})
+			}
+		})
+	}
+}
+
+func TestValidateSpriteTransformRejectsFloat32Overflow(t *testing.T) {
+	for field, name := range []string{"x", "y", "rotation", "scale x", "scale y", "offset x", "offset y"} {
+		t.Run(name, func(t *testing.T) {
+			fields := [7]float64{1, 2, 3, 4, 5, 6, 7}
+			fields[field] = math.MaxFloat64
+			defer func() {
+				want := fmt.Sprintf("sprite 73 transform %s=%v must be finite after float32 conversion", name, math.MaxFloat64)
+				if got := recover(); got != want {
+					t.Fatalf("transform validation panic = %v, want %q", got, want)
+				}
+			}()
+			ValidateSpriteTransform(73, mathf.NewVec2(fields[0], fields[1]), fields[2], mathf.NewVec2(fields[3], fields[4]), mathf.NewVec2(fields[5], fields[6]))
+		})
+	}
+}
+
+func TestSpriteSyncBufferAcceptsFiniteFloat32Limits(t *testing.T) {
+	ValidateSpriteTransform(1, mathf.NewVec2(math.MaxFloat32, -math.MaxFloat32), math.SmallestNonzeroFloat32, mathf.NewVec2(1, 1), mathf.Vec2{})
+	buffer := NewSpriteSyncBuffer(1)
+	buffer.Add(1, math.MaxFloat32, -math.MaxFloat32, math.SmallestNonzeroFloat32, 1, 1, 0, 0, true)
+	packet := buffer.Serialize()
+	if packet[3] != math.MaxFloat32 || packet[4] != -math.MaxFloat32 || packet[5] != math.SmallestNonzeroFloat32 {
+		t.Fatalf("finite float32 limits changed during serialization: %v", packet)
 	}
 }
 

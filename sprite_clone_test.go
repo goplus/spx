@@ -199,7 +199,7 @@ func (s *cloneProxyInitSprite) Main() {
 	s.OnCloned__0(func() {
 		// Query synchronization is allowed during initialization, but it must
 		// not bypass the clone's render-visibility gate.
-		s.ensureProxyQueryStateSynced()
+		s.syncProxyForQuery()
 		s.SetCostume__0(s.finalCostume)
 		if s.hideOnCloned {
 			s.Hide()
@@ -422,10 +422,10 @@ func flushCloneProxyUpdates(game *Game) {
 	if game.syncBuffer == nil {
 		game.syncBuffer = engine.NewSpriteSyncBuffer(initialSpriteSyncBufferSize)
 	}
-	game.syncBuffer.Clear()
-	game.shapeMgr.collectProxyUpdates(game.shapeMgr.getTempShapes(), game.syncBuffer)
-	game.shapeMgr.flushDestroy(game.syncBuffer)
-	game.flushSyncBuffer()
+	if game.camera == nil {
+		game.camera = &cameraImpl{g: game}
+	}
+	game.flushSpriteProxyChanges(game.shapeMgr.getTempShapes())
 }
 
 func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
@@ -468,8 +468,9 @@ func TestFinishCloneInitializationPreservesPublicationState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sprite := &SpriteImpl{
 				g:                &Game{},
-				proxyPublication: &cloneProxyPublication{state: tt.initial},
+				proxyPublication: &cloneProxyPublication{},
 			}
+			sprite.proxyPublication.state.Store(tt.initial)
 			if tt.destroyed {
 				sprite.markDestroyed()
 			}
@@ -695,12 +696,13 @@ func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
 	clone := instantiateRuntimeClone(out, source)
 	game.shapeMgr.addClonedShape(spriteOf(source), clone)
 
-	clone.ensureProxyQueryStateSynced()
+	clone.syncProxyForQuery()
 	mgr.assertNoVisibleWrites(t)
 
 	clone.markProxyDirty()
 	buffer := engine.NewSpriteSyncBuffer(1)
-	clone.collectProxyUpdate(buffer)
+	clone.prepareProxyUpdate()
+	update := clone.collectProxyUpdate(buffer)
 	serialized := buffer.Serialize()
 	if len(serialized) != 2+engine.SyncFieldsPerSprite {
 		t.Fatalf("serialized sync length = %d, want %d", len(serialized), 2+engine.SyncFieldsPerSprite)
@@ -708,12 +710,15 @@ func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
 	if got := serialized[len(serialized)-1]; got != 0 {
 		t.Fatalf("pending clone batch visibility = %v, want 0", got)
 	}
+	engine.SyncBatchUpdateSprites(serialized)
+	commitProxyChange(update)
 
 	// Both query and batch synchronization have already consumed the logical
 	// transform. Opening the publication gate must still submit visibility.
 	clone.finishCloneInitialization()
 	buffer.Clear()
-	clone.collectProxyUpdate(buffer)
+	clone.prepareProxyUpdate()
+	update = clone.collectProxyUpdate(buffer)
 	if got := buffer.UpdateCount(); got != 1 {
 		t.Fatalf("publication batched %d updates, want 1", got)
 	}
@@ -721,7 +726,10 @@ func TestPendingCloneProxySyncWritesStayHidden(t *testing.T) {
 	if got := serialized[len(serialized)-1]; got != 1 {
 		t.Fatalf("published clone batch visibility = %v, want 1", got)
 	}
+	engine.SyncBatchUpdateSprites(serialized)
+	commitProxyChange(update)
 	buffer.Clear()
+	clone.prepareProxyUpdate()
 	clone.collectProxyUpdate(buffer)
 	if got := buffer.UpdateCount(); got != 0 {
 		t.Fatalf("published clone batched %d repeated updates, want 0", got)
@@ -749,6 +757,7 @@ func TestCloneProxyPublicationReadyCanRaceProxyCollection(t *testing.T) {
 		go func() {
 			defer workers.Done()
 			<-start
+			clone.prepareProxyUpdate()
 			clone.collectProxyUpdate(buffer)
 		}()
 		close(start)
@@ -756,6 +765,7 @@ func TestCloneProxyPublicationReadyCanRaceProxyCollection(t *testing.T) {
 
 		// Collection is allowed to win before READY. A later ordinary update
 		// must observe the atomic transition and complete publication safely.
+		clone.prepareProxyUpdate()
 		clone.collectProxyUpdate(buffer)
 		if clone.isCloneProxyPublicationBlocked() {
 			t.Fatal("ready clone remained blocked after proxy collection")

@@ -622,3 +622,76 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 		t.Fatalf("stale startup survived reset: generation=%d running=%v bootstrap=%v main=%d", game.bootstrapGeneration(), game.lifecycleState.IsRunned.Load(), game.lifecycleState.BootstrapDone.Load(), gamer.mainCalls)
 	}
 }
+
+type queuedQuerySpriteMgr struct {
+	*frameSyncSpriteMgr
+	queriedPosition mathf.Vec2
+}
+
+func (m *queuedQuerySpriteMgr) GetPosition(id pkgengine.Object) mathf.Vec2 {
+	return m.positions[int64(id)]
+}
+
+func (m *queuedQuerySpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, _ float64, _ mathf.Vec2, _ bool, _ mathf.Vec2) {
+	m.positions[int64(id)] = pos
+}
+
+func (m *queuedQuerySpriteMgr) CheckCollisionByColor(id pkgengine.Object, _ mathf.Color, _, _ float64) bool {
+	m.queriedPosition = m.positions[int64(id)]
+	return false
+}
+
+func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		writeX bool
+		x      float64
+		want   mathf.Vec2
+	}{
+		{name: "visual only", want: mathf.NewVec2(20, 30)},
+		{name: "set X", writeX: true, x: 42, want: mathf.NewVec2(42, 30)},
+		{name: "set unchanged X", writeX: true, x: 10, want: mathf.NewVec2(10, 30)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			co, game, backend := setupFrameSyncGame(t)
+			sprite := addFrameSyncSprite(game, 1, "moving")
+			sprite.SetXYpos(10, 11)
+			game.OnEngineRender(0)
+			mgr := &queuedQuerySpriteMgr{frameSyncSpriteMgr: backend}
+			pkgengine.SpriteMgr = mgr
+			platform := &eventDispatchPlatform{workerSeen: make(chan struct{})}
+			platform.useCurrentAsMainThread()
+			previousPlatform := pkgengine.PlatformMgr
+			pkgengine.PlatformMgr = platform
+			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
+			enginewrap.Init(engine.WaitMainThread)
+
+			release := make(chan struct{})
+			thread := co.Create(sprite, func(coroutine.Thread) {
+				engine.WaitForChan(release)
+				if tt.writeX {
+					sprite.SetXpos(tt.x)
+				}
+				sprite.Hide()
+				sprite.TouchingColor__0(Color{})
+			})
+			co.JoinFirstSlice(thread)
+			// Physics advances while the script waits for external work.
+			mgr.positions[1] = mathf.NewVec2(20, 30)
+			close(release)
+			select {
+			case <-platform.workerSeen:
+			case <-time.After(time.Second):
+				t.Fatal("resumed script did not request the engine main thread")
+			}
+			// The entry boundary must service the query before it can acquire
+			// the script lock and perform its normal physics snapshot.
+			game.OnEngineBeforeUpdate(1.0 / 60)
+			co.Join(thread)
+			if mgr.queriedPosition != tt.want || mgr.positions[1] != tt.want {
+				t.Fatalf("query position=%v backend=%v, want %v", mgr.queriedPosition, mgr.positions[1], tt.want)
+			}
+			requirePosition(t, sprite, tt.want.X, tt.want.Y)
+		})
+	}
+}

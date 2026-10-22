@@ -351,7 +351,8 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 	for _, redraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
-			co, game := setupRuntimeEventGame(t)
+			co, game, _ := setupInputSourceTest(t)
+			game.markGameStarted(game.bootstrapGeneration())
 			itime.Start(nil)
 			var tracked float64
 			fired := 0
@@ -394,43 +395,49 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 }
 
 func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
-	started, release := make(chan struct{}), make(chan struct{})
-	var returned chan struct{}
-	t.Cleanup(func() {
-		close(release)
-		if returned != nil {
-			<-returned
-		}
-	})
-	co.Create(game, func(coroutine.Thread) {
-		close(started)
-		<-release
-	})
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("bootstrap script did not start")
-	}
-	samples := 0
-	game.OnCond(func() bool { samples++; return true }, func() {})
-	returned = make(chan struct{})
-	go func() {
-		game.OnEngineBeforeUpdate(1.0 / 30)
-		close(returned)
-	}()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("unstarted frame waited for a script sampling barrier")
-	}
-	if samples != 0 {
-		t.Fatalf("bootstrap condition samples = %d, want 0", samples)
+	for _, startDispatched := range []bool{false, true} {
+		t.Run(fmt.Sprintf("start_dispatched=%t", startDispatched), func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			game.lifecycleState.StartDispatched.Store(startDispatched)
+			started, release := make(chan struct{}), make(chan struct{})
+			var returned chan struct{}
+			t.Cleanup(func() {
+				close(release)
+				if returned != nil {
+					<-returned
+				}
+			})
+			co.Create(game, func(coroutine.Thread) {
+				close(started)
+				<-release
+			})
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("bootstrap script did not start")
+			}
+			samples := 0
+			game.OnCond(func() bool { samples++; return true }, func() {})
+			returned = make(chan struct{})
+			go func() {
+				game.OnEngineBeforeUpdate(1.0 / 30)
+				close(returned)
+			}()
+			select {
+			case <-returned:
+			case <-time.After(time.Second):
+				t.Fatal("unstarted frame waited for a script sampling barrier")
+			}
+			if samples != 0 {
+				t.Fatalf("bootstrap condition samples = %d, want 0", samples)
+			}
+		})
 	}
 }
 
 func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	co, game, _ := setupInputSourceTest(t)
+	game.markGameStarted(game.bootstrapGeneration())
 	itime.Start(nil)
 	game.lifecycleState.StartDispatched.Store(true)
 	var sampled, handled float64
@@ -449,7 +456,8 @@ func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 }
 
 func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	co, game, _ := setupInputSourceTest(t)
+	game.markGameStarted(game.bootstrapGeneration())
 	itime.Start(nil)
 	game.lifecycleState.StartDispatched.Store(true)
 	value := true

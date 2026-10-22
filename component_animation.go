@@ -189,7 +189,7 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 		if playAudio {
 			a.playAnimationAudio(entry.config, info)
 		}
-		a.sprite.baseObj.applyCostumeUpdate()
+		a.sprite.applyCostumeUpdate()
 		a.prepareAnimationPlayback(entry, syncSprite)
 		playbackStarted = true
 		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)

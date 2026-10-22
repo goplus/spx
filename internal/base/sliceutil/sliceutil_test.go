@@ -21,6 +21,60 @@ import (
 	"testing"
 )
 
+func TestResetNil(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		initialCap int
+		wantCap    int
+	}{
+		{"negative capacity", -1, 0},
+		{"zero capacity", 0, 0},
+		{"allocate capacity", 4, 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Reset[*int](nil, tc.initialCap)
+			if len(got) != 0 || cap(got) != tc.wantCap || (got == nil) != (tc.wantCap == 0) {
+				t.Fatalf("Reset(nil, %d) len/cap/nil = %d/%d/%v, want 0/%d/%v", tc.initialCap, len(got), cap(got), got == nil, tc.wantCap, tc.wantCap == 0)
+			}
+			for i, value := range got[:cap(got)] {
+				if value != nil {
+					t.Fatalf("allocated element %d = %v, want nil", i, value)
+				}
+			}
+		})
+	}
+}
+
+func TestResetClearsAndReusesStorage(t *testing.T) {
+	backing := make([]*int, 3, 5)
+	for i := range backing {
+		backing[i] = new(int)
+	}
+	// A non-nil slice ignores initialCap, even when it asks for more storage.
+	got := Reset(backing, 10)
+	if len(got) != 0 || cap(got) != cap(backing) || &got[:cap(got)][0] != &backing[0] {
+		t.Fatalf("Reset did not preserve storage: len=%d cap=%d, want 0/%d", len(got), cap(got), cap(backing))
+	}
+	for i, value := range backing {
+		if value != nil {
+			t.Fatalf("Reset retained element %d: %v", i, value)
+		}
+	}
+	// Resetting an already-empty buffer must remain non-nil and reusable.
+	again := Reset(got, 10)
+	if again == nil || len(again) != 0 || cap(again) != cap(backing) || &again[:cap(again)][0] != &backing[0] {
+		t.Fatal("Reset lost the empty buffer's storage")
+	}
+	value := new(int)
+	again = append(again, value)
+	if backing[0] != value {
+		t.Fatal("append after Reset did not reuse the backing array")
+	}
+	if empty := Reset(make([]int, 0), 10); empty == nil || len(empty) != 0 || cap(empty) != 0 {
+		t.Fatalf("Reset allocated for a non-nil zero-capacity slice: len/cap/nil = %d/%d/%v", len(empty), cap(empty), empty == nil)
+	}
+}
+
 func TestInsertAt(t *testing.T) {
 	got := InsertAt([]int{1, 3}, 1, 2)
 	want := []int{1, 2, 3}

@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	itime "github.com/goplus/spx/v3/internal/time"
 )
@@ -724,6 +725,70 @@ func (g *frameRecordingGame) OnEngineBeforeUpdate(delta float64) { g.record("bef
 func (g *frameRecordingGame) OnEngineUpdate(delta float64)       { g.record("update", delta) }
 func (g *frameRecordingGame) OnEngineRender(delta float64)       { g.record("render", delta) }
 func (g *frameRecordingGame) OnEngineFrameEnd()                  { g.step("end") }
+
+func TestFrameRuntimeUpdatesPrecedeScriptsAndCapture(t *testing.T) {
+	for _, stop := range []bool{false, true} {
+		t.Run(map[bool]string{false: "running", true: "stopped"}[stop], func(t *testing.T) {
+			isolateGameBinding(t)
+			co := setupExecuteTest(t)
+			isolateCaptureState(t)
+			resetRuntimeDeltaTestState()
+			t.Cleanup(func() {
+				co.RunAfterStop(nil)
+				resetRuntimeDeltaTestState()
+			})
+			var steps []string
+			var scriptValue atomic.Int32
+			game := &frameRecordingGame{step: func(phase string) {
+				steps = append(steps, phase)
+				if phase == "before" && itime.Frame() != 0 {
+					t.Error("frame clock advanced before readback")
+				}
+				if phase == "render" && scriptValue.Load() != 42 {
+					t.Error("committed before runtime-created script completed its slice")
+				}
+			}}
+			binding, err := bindGame(game, game)
+			if err != nil {
+				t.Fatal(err)
+			}
+			SetCaptureHandler(func(CaptureRequest) error {
+				steps = append(steps, "capture")
+				return nil
+			})
+			sprite := &frameCallbackSprite{}
+			sprite.Id = 1
+			state.sprites[sprite.Id] = sprite
+			sprite.onPosition = func(mathf.Vec2) {
+				steps = append(steps, "runtime")
+				if itime.Frame() != 1 {
+					t.Error("runtime update did not see the advanced clock")
+				}
+				if stop {
+					binding.storePhase(gameStopped)
+					return
+				}
+				Go(nil, func(context.Context, any) {
+					scriptValue.Store(42)
+					if err := EnqueueCapture("runtime", nil); err != nil {
+						t.Error(err)
+					}
+					WaitNextFrame()
+					scriptValue.Store(84)
+				})
+			}
+			tweenPos(sprite, mathf.NewVec2(20, 30), 0.25, func() {})
+			onUpdate(0.25)
+			want := []string{"before", "runtime", "update", "render", "capture", "end"}
+			if stop {
+				want = want[:2]
+			}
+			if !slices.Equal(steps, want) {
+				t.Fatalf("frame phases=%v, want %v", steps, want)
+			}
+		})
+	}
+}
 
 func TestFramePipelineStopsWhenGameStops(t *testing.T) {
 	for _, stopAfter := range []string{"", "before", "update", "render", "capture"} {

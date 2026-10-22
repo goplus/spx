@@ -136,17 +136,42 @@ code and circular dependencies can still prevent cleanup.
 An engine update advances the frame clock once. It may contain several script
 rounds; starting another round does not advance the frame number or timer.
 
-1. Cache engine input and freeze the same kind of input batch for live input,
-   recording, or replay. After startup scripts first yield or finish, sample
-   condition events using that input before advancing the frame clock. Input
-   preparation and condition matching share one `RunBetweenScripts` phase.
-2. Advance the clock and handle capture-key requests. Freeze timers due at this
-   phase, register matched condition handlers, then route this frame's input and
-   timers. Finish registration before dispatching startup handlers.
-3. Process runnable coroutines and eligible loop rounds.
-4. Synchronize visual state needed by captures, dispatch queued capture requests,
-   and finalize input-session frame completion. The Web host waits for its
-   render fence before reading the canvas.
+1. Cache input and collision events already delivered by the engine. In one
+   `RunBetweenScripts` phase, read physical sprite positions from Godot, freeze
+   the input batch for live input, recording, or replay, and sample condition
+   events before advancing the frame clock. Conditions become eligible after
+   startup scripts first yield or finish.
+2. Advance the clock, then advance runtime delay timers and tweens inside a
+   managed dispatcher. Register sprite `OnUpdate`, due timer, and completed tween
+   callbacks in one ordered batch of independent script tasks. A waiting callback
+   lets later tasks run without suspending frame advancement. Timers and tweens
+   created by these callbacks advance next frame.
+3. Prepare game updates and handle capture-key requests. Freeze due script Timer
+   events, register matched conditions, route input and Timer events, then
+   register cached collision handlers before dispatching startup handlers.
+   Registration order does not impose execution order across separate batches.
+4. Call `gco.Update` once to process runnable coroutines and eligible loop rounds,
+   including the registered collision handlers. A yield can defer continuation
+   to a future frame; frame completion does not require every coroutine to exit.
+5. Exclude script execution while submitting pending Go sprite changes, bubble
+   visuals, and pen commands to Godot. Dispatch queued captures afterward, then
+   finalize input-session frame completion. The Web host waits for its render
+   fence before reading the canvas.
+
+The current Godot fork runs zero or more fixed physics ticks, processes the scene,
+and submits rendering before entering the SPX update callback. `OnEngineRender`
+is the Go submission phase, not another Godot draw. Its changes feed subsequent
+physics and rendering. It does not recalculate collisions immediately: only
+events delivered before the frame cutoff enter this frame's collision batch.
+
+Physical position reads preserve explicit, unsubmitted Go writes per axis.
+Direct proxy position helpers acknowledge only the axes they write; a full
+`SetPosition` supersedes both axes.
+Changing visibility alone does not reserve a coordinate, so it cannot replace a
+fresh physical position with an old Go value. Queries that need current geometry
+may still synchronize a sprite during script execution; the final batch is not
+the only possible Go-to-Godot call. There is no second scheduler update after
+submission to force collision continuations through a future-frame wait.
 
 ### Input and timer frame boundaries
 
@@ -239,6 +264,8 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Wait-job processing and scheduler statistics | `internal/coroutine/update.go`, `stats.go` |
 | Control-flow integration | `internal/engine/coro.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
+| Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
+| Physical position reads and final sprite submission | `runtime_sync.go`, `component_transform.go`, `shape_manager.go` |
 | Frame input sampling, unified input and timer dispatch | `runtime_input.go`, `runtime_replay_input.go` |
 | Condition registration, sampling, and matched-handler dispatch | `runtime_conditions.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
@@ -249,9 +276,11 @@ milliseconds. `queue`, `waitJob`, and `waitKind` are private scheduler details.
 Frame-boundary callbacks exclude script execution while servicing queued
 engine main-thread calls. A script waiting on such a call must not block
 condition sampling. This phase does not advance loop or frame waiters.
-Frame-boundary callbacks run on the caller. External native event dispatch uses
-a managed coroutine and services only engine-thread jobs while waiting, so a
-synchronous dispatch cannot wait for a future frame.
+Frame-boundary callbacks run on the caller. Runtime state advancement and external
+native event dispatch use managed dispatchers and service only engine-thread jobs
+while waiting. These dispatchers register asynchronous work and cannot wait for a
+future frame. Runtime user callbacks run in independent tasks and can wait across
+frames, including through joined event handlers.
 
 ## Capture and input replay
 
@@ -301,6 +330,11 @@ control; it does not provide preemption or a hard timeout.
   respectively; slow frames preserve this phase ordering.
 - Live input, recording, and replay share frame batches; routing and registration
   finish before script scheduling, and timers use the advanced clock.
+- Physical state is read before conditions, visual-only changes preserve physical
+  movement, and collision-handler changes reach the final submission. Explicit
+  future-frame waits still resume in later frames.
+- Runtime update callbacks can register scripts and call the engine before the
+  final submission without entering an exclusive sampling callback.
 - Condition events preserve rising edges, non-reentrancy, and owner isolation.
 - Pending main-thread calls cannot deadlock the sampling phase.
 - Concurrent drain waiters all receive completion notifications; reset waits for
@@ -323,6 +357,8 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 Core regression coverage is in `runtime_scratch_scheduler_test.go`,
 `runtime_events_test.go`, `runtime_events_order_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_native_test.go`,
+`runtime_sync_test.go`, `runtime_native_test.go`, `internal/engine/runtime_delta_test.go`,
+`internal/engine/execute_native_test.go`,
 `sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
 `internal/coroutine/order_test.go`.
 Cancellation and restart coverage is in `internal/coroutine/thread_test.go`,

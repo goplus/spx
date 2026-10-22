@@ -23,6 +23,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/coroutine"
 	"github.com/goplus/spx/v3/internal/engine"
+	itime "github.com/goplus/spx/v3/internal/time"
 )
 
 // -----------------------------------------------------------------------------
@@ -65,48 +66,74 @@ func (p *Game) OnEngineReset() {
 	p.reset()
 }
 
-// OnEngineBeforeUpdate samples input and conditions before the clock advances.
+// OnEngineBeforeUpdate snapshots physics, input, and conditions before the clock advances.
 func (p *Game) OnEngineBeforeUpdate(delta float64) {
 	p.scriptEvents.pendingConditions = nil
-	running := p.lifecycleState.IsRunned.Load()
-	if !running && !p.lifecycleState.StartDispatched.Load() {
+	if !p.lifecycleState.IsRunned.Load() {
 		return
 	}
-	sample := func() {
-		if running && !p.inputMgr.prepareInputFrame(delta) {
+	runBetweenScripts(func() {
+		p.pullPhysicsPositions()
+		if !p.inputMgr.prepareInputFrame(delta) {
 			return
 		}
 		if p.lifecycleState.StartDispatched.Load() {
 			p.scriptEvents.sampleConditions()
 		}
-	}
-	if gco == nil {
-		sample()
-	} else {
-		gco.RunBetweenScripts(sample)
-	}
+	})
 }
 
 func (p *Game) OnEngineUpdate(float64) {
 	if !p.lifecycleState.IsRunned.Load() || p.inputMgr.frame.pending == nil {
 		return
 	}
-	p.dispatchFrameEvents()
-	p.soundMgr.Update()
-	p.dispatchStartEventIfNeeded()
-	p.updateSpriteProxies()
-	p.pullPhysicsPositions()
+	// Use a managed dispatcher because update callbacks may run user code.
+	withEventRegistrationBarrier(frameEventDispatcher{}, func() {
+		p.soundMgr.Update()
+		p.dispatchShapeUpdates()
+		p.dispatchFrameEvents()
+		// Register retained bootstrap contacts before OnStart.
+		p.processPhysicsTriggers()
+		p.dispatchStartEventIfNeeded()
+	})
+}
+
+// dispatchShapeUpdates runs under the managed frame dispatcher. Each shape's
+// first slice precedes event registration; future-frame waits stay independent.
+func (p *Game) dispatchShapeUpdates() {
+	delta := itime.DeltaTime()
+	generation := p.bootstrapGeneration()
+	var tasks []coroutine.Task
+	// Task collection cannot run user code, so the live list is stable here.
+	for _, shape := range p.shapeMgr.all() {
+		switch updater := shape.(type) {
+		case bubbleShape:
+			// Bubble visuals are committed at frame end.
+		case interface{ onUpdate(float64) }:
+			tasks = append(tasks, coroutine.Task{
+				Owner: p,
+				Run: func(coroutine.Thread) {
+					if currentGame() == p && p.isCurrentBootstrap(generation) {
+						updater.onUpdate(delta)
+					}
+				},
+			})
+		}
+	}
+	gco.StartBatch(tasks, coroutine.BatchWaitFirstSlice)
 }
 
 func (p *Game) OnEngineRender(float64) {
-	defer p.flushPenCommands()
-	if !p.lifecycleState.IsRunned.Load() {
-		return
-	}
-	// Flush coroutine changes before drawing.
-	p.syncPostCoroutineVisuals()
-	// Drain bootstrap collisions before OnStart.
-	p.processPhysicsTriggers()
+	runBetweenScripts(func() {
+		defer p.flushPenCommands()
+		if !p.lifecycleState.IsRunned.Load() {
+			return
+		}
+		p.camera.onUpdate()
+		activeShapes := p.shapeMgr.getTempShapes()
+		p.flushSpriteProxyChanges(activeShapes)
+		p.shapeMgr.flushBubbleVisuals(activeShapes)
+	})
 }
 
 // OnEngineFrameEnd pauses completed replays after rendering and capture.
@@ -154,6 +181,12 @@ func (p *Game) markGameStarted(generation uint64) bool {
 // -----------------------------------------------------------------------------
 // Start Events
 // -----------------------------------------------------------------------------
+func (p *Game) dispatchStartEventIfNeeded() {
+	if ev := p.scheduleStartEvent(); ev != nil {
+		p.handleEvent(ev)
+	}
+}
+
 func (p *Game) scheduleStartEvent() *eventStart {
 	p.bootstrapMu.Lock()
 	defer p.bootstrapMu.Unlock()
@@ -178,10 +211,18 @@ func (p *Game) markStartDispatched(generation uint64) bool {
 }
 
 // -----------------------------------------------------------------------------
-// Main Execution Helpers
+// Execution Helpers
 // -----------------------------------------------------------------------------
 
-// runMainUntilYield starts Main in its own coroutine and waits for its first yield or exit.
+// runBetweenScripts excludes script slices during frame snapshots and commits.
+func runBetweenScripts(call func()) {
+	if gco == nil {
+		call()
+		return
+	}
+	gco.RunBetweenScripts(call)
+}
+
 func runMainUntilYield(owner any, mainFn func()) {
 	thread := gco.Create(owner, func(coroutine.Thread) {
 		runMain(mainFn)

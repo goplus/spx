@@ -52,6 +52,52 @@ func (s *callbackTestSprite) OnDestroy() {
 	*s.calls = append(*s.calls, "sprite-destroy")
 }
 
+func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
+	previousCallbacks, previousSprites := coreCallbacks, sprites
+	previousDelta, _ := itime.FixedDeltaTime()
+	t.Cleanup(func() {
+		coreCallbacks, sprites = previousCallbacks, previousSprites
+		itime.SetFixedDeltaTime(previousDelta)
+		engine.SetRuntimeBridge(nil)
+	})
+
+	for _, fixed := range []float64{0, 0.1} {
+		for _, runUpdate := range []bool{false, true} {
+			t.Run(fmt.Sprintf("fixed=%g/update=%v", fixed, runUpdate), func(t *testing.T) {
+				var calls []string
+				sprite := &callbackTestSprite{calls: &calls}
+				engine.SetRuntimeBridge(&callbackTestRuntime{
+					sprites: map[engine.Object]engine.ISpriter{1: sprite}, calls: &calls,
+				})
+				itime.SetFixedDeltaTime(fixed)
+				coreCallbacks = engine.CoreCallbackInfo{
+					OnEngineUpdate: func(delta float64) {
+						calls = append(calls, fmt.Sprintf("frame-begin:%g", delta))
+						if runUpdate {
+							engine.InternalUpdateEngine(delta)
+						}
+						calls = append(calls, "frame-end")
+					},
+				}
+				bindCallbacks().OnEngineUpdate(0.25)
+
+				logical := 0.25
+				if fixed > 0 {
+					logical = fixed
+				}
+				want := []string{fmt.Sprintf("advance:%g", logical), fmt.Sprintf("frame-begin:%g", logical)}
+				if runUpdate {
+					want = append(want, fmt.Sprintf("runtime:%g", logical))
+				}
+				want = append(want, "frame-end")
+				if !slices.Equal(calls, want) {
+					t.Fatalf("frame calls = %v, want %v", calls, want)
+				}
+			})
+		}
+	}
+}
+
 func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	previousCallbacks, previousSprites := coreCallbacks, sprites
 	previousLink, previousInterpreter := activeLink, isWebIntepreterMode
@@ -115,14 +161,14 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 
 				if runtime.GOOS == "js" {
 					// Web linking requires the host's full JS API; exercise callbacks directly.
-					coreCallbacks = core
+					coreCallbacks = standaloneCallbacks(core)
 				} else {
 					engine.AudioMgr, engine.CameraMgr, engine.DebugMgr = nil, nil, nil
 					engine.ExtMgr, engine.InputMgr, engine.NavigationMgr = nil, nil, nil
 					engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr = nil, nil, nil
 					engine.ResMgr, engine.SceneMgr, engine.SpriteMgr = nil, nil, nil
 					engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr = nil, nil, nil
-					session := PrepareLink(core)
+					session := PrepareLink(standaloneCallbacks(core))
 					t.Cleanup(func() {
 						session.Unlink()
 						if activeLink != nil || isWebIntepreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {

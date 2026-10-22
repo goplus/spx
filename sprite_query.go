@@ -18,7 +18,6 @@ package spx
 
 import (
 	"math"
-	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v3/internal/engine"
@@ -180,7 +179,7 @@ func (p *SpriteImpl) prepareSelfCollisionQuery() bool {
 	if p.runtimeState.SyncSprite == nil {
 		return false
 	}
-	p.ensureProxyQueryStateSynced()
+	p.syncProxyForQuery()
 	return true
 }
 
@@ -300,7 +299,7 @@ func withPendingCloneSensingVisibility(sprites []*SpriteImpl, call func()) {
 		publication := sprite.proxyPublication
 		proxy := sprite.runtimeState.SyncSprite
 		if publication == nil || proxy == nil ||
-			atomic.LoadUint32(&publication.state) == cloneProxyPublished {
+			publication.state.Load() == cloneProxyPublished {
 			continue
 		}
 		leaseCount := publication.sensingVisibilityLeases.Add(1)

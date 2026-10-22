@@ -207,6 +207,7 @@ func TestProxyCollectionRefreshesAutoShapesWithoutTransformChanges(t *testing.T)
 
 	sprite.markAutoPhysicsShapesDirty()
 	buffer := internalengine.NewSpriteSyncBuffer(1)
+	sprite.prepareProxyUpdate()
 	sprite.collectProxyUpdate(buffer)
 	if got := buffer.UpdateCount(); got != 0 {
 		t.Fatalf("auto shape refresh batched %d transforms, want 0", got)

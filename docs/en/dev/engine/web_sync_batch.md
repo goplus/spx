@@ -15,6 +15,12 @@ Each batch has explicit ownership and a synchronization point. Producers finish 
 
 Position, rotation, scale, and related transform state are packed for all changed sprites and applied together.
 
+`Game.OnEngineRender` submits the final batch after the frame's single
+scheduler update, including changes made by eligible collision handlers. Each
+submission owns its acknowledgment records; dirty state, pending position writes,
+and deletions are acknowledged only after it succeeds. Geometry queries may still
+synchronize an individual sprite earlier.
+
 ### Sprite visuals
 
 Frequently changing visibility and render properties use compact records instead of independent bridge calls.
@@ -22,6 +28,10 @@ Frequently changing visibility and render properties use compact records instead
 ### Physics position pull
 
 Physics-driven positions are read back in one batch and converted to SPX coordinates at the engine boundary.
+
+Readback precedes condition sampling at frame start. Explicit, unsubmitted Go
+position writes are preserved per axis; visibility changes do not reserve a
+coordinate. See [frame phases](scheduling.md#frame-phases).
 
 ### Input snapshot
 
@@ -51,6 +61,13 @@ Do not put irregular strings, long-lived object references, rare control operati
 The current implementation maintains reusable transfer storage and compact record layouts. Capacity growth, record count, and validity must be checked on both sides. Never retain a pointer/view beyond the documented synchronization window because a later batch may reuse or grow the buffer.
 
 Transform, deletion, and visual batches use a legacy format that stores sprite IDs as numeric `float32` values. Their serializers require non-negative IDs that round-trip exactly; an invalid ID causes a panic containing the original ID before the packet is submitted. The engine callback panic handler reports the failure and requests runtime exit or reset. This guard preserves the existing wire format; physics batches already encode IDs losslessly in two bit lanes.
+
+Query and batch transform submissions share a finite-value check after conversion
+to `float32`, including overflow from finite Go values. A failure identifies the
+sprite ID, field, and value, and does not acknowledge pending writes. Public heading
+setters ignore NaN and infinity, preserving the last valid heading; the submission
+check remains a guard against invalid internal state. Godot rejects an entire
+invalid batch, so checking before submission prevents false acknowledgments.
 
 ## Priorities
 

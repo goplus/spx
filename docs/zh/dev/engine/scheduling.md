@@ -105,14 +105,32 @@ Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，�
 一次 engine update 推进一次帧时钟，其中可以包含多轮脚本执行。
 开始下一轮不会推进帧号或计时器。
 
-1. 缓存引擎输入，为普通输入、录制或回放冻结同一种帧输入批次。
-   启动脚本到达首次让出或结束后，使用本帧输入在帧时钟推进前采样条件事件。
-   输入准备和条件匹配共用一次 `RunBetweenScripts` 采样阶段。
-2. 推进时钟并处理截图快捷键请求；冻结此阶段已到期的 Timer，登记已匹配的条件
-   处理函数，再路由本帧输入和 Timer。整批登记完成后，派发启动事件。
-3. 处理可运行的协程，以及满足条件的后续循环轮次。
-4. 同步截图所需的视觉状态，派发截图队列，再完成输入 session 的帧收尾。
-   Web host 等待渲染屏障后读取画布。
+1. 缓存引擎已经交付的输入和碰撞事件。在同一次 `RunBetweenScripts` 阶段，
+   从 Godot 回读物理精灵位置，为普通输入、录制或回放冻结帧输入批次，
+   并在帧时钟推进前采样条件事件。条件采样在启动脚本首次让出或结束后启用。
+2. 推进时钟，再通过受管理的派发协程推进 runtime 延时计时和 tween 状态。
+   精灵 `OnUpdate`、到期延时和已完成 tween 的回调按登记顺序组成一个独立任务批次。
+   某个回调等待时，后续任务仍可执行，不会挂起帧推进。
+   回调新建的 timer 和 tween 从下一帧开始推进。
+3. 准备游戏更新并处理截图快捷键请求；冻结已到期的脚本 Timer，登记已匹配的
+   条件处理函数，路由输入和 Timer，再登记缓存的碰撞处理函数，最后派发启动事件。
+   登记顺序不保证不同批次处理函数的执行顺序。
+4. 仅调用一次 `gco.Update`，处理可运行的协程和满足条件的后续循环轮次，
+   包括已登记的碰撞处理函数。让出执行权后，后续工作可以留到未来帧；
+   帧收尾不要求每个协程都退出。
+5. 与脚本执行互斥，将待提交的 Go 精灵变化、气泡和画笔命令写入 Godot。
+   随后派发截图队列，完成输入 session 的帧收尾。Web host 等待渲染屏障后读取画布。
+
+当前 Godot fork 在进入 SPX 更新回调前，已执行零到多次固定物理更新、场景处理和
+本轮渲染提交。`OnEngineRender` 是 Go 状态提交阶段，不会再调用一次 Godot 绘制；
+提交的变化参与后续物理和渲染。提交也不会立即重新计算碰撞，只有帧边界前已经交付的
+碰撞事件进入本帧事件批次。
+
+物理位置回读会按轴保留尚未提交的显式 Go 坐标修改。仅修改可见性不占用坐标，
+因此不会用旧 Go 坐标覆盖刚回读的物理位置。底层 proxy 单轴移动只确认对应轴的写入，
+完整 `SetPosition` 才覆盖双轴。需要最新几何状态的查询仍可在脚本执行期间
+同步精灵，帧末批量提交并不是唯一可能的 Go→Godot 调用。提交后不会额外运行一次
+调度器来强行推进等待未来帧的碰撞处理函数。
 
 ### 输入与 Timer 的帧归属
 
@@ -186,6 +204,8 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 等待任务处理与调度统计 | `internal/coroutine/update.go`、`stats.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
+| 引擎层更新回调与 runtime 延时、tween | `internal/gdengine/callbacks.go`、`internal/engine/runtime_bridge.go` |
+| 物理位置回读与帧末精灵提交 | `runtime_sync.go`、`component_transform.go`、`shape_manager.go` |
 | 帧输入采样、统一输入与 Timer 派发 | `runtime_input.go`、`runtime_replay_input.go` |
 | 条件注册、状态采样与已匹配事件派发 | `runtime_conditions.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
@@ -195,8 +215,9 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 
 帧边界回调与脚本执行互斥，同时处理已排队的引擎主线程调用，
 避免正在等待引擎调用的脚本阻塞条件采样。该阶段不推进循环或帧等待任务。
-帧边界回调仍在调用线程执行；外部原生事件派发则使用受管理协程，等待期间只处理引擎主线程任务，
-因此同步派发不能等待未来帧。
+帧边界回调仍在调用线程执行；runtime 状态推进和外部原生事件派发使用受管理的派发协程，
+等待期间只处理引擎主线程任务。同步派发过程登记异步任务，不能等待未来帧。
+runtime 用户回调由独立任务执行，可以直接等待未来帧，也可以等待含跨帧操作的事件处理函数。
 
 ## 截图与输入回放
 
@@ -233,6 +254,9 @@ host 接入方式见[《Web 端截图接入说明》](web_capture.md)。
 - 预算耗尽后脚本可在后续帧继续执行，并保留取消能力。
 - 条件与处理函数分别观察时钟推进前、后的状态；慢帧不破坏阶段顺序。
 - 普通输入、录制和回放共享帧批次；整批路由与登记在脚本调度前完成，Timer 使用推进后的时钟。
+- 条件采样前回读物理位置，纯视觉修改保留物理位移，碰撞处理函数的修改进入帧末提交；
+  显式等待未来帧的后续代码仍在后续帧恢复。
+- runtime 更新回调能在最终提交前登记脚本和调用引擎，不进入独占采样回调。
 - 条件事件维持上升沿、防重入和拥有者隔离语义。
 - 采样阶段不会因待处理的主线程调用发生死锁。
 - 同步引擎调用保持脚本片段连续；取消不会让正在执行的调用越过重置屏障。
@@ -252,6 +276,8 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 核心回归位于 `runtime_scratch_scheduler_test.go`、`runtime_events_test.go`、
 `runtime_events_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
 `runtime_event_dispatch_native_test.go`、
+`runtime_sync_test.go`、`runtime_native_test.go`、`internal/engine/runtime_delta_test.go`、
+`internal/engine/execute_native_test.go`、
 `sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
 `internal/coroutine/order_test.go`。
 取消与重启覆盖位于 `internal/coroutine/thread_test.go`、

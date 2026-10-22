@@ -348,3 +348,19 @@ func TestRuntimeBridgeLifecycleOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestBaseSpritePreservesEmbeddedIdentity(t *testing.T) {
+	type base struct{ Sprite }
+	type derived struct{ base }
+	sprite := &derived{}
+	want := &sprite.Sprite
+	for _, view := range []interface{ BaseSprite() *Sprite }{want, &sprite.base, sprite} {
+		if got := view.BaseSprite(); got != want {
+			t.Fatalf("%T.BaseSprite() = %p, want shared base %p", view, got, want)
+		}
+	}
+	other := &derived{}
+	if other.BaseSprite() == sprite.BaseSprite() {
+		t.Fatal("distinct sprites must not share base identity")
+	}
+}

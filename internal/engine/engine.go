@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -132,6 +133,24 @@ func Main(game IGame, owner any, initialize func()) error {
 	return nil
 }
 
+func (b *gameBinding) loadPhase() gamePhase {
+	return gamePhase(b.phase.Load())
+}
+
+func (b *gameBinding) storePhase(phase gamePhase) {
+	b.phase.Store(uint32(phase))
+}
+
+func (b *gameBinding) isCurrent(phase gamePhase) bool {
+	return activeGame.Load() == b && b.loadPhase() == phase
+}
+
+func (b *gameBinding) unlink() {
+	if b != nil && b.link != nil {
+		b.link.Unlink()
+	}
+}
+
 func onStart() {
 	defer CheckPanic()
 	binding := runningBinding()
@@ -161,6 +180,10 @@ func onUpdate(delta float64) {
 		return
 	}
 	itime.Update(delta, profiler.Calcfps())
+	Execute(nil, func(context.Context, any) { updateRuntime(delta) })
+	if !binding.isCurrent(gameRunning) {
+		return
+	}
 	profiler.MeasureFunctionTime("GameUpdate", func() {
 		binding.callbacks.OnEngineUpdate(delta)
 	})
@@ -255,18 +278,6 @@ func drainCoroutines(cleanup func()) {
 	gco.RunAfterStop(cleanup)
 }
 
-func (b *gameBinding) loadPhase() gamePhase {
-	return gamePhase(b.phase.Load())
-}
-
-func (b *gameBinding) storePhase(phase gamePhase) {
-	b.phase.Store(uint32(phase))
-}
-
-func (b *gameBinding) isCurrent(phase gamePhase) bool {
-	return activeGame.Load() == b && b.loadPhase() == phase
-}
-
 func runningBinding() *gameBinding {
 	binding := activeGame.Load()
 	if binding == nil || binding.callbacks == nil || binding.loadPhase() != gameRunning {
@@ -322,12 +333,6 @@ func finishDeferredReset(binding *gameBinding) {
 	releaseGameAfter(binding, binding.unlink)
 }
 
-func (b *gameBinding) unlink() {
-	if b != nil && b.link != nil {
-		b.link.Unlink()
-	}
-}
-
 func bindGameAtPhase(callbacks IGame, owner any, phase gamePhase) (*gameBinding, error) {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()
@@ -380,7 +385,6 @@ func releaseDestroyedGame(binding *gameBinding) bool {
 	return releaseGameAfter(binding, binding.unlink)
 }
 
-// releaseGameAfter clears the binding after teardown.
 func releaseGameAfter(binding *gameBinding, teardown func()) bool {
 	bindingMu.Lock()
 	defer bindingMu.Unlock()

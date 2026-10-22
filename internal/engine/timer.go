@@ -20,7 +20,7 @@ import gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
 
 type delaySpriteCallInfo struct {
 	timer    float64
-	objectID Object
+	sprite   gdx.ISpriter
 	callback func()
 }
 
@@ -29,36 +29,41 @@ var (
 	tempDelaySpriteCalls = make([]*delaySpriteCallInfo, 0)
 )
 
-func updateTimers(delta float64) {
-	tempDelaySpriteCalls = tempDelaySpriteCalls[:0]
-	count := len(delaySpriteCalls)
-	tempDelaySpriteCalls = append(tempDelaySpriteCalls, delaySpriteCalls...)
-	delaySpriteCalls = delaySpriteCalls[:0]
-	for i := range count {
-		tempDelaySpriteCalls[i].timer -= delta
-		if tempDelaySpriteCalls[i].timer > 0 {
-			delaySpriteCalls = append(delaySpriteCalls, tempDelaySpriteCalls[i])
+func updateTimers(delta float64, emit func(gdx.ISpriter, func())) {
+	delaySpriteCalls, tempDelaySpriteCalls = tempDelaySpriteCalls[:0], delaySpriteCalls
+	for _, info := range tempDelaySpriteCalls {
+		if info.sprite != nil && !runtimeSpriteAlive(info.sprite) {
+			continue
+		}
+		info.timer -= delta
+		if info.timer > 0 {
+			delaySpriteCalls = append(delaySpriteCalls, info)
 		}
 	}
-	for i := range count {
-		if tempDelaySpriteCalls[i].timer <= 0 {
-			id := tempDelaySpriteCalls[i].objectID
-			if id == 0 || IsNodeExist(id) {
-				tempDelaySpriteCalls[i].callback()
-			}
+	for _, info := range tempDelaySpriteCalls {
+		if info.timer <= 0 {
+			emit(info.sprite, info.callback)
 		}
 	}
+	clear(tempDelaySpriteCalls)
 	tempDelaySpriteCalls = tempDelaySpriteCalls[:0]
 }
 
 func delayCall(delay float64, callback func()) {
-	delaySpriteCalls = append(delaySpriteCalls, &delaySpriteCallInfo{timer: delay, callback: callback})
+	delaySpriteCall(delay, nil, callback)
 }
 
 func delaySpriteCall(delay float64, sprite gdx.ISpriter, callback func()) {
+	if sprite != nil {
+		sprite = resolveRuntimeSprite(sprite)
+		if sprite == nil {
+			return
+		}
+	}
+
 	delaySpriteCalls = append(delaySpriteCalls, &delaySpriteCallInfo{
 		timer:    delay,
-		objectID: sprite.GetId(),
+		sprite:   sprite,
 		callback: callback,
 	})
 }

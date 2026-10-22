@@ -51,6 +51,8 @@ type Monitor struct {
 	panel       monitorPanel
 	isDirty     bool
 	updateTimer float64
+	evaluating  bool
+	refresh     uint64
 }
 
 // monitorPanel separates widget lifecycle from the engine-backed view.
@@ -139,17 +141,48 @@ func (pself *Monitor) onUpdate(delta float64) {
 	if due {
 		pself.updateTimer = 0
 	}
+	pself.refresh++
+	refresh := pself.refresh
 
-	// A getter can change visibility; apply that change on the next refresh.
+	// Snapshot visibility so synchronous getter changes apply on the next refresh.
 	visible := pself.visible
+	hasValue := visible && !pself.evaluating
+	var value ui.MonitorValue
+	if hasValue {
+		value = pself.evaluate()
+	}
+	if refresh != pself.refresh {
+		// A later refresh already applied the UI state while the getter waited.
+		// Publish only its value, preserving visibility and pending layout edits.
+		if pself.visible {
+			pself.panel.Render(pself.style, value)
+		}
+		return
+	}
 	if visible {
-		value := pself.eval()
 		pself.panel.UpdateScale(pself.size)
 		pself.panel.UpdatePos(pself.pos)
-		pself.panel.Render(pself.style, value)
+		if hasValue {
+			pself.panel.Render(pself.style, value)
+		}
 	}
 	pself.panel.SetVisible(visible)
 	pself.isDirty = false
+}
+
+// Only evaluation is exclusive; waiting getters do not block lightweight UI.
+func (pself *Monitor) evaluate() ui.MonitorValue {
+	pself.evaluating = true
+	completed := false
+	defer func() {
+		pself.evaluating = false
+		if !completed {
+			pself.isDirty = true // Retry canceled getters even after a UI refresh.
+		}
+	}()
+	value := pself.eval()
+	completed = true
+	return value
 }
 
 // -----------------------------------------------------------------------------

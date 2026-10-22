@@ -80,7 +80,10 @@ func (p *Game) setupBackdrop() {
 		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
 	p.runtimeState.Scale = 1
-	p.baseObj.scheduleCostumeUpdate()
+	engine.WaitMainThread(func() {
+		p.applyLayerUpdate()
+		p.applyCostumeTexture()
+	})
 
 	if p.displayState.MapMode == coreproject.MapModeActualSize {
 		x, y := getCostumeRenderOffset(p.currentCostume(), p.currentCostume().pivot, layout.ScaleX, layout.ScaleY)
