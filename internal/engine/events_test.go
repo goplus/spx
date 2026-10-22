@@ -173,14 +173,14 @@ func TestMouseInputKeepsLiveAndFrameStatesSeparate(t *testing.T) {
 }
 
 func TestResetInputStateClearsMouseStateAndEvents(t *testing.T) {
-	ResetInputState()
-	t.Cleanup(ResetInputState)
+	resetInputState()
+	t.Cleanup(resetInputState)
 	onMousePressed(1)
 	cacheMouseEvents()
 	onMousePressed(2)
 	onMousePressed(3)
 
-	ResetInputState()
+	resetInputState()
 	if IsMouseButtonPressed(1) || IsMouseButtonPressed(2) || IsMouseButtonPressed(3) || AnyMouseButtonPressed() {
 		t.Fatal("reset left a mouse button held")
 	}
@@ -262,8 +262,8 @@ func TestInputCallbacksIgnoreLifecycleTransitions(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			isolateGameBinding(t)
-			ResetInputState()
-			t.Cleanup(ResetInputState)
+			resetInputState()
+			t.Cleanup(resetInputState)
 
 			binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), test.phase)
 			if err != nil {

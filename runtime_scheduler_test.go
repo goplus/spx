@@ -168,8 +168,7 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	resetInputSessionTest(t)
 	co, game := setupRuntimeEventGame(t)
 	itime.Start(nil)
-	engine.ResetCaptures()
-	t.Cleanup(engine.ResetCaptures)
+	setupCaptureTest(t)
 	setupImmediateEngineCalls(t)
 	originalInputMgr, originalExtMgr := pkgengine.InputMgr, pkgengine.ExtMgr
 	pkgengine.InputMgr = &gameTestInputMgr{}

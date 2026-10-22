@@ -24,11 +24,24 @@ import (
 	itime "github.com/goplus/spx/v3/internal/time"
 )
 
+func setupCaptureTest(t testing.TB) {
+	t.Helper()
+	clear := func() {
+		t.Helper()
+		engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
+		if err := engine.FlushCaptures(); err != nil {
+			t.Fatal(err)
+		}
+		engine.SetCaptureHandler(nil)
+	}
+	clear()
+	t.Cleanup(clear)
+}
+
 func TestSnapshotUsesConfiguredHandlerAfterBody(t *testing.T) {
 	var got []string
 	engine.SetGame(nil)
-	engine.ResetCaptures()
-	defer engine.ResetCaptures()
+	setupCaptureTest(t)
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, "capture:"+req.Name)
 		return nil
@@ -55,8 +68,7 @@ func TestSnapshotQueuesRequestForActiveGame(t *testing.T) {
 	var got []string
 	engine.SetGame(struct{}{})
 	defer engine.SetGame(nil)
-	engine.ResetCaptures()
-	defer engine.ResetCaptures()
+	setupCaptureTest(t)
 	engine.SetCaptureHandler(func(req engine.CaptureRequest) error {
 		got = append(got, req.Name)
 		return nil
@@ -84,8 +96,7 @@ func TestSnapshotBodyMayWaitForNextFrame(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			co, game := setupRuntimeEventGame(t)
-			engine.ResetCaptures()
-			t.Cleanup(engine.ResetCaptures)
+			setupCaptureTest(t)
 			base := itime.Frame()
 
 			bodyStarted, bodyCompleted := false, false

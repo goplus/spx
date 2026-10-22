@@ -286,13 +286,13 @@ func setupRuntimeCallbackTest(t *testing.T) *coroutine.Coroutines {
 	isolateGameBinding(t)
 	co := setupExecuteTest(t)
 	isolateCaptureState(t)
-	ResetInputState()
+	resetInputState()
 	resetTriggerEvents()
 	resetRuntimeDeltaTestState()
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 		resetRuntimeDeltaTestState()
-		ResetInputState()
+		resetInputState()
 		resetTriggerEvents()
 	})
 	game := &frameRecordingGame{step: func(string) {}}

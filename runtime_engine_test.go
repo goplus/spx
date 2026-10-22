@@ -227,8 +227,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 
 	engine.SetGame(&game)
 	defer engine.SetGame(nil)
-	engine.ResetCaptures()
-	defer engine.ResetCaptures()
+	setupCaptureTest(t)
 	engine.SetCaptureHandler(func(engine.CaptureRequest) error { return nil })
 	defer engine.SetCaptureHandler(nil)
 

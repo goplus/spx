@@ -26,8 +26,7 @@ import (
 
 func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {
 	engine.SetGame(nil)
-	engine.ResetCaptures()
-	defer engine.ResetCaptures()
+	setupCaptureTest(t)
 
 	engine.SetCaptureHandler(ignoreCaptureRequest)
 

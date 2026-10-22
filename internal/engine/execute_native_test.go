@@ -57,13 +57,13 @@ func TestFrameRuntimeCallbacksCanRegisterScriptsAndCallEngine(t *testing.T) {
 	co := setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
 	gdx.PlatformMgr = platform
-	ResetInputState()
+	resetInputState()
 	resetTriggerEvents()
 	resetRuntimeDeltaTestState()
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 		resetRuntimeDeltaTestState()
-		ResetInputState()
+		resetInputState()
 		resetTriggerEvents()
 	})
 	isolateCaptureState(t)
@@ -308,7 +308,7 @@ func TestLinkedGameResetReleasesBackendForNextGame(t *testing.T) {
 		// Preparing another real link would panic if the previous reset only
 		// cleared the game binding without releasing its backend session.
 		binding.link = gde.PrepareLink(gdx.CoreCallbackInfo{})
-		t.Cleanup(binding.unlink)
+		t.Cleanup(binding.link.Unlink)
 		onReset()
 		if game.reset.Load() != 1 || activeGame.Load() != nil {
 			t.Fatalf("reset callbacks=%d active binding=%p", game.reset.Load(), activeGame.Load())
