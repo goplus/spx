@@ -588,37 +588,50 @@ func TestMainRejectsSecondGameBeforeInitialize(t *testing.T) {
 	}
 }
 
-func TestResetDuringStartPreventsActivationAndDefersRelease(t *testing.T) {
+func TestMainStartsAndReleasesBinding(t *testing.T) {
 	isolateGameBinding(t)
-	binding, err := bindGameAtPhase(new(bindingTestGame), new(struct{}), gameStarting)
-	if err != nil {
+	owner := new(struct{})
+	game := new(bindingTestGame)
+	if err := Main(game, owner, nil); err != nil {
 		t.Fatal(err)
 	}
-	finishStart := sync.OnceFunc(func() { close(binding.startDone) })
-	t.Cleanup(finishStart)
-
-	resetBinding, started := beginDeferredReset()
-	if !started || resetBinding != binding {
-		t.Fatalf("deferred reset = (%p, %v), want (%p, true)", resetBinding, started, binding)
+	binding := activeGame.Load()
+	if binding == nil || binding.callbacks != game || binding.loadPhase() != gameRunning || binding.link == nil {
+		t.Fatalf("main binding = %+v, want running binding with a link", binding)
 	}
+	if got := GetGame(); got != owner {
+		t.Fatalf("active owner = %p, want %p", got, owner)
+	}
+	if !releaseGame(binding) {
+		t.Fatal("main binding was not released")
+	}
+}
+
+func TestResetDuringStartPreventsActivationAndDefersRelease(t *testing.T) {
+	isolateGameBinding(t)
+	var binding *gameBinding
 	released := make(chan struct{})
-	go func() {
-		finishWebReset(nil, resetBinding, 0)
-		close(released)
-	}()
-	select {
-	case <-released:
-		t.Fatal("reset released the binding before startup finished")
-	case <-time.After(25 * time.Millisecond):
-	}
-
-	if activateGame(binding, gdx.CoreCallbackInfo{}) {
-		t.Fatal("a closing startup was activated")
+	if err := Main(new(bindingTestGame), new(struct{}), func() {
+		binding = activeGame.Load()
+		resetBinding, started := beginDeferredReset()
+		if !started || resetBinding != binding {
+			t.Fatalf("deferred reset = (%p, %v), want (%p, true)", resetBinding, started, binding)
+		}
+		go func() {
+			finishWebReset(nil, resetBinding, 0)
+			close(released)
+		}()
+		select {
+		case <-released:
+			t.Fatal("reset released the binding before startup finished")
+		case <-time.After(25 * time.Millisecond):
+		}
+	}); err != nil {
+		t.Fatal(err)
 	}
 	if binding.link != nil {
 		t.Fatal("a closing startup prepared the engine link")
 	}
-	finishStart()
 	waitForEngineSignal(t, released, time.Second, "reset did not release the binding after startup finished")
 	if got := GetGame(); got != nil {
 		t.Fatalf("active owner after canceled startup = %v, want nil", got)
