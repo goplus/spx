@@ -125,8 +125,7 @@ func (p *Game) pullPhysicsPositions() {
 	}
 	pull.ids = pull.ids[:0]
 	defer func() {
-		clear(pull.sprites)
-		pull.sprites = pull.sprites[:0]
+		pull.sprites = sliceutil.Reset(pull.sprites, 0)
 		if reuse {
 			pull.busy.Store(false)
 		}
@@ -168,8 +167,7 @@ func (p *Game) dispatchPhysicsTriggers() {
 		}
 		src.fireTouchStart(dst)
 	}
-	clear(p.triggerEvents)
-	p.triggerEvents = p.triggerEvents[:0]
+	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
 }
 
 // -----------------------------------------------------------------------------

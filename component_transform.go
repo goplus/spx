@@ -145,18 +145,16 @@ func (t *transformComponent) stepToPos(x, y, speed float64, animation SpriteAnim
 		animation = t.sprite.animation().getStateAnimName(StateStep)
 	}
 
-	from := mathf.NewVec2(t.x, t.y)
-	to := mathf.NewVec2(x, y)
-	distance := from.DistanceTo(to)
-
 	ani, ok := t.sprite.animation().getAnimation(animation)
 	if !ok {
 		t.setPosition(x, y)
 		return
 	}
 
+	from := mathf.NewVec2(t.x, t.y)
+	to := mathf.NewVec2(x, y)
 	speed = math.Max(speed, minSpeed)
-	duration := math.Abs(distance) * ani.StepDuration / speed
+	duration := from.DistanceTo(to) * ani.StepDuration / speed
 	t.sprite.animation().doTween(animation, ani, tweenParams{
 		aniType:  coreproject.AniTypeMove,
 		duration: duration,

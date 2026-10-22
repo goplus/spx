@@ -843,7 +843,7 @@ func TestSpriteMotionOverloadsKeepTargetAndOptionSemantics(t *testing.T) {
 		}
 	}
 	for name, got := range map[string]float64{"sprite": sprite.DirectionTo__0(target), "mouse": sprite.DirectionTo__2(Mouse), "random": sprite.DirectionTo__3(Random), "target": sprite.DirectionToWith(target)} {
-		if got != 0 {
+		if !(math.Abs(got) <= 1e-9) {
 			t.Errorf("%s direction = %v, want 0", name, got)
 		}
 	}

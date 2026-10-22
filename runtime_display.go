@@ -104,9 +104,7 @@ func (p *Game) getWindowSize() mathf.Vec2 {
 }
 
 func (p *Game) windowSize() (int, int) {
-	if p.displayState.WindowWidth == 0 {
-		p.doWindowSize()
-	}
+	p.doWindowSize()
 	return p.displayState.WindowWidth, p.displayState.WindowHeight
 }
 
@@ -118,9 +116,7 @@ func (p *Game) doWindowSize() {
 }
 
 func (p *Game) worldSize() (int, int) {
-	if p.displayState.WorldWidth == 0 {
-		p.doWorldSize()
-	}
+	p.doWorldSize()
 	return p.displayState.WorldWidth, p.displayState.WorldHeight
 }
 

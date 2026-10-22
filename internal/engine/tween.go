@@ -111,7 +111,7 @@ func startPositionTween(sprite gdx.ISpriter, callback func(), segments ...posTwe
 		callback: callback,
 		infos:    segments,
 	}
-	if !info.isDone() && runtimeSpriteAlive(sprite) {
+	if runtimeSpriteAlive(sprite) {
 		info.startValue = sprite.GetPosition()
 	}
 	for i := 1; i < len(info.infos); i++ {

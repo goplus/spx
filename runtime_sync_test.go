@@ -1050,42 +1050,6 @@ func TestProxyCollectionIncludesCallbackWrites(t *testing.T) {
 	}
 }
 
-func TestInvalidTransformPreservesOtherSpritesPositionIntent(t *testing.T) {
-	sprite, mgr := setupPositionSyncSprite(t)
-	sprite.SetXpos(42)
-	game := sprite.g
-	invalid := &newCloneAwakeOrderSprite(game, "invalid").SpriteImpl
-	invalid.runtimeState.IsCostumeDirty = false
-	invalid.runtimeState.SyncSprite = &engine.Sprite{Target: invalid, MirrorPosition: invalid.mirrorPosition}
-	invalid.runtimeState.SyncSprite.Id = 2
-	// A finite Go coordinate can still overflow the float32 batch protocol.
-	invalid.SetXpos(math.MaxFloat64)
-	game.shapeMgr.add(invalid)
-	requireSyncPanic(t, func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }, "sprite 2 transform x=", "finite after float32 conversion")
-	if mgr.submissions != 0 {
-		t.Fatal("invalid batch reached the engine")
-	}
-	for _, pending := range []*SpriteImpl{sprite, invalid} {
-		if pending.spriteState.ProxySyncVersion == pending.spriteState.DirtyVersion {
-			t.Fatalf("rejected batch acknowledged sprite %q", pending.name)
-		}
-	}
-	sprite.mergeEnginePosition(100, 200)
-	requirePosition(t, sprite, 42, 200)
-	invalid.SetXpos(80)
-	game.flushSpriteProxyChanges(game.shapeMgr.items)
-	if mgr.submissions != 1 || mgr.position != mathf.NewVec2(42, 200) {
-		t.Fatalf("retried batch submitted %d times with position %v", mgr.submissions, mgr.position)
-	}
-	for _, synced := range []*SpriteImpl{sprite, invalid} {
-		if synced.spriteState.ProxySyncVersion != synced.spriteState.DirtyVersion {
-			t.Fatalf("successful retry did not acknowledge sprite %q", synced.name)
-		}
-	}
-	sprite.mergeEnginePosition(300, 400)
-	requirePosition(t, sprite, 300, 400)
-}
-
 func batchDeleteIDs(batch []float32) []float32 {
 	return batch[2+int(batch[0])*engine.SyncFieldsPerSprite:]
 }
@@ -1102,6 +1066,7 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			invalid.runtimeState.SyncSprite = &engine.Sprite{Target: invalid, MirrorPosition: invalid.mirrorPosition}
 			invalid.runtimeState.SyncSprite.Id = 2
 			if failure == "serialization" {
+				// A finite Go coordinate can overflow the float32 batch protocol.
 				invalid.SetXpos(math.MaxFloat64)
 			} else {
 				invalid.SetXpos(80)
@@ -1114,24 +1079,40 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			game.shapeMgr.add(destroyed)
 			game.shapeMgr.removeShape(destroyed)
 			game.shapeMgr.removeShape(destroyed)
-			wantPanic := "position sync failed"
+			wantPanic := []string{"position sync failed"}
 			if failure == "serialization" {
-				wantPanic = "sprite 2 transform x="
+				wantPanic = []string{"sprite 2 transform x=", "finite after float32 conversion"}
 			}
-			requireSyncPanic(t, func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }, wantPanic)
+			requireSyncPanic(t, func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }, wantPanic...)
+			if mgr.submissions != 0 {
+				t.Fatal("failed batch committed positions to the engine")
+			}
 			if len(mgr.batches) != 0 || destroyed.runtimeState.SyncSprite != proxy || len(game.shapeMgr.destroyItems) != 1 {
 				t.Fatal("failed batch consumed a native proxy or its pending deletion")
+			}
+			for _, pending := range []*SpriteImpl{sprite, invalid} {
+				if pending.spriteState.ProxySyncVersion == pending.spriteState.DirtyVersion {
+					t.Fatalf("rejected batch acknowledged sprite %q", pending.name)
+				}
 			}
 			sprite.mergeEnginePosition(100, 200)
 			requirePosition(t, sprite, 42, 200)
 			invalid.SetXpos(80)
 			mgr.fail = false
 			game.flushSpriteProxyChanges(game.shapeMgr.items)
+			if mgr.submissions != 1 || mgr.position != mathf.NewVec2(42, 200) {
+				t.Fatalf("retried batch submitted %d times with position %v", mgr.submissions, mgr.position)
+			}
 			if len(mgr.batches) != 1 || !slices.Equal(batchDeleteIDs(mgr.batches[0]), []float32{3}) {
 				t.Fatalf("retry did not submit exactly one deletion: %v", mgr.batches)
 			}
 			if destroyed.runtimeState.SyncSprite != nil || len(game.shapeMgr.destroyItems) != 0 {
 				t.Fatal("successful retry retained the deleted proxy or request")
+			}
+			for _, synced := range []*SpriteImpl{sprite, invalid} {
+				if synced.spriteState.ProxySyncVersion != synced.spriteState.DirtyVersion {
+					t.Fatalf("successful retry did not acknowledge sprite %q", synced.name)
+				}
 			}
 			sprite.mergeEnginePosition(300, 400)
 			requirePosition(t, sprite, 300, 400)

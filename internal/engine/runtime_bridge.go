@@ -39,9 +39,7 @@ func init() {
 
 func (runtimeBridge) InternalUpdateEngine(delta float64) {
 	callbacks := runtimeCallbacks{binding: activeGame.Load()}
-	updateTimers(delta, callbacks.emit)
-	updateTweens(delta, callbacks.emit)
-	callbacks.start()
+	callbacks.update(delta)
 }
 
 // A nil sprite identifies a global callback; object callbacks recheck lifetime
@@ -149,7 +147,9 @@ func (p *runtimeCallbacks) emit(sprite gdx.ISpriter, call func()) {
 	})
 }
 
-func (p *runtimeCallbacks) start() {
+func (p *runtimeCallbacks) update(delta float64) {
+	updateTimers(delta, p.emit)
+	updateTweens(delta, p.emit)
 	if len(p.tasks) != 0 && isRuntimeWorkCurrent(p.binding) {
 		gco.StartBatch(p.tasks, coroutine.BatchAsync)
 	}
@@ -167,7 +167,5 @@ func updateRuntime(delta float64) {
 		// Object deletion cancels every outstanding invocation.
 		callbacks.emit(sprite, func() { sprite.OnUpdate(delta) })
 	}
-	updateTimers(delta, callbacks.emit)
-	updateTweens(delta, callbacks.emit)
-	callbacks.start()
+	callbacks.update(delta)
 }

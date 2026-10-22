@@ -358,25 +358,33 @@ func TestRuntimeCallbackDeletionCancelsSuspendedWork(t *testing.T) {
 }
 
 func TestRuntimeCallbackProxyUsesLogicalOwner(t *testing.T) {
-	for _, deletion := range []string{"logical owner", "raw deletion"} {
+	for _, deletion := range []string{"logical owner", "raw deletion", "embedded proxy"} {
 		t.Run(deletion, func(t *testing.T) {
 			co := setupRuntimeCallbackTest(t)
 			owner := new(int)
 			proxy := &Sprite{Sprite: gdx.Sprite{Id: 1}, Target: owner}
 			state.sprites[1] = proxy
-			var completed atomic.Bool
-			delaySpriteCall(0, proxy, func() {
+			var handle gdx.ISpriter = proxy
+			if deletion == "embedded proxy" {
+				handle = &proxy.Sprite
+			}
+			var started, completed atomic.Bool
+			gdx.DelaySpriteCall(0, handle, func() {
 				if currentThread().Owner != owner {
 					t.Error("callback did not retain the logical sprite owner")
 				}
+				started.Store(true)
 				WaitNextFrame()
 				completed.Store(true)
 			})
 			runRuntimeCallbackFrame(t, co)
-			if deletion == "raw deletion" {
-				runtimeBridge{}.DeleteSprite(proxy.Id)
-			} else {
+			if !started.Load() || completed.Load() {
+				t.Fatal("proxy callback did not suspend in its first frame")
+			}
+			if deletion == "logical owner" {
 				co.StopIf(func(thread coroutine.Thread) bool { return thread.Owner == owner })
+			} else {
+				runtimeBridge{}.DeleteSprite(proxy.Id)
 			}
 			runRuntimeCallbackFrame(t, co)
 			if completed.Load() {
@@ -605,31 +613,6 @@ func TestResolveRuntimeSpriteRequiresSharedBase(t *testing.T) {
 				t.Fatalf("resolved=%v, want %v", got, want)
 			}
 		})
-	}
-}
-
-func TestRuntimeCallbackEmbeddedProxyRetainsLogicalOwner(t *testing.T) {
-	co := setupRuntimeCallbackTest(t)
-	owner := new(int)
-	proxy := &Sprite{Sprite: gdx.Sprite{Id: 1}, Target: owner}
-	state.sprites[1] = proxy
-	var started, completed atomic.Bool
-	gdx.DelaySpriteCall(0, &proxy.Sprite, func() {
-		if currentThread().Owner != owner {
-			t.Error("embedded proxy callback lost its logical sprite owner")
-		}
-		started.Store(true)
-		WaitNextFrame()
-		completed.Store(true)
-	})
-	runRuntimeCallbackFrame(t, co)
-	if !started.Load() {
-		t.Fatal("embedded proxy callback did not start")
-	}
-	runtimeBridge{}.DeleteSprite(proxy.Id)
-	runRuntimeCallbackFrame(t, co)
-	if completed.Load() {
-		t.Fatal("embedded proxy callback resumed after deletion")
 	}
 }
 

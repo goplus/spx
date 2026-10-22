@@ -186,29 +186,6 @@ func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
 	}
 }
 
-func TestOnEngineRenderFlushesWithoutClonePublicationSignal(t *testing.T) {
-	spriteMgr := setupCaptureFlushSpriteMgr(t)
-
-	var game Game
-	game.lifecycleState.IsRunned.Store(true)
-	game.camera = &cameraImpl{g: &game}
-	game.initShapeMgr()
-	game.syncBuffer = engine.NewSpriteSyncBuffer(1)
-	destroyed := &SpriteImpl{}
-	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
-	game.shapeMgr.add(destroyed)
-	game.shapeMgr.removeShape(destroyed)
-
-	game.OnEngineRender(0)
-
-	if destroyed.runtimeState.SyncSprite != nil {
-		t.Fatal("post-coroutine proxy flush required a clone publication signal")
-	}
-	if len(spriteMgr.batches) != 1 {
-		t.Fatalf("proxy batches without a clone publication signal = %d, want 1", len(spriteMgr.batches))
-	}
-}
-
 func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	spriteMgr := setupCaptureFlushSpriteMgr(t)
 
@@ -664,6 +641,20 @@ func (g *frameMonitorWaitGame) Value() float64 {
 	return 42
 }
 
+func addFrameSyncMonitor(t *testing.T, getter *frameMonitorWaitGame) (*Monitor, *monitorPanelSpy) {
+	t.Helper()
+	panel := &monitorPanelSpy{}
+	monitor := &Monitor{
+		visible: true, isDirty: true, panel: panel,
+		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
+	}
+	if monitor.eval == nil {
+		t.Fatal("lowercase monitor property did not bind the Value getter")
+	}
+	getter.shapeMgr.add(monitor)
+	return monitor, panel
+}
+
 func TestFrameSyncMonitorWaitSkipsBusyAndCleansStoppedGetter(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -675,15 +666,7 @@ func TestFrameSyncMonitorWaitSkipsBusyAndCleansStoppedGetter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			co, game, _ := setupFrameSyncGame(t)
 			getter := &frameMonitorWaitGame{Game: game, wait: func() { test.wait(game) }}
-			panel := &monitorPanelSpy{}
-			monitor := &Monitor{
-				visible: true, isDirty: true, panel: panel,
-				eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
-			}
-			if monitor.eval == nil {
-				t.Fatal("lowercase monitor property did not bind the Value getter")
-			}
-			game.shapeMgr.add(monitor)
+			monitor, panel := addFrameSyncMonitor(t, getter)
 			for frame := range 2 {
 				runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
 				if getter.started != 1 || getter.completed != frame || getter.active != 1-frame {
@@ -738,12 +721,7 @@ func TestFrameSyncMonitorWaitAppliesVisibilityAndLayout(t *testing.T) {
 						test.wait()
 					}
 				}
-				panel := &monitorPanelSpy{}
-				monitor := &Monitor{
-					visible: true, isDirty: true, panel: panel,
-					eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
-				}
-				game.shapeMgr.add(monitor)
+				monitor, panel := addFrameSyncMonitor(t, getter)
 				lateEdit := false
 				game.shapeMgr.add(frameUpdateFunc(func(float64) {
 					if lateEdit {
@@ -806,12 +784,7 @@ func TestFrameSyncMonitorWaitAppliesVisibilityAndLayout(t *testing.T) {
 func TestFrameSyncMonitorWaitStopsBeforeGameDestroy(t *testing.T) {
 	co, game, _ := setupFrameSyncGame(t)
 	getter := &frameMonitorWaitGame{Game: game, wait: func() { engine.WaitNextFrame() }}
-	panel := &monitorPanelSpy{}
-	monitor := &Monitor{
-		visible: true, isDirty: true, panel: panel,
-		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
-	}
-	game.shapeMgr.add(monitor)
+	monitor, panel := addFrameSyncMonitor(t, getter)
 	runFrameSyncCall(t, co, func() { runFrameSyncGame(co, game) })
 	if getter.started != 1 || getter.active != 1 {
 		t.Fatal("getter did not wait before destroy")

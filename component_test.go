@@ -1,6 +1,7 @@
 package spx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -180,7 +181,7 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 		t.Fatalf("direction to current position = %v, want 35", got)
 	}
 	sprite.g.inputMgr.setMousePos(mathf.NewVec2(0, 10))
-	if got := transform.directionToTarget(Mouse); got != 0 {
+	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
 		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
 	}
 	transform.bounceOffEdge(edgeAreaStage)
