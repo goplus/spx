@@ -75,6 +75,11 @@ GdBool SpxSprite::is_dynamic_frame_offset_enabled() const {
 void SpxSprite::_commit_visual(const PreparedVisual &p_visual) {
 	visual_source = p_visual.source;
 	source_sprite_frames = p_visual.shared_frames;
+
+	const bool is_svg = p_visual.source.is_svg() ||
+			p_visual.source.is_single_image_svg();
+
+	anim2d->set_texture_filter(is_svg ? CanvasItem::TEXTURE_FILTER_LINEAR : CanvasItem::TEXTURE_FILTER_NEAREST);
 	anim2d->set_sprite_frames(p_visual.frames);
 	anim2d->set_animation(p_visual.animation);
 	_update_frame_transform();
