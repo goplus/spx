@@ -124,8 +124,11 @@ type runtimeBridgeTestAccess struct {
 	boundType string
 }
 
-func (b *runtimeBridgeTestAccess) InternalUpdateEngine(delta float64) {
+func (b *runtimeBridgeTestAccess) InternalUpdateFrame(delta float64, update func(float64)) {
 	b.updates = append(b.updates, delta)
+	if update != nil {
+		update(delta)
+	}
 }
 func (b *runtimeBridgeTestAccess) ClearAllSprites()              { clear(b.sprites) }
 func (b *runtimeBridgeTestAccess) GetSprite(id Object) ISpriter  { return b.sprites[id] }
@@ -166,10 +169,14 @@ func TestRuntimeBridgeAccessorsPreserveRuntimeState(t *testing.T) {
 	if len(sprites) != 0 || len(nodes) != 1 {
 		t.Fatal("clearing sprites did not preserve the UI registry")
 	}
-	InternalUpdateEngine(0.125)
-	InternalUpdateEngine(0.25)
+	InternalUpdateFrame(0.125, nil)
+	var callbackDelta float64
+	InternalUpdateFrame(0.25, func(delta float64) { callbackDelta = delta })
 	if !reflect.DeepEqual(bridge.updates, []float64{0.125, 0.25}) {
 		t.Errorf("engine deltas = %v", bridge.updates)
+	}
+	if callbackDelta != 0.25 {
+		t.Errorf("frame callback delta = %v, want 0.25", callbackDelta)
 	}
 	if got := AdvanceTimeSinceGameStart(0.75); got != 13.25 || TimeSinceGameStarted() != got {
 		t.Errorf("game clock = %v, want 13.25", got)
@@ -248,7 +255,7 @@ func TestRuntimeBridgeSchedulingPreservesArgumentsAndCallbacks(t *testing.T) {
 func TestRuntimeBridgeMissingPanicsClearly(t *testing.T) {
 	runtimeBridgeTestInstall(t, nil)
 	for name, call := range map[string]func(){
-		"update":       func() { InternalUpdateEngine(0.1) },
+		"update":       func() { InternalUpdateFrame(0.1, nil) },
 		"construction": func() { CreateSprite[runtimeBridgeTestObject](mathf.Vec2{}) },
 		"timer":        func() { DelayCall(1, nil) },
 		"tween":        func() { TweenPos(nil, mathf.Vec2{}, 1, nil) },

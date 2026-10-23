@@ -43,10 +43,10 @@ func resetRuntimeDeltaTestState() {
 func advanceRuntimeDeltaFrame(realDelta float64) {
 	logicalDelta := itime.EffectiveLogicalDeltaTime(realDelta)
 	itime.Update(logicalDelta, 60)
-	runtimeBridge{}.InternalUpdateEngine(logicalDelta)
+	runtimeBridge{}.InternalUpdateFrame(logicalDelta, nil)
 }
 
-func TestInternalUpdateEngineUsesScriptDeltaForDelayCall(t *testing.T) {
+func TestInternalUpdateFrameUsesScriptDeltaForDelayCall(t *testing.T) {
 	resetRuntimeDeltaTestState()
 	t.Cleanup(resetRuntimeDeltaTestState)
 
@@ -68,7 +68,7 @@ func TestInternalUpdateEngineUsesScriptDeltaForDelayCall(t *testing.T) {
 	}
 }
 
-func TestInternalUpdateEngineUsesScriptDeltaForTweens(t *testing.T) {
+func TestInternalUpdateFrameUsesScriptDeltaForTweens(t *testing.T) {
 	resetRuntimeDeltaTestState()
 	t.Cleanup(resetRuntimeDeltaTestState)
 
@@ -86,7 +86,7 @@ func TestInternalUpdateEngineUsesScriptDeltaForTweens(t *testing.T) {
 	}
 }
 
-func TestInternalUpdateEngineKeepsRealDeltaWithoutFixedTimestep(t *testing.T) {
+func TestInternalUpdateFrameKeepsRealDeltaWithoutFixedTimestep(t *testing.T) {
 	resetRuntimeDeltaTestState()
 	t.Cleanup(resetRuntimeDeltaTestState)
 
@@ -118,12 +118,12 @@ func TestRuntimeBridgeTimersRespectObjectLifetime(t *testing.T) {
 	bridge.DelaySpriteCall(.25, removed, func() { calls = append(calls, "removed") })
 	bridge.DeleteSprite(2)
 	bridge.DeleteUINode(3)
-	bridge.InternalUpdateEngine(.125)
+	bridge.InternalUpdateFrame(.125, nil)
 	if len(calls) != 0 {
 		t.Fatal("timers fired before their deadline")
 	}
-	bridge.InternalUpdateEngine(.125)
-	bridge.InternalUpdateEngine(1)
+	bridge.InternalUpdateFrame(.125, nil)
+	bridge.InternalUpdateFrame(1, nil)
 	if !slices.Equal(calls, []string{"global", "alive"}) || bridge.GetUINode(3) != nil {
 		t.Fatalf("timer calls=%v, deleted node=%v", calls, bridge.GetUINode(3))
 	}
@@ -145,11 +145,11 @@ func TestRuntimeBridgeTimersDeferCallbacksAddedDuringUpdate(t *testing.T) {
 	bridge.DelayCall(.2, func() { calls = append(calls, 3) })
 	bridge.DelayCall(.1, func() { calls = append(calls, 2) })
 
-	bridge.InternalUpdateEngine(.1)
+	bridge.InternalUpdateFrame(.1, nil)
 	if !slices.Equal(calls, []int{1, 2}) {
 		t.Fatalf("first frame callbacks = %v, want [1 2]", calls)
 	}
-	bridge.InternalUpdateEngine(.1)
+	bridge.InternalUpdateFrame(.1, nil)
 	if !slices.Equal(calls, []int{1, 2, 3, 4}) {
 		t.Fatalf("second frame callbacks = %v, want [1 2 3 4]", calls)
 	}
@@ -418,11 +418,11 @@ func TestRuntimeCallbackDeletionBeforeDeadline(t *testing.T) {
 				runtimeBridge{}.DeleteSprite(proxy.Id)
 				state.sprites[1] = &gdx.Sprite{Id: 1}
 			}
-			runtimeBridge{}.InternalUpdateEngine(.1)
+			runtimeBridge{}.InternalUpdateFrame(.1, nil)
 			if len(delaySpriteCalls) != 0 || len(tweenInfos) != 0 {
 				t.Fatal("deleted object's pending timer or tween was retained")
 			}
-			runtimeBridge{}.InternalUpdateEngine(1)
+			runtimeBridge{}.InternalUpdateFrame(1, nil)
 		})
 	}
 }
@@ -455,7 +455,7 @@ func TestRuntimeCallbackContinuousUpdatesOverlapAndCancel(t *testing.T) {
 	}
 }
 
-func TestRuntimeCallbackStandaloneTimerPrecedesTween(t *testing.T) {
+func TestInternalUpdateFramePreservesStandaloneOrder(t *testing.T) {
 	for _, binding := range []bool{false, true} {
 		t.Run(map[bool]string{false: "no binding", true: "owner only"}[binding], func(t *testing.T) {
 			isolateGameBinding(t)
@@ -464,18 +464,81 @@ func TestRuntimeCallbackStandaloneTimerPrecedesTween(t *testing.T) {
 			if binding {
 				SetGame(new(int))
 			}
-			sprite := &frameCallbackSprite{Sprite: gdx.Sprite{Id: 1}}
-			state.sprites[1] = sprite
+
 			var calls []string
-			delayCall(.1, func() {
-				calls = append(calls, "timer")
-				tweenPos(sprite, mathf.NewVec2(1, 0), .1, func() { calls = append(calls, "tween") })
+			sprite := &frameCallbackSprite{
+				Sprite: gdx.Sprite{Id: 1},
+				update: func() { calls = append(calls, "sprite") },
+			}
+			state.sprites[sprite.Id] = sprite
+			bridge := runtimeBridge{}
+			bridge.InternalUpdateFrame(.25, func(delta float64) {
+				if delta != .25 {
+					t.Errorf("user callback delta = %v, want .25", delta)
+				}
+				calls = append(calls, "user")
+				bridge.DelayCall(.25, func() {
+					calls = append(calls, "timer")
+					bridge.TweenPos(sprite, mathf.NewVec2(1, 0), .25, func() {
+						calls = append(calls, "tween")
+					})
+				})
+				bridge.DelayCall(.5, func() { calls = append(calls, "next-timer") })
 			})
-			runtimeBridge{}.InternalUpdateEngine(.1)
-			if !slices.Equal(calls, []string{"timer", "tween"}) || sprite.position.X != 1 {
-				t.Fatalf("callbacks=%v position=%v, want timer then tween at its endpoint", calls, sprite.position)
+			want := []string{"sprite", "user", "timer", "tween"}
+			if !slices.Equal(calls, want) || sprite.position.X != 1 {
+				t.Fatalf("frame callbacks=%v position=%v, want %v and completed tween", calls, sprite.position, want)
+			}
+
+			// Each frame updates the sprite and advances timers once.
+			bridge.InternalUpdateFrame(.25, nil)
+			want = append(want, "sprite", "next-timer")
+			if !slices.Equal(calls, want) {
+				t.Fatalf("next frame callbacks = %v, want %v", calls, want)
 			}
 		})
+	}
+}
+
+func TestInternalUpdateFramePreservesStandaloneSpriteSnapshotAcrossNestedFrames(t *testing.T) {
+	isolateGameBinding(t)
+	resetRuntimeDeltaTestState()
+	t.Cleanup(resetRuntimeDeltaTestState)
+
+	bridge := runtimeBridge{}
+	var calls []Object
+	added := &frameCallbackSprite{
+		Sprite: gdx.Sprite{Id: 4},
+		update: func() { calls = append(calls, 4) },
+	}
+	for _, id := range []Object{1, 2, 3} {
+		state.sprites[id] = &frameCallbackSprite{
+			Sprite: gdx.Sprite{Id: id},
+			update: func() {
+				calls = append(calls, id)
+				if len(calls) == 1 {
+					// Mutate the registry from whichever snapshot member runs first.
+					for otherID := range state.sprites {
+						bridge.DeleteSprite(otherID)
+					}
+					state.sprites[added.Id] = added
+					// A nested frame must not overwrite the outer frame's snapshot.
+					bridge.InternalUpdateFrame(.25, nil)
+				}
+			},
+		}
+	}
+
+	bridge.InternalUpdateFrame(.25, nil)
+	slices.Sort(calls)
+	if !slices.Equal(calls, []Object{1, 2, 3, 4}) {
+		t.Fatalf("first frame updated sprites = %v, want original snapshot plus nested frame [1 2 3 4]", calls)
+	}
+
+	calls = nil
+	bridge.InternalUpdateFrame(.25, nil)
+	if !slices.Equal(calls, []Object{4}) {
+		t.Fatalf("next frame updated sprites = %v, want newly registered sprite [4]", calls)
 	}
 }
 
@@ -500,7 +563,7 @@ func TestRuntimeCallbacksAcceptEmbeddedSpriteHandles(t *testing.T) {
 			case "two-stage tween":
 				gdx.TweenPos2(&sprite.Sprite, mathf.NewVec2(5, 10), .1, endpoint, .1, callback)
 			}
-			gdx.InternalUpdateEngine(.2)
+			gdx.InternalUpdateFrame(.2, nil)
 			if completed != 1 {
 				t.Fatalf("live embedded handle completed %d times, want 1", completed)
 			}
@@ -532,7 +595,7 @@ func TestRuntimeCallbackInheritedStartRetainsBaseReceiver(t *testing.T) {
 	gdx.InitSpriteInstance(1, sprite, func(id Object, value gdx.ISpriter) {
 		state.sprites[id] = value
 	})
-	gdx.InternalUpdateEngine(.1)
+	gdx.InternalUpdateFrame(.1, nil)
 	if !sprite.completed {
 		t.Fatal("timer registered by inherited OnStart was discarded")
 	}
@@ -563,7 +626,7 @@ func TestRuntimeCallbackEmbeddedHandlesCannotFollowReusedIDs(t *testing.T) {
 				}
 				global := false
 				gdx.DelayCall(.1, func() { global = true })
-				gdx.InternalUpdateEngine(.1)
+				gdx.InternalUpdateFrame(.1, nil)
 				if !global || len(delaySpriteCalls) != 0 || len(tweenInfos) != 0 {
 					t.Fatalf("global=%v pending timers=%d tweens=%d", global, len(delaySpriteCalls), len(tweenInfos))
 				}
@@ -622,7 +685,7 @@ func TestRuntimeCallbackNilSpriteRemainsGlobal(t *testing.T) {
 	t.Cleanup(resetRuntimeDeltaTestState)
 	completed := 0
 	gdx.DelaySpriteCall(.1, nil, func() { completed++ })
-	gdx.InternalUpdateEngine(.1)
+	gdx.InternalUpdateFrame(.1, nil)
 	if completed != 1 {
 		t.Fatalf("nil-sprite callback completed %d times, want 1", completed)
 	}

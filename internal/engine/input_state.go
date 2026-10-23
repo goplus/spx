@@ -98,11 +98,8 @@ func resetInputState() {
 	mouseInput.reset()
 }
 
-func cacheKeyEvents() {
+func cacheInputState() {
 	keyInput.cache()
-}
-
-func cacheMouseEvents() {
 	mouseInput.cache()
 }
 

@@ -343,14 +343,7 @@ func onSpriteFramesSetChanged(id int64) {
 func standaloneCallbacks(callbacks CoreCallbackInfo) CoreCallbackInfo {
 	update := callbacks.OnEngineUpdate
 	callbacks.OnEngineUpdate = func(delta float64) {
-		sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
-		for _, sprite := range sprites {
-			sprite.OnUpdate(delta)
-		}
-		if update != nil {
-			update(delta)
-		}
-		InternalUpdateEngine(delta)
+		InternalUpdateFrame(delta, update)
 	}
 	return callbacks
 }

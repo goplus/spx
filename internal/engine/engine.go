@@ -158,7 +158,9 @@ func onUpdate(delta float64) {
 	cacheFrameEvents()
 	binding.callbacks.OnEngineBeforeUpdate(delta)
 	itime.Update(delta, profiler.Calcfps())
-	Execute(nil, func(context.Context, any) { updateRuntime(delta) })
+	Execute(nil, func(context.Context, any) {
+		runtimeBridge{}.InternalUpdateFrame(delta, nil)
+	})
 	if binding.loadPhase() != gameRunning {
 		return
 	}
@@ -238,8 +240,7 @@ func onReset() {
 
 func cacheFrameEvents() {
 	cacheTriggerEvents()
-	cacheKeyEvents()
-	cacheMouseEvents()
+	cacheInputState()
 }
 
 // Drain and clean up synchronously on the caller thread.

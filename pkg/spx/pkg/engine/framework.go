@@ -27,7 +27,7 @@ func typeOf[T any]() reflect.Type {
 }
 
 type RuntimeBridge interface {
-	InternalUpdateEngine(delta float64)
+	InternalUpdateFrame(delta float64, update func(float64))
 	ClearAllSprites()
 	RegisterSpriteType(t reflect.Type)
 	GetSprite(id Object) ISpriter
@@ -63,8 +63,9 @@ func requireRuntimeBridge() RuntimeBridge {
 	return runtimeBridge
 }
 
-func InternalUpdateEngine(delta float64) {
-	requireRuntimeBridge().InternalUpdateEngine(delta)
+// InternalUpdateFrame runs a frame, invoking an optional update before timers and tweens.
+func InternalUpdateFrame(delta float64, update func(float64)) {
+	requireRuntimeBridge().InternalUpdateFrame(delta, update)
 }
 
 func ClearAllSprites() {
