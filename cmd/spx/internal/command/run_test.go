@@ -35,15 +35,12 @@ func TestRunWebCommandOrderAndErrors(t *testing.T) {
 	failure := errors.New("step failed")
 	for _, tt := range []struct {
 		name, failAt string
-		setup        bool
 		want         []string
 	}{
-		{"export before server", "", false, []string{"export", "serve"}},
-		{"setup before export and server", "", true, []string{"setup", "export", "serve"}},
-		{"setup failure", "setup", true, []string{"setup"}},
-		{"export failure", "export", false, []string{"export"}},
-		{"export failure after setup", "export", true, []string{"setup", "export"}},
-		{"server failure", "serve", false, []string{"export", "serve"}},
+		{"setup before export and server", "", []string{"setup", "export", "serve"}},
+		{"setup failure", "setup", []string{"setup"}},
+		{"export failure", "export", []string{"setup", "export"}},
+		{"server failure", "serve", []string{"setup", "export", "serve"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []string
@@ -56,12 +53,7 @@ func TestRunWebCommandOrderAndErrors(t *testing.T) {
 					return nil
 				}
 			}
-			var err error
-			if tt.setup {
-				err = runWebCommandWithSetup(step("setup"), step("export"), step("serve"))
-			} else {
-				err = runWebCommand(step("export"), step("serve"))
-			}
+			err := runWebCommand(step("setup"), step("export"), step("serve"))
 			if tt.failAt == "" && err != nil || tt.failAt != "" && !errors.Is(err, failure) {
 				t.Fatalf("run error = %v, failing step %q", err, tt.failAt)
 			}
