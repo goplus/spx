@@ -1097,6 +1097,69 @@ func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
 	return mgr
 }
 
+func BenchmarkReplayInputQueries(b *testing.B) {
+	game := &Game{inputSession: &inputSession{
+		mode: InputSessionModeReplaying, phase: InputSessionPhaseRunning,
+		current: InputReplayState{Mouse: InputReplayMouse{X: 5, Y: 6}, Buttons: 1, KeysDown: make([]int64, 128)},
+	}}
+	game.inputMgr.g = game
+	for i := range game.inputSession.current.KeysDown {
+		game.inputSession.current.KeysDown[i] = int64(i + 1)
+	}
+	for _, query := range []struct {
+		name string
+		run  func()
+	}{
+		{"key", func() { game.inputMgr.effectiveKeyPressed(KeyA) }},
+		{"mouse-position", func() { game.inputMgr.effectiveMousePos() }},
+		{"mouse-buttons", func() { game.inputMgr.effectiveMousePressed() }},
+	} {
+		b.Run(query.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				query.run()
+			}
+		})
+	}
+}
+
+func TestReplayQueriesDuringTicksAndClose(t *testing.T) {
+	resetInputSessionTest(t)
+	state := InputReplayState{Mouse: InputReplayMouse{X: 5}, KeysDown: []int64{int64(KeyA)}}
+	replay := validRuntimeReplay()
+	replay.Initial = state
+	for i := range 100 {
+		replay.Frames = append(replay.Frames, InputReplayFrame{Frame: int64(i), Time: float64(i) / 30, State: state})
+	}
+	if _, err := PrepareInputReplay(replay); err != nil {
+		t.Fatal(err)
+	}
+	session := claimPreparedSession(t, &Game{})
+	var readers sync.WaitGroup
+	defer readers.Wait()
+	for range 2 {
+		readers.Go(func() {
+			for range 1000 {
+				session.playbackKeyPressed(KeyA)
+				session.playbackKeyPressed(KeyAny)
+				session.playbackMouse()
+			}
+		})
+	}
+	for range replay.Frames {
+		if _, err := consumeInputTick(InputReplayState{}, nil, 1.0/30); err != nil {
+			t.Fatal(err)
+		}
+	}
+	session.close("finished")
+	if _, ok := session.playbackKeyPressed(KeyA); ok {
+		t.Fatal("closed replay still overrides keys")
+	}
+	if _, ok := session.playbackMouse(); ok {
+		t.Fatal("closed replay still overrides mouse")
+	}
+}
+
 func BenchmarkPrepareInputFrame(b *testing.B) {
 	mgr := setupInputSourceManager(b)
 	for _, scenario := range []struct {
@@ -1505,7 +1568,7 @@ func TestInputSessionFreezeFailures(t *testing.T) {
 	if complete, err := replay.completeReplayFrame(freeze); complete || err == nil || replay.phase != InputSessionPhaseAborted {
 		t.Fatalf("failed replay freeze: %v, %v, %+v", complete, err, replay.status())
 	}
-	if _, ok := replay.playbackState(); ok {
+	if _, ok := replay.playbackMouse(); ok {
 		t.Fatal("aborted replay still overrides input")
 	}
 }
@@ -1547,7 +1610,6 @@ func TestInputSessionPendingReplayAndTickErrors(t *testing.T) {
 
 func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	_, game, mgr := setupInputSourceTest(t)
-	resetInputSessionTest(t)
 	mgr.point = mathf.Vec2{X: 90, Y: 80}
 	game.inputMgr.mousePos = mathf.Vec2{X: 3, Y: 4}
 	if got := game.inputMgr.effectiveMousePos(); got != (mathf.Vec2{X: 3, Y: 4}) {
@@ -1559,8 +1621,28 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	}
 	_ = game.inputMgr.effectiveMousePressed()
 	game.inputSession = &inputSession{mode: InputSessionModeReplaying, phase: InputSessionPhaseRunning, current: InputReplayState{KeysDown: []int64{int64(KeyA)}, Mouse: InputReplayMouse{X: 5, Y: 6}, Buttons: 2}}
-	if !game.inputMgr.effectiveKeyPressed(KeyAny) || !game.inputMgr.effectiveKeyPressed(KeyA) || game.inputMgr.effectiveKeyPressed(KeyB) || !game.inputMgr.effectiveMousePressed() || game.inputMgr.effectiveMousePos() != (mathf.Vec2{X: 5, Y: 6}) {
-		t.Fatal("queries ignored frozen replay state")
+	for _, phase := range []InputSessionPhase{InputSessionPhaseRunning, InputSessionPhaseFinishing, InputSessionPhaseCompleted} {
+		game.inputSession.phase = phase
+		if !game.KeyPressed(KeyAny) || !game.KeyPressed(KeyA) || game.KeyPressed(KeyB) || !game.MousePressed() || game.MouseX() != 5 || game.MouseY() != 6 {
+			t.Fatalf("queries ignored frozen replay state in phase %q", phase)
+		}
+	}
+	game.inputSession.current.KeysDown = nil
+	if game.KeyPressed(KeyAny) || game.KeyPressed(KeyA) {
+		t.Fatal("empty replay key state reported a held key")
+	}
+	for _, inactive := range []struct {
+		mode  InputSessionMode
+		phase InputSessionPhase
+	}{
+		{InputSessionModeRecording, InputSessionPhaseRunning},
+		{InputSessionModeReplaying, InputSessionPhaseAborted},
+	} {
+		game.inputSession.mode = inactive.mode
+		game.inputSession.phase = inactive.phase
+		if !game.KeyPressed(KeyB) || game.MouseX() != 3 {
+			t.Fatal("inactive replay did not return to live queries")
+		}
 	}
 	game.inputSession = nil
 }

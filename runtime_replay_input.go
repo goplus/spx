@@ -17,8 +17,6 @@
 package spx
 
 import (
-	"slices"
-
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
 )
@@ -35,8 +33,8 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 		return InputReplayState{}, err
 	}
 	if resolved.firstTick {
-		point := mathf.Vec2{X: resolved.initial.Mouse.X, Y: resolved.initial.Mouse.Y}
-		c.history.Reset(point, resolved.initial.Buttons&1 != 0)
+		point := mathf.Vec2{X: resolved.initial.position.X, Y: resolved.initial.position.Y}
+		c.history.Reset(point, resolved.initial.buttons&1 != 0)
 		p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
 		p.swipe.InitWithClock(p.g.inputClock)
 	}
@@ -46,26 +44,22 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 }
 
 func (p *inputManager) effectiveKeyPressed(key Key) bool {
-	if state, replaying := p.g.currentInputPlaybackState(); replaying {
-		if key == KeyAny {
-			return len(state.KeysDown) != 0
-		}
-		_, pressed := slices.BinarySearch(state.KeysDown, int64(key))
+	if pressed, replaying := p.g.currentInputSession().playbackKeyPressed(key); replaying {
 		return pressed
 	}
 	return engine.Managers().InputMgr.GetKey(int64(key))
 }
 
 func (p *inputManager) effectiveMousePos() mathf.Vec2 {
-	if state, replaying := p.g.currentInputPlaybackState(); replaying {
-		return mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
+	if mouse, replaying := p.g.currentInputSession().playbackMouse(); replaying {
+		return mathf.Vec2{X: mouse.position.X, Y: mouse.position.Y}
 	}
 	return p.mousePos
 }
 
 func (p *inputManager) effectiveMousePressed() bool {
-	if state, replaying := p.g.currentInputPlaybackState(); replaying {
-		return state.Buttons&0b011 != 0
+	if mouse, replaying := p.g.currentInputSession().playbackMouse(); replaying {
+		return mouse.buttons&0b011 != 0
 	}
 	return engine.AnyMouseButtonPressed()
 }
