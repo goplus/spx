@@ -28,11 +28,6 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func installBubbleTestUiMgr(t *testing.T) {
-	t.Helper()
-	installAskTestUiMgr(t)
-}
-
 func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
 	game := &Game{}
 	game.shapeMgr.init()
@@ -44,7 +39,7 @@ func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
 }
 
 func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
-	installBubbleTestUiMgr(t)
+	installAskTestUiMgr(t)
 	_, sprite, component := newBubbleTestSprite()
 
 	textToken := sprite.sayOrThink(123, ui.StyleSay)
@@ -55,6 +50,14 @@ func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	renewedText := component.upsertText("renewed", ui.StyleThink)
 	if renewedText.generation != textToken.generation+1 || component.textObj.timedRemovalPending {
 		t.Fatal("text bubble renewal did not invalidate its pending removal")
+	}
+	component.expireText(renewedText)
+	content := component.textObj.content
+	sameText := component.upsertText("renewed", ui.StyleThink)
+	component.expireText(renewedText)
+	component.textObj.flushPendingRemoval(itime.Frame() + 1)
+	if component.textObj == nil || sameText.bubble != renewedText.bubble || sameText.generation != renewedText.generation+1 || component.textObj.timedRemovalPending || component.textObj.content != content {
+		t.Fatal("identical text did not renew the current bubble and cancel older removal")
 	}
 	component.textObj.generation = ^uint64(0)
 	if wrapped := component.upsertText("renewed", ui.StyleThink); wrapped.generation != 1 {
@@ -73,6 +76,13 @@ func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	renewedQuote := component.upsertQuote("renewed", "description")
 	if renewedQuote.generation != quoteToken.generation+1 || component.quoteObj.timedRemovalPending {
 		t.Fatal("quote renewal did not invalidate its pending removal")
+	}
+	component.expireQuote(renewedQuote)
+	sameQuote := component.upsertQuote("renewed", "description")
+	component.expireQuote(renewedQuote)
+	component.quoteObj.flushPendingRemoval(itime.Frame() + 1)
+	if component.quoteObj == nil || sameQuote.bubble != renewedQuote.bubble || sameQuote.generation != renewedQuote.generation+1 || component.quoteObj.timedRemovalPending {
+		t.Fatal("identical quote did not renew the current bubble and cancel older removal")
 	}
 	component.quoteObj.generation = ^uint64(0)
 	if wrapped := component.upsertQuote("renewed", "description"); wrapped.generation != 1 {
@@ -97,8 +107,49 @@ func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	component.stopAll()
 }
 
+func TestBubbleRemovalUnlocksBeforeDestroy(t *testing.T) {
+	for _, kind := range []string{"text", "quote"} {
+		for _, removal := range []string{"stop", "expire"} {
+			t.Run(kind+"/"+removal, func(t *testing.T) {
+				mgr := installAskTestUiMgr(t)
+				game, _, component := newBubbleTestSprite()
+				var bubble bubbleShape
+				var stop func()
+				if kind == "text" {
+					token := component.upsertText("message", ui.StyleSay)
+					bubble, stop = component.textObj, component.stopText
+					component.expireText(token)
+				} else {
+					token := component.upsertQuote("message", "description")
+					bubble, stop = component.quoteObj, component.stopQuote
+					component.expireQuote(token)
+				}
+				destroyed := false
+				mgr.onDestroy = func() {
+					destroyed = true
+					if !component.mu.TryLock() {
+						t.Fatal("panel destruction ran with the component locked")
+					}
+					component.mu.Unlock()
+					if component.textObj != nil || component.quoteObj != nil {
+						t.Fatal("panel destruction ran before the current slot was cleared")
+					}
+				}
+				if removal == "stop" {
+					stop()
+				} else {
+					bubble.flushPendingRemoval(itime.Frame() + 1)
+				}
+				if !destroyed || game.shapeMgr.findShapeIndex(bubble) >= 0 {
+					t.Fatal("bubble removal did not destroy its panel and remove its shape")
+				}
+			})
+		}
+	}
+}
+
 func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
-	installBubbleTestUiMgr(t)
+	installAskTestUiMgr(t)
 	co := setupRuntimeScheduler(t)
 	itime.Start(nil)
 	_, sprite, component := newBubbleTestSprite()
@@ -208,11 +259,7 @@ func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
 }
 
 func TestTimedTextRemovalWaitsForNextFrame(t *testing.T) {
-	var game Game
-	game.shapeMgr.init()
-	sprite := &SpriteImpl{g: &game}
-	component := &bubbleComponent{sprite: sprite}
-	sprite.components.bubble = component
+	game, sprite, component := newBubbleTestSprite()
 	bubble := &textBubble{
 		bubbleBase: bubbleBase{
 			sprite:              sprite,
@@ -224,14 +271,37 @@ func TestTimedTextRemovalWaitsForNextFrame(t *testing.T) {
 	component.textObj = bubble
 	game.shapeMgr.add(bubble)
 
-	bubble.flushPendingRemoval(10)
-	if component.textObj != bubble || game.shapeMgr.findShapeIndex(bubble) < 0 {
-		t.Fatal("timed bubble was removed during its expiration frame")
+	for _, frame := range []int64{9, 10} {
+		bubble.flushPendingRemoval(frame)
+		if component.textObj != bubble || game.shapeMgr.findShapeIndex(bubble) < 0 {
+			t.Fatalf("timed text bubble was removed before its grace frame ended: %d", frame)
+		}
 	}
+	bubble.timedRemovalPending = false
+	bubble.flushPendingRemoval(11)
+	if component.textObj != bubble {
+		t.Fatal("cancelled text expiration removed the bubble")
+	}
+	bubble.timedRemovalPending = true
 
 	bubble.flushPendingRemoval(11)
 	if component.textObj != nil || game.shapeMgr.findShapeIndex(bubble) >= 0 {
 		t.Fatal("timed bubble was not removed on the following frame")
+	}
+
+	// A stale shape must not remove the replacement now occupying its slot.
+	replacement := *bubble
+	replacement.timedRemovalPending = true
+	component.textObj = &replacement
+	game.shapeMgr.add(&replacement)
+	bubble.timedRemovalPending = true
+	bubble.flushPendingRemoval(12)
+	if component.textObj != &replacement || game.shapeMgr.findShapeIndex(&replacement) < 0 {
+		t.Fatal("stale text bubble removed its replacement")
+	}
+	replacement.flushPendingRemoval(12)
+	if component.textObj != nil || replacement.timedRemovalPending {
+		t.Fatal("current text bubble did not commit its expiration")
 	}
 }
 
@@ -239,9 +309,11 @@ func TestTextBubbleTokenOnlyExpiresCurrentGeneration(t *testing.T) {
 	bubble := &textBubble{bubbleBase: bubbleBase{generation: 2}}
 	component := &bubbleComponent{textObj: bubble}
 
-	component.expireText(bubbleToken{bubble: &bubble.bubbleBase, generation: 1})
-	if bubble.timedRemovalPending {
-		t.Fatal("stale token scheduled removal of a newer bubble generation")
+	for _, token := range []bubbleToken{{}, {bubble: &bubble.bubbleBase, generation: 1}} {
+		component.expireText(token)
+		if bubble.timedRemovalPending {
+			t.Fatalf("invalid token %+v scheduled bubble removal", token)
+		}
 	}
 
 	component.expireText(bubbleToken{bubble: &bubble.bubbleBase, generation: 2})
@@ -261,11 +333,7 @@ func TestTextBubbleTokenOnlyExpiresCurrentGeneration(t *testing.T) {
 }
 
 func TestTimedQuoteRemovalWaitsForNextFrame(t *testing.T) {
-	var game Game
-	game.shapeMgr.init()
-	sprite := &SpriteImpl{g: &game}
-	component := &bubbleComponent{sprite: sprite}
-	sprite.components.bubble = component
+	game, sprite, component := newBubbleTestSprite()
 	quote := &quoterBubble{
 		bubbleBase: bubbleBase{
 			sprite:              sprite,
@@ -277,14 +345,37 @@ func TestTimedQuoteRemovalWaitsForNextFrame(t *testing.T) {
 	component.quoteObj = quote
 	game.shapeMgr.add(quote)
 
-	quote.flushPendingRemoval(10)
-	if component.quoteObj != quote || game.shapeMgr.findShapeIndex(quote) < 0 {
-		t.Fatal("timed quote was removed during its expiration frame")
+	for _, frame := range []int64{9, 10} {
+		quote.flushPendingRemoval(frame)
+		if component.quoteObj != quote || game.shapeMgr.findShapeIndex(quote) < 0 {
+			t.Fatalf("timed quote bubble was removed before its grace frame ended: %d", frame)
+		}
 	}
+	quote.timedRemovalPending = false
+	quote.flushPendingRemoval(11)
+	if component.quoteObj != quote {
+		t.Fatal("cancelled quote expiration removed the bubble")
+	}
+	quote.timedRemovalPending = true
 
 	quote.flushPendingRemoval(11)
 	if component.quoteObj != nil || game.shapeMgr.findShapeIndex(quote) >= 0 {
 		t.Fatal("timed quote was not removed on the following frame")
+	}
+
+	// A stale shape must not remove the replacement now occupying its slot.
+	replacement := *quote
+	replacement.timedRemovalPending = true
+	component.quoteObj = &replacement
+	game.shapeMgr.add(&replacement)
+	quote.timedRemovalPending = true
+	quote.flushPendingRemoval(12)
+	if component.quoteObj != &replacement || game.shapeMgr.findShapeIndex(&replacement) < 0 {
+		t.Fatal("stale quote bubble removed its replacement")
+	}
+	replacement.flushPendingRemoval(12)
+	if component.quoteObj != nil || replacement.timedRemovalPending {
+		t.Fatal("current quote bubble did not commit its expiration")
 	}
 }
 
@@ -292,9 +383,11 @@ func TestQuoteBubbleTokenOnlyExpiresCurrentGeneration(t *testing.T) {
 	quote := &quoterBubble{bubbleBase: bubbleBase{generation: 2}}
 	component := &bubbleComponent{quoteObj: quote}
 
-	component.expireQuote(bubbleToken{bubble: &quote.bubbleBase, generation: 1})
-	if quote.timedRemovalPending {
-		t.Fatal("stale token scheduled removal of a newer quote generation")
+	for _, token := range []bubbleToken{{}, {bubble: &quote.bubbleBase, generation: 1}} {
+		component.expireQuote(token)
+		if quote.timedRemovalPending {
+			t.Fatalf("invalid token %+v scheduled bubble removal", token)
+		}
 	}
 
 	component.expireQuote(bubbleToken{bubble: &quote.bubbleBase, generation: 2})
@@ -441,6 +534,7 @@ type askTestUiMgr struct {
 	text         map[pkgengine.Object]string
 	askRoot      pkgengine.Object
 	onAskVisible func()
+	onDestroy    func()
 }
 
 func newAskTestUiMgr(base pkgengine.IUiMgr) *askTestUiMgr {
@@ -476,7 +570,12 @@ func (m *askTestUiMgr) BindNode(parent pkgengine.Object, path string) pkgengine.
 	return id
 }
 
-func (*askTestUiMgr) DestroyNode(pkgengine.Object) bool { return true }
+func (m *askTestUiMgr) DestroyNode(pkgengine.Object) bool {
+	if m.onDestroy != nil {
+		m.onDestroy()
+	}
+	return true
+}
 
 func (m *askTestUiMgr) SetVisible(id pkgengine.Object, visible bool) {
 	m.visible[id] = visible
@@ -594,25 +693,25 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
 	sprite.spriteState.IsVisible = true
 	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), msg: "first", style: ui.StyleSay}
-	bubble.onUpdate(0)
+	bubble.onUpdate()
 	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
 		t.Fatalf("text bubble was not rendered: dirty=%v text=%v", bubble.isDirty, mgr.text)
 	}
 	layout := ui.NewSayBubbleLayoutContext(mathf.NewVec2(480, 360)).NewLayout(1, mathf.Vec2{}, mathf.NewVec2(20, 20), ui.NewSayBubbleContent("planned", ui.StyleThink))
 	bubble.setLayout(layout)
-	bubble.onUpdate(0)
+	bubble.onUpdate()
 	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "planned") {
 		t.Fatal("precomputed layout did not replace the visible text")
 	}
 	sprite.spriteState.IsVisible = false
 	bubble.markDirty()
-	bubble.onUpdate(0)
+	bubble.onUpdate()
 	if !bubble.isDirty {
 		t.Fatal("hidden bubble consumed its pending visual update")
 	}
 	sprite.spriteState.IsVisible = true
 	quote := &quoterBubble{bubbleBase: bubbleBase{sprite: sprite, camera: bubble.camera, isDirty: true}, panel: ui.NewUiQuote(), message: "quotation", description: "speaker"}
-	quote.onUpdate(0)
+	quote.onUpdate()
 	container := mgr.bound[askTestBinding{parent: quote.panel.GetId(), path: "C"}]
 	_, size := quote.getBounds()
 	if mgr.sizes[container] != size.Addf(20) || !slices.Contains(bubbleRenderedTexts(mgr.text), "quotation") || !slices.Contains(bubbleRenderedTexts(mgr.text), "speaker") || quote.isDirty {

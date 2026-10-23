@@ -36,9 +36,16 @@ type bubbleBase struct {
 	observedSpriteVersion uint64
 	observedCameraVersion uint64
 
+	// Removal state is protected by the owning bubbleComponent.mu.
 	timedRemovalPending bool
 	timedRemovalFrame   int64
 	generation          uint64
+}
+
+// bubbleToken limits timed removal to one displayed generation.
+type bubbleToken struct {
+	bubble     *bubbleBase
+	generation uint64
 }
 
 type textBubble struct {
@@ -58,6 +65,31 @@ type quoterBubble struct {
 	message     string
 	description string
 	panel       *ui.UiQuote
+}
+
+// renew supersedes older timed removals, even when the content is unchanged.
+func (b *bubbleBase) renew() bubbleToken {
+	b.generation++
+	if b.generation == 0 {
+		// Zero represents an invalid token.
+		b.generation++
+	}
+	b.timedRemovalPending = false
+	return bubbleToken{bubble: b, generation: b.generation}
+}
+
+// scheduleRemoval validates the token against the component's current bubble.
+func (b *bubbleBase) scheduleRemoval(token bubbleToken, frame int64) bool {
+	if token.bubble != b || token.generation != b.generation {
+		return false
+	}
+	b.timedRemovalPending = true
+	b.timedRemovalFrame = frame
+	return true
+}
+
+func (b *bubbleBase) removalDue(frame int64) bool {
+	return b.timedRemovalPending && b.timedRemovalFrame < frame
 }
 
 // checkNeedsUpdate checks if the bubble needs to be refreshed.
@@ -102,7 +134,7 @@ func (pself *textBubble) flushPendingRemoval(frame int64) {
 	pself.sprite.bubble().flushPendingTextRemoval(pself, frame)
 }
 
-func (pself *textBubble) onUpdate(delta float64) {
+func (pself *textBubble) onUpdate() {
 	if pself.checkNeedsUpdate() {
 		pself.refresh()
 		pself.markClean()
@@ -143,7 +175,7 @@ func (pself *quoterBubble) flushPendingRemoval(frame int64) {
 	pself.sprite.bubble().flushPendingQuoteRemoval(pself, frame)
 }
 
-func (pself *quoterBubble) onUpdate(delta float64) {
+func (pself *quoterBubble) onUpdate() {
 	if pself.checkNeedsUpdate() {
 		pself.refresh()
 		pself.markClean()

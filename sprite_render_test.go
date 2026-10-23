@@ -277,7 +277,7 @@ func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
 func TestSpriteRenderingOverloadsAndDebugPreserveState(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	game.debugState.DebugInstr = true
-	installBubbleTestUiMgr(t)
+	installAskTestUiMgr(t)
 	sprite := newCloneLimitSprite(game, "actor")
 	sprite.costumes = []*costume{{name: "first"}, {name: "second"}, {name: "third"}}
 	for _, tt := range []struct {
