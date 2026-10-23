@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/enginewrap"
@@ -506,8 +507,8 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 
 	sprite := newTouchingTestSprite("mover", 0, 0, 1)
 	sprite.costumes = []*costume{
-		{name: "idle", path: "idle.png", bitmapResolution: 1, width: 1, height: 1, setIndex: -1},
-		{name: "hit", path: "hit.png", bitmapResolution: 1, width: 1, height: 1, setIndex: -1},
+		{name: "idle", path: "idle.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
+		{name: "hit", path: "hit.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
 	}
 	sprite.costumeIndex = 0
 	sprite.runtimeState.IsCostumeDirty = false

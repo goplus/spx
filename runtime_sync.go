@@ -205,7 +205,7 @@ func (p *baseObj) applyCostumeTexture() {
 		renderScale := p.getCostumeRenderScale()
 		if p.isCostumeAtlas() {
 			rect := p.getCostumeAtlasRegion()
-			uvRemap := p.currentCostume().atlasUVRect
+			uvRemap := p.currentCostume().frame.AtlasUVRect
 			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
 			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
 		} else {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/enginewrap"
@@ -172,12 +173,13 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 	sprite.transform().y = 60
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
-		setIndex:         -1,
-		path:             "sprites/PenTest/costume1.svg",
-		center:           mathf.NewVec2(10, 20),
-		bitmapResolution: 1,
-		width:            100,
-		height:           80,
+		path: "sprites/PenTest/costume1.svg",
+		frame: assetutil.FrameDescriptor{
+			Center:           mathf.NewVec2(10, 20),
+			BitmapResolution: 1,
+			Width:            100,
+			Height:           80,
+		},
 	}}
 	sprite.costumeIndex = 0
 	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
@@ -707,8 +709,8 @@ func TestPenComponentStampSyncsAtlasCostume(t *testing.T) {
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
 	costume := sprite.currentCostume()
-	costume.setIndex = 0
-	costume.posX, costume.posY = 32, 16
+	costume.atlas = true
+	costume.frame.PosX, costume.frame.PosY = 32, 16
 	spy.onStamp = func() {
 		if got, want := spy.spriteMgr.atlasRegion, mathf.NewRect2(32, 16, 100, 80); got != want {
 			t.Fatalf("atlas region at capture = %v, want %v", got, want)

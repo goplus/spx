@@ -196,7 +196,7 @@ func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
 
 func TestProxyCollectionRefreshesAutoShapesWithoutTransformChanges(t *testing.T) {
 	sprite, mgr := newPolygonColliderTestSprite(t)
-	sprite.costumes[0].setIndex = -1
+	sprite.costumes[0].atlas = false
 	previous := cachedBounds
 	cachedBounds = map[string]mathf.Rect2{
 		sprite.costumes[0].path: {Size: mathf.NewVec2(20, 30)},

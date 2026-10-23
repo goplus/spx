@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/enginewrap"
@@ -89,8 +90,8 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 		}
 		for _, path := range []string{"image.png", "./image.png"} {
 			costume := newCostume(&coreproject.CostumeConfig{Path: path})
-			if costume.imageSize != sizes[i] || costume.width != int(sizes[i].X) || costume.height != int(sizes[i].Y) {
-				t.Fatalf("project %d, %q: costume size = %dx%d, want %v", i, path, costume.width, costume.height, sizes[i])
+			if costume.frame.ImageSize != sizes[i] || costume.frame.Width != int(sizes[i].X) || costume.frame.Height != int(sizes[i].Y) {
+				t.Fatalf("project %d, %q: costume size = %dx%d, want %v", i, path, costume.frame.Width, costume.frame.Height, sizes[i])
 			}
 		}
 	}
@@ -103,5 +104,88 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 	}
 	if resources.calls != len(projects)+1 {
 		t.Fatalf("logical and pixel queries shared a cache entry: calls = %d", resources.calls)
+	}
+}
+
+func TestCostumeFrameGeometryFixtures(t *testing.T) {
+	fixtures := []struct {
+		name    string
+		costume *costume
+		display [2]int
+		size    [2]float64
+		anchor  mathf.Vec2
+		isAtlas bool
+	}{
+		{"sized", newCostumeWithSize(11, 17), [2]int{11, 17}, [2]float64{11, 17}, mathf.Vec2{}, false},
+		{"standalone", newCostume(&coreproject.CostumeConfig{
+			Name: "fractional", Path: "sprites/fractional.svg", ImageWidth: 55.75, ImageHeight: 54.25,
+			BitmapResolution: 2, X: 52, Y: 89, FaceRight: 90,
+		}), [2]int{27, 27}, [2]float64{27.875, 27.125}, mathf.NewVec2(12.0625, -30.9375), false},
+		{"atlas", newCostumeWith("run1", &costumeSetImage{
+			path: "sprites/atlas.png", width: 256, height: 128, nx: 3,
+			rc: coreproject.CostumeSetRect{X: 16, Y: 8, W: 131, H: 43},
+		}, 90, 1, 2), [2]int{21, 21}, [2]float64{21.5, 21.5}, mathf.Vec2{}, true},
+		{"negative atlas index", newCostumeWith("negative", &costumeSetImage{
+			path: "sprites/atlas.png", width: 256, height: 128, nx: 3,
+			rc: coreproject.CostumeSetRect{X: 16, Y: 8, W: 131, H: 43},
+		}, 90, -1, 2), [2]int{21, 21}, [2]float64{128, 64}, mathf.NewVec2(-53.25, 21.25), false},
+		{"missing logical size", &costume{frame: assetutil.FrameDescriptor{Width: 11, Height: 17, BitmapResolution: 2}},
+			[2]int{5, 8}, [2]float64{5.5, 8.5}, mathf.NewVec2(-2.75, 4.25), false},
+		{"zero logical height", &costume{frame: assetutil.FrameDescriptor{Width: 11, Height: 17, ImageSize: mathf.NewVec2(11.5, 0), BitmapResolution: 2}},
+			[2]int{5, 8}, [2]float64{5.5, 8.5}, mathf.NewVec2(-2.75, 4.25), false},
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			c := fixture.costume
+			w, h := c.displaySize()
+			x, y := c.sizeInSPX()
+			if [2]int{w, h} != fixture.display || [2]float64{x, y} != fixture.size || c.renderAnchorInSPX() != fixture.anchor || c.isAtlas() != fixture.isAtlas {
+				t.Fatalf("geometry = %v / %v / %v / %v", [2]int{w, h}, [2]float64{x, y}, c.renderAnchorInSPX(), c.isAtlas())
+			}
+		})
+	}
+}
+
+func TestCostumeFrameMetadataOwnership(t *testing.T) {
+	c := &costume{
+		path: "backdrop.svg",
+		frame: assetutil.FrameDescriptor{
+			Width: 11, Height: 17, BitmapResolution: 2, ImageSize: mathf.NewVec2(55.75, 54.25),
+			Center: mathf.NewVec2(52, 89), PosX: 4, PosY: 6, AtlasUVRect: mathf.NewVec4(0.1, 0.2, 0.3, 0.4),
+		},
+	}
+	costumes := []*costume{c, newCostumeWithSize(7, 9)}
+	sources := buildAnimationSources(costumes)
+	if len(sources) != len(costumes) {
+		t.Fatalf("animation sources = %d, want %d", len(sources), len(costumes))
+	}
+	for i, source := range sources {
+		if source.Path != costumes[i].path || source.Frame != costumes[i].frame {
+			t.Fatalf("animation source %d lost metadata: %+v", i, source)
+		}
+	}
+	sources[0].Frame.Center.X++
+	if c.frame.Center == sources[0].Frame.Center {
+		t.Fatal("animation source aliases the costume descriptor")
+	}
+	var clone baseObj
+	original := baseObj{costumes: []*costume{c}}
+	clone.initFrom(&original)
+	if clone.currentCostume() != c {
+		t.Fatal("clones must continue sharing costume metadata")
+	}
+	if got := buildAnimationSources(nil); got == nil || len(got) != 0 {
+		t.Fatalf("empty animation sources = %#v, want non-nil empty slice", got)
+	}
+}
+
+func TestBackdropPreservesConfiguredMetadata(t *testing.T) {
+	config := &coreproject.BackdropConfig{
+		CostumeConfig: coreproject.CostumeConfig{Name: "stage", Path: "stage.svg", ImageWidth: 11.5, ImageHeight: 17.25, FaceRight: 90},
+		Pivot:         mathf.NewVec2(3, 4),
+	}
+	c := newBackdropCostume(config)
+	if c.name != config.Name || c.path != config.Path || c.faceRight != config.FaceRight || c.pivot != config.Pivot || c.frame.Center != (mathf.Vec2{}) || c.isAtlas() {
+		t.Fatalf("configured backdrop metadata = %+v", c)
 	}
 }

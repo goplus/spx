@@ -28,7 +28,7 @@ type FrameDescriptor struct {
 	Width            int
 	Height           int
 	BitmapResolution int
-	ImageSize        mathf.Vec2
+	ImageSize        mathf.Vec2 // standalone logical dimensions or full atlas image pixel dimensions
 	Center           mathf.Vec2
 	PosX             int
 	PosY             int

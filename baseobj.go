@@ -269,7 +269,7 @@ func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
 
 // getCurrentBitmapResolution returns the bitmap resolution of the current costume.
 func (p *baseObj) getCurrentBitmapResolution() int {
-	return p.currentCostume().bitmapResolution
+	return p.currentCostume().frame.BitmapResolution
 }
 
 // getCostumeSize returns the size of the current costume.
@@ -284,12 +284,12 @@ func (p *baseObj) isCostumeAtlas() bool {
 
 // getCostumeAtlasRegion returns the pixel region of the current costume in the atlas.
 func (p *baseObj) getCostumeAtlasRegion() mathf.Rect2 {
-	costume := p.currentCostume()
+	frame := p.currentCostume().frame
 	return mathf.NewRect2(
-		float64(costume.posX),
-		float64(costume.posY),
-		float64(costume.width),
-		float64(costume.height),
+		float64(frame.PosX),
+		float64(frame.PosY),
+		float64(frame.Width),
+		float64(frame.Height),
 	)
 }
 

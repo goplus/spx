@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	"github.com/goplus/spx/v4/internal/base/collision"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -81,8 +82,8 @@ func TestTouchingNameUsesRotatedCostume(t *testing.T) {
 	_, mgr, receiver, target := newTouchingPair(t, false)
 	receiver.SetXYpos(4, 0)
 	target.costumes = []*costume{
-		{name: "small", width: 2, height: 10, bitmapResolution: 1},
-		{name: "wide", width: 10, height: 2, bitmapResolution: 1},
+		{name: "small", atlas: true, frame: assetutil.FrameDescriptor{Width: 2, Height: 10, BitmapResolution: 1}},
+		{name: "wide", atlas: true, frame: assetutil.FrameDescriptor{Width: 10, Height: 2, BitmapResolution: 1}},
 	}
 	target.transform().direction = 90
 	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }

@@ -307,7 +307,7 @@ func TestClonedAnimationEntryRegistersOnceConcurrently(t *testing.T) {
 	t.Cleanup(func() { pkgengine.ResMgr = originalResMgr })
 
 	frame := newCostumeWithSize(1, 1)
-	frame.bitmapResolution = 4
+	frame.frame.BitmapResolution = 4
 	frame.path = "walk.png"
 	sprite := &SpriteImpl{name: "TestSprite"}
 	sprite.costumes = []*costume{frame}

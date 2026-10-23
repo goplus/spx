@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v4/internal/assets"
 	"github.com/goplus/spx/v4/internal/engine"
 )
@@ -31,14 +30,8 @@ type Config struct {
 }
 
 type FrameSource struct {
-	Path             string
-	BitmapResolution int
-	Center           mathf.Vec2
-	ImageSize        mathf.Vec2
-	PosX             int
-	PosY             int
-	Width            int
-	Height           int
+	Path  string
+	Frame assetutil.FrameDescriptor
 }
 
 type frameNormal struct {
@@ -95,24 +88,24 @@ func buildPayload(cfg Config, costumes []FrameSource, isAtlas bool) payload {
 	result.Frames = make([]any, 0, frameCount)
 	for i := cfg.FrameFrom; i != cfg.FrameTo+step; i += step {
 		c := costumes[i]
+		frame := c.Frame
 		if isAtlas {
 			result.Frames = append(result.Frames, frameAtlas{
-				X: int64(c.PosX),
-				Y: int64(c.PosY),
-				W: int64(c.Width),
-				H: int64(c.Height),
+				X: int64(frame.PosX),
+				Y: int64(frame.PosY),
+				W: int64(frame.Width),
+				H: int64(frame.Height),
 			})
 			continue
 		}
-		b := int64(assetutil.ToBitmapResolution(c.BitmapResolution))
+		b := int64(assetutil.ToBitmapResolution(frame.BitmapResolution))
 		result.MaxBitmap = max(result.MaxBitmap, b)
-		path := engine.ToAssetPath(c.Path)
-		half := mathf.Vec2.Mulf(c.ImageSize, 0.5)
+		half := frame.ImageSize.Mulf(0.5)
 		result.Frames = append(result.Frames, frameNormal{
-			Path: path,
+			Path: engine.ToAssetPath(c.Path),
 			Offset: [2]float64{
-				c.Center.X - half.X,
-				-(c.Center.Y - half.Y),
+				frame.Center.X - half.X,
+				-(frame.Center.Y - half.Y),
 			},
 			Bitmap: b,
 		})

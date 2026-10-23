@@ -38,20 +38,12 @@ type costumeSetImage struct {
 
 // costume represents a single costume (image frame) for a sprite or backdrop.
 type costume struct {
-	name          SpriteCostumeName
-	width, height int
-	center        mathf.Vec2 // center point
-	imageSize     mathf.Vec2 // standalone logical size or atlas image pixel size
-	pivot         mathf.Vec2
-
-	faceRight        float64
-	bitmapResolution int
-	path             string
-
-	setIndex   int // costume index in set (-1 if not part of a set)
-	posX, posY int // position in atlas (left top corner)
-
-	atlasUVRect mathf.Vec4 // UV coordinates for atlas texture
+	name      SpriteCostumeName
+	path      string
+	pivot     mathf.Vec2
+	faceRight float64
+	atlas     bool
+	frame     assetutil.FrameDescriptor
 }
 
 func (c *costume) getAssetPath() string {
@@ -60,12 +52,12 @@ func (c *costume) getAssetPath() string {
 
 // displaySize returns integer dimensions for the stage and window.
 func (c *costume) displaySize() (int, int) {
-	return c.width / c.bitmapResolution, c.height / c.bitmapResolution
+	return c.frame.Width / c.frame.BitmapResolution, c.frame.Height / c.frame.BitmapResolution
 }
 
 // sizeInSPX returns the frame size in SPX coordinates, retaining fractional pixels.
 func (c *costume) sizeInSPX() (float64, float64) {
-	resolution := float64(c.bitmapResolution)
+	resolution := float64(c.frame.BitmapResolution)
 	size := c.frameSizeInAsset()
 	return size.X / resolution, size.Y / resolution
 }
@@ -74,43 +66,29 @@ func (c *costume) sizeInSPX() (float64, float64) {
 // coordinates into a local SPX anchor relative to the geometric image center.
 func (c *costume) renderAnchorInSPX() mathf.Vec2 {
 	size := c.frameSizeInAsset()
-	resolution := float64(c.bitmapResolution)
+	resolution := float64(c.frame.BitmapResolution)
 	return mathf.NewVec2(
-		(c.center.X-size.X/2)/resolution,
-		(size.Y/2-c.center.Y)/resolution,
+		(c.frame.Center.X-size.X/2)/resolution,
+		(size.Y/2-c.frame.Center.Y)/resolution,
 	)
 }
 
 // frameSizeInAsset returns standalone logical dimensions or atlas frame pixel dimensions.
 func (c *costume) frameSizeInAsset() mathf.Vec2 {
-	if !c.isAtlas() && c.imageSize.X > 0 && c.imageSize.Y > 0 {
-		return c.imageSize
+	if !c.isAtlas() && c.frame.ImageSize.X > 0 && c.frame.ImageSize.Y > 0 {
+		return c.frame.ImageSize
 	}
-	return mathf.NewVec2(float64(c.width), float64(c.height))
+	return mathf.NewVec2(float64(c.frame.Width), float64(c.frame.Height))
 }
 
 // isAtlas returns true if this costume is part of an atlas/set.
 func (c *costume) isAtlas() bool {
-	return c.setIndex >= 0
+	return c.atlas
 }
 
 // newCostumeWithSize creates a costume with specified dimensions (no image file).
 func newCostumeWithSize(width, height int) *costume {
-	return newCostumeFromFrame(assetutil.NewSizedFrame(width, height))
-}
-
-func newCostumeFromFrame(frame assetutil.FrameDescriptor) *costume {
-	return &costume{
-		setIndex:         -1,
-		width:            frame.Width,
-		height:           frame.Height,
-		bitmapResolution: frame.BitmapResolution,
-		posX:             frame.PosX,
-		posY:             frame.PosY,
-		imageSize:        frame.ImageSize,
-		center:           frame.Center,
-		atlasUVRect:      frame.AtlasUVRect,
-	}
+	return &costume{frame: assetutil.NewSizedFrame(width, height)}
 }
 
 // newCostumeWith creates a costume from a costume set image.
@@ -128,12 +106,7 @@ func newCostumeWith(name string, img *costumeSetImage, faceRight float64, frameI
 		bitmapResolution,
 		costumePixelSize,
 	)
-	c := newCostumeFromFrame(frame)
-	c.path = img.path
-	c.name = name
-	c.setIndex = frameIndex
-	c.faceRight = faceRight
-	return c
+	return &costume{name: name, path: img.path, atlas: frameIndex >= 0, faceRight: faceRight, frame: frame}
 }
 
 // newCostume creates a costume from a costume configuration.
@@ -145,12 +118,8 @@ func newCostume(config *coreproject.CostumeConfig) *costume {
 		config.BitmapResolution,
 		costumeLogicalSize,
 	)
-	c := newCostumeFromFrame(frame)
-	c.name = config.Name
-	c.center = costumeCenterInAsset(frame, mathf.NewVec2(config.X, config.Y))
-	c.faceRight = config.FaceRight
-	c.path = config.Path
-	return c
+	frame.Center = costumeCenterInAsset(frame, mathf.NewVec2(config.X, config.Y))
+	return &costume{name: config.Name, path: config.Path, faceRight: config.FaceRight, frame: frame}
 }
 
 // costumeCenterInAsset returns the rotation center to anchor a costume on. An empty
