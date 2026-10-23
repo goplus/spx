@@ -21,14 +21,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	spxfs "github.com/goplus/spx/v3/fs"
-	_ "github.com/goplus/spx/v3/fs/asset"
-	_ "github.com/goplus/spx/v3/fs/zip"
+	spxfs "github.com/goplus/spx/v4/fs"
+	_ "github.com/goplus/spx/v4/fs/asset"
+	_ "github.com/goplus/spx/v4/fs/zip"
 
-	"github.com/goplus/spx/v3/internal/audio"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/audio"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 const (

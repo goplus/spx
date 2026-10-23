@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/coroutine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 func TestSetLayerPublicAPI(t *testing.T) {

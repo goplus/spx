@@ -19,8 +19,8 @@ package spx
 import (
 	"os"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 // applyRuntimeConfig applies startup settings and returns the window title.

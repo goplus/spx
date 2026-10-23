@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func TestBuildFilesystemAssetPath(t *testing.T) {

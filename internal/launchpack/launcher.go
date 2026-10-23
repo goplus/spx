@@ -37,7 +37,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v3/x/xgolauncher"
+	"github.com/goplus/spx/v4/x/xgolauncher"
 )
 
 //go:embed payload.spxpkg

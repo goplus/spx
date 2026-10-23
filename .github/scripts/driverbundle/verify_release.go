@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/driverbundle"
+	"github.com/goplus/spx/v4/internal/driverbundle"
 )
 
 func runVerifyRelease(args []string) error {

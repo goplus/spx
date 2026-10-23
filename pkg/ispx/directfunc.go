@@ -18,7 +18,7 @@ package ispx
 
 import (
 	"github.com/goplus/ixgo"
-	"github.com/goplus/spx/v3"
+	"github.com/goplus/spx/v4"
 )
 
 // Register the callback signatures used by SPX scripts on every interpreter

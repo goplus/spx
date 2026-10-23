@@ -31,12 +31,12 @@ func TestHighestTag(t *testing.T) {
 		want string
 	}{
 		{"empty", nil, ""},
-		{"other majors and invalid tags", []string{"v2.99.0", "v4.0.0", "v30.0.0", "3.9.0", "v3", "v3.bad", "v3.01.0", "v3.1.0-01"}, ""},
-		{"numeric ordering", []string{"v3.9.9", "v3.10.0", "v3.2.99"}, "v3.10.0"},
-		{"prerelease numeric ordering", []string{"v3.2.0-rc.2", "v3.2.0-rc.10", "v3.2.0-beta.99", "v3.1.99"}, "v3.2.0-rc.10"},
-		{"release beats prerelease", []string{"v3.2.0-rc.10", "v3.2.0", "v3.2.0-beta"}, "v3.2.0"},
-		{"mixed valid and invalid", []string{"v4.99.0", "v3.2.0", "v3.100.invalid", "v3.10.0-rc.1", "v2.999.0"}, "v3.10.0-rc.1"},
-		{"build metadata preserves first equal version", []string{"v3.2.0+first", "v3.2.0+second"}, "v3.2.0+first"},
+		{"other majors and invalid tags", []string{"v3.99.0", "v5.0.0", "v40.0.0", "4.9.0", "v4", "v4.bad", "v4.01.0", "v4.1.0-01"}, ""},
+		{"numeric ordering", []string{"v4.9.9", "v4.10.0", "v4.2.99"}, "v4.10.0"},
+		{"prerelease numeric ordering", []string{"v4.2.0-rc.2", "v4.2.0-rc.10", "v4.2.0-beta.99", "v4.1.99"}, "v4.2.0-rc.10"},
+		{"release beats prerelease", []string{"v4.2.0-rc.10", "v4.2.0", "v4.2.0-beta"}, "v4.2.0"},
+		{"mixed valid and invalid", []string{"v5.99.0", "v4.2.0", "v4.100.invalid", "v4.10.0-rc.1", "v3.999.0"}, "v4.10.0-rc.1"},
+		{"build metadata preserves first equal version", []string{"v4.2.0+first", "v4.2.0+second"}, "v4.2.0+first"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,7 +118,7 @@ func TestPseudoVersionMain(t *testing.T) {
 		sha := git("rev-parse", "HEAD")
 		// Empty optional targets have the same behavior as omitting the target.
 		for _, args := range [][]string{nil, {""}} {
-			want := "v3.0.0-20260102010405-" + sha[:12] + "\n"
+			want := "v4.0.0-20260102010405-" + sha[:12] + "\n"
 			if got := runVersionMain(t, args...); got != want {
 				t.Fatalf("main(%q) = %q, want %q", args, got, want)
 			}
@@ -126,33 +126,33 @@ func TestPseudoVersionMain(t *testing.T) {
 	})
 	t.Run("highest exact tag including annotated tags wins", func(t *testing.T) {
 		git := newVersionRepo(t)
-		for _, tag := range []string{"v3.2.0", "v3.10.0-rc.2", "v4.99.0", "v3.invalid"} {
+		for _, tag := range []string{"v4.2.0", "v4.10.0-rc.2", "v5.99.0", "v4.invalid"} {
 			git("tag", tag)
 		}
-		git("tag", "-a", "v3.10.0", "-m", "release")
-		if got := runVersionMain(t); got != "v3.10.0\n" {
+		git("tag", "-a", "v4.10.0", "-m", "release")
+		if got := runVersionMain(t); got != "v4.10.0\n" {
 			t.Fatalf("main() = %q", got)
 		}
 	})
 	t.Run("release ancestor increments patch and ignores unreachable tags", func(t *testing.T) {
 		git := newVersionRepo(t)
-		git("tag", "v3.2.4")
-		git("tag", "v2.99.0")
+		git("tag", "v4.2.4")
+		git("tag", "v3.99.0")
 		git("commit", "--quiet", "--allow-empty", "-m", "target")
 		target := git("rev-parse", "HEAD")
 		git("commit", "--quiet", "--allow-empty", "-m", "future")
-		git("tag", "v3.99.0")
-		want := "v3.2.5-0.20260102010405-" + target[:12] + "\n"
+		git("tag", "v4.99.0")
+		want := "v4.2.5-0.20260102010405-" + target[:12] + "\n"
 		if got := runVersionMain(t, target); got != want {
 			t.Fatalf("main(target) = %q, want %q", got, want)
 		}
 	})
 	t.Run("prerelease ancestor gets dotted pseudo suffix", func(t *testing.T) {
 		git := newVersionRepo(t)
-		git("tag", "v3.5.0-rc.2")
+		git("tag", "v4.5.0-rc.2")
 		git("commit", "--quiet", "--allow-empty", "-m", "after prerelease")
 		sha := git("rev-parse", "HEAD")
-		want := "v3.5.0-rc.2.0.20260102010405-" + sha[:12] + "\n"
+		want := "v4.5.0-rc.2.0.20260102010405-" + sha[:12] + "\n"
 		if got := runVersionMain(t); got != want {
 			t.Fatalf("main() = %q, want %q", got, want)
 		}
@@ -161,9 +161,9 @@ func TestPseudoVersionMain(t *testing.T) {
 
 func TestGitHelpers(t *testing.T) {
 	git := newVersionRepo(t)
-	git("tag", "v3.1.0")
-	git("tag", "v3.2.0")
-	if got := gitLines("tag", "--list"); len(got) != 2 || got[0] != "v3.1.0" || got[1] != "v3.2.0" {
+	git("tag", "v4.1.0")
+	git("tag", "v4.2.0")
+	if got := gitLines("tag", "--list"); len(got) != 2 || got[0] != "v4.1.0" || got[1] != "v4.2.0" {
 		t.Fatalf("gitLines(tag) = %q", got)
 	}
 	if got := gitLines("rev-parse", "--verify", "missing-ref"); got != nil {

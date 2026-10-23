@@ -1,18 +1,15 @@
-module github.com/goplus/spx/v3/cmd/ispx
+module github.com/goplus/spx/v4/cmd/ispx
 
 go 1.26.0
 
-tool github.com/goplus/ixgo/cmd/qexp
-
 require (
-	github.com/goplus/builder/tools/ai v0.0.0-20260724041336-c23d9b241e6b
 	github.com/goplus/ixgo v1.2.4
-	github.com/goplus/mod v0.22.1
-	github.com/goplus/spx/v3 v3.0.0
+	github.com/goplus/spx/v4 v4.0.0
 )
 
 require (
 	github.com/goplus/gogen v1.24.7 // indirect
+	github.com/goplus/mod v0.22.1 // indirect
 	github.com/goplus/reflectx v1.8.3 // indirect
 	github.com/goplus/spbase v0.1.1 // indirect
 	github.com/goplus/xgo v1.7.6-0.20260925200949-51a44c58fd65 // indirect
@@ -26,4 +23,4 @@ require (
 	golang.org/x/tools v0.52.0 // indirect
 )
 
-replace github.com/goplus/spx/v3 => ../..
+replace github.com/goplus/spx/v4 => ../..

@@ -22,7 +22,7 @@ package platform
 import (
 	"testing"
 
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type panicPlatformMgr struct {

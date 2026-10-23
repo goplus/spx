@@ -24,9 +24,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/gdext"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/gdext"
 	"github.com/stretchr/testify/require"
 )
 

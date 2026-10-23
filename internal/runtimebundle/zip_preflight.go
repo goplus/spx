@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/goplus/spx/v3/internal/zippreflight"
+	"github.com/goplus/spx/v4/internal/zippreflight"
 )
 
 func preflightZipArchive(reader io.ReaderAt, size int64, limits Limits) error {

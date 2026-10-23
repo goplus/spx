@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/goplus/spx/v3/internal/tools"
+	"github.com/goplus/spx/v4/internal/tools"
 )
 
 // CostumeFrame identifies one expanded costume frame. Part is zero for a

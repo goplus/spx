@@ -24,7 +24,7 @@ import (
 	"os/exec"
 	"os/signal"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 )
 
 func runTrackedEngineCommandWithEnv(workdir string, env map[string]string, name string, args ...string) error {

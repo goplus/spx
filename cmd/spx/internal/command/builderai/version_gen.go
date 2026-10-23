@@ -3,3 +3,5 @@
 package builderai
 
 const Version = "v0.0.0-20260724041336-c23d9b241e6b"
+const ReplacementPath = "github.com/joeykchen/builder/tools/ai"
+const ReplacementVersion = "v0.0.0-20261023045302-57741b3a68e6"

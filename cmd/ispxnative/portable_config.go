@@ -21,8 +21,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
 type portableConfigOverlay struct {

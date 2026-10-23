@@ -16,9 +16,9 @@
 
 package ispx
 
-//go:generate go run ../../internal/cmd/qexpwrap -types -outdir internal/pkg -directcalls-file direct_calls.txt github.com/goplus/spx/v3
-//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v3/pkg/spx/pkg/engine
-//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v3/pkg/spx
+//go:generate go run ../../internal/cmd/qexpwrap -types -outdir internal/pkg -directcalls-file direct_calls.txt github.com/goplus/spx/v4
+//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v4/pkg/spx/pkg/engine
+//go:generate go run ../../internal/cmd/qexpwrap -outdir internal/pkg github.com/goplus/spx/v4/pkg/spx
 
 // Embedded packages available across all ispx runtime platforms.
 import (
@@ -189,7 +189,7 @@ import (
 	// _ "github.com/goplus/ixgo/pkg/testing/slogtest"
 
 	// Third-party packages.
-	_ "github.com/goplus/spx/v3/pkg/ispx/internal/pkg/github.com/goplus/spx/v3"
-	_ "github.com/goplus/spx/v3/pkg/ispx/internal/pkg/github.com/goplus/spx/v3/pkg/spx"
-	_ "github.com/goplus/spx/v3/pkg/ispx/internal/pkg/github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	_ "github.com/goplus/spx/v4/pkg/ispx/internal/pkg/github.com/goplus/spx/v4"
+	_ "github.com/goplus/spx/v4/pkg/ispx/internal/pkg/github.com/goplus/spx/v4/pkg/spx"
+	_ "github.com/goplus/spx/v4/pkg/ispx/internal/pkg/github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )

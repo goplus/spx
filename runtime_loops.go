@@ -17,8 +17,8 @@
 package spx
 
 import (
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func (p *Game) initLogicLoop() {

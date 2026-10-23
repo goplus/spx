@@ -21,11 +21,11 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/ui"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/ui"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func installBubbleTestUiMgr(t *testing.T) {

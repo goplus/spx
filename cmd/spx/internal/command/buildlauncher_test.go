@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/launchpack"
+	"github.com/goplus/spx/v4/internal/launchpack"
 )
 
 func TestBuildLauncherDispatchesBeforeLegacySetup(t *testing.T) {
@@ -36,12 +36,12 @@ func TestBuildLauncherDispatchesBeforeLegacySetup(t *testing.T) {
 	projectDir := t.TempDir()
 	otherModule := t.TempDir()
 	repoRoot := findSPXRoot(t)
-	writeCommandTestFile(t, filepath.Join(projectDir, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\n\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(repoRoot)+"\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v4 v4.0.0\n\nreplace github.com/goplus/spx/v4 => "+filepath.ToSlash(repoRoot)+"\n")
 	writeCommandTestFile(t, filepath.Join(otherModule, "go.mod"), "module example.com/other\n\ngo 1.25.0\n")
 	goWork := filepath.Join(t.TempDir(), "go.work")
 	writeCommandTestFile(t, goWork, "go 1.25.0\n\nuse (\n\t"+filepath.ToSlash(projectDir)+"\n\t"+filepath.ToSlash(otherModule)+"\n)\n")
 	t.Setenv("GOWORK", goWork)
-	writeCommandTestFile(t, filepath.Join(projectDir, "gox.mod"), "xgo 1.8.0\n\nproject main.spx Game github.com/goplus/spx/v3 math\n\nclass -embed *.spx SpriteImpl\n\npack assets index.json\n")
+	writeCommandTestFile(t, filepath.Join(projectDir, "gox.mod"), "xgo 1.8.0\n\nproject main.spx Game github.com/goplus/spx/v4 math\n\nclass -embed *.spx SpriteImpl\n\npack assets index.json\n")
 	writeCommandTestFile(t, filepath.Join(projectDir, "main.spx"), "onStart => {}\n")
 	writeCommandTestFile(t, filepath.Join(projectDir, "Hero.spx"), "when green flag => {}\n")
 	writeCommandTestFile(t, filepath.Join(projectDir, "assets", "index.json"), "{}\n")
@@ -161,8 +161,8 @@ func launcherStringPointer(value string) *string { return &value }
 func launcherBoolPointer(value bool) *bool { return &value }
 
 func TestLoadLauncherProject(t *testing.T) {
-	const project = "project main.spx Game github.com/goplus/spx/v3 math\n"
-	const wildcard = "project *.spx Game github.com/goplus/spx/v3 math\n"
+	const project = "project main.spx Game github.com/goplus/spx/v4 math\n"
+	const wildcard = "project *.spx Game github.com/goplus/spx/v4 math\n"
 	const pack = "pack assets index.json\n"
 	for _, test := range []struct {
 		name, metadata, filename string
@@ -216,7 +216,7 @@ func TestLoadLauncherProject(t *testing.T) {
 }
 
 func TestLoadLauncherProjectRejectsInvalidFiles(t *testing.T) {
-	const metadata = "project main.spx Game github.com/goplus/spx/v3 math\npack assets index.json\n"
+	const metadata = "project main.spx Game github.com/goplus/spx/v4 math\npack assets index.json\n"
 	for _, kind := range []string{"missing metadata", "both metadata files", "metadata directory", "metadata symlink", "source directory", "source symlink", "missing source directory"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
@@ -271,8 +271,8 @@ func TestBuildLauncherFailureDoesNotPublishOutput(t *testing.T) {
 	for _, scenario := range []string{"builder failure", "missing stage", "portable config", "protected output", "invalid project", "missing Go"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
-			writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(findSPXRoot(t))+"\n")
-			writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\npack assets index.json\n")
+			writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module example.com/game\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v4 v4.0.0\nreplace github.com/goplus/spx/v4 => "+filepath.ToSlash(findSPXRoot(t))+"\n")
+			writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v4 math\npack assets index.json\n")
 			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "onStart => {}\n")
 			output := filepath.Join(root, "launcher")
 			writeCommandTestFile(t, output, "old launcher")

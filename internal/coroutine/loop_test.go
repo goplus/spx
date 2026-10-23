@@ -20,7 +20,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	itime "github.com/goplus/spx/v3/internal/time"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {

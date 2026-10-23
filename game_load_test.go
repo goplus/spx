@@ -26,12 +26,12 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type cameraFollowOverrideGame struct {

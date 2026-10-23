@@ -19,8 +19,8 @@ package engine
 import (
 	stdtime "time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 const warpBudget = 500 * stdtime.Millisecond

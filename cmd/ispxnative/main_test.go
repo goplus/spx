@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/interpruntime"
 )
 
 func TestValidateAssetIndex(t *testing.T) {

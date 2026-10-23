@@ -19,8 +19,8 @@ package spx
 import (
 	"slices"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	"github.com/goplus/spx/v3/internal/coroutine"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 // scriptEventLifecycle registers an invocation before it can run and returns

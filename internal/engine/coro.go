@@ -19,8 +19,8 @@ package engine
 import (
 	"context"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine/profiler"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine/profiler"
 )
 
 var gco *coroutine.Coroutines

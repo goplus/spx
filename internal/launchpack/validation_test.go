@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/projectpolicy"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func TestValidateGraphFlags(t *testing.T) {

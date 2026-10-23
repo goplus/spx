@@ -17,8 +17,8 @@
 package spx
 
 import (
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	"github.com/goplus/spx/v3/internal/coroutine"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 // OnCond handles rising edges without reentry, skipping polls while active.

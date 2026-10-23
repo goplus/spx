@@ -150,6 +150,8 @@ class ReleaseBumpTest(unittest.TestCase):
                     self.next_patch(baseline["current_runtime_version"]),
                 ),
                 ("v2.9.0", self.next_patch(baseline["current_runtime_version"])),
+                ("v3.99.0", self.next_patch(baseline["current_runtime_version"])),
+                ("v5.0.0", self.next_patch(baseline["current_runtime_version"])),
                 (
                     self.next_patch(baseline["current_spx_version"])[1:],
                     self.next_patch(baseline["current_runtime_version"]),
@@ -234,8 +236,8 @@ class ReleaseBumpTest(unittest.TestCase):
 
     def test_semver_prerelease_order_is_canonical(self):
         release_bump.require_newer_version(
-            "v3.3.0-rc.1",
-            "v3.3.0",
+            "v4.0.0-rc.1",
+            "v4.0.0",
             "SPX version",
             require_spx_major=True,
         )
@@ -264,7 +266,7 @@ class ReleaseBumpTest(unittest.TestCase):
 
     def test_release_boundary_requires_public_current_and_unused_targets(self):
         repository = "goplus/spx"
-        versions = ("v3.2.0", "2.4.0", "v3.3.0", "2.5.0")
+        versions = ("v3.3.0", "3.0.0", "v4.0.0", "4.0.0")
         current_tags = (versions[0], f"runtime-v{versions[1]}")
         target_tags = (versions[2], f"runtime-v{versions[3]}")
         current_values = {}

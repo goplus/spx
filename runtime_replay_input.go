@@ -20,7 +20,7 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func (p *inputManager) resolveInputSessionState(session *inputSession, delta float64) (InputReplayState, error) {

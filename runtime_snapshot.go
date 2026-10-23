@@ -16,7 +16,7 @@
 
 package spx
 
-import "github.com/goplus/spx/v3/internal/engine"
+import "github.com/goplus/spx/v4/internal/engine"
 
 // Snapshot runs fn and requests a screenshot if it succeeds. fn is the decorated
 // XGo function body and may be nil when called directly. Body errors are reported

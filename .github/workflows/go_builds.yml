@@ -14,6 +14,8 @@ jobs:
           - macos-latest
           - windows-latest
     runs-on: ${{ matrix.os }}
+    env:
+      GOWORK: 'off'
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -43,7 +45,7 @@ jobs:
       - name: Build cmd/ispx
         if: runner.os == 'Linux'
         working-directory: cmd/ispx
-        run: ./build.sh
+        run: ./build.sh --base
 
       - name: Build cmd/ispxnative
         shell: bash

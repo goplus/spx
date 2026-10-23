@@ -25,7 +25,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/common"
 	"github.com/iancoleman/strcase"
 )
 

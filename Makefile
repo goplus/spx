@@ -57,8 +57,8 @@ validate-pin-godot:
 	@test -z "$(strip $(GODOT_PREMERGE_CANDIDATE))" || { echo 'GODOT_PREMERGE_CANDIDATE was replaced by the pin-godot-candidate target.' >&2; exit 2; }
 
 validate-bump-release:
-	@test -n "$(strip $(SPX_VERSION))" || { echo 'SPX_VERSION is required. Usage: make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
-	@test -n "$(strip $(RUNTIME_VERSION))" || { echo 'RUNTIME_VERSION is required. Usage: make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
+	@test -n "$(strip $(SPX_VERSION))" || { echo 'SPX_VERSION is required. Usage: make bump-release SPX_VERSION=v4.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
+	@test -n "$(strip $(RUNTIME_VERSION))" || { echo 'RUNTIME_VERSION is required. Usage: make bump-release SPX_VERSION=v4.x.y RUNTIME_VERSION=x.y.z [RUNTIME_ABI=N]' >&2; exit 2; }
 
 download-engine: validate-download-engine
 
@@ -113,14 +113,15 @@ help-advanced: ## Show all commands, including low-level targets
 	@echo "Advanced variable notes:"
 	@echo "  MODE defaults to normal for Web-related targets."
 	@echo "  WEB defaults to 0; truthy values enable web tooling/runtime for 'make install'."
+	@echo "  SPX_ISPX_PROFILE defaults to ai; use base for a Web interpreter without Builder AI."
 	@echo "  PLATFORM is required by download-engine."
 	@echo "  GODOT_REF is optional for pin-godot targets; omitting it retains the current lock ref."
 	@echo "  bump-release requires authenticated gh access; current tags must be public and target tags unused."
 	@echo "  Use pin-godot-unpublished only after confirming that the current snapshot is unpublished."
 	@echo "  pin-godot-candidate permits verified candidate-only pinning; never use it for publication."
 	@echo "  Examples:"
-	@echo "    make bump-release SPX_VERSION=v3.3.0 RUNTIME_VERSION=2.5.0"
-	@echo "    make bump-release SPX_VERSION=v3.4.0 RUNTIME_VERSION=3.0.0 RUNTIME_ABI=3"
+	@echo "    make bump-release SPX_VERSION=v4.0.1 RUNTIME_VERSION=4.0.1"
+	@echo "    make bump-release SPX_VERSION=v4.1.0 RUNTIME_VERSION=5.0.0 RUNTIME_ABI=5"
 	@echo "    make pin-godot GODOT_SHA=<40-sha>"
 	@echo "    make pin-godot-unpublished GODOT_SHA=<40-sha>"
 	@echo "    make pin-godot-candidate GODOT_SHA=<40-sha>"
@@ -240,8 +241,9 @@ stop: ## Stop running processes
 format: ## Format Go code
 	$(LOCKED_GO) fmt ./...
 	cd ./cmd/ispx && $(LOCKED_GO) fmt ./...
+	cd ./cmd/ispx/ai && $(LOCKED_GO) fmt ./...
 
-generate: ## Generate all code
+generate: ## Generate bindings and both runtime variants, then format all modules
 	$(MAKE) generate-bindings
 	$(MAKE) generate-runtime
 	$(MAKE) format
@@ -249,10 +251,10 @@ generate: ## Generate all code
 generate-bindings: ## Generate Godot/GDExtension binding code
 	cd ./internal/cmd/codegen && $(LOCKED_GO) run .
 
-generate-runtime: ## Generate runtime registration code
+generate-runtime: ## Generate base and AI runtime registrations and CLI dependency metadata
 	$(LOCKED_GO) generate ./pkg/ispx/...
 	$(LOCKED_GO) generate ./cmd/spx/internal/command/...
-	cd ./cmd/ispx && $(LOCKED_GO) generate ./...
+	cd ./cmd/ispx/ai && $(LOCKED_GO) generate ./...
 
 clean-projects: ## Delete generated artifacts (.temp/, project/, .gdspx_web_server*.pid, go.mod, go.sum, gox.mod) from tutorial/test projects
 	@find -P tutorial test \( \

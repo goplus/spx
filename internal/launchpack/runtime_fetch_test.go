@@ -27,8 +27,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/httpclient"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/httpclient"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 func TestFetchReleaseURLRejectsHTTPSDowngrade(t *testing.T) {

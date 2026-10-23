@@ -34,13 +34,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	itime "github.com/goplus/spx/v3/internal/time"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	itime "github.com/goplus/spx/v4/internal/time"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type loadGameFS struct {

@@ -9,9 +9,9 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/visualfc/gid"
 )
 

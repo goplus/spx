@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 const (

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/goplus/spx/v3/internal/processsupervisor"
+	"github.com/goplus/spx/v4/internal/processsupervisor"
 )
 
 func runCommand(parent context.Context, run func(context.Context) (ProcessStatus, error)) (ProcessStatus, error) {

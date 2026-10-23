@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	spxfs "github.com/goplus/spx/v3/fs"
+	spxfs "github.com/goplus/spx/v4/fs"
 )
 
 func (zipf *FS) ReadDir(name string) ([]spxfs.DirEntry, error) {

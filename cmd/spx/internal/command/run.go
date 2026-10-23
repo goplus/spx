@@ -30,9 +30,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v3/cmd/spx/internal/runtimeasset"
-	"github.com/goplus/spx/v3/cmd/spx/internal/util"
-	"github.com/goplus/spx/v3/internal/interpruntime"
+	"github.com/goplus/spx/v4/cmd/spx/internal/runtimeasset"
+	"github.com/goplus/spx/v4/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/internal/interpruntime"
 )
 
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {

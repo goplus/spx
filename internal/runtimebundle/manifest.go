@@ -27,9 +27,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/goplus/spx/v3/internal/base/pathutil"
+	"github.com/goplus/spx/v4/internal/base/pathutil"
 
-	"github.com/goplus/spx/v3/internal/strictjson"
+	"github.com/goplus/spx/v4/internal/strictjson"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )

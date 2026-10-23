@@ -27,8 +27,8 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/scaffold"
+	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
 func TestRunWebCommandOrderAndErrors(t *testing.T) {

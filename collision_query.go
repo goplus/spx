@@ -19,8 +19,8 @@ package spx
 import (
 	"math"
 
-	"github.com/goplus/spx/v3/internal/base/collision"
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/base/collision"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {

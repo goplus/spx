@@ -19,7 +19,7 @@ package spx
 import (
 	"fmt"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 type spriteProperty uint8

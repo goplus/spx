@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestEndSampleSkipsMissingCoroutineStats(t *testing.T) {

@@ -335,7 +335,7 @@ func TestRuntimePackSourceDirectoriesCoverRuntimeDependencies(t *testing.T) {
 		t.Fatal("cannot locate runtime_pack_source_test.go")
 	}
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "../.."))
-	command := exec.Command("go", "list", "-deps", "-f", `{{if .Module}}{{if eq .Module.Path "github.com/goplus/spx/v3"}}{{.Dir}}{{end}}{{end}}`, ".")
+	command := exec.Command("go", "list", "-deps", "-f", `{{if .Module}}{{if eq .Module.Path "github.com/goplus/spx/v4"}}{{.Dir}}{{end}}{{end}}`, ".")
 	command.Dir = repoRoot
 	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=1")
 	output, err := command.Output()

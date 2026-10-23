@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 func fetchURLToFile(url, dst string) error {

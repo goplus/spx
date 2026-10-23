@@ -17,7 +17,7 @@
 package webffi
 
 import (
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
 // jsResult returns a reuse key and initializer, or empty strings for fresh results.

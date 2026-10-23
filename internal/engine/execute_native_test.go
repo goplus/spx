@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	gde "github.com/goplus/spx/v3/internal/gdengine"
-	itime "github.com/goplus/spx/v3/internal/time"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	gde "github.com/goplus/spx/v4/internal/gdengine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
 

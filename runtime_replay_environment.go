@@ -19,7 +19,7 @@ package spx
 import (
 	"sync"
 
-	itime "github.com/goplus/spx/v3/internal/time"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // inputSessionEnvironment owns deterministic process settings for one Game

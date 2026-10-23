@@ -20,8 +20,8 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/base/collision"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/base/collision"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func newTouchingPair(t *testing.T, physics bool) (*Game, *touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {

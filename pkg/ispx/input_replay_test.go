@@ -21,7 +21,7 @@ import (
 	"math"
 	"testing"
 
-	spx "github.com/goplus/spx/v3"
+	spx "github.com/goplus/spx/v4"
 )
 
 func TestHostInputRecordingBridge(t *testing.T) {

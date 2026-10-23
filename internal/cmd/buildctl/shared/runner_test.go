@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func TestCommandRunnerRunCommandUsesGoPathBin(t *testing.T) {

@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 type testVersionedManifest struct {

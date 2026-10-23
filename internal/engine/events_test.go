@@ -20,7 +20,7 @@ import (
 	"slices"
 	"testing"
 
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {

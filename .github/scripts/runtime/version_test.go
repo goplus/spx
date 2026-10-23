@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func TestDescribeRelease(t *testing.T) {

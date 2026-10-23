@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	itime "github.com/goplus/spx/v3/internal/time"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // CaptureRequest identifies a screenshot and its timing.

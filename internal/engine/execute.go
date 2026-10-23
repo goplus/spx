@@ -19,7 +19,7 @@ package engine
 import (
 	"context"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 func Execute(owner any, fn func(ctx context.Context, owner any)) {

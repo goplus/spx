@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/fs/fsutil"
+	"github.com/goplus/spx/v4/fs/fsutil"
 )
 
 func TestOpenFile(t *testing.T) {

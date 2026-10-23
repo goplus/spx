@@ -24,9 +24,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func TestRunEnvDispatchAndArgumentErrors(t *testing.T) {

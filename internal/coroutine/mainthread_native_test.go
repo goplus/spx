@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	itime "github.com/goplus/spx/v3/internal/time"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type mainThreadTestPlatform struct {

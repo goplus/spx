@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 func TestSpritePropertiesDistinguishMissingAndZeroValues(t *testing.T) {

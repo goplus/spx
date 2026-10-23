@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	inputstate "github.com/goplus/spx/v3/internal/input"
+	inputstate "github.com/goplus/spx/v4/internal/input"
 )
 
 type SwipeState[T any] struct {

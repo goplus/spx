@@ -11,6 +11,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Build web bundle (normal)
+    env:
+      GOWORK: 'off'
+      SPX_ISPX_PROFILE: base
     steps:
       - name: Check out code
         uses: actions/checkout@v7

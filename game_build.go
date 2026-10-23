@@ -23,9 +23,9 @@ import (
 	"os"
 	"reflect"
 
-	spxfs "github.com/goplus/spx/v3/fs"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
+	spxfs "github.com/goplus/spx/v4/fs"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 // -----------------------------------------------------------------------------

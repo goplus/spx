@@ -21,8 +21,8 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v3/internal/assets"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 func newTestRenderSprite() *SpriteImpl {

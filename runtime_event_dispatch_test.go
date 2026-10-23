@@ -21,9 +21,9 @@ import (
 	"slices"
 	"testing"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // Stamp-driven games broadcast to many clones each frame.

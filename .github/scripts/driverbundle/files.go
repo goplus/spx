@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v3/internal/driverbundle"
+	"github.com/goplus/spx/v4/internal/driverbundle"
 )
 
 func openRegularFile(path string) (*os.File, os.FileInfo, error) {

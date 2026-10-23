@@ -24,11 +24,11 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v3/internal/launchpack"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/launchpack"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
-const spxModulePath = "github.com/goplus/spx/v3"
+const spxModulePath = "github.com/goplus/spx/v4"
 
 type launcherBuilder func(context.Context, launchpack.Config) (launchpack.Result, error)
 

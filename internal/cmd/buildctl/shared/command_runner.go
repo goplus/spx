@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func (r CommandRunner) RunCommand(workdir string, name string, args ...string) error {

@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func acquireSourceRuntime(ctx context.Context, cfg Config, env []string, cacheRoot string, lock release.RuntimeLock, spec release.HostRuntimeSpec, dependencies runtimeAssetDependencies, publishedErr error) (Assets, error) {

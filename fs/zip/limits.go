@@ -25,7 +25,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/zippreflight"
+	"github.com/goplus/spx/v4/internal/zippreflight"
 )
 
 // Limits bound ZIP metadata and decompression work.

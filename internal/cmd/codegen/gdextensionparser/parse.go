@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/preprocessor"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/preprocessor"
 )
 
 func ReadFiles(dir, fileName string) (string, error) {

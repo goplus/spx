@@ -23,12 +23,12 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/goplus/spx/v3/internal/base/defaults"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/engine/platform"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	"github.com/goplus/spx/v3/internal/ui"
+	"github.com/goplus/spx/v4/internal/base/defaults"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/platform"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	"github.com/goplus/spx/v4/internal/ui"
 )
 
 type preparedSprite struct {

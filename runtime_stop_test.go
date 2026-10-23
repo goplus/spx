@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func TestStopThisScriptAtEventBoundaryEndsThread(t *testing.T) {

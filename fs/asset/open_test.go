@@ -27,8 +27,8 @@ import (
 	"slices"
 	"testing"
 
-	spxfs "github.com/goplus/spx/v3/fs"
-	"github.com/goplus/spx/v3/fs/asset"
+	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/fs/asset"
 )
 
 func TestOpenRegistersDefaultSchema(t *testing.T) {

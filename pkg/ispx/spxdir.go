@@ -21,7 +21,7 @@ import (
 	"io/fs"
 	"path"
 
-	spxfs "github.com/goplus/spx/v3/fs"
+	spxfs "github.com/goplus/spx/v4/fs"
 )
 
 // spxDir wraps a [fs.FS] to implement [spxfs.Dir].

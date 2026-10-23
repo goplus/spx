@@ -30,7 +30,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/goplus/spx/v3/internal/scaffold"
+	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
 func testSessionConfig(t *testing.T) SessionConfig {

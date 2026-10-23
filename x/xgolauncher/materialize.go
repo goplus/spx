@@ -23,8 +23,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
 func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workDir string, namespace runtimebundle.Namespace, expectedDigest string, write func(io.Writer) error) (*runtimebundle.Materialized, error) {

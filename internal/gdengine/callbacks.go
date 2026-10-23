@@ -22,9 +22,9 @@ import (
 	"maps"
 	"slices"
 
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	itime "github.com/goplus/spx/v3/internal/time"
-	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	itime "github.com/goplus/spx/v4/internal/time"
+	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func bindCallbacks() CallbackInfo {

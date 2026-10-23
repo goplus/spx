@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	itime "github.com/goplus/spx/v3/internal/time"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func resetRuntimeDeltaTestState() {

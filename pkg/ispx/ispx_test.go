@@ -28,8 +28,8 @@ import (
 
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
-	spxfs "github.com/goplus/spx/v3/fs"
-	"github.com/goplus/spx/v3/fs/asset"
+	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/fs/asset"
 )
 
 // Lifecycle tests own the package singleton and release every interpreter they
@@ -97,7 +97,7 @@ func TestInterpreterInit(t *testing.T) {
 					t.Fatalf("default lookup = %q, %v", dir, ok)
 				}
 			}
-			if ixgoCtx.SourcePackage("github.com/goplus/spx/v3@patch") == nil {
+			if ixgoCtx.SourcePackage("github.com/goplus/spx/v4@patch") == nil {
 				t.Fatal("Init did not register the generic widget patch")
 			}
 			requireInterpreterPanic(t, "ispx: already initialized", func() { _ = Init(nil) })

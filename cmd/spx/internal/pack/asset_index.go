@@ -24,8 +24,8 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/goplus/spx/v3/internal/assetindex"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
+	"github.com/goplus/spx/v4/internal/assetindex"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
 type packedAssetIndex struct {

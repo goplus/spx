@@ -25,10 +25,10 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/processsupervisor"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
+	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/processsupervisor"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
 func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, error) {

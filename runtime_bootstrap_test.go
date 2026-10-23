@@ -25,10 +25,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {

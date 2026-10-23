@@ -43,13 +43,13 @@ func TestResolveSPXSourceModes(t *testing.T) {
 		{
 			name: "module cache",
 			module: listedModule{
-				Path: spxModulePath, Version: "v3.1.0", Dir: root,
+				Path: spxModulePath, Version: "v4.1.0", Dir: root,
 			},
 		},
 		{
 			name: "local replacement",
 			module: listedModule{
-				Path: spxModulePath, Version: "v3.1.0", Dir: root,
+				Path: spxModulePath, Version: "v4.1.0", Dir: root,
 				Replace: &listedModule{Path: root, Dir: root},
 			},
 			mode: true,
@@ -60,7 +60,7 @@ func TestResolveSPXSourceModes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if gotRoot != wantRoot || selected != "v3.1.0" || mode != test.mode {
+			if gotRoot != wantRoot || selected != "v4.1.0" || mode != test.mode {
 				t.Fatalf("source = root %q, selected %q, mode %v", gotRoot, selected, mode)
 			}
 		})
@@ -69,12 +69,12 @@ func TestResolveSPXSourceModes(t *testing.T) {
 
 func TestResolveSPXSourceWithoutModuleDirectory(t *testing.T) {
 	root, selected, effective, sourceMode, err := resolveSPXSource(listedModule{
-		Path: spxModulePath, Version: "v3.1.0",
+		Path: spxModulePath, Version: "v4.1.0",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if root != "" || selected != "v3.1.0" || effective != "v3.1.0" || sourceMode {
+	if root != "" || selected != "v4.1.0" || effective != "v4.1.0" || sourceMode {
 		t.Fatalf("source = root %q, selected %q, effective %q, mode %v", root, selected, effective, sourceMode)
 	}
 }
@@ -145,7 +145,7 @@ func TestLauncherGraphVerifier(t *testing.T) {
 	dependency := filepath.Join(t.TempDir(), "dependency")
 	writeCommandTestFile(t, filepath.Join(dependency, "go.mod"), "module example.com/dependency\n\ngo 1.25.0\n")
 	moduleText := func(version string) string {
-		return "module example.com/game\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/goplus/spx/v3 v3.0.0\n\texample.com/dependency " + version + "\n)\nreplace github.com/goplus/spx/v3 => " + filepath.ToSlash(findSPXRoot(t)) + "\nreplace example.com/dependency => " + filepath.ToSlash(dependency) + "\n"
+		return "module example.com/game\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/goplus/spx/v4 v4.0.0\n\texample.com/dependency " + version + "\n)\nreplace github.com/goplus/spx/v4 => " + filepath.ToSlash(findSPXRoot(t)) + "\nreplace example.com/dependency => " + filepath.ToSlash(dependency) + "\n"
 	}
 	writeCommandTestFile(t, goMod, moduleText("v1.0.0"))
 	writeCommandTestFile(t, metadata, "xgo 1.8.0\n")
@@ -186,7 +186,7 @@ func TestLauncherGraphVerifierVendorMetadata(t *testing.T) {
 	writeCommandTestFile(t, filepath.Join(spxRoot, "go.mod"), "module "+spxModulePath+"\n\ngo 1.25.0\n")
 	writeCommandTestFile(t, filepath.Join(spxRoot, "cmd", "ispxnative", "main.go"), "package ispxnative\n")
 	goMod := filepath.Join(moduleRoot, "go.mod")
-	writeCommandTestFile(t, goMod, "module example.com/game\n\ngo 1.25.0\n\nrequire "+spxModulePath+" v3.0.0\nreplace "+spxModulePath+" => "+filepath.ToSlash(spxRoot)+"\n")
+	writeCommandTestFile(t, goMod, "module example.com/game\n\ngo 1.25.0\n\nrequire "+spxModulePath+" v4.0.0\nreplace "+spxModulePath+" => "+filepath.ToSlash(spxRoot)+"\n")
 	writeCommandTestFile(t, filepath.Join(moduleRoot, "main.go"), "package main\nimport _ \""+spxModulePath+"/cmd/ispxnative\"\nfunc main() {}\n")
 	goCommand, err := resolveGoCommand()
 	if err != nil {
@@ -269,8 +269,8 @@ func TestLauncherGraphQueryFailures(t *testing.T) {
 		{"stderr", "echo graph-unavailable >&2; exit 7\n", "graph-unavailable"},
 		{"malformed output", "echo '{'\n", "decode go list module"},
 		{"wrong module", "echo '{\"Path\":\"example.com/wrong\"}'\n", "want"},
-		{"missing local root", `printf '{"Path":"github.com/goplus/spx/v3","Main":true}'`, "local module"},
-		{"selection failure", `case "$*" in *-json*) printf '{"Path":"github.com/goplus/spx/v3"}';; *) exit 7;; esac`, "go list module graph"},
+		{"missing local root", `printf '{"Path":"github.com/goplus/spx/v4","Main":true}'`, "local module"},
+		{"selection failure", `case "$*" in *-json*) printf '{"Path":"github.com/goplus/spx/v4"}';; *) exit 7;; esac`, "go list module graph"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin := installCommandTestTools(t, map[string]string{"go": tc.script})
@@ -314,12 +314,12 @@ func TestResolveLauncherInputsRejectsIncompleteEnvironment(t *testing.T) {
 			}
 			mod := filepath.Join(root, "go.mod")
 			writeCommandTestFile(t, mod, "module example.com/game\ngo 1.25\n")
-			writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\npack assets index.json\n")
+			writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v4 math\npack assets index.json\n")
 			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "onStart => {}\n")
 			t.Setenv("GOFLAGS", "")
 			t.Setenv("SPX_TEST_GOMOD", mod)
 			t.Setenv("SPX_TEST_GOWORK", "off")
-			t.Setenv("SPX_TEST_MODULE", `{"Path":"github.com/goplus/spx/v3","Version":"v3.0.0"}`)
+			t.Setenv("SPX_TEST_MODULE", `{"Path":"github.com/goplus/spx/v4","Version":"v4.0.0"}`)
 			t.Setenv("SPX_TEST_FAIL", "")
 			bin := installCommandTestTools(t, map[string]string{"go": `
 case "$1 $2" in
@@ -352,7 +352,7 @@ esac
 			case "graph query":
 				t.Setenv("SPX_TEST_FAIL", "graph")
 			case "invalid source":
-				t.Setenv("SPX_TEST_MODULE", fmt.Sprintf(`{"Path":"github.com/goplus/spx/v3","Main":true,"Dir":%q,"GoMod":%q}`, root, mod))
+				t.Setenv("SPX_TEST_MODULE", fmt.Sprintf(`{"Path":"github.com/goplus/spx/v4","Main":true,"Dir":%q,"GoMod":%q}`, root, mod))
 			case "empty workspace":
 				t.Setenv("SPX_TEST_GOWORK", "")
 			}
@@ -366,7 +366,7 @@ esac
 			if err != nil {
 				t.Fatal(err)
 			}
-			if project.dir != root || source.goWork != "off" || source.selectedVersion != "v3.0.0" || source.verifyGraph == nil {
+			if project.dir != root || source.goWork != "off" || source.selectedVersion != "v4.0.0" || source.verifyGraph == nil {
 				t.Fatalf("resolved project/source = %+v / %+v", project, source)
 			}
 			if err := source.verifyGraph(context.Background()); err != nil {
@@ -406,7 +406,7 @@ func TestLauncherGraphNormalizesFilesFlagsAndModuleIdentity(t *testing.T) {
 	}{
 		{"local directory missing", listedModule{Path: spxModulePath, Main: true}, "local module"},
 		{"local go.mod missing", listedModule{Path: spxModulePath, Main: true, Dir: root}, "has no go.mod"},
-		{"versioned replacement", listedModule{Path: spxModulePath, Version: "v3.0.0", Replace: &listedModule{Path: "example.com/fork", Version: "v3.1.0", Sum: "replacement-sum", GoModSum: "replacement-mod-sum"}}, ""},
+		{"versioned replacement", listedModule{Path: spxModulePath, Version: "v4.0.0", Replace: &listedModule{Path: "example.com/fork", Version: "v3.1.0", Sum: "replacement-sum", GoModSum: "replacement-mod-sum"}}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			identity, file, err := normalizeLauncherModule(tc.module)

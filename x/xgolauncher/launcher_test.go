@@ -31,8 +31,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
 func TestProcessStatusSuccess(t *testing.T) {
@@ -236,7 +236,7 @@ func launcherTestPayload(t *testing.T, engineScript string, configure ...func(*r
 	projectSum := sha256.Sum256(projectZIP)
 	interfaceSum := sha256.Sum256([]byte("interface"))
 	config := runtimepayload.BuildConfig{
-		SPX:    runtimepayload.SourceIdentity{SelectedPath: "github.com/goplus/spx/v3", EffectivePath: "github.com/goplus/spx/v3", SourceMode: true},
+		SPX:    runtimepayload.SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", EffectivePath: "github.com/goplus/spx/v4", SourceMode: true},
 		Target: runtimepayload.Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
 		Engine: runtimepayload.Engine{
 			RuntimeVersion: "test", RuntimeABI: 1, EngineInterfaceDigest: hex.EncodeToString(interfaceSum[:]),

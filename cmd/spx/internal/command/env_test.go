@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
+	builderai "github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
 )
 
 func TestAdaptGoModSkipsScaffoldInsideLocalSPXRepository(t *testing.T) {
@@ -73,8 +73,8 @@ func TestClearBuildRemovesArtifactsOnly(t *testing.T) {
 func TestAdaptGoModPreservesExistingModule(t *testing.T) {
 	for _, location := range []string{"local repository", "external project"} {
 		for _, module := range []struct{ name, content string }{
-			{"single-line replacement", "module example.com/game\n\n// Keep the selected dependency.\nreplace github.com/goplus/spx/v3 => ../../.. // stale local path\n"},
-			{"CRLF replacement block", "module example.com/game\r\n\r\nreplace (\r\n\tgithub.com/goplus/spx/v3 => ../../.. // keep this comment\r\n)\r\n\r\n"},
+			{"single-line replacement", "module example.com/game\n\n// Keep the selected dependency.\nreplace github.com/goplus/spx/v4 => ../../.. // stale local path\n"},
+			{"CRLF replacement block", "module example.com/game\r\n\r\nreplace (\r\n\tgithub.com/goplus/spx/v4 => ../../.. // keep this comment\r\n)\r\n\r\n"},
 			{"no replacement", "// User-owned module without a replacement.\nmodule example.com/game\n"},
 		} {
 			t.Run(location+"/"+module.name, func(t *testing.T) {
@@ -386,7 +386,7 @@ func TestEnsureBuilderAIModuleFiles(t *testing.T) {
 
 go 1.25.0
 
-require github.com/goplus/spx/v3 v3.0.0-test //xgo:class
+require github.com/goplus/spx/v4 v4.0.0-test //xgo:class
 `
 	for _, test := range []struct {
 		name, description string
@@ -411,13 +411,13 @@ require github.com/goplus/spx/v3 v3.0.0-test //xgo:class
 				writeCommandTestFile(t, filepath.Join(projectRoot, test.description), "summary")
 			}
 			if test.existing {
-				writeCommandTestFile(t, filepath.Join(projectRoot, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\n")
+				writeCommandTestFile(t, filepath.Join(projectRoot, "gox.mod"), "project main.spx Game github.com/goplus/spx/v4 math\n")
 				writeCommandTestFile(t, filepath.Join(projectRoot, "go.mod"), `module demo
 
 go 1.25.0
 
 require (
-	github.com/goplus/spx/v3 v3.0.0-test //xgo:class
+	github.com/goplus/spx/v4 v4.0.0-test //xgo:class
 )
 `)
 			}
@@ -446,7 +446,7 @@ require (
 			if !strings.Contains(goMod, builderai.ModulePath+" "+builderai.Version) || strings.Contains(goMod, "//xgo:class") {
 				t.Fatalf("go.mod must require builder AI without the SPX class marker:\n%s", goMod)
 			}
-			if test.local && !strings.Contains(goMod, "replace github.com/goplus/spx/v3 => ../..") {
+			if test.local && !strings.Contains(goMod, "replace github.com/goplus/spx/v4 => ../..") {
 				t.Fatalf("go.mod must retain the local SPX replacement:\n%s", goMod)
 			}
 		})
@@ -560,7 +560,7 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 
 func writeLocalSpxRepoMarker(t *testing.T, root string) {
 	t.Helper()
-	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v3\n")
+	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v4\n")
 	script := filepath.Join(root, "cmd", "spx", "install.sh")
 	writeCommandTestFile(t, script, "#!/bin/bash\n")
 	if err := os.Chmod(script, 0o755); err != nil {
@@ -588,7 +588,7 @@ func TestFindSpxRoot(t *testing.T) {
 				}
 			case "SPX dependency only":
 				writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module example.com/demo\n")
-				writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v3 math\n")
+				writeCommandTestFile(t, filepath.Join(root, "gox.mod"), "project main.spx Game github.com/goplus/spx/v4 math\n")
 				want = ""
 			}
 			cmd := CmdTool{TargetAbsDir: start}

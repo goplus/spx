@@ -21,9 +21,9 @@ import (
 	"strings"
 	"syscall"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	"github.com/goplus/spx/v3/internal/ui"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // monitorBinding resolves reads and optional writes in the same variable scope.

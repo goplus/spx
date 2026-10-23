@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/base/quoted"
+	"github.com/goplus/spx/v4/internal/base/quoted"
 )
 
 type launcherSource struct {

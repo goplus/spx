@@ -27,8 +27,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/strictjson"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/strictjson"
 )
 
 // Verified is an immutable payload whose complete archive, top-level manifest,

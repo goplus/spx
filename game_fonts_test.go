@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 type recordingProjectFontBridge struct {

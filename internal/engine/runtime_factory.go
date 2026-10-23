@@ -20,8 +20,8 @@ import (
 	"reflect"
 
 	"github.com/goplus/spbase/mathf"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func CreateBareSpriteForType[T any](pos mathf.Vec2) *T {

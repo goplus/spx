@@ -28,7 +28,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/goplus/spx/v3/internal/scaffold"
+	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
 const (

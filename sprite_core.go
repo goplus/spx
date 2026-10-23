@@ -20,8 +20,8 @@ import (
 	"maps"
 	"reflect"
 
-	corestate "github.com/goplus/spx/v3/internal/core/state"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	corestate "github.com/goplus/spx/v4/internal/core/state"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // SpriteImpl is the concrete implementation of the Sprite interface.

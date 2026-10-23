@@ -19,7 +19,7 @@ package command
 import (
 	"bytes"
 	"errors"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 	"os"
 	"path/filepath"
 	"runtime"

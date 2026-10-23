@@ -25,7 +25,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v3/cmd/spx/internal/util"
+	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 )
 
 func (cmd *CmdTool) BuildWasm() error {

@@ -19,7 +19,7 @@ package coroutine
 import (
 	stime "time"
 
-	"github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/time"
 )
 
 // Scratch budgets 75% of the default stepping interval for script rounds.

@@ -20,7 +20,7 @@ import (
 	_ "embed"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
 // ManagerTemplate is the shared manager registration and method skeleton.

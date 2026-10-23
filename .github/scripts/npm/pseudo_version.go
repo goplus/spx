@@ -27,7 +27,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const majorVersion = "v3"
+const majorVersion = "v4"
 
 func main() {
 	target := "HEAD"

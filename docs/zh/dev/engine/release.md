@@ -6,6 +6,10 @@ SPX 发布与 Godot runtime 使用两套版本，并由同一受控流程按显�
 go run ./.github/scripts/runtime/version.go --json
 ```
 
+SPX `v4.0.0` 使用 Go module `github.com/goplus/spx/v4`，配套 runtime `4.0.0`、runtime ABI `4`。从 v3 迁移时，需要同步更新项目的 `go.mod`、Go import 和 `gox.mod` 中的模块路径。`AtFrame`、`CurrentFrame`、`XGot_Game_Reload` 已移除，`Rand__0` 现在返回 `int`；依赖这些接口的代码需要适配。runtime 的回调表布局和导出符号也已变化，v3 runtime 不能与 v4 产品混用。
+
+SPX 发布的 Web 包和 npm 包只包含基础解释器，Builder 自行构建带 AI 的解释器。本地构建、代码生成和测试见[解释器开发说明](../../../../cmd/ispx/README.md)。
+
 只需要单值的脚本仍可使用 `--spx-version`、`--runtime-tag`，或默认的 runtime version 输出。发布 CI 使用 `--github-output` 一次描述已校验的 lock 与 release mapping，不再通过多次 JSON 查询重复拼装。
 
 外置模块首个原子版本为 SPX `v3.2.0`、runtime `2.4.0`（tag `runtime-v2.4.0`）、runtime ABI `2`。历史 `v3.1.0 -> Godot spx2.3.0` 映射保持 legacy，不得移动或重新解释旧 tag。
@@ -104,7 +108,7 @@ gh workflow run release.yml \
   -f operation=publish-dev-npm
 ```
 
-该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release。发布前会执行相同的源码身份复用校验，所选 runtime 必须已经公开、完整且兼容；runtime 不存在时应先发布，存在同版本但不兼容时必须提升版本。如果目标 SHA 恰好已有正式 `v3.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
+该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release。发布前会执行相同的源码身份复用校验，所选 runtime 必须已经公开、完整且兼容；runtime 不存在时应先发布，存在同版本但不兼容时必须提升版本。如果目标 SHA 恰好已有正式 `v4.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
 
 不要恢复 `dev` 每次 push 自动发布。显式操作可以避免 runtime lock 已推进但对应 runtime 尚未公开时反复失败，也避免为每次合入产生不可撤销的 npm 版本。npm Trusted Publisher 应固定为 organization `goplus`、repository `spx`、workflow filename `release.yml`，environment 留空；正式版与开发版都通过该顶层 workflow 的 OIDC 身份发布。`publish_web_package.yml` 只是 reusable workflow，不应单独触发。
 
@@ -114,11 +118,11 @@ gh workflow run release.yml \
 - Godot、`godot_modules/spx`、toolchain 或 runtime pack 输出变化时，用一个事务同时提升两套身份：
 
   ```sh
-  make bump-release SPX_VERSION=v3.x.y RUNTIME_VERSION=x.y.z
+  make bump-release SPX_VERSION=v4.x.y RUNTIME_VERSION=x.y.z
   ```
 
   只有 runtime ABI 本身变化时才额外传 `RUNTIME_ABI=N`。该命令会先通过已认证的 `gh` API 只读检查确认两项 current release 已公开、两项目标 release/tag 均未占用，再归档上一条 SPX mapping、推进 current lock、创建新的不可变 snapshot，并执行 release metadata 测试；它不会发布，也不会修改 Godot pin。current pair 仍是未发布 candidate 时，应继续使用原版本，不能把它归档成发布历史。
 - 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；历史版本根据该快照恢复构建配置、平台资产名称和 SPX/runtime 映射，不能读取更新后的默认 lock。
 - 新 runtime version 创建后，严格固定使用 `make pin-godot GODOT_SHA=<sha>`；commit 已进入 lock ref 且需要替换未发布 snapshot 时使用 `make pin-godot-unpublished GODOT_SHA=<sha>`；合并前 dry-run candidate 使用 `make pin-godot-candidate GODOT_SHA=<sha>`。三者默认保留 current lock ref，只有传入 `GODOT_REF=...` 才会切换，并且只根据 current lock 推导 snapshot 文件名，不会触碰其他历史版本。
-- 项目 `go.mod` scaffold 会自动渲染当前声明的 SPX 版本。`internal/cmd/codegen/go.mod` 中的 `v3.0.0` 只是本地 `replace` 所需的 major-version floor，发布时不要修改这两个文件。
+- 项目 `go.mod` scaffold 会自动渲染当前声明的 SPX 版本。`internal/cmd/codegen/go.mod` 中的 `v4.0.0` 只是本地 `replace` 所需的 major-version floor，发布时不要修改这两个文件。
 - runtime 一旦公开，其 snapshot 永久冻结。公开 tag 绝不能使用 `sync --unpublished`、`pin-godot-unpublished` 或 `pin-godot-candidate`；必须通过 `make bump-release` 使用新的 runtime version。release setup 会运行 `check`，package 初始化、drift 与 catalog 测试也会共同校验 current mapping。

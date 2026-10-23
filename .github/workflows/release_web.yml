@@ -17,6 +17,9 @@ jobs:
   web-build:
     name: Build web bundle (${{ matrix.mode }})
     runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+      SPX_ISPX_PROFILE: base
     strategy:
       matrix:
         include:
