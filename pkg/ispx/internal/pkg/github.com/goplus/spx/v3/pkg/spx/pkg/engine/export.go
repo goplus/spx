@@ -111,7 +111,7 @@ func init() {
 			"HeadingToPoint":              reflect.ValueOf(q.HeadingToPoint),
 			"InitSpriteInstance":          reflect.ValueOf(q.InitSpriteInstance),
 			"InitUINodeInstance":          reflect.ValueOf(q.InitUINodeInstance),
-			"InternalUpdateEngine":        reflect.ValueOf(q.InternalUpdateEngine),
+			"InternalUpdateFrame":         reflect.ValueOf(q.InternalUpdateFrame),
 			"NewEvent0":                   reflect.ValueOf(q.NewEvent0),
 			"PrintStack":                  reflect.ValueOf(q.PrintStack),
 			"RadToDeg":                    reflect.ValueOf(q.RadToDeg),

@@ -31,8 +31,11 @@ func (r *callbackTestRuntime) AdvanceTimeSinceGameStart(delta float64) float64 {
 	return delta
 }
 
-func (r *callbackTestRuntime) InternalUpdateEngine(delta float64) {
-	*r.calls = append(*r.calls, fmt.Sprintf("runtime:%g", delta))
+func (r *callbackTestRuntime) InternalUpdateFrame(delta float64, update func(float64)) {
+	*r.calls = append(*r.calls, fmt.Sprintf("runtime-frame:%g", delta))
+	if update != nil {
+		update(delta)
+	}
 }
 
 type callbackTestSprite struct {
@@ -74,7 +77,7 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 					OnEngineUpdate: func(delta float64) {
 						calls = append(calls, fmt.Sprintf("frame-begin:%g", delta))
 						if runUpdate {
-							engine.InternalUpdateEngine(delta)
+							engine.InternalUpdateFrame(delta, nil)
 						}
 						calls = append(calls, "frame-end")
 					},
@@ -87,7 +90,7 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 				}
 				want := []string{fmt.Sprintf("advance:%g", logical), fmt.Sprintf("frame-begin:%g", logical)}
 				if runUpdate {
-					want = append(want, fmt.Sprintf("runtime:%g", logical))
+					want = append(want, fmt.Sprintf("runtime-frame:%g", logical))
 				}
 				want = append(want, "frame-end")
 				if !slices.Equal(calls, want) {
@@ -149,11 +152,11 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 				if fixed > 0 {
 					logical = fixed
 				}
-				want = append(want, fmt.Sprintf("advance:%g", logical), fmt.Sprintf("sprite-update:%g", logical))
+				want = append(want, fmt.Sprintf("advance:%g", logical), fmt.Sprintf("runtime-frame:%g", logical))
 				if withCore {
 					want = append(want, fmt.Sprintf("core-update:%g", logical))
 				}
-				want = append(want, fmt.Sprintf("runtime:%g", logical), "sprite-fixed:0.5")
+				want = append(want, "sprite-fixed:0.5")
 				if withCore {
 					want = append(want, "core-fixed:0.5", "core-pause:true", "core-destroy")
 				}
@@ -216,10 +219,23 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 		}
 	}
 	if runtime.GOOS != "js" {
+		var calls []string
+		engine.SetRuntimeBridge(&callbackTestRuntime{calls: &calls})
+		itime.SetFixedDeltaTime(0)
 		bridge := linkerBridge{}
-		bridge.Link(engine.CoreCallbackInfo{})
+		bridge.Link(engine.CoreCallbackInfo{
+			OnEngineUpdate: func(delta float64) {
+				calls = append(calls, fmt.Sprintf("core-update:%g", delta))
+			},
+		})
+		t.Cleanup(bridge.Unlink)
 		if activeLink == nil {
 			t.Fatal("public link did not install an active session")
+		}
+		bindCallbacks().OnEngineUpdate(0.25)
+		want := []string{"advance:0.25", "runtime-frame:0.25", "core-update:0.25"}
+		if !slices.Equal(calls, want) {
+			t.Fatalf("public link frame calls = %v, want %v", calls, want)
 		}
 		bridge.Unlink()
 		bridge.Unlink()

@@ -435,8 +435,7 @@ func TestResetClearsInputAndTriggerEvents(t *testing.T) {
 			onKeyPressed(7)
 			onMousePressed(1)
 			enqueueTriggerEvent(&Sprite{}, &Sprite{})
-			cacheKeyEvents()
-			cacheMouseEvents()
+			cacheInputState()
 			cacheTriggerEvents()
 			onKeyPressed(8)
 			onMousePressed(2)
@@ -457,8 +456,7 @@ func TestResetClearsInputAndTriggerEvents(t *testing.T) {
 				if IsMouseButtonPressed(1) || IsMouseButtonPressed(2) || AnyMouseButtonPressed() {
 					t.Fatal("reset retained held mouse buttons")
 				}
-				cacheKeyEvents()
-				cacheMouseEvents()
+				cacheInputState()
 				cacheTriggerEvents()
 			}
 
@@ -472,8 +470,7 @@ func TestResetClearsInputAndTriggerEvents(t *testing.T) {
 			onKeyPressed(7)
 			onMousePressed(1)
 			enqueueTriggerEvent(source, target)
-			cacheKeyEvents()
-			cacheMouseEvents()
+			cacheInputState()
 			cacheTriggerEvents()
 			keys, held := GetKeyInput(nil)
 			mouse, buttons := GetMouseInput(nil)
