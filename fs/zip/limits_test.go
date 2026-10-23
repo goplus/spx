@@ -227,7 +227,6 @@ func TestFSNilCloseIsSafe(t *testing.T) {
 func TestZipLimitedReaderDoesNotExposeSentinelByte(t *testing.T) {
 	reader := &zipLimitedReadCloser{
 		ReadCloser: io.NopCloser(strings.NewReader("12345")),
-		remaining:  5,
 		max:        4,
 		name:       "sentinel",
 	}

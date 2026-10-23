@@ -178,22 +178,9 @@ func TestOpenZipEntryPreservesArchiveErrors(t *testing.T) {
 	}
 }
 
-func TestZipLimitWithSentinel(t *testing.T) {
-	for _, tt := range []struct{ max, want int64 }{
-		{0, 1},
-		{MaxZipEntrySize, MaxZipEntrySize + 1},
-		{math.MaxInt64 - 1, math.MaxInt64},
-		{math.MaxInt64, math.MaxInt64},
-	} {
-		if got := zipLimitWithSentinel(tt.max); got != tt.want {
-			t.Errorf("zipLimitWithSentinel(%d) = %d, want %d", tt.max, got, tt.want)
-		}
-	}
-}
-
 func TestZipLimitedReaderBoundsSuccessiveReads(t *testing.T) {
 	source := &trackedZipReadCloser{Reader: strings.NewReader("12345")}
-	reader := &zipLimitedReadCloser{ReadCloser: source, remaining: 5, max: 4, name: "chunked"}
+	reader := &zipLimitedReadCloser{ReadCloser: source, max: 4, name: "chunked"}
 	defer reader.Close()
 	buf := make([]byte, 3)
 	if n, err := reader.Read(buf); n != 3 || err != nil || string(buf[:n]) != "123" {
@@ -215,7 +202,7 @@ func TestZipLimitedReaderRejectsInvalidReadCounts(t *testing.T) {
 	for _, count := range []int{-1, 4} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			source := &trackedZipReadCloser{Reader: zipReadFunc(func([]byte) (int, error) { return count, nil })}
-			reader := &zipLimitedReadCloser{ReadCloser: source, remaining: 3, max: 2, name: "invalid-count"}
+			reader := &zipLimitedReadCloser{ReadCloser: source, max: 2, name: "invalid-count"}
 			defer reader.Close()
 			buf := make([]byte, 8)
 			n, limitErr := reader.Read(buf)
@@ -229,13 +216,14 @@ func TestZipLimitedReaderRejectsInvalidReadCounts(t *testing.T) {
 	}
 }
 
-func TestZipLimitedReaderExhaustedBudget(t *testing.T) {
-	source := &trackedZipReadCloser{Reader: strings.NewReader("unexpected")}
-	// The saturated sentinel limit can be exhausted without an extra byte.
-	reader := &zipLimitedReadCloser{ReadCloser: source, max: math.MaxInt64, read: math.MaxInt64, name: "exhausted"}
-	defer reader.Close()
-	if n, err := reader.Read(make([]byte, 1)); n != 0 || !errors.Is(err, ErrArchiveLimit) || source.readCalls != 0 {
-		t.Fatalf("Read = %d, %v, calls = %d; want 0, ErrArchiveLimit, 0", n, err, source.readCalls)
+func TestZipLimitedReaderRejectsDataAfterDeclaredEnd(t *testing.T) {
+	for _, max := range []int64{0, MaxZipEntrySize} {
+		source := &trackedZipReadCloser{Reader: strings.NewReader("unexpected")}
+		reader := &zipLimitedReadCloser{ReadCloser: source, max: max, read: max, name: "at-limit"}
+		defer reader.Close()
+		if n, err := reader.Read(make([]byte, 4)); n != 0 || !errors.Is(err, ErrArchiveLimit) || source.lastBufferSize != 1 {
+			t.Fatalf("Read at %d = %d, %v, buffer = %d; want 0, ErrArchiveLimit, 1", max, n, err, source.lastBufferSize)
+		}
 	}
 }
 
@@ -256,7 +244,7 @@ func TestZipLimitedReaderPreservesReadAndCloseErrors(t *testing.T) {
 				Reader:   zipReadFunc(func(p []byte) (int, error) { return copy(p, tt.data), tt.err }),
 				closeErr: closeErr,
 			}
-			reader := &zipLimitedReadCloser{ReadCloser: source, remaining: 5, max: 4, name: "source-errors"}
+			reader := &zipLimitedReadCloser{ReadCloser: source, max: 4, name: "source-errors"}
 			buf := make([]byte, 4)
 			n, err := reader.Read(buf)
 			if n != len(tt.data) || string(buf[:n]) != tt.data || err != tt.err {

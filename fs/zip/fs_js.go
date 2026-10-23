@@ -19,9 +19,6 @@ package zip
 import (
 	"archive/zip"
 	"bytes"
-	"fmt"
-	"io"
-	"syscall"
 
 	"github.com/goplus/spx/v4/fs"
 )
@@ -36,31 +33,9 @@ func Open(file string) (fs.Dir, error) {
 	return OpenHttp(file)
 }
 
-// Open opens a zipped file object.
-func (zipf *FS) Open(name string) (io.ReadCloser, error) {
-	for _, f := range zipf.File {
-		if f.Name == name {
-			return openZipEntry(f)
-		}
-	}
-	return nil, fmt.Errorf("`%s` not found in zipfile: %w", name, syscall.ENOENT)
-}
-
 // Close closes the filesystem object.
 func (zipf *FS) Close() error {
 	return nil
-}
-
-// OpenHttp opens hzip:<domain>/<path>
-// OpenHttp("open.qiniu.us/weather/res.zip")
-func OpenHttp(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "http://")
-}
-
-// OpenHttps opens hzips:<domain>/<path>
-// OpenHttps("open.qiniu.us/weather/res.zip")
-func OpenHttps(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "https://")
 }
 
 func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
@@ -78,21 +53,9 @@ func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
 		return nil, err
 	}
 	r := bytes.NewReader(body)
-	if err := preflightZipArchive(r, int64(r.Len())); err != nil {
-		return nil, err
-	}
-	zipf, err := zip.NewReader(r, int64(r.Len()))
+	zipf, err := newZipReader(r, int64(r.Len()))
 	if err != nil {
 		return nil, err
 	}
-	if err := validateZipReader(zipf); err != nil {
-		return nil, err
-	}
 	return &FS{zipf}, nil
-}
-
-func init() {
-	fs.RegisterSchema("zip", Open)
-	fs.RegisterSchema("hzip", OpenHttp)
-	fs.RegisterSchema("hzips", OpenHttps)
 }

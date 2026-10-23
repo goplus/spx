@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/goplus/spx/v4/fs"
 )
@@ -55,28 +54,12 @@ func Open(file string) (fs.Dir, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := preflightZipArchive(source, info.Size()); err != nil {
-		return nil, err
-	}
-	reader, err := zip.NewReader(source, info.Size())
+	reader, err := newZipReader(source, info.Size())
 	if err != nil {
-		return nil, err
-	}
-	if err := validateZipReader(reader); err != nil {
 		return nil, err
 	}
 	closeOnError = false
 	return &FS{Reader: reader, file: source}, nil
-}
-
-// Open opens a zipped file object.
-func (zipf *FS) Open(name string) (io.ReadCloser, error) {
-	for _, f := range zipf.File {
-		if f.Name == name {
-			return openZipEntry(f)
-		}
-	}
-	return nil, fmt.Errorf("`%s` not found in zipfile: %w", name, syscall.ENOENT)
 }
 
 // Close closes the filesystem object.
@@ -85,18 +68,6 @@ func (zipf *FS) Close() error {
 		return nil
 	}
 	return zipf.file.Close()
-}
-
-// OpenHttp opens hzip:<domain>/<path>
-// OpenHttp("open.qiniu.us/weather/res.zip")
-func OpenHttp(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "http://")
-}
-
-// OpenHttps opens hzips:<domain>/<path>
-// OpenHttps("open.qiniu.us/weather/res.zip")
-func OpenHttps(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "https://")
 }
 
 func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
@@ -280,9 +251,3 @@ func defaultSPXBaseDir() string {
 }
 
 var spxBaseDir = defaultSPXBaseDir()
-
-func init() {
-	fs.RegisterSchema("zip", Open)
-	fs.RegisterSchema("hzip", OpenHttp)
-	fs.RegisterSchema("hzips", OpenHttps)
-}

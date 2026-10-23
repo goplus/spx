@@ -172,10 +172,7 @@ func validateZipFile(file *zip.File) error {
 	if uncompressed > uint64(MaxZipEntrySize) {
 		return fmt.Errorf("%w: entry %q uncompressed size %d exceeds limit %d", ErrArchiveLimit, file.Name, uncompressed, MaxZipEntrySize)
 	}
-	if err := checkZipCompressionRatio(file, MaxZipCompressionRatio); err != nil {
-		return err
-	}
-	return nil
+	return checkZipCompressionRatio(file, MaxZipCompressionRatio)
 }
 
 func isZipDirectory(file *zip.File) bool {
@@ -202,49 +199,35 @@ func openZipEntry(file *zip.File) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	max := int64(file.UncompressedSize64)
 	return &zipLimitedReadCloser{
 		ReadCloser: reader,
-		remaining:  zipLimitWithSentinel(max),
-		max:        max,
+		max:        int64(file.UncompressedSize64),
 		name:       file.Name,
 	}, nil
 }
 
-func zipLimitWithSentinel(max int64) int64 {
-	if max == math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return max + 1
-}
-
 type zipLimitedReadCloser struct {
 	io.ReadCloser
-	remaining int64
-	max       int64
-	read      int64
-	name      string
-	limitErr  error
+	max      int64
+	read     int64
+	name     string
+	limitErr error
 }
 
 func (r *zipLimitedReadCloser) Read(p []byte) (int, error) {
 	if r.limitErr != nil {
 		return 0, r.limitErr
 	}
-	if r.remaining == 0 {
-		r.limitErr = fmt.Errorf("%w: entry %q uncompressed output exceeds limit %d", ErrArchiveLimit, r.name, r.max)
-		return 0, r.limitErr
-	}
-	if int64(len(p)) > r.remaining {
-		p = p[:r.remaining]
+	// Entry validation bounds max, leaving room for the sentinel byte.
+	allowed := r.max - r.read
+	if int64(len(p)) > allowed+1 {
+		p = p[:allowed+1]
 	}
 	n, err := r.ReadCloser.Read(p)
 	if n < 0 || n > len(p) {
 		r.limitErr = fmt.Errorf("%w: entry %q returned invalid read count %d", ErrArchiveLimit, r.name, n)
 		return 0, r.limitErr
 	}
-	allowed := r.max - r.read
-	r.remaining -= int64(n)
 	r.read += int64(n)
 	if int64(n) > allowed {
 		r.limitErr = fmt.Errorf("%w: entry %q uncompressed output exceeds limit %d", ErrArchiveLimit, r.name, r.max)
