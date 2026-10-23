@@ -45,15 +45,8 @@ typedef struct {
 	require.Contains(t, string(output), "callbacks.func_on_ready = []() {};")
 }
 
-func TestCallbackDefaultsRejectUnknownAndNonVoidFields(t *testing.T) {
-	for _, source := range []string{
-		"typedef struct { Unknown field; } SpxCallbackInfo;",
-		"typedef GdInt (*GDExtensionSpxCallbackValue)(); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",
-		"typedef struct { GdInt count; } Other;",
-	} {
-		ast, err := clang.ParseCString(source)
-		require.NoError(t, err)
-		generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
-		require.Error(t, generation.writeCallbackDefaults(t.TempDir()))
-	}
+// Structural ABI validation is covered by common; this checks the generator boundary.
+func TestCallbackDefaultsPropagatesABIError(t *testing.T) {
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
+	require.EqualError(t, generation.writeCallbackDefaults(t.TempDir()), "generate callback defaults: missing SpxCallbackInfo")
 }

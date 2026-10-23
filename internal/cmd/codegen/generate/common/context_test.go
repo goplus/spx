@@ -95,3 +95,40 @@ const Manager = "{{manager .}}"
 		}
 	}
 }
+
+func TestCollectCallbacksPreservesABIFieldsAndSignatures(t *testing.T) {
+	ast, err := clang.ParseCString(`
+typedef void (*GDExtensionSpxCallbackReady)();
+typedef void (*GDExtensionSpxCallbackChanged)(GdObj obj, GdString value);
+typedef struct {
+ GDExtensionSpxCallbackChanged custom_field;
+ GDExtensionSpxCallbackReady func_on_ready;
+} SpxCallbackInfo;`)
+	require.NoError(t, err)
+	callbacks, err := CollectCallbacks(ast)
+	require.NoError(t, err)
+	require.Len(t, callbacks, 2)
+	require.Equal(t, "custom_field", callbacks[0].Field)
+	require.Equal(t, "func_on_ready", callbacks[1].Field)
+	functions := ast.CollectGDExtensionICallbackFunctions()
+	require.Equal(t, functions[1], callbacks[0].Function)
+	require.Equal(t, functions[0], callbacks[1].Function)
+}
+
+func TestCollectCallbacksRejectsUnsupportedABIFields(t *testing.T) {
+	for _, source := range []string{
+		"typedef struct { Unknown field; } SpxCallbackInfo;",
+		"typedef void (*GDExtensionSpxCallbackValue)(); typedef struct { GDExtensionSpxCallbackValue *field; } SpxCallbackInfo;",
+		"typedef GdInt (*GDExtensionSpxCallbackValue)(); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",
+		"typedef struct { void (*field)(GdInt value); } SpxCallbackInfo;",
+		"typedef struct { GdInt count; } Other;",
+	} {
+		t.Run(source, func(t *testing.T) {
+			ast, err := clang.ParseCString(source)
+			require.NoError(t, err)
+			callbacks, err := CollectCallbacks(ast)
+			require.Error(t, err)
+			require.Nil(t, callbacks)
+		})
+	}
+}
