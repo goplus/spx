@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v3/internal/assets"
 	coreproject "github.com/goplus/spx/v3/internal/core/project"
 )
 
@@ -151,6 +152,33 @@ func TestCostumeRenderAnchorConvertsAssetCoordinatesToSPX(t *testing.T) {
 	}
 	if costume.isAtlas() {
 		t.Fatal("standalone costume is marked as an atlas")
+	}
+}
+
+func TestCostumeCenterInAssetNormalizesStaleCenterOnEmptyFrame(t *testing.T) {
+	// An empty vector costume is imported as a 1x1 frame, but the source project can
+	// still declare a rotation center sized for its original canvas.
+	empty := assetutil.FrameDescriptor{Width: 1, Height: 1, BitmapResolution: 1}
+	if got := costumeCenterInAsset(empty, mathf.NewVec2(240, 180)); got != (mathf.NewVec2(0.5, 0.5)) {
+		t.Fatalf("empty frame center = %v, want {0.5 0.5}", got)
+	}
+	costume := &costume{
+		width: 1, height: 1, bitmapResolution: 1, imageSize: mathf.NewVec2(1, 1),
+		center: costumeCenterInAsset(empty, mathf.NewVec2(240, 180)),
+	}
+	if got := costume.renderAnchorInSPX(); got != (mathf.Vec2{}) {
+		t.Fatalf("renderAnchorInSPX = %v, want {0 0}", got)
+	}
+
+	filled := assetutil.FrameDescriptor{Width: 960, Height: 720, BitmapResolution: 2}
+	if got := costumeCenterInAsset(filled, mathf.NewVec2(480, 360)); got != (mathf.NewVec2(480, 360)) {
+		t.Fatalf("filled frame center = %v, want {480 360}", got)
+	}
+
+	// A 1xN costume has real pixels and may anchor at an end rather than its center.
+	thin := assetutil.FrameDescriptor{Width: 1, Height: 200, BitmapResolution: 1}
+	if got := costumeCenterInAsset(thin, mathf.NewVec2(0.5, 200)); got != (mathf.NewVec2(0.5, 200)) {
+		t.Fatalf("thin frame center = %v, want {0.5 200}", got)
 	}
 }
 
