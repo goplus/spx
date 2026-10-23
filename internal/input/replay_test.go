@@ -616,3 +616,23 @@ func BenchmarkDecodeInputReplay(b *testing.B) {
 		}
 	}
 }
+
+func TestCloneInputReplayPreservesSliceShapes(t *testing.T) {
+	for _, name := range []string{"nil", "empty"} {
+		t.Run(name, func(t *testing.T) {
+			replay := InputReplay{Frames: []InputReplayFrame{{}}}
+			if name == "empty" {
+				replay.Initial.KeysDown = []int64{}
+				replay.Frames[0].State.KeysDown = []int64{}
+				replay.Frames[0].MouseEvents = []InputReplayMouseEvent{}
+				replay.Frames[0].KeyEvents = []InputReplayKeyEvent{}
+			}
+			if got := CloneInputReplay(replay); !reflect.DeepEqual(got, replay) {
+				t.Fatalf("clone changed nested slice shapes: %#v", got)
+			}
+		})
+	}
+	if got := CloneInputReplay(InputReplay{}); got.Frames == nil || len(got.Frames) != 0 {
+		t.Fatalf("absent frames not normalized: %#v", got.Frames)
+	}
+}
