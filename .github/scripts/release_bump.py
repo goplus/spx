@@ -149,8 +149,8 @@ def parse_semver(value, label, require_spx_major=False):
     if match is None:
         raise ReleaseBumpError(f"{label} {value!r} is not canonical SemVer")
     major, minor, patch = (int(match.group(index)) for index in range(1, 4))
-    if require_spx_major and major != 3:
-        raise ReleaseBumpError(f"{label} {value!r} must use SPX major version v3")
+    if require_spx_major and major != 4:
+        raise ReleaseBumpError(f"{label} {value!r} must use SPX major version v4")
     prerelease = match.group(4)
     if prerelease is not None:
         for identifier in prerelease.split("."):
@@ -354,11 +354,11 @@ def bump_release(
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("spx_version", metavar="SPX_VERSION", help="new SPX tag, for example v3.3.0")
+    parser.add_argument("spx_version", metavar="SPX_VERSION", help="new SPX tag, for example v4.1.0")
     parser.add_argument(
         "runtime_version",
         metavar="RUNTIME_VERSION",
-        help="new runtime version without the runtime-v prefix, for example 2.5.0",
+        help="new runtime version without the runtime-v prefix, for example 4.1.0",
     )
     parser.add_argument(
         "--runtime-abi",

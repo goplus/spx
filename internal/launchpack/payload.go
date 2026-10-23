@@ -27,10 +27,10 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/goplus/spx/v3/internal/projectbundle"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
+	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
 func buildSourceBridge(ctx context.Context, cfg Config, bridgeName string, streams IO) (string, func(), error) {

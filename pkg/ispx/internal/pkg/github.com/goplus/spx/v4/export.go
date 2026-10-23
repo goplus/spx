@@ -19,7 +19,7 @@
 package spx
 
 import (
-	q "github.com/goplus/spx/v3"
+	q "github.com/goplus/spx/v4"
 
 	"github.com/goplus/ixgo/alias"
 	"go/constant"
@@ -29,8 +29,8 @@ import (
 	_ "embed"
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild/typesdata"
-	event "github.com/goplus/spx/v3/internal/core/event"
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	event "github.com/goplus/spx/v4/internal/core/event"
+	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 //go:embed export.types
@@ -42,7 +42,7 @@ func init() {
 	)
 	ixgo.RegisterPackage(&ixgo.Package{
 		Name: "spx",
-		Path: "github.com/goplus/spx/v3",
+		Path: "github.com/goplus/spx/v4",
 		Deps: map[string]string{
 			"cmp":                               "cmp",
 			"context":                           "context",
@@ -50,33 +50,33 @@ func init() {
 			"flag":                              "flag",
 			"fmt":                               "fmt",
 			"github.com/goplus/spbase/mathf":    "mathf",
-			"github.com/goplus/spx/v3/fs":       "fs",
-			"github.com/goplus/spx/v3/fs/asset": "asset",
-			"github.com/goplus/spx/v3/fs/zip":   "zip",
-			"github.com/goplus/spx/v3/internal/animation":       "animation",
-			"github.com/goplus/spx/v3/internal/assets":          "assets",
-			"github.com/goplus/spx/v3/internal/audio":           "audio",
-			"github.com/goplus/spx/v3/internal/base/collision":  "collision",
-			"github.com/goplus/spx/v3/internal/base/defaults":   "defaults",
-			"github.com/goplus/spx/v3/internal/base/sliceutil":  "sliceutil",
-			"github.com/goplus/spx/v3/internal/core/event":      "event",
-			"github.com/goplus/spx/v3/internal/core/project":    "project",
-			"github.com/goplus/spx/v3/internal/core/runtime":    "runtime",
-			"github.com/goplus/spx/v3/internal/core/state":      "state",
-			"github.com/goplus/spx/v3/internal/coroutine":       "coroutine",
-			"github.com/goplus/spx/v3/internal/debug":           "debug",
-			"github.com/goplus/spx/v3/internal/engine":          "engine",
-			"github.com/goplus/spx/v3/internal/engine/platform": "platform",
-			"github.com/goplus/spx/v3/internal/engine/profiler": "profiler",
-			"github.com/goplus/spx/v3/internal/input":           "input",
-			"github.com/goplus/spx/v3/internal/input/keycode":   "keycode",
-			"github.com/goplus/spx/v3/internal/log":             "log",
-			"github.com/goplus/spx/v3/internal/tilemap":         "tilemap",
-			"github.com/goplus/spx/v3/internal/time":            "time",
-			"github.com/goplus/spx/v3/internal/tools":           "tools",
-			"github.com/goplus/spx/v3/internal/ui":              "ui",
-			"github.com/goplus/spx/v3/pkg/spx":                  "spx",
-			"github.com/goplus/spx/v3/pkg/spx/pkg/engine":       "engine",
+			"github.com/goplus/spx/v4/fs":       "fs",
+			"github.com/goplus/spx/v4/fs/asset": "asset",
+			"github.com/goplus/spx/v4/fs/zip":   "zip",
+			"github.com/goplus/spx/v4/internal/animation":       "animation",
+			"github.com/goplus/spx/v4/internal/assets":          "assets",
+			"github.com/goplus/spx/v4/internal/audio":           "audio",
+			"github.com/goplus/spx/v4/internal/base/collision":  "collision",
+			"github.com/goplus/spx/v4/internal/base/defaults":   "defaults",
+			"github.com/goplus/spx/v4/internal/base/sliceutil":  "sliceutil",
+			"github.com/goplus/spx/v4/internal/core/event":      "event",
+			"github.com/goplus/spx/v4/internal/core/project":    "project",
+			"github.com/goplus/spx/v4/internal/core/runtime":    "runtime",
+			"github.com/goplus/spx/v4/internal/core/state":      "state",
+			"github.com/goplus/spx/v4/internal/coroutine":       "coroutine",
+			"github.com/goplus/spx/v4/internal/debug":           "debug",
+			"github.com/goplus/spx/v4/internal/engine":          "engine",
+			"github.com/goplus/spx/v4/internal/engine/platform": "platform",
+			"github.com/goplus/spx/v4/internal/engine/profiler": "profiler",
+			"github.com/goplus/spx/v4/internal/input":           "input",
+			"github.com/goplus/spx/v4/internal/input/keycode":   "keycode",
+			"github.com/goplus/spx/v4/internal/log":             "log",
+			"github.com/goplus/spx/v4/internal/tilemap":         "tilemap",
+			"github.com/goplus/spx/v4/internal/time":            "time",
+			"github.com/goplus/spx/v4/internal/tools":           "tools",
+			"github.com/goplus/spx/v4/internal/ui":              "ui",
+			"github.com/goplus/spx/v4/pkg/spx":                  "spx",
+			"github.com/goplus/spx/v4/pkg/spx/pkg/engine":       "engine",
 			"maps":        "maps",
 			"math":        "math",
 			"math/rand":   "rand",
@@ -393,7 +393,7 @@ func init() {
 			"XGoo_Sprite_TurnToWith":       {Typ: "untyped string", Value: constant.MakeString(string(q.XGoo_Sprite_TurnToWith))},
 			"XGou_Seconds":                 {Typ: "untyped string", Value: constant.MakeString(string(q.XGou_Seconds))},
 		},
-		Import: typesdata.ImportFunc("github.com/goplus/spx/v3", exportTypesData),
+		Import: typesdata.ImportFunc("github.com/goplus/spx/v4", exportTypesData),
 		Alias: map[string]alias.Type{
 			"DeltaTime": &alias.Func{
 				Params:  nil,
@@ -553,7 +553,7 @@ func init() {
 			},
 		},
 	})
-	ixgo.RegisterDirectCalls("github.com/goplus/spx/v3", map[string]ixgo.DirectCallAdapter{
+	ixgo.RegisterDirectCalls("github.com/goplus/spx/v4", map[string]ixgo.DirectCallAdapter{
 		"(*Game).KeyPressed":           method_ptr_Game_KeyPressed,
 		"(*Game).MousePressed":         method_ptr_Game_MousePressed,
 		"(*Game).MouseX":               method_ptr_Game_MouseX,

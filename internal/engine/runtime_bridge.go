@@ -22,8 +22,8 @@ import (
 	"slices"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type runtimeBridge struct{}

@@ -16,7 +16,7 @@
 
 package engine
 
-import gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+import gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 
 type delaySpriteCallInfo struct {
 	timer    float64

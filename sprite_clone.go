@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func (p *SpriteImpl) Clone__0() {

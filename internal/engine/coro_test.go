@@ -23,8 +23,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestResolveOwnerPreservesNilCoroutineOwner(t *testing.T) {

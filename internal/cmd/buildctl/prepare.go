@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/runtimecmd"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 type setupConfig struct {

@@ -21,8 +21,8 @@ package webffi
 import (
 	"syscall/js"
 
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type LinkSession struct {

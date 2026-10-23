@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	spxfs "github.com/goplus/spx/v3/fs"
+	spxfs "github.com/goplus/spx/v4/fs"
 )
 
 func TestReadDirReturnsDirectChildren(t *testing.T) {

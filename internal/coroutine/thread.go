@@ -24,8 +24,8 @@ import (
 	"sync/atomic"
 	stime "time"
 
-	"github.com/goplus/spx/v3/internal/debug"
-	"github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/debug"
+	"github.com/goplus/spx/v4/internal/time"
 )
 
 type suspendState uint8

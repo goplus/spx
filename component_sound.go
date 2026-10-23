@@ -16,7 +16,7 @@
 
 package spx
 
-import engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+import engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 
 // ============================================================================
 // Sound Component

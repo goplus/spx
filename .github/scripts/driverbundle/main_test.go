@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/driverbundle"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/driverbundle"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func TestPackageAndVerifyIsDeterministic(t *testing.T) {

@@ -23,9 +23,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/projectassets"
-	"github.com/goplus/spx/v3/internal/projectbundle"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/projectassets"
+	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
 func collectProjectAllowlist(cfg Config) ([]string, error) {

@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/goplus/ixgo"
-	spx "github.com/goplus/spx/v3"
+	spx "github.com/goplus/spx/v4"
 )
 
 func TestInputSessionStatusToJS(t *testing.T) {

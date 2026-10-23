@@ -30,6 +30,9 @@ jobs:
   build:
     name: Publish web package
     runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+      SPX_ISPX_PROFILE: base
     steps:
       - name: Validate publication target
         env:
@@ -68,7 +71,7 @@ jobs:
             exit 1
           fi
           if [ "$IS_DEVELOPMENT" = true ]; then
-            release_tag="$(git tag --points-at HEAD --list 'v3.*' | sed -n '1p')"
+            release_tag="$(git tag --points-at HEAD --list 'v4.*' | sed -n '1p')"
             if [ -n "$release_tag" ]; then
               echo "[error] Refusing to publish development npm from exact release tag $release_tag" >&2
               exit 1

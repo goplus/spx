@@ -21,8 +21,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
 )
 
 func ExportWebTemplateRuntime(mode string, runner shared.ScriptRunner) error {

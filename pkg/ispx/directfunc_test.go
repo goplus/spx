@@ -22,13 +22,13 @@ import (
 	"testing"
 
 	"github.com/goplus/ixgo"
-	"github.com/goplus/spx/v3"
+	"github.com/goplus/spx/v4"
 	"github.com/visualfc/funcval"
 )
 
 const directFuncSource = `package main
 
-import "github.com/goplus/spx/v3"
+import "github.com/goplus/spx/v4"
 
 func MakeCallbacks(count int, failure error) []any {
 	var key spx.Key
@@ -369,7 +369,7 @@ func BenchmarkDirectFuncEvents(b *testing.B) {
 
 const procedureStopSource = `package main
 
-import "github.com/goplus/spx/v3"
+import "github.com/goplus/spx/v4"
 
 var game spx.Game
 var sprite spx.SpriteImpl

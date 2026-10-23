@@ -20,11 +20,11 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	assetutil "github.com/goplus/spx/v3/internal/assets"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	corestate "github.com/goplus/spx/v3/internal/core/state"
-	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	corestate "github.com/goplus/spx/v4/internal/core/state"
+	"github.com/goplus/spx/v4/internal/engine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // baseObj provides common functionality for sprites and backdrops.

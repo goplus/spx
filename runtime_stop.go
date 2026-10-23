@@ -1,8 +1,8 @@
 package spx
 
 import (
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	"github.com/goplus/spx/v3/internal/coroutine"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 // Stop stops scripts selected by kind.

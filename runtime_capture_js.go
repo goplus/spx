@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 const jsCaptureBridgeName = "__spxHandleCaptureRequest"

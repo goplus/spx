@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type configTestResMgr struct {

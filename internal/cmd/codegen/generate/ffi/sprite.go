@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
 func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string, pure bool) string {

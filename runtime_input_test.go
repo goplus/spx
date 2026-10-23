@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
-	coreevent "github.com/goplus/spx/v3/internal/core/event"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func setupInputFrameGame(t *testing.T) (*coroutine.Coroutines, *Game) {

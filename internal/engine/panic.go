@@ -19,8 +19,8 @@ package engine
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // DeferPanic reports a recovered panic.

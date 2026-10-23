@@ -25,8 +25,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/release"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 const (

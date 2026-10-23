@@ -33,7 +33,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 type testFile struct {
@@ -611,7 +611,7 @@ func testBuildConfig(t *testing.T) testPayload {
 	interfaceSum := sha256.Sum256([]byte("interface"))
 	return testPayload{
 		BuildConfig: BuildConfig{
-			SPX:    SourceIdentity{SelectedPath: "github.com/goplus/spx/v3", EffectivePath: "github.com/goplus/spx/v3", SourceMode: true},
+			SPX:    SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", EffectivePath: "github.com/goplus/spx/v4", SourceMode: true},
 			Target: Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
 			Engine: Engine{
 				RuntimeVersion: "test", RuntimeABI: 1, EngineInterfaceDigest: hex.EncodeToString(interfaceSum[:]),

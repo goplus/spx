@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 func EnsureEngineSource(repoRoot string, run func(name string, args ...string) error) error {

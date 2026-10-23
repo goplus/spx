@@ -22,12 +22,12 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/goplus/spx/v3/internal/engine/profiler"
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	gde "github.com/goplus/spx/v3/internal/gdengine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/engine/profiler"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	gde "github.com/goplus/spx/v4/internal/gdengine"
+	itime "github.com/goplus/spx/v4/internal/time"
 
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type (

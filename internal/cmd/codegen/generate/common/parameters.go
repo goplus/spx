@@ -19,7 +19,7 @@ package common
 import (
 	"fmt"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/gdextensionparser/clang"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
 // Parameter records the public name and ABI positions once for every renderer.

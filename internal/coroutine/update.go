@@ -20,8 +20,8 @@ import (
 	"cmp"
 	stime "time"
 
-	"github.com/goplus/spx/v3/internal/log"
-	itime "github.com/goplus/spx/v3/internal/time"
+	"github.com/goplus/spx/v4/internal/log"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 type waitKind int

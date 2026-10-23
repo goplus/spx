@@ -28,7 +28,7 @@ import (
 	"io/fs"
 	"sort"
 
-	"github.com/goplus/spx/v3/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
 // BuildTo writes canonical payload bytes to dst and returns the full payload

@@ -27,9 +27,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/ui"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/ui"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type monitorEvalFixture struct {

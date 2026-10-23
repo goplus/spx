@@ -22,10 +22,10 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/ui"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/ui"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {

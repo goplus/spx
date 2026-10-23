@@ -23,7 +23,7 @@ import (
 	"io"
 	"syscall"
 
-	"github.com/goplus/spx/v3/fs"
+	"github.com/goplus/spx/v4/fs"
 )
 
 // A FS represents a zip filesystem.

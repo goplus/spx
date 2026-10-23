@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 func TestProcedureConsumesStopThisScript(t *testing.T) {

@@ -12,6 +12,8 @@ jobs:
   static-checks:
     name: static-checks
     runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -36,15 +38,10 @@ jobs:
           go generate ./cmd/spx/internal/command/...
           go generate ./pkg/ispx/...
 
-      - name: Run go generate for cmd/ispx
-        shell: bash
-        working-directory: cmd/ispx
-        run: go generate ./...
-
       # Embedded type data also changes for private implementation edits.
       - name: Restore committed SPX type snapshot in regular CI
         if: ${{ !inputs.check_export_types }}
-        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v3/export.types
+        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v4/export.types
 
       - name: Ensure generated files are up to date
         run: git diff --exit-code
@@ -58,7 +55,8 @@ jobs:
             .github/scripts/npm/prepare_package.sh \
             .github/scripts/release/assemble.sh \
             .github/scripts/test_go.sh \
-            .github/scripts/test_go_coverage.sh; do
+            .github/scripts/test_go_coverage.sh \
+            cmd/ispx/build.sh; do
             bash -n "$script"
           done
 
@@ -102,7 +100,8 @@ jobs:
             .github/scripts/runtime_build_contract_test.py \
             .github/scripts/release/workflow_test.py \
             .github/scripts/release_bump_test.py \
-            .github/scripts/driverbundle/workflow_test.py; do
+            .github/scripts/driverbundle/workflow_test.py \
+            cmd/ispx/build_test.py; do
             PYTHONDONTWRITEBYTECODE=1 python3 "$script"
           done
 

@@ -19,11 +19,11 @@ package spx
 import (
 	"time"
 
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/debug"
-	"github.com/goplus/spx/v3/internal/engine"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/debug"
+	"github.com/goplus/spx/v4/internal/engine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // -----------------------------------------------------------------------------

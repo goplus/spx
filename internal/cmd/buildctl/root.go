@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/engine"
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	toolpkg "github.com/goplus/spx/v3/internal/cmd/buildctl/tool"
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/workflow"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/engine"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	toolpkg "github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/workflow"
 )
 
 func runOtherRootCommand(args []string) error {

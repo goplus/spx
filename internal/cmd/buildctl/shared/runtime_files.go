@@ -22,7 +22,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/base/fileutil"
+	"github.com/goplus/spx/v4/internal/base/fileutil"
 )
 
 func EnsureGoPath() (string, error) {

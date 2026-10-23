@@ -22,8 +22,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/goplus/spx/v3/internal/projectpolicy"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 // IO describes command streams and environment. A nil Env inherits the process.

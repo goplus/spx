@@ -24,8 +24,8 @@ import (
 	"syscall/js"
 	_ "unsafe"
 
-	"github.com/goplus/spx/v3"
-	spxlog "github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v4"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // JavaScript built-in types.

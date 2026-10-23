@@ -16,7 +16,7 @@
 
 package coroutine
 
-import "github.com/goplus/spx/v3/internal/time"
+import "github.com/goplus/spx/v4/internal/time"
 
 // Wait suspends the current coroutine for t seconds of level time.
 func (p *Coroutines) Wait(t float64) {

@@ -21,7 +21,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/cmd/codegen/generate/common"
+	"github.com/goplus/spx/v4/internal/cmd/codegen/generate/common"
 )
 
 var reFixedArrayDecl = regexp.MustCompile(`^\s*(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*([1-9][0-9]*)\s*\]\s*$`)

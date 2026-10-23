@@ -17,7 +17,7 @@
 package gdspx
 
 import (
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type LinkerBridge interface {

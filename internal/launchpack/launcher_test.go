@@ -29,11 +29,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/projectbundle"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
-	"github.com/goplus/spx/v3/internal/release"
-	"github.com/goplus/spx/v3/internal/runtimebundle"
-	"github.com/goplus/spx/v3/internal/runtimepayload"
+	"github.com/goplus/spx/v4/internal/projectbundle"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/runtimebundle"
+	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
 func TestGeneratedLauncherGolden(t *testing.T) {
@@ -45,7 +45,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v3/x/xgolauncher"
+	"github.com/goplus/spx/v4/x/xgolauncher"
 )
 
 //go:embed payload.spxpkg
@@ -400,7 +400,7 @@ func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 				t.Skip("Windows keeps opened source files locked against rename")
 			}
 			cfg := validLaunchpackConfig(t)
-			cfg.Source = SourceIdentity{SelectedPath: "github.com/goplus/spx/v3", SelectedVersion: "v3.0.0", EffectivePath: cfg.WorkDir, SourceMode: true}
+			cfg.Source = SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: cfg.WorkDir, SourceMode: true}
 			cfg.BuildFlags = []string{"-x"}
 			work := t.TempDir()
 			assets := Assets{EnginePath: filepath.Join(work, "engine"), PackPath: filepath.Join(work, "runtime.pck"), BridgePath: filepath.Join(work, "bridge.so"), Lock: cfg.RuntimeLock}
@@ -513,7 +513,7 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 
 	repoRoot := launchpackRepoRoot(t)
 	moduleRoot := t.TempDir()
-	writeProjectTestFile(t, filepath.Join(moduleRoot, "go.mod"), "module example.com/launcher\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v3 v3.0.0\nreplace github.com/goplus/spx/v3 => "+filepath.ToSlash(repoRoot)+"\n")
+	writeProjectTestFile(t, filepath.Join(moduleRoot, "go.mod"), "module example.com/launcher\n\ngo 1.25.0\n\nrequire github.com/goplus/spx/v4 v4.0.0\nreplace github.com/goplus/spx/v4 => "+filepath.ToSlash(repoRoot)+"\n")
 	writeProjectTestFile(t, filepath.Join(moduleRoot, "bridge", "main.go"), "package main\n\n// void bridge(void) {}\nimport \"C\"\n\nfunc main() {}\n")
 
 	projectDir := filepath.Join(moduleRoot, "game")
@@ -545,7 +545,7 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 		RuntimeManifestPath: manifest, RuntimeCacheRoot: filepath.Join(moduleRoot, "cache"),
 		RuntimeIdentity: RuntimeIdentity{Version: lock.RuntimeVersion, ABI: lock.RuntimeABI, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
 		RuntimeLock:     lock,
-		Source:          SourceIdentity{SelectedPath: "github.com/goplus/spx/v3", SelectedVersion: "v3.0.0", EffectivePath: repoRoot, SourceMode: true},
+		Source:          SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", SelectedVersion: "v4.0.0", EffectivePath: repoRoot, SourceMode: true},
 		GoCommand:       goCommand, WorkDir: moduleRoot, GoWork: "off", GraphFlags: []string{"-mod=mod"},
 		BuildFlags: []string{"-trimpath=true", "-buildvcs=false"},
 		Output:     output, BridgePackage: "./bridge", VerifyGraph: func(context.Context) error {

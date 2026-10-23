@@ -26,8 +26,8 @@ import (
 	"sort"
 	"strings"
 
-	spxfs "github.com/goplus/spx/v3/fs"
-	"github.com/goplus/spx/v3/internal/engine"
+	spxfs "github.com/goplus/spx/v4/fs"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 const fontsDir = "fonts"

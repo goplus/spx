@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalengine "github.com/goplus/spx/v3/internal/engine"
+	internalengine "github.com/goplus/spx/v4/internal/engine"
 )
 
 func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {

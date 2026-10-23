@@ -21,7 +21,7 @@ package spx
 import (
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func TestCaptureDefaultsToNoopHandlerOnNative(t *testing.T) {

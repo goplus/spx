@@ -22,7 +22,7 @@ import (
 	"math"
 	"syscall/js"
 
-	"github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 var jsUint8Array = js.Global().Get("Uint8Array")

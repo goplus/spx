@@ -12,4 +12,4 @@ ignore:
   - "xgo_autogen*.go"
   - "**/xgo_autogen*.go"
   - "pkg/ispx/internal/pkg/"
-  - "cmd/ispx/internal/pkg/"
+  - "cmd/ispx/ai/internal/pkg/"

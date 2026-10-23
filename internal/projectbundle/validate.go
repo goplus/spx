@@ -25,7 +25,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/goplus/spx/v3/internal/base/pathutil"
+	"github.com/goplus/spx/v4/internal/base/pathutil"
 )
 
 type observedRoot struct {

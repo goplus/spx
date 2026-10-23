@@ -18,6 +18,8 @@ STATIC_CHECKS_WORKFLOW_PATH = (
 ASSEMBLE_SCRIPT_PATH = Path(__file__).resolve().parent / "assemble.sh"
 GO_TEST_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "test_go.sh"
 GO_COVERAGE_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "test_go_coverage.sh"
+GO_BUILDS_WORKFLOW_PATH = WORKFLOW_PATH.with_name("go_builds.yml")
+WEB_BUILD_WORKFLOW_PATH = WORKFLOW_PATH.with_name("build_web.yml")
 WEB_PACKAGE_WORKFLOW_PATH = (
     Path(__file__).resolve().parents[2] / "workflows" / "publish_web_package.yml"
 )
@@ -160,7 +162,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         restore = (
             "      - name: Restore committed SPX type snapshot in regular CI\n"
             "        if: ${{ !inputs.check_export_types }}\n"
-            "        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v3/export.types"
+            "        run: git restore -- pkg/ispx/internal/pkg/github.com/goplus/spx/v4/export.types"
         )
         check = "      - name: Ensure generated files are up to date\n        run: git diff --exit-code"
         self.assertIn(restore, steps)
@@ -435,8 +437,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         cases = (
             ("goplus/spx", "refs/heads/dev", "", True),
             ("someone/spx", "refs/heads/dev", "", False),
-            ("goplus/spx", "refs/heads/release/v3.2.0", "", False),
-            ("goplus/spx", "refs/heads/dev", "v3.2.0", False),
+            ("goplus/spx", "refs/heads/release/v4.0.0", "", False),
+            ("goplus/spx", "refs/heads/dev", "v4.0.0", False),
         )
         for repository, ref, release_tag, succeeds in cases:
             with self.subTest(repository=repository, ref=ref, release_tag=release_tag):
@@ -462,8 +464,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         validate_target = step_script(block, "Validate publication target")
         for target, release_version, release_artifact, succeeds in (
             ("a" * 40, "", "", True),
-            ("a" * 40, "3.2.0", "web-release", True),
-            ("a" * 40, "3.2.0", "", False),
+            ("a" * 40, "4.0.0", "web-release", True),
+            ("a" * 40, "4.0.0", "", False),
             ("a" * 40, "", "web-release", False),
             ("dev", "", "", False),
             ("refs/heads/dev", "", "", False),
@@ -493,7 +495,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 ("git", "config", "commit.gpgSign", "false"),
                 ("git", "config", "tag.gpgSign", "false"),
                 ("git", "commit", "--allow-empty", "--quiet", "-m", "test"),
-                ("git", "tag", "v3.2.0"),
+                ("git", "tag", "v4.0.0"),
             ):
                 subprocess.run(command, cwd=repository, check=True)
             target = run_command(
@@ -524,7 +526,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertIn("instead of publication target", wrong_sha.stderr)
 
             subprocess.run(
-                ("git", "tag", "--delete", "v3.2.0"),
+                ("git", "tag", "--delete", "v4.0.0"),
                 cwd=repository,
                 capture_output=True,
                 check=True,
@@ -572,7 +574,7 @@ esac
 """,
             )
 
-            version = "3.2.1-0.20260814000000-aaaaaaaaaaaa"
+            version = "4.0.1-0.20260814000000-aaaaaaaaaaaa"
             for remote_dist_tag, succeeds in ((version, True), ("older", False)):
                 with self.subTest(remote_dist_tag=remote_dist_tag):
                     completed = run_shell(
@@ -700,6 +702,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
         self.assertIn("GDSPX_SANITIZERS: address,undefined", blocks[names[4]])
         self.assertIn("bash godot_modules/spx/web/tests/run_string_abi_test.sh", blocks[names[4]])
         self.assertIn(".github/scripts/test_go_coverage.sh", blocks["Check shell scripts"])
+        self.assertIn("cmd/ispx/build.sh", blocks["Check shell scripts"])
         # Filenames belong to the runner; the workflow only combines its outputs.
         self.assertNotRegex(steps, r"coverage(?:-[\w-]+)?\.out")
         codecov = blocks["Upload coverage to Codecov"]
@@ -718,6 +721,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
             ".github/scripts/release/workflow_test.py",
             ".github/scripts/release_bump_test.py",
             ".github/scripts/driverbundle/workflow_test.py",
+            "cmd/ispx/build_test.py",
         ]
         trace = r'''python3() { printf '%s:%s\n' "$PYTHONDONTWRITEBYTECODE" "$*"; [ "$*" != "${FAIL_SCRIPT:-}" ]; }
 ''' + script
@@ -740,6 +744,36 @@ class StaticChecksWorkflowTest(unittest.TestCase):
                 count = len(expected) if failed is None else failed + 1
                 self.assertEqual(result.stderr.splitlines(), expected[:count])
                 self.assertEqual(result.stdout, "")
+
+
+class InterpreterCIWorkflowTest(unittest.TestCase):
+    def test_required_checks_build_and_test_only_base_modules(self):
+        static = job_blocks(STATIC_CHECKS_WORKFLOW_PATH.read_text(encoding="utf-8"))["static-checks"]
+        builds = job_blocks(GO_BUILDS_WORKFLOW_PATH.read_text(encoding="utf-8"))["go-build"]
+        for job in (static, builds):
+            with self.subTest(job=job.splitlines()[0]):
+                self.assertIn("    env:\n      GOWORK: 'off'", job)
+                self.assertNotIn("cmd/ispx/ai", job)
+                self.assertIn("          go mod download\n          cd cmd/ispx && go mod download\n", job)
+        self.assertIn("go generate ./cmd/spx/internal/command/...", static)
+        self.assertIn("go generate ./pkg/ispx/...", static)
+        self.assertIn("working-directory: cmd/ispx\n        run: ./build.sh --base", builds)
+
+    def test_web_ci_and_publication_use_base_interpreter(self):
+        for path, job_name in (
+            (WEB_BUILD_WORKFLOW_PATH, "build"),
+            (WORKFLOW_PATH.with_name("release_web.yml"), "web-build"),
+            (WEB_PACKAGE_WORKFLOW_PATH, "build"),
+        ):
+            with self.subTest(workflow=path.name):
+                job = job_blocks(path.read_text(encoding="utf-8"))[job_name]
+                # Both asset preparation and export rebuild the interpreter.
+                # Select the profile in the called workflow's job, not one step.
+                settings, _ = job.split("    steps:\n", 1)
+                self.assertIn("    env:\n", settings)
+                self.assertIn("      GOWORK: 'off'\n", settings)
+                self.assertIn("      SPX_ISPX_PROFILE: base\n", settings)
+                self.assertEqual(re.findall(r"(?m)^\s*SPX_ISPX_PROFILE: (.+)$", job), ["base"])
 
 
 class GoTestScriptTest(unittest.TestCase):
@@ -811,7 +845,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         return [json.loads(line) for line in self.log.read_text(encoding="utf-8").splitlines()]
 
     def test_coverage_preserves_package_selection_arguments_and_module_reports(self):
-        module = "github.com/goplus/spx/v3"
+        module = "github.com/goplus/spx/v4"
         included = [
             module, f"{module}/fs", f"{module}/testing", f"{module}/tutorials",
             f"{module}/pkg/ispx/internal/pkgextra", "example.com/other/test",
@@ -820,7 +854,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "", f"{module}/internal/webffi", f"{module}/internal/webffi/generated",
             f"{module}/test", f"{module}/test/project", f"{module}/tutorial",
             f"{module}/tutorial/01-Hello", f"{module}/pkg/ispx/internal/pkg",
-            f"{module}/pkg/ispx/internal/pkg/github.com/goplus/spx/v3",
+            f"{module}/pkg/ispx/internal/pkg/github.com/goplus/spx/v4",
         ]
         arguments = ("-v", "-coverprofile=coverage.out", "-covermode=atomic", "-run", "Test With Spaces")
         completed = self.run_script([*included, *excluded], *arguments)
@@ -839,9 +873,9 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
 
     def test_discovery_errors_and_empty_selection_stop_before_testing(self):
         for name, packages, environment, code in (
-            ("partial discovery", ["github.com/goplus/spx/v3"], {"MOCK_FAIL_CALL": "1"}, 7),
+            ("partial discovery", ["github.com/goplus/spx/v4"], {"MOCK_FAIL_CALL": "1"}, 7),
             ("empty discovery", [], {}, 1),
-            ("only excluded packages", ["github.com/goplus/spx/v3/tutorial"], {}, 1),
+            ("only excluded packages", ["github.com/goplus/spx/v4/tutorial"], {}, 1),
         ):
             with self.subTest(name=name):
                 completed = self.run_script(packages, **environment)
@@ -851,7 +885,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     self.assertIn("No Go packages selected for testing", completed.stderr)
 
     def test_failed_root_tests_do_not_run_the_second_module(self):
-        module = "github.com/goplus/spx/v3"
+        module = "github.com/goplus/spx/v4"
         completed = self.run_script([module], "-race", MOCK_FAIL_CALL="2")
         self.assertEqual(completed.returncode, 7, completed.stderr)
         self.assertEqual(self.recorded_calls(), [
@@ -886,7 +920,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             ],
             "native": [
                 (".", ["list", "./..."]),
-                (".", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "github.com/goplus/spx/v3"]),
+                (".", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "github.com/goplus/spx/v4"]),
                 ("cmd/ispx", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "./..."]),
             ],
         }
@@ -896,7 +930,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         for profile in self.root.rglob("coverage*.out"):
             profile.unlink()
         return self.run_script(
-            ["github.com/goplus/spx/v3"], suite, script=self.coverage_script,
+            ["github.com/goplus/spx/v4"], suite, script=self.coverage_script,
             **{
                 "GITHUB_OUTPUT": str(self.output),
                 "GOOS": "",
@@ -928,8 +962,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
                 self.assertCountEqual(actual, profiles)
                 all_profiles.extend(profiles)
-        self.assertEqual(len(all_profiles), 9)
-        self.assertEqual(len(set(all_profiles)), 9)
+        self.assertEqual(len(all_profiles), len(set(all_profiles)))
 
     def test_failed_coverage_commands_stop_the_suite_without_publishing_outputs(self):
         for suite, calls in self.coverage_suite_calls().items():

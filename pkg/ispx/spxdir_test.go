@@ -24,7 +24,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	spxfs "github.com/goplus/spx/v3/fs"
+	spxfs "github.com/goplus/spx/v4/fs"
 )
 
 func TestSpxDirOpen(t *testing.T) {

@@ -20,9 +20,9 @@ import (
 	"embed"
 	"os"
 
-	"github.com/goplus/spx/v3/cmd/spx/internal/command"
-	"github.com/goplus/spx/v3/internal/release"
-	"github.com/goplus/spx/v3/internal/scaffold"
+	"github.com/goplus/spx/v4/cmd/spx/internal/command"
+	"github.com/goplus/spx/v4/internal/release"
+	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
 //go:generate go run ../../.github/scripts/codegen/runtime_gdextension_templates.go

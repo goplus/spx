@@ -30,8 +30,8 @@ import (
 	"strings"
 	"time"
 
-	builderai "github.com/goplus/spx/v3/cmd/spx/internal/command/builderai"
-	"github.com/goplus/spx/v3/cmd/spx/internal/util"
+	builderai "github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
+	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 )
 
 const envName = "gdspx"
@@ -85,7 +85,7 @@ func (cmd *CmdTool) PrepareEnv(fsRelDir, dstDir string) {
 	tempFile, _ := filepath.Abs(path.Join(cmd.TargetDir, "xgo_autogen.go"))
 	tmp := `
 package main
-import "github.com/goplus/spx/v3"
+import "github.com/goplus/spx/v4"
 func main() {print(&spx.Game{})}
 `
 	os.WriteFile(tempFile, []byte(tmp), 0644)
@@ -438,7 +438,7 @@ func isLocalSpxRepoRoot(dir string) bool {
 	if err != nil {
 		return false
 	}
-	if !hasGoModuleDeclaration(string(content), "github.com/goplus/spx/v3") {
+	if !hasGoModuleDeclaration(string(content), "github.com/goplus/spx/v4") {
 		return false
 	}
 	return util.IsFileExist(filepath.Join(dir, "cmd", "spx", "install.sh"))

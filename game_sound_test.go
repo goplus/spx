@@ -21,8 +21,8 @@ import (
 	"slices"
 	"testing"
 
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	internalengine "github.com/goplus/spx/v3/internal/engine"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	internalengine "github.com/goplus/spx/v4/internal/engine"
 )
 
 type soundControlBackend struct {

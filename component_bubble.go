@@ -19,9 +19,9 @@ package spx
 import (
 	"sync"
 
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/ui"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // ============================================================================

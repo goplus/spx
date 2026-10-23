@@ -23,8 +23,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 const linuxRuntimePackArch = "x86_64"

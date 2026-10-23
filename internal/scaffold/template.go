@@ -20,7 +20,7 @@ import (
 	_ "embed"
 	"strings"
 
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 //go:embed go.mod.template

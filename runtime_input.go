@@ -18,9 +18,9 @@ package spx
 
 import (
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 // Sampling runs between script slices; pending is consumed on the engine thread.

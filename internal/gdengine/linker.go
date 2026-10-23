@@ -21,10 +21,10 @@ package gdengine
 import (
 	"sync"
 
-	"github.com/goplus/spx/v3/internal/gdengine/binding/facade"
-	engineimpl "github.com/goplus/spx/v3/internal/gdengine/impl"
-	. "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
-	gdspx "github.com/goplus/spx/v3/pkg/spx/pkg/gdspx"
+	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
+	engineimpl "github.com/goplus/spx/v4/internal/gdengine/impl"
+	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
+	gdspx "github.com/goplus/spx/v4/pkg/spx/pkg/gdspx"
 )
 
 var (

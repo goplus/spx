@@ -25,13 +25,13 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
-	"github.com/goplus/spx/v3/internal/engine/profiler"
-	"github.com/goplus/spx/v3/internal/enginewrap"
-	itime "github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/ui"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/profiler"
+	"github.com/goplus/spx/v4/internal/enginewrap"
+	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/ui"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type engineStartTestGame struct {

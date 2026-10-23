@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/cmd/buildctl/shared"
-	"github.com/goplus/spx/v3/internal/zippreflight"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/zippreflight"
 )
 
 type toolSetupNDKConfig struct {

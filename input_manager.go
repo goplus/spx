@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	coreruntime "github.com/goplus/spx/v3/internal/core/runtime"
-	inputstate "github.com/goplus/spx/v3/internal/input"
-	inkey "github.com/goplus/spx/v3/internal/input/keycode"
-	spxlog "github.com/goplus/spx/v3/internal/log"
-	engine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
+	inputstate "github.com/goplus/spx/v4/internal/input"
+	inkey "github.com/goplus/spx/v4/internal/input/keycode"
+	spxlog "github.com/goplus/spx/v4/internal/log"
+	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 const (

@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/engine"
-	itime "github.com/goplus/spx/v3/internal/time"
-	"github.com/goplus/spx/v3/internal/ui"
-	spxapi "github.com/goplus/spx/v3/pkg/spx"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
+	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/ui"
+	spxapi "github.com/goplus/spx/v4/pkg/spx"
 )
 
 // -----------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run both Go modules with the same package-selection policy in local and CI runs.
+# Run the root and base interpreter modules in local and CI runs.
 set -euo pipefail
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
 
-module_path=github.com/goplus/spx/v3
+module_path=github.com/goplus/spx/v4
 
 # Keep discovery separate so an error cannot silently run a partial package list.
 packages="$(go list ./...)"

@@ -7,7 +7,7 @@ import (
 	"syscall/js"
 	"testing"
 
-	webffi "github.com/goplus/spx/v3/internal/gdengine/binding/web"
+	webffi "github.com/goplus/spx/v4/internal/gdengine/binding/web"
 )
 
 func TestBatchRetrievePositionsUpdatesCallerBuffer(t *testing.T) {

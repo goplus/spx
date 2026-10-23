@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/driverbundle"
-	"github.com/goplus/spx/v3/internal/release"
+	"github.com/goplus/spx/v4/internal/driverbundle"
+	"github.com/goplus/spx/v4/internal/release"
 )
 
 var zipEpoch = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)

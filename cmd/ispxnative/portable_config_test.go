@@ -30,8 +30,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/internal/projectpolicy"
+	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
 func TestPortableConfigFSUsesCapturedBytes(t *testing.T) {

@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/goplus/spx/v3/internal/assetindex"
+	"github.com/goplus/spx/v4/internal/assetindex"
 )
 
 type resourceConfig struct {

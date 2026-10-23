@@ -139,9 +139,9 @@ runs:
 
         go 1.25.0
 
-        require github.com/goplus/spx/v3 $spx_version //xgo:class
+        require github.com/goplus/spx/v4 $spx_version //xgo:class
 
-        replace github.com/goplus/spx/v3 => $spx_source_dir
+        replace github.com/goplus/spx/v4 => $spx_source_dir
         EOF
           log_info "Smoke test uses local SPX source for unpublished $spx_version"
           log_success "Test project prepared: $test_project_dir"

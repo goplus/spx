@@ -20,10 +20,10 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalaudio "github.com/goplus/spx/v3/internal/audio"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	"github.com/goplus/spx/v3/internal/coroutine"
-	"github.com/goplus/spx/v3/internal/engine"
+	internalaudio "github.com/goplus/spx/v4/internal/audio"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func TestTweenCancellationUnregistersState(t *testing.T) {

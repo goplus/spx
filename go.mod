@@ -1,4 +1,4 @@
-module github.com/goplus/spx/v3
+module github.com/goplus/spx/v4
 
 go 1.26.0
 

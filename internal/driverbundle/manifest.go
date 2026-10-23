@@ -22,13 +22,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/goplus/spx/v3/internal/strictjson"
+	"github.com/goplus/spx/v4/internal/strictjson"
 )
 
 const (
 	ManifestSchema                    = 1
 	ManifestName                      = "driver-manifest.json"
-	SPXModulePath                     = "github.com/goplus/spx/v3"
+	SPXModulePath                     = "github.com/goplus/spx/v4"
 	ReleaseRepository                 = "goplus/spx"
 	EngineInterfaceDigestDomain       = "spx-engine-interface/v1\x00"
 	MaxManifestSize             int64 = 16 << 20

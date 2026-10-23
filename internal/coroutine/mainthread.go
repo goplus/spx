@@ -20,7 +20,7 @@ import (
 	"runtime"
 	"sync/atomic"
 
-	"github.com/goplus/spx/v3/internal/engine/platform"
+	"github.com/goplus/spx/v4/internal/engine/platform"
 )
 
 // WaitMainThread runs call on the engine thread, directly when the platform allows.

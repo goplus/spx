@@ -27,8 +27,8 @@ import (
 	"sync"
 	_ "unsafe"
 
-	"github.com/goplus/spx/v3/internal/interpruntime"
-	"github.com/goplus/spx/v3/pkg/ispx"
+	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/pkg/ispx"
 )
 
 var retainedProjectRoot struct {

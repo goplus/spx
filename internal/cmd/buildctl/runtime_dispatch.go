@@ -16,7 +16,7 @@
 
 package main
 
-import "github.com/goplus/spx/v3/internal/cmd/buildctl/runtimecmd"
+import "github.com/goplus/spx/v4/internal/cmd/buildctl/runtimecmd"
 
 func run(args []string) error {
 	if len(args) != 0 && args[0] == "runtime" {

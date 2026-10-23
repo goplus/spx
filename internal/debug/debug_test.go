@@ -23,7 +23,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/goplus/spx/v3/internal/log"
+	"github.com/goplus/spx/v4/internal/log"
 )
 
 func TestStackInformation(t *testing.T) {

@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalaudio "github.com/goplus/spx/v3/internal/audio"
-	coreproject "github.com/goplus/spx/v3/internal/core/project"
-	internalengine "github.com/goplus/spx/v3/internal/engine"
-	tm "github.com/goplus/spx/v3/internal/tilemap"
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	internalaudio "github.com/goplus/spx/v4/internal/audio"
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	internalengine "github.com/goplus/spx/v4/internal/engine"
+	tm "github.com/goplus/spx/v4/internal/tilemap"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type penCanvasTilemapMgr struct {

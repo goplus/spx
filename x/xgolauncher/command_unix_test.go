@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/goplus/spx/v3/internal/processsupervisor"
+	"github.com/goplus/spx/v4/internal/processsupervisor"
 )
 
 func TestRunCommandCancelsCleanupBeforeReturningSignal(t *testing.T) {

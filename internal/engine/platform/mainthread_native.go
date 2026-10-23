@@ -22,7 +22,7 @@ package platform
 import (
 	"runtime"
 
-	gdx "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 // TryCallEngineDirectly runs call when the current OS thread is Godot's main

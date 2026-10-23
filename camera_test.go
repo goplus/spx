@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	pkgengine "github.com/goplus/spx/v3/pkg/spx/pkg/engine"
+	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type cameraTestMgr struct {

@@ -20,7 +20,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/goplus/spx/v3/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 // MonitorSlider describes Scratch's min-anchored range and discrete step.
