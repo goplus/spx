@@ -152,23 +152,17 @@ func runPackage(args []string) error {
 	return nil
 }
 
+// spec is the canonical naming contract already validated by HostSpecFor.
 func validateInputBasenames(spec driverbundle.HostSpec, enginePath, packPath, bridgePath, outputPath string) error {
-	validDigest := strings.Repeat("0", sha256.Size*2)
-	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(validDigest, validDigest)
-	if err != nil {
-		return err
-	}
-	bundle := driverbundle.Bundle{
-		GOOS: spec.GOOS, GOARCH: spec.GOARCH, Name: filepath.Base(outputPath), Size: 1,
-		SHA256: validDigest, EngineInterfaceDigest: interfaceDigest,
-		Files: []driverbundle.File{
-			{Name: filepath.Base(enginePath), Mode: spec.Engine.Mode, Size: 1, SHA256: validDigest},
-			{Name: filepath.Base(packPath), Mode: spec.Pack.Mode, Size: 1, SHA256: validDigest},
-			{Name: filepath.Base(bridgePath), Mode: spec.Bridge.Mode, Size: 1, SHA256: validDigest},
-		},
-	}
-	if err := bundle.ValidateForRuntime(spec.RuntimeVersion); err != nil {
-		return fmt.Errorf("validate input basenames: %w", err)
+	for _, input := range [...]struct{ kind, path, name string }{
+		{"bundle", outputPath, spec.BundleName},
+		{"Engine", enginePath, spec.Engine.Name},
+		{"PCK", packPath, spec.Pack.Name},
+		{"bridge", bridgePath, spec.Bridge.Name},
+	} {
+		if name := filepath.Base(input.path); name != input.name {
+			return fmt.Errorf("validate input basenames: %s name = %q, want %q", input.kind, name, input.name)
+		}
 	}
 	return nil
 }

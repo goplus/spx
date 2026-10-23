@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -119,19 +120,57 @@ func TestPackageAndVerifyIsDeterministic(t *testing.T) {
 
 func TestPackageRejectsNonCanonicalBasename(t *testing.T) {
 	directory := t.TempDir()
-	for _, name := range []string{"engine", "pack", "bridge"} {
-		writeDriverTestFile(t, filepath.Join(directory, name), []byte(name))
-	}
+	outputDir := filepath.Join(directory, "output")
 	err := runPackage([]string{
 		"--engine", filepath.Join(directory, "engine"),
 		"--pack", filepath.Join(directory, "pack"),
 		"--bridge", filepath.Join(directory, "bridge"),
-		"--output", filepath.Join(directory, "spx-driver-linux-amd64.zip"),
+		"--output", filepath.Join(outputDir, "spx-driver-linux-amd64.zip"),
 		"--descriptor", filepath.Join(directory, "bundle.json"),
 		"--goos", "linux", "--goarch", "amd64",
 	})
-	if err == nil {
-		t.Fatal("accepted non-canonical input basenames")
+	if err == nil || !strings.Contains(err.Error(), "validate input basenames: Engine name") {
+		t.Fatalf("basename rejection = %v", err)
+	}
+	if _, err := os.Stat(outputDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("output directory exists after basename rejection: %v", err)
+	}
+}
+
+func TestValidateInputBasenames(t *testing.T) {
+	for _, target := range driverbundle.SupportedTargets() {
+		t.Run(target.GOOS+"/"+target.GOARCH, func(t *testing.T) {
+			spec, err := driverbundle.HostSpecFor(release.DefaultRuntimeLock().RuntimeVersion, target.GOOS, target.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inputs := [...]struct{ kind, name string }{
+				{"Engine", spec.Engine.Name}, {"PCK", spec.Pack.Name},
+				{"bridge", spec.Bridge.Name}, {"bundle", spec.BundleName},
+			}
+			var paths [4]string
+			for i, input := range inputs {
+				paths[i] = filepath.Join("input", "nested", input.name)
+			}
+			if err := validateInputBasenames(spec, paths[0], paths[1], paths[2], paths[3]); err != nil {
+				t.Fatalf("canonical names in directories: %v", err)
+			}
+			for i, input := range inputs {
+				for _, invalid := range []string{"", ".", "..", "wrong.zip", inputs[(i+1)%len(inputs)].name, input.name + " ", input.name + "\x00", input.name + "\n", input.name + "\\suffix"} {
+					actual := paths
+					actual[i] = invalid
+					err := validateInputBasenames(spec, actual[0], actual[1], actual[2], actual[3])
+					want := fmt.Sprintf("validate input basenames: %s name = %q, want %q", input.kind, filepath.Base(invalid), input.name)
+					if err == nil || err.Error() != want {
+						t.Fatalf("slot %d path %q: error = %v, want %q", i, invalid, err, want)
+					}
+				}
+			}
+			err = validateInputBasenames(spec, "bad-engine", "bad-pack", "bad-bridge", "bad.zip")
+			if err == nil || !strings.Contains(err.Error(), "bundle name") {
+				t.Fatalf("bundle name must be checked before component names: %v", err)
+			}
+		})
 	}
 }
 
