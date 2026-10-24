@@ -83,9 +83,8 @@ func (s *shapeManager) flushBubbleVisuals(items []Shape) {
 
 	s.layoutTextBubbles()
 
-	delta := itime.DeltaTime()
 	for _, bubble := range s.bubbles {
-		bubble.onUpdate(delta)
+		bubble.onUpdate()
 	}
 }
 

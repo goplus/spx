@@ -141,7 +141,7 @@ func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
 }
 
 func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
-	installBubbleTestUiMgr(t)
+	installAskTestUiMgr(t)
 	mgr := &debugPanelUiMgr{IUiMgr: pkgengine.UiMgr}
 	pkgengine.UiMgr = mgr
 	previousDebug := profiler.Debug
@@ -291,7 +291,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 }
 
 func TestEngineResetClearsBootstrapAndAllowsStartupAgain(t *testing.T) {
-	installBubbleTestUiMgr(t)
+	installAskTestUiMgr(t)
 	game := setupStageLoadTestGame(t, gameTestFS{}).baseGame()
 	// Reset owns both registries, even when prior tests left native proxies.
 	pkgengine.CreateEmptySprite[engine.Sprite](mathf.Vec2{})
