@@ -122,18 +122,9 @@ func (e *animationEntry) ensureRegistered() int {
 }
 
 func buildAnimationSources(costumes []*costume) []intani.FrameSource {
-	frames := make([]intani.FrameSource, 0, len(costumes))
-	for _, c := range costumes {
-		frames = append(frames, intani.FrameSource{
-			Path:             c.path,
-			BitmapResolution: c.bitmapResolution,
-			Center:           c.center,
-			ImageSize:        c.imageSize,
-			PosX:             c.posX,
-			PosY:             c.posY,
-			Width:            c.width,
-			Height:           c.height,
-		})
+	frames := make([]intani.FrameSource, len(costumes))
+	for i, c := range costumes {
+		frames[i] = intani.FrameSource{Path: c.path, Frame: c.frame}
 	}
 	return frames
 }

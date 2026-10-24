@@ -85,7 +85,7 @@ func getCostumeBoundByAlpha(p *SpriteImpl) (mathf.Vec2, mathf.Vec2) {
 		}
 		cachedBounds[cs.path] = rect
 	}
-	scale := 1 / float64(cs.bitmapResolution)
+	scale := 1 / float64(cs.frame.BitmapResolution)
 	posX := float64(rect.Position.X) * scale
 	posY := float64(rect.Position.Y) * scale
 	sizeX := float64(rect.Size.X) * scale

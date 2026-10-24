@@ -1232,7 +1232,7 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 	for i, center := range []mathf.Vec2{mathf.NewVec2(10, 10), mathf.NewVec2(14, 6), mathf.NewVec2(6, 16)} {
 		c := newCostumeWithSize(20, 20)
 		c.name, c.path = fmt.Sprintf("costume%d", i), fmt.Sprintf("costume%d.png", i)
-		c.center, c.faceRight, c.bitmapResolution = center, float64(i-1)*90, 1<<i
+		c.frame.Center, c.faceRight, c.frame.BitmapResolution = center, float64(i-1)*90, 1<<i
 		sprite.costumes = append(sprite.costumes, c)
 	}
 	sprite.costumeIndex = 0
@@ -1273,7 +1273,7 @@ func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedReso
 	if got, want := mgr.texturePaths[id], engine.ToAssetPath(c.path); got != want {
 		t.Fatalf("texture = %q, want %q", got, want)
 	}
-	if got, want := mgr.renderScales[id], engine.UniformVec2(size/float64(c.bitmapResolution)); got != want {
+	if got, want := mgr.renderScales[id], engine.UniformVec2(size/float64(c.frame.BitmapResolution)); got != want {
 		t.Fatalf("resource scale = %v, want %v", got, want)
 	}
 	offsets := []mathf.Vec2{mathf.NewVec2(-1, 2), mathf.NewVec2(-3, 0), mathf.NewVec2(0, 3.5)}
@@ -1283,8 +1283,8 @@ func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedReso
 		visual.renderOffset != wantOffset || visual.scale != mathf.NewVec2(1, 1) {
 		t.Fatalf("geometry = %+v, want costume %d with offset %v", visual, index, wantOffset)
 	}
-	if c.isAtlas() && mgr.uvRemaps[id] != c.atlasUVRect {
-		t.Fatalf("atlas UV = %v, want %v", mgr.uvRemaps[id], c.atlasUVRect)
+	if c.isAtlas() && mgr.uvRemaps[id] != c.frame.AtlasUVRect {
+		t.Fatalf("atlas UV = %v, want %v", mgr.uvRemaps[id], c.frame.AtlasUVRect)
 	}
 }
 
@@ -1332,8 +1332,8 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 			name: "atlas query",
 			prepare: func(_ *testing.T, s *SpriteImpl, _ *preparedResourceSpriteMgr) {
 				for i, c := range s.costumes {
-					c.setIndex = i
-					c.atlasUVRect = mathf.NewVec4(float64(i)/4, 0, 0.25, 1)
+					c.atlas = true
+					c.frame.AtlasUVRect = mathf.NewVec4(float64(i)/4, 0, 0.25, 1)
 				}
 			},
 			onOwnTexture: true, onChange: (*SpriteImpl).syncProxyForQuery,

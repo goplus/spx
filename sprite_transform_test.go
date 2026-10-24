@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
@@ -452,10 +453,13 @@ func TestFixWorldRange(t *testing.T) {
 			sprite.g.displayState.MinWorldX = -240
 			sprite.g.displayState.MinWorldY = -180
 			sprite.costumes = []*costume{{
-				width:            tt.width,
-				height:           tt.height,
-				bitmapResolution: 1,
-				center:           mathf.NewVec2(float64(tt.width)/2, float64(tt.height)/2),
+				atlas: true,
+				frame: assetutil.FrameDescriptor{
+					Width:            tt.width,
+					Height:           tt.height,
+					BitmapResolution: 1,
+					Center:           mathf.NewVec2(float64(tt.width)/2, float64(tt.height)/2),
+				},
 			}}
 			sprite.costumeIndex = 0
 			sprite.runtimeState.Scale = tt.scale
@@ -476,10 +480,13 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 	sprite.g.displayState.MinWorldX = -240
 	sprite.g.displayState.MinWorldY = -180
 	sprite.baseObj.costumes = []*costume{{
-		width:            55,
-		height:           54,
-		bitmapResolution: 2,
-		center:           mathf.NewVec2(52, 89),
+		atlas: true,
+		frame: assetutil.FrameDescriptor{
+			Width:            55,
+			Height:           54,
+			BitmapResolution: 2,
+			Center:           mathf.NewVec2(52, 89),
+		},
 	}}
 	sprite.baseObj.costumeIndex = 0
 	sprite.runtimeState.Scale = 1
@@ -498,10 +505,13 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
 	sprite.baseObj.costumes = []*costume{{
-		width:            100,
-		height:           40,
-		bitmapResolution: 1,
-		center:           mathf.NewVec2(50, 20),
+		atlas: true,
+		frame: assetutil.FrameDescriptor{
+			Width:            100,
+			Height:           40,
+			BitmapResolution: 1,
+			Center:           mathf.NewVec2(50, 20),
+		},
 	}}
 	sprite.baseObj.costumeIndex = 0
 	sprite.runtimeState.Scale = 1
@@ -522,10 +532,13 @@ func TestClampSpriteScaleToMaxScale(t *testing.T) {
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
 	sprite.baseObj.costumes = []*costume{{
-		width:            480,
-		height:           360,
-		bitmapResolution: 1,
-		center:           mathf.NewVec2(240, 180),
+		atlas: true,
+		frame: assetutil.FrameDescriptor{
+			Width:            480,
+			Height:           360,
+			BitmapResolution: 1,
+			Center:           mathf.NewVec2(240, 180),
+		},
 	}}
 	sprite.baseObj.costumeIndex = 0
 

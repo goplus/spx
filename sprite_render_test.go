@@ -114,10 +114,13 @@ func newRenderOffsetTestSprite() *SpriteImpl {
 	sprite.runtimeState.Scale = 1
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
-		center:           mathf.NewVec2(10, 20),
-		bitmapResolution: 1,
-		width:            100,
-		height:           80,
+		atlas: true,
+		frame: assetutil.FrameDescriptor{
+			Center:           mathf.NewVec2(10, 20),
+			BitmapResolution: 1,
+			Width:            100,
+			Height:           80,
+		},
 	}}
 	return sprite
 }
@@ -162,10 +165,9 @@ func TestCostumeCenterInAssetNormalizesStaleCenterOnEmptyFrame(t *testing.T) {
 	if got := costumeCenterInAsset(empty, mathf.NewVec2(240, 180)); got != (mathf.NewVec2(0.5, 0.5)) {
 		t.Fatalf("empty frame center = %v, want {0.5 0.5}", got)
 	}
-	costume := &costume{
-		width: 1, height: 1, bitmapResolution: 1, imageSize: mathf.NewVec2(1, 1),
-		center: costumeCenterInAsset(empty, mathf.NewVec2(240, 180)),
-	}
+	costume := newCostume(&coreproject.CostumeConfig{
+		ImageWidth: 1, ImageHeight: 1, BitmapResolution: 1, X: 240, Y: 180,
+	})
 	if got := costume.renderAnchorInSPX(); got != (mathf.Vec2{}) {
 		t.Fatalf("renderAnchorInSPX = %v, want {0 0}", got)
 	}
@@ -207,7 +209,7 @@ func TestAtlasCostumePreservesFrameGeometry(t *testing.T) {
 	if got, want := obj.getCostumeAtlasRegion(), mathf.NewRect2(59, 8, 43, 43); got != want {
 		t.Fatalf("atlas region = %v, want %v", got, want)
 	}
-	if got, want := c.atlasUVRect, mathf.NewVec4(59.0/256, 8.0/128, 43.0/256, 43.0/128); got != want {
+	if got, want := c.frame.AtlasUVRect, mathf.NewVec4(59.0/256, 8.0/128, 43.0/256, 43.0/128); got != want {
 		t.Fatalf("atlas UV remap = %v, want %v", got, want)
 	}
 	if width, height := c.displaySize(); width != 21 || height != 21 {
@@ -251,7 +253,7 @@ func TestLegacyLeftRightRotationStyleFlipsNegativeHeading(t *testing.T) {
 		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
 		AnimBindings:  map[string]string{},
 	})
-	sprite.costumes = []*costume{{bitmapResolution: 1}}
+	sprite.costumes = []*costume{{frame: assetutil.FrameDescriptor{BitmapResolution: 1}}}
 
 	rotation, scaleX, scaleY := getRenderRotationAndScale(sprite)
 	if rotation != 0 || scaleX != -1 || scaleY != 1 {

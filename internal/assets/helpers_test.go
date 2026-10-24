@@ -81,25 +81,36 @@ func TestNewSizedFrame(t *testing.T) {
 }
 
 func TestNewAtlasFrame(t *testing.T) {
-	got := NewAtlasFrame(100, 20, "path", 0, 0, 0, 0, 5, 2, 1, func(string) mathf.Vec2 {
-		t.Fatal("fallback should not be called")
-		return mathf.Vec2{}
-	})
-	if got.Width != 20 || got.Height != 20 {
-		t.Fatalf("NewAtlasFrame size = (%d, %d), want (20, 20)", got.Width, got.Height)
+	tests := []struct {
+		name       string
+		nx, index  int
+		rect       [4]float64
+		width      int
+		height     int
+		posX, posY int
+	}{
+		{"full image", 5, 2, [4]float64{}, 20, 20, 40, 0},
+		{"zero columns", 0, 0, [4]float64{}, 100, 20, 0, 0},
+		{"negative columns", -2, 0, [4]float64{}, 100, 20, 0, 0},
+		{"fractional region", 3, 1, [4]float64{7.5, 3.5, 31.5, 11.5}, 10, 11, 17, 3},
 	}
-	if got.PosX != 40 || got.PosY != 0 {
-		t.Fatalf("NewAtlasFrame position = (%d, %d), want (40, 0)", got.PosX, got.PosY)
-	}
-}
-
-func TestNewAtlasFrameDefaultsZeroNxToOne(t *testing.T) {
-	got := NewAtlasFrame(100, 20, "path", 0, 0, 0, 0, 0, 0, 1, func(string) mathf.Vec2 {
-		t.Fatal("fallback should not be called")
-		return mathf.Vec2{}
-	})
-	if got.Width != 100 || got.Height != 20 {
-		t.Fatalf("NewAtlasFrame size = (%d, %d), want (100, 20)", got.Width, got.Height)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := NewAtlasFrame(100, 20, "path", test.rect[0], test.rect[1], test.rect[2], test.rect[3], test.nx, test.index, 2, func(string) mathf.Vec2 {
+				t.Fatal("fallback should not be called")
+				return mathf.Vec2{}
+			})
+			want := FrameDescriptor{
+				Width: test.width, Height: test.height, BitmapResolution: 2,
+				ImageSize: mathf.NewVec2(100, 20),
+				Center:    mathf.NewVec2(float64(test.width)/2, float64(test.height)/2),
+				PosX:      test.posX, PosY: test.posY,
+				AtlasUVRect: mathf.NewVec4(float64(test.posX)/100, float64(test.posY)/20, float64(test.width)/100, float64(test.height)/20),
+			}
+			if got != want {
+				t.Fatalf("NewAtlasFrame() = %+v, want %+v", got, want)
+			}
+		})
 	}
 }
 

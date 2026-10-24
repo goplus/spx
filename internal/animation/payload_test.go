@@ -25,135 +25,9 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	assetutil "github.com/goplus/spx/v4/internal/assets"
 	"github.com/goplus/spx/v4/internal/engine"
 )
-
-type decodedPayload struct {
-	BasePath  string           `json:"base_path"`
-	Frames    []map[string]any `json:"frames"`
-	MaxBitmap float64          `json:"max_bitmap"`
-}
-
-func TestBuildPayloadJSONNormal(t *testing.T) {
-	got, maxBitmap, err := BuildPayloadJSON(
-		Config{FrameFrom: 0, FrameTo: 1},
-		[]FrameSource{
-			{
-				Path:             "sprites/cat/a.webp",
-				BitmapResolution: 2,
-				Center:           mathf.NewVec2(8, 12),
-				ImageSize:        mathf.NewVec2(20, 30),
-			},
-			{
-				Path:             "sprites/cat/b.png",
-				BitmapResolution: 4,
-				Center:           mathf.NewVec2(10, 15),
-				ImageSize:        mathf.NewVec2(20, 30),
-			},
-		},
-		false,
-	)
-	if err != nil {
-		t.Fatalf("BuildPayloadJSON(normal) error: %v", err)
-	}
-	if maxBitmap != 4 {
-		t.Fatalf("maxBitmap = %d, want 4", maxBitmap)
-	}
-
-	var payload decodedPayload
-	if err := json.Unmarshal([]byte(got), &payload); err != nil {
-		t.Fatalf("json.Unmarshal error: %v", err)
-	}
-	if payload.BasePath != "" {
-		t.Fatalf("BasePath = %q, want empty", payload.BasePath)
-	}
-	if payload.MaxBitmap != 4 {
-		t.Fatalf("MaxBitmap = %v, want 4", payload.MaxBitmap)
-	}
-	if len(payload.Frames) != 2 {
-		t.Fatalf("len(Frames) = %d, want 2", len(payload.Frames))
-	}
-	if payload.Frames[0]["path"] != engine.ToAssetPath("sprites/cat/a.webp") {
-		t.Fatalf("frame[0].path = %v, want %q", payload.Frames[0]["path"], engine.ToAssetPath("sprites/cat/a.webp"))
-	}
-	if payload.Frames[1]["path"] != engine.ToAssetPath("sprites/cat/b.png") {
-		t.Fatalf("frame[1].path = %v, want %q", payload.Frames[1]["path"], engine.ToAssetPath("sprites/cat/b.png"))
-	}
-	if payload.Frames[0]["bitmap"] != float64(2) {
-		t.Fatalf("frame[0].bitmap = %v, want 2", payload.Frames[0]["bitmap"])
-	}
-	offset := payload.Frames[0]["offset"].([]any)
-	if offset[0] != float64(-2) || offset[1] != float64(3) {
-		t.Fatalf("frame[0].offset = %#v, want [-2 3]", offset)
-	}
-}
-
-func TestBuildPayloadJSONAtlasReverse(t *testing.T) {
-	got, maxBitmap, err := BuildPayloadJSON(
-		Config{FrameFrom: 2, FrameTo: 0},
-		[]FrameSource{
-			{Path: "sprites/cat/atlas.png", PosX: 0, PosY: 0, Width: 10, Height: 20},
-			{Path: "sprites/cat/atlas.png", PosX: 10, PosY: 0, Width: 10, Height: 20},
-			{Path: "sprites/cat/atlas.png", PosX: 20, PosY: 0, Width: 10, Height: 20},
-		},
-		true,
-	)
-	if err != nil {
-		t.Fatalf("BuildPayloadJSON(atlas) error: %v", err)
-	}
-	if maxBitmap != 1 {
-		t.Fatalf("maxBitmap = %d, want 1", maxBitmap)
-	}
-
-	var payload decodedPayload
-	if err := json.Unmarshal([]byte(got), &payload); err != nil {
-		t.Fatalf("json.Unmarshal error: %v", err)
-	}
-	if payload.BasePath != engine.ToAssetPath("sprites/cat/atlas.png") {
-		t.Fatalf("BasePath = %q, want %q", payload.BasePath, engine.ToAssetPath("sprites/cat/atlas.png"))
-	}
-	if len(payload.Frames) != 3 {
-		t.Fatalf("len(Frames) = %d, want 3", len(payload.Frames))
-	}
-	if payload.Frames[0]["x"] != float64(20) || payload.Frames[2]["x"] != float64(0) {
-		t.Fatalf("atlas frame order = %#v", payload.Frames)
-	}
-}
-
-func TestBuildPayloadJSONNormalReverse(t *testing.T) {
-	got, _, err := BuildPayloadJSON(
-		Config{FrameFrom: 1, FrameTo: 0},
-		[]FrameSource{
-			{
-				Path:             "sprites/cat/a.png",
-				BitmapResolution: 1,
-				Center:           mathf.NewVec2(5, 5),
-				ImageSize:        mathf.NewVec2(10, 10),
-			},
-			{
-				Path:             "sprites/cat/b.png",
-				BitmapResolution: 1,
-				Center:           mathf.NewVec2(5, 5),
-				ImageSize:        mathf.NewVec2(10, 10),
-			},
-		},
-		false,
-	)
-	if err != nil {
-		t.Fatalf("BuildPayloadJSON(reverse normal) error: %v", err)
-	}
-
-	var payload decodedPayload
-	if err := json.Unmarshal([]byte(got), &payload); err != nil {
-		t.Fatalf("json.Unmarshal error: %v", err)
-	}
-	if len(payload.Frames) != 2 {
-		t.Fatalf("len(Frames) = %d, want 2", len(payload.Frames))
-	}
-	if payload.Frames[0]["path"] != engine.ToAssetPath("sprites/cat/b.png") {
-		t.Fatalf("frame[0].path = %v, want %q", payload.Frames[0]["path"], engine.ToAssetPath("sprites/cat/b.png"))
-	}
-}
 
 func TestBuildPayloadJSONBoundsError(t *testing.T) {
 	tests := []struct {
@@ -182,13 +56,17 @@ func TestBuildPayloadJSONBoundsError(t *testing.T) {
 
 func TestBuildPayloadJSONAtlasIgnoresNormalMetadata(t *testing.T) {
 	costumes := []FrameSource{
-		{Path: "sprites/base.png"},
+		{Path: "sprites/base.png", Frame: assetutil.FrameDescriptor{Width: 90, Height: 100}},
 		{
-			Path: "sprites/other.png", PosX: 10, PosY: 20, Width: 30, Height: 40,
-			BitmapResolution: 8, Center: mathf.NewVec2(math.NaN(), 0), ImageSize: mathf.NewVec2(0, math.Inf(1)),
+			Path: "sprites/other.png",
+			Frame: assetutil.FrameDescriptor{
+				PosX: 10, PosY: 20, Width: 30, Height: 40,
+				BitmapResolution: 8, Center: mathf.NewVec2(math.NaN(), 0), ImageSize: mathf.NewVec2(0, math.Inf(1)),
+			},
 		},
-		{Path: "sprites/another.png", PosX: 50, PosY: 60, Width: 70, Height: 80},
+		{Path: "sprites/another.png", Frame: assetutil.FrameDescriptor{PosX: 50, PosY: 60, Width: 70, Height: 80}},
 	}
+	const base = `{"x":0,"y":0,"w":90,"h":100,"offset":[0,0]}`
 	const first = `{"x":10,"y":20,"w":30,"h":40,"offset":[0,0]}`
 	const second = `{"x":50,"y":60,"w":70,"h":80,"offset":[0,0]}`
 	tests := []struct {
@@ -199,6 +77,7 @@ func TestBuildPayloadJSONAtlasIgnoresNormalMetadata(t *testing.T) {
 		{"single", Config{FrameFrom: 1, FrameTo: 1}, "[" + first + "]"},
 		{"forward", Config{FrameFrom: 1, FrameTo: 2}, "[" + first + "," + second + "]"},
 		{"reverse", Config{FrameFrom: 2, FrameTo: 1}, "[" + second + "," + first + "]"},
+		{"reverse through zero", Config{FrameFrom: 2}, "[" + second + "," + first + "," + base + "]"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -212,9 +91,49 @@ func TestBuildPayloadJSONAtlasIgnoresNormalMetadata(t *testing.T) {
 }
 
 func TestBuildPayloadJSONRejectsNonFiniteNormalOffset(t *testing.T) {
-	got, bitmap, err := BuildPayloadJSON(Config{}, []FrameSource{{Center: mathf.NewVec2(math.NaN(), 0)}}, false)
+	got, bitmap, err := BuildPayloadJSON(Config{}, []FrameSource{{Frame: assetutil.FrameDescriptor{Center: mathf.NewVec2(math.NaN(), 0)}}}, false)
 	var unsupported *json.UnsupportedValueError
 	if !errors.As(err, &unsupported) || !strings.HasPrefix(err.Error(), "createAnimation: failed to marshal animation payload:") || got != "" || bitmap != 0 {
 		t.Fatalf("BuildPayloadJSON() = (%q, %d, %v), want empty/0/wrapped JSON error", got, bitmap, err)
+	}
+}
+
+func TestBuildPayloadJSONNormalPreservesDescriptorGeometry(t *testing.T) {
+	costumes := []FrameSource{
+		{
+			Path: "sprites/fractional.svg",
+			Frame: assetutil.FrameDescriptor{
+				ImageSize: mathf.NewVec2(55.75, 54.25), Center: mathf.NewVec2(52, 89),
+				// Normal payloads use logical ImageSize, not atlas-only geometry.
+				Width: 999, Height: 999, PosX: 10, PosY: 20,
+				AtlasUVRect: mathf.NewVec4(math.NaN(), 0, 0, 0),
+			},
+		},
+		{
+			Path: "sprites/centered.png",
+			Frame: assetutil.FrameDescriptor{
+				BitmapResolution: 2, ImageSize: mathf.NewVec2(20, 30), Center: mathf.NewVec2(10, 15),
+			},
+		},
+	}
+	first := `{"path":` + strconv.Quote(engine.ToAssetPath(costumes[0].Path)) + `,"offset":[24.125,-61.875],"bitmap":1}`
+	second := `{"path":` + strconv.Quote(engine.ToAssetPath(costumes[1].Path)) + `,"offset":[0,-0],"bitmap":2}`
+	for _, test := range []struct {
+		name   string
+		config Config
+		frames string
+		bitmap int
+	}{
+		{"single", Config{}, "[" + first + "]", 1},
+		{"forward", Config{FrameTo: 1}, "[" + first + "," + second + "]", 2},
+		{"reverse", Config{FrameFrom: 1}, "[" + second + "," + first + "]", 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, bitmap, err := BuildPayloadJSON(test.config, costumes, false)
+			want := `{"frames":` + test.frames + `,"max_bitmap":` + strconv.Itoa(test.bitmap) + `}`
+			if err != nil || got != want || bitmap != test.bitmap {
+				t.Fatalf("BuildPayloadJSON() = (%q, %d, %v), want (%q, %d, nil)", got, bitmap, err, want, test.bitmap)
+			}
+		})
 	}
 }

@@ -79,7 +79,7 @@ func TestBaseObjInitializesSingleCostumeSetWithRect(t *testing.T) {
 		t.Fatalf("costume set = %v, frames = %d, initial = %d", obj.runtimeState.IsCostumeSet, len(obj.costumes), obj.costumeIndex)
 	}
 	for i, costume := range obj.costumes {
-		if costume.posX != 20+i*20 || costume.posY != 10 || costume.width != 20 || costume.height != 20 || costume.bitmapResolution != 2 || costume.faceRight != 90 {
+		if costume.frame.PosX != 20+i*20 || costume.frame.PosY != 10 || costume.frame.Width != 20 || costume.frame.Height != 20 || costume.frame.BitmapResolution != 2 || costume.faceRight != 90 {
 			t.Fatalf("frame %d = %+v", i, costume)
 		}
 	}
@@ -135,16 +135,19 @@ func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 	obj.initSpriteCostumes(config, layout)
 
 	names := make([]string, len(obj.costumes))
-	setIndexes := make([]int, len(obj.costumes))
+	positions := make([]int, len(obj.costumes))
 	for i, costume := range obj.costumes {
 		names[i] = costume.name
-		setIndexes[i] = costume.setIndex
+		positions[i] = costume.frame.PosX
+		if !costume.isAtlas() {
+			t.Fatalf("costume %d is not an atlas frame", i)
+		}
 	}
 	if want := []string{"0", "run0", "run1"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("costume names = %v, want %v", names, want)
 	}
-	if want := []int{0, 0, 1}; !reflect.DeepEqual(setIndexes, want) {
-		t.Fatalf("costume set indexes = %v, want %v", setIndexes, want)
+	if want := []int{0, 0, 10}; !reflect.DeepEqual(positions, want) {
+		t.Fatalf("costume frame positions = %v, want %v", positions, want)
 	}
 	if obj.costumeIndex != 2 {
 		t.Fatalf("costume index = %d, want 2", obj.costumeIndex)
