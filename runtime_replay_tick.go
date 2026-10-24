@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v4/internal/engine"
+	inputstate "github.com/goplus/spx/v4/internal/input"
 )
 
 type inputSessionTick struct {
@@ -47,7 +48,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		if err := s.controller.SynchronizeRecordingInitial(initial); err != nil {
 			return inputSessionTick{}, err
 		}
-		s.initial = cloneInputReplayState(initial)
+		s.initial = inputstate.CloneInputReplayState(initial)
 		s.initialPending = false
 	}
 
@@ -55,7 +56,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 	if err != nil {
 		return inputSessionTick{}, err
 	}
-	s.current = cloneInputReplayState(frame.State)
+	s.current = inputstate.CloneInputReplayState(frame.State)
 	s.currentTime = frame.Time
 	s.currentTick = frame.Frame
 	if s.mode == InputSessionModeReplaying && firstTick && frame.Frame < 0 {
@@ -69,7 +70,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 	}
 	return inputSessionTick{
 		frame:     frame,
-		initial:   cloneInputReplayState(s.initial),
+		initial:   inputstate.CloneInputReplayState(s.initial),
 		firstTick: firstTick,
 	}, nil
 }
@@ -80,7 +81,7 @@ func (s *inputSession) playbackState() (InputReplayState, bool) {
 	if s.mode != InputSessionModeReplaying || s.phase == InputSessionPhaseAborted {
 		return InputReplayState{}, false
 	}
-	return cloneInputReplayState(s.current), true
+	return inputstate.CloneInputReplayState(s.current), true
 }
 
 func (p *Game) currentInputPlaybackState() (InputReplayState, bool) {
@@ -199,10 +200,4 @@ func inputStateBeforeEvents(
 	}
 	initial.KeysDown = sortedPressedKeys(keys)
 	return initial
-}
-
-func cloneInputReplayState(state InputReplayState) InputReplayState {
-	cloned := state
-	cloned.KeysDown = append([]int64(nil), state.KeysDown...)
-	return cloned
 }
