@@ -22,6 +22,8 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
@@ -283,4 +285,90 @@ func generatedMethod(t *testing.T, filename string, source []byte, name string) 
 	}
 	t.Fatalf("generated method %s not found", name)
 	return ""
+}
+
+func TestNativeCallbacksMatchABI(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..", "..")
+	source, err := os.ReadFile(filepath.Join(root, "godot_modules", "spx", "gdextension_spx_ext.h"))
+	require.NoError(t, err)
+	start := strings.Index(string(source), "// Callbacks run synchronously.")
+	end := strings.Index(string(source), "} SpxCallbackInfo;") + len("} SpxCallbackInfo;")
+	require.GreaterOrEqual(t, start, 0)
+	require.Greater(t, end, start)
+	callbackAST, err := clang.ParseCString(string(source[start:end]))
+	require.NoError(t, err)
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	nativeDir := filepath.Join(codegenDir, common.NativeRelDir)
+	require.NoError(t, os.MkdirAll(nativeDir, 0o755))
+	generation := &Generator{common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
+	require.NoError(t, generation.Generate(codegenDir))
+
+	outputs := make(map[string][]byte)
+	for _, name := range []string{"callbacks.gen.go", "callbacks.gen.h"} {
+		output, err := os.ReadFile(filepath.Join(nativeDir, name))
+		require.NoError(t, err)
+		committed, err := os.ReadFile(filepath.Join(root, "internal", "gdengine", "binding", "native", name))
+		require.NoError(t, err)
+		require.Equal(t, string(committed), string(output), "%s must be regenerated", name)
+		outputs[name] = output
+	}
+	header := string(outputs["callbacks.gen.h"])
+	declarations := regexp.MustCompile(`(?m)^extern void (\w+)\(`).FindAllStringSubmatch(header, -1)
+	registrations := regexp.MustCompile(`info\.(\w+) = (\w+);`).FindAllStringSubmatch(header, -1)
+	fields := callbackAST.CollectStructs()[0].Fields
+	require.NotEmpty(t, fields)
+	require.Len(t, declarations, len(fields))
+	require.Len(t, registrations, len(fields))
+	for i, field := range fields {
+		symbol := field.Variable.Name
+		require.Equal(t, symbol, declarations[i][1])
+		require.Equal(t, []string{symbol, symbol}, registrations[i][1:])
+	}
+	require.NoError(t, writeCallbacks(codegenDir, callbackAST))
+	for name, before := range outputs {
+		after, err := os.ReadFile(filepath.Join(nativeDir, name))
+		require.NoError(t, err)
+		require.Equal(t, before, after, "generation must be idempotent: %s", name)
+	}
+}
+
+func TestNativeCallbacksUseABIFieldNamesAndRejectUnsupportedTypes(t *testing.T) {
+	callbackAST, err := clang.ParseCString(`
+typedef void (*GDExtensionSpxCallbackOnChanged)(GdObj obj, GdInt key, GdFloat delta, GdBool flag, GdString text);
+typedef void (*GDExtensionSpxCallbackOnReady)();
+typedef struct {
+ GDExtensionSpxCallbackOnReady custom_ready;
+ GDExtensionSpxCallbackOnChanged custom_changed;
+} SpxCallbackInfo;`)
+	require.NoError(t, err)
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, writeCallbacks(codegenDir, callbackAST))
+	generated, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.go"))
+	require.NoError(t, err)
+	method := generatedMethod(t, "callbacks.gen.go", generated, "custom_changed")
+	require.Contains(t, method, "func custom_changed(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt, arg2 C.GDReal, arg3 C.GDExtensionBool, arg4 C.GdString)")
+	require.Contains(t, method, "callbacks.OnChanged(int64(arg0), int64(arg1), float64(arg2), arg3 != 0, copyString(GdString(arg4)))")
+	for _, source := range []string{
+		"typedef struct { GdInt count; } Other;",
+		"typedef void (*GDExtensionSpxCallbackValue)(Unknown value); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",
+		"typedef void (*GDExtensionSpxCallbackValue)(GdInt *value); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",
+		"typedef void (*GDExtensionSpxCallbackValue)(void (*value)(GdInt arg)); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",
+	} {
+		t.Run(source, func(t *testing.T) {
+			callbackAST, err := clang.ParseCString(source)
+			require.NoError(t, err)
+			dir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+			require.Error(t, writeCallbacks(dir, callbackAST))
+			_, err = os.Stat(filepath.Join(dir, common.NativeRelDir))
+			require.True(t, os.IsNotExist(err), "invalid input must not write output")
+		})
+	}
+	for _, name := range []string{"callbacks.gen.go", "callbacks.gen.h"} {
+		t.Run(name+" write error", func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+			path := filepath.Join(dir, common.NativeRelDir, name)
+			require.NoError(t, os.MkdirAll(path, 0o755))
+			require.ErrorContains(t, writeCallbacks(dir, callbackAST), path)
+		})
+	}
 }

@@ -125,34 +125,6 @@ func TestToGdArrayInfoPreservesTypedEmptyArrays(t *testing.T) {
 	}
 }
 
-func TestStringCallbackBorrowsCallerMemory(t *testing.T) {
-	previous := callbacks
-	t.Cleanup(func() { BindCallback(previous) })
-	input := ToGdArrayInfo([]string{"borrowed"})
-	defer input.Free()
-	ptr := *(*unsafe.Pointer)(input.gdArray.data)
-	var got string
-	BindCallback(engine.CallbackInfo{OnActionPressed: func(value string) { got = value }})
-	invokeStringCallback(func_on_action_pressed, ptr)
-	if got != "borrowed" || input.ToStrings()[0] != "borrowed" {
-		t.Fatalf("callback = %q, caller input = %q", got, input.ToStrings()[0])
-	}
-	unsafe.Slice((*byte)(ptr), len(got))[0] = 'B'
-	if got != "borrowed" || input.ToStrings()[0] != "Borrowed" {
-		t.Fatalf("callback did not retain an independent copy: callback = %q, input = %q", got, input.ToStrings()[0])
-	}
-	BindCallback(engine.CallbackInfo{})
-	invokeStringCallback(func_on_action_pressed, ptr)
-	if input.ToStrings()[0] != "Borrowed" {
-		t.Fatal("a missing handler changed the caller input")
-	}
-}
-
-// Infer the cgo pointer type without adding an import-C production test hook.
-func invokeStringCallback[T ~unsafe.Pointer](callback func(T), input unsafe.Pointer) {
-	callback(T(input))
-}
-
 func TestNativeArrayValuesAndOwnership(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -276,6 +248,7 @@ func TestNativeCallbacksForwardValuesAndAllowMissingHandlers(t *testing.T) {
 	defer text.Free()
 	pointer := *(*unsafe.Pointer)(text.gdArray.data)
 	const id int64 = 1<<54 + 3
+	tested := make(map[string]bool)
 	for _, tc := range []struct {
 		field      string
 		callback   any
@@ -323,10 +296,13 @@ func TestNativeCallbacksForwardValuesAndAllowMissingHandlers(t *testing.T) {
 		{"OnSceneSpriteInstantiated", func_on_scene_sprite_instantiated, []any{id, pointer}, []any{id, "héllo action"}},
 		{"OnUiTextChanged", func_on_ui_text_changed, []any{id, pointer}, []any{id, "héllo action"}},
 		{"OnAxisChanged", func_on_axis_changed, []any{pointer, -.5}, []any{"héllo action", -.5}},
-		{"OnEnginePause", func_on_engine_pause, []any{true}, []any{true}},
+		{"OnEnginePause", func_on_engine_pause, []any{uint8(1)}, []any{true}},
+		{"OnEnginePause", func_on_engine_pause, []any{uint8(2)}, []any{true}},
+		{"OnEnginePause", func_on_engine_pause, []any{uint8(0)}, []any{false}},
 		{"OnUiToggle", func_on_ui_toggle, []any{id, uint8(2)}, []any{id, true}},
 		{"OnUiToggle", func_on_ui_toggle, []any{id, uint8(0)}, []any{id, false}},
 	} {
+		tested[tc.field] = true
 		t.Run(tc.field, func(t *testing.T) {
 			function := reflect.ValueOf(tc.callback)
 			args := make([]reflect.Value, len(tc.args))
@@ -336,16 +312,14 @@ func TestNativeCallbacksForwardValuesAndAllowMissingHandlers(t *testing.T) {
 			BindCallback(engine.CallbackInfo{})
 			function.Call(args) // Missing handlers must be safe.
 			calls := 0
+			var got []any
 			info := engine.CallbackInfo{}
 			field := reflect.ValueOf(&info).Elem().FieldByName(tc.field)
 			field.Set(reflect.MakeFunc(field.Type(), func(values []reflect.Value) []reflect.Value {
 				calls++
-				got := make([]any, len(values))
+				got = make([]any, len(values))
 				for i, value := range values {
 					got[i] = value.Interface()
-				}
-				if !reflect.DeepEqual(got, tc.want) {
-					t.Errorf("callback values = %#v, want %#v", got, tc.want)
 				}
 				return nil
 			}))
@@ -357,6 +331,17 @@ func TestNativeCallbacksForwardValuesAndAllowMissingHandlers(t *testing.T) {
 			if text.ToStrings()[0] != "héllo action" {
 				t.Fatal("callback freed or changed borrowed string")
 			}
+			// Retained callback values must survive changes to caller-owned memory.
+			*(*byte)(pointer) = 'H'
+			t.Cleanup(func() { *(*byte)(pointer) = 'h' })
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("retained callback values = %#v, want %#v", got, tc.want)
+			}
 		})
+	}
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[engine.CallbackInfo]()) {
+		if field.Type.Kind() == reflect.Func && !tested[field.Name] {
+			t.Errorf("callback %s is missing a forwarding test", field.Name)
+		}
 	}
 }
