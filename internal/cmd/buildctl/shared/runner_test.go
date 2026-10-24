@@ -18,7 +18,6 @@ package shared
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"flag"
 	"os"
@@ -26,10 +25,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goplus/spx/v4/internal/release"
 )
@@ -384,41 +381,49 @@ exit "$FAKE_EXIT"
 		})
 	}
 
-	// Isolate the Windows compatibility branch with a mock taskkill too.
+	// Isolate the Windows compatibility branch. Only verified PIDs may be killed.
 	marker := filepath.Join(binDir, "taskkill-arguments")
-	writeExecutable(t, filepath.Join(binDir, "taskkill"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$OUTPUT\"\nexit 1\n")
+	writeExecutable(t, filepath.Join(binDir, "powershell"), `#!/bin/sh
+case "$*" in
+ *Select-Object*) printf '37\n42\n';;
+ *'ProcessId = 37'*) printf 'python.exe C:\\spx\\gdspx_web_server.py';;
+ *'ProcessId = 42'*) printf 'python.exe unrelated.py';;
+ *) exit 99;;
+esac
+`)
+	writeExecutable(t, filepath.Join(binDir, "taskkill"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$OUTPUT\"\n")
 	t.Setenv("OUTPUT", marker)
 	t.Setenv("OS", "Windows_NT")
 	if err := (CommandRunner{}).StopWebServers(); err != nil {
-		t.Fatalf("taskkill failures should be ignored: %v", err)
+		t.Fatal(err)
 	}
 	got, err := os.ReadFile(marker)
-	const want = "/F /FI IMAGENAME eq python.exe\n/F /FI IMAGENAME eq python3.exe\n"
+	const want = "/F /PID 37\n"
 	if err != nil || string(got) != want {
 		t.Fatalf("taskkill arguments = %q, %v; want %q", got, err, want)
 	}
 }
 
-func TestStopWebServersStopsOnlyFixtureProcess(t *testing.T) {
+func TestStopWebServersChecksEveryCandidate(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("POSIX process fixture")
+		t.Skip("Unix shell fixtures")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	process := exec.CommandContext(ctx, "/bin/sleep", "30")
-	if err := process.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = process.Process.Kill(); _ = process.Wait() })
 	bin := t.TempDir()
-	writeExecutable(t, filepath.Join(bin, "pgrep"), "#!/bin/sh\nprintf '%s\\n' '"+strconv.Itoa(process.Process.Pid)+"'\n")
+	log := filepath.Join(bin, "queries")
+	writeExecutable(t, filepath.Join(bin, "pgrep"), "#!/bin/sh\nprintf '37 42 99 37 0 -1 invalid\\n'\n")
+	writeExecutable(t, filepath.Join(bin, "ps"), `#!/bin/sh
+printf '%s\n' "$*" >> "$OUTPUT"
+printf 'python unrelated.py'
+`)
 	t.Setenv("PATH", bin)
 	t.Setenv("OS", "")
+	t.Setenv("OUTPUT", log)
 	if err := (CommandRunner{}).StopWebServers(); err != nil {
 		t.Fatal(err)
 	}
-	if err := process.Wait(); err == nil || ctx.Err() != nil {
-		t.Fatalf("fixture process was not killed by StopWebServers: %v, context %v", err, ctx.Err())
+	got, err := os.ReadFile(log)
+	if err != nil || string(got) != "-o args= -p 37\n-o args= -p 42\n-o args= -p 99\n" {
+		t.Fatalf("verified PIDs = %q, %v", got, err)
 	}
 }
 

@@ -554,36 +554,6 @@ func TestWebServerPIDPathUsesAbsoluteTargetDir(t *testing.T) {
 	}
 }
 
-func TestParsePIDList(t *testing.T) {
-	got := parsePIDList([]byte("123\n456\ninvalid\n"))
-	want := []int{123, 456}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("parsePIDList = %v, want %v", got, want)
-	}
-}
-
-func TestLooksLikeGDSPXWebServerCommandLine(t *testing.T) {
-	if !looksLikeGDSPXWebServerCommandLine(`python.exe C:\tmp\gdspx_web_server.py -r build -p 8080`) {
-		t.Fatal("expected gdspx web server command line to match")
-	}
-	if looksLikeGDSPXWebServerCommandLine(`python.exe C:\tmp\other_server.py -p 8080`) {
-		t.Fatal("did not expect unrelated python process to match")
-	}
-}
-
-func TestWindowsProcessCommandLineQuery(t *testing.T) {
-	got := windowsProcessCommandLineQuery(321)
-	if !strings.Contains(got, "Get-CimInstance Win32_Process") {
-		t.Fatalf("windowsProcessCommandLineQuery = %q, want Get-CimInstance query", got)
-	}
-	if !strings.Contains(got, "ProcessId = 321") {
-		t.Fatalf("windowsProcessCommandLineQuery = %q, want pid filter", got)
-	}
-	if strings.Contains(strings.ToLower(got), "tasklist") {
-		t.Fatalf("windowsProcessCommandLineQuery = %q, should not use tasklist", got)
-	}
-}
-
 func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
 	t.Helper()
 
@@ -724,69 +694,18 @@ func TestRuntimePackFilenames(t *testing.T) {
 	}
 }
 
-func TestListeningPIDCommands(t *testing.T) {
-	for _, tt := range []struct {
-		name, tool, script string
-		windows            bool
-		want               []int
-		wantError          bool
-	}{
-		{"unix parsed", "lsof", `printf '31\ninvalid\n42\n'`, false, []int{31, 42}, false},
-		{"unix no listeners", "lsof", "exit 1", false, nil, false},
-		{"unix command failed", "lsof", "exit 2", false, nil, true},
-		{"unix missing command", "unused", "exit 0", false, nil, true},
-		{"windows parsed", "netstat", `printf '%s\n' 'Proto Local Address Foreign Address State PID' 'UDP 0.0.0.0:8060 *:* LISTENING 10' 'TCP 0.0.0.0:8061 *:* LISTENING 11' 'TCP 0.0.0.0:8060 *:* ESTABLISHED 12' 'TCP 0.0.0.0:8060 *:* LISTENING invalid' 'TCP 0.0.0.0:8060 *:* LISTENING 31' 'tcp [::]:8060 *:* listen 42' 'incomplete'`, true, []int{31, 42}, false},
-		{"windows command failed", "netstat", "exit 2", true, nil, true},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			installCommandTestTools(t, map[string]string{tt.tool: tt.script})
-			var got []int
-			var err error
-			if tt.windows {
-				got, err = listListeningPIDsWindows(8060)
-			} else {
-				got, err = listListeningPIDsUnix(8060)
-			}
-			if (err != nil) != tt.wantError || !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("listening PIDs = %v, %v; want %v, error %v", got, err, tt.want, tt.wantError)
-			}
-		})
-	}
-}
-
-func TestWebServerProcessIdentification(t *testing.T) {
-	for _, tt := range []struct {
-		name, script string
-		want         bool
-	}{
-		{"matching server", `printf 'python gdspx_web_server.py -p 8060'`, true},
-		{"unrelated python", `printf 'python another-server.py'`, false},
-		{"process query failed", "exit 2", false},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			installCommandTestTools(t, map[string]string{"ps": tt.script, "powershell": tt.script})
-			if got := looksLikeGDSPXWebServerProcessUnix(37); got != tt.want {
-				t.Errorf("Unix process match = %v, want %v", got, tt.want)
-			}
-			if got := looksLikeGDSPXWebServerProcessWindows(37); got != tt.want {
-				t.Errorf("Windows process match = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestRunWebServerLifecycle(t *testing.T) {
-	for _, scenario := range []string{"running", "browser failure", "orphaned server", "python3 fallback", "early failure", "missing python", "start failure", "pid write failure"} {
+	for _, scenario := range []string{"running", "browser failure", "python3 fallback", "early failure", "missing python", "start failure", "pid write failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			logPath := filepath.Join(t.TempDir(), "commands.log")
 			t.Setenv("SPX_SERVER_LOG", logPath)
+			// Removing this directory lets the owned fixture exit without a signal.
+			t.Setenv("SPX_SERVER_LIFETIME", t.TempDir())
 			const python = `printf '%s\n' "$*" >> "$SPX_SERVER_LOG"
-exec /bin/sleep 30
+while [ -d "$SPX_SERVER_LIFETIME" ]; do /bin/sleep 0.01; done
 `
 			tools := map[string]string{
 				"python":   python,
-				"lsof":     `printf '%s\n' "${SPX_ORPHAN_PID:-}"`,
-				"ps":       `printf 'python gdspx_web_server.py'`,
 				"xdg-open": `printf 'browser %s\n' "$*" >> "$SPX_SERVER_LOG"`,
 				"open":     `printf 'browser %s\n' "$*" >> "$SPX_SERVER_LOG"`,
 			}
@@ -817,16 +736,12 @@ exec /bin/sleep 30
 					t.Fatal(err)
 				}
 			}
-			t.Setenv("SPX_ORPHAN_PID", "")
 			cmd := &CmdTool{TargetAbsDir: t.TempDir(), ProjectDir: t.TempDir()}
-			if scenario == "orphaned server" {
-				cmd.ServerPort = 8060
-			}
 			if scenario == "pid write failure" {
 				cmd.TargetAbsDir = filepath.Join(cmd.TargetAbsDir, "missing-parent")
 			}
 			t.Cleanup(func() {
-				if err := cmd.StopWeb(); err != nil {
+				if err := cmd.stopWeb(webServerProcessStub{stop: func(int) (bool, error) { return true, nil }}); err != nil {
 					t.Errorf("stop test server: %v", err)
 				}
 			})
@@ -861,14 +776,7 @@ exec /bin/sleep 30
 			if scenario == "running" && (!strings.Contains(calls, "browser ") || !strings.Contains(calls, "http://127.0.0.1:0")) {
 				t.Fatalf("browser did not receive local URL: %s", calls)
 			}
-			if scenario == "orphaned server" {
-				// Discover only this test's owned process after its PID file is lost.
-				t.Setenv("SPX_ORPHAN_PID", strings.TrimSpace(readTestFile(t, cmd.webServerPIDPath())))
-				if err := os.Remove(cmd.webServerPIDPath()); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err := cmd.StopWeb(); err != nil {
+			if err := cmd.stopWeb(webServerProcessStub{stop: func(int) (bool, error) { return true, nil }}); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := os.Stat(cmd.webServerPIDPath()); !os.IsNotExist(err) {
@@ -1059,6 +967,76 @@ func TestRunPackModeRejectsIncompleteSessionBeforeStartingEngine(t *testing.T) {
 			assertWorkingDirectory(t, before)
 			if _, err := os.Stat(log); !os.IsNotExist(err) {
 				t.Fatalf("engine started after preparation failed: %v", err)
+			}
+		})
+	}
+}
+
+type webServerProcessStub struct {
+	stop      func(int) (bool, error)
+	listeners func(int) ([]int, error)
+}
+
+func (s webServerProcessStub) Stop(pid int) (bool, error) {
+	return s.stop(pid)
+}
+
+func (s webServerProcessStub) ListeningPIDs(port int) ([]int, error) {
+	if s.listeners == nil {
+		return nil, nil
+	}
+	return s.listeners(port)
+}
+
+func TestStopWebUsesScopedVerifiedCandidates(t *testing.T) {
+	denied := errors.New("permission denied")
+	for _, tt := range []struct {
+		name, pid         string
+		queryErr, killErr error
+		wantStopped       []int
+		keepPID           bool
+	}{
+		{name: "recorded server", pid: "37", wantStopped: []int{37}},
+		{name: "unrelated recorded PID", pid: "99", wantStopped: []int{99, 99, 42}},
+		{name: "missing PID", wantStopped: []int{99, 42}},
+		{name: "invalid PID", pid: "invalid", wantStopped: []int{99, 42}},
+		{name: "zero PID", pid: "0", wantStopped: []int{0, 99, 42}},
+		{name: "negative PID", pid: "-1", wantStopped: []int{-1, 99, 42}},
+		{name: "failed port query", queryErr: denied},
+		{name: "recorded kill denied", pid: "37", killErr: denied, wantStopped: []int{37}, keepPID: true},
+		{name: "orphan kill denied", killErr: denied, wantStopped: []int{99, 42}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var stopped []int
+			processes := webServerProcessStub{
+				stop: func(pid int) (bool, error) {
+					stopped = append(stopped, pid)
+					if pid <= 0 || pid == 99 {
+						return false, nil
+					}
+					return tt.killErr == nil, tt.killErr
+				},
+				listeners: func(port int) ([]int, error) {
+					if port != 8060 {
+						t.Fatalf("looked up port %d, want 8060", port)
+					}
+					return []int{99, 42, 43}, tt.queryErr
+				},
+			}
+			cmd := &CmdTool{TargetDir: t.TempDir(), ServerPort: 8060}
+			if tt.pid != "" {
+				writeCommandTestFile(t, cmd.webServerPIDPath(), tt.pid)
+			}
+			err := cmd.stopWeb(processes)
+			if !errors.Is(err, tt.killErr) {
+				t.Fatalf("StopWeb = %v, want %v", err, tt.killErr)
+			}
+			if !reflect.DeepEqual(stopped, tt.wantStopped) {
+				t.Fatalf("stop calls = %v, want %v", stopped, tt.wantStopped)
+			}
+			_, statErr := os.Stat(cmd.webServerPIDPath())
+			if tt.keepPID && statErr != nil || !tt.keepPID && !os.IsNotExist(statErr) {
+				t.Fatalf("PID file error = %v, keep %v", statErr, tt.keepPID)
 			}
 		})
 	}
