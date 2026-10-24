@@ -53,7 +53,7 @@ type inputSession struct {
 	captureKey Key
 	controller inputstate.InputReplayController
 
-	initial        InputReplayState
+	initial        inputMouseState
 	current        InputReplayState
 	currentTime    float64
 	currentTick    int64
@@ -435,7 +435,7 @@ func newInputSession(plan *inputSessionPlan) (*inputSession, error) {
 			return nil, err
 		}
 		fixedTimestep = plan.replay.FixedTimestep
-		session.initial = cloneInputReplayState(plan.replay.Initial)
+		session.initial = inputMouseState{position: plan.replay.Initial.Mouse, buttons: plan.replay.Initial.Buttons}
 		session.current = cloneInputReplayState(plan.replay.Initial)
 	default:
 		return nil, fmt.Errorf("unsupported input session mode %q", plan.mode)

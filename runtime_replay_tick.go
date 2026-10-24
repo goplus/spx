@@ -24,9 +24,14 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
+type inputMouseState struct {
+	position InputReplayMouse
+	buttons  uint8
+}
+
 type inputSessionTick struct {
 	frame     InputReplayFrame
-	initial   InputReplayState
+	initial   inputMouseState
 	firstTick bool
 }
 
@@ -47,7 +52,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		if err := s.controller.SynchronizeRecordingInitial(initial); err != nil {
 			return inputSessionTick{}, err
 		}
-		s.initial = cloneInputReplayState(initial)
+		s.initial = inputMouseState{position: initial.Mouse, buttons: initial.Buttons}
 		s.initialPending = false
 	}
 
@@ -69,26 +74,37 @@ func (s *inputSession) consumeSampledInputTickLocked(
 	}
 	return inputSessionTick{
 		frame:     frame,
-		initial:   cloneInputReplayState(s.initial),
+		initial:   s.initial,
 		firstTick: firstTick,
 	}, nil
 }
 
-func (s *inputSession) playbackState() (InputReplayState, bool) {
+func (s *inputSession) playbackKeyPressed(key Key) (bool, bool) {
+	if s == nil {
+		return false, false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.mode != InputSessionModeReplaying || s.phase == InputSessionPhaseAborted {
-		return InputReplayState{}, false
+		return false, false
 	}
-	return cloneInputReplayState(s.current), true
+	if key == KeyAny {
+		return len(s.current.KeysDown) != 0, true
+	}
+	_, pressed := slices.BinarySearch(s.current.KeysDown, int64(key))
+	return pressed, true
 }
 
-func (p *Game) currentInputPlaybackState() (InputReplayState, bool) {
-	session := p.currentInputSession()
-	if session == nil {
-		return InputReplayState{}, false
+func (s *inputSession) playbackMouse() (inputMouseState, bool) {
+	if s == nil {
+		return inputMouseState{}, false
 	}
-	return session.playbackState()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.mode != InputSessionModeReplaying || s.phase == InputSessionPhaseAborted {
+		return inputMouseState{}, false
+	}
+	return inputMouseState{position: s.current.Mouse, buttons: s.current.Buttons}, true
 }
 
 func (s *inputSession) logicalClock() time.Time {
