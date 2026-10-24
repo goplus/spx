@@ -64,13 +64,13 @@ func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind str
 }
 
 func (cmd *CmdTool) RunWeb() error {
-	return runWebCommandWithSetup(func() error {
+	return runWebCommand(func() error {
 		return cmd.installRepoWebRuntime(webNormalMode)
 	}, cmd.ExportWeb, cmd.runWebServer)
 }
 
 func (cmd *CmdTool) RunWebWorker() error {
-	return runWebCommandWithSetup(func() error {
+	return runWebCommand(func() error {
 		return cmd.installRepoWebRuntime(webWorkerMode)
 	}, cmd.ExportWebWorker, cmd.runWebServer)
 }
@@ -255,16 +255,10 @@ func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
 	}, nil
 }
 
-// runWebCommand exports before serving.
-func runWebCommand(exportFn func() error, serverFn func() error) error {
-	return runWebCommandWithSetup(nil, exportFn, serverFn)
-}
-
-func runWebCommandWithSetup(setupFn func() error, exportFn func() error, serverFn func() error) error {
-	if setupFn != nil {
-		if err := setupFn(); err != nil {
-			return err
-		}
+// runWebCommand prepares the runtime, exports, and then starts serving.
+func runWebCommand(setupFn func() error, exportFn func() error, serverFn func() error) error {
+	if err := setupFn(); err != nil {
+		return err
 	}
 	if err := exportFn(); err != nil {
 		return err

@@ -105,15 +105,6 @@ type Argument struct {
 	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
 }
 
-func (a CHeaderFileAST) FindVariantEnumType() *TypedefEnum {
-	for _, e := range a.Expr {
-		if e.Enum != nil && e.Enum.Name != nil && *e.Enum.Name == "GDExtensionVariantType" {
-			return e.Enum
-		}
-	}
-	return nil
-}
-
 func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 	// Included headers may repeat typedefs, such as GDExtensionClassGetPropertyList.
 	distinct := map[string]struct{}{}
@@ -193,16 +184,6 @@ func (a CHeaderFileAST) CollectStructs() []TypedefStruct {
 	return structs
 }
 
-func (a CHeaderFileAST) CollectAliases() []TypedefAlias {
-	aliases := make([]TypedefAlias, 0, len(a.Expr))
-	for _, e := range a.Expr {
-		if e.Alias != nil {
-			aliases = append(aliases, *e.Alias)
-		}
-	}
-	return aliases
-}
-
 func (a CHeaderFileAST) CollectEnums() []TypedefEnum {
 	enums := make([]TypedefEnum, 0, len(a.Expr))
 	for _, e := range a.Expr {
@@ -263,22 +244,6 @@ func (t Type) CStyleString() string {
 	}
 
 	panic("unhandled type")
-}
-
-func (a Argument) IsPinnable() bool {
-	switch {
-	case a.Type.Function != nil:
-		return false
-	case a.Type.Primitive != nil:
-		switch a.Type.Primitive.Name {
-		case "char":
-			return false
-		default:
-			return a.Type.Primitive.IsPointer
-		}
-	}
-
-	return false
 }
 
 func (a Argument) CStylePtrString(i int) string {
