@@ -32,6 +32,12 @@ import (
 )
 
 var (
+	//go:embed callbacks.go.tmpl
+	callbacksGoText string
+
+	//go:embed callbacks.h.tmpl
+	callbacksHeaderText string
+
 	//go:embed ffi_wrapper.h.tmpl
 	ffiWrapperHeaderFileText string
 
@@ -73,6 +79,7 @@ func (g *Generator) Generate(codegenDir string) error {
 		{"GDExtension wrapper header", func() error { return writeWrapperHeader(codegenDir, ast) }},
 		{"GDExtension wrapper Go source", func() error { return writeWrapperGo(codegenDir, ast) }},
 		{"GDExtension interface", func() error { return writeFFI(codegenDir, ast) }},
+		{"native callbacks", func() error { return writeCallbacks(codegenDir, ast) }},
 		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
 		{"manager interface", func() error { return g.writeManagerInterface(codegenDir) }},
 		{"synchronized API", func() error { return g.writeSyncAPI(codegenDir) }},
