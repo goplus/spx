@@ -17,14 +17,12 @@
 package shared
 
 import (
-	"bytes"
-	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strconv"
+
+	"github.com/goplus/spx/v4/internal/webserver"
 )
 
 func (r CommandRunner) ListDemoDirs() ([]string, error) {
@@ -44,32 +42,9 @@ func (r CommandRunner) ListDemoDirs() ([]string, error) {
 }
 
 func (r CommandRunner) StopWebServers() error {
-	if runtime.GOOS == "windows" || os.Getenv("OS") == "Windows_NT" {
-		_ = exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq python.exe").Run()
-		_ = exec.Command("taskkill", "/F", "/FI", "IMAGENAME eq python3.exe").Run()
-		return nil
+	goos := runtime.GOOS
+	if os.Getenv("OS") == "Windows_NT" {
+		goos = "windows"
 	}
-
-	cmd := exec.Command("pgrep", "-f", "gdspx_web_server.py")
-	output, err := cmd.Output()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return nil
-		}
-		return err
-	}
-
-	for _, field := range bytes.Fields(output) {
-		pid, err := strconv.Atoi(string(field))
-		if err != nil {
-			continue
-		}
-		process, err := os.FindProcess(pid)
-		if err != nil {
-			continue
-		}
-		_ = process.Kill()
-	}
-	return nil
+	return webserver.New(goos).StopAll()
 }
