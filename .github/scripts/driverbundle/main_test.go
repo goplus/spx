@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,103 +36,165 @@ import (
 )
 
 func TestPackageAndVerifyIsDeterministic(t *testing.T) {
-	directory := t.TempDir()
-	runtimeVersion := release.DefaultRuntimeLock().RuntimeVersion
-	enginePath := filepath.Join(directory, "gdspxrt"+runtimeVersion)
-	packPath := filepath.Join(directory, "gdspxrt"+runtimeVersion+".pck")
-	bridgePath := filepath.Join(directory, "gdspx-linux-amd64.so")
-	for path, data := range map[string][]byte{
-		enginePath: []byte("engine bytes"),
-		packPath:   []byte("pack bytes"),
-		bridgePath: []byte("bridge bytes"),
-	} {
-		writeDriverTestFile(t, path, data)
-	}
-	outputPath := filepath.Join(directory, "spx-driver-linux-amd64.zip")
-	descriptorPath := filepath.Join(directory, "bundle.json")
-	args := []string{
-		"--engine", enginePath, "--pack", packPath, "--bridge", bridgePath,
-		"--output", outputPath, "--descriptor", descriptorPath,
-		"--goos", "linux", "--goarch", "amd64",
-	}
-	if err := runPackage(args); err != nil {
-		t.Fatalf("package: %v", err)
-	}
-	firstZIP, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	firstDescriptor, err := os.ReadFile(descriptorPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := runVerify([]string{"--output", outputPath, "--descriptor", descriptorPath}); err != nil {
-		t.Fatalf("verify: %v", err)
-	}
+	for _, target := range driverbundle.SupportedTargets() {
+		t.Run(target.GOOS+"/"+target.GOARCH, func(t *testing.T) {
+			directory := t.TempDir()
+			spec, err := driverbundle.HostSpecFor(release.DefaultRuntimeLock().RuntimeVersion, target.GOOS, target.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			enginePath := filepath.Join(directory, spec.Engine.Name)
+			packPath := filepath.Join(directory, spec.Pack.Name)
+			bridgePath := filepath.Join(directory, spec.Bridge.Name)
+			for path, data := range map[string][]byte{
+				enginePath: []byte("engine bytes"),
+				packPath:   []byte("pack bytes"),
+				bridgePath: []byte("bridge bytes"),
+			} {
+				writeDriverTestFile(t, path, data)
+			}
+			outputPath := filepath.Join(directory, spec.BundleName)
+			descriptorPath := filepath.Join(directory, "bundle.json")
+			args := []string{
+				"--engine", enginePath, "--pack", packPath, "--bridge", bridgePath,
+				"--output", outputPath, "--descriptor", descriptorPath,
+				"--goos", target.GOOS, "--goarch", target.GOARCH,
+			}
+			if err := runPackage(args); err != nil {
+				t.Fatalf("package: %v", err)
+			}
+			firstZIP, err := os.ReadFile(outputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			firstDescriptor, err := os.ReadFile(descriptorPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := runVerify([]string{"--output", outputPath, "--descriptor", descriptorPath}); err != nil {
+				t.Fatalf("verify: %v", err)
+			}
 
-	secondOutput := filepath.Join(directory, "second", "spx-driver-linux-amd64.zip")
-	secondDescriptor := filepath.Join(directory, "second", "bundle.json")
-	secondArgs := append([]string{}, args...)
-	for i := range secondArgs {
-		if secondArgs[i] == outputPath {
-			secondArgs[i] = secondOutput
-		}
-		if secondArgs[i] == descriptorPath {
-			secondArgs[i] = secondDescriptor
-		}
-	}
-	if err := runPackage(secondArgs); err != nil {
-		t.Fatalf("second package: %v", err)
-	}
-	secondZIP, err := os.ReadFile(secondOutput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondDescriptorData, err := os.ReadFile(secondDescriptor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(firstZIP, secondZIP) || !bytes.Equal(firstDescriptor, secondDescriptorData) {
-		t.Fatal("package output is not deterministic")
-	}
+			secondOutput := filepath.Join(directory, "second", spec.BundleName)
+			secondDescriptor := filepath.Join(directory, "second", "bundle.json")
+			secondArgs := append([]string{}, args...)
+			for i := range secondArgs {
+				if secondArgs[i] == outputPath {
+					secondArgs[i] = secondOutput
+				}
+				if secondArgs[i] == descriptorPath {
+					secondArgs[i] = secondDescriptor
+				}
+			}
+			if err := runPackage(secondArgs); err != nil {
+				t.Fatalf("second package: %v", err)
+			}
+			secondZIP, err := os.ReadFile(secondOutput)
+			if err != nil {
+				t.Fatal(err)
+			}
+			secondDescriptorData, err := os.ReadFile(secondDescriptor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(firstZIP, secondZIP) || !bytes.Equal(firstDescriptor, secondDescriptorData) {
+				t.Fatal("package output is not deterministic")
+			}
 
-	bundle, err := driverbundle.ParseBundle(firstDescriptor)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(bundle.Files) != 3 || bundle.Files[0].Mode != 0o755 || bundle.Files[1].Mode != 0o644 || bundle.Files[2].Mode != 0o755 {
-		t.Fatalf("descriptor files = %#v", bundle.Files)
-	}
-	archive, err := zip.OpenReader(outputPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer archive.Close()
-	for i, entry := range archive.File {
-		if entry.Name != bundle.Files[i].Name || entry.Mode().Perm() != os.FileMode(bundle.Files[i].Mode) {
-			t.Fatalf("ZIP entry %d = %q mode %#o", i, entry.Name, entry.Mode().Perm())
-		}
-		if !entry.Modified.Equal(time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)) {
-			t.Fatalf("ZIP entry %q modified = %s", entry.Name, entry.Modified)
-		}
+			bundle, err := driverbundle.ParseBundle(firstDescriptor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(bundle.Files) != 3 || bundle.Files[0].Mode != 0o755 || bundle.Files[1].Mode != 0o644 || bundle.Files[2].Mode != 0o755 {
+				t.Fatalf("descriptor files = %#v", bundle.Files)
+			}
+			archive, err := zip.OpenReader(outputPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer archive.Close()
+			if len(archive.File) != len(bundle.Files) {
+				t.Fatalf("ZIP entry count = %d, want %d", len(archive.File), len(bundle.Files))
+			}
+			wantNames := []string{spec.Engine.Name, spec.Pack.Name, spec.Bridge.Name}
+			wantContents := []string{"engine bytes", "pack bytes", "bridge bytes"}
+			for i, entry := range archive.File {
+				if entry.Name != wantNames[i] {
+					t.Fatalf("ZIP entry %d = %q, want %q", i, entry.Name, wantNames[i])
+				}
+				reader, err := entry.Open()
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, err := io.ReadAll(reader)
+				reader.Close()
+				if err != nil || string(data) != wantContents[i] {
+					t.Fatalf("ZIP entry %q contents = %q, %v", entry.Name, data, err)
+				}
+				if entry.Name != bundle.Files[i].Name || entry.Mode().Perm() != os.FileMode(bundle.Files[i].Mode) {
+					t.Fatalf("ZIP entry %d = %q mode %#o", i, entry.Name, entry.Mode().Perm())
+				}
+				if !entry.Modified.Equal(time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)) {
+					t.Fatalf("ZIP entry %q modified = %s", entry.Name, entry.Modified)
+				}
+			}
+		})
 	}
 }
 
 func TestPackageRejectsNonCanonicalBasename(t *testing.T) {
 	directory := t.TempDir()
-	for _, name := range []string{"engine", "pack", "bridge"} {
-		writeDriverTestFile(t, filepath.Join(directory, name), []byte(name))
-	}
+	outputDir := filepath.Join(directory, "output")
 	err := runPackage([]string{
 		"--engine", filepath.Join(directory, "engine"),
 		"--pack", filepath.Join(directory, "pack"),
 		"--bridge", filepath.Join(directory, "bridge"),
-		"--output", filepath.Join(directory, "spx-driver-linux-amd64.zip"),
+		"--output", filepath.Join(outputDir, "spx-driver-linux-amd64.zip"),
 		"--descriptor", filepath.Join(directory, "bundle.json"),
 		"--goos", "linux", "--goarch", "amd64",
 	})
-	if err == nil {
-		t.Fatal("accepted non-canonical input basenames")
+	if err == nil || !strings.Contains(err.Error(), "validate input basenames: Engine name") {
+		t.Fatalf("basename rejection = %v", err)
+	}
+	if _, err := os.Stat(outputDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("output directory exists after basename rejection: %v", err)
+	}
+}
+
+func TestValidateInputBasenames(t *testing.T) {
+	for _, target := range driverbundle.SupportedTargets() {
+		t.Run(target.GOOS+"/"+target.GOARCH, func(t *testing.T) {
+			spec, err := driverbundle.HostSpecFor(release.DefaultRuntimeLock().RuntimeVersion, target.GOOS, target.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inputs := [...]struct{ kind, name string }{
+				{"Engine", spec.Engine.Name}, {"PCK", spec.Pack.Name},
+				{"bridge", spec.Bridge.Name}, {"bundle", spec.BundleName},
+			}
+			var paths [4]string
+			for i, input := range inputs {
+				paths[i] = filepath.Join("input", "nested", input.name)
+			}
+			if err := validateInputBasenames(spec, paths[0], paths[1], paths[2], paths[3]); err != nil {
+				t.Fatalf("canonical names in directories: %v", err)
+			}
+			for i, input := range inputs {
+				for _, invalid := range []string{"", ".", "..", "wrong.zip", inputs[(i+1)%len(inputs)].name, input.name + " ", input.name + "\x00", input.name + "\n", input.name + "\\suffix"} {
+					actual := paths
+					actual[i] = invalid
+					err := validateInputBasenames(spec, actual[0], actual[1], actual[2], actual[3])
+					want := fmt.Sprintf("validate input basenames: %s name = %q, want %q", input.kind, filepath.Base(invalid), input.name)
+					if err == nil || err.Error() != want {
+						t.Fatalf("slot %d path %q: error = %v, want %q", i, invalid, err, want)
+					}
+				}
+			}
+			err = validateInputBasenames(spec, "bad-engine", "bad-pack", "bad-bridge", "bad.zip")
+			if err == nil || !strings.Contains(err.Error(), "bundle name") {
+				t.Fatalf("bundle name must be checked before component names: %v", err)
+			}
+		})
 	}
 }
 

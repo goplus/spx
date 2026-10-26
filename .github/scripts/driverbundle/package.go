@@ -98,21 +98,21 @@ func runPackage(args []string) error {
 	archive := zip.NewWriter(outer)
 	files := make([]driverbundle.File, 0, 3)
 
-	engine, err := addZipFile(archive, enginePath, spec.Engine.Name, spec.Engine.Mode)
-	if err != nil {
-		return fmt.Errorf("package Engine: %w", err)
+	// Keep descriptor and ZIP entries in Engine/PCK/bridge order.
+	for _, input := range [...]struct {
+		kind, path string
+		component  driverbundle.Component
+	}{
+		{"Engine", enginePath, spec.Engine},
+		{"PCK", packPath, spec.Pack},
+		{"bridge", bridgePath, spec.Bridge},
+	} {
+		file, err := addZipFile(archive, input.path, input.component.Name, input.component.Mode)
+		if err != nil {
+			return fmt.Errorf("package %s: %w", input.kind, err)
+		}
+		files = append(files, file)
 	}
-	files = append(files, engine)
-	pack, err := addZipFile(archive, packPath, spec.Pack.Name, spec.Pack.Mode)
-	if err != nil {
-		return fmt.Errorf("package PCK: %w", err)
-	}
-	files = append(files, pack)
-	bridge, err := addZipFile(archive, bridgePath, spec.Bridge.Name, spec.Bridge.Mode)
-	if err != nil {
-		return fmt.Errorf("package bridge: %w", err)
-	}
-	files = append(files, bridge)
 	if err := archive.Close(); err != nil {
 		return fmt.Errorf("close ZIP: %w", err)
 	}
@@ -126,7 +126,7 @@ func runPackage(args []string) error {
 		return fmt.Errorf("close temporary ZIP: %w", err)
 	}
 
-	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(engine.SHA256, pack.SHA256)
+	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(files[0].SHA256, files[1].SHA256)
 	if err != nil {
 		return fmt.Errorf("identify Engine interface: %w", err)
 	}
@@ -152,23 +152,17 @@ func runPackage(args []string) error {
 	return nil
 }
 
+// spec is the canonical naming contract already validated by HostSpecFor.
 func validateInputBasenames(spec driverbundle.HostSpec, enginePath, packPath, bridgePath, outputPath string) error {
-	validDigest := strings.Repeat("0", sha256.Size*2)
-	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(validDigest, validDigest)
-	if err != nil {
-		return err
-	}
-	bundle := driverbundle.Bundle{
-		GOOS: spec.GOOS, GOARCH: spec.GOARCH, Name: filepath.Base(outputPath), Size: 1,
-		SHA256: validDigest, EngineInterfaceDigest: interfaceDigest,
-		Files: []driverbundle.File{
-			{Name: filepath.Base(enginePath), Mode: spec.Engine.Mode, Size: 1, SHA256: validDigest},
-			{Name: filepath.Base(packPath), Mode: spec.Pack.Mode, Size: 1, SHA256: validDigest},
-			{Name: filepath.Base(bridgePath), Mode: spec.Bridge.Mode, Size: 1, SHA256: validDigest},
-		},
-	}
-	if err := bundle.ValidateForRuntime(spec.RuntimeVersion); err != nil {
-		return fmt.Errorf("validate input basenames: %w", err)
+	for _, input := range [...]struct{ kind, path, name string }{
+		{"bundle", outputPath, spec.BundleName},
+		{"Engine", enginePath, spec.Engine.Name},
+		{"PCK", packPath, spec.Pack.Name},
+		{"bridge", bridgePath, spec.Bridge.Name},
+	} {
+		if name := filepath.Base(input.path); name != input.name {
+			return fmt.Errorf("validate input basenames: %s name = %q, want %q", input.kind, name, input.name)
+		}
 	}
 	return nil
 }
