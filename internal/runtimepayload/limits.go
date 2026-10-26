@@ -27,111 +27,59 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
-// validateSourceLimits checks every bound that can be decided from the
-// caller-provided source metadata. It deliberately runs before prepareSources
-// hashes any ReaderAt, so a source that cannot possibly fit in a payload is
-// rejected without touching its body.
-func validateSourceLimits(cfg BuildConfig, sources []FileSource) error {
+// preparePayloadSources checks every bound that can be decided from source
+// metadata before BuildTo hashes any ReaderAt. The returned sources are already
+// ordered and canonicalized, so hashing does not repeat their preparation.
+func preparePayloadSources(cfg BuildConfig, sources []FileSource) ([]preparedSource, error) {
 	// The manifest is an outer ZIP entry in addition to the caller's sources.
 	if len(sources) >= runtimebundle.MaxEntries {
-		return fmt.Errorf("runtimepayload: %d entries exceeds limit %d: %w", len(sources)+1, runtimebundle.MaxEntries, runtimebundle.ErrArchiveLimit)
+		return nil, fmt.Errorf("runtimepayload: %d entries exceeds limit %d: %w", len(sources)+1, runtimebundle.MaxEntries, runtimebundle.ErrArchiveLimit)
 	}
-
-	ordered := append([]FileSource(nil), sources...)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Name < ordered[j].Name })
-	seen := make(map[string]struct{}, len(ordered))
-	entries := make([]runtimebundle.Entry, 0, len(ordered))
-	var total int64
-	placeholder := strings.Repeat("0", sha256.Size*2)
-	for _, source := range ordered {
-		if err := validateEntryName(source.Name); err != nil {
-			return err
-		}
-		if source.Name == ManifestPath {
-			return fmt.Errorf("runtimepayload: %q is reserved for the top-level manifest", source.Name)
-		}
-		if _, duplicate := seen[source.Name]; duplicate {
-			return fmt.Errorf("runtimepayload: duplicate entry %q", source.Name)
-		}
-		seen[source.Name] = struct{}{}
-		if source.ReaderAt == nil {
-			return fmt.Errorf("runtimepayload: entry %q has a nil ReaderAt", source.Name)
-		}
-		if source.Size < 0 {
-			return fmt.Errorf("runtimepayload: entry %q has negative size %d", source.Name, source.Size)
-		}
-		if source.Size > runtimebundle.MaxEntrySize {
-			return fmt.Errorf("runtimepayload: entry %q size %d exceeds limit %d: %w", source.Name, source.Size, runtimebundle.MaxEntrySize, runtimebundle.ErrArchiveLimit)
-		}
-		if source.Size > runtimebundle.MaxTotalSize-total {
-			return fmt.Errorf("runtimepayload: total size exceeds limit %d: %w", runtimebundle.MaxTotalSize, runtimebundle.ErrArchiveLimit)
-		}
-		if len(source.Name) > zipMaxNameBytes {
-			return fmt.Errorf("runtimepayload: entry %q name is too long", source.Name)
-		}
-		total += source.Size
-		entries = append(entries, runtimebundle.Entry{
-			Name: source.Name, Mode: uint32(canonicalFileMode(source.Mode)), Size: source.Size, SHA256: placeholder,
-		})
-	}
-
-	manifest := Manifest{
-		Schema: SchemaV1, Protocol: ProtocolV1, SPX: cfg.SPX, Target: cfg.Target,
-		Engine: cfg.Engine, Bridge: cfg.Bridge, Project: cfg.Project, Entries: entries,
-	}
-	manifestBytes, err := json.Marshal(manifest)
+	prepared, err := prepareSources(sources, ManifestPath)
 	if err != nil {
-		return fmt.Errorf("runtimepayload: encode manifest: %w", err)
+		return nil, err
 	}
-	return validatePreparedPayloadLimits(entries, int64(len(manifestBytes)))
-}
-
-// validatePreparedPayloadLimits validates the complete outer payload after
-// the manifest is encoded. The same check is also used by the source preflight
-// with placeholder digests; SHA-256 values are fixed-width, so that dry-run
-// manifest has the exact same size as the eventual manifest.
-func validatePreparedPayloadLimits(entries []runtimebundle.Entry, manifestSize int64) error {
-	if len(entries) >= runtimebundle.MaxEntries {
-		return fmt.Errorf("runtimepayload: %d entries exceeds limit %d: %w", len(entries)+1, runtimebundle.MaxEntries, runtimebundle.ErrArchiveLimit)
-	}
-	if manifestSize < 0 {
-		return fmt.Errorf("runtimepayload: negative manifest size %d", manifestSize)
-	}
-	if manifestSize > maxPayloadManifestBytes {
-		return fmt.Errorf("runtimepayload: manifest size %d exceeds limit %d: %w", manifestSize, maxPayloadManifestBytes, runtimebundle.ErrArchiveLimit)
-	}
-
+	entries := make([]runtimebundle.Entry, len(prepared), len(prepared)+1)
+	placeholder := strings.Repeat("0", sha256.Size*2)
 	var total int64
-	for _, entry := range entries {
-		if entry.Size < 0 {
-			return fmt.Errorf("runtimepayload: entry %q has negative size %d", entry.Name, entry.Size)
+	for i, file := range prepared {
+		// Reject oversized sources before allocating the encoded manifest.
+		if file.entry.Size > runtimebundle.MaxEntrySize {
+			return nil, fmt.Errorf("runtimepayload: entry %q size %d exceeds limit %d: %w", file.entry.Name, file.entry.Size, runtimebundle.MaxEntrySize, runtimebundle.ErrArchiveLimit)
 		}
-		if entry.Size > runtimebundle.MaxEntrySize {
-			return fmt.Errorf("runtimepayload: entry %q size %d exceeds limit %d: %w", entry.Name, entry.Size, runtimebundle.MaxEntrySize, runtimebundle.ErrArchiveLimit)
+		if file.entry.Size > runtimebundle.MaxTotalSize-total {
+			return nil, fmt.Errorf("runtimepayload: total size exceeds limit %d: %w", runtimebundle.MaxTotalSize, runtimebundle.ErrArchiveLimit)
 		}
-		if entry.Size > runtimebundle.MaxTotalSize-total {
-			return fmt.Errorf("runtimepayload: total size exceeds limit %d: %w", runtimebundle.MaxTotalSize, runtimebundle.ErrArchiveLimit)
+		total += file.entry.Size
+		if len(file.entry.Name) > zipMaxNameBytes {
+			return nil, fmt.Errorf("runtimepayload: entry %q name is too long", file.entry.Name)
 		}
-		total += entry.Size
+		entries[i] = file.entry
+		entries[i].SHA256 = placeholder
 	}
-	if manifestSize > runtimebundle.MaxEntrySize {
-		return fmt.Errorf("runtimepayload: manifest size %d exceeds limit %d: %w", manifestSize, runtimebundle.MaxEntrySize, runtimebundle.ErrArchiveLimit)
+	manifestBytes, err := json.Marshal(newManifest(cfg, entries))
+	if err != nil {
+		return nil, fmt.Errorf("runtimepayload: encode manifest: %w", err)
+	}
+	// SHA-256 values are fixed-width, so the placeholder manifest has the same
+	// size as the final manifest after hashing the sources.
+	manifestSize := int64(len(manifestBytes))
+	if manifestSize > maxPayloadManifestBytes {
+		return nil, fmt.Errorf("runtimepayload: manifest size %d exceeds limit %d: %w", manifestSize, maxPayloadManifestBytes, runtimebundle.ErrArchiveLimit)
 	}
 	if manifestSize > runtimebundle.MaxTotalSize-total {
-		return fmt.Errorf("runtimepayload: total size exceeds limit %d: %w", runtimebundle.MaxTotalSize, runtimebundle.ErrArchiveLimit)
+		return nil, fmt.Errorf("runtimepayload: total size exceeds limit %d: %w", runtimebundle.MaxTotalSize, runtimebundle.ErrArchiveLimit)
 	}
 
-	archiveEntries := make([]runtimebundle.Entry, 0, len(entries)+1)
-	archiveEntries = append(archiveEntries, entries...)
-	archiveEntries = append(archiveEntries, runtimebundle.Entry{Name: ManifestPath, Size: manifestSize})
-	archiveSize, err := estimatePayloadArchiveSize(archiveEntries)
+	entries = append(entries, runtimebundle.Entry{Name: ManifestPath, Size: manifestSize})
+	archiveSize, err := estimatePayloadArchiveSize(entries)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if archiveSize > runtimebundle.MaxArchiveBytes {
-		return fmt.Errorf("runtimepayload: archive size %d exceeds limit %d: %w", archiveSize, runtimebundle.MaxArchiveBytes, runtimebundle.ErrArchiveLimit)
+		return nil, fmt.Errorf("runtimepayload: archive size %d exceeds limit %d: %w", archiveSize, runtimebundle.MaxArchiveBytes, runtimebundle.ErrArchiveLimit)
 	}
-	return nil
+	return prepared, nil
 }
 
 // estimatePayloadArchiveSize computes the exact size emitted by BuildTo's

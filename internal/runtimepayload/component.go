@@ -42,6 +42,9 @@ func ComponentBundleSources(sources []FileSource, namespace runtimebundle.Namesp
 	if err != nil {
 		return runtimebundle.Bundle{}, err
 	}
+	if err := hashPreparedSources(prepared); err != nil {
+		return runtimebundle.Bundle{}, err
+	}
 	entries := make([]runtimebundle.Entry, len(prepared))
 	for i := range prepared {
 		entries[i] = prepared[i].entry
