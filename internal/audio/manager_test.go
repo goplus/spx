@@ -19,26 +19,27 @@ package audio
 import (
 	"fmt"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
 type fakeBackend struct {
-	nextID      int64
-	plays       []playCall
-	pauses      []int64
-	resumes     []int64
-	stops       []int64
-	restarts    []int64
-	loops       []loopCall
-	volumes     []float64
-	destroys    []engine.Object
-	lastDestroy engine.Object
-	pan         float64
-	pitch       float64
-	volume      float64
-	playing     map[int64]bool
+	nextID    int64
+	plays     []playCall
+	pauses    []int64
+	resumes   []int64
+	stops     []int64
+	restarts  []int64
+	loops     []loopCall
+	volumes   []float64
+	destroys  []engine.Object
+	lifecycle []string
+	pan       float64
+	pitch     float64
+	volume    float64
+	playing   map[int64]bool
 }
 
 type playCall struct {
@@ -58,7 +59,7 @@ func (f *fakeBackend) CreateAudio() engine.Object {
 }
 
 func (f *fakeBackend) DestroyAudio(obj engine.Object) {
-	f.lastDestroy = obj
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("destroy:%d", obj))
 	f.destroys = append(f.destroys, obj)
 }
 
@@ -111,6 +112,7 @@ func (f *fakeBackend) Resume(aid int64) {
 }
 
 func (f *fakeBackend) Stop(aid int64) {
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("stop:%d", aid))
 	if f.playing != nil {
 		f.playing[aid] = false
 	}
@@ -182,6 +184,9 @@ func TestManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
 	}
 	if len(backend.loops) != 1 || backend.loops[0].id != 2 {
 		t.Fatalf("SetLoop calls = %+v, want loop only on latest id", backend.loops)
+	}
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none before the sound objects are released", backend.destroys)
 	}
 }
 
@@ -388,28 +393,38 @@ func TestManagerAllocAndRelease(t *testing.T) {
 	}
 
 	mgr.ReleaseSound(13)
-	if backend.lastDestroy != 13 {
-		t.Fatalf("ReleaseSound destroyed = %d, want 13", backend.lastDestroy)
+	if !slices.Equal(backend.destroys, []engine.Object{13}) {
+		t.Fatalf("DestroyAudio calls = %+v, want [13]", backend.destroys)
 	}
 }
 
-func TestManagerReleaseSoundDefersDestroyUntilPlaybackStops(t *testing.T) {
+func TestManagerReleaseSoundDefersDestroyUntilAllPlaybackStops(t *testing.T) {
 	backend := &fakeBackend{}
 	var mgr Manager
 	mgr.Init(backend)
 
-	id := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	first := mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	second := mgr.Play(13, "sounds/b.wav", false, false, 0, 0, 0)
+	mgr.Pause("sounds/b.wav")
 
 	mgr.ReleaseSound(13)
 	if len(backend.destroys) != 0 {
-		t.Fatalf("DestroyAudio calls = %+v, want none while playback %d is live", backend.destroys, id)
+		t.Fatalf("DestroyAudio calls = %+v, want none while playbacks are live", backend.destroys)
 	}
 
-	backend.playing[id] = false
+	backend.playing[first] = false
 	mgr.Update()
+	if len(backend.destroys) != 0 {
+		t.Fatalf("DestroyAudio calls = %+v, want none while playback %d is live", backend.destroys, second)
+	}
 
+	mgr.Resume("sounds/b.wav")
+	backend.playing[second] = false
+	mgr.Update()
+	mgr.Update()
+	mgr.StopAll()
 	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
-		t.Fatalf("DestroyAudio calls = %+v, want [13] after playback stops", backend.destroys)
+		t.Fatalf("DestroyAudio calls = %+v, want [13] after all playback stops", backend.destroys)
 	}
 	assertManagerNoTracking(t, &mgr)
 }
@@ -438,6 +453,7 @@ func TestManagerReleaseSoundStopsLoopedPlaybackBeforeDestroy(t *testing.T) {
 	mgr.Init(backend)
 
 	id := mgr.Play(13, "sounds/loop.wav", true, false, 0, 0, 0)
+	mgr.Pause("sounds/loop.wav")
 
 	mgr.ReleaseSound(13)
 
@@ -446,6 +462,9 @@ func TestManagerReleaseSoundStopsLoopedPlaybackBeforeDestroy(t *testing.T) {
 	}
 	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
 		t.Fatalf("DestroyAudio calls = %+v, want [13] after loop playback stops", backend.destroys)
+	}
+	if want := []string{fmt.Sprintf("stop:%d", id), "destroy:13"}; !slices.Equal(backend.lifecycle, want) {
+		t.Fatalf("lifecycle = %v, want %v", backend.lifecycle, want)
 	}
 	assertManagerNoTracking(t, &mgr)
 }
@@ -526,11 +545,17 @@ func TestManagerStopAllDestroysPendingReleasedSounds(t *testing.T) {
 	mgr.Init(backend)
 
 	mgr.Play(13, "sounds/a.wav", false, false, 0, 0, 0)
+	mgr.Play(14, "sounds/b.wav", false, false, 0, 0, 0)
+	mgr.Play(15, "sounds/c.wav", false, false, 0, 0, 0)
 	mgr.ReleaseSound(13)
+	mgr.ReleaseSound(14)
 	mgr.StopAll()
+	mgr.StopAll()
+	mgr.Update()
 
-	if len(backend.destroys) != 1 || backend.destroys[0] != 13 {
-		t.Fatalf("DestroyAudio calls = %+v, want [13] after StopAll", backend.destroys)
+	slices.Sort(backend.destroys)
+	if !slices.Equal(backend.destroys, []engine.Object{13, 14}) {
+		t.Fatalf("DestroyAudio calls = %+v, want [13 14] after StopAll; unreleased sound 15 must survive", backend.destroys)
 	}
 	assertManagerNoTracking(t, &mgr)
 }
@@ -687,6 +712,46 @@ func TestManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
 			if len(mgr.playbacks) != 0 || len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 {
 				t.Fatal("failed/completed playback remained tracked")
 			}
+		})
+	}
+}
+
+// Every single-playback removal path must update all indexes and finalize only
+// the released sound, even when cleanup is repeated after the ID is gone.
+func TestManagerPlaybackRemovalFinalizesOnlyReleasedSound(t *testing.T) {
+	for _, remove := range []struct {
+		name string
+		run  func(*Manager, int64)
+	}{
+		{"stop path", func(m *Manager, _ int64) { m.Stop("released.wav") }},
+		{"stop ID", func(m *Manager, id int64) { m.StopID(id) }},
+		{"restart stopped ID", func(m *Manager, id int64) { m.RestartID(id) }},
+		{"prune stopped IDs", func(m *Manager, id int64) { m.PruneStoppedIDs([]int64{id}) }},
+		{"pause stopped path", func(m *Manager, _ int64) { m.Pause("released.wav") }},
+		{"resume stopped path", func(m *Manager, _ int64) { m.Resume("released.wav") }},
+		{"update", func(m *Manager, _ int64) { m.Update() }},
+	} {
+		t.Run(remove.name, func(t *testing.T) {
+			backend := &fakeBackend{}
+			var mgr Manager
+			mgr.Init(backend)
+			id := mgr.Play(13, "released.wav", false, false, 0, 0, 0)
+			other := mgr.Play(14, "retained.wav", false, false, 0, 0, 0)
+			mgr.ReleaseSound(13)
+			backend.playing[id] = false
+			remove.run(&mgr, id)
+			remove.run(&mgr, id)
+			if !slices.Equal(backend.destroys, []engine.Object{13}) {
+				t.Fatalf("DestroyAudio calls = %v, want [13]", backend.destroys)
+			}
+			if len(mgr.path2id) != 1 || mgr.path2id["retained.wav"] != other ||
+				len(mgr.playbacks) != 1 || mgr.playbacks[other].soundObj != 14 ||
+				len(mgr.obj2ids) != 1 || !slices.Equal(mgr.obj2ids[14], []int64{other}) ||
+				len(mgr.pendingDestroy) != 0 || !backend.IsPlaying(other) {
+				t.Fatalf("removal disturbed retained playback or left stale tracking: %+v", mgr)
+			}
+			mgr.StopAll()
+			assertManagerNoTracking(t, &mgr)
 		})
 	}
 }
