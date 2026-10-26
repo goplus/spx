@@ -40,11 +40,11 @@ func BuildTo(dst io.Writer, cfg BuildConfig, sources []FileSource) (payloadSHA25
 	if err := validateIdentity(cfg); err != nil {
 		return "", "", err
 	}
-	if err := validateSourceLimits(cfg, sources); err != nil {
+	prepared, err := preparePayloadSources(cfg, sources)
+	if err != nil {
 		return "", "", err
 	}
-	prepared, err := prepareSources(sources, ManifestPath)
-	if err != nil {
+	if err := hashPreparedSources(prepared); err != nil {
 		return "", "", err
 	}
 	entries := make([]runtimebundle.Entry, len(prepared))
@@ -55,16 +55,10 @@ func BuildTo(dst io.Writer, cfg BuildConfig, sources []FileSource) (payloadSHA25
 		return "", "", err
 	}
 
-	manifest := Manifest{
-		Schema: SchemaV1, Protocol: ProtocolV1, SPX: cfg.SPX, Target: cfg.Target,
-		Engine: cfg.Engine, Bridge: cfg.Bridge, Project: cfg.Project, Entries: entries,
-	}
+	manifest := newManifest(cfg, entries)
 	manifestBytes, err := json.Marshal(manifest)
 	if err != nil {
 		return "", "", fmt.Errorf("runtimepayload: encode manifest: %w", err)
-	}
-	if err := validatePreparedPayloadLimits(entries, int64(len(manifestBytes))); err != nil {
-		return "", "", err
 	}
 	manifestSum := sha256.Sum256(manifestBytes)
 
@@ -109,22 +103,28 @@ func BuildTo(dst io.Writer, cfg BuildConfig, sources []FileSource) (payloadSHA25
 	return hex.EncodeToString(payloadHasher.Sum(nil)), hex.EncodeToString(manifestSum[:]), nil
 }
 
+func newManifest(cfg BuildConfig, entries []runtimebundle.Entry) Manifest {
+	return Manifest{
+		Schema: SchemaV1, Protocol: ProtocolV1, SPX: cfg.SPX, Target: cfg.Target,
+		Engine: cfg.Engine, Bridge: cfg.Bridge, Project: cfg.Project, Entries: entries,
+	}
+}
+
+// prepareSources validates and canonicalizes source metadata without reading it.
 func prepareSources(sources []FileSource, reserved string) ([]preparedSource, error) {
 	sources = append([]FileSource(nil), sources...)
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Name < sources[j].Name })
 	prepared := make([]preparedSource, 0, len(sources))
-	seen := make(map[string]struct{}, len(sources))
-	for _, source := range sources {
+	for i, source := range sources {
 		if err := validateEntryName(source.Name); err != nil {
 			return nil, err
 		}
 		if reserved != "" && source.Name == reserved {
 			return nil, fmt.Errorf("runtimepayload: %q is reserved for the top-level manifest", source.Name)
 		}
-		if _, duplicate := seen[source.Name]; duplicate {
+		if i > 0 && source.Name == sources[i-1].Name {
 			return nil, fmt.Errorf("runtimepayload: duplicate entry %q", source.Name)
 		}
-		seen[source.Name] = struct{}{}
 		if source.ReaderAt == nil {
 			return nil, fmt.Errorf("runtimepayload: entry %q has a nil ReaderAt", source.Name)
 		}
@@ -132,18 +132,25 @@ func prepareSources(sources []FileSource, reserved string) ([]preparedSource, er
 			return nil, fmt.Errorf("runtimepayload: entry %q has negative size %d", source.Name, source.Size)
 		}
 		source.Mode = canonicalFileMode(source.Mode)
-		digest, err := hashSource(source)
-		if err != nil {
-			return nil, fmt.Errorf("runtimepayload: hash entry %q: %w", source.Name, err)
-		}
 		prepared = append(prepared, preparedSource{
 			source: source,
 			entry: runtimebundle.Entry{
-				Name: source.Name, Mode: uint32(source.Mode), Size: source.Size, SHA256: digest,
+				Name: source.Name, Mode: uint32(source.Mode), Size: source.Size,
 			},
 		})
 	}
 	return prepared, nil
+}
+
+func hashPreparedSources(prepared []preparedSource) error {
+	for i := range prepared {
+		digest, err := hashSource(prepared[i].source)
+		if err != nil {
+			return fmt.Errorf("runtimepayload: hash entry %q: %w", prepared[i].source.Name, err)
+		}
+		prepared[i].entry.SHA256 = digest
+	}
+	return nil
 }
 
 func canonicalFileMode(mode fs.FileMode) fs.FileMode {
@@ -154,15 +161,7 @@ func canonicalFileMode(mode fs.FileMode) fs.FileMode {
 }
 
 func hashSource(source FileSource) (string, error) {
-	hasher := sha256.New()
-	count, err := io.Copy(hasher, io.NewSectionReader(source.ReaderAt, 0, source.Size))
-	if err != nil {
-		return "", err
-	}
-	if count != source.Size {
-		return "", fmt.Errorf("short read: read %d bytes, want %d: %w", count, source.Size, io.ErrUnexpectedEOF)
-	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
+	return writeSource(io.Discard, source)
 }
 
 func writeSource(dst io.Writer, source FileSource) (string, error) {

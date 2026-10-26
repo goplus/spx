@@ -164,7 +164,7 @@ func TestBuildToRejectsShortReadWriteFailureAndSourceChange(t *testing.T) {
 	})
 }
 
-func TestBuildToRejectsOuterLimitsBeforeReadingSources(t *testing.T) {
+func TestBuildToRejectsInvalidMetadataBeforeReadingSources(t *testing.T) {
 	t.Run("entry count", func(t *testing.T) {
 		config := testBuildConfig(t).BuildConfig
 		guard := &countingReaderAt{reader: bytes.NewReader([]byte("must not read"))}
@@ -175,19 +175,6 @@ func TestBuildToRejectsOuterLimitsBeforeReadingSources(t *testing.T) {
 		}
 		if reads, _ := guard.counts(); reads != 0 {
 			t.Fatalf("oversized entry-count source bytes read = %d, want 0", reads)
-		}
-	})
-
-	t.Run("entry size", func(t *testing.T) {
-		config, sources := fileSources(testBuildConfig(t))
-		guard := &countingReaderAt{reader: bytes.NewReader([]byte("must not read"))}
-		sources[0].ReaderAt = guard
-		sources[0].Size = runtimebundle.MaxEntrySize + 1
-		if _, _, err := BuildTo(io.Discard, config, sources); !errors.Is(err, runtimebundle.ErrArchiveLimit) {
-			t.Fatalf("BuildTo error = %v, want runtimebundle.ErrArchiveLimit", err)
-		}
-		if reads, _ := guard.counts(); reads != 0 {
-			t.Fatalf("oversized entry source bytes read = %d, want 0", reads)
 		}
 	})
 
@@ -211,6 +198,69 @@ func TestBuildToRejectsOuterLimitsBeforeReadingSources(t *testing.T) {
 			}
 		}
 	})
+
+	for _, tt := range []struct {
+		name, want string
+		limit      bool
+		mutate     func(*BuildConfig, *[]FileSource)
+	}{
+		{"late invalid path", "invalid entry path", false, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].Name = "zz/../bad"
+		}},
+		{"late nil reader", "nil ReaderAt", false, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].ReaderAt = nil
+		}},
+		{"late negative size", "negative size", false, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].Size = -1
+		}},
+		{"long name", "name is too long", false, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].Name = strings.Repeat("z", zipMaxNameBytes+1)
+		}},
+		{"late oversized entry", "exceeds limit", true, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].Size = runtimebundle.MaxEntrySize + 1
+		}},
+		{"manifest in total", "total size", true, func(_ *BuildConfig, sources *[]FileSource) {
+			for _, name := range []string{"extra-a", "extra-b"} {
+				*sources = append(*sources, FileSource{Name: name, ReaderAt: (*sources)[0].ReaderAt})
+			}
+			for i := range *sources {
+				(*sources)[i].Size = runtimebundle.MaxEntrySize
+			}
+		}},
+		{"duplicate", "duplicate entry", false, func(_ *BuildConfig, sources *[]FileSource) {
+			*sources = append(*sources, (*sources)[len(*sources)-1])
+		}},
+		{"reserved manifest", "reserved", false, func(_ *BuildConfig, sources *[]FileSource) {
+			(*sources)[len(*sources)-1].Name = ManifestPath
+		}},
+		{"oversized manifest", "manifest size", true, func(cfg *BuildConfig, _ *[]FileSource) {
+			cfg.SPX.EffectivePath = strings.Repeat("a", maxPayloadManifestBytes)
+		}},
+		{"source bounds before manifest", "entry ", true, func(cfg *BuildConfig, sources *[]FileSource) {
+			cfg.SPX.EffectivePath = strings.Repeat("a", maxPayloadManifestBytes)
+			(*sources)[len(*sources)-1].Size = runtimebundle.MaxEntrySize + 1
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			config, sources := fileSources(testBuildConfig(t))
+			reads := 0
+			for i := range sources {
+				sources[i].ReaderAt = payloadReaderAtFunc(func([]byte, int64) (int, error) {
+					reads++
+					return 0, errors.New("unexpected source read")
+				})
+			}
+			tt.mutate(&config, &sources)
+			var output bytes.Buffer
+			payloadDigest, manifestDigest, err := BuildTo(&output, config, sources)
+			if err == nil || !strings.Contains(err.Error(), tt.want) || errors.Is(err, runtimebundle.ErrArchiveLimit) != tt.limit {
+				t.Fatalf("BuildTo error = %v, want %q", err, tt.want)
+			}
+			if reads != 0 || output.Len() != 0 || payloadDigest != "" || manifestDigest != "" {
+				t.Fatalf("invalid metadata read sources %d times and wrote %d bytes; digests = %q/%q", reads, output.Len(), payloadDigest, manifestDigest)
+			}
+		})
+	}
 }
 
 func TestVerifyReaderAtRejectsOversizedArchiveBeforeReading(t *testing.T) {
@@ -687,9 +737,6 @@ func TestBuildRejectsInvalidIdentityAndSourcesBeforeWriting(t *testing.T) {
 		{"invalid ABI", func(c *BuildConfig, _ *[]FileSource) { c.Engine.RuntimeABI = 0 }, "ABI must be positive"},
 		{"nonhex digest", func(c *BuildConfig, _ *[]FileSource) { c.Engine.BundleDigest = strings.Repeat("g", 64) }, "invalid engine bundle digest"},
 		{"unsafe basename", func(c *BuildConfig, _ *[]FileSource) { c.Engine.Executable = "../engine" }, "unsafe component basename"},
-		{"nil reader", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].ReaderAt = nil }, "nil ReaderAt"},
-		{"negative size", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Size = -1 }, "negative size"},
-		{"long name", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Name = strings.Repeat("a", zipMaxNameBytes+1) }, "name is too long"},
 		{"invalid path", func(_ *BuildConfig, s *[]FileSource) { (*s)[0].Name = "/absolute" }, "invalid entry path"},
 		{"engine claim", func(c *BuildConfig, _ *[]FileSource) { c.Engine.BundleDigest = strings.Repeat("0", 64) }, "engine bundle digest does not match"},
 		{"bridge claim", func(c *BuildConfig, _ *[]FileSource) { c.Bridge.BundleDigest = strings.Repeat("0", 64) }, "bridge bundle digest does not match"},
@@ -721,6 +768,41 @@ func TestBuildRejectsInvalidIdentityAndSourcesBeforeWriting(t *testing.T) {
 	}
 }
 
+func TestPrepareSourcesPreservesCallerMetadata(t *testing.T) {
+	reader := &countingReaderAt{reader: bytes.NewReader([]byte("must not read"))}
+	sources := []FileSource{
+		{Name: "z", Mode: 0o700, ReaderAt: reader, Size: 2},
+		{Name: "a", Mode: 0o600, ReaderAt: reader, Size: 1},
+	}
+	prepared, err := prepareSources(sources, ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sources[0].Name != "z" || sources[0].Mode != 0o700 || sources[1].Name != "a" || sources[1].Mode != 0o600 {
+		t.Fatalf("preparation mutated caller metadata: %+v", sources)
+	}
+	for i, want := range []runtimebundle.Entry{
+		{Name: "a", Mode: 0o644, Size: 1},
+		{Name: "z", Mode: 0o755, Size: 2},
+	} {
+		if prepared[i].entry != want {
+			t.Fatalf("entry %d = %+v, want %+v", i, prepared[i].entry, want)
+		}
+		source := prepared[i].source
+		if source.Name != want.Name || uint32(source.Mode) != want.Mode || source.Size != want.Size || source.ReaderAt != reader {
+			t.Fatalf("prepared source %d does not match its metadata: %+v", i, source)
+		}
+	}
+	// Duplicates need not be adjacent in the caller's input.
+	sources = append(sources, sources[0])
+	if _, err := prepareSources(sources, ManifestPath); err == nil || err.Error() != `runtimepayload: duplicate entry "z"` {
+		t.Fatalf("nonadjacent duplicate = %v", err)
+	}
+	if reads, _ := reader.counts(); reads != 0 {
+		t.Fatalf("metadata preparation read sources %d times", reads)
+	}
+}
+
 func TestComponentBundleSourcesRejectsInvalidInputs(t *testing.T) {
 	good := FileSource{Name: "asset", ReaderAt: bytes.NewReader([]byte("x")), Size: 1}
 	for _, tt := range []struct {
@@ -741,8 +823,9 @@ func TestComponentBundleSourcesRejectsInvalidInputs(t *testing.T) {
 			}
 		})
 	}
-	if _, err := prepareSources([]FileSource{good}, good.Name); err == nil || !strings.Contains(err.Error(), "reserved") {
-		t.Fatalf("reserved source = %v", err)
+	good.Name = ManifestPath
+	if _, err := ComponentBundleSources([]FileSource{good}, runtimebundle.NamespaceProject); err != nil {
+		t.Fatalf("component sources must not reserve the outer manifest path: %v", err)
 	}
 }
 
@@ -863,34 +946,6 @@ func TestVerifiedWritersRejectInvalidRequestsAndWriteFailures(t *testing.T) {
 			}
 			if err := copy.WriteProjectZIP(io.Discard); err == nil || !strings.Contains(err.Error(), kind+" changed") {
 				t.Fatalf("changed entry = %v, want %s failure", err, kind)
-			}
-		})
-	}
-}
-
-func TestPreparedPayloadLimits(t *testing.T) {
-	full := make([]runtimebundle.Entry, 8)
-	for i := range full {
-		full[i] = runtimebundle.Entry{Name: "entry", Size: runtimebundle.MaxEntrySize}
-	}
-	for _, tt := range []struct {
-		name         string
-		entries      []runtimebundle.Entry
-		manifestSize int64
-		want         string
-	}{
-		{"entry count", make([]runtimebundle.Entry, runtimebundle.MaxEntries), 0, "entries exceeds limit"},
-		{"negative manifest", nil, -1, "negative manifest size"},
-		{"large manifest", nil, maxPayloadManifestBytes + 1, "manifest size"},
-		{"negative entry", []runtimebundle.Entry{{Name: "x", Size: -1}}, 0, "negative size"},
-		{"large entry", []runtimebundle.Entry{{Name: "x", Size: runtimebundle.MaxEntrySize + 1}}, 0, "entry"},
-		{"total overflow", append(append([]runtimebundle.Entry(nil), full...), runtimebundle.Entry{Name: "extra", Size: 1}), 0, "total size"},
-		{"manifest in total", full, 1, "total size"},
-		{"long entry name", []runtimebundle.Entry{{Name: strings.Repeat("x", zipMaxNameBytes+1)}}, 0, "name is too long"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := validatePreparedPayloadLimits(tt.entries, tt.manifestSize); err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("limits = %v, want %q", err, tt.want)
 			}
 		})
 	}
