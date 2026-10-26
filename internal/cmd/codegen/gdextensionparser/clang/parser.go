@@ -19,6 +19,7 @@ package clang
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/participle/v2"
@@ -105,15 +106,6 @@ type Argument struct {
 	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
 }
 
-func (a CHeaderFileAST) FindVariantEnumType() *TypedefEnum {
-	for _, e := range a.Expr {
-		if e.Enum != nil && e.Enum.Name != nil && *e.Enum.Name == "GDExtensionVariantType" {
-			return e.Enum
-		}
-	}
-	return nil
-}
-
 func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 	// Included headers may repeat typedefs, such as GDExtensionClassGetPropertyList.
 	distinct := map[string]struct{}{}
@@ -132,14 +124,9 @@ func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 
 // filterFunctions preserves declaration order and the deduplication in CollectFunctions.
 func (a CHeaderFileAST) filterFunctions(include func(TypedefFunction) bool) []TypedefFunction {
-	functions := a.CollectFunctions()
-	filtered := make([]TypedefFunction, 0, len(functions))
-	for _, function := range functions {
-		if include(function) {
-			filtered = append(filtered, function)
-		}
-	}
-	return filtered
+	return slices.DeleteFunc(a.CollectFunctions(), func(function TypedefFunction) bool {
+		return !include(function)
+	})
 }
 
 func isInterfaceFunction(function TypedefFunction) bool {
@@ -191,16 +178,6 @@ func (a CHeaderFileAST) CollectStructs() []TypedefStruct {
 		}
 	}
 	return structs
-}
-
-func (a CHeaderFileAST) CollectAliases() []TypedefAlias {
-	aliases := make([]TypedefAlias, 0, len(a.Expr))
-	for _, e := range a.Expr {
-		if e.Alias != nil {
-			aliases = append(aliases, *e.Alias)
-		}
-	}
-	return aliases
 }
 
 func (a CHeaderFileAST) CollectEnums() []TypedefEnum {
@@ -263,22 +240,6 @@ func (t Type) CStyleString() string {
 	}
 
 	panic("unhandled type")
-}
-
-func (a Argument) IsPinnable() bool {
-	switch {
-	case a.Type.Function != nil:
-		return false
-	case a.Type.Primitive != nil:
-		switch a.Type.Primitive.Name {
-		case "char":
-			return false
-		default:
-			return a.Type.Primitive.IsPointer
-		}
-	}
-
-	return false
 }
 
 func (a Argument) CStylePtrString(i int) string {

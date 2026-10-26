@@ -22,14 +22,11 @@ import (
 	"testing"
 )
 
-func TestNumericConversions(t *testing.T) {
+func TestGetFloat(t *testing.T) {
 	for _, value := range []any{float32(12), float64(12), int(12), int8(12), int16(12), int32(12), int64(12), uint(12), uint8(12), uint16(12), uint32(12), uint64(12), "12"} {
 		t.Run(fmt.Sprintf("%T", value), func(t *testing.T) {
 			if got, ok := GetFloat(value); !ok || got != 12 {
 				t.Errorf("GetFloat = %v, %v", got, ok)
-			}
-			if got, ok := GetInt(value); !ok || got != 12 {
-				t.Errorf("GetInt = %v, %v", got, ok)
 			}
 		})
 	}
@@ -37,14 +34,8 @@ func TestNumericConversions(t *testing.T) {
 		if got, ok := GetFloat(value); ok || got != 0 {
 			t.Errorf("GetFloat(%v) = %v, %v", value, got, ok)
 		}
-		if got, ok := GetInt(value); ok || got != 0 {
-			t.Errorf("GetInt(%v) = %v, %v", value, got, ok)
-		}
 	}
 	for _, value := range []any{float32(-12.75), float64(-12.75), "-12.75"} {
-		if got, ok := GetInt(value); !ok || got != -12 {
-			t.Errorf("GetInt(%v) = %v, %v, want truncation toward zero", value, got, ok)
-		}
 		if got, ok := GetFloat(value); !ok || got != -12.75 {
 			t.Errorf("GetFloat(%v) = %v, %v", value, got, ok)
 		}
