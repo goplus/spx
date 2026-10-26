@@ -189,3 +189,40 @@ func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
 	}
 	sprite.bubble().stopAll()
 }
+
+type layoutExtraBaseSprite struct {
+	SpriteImpl
+	owner *Game
+	Extra SpriteImpl
+	value int
+}
+
+func (*layoutExtraBaseSprite) Main() {}
+
+func TestSpriteLayoutKeepsFirstImplementation(t *testing.T) {
+	game := setupStageLoadTestGame(t, gameTestFS{
+		"sprites/extra/index.json": `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`,
+	})
+	source := &layoutExtraBaseSprite{}
+	gamer := reflect.ValueOf(&game.Game).Elem()
+	prepared, err := prepareSprite(game.fs, "extra", reflect.TypeOf(source).Elem(), gamer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game.loadPreparedSprite(source, "extra", gamer, &prepared)
+	if spriteOf(source) != &source.SpriteImpl {
+		t.Fatal("lookup did not select the first SpriteImpl field")
+	}
+	source.value = 7
+	state := snapshotSpriteUserFields(reflect.ValueOf(source).Elem())
+	source.value, source.Extra.name = 9, "extra"
+	restoreSpriteUserFields(state)
+	if source.value != 7 || source.Extra.name != "extra" {
+		t.Fatal("snapshot did not exclude all SpriteImpl fields")
+	}
+	var clone layoutExtraBaseSprite
+	copySprite(reflect.ValueOf(&clone).Elem(), source)
+	if !clone.IsCloned() || !clone.Extra.IsCloned() || clone.Extra.original != &source.Extra {
+		t.Fatal("cloning did not invoke InitFrom for both SpriteImpl fields")
+	}
+}

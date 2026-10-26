@@ -42,6 +42,8 @@ var (
 
 	// SPX_BIND exports one C++ declaration; static is ordinary C++ semantics.
 	reMethod = regexp.MustCompile(`^SPX_BIND\s+(static\s+)?(\w+)\s+(\w+)\((.*)\);$`)
+
+	reReturnParameter = regexp.MustCompile(`\bret_value(?:_[0-9]+)?\b`)
 )
 
 type classMethodDecl struct {
@@ -50,10 +52,6 @@ type classMethodDecl struct {
 	MethodName string
 	Params     string
 	Static     bool
-}
-
-func (m classMethodDecl) functionName() string {
-	return "GDExtension" + m.ClassName + strcase.ToCamel(m.MethodName)
 }
 
 // Headers holds both ABI spellings and the metadata collected from one input.
@@ -74,15 +72,16 @@ func PrepareHeaders(dir string) (Headers, error) {
 		return Headers{}, err
 	}
 	h := parseManagerHeader(merged)
-	raw, err := h.renderHeader(true)
+	output, err := common.RenderTemplate(template.FuncMap{"arrayTypes": common.ArrayTypes}, "gdextension_spx_ext.h", headerTemplate, nil)
 	if err != nil {
 		return Headers{}, err
 	}
-	standard, err := h.renderHeader(false)
-	if err != nil {
-		return Headers{}, err
-	}
-	return Headers{Raw: raw, Standard: standard, Metadata: h.metadata}, nil
+	text := string(output)
+	return Headers{
+		Raw:      strings.ReplaceAll(text, "###MANAGER_FUNC_DEFINE", h.render(true)),
+		Standard: strings.ReplaceAll(text, "###MANAGER_FUNC_DEFINE", h.render(false)),
+		Metadata: h.metadata,
+	}, nil
 }
 
 func (g *headerCollector) render(rawFormat bool) string {
@@ -107,14 +106,12 @@ func (g *headerCollector) render(rawFormat bool) string {
 	return builder.String()
 }
 
-func (g *headerCollector) renderHeader(raw bool) (string, error) {
-	text := strings.ReplaceAll(gdSpxExtH, "###MANAGER_FUNC_DEFINE", g.render(raw))
-	output, err := common.RenderTemplate(template.FuncMap{"arrayTypes": common.ArrayTypes}, "gdextension_spx_ext.h", text, nil)
-	return string(output), err
+func (m classMethodDecl) functionName() string {
+	return "GDExtension" + m.ClassName + strcase.ToCamel(m.MethodName)
 }
 
 func mergeManagerHeader(dir string) (string, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "spx*mgr.h"))
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("find SPX manager headers: %w", err)
 	}
@@ -123,11 +120,12 @@ func mergeManagerHeader(dir string) (string, error) {
 	builder.WriteString("#include \"gdextension_interface.h\"\n")
 	builder.WriteString("#include \"gdextension_spx_mgr_pre_define.h\"\n")
 
-	for _, file := range files {
-		switch filepath.Base(file) {
-		case "spx_object_mgr.h":
+	for _, entry := range files {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "spx") || !strings.HasSuffix(name, "mgr.h") || name == "spx_object_mgr.h" {
 			continue
 		}
+		file := filepath.Join(dir, name)
 		source, err := os.ReadFile(file)
 		if err != nil {
 			return "", fmt.Errorf("read SPX manager header %q: %w", file, err)
@@ -136,6 +134,72 @@ func mergeManagerHeader(dir string) (string, error) {
 	}
 
 	return builder.String(), nil
+}
+
+func parseManagerHeader(input string) *headerCollector {
+	g := &headerCollector{metadata: common.GenerationMetadata{
+		ArrayBridges:     make(map[string]common.ArrayBridge),
+		StaticMethods:    make(map[string]string),
+		ReturnParameters: make(map[string]common.CParam),
+	}}
+	var currentClassName string
+
+	for line := range strings.SplitSeq(input, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if strings.HasPrefix(line, "class ") {
+			parts := strings.Fields(line)
+			currentClassName = parts[1]
+			currentClassName = currentClassName[:len(currentClassName)-3]
+			if strings.HasPrefix(currentClassName, "Spx") {
+				managerName := strings.ToLower(currentClassName[3:])
+				if !slices.Contains(g.metadata.ManagerNames, managerName) {
+					g.metadata.ManagerNames = append(g.metadata.ManagerNames, managerName)
+				}
+			}
+			g.methods = append(g.methods, classMethodDecl{ClassName: currentClassName})
+			continue
+		}
+		if matches := reMethod.FindStringSubmatch(line); matches != nil {
+			params := normalizeParams(matches[4])
+			methodDecl := classMethodDecl{
+				ClassName:  currentClassName,
+				ReturnType: matches[2],
+				MethodName: matches[3],
+				Params:     params,
+				Static:     matches[1] != "",
+			}
+			spec, arrayBridge := parseArrayBridge(methodDecl)
+			functionName := methodDecl.functionName()
+			if methodDecl.ReturnType != "void" {
+				usedNames := reReturnParameter.FindAllString(methodDecl.Params, -1)
+				name := "ret_value"
+				for n := 2; slices.Contains(usedNames, name); n++ {
+					name = fmt.Sprintf("ret_value_%d", n)
+				}
+				g.metadata.ReturnParameters[functionName] = common.CParam{CType: methodDecl.ReturnType, Name: name}
+			}
+			if methodDecl.Static {
+				g.metadata.StaticMethods[functionName] = currentClassName + "Mgr::" + methodDecl.MethodName
+			}
+			if arrayBridge {
+				g.metadata.ArrayBridges[spec.FunctionName] = spec
+				// Lower every fixed array to its pointer ABI after preserving its extent.
+				var params []string
+				for _, param := range spec.Params() {
+					params = append(params, param.Declaration())
+				}
+				methodDecl.Params = strings.Join(params, ", ")
+			}
+			g.methods = append(g.methods, methodDecl)
+		} else if strings.HasPrefix(line, "SPX_BIND") {
+			panic("invalid SPX_BIND declaration: " + line)
+		}
+	}
+
+	return g
 }
 
 // appendPublicDeclarations collects direct public exports from manager classes.
@@ -186,69 +250,4 @@ func normalizeParams(params string) string {
 	// Use one space after each comma.
 	params = reCommaSpace.ReplaceAllString(params, ", ")
 	return strings.TrimSpace(params)
-}
-
-func parseManagerHeader(input string) *headerCollector {
-	g := &headerCollector{metadata: common.GenerationMetadata{
-		ArrayBridges:     make(map[string]common.ArrayBridge),
-		StaticMethods:    make(map[string]string),
-		ReturnParameters: make(map[string]common.CParam),
-	}}
-	var currentClassName string
-
-	for line := range strings.SplitSeq(input, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-		if strings.HasPrefix(line, "class ") {
-			parts := strings.Fields(line)
-			currentClassName = parts[1]
-			currentClassName = currentClassName[:len(currentClassName)-3]
-			if strings.HasPrefix(currentClassName, "Spx") {
-				managerName := strings.ToLower(currentClassName[3:])
-				if !slices.Contains(g.metadata.ManagerNames, managerName) {
-					g.metadata.ManagerNames = append(g.metadata.ManagerNames, managerName)
-				}
-			}
-			g.methods = append(g.methods, classMethodDecl{ClassName: currentClassName})
-			continue
-		}
-		if matches := reMethod.FindStringSubmatch(line); matches != nil {
-			params := normalizeParams(matches[4])
-			methodDecl := classMethodDecl{
-				ClassName:  currentClassName,
-				ReturnType: matches[2],
-				MethodName: matches[3],
-				Params:     params,
-				Static:     matches[1] != "",
-			}
-			spec, arrayBridge := parseArrayBridge(methodDecl)
-			functionName := methodDecl.functionName()
-			if methodDecl.ReturnType != "void" {
-				name := "ret_value"
-				for n := 2; regexp.MustCompile(`\b` + name + `\b`).MatchString(methodDecl.Params); n++ {
-					name = fmt.Sprintf("ret_value_%d", n)
-				}
-				g.metadata.ReturnParameters[functionName] = common.CParam{CType: methodDecl.ReturnType, Name: name}
-			}
-			if methodDecl.Static {
-				g.metadata.StaticMethods[functionName] = currentClassName + "Mgr::" + methodDecl.MethodName
-			}
-			if arrayBridge {
-				g.metadata.ArrayBridges[spec.FunctionName] = spec
-				// Lower every fixed array to its pointer ABI after preserving its extent.
-				var params []string
-				for _, param := range spec.Params() {
-					params = append(params, param.Declaration())
-				}
-				methodDecl.Params = strings.Join(params, ", ")
-			}
-			g.methods = append(g.methods, methodDecl)
-		} else if strings.HasPrefix(line, "SPX_BIND") {
-			panic("invalid SPX_BIND declaration: " + line)
-		}
-	}
-
-	return g
 }

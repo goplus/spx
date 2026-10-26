@@ -20,6 +20,8 @@ import (
 	"archive/zip"
 	"embed"
 	"errors"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +31,9 @@ import (
 
 //go:embed template/project/* template/project/.godot/* template/platform/web/* template/platform/webnormal/*
 var webExportTestFS embed.FS
+
+//go:embed template/platform/webminigame/engine
+var conflictingMinigamePlatformFS embed.FS
 
 func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 	projectRoot := t.TempDir()
@@ -105,6 +110,70 @@ func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 		if found[name] {
 			t.Fatalf("game.zip contains transient %s", name)
 		}
+	}
+}
+
+func TestExportWebAcceptsSymlinkProjectPath(t *testing.T) {
+	for _, pathKind := range []string{"absolute", "relative"} {
+		t.Run(pathKind, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			before := workingDirectory(t)
+			cmd := newWebExportFixture(t, webNormalMode)
+			projectRoot := cmd.TargetDir
+			wantFiles := map[string]string{
+				"main.spx":          "onStart => {}\n",
+				"assets/index.json": `{"backdrops":[{"path":"bg.png"}]}`,
+				"assets/bg.png":     "background image",
+			}
+			for name, content := range wantFiles {
+				writeCommandTestFile(t, filepath.Join(projectRoot, name), content)
+			}
+			projectLink := filepath.Join(before, "linked-project")
+			if err := os.Symlink(projectRoot, projectLink); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			projectPath := projectLink
+			if pathKind == "relative" {
+				projectPath = filepath.Base(projectLink)
+			}
+			t.Setenv("GOPATH", filepath.Dir(cmd.GoBinPath))
+			t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
+			setTestCommandLine(t, "spx", "exportweb", "--path", projectPath)
+
+			err := cmd.RunCmd("spx", ".spx", "test", webExportTestFS, "template/project", "project")
+			assertWorkingDirectory(t, before)
+			if err != nil {
+				t.Fatalf("exportweb through project symlink: %v", err)
+			}
+			if cmd.TargetDir != projectRoot || *cmd.Args.Path != projectRoot {
+				t.Fatalf("source paths = %q, %q; want real root %q", cmd.TargetDir, *cmd.Args.Path, projectRoot)
+			}
+			projectDir := filepath.Join(projectRoot, "project")
+			webDir := filepath.Join(projectDir, ".builds", "web")
+			if cmd.ProjectDir != projectDir || cmd.WebDir != webDir {
+				t.Fatalf("generated paths = %q, %q; want %q, %q", cmd.ProjectDir, cmd.WebDir, projectDir, webDir)
+			}
+
+			archive, err := zip.OpenReader(filepath.Join(webDir, "game.zip"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer archive.Close()
+			for name, want := range wantFiles {
+				entry, err := archive.Open(name)
+				if err != nil {
+					t.Fatalf("open game.zip entry %s: %v", name, err)
+				}
+				got, readErr := io.ReadAll(entry)
+				closeErr := entry.Close()
+				if readErr != nil || closeErr != nil {
+					t.Fatalf("read game.zip entry %s: %v", name, errors.Join(readErr, closeErr))
+				}
+				if string(got) != want {
+					t.Fatalf("game.zip entry %s = %q, want %q", name, got, want)
+				}
+			}
+		})
 	}
 }
 
@@ -338,11 +407,17 @@ func TestFinalizeMinigameJS(t *testing.T) {
 
 func TestWebAssetMoveAndMergeFailures(t *testing.T) {
 	cmd := &CmdTool{}
-	source, destination := t.TempDir(), t.TempDir()
+	root, destination := t.TempDir(), t.TempDir()
+	source := filepath.Join(root, "game[one]")
 	if err := cmd.moveFilesByPattern(source, destination, "["); err == nil {
 		t.Fatal("invalid asset pattern accepted")
 	}
 	writeCommandTestFile(t, filepath.Join(source, "engine.js"), "engine();")
+	neighbor := filepath.Join(root, "gameo", "engine.js")
+	writeCommandTestFile(t, neighbor, "unrelated();")
+	if err := cmd.moveFilesByPattern(source, destination, "engine*["); !errors.Is(err, filepath.ErrBadPattern) {
+		t.Fatalf("invalid pattern after a matching prefix = %v, want ErrBadPattern", err)
+	}
 	missing := filepath.Join(destination, "missing")
 	if err := cmd.moveFilesByPattern(source, missing, "*.js"); err == nil {
 		t.Fatal("asset moved into a missing directory")
@@ -359,17 +434,43 @@ func TestWebAssetMoveAndMergeFailures(t *testing.T) {
 	if err := cmd.mergeJSFiles(destination, false); err == nil {
 		t.Fatal("merge accepted a directory in place of a script")
 	}
+	if err := cmd.moveFilesByPattern(source, destination, "*.js"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTestFile(t, filepath.Join(destination, "engine.js")); got != "engine();" {
+		t.Fatalf("literal source directory moved %q, want its own engine script", got)
+	}
+	if got := readTestFile(t, neighbor); got != "unrelated();" {
+		t.Fatalf("asset move changed neighboring project: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(source, "engine.js")); !os.IsNotExist(err) {
+		t.Fatalf("source engine was not moved: %v", err)
+	}
+	if err := cmd.moveFilesByPattern(filepath.Join(root, "missing"), destination, "*.js"); err != nil {
+		t.Fatalf("missing source directory should have no matches: %v", err)
+	}
+	t.Run("unreadable source", func(t *testing.T) {
+		restrictCommandTestPath(t, source, 0)
+		if err := cmd.moveFilesByPattern(source, destination, "*.js"); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("source listing error = %v, want permission denied", err)
+		}
+	})
 }
 
 func newWebExportFixture(t *testing.T, mode string) *CmdTool {
 	t.Helper()
-	root := t.TempDir()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root = filepath.Join(root, "game[one]")
 	goRoot := filepath.Join(root, "goroot")
 	t.Setenv("SPX_WEB_GOROOT", goRoot)
-	installCommandTestTools(t, map[string]string{"go": `test "$*" = 'env GOROOT'; printf '%s\n' "$SPX_WEB_GOROOT"`})
+	t.Setenv("SPX_WEB_PROJECT_DIR", root)
+	installCommandTestTools(t, map[string]string{"go": `test "$*" = 'env GOROOT'; test "$(pwd -P)" = "$SPX_WEB_PROJECT_DIR"; printf '%s\n' "$SPX_WEB_GOROOT"`})
 	build := "fast"
 	cmd := &CmdTool{
-		TargetDir: root, TargetAbsDir: root, ProjectDir: filepath.Join(root, "project"),
+		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
 		WebDir: filepath.Join(root, "project", ".builds", "web"), GoBinPath: filepath.Join(root, "bin"), Version: "test",
 		ProjectFS: webExportTestFS, PlatformFS: webExportTestFS, Args: ExtraArgs{Build: &build},
 	}
@@ -390,16 +491,64 @@ func newWebExportFixture(t *testing.T, mode string) *CmdTool {
 	return cmd
 }
 
+func TestWeChatDevToolsUsesTargetProjectDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake DevTools command uses a POSIX shell script")
+	}
+	for _, pathKind := range []string{"relative", "absolute", "unset"} {
+		t.Run(pathKind, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			before := workingDirectory(t)
+			projectDir, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			toolsDir := filepath.Join(projectDir, "dev tools")
+			cli := filepath.Join(toolsDir, "cli")
+			writeCommandTestFile(t, cli, "#!/bin/sh\nprintf '%s\\000' \"$PWD\" \"$@\" > \"$SPX_DEVTOOLS_LOG\"\n")
+			if err := os.Chmod(cli, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			logPath := filepath.Join(projectDir, "devtools.log")
+			t.Setenv("SPX_DEVTOOLS_LOG", logPath)
+			toolPath := toolsDir
+			if pathKind == "relative" {
+				toolPath = filepath.Base(toolsDir)
+			} else if pathKind == "unset" {
+				toolPath = ""
+			}
+			t.Setenv("WECHAT_DEV_TOOLS", toolPath)
+			cmd := CmdTool{TargetDir: projectDir}
+			workDir := filepath.Join(projectDir, "project", ".builds", "web")
+			cmd.openWeChatDevTools(workDir)
+			assertWorkingDirectory(t, before)
+			if pathKind == "unset" {
+				if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+					t.Fatalf("unset DevTools path launched a command: %v", err)
+				}
+				return
+			}
+			want := projectDir + "\x00open\x00--project\x00" + workDir + "\x00-y\x00"
+			if got := readTestFile(t, logPath); got != want {
+				t.Fatalf("DevTools invocation = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestWebExportModeWorkflows(t *testing.T) {
 	for _, tc := range []struct {
 		mode   string
 		export func(*CmdTool) error
 	}{
+		{webNormalMode, (*CmdTool).ExportWeb},
 		{webWorkerMode, (*CmdTool).ExportWebWorker},
 		{webMinigameMode, (*CmdTool).ExportMinigame},
 		{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			before := workingDirectory(t)
 			mode := tc.mode
 			cmd := newWebExportFixture(t, mode)
 			devToolsLog := filepath.Join(t.TempDir(), "devtools.log")
@@ -414,6 +563,7 @@ func TestWebExportModeWorkflows(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			assertWorkingDirectory(t, before)
 			archivePath := filepath.Join(cmd.WebDir, "game.zip")
 			switch mode {
 			case webWorkerMode:
@@ -453,14 +603,10 @@ func TestWebExportModeWorkflows(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer archive.Close()
-			foundSource := false
-			for _, file := range archive.File {
-				if file.Name == "main.spx" {
-					foundSource = true
+			for name, want := range map[string]string{"main.spx": "onStart => {}\n", "assets/index.json": "{}"} {
+				if data, err := fs.ReadFile(archive, name); err != nil || string(data) != want {
+					t.Fatalf("exported archive entry %s = %q, %v; want %q", name, data, err, want)
 				}
-			}
-			if !foundSource {
-				t.Fatal("exported archive omits project source")
 			}
 		})
 	}
@@ -491,11 +637,15 @@ func TestWebExportMissingPrerequisites(t *testing.T) {
 			}
 		})
 	}
-	for _, failure := range []string{"interpreter", "go env", "wasm runtime", "project assets", "interpreter wasm"} {
+	for _, failure := range []string{"protected generated directory", "interpreter", "go env", "wasm runtime", "project assets", "interpreter wasm"} {
 		t.Run(failure, func(t *testing.T) {
 			cmd := newWebExportFixture(t, webNormalMode)
 			want := ""
 			switch failure {
+			case "protected generated directory":
+				writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "keep"), "original export")
+				restrictCommandTestPath(t, cmd.ProjectDir, 0o500)
+				want = "failed to remove project directory"
 			case "interpreter":
 				if err := os.RemoveAll(filepath.Join(cmd.GoBinPath, "ispx")); err != nil {
 					t.Fatal(err)
@@ -520,15 +670,24 @@ func TestWebExportMissingPrerequisites(t *testing.T) {
 				}
 				want = "failed to copy interpreter wasm"
 			}
-			if err := cmd.ExportWeb(); err == nil || !strings.Contains(err.Error(), want) {
+			err := cmd.ExportWeb()
+			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("export error = %v, want %q", err, want)
+			}
+			if failure == "protected generated directory" {
+				if !errors.Is(err, os.ErrPermission) {
+					t.Fatalf("protected export error = %v, want permission denied", err)
+				}
+				if got := readTestFile(t, filepath.Join(cmd.ProjectDir, "keep")); got != "original export" {
+					t.Fatalf("failed cleanup changed existing export: %q", got)
+				}
 			}
 		})
 	}
 }
 
 func TestWebExportFailureCleanup(t *testing.T) {
-	for _, scenario := range []string{"worker bundle", "worker patch", "minigame engine", "minigame JS"} {
+	for _, scenario := range []string{"worker bundle", "worker patch", "minigame workspace", "minigame engine", "minigame JS"} {
 		t.Run(scenario, func(t *testing.T) {
 			mode := webMinigameMode
 			if strings.HasPrefix(scenario, "worker") {
@@ -545,6 +704,9 @@ func TestWebExportFailureCleanup(t *testing.T) {
 			case "worker patch":
 				writeCommandTestFile(t, filepath.Join(template, "engine.js"), "unrecognized engine")
 				want = "missing worker hook anchor"
+			case "minigame workspace":
+				cmd.PlatformFS = conflictingMinigamePlatformFS
+				want = "failed to create " + filepath.Join(cmd.WebDir, "engine")
 			case "minigame engine":
 				if err := os.Remove(filepath.Join(template, "engine.wasm")); err != nil {
 					t.Fatal(err)
@@ -570,9 +732,42 @@ func TestWebExportFailureCleanup(t *testing.T) {
 				if scenario == "worker patch" && readTestFile(t, filepath.Join(cmd.WebDir, "engine.js")) != "unrecognized engine" {
 					t.Fatal("failed patch changed engine source")
 				}
+			} else if scenario == "minigame workspace" {
+				backup := cmd.WebDir + "_bck"
+				if got := readTestFile(t, filepath.Join(backup, "engine.wasm")); got != "engine wasm" {
+					t.Fatalf("failed workspace preparation changed raw engine: %q", got)
+				}
+				if len(readTestFile(t, filepath.Join(backup, "game.zip"))) == 0 {
+					t.Fatal("failed workspace preparation lost the project archive")
+				}
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "engine")); got != "conflicting engine file\n" {
+					t.Fatalf("failed workspace preparation overwrote conflicting template: %q", got)
+				}
 			} else if scenario == "minigame engine" {
-				if _, err := os.Stat(filepath.Join(cmd.WebDir, "rawWeb", "game.zip")); err != nil {
-					t.Fatalf("failed engine preparation removed raw project archive: %v", err)
+				backup := cmd.WebDir + "_bck"
+				if len(readTestFile(t, filepath.Join(backup, "game.zip"))) == 0 {
+					t.Fatal("failed engine preparation lost the project archive")
+				}
+				if got := readTestFile(t, filepath.Join(backup, "game.js")); got != "game();" {
+					t.Fatalf("failed engine preparation changed raw JS: %q", got)
+				}
+				writeCommandTestFile(t, filepath.Join(template, "engine.wasm"), "engine wasm")
+				t.Setenv("WECHAT_DEV_TOOLS", "")
+				if err := cmd.ExportMinigame(); err != nil {
+					t.Fatalf("retry after restoring missing engine: %v", err)
+				}
+				archive, err := zip.OpenReader(filepath.Join(cmd.WebDir, "engine", "game.zip"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer archive.Close()
+				for name, want := range map[string]string{"main.spx": "onStart => {}\n", "assets/index.json": "{}"} {
+					if data, err := fs.ReadFile(archive, name); err != nil || string(data) != want {
+						t.Fatalf("retried archive entry %s = %q, %v; want %q", name, data, err, want)
+					}
+				}
+				if _, err := os.Stat(backup); !os.IsNotExist(err) {
+					t.Fatalf("successful retry retained raw backup: %v", err)
 				}
 			}
 		})
@@ -724,13 +919,20 @@ func TestMergeJSFilesReportsFullOutputDevice(t *testing.T) {
 		t.Skipf("/dev/full unavailable: %v", err)
 	}
 	dir := t.TempDir()
-	if err := os.Symlink("/dev/full", filepath.Join(dir, "engine_new.js")); err != nil {
+	sources := map[string]string{"header.js": "header();", "engine.js": "engine();", "game.js": "game();"}
+	for name, content := range sources {
+		writeCommandTestFile(t, filepath.Join(dir, name), content)
+	}
+	output := filepath.Join(dir, "engine_new.js")
+	if err := os.Symlink("/dev/full", output); err != nil {
 		t.Fatal(err)
 	}
-	if err := (&CmdTool{}).mergeJSFiles(dir, false); err == nil || !strings.Contains(err.Error(), "flushing merged JS output") {
+	if err := (&CmdTool{}).mergeJSFiles(dir, false); err == nil || !strings.Contains(err.Error(), "write merged JS output "+output) {
 		t.Fatalf("full output error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "engine.js")); !os.IsNotExist(err) {
-		t.Fatalf("failed merge published engine.js: %v", err)
+	for name, want := range sources {
+		if got := readTestFile(t, filepath.Join(dir, name)); got != want {
+			t.Fatalf("failed merge changed source %s: %q, want %q", name, got, want)
+		}
 	}
 }

@@ -24,12 +24,10 @@ import (
 	"io"
 	"os"
 	"path"
-	"slices"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/assetindex"
-	"github.com/goplus/spx/v4/internal/engine"
 )
 
 const packedIndexJSON = "index_pack.json"
@@ -37,22 +35,6 @@ const packedIndexJSON = "index_pack.json"
 type packedConfigDir struct {
 	spxfs.Dir
 	index packedConfigIndex
-}
-
-type adaptedConfigDir interface {
-	isAdaptedConfigDir()
-}
-
-// rawConfigDir keeps engine-specific lookup below packedConfigDir so all
-// decoded configuration still passes through the installed overlay.
-type rawConfigDir struct {
-	spxfs.Dir
-	assetDir string
-}
-
-type rawReadDirConfigDir struct {
-	*rawConfigDir
-	spxfs.ReadDirer
 }
 
 type packedConfigIndex struct {
@@ -65,20 +47,15 @@ type packedConfigIndex struct {
 }
 
 func (p *packedConfigDir) Open(name string) (io.ReadCloser, error) {
-	switch normalizePackedConfigPath(name) {
-	case "index.json":
-		return io.NopCloser(bytes.NewReader(p.index.projectRaw)), nil
-	case packedIndexJSON:
-		return io.NopCloser(bytes.NewReader(p.index.raw)), nil
-	}
-
-	if raw, ok := p.lookupPackedChild(name); ok {
+	if raw, ok := p.lookupPackedConfig(name); ok {
 		return io.NopCloser(bytes.NewReader(raw)), nil
 	}
-	return openConfigReader(p.Dir, name)
+	file, err := p.Dir.Open(name)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", name, err)
+	}
+	return file, nil
 }
-
-func (*packedConfigDir) isAdaptedConfigDir() {}
 
 func (p *packedConfigDir) GetPath() string {
 	if gdDir, ok := p.Dir.(spxfs.GdDir); ok {
@@ -95,8 +72,32 @@ func (p *packedConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
 	return reader.ReadDir(name)
 }
 
-func (p *packedConfigDir) lookupPackedChild(name string) (json.RawMessage, bool) {
+func (p *packedConfigDir) VerifyFile(name string) error {
+	if _, ok := p.lookupPackedConfig(name); ok {
+		return nil
+	}
+	return spxfs.VerifyFile(p.Dir, name)
+}
+
+func (p *packedConfigDir) ListDirectories(name string) ([]string, error) {
+	if name == fontsDir && p.index.hasFonts {
+		names := make([]string, 0, len(p.index.fonts))
+		for name := range p.index.fonts {
+			names = append(names, name)
+		}
+		return names, nil
+	}
+	return spxfs.ListDirectories(p.Dir, name)
+}
+
+func (p *packedConfigDir) lookupPackedConfig(name string) ([]byte, bool) {
 	normalized := normalizePackedConfigPath(name)
+	switch normalized {
+	case "index.json":
+		return p.index.projectRaw, true
+	case packedIndexJSON:
+		return p.index.raw, true
+	}
 	parts := strings.Split(normalized, "/")
 	if len(parts) != 3 || parts[2] != "index.json" {
 		return nil, false
@@ -115,48 +116,6 @@ func (p *packedConfigDir) lookupPackedChild(name string) (json.RawMessage, bool)
 	default:
 		return nil, false
 	}
-}
-
-func (p *packedConfigDir) projectFontFamilyNames() ([]string, bool) {
-	if !p.index.hasFonts {
-		return nil, false
-	}
-	names := make([]string, 0, len(p.index.fonts))
-	for name := range p.index.fonts {
-		names = append(names, name)
-	}
-	sortFontFamilyNames(names)
-	return names, true
-}
-
-func adaptConfigDir(fs spxfs.Dir) spxfs.Dir {
-	if _, ok := fs.(adaptedConfigDir); ok {
-		return fs
-	}
-	assetDir, ok := gdAssetDir(fs)
-	if !ok || !shouldReadConfigFromEngine(assetDir) {
-		return fs
-	}
-	raw := &rawConfigDir{Dir: fs, assetDir: assetDir}
-	if reader, ok := fs.(spxfs.ReadDirer); ok {
-		return &rawReadDirConfigDir{rawConfigDir: raw, ReadDirer: reader}
-	}
-	return raw
-}
-
-func (p *rawConfigDir) Open(name string) (io.ReadCloser, error) {
-	for _, filePath := range configAssetPaths(p.assetDir, name) {
-		if engine.HasFile(filePath) {
-			return io.NopCloser(strings.NewReader(engine.ReadAllText(filePath))), nil
-		}
-	}
-	return p.Dir.Open(name)
-}
-
-func (*rawConfigDir) isAdaptedConfigDir() {}
-
-func (p *rawConfigDir) GetPath() string {
-	return p.assetDir
 }
 
 func loadPackedConfigIndex(fs spxfs.Dir) (packedConfigIndex, bool, error) {
@@ -245,15 +204,6 @@ func normalizePackedConfigPath(name string) string {
 	return path.Clean(name)
 }
 
-func openConfigReader(fs spxfs.Dir, file string) (io.ReadCloser, error) {
-	if data, ok, err := readConfigBytes(fs, file); err != nil {
-		return nil, err
-	} else if ok {
-		return io.NopCloser(bytes.NewReader(data)), nil
-	}
-	return nil, fmt.Errorf("load json failed: %s does not exist", file)
-}
-
 func readConfigBytes(fs spxfs.Dir, file string) ([]byte, bool, error) {
 	f, err := fs.Open(file)
 	if err != nil {
@@ -269,42 +219,4 @@ func readConfigBytes(fs spxfs.Dir, file string) ([]byte, bool, error) {
 		return nil, false, fmt.Errorf("read %s: %w", file, err)
 	}
 	return data, true, nil
-}
-
-func configAssetPaths(assetDir, file string) []string {
-	normalizedFile := normalizePackedConfigPath(file)
-	paths := []string{
-		joinAssetConfigPath(assetDir, normalizedFile),
-		joinAssetConfigPath(resourceAssetDir(assetDir), normalizedFile),
-		engine.ToAssetPath(normalizedFile),
-	}
-
-	ret := paths[:0]
-	for _, candidate := range paths {
-		if candidate != "" && !slices.Contains(ret, candidate) {
-			ret = append(ret, candidate)
-		}
-	}
-	return ret
-}
-
-func joinAssetConfigPath(assetDir, file string) string {
-	assetDir = strings.ReplaceAll(assetDir, "\\", "/")
-	assetDir = strings.TrimSuffix(assetDir, "/")
-	if assetDir == "" {
-		return file
-	}
-	return assetDir + "/" + file
-}
-
-func resourceAssetDir(assetDir string) string {
-	assetDir = strings.ReplaceAll(assetDir, "\\", "/")
-	assetDir = strings.TrimSuffix(assetDir, "/")
-	if assetDir == "" {
-		return ""
-	}
-	if schema, _ := spxfs.SplitSchema(assetDir); schema != "" {
-		return assetDir
-	}
-	return "res://" + strings.TrimPrefix(assetDir, "/")
 }

@@ -486,3 +486,174 @@ func TestRuntimeAcquisitionRejectsInvalidLockBeforeResolution(t *testing.T) {
 		t.Fatal("invalid runtime lock accepted")
 	}
 }
+
+func TestRuntimeNamesMatchReleaseAndDevelopmentNames(t *testing.T) {
+	lock := release.DefaultRuntimeLock()
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		for _, version := range []string{lock.RuntimeVersion, "1.0.0-local.exe"} {
+			t.Run(goos+"/"+version, func(t *testing.T) {
+				names, err := RuntimeNamesFor(version, goos, "amd64")
+				if err != nil {
+					t.Fatal(err)
+				}
+				versionLock := lock
+				versionLock.RuntimeVersion = version
+				spec, err := release.HostRuntimeSpecFor(versionLock, goos, "amd64")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if names.Engine != spec.RuntimeName || names.Pack != spec.PackName {
+					t.Fatalf("names = %+v, release spec = %+v", names, spec)
+				}
+				assets := names.inDirectory(t.TempDir())
+				for _, path := range []string{assets.EnginePath, assets.PackPath, assets.BridgePath} {
+					writeProjectTestFile(t, path, "asset")
+				}
+				if err := assets.ValidateFiles(names); err != nil {
+					t.Fatal(err)
+				}
+				mixed := names
+				mixed.Pack = "gdspxrt2.0.0-other.exe.pck"
+				if err := assets.ValidateFiles(mixed); err == nil || !strings.Contains(err.Error(), "same version") {
+					t.Fatalf("mixed runtime versions accepted: %v", err)
+				}
+			})
+		}
+	}
+	names, err := RuntimeNamesFor("dev-test", "windows", "arm64")
+	if err != nil || names.Engine != "gdspxrtdev-test.exe" || names.Pack != "gdspxrtdev-test.pck" || names.Bridge != "gdspx-windows-arm64.dll" {
+		t.Fatalf("development names = %+v, %v", names, err)
+	}
+	for _, version := range []string{"", "../other", `a\b`} {
+		if _, err := RuntimeNamesFor(version, "linux", "amd64"); err == nil {
+			t.Fatalf("accepted version %q", version)
+		}
+	}
+	if names, err := RuntimeNamesFor("dev-test", "plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "host platform plan9/amd64 is not supported") || names != (RuntimeNames{}) {
+		t.Fatalf("unsupported platform names = %+v, %v", names, err)
+	}
+}
+
+func TestResolveInstalledRuntimeRejectsInvalidConfiguration(t *testing.T) {
+	valid := RuntimeNames{Engine: "gdspxrt1", Pack: "gdspxrt1.pck", Bridge: "gdspx-linux-amd64.so"}
+	for _, tt := range []struct {
+		name, want string
+		change     func(*RuntimeNames)
+	}{
+		{"no directories", "no runtime installation directories configured", func(*RuntimeNames) {}},
+		{"missing engine name", "invalid runtime file name", func(n *RuntimeNames) { n.Engine = "" }},
+		{"pack outside installation", "invalid runtime file name", func(n *RuntimeNames) { n.Pack = "../gdspxrt1.pck" }},
+		{"bridge path separator", "invalid runtime file name", func(n *RuntimeNames) { n.Bridge = `lib\gdspx.dll` }},
+		{"mixed version names", "must identify the same version", func(n *RuntimeNames) { n.Pack = "gdspxrt2.pck" }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			names := valid
+			tt.change(&names)
+			assets, err := ResolveInstalledRuntime(nil, names)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("ResolveInstalledRuntime = %+v, %v; want %q", assets, err, tt.want)
+			}
+			if assets.EnginePath != "" || assets.PackPath != "" || assets.BridgePath != "" || assets.Cleanup != nil {
+				t.Fatalf("invalid configuration returned runtime assets: %+v", assets)
+			}
+		})
+	}
+}
+
+func TestResolveInstalledRuntimeSelectsCompleteDirectory(t *testing.T) {
+	names := RuntimeNames{Engine: "gdspxrt1", Pack: "gdspxrt1.pck", Bridge: "gdspx-linux-amd64.so"}
+	pair := []string{names.Engine, names.Pack}
+	complete := []string{names.Engine, names.Pack, names.Bridge}
+	for _, test := range []struct {
+		name          string
+		first, second []string
+		want          int
+	}{
+		{"first complete", complete, complete, 0},
+		{"missing bridge falls through", pair, complete, 1},
+		{"split installation", pair, []string{names.Bridge}, -1},
+		{"different version", pair, []string{names.Engine, "gdspxrt2.pck", names.Bridge}, -1},
+		{"different platform", pair, []string{names.Engine, names.Pack, "gdspx-linux-arm64.so"}, -1},
+		{"pack directory", pair, []string{names.Engine, names.Bridge}, -1},
+		{"bridge symlink", pair, pair, -1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dirs := []string{t.TempDir(), t.TempDir()}
+			for i, files := range [][]string{test.first, test.second} {
+				for _, name := range files {
+					writeProjectTestFile(t, filepath.Join(dirs[i], name), "legacy asset without version metadata")
+				}
+			}
+			switch test.name {
+			case "pack directory":
+				if err := os.Mkdir(filepath.Join(dirs[1], names.Pack), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			case "bridge symlink":
+				if err := os.Symlink(filepath.Join(dirs[1], names.Engine), filepath.Join(dirs[1], names.Bridge)); err != nil {
+					t.Skip(err)
+				}
+			}
+			assets, err := ResolveInstalledRuntime(dirs, names)
+			if test.want < 0 {
+				if err == nil || assets.EnginePath != "" || assets.PackPath != "" || assets.BridgePath != "" {
+					t.Fatalf("invalid installation = %+v, %v", assets, err)
+				}
+				return
+			}
+			wantDir := dirs[test.want]
+			if err != nil || assets.EnginePath != filepath.Join(wantDir, names.Engine) || assets.PackPath != filepath.Join(wantDir, names.Pack) || assets.BridgePath != filepath.Join(wantDir, names.Bridge) {
+				t.Fatalf("installation = %+v, %v; want directory %q", assets, err, wantDir)
+			}
+			if assets.Lock.RuntimeVersion != "" || assets.Cleanup != nil {
+				t.Fatalf("legacy installation acquired manifest identity or ownership: %+v", assets)
+			}
+		})
+	}
+}
+
+func TestRuntimeAssetsValidateSelectedNamesAndSourceBridge(t *testing.T) {
+	names, err := RuntimeNamesFor("1", "linux", "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets := names.inDirectory(t.TempDir())
+	assets.BridgePath = filepath.Join(t.TempDir(), names.Bridge)
+	for _, path := range []string{assets.EnginePath, assets.PackPath, assets.BridgePath} {
+		writeProjectTestFile(t, path, "asset")
+	}
+	if err := assets.ValidateFiles(names); err != nil {
+		t.Fatalf("source bridge in a separate build directory: %v", err)
+	}
+	for _, tt := range []struct {
+		name, want string
+		change     func(*Assets)
+	}{
+		{"relative engine", "Engine path must be absolute and clean", func(a *Assets) { a.EnginePath = names.Engine }},
+		{"unclean engine", "Engine path must be absolute and clean", func(a *Assets) {
+			a.EnginePath = filepath.Dir(a.EnginePath) + string(filepath.Separator) + "." + string(filepath.Separator) + names.Engine
+		}},
+		{"wrong engine version", "does not match selected runtime", func(a *Assets) { a.EnginePath = filepath.Join(filepath.Dir(a.EnginePath), "gdspxrt2") }},
+		{"wrong pack version", "does not match selected runtime", func(a *Assets) { a.PackPath = filepath.Join(filepath.Dir(a.PackPath), "gdspxrt2.pck") }},
+		{"relative bridge", "interpreter bridge path must be absolute and clean", func(a *Assets) { a.BridgePath = names.Bridge }},
+		{"wrong bridge platform", "does not match selected runtime", func(a *Assets) { a.BridgePath = filepath.Join(filepath.Dir(a.BridgePath), "gdspx-linux-arm64.so") }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			invalid := assets
+			tt.change(&invalid)
+			if err := invalid.ValidateFiles(names); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("ValidateFiles = %v, want %q", err, tt.want)
+			}
+		})
+	}
+	names.Pack = "gdspxrt2.pck"
+	if err := assets.ValidateFiles(names); err == nil || !strings.Contains(err.Error(), "same version") {
+		t.Fatalf("mixed version names = %v", err)
+	}
+	names.Pack = "gdspxrt1.pck"
+	assets.PackPath = filepath.Join(t.TempDir(), names.Pack)
+	writeProjectTestFile(t, assets.PackPath, "pack")
+	if err := assets.ValidateFiles(names); err == nil || !strings.Contains(err.Error(), "share one directory") {
+		t.Fatalf("separate engine and pack = %v", err)
+	}
+}

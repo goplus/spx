@@ -17,6 +17,7 @@
 package command
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"flag"
@@ -28,6 +29,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func writeCommandTestFile(t *testing.T, path, content string) {
@@ -122,7 +126,7 @@ func TestRunCmdPropagatesSpecialCommandErrors(t *testing.T) {
 			t.Chdir(root)
 			projectDir := "project"
 			if name == "stopweb" {
-				cmd := &CmdTool{TargetAbsDir: root}
+				cmd := &CmdTool{TargetDir: root}
 				if err := os.Mkdir(cmd.webServerPIDPath(), 0o755); err != nil {
 					t.Fatal(err)
 				}
@@ -234,7 +238,11 @@ func TestGoBuildCommandBoundaries(t *testing.T) {
 		{"apk", "go", (*CmdTool).ExportApk, true},
 		{"ios", "go", (*CmdTool).ExportIos, true},
 	} {
-		for _, failure := range []string{"", "xgo:go", "go:mod", build.tool + ":build"} {
+		failures := []string{"", "xgo:go", "go:mod", build.tool + ":build"}
+		if build.name == "shared" {
+			failures = append(failures, "missing library", "invalid library")
+		}
+		for _, failure := range failures {
 			// Mobile cases exercise early failure, not SDK builds or packaging.
 			if build.mobileExport && failure == "" {
 				continue
@@ -244,6 +252,7 @@ func TestGoBuildCommandBoundaries(t *testing.T) {
 				name = "success"
 			}
 			t.Run(build.name+"/"+name, func(t *testing.T) {
+				libraryError := failure == "missing library" || failure == "invalid library"
 				root, err := filepath.EvalSymlinks(t.TempDir())
 				if err != nil {
 					t.Fatal(err)
@@ -286,18 +295,27 @@ fi
 				target, tags, arch := "", "fixture_tag", runtime.GOARCH
 				install := false
 				cmd := &CmdTool{
-					TargetDir:    projectRoot,
-					TargetAbsDir: projectRoot,
-					ProjectDir:   filepath.Join(projectRoot, ".generated"),
-					GoDir:        filepath.Join(projectRoot, ".generated", "go"),
-					LibPath:      filepath.Join(root, "spx-1-"+arch+".so"),
-					CmdPath:      filepath.Join(binDir, "godot"),
+					TargetDir:  projectRoot,
+					ProjectDir: filepath.Join(projectRoot, ".generated", "engine"),
+					GoDir:      filepath.Join(projectRoot, ".generated", "engine", "go"),
+					LibPath:    filepath.Join(root, "spx-1-"+arch+".so"),
+					CmdPath:    filepath.Join(binDir, "godot"),
 					Args: ExtraArgs{
 						Target:  &target,
 						Tags:    &tags,
 						Arch:    &arch,
 						Install: &install,
 					},
+				}
+				switch failure {
+				case "":
+					if build.name == "shared" {
+						cmd.Args.Arch = nil
+					}
+				case "missing library":
+					cmd.LibPath = ""
+				case "invalid library":
+					cmd.LibPath = filepath.Join(root, "bridge.so")
 				}
 				const staleMain = "package main\n// previous generation\n"
 				if build.mobileExport {
@@ -330,7 +348,14 @@ fi
 				if after, cwdErr := os.Getwd(); cwdErr != nil || after != before {
 					t.Fatalf("working directory = %q (%v), want %q", after, cwdErr, before)
 				}
-				if failure == "" {
+				if libraryError {
+					if err == nil || !strings.Contains(err.Error(), "unexpected library path format") {
+						t.Fatalf("build error = %v, want invalid library path", err)
+					}
+					if cmd.LibPath != "" {
+						t.Fatalf("failed build retained library path %q", cmd.LibPath)
+					}
+				} else if failure == "" {
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -388,7 +413,7 @@ fi
 						t.Fatalf("%s command directory = %q, want %q", tool, dir, wantDir)
 					}
 				}
-				if failure == "xgo:go" || failure == "go:mod" {
+				if failure == "xgo:go" || failure == "go:mod" || libraryError {
 					if buildCalls != 0 {
 						t.Fatalf("ran %d builds after generation failed", buildCalls)
 					}
@@ -692,8 +717,57 @@ func TestCommandRejectsUnsupportedInternalModes(t *testing.T) {
 	}
 }
 
-func TestBuildRejectsBlockedGeneratedDirectories(t *testing.T) {
-	for _, scenario := range []string{"Go directory", "generated main", "wasm output", "TinyGo output"} {
+func TestEngineCommandsUseGeneratedProjectDirectory(t *testing.T) {
+	for _, command := range []string{"editor", "rune"} {
+		t.Run(command, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			project := filepath.Join(root, "generated project")
+			if err := os.Mkdir(project, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			logPath := filepath.Join(root, "engine.log")
+			t.Setenv("SPX_TEST_ENGINE_LOG", logPath)
+			bin := installCommandTestTools(t, map[string]string{
+				"godot": `printf '%s\000' "$PWD" "$@" > "$SPX_TEST_ENGINE_LOG"`,
+			})
+			setTestCommandLine(t, "spx", command, "--path", root)
+			cmd := CmdTool{CmdPath: filepath.Join(bin, "godot")}
+			help := cmd.initializeFlags()
+			if err := cmd.parseCommandLineArgs(help); err != nil {
+				t.Fatal(err)
+			}
+			before := workingDirectory(t)
+			if err := cmd.setupPaths("generated project"); err != nil {
+				t.Fatal(err)
+			}
+			if command == "editor" {
+				err = cmd.executeEditor()
+			} else {
+				err = cmd.executeRune()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := project + "\x00--path\x00" + project + "\x00"
+			if command == "editor" {
+				want += "-e\x00"
+			}
+			if got := readTestFile(t, logPath); got != want {
+				t.Fatalf("Engine invocation = %q, want %q", got, want)
+			}
+			if *cmd.Args.Path != root {
+				t.Fatalf("Engine invocation changed source path to %q", *cmd.Args.Path)
+			}
+			assertWorkingDirectory(t, before)
+		})
+	}
+}
+
+func TestBuildRejectsBlockedProjectFiles(t *testing.T) {
+	for _, scenario := range []string{"AI module", "Go directory", "generated main", "wasm output", "TinyGo output"} {
 		t.Run(scenario, func(t *testing.T) {
 			installCommandTestTools(t, map[string]string{
 				"xgo": `printf 'package main\n' > xgo_autogen.go`,
@@ -704,6 +778,10 @@ func TestBuildRejectsBlockedGeneratedDirectories(t *testing.T) {
 			cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"), Args: ExtraArgs{Target: &target, Tags: &tags}}
 			want := ""
 			switch scenario {
+			case "AI module":
+				writeCommandTestFile(t, filepath.Join(root, builderai.DescriptionFile), "summary")
+				writeCommandTestFile(t, filepath.Join(root, "gox.mod", "keep"), "existing directory")
+				want = "failed to read gox.mod"
 			case "Go directory":
 				writeCommandTestFile(t, cmd.GoDir, "existing file")
 				want = "failed to create GoDir"
@@ -726,38 +804,201 @@ func TestBuildRejectsBlockedGeneratedDirectories(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("build error = %v, want %q", err, want)
 			}
+			if scenario == "AI module" {
+				if _, err := os.Stat(filepath.Join(root, "xgo_autogen.go")); !os.IsNotExist(err) {
+					t.Fatalf("ran XGo after module preparation failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestTinyGoBuildOptions(t *testing.T) {
+	for _, test := range []struct {
+		target, tags, wantTarget string
+	}{
+		{"", "", "esp32-coreboard-v2"},
+		{"esp32", "", "esp32-coreboard-v2"},
+		{"pico", "fixture_tag", "pico"},
+	} {
+		t.Run(test.target, func(t *testing.T) {
+			root := t.TempDir()
+			argsPath := filepath.Join(root, "tinygo-args")
+			t.Setenv("SPX_TEST_TINYGO_ARGS", argsPath)
+			installCommandTestTools(t, map[string]string{
+				"xgo":    `printf 'package main\n' > xgo_autogen.go`,
+				"go":     "",
+				"tinygo": `printf '%s\n' "$@" > "$SPX_TEST_TINYGO_ARGS"`,
+			})
+			cmd := &CmdTool{
+				TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"),
+				Args: ExtraArgs{Target: &test.target, Tags: &test.tags},
+			}
+			if test.target == "" {
+				cmd.Args.Tags = nil
+			}
+			if err := cmd.BuildTinyGoLib(); err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Split(strings.TrimSpace(readTestFile(t, argsPath)), "\n")
+			if !slices.Contains(args, "-target="+test.wantTarget) {
+				t.Fatalf("TinyGo args = %q, want target %q", args, test.wantTarget)
+			}
+			var tags []string
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "-tags=") {
+					tags = append(tags, strings.TrimPrefix(arg, "-tags="))
+				}
+			}
+			var wantTags []string
+			if test.tags != "" {
+				wantTags = []string{test.tags}
+			}
+			if !slices.Equal(tags, wantTags) {
+				t.Fatalf("TinyGo tags = %q, want %q", tags, wantTags)
+			}
 		})
 	}
 }
 
 func TestSharedBuildArchitectureSelection(t *testing.T) {
-	var supported []string
-	switch runtime.GOOS {
-	case "darwin":
-		supported = []string{"amd64", "arm64"}
-	case "linux":
-		supported = []string{"amd64", "arm", "arm64", "386"}
-	case "windows":
-		supported = []string{"amd64", "386"}
-	default:
-		supported = []string{runtime.GOARCH}
+	for _, platform := range []struct {
+		goos, hostArch string
+		supported      []string
+	}{
+		{"darwin", "arm64", []string{"amd64", "arm64"}},
+		{"windows", "amd64", []string{"amd64", "386"}},
+		{"linux", "arm64", []string{"amd64", "arm", "arm64", "386"}},
+		{"freebsd", "386", []string{"386"}},
+	} {
+		for _, arch := range append([]string{"", "all", "invalid-architecture"}, platform.supported...) {
+			t.Run(platform.goos+"/"+arch, func(t *testing.T) {
+				got, err := determineTargetArchs(platform.goos, platform.hostArch, arch)
+				if arch == "invalid-architecture" && platform.goos != "darwin" {
+					wantError := "invalid arch " + arch + ". Valid archs for " + platform.goos + ": " + strings.Join(platform.supported, ",")
+					if got != nil || err == nil || err.Error() != wantError {
+						t.Fatalf("architectures = %v, %v; want error %q", got, err, wantError)
+					}
+					return
+				}
+				want := []string{arch}
+				if arch == "" {
+					want = []string{platform.hostArch}
+				}
+				if arch == "all" || platform.goos == "darwin" {
+					want = platform.supported
+				}
+				if err != nil || !slices.Equal(got, want) {
+					t.Fatalf("architectures = %v, %v; want %v", got, err, want)
+				}
+			})
+		}
 	}
-	for _, arch := range []string{"", "all", "invalid-architecture"} {
-		t.Run(arch, func(t *testing.T) {
-			cmd := &CmdTool{ProjectDir: t.TempDir(), Args: ExtraArgs{Arch: &arch}}
-			if arch == "invalid-architecture" && runtime.GOOS != "darwin" {
-				if err := cmd.BuildDll(); err == nil || !strings.Contains(err.Error(), "invalid arch") {
-					t.Fatalf("invalid architecture error = %v", err)
+	if runtime.GOOS != "darwin" {
+		arch := "invalid-architecture"
+		cmd := &CmdTool{ProjectDir: t.TempDir(), Args: ExtraArgs{Arch: &arch}}
+		if err := cmd.BuildDll(); err == nil || !strings.Contains(err.Error(), "invalid arch") {
+			t.Fatalf("invalid architecture error = %v", err)
+		}
+	}
+}
+
+func TestSharedBuildReportsMissingHostLibrary(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS always builds both supported host architectures")
+	}
+	arch, tags := "all", ""
+	root := t.TempDir()
+	cmd := &CmdTool{
+		TargetDir: root, ProjectDir: filepath.Join(root, "project"), GoDir: filepath.Join(root, "project", "go"),
+		LibPath: filepath.Join(root, "spx-test-"+runtime.GOARCH+".so"),
+		Args:    ExtraArgs{Arch: &arch, Tags: &tags},
+	}
+	supported, err := determineTargetArchs(runtime.GOOS, runtime.GOARCH, arch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arch = ""
+	for _, candidate := range supported {
+		if candidate != runtime.GOARCH {
+			arch = candidate
+			break
+		}
+	}
+	if arch == "" {
+		t.Skip("platform has no supported cross-build architecture")
+	}
+	logPath := filepath.Join(root, "architecture.log")
+	t.Setenv("SPX_TEST_ARCH_LOG", logPath)
+	installCommandTestTools(t, map[string]string{
+		"xgo": `printf 'package main\n' > xgo_autogen.go`,
+		"go":  `if [ "$1" = build ]; then printf '%s' "$GOARCH" > "$SPX_TEST_ARCH_LOG"; fi`,
+	})
+	if err := cmd.BuildDll(); err == nil || !strings.Contains(err.Error(), "cannot find matched dylib for runtime arch "+runtime.GOARCH) {
+		t.Fatalf("cross-build error = %v, want missing host library", err)
+	}
+	if cmd.LibPath != "" || readTestFile(t, logPath) != arch {
+		t.Fatalf("cross-build retained host library %q or did not build %s", cmd.LibPath, arch)
+	}
+}
+
+func TestHideIOSFilesPreservesDirectoryBoundaries(t *testing.T) {
+	for _, scenario := range []string{"literal project path", "missing directory", "unreadable directory", "blocked destination"} {
+		t.Run(scenario, func(t *testing.T) {
+			root := t.TempDir()
+			cmd := &CmdTool{ProjectDir: filepath.Join(root, "project[one]")}
+			goDir := filepath.Join(cmd.ProjectDir, "go")
+			var warnings bytes.Buffer
+			spxlog.SetOutput(&warnings)
+			t.Cleanup(func() {
+				spxlog.SetStdoutOutput(os.Stdout)
+				spxlog.SetStderrOutput(os.Stderr)
+			})
+
+			if scenario == "missing directory" {
+				cmd.hideIOSFiles()
+				if warnings.Len() != 0 {
+					t.Fatalf("first build warned about missing Go directory: %s", warnings.String())
 				}
 				return
 			}
-			want := []string{runtime.GOARCH}
-			if arch == "all" || runtime.GOOS == "darwin" {
-				want = supported
+			if scenario == "unreadable directory" {
+				writeCommandTestFile(t, goDir, "occupied")
+				cmd.hideIOSFiles()
+				if !strings.Contains(warnings.String(), goDir) || readTestFile(t, goDir) != "occupied" {
+					t.Fatalf("directory failure did not preserve its source or report its path: %s", warnings.String())
+				}
+				return
 			}
-			got, err := cmd.determineTargetArchs()
-			if err != nil || !slices.Equal(got, want) {
-				t.Fatalf("architectures = %v, %v; want %v", got, err, want)
+
+			writeCommandTestFile(t, filepath.Join(goDir, "ios_main.go"), "iOS source")
+			writeCommandTestFile(t, filepath.Join(goDir, "ios_saved.go.txt"), "already hidden")
+			writeCommandTestFile(t, filepath.Join(goDir, "main.go"), "main source")
+			otherSource := filepath.Join(root, "projecto", "go", "ios_other.go")
+			writeCommandTestFile(t, otherSource, "other project")
+			if scenario == "blocked destination" {
+				writeCommandTestFile(t, filepath.Join(goDir, "ios_blocked.go"), "blocked source")
+				writeCommandTestFile(t, filepath.Join(goDir, "ios_blocked.go.txt", "keep"), "existing directory")
+			}
+			cmd.hideIOSFiles()
+			if readTestFile(t, filepath.Join(goDir, "ios_main.go.txt")) != "iOS source" {
+				t.Fatal("iOS source contents changed")
+			}
+			if _, err := os.Stat(filepath.Join(goDir, "ios_main.go")); !os.IsNotExist(err) {
+				t.Fatalf("iOS source was not hidden: %v", err)
+			}
+			if readTestFile(t, filepath.Join(goDir, "ios_saved.go.txt")) != "already hidden" ||
+				readTestFile(t, filepath.Join(goDir, "main.go")) != "main source" || readTestFile(t, otherSource) != "other project" {
+				t.Fatal("hiding iOS sources changed an excluded file or another project")
+			}
+			if scenario == "blocked destination" {
+				if readTestFile(t, filepath.Join(goDir, "ios_blocked.go")) != "blocked source" ||
+					readTestFile(t, filepath.Join(goDir, "ios_blocked.go.txt", "keep")) != "existing directory" ||
+					!strings.Contains(warnings.String(), "Failed to rename") {
+					t.Fatalf("rename failure did not preserve both paths and warn: %s", warnings.String())
+				}
+			} else if warnings.Len() != 0 {
+				t.Fatalf("unexpected warning: %s", warnings.String())
 			}
 		})
 	}

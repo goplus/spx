@@ -119,46 +119,72 @@ func TestLoadProjectFontsFromSourceDirectory(t *testing.T) {
 	}
 }
 
-func TestOpenBuilderResourcesUsesPackedFontsCatalog(t *testing.T) {
+func TestOpenBuilderResourcesUsesPackedFonts(t *testing.T) {
 	dir := t.TempDir()
 	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["Source"]}`)
 	writeProjectFile(t, dir, "index_pack.json", `{
 		"fontPreferences":["Packed", "default"],
-		"fonts":{"Packed":{"faces":[{"path":"packed.ttf"}]}}
+		"fonts":{
+			"Packed":{"faces":[{"path":"packed.ttf"}]},
+			"alpha":{"faces":[{"path":"alpha.ttf"}]}
+		}
 	}`)
 	writeProjectFile(t, dir, "fonts/Packed/packed.ttf", "packed-font")
+	writeProjectFile(t, dir, "fonts/alpha/alpha.ttf", "alpha-font")
 	writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
 	writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
+	writeProjectFile(t, dir, "sprites/Hero/index.json", `{}`)
 
 	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer opened.FS.Close()
-	wantFamilies := []ProjectFontFamily{{Name: "Packed", Faces: []ProjectFontFace{{Path: "fonts/Packed/packed.ttf"}}}}
+	wantFamilies := []ProjectFontFamily{
+		{Name: "alpha", Faces: []ProjectFontFace{{Path: "fonts/alpha/alpha.ttf"}}},
+		{Name: "Packed", Faces: []ProjectFontFace{{Path: "fonts/Packed/packed.ttf"}}},
+	}
 	if !reflect.DeepEqual(opened.Fonts.Families, wantFamilies) {
-		t.Fatalf("families = %#v, want packed catalog %#v", opened.Fonts.Families, wantFamilies)
+		t.Fatalf("families = %#v, want sorted packed fonts %#v", opened.Fonts.Families, wantFamilies)
 	}
 	if want := []string{"Packed", "default"}; !reflect.DeepEqual(opened.Fonts.Preferences, want) {
 		t.Fatalf("preferences = %#v, want %#v", opened.Fonts.Preferences, want)
 	}
+	if names, err := spxfs.ListDirectories(opened.FS, "sprites"); err != nil || !reflect.DeepEqual(names, []string{"Hero"}) {
+		t.Fatalf("non-font directories = %v, %v; want source directory Hero", names, err)
+	}
 }
 
-func TestOpenBuilderResourcesScansFontsWhenPackedCatalogMissing(t *testing.T) {
-	dir := t.TempDir()
-	writeProjectFile(t, dir, "index.json", `{"fontPreferences":["Source"]}`)
-	writeProjectFile(t, dir, "index_pack.json", `{"zorder":[]}`)
-	writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
-	writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
+func TestOpenBuilderResourcesScansFontsOnlyWhenPackedFontsAbsent(t *testing.T) {
+	for _, tt := range []struct {
+		name, packed string
+		wantSource   bool
+	}{
+		{name: "absent", packed: `{"zorder":[]}`, wantSource: true},
+		{name: "null", packed: `{"fonts":null,"fontPreferences":[]}`},
+		{name: "empty", packed: `{"fonts":{},"fontPreferences":[]}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, "index.json", `{"fontPreferences":["Source"]}`)
+			writeProjectFile(t, dir, "index_pack.json", tt.packed)
+			writeProjectFile(t, dir, "fonts/Source/index.json", `{"faces":[{"path":"source.ttf"}]}`)
+			writeProjectFile(t, dir, "fonts/Source/source.ttf", "source-font")
 
-	opened, err := OpenBuilderResources(localDir{base: dir}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer opened.FS.Close()
-	want := []ProjectFontFamily{{Name: "Source", Faces: []ProjectFontFace{{Path: "fonts/Source/source.ttf"}}}}
-	if !reflect.DeepEqual(opened.Fonts.Families, want) {
-		t.Fatalf("families = %#v, want source scan %#v", opened.Fonts.Families, want)
+			opened, err := OpenBuilderResources(localDir{base: dir}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer opened.FS.Close()
+			wantFamilies, wantPreferences := []ProjectFontFamily{}, []string{}
+			if tt.wantSource {
+				wantFamilies = []ProjectFontFamily{{Name: "Source", Faces: []ProjectFontFace{{Path: "fonts/Source/source.ttf"}}}}
+				wantPreferences = []string{"Source"}
+			}
+			if !reflect.DeepEqual(opened.Fonts.Families, wantFamilies) || !reflect.DeepEqual(opened.Fonts.Preferences, wantPreferences) {
+				t.Fatalf("fonts = %#v, want families %#v and preferences %#v", opened.Fonts, wantFamilies, wantPreferences)
+			}
+		})
 	}
 }
 
@@ -182,20 +208,25 @@ func TestLoadProjectFontsValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("case folded duplicate", func(t *testing.T) {
-		dir := t.TempDir()
-		writeProjectFile(t, dir, "index_pack.json", `{
-			"fonts": {
-				"Latin": {"faces":[{"path":"font.ttf"}]},
-				"latin": {"faces":[{"path":"font.ttf"}]}
+	for _, tt := range []struct{ name, first, want string }{
+		{"case folded duplicate", `{"faces":[{"path":"font.ttf"}]}`, `font family "latin" conflicts with "Latin" after ASCII case folding`},
+		{"family error before duplicate", `{"faces":[]}`, `font family "Latin" must contain exactly one face, got 0`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, "index_pack.json", `{
+				"fonts": {
+					"Latin": `+tt.first+`,
+					"latin": {"faces":[]}
+				}
+			}`)
+			writeProjectFile(t, dir, "fonts/Latin/font.ttf", "font")
+			_, err := OpenBuilderResources(localDir{base: dir}, nil)
+			if err == nil || err.Error() != tt.want {
+				t.Fatalf("error = %v, want %s", err, tt.want)
 			}
-		}`)
-		writeProjectFile(t, dir, "fonts/Latin/font.ttf", "font")
-		_, err := OpenBuilderResources(localDir{base: dir}, nil)
-		if err == nil || !strings.Contains(err.Error(), "ASCII case folding") {
-			t.Fatalf("error = %v, want case-folded duplicate error", err)
-		}
-	})
+		})
+	}
 
 	t.Run("exactly one face", func(t *testing.T) {
 		dir := t.TempDir()
@@ -231,11 +262,11 @@ func TestResolveFontPreferences(t *testing.T) {
 }
 
 func TestAssetDirFromResource(t *testing.T) {
-	if got, ok := AssetDirFromResource("assets"); !ok || got != "assets" {
-		t.Fatalf("string asset dir = %q, %v", got, ok)
+	if got := AssetDirFromResource("assets"); got != "assets" {
+		t.Fatalf("string asset dir = %q", got)
 	}
-	if got, ok := AssetDirFromResource(fakeGdDir{path: "res://assets/"}); !ok || got != "res://assets" {
-		t.Fatalf("gd asset dir = %q, %v", got, ok)
+	if got := AssetDirFromResource(fakeGdDir{path: "res://assets/"}); got != "res://assets" {
+		t.Fatalf("gd asset dir = %q", got)
 	}
 }
 
@@ -522,6 +553,7 @@ func TestOpenBuilderResources(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeProjectFile(t, dir, "index.json", `{"run":{"title":"demo"}}`)
+			writeProjectFile(t, dir, "sprites/Hero/index.json", `{}`)
 			if tt.packed {
 				writeProjectFile(t, dir, packedIndexJSON, `{}`)
 			}
@@ -536,6 +568,26 @@ func TestOpenBuilderResources(t *testing.T) {
 			defer opened.FS.Close()
 			if opened.AssetDir != "" || opened.Config.Title != "demo" || len(opened.Fonts.Families) != 0 {
 				t.Fatalf("unexpected loaded project: %+v", opened)
+			}
+			if tt.packed {
+				if got := opened.FS.(spxfs.GdDir).GetPath(); got != "" {
+					t.Fatalf("packed directory without path capability returned %q", got)
+				}
+				reader := opened.FS.(spxfs.ReadDirer)
+				entries, err := reader.ReadDir("sprites")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tt.listing {
+					if want := []spxfs.DirEntry{{Name: "Hero", IsDir: true}}; !reflect.DeepEqual(entries, want) {
+						t.Fatalf("packed directory listing = %#v, want %#v", entries, want)
+					}
+					if entries, err := reader.ReadDir("missing"); entries != nil || !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("missing directory listing = %#v, %v", entries, err)
+					}
+				} else if entries != nil {
+					t.Fatalf("directory without listing capability returned %#v", entries)
+				}
 			}
 		})
 	}
@@ -707,6 +759,8 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 	}`)
 
 	writeProjectFile(t, dir, "custom/Settings/index.json", `{"name":"custom"}`)
+	writeProjectFile(t, dir, "custom/settings.json", `{"name":"custom"}`)
+	writeProjectFile(t, dir, "custom/Settings/details.json", `{"name":"custom"}`)
 	if err := os.MkdirAll(filepath.Join(dir, "custom", "Broken", "index.json"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -743,16 +797,18 @@ func TestOpenBuilderResourcesFallsBackToSourceChildConfigWhenPackedChildMissing(
 		t.Fatalf("sound.Rate = %d, want 1", sound.Rate)
 	}
 	for _, tt := range []struct {
-		name    string
+		path    string
 		wantErr string
 	}{
-		{name: "Settings"},
-		{name: "Missing", wantErr: "does not exist"},
-		{name: "Broken", wantErr: "custom/Broken/index.json"},
+		{path: "custom/Settings/index.json"},
+		{path: "custom/settings.json"},
+		{path: "custom/Settings/details.json"},
+		{path: "custom/Missing/index.json", wantErr: "custom/Missing/index.json"},
+		{path: "custom/Broken/index.json", wantErr: "custom/Broken/index.json"},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.path, func(t *testing.T) {
 			var config struct{ Name string }
-			err := LoadJSON(&config, opened.FS, "custom/"+tt.name+"/index.json")
+			err := LoadJSON(&config, opened.FS, tt.path)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("LoadJSON() error = %v, want %q", err, tt.wantErr)
@@ -788,8 +844,10 @@ func TestOpenBuilderResourcesFromStringResourceWithPackedFallback(t *testing.T) 
 	if opened.Config.Title != "packed-demo" {
 		t.Fatalf("opened.Config.Title = %q, want packed-demo", opened.Config.Title)
 	}
-	if _, ok := opened.FS.(spxfs.GdDir); !ok {
+	if gdDir, ok := opened.FS.(spxfs.GdDir); !ok {
 		t.Fatalf("opened.FS does not implement spxfs.GdDir: %T", opened.FS)
+	} else if got, want := gdDir.GetPath(), dir+"/"; got != want {
+		t.Fatalf("packed directory path = %q, want %q", got, want)
 	}
 
 	sprite, err := LoadSpriteConfig(opened.FS, "Hero")
@@ -1000,48 +1058,13 @@ func TestResolveSystemSettings(t *testing.T) {
 	}
 }
 
-func TestFieldPtrOrAllocAndFinders(t *testing.T) {
-	type spriteLike struct{ V int }
-	type holder struct {
-		Spr *spriteLike
-		Any any
-		Val int
-	}
-
-	h := holder{}
-	name, value := FieldPtrOrAlloc(reflect.ValueOf(&h).Elem(), 0, FieldAllocConfig{
-		IsPointerSpriteType: func(typ reflect.Type) bool {
-			return typ == reflect.TypeOf((*spriteLike)(nil))
-		},
-	})
-	if name != "Spr" {
-		t.Fatalf("name = %q, want Spr", name)
-	}
-	if h.Spr == nil || value.(*spriteLike) != h.Spr {
-		t.Fatalf("expected allocated pointer, got %#v / %#v", value, h.Spr)
-	}
-
-	_, _ = FieldPtrOrAlloc(reflect.ValueOf(&h).Elem(), 1, FieldAllocConfig{
-		ResolveInterfaceSpriteType: func(fieldName string) (reflect.Type, bool) {
-			if fieldName == "Any" {
-				return reflect.TypeOf(spriteLike{}), true
-			}
-			return nil, false
-		},
-	})
-	if _, ok := h.Any.(*spriteLike); !ok {
-		t.Fatalf("expected interface allocation, got %#v", h.Any)
-	}
-
-	h.Val = 7
+func TestFindFieldPtr(t *testing.T) {
+	h := struct{ Val int }{Val: 7}
 	if got := FindFieldPtr(reflect.ValueOf(&h), "Val", 0).(*int); *got != 7 {
 		t.Fatalf("FindFieldPtr = %d, want 7", *got)
 	}
-	if got := FindFieldRefCaseInsensitive(reflect.ValueOf(&h), "val", 0).(*int); *got != 7 {
-		t.Fatalf("FindFieldRefCaseInsensitive = %d, want 7", *got)
-	}
-	if got := FindFieldRefCaseInsensitive(reflect.ValueOf(&h), "missing", 0); got != nil {
-		t.Fatalf("missing case-insensitive field = %v, want nil", got)
+	if got := FindFieldPtr(reflect.ValueOf(&h), "missing", 0); got != nil {
+		t.Fatalf("missing field = %v, want nil", got)
 	}
 }
 
@@ -1109,5 +1132,34 @@ func TestLoadProjectFontsRejectsUnreadableAndMalformedFamilies(t *testing.T) {
 	}
 	if _, err := validateFontFamilyName(""); err == nil {
 		t.Fatal("empty family accepted")
+	}
+}
+
+func TestLoadBuilderProjectRejectsInvalidIndexWithoutPartialResult(t *testing.T) {
+	for _, test := range []struct {
+		name, contents string
+		wantErr        error
+	}{
+		{name: "missing", wantErr: os.ErrNotExist},
+		{name: "malformed", contents: `{"fullscreen":true,"run":`, wantErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if test.contents != "" {
+				writeProjectFile(t, dir, "custom.json", test.contents)
+			}
+			config := &Config{Index: "custom.json", Title: "caller title"}
+			before := *config
+			loaded, err := LoadBuilderProject(localDir{base: dir}, config)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("invalid index error = %v, want %v", err, test.wantErr)
+			}
+			if !reflect.DeepEqual(loaded, LoadedBuilderProject{}) {
+				t.Fatalf("failed load published partial project: %+v", loaded)
+			}
+			if !reflect.DeepEqual(*config, before) {
+				t.Fatal("failed load mutated caller config")
+			}
+		})
 	}
 }

@@ -14,10 +14,17 @@ make generate
 ## 2. Pipeline
 
 1. Collect marked public methods from the SPX manager headers.
-2. Generate and preprocess the C interface header, then parse its AST.
+2. Prepare and preprocess the source C interface header in memory, then parse its AST.
 3. Derive names, types, static call targets, and array directions from the declarations.
 4. Render native Go, engine-facing, C++, Web JavaScript, and worker templates.
-5. Format generated files and compile the affected targets.
+5. Format and validate all generated files in a shared output plan.
+6. Commit the completed plan, then compile the affected targets as a separate validation step.
+
+The source header and native include directory are passed to `gdextensionparser.ParseGDExtensionInterface`; input and output paths share the same base. The checked-in native header is never temporary parser input. All three generators share `common.OutputPlan`. Parsing, rendering or validation failure leaves existing outputs unchanged. `Commit` publishes files in generation order; it is not an atomic transaction across files if filesystem I/O fails.
+
+Render helpers use the AST held by their `GenerationContext` and queue output in the plan. `RenderFile` derives the template name from its destination path; only `Commit` writes files.
+
+The optional `_debug_parsed_ast.json` is also published with the completed plan. The pipeline no longer writes `_temp_output.h`.
 
 The main generator lives under `internal/cmd/codegen`. Its SPX Godot module input and output live at `godot_modules/spx`, independently of the Godot checkout. Set `SPX_MODULE_SRC` to override that module location; relative values resolve from the SPX repository root.
 

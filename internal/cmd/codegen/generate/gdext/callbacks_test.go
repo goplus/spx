@@ -35,9 +35,10 @@ typedef struct {
  GDExtensionSpxCallbackReady func_on_ready;
 } SpxCallbackInfo;`)
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
 	dir := t.TempDir()
-	require.NoError(t, generation.writeCallbackDefaults(dir))
+	require.NoError(t, generation.renderCallbackDefaults(dir))
+	require.NoError(t, generation.Output.Commit())
 	output, err := os.ReadFile(filepath.Join(dir, "spx_callback_defaults.gen.h"))
 	require.NoError(t, err)
 	require.Contains(t, string(output), "SpxCallbackInfo callbacks = {};")
@@ -47,6 +48,6 @@ typedef struct {
 
 // Structural ABI validation is covered by common; this checks the generator boundary.
 func TestCallbackDefaultsPropagatesABIError(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-	require.EqualError(t, generation.writeCallbackDefaults(t.TempDir()), "generate callback defaults: missing SpxCallbackInfo")
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
+	require.EqualError(t, generation.renderCallbackDefaults(t.TempDir()), "generate callback defaults: missing SpxCallbackInfo")
 }

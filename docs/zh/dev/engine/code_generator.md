@@ -45,7 +45,7 @@ SPX_MODULE_SRC=/path/to/spx-module make generate-bindings
 ```mermaid
 graph TD
     A[godot_modules/spx/spx*mgr.h] --> B[合并 public 接口]
-    B --> C[生成 gdextension_spx_ext.h 原始头]
+    B --> C[在内存中准备原始 ABI 头]
     C --> D[预处理 include / 宏]
     D --> E[Clang 解析 AST]
     E --> F[Native Go 绑定]
@@ -56,14 +56,20 @@ graph TD
     E --> K[worker.wrap.gen.js]
 ```
 
-`internal/cmd/codegen/main.go` 中的主流程分成三步：
+`internal/cmd/codegen/main.go` 中的主流程分成四步：
 
-1. `gdext.GenerateHeader(...)`
-   - 从 Godot `spx` 模块头文件生成 `gdextension_spx_ext.h`
-2. `gdextensionparser.GenerateGDExtensionInterfaceAST(...)`
-   - 展开 include、预处理宏、生成 AST
-3. `ffi.Generate(...)`、`webffi.Generate(...)`、`gdext.Generate(...)`
-   - 基于 AST 生成 Go / JS / C++ 绑定
+1. `gdext.PrepareHeaders(...)`
+   - 从模块声明在内存中准备源 ABI 和输出 ABI，不覆盖正式头文件
+2. `gdextensionparser.ParseGDExtensionInterface(...)`
+   - 使用内存中的源 ABI 展开 include、预处理宏、生成 AST
+3. `ffi.Generator`、`webffi.Generator`、`gdext.Generator`
+   - 共享 `common.OutputPlan`，完成所有 Go / JS / C++ 绑定的渲染、格式化和校验
+4. `OutputPlan.Commit()`
+   - 发布完整输出计划；编译受影响目标是后续独立验证步骤
+
+解析、渲染或校验失败不会修改现有产物。`Commit` 按生成顺序写入文件，磁盘 I/O 失败时仍可能留下部分写入，不提供跨文件原子事务。
+
+渲染助手使用 `GenerationContext` 中的 AST，向输出计划添加产物。`RenderFile` 从输出路径取得模板名；只有 `Commit` 写入文件。
 
 ## 3. 关键目录与产物
 
@@ -89,18 +95,18 @@ graph TD
 
 ### 3.2 中间文件
 
-生成过程中常见的中间文件有两个：
+解析入口为：
 
 - `internal/gdengine/binding/native/gdextension_spx_codegen_header.h`
   - AST 解析入口头文件
-- `internal/gdengine/binding/native/_temp_output.h`
-  - include 展开后的临时头文件
 
-另外，默认还会在 `internal/cmd/codegen` 工作目录下写出：
+原始 ABI 头和 include 展开结果保留在内存中，正式头文件不再用作临时输入，也不再写出 `_temp_output.h`。
+
+另外，默认会在完整生成成功后，于 `internal/cmd/codegen` 工作目录下写出：
 
 - `_debug_parsed_ast.json`
 
-这个 JSON 很适合调试“为什么某个方法没被识别”。
+这个 JSON 可用于检查方法识别结果，与正式产物在同一输出计划中提交。生成失败时保留的是上一次成功运行的诊断结果。
 
 ### 3.3 主要输出文件
 
@@ -175,12 +181,12 @@ graph TD
 
 流程如下：
 
-1. 找到项目根目录
-2. 读取 `gdextension_spx_codegen_header.h`
+1. 从主流程接收与输出路径使用同一基准的 Native 头文件目录
+2. 读取该目录下的 `gdextension_spx_codegen_header.h`
 3. 展开本地 include
 4. 交给 `preprocessor` 做预处理
 5. 调用 `clang.ParseCString(...)` 得到 AST
-6. 按需写出 `_debug_parsed_ast.json`
+6. 将 AST 返回主流程，按需加入 `_debug_parsed_ast.json` 输出计划
 
 `generate/common/parameters.go` 在上下文创建时整理每个参数的公开名称、Go 类型、ABI 位置及数组长度对应关系。Native 和 Web 共用这份参数描述。返回参数由 header 元数据显式标记，用户声明中的 `ret_value` 不会仅因名称相同而被当作返回值。
 
@@ -196,12 +202,12 @@ graph TD
 
 - `internal/cmd/codegen/generate/common/funcs.go`
 
-`GenerateFile(...)` 会统一做几件事：
+输出计划会统一做几件事：
 
 - 渲染模板
 - 给 `.go` 文件补 license header
-- 对生成的 Go 文件执行 `go fmt`
-- 对生成的 Go 文件执行 `goimports -w`
+- 使用 `go/format` 格式化 Go 源码
+- 全部平台渲染和校验成功后统一写入
 
 所以日常维护时，应该改模板，不要直接改 `.gen.go`。
 
@@ -349,12 +355,7 @@ Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_ca
 
 ### 7.2 AST 里没有这个方法
 
-优先看：
-
-- `internal/gdengine/binding/native/_temp_output.h`
-- `internal/cmd/codegen/_debug_parsed_ast.json`
-
-如果这两个文件里都没有，问题通常出在 header 合并或预处理阶段。
+成功生成后检查 `internal/cmd/codegen/_debug_parsed_ast.json`。若解析失败，查看返回的错误以及 `PrepareHeaders` 的 Raw 内容和内存中的 include 展开结果；此时磁盘上的诊断 AST 仍可能属于上一次成功运行。
 
 ### 7.3 SPX 模块侧文件没有更新
 
@@ -364,7 +365,7 @@ Web Go 缓存由 Go 函数自动接入：在 `internal/gdengine/binding/web/*_ca
 - `$(SPX_MODULE_SRC)` 是否存在
 - `$(SPX_MODULE_SRC)/web/js/engine` 是否可写
 
-从代码逻辑看，如果 `SPX_MODULE_SRC` 目录不存在，`gdext.GenerateHeader(...)` 和 `gdext.Generate(...)` 会给出 warning 并跳过 Godot C++ 侧更新。
+输入目录和必需文件由 `validateCodegenInputs` 检查。目录不存在或文件不合法时直接返回错误，不跳过某个平台继续发布。
 
 ### 7.4 Web fast path 异常
 
@@ -412,4 +413,4 @@ SPX 当前的绑定生成系统，本质上是：
 
 - 先改源头 header 或模板，不要手改生成产物
 - 新增数组桥接时，声明指针 + 长度或固定数组大小，只输出参数标记 `SPX_OUT`
-- 出问题先看 `_temp_output.h` 和 `_debug_parsed_ast.json`
+- 出问题先看生成错误，成功运行后再检查 `_debug_parsed_ast.json`

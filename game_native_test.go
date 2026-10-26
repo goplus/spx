@@ -279,7 +279,6 @@ func TestLoadGameSpriteFailureClosesResources(t *testing.T) {
 			base := setupGameTestRuntime(t, files, game, []Sprite{&DirectLoadSprite{}}, false)
 			platform := &loadGamePlatformMgr{title: "unchanged"}
 			pkgengine.PlatformMgr = platform
-			pkgengine.ResMgr = &loadGameResMgr{}
 			setupLoadGameFlags(t)
 			base.lifecycleState.IsRunned.Store(false)
 			base.tilemapMgr = gameTilemapMgr{}
@@ -330,10 +329,6 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 			game := setupStageLoadTestGame(t, files)
 			platform := &loadGamePlatformMgr{title: "unchanged"}
 			pkgengine.PlatformMgr = platform
-			pkgengine.ResMgr = &loadGameResMgr{}
-			previousAudio := pkgengine.AudioMgr
-			pkgengine.AudioMgr = &loadGameAudioMgr{}
-			t.Cleanup(func() { pkgengine.AudioMgr = previousAudio })
 			panicMgr := &runtimePanicRecorder{IExtMgr: pkgengine.ExtMgr}
 			pkgengine.ExtMgr = panicMgr
 			setupLoadGameFlags(t)
@@ -366,41 +361,6 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 				t.Fatalf("stage loading reported a fatal error: messages=%v exits=%v", panicMgr.messages, panicMgr.exits)
 			}
 		})
-	}
-}
-
-func TestLoadSpriteFieldsReturnsFirstError(t *testing.T) {
-	game := &struct {
-		Game
-		Skipped *spriteLoadTestSprite
-		Data    any
-		First   *spriteLoadTestSprite
-		Later   *spriteLoadTestSprite
-	}{}
-	files := gameTestFS{}
-	base := setupGameTestRuntime(t, files, game, nil, false)
-	base.typs["Data"] = reflect.TypeFor[int]()
-	base.typs["First"] = reflect.TypeFor[spriteLoadTestSprite]()
-	base.typs["Later"] = reflect.TypeFor[spriteLoadTestSprite]()
-	panicMgr := &runtimePanicRecorder{}
-	pkgengine.ExtMgr = panicMgr
-	base.startLoad(&loadGameFS{gameTestFS: files})
-
-	err := base.loadSpriteFields(reflect.ValueOf(game).Elem())
-	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), `load sprite "First"`) {
-		t.Fatalf("loadSpriteFields error = %v, want named sprite error wrapping os.ErrNotExist", err)
-	}
-	if game.Skipped == nil || game.First == nil {
-		t.Fatal("sprite fields were not allocated before filtering and loading")
-	}
-	if _, ok := game.Data.(*int); !ok {
-		t.Fatalf("non-sprite interface field = %T, want *int", game.Data)
-	}
-	if game.Later != nil {
-		t.Fatal("sprite traversal continued after the first load error")
-	}
-	if len(panicMgr.messages) != 0 || len(panicMgr.exits) != 0 {
-		t.Fatalf("loading helper reported a fatal error: messages=%v exits=%v", panicMgr.messages, panicMgr.exits)
 	}
 }
 
@@ -597,5 +557,155 @@ func TestUnknownSpriteCollisionReportsRuntimeFailure(t *testing.T) {
 	info := new(Game).getSpriteCollisionInfo("missing")
 	if *info != (spriteCollisionInfo{}) || len(recorder.messages) != 1 || !strings.Contains(recorder.messages[0], "Unknown sprite missing") || !slices.Equal(recorder.exits, []int64{1}) {
 		t.Fatalf("unknown collision=%+v, messages=%v, exits=%v", info, recorder.messages, recorder.exits)
+	}
+}
+
+type preflightLoadGame struct {
+	Game
+	First, Second *preflightLoadSprite
+}
+
+type preflightLoadSprite struct {
+	SpriteImpl
+	*preflightLoadGame
+}
+
+func (*preflightLoadSprite) Main() {}
+
+func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
+	const valid = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`
+	for _, test := range []struct{ name, project, second, want string }{
+		{"late sprite", `{}`, `{"costumes":[null]}`, `load sprite "Second"`},
+		{"late stage", `{"zorder":["First",{}]}`, valid, `zorder[1]: invalid stage shape type`},
+		{"lazy sprite", `{"zorder":["First","Missing"]}`, valid, `zorder[1]: sprite "Missing" is not defined`},
+		{"tilemap", `{"tilemapPath":"broken.json"}`, valid, `load tilemap`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			files := gameTestFS{
+				"index.json":                test.project,
+				"sprites/First/index.json":  valid,
+				"sprites/Second/index.json": test.second,
+				"broken.json":               `{`,
+			}
+			game := &preflightLoadGame{}
+			base := setupGameTestRuntime(t, files, game, nil, false)
+			base.typs = map[string]reflect.Type{"First": reflect.TypeFor[preflightLoadSprite](), "Second": reflect.TypeFor[preflightLoadSprite]()}
+			first, second := &preflightLoadSprite{}, &preflightLoadSprite{}
+			game.First, game.Second = first, second
+			fonts := &loadGameResMgr{}
+			pkgengine.ResMgr = fonts
+			mgr := pkgengine.SpriteMgr.(*gameTestSpriteMgr)
+			base.fs = &loadGameFS{gameTestFS: files}
+			base.tilemapMgr.fs = base.fs
+			beforeID, beforeFS, beforeTilemap := mgr.nextID, base.fs, base.tilemapMgr
+			setupLoadGameFlags(t)
+			resource := &loadGameFS{gameTestFS: files}
+
+			err := base.loadGame(resource, base.bootstrapGeneration())
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("loadGame error = %v, want %q", err, test.want)
+			}
+			if fonts.applyCalls != 0 || mgr.nextID != beforeID {
+				t.Fatalf("preparation changed engine: fonts=%d sprite IDs=%d -> %d", fonts.applyCalls, beforeID, mgr.nextID)
+			}
+			if game.First != first || game.Second != second || len(base.sprs) != 0 || len(base.getAllShapes()) != 0 {
+				t.Fatal("preparation published sprite fields, prototypes, or shapes")
+			}
+			if base.fs != beforeFS || base.tilemapMgr != beforeTilemap || resource.closeCalls != 1 {
+				t.Fatal("preparation changed resource ownership")
+			}
+			if len(base.pendingBootstrap) != 0 || gco.LastThreadID() != 0 {
+				t.Fatal("preparation started scripts")
+			}
+		})
+	}
+}
+
+type singleReadProjectFS struct {
+	loadGameFS
+	reads map[string]int
+}
+
+func (fs *singleReadProjectFS) Open(name string) (io.ReadCloser, error) {
+	if _, exists := fs.gameTestFS[name]; exists {
+		fs.reads[name]++
+		if fs.reads[name] > 1 {
+			return nil, fmt.Errorf("project metadata %q was read more than once", name)
+		}
+	}
+	return fs.loadGameFS.Open(name)
+}
+
+func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
+	files := gameTestFS{
+		"index.json": `{
+			"tilemapPath":"tilemaps/map",
+			"map":{"width":640,"height":480},
+			"zorder":[
+				{"type":"sprite","target":"projectTestSprite","x":11},
+				{"type":"sprite","target":"Dynamic","x":22},
+				{"type":"sprite","target":"Value","x":33},
+				{"type":"sprites","target":"Items","items":[{"x":44},{"x":55}]},
+				"Lazy"
+			]
+		}`,
+		"sprites/projectTestSprite/index.json": testSpriteConfig,
+		"sprites/Dynamic/index.json":           testSpriteConfig,
+		"sprites/Value/index.json":             testSpriteConfig,
+		"sprites/Lazy/index.json":              testSpriteConfig,
+		"tilemaps/map/tilemap.json":            `{}`,
+		"tilemaps/map/decorator.json":          `{"decorators":[]}`,
+	}
+	game := &projectTestGame{}
+	base := setupGameTestRuntime(t, files, game, nil, false)
+	for _, name := range []string{"projectTestSprite", "Dynamic", "Value", "Lazy"} {
+		base.typs[name] = reflect.TypeFor[projectTestSprite]()
+	}
+	pkgengine.PlatformMgr = &loadGamePlatformMgr{}
+	pkgengine.ResMgr = &loadGameResMgr{}
+	previousAudio, previousParser := pkgengine.AudioMgr, pkgengine.TilemapparserMgr
+	pkgengine.AudioMgr = &loadGameAudioMgr{}
+	parser := &gameTestTilemapparserMgr{}
+	pkgengine.TilemapparserMgr = parser
+	t.Cleanup(func() {
+		pkgengine.AudioMgr, pkgengine.TilemapparserMgr = previousAudio, previousParser
+	})
+	setupLoadGameFlags(t)
+	resource := &singleReadProjectFS{
+		loadGameFS: loadGameFS{gameTestFS: files},
+		reads:      make(map[string]int),
+	}
+
+	if err := base.loadGame(resource, base.bootstrapGeneration()); err != nil {
+		t.Fatal(err)
+	}
+	for name := range files {
+		if resource.reads[name] != 1 {
+			t.Errorf("metadata %q read %d times, want once", name, resource.reads[name])
+		}
+	}
+	if game.projectTestSprite == nil || game.Dynamic == nil || len(game.Items) != 2 || base.sprs["Lazy"] == nil {
+		t.Fatal("project did not publish its pointer, interface, group, or lazy sprite")
+	}
+	want := []Sprite{game.projectTestSprite, game.Dynamic, &game.Value, game.Items[0], game.Items[1], base.sprs["Lazy"]}
+	positions := []float64{11, 22, 33, 44, 55, 0}
+	shapes := base.getAllShapes()
+	if len(shapes) != len(want) {
+		t.Fatalf("stage has %d shapes, want %d", len(shapes), len(want))
+	}
+	for i, sprite := range want {
+		live, ok := sprite.(*projectTestSprite)
+		if !ok || live == nil || shapes[i] != &live.SpriteImpl || live.sprite != sprite || live.g != base || live.projectTestGame != game {
+			t.Fatalf("stage sprite %d is not bound to its live game field and owner", i)
+		}
+		if live.Xpos() != positions[i] || live.runtimeState.Layer != firstSpriteLayer+i {
+			t.Errorf("sprite %d: x=%v layer=%d, want x=%v layer=%d", i, live.Xpos(), live.runtimeState.Layer, positions[i], firstSpriteLayer+i)
+		}
+	}
+	if base.TilemapName() != "map" || parser.loadedPath == "" {
+		t.Fatal("prepared tilemap was not applied")
+	}
+	if resource.closeCalls != 0 || base.fs != resource {
+		t.Fatal("successful loading did not retain ownership of the resource directory")
 	}
 }

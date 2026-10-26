@@ -29,8 +29,12 @@ import (
 )
 
 func TestMergeManagerHeaderSupportsAdditionalBaseClasses(t *testing.T) {
-
-	dir := t.TempDir()
+	root := t.TempDir()
+	dir := filepath.Join(root, "module[one]")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	neighbor := filepath.Join(root, "moduleo")
+	require.NoError(t, os.MkdirAll(neighbor, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(neighbor, "spx_other_mgr.h"), []byte("class SpxOtherMgr {\npublic:\nSPX_BIND void unrelated();\n};\n"), 0o600))
 	header := strings.TrimSpace(`
 class SpxUiMgr : public SpxManager, private SpxUiBindingListener {
 public:
@@ -43,6 +47,12 @@ public:
 	require.NoError(t, err)
 	require.Contains(t, merged, "class SpxUiMgr")
 	require.Contains(t, parseManagerHeader(merged).render(false), "GDExtensionSpxUiBindNode")
+	require.NotContains(t, merged, "SpxOtherMgr")
+
+	for _, invalid := range []string{filepath.Join(root, "missing"), filepath.Join(dir, "spx_ui_mgr.h")} {
+		_, err := mergeManagerHeader(invalid)
+		require.ErrorContains(t, err, "find SPX manager headers")
+	}
 }
 
 func TestGenerateManagerHeaderUsesExplicitExports(t *testing.T) {
@@ -73,10 +83,10 @@ public:
 }
 
 func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
-	require.Contains(t, gdJsSpxCpp, `#include "../gdextension_spx_ext.h"`)
-	require.Contains(t, gdJsSpxCpp, `#include "../spx_engine.h"`)
-	require.Contains(t, gdJsSpxCpp, `#include "godot_js_spx_util.h"`)
-	require.NotContains(t, gdJsSpxCpp, `#include "modules/spx/`)
+	require.Contains(t, webTemplate, `#include "../gdextension_spx_ext.h"`)
+	require.Contains(t, webTemplate, `#include "../spx_engine.h"`)
+	require.Contains(t, webTemplate, `#include "godot_js_spx_util.h"`)
+	require.NotContains(t, webTemplate, `#include "modules/spx/`)
 }
 
 func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
@@ -91,8 +101,9 @@ func TestGodotJsTemplateValidatesAndBindsGdStrings(t *testing.T) {
 		}},
 	}}}}
 
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
-	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderCPP(outputPath, webTemplate))
+	require.NoError(t, generation.Output.Commit())
 	generated, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	body := string(generated)
@@ -116,8 +127,9 @@ func TestGodotJsTemplateValidatesAndBindsGdArrays(t *testing.T) {
 		}},
 	}}}}
 
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
-	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderCPP(outputPath, webTemplate))
+	require.NoError(t, generation.Output.Commit())
 	generated, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	body := string(generated)
@@ -159,15 +171,16 @@ func TestArrayTransformUsesOrdinaryGdArraySignature(t *testing.T) {
 	require.Contains(t, header.render(false), "typedef void (*GDExtensionSpxExampleExpandValues)(GdArray input, GdArray *ret_value);")
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
-	for _, tmpl := range []string{gdSpxExtCpp, gdJsSpxCpp} {
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	for _, tmpl := range []string{extensionTemplate, webTemplate} {
 		path := filepath.Join(t.TempDir(), "wrapper.cpp")
-		require.NoError(t, generation.writeCPP(path, tmpl))
+		require.NoError(t, generation.renderCPP(path, tmpl))
+		require.NoError(t, generation.Output.Commit())
 		output, err := os.ReadFile(path)
 		require.NoError(t, err)
 		require.Contains(t, string(output), "exampleMgr->expand_values(")
 		require.NotContains(t, string(output), "SpxBaseMgr::create_array")
-		if tmpl == gdJsSpxCpp {
+		if tmpl == webTemplate {
 			require.Contains(t, string(output), "gdspx_validate_array_wrapper(input)")
 			require.Contains(t, string(output), "gdspx_bind_array_wrapper(ret_val)")
 			require.Contains(t, string(output), "gdspx_release_array_info(result)")
@@ -182,9 +195,7 @@ func TestArrayBridgesKeepDistinctBufferOwnership(t *testing.T) {
  SPX_BIND GdArray read_positions(GdArray objects);
  };`)
 	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
-	specs := generation.ListArrayBridges()
-	require.Len(t, specs, 2)
-	require.Equal(t, "GDExtensionSpxExampleReadBytes", specs[0].FunctionName)
+	require.Len(t, header.metadata.ArrayBridges, 2)
 	input, _ := generation.ArrayBridge("GDExtensionSpxExampleUpdateValues")
 	require.Len(t, input.Buffers, 1)
 	require.False(t, input.Buffers[0].Writable())
@@ -224,10 +235,11 @@ func TestFixedArrayOutputTypesAndPointerABI(t *testing.T) {
 			}
 			ast, err := clang.ParseCString(header.render(true))
 			require.NoError(t, err)
-			generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
-			for _, tmpl := range []string{gdSpxExtCpp, gdJsSpxCpp} {
+			generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+			for _, tmpl := range []string{extensionTemplate, webTemplate} {
 				path := filepath.Join(t.TempDir(), "wrapper.cpp")
-				require.NoError(t, generation.writeCPP(path, tmpl))
+				require.NoError(t, generation.renderCPP(path, tmpl))
+				require.NoError(t, generation.Output.Commit())
 				output, err := os.ReadFile(path)
 				require.NoError(t, err)
 				require.Contains(t, string(output), "exampleMgr->write_values(out_data);")
@@ -279,14 +291,15 @@ func TestHeaderRenderingDoesNotChangeMetadata(t *testing.T) {
  SPX_BIND void batch_retrieve_positions(const GdObj *objs, int count, float *out, int out_len);
  };`
 	header := parseManagerHeader(input)
-	before := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
+	const functionName = "GDExtensionSpxSpriteBatchRetrievePositions"
+	before, _ := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata).ArrayBridge(functionName)
 	standard, raw := header.render(false), header.render(true)
 	require.Equal(t, standard, header.render(false))
 	require.Equal(t, raw, header.render(true))
 	require.Contains(t, raw, "typedef GdBool (*GDExtensionSpxSpriteDestroySprite)(GdObj obj);")
 	require.Contains(t, standard, "typedef void (*GDExtensionSpxSpriteDestroySprite)(GdObj obj, GdBool *ret_value);")
-	after := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
-	require.Equal(t, before.ListArrayBridges(), after.ListArrayBridges())
+	after, _ := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata).ArrayBridge(functionName)
+	require.Equal(t, before, after)
 }
 
 func TestArrayBridgeTypeMappings(t *testing.T) {
@@ -347,10 +360,11 @@ func TestMixedFixedAndDynamicArraysPreservePointerABI(t *testing.T) {
 	require.Contains(t, header.render(true), "typedef void (*GDExtensionSpxExampleCollect)(const GdObj *objects, const float *values, int count, GdObj *selected, uint8_t *flags, int flags_len);")
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
-	for _, tmpl := range []string{gdSpxExtCpp, gdJsSpxCpp} {
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	for _, tmpl := range []string{extensionTemplate, webTemplate} {
 		path := filepath.Join(t.TempDir(), "wrapper.cpp")
-		require.NoError(t, generation.writeCPP(path, tmpl))
+		require.NoError(t, generation.renderCPP(path, tmpl))
+		require.NoError(t, generation.Output.Commit())
 		output, err := os.ReadFile(path)
 		require.NoError(t, err)
 		require.Contains(t, string(output), "exampleMgr->collect(objects, values, count, selected, flags, flags_len);")
@@ -377,6 +391,22 @@ func TestReturnParametersHaveExplicitIdentity(t *testing.T) {
 		require.False(t, context.HasEffectiveReturn(&functions[1]))
 		require.Equal(t, "Read(ret_value int64) int64 ", context.ManagerInterfaceSignature(&functions[2]))
 	}
+
+	for _, test := range []struct {
+		params, want string
+	}{
+		{"GdInt value", "ret_value"},
+		{"GdInt ret_value", "ret_value_2"},
+		{"GdInt ret_value, GdInt ret_value_2, GdInt ret_value_3", "ret_value_4"},
+		{"GdInt ret_value, GdInt ret_value_3", "ret_value_2"},
+		{"GdInt ret_value_2, GdInt ret_value_extra, GdInt _ret_value", "ret_value"},
+	} {
+		t.Run(test.params, func(t *testing.T) {
+			header := parseManagerHeader("class SpxExampleMgr {\n SPX_BIND GdInt read(" + test.params + ");\n};")
+			require.Equal(t, test.want, header.metadata.ReturnParameters["GDExtensionSpxExampleRead"].Name)
+			require.Contains(t, header.render(false), test.params+", GdInt *"+test.want)
+		})
+	}
 }
 
 func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
@@ -385,11 +415,12 @@ func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
  };`)
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
 	function := ast.CollectGDExtensionInterfaceFunctions()[0]
 	require.Equal(t, "Collect(label string, mode int32, objects []int64, out []float32, ret_value *[3]float32)", generation.ManagerInterfaceSignature(&function))
 	path := filepath.Join(t.TempDir(), "wrapper.cpp")
-	require.NoError(t, generation.writeCPP(path, gdJsSpxCpp))
+	require.NoError(t, generation.renderCPP(path, webTemplate))
+	require.NoError(t, generation.Output.Commit())
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Contains(t, string(output), "int mode, const GdObj *objects, int count, float *out, int out_len, float *ret_value")
@@ -423,9 +454,10 @@ func TestOutputOnlyArraysPreserveDirectionsAndReturnABI(t *testing.T) {
 	}
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
 	path := filepath.Join(t.TempDir(), "wrapper.cpp")
-	require.NoError(t, generation.writeCPP(path, gdJsSpxCpp))
+	require.NoError(t, generation.renderCPP(path, webTemplate))
+	require.NoError(t, generation.Output.Commit())
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
 	source := string(output)
@@ -509,12 +541,13 @@ public:
 };`)
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
 	for _, file := range []struct{ name, content string }{
-		{"native.cpp", gdSpxExtCpp}, {"web.cpp", gdJsSpxCpp},
+		{"native.cpp", extensionTemplate}, {"web.cpp", webTemplate},
 	} {
 		path := filepath.Join(t.TempDir(), file.name)
-		require.NoError(t, generation.writeCPP(path, file.content))
+		require.NoError(t, generation.renderCPP(path, file.content))
+		require.NoError(t, generation.Output.Commit())
 		output, err := os.ReadFile(path)
 		require.NoError(t, err)
 		body := string(output)
@@ -554,8 +587,8 @@ func TestNativeStringReleaseIsABuiltinNotAManagerMethod(t *testing.T) {
 	for _, fn := range ast.CollectGDExtensionInterfaceFunctions() {
 		require.NotContains(t, fn.Name, "FreeStr")
 	}
-	require.Contains(t, gdSpxExtCpp, "SpxAbi::free_return_cstr(value);")
-	require.Contains(t, gdSpxExtCpp, "REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string)")
+	require.Contains(t, extensionTemplate, "SpxAbi::free_return_cstr(value);")
+	require.Contains(t, extensionTemplate, "REGISTER_SPX_INTERFACE_FUNC(spx_global_free_string)")
 }
 
 func TestWebScalarValuesPreserveNativeSignatureAndOutputPointers(t *testing.T) {
@@ -565,9 +598,10 @@ func TestWebScalarValuesPreserveNativeSignatureAndOutputPointers(t *testing.T) {
 	require.Contains(t, header.render(false), "(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count, float *out, GdBool *ret_value)")
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, header.metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
 	outputPath := filepath.Join(t.TempDir(), "godot_js_spx.cpp")
-	require.NoError(t, generation.writeCPP(outputPath, gdJsSpxCpp))
+	require.NoError(t, generation.renderCPP(outputPath, webTemplate))
+	require.NoError(t, generation.Output.Commit())
 	generated, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	body := string(generated)

@@ -676,6 +676,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
             "Test Go Web interpreter",
             "Test Web ABI memory ownership",
             "Test CI tooling",
+            "Test binding generator",
             "Test CI contracts",
             "Check runtime fingerprints",
             "Test Go modules",
@@ -688,6 +689,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
             ("web-process", "web-process-tests", "Test Go Web process fallbacks"),
             ("web-interpreter", "web-interpreter-tests", "Test Go Web interpreter"),
             ("tools", "tool-tests", "Test CI tooling"),
+            ("codegen", "codegen-tests", "Test binding generator"),
             ("native", "go-tests", "Test Go modules"),
         )
         for suite, step_id, name in suites:
@@ -708,7 +710,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
         codecov = blocks["Upload coverage to Codecov"]
         output_steps = re.findall(r"\$\{\{\s*steps\.([a-z-]+)\.outputs\.coverage\s*\}\}", codecov)
         self.assertEqual(output_steps, [
-            "go-tests", "web-tests", "web-process-tests", "web-interpreter-tests", "tool-tests",
+            "go-tests", "web-tests", "web-process-tests", "web-interpreter-tests", "tool-tests", "codegen-tests",
         ])
         self.assertEqual(steps.count("uses: codecov/codecov-action@v7"), 1)
         self.assertIn("slug: goplus/spx", codecov)
@@ -788,6 +790,7 @@ class GoTestScriptTest(unittest.TestCase):
         self.coverage_script.write_text(GO_COVERAGE_SCRIPT_PATH.read_text(encoding="utf-8"), encoding="utf-8")
         self.output = self.root / "github-output"
         (self.root / "cmd" / "ispx").mkdir(parents=True)
+        (self.root / "internal" / "cmd" / "codegen").mkdir(parents=True)
         self.log = self.root / "go-calls.jsonl"
         self.bin = Path(workspace.name) / "bin"
         self.bin.mkdir()
@@ -917,6 +920,9 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 (".", covered("coverage-driverbundle.out", "./.github/scripts/driverbundle", verbose=True)),
                 *[(".", covered(f"coverage-{name}.out", f".github/scripts/runtime/{name}.go",
                     f".github/scripts/runtime/{name}_test.go", verbose=True)) for name in ("manifest", "resolution", "version")],
+            ],
+            "codegen": [
+                ("internal/cmd/codegen", covered("coverage.out", "-coverpkg=./...", "./...")),
             ],
             "native": [
                 (".", ["list", "./..."]),

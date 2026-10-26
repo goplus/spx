@@ -21,7 +21,6 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -36,50 +35,71 @@ const WebRelDir = "../../gdengine/binding/web"
 
 var (
 	//go:embed callbacks.go.tmpl
-	callbacksFileText string
+	callbacksTemplate string
 
 	//go:embed ffi.go.tmpl
-	ffiFileText string
+	ffiTemplate string
 
 	//go:embed manager_web.go.tmpl
-	managerWebText string
+	managerTemplate string
 
 	//go:embed gdspx.js.tmpl
-	jsEngineJsFileText string
+	engineTemplate string
 
 	//go:embed worker.js.tmpl
-	workerWrapJsFileText string
+	workerTemplate string
 )
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
 	*common.GenerationContext
-	caches map[string]cacheFunc
+	Output *common.OutputPlan
 }
 
 func (g *Generator) Generate(codegenDir, spxModulePath string) error {
-	ast := g.AST()
-	generators := []struct {
-		name string
-		fn   func() error
+	steps := []struct {
+		name   string
+		render func(string) error
+		dir    string
 	}{
-		{"array ABI constants", func() error { return writeGoArrays(codegenDir) }},
-		{"JavaScript array ABI constants", func() error { return writeJSArrays(spxModulePath) }},
-		{"callback Go source", func() error { return writeCallbacks(codegenDir, ast) }},
-		{"GDExtension interface", func() error { return writeFFI(codegenDir, ast) }},
-		{"manager wrapper", func() error { return g.writeManager(codegenDir) }},
-		{"JavaScript engine bridge", func() error { return g.writeEngineJS(spxModulePath) }},
-		{"Web worker wrapper", func() error { return writeWorker(codegenDir) }},
+		{"array ABI constants", g.renderGoArrays, codegenDir},
+		{"JavaScript array ABI constants", g.renderJSArrays, spxModulePath},
+		{"callback Go source", g.renderCallbacks, codegenDir},
+		{"GDExtension interface", g.renderFFI, codegenDir},
+		{"manager wrapper", g.renderManager, codegenDir},
+		{"JavaScript engine bridge", g.renderEngineJS, spxModulePath},
+		{"Web worker wrapper", g.renderWorker, codegenDir},
 	}
-	for _, generator := range generators {
-		if err := generator.fn(); err != nil {
-			return fmt.Errorf("generate %s: %w", generator.name, err)
+	for _, step := range steps {
+		if err := step.render(step.dir); err != nil {
+			return fmt.Errorf("generate %s: %w", step.name, err)
 		}
 	}
 	return nil
 }
 
-func (g *Generator) writeManager(codegenDir string) error {
+func (g *Generator) renderCallbacks(codegenDir string) error {
+	funcs := template.FuncMap{
+		"add":                   common.Add,
+		"trimPrefix":            strings.TrimPrefix,
+		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
+	}
+
+	return g.Output.RenderFile(funcs, callbacksTemplate, g.AST(),
+		filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
+}
+
+func (g *Generator) renderFFI(codegenDir string) error {
+	funcs := template.FuncMap{
+		"trimPrefix":          strings.TrimPrefix,
+		"loadProcAddressName": common.LoadProcAddressName,
+	}
+
+	return g.Output.RenderFile(funcs, ffiTemplate, g.AST(),
+		filepath.Join(codegenDir, WebRelDir, "ffi.gen.go"))
+}
+
+func (g *Generator) renderManager(codegenDir string) error {
 	caches, err := scanCaches(filepath.Join(codegenDir, WebRelDir))
 	if err != nil {
 		return err
@@ -95,20 +115,20 @@ func (g *Generator) writeManager(codegenDir string) error {
 			return fmt.Errorf("cache function has no matching API: %s", name)
 		}
 	}
-	renderer := *g
-	renderer.caches = caches
 	funcs := template.FuncMap{
 		"camelCase":        strcase.ToCamel,
 		"isManagerMethod":  g.IsManagerMethod,
 		"managerSignature": g.ManagerMethodSignature,
-		"managerBody":      renderer.managerBody,
+		"managerBody": func(function *clang.TypedefFunction) string {
+			return g.cachedManagerBody(function, caches)
+		},
 	}
 
-	return common.GenerateFile(funcs, "manager_web.gen.go", managerWebText+common.ManagerTemplate, g.ManagerData(),
+	return g.Output.RenderFile(funcs, managerTemplate+common.ManagerTemplate, g.ManagerData(),
 		filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_web.gen.go"))
 }
 
-func (g *Generator) writeEngineJS(spxModulePath string) error {
+func (g *Generator) renderEngineJS(spxModulePath string) error {
 	funcs := template.FuncMap{
 		"sub":                common.Sub,
 		"jsArgs":             g.jsArgs,
@@ -122,42 +142,18 @@ func (g *Generator) writeEngineJS(spxModulePath string) error {
 		"loadProcAddressName": common.LoadProcAddressName,
 	}
 
-	output, err := common.RenderTemplate(funcs, "gdspx.js", jsEngineJsFileText, g.AST())
+	output, err := common.RenderTemplate(funcs, "gdspx.js", engineTemplate, g.AST())
 	if err != nil {
 		return err
 	}
 	output = trimTrailingWhitespace(output)
 	dstPath := filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js")
-	if err := os.MkdirAll(filepath.Dir(dstPath), os.ModePerm); err != nil {
-		return err
-	}
-	return common.WriteGeneratedFile(dstPath, output, 0o666)
+	return g.Output.AddFile(dstPath, output)
 }
 
-func writeCallbacks(codegenDir string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"add":                   common.Add,
-		"trimPrefix":            strings.TrimPrefix,
-		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
-	}
-
-	return common.GenerateFile(funcs, "callbacks.gen.go", callbacksFileText, ast,
-		filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
-}
-
-func writeWorker(codegenDir string) error {
-	return common.GenerateFile(nil, "worker.wrap.gen.js", workerWrapJsFileText, nil,
+func (g *Generator) renderWorker(codegenDir string) error {
+	return g.Output.RenderFile(nil, workerTemplate, nil,
 		filepath.Join(codegenDir, "../../../cmd/spx/template/platform/webworker/worker.wrap.gen.js"))
-}
-
-func writeFFI(codegenDir string, ast clang.CHeaderFileAST) error {
-	funcs := template.FuncMap{
-		"trimPrefix":          strings.TrimPrefix,
-		"loadProcAddressName": common.LoadProcAddressName,
-	}
-
-	return common.GenerateFile(funcs, "ffi.gen.go", ffiFileText, ast,
-		filepath.Join(codegenDir, WebRelDir, "ffi.gen.go"))
 }
 
 func trimTrailingWhitespace(src []byte) []byte {

@@ -127,3 +127,129 @@ func TestDirEntriesFromFS(t *testing.T) {
 		}
 	}
 }
+
+type verificationTestDir struct {
+	Dir
+	verify func(string) error
+}
+
+func (d verificationTestDir) VerifyFile(name string) error { return d.verify(name) }
+
+type openFileTestDir struct {
+	Dir
+	open func(string) (io.ReadCloser, error)
+}
+
+func (d openFileTestDir) Open(name string) (io.ReadCloser, error) { return d.open(name) }
+
+type closeFileTestReader struct {
+	io.Reader
+	close func() error
+}
+
+func (r closeFileTestReader) Close() error { return r.close() }
+
+func TestVerifyFileUsesCapability(t *testing.T) {
+	wantErr := errors.New("verification failed")
+	dir := verificationTestDir{verify: func(name string) error {
+		if name != "font.ttf" {
+			t.Fatalf("verification path = %q", name)
+		}
+		return wantErr
+	}}
+	// The embedded Dir is nil: a failed capability must not fall back to Open.
+	if err := VerifyFile(dir, "font.ttf"); err != wantErr {
+		t.Fatalf("verification error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestVerifyFileOpenAndCloseErrors(t *testing.T) {
+	wantErr := errors.New("resource failure")
+	for _, operation := range []string{"success", "open", "close"} {
+		t.Run(operation, func(t *testing.T) {
+			closes := 0
+			dir := openFileTestDir{open: func(name string) (io.ReadCloser, error) {
+				if name != "font.ttf" {
+					t.Fatalf("open path = %q", name)
+				}
+				if operation == "open" {
+					return nil, wantErr
+				}
+				return closeFileTestReader{close: func() error {
+					closes++
+					if operation == "close" {
+						return wantErr
+					}
+					return nil
+				}}, nil
+			}}
+			wantCloses := 1
+			if operation == "open" {
+				wantCloses = 0
+			}
+			err := VerifyFile(dir, "font.ttf")
+			if operation == "success" && err != nil || operation != "success" && err != wantErr {
+				t.Fatalf("verification error = %v for %s", err, operation)
+			}
+			if closes != wantCloses {
+				t.Fatalf("file closes = %d, want %d", closes, wantCloses)
+			}
+		})
+	}
+}
+
+type directoryListTestDir struct {
+	Dir
+	ReadDirer
+	list func(string) ([]string, error)
+}
+
+func (d directoryListTestDir) ListDirectories(name string) ([]string, error) {
+	return d.list(name)
+}
+
+type readDirTestDir struct {
+	Dir
+	read func(string) ([]DirEntry, error)
+}
+
+func (d readDirTestDir) ReadDir(name string) ([]DirEntry, error) { return d.read(name) }
+
+func TestListDirectoriesUsesCapability(t *testing.T) {
+	wantErr := errors.New("listing failed")
+	dir := directoryListTestDir{list: func(name string) ([]string, error) {
+		if name != "fonts" {
+			t.Fatalf("listing path = %q", name)
+		}
+		return []string{"first"}, wantErr
+	}}
+	names, err := ListDirectories(dir, "fonts")
+	if !reflect.DeepEqual(names, []string{"first"}) || err != wantErr {
+		t.Fatalf("directory capability = %v, %v", names, err)
+	}
+}
+
+func TestListDirectoriesReadDirFallback(t *testing.T) {
+	if names, err := ListDirectories(&schemaTestDir{}, "fonts"); names != nil || err != nil {
+		t.Fatalf("directory without listing capability = %v, %v", names, err)
+	}
+	wantErr := errors.New("read directory failed")
+	for _, readErr := range []error{nil, wantErr} {
+		dir := readDirTestDir{read: func(name string) ([]DirEntry, error) {
+			if name != "fonts" {
+				t.Fatalf("ReadDir path = %q", name)
+			}
+			return []DirEntry{{Name: "Zulu", IsDir: true}, {Name: "file"}, {Name: "alpha", IsDir: true}}, readErr
+		}}
+		names, err := ListDirectories(dir, "fonts")
+		if err != readErr {
+			t.Fatalf("ReadDir error = %v, want %v", err, readErr)
+		}
+		if readErr == nil && !reflect.DeepEqual(names, []string{"Zulu", "alpha"}) {
+			t.Fatalf("directory filtering changed order: %v", names)
+		}
+		if readErr != nil && names != nil {
+			t.Fatalf("failed listing returned partial names: %v", names)
+		}
+	}
+}

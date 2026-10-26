@@ -28,6 +28,7 @@ import (
 	"testing/synctest"
 
 	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/launchpack"
 	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
@@ -158,21 +159,32 @@ func TestBrowserOpenCommands(t *testing.T) {
 	}
 }
 
-func TestSetupInterpretedPathsKeepsWorkingDirectory(t *testing.T) {
+func TestPrepareInterpretedCommandOnlyResolvesPaths(t *testing.T) {
 	before := workingDirectory(t)
 	projectDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(projectDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	pathArg := projectDir
 	cmd := CmdTool{Args: ExtraArgs{Path: &pathArg}}
 
-	if err := cmd.setupInterpretedPaths("project"); err != nil {
+	spec, ok := findCommand("run")
+	if !ok {
+		t.Fatal("run command is not registered")
+	}
+	if err := cmd.prepareCommand(spec, "unused", "project"); err != nil {
 		t.Fatal(err)
 	}
 	assertWorkingDirectory(t, before)
-	if cmd.TargetAbsDir != projectDir || cmd.TargetDir != projectDir {
-		t.Fatalf("project root = (%q, %q), want %q", cmd.TargetAbsDir, cmd.TargetDir, projectDir)
+	if cmd.TargetDir != resolved {
+		t.Fatalf("project root = %q, want %q", cmd.TargetDir, resolved)
 	}
-	if cmd.ProjectDir != filepath.Join(projectDir, "project") {
+	if cmd.ProjectDir != filepath.Join(resolved, "project") {
 		t.Fatalf("Engine project dir = %q", cmd.ProjectDir)
+	}
+	if entries, err := os.ReadDir(projectDir); err != nil || len(entries) != 0 {
+		t.Fatalf("interpreted setup created project files: %v, %v", entries, err)
 	}
 }
 
@@ -280,7 +292,7 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 	}
 
 	cmd := CmdTool{
-		TargetAbsDir: projectDir, ProjectDir: generatedDir, RuntimeTempDir: sessionDir,
+		TargetDir: projectDir, ProjectDir: generatedDir, RuntimeTempDir: sessionDir,
 		RuntimeCmdPath: runtimePath, LibPath: libPath,
 	}
 	before := workingDirectory(t)
@@ -331,7 +343,7 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 
 	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
 	writeTestRuntimeExecutable(t, filepath.Join(goBinPath, runtimeName), logPath)
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("runtime pack"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(goBinPath, "gdspxrt"+version+".pck"), []byte("runtime pack"), 0o644); err != nil {
 		t.Fatalf("write runtime pack: %v", err)
 	}
 
@@ -343,7 +355,7 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 	cmd := CmdTool{
 		GoBinPath:      goBinPath,
 		RuntimeTempDir: runtimeTempDir,
-		TargetAbsDir:   projectDir,
+		TargetDir:      projectDir,
 		Version:        version,
 	}
 	cmd.BinPostfix = executableSuffix(runtime.GOOS)
@@ -422,7 +434,7 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 	runtimeName := "gdspxrt" + version + executableSuffix(runtime.GOOS)
 	runtimePath := filepath.Join(goBinPath, runtimeName)
 	writeCommandTestFile(t, runtimePath, "not an executable")
-	writeCommandTestFile(t, filepath.Join(goBinPath, runtimePackFileName(runtimeName)), "runtime pack")
+	writeCommandTestFile(t, filepath.Join(goBinPath, "gdspxrt"+version+".pck"), "runtime pack")
 	libPath := filepath.Join(goBinPath, libraryFileName(envName, runtime.GOOS, runtime.GOARCH))
 	if err := os.WriteFile(libPath, []byte("bridge"), 0o755); err != nil {
 		t.Fatal(err)
@@ -438,7 +450,7 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 			wantErr: "native Engine failed",
 			run: func(sessionDir string) error {
 				cmd := CmdTool{
-					TargetAbsDir: projectDir, RuntimeTempDir: sessionDir,
+					TargetDir: projectDir, RuntimeTempDir: sessionDir,
 					RuntimeCmdPath: runtimePath, LibPath: libPath,
 				}
 				return cmd.RunPackMode()
@@ -449,7 +461,7 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 			wantErr: "interpreted Engine failed",
 			run: func(sessionDir string) error {
 				cmd := CmdTool{
-					TargetAbsDir: projectDir, RuntimeTempDir: sessionDir,
+					TargetDir: projectDir, RuntimeTempDir: sessionDir,
 					GoBinPath: goBinPath, Version: version, BinPostfix: executableSuffix(runtime.GOOS),
 				}
 				return cmd.RunInterpreted()
@@ -470,6 +482,16 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 }
 
 func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailable(t *testing.T) {
+	// Export targets must not select a foreign Engine or bridge for a local run.
+	targetOS, targetArch := "windows", "arm64"
+	if runtime.GOOS == targetOS {
+		targetOS = "linux"
+	}
+	if runtime.GOARCH == targetArch {
+		targetArch = "amd64"
+	}
+	t.Setenv("GOOS", targetOS)
+	t.Setenv("GOARCH", targetArch)
 	goBinPath := t.TempDir()
 	version := "9.9.9-test"
 	runtimeName := "gdspxrt" + version
@@ -480,7 +502,8 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	if err := os.WriteFile(runtimePathWant, []byte("external runtime"), 0o755); err != nil {
 		t.Fatalf("write external runtime: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(goBinPath, runtimePackFileName(runtimeName)), []byte("external pack"), 0o644); err != nil {
+	packPathWant := filepath.Join(goBinPath, "gdspxrt"+version+".pck")
+	if err := os.WriteFile(packPathWant, []byte("external pack"), 0o644); err != nil {
 		t.Fatalf("write external runtime pack: %v", err)
 	}
 	libName := libraryFileName(envName, runtime.GOOS, runtime.GOARCH)
@@ -490,19 +513,52 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	}
 
 	cmd := CmdTool{
-		GoBinPath: goBinPath,
-		Version:   version,
+		GoBinPath:  goBinPath,
+		Version:    version,
+		BinPostfix: executableSuffix(targetOS),
 	}
 
-	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
+	assets, err := cmd.resolveInterpretedRuntimeAssets()
 	if err != nil {
 		t.Fatalf("resolveInterpretedRuntimeAssets returned error: %v", err)
 	}
-	if runtimePath != runtimePathWant {
-		t.Fatalf("runtime path = %s, want %s", runtimePath, runtimePathWant)
+	if assets.EnginePath != runtimePathWant {
+		t.Fatalf("runtime path = %s, want %s", assets.EnginePath, runtimePathWant)
 	}
-	if libPath != libPathWant {
-		t.Fatalf("shared library path = %s, want %s", libPath, libPathWant)
+	if assets.PackPath != packPathWant {
+		t.Fatalf("runtime pack path = %s, want %s", assets.PackPath, packPathWant)
+	}
+	if assets.BridgePath != libPathWant {
+		t.Fatalf("shared library path = %s, want %s", assets.BridgePath, libPathWant)
+	}
+}
+
+func TestRuntimeSearchDirectoriesPreserveOrderAndDeduplicate(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executableDir := filepath.Dir(executable)
+	t.Chdir(t.TempDir())
+	root := workingDirectory(t)
+	for _, test := range []struct {
+		name, bin string
+		want      []string
+	}{
+		{"unconfigured bin", "", []string{executableDir}},
+		{"duplicate executable directory", executableDir + string(filepath.Separator) + ".", []string{executableDir}},
+		{"relative bin first", "runtime", []string{filepath.Join(root, "runtime"), executableDir}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := CmdTool{GoBinPath: test.bin}
+			if got := cmd.runtimeSearchDirs(); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("runtime search directories = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 
@@ -519,7 +575,7 @@ func mustWriteAssetIndex(t *testing.T, projectDir string) {
 
 func TestStopWebIgnoresInvalidPIDFile(t *testing.T) {
 	targetDir := t.TempDir()
-	cmd := CmdTool{TargetDir: targetDir, TargetAbsDir: targetDir}
+	cmd := CmdTool{TargetDir: targetDir}
 	pidFile := filepath.Join(targetDir, ".gdspx_web_server.pid")
 	if err := os.WriteFile(pidFile, []byte("invalid"), 0644); err != nil {
 		t.Fatalf("write pid file: %v", err)
@@ -538,7 +594,7 @@ func TestWebServerPIDPathUsesAbsoluteTargetDir(t *testing.T) {
 	otherDir := t.TempDir()
 	t.Chdir(otherDir)
 
-	cmd := CmdTool{TargetDir: ".", TargetAbsDir: targetDir}
+	cmd := CmdTool{TargetDir: targetDir}
 	got := cmd.webServerPIDPath()
 	want := filepath.Join(targetDir, ".gdspx_web_server.pid")
 	if got != want {
@@ -657,10 +713,10 @@ func TestInterpretedRootsResolveDefaultsAndRelativePaths(t *testing.T) {
 		cmd              CmdTool
 		project, session string
 	}{
-		{"logical root", CmdTool{TargetAbsDir: root}, root, filepath.Join(root, ".temp")},
+		{"logical root", CmdTool{TargetDir: root}, root, filepath.Join(root, ".temp")},
 		{"relative root", CmdTool{TargetDir: "game"}, filepath.Join(root, "game"), filepath.Join(root, "game", ".temp")},
-		{"relative session", CmdTool{TargetAbsDir: root, RuntimeTempDir: "session"}, root, filepath.Join(root, "session")},
-		{"explicit session", CmdTool{TargetAbsDir: root, RuntimeTempDir: filepath.Join(root, "other")}, root, filepath.Join(root, "other")},
+		{"relative session", CmdTool{TargetDir: root, RuntimeTempDir: "session"}, root, filepath.Join(root, "session")},
+		{"explicit session", CmdTool{TargetDir: root, RuntimeTempDir: filepath.Join(root, "other")}, root, filepath.Join(root, "other")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.cmd.interpretedRoots()
@@ -671,18 +727,6 @@ func TestInterpretedRootsResolveDefaultsAndRelativePaths(t *testing.T) {
 	}
 	if _, err := (&CmdTool{}).interpretedRoots(); err == nil || !strings.Contains(err.Error(), "project directory is not configured") {
 		t.Fatalf("missing roots error = %v", err)
-	}
-}
-
-func TestRuntimePackFilenames(t *testing.T) {
-	for _, tt := range []struct{ executable, pack string }{
-		{"gdspxrt", "gdspxrt.pck"},
-		{"gdspxrt.exe", "gdspxrt.pck"},
-		{"gdspxrt.exe.extra", "gdspxrt.exe.extra.pck"},
-	} {
-		if got := runtimePackFileName(tt.executable); got != tt.pack {
-			t.Errorf("pack filename for %q = %q, want %q", tt.executable, got, tt.pack)
-		}
 	}
 }
 
@@ -728,9 +772,9 @@ while [ -d "$SPX_SERVER_LIFETIME" ]; do /bin/sleep 0.01; done
 					t.Fatal(err)
 				}
 			}
-			cmd := &CmdTool{TargetAbsDir: t.TempDir(), ProjectDir: t.TempDir()}
+			cmd := &CmdTool{TargetDir: t.TempDir(), ProjectDir: t.TempDir()}
 			if scenario == "pid write failure" {
-				cmd.TargetAbsDir = filepath.Join(cmd.TargetAbsDir, "missing-parent")
+				cmd.TargetDir = filepath.Join(cmd.TargetDir, "missing-parent")
 			}
 			t.Cleanup(func() {
 				if err := cmd.stopWeb(webServerProcessStub{stop: func(int) (bool, error) { return true, nil }}); err != nil {
@@ -801,6 +845,9 @@ func TestStopWebHandlesUnreadableAndStalePID(t *testing.T) {
 				if err == nil || !strings.Contains(err.Error(), "failed to read web server pid") {
 					t.Fatalf("PID read error = %v", err)
 				}
+				if err := cmd.runWebServer(); err == nil || !strings.Contains(err.Error(), "failed to read web server pid") {
+					t.Fatalf("server start after failed stop = %v", err)
+				}
 				return
 			}
 			if err != nil {
@@ -840,7 +887,7 @@ func TestRunWebExportsBeforeStartingServer(t *testing.T) {
 }
 
 func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
-	for _, scenario := range []string{"install", "installer failure", "installed", "external project"} {
+	for _, scenario := range []string{"install", "installer failure", "installed", "external project", "missing installer"} {
 		t.Run(scenario, func(t *testing.T) {
 			root, bin := t.TempDir(), t.TempDir()
 			logPath := filepath.Join(t.TempDir(), "installer.log")
@@ -850,9 +897,14 @@ func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
 				script += "\nexit 19"
 			}
 			installCommandTestTools(t, map[string]string{"bash": script})
-			cmd := &CmdTool{TargetAbsDir: root, GoBinPath: bin, Version: "test"}
+			cmd := &CmdTool{TargetDir: root, GoBinPath: bin, Version: "test"}
 			if scenario != "external project" {
 				writeLocalSpxRepoMarker(t, root)
+			}
+			if scenario == "missing installer" {
+				if err := os.Remove(filepath.Join(root, "cmd", "spx", "install.sh")); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if scenario == "installed" {
 				for _, name := range []string{"ispx", "ispx.wasm", "gdspxrttest_webnormal"} {
@@ -863,7 +915,7 @@ func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
 			if (err != nil) != (scenario == "installer failure") {
 				t.Fatalf("installer error = %v, scenario %s", err, scenario)
 			}
-			if scenario == "installed" || scenario == "external project" {
+			if scenario == "installed" || scenario == "external project" || scenario == "missing installer" {
 				if _, err := os.Stat(logPath); !os.IsNotExist(err) {
 					t.Fatalf("unnecessary installer invocation: %v", err)
 				}
@@ -875,29 +927,50 @@ func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
 }
 
 func TestInterpretedRuntimeReportsMissingAssetsAndInitializesCommand(t *testing.T) {
+	for _, version := range []string{"", "../runtime", `runtime\escape`} {
+		t.Run("invalid version "+version, func(t *testing.T) {
+			root := t.TempDir()
+			cmd := CmdTool{TargetDir: root, GoBinPath: root, Version: version, RuntimeCmdPath: "previous runtime"}
+			if err := cmd.RunInterpreted(); err == nil || !strings.Contains(err.Error(), "invalid runtime version") {
+				t.Fatalf("invalid version error = %v", err)
+			}
+			if cmd.RuntimeCmdPath != "previous runtime" {
+				t.Fatalf("failed selection replaced runtime path: %q", cmd.RuntimeCmdPath)
+			}
+			if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+				t.Fatalf("invalid runtime selection created session files: %v, %v", entries, err)
+			}
+		})
+	}
 	for _, kind := range []string{"runtime and library", "runtime pack", "library"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			cmd := &CmdTool{GoBinPath: root, Version: "9.9.9-missing-test"}
-			runtimeName, libName := "gdspxrt9.9.9-missing-test", "bridge.so"
+			names, err := launchpack.RuntimeNamesFor(cmd.Version, runtime.GOOS, runtime.GOARCH)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if kind != "runtime and library" {
-				writeCommandTestFile(t, filepath.Join(root, runtimeName), "runtime")
+				writeCommandTestFile(t, filepath.Join(root, names.Engine), "runtime")
 			}
 			if kind == "runtime pack" {
-				writeCommandTestFile(t, filepath.Join(root, libName), "bridge")
+				writeCommandTestFile(t, filepath.Join(root, names.Bridge), "bridge")
 			}
 			if kind == "library" {
-				writeCommandTestFile(t, filepath.Join(root, runtimePackFileName(runtimeName)), "pack")
+				writeCommandTestFile(t, filepath.Join(root, names.Pack), "pack")
 			}
-			runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, runtimePackFileName(runtimeName), libName)
-			if err == nil || !strings.Contains(err.Error(), "interpreted runtime assets not available") || runtimePath != "" || libPath != "" {
-				t.Fatalf("assets = %q, %q, %v", runtimePath, libPath, err)
+			assets, err := cmd.resolveInterpretedRuntimeAssets()
+			if err == nil || !strings.Contains(err.Error(), "interpreted runtime assets not available") || assets.EnginePath != "" || assets.PackPath != "" || assets.BridgePath != "" {
+				t.Fatalf("assets = %+v, %v", assets, err)
 			}
 			if kind == "runtime pack" && !strings.Contains(err.Error(), "runtime pack") {
 				t.Fatalf("missing pack reason = %v", err)
 			}
-			if kind != "runtime pack" && !strings.Contains(err.Error(), libName) {
+			if kind == "library" && !strings.Contains(err.Error(), names.Bridge) {
 				t.Fatalf("missing library reason = %v", err)
+			}
+			if kind == "runtime and library" && !strings.Contains(err.Error(), names.Engine) {
+				t.Fatalf("missing runtime reason = %v", err)
 			}
 		})
 	}
@@ -913,11 +986,7 @@ func TestInterpretedRuntimeReportsMissingAssetsAndInitializesCommand(t *testing.
 			if err := cmd.handleInterpretedRunCommand(); err == nil || !strings.Contains(err.Error(), "runtime assets not available") {
 				t.Fatalf("run error = %v", err)
 			}
-			suffix := executableSuffix(runtime.GOOS)
-			if goos != "" {
-				suffix = executableSuffix(goos)
-			}
-			if !cmd.RuntimeMode || cmd.RuntimeTempDir != filepath.Join(root, ".temp") || cmd.RuntimeCmdPath != filepath.Join(root, "bin", "gdspxrt"+cmd.Version+suffix) {
+			if !cmd.RuntimeMode || cmd.RuntimeTempDir != filepath.Join(root, ".temp") || cmd.RuntimeCmdPath != "" {
 				t.Fatalf("initialized command = %+v", cmd)
 			}
 			if info, err := os.Stat(filepath.Join(root, ".temp", "output")); err != nil || !info.IsDir() {
@@ -935,12 +1004,12 @@ func TestRunPackModeRejectsIncompleteSessionBeforeStartingEngine(t *testing.T) {
 			log := filepath.Join(root, "engine.log")
 			bin := installCommandTestTools(t, map[string]string{"engine": `printf started > "$SPX_TEST_ENGINE_LOG"`})
 			t.Setenv("SPX_TEST_ENGINE_LOG", log)
-			cmd := &CmdTool{TargetAbsDir: root, RuntimeCmdPath: filepath.Join(bin, "engine"), LibPath: filepath.Join(root, "bridge.so")}
+			cmd := &CmdTool{TargetDir: root, RuntimeCmdPath: filepath.Join(bin, "engine"), LibPath: filepath.Join(root, "bridge.so")}
 			writeCommandTestFile(t, cmd.LibPath, "bridge")
 			want := ""
 			switch scenario {
 			case "missing project":
-				cmd.TargetAbsDir, want = "", "project directory is not configured"
+				cmd.TargetDir, want = "", "project directory is not configured"
 			case "missing bridge":
 				if err := os.Remove(cmd.LibPath); err != nil {
 					t.Fatal(err)

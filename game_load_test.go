@@ -397,7 +397,7 @@ func TestRuntimeTitleUsesProjectDirectory(t *testing.T) {
 	}
 }
 
-func TestInitialLoadRejectsInvalidSpriteConfig(t *testing.T) {
+func TestPrepareSpriteRejectsInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		configJSON string
@@ -433,23 +433,15 @@ func TestInitialLoadRejectsInvalidSpriteConfig(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			files := gameTestFS{"sprites/Sprite/index.json": test.configJSON}
-			game := &spriteLoadTestGame{Game: Game{fs: files}}
-			gamer := reflect.ValueOf(game).Elem()
-
-			initialSprite := &spriteLoadTestSprite{spriteLoadTestGame: game}
-			initialSprite.name = "existing"
-			initialSprite.spriteState.IsVisible = true
-			initialErr := game.loadSprite(initialSprite, "Sprite", gamer)
-			if initialErr == nil {
-				t.Fatal("initial load accepted invalid sprite config")
+			gamer := reflect.ValueOf(&spriteLoadTestGame{}).Elem()
+			_, err := prepareSprite(files, "Sprite", reflect.TypeFor[spriteLoadTestSprite](), gamer)
+			if err == nil {
+				t.Fatal("sprite preparation accepted invalid config")
 			}
 
 			want := `sprite config "Sprite": ` + test.want
-			if initialErr.Error() != want {
-				t.Fatalf("sprite preparation error = %q, want %q", initialErr, want)
-			}
-			if initialSprite.spriteLoadTestGame != game || initialSprite.name != "existing" || !initialSprite.spriteState.IsVisible {
-				t.Fatal("invalid sprite configuration modified the existing instance")
+			if err.Error() != want {
+				t.Fatalf("sprite preparation error = %q, want %q", err, want)
 			}
 		})
 	}
@@ -506,29 +498,75 @@ func TestPrepareSpriteConfigBuildsStableAnimationDefinitions(t *testing.T) {
 	}
 }
 
-func TestBindSpriteOwnerRejectsInvalidStorage(t *testing.T) {
-	game := reflect.ValueOf(&Game{}).Elem()
+func TestSpriteLayoutRejectsNonStructTypes(t *testing.T) {
+	for _, typ := range []reflect.Type{nil, reflect.TypeFor[int](), reflect.TypeFor[*SpriteImpl]()} {
+		layout, err := inspectSpriteLayout(typ)
+		if layout != nil || err == nil || !strings.Contains(err.Error(), "must be a struct") {
+			t.Fatalf("inspectSpriteLayout(%v) = %v, %v; want no layout and a struct type error", typ, layout, err)
+		}
+	}
+}
+
+type layoutInterfaceOwnerSprite struct {
+	SpriteImpl
+	owner any
+}
+
+func (*layoutInterfaceOwnerSprite) Main() {}
+
+func TestPrepareSpriteOwner(t *testing.T) {
+	files := gameTestFS{"sprites/owner/index.json": testSpriteConfig}
+	game := setupStageLoadTestGame(t, files)
 	for _, test := range []struct {
-		name   string
-		sprite reflect.Value
-		want   string
+		name          string
+		sprite        reflect.Value
+		unaddressable bool
+		want          string
 	}{
-		{"missing", reflect.ValueOf(&struct{ SpriteImpl }{}).Elem(), "missing owner field"},
-		{"unaddressable", reflect.ValueOf(struct {
-			SpriteImpl
-			Owner *Game
-		}{}), "not addressable"},
+		{"missing", reflect.ValueOf(&struct{ SpriteImpl }{}).Elem(), false, "missing owner field"},
+		{"unaddressable game", reflect.ValueOf(&layoutInterfaceOwnerSprite{}).Elem(), true, "not addressable"},
 		{"wrong type", reflect.ValueOf(&struct {
 			SpriteImpl
 			Owner *int
-		}{}).Elem(), "cannot hold"},
+		}{}).Elem(), false, "cannot hold"},
+		{"unexported interface", reflect.ValueOf(&layoutInterfaceOwnerSprite{}).Elem(), false, ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := bindSpriteOwner(test.sprite, game)
-			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("error=%v, want %q", err, test.want)
+			gamer := reflect.ValueOf(&game.Game).Elem()
+			if test.unaddressable {
+				gamer = reflect.Zero(gamer.Type())
+			}
+			prepared, err := prepareSprite(files, "owner", test.sprite.Type(), gamer)
+			if test.want != "" {
+				if err == nil || !strings.Contains(err.Error(), test.want) {
+					t.Fatalf("error=%v, want %q", err, test.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			sprite := test.sprite.Addr().Interface().(Sprite)
+			game.loadPreparedSprite(sprite, "owner", gamer, &prepared)
+			owner := coreproject.WritableField(test.sprite.Field(spriteOwnerField))
+			if owner.Interface() != gamer.Addr().Interface() {
+				t.Fatal("owner does not reference the original game")
 			}
 		})
+	}
+}
+
+func TestPrepareProjectRequiresAddressableGame(t *testing.T) {
+	game := &Game{}
+	fs := &recordingProjectFS{}
+	for _, entries := range [][]any{nil, {"Lazy"}} {
+		_, err := game.prepareProject(fs, &coreproject.ProjectConfig{Zorder: entries}, reflect.Zero(reflect.TypeFor[Game]()))
+		if err == nil || !strings.Contains(err.Error(), "game value is not addressable") {
+			t.Fatalf("prepareProject error = %v, want original game addressability error", err)
+		}
+		if len(fs.reads) != 0 {
+			t.Fatalf("unaddressable game read sprite configuration: %v", fs.reads)
+		}
 	}
 }
 
@@ -825,7 +863,7 @@ func setupGameTestRuntime(t *testing.T, files gameTestFS, game Gamer, sprites []
 	base.gamer = game
 	base.startLoad(files)
 	base.soundMgr.Init(&fakeAudioBackend{})
-	base.tilemapMgr.init(base, files, "")
+	base.tilemapMgr.g, base.tilemapMgr.fs = base, files
 	base.physicsEnabled = physics
 	base.lifecycleState.IsRunned.Store(true)
 
@@ -837,4 +875,373 @@ func setupStageLoadTestGame(t *testing.T, files gameTestFS) *stageLoadTestGame {
 	game := &stageLoadTestGame{}
 	setupGameTestRuntime(t, files, game, []Sprite{&stageLoadTestSprite{}}, false)
 	return game
+}
+
+type projectTestGame struct {
+	Game
+	projectTestSprite *projectTestSprite
+	Dynamic           Sprite
+	Value             projectTestSprite
+	Last              *projectTestSprite
+	Items             []*projectTestSprite
+}
+
+type projectTestSprite struct {
+	SpriteImpl
+	*projectTestGame
+	marker string
+}
+
+func (*projectTestSprite) Main() {}
+
+type recordingProjectFS struct {
+	files map[string]string
+	reads []string
+}
+
+func (fs *recordingProjectFS) Open(name string) (io.ReadCloser, error) {
+	fs.reads = append(fs.reads, name)
+	content, ok := fs.files[name]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (*recordingProjectFS) Close() error { return nil }
+
+const testSpriteConfig = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`
+
+func TestAllocSpriteFieldsUsesGeneratedStorage(t *testing.T) {
+	original := &projectTestSprite{marker: "original"}
+	holder := struct {
+		pointer *projectTestSprite
+		iface   Sprite
+		value   projectTestSprite
+	}{pointer: original, iface: original, value: projectTestSprite{marker: "value"}}
+	game := Game{typs: map[string]reflect.Type{
+		"pointer": reflect.TypeFor[projectTestSprite](),
+		"iface":   reflect.TypeFor[projectTestSprite](),
+		"value":   reflect.TypeFor[projectTestSprite](),
+	}}
+	fields := reflect.ValueOf(&holder).Elem()
+	for i, wantName := range []string{"pointer", "iface", "value"} {
+		name, sprite := game.allocSpriteField(fields, i)
+		want := []Sprite{holder.pointer, holder.iface, &holder.value}[i]
+		if name != wantName || sprite == nil || sprite != want {
+			t.Fatalf("field %q = %v, want %q bound to its live field", name, sprite, wantName)
+		}
+	}
+	if holder.pointer == original || holder.iface == original || holder.pointer == holder.iface {
+		t.Fatal("pointer and interface fields did not receive separate fresh sprites")
+	}
+	if holder.value.marker != "value" || original.marker != "original" {
+		t.Fatal("allocation changed value fields or previously referenced sprites")
+	}
+}
+
+func TestPrepareSpriteFieldsReturnsFirstError(t *testing.T) {
+	game := &struct {
+		Game
+		Skipped *spriteLoadTestSprite
+		Data    any
+		First   *spriteLoadTestSprite
+		Later   *spriteLoadTestSprite
+	}{}
+	game.typs = map[string]reflect.Type{
+		"Data":  reflect.TypeFor[int](),
+		"First": reflect.TypeFor[spriteLoadTestSprite](),
+		"Later": reflect.TypeFor[spriteLoadTestSprite](),
+	}
+	fs := &recordingProjectFS{}
+
+	_, err := game.prepareProject(fs, &coreproject.ProjectConfig{}, reflect.ValueOf(game).Elem())
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), `load sprite "First"`) {
+		t.Fatalf("prepareProject error = %v, want named sprite error wrapping os.ErrNotExist", err)
+	}
+	if game.Skipped != nil || game.First != nil || game.Data != nil || game.Later != nil {
+		t.Fatal("failed preparation changed live fields")
+	}
+	if want := []string{"sprites/First/index.json"}; !reflect.DeepEqual(fs.reads, want) {
+		t.Fatalf("resource reads = %v, want %v", fs.reads, want)
+	}
+}
+
+func TestPrepareProjectFailurePreservesLiveGame(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		last    string
+		project coreproject.ProjectConfig
+		want    string
+	}{
+		{
+			name: "late sprite configuration",
+			last: `{"costumes":[null]}`,
+			want: `load sprite "Last"`,
+		},
+		{
+			name:    "tilemap before stage",
+			last:    testSpriteConfig,
+			project: coreproject.ProjectConfig{TilemapPath: "broken.json", Zorder: []any{"Missing"}},
+			want:    `load tilemap "broken.json"`,
+		},
+		{
+			name:    "late stage entry",
+			last:    testSpriteConfig,
+			project: coreproject.ProjectConfig{Zorder: []any{"projectTestSprite", coreproject.StageShape{}}},
+			want:    `zorder[1]: invalid stage shape type`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original := &projectTestSprite{marker: "pointer"}
+			dynamic := &projectTestSprite{marker: "interface"}
+			last := &projectTestSprite{marker: "last"}
+			game := &projectTestGame{
+				projectTestSprite: original,
+				Dynamic:           dynamic,
+				Value:             projectTestSprite{marker: "value"},
+				Last:              last,
+				Items:             []*projectTestSprite{original},
+			}
+			game.typs = make(map[string]reflect.Type)
+			for _, name := range []string{"projectTestSprite", "Dynamic", "Value", "Last", "Missing"} {
+				game.typs[name] = reflect.TypeFor[projectTestSprite]()
+			}
+			game.sprs = map[string]Sprite{"Existing": original}
+			game.shapeMgr.items = []Shape{&original.SpriteImpl}
+			beforeValue := &projectTestSprite{marker: "value"}
+			fs := &recordingProjectFS{files: map[string]string{
+				"sprites/projectTestSprite/index.json": testSpriteConfig,
+				"sprites/Dynamic/index.json":           testSpriteConfig,
+				"sprites/Value/index.json":             testSpriteConfig,
+				"sprites/Last/index.json":              test.last,
+				"broken.json":                          `{`,
+			}}
+
+			_, err := game.prepareProject(fs, &test.project, reflect.ValueOf(game).Elem())
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("prepareProject error = %v, want %q", err, test.want)
+			}
+			if game.projectTestSprite != original || game.Dynamic != dynamic || game.Last != last || !reflect.DeepEqual(&game.Value, beforeValue) {
+				t.Fatal("preparation changed pointer, interface, or value sprite fields")
+			}
+			if original.marker != "pointer" || dynamic.marker != "interface" || last.marker != "last" || len(game.Items) != 1 || game.Items[0] != original {
+				t.Fatal("preparation changed existing sprites or a stage group")
+			}
+			if len(game.sprs) != 1 || game.sprs["Existing"] != original || len(game.shapeMgr.items) != 1 || game.shapeMgr.items[0] != &original.SpriteImpl {
+				t.Fatal("preparation published sprite prototypes or stage shapes")
+			}
+			wantReads := []string{
+				"sprites/projectTestSprite/index.json", "sprites/Dynamic/index.json",
+				"sprites/Value/index.json", "sprites/Last/index.json",
+			}
+			if test.project.TilemapPath != "" {
+				wantReads = append(wantReads, test.project.TilemapPath)
+			}
+			if !reflect.DeepEqual(fs.reads, wantReads) {
+				t.Fatalf("resource reads = %v, want %v", fs.reads, wantReads)
+			}
+		})
+	}
+}
+
+func TestPrepareProjectReusesSpriteConfigurationAcrossStageEntries(t *testing.T) {
+	game := &projectTestGame{}
+	game.typs = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[projectTestSprite]()}
+	fs := &recordingProjectFS{files: map[string]string{
+		"sprites/projectTestSprite/index.json": testSpriteConfig,
+	}}
+	group := coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{coreproject.StageShape{"x": 1.0}}}
+	project := &coreproject.ProjectConfig{Zorder: []any{"projectTestSprite", group, group, "projectTestSprite"}}
+
+	plan, err := game.prepareProject(fs, project, reflect.ValueOf(game).Elem())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.sprites) != 1 || len(plan.stage) != 4 {
+		t.Fatalf("prepared %d prototypes and %d stage entries", len(plan.sprites), len(plan.stage))
+	}
+	if want := []string{"sprites/projectTestSprite/index.json"}; !reflect.DeepEqual(fs.reads, want) {
+		t.Fatalf("resource reads = %v, want %v", fs.reads, want)
+	}
+	if game.projectTestSprite != nil || game.Items != nil || len(game.sprs) != 0 || len(game.shapeMgr.items) != 0 {
+		t.Fatal("successful preparation published fields or stage state")
+	}
+}
+
+func TestPrepareProjectReadsTilemapOnceAndKeepsDecoratorOptional(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		path      string
+		files     map[string]string
+		reads     []string
+		decorator bool
+		missing   bool
+	}{
+		{"legacy", "map.json", map[string]string{"map.json": `{}`}, []string{"map.json"}, false, false},
+		{"new", "map", map[string]string{"map/tilemap.json": `{}`, "map/decorator.json": `{}`}, []string{"map/tilemap.json", "map/decorator.json"}, false, false},
+		{"missing decorator", "map", map[string]string{"map/tilemap.json": `{}`}, []string{"map/tilemap.json", "map/decorator.json"}, true, true},
+		{"invalid decorator", "map", map[string]string{"map/tilemap.json": `{}`, "map/decorator.json": `{`}, []string{"map/tilemap.json", "map/decorator.json"}, true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &projectTestGame{}
+			game.sprs = map[string]Sprite{"Existing": &projectTestSprite{}}
+			fs := &recordingProjectFS{files: test.files}
+			project := &coreproject.ProjectConfig{TilemapPath: test.path, Zorder: []any{"Existing"}}
+			plan, err := game.prepareProject(fs, project, reflect.ValueOf(game).Elem())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(fs.reads, test.reads) {
+				t.Fatalf("resource reads = %v, want %v", fs.reads, test.reads)
+			}
+			if (plan.tilemap.DecoratorErr != nil) != test.decorator || test.missing && !errors.Is(plan.tilemap.DecoratorErr, os.ErrNotExist) {
+				t.Fatalf("decorator error = %v", plan.tilemap.DecoratorErr)
+			}
+			if len(plan.stage) != 1 || plan.tilemap.UseNewLoader != (test.path == "map") {
+				t.Fatal("tilemap preparation did not retain its format or proceed to stage preparation")
+			}
+			if test.path == "map.json" && plan.tilemap.Data == nil {
+				t.Fatal("legacy tilemap data was not retained")
+			}
+		})
+	}
+}
+
+func TestPrepareProjectPreservesStageFailureOrder(t *testing.T) {
+	group := func(items ...any) coreproject.StageShape {
+		return coreproject.StageShape{"type": "sprites", "target": "Items", "items": items}
+	}
+	for _, test := range []struct {
+		name    string
+		entries []any
+		want    string
+		reads   []string
+	}{
+		{"lazy prototype before later shape", []any{"Missing", coreproject.StageShape{}}, `zorder[0]: load sprite "Missing"`, []string{"sprites/Missing/index.json"}},
+		{"group prototype before later shape", []any{group(coreproject.StageShape{}), coreproject.StageShape{}}, `zorder[0]: load sprite "projectTestSprite"`, []string{"sprites/projectTestSprite/index.json"}},
+		{"group items before prototype", []any{group(coreproject.StageShape{}, 42)}, `zorder[0]: stage sprites target "Items" item[1]`, nil},
+		{"shape before later prototype", []any{coreproject.StageShape{}, "Missing"}, `zorder[0]: invalid stage shape type`, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &projectTestGame{}
+			game.typs = map[string]reflect.Type{"Missing": reflect.TypeFor[projectTestSprite]()}
+			fs := &recordingProjectFS{}
+			_, err := game.prepareProject(fs, &coreproject.ProjectConfig{Zorder: test.entries}, reflect.ValueOf(game).Elem())
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("prepareProject error = %v, want %q", err, test.want)
+			}
+			if !reflect.DeepEqual(fs.reads, test.reads) {
+				t.Fatalf("resource reads = %v, want %v", fs.reads, test.reads)
+			}
+		})
+	}
+}
+
+func TestPrepareProjectEmptyGroupDoesNotReadPrototype(t *testing.T) {
+	original := &projectTestSprite{}
+	game := &projectTestGame{Items: []*projectTestSprite{original}}
+	fs := &recordingProjectFS{}
+	project := &coreproject.ProjectConfig{Zorder: []any{
+		coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{}},
+	}}
+	plan, err := game.prepareProject(fs, project, reflect.ValueOf(game).Elem())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.reads) != 0 || len(plan.sprites) != 0 {
+		t.Fatalf("empty group read resources %v or prepared a prototype", fs.reads)
+	}
+	if len(plan.stage) != 1 {
+		t.Fatalf("prepared %d stage entries, want 1", len(plan.stage))
+	}
+	entry := plan.stage[0].sprite
+	field := reflect.TypeFor[projectTestGame]().Field(entry.field)
+	if field.Name != "Items" || entry.properties == nil || len(entry.properties) != 0 {
+		t.Fatal("preparation lost the empty group's target or empty items")
+	}
+	if len(game.Items) != 1 || game.Items[0] != original {
+		t.Fatal("preparation replaced the live group")
+	}
+}
+
+func TestPrepareProjectRejectsNilCachedPrototype(t *testing.T) {
+	for _, entry := range []any{
+		"projectTestSprite",
+		coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{coreproject.StageShape{}}},
+	} {
+		game := &projectTestGame{}
+		game.sprs = map[string]Sprite{"projectTestSprite": (*projectTestSprite)(nil)}
+		_, err := game.prepareProject(&recordingProjectFS{}, &coreproject.ProjectConfig{Zorder: []any{entry}}, reflect.ValueOf(game).Elem())
+		if err == nil || !strings.Contains(err.Error(), "projectTestSprite") {
+			t.Errorf("typed-nil prototype with entry %v: error = %v, want preflight rejection", entry, err)
+		}
+	}
+}
+
+type prototypeConflictGame struct {
+	Game
+	projectTestSprite *conflictingSprite
+	Items             []*projectTestSprite
+}
+
+type conflictingSprite struct {
+	SpriteImpl
+	*prototypeConflictGame
+}
+
+func (*conflictingSprite) Main() {}
+
+func TestPrepareProjectRejectsPrototypeTypeCollision(t *testing.T) {
+	for _, cached := range []bool{false, true} {
+		t.Run(map[bool]string{false: "prepared field", true: "cached prototype"}[cached], func(t *testing.T) {
+			game := &prototypeConflictGame{}
+			if cached {
+				game.sprs = map[string]Sprite{"projectTestSprite": &conflictingSprite{}}
+			} else {
+				game.typs = map[string]reflect.Type{"projectTestSprite": reflect.TypeFor[conflictingSprite]()}
+			}
+			fs := &recordingProjectFS{files: map[string]string{
+				"sprites/projectTestSprite/index.json": testSpriteConfig,
+			}}
+			project := &coreproject.ProjectConfig{Zorder: []any{
+				coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{coreproject.StageShape{}}},
+			}}
+			_, err := game.prepareProject(fs, project, reflect.ValueOf(game).Elem())
+			if err == nil || !strings.Contains(err.Error(), "projectTestSprite") {
+				t.Fatalf("prototype type collision error = %v, want preflight rejection", err)
+			}
+		})
+	}
+}
+
+type layoutInvalidOwnerSprite struct {
+	SpriteImpl
+	owner *int
+	value int
+}
+
+func (*layoutInvalidOwnerSprite) Main() {}
+
+func TestPrepareSpriteRejectsInvalidLayout(t *testing.T) {
+	gamer := reflect.ValueOf(&Game{}).Elem()
+	files := gameTestFS{"sprites/invalid/index.json": testSpriteConfig}
+	for _, test := range []struct {
+		name string
+		typ  reflect.Type
+		want string
+	}{
+		{"owner", reflect.TypeFor[layoutInvalidOwnerSprite](), "cannot hold"},
+		{"implementation", reflect.TypeFor[spriteWithoutImplementation](), "missing SpriteImpl"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			plan, err := prepareSprite(files, "invalid", test.typ, gamer)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
+			}
+			if !reflect.ValueOf(plan).IsZero() {
+				t.Fatal("layout rejection returned a partial sprite plan")
+			}
+		})
+	}
 }

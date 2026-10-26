@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -85,7 +86,7 @@ func TestExportPackPreservesFailures(t *testing.T) {
 
 func TestPrepareExportStagesAssetsFromLogicalProject(t *testing.T) {
 	source := t.TempDir()
-	cmd := &CmdTool{TargetAbsDir: source, ProjectDir: filepath.Join(source, "project")}
+	cmd := &CmdTool{TargetDir: source, ProjectDir: filepath.Join(source, "project")}
 	for _, name := range []string{"index.json", "images/sprite.svg"} {
 		writeCommandTestFile(t, filepath.Join(source, "assets", name), "asset "+name)
 	}
@@ -108,25 +109,25 @@ func TestPrepareExportStagesAssetsFromLogicalProject(t *testing.T) {
 }
 
 func TestPrepareExportRejectsInvalidAssets(t *testing.T) {
-	for _, name := range []string{"missing project", "missing assets", "assets file", "asset symlink", "source symlink", "destination symlink", "same directory", "nested destination", "blocked destination"} {
+	for _, name := range []string{"missing project", "missing assets", "assets file", "asset symlink", "source symlink", "destination symlink", "same directory", "nested destination", "blocked destination", "destination parent loop"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
-			cmd := &CmdTool{TargetAbsDir: filepath.Join(root, "game"), ProjectDir: filepath.Join(root, "generated")}
-			source := filepath.Join(cmd.TargetAbsDir, "assets")
+			cmd := &CmdTool{TargetDir: filepath.Join(root, "game"), ProjectDir: filepath.Join(root, "generated")}
+			source := filepath.Join(cmd.TargetDir, "assets")
 			writeCommandTestFile(t, filepath.Join(source, "index.json"), "source")
 			switch name {
 			case "missing project":
-				cmd.TargetAbsDir = ""
+				cmd.TargetDir = ""
 			case "missing assets":
-				cmd.TargetAbsDir = filepath.Join(root, "missing")
+				cmd.TargetDir = filepath.Join(root, "missing")
 			case "assets file":
-				cmd.TargetAbsDir = filepath.Join(root, "not-a-directory")
-				writeCommandTestFile(t, filepath.Join(cmd.TargetAbsDir, "assets"), "occupied")
+				cmd.TargetDir = filepath.Join(root, "not-a-directory")
+				writeCommandTestFile(t, filepath.Join(cmd.TargetDir, "assets"), "occupied")
 			case "asset symlink", "source symlink", "destination symlink":
 				link := filepath.Join(source, "linked")
 				if name == "source symlink" {
-					cmd.TargetAbsDir = filepath.Join(root, "linked-game")
-					link = filepath.Join(cmd.TargetAbsDir, "assets")
+					cmd.TargetDir = filepath.Join(root, "linked-game")
+					link = filepath.Join(cmd.TargetDir, "assets")
 				} else if name == "destination symlink" {
 					link = filepath.Join(cmd.ProjectDir, "assets")
 				}
@@ -142,9 +143,15 @@ func TestPrepareExportRejectsInvalidAssets(t *testing.T) {
 					t.Skipf("symlink unavailable: %v", err)
 				}
 			case "same directory":
-				cmd.ProjectDir = cmd.TargetAbsDir
+				cmd.ProjectDir = cmd.TargetDir
 			case "nested destination":
 				cmd.ProjectDir = filepath.Join(source, "generated")
+			case "destination parent loop":
+				loop := filepath.Join(root, "loop")
+				if err := os.Symlink("loop", loop); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+				cmd.ProjectDir = filepath.Join(loop, "generated")
 			case "blocked destination":
 				writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "assets"), "occupied")
 			}
@@ -292,7 +299,7 @@ esac
 	}
 	arch, tags, install := runtime.GOARCH, "", false
 	cmd := &CmdTool{
-		TargetDir: root, TargetAbsDir: root, ProjectDir: filepath.Join(root, "project"),
+		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
 		GoDir: filepath.Join(root, "project", "go"), LibPath: filepath.Join(root, "spx-test-"+arch+".so"),
 		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: &arch, Tags: &tags, Install: &install},
 	}
@@ -477,5 +484,34 @@ func TestExportBuildInvokesRequestedPlatform(t *testing.T) {
 				t.Fatalf("platform output directory missing: %v", err)
 			}
 		})
+	}
+}
+
+func TestPrepareExportRejectsSocketAssets(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix socket asset fixture")
+	}
+	// Keep the pathname below the Unix socket limit, independent of the test name.
+	root, err := os.MkdirTemp("", "spx-assets-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	cmd := &CmdTool{TargetDir: root, ProjectDir: filepath.Join(root, "project")}
+	asset := filepath.Join(root, "assets", "index.json")
+	writeCommandTestFile(t, asset, "source")
+	listener, err := net.Listen("unix", filepath.Join(root, "assets", "socket"))
+	if err != nil {
+		t.Skipf("Unix socket creation unavailable: %v", err)
+	}
+	defer listener.Close()
+	if err := cmd.prepareExport(); err == nil || !strings.Contains(err.Error(), "must be a regular file") {
+		t.Fatalf("socket asset error = %v", err)
+	}
+	if readTestFile(t, asset) != "source" {
+		t.Fatal("failed staging changed source")
+	}
+	if _, err := os.Stat(filepath.Join(cmd.ProjectDir, "assets")); !os.IsNotExist(err) {
+		t.Fatalf("invalid assets were staged: %v", err)
 	}
 }

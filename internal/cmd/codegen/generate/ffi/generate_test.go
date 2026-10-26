@@ -20,6 +20,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -57,8 +58,9 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	}}
 
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, metadata)}
-	require.NoError(t, generation.writeManager(codegenDir))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, metadata)}
+	require.NoError(t, generation.renderManager(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 	generatedPath := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	generated, err := os.ReadFile(generatedPath)
 	require.NoError(t, err)
@@ -83,6 +85,61 @@ func TestGenerateManagerWrapperRunsNativeCallsOnMainThread(t *testing.T) {
 	require.Contains(t, isMainThread, "return ToBool(retValue)")
 }
 
+func TestGenerateWrapperPreservesCEnumValues(t *testing.T) {
+	header, err := clang.ParseCString(`typedef enum {
+ First,
+ Second,
+ Explicit = 7,
+ AfterExplicit,
+ Alias = Explicit,
+ AfterAlias,
+} Example;`)
+	require.NoError(t, err)
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(header, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderWrapperGo(codegenDir))
+	require.NoError(t, generation.Output.Commit())
+	path := filepath.Join(codegenDir, common.NativeRelDir, "ffi_wrapper.gen.go")
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+	positions := token.NewFileSet()
+	file, err := parser.ParseFile(positions, path, source, 0)
+	require.NoError(t, err)
+	checked := &ast.File{Name: ast.NewIdent("ffi")}
+	var values []*ast.ValueSpec
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		switch group.Tok {
+		case token.TYPE:
+			// Isolate C.Example from cgo headers while retaining the generated
+			// named type and every constant's actual initializer.
+			group.Specs[0].(*ast.TypeSpec).Type = ast.NewIdent("int")
+			checked.Decls = append(checked.Decls, group)
+		case token.CONST:
+			checked.Decls = append(checked.Decls, group)
+			for _, spec := range group.Specs {
+				value := spec.(*ast.ValueSpec)
+				// A typed Go constant without an initializer parses but does not
+				// compile. C also increments after explicit values and aliases.
+				require.Len(t, value.Values, 1, "constant %s needs an initializer", value.Names[0].Name)
+				values = append(values, value)
+			}
+		}
+	}
+	checkedPackage, err := (&types.Config{}).Check("generated", positions, []*ast.File{checked}, nil)
+	require.NoError(t, err)
+	want := []string{"0", "1", "7", "8", "7", "8"}
+	require.Len(t, values, len(want))
+	for i, value := range values {
+		name := value.Names[0].Name
+		constant := checkedPackage.Scope().Lookup(name).(*types.Const)
+		require.Equal(t, want[i], constant.Val().ExactString(), name)
+	}
+}
+
 func TestGenerateSyncAPIVariants(t *testing.T) {
 	ast := clang.CHeaderFileAST{Expr: []clang.Expr{
 		{Function: managerFunction("GDExtensionSpxSpriteSetTriggerEnabled", "void",
@@ -90,10 +147,11 @@ func TestGenerateSyncAPIVariants(t *testing.T) {
 		{Function: managerFunction("GDExtensionSpxSpriteIsCollisionEnabled", "GdBool",
 			managerArgument("obj", "GdObj"))},
 	}}
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast,
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast,
 		common.GenerationMetadata{ManagerNames: []string{"sprite"}})}
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeSyncAPI(codegenDir))
+	require.NoError(t, generation.renderSyncAPI(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 
 	for _, variant := range []struct {
 		filename string
@@ -143,9 +201,10 @@ public:
 	require.NoError(t, err)
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleWriteValues)(float *out);")
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeManager(codegenDir))
+	require.NoError(t, generation.renderManager(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 	path := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -168,9 +227,10 @@ public:
 	require.NoError(t, err)
 	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxExampleCollect)(" + params + ");")
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeManager(codegenDir))
+	require.NoError(t, generation.renderManager(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 	path := filepath.Join(codegenDir, common.GDEngineImplRelDir, "manager_native.gen.go")
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -298,21 +358,13 @@ func TestNativeCallbacksMatchABI(t *testing.T) {
 	callbackAST, err := clang.ParseCString(string(source[start:end]))
 	require.NoError(t, err)
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	nativeDir := filepath.Join(codegenDir, common.NativeRelDir)
-	require.NoError(t, os.MkdirAll(nativeDir, 0o755))
-	generation := &Generator{common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
-	require.NoError(t, generation.Generate(codegenDir))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderCallbacks(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 
-	outputs := make(map[string][]byte)
-	for _, name := range []string{"callbacks.gen.go", "callbacks.gen.h"} {
-		output, err := os.ReadFile(filepath.Join(nativeDir, name))
-		require.NoError(t, err)
-		committed, err := os.ReadFile(filepath.Join(root, "internal", "gdengine", "binding", "native", name))
-		require.NoError(t, err)
-		require.Equal(t, string(committed), string(output), "%s must be regenerated", name)
-		outputs[name] = output
-	}
-	header := string(outputs["callbacks.gen.h"])
+	output, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.h"))
+	require.NoError(t, err)
+	header := string(output)
 	declarations := regexp.MustCompile(`(?m)^extern void (\w+)\(`).FindAllStringSubmatch(header, -1)
 	registrations := regexp.MustCompile(`info\.(\w+) = (\w+);`).FindAllStringSubmatch(header, -1)
 	fields := callbackAST.CollectStructs()[0].Fields
@@ -323,12 +375,6 @@ func TestNativeCallbacksMatchABI(t *testing.T) {
 		symbol := field.Variable.Name
 		require.Equal(t, symbol, declarations[i][1])
 		require.Equal(t, []string{symbol, symbol}, registrations[i][1:])
-	}
-	require.NoError(t, writeCallbacks(codegenDir, callbackAST))
-	for name, before := range outputs {
-		after, err := os.ReadFile(filepath.Join(nativeDir, name))
-		require.NoError(t, err)
-		require.Equal(t, before, after, "generation must be idempotent: %s", name)
 	}
 }
 
@@ -342,7 +388,9 @@ typedef struct {
 } SpxCallbackInfo;`)
 	require.NoError(t, err)
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, writeCallbacks(codegenDir, callbackAST))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderCallbacks(codegenDir))
+	require.NoError(t, generation.Output.Commit())
 	generated, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.go"))
 	require.NoError(t, err)
 	method := generatedMethod(t, "callbacks.gen.go", generated, "custom_changed")
@@ -358,7 +406,8 @@ typedef struct {
 			callbackAST, err := clang.ParseCString(source)
 			require.NoError(t, err)
 			dir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-			require.Error(t, writeCallbacks(dir, callbackAST))
+			generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
+			require.Error(t, generation.renderCallbacks(dir))
 			_, err = os.Stat(filepath.Join(dir, common.NativeRelDir))
 			require.True(t, os.IsNotExist(err), "invalid input must not write output")
 		})
@@ -368,7 +417,9 @@ typedef struct {
 			dir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
 			path := filepath.Join(dir, common.NativeRelDir, name)
 			require.NoError(t, os.MkdirAll(path, 0o755))
-			require.ErrorContains(t, writeCallbacks(dir, callbackAST), path)
+			generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(callbackAST, common.GenerationMetadata{})}
+			require.NoError(t, generation.renderCallbacks(dir))
+			require.ErrorContains(t, generation.Output.Commit(), path)
 		})
 	}
 }

@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/input"
 )
 
 func TestInputFrameStateProcess(t *testing.T) {
@@ -38,7 +38,7 @@ func TestInputFrameStateProcess(t *testing.T) {
 		InputFrame{
 			Point:             mathf.Vec2{X: 10, Y: 20},
 			LeftButtonPressed: true,
-			KeyEvents: []engine.KeyEvent{
+			KeyEvents: []input.KeyEvent{
 				{Id: 1, IsPressed: true},
 				{Id: 2, IsPressed: false},
 			},
@@ -76,7 +76,7 @@ func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.
 		InputFrame{
 			Point:             mathf.Vec2{X: 7, Y: 8},
 			LeftButtonPressed: false,
-			MouseEvents: []engine.MouseEvent{
+			MouseEvents: []input.MouseEvent{
 				{Id: 1, IsPressed: true},
 				{Id: 1, IsPressed: false},
 			},
@@ -104,7 +104,7 @@ func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *test
 		InputFrame{
 			Point:             mathf.Vec2{X: 4, Y: 5},
 			LeftButtonPressed: false,
-			MouseEvents: []engine.MouseEvent{
+			MouseEvents: []input.MouseEvent{
 				{Id: 2, IsPressed: false},
 				{Id: 1, IsPressed: true},
 			},

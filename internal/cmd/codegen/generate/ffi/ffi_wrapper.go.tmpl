@@ -27,7 +27,7 @@ import "C"
 type {{ $e.Name }} C.{{ $e.Name }}
 const (
 	{{ range $j, $v := $e.Values -}}
-	{{ $v.Name }} {{ $e.Name }} {{ with $z := (goEnumValue $v $j) -}} = {{ $z }} {{- end }}
+	{{ $v.Name }} {{ $e.Name }} = {{ goEnumValue $e.Values $j }}
 	{{ end -}}
 )
 {{ end }}

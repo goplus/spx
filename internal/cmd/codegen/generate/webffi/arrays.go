@@ -39,12 +39,12 @@ var arrayTemplateFuncs = template.FuncMap{
 	"arrayTag": func() string { return common.ArrayTag },
 }
 
-func writeGoArrays(codegenDir string) error {
-	return common.GenerateFile(arrayTemplateFuncs, "arrays.gen.go", goArraysTemplate, common.ArrayTypes(),
+func (g *Generator) renderGoArrays(codegenDir string) error {
+	return g.Output.RenderFile(arrayTemplateFuncs, goArraysTemplate, common.ArrayTypes(),
 		filepath.Join(codegenDir, WebRelDir, "arrays.gen.go"))
 }
 
-func writeJSArrays(spxModulePath string) error {
+func (g *Generator) renderJSArrays(spxModulePath string) error {
 	path := filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.util.js")
 	source, err := os.ReadFile(path)
 	if err != nil {
@@ -64,5 +64,5 @@ func writeJSArrays(spxModulePath string) error {
 	if err != nil {
 		return err
 	}
-	return common.WriteGeneratedFile(path, []byte(before+start+string(output)+end+after), 0o644)
+	return g.Output.AddFile(path, []byte(before+start+string(output)+end+after))
 }

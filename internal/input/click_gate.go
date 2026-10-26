@@ -19,15 +19,13 @@ package input
 import (
 	"sync"
 	"time"
-
-	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 // ClickGate suppresses repeated click handling within a minimum interval.
 type ClickGate struct {
 	mu            sync.Mutex
 	minIntervalMs int64
-	lastClickMs   map[engine.Object]int64
+	lastClickMs   map[int64]int64
 	now           func() time.Time
 }
 
@@ -43,11 +41,17 @@ func (g *ClickGate) InitWithClock(minInterval time.Duration, now func() time.Tim
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.minIntervalMs = int64(minInterval / time.Millisecond)
-	g.lastClickMs = make(map[engine.Object]int64)
+	g.lastClickMs = make(map[int64]int64)
 	g.now = now
 }
 
-func (g *ClickGate) Allow(id engine.Object) bool {
+func (g *ClickGate) Reset() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	clear(g.lastClickMs)
+}
+
+func (g *ClickGate) Allow(id int64) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	currentTimeMs := g.nowMs()
@@ -63,16 +67,10 @@ func (g *ClickGate) Allow(id engine.Object) bool {
 	return true
 }
 
-func (g *ClickGate) Remove(id engine.Object) {
+func (g *ClickGate) Remove(id int64) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	delete(g.lastClickMs, id)
-}
-
-func (g *ClickGate) Reset() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	clear(g.lastClickMs)
 }
 
 func (g *ClickGate) pruneLocked(expireBefore int64) {

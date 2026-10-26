@@ -104,18 +104,24 @@ func (cmd *CmdTool) ExportIos() error {
 }
 
 func (cmd *CmdTool) renameIosArtifacts() error {
-	files, err := filepath.Glob(filepath.Join(cmd.ProjectDir, "go", "ios*"))
+	dir := filepath.Join(cmd.ProjectDir, "go")
+	files, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("failed to list iOS artifacts: %w", err)
 	}
 
 	for _, file := range files {
-		if !strings.HasSuffix(file, ".txt") {
+		name := file.Name()
+		if !strings.HasPrefix(name, "ios") || !strings.HasSuffix(name, ".txt") {
 			continue
 		}
-		newName := strings.TrimSuffix(file, ".txt")
-		if err := os.Rename(file, newName); err != nil {
-			return fmt.Errorf("failed to rename %s: %w", file, err)
+		source := filepath.Join(dir, name)
+		newName := strings.TrimSuffix(source, ".txt")
+		if err := os.Rename(source, newName); err != nil {
+			return fmt.Errorf("failed to rename %s: %w", source, err)
 		}
 	}
 	return nil
@@ -228,6 +234,161 @@ func (cmd *CmdTool) isIosExportProjectOnly() (bool, error) {
 	return parseIosExportProjectOnly(content), nil
 }
 
+func (cmd *CmdTool) exportIos(output iosExportOutput, exportProjectOnly bool) error {
+	logInfof("Exporting Godot project for iOS")
+	logInfof("Export command: %s --headless --path %s --export-debug %s %s",
+		cmd.CmdPath, cmd.ProjectDir, iosExportPresetName, output.ipaPath)
+
+	if err := util.ExecCommand(
+		util.CommandOptions{},
+		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", iosExportPresetName, output.ipaPath,
+	); err != nil {
+		return fmt.Errorf("failed to export iOS build: %w", err)
+	}
+
+	return validateIosExportOutput(output, exportProjectOnly)
+}
+
+func (cmd *CmdTool) installIosIPA(ipaPath string, exportProjectOnly bool) error {
+	if !*cmd.Args.Install {
+		return nil
+	}
+	if exportProjectOnly {
+		return fmt.Errorf("cannot install IPA when application/export_project_only=true")
+	}
+
+	logInfof("Installing IPA on connected devices")
+	if err := util.ExecCommand(util.CommandOptions{}, "ios-deploy", "--bundle", ipaPath); err != nil {
+		return fmt.Errorf("failed to install IPA: %w", err)
+	}
+	return nil
+}
+
+func (cmd *CmdTool) buildIosLibraries() error {
+	paths := cmd.iosLibraryPaths()
+	if err := prepareIosLibraryDirs(paths); err != nil {
+		return err
+	}
+
+	logInfof("Building Go libraries for iOS")
+	if err := cmd.prepareIosHeaders(paths); err != nil {
+		return err
+	}
+
+	sdkPaths, err := lookupIosSDKPaths()
+	if err != nil {
+		return err
+	}
+	if err := cmd.buildIosArchives(paths, sdkPaths); err != nil {
+		return err
+	}
+	if err := createIosSimulatorFatBinary(paths); err != nil {
+		return err
+	}
+	if err := createIosXCFramework(paths); err != nil {
+		return err
+	}
+
+	logInfof("Cleaning up temporary build files")
+	if err := os.RemoveAll(paths.buildDir); err != nil {
+		return fmt.Errorf("failed to remove temporary build directory: %w", err)
+	}
+
+	logInfof("Built libgdspx.ios.xcframework successfully")
+	logInfof("XCFramework location: %s", paths.xcframeworkPath)
+	return nil
+}
+
+func (cmd *CmdTool) iosLibraryPaths() iosLibraryPaths {
+	libDir := filepath.Join(cmd.ProjectDir, "lib")
+	buildDir := filepath.Join(cmd.ProjectDir, ".godot", "tmp", "gobuild")
+	return iosLibraryPaths{
+		libDir:          libDir,
+		xcframeworkPath: filepath.Join(libDir, "libgdspx.ios.xcframework"),
+		buildDir:        buildDir,
+		simulatorDir:    filepath.Join(buildDir, "simulator"),
+		deviceDir:       filepath.Join(buildDir, "device"),
+		headersDir:      filepath.Join(buildDir, "headers"),
+		goSrcDir:        filepath.Join(cmd.ProjectDir, "go"),
+	}
+}
+
+func (cmd *CmdTool) prepareIosHeaders(paths iosLibraryPaths) error {
+	const headerContent = `#ifndef LIBGDSPX_H
+#define LIBGDSPX_H
+
+#include <stdlib.h>
+
+// GDExtension entry point.
+void GDExtensionInit(void *p_interface, const void *p_library, void *r_initialization);
+
+#endif // LIBGDSPX_H
+`
+	if err := os.WriteFile(filepath.Join(paths.headersDir, "libgdspx.h"), []byte(headerContent), 0o644); err != nil {
+		return fmt.Errorf("failed to create header file: %w", err)
+	}
+
+	headerFiles, err := os.ReadDir(paths.goSrcDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to find header files: %w", err)
+	}
+	for _, file := range headerFiles {
+		name := file.Name()
+		if !strings.HasSuffix(name, ".h") {
+			continue
+		}
+		headerFile := filepath.Join(paths.goSrcDir, name)
+		destFile := filepath.Join(paths.headersDir, name)
+		if err := util.CopyFile(headerFile, destFile); err != nil {
+			return fmt.Errorf("failed to copy header file %s: %w", headerFile, err)
+		}
+	}
+	return nil
+}
+
+func (cmd *CmdTool) buildIosArchives(paths iosLibraryPaths, sdkPaths iosSDKPaths) error {
+	builds := []iosArchiveBuild{
+		newIosArchiveBuild(
+			"iOS Simulator (x86_64)",
+			filepath.Join(paths.simulatorDir, "libgdspx-x86_64.a"),
+			sdkPaths.simulator,
+			"amd64",
+			"-mios-simulator-version-min=12.0 -arch x86_64 -fembed-bitcode",
+			"-mios-simulator-version-min=12.0 -arch x86_64",
+		),
+		newIosArchiveBuild(
+			"iOS Simulator (arm64)",
+			filepath.Join(paths.simulatorDir, "libgdspx-arm64-sim.a"),
+			sdkPaths.simulator,
+			"arm64",
+			"-mios-simulator-version-min=12.0 -arch arm64 -fembed-bitcode",
+			"-mios-simulator-version-min=12.0 -arch arm64",
+		),
+		newIosArchiveBuild(
+			"iOS Device (arm64)",
+			filepath.Join(paths.deviceDir, "libgdspx-arm64.a"),
+			sdkPaths.device,
+			"arm64",
+			"-mios-version-min=12.0 -arch arm64 -fembed-bitcode",
+			"-mios-version-min=12.0 -arch arm64",
+		),
+	}
+
+	for _, build := range builds {
+		logInfof("Building iOS archive for %s", build.name)
+		if err := util.ExecCommand(util.CommandOptions{Env: build.env, Dir: paths.goSrcDir}, "go",
+			"build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s",
+			"-o", build.outputPath, ".",
+		); err != nil {
+			return fmt.Errorf("failed to build for %s: %w", build.name, err)
+		}
+	}
+	return nil
+}
+
 func parseIosExportProjectOnly(content []byte) bool {
 	presetNames := make(map[string]string)
 	projectOnlyValues := make(map[string]string)
@@ -313,21 +474,6 @@ func parseExportPresetAssignment(line string) (key string, value string, ok bool
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
 }
 
-func (cmd *CmdTool) exportIos(output iosExportOutput, exportProjectOnly bool) error {
-	logInfof("Exporting Godot project for iOS")
-	logInfof("Export command: %s --headless --path %s --export-debug %s %s",
-		cmd.CmdPath, cmd.ProjectDir, iosExportPresetName, output.ipaPath)
-
-	if err := util.ExecCommand(
-		util.CommandOptions{},
-		cmd.CmdPath, "--headless", "--path", cmd.ProjectDir, "--export-debug", iosExportPresetName, output.ipaPath,
-	); err != nil {
-		return fmt.Errorf("failed to export iOS build: %w", err)
-	}
-
-	return validateIosExportOutput(output, exportProjectOnly)
-}
-
 func validateIosExportOutput(output iosExportOutput, exportProjectOnly bool) error {
 	if exportProjectOnly {
 		if _, err := os.Stat(output.xcodeProjectPath); err != nil {
@@ -351,70 +497,6 @@ func validateIosExportOutput(output iosExportOutput, exportProjectOnly bool) err
 	return nil
 }
 
-func (cmd *CmdTool) installIosIPA(ipaPath string, exportProjectOnly bool) error {
-	if !*cmd.Args.Install {
-		return nil
-	}
-	if exportProjectOnly {
-		return fmt.Errorf("cannot install IPA when application/export_project_only=true")
-	}
-
-	logInfof("Installing IPA on connected devices")
-	if err := util.ExecCommand(util.CommandOptions{}, "ios-deploy", "--bundle", ipaPath); err != nil {
-		return fmt.Errorf("failed to install IPA: %w", err)
-	}
-	return nil
-}
-
-func (cmd *CmdTool) buildIosLibraries() error {
-	paths := cmd.iosLibraryPaths()
-	if err := prepareIosLibraryDirs(paths); err != nil {
-		return err
-	}
-
-	logInfof("Building Go libraries for iOS")
-	if err := cmd.prepareIosHeaders(paths); err != nil {
-		return err
-	}
-
-	sdkPaths, err := lookupIosSDKPaths()
-	if err != nil {
-		return err
-	}
-	if err := cmd.buildIosArchives(paths, sdkPaths); err != nil {
-		return err
-	}
-	if err := createIosSimulatorFatBinary(paths); err != nil {
-		return err
-	}
-	if err := createIosXCFramework(paths); err != nil {
-		return err
-	}
-
-	logInfof("Cleaning up temporary build files")
-	if err := os.RemoveAll(paths.buildDir); err != nil {
-		return fmt.Errorf("failed to remove temporary build directory: %w", err)
-	}
-
-	logInfof("Built libgdspx.ios.xcframework successfully")
-	logInfof("XCFramework location: %s", paths.xcframeworkPath)
-	return nil
-}
-
-func (cmd *CmdTool) iosLibraryPaths() iosLibraryPaths {
-	libDir := filepath.Join(cmd.ProjectDir, "lib")
-	buildDir := filepath.Join(cmd.ProjectDir, ".godot", "tmp", "gobuild")
-	return iosLibraryPaths{
-		libDir:          libDir,
-		xcframeworkPath: filepath.Join(libDir, "libgdspx.ios.xcframework"),
-		buildDir:        buildDir,
-		simulatorDir:    filepath.Join(buildDir, "simulator"),
-		deviceDir:       filepath.Join(buildDir, "device"),
-		headersDir:      filepath.Join(buildDir, "headers"),
-		goSrcDir:        filepath.Join(cmd.ProjectDir, "go"),
-	}
-}
-
 func prepareIosLibraryDirs(paths iosLibraryPaths) error {
 	if err := os.RemoveAll(paths.buildDir); err != nil {
 		return fmt.Errorf("failed to clean build directory: %w", err)
@@ -425,34 +507,6 @@ func prepareIosLibraryDirs(paths iosLibraryPaths) error {
 	for _, dir := range []string{paths.simulatorDir, paths.deviceDir, paths.libDir, paths.headersDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
-	}
-	return nil
-}
-
-func (cmd *CmdTool) prepareIosHeaders(paths iosLibraryPaths) error {
-	const headerContent = `#ifndef LIBGDSPX_H
-#define LIBGDSPX_H
-
-#include <stdlib.h>
-
-// GDExtension entry point.
-void GDExtensionInit(void *p_interface, const void *p_library, void *r_initialization);
-
-#endif // LIBGDSPX_H
-`
-	if err := os.WriteFile(filepath.Join(paths.headersDir, "libgdspx.h"), []byte(headerContent), 0o644); err != nil {
-		return fmt.Errorf("failed to create header file: %w", err)
-	}
-
-	headerFiles, err := filepath.Glob(filepath.Join(paths.goSrcDir, "*.h"))
-	if err != nil {
-		return fmt.Errorf("failed to find header files: %w", err)
-	}
-	for _, headerFile := range headerFiles {
-		destFile := filepath.Join(paths.headersDir, filepath.Base(headerFile))
-		if err := util.CopyFile(headerFile, destFile); err != nil {
-			return fmt.Errorf("failed to copy header file %s: %w", headerFile, err)
 		}
 	}
 	return nil
@@ -486,46 +540,6 @@ func lookupIosSDKPaths() (iosSDKPaths, error) {
 func validateSDKPath(name, sdkPath string) error {
 	if strings.ContainsAny(sdkPath, " \t\n") {
 		return fmt.Errorf("%s SDK path contains whitespace: %q", name, sdkPath)
-	}
-	return nil
-}
-
-func (cmd *CmdTool) buildIosArchives(paths iosLibraryPaths, sdkPaths iosSDKPaths) error {
-	builds := []iosArchiveBuild{
-		newIosArchiveBuild(
-			"iOS Simulator (x86_64)",
-			filepath.Join(paths.simulatorDir, "libgdspx-x86_64.a"),
-			sdkPaths.simulator,
-			"amd64",
-			"-mios-simulator-version-min=12.0 -arch x86_64 -fembed-bitcode",
-			"-mios-simulator-version-min=12.0 -arch x86_64",
-		),
-		newIosArchiveBuild(
-			"iOS Simulator (arm64)",
-			filepath.Join(paths.simulatorDir, "libgdspx-arm64-sim.a"),
-			sdkPaths.simulator,
-			"arm64",
-			"-mios-simulator-version-min=12.0 -arch arm64 -fembed-bitcode",
-			"-mios-simulator-version-min=12.0 -arch arm64",
-		),
-		newIosArchiveBuild(
-			"iOS Device (arm64)",
-			filepath.Join(paths.deviceDir, "libgdspx-arm64.a"),
-			sdkPaths.device,
-			"arm64",
-			"-mios-version-min=12.0 -arch arm64 -fembed-bitcode",
-			"-mios-version-min=12.0 -arch arm64",
-		),
-	}
-
-	for _, build := range builds {
-		logInfof("Building iOS archive for %s", build.name)
-		if err := util.ExecCommand(util.CommandOptions{Env: build.env, Dir: paths.goSrcDir}, "go",
-			"build", "-tags=ios,packmode", "-buildmode=c-archive", "-trimpath", "-ldflags=-w -s",
-			"-o", build.outputPath, ".",
-		); err != nil {
-			return fmt.Errorf("failed to build for %s: %w", build.name, err)
-		}
 	}
 	return nil
 }

@@ -20,14 +20,14 @@ import (
 	"math"
 
 	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/input"
 )
 
 type InputFrame struct {
 	Point                  mathf.Vec2
 	LeftButtonPressed      bool
-	MouseEvents            []engine.MouseEvent
-	KeyEvents              []engine.KeyEvent
+	MouseEvents            []input.MouseEvent
+	KeyEvents              []input.KeyEvent
 	MouseMovementThreshold float64
 }
 

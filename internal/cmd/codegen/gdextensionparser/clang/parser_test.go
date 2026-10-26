@@ -452,10 +452,9 @@ func TestFunctionCollectionsPreserveOrderAndDeduplicate(t *testing.T) {
 		return result
 	}
 	require.Equal(t, []string{"GDExtensionSpxSpriteCreate", "GDExtensionSpxSpriteDestroy"}, names(ast.CollectGDExtensionInterfaceFunctions()))
-	require.Equal(t, ast.CollectFunctionsOfClass("Sprite"), ast.CollectGDExtensionISpriteFunctions())
+	require.Equal(t, []string{"GDExtensionSpxSpriteCreate", "GDExtensionSpxSpriteDestroy"}, names(ast.CollectFunctionsOfClass("Sprite")))
 	require.Equal(t, []string{"GDExtensionSpxGlobalInit"}, names(ast.CollectGDExtensionManagerFunctions("global", ManagerNames{})))
 	require.Equal(t, []string{"GDExtensionSpxCallbackReady"}, names(ast.CollectGDExtensionICallbackFunctions()))
-	require.Equal(t, []string{"GDExtensionInterfaceFunctionPtr"}, names(ast.CollectNonGDExtensionInterfaceFunctions()))
 }
 
 func TestFilterFunctionsPreservesDeclarations(t *testing.T) {

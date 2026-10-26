@@ -19,12 +19,13 @@ package command
 import (
 	"bytes"
 	"errors"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func TestParseIosExportProjectOnly(t *testing.T) {
@@ -253,28 +254,37 @@ func TestIosPresetFileAndMalformedSections(t *testing.T) {
 }
 
 func TestIosArtifactRenameAndHeaders(t *testing.T) {
-	cmd := &CmdTool{ProjectDir: t.TempDir()}
+	root := t.TempDir()
+	cmd := &CmdTool{ProjectDir: filepath.Join(root, "project[one]")}
 	paths := cmd.iosLibraryPaths()
+	neighborDir := filepath.Join(root, "projecto", "go")
 	if paths.goSrcDir != filepath.Join(cmd.ProjectDir, "go") || paths.xcframeworkPath != filepath.Join(cmd.ProjectDir, "lib", "libgdspx.ios.xcframework") {
 		t.Fatalf("iOS library paths = %+v", paths)
 	}
-	for _, name := range []string{"ios_bridge.m.txt", "ios_keep.m", "other.txt"} {
-		writeCommandTestFile(t, filepath.Join(paths.goSrcDir, name), name)
-	}
-	if err := cmd.renameIosArtifacts(); err != nil {
-		t.Fatal(err)
-	}
-	if got := readTestFile(t, filepath.Join(paths.goSrcDir, "ios_bridge.m")); got != "ios_bridge.m.txt" {
-		t.Fatalf("restored iOS artifact = %q", got)
-	}
-	if _, err := os.Stat(filepath.Join(paths.goSrcDir, "ios_bridge.m.txt")); !os.IsNotExist(err) {
-		t.Fatalf("renamed artifact retained .txt: %v", err)
-	}
-	for _, name := range []string{"ios_keep.m", "other.txt"} {
-		if got := readTestFile(t, filepath.Join(paths.goSrcDir, name)); got != name {
-			t.Fatalf("unrelated artifact changed: %s = %q", name, got)
+	t.Run("artifacts", func(t *testing.T) {
+		for _, name := range []string{"ios_bridge.m.txt", "ios_keep.m", "other.txt"} {
+			writeCommandTestFile(t, filepath.Join(paths.goSrcDir, name), name)
 		}
-	}
+		neighborArtifact := filepath.Join(neighborDir, "ios_other.m.txt")
+		writeCommandTestFile(t, neighborArtifact, "neighbor source")
+		if err := cmd.renameIosArtifacts(); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := os.ReadFile(filepath.Join(paths.goSrcDir, "ios_bridge.m")); err != nil || string(got) != "ios_bridge.m.txt" {
+			t.Errorf("restored iOS artifact = %q, %v", got, err)
+		}
+		if _, err := os.Stat(filepath.Join(paths.goSrcDir, "ios_bridge.m.txt")); !os.IsNotExist(err) {
+			t.Errorf("renamed artifact retained .txt: %v", err)
+		}
+		for _, name := range []string{"ios_keep.m", "other.txt"} {
+			if got := readTestFile(t, filepath.Join(paths.goSrcDir, name)); got != name {
+				t.Errorf("unrelated artifact changed: %s = %q", name, got)
+			}
+		}
+		if got := readTestFile(t, neighborArtifact); got != "neighbor source" {
+			t.Errorf("neighbor artifact changed: %q", got)
+		}
+	})
 	writeCommandTestFile(t, filepath.Join(paths.buildDir, "stale"), "old build")
 	writeCommandTestFile(t, filepath.Join(paths.xcframeworkPath, "stale"), "old framework")
 	if err := prepareIosLibraryDirs(paths); err != nil {
@@ -290,16 +300,26 @@ func TestIosArtifactRenameAndHeaders(t *testing.T) {
 			t.Fatalf("iOS library directory missing: %s: %v", dir, err)
 		}
 	}
-	writeCommandTestFile(t, filepath.Join(paths.goSrcDir, "custom.h"), "custom header")
-	if err := cmd.prepareIosHeaders(paths); err != nil {
-		t.Fatal(err)
-	}
-	if got := readTestFile(t, filepath.Join(paths.headersDir, "custom.h")); got != "custom header" {
-		t.Fatalf("copied header = %q", got)
-	}
-	if got := readTestFile(t, filepath.Join(paths.headersDir, "libgdspx.h")); !strings.Contains(got, "void GDExtensionInit(") || !strings.Contains(got, "#ifndef LIBGDSPX_H") {
-		t.Fatalf("generated extension header = %q", got)
-	}
+	t.Run("headers", func(t *testing.T) {
+		writeCommandTestFile(t, filepath.Join(paths.goSrcDir, "custom.h"), "custom header")
+		writeCommandTestFile(t, filepath.Join(neighborDir, "custom.h"), "neighbor header")
+		writeCommandTestFile(t, filepath.Join(neighborDir, "other.h"), "unrelated header")
+		if err := cmd.prepareIosHeaders(paths); err != nil {
+			t.Fatal(err)
+		}
+		if got := readTestFile(t, filepath.Join(paths.headersDir, "custom.h")); got != "custom header" {
+			t.Errorf("copied header = %q", got)
+		}
+		if _, err := os.Stat(filepath.Join(paths.headersDir, "other.h")); !os.IsNotExist(err) {
+			t.Errorf("copied unrelated header: %v", err)
+		}
+		if got := readTestFile(t, filepath.Join(neighborDir, "custom.h")); got != "neighbor header" {
+			t.Errorf("neighbor header changed: %q", got)
+		}
+		if got := readTestFile(t, filepath.Join(paths.headersDir, "libgdspx.h")); !strings.Contains(got, "void GDExtensionInit(") || !strings.Contains(got, "#ifndef LIBGDSPX_H") {
+			t.Fatalf("generated extension header = %q", got)
+		}
+	})
 }
 
 func TestIosLibraryPreparationFailures(t *testing.T) {
@@ -318,6 +338,22 @@ func TestIosLibraryPreparationFailures(t *testing.T) {
 	if err := prepareIosLibraryDirs(paths); err != nil {
 		t.Fatal(err)
 	}
+	if err := cmd.renameIosArtifacts(); err != nil {
+		t.Fatalf("missing source directory rename error = %v", err)
+	}
+	if err := cmd.prepareIosHeaders(paths); err != nil {
+		t.Fatalf("missing source directory headers error = %v", err)
+	}
+	writeCommandTestFile(t, paths.goSrcDir, "occupied")
+	if err := cmd.renameIosArtifacts(); !errors.As(err, &pathError) || !strings.Contains(err.Error(), "failed to list iOS artifacts") {
+		t.Fatalf("invalid source directory rename error = %v", err)
+	}
+	if err := cmd.prepareIosHeaders(paths); !errors.As(err, &pathError) || !strings.Contains(err.Error(), "failed to find header files") {
+		t.Fatalf("invalid source directory headers error = %v", err)
+	}
+	if err := os.Remove(paths.goSrcDir); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(paths.goSrcDir, "invalid.h"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -330,6 +366,58 @@ func TestIosLibraryPreparationFailures(t *testing.T) {
 	}
 	if err := cmd.renameIosArtifacts(); err == nil || !strings.Contains(err.Error(), "failed to rename") {
 		t.Fatalf("blocked artifact rename error = %v", err)
+	}
+}
+
+func TestIosLibraryBuildPreservesFilesystemErrors(t *testing.T) {
+	for _, scenario := range []string{"clean build directory", "copy header", "cleanup"} {
+		t.Run(scenario, func(t *testing.T) {
+			cmd, logPath := newMobileExportFixture(t)
+			paths := cmd.iosLibraryPaths()
+			var want string
+			switch scenario {
+			case "clean build directory":
+				writeCommandTestFile(t, filepath.Join(paths.buildDir, "keep"), "old build")
+				restrictCommandTestPath(t, paths.buildDir, 0o500)
+				want = "failed to clean build directory"
+			case "copy header":
+				header := filepath.Join(paths.goSrcDir, "private.h")
+				writeCommandTestFile(t, header, "protected header")
+				restrictCommandTestPath(t, header, 0)
+				want = "failed to copy header file"
+			case "cleanup":
+				if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+					t.Skip("requires POSIX permissions enforced for an unprivileged user")
+				}
+				t.Setenv("SPX_MOBILE_BUILD_DIR", paths.buildDir)
+				tool := filepath.Join(filepath.Dir(cmd.CmdPath), "xcrun")
+				script := readTestFile(t, tool) + "\nif [ \"$1\" != --sdk ]; then /bin/chmod 500 \"$SPX_MOBILE_BUILD_DIR\"; fi\n"
+				if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					if err := os.Chmod(paths.buildDir, 0o755); err != nil && !os.IsNotExist(err) {
+						t.Errorf("restore build directory permissions: %v", err)
+					}
+				})
+				want = "failed to remove temporary build directory"
+			}
+			err := cmd.buildIosLibraries()
+			var pathError *os.PathError
+			if !errors.As(err, &pathError) || !strings.Contains(err.Error(), want) {
+				t.Fatalf("library build error = %v, want filesystem error with %q", err, want)
+			}
+			if scenario == "cleanup" {
+				if info, err := os.Stat(paths.xcframeworkPath); err != nil || !info.IsDir() {
+					t.Fatalf("cleanup failure lost the built framework: %v, %v", info, err)
+				}
+			} else if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+				t.Fatalf("SDK commands ran after preparation failed: %v", err)
+			}
+			if got := readTestFile(t, filepath.Join(paths.goSrcDir, "ios_bridge.m")); got != "bridge" {
+				t.Fatalf("failed library build changed project source: %q", got)
+			}
+		})
 	}
 }
 

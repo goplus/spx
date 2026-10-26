@@ -20,7 +20,6 @@ package common
 import (
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
@@ -58,6 +57,38 @@ type ManagerData struct {
 	ManagerNames clang.ManagerNames
 }
 
+func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
+	c := &GenerationContext{
+		ast:              ast,
+		managerSet:       make(map[string]bool),
+		managerNames:     clang.NewManagerNames(metadata.ManagerNames),
+		arrayBridges:     make(map[string]ArrayBridge),
+		staticMethods:    maps.Clone(metadata.StaticMethods),
+		returnParameters: maps.Clone(metadata.ReturnParameters),
+		parameters:       make(map[string][]Parameter),
+		parameterNames:   make(map[string]map[string]Parameter),
+		goTypes: map[string]string{
+			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
+			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
+			"GdRect2": "Rect2", "GdString": "string", "GdBool": "bool",
+			"GdColor": "Color", "GdArray": "Array",
+		},
+	}
+	maps.Copy(c.goTypes, directScalarTypes)
+	for name, spec := range metadata.ArrayBridges {
+		c.arrayBridges[name] = spec.Clone()
+	}
+	for _, function := range ast.CollectGDExtensionInterfaceFunctions() {
+		c.parameters[function.Name], c.parameterNames[function.Name] = c.prepareParameters(&function)
+		c.managerSet[c.GetManagerName(function.Name)] = true
+	}
+	for _, name := range []string{"", "string", "variant", "global"} {
+		delete(c.managerSet, name)
+	}
+	c.managers = slices.Sorted(maps.Keys(c.managerSet))
+	return c
+}
+
 // AST returns the input used to prepare this context. Treat it as read-only.
 func (c *GenerationContext) AST() clang.CHeaderFileAST { return c.ast }
 
@@ -87,61 +118,4 @@ func (c *GenerationContext) MethodTarget(function *clang.TypedefFunction) string
 func (c *GenerationContext) ArrayBridge(functionName string) (ArrayBridge, bool) {
 	spec, ok := c.arrayBridges[functionName]
 	return spec.Clone(), ok
-}
-
-func (c *GenerationContext) ListArrayBridges() []ArrayBridge {
-	specs := make([]ArrayBridge, 0, len(c.arrayBridges))
-	for _, spec := range c.arrayBridges {
-		specs = append(specs, spec.Clone())
-	}
-	sort.Slice(specs, func(i, j int) bool { return specs[i].FunctionName < specs[j].FunctionName })
-	return specs
-}
-
-func (c *GenerationContext) GetManagers(ast clang.CHeaderFileAST) []string {
-	managerSet := make(map[string]bool)
-	managers := []string{}
-	for _, fn := range ast.CollectGDExtensionInterfaceFunctions() {
-		managerSet[c.GetManagerName(fn.Name)] = true
-	}
-	delete(managerSet, "")
-	delete(managerSet, "string")
-	delete(managerSet, "variant")
-	delete(managerSet, "global")
-	for item := range managerSet {
-		managers = append(managers, item)
-	}
-	sort.Strings(managers)
-	return managers
-}
-
-func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata) *GenerationContext {
-	c := &GenerationContext{
-		ast:              ast,
-		managerSet:       make(map[string]bool),
-		managerNames:     clang.NewManagerNames(metadata.ManagerNames),
-		arrayBridges:     make(map[string]ArrayBridge),
-		staticMethods:    maps.Clone(metadata.StaticMethods),
-		returnParameters: maps.Clone(metadata.ReturnParameters),
-		parameters:       make(map[string][]Parameter),
-		parameterNames:   make(map[string]map[string]Parameter),
-		goTypes: map[string]string{
-			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
-			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
-			"GdRect2": "Rect2", "GdString": "string", "GdBool": "bool",
-			"GdColor": "Color", "GdArray": "Array",
-		},
-	}
-	maps.Copy(c.goTypes, directScalarTypes)
-	for name, spec := range metadata.ArrayBridges {
-		c.arrayBridges[name] = spec.Clone()
-	}
-	for _, function := range ast.CollectGDExtensionInterfaceFunctions() {
-		c.parameters[function.Name], c.parameterNames[function.Name] = c.prepareParameters(&function)
-	}
-	c.managers = c.GetManagers(ast)
-	for _, name := range c.managers {
-		c.managerSet[name] = true
-	}
-	return c
 }

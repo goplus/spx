@@ -37,6 +37,10 @@ case "${1:-}" in
     cd cmd/ispx
     covered_web_test coverage-web.out ./...
     ;;
+  codegen)
+    cd internal/cmd/codegen
+    covered_test coverage.out -coverpkg=./... ./...
+    ;;
   tools)
     covered_test coverage-driverbundle.out -v ./.github/scripts/driverbundle
     for runtime_tool in manifest resolution version; do

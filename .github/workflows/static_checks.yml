@@ -93,6 +93,11 @@ jobs:
         shell: bash
         run: bash .github/scripts/test_go_coverage.sh tools
 
+      - name: Test binding generator
+        id: codegen-tests
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh codegen
+
       - name: Test CI contracts
         shell: bash
         run: |
@@ -121,5 +126,5 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           slug: goplus/spx
-          files: ${{ steps.go-tests.outputs.coverage }},${{ steps.web-tests.outputs.coverage }},${{ steps.web-process-tests.outputs.coverage }},${{ steps.web-interpreter-tests.outputs.coverage }},${{ steps.tool-tests.outputs.coverage }}
+          files: ${{ steps.go-tests.outputs.coverage }},${{ steps.web-tests.outputs.coverage }},${{ steps.web-process-tests.outputs.coverage }},${{ steps.web-interpreter-tests.outputs.coverage }},${{ steps.tool-tests.outputs.coverage }},${{ steps.codegen-tests.outputs.coverage }}
           disable_search: true

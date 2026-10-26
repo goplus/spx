@@ -40,44 +40,32 @@ func acquireSourceRuntime(ctx context.Context, cfg Config, env []string, cacheRo
 	if err != nil {
 		return Assets{}, sourceRuntimeError(root, publishedErr, err)
 	}
-	if found {
-		assets, err := materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
+	if !found {
+		if dependencies.goBin == nil {
+			return Assets{}, sourceRuntimeError(root, publishedErr, errors.New("cannot resolve Go bin: resolver is unavailable"))
+		}
+		bin, err := dependencies.goBin(ctx, cfg, env)
 		if err != nil {
 			return Assets{}, sourceRuntimeError(root, publishedErr, err)
 		}
-		return assets, nil
+		// The bridge is built from the selected source graph, so the source-mode
+		// fallback consumes only the co-located Engine/PCK from this installation.
+		enginePath, packPath := filepath.Join(bin, spec.RuntimeName), filepath.Join(bin, spec.PackName)
+		manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
+		if err != nil {
+			return Assets{}, sourceRuntimeError(root, publishedErr, fmt.Errorf("inspect %s: %w", bin, err))
+		}
+		data, err := manifest.JSON()
+		if err != nil {
+			return Assets{}, sourceRuntimeError(root, publishedErr, err)
+		}
+		local = localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath}
 	}
-	if dependencies.goBin == nil {
-		return Assets{}, sourceRuntimeError(root, publishedErr, errors.New("cannot resolve Go bin: resolver is unavailable"))
-	}
-	bin, err := dependencies.goBin(ctx, cfg, env)
-	if err != nil {
-		return Assets{}, sourceRuntimeError(root, publishedErr, err)
-	}
-	enginePath := filepath.Join(bin, spec.RuntimeName)
-	packPath := filepath.Join(bin, spec.PackName)
-	manifest, err := release.NewLocalRuntimeManifest(lock, spec.GOOS, spec.GOARCH, enginePath, packPath)
-	if err != nil {
-		return Assets{}, sourceRuntimeError(root, publishedErr, fmt.Errorf("inspect %s: %w", bin, err))
-	}
-	data, err := manifest.JSON()
-	if err != nil {
-		return Assets{}, sourceRuntimeError(root, publishedErr, err)
-	}
-	local = localRuntimeSource{manifest: manifest, bytes: data, enginePath: enginePath, packPath: packPath}
 	assets, err := materializeLocalRuntime(ctx, cacheRoot, lock, spec, local)
 	if err != nil {
 		return Assets{}, sourceRuntimeError(root, publishedErr, err)
 	}
 	return assets, nil
-}
-
-func sourceRuntimeError(root string, publishedErr, localErr error) error {
-	hint := "run make dev in the SPX source checkout"
-	if root != "" {
-		hint = "run make dev in " + root
-	}
-	return fmt.Errorf("launchpack: published runtime unavailable: %w; local runtime unavailable: %w; %s", publishedErr, localErr, hint)
 }
 
 func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error) {
@@ -105,4 +93,12 @@ func resolveGoBin(ctx context.Context, cfg Config, env []string) (string, error)
 		return "", fmt.Errorf("cannot resolve Go bin: expected an absolute clean path, got %q", bin)
 	}
 	return bin, nil
+}
+
+func sourceRuntimeError(root string, publishedErr, localErr error) error {
+	hint := "run make dev in the SPX source checkout"
+	if root != "" {
+		hint = "run make dev in " + root
+	}
+	return fmt.Errorf("launchpack: published runtime unavailable: %w; local runtime unavailable: %w; %s", publishedErr, localErr, hint)
 }

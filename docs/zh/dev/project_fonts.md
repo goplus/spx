@@ -62,7 +62,7 @@ Family 的 `index.json` 格式如下：
 
 字体注册发生在游戏资源构建阶段：
 
-1. `game_build.go` 打开项目资源。
+1. `game_load.go` 打开项目资源。
 2. `internal/core/project.LoadProjectFonts()` 从 packed catalog 或 `assets/fonts/` 加载 Font Collection。
 3. `ResolveRuntimeFontPlan()` 把加载结果解析成独立的运行时字体计划，包括默认字体、所有项目 Face 和 preference，不注入任何兼容 family。
 4. `applyRuntimeFontPlan()` 展平字体计划，并通过一次 `ApplyProjectFonts()` 调用交给 Godot。

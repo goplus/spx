@@ -113,10 +113,6 @@ func (p *Game) EraseAll() {
 	p.penCommandBarrier(engine.Managers().PenMgr.DestroyAllPens)
 }
 
-func (kind EffectKind) String() string {
-	return greffNames[kind]
-}
-
 func (p *Game) SetGraphicEffect(kind EffectKind, val float64) {
 	engine.RequestRedraw()
 	p.baseObj.setGraphicEffect(kind, val)
@@ -309,7 +305,7 @@ func (p *Game) resolvePropertyTarget(target string) (reflect.Value, int) {
 
 	v := reflect.ValueOf(val).Elem()
 	if _, ok := val.(Sprite); ok {
-		return v, 2 // (spx.Sprite, *Game)
+		return v, spritePropertyFieldsStart
 	}
 	return v, 0 // normal target field
 }
@@ -348,4 +344,8 @@ func (p *Game) setupPathFinder(withJump, withDebug bool) {
 	cellSize := mathf.NewVec2(float64(p.pathfindingState.PathCellSizeX), float64(p.pathfindingState.PathCellSizeY))
 	gridSize := mathf.NewVec2(float64(p.displayState.WorldWidth), float64(p.displayState.WorldHeight)).Div(cellSize)
 	engine.Managers().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, withJump, withDebug)
+}
+
+func (kind EffectKind) String() string {
+	return greffNames[kind]
 }

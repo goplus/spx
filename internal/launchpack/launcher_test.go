@@ -600,6 +600,9 @@ func TestBuildLauncherFailureReleasesBridgeWork(t *testing.T) {
 				return errors.New("bridge provenance rejected")
 			}
 		}},
+		{"bridge removed during verification", "interpreter bridge unavailable", func(t *testing.T, c *Config) {
+			c.VerifyBridge = os.Remove
+		}},
 		{"project changes during build", "changed after validation", func(t *testing.T, c *Config) {
 			c.VerifyBridge = func(string) error { writeProjectTestFile(t, filepath.Join(c.ProjectDir, ".config"), "{}"); return nil }
 		}},
