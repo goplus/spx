@@ -25,9 +25,14 @@ import (
 	inputstate "github.com/goplus/spx/v4/internal/input"
 )
 
+type inputMouseState struct {
+	position InputReplayMouse
+	buttons  uint8
+}
+
 type inputSessionTick struct {
 	frame     InputReplayFrame
-	initial   InputReplayState
+	initial   inputMouseState
 	firstTick bool
 }
 
@@ -48,7 +53,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		if err := s.controller.SynchronizeRecordingInitial(initial); err != nil {
 			return inputSessionTick{}, err
 		}
-		s.initial = inputstate.CloneInputReplayState(initial)
+		s.initial = inputMouseState{position: initial.Mouse, buttons: initial.Buttons}
 		s.initialPending = false
 	}
 
@@ -70,26 +75,35 @@ func (s *inputSession) consumeSampledInputTickLocked(
 	}
 	return inputSessionTick{
 		frame:     frame,
-		initial:   inputstate.CloneInputReplayState(s.initial),
+		initial:   s.initial,
 		firstTick: firstTick,
 	}, nil
 }
 
-func (s *inputSession) playbackState() (InputReplayState, bool) {
+// inputPlaybackState contains only scalar values, so queries cannot expose the
+// session's held-key slice or require an owned copy of it.
+type inputPlaybackState struct {
+	inputMouseState
+	keyPressed bool
+}
+
+func (s *inputSession) playbackInput(key Key) (inputPlaybackState, bool) {
+	if s == nil {
+		return inputPlaybackState{}, false
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.mode != InputSessionModeReplaying || s.phase == InputSessionPhaseAborted {
-		return InputReplayState{}, false
+		return inputPlaybackState{}, false
 	}
-	return inputstate.CloneInputReplayState(s.current), true
-}
-
-func (p *Game) currentInputPlaybackState() (InputReplayState, bool) {
-	session := p.currentInputSession()
-	if session == nil {
-		return InputReplayState{}, false
+	pressed := len(s.current.KeysDown) != 0
+	if key != KeyAny {
+		_, pressed = slices.BinarySearch(s.current.KeysDown, int64(key))
 	}
-	return session.playbackState()
+	return inputPlaybackState{
+		inputMouseState: inputMouseState{position: s.current.Mouse, buttons: s.current.Buttons},
+		keyPressed:      pressed,
+	}, true
 }
 
 func (s *inputSession) logicalClock() time.Time {
