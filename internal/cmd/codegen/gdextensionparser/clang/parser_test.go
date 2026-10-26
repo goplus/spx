@@ -457,3 +457,34 @@ func TestFunctionCollectionsPreserveOrderAndDeduplicate(t *testing.T) {
 	require.Equal(t, []string{"GDExtensionSpxCallbackReady"}, names(ast.CollectGDExtensionICallbackFunctions()))
 	require.Equal(t, []string{"GDExtensionInterfaceFunctionPtr"}, names(ast.CollectNonGDExtensionInterfaceFunctions()))
 }
+
+func TestFilterFunctionsPreservesDeclarations(t *testing.T) {
+	first := TypedefFunction{Name: "first", ReturnType: PrimitiveType{Name: "int"}}
+	duplicate := TypedefFunction{Name: "first", ReturnType: PrimitiveType{Name: "void"}}
+	second := TypedefFunction{Name: "second"}
+	third := TypedefFunction{Name: "third"}
+	ast := CHeaderFileAST{Expr: []Expr{
+		{Function: &first}, {Comment: "ignored"}, {Function: &second},
+		{Function: &duplicate}, {Function: &third},
+	}}
+	for _, tt := range []struct {
+		name    string
+		include func(TypedefFunction) bool
+		want    []TypedefFunction
+	}{
+		{"all", func(TypedefFunction) bool { return true }, []TypedefFunction{first, second, third}},
+		{"middle removed", func(f TypedefFunction) bool { return f.Name != "second" }, []TypedefFunction{first, third}},
+		{"first removed", func(f TypedefFunction) bool { return f.Name != "first" }, []TypedefFunction{second, third}},
+		{"none", func(TypedefFunction) bool { return false }, []TypedefFunction{}},
+		{"duplicate cannot replace first", func(f TypedefFunction) bool { return f.ReturnType.Name == "void" }, []TypedefFunction{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, ast.filterFunctions(tt.include))
+			require.Equal(t, []TypedefFunction{first, second, third}, ast.CollectFunctions())
+		})
+	}
+	require.Equal(t, []TypedefFunction{}, (CHeaderFileAST{}).filterFunctions(func(TypedefFunction) bool {
+		t.Fatal("empty AST must not call predicate")
+		return true
+	}))
+}
