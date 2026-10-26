@@ -59,8 +59,7 @@ type inputSession struct {
 	currentTick    int64
 	hasCurrentTick bool
 	initialPending bool
-	result         InputReplay
-	resultJSON     []byte
+	result         inputRecordingResult
 	abortReason    string
 	frameOpen      bool
 	terminalStatus InputSessionStatus
@@ -71,6 +70,13 @@ type inputSession struct {
 type inputRecordingResult struct {
 	replay InputReplay
 	json   []byte
+}
+
+func (r inputRecordingResult) clone() inputRecordingResult {
+	return inputRecordingResult{
+		replay: inputstate.CloneInputReplay(r.replay),
+		json:   append([]byte(nil), r.json...),
+	}
 }
 
 func (p *Game) attachPreparedInputSession() error {
@@ -165,8 +171,7 @@ func (s *inputSession) close(reason string) InputSessionStatus {
 	if s.phase != InputSessionPhaseCompleted && s.phase != InputSessionPhaseAborted {
 		s.phase = InputSessionPhaseAborted
 		s.abortReason = reason
-		s.result = InputReplay{}
-		s.resultJSON = nil
+		s.result = inputRecordingResult{}
 	}
 	status := s.statusLocked()
 	s.terminalStatus = status
@@ -195,10 +200,7 @@ func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResul
 		return inputRecordingResult{}, fmt.Errorf("input recording was aborted: %s", reason)
 	}
 	if s.phase == InputSessionPhaseCompleted {
-		result := inputRecordingResult{
-			replay: cloneInputReplay(s.result),
-			json:   append([]byte(nil), s.resultJSON...),
-		}
+		result := s.result.clone()
 		s.mu.Unlock()
 		return result, nil
 	}
@@ -225,22 +227,22 @@ func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResul
 		s.mu.Unlock()
 		return inputRecordingResult{}, err
 	}
-	s.result = cloneInputReplay(replay)
-	s.resultJSON = append(s.resultJSON[:0], encoded...)
+	// Recording returns an owned snapshot; keep it as the cache until finishing succeeds.
+	s.result = inputRecordingResult{replay: replay, json: encoded}
 	s.mu.Unlock()
 
 	if err := freezeInputSession(freeze); err != nil {
 		s.mu.Lock()
-		s.result = InputReplay{}
-		s.resultJSON = nil
+		s.result = inputRecordingResult{}
 		s.phase = InputSessionPhaseRunning
 		s.mu.Unlock()
 		return inputRecordingResult{}, err
 	}
 	s.mu.Lock()
 	s.phase = InputSessionPhaseCompleted
+	result := s.result.clone()
 	s.mu.Unlock()
-	return inputRecordingResult{replay: replay, json: encoded}, nil
+	return result, nil
 }
 
 func (s *inputSession) status() InputSessionStatus {
@@ -267,8 +269,8 @@ func (s *inputSession) statusLocked() InputSessionStatus {
 		status.HasCurrentTick = true
 	}
 	if s.mode == InputSessionModeRecording && s.phase == InputSessionPhaseCompleted {
-		status.NextFrame = int64(len(s.result.Frames))
-		status.FrameCount = len(s.result.Frames)
+		status.NextFrame = int64(len(s.result.replay.Frames))
+		status.FrameCount = len(s.result.replay.Frames)
 	}
 	if s.phase == InputSessionPhaseAborted {
 		status.Error = s.abortReason
@@ -344,7 +346,7 @@ func prepareInputReplaySession(replay InputReplay, option InputSessionOptions) (
 	}
 	return prepareInputSession(inputSessionPlan{
 		mode:       InputSessionModeReplaying,
-		replay:     cloneInputReplay(replay),
+		replay:     inputstate.CloneInputReplay(replay),
 		captureKey: option.CaptureKey,
 	})
 }
@@ -435,8 +437,8 @@ func newInputSession(plan *inputSessionPlan) (*inputSession, error) {
 			return nil, err
 		}
 		fixedTimestep = plan.replay.FixedTimestep
-		session.initial = cloneInputReplayState(plan.replay.Initial)
-		session.current = cloneInputReplayState(plan.replay.Initial)
+		session.initial = inputstate.CloneInputReplayState(plan.replay.Initial)
+		session.current = inputstate.CloneInputReplayState(plan.replay.Initial)
 	default:
 		return nil, fmt.Errorf("unsupported input session mode %q", plan.mode)
 	}
@@ -507,17 +509,4 @@ func inputSessionStatus() InputSessionStatus {
 		}
 	}
 	return InputSessionStatus{Mode: InputSessionModeIdle}
-}
-
-func cloneInputReplay(replay InputReplay) InputReplay {
-	cloned := replay
-	cloned.Initial = cloneInputReplayState(replay.Initial)
-	cloned.Frames = make([]InputReplayFrame, len(replay.Frames))
-	for i, frame := range replay.Frames {
-		cloned.Frames[i] = frame
-		cloned.Frames[i].State = cloneInputReplayState(frame.State)
-		cloned.Frames[i].MouseEvents = append([]InputReplayMouseEvent(nil), frame.MouseEvents...)
-		cloned.Frames[i].KeyEvents = append([]InputReplayKeyEvent(nil), frame.KeyEvents...)
-	}
-	return cloned
 }

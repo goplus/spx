@@ -45,7 +45,7 @@ func (c *InputReplayController) StartRecording(initial InputReplayState, fixedTi
 		Format:        InputReplayFormat,
 		Version:       InputReplayVersion,
 		FixedTimestep: fixedTimestep,
-		Initial:       cloneInputReplayState(initial),
+		Initial:       CloneInputReplayState(initial),
 		Frames:        make([]InputReplayFrame, 0),
 	}
 	return nil
@@ -56,7 +56,7 @@ func (c *InputReplayController) Recording() (InputReplay, error) {
 	if c.mode != InputSessionModeRecording {
 		return InputReplay{}, ErrInputSessionNotRecording
 	}
-	return cloneInputReplay(c.stream), nil
+	return CloneInputReplay(c.stream), nil
 }
 
 func (c *InputReplayController) SynchronizeRecordingInitial(initial InputReplayState) error {
@@ -69,7 +69,7 @@ func (c *InputReplayController) SynchronizeRecordingInitial(initial InputReplayS
 	if c.next != 0 {
 		return fmt.Errorf("cannot synchronize initial state after recording tick zero")
 	}
-	c.stream.Initial = cloneInputReplayState(initial)
+	c.stream.Initial = CloneInputReplayState(initial)
 	return nil
 }
 
@@ -81,7 +81,7 @@ func (c *InputReplayController) StartReplay(replay InputReplay) error {
 		return ErrInputSessionActive
 	}
 	c.mode = InputSessionModeReplaying
-	c.stream = cloneInputReplay(replay)
+	c.stream = CloneInputReplay(replay)
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (c *InputReplayController) Resolve(
 	}
 	effective = InputReplayFrame{
 		Frame:       -1,
-		State:       cloneInputReplayState(live),
+		State:       CloneInputReplayState(live),
 		MouseEvents: slices.Clone(mouseEvents),
 		KeyEvents:   slices.Clone(keyEvents),
 	}
@@ -166,9 +166,11 @@ func (c *InputReplayController) resolveReplay() (InputReplayFrame, bool, error) 
 	return cloneInputReplayFrame(frozen), firstTick, nil
 }
 
-func cloneInputReplay(replay InputReplay) InputReplay {
+// CloneInputReplay returns an isolated snapshot, preserving nested slice shapes.
+// As in recording and decoding, an absent Frames slice becomes an empty slice.
+func CloneInputReplay(replay InputReplay) InputReplay {
 	cloned := replay
-	cloned.Initial = cloneInputReplayState(replay.Initial)
+	cloned.Initial = CloneInputReplayState(replay.Initial)
 	cloned.Frames = make([]InputReplayFrame, len(replay.Frames))
 	for i, frame := range replay.Frames {
 		cloned.Frames[i] = cloneInputReplayFrame(frame)
@@ -177,15 +179,14 @@ func cloneInputReplay(replay InputReplay) InputReplay {
 }
 
 func cloneInputReplayFrame(frame InputReplayFrame) InputReplayFrame {
-	cloned := frame
-	cloned.State = cloneInputReplayState(frame.State)
-	cloned.MouseEvents = slices.Clone(frame.MouseEvents)
-	cloned.KeyEvents = slices.Clone(frame.KeyEvents)
-	return cloned
+	frame.State = CloneInputReplayState(frame.State)
+	frame.MouseEvents = slices.Clone(frame.MouseEvents)
+	frame.KeyEvents = slices.Clone(frame.KeyEvents)
+	return frame
 }
 
-func cloneInputReplayState(state InputReplayState) InputReplayState {
-	cloned := state
-	cloned.KeysDown = slices.Clone(state.KeysDown)
-	return cloned
+// CloneInputReplayState copies state without changing nil or empty key slices.
+func CloneInputReplayState(state InputReplayState) InputReplayState {
+	state.KeysDown = slices.Clone(state.KeysDown)
+	return state
 }
