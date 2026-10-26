@@ -17,7 +17,6 @@
 package command
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -79,10 +78,7 @@ func (cmd *CmdTool) ExportWebWorker() error {
 	if err != nil {
 		return err
 	}
-	if err := cmd.patchWebWorkerEngine(insertCode); err != nil {
-		return err
-	}
-	return nil
+	return cmd.patchWebWorkerEngine(insertCode)
 }
 
 // ExportMinigame exports the project for the minigame runtime.
@@ -118,90 +114,63 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 	return nil
 }
 
-func (cmd *CmdTool) prepareMinigameWorkspace() (minigamePaths, error) {
-	backupDir := cmd.WebDir + "_bck"
-	if err := os.Rename(cmd.WebDir, backupDir); err != nil {
-		return minigamePaths{}, fmt.Errorf("failed to backup web directory: %w", err)
+func (cmd *CmdTool) exportWebCommon(mode string) error {
+	if err := cmd.Clear(); err != nil {
+		return err
 	}
-	if err := os.MkdirAll(cmd.WebDir, 0o755); err != nil {
-		return minigamePaths{}, fmt.Errorf("failed to create minigame directory: %w", err)
-	}
-
-	paths := minigamePaths{
-		workDir:   cmd.WebDir,
-		engineDir: filepath.Join(cmd.WebDir, "engine"),
-		jsDir:     filepath.Join(cmd.WebDir, "js"),
-		rawWebDir: filepath.Join(cmd.WebDir, "rawWeb"),
-	}
-	if err := os.Rename(backupDir, paths.rawWebDir); err != nil {
-		return minigamePaths{}, fmt.Errorf("failed to move raw web assets: %w", err)
+	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode)
+	if !util.IsFileExist(templateDir) {
+		return errors.New("web dir file not found: " + templateDir)
 	}
 
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMinigameMode, cmd.WebDir, true)
-	for _, dir := range []string{paths.engineDir, paths.jsDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return minigamePaths{}, fmt.Errorf("failed to create %s: %w", dir, err)
-		}
+	dstPath := filepath.Join(cmd.ProjectDir, ".builds", "web")
+	os.MkdirAll(dstPath, 0o755)
+	util.CopyDir2(templateDir, dstPath)
+
+	logInfof("Exporting web assets to %s", dstPath)
+	util.CopyDir(cmd.ProjectFS, "template/project", cmd.ProjectDir, true)
+
+	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
+
+	ispxWebDir, err := cmd.getIspxWebDir()
+	if err != nil {
+		return err
 	}
-	return paths, nil
+	util.CopyDir2(ispxWebDir, cmd.WebDir)
+
+	util.CopyDir(cmd.PlatformFS, "template/platform/web", cmd.WebDir, true)
+
+	output, err := util.OutputCommand(util.CommandOptions{Dir: cmd.TargetDir}, "go", "env", "GOROOT")
+	if err != nil {
+		return fmt.Errorf("failed to get GOROOT: %w", err)
+	}
+	goroot := strings.TrimSpace(string(output))
+	wasmExecPath := filepath.Join(goroot, "lib", "wasm", "wasm_exec.js")
+	if err := util.CopyFile(wasmExecPath, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); err != nil {
+		return fmt.Errorf("failed to copy wasm_exec.js: %w", err)
+	}
+	if err := pack.PackProject(cmd.TargetDir, filepath.Join(cmd.WebDir, "game.zip")); err != nil {
+		return err
+	}
+	return cmd.writeWebLogicAssets(mode)
 }
 
-func (cmd *CmdTool) prepareMinigameEngineAssets(paths minigamePaths, buildMode string) error {
-	godotEditorWasm := filepath.Join(paths.rawWebDir, "engine.wasm")
-	ispxWasm := filepath.Join(paths.rawWebDir, "ispx.wasm")
-
-	if buildMode == "fast" {
-		if err := os.Rename(godotEditorWasm, filepath.Join(paths.engineDir, "engine.wasm")); err != nil {
-			return fmt.Errorf("failed to move %s: %w", godotEditorWasm, err)
-		}
-		if err := os.Rename(ispxWasm, filepath.Join(paths.engineDir, "ispx.wasm")); err != nil {
-			return fmt.Errorf("failed to move %s: %w", ispxWasm, err)
-		}
-	} else {
-		if _, err := exec.LookPath("brotli"); err != nil {
-			return fmt.Errorf("error: brotli is not installed")
-		}
-
-		logInfof("Compressing %s", godotEditorWasm)
-		if err := cmd.compressBrotli(godotEditorWasm); err != nil {
-			return fmt.Errorf("failed to compress %s: %w", godotEditorWasm, err)
-		}
-		logInfof("Compressing %s", ispxWasm)
-		if err := cmd.compressBrotli(ispxWasm); err != nil {
-			return fmt.Errorf("failed to compress %s: %w", ispxWasm, err)
-		}
-		if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.engineDir, "*.br"); err != nil {
-			return fmt.Errorf("failed to move br files: %w", err)
-		}
+func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
+	wasmDstPath := filepath.Join(cmd.WebDir, "ispx.wasm")
+	wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
+	wasmBrPath := wasmPath + ".br"
+	if err := util.CopyFile(wasmPath, wasmDstPath); err != nil {
+		return fmt.Errorf("failed to copy interpreter wasm from %s: %w", wasmPath, err)
 	}
-
-	if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.engineDir, "*.zip"); err != nil {
-		return fmt.Errorf("failed to move zip files: %w", err)
+	// Minigame exports either use raw wasm or recompress it during preparation.
+	if mode != webMinigameMode && util.IsFileExist(wasmBrPath) {
+		if err := util.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
+			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
+		}
+	} else if err := os.Remove(wasmDstPath + ".br"); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove stale compressed wasm at %s: %w", wasmDstPath+".br", err)
 	}
 	return nil
-}
-
-func (cmd *CmdTool) finalizeMinigameJS(paths minigamePaths, isCompressed bool) error {
-	if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.jsDir, "*.js"); err != nil {
-		return fmt.Errorf("failed to move js files: %w", err)
-	}
-	if err := cmd.mergeJSFiles(paths.jsDir, isCompressed); err != nil {
-		return fmt.Errorf("failed to merge JS files: %w", err)
-	}
-	if err := os.RemoveAll(paths.rawWebDir); err != nil {
-		return fmt.Errorf("failed to remove raw web directory: %w", err)
-	}
-	return nil
-}
-
-func (cmd *CmdTool) openWeChatDevTools(workDir string) {
-	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
-		logInfof("Opening WeChat DevTools for %s", workDir)
-		execCmd := exec.Command(filepath.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
-		execCmd.Run()
-		return
-	}
-	logWarnf("WECHAT_DEV_TOOLS is not set; open the project manually: %s", workDir)
 }
 
 func (cmd *CmdTool) readWebWorkerBundle(extDir string) (string, error) {
@@ -256,82 +225,108 @@ func (cmd *CmdTool) patchWebWorkerEngine(insertCode string) error {
 	return nil
 }
 
-func (cmd *CmdTool) exportWebCommon(mode string) error {
-	if err := cmd.Clear(); err != nil {
-		return err
+func (cmd *CmdTool) prepareMinigameWorkspace() (minigamePaths, error) {
+	paths := minigamePaths{
+		workDir:   cmd.WebDir,
+		engineDir: filepath.Join(cmd.WebDir, "engine"),
+		jsDir:     filepath.Join(cmd.WebDir, "js"),
+		rawWebDir: cmd.WebDir + "_bck",
 	}
-	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode)
-	if !util.IsFileExist(templateDir) {
-		return errors.New("web dir file not found: " + templateDir)
+	if err := os.Rename(cmd.WebDir, paths.rawWebDir); err != nil {
+		return minigamePaths{}, fmt.Errorf("failed to backup web directory: %w", err)
 	}
 
-	dstPath := filepath.Join(cmd.ProjectDir, ".builds", "web")
-	os.MkdirAll(dstPath, 0o755)
-	util.CopyDir2(templateDir, dstPath)
-
-	logInfof("Exporting web assets to %s", dstPath)
-	util.CopyDir(cmd.ProjectFS, "template/project", cmd.ProjectDir, true)
-
-	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
-
-	ispxWebDir, err := cmd.getIspxWebDir()
-	if err != nil {
-		return err
+	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMinigameMode, cmd.WebDir, true)
+	for _, dir := range []string{paths.engineDir, paths.jsDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return minigamePaths{}, fmt.Errorf("failed to create %s: %w", dir, err)
+		}
 	}
-	util.CopyDir2(ispxWebDir, cmd.WebDir)
-
-	util.CopyDir(cmd.PlatformFS, "template/platform/web", cmd.WebDir, true)
-
-	output, err := util.OutputCommand(util.CommandOptions{}, "go", "env", "GOROOT")
-	if err != nil {
-		return fmt.Errorf("failed to get GOROOT: %w", err)
-	}
-	goroot := strings.TrimSpace(string(output))
-	wasmExecPath := filepath.Join(goroot, "lib", "wasm", "wasm_exec.js")
-	if err := util.CopyFile(wasmExecPath, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); err != nil {
-		return fmt.Errorf("failed to copy wasm_exec.js: %w", err)
-	}
-	if err := pack.PackProject(cmd.TargetDir, filepath.Join(cmd.WebDir, "game.zip")); err != nil {
-		return err
-	}
-	return cmd.writeWebLogicAssets(mode)
+	return paths, nil
 }
 
-func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
-	wasmDstPath := filepath.Join(cmd.WebDir, "ispx.wasm")
-	wasmPath := filepath.Join(cmd.GoBinPath, "ispx.wasm")
-	wasmBrPath := wasmPath + ".br"
-	if err := util.CopyFile(wasmPath, wasmDstPath); err != nil {
-		return fmt.Errorf("failed to copy interpreter wasm from %s: %w", wasmPath, err)
-	}
-	// Minigame exports either use raw wasm or recompress it during preparation.
-	if mode != webMinigameMode && util.IsFileExist(wasmBrPath) {
-		if err := util.CopyFile(wasmBrPath, wasmDstPath+".br"); err != nil {
-			return fmt.Errorf("failed to copy compressed ispx wasm from %s: %w", wasmBrPath, err)
+func (cmd *CmdTool) prepareMinigameEngineAssets(paths minigamePaths, buildMode string) error {
+	wasmNames := []string{"engine.wasm", "ispx.wasm"}
+	if buildMode == "fast" {
+		for _, name := range wasmNames {
+			source := filepath.Join(paths.rawWebDir, name)
+			if err := os.Rename(source, filepath.Join(paths.engineDir, name)); err != nil {
+				return fmt.Errorf("failed to move %s: %w", source, err)
+			}
 		}
-	} else if err := os.Remove(wasmDstPath + ".br"); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove stale compressed wasm at %s: %w", wasmDstPath+".br", err)
+	} else {
+		if _, err := exec.LookPath("brotli"); err != nil {
+			return fmt.Errorf("error: brotli is not installed")
+		}
+
+		for _, name := range wasmNames {
+			source := filepath.Join(paths.rawWebDir, name)
+			logInfof("Compressing %s", source)
+			if err := exec.Command("brotli", "-f", "-q", "11", source).Run(); err != nil {
+				return fmt.Errorf("failed to compress %s: %w", source, err)
+			}
+		}
+		if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.engineDir, "*.br"); err != nil {
+			return fmt.Errorf("failed to move br files: %w", err)
+		}
+	}
+
+	if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.engineDir, "*.zip"); err != nil {
+		return fmt.Errorf("failed to move zip files: %w", err)
 	}
 	return nil
 }
 
-// compressBrotli runs brotli on a file.
-func (cmd *CmdTool) compressBrotli(filePath string) error {
-	execCmd := exec.Command("brotli", "-f", "-q", "11", filePath)
-	return execCmd.Run()
+func (cmd *CmdTool) finalizeMinigameJS(paths minigamePaths, isCompressed bool) error {
+	if err := cmd.moveFilesByPattern(paths.rawWebDir, paths.jsDir, "*.js"); err != nil {
+		return fmt.Errorf("failed to move js files: %w", err)
+	}
+	if err := cmd.mergeJSFiles(paths.jsDir, isCompressed); err != nil {
+		return fmt.Errorf("failed to merge JS files: %w", err)
+	}
+	if err := os.RemoveAll(paths.rawWebDir); err != nil {
+		return fmt.Errorf("failed to remove raw web directory: %w", err)
+	}
+	return nil
+}
+
+func (cmd *CmdTool) openWeChatDevTools(workDir string) {
+	if wechatDevTools := os.Getenv("WECHAT_DEV_TOOLS"); wechatDevTools != "" {
+		projectDir := cmd.TargetDir
+		if !filepath.IsAbs(wechatDevTools) {
+			wechatDevTools = filepath.Join(projectDir, wechatDevTools)
+		}
+		logInfof("Opening WeChat DevTools for %s", workDir)
+		execCmd := exec.Command(filepath.Join(wechatDevTools, "cli"), "open", "--project", workDir, "-y")
+		execCmd.Dir = projectDir
+		execCmd.Run()
+		return
+	}
+	logWarnf("WECHAT_DEV_TOOLS is not set; open the project manually: %s", workDir)
 }
 
 // moveFilesByPattern moves matching files.
 func (cmd *CmdTool) moveFilesByPattern(srcDir, dstDir, pattern string) error {
-	files, err := filepath.Glob(filepath.Join(srcDir, pattern))
+	if _, err := filepath.Match(pattern, ""); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(srcDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
 
-	for _, file := range files {
-		fileName := filepath.Base(file)
-		dstFile := filepath.Join(dstDir, fileName)
-		if err := os.Rename(file, dstFile); err != nil {
+	for _, entry := range entries {
+		matched, err := filepath.Match(pattern, entry.Name())
+		if err != nil {
+			return err
+		}
+		if !matched {
+			continue
+		}
+		if err := os.Rename(filepath.Join(srcDir, entry.Name()), filepath.Join(dstDir, entry.Name())); err != nil {
 			return err
 		}
 	}
@@ -352,36 +347,26 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) (err error) {
 		if output == nil {
 			return
 		}
-		if closeErr := output.Close(); err == nil && closeErr != nil {
-			err = fmt.Errorf("closing merged JS output: %w", closeErr)
-		}
+		err = errors.Join(err, output.Close())
 	}()
 
-	writer := bufio.NewWriter(output)
-
-	compressionFlag := fmt.Sprintf("globalThis['FFI'] = null;\nconst isWasmCompressed = %t;\n\n", isCompressed)
-	if _, err := writer.WriteString(compressionFlag); err != nil {
-		return err
+	if _, err := fmt.Fprintf(output, "globalThis['FFI'] = null;\nconst isWasmCompressed = %t;\n\n", isCompressed); err != nil {
+		return fmt.Errorf("write merged JS output %s: %w", outputFile, err)
 	}
 
 	for _, jsFile := range jsFiles {
 		filePath := filepath.Join(jsDir, jsFile)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		file, err := os.Open(filePath)
+		if os.IsNotExist(err) {
 			continue
 		}
-
-		file, err := os.Open(filePath)
 		if err != nil {
 			return err
 		}
 
-		_, err = io.Copy(writer, file)
-		closeErr := file.Close()
-		if err != nil {
+		_, copyErr := io.Copy(output, file)
+		if err := errors.Join(copyErr, file.Close()); err != nil {
 			return err
-		}
-		if closeErr != nil {
-			return closeErr
 		}
 
 		if err := os.Remove(filePath); err != nil {
@@ -389,9 +374,6 @@ func (cmd *CmdTool) mergeJSFiles(jsDir string, isCompressed bool) (err error) {
 		}
 	}
 
-	if err = writer.Flush(); err != nil {
-		return fmt.Errorf("flushing merged JS output: %w", err)
-	}
 	if err = output.Close(); err != nil {
 		output = nil
 		return fmt.Errorf("closing merged JS output: %w", err)

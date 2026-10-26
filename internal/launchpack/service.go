@@ -25,6 +25,52 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
+// BuildLauncher packages the project, runtime, and bridge into one executable.
+func BuildLauncher(ctx context.Context, cfg Config) (Result, error) {
+	if ctx == nil {
+		return Result{}, fmt.Errorf("launchpack: nil context")
+	}
+	if err := cfg.validate(); err != nil {
+		return Result{}, err
+	}
+	if _, err := cfg.PortableConfig.Identity(); err != nil {
+		return Result{}, fmt.Errorf("launchpack: portable config: %w", err)
+	}
+	assets, err := AcquireRuntimeAssets(ctx, cfg)
+	if err != nil {
+		return Result{}, err
+	}
+	if assets.Cleanup != nil {
+		defer assets.Cleanup()
+	}
+	bridge, bridgeCleanup, err := BuildSourceBridge(ctx, cfg)
+	if err != nil {
+		return Result{}, err
+	}
+	defer bridgeCleanup()
+	assets.BridgePath = bridge
+	if cfg.VerifyBridge != nil {
+		if err := cfg.VerifyBridge(bridge); err != nil {
+			return Result{}, fmt.Errorf("launchpack: verify source bridge: %w", err)
+		}
+	}
+	names, err := RuntimeNamesFor(assets.Lock.RuntimeVersion, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := assets.ValidateFiles(names); err != nil {
+		return Result{}, err
+	}
+
+	payload, manifest, err := buildLauncher(ctx, cfg, assets, cfg.PortableConfig, cfg.IO)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{
+		Output: cfg.Output, PayloadSHA256: payload, ManifestSHA256: manifest,
+	}, nil
+}
+
 // AcquireRuntimeAssets resolves and materializes one verified Engine/PCK pair.
 // Explicit local settings take priority. Source checkouts may use an exact
 // GOPATH/bin runtime when the selected versioned release is unavailable.
@@ -50,56 +96,6 @@ func BuildSourceBridge(ctx context.Context, cfg Config) (string, func(), error) 
 		return "", nil, err
 	}
 	return buildSourceBridge(ctx, cfg, name, cfg.IO)
-}
-
-// BuildLauncher packages the project, runtime, and bridge into one executable.
-func BuildLauncher(ctx context.Context, cfg Config) (Result, error) {
-	if ctx == nil {
-		return Result{}, fmt.Errorf("launchpack: nil context")
-	}
-	if err := cfg.validate(); err != nil {
-		return Result{}, err
-	}
-	if _, err := cfg.PortableConfig.Identity(); err != nil {
-		return Result{}, fmt.Errorf("launchpack: portable config: %w", err)
-	}
-	assets, err := AcquireRuntimeAssets(ctx, cfg)
-	if err != nil {
-		return Result{}, err
-	}
-	bridge, bridgeCleanup, err := BuildSourceBridge(ctx, cfg)
-	if err != nil {
-		if assets.Cleanup != nil {
-			assets.Cleanup()
-		}
-		return Result{}, err
-	}
-	assets.BridgePath = bridge
-	if cfg.VerifyBridge != nil {
-		if err := cfg.VerifyBridge(bridge); err != nil {
-			bridgeCleanup()
-			if assets.Cleanup != nil {
-				assets.Cleanup()
-			}
-			return Result{}, fmt.Errorf("launchpack: verify source bridge: %w", err)
-		}
-	}
-	oldCleanup := assets.Cleanup
-	cleanup := func() {
-		bridgeCleanup()
-		if oldCleanup != nil {
-			oldCleanup()
-		}
-	}
-	defer cleanup()
-
-	payload, manifest, err := buildLauncher(ctx, cfg, assets, cfg.PortableConfig, cfg.IO)
-	if err != nil {
-		return Result{}, err
-	}
-	return Result{
-		Output: cfg.Output, PayloadSHA256: payload, ManifestSHA256: manifest,
-	}, nil
 }
 
 func (c Config) verifyGraph(ctx context.Context, phase string) error {

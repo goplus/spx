@@ -268,6 +268,10 @@ func TestSourceRuntimeRejectsInvalidInstalledPair(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{name: "PCK from another version", setup: func(t *testing.T, bin string) {
+			writeProjectTestFile(t, filepath.Join(bin, spec.RuntimeName), "engine")
+			writeProjectTestFile(t, filepath.Join(bin, "gdspxrt0.0.0-other.pck"), "other pack")
+		}},
 		{name: "Engine symlink", setup: func(t *testing.T, bin string) {
 			target := filepath.Join(bin, "engine-target")
 			if err := os.WriteFile(target, []byte("engine"), 0o755); err != nil {

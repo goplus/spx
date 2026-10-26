@@ -18,7 +18,6 @@ package spx
 
 import (
 	"maps"
-	"reflect"
 
 	corestate "github.com/goplus/spx/v4/internal/core/state"
 	spxlog "github.com/goplus/spx/v4/internal/log"
@@ -46,14 +45,6 @@ type SpriteImpl struct {
 // -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
-func (p *SpriteImpl) Name() string {
-	return p.name
-}
-
-func (p *SpriteImpl) IsCloned() bool {
-	return p.spriteState.Cloned
-}
-
 func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.scriptEventBindings.bind(src.scriptEventRegistry, p)
@@ -96,6 +87,14 @@ func (p *SpriteImpl) DeleteThisClone() {
 		return
 	}
 	p.Destroy()
+}
+
+func (p *SpriteImpl) Name() string {
+	return p.name
+}
+
+func (p *SpriteImpl) IsCloned() bool {
+	return p.spriteState.Cloned
 }
 
 // -----------------------------------------------------------------------------
@@ -184,29 +183,6 @@ func (p *SpriteImpl) stopIfCurrentCoroutine() {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-var spriteImplType = reflect.TypeFor[SpriteImpl]()
-
-func isSpriteBaseField(typ reflect.Type, index int) bool {
-	return index >= 0 && index < typ.NumField() && typ.Field(index).Type == spriteImplType
-}
-
-func spriteOf(sprite Sprite) *SpriteImpl {
-	vSpr := reflect.ValueOf(sprite)
-	if vSpr.Kind() == reflect.Pointer {
-		vSpr = vSpr.Elem()
-	}
-	if vSpr.Kind() != reflect.Struct {
-		return nil
-	}
-	typ := vSpr.Type()
-	for i := 0; i < typ.NumField(); i++ {
-		if isSpriteBaseField(typ, i) {
-			return vSpr.Field(i).Addr().Interface().(*SpriteImpl)
-		}
-	}
-	return nil
-}
-
 // originalSprite returns the original instance, including for clones of clones.
 // A configured stage instance starts its own family even if built from a template.
 func (p *SpriteImpl) originalSprite() *SpriteImpl {

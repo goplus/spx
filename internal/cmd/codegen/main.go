@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +67,51 @@ func run() error {
 	})
 }
 
+func generateCode(config codegenConfig) error {
+	if err := validateCodegenInputs(config.spxModulePath); err != nil {
+		return err
+	}
+
+	codegenLogger.Info("SPX module source %q selected", config.spxModulePath)
+	headers, err := gdext.PrepareHeaders(config.spxModulePath)
+	if err != nil {
+		return fmt.Errorf("prepare GDExtension headers: %w", err)
+	}
+	ast, err := gdextensionparser.ParseGDExtensionInterface(filepath.Join(config.codegenDir, common.NativeRelDir), headers.Raw)
+	if err != nil {
+		return fmt.Errorf("parse GDExtension interface: %w", err)
+	}
+	generation := common.NewGenerationContext(ast, headers.Metadata)
+	output := &common.OutputPlan{}
+	if config.parsedASTPath != "" {
+		data, err := json.Marshal(ast)
+		if err != nil {
+			return fmt.Errorf("marshal parsed AST: %w", err)
+		}
+		if err := output.AddFile(config.parsedASTPath, data); err != nil {
+			return err
+		}
+	}
+	nativeGenerator := ffi.Generator{GenerationContext: generation, Output: output}
+	webGenerator := webffi.Generator{GenerationContext: generation, Output: output}
+	extensionGenerator := gdext.Generator{GenerationContext: generation, Output: output}
+	if err := nativeGenerator.Generate(config.codegenDir); err != nil {
+		return fmt.Errorf("generate native bindings: %w", err)
+	}
+	if err := webGenerator.Generate(config.codegenDir, config.spxModulePath); err != nil {
+		return fmt.Errorf("generate Web bindings: %w", err)
+	}
+	if err := extensionGenerator.Generate(config.codegenDir, config.spxModulePath, headers); err != nil {
+		return fmt.Errorf("generate GDExtension sources: %w", err)
+	}
+	if err := output.Commit(); err != nil {
+		return fmt.Errorf("publish generated bindings: %w", err)
+	}
+
+	codegenLogger.Info("Code generation completed")
+	return nil
+}
+
 func resolveSPXModuleSource(repoRoot, override string) string {
 	if absRepoRoot, err := filepath.Abs(repoRoot); err == nil {
 		repoRoot = absRepoRoot
@@ -101,41 +147,5 @@ func validateCodegenInputs(spxModuleSource string) error {
 			return fmt.Errorf("SPX module file %q is not a regular file", path)
 		}
 	}
-	return nil
-}
-
-func generateCode(config codegenConfig) error {
-	if err := validateCodegenInputs(config.spxModulePath); err != nil {
-		return err
-	}
-
-	codegenLogger.Info("SPX module source %q selected", config.spxModulePath)
-	headers, err := gdext.PrepareHeaders(config.spxModulePath)
-	if err != nil {
-		return fmt.Errorf("prepare GDExtension headers: %w", err)
-	}
-	// Parse source return types before publishing the lowered output-parameter ABI.
-	if err := common.WriteGeneratedFile(filepath.Join(config.codegenDir, common.NativeRelDir, "gdextension_spx_ext.h"), []byte(headers.Raw), 0o644); err != nil {
-		return fmt.Errorf("generate GDExtension header: %w", err)
-	}
-	ast, err := gdextensionparser.GenerateGDExtensionInterfaceAST(config.codegenDir, config.parsedASTPath)
-	if err != nil {
-		return fmt.Errorf("parse GDExtension interface: %w", err)
-	}
-	generation := common.NewGenerationContext(ast, headers.Metadata)
-	nativeGenerator := ffi.Generator{GenerationContext: generation}
-	webGenerator := webffi.Generator{GenerationContext: generation}
-	extensionGenerator := gdext.Generator{GenerationContext: generation}
-	if err := nativeGenerator.Generate(config.codegenDir); err != nil {
-		return fmt.Errorf("generate native bindings: %w", err)
-	}
-	if err := webGenerator.Generate(config.codegenDir, config.spxModulePath); err != nil {
-		return fmt.Errorf("generate Web bindings: %w", err)
-	}
-	if err := extensionGenerator.Generate(config.codegenDir, config.spxModulePath, headers); err != nil {
-		return fmt.Errorf("generate GDExtension sources: %w", err)
-	}
-
-	codegenLogger.Info("Code generation completed")
 	return nil
 }

@@ -106,6 +106,47 @@ type Argument struct {
 	Name string `parser:" ( @Ident | '(' '*' @Ident ')' )? " json:",omitempty"`
 }
 
+func ParseCString(s string) (CHeaderFileAST, error) {
+	var headerFileLexer = lexer.MustStateful(lexer.Rules{
+		"Root": {
+			{Name: `Typedef`, Pattern: `typedef`},
+			{Name: `Struct`, Pattern: `struct`},
+			{Name: `{`, Pattern: `{`},
+			{Name: `}`, Pattern: `}`},
+			{Name: `;`, Pattern: `;`},
+			{Name: `,`, Pattern: `,`},
+			{Name: `"`, Pattern: `"`},
+			{Name: `(`, Pattern: `\(`},
+			{Name: `)`, Pattern: `\)`},
+			{Name: `*`, Pattern: `\*`},
+			{Name: `=`, Pattern: `=`},
+			{Name: `Const`, Pattern: `const`},
+			{Name: `Ident`, Pattern: `[a-zA-Z_][a-zA-Z0-9_]*`},
+			{Name: `Int`, Pattern: `[+-]?\d+`},
+			{Name: `Comment`, Pattern: `[ \t\r\n]*(\/\/[^\n]*)|(\/\*(.|[\r\n])*?\*\/)[ \t\r\n]*`},
+			{Name: `Whitespace`, Pattern: `[ \t\r\n]+`},
+		},
+	})
+
+	parser, err := participle.Build[CHeaderFileAST](
+		participle.Lexer(headerFileLexer),
+		participle.UseLookahead(20),
+		participle.Elide("Whitespace", "Comment"),
+	)
+
+	if err != nil {
+		return CHeaderFileAST{}, err
+	}
+
+	ast, err := parser.ParseString("", s)
+
+	if err != nil {
+		return CHeaderFileAST{}, err
+	}
+
+	return *ast, nil
+}
+
 func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 	// Included headers may repeat typedefs, such as GDExtensionClassGetPropertyList.
 	distinct := map[string]struct{}{}
@@ -120,19 +161,6 @@ func (a CHeaderFileAST) CollectFunctions() []TypedefFunction {
 		}
 	}
 	return fns
-}
-
-// filterFunctions preserves declaration order and the deduplication in CollectFunctions.
-func (a CHeaderFileAST) filterFunctions(include func(TypedefFunction) bool) []TypedefFunction {
-	return slices.DeleteFunc(a.CollectFunctions(), func(function TypedefFunction) bool {
-		return !include(function)
-	})
-}
-
-func isInterfaceFunction(function TypedefFunction) bool {
-	return strings.HasPrefix(function.Name, "GDExtensionSpx") &&
-		!strings.HasPrefix(function.Name, "GDExtensionSpxCallback") &&
-		!strings.HasPrefix(function.Name, "GDExtensionSpxGlobal")
 }
 
 func (a CHeaderFileAST) CollectFunctionsOfClass(className string) []TypedefFunction {
@@ -154,19 +182,9 @@ func (a CHeaderFileAST) CollectGDExtensionInterfaceFunctions() []TypedefFunction
 	return a.filterFunctions(isInterfaceFunction)
 }
 
-func (a CHeaderFileAST) CollectGDExtensionISpriteFunctions() []TypedefFunction {
-	return a.CollectFunctionsOfClass("Sprite")
-}
-
 func (a CHeaderFileAST) CollectGDExtensionICallbackFunctions() []TypedefFunction {
 	return a.filterFunctions(func(function TypedefFunction) bool {
 		return strings.HasPrefix(function.Name, "GDExtensionSpxCallback")
-	})
-}
-
-func (a CHeaderFileAST) CollectNonGDExtensionInterfaceFunctions() []TypedefFunction {
-	return a.filterFunctions(func(function TypedefFunction) bool {
-		return !strings.HasPrefix(function.Name, "GDExtensionSpx")
 	})
 }
 
@@ -190,14 +208,11 @@ func (a CHeaderFileAST) CollectEnums() []TypedefEnum {
 	return enums
 }
 
-func (t TypedefStruct) CollectFunctions() []StructFunction {
-	fns := make([]StructFunction, 0, len(t.Fields))
-	for _, f := range t.Fields {
-		if f.Function != nil {
-			fns = append(fns, *f.Function)
-		}
-	}
-	return fns
+// filterFunctions preserves declaration order and the deduplication in CollectFunctions.
+func (a CHeaderFileAST) filterFunctions(include func(TypedefFunction) bool) []TypedefFunction {
+	return slices.DeleteFunc(a.CollectFunctions(), func(function TypedefFunction) bool {
+		return !include(function)
+	})
 }
 
 func (t FunctionType) CStyleString() string {
@@ -279,45 +294,10 @@ func (a Argument) ResolvedName(i int) string {
 	return fmt.Sprintf("arg_%d", i)
 }
 
-func ParseCString(s string) (CHeaderFileAST, error) {
-	var headerFileLexer = lexer.MustStateful(lexer.Rules{
-		"Root": {
-			{Name: `Typedef`, Pattern: `typedef`},
-			{Name: `Struct`, Pattern: `struct`},
-			{Name: `{`, Pattern: `{`},
-			{Name: `}`, Pattern: `}`},
-			{Name: `;`, Pattern: `;`},
-			{Name: `,`, Pattern: `,`},
-			{Name: `"`, Pattern: `"`},
-			{Name: `(`, Pattern: `\(`},
-			{Name: `)`, Pattern: `\)`},
-			{Name: `*`, Pattern: `\*`},
-			{Name: `=`, Pattern: `=`},
-			{Name: `Const`, Pattern: `const`},
-			{Name: `Ident`, Pattern: `[a-zA-Z_][a-zA-Z0-9_]*`},
-			{Name: `Int`, Pattern: `[+-]?\d+`},
-			{Name: `Comment`, Pattern: `[ \t\r\n]*(\/\/[^\n]*)|(\/\*(.|[\r\n])*?\*\/)[ \t\r\n]*`},
-			{Name: `Whitespace`, Pattern: `[ \t\r\n]+`},
-		},
-	})
-
-	parser, err := participle.Build[CHeaderFileAST](
-		participle.Lexer(headerFileLexer),
-		participle.UseLookahead(20),
-		participle.Elide("Whitespace", "Comment"),
-	)
-
-	if err != nil {
-		return CHeaderFileAST{}, err
-	}
-
-	ast, err := parser.ParseString("", s)
-
-	if err != nil {
-		return CHeaderFileAST{}, err
-	}
-
-	return *ast, nil
+func isInterfaceFunction(function TypedefFunction) bool {
+	return strings.HasPrefix(function.Name, "GDExtensionSpx") &&
+		!strings.HasPrefix(function.Name, "GDExtensionSpxCallback") &&
+		!strings.HasPrefix(function.Name, "GDExtensionSpxGlobal")
 }
 
 func joinCTypeAndName(typeName, name string) string {

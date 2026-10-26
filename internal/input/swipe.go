@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
-	engine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type SwipeResult struct {
@@ -128,7 +127,7 @@ func (sr *SwipeRecognizer) elapsedSeconds() float64 {
 
 func calculateDirection(startPoint, endPoint mathf.Vec2) float64 {
 	delta := endPoint.Sub(startPoint)
-	angle := engine.RadToDeg(math.Atan2(delta.Y, delta.X))
+	angle := math.Atan2(delta.Y, delta.X) * (180 / math.Pi)
 	if angle < 0 {
 		angle += 360
 	}

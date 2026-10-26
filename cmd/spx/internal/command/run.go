@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,11 +32,63 @@ import (
 	"github.com/goplus/spx/v4/cmd/spx/internal/runtimeasset"
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 	"github.com/goplus/spx/v4/internal/interpruntime"
+	"github.com/goplus/spx/v4/internal/launchpack"
 	"github.com/goplus/spx/v4/internal/webserver"
 )
 
+type webServerProcesses interface {
+	Stop(int) (bool, error)
+	ListeningPIDs(int) ([]int, error)
+}
+
+type browserOpenCommand struct {
+	name string
+	args []string
+}
+
 func (cmd *CmdTool) RunPackMode(pargs ...string) error {
 	return cmd.runInterpretedEngine(cmd.RuntimeCmdPath, cmd.LibPath, "native", pargs...)
+}
+
+// RunInterpreted runs the project with a prebuilt runtime.
+func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
+	assets, err := cmd.resolveInterpretedRuntimeAssets()
+	if err != nil {
+		return err
+	}
+	cmd.RuntimeCmdPath = assets.EnginePath
+	return cmd.runInterpretedEngine(assets.EnginePath, assets.BridgePath, "interpreted", pargs...)
+}
+
+func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
+	binaryName := "main" + executableSuffix(runtime.GOOS)
+	buildArgs := []string{"build"}
+	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
+		buildArgs = append(buildArgs, "-tags="+*cmd.Args.Tags)
+	}
+	buildArgs = append(buildArgs, "-o", binaryName)
+	if err := util.ExecCommand(util.CommandOptions{Env: []string{"CGO_ENABLED=0"}, Dir: cmd.GoDir}, "go", buildArgs...); err != nil {
+		return fmt.Errorf("failed to build Go binary: %w", err)
+	}
+
+	binaryPath := filepath.Join(cmd.GoDir, binaryName)
+	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
+}
+
+func (cmd *CmdTool) RunWeb() error {
+	return runWebCommand(func() error {
+		return cmd.installRepoWebRuntime(webNormalMode)
+	}, cmd.ExportWeb, cmd.runWebServer)
+}
+
+func (cmd *CmdTool) RunWebWorker() error {
+	return runWebCommand(func() error {
+		return cmd.installRepoWebRuntime(webWorkerMode)
+	}, cmd.ExportWebWorker, cmd.runWebServer)
+}
+
+func (cmd *CmdTool) StopWeb() error {
+	return cmd.stopWeb(webserver.New(runtime.GOOS))
 }
 
 func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind string, pargs ...string) error {
@@ -63,189 +115,34 @@ func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind str
 	return nil
 }
 
-func (cmd *CmdTool) RunWeb() error {
-	return runWebCommand(func() error {
-		return cmd.installRepoWebRuntime(webNormalMode)
-	}, cmd.ExportWeb, cmd.runWebServer)
-}
-
-func (cmd *CmdTool) RunWebWorker() error {
-	return runWebCommand(func() error {
-		return cmd.installRepoWebRuntime(webWorkerMode)
-	}, cmd.ExportWebWorker, cmd.runWebServer)
-}
-
-type webServerProcesses interface {
-	Stop(int) (bool, error)
-	ListeningPIDs(int) ([]int, error)
-}
-
-func (cmd *CmdTool) StopWeb() error {
-	return cmd.stopWeb(webserver.New(runtime.GOOS))
-}
-
-func (cmd *CmdTool) stopWeb(processes webServerProcesses) error {
-	pidPath := cmd.webServerPIDPath()
-	pidBytes, readErr := os.ReadFile(pidPath)
-	if os.IsNotExist(readErr) {
-		return cmd.stopOrphanedWebServerByPort(processes)
-	}
-	if readErr != nil {
-		return fmt.Errorf("failed to read web server pid: %w", readErr)
-	}
-
-	stopped := false
-	if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil {
-		stopped, err = processes.Stop(pid)
-		if err != nil {
-			return err
-		}
-	}
-	_ = os.Remove(pidPath)
-	if stopped {
-		return nil
-	}
-	return cmd.stopOrphanedWebServerByPort(processes)
-}
-
-func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
-	binaryName := "main" + executableSuffix(runtime.GOOS)
-	buildArgs := []string{"build"}
-	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
-		buildArgs = append(buildArgs, "-tags="+*cmd.Args.Tags)
-	}
-	buildArgs = append(buildArgs, "-o", binaryName)
-	if err := util.ExecCommand(util.CommandOptions{Env: []string{"CGO_ENABLED=0"}, Dir: cmd.GoDir}, "go", buildArgs...); err != nil {
-		return fmt.Errorf("failed to build Go binary: %w", err)
-	}
-
-	binaryPath := filepath.Join(cmd.GoDir, binaryName)
-	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
-}
-
-// RunInterpreted runs the project with a prebuilt runtime.
-func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
-	runtimeName := "gdspxrt" + cmd.Version + cmd.BinPostfix
-	GOOS := runtime.GOOS
-	GOARCH := runtime.GOARCH
-	libName := libraryFileName(envName, GOOS, GOARCH)
-	packName := runtimePackFileName(runtimeName)
-
-	runtimePath, libPath, err := cmd.resolveInterpretedRuntimeAssets(runtimeName, packName, libName)
+func (cmd *CmdTool) resolveInterpretedRuntimeAssets() (launchpack.Assets, error) {
+	names, err := launchpack.RuntimeNamesFor(cmd.Version, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
-		return err
+		return launchpack.Assets{}, err
 	}
-	cmd.RuntimeCmdPath = runtimePath
-	return cmd.runInterpretedEngine(runtimePath, libPath, "interpreted", pargs...)
-}
-
-func (cmd *CmdTool) runtimeSearchDirs() []string {
-	var dirs []string
-	appendDir := func(dir string) {
-		if dir == "" {
-			return
-		}
-		absDir, err := filepath.Abs(dir)
-		if err != nil {
-			absDir = dir
-		}
-		for _, existing := range dirs {
-			if existing == absDir {
-				return
-			}
-		}
-		dirs = append(dirs, absDir)
-	}
-
-	appendDir(cmd.GoBinPath)
-
-	exePath, err := os.Executable()
-	if err == nil {
-		if realExePath, realErr := filepath.EvalSymlinks(exePath); realErr == nil {
-			exePath = realExePath
-		}
-		appendDir(filepath.Dir(exePath))
-	}
-
-	return dirs
-}
-
-func (cmd *CmdTool) findRuntimeAsset(name string) (string, error) {
-	searchDirs := cmd.runtimeSearchDirs()
-	if len(searchDirs) == 0 {
-		return "", fmt.Errorf("no runtime search directories configured")
-	}
-
-	candidates := make([]string, 0, len(searchDirs))
-	for _, dir := range searchDirs {
-		candidate := filepath.Join(dir, name)
-		candidates = append(candidates, candidate)
-		if util.IsFileExist(candidate) {
-			return candidate, nil
-		}
-	}
-	return "", fmt.Errorf("searched %s", strings.Join(candidates, ", "))
-}
-
-func (cmd *CmdTool) resolveInterpretedRuntimeAssets(runtimeName, packName, libName string) (runtimePath, libPath string, err error) {
-	embeddedDir, ok, err := runtimeasset.Prepare(cmd.Version, runtimeName, packName, libName)
+	embeddedDir, embedded, err := runtimeasset.Prepare(cmd.Version, names.Engine, names.Pack, names.Bridge)
 	if err != nil {
-		return "", "", fmt.Errorf("prepare embedded runtime assets: %w", err)
+		return launchpack.Assets{}, fmt.Errorf("prepare embedded runtime assets: %w", err)
 	}
-	if ok {
-		return filepath.Join(embeddedDir, runtimeName), filepath.Join(embeddedDir, libName), nil
+	directories := []string{embeddedDir}
+	if !embedded {
+		directories = cmd.runtimeSearchDirs()
 	}
-
-	runtimePath, runtimeErr := cmd.findRuntimeAsset(runtimeName)
-	libPath, libErr := cmd.findRuntimeAsset(libName)
-	if runtimeErr == nil {
-		packPath := runtimePackPath(runtimePath)
-		if _, err := os.Stat(packPath); err == nil && libErr == nil {
-			return runtimePath, libPath, nil
-		} else if os.IsNotExist(err) {
-			runtimeErr = fmt.Errorf("runtime pack %s not found next to %s", filepath.Base(packPath), runtimePath)
-		} else if err != nil {
-			runtimeErr = fmt.Errorf("runtime pack check failed for %s: %w", packPath, err)
-		}
+	assets, err := launchpack.ResolveInstalledRuntime(directories, names)
+	if err != nil {
+		return launchpack.Assets{}, fmt.Errorf("interpreted runtime assets not available: %w", err)
 	}
-
-	var reasons []string
-	if runtimeErr != nil {
-		reasons = append(reasons, runtimeErr.Error())
-	}
-	if libErr != nil {
-		reasons = append(reasons, libErr.Error())
-	}
-	if len(reasons) == 0 {
-		reasons = append(reasons, "embedded runtime assets are not available in this spx binary")
-	}
-	return "", "", fmt.Errorf("interpreted runtime assets not available: %s", strings.Join(reasons, "; "))
-}
-
-func runtimePackFileName(runtimeName string) string {
-	if strings.HasSuffix(runtimeName, ".exe") {
-		return strings.TrimSuffix(runtimeName, ".exe") + ".pck"
-	}
-	return runtimeName + ".pck"
-}
-
-func runtimePackPath(runtimePath string) string {
-	return filepath.Join(filepath.Dir(runtimePath), runtimePackFileName(filepath.Base(runtimePath)))
+	return assets, nil
 }
 
 func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
-	projectDir := cmd.TargetAbsDir
-	if projectDir == "" && cmd.TargetDir != "" {
-		var err error
-		projectDir, err = filepath.Abs(cmd.TargetDir)
-		if err != nil {
-			return interpruntime.Roots{}, fmt.Errorf("resolve interpreted project directory: %w", err)
-		}
-	}
-	if projectDir == "" {
+	if cmd.TargetDir == "" {
 		return interpruntime.Roots{}, fmt.Errorf("interpreted project directory is not configured")
 	}
-	projectDir = filepath.Clean(projectDir)
+	projectDir, err := filepath.Abs(cmd.TargetDir)
+	if err != nil {
+		return interpruntime.Roots{}, fmt.Errorf("resolve interpreted project directory: %w", err)
+	}
 	sessionDir := cmd.RuntimeTempDir
 	if sessionDir == "" {
 		sessionDir = filepath.Join(projectDir, ".temp")
@@ -264,91 +161,33 @@ func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
 	}, nil
 }
 
-// runWebCommand prepares the runtime, exports, and then starts serving.
-func runWebCommand(setupFn func() error, exportFn func() error, serverFn func() error) error {
-	if err := setupFn(); err != nil {
-		return err
-	}
-	if err := exportFn(); err != nil {
-		return err
-	}
-	return serverFn()
-}
-
-func (cmd *CmdTool) installRepoWebRuntime(mode string) error {
-	if cmd.hasInstalledWebRuntimeAssets(mode) {
-		return nil
-	}
-	spxRoot := cmd.findSpxRoot()
-	if spxRoot == "" {
-		return nil
-	}
-	scriptPath := filepath.Join(spxRoot, "cmd", "spx", "install.sh")
-	if !util.IsFileExist(scriptPath) {
-		return nil
-	}
-	return util.ExecCommand(util.CommandOptions{}, "bash", scriptPath, "--web")
-}
-
-func (cmd *CmdTool) hasInstalledWebRuntimeAssets(mode string) bool {
-	requiredPaths := []string{
-		filepath.Join(cmd.GoBinPath, "ispx"),
-		filepath.Join(cmd.GoBinPath, "ispx.wasm"),
-		filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode),
-	}
-	for _, requiredPath := range requiredPaths {
-		if !util.IsFileExist(requiredPath) {
-			return false
+func (cmd *CmdTool) runtimeSearchDirs() []string {
+	var dirs []string
+	appendDir := func(dir string) {
+		if dir == "" {
+			return
 		}
-	}
-	return true
-}
-
-func (cmd *CmdTool) webServerPIDPath() string {
-	baseDir := cmd.TargetAbsDir
-	if baseDir == "" {
-		baseDir = cmd.TargetDir
-	}
-	pidPath, _ := filepath.Abs(path.Join(baseDir, ".gdspx_web_server.pid"))
-	return pidPath
-}
-
-type browserOpenCommand struct {
-	name string
-	args []string
-}
-
-func browserOpenCommands(goos, url string) []browserOpenCommand {
-	switch goos {
-	case "darwin":
-		return []browserOpenCommand{
-			{name: "open", args: []string{"-a", "Google Chrome", url}},
-			{name: "open", args: []string{url}},
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			absDir = dir
 		}
-	case "windows":
-		return []browserOpenCommand{
-			{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+		if slices.Contains(dirs, absDir) {
+			return
 		}
-	default:
-		return []browserOpenCommand{
-			{name: "xdg-open", args: []string{url}},
-		}
+		dirs = append(dirs, absDir)
 	}
-}
 
-func openURLInPreferredBrowser(url string) error {
-	var errs []string
-	for _, cmd := range browserOpenCommands(runtime.GOOS, url) {
-		if err := exec.Command(cmd.name, cmd.args...).Run(); err == nil {
-			return nil
-		} else {
-			errs = append(errs, fmt.Sprintf("%s %s: %v", cmd.name, strings.Join(cmd.args, " "), err))
+	appendDir(cmd.GoBinPath)
+
+	exePath, err := os.Executable()
+	if err == nil {
+		if realExePath, realErr := filepath.EvalSymlinks(exePath); realErr == nil {
+			exePath = realExePath
 		}
+		appendDir(filepath.Dir(exePath))
 	}
-	if len(errs) == 0 {
-		return fmt.Errorf("no browser launch command available")
-	}
-	return errors.New(strings.Join(errs, "; "))
+
+	return dirs
 }
 
 func (cmd *CmdTool) runWebServer() error {
@@ -403,6 +242,30 @@ func (cmd *CmdTool) runWebServer() error {
 	return nil
 }
 
+func (cmd *CmdTool) stopWeb(processes webServerProcesses) error {
+	pidPath := cmd.webServerPIDPath()
+	pidBytes, readErr := os.ReadFile(pidPath)
+	if os.IsNotExist(readErr) {
+		return cmd.stopOrphanedWebServerByPort(processes)
+	}
+	if readErr != nil {
+		return fmt.Errorf("failed to read web server pid: %w", readErr)
+	}
+
+	stopped := false
+	if pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes))); err == nil {
+		stopped, err = processes.Stop(pid)
+		if err != nil {
+			return err
+		}
+	}
+	_ = os.Remove(pidPath)
+	if stopped {
+		return nil
+	}
+	return cmd.stopOrphanedWebServerByPort(processes)
+}
+
 func (cmd *CmdTool) stopOrphanedWebServerByPort(processes webServerProcesses) error {
 	pids, err := processes.ListeningPIDs(cmd.ServerPort)
 	if err != nil {
@@ -414,4 +277,75 @@ func (cmd *CmdTool) stopOrphanedWebServerByPort(processes webServerProcesses) er
 		}
 	}
 	return nil
+}
+
+func (cmd *CmdTool) installRepoWebRuntime(mode string) error {
+	if cmd.hasInstalledWebRuntimeAssets(mode) {
+		return nil
+	}
+	spxRoot := cmd.findSpxRoot()
+	if spxRoot == "" {
+		return nil
+	}
+	scriptPath := filepath.Join(spxRoot, "cmd", "spx", "install.sh")
+	return util.ExecCommand(util.CommandOptions{}, "bash", scriptPath, "--web")
+}
+
+func (cmd *CmdTool) hasInstalledWebRuntimeAssets(mode string) bool {
+	requiredPaths := []string{
+		filepath.Join(cmd.GoBinPath, "ispx"),
+		filepath.Join(cmd.GoBinPath, "ispx.wasm"),
+		filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+"_web"+mode),
+	}
+	for _, requiredPath := range requiredPaths {
+		if !util.IsFileExist(requiredPath) {
+			return false
+		}
+	}
+	return true
+}
+
+func (cmd *CmdTool) webServerPIDPath() string {
+	return filepath.Join(cmd.TargetDir, ".gdspx_web_server.pid")
+}
+
+// runWebCommand prepares the runtime, exports, and then starts serving.
+func runWebCommand(setupFn func() error, exportFn func() error, serverFn func() error) error {
+	if err := setupFn(); err != nil {
+		return err
+	}
+	if err := exportFn(); err != nil {
+		return err
+	}
+	return serverFn()
+}
+
+func openURLInPreferredBrowser(url string) error {
+	var errs []string
+	for _, cmd := range browserOpenCommands(runtime.GOOS, url) {
+		if err := exec.Command(cmd.name, cmd.args...).Run(); err == nil {
+			return nil
+		} else {
+			errs = append(errs, fmt.Sprintf("%s %s: %v", cmd.name, strings.Join(cmd.args, " "), err))
+		}
+	}
+	return errors.New(strings.Join(errs, "; "))
+}
+
+func browserOpenCommands(goos, url string) []browserOpenCommand {
+	switch goos {
+	case "darwin":
+		return []browserOpenCommand{
+			{name: "open", args: []string{"-a", "Google Chrome", url}},
+			{name: "open", args: []string{url}},
+		}
+	case "windows":
+		return []browserOpenCommand{
+			{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+		}
+	default:
+		return []browserOpenCommand{
+			{name: "xdg-open", args: []string{url}},
+		}
+	}
 }

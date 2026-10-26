@@ -22,8 +22,6 @@ import (
 	"go/build"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
 )
@@ -39,8 +37,7 @@ type CmdTool struct {
 	ProjectRelPath string
 	ProjectDir     string
 	GoDir          string
-	TargetDir      string
-	TargetAbsDir   string
+	TargetDir      string // Canonical absolute source root; distinct from generated ProjectDir.
 	WebDir         string
 	GoBinPath      string
 
@@ -103,34 +100,28 @@ func (cmd *CmdTool) RunCmd(projectName, fileSuffix, version string, fs embed.FS,
 	return nil
 }
 
-// setupInterpretedPaths resolves the source and session roots without changing
-// the process working directory. Other legacy commands continue to use
-// setupPaths until their generated-project assumptions are migrated.
-func (cmd *CmdTool) setupInterpretedPaths(dstRelDir string) error {
-	targetDir, err := filepath.Abs(*cmd.Args.Path)
-	if err != nil {
-		return fmt.Errorf("failed to resolve target directory: %w", err)
-	}
-	cmd.TargetAbsDir = filepath.Clean(targetDir)
-	cmd.TargetDir = cmd.TargetAbsDir
-	cmd.Args.Path = &cmd.TargetDir
-	cmd.ProjectDir = filepath.Join(cmd.TargetAbsDir, dstRelDir)
-	return nil
+// handleInterpretedRunCommand runs the interpreted-mode command with minimal setup.
+func (cmd *CmdTool) handleInterpretedRunCommand() error {
+	cmd.RuntimeMode = true
+	cmd.RuntimeTempDir = filepath.Join(cmd.TargetDir, ".temp")
+
+	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
+	return cmd.RunInterpreted(args...)
 }
 
 // executeEditor runs the editor command.
 func (cmd *CmdTool) executeEditor() error {
-	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+	if cmd.usesPureEngine() {
 		return fmt.Errorf("editor command is not supported in pure_engine mode")
 	}
-	args := cmd.Args.String()
+	args := cmd.engineArgs(cmd.ProjectDir)
 	args = append(args, "-e")
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
 // executeRune runs the rune command.
 func (cmd *CmdTool) executeRune() error {
-	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+	if cmd.usesPureEngine() {
 		return fmt.Errorf("rune command is not supported in pure_engine mode")
 	}
 	args := cmd.checkMovieArgs(cmd.ProjectDir)
@@ -139,17 +130,33 @@ func (cmd *CmdTool) executeRune() error {
 
 // executeRunNative runs the native desktop runtime command.
 func (cmd *CmdTool) executeRunNative() error {
-	if cmd.Args.Tags != nil && strings.Contains(*cmd.Args.Tags, "pure_engine") {
+	if cmd.usesPureEngine() {
 		args := cmd.Args.String()
 		return cmd.RunPureEngine(args...)
-	} else {
-		args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
-		return cmd.RunPackMode(args...)
 	}
+	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
+	return cmd.RunPackMode(args...)
+}
+
+// resolveProjectPaths resolves the real source root and generated project path
+// without changing the process working directory.
+func (cmd *CmdTool) resolveProjectPaths(sourceDir, dstRelDir string) error {
+	targetDir, err := filepath.Abs(sourceDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+	targetDir, err = filepath.EvalSymlinks(targetDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve target directory: %w", err)
+	}
+	cmd.TargetDir = targetDir
+	cmd.Args.Path = &cmd.TargetDir
+	cmd.ProjectDir = filepath.Join(cmd.TargetDir, dstRelDir)
+	return nil
 }
 
 func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
-	args := cmd.Args.String()
+	args := cmd.engineArgs(rootDir)
 	if cmd.Args.Movie != nil && *cmd.Args.Movie {
 		dir, _ := filepath.Abs(filepath.Join(rootDir, "output"))
 		fpath := filepath.Join(dir, "movie.avi")
@@ -159,18 +166,8 @@ func (cmd *CmdTool) checkMovieArgs(rootDir string) []string {
 	return args
 }
 
-// handleInterpretedRunCommand runs the interpreted-mode command with minimal setup.
-func (cmd *CmdTool) handleInterpretedRunCommand() error {
-	cmd.RuntimeMode = true
-	cmd.RuntimeTempDir, _ = filepath.Abs(filepath.Join(cmd.TargetDir, ".temp"))
-
-	GOOS := runtime.GOOS
-	if os.Getenv("GOOS") != "" {
-		GOOS = os.Getenv("GOOS")
-	}
-	cmd.BinPostfix = executableSuffix(GOOS)
-	cmd.RuntimeCmdPath = filepath.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
-
-	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
-	return cmd.RunInterpreted(args...)
+func (cmd *CmdTool) engineArgs(rootDir string) []string {
+	args := cmd.Args
+	args.Path = &rootDir
+	return args.String()
 }

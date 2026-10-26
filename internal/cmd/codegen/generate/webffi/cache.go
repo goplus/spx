@@ -21,6 +21,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -32,8 +33,9 @@ type cacheFunc struct {
 	argCount int
 }
 
-func (g *Generator) wrapCache(function *clang.TypedefFunction, body string) string {
-	cache, ok := g.caches[function.Name]
+func (g *Generator) cachedManagerBody(function *clang.TypedefFunction, caches map[string]cacheFunc) string {
+	body := g.managerBody(function)
+	cache, ok := caches[function.Name]
 	if !ok {
 		return body
 	}
@@ -53,12 +55,16 @@ func (g *Generator) wrapCache(function *clang.TypedefFunction, body string) stri
 // scanCaches matches Cached<Manager><Method> functions in *_cache.go to APIs.
 // Each takes the API arguments followed by a func() T fallback.
 func scanCaches(dir string) (map[string]cacheFunc, error) {
-	paths, err := filepath.Glob(filepath.Join(dir, "*_cache.go"))
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 	functions := make(map[string]cacheFunc)
-	for _, path := range paths {
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), "_cache.go") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
 		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
 			return nil, err

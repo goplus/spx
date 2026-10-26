@@ -137,10 +137,13 @@ func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 					Name: "unused", Path: "unused.png", ImageWidth: 10, ImageHeight: 10,
 				}}},
 			}
-			game.tilemapMgr.init(&game.Game, files, project.TilemapPath)
-			if err := game.loadStage(reflect.ValueOf(game).Elem(), project, game.bootstrapGeneration()); err != nil {
+			gamer := reflect.ValueOf(game).Elem()
+			plan, err := game.prepareProject(files, project, gamer)
+			if err != nil {
 				t.Fatal(err)
 			}
+			game.tilemapMgr.applyLoadedMap(plan.tilemap)
+			game.applyPreparedStage(gamer, project, game.bootstrapGeneration(), &plan)
 			if game.TilemapName() != "map" || parser.loadedPath != internalengine.ToAssetPath("tilemaps/map/tilemap.json") {
 				t.Fatalf("native tilemap name/path = %q/%q", game.TilemapName(), parser.loadedPath)
 			}
@@ -298,7 +301,8 @@ func TestTilemapDecoratorCoordinates(t *testing.T) {
 func TestTilemapLoadAndEmptyBounds(t *testing.T) {
 	var game Game
 	files := gameTestFS{"map.json": `{"tilemap":{"layers":[]}}`}
-	game.tilemapMgr.init(&game, files, "map.json")
+	game.tilemapMgr.g, game.tilemapMgr.fs = &game, files
+	game.tilemapMgr.loadMap("map.json")
 	if game.TilemapName() != "map" {
 		t.Fatalf("map name=%q", game.TilemapName())
 	}

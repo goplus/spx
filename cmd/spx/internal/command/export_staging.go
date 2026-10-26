@@ -27,10 +27,10 @@ import (
 )
 
 func (cmd *CmdTool) prepareExport() error {
-	if cmd.TargetAbsDir == "" {
+	if cmd.TargetDir == "" {
 		return fmt.Errorf("stage project-local resources: logical project directory is empty")
 	}
-	source := filepath.Join(cmd.TargetAbsDir, "assets")
+	source := filepath.Join(cmd.TargetDir, "assets")
 	destination := filepath.Join(cmd.ProjectDir, "assets")
 	if err := validateExportStage(source, destination); err != nil {
 		return err

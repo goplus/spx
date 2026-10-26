@@ -18,10 +18,15 @@ package spx
 
 import (
 	"reflect"
-	"unsafe"
 
+	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
+
+type spriteUserFieldSnapshot struct {
+	field reflect.Value
+	value reflect.Value
+}
 
 func (p *SpriteImpl) Clone__0() {
 	p.CloneWith(nil)
@@ -92,20 +97,26 @@ func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteP
 	return dest, outPtr
 }
 
+func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
+	defer dest.finishCloneInitialization()
+	if dest.spriteState.HasOnCloned {
+		dest.doWhenCloned(dest, data)
+	}
+}
+
 func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	in := reflect.ValueOf(source).Elem()
+	layout, err := inspectCloneLayout(in.Type())
+	if err != nil {
+		panic(err)
+	}
 	outPtr := out.Addr().Interface().(Sprite)
-	dest := spriteOf(outPtr)
+	dest := layout.base(out)
 	out.Set(in)
-	for i, n := 0, out.NumField(); i < n; i++ {
-		dstField := settableSpriteField(out.Field(i))
-		srcField := settableSpriteField(in.Field(i))
-		if !dstField.IsValid() || !srcField.IsValid() {
-			continue
-		}
-		if ini := dstField.Addr().MethodByName("InitFrom"); ini.IsValid() {
-			ini.Call([]reflect.Value{srcField.Addr()})
-		}
+	for _, field := range layout.initFields {
+		dstField := coreproject.WritableField(out.Field(field.field))
+		srcField := coreproject.WritableField(in.Field(field.field))
+		dstField.Addr().Method(field.method).Call([]reflect.Value{srcField.Addr()})
 	}
 	dest.sprite = outPtr
 	dest.runtimeState.IsCostumeDirty = true
@@ -113,28 +124,22 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 	// even when it is numerically unchanged from the source layer.
 	dest.runtimeState.IsLayerDirty = true
 
-	src := spriteOf(source)
+	src := layout.base(in)
 	dest.components = cloneComponents(src, dest)
 	return dest, outPtr
 }
 
-type spriteUserFieldSnapshot struct {
-	field reflect.Value
-	value reflect.Value
-}
-
 func snapshotSpriteUserFields(v reflect.Value) []spriteUserFieldSnapshot {
-	count := v.NumField()
-	out := make([]spriteUserFieldSnapshot, 0, count)
-	typ := v.Type()
-	for i := 0; i < count; i++ {
-		if isSpriteBaseField(typ, i) {
-			continue
-		}
-		field := settableSpriteField(v.Field(i))
-		if !field.IsValid() {
-			continue
-		}
+	if !v.CanAddr() {
+		return nil
+	}
+	layout, err := inspectSpriteLayout(v.Type())
+	if err != nil {
+		panic(err)
+	}
+	out := make([]spriteUserFieldSnapshot, 0, len(layout.userFields))
+	for _, i := range layout.userFields {
+		field := coreproject.WritableField(v.Field(i))
 		saved := reflect.New(field.Type()).Elem()
 		saved.Set(field)
 		out = append(out, spriteUserFieldSnapshot{field: field, value: saved})
@@ -145,22 +150,5 @@ func snapshotSpriteUserFields(v reflect.Value) []spriteUserFieldSnapshot {
 func restoreSpriteUserFields(state []spriteUserFieldSnapshot) {
 	for _, saved := range state {
 		saved.field.Set(saved.value)
-	}
-}
-
-func settableSpriteField(field reflect.Value) reflect.Value {
-	if field.CanSet() {
-		return field
-	}
-	if !field.CanAddr() {
-		return reflect.Value{}
-	}
-	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-}
-
-func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
-	defer dest.finishCloneInitialization()
-	if dest.spriteState.HasOnCloned {
-		dest.doWhenCloned(dest, data)
 	}
 }

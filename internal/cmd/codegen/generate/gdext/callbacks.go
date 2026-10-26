@@ -26,7 +26,7 @@ import (
 
 // Default callbacks are generated from the ABI fields, so adding a callback
 // cannot leave an uninitialized function pointer in the engine's fallback table.
-func (g *Generator) writeCallbackDefaults(spxModulePath string) error {
+func (g *Generator) renderCallbackDefaults(spxModulePath string) error {
 	callbacks, err := common.CollectCallbacks(g.AST())
 	if err != nil {
 		return fmt.Errorf("generate callback defaults: %w", err)
@@ -50,5 +50,5 @@ inline SpxCallbackInfo get_default_spx_callbacks() {
 		fmt.Fprintf(&out, "\tcallbacks.%s = [](%s) {};\n", callback.Field, strings.Join(args, ", "))
 	}
 	out.WriteString("\treturn callbacks;\n}\n\n#endif // SPX_CALLBACK_DEFAULTS_GEN_H\n")
-	return common.WriteGeneratedFile(filepath.Join(spxModulePath, "spx_callback_defaults.gen.h"), []byte(out.String()), 0o644)
+	return g.Output.AddFile(filepath.Join(spxModulePath, "spx_callback_defaults.gen.h"), []byte(out.String()))
 }

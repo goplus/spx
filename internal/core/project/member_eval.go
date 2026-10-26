@@ -72,13 +72,13 @@ func resolveMember(target reflect.Value, name string, from int) resolvedMember {
 	aliasName := aliasNameOf(name, true)
 
 	m := targetForMethod.MethodByName(name)
-	if m.IsValid() && methodHasAutoProperty(m) {
+	if methodHasAutoProperty(m) {
 		return resolvedMember{method: m}
 	}
 
 	if !m.IsValid() && aliasName != "" && aliasName != name {
 		mAlias := targetForMethod.MethodByName(aliasName)
-		if mAlias.IsValid() && methodHasAutoProperty(mAlias) {
+		if methodHasAutoProperty(mAlias) {
 			return resolvedMember{method: mAlias, autoProperty: true}
 		}
 	}

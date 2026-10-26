@@ -49,7 +49,8 @@ func (cmd *CmdTool) BuildWasm() error {
 
 // BuildTinyGoLib builds a TinyGo static library.
 func (cmd *CmdTool) BuildTinyGoLib() error {
-	if _, err := cmd.genGo(); err != nil {
+	tagStr, err := cmd.genGo()
+	if err != nil {
 		return err
 	}
 
@@ -73,8 +74,8 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 		"-gc=leaking",
 		"-scheduler=none",
 	}
-	if tags := *cmd.Args.Tags; tags != "" {
-		args = append(args, "-tags="+tags)
+	if tagStr != "" {
+		args = append(args, tagStr)
 	}
 	args = append(args, ".")
 
@@ -91,7 +92,11 @@ func (cmd *CmdTool) BuildTinyGoLib() error {
 func (cmd *CmdTool) BuildDll() error {
 	cmd.hideIOSFiles()
 
-	targetArchs, err := cmd.determineTargetArchs()
+	requestedArch := ""
+	if cmd.Args.Arch != nil {
+		requestedArch = *cmd.Args.Arch
+	}
+	targetArchs, err := determineTargetArchs(runtime.GOOS, runtime.GOARCH, requestedArch)
 	if err != nil {
 		return err
 	}
@@ -109,70 +114,10 @@ func (cmd *CmdTool) BuildDll() error {
 	return nil
 }
 
-// hideIOSFiles renames ios* files to .txt files.
-func (cmd *CmdTool) hideIOSFiles() {
-	searchPattern := filepath.Join(cmd.ProjectDir, "go", "ios*")
-	files, err := filepath.Glob(searchPattern)
-	if err != nil {
-		logWarnf("Glob failed for pattern %s: %v", searchPattern, err)
-		return
-	}
-
-	for _, file := range files {
-		if !strings.HasSuffix(file, ".txt") {
-			newName := file + ".txt"
-			if err := os.Rename(file, newName); err != nil {
-				logWarnf("Failed to rename %s to %s: %v", file, newName, err)
-			}
-		}
-	}
-}
-
-// determineTargetArchs resolves target architectures.
-func (cmd *CmdTool) determineTargetArchs() ([]string, error) {
-	if runtime.GOOS == "darwin" {
-		return []string{"amd64", "arm64"}, nil
-	}
-
-	tarArch := *cmd.Args.Arch
-	if tarArch == "" {
-		return []string{runtime.GOARCH}, nil
-	}
-
-	var validArchs []string
-	switch runtime.GOOS {
-	case "windows":
-		validArchs = []string{"amd64", "386"}
-	case "linux":
-		validArchs = []string{"amd64", "arm", "arm64", "386"}
-	default:
-		validArchs = []string{runtime.GOARCH}
-	}
-
-	if tarArch == "all" {
-		return validArchs, nil
-	}
-
-	if slices.Contains(validArchs, tarArch) {
-		return []string{tarArch}, nil
-	}
-
-	return nil, fmt.Errorf("invalid arch %s. Valid archs for %s: %s",
-		tarArch, runtime.GOOS, strings.Join(validArchs, ","))
-}
-
+// genGo generates code from the source root without changing the process directory.
 func (cmd *CmdTool) genGo() (string, error) {
-	spxProjPath := filepath.Join(cmd.ProjectDir, "..")
-	if err := cmd.genGoUsingXgoCLI(spxProjPath); err != nil {
-		return "", fmt.Errorf("code generation failed using xgo CLI: %w", err)
-	}
-	return cmd.SafeTagArgs(), nil
-}
-
-// genGoUsingXgoCLI generates code with xgo without changing the process directory.
-func (cmd *CmdTool) genGoUsingXgoCLI(spxProjPath string) error {
-	if err := cmd.ensureBuilderAIModuleFiles(spxProjPath); err != nil {
-		return err
+	if err := cmd.ensureBuilderAIModuleFiles(cmd.TargetDir); err != nil {
+		return "", err
 	}
 
 	tagStr := cmd.SafeTagArgs()
@@ -181,28 +126,28 @@ func (cmd *CmdTool) genGoUsingXgoCLI(spxProjPath string) error {
 	if tagStr != "" {
 		args = append(args, tagStr)
 	}
-	if err := util.ExecCommand(util.CommandOptions{Dir: spxProjPath}, "xgo", args...); err != nil {
-		return fmt.Errorf("xgo generation failed: %w", err)
+	if err := util.ExecCommand(util.CommandOptions{Dir: cmd.TargetDir}, "xgo", args...); err != nil {
+		return "", fmt.Errorf("code generation failed using xgo CLI: %w", err)
 	}
 
 	if err := os.MkdirAll(cmd.GoDir, 0755); err != nil {
-		return fmt.Errorf("failed to create GoDir: %w", err)
+		return "", fmt.Errorf("failed to create GoDir: %w", err)
 	}
 
-	sourceFile := path.Join(spxProjPath, "xgo_autogen.go")
+	sourceFile := path.Join(cmd.TargetDir, "xgo_autogen.go")
 	destFile := path.Join(cmd.GoDir, "main.go")
 
 	if err := os.Rename(sourceFile, destFile); err != nil {
-		return fmt.Errorf("failed to rename/move generated file %s to %s: %w", sourceFile, destFile, err)
+		return "", fmt.Errorf("failed to rename/move generated file %s to %s: %w", sourceFile, destFile, err)
 	}
 
 	if cmd.shouldRunGoModTidy() {
-		if err := util.ExecCommand(util.CommandOptions{Dir: spxProjPath}, "go", "mod", "tidy"); err != nil {
-			return fmt.Errorf("go mod tidy failed: %w", err)
+		if err := util.ExecCommand(util.CommandOptions{Dir: cmd.TargetDir}, "go", "mod", "tidy"); err != nil {
+			return "", fmt.Errorf("go mod tidy failed: %w", err)
 		}
 	}
 
-	return nil
+	return tagStr, nil
 }
 
 // executeDllBuild runs a multi-arch C-shared build.
@@ -244,4 +189,60 @@ func (cmd *CmdTool) executeDllBuild(archs []string, tagStr string) error {
 		}
 	}
 	return nil
+}
+
+// hideIOSFiles renames ios* files to .txt files.
+func (cmd *CmdTool) hideIOSFiles() {
+	dir := filepath.Join(cmd.ProjectDir, "go")
+	files, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		logWarnf("Failed to read iOS source directory %s: %v", dir, err)
+		return
+	}
+
+	for _, file := range files {
+		name := file.Name()
+		if !strings.HasPrefix(name, "ios") || strings.HasSuffix(name, ".txt") {
+			continue
+		}
+		source := filepath.Join(dir, name)
+		if err := os.Rename(source, source+".txt"); err != nil {
+			logWarnf("Failed to rename %s to %s: %v", source, source+".txt", err)
+		}
+	}
+}
+
+// determineTargetArchs resolves target architectures.
+func determineTargetArchs(goos, hostArch, requestedArch string) ([]string, error) {
+	if goos == "darwin" {
+		return []string{"amd64", "arm64"}, nil
+	}
+
+	if requestedArch == "" {
+		return []string{hostArch}, nil
+	}
+
+	var validArchs []string
+	switch goos {
+	case "windows":
+		validArchs = []string{"amd64", "386"}
+	case "linux":
+		validArchs = []string{"amd64", "arm", "arm64", "386"}
+	default:
+		validArchs = []string{hostArch}
+	}
+
+	if requestedArch == "all" {
+		return validArchs, nil
+	}
+
+	if slices.Contains(validArchs, requestedArch) {
+		return []string{requestedArch}, nil
+	}
+
+	return nil, fmt.Errorf("invalid arch %s. Valid archs for %s: %s",
+		requestedArch, goos, strings.Join(validArchs, ","))
 }

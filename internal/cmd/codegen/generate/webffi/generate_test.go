@@ -41,8 +41,9 @@ func TestWriteEngineJSTrimsTrailingWhitespace(t *testing.T) {
 	}
 	spxModulePath := filepath.Join(t.TempDir(), "spx")
 
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
-	require.NoError(t, generation.writeEngineJS(spxModulePath))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	require.NoError(t, generation.renderEngineJS(spxModulePath))
+	require.NoError(t, generation.Output.Commit())
 	body, err := os.ReadFile(filepath.Join(spxModulePath, "web", "js", "engine", "gdspx.js"))
 	require.NoError(t, err)
 	for line := range strings.SplitSeq(string(body), "\n") {
@@ -56,7 +57,9 @@ func TestWriteEngineJSTrimsTrailingWhitespace(t *testing.T) {
 
 func TestWorkerExposesOnlyCallbackDispatcher(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, writeWorker(filepath.Join(root, "internal", "cmd", "codegen")))
+	generation := &Generator{Output: &common.OutputPlan{}}
+	require.NoError(t, generation.renderWorker(filepath.Join(root, "internal", "cmd", "codegen")))
+	require.NoError(t, generation.Output.Commit())
 	body, err := os.ReadFile(filepath.Join(root, "cmd", "spx", "template", "platform", "webworker", "worker.wrap.gen.js"))
 	require.NoError(t, err)
 	source := string(body)
@@ -230,8 +233,9 @@ typedef void (*GDExtensionSpxExampleUpdateValues)(const float *values, int count
 typedef GdBool (*GDExtensionSpxExampleTryWrite)(float *out);
 typedef void (*GDExtensionSpxExampleUpdateFixed)(float *out);`)
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
-	require.NoError(t, generation.writeEngineJS(dir))
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	require.NoError(t, generation.renderEngineJS(dir))
+	require.NoError(t, generation.Output.Commit())
 	output, err := os.ReadFile(filepath.Join(dir, "web", "js", "engine", "gdspx.js"))
 	require.NoError(t, err)
 	require.Contains(t, string(output), "GdspxFuncs['arrayOutputs'] = {")
@@ -327,11 +331,11 @@ func TestManagerInputCacheUsesGeneratedFallback(t *testing.T) {
 			declaration := "typedef " + ret + " (*GDExtensionSpxInput" + test.method + ")(" + strings.Join(parts[:len(parts)-1], ", ") + ");"
 			ast, err := clang.ParseCString(declaration)
 			require.NoError(t, err)
-			generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{}), caches: caches}
+			generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
 			functions := ast.CollectGDExtensionInterfaceFunctions()
 			require.Len(t, functions, 1)
 			require.NotContains(t, generation.jsBody(&functions[0]), "_call(_arg0, _arg1);")
-			body := generation.managerBody(&functions[0])
+			body := generation.cachedManagerBody(&functions[0], caches)
 			require.Contains(t, body, test.call+" {")
 			require.Contains(t, body, "_result := API.SpxInput"+test.method+".Invoke(")
 			require.Contains(t, body, "return "+test.conversion)

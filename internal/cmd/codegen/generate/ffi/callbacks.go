@@ -35,8 +35,8 @@ type callbackArgumentData struct {
 	CType, GoType, Value string
 }
 
-func writeCallbacks(codegenDir string, ast clang.CHeaderFileAST) error {
-	declarations, err := common.CollectCallbacks(ast)
+func (g *Generator) renderCallbacks(codegenDir string) error {
+	declarations, err := common.CollectCallbacks(g.AST())
 	if err != nil {
 		return err
 	}
@@ -52,11 +52,11 @@ func writeCallbacks(codegenDir string, ast clang.CHeaderFileAST) error {
 		}
 		callbacks = append(callbacks, data)
 	}
-	if err := common.GenerateFile(template.FuncMap{"trimPrefix": strings.TrimPrefix}, "callbacks.gen.go", callbacksGoText, callbacks,
+	if err := g.Output.RenderFile(template.FuncMap{"trimPrefix": strings.TrimPrefix}, callbacksGoTemplate, callbacks,
 		filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.go")); err != nil {
 		return err
 	}
-	return common.GenerateFile(nil, "callbacks.gen.h", callbacksHeaderText, callbacks,
+	return g.Output.RenderFile(nil, callbacksHeaderTemplate, callbacks,
 		filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.h"))
 }
 

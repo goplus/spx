@@ -42,13 +42,17 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	metadata.StaticMethods["control"] = "SpxExtMgr::resume"
 	metadata.ArrayBridges["first"].Buffers[0].Data.Name = "changed"
 	metadata.ArrayBridges["first"].Buffers[1].Count = 9
-	second := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
+	secondAST, err := clang.ParseCString("typedef void (*GDExtensionSpxCameraShow)();")
+	require.NoError(t, err)
+	second := NewGenerationContext(secondAST, metadata)
 	require.Equal(t, "SpxExtMgr::pause", first.MethodTarget(&clang.TypedefFunction{Name: "control"}))
 	require.Equal(t, "SpxExtMgr::resume", second.MethodTarget(&clang.TypedefFunction{Name: "control"}))
 	require.Equal(t, "spriteMgr->show", first.MethodTarget(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.Equal(t, "sprite", first.GetManagerName("GDExtensionSpxSpriteShow"))
 	require.True(t, first.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
 	require.False(t, second.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
+	require.Equal(t, []string{"sprite"}, first.ManagerData().Managers)
+	require.Equal(t, []string{"camera"}, second.ManagerData().Managers)
 	spec, ok := first.ArrayBridge("first")
 	require.True(t, ok)
 	require.Equal(t, "[]float32", spec.Buffers[0].GoType())
@@ -56,23 +60,10 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	require.Equal(t, 3, spec.Buffers[1].Count)
 	spec.Buffers[0].Data.Name = "caller mutation"
 	spec.Buffers[1].Count = 8
-	first.ListArrayBridges()[0].Buffers[0].Data.Name = "another mutation"
-	first.ListArrayBridges()[0].Buffers[1].Count = 7
 	again, _ := first.ArrayBridge("first")
 	require.Equal(t, "input", again.Buffers[0].Data.Name)
 	require.Equal(t, 3, again.Buffers[1].Count)
 	require.Equal(t, "int64", first.MustGoTypeForCType("GdInt", "test"))
-}
-
-func TestGetManagersDoesNotChangePreparedAST(t *testing.T) {
-	first, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)();")
-	require.NoError(t, err)
-	second, err := clang.ParseCString("typedef void (*GDExtensionSpxCameraShow)();")
-	require.NoError(t, err)
-	generation := NewGenerationContext(first, GenerationMetadata{ManagerNames: []string{"sprite", "camera"}})
-	require.Equal(t, []string{"camera"}, generation.GetManagers(second))
-	require.True(t, generation.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxSpriteShow"}))
-	require.False(t, generation.IsManagerMethod(&clang.TypedefFunction{Name: "GDExtensionSpxCameraShow"}))
 }
 
 func TestGenerationContextsRenderIndependently(t *testing.T) {
@@ -83,11 +74,13 @@ func TestGenerationContextsRenderIndependently(t *testing.T) {
 			t.Run(manager+"/"+output, func(t *testing.T) {
 				t.Parallel()
 				dst := filepath.Join(t.TempDir(), "manager.go")
-				err := GenerateFile(template.FuncMap{"manager": generation.GetManagerName}, "manager.go",
+				var plan OutputPlan
+				err := plan.RenderFile(template.FuncMap{"manager": generation.GetManagerName},
 					`package generated
 const Manager = "{{manager .}}"
 `, "GDExtensionSpxFooBar", dst)
 				require.NoError(t, err)
+				require.NoError(t, plan.Commit())
 				data, err := os.ReadFile(dst)
 				require.NoError(t, err)
 				require.Contains(t, string(data), `const Manager = "`+manager+`"`)

@@ -18,98 +18,37 @@ package project
 
 import (
 	"reflect"
-	"strings"
 	"unsafe"
 )
 
-type FieldAllocConfig struct {
-	IsPointerSpriteType        func(reflect.Type) bool
-	ResolveInterfaceSpriteType func(fieldName string) (reflect.Type, bool)
-}
-
-func FieldPtrOrAlloc(v reflect.Value, fieldIndex int, cfg FieldAllocConfig) (name string, val any) {
-	tFld := v.Type().Field(fieldIndex)
-	vFld := v.Field(fieldIndex)
-	typ := tFld.Type
-	word := unsafe.Pointer(vFld.Addr().Pointer())
-	ret := reflect.NewAt(typ, word).Interface()
-
-	if vFld.Kind() == reflect.Pointer && cfg.IsPointerSpriteType != nil && cfg.IsPointerSpriteType(typ) {
-		obj := reflect.New(typ.Elem())
-		reflect.ValueOf(ret).Elem().Set(obj)
-		ret = obj.Interface()
+// WritableField exposes addressable generated fields, including unexported
+// fields, to the loader and cloner. It returns an invalid value for fields
+// without writable storage.
+func WritableField(field reflect.Value) reflect.Value {
+	if field.CanSet() {
+		return field
 	}
-
-	if vFld.Kind() == reflect.Interface && cfg.ResolveInterfaceSpriteType != nil {
-		if typ2, ok := cfg.ResolveInterfaceSpriteType(tFld.Name); ok {
-			obj := reflect.New(typ2)
-			reflect.ValueOf(ret).Elem().Set(obj)
-			ret = obj.Interface()
-		}
+	if !field.CanAddr() {
+		return reflect.Value{}
 	}
-	return tFld.Name, ret
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 }
 
 func FindFieldPtr(v reflect.Value, name string, from int) any {
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
+	if v.Kind() != reflect.Struct || !v.CanAddr() {
+		return nil
+	}
 	t := v.Type()
 	for i, n := from, v.NumField(); i < n; i++ {
 		tFld := t.Field(i)
 		if tFld.Name == name {
-			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
-			return reflect.NewAt(tFld.Type, word).Interface()
+			return WritableField(v.Field(i)).Addr().Interface()
 		}
 	}
 	return nil
-}
-
-func FindFieldRefCaseInsensitive(v reflect.Value, name string, from int) any {
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	t := v.Type()
-	nameLower := strings.ToLower(name)
-	for i, n := from, v.NumField(); i < n; i++ {
-		tFld := t.Field(i)
-		if strings.ToLower(tFld.Name) == nameLower {
-			word := unsafe.Pointer(v.Field(i).Addr().Pointer())
-			return reflect.NewAt(tFld.Type, word).Interface()
-		}
-	}
-	return nil
-}
-
-// embeddedStructs returns the dereferenced struct values of all exported
-// anonymous fields of v. Nil pointers and nil interfaces are skipped.
-func embeddedStructs(v reflect.Value) []reflect.Value {
-	t := v.Type()
-	var out []reflect.Value
-	for i := range v.NumField() {
-		tFld := t.Field(i)
-		if !tFld.Anonymous || !tFld.IsExported() {
-			continue
-		}
-		f := v.Field(i)
-		if f.Kind() == reflect.Pointer {
-			if f.IsNil() {
-				continue
-			}
-			f = f.Elem()
-		}
-		if f.Kind() == reflect.Interface {
-			if f.IsNil() {
-				continue
-			}
-			f = f.Elem()
-		}
-		if f.Kind() != reflect.Struct {
-			continue
-		}
-		out = append(out, f)
-	}
-	return out
 }
 
 // findPromotedFieldPtr approximates Go's embedding promotion rules: direct
@@ -161,4 +100,35 @@ func findPromotedFieldPtr(v reflect.Value, name string, from int) any {
 		queue = next
 	}
 	return nil
+}
+
+// embeddedStructs returns the dereferenced struct values of all exported
+// anonymous fields of v. Nil pointers and nil interfaces are skipped.
+func embeddedStructs(v reflect.Value) []reflect.Value {
+	t := v.Type()
+	var out []reflect.Value
+	for i := range v.NumField() {
+		tFld := t.Field(i)
+		if !tFld.Anonymous || !tFld.IsExported() {
+			continue
+		}
+		f := v.Field(i)
+		if f.Kind() == reflect.Pointer {
+			if f.IsNil() {
+				continue
+			}
+			f = f.Elem()
+		}
+		if f.Kind() == reflect.Interface {
+			if f.IsNil() {
+				continue
+			}
+			f = f.Elem()
+		}
+		if f.Kind() != reflect.Struct {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }

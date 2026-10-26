@@ -34,37 +34,14 @@ type OpenedBuilderResources struct {
 	LoadedBuilderProject
 }
 
-func AssetDirFromResource(resource any) (string, bool) {
-	switch v := resource.(type) {
-	case string:
-		return v, true
-	case spxfs.GdDir:
-		return strings.TrimSuffix(v.GetPath(), "/"), true
-	default:
-		return "", false
-	}
-}
-
-func ResourceDir(resource any) (spxfs.Dir, error) {
-	if fs, ok := resource.(spxfs.Dir); ok {
-		return fs, nil
-	}
-	path, ok := resource.(string)
-	if !ok {
-		return nil, fmt.Errorf("unsupported resource type %T", resource)
-	}
-	return spxfs.Open(path)
-}
-
 func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResources, error) {
 	var opened OpenedBuilderResources
-	opened.AssetDir, _ = AssetDirFromResource(resource)
+	opened.AssetDir = AssetDirFromResource(resource)
 
 	fs, err := ResourceDir(resource)
 	if err != nil {
 		return OpenedBuilderResources{}, err
 	}
-	fs = adaptConfigDir(fs)
 	index, packed, err := loadPackedConfigIndex(fs)
 	if err != nil {
 		fs.Close()
@@ -84,15 +61,26 @@ func OpenBuilderResources(resource any, gameConf *Config) (OpenedBuilderResource
 	return opened, nil
 }
 
-func LoadJSON(ret any, fs spxfs.Dir, file string) error {
-	fs = adaptConfigDir(fs)
-	f, err := fs.Open(file)
-	if err != nil {
-		spxlog.Error("Failed to open file %s: %v", file, err)
-		return err
+func AssetDirFromResource(resource any) string {
+	switch v := resource.(type) {
+	case string:
+		return v
+	case spxfs.GdDir:
+		return strings.TrimSuffix(v.GetPath(), "/")
+	default:
+		return ""
 	}
-	defer f.Close()
-	return decodeJSON(f, ret)
+}
+
+func ResourceDir(resource any) (spxfs.Dir, error) {
+	if fs, ok := resource.(spxfs.Dir); ok {
+		return fs, nil
+	}
+	path, ok := resource.(string)
+	if !ok {
+		return nil, fmt.Errorf("unsupported resource type %T", resource)
+	}
+	return spxfs.Open(path)
 }
 
 func LoadConfig(ret any, fs spxfs.Dir, index any) error {
@@ -128,32 +116,14 @@ func LoadSoundConfig(fs spxfs.Dir, name string) (SoundConfig, error) {
 	return conf, nil
 }
 
-func decodeJSON(r io.Reader, ret any) error {
-	dec := json.NewDecoder(r)
-	if err := dec.Decode(ret); err != nil {
+func LoadJSON(ret any, fs spxfs.Dir, file string) error {
+	f, err := fs.Open(file)
+	if err != nil {
+		spxlog.Error("Failed to open file %s: %v", file, err)
 		return err
 	}
-	if err := dec.Decode(new(any)); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("unexpected content after JSON value")
-		}
-		return err
-	}
-	return nil
-}
-
-func gdAssetDir(fs spxfs.Dir) (string, bool) {
-	gdDir, ok := fs.(spxfs.GdDir)
-	if !ok {
-		return "", false
-	}
-	assetDir := strings.TrimSuffix(gdDir.GetPath(), "/")
-	return assetDir, assetDir != ""
-}
-
-func shouldReadConfigFromEngine(assetDir string) bool {
-	schema, _ := spxfs.SplitSchema(assetDir)
-	return schema != ""
+	defer f.Close()
+	return decodeJSON(f, ret)
 }
 
 // NormalizeConfigPath resolves a relative project config path from configDir.
@@ -167,14 +137,10 @@ func NormalizeConfigPath(configDir, relPath string) string {
 	if schema, _ := spxfs.SplitSchema(relPath); schema != "" {
 		return relPath
 	}
-	return path.Clean(path.Join(configDir, relPath))
+	return path.Join(configDir, relPath)
 }
 
 func normalizeProjectConfigPaths(conf *ProjectConfig) {
-	if conf == nil {
-		return
-	}
-
 	for _, backdrop := range conf.Backdrops {
 		if backdrop == nil {
 			continue
@@ -186,10 +152,6 @@ func normalizeProjectConfigPaths(conf *ProjectConfig) {
 }
 
 func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
-	if conf == nil {
-		return
-	}
-
 	for _, costume := range conf.Costumes {
 		if costume == nil {
 			continue
@@ -202,4 +164,18 @@ func normalizeSpriteConfigPaths(conf *SpriteConfig, configDir string) {
 	if conf.CostumeMPSet != nil {
 		conf.CostumeMPSet.Path = NormalizeConfigPath(configDir, conf.CostumeMPSet.Path)
 	}
+}
+
+func decodeJSON(r io.Reader, ret any) error {
+	dec := json.NewDecoder(r)
+	if err := dec.Decode(ret); err != nil {
+		return err
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("unexpected content after JSON value")
+		}
+		return err
+	}
+	return nil
 }

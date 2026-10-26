@@ -86,8 +86,9 @@ type Config struct {
 	IO            IO
 }
 
-// Assets are the verified runtime and source bridge files used by a launcher
-// or a direct project run. The caller must invoke Cleanup when done.
+// Assets contains runtime and bridge files used by a launcher or direct run.
+// Manifest-based acquisition also sets Lock and Cleanup; legacy installations
+// have no manifest identity. The caller must invoke a non-nil Cleanup when done.
 type Assets struct {
 	EnginePath string
 	PackPath   string

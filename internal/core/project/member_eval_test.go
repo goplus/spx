@@ -415,3 +415,63 @@ func TestMemberNumberSetterPromotedField(t *testing.T) {
 		t.Fatal("nil embedded pointer accepted")
 	}
 }
+
+func TestGeneratedUnexportedFieldsRemainWritable(t *testing.T) {
+	holder := struct{ value int }{}
+	v := reflect.ValueOf(&holder).Elem()
+	*FindFieldPtr(v, "value", 0).(*int) = 7
+	if holder.value != 7 {
+		t.Fatalf("value = %d, want 7", holder.value)
+	}
+	if WritableField(reflect.ValueOf(holder).Field(0)).IsValid() {
+		t.Fatal("unaddressable field unexpectedly exposed writable storage")
+	}
+	for _, value := range []reflect.Value{reflect.ValueOf(holder), reflect.ValueOf((*struct{ value int })(nil)), reflect.Value{}} {
+		if FindFieldPtr(value, "value", 0) != nil {
+			t.Fatal("field lookup exposed storage without an addressable struct")
+		}
+	}
+}
+
+func TestResolveMemberEvalSharedEmbeddedInstance(t *testing.T) {
+	// Both branches reach the same instance. A missing lookup must visit it
+	// only once, while an existing promoted field must remain writable.
+	shared := &CycleMemberBranch{CycleMemberLeaf: &CycleMemberLeaf{Score: 9}}
+	fixture := struct {
+		CycleMemberLeft
+		CycleMemberRight
+	}{CycleMemberLeft{shared}, CycleMemberRight{shared}}
+	target := reflect.ValueOf(&fixture)
+	if eval := ResolveMemberValueEval(target, "missing", 0); eval != nil {
+		t.Fatal("unexpected evaluator for missing member in shared embedding")
+	}
+	if eval := ResolveMemberStringEval(target, "Score", 0); eval == nil || eval() != "9" {
+		t.Fatal("shared embedding hid promoted field")
+	}
+	set := ResolveMemberNumberSetter(target, "Score", 0)
+	if set == nil || !set(12) || shared.Score != 12 {
+		t.Fatal("shared promoted field did not retain writable storage")
+	}
+}
+
+func TestResolveMemberEvalSkipsNonStructEmbeddings(t *testing.T) {
+	type EmbeddedScalar int
+	type EmbeddedValue interface{}
+	for _, value := range []any{42, struct{ Other int }{Other: 7}} {
+		fixture := struct {
+			EmbeddedScalar
+			EmbeddedValue
+			Score int
+		}{EmbeddedScalar: 3, EmbeddedValue: value, Score: 9}
+		target := reflect.ValueOf(&fixture)
+		if eval := ResolveMemberValueEval(target, "missing", 0); eval != nil {
+			t.Fatalf("unexpected evaluator through embedded %T", value)
+		}
+		if set := ResolveMemberNumberSetter(target, "Other", 0); set != nil {
+			t.Fatalf("unaddressable embedded %T exposed writable storage", value)
+		}
+		if eval := ResolveMemberStringEval(target, "Score", 0); eval == nil || eval() != "9" {
+			t.Fatalf("embedded %T interfered with direct field", value)
+		}
+	}
+}

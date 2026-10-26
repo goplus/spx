@@ -20,17 +20,12 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+
+	"github.com/goplus/spx/v4/internal/input"
 )
 
-type KeyEvent struct {
-	Id        int64
-	IsPressed bool
-}
-
-type MouseEvent struct {
-	Id        int64
-	IsPressed bool
-}
+type KeyEvent = input.KeyEvent
+type MouseEvent = input.MouseEvent
 
 type keyInputState struct {
 	mu       sync.Mutex
@@ -90,6 +85,93 @@ func DiscardPendingKeyEvents() {
 // preserving the current held-button snapshot.
 func DiscardPendingMouseEvents() {
 	mouseInput.discard()
+}
+
+func (s *keyInputState) reset() {
+	s.mu.Lock()
+	s.pending = nil
+	s.ready = nil
+	s.pressed = make(map[int64]bool)
+	s.keysDown = nil
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) drain(dst []KeyEvent) []KeyEvent {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	s.mu.Unlock()
+	return dst
+}
+
+func (s *keyInputState) drainInput(dst []KeyEvent) ([]KeyEvent, []int64) {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	keysDown := append([]int64(nil), s.keysDown...)
+	s.mu.Unlock()
+	return dst, keysDown
+}
+
+func (s *keyInputState) discard() {
+	s.mu.Lock()
+	s.pending = s.pending[:0]
+	s.ready = s.ready[:0]
+	s.rebuildKeysDownLocked()
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) cache() {
+	s.mu.Lock()
+	s.ready = append(s.ready, s.pending...)
+	changed := len(s.pending) != 0
+	s.pending = s.pending[:0]
+	if changed {
+		s.rebuildKeysDownLocked()
+	}
+	s.mu.Unlock()
+}
+
+func (s *keyInputState) rebuildKeysDownLocked() {
+	s.keysDown = s.keysDown[:0]
+	for key := range s.pressed {
+		s.keysDown = append(s.keysDown, key)
+	}
+	slices.Sort(s.keysDown)
+}
+
+func (s *mouseInputState) reset() {
+	s.mu.Lock()
+	s.buttons.Store(0)
+	s.pending = nil
+	s.ready = nil
+	s.cachedButtons = 0
+	s.mu.Unlock()
+}
+
+func (s *mouseInputState) drainInput(dst []MouseEvent) ([]MouseEvent, uint8) {
+	s.mu.Lock()
+	dst = append(dst, s.ready...)
+	s.ready = s.ready[:0]
+	buttons := s.cachedButtons
+	s.mu.Unlock()
+	return dst, buttons
+}
+
+func (s *mouseInputState) discard() {
+	s.mu.Lock()
+	s.pending = s.pending[:0]
+	s.ready = s.ready[:0]
+	s.cachedButtons = uint8(s.buttons.Load())
+	s.mu.Unlock()
+}
+
+func (s *mouseInputState) cache() {
+	s.mu.Lock()
+	s.ready = append(s.ready, s.pending...)
+	s.pending = s.pending[:0]
+	s.cachedButtons = uint8(s.buttons.Load())
+	s.mu.Unlock()
 }
 
 // resetInputState clears process-wide input state at a game lifecycle boundary.
@@ -152,91 +234,4 @@ func queueMouseEvent(id int64, pressed bool) {
 	mouseInput.buttons.Store(buttons)
 	mouseInput.pending = append(mouseInput.pending, MouseEvent{Id: id, IsPressed: pressed})
 	mouseInput.mu.Unlock()
-}
-
-func (s *keyInputState) drain(dst []KeyEvent) []KeyEvent {
-	s.mu.Lock()
-	dst = append(dst, s.ready...)
-	s.ready = s.ready[:0]
-	s.mu.Unlock()
-	return dst
-}
-
-func (s *keyInputState) drainInput(dst []KeyEvent) ([]KeyEvent, []int64) {
-	s.mu.Lock()
-	dst = append(dst, s.ready...)
-	s.ready = s.ready[:0]
-	keysDown := append([]int64(nil), s.keysDown...)
-	s.mu.Unlock()
-	return dst, keysDown
-}
-
-func (s *keyInputState) discard() {
-	s.mu.Lock()
-	s.pending = s.pending[:0]
-	s.ready = s.ready[:0]
-	s.rebuildKeysDownLocked()
-	s.mu.Unlock()
-}
-
-func (s *keyInputState) reset() {
-	s.mu.Lock()
-	s.pending = nil
-	s.ready = nil
-	s.pressed = make(map[int64]bool)
-	s.keysDown = nil
-	s.mu.Unlock()
-}
-
-func (s *keyInputState) cache() {
-	s.mu.Lock()
-	s.ready = append(s.ready, s.pending...)
-	changed := len(s.pending) != 0
-	s.pending = s.pending[:0]
-	if changed {
-		s.rebuildKeysDownLocked()
-	}
-	s.mu.Unlock()
-}
-
-func (s *keyInputState) rebuildKeysDownLocked() {
-	s.keysDown = s.keysDown[:0]
-	for key := range s.pressed {
-		s.keysDown = append(s.keysDown, key)
-	}
-	slices.Sort(s.keysDown)
-}
-
-func (s *mouseInputState) drainInput(dst []MouseEvent) ([]MouseEvent, uint8) {
-	s.mu.Lock()
-	dst = append(dst, s.ready...)
-	s.ready = s.ready[:0]
-	buttons := s.cachedButtons
-	s.mu.Unlock()
-	return dst, buttons
-}
-
-func (s *mouseInputState) discard() {
-	s.mu.Lock()
-	s.pending = s.pending[:0]
-	s.ready = s.ready[:0]
-	s.cachedButtons = uint8(s.buttons.Load())
-	s.mu.Unlock()
-}
-
-func (s *mouseInputState) reset() {
-	s.mu.Lock()
-	s.buttons.Store(0)
-	s.pending = nil
-	s.ready = nil
-	s.cachedButtons = 0
-	s.mu.Unlock()
-}
-
-func (s *mouseInputState) cache() {
-	s.mu.Lock()
-	s.ready = append(s.ready, s.pending...)
-	s.pending = s.pending[:0]
-	s.cachedButtons = uint8(s.buttons.Load())
-	s.mu.Unlock()
 }

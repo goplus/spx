@@ -17,17 +17,14 @@
 package project
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 
 	spxfs "github.com/goplus/spx/v4/fs"
-	"github.com/goplus/spx/v4/internal/engine"
 )
 
 const fontsDir = "fonts"
@@ -55,10 +52,6 @@ type FontFaceConfig struct {
 
 type FontFamilyConfig struct {
 	Faces []FontFaceConfig `json:"faces"`
-}
-
-type projectFontCatalog interface {
-	projectFontFamilyNames() (names []string, available bool)
 }
 
 func LoadProjectFonts(fs spxfs.Dir, preferences []string) (ProjectFonts, error) {
@@ -109,16 +102,17 @@ func loadProjectFontFamilies(fs spxfs.Dir) ([]ProjectFontFamily, error) {
 	}
 
 	families := make([]ProjectFontFamily, 0, len(names))
-	seen := make(map[string]string, len(names))
-	for _, name := range names {
+	var previousFolded string
+	for i, name := range names {
 		folded, err := validateFontFamilyName(name)
 		if err != nil {
 			return nil, err
 		}
-		if previous, ok := seen[folded]; ok {
-			return nil, fmt.Errorf("font family %q conflicts with %q after ASCII case folding", name, previous)
+		// Discovery sorts by ASCII fold, so conflicting families are adjacent.
+		if i > 0 && folded == previousFolded {
+			return nil, fmt.Errorf("font family %q conflicts with %q after ASCII case folding", name, names[i-1])
 		}
-		seen[folded] = name
+		previousFolded = folded
 
 		family, err := loadProjectFontFamily(fs, name)
 		if err != nil {
@@ -143,89 +137,20 @@ func loadProjectFontFamily(fs spxfs.Dir, name string) (ProjectFontFamily, error)
 	if err != nil {
 		return ProjectFontFamily{}, fmt.Errorf("font family %q: %w", name, err)
 	}
-	if err := verifyFontFace(fs, facePath); err != nil {
+	if err := spxfs.VerifyFile(fs, facePath); err != nil {
 		return ProjectFontFamily{}, fmt.Errorf("open font face %q for family %q: %w", facePath, name, err)
 	}
 	return ProjectFontFamily{Name: name, Faces: []ProjectFontFace{{Path: facePath}}}, nil
 }
 
 func projectFontFamilyNames(fs spxfs.Dir) ([]string, error) {
-	if names, available := projectFontFamilyNamesFromCatalog(fs); available {
-		return names, nil
-	}
-	return scanProjectFontFamilyNames(fs)
-}
-
-func verifyFontFace(fs spxfs.Dir, facePath string) error {
-	assetDir, hasAssetDir := gdAssetDir(fs)
-	if hasAssetDir && shouldReadConfigFromEngine(assetDir) {
-		return verifyFontFaceInEngine(assetDir, facePath)
-	}
-	file, err := fs.Open(facePath)
-	if err == nil {
-		return file.Close()
-	}
-	// The Web interpreter receives source and JSON files only. Font binaries
-	// live in Godot's mounted project data, so retry the same logical asset path
-	// through the engine after the interpreter filesystem misses it.
-	if hasAssetDir {
-		if engineErr := verifyFontFaceInEngine(assetDir, facePath); engineErr == nil {
-			return nil
-		}
-	}
-	return err
-}
-
-func verifyFontFaceInEngine(assetDir, facePath string) error {
-	if slices.ContainsFunc(configAssetPaths(assetDir, facePath), engine.HasFile) {
-		return nil
-	}
-	return os.ErrNotExist
-}
-
-func projectFontFamilyNamesFromCatalog(fs spxfs.Dir) ([]string, bool) {
-	catalog, ok := fs.(projectFontCatalog)
-	if !ok {
-		return nil, false
-	}
-	return catalog.projectFontFamilyNames()
-}
-
-func scanProjectFontFamilyNames(fs spxfs.Dir) ([]string, error) {
-	if gdDir, ok := fs.(spxfs.GdDir); ok {
-		base := strings.TrimSuffix(gdDir.GetPath(), "/")
-		if schema, _ := spxfs.SplitSchema(base); schema != "" {
-			encoded := engine.ListDirectories(base + "/" + fontsDir)
-			var names []string
-			if err := json.Unmarshal([]byte(encoded), &names); err != nil {
-				return nil, fmt.Errorf("scan %s through engine: %w", fontsDir, err)
-			}
-			sortFontFamilyNames(names)
-			return names, nil
-		}
-	}
-	reader, ok := fs.(spxfs.ReadDirer)
-	if !ok {
-		return nil, nil
-	}
-	entries, err := reader.ReadDir(fontsDir)
+	names, err := spxfs.ListDirectories(fs, fontsDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scan %s: %w", fontsDir, err)
 	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir {
-			names = append(names, entry.Name)
-		}
-	}
-	sortFontFamilyNames(names)
-	return names, nil
-}
-
-func sortFontFamilyNames(names []string) {
 	sort.Slice(names, func(i, j int) bool {
 		left, right := asciiFold(names[i]), asciiFold(names[j])
 		if left == right {
@@ -233,6 +158,7 @@ func sortFontFamilyNames(names []string) {
 		}
 		return left < right
 	})
+	return names, nil
 }
 
 func validateFontFamilyName(name string) (string, error) {

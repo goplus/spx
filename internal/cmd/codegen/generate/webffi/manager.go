@@ -90,5 +90,5 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 		}
 		fmt.Fprintf(&sb, "\n\treturn JsTo%s(_result)", name)
 	}
-	return g.wrapCache(function, sb.String())
+	return sb.String()
 }

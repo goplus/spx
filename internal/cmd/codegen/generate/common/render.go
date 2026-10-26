@@ -39,24 +39,15 @@ const (
 	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
 )
 
-func Add(a int, b int) int {
-	return a + b
+// OutputPlan defers publication until every generator has completed. Its zero
+// value is ready to use; only Commit writes files.
+type OutputPlan struct {
+	files []generatedFile
 }
 
-func Sub(a int, b int) int {
-	return a - b
-}
-
-func GoEnumValue(v clang.EnumValue, index int) string {
-	if v.IntValue != nil {
-		return strconv.Itoa(*v.IntValue)
-	} else if v.ConstRefValue != nil {
-		return *v.ConstRefValue
-	} else if index == 0 {
-		return "iota"
-	} else {
-		return ""
-	}
+type generatedFile struct {
+	path string
+	data []byte
 }
 
 // RenderTemplate completes template execution before any output file is opened.
@@ -72,16 +63,30 @@ func RenderTemplate(funcs template.FuncMap, name, text string, data any) ([]byte
 	return b.Bytes(), nil
 }
 
-func WriteGeneratedFile(dstPath string, output []byte, mode os.FileMode) error {
-	if err := os.WriteFile(dstPath, output, mode); err != nil {
-		return fmt.Errorf("write generated file %q: %w", dstPath, err)
+// GoEnumValue preserves C's increment rule after explicit values and aliases.
+func GoEnumValue(values []clang.EnumValue, index int) string {
+	v := values[index]
+	if v.IntValue != nil {
+		return strconv.Itoa(*v.IntValue)
+	} else if v.ConstRefValue != nil {
+		return *v.ConstRefValue
+	} else if index == 0 {
+		return "0"
 	}
-	codegenLogger.Info("Generated file: %s", dstPath)
-	return nil
+	return values[index-1].Name + " + 1"
 }
 
-func GenerateFile(funcs template.FuncMap, name string, text string, data any, dstPath string) error {
-	output, err := RenderTemplate(funcs, name, text, data)
+func Add(a int, b int) int {
+	return a + b
+}
+
+func Sub(a int, b int) int {
+	return a - b
+}
+
+// RenderFile renders and formats an output before adding it to the plan.
+func (p *OutputPlan) RenderFile(funcs template.FuncMap, text string, data any, dstPath string) error {
+	output, err := RenderTemplate(funcs, filepath.Base(dstPath), text, data)
 	if err != nil {
 		return err
 	}
@@ -92,8 +97,37 @@ func GenerateFile(funcs template.FuncMap, name string, text string, data any, ds
 			return fmt.Errorf("format generated Go file %q: %w", dstPath, err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-		return fmt.Errorf("create generated file directory %q: %w", filepath.Dir(dstPath), err)
+	return p.AddFile(dstPath, output)
+}
+
+// AddFile snapshots an output and rejects conflicting ownership of its path.
+func (p *OutputPlan) AddFile(path string, data []byte) error {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve generated file path: %w", err)
 	}
-	return WriteGeneratedFile(dstPath, output, 0o644)
+	for _, file := range p.files {
+		if file.path == path {
+			return fmt.Errorf("duplicate generated file %q", path)
+		}
+	}
+	p.files = append(p.files, generatedFile{path, bytes.Clone(data)})
+	return nil
+}
+
+// Commit writes the completed outputs in generation order. Rendering failures
+// cannot affect existing files; filesystem failures during Commit may leave a
+// partially published set, and are returned to the caller.
+func (p *OutputPlan) Commit() error {
+	for _, file := range p.files {
+		if err := os.MkdirAll(filepath.Dir(file.path), 0o755); err != nil {
+			return fmt.Errorf("create generated file directory %q: %w", filepath.Dir(file.path), err)
+		}
+		if err := os.WriteFile(file.path, file.data, 0o644); err != nil {
+			return fmt.Errorf("write generated file %q: %w", file.path, err)
+		}
+		codegenLogger.Info("Generated file: %s", file.path)
+	}
+	p.files = nil
+	return nil
 }

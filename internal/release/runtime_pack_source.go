@@ -108,6 +108,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/input":                   {},
 	"internal/input/keycode":           {},
 	"internal/log":                     {},
+	"internal/projectloader":           {},
 	"internal/scaffold":                {},
 	"internal/text":                    {},
 	"internal/tilemap":                 {},

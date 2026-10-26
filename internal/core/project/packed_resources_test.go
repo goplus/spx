@@ -18,6 +18,8 @@ package project
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -42,17 +44,35 @@ func (panicPathDir) GetPath() string {
 
 func TestLoadJSONReadsPackedConfigWithoutInspectingResourcePath(t *testing.T) {
 	fs := &packedConfigDir{
-		Dir:   panicPathDir{},
-		index: packedConfigIndex{projectRaw: []byte(`{"name":"packed"}`)},
+		Dir: panicPathDir{},
+		index: packedConfigIndex{
+			raw:        []byte(`{"name":"original"}`),
+			projectRaw: []byte(`{"name":"packed"}`),
+			sprites:    map[string]json.RawMessage{"Hero": json.RawMessage(`{"name":"hero"}`)},
+		},
 	}
-	var config struct {
-		Name string `json:"name"`
-	}
-	if err := LoadJSON(&config, fs, "index.json"); err != nil {
-		t.Fatal(err)
-	}
-	if config.Name != "packed" {
-		t.Fatalf("config name = %q, want packed", config.Name)
+	for _, tt := range []struct{ path, name string }{
+		{packedIndexJSON, "original"},
+		{"index.json", "packed"},
+		{"/index.json", "packed"},
+		{"sprites/Hero/index.json", "hero"},
+		{`sprites\Hero\index.json`, "hero"},
+		{"/sprites/Other/../Hero/index.json", "hero"},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			if err := spxfs.VerifyFile(fs, tt.path); err != nil {
+				t.Fatalf("verify packed config: %v", err)
+			}
+			var config struct {
+				Name string `json:"name"`
+			}
+			if err := LoadJSON(&config, fs, tt.path); err != nil {
+				t.Fatal(err)
+			}
+			if config.Name != tt.name {
+				t.Fatalf("config name = %q, want %q", config.Name, tt.name)
+			}
+		})
 	}
 }
 
@@ -81,17 +101,6 @@ func (*rawCapabilityDir) GetPath() string {
 	return "res://assets"
 }
 
-type rawReadDirCapabilityDir struct {
-	*rawCapabilityDir
-	entries []spxfs.DirEntry
-	readDir string
-}
-
-func (d *rawReadDirCapabilityDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	d.readDir = name
-	return d.entries, nil
-}
-
 func TestResourceDirPreservesRawDirectoryIdentity(t *testing.T) {
 	base := &rawCapabilityDir{}
 	got, err := ResourceDir(base)
@@ -103,36 +112,55 @@ func TestResourceDirPreservesRawDirectoryIdentity(t *testing.T) {
 	}
 }
 
-func TestRawConfigDirPreservesOptionalReadDirCapability(t *testing.T) {
-	withoutReadDir := adaptConfigDir(&rawCapabilityDir{})
-	if _, ok := withoutReadDir.(spxfs.ReadDirer); ok {
-		t.Fatalf("raw wrapper unexpectedly implements spxfs.ReadDirer: %T", withoutReadDir)
-	}
-	if got := adaptConfigDir(withoutReadDir); got != withoutReadDir {
-		t.Fatalf("raw wrapper was wrapped again: %T", got)
-	}
+type failingConfigDir struct {
+	spxfs.Dir
+	failPath string
+	err      error
+	closed   int
+}
 
-	base := &rawReadDirCapabilityDir{
-		rawCapabilityDir: &rawCapabilityDir{},
-		entries:          []spxfs.DirEntry{{Name: "Shared", IsDir: true}},
+func (d *failingConfigDir) Open(name string) (io.ReadCloser, error) {
+	if name == d.failPath {
+		return nil, d.err
 	}
-	withReadDir := adaptConfigDir(base)
-	reader, ok := withReadDir.(spxfs.ReadDirer)
-	if !ok {
-		t.Fatalf("raw wrapper does not implement spxfs.ReadDirer: %T", withReadDir)
-	}
-	if got := adaptConfigDir(withReadDir); got != withReadDir {
-		t.Fatalf("raw ReadDir wrapper was wrapped again: %T", got)
-	}
-	entries, err := reader.ReadDir("fonts")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if base.readDir != "fonts" {
-		t.Fatalf("delegated ReadDir path = %q, want fonts", base.readDir)
-	}
-	if len(entries) != 1 || entries[0] != base.entries[0] {
-		t.Fatalf("delegated ReadDir entries = %#v, want %#v", entries, base.entries)
+	return d.Dir.Open(name)
+}
+
+func (d *failingConfigDir) Close() error {
+	d.closed++
+	return d.Dir.Close()
+}
+
+func TestPackedResourcesPreserveSourceOpenErrors(t *testing.T) {
+	for _, file := range []string{packedIndexJSON, "index.json", "custom/settings.json"} {
+		t.Run(file, func(t *testing.T) {
+			dir := t.TempDir()
+			writeProjectFile(t, dir, packedIndexJSON, `{}`)
+			writeProjectFile(t, dir, "index.json", `{}`)
+			base := &failingConfigDir{Dir: localDir{base: dir}, failPath: file, err: os.ErrPermission}
+			opened, err := OpenBuilderResources(base, nil)
+			if file == "custom/settings.json" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				var config any
+				err = LoadJSON(&config, opened.FS, file)
+				if base.closed != 0 {
+					t.Fatal("child read failure closed the resource directory")
+				}
+				if closeErr := opened.FS.Close(); closeErr != nil {
+					t.Fatal(closeErr)
+				}
+			} else if opened.FS != nil {
+				t.Fatal("failed preparation returned a resource directory")
+			}
+			if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "open "+file) {
+				t.Fatalf("source open error = %v, want permission error with path %q", err, file)
+			}
+			if base.closed != 1 {
+				t.Fatalf("source directory closes = %d, want 1", base.closed)
+			}
+		})
 	}
 }
 
@@ -180,5 +208,39 @@ func TestPackedSectionsPreservePresenceAndErrorOrder(t *testing.T) {
 				t.Fatalf("font catalog = (%v, %#v)", index.hasFonts, index.fonts)
 			}
 		})
+	}
+}
+
+func TestPackedResourcesPreserveMissingFileErrors(t *testing.T) {
+	dir := &packedConfigDir{Dir: &rawCapabilityDir{}}
+	if _, err := dir.Open("missing.json"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing packed fallback error = %v, want ErrNotExist", err)
+	}
+	if err := spxfs.VerifyFile(dir, "missing.ttf"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing binary error = %v, want ErrNotExist", err)
+	}
+}
+
+type streamedConfigDir struct{ reader io.ReadCloser }
+
+func (d streamedConfigDir) Open(string) (io.ReadCloser, error) { return d.reader, nil }
+func (streamedConfigDir) Close() error                         { return nil }
+
+func TestPackedResourcesKeepSourceReaderOwnership(t *testing.T) {
+	// A non-overlay resource remains a stream owned by the caller. In
+	// particular, Open must not eagerly read or close a binary resource.
+	reader := io.NopCloser(strings.NewReader("resource"))
+	dir := &packedConfigDir{Dir: streamedConfigDir{reader: reader}}
+	file, err := dir.Open("resource.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if file != reader {
+		t.Fatal("packed fallback replaced the source reader")
+	}
+	data, err := io.ReadAll(file)
+	if err != nil || string(data) != "resource" {
+		t.Fatalf("resource = %q, %v", data, err)
 	}
 }

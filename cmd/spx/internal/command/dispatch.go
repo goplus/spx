@@ -80,15 +80,6 @@ var commandSpecs = []commandSpec{
 	{name: "runm", group: "Multiplayer", summary: "Reserved; not implemented", unavailable: true},
 }
 
-func findCommand(name string) (commandSpec, bool) {
-	for _, spec := range commandSpecs {
-		if spec.name == name {
-			return spec, true
-		}
-	}
-	return commandSpec{}, false
-}
-
 func (cmd *CmdTool) dispatch(spec commandSpec, fsRelDir, dstRelDir string) error {
 	if spec.unavailable {
 		return fmt.Errorf("command %q is not implemented", spec.name)
@@ -114,7 +105,7 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	case noSetup:
 		return nil
 	case interpretedSetup:
-		return cmd.setupInterpretedPaths(dstRelDir)
+		return cmd.resolveProjectPaths(*cmd.Args.Path, dstRelDir)
 	case pathSetup, projectSetup, webExportSetup:
 		if err := cmd.setupPaths(dstRelDir); err != nil {
 			return err
@@ -131,7 +122,7 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	}
 	// Work around goplus/spx#619.
 	os.Setenv("GODEBUG", "asyncpreemptoff=1")
-	cmd.WebDir, _ = filepath.Abs(filepath.Join(cmd.ProjectDir, ".builds", "web"))
+	cmd.WebDir = filepath.Join(cmd.ProjectDir, ".builds", "web")
 	if spec.setup == webExportSetup {
 		return nil
 	}
@@ -163,4 +154,13 @@ func (cmd *CmdTool) buildCommand(spec commandSpec) error {
 	default:
 		return fmt.Errorf("invalid command build phase %d", spec.build)
 	}
+}
+
+func findCommand(name string) (commandSpec, bool) {
+	for _, spec := range commandSpecs {
+		if spec.name == name {
+			return spec, true
+		}
+	}
+	return commandSpec{}, false
 }

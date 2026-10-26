@@ -1436,6 +1436,20 @@ func TestSpriteSnapshotSkipsUnaddressableUserFields(t *testing.T) {
 	}
 }
 
+func TestSpriteSnapshotRejectsMissingImplementation(t *testing.T) {
+	value := &struct{ count int }{count: 42}
+	defer func() {
+		err, ok := recover().(error)
+		if !ok || !strings.Contains(err.Error(), "missing SpriteImpl") {
+			t.Fatalf("snapshot panic = %v, want missing SpriteImpl error", err)
+		}
+		if value.count != 42 {
+			t.Fatal("rejected snapshot changed user state")
+		}
+	}()
+	snapshotSpriteUserFields(reflect.ValueOf(value).Elem())
+}
+
 func TestDebugCloneStillPreservesOriginalState(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	game.debugState.DebugInstr = true
@@ -1444,5 +1458,105 @@ func TestDebugCloneStillPreservesOriginalState(t *testing.T) {
 	cloned := createRuntimeClone(&original.SpriteImpl)
 	if cloned == nil || !cloned.IsCloned() || cloned.Xpos() != 10 || cloned.Ypos() != 20 {
 		t.Fatal("debug-enabled cloning lost source state")
+	}
+}
+
+type layoutInvalidInitializer int
+
+func (*layoutInvalidInitializer) InitFrom(string) {}
+
+type layoutInvalidInitSprite struct {
+	SpriteImpl
+	owner *Game
+	value layoutInvalidInitializer
+}
+
+func (*layoutInvalidInitSprite) Main() {}
+
+func TestSpriteLayoutChecksInitFromOnlyWhenCloning(t *testing.T) {
+	game := setupStageLoadTestGame(t, gameTestFS{
+		"sprites/initializer/index.json": `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`,
+	})
+	source := &layoutInvalidInitSprite{}
+	gamer := reflect.ValueOf(&game.Game).Elem()
+	prepared, err := prepareSprite(game.fs, "initializer", reflect.TypeOf(source).Elem(), gamer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game.loadPreparedSprite(source, "initializer", gamer, &prepared)
+	if spriteOf(source) != &source.SpriteImpl || game.sprs["initializer"] != source || source.owner != &game.Game {
+		t.Fatal("unused InitFrom method affected lookup, publication, or owner binding")
+	}
+
+	clone := layoutInvalidInitSprite{value: 23}
+	before := &layoutInvalidInitSprite{value: 23}
+	var recovered any
+	func() {
+		defer func() { recovered = recover() }()
+		copySprite(reflect.ValueOf(&clone).Elem(), source)
+	}()
+	err, ok := recovered.(error)
+	if !ok || !strings.Contains(err.Error(), "field value InitFrom") {
+		t.Fatalf("clone panic = %v, want invalid InitFrom error", recovered)
+	}
+	if !reflect.DeepEqual(&clone, before) {
+		t.Fatal("invalid InitFrom changed the clone before rejection")
+	}
+}
+
+type layoutCloneValue struct{ value int }
+
+func (v *layoutCloneValue) InitFrom(src any) int {
+	v.value = src.(*layoutCloneValue).value + 1
+	return v.value
+}
+
+type layoutCloneSprite struct {
+	value layoutCloneValue
+	owner *Game
+	SpriteImpl
+	variadic layoutVariadicValue
+	optional layoutOptionalValue
+	list     List
+	items    []int
+}
+
+func (*layoutCloneSprite) Main() {}
+
+type layoutVariadicValue int
+
+func (v *layoutVariadicValue) InitFrom(src ...*layoutVariadicValue) { *v = *src[0] + 1 }
+
+type layoutOptionalValue int
+
+func (v *layoutOptionalValue) InitFrom(src *layoutOptionalValue, _ ...any) { *v = *src + 1 }
+
+func TestSpriteLayoutKeepsInitFromAndReferenceSemantics(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	source := &layoutCloneSprite{
+		owner: game,
+		value: layoutCloneValue{value: 7},
+		items: []int{1},
+	}
+	source.baseObj.initWithSize(1, 1)
+	source.g, source.name, source.sprite = game, "layout", source
+	source.scriptEventBindings.bind(&game.scriptEvents, &source.SpriteImpl)
+	source.components.initComponents(&source.SpriteImpl, &coreproject.SpriteConfig{})
+	source.physics().collisionInfo.Type = physicsColliderNone
+	source.physics().triggerInfo.Type = physicsColliderNone
+	game.shapeMgr.add(&source.SpriteImpl)
+	source.list.Init("source")
+	var clone layoutCloneSprite
+	base, cloned := copySprite(reflect.ValueOf(&clone).Elem(), source)
+	if base != &clone.SpriteImpl || cloned != &clone || clone.sprite != &clone || clone.owner != game {
+		t.Fatal("clone lost its implementation, self reference, or owner")
+	}
+	if clone.value.value != 8 || source.value.value != 7 || clone.variadic != 1 || clone.optional != 1 {
+		t.Fatalf("InitFrom values = clone %d, source %d, variadic %d, optional %d", clone.value.value, source.value.value, clone.variadic, clone.optional)
+	}
+	clone.list.Set(0, "clone")
+	clone.items[0] = 2
+	if source.list.String() != "source" || source.items[0] != 2 {
+		t.Fatal("clone changed List ownership or shallow slice reference semantics")
 	}
 }

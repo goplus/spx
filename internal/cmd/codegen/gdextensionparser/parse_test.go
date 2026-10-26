@@ -17,39 +17,40 @@
 package gdextensionparser
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateGDExtensionInterfaceAST(t *testing.T) {
+func TestParseGDExtensionInterfaceUsesSourceHeaderWithoutWriting(t *testing.T) {
 	root := t.TempDir()
 	nativeDir := filepath.Join(root, "internal", "gdengine", "binding", "native")
 	require.NoError(t, os.MkdirAll(nativeDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(nativeDir, "gdextension_spx_codegen_header.h"), []byte("#include \"api.h\"\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(nativeDir, "api.h"), []byte(`
+	require.NoError(t, os.WriteFile(filepath.Join(nativeDir, "gdextension_spx_codegen_header.h"), []byte("#include \"gdextension_spx_ext.h\"\n"), 0o600))
+	const published = "published lowered ABI must remain unchanged\n"
+	header := filepath.Join(nativeDir, "gdextension_spx_ext.h")
+	require.NoError(t, os.WriteFile(header, []byte(published), 0o600))
+	parsed, err := ParseGDExtensionInterface(nativeDir, `
 #ifndef SPX_TEST_API_H
 #define SPX_TEST_API_H
 typedef void (*GDExtensionSpxExampleRun)(int value);
 #endif
-`), 0o600))
-	debugPath := filepath.Join(root, "parsed.json")
-	parsed, err := GenerateGDExtensionInterfaceAST(filepath.Join(root, "internal", "cmd", "codegen"), debugPath)
+`)
 	require.NoError(t, err)
 	functions := parsed.CollectGDExtensionInterfaceFunctions()
 	require.Len(t, functions, 1)
 	require.Equal(t, "GDExtensionSpxExampleRun", functions[0].Name)
 	require.Equal(t, "int", functions[0].Arguments[0].Type.Primitive.Name)
-	expanded, err := os.ReadFile(filepath.Join(nativeDir, "_temp_output.h"))
+	got, err := os.ReadFile(header)
 	require.NoError(t, err)
-	require.Contains(t, string(expanded), "GDExtensionSpxExampleRun")
-	debug, err := os.ReadFile(debugPath)
+	require.Equal(t, published, string(got))
+	entries, err := os.ReadDir(nativeDir)
 	require.NoError(t, err)
-	var saved clang.CHeaderFileAST
-	require.NoError(t, json.Unmarshal(debug, &saved))
-	require.Equal(t, parsed, saved)
+	require.Len(t, entries, 2, "parsing must not write scratch headers or diagnostics")
+	// A wrong header directory must fail instead of finding an ancestor's
+	// project and reading inputs from a different root than generated outputs.
+	_, err = ParseGDExtensionInterface(filepath.Join(root, "nested"), "")
+	require.ErrorIs(t, err, os.ErrNotExist)
 }

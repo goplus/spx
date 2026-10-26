@@ -71,6 +71,7 @@ func init() {
 			"github.com/goplus/spx/v4/internal/input":           "input",
 			"github.com/goplus/spx/v4/internal/input/keycode":   "keycode",
 			"github.com/goplus/spx/v4/internal/log":             "log",
+			"github.com/goplus/spx/v4/internal/projectloader":   "projectloader",
 			"github.com/goplus/spx/v4/internal/tilemap":         "tilemap",
 			"github.com/goplus/spx/v4/internal/time":            "time",
 			"github.com/goplus/spx/v4/internal/tools":           "tools",
@@ -90,7 +91,6 @@ func init() {
 			"sync/atomic": "atomic",
 			"syscall":     "syscall",
 			"time":        "time",
-			"unsafe":      "unsafe",
 		},
 		Interfaces: map[string]reflect.Type{
 			"Camera":      reflect.TypeOf((*q.Camera)(nil)).Elem(),

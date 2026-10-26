@@ -48,9 +48,10 @@ typedef void (*GDExtensionSpxSpriteCollectObjects)(const GdObj *obj, int count);
 typedef void (*GDExtensionSpxSpriteSelect)(GdBool enabled, GdObj obj);
 typedef GdString (*GDExtensionSpxSpriteLabel)();`)
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
-	require.NoError(t, generation.writeManagerImpl(codegenDir, "Sprite"))
+	require.NoError(t, generation.renderManagerImpl(codegenDir, "Sprite"))
+	require.NoError(t, generation.Output.Commit())
 	methods := []struct {
 		name, signature, call, zero string
 	}{

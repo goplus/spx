@@ -27,17 +27,24 @@ import (
 )
 
 func TestCacheFollowsFunctions(t *testing.T) {
-	dir := t.TempDir()
+	root := t.TempDir()
+	dir := filepath.Join(root, "binding[one]")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	neighbor := filepath.Join(root, "bindingo")
+	require.NoError(t, os.MkdirAll(neighbor, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(neighbor, "other_cache.go"), []byte("invalid neighboring cache"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ordinary.go"), []byte("not a cache source"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "example_cache.go"), []byte(`package webffi
  func CachedExampleReadValue(value string, fallback func() bool) bool { return fallback() }
  `), 0o600))
 	caches, err := scanCaches(dir)
 	require.NoError(t, err)
+	require.Len(t, caches, 1)
 	ast, err := clang.ParseCString("typedef GdBool (*GDExtensionSpxExampleReadValue)(GdString renamed);")
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{}), caches: caches}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
 	functions := ast.CollectGDExtensionInterfaceFunctions()
-	body := generation.managerBody(&functions[0])
+	body := generation.cachedManagerBody(&functions[0], caches)
 	require.Contains(t, body, "CachedExampleReadValue(renamed, func() bool")
 	require.Contains(t, body, "API.SpxExampleReadValue.Invoke(arg0)")
 
@@ -46,24 +53,31 @@ func TestCacheFollowsFunctions(t *testing.T) {
 	require.NoError(t, err)
 	generation.GenerationContext = common.NewGenerationContext(ast, common.GenerationMetadata{})
 	functions = ast.CollectGDExtensionInterfaceFunctions()
-	body = generation.managerBody(&functions[0])
+	body = generation.cachedManagerBody(&functions[0], caches)
 	require.NotContains(t, body, "CachedInput")
 	require.Contains(t, body, "API.SpxInputGetKey.Invoke(")
 }
 
-func TestCacheRejectsInvalidFallback(t *testing.T) {
-	for _, signature := range []string{
-		"Read() bool", "Read(value bool) bool", "Read(fallback func()) bool",
-		"Read(fallback func(int) bool) bool", "Read(fallback func() bool)",
+func TestCacheRejectsInvalidDeclarations(t *testing.T) {
+	for _, test := range []struct{ signature, want string }{
+		{"Read() bool", "requires arguments"},
+		{"Read(value bool) bool", "requires a final func() T fallback"},
+		{"Read(fallback func()) bool", "requires a final func() T fallback"},
+		{"Read(fallback func(int) bool) bool", "requires a final func() T fallback"},
+		{"Read(fallback func() bool)", "requires arguments"},
+		{"Read(", "expected"},
+		{"Read(fallback func() bool) bool {}\nfunc CachedExampleRead(fallback func() bool) bool", "duplicate cache function"},
 	} {
-		t.Run(signature, func(t *testing.T) {
+		t.Run(test.signature, func(t *testing.T) {
 			dir := t.TempDir()
-			source := "package webffi; func CachedExample" + signature + " {}"
+			source := "package webffi; func CachedExample" + test.signature + " {}"
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "example_cache.go"), []byte(source), 0o600))
 			_, err := scanCaches(dir)
-			require.Error(t, err)
+			require.ErrorContains(t, err, test.want)
 		})
 	}
+	_, err := scanCaches(filepath.Join(t.TempDir(), "missing"))
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCacheRejectsMissingAPI(t *testing.T) {
@@ -72,6 +86,6 @@ func TestCacheRejectsMissingAPI(t *testing.T) {
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	source := "package webffi; func CachedExampleRemoved(fallback func() bool) bool { return fallback() }"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "example_cache.go"), []byte(source), 0o600))
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-	require.ErrorContains(t, generation.writeManager(codegenDir), "cache function has no matching API: GDExtensionSpxExampleRemoved")
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
+	require.ErrorContains(t, generation.renderManager(codegenDir), "cache function has no matching API: GDExtensionSpxExampleRemoved")
 }

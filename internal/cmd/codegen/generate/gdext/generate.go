@@ -30,39 +30,40 @@ import (
 
 var (
 	//go:embed gdextension_spx_ext.cpp.tmpl
-	gdSpxExtCpp string
+	extensionTemplate string
 
 	//go:embed godot_js_spx.cpp.tmpl
-	gdJsSpxCpp string
+	webTemplate string
 
 	//go:embed gdextension_spx_ext.h.tmpl
-	gdSpxExtH string
+	headerTemplate string
 )
 
 // Generator renders bindings using metadata owned by one generation task.
 type Generator struct {
 	*common.GenerationContext
+	Output *common.OutputPlan
 }
 
 func (g *Generator) Generate(codegenDir, spxModulePath string, headers Headers) error {
-	if err := g.writeCallbackDefaults(spxModulePath); err != nil {
+	if err := g.renderCallbackDefaults(spxModulePath); err != nil {
 		return err
 	}
-	if err := g.writeCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), gdSpxExtCpp); err != nil {
+	if err := g.renderCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), extensionTemplate); err != nil {
 		return err
 	}
 	for _, path := range []string{
 		filepath.Join(codegenDir, common.NativeRelDir, "gdextension_spx_ext.h"),
 		filepath.Join(spxModulePath, "gdextension_spx_ext.h"),
 	} {
-		if err := common.WriteGeneratedFile(path, []byte(headers.Standard), 0o644); err != nil {
+		if err := g.Output.AddFile(path, []byte(headers.Standard)); err != nil {
 			return err
 		}
 	}
-	return g.writeCPP(filepath.Join(spxModulePath, "web", "godot_js_spx.cpp"), gdJsSpxCpp)
+	return g.renderCPP(filepath.Join(spxModulePath, "web", "godot_js_spx.cpp"), webTemplate)
 }
 
-func (g *Generator) writeCPP(outputPath, templateStr string) error {
+func (g *Generator) renderCPP(outputPath, templateStr string) error {
 	funcs := template.FuncMap{
 		"sub":                     common.Sub,
 		"loadProcAddressName":     common.LoadProcAddressName,
@@ -78,11 +79,7 @@ func (g *Generator) writeCPP(outputPath, templateStr string) error {
 		"hasOutputStatus":         g.HasOutputStatus,
 	}
 
-	output, err := common.RenderTemplate(funcs, filepath.Base(outputPath), templateStr, g.ManagerData())
-	if err != nil {
-		return err
-	}
-	return common.WriteGeneratedFile(outputPath, output, 0o644)
+	return g.Output.RenderFile(funcs, templateStr, g.ManagerData(), outputPath)
 }
 
 func (g *Generator) webManagerCall(function *clang.TypedefFunction) string {
@@ -103,16 +100,16 @@ func (g *Generator) webManagerArgument(function *clang.TypedefFunction, argument
 	return argument.ResolvedPtrName(index)
 }
 
-func (g *Generator) isDirectWebParameter(function *clang.TypedefFunction, argument clang.Argument) bool {
-	param := g.Parameter(function, argument.Name)
-	return param.Buffer != nil || param.IsLength || param.WebScalarByValue()
-}
-
 func (g *Generator) webParameterDeclaration(function *clang.TypedefFunction, argument clang.Argument, index int) string {
 	if g.isDirectWebParameter(function, argument) {
 		return argument.CStyleString(index)
 	}
 	return argument.CStylePtrString(index)
+}
+
+func (g *Generator) isDirectWebParameter(function *clang.TypedefFunction, argument clang.Argument) bool {
+	param := g.Parameter(function, argument.Name)
+	return param.Buffer != nil || param.IsLength || param.WebScalarByValue()
 }
 
 func isWebGdArrayReturn(function *clang.TypedefFunction) bool {

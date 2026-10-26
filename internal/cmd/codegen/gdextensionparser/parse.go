@@ -19,7 +19,6 @@ package gdextensionparser
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,18 +28,42 @@ import (
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/preprocessor"
 )
 
-func ReadFiles(dir, fileName string) (string, error) {
+// ParseGDExtensionInterface expands the parser headers with an in-memory source
+// ABI. The published header contains a lowered ABI and must never be used as
+// scratch space while preparing its replacement.
+func ParseGDExtensionInterface(nativeDir, extensionHeader string) (clang.CHeaderFileAST, error) {
+	source, err := readHeaders(nativeDir, extensionHeader)
+	if err != nil {
+		return clang.CHeaderFileAST{}, err
+	}
+	preprocFile, err := preprocessor.ParsePreprocessorString(source)
+	if err != nil {
+		return clang.CHeaderFileAST{}, fmt.Errorf("error preprocessing %s: %w", nativeDir, err)
+	}
+	ast, err := clang.ParseCString(preprocFile.Eval(false))
+	if err != nil {
+		return clang.CHeaderFileAST{}, fmt.Errorf("error parsing %s: %w", nativeDir, err)
+	}
+	return ast, nil
+}
+
+func readHeaders(dir, extensionHeader string) (string, error) {
 	var allLines []string
-	lines, err := readLines(filepath.Join(dir, fileName))
+	lines, err := readLines(filepath.Join(dir, "gdextension_spx_codegen_header.h"))
 	if err != nil {
 		return "", err
 	}
 	for _, line := range lines {
 		if strings.HasPrefix(line, "#include \"") {
 			includePath := strings.ReplaceAll(strings.ReplaceAll(line, "#include \"", ""), "\"", "")
-			includeLines, err := readLines(filepath.Join(dir, includePath))
-			if err != nil {
-				return "", err
+			var includeLines []string
+			if includePath == "gdextension_spx_ext.h" {
+				includeLines = strings.Split(extensionHeader, "\n")
+			} else {
+				includeLines, err = readLines(filepath.Join(dir, includePath))
+				if err != nil {
+					return "", err
+				}
 			}
 			for _, inLine := range includeLines {
 				if !strings.HasPrefix(inLine, "#include \"") {
@@ -66,14 +89,6 @@ func ReadFiles(dir, fileName string) (string, error) {
 	return source, nil
 }
 
-func GenerateGDExtensionInterfaceAST(codegenDir, astOutputFilename string) (clang.CHeaderFileAST, error) {
-	str, err := expandIncludeFiles(codegenDir, "gdextension_spx_codegen_header.h", "_temp_output.h")
-	if err != nil {
-		return clang.CHeaderFileAST{}, err
-	}
-	return generateGDExtensionInterfaceAST(str, codegenDir, astOutputFilename)
-}
-
 func readLines(path string) ([]string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -87,67 +102,4 @@ func readLines(path string) ([]string, error) {
 		lines = append(lines, scanner.Text())
 	}
 	return lines, scanner.Err()
-}
-
-func findProjectRoot(start string) (string, error) {
-	dir, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		header := filepath.Join(dir, "internal", "gdengine", "binding", "native", "gdextension_spx_codegen_header.h")
-		if _, err := os.Stat(header); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", fmt.Errorf("unable to find project root from %s", start)
-}
-
-func expandIncludeFiles(codegenDir, header, outputName string) (string, error) {
-	rootPath, err := findProjectRoot(codegenDir)
-	if err != nil {
-		return "", err
-	}
-	dirPath := filepath.Join(rootPath, "internal", "gdengine", "binding", "native")
-	expandedSource, err := ReadFiles(dirPath, header)
-	if err != nil {
-		return "", err
-	}
-	tempPath := filepath.Join(dirPath, outputName)
-	err = os.WriteFile(tempPath, []byte(expandedSource), 0o644)
-	if err != nil {
-		return "", err
-	}
-	return expandedSource, nil
-}
-
-func generateGDExtensionInterfaceAST(source, codegenDir, astOutputFilename string) (clang.CHeaderFileAST, error) {
-	preprocFile, err := preprocessor.ParsePreprocessorString(source)
-	if err != nil {
-		return clang.CHeaderFileAST{}, fmt.Errorf("error preprocessing %s: %w", codegenDir, err)
-	}
-
-	preprocText := preprocFile.Eval(false)
-	ast, err := clang.ParseCString(preprocText)
-	if err != nil {
-		return clang.CHeaderFileAST{}, fmt.Errorf("error parsing %s: %w", codegenDir, err)
-	}
-
-	// Save the parsed declarations when a debug output path is requested.
-	if astOutputFilename != "" {
-		b, err := json.Marshal(ast)
-		if err != nil {
-			return clang.CHeaderFileAST{}, fmt.Errorf("marshal parsed AST: %w", err)
-		}
-		if err := os.WriteFile(astOutputFilename, b, 0o644); err != nil {
-			return clang.CHeaderFileAST{}, fmt.Errorf("write parsed AST %q: %w", astOutputFilename, err)
-		}
-	}
-
-	return ast, nil
 }

@@ -317,14 +317,28 @@ func TestStageRejectsPromotedFieldTargets(t *testing.T) {
 }
 
 func TestColdLoadKeepsUnregisteredSpriteFieldsUnloaded(t *testing.T) {
-	game := &directSpriteTestGame{}
+	game := &struct {
+		Game
+		DirectLoadSprite *DirectLoadSprite
+		Data             any
+	}{}
 	files := gameTestFS{}
 	setupGameTestRuntime(t, files, game, nil, false)
-	if err := game.loadSpriteFields(reflect.ValueOf(game).Elem()); err != nil {
+	game.typs["Data"] = reflect.TypeFor[int]()
+	gamer := reflect.ValueOf(game).Elem()
+	plan, err := game.prepareProject(files, &coreproject.ProjectConfig{}, gamer)
+	if err != nil {
 		t.Fatal(err)
 	}
+	if game.DirectLoadSprite != nil || game.Data != nil {
+		t.Fatal("preparation allocated live fields")
+	}
+	game.applySpriteFields(gamer, &plan)
 	if game.DirectLoadSprite == nil {
 		t.Fatal("cold load did not allocate the sprite field")
+	}
+	if data, ok := game.Data.(*int); !ok || data == nil {
+		t.Fatalf("registered non-sprite field = %v, want allocated *int", game.Data)
 	}
 	if len(game.sprs) != 0 {
 		t.Fatalf("cold load initialized unregistered sprites: %v", game.sprs)
@@ -439,6 +453,7 @@ func TestStageEntryValidationErrors(t *testing.T) {
 		{"non-string target", coreproject.StageShape{"type": "sprites", "target": 1.0}, "stage shape target must be a non-empty string"},
 		{"unknown sprite", coreproject.StageShape{"type": "sprite", "target": "Missing"}, `stage sprite target "Missing" is not defined`},
 		{"non-sprite field", coreproject.StageShape{"type": "sprite", "target": "Number"}, `stage sprite target "Number" is not a sprite field`},
+		{"nil sprite", coreproject.StageShape{"type": "sprite", "target": "Sprite"}, `stage sprite target "Sprite" has no sprite value`},
 		{"sprite property", coreproject.StageShape{"type": "sprite", "target": "Sprite", "x": "left"}, `stage shape field "x" has type string, want float64`},
 		{"missing items", coreproject.StageShape{"type": "sprites", "target": "Sprites"}, "stage shape items must be an array"},
 		{"null items", coreproject.StageShape{"type": "sprites", "target": "Sprites", "items": nil}, "stage shape items must be an array"},
@@ -657,4 +672,44 @@ func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect 
 func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
 	m.position = pos
 	m.positionCalls++
+}
+
+// Stage-focused tests execute the same prepare/apply phases as project loading,
+// while retaining the already-live sprite fixtures they supply.
+func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
+	plan := projectPlan{sprites: make(map[string]spritePlan)}
+	var err error
+	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
+	if err != nil {
+		return nil, err
+	}
+	return p.applyStageEntries(gamer, &plan), nil
+}
+
+func TestStagePreparationChecksInitFromOnlyForNonemptyGroups(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		entry any
+		clone bool
+	}{
+		{"named", "layoutInvalidInitSprite", false},
+		{"group", coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{coreproject.StageShape{}}}, true},
+		{"empty group", coreproject.StageShape{"type": "sprites", "target": "Items", "items": []any{}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			game := &struct {
+				Game
+				Items []*layoutInvalidInitSprite
+			}{}
+			game.sprs = map[string]Sprite{"layoutInvalidInitSprite": &layoutInvalidInitSprite{}}
+			_, err := game.prepareProject(gameTestFS{}, &coreproject.ProjectConfig{Zorder: []any{test.entry}}, reflect.ValueOf(game).Elem())
+			if test.clone {
+				if err == nil || !strings.Contains(err.Error(), "field value InitFrom") {
+					t.Fatalf("clone preflight error = %v, want InitFrom signature error", err)
+				}
+			} else if err != nil {
+				t.Fatalf("non-cloning stage entry rejected an unused InitFrom: %v", err)
+			}
+		})
+	}
 }
