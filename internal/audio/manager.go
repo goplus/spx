@@ -95,18 +95,17 @@ func (m *Manager) ReleaseSound(soundObj engine.Object) {
 	if soundObj == invalidSoundObject {
 		return
 	}
-	_, wasPending := m.pendingDestroy[soundObj]
+	m.pendingDestroy[soundObj] = struct{}{}
 	m.preparePlaybacksForRelease(soundObj)
-	if len(m.obj2ids[soundObj]) == 0 {
-		if _, pending := m.pendingDestroy[soundObj]; pending {
-			delete(m.pendingDestroy, soundObj)
-			m.backend.DestroyAudio(soundObj)
-		} else if !wasPending {
-			m.backend.DestroyAudio(soundObj)
-		}
+	m.destroyReleasedSoundIfIdle(soundObj)
+}
+
+func (m *Manager) destroyReleasedSoundIfIdle(soundObj engine.Object) {
+	if _, pending := m.pendingDestroy[soundObj]; !pending || len(m.obj2ids[soundObj]) != 0 {
 		return
 	}
-	m.pendingDestroy[soundObj] = struct{}{}
+	delete(m.pendingDestroy, soundObj)
+	m.backend.DestroyAudio(soundObj)
 }
 
 func (m *Manager) Pause(path string) {
@@ -122,10 +121,7 @@ func (m *Manager) Resume(path string) {
 }
 
 func (m *Manager) Stop(path string) {
-	if id := m.path2id[path]; id != invalidPlaybackID {
-		m.backend.Stop(id)
-		m.dropPlaybackTracking(id)
-	}
+	m.StopID(m.path2id[path])
 	delete(m.path2id, path)
 }
 
@@ -209,23 +205,16 @@ func (m *Manager) StopAll() {
 		m.backend.StopAll()
 	}
 	for soundObj := range m.pendingDestroy {
-		m.backend.DestroyAudio(soundObj)
+		m.destroyReleasedSoundIfIdle(soundObj)
 	}
-	clear(m.pendingDestroy)
 }
 
 func (m *Manager) Update() {
-	if m.backend == nil || len(m.path2id) == 0 && len(m.pendingDestroy) == 0 {
+	if m.backend == nil {
 		return
 	}
 	for path := range m.path2id {
 		m.pruneDeadID(path)
-	}
-	for soundObj := range m.pendingDestroy {
-		if len(m.obj2ids[soundObj]) == 0 {
-			delete(m.pendingDestroy, soundObj)
-			m.backend.DestroyAudio(soundObj)
-		}
 	}
 }
 
@@ -270,16 +259,9 @@ func (m *Manager) pruneDeadID(path string) int64 {
 	if id != invalidPlaybackID && m.backend.IsPlaying(id) {
 		return id
 	}
-	m.dropPlaybackTracking(id)
+	m.removeID(id)
 	delete(m.path2id, path)
 	return invalidPlaybackID
-}
-
-func (m *Manager) removeID(target int64) {
-	if info, ok := m.playbacks[target]; ok && m.path2id[info.path] == target {
-		delete(m.path2id, info.path)
-	}
-	m.dropPlaybackTracking(target)
 }
 
 func (m *Manager) trackPlayback(id int64, path string, soundObj engine.Object, loop bool) {
@@ -294,19 +276,17 @@ func (m *Manager) trackPlayback(id int64, path string, soundObj engine.Object, l
 	m.obj2ids[soundObj] = append(m.obj2ids[soundObj], id)
 }
 
-func (m *Manager) dropPlaybackTracking(id int64) {
+func (m *Manager) removeID(id int64) {
 	info, ok := m.playbacks[id]
 	if !ok {
 		return
 	}
+	if m.path2id[info.path] == id {
+		delete(m.path2id, info.path)
+	}
 	delete(m.playbacks, id)
 	m.dropSoundPlaybackID(info.soundObj, id)
-	if len(m.obj2ids[info.soundObj]) == 0 {
-		if _, pending := m.pendingDestroy[info.soundObj]; pending {
-			delete(m.pendingDestroy, info.soundObj)
-			m.backend.DestroyAudio(info.soundObj)
-		}
-	}
+	m.destroyReleasedSoundIfIdle(info.soundObj)
 }
 
 func (m *Manager) dropSoundPlaybackID(soundObj engine.Object, id int64) {
@@ -326,12 +306,7 @@ func (m *Manager) dropSoundPlaybackID(soundObj engine.Object, id int64) {
 }
 
 func (m *Manager) preparePlaybacksForRelease(soundObj engine.Object) {
-	ids := m.obj2ids[soundObj]
-	if len(ids) == 0 {
-		delete(m.obj2ids, soundObj)
-		return
-	}
-	for _, id := range append([]int64(nil), ids...) {
+	for _, id := range append([]int64(nil), m.obj2ids[soundObj]...) {
 		info, ok := m.playbacks[id]
 		if !ok {
 			m.dropSoundPlaybackID(soundObj, id)
@@ -339,10 +314,7 @@ func (m *Manager) preparePlaybacksForRelease(soundObj engine.Object) {
 		}
 		if info.loop {
 			m.backend.Stop(id)
-			m.removeID(id)
-			continue
-		}
-		if m.backend.IsPlaying(id) {
+		} else if m.backend.IsPlaying(id) {
 			continue
 		}
 		m.removeID(id)
