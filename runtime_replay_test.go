@@ -197,6 +197,28 @@ func TestInputReplayRuntimeUsesIndependentInputTicks(t *testing.T) {
 	if !reflect.DeepEqual(decoded, replay) {
 		t.Fatalf("decoded replay = %+v, want %+v", decoded, replay)
 	}
+	result, err := finishInputRecording()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result.json[0] = '!'
+	if got, err := FinishInputRecordingJSON(); err != nil || got != encoded {
+		t.Fatalf("recording JSON aliases its cache: %s, %v", got, err)
+	}
+	for range 2 {
+		replay.Initial.KeysDown[0] = 999
+		replay.Frames[0].State.KeysDown[0] = 999
+		replay.Frames[0].MouseEvents[0].Button = 3
+		replay.Frames[0].KeyEvents[0].Key = 999
+		replay.Frames[0].Time = 999
+		replay, err = FinishInputRecording()
+		if err != nil || !reflect.DeepEqual(replay, decoded) {
+			t.Fatalf("recording result aliases its cache: %+v, %v", replay, err)
+		}
+		if got, err := FinishInputRecordingJSON(); err != nil || got != encoded {
+			t.Fatalf("mutating recording result changed cached JSON: %s, %v", got, err)
+		}
+	}
 }
 
 func TestInputReplaySessionUsesDeterministicRandomByDefault(t *testing.T) {
@@ -1486,7 +1508,7 @@ func TestInputSessionFreezeFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer recording.close("done")
-	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.resultJSON != nil || len(recording.result.Frames) != 0 {
+	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.result.json != nil || len(recording.result.replay.Frames) != 0 {
 		t.Fatalf("failed finish left partial result: %+v, %v", recording.status(), err)
 	}
 	if _, err := recording.finishRecordingResult(nil); err != nil {
@@ -1634,7 +1656,7 @@ func TestRecordingTooLargeToEncodeRollsBackFinish(t *testing.T) {
 	if _, err := session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("encoding error = %v", err)
 	}
-	if session.phase != InputSessionPhaseRunning || session.resultJSON != nil {
+	if session.phase != InputSessionPhaseRunning || session.result.json != nil {
 		t.Fatal("failed serialization committed a recording")
 	}
 }
@@ -1673,5 +1695,73 @@ func TestInputEdgeConversionPreservesOrderAndPayload(t *testing.T) {
 	}
 	if got := engineMouseEventsFromReplay(wantMouse, make([]engine.MouseEvent, 3)); !reflect.DeepEqual(got, mouse) {
 		t.Fatalf("engine mouse edges = %v", got)
+	}
+}
+
+// Exercise public finish calls after the normal input, scheduler, and frame-end
+// lifecycle; engine managers remain the standard test fixtures.
+func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
+	for _, name := range []string{"Replay-first", "JSON-first"} {
+		t.Run(name, func(t *testing.T) {
+			co, game, _ := setupInputSourceTest(t)
+			setupCaptureFlushSpriteMgr(t)
+			game.camera = &cameraImpl{g: game}
+			game.initShapeMgr()
+			game.syncBuffer = engine.NewSpriteSyncBuffer(1)
+			oldExt := pkgengine.ExtMgr
+			pkgengine.ExtMgr = &replayPauseTestExtMgr{}
+			t.Cleanup(func() { pkgengine.ExtMgr = oldExt })
+			if _, err := PrepareInputRecording(30); err != nil {
+				t.Fatal(err)
+			}
+			claimPreparedSession(t, game)
+			game.lifecycleState.IsRunned.Store(true)
+			game.lifecycleState.StartDispatched.Store(true)
+			handled := 0
+			game.OnCond(func() bool { return true }, func() { handled++ })
+			game.OnEngineBeforeUpdate(1.0 / 30)
+			itime.Update(1.0/30, 30)
+			game.OnEngineUpdate(1.0 / 30)
+			co.Update()
+			game.OnEngineRender(1.0 / 30)
+			game.OnEngineFrameEnd()
+			if handled != 1 || GetInputSessionStatus().FrameCount != 1 {
+				t.Fatalf("engine frame not exercised: handlers=%d, status=%+v", handled, GetInputSessionStatus())
+			}
+			var first InputReplay
+			var cached string
+			if name == "JSON-first" {
+				var err error
+				cached, err = FinishInputRecordingJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			for attempt := range 2 {
+				replay, err := FinishInputRecording()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if attempt == 0 {
+					first = replay
+				} else if !reflect.DeepEqual(replay, first) {
+					t.Error("consecutive public Replay results differ")
+				}
+				encoded, err := EncodeInputReplay(replay)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := FinishInputRecordingJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cached == "" {
+					cached = got
+				}
+				if got != cached || encoded != cached || !GetInputSessionStatus().Completed {
+					t.Fatalf("inconsistent completed result: encoded=%s, cached=%s, returned=%s", encoded, cached, got)
+				}
+			}
+		})
 	}
 }
