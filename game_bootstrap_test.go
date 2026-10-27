@@ -31,6 +31,18 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+type bootstrapAwakeOrderSprite struct {
+	SpriteImpl
+	peer         *bootstrapAwakeOrderSprite
+	sawSelfAwake bool
+	sawPeerAwake bool
+}
+
+type bootstrapOnLoadedGame struct {
+	Game
+	onLoaded func(*bootstrapOnLoadedGame)
+}
+
 func TestGameStartBootstrapWithoutEngineThread(t *testing.T) {
 	for _, name := range []string{"empty", "tasks", "stale"} {
 		t.Run(name, func(t *testing.T) {
@@ -184,63 +196,6 @@ func TestGameBootstrapCompletionIgnoresStaleGeneration(t *testing.T) {
 	}
 }
 
-type bootstrapAwakeOrderSprite struct {
-	SpriteImpl
-	peer         *bootstrapAwakeOrderSprite
-	sawSelfAwake bool
-	sawPeerAwake bool
-}
-
-func (s *bootstrapAwakeOrderSprite) Main() {
-	s.sawSelfAwake = s.CostumeIndex() == 0
-	if s.peer != nil {
-		s.sawPeerAwake = s.peer.CostumeIndex() == 0
-	}
-}
-
-func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSprite {
-	sprite := &bootstrapAwakeOrderSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	prepareAwakeCostumes(&sprite.SpriteImpl)
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	return sprite
-}
-
-func prepareAwakeCostumes(sprite *SpriteImpl) {
-	// With no default animation, awake restores the default costume. Start on
-	// another costume so lifecycle tests observe that effect instead of a flag.
-	sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	sprite.setCostumeIndex(1)
-	sprite.spriteState.IsVisible = true
-}
-
-func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64) {
-	t.Helper()
-
-	done := make(chan struct{})
-	go func() {
-		game.runBootstrapTasks(generation)
-		close(done)
-	}()
-	deadline := time.Now().Add(time.Second)
-	for {
-		select {
-		case <-done:
-			return
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
-		}
-		gco.Update()
-		time.Sleep(time.Millisecond)
-	}
-}
-
 func TestPrepareStageBootstrapAwakesAllSpritesBeforeMain(t *testing.T) {
 	var game Game
 	spriteA := newBootstrapAwakeOrderSprite(&game, "SpriteA")
@@ -292,13 +247,6 @@ func TestPrepareStageBootstrapRunsSpriteMainsInZOrderUntilFirstYield(t *testing.
 		t.Fatalf("SpriteB saw %d created threads before its first yield, want 2", spriteBSeenThreadCount)
 	}
 }
-
-type bootstrapOnLoadedGame struct {
-	Game
-	onLoaded func(*bootstrapOnLoadedGame)
-}
-
-func (g *bootstrapOnLoadedGame) OnLoaded() { g.onLoaded(g) }
 
 func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -490,5 +438,57 @@ func TestBootstrapStateConcurrentClaim(t *testing.T) {
 	}
 	if !state.isCurrentBootstrap(generation) || state.isCurrentBootstrap(generation+1) {
 		t.Fatal("claiming bootstrap changed the generation")
+	}
+}
+
+func (s *bootstrapAwakeOrderSprite) Main() {
+	s.sawSelfAwake = s.CostumeIndex() == 0
+	if s.peer != nil {
+		s.sawPeerAwake = s.peer.CostumeIndex() == 0
+	}
+}
+
+func (g *bootstrapOnLoadedGame) OnLoaded() { g.onLoaded(g) }
+
+func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSprite {
+	sprite := &bootstrapAwakeOrderSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	prepareAwakeCostumes(&sprite.SpriteImpl)
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	return sprite
+}
+
+func prepareAwakeCostumes(sprite *SpriteImpl) {
+	// With no default animation, awake restores the default costume. Start on
+	// another costume so lifecycle tests observe that effect instead of a flag.
+	sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
+	sprite.setCostumeIndex(1)
+	sprite.spriteState.IsVisible = true
+}
+
+func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		game.runBootstrapTasks(generation)
+		close(done)
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("bootstrap tasks did not finish while pumping scheduler")
+		}
+		gco.Update()
+		time.Sleep(time.Millisecond)
 	}
 }

@@ -26,8 +26,8 @@ import (
 // content validation, and entries are recorded only after those checks pass.
 type entryIndex map[string]Entry
 
-func (entries entryIndex) checkName(key, name string) error {
-	if previous, ok := entries[key]; ok {
+func (e entryIndex) checkName(key, name string) error {
+	if previous, ok := e[key]; ok {
 		if previous.Name == name {
 			return fmt.Errorf("%w: duplicate entry %q", ErrUnsafeArchive, name)
 		}
@@ -36,15 +36,15 @@ func (entries entryIndex) checkName(key, name string) error {
 	return nil
 }
 
-func (entries entryIndex) checkParents() error {
-	for parent, entry := range entries {
+func (e entryIndex) checkParents() error {
+	for parent, entry := range e {
 		for {
 			index := strings.LastIndexByte(parent, '/')
 			if index < 0 {
 				break
 			}
 			parent = parent[:index]
-			if parentEntry, ok := entries[parent]; ok && !parentEntry.isDir() {
+			if parentEntry, ok := e[parent]; ok && !parentEntry.isDir() {
 				return fmt.Errorf("%w: file %q is also a parent of %q", ErrUnsafeArchive, parentEntry.Name, entry.Name)
 			}
 		}

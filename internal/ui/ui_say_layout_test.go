@@ -28,6 +28,17 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+type uiRenderSpy struct {
+	askShowUiMgr
+	positions map[gdx.Object]mathf.Vec2
+	scales    map[gdx.Object]mathf.Vec2
+	sizes     map[gdx.Object]mathf.Vec2
+	colors    map[gdx.Object]mathf.Color
+	rotations map[gdx.Object]float64
+}
+
+type uiRenderCamera struct{ gdx.ICameraMgr }
+
 func TestResolveSayBubbleLayoutsEscapesJointFlipLocalMinimum(t *testing.T) {
 	winSize := mathf.NewVec2(480, 360)
 	layouts := []SayBubbleLayout{
@@ -110,26 +121,37 @@ func TestSayBubbleLayoutContextTransformsSpriteTopAndScale(t *testing.T) {
 	baseSize := mathf.NewVec2(480, 360)
 	cameraPosition := mathf.NewVec2(10, 20)
 	cameraZoom := mathf.NewVec2(4, 6)
-	context := newSayBubbleLayoutContext(winSize, baseSize, cameraPosition, cameraZoom, 2, false)
-	content := NewSayBubbleContent("hello", StyleSay)
-	layout := context.NewLayout(
-		7,
-		mathf.NewVec2(30, 40),
-		mathf.NewVec2(12, 20),
-		content,
-	)
+	for _, test := range []struct {
+		name          string
+		style         int
+		scale, extent mathf.Vec2
+	}{
+		{"say", StyleSay, mathf.NewVec2(3, 4.5), mathf.NewVec2(144, 173.25)},
+		{"think", StyleThink, mathf.NewVec2(2.4, 3.6), mathf.NewVec2(148.8, 241.2)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			context := newSayBubbleLayoutContext(winSize, baseSize, cameraPosition, cameraZoom, 2, false)
+			content := NewSayBubbleContent("hello", test.style)
+			layout := context.NewLayout(7, mathf.NewVec2(30, 40), mathf.NewVec2(12, 20), content)
 
-	// The non-480x360 window has a uniform scale of min(2, 1.5) = 1.5.
-	// Position uses cameraZoom.X/windowScale = 2 and transforms the sprite's
-	// world-space top (30, 50), not its center followed by an unscaled offset.
-	assertVec2Near(t, "position", layout.position, mathf.NewVec2(40, 60))
-	assertVec2Near(t, "render scale", layout.renderScale, mathf.NewVec2(3, 4.5))
-	assertVec2Near(t, "collision extent", layout.extent, mathf.NewVec2(
-		float64(content.baseExtent.X)*1.5,
-		float64(content.baseExtent.Y)*2.25,
-	))
-	if layout.stableID != 7 {
-		t.Fatalf("stableID = %d, want 7", layout.stableID)
+			// min(960/480, 540/360) = 1.5 scales the bubble, not its anchor.
+			// The sprite's top (30, 50) is transformed as a whole by zoom.X/2.
+			assertVec2Near(t, "tail anchor", layout.position, mathf.NewVec2(40, 60))
+			assertVec2Near(t, "render scale", layout.renderScale, test.scale)
+			assertVec2Near(t, "collision extent", layout.extent, test.extent)
+			assertVec2Near(t, "standalone scale", calculateSayRenderScale(winSize, baseSize, cameraZoom, 2, test.style == StyleThink), test.scale)
+			if layout.stableID != 7 || layout.viewport != (sayBubbleRect{left: -480, right: 480, bottom: -270, top: 270}) {
+				t.Fatalf("layout identity/viewport = %d, %+v", layout.stableID, layout.viewport)
+			}
+
+			context.clampPosition = true
+			clamped := context.NewLayout(7, mathf.NewVec2(30, 1000), mathf.NewVec2(12, 20), content)
+			assertVec2Near(t, "clamped tail anchor", clamped.position, mathf.NewVec2(40, 270-test.extent.Y))
+			bounds := clamped.candidate(clamped.isLeft)
+			if math.Abs(bounds.top-270) > 1e-9 || math.Abs(bounds.outsideArea(clamped.viewport)) > 1e-9 {
+				t.Fatalf("clamped bounds = %+v, want top at viewport edge without double scaling", bounds)
+			}
+		})
 	}
 }
 
@@ -189,14 +211,6 @@ func TestSayBubbleGeometryAtCoincidentAndExactBoundaries(t *testing.T) {
 	assertVec2Near(t, "clamped boundary anchor", clamped, mathf.NewVec2(10, 2))
 	if scale := validWindowScale(0); scale != 1 {
 		t.Fatalf("zero window scale fallback = %v, want 1", scale)
-	}
-}
-
-func assertVec2Near(t *testing.T, name string, got, want mathf.Vec2) {
-	t.Helper()
-	const epsilon = 1e-9
-	if math.Abs(float64(got.X-want.X)) > epsilon || math.Abs(float64(got.Y-want.Y)) > epsilon {
-		t.Fatalf("%s = %v, want %v", name, got, want)
 	}
 }
 
@@ -278,28 +292,6 @@ func TestSayBubbleLayoutContextKeepsClampPolicy(t *testing.T) {
 	}
 }
 
-func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, style int, preferredIsLeft bool) SayBubbleLayout {
-	content := SayBubbleContent{
-		formattedMessage: formattedMessage,
-		style:            style,
-		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
-	}
-	return SayBubbleLayout{
-		position:        position,
-		isLeft:          preferredIsLeft,
-		preferredIsLeft: preferredIsLeft,
-		content:         content,
-		extent:          content.baseExtent,
-		renderScale:     mathf.NewVec2(1, 1),
-		viewport: sayBubbleRect{
-			left:   -float64(winSize.X) / 2,
-			right:  float64(winSize.X) / 2,
-			bottom: -float64(winSize.Y) / 2,
-			top:    float64(winSize.Y) / 2,
-		},
-	}
-}
-
 func TestResolveSayBubbleLayoutsLargeComponent(t *testing.T) {
 	base := make([]SayBubbleLayout, sayBubbleExactLayoutLimit+1)
 	component := make([]int, len(base))
@@ -374,52 +366,6 @@ func TestSayBubbleLayoutEqualityTracksInputsAndRendering(t *testing.T) {
 	}
 }
 
-type uiRenderSpy struct {
-	askShowUiMgr
-	positions map[gdx.Object]mathf.Vec2
-	scales    map[gdx.Object]mathf.Vec2
-	sizes     map[gdx.Object]mathf.Vec2
-	colors    map[gdx.Object]mathf.Color
-	rotations map[gdx.Object]float64
-}
-
-func (m *uiRenderSpy) SetPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
-func (m *uiRenderSpy) SetScale(id gdx.Object, v mathf.Vec2)    { m.scales[id] = v }
-
-func (m *uiRenderSpy) SetGlobalPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
-func (m *uiRenderSpy) SetSize(id gdx.Object, v mathf.Vec2)           { m.sizes[id] = v }
-func (m *uiRenderSpy) SetColor(id gdx.Object, v mathf.Color)         { m.colors[id] = v }
-func (m *uiRenderSpy) SetRotation(id gdx.Object, v float64)          { m.rotations[id] = v }
-
-type uiRenderCamera struct{ gdx.ICameraMgr }
-
-func (uiRenderCamera) GetViewportRect() mathf.Rect2 {
-	return mathf.Rect2{Position: mathf.NewVec2(10, 20), Size: mathf.NewVec2(480, 360)}
-}
-func (uiRenderCamera) GetCameraPosition() mathf.Vec2 { return mathf.NewVec2(10, 20) }
-func (uiRenderCamera) GetCameraZoom() mathf.Vec2     { return mathf.NewVec2(2, 2) }
-
-func setupUIRendering(t *testing.T) *uiRenderSpy {
-	t.Helper()
-	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
-	oldScale := engine.WindowScale()
-	oldWidth, oldHeight, oldClamp := baseScreenWidth, baseScreenHeight, clampUIPositionInScreen
-	enginewrap.Init(func(f func()) { f() })
-	mgr := &uiRenderSpy{askShowUiMgr: askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{}}, positions: map[gdx.Object]mathf.Vec2{}, scales: map[gdx.Object]mathf.Vec2{}, sizes: map[gdx.Object]mathf.Vec2{}, colors: map[gdx.Object]mathf.Color{}, rotations: map[gdx.Object]float64{}}
-	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
-	engine.SetWindowScale(2)
-	SetBaseScreenSize(480, 360)
-	ClampUIPositionInScreen(true)
-	t.Cleanup(func() {
-		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
-		engine.SetWindowScale(oldScale)
-		SetBaseScreenSize(oldWidth, oldHeight)
-		ClampUIPositionInScreen(oldClamp)
-		enginewrap.Init(engine.WaitMainThread)
-	})
-	return mgr
-}
-
 func TestSayBubbleRendering(t *testing.T) {
 	mgr := setupUIRendering(t)
 	node := func(id gdx.Object) *UiNode { n := &UiNode{}; n.SetId(id); return n }
@@ -448,10 +394,18 @@ func TestSayBubbleRendering(t *testing.T) {
 		})
 	}
 	win, pos, size := mathf.NewVec2(480, 360), mathf.NewVec2(30, 40), mathf.NewVec2(20, 30)
-	want := NewSayBubbleLayout(win, pos, size, "hello", StyleSay)
-	say.SetText(win, pos, size, "hello", StyleSay)
-	if mgr.positions[1] != ViewToUI(want.position) || mgr.scales[1] != want.renderScale {
-		t.Fatal("SetText did not apply display context")
+	for _, test := range []struct {
+		style int
+		scale float64
+	}{{StyleSay, 1}, {StyleThink, 0.8}} {
+		// With camera zoom 2 and window scale 2, neither the tail nor the
+		// already-resolved Think scale should be multiplied a second time.
+		layout := NewSayBubbleLayout(win, pos, size, "hello", test.style)
+		assertVec2Near(t, "standalone tail anchor", layout.position, mathf.NewVec2(20, 35))
+		assertVec2Near(t, "standalone render scale", layout.renderScale, mathf.NewVec2(test.scale, test.scale))
+		say.SetText(win, pos, size, "hello", test.style)
+		assertVec2Near(t, "rendered tail anchor", mgr.positions[1], mathf.NewVec2(270, 90))
+		assertVec2Near(t, "rendered scale", mgr.scales[1], mathf.NewVec2(test.scale, test.scale))
 	}
 }
 
@@ -510,4 +464,75 @@ func TestDecorativeUIRenderingUsesViewportAndScale(t *testing.T) {
 	if mgr.positions[8] != mathf.NewVec2(260, 108) || mgr.sizes[8] != mathf.NewVec2(10, 12) || mgr.text[9] != "message" || mgr.text[10] != "description" || mgr.scales[11] != mathf.NewVec2(2, 2) {
 		t.Fatalf("quote rendering mismatch:%+v", mgr)
 	}
+}
+
+func (m *uiRenderSpy) SetPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
+
+func (m *uiRenderSpy) SetScale(id gdx.Object, v mathf.Vec2) { m.scales[id] = v }
+
+func (m *uiRenderSpy) SetGlobalPosition(id gdx.Object, v mathf.Vec2) { m.positions[id] = v }
+
+func (m *uiRenderSpy) SetSize(id gdx.Object, v mathf.Vec2) { m.sizes[id] = v }
+
+func (m *uiRenderSpy) SetColor(id gdx.Object, v mathf.Color) { m.colors[id] = v }
+
+func (m *uiRenderSpy) SetRotation(id gdx.Object, v float64) { m.rotations[id] = v }
+
+func (uiRenderCamera) GetViewportRect() mathf.Rect2 {
+	return mathf.Rect2{Position: mathf.NewVec2(10, 20), Size: mathf.NewVec2(480, 360)}
+}
+
+func (uiRenderCamera) GetCameraPosition() mathf.Vec2 { return mathf.NewVec2(10, 20) }
+
+func (uiRenderCamera) GetCameraZoom() mathf.Vec2 { return mathf.NewVec2(2, 2) }
+
+func assertVec2Near(t *testing.T, name string, got, want mathf.Vec2) {
+	t.Helper()
+	const epsilon = 1e-9
+	if math.Abs(float64(got.X-want.X)) > epsilon || math.Abs(float64(got.Y-want.Y)) > epsilon {
+		t.Fatalf("%s = %v, want %v", name, got, want)
+	}
+}
+
+func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, style int, preferredIsLeft bool) SayBubbleLayout {
+	content := SayBubbleContent{
+		formattedMessage: formattedMessage,
+		style:            style,
+		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
+	}
+	return SayBubbleLayout{
+		position:        position,
+		isLeft:          preferredIsLeft,
+		preferredIsLeft: preferredIsLeft,
+		content:         content,
+		extent:          content.baseExtent,
+		renderScale:     mathf.NewVec2(1, 1),
+		viewport: sayBubbleRect{
+			left:   -float64(winSize.X) / 2,
+			right:  float64(winSize.X) / 2,
+			bottom: -float64(winSize.Y) / 2,
+			top:    float64(winSize.Y) / 2,
+		},
+	}
+}
+
+func setupUIRendering(t *testing.T) *uiRenderSpy {
+	t.Helper()
+	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
+	oldScale := engine.WindowScale()
+	oldWidth, oldHeight, oldClamp := baseScreenWidth, baseScreenHeight, clampUIPositionInScreen
+	enginewrap.Init(func(f func()) { f() })
+	mgr := &uiRenderSpy{askShowUiMgr: askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{}}, positions: map[gdx.Object]mathf.Vec2{}, scales: map[gdx.Object]mathf.Vec2{}, sizes: map[gdx.Object]mathf.Vec2{}, colors: map[gdx.Object]mathf.Color{}, rotations: map[gdx.Object]float64{}}
+	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
+	engine.SetWindowScale(2)
+	SetBaseScreenSize(480, 360)
+	ClampUIPositionInScreen(true)
+	t.Cleanup(func() {
+		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
+		engine.SetWindowScale(oldScale)
+		SetBaseScreenSize(oldWidth, oldHeight)
+		ClampUIPositionInScreen(oldClamp)
+		enginewrap.Init(engine.WaitMainThread)
+	})
+	return mgr
 }

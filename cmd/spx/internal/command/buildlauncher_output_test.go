@@ -254,16 +254,6 @@ func TestCommitLauncherOutputRechecksProtectedInputs(t *testing.T) {
 	}
 }
 
-func stageLauncherTestOutput(t *testing.T, final string) string {
-	t.Helper()
-	stage, cleanup, err := stageLauncherOutput(final)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(cleanup)
-	return stage
-}
-
 func TestBuildLauncherFailurePreservesExistingOutput(t *testing.T) {
 	projectDir := t.TempDir()
 	output := filepath.Join(projectDir, "game")
@@ -426,4 +416,14 @@ func TestStageLauncherOutputRejectsProtectedParent(t *testing.T) {
 			}
 		})
 	}
+}
+
+func stageLauncherTestOutput(t *testing.T, final string) string {
+	t.Helper()
+	stage, cleanup, err := stageLauncherOutput(final)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cleanup)
+	return stage
 }

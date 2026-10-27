@@ -35,12 +35,35 @@ jobs:
         shell: bash
         run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)
 
+      - name: Test macOS buildctl environment
+        id: macos-tests
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash .github/scripts/test_go_coverage.sh macos
+
+      - name: Upload macOS coverage to Codecov
+        if: runner.os == 'macOS'
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: ${{ steps.macos-tests.outputs.coverage }}
+          flags: buildctl-macos
+          disable_search: true
+
       - name: Test Windows file replacement and process tracking
+        id: windows-tests
         if: runner.os == 'Windows'
         shell: bash
-        run: |
-          go test -v ./internal/cmd/buildctl/shared -run '^(TestReplaceFileWindows|TestWindowsPath|TestFetchURLToFileReplacesExistingDestination)$'
-          go test -v ./internal/cmd/buildctl/engine -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$'
+        run: bash .github/scripts/test_go_coverage.sh windows
+
+      - name: Upload Windows coverage to Codecov
+        if: runner.os == 'Windows'
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: ${{ steps.windows-tests.outputs.coverage }}
+          flags: buildctl-windows
+          disable_search: true
 
       - name: Build cmd/ispx
         if: runner.os == 'Linux'

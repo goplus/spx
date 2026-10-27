@@ -21,18 +21,6 @@ type assetManifest struct {
 
 type assetSpecs []string
 
-func (specs *assetSpecs) String() string {
-	return strings.Join(*specs, ",")
-}
-
-func (specs *assetSpecs) Set(value string) error {
-	if _, _, ok := strings.Cut(value, "="); !ok {
-		return fmt.Errorf("invalid asset spec %q: want name=path", value)
-	}
-	*specs = append(*specs, value)
-	return nil
-}
-
 func main() {
 	// Keep the historical positional mode used by cmd/spx/install.sh. CI uses
 	// the flag mode below to emit the reproducible release manifest.
@@ -47,6 +35,18 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func (s *assetSpecs) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *assetSpecs) Set(value string) error {
+	if _, _, ok := strings.Cut(value, "="); !ok {
+		return fmt.Errorf("invalid asset spec %q: want name=path", value)
+	}
+	*s = append(*s, value)
+	return nil
 }
 
 func runReleaseManifest(args []string) error {

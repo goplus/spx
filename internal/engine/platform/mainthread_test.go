@@ -30,10 +30,6 @@ type testPlatformMgr struct {
 	main bool
 }
 
-func (p testPlatformMgr) IsMainThread() bool {
-	return p.main
-}
-
 func TestTryCallEngineDirectlyUsesGodot(t *testing.T) {
 	previous := gdx.PlatformMgr
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
@@ -75,4 +71,8 @@ func TestPlatformPredicatesMatchBuildTarget(t *testing.T) {
 	if GetPlatformType() != want || IsDesktop() != (want == PlatformTypeDesktop) || IsWeb() != (want == PlatformTypeWeb) || IsAndroid() != (want == PlatformTypeAndroid) || IsIos() != (want == PlatformTypeIos) || IsServer() || IsMobile() != (want == PlatformTypeAndroid || want == PlatformTypeIos) {
 		t.Fatalf("platform predicates disagree for %s", runtime.GOOS)
 	}
+}
+
+func (p testPlatformMgr) IsMainThread() bool {
+	return p.main
 }

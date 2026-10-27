@@ -36,19 +36,48 @@ type FS struct {
 	files map[string][]byte
 }
 
+// file implements [fs.File].
+type file struct {
+	name    string
+	content []byte
+	offset  int64
+}
+
+// dir implements [fs.ReadDirFile].
+type dir struct {
+	fsys    *FS
+	name    string
+	entries []fs.DirEntry
+	offset  int
+}
+
+// fileInfo implements [fs.FileInfo].
+type fileInfo struct {
+	name string
+	size int64
+	mode fs.FileMode
+}
+
+// dirEntry implements [fs.DirEntry].
+type dirEntry struct {
+	name string
+	size int64
+	mode fs.FileMode
+}
+
 // New creates a new [FS].
 func New(files map[string][]byte) *FS {
 	return &FS{files: files}
 }
 
 // Open implements [fs.FS].
-func (fsys *FS) Open(name string) (fs.File, error) {
+func (f *FS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrInvalid}
 	}
 
 	// Check if it's a file.
-	if content, ok := fsys.files[name]; ok {
+	if content, ok := f.files[name]; ok {
 		return &file{
 			name:    name,
 			content: content,
@@ -56,9 +85,9 @@ func (fsys *FS) Open(name string) (fs.File, error) {
 	}
 
 	// Check if it's a directory.
-	if fsys.hasDir(name) {
+	if f.hasDir(name) {
 		return &dir{
-			fsys: fsys,
+			fsys: f,
 			name: name,
 		}, nil
 	}
@@ -67,7 +96,7 @@ func (fsys *FS) Open(name string) (fs.File, error) {
 }
 
 // ReadDir implements [fs.ReadDirFS].
-func (fsys *FS) ReadDir(name string) ([]fs.DirEntry, error) {
+func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrInvalid}
 	}
@@ -80,7 +109,7 @@ func (fsys *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	// Map entry names to whether they are directories (true = dir, false = file).
 	// If an entry appears both as a file and a directory prefix, it's a directory.
 	entries := make(map[string]bool)
-	for p := range fsys.files {
+	for p := range f.files {
 		after, ok := strings.CutPrefix(p, prefix)
 		if !ok {
 			continue
@@ -107,7 +136,7 @@ func (fsys *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 			de.mode = dirMode
 		} else {
 			de.mode = fileMode
-			de.size = int64(len(fsys.files[prefix+entryName]))
+			de.size = int64(len(f.files[prefix+entryName]))
 		}
 		des = append(des, de)
 	}
@@ -115,13 +144,13 @@ func (fsys *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 // Stat implements [fs.StatFS].
-func (fsys *FS) Stat(name string) (fs.FileInfo, error) {
+func (f *FS) Stat(name string) (fs.FileInfo, error) {
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
 	}
 
 	// Check if it's a file.
-	if content, ok := fsys.files[name]; ok {
+	if content, ok := f.files[name]; ok {
 		return &fileInfo{
 			name: path.Base(name),
 			size: int64(len(content)),
@@ -130,7 +159,7 @@ func (fsys *FS) Stat(name string) (fs.FileInfo, error) {
 	}
 
 	// Check if it's a directory.
-	if fsys.hasDir(name) {
+	if f.hasDir(name) {
 		return &fileInfo{
 			name: path.Base(name),
 			mode: dirMode,
@@ -141,24 +170,17 @@ func (fsys *FS) Stat(name string) (fs.FileInfo, error) {
 }
 
 // hasDir reports whether name exists as a directory.
-func (fsys *FS) hasDir(name string) bool {
+func (f *FS) hasDir(name string) bool {
 	if name == "." {
 		return true
 	}
 	prefix := name + "/"
-	for p := range fsys.files {
+	for p := range f.files {
 		if strings.HasPrefix(p, prefix) {
 			return true
 		}
 	}
 	return false
-}
-
-// file implements [fs.File].
-type file struct {
-	name    string
-	content []byte
-	offset  int64
 }
 
 // Stat implements [fs.File].
@@ -184,14 +206,6 @@ func (f *file) Read(b []byte) (int, error) {
 // Close implements [fs.File].
 func (f *file) Close() error {
 	return nil
-}
-
-// dir implements [fs.ReadDirFile].
-type dir struct {
-	fsys    *FS
-	name    string
-	entries []fs.DirEntry
-	offset  int
 }
 
 // Stat implements [fs.File].
@@ -238,30 +252,24 @@ func (d *dir) ReadDir(n int) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-// fileInfo implements [fs.FileInfo].
-type fileInfo struct {
-	name string
-	size int64
-	mode fs.FileMode
-}
+func (fi *fileInfo) Name() string { return fi.name }
 
-func (fi *fileInfo) Name() string       { return fi.name }
-func (fi *fileInfo) Size() int64        { return fi.size }
-func (fi *fileInfo) Mode() fs.FileMode  { return fi.mode }
+func (fi *fileInfo) Size() int64 { return fi.size }
+
+func (fi *fileInfo) Mode() fs.FileMode { return fi.mode }
+
 func (fi *fileInfo) ModTime() time.Time { return time.Unix(0, 0) }
-func (fi *fileInfo) IsDir() bool        { return fi.mode.IsDir() }
-func (fi *fileInfo) Sys() any           { return nil }
 
-// dirEntry implements [fs.DirEntry].
-type dirEntry struct {
-	name string
-	size int64
-	mode fs.FileMode
-}
+func (fi *fileInfo) IsDir() bool { return fi.mode.IsDir() }
 
-func (de *dirEntry) Name() string      { return de.name }
-func (de *dirEntry) IsDir() bool       { return de.mode.IsDir() }
+func (fi *fileInfo) Sys() any { return nil }
+
+func (de *dirEntry) Name() string { return de.name }
+
+func (de *dirEntry) IsDir() bool { return de.mode.IsDir() }
+
 func (de *dirEntry) Type() fs.FileMode { return de.mode.Type() }
+
 func (de *dirEntry) Info() (fs.FileInfo, error) {
 	return &fileInfo{
 		name: de.name,

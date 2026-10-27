@@ -89,35 +89,6 @@ func TestSConsScriptQuotesCommandPath(t *testing.T) {
 	}
 }
 
-func loadEngineTestSPXModule(t *testing.T, profile string) (shared.SPXModule, string) {
-	t.Helper()
-	moduleSource := filepath.Join(t.TempDir(), "SPX Modules", "spx")
-	mustWriteFile(t, filepath.Join(moduleSource, "SCsub"), []byte("# fixture\n"))
-	mustWriteFile(t, filepath.Join(moduleSource, "config.py"), []byte("# fixture\n"))
-	mustWriteFile(t, filepath.Join(moduleSource, shared.SConsProfileFilename), []byte(profile))
-	module, err := shared.LoadSPXModule(moduleSource)
-	if err != nil {
-		t.Fatalf("LoadSPXModule returned error: %v", err)
-	}
-	return module, moduleSource
-}
-
-func writeEngineTestTool(t *testing.T, path, script string) {
-	t.Helper()
-	mustWriteFile(t, path, []byte("#!/bin/sh\n"+script))
-	if err := os.Chmod(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func assertEngineTestCommandRecord(t *testing.T, path string, want []string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if got := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"); err != nil || !slices.Equal(got, want) {
-		t.Fatalf("command record = %q (%v), want %q", data, err, want)
-	}
-}
-
 func TestBuildEngineDesktopCommands(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture executables require a POSIX shell")
@@ -397,8 +368,8 @@ func TestPopulateWebTemplateCopies(t *testing.T) {
 }
 
 func TestBuildEngineEntryPoint(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("isolated Linux toolchain fixture")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("toolchain fixture requires Linux or macOS")
 	}
 	for _, scenario := range []string{"editor", "template", "invalid platform", "invalid target", "template directory", "missing python", "missing source"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -423,6 +394,13 @@ func TestBuildEngineEntryPoint(t *testing.T) {
 			for _, name := range []string{"go", "xgo", "python3"} {
 				writeEngineTestTool(t, filepath.Join(bin, name), "exit 0\n")
 			}
+			// Keep macOS toolchain discovery inside the fixture as well.
+			t.Setenv("SDKROOT", root)
+			t.Setenv("CC", filepath.Join(bin, "go"))
+			t.Setenv("CXX", filepath.Join(bin, "go"))
+			for _, name := range []string{"CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
+				t.Setenv(name, "")
+			}
 			// Any source acquisition is intercepted; no real git or installer is on PATH.
 			writeEngineTestTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
 			venvBin := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
@@ -443,7 +421,7 @@ func TestBuildEngineEntryPoint(t *testing.T) {
 			case "invalid target":
 				cfg.Target, wantError = "invalid", "unsupported build target"
 			case "template directory":
-				mustWriteFile(t, filepath.Join(root, ".local"), []byte("blocked"))
+				mustWriteFile(t, filepath.Dir(env.TemplateDir), []byte("blocked"))
 				wantError = "not a directory"
 			case "missing python":
 				if err := os.Remove(filepath.Join(bin, "python3")); err != nil {
@@ -481,17 +459,32 @@ func TestBuildEngineEntryPoint(t *testing.T) {
 }
 
 func TestBuildEngineWebTemplate(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("isolated Linux EMSDK fixture")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("EMSDK fixture requires Linux or macOS")
 	}
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash is unavailable")
+	commands := make(map[string]string)
+	for _, name := range []string{"bash", "env", "head"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			t.Skipf("%s is unavailable", name)
+		}
+		commands[name] = path
 	}
 	module, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":[],"editor_release":[],"template_release":["optimize=size"]}`)
 	for _, scenario := range []string{"normal", "worker", "sdk failure", "build failure", "cache failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := isolateEngineEnvironment(t)
 			sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
+			if runtime.GOOS == "darwin" {
+				sdk = filepath.Join(root, "Library", "Application Support", "emsdk", "emsdk")
+			}
+			bin := filepath.Join(root, "tools")
+			for _, name := range []string{"env", "head"} {
+				writeEngineTestTool(t, filepath.Join(bin, name), "exec "+shared.ShellQuote(commands[name])+" \"$@\"\n")
+			}
+			// Login profiles must not replace the isolated PATH or load host SDKs.
+			writeEngineTestTool(t, filepath.Join(bin, "bash"), "[ \"$1\" = -lc ] && [ \"$#\" = 2 ] || exit 98\nexec "+shared.ShellQuote(commands["bash"])+" --noprofile --norc -c \"$2\"\n")
+			t.Setenv("PATH", bin)
 			compilerBin := filepath.Join(sdk, "upstream", "emscripten")
 			t.Setenv("EM_CACHE", filepath.Join(root, "em-cache"))
 			t.Setenv("EM_CONFIG", filepath.Join(root, "em-config"))
@@ -619,4 +612,33 @@ func TestWaitForNonEmptyFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+func loadEngineTestSPXModule(t *testing.T, profile string) (shared.SPXModule, string) {
+	t.Helper()
+	moduleSource := filepath.Join(t.TempDir(), "SPX Modules", "spx")
+	mustWriteFile(t, filepath.Join(moduleSource, "SCsub"), []byte("# fixture\n"))
+	mustWriteFile(t, filepath.Join(moduleSource, "config.py"), []byte("# fixture\n"))
+	mustWriteFile(t, filepath.Join(moduleSource, shared.SConsProfileFilename), []byte(profile))
+	module, err := shared.LoadSPXModule(moduleSource)
+	if err != nil {
+		t.Fatalf("LoadSPXModule returned error: %v", err)
+	}
+	return module, moduleSource
+}
+
+func writeEngineTestTool(t *testing.T, path, script string) {
+	t.Helper()
+	mustWriteFile(t, path, []byte("#!/bin/sh\n"+script))
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertEngineTestCommandRecord(t *testing.T, path string, want []string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if got := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n"); err != nil || !slices.Equal(got, want) {
+		t.Fatalf("command record = %q (%v), want %q", data, err, want)
+	}
 }

@@ -223,56 +223,6 @@ func TestStartFailureCancelsPreparedInputSession(t *testing.T) {
 	}
 }
 
-func assertInputSessionStatusJSON(t *testing.T, value js.Value, want string) {
-	t.Helper()
-	if value.Type() != js.TypeObject || !isPlainJSObject(value) {
-		t.Fatalf("status = %v, want a plain JavaScript object", value)
-	}
-	encoded := js.Global().Get("JSON").Call("stringify", value).String()
-	// Compare raw JSON values to preserve exact JavaScript number rounding.
-	var gotJSON, wantJSON map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(encoded), &gotJSON); err != nil {
-		t.Fatalf("decode status JSON: %v", err)
-	}
-	if err := json.Unmarshal([]byte(want), &wantJSON); err != nil {
-		t.Fatalf("decode expected JSON: %v", err)
-	}
-	if !reflect.DeepEqual(gotJSON, wantJSON) {
-		t.Fatalf("status JSON = %s, want %s", encoded, want)
-	}
-	// JSON.stringify omits undefined fields, so also check the actual object
-	// shape to ensure an empty error and the internal tick flag are absent.
-	keys := jsTypeObject.Call("keys", value)
-	if keys.Length() != len(wantJSON) {
-		t.Fatalf("status has %d properties, want %d: %s", keys.Length(), len(wantJSON), encoded)
-	}
-}
-
-func setJSFunction(t *testing.T, name string, fn func(js.Value, []js.Value) any) {
-	t.Helper()
-	global := js.Global()
-	previous := global.Get(name)
-	hadOwn := jsTypeObject.Get("prototype").Get("hasOwnProperty").Call("call", global, name).Bool()
-	callback := js.FuncOf(fn)
-	global.Set(name, callback)
-	t.Cleanup(func() {
-		if hadOwn {
-			global.Set(name, previous)
-		} else {
-			global.Delete(name)
-		}
-		callback.Release()
-	})
-}
-
-func assertJSError(t *testing.T, value js.Value) string {
-	t.Helper()
-	if value.Type() != js.TypeObject || !value.InstanceOf(jsTypeError) {
-		t.Fatalf("result = %v, want JavaScript Error", value)
-	}
-	return value.Get("message").String()
-}
-
 func TestJSBinaryCopiesOwnTheirStorage(t *testing.T) {
 	for _, kind := range []string{"string", "Uint8Array view", "ArrayBuffer"} {
 		t.Run(kind, func(t *testing.T) {
@@ -462,4 +412,54 @@ func TestJSStopWithNoRunningInterpreter(t *testing.T) {
 		}
 		synctest.Wait()
 	})
+}
+
+func assertInputSessionStatusJSON(t *testing.T, value js.Value, want string) {
+	t.Helper()
+	if value.Type() != js.TypeObject || !isPlainJSObject(value) {
+		t.Fatalf("status = %v, want a plain JavaScript object", value)
+	}
+	encoded := js.Global().Get("JSON").Call("stringify", value).String()
+	// Compare raw JSON values to preserve exact JavaScript number rounding.
+	var gotJSON, wantJSON map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(encoded), &gotJSON); err != nil {
+		t.Fatalf("decode status JSON: %v", err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantJSON); err != nil {
+		t.Fatalf("decode expected JSON: %v", err)
+	}
+	if !reflect.DeepEqual(gotJSON, wantJSON) {
+		t.Fatalf("status JSON = %s, want %s", encoded, want)
+	}
+	// JSON.stringify omits undefined fields, so also check the actual object
+	// shape to ensure an empty error and the internal tick flag are absent.
+	keys := jsTypeObject.Call("keys", value)
+	if keys.Length() != len(wantJSON) {
+		t.Fatalf("status has %d properties, want %d: %s", keys.Length(), len(wantJSON), encoded)
+	}
+}
+
+func setJSFunction(t *testing.T, name string, fn func(js.Value, []js.Value) any) {
+	t.Helper()
+	global := js.Global()
+	previous := global.Get(name)
+	hadOwn := jsTypeObject.Get("prototype").Get("hasOwnProperty").Call("call", global, name).Bool()
+	callback := js.FuncOf(fn)
+	global.Set(name, callback)
+	t.Cleanup(func() {
+		if hadOwn {
+			global.Set(name, previous)
+		} else {
+			global.Delete(name)
+		}
+		callback.Release()
+	})
+}
+
+func assertJSError(t *testing.T, value js.Value) string {
+	t.Helper()
+	if value.Type() != js.TypeObject || !value.InstanceOf(jsTypeError) {
+		t.Fatalf("result = %v, want JavaScript Error", value)
+	}
+	return value.Get("message").String()
 }

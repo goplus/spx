@@ -22,12 +22,17 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/projectloader"
 )
+
+type projectFontBridge interface {
+	ApplyProjectFonts(defaultPath string, paths, families, preferences engine.Array) string
+}
 
 // -----------------------------------------------------------------------------
 // Loading
@@ -94,6 +99,30 @@ func (p *Game) startLoad(fs spxfs.Dir) {
 	p.fs = fs
 }
 
+// applyRuntimeConfig applies startup settings and returns the window title.
+func (p *Game) applyRuntimeConfig(conf *Config, proj *coreproject.ProjectConfig) string {
+	if conf == nil {
+		conf = &Config{}
+	}
+	// Desktop sessions run from a temporary directory, separate from the project.
+	projectDir := os.Getenv("SPX_PROJECT_DIR")
+	if projectDir == "" {
+		projectDir, _ = os.Getwd()
+	}
+	runtimeCfg := coreproject.ResolveRuntimeConfig(conf, proj, projectDir, os.Getenv("SPX_SCREENSHOT_KEY"))
+	proj.FullScreen = runtimeCfg.FullScreen
+	p.physicsEnabled = runtimeCfg.PhysicsEnabled
+	p.displayState.WindowHeight = runtimeCfg.WindowHeight
+	p.displayState.WindowWidth = runtimeCfg.WindowWidth
+
+	if runtimeCfg.ScreenshotKey != "" {
+		if err := os.Setenv("SPX_SCREENSHOT_KEY", runtimeCfg.ScreenshotKey); err != nil {
+			engine.Panic(err)
+		}
+	}
+	return runtimeCfg.Title
+}
+
 // -----------------------------------------------------------------------------
 // Setup
 // -----------------------------------------------------------------------------
@@ -121,4 +150,18 @@ func parseCommandLineFlags(conf *Config) {
 	if effects.Verbose {
 		SetDebug(DbgFlagAll)
 	}
+}
+
+func applyRuntimeFontPlan(res projectFontBridge, plan coreproject.RuntimeFontPlan) error {
+	if res == nil {
+		return errors.New("project font bridge is nil")
+	}
+	paths, families := make([]string, len(plan.Faces)), make([]string, len(plan.Faces))
+	for i, face := range plan.Faces {
+		paths[i], families[i] = face.Path, face.Family
+	}
+	if message := res.ApplyProjectFonts(plan.DefaultPath, paths, families, slices.Clone(plan.Preferences)); message != "" {
+		return errors.New(message)
+	}
+	return nil
 }

@@ -58,36 +58,133 @@ type collisionLayerOrderSprite struct {
 	onMain func()
 }
 
-func (s *cameraFollowOverrideSprite) Main() {
-	if s.followTarget != "" {
-		s.g.Camera.Follow__1(s.followTarget)
-	}
+type layoutInterfaceOwnerSprite struct {
+	SpriteImpl
+	owner any
 }
 
-func (s *collisionLayerOrderSprite) Main() {
-	if s.onMain != nil {
-		s.onMain()
-	}
+type gameDisplayPlatformMgr struct {
+	gameTestPlatformMgr
+	width, height int64
+	fullscreen    bool
 }
 
-func newCameraFollowOverrideSprite(g *Game, name string, followTarget SpriteName) *cameraFollowOverrideSprite {
-	sprite := &cameraFollowOverrideSprite{followTarget: followTarget}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	return sprite
+type gameTestFS map[string]string
+
+type spriteLoadTestGame struct {
+	Game
 }
 
-func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisionLayerOrderSprite {
-	sprite := &collisionLayerOrderSprite{onMain: onMain}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
-	return sprite
+type spriteLoadTestSprite struct {
+	SpriteImpl
+	*spriteLoadTestGame
+}
+
+type stageLoadTestGame struct {
+	Game
+	Empty   []*stageLoadTestSprite
+	Sprites []*stageLoadTestSprite
+}
+
+type stageLoadTestSprite struct {
+	SpriteImpl
+	*stageLoadTestGame
+}
+
+type directSpriteTestGame struct {
+	Game
+	DirectLoadSprite *DirectLoadSprite
+}
+
+type DirectLoadSprite struct {
+	SpriteImpl
+	*directSpriteTestGame
+}
+
+type gameTestSpriteMgr struct {
+	*spyCloneSpriteMgr
+}
+
+type gameTestExtMgr struct {
+	pkgengine.IExtMgr
+}
+
+type gameTestPlatformMgr struct {
+	pkgengine.IPlatformMgr
+}
+
+type gameTestCameraMgr struct {
+	pkgengine.ICameraMgr
+}
+
+type gameTestInputMgr struct {
+	pkgengine.IInputMgr
+}
+
+type gameTestPenMgr struct {
+	pkgengine.IPenMgr
+}
+
+type gameTestPhysicsMgr struct {
+	pkgengine.IPhysicsMgr
+	collisionModes []bool
+}
+
+type gameTestResMgr struct {
+	pkgengine.IResMgr
+}
+
+type gameTestTilemapparserMgr struct {
+	pkgengine.ITilemapparserMgr
+	loadedPath   string
+	destroyCalls int
+}
+
+type projectTestGame struct {
+	Game
+	projectTestSprite *projectTestSprite
+	Dynamic           Sprite
+	Value             projectTestSprite
+	Last              *projectTestSprite
+	Items             []*projectTestSprite
+}
+
+type projectTestSprite struct {
+	SpriteImpl
+	*projectTestGame
+	marker string
+}
+
+type recordingProjectFS struct {
+	files map[string]string
+	reads []string
+}
+
+const testSpriteConfig = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`
+
+type prototypeConflictGame struct {
+	Game
+	projectTestSprite *conflictingSprite
+	Items             []*projectTestSprite
+}
+
+type conflictingSprite struct {
+	SpriteImpl
+	*prototypeConflictGame
+}
+
+type layoutInvalidOwnerSprite struct {
+	SpriteImpl
+	owner *int
+	value int
+}
+
+type recordingProjectFontBridge struct {
+	defaultPath string
+	paths       []string
+	families    []string
+	preferences []string
+	message     string
 }
 
 func TestPrepareStageBootstrapKeepsManualCameraFollowLast(t *testing.T) {
@@ -507,13 +604,6 @@ func TestSpriteLayoutRejectsNonStructTypes(t *testing.T) {
 	}
 }
 
-type layoutInterfaceOwnerSprite struct {
-	SpriteImpl
-	owner any
-}
-
-func (*layoutInterfaceOwnerSprite) Main() {}
-
 func TestPrepareSpriteOwner(t *testing.T) {
 	files := gameTestFS{"sprites/owner/index.json": testSpriteConfig}
 	game := setupStageLoadTestGame(t, files)
@@ -570,16 +660,6 @@ func TestPrepareProjectRequiresAddressableGame(t *testing.T) {
 	}
 }
 
-type gameDisplayPlatformMgr struct {
-	gameTestPlatformMgr
-	width, height int64
-	fullscreen    bool
-}
-
-func (m *gameDisplayPlatformMgr) SetWindowSize(width, height int64, _ bool) {
-	m.width, m.height = width, height
-}
-func (m *gameDisplayPlatformMgr) SetWindowFullscreen(value bool) { m.fullscreen = value }
 func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
 	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
 	game := setupStageLoadTestGame(t, gameTestFS{})
@@ -683,234 +763,6 @@ func TestPrepareSpriteConfigAcceptsSupportedLayouts(t *testing.T) {
 		}
 	}
 }
-
-type gameTestFS map[string]string
-
-func (f gameTestFS) Open(name string) (io.ReadCloser, error) {
-	content, ok := f[name]
-	if !ok {
-		return nil, errors.New("file not found: " + name)
-	}
-	return io.NopCloser(strings.NewReader(content)), nil
-}
-
-func (gameTestFS) Close() error { return nil }
-
-type spriteLoadTestGame struct {
-	Game
-}
-
-type spriteLoadTestSprite struct {
-	SpriteImpl
-	*spriteLoadTestGame
-}
-
-func (*spriteLoadTestSprite) Main() {}
-
-type stageLoadTestGame struct {
-	Game
-	Empty   []*stageLoadTestSprite
-	Sprites []*stageLoadTestSprite
-}
-
-type stageLoadTestSprite struct {
-	SpriteImpl
-	*stageLoadTestGame
-}
-
-func (*stageLoadTestSprite) Main() {}
-
-type directSpriteTestGame struct {
-	Game
-	DirectLoadSprite *DirectLoadSprite
-}
-
-type DirectLoadSprite struct {
-	SpriteImpl
-	*directSpriteTestGame
-}
-
-func (*DirectLoadSprite) Main() {}
-
-type gameTestSpriteMgr struct {
-	*spyCloneSpriteMgr
-}
-
-func (m *gameTestSpriteMgr) CreateBackdrop(string) pkgengine.Object {
-	return m.CreateBareSprite(mathf.Vec2{})
-}
-
-func (*gameTestSpriteMgr) DestroySprite(pkgengine.Object) bool   { return true }
-func (*gameTestSpriteMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
-func (*gameTestSpriteMgr) SetColliderRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {
-}
-func (*gameTestSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
-func (*gameTestSpriteMgr) SetPixelCollisionSamplingStep(int64)                     {}
-
-type gameTestExtMgr struct {
-	pkgengine.IExtMgr
-}
-
-func (*gameTestExtMgr) SetLayerSorterMode(int64) {}
-
-type gameTestPlatformMgr struct {
-	pkgengine.IPlatformMgr
-}
-
-func (*gameTestPlatformMgr) IsMainThread() bool               { return true }
-func (*gameTestPlatformMgr) GetWindowSize() mathf.Vec2        { return mathf.NewVec2(480, 360) }
-func (*gameTestPlatformMgr) SetWindowSize(int64, int64, bool) {}
-func (*gameTestPlatformMgr) SetWindowFullscreen(bool)         {}
-func (*gameTestPlatformMgr) SetMaxFps(int64)                  {}
-func (*gameTestPlatformMgr) SetStretch(bool, int64, int64)    {}
-func (*gameTestPlatformMgr) SetDebugMode(bool)                {}
-
-type gameTestCameraMgr struct {
-	pkgengine.ICameraMgr
-}
-
-func (*gameTestCameraMgr) SetCameraZoom(mathf.Vec2)    {}
-func (*gameTestCameraMgr) SetCameraLimit(int64, int64) {}
-func (*gameTestCameraMgr) SetCameraSmoothing(bool)     {}
-
-type gameTestInputMgr struct {
-	pkgengine.IInputMgr
-}
-
-func (*gameTestInputMgr) GetGlobalMousePos() mathf.Vec2 { return mathf.Vec2{} }
-func (*gameTestInputMgr) GetMouseState(int64) bool      { return false }
-
-type gameTestPenMgr struct {
-	pkgengine.IPenMgr
-}
-
-func (*gameTestPenMgr) DestroyAllPens()            {}
-func (*gameTestPenMgr) SetCanvasSize(int64, int64) {}
-
-type gameTestPhysicsMgr struct {
-	pkgengine.IPhysicsMgr
-	collisionModes []bool
-}
-
-func (m *gameTestPhysicsMgr) SetCollisionSystemType(byPixel bool) {
-	m.collisionModes = append(m.collisionModes, byPixel)
-}
-func (*gameTestPhysicsMgr) SetGlobalGravity(float64)  {}
-func (*gameTestPhysicsMgr) SetGlobalFriction(float64) {}
-func (*gameTestPhysicsMgr) SetGlobalAirDrag(float64)  {}
-
-type gameTestResMgr struct {
-	pkgengine.IResMgr
-}
-
-func (*gameTestResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
-	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
-}
-
-type gameTestTilemapparserMgr struct {
-	pkgengine.ITilemapparserMgr
-	loadedPath   string
-	destroyCalls int
-}
-
-func (m *gameTestTilemapparserMgr) LoadTilemap(path string) {
-	m.loadedPath = path
-}
-
-func (m *gameTestTilemapparserMgr) DestroyAllTilemaps() { m.destroyCalls++ }
-
-func setupGameTestRuntime(t *testing.T, files gameTestFS, game Gamer, sprites []Sprite, physics bool) *Game {
-	t.Helper()
-
-	cloneMgr := setupCloneSpriteMgr(t)
-	originalExtMgr := pkgengine.ExtMgr
-	originalPlatformMgr := pkgengine.PlatformMgr
-	originalCameraMgr := pkgengine.CameraMgr
-	originalInputMgr := pkgengine.InputMgr
-	originalPenMgr := pkgengine.PenMgr
-	originalPhysicsMgr := pkgengine.PhysicsMgr
-	originalResMgr := pkgengine.ResMgr
-	pkgengine.SpriteMgr = &gameTestSpriteMgr{spyCloneSpriteMgr: cloneMgr}
-	pkgengine.ExtMgr = &gameTestExtMgr{}
-	pkgengine.PlatformMgr = &gameTestPlatformMgr{}
-	pkgengine.CameraMgr = &gameTestCameraMgr{}
-	pkgengine.InputMgr = &gameTestInputMgr{}
-	pkgengine.PenMgr = &gameTestPenMgr{}
-	pkgengine.PhysicsMgr = &gameTestPhysicsMgr{}
-	pkgengine.ResMgr = &gameTestResMgr{}
-	t.Cleanup(func() {
-		pkgengine.SpriteMgr = cloneMgr
-		pkgengine.ExtMgr = originalExtMgr
-		pkgengine.PlatformMgr = originalPlatformMgr
-		pkgengine.CameraMgr = originalCameraMgr
-		pkgengine.InputMgr = originalInputMgr
-		pkgengine.PenMgr = originalPenMgr
-		pkgengine.PhysicsMgr = originalPhysicsMgr
-		pkgengine.ResMgr = originalResMgr
-	})
-
-	originalGame := engine.GetGame()
-	originalBounds := cachedBounds
-	t.Cleanup(func() {
-		engine.SetGame(originalGame)
-		cachedBounds = originalBounds
-	})
-	installRuntimeScheduler(t, coroutine.New(nil), engine.ClearAllSprites)
-	cachedBounds = make(map[string]mathf.Rect2)
-
-	base := game.baseGame().initGame(sprites)
-	engine.SetGame(base)
-	base.gamer = game
-	base.startLoad(files)
-	base.soundMgr.Init(&fakeAudioBackend{})
-	base.tilemapMgr.g, base.tilemapMgr.fs = base, files
-	base.physicsEnabled = physics
-	base.lifecycleState.IsRunned.Store(true)
-
-	return base
-}
-
-func setupStageLoadTestGame(t *testing.T, files gameTestFS) *stageLoadTestGame {
-	t.Helper()
-	game := &stageLoadTestGame{}
-	setupGameTestRuntime(t, files, game, []Sprite{&stageLoadTestSprite{}}, false)
-	return game
-}
-
-type projectTestGame struct {
-	Game
-	projectTestSprite *projectTestSprite
-	Dynamic           Sprite
-	Value             projectTestSprite
-	Last              *projectTestSprite
-	Items             []*projectTestSprite
-}
-
-type projectTestSprite struct {
-	SpriteImpl
-	*projectTestGame
-	marker string
-}
-
-func (*projectTestSprite) Main() {}
-
-type recordingProjectFS struct {
-	files map[string]string
-	reads []string
-}
-
-func (fs *recordingProjectFS) Open(name string) (io.ReadCloser, error) {
-	fs.reads = append(fs.reads, name)
-	content, ok := fs.files[name]
-	if !ok {
-		return nil, os.ErrNotExist
-	}
-	return io.NopCloser(strings.NewReader(content)), nil
-}
-
-func (*recordingProjectFS) Close() error { return nil }
-
-const testSpriteConfig = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`
 
 func TestAllocSpriteFieldsUsesGeneratedStorage(t *testing.T) {
 	original := &projectTestSprite{marker: "original"}
@@ -1179,19 +1031,6 @@ func TestPrepareProjectRejectsNilCachedPrototype(t *testing.T) {
 	}
 }
 
-type prototypeConflictGame struct {
-	Game
-	projectTestSprite *conflictingSprite
-	Items             []*projectTestSprite
-}
-
-type conflictingSprite struct {
-	SpriteImpl
-	*prototypeConflictGame
-}
-
-func (*conflictingSprite) Main() {}
-
 func TestPrepareProjectRejectsPrototypeTypeCollision(t *testing.T) {
 	for _, cached := range []bool{false, true} {
 		t.Run(map[bool]string{false: "prepared field", true: "cached prototype"}[cached], func(t *testing.T) {
@@ -1215,14 +1054,6 @@ func TestPrepareProjectRejectsPrototypeTypeCollision(t *testing.T) {
 	}
 }
 
-type layoutInvalidOwnerSprite struct {
-	SpriteImpl
-	owner *int
-	value int
-}
-
-func (*layoutInvalidOwnerSprite) Main() {}
-
 func TestPrepareSpriteRejectsInvalidLayout(t *testing.T) {
 	gamer := reflect.ValueOf(&Game{}).Elem()
 	files := gameTestFS{"sprites/invalid/index.json": testSpriteConfig}
@@ -1244,4 +1075,262 @@ func TestPrepareSpriteRejectsInvalidLayout(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplyRuntimeFontPlan(t *testing.T) {
+	bridge := &recordingProjectFontBridge{}
+	plan := coreproject.RuntimeFontPlan{
+		DefaultPath: "res://engine/fonts/default.ttf",
+		Faces: []coreproject.RuntimeFontFace{
+			{Path: "asset://scratch.ttf", Family: "Scratch"},
+			{Path: "asset://chinese.ttf", Family: "Chinese"},
+		},
+		Preferences: []string{"Scratch", "Chinese", "default"},
+	}
+	if err := applyRuntimeFontPlan(bridge, plan); err != nil {
+		t.Fatal(err)
+	}
+	if bridge.defaultPath != plan.DefaultPath ||
+		!reflect.DeepEqual(bridge.paths, []string{"asset://scratch.ttf", "asset://chinese.ttf"}) ||
+		!reflect.DeepEqual(bridge.families, []string{"Scratch", "Chinese"}) ||
+		!reflect.DeepEqual(bridge.preferences, plan.Preferences) {
+		t.Fatalf("unexpected bridge payload: %+v", bridge)
+	}
+	bridge.preferences[0] = "changed by bridge"
+	if plan.Preferences[0] != "Scratch" {
+		t.Fatal("bridge preferences alias the input plan")
+	}
+
+	bridge.message = "engine rejected project fonts"
+	if err := applyRuntimeFontPlan(bridge, plan); err == nil || err.Error() != bridge.message {
+		t.Fatalf("applyRuntimeFontPlan error = %v, want %q", err, bridge.message)
+	}
+	if err := applyRuntimeFontPlan(nil, plan); err == nil {
+		t.Fatal("applyRuntimeFontPlan(nil) succeeded")
+	}
+
+	for _, test := range []struct {
+		name        string
+		preferences []string
+	}{
+		{"nil preferences", nil},
+		{"empty preferences", []string{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			bridge := &recordingProjectFontBridge{}
+			if err := applyRuntimeFontPlan(bridge, coreproject.RuntimeFontPlan{Preferences: test.preferences}); err != nil {
+				t.Fatal(err)
+			}
+			if bridge.paths == nil || len(bridge.paths) != 0 || bridge.families == nil || len(bridge.families) != 0 {
+				t.Fatalf("empty faces produced paths %v and families %v, want non-nil empty slices", bridge.paths, bridge.families)
+			}
+			if !reflect.DeepEqual(bridge.preferences, test.preferences) {
+				t.Fatalf("preferences = %#v, want %#v", bridge.preferences, test.preferences)
+			}
+		})
+	}
+}
+
+func (s *cameraFollowOverrideSprite) Main() {
+	if s.followTarget != "" {
+		s.g.Camera.Follow__1(s.followTarget)
+	}
+}
+
+func (s *collisionLayerOrderSprite) Main() {
+	if s.onMain != nil {
+		s.onMain()
+	}
+}
+
+func (*layoutInterfaceOwnerSprite) Main() {}
+
+func (m *gameDisplayPlatformMgr) SetWindowSize(width, height int64, _ bool) {
+	m.width, m.height = width, height
+}
+
+func (m *gameDisplayPlatformMgr) SetWindowFullscreen(value bool) { m.fullscreen = value }
+
+func (f gameTestFS) Open(name string) (io.ReadCloser, error) {
+	content, ok := f[name]
+	if !ok {
+		return nil, errors.New("file not found: " + name)
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (gameTestFS) Close() error { return nil }
+
+func (*spriteLoadTestSprite) Main() {}
+
+func (*stageLoadTestSprite) Main() {}
+
+func (*DirectLoadSprite) Main() {}
+
+func (m *gameTestSpriteMgr) CreateBackdrop(string) pkgengine.Object {
+	return m.CreateBareSprite(mathf.Vec2{})
+}
+
+func (*gameTestSpriteMgr) DestroySprite(pkgengine.Object) bool { return true }
+
+func (*gameTestSpriteMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameTestSpriteMgr) SetColliderRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {
+}
+
+func (*gameTestSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
+
+func (*gameTestSpriteMgr) SetPixelCollisionSamplingStep(int64) {}
+
+func (*gameTestExtMgr) SetLayerSorterMode(int64) {}
+
+func (*gameTestPlatformMgr) IsMainThread() bool { return true }
+
+func (*gameTestPlatformMgr) GetWindowSize() mathf.Vec2 { return mathf.NewVec2(480, 360) }
+
+func (*gameTestPlatformMgr) SetWindowSize(int64, int64, bool) {}
+
+func (*gameTestPlatformMgr) SetWindowFullscreen(bool) {}
+
+func (*gameTestPlatformMgr) SetMaxFps(int64) {}
+
+func (*gameTestPlatformMgr) SetStretch(bool, int64, int64) {}
+
+func (*gameTestPlatformMgr) SetDebugMode(bool) {}
+
+func (*gameTestCameraMgr) SetCameraZoom(mathf.Vec2) {}
+
+func (*gameTestCameraMgr) SetCameraLimit(int64, int64) {}
+
+func (*gameTestCameraMgr) SetCameraSmoothing(bool) {}
+
+func (*gameTestInputMgr) GetGlobalMousePos() mathf.Vec2 { return mathf.Vec2{} }
+
+func (*gameTestInputMgr) GetMouseState(int64) bool { return false }
+
+func (*gameTestPenMgr) DestroyAllPens() {}
+
+func (*gameTestPenMgr) SetCanvasSize(int64, int64) {}
+
+func (m *gameTestPhysicsMgr) SetCollisionSystemType(byPixel bool) {
+	m.collisionModes = append(m.collisionModes, byPixel)
+}
+
+func (*gameTestPhysicsMgr) SetGlobalGravity(float64) {}
+
+func (*gameTestPhysicsMgr) SetGlobalFriction(float64) {}
+
+func (*gameTestPhysicsMgr) SetGlobalAirDrag(float64) {}
+
+func (*gameTestResMgr) GetBoundFromAlpha(string) mathf.Rect2 {
+	return mathf.Rect2{Size: mathf.NewVec2(10, 10)}
+}
+
+func (m *gameTestTilemapparserMgr) LoadTilemap(path string) {
+	m.loadedPath = path
+}
+
+func (m *gameTestTilemapparserMgr) DestroyAllTilemaps() { m.destroyCalls++ }
+
+func (*projectTestSprite) Main() {}
+
+func (fs *recordingProjectFS) Open(name string) (io.ReadCloser, error) {
+	fs.reads = append(fs.reads, name)
+	content, ok := fs.files[name]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (*recordingProjectFS) Close() error { return nil }
+
+func (*conflictingSprite) Main() {}
+
+func (*layoutInvalidOwnerSprite) Main() {}
+
+func (b *recordingProjectFontBridge) ApplyProjectFonts(defaultPath string, paths, families, preferences engine.Array) string {
+	b.defaultPath = defaultPath
+	b.paths = paths.([]string)
+	b.families = families.([]string)
+	b.preferences = preferences.([]string)
+	return b.message
+}
+
+func newCameraFollowOverrideSprite(g *Game, name string, followTarget SpriteName) *cameraFollowOverrideSprite {
+	sprite := &cameraFollowOverrideSprite{followTarget: followTarget}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	return sprite
+}
+
+func newCollisionLayerOrderSprite(g *Game, name string, onMain func()) *collisionLayerOrderSprite {
+	sprite := &collisionLayerOrderSprite{onMain: onMain}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
+	return sprite
+}
+
+func setupGameTestRuntime(t *testing.T, files gameTestFS, game Gamer, sprites []Sprite, physics bool) *Game {
+	t.Helper()
+
+	cloneMgr := setupCloneSpriteMgr(t)
+	originalExtMgr := pkgengine.ExtMgr
+	originalPlatformMgr := pkgengine.PlatformMgr
+	originalCameraMgr := pkgengine.CameraMgr
+	originalInputMgr := pkgengine.InputMgr
+	originalPenMgr := pkgengine.PenMgr
+	originalPhysicsMgr := pkgengine.PhysicsMgr
+	originalResMgr := pkgengine.ResMgr
+	pkgengine.SpriteMgr = &gameTestSpriteMgr{spyCloneSpriteMgr: cloneMgr}
+	pkgengine.ExtMgr = &gameTestExtMgr{}
+	pkgengine.PlatformMgr = &gameTestPlatformMgr{}
+	pkgengine.CameraMgr = &gameTestCameraMgr{}
+	pkgengine.InputMgr = &gameTestInputMgr{}
+	pkgengine.PenMgr = &gameTestPenMgr{}
+	pkgengine.PhysicsMgr = &gameTestPhysicsMgr{}
+	pkgengine.ResMgr = &gameTestResMgr{}
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = cloneMgr
+		pkgengine.ExtMgr = originalExtMgr
+		pkgengine.PlatformMgr = originalPlatformMgr
+		pkgengine.CameraMgr = originalCameraMgr
+		pkgengine.InputMgr = originalInputMgr
+		pkgengine.PenMgr = originalPenMgr
+		pkgengine.PhysicsMgr = originalPhysicsMgr
+		pkgengine.ResMgr = originalResMgr
+	})
+
+	originalGame := engine.GetGame()
+	originalBounds := cachedBounds
+	t.Cleanup(func() {
+		engine.SetGame(originalGame)
+		cachedBounds = originalBounds
+	})
+	installRuntimeScheduler(t, coroutine.New(nil), engine.ClearAllSprites)
+	cachedBounds = make(map[string]mathf.Rect2)
+
+	base := game.baseGame().initGame(sprites)
+	engine.SetGame(base)
+	base.gamer = game
+	base.startLoad(files)
+	base.soundMgr.Init(&fakeAudioBackend{})
+	base.tilemapMgr.g, base.tilemapMgr.fs = base, files
+	base.physicsEnabled = physics
+	base.lifecycleState.IsRunned.Store(true)
+
+	return base
+}
+
+func setupStageLoadTestGame(t *testing.T, files gameTestFS) *stageLoadTestGame {
+	t.Helper()
+	game := &stageLoadTestGame{}
+	setupGameTestRuntime(t, files, game, []Sprite{&stageLoadTestSprite{}}, false)
+	return game
 }

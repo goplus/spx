@@ -28,14 +28,6 @@ import (
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-func isSuspended(thread Thread) bool {
-	if !thread.suspendMu.TryLock() {
-		return false
-	}
-	defer thread.suspendMu.Unlock()
-	return thread.suspendState == suspendWaiting
-}
-
 func TestUpdateReadsGCStatsOnlyWhenPerfDebugEnabled(t *testing.T) {
 	co := New(nil)
 
@@ -777,6 +769,14 @@ func (p *Coroutines) currentJobCount() int {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
 	return p.currentJobs.len()
+}
+
+func isSuspended(thread Thread) bool {
+	if !thread.suspendMu.TryLock() {
+		return false
+	}
+	defer thread.suspendMu.Unlock()
+	return thread.suspendState == suspendWaiting
 }
 
 func joinFirstSliceAll(co *Coroutines, threads []Thread) {

@@ -89,14 +89,6 @@ func EnsureEngineSource(repoRoot string, run func(name string, args ...string) e
 	return nil
 }
 
-func gitHead(dir string) (string, error) {
-	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 func ResolveMacOSVulkanSDKRoot(homeDir string, envSDK string) (string, error) {
 	if envSDK != "" && FileExists(filepath.Join(envSDK, "bin", "vulkaninfo")) {
 		return envSDK, nil
@@ -131,6 +123,14 @@ func MacOSVulkanSDKShellExports(sdkRoot string) string {
 		"export VULKAN_SDK=" + ShellQuote(sdkRoot),
 		"export PATH=" + ShellQuote(filepath.Join(sdkRoot, "bin")+":"+os.Getenv("PATH")),
 	}, "\n") + "\n"
+}
+
+func gitHead(dir string) (string, error) {
+	output, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func compareVersionish(a, b string) int {

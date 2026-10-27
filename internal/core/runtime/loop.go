@@ -52,7 +52,7 @@ func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
 func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
 	leftPressed := s.leftButtonPressed
 	for _, event := range frame.MouseEvents {
-		if event.Id != 1 || event.IsPressed == leftPressed {
+		if event.Id != input.MouseButtonLeft || event.IsPressed == leftPressed {
 			continue
 		}
 		if event.IsPressed {

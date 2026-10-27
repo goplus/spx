@@ -28,9 +28,6 @@ type ProcessStatus struct {
 	Signal int
 }
 
-// Success reports whether the process exited normally with status zero.
-func (s ProcessStatus) Success() bool { return s.Signal == 0 && s.Code == 0 }
-
 // Config describes one embedded launcher invocation.
 type Config struct {
 	// Payload must remain unchanged while Run is active.
@@ -52,3 +49,6 @@ func Run(cfg Config) (ProcessStatus, error) {
 func RunContext(ctx context.Context, cfg Config) (ProcessStatus, error) {
 	return run(ctx, cfg, "")
 }
+
+// Success reports whether the process exited normally with status zero.
+func (s ProcessStatus) Success() bool { return s.Signal == 0 && s.Code == 0 }

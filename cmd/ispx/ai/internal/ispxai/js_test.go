@@ -15,23 +15,6 @@ import (
 	"github.com/goplus/builder/tools/ai"
 )
 
-func bridgeRequireJSError(t *testing.T, value js.Value, message string) {
-	t.Helper()
-	if !value.InstanceOf(js.Global().Get("Error")) {
-		t.Fatalf("result = %v, want a JavaScript Error", value)
-	}
-	if got := value.Get("message").String(); got != message {
-		t.Errorf("error = %q, want %q", got, message)
-	}
-}
-
-func bridgeRequireSuccess(t *testing.T, value js.Value) {
-	t.Helper()
-	if !value.IsNull() {
-		t.Fatalf("result = %v, want null", value)
-	}
-}
-
 func TestBridgeGlobals(t *testing.T) {
 	originalKB := ai.DefaultKnowledgeBase()
 	originalEndpoint, _ := aiBridgeTransport.config()
@@ -223,44 +206,6 @@ func TestBridgeRejectionErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-func jsTestFunc(t *testing.T, fn func(this js.Value, args []js.Value) any) js.Func {
-	t.Helper()
-	f := js.FuncOf(fn)
-	t.Cleanup(f.Release)
-	return f
-}
-
-func jsTestContext(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
-	return ctx
-}
-
-func transportMockFetch(t *testing.T, fn func(this js.Value, args []js.Value) any) {
-	t.Helper()
-	global := js.Global()
-	original := global.Get("fetch")
-	hadOwn := global.Get("Object").Get("prototype").Get("hasOwnProperty").Call("call", global, "fetch").Bool()
-	f := jsTestFunc(t, fn)
-	global.Set("fetch", f)
-	t.Cleanup(func() {
-		if hadOwn {
-			global.Set("fetch", original)
-		} else {
-			global.Delete("fetch")
-		}
-	})
-}
-
-func transportResolved(value js.Value) js.Value {
-	return js.Global().Get("Promise").Call("resolve", value)
-}
-
-func transportRejected(message string) js.Value {
-	return js.Global().Get("Promise").Call("reject", js.Global().Get("Error").New(message))
 }
 
 func TestTransportInteract(t *testing.T) {
@@ -534,4 +479,59 @@ func TestTransportCancellationAbortsFetch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("fetch AbortSignal was not aborted after context cancellation")
 	}
+}
+
+func bridgeRequireJSError(t *testing.T, value js.Value, message string) {
+	t.Helper()
+	if !value.InstanceOf(js.Global().Get("Error")) {
+		t.Fatalf("result = %v, want a JavaScript Error", value)
+	}
+	if got := value.Get("message").String(); got != message {
+		t.Errorf("error = %q, want %q", got, message)
+	}
+}
+
+func bridgeRequireSuccess(t *testing.T, value js.Value) {
+	t.Helper()
+	if !value.IsNull() {
+		t.Fatalf("result = %v, want null", value)
+	}
+}
+
+func jsTestFunc(t *testing.T, fn func(this js.Value, args []js.Value) any) js.Func {
+	t.Helper()
+	f := js.FuncOf(fn)
+	t.Cleanup(f.Release)
+	return f
+}
+
+func jsTestContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func transportMockFetch(t *testing.T, fn func(this js.Value, args []js.Value) any) {
+	t.Helper()
+	global := js.Global()
+	original := global.Get("fetch")
+	hadOwn := global.Get("Object").Get("prototype").Get("hasOwnProperty").Call("call", global, "fetch").Bool()
+	f := jsTestFunc(t, fn)
+	global.Set("fetch", f)
+	t.Cleanup(func() {
+		if hadOwn {
+			global.Set("fetch", original)
+		} else {
+			global.Delete("fetch")
+		}
+	})
+}
+
+func transportResolved(value js.Value) js.Value {
+	return js.Global().Get("Promise").Call("resolve", value)
+}
+
+func transportRejected(message string) js.Value {
+	return js.Global().Get("Promise").Call("reject", js.Global().Get("Error").New(message))
 }

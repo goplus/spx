@@ -17,6 +17,8 @@
 package scaffold
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,5 +33,46 @@ func TestGoModUsesDefaultSPXRelease(t *testing.T) {
 	}
 	if strings.Contains(got, spxVersionPlaceholder) {
 		t.Fatalf("go.mod template still contains %q:\n%s", spxVersionPlaceholder, got)
+	}
+}
+
+func TestGDExtensionTemplatesMatchProjectFiles(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	assertTemplateFile(t, filepath.Join(repoRoot, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), RuntimeGDExtension())
+	assertTemplateFile(t, filepath.Join(repoRoot, "cmd", "spx", "template", "project", "gdspx.gdextension"), ProjectGDExtension())
+}
+
+func TestRuntimeExtensionListUsesStandardProjectEntry(t *testing.T) {
+	if got, want := RuntimeExtensionList(), "res://runtime.gdextension\n"; got != want {
+		t.Fatalf("RuntimeExtensionList() = %q, want %q", got, want)
+	}
+}
+
+func TestSessionExtensionListUsesPackedProjectEntry(t *testing.T) {
+	if got, want := SessionExtensionList(), "res://gdspx.gdextension\n"; got != want {
+		t.Fatalf("SessionExtensionList() = %q, want %q", got, want)
+	}
+}
+
+func TestSessionRuntimeGDExtensionPinsLibrariesToSession(t *testing.T) {
+	const section = "[libraries]\n\n"
+	header, libraries, ok := strings.Cut(RuntimeGDExtension(), section)
+	if !ok {
+		t.Fatal("RuntimeGDExtension() is missing its libraries section")
+	}
+	want := header + section + strings.ReplaceAll(libraries, ` = "`, ` = "res://`)
+	if got := SessionRuntimeGDExtension(); got != want {
+		t.Fatalf("SessionRuntimeGDExtension() = %q, want %q", got, want)
+	}
+}
+
+func assertTemplateFile(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if string(got) != want {
+		t.Fatalf("%s is out of sync; run go generate ./cmd/spx", path)
 	}
 }

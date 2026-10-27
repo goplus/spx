@@ -31,10 +31,6 @@ import (
 	"github.com/goplus/spx/v4/pkg/ispx/internal/memfs"
 )
 
-func init() {
-	xgobuild.RegisterProject(spxproject.New())
-}
-
 var (
 	mu          sync.Mutex
 	ixgoCtx     *ixgo.Context
@@ -50,14 +46,6 @@ type initOptions struct {
 
 // InitOption configures interpreter initialization.
 type InitOption func(*initOptions)
-
-// WithSSAOptimization enables ixgo's default SSA transformation pipeline before
-// creating the interpreter.
-func WithSSAOptimization() InitOption {
-	return func(options *initOptions) {
-		options.optimizeSSA = true
-	}
-}
 
 // defaultPackagesToImport is the list of packages that are always imported by ispx.
 var defaultPackagesToImport = []string{
@@ -78,6 +66,18 @@ var defaultPackagesToImport = []string{
 	"github.com/qiniu/x/stringutil",
 	"github.com/qiniu/x/xgo",
 	"github.com/qiniu/x/xgo/ng",
+}
+
+func init() {
+	xgobuild.RegisterProject(spxproject.New())
+}
+
+// WithSSAOptimization enables ixgo's default SSA transformation pipeline before
+// creating the interpreter.
+func WithSSAOptimization() InitOption {
+	return func(options *initOptions) {
+		options.optimizeSSA = true
+	}
 }
 
 // Init initializes the interpreter with the given ctx, which must not be
@@ -149,18 +149,6 @@ func ConfigureFilesystemRoots(projectDir, assetDir string) error {
 // used by existing interpreted and native commands.
 func ConfigureLegacyFilesystemRoots(projectDir, assetDir string) error {
 	return configureFilesystemRoots(projectDir, assetDir, true)
-}
-
-func configureFilesystemRoots(projectDir, assetDir string, legacy bool) error {
-	mu.Lock()
-	defer mu.Unlock()
-	if ixgoCtx != nil {
-		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
-	}
-	if legacy {
-		return engine.SetLegacyFilesystemRoots(projectDir, assetDir)
-	}
-	return engine.SetFilesystemRoots(projectDir, assetDir)
 }
 
 // BuildFS builds from a borrowed file system that must remain usable while the
@@ -257,4 +245,16 @@ func Shutdown() error {
 
 	mu.Unlock()
 	return nil
+}
+
+func configureFilesystemRoots(projectDir, assetDir string, legacy bool) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if ixgoCtx != nil {
+		return fmt.Errorf("ispx: filesystem roots must be configured before Init")
+	}
+	if legacy {
+		return engine.SetLegacyFilesystemRoots(projectDir, assetDir)
+	}
+	return engine.SetFilesystemRoots(projectDir, assetDir)
 }

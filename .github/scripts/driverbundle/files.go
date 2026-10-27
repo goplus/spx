@@ -28,6 +28,35 @@ import (
 	"github.com/goplus/spx/v4/internal/driverbundle"
 )
 
+type digestWriter struct {
+	writer io.Writer
+	digest hash.Hash
+	size   int64
+}
+
+type notRegularError struct{ path string }
+
+type changedFileError struct{ path string }
+
+type aliasError struct{ first, second string }
+
+func (w *digestWriter) Write(data []byte) (int, error) {
+	count, err := w.writer.Write(data)
+	if count > 0 {
+		if _, digestErr := w.digest.Write(data[:count]); err == nil {
+			err = digestErr
+		}
+		w.size += int64(count)
+	}
+	return count, err
+}
+
+func (e *notRegularError) Error() string { return e.path + " is not a regular non-symlink file" }
+
+func (e *changedFileError) Error() string { return e.path + " changed while opening" }
+
+func (e *aliasError) Error() string { return "paths alias: " + e.first + " and " + e.second }
+
 func openRegularFile(path string) (*os.File, os.FileInfo, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -186,23 +215,6 @@ func copyRegularFile(source, destination string) error {
 	return nil
 }
 
-type digestWriter struct {
-	writer io.Writer
-	digest hash.Hash
-	size   int64
-}
-
-func (w *digestWriter) Write(data []byte) (int, error) {
-	count, err := w.writer.Write(data)
-	if count > 0 {
-		if _, digestErr := w.digest.Write(data[:count]); err == nil {
-			err = digestErr
-		}
-		w.size += int64(count)
-	}
-	return count, err
-}
-
 func syncDirectory(path string) error {
 	directory, err := os.Open(path)
 	if err != nil {
@@ -211,15 +223,3 @@ func syncDirectory(path string) error {
 	defer directory.Close()
 	return directory.Sync()
 }
-
-type notRegularError struct{ path string }
-
-func (e *notRegularError) Error() string { return e.path + " is not a regular non-symlink file" }
-
-type changedFileError struct{ path string }
-
-func (e *changedFileError) Error() string { return e.path + " changed while opening" }
-
-type aliasError struct{ first, second string }
-
-func (e *aliasError) Error() string { return "paths alias: " + e.first + " and " + e.second }

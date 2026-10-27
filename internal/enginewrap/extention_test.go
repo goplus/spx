@@ -17,7 +17,12 @@
 package enginewrap
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
+
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func TestCallInMainThreadRequiresInit(t *testing.T) {
@@ -55,5 +60,25 @@ func TestCallInMainThreadValue(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("main-thread callback calls = %d, want 1", calls)
+	}
+}
+
+func TestRunnableOnUnfocusedReportsUnsupportedDisable(t *testing.T) {
+	var output bytes.Buffer
+	spxlog.SetStdoutOutput(&output)
+	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout) })
+	platform := &PlatformMgrImpl{}
+	platform.SetRunnableOnUnfocused(true)
+	if output.Len() != 0 {
+		t.Fatalf("supported setting logged a warning: %q", output.String())
+	}
+	platform.SetRunnableOnUnfocused(false)
+	warning := output.String()
+	if !strings.Contains(warning, "[WARN]") || !strings.Contains(warning, "SetRunnableOnUnfocused(false) is not implemented yet") {
+		t.Fatalf("unsupported setting warning = %q", warning)
+	}
+	platform.SetRunnableOnUnfocused(true)
+	if output.String() != warning {
+		t.Fatalf("restoring the supported setting logged another warning: %q", output.String())
 	}
 }

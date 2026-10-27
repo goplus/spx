@@ -59,71 +59,6 @@ const (
 	zip32Max                 uint64 = 1<<32 - 1
 )
 
-// WriteComponentZIP writes a deterministic archive containing entries below
-// prefix with the prefix removed. Only engine/ and bridge/ are accepted.
-func (v *Verified) WriteComponentZIP(prefix string, dst io.Writer) error {
-	if v == nil || (prefix != "engine/" && prefix != "bridge/") {
-		return fmt.Errorf("runtimepayload: invalid component prefix %q", prefix)
-	}
-	if dst == nil {
-		return fmt.Errorf("runtimepayload: nil component writer")
-	}
-	var entries []runtimebundle.Entry
-	for _, entry := range v.entries {
-		if strings.HasPrefix(entry.Name, prefix) {
-			entry.Name = strings.TrimPrefix(entry.Name, prefix)
-			entries = append(entries, entry)
-		}
-	}
-	if len(entries) == 0 {
-		return fmt.Errorf("runtimepayload: empty component %q", prefix)
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-	writer := zip.NewWriter(dst)
-	for _, entry := range entries {
-		sourceName := prefix + entry.Name
-		file := v.files[sourceName]
-		if file == nil {
-			_ = writer.Close()
-			return fmt.Errorf("runtimepayload: missing component entry %q", sourceName)
-		}
-		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
-		header.SetMode(canonicalFileMode(fs.FileMode(entry.Mode)))
-		header.Modified = canonicalTime.UTC()
-		output, err := writer.CreateHeader(header)
-		if err != nil {
-			_ = writer.Close()
-			return fmt.Errorf("runtimepayload: create component entry %q: %w", entry.Name, err)
-		}
-		if err := copyVerifiedZipEntry(output, file, runtimebundle.Entry{
-			Name: sourceName, Mode: entry.Mode, Size: entry.Size, SHA256: entry.SHA256,
-		}); err != nil {
-			_ = writer.Close()
-			return err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("runtimepayload: close component ZIP: %w", err)
-	}
-	return nil
-}
-
-// WriteProjectZIP streams the embedded canonical project archive to dst.
-func (v *Verified) WriteProjectZIP(dst io.Writer) error {
-	if v == nil {
-		return fmt.Errorf("runtimepayload: nil verified payload")
-	}
-	if dst == nil {
-		return fmt.Errorf("runtimepayload: nil project writer")
-	}
-	file := v.files[ProjectZipPath]
-	entry, ok := findEntry(v.entries, ProjectZipPath)
-	if file == nil || !ok {
-		return fmt.Errorf("runtimepayload: missing required entry %q", ProjectZipPath)
-	}
-	return copyVerifiedZipEntry(dst, file, entry)
-}
-
 // Verify is the in-memory convenience wrapper around VerifyReaderAt.
 func Verify(payload []byte, payloadSHA256, manifestSHA256, goos, goarch string) (*Verified, error) {
 	reader := bytes.NewReader(payload)
@@ -200,6 +135,71 @@ func VerifyReaderAt(source io.ReaderAt, size int64, payloadSHA256, manifestSHA25
 		return nil, fmt.Errorf("runtimepayload: payload source changed during verification: %w", err)
 	}
 	return verified, nil
+}
+
+// WriteComponentZIP writes a deterministic archive containing entries below
+// prefix with the prefix removed. Only engine/ and bridge/ are accepted.
+func (v *Verified) WriteComponentZIP(prefix string, dst io.Writer) error {
+	if v == nil || (prefix != "engine/" && prefix != "bridge/") {
+		return fmt.Errorf("runtimepayload: invalid component prefix %q", prefix)
+	}
+	if dst == nil {
+		return fmt.Errorf("runtimepayload: nil component writer")
+	}
+	var entries []runtimebundle.Entry
+	for _, entry := range v.entries {
+		if strings.HasPrefix(entry.Name, prefix) {
+			entry.Name = strings.TrimPrefix(entry.Name, prefix)
+			entries = append(entries, entry)
+		}
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("runtimepayload: empty component %q", prefix)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	writer := zip.NewWriter(dst)
+	for _, entry := range entries {
+		sourceName := prefix + entry.Name
+		file := v.files[sourceName]
+		if file == nil {
+			_ = writer.Close()
+			return fmt.Errorf("runtimepayload: missing component entry %q", sourceName)
+		}
+		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
+		header.SetMode(canonicalFileMode(fs.FileMode(entry.Mode)))
+		header.Modified = canonicalTime.UTC()
+		output, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = writer.Close()
+			return fmt.Errorf("runtimepayload: create component entry %q: %w", entry.Name, err)
+		}
+		if err := copyVerifiedZipEntry(output, file, runtimebundle.Entry{
+			Name: sourceName, Mode: entry.Mode, Size: entry.Size, SHA256: entry.SHA256,
+		}); err != nil {
+			_ = writer.Close()
+			return err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("runtimepayload: close component ZIP: %w", err)
+	}
+	return nil
+}
+
+// WriteProjectZIP streams the embedded canonical project archive to dst.
+func (v *Verified) WriteProjectZIP(dst io.Writer) error {
+	if v == nil {
+		return fmt.Errorf("runtimepayload: nil verified payload")
+	}
+	if dst == nil {
+		return fmt.Errorf("runtimepayload: nil project writer")
+	}
+	file := v.files[ProjectZipPath]
+	entry, ok := findEntry(v.entries, ProjectZipPath)
+	if file == nil || !ok {
+		return fmt.Errorf("runtimepayload: missing required entry %q", ProjectZipPath)
+	}
+	return copyVerifiedZipEntry(dst, file, entry)
 }
 
 func (v *Verified) validateComponents() error {

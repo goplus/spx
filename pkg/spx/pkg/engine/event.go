@@ -29,9 +29,37 @@ type Event0 struct {
 	mutex   sync.Mutex
 }
 
+type Action1[T any] func(data T)
+
+type Event1[T any] struct {
+	actions map[int]Action1[T]
+	nextID  int
+	mutex   sync.Mutex
+}
+
+type Action2[T1 any, T2 any] func(data1 T1, data2 T2)
+
+type Event2[T1 any, T2 any] struct {
+	actions map[int]Action2[T1, T2]
+	nextID  int
+	mutex   sync.Mutex
+}
+
 func NewEvent0() *Event0 {
 	return &Event0{
 		actions: make(map[int]Action0),
+	}
+}
+
+func NewEvent1[T any]() *Event1[T] {
+	return &Event1[T]{
+		actions: make(map[int]Action1[T]),
+	}
+}
+
+func NewEvent2[T1 any, T2 any]() *Event2[T1, T2] {
+	return &Event2[T1, T2]{
+		actions: make(map[int]Action2[T1, T2]),
 	}
 }
 
@@ -68,20 +96,6 @@ func (e *Event0) Trigger() {
 	}
 }
 
-type Action1[T any] func(data T)
-
-type Event1[T any] struct {
-	actions map[int]Action1[T]
-	nextID  int
-	mutex   sync.Mutex
-}
-
-func NewEvent1[T any]() *Event1[T] {
-	return &Event1[T]{
-		actions: make(map[int]Action1[T]),
-	}
-}
-
 func (e *Event1[T]) Subscribe(action Action1[T]) int {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
@@ -99,6 +113,7 @@ func (e *Event1[T]) Unsubscribe(id int) {
 
 	delete(e.actions, id)
 }
+
 func (e *Event1[T]) UnsubscribeAll() {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
@@ -111,20 +126,6 @@ func (e *Event1[T]) Trigger(data T) {
 	e.mutex.Unlock()
 	for _, action := range actions {
 		action(data)
-	}
-}
-
-type Action2[T1 any, T2 any] func(data1 T1, data2 T2)
-
-type Event2[T1 any, T2 any] struct {
-	actions map[int]Action2[T1, T2]
-	nextID  int
-	mutex   sync.Mutex
-}
-
-func NewEvent2[T1 any, T2 any]() *Event2[T1, T2] {
-	return &Event2[T1, T2]{
-		actions: make(map[int]Action2[T1, T2]),
 	}
 }
 

@@ -31,21 +31,6 @@ type CostumeFrame struct {
 	Index int
 }
 
-// ResolveFrameIndex applies the animation frame-reference rules to this
-// layout. Strings name costumes; supported numeric values are truncated to an
-// index. Other values retain the historical fallback to frame zero.
-func (l *CostumeLayout) ResolveFrameIndex(value any) (int, bool) {
-	if name, ok := value.(string); ok {
-		index, exists := l.nameIndexes[name]
-		return index, exists
-	}
-	valueAsFloat, ok := tools.GetFloat(value)
-	if !ok {
-		return 0, true
-	}
-	return int(valueAsFloat), true
-}
-
 // CostumeLayout is the validated, expanded view of a sprite's costumes.
 type CostumeLayout struct {
 	Frames      []CostumeFrame
@@ -92,6 +77,21 @@ func PrepareCostumeLayout(cfg *SpriteConfig) (*CostumeLayout, error) {
 		return nil, fmt.Errorf("configuration must define costumes, costumeSet, or costumeMPSet")
 	}
 	return layout, nil
+}
+
+// ResolveFrameIndex applies the animation frame-reference rules to this
+// layout. Strings name costumes; supported numeric values are truncated to an
+// index. Other values retain the historical fallback to frame zero.
+func (l *CostumeLayout) ResolveFrameIndex(value any) (int, bool) {
+	if name, ok := value.(string); ok {
+		index, exists := l.nameIndexes[name]
+		return index, exists
+	}
+	valueAsFloat, ok := tools.GetFloat(value)
+	if !ok {
+		return 0, true
+	}
+	return int(valueAsFloat), true
 }
 
 func (l *CostumeLayout) appendSet(part, count int, items []CostumeSetItem) error {

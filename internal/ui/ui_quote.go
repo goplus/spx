@@ -31,25 +31,25 @@ type UiQuote struct {
 	labelMsg  *UiNode
 }
 
-// OnStart binds UI nodes in the engine callback context.
-func (pself *UiQuote) OnStart() {
-	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
-	pself.imageL = engine.BridgeBindUI[UiNode](pself.GetId(), "C/ImageL")
-	pself.imageR = engine.BridgeBindUI[UiNode](pself.GetId(), "C/ImageR")
-	pself.labelDes = engine.BridgeBindUI[UiNode](pself.GetId(), "C/LabelDes")
-	pself.labelMsg = engine.BridgeBindUI[UiNode](pself.GetId(), "C/LabelMsg")
-}
-
-func (pself *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
-	pos = engine.BridgeWorldToView(pos)
-	targetPos := pos.Sub(mathf.NewVec2(size.X, -size.Y))
-	engine.Managers().UiMgr.SetGlobalPosition(pself.container.GetId(), ViewToUI(targetPos))
-	engine.Managers().UiMgr.SetSize(pself.container.GetId(), size.Mulf(2))
-	engine.Managers().UiMgr.SetText(pself.labelMsg.GetId(), msg)
-	engine.Managers().UiMgr.SetText(pself.labelDes.GetId(), description)
-}
-
 func NewUiQuote() *UiQuote {
 	return engine.NewUiNode[UiQuote]()
+}
+
+// OnStart binds UI nodes in the engine callback context.
+func (p *UiQuote) OnStart() {
+	p.container = engine.BridgeBindUI[UiNode](p.GetId(), "C")
+	p.imageL = engine.BridgeBindUI[UiNode](p.GetId(), "C/ImageL")
+	p.imageR = engine.BridgeBindUI[UiNode](p.GetId(), "C/ImageR")
+	p.labelDes = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelDes")
+	p.labelMsg = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelMsg")
+}
+
+func (p *UiQuote) SetText(pos mathf.Vec2, size mathf.Vec2, msg, description string) {
+	engine.Managers().UiMgr.SetScale(p.GetId(), engine.UniformVec2(engine.WindowScale()))
+	pos = engine.BridgeWorldToView(pos)
+	targetPos := pos.Sub(mathf.NewVec2(size.X, -size.Y))
+	engine.Managers().UiMgr.SetGlobalPosition(p.container.GetId(), ViewToUI(targetPos))
+	engine.Managers().UiMgr.SetSize(p.container.GetId(), size.Mulf(2))
+	engine.Managers().UiMgr.SetText(p.labelMsg.GetId(), msg)
+	engine.Managers().UiMgr.SetText(p.labelDes.GetId(), description)
 }

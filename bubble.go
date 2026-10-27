@@ -122,74 +122,74 @@ func (b *bubbleBase) markDirty() {
 	b.isDirty = true
 }
 
-func (pself *textBubble) destroyPanel() {
-	panel := pself.panel
-	pself.panel = nil
+func (p *textBubble) destroyPanel() {
+	panel := p.panel
+	p.panel = nil
 	if panel != nil {
 		panel.Destroy()
 	}
 }
 
-func (pself *textBubble) flushPendingRemoval(frame int64) {
-	pself.sprite.bubble().flushPendingTextRemoval(pself, frame)
+func (p *textBubble) flushPendingRemoval(frame int64) {
+	p.sprite.bubble().flushPendingTextRemoval(p, frame)
 }
 
-func (pself *textBubble) onUpdate() {
-	if pself.checkNeedsUpdate() {
-		pself.refresh()
-		pself.markClean()
+func (p *textBubble) onUpdate() {
+	if p.checkNeedsUpdate() {
+		p.refresh()
+		p.markClean()
 	}
 }
 
-func (pself *textBubble) refresh() {
-	if pself.panel == nil {
+func (p *textBubble) refresh() {
+	if p.panel == nil {
 		return
 	}
-	if pself.hasLayout {
-		pself.panel.SetTextLayout(pself.layout)
+	if p.hasLayout {
+		p.panel.SetTextLayout(p.layout)
 		return
 	}
-	winSize := pself.sprite.g.getWindowSize()
-	center, size := pself.getBounds()
-	pself.panel.SetText(winSize, center, size, pself.msg, pself.style)
+	winSize := p.sprite.g.getWindowSize()
+	center, size := p.getBounds()
+	p.panel.SetText(winSize, center, size, p.msg, p.style)
 }
 
-func (pself *textBubble) setLayout(layout ui.SayBubbleLayout) {
-	renderChanged := !pself.hasLayout || !pself.layout.Equal(layout)
-	pself.layout = layout
-	pself.hasLayout = true
+func (p *textBubble) setLayout(layout ui.SayBubbleLayout) {
+	renderChanged := !p.hasLayout || !p.layout.Equal(layout)
+	p.layout = layout
+	p.hasLayout = true
 	if renderChanged {
-		pself.markDirty()
+		p.markDirty()
 	}
 }
 
-func (pself *quoterBubble) destroyPanel() {
-	panel := pself.panel
-	pself.panel = nil
+func (p *quoterBubble) destroyPanel() {
+	panel := p.panel
+	p.panel = nil
 	if panel != nil {
 		panel.Destroy()
 	}
 }
 
-func (pself *quoterBubble) flushPendingRemoval(frame int64) {
-	pself.sprite.bubble().flushPendingQuoteRemoval(pself, frame)
+func (p *quoterBubble) flushPendingRemoval(frame int64) {
+	p.sprite.bubble().flushPendingQuoteRemoval(p, frame)
 }
 
-func (pself *quoterBubble) onUpdate() {
-	if pself.checkNeedsUpdate() {
-		pself.refresh()
-		pself.markClean()
+func (p *quoterBubble) onUpdate() {
+	if p.checkNeedsUpdate() {
+		p.refresh()
+		p.markClean()
 	}
 }
 
-func (pself *quoterBubble) refresh() {
-	if pself.panel == nil {
+func (p *quoterBubble) refresh() {
+	if p.panel == nil {
 		return
 	}
 
-	center, size := pself.getBounds()
+	center, size := p.getBounds()
 	extSize := 10.0
-	pself.panel.SetText(center, size.Divf(2).Addf(extSize), pself.message, pself.description)
+	p.panel.SetText(center, size.Divf(2).Addf(extSize), p.message, p.description)
 }
 
 func (p *SpriteImpl) newBubbleBase() bubbleBase {

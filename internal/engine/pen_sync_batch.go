@@ -37,6 +37,15 @@ type PenSyncBuffer struct {
 	data  []float32
 }
 
+func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
+	if capacity < 1 {
+		capacity = 1
+	}
+	return &PenSyncBuffer{
+		data: make([]float32, 1, 1+capacity*PenBatchFields),
+	}
+}
+
 func (b *PenSyncBuffer) AddMove(obj Object, x, y float64) bool {
 	return b.add(PenBatchMove, obj, x, y, 0, 0)
 }
@@ -87,15 +96,6 @@ func (b *PenSyncBuffer) Discard() {
 		return
 	}
 	b.reset()
-}
-
-func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
-	if capacity < 1 {
-		capacity = 1
-	}
-	return &PenSyncBuffer{
-		data: make([]float32, 1, 1+capacity*PenBatchFields),
-	}
 }
 
 func (b *PenSyncBuffer) add(command int, obj Object, a, bval, c, d float64) bool {

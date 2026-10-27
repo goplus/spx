@@ -26,6 +26,32 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
+type animationAudioBackend struct {
+	createCalls int
+	nextID      int64
+	plays       []animationPlayCall
+	loops       []animationLoopCall
+	restarts    []int64
+	stops       []int64
+	playing     map[int64]bool
+	onPlay      func(id int64)
+	onStop      func(id int64)
+	onRestart   func(id int64)
+}
+
+type animationPlayCall struct {
+	soundObj   engine.Object
+	path       string
+	owner      engine.Object
+	attenation float64
+	maxDist    float64
+}
+
+type animationLoopCall struct {
+	id   int64
+	loop bool
+}
+
 func TestTweenCancellationUnregistersState(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 	anim := newTestAnimationComponent()
@@ -66,42 +92,6 @@ func TestTweenInitializationFailureUnregistersState(t *testing.T) {
 	}
 }
 
-func lastOnPlayPlaybackID(state *animState) int64 {
-	if state == nil {
-		return 0
-	}
-	return state.OnPlayAudioPlaybackID
-}
-
-func newTestAnimationComponent() *animationComponent {
-	sprite := &SpriteImpl{
-		g:    &Game{},
-		name: "TestSprite",
-	}
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	sprite.spriteState.IsVisible = true
-	sprite.spriteState.DefaultCostumeIndex = 0
-	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
-
-	anim := &animationComponent{
-		sprite: sprite,
-		shared: &sharedAnimationData{
-			defaultAnimation: "idle",
-			animations:       map[SpriteAnimationName]*animationEntry{},
-			animBindings:     map[string]string{},
-		},
-	}
-	sprite.components.animation = anim
-	sprite.components.sound = &soundComponent{
-		sprite: sprite,
-	}
-	sprite.components.physics = &physicsComponent{
-		sprite:      sprite,
-		physicsMode: NoPhysics,
-	}
-	return anim
-}
-
 func TestAnimationInitializeBuildsSingleAnimationEntryMap(t *testing.T) {
 	sprite := &SpriteImpl{name: "TestSprite"}
 	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
@@ -139,131 +129,6 @@ func TestAnimationInitializeBuildsSingleAnimationEntryMap(t *testing.T) {
 	}
 	if got, ok := anim.getAnimation("missing"); ok || got != nil {
 		t.Fatalf("getAnimation(missing) = (%p, %v), want (nil, false)", got, ok)
-	}
-}
-
-func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
-	sprite.components.transform = &transformComponent{
-		sprite: sprite,
-		x:      x,
-		y:      y,
-	}
-	sprite.components.pen = &penComponent{
-		sprite: sprite,
-	}
-}
-
-type animationAudioBackend struct {
-	createCalls int
-	nextID      int64
-	plays       []animationPlayCall
-	loops       []animationLoopCall
-	restarts    []int64
-	stops       []int64
-	playing     map[int64]bool
-	onPlay      func(id int64)
-	onStop      func(id int64)
-	onRestart   func(id int64)
-}
-
-type animationPlayCall struct {
-	soundObj   engine.Object
-	path       string
-	owner      engine.Object
-	attenation float64
-	maxDist    float64
-}
-
-type animationLoopCall struct {
-	id   int64
-	loop bool
-}
-
-func (f *animationAudioBackend) CreateAudio() engine.Object {
-	f.createCalls++
-	return 77
-}
-
-func (f *animationAudioBackend) DestroyAudio(obj engine.Object) {}
-
-func (f *animationAudioBackend) SetPitch(obj engine.Object, pitch float64) {}
-
-func (f *animationAudioBackend) GetPitch(obj engine.Object) float64 {
-	return 0
-}
-
-func (f *animationAudioBackend) SetPan(obj engine.Object, pan float64) {}
-
-func (f *animationAudioBackend) GetPan(obj engine.Object) float64 {
-	return 0
-}
-
-func (f *animationAudioBackend) SetVolume(obj engine.Object, volume float64) {}
-
-func (f *animationAudioBackend) GetVolume(obj engine.Object) float64 {
-	return 1
-}
-
-func (f *animationAudioBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
-	f.nextID++
-	if f.playing == nil {
-		f.playing = make(map[int64]bool)
-	}
-	f.playing[f.nextID] = true
-	f.plays = append(f.plays, animationPlayCall{
-		soundObj:   obj,
-		path:       path,
-		owner:      ownerID,
-		attenation: attenuation,
-		maxDist:    maxDistance,
-	})
-	if f.onPlay != nil {
-		f.onPlay(f.nextID)
-	}
-	return f.nextID
-}
-
-func (f *animationAudioBackend) Pause(aid int64) {}
-
-func (f *animationAudioBackend) Resume(aid int64) {}
-
-func (f *animationAudioBackend) Stop(aid int64) {
-	if f.playing != nil {
-		f.playing[aid] = false
-	}
-	f.stops = append(f.stops, aid)
-	if f.onStop != nil {
-		f.onStop(aid)
-	}
-}
-
-func (f *animationAudioBackend) Restart(aid int64) bool {
-	if f.playing == nil || !f.playing[aid] {
-		return false
-	}
-	f.restarts = append(f.restarts, aid)
-	if f.onRestart != nil {
-		f.onRestart(aid)
-	}
-	return true
-}
-
-func (f *animationAudioBackend) SetLoop(aid int64, loop bool) {
-	f.loops = append(f.loops, animationLoopCall{id: aid, loop: loop})
-}
-
-func (f *animationAudioBackend) IsPlaying(aid int64) bool {
-	return f.playing[aid]
-}
-
-func (f *animationAudioBackend) StopAll() {}
-
-func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBackend) {
-	anim.sprite.g.soundMgr = internalaudio.Manager{}
-	anim.sprite.g.soundMgr.Init(backend)
-	anim.sprite.g.sounds = map[string]sound{
-		"walk": &coreproject.SoundConfig{Path: "sounds/walk.wav"},
-		"step": &coreproject.SoundConfig{Path: "sounds/step.wav"},
 	}
 }
 
@@ -494,26 +359,6 @@ func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
 	assertTweenStepUsesAbsolutePosition(t, coreproject.AniTypeMove)
 }
 
-func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
-	t.Helper()
-	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
-	initTestMotionComponents(anim.sprite, 100, 20)
-
-	params := &tweenParams{
-		aniType:  kind,
-		moveFrom: mathf.NewVec2(10, 20),
-		moveTo:   mathf.NewVec2(100, 20),
-	}
-
-	anim.applyTweenStep(nil, 0.5, params)
-
-	x, y := anim.sprite.getXY()
-	if x != 55 || y != 20 {
-		t.Fatalf("%v tween position = (%v, %v), want (55, 20)", kind, x, y)
-	}
-}
-
 func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.spriteState.IsVisible = false
@@ -688,63 +533,48 @@ func TestHandleAnimationLoopedReplaysOnStartSound(t *testing.T) {
 }
 
 func TestHandleAnimationLoopedRestartsOnPlaySound(t *testing.T) {
-	anim := newTestAnimationComponent()
-	backend := &animationAudioBackend{}
-	initTestAnimationAudio(anim, backend)
+	for _, test := range []struct {
+		name      string
+		loopCount int
+	}{
+		{name: "single loop", loopCount: 1},
+		{name: "coalesced loops before flush", loopCount: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			anim := newTestAnimationComponent()
+			backend := &animationAudioBackend{}
+			initTestAnimationAudio(anim, backend)
 
-	state := &animState{Name: "walk"}
-	anim.curAnimState = state
-	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{Play: "walk"},
-	}, state)
+			state := &animState{Name: "walk"}
+			anim.curAnimState = state
+			anim.playAnimationAudio(&coreproject.AniConfig{
+				OnPlay: &coreproject.ActionConfig{Play: "walk"},
+			}, state)
 
-	firstID := lastOnPlayPlaybackID(state)
-	anim.sprite.handleAnimationLooped()
-	anim.sprite.flushPendingAudios(nil)
+			firstID := lastOnPlayPlaybackID(state)
+			for range test.loopCount {
+				anim.sprite.handleAnimationLooped()
+			}
+			anim.sprite.flushPendingAudios(nil)
 
-	if len(backend.plays) != 1 {
-		t.Fatalf("plays = %d, want 1 initial play plus no extra backend plays on restart", len(backend.plays))
-	}
-	if len(backend.restarts) != 1 || backend.restarts[0] != firstID {
-		t.Fatalf("restart calls after loop = %+v, want [%d]", backend.restarts, firstID)
-	}
+			if len(backend.plays) != 1 {
+				t.Fatalf("plays = %d, want 1 initial play plus no extra backend plays on restart", len(backend.plays))
+			}
+			if len(backend.restarts) != 1 || backend.restarts[0] != firstID {
+				t.Fatalf("restart calls after loop = %+v, want [%d]", backend.restarts, firstID)
+			}
+			if got := lastOnPlayPlaybackID(state); got != firstID {
+				t.Fatalf("last onPlay playback id = %d, want original playback id %d to be reused", got, firstID)
+			}
+			if len(backend.loops) != 1 || backend.loops[0].id != firstID || !backend.loops[0].loop {
+				t.Fatalf("loop calls = %+v, want one loop playback setup for id %d", backend.loops, firstID)
+			}
 
-	secondID := lastOnPlayPlaybackID(state)
-	if secondID != firstID {
-		t.Fatalf("last onPlay playback id = %d, want original playback id %d to be reused", secondID, firstID)
-	}
-	if len(backend.loops) != 1 || backend.loops[0].id != firstID || !backend.loops[0].loop {
-		t.Fatalf("loop calls = %+v, want one loop playback setup for id %d", backend.loops, firstID)
-	}
-
-	anim.onAnimationDone(state)
-
-	if len(backend.stops) != 1 || backend.stops[0] != firstID {
-		t.Fatalf("stops = %+v, want [%d]", backend.stops, firstID)
-	}
-}
-
-func TestHandleAnimationLoopedCoalescesOnPlayRestartBeforeFlush(t *testing.T) {
-	anim := newTestAnimationComponent()
-	backend := &animationAudioBackend{}
-	initTestAnimationAudio(anim, backend)
-
-	state := &animState{Name: "walk"}
-	anim.curAnimState = state
-	anim.playAnimationAudio(&coreproject.AniConfig{
-		OnPlay: &coreproject.ActionConfig{Play: "walk"},
-	}, state)
-
-	firstID := lastOnPlayPlaybackID(state)
-	anim.sprite.handleAnimationLooped()
-	anim.sprite.handleAnimationLooped()
-	anim.sprite.flushPendingAudios(nil)
-
-	if len(backend.restarts) != 1 || backend.restarts[0] != firstID {
-		t.Fatalf("restart calls after coalesced loops = %+v, want [%d]", backend.restarts, firstID)
-	}
-	if lastOnPlayPlaybackID(state) != firstID {
-		t.Fatalf("last onPlay playback id = %d, want reused playback id %d", lastOnPlayPlaybackID(state), firstID)
+			anim.onAnimationDone(state)
+			if len(backend.stops) != 1 || backend.stops[0] != firstID {
+				t.Fatalf("stops = %+v, want [%d]", backend.stops, firstID)
+			}
+		})
 	}
 }
 
@@ -960,5 +790,160 @@ func TestAnimationAudioRejectsCanceledEmptyAndMissingReplay(t *testing.T) {
 	}
 	if anim.curAnimState.OnPlayAudioRestartPending || anim.activeTweenStates[0].OnPlayAudioRestartPending {
 		t.Fatal("invalid replay requests were not consumed")
+	}
+}
+
+func (f *animationAudioBackend) CreateAudio() engine.Object {
+	f.createCalls++
+	return 77
+}
+
+func (f *animationAudioBackend) DestroyAudio(obj engine.Object) {}
+
+func (f *animationAudioBackend) SetPitch(obj engine.Object, pitch float64) {}
+
+func (f *animationAudioBackend) GetPitch(obj engine.Object) float64 {
+	return 0
+}
+
+func (f *animationAudioBackend) SetPan(obj engine.Object, pan float64) {}
+
+func (f *animationAudioBackend) GetPan(obj engine.Object) float64 {
+	return 0
+}
+
+func (f *animationAudioBackend) SetVolume(obj engine.Object, volume float64) {}
+
+func (f *animationAudioBackend) GetVolume(obj engine.Object) float64 {
+	return 1
+}
+
+func (f *animationAudioBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.nextID++
+	if f.playing == nil {
+		f.playing = make(map[int64]bool)
+	}
+	f.playing[f.nextID] = true
+	f.plays = append(f.plays, animationPlayCall{
+		soundObj:   obj,
+		path:       path,
+		owner:      ownerID,
+		attenation: attenuation,
+		maxDist:    maxDistance,
+	})
+	if f.onPlay != nil {
+		f.onPlay(f.nextID)
+	}
+	return f.nextID
+}
+
+func (f *animationAudioBackend) Pause(aid int64) {}
+
+func (f *animationAudioBackend) Resume(aid int64) {}
+
+func (f *animationAudioBackend) Stop(aid int64) {
+	if f.playing != nil {
+		f.playing[aid] = false
+	}
+	f.stops = append(f.stops, aid)
+	if f.onStop != nil {
+		f.onStop(aid)
+	}
+}
+
+func (f *animationAudioBackend) Restart(aid int64) bool {
+	if f.playing == nil || !f.playing[aid] {
+		return false
+	}
+	f.restarts = append(f.restarts, aid)
+	if f.onRestart != nil {
+		f.onRestart(aid)
+	}
+	return true
+}
+
+func (f *animationAudioBackend) SetLoop(aid int64, loop bool) {
+	f.loops = append(f.loops, animationLoopCall{id: aid, loop: loop})
+}
+
+func (f *animationAudioBackend) IsPlaying(aid int64) bool {
+	return f.playing[aid]
+}
+
+func (f *animationAudioBackend) StopAll() {}
+
+func lastOnPlayPlaybackID(state *animState) int64 {
+	if state == nil {
+		return 0
+	}
+	return state.OnPlayAudioPlaybackID
+}
+
+func newTestAnimationComponent() *animationComponent {
+	sprite := &SpriteImpl{
+		g:    &Game{},
+		name: "TestSprite",
+	}
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.spriteState.IsVisible = true
+	sprite.spriteState.DefaultCostumeIndex = 0
+	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
+
+	anim := &animationComponent{
+		sprite: sprite,
+		shared: &sharedAnimationData{
+			defaultAnimation: "idle",
+			animations:       map[SpriteAnimationName]*animationEntry{},
+			animBindings:     map[string]string{},
+		},
+	}
+	sprite.components.animation = anim
+	sprite.components.sound = &soundComponent{
+		sprite: sprite,
+	}
+	sprite.components.physics = &physicsComponent{
+		sprite:      sprite,
+		physicsMode: NoPhysics,
+	}
+	return anim
+}
+
+func initTestMotionComponents(sprite *SpriteImpl, x, y float64) {
+	sprite.components.transform = &transformComponent{
+		sprite: sprite,
+		x:      x,
+		y:      y,
+	}
+	sprite.components.pen = &penComponent{
+		sprite: sprite,
+	}
+}
+
+func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBackend) {
+	anim.sprite.g.soundMgr = internalaudio.Manager{}
+	anim.sprite.g.soundMgr.Init(backend)
+	anim.sprite.g.sounds = map[string]sound{
+		"walk": &coreproject.SoundConfig{Path: "sounds/walk.wav"},
+		"step": &coreproject.SoundConfig{Path: "sounds/step.wav"},
+	}
+}
+
+func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
+	t.Helper()
+	anim := newTestAnimationComponent()
+	anim.sprite.spriteState.IsVisible = false
+	initTestMotionComponents(anim.sprite, 100, 20)
+
+	params := &tweenParams{
+		aniType:  kind,
+		moveFrom: mathf.NewVec2(10, 20),
+		moveTo:   mathf.NewVec2(100, 20),
+	}
+
+	anim.applyTweenStep(nil, 0.5, params)
+
+	x, y := anim.sprite.getXY()
+	if x != 55 || y != 20 {
+		t.Fatalf("%v tween position = (%v, %v), want (55, 20)", kind, x, y)
 	}
 }

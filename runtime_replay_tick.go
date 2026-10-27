@@ -36,6 +36,13 @@ type inputSessionTick struct {
 	firstTick bool
 }
 
+// inputPlaybackState contains only scalar values, so queries cannot expose the
+// session's held-key slice or require an owned copy of it.
+type inputPlaybackState struct {
+	inputMouseState
+	keyPressed bool
+}
+
 func (s *inputSession) consumeSampledInputTickLocked(
 	delta float64,
 	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
@@ -78,13 +85,6 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		initial:   s.initial,
 		firstTick: firstTick,
 	}, nil
-}
-
-// inputPlaybackState contains only scalar values, so queries cannot expose the
-// session's held-key slice or require an owned copy of it.
-type inputPlaybackState struct {
-	inputMouseState
-	keyPressed bool
 }
 
 func (s *inputSession) playbackInput(key Key) (inputPlaybackState, bool) {
@@ -186,9 +186,8 @@ func inputStateBeforeEvents(
 ) InputReplayState {
 	initial := live
 	buttons := live.Buttons
-	for i := len(mouseEvents) - 1; i >= 0; i-- {
-		event := mouseEvents[i]
-		if event.Button < 1 || event.Button > 3 {
+	for _, event := range slices.Backward(mouseEvents) {
+		if event.Button < MOUSE_BUTTON_LEFT || event.Button > MOUSE_BUTTON_MIDDLE {
 			continue
 		}
 		mask := uint8(1 << (event.Button - 1))
@@ -204,8 +203,7 @@ func inputStateBeforeEvents(
 	for _, key := range live.KeysDown {
 		keys[key] = true
 	}
-	for i := len(keyEvents) - 1; i >= 0; i-- {
-		event := keyEvents[i]
+	for _, event := range slices.Backward(keyEvents) {
 		if event.Pressed {
 			delete(keys, event.Key)
 		} else {

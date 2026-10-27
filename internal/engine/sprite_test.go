@@ -31,16 +31,6 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func setupSpriteManagerTest(t *testing.T) {
-	t.Helper()
-	previous := gdx.SpriteMgr
-	enginewrap.Init(func(call func()) { call() })
-	t.Cleanup(func() {
-		gdx.SpriteMgr = previous
-		enginewrap.Init(WaitMainThread)
-	})
-}
-
 type positionWriteSpy struct {
 	gdx.ISpriteMgr
 	position mathf.Vec2
@@ -48,14 +38,91 @@ type positionWriteSpy struct {
 	writes   int
 }
 
-func (s *positionWriteSpy) GetPosition(Object) mathf.Vec2 { return s.position }
+type textureUpdateCall struct {
+	method string
+	id     gdx.Object
+	path   string
+	rect   mathf.Rect2
+	scale  mathf.Vec2
+}
 
-func (s *positionWriteSpy) SetPosition(_ Object, position mathf.Vec2) {
-	if s.fail {
-		panic("position write failed")
-	}
-	s.position = position
-	s.writes++
+type textureUpdateSpy struct {
+	gdx.ISpriteMgr
+	calls []textureUpdateCall
+}
+
+type positionQuerySpy struct {
+	gdx.ISpriteMgr
+	query func([]int64, []float32) bool
+}
+
+type transformBatchSpy struct {
+	gdx.ISpriteMgr
+	batches [][]float32
+}
+
+type factorySprite struct {
+	gdx.Sprite
+	started bool
+}
+
+type factoryUI struct {
+	gdx.UiNode
+	started bool
+}
+
+type factorySpriteManager struct {
+	gdx.ISpriteMgr
+	path     string
+	position mathf.Vec2
+}
+
+type factoryUIManager struct {
+	gdx.IUiMgr
+	path           string
+	parent, result Object
+}
+
+type colliderCall struct {
+	kind         string
+	id           Object
+	center, size mathf.Vec2
+	radius       float64
+	points       gdx.Array
+	enabled      bool
+}
+
+type colliderSpy struct {
+	gdx.ISpriteMgr
+	calls []colliderCall
+}
+
+type adapterResourceSpy struct {
+	gdx.IResMgr
+	files map[string]string
+	font  string
+}
+
+type adapterCameraSpy struct {
+	gdx.ICameraMgr
+	position, zoom mathf.Vec2
+}
+
+type adapterPlatformSpy struct {
+	bridgeMainThreadPlatform
+	debug bool
+}
+
+type adapterExtSpy struct {
+	gdx.IExtMgr
+	modes []int64
+}
+
+type backdropProxySpy struct {
+	factorySpriteManager
+	settings []string
+	texture  string
+	scale    mathf.Vec2
 }
 
 func TestSpritePositionWritesMirrorAfterEngineWrite(t *testing.T) {
@@ -158,31 +225,6 @@ func TestTweenMirrorsProxyPositionBeforeCompletionCallback(t *testing.T) {
 	}
 }
 
-type textureUpdateCall struct {
-	method string
-	id     gdx.Object
-	path   string
-	rect   mathf.Rect2
-	scale  mathf.Vec2
-}
-
-type textureUpdateSpy struct {
-	gdx.ISpriteMgr
-	calls []textureUpdateCall
-}
-
-func (s *textureUpdateSpy) SetTexture(id gdx.Object, path string) {
-	s.calls = append(s.calls, textureUpdateCall{method: "texture", id: id, path: path})
-}
-
-func (s *textureUpdateSpy) SetTextureAtlas(id gdx.Object, path string, rect mathf.Rect2) {
-	s.calls = append(s.calls, textureUpdateCall{method: "atlas", id: id, path: path, rect: rect})
-}
-
-func (s *textureUpdateSpy) SetRenderScale(id gdx.Object, scale mathf.Vec2) {
-	s.calls = append(s.calls, textureUpdateCall{method: "scale", id: id, scale: scale})
-}
-
 func TestSpriteTextureUpdates(t *testing.T) {
 	setupSpriteManagerTest(t)
 	previousPaths := assetPaths
@@ -233,15 +275,6 @@ func TestSpriteTextureUpdates(t *testing.T) {
 			}
 		})
 	}
-}
-
-type positionQuerySpy struct {
-	gdx.ISpriteMgr
-	query func([]int64, []float32) bool
-}
-
-func (s *positionQuerySpy) BatchRetrievePositions(ids []int64, out []float32) bool {
-	return s.query(ids, out)
 }
 
 func TestPositionSyncReusesStorageAndPreservesIDs(t *testing.T) {
@@ -309,15 +342,6 @@ func TestPositionSyncSkipsFailedQueryAndKeepsStorage(t *testing.T) {
 	}
 }
 
-type transformBatchSpy struct {
-	gdx.ISpriteMgr
-	batches [][]float32
-}
-
-func (s *transformBatchSpy) BatchUpdateTransforms(data []float32) {
-	s.batches = append(s.batches, slices.Clone(data))
-}
-
 func TestSyncBatchUpdateSpritesForwardsOnlyNonemptyPackets(t *testing.T) {
 	setupSpriteManagerTest(t)
 	manager := &transformBatchSpy{}
@@ -338,51 +362,6 @@ func TestSyncBatchUpdateSpritesForwardsOnlyNonemptyPackets(t *testing.T) {
 	if got := buffer.Serialize(); !slices.Equal(got, want) {
 		t.Fatalf("sending altered the pending packet: %v", got)
 	}
-}
-
-type factorySprite struct {
-	gdx.Sprite
-	started bool
-}
-
-func (s *factorySprite) OnStart() { s.started = state.sprites[s.GetId()] == s }
-
-type factoryUI struct {
-	gdx.UiNode
-	started bool
-}
-
-func (n *factoryUI) OnStart() { n.started = state.uiNodes[n.GetId()] == n }
-
-type factorySpriteManager struct {
-	gdx.ISpriteMgr
-	path     string
-	position mathf.Vec2
-}
-
-func (m *factorySpriteManager) CreateSprite(path string, position mathf.Vec2) Object {
-	m.path, m.position = path, position
-	return 10
-}
-func (m *factorySpriteManager) CreateBareSprite(position mathf.Vec2) Object {
-	m.position = position
-	return 11
-}
-func (m *factorySpriteManager) CreateBackdrop(path string) Object {
-	m.path = path
-	return 12
-}
-
-type factoryUIManager struct {
-	gdx.IUiMgr
-	path           string
-	parent, result Object
-}
-
-func (m *factoryUIManager) CreateNode(path string) Object { m.path = path; return m.result }
-func (m *factoryUIManager) BindNode(parent Object, path string) Object {
-	m.parent, m.path = parent, path
-	return m.result
 }
 
 func TestRuntimeFactoriesRegisterBeforeStart(t *testing.T) {
@@ -469,50 +448,6 @@ func TestRuntimeFactoriesRegisterBeforeStart(t *testing.T) {
 	}
 }
 
-type colliderCall struct {
-	kind         string
-	id           Object
-	center, size mathf.Vec2
-	radius       float64
-	points       gdx.Array
-	enabled      bool
-}
-type colliderSpy struct {
-	gdx.ISpriteMgr
-	calls []colliderCall
-}
-
-func (m *colliderSpy) SetColliderRect(id Object, center, size mathf.Vec2) {
-	m.calls = append(m.calls, colliderCall{kind: "ColliderRect", id: id, center: center, size: size})
-}
-func (m *colliderSpy) SetColliderCapsule(id Object, center, size mathf.Vec2) {
-	m.calls = append(m.calls, colliderCall{kind: "ColliderCapsule", id: id, center: center, size: size})
-}
-func (m *colliderSpy) SetColliderCircle(id Object, center mathf.Vec2, radius float64) {
-	m.calls = append(m.calls, colliderCall{kind: "ColliderCircle", id: id, center: center, radius: radius})
-}
-func (m *colliderSpy) SetColliderPolygon(id Object, center mathf.Vec2, points gdx.Array) {
-	m.calls = append(m.calls, colliderCall{kind: "ColliderPolygon", id: id, center: center, points: points})
-}
-func (m *colliderSpy) SetTriggerRect(id Object, center, size mathf.Vec2) {
-	m.calls = append(m.calls, colliderCall{kind: "TriggerRect", id: id, center: center, size: size})
-}
-func (m *colliderSpy) SetTriggerCapsule(id Object, center, size mathf.Vec2) {
-	m.calls = append(m.calls, colliderCall{kind: "TriggerCapsule", id: id, center: center, size: size})
-}
-func (m *colliderSpy) SetTriggerCircle(id Object, center mathf.Vec2, radius float64) {
-	m.calls = append(m.calls, colliderCall{kind: "TriggerCircle", id: id, center: center, radius: radius})
-}
-func (m *colliderSpy) SetTriggerPolygon(id Object, center mathf.Vec2, points gdx.Array) {
-	m.calls = append(m.calls, colliderCall{kind: "TriggerPolygon", id: id, center: center, points: points})
-}
-func (m *colliderSpy) SetCollisionEnabled(id Object, enabled bool) {
-	m.calls = append(m.calls, colliderCall{kind: "CollisionEnabled", id: id, enabled: enabled})
-}
-func (m *colliderSpy) SetTriggerEnabled(id Object, enabled bool) {
-	m.calls = append(m.calls, colliderCall{kind: "TriggerEnabled", id: id, enabled: enabled})
-}
-
 func TestSpriteColliderMethodsSelectTriggerAndPreserveCoordinates(t *testing.T) {
 	setupSpriteManagerTest(t)
 	manager := &colliderSpy{}
@@ -552,40 +487,6 @@ func TestSpriteAnimationSubscriptionsCanBeRemoved(t *testing.T) {
 		t.Fatalf("animation callbacks=%d/%d", looped, finished)
 	}
 }
-
-type adapterResourceSpy struct {
-	gdx.IResMgr
-	files map[string]string
-	font  string
-}
-
-func (m *adapterResourceSpy) ReadAllText(path string) string     { return m.files[path] }
-func (m *adapterResourceSpy) HasFile(path string) bool           { _, ok := m.files[path]; return ok }
-func (m *adapterResourceSpy) ListDirectories(path string) string { return "directories:" + path }
-func (m *adapterResourceSpy) SetDefaultFont(path string)         { m.font = path }
-
-type adapterCameraSpy struct {
-	gdx.ICameraMgr
-	position, zoom mathf.Vec2
-}
-
-func (m *adapterCameraSpy) GetCameraPosition() mathf.Vec2      { return m.position }
-func (m *adapterCameraSpy) GetCameraZoom() mathf.Vec2          { return m.zoom }
-func (m *adapterCameraSpy) SetCameraPosition(value mathf.Vec2) { m.position = value }
-
-type adapterPlatformSpy struct {
-	bridgeMainThreadPlatform
-	debug bool
-}
-
-func (m *adapterPlatformSpy) SetDebugMode(value bool) { m.debug = value }
-
-type adapterExtSpy struct {
-	gdx.IExtMgr
-	modes []int64
-}
-
-func (m *adapterExtSpy) SetLayerSorterMode(value int64) { m.modes = append(m.modes, value) }
 
 func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
 	setupSpriteManagerTest(t)
@@ -647,30 +548,6 @@ func TestBackendAdaptersForwardResourcesCameraAndLayerMode(t *testing.T) {
 	}
 }
 
-type backdropProxySpy struct {
-	factorySpriteManager
-	settings []string
-	texture  string
-	scale    mathf.Vec2
-}
-
-func (m *backdropProxySpy) SetZIndex(id Object, value int64) {
-	m.settings = append(m.settings, fmt.Sprintf("z:%d:%d", id, value))
-}
-func (m *backdropProxySpy) SetTriggerLayer(id Object, value int64) {
-	m.settings = append(m.settings, fmt.Sprintf("trigger-layer:%d:%d", id, value))
-}
-func (m *backdropProxySpy) SetCollisionLayer(id Object, value int64) {
-	m.settings = append(m.settings, fmt.Sprintf("collision-layer:%d:%d", id, value))
-}
-func (m *backdropProxySpy) SetCollisionMask(id Object, value int64) {
-	m.settings = append(m.settings, fmt.Sprintf("collision-mask:%d:%d", id, value))
-}
-func (m *backdropProxySpy) SetTriggerMask(id Object, value int64) {
-	m.settings = append(m.settings, fmt.Sprintf("trigger-mask:%d:%d", id, value))
-}
-func (m *backdropProxySpy) SetTexture(_ Object, path string)          { m.texture = path }
-func (m *backdropProxySpy) SetRenderScale(_ Object, value mathf.Vec2) { m.scale = value }
 func TestPublicFactoriesInitializeProxyAndUI(t *testing.T) {
 	setupSpriteManagerTest(t)
 	previousState, previousCo, previousPlatform, previousUI, previousPaths := state, gco, gdx.PlatformMgr, gdx.UiMgr, assetPaths
@@ -703,4 +580,152 @@ func TestPublicFactoriesInitializeProxyAndUI(t *testing.T) {
 	if !node.started || node.GetId() != 20 || ui.path != "res://engine/ui/factoryUI.tscn" {
 		t.Fatalf("UI=%#v path=%s", node, ui.path)
 	}
+}
+
+func (s *positionWriteSpy) GetPosition(Object) mathf.Vec2 { return s.position }
+
+func (s *positionWriteSpy) SetPosition(_ Object, position mathf.Vec2) {
+	if s.fail {
+		panic("position write failed")
+	}
+	s.position = position
+	s.writes++
+}
+
+func (s *textureUpdateSpy) SetTexture(id gdx.Object, path string) {
+	s.calls = append(s.calls, textureUpdateCall{method: "texture", id: id, path: path})
+}
+
+func (s *textureUpdateSpy) SetTextureAtlas(id gdx.Object, path string, rect mathf.Rect2) {
+	s.calls = append(s.calls, textureUpdateCall{method: "atlas", id: id, path: path, rect: rect})
+}
+
+func (s *textureUpdateSpy) SetRenderScale(id gdx.Object, scale mathf.Vec2) {
+	s.calls = append(s.calls, textureUpdateCall{method: "scale", id: id, scale: scale})
+}
+
+func (s *positionQuerySpy) BatchRetrievePositions(ids []int64, out []float32) bool {
+	return s.query(ids, out)
+}
+
+func (s *transformBatchSpy) BatchUpdateTransforms(data []float32) {
+	s.batches = append(s.batches, slices.Clone(data))
+}
+
+func (s *factorySprite) OnStart() { s.started = state.sprites[s.GetId()] == s }
+
+func (n *factoryUI) OnStart() { n.started = state.uiNodes[n.GetId()] == n }
+
+func (m *factorySpriteManager) CreateSprite(path string, position mathf.Vec2) Object {
+	m.path, m.position = path, position
+	return 10
+}
+
+func (m *factorySpriteManager) CreateBareSprite(position mathf.Vec2) Object {
+	m.position = position
+	return 11
+}
+
+func (m *factorySpriteManager) CreateBackdrop(path string) Object {
+	m.path = path
+	return 12
+}
+
+func (m *factoryUIManager) CreateNode(path string) Object { m.path = path; return m.result }
+
+func (m *factoryUIManager) BindNode(parent Object, path string) Object {
+	m.parent, m.path = parent, path
+	return m.result
+}
+
+func (m *colliderSpy) SetColliderRect(id Object, center, size mathf.Vec2) {
+	m.calls = append(m.calls, colliderCall{kind: "ColliderRect", id: id, center: center, size: size})
+}
+
+func (m *colliderSpy) SetColliderCapsule(id Object, center, size mathf.Vec2) {
+	m.calls = append(m.calls, colliderCall{kind: "ColliderCapsule", id: id, center: center, size: size})
+}
+
+func (m *colliderSpy) SetColliderCircle(id Object, center mathf.Vec2, radius float64) {
+	m.calls = append(m.calls, colliderCall{kind: "ColliderCircle", id: id, center: center, radius: radius})
+}
+
+func (m *colliderSpy) SetColliderPolygon(id Object, center mathf.Vec2, points gdx.Array) {
+	m.calls = append(m.calls, colliderCall{kind: "ColliderPolygon", id: id, center: center, points: points})
+}
+
+func (m *colliderSpy) SetTriggerRect(id Object, center, size mathf.Vec2) {
+	m.calls = append(m.calls, colliderCall{kind: "TriggerRect", id: id, center: center, size: size})
+}
+
+func (m *colliderSpy) SetTriggerCapsule(id Object, center, size mathf.Vec2) {
+	m.calls = append(m.calls, colliderCall{kind: "TriggerCapsule", id: id, center: center, size: size})
+}
+
+func (m *colliderSpy) SetTriggerCircle(id Object, center mathf.Vec2, radius float64) {
+	m.calls = append(m.calls, colliderCall{kind: "TriggerCircle", id: id, center: center, radius: radius})
+}
+
+func (m *colliderSpy) SetTriggerPolygon(id Object, center mathf.Vec2, points gdx.Array) {
+	m.calls = append(m.calls, colliderCall{kind: "TriggerPolygon", id: id, center: center, points: points})
+}
+
+func (m *colliderSpy) SetCollisionEnabled(id Object, enabled bool) {
+	m.calls = append(m.calls, colliderCall{kind: "CollisionEnabled", id: id, enabled: enabled})
+}
+
+func (m *colliderSpy) SetTriggerEnabled(id Object, enabled bool) {
+	m.calls = append(m.calls, colliderCall{kind: "TriggerEnabled", id: id, enabled: enabled})
+}
+
+func (m *adapterResourceSpy) ReadAllText(path string) string { return m.files[path] }
+
+func (m *adapterResourceSpy) HasFile(path string) bool { _, ok := m.files[path]; return ok }
+
+func (m *adapterResourceSpy) ListDirectories(path string) string { return "directories:" + path }
+
+func (m *adapterResourceSpy) SetDefaultFont(path string) { m.font = path }
+
+func (m *adapterCameraSpy) GetCameraPosition() mathf.Vec2 { return m.position }
+
+func (m *adapterCameraSpy) GetCameraZoom() mathf.Vec2 { return m.zoom }
+
+func (m *adapterCameraSpy) SetCameraPosition(value mathf.Vec2) { m.position = value }
+
+func (m *adapterPlatformSpy) SetDebugMode(value bool) { m.debug = value }
+
+func (m *adapterExtSpy) SetLayerSorterMode(value int64) { m.modes = append(m.modes, value) }
+
+func (m *backdropProxySpy) SetZIndex(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("z:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTriggerLayer(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("trigger-layer:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetCollisionLayer(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("collision-layer:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetCollisionMask(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("collision-mask:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTriggerMask(id Object, value int64) {
+	m.settings = append(m.settings, fmt.Sprintf("trigger-mask:%d:%d", id, value))
+}
+
+func (m *backdropProxySpy) SetTexture(_ Object, path string) { m.texture = path }
+
+func (m *backdropProxySpy) SetRenderScale(_ Object, value mathf.Vec2) { m.scale = value }
+
+func setupSpriteManagerTest(t *testing.T) {
+	t.Helper()
+	previous := gdx.SpriteMgr
+	enginewrap.Init(func(call func()) { call() })
+	t.Cleanup(func() {
+		gdx.SpriteMgr = previous
+		enginewrap.Init(WaitMainThread)
+	})
 }

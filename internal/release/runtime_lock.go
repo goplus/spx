@@ -95,6 +95,35 @@ var (
 	runtimeLocksByVersion = mustLoadRuntimeLocks(embeddedRuntimeLocks, defaultRuntimeLock)
 )
 
+// DefaultRuntimeLock returns a copy of the runtime lock embedded in this package.
+func DefaultRuntimeLock() RuntimeLock {
+	return cloneRuntimeLock(defaultRuntimeLock)
+}
+
+// RuntimeLockForVersion returns the immutable build contract published for an
+// atomic runtime version. Historical snapshots let consumers verify an older
+// manifest after runtime.lock.json advances to a newer release.
+func RuntimeLockForVersion(runtimeVersion string) (RuntimeLock, error) {
+	lock, ok := runtimeLocksByVersion[runtimeVersion]
+	if !ok {
+		return RuntimeLock{}, fmt.Errorf("release: no runtime lock snapshot for version %q", runtimeVersion)
+	}
+	return cloneRuntimeLock(lock), nil
+}
+
+// ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields
+// are rejected so misspelled release inputs cannot silently change a build.
+func ParseRuntimeLock(data []byte) (RuntimeLock, error) {
+	var lock RuntimeLock
+	if err := strictjson.Decode(data, &lock); err != nil {
+		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
+	}
+	if err := lock.Validate(); err != nil {
+		return RuntimeLock{}, err
+	}
+	return lock, nil
+}
+
 // RuntimeReleaseTag returns the Git tag that owns this runtime's atomic
 // release assets. The tag is part of the release convention, so storing it
 // beside RuntimeVersion would create two independently editable identities.
@@ -132,18 +161,16 @@ func (l RuntimeLock) Validate() error {
 	if !slices.IsSorted(l.RequiredAssets) {
 		return errors.New("release: required_assets must be sorted by name")
 	}
-	seenAssets := make(map[string]struct{}, len(l.RequiredAssets))
-	for _, name := range l.RequiredAssets {
+	for i, name := range l.RequiredAssets {
 		if err := validateBaseName("required asset", name); err != nil {
 			return err
 		}
 		if name == l.Manifest {
 			return fmt.Errorf("release: required asset %q conflicts with manifest", name)
 		}
-		if _, ok := seenAssets[name]; ok {
+		if i > 0 && name == l.RequiredAssets[i-1] {
 			return fmt.Errorf("release: duplicate required asset basename %q", name)
 		}
-		seenAssets[name] = struct{}{}
 	}
 
 	if !godotRepositoryPattern.MatchString(l.Godot.Repository) {
@@ -184,35 +211,6 @@ func (l RuntimeLock) SHA256() (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
-}
-
-// DefaultRuntimeLock returns a copy of the runtime lock embedded in this package.
-func DefaultRuntimeLock() RuntimeLock {
-	return cloneRuntimeLock(defaultRuntimeLock)
-}
-
-// RuntimeLockForVersion returns the immutable build contract published for an
-// atomic runtime version. Historical snapshots let consumers verify an older
-// manifest after runtime.lock.json advances to a newer release.
-func RuntimeLockForVersion(runtimeVersion string) (RuntimeLock, error) {
-	lock, ok := runtimeLocksByVersion[runtimeVersion]
-	if !ok {
-		return RuntimeLock{}, fmt.Errorf("release: no runtime lock snapshot for version %q", runtimeVersion)
-	}
-	return cloneRuntimeLock(lock), nil
-}
-
-// ParseRuntimeLock decodes and validates a runtime lock. Unknown JSON fields
-// are rejected so misspelled release inputs cannot silently change a build.
-func ParseRuntimeLock(data []byte) (RuntimeLock, error) {
-	var lock RuntimeLock
-	if err := strictjson.Decode(data, &lock); err != nil {
-		return RuntimeLock{}, fmt.Errorf("decode runtime lock: %w", err)
-	}
-	if err := lock.Validate(); err != nil {
-		return RuntimeLock{}, err
-	}
-	return lock, nil
 }
 
 func mustParseRuntimeLock(data []byte) RuntimeLock {

@@ -28,30 +28,6 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
-func (r CommandRunner) RunCommand(workdir string, name string, args ...string) error {
-	dir := workdir
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(r.RepoRoot, workdir)
-	}
-
-	env, err := buildctlCommandEnv()
-	if err != nil {
-		return fmt.Errorf("resolve command environment: %w", err)
-	}
-	commandName, err := resolveCommandPath(name, env)
-	if err != nil {
-		return fmt.Errorf("resolve command path for %s: %w", name, err)
-	}
-
-	cmd := exec.Command(commandName, args...)
-	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	cmd.Env = EnvMapToSlice(env)
-	return cmd.Run()
-}
-
 // CurrentEnvMap returns a copy of the process environment keyed by name.
 func CurrentEnvMap() map[string]string {
 	env := map[string]string{}
@@ -85,6 +61,78 @@ func PrependToPath(pathValue string, dirs ...string) string {
 	return strings.Join(result, string(os.PathListSeparator))
 }
 
+// PrependEnvPath prepends directories to env's PATH and normalizes its key on Windows.
+func PrependEnvPath(env map[string]string, dirs ...string) {
+	setPathEnv(env, PrependToPath(pathEnvValue(env), dirs...))
+}
+
+func CurrentBuildEnv() (map[string]string, error) {
+	env := CurrentEnvMap()
+	if err := configureCurrentMacOSGoToolchainEnv(env); err != nil {
+		return nil, fmt.Errorf("configure macOS Go toolchain: %w", err)
+	}
+	return env, nil
+}
+
+func EnvMapToSlice(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, key+"="+env[key])
+	}
+	return out
+}
+
+// ResolveCommandPath finds a command using PATH and PATHEXT from env.
+func ResolveCommandPath(name string, env map[string]string) (string, error) {
+	if filepath.IsAbs(name) || strings.ContainsRune(name, filepath.Separator) {
+		return name, nil
+	}
+	extensions := append([]string{""}, executableExtensions(env)...)
+	for _, dir := range filepath.SplitList(pathEnvValue(env)) {
+		if dir == "" {
+			continue
+		}
+		base := filepath.Join(dir, name)
+		for _, ext := range extensions {
+			candidate := base + ext
+			info, err := os.Stat(candidate)
+			if err == nil && isCommandFile(info) {
+				return candidate, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("%s not found in PATH", name)
+}
+
+func (r CommandRunner) RunCommand(workdir string, name string, args ...string) error {
+	dir := workdir
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(r.RepoRoot, workdir)
+	}
+
+	env, err := buildctlCommandEnv()
+	if err != nil {
+		return fmt.Errorf("resolve command environment: %w", err)
+	}
+	commandName, err := ResolveCommandPath(name, env)
+	if err != nil {
+		return fmt.Errorf("resolve command path for %s: %w", name, err)
+	}
+
+	cmd := exec.Command(commandName, args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = EnvMapToSlice(env)
+	return cmd.Run()
+}
+
 func buildctlCommandEnv() (map[string]string, error) {
 	env, err := CurrentBuildEnv()
 	if err != nil {
@@ -99,41 +147,9 @@ func buildctlCommandEnv() (map[string]string, error) {
 	if goRoot := runtime.GOROOT(); goRoot != "" {
 		pathDirs = append(pathDirs, filepath.Join(goRoot, "bin"))
 	}
-	setPathEnv(env, PrependToPath(pathEnvValue(env), pathDirs...))
+	PrependEnvPath(env, pathDirs...)
 	env["GOTOOLCHAIN"] = "go" + release.DefaultRuntimeLock().Toolchain.Go
 	return env, nil
-}
-
-func CurrentBuildEnv() (map[string]string, error) {
-	env := CurrentEnvMap()
-	if err := configureCurrentMacOSGoToolchainEnv(env); err != nil {
-		return nil, fmt.Errorf("configure macOS Go toolchain: %w", err)
-	}
-	return env, nil
-}
-
-func resolveCommandPath(name string, env map[string]string) (string, error) {
-	if filepath.IsAbs(name) || strings.ContainsRune(name, filepath.Separator) {
-		return name, nil
-	}
-	for _, dir := range filepath.SplitList(pathEnvValue(env)) {
-		if dir == "" {
-			continue
-		}
-		candidate := filepath.Join(dir, name)
-		info, err := os.Stat(candidate)
-		if err == nil && isCommandFile(info) {
-			return candidate, nil
-		}
-		for _, ext := range executableExtensions(env) {
-			candidateWithExt := candidate + ext
-			info, err := os.Stat(candidateWithExt)
-			if err == nil && isCommandFile(info) {
-				return candidateWithExt, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("%s not found in PATH", name)
 }
 
 func isCommandFile(info os.FileInfo) bool {
@@ -155,13 +171,7 @@ func executableExtensions(env map[string]string) []string {
 		return nil
 	}
 	pathExt := envValue(env, "PATHEXT")
-	if pathExt == "" {
-		return []string{".com", ".exe", ".bat", ".cmd"}
-	}
 	parts := filepath.SplitList(strings.ToLower(pathExt))
-	if len(parts) == 0 {
-		return []string{".com", ".exe", ".bat", ".cmd"}
-	}
 	exts := make([]string, 0, len(parts))
 	for _, ext := range parts {
 		if ext == "" {
@@ -200,17 +210,4 @@ func setPathEnv(env map[string]string, value string) {
 		}
 	}
 	env["PATH"] = value
-}
-
-func EnvMapToSlice(env map[string]string) []string {
-	keys := make([]string, 0, len(env))
-	for key := range env {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	out := make([]string, 0, len(keys))
-	for _, key := range keys {
-		out = append(out, key+"="+env[key])
-	}
-	return out
 }

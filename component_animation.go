@@ -409,20 +409,6 @@ func (a *animationComponent) doTween(name SpriteAnimationName, base *coreproject
 	completed = true
 }
 
-func prepareTweenParams(params tweenParams) (tweenParams, bool) {
-	duration := params.duration
-	if duration <= 0 {
-		spxlog.Warn("Invalid animation duration: %v", duration)
-		return tweenParams{}, false
-	}
-
-	if params.aniType == coreproject.AniTypeMove {
-		params.moveVelocity = params.moveTo.Sub(params.moveFrom).Mulf(1 / duration)
-	}
-
-	return params, true
-}
-
 func (a *animationComponent) applyTweenStep(info *animState, percent float64, params *tweenParams) {
 	switch params.aniType {
 	case coreproject.AniTypeMove:
@@ -490,4 +476,18 @@ func (a *animationComponent) syncSpriteForPlayback() *engine.Sprite {
 		return nil
 	}
 	return a.sprite.runtimeState.SyncSprite
+}
+
+func prepareTweenParams(params tweenParams) (tweenParams, bool) {
+	duration := params.duration
+	if duration <= 0 {
+		spxlog.Warn("Invalid animation duration: %v", duration)
+		return tweenParams{}, false
+	}
+
+	if params.aniType == coreproject.AniTypeMove {
+		params.moveVelocity = params.moveTo.Sub(params.moveFrom).Mulf(1 / duration)
+	}
+
+	return params, true
 }

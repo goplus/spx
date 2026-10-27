@@ -49,20 +49,6 @@ func (sc *spriteComponents) initComponents(sprite *SpriteImpl, spriteCfg *corepr
 	sc.sound = &soundComponent{sprite: sprite}
 }
 
-// cloneComponents creates independent eager components for a cloned sprite.
-// Bubble state is intentionally omitted and remains lazy.
-func cloneComponents(source *SpriteImpl, newSprite *SpriteImpl) spriteComponents {
-	// Pen and sound inherit the original instance's current state across generations.
-	original := source.originalSprite()
-	return spriteComponents{
-		transform: source.components.transform.cloneFor(newSprite),
-		animation: source.components.animation.cloneFor(newSprite),
-		physics:   source.components.physics.cloneFor(newSprite),
-		pen:       original.components.pen.cloneFor(newSprite),
-		sound:     original.components.sound.cloneFor(newSprite),
-	}
-}
-
 // destroyComponents destroys all sprite components.
 func (sc *spriteComponents) destroyComponents() {
 	if sc.animation != nil {
@@ -76,5 +62,19 @@ func (sc *spriteComponents) destroyComponents() {
 	}
 	if sc.bubble != nil {
 		sc.bubble.onDestroy()
+	}
+}
+
+// cloneComponents creates independent eager components for a cloned sprite.
+// Bubble state is intentionally omitted and remains lazy.
+func cloneComponents(source *SpriteImpl, newSprite *SpriteImpl) spriteComponents {
+	// Pen and sound inherit the original instance's current state across generations.
+	original := source.originalSprite()
+	return spriteComponents{
+		transform: source.components.transform.cloneFor(newSprite),
+		animation: source.components.animation.cloneFor(newSprite),
+		physics:   source.components.physics.cloneFor(newSprite),
+		pen:       original.components.pen.cloneFor(newSprite),
+		sound:     original.components.sound.cloneFor(newSprite),
 	}
 }

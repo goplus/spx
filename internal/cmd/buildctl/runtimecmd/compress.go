@@ -90,40 +90,57 @@ func ensureBrotliAvailable() error {
 }
 
 func installBrotliLinux() error {
-	switch {
-	case shared.FileExists("/etc/os-release"):
+	var osRelease string
+	if shared.FileExists("/etc/os-release") {
 		content, err := os.ReadFile("/etc/os-release")
 		if err != nil {
 			return err
 		}
-		lower := strings.ToLower(string(content))
-		switch {
-		case strings.Contains(lower, "id=ubuntu"), strings.Contains(lower, "id=debian"):
-			if err := shared.RunStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
-				return err
-			}
-			return shared.RunStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
-		case strings.Contains(lower, "id=fedora"), strings.Contains(lower, "id=rhel"), strings.Contains(lower, "id=centos"):
-			if _, err := exec.LookPath("dnf"); err == nil {
-				return shared.RunStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
-			}
-			return shared.RunStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
-		}
+		osRelease = string(content)
 	}
-
-	if _, err := exec.LookPath("apt-get"); err == nil {
-		if err := shared.RunStreamingCommand("", "sudo", "apt-get", "update"); err != nil {
+	available := make(map[string]bool)
+	for _, name := range []string{"apt-get", "dnf", "yum"} {
+		_, err := exec.LookPath(name)
+		available[name] = err == nil
+	}
+	commands, err := brotliLinuxInstallCommands(osRelease, available)
+	if err != nil {
+		return err
+	}
+	for _, command := range commands {
+		if err := shared.RunStreamingCommand("", "sudo", command...); err != nil {
 			return err
 		}
-		return shared.RunStreamingCommand("", "sudo", "apt-get", "install", "-y", "brotli")
 	}
-	if _, err := exec.LookPath("dnf"); err == nil {
-		return shared.RunStreamingCommand("", "sudo", "dnf", "install", "-y", "brotli")
+	return nil
+}
+
+func brotliLinuxInstallCommands(osRelease string, available map[string]bool) ([][]string, error) {
+	lower := strings.ToLower(osRelease)
+	var manager string
+	switch {
+	case strings.Contains(lower, "id=ubuntu"), strings.Contains(lower, "id=debian"):
+		manager = "apt-get"
+	case strings.Contains(lower, "id=fedora"), strings.Contains(lower, "id=rhel"), strings.Contains(lower, "id=centos"):
+		manager = "yum"
+		if available["dnf"] {
+			manager = "dnf"
+		}
+	default:
+		for _, name := range []string{"apt-get", "dnf", "yum"} {
+			if available[name] {
+				manager = name
+				break
+			}
+		}
 	}
-	if _, err := exec.LookPath("yum"); err == nil {
-		return shared.RunStreamingCommand("", "sudo", "yum", "install", "-y", "brotli")
+	if manager == "" {
+		return nil, fmt.Errorf("unable to install brotli automatically on linux: no supported package manager found")
 	}
-	return fmt.Errorf("unable to install brotli automatically on linux: no supported package manager found")
+	if manager == "apt-get" {
+		return [][]string{{manager, "update"}, {manager, "install", "-y", "brotli"}}, nil
+	}
+	return [][]string{{manager, "install", "-y", "brotli"}}, nil
 }
 
 func compressWithBrotli(inputFile, outputFile string) error {

@@ -39,7 +39,40 @@ type engineStartTestGame struct {
 	mainCalls int
 }
 
-func (g *engineStartTestGame) MainEntry() { g.mainCalls++ }
+type captureFlushTestShape struct {
+	updates int
+}
+
+type captureFlushSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	batches [][]float32
+}
+
+type replayPauseTestExtMgr struct {
+	pauses int
+}
+
+type debugPanelUiMgr struct {
+	pkgengine.IUiMgr
+	text      string
+	destroyed []pkgengine.Object
+}
+
+// The backend advances independently of the Go sprite, as Godot physics does.
+type frameSyncSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	positions map[int64]mathf.Vec2
+	batches   [][]float32
+}
+
+type frameUpdateFunc func(float64)
+
+type frameMonitorWaitGame struct {
+	*Game
+	wait                       func()
+	thread                     coroutine.Thread
+	started, completed, active int
+}
 
 func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 	for _, reset := range []bool{false, true} {
@@ -84,60 +117,6 @@ func TestOnEngineStartSchedulesBootstrapOnce(t *testing.T) {
 			}
 		})
 	}
-}
-
-type captureFlushTestShape struct {
-	updates int
-}
-
-func (s *captureFlushTestShape) onUpdate(float64) {
-	s.updates++
-}
-
-type captureFlushSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
-	batches [][]float32
-}
-
-func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.SpriteMgr
-	mgr := &captureFlushSpriteMgr{}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = original })
-	return mgr
-}
-
-type replayPauseTestExtMgr struct {
-	pauses int
-}
-
-func (*replayPauseTestExtMgr) RequestExit(int64)        {}
-func (*replayPauseTestExtMgr) RequestReset(int64)       {}
-func (*replayPauseTestExtMgr) RequestRestart()          {}
-func (*replayPauseTestExtMgr) OnRuntimePanic(string)    {}
-func (m *replayPauseTestExtMgr) Pause()                 { m.pauses++ }
-func (*replayPauseTestExtMgr) Resume()                  {}
-func (*replayPauseTestExtMgr) IsPaused() bool           { return false }
-func (*replayPauseTestExtMgr) NextFrame()               {}
-func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
-
-func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
-	m.batches = append(m.batches, append([]float32(nil), buffer...))
-}
-
-type debugPanelUiMgr struct {
-	pkgengine.IUiMgr
-	text      string
-	destroyed []pkgengine.Object
-}
-
-func (m *debugPanelUiMgr) SetText(_ pkgengine.Object, text string) { m.text = text }
-func (*debugPanelUiMgr) SetScale(pkgengine.Object, mathf.Vec2)     {}
-func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
-	m.destroyed = append(m.destroyed, id)
-	return m.IUiMgr.DestroyNode(id)
 }
 
 func TestDebugPanelShowsLatestCoroutineStats(t *testing.T) {
@@ -351,39 +330,6 @@ func TestScheduleStartEventRejectsUnreadyAndDuplicateDispatch(t *testing.T) {
 	}
 }
 
-// The backend advances independently of the Go sprite, as Godot physics does.
-type frameSyncSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
-	positions map[int64]mathf.Vec2
-	batches   [][]float32
-}
-
-func (m *frameSyncSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
-	for i, id := range ids {
-		pos := m.positions[id]
-		out[i*2], out[i*2+1] = float32(pos.X), float32(pos.Y)
-	}
-	return true
-}
-
-func (m *frameSyncSpriteMgr) SetPosition(id pkgengine.Object, pos mathf.Vec2) {
-	m.positions[int64(id)] = pos
-}
-
-func (*frameSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
-
-func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
-	m.batches = append(m.batches, append([]float32(nil), data...))
-	for i := 0; i < int(data[0]); i++ {
-		at := 2 + i*engine.SyncFieldsPerSprite
-		m.positions[int64(data[at])] = mathf.NewVec2(float64(data[at+1]), float64(data[at+2]))
-	}
-}
-
-type frameUpdateFunc func(float64)
-
-func (update frameUpdateFunc) onUpdate(delta float64) { update(delta) }
-
 func TestFrameSyncUpdatesCustomShapesAndMonitors(t *testing.T) {
 	_, game := setupRuntimeEventGame(t)
 	calls, delta := 0, 0.0
@@ -395,42 +341,6 @@ func TestFrameSyncUpdatesCustomShapesAndMonitors(t *testing.T) {
 	if calls != 1 || delta != itime.DeltaTime() || panel.value.Text != "42" || monitor.isDirty {
 		t.Fatalf("shape update calls=%d delta=%v monitor=%+v", calls, delta, panel)
 	}
-}
-
-func setupFrameSyncGame(t *testing.T) (*coroutine.Coroutines, *Game, *frameSyncSpriteMgr) {
-	t.Helper()
-	co, game, _ := setupInputSourceTest(t)
-	original := pkgengine.SpriteMgr
-	mgr := &frameSyncSpriteMgr{positions: make(map[int64]mathf.Vec2)}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() { pkgengine.SpriteMgr = original })
-	game.initShapeMgr()
-	game.camera = &cameraImpl{g: game}
-	game.syncBuffer = engine.NewSpriteSyncBuffer(2)
-	game.lifecycleState.IsRunned.Store(true)
-	game.lifecycleState.StartDispatched.Store(true)
-	return co, game, mgr
-}
-
-func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
-	sprite := &newCloneAwakeOrderSprite(game, name).SpriteImpl
-	sprite.runtimeState.SyncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
-	sprite.runtimeState.SyncSprite.SetId(id)
-	sprite.runtimeState.IsCostumeDirty = false
-	sprite.spriteState.IsVisible = true
-	sprite.physics().physicsMode = DynamicPhysics
-	sprite.markProxyDirty()
-	game.shapeMgr.add(sprite)
-	return sprite
-}
-
-func runFrameSyncGame(co *coroutine.Coroutines, game *Game) {
-	const delta = 1.0 / 60
-	game.OnEngineBeforeUpdate(delta)
-	itime.Update(delta, 60)
-	game.OnEngineUpdate(delta)
-	co.Update()
-	game.OnEngineRender(delta)
 }
 
 func TestFrameSyncReadsPhysicsBeforeConditionsAndPreservesVisualEdits(t *testing.T) {
@@ -530,30 +440,6 @@ func TestFrameSyncShapeCallbacksCanBroadcastBeforeCommit(t *testing.T) {
 	}
 }
 
-// A failed frame must release the host before fixture cleanup restores globals.
-func runFrameSyncCall(t *testing.T, co *coroutine.Coroutines, call func()) {
-	t.Helper()
-	done := make(chan any, 1)
-	go func() {
-		defer func() { done <- recover() }()
-		call()
-	}()
-	select {
-	case recovered := <-done:
-		if recovered != nil {
-			t.Fatalf("frame panicked: %v", recovered)
-		}
-	case <-time.After(time.Second):
-		co.StopAll()
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("frame did not exit after stopping its scripts")
-		}
-		t.Fatal("frame waited for a future-frame continuation")
-	}
-}
-
 func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -622,37 +508,6 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			}
 		})
 	}
-}
-
-type frameMonitorWaitGame struct {
-	*Game
-	wait                       func()
-	thread                     coroutine.Thread
-	started, completed, active int
-}
-
-func (g *frameMonitorWaitGame) Value() float64 {
-	g.thread = currentScriptThread()
-	g.started++
-	g.active++
-	defer func() { g.active-- }()
-	g.wait()
-	g.completed++
-	return 42
-}
-
-func addFrameSyncMonitor(t *testing.T, getter *frameMonitorWaitGame) (*Monitor, *monitorPanelSpy) {
-	t.Helper()
-	panel := &monitorPanelSpy{}
-	monitor := &Monitor{
-		visible: true, isDirty: true, panel: panel,
-		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
-	}
-	if monitor.eval == nil {
-		t.Fatal("lowercase monitor property did not bind the Value getter")
-	}
-	getter.shapeMgr.add(monitor)
-	return monitor, panel
 }
 
 func TestFrameSyncMonitorWaitSkipsBusyAndCleansStoppedGetter(t *testing.T) {
@@ -912,4 +767,159 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 	mgr.positions[1] = mathf.NewVec2(50, 60)
 	runFrameSyncGame(co, game)
 	requirePosition(t, sprite, 50, 60)
+}
+
+func (g *engineStartTestGame) MainEntry() { g.mainCalls++ }
+
+func (s *captureFlushTestShape) onUpdate(float64) {
+	s.updates++
+}
+
+func (*replayPauseTestExtMgr) RequestExit(int64) {}
+
+func (*replayPauseTestExtMgr) RequestReset(int64) {}
+
+func (*replayPauseTestExtMgr) RequestRestart() {}
+
+func (*replayPauseTestExtMgr) OnRuntimePanic(string) {}
+
+func (m *replayPauseTestExtMgr) Pause() { m.pauses++ }
+
+func (*replayPauseTestExtMgr) Resume() {}
+
+func (*replayPauseTestExtMgr) IsPaused() bool { return false }
+
+func (*replayPauseTestExtMgr) NextFrame() {}
+
+func (*replayPauseTestExtMgr) SetLayerSorterMode(int64) {}
+
+func (m *captureFlushSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	m.batches = append(m.batches, append([]float32(nil), buffer...))
+}
+
+func (m *debugPanelUiMgr) SetText(_ pkgengine.Object, text string) { m.text = text }
+
+func (*debugPanelUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (m *debugPanelUiMgr) DestroyNode(id pkgengine.Object) bool {
+	m.destroyed = append(m.destroyed, id)
+	return m.IUiMgr.DestroyNode(id)
+}
+
+func (m *frameSyncSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
+	for i, id := range ids {
+		pos := m.positions[id]
+		out[i*2], out[i*2+1] = float32(pos.X), float32(pos.Y)
+	}
+	return true
+}
+
+func (m *frameSyncSpriteMgr) SetPosition(id pkgengine.Object, pos mathf.Vec2) {
+	m.positions[int64(id)] = pos
+}
+
+func (*frameSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
+
+func (m *frameSyncSpriteMgr) BatchUpdateTransforms(data []float32) {
+	m.batches = append(m.batches, append([]float32(nil), data...))
+	for i := 0; i < int(data[0]); i++ {
+		at := 2 + i*engine.SyncFieldsPerSprite
+		m.positions[int64(data[at])] = mathf.NewVec2(float64(data[at+1]), float64(data[at+2]))
+	}
+}
+
+func (f frameUpdateFunc) onUpdate(delta float64) { f(delta) }
+
+func (g *frameMonitorWaitGame) Value() float64 {
+	g.thread = currentScriptThread()
+	g.started++
+	g.active++
+	defer func() { g.active-- }()
+	g.wait()
+	g.completed++
+	return 42
+}
+
+func setupCaptureFlushSpriteMgr(t *testing.T) *captureFlushSpriteMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.SpriteMgr
+	mgr := &captureFlushSpriteMgr{}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	return mgr
+}
+
+func setupFrameSyncGame(t *testing.T) (*coroutine.Coroutines, *Game, *frameSyncSpriteMgr) {
+	t.Helper()
+	co, game, _ := setupInputSourceTest(t)
+	original := pkgengine.SpriteMgr
+	mgr := &frameSyncSpriteMgr{positions: make(map[int64]mathf.Vec2)}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() { pkgengine.SpriteMgr = original })
+	game.initShapeMgr()
+	game.camera = &cameraImpl{g: game}
+	game.syncBuffer = engine.NewSpriteSyncBuffer(2)
+	game.lifecycleState.IsRunned.Store(true)
+	game.lifecycleState.StartDispatched.Store(true)
+	return co, game, mgr
+}
+
+func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
+	sprite := &newCloneAwakeOrderSprite(game, name).SpriteImpl
+	sprite.runtimeState.SyncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
+	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.runtimeState.IsCostumeDirty = false
+	sprite.spriteState.IsVisible = true
+	sprite.physics().physicsMode = DynamicPhysics
+	sprite.markProxyDirty()
+	game.shapeMgr.add(sprite)
+	return sprite
+}
+
+func runFrameSyncGame(co *coroutine.Coroutines, game *Game) {
+	const delta = 1.0 / 60
+	game.OnEngineBeforeUpdate(delta)
+	itime.Update(delta, 60)
+	game.OnEngineUpdate(delta)
+	co.Update()
+	game.OnEngineRender(delta)
+}
+
+// A failed frame must release the host before fixture cleanup restores globals.
+func runFrameSyncCall(t *testing.T, co *coroutine.Coroutines, call func()) {
+	t.Helper()
+	done := make(chan any, 1)
+	go func() {
+		defer func() { done <- recover() }()
+		call()
+	}()
+	select {
+	case recovered := <-done:
+		if recovered != nil {
+			t.Fatalf("frame panicked: %v", recovered)
+		}
+	case <-time.After(time.Second):
+		co.StopAll()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("frame did not exit after stopping its scripts")
+		}
+		t.Fatal("frame waited for a future-frame continuation")
+	}
+}
+
+func addFrameSyncMonitor(t *testing.T, getter *frameMonitorWaitGame) (*Monitor, *monitorPanelSpy) {
+	t.Helper()
+	panel := &monitorPanelSpy{}
+	monitor := &Monitor{
+		visible: true, isDirty: true, panel: panel,
+		eval: buildMonitorEval(reflect.ValueOf(getter).Elem(), 1, "value", ui.MonitorAppearanceDefault),
+	}
+	if monitor.eval == nil {
+		t.Fatal("lowercase monitor property did not bind the Value getter")
+	}
+	getter.shapeMgr.add(monitor)
+	return monitor, panel
 }

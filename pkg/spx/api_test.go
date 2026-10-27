@@ -15,6 +15,17 @@ import (
 	"github.com/visualfc/gid"
 )
 
+type apiInvocation struct {
+	ctx    context.Context
+	owner  any
+	thread coroutine.Thread
+}
+
+type apiGate struct {
+	channel <-chan struct{}
+	open    func()
+}
+
 func TestGoWithActiveGame(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -335,12 +346,6 @@ func TestWaitUsesLogicalFrames(t *testing.T) {
 	joinAPIThread(t, co, thread, false)
 }
 
-type apiInvocation struct {
-	ctx    context.Context
-	owner  any
-	thread coroutine.Thread
-}
-
 func captureAPIInvocation(co *coroutine.Coroutines, ctx context.Context, owner any) apiInvocation {
 	var thread coroutine.Thread
 	if IsInCoroutine() {
@@ -363,11 +368,6 @@ func newAPICoroutines(t *testing.T, game any) *coroutine.Coroutines {
 		engine.SetGame(previousGame)
 	})
 	return co
-}
-
-type apiGate struct {
-	channel <-chan struct{}
-	open    func()
 }
 
 func apiReleaseGate(t *testing.T, finished ...<-chan struct{}) apiGate {

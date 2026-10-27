@@ -21,13 +21,27 @@ import (
 	"crypto/sha256"
 	"errors"
 	"hash"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 )
+
+type failingAssetHash struct {
+	hash.Hash
+	writes, failAt int
+	err            error
+}
+
+type failingAssetFS struct {
+	err error
+}
 
 func TestPrepareReturnsFalseWhenAssetMissing(t *testing.T) {
 	for _, names := range [][]string{nil, {""}, {"missing-runtime-asset"}, {"placeholder.txt", "missing"}} {
@@ -94,6 +108,50 @@ func TestExtractAssetReusesValidCache(t *testing.T) {
 	}
 }
 
+func TestExtractAssetReplacesSymlinkWithoutChangingTarget(t *testing.T) {
+	const name = "placeholder.txt"
+	want, err := embeddedAssets.ReadFile(assetPath(name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name    string
+		content []byte
+	}{
+		{name: "matching content", content: want},
+		{name: "different content", content: bytes.Repeat([]byte{0}, len(want))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			target := filepath.Join(t.TempDir(), "external")
+			if err := os.WriteFile(target, test.content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Stat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cacheDir := t.TempDir()
+			cachedPath := filepath.Join(cacheDir, name)
+			if err := os.Symlink(target, cachedPath); err != nil {
+				t.Skipf("symlink unavailable: %v", err)
+			}
+			if err := extractAsset(cacheDir, name); err != nil {
+				t.Fatal(err)
+			}
+			if info, err := os.Lstat(cachedPath); err != nil || !info.Mode().IsRegular() {
+				t.Errorf("extracted cache must be a regular file: %v, %v", info, err)
+			}
+			assertEmbeddedContent(t, cachedPath)
+			if after, err := os.Stat(target); err != nil || !os.SameFile(before, after) || after.Mode().Perm() != before.Mode().Perm() {
+				t.Errorf("external target identity or permissions changed: before=%v after=%v err=%v", before, after, err)
+			}
+			if got, err := os.ReadFile(target); err != nil || !bytes.Equal(got, test.content) {
+				t.Errorf("external target content = %q, %v; want %q", got, err, test.content)
+			}
+		})
+	}
+}
+
 func TestExtractAssetReportsCacheRepairFailure(t *testing.T) {
 	cacheDir := t.TempDir()
 	cachedPath := filepath.Join(cacheDir, "placeholder.txt")
@@ -114,21 +172,6 @@ func TestExtractAssetReportsCacheRepairFailure(t *testing.T) {
 	leftovers, err := filepath.Glob(cachedPath + ".tmp-*")
 	if err != nil || len(leftovers) != 0 {
 		t.Fatalf("temporary cache files remain: %v, error: %v", leftovers, err)
-	}
-}
-
-func assertEmbeddedContent(t *testing.T, path string) {
-	t.Helper()
-	want, err := embeddedAssets.ReadFile(assetPath("placeholder.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("file %s = %q, want %q", path, got, want)
 	}
 }
 
@@ -179,19 +222,6 @@ func TestDefaultCacheBaseDirFallsBackWithoutUserCache(t *testing.T) {
 	}
 }
 
-func setCacheEnvironment(t *testing.T, dir string) {
-	t.Helper()
-	switch runtime.GOOS {
-	case "windows":
-		t.Setenv("LocalAppData", dir)
-	case "darwin", "ios":
-		t.Setenv("HOME", dir)
-	default:
-		t.Setenv("XDG_CACHE_HOME", dir)
-		t.Setenv("HOME", dir)
-	}
-}
-
 func TestAssetModes(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -204,20 +234,6 @@ func TestAssetModes(t *testing.T) {
 			t.Errorf("mode(%q)=%o, want %o", tt.name, got, tt.want)
 		}
 	}
-}
-
-type failingAssetHash struct {
-	hash.Hash
-	writes, failAt int
-	err            error
-}
-
-func (h *failingAssetHash) Write(p []byte) (int, error) {
-	h.writes++
-	if h.writes == h.failAt {
-		return 0, h.err
-	}
-	return h.Hash.Write(p)
 }
 
 func TestAssetHashIncludesNameAndPropagatesWriteFailures(t *testing.T) {
@@ -289,5 +305,167 @@ func TestExtractAssetRejectsMissingSourceAndInvalidCache(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	if err := extractAsset(dir, "placeholder.txt"); err == nil || !strings.Contains(err.Error(), "create extracted runtime asset") {
 		t.Fatalf("unwritable cache error=%v", err)
+	}
+}
+
+func TestManifestCacheKeyRequiresExactOrderedAssetSet(t *testing.T) {
+	const valid = `{"cache_key":"release-content-id","names":["engine","engine.pck"]}`
+	for _, tt := range []struct {
+		name     string
+		manifest string
+		names    []string
+		wantKey  string
+		wantErr  bool
+	}{
+		{name: "complete bundle", manifest: valid, names: []string{"engine", "engine.pck"}, wantKey: "release-content-id"},
+		{name: "missing manifest", names: []string{"engine", "engine.pck"}},
+		{name: "empty cache key", manifest: `{"names":["engine","engine.pck"]}`, names: []string{"engine", "engine.pck"}},
+		{name: "subset", manifest: valid, names: []string{"engine"}},
+		{name: "superset", manifest: valid, names: []string{"engine", "engine.pck", "bridge"}},
+		{name: "same size different names", manifest: valid, names: []string{"engine", "other.pck"}},
+		{name: "reordered assets", manifest: valid, names: []string{"engine.pck", "engine"}},
+		{name: "malformed manifest", manifest: `{"cache_key":`, names: []string{"engine"}, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assets := fstest.MapFS{}
+			if tt.manifest != "" {
+				assets[assetPath(manifestFileName)] = &fstest.MapFile{Data: []byte(tt.manifest)}
+			}
+			before := append([]string(nil), tt.names...)
+			key, found, err := manifestCacheKeyFromFS(assets, tt.names)
+			if (err != nil) != tt.wantErr || key != tt.wantKey || found != (tt.wantKey != "") {
+				t.Fatalf("manifest cache key = %q, %v, %v; want %q, error=%v", key, found, err, tt.wantKey, tt.wantErr)
+			}
+			if !reflect.DeepEqual(tt.names, before) {
+				t.Fatalf("asset request changed: %v, want %v", tt.names, before)
+			}
+		})
+	}
+	if key, found, err := manifestCacheKeyFromFS(failingAssetFS{err: fs.ErrPermission}, []string{"engine"}); key != "" || found || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("unreadable manifest = %q, %v, %v; want permission error without fallback", key, found, err)
+	}
+}
+
+func TestPrepareConcurrentRequestsShareCompleteCache(t *testing.T) {
+	setCacheEnvironment(t, t.TempDir())
+	const workers = 8
+	type result struct {
+		dir     string
+		ok      bool
+		err     error
+		content []byte
+	}
+	want, err := embeddedAssets.ReadFile(assetPath("placeholder.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan result, workers)
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for range workers {
+		group.Go(func() {
+			<-start
+			dir, ok, err := Prepare("concurrent-version", "placeholder.txt")
+			var content []byte
+			if err == nil && ok {
+				content, err = os.ReadFile(filepath.Join(dir, "placeholder.txt"))
+			}
+			results <- result{dir: dir, ok: ok, err: err, content: content}
+		})
+	}
+	close(start)
+	group.Wait()
+	close(results)
+	var directory string
+	for got := range results {
+		if got.err != nil || !got.ok || got.dir == "" {
+			t.Fatalf("Prepare = %q, %v, %v", got.dir, got.ok, got.err)
+		}
+		if directory == "" {
+			directory = got.dir
+		} else if got.dir != directory {
+			t.Fatalf("cache directories differ: %q and %q", directory, got.dir)
+		}
+		if !bytes.Equal(got.content, want) {
+			t.Fatalf("Prepare exposed incomplete cached content: %q, want %q", got.content, want)
+		}
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "placeholder.txt" {
+		t.Fatalf("cache publication left unexpected files: %v, %v", entries, err)
+	}
+}
+
+func TestExtractAssetPreservesUnreadableCache(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions and an unprivileged user")
+	}
+	directory := t.TempDir()
+	name := "placeholder.txt"
+	if err := extractAsset(directory, name); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(directory, name)
+	before, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(target, 0o644) })
+	if err := extractAsset(directory, name); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("unreadable cache = %v, want permission error", err)
+	}
+	after, err := os.Stat(target)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("unreadable cached asset was replaced: %v, %v", after, err)
+	}
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	assertEmbeddedContent(t, target)
+	if entries, err := os.ReadDir(directory); err != nil || len(entries) != 1 {
+		t.Fatalf("failed cache verification left temporary files: %v, %v", entries, err)
+	}
+}
+
+func (h *failingAssetHash) Write(p []byte) (int, error) {
+	h.writes++
+	if h.writes == h.failAt {
+		return 0, h.err
+	}
+	return h.Hash.Write(p)
+}
+
+func (f failingAssetFS) Open(name string) (fs.File, error) {
+	return nil, &fs.PathError{Op: "open", Path: name, Err: f.err}
+}
+
+func assertEmbeddedContent(t *testing.T, path string) {
+	t.Helper()
+	want, err := embeddedAssets.ReadFile(assetPath("placeholder.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("file %s = %q, want %q", path, got, want)
+	}
+}
+
+func setCacheEnvironment(t *testing.T, dir string) {
+	t.Helper()
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("LocalAppData", dir)
+	case "darwin", "ios":
+		t.Setenv("HOME", dir)
+	default:
+		t.Setenv("XDG_CACHE_HOME", dir)
+		t.Setenv("HOME", dir)
 	}
 }

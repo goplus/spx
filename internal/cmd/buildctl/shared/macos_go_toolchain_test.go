@@ -18,6 +18,7 @@ package shared
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -377,6 +378,10 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS" >> "$OUTPUT_PATH"
 	t.Setenv("CC", filepath.Join(root, "missing-clang"))
 	t.Setenv("CXX", filepath.Join(root, "missing-clang++"))
 	t.Setenv("CGO_CFLAGS", "-O2 -isysroot "+staleSDK)
+	for _, name := range []string{"CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
+		t.Setenv(name, "")
+	}
+	before := CurrentEnvMap()
 
 	runner := CommandRunner{RepoRoot: root}
 	if err := runner.RunCommand(".", "capture-go-env"); err != nil {
@@ -385,6 +390,9 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS" >> "$OUTPUT_PATH"
 	output, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if after := CurrentEnvMap(); !maps.Equal(after, before) {
+		t.Fatal("running a child changed the process environment")
 	}
 	values := parseKeyValueLines(t, string(output))
 	for key, want := range map[string]string{
@@ -399,33 +407,120 @@ printf 'CGO_CFLAGS=%s\n' "$CGO_CFLAGS" >> "$OUTPUT_PATH"
 	}
 }
 
-func macOSGoToolchainScriptPath(t *testing.T) string {
-	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate macos_go_toolchain_test.go")
+func TestConfigureCurrentMacOSGoToolchainEnv(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS toolchain environment transaction")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../cmd/internal/macos_go_toolchain.sh"))
-}
+	if err := configureCurrentMacOSGoToolchainEnv(nil); err == nil || !strings.Contains(err.Error(), "must not be nil") {
+		t.Fatalf("nil environment error = %v", err)
+	}
 
-func writeExecutable(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
-		t.Fatal(err)
+	type testCase struct {
+		name, failure, malformed, wantError string
+		valid                               bool
 	}
-}
-
-func parseKeyValueLines(t *testing.T, output string) map[string]string {
-	t.Helper()
-	values := make(map[string]string)
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			t.Fatalf("invalid key/value output line %q", line)
-		}
-		values[key] = value
+	tests := []testCase{
+		{name: "repairs stale SDK and compilers"},
+		{name: "preserves valid inputs without xcrun", valid: true},
+		{name: "SDK lookup failure", failure: "sdk", wantError: "resolve macOS SDK"},
+		{name: "invalid SDK path", failure: "invalid-sdk", wantError: "invalid macOS SDK"},
+		{name: "C compiler lookup failure", failure: "clang", wantError: "resolve macOS C compiler"},
+		{name: "C++ compiler lookup failure", failure: "clang++", wantError: "resolve macOS C++ compiler"},
 	}
-	return values
+	for _, variable := range macOSCGOFlagVariables {
+		tests = append(tests, testCase{name: "malformed " + variable, malformed: variable, wantError: "normalize " + variable})
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			bin := filepath.Join(root, "bin")
+			sdk := filepath.Join(root, "MacOSX.sdk")
+			stale := filepath.Join(root, "Missing.sdk")
+			for _, directory := range []string{bin, sdk} {
+				if err := os.MkdirAll(directory, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			clang, clangXX := filepath.Join(bin, "clang"), filepath.Join(bin, "clang++")
+			writeExecutable(t, clang, "#!/bin/sh\nexit 0\n")
+			writeExecutable(t, clangXX, "#!/bin/sh\nexit 0\n")
+			log := filepath.Join(root, "xcrun.log")
+			writeExecutable(t, filepath.Join(bin, "xcrun"), `#!/bin/sh
+[ "${SDKROOT+x}" != x ] || exit 90
+printf '%s\n' "$*" >> "$XCRUN_LOG"
+case "$*" in
+  "--sdk macosx --show-sdk-path")
+    [ "$FAIL_STEP" != sdk ] || { printf 'SDK lookup failed\n' >&2; exit 7; }
+    if [ "$FAIL_STEP" = invalid-sdk ]; then printf 'relative.sdk\n'; else printf '%s\n' "$FAKE_SDK"; fi ;;
+  "--sdk macosx --find clang")
+    [ "$FAIL_STEP" != clang ] || exit 7
+    printf '%s\n' "$FAKE_CLANG" ;;
+  "--sdk macosx --find clang++")
+    [ "$FAIL_STEP" != clang++ ] || exit 7
+    printf '%s\n' "$FAKE_CLANGXX" ;;
+  *) exit 91 ;;
+esac
+`)
+			env := map[string]string{
+				"PATH": bin, "SDKROOT": stale,
+				"CC": filepath.Join(root, "missing-clang"), "CXX": filepath.Join(root, "missing-clang++"),
+				"CGO_CFLAGS": "-O2 -isysroot " + stale, "CGO_CPPFLAGS": "-I" + stale + "/usr/include",
+				"CGO_CXXFLAGS": "-std=c++17", "CGO_LDFLAGS": "-Wl,-syslibroot," + stale,
+				"FAKE_SDK": sdk, "FAKE_CLANG": clang, "FAKE_CLANGXX": clangXX,
+				"XCRUN_LOG": log, "FAIL_STEP": tt.failure, "EXTRA": "kept=value",
+			}
+			if tt.valid {
+				env["SDKROOT"], env["CC"], env["CXX"] = sdk, clang, clangXX
+				env["CGO_CFLAGS"], env["CGO_CPPFLAGS"] = "-O2 -isysroot "+sdk, ""
+				delete(env, "CGO_CXXFLAGS")
+				env["CGO_LDFLAGS"] = "-Wl,-syslibroot," + sdk
+			}
+			if tt.malformed != "" {
+				env[tt.malformed] = "'unterminated"
+			}
+			before := maps.Clone(env)
+			err := configureCurrentMacOSGoToolchainEnv(env)
+			if tt.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("configure environment = %v, want %q", err, tt.wantError)
+				}
+				if !maps.Equal(env, before) {
+					t.Fatalf("failed configuration changed caller environment: before=%v, after=%v", before, env)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := maps.Clone(before)
+				if !tt.valid {
+					want["SDKROOT"], want["CC"], want["CXX"] = sdk, clang, clangXX
+					want["CGO_CFLAGS"] = "-O2 -isysroot " + sdk
+					want["CGO_CPPFLAGS"] = "-I" + sdk + "/usr/include"
+					want["CGO_LDFLAGS"] = "-Wl,-syslibroot," + sdk
+				}
+				if !maps.Equal(env, want) {
+					t.Fatalf("configured environment = %v, want %v", env, want)
+				}
+			}
+			calls, readErr := os.ReadFile(log)
+			if tt.valid {
+				if !errors.Is(readErr, os.ErrNotExist) {
+					t.Fatalf("valid inputs unexpectedly invoked xcrun: %q, %v", calls, readErr)
+				}
+				return
+			}
+			wantCalls := "--sdk macosx --show-sdk-path\n"
+			if tt.failure != "sdk" && tt.failure != "invalid-sdk" {
+				wantCalls += "--sdk macosx --find clang\n"
+				if tt.failure != "clang" {
+					wantCalls += "--sdk macosx --find clang++\n"
+				}
+			}
+			if readErr != nil || string(calls) != wantCalls {
+				t.Fatalf("xcrun calls = %q, %v; want %q", calls, readErr, wantCalls)
+			}
+		})
+	}
 }
 
 func TestResolveMacOSXcrunPath(t *testing.T) {
@@ -557,4 +652,33 @@ func TestNormalizeMacOSCGOFlags(t *testing.T) {
 	if got, ok := normalizeAttachedSysroot("--sysroot", sdk); ok || got != "" {
 		t.Fatalf("bare sysroot flag treated as attached: %q, %v", got, ok)
 	}
+}
+
+func macOSGoToolchainScriptPath(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate macos_go_toolchain_test.go")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../cmd/internal/macos_go_toolchain.sh"))
+}
+
+func writeExecutable(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func parseKeyValueLines(t *testing.T, output string) map[string]string {
+	t.Helper()
+	values := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			t.Fatalf("invalid key/value output line %q", line)
+		}
+		values[key] = value
+	}
+	return values
 }

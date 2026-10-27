@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -177,6 +178,32 @@ func TestLauncherGraphVerifier(t *testing.T) {
 	if err := verifier.verify(context.Background()); err == nil || !strings.Contains(err.Error(), "module input changed") {
 		t.Fatalf("metadata change error = %v", err)
 	}
+	t.Run("alternate modfile", func(t *testing.T) {
+		alternate := filepath.Join(root, "alternate.mod")
+		content := moduleText("v1.0.0")
+		writeCommandTestFile(t, alternate, content)
+		canonical, err := canonicalFile(alternate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, verifier, err := resolveLauncherGraph(context.Background(), launcherGraphQuery{
+			goCommand: goCommand, workDir: root, goWork: "off", env: env,
+			graphFlags: []string{"-mod=mod", "-modfile=" + canonical}, files: []string{goMod, metadata},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(verifier.files(), canonical) {
+			t.Fatalf("alternate modfile absent from graph inputs: %v", verifier.files())
+		}
+		if err := verifier.verify(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		writeCommandTestFile(t, alternate, content+"// changed without changing module selection\n")
+		if err := verifier.verify(context.Background()); err == nil || !strings.Contains(err.Error(), "module input changed") {
+			t.Fatalf("alternate modfile change error = %v", err)
+		}
+	})
 }
 
 func TestLauncherGraphVerifierVendorMetadata(t *testing.T) {

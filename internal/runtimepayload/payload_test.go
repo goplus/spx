@@ -47,67 +47,40 @@ type testPayload struct {
 	Files []testFile
 }
 
-func buildPayload(config testPayload) ([]byte, string, string, error) {
-	cfg, sources := fileSources(config)
-	var output bytes.Buffer
-	payloadDigest, manifestDigest, err := BuildTo(&output, cfg, sources)
-	if err != nil {
-		return nil, "", "", err
-	}
-	return output.Bytes(), payloadDigest, manifestDigest, nil
+var errWriteFailure = errors.New("test writer failure")
+
+type failingWriter struct {
+	remaining int
 }
 
-func newTestPayload(t *testing.T) ([]byte, string, string) {
-	t.Helper()
-	payload, payloadDigest, manifestDigest, err := buildPayload(testBuildConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return payload, payloadDigest, manifestDigest
+type changingReaderAt struct {
+	mu        sync.Mutex
+	first     []byte
+	second    []byte
+	completed bool
+	changed   bool
 }
 
-func componentBundleBytes(data []byte, namespace runtimebundle.Namespace) (runtimebundle.Bundle, error) {
-	return ComponentBundleReaderAt(bytes.NewReader(data), int64(len(data)), namespace)
+type patternReaderAt struct {
+	mu      sync.Mutex
+	size    int64
+	read    int64
+	maxRead int
 }
 
-func verifiedComponentZIP(verified *Verified, prefix string) ([]byte, error) {
-	var output bytes.Buffer
-	err := verified.WriteComponentZIP(prefix, &output)
-	return output.Bytes(), err
+type countingReaderAt struct {
+	mu      sync.Mutex
+	reader  io.ReaderAt
+	read    int64
+	maxRead int
 }
 
-func verifiedProjectZIP(t *testing.T, verified *Verified) []byte {
-	t.Helper()
-	var output bytes.Buffer
-	if err := verified.WriteProjectZIP(&output); err != nil {
-		t.Fatal(err)
-	}
-	return output.Bytes()
-}
+type payloadReaderAtFunc func([]byte, int64) (int, error)
 
-func canonicalComponentZIP(files []testFile) ([]byte, error) {
-	files = append([]testFile(nil), files...)
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
-	var output bytes.Buffer
-	writer := zip.NewWriter(&output)
-	for _, file := range files {
-		header := &zip.FileHeader{Name: file.Name, Method: zip.Store}
-		header.SetMode(canonicalFileMode(file.Mode))
-		header.Modified = canonicalTime.UTC()
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			_ = writer.Close()
-			return nil, err
-		}
-		if _, err := entry.Write(file.Data); err != nil {
-			_ = writer.Close()
-			return nil, err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return nil, err
-	}
-	return output.Bytes(), nil
+type payloadCloseErrorReader struct {
+	io.Reader
+	err    error
+	closes int
 }
 
 func TestBuildToMatchesBuildBytes(t *testing.T) {
@@ -469,264 +442,6 @@ func TestBuildRejectsInvalidLayoutInputs(t *testing.T) {
 	}
 }
 
-var errWriteFailure = errors.New("test writer failure")
-
-type failingWriter struct {
-	remaining int
-}
-
-func (w *failingWriter) Write(data []byte) (int, error) {
-	if w.remaining <= 0 {
-		return 0, errWriteFailure
-	}
-	if len(data) > w.remaining {
-		written := w.remaining
-		w.remaining = 0
-		return written, errWriteFailure
-	}
-	w.remaining -= len(data)
-	return len(data), nil
-}
-
-type changingReaderAt struct {
-	mu        sync.Mutex
-	first     []byte
-	second    []byte
-	completed bool
-	changed   bool
-}
-
-func (r *changingReaderAt) ReadAt(data []byte, offset int64) (int, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if offset == 0 && r.completed {
-		r.changed = true
-	}
-	source := r.first
-	if r.changed {
-		source = r.second
-	}
-	if offset >= int64(len(source)) {
-		return 0, io.EOF
-	}
-	count := copy(data, source[offset:])
-	if offset+int64(count) == int64(len(source)) {
-		r.completed = true
-	}
-	if count != len(data) {
-		return count, io.EOF
-	}
-	return count, nil
-}
-
-type patternReaderAt struct {
-	mu      sync.Mutex
-	size    int64
-	read    int64
-	maxRead int
-}
-
-func (r *patternReaderAt) ReadAt(data []byte, offset int64) (int, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(data) > r.maxRead {
-		r.maxRead = len(data)
-	}
-	if offset >= r.size {
-		return 0, io.EOF
-	}
-	count := len(data)
-	if remaining := r.size - offset; int64(count) > remaining {
-		count = int(remaining)
-	}
-	for i := 0; i < count; i++ {
-		data[i] = byte((offset + int64(i)) % 251)
-	}
-	r.read += int64(count)
-	if count != len(data) {
-		return count, io.EOF
-	}
-	return count, nil
-}
-
-func (r *patternReaderAt) resetCounts() {
-	r.mu.Lock()
-	r.read = 0
-	r.maxRead = 0
-	r.mu.Unlock()
-}
-
-func (r *patternReaderAt) counts() (int64, int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.read, r.maxRead
-}
-
-type countingReaderAt struct {
-	mu      sync.Mutex
-	reader  io.ReaderAt
-	read    int64
-	maxRead int
-}
-
-func (r *countingReaderAt) ReadAt(data []byte, offset int64) (int, error) {
-	count, err := r.reader.ReadAt(data, offset)
-	r.mu.Lock()
-	r.read += int64(count)
-	if len(data) > r.maxRead {
-		r.maxRead = len(data)
-	}
-	r.mu.Unlock()
-	return count, err
-}
-
-func (r *countingReaderAt) counts() (int64, int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.read, r.maxRead
-}
-
-func fileSources(config testPayload) (BuildConfig, []FileSource) {
-	sources := make([]FileSource, len(config.Files))
-	for i, file := range config.Files {
-		sources[i] = FileSource{
-			Name: file.Name, Mode: file.Mode,
-			ReaderAt: bytes.NewReader(file.Data), Size: int64(len(file.Data)),
-		}
-	}
-	return config.BuildConfig, sources
-}
-
-func componentSources(sources []FileSource, prefix string) []FileSource {
-	var component []FileSource
-	for _, source := range sources {
-		if strings.HasPrefix(source.Name, prefix) {
-			source.Name = strings.TrimPrefix(source.Name, prefix)
-			component = append(component, source)
-		}
-	}
-	return component
-}
-
-func configFileData(t *testing.T, config testPayload, name string) []byte {
-	t.Helper()
-	for _, file := range config.Files {
-		if file.Name == name {
-			return file.Data
-		}
-	}
-	t.Fatalf("missing test config file %q", name)
-	return nil
-}
-
-func testBuildConfig(t *testing.T) testPayload {
-	t.Helper()
-	engineFiles := []testFile{
-		{Name: "runtime-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
-		{Name: "engine", Mode: 0o755, Data: []byte("engine")},
-		{Name: "engine.pck", Mode: 0o644, Data: []byte("pack")},
-	}
-	bridgeFiles := []testFile{
-		{Name: "bridge-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-bridge/v1"}`)},
-		{Name: "bridge.so", Mode: 0o755, Data: []byte("bridge")},
-	}
-	projectZIP, err := canonicalComponentZIP([]testFile{
-		{Name: "main.spx", Mode: 0o644, Data: []byte("onStart => {}")},
-		{Name: "assets/index.json", Mode: 0o644, Data: []byte(`{"zorder":[]}`)},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	engineZIP, err := canonicalComponentZIP(engineFiles)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bridgeZIP, err := canonicalComponentZIP(bridgeFiles)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine, err := componentBundleBytes(engineZIP, runtimebundle.NamespaceEngine)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bridge, err := componentBundleBytes(bridgeZIP, runtimebundle.NamespaceBridge)
-	if err != nil {
-		t.Fatal(err)
-	}
-	project, err := componentBundleBytes(projectZIP, runtimebundle.NamespaceProject)
-	if err != nil {
-		t.Fatal(err)
-	}
-	projectSum := sha256.Sum256(projectZIP)
-	interfaceSum := sha256.Sum256([]byte("interface"))
-	return testPayload{
-		BuildConfig: BuildConfig{
-			SPX:    SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", EffectivePath: "github.com/goplus/spx/v4", SourceMode: true},
-			Target: Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
-			Engine: Engine{
-				RuntimeVersion: "test", RuntimeABI: 1, EngineInterfaceDigest: hex.EncodeToString(interfaceSum[:]),
-				Executable: "engine", Pack: "engine.pck", BundleDigest: engine.Digest,
-			},
-			Bridge: Bridge{File: "bridge.so", BundleDigest: bridge.Digest},
-			Project: Project{
-				PackDirectory: "assets", BundleDigest: project.Digest, ArchiveSHA256: hex.EncodeToString(projectSum[:]),
-			},
-		},
-		Files: []testFile{
-			{Name: "engine/runtime-manifest.json", Mode: 0o644, Data: engineFiles[0].Data},
-			{Name: "engine/engine", Mode: 0o755, Data: engineFiles[1].Data},
-			{Name: "engine/engine.pck", Mode: 0o644, Data: engineFiles[2].Data},
-			{Name: "bridge/bridge-manifest.json", Mode: 0o644, Data: bridgeFiles[0].Data},
-			{Name: "bridge/bridge.so", Mode: 0o755, Data: bridgeFiles[1].Data},
-			{Name: ProjectZipPath, Mode: 0o644, Data: projectZIP},
-		},
-	}
-}
-
-func rewritePayload(t *testing.T, payload []byte, mutate func(*Manifest, []testFile)) ([]byte, string, string) {
-	t.Helper()
-	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var files []testFile
-	var manifest Manifest
-	for _, file := range reader.File {
-		input, err := file.Open()
-		if err != nil {
-			t.Fatal(err)
-		}
-		data, readErr := io.ReadAll(input)
-		closeErr := input.Close()
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		if closeErr != nil {
-			t.Fatal(closeErr)
-		}
-		if file.Name == ManifestPath {
-			if err := json.Unmarshal(data, &manifest); err != nil {
-				t.Fatal(err)
-			}
-			continue
-		}
-		files = append(files, testFile{Name: file.Name, Mode: file.Mode(), Data: data})
-	}
-	mutate(&manifest, files)
-	manifestData, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	files = append(files, testFile{Name: ManifestPath, Mode: 0o644, Data: manifestData})
-	archive, err := canonicalComponentZIP(files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payloadSum := sha256.Sum256(archive)
-	manifestSum := sha256.Sum256(manifestData)
-	return archive, hex.EncodeToString(payloadSum[:]), hex.EncodeToString(manifestSum[:])
-}
-
 func TestBuildRejectsInvalidIdentityAndSourcesBeforeWriting(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -1042,10 +757,6 @@ func TestBuildToPropagatesFailuresDuringZIPWriting(t *testing.T) {
 	}
 }
 
-type payloadReaderAtFunc func([]byte, int64) (int, error)
-
-func (f payloadReaderAtFunc) ReadAt(data []byte, offset int64) (int, error) { return f(data, offset) }
-
 func TestSourceReadsPropagateErrorsAndRejectTruncation(t *testing.T) {
 	readErr := errors.New("source read failure")
 	failed := payloadReaderAtFunc(func([]byte, int64) (int, error) { return 0, readErr })
@@ -1086,14 +797,6 @@ func TestVerifyDetectsSourceChangeOnFinalDigestPass(t *testing.T) {
 		t.Fatalf("VerifyReaderAt = %v, %v; full reads=%d", result, err, fullReads)
 	}
 }
-
-type payloadCloseErrorReader struct {
-	io.Reader
-	err    error
-	closes int
-}
-
-func (r *payloadCloseErrorReader) Close() error { r.closes++; return r.err }
 
 func TestZipEntryReadsPreserveOpenReadAndCloseErrors(t *testing.T) {
 	data, err := canonicalComponentZIP([]testFile{{Name: "entry", Data: []byte("payload")}})
@@ -1224,4 +927,301 @@ func TestVerifiedWritersDetectBackingSourceCorruption(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (w *failingWriter) Write(data []byte) (int, error) {
+	if w.remaining <= 0 {
+		return 0, errWriteFailure
+	}
+	if len(data) > w.remaining {
+		written := w.remaining
+		w.remaining = 0
+		return written, errWriteFailure
+	}
+	w.remaining -= len(data)
+	return len(data), nil
+}
+
+func (r *changingReaderAt) ReadAt(data []byte, offset int64) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if offset == 0 && r.completed {
+		r.changed = true
+	}
+	source := r.first
+	if r.changed {
+		source = r.second
+	}
+	if offset >= int64(len(source)) {
+		return 0, io.EOF
+	}
+	count := copy(data, source[offset:])
+	if offset+int64(count) == int64(len(source)) {
+		r.completed = true
+	}
+	if count != len(data) {
+		return count, io.EOF
+	}
+	return count, nil
+}
+
+func (r *patternReaderAt) ReadAt(data []byte, offset int64) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(data) > r.maxRead {
+		r.maxRead = len(data)
+	}
+	if offset >= r.size {
+		return 0, io.EOF
+	}
+	count := len(data)
+	if remaining := r.size - offset; int64(count) > remaining {
+		count = int(remaining)
+	}
+	for i := 0; i < count; i++ {
+		data[i] = byte((offset + int64(i)) % 251)
+	}
+	r.read += int64(count)
+	if count != len(data) {
+		return count, io.EOF
+	}
+	return count, nil
+}
+
+func (r *patternReaderAt) resetCounts() {
+	r.mu.Lock()
+	r.read = 0
+	r.maxRead = 0
+	r.mu.Unlock()
+}
+
+func (r *patternReaderAt) counts() (int64, int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.read, r.maxRead
+}
+
+func (r *countingReaderAt) ReadAt(data []byte, offset int64) (int, error) {
+	count, err := r.reader.ReadAt(data, offset)
+	r.mu.Lock()
+	r.read += int64(count)
+	if len(data) > r.maxRead {
+		r.maxRead = len(data)
+	}
+	r.mu.Unlock()
+	return count, err
+}
+
+func (r *countingReaderAt) counts() (int64, int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.read, r.maxRead
+}
+
+func (f payloadReaderAtFunc) ReadAt(data []byte, offset int64) (int, error) { return f(data, offset) }
+
+func (r *payloadCloseErrorReader) Close() error { r.closes++; return r.err }
+
+func buildPayload(config testPayload) ([]byte, string, string, error) {
+	cfg, sources := fileSources(config)
+	var output bytes.Buffer
+	payloadDigest, manifestDigest, err := BuildTo(&output, cfg, sources)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return output.Bytes(), payloadDigest, manifestDigest, nil
+}
+
+func newTestPayload(t *testing.T) ([]byte, string, string) {
+	t.Helper()
+	payload, payloadDigest, manifestDigest, err := buildPayload(testBuildConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload, payloadDigest, manifestDigest
+}
+
+func componentBundleBytes(data []byte, namespace runtimebundle.Namespace) (runtimebundle.Bundle, error) {
+	return ComponentBundleReaderAt(bytes.NewReader(data), int64(len(data)), namespace)
+}
+
+func verifiedComponentZIP(verified *Verified, prefix string) ([]byte, error) {
+	var output bytes.Buffer
+	err := verified.WriteComponentZIP(prefix, &output)
+	return output.Bytes(), err
+}
+
+func verifiedProjectZIP(t *testing.T, verified *Verified) []byte {
+	t.Helper()
+	var output bytes.Buffer
+	if err := verified.WriteProjectZIP(&output); err != nil {
+		t.Fatal(err)
+	}
+	return output.Bytes()
+}
+
+func canonicalComponentZIP(files []testFile) ([]byte, error) {
+	files = append([]testFile(nil), files...)
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+	var output bytes.Buffer
+	writer := zip.NewWriter(&output)
+	for _, file := range files {
+		header := &zip.FileHeader{Name: file.Name, Method: zip.Store}
+		header.SetMode(canonicalFileMode(file.Mode))
+		header.Modified = canonicalTime.UTC()
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = writer.Close()
+			return nil, err
+		}
+		if _, err := entry.Write(file.Data); err != nil {
+			_ = writer.Close()
+			return nil, err
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func fileSources(config testPayload) (BuildConfig, []FileSource) {
+	sources := make([]FileSource, len(config.Files))
+	for i, file := range config.Files {
+		sources[i] = FileSource{
+			Name: file.Name, Mode: file.Mode,
+			ReaderAt: bytes.NewReader(file.Data), Size: int64(len(file.Data)),
+		}
+	}
+	return config.BuildConfig, sources
+}
+
+func componentSources(sources []FileSource, prefix string) []FileSource {
+	var component []FileSource
+	for _, source := range sources {
+		if strings.HasPrefix(source.Name, prefix) {
+			source.Name = strings.TrimPrefix(source.Name, prefix)
+			component = append(component, source)
+		}
+	}
+	return component
+}
+
+func configFileData(t *testing.T, config testPayload, name string) []byte {
+	t.Helper()
+	for _, file := range config.Files {
+		if file.Name == name {
+			return file.Data
+		}
+	}
+	t.Fatalf("missing test config file %q", name)
+	return nil
+}
+
+func testBuildConfig(t *testing.T) testPayload {
+	t.Helper()
+	engineFiles := []testFile{
+		{Name: "runtime-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-engine/v1"}`)},
+		{Name: "engine", Mode: 0o755, Data: []byte("engine")},
+		{Name: "engine.pck", Mode: 0o644, Data: []byte("pack")},
+	}
+	bridgeFiles := []testFile{
+		{Name: "bridge-manifest.json", Mode: 0o644, Data: []byte(`{"schema":"test-bridge/v1"}`)},
+		{Name: "bridge.so", Mode: 0o755, Data: []byte("bridge")},
+	}
+	projectZIP, err := canonicalComponentZIP([]testFile{
+		{Name: "main.spx", Mode: 0o644, Data: []byte("onStart => {}")},
+		{Name: "assets/index.json", Mode: 0o644, Data: []byte(`{"zorder":[]}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engineZIP, err := canonicalComponentZIP(engineFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridgeZIP, err := canonicalComponentZIP(bridgeFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := componentBundleBytes(engineZIP, runtimebundle.NamespaceEngine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridge, err := componentBundleBytes(bridgeZIP, runtimebundle.NamespaceBridge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	project, err := componentBundleBytes(projectZIP, runtimebundle.NamespaceProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectSum := sha256.Sum256(projectZIP)
+	interfaceSum := sha256.Sum256([]byte("interface"))
+	return testPayload{
+		BuildConfig: BuildConfig{
+			SPX:    SourceIdentity{SelectedPath: "github.com/goplus/spx/v4", EffectivePath: "github.com/goplus/spx/v4", SourceMode: true},
+			Target: Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH},
+			Engine: Engine{
+				RuntimeVersion: "test", RuntimeABI: 1, EngineInterfaceDigest: hex.EncodeToString(interfaceSum[:]),
+				Executable: "engine", Pack: "engine.pck", BundleDigest: engine.Digest,
+			},
+			Bridge: Bridge{File: "bridge.so", BundleDigest: bridge.Digest},
+			Project: Project{
+				PackDirectory: "assets", BundleDigest: project.Digest, ArchiveSHA256: hex.EncodeToString(projectSum[:]),
+			},
+		},
+		Files: []testFile{
+			{Name: "engine/runtime-manifest.json", Mode: 0o644, Data: engineFiles[0].Data},
+			{Name: "engine/engine", Mode: 0o755, Data: engineFiles[1].Data},
+			{Name: "engine/engine.pck", Mode: 0o644, Data: engineFiles[2].Data},
+			{Name: "bridge/bridge-manifest.json", Mode: 0o644, Data: bridgeFiles[0].Data},
+			{Name: "bridge/bridge.so", Mode: 0o755, Data: bridgeFiles[1].Data},
+			{Name: ProjectZipPath, Mode: 0o644, Data: projectZIP},
+		},
+	}
+}
+
+func rewritePayload(t *testing.T, payload []byte, mutate func(*Manifest, []testFile)) ([]byte, string, string) {
+	t.Helper()
+	reader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []testFile
+	var manifest Manifest
+	for _, file := range reader.File {
+		input, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, readErr := io.ReadAll(input)
+		closeErr := input.Close()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
+		if file.Name == ManifestPath {
+			if err := json.Unmarshal(data, &manifest); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		files = append(files, testFile{Name: file.Name, Mode: file.Mode(), Data: data})
+	}
+	mutate(&manifest, files)
+	manifestData, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, testFile{Name: ManifestPath, Mode: 0o644, Data: manifestData})
+	archive, err := canonicalComponentZIP(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payloadSum := sha256.Sum256(archive)
+	manifestSum := sha256.Sum256(manifestData)
+	return archive, hex.EncodeToString(payloadSum[:]), hex.EncodeToString(manifestSum[:])
 }

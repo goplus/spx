@@ -276,14 +276,14 @@ func resolveJDKShellEnvironment() (map[string]string, error) {
 	env := shared.CurrentEnvMap()
 	for _, binDir := range candidateJDKBinDirs() {
 		if shared.DirExists(binDir) {
-			env["PATH"] = shared.PrependToPath(env["PATH"], binDir)
+			shared.PrependEnvPath(env, binDir)
 			break
 		}
 	}
 
 	if javaHome, err := resolveJavaHome(env); err == nil && javaHome != "" {
 		env["JAVA_HOME"] = javaHome
-		env["PATH"] = shared.PrependToPath(env["PATH"], filepath.Join(javaHome, "bin"))
+		shared.PrependEnvPath(env, filepath.Join(javaHome, "bin"))
 	}
 	return env, nil
 }
@@ -321,7 +321,15 @@ func candidateJDKBinDirs() []string {
 }
 
 func detectJavaMajorVersion(env map[string]string) (int, bool) {
-	output, err := shared.RunCommandOutputWithEnv("", shared.EnvMapToSlice(env), "java", "-version")
+	javaPath, err := shared.ResolveCommandPath("java", env)
+	if err != nil {
+		return 0, false
+	}
+	javaPath, err = filepath.Abs(javaPath)
+	if err != nil {
+		return 0, false
+	}
+	output, err := shared.RunCommandOutputWithEnv("", shared.EnvMapToSlice(env), javaPath, "-version")
 	if err != nil {
 		return 0, false
 	}

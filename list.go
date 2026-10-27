@@ -53,6 +53,20 @@ type List struct {
 	data []obj
 }
 
+// NewValue creates a new Value initialized with the given object.
+func NewValue(o obj) Value {
+	return Value{data: fromObj(o)}
+}
+
+// NewList creates a new List initialized with the given elements.
+func NewList(l ...obj) List {
+	data := make([]obj, len(l))
+	for i, v := range l {
+		data[i] = fromObj(v)
+	}
+	return List{data: data}
+}
+
 func (p Value) Equal(v obj) bool {
 	return Equal(p.data, v)
 }
@@ -189,20 +203,6 @@ func (p *List) IndexOf(v obj) Pos {
 // Clear removes all elements from the list.
 func (p *List) Clear() {
 	p.data = p.data[:0]
-}
-
-// NewValue creates a new Value initialized with the given object.
-func NewValue(o obj) Value {
-	return Value{data: fromObj(o)}
-}
-
-// NewList creates a new List initialized with the given elements.
-func NewList(l ...obj) List {
-	data := make([]obj, len(l))
-	for i, v := range l {
-		data[i] = fromObj(v)
-	}
-	return List{data: data}
 }
 
 func toString(v obj) string {

@@ -31,29 +31,6 @@ type SPXModule struct {
 	profile sconsProfile
 }
 
-// Source returns the validated host path to the module.
-func (module SPXModule) Source() string {
-	return module.source
-}
-
-// EditorBuildArgs composes module-owned flags, editor axes, and the resolved
-// custom_modules path without mutating the parsed profile.
-func (module SPXModule) EditorBuildArgs(buildArgs ...string) []string {
-	return composeSConsBuildArgs(module.source, buildArgs, module.profile.Common, module.profile.EditorRelease)
-}
-
-// TemplateBuildArgs composes module-owned flags, template axes, and the
-// resolved custom_modules path without mutating the parsed profile.
-func (module SPXModule) TemplateBuildArgs(buildArgs ...string) []string {
-	return module.TemplateBuildArgsAt(module.source, buildArgs...)
-}
-
-// TemplateBuildArgsAt composes template arguments for an alternate mounted
-// module path, such as the path visible inside a build container.
-func (module SPXModule) TemplateBuildArgsAt(moduleSource string, buildArgs ...string) []string {
-	return composeSConsBuildArgs(moduleSource, buildArgs, module.profile.Common, module.profile.TemplateRelease)
-}
-
 // ResolveSPXModule resolves SPX_MODULE_SRC once and validates the external
 // module build contract at that location.
 func ResolveSPXModule(repoRoot string) (SPXModule, error) {
@@ -95,4 +72,27 @@ func LoadSPXModule(source string) (SPXModule, error) {
 		return SPXModule{}, err
 	}
 	return SPXModule{source: source, profile: profile}, nil
+}
+
+// Source returns the validated host path to the module.
+func (m SPXModule) Source() string {
+	return m.source
+}
+
+// EditorBuildArgs composes module-owned flags, editor axes, and the resolved
+// custom_modules path without mutating the parsed profile.
+func (m SPXModule) EditorBuildArgs(buildArgs ...string) []string {
+	return composeSConsBuildArgs(m.source, buildArgs, m.profile.Common, m.profile.EditorRelease)
+}
+
+// TemplateBuildArgs composes module-owned flags, template axes, and the
+// resolved custom_modules path without mutating the parsed profile.
+func (m SPXModule) TemplateBuildArgs(buildArgs ...string) []string {
+	return m.TemplateBuildArgsAt(m.source, buildArgs...)
+}
+
+// TemplateBuildArgsAt composes template arguments for an alternate mounted
+// module path, such as the path visible inside a build container.
+func (m SPXModule) TemplateBuildArgsAt(moduleSource string, buildArgs ...string) []string {
+	return composeSConsBuildArgs(moduleSource, buildArgs, m.profile.Common, m.profile.TemplateRelease)
 }

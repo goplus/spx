@@ -64,17 +64,6 @@ type launcherGraphVerifier struct {
 	expected launcherGraphIdentity
 }
 
-func resolveLauncherGraph(ctx context.Context, query launcherGraphQuery) (listedModule, launcherGraphVerifier, error) {
-	query.graphFlags = append([]string(nil), query.graphFlags...)
-	query.env = append([]string(nil), query.env...)
-	query.files = append([]string(nil), query.files...)
-	identity, module, err := snapshotLauncherGraph(ctx, query)
-	if err != nil {
-		return listedModule{}, launcherGraphVerifier{}, err
-	}
-	return module, launcherGraphVerifier{query: query, expected: identity}, nil
-}
-
 func (v launcherGraphVerifier) verify(ctx context.Context) error {
 	current, _, err := snapshotLauncherGraph(ctx, v.query)
 	if err != nil {
@@ -95,6 +84,17 @@ func (v launcherGraphVerifier) files() []string {
 		files[i] = file.path
 	}
 	return files
+}
+
+func resolveLauncherGraph(ctx context.Context, query launcherGraphQuery) (listedModule, launcherGraphVerifier, error) {
+	query.graphFlags = append([]string(nil), query.graphFlags...)
+	query.env = append([]string(nil), query.env...)
+	query.files = append([]string(nil), query.files...)
+	identity, module, err := snapshotLauncherGraph(ctx, query)
+	if err != nil {
+		return listedModule{}, launcherGraphVerifier{}, err
+	}
+	return module, launcherGraphVerifier{query: query, expected: identity}, nil
 }
 
 func snapshotLauncherGraph(ctx context.Context, query launcherGraphQuery) (launcherGraphIdentity, listedModule, error) {

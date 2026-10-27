@@ -32,36 +32,9 @@ import (
 	"github.com/goplus/spx/v4/fs/asset"
 )
 
-// Lifecycle tests own the package singleton and release every interpreter they
-// build. None may run in parallel with another interpreter lifecycle test.
-func isolateInterpreter(t *testing.T) {
-	t.Helper()
-	mu.Lock()
-	previousCtx, previousInterp, previousDone, previousOptimize := ixgoCtx, ixgoInterp, runDone, optimizeSSA
-	ixgoCtx, ixgoInterp, runDone, optimizeSSA = nil, nil, nil, false
-	mu.Unlock()
-	t.Cleanup(func() {
-		mu.Lock()
-		defer mu.Unlock()
-		if runDone != nil {
-			t.Error("test left an interpreter running")
-		}
-		if ixgoInterp != nil {
-			ixgoInterp.UnsafeRelease()
-		}
-		ixgoCtx, ixgoInterp, runDone, optimizeSSA = previousCtx, previousInterp, previousDone, previousOptimize
-		spxfs.RegisterSchema("", asset.Open)
-	})
-}
-
-func requireInterpreterPanic(t *testing.T, want string, fn func()) {
-	t.Helper()
-	defer func() {
-		if got := recover(); got != want {
-			t.Errorf("panic = %v, want %q", got, want)
-		}
-	}()
-	fn()
+type interpreterImportFailure struct {
+	types.Importer
+	err error
 }
 
 func TestInterpreterInit(t *testing.T) {
@@ -148,18 +121,6 @@ func TestInterpreterBuildMissingFunctionBody(t *testing.T) {
 	if ixgoInterp != nil {
 		t.Fatal("failed Build published an interpreter")
 	}
-}
-
-type interpreterImportFailure struct {
-	types.Importer
-	err error
-}
-
-func (i interpreterImportFailure) Import(path string) (*types.Package, error) {
-	if path == "fmt" {
-		return nil, i.err
-	}
-	return i.Importer.Import(path)
 }
 
 func TestInterpreterBuildLoadError(t *testing.T) {
@@ -325,4 +286,43 @@ onCond score >= 3, => {
 	if !strings.Contains(string(source), ".OnCond(func() bool") {
 		t.Fatalf("onCond condition was not compiled as a closure:\n%s", source)
 	}
+}
+
+func (i interpreterImportFailure) Import(path string) (*types.Package, error) {
+	if path == "fmt" {
+		return nil, i.err
+	}
+	return i.Importer.Import(path)
+}
+
+// Lifecycle tests own the package singleton and release every interpreter they
+// build. None may run in parallel with another interpreter lifecycle test.
+func isolateInterpreter(t *testing.T) {
+	t.Helper()
+	mu.Lock()
+	previousCtx, previousInterp, previousDone, previousOptimize := ixgoCtx, ixgoInterp, runDone, optimizeSSA
+	ixgoCtx, ixgoInterp, runDone, optimizeSSA = nil, nil, nil, false
+	mu.Unlock()
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if runDone != nil {
+			t.Error("test left an interpreter running")
+		}
+		if ixgoInterp != nil {
+			ixgoInterp.UnsafeRelease()
+		}
+		ixgoCtx, ixgoInterp, runDone, optimizeSSA = previousCtx, previousInterp, previousDone, previousOptimize
+		spxfs.RegisterSchema("", asset.Open)
+	})
+}
+
+func requireInterpreterPanic(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		if got := recover(); got != want {
+			t.Errorf("panic = %v, want %q", got, want)
+		}
+	}()
+	fn()
 }

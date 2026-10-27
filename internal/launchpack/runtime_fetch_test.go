@@ -31,6 +31,18 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
+type errorWriter struct{ err error }
+
+type shortWriteWriter struct{}
+
+type runtimeRoundTripper func(*http.Request) (*http.Response, error)
+
+type failingRuntimeResponse struct {
+	err    error
+	cancel func()
+	closed bool
+}
+
 func TestFetchReleaseURLRejectsHTTPSDowngrade(t *testing.T) {
 	var insecureRequests atomic.Int32
 	insecure := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -138,19 +150,6 @@ func TestRuntimeReleaseUnavailableClassification(t *testing.T) {
 	}
 }
 
-type errorWriter struct{ err error }
-
-func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
-
-type shortWriteWriter struct{}
-
-func (shortWriteWriter) Write(data []byte) (int, error) {
-	if len(data) == 0 {
-		return 0, nil
-	}
-	return len(data) - 1, nil
-}
-
 func TestFetchReleaseURLClassifiesInterruptedTransfers(t *testing.T) {
 	for _, name := range []string{"malformed URL", "connection failure", "truncated response", "cancelled response"} {
 		t.Run(name, func(t *testing.T) {
@@ -196,25 +195,6 @@ func TestFetchReleaseURLClassifiesInterruptedTransfers(t *testing.T) {
 	}
 }
 
-type runtimeRoundTripper func(*http.Request) (*http.Response, error)
-
-func (f runtimeRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-type failingRuntimeResponse struct {
-	err    error
-	cancel func()
-	closed bool
-}
-
-func (r *failingRuntimeResponse) Read([]byte) (int, error) {
-	if r.cancel != nil {
-		r.cancel()
-	}
-	return 0, r.err
-}
-
-func (r *failingRuntimeResponse) Close() error { r.closed = true; return nil }
-
 func TestReadRuntimeMetadataEnforcesBoundedReads(t *testing.T) {
 	if _, err := readRuntimeMetadata(&failingRuntimeResponse{err: io.ErrUnexpectedEOF}, "manifest.json"); !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("metadata read failure = %v", err)
@@ -230,3 +210,23 @@ func TestReadRuntimeMetadataEnforcesBoundedReads(t *testing.T) {
 		}
 	}
 }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func (shortWriteWriter) Write(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, nil
+	}
+	return len(data) - 1, nil
+}
+
+func (f runtimeRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func (r *failingRuntimeResponse) Read([]byte) (int, error) {
+	if r.cancel != nil {
+		r.cancel()
+	}
+	return 0, r.err
+}
+
+func (r *failingRuntimeResponse) Close() error { r.closed = true; return nil }

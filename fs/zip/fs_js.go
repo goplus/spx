@@ -34,7 +34,7 @@ func Open(file string) (fs.Dir, error) {
 }
 
 // Close closes the filesystem object.
-func (zipf *FS) Close() error {
+func (z *FS) Close() error {
 	return nil
 }
 

@@ -245,70 +245,6 @@ func TestAndroidBuildRejectsMissingNDKAndBlockedLibraryDirectory(t *testing.T) {
 	}
 }
 
-func newMobileExportFixture(t *testing.T) (*CmdTool, string) {
-	t.Helper()
-	const script = `
-tool=${0##*/}
-step=$tool
-case "$tool" in
-  go) step="go:${GOOS-}:${GOARCH-}" ;;
-  xcrun) if [ "$1" = --sdk ]; then step="sdk:$2"; fi ;;
-  godot) case "$*" in *--editor*) step=import ;; *) step=export ;; esac ;;
-  adb) step="adb:$1" ;;
-esac
-printf '%s|%s|%s|%s|%s|%s|%s\n' "$step" "$PWD" "$*" "${CGO_ENABLED-}" "${CC-}" "${CGO_CFLAGS-}" "${CGO_LDFLAGS-}" >> "$SPX_MOBILE_LOG"
-if [ "$step" = "$SPX_MOBILE_FAIL" ]; then exit 29; fi
-case "$tool" in
-  xgo) printf 'package main\n' > xgo_autogen.go ;;
-  xcrun)
-    if [ "$1" = --sdk ]; then
-      printf '  /test-sdk/%s\n' "$2"
-    else
-      for arg do output=$arg; done
-      /bin/mkdir -p "$output"
-    fi ;;
-  godot)
-    if [ "$step" = export ] && [ "$SPX_MOBILE_OUTPUT" != missing ]; then
-      for arg do output=$arg; done
-      printf 'exported artifact' > "$output"
-    fi ;;
-  adb)
-    if [ "$1" = devices ]; then printf '%s\n' "$SPX_MOBILE_DEVICES"; fi
-    if [ "$1" = install ]; then test -f "$3"; fi ;;
-  ios-deploy) test -f "$2" ;;
-esac
-`
-	tools := map[string]string{}
-	for _, name := range []string{"go", "xgo", "godot", "xcrun", "lipo", "adb", "ios-deploy"} {
-		tools[name] = script
-	}
-	binDir := installCommandTestTools(t, tools)
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	logPath := filepath.Join(root, "commands.log")
-	t.Setenv("SPX_MOBILE_LOG", logPath)
-	t.Setenv("SPX_MOBILE_FAIL", "")
-	t.Setenv("SPX_MOBILE_OUTPUT", "artifact")
-	t.Setenv("SPX_MOBILE_DEVICES", "List of devices attached\ntest-device\tdevice")
-	t.Setenv("ANDROID_NDK_ROOT", filepath.Join(root, "ndk"))
-	t.Setenv("HOME", filepath.Join(root, "home"))
-	for _, name := range []string{"GOOS", "GOARCH", "CGO_ENABLED", "CGO_CFLAGS", "CGO_LDFLAGS", "CC"} {
-		t.Setenv(name, "")
-	}
-	arch, tags, install := runtime.GOARCH, "", false
-	cmd := &CmdTool{
-		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
-		GoDir: filepath.Join(root, "project", "go"), LibPath: filepath.Join(root, "spx-test-"+arch+".so"),
-		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: &arch, Tags: &tags, Install: &install},
-	}
-	writeCommandTestFile(t, filepath.Join(root, "assets", "index.json"), "{}")
-	writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "project.godot"), "[application]\n")
-	writeCommandTestFile(t, filepath.Join(cmd.GoDir, "ios_bridge.m"), "bridge")
-	return cmd, logPath
-}
-
 func TestMobileExportToolWorkflows(t *testing.T) {
 	for _, platform := range []struct {
 		name, installStep string
@@ -514,4 +450,68 @@ func TestPrepareExportRejectsSocketAssets(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cmd.ProjectDir, "assets")); !os.IsNotExist(err) {
 		t.Fatalf("invalid assets were staged: %v", err)
 	}
+}
+
+func newMobileExportFixture(t *testing.T) (*CmdTool, string) {
+	t.Helper()
+	const script = `
+tool=${0##*/}
+step=$tool
+case "$tool" in
+  go) step="go:${GOOS-}:${GOARCH-}" ;;
+  xcrun) if [ "$1" = --sdk ]; then step="sdk:$2"; fi ;;
+  godot) case "$*" in *--editor*) step=import ;; *) step=export ;; esac ;;
+  adb) step="adb:$1" ;;
+esac
+printf '%s|%s|%s|%s|%s|%s|%s\n' "$step" "$PWD" "$*" "${CGO_ENABLED-}" "${CC-}" "${CGO_CFLAGS-}" "${CGO_LDFLAGS-}" >> "$SPX_MOBILE_LOG"
+if [ "$step" = "$SPX_MOBILE_FAIL" ]; then exit 29; fi
+case "$tool" in
+  xgo) printf 'package main\n' > xgo_autogen.go ;;
+  xcrun)
+    if [ "$1" = --sdk ]; then
+      printf '  /test-sdk/%s\n' "$2"
+    else
+      for arg do output=$arg; done
+      /bin/mkdir -p "$output"
+    fi ;;
+  godot)
+    if [ "$step" = export ] && [ "$SPX_MOBILE_OUTPUT" != missing ]; then
+      for arg do output=$arg; done
+      printf 'exported artifact' > "$output"
+    fi ;;
+  adb)
+    if [ "$1" = devices ]; then printf '%s\n' "$SPX_MOBILE_DEVICES"; fi
+    if [ "$1" = install ]; then test -f "$3"; fi ;;
+  ios-deploy) test -f "$2" ;;
+esac
+`
+	tools := map[string]string{}
+	for _, name := range []string{"go", "xgo", "godot", "xcrun", "lipo", "adb", "ios-deploy"} {
+		tools[name] = script
+	}
+	binDir := installCommandTestTools(t, tools)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(root, "commands.log")
+	t.Setenv("SPX_MOBILE_LOG", logPath)
+	t.Setenv("SPX_MOBILE_FAIL", "")
+	t.Setenv("SPX_MOBILE_OUTPUT", "artifact")
+	t.Setenv("SPX_MOBILE_DEVICES", "List of devices attached\ntest-device\tdevice")
+	t.Setenv("ANDROID_NDK_ROOT", filepath.Join(root, "ndk"))
+	t.Setenv("HOME", filepath.Join(root, "home"))
+	for _, name := range []string{"GOOS", "GOARCH", "CGO_ENABLED", "CGO_CFLAGS", "CGO_LDFLAGS", "CC"} {
+		t.Setenv(name, "")
+	}
+	arch, tags, install := runtime.GOARCH, "", false
+	cmd := &CmdTool{
+		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
+		GoDir: filepath.Join(root, "project", "go"), LibPath: filepath.Join(root, "spx-test-"+arch+".so"),
+		CmdPath: filepath.Join(binDir, "godot"), Args: ExtraArgs{Arch: &arch, Tags: &tags, Install: &install},
+	}
+	writeCommandTestFile(t, filepath.Join(root, "assets", "index.json"), "{}")
+	writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, "project.godot"), "[application]\n")
+	writeCommandTestFile(t, filepath.Join(cmd.GoDir, "ios_bridge.m"), "bridge")
+	return cmd, logPath
 }

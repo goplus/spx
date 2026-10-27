@@ -23,8 +23,24 @@ type panicRecordingExt struct {
 	exits    chan int64
 }
 
-func (r *panicRecordingExt) OnRuntimePanic(message string) { r.messages <- message }
-func (r *panicRecordingExt) RequestExit(code int64)        { r.exits <- code }
+type panicCalls struct {
+	gdx.IExtMgr
+	messages []string
+	exits    []int64
+}
+
+type startupExitPlatform struct {
+	gdx.IPlatformMgr
+	main       atomic.Uint64
+	workerCall chan struct{}
+}
+
+type startupExitGame struct {
+	bindingTestGame
+	start    func()
+	rendered atomic.Int32
+	ended    atomic.Int32
+}
 
 func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
 	co := coroutine.New(OnPanic)
@@ -60,19 +76,6 @@ func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
 		t.Fatal("coroutine panic did not request exit")
 	}
 }
-
-func panicWithSentinelCause(coroutine.Thread) {
-	panic("sentinel cause")
-}
-
-type panicCalls struct {
-	gdx.IExtMgr
-	messages []string
-	exits    []int64
-}
-
-func (r *panicCalls) OnRuntimePanic(message string) { r.messages = append(r.messages, message) }
-func (r *panicCalls) RequestExit(code int64)        { r.exits = append(r.exits, code) }
 
 func TestPanicAdaptersReportCauseAndHonorExitPolicy(t *testing.T) {
 	for _, tc := range []struct {
@@ -181,36 +184,6 @@ func TestCaptureFailureStopsFrameAndReportsExit(t *testing.T) {
 	}
 }
 
-type startupExitPlatform struct {
-	gdx.IPlatformMgr
-	main       atomic.Uint64
-	workerCall chan struct{}
-}
-
-func (p *startupExitPlatform) IsMainThread() bool {
-	if p.main.Load() == gid.Get() {
-		return true
-	}
-	select {
-	case p.workerCall <- struct{}{}:
-	default:
-	}
-	return false
-}
-
-func (*startupExitPlatform) SetTimeScale(float64) {}
-
-type startupExitGame struct {
-	bindingTestGame
-	start    func()
-	rendered atomic.Int32
-	ended    atomic.Int32
-}
-
-func (g *startupExitGame) OnEngineStart()         { g.start() }
-func (g *startupExitGame) OnEngineRender(float64) { g.rendered.Add(1) }
-func (g *startupExitGame) OnEngineFrameEnd()      { g.ended.Add(1) }
-
 func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 	for _, test := range []struct {
 		name        string
@@ -299,4 +272,35 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (r *panicRecordingExt) OnRuntimePanic(message string) { r.messages <- message }
+
+func (r *panicRecordingExt) RequestExit(code int64) { r.exits <- code }
+
+func (r *panicCalls) OnRuntimePanic(message string) { r.messages = append(r.messages, message) }
+
+func (r *panicCalls) RequestExit(code int64) { r.exits = append(r.exits, code) }
+
+func (p *startupExitPlatform) IsMainThread() bool {
+	if p.main.Load() == gid.Get() {
+		return true
+	}
+	select {
+	case p.workerCall <- struct{}{}:
+	default:
+	}
+	return false
+}
+
+func (*startupExitPlatform) SetTimeScale(float64) {}
+
+func (g *startupExitGame) OnEngineStart() { g.start() }
+
+func (g *startupExitGame) OnEngineRender(float64) { g.rendered.Add(1) }
+
+func (g *startupExitGame) OnEngineFrameEnd() { g.ended.Add(1) }
+
+func panicWithSentinelCause(coroutine.Thread) {
+	panic("sentinel cause")
 }

@@ -748,6 +748,48 @@ class StaticChecksWorkflowTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
 
 
+class GoBuildsWorkflowTest(unittest.TestCase):
+    def test_native_coverage_uses_existing_build_matrix_and_unique_uploads(self):
+        jobs = job_blocks(GO_BUILDS_WORKFLOW_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(list(jobs), ["go-build"])
+        job = jobs["go-build"]
+        self.assertIn("    runs-on: ${{ matrix.os }}", job)
+        self.assertEqual(re.findall(r"^          - (.+)$", job, re.MULTILINE), [
+            "ubuntu-latest", "macos-latest", "windows-latest",
+        ])
+        blocks = {
+            block.splitlines()[0]: block
+            for block in job.split("      - name: ")[1:]
+        }
+        for suite, runner, name in (
+            ("macos", "macOS", "Test macOS buildctl environment"),
+            ("windows", "Windows", "Test Windows file replacement and process tracking"),
+        ):
+            with self.subTest(suite=suite):
+                test = blocks[name]
+                self.assertIn(f"        id: {suite}-tests\n", test)
+                self.assertIn(f"        if: runner.os == '{runner}'\n", test)
+                self.assertIn("        shell: bash\n", test)
+                self.assertIn(f"run: bash .github/scripts/test_go_coverage.sh {suite}", test)
+                self.assertNotIn("working-directory:", test)
+                upload = blocks[f"Upload {runner} coverage to Codecov"]
+                self.assertIn(f"        if: runner.os == '{runner}'\n", upload)
+                self.assertIn("uses: codecov/codecov-action@v7", upload)
+                self.assertIn(f"files: ${{{{ steps.{suite}-tests.outputs.coverage }}}}", upload)
+                self.assertIn(f"flags: buildctl-{suite}", upload)
+                self.assertIn("slug: goplus/spx", upload)
+                self.assertIn("disable_search: true", upload)
+                self.assertLess(job.index(f"- name: {name}\n"), job.index(f"- name: Upload {runner} coverage"))
+        self.assertEqual(job.count("uses: codecov/codecov-action@v7"), 2)
+        self.assertNotRegex(job, r"coverage(?:-[\w-]+)?\.out")
+        self.assertNotRegex(job, r"GO(?:OS|ARCH):")
+        self.assertNotIn("continue-on-error:", job)
+        self.assertIn("run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)", blocks["Build Go packages"])
+        self.assertIn("if: runner.os == 'Linux'", blocks["Build cmd/ispx"])
+        self.assertIn("working-directory: cmd/ispx\n        run: ./build.sh --base", blocks["Build cmd/ispx"])
+        self.assertIn("working-directory: cmd/ispxnative\n        run: ./build.sh", blocks["Build cmd/ispxnative"])
+
+
 class InterpreterCIWorkflowTest(unittest.TestCase):
     def test_required_checks_build_and_test_only_base_modules(self):
         static = job_blocks(STATIC_CHECKS_WORKFLOW_PATH.read_text(encoding="utf-8"))["static-checks"]
@@ -811,6 +853,10 @@ with log_path.open("a", encoding="utf-8") as log:
     log.write(json.dumps(call) + "\n")
 if args == ["env", "GOROOT"]:
     print("/mock/go root")
+elif args == ["env", "GOHOSTOS"]:
+    print(os.environ["MOCK_GOHOSTOS"])
+elif args == ["env", "GOOS"]:
+    print(os.environ["MOCK_GOOS"])
 elif args == ["list", "./..."]:
     print(os.environ["MOCK_PACKAGES"])
 elif args[0] == "test":
@@ -902,6 +948,23 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
 
         executor = '-exec="/mock/go root/lib/wasm/go_js_wasm_exec"'
         return {
+            "macos": [
+                (".", ["env", "GOHOSTOS"]),
+                (".", ["env", "GOOS"]),
+                (".", covered("coverage-buildctl-macos.out", "-run",
+                    "^(TestCommandRunnerRepairsMacOSGoToolchainForChild|TestCommandRunnerRunCommandReturnsEnvironmentError|TestConfigureCurrentMacOSGoToolchainEnv|TestCurrentBuildEnvReturnsIndependentCopy|TestSetupJDKWithHomebrewFixture|TestCompressWasmArtifactsInstallsBrotli|TestBrotliLinuxInstallRejectsMissingReleaseAndTools)$",
+                    "./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool", "./internal/cmd/buildctl/runtimecmd", verbose=True)),
+            ],
+            "windows": [
+                (".", ["env", "GOHOSTOS"]),
+                (".", ["env", "GOOS"]),
+                (".", covered("coverage-buildctl-windows.out", "-run",
+                    "^Test(ReplaceFileWindows|Windows.*|FetchURLToFileReplacesExistingDestination|SConsEnvironmentCommands|SetupJDKWindowsRequiresManualInstallation)$",
+                    "./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool", verbose=True)),
+                (".", covered("coverage-engine-windows.out", "-run",
+                    "^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$",
+                    "./internal/cmd/buildctl/engine", verbose=True)),
+            ],
             "web": [
                 (".", ["env", "GOROOT"]),
                 (".", covered("coverage-web.out", executor, "./internal/gdengine/binding/web", "./pkg/ispx", "./internal/coroutine")),
@@ -942,6 +1005,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "GOOS": "",
                 "GOARCH": "",
                 "MOCK_CAPTURE_PLATFORM": "1",
+                "MOCK_GOHOSTOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"),
+                "MOCK_GOOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"),
                 **environment,
             },
         )
@@ -980,6 +1045,19 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                         [(call["directory"], call["args"]) for call in self.recorded_calls()], calls[:index],
                     )
                     self.assertFalse(self.output.exists())
+
+    def test_platform_coverage_rejects_wrong_host_and_cross_compilation(self):
+        for suite, expected in (("macos", "darwin"), ("windows", "windows")):
+            for variable in ("MOCK_GOHOSTOS", "MOCK_GOOS"):
+                with self.subTest(suite=suite, variable=variable):
+                    result = self.run_coverage_suite(suite, **{variable: "linux"})
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn(f"requires a native {expected} runner", result.stderr)
+                    self.assertEqual([call["args"] for call in self.recorded_calls()], [
+                        ["env", "GOHOSTOS"], ["env", "GOOS"],
+                    ])
+                    self.assertFalse(self.output.exists())
+                    self.assertEqual(list(self.root.rglob("coverage*.out")), [])
 
     def test_coverage_runner_rejects_unknown_suites_and_supports_local_runs(self):
         result = self.run_coverage_suite("unknown")

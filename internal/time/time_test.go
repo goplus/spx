@@ -24,24 +24,6 @@ import (
 	stdtime "time"
 )
 
-func resetStateForTest() {
-	realTimeSinceLevelLoad = 0
-	timeSinceLevelLoad = 0
-	logicalTimeCompensation = 0
-	deltaTime = 0
-	realDeltaTime = 0
-	fixedDeltaTimeBits.Store(0)
-	timeScaleBits.Store(0)
-	curFrame.Store(0)
-	setTimeScaleCallback = nil
-	startTimestamp = stdtime.Time{}
-	lastTimestamp = stdtime.Time{}
-	fps = 0
-	timerBaseTime = 0
-	registeredTimers = nil
-	pendingTimers = nil
-}
-
 func TestStartInitializesTimeState(t *testing.T) {
 	resetStateForTest()
 	realTimeSinceLevelLoad = 9
@@ -265,18 +247,6 @@ func TestTimeScaleSupportsConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-func assertTimers(t *testing.T, want ...int64) {
-	t.Helper()
-	for _, timestamp := range want {
-		if got, ok := NextTimer(); !ok || got != timestamp {
-			t.Fatalf("NextTimer() = (%v, %v), want (%v, true)", got, ok, timestamp)
-		}
-	}
-	if got, ok := NextTimer(); ok {
-		t.Fatalf("unexpected timer: %v", got)
-	}
-}
-
 func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	resetStateForTest()
 	Start(nil)
@@ -356,4 +326,34 @@ func TestTimerRegistrationAfterDrain(t *testing.T) {
 		RegisterTimer(at)
 	}
 	assertTimers(t, 250, 750)
+}
+
+func resetStateForTest() {
+	realTimeSinceLevelLoad = 0
+	timeSinceLevelLoad = 0
+	logicalTimeCompensation = 0
+	deltaTime = 0
+	realDeltaTime = 0
+	fixedDeltaTimeBits.Store(0)
+	timeScaleBits.Store(0)
+	curFrame.Store(0)
+	setTimeScaleCallback = nil
+	startTimestamp = stdtime.Time{}
+	lastTimestamp = stdtime.Time{}
+	fps = 0
+	timerBaseTime = 0
+	registeredTimers = nil
+	pendingTimers = nil
+}
+
+func assertTimers(t *testing.T, want ...int64) {
+	t.Helper()
+	for _, timestamp := range want {
+		if got, ok := NextTimer(); !ok || got != timestamp {
+			t.Fatalf("NextTimer() = (%v, %v), want (%v, true)", got, ok, timestamp)
+		}
+	}
+	if got, ok := NextTimer(); ok {
+		t.Fatalf("unexpected timer: %v", got)
+	}
 }

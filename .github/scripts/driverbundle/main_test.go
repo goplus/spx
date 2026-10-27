@@ -35,6 +35,11 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
+type driverShortWriter struct {
+	count int
+	err   error
+}
+
 func TestPackageAndVerifyIsDeterministic(t *testing.T) {
 	for _, target := range driverbundle.SupportedTargets() {
 		t.Run(target.GOOS+"/"+target.GOARCH, func(t *testing.T) {
@@ -451,13 +456,6 @@ func TestDigestWriterCountsOnlyWrittenBytes(t *testing.T) {
 	}
 }
 
-type driverShortWriter struct {
-	count int
-	err   error
-}
-
-func (w driverShortWriter) Write([]byte) (int, error) { return w.count, w.err }
-
 func TestAddZipFilePropagatesWriterFailures(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "input")
 	writeDriverTestFile(t, path, bytes.Repeat([]byte("data"), 4096))
@@ -521,58 +519,6 @@ func TestVerifyReleaseChecksVersionsAndBundles(t *testing.T) {
 	writeDriverTestFile(t, filepath.Join(directory, bundles[0].Name), []byte("tampered"))
 	if err := runVerifyRelease(args); err == nil {
 		t.Fatal("accepted tampered release")
-	}
-}
-
-func writeReleaseTestBundle(t *testing.T, directory string, lock release.RuntimeLock, goos, goarch string) driverbundle.Bundle {
-	t.Helper()
-	spec, err := release.HostRuntimeSpecFor(lock, goos, goarch)
-	if err != nil {
-		t.Fatal(err)
-	}
-	extension := map[string]string{"darwin": ".dylib", "linux": ".so", "windows": ".dll"}[goos]
-	names := [3]string{spec.RuntimeName, spec.PackName, "gdspx-" + goos + "-" + goarch + extension}
-	modes := [3]uint32{0o755, 0o644, 0o755}
-	name := "spx-driver-" + goos + "-" + goarch + ".zip"
-	path := filepath.Join(directory, name)
-	output, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	archive := zip.NewWriter(output)
-	files := make([]driverbundle.File, 0, len(names))
-	for i, name := range names {
-		data := []byte(name + " bytes")
-		header := &zip.FileHeader{Name: name, Method: zip.Store, Modified: zipEpoch}
-		header.SetMode(os.FileMode(modes[i]))
-		writer, err := archive.CreateHeader(header)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := writer.Write(data); err != nil {
-			t.Fatal(err)
-		}
-		digest := sha256.Sum256(data)
-		files = append(files, driverbundle.File{Name: name, Mode: modes[i], Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])})
-	}
-	if err := archive.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := output.Close(); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	digest := sha256.Sum256(data)
-	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(files[0].SHA256, files[1].SHA256)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return driverbundle.Bundle{
-		GOOS: goos, GOARCH: goarch, Name: name, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:]),
-		EngineInterfaceDigest: interfaceDigest, Files: files,
 	}
 }
 
@@ -656,6 +602,60 @@ func TestAssembleRejectsInvalidInputsWithoutManifest(t *testing.T) {
 				t.Fatal("published a manifest after assembly failed")
 			}
 		})
+	}
+}
+
+func (w driverShortWriter) Write([]byte) (int, error) { return w.count, w.err }
+
+func writeReleaseTestBundle(t *testing.T, directory string, lock release.RuntimeLock, goos, goarch string) driverbundle.Bundle {
+	t.Helper()
+	spec, err := release.HostRuntimeSpecFor(lock, goos, goarch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extension := map[string]string{"darwin": ".dylib", "linux": ".so", "windows": ".dll"}[goos]
+	names := [3]string{spec.RuntimeName, spec.PackName, "gdspx-" + goos + "-" + goarch + extension}
+	modes := [3]uint32{0o755, 0o644, 0o755}
+	name := "spx-driver-" + goos + "-" + goarch + ".zip"
+	path := filepath.Join(directory, name)
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive := zip.NewWriter(output)
+	files := make([]driverbundle.File, 0, len(names))
+	for i, name := range names {
+		data := []byte(name + " bytes")
+		header := &zip.FileHeader{Name: name, Method: zip.Store, Modified: zipEpoch}
+		header.SetMode(os.FileMode(modes[i]))
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.Write(data); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(data)
+		files = append(files, driverbundle.File{Name: name, Mode: modes[i], Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:])})
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(data)
+	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(files[0].SHA256, files[1].SHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return driverbundle.Bundle{
+		GOOS: goos, GOARCH: goarch, Name: name, Size: int64(len(data)), SHA256: hex.EncodeToString(digest[:]),
+		EngineInterfaceDigest: interfaceDigest, Files: files,
 	}
 }
 

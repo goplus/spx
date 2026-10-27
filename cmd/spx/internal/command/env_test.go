@@ -443,25 +443,6 @@ func TestProjectImportTimeout(t *testing.T) {
 	}
 }
 
-func setupAdaptGoModFixture(t *testing.T) string {
-	t.Helper()
-
-	repoRoot := t.TempDir()
-	// Keep the fixture nested so root detection must search parent directories.
-	targetDir := filepath.Join(repoRoot, "tutorial", "05-Animation")
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll(%s) returned error: %v", targetDir, err)
-	}
-	writeLocalSpxRepoMarker(t, repoRoot)
-	return targetDir
-}
-
-func writeProjectImportCache(t *testing.T, projectDir string) {
-	t.Helper()
-
-	writeCommandTestFile(t, filepath.Join(projectDir, ".godot", "uid_cache.bin"), "cache")
-}
-
 func TestRunCmdRejectsInvalidTargetBeforeClearing(t *testing.T) {
 	for _, command := range []string{"clear", "clearbuild"} {
 		for _, targetKind := range []string{"missing", "file"} {
@@ -665,16 +646,6 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func writeLocalSpxRepoMarker(t *testing.T, root string) {
-	t.Helper()
-	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v4\n")
-	script := filepath.Join(root, "cmd", "spx", "install.sh")
-	writeCommandTestFile(t, script, "#!/bin/bash\n")
-	if err := os.Chmod(script, 0o755); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -953,5 +924,34 @@ func TestPrepareCommandRejectsProjectWithoutSource(t *testing.T) {
 				t.Fatalf("invalid project was prepared: %v", err)
 			}
 		})
+	}
+}
+
+func setupAdaptGoModFixture(t *testing.T) string {
+	t.Helper()
+
+	repoRoot := t.TempDir()
+	// Keep the fixture nested so root detection must search parent directories.
+	targetDir := filepath.Join(repoRoot, "tutorial", "05-Animation")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s) returned error: %v", targetDir, err)
+	}
+	writeLocalSpxRepoMarker(t, repoRoot)
+	return targetDir
+}
+
+func writeProjectImportCache(t *testing.T, projectDir string) {
+	t.Helper()
+
+	writeCommandTestFile(t, filepath.Join(projectDir, ".godot", "uid_cache.bin"), "cache")
+}
+
+func writeLocalSpxRepoMarker(t *testing.T, root string) {
+	t.Helper()
+	writeCommandTestFile(t, filepath.Join(root, "go.mod"), "module github.com/goplus/spx/v4\n")
+	script := filepath.Join(root, "cmd", "spx", "install.sh")
+	writeCommandTestFile(t, script, "#!/bin/bash\n")
+	if err := os.Chmod(script, 0o755); err != nil {
+		t.Fatal(err)
 	}
 }

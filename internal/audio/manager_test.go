@@ -54,89 +54,14 @@ type loopCall struct {
 	loop bool
 }
 
-func (f *fakeBackend) CreateAudio() engine.Object {
-	return 77
+type cloningBackend struct {
+	fakeBackend
+	pans, pitches map[engine.Object]float64
 }
 
-func (f *fakeBackend) DestroyAudio(obj engine.Object) {
-	f.lifecycle = append(f.lifecycle, fmt.Sprintf("destroy:%d", obj))
-	f.destroys = append(f.destroys, obj)
-}
-
-func (f *fakeBackend) SetPitch(obj engine.Object, pitch float64) {
-	f.pitch = pitch
-}
-
-func (f *fakeBackend) GetPitch(obj engine.Object) float64 {
-	return f.pitch
-}
-
-func (f *fakeBackend) SetPan(obj engine.Object, pan float64) {
-	f.pan = pan
-}
-
-func (f *fakeBackend) GetPan(obj engine.Object) float64 {
-	return f.pan
-}
-
-func (f *fakeBackend) SetVolume(obj engine.Object, volume float64) {
-	f.volume = volume
-	f.volumes = append(f.volumes, volume)
-}
-
-func (f *fakeBackend) GetVolume(obj engine.Object) float64 {
-	return f.volume
-}
-
-func (f *fakeBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
-	f.nextID++
-	if f.playing == nil {
-		f.playing = make(map[int64]bool)
-	}
-	f.playing[f.nextID] = true
-	f.plays = append(f.plays, playCall{
-		path:       path,
-		owner:      ownerID,
-		attenation: attenuation,
-		maxDist:    maxDistance,
-	})
-	return f.nextID
-}
-
-func (f *fakeBackend) Pause(aid int64) {
-	f.pauses = append(f.pauses, aid)
-}
-
-func (f *fakeBackend) Resume(aid int64) {
-	f.resumes = append(f.resumes, aid)
-}
-
-func (f *fakeBackend) Stop(aid int64) {
-	f.lifecycle = append(f.lifecycle, fmt.Sprintf("stop:%d", aid))
-	if f.playing != nil {
-		f.playing[aid] = false
-	}
-	f.stops = append(f.stops, aid)
-}
-
-func (f *fakeBackend) Restart(aid int64) bool {
-	if f.playing == nil || !f.playing[aid] {
-		return false
-	}
-	f.restarts = append(f.restarts, aid)
-	return true
-}
-
-func (f *fakeBackend) SetLoop(aid int64, loop bool) {
-	f.loops = append(f.loops, loopCall{id: aid, loop: loop})
-}
-
-func (f *fakeBackend) IsPlaying(aid int64) bool {
-	return f.playing[aid]
-}
-
-func (f *fakeBackend) StopAll() {
-	f.playing = make(map[int64]bool)
+type immediatePlaybackBackend struct {
+	fakeBackend
+	id int64
 }
 
 func TestManagerRepeatedPlayStopsPreviousPlayback(t *testing.T) {
@@ -560,23 +485,6 @@ func TestManagerStopAllDestroysPendingReleasedSounds(t *testing.T) {
 	assertManagerNoTracking(t, &mgr)
 }
 
-func assertManagerNoTracking(t *testing.T, mgr *Manager) {
-	t.Helper()
-	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
-		t.Fatalf(
-			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
-			mgr.path2id,
-			mgr.obj2ids,
-			mgr.playbacks,
-			mgr.pendingDestroy,
-		)
-	}
-}
-
-func almostEqual(got, want float64) bool {
-	return math.Abs(got-want) < 1e-9
-}
-
 func TestManagerStopAllBeforeInitialization(t *testing.T) {
 	var mgr Manager
 	mgr.StopAll()
@@ -648,16 +556,6 @@ func TestManagerControlRanges(t *testing.T) {
 	}
 }
 
-type cloningBackend struct {
-	fakeBackend
-	pans, pitches map[engine.Object]float64
-}
-
-func (b *cloningBackend) GetPan(id engine.Object) float64          { return b.pans[id] }
-func (b *cloningBackend) SetPan(id engine.Object, value float64)   { b.pans[id] = value }
-func (b *cloningBackend) GetPitch(id engine.Object) float64        { return b.pitches[id] }
-func (b *cloningBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
-
 func TestManagerCloneAndInvalidPlayback(t *testing.T) {
 	backend := &cloningBackend{fakeBackend: fakeBackend{volume: 0.4}, pans: map[engine.Object]float64{9: 0.25}, pitches: map[engine.Object]float64{9: 2}}
 	var mgr Manager
@@ -692,14 +590,6 @@ func TestManagerCloneAndInvalidPlayback(t *testing.T) {
 	uninitialized.Update()
 }
 
-type immediatePlaybackBackend struct {
-	fakeBackend
-	id int64
-}
-
-func (b *immediatePlaybackBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
-	return b.id
-}
 func TestManagerFailedAndAlreadyFinishedPlayback(t *testing.T) {
 	for _, id := range []int64{InvalidSoundID, 42} {
 		t.Run(fmt.Sprint(id), func(t *testing.T) {
@@ -754,4 +644,118 @@ func TestManagerPlaybackRemovalFinalizesOnlyReleasedSound(t *testing.T) {
 			assertManagerNoTracking(t, &mgr)
 		})
 	}
+}
+
+func (f *fakeBackend) CreateAudio() engine.Object {
+	return 77
+}
+
+func (f *fakeBackend) DestroyAudio(obj engine.Object) {
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("destroy:%d", obj))
+	f.destroys = append(f.destroys, obj)
+}
+
+func (f *fakeBackend) SetPitch(obj engine.Object, pitch float64) {
+	f.pitch = pitch
+}
+
+func (f *fakeBackend) GetPitch(obj engine.Object) float64 {
+	return f.pitch
+}
+
+func (f *fakeBackend) SetPan(obj engine.Object, pan float64) {
+	f.pan = pan
+}
+
+func (f *fakeBackend) GetPan(obj engine.Object) float64 {
+	return f.pan
+}
+
+func (f *fakeBackend) SetVolume(obj engine.Object, volume float64) {
+	f.volume = volume
+	f.volumes = append(f.volumes, volume)
+}
+
+func (f *fakeBackend) GetVolume(obj engine.Object) float64 {
+	return f.volume
+}
+
+func (f *fakeBackend) PlayWithAttenuation(obj engine.Object, path string, ownerID engine.Object, attenuation, maxDistance float64) int64 {
+	f.nextID++
+	if f.playing == nil {
+		f.playing = make(map[int64]bool)
+	}
+	f.playing[f.nextID] = true
+	f.plays = append(f.plays, playCall{
+		path:       path,
+		owner:      ownerID,
+		attenation: attenuation,
+		maxDist:    maxDistance,
+	})
+	return f.nextID
+}
+
+func (f *fakeBackend) Pause(aid int64) {
+	f.pauses = append(f.pauses, aid)
+}
+
+func (f *fakeBackend) Resume(aid int64) {
+	f.resumes = append(f.resumes, aid)
+}
+
+func (f *fakeBackend) Stop(aid int64) {
+	f.lifecycle = append(f.lifecycle, fmt.Sprintf("stop:%d", aid))
+	if f.playing != nil {
+		f.playing[aid] = false
+	}
+	f.stops = append(f.stops, aid)
+}
+
+func (f *fakeBackend) Restart(aid int64) bool {
+	if f.playing == nil || !f.playing[aid] {
+		return false
+	}
+	f.restarts = append(f.restarts, aid)
+	return true
+}
+
+func (f *fakeBackend) SetLoop(aid int64, loop bool) {
+	f.loops = append(f.loops, loopCall{id: aid, loop: loop})
+}
+
+func (f *fakeBackend) IsPlaying(aid int64) bool {
+	return f.playing[aid]
+}
+
+func (f *fakeBackend) StopAll() {
+	f.playing = make(map[int64]bool)
+}
+
+func (b *cloningBackend) GetPan(id engine.Object) float64 { return b.pans[id] }
+
+func (b *cloningBackend) SetPan(id engine.Object, value float64) { b.pans[id] = value }
+
+func (b *cloningBackend) GetPitch(id engine.Object) float64 { return b.pitches[id] }
+
+func (b *cloningBackend) SetPitch(id engine.Object, value float64) { b.pitches[id] = value }
+
+func (b *immediatePlaybackBackend) PlayWithAttenuation(engine.Object, string, engine.Object, float64, float64) int64 {
+	return b.id
+}
+
+func assertManagerNoTracking(t *testing.T, mgr *Manager) {
+	t.Helper()
+	if len(mgr.path2id) != 0 || len(mgr.obj2ids) != 0 || len(mgr.playbacks) != 0 || len(mgr.pendingDestroy) != 0 {
+		t.Fatalf(
+			"manager tracking not cleared: path2id=%+v obj2ids=%+v playbacks=%+v pendingDestroy=%+v",
+			mgr.path2id,
+			mgr.obj2ids,
+			mgr.playbacks,
+			mgr.pendingDestroy,
+		)
+	}
+}
+
+func almostEqual(got, want float64) bool {
+	return math.Abs(got-want) < 1e-9
 }

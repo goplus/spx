@@ -35,20 +35,6 @@ func GetTriggerEvents(dst []TriggerEvent) []TriggerEvent {
 	return triggerEvents.drain(dst)
 }
 
-func resetTriggerEvents() {
-	triggerEvents.reset()
-}
-
-func cacheTriggerEvents() {
-	triggerEvents.cache()
-}
-
-func enqueueTriggerEvent(src, dst *Sprite) {
-	triggerEvents.mu.Lock()
-	triggerEvents.pending = append(triggerEvents.pending, TriggerEvent{Src: src, Dst: dst})
-	triggerEvents.mu.Unlock()
-}
-
 func (q *triggerEventQueue) drain(dst []TriggerEvent) []TriggerEvent {
 	q.mu.Lock()
 	dst = append(dst, q.ready...)
@@ -73,4 +59,18 @@ func (q *triggerEventQueue) cache() {
 	clear(q.pending)
 	q.pending = q.pending[:0]
 	q.mu.Unlock()
+}
+
+func resetTriggerEvents() {
+	triggerEvents.reset()
+}
+
+func cacheTriggerEvents() {
+	triggerEvents.cache()
+}
+
+func enqueueTriggerEvent(src, dst *Sprite) {
+	triggerEvents.mu.Lock()
+	triggerEvents.pending = append(triggerEvents.pending, TriggerEvent{Src: src, Dst: dst})
+	triggerEvents.mu.Unlock()
 }

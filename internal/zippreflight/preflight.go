@@ -58,10 +58,6 @@ type directoryInfo struct {
 	entries    uint64
 }
 
-func (e *limitError) Error() string {
-	return e.message
-}
-
 // IsLimit reports whether err identifies a preflight resource limit.
 func IsLimit(err error) bool {
 	var target *limitError
@@ -108,6 +104,10 @@ func Check(reader io.ReaderAt, size int64, limits Limits) error {
 		return fmt.Errorf("zip: ambiguous central directory offset: %w", zip.ErrFormat)
 	}
 	return scanCentralDirectory(reader, size, start, directory.endOffset, directory.entries, limits)
+}
+
+func (e *limitError) Error() string {
+	return e.message
 }
 
 func limitErrorf(format string, args ...any) error {

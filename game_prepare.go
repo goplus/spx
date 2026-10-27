@@ -47,6 +47,21 @@ type preparedSprite struct {
 	layout *coreproject.CostumeLayout
 }
 
+type stageEntry struct {
+	kind      string
+	prototype string
+	sprite    stageSprite
+	monitor   preparedMonitor
+	measure   coreproject.MeasureShape
+}
+
+// stageSprite binds the same direct field on the preparation copy and live game.
+type stageSprite struct {
+	field      int
+	typ        reflect.Type
+	properties []spriteProperties
+}
+
 func (p *Game) prepareProject(fs spxfs.Dir, proj *coreproject.ProjectConfig, gamer reflect.Value) (projectPlan, error) {
 	plan := projectPlan{sprites: make(map[string]spritePlan)}
 	if err := validateProjectConfig(proj); err != nil {
@@ -131,6 +146,56 @@ func (g *Game) allocSpriteField(v reflect.Value, i int) (string, Sprite) {
 	}
 	sprite, _ := value.Interface().(Sprite)
 	return name, sprite
+}
+
+func (p *Game) prepareStageEntries(fs spxfs.Dir, gamer reflect.Value, entries []any, plan *projectPlan) ([]stageEntry, error) {
+	prepared := make([]stageEntry, len(entries))
+	for layer, raw := range entries {
+		// Prepare each prototype before parsing the next entry: a later shape
+		// error must not hide an earlier missing or invalid sprite config.
+		entry, err := p.prepareStageEntry(fs, gamer, raw, plan)
+		if err != nil {
+			return nil, fmt.Errorf("zorder[%d]: %w", layer, err)
+		}
+		prepared[layer] = entry
+	}
+	return prepared, nil
+}
+
+func (p *Game) prepareStageEntry(fs spxfs.Dir, gamer reflect.Value, raw any, plan *projectPlan) (stageEntry, error) {
+	var entry stageEntry
+	if name, ok := raw.(string); ok {
+		entry.kind, entry.prototype = "prototype", name
+		return entry, p.prepareSpritePrototype(fs, name, p.typs[name], gamer, plan)
+	}
+	shape, ok := raw.(coreproject.StageShape)
+	if !ok {
+		return entry, fmt.Errorf("invalid zorder entry type %T", raw)
+	}
+	entry.kind, ok = shape["type"].(string)
+	if !ok {
+		return entry, fmt.Errorf("invalid stage shape type")
+	}
+	var err error
+	switch entry.kind {
+	case "sprite", "sprites":
+		entry.sprite, err = prepareStageSprite(gamer, shape, entry.kind == "sprites")
+		if err != nil || entry.kind == "sprite" || len(entry.sprite.properties) == 0 {
+			return entry, err
+		}
+		entry.prototype = entry.sprite.typ.Name()
+		if err = p.prepareSpritePrototype(fs, entry.prototype, entry.sprite.typ, gamer, plan); err != nil {
+			return entry, err
+		}
+		_, err = inspectCloneLayout(entry.sprite.typ)
+	case "stageMonitor", "monitor":
+		entry.monitor, err = prepareMonitor(shape)
+	case "measure":
+		entry.measure, err = coreproject.ParseMeasureShape(shape)
+	default:
+		err = fmt.Errorf("unknown shape - %s", entry.kind)
+	}
+	return entry, err
 }
 
 func prepareSprite(fs spxfs.Dir, name string, typ reflect.Type, gamer reflect.Value) (spritePlan, error) {
@@ -224,4 +289,72 @@ func validateProjectConfig(project *coreproject.ProjectConfig) error {
 		return fmt.Errorf("autoSetCollisionLayer and physics must have different enabled states")
 	}
 	return nil
+}
+
+func prepareStageSprite(gamer reflect.Value, shape coreproject.StageShape, multiple bool) (stageSprite, error) {
+	var entry stageSprite
+	target, ok := shape["target"].(string)
+	if !ok || target == "" {
+		return entry, fmt.Errorf("stage shape target must be a non-empty string")
+	}
+	var items []any
+	if multiple {
+		items, ok = shape["items"].([]any)
+		if !ok {
+			return entry, fmt.Errorf("stage shape items must be an array")
+		}
+	}
+	fieldType, ok := gamer.Type().FieldByName(target)
+	if !ok || len(fieldType.Index) != 1 {
+		kind := "sprite"
+		if multiple {
+			kind = "sprites"
+		}
+		return entry, fmt.Errorf("stage %s target %q is not defined", kind, target)
+	}
+	entry.field = fieldType.Index[0]
+	field := coreproject.WritableField(gamer.Field(entry.field))
+	if !multiple {
+		sprite, ok := stageSpriteValue(field).(Sprite)
+		if !ok {
+			return entry, fmt.Errorf("stage sprite target %q is not a sprite field", target)
+		}
+		properties, err := parseSpriteProperties(shape)
+		if err == nil && spriteOf(sprite) == nil {
+			err = fmt.Errorf("stage sprite target %q has no sprite value", target)
+		}
+		entry.properties = []spriteProperties{properties}
+		return entry, err
+	}
+	if field.Kind() != reflect.Slice {
+		return entry, fmt.Errorf("stage sprites target %q is not a slice", target)
+	}
+	typ := field.Type().Elem()
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct || !reflect.PointerTo(typ).Implements(tySprite) {
+		return entry, fmt.Errorf("stage sprites target %q has invalid item type %s", target, field.Type().Elem())
+	}
+	entry.typ = typ
+	entry.properties = make([]spriteProperties, len(items))
+	for i, item := range items {
+		shape, ok := item.(coreproject.StageShape)
+		if !ok {
+			return entry, fmt.Errorf("stage sprites target %q item[%d] has invalid type %T", target, i, item)
+		}
+		properties, err := parseSpriteProperties(shape)
+		if err != nil {
+			return entry, fmt.Errorf("stage sprites target %q item[%d]: %w", target, i, err)
+		}
+		entry.properties[i] = properties
+	}
+	return entry, nil
+}
+
+func stageSpriteValue(field reflect.Value) any {
+	if field.Kind() == reflect.Pointer || field.Kind() == reflect.Interface {
+		return field.Interface()
+	}
+	return field.Addr().Interface()
 }

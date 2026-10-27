@@ -17,6 +17,7 @@
 package projectbundle
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,10 +80,7 @@ func (c *collector) appendEntry(name string, data []byte, clone bool) error {
 	}
 	contents := data
 	if clone {
-		contents = append([]byte(nil), data...)
-		if data != nil && contents == nil {
-			contents = []byte{}
-		}
+		contents = bytes.Clone(data)
 	}
 	c.total += size
 	c.entries = append(c.entries, collectedEntry{name: name, data: contents})

@@ -22,36 +22,13 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v4/internal/assets"
+	"github.com/goplus/spx/v4/internal/base/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/enginewrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
-
-func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
-	sprite := newTestTransformSprite(10, 20)
-	sprite.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
-		ImageWidth:       10.5,
-		ImageHeight:      6.25,
-		X:                2,
-		Y:                1.5,
-		BitmapResolution: 2,
-	})}
-	sprite.runtimeState.Scale = 1.5
-	sprite.transform().direction = 90
-	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
-	sprite.physics().triggerInfo.Type = physicsColliderNone
-
-	got := sprite.bounds()
-	want := mathf.Rect2{
-		Position: mathf.NewVec2(7.75, 16.8125),
-		Size:     mathf.NewVec2(7.875, 4.6875),
-	}
-	if got == nil || *got != want {
-		t.Fatalf("bounds() = %v, want %v", got, want)
-	}
-}
 
 type touchingSyncSpriteMgr struct {
 	enginewrap.SpriteMgrImpl
@@ -83,202 +60,45 @@ type touchingSyncSpriteMgr struct {
 	panicCollision          any
 }
 
-func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
-	return &touchingSyncSpriteMgr{
-		positions:               map[pkgengine.Object]mathf.Vec2{},
-		visible:                 map[pkgengine.Object]bool{},
-		texturePaths:            map[pkgengine.Object]string{},
-		expectedTexturePaths:    map[pkgengine.Object]string{},
-		checkedTexturePaths:     map[pkgengine.Object]string{},
-		setTransformCalls:       map[pkgengine.Object]int{},
-		setPositionCalls:        map[pkgengine.Object]int{},
-		setRotationCalls:        map[pkgengine.Object]int{},
-		setScaleCalls:           map[pkgengine.Object]int{},
-		setPivotCalls:           map[pkgengine.Object]int{},
-		setVisibleCalls:         map[pkgengine.Object]int{},
-		setTextureCalls:         map[pkgengine.Object]int{},
-		setTextureAtlasCalls:    map[pkgengine.Object]int{},
-		setRenderScaleCalls:     map[pkgengine.Object]int{},
-		setTextureDirectCalls:   map[pkgengine.Object]int{},
-		setTextureAtlasPathByID: map[pkgengine.Object]string{},
-	}
-}
-
-func (s *touchingSyncSpriteMgr) SetTransform(
-	obj pkgengine.Object,
-	pos mathf.Vec2,
-	rot float64,
-	scale mathf.Vec2,
-	visible bool,
-	pivot mathf.Vec2,
-) {
-	s.positions[obj] = pos
-	s.visible[obj] = visible
-	s.setTransformCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetPosition(obj pkgengine.Object, pos mathf.Vec2) {
-	s.positions[obj] = pos
-	s.setPositionCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetRotation(obj pkgengine.Object, rot float64) {
-	s.setRotationCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetScale(obj pkgengine.Object, scale mathf.Vec2) {
-	s.setScaleCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetPivot(obj pkgengine.Object, pivot mathf.Vec2) {
-	s.setPivotCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
-	s.visible[obj] = visible
-	s.setVisibleCalls[obj]++
-	if visible && s.panicVisibleTrue != nil {
-		failure := s.panicVisibleTrue
-		s.panicVisibleTrue = nil
-		panic(failure)
-	}
-	if !visible && s.panicVisibleFalse != nil {
-		failure := s.panicVisibleFalse
-		s.panicVisibleFalse = nil
-		panic(failure)
-	}
-}
-
-func (s *touchingSyncSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
-	s.texturePaths[obj] = path
-	s.setTextureCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetTextureAtlas(obj pkgengine.Object, path string, rect2 mathf.Rect2) {
-	s.texturePaths[obj] = path
-	s.setTextureAtlasPathByID[obj] = path
-	s.setTextureAtlasCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetTextureDirect(obj pkgengine.Object, path string) {
-	s.texturePaths[obj] = path
-	s.setTextureDirectCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf.Vec2) {
-	s.setRenderScaleCalls[obj]++
-}
-
-func (s *touchingSyncSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
-
-func (s *touchingSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
-
-func (s *touchingSyncSpriteMgr) SetMaterialParamsVec(pkgengine.Object, string, float64, float64, float64, float64) {
-}
-
-func (s *touchingSyncSpriteMgr) SetTriggerEnabled(pkgengine.Object, bool) {}
-
-func (s *touchingSyncSpriteMgr) SetCollisionEnabled(pkgengine.Object, bool) {}
-
-func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effect string, vec4 mathf.Vec4) {
-}
-
-func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
-	s.collisionChecks++
-	if call := s.onCollision; call != nil {
-		s.onCollision = nil
-		call()
-	}
-	if s.panicCollision != nil {
-		failure := s.panicCollision
-		s.panicCollision = nil
-		panic(failure)
-	}
-	if !s.visible[obj] || !s.visible[objB] {
-		return false
-	}
-	if s.collisionResult != nil {
-		return s.collisionResult(obj, objB)
-	}
-	a, b := s.positions[obj], s.positions[objB]
-	return math.Abs(a.X-b.X) < 1e-9 && math.Abs(a.Y-b.Y) < 1e-9
-}
-
-func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
-	if s.onColorCollision != nil {
-		s.onColorCollision()
-	}
-	s.lastColorThreshold = colorThreshold
-	s.lastAlphaThreshold = alphaThreshold
-	s.checkedTexturePaths[obj] = s.texturePaths[obj]
-	if s.colorQueryResult != nil {
-		return *s.colorQueryResult
-	}
-	expected, ok := s.expectedTexturePaths[obj]
-	return !ok || s.texturePaths[obj] == expected
-}
-
-func (s *touchingSyncSpriteMgr) CheckCollisionByColors(obj pkgengine.Object, spriteColor, targetColor mathf.Color, colorThreshold, alphaThreshold float64) bool {
-	return s.CheckCollisionByColor(obj, targetColor, colorThreshold, alphaThreshold)
-}
-
-func installTouchingSyncSpriteMgr(t testing.TB, mgr *touchingSyncSpriteMgr) {
-	t.Helper()
-
-	setupImmediateEngineCalls(t)
-
-	original := pkgengine.SpriteMgr
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.SpriteMgr = original
-	})
-}
-
-func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *SpriteImpl {
-	sprite := newTestTransformSprite(x, y)
-	sprite.name = name
-	sprite.g.displayState.WorldWidth = 480
-	sprite.g.displayState.WorldHeight = 360
-	sprite.baseObj.initWithSize(1, 1)
-	sprite.runtimeState.Scale = 1
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
-	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
-		mgr.visible[id] = true
-	}
-	return sprite
-}
-
 type touchingQuerySprite struct {
 	SpriteImpl
 }
 
-func (*touchingQuerySprite) Main() {}
+type cloneCollisionSpriteMgr struct {
+	*spyCloneSpriteMgr
+	visible     map[pkgengine.Object]bool
+	ghost       map[pkgengine.Object]float64
+	sensedGhost bool
+}
 
-func newTouchingQuerySprite(name string, x, y float64, id pkgengine.Object) *touchingQuerySprite {
-	sprite := &touchingQuerySprite{}
-	sprite.g = &Game{}
-	sprite.name = name
-	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{
-		X:             x,
-		Y:             y,
-		RotationStyle: "normal",
-		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
-		AnimBindings:  map[string]string{},
-	})
-	sprite.g.displayState.WorldWidth = 480
-	sprite.g.displayState.WorldHeight = 360
-	sprite.baseObj.initWithSize(1, 1)
-	sprite.runtimeState.Scale = 1
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
-	sprite.sprite = sprite
-	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
-		mgr.visible[id] = true
+type mouseSensingSpriteMgr struct {
+	*touchingSyncSpriteMgr
+	point       mathf.Vec2
+	visibleOnly bool
+}
+
+func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
+	sprite := newTestTransformSprite(10, 20)
+	sprite.costumes = []*costume{newCostume(&coreproject.CostumeConfig{
+		ImageWidth:       10.5,
+		ImageHeight:      6.25,
+		X:                2,
+		Y:                1.5,
+		BitmapResolution: 2,
+	})}
+	sprite.runtimeState.Scale = 1.5
+	sprite.transform().direction = 90
+	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
+	sprite.physics().triggerInfo.Type = physicsColliderNone
+
+	got := sprite.bounds()
+	want := mathf.Rect2{
+		Position: mathf.NewVec2(7.75, 16.8125),
+		Size:     mathf.NewVec2(7.875, 4.6875),
 	}
-	return sprite
+	if got == nil || *got != want {
+		t.Fatalf("bounds() = %v, want %v", got, want)
+	}
 }
 
 func TestPendingCloneSensingIsIndependentFromRenderPublication(t *testing.T) {
@@ -343,19 +163,6 @@ func TestPendingCloneSensingByNameIsIndependentFromRenderPublication(t *testing.
 	if !receiver.Touching__1("target") {
 		t.Fatal("pending clone could not sense a published named target")
 	}
-}
-
-func newPendingCloneSensingPair(t *testing.T) (*touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
-	t.Helper()
-	mgr := newTouchingSyncSpriteMgr()
-	installTouchingSyncSpriteMgr(t, mgr)
-	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
-	target := newTouchingQuerySprite("target", 0, 0, 2)
-	receiver.beginCloneProxyPublication()
-	mgr.positions[1] = mathf.NewVec2(0, 0)
-	mgr.positions[2] = mathf.NewVec2(0, 0)
-	mgr.visible[1] = false
-	return mgr, receiver, target
 }
 
 func TestLogicallyHiddenPendingCloneDoesNotAcquireSensingVisibility(t *testing.T) {
@@ -558,100 +365,6 @@ func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
 	}
 }
 
-func TestColorSensingFlushesPendingPenBeforeQuery(t *testing.T) {
-	for _, tt := range []struct {
-		name  string
-		query func(*SpriteImpl) bool
-	}{
-		{"touching color", func(sprite *SpriteImpl) bool { return sprite.TouchingColor__0(HSB(0, 100, 100)) }},
-		{"color touching color", func(sprite *SpriteImpl) bool {
-			return sprite.TouchingColor__1(HSB(0, 0, 100), HSB(0, 100, 100))
-		}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			pen := setupSpyPenMgr(t)
-			mgr := newTouchingSyncSpriteMgr()
-			installTouchingSyncSpriteMgr(t, mgr)
-			sprite := newTouchingTestSprite("sensor", 0, 0, 1)
-			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
-			sprite.g.queuePenDown(7)
-			sprite.g.queuePenMove(7, mathf.NewVec2(10, 20))
-			mgr.onColorCollision = func() {
-				if pen.batchCalls != 1 {
-					t.Fatalf("color query saw %d pen batches, want 1", pen.batchCalls)
-				}
-				ops := penBatchOperations(pen.batches[0])
-				if len(ops) != 2 || ops[0] != internalengine.PenBatchDown || ops[1] != internalengine.PenBatchMove {
-					t.Fatalf("color query saw pen commands %v, want down then move", ops)
-				}
-			}
-			for query := range 2 {
-				if !tt.query(sprite) {
-					t.Errorf("color sensing query %d returned false", query+1)
-				}
-			}
-			sprite.g.flushPenCommands()
-			if pen.batchCalls != 1 {
-				t.Fatalf("pen batches after repeated queries = %d, want 1", pen.batchCalls)
-			}
-		})
-	}
-}
-
-type cloneCollisionSpriteMgr struct {
-	*spyCloneSpriteMgr
-	visible     map[pkgengine.Object]bool
-	ghost       map[pkgengine.Object]float64
-	sensedGhost bool
-}
-
-func (m *cloneCollisionSpriteMgr) SetVisible(id pkgengine.Object, visible bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.visible[id] = visible
-}
-
-func (m *cloneCollisionSpriteMgr) SetTransform(id pkgengine.Object, _ mathf.Vec2, _ float64, _ mathf.Vec2, visible bool, _ mathf.Vec2) {
-	m.SetVisible(id, visible)
-}
-
-func (m *cloneCollisionSpriteMgr) SetMaterialParams(id pkgengine.Object, effect string, amount float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if effect == GhostEffect.String() {
-		m.ghost[id] = amount
-	}
-}
-
-func (m *cloneCollisionSpriteMgr) BatchUpdateTransforms(buffer []float32) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	idx := 2
-	for range int(buffer[0]) {
-		m.visible[pkgengine.Object(buffer[idx])] = buffer[idx+internalengine.SyncFieldsPerSprite-1] != 0
-		idx += internalengine.SyncFieldsPerSprite
-	}
-	for range int(buffer[1]) {
-		id := pkgengine.Object(buffer[idx])
-		delete(m.visible, id)
-		delete(m.ghost, id)
-		idx++
-	}
-}
-
-func (m *cloneCollisionSpriteMgr) CheckCollisionWithSprite(a, b pkgengine.Object, _ float64, _ bool) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	// Broad phase checked overlap; ghost does not affect sensing.
-	if !m.visible[a] || !m.visible[b] {
-		return false
-	}
-	if m.ghost[a] == 1 || m.ghost[b] == 1 {
-		m.sensedGhost = true
-	}
-	return true
-}
-
 func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 	for _, front := range []string{"Player", "Ground"} {
 		t.Run(front+"InFront", func(t *testing.T) {
@@ -759,18 +472,6 @@ func TestSpriteSensingWithoutProxyAndInvalidTargets(t *testing.T) {
 	sprite.TouchingWith(struct{}{})
 }
 
-type mouseSensingSpriteMgr struct {
-	*touchingSyncSpriteMgr
-	point       mathf.Vec2
-	visibleOnly bool
-}
-
-func (m *mouseSensingSpriteMgr) CheckCollisionWithPoint(_ pkgengine.Object, p mathf.Vec2, visibleOnly bool) bool {
-	m.point = p
-	m.visibleOnly = visibleOnly
-	return true
-}
-
 func TestSpriteMouseSensingUsesWorldPointWithoutVisibilityFilter(t *testing.T) {
 	game, mgr, sprite, _ := newTouchingPair(t, false)
 	pointMgr := &mouseSensingSpriteMgr{touchingSyncSpriteMgr: mgr}
@@ -779,31 +480,6 @@ func TestSpriteMouseSensingUsesWorldPointWithoutVisibilityFilter(t *testing.T) {
 	sprite.Hide()
 	if !sprite.TouchingWith(Mouse) || pointMgr.point != mathf.NewVec2(12, 34) || pointMgr.visibleOnly {
 		t.Fatalf("mouse query point=%v visibleOnly=%v", pointMgr.point, pointMgr.visibleOnly)
-	}
-}
-
-func TestSpriteVariableMonitorsPreferLocalThenStage(t *testing.T) {
-	game := &Game{}
-	sprite := &SpriteImpl{g: game, name: "actor"}
-	local := &Monitor{target: "actor", val: "score"}
-	global := &Monitor{target: "", val: "score"}
-	fallback := &Monitor{target: "", val: "lives"}
-	game.shapeMgr.items = []Shape{local, global, fallback}
-	sprite.ShowVar("score")
-	if !local.visible || global.visible {
-		t.Fatal("local show changed the shadowed stage monitor")
-	}
-	sprite.HideVar("score")
-	if local.visible {
-		t.Fatal("local monitor remained visible")
-	}
-	sprite.ShowVar("lives")
-	if !fallback.visible {
-		t.Fatal("stage fallback was not shown")
-	}
-	sprite.HideVar("lives")
-	if fallback.visible {
-		t.Fatal("stage fallback remained visible")
 	}
 }
 
@@ -823,4 +499,577 @@ func TestPendingCloneSensingReportsCleanupFailureAndDoubleRelease(t *testing.T) 
 	if failure != "spx: negative pending clone sensing visibility lease count" {
 		t.Fatalf("double release failure=%v", failure)
 	}
+}
+
+func TestTouchingNameReadsCurrentState(t *testing.T) {
+	game, mgr, receiver, target := newTouchingPair(t, false)
+	target.SetXYpos(10, 0)
+	for range 2 {
+		if receiver.Touching__1("target") {
+			t.Fatal("far target touched receiver")
+		}
+	}
+	if mgr.collisionChecks != 0 {
+		t.Fatalf("far target caused %d native checks", mgr.collisionChecks)
+	}
+
+	target.SetXYpos(0, 0)
+	if !receiver.Touching__1("target") {
+		t.Fatal("same-frame move was missed")
+	}
+	if got := mgr.positions[2]; got != (mathf.Vec2{}) {
+		t.Fatalf("native target position = %v, want origin", got)
+	}
+	target.Hide()
+	if receiver.Touching__1("target") {
+		t.Fatal("hidden target touched receiver")
+	}
+	target.Show()
+	if !receiver.Touching__1("target") {
+		t.Fatal("same-frame show was missed")
+	}
+	game.shapeMgr.removeShape(&target.SpriteImpl)
+	if receiver.Touching__1("target") {
+		t.Fatal("removed target touched receiver")
+	}
+	game.shapeMgr.add(&target.SpriteImpl)
+	if !receiver.Touching__1("target") {
+		t.Fatal("re-added target was missed")
+	}
+}
+
+func TestTouchingNameUsesRotatedCostume(t *testing.T) {
+	_, mgr, receiver, target := newTouchingPair(t, false)
+	receiver.SetXYpos(4, 0)
+	target.costumes = []*costume{
+		{name: "small", atlas: true, frame: assetutil.FrameDescriptor{Width: 2, Height: 10, BitmapResolution: 1}},
+		{name: "wide", atlas: true, frame: assetutil.FrameDescriptor{Width: 10, Height: 2, BitmapResolution: 1}},
+	}
+	target.transform().direction = 90
+	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+	if receiver.Touching__1("target") {
+		t.Fatal("unrotated narrow costume touched receiver")
+	}
+	target.transform().direction = 0
+	target.markProxyDirty()
+	if !receiver.Touching__1("target") {
+		t.Fatal("rotated costume overlap was culled")
+	}
+	target.transform().direction = 90
+	target.markProxyDirty()
+	if receiver.Touching__1("target") {
+		t.Fatal("unrotated costume unexpectedly touched receiver")
+	}
+	target.SetCostume__0("wide")
+	if !receiver.Touching__1("target") {
+		t.Fatal("same-frame costume enlargement was missed")
+	}
+	target.SetCostume__0("small")
+	target.SetSize(5)
+	if !receiver.Touching__1("target") {
+		t.Fatal("same-frame scale change was missed")
+	}
+}
+
+func TestTouchingNameUsesPhysicsShape(t *testing.T) {
+	_, mgr, receiver, target := newTouchingPair(t, true)
+	receiver.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{1, 1}}
+	target.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 10}}
+	receiver.SetXYpos(4, 0)
+	target.transform().direction = 90
+	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+	if receiver.Touching__1("target") {
+		t.Fatal("unrotated collider touched receiver")
+	}
+	target.transform().direction = 0
+	target.markProxyDirty()
+	if !receiver.Touching__1("target") {
+		t.Fatal("rotated collider overlap was culled")
+	}
+	target.physics().collisionInfo = physicConfig{
+		Type:   physicsColliderPolygon,
+		Params: []float64{-5, -1, 5, -1, 0, 1},
+	}
+	target.transform().direction = 90
+	target.markProxyDirty()
+	if !receiver.Touching__1("target") {
+		t.Fatal("polygon overlap was culled")
+	}
+}
+
+func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		breakCostume func(*touchingQuerySprite)
+	}{
+		{"missing", func(sp *touchingQuerySprite) { sp.costumes = nil }},
+		{"negative index", func(sp *touchingQuerySprite) { sp.costumeIndex = -1 }},
+		{"past end", func(sp *touchingQuerySprite) { sp.costumeIndex = len(sp.costumes) }},
+		{"nil costume", func(sp *touchingQuerySprite) { sp.costumes[0] = nil }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mgr, receiver, target := newTouchingPair(t, true)
+			target.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 2}}
+			target.runtimeState.IsCostumeDirty = false
+			tc.breakCostume(target)
+			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+			if _, bounded := target.queryBounds(false); bounded {
+				t.Fatal("invalid costume produced a query bound")
+			}
+			if !receiver.Touching__1("target") {
+				t.Fatal("native collision fallback was skipped")
+			}
+		})
+	}
+}
+
+func TestPhysicsQueryBoundsRespectRotationStyle(t *testing.T) {
+	sp := newTouchingQuerySprite("target", 100, 50, 2)
+	sp.runtimeState.Scale = 2
+	sp.physics().collisionInfo = physicConfig{
+		Type:   physicsColliderRect,
+		Pivot:  mathf.NewVec2(10, 2),
+		Params: []float64{2, 4},
+	}
+	for _, tc := range []struct {
+		name  string
+		style RotationStyle
+		want  collision.AABB
+	}{
+		{"left right", LeftRight, collision.AABB{MinX: 78, MinY: 50, MaxX: 82, MaxY: 58}},
+		{"none", None, collision.AABB{MinX: 118, MinY: 50, MaxX: 122, MaxY: 58}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sp.transform().rotationStyle = tc.style
+			sp.transform().direction = -30
+			got, bounded := sp.queryBounds(false)
+			if !bounded || got != tc.want {
+				t.Fatalf("physics query bounds = %+v, %t; want %+v, true", got, bounded, tc.want)
+			}
+		})
+	}
+}
+
+func TestTouchingNameSeesCloneImmediately(t *testing.T) {
+	game, mgr, receiver, target := newTouchingPair(t, false)
+	target.SetXYpos(20, 0)
+	clone := newTouchingQuerySprite("target", 0, 0, 3)
+	clone.g = game
+	clone.spriteState.Cloned = true
+	mgr.positions[3] = mathf.NewVec2(0, 0)
+	game.shapeMgr.add(&clone.SpriteImpl)
+	if !receiver.Touching__1("target") {
+		t.Fatal("new clone was missed")
+	}
+	game.shapeMgr.removeShape(&clone.SpriteImpl)
+	if receiver.Touching__1("target") {
+		t.Fatal("removed clone still touched receiver")
+	}
+}
+
+func TestTouchingNameFollowsShapeOrder(t *testing.T) {
+	game, mgr, receiver, target := newTouchingPair(t, false)
+	mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+	first := func(want *SpriteImpl) {
+		t.Helper()
+		if got := game.touchingSpriteBy(&receiver.SpriteImpl, "target"); got != want {
+			t.Fatalf("first touching sprite = %p, want %p", got, want)
+		}
+	}
+	first(&target.SpriteImpl)
+	clone := newTouchingQuerySprite("target", 0, 0, 3)
+	clone.g = game
+	clone.spriteState.Cloned = true
+	game.shapeMgr.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
+	first(&clone.SpriteImpl)
+	game.shapeMgr.activateShape(&clone.SpriteImpl)
+	first(&target.SpriteImpl)
+	game.shapeMgr.goBackLayers(&target.SpriteImpl, -1)
+	first(&clone.SpriteImpl)
+	game.shapeMgr.removeShape(&target.SpriteImpl)
+	first(&clone.SpriteImpl)
+	game.shapeMgr.init()
+	if game.shapeMgr.named != nil {
+		t.Fatal("scene reset retained the name index")
+	}
+	first(nil)
+	game.shapeMgr.spritesNamed("missing-a")
+	game.shapeMgr.spritesNamed("missing-b")
+	if game.shapeMgr.named != nil {
+		t.Fatal("empty scene allocated a name index")
+	}
+}
+
+func BenchmarkTouchingName(b *testing.B) {
+	for _, tc := range []struct {
+		name    string
+		start   int
+		rebuild bool
+	}{
+		{"none", 300, false},
+		{"first", 0, false},
+		{"last", 299, false},
+		{"all", -1, false},
+		{"none/rebuild", 300, true},
+		{"last/rebuild", 299, true},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			mgr := newTouchingSyncSpriteMgr()
+			installTouchingSyncSpriteMgr(b, mgr)
+			game := &Game{}
+			game.initShapeMgr()
+			receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
+			receiver.g = game
+			game.shapeMgr.add(&receiver.SpriteImpl)
+			mgr.positions[1] = mathf.NewVec2(0, 0)
+			for i := range 300 {
+				name := "other"
+				if i == tc.start || tc.start == -1 {
+					name = "target"
+				}
+				target := newTouchingQuerySprite(name, float64(1000+i*10), 0, int64(i+2))
+				target.g = game
+				game.shapeMgr.add(&target.SpriteImpl)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if tc.rebuild {
+					clear(game.shapeMgr.named)
+				}
+				if receiver.Touching__1("target") {
+					b.Fatal("unexpected collision")
+				}
+			}
+		})
+	}
+}
+
+func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		radius, scale float64
+	}{
+		{"small radius", 0.001, 1},
+		{"small scale", 1, 0.001},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, mgr, receiver, target := newTouchingPair(t, true)
+			for _, sp := range []*touchingQuerySprite{receiver, target} {
+				sp.physics().collisionInfo = physicConfig{Type: physicsColliderCircle, Params: []float64{tc.radius}}
+				sp.runtimeState.Scale = tc.scale
+			}
+			target.SetXYpos(0.015, 0)
+			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
+			if !receiver.Touching__1("target") {
+				t.Fatal("minimum-radius circle overlap was culled")
+			}
+		})
+	}
+}
+
+func TestCollisionQueriesRejectUnavailableOrInvalidGeometry(t *testing.T) {
+	game, _, receiver, _ := newTouchingPair(t, true)
+	if game.touchingSpriteBy(nil, "target") != nil || game.touchingSpriteBy(&SpriteImpl{}, "target") != nil {
+		t.Fatal("unbound receiver participated in collision query")
+	}
+	sprite := &receiver.SpriteImpl
+	for _, cfg := range []physicConfig{
+		{Type: physicsColliderRect, Params: []float64{0, 1}},
+		{Type: physicsColliderCircle, Params: []float64{0}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1}},
+		{Type: physicsColliderPolygon, Params: []float64{0, 0, 1, 1, 2, 2, 3}},
+	} {
+		sprite.physics().collisionInfo = cfg
+		if _, bounded := sprite.queryBounds(false); bounded {
+			t.Errorf("invalid geometry %v produced usable bounds", cfg)
+		}
+	}
+	sprite.physics().collisionInfo = physicConfig{Type: physicsColliderCapsule, Params: []float64{3, 2}}
+	sprite.runtimeState.Scale = 1
+	sprite.transform().direction = 90
+	box, bounded := sprite.queryBounds(false)
+	if !bounded || box != (collision.AABB{MinX: -3, MinY: -3, MaxX: 3, MaxY: 3}) {
+		t.Fatalf("short capsule bounds = %v, %v, want diameter-sized square", box, bounded)
+	}
+	sprite.costumes = nil
+	if _, bounded := sprite.queryBounds(true); bounded {
+		t.Fatal("pixel bounds without costume should be unavailable")
+	}
+}
+
+func (s *touchingSyncSpriteMgr) SetTransform(
+	obj pkgengine.Object,
+	pos mathf.Vec2,
+	rot float64,
+	scale mathf.Vec2,
+	visible bool,
+	pivot mathf.Vec2,
+) {
+	s.positions[obj] = pos
+	s.visible[obj] = visible
+	s.setTransformCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetPosition(obj pkgengine.Object, pos mathf.Vec2) {
+	s.positions[obj] = pos
+	s.setPositionCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetRotation(obj pkgengine.Object, rot float64) {
+	s.setRotationCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetScale(obj pkgengine.Object, scale mathf.Vec2) {
+	s.setScaleCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetPivot(obj pkgengine.Object, pivot mathf.Vec2) {
+	s.setPivotCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetVisible(obj pkgengine.Object, visible bool) {
+	s.visible[obj] = visible
+	s.setVisibleCalls[obj]++
+	if visible && s.panicVisibleTrue != nil {
+		failure := s.panicVisibleTrue
+		s.panicVisibleTrue = nil
+		panic(failure)
+	}
+	if !visible && s.panicVisibleFalse != nil {
+		failure := s.panicVisibleFalse
+		s.panicVisibleFalse = nil
+		panic(failure)
+	}
+}
+
+func (s *touchingSyncSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
+	s.texturePaths[obj] = path
+	s.setTextureCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetTextureAtlas(obj pkgengine.Object, path string, rect2 mathf.Rect2) {
+	s.texturePaths[obj] = path
+	s.setTextureAtlasPathByID[obj] = path
+	s.setTextureAtlasCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetTextureDirect(obj pkgengine.Object, path string) {
+	s.texturePaths[obj] = path
+	s.setTextureDirectCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf.Vec2) {
+	s.setRenderScaleCalls[obj]++
+}
+
+func (s *touchingSyncSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
+
+func (s *touchingSyncSpriteMgr) SetZIndex(pkgengine.Object, int64) {}
+
+func (s *touchingSyncSpriteMgr) SetMaterialParamsVec(pkgengine.Object, string, float64, float64, float64, float64) {
+}
+
+func (s *touchingSyncSpriteMgr) SetTriggerEnabled(pkgengine.Object, bool) {}
+
+func (s *touchingSyncSpriteMgr) SetCollisionEnabled(pkgengine.Object, bool) {}
+
+func (s *touchingSyncSpriteMgr) SetMaterialParamsVec4(obj pkgengine.Object, effect string, vec4 mathf.Vec4) {
+}
+
+func (s *touchingSyncSpriteMgr) CheckCollisionWithSprite(obj, objB pkgengine.Object, alphaThreshold float64, usePixelPerfect bool) bool {
+	s.collisionChecks++
+	if call := s.onCollision; call != nil {
+		s.onCollision = nil
+		call()
+	}
+	if s.panicCollision != nil {
+		failure := s.panicCollision
+		s.panicCollision = nil
+		panic(failure)
+	}
+	if !s.visible[obj] || !s.visible[objB] {
+		return false
+	}
+	if s.collisionResult != nil {
+		return s.collisionResult(obj, objB)
+	}
+	a, b := s.positions[obj], s.positions[objB]
+	return math.Abs(a.X-b.X) < 1e-9 && math.Abs(a.Y-b.Y) < 1e-9
+}
+
+func (s *touchingSyncSpriteMgr) CheckCollisionByColor(obj pkgengine.Object, color mathf.Color, colorThreshold, alphaThreshold float64) bool {
+	if s.onColorCollision != nil {
+		s.onColorCollision()
+	}
+	s.lastColorThreshold = colorThreshold
+	s.lastAlphaThreshold = alphaThreshold
+	s.checkedTexturePaths[obj] = s.texturePaths[obj]
+	if s.colorQueryResult != nil {
+		return *s.colorQueryResult
+	}
+	expected, ok := s.expectedTexturePaths[obj]
+	return !ok || s.texturePaths[obj] == expected
+}
+
+func (s *touchingSyncSpriteMgr) CheckCollisionByColors(obj pkgengine.Object, spriteColor, targetColor mathf.Color, colorThreshold, alphaThreshold float64) bool {
+	return s.CheckCollisionByColor(obj, targetColor, colorThreshold, alphaThreshold)
+}
+
+func (*touchingQuerySprite) Main() {}
+
+func (m *cloneCollisionSpriteMgr) SetVisible(id pkgengine.Object, visible bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.visible[id] = visible
+}
+
+func (m *cloneCollisionSpriteMgr) SetTransform(id pkgengine.Object, _ mathf.Vec2, _ float64, _ mathf.Vec2, visible bool, _ mathf.Vec2) {
+	m.SetVisible(id, visible)
+}
+
+func (m *cloneCollisionSpriteMgr) SetMaterialParams(id pkgengine.Object, effect string, amount float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if effect == GhostEffect.String() {
+		m.ghost[id] = amount
+	}
+}
+
+func (m *cloneCollisionSpriteMgr) BatchUpdateTransforms(buffer []float32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	idx := 2
+	for range int(buffer[0]) {
+		m.visible[pkgengine.Object(buffer[idx])] = buffer[idx+internalengine.SyncFieldsPerSprite-1] != 0
+		idx += internalengine.SyncFieldsPerSprite
+	}
+	for range int(buffer[1]) {
+		id := pkgengine.Object(buffer[idx])
+		delete(m.visible, id)
+		delete(m.ghost, id)
+		idx++
+	}
+}
+
+func (m *cloneCollisionSpriteMgr) CheckCollisionWithSprite(a, b pkgengine.Object, _ float64, _ bool) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Broad phase checked overlap; ghost does not affect sensing.
+	if !m.visible[a] || !m.visible[b] {
+		return false
+	}
+	if m.ghost[a] == 1 || m.ghost[b] == 1 {
+		m.sensedGhost = true
+	}
+	return true
+}
+
+func (m *mouseSensingSpriteMgr) CheckCollisionWithPoint(_ pkgengine.Object, p mathf.Vec2, visibleOnly bool) bool {
+	m.point = p
+	m.visibleOnly = visibleOnly
+	return true
+}
+
+func newTouchingSyncSpriteMgr() *touchingSyncSpriteMgr {
+	return &touchingSyncSpriteMgr{
+		positions:               map[pkgengine.Object]mathf.Vec2{},
+		visible:                 map[pkgengine.Object]bool{},
+		texturePaths:            map[pkgengine.Object]string{},
+		expectedTexturePaths:    map[pkgengine.Object]string{},
+		checkedTexturePaths:     map[pkgengine.Object]string{},
+		setTransformCalls:       map[pkgengine.Object]int{},
+		setPositionCalls:        map[pkgengine.Object]int{},
+		setRotationCalls:        map[pkgengine.Object]int{},
+		setScaleCalls:           map[pkgengine.Object]int{},
+		setPivotCalls:           map[pkgengine.Object]int{},
+		setVisibleCalls:         map[pkgengine.Object]int{},
+		setTextureCalls:         map[pkgengine.Object]int{},
+		setTextureAtlasCalls:    map[pkgengine.Object]int{},
+		setRenderScaleCalls:     map[pkgengine.Object]int{},
+		setTextureDirectCalls:   map[pkgengine.Object]int{},
+		setTextureAtlasPathByID: map[pkgengine.Object]string{},
+	}
+}
+
+func installTouchingSyncSpriteMgr(t testing.TB, mgr *touchingSyncSpriteMgr) {
+	t.Helper()
+
+	setupImmediateEngineCalls(t)
+
+	original := pkgengine.SpriteMgr
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = original
+	})
+}
+
+func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *SpriteImpl {
+	sprite := newTestTransformSprite(x, y)
+	sprite.name = name
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.baseObj.initWithSize(1, 1)
+	sprite.runtimeState.Scale = 1
+	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.SyncSprite.SetId(id)
+	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
+		mgr.visible[id] = true
+	}
+	return sprite
+}
+
+func newTouchingQuerySprite(name string, x, y float64, id pkgengine.Object) *touchingQuerySprite {
+	sprite := &touchingQuerySprite{}
+	sprite.g = &Game{}
+	sprite.name = name
+	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{
+		X:             x,
+		Y:             y,
+		RotationStyle: "normal",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	sprite.g.displayState.WorldWidth = 480
+	sprite.g.displayState.WorldHeight = 360
+	sprite.baseObj.initWithSize(1, 1)
+	sprite.runtimeState.Scale = 1
+	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.sprite = sprite
+	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
+		mgr.visible[id] = true
+	}
+	return sprite
+}
+
+func newPendingCloneSensingPair(t *testing.T) (*touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
+	t.Helper()
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
+	target := newTouchingQuerySprite("target", 0, 0, 2)
+	receiver.beginCloneProxyPublication()
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+	mgr.visible[1] = false
+	return mgr, receiver, target
+}
+
+func newTouchingPair(t *testing.T, physics bool) (*Game, *touchingSyncSpriteMgr, *touchingQuerySprite, *touchingQuerySprite) {
+	t.Helper()
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+	game := &Game{physicsEnabled: physics}
+	game.initShapeMgr()
+	receiver := newTouchingQuerySprite("receiver", 0, 0, 1)
+	target := newTouchingQuerySprite("target", 0, 0, 2)
+	receiver.g, target.g = game, game
+	game.shapeMgr.add(&receiver.SpriteImpl)
+	game.shapeMgr.add(&target.SpriteImpl)
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+	return game, mgr, receiver, target
 }

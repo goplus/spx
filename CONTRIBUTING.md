@@ -229,12 +229,20 @@ files; an absolute path would overwrite the first report. CI also records
 Node/WASM Go tests and `.github/scripts` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests (excluding `internal/webffi`) and
-`internal/coroutine`, `internal/gdengine/binding/web`, and `pkg/ispx` under
-Node/WASM, subject to Go build tags.
-It excludes Godot end-to-end, browser, C++, JavaScript, and other-platform
-coverage. The nested `cmd/ispx` module is tested separately, but its Web-only
-entry point and the `internal/cmd/codegen` module are outside this coverage.
-Packages without tests may report zero coverage or no instrumented statements.
+Node/WASM binding, coroutine, interpreter, and process-fallback tests, subject
+to Go build tags. The nested `cmd/ispx` and `internal/cmd/codegen` modules have
+separate profiles.
+
+The existing Go build matrix also collects targeted native macOS buildctl
+environment and Homebrew JDK/Brotli fixture coverage, plus Windows command
+lookup, file replacement, tool setup, and process-lock coverage. These are not full
+cross-platform test suites. Reproduce them on their respective native hosts
+with `bash .github/scripts/test_go_coverage.sh macos` or
+`bash .github/scripts/test_go_coverage.sh windows`.
+
+Godot end-to-end, browser, C++, JavaScript, and other platform-specific paths
+remain outside these Go coverage suites. Packages without tests may report
+zero coverage or no instrumented statements.
 
 Raw profiles include generated Go files. Codecov applies
 [`.github/codecov.yml`](.github/codecov.yml) to exclude examples, fixtures,

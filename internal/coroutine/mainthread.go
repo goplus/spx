@@ -23,6 +23,12 @@ import (
 	"github.com/goplus/spx/v4/internal/engine/platform"
 )
 
+type mainThreadCall struct {
+	caller  Thread
+	done    chan callbackResult
+	claimed atomic.Bool // Claimed by execution or cancellation.
+}
+
 // WaitMainThread runs call on the engine thread, directly when the platform allows.
 // Managed callers retain their script slice while waiting.
 func (p *Coroutines) WaitMainThread(call func()) {
@@ -82,12 +88,6 @@ func (p *Coroutines) TryRunFromEngine(owner any, call func()) bool {
 	})
 }
 
-type mainThreadCall struct {
-	caller  Thread
-	done    chan callbackResult
-	claimed atomic.Bool // Claimed by execution or cancellation.
-}
-
 func (p *Coroutines) waitMainThread(call func(), caller Thread) {
 	if platform.TryCallEngineDirectly(call) {
 		return
@@ -103,45 +103,6 @@ func (p *Coroutines) waitMainThread(call func(), caller Thread) {
 		call:   func() { pending.run(p, call) },
 	})
 	pending.wait()
-}
-
-func (c *mainThreadCall) run(p *Coroutines, call func()) {
-	if !c.claimed.CompareAndSwap(false, true) {
-		return
-	}
-	result := callbackResult{}
-	// Notify the waiter even if call exits the engine goroutine with Goexit.
-	defer func() { c.done <- result }()
-	if c.caller.canceled() {
-		return
-	}
-	scope := callbackNoDrain
-	if c.caller != nil {
-		scope |= callbackExclusive
-	}
-	result = p.invokeCallback(scope, call)
-}
-
-func (c *mainThreadCall) wait() {
-	var canceled <-chan struct{}
-	if c.caller != nil {
-		canceled = c.caller.Context().Done()
-	}
-	select {
-	case result := <-c.done:
-		if c.caller.canceled() {
-			panic(ErrAbortThread)
-		}
-		if result.panicked {
-			panic(result.panicValue)
-		}
-	case <-canceled:
-		if !c.claimed.CompareAndSwap(false, true) {
-			// Keep script ownership until the running call returns.
-			<-c.done
-		}
-		panic(ErrAbortThread)
-	}
 }
 
 // waitForSignal serves native engine jobs while waiting, without advancing frames.
@@ -188,4 +149,43 @@ func (p *Coroutines) takeMainThreadJob() *waitJob {
 		return p.currentJobs.popFront()
 	}
 	return nil
+}
+
+func (c *mainThreadCall) run(p *Coroutines, call func()) {
+	if !c.claimed.CompareAndSwap(false, true) {
+		return
+	}
+	result := callbackResult{}
+	// Notify the waiter even if call exits the engine goroutine with Goexit.
+	defer func() { c.done <- result }()
+	if c.caller.canceled() {
+		return
+	}
+	scope := callbackNoDrain
+	if c.caller != nil {
+		scope |= callbackExclusive
+	}
+	result = p.invokeCallback(scope, call)
+}
+
+func (c *mainThreadCall) wait() {
+	var canceled <-chan struct{}
+	if c.caller != nil {
+		canceled = c.caller.Context().Done()
+	}
+	select {
+	case result := <-c.done:
+		if c.caller.canceled() {
+			panic(ErrAbortThread)
+		}
+		if result.panicked {
+			panic(result.panicValue)
+		}
+	case <-canceled:
+		if !c.claimed.CompareAndSwap(false, true) {
+			// Keep script ownership until the running call returns.
+			<-c.done
+		}
+		panic(ErrAbortThread)
+	}
 }

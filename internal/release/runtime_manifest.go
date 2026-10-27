@@ -71,6 +71,110 @@ type RuntimeAssetInput struct {
 	Path string
 }
 
+// GenerateRuntimeManifest hashes assets and creates a manifest sorted by asset
+// name. It validates the result against lock before returning it.
+func GenerateRuntimeManifest(lock RuntimeLock, provenance RuntimeProvenance, inputs []RuntimeAssetInput) (RuntimeManifest, error) {
+	if err := lock.Validate(); err != nil {
+		return RuntimeManifest{}, err
+	}
+	lockSHA256, err := lock.SHA256()
+	if err != nil {
+		return RuntimeManifest{}, err
+	}
+
+	assets := make([]RuntimeAsset, 0, len(inputs))
+	for _, input := range inputs {
+		if err := validateBaseName("runtime asset", input.Name); err != nil {
+			return RuntimeManifest{}, err
+		}
+		if strings.TrimSpace(input.Path) == "" {
+			return RuntimeManifest{}, fmt.Errorf("release: runtime asset %q has an empty path", input.Name)
+		}
+		size, digest, err := hashFile(input.Path)
+		if err != nil {
+			return RuntimeManifest{}, fmt.Errorf("release: hash runtime asset %q: %w", input.Name, err)
+		}
+		assets = append(assets, RuntimeAsset{Name: input.Name, Size: size, SHA256: digest})
+	}
+	slices.SortFunc(assets, func(a, b RuntimeAsset) int { return strings.Compare(a.Name, b.Name) })
+
+	manifest := RuntimeManifest{
+		Schema:            RuntimeManifestSchema,
+		RuntimeVersion:    lock.RuntimeVersion,
+		RuntimeABI:        lock.RuntimeABI,
+		ReleaseRepository: lock.ReleaseRepository,
+		LockSHA256:        lockSHA256,
+		Provenance:        provenance,
+		Assets:            assets,
+	}
+	if err := manifest.ValidateForLock(lock); err != nil {
+		return RuntimeManifest{}, err
+	}
+	return manifest, nil
+}
+
+// ParseRuntimeManifest decodes and structurally validates a manifest.
+func ParseRuntimeManifest(data []byte) (RuntimeManifest, error) {
+	var manifest RuntimeManifest
+	if err := strictjson.Decode(data, &manifest); err != nil {
+		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
+	}
+	if err := manifest.Validate(); err != nil {
+		return RuntimeManifest{}, err
+	}
+	return manifest, nil
+}
+
+// ParseRuntimeManifestForRelease decodes a manifest and binds it to the
+// selected runtime version and required release asset set without repeating
+// structural validation.
+func ParseRuntimeManifestForRelease(data []byte, runtimeVersion string, requiredAssets []string) (RuntimeManifest, error) {
+	manifest, err := ParseRuntimeManifest(data)
+	if err != nil {
+		return RuntimeManifest{}, err
+	}
+	if err := manifest.validateForVersion(runtimeVersion); err != nil {
+		return RuntimeManifest{}, err
+	}
+	if err := manifest.validateRequiredAssets(requiredAssets); err != nil {
+		return RuntimeManifest{}, err
+	}
+	return manifest, nil
+}
+
+// LoadRuntimeManifest reads and parses a runtime manifest file.
+func LoadRuntimeManifest(path string) (RuntimeManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return RuntimeManifest{}, fmt.Errorf("read runtime manifest: %w", err)
+	}
+	return ParseRuntimeManifest(data)
+}
+
+// WriteRuntimeManifest writes a validated runtime manifest to path.
+func WriteRuntimeManifest(path string, manifest RuntimeManifest) error {
+	data, err := manifest.JSON()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write runtime manifest: %w", err)
+	}
+	return nil
+}
+
+// WriteSHA256SUMS writes conventional checksum lines for a manifest's assets.
+func WriteSHA256SUMS(path string, manifest RuntimeManifest) error {
+	data, err := manifest.SHA256SUMS()
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write SHA256SUMS: %w", err)
+	}
+	return nil
+}
+
 // Validate checks the manifest's internal structure and canonical asset order.
 func (m RuntimeManifest) Validate() error {
 	if m.Schema != RuntimeManifestSchema {
@@ -216,17 +320,7 @@ func (m RuntimeManifest) VerifyAsset(name, path string) error {
 	if !ok {
 		return fmt.Errorf("release: runtime asset %q is not present in the manifest", name)
 	}
-	size, digest, err := hashFile(path)
-	if err != nil {
-		return fmt.Errorf("release: verify runtime asset %q: %w", name, err)
-	}
-	if size != asset.Size {
-		return fmt.Errorf("release: runtime asset %q size = %d, want %d", name, size, asset.Size)
-	}
-	if digest != asset.SHA256 {
-		return fmt.Errorf("release: runtime asset %q SHA-256 = %s, want %s", name, digest, asset.SHA256)
-	}
-	return nil
+	return verifyRuntimeAssetFile(asset, path)
 }
 
 // VerifyFiles verifies every manifest asset below dir by exact size and SHA-256.
@@ -235,7 +329,7 @@ func (m RuntimeManifest) VerifyFiles(dir string) error {
 		return err
 	}
 	for _, asset := range m.Assets {
-		if err := m.VerifyAsset(asset.Name, filepath.Join(dir, asset.Name)); err != nil {
+		if err := verifyRuntimeAssetFile(asset, filepath.Join(dir, asset.Name)); err != nil {
 			return err
 		}
 	}
@@ -252,110 +346,6 @@ func (m RuntimeManifest) SHA256SUMS() ([]byte, error) {
 		fmt.Fprintf(&sums, "%s  %s\n", asset.SHA256, asset.Name)
 	}
 	return []byte(sums.String()), nil
-}
-
-// GenerateRuntimeManifest hashes assets and creates a manifest sorted by asset
-// name. It validates the result against lock before returning it.
-func GenerateRuntimeManifest(lock RuntimeLock, provenance RuntimeProvenance, inputs []RuntimeAssetInput) (RuntimeManifest, error) {
-	if err := lock.Validate(); err != nil {
-		return RuntimeManifest{}, err
-	}
-	lockSHA256, err := lock.SHA256()
-	if err != nil {
-		return RuntimeManifest{}, err
-	}
-
-	assets := make([]RuntimeAsset, 0, len(inputs))
-	for _, input := range inputs {
-		if err := validateBaseName("runtime asset", input.Name); err != nil {
-			return RuntimeManifest{}, err
-		}
-		if strings.TrimSpace(input.Path) == "" {
-			return RuntimeManifest{}, fmt.Errorf("release: runtime asset %q has an empty path", input.Name)
-		}
-		size, digest, err := hashFile(input.Path)
-		if err != nil {
-			return RuntimeManifest{}, fmt.Errorf("release: hash runtime asset %q: %w", input.Name, err)
-		}
-		assets = append(assets, RuntimeAsset{Name: input.Name, Size: size, SHA256: digest})
-	}
-	slices.SortFunc(assets, func(a, b RuntimeAsset) int { return strings.Compare(a.Name, b.Name) })
-
-	manifest := RuntimeManifest{
-		Schema:            RuntimeManifestSchema,
-		RuntimeVersion:    lock.RuntimeVersion,
-		RuntimeABI:        lock.RuntimeABI,
-		ReleaseRepository: lock.ReleaseRepository,
-		LockSHA256:        lockSHA256,
-		Provenance:        provenance,
-		Assets:            assets,
-	}
-	if err := manifest.ValidateForLock(lock); err != nil {
-		return RuntimeManifest{}, err
-	}
-	return manifest, nil
-}
-
-// ParseRuntimeManifest decodes and structurally validates a manifest.
-func ParseRuntimeManifest(data []byte) (RuntimeManifest, error) {
-	var manifest RuntimeManifest
-	if err := strictjson.Decode(data, &manifest); err != nil {
-		return RuntimeManifest{}, fmt.Errorf("decode runtime manifest: %w", err)
-	}
-	if err := manifest.Validate(); err != nil {
-		return RuntimeManifest{}, err
-	}
-	return manifest, nil
-}
-
-// ParseRuntimeManifestForRelease decodes a manifest and binds it to the
-// selected runtime version and required release asset set without repeating
-// structural validation.
-func ParseRuntimeManifestForRelease(data []byte, runtimeVersion string, requiredAssets []string) (RuntimeManifest, error) {
-	manifest, err := ParseRuntimeManifest(data)
-	if err != nil {
-		return RuntimeManifest{}, err
-	}
-	if err := manifest.validateForVersion(runtimeVersion); err != nil {
-		return RuntimeManifest{}, err
-	}
-	if err := manifest.validateRequiredAssets(requiredAssets); err != nil {
-		return RuntimeManifest{}, err
-	}
-	return manifest, nil
-}
-
-// LoadRuntimeManifest reads and parses a runtime manifest file.
-func LoadRuntimeManifest(path string) (RuntimeManifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return RuntimeManifest{}, fmt.Errorf("read runtime manifest: %w", err)
-	}
-	return ParseRuntimeManifest(data)
-}
-
-// WriteRuntimeManifest writes a validated runtime manifest to path.
-func WriteRuntimeManifest(path string, manifest RuntimeManifest) error {
-	data, err := manifest.JSON()
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write runtime manifest: %w", err)
-	}
-	return nil
-}
-
-// WriteSHA256SUMS writes conventional checksum lines for a manifest's assets.
-func WriteSHA256SUMS(path string, manifest RuntimeManifest) error {
-	data, err := manifest.SHA256SUMS()
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write SHA256SUMS: %w", err)
-	}
-	return nil
 }
 
 func (m RuntimeManifest) validateForVersion(runtimeVersion string) error {
@@ -386,6 +376,20 @@ func (m RuntimeManifest) validateRequiredAssets(requiredAssets []string) error {
 		if _, ok := required[asset.Name]; !ok {
 			return fmt.Errorf("release: runtime asset %q is not required", asset.Name)
 		}
+	}
+	return nil
+}
+
+func verifyRuntimeAssetFile(asset RuntimeAsset, path string) error {
+	size, digest, err := hashFile(path)
+	if err != nil {
+		return fmt.Errorf("release: verify runtime asset %q: %w", asset.Name, err)
+	}
+	if size != asset.Size {
+		return fmt.Errorf("release: runtime asset %q size = %d, want %d", asset.Name, size, asset.Size)
+	}
+	if digest != asset.SHA256 {
+		return fmt.Errorf("release: runtime asset %q SHA-256 = %s, want %s", asset.Name, digest, asset.SHA256)
 	}
 	return nil
 }

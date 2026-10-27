@@ -17,6 +17,7 @@
 package common
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
@@ -156,6 +157,28 @@ func TestMustGoTypeForCTypePanicsOnMissingMapping(t *testing.T) {
 	)
 }
 
+func TestManagerSignatureRejectsUnmappedArgumentTypes(t *testing.T) {
+	for _, tt := range []struct {
+		cType        string
+		functionName string
+	}{
+		{"double", "GDExtensionSpxSpriteSetPrecision"},
+		{"uint64_t", "GDExtensionSpxSpriteSetToken"},
+	} {
+		t.Run(tt.cType, func(t *testing.T) {
+			header, err := clang.ParseCString(fmt.Sprintf("typedef void (*%s)(%s value);", tt.functionName, tt.cType))
+			require.NoError(t, err)
+			functions := header.CollectGDExtensionInterfaceFunctions()
+			require.Len(t, functions, 1)
+			generation := NewGenerationContext(header, GenerationMetadata{})
+			require.PanicsWithValue(t,
+				fmt.Sprintf("no Go mapping for C type %q in function %s", tt.cType, tt.functionName),
+				func() { generation.ManagerInterfaceSignature(&functions[0]) },
+			)
+		})
+	}
+}
+
 func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 	metadata := GenerationMetadata{}
 
@@ -190,4 +213,32 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").GDXType(function.Name))
 	require.Equal(t, "buffer", generation.Parameter(function, "buffer_data").Name)
 	require.True(t, generation.Parameter(function, "len").IsLength)
+}
+
+func TestArrayBufferRejectsUnsupportedElementTypes(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		typeID  ArrayType
+		unknown bool
+	}{
+		{"negative ABI ID", ArrayType(-1), true},
+		{"unassigned ABI ID", ArrayType(1<<31 - 1), true},
+		{"unknown array", ArrayUnknown, false},
+		{"boolean array", ArrayBool, false},
+		{"string array", ArrayString, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Descriptor-only types must not generate raw buffers or direct Go
+			// slices; both backends need an explicit storage representation.
+			cError := fmt.Sprintf("array type %d does not support raw buffers", tt.typeID)
+			goError := fmt.Sprintf("array type %d does not support direct Go slices", tt.typeID)
+			if tt.unknown {
+				cError = fmt.Sprintf("unsupported array type: %d", tt.typeID)
+				goError = cError
+			}
+			require.PanicsWithValue(t, cError, func() { tt.typeID.CType() })
+			buffer := ArrayBuffer{Type: tt.typeID}
+			require.PanicsWithValue(t, goError, func() { buffer.GoType() })
+		})
+	}
 }

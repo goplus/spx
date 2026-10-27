@@ -41,12 +41,6 @@ func FindRepoRoot() (string, error) {
 	}
 }
 
-func isRepoRoot(dir string) bool {
-	return FileExists(filepath.Join(dir, "go.mod")) &&
-		FileExists(filepath.Join(dir, "cmd", "spx", "install.sh")) &&
-		FileExists(filepath.Join(dir, "internal", "tools"))
-}
-
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -55,4 +49,10 @@ func FileExists(path string) bool {
 func DirExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+func isRepoRoot(dir string) bool {
+	return FileExists(filepath.Join(dir, "go.mod")) &&
+		FileExists(filepath.Join(dir, "cmd", "spx", "install.sh")) &&
+		FileExists(filepath.Join(dir, "internal", "tools"))
 }

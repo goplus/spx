@@ -46,18 +46,6 @@ func init() {
 	gdspx.SetLinkerBridge(linkerBridge{})
 }
 
-func (linkerBridge) IsWebIntepreterMode() bool {
-	return IsWebIntepreterMode()
-}
-
-func (linkerBridge) Link(coreCallbackInfo CoreCallbackInfo) {
-	Link(coreCallbackInfo)
-}
-
-func (linkerBridge) Unlink() {
-	Unlink()
-}
-
 func IsWebIntepreterMode() bool {
 	return isWebIntepreterMode
 }
@@ -96,6 +84,25 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	return session
 }
 
+func Unlink() {
+	linkMu.Lock()
+	session := activeLink
+	linkMu.Unlock()
+	session.Unlink()
+}
+
+func (linkerBridge) IsWebIntepreterMode() bool {
+	return IsWebIntepreterMode()
+}
+
+func (linkerBridge) Link(coreCallbackInfo CoreCallbackInfo) {
+	Link(coreCallbackInfo)
+}
+
+func (linkerBridge) Unlink() {
+	Unlink()
+}
+
 func (s *LinkSession) Run(ready func()) {
 	s.backend.Run(ready)
 }
@@ -113,11 +120,4 @@ func (s *LinkSession) Unlink() {
 	activeLink = nil
 	coreCallbacks = CoreCallbackInfo{}
 	isWebIntepreterMode = false
-}
-
-func Unlink() {
-	linkMu.Lock()
-	session := activeLink
-	linkMu.Unlock()
-	session.Unlink()
 }

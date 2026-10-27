@@ -100,6 +100,49 @@ func (p *inputManager) sampleInputState() InputReplayState {
 	}
 }
 
+func (p *inputManager) resolveInputSessionState(session *inputSession, delta float64) (InputReplayState, error) {
+	session.operationMu.Lock()
+	defer session.operationMu.Unlock()
+	c := &p.frame
+	resolved, err := session.consumeSampledInputTickLocked(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		state := p.sampleInputState()
+		return state, replayMouseEventsFromEngine(c.mouseEvents), replayKeyEventsFromEngine(c.keyEvents)
+	})
+	if err != nil {
+		return InputReplayState{}, err
+	}
+	if resolved.firstTick {
+		point := mathf.Vec2{X: resolved.initial.position.X, Y: resolved.initial.position.Y}
+		c.history.Reset(point, resolved.initial.buttons&1 != 0)
+		p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
+		p.swipe.InitWithClock(p.g.inputClock)
+	}
+	c.mouseEvents = engineMouseEventsFromReplay(resolved.frame.MouseEvents, c.mouseEvents)
+	c.keyEvents = engineKeyEventsFromReplay(resolved.frame.KeyEvents, c.keyEvents)
+	return resolved.frame.State, nil
+}
+
+func (p *inputManager) effectiveKeyPressed(key Key) bool {
+	if state, replaying := p.g.currentInputSession().playbackInput(key); replaying {
+		return state.keyPressed
+	}
+	return engine.Managers().InputMgr.GetKey(int64(key))
+}
+
+func (p *inputManager) effectiveMousePos() mathf.Vec2 {
+	if mouse, replaying := p.g.currentInputSession().playbackInput(KeyAny); replaying {
+		return mathf.Vec2{X: mouse.position.X, Y: mouse.position.Y}
+	}
+	return p.mousePos
+}
+
+func (p *inputManager) effectiveMousePressed() bool {
+	if mouse, replaying := p.g.currentInputSession().playbackInput(KeyAny); replaying {
+		return mouse.buttons&0b011 != 0
+	}
+	return engine.AnyMouseButtonPressed()
+}
+
 // dispatchFrameEvents completes this frame's routing before returning to the
 // engine. User handlers remain asynchronous and may wait across future frames.
 func (p *Game) dispatchFrameEvents() {

@@ -35,6 +35,24 @@ type recordedCommand struct {
 	args []string
 }
 
+type recordedCall struct {
+	script string
+	args   []string
+}
+
+type recordingRunner struct {
+	calls       []recordedCall
+	commands    []recordedCommand
+	repoRoot    string
+	demos       []string
+	stopCalls   int
+	scriptErr   error
+	commandErr  error
+	listErr     error
+	stopErr     error
+	commandHook func(string, string, ...string) error
+}
+
 func TestWorkflowDispatchAndArgumentErrors(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -385,74 +403,6 @@ func TestWorkflowAdditionalFailurePaths(t *testing.T) {
 	}
 }
 
-func newWorkflowBuildFixture(t *testing.T) *recordingRunner {
-	t.Helper()
-	root := newWorkflowFixture(t)
-	for _, name := range []string{"SCsub", "config.py"} {
-		mustWriteFile(t, filepath.Join(root, "module", name), nil)
-	}
-	mustWriteFile(t, filepath.Join(root, "module", "spx_scons_profile.json"), []byte(`{"schema":1,"common":[],"editor_release":[],"template_release":[]}`))
-	lock := release.DefaultRuntimeLock()
-	bin := filepath.Join(root, "tools")
-	for _, name := range []string{"xgo", "go", "python3"} {
-		writeWorkflowTool(t, filepath.Join(bin, name), "exit 0\n")
-	}
-	writeWorkflowTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
-	venv := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
-	writeWorkflowTool(t, filepath.Join(venv, "python"), "printf '%s\\n' '"+lock.Toolchain.SCons+"'\n")
-	writeWorkflowTool(t, filepath.Join(venv, "scons"), `case "$*" in
-  *platform=linuxbsd*) [ "$WORKFLOW_FAIL" != host ] || exit 23 ;;
-  *platform=web*) [ "$WORKFLOW_FAIL" != web ] || exit 23 ;;
-esac
-exit 0
-`)
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	env, err := shared.ResolveBuildEnvironment(root, "linux")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{
-		"godot.linuxbsd.editor.dev." + env.Arch, "godot.linuxbsd.template_release." + env.Arch,
-		"godot_ios.zip", "android_debug.apk", "android_release.apk", "android_source.zip",
-		"godot.web.template_release.wasm32.nothreads.zip",
-	} {
-		mustWriteFile(t, filepath.Join(env.EngineDir, "bin", name), []byte("built "+name))
-	}
-	writeWorkflowTool(t, filepath.Join(env.EngineDir, "platform", "android", "java", "gradlew"), "exit 0\n")
-	javaHome := filepath.Join(root, "java")
-	writeWorkflowTool(t, filepath.Join(javaHome, "bin", "java"), "printf '%s\\n' 'openjdk version \""+lock.Toolchain.JDK+".0.0\"'\n")
-	t.Setenv("JAVA_HOME", javaHome)
-	t.Setenv("PATH", filepath.Join(javaHome, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
-	sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
-	sdkBin := filepath.Join(sdk, "upstream", "emscripten")
-	for _, name := range []string{"emcc", "em++"} {
-		writeWorkflowTool(t, filepath.Join(sdkBin, name), "printf '%s\\n' 'emcc fixture "+lock.Toolchain.EMSDK+"'\n")
-	}
-	writeWorkflowTool(t, filepath.Join(sdk, "emsdk"), "[ \"$1\" = activate ]\n")
-	mustWriteFile(t, filepath.Join(sdk, "emsdk_env.sh"), []byte("export PATH="+shared.ShellQuote(sdkBin)+":\"$PATH\"\n"))
-	t.Setenv("EM_CACHE", filepath.Join(root, "em-cache"))
-	t.Setenv("EM_CONFIG", filepath.Join(root, "em-config"))
-	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), []byte("extension"))
-	runner := &recordingRunner{repoRoot: root}
-	runner.commandHook = func(dir, name string, args ...string) error {
-		if dir != root || name != "go" || len(args) != 5 || args[0] != "run" || args[1] != "./cmd/spx" || args[3] != "--path" {
-			t.Fatalf("unexpected export command %s %s %q", dir, name, args)
-		}
-		output := filepath.Join(args[4], "project", ".builds")
-		switch args[2] {
-		case "exportpack":
-			mustWriteFile(t, filepath.Join(output, "pc", "gdexport.pck"), []byte("exported pack"))
-		case "exporttemplateweb":
-			mustWriteFile(t, filepath.Join(output, "webi", "engine.pck"), []byte("web pack"))
-			mustWriteFile(t, filepath.Join(output, "webi", "engine.js"), []byte("engine"))
-		default:
-			t.Fatalf("unexpected export %q", args[2])
-		}
-		return nil
-	}
-	return runner
-}
-
 func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("isolated Linux build toolchain")
@@ -606,24 +556,6 @@ func TestTemplateEditorRejectsInvalidProjects(t *testing.T) {
 	}
 }
 
-type recordedCall struct {
-	script string
-	args   []string
-}
-
-type recordingRunner struct {
-	calls       []recordedCall
-	commands    []recordedCommand
-	repoRoot    string
-	demos       []string
-	stopCalls   int
-	scriptErr   error
-	commandErr  error
-	listErr     error
-	stopErr     error
-	commandHook func(string, string, ...string) error
-}
-
 func (r *recordingRunner) RunScript(relativePath string, args ...string) error {
 	r.calls = append(r.calls, recordedCall{
 		script: relativePath,
@@ -662,6 +594,74 @@ func (r *recordingRunner) ListDemoDirs() ([]string, error) {
 func (r *recordingRunner) StopWebServers() error {
 	r.stopCalls++
 	return r.stopErr
+}
+
+func newWorkflowBuildFixture(t *testing.T) *recordingRunner {
+	t.Helper()
+	root := newWorkflowFixture(t)
+	for _, name := range []string{"SCsub", "config.py"} {
+		mustWriteFile(t, filepath.Join(root, "module", name), nil)
+	}
+	mustWriteFile(t, filepath.Join(root, "module", "spx_scons_profile.json"), []byte(`{"schema":1,"common":[],"editor_release":[],"template_release":[]}`))
+	lock := release.DefaultRuntimeLock()
+	bin := filepath.Join(root, "tools")
+	for _, name := range []string{"xgo", "go", "python3"} {
+		writeWorkflowTool(t, filepath.Join(bin, name), "exit 0\n")
+	}
+	writeWorkflowTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
+	venv := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
+	writeWorkflowTool(t, filepath.Join(venv, "python"), "printf '%s\\n' '"+lock.Toolchain.SCons+"'\n")
+	writeWorkflowTool(t, filepath.Join(venv, "scons"), `case "$*" in
+  *platform=linuxbsd*) [ "$WORKFLOW_FAIL" != host ] || exit 23 ;;
+  *platform=web*) [ "$WORKFLOW_FAIL" != web ] || exit 23 ;;
+esac
+exit 0
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	env, err := shared.ResolveBuildEnvironment(root, "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"godot.linuxbsd.editor.dev." + env.Arch, "godot.linuxbsd.template_release." + env.Arch,
+		"godot_ios.zip", "android_debug.apk", "android_release.apk", "android_source.zip",
+		"godot.web.template_release.wasm32.nothreads.zip",
+	} {
+		mustWriteFile(t, filepath.Join(env.EngineDir, "bin", name), []byte("built "+name))
+	}
+	writeWorkflowTool(t, filepath.Join(env.EngineDir, "platform", "android", "java", "gradlew"), "exit 0\n")
+	javaHome := filepath.Join(root, "java")
+	writeWorkflowTool(t, filepath.Join(javaHome, "bin", "java"), "printf '%s\\n' 'openjdk version \""+lock.Toolchain.JDK+".0.0\"'\n")
+	t.Setenv("JAVA_HOME", javaHome)
+	t.Setenv("PATH", filepath.Join(javaHome, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
+	sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
+	sdkBin := filepath.Join(sdk, "upstream", "emscripten")
+	for _, name := range []string{"emcc", "em++"} {
+		writeWorkflowTool(t, filepath.Join(sdkBin, name), "printf '%s\\n' 'emcc fixture "+lock.Toolchain.EMSDK+"'\n")
+	}
+	writeWorkflowTool(t, filepath.Join(sdk, "emsdk"), "[ \"$1\" = activate ]\n")
+	mustWriteFile(t, filepath.Join(sdk, "emsdk_env.sh"), []byte("export PATH="+shared.ShellQuote(sdkBin)+":\"$PATH\"\n"))
+	t.Setenv("EM_CACHE", filepath.Join(root, "em-cache"))
+	t.Setenv("EM_CONFIG", filepath.Join(root, "em-config"))
+	mustWriteFile(t, filepath.Join(root, "cmd", "spx", "template", "project", "runtime.gdextension.txt"), []byte("extension"))
+	runner := &recordingRunner{repoRoot: root}
+	runner.commandHook = func(dir, name string, args ...string) error {
+		if dir != root || name != "go" || len(args) != 5 || args[0] != "run" || args[1] != "./cmd/spx" || args[3] != "--path" {
+			t.Fatalf("unexpected export command %s %s %q", dir, name, args)
+		}
+		output := filepath.Join(args[4], "project", ".builds")
+		switch args[2] {
+		case "exportpack":
+			mustWriteFile(t, filepath.Join(output, "pc", "gdexport.pck"), []byte("exported pack"))
+		case "exporttemplateweb":
+			mustWriteFile(t, filepath.Join(output, "webi", "engine.pck"), []byte("web pack"))
+			mustWriteFile(t, filepath.Join(output, "webi", "engine.js"), []byte("engine"))
+		default:
+			t.Fatalf("unexpected export %q", args[2])
+		}
+		return nil
+	}
+	return runner
 }
 
 func mustMkdirAll(t *testing.T, path string) {

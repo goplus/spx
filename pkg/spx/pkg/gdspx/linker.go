@@ -32,13 +32,6 @@ func SetLinkerBridge(bridge LinkerBridge) {
 	linkerBridge = bridge
 }
 
-func requireLinkerBridge() LinkerBridge {
-	if linkerBridge == nil {
-		panic("gdspx linker bridge is not initialized")
-	}
-	return linkerBridge
-}
-
 // IsWebIntepreterMode is a compatibility shim around the runtime linker bridge.
 func IsWebIntepreterMode() bool {
 	return requireLinkerBridge().IsWebIntepreterMode()
@@ -52,4 +45,11 @@ func LinkEngine(coreCallbackInfo engine.CoreCallbackInfo) {
 // UnlinkEngine is a compatibility shim around the runtime linker bridge.
 func UnlinkEngine() {
 	requireLinkerBridge().Unlink()
+}
+
+func requireLinkerBridge() LinkerBridge {
+	if linkerBridge == nil {
+		panic("gdspx linker bridge is not initialized")
+	}
+	return linkerBridge
 }

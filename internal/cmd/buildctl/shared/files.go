@@ -40,6 +40,15 @@ type ZipExtractOptions struct {
 	MaterializeSymlinksAsFiles bool
 }
 
+// HTTPStatusError reports a failed HTTP download response.
+type HTTPStatusError struct {
+	URL        string
+	StatusCode int
+	Status     string
+}
+
+type writerFunc func([]byte) (int, error)
+
 func CopyDir(src, dst string) error {
 	return fileutil.CopyDir(src, dst)
 }
@@ -67,17 +76,6 @@ func FetchURLToFile(url, dst string) error {
 // FetchURLToFileWithLimit downloads atomically within maxBytes.
 func FetchURLToFileWithLimit(url, dst string, maxBytes int64) error {
 	return DownloadURL(url, dst, maxBytes, nil)
-}
-
-// HTTPStatusError reports a failed HTTP download response.
-type HTTPStatusError struct {
-	URL        string
-	StatusCode int
-	Status     string
-}
-
-func (e *HTTPStatusError) Error() string {
-	return fmt.Sprintf("download %s failed: %s", e.URL, e.Status)
 }
 
 // DownloadURL saves a bounded response atomically. progress receives written and declared bytes.
@@ -153,7 +151,9 @@ func DownloadURL(url, dst string, maxBytes int64, progress func(int64, int64)) (
 	return ReplaceFile(tmpPath, dst)
 }
 
-type writerFunc func([]byte) (int, error)
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("download %s failed: %s", e.URL, e.Status)
+}
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 

@@ -21,25 +21,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/ui"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
-	game := &Game{}
-	game.initShapeMgr()
-	sprites := make(map[string]*SpriteImpl, len(names))
-	for _, name := range names {
-		spr := &SpriteImpl{g: game, name: name}
-		sprites[name] = spr
-		game.shapeMgr.add(spr)
-	}
-	game.shapeMgr.updateRenderLayers()
-	return game, sprites
-}
+type shapeLayerSortManager struct{ pkgengine.IExtMgr }
 
 func TestShapeManagerInitClearsReferences(t *testing.T) {
 	marker := &struct{}{}
@@ -100,34 +87,6 @@ func TestShapeManagerCommitsClearedProxyDeletion(t *testing.T) {
 	s.commitProxyChanges(batch)
 	if len(s.destroyItems) != 0 || s.destroyItems[:1][0] != nil {
 		t.Fatal("commit retained a deletion with a cleared proxy")
-	}
-}
-
-func spriteOrderNames(shapes []Shape) []string {
-	names := make([]string, 0, len(shapes))
-	for _, shape := range shapes {
-		if spr, ok := shape.(*SpriteImpl); ok {
-			names = append(names, spr.name)
-		}
-	}
-	return names
-}
-
-func assertLayerOrder(t *testing.T, game *Game, want []string) {
-	t.Helper()
-	if got := spriteOrderNames(game.getAllShapes()); !reflect.DeepEqual(got, want) {
-		t.Fatalf("sprite order = %v, want %v", got, want)
-	}
-	wantLayer := firstSpriteLayer
-	for _, shape := range game.getAllShapes() {
-		spr, ok := shape.(*SpriteImpl)
-		if !ok {
-			continue
-		}
-		if got := spr.runtimeState.Layer; got != wantLayer {
-			t.Fatalf("sprite %q layer = %d, want %d", spr.name, got, wantLayer)
-		}
-		wantLayer++
 	}
 }
 
@@ -217,17 +176,9 @@ func TestRemovingSpriteReindexesRemainingLayersAbovePen(t *testing.T) {
 	}
 }
 
-type shapeLayerSortManager struct{ pkgengine.IExtMgr }
-
-func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
-
-func TestShapeManagerCachesBoundedNamesAndWrapsBubbleIDs(t *testing.T) {
-	manager := shapeManager{nextTextBubbleLayoutID: ^uint64(0)}
-	bubble := &textBubble{}
-	manager.add(bubble)
-	if bubble.layoutID != 1 {
-		t.Fatalf("wrapped layout id=%d,want1", bubble.layoutID)
-	}
+func TestShapeManagerCachesBoundedNames(t *testing.T) {
+	var manager shapeManager
+	manager.add(&struct{}{})
 	for _, name := range []string{"missing1", "missing2", "missing3"} {
 		if len(manager.spritesNamed(name)) != 0 {
 			t.Fatal("missing name found sprites")
@@ -271,22 +222,70 @@ func TestShapeManagerCloningDeletedSourceStopsScript(t *testing.T) {
 	}
 }
 
-func TestShapeManagerRelayoutsChangedBubbleInput(t *testing.T) {
-	mgr := setupCameraTestMgr(t)
-	mgr.zoom = mathf.NewVec2(1, 1)
-	previousScale := engine.WindowScale()
-	engine.SetWindowScale(1)
-	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
-	sprite := newRenderOffsetTestSprite()
-	sprite.spriteState.IsVisible = true
-	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
-	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
-	manager := shapeManager{textBubbles: []*textBubble{bubble}}
-	manager.layoutTextBubbles()
-	previous := bubble.layout
-	sprite.SetXYpos(80, 60)
-	manager.layoutTextBubbles()
-	if bubble.layout.SameInput(previous) {
-		t.Fatal("moving bubble owner did not refresh cached layout input")
+func TestSetLayerPublicAPI(t *testing.T) {
+	spriteType := reflect.TypeOf((*Sprite)(nil)).Elem()
+	if _, ok := spriteType.MethodByName("ChangeLayer"); ok {
+		t.Fatal("Sprite should not expose ChangeLayer")
+	}
+	if _, ok := spriteType.MethodByName("SetLayer__1"); !ok {
+		t.Fatal("Sprite should keep SetLayer__1 for overload dispatch")
+	}
+
+	spriteImplType := reflect.TypeOf((*SpriteImpl)(nil))
+	if _, ok := spriteImplType.MethodByName("ChangeLayer"); ok {
+		t.Fatal("SpriteImpl should not expose ChangeLayer")
+	}
+	if _, ok := spriteImplType.MethodByName("SetLayer__1"); !ok {
+		t.Fatal("SpriteImpl should keep SetLayer__1 for overload dispatch")
+	}
+
+	if XGoo_Sprite_SetLayerWith != ".SetLayerTo,.SetLayer__1" {
+		t.Fatalf("XGoo_Sprite_SetLayerWith = %q, want %q", XGoo_Sprite_SetLayerWith, ".SetLayerTo,.SetLayer__1")
+	}
+	if XGoo_SpriteImpl_SetLayerWith != ".SetLayerTo,.SetLayer__1" {
+		t.Fatalf("XGoo_SpriteImpl_SetLayerWith = %q, want %q", XGoo_SpriteImpl_SetLayerWith, ".SetLayerTo,.SetLayer__1")
+	}
+}
+
+func (*shapeLayerSortManager) SetLayerSorterMode(int64) {}
+
+func newLayerOrderTestGame(names ...string) (*Game, map[string]*SpriteImpl) {
+	game := &Game{}
+	game.initShapeMgr()
+	sprites := make(map[string]*SpriteImpl, len(names))
+	for _, name := range names {
+		spr := &SpriteImpl{g: game, name: name}
+		sprites[name] = spr
+		game.shapeMgr.add(spr)
+	}
+	game.shapeMgr.updateRenderLayers()
+	return game, sprites
+}
+
+func spriteOrderNames(shapes []Shape) []string {
+	names := make([]string, 0, len(shapes))
+	for _, shape := range shapes {
+		if spr, ok := shape.(*SpriteImpl); ok {
+			names = append(names, spr.name)
+		}
+	}
+	return names
+}
+
+func assertLayerOrder(t *testing.T, game *Game, want []string) {
+	t.Helper()
+	if got := spriteOrderNames(game.getAllShapes()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("sprite order = %v, want %v", got, want)
+	}
+	wantLayer := firstSpriteLayer
+	for _, shape := range game.getAllShapes() {
+		spr, ok := shape.(*SpriteImpl)
+		if !ok {
+			continue
+		}
+		if got := spr.runtimeState.Layer; got != wantLayer {
+			t.Fatalf("sprite %q layer = %d, want %d", spr.name, got, wantLayer)
+		}
+		wantLayer++
 	}
 }

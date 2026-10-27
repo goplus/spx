@@ -31,6 +31,8 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
+type manifestFailWriter struct{ err error }
+
 func TestRunReleaseManifestGenerateAndVerify(t *testing.T) {
 	t.Parallel()
 
@@ -174,10 +176,6 @@ func TestEmbeddedAssetManifest(t *testing.T) {
 	}
 }
 
-type manifestFailWriter struct{ err error }
-
-func (w manifestFailWriter) Write([]byte) (int, error) { return 0, w.err }
-
 func TestManifestMainModesAndOutputFailures(t *testing.T) {
 	lock := release.DefaultRuntimeLock()
 	dir := t.TempDir()
@@ -243,3 +241,5 @@ func TestManifestMainModesAndOutputFailures(t *testing.T) {
 		})
 	}
 }
+
+func (w manifestFailWriter) Write([]byte) (int, error) { return 0, w.err }

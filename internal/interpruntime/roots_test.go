@@ -25,23 +25,11 @@ import (
 	"testing"
 )
 
-func testRoots(t *testing.T) Roots {
-	t.Helper()
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	sessionDir := filepath.Join(t.TempDir(), "session")
-	for _, dir := range []string{assetDir, sessionDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir}
-}
-
 func TestRootsFromEnv(t *testing.T) {
 	roots := testRoots(t)
 	env := []string{
 		"PATH=/bin",
+		ProjectDirEnv,
 		ProjectDirEnv + "=" + roots.ProjectDir,
 		AssetDirEnv + "=" + roots.AssetDir,
 		SessionDirEnv + "=" + roots.SessionDir,
@@ -92,6 +80,7 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 		PortableConfigDirEnv + "=/attacker/config",
 		PortableConfigIdentityEnv + "=sha256:attacker",
 		"UNCHANGED=value",
+		"UNCHANGED_WITHOUT_VALUE",
 	}
 	got, err := roots.Environment(base)
 	if err != nil {
@@ -100,6 +89,7 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 	want := []string{
 		"PATH=/bin",
 		"UNCHANGED=value",
+		"UNCHANGED_WITHOUT_VALUE",
 		ProjectDirEnv + "=" + roots.ProjectDir,
 		AssetDirEnv + "=" + roots.AssetDir,
 		SessionDirEnv + "=" + roots.SessionDir,
@@ -110,7 +100,7 @@ func TestEnvironmentReplacesAmbientRoots(t *testing.T) {
 }
 
 func TestPortableConfigFromEnv(t *testing.T) {
-	if directory, identity, found, err := PortableConfigFromEnv([]string{"KEEP=value"}); err != nil || found || directory != "" || identity != "" {
+	if directory, identity, found, err := PortableConfigFromEnv([]string{"KEEP=value", PortableConfigDirEnv}); err != nil || found || directory != "" || identity != "" {
 		t.Fatalf("PortableConfigFromEnv() = %q, %q, %v, %v, want absent", directory, identity, found, err)
 	}
 	directory, identity, found, err := PortableConfigFromEnv([]string{
@@ -222,4 +212,32 @@ func TestRootsRejectAssetDirectoryThroughSymlinkOutsideProject(t *testing.T) {
 	if err := roots.Validate(); err == nil || !strings.Contains(err.Error(), "within ProjectDir") {
 		t.Fatalf("Roots.Validate() error = %v, want canonical ProjectDir containment rejection", err)
 	}
+}
+
+func TestEnvironmentRejectsMissingRootsWithoutChangingBase(t *testing.T) {
+	roots := testRoots(t)
+	if err := os.Remove(roots.AssetDir); err != nil {
+		t.Fatal(err)
+	}
+	base := []string{"KEEP=value", AssetDirEnv + "=/old/assets"}
+	before := append([]string(nil), base...)
+	if environment, err := roots.Environment(base); environment != nil || !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Environment = %v, %v; want missing assets rejection", environment, err)
+	}
+	if !reflect.DeepEqual(base, before) {
+		t.Fatalf("base environment changed: %v, want %v", base, before)
+	}
+}
+
+func testRoots(t *testing.T) Roots {
+	t.Helper()
+	projectDir := t.TempDir()
+	assetDir := filepath.Join(projectDir, "assets")
+	sessionDir := filepath.Join(t.TempDir(), "session")
+	for _, dir := range []string{assetDir, sessionDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: sessionDir}
 }

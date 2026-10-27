@@ -457,40 +457,6 @@ func TestWebAssetMoveAndMergeFailures(t *testing.T) {
 	})
 }
 
-func newWebExportFixture(t *testing.T, mode string) *CmdTool {
-	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	root = filepath.Join(root, "game[one]")
-	goRoot := filepath.Join(root, "goroot")
-	t.Setenv("SPX_WEB_GOROOT", goRoot)
-	t.Setenv("SPX_WEB_PROJECT_DIR", root)
-	installCommandTestTools(t, map[string]string{"go": `test "$*" = 'env GOROOT'; test "$(pwd -P)" = "$SPX_WEB_PROJECT_DIR"; printf '%s\n' "$SPX_WEB_GOROOT"`})
-	build := "fast"
-	cmd := &CmdTool{
-		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
-		WebDir: filepath.Join(root, "project", ".builds", "web"), GoBinPath: filepath.Join(root, "bin"), Version: "test",
-		ProjectFS: webExportTestFS, PlatformFS: webExportTestFS, Args: ExtraArgs{Build: &build},
-	}
-	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrttest_web"+mode)
-	for name, content := range map[string]string{
-		filepath.Join(root, "main.spx"):                          "onStart => {}\n",
-		filepath.Join(root, "assets", "index.json"):              "{}",
-		filepath.Join(templateDir, "godot.editor.html"):          "web entry",
-		filepath.Join(templateDir, "engine.wasm"):                "engine wasm",
-		filepath.Join(templateDir, "engine.js"):                  "{if(initializedJS){checkMailbox()}};throw ex}}self.onmessage=handleMessage}",
-		filepath.Join(cmd.GoBinPath, "ispx", "game.js"):          "game();",
-		filepath.Join(cmd.GoBinPath, "ispx", "lab", "debug.txt"): "debug only",
-		filepath.Join(cmd.GoBinPath, "ispx.wasm"):                "interpreter wasm",
-		filepath.Join(goRoot, "lib", "wasm", "wasm_exec.js"):     "runtime();",
-	} {
-		writeCommandTestFile(t, name, content)
-	}
-	return cmd
-}
-
 func TestWeChatDevToolsUsesTargetProjectDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake DevTools command uses a POSIX shell script")
@@ -935,4 +901,38 @@ func TestMergeJSFilesReportsFullOutputDevice(t *testing.T) {
 			t.Fatalf("failed merge changed source %s: %q, want %q", name, got, want)
 		}
 	}
+}
+
+func newWebExportFixture(t *testing.T, mode string) *CmdTool {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root = filepath.Join(root, "game[one]")
+	goRoot := filepath.Join(root, "goroot")
+	t.Setenv("SPX_WEB_GOROOT", goRoot)
+	t.Setenv("SPX_WEB_PROJECT_DIR", root)
+	installCommandTestTools(t, map[string]string{"go": `test "$*" = 'env GOROOT'; test "$(pwd -P)" = "$SPX_WEB_PROJECT_DIR"; printf '%s\n' "$SPX_WEB_GOROOT"`})
+	build := "fast"
+	cmd := &CmdTool{
+		TargetDir: root, ProjectDir: filepath.Join(root, "project"),
+		WebDir: filepath.Join(root, "project", ".builds", "web"), GoBinPath: filepath.Join(root, "bin"), Version: "test",
+		ProjectFS: webExportTestFS, PlatformFS: webExportTestFS, Args: ExtraArgs{Build: &build},
+	}
+	templateDir := filepath.Join(cmd.GoBinPath, "gdspxrttest_web"+mode)
+	for name, content := range map[string]string{
+		filepath.Join(root, "main.spx"):                          "onStart => {}\n",
+		filepath.Join(root, "assets", "index.json"):              "{}",
+		filepath.Join(templateDir, "godot.editor.html"):          "web entry",
+		filepath.Join(templateDir, "engine.wasm"):                "engine wasm",
+		filepath.Join(templateDir, "engine.js"):                  "{if(initializedJS){checkMailbox()}};throw ex}}self.onmessage=handleMessage}",
+		filepath.Join(cmd.GoBinPath, "ispx", "game.js"):          "game();",
+		filepath.Join(cmd.GoBinPath, "ispx", "lab", "debug.txt"): "debug only",
+		filepath.Join(cmd.GoBinPath, "ispx.wasm"):                "interpreter wasm",
+		filepath.Join(goRoot, "lib", "wasm", "wasm_exec.js"):     "runtime();",
+	} {
+		writeCommandTestFile(t, name, content)
+	}
+	return cmd
 }

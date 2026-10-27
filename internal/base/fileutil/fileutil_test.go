@@ -28,6 +28,11 @@ import (
 	"time"
 )
 
+type zipEntry struct {
+	name    string
+	content string
+}
+
 func TestCopyFileCreatesParentAndPreservesMode(t *testing.T) {
 	tempDir := t.TempDir()
 	src := filepath.Join(tempDir, "src.txt")
@@ -245,56 +250,6 @@ func TestZipDirectoryUsesSortedSlashPathsAndContent(t *testing.T) {
 	}
 }
 
-type zipEntry struct {
-	name    string
-	content string
-}
-
-func readZipEntries(t *testing.T, path string) []zipEntry {
-	t.Helper()
-
-	reader, err := zip.OpenReader(path)
-	if err != nil {
-		t.Fatalf("OpenReader(%s) returned error: %v", path, err)
-	}
-	defer reader.Close()
-
-	entries := make([]zipEntry, 0, len(reader.File))
-	for _, file := range reader.File {
-		content, err := readZipFile(file)
-		if err != nil {
-			t.Fatalf("readZipFile(%s) returned error: %v", file.Name, err)
-		}
-		entries = append(entries, zipEntry{name: file.Name, content: string(content)})
-	}
-	return entries
-}
-
-func readZipFile(file *zip.File) ([]byte, error) {
-	reader, err := file.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	return io.ReadAll(reader)
-}
-
-func assertSamePerm(t *testing.T, src, dst string) {
-	t.Helper()
-
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		t.Fatalf("Stat(%s) returned error: %v", src, err)
-	}
-	dstInfo, err := os.Stat(dst)
-	if err != nil {
-		t.Fatalf("Stat(%s) returned error: %v", dst, err)
-	}
-	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
-		t.Fatalf("%s mode = %v, want %v from %s", dst, got, want, src)
-	}
-}
-
 func TestFileOperationsRejectInvalidSourcesAndBlockedDestinations(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source")
@@ -377,5 +332,50 @@ func TestWriteZipFilePropagatesEntryFailure(t *testing.T) {
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func readZipEntries(t *testing.T, path string) []zipEntry {
+	t.Helper()
+
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatalf("OpenReader(%s) returned error: %v", path, err)
+	}
+	defer reader.Close()
+
+	entries := make([]zipEntry, 0, len(reader.File))
+	for _, file := range reader.File {
+		content, err := readZipFile(file)
+		if err != nil {
+			t.Fatalf("readZipFile(%s) returned error: %v", file.Name, err)
+		}
+		entries = append(entries, zipEntry{name: file.Name, content: string(content)})
+	}
+	return entries
+}
+
+func readZipFile(file *zip.File) ([]byte, error) {
+	reader, err := file.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
+}
+
+func assertSamePerm(t *testing.T, src, dst string) {
+	t.Helper()
+
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatalf("Stat(%s) returned error: %v", src, err)
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("Stat(%s) returned error: %v", dst, err)
+	}
+	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Fatalf("%s mode = %v, want %v from %s", dst, got, want, src)
 	}
 }

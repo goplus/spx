@@ -37,13 +37,27 @@ func TestCreateMgrsReturnsIndependentOrderedSlices(t *testing.T) {
 	}
 }
 
-func TestCreateMgrsDoesNotBind(t *testing.T) {
+func TestCreateMgrsLifecycleDoesNotBind(t *testing.T) {
 	previous := engine.AudioMgr
 	t.Cleanup(func() { engine.AudioMgr = previous })
 	engine.AudioMgr = nil
 	managers := CreateMgrs()
 	if engine.AudioMgr != nil {
 		t.Fatal("constructing managers bound the audio manager")
+	}
+	for _, mgr := range managers {
+		t.Run(reflect.TypeOf(mgr).Elem().Name(), func(t *testing.T) {
+			// Lifecycle callbacks must remain safe before native bindings exist.
+			mgr.OnStart()
+			mgr.OnUpdate(1.0 / 60)
+			mgr.OnFixedUpdate(1.0 / 60)
+			mgr.OnPause(true)
+			mgr.OnPause(false)
+			mgr.OnDestroy()
+			if engine.AudioMgr != nil {
+				t.Fatal("manager lifecycle bound the audio manager")
+			}
+		})
 	}
 	BindMgr(managers[:1])
 	if engine.AudioMgr != managers[0].(engine.IAudioMgr) {

@@ -35,51 +35,6 @@ type eventOrderLog struct {
 	entries []string
 }
 
-func (l *eventOrderLog) add(entry string) {
-	l.mu.Lock()
-	l.entries = append(l.entries, entry)
-	l.mu.Unlock()
-}
-
-func (l *eventOrderLog) len() int {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return len(l.entries)
-}
-
-func (l *eventOrderLog) reset() {
-	l.mu.Lock()
-	l.entries = l.entries[:0]
-	l.mu.Unlock()
-}
-
-func (l *eventOrderLog) snapshot() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return append([]string(nil), l.entries...)
-}
-
-func newEventOrderSprite(game *Game, name string) *SpriteImpl {
-	sprite := &SpriteImpl{name: name, g: game}
-	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
-	return sprite
-}
-
-func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl, *SpriteImpl) {
-	t.Helper()
-
-	co, game := setupRuntimeEventGame(t)
-	game.initShapeMgr()
-	setupCaptureTest(t)
-
-	back := newEventOrderSprite(game, "back")
-	front := newEventOrderSprite(game, "front")
-	game.shapeMgr.add(back)
-	game.shapeMgr.add(front)
-	game.shapeMgr.updateRenderLayers()
-	return co, game, back, front
-}
-
 func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
 	for _, handlers := range []int{1, 3, 10} {
 		b.Run(fmt.Sprintf("300-targets/%d-handlers", handlers), func(b *testing.B) {
@@ -102,29 +57,6 @@ func BenchmarkBroadcastAndWaitFanout(b *testing.B) {
 				game.BroadcastAndWait__0("fan-out")
 			}
 		})
-	}
-}
-
-func waitForEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
-	t.Helper()
-	// Drain once before observing the log; a handler may write its final entry
-	// while its coroutine is still tearing down.
-	co.Update()
-	updateRuntimeEventSchedulerUntil(t, co, func() bool {
-		return log.len() >= count
-	})
-}
-
-func advanceEventFrame(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
-	t.Helper()
-	itime.Update(0, 0)
-	waitForEventOrderEntries(t, co, log, count)
-}
-
-func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {
-	t.Helper()
-	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("event order = %v, want %v", got, want)
 	}
 }
 
@@ -862,4 +794,72 @@ func TestDistinctNestedAsyncBroadcastRunsInCurrentFrame(t *testing.T) {
 		"inner-back",
 		"inner-stage",
 	})
+}
+
+func (l *eventOrderLog) add(entry string) {
+	l.mu.Lock()
+	l.entries = append(l.entries, entry)
+	l.mu.Unlock()
+}
+
+func (l *eventOrderLog) len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.entries)
+}
+
+func (l *eventOrderLog) reset() {
+	l.mu.Lock()
+	l.entries = l.entries[:0]
+	l.mu.Unlock()
+}
+
+func (l *eventOrderLog) snapshot() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.entries...)
+}
+
+func newEventOrderSprite(game *Game, name string) *SpriteImpl {
+	sprite := &SpriteImpl{name: name, g: game}
+	sprite.scriptEventBindings.bind(&game.scriptEvents, sprite)
+	return sprite
+}
+
+func setupEventOrderGame(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl, *SpriteImpl) {
+	t.Helper()
+
+	co, game := setupRuntimeEventGame(t)
+	game.initShapeMgr()
+	setupCaptureTest(t)
+
+	back := newEventOrderSprite(game, "back")
+	front := newEventOrderSprite(game, "front")
+	game.shapeMgr.add(back)
+	game.shapeMgr.add(front)
+	game.shapeMgr.updateRenderLayers()
+	return co, game, back, front
+}
+
+func waitForEventOrderEntries(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
+	t.Helper()
+	// Drain once before observing the log; a handler may write its final entry
+	// while its coroutine is still tearing down.
+	co.Update()
+	updateRuntimeEventSchedulerUntil(t, co, func() bool {
+		return log.len() >= count
+	})
+}
+
+func advanceEventFrame(t *testing.T, co *coroutine.Coroutines, log *eventOrderLog, count int) {
+	t.Helper()
+	itime.Update(0, 0)
+	waitForEventOrderEntries(t, co, log, count)
+}
+
+func requireEventOrder(t *testing.T, log *eventOrderLog, want []string) {
+	t.Helper()
+	if got := log.snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
 }

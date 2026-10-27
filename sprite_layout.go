@@ -51,20 +51,20 @@ var (
 	spriteLayouts  sync.Map // reflect.Type -> immutable *spriteLayout
 )
 
-func (layout *spriteLayout) validateOwner(gamer reflect.Type) error {
-	if spriteOwnerField >= layout.typ.NumField() {
-		return fmt.Errorf("sprite %s is missing owner field", layout.typ)
+func (l *spriteLayout) validateOwner(gamer reflect.Type) error {
+	if spriteOwnerField >= l.typ.NumField() {
+		return fmt.Errorf("sprite %s is missing owner field", l.typ)
 	}
-	ownerType := layout.typ.Field(spriteOwnerField).Type
+	ownerType := l.typ.Field(spriteOwnerField).Type
 	gamerPtr := reflect.PointerTo(gamer)
 	if !gamerPtr.AssignableTo(ownerType) {
-		return fmt.Errorf("sprite %s owner field type %s cannot hold %s", layout.typ, ownerType, gamerPtr)
+		return fmt.Errorf("sprite %s owner field type %s cannot hold %s", l.typ, ownerType, gamerPtr)
 	}
 	return nil
 }
 
-func (layout *spriteLayout) base(v reflect.Value) *SpriteImpl {
-	return coreproject.WritableField(v.Field(layout.baseField)).Addr().Interface().(*SpriteImpl)
+func (l *spriteLayout) base(v reflect.Value) *SpriteImpl {
+	return coreproject.WritableField(v.Field(l.baseField)).Addr().Interface().(*SpriteImpl)
 }
 
 func spriteOf(sprite Sprite) *SpriteImpl {

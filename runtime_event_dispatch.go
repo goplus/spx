@@ -19,9 +19,42 @@ package spx
 import (
 	"slices"
 
+	"github.com/goplus/spbase/mathf"
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	"github.com/goplus/spx/v4/internal/coroutine"
 )
+
+// -----------------------------------------------------------------------------
+// Shared Types
+// -----------------------------------------------------------------------------
+type event any
+
+// -----------------------------------------------------------------------------
+// Event Payloads
+// -----------------------------------------------------------------------------
+type eventStart struct {
+	generation uint64
+}
+
+type eventKeyDown struct {
+	Key Key
+}
+
+type eventLeftButtonDown struct {
+	Pos mathf.Vec2
+}
+
+type eventLeftButtonUp struct {
+	Pos mathf.Vec2
+}
+
+type eventMouseMove struct {
+	Pos mathf.Vec2
+}
+
+type eventTimer struct {
+	Timestamp int64
+}
 
 // scriptEventLifecycle registers an invocation before it can run and returns
 // its cleanup. Handlers without this interface allow overlapping invocations.
@@ -41,10 +74,10 @@ type scriptEventDispatch struct {
 	run       func(coroutine.Thread, *eventSink)
 }
 
-func (event scriptEventDispatch) task(sink eventSink) coroutine.Task {
+func (e scriptEventDispatch) task(sink eventSink) coroutine.Task {
 	task := coroutine.Task{
 		Owner: sink.Owner,
-		Run:   func(thread coroutine.Thread) { event.run(thread, &sink) },
+		Run:   func(thread coroutine.Thread) { e.run(thread, &sink) },
 	}
 	if handler, ok := sink.Handler.(scriptEventLifecycle); ok {
 		task.RegisterInvocation = handler.RegisterInvocation

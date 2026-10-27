@@ -50,7 +50,7 @@ var (
 
 // IsMouseButtonPressed reports whether the button is held.
 func IsMouseButtonPressed(id int64) bool {
-	if id < 1 || id > 3 {
+	if id < input.MouseButtonLeft || id > input.MouseButtonMiddle {
 		return false
 	}
 	return mouseInput.buttons.Load()&(1<<(id-1)) != 0
@@ -216,7 +216,7 @@ func queueKeyEvent(id int64, pressed bool) {
 }
 
 func queueMouseEvent(id int64, pressed bool) {
-	if !acceptsRuntimeWork() || id < 1 || id > 3 {
+	if !acceptsRuntimeWork() || id < input.MouseButtonLeft || id > input.MouseButtonMiddle {
 		return
 	}
 	mouseInput.mu.Lock()

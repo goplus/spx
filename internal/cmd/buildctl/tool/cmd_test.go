@@ -42,15 +42,6 @@ type toolRecordingRunner struct {
 	err   error
 }
 
-func (r *toolRecordingRunner) RunScript(path string, args ...string) error {
-	r.calls = append(r.calls, toolRecordedCall{path: path, args: append([]string(nil), args...)})
-	return r.err
-}
-
-func (r *toolRecordingRunner) RunCommand(string, string, ...string) error { return nil }
-
-func (r *toolRecordingRunner) RepoRootDir() string { return "." }
-
 func TestToolDispatchAndInstallArguments(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -146,16 +137,6 @@ func TestToolCommandArgumentValidation(t *testing.T) {
 		})
 	}
 
-}
-
-func writeToolFixture(t *testing.T, path, content string, mode fs.FileMode) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), mode); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestToolInstallFindsRepository(t *testing.T) {
@@ -278,4 +259,23 @@ func TestCleanInstalledAssetsRejectsLookupAndGlobFailures(t *testing.T) {
 			t.Fatalf("malformed asset glob = %v", err)
 		}
 	})
+}
+
+func (r *toolRecordingRunner) RunScript(path string, args ...string) error {
+	r.calls = append(r.calls, toolRecordedCall{path: path, args: append([]string(nil), args...)})
+	return r.err
+}
+
+func (r *toolRecordingRunner) RunCommand(string, string, ...string) error { return nil }
+
+func (r *toolRecordingRunner) RepoRootDir() string { return "." }
+
+func writeToolFixture(t *testing.T, path, content string, mode fs.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
 }

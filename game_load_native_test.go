@@ -49,27 +49,10 @@ type loadGameFS struct {
 	closeErr   error
 }
 
-func (f *loadGameFS) Open(name string) (io.ReadCloser, error) {
-	if _, ok := f.gameTestFS[name]; !ok {
-		return nil, os.ErrNotExist
-	}
-	return f.gameTestFS.Open(name)
-}
-
-func (f *loadGameFS) Close() error {
-	f.closeCalls++
-	return f.closeErr
-}
-
 type loadGameResMgr struct {
 	gameTestResMgr
 	fontError  string
 	applyCalls int
-}
-
-func (m *loadGameResMgr) ApplyProjectFonts(string, pkgengine.Array, pkgengine.Array, pkgengine.Array) string {
-	m.applyCalls++
-	return m.fontError
 }
 
 type loadGamePlatformMgr struct {
@@ -77,23 +60,34 @@ type loadGamePlatformMgr struct {
 	title string
 }
 
-func (m *loadGamePlatformMgr) SetWindowTitle(title string) { m.title = title }
-
 type loadGameAudioMgr struct {
 	pkgengine.IAudioMgr
 }
 
-func (*loadGameAudioMgr) CreateAudio() pkgengine.Object { return 1 }
+type runtimePanicRecorder struct {
+	pkgengine.IExtMgr
+	messages []string
+	exits    []int64
+}
 
-func setupLoadGameFlags(t *testing.T, args ...string) {
-	t.Helper()
-	previousFlags, previousArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = append([]string{t.Name()}, args...)
-	t.Cleanup(func() {
-		flag.CommandLine, os.Args = previousFlags, previousArgs
-	})
+type loadGameAssetResMgr struct {
+	loadGameResMgr
+	filesystemMode bool
+}
+
+type preflightLoadGame struct {
+	Game
+	First, Second *preflightLoadSprite
+}
+
+type preflightLoadSprite struct {
+	SpriteImpl
+	*preflightLoadGame
+}
+
+type singleReadProjectFS struct {
+	loadGameFS
+	reads map[string]int
 }
 
 func TestLoadGameLoadsStageBeforeStartingScripts(t *testing.T) {
@@ -364,20 +358,6 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 	}
 }
 
-type runtimePanicRecorder struct {
-	pkgengine.IExtMgr
-	messages []string
-	exits    []int64
-}
-
-func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
-	m.messages = append(m.messages, message)
-}
-
-func (m *runtimePanicRecorder) RequestExit(code int64) {
-	m.exits = append(m.exits, code)
-}
-
 func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 	// Restore real frame timing after the bubble advances it with its fake clock.
 	t.Cleanup(func() { itime.Start(nil) })
@@ -436,26 +416,6 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 	})
 }
 
-func isolatedGameTest(t *testing.T) bool {
-	t.Helper()
-	if os.Getenv("SPX_TEST_NATIVE_GAME_CASE") == t.Name() {
-		return false
-	}
-	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
-	// Keep native startup and os.Exit coverage in the same report as the parent.
-	if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
-		command.Args = append(command.Args, "-test.gocoverdir="+coverDir.Value.String())
-		command.Env = append(os.Environ(), "GOCOVERDIR="+coverDir.Value.String())
-	} else {
-		command.Env = os.Environ()
-	}
-	command.Env = append(command.Env, "SPX_TEST_NATIVE_GAME_CASE="+t.Name())
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("isolated game test: %v\n%s", err, output)
-	}
-	return true
-}
-
 func TestGameNativeEntryAndDuplicateStartup(t *testing.T) {
 	if isolatedGameTest(t) {
 		return
@@ -497,14 +457,6 @@ func TestLoadGameRejectsInvalidResourceAndSetsAssetDirectory(t *testing.T) {
 		t.Fatal("asset directory did not select filesystem loading")
 	}
 }
-
-type loadGameAssetResMgr struct {
-	loadGameResMgr
-	filesystemMode bool
-}
-
-func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) { m.filesystemMode = filesystem }
-func (*loadGameAssetResMgr) HasFile(string) bool           { return false }
 
 func TestGameCommandLineHelp(t *testing.T) {
 	if isolatedGameTest(t) {
@@ -560,18 +512,6 @@ func TestUnknownSpriteCollisionReportsRuntimeFailure(t *testing.T) {
 	}
 }
 
-type preflightLoadGame struct {
-	Game
-	First, Second *preflightLoadSprite
-}
-
-type preflightLoadSprite struct {
-	SpriteImpl
-	*preflightLoadGame
-}
-
-func (*preflightLoadSprite) Main() {}
-
 func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
 	const valid = `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`
 	for _, test := range []struct{ name, project, second, want string }{
@@ -619,21 +559,6 @@ func TestLoadGameRejectsLateConfigurationBeforeEngineChanges(t *testing.T) {
 			}
 		})
 	}
-}
-
-type singleReadProjectFS struct {
-	loadGameFS
-	reads map[string]int
-}
-
-func (fs *singleReadProjectFS) Open(name string) (io.ReadCloser, error) {
-	if _, exists := fs.gameTestFS[name]; exists {
-		fs.reads[name]++
-		if fs.reads[name] > 1 {
-			return nil, fmt.Errorf("project metadata %q was read more than once", name)
-		}
-	}
-	return fs.loadGameFS.Open(name)
 }
 
 func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
@@ -708,4 +633,80 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 	if resource.closeCalls != 0 || base.fs != resource {
 		t.Fatal("successful loading did not retain ownership of the resource directory")
 	}
+}
+
+func (f *loadGameFS) Open(name string) (io.ReadCloser, error) {
+	if _, ok := f.gameTestFS[name]; !ok {
+		return nil, os.ErrNotExist
+	}
+	return f.gameTestFS.Open(name)
+}
+
+func (f *loadGameFS) Close() error {
+	f.closeCalls++
+	return f.closeErr
+}
+
+func (m *loadGameResMgr) ApplyProjectFonts(string, pkgengine.Array, pkgengine.Array, pkgengine.Array) string {
+	m.applyCalls++
+	return m.fontError
+}
+
+func (m *loadGamePlatformMgr) SetWindowTitle(title string) { m.title = title }
+
+func (*loadGameAudioMgr) CreateAudio() pkgengine.Object { return 1 }
+
+func (m *runtimePanicRecorder) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
+}
+
+func (m *runtimePanicRecorder) RequestExit(code int64) {
+	m.exits = append(m.exits, code)
+}
+
+func (m *loadGameAssetResMgr) SetLoadMode(filesystem bool) { m.filesystemMode = filesystem }
+
+func (*loadGameAssetResMgr) HasFile(string) bool { return false }
+
+func (*preflightLoadSprite) Main() {}
+
+func (fs *singleReadProjectFS) Open(name string) (io.ReadCloser, error) {
+	if _, exists := fs.gameTestFS[name]; exists {
+		fs.reads[name]++
+		if fs.reads[name] > 1 {
+			return nil, fmt.Errorf("project metadata %q was read more than once", name)
+		}
+	}
+	return fs.loadGameFS.Open(name)
+}
+
+func setupLoadGameFlags(t *testing.T, args ...string) {
+	t.Helper()
+	previousFlags, previousArgs := flag.CommandLine, os.Args
+	flag.CommandLine = flag.NewFlagSet(t.Name(), flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = append([]string{t.Name()}, args...)
+	t.Cleanup(func() {
+		flag.CommandLine, os.Args = previousFlags, previousArgs
+	})
+}
+
+func isolatedGameTest(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("SPX_TEST_NATIVE_GAME_CASE") == t.Name() {
+		return false
+	}
+	command := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+t.Name()+"$")
+	// Keep native startup and os.Exit coverage in the same report as the parent.
+	if coverDir := flag.Lookup("test.gocoverdir"); coverDir != nil && coverDir.Value.String() != "" {
+		command.Args = append(command.Args, "-test.gocoverdir="+coverDir.Value.String())
+		command.Env = append(os.Environ(), "GOCOVERDIR="+coverDir.Value.String())
+	} else {
+		command.Env = os.Environ()
+	}
+	command.Env = append(command.Env, "SPX_TEST_NATIVE_GAME_CASE="+t.Name())
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("isolated game test: %v\n%s", err, output)
+	}
+	return true
 }

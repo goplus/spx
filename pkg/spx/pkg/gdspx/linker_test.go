@@ -12,13 +12,6 @@ type testLinkerBridge struct {
 	callbacks      engine.CoreCallbackInfo
 }
 
-func (b *testLinkerBridge) IsWebIntepreterMode() bool { return b.web }
-func (b *testLinkerBridge) Link(callbacks engine.CoreCallbackInfo) {
-	b.links++
-	b.callbacks = callbacks
-}
-func (b *testLinkerBridge) Unlink() { b.unlinks++ }
-
 func TestLinkerBridgeLifecycle(t *testing.T) {
 	previous := linkerBridge
 	t.Cleanup(func() { SetLinkerBridge(previous) })
@@ -74,3 +67,12 @@ func TestLinkerRequiresBridge(t *testing.T) {
 		})
 	}
 }
+
+func (b *testLinkerBridge) IsWebIntepreterMode() bool { return b.web }
+
+func (b *testLinkerBridge) Link(callbacks engine.CoreCallbackInfo) {
+	b.links++
+	b.callbacks = callbacks
+}
+
+func (b *testLinkerBridge) Unlink() { b.unlinks++ }

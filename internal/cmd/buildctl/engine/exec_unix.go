@@ -26,16 +26,16 @@ import (
 	"time"
 )
 
-func configureTrackedCommand(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-}
-
 var trackedSignals = []os.Signal{
 	os.Interrupt,
 	syscall.SIGTERM,
 	syscall.SIGHUP,
 	syscall.SIGQUIT,
 	syscall.SIGTSTP,
+}
+
+func configureTrackedCommand(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
 func trackedProcessExists(pid int) (bool, error) {

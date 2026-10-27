@@ -41,50 +41,6 @@ type localDir struct {
 	base string
 }
 
-func writeProjectFile(t *testing.T, dir, relPath, content string) {
-	t.Helper()
-
-	filePath := filepath.Join(dir, relPath)
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func (d fakeGdDir) Open(string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
-func (d fakeGdDir) Close() error {
-	return nil
-}
-
-func (d fakeGdDir) GetPath() string {
-	return d.path
-}
-
-func (d localDir) Open(name string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(d.base, name))
-}
-
-func (d localDir) Close() error {
-	return nil
-}
-
-func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	entries, err := os.ReadDir(filepath.Join(d.base, filepath.FromSlash(name)))
-	if err != nil {
-		return nil, err
-	}
-	result := make([]spxfs.DirEntry, 0, len(entries))
-	for _, entry := range entries {
-		result = append(result, spxfs.DirEntry{Name: entry.Name(), IsDir: entry.IsDir()})
-	}
-	return result, nil
-}
-
 func TestLoadConfigRejectsTrailingContent(t *testing.T) {
 	for _, input := range []string{`{} {}`, `{} trailing`} {
 		var config ProjectConfig
@@ -188,26 +144,7 @@ func TestOpenBuilderResourcesScansFontsOnlyWhenPackedFontsAbsent(t *testing.T) {
 	}
 }
 
-func TestLoadProjectFontsValidation(t *testing.T) {
-	t.Run("reserved family", func(t *testing.T) {
-		dir := t.TempDir()
-		writeProjectFile(t, dir, "fonts/DEFAULT/index.json", `{"faces":[{"path":"font.ttf"}]}`)
-		writeProjectFile(t, dir, "fonts/DEFAULT/font.ttf", "font")
-		_, err := LoadProjectFonts(localDir{base: dir}, nil)
-		if err == nil || !strings.Contains(err.Error(), "reserved") {
-			t.Fatalf("error = %v, want reserved family error", err)
-		}
-	})
-
-	t.Run("escaping face", func(t *testing.T) {
-		dir := t.TempDir()
-		writeProjectFile(t, dir, "fonts/Unsafe/index.json", `{"faces":[{"path":"../font.ttf"}]}`)
-		_, err := LoadProjectFonts(localDir{base: dir}, nil)
-		if err == nil || !strings.Contains(err.Error(), "escapes") {
-			t.Fatalf("error = %v, want escaping face error", err)
-		}
-	})
-
+func TestPackedFontsValidateFamiliesBeforeCaseConflicts(t *testing.T) {
 	for _, tt := range []struct{ name, first, want string }{
 		{"case folded duplicate", `{"faces":[{"path":"font.ttf"}]}`, `font family "latin" conflicts with "Latin" after ASCII case folding`},
 		{"family error before duplicate", `{"faces":[]}`, `font family "Latin" must contain exactly one face, got 0`},
@@ -227,15 +164,6 @@ func TestLoadProjectFontsValidation(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("exactly one face", func(t *testing.T) {
-		dir := t.TempDir()
-		writeProjectFile(t, dir, "fonts/Empty/index.json", `{"faces":[]}`)
-		_, err := LoadProjectFonts(localDir{base: dir}, nil)
-		if err == nil || !strings.Contains(err.Error(), "exactly one face") {
-			t.Fatalf("error = %v, want face count error", err)
-		}
-	})
 }
 
 func TestResolveFontPreferences(t *testing.T) {
@@ -1099,20 +1027,24 @@ func TestParseCommandLineFlags(t *testing.T) {
 	}
 }
 
-func TestLoadProjectFontsRejectsUnreadableAndMalformedFamilies(t *testing.T) {
-	for _, tc := range []struct{ name, config, want string }{
-		{"invalid JSON", "{", "load font family"},
-		{"missing face", `{"faces":[{"path":"missing.ttf"}]}`, "open font face"},
-		{"empty path", `{"faces":[{"path":""}]}`, "must not be empty"},
-		{"absolute path", `{"faces":[{"path":"/font.ttf"}]}`, "relative POSIX path"},
-		{"backslash path", `{"faces":[{"path":"dir\\font.ttf"}]}`, "relative POSIX path"},
-		{"dot path", `{"faces":[{"path":"."}]}`, "escapes"},
+func TestLoadProjectFontsRejectsInvalidFamilies(t *testing.T) {
+	for _, test := range []struct{ name, family, config, want string }{
+		{"reserved family", "DEFAULT", `{"faces":[{"path":"font.ttf"}]}`, "reserved"},
+		{"escaping face", "Unsafe", `{"faces":[{"path":"../font.ttf"}]}`, "escapes"},
+		{"exactly one face", "Empty", `{"faces":[]}`, "exactly one face"},
+		{"invalid JSON", "Family", "{", "load font family"},
+		{"missing face", "Family", `{"faces":[{"path":"missing.ttf"}]}`, "open font face"},
+		{"empty path", "Family", `{"faces":[{"path":""}]}`, "must not be empty"},
+		{"absolute path", "Family", `{"faces":[{"path":"/font.ttf"}]}`, "relative POSIX path"},
+		{"backslash path", "Family", `{"faces":[{"path":"dir\\font.ttf"}]}`, "relative POSIX path"},
+		{"dot path", "Family", `{"faces":[{"path":"."}]}`, "escapes"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
-			writeProjectFile(t, dir, "fonts/Family/index.json", tc.config)
-			if _, err := LoadProjectFonts(localDir{base: dir}, nil); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("error=%v,want %q", err, tc.want)
+			writeProjectFile(t, dir, "fonts/"+test.family+"/index.json", test.config)
+			writeProjectFile(t, dir, "fonts/"+test.family+"/font.ttf", "font")
+			if _, err := LoadProjectFonts(localDir{base: dir}, nil); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
 			}
 		})
 	}
@@ -1161,5 +1093,49 @@ func TestLoadBuilderProjectRejectsInvalidIndexWithoutPartialResult(t *testing.T)
 				t.Fatal("failed load mutated caller config")
 			}
 		})
+	}
+}
+
+func (d fakeGdDir) Open(string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
+func (d fakeGdDir) Close() error {
+	return nil
+}
+
+func (d fakeGdDir) GetPath() string {
+	return d.path
+}
+
+func (d localDir) Open(name string) (io.ReadCloser, error) {
+	return os.Open(filepath.Join(d.base, name))
+}
+
+func (d localDir) Close() error {
+	return nil
+}
+
+func (d localDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	entries, err := os.ReadDir(filepath.Join(d.base, filepath.FromSlash(name)))
+	if err != nil {
+		return nil, err
+	}
+	result := make([]spxfs.DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, spxfs.DirEntry{Name: entry.Name(), IsDir: entry.IsDir()})
+	}
+	return result, nil
+}
+
+func writeProjectFile(t *testing.T, dir, relPath, content string) {
+	t.Helper()
+
+	filePath := filepath.Join(dir, relPath)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

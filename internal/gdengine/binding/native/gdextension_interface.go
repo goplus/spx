@@ -275,6 +275,178 @@ type initialization = C.GDExtensionInitialization
 
 type initializationLevel = C.GDExtensionInitializationLevel
 
+func ToGdBool(val bool) GdBool {
+	if val {
+		return GdBool(1)
+	} else {
+		return GdBool(0)
+	}
+}
+
+func ToBool(val GdBool) bool {
+	return val != 0
+}
+
+func ToGdVec2(val mathf.Vec2) GdVec2 {
+	return GdVec2{C.GdFloat(val.X), C.GdFloat(val.Y)}
+}
+
+func ToVec2(val GdVec2) mathf.Vec2 {
+	return mathf.NewVec2(float64(val.X), float64(val.Y))
+}
+
+func ToGdVec4(val mathf.Vec4) GdVec4 {
+	return GdVec4{C.GdFloat(val.X), C.GdFloat(val.Y), C.GdFloat(val.Z), C.GdFloat(val.W)}
+}
+
+func ToVec4(val GdVec4) mathf.Vec4 {
+	return mathf.NewVec4(float64(val.X), float64(val.Y), float64(val.Z), float64(val.W))
+}
+
+func ToGdColor(val mathf.Color) GdColor {
+	return GdColor{C.float(val.R), C.float(val.G), C.float(val.B), C.float(val.A)}
+}
+
+func ToColor(val GdColor) mathf.Color {
+	return mathf.NewColor(float64(val.R), float64(val.G), float64(val.B), float64(val.A))
+}
+
+func ToGdRect2(val mathf.Rect2) GdRect2 {
+	position := ToGdVec2(val.Position)
+	size := ToGdVec2(val.Size)
+	ret := GdRect2{}
+	ret.Position = C.GdVec2(position)
+	ret.Size = C.GdVec2(size)
+	return ret
+}
+
+func ToRect2(val GdRect2) mathf.Rect2 {
+	ret := mathf.Rect2{}
+	ret.Position = ToVec2(GdVec2(val.Position))
+	ret.Size = ToVec2(GdVec2(val.Size))
+	return ret
+}
+
+func ToGdObj(val engine.Object) GdObj {
+	return GdObj(val)
+}
+
+func ToObject(val GdObj) engine.Object {
+	return engine.Object(val)
+}
+
+func ToGdInt(val int64) GdInt {
+	return GdInt(val)
+}
+
+func ToInt(val GdInt) int64 {
+	return int64(val)
+}
+
+func ToInt64(val GdInt) int64 {
+	return int64(val)
+}
+
+func ToGdFloat(val float64) GdFloat {
+	return GdFloat(val)
+}
+
+func ToFloat64(val GdFloat) float64 {
+	return float64(val)
+}
+
+func ToFloat32(val GdFloat) float64 {
+	return float64(val)
+}
+
+func ToFloat(val GdFloat) float64 {
+	return float64(val)
+}
+
+// ToString copies an owned ABI return and releases it through the runtime allocator.
+func ToString(val GdString) string {
+	if val == nil {
+		return ""
+	}
+	str := copyString(val)
+	freeReturnedString(val)
+	return str
+}
+
+func GDExtensionInterfaceObjectMethodBindPtrcall(
+	p_method_bind GDExtensionMethodBindPtr,
+	p_instance GDExtensionObjectPtr,
+	p_args *GDExtensionConstTypePtr,
+	r_ret GDExtensionTypePtr,
+) {
+}
+
+func ToGdArrayInfo(slice interface{}) *ArrayInfoImpl {
+	var info *ArrayInfoImpl = nil
+	switch v := slice.(type) {
+	case []int64:
+		info = createGdArrayFromInt64s(v)
+	case []float32:
+		info = createGdArrayFromFloats(v)
+	case []float64:
+		if v == nil {
+			info = createGdArrayFromFloats(nil)
+			break
+		}
+		floats := make([]float32, len(v))
+		for i, f := range v {
+			floats[i] = float32(f)
+		}
+		info = createGdArrayFromFloats(floats)
+	case []bool:
+		info = createGdArrayFromBools(v)
+	case []string:
+		info = createGdArrayFromStrings(v)
+	case []GdObj:
+		info = createGdArrayFromObjects(v)
+	case []byte:
+		info = createGdArrayFromBytes(v)
+	default:
+		panic(fmt.Sprintf("unsupported array type: %T", slice))
+	}
+	return info
+}
+
+func ToGdArray(slice interface{}) GdArray {
+	info := ToGdArrayInfo(slice)
+	if info == nil {
+		return nil
+	}
+	return GdArray(info.gdArray)
+}
+
+// Conversion functions
+func ToArray(arrayInfo GdArray) any {
+	if arrayInfo == nil {
+		return nil
+	}
+	// Returned GdArray values own a temporary bridge buffer and must be freed
+	// after converting them into Go slices.
+	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo), needsFree: true}
+	defer info.Free()
+	switch info.Type() {
+	case ArrayTypeInt64:
+		return info.ToInt64s()
+	case ArrayTypeFloat:
+		return info.ToFloats()
+	case ArrayTypeBool:
+		return info.ToBools()
+	case ArrayTypeString:
+		return info.ToStrings()
+	case ArrayTypeGdObj:
+		return info.ToObjects()
+	case ArrayTypeByte:
+		return info.ToBytes()
+	default:
+		return nil
+	}
+}
+
 func (a *ArrayInfoImpl) Raw() GdArray {
 	if a == nil {
 		return nil
@@ -404,184 +576,12 @@ func (a *ArrayInfoImpl) ToStrings() []string {
 	return result
 }
 
-func ToGdBool(val bool) GdBool {
-	if val {
-		return GdBool(1)
-	} else {
-		return GdBool(0)
-	}
-}
-
-func ToBool(val GdBool) bool {
-	return val != 0
-}
-
-func ToGdVec2(val mathf.Vec2) GdVec2 {
-	return GdVec2{C.GdFloat(val.X), C.GdFloat(val.Y)}
-}
-
-func ToVec2(val GdVec2) mathf.Vec2 {
-	return mathf.NewVec2(float64(val.X), float64(val.Y))
-}
-
-func ToGdVec4(val mathf.Vec4) GdVec4 {
-	return GdVec4{C.GdFloat(val.X), C.GdFloat(val.Y), C.GdFloat(val.Z), C.GdFloat(val.W)}
-}
-
-func ToVec4(val GdVec4) mathf.Vec4 {
-	return mathf.NewVec4(float64(val.X), float64(val.Y), float64(val.Z), float64(val.W))
-}
-
-func ToGdColor(val mathf.Color) GdColor {
-	return GdColor{C.float(val.R), C.float(val.G), C.float(val.B), C.float(val.A)}
-}
-
-func ToColor(val GdColor) mathf.Color {
-	return mathf.NewColor(float64(val.R), float64(val.G), float64(val.B), float64(val.A))
-}
-
-func ToGdRect2(val mathf.Rect2) GdRect2 {
-	position := ToGdVec2(val.Position)
-	size := ToGdVec2(val.Size)
-	ret := GdRect2{}
-	ret.Position = C.GdVec2(position)
-	ret.Size = C.GdVec2(size)
-	return ret
-}
-
-func ToRect2(val GdRect2) mathf.Rect2 {
-	ret := mathf.Rect2{}
-	ret.Position = ToVec2(GdVec2(val.Position))
-	ret.Size = ToVec2(GdVec2(val.Size))
-	return ret
-}
-
-func ToGdObj(val engine.Object) GdObj {
-	return GdObj(val)
-}
-
-func ToObject(val GdObj) engine.Object {
-	return engine.Object(val)
-}
-
-func ToGdInt(val int64) GdInt {
-	return GdInt(val)
-}
-
-func ToInt(val GdInt) int64 {
-	return int64(val)
-}
-
-func ToInt64(val GdInt) int64 {
-	return int64(val)
-}
-
-func ToGdFloat(val float64) GdFloat {
-	return GdFloat(val)
-}
-
-func ToFloat64(val GdFloat) float64 {
-	return float64(val)
-}
-
-func ToFloat32(val GdFloat) float64 {
-	return float64(val)
-}
-
-func ToFloat(val GdFloat) float64 {
-	return float64(val)
-}
-
-// ToString copies an owned ABI return and releases it through the runtime allocator.
-func ToString(val GdString) string {
-	if val == nil {
-		return ""
-	}
-	str := copyString(val)
-	freeReturnedString(val)
-	return str
-}
-
 // copyString copies a borrowed string without releasing the caller's memory.
 func copyString(val GdString) string {
 	if val == nil {
 		return ""
 	}
 	return C.GoString((*C.char)(unsafe.Pointer(val)))
-}
-
-func GDExtensionInterfaceObjectMethodBindPtrcall(
-	p_method_bind GDExtensionMethodBindPtr,
-	p_instance GDExtensionObjectPtr,
-	p_args *GDExtensionConstTypePtr,
-	r_ret GDExtensionTypePtr,
-) {
-}
-
-func ToGdArrayInfo(slice interface{}) *ArrayInfoImpl {
-	var info *ArrayInfoImpl = nil
-	switch v := slice.(type) {
-	case []int64:
-		info = createGdArrayFromInt64s(v)
-	case []float32:
-		info = createGdArrayFromFloats(v)
-	case []float64:
-		if v == nil {
-			info = createGdArrayFromFloats(nil)
-			break
-		}
-		floats := make([]float32, len(v))
-		for i, f := range v {
-			floats[i] = float32(f)
-		}
-		info = createGdArrayFromFloats(floats)
-	case []bool:
-		info = createGdArrayFromBools(v)
-	case []string:
-		info = createGdArrayFromStrings(v)
-	case []GdObj:
-		info = createGdArrayFromObjects(v)
-	case []byte:
-		info = createGdArrayFromBytes(v)
-	default:
-		panic(fmt.Sprintf("unsupported array type: %T", slice))
-	}
-	return info
-}
-
-func ToGdArray(slice interface{}) GdArray {
-	info := ToGdArrayInfo(slice)
-	if info == nil {
-		return nil
-	}
-	return GdArray(info.gdArray)
-}
-
-// Conversion functions
-func ToArray(arrayInfo GdArray) any {
-	if arrayInfo == nil {
-		return nil
-	}
-	// Returned GdArray values own a temporary bridge buffer and must be freed
-	// after converting them into Go slices.
-	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo), needsFree: true}
-	defer info.Free()
-	switch info.Type() {
-	case ArrayTypeInt64:
-		return info.ToInt64s()
-	case ArrayTypeFloat:
-		return info.ToFloats()
-	case ArrayTypeBool:
-		return info.ToBools()
-	case ArrayTypeString:
-		return info.ToStrings()
-	case ArrayTypeGdObj:
-		return info.ToObjects()
-	case ArrayTypeByte:
-		return info.ToBytes()
-	default:
-		return nil
-	}
 }
 
 func doInitialization(init *initialization) {

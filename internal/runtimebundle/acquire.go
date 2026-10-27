@@ -62,6 +62,16 @@ type acquireLimitWriter struct {
 	exceeded    bool
 }
 
+// AcquireFile downloads or reuses one file, verifies it, and keeps a shared
+// use lease while the returned descriptor is read.
+func AcquireFile(ctx context.Context, root string, spec FetchSpec) (*AcquiredFile, error) {
+	_, err := acquirePath(ctx, root, spec)
+	if err != nil {
+		return nil, err
+	}
+	return openAcquiredFile(ctx, root, spec)
+}
+
 func (f *AcquiredFile) Read(p []byte) (int, error) {
 	if f == nil || f.file == nil {
 		return 0, os.ErrInvalid
@@ -129,13 +139,9 @@ func (w *acquireLimitWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
-// AcquireFile downloads or reuses one file, verifies it, and keeps a shared
-// use lease while the returned descriptor is read.
-func AcquireFile(ctx context.Context, root string, spec FetchSpec) (*AcquiredFile, error) {
-	_, err := acquirePath(ctx, root, spec)
-	if err != nil {
-		return nil, err
-	}
+// openAcquiredFile revalidates the cached asset while acquiring its shared use
+// lease: another writer may have replaced the file after acquisition completed.
+func openAcquiredFile(ctx context.Context, root string, spec FetchSpec) (*AcquiredFile, error) {
 	cacheRoot, err := openOrCreateCacheRoot(root, defaultPermissions())
 	if err != nil {
 		return nil, fmt.Errorf("runtimebundle: pin acquisition root for use: %w", err)
@@ -341,11 +347,11 @@ func openVerifiedAcquireRootFile(root *os.Root, name string, expectedSize int64,
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
+	defer func(f *os.File) {
 		if err != nil {
-			_ = file.Close()
+			_ = f.Close()
 		}
-	}()
+	}(file)
 	opened, err := file.Stat()
 	if err != nil {
 		return nil, err

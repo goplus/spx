@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
@@ -41,49 +42,6 @@ type BuildShellPlan struct {
 	WebProxyToPThread     bool
 	WebThreadSuffix       string
 	WebCachedTemplateZip  string
-}
-
-func (plan BuildShellPlan) ShellExports() string {
-	lines := []string{
-		"export ENGINE_BUILD_TARGET=" + shared.ShellQuote(plan.Target),
-		"export ENGINE_BUILD_PLATFORM=" + shared.ShellQuote(plan.Platform),
-	}
-	if plan.EditorSource != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_EDITOR_SOURCE="+shared.ShellQuote(plan.EditorSource),
-			"export ENGINE_BUILD_EDITOR_DESTINATION="+shared.ShellQuote(plan.EditorDestination),
-		)
-		if plan.EditorUseVSProj {
-			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='true'")
-		} else {
-			lines = append(lines, "export ENGINE_BUILD_EDITOR_USE_VSPROJ='false'")
-		}
-	}
-	if plan.TemplateSConsPlatform != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shared.ShellQuote(plan.TemplateSConsPlatform),
-			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shared.ShellQuote(plan.TemplateSource),
-			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shared.ShellQuote(plan.TemplateDestination),
-		)
-	}
-	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_SCONS_COMMAND", plan.TemplateSConsCommands)
-	if plan.TemplatePostDir != "" {
-		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shared.ShellQuote(plan.TemplatePostDir))
-	}
-	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_POST_COMMAND", plan.TemplatePostCommands)
-	if plan.WebThreads != "" {
-		lines = append(lines,
-			"export ENGINE_BUILD_WEB_THREADS="+shared.ShellQuote(plan.WebThreads),
-			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shared.ShellQuote(plan.WebThreadSuffix),
-			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shared.ShellQuote(plan.WebCachedTemplateZip),
-		)
-		if plan.WebProxyToPThread {
-			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='true'")
-		} else {
-			lines = append(lines, "export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD='false'")
-		}
-	}
-	return strings.Join(lines, "\n") + "\n"
 }
 
 func ParseEnvExportEngineBuildShellArgs(args []string) (BuildConfig, error) {
@@ -133,6 +91,41 @@ func ResolveEngineBuildShellPlan(repoRoot string, cfg BuildConfig) (BuildShellPl
 		return BuildShellPlan{}, err
 	}
 	return resolveEngineBuildShellPlan(env, cfg)
+}
+
+func (p BuildShellPlan) ShellExports() string {
+	lines := []string{
+		"export ENGINE_BUILD_TARGET=" + shared.ShellQuote(p.Target),
+		"export ENGINE_BUILD_PLATFORM=" + shared.ShellQuote(p.Platform),
+	}
+	if p.EditorSource != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_EDITOR_SOURCE="+shared.ShellQuote(p.EditorSource),
+			"export ENGINE_BUILD_EDITOR_DESTINATION="+shared.ShellQuote(p.EditorDestination),
+			"export ENGINE_BUILD_EDITOR_USE_VSPROJ="+shared.ShellQuote(strconv.FormatBool(p.EditorUseVSProj)),
+		)
+	}
+	if p.TemplateSConsPlatform != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_TEMPLATE_SCONS_PLATFORM="+shared.ShellQuote(p.TemplateSConsPlatform),
+			"export ENGINE_BUILD_TEMPLATE_SOURCE="+shared.ShellQuote(p.TemplateSource),
+			"export ENGINE_BUILD_TEMPLATE_DESTINATION="+shared.ShellQuote(p.TemplateDestination),
+		)
+	}
+	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_SCONS_COMMAND", p.TemplateSConsCommands)
+	if p.TemplatePostDir != "" {
+		lines = append(lines, "export ENGINE_BUILD_TEMPLATE_POST_DIR="+shared.ShellQuote(p.TemplatePostDir))
+	}
+	lines = appendIndexedShellExports(lines, "ENGINE_BUILD_TEMPLATE_POST_COMMAND", p.TemplatePostCommands)
+	if p.WebThreads != "" {
+		lines = append(lines,
+			"export ENGINE_BUILD_WEB_THREADS="+shared.ShellQuote(p.WebThreads),
+			"export ENGINE_BUILD_WEB_THREAD_SUFFIX="+shared.ShellQuote(p.WebThreadSuffix),
+			"export ENGINE_BUILD_WEB_CACHED_TEMPLATE_ZIP="+shared.ShellQuote(p.WebCachedTemplateZip),
+			"export ENGINE_BUILD_WEB_PROXY_TO_PTHREAD="+shared.ShellQuote(strconv.FormatBool(p.WebProxyToPThread)),
+		)
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func resolveEngineBuildShellPlan(env buildEnvironment, cfg BuildConfig) (BuildShellPlan, error) {

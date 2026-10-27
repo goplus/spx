@@ -40,17 +40,6 @@ type costumeSizeResMgr struct {
 	calls int
 }
 
-func (m *costumeSizeResMgr) GetImageSize(path string) mathf.Vec2 {
-	m.calls++
-	size := m.sizes[path]
-	return mathf.NewVec2(math.Ceil(size.X), math.Ceil(size.Y))
-}
-
-func (m *costumeSizeResMgr) GetImageLogicalSize(path string) mathf.Vec2 {
-	m.calls++
-	return m.sizes[path]
-}
-
 func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 	// Isolate the process-wide filesystem roots from other runtime tests.
 	if os.Getenv("SPX_TEST_COSTUME_ASSET_ROOTS") != "1" {
@@ -188,4 +177,15 @@ func TestBackdropPreservesConfiguredMetadata(t *testing.T) {
 	if c.name != config.Name || c.path != config.Path || c.faceRight != config.FaceRight || c.pivot != config.Pivot || c.frame.Center != (mathf.Vec2{}) || c.isAtlas() {
 		t.Fatalf("configured backdrop metadata = %+v", c)
 	}
+}
+
+func (m *costumeSizeResMgr) GetImageSize(path string) mathf.Vec2 {
+	m.calls++
+	size := m.sizes[path]
+	return mathf.NewVec2(math.Ceil(size.X), math.Ceil(size.Y))
+}
+
+func (m *costumeSizeResMgr) GetImageLogicalSize(path string) mathf.Vec2 {
+	m.calls++
+	return m.sizes[path]
 }

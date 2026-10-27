@@ -31,18 +31,6 @@ import (
 	"github.com/goplus/spx/v4/fs"
 )
 
-// OpenHttp opens hzip:<domain>/<path>
-// OpenHttp("open.qiniu.us/weather/res.zip")
-func OpenHttp(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "http://")
-}
-
-// OpenHttps opens hzips:<domain>/<path>
-// OpenHttps("open.qiniu.us/weather/res.zip")
-func OpenHttps(remotePath string) (fs.Dir, error) {
-	return openHttpWith(remotePath, "https://")
-}
-
 const (
 	// MaxRemoteZipBytes limits the downloaded archive size.
 	MaxRemoteZipBytes int64 = MaxZipArchiveBytes
@@ -60,6 +48,18 @@ type remoteHTTPStatusError struct {
 	URL        string
 	StatusCode int
 	Status     string
+}
+
+// OpenHttp opens hzip:<domain>/<path>
+// OpenHttp("open.qiniu.us/weather/res.zip")
+func OpenHttp(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "http://")
+}
+
+// OpenHttps opens hzips:<domain>/<path>
+// OpenHttps("open.qiniu.us/weather/res.zip")
+func OpenHttps(remotePath string) (fs.Dir, error) {
+	return openHttpWith(remotePath, "https://")
 }
 
 func (e *remoteHTTPStatusError) Error() string {

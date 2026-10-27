@@ -98,7 +98,7 @@ func configureCurrentMacOSGoToolchainEnv(env map[string]string) error {
 }
 
 func runMacOSXcrun(env map[string]string, args ...string) (string, error) {
-	xcrunPath, err := resolveCommandPath("xcrun", env)
+	xcrunPath, err := ResolveCommandPath("xcrun", env)
 	if err != nil {
 		return "", fmt.Errorf("resolve xcrun: %w", err)
 	}

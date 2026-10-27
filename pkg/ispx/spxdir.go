@@ -30,11 +30,6 @@ type spxDir struct {
 	prefix string
 }
 
-// newSpxDir creates a new spx directory.
-func newSpxDir(fsys fs.FS, prefix string) spxfs.Dir {
-	return &spxDir{fsys: fsys, prefix: prefix}
-}
-
 // Open implements [spxfs.Dir].
 func (d *spxDir) Open(file string) (io.ReadCloser, error) {
 	return d.fsys.Open(d.resolve(file))
@@ -67,4 +62,9 @@ func (d *spxDir) resolve(name string) string {
 		return name
 	}
 	return path.Join(d.prefix, name)
+}
+
+// newSpxDir creates a new spx directory.
+func newSpxDir(fsys fs.FS, prefix string) spxfs.Dir {
+	return &spxDir{fsys: fsys, prefix: prefix}
 }

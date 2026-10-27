@@ -27,33 +27,6 @@ import (
 
 const testDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-func testManifest() Manifest {
-	file := func(name string, mode uint32) File {
-		return File{Name: name, Mode: mode, Size: 10, SHA256: testDigest}
-	}
-	bundle := func(goos, goarch, name string) Bundle {
-		names := expectedFileNames("2.4.4", goos, goarch)
-		interfaceDigest, err := ComputeEngineInterfaceDigestFromSHA256(testDigest, testDigest)
-		if err != nil {
-			panic(err)
-		}
-		return Bundle{
-			GOOS: goos, GOARCH: goarch, Name: name, Size: 100, SHA256: testDigest,
-			EngineInterfaceDigest: interfaceDigest,
-			Files:                 []File{file(names[0], 0o755), file(names[1], 0o644), file(names[2], 0o755)},
-		}
-	}
-	return Manifest{
-		Schema: ManifestSchema, SPXVersion: "v3.2.4", RuntimeVersion: "2.4.4",
-		Bundles: []Bundle{
-			bundle("darwin", "amd64", "spx-driver-darwin-amd64.zip"),
-			bundle("darwin", "arm64", "spx-driver-darwin-arm64.zip"),
-			bundle("linux", "amd64", "spx-driver-linux-amd64.zip"),
-			bundle("windows", "amd64", "spx-driver-windows-amd64.zip"),
-		},
-	}
-}
-
 func TestManifestRoundTripLookupAndURL(t *testing.T) {
 	want := testManifest()
 	data, err := want.JSON()
@@ -278,5 +251,32 @@ func TestManifestBindingAndDigestInputs(t *testing.T) {
 		if _, err := ComputeEngineInterfaceDigestFromSHA256(pair[0], pair[1]); err == nil {
 			t.Fatal("invalid component digest accepted")
 		}
+	}
+}
+
+func testManifest() Manifest {
+	file := func(name string, mode uint32) File {
+		return File{Name: name, Mode: mode, Size: 10, SHA256: testDigest}
+	}
+	bundle := func(goos, goarch, name string) Bundle {
+		names := expectedFileNames("2.4.4", goos, goarch)
+		interfaceDigest, err := ComputeEngineInterfaceDigestFromSHA256(testDigest, testDigest)
+		if err != nil {
+			panic(err)
+		}
+		return Bundle{
+			GOOS: goos, GOARCH: goarch, Name: name, Size: 100, SHA256: testDigest,
+			EngineInterfaceDigest: interfaceDigest,
+			Files:                 []File{file(names[0], 0o755), file(names[1], 0o644), file(names[2], 0o755)},
+		}
+	}
+	return Manifest{
+		Schema: ManifestSchema, SPXVersion: "v3.2.4", RuntimeVersion: "2.4.4",
+		Bundles: []Bundle{
+			bundle("darwin", "amd64", "spx-driver-darwin-amd64.zip"),
+			bundle("darwin", "arm64", "spx-driver-darwin-arm64.zip"),
+			bundle("linux", "amd64", "spx-driver-linux-amd64.zip"),
+			bundle("windows", "amd64", "spx-driver-windows-amd64.zip"),
+		},
 	}
 }

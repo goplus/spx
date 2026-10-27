@@ -24,7 +24,7 @@ import (
 	spxfs "github.com/goplus/spx/v4/fs"
 )
 
-func (zipf *FS) ReadDir(name string) ([]spxfs.DirEntry, error) {
+func (z *FS) ReadDir(name string) ([]spxfs.DirEntry, error) {
 	prefix := strings.Trim(path.Clean(name), "/")
 	if prefix != "" && prefix != "." {
 		prefix += "/"
@@ -33,7 +33,7 @@ func (zipf *FS) ReadDir(name string) ([]spxfs.DirEntry, error) {
 	}
 
 	children := make(map[string]bool)
-	for _, file := range zipf.File {
+	for _, file := range z.File {
 		fileName := strings.TrimPrefix(file.Name, "/")
 		if !strings.HasPrefix(fileName, prefix) {
 			continue

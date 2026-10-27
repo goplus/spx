@@ -35,6 +35,12 @@ type Permissions interface {
 
 type modePermissions struct{}
 
+// PrivateFileMode exposes the private mode selected for a manifest entry. It
+// is useful to callers materializing a verified entry outside Cache.
+func PrivateFileMode(mode uint32) os.FileMode {
+	return privateFileMode(mode)
+}
+
 func (modePermissions) EnsureDir(path string) error {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		return err
@@ -48,12 +54,6 @@ func (modePermissions) EnsureFile(path string, executable bool) error {
 		mode = 0o700
 	}
 	return os.Chmod(path, mode)
-}
-
-// PrivateFileMode exposes the private mode selected for a manifest entry. It
-// is useful to callers materializing a verified entry outside Cache.
-func PrivateFileMode(mode uint32) os.FileMode {
-	return privateFileMode(mode)
 }
 
 func defaultPermissions() Permissions {

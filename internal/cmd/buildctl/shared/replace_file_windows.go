@@ -33,6 +33,19 @@ const (
 	windowsLongPathLimit    = 248
 )
 
+func ReplaceFile(src, dst string) error {
+	if _, err := os.Lstat(dst); err == nil {
+		if err := replaceExistingFile(src, dst); err == nil {
+			return nil
+		} else if err != windows.ERROR_FILE_NOT_FOUND && err != windows.ERROR_PATH_NOT_FOUND {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return moveFile(src, dst)
+}
+
 func windowsPath(path string) (string, error) {
 	if path == "" || hasWindowsNamespace(path) {
 		return path, nil
@@ -95,17 +108,4 @@ func moveFile(src, dst string) error {
 		return err
 	}
 	return windows.MoveFileEx(srcName, dstName, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH)
-}
-
-func ReplaceFile(src, dst string) error {
-	if _, err := os.Lstat(dst); err == nil {
-		if err := replaceExistingFile(src, dst); err == nil {
-			return nil
-		} else if err != windows.ERROR_FILE_NOT_FOUND && err != windows.ERROR_PATH_NOT_FOUND {
-			return err
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	return moveFile(src, dst)
 }

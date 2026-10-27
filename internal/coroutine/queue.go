@@ -36,12 +36,6 @@ type queue[T any] struct {
 	sortBuffer []T
 }
 
-func newQueue[T any]() *queue[T] {
-	q := &queue[T]{}
-	q.ensurePool()
-	return q
-}
-
 func (q *queue[T]) len() int {
 	return q.count
 }
@@ -164,4 +158,10 @@ func (q *queue[T]) releaseNode(n *node[T]) {
 	n.next = nil
 	q.ensurePool()
 	q.pool.Put(n)
+}
+
+func newQueue[T any]() *queue[T] {
+	q := &queue[T]{}
+	q.ensurePool()
+	return q
 }

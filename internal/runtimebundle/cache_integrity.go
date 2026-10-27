@@ -28,6 +28,22 @@ import (
 	"strings"
 )
 
+// validMaterializedHit verifies the pinned bundle, then checks that the public
+// path still names it after reading the complete tree.
+func (c *Cache) validMaterializedHit(cacheRoot, namespaceRoot *os.Root, namespace Namespace, digest string, expected *Bundle) (bool, error) {
+	ok, err := c.validCacheHitRoot(namespaceRoot, string(namespace), digest, expected)
+	if err != nil || !ok {
+		return false, err
+	}
+	if err := checkPinnedRootPath(c.Root, cacheRoot); err != nil {
+		return false, err
+	}
+	if err := checkPinnedChildPath(cacheRoot, string(namespace), namespaceRoot); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (c *Cache) validCacheHitRoot(namespaceRoot *os.Root, namespace, digest string, expected *Bundle) (bool, error) {
 	limits, err := c.Limits.withDefaults()
 	if err != nil {

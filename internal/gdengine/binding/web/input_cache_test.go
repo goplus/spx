@@ -214,55 +214,156 @@ func TestInputActionCache(t *testing.T) {
 
 func TestActionQueriesUseGeneratedBindings(t *testing.T) {
 	previousAPI, previousIDs := API, actionIDs
+	previousBool, previousAxis, previousGeneration := actionBool, actionAxis, actionGeneration
+	previousSnapshot := inputSnap
+	global := js.Global()
+	previousBindings, previousEpoch := global.Get("GdspxFuncs"), global.Get("GdspxGetInputActionEpoch")
+	t.Cleanup(func() {
+		API, actionIDs = previousAPI, previousIDs
+		actionBool, actionAxis, actionGeneration = previousBool, previousAxis, previousGeneration
+		inputSnap = previousSnapshot
+		global.Set("GdspxFuncs", previousBindings)
+		global.Set("GdspxGetInputActionEpoch", previousEpoch)
+	})
+	global.Set("GdspxFuncs", js.Undefined())
+	global.Set("GdspxGetInputActionEpoch", js.Undefined())
 	actionIDs = map[string]int{"left": 7, "right": 9}
-	t.Cleanup(func() { API, actionIDs = previousAPI, previousIDs })
+	actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 
 	var args []int
+	calls, result := 0, false
 	query := js.FuncOf(func(_ js.Value, values []js.Value) any {
+		calls++
 		args = nil
 		for _, value := range values {
 			args = append(args, value.Int())
 		}
-		return true
+		return result
 	})
 	defer query.Release()
 	API.SpxInputIsActionPressedId = query.Value
 	API.SpxInputIsActionJustPressedId = query.Value
 	API.SpxInputIsActionJustReleasedId = query.Value
-	for _, kind := range []string{"pressed", "just_pressed", "just_released"} {
-		if value, ok := webActionBool(kind, "left"); !ok || !value {
-			t.Fatalf("%s: got (%v, %v)", kind, value, ok)
-		}
-		if !slices.Equal(args, []int{7, 0}) {
-			t.Fatalf("%s: flattened ID arguments = %v", kind, args)
-		}
+	for _, test := range []struct {
+		name string
+		read func(string, func() bool) bool
+	}{
+		{"pressed", CachedInputIsActionPressed},
+		{"just_pressed", CachedInputIsActionJustPressed},
+		{"just_released", CachedInputIsActionJustReleased},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, want := range []bool{false, true} {
+				SyncWebInputSnapshot()
+				calls, result = 0, want
+				for range 2 {
+					got := test.read("left", func() bool { t.Fatal("valid action ID used fallback"); return false })
+					if got != want {
+						t.Fatalf("action value = %v, want current frame value %v", got, want)
+					}
+				}
+				if calls != 1 || !slices.Equal(args, []int{7, 0}) {
+					t.Fatalf("action binding: %d calls with %v, want one call with [7 0]", calls, args)
+				}
+			}
+		})
 	}
 	if _, ok := webActionBool("unknown", "left"); ok {
 		t.Fatal("unknown action kind should use fallback")
 	}
 
+	axisResult := 0.0
 	axis := js.FuncOf(func(_ js.Value, values []js.Value) any {
+		calls++
 		args = nil
 		for _, value := range values {
 			args = append(args, value.Int())
 		}
-		return -0.5
+		return axisResult
 	})
 	defer axis.Release()
 	API.SpxInputGetAxisId = axis.Value
-	if value, ok := webActionAxis("left", "right"); !ok || value != -0.5 {
-		t.Fatalf("axis: got (%v, %v)", value, ok)
+	for _, want := range []float64{0, -0.5} {
+		SyncWebInputSnapshot()
+		calls, axisResult = 0, want
+		for range 2 {
+			got := CachedInputGetAxis("left", "right", func() float64 { t.Fatal("valid axis IDs used fallback"); return 0 })
+			if got != want {
+				t.Fatalf("axis value = %v, want current frame value %v", got, want)
+			}
+		}
+		if calls != 1 || !slices.Equal(args, []int{7, 0, 9, 0}) {
+			t.Fatalf("axis binding: %d calls with %v, want one call with [7 0 9 0]", calls, args)
+		}
 	}
-	if !slices.Equal(args, []int{7, 0, 9, 0}) {
-		t.Fatalf("flattened axis arguments = %v", args)
-	}
-	API.SpxInputGetAxisId = js.Undefined()
-	API.SpxInputIsActionPressedId = js.Undefined()
-	if _, ok := webActionAxis("left", "right"); ok {
-		t.Fatal("missing axis binding should use fallback")
-	}
-	if _, ok := webActionBool("pressed", "left"); ok {
-		t.Fatal("missing action binding should use fallback")
+}
+
+func TestActionQueriesFallBackWhenUnavailable(t *testing.T) {
+	previousAPI, previousIDs := API, actionIDs
+	previousBool, previousAxis, previousGeneration := actionBool, actionAxis, actionGeneration
+	global := js.Global()
+	previousRegister, previousEpoch := global.Get("GdspxGetInputActionID"), global.Get("GdspxGetInputActionEpoch")
+	t.Cleanup(func() {
+		API, actionIDs = previousAPI, previousIDs
+		actionBool, actionAxis, actionGeneration = previousBool, previousAxis, previousGeneration
+		global.Set("GdspxGetInputActionID", previousRegister)
+		global.Set("GdspxGetInputActionEpoch", previousEpoch)
+	})
+	global.Set("GdspxGetInputActionEpoch", js.Undefined())
+	actionBool, actionAxis = map[string]bool{}, map[string]float64{}
+
+	negativeID := js.FuncOf(func(js.Value, []js.Value) any { return -1 })
+	undefined := js.FuncOf(func(js.Value, []js.Value) any { return js.Undefined() })
+	null := js.FuncOf(func(js.Value, []js.Value) any { return js.Null() })
+	unexpected := js.FuncOf(func(js.Value, []js.Value) any { t.Error("binding called without valid action IDs"); return nil })
+	defer negativeID.Release()
+	defer undefined.Release()
+	defer null.Release()
+	defer unexpected.Release()
+	for _, test := range []struct {
+		name              string
+		ids               map[string]int
+		register, binding js.Value
+		axisOnly          bool
+	}{
+		{"missing ID provider", map[string]int{}, js.Undefined(), unexpected.Value, false},
+		{"negative ID", map[string]int{}, negativeID.Value, unexpected.Value, false},
+		{"missing positive axis ID", map[string]int{"left": 7}, negativeID.Value, unexpected.Value, true},
+		{"missing binding", map[string]int{"left": 7, "right": 9}, js.Undefined(), js.Undefined(), false},
+		{"undefined result", map[string]int{"left": 7, "right": 9}, js.Undefined(), undefined.Value, false},
+		{"null result", map[string]int{"left": 7, "right": 9}, js.Undefined(), null.Value, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			clearActionCache()
+			actionIDs = test.ids
+			global.Set("GdspxGetInputActionID", test.register)
+			API.SpxInputIsActionPressedId = test.binding
+			API.SpxInputIsActionJustPressedId = test.binding
+			API.SpxInputIsActionJustReleasedId = test.binding
+			API.SpxInputGetAxisId = test.binding
+			if !test.axisOnly {
+				for _, read := range []func(string, func() bool) bool{CachedInputIsActionPressed, CachedInputIsActionJustPressed, CachedInputIsActionJustReleased} {
+					calls := 0
+					for range 2 {
+						if !read("left", func() bool { calls++; return true }) {
+							t.Fatal("unavailable action did not return fallback value")
+						}
+					}
+					if calls != 1 {
+						t.Fatalf("action fallback called %d times, want once per frame", calls)
+					}
+				}
+			}
+			calls := 0
+			for range 2 {
+				if got := CachedInputGetAxis("left", "right", func() float64 { calls++; return 0.75 }); got != 0.75 {
+					t.Fatalf("unavailable axis = %v, want fallback value 0.75", got)
+				}
+			}
+			if calls != 1 {
+				t.Fatalf("axis fallback called %d times, want once per frame", calls)
+			}
+		})
 	}
 }
 

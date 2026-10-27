@@ -30,28 +30,16 @@ type resourceTestDir struct {
 	closed int
 }
 
-func (*resourceTestDir) Open(string) (io.ReadCloser, error) {
-	return nil, os.ErrNotExist
-}
-
-func (d *resourceTestDir) Close() error {
-	d.closed++
-	return nil
-}
-
-func (d *resourceTestDir) GetPath() string {
-	return d.path
-}
-
 type listedResourceTestDir struct {
 	*resourceTestDir
 	entries []spxfs.DirEntry
 	readDir string
 }
 
-func (d *listedResourceTestDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	d.readDir = name
-	return d.entries, nil
+type verifyingResourceTestDir struct {
+	resourceTestDir
+	verified string
+	err      error
 }
 
 func TestEngineAssetsPreserveOptionalReadDir(t *testing.T) {
@@ -102,21 +90,6 @@ func TestOpenResourcesRejectsUnsupportedResource(t *testing.T) {
 	}
 }
 
-type verifyingResourceTestDir struct {
-	resourceTestDir
-	verified string
-	err      error
-}
-
-func (*verifyingResourceTestDir) Open(string) (io.ReadCloser, error) {
-	panic("file verification must not open the source")
-}
-
-func (d *verifyingResourceTestDir) VerifyFile(name string) error {
-	d.verified = name
-	return d.err
-}
-
 func TestEngineAssetsPreserveFileVerifier(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -133,4 +106,31 @@ func TestEngineAssetsPreserveFileVerifier(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (*resourceTestDir) Open(string) (io.ReadCloser, error) {
+	return nil, os.ErrNotExist
+}
+
+func (d *resourceTestDir) Close() error {
+	d.closed++
+	return nil
+}
+
+func (d *resourceTestDir) GetPath() string {
+	return d.path
+}
+
+func (d *listedResourceTestDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	d.readDir = name
+	return d.entries, nil
+}
+
+func (*verifyingResourceTestDir) Open(string) (io.ReadCloser, error) {
+	panic("file verification must not open the source")
+}
+
+func (d *verifyingResourceTestDir) VerifyFile(name string) error {
+	d.verified = name
+	return d.err
 }

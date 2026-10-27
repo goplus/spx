@@ -21,10 +21,6 @@ type executeMainThreadPlatform struct {
 	mainGID atomic.Uint64
 }
 
-func (p *executeMainThreadPlatform) IsMainThread() bool {
-	return gid.Get() == p.mainGID.Load()
-}
-
 func TestExecuteOnEngineThreadServicesMainThreadCalls(t *testing.T) {
 	setupExecuteTest(t)
 	platform := &executeMainThreadPlatform{}
@@ -314,4 +310,8 @@ func TestLinkedGameResetReleasesBackendForNextGame(t *testing.T) {
 			t.Fatalf("reset callbacks=%d active binding=%p", game.reset.Load(), activeGame.Load())
 		}
 	}
+}
+
+func (p *executeMainThreadPlatform) IsMainThread() bool {
+	return gid.Get() == p.mainGID.Load()
 }

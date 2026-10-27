@@ -114,6 +114,35 @@ func TestBuildctlCommandEnvPrependsGoBinDirs(t *testing.T) {
 	}
 }
 
+func TestPrependEnvPathPreservesInheritedPath(t *testing.T) {
+	root := t.TempDir()
+	javaBin, fallbackBin := filepath.Join(root, "jdk", "bin"), filepath.Join(root, "fallback")
+	if err := os.MkdirAll(fallbackBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := "java"
+	if runtime.GOOS == "windows" {
+		command += ".exe"
+	}
+	commandPath := filepath.Join(fallbackBin, command)
+	if err := os.WriteFile(commandPath, []byte("fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"PATH", "Path"} {
+		t.Run(key, func(t *testing.T) {
+			env := map[string]string{key: fallbackBin, "PATHEXT": ".EXE", "OTHER": "kept"}
+			PrependEnvPath(env, javaBin)
+			want := javaBin + string(os.PathListSeparator) + fallbackBin
+			if env["PATH"] != want || env["OTHER"] != "kept" {
+				t.Fatalf("environment = %v, want PATH %q and preserved OTHER", env, want)
+			}
+			if got, err := ResolveCommandPath("java", env); err != nil || got != commandPath {
+				t.Fatalf("Java fallback = %q, %v; want %q", got, err, commandPath)
+			}
+		})
+	}
+}
+
 func TestResolveCommandPathUsesCaseInsensitivePathFallback(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")
@@ -126,12 +155,12 @@ func TestResolveCommandPathUsesCaseInsensitivePathFallback(t *testing.T) {
 		t.Fatalf("WriteFile returned error: %v", err)
 	}
 
-	got, err := resolveCommandPath("fakecmd", map[string]string{"Path": binDir})
+	got, err := ResolveCommandPath("fakecmd", map[string]string{"Path": binDir})
 	if err != nil {
-		t.Fatalf("resolveCommandPath returned error: %v", err)
+		t.Fatalf("ResolveCommandPath returned error: %v", err)
 	}
 	if got != cmdPath {
-		t.Fatalf("resolveCommandPath = %q, want %q", got, cmdPath)
+		t.Fatalf("ResolveCommandPath = %q, want %q", got, cmdPath)
 	}
 }
 
@@ -155,18 +184,41 @@ func TestIsCommandFileForOSAllowsWindowsFilesWithoutUnixExecBit(t *testing.T) {
 }
 
 func TestCommandRunnerRunCommandReturnsEnvironmentError(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("GOPATH", "")
-	t.Setenv("PATH", "")
-
-	runner := CommandRunner{RepoRoot: root}
-	err := runner.RunCommand(".", "fakecmd")
-	if err == nil {
-		t.Fatal("expected runCommand to fail when command environment cannot be resolved")
-	}
-	if !strings.Contains(err.Error(), "resolve command environment") {
-		t.Fatalf("runCommand error = %v, want environment resolution context", err)
-	}
+	t.Run("missing Go executable", func(t *testing.T) {
+		root := t.TempDir()
+		t.Setenv("GOPATH", "")
+		t.Setenv("PATH", "")
+		if runtime.GOOS == "darwin" {
+			// Keep SDK resolution valid so the error comes from GOPATH discovery.
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("SDKROOT", root)
+			t.Setenv("CC", executable)
+			t.Setenv("CXX", executable)
+			for _, name := range macOSCGOFlagVariables {
+				t.Setenv(name, "")
+			}
+		}
+		err := (CommandRunner{RepoRoot: root}).RunCommand(".", "fakecmd")
+		if !errors.Is(err, exec.ErrNotFound) || !strings.Contains(err.Error(), "resolve command environment") {
+			t.Fatalf("runCommand error = %v, want wrapped missing Go executable", err)
+		}
+	})
+	t.Run("missing macOS SDK resolver", func(t *testing.T) {
+		if runtime.GOOS != "darwin" {
+			t.Skip("macOS SDK resolution")
+		}
+		root := t.TempDir()
+		t.Setenv("GOPATH", filepath.Join(root, "gopath"))
+		t.Setenv("PATH", "")
+		t.Setenv("SDKROOT", filepath.Join(root, "missing.sdk"))
+		err := (CommandRunner{RepoRoot: root}).RunCommand(".", "fakecmd")
+		if err == nil || !strings.Contains(err.Error(), "resolve command environment: configure macOS Go toolchain: resolve macOS SDK: resolve xcrun:") {
+			t.Fatalf("runCommand error = %v, want SDK resolution context", err)
+		}
+	})
 }
 
 func TestCommandRunnerRunCommandReturnsResolvePathError(t *testing.T) {
@@ -328,17 +380,17 @@ func TestCommandRunnerListDemoDirs(t *testing.T) {
 func TestResolveCommandPathExplicitAndInvalidPaths(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{filepath.Join(root, "tool"), filepath.Join("relative", "tool")} {
-		if got, err := resolveCommandPath(name, nil); err != nil || got != name {
+		if got, err := ResolveCommandPath(name, nil); err != nil || got != name {
 			t.Fatalf("explicit command = %q, %v; want %q", got, err, name)
 		}
 	}
-	if _, err := resolveCommandPath("missing", nil); err == nil {
+	if _, err := ResolveCommandPath("missing", nil); err == nil {
 		t.Fatal("expected missing PATH to fail")
 	}
 	if err := os.Mkdir(filepath.Join(root, "tool"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := resolveCommandPath("tool", map[string]string{"PATH": string(os.PathListSeparator) + root}); err == nil {
+	if _, err := ResolveCommandPath("tool", map[string]string{"PATH": string(os.PathListSeparator) + root}); err == nil {
 		t.Fatal("a directory in PATH must not be resolved as a command")
 	}
 }

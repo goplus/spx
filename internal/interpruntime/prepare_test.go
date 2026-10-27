@@ -33,14 +33,7 @@ import (
 	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
-func testSessionConfig(t *testing.T) SessionConfig {
-	t.Helper()
-	bridge := filepath.Join(t.TempDir(), "bridge.so")
-	if err := os.WriteFile(bridge, []byte("bridge"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return SessionConfig{Roots: testRoots(t), BridgePath: bridge}
-}
+type scaffoldTestReader func([]byte) (int, error)
 
 func TestPrepareSession(t *testing.T) {
 	for _, existing := range []bool{false, true} {
@@ -533,4 +526,124 @@ func TestReplaceRootFileTemporaryNameCollisions(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPrepareSessionPermissionFailuresPreserveExistingFiles(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions and an unprivileged user")
+	}
+	for _, tt := range []struct {
+		name       string
+		restricted string
+		mode       os.FileMode
+		preserved  string
+		want       string
+	}{
+		{name: "unreadable bridge", restricted: "source", mode: 0, want: "open BridgePath"},
+		{name: "unreadable session", restricted: ".", mode: 0, preserved: "keep.txt", want: "open SessionDir root"},
+		{name: "read-only session", restricted: ".", mode: 0o500, preserved: "keep.txt", want: "create session directory"},
+		{name: "unreadable bridge directory", restricted: bridgeDirectory, mode: 0, preserved: "lib/bridge.so", want: "open session directory"},
+		{name: "read-only bridge directory", restricted: bridgeDirectory, mode: 0o500, preserved: "lib/bridge.so", want: "create temporary scaffold"},
+		{name: "unreadable project data", restricted: ".godot", mode: 0, preserved: ".godot/extension_list.cfg", want: "open session directory"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := testSessionConfig(t)
+			preserved := cfg.BridgePath
+			wantContent := "bridge"
+			if tt.preserved != "" {
+				preserved = filepath.Join(cfg.Roots.SessionDir, filepath.FromSlash(tt.preserved))
+				wantContent = "existing session file"
+				if err := os.MkdirAll(filepath.Dir(preserved), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(preserved, []byte(wantContent), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			restricted := filepath.Join(cfg.Roots.SessionDir, tt.restricted)
+			restoreMode := os.FileMode(0o700)
+			if tt.restricted == "source" {
+				restricted = cfg.BridgePath
+				restoreMode = 0o600
+			}
+			if err := os.Chmod(restricted, tt.mode); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(restricted, restoreMode) })
+			err := PrepareSession(cfg)
+			if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("PrepareSession = %v; want %q wrapping permission failure", err, tt.want)
+			}
+			if err := os.Chmod(restricted, restoreMode); err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(preserved); err != nil || string(data) != wantContent {
+				t.Fatalf("existing file changed after failure: %q, %v", data, err)
+			}
+			if err := filepath.WalkDir(cfg.Roots.SessionDir, func(path string, entry os.DirEntry, err error) error {
+				if err == nil && strings.Contains(entry.Name(), ".tmp-") {
+					t.Errorf("temporary scaffold leaked: %s", path)
+				}
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestReplaceRootFilePreservesCompetingDestination(t *testing.T) {
+	directory := t.TempDir()
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	target := filepath.Join(directory, "asset")
+	if err := os.WriteFile(target, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input := strings.NewReader("replacement")
+	replaced := false
+	reader := scaffoldTestReader(func(p []byte) (int, error) {
+		if !replaced {
+			replaced = true
+			// Create a conflicting directory while the replacement is being
+			// streamed, after the original destination has been inspected.
+			if err := os.Rename(target, target+".old"); err != nil {
+				return 0, err
+			}
+			if err := os.Mkdir(target, 0o700); err != nil {
+				return 0, err
+			}
+			if err := os.WriteFile(filepath.Join(target, "keep"), []byte("concurrent file"), 0o600); err != nil {
+				return 0, err
+			}
+		}
+		return input.Read(p)
+	})
+	if err := replaceRootFile(root, "asset", reader, 0o600); err == nil {
+		t.Fatal("replacement overwrote a competing directory")
+	}
+	for path, want := range map[string]string{target + ".old": "original", filepath.Join(target, "keep"): "concurrent file"} {
+		if data, err := os.ReadFile(path); err != nil || string(data) != want {
+			t.Fatalf("preserved file %q = %q, %v; want %q", path, data, err, want)
+		}
+	}
+	if entries, err := os.ReadDir(directory); err != nil || len(entries) != 2 {
+		t.Fatalf("failed publication leaked temporary files: %v, %v", entries, err)
+	}
+}
+
+func (f scaffoldTestReader) Read(p []byte) (int, error) {
+	return f(p)
+}
+
+func testSessionConfig(t *testing.T) SessionConfig {
+	t.Helper()
+	bridge := filepath.Join(t.TempDir(), "bridge.so")
+	if err := os.WriteFile(bridge, []byte("bridge"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return SessionConfig{Roots: testRoots(t), BridgePath: bridge}
 }

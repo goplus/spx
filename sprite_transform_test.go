@@ -28,21 +28,6 @@ import (
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-func newTestTransformSprite(x, y float64) *SpriteImpl {
-	sprite := &SpriteImpl{
-		g:    &Game{},
-		name: "TestSprite",
-	}
-	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
-		X:             x,
-		Y:             y,
-		RotationStyle: "normal",
-		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
-		AnimBindings:  map[string]string{},
-	})
-	return sprite
-}
-
 func TestMotionInputsTreatNaNAsZero(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -865,4 +850,120 @@ func TestSpriteMotionOverloadsKeepTargetAndOptionSemantics(t *testing.T) {
 	if sprite.Size() != 5 {
 		t.Fatalf("size = %v, want 5", sprite.Size())
 	}
+}
+
+func TestTransformComponentScaleFallbacksAndTinyStage(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	transform := sprite.transform()
+	if got := transform.clampSpriteScale(3); got != 3 {
+		t.Fatalf("unconfigured sprite scale = %v, want 3", got)
+	}
+	sprite.costumes = []*costume{newCostumeWithSize(0, 0)}
+	if got := transform.clampSpriteScale(3); got != 3 {
+		t.Fatalf("empty costume scale = %v, want 3", got)
+	}
+	sprite.costumes = []*costume{newCostumeWithSize(10, 10)}
+	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 1, 1
+	if got := transform.clampSpriteScale(3); got != 0.5 {
+		t.Fatalf("tiny stage scale = %v, want minimum visible scale 0.5", got)
+	}
+	transform.setSize(-2)
+	if sprite.runtimeState.Scale != 0.5 {
+		t.Fatalf("negative size = %v, want clamped visible size 0.5", sprite.runtimeState.Scale)
+	}
+}
+
+func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T) {
+	sprite := newTestTransformSprite(0, 0)
+	sprite.runtimeState.Scale = 1
+	sprite.costumes = []*costume{newCostumeWithSize(20, 20)}
+	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 100, 100
+	sprite.g.displayState.MinWorldX, sprite.g.displayState.MinWorldY = -50, -50
+	transform := sprite.transform()
+	if x, y := transform.fixWorldRange(0, -100); x != 0 || y != -50 {
+		t.Fatalf("bottom fenced position = (%v, %v), want (0, -50)", x, y)
+	}
+	transform.direction = 35
+	if got := transform.calculateTargetAngleToPos(0, 0); got != 35 {
+		t.Fatalf("direction to current position = %v, want 35", got)
+	}
+	sprite.g.inputMgr.setMousePos(mathf.NewVec2(0, 10))
+	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
+		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
+	}
+	transform.bounceOffEdge(edgeAreaStage)
+	if transform.direction != 35 {
+		t.Fatal("sprite away from edges changed its heading")
+	}
+}
+
+func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
+	t.Cleanup(itime.ClearTimers)
+	co := setupRuntimeScheduler(t)
+	itime.Start(nil)
+	sprite := newTestTransformSprite(0, 0)
+	animation := &coreproject.AniConfig{StepDuration: 0.001}
+	sprite.animation().shared.animations["walk"] = &animationEntry{name: "walk", config: animation}
+	done := false
+	thread := co.Create(sprite, func(coroutine.Thread) {
+		sprite.transform().stepToPos(10, 0, 1, "walk")
+		done = true
+	})
+	co.JoinFirstSlice(thread)
+	if done {
+		t.Fatal("configured step animation completed before advancing a frame")
+	}
+	for range 2 {
+		itime.Update(1.0/30, 30)
+		co.Update()
+	}
+	if x, y := sprite.getXY(); !done || x != 10 || y != 0 || sprite.animation().getCurTweenState() != nil {
+		t.Fatalf("step completion = %v, position=(%v,%v), tween=%v", done, x, y, sprite.animation().getCurTweenState())
+	}
+	co.Join(thread)
+}
+
+func TestTransformComponentDebugVisualOperations(t *testing.T) {
+	t.Cleanup(itime.ClearTimers)
+	game := setupCloneLimitGame(t)
+	game.debugState.DebugInstr = true
+	sprite := newCloneLimitSprite(game, "moving")
+	sprite.costumes = nil
+	transform := sprite.transform()
+	transform.setRotationStyle(LeftRight)
+	transform.direction = 45
+	transform.bounceOffEdge(edgeAreaStage)
+	if transform.rotationStyle != LeftRight || transform.direction != 45 {
+		t.Fatal("unbound sprite lost its rotation style or heading")
+	}
+	itime.Start(nil)
+	done := false
+	thread := gco.Create(sprite, func(coroutine.Thread) {
+		transform.glide(5, 7, 0.01)
+		done = true
+	})
+	gco.JoinFirstSlice(thread)
+	for range 2 {
+		itime.Update(1.0/30, 30)
+		gco.Update()
+	}
+	if x, y := sprite.getXY(); !done || x != 5 || y != 7 {
+		t.Fatalf("debug glide completed=%v, position=(%v,%v), want (5,7)", done, x, y)
+	}
+	gco.Join(thread)
+}
+
+func newTestTransformSprite(x, y float64) *SpriteImpl {
+	sprite := &SpriteImpl{
+		g:    &Game{},
+		name: "TestSprite",
+	}
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
+		X:             x,
+		Y:             y,
+		RotationStyle: "normal",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	return sprite
 }

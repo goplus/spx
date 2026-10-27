@@ -110,25 +110,6 @@ func TestRunValidatesInputsBeforeWriting(t *testing.T) {
 	require.Equal(t, before, generationFiles(t, codegenDir), "validation must preserve existing files")
 }
 
-func writeCodegenFixtureFile(t *testing.T, dir, name string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func newValidSPXModuleFixture(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	for _, name := range requiredCodegenModuleFiles {
-		writeCodegenFixtureFile(t, dir, name)
-	}
-	return dir
-}
-
 func TestGenerateCodeFailurePreservesPublishedOutputs(t *testing.T) {
 	for _, test := range []struct {
 		name, errorText string
@@ -241,6 +222,25 @@ func TestGenerateCodeMatchesPublishedBindingsAndIsDeterministic(t *testing.T) {
 	}
 	require.NoError(t, generateCode(config))
 	require.Equal(t, first, generationFiles(t, root), "second generation must be byte-for-byte identical")
+}
+
+func writeCodegenFixtureFile(t *testing.T, dir, name string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newValidSPXModuleFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range requiredCodegenModuleFiles {
+		writeCodegenFixtureFile(t, dir, name)
+	}
+	return dir
 }
 
 func newGenerationFixture(t *testing.T) (string, codegenConfig) {

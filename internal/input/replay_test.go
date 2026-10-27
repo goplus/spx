@@ -536,6 +536,53 @@ func TestInputReplayControllerRejectedTicksDoNotAdvanceRecording(t *testing.T) {
 	}
 }
 
+func BenchmarkDecodeInputReplay(b *testing.B) {
+	replay := InputReplay{
+		Format: InputReplayFormat, Version: InputReplayVersion,
+		Initial: InputReplayState{KeysDown: []int64{1}},
+		Frames:  make([]InputReplayFrame, 10000),
+	}
+	for i := range replay.Frames {
+		replay.Frames[i] = InputReplayFrame{
+			Frame: int64(i), Time: float64(i) / 60,
+			State:       InputReplayState{KeysDown: []int64{1}},
+			KeyEvents:   []InputReplayKeyEvent{{Key: 1, Pressed: true}},
+			MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
+		}
+	}
+	data, err := EncodeInputReplay(replay)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(int64(len(data)))
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := DecodeInputReplay(data); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestCloneInputReplayPreservesSliceShapes(t *testing.T) {
+	for _, name := range []string{"nil", "empty"} {
+		t.Run(name, func(t *testing.T) {
+			replay := InputReplay{Frames: []InputReplayFrame{{}}}
+			if name == "empty" {
+				replay.Initial.KeysDown = []int64{}
+				replay.Frames[0].State.KeysDown = []int64{}
+				replay.Frames[0].MouseEvents = []InputReplayMouseEvent{}
+				replay.Frames[0].KeyEvents = []InputReplayKeyEvent{}
+			}
+			if got := CloneInputReplay(replay); !reflect.DeepEqual(got, replay) {
+				t.Fatalf("clone changed nested slice shapes: %#v", got)
+			}
+		})
+	}
+	if got := CloneInputReplay(InputReplay{}); got.Frames == nil || len(got.Frames) != 0 {
+		t.Fatalf("absent frames not normalized: %#v", got.Frames)
+	}
+}
+
 func assertInputReplayRoundTrip(t *testing.T, want InputReplay) []byte {
 	t.Helper()
 	data, err := EncodeInputReplay(want)
@@ -587,52 +634,5 @@ func validInputReplay() InputReplay {
 				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
 			},
 		},
-	}
-}
-
-func BenchmarkDecodeInputReplay(b *testing.B) {
-	replay := InputReplay{
-		Format: InputReplayFormat, Version: InputReplayVersion,
-		Initial: InputReplayState{KeysDown: []int64{1}},
-		Frames:  make([]InputReplayFrame, 10000),
-	}
-	for i := range replay.Frames {
-		replay.Frames[i] = InputReplayFrame{
-			Frame: int64(i), Time: float64(i) / 60,
-			State:       InputReplayState{KeysDown: []int64{1}},
-			KeyEvents:   []InputReplayKeyEvent{{Key: 1, Pressed: true}},
-			MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
-		}
-	}
-	data, err := EncodeInputReplay(replay)
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.SetBytes(int64(len(data)))
-	b.ReportAllocs()
-	for b.Loop() {
-		if _, err := DecodeInputReplay(data); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func TestCloneInputReplayPreservesSliceShapes(t *testing.T) {
-	for _, name := range []string{"nil", "empty"} {
-		t.Run(name, func(t *testing.T) {
-			replay := InputReplay{Frames: []InputReplayFrame{{}}}
-			if name == "empty" {
-				replay.Initial.KeysDown = []int64{}
-				replay.Frames[0].State.KeysDown = []int64{}
-				replay.Frames[0].MouseEvents = []InputReplayMouseEvent{}
-				replay.Frames[0].KeyEvents = []InputReplayKeyEvent{}
-			}
-			if got := CloneInputReplay(replay); !reflect.DeepEqual(got, replay) {
-				t.Fatalf("clone changed nested slice shapes: %#v", got)
-			}
-		})
-	}
-	if got := CloneInputReplay(InputReplay{}); got.Frames == nil || len(got.Frames) != 0 {
-		t.Fatalf("absent frames not normalized: %#v", got.Frames)
 	}
 }

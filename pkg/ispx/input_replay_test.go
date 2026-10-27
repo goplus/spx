@@ -83,18 +83,6 @@ func TestHostInputReplayBridgeValidatesAndPreparesNextGame(t *testing.T) {
 	}
 }
 
-func hostInputReplayJSON(t *testing.T, frames ...spx.InputReplayFrame) string {
-	t.Helper()
-	data, err := spx.EncodeInputReplay(spx.InputReplay{
-		Format: spx.InputReplayFormat, Version: spx.InputReplayVersion,
-		FixedTimestep: 1.0 / 30, Frames: frames,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
 func TestHostInputRecordingFinishRequiresActiveRecording(t *testing.T) {
 	for _, mode := range []string{"idle", "recording prepared", "replay prepared"} {
 		t.Run(mode, func(t *testing.T) {
@@ -150,4 +138,16 @@ func TestHostInputSessionForwardsOptions(t *testing.T) {
 			})
 		}
 	}
+}
+
+func hostInputReplayJSON(t *testing.T, frames ...spx.InputReplayFrame) string {
+	t.Helper()
+	data, err := spx.EncodeInputReplay(spx.InputReplay{
+		Format: spx.InputReplayFormat, Version: spx.InputReplayVersion,
+		FixedTimestep: 1.0 / 30, Frames: frames,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

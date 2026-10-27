@@ -108,6 +108,8 @@ type platformLockFile interface {
 	validate() error
 }
 
+const lockSidecarSuffix = ".lock"
+
 func (CrossProcessLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
 	return acquirePlatformFileLock(ctx, key, lockExclusive)
 }
@@ -296,8 +298,6 @@ func acquireOpenedPlatformFileLock(ctx context.Context, file platformLockFile, m
 		}
 	}
 }
-
-const lockSidecarSuffix = ".lock"
 
 func lockSidecarPath(key string) string { return key + lockSidecarSuffix }
 

@@ -49,7 +49,7 @@ CLI path resolution does not change process cwd. Commands receive their source o
 
 ### Project load plan
 
-After opening resources and parsing command-line flags, `game_load.go` coordinates a `projectPlan` prepared in `game_prepare.go` and applied by `game_apply.go`. `game_stage_entries.go` handles stage entry preparation and application. Preparation processes project constraints, sprite fields, tilemap, and stage entries in that order. Each stage entry immediately prepares its required prototype so a later syntax error cannot hide an earlier configuration read error. Application reuses the Go parsing results without rereading sprite and stage configurations.
+After opening resources and parsing command-line flags, `game_load.go` coordinates a `projectPlan`. `game_prepare.go` prepares the plan and its stage entries; `game_apply.go` applies them. Preparation processes project constraints, sprite fields, tilemap, and stage entries in that order. Each stage entry immediately prepares its required prototype so a later syntax error cannot hide an earlier configuration read error. Application reuses the Go parsing results without rereading sprite and stage configurations.
 
 Field preparation allocates pointers and interfaces only on a temporary game value. Stage plans retain direct field indices and property values, then bind the corresponding live fields during application without repeating name lookup. A failure during plan preparation publishes no sprite fields, prototypes or shapes, applies no fonts and allocates no engine objects. Empty groups do not read prototypes; failed monitor bindings are skipped, and BGM or optional decorator failures remain nonfatal.
 

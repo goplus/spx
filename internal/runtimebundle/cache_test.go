@@ -34,6 +34,19 @@ import (
 	"time"
 )
 
+// faultLockProvider keeps real process-local leases except at one injected
+// boundary, so cache error paths can be checked without timing races.
+type faultLockProvider struct {
+	LockProvider
+	mode    lockMode
+	acquire func(context.Context, string) (LockLease, error)
+}
+
+type errorTestLease struct {
+	err    error
+	closes int
+}
+
 func TestCacheMaterializeRejectsInvalidRequestBeforeWriting(t *testing.T) {
 	if result, err := (*Cache)(nil).Materialize(nil, NamespaceEngine, "missing.zip", nil); result != nil || err == nil || !strings.Contains(err.Error(), "nil cache") {
 		t.Fatalf("nil Materialize = %v, %v", result, err)
@@ -893,41 +906,6 @@ func TestCrossProcessLockKillReleases(t *testing.T) {
 	}
 }
 
-func runtimeBundleHelperCommand(t *testing.T, values map[string]string) *exec.Cmd {
-	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestRuntimeBundleProcessHelper$", "-test.v")
-	env := append([]string(nil), os.Environ()...)
-	for key, value := range values {
-		env = append(env, key+"="+value)
-	}
-	cmd.Env = env
-	return cmd
-}
-
-func waitTestFile(t *testing.T, path string, timeout time.Duration) {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("timed out waiting for %s", path)
-}
-
-func materializeTestPath(cache *Cache, ctx context.Context, namespace Namespace, zipPath string, expected *Bundle) (string, error) {
-	materialized, err := cache.Materialize(ctx, namespace, zipPath, expected)
-	if err != nil {
-		return "", err
-	}
-	path := materialized.Path
-	if err := materialized.Close(); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
 func TestNewCacheWithOptions(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "cache")
 	for _, tt := range []struct {
@@ -1041,16 +1019,30 @@ func TestCacheAdminMissingAndInvalidState(t *testing.T) {
 }
 
 func TestDefaultCacheRoot(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux user cache directory environment")
-	}
 	cacheHome := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	if got, want := DefaultCacheRoot(), filepath.Join(cacheHome, "spx", "runtimebundle"); got != want {
+	wantBase := cacheHome
+	var variables []string
+	switch runtime.GOOS {
+	case "windows":
+		variables = []string{"LocalAppData"}
+	case "darwin", "ios":
+		variables = []string{"HOME"}
+		wantBase = filepath.Join(cacheHome, "Library", "Caches")
+	case "plan9":
+		variables = []string{"home"}
+		wantBase = filepath.Join(cacheHome, "lib", "cache")
+	default:
+		variables = []string{"XDG_CACHE_HOME", "HOME"}
+	}
+	for _, variable := range variables {
+		t.Setenv(variable, cacheHome)
+	}
+	if got, want := DefaultCacheRoot(), filepath.Join(wantBase, "spx", "runtimebundle"); got != want {
 		t.Fatalf("DefaultCacheRoot = %q, want %q", got, want)
 	}
-	t.Setenv("XDG_CACHE_HOME", "")
-	t.Setenv("HOME", "")
+	for _, variable := range variables {
+		t.Setenv(variable, "")
+	}
 	if got, want := DefaultCacheRoot(), filepath.Join(os.TempDir(), "spx", "runtimebundle"); got != want {
 		t.Fatalf("fallback DefaultCacheRoot = %q, want %q", got, want)
 	}
@@ -1095,38 +1087,6 @@ func TestModePermissions(t *testing.T) {
 	if err := permissions.EnsureFile(filepath.Join(dir, "missing"), false); !os.IsNotExist(err) {
 		t.Fatalf("EnsureFile missing = %v", err)
 	}
-}
-
-// faultLockProvider keeps real process-local leases except at one injected
-// boundary, so cache error paths can be checked without timing races.
-type faultLockProvider struct {
-	LockProvider
-	mode    lockMode
-	acquire func(context.Context, string) (LockLease, error)
-}
-
-func (p faultLockProvider) AcquireShared(ctx context.Context, key string) (LockLease, error) {
-	if p.mode == lockShared {
-		return p.acquire(ctx, key)
-	}
-	return p.LockProvider.AcquireShared(ctx, key)
-}
-
-func (p faultLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
-	if p.mode == lockExclusive {
-		return p.acquire(ctx, key)
-	}
-	return p.LockProvider.AcquireExclusive(ctx, key)
-}
-
-type errorTestLease struct {
-	err    error
-	closes int
-}
-
-func (l *errorTestLease) Close() error {
-	l.closes++
-	return l.err
 }
 
 func TestCacheLockFailuresDoNotRemoveData(t *testing.T) {
@@ -1345,6 +1305,91 @@ func TestCacheMaterializeUsesCompetingPublication(t *testing.T) {
 	}
 	if items, err := cache.List(NamespaceEngine); err != nil || len(items) != 1 || items[0] != winner {
 		t.Fatalf("competing publication List = %v, %v", items, err)
+	}
+}
+
+type cacheTestReader func([]byte) (int, error)
+
+func (r cacheTestReader) Read(p []byte) (int, error) { return r(p) }
+
+func TestCacheMaterializeRevalidatesRenameWinnerAndCleansTemporary(t *testing.T) {
+	// Like the allocation-collision tests, this test must remain serial because
+	// crypto/rand.Reader is process-wide. Its callback models a competing
+	// publisher after the cache miss, without a filesystem race or test hook.
+	for _, winnerState := range []string{"valid", "missing marker", "damaged payload"} {
+		t.Run(winnerState, func(t *testing.T) {
+			zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
+			winner, err := materializeTestPath(NewProcessLocalCache(t.TempDir()), t.Context(), NamespaceEngine, zipPath, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch winnerState {
+			case "missing marker":
+				err = os.Remove(filepath.Join(winner, completeMarkerName))
+			case "damaged payload":
+				err = os.WriteFile(filepath.Join(winner, "runtime"), []byte("changed"), 0o600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			winnerInfo, err := os.Stat(winner)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cache := NewProcessLocalCache(t.TempDir())
+			target := filepath.Join(cache.Root, string(NamespaceEngine), filepath.Base(winner))
+			var path string
+			allocations := 0
+			original := cryptorand.Reader
+			t.Cleanup(func() { cryptorand.Reader = original })
+			cryptorand.Reader = cacheTestReader(func(p []byte) (int, error) {
+				allocations++
+				if err := os.Rename(winner, target); err != nil {
+					t.Fatalf("install competing publication: %v", err)
+				}
+				return original.Read(p)
+			})
+			path, err = materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, nil)
+			cryptorand.Reader = original
+			if allocations != 1 {
+				t.Fatalf("temporary allocations = %d, want 1", allocations)
+			}
+			if winnerState == "valid" {
+				if err != nil || path != target {
+					t.Fatalf("verified rename winner = %q, %v; want %q", path, err, target)
+				}
+			} else if path != "" || err == nil || !strings.Contains(err.Error(), "atomically publish cache") {
+				t.Fatalf("damaged rename winner = %q, %v; want publication failure", path, err)
+			}
+			if info, err := os.Stat(target); err != nil || !os.SameFile(info, winnerInfo) {
+				t.Fatalf("publication overwrote the competing winner: %v", err)
+			}
+			if entries, err := os.ReadDir(filepath.Dir(target)); err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(target) {
+				t.Fatalf("rename loser left temporary entries: %v, %v", entries, err)
+			}
+			wantPayload := "trusted"
+			if winnerState == "damaged payload" {
+				wantPayload = "changed"
+			}
+			if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != wantPayload {
+				t.Fatalf("winner payload = %q, %v; want %q", data, err, wantPayload)
+			}
+			if winnerState == "missing marker" {
+				if _, err := os.Stat(filepath.Join(target, completeMarkerName)); !os.IsNotExist(err) {
+					t.Fatalf("failed publication repaired the competing marker: %v", err)
+				}
+			}
+			// A failed publication must release its exclusive lease so a later
+			// attempt can repair the winner, rather than retaining temp state.
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			if retry, err := materializeTestPath(cache, ctx, NamespaceEngine, zipPath, nil); err != nil || retry != target {
+				t.Fatalf("retry after rename competition = %q, %v", retry, err)
+			}
+			if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+				t.Fatalf("repaired winner = %q, %v; want trusted", data, err)
+			}
+		})
 	}
 }
 
@@ -1684,6 +1729,58 @@ func TestCacheRejectsInvalidFilesystemObjects(t *testing.T) {
 	}
 }
 
+func TestMaterializedHitRequiresPinnedRootIdentities(t *testing.T) {
+	zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
+	for _, change := range []string{"unchanged", "root", "namespace"} {
+		t.Run(change, func(t *testing.T) {
+			cache := NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+			target, err := materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cacheRoot, err := os.OpenRoot(cache.Root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cacheRoot.Close()
+			namespaceRoot, err := cacheRoot.OpenRoot(string(NamespaceEngine))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer namespaceRoot.Close()
+			if change != "unchanged" {
+				path := cache.Root
+				if change == "namespace" {
+					path = filepath.Join(path, string(NamespaceEngine))
+				}
+				if err := os.Rename(path, path+".old"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.MkdirAll(target, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(target, "runtime"), []byte("unverified replacement"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			digest := filepath.Base(target)
+			// The pinned directory still contains a valid bundle even when the
+			// public path now leads to an unverified replacement.
+			if hit, err := cache.validCacheHitRoot(namespaceRoot, string(NamespaceEngine), digest, nil); !hit || err != nil {
+				t.Fatalf("pinned bundle contents = %v, %v; want a valid bundle", hit, err)
+			}
+			hit, err := cache.validMaterializedHit(cacheRoot, namespaceRoot, NamespaceEngine, digest, nil)
+			if change == "unchanged" {
+				if !hit || err != nil {
+					t.Fatalf("unchanged materialized path = %v, %v; want cache hit", hit, err)
+				}
+			} else if hit || !errors.Is(err, ErrUnsafeArchive) {
+				t.Fatalf("replaced materialized path = %v, %v; want ErrUnsafeArchive", hit, err)
+			}
+		})
+	}
+}
+
 func TestCacheHitRequiresExpectedManifestEntries(t *testing.T) {
 	zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
 	cache := NewProcessLocalCache(t.TempDir())
@@ -1691,22 +1788,81 @@ func TestCacheHitRequiresExpectedManifestEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := os.OpenRoot(filepath.Dir(target))
+	cacheRoot, err := os.OpenRoot(cache.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cacheRoot.Close()
+	root, err := cacheRoot.OpenRoot(string(NamespaceEngine))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer root.Close()
 	expected := Bundle{Namespace: NamespaceEngine, Entries: []Entry{{Name: "runtime", Size: 7, SHA256: testDigest("changed")}}}
-	if hit, err := cache.validCacheHitRoot(root, string(NamespaceEngine), filepath.Base(target), &expected); hit || err != nil {
+	if hit, err := cache.validMaterializedHit(cacheRoot, root, NamespaceEngine, filepath.Base(target), &expected); hit || err != nil {
 		t.Fatalf("mismatched expected entries = %v, %v", hit, err)
 	}
 	if err := root.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if hit, err := cache.validCacheHitRoot(root, string(NamespaceEngine), filepath.Base(target), nil); hit || !errors.Is(err, os.ErrClosed) {
+	if hit, err := cache.validMaterializedHit(cacheRoot, root, NamespaceEngine, filepath.Base(target), nil); hit || !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("closed namespace = %v, %v", hit, err)
 	}
 	if err := (*Materialized)(nil).Close(); err != nil {
 		t.Fatalf("nil materialization Close = %v", err)
 	}
+}
+
+func (p faultLockProvider) AcquireShared(ctx context.Context, key string) (LockLease, error) {
+	if p.mode == lockShared {
+		return p.acquire(ctx, key)
+	}
+	return p.LockProvider.AcquireShared(ctx, key)
+}
+
+func (p faultLockProvider) AcquireExclusive(ctx context.Context, key string) (LockLease, error) {
+	if p.mode == lockExclusive {
+		return p.acquire(ctx, key)
+	}
+	return p.LockProvider.AcquireExclusive(ctx, key)
+}
+
+func (l *errorTestLease) Close() error {
+	l.closes++
+	return l.err
+}
+
+func runtimeBundleHelperCommand(t *testing.T, values map[string]string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRuntimeBundleProcessHelper$", "-test.v")
+	env := append([]string(nil), os.Environ()...)
+	for key, value := range values {
+		env = append(env, key+"="+value)
+	}
+	cmd.Env = env
+	return cmd
+}
+
+func waitTestFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", path)
+}
+
+func materializeTestPath(cache *Cache, ctx context.Context, namespace Namespace, zipPath string, expected *Bundle) (string, error) {
+	materialized, err := cache.Materialize(ctx, namespace, zipPath, expected)
+	if err != nil {
+		return "", err
+	}
+	path := materialized.Path
+	if err := materialized.Close(); err != nil {
+		return "", err
+	}
+	return path, nil
 }

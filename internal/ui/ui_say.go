@@ -51,6 +51,11 @@ type UiSay struct {
 	rightThink sayNodes
 }
 
+// NewUiSay creates a new UiSay instance
+func NewUiSay() *UiSay {
+	return engine.NewUiNode[UiSay]()
+}
+
 // OnStart binds UI nodes in the engine callback context.
 func (s *UiSay) OnStart() {
 	s.left = sayNodes{
@@ -93,11 +98,6 @@ func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
 
 	s.updateVisibility(layout.isLeft, isThink)
 	s.updateUI(layout.position, layout.renderScale, nodes.label.GetId(), layout.content.formattedMessage)
-}
-
-// NewUiSay creates a new UiSay instance
-func NewUiSay() *UiSay {
-	return engine.NewUiNode[UiSay]()
 }
 
 func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {

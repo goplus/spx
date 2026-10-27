@@ -10,15 +10,7 @@ import (
 	"testing/fstest"
 )
 
-func writeIOTestFile(t *testing.T, name, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
+type failingCopyFS struct{ fs.FS }
 
 func TestCopyDir(t *testing.T) {
 	for _, tt := range []struct {
@@ -114,15 +106,6 @@ func TestLocalCopiesAndExistence(t *testing.T) {
 	}
 }
 
-type failingCopyFS struct{ fs.FS }
-
-func (f failingCopyFS) Open(name string) (fs.File, error) {
-	if strings.HasSuffix(name, "blocked.txt") {
-		return nil, fs.ErrPermission
-	}
-	return f.FS.Open(name)
-}
-
 func TestCopyDirReportsFilesystemErrors(t *testing.T) {
 	for _, tt := range []struct {
 		name, source, conflict, want string
@@ -150,5 +133,22 @@ func TestCopyDirReportsFilesystemErrors(t *testing.T) {
 				t.Fatalf("CopyDir error = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func (f failingCopyFS) Open(name string) (fs.File, error) {
+	if strings.HasSuffix(name, "blocked.txt") {
+		return nil, fs.ErrPermission
+	}
+	return f.FS.Open(name)
+}
+
+func writeIOTestFile(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

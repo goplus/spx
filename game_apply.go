@@ -223,3 +223,54 @@ func (p *Game) prepareStageBootstrap(sprites []Sprite, proj *coreproject.Project
 		p.queueBootstrap(generation, loader.OnLoaded)
 	}
 }
+
+func (p *Game) applyStageEntries(gamer reflect.Value, plan *projectPlan) []Sprite {
+	sprites := make([]Sprite, 0, len(plan.stage))
+	for layer, entry := range plan.stage {
+		switch entry.kind {
+		case "prototype":
+			prototype := p.applySpritePrototype(entry.prototype, gamer, plan)
+			spr := spriteOf(prototype)
+			spr.setLayer(layer + firstSpriteLayer)
+			p.shapeMgr.add(spr)
+			sprites = append(sprites, prototype)
+		case "sprite":
+			field := coreproject.WritableField(gamer.Field(entry.sprite.field))
+			sp := stageSpriteValue(field).(Sprite)
+			dest := spriteOf(sp)
+			applySpriteProperties(dest, entry.sprite.properties[0])
+			p.shapeMgr.add(dest)
+			sprites = append(sprites, sp)
+		case "sprites":
+			field := coreproject.WritableField(gamer.Field(entry.sprite.field))
+			items := reflect.MakeSlice(field.Type(), len(entry.sprite.properties), len(entry.sprite.properties))
+			var prototype Sprite
+			if len(entry.sprite.properties) != 0 {
+				prototype = p.applySpritePrototype(entry.prototype, gamer, plan)
+			}
+			for i, properties := range entry.sprite.properties {
+				item := items.Index(i)
+				if item.Kind() == reflect.Pointer {
+					item.Set(reflect.New(entry.sprite.typ))
+					item = item.Elem()
+				}
+				dest, sp := instantiateStageSprite(item, prototype, properties)
+				p.shapeMgr.add(dest)
+				sprites = append(sprites, sp)
+			}
+			field.Set(items)
+		case "stageMonitor", "monitor":
+			monitor, err := newMonitor(gamer, entry.monitor)
+			if err != nil {
+				spxlog.Error("Skip monitor %q: %v", entry.monitor.config.Name, err)
+				continue
+			}
+			p.shapeMgr.add(monitor)
+		case "measure":
+			p.shapeMgr.add(ui.NewMeasureShape(entry.measure))
+		}
+	}
+	// Expanded groups keep contiguous layers above the pen canvas.
+	p.shapeMgr.updateRenderLayers()
+	return sprites
+}

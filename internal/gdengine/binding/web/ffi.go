@@ -44,6 +44,11 @@ func Link() (*LinkSession, bool) {
 	return &LinkSession{exit: make(chan struct{}), interpreter: interpreter}, interpreter
 }
 
+func BindCallback(info engine.CallbackInfo) {
+	contactEventGeneration++
+	callbacks = info
+}
+
 func (s *LinkSession) Run(ready func()) {
 	if s.interpreter { // adapt for ixgo
 		gdspxDispatch(js.Value{}, []js.Value{jsEventOnEngineStart})
@@ -55,11 +60,6 @@ func (s *LinkSession) Run(ready func()) {
 func (s *LinkSession) Unlink() {
 	close(s.exit)
 	hasInitEngine = false
-}
-
-func BindCallback(info engine.CallbackInfo) {
-	contactEventGeneration++
-	callbacks = info
 }
 
 func resolveJSFunc(funcName string) js.Value {

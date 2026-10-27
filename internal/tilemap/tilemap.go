@@ -128,18 +128,6 @@ type TscnMapData struct {
 
 const tilemapRelDir = "tilemaps"
 
-func (v Vec2) ToVec2() mathf.Vec2 {
-	return mathf.NewVec2(v.X, v.Y)
-}
-
-func (v Vec2) Add(other Vec2) Vec2 {
-	return Vec2{X: v.X + other.X, Y: v.Y + other.Y}
-}
-
-func (v Vec2) Sub(other Vec2) Vec2 {
-	return Vec2{X: v.X - other.X, Y: v.Y - other.Y}
-}
-
 func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, points []float64), funcSetLayer func(layerIndex int64),
 	funcPlaceTiles func(positions []float64, texturePath string, layerIndex int64)) {
 	paths := make(map[int32]string)
@@ -182,6 +170,18 @@ func LoadTilemaps(datas *TscnMapData, funcSetTile func(texturePath string, point
 			funcPlaceTiles(positions, path, layerId)
 		}
 	}
+}
+
+func (v Vec2) ToVec2() mathf.Vec2 {
+	return mathf.NewVec2(v.X, v.Y)
+}
+
+func (v Vec2) Add(other Vec2) Vec2 {
+	return Vec2{X: v.X + other.X, Y: v.Y + other.Y}
+}
+
+func (v Vec2) Sub(other Vec2) Vec2 {
+	return Vec2{X: v.X - other.X, Y: v.Y - other.Y}
 }
 
 func toTilemapPath(p string) string {

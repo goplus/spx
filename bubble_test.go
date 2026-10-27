@@ -28,15 +28,38 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
-	game := &Game{}
-	game.shapeMgr.init()
-	sprite := &SpriteImpl{g: game}
-	sprite.spriteState.IsVisible = true
-	component := &bubbleComponent{sprite: sprite}
-	sprite.components.bubble = component
-	return game, sprite, component
+type bubbleLayoutCameraMgr struct{ pkgengine.ICameraMgr }
+
+const (
+	askScenePath = "res://engine/ui/UiAsk.tscn"
+	sayScenePath = "res://engine/ui/UiSay.tscn"
+)
+
+type askTestBinding struct {
+	parent pkgengine.Object
+	path   string
 }
+
+type askTestUiMgr struct {
+	pkgengine.IUiMgr
+	nextID       pkgengine.Object
+	ids          map[pkgengine.Object]struct{}
+	created      map[string]int
+	bound        map[askTestBinding]pkgengine.Object
+	visible      map[pkgengine.Object]bool
+	text         map[pkgengine.Object]string
+	askRoot      pkgengine.Object
+	onAskVisible func()
+	onDestroy    func()
+}
+
+type bubbleRenderTestUiMgr struct {
+	*askTestUiMgr
+	positions map[pkgengine.Object]mathf.Vec2
+	sizes     map[pkgengine.Object]mathf.Vec2
+}
+
+type askDelayedInputMgr struct{ pkgengine.IInputMgr }
 
 func TestBubbleEntryPointsCreateAndRenewBubbles(t *testing.T) {
 	installAskTestUiMgr(t)
@@ -420,11 +443,6 @@ func TestLayoutTextBubblesPreservesEmptyActiveSlice(t *testing.T) {
 	}
 }
 
-type bubbleLayoutCameraMgr struct{ pkgengine.ICameraMgr }
-
-func (bubbleLayoutCameraMgr) GetCameraPosition() mathf.Vec2 { return mathf.Vec2{} }
-func (bubbleLayoutCameraMgr) GetCameraZoom() mathf.Vec2     { return mathf.NewVec2(1, 1) }
-
 func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	original := pkgengine.CameraMgr
@@ -514,101 +532,6 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	}
 }
 
-const (
-	askScenePath = "res://engine/ui/UiAsk.tscn"
-	sayScenePath = "res://engine/ui/UiSay.tscn"
-)
-
-type askTestBinding struct {
-	parent pkgengine.Object
-	path   string
-}
-
-type askTestUiMgr struct {
-	pkgengine.IUiMgr
-	nextID       pkgengine.Object
-	ids          map[pkgengine.Object]struct{}
-	created      map[string]int
-	bound        map[askTestBinding]pkgengine.Object
-	visible      map[pkgengine.Object]bool
-	text         map[pkgengine.Object]string
-	askRoot      pkgengine.Object
-	onAskVisible func()
-	onDestroy    func()
-}
-
-func newAskTestUiMgr(base pkgengine.IUiMgr) *askTestUiMgr {
-	return &askTestUiMgr{
-		IUiMgr:  base,
-		nextID:  100,
-		ids:     make(map[pkgengine.Object]struct{}),
-		created: make(map[string]int),
-		bound:   make(map[askTestBinding]pkgengine.Object),
-		visible: make(map[pkgengine.Object]bool),
-		text:    make(map[pkgengine.Object]string),
-	}
-}
-
-func (m *askTestUiMgr) newID() pkgengine.Object {
-	m.nextID++
-	m.ids[m.nextID] = struct{}{}
-	return m.nextID
-}
-
-func (m *askTestUiMgr) CreateNode(path string) pkgengine.Object {
-	id := m.newID()
-	m.created[path]++
-	if path == askScenePath {
-		m.askRoot = id
-	}
-	return id
-}
-
-func (m *askTestUiMgr) BindNode(parent pkgengine.Object, path string) pkgengine.Object {
-	id := m.newID()
-	m.bound[askTestBinding{parent: parent, path: path}] = id
-	return id
-}
-
-func (m *askTestUiMgr) DestroyNode(pkgengine.Object) bool {
-	if m.onDestroy != nil {
-		m.onDestroy()
-	}
-	return true
-}
-
-func (m *askTestUiMgr) SetVisible(id pkgengine.Object, visible bool) {
-	m.visible[id] = visible
-	if id == m.askRoot && visible && m.onAskVisible != nil {
-		onAskVisible := m.onAskVisible
-		m.onAskVisible = nil
-		onAskVisible()
-	}
-}
-
-func (m *askTestUiMgr) SetText(id pkgengine.Object, text string) {
-	m.text[id] = text
-}
-
-func (m *askTestUiMgr) GetText(id pkgengine.Object) string {
-	return m.text[id]
-}
-
-func installAskTestUiMgr(t *testing.T) *askTestUiMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.UiMgr
-	mgr := newAskTestUiMgr(original)
-	pkgengine.UiMgr = mgr
-	t.Cleanup(func() {
-		for id := range mgr.ids {
-			pkgengine.DeleteUINode(id)
-		}
-		pkgengine.UiMgr = original
-	})
-	return mgr
-}
-
 func TestAskQuestionPlacement(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -658,27 +581,6 @@ func TestAskQuestionPlacement(t *testing.T) {
 	}
 }
 
-type bubbleRenderTestUiMgr struct {
-	*askTestUiMgr
-	positions map[pkgengine.Object]mathf.Vec2
-	sizes     map[pkgengine.Object]mathf.Vec2
-}
-
-func (*bubbleRenderTestUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
-func (m *bubbleRenderTestUiMgr) SetPosition(id pkgengine.Object, position mathf.Vec2) {
-	m.positions[id] = position
-}
-func (m *bubbleRenderTestUiMgr) SetGlobalPosition(id pkgengine.Object, position mathf.Vec2) {
-	m.positions[id] = position
-}
-func (m *bubbleRenderTestUiMgr) SetSize(id pkgengine.Object, size mathf.Vec2) {
-	m.sizes[id] = size
-}
-
-func (bubbleLayoutCameraMgr) GetViewportRect() mathf.Rect2 {
-	return mathf.NewRect2(0, 0, 480, 360)
-}
-
 func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	mgr := &bubbleRenderTestUiMgr{
 		askTestUiMgr: installAskTestUiMgr(t),
@@ -719,18 +621,6 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	}
 }
 
-func bubbleRenderedTexts(values map[pkgengine.Object]string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		out = append(out, value)
-	}
-	return out
-}
-
-type askDelayedInputMgr struct{ pkgengine.IInputMgr }
-
-func (askDelayedInputMgr) GetKey(int64) bool { return false }
-
 func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	mgr := installAskTestUiMgr(t)
 	originalInput := pkgengine.InputMgr
@@ -754,4 +644,205 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 		t.Fatalf("Ask resumed=%v, answer=%q", answered, game.Answer())
 	}
 	co.Join(thread)
+}
+
+func TestCloneBubbleIsLazyAndIndependent(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	original := newCloneLimitSprite(game, "original")
+	originalBubble := original.bubble()
+	originalText := &textBubble{bubbleBase: original.newBubbleBase()}
+	originalBubble.textObj = originalText
+	game.shapeMgr.add(originalText)
+
+	clone := createRuntimeClone(&original.SpriteImpl)
+	if clone.components.bubble != nil {
+		t.Fatal("clone inherited an allocated bubble component")
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("cloning changed the original bubble")
+	}
+
+	cloneBubble := clone.bubble()
+	if cloneBubble == originalBubble || cloneBubble.sprite != clone {
+		t.Fatal("lazy bubble component is not owned by the clone")
+	}
+	cloneText := &textBubble{bubbleBase: clone.newBubbleBase()}
+	cloneBubble.textObj = cloneText
+	game.shapeMgr.add(cloneText)
+
+	clone.Destroy()
+	if cloneBubble.textObj != nil || cloneBubble.quoteObj != nil {
+		t.Fatal("destroy left clone bubble state active")
+	}
+	for _, shape := range game.getAllShapes() {
+		if shape == cloneText {
+			t.Fatal("destroy left the clone bubble in the shape list")
+		}
+	}
+	if originalBubble.textObj != originalText {
+		t.Fatal("destroying the clone changed the original bubble")
+	}
+}
+
+func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
+	game := setupCloneLimitGame(t)
+	game.debugState.DebugInstr = true
+	mgr := installAskTestUiMgr(t)
+	sprite := newCloneLimitSprite(game, "speaker")
+	sprite.Show()
+	sprite.SayWith("hello", 0)
+	sprite.ThinkWith("thought", 0)
+	sprite.QuoteMsgEx("quote", "source", 0)
+	if sprite.bubble().textObj.msg != "thought" || sprite.bubble().quoteObj.message != "quote" {
+		t.Fatal("debug logging changed dialogue presentation")
+	}
+	mgr.onAskVisible = func() { game.dialogState.AskPanel.OnCheck("answer") }
+	sprite.Ask("question")
+	if game.Answer() != "answer" || sprite.bubble().textObj != nil {
+		t.Fatal("debug Ask did not store the answer and retire its bubble")
+	}
+	sprite.bubble().stopAll()
+}
+
+func TestBubbleLayoutIDWrapsWithoutUsingZero(t *testing.T) {
+	manager := shapeManager{nextTextBubbleLayoutID: ^uint64(0)}
+	bubble := &textBubble{}
+	manager.add(bubble)
+	if bubble.layoutID != 1 {
+		t.Fatalf("wrapped layout ID = %d, want 1", bubble.layoutID)
+	}
+}
+
+func TestShapeManagerRelayoutsChangedBubbleInput(t *testing.T) {
+	mgr := setupCameraTestMgr(t)
+	mgr.zoom = mathf.NewVec2(1, 1)
+	previousScale := engine.WindowScale()
+	engine.SetWindowScale(1)
+	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
+	sprite := newRenderOffsetTestSprite()
+	sprite.spriteState.IsVisible = true
+	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
+	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
+	manager := shapeManager{textBubbles: []*textBubble{bubble}}
+	manager.layoutTextBubbles()
+	previous := bubble.layout
+	sprite.SetXYpos(80, 60)
+	manager.layoutTextBubbles()
+	if bubble.layout.SameInput(previous) {
+		t.Fatal("moving bubble owner did not refresh cached layout input")
+	}
+}
+
+func (bubbleLayoutCameraMgr) GetCameraPosition() mathf.Vec2 { return mathf.Vec2{} }
+
+func (bubbleLayoutCameraMgr) GetCameraZoom() mathf.Vec2 { return mathf.NewVec2(1, 1) }
+
+func (bubbleLayoutCameraMgr) GetViewportRect() mathf.Rect2 {
+	return mathf.NewRect2(0, 0, 480, 360)
+}
+
+func (m *askTestUiMgr) CreateNode(path string) pkgengine.Object {
+	id := m.newID()
+	m.created[path]++
+	if path == askScenePath {
+		m.askRoot = id
+	}
+	return id
+}
+
+func (m *askTestUiMgr) BindNode(parent pkgengine.Object, path string) pkgengine.Object {
+	id := m.newID()
+	m.bound[askTestBinding{parent: parent, path: path}] = id
+	return id
+}
+
+func (m *askTestUiMgr) DestroyNode(pkgengine.Object) bool {
+	if m.onDestroy != nil {
+		m.onDestroy()
+	}
+	return true
+}
+
+func (m *askTestUiMgr) SetVisible(id pkgengine.Object, visible bool) {
+	m.visible[id] = visible
+	if id == m.askRoot && visible && m.onAskVisible != nil {
+		onAskVisible := m.onAskVisible
+		m.onAskVisible = nil
+		onAskVisible()
+	}
+}
+
+func (m *askTestUiMgr) SetText(id pkgengine.Object, text string) {
+	m.text[id] = text
+}
+
+func (m *askTestUiMgr) GetText(id pkgengine.Object) string {
+	return m.text[id]
+}
+
+func (m *askTestUiMgr) newID() pkgengine.Object {
+	m.nextID++
+	m.ids[m.nextID] = struct{}{}
+	return m.nextID
+}
+
+func (*bubbleRenderTestUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (m *bubbleRenderTestUiMgr) SetPosition(id pkgengine.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func (m *bubbleRenderTestUiMgr) SetGlobalPosition(id pkgengine.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func (m *bubbleRenderTestUiMgr) SetSize(id pkgengine.Object, size mathf.Vec2) {
+	m.sizes[id] = size
+}
+
+func (askDelayedInputMgr) GetKey(int64) bool { return false }
+
+func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
+	game := &Game{}
+	game.shapeMgr.init()
+	sprite := &SpriteImpl{g: game}
+	sprite.spriteState.IsVisible = true
+	component := &bubbleComponent{sprite: sprite}
+	sprite.components.bubble = component
+	return game, sprite, component
+}
+
+func newAskTestUiMgr(base pkgengine.IUiMgr) *askTestUiMgr {
+	return &askTestUiMgr{
+		IUiMgr:  base,
+		nextID:  100,
+		ids:     make(map[pkgengine.Object]struct{}),
+		created: make(map[string]int),
+		bound:   make(map[askTestBinding]pkgengine.Object),
+		visible: make(map[pkgengine.Object]bool),
+		text:    make(map[pkgengine.Object]string),
+	}
+}
+
+func installAskTestUiMgr(t *testing.T) *askTestUiMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.UiMgr
+	mgr := newAskTestUiMgr(original)
+	pkgengine.UiMgr = mgr
+	t.Cleanup(func() {
+		for id := range mgr.ids {
+			pkgengine.DeleteUINode(id)
+		}
+		pkgengine.UiMgr = original
+	})
+	return mgr
+}
+
+func bubbleRenderedTexts(values map[pkgengine.Object]string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	return out
 }

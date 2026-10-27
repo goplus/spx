@@ -46,8 +46,6 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 	}
 }
 
-func panicWithValue(value any) { panic(value) }
-
 func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	reports := make(chan PanicReport, 1)
 	co := New(func(report PanicReport) { reports <- report })
@@ -74,10 +72,6 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 	default:
 		t.Fatal("runtime panic was not reported")
 	}
-}
-
-func panicWithNilDereference(pointer *int) {
-	_ = *pointer
 }
 
 func TestPanicReportIgnoresNormalCompletionAndStopSentinels(t *testing.T) {
@@ -136,4 +130,10 @@ func TestFinishThreadCleansLifecycleStateWhenPanicHandlerPanics(t *testing.T) {
 		t.Fatalf("finalizing goroutine markers = %d, want 0", finalizing)
 	}
 	co.RunAfterStop(nil)
+}
+
+func panicWithValue(value any) { panic(value) }
+
+func panicWithNilDereference(pointer *int) {
+	_ = *pointer
 }

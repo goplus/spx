@@ -52,19 +52,16 @@ func CheckFileExist(dir, ext string, recursive bool) bool {
 			return nil
 		})
 
-		if errors.Is(err, errFileFound) {
-			return true
-		}
-	} else {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			return false
-		}
+		return errors.Is(err, errFileFound)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
 
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ext) {
-				return true
-			}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ext) {
+			return true
 		}
 	}
 
@@ -99,32 +96,30 @@ func CopyDir(fsys fs.FS, srcDir, dstDir string, isOverride bool) error {
 		dstPath := filepath.Join(dstDir, path)
 		if d.IsDir() {
 			return os.MkdirAll(dstPath, 0755)
-		} else {
-			if strings.HasSuffix(dstPath, "go.mod.txt") {
-				i := strings.LastIndex(dstPath, "go.mod.txt")
-				dstPath = dstPath[:i] + "go.mod"
-			}
+		}
+		if strings.HasSuffix(dstPath, "go.mod.txt") {
+			dstPath = strings.TrimSuffix(dstPath, ".txt")
+		}
 
-			if !isOverride {
-				if _, err := os.Stat(dstPath); !os.IsNotExist(err) {
-					return nil
-				}
+		if !isOverride {
+			if _, err := os.Stat(dstPath); !os.IsNotExist(err) {
+				return nil
 			}
+		}
 
-			srcFile, err := subfs.Open(path)
-			if err != nil {
-				return err
-			}
-			defer srcFile.Close()
-
-			dstFile, err := os.Create(dstPath)
-			if err != nil {
-				return err
-			}
-			defer dstFile.Close()
-
-			_, err = io.Copy(dstFile, srcFile)
+		srcFile, err := subfs.Open(path)
+		if err != nil {
 			return err
 		}
+		defer srcFile.Close()
+
+		dstFile, err := os.Create(dstPath)
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+
+		_, err = io.Copy(dstFile, srcFile)
+		return err
 	})
 }

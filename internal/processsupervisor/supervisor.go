@@ -43,16 +43,6 @@ type SignalCause struct {
 	Signal os.Signal
 }
 
-func (c *SignalCause) Error() string {
-	if c == nil || c.Signal == nil {
-		return "processsupervisor: canceled by signal"
-	}
-	return fmt.Sprintf("processsupervisor: canceled by signal %s", c.Signal)
-}
-
-// Success reports whether the child exited normally with status zero.
-func (s Status) Success() bool { return s.Signal == 0 && s.Code == 0 }
-
 // Run starts and waits for cmd. Preparation/start failures and wait failures
 // are returned as errors. A child exit (including a non-zero exit code or a
 // signal termination) is represented by Status and is not an error. On Unix,
@@ -70,6 +60,16 @@ func Run(ctx context.Context, cmd *exec.Cmd) (Status, error) {
 	}
 	return run(ctx, cmd)
 }
+
+func (c *SignalCause) Error() string {
+	if c == nil || c.Signal == nil {
+		return "processsupervisor: canceled by signal"
+	}
+	return fmt.Sprintf("processsupervisor: canceled by signal %s", c.Signal)
+}
+
+// Success reports whether the child exited normally with status zero.
+func (s Status) Success() bool { return s.Signal == 0 && s.Code == 0 }
 
 func cancellationError(ctx context.Context, observed bool) error {
 	if !observed && ctx.Err() == nil {

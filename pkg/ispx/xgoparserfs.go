@@ -29,11 +29,6 @@ type xgoParserFS struct {
 	fsys fs.FS
 }
 
-// newXGoParserFS creates a new XGo parser file system.
-func newXGoParserFS(fsys fs.FS) xgoparser.FileSystem {
-	return &xgoParserFS{fsys: fsys}
-}
-
 // ReadDir implements [xgoparser.FileSystem].
 func (pfs *xgoParserFS) ReadDir(dirname string) ([]fs.DirEntry, error) {
 	return fs.ReadDir(pfs.fsys, dirname)
@@ -57,4 +52,9 @@ func (pfs *xgoParserFS) Base(filename string) string {
 // Abs implements [xgoparser.FileSystem].
 func (pfs *xgoParserFS) Abs(path string) (string, error) {
 	return "", errors.ErrUnsupported
+}
+
+// newXGoParserFS creates a new XGo parser file system.
+func newXGoParserFS(fsys fs.FS) xgoparser.FileSystem {
+	return &xgoParserFS{fsys: fsys}
 }

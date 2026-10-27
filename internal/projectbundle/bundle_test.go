@@ -31,6 +31,8 @@ import (
 	"time"
 )
 
+type bundleTestWriter struct{ err error }
+
 func TestArchiveCanonicalAndDeterministic(t *testing.T) {
 	projectDir := t.TempDir()
 	outputDir := t.TempDir()
@@ -376,19 +378,6 @@ func TestCollectorKeepsNameReservedAfterOpenFailure(t *testing.T) {
 	assertReservedCollectorName(t, collector)
 }
 
-func assertReservedCollectorName(t *testing.T, collector *collector) {
-	t.Helper()
-	for _, test := range []struct{ name, diagnostic string }{
-		{"Reserved", `duplicate path "Reserved" (already declared as "Reserved")`},
-		{"reserved", `case-folded paths "Reserved" and "reserved"`},
-	} {
-		err := collector.addData(test.name, nil)
-		if want := ErrCollision.Error() + ": " + test.diagnostic; !errors.Is(err, ErrCollision) || err.Error() != want {
-			t.Fatalf("addData(%q) after failed addition = %v, want %s", test.name, err, want)
-		}
-	}
-}
-
 func TestCollectRejectsSymlinksAndNonRegularFiles(t *testing.T) {
 	t.Run("project file symlink", func(t *testing.T) {
 		projectDir := t.TempDir()
@@ -615,36 +604,6 @@ func TestCollectEnforcesLimits(t *testing.T) {
 	}
 }
 
-func writeBundleTestFile(t *testing.T, name, content string, mode os.FileMode) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(name, []byte(content), mode); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(name, mode); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func archiveBytes(cfg Config) ([]byte, Digest, error) {
-	var output bytes.Buffer
-	digest, err := WriteArchive(&output, cfg)
-	return output.Bytes(), digest, err
-}
-
-func assertBundleTestFile(t *testing.T, name, want string) {
-	t.Helper()
-	data, err := os.ReadFile(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := string(data); got != want {
-		t.Fatalf("file %q = %q, want %q", name, got, want)
-	}
-}
-
 func TestArchiveRejectsInvalidInputsAndWriterFailures(t *testing.T) {
 	if digest, err := WriteArchive(io.Discard, Config{}); err == nil || digest != (Digest{}) {
 		t.Fatalf("invalid collection = %s, %v", digest, err)
@@ -680,15 +639,6 @@ func TestArchiveRejectsInvalidInputsAndWriterFailures(t *testing.T) {
 	if n, err := writer.Write([]byte("abc")); n != 2 || !errors.Is(err, io.ErrShortWrite) || writer.remaining != 8 {
 		t.Fatalf("short write = %d, %v, remaining %d", n, err, writer.remaining)
 	}
-}
-
-type bundleTestWriter struct{ err error }
-
-func (w bundleTestWriter) Write(p []byte) (int, error) {
-	if w.err != nil {
-		return 0, w.err
-	}
-	return len(p) - 1, nil
 }
 
 func TestBundleInputFailuresPreserveErrorKinds(t *testing.T) {
@@ -787,5 +737,55 @@ func TestBundleRecursiveFailuresAndRelativeOutput(t *testing.T) {
 	}
 	if _, err := canonicalFilesystemPath(broken); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("dangling output link = %v", err)
+	}
+}
+
+func (w bundleTestWriter) Write(p []byte) (int, error) {
+	if w.err != nil {
+		return 0, w.err
+	}
+	return len(p) - 1, nil
+}
+
+func assertReservedCollectorName(t *testing.T, collector *collector) {
+	t.Helper()
+	for _, test := range []struct{ name, diagnostic string }{
+		{"Reserved", `duplicate path "Reserved" (already declared as "Reserved")`},
+		{"reserved", `case-folded paths "Reserved" and "reserved"`},
+	} {
+		err := collector.addData(test.name, nil)
+		if want := ErrCollision.Error() + ": " + test.diagnostic; !errors.Is(err, ErrCollision) || err.Error() != want {
+			t.Fatalf("addData(%q) after failed addition = %v, want %s", test.name, err, want)
+		}
+	}
+}
+
+func writeBundleTestFile(t *testing.T, name, content string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func archiveBytes(cfg Config) ([]byte, Digest, error) {
+	var output bytes.Buffer
+	digest, err := WriteArchive(&output, cfg)
+	return output.Bytes(), digest, err
+}
+
+func assertBundleTestFile(t *testing.T, name, want string) {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != want {
+		t.Fatalf("file %q = %q, want %q", name, got, want)
 	}
 }

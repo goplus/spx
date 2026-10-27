@@ -22,10 +22,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-func typeOf[T any]() reflect.Type {
-	return reflect.TypeOf((*T)(nil)).Elem()
-}
-
 type RuntimeBridge interface {
 	InternalUpdateFrame(delta float64, update func(float64))
 	ClearAllSprites()
@@ -54,13 +50,6 @@ var runtimeBridge RuntimeBridge
 
 func SetRuntimeBridge(bridge RuntimeBridge) {
 	runtimeBridge = bridge
-}
-
-func requireRuntimeBridge() RuntimeBridge {
-	if runtimeBridge == nil {
-		panic("engine runtime bridge is not initialized")
-	}
-	return runtimeBridge
 }
 
 // InternalUpdateFrame runs a frame, invoking an optional update before timers and tweens.
@@ -132,13 +121,9 @@ func CreateBackdrop[T any]() *T {
 func CreateUI[T any](prefabName string) *T {
 	return createUI[T](prefabName, false)
 }
+
 func CreateEngineUI[T any](prefabName string) *T {
 	return createUI[T](prefabName, true)
-}
-
-func createUI[T any](prefabName string, isEngine bool) *T {
-	nodeValue := requireRuntimeBridge().CreateUI(typeOf[T](), prefabName, isEngine)
-	return nodeValue.Addr().Interface().(*T)
 }
 
 func BindUI[T any](parentNode Object, path string) *T {
@@ -166,4 +151,20 @@ func InitUINodeInstance(id Object, node IUiNode, register func(Object, IUiNode))
 	}
 	node.onCreate()
 	node.OnStart()
+}
+
+func typeOf[T any]() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+func requireRuntimeBridge() RuntimeBridge {
+	if runtimeBridge == nil {
+		panic("engine runtime bridge is not initialized")
+	}
+	return runtimeBridge
+}
+
+func createUI[T any](prefabName string, isEngine bool) *T {
+	nodeValue := requireRuntimeBridge().CreateUI(typeOf[T](), prefabName, isEngine)
+	return nodeValue.Addr().Interface().(*T)
 }

@@ -19,10 +19,13 @@
 package shared
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsPath(t *testing.T) {
@@ -93,6 +96,55 @@ func TestReplaceFileWindows(t *testing.T) {
 			}
 			if _, err := os.Lstat(src); !os.IsNotExist(err) {
 				t.Fatalf("source still exists: %v", err)
+			}
+		})
+	}
+	for _, name := range []string{"locked destination", "invalid destination", "missing source"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			src, dst := filepath.Join(dir, "source"), filepath.Join(dir, "destination")
+			if name != "missing source" {
+				if err := os.WriteFile(src, []byte("replacement"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(dst, []byte("existing"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			destination := dst
+			switch name {
+			case "locked destination":
+				path, err := windows.UTF16PtrFromString(dst)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// A reader that does not share deletion must prevent replacement.
+				handle, err := windows.CreateFile(path, windows.GENERIC_READ, windows.FILE_SHARE_READ, nil, windows.OPEN_EXISTING, 0, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer windows.CloseHandle(handle)
+			case "invalid destination":
+				destination += "\x00invalid"
+			}
+
+			err := ReplaceFile(src, destination)
+			if err == nil {
+				t.Fatal("invalid replacement succeeded")
+			}
+			if name == "locked destination" && !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+				t.Fatalf("locked destination error = %v, want sharing violation", err)
+			}
+			if name == "missing source" && !os.IsNotExist(err) {
+				t.Fatalf("missing source error = %v, want file not found", err)
+			}
+			if data, err := os.ReadFile(dst); err != nil || string(data) != "existing" {
+				t.Fatalf("failed replacement changed destination: %q, %v", data, err)
+			}
+			if name != "missing source" {
+				if data, err := os.ReadFile(src); err != nil || string(data) != "replacement" {
+					t.Fatalf("failed replacement consumed source: %q, %v", data, err)
+				}
 			}
 		})
 	}

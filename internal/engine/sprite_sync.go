@@ -47,6 +47,46 @@ type SpriteSyncBuffer struct {
 	positions  []float32
 }
 
+// ValidateSpriteTransform rejects values that cannot remain finite in the
+// float32 transform protocol shared by query and batch submissions.
+func ValidateSpriteTransform(id int64, position mathf.Vec2, rotation float64, scale, renderOffset mathf.Vec2) {
+	for _, field := range [...]struct {
+		name  string
+		value float64
+	}{
+		{"x", position.X},
+		{"y", position.Y},
+		{"rotation", rotation},
+		{"scale x", scale.X},
+		{"scale y", scale.Y},
+		{"offset x", renderOffset.X},
+		{"offset y", renderOffset.Y},
+	} {
+		value := float64(float32(field.value))
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			panic(fmt.Sprintf("sprite %d transform %s=%v must be finite after float32 conversion", id, field.name, field.value))
+		}
+	}
+}
+
+func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
+	serializedCapacity := 2 + capacity*SyncFieldsPerSprite + DefaultDeleteBufferSize
+	return &SpriteSyncBuffer{
+		data:       make([]SpriteSyncData, 0, capacity),
+		deleteIDs:  make([]int64, 0, DefaultDeleteBufferSize),
+		serialized: make([]float32, 0, serializedCapacity),
+	}
+}
+
+// SyncBatchUpdateSprites sends sprite updates to Godot in one FFI call.
+func SyncBatchUpdateSprites(buffer []float32) {
+	if len(buffer) == 0 {
+		return
+	}
+
+	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
+}
+
 func (b *SpriteSyncBuffer) Add(id int64, x, y, rotation, scaleX, scaleY, renderOffsetX, renderOffsetY float64, visible bool) {
 	vis := float32(0.0)
 	if visible {
@@ -148,44 +188,4 @@ func (b *SpriteSyncBuffer) GetPositions(spriteIDs []int64) []float32 {
 		return nil
 	}
 	return b.positions
-}
-
-// ValidateSpriteTransform rejects values that cannot remain finite in the
-// float32 transform protocol shared by query and batch submissions.
-func ValidateSpriteTransform(id int64, position mathf.Vec2, rotation float64, scale, renderOffset mathf.Vec2) {
-	for _, field := range [...]struct {
-		name  string
-		value float64
-	}{
-		{"x", position.X},
-		{"y", position.Y},
-		{"rotation", rotation},
-		{"scale x", scale.X},
-		{"scale y", scale.Y},
-		{"offset x", renderOffset.X},
-		{"offset y", renderOffset.Y},
-	} {
-		value := float64(float32(field.value))
-		if math.IsNaN(value) || math.IsInf(value, 0) {
-			panic(fmt.Sprintf("sprite %d transform %s=%v must be finite after float32 conversion", id, field.name, field.value))
-		}
-	}
-}
-
-func NewSpriteSyncBuffer(capacity int) *SpriteSyncBuffer {
-	serializedCapacity := 2 + capacity*SyncFieldsPerSprite + DefaultDeleteBufferSize
-	return &SpriteSyncBuffer{
-		data:       make([]SpriteSyncData, 0, capacity),
-		deleteIDs:  make([]int64, 0, DefaultDeleteBufferSize),
-		serialized: make([]float32, 0, serializedCapacity),
-	}
-}
-
-// SyncBatchUpdateSprites sends sprite updates to Godot in one FFI call.
-func SyncBatchUpdateSprites(buffer []float32) {
-	if len(buffer) == 0 {
-		return
-	}
-
-	Managers().SpriteMgr.BatchUpdateTransforms(buffer)
 }

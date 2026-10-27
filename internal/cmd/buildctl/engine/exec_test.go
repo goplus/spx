@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -78,29 +79,6 @@ func TestEngineProcessTrackingUnsupportedPlatform(t *testing.T) {
 	t.Run("preserves unknown PID lock", func(t *testing.T) {
 		assertEngineBuildLockPreservedOnProbeError(t, 123456789, errors.ErrUnsupported)
 	})
-}
-
-func assertEngineBuildLockPreservedOnProbeError(t *testing.T, pid int, wantErr error) {
-	t.Helper()
-	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
-	pidPath := filepath.Join(lockDir, "pid")
-	pidData := fmt.Sprintf("%d\n", pid)
-	mustWriteFile(t, pidPath, []byte(pidData))
-
-	stale, message, err := detectStaleEngineBuildLock(lockDir)
-	if !errors.Is(err, wantErr) || stale || message != "" {
-		t.Fatalf("lock probe = (%v, %q, %v), want %v without reclaiming lock", stale, message, err, wantErr)
-	}
-	err = withEngineBuildLock(lockDir, func() error {
-		t.Error("failed lock probe invoked the build callback")
-		return nil
-	})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("lock acquisition = %v, want %v", err, wantErr)
-	}
-	if data, err := os.ReadFile(pidPath); err != nil || string(data) != pidData {
-		t.Fatalf("lock metadata = %q (%v), want unchanged %q", data, err, pidData)
-	}
 }
 
 func TestDetectStaleEngineBuildLockInvalidPID(t *testing.T) {
@@ -175,12 +153,33 @@ func TestDetectStaleEngineBuildLockProtectsLivePID(t *testing.T) {
 }
 
 func TestEngineBuildLockRecoversExitedPID(t *testing.T) {
-	// Reap a real helper rather than assuming an arbitrary PID is unused.
-	cmd := exec.Command(os.Args[0], "-test.run=^$")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("run helper: %v\n%s", err, output)
+	const helperPID = "SPX_BUILDCTL_EXITED_PID_HELPER"
+	if path := os.Getenv(helperPID); path != "" {
+		if err := os.WriteFile(path, fmt.Appendf(nil, "%d\n", os.Getpid()), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// Keep the child's test summary out of the tracked command's output.
+		os.Exit(0)
 	}
-	pid := cmd.Process.Pid
+	// Reap a real helper rather than assuming an arbitrary PID is unused.
+	workdir := t.TempDir()
+	env := shared.CurrentEnvMap()
+	env[helperPID] = "child.pid"
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runTrackedEngineCommandWithEnv(workdir, env, executable, "-test.run=^TestEngineBuildLockRecoversExitedPID$"); err != nil {
+		t.Fatalf("run tracked helper: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(workdir, env[helperPID]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 0 || pid == os.Getpid() {
+		t.Fatalf("tracked helper PID = %q, %v", data, err)
+	}
 	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
 	mustWriteFile(t, filepath.Join(lockDir, "pid"), fmt.Appendf(nil, "%d\n", pid))
 	stale, message, err := detectStaleEngineBuildLock(lockDir)
@@ -387,4 +386,27 @@ func TestEngineLockWaitsForActiveOwner(t *testing.T) {
 			t.Fatalf("acquired owner=%q,%v", data, err)
 		}
 	})
+}
+
+func assertEngineBuildLockPreservedOnProbeError(t *testing.T, pid int, wantErr error) {
+	t.Helper()
+	lockDir := filepath.Join(t.TempDir(), ".spx_build_lock")
+	pidPath := filepath.Join(lockDir, "pid")
+	pidData := fmt.Sprintf("%d\n", pid)
+	mustWriteFile(t, pidPath, []byte(pidData))
+
+	stale, message, err := detectStaleEngineBuildLock(lockDir)
+	if !errors.Is(err, wantErr) || stale || message != "" {
+		t.Fatalf("lock probe = (%v, %q, %v), want %v without reclaiming lock", stale, message, err, wantErr)
+	}
+	err = withEngineBuildLock(lockDir, func() error {
+		t.Error("failed lock probe invoked the build callback")
+		return nil
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("lock acquisition = %v, want %v", err, wantErr)
+	}
+	if data, err := os.ReadFile(pidPath); err != nil || string(data) != pidData {
+		t.Fatalf("lock metadata = %q (%v), want unchanged %q", data, err, pidData)
+	}
 }

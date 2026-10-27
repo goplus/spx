@@ -33,92 +33,21 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-// resetInputSessionState isolates tests without adding a production path for
-// resetting input independently of the Game lifecycle.
-func resetInputSessionState() {
-	preparedInputSession.Lock()
-	preparedInputSession.plan = nil
-	preparedInputSession.claimed = false
-	preparedInputSession.Unlock()
-	if game := currentGame(); game != nil {
-		game.abortInputSession("input session reset")
-		game.inputSessionMu.Lock()
-		game.inputTerminal = InputSessionStatus{}
-		game.inputSessionMu.Unlock()
-	}
+type inputSourceTestManager struct {
+	pkgengine.IInputMgr
+	point   mathf.Vec2
+	samples int
 }
 
-// consumeSampledInputTick holds the session boundary while the engine state is
-// sampled and resolved into one effective input tick.
-func (s *inputSession) consumeSampledInputTick(
-	delta float64,
-	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
-) (inputSessionTick, error) {
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	return s.consumeSampledInputTickLocked(delta, sample)
+type inputFrameFailureExtMgr struct {
+	replayPauseTestExtMgr
+	messages []string
+	exits    []int64
 }
 
-func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
-	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
-}
+type inputFrameFailurePlatform struct{ pkgengine.IPlatformMgr }
 
-func consumeInputTickWithMouseEvents(
-	live InputReplayState,
-	mouseEvents []InputReplayMouseEvent,
-	keyEvents []InputReplayKeyEvent,
-	delta float64,
-) (inputSessionTick, error) {
-	session := activeInputSession()
-	if session == nil {
-		return inputSessionTick{}, errors.New("no active input session")
-	}
-	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
-		return live, mouseEvents, keyEvents
-	})
-}
-
-func resetInputSessionTest(t *testing.T) {
-	t.Helper()
-	resetInputSessionState()
-	engine.SetGame(nil)
-	itime.SetFixedDeltaTime(0)
-	t.Cleanup(func() {
-		resetInputSessionState()
-		engine.SetGame(nil)
-		itime.SetFixedDeltaTime(0)
-		ResetRandomSeed()
-	})
-}
-
-// setupSnapshotInputSessionTest extends the replay fixture with capture cleanup.
-func setupSnapshotInputSessionTest(t *testing.T) {
-	t.Helper()
-	resetInputSessionTest(t)
-	setupCaptureTest(t)
-}
-
-func claimPreparedSession(t *testing.T, game *Game) *inputSession {
-	t.Helper()
-	engine.SetGame(game)
-	if err := game.attachPreparedInputSession(); err != nil {
-		t.Fatal(err)
-	}
-	session := game.currentInputSession()
-	if session == nil {
-		t.Fatal("prepared input session was not attached")
-	}
-	return session
-}
-
-func validRuntimeReplay(frames ...InputReplayFrame) InputReplay {
-	return InputReplay{
-		Format:        InputReplayFormat,
-		Version:       InputReplayVersion,
-		FixedTimestep: 1.0 / 30,
-		Frames:        frames,
-	}
-}
+type replayQueryInputMgr struct{ *inputSourceTestManager }
 
 func TestInputReplayRuntimeUsesIndependentInputTicks(t *testing.T) {
 	resetInputSessionTest(t)
@@ -1087,38 +1016,6 @@ func TestResetBeforeFinalFrameEndAbortsReplay(t *testing.T) {
 	}
 }
 
-type inputSourceTestManager struct {
-	pkgengine.IInputMgr
-	point   mathf.Vec2
-	samples int
-}
-
-func (m *inputSourceTestManager) GetGlobalMousePos() mathf.Vec2 {
-	m.samples++
-	return m.point
-}
-
-func setupInputSourceTest(t *testing.T) (*coroutine.Coroutines, *Game, *inputSourceTestManager) {
-	t.Helper()
-	resetInputSessionTest(t)
-	co, game := setupInputFrameGame(t)
-	mgr := setupInputSourceManager(t)
-	t.Cleanup(func() { game.abortInputSession("test finished") })
-	return co, game, mgr
-}
-
-func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	original := pkgengine.InputMgr
-	mgr := &inputSourceTestManager{}
-	pkgengine.InputMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.InputMgr = original
-	})
-	return mgr
-}
-
 func BenchmarkReplayInputQueries(b *testing.B) {
 	game := &Game{inputSession: &inputSession{
 		mode: InputSessionModeReplaying, phase: InputSessionPhaseRunning,
@@ -1336,24 +1233,6 @@ func TestPrepareInputFrameRejectsCompletedSessionWithoutDispatchingPendingInput(
 		t.Fatal("rejected frame dispatched old input or screenshot requests")
 	}
 }
-
-type inputFrameFailureExtMgr struct {
-	replayPauseTestExtMgr
-	messages []string
-	exits    []int64
-}
-
-func (m *inputFrameFailureExtMgr) OnRuntimePanic(message string) {
-	m.messages = append(m.messages, message)
-}
-
-func (m *inputFrameFailureExtMgr) RequestExit(code int64) {
-	m.exits = append(m.exits, code)
-}
-
-type inputFrameFailurePlatform struct{ pkgengine.IPlatformMgr }
-
-func (inputFrameFailurePlatform) IsMainThread() bool { return true }
 
 func TestPrepareInputFrameReportsInvalidRecordingSample(t *testing.T) {
 	if runtime.GOOS == "js" {
@@ -1679,10 +1558,6 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	game.inputSession = nil
 }
 
-type replayQueryInputMgr struct{ *inputSourceTestManager }
-
-func (*replayQueryInputMgr) GetKey(key int64) bool { return key == int64(KeyB) }
-
 func TestInputAttachmentCanceledWhilePreparingEnvironment(t *testing.T) {
 	resetInputSessionTest(t)
 	if _, err := PrepareInputRecording(30); err != nil {
@@ -1856,4 +1731,129 @@ func TestFinishRecordingPreservesResultsAfterEngineFrame(t *testing.T) {
 			}
 		})
 	}
+}
+
+// consumeSampledInputTick holds the session boundary while the engine state is
+// sampled and resolved into one effective input tick.
+func (s *inputSession) consumeSampledInputTick(
+	delta float64,
+	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),
+) (inputSessionTick, error) {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	return s.consumeSampledInputTickLocked(delta, sample)
+}
+
+func (m *inputSourceTestManager) GetGlobalMousePos() mathf.Vec2 {
+	m.samples++
+	return m.point
+}
+
+func (m *inputFrameFailureExtMgr) OnRuntimePanic(message string) {
+	m.messages = append(m.messages, message)
+}
+
+func (m *inputFrameFailureExtMgr) RequestExit(code int64) {
+	m.exits = append(m.exits, code)
+}
+
+func (inputFrameFailurePlatform) IsMainThread() bool { return true }
+
+func (*replayQueryInputMgr) GetKey(key int64) bool { return key == int64(KeyB) }
+
+// resetInputSessionState isolates tests without adding a production path for
+// resetting input independently of the Game lifecycle.
+func resetInputSessionState() {
+	preparedInputSession.Lock()
+	preparedInputSession.plan = nil
+	preparedInputSession.claimed = false
+	preparedInputSession.Unlock()
+	if game := currentGame(); game != nil {
+		game.abortInputSession("input session reset")
+		game.inputSessionMu.Lock()
+		game.inputTerminal = InputSessionStatus{}
+		game.inputSessionMu.Unlock()
+	}
+}
+
+func consumeInputTick(live InputReplayState, keyEvents []InputReplayKeyEvent, delta float64) (inputSessionTick, error) {
+	return consumeInputTickWithMouseEvents(live, nil, keyEvents, delta)
+}
+
+func consumeInputTickWithMouseEvents(
+	live InputReplayState,
+	mouseEvents []InputReplayMouseEvent,
+	keyEvents []InputReplayKeyEvent,
+	delta float64,
+) (inputSessionTick, error) {
+	session := activeInputSession()
+	if session == nil {
+		return inputSessionTick{}, errors.New("no active input session")
+	}
+	return session.consumeSampledInputTick(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
+		return live, mouseEvents, keyEvents
+	})
+}
+
+func resetInputSessionTest(t *testing.T) {
+	t.Helper()
+	resetInputSessionState()
+	engine.SetGame(nil)
+	itime.SetFixedDeltaTime(0)
+	t.Cleanup(func() {
+		resetInputSessionState()
+		engine.SetGame(nil)
+		itime.SetFixedDeltaTime(0)
+		ResetRandomSeed()
+	})
+}
+
+// setupSnapshotInputSessionTest extends the replay fixture with capture cleanup.
+func setupSnapshotInputSessionTest(t *testing.T) {
+	t.Helper()
+	resetInputSessionTest(t)
+	setupCaptureTest(t)
+}
+
+func claimPreparedSession(t *testing.T, game *Game) *inputSession {
+	t.Helper()
+	engine.SetGame(game)
+	if err := game.attachPreparedInputSession(); err != nil {
+		t.Fatal(err)
+	}
+	session := game.currentInputSession()
+	if session == nil {
+		t.Fatal("prepared input session was not attached")
+	}
+	return session
+}
+
+func validRuntimeReplay(frames ...InputReplayFrame) InputReplay {
+	return InputReplay{
+		Format:        InputReplayFormat,
+		Version:       InputReplayVersion,
+		FixedTimestep: 1.0 / 30,
+		Frames:        frames,
+	}
+}
+
+func setupInputSourceTest(t *testing.T) (*coroutine.Coroutines, *Game, *inputSourceTestManager) {
+	t.Helper()
+	resetInputSessionTest(t)
+	co, game := setupInputFrameGame(t)
+	mgr := setupInputSourceManager(t)
+	t.Cleanup(func() { game.abortInputSession("test finished") })
+	return co, game, mgr
+}
+
+func setupInputSourceManager(t testing.TB) *inputSourceTestManager {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	original := pkgengine.InputMgr
+	mgr := &inputSourceTestManager{}
+	pkgengine.InputMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.InputMgr = original
+	})
+	return mgr
 }

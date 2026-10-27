@@ -22,6 +22,13 @@ import (
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
+func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
+	if arg.Type.Primitive != nil {
+		return arg.Type.Primitive.Name
+	}
+	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
+}
+
 func (c *GenerationContext) EffectiveArguments(function *clang.TypedefFunction) []clang.Argument {
 	args := function.Arguments
 	if c.HasSyntheticReturn(function) {
@@ -73,11 +80,4 @@ func (c *GenerationContext) MustGoTypeForCType(typeName string, functionName str
 func (c *GenerationContext) HasOutputStatus(function *clang.TypedefFunction) bool {
 	spec, ok := c.ArrayBridge(function.Name)
 	return ok && spec.HasOutputOnly() && c.EffectiveRawReturnType(function) == "GdBool"
-}
-
-func MustPrimitiveTypeName(arg clang.Argument, functionName string) string {
-	if arg.Type.Primitive != nil {
-		return arg.Type.Primitive.Name
-	}
-	panic(fmt.Sprintf("unsupported function-pointer argument %q in %s: %s", arg.Name, functionName, arg.Type.CStyleString()))
 }

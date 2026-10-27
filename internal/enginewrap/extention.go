@@ -20,34 +20,17 @@ package enginewrap
 
 import (
 	. "github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/input"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 var mainCallback func(call func())
 
 const (
-	MOUSE_BUTTON_LEFT   int64 = 1
-	MOUSE_BUTTON_RIGHT  int64 = 2
-	MOUSE_BUTTON_MIDDLE int64 = 3
+	MOUSE_BUTTON_LEFT   int64 = input.MouseButtonLeft
+	MOUSE_BUTTON_RIGHT  int64 = input.MouseButtonRight
+	MOUSE_BUTTON_MIDDLE int64 = input.MouseButtonMiddle
 )
-
-func (*inputMgrImpl) MousePressed() bool {
-	return inputMgr.GetMouseState(MOUSE_BUTTON_LEFT) || inputMgr.GetMouseState(MOUSE_BUTTON_RIGHT)
-}
-
-func (*platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
-	if !flag {
-		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
-	}
-}
-
-func (c *cameraMgrImpl) GetPosition() Vec2 {
-	return c.GetCameraPosition()
-}
-
-func (c *cameraMgrImpl) SetPosition(position Vec2) {
-	c.SetCameraPosition(position)
-}
 
 func Init(call func(f func())) {
 	mainCallback = call
@@ -68,6 +51,24 @@ func CallInMainThreadValue[T any](call func() T) (result T) {
 		result = call()
 	})
 	return
+}
+
+func (*inputMgrImpl) MousePressed() bool {
+	return inputMgr.GetMouseState(MOUSE_BUTTON_LEFT) || inputMgr.GetMouseState(MOUSE_BUTTON_RIGHT)
+}
+
+func (*platformMgrImpl) SetRunnableOnUnfocused(flag bool) {
+	if !flag {
+		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
+	}
+}
+
+func (c *cameraMgrImpl) GetPosition() Vec2 {
+	return c.GetCameraPosition()
+}
+
+func (c *cameraMgrImpl) SetPosition(position Vec2) {
+	c.SetCameraPosition(position)
 }
 
 func callInMainThread(call func()) {

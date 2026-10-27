@@ -12,6 +12,10 @@ import (
 	"github.com/goplus/ixgo"
 )
 
+type patchTestTransport struct {
+	requests []ai.Request
+}
+
 func TestRegisterPatchDispatchesInterpretedCommands(t *testing.T) {
 	for _, function := range []string{"XGot_Player_XGox_OnCmd", "XGot_Player_XGox_OnCmd__0"} {
 		t.Run(function, func(t *testing.T) {
@@ -125,6 +129,21 @@ func Register(player *ai.Player) {
 	}
 }
 
+func (t *patchTestTransport) Interact(_ context.Context, request ai.Request) (ai.Response, error) {
+	t.requests = append(t.requests, request)
+	if len(t.requests) == 1 {
+		return ai.Response{
+			CommandName: "Move",
+			CommandArgs: map[string]any{"Steps": float64(7), "Message": "hello"},
+		}, nil
+	}
+	return ai.Response{}, nil
+}
+
+func (*patchTestTransport) Archive(context.Context, []ai.Turn, string) (ai.ArchivedHistory, error) {
+	return ai.ArchivedHistory{}, errors.New("unexpected history archive")
+}
+
 func newPatchedInterp(t *testing.T, source string) *ixgo.Interp {
 	t.Helper()
 	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
@@ -137,23 +156,4 @@ func newPatchedInterp(t *testing.T, source string) *ixgo.Interp {
 	}
 	t.Cleanup(interp.UnsafeRelease)
 	return interp
-}
-
-type patchTestTransport struct {
-	requests []ai.Request
-}
-
-func (transport *patchTestTransport) Interact(_ context.Context, request ai.Request) (ai.Response, error) {
-	transport.requests = append(transport.requests, request)
-	if len(transport.requests) == 1 {
-		return ai.Response{
-			CommandName: "Move",
-			CommandArgs: map[string]any{"Steps": float64(7), "Message": "hello"},
-		}, nil
-	}
-	return ai.Response{}, nil
-}
-
-func (*patchTestTransport) Archive(context.Context, []ai.Turn, string) (ai.ArchivedHistory, error) {
-	return ai.ArchivedHistory{}, errors.New("unexpected history archive")
 }

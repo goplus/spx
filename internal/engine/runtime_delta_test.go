@@ -28,23 +28,23 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func resetRuntimeDeltaTestState() {
-	delaySpriteCalls = delaySpriteCalls[:0]
-	tempDelaySpriteCalls = tempDelaySpriteCalls[:0]
-	tweenInfos = tweenInfos[:0]
-	tempTweenInfos = tempTweenInfos[:0]
-	state.sprites = make(map[Object]gdx.ISpriter)
-	state.uiNodes = make(map[Object]gdx.IUiNode)
-	state.timeSinceStart = 0
-	itime.SetFixedDeltaTime(0)
-	itime.Start(nil)
+type frameCallbackSprite struct {
+	gdx.Sprite
+	position   mathf.Vec2
+	update     func()
+	onPosition func(mathf.Vec2)
 }
 
-func advanceRuntimeDeltaFrame(realDelta float64) {
-	logicalDelta := itime.EffectiveLogicalDeltaTime(realDelta)
-	itime.Update(logicalDelta, 60)
-	runtimeBridge{}.InternalUpdateFrame(logicalDelta, nil)
+type callbackReusableBase struct {
+	gdx.Sprite
+	completed bool
 }
+
+type callbackDerivedSprite struct{ callbackReusableBase }
+
+type opaqueRuntimeSprite struct{ gdx.ISpriter }
+
+type nilBaseRuntimeSprite struct{ gdx.Sprite }
 
 func TestInternalUpdateFrameUsesScriptDeltaForDelayCall(t *testing.T) {
 	resetRuntimeDeltaTestState()
@@ -155,26 +155,6 @@ func TestRuntimeBridgeTimersDeferCallbacksAddedDuringUpdate(t *testing.T) {
 	}
 }
 
-type frameCallbackSprite struct {
-	gdx.Sprite
-	position   mathf.Vec2
-	update     func()
-	onPosition func(mathf.Vec2)
-}
-
-func (s *frameCallbackSprite) GetPosition() mathf.Vec2 { return s.position }
-func (s *frameCallbackSprite) SetPosition(value mathf.Vec2) {
-	s.position = value
-	if s.onPosition != nil {
-		s.onPosition(value)
-	}
-}
-func (s *frameCallbackSprite) OnUpdate(float64) {
-	if s.update != nil {
-		s.update()
-	}
-}
-
 func TestFrameRuntimeCallbacksCanWaitAcrossFrames(t *testing.T) {
 	for _, source := range []string{"timer", "tween", "sprite update"} {
 		for _, wait := range []string{"time", "frame", "batch"} {
@@ -278,43 +258,6 @@ func TestRuntimeCallbackBatchPreservesOrderAcrossWaits(t *testing.T) {
 		if !resumed || !slices.Equal(got, []int{0}) {
 			t.Fatalf("second frame callbacks=%v resumed=%v, want only the next sprite update and timer continuation", got, resumed)
 		}
-	}
-}
-
-func setupRuntimeCallbackTest(t *testing.T) *coroutine.Coroutines {
-	t.Helper()
-	isolateGameBinding(t)
-	co := setupExecuteTest(t)
-	isolateCaptureState(t)
-	resetInputState()
-	resetTriggerEvents()
-	resetRuntimeDeltaTestState()
-	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		resetRuntimeDeltaTestState()
-		resetInputState()
-		resetTriggerEvents()
-	})
-	game := &frameRecordingGame{step: func(string) {}}
-	if _, err := bindGame(game, game); err != nil {
-		t.Fatal(err)
-	}
-	return co
-}
-
-func runRuntimeCallbackFrame(t *testing.T, co *coroutine.Coroutines) {
-	t.Helper()
-	returned := make(chan struct{})
-	go func() {
-		defer close(returned)
-		onUpdate(.1)
-	}()
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		co.StopAll()
-		waitForEngineSignal(t, returned, time.Second, "frame did not unwind after cancellation")
-		t.Fatal("runtime callback wait blocked the frame dispatcher")
 	}
 }
 
@@ -576,17 +519,6 @@ func TestRuntimeCallbacksAcceptEmbeddedSpriteHandles(t *testing.T) {
 	}
 }
 
-type callbackReusableBase struct {
-	gdx.Sprite
-	completed bool
-}
-
-func (s *callbackReusableBase) OnStart() {
-	gdx.DelaySpriteCall(.1, s, func() { s.completed = true })
-}
-
-type callbackDerivedSprite struct{ callbackReusableBase }
-
 func TestRuntimeCallbackInheritedStartRetainsBaseReceiver(t *testing.T) {
 	isolateGameBinding(t)
 	resetRuntimeDeltaTestState()
@@ -638,12 +570,6 @@ func TestRuntimeCallbackEmbeddedHandlesCannotFollowReusedIDs(t *testing.T) {
 	}
 }
 
-type opaqueRuntimeSprite struct{ gdx.ISpriter }
-
-type nilBaseRuntimeSprite struct{ gdx.Sprite }
-
-func (*nilBaseRuntimeSprite) BaseSprite() *gdx.Sprite { return nil }
-
 func TestResolveRuntimeSpriteRequiresSharedBase(t *testing.T) {
 	isolateGameBinding(t)
 	resetRuntimeDeltaTestState()
@@ -688,5 +614,81 @@ func TestRuntimeCallbackNilSpriteRemainsGlobal(t *testing.T) {
 	gdx.InternalUpdateFrame(.1, nil)
 	if completed != 1 {
 		t.Fatalf("nil-sprite callback completed %d times, want 1", completed)
+	}
+}
+
+func (s *frameCallbackSprite) GetPosition() mathf.Vec2 { return s.position }
+
+func (s *frameCallbackSprite) SetPosition(value mathf.Vec2) {
+	s.position = value
+	if s.onPosition != nil {
+		s.onPosition(value)
+	}
+}
+
+func (s *frameCallbackSprite) OnUpdate(float64) {
+	if s.update != nil {
+		s.update()
+	}
+}
+
+func (s *callbackReusableBase) OnStart() {
+	gdx.DelaySpriteCall(.1, s, func() { s.completed = true })
+}
+
+func (*nilBaseRuntimeSprite) BaseSprite() *gdx.Sprite { return nil }
+
+func resetRuntimeDeltaTestState() {
+	delaySpriteCalls = delaySpriteCalls[:0]
+	tempDelaySpriteCalls = tempDelaySpriteCalls[:0]
+	tweenInfos = tweenInfos[:0]
+	tempTweenInfos = tempTweenInfos[:0]
+	state.sprites = make(map[Object]gdx.ISpriter)
+	state.uiNodes = make(map[Object]gdx.IUiNode)
+	state.timeSinceStart = 0
+	itime.SetFixedDeltaTime(0)
+	itime.Start(nil)
+}
+
+func advanceRuntimeDeltaFrame(realDelta float64) {
+	logicalDelta := itime.EffectiveLogicalDeltaTime(realDelta)
+	itime.Update(logicalDelta, 60)
+	runtimeBridge{}.InternalUpdateFrame(logicalDelta, nil)
+}
+
+func setupRuntimeCallbackTest(t *testing.T) *coroutine.Coroutines {
+	t.Helper()
+	isolateGameBinding(t)
+	co := setupExecuteTest(t)
+	isolateCaptureState(t)
+	resetInputState()
+	resetTriggerEvents()
+	resetRuntimeDeltaTestState()
+	t.Cleanup(func() {
+		co.RunAfterStop(nil)
+		resetRuntimeDeltaTestState()
+		resetInputState()
+		resetTriggerEvents()
+	})
+	game := &frameRecordingGame{step: func(string) {}}
+	if _, err := bindGame(game, game); err != nil {
+		t.Fatal(err)
+	}
+	return co
+}
+
+func runRuntimeCallbackFrame(t *testing.T, co *coroutine.Coroutines) {
+	t.Helper()
+	returned := make(chan struct{})
+	go func() {
+		defer close(returned)
+		onUpdate(.1)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		co.StopAll()
+		waitForEngineSignal(t, returned, time.Second, "frame did not unwind after cancellation")
+		t.Fatal("runtime callback wait blocked the frame dispatcher")
 	}
 }

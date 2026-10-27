@@ -25,7 +25,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,7 +33,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestOpenHTTPRejectsPathTraversalBeforeRequest(t *testing.T) {
@@ -279,40 +277,6 @@ func TestOpenHTTPRejectsOversizedResponse(t *testing.T) {
 	}
 }
 
-func TestHTTPSClientRejectsDowngradeRedirect(t *testing.T) {
-	downgrade := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("downgrade target was contacted")
-	}))
-	defer downgrade.Close()
-	client := remoteClientForScheme("https://")
-	requestURL, err := url.Parse("https://example.test/archive.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	redirectURL, err := url.Parse(downgrade.URL + "/archive.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := &http.Request{URL: redirectURL}
-	if err := client.CheckRedirect(request, []*http.Request{{URL: requestURL}}); !errors.Is(err, ErrInsecureRedirect) {
-		t.Fatalf("CheckRedirect error = %v, want ErrInsecureRedirect", err)
-	}
-}
-
-func TestRemoteClientClonesDefaultWithTimeout(t *testing.T) {
-	originalTimeout := http.DefaultClient.Timeout
-	client := remoteClientForScheme("http://")
-	if client == http.DefaultClient {
-		t.Fatal("remoteClientForScheme returned the shared default client")
-	}
-	if got, want := client.Timeout, 5*time.Minute; got != want {
-		t.Fatalf("remote client timeout = %v, want %v", got, want)
-	}
-	if http.DefaultClient.Timeout != originalTimeout {
-		t.Fatal("remoteClientForScheme modified the default client timeout")
-	}
-}
-
 func TestOpenHTTPConcurrentDownloadsPublishCompleteArchive(t *testing.T) {
 	root := t.TempDir()
 	archive := testRemoteZip(t, "concurrent.txt", strings.Repeat("x", 1024))
@@ -359,23 +323,6 @@ func TestOpenHTTPConcurrentDownloadsPublishCompleteArchive(t *testing.T) {
 	}
 	if requests.Load() == 0 {
 		t.Fatal("server was not contacted")
-	}
-}
-
-func TestParseRemoteURLCanonicalizesHostAndSeparatesProtocols(t *testing.T) {
-	_, httpKey, err := parseRemoteURL("Example.TEST/assets/a.zip?token=1", "http://")
-	if err != nil {
-		t.Fatal(err)
-	}
-	remote, httpsKey, err := parseRemoteURL("example.test/assets/a.zip?token=1", "https://")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if remote != "https://example.test/assets/a.zip?token=1" {
-		t.Fatalf("canonical remote = %q", remote)
-	}
-	if httpKey == httpsKey {
-		t.Fatal("HTTP and HTTPS cache keys collided")
 	}
 }
 

@@ -328,6 +328,33 @@ func (p *Game) setStageMonitor(target string, val PropertyName, visible bool) bo
 // -----------------------------------------------------------------------------
 // Position
 // -----------------------------------------------------------------------------
+// resolveTargetPosition distinguishes a missing target from one at the origin.
+func (p *Game) resolveTargetPosition(target Target) (float64, float64, bool) {
+	var targetSprite *SpriteImpl
+	switch target := target.(type) {
+	case SpriteName:
+		targetSprite = p.shapeMgr.findSprite(target)
+	case Sprite:
+		targetSprite = spriteOf(target)
+	case specialObj:
+		if target == Mouse {
+			x, y := p.getMousePos()
+			return x, y, true
+		}
+	case Pos:
+		if target == Random {
+			worldW, worldH := p.worldSize()
+			randomX, randomY := randomIntn(worldW), randomIntn(worldH)
+			return float64(randomX - (worldW >> 1)), float64((worldH >> 1) - randomY), true
+		}
+	}
+	if targetSprite == nil {
+		return 0, 0, false
+	}
+	x, y := targetSprite.getXY()
+	return x, y, true
+}
+
 func (p *Game) touchingPoint(dst *SpriteImpl, x, y float64) bool {
 	return dst.touchPoint(x, y)
 }
@@ -346,6 +373,6 @@ func (p *Game) setupPathFinder(withJump, withDebug bool) {
 	engine.Managers().NavigationMgr.SetupPathFinderWithSize(gridSize, cellSize, withJump, withDebug)
 }
 
-func (kind EffectKind) String() string {
-	return greffNames[kind]
+func (k EffectKind) String() string {
+	return greffNames[k]
 }

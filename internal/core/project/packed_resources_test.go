@@ -30,17 +30,16 @@ import (
 
 type panicPathDir struct{}
 
-func (panicPathDir) Open(string) (io.ReadCloser, error) {
-	panic("base Open called for packed config")
+type rawCapabilityDir struct{}
+
+type failingConfigDir struct {
+	spxfs.Dir
+	failPath string
+	err      error
+	closed   int
 }
 
-func (panicPathDir) Close() error {
-	return nil
-}
-
-func (panicPathDir) GetPath() string {
-	panic("GetPath bypassed packed config")
-}
+type streamedConfigDir struct{ reader io.ReadCloser }
 
 func TestLoadJSONReadsPackedConfigWithoutInspectingResourcePath(t *testing.T) {
 	fs := &packedConfigDir{
@@ -87,20 +86,6 @@ func TestResourceDirKeepsPackedConfigOutermost(t *testing.T) {
 	}
 }
 
-type rawCapabilityDir struct{}
-
-func (*rawCapabilityDir) Open(string) (io.ReadCloser, error) {
-	return nil, os.ErrNotExist
-}
-
-func (*rawCapabilityDir) Close() error {
-	return nil
-}
-
-func (*rawCapabilityDir) GetPath() string {
-	return "res://assets"
-}
-
 func TestResourceDirPreservesRawDirectoryIdentity(t *testing.T) {
 	base := &rawCapabilityDir{}
 	got, err := ResourceDir(base)
@@ -110,25 +95,6 @@ func TestResourceDirPreservesRawDirectoryIdentity(t *testing.T) {
 	if got != base {
 		t.Fatalf("ResourceDir() = %T, want original directory", got)
 	}
-}
-
-type failingConfigDir struct {
-	spxfs.Dir
-	failPath string
-	err      error
-	closed   int
-}
-
-func (d *failingConfigDir) Open(name string) (io.ReadCloser, error) {
-	if name == d.failPath {
-		return nil, d.err
-	}
-	return d.Dir.Open(name)
-}
-
-func (d *failingConfigDir) Close() error {
-	d.closed++
-	return d.Dir.Close()
 }
 
 func TestPackedResourcesPreserveSourceOpenErrors(t *testing.T) {
@@ -221,11 +187,6 @@ func TestPackedResourcesPreserveMissingFileErrors(t *testing.T) {
 	}
 }
 
-type streamedConfigDir struct{ reader io.ReadCloser }
-
-func (d streamedConfigDir) Open(string) (io.ReadCloser, error) { return d.reader, nil }
-func (streamedConfigDir) Close() error                         { return nil }
-
 func TestPackedResourcesKeepSourceReaderOwnership(t *testing.T) {
 	// A non-overlay resource remains a stream owned by the caller. In
 	// particular, Open must not eagerly read or close a binary resource.
@@ -244,3 +205,43 @@ func TestPackedResourcesKeepSourceReaderOwnership(t *testing.T) {
 		t.Fatalf("resource = %q, %v", data, err)
 	}
 }
+
+func (panicPathDir) Open(string) (io.ReadCloser, error) {
+	panic("base Open called for packed config")
+}
+
+func (panicPathDir) Close() error {
+	return nil
+}
+
+func (panicPathDir) GetPath() string {
+	panic("GetPath bypassed packed config")
+}
+
+func (*rawCapabilityDir) Open(string) (io.ReadCloser, error) {
+	return nil, os.ErrNotExist
+}
+
+func (*rawCapabilityDir) Close() error {
+	return nil
+}
+
+func (*rawCapabilityDir) GetPath() string {
+	return "res://assets"
+}
+
+func (d *failingConfigDir) Open(name string) (io.ReadCloser, error) {
+	if name == d.failPath {
+		return nil, d.err
+	}
+	return d.Dir.Open(name)
+}
+
+func (d *failingConfigDir) Close() error {
+	d.closed++
+	return d.Dir.Close()
+}
+
+func (d streamedConfigDir) Open(string) (io.ReadCloser, error) { return d.reader, nil }
+
+func (streamedConfigDir) Close() error { return nil }

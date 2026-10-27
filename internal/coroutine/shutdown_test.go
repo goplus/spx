@@ -448,6 +448,12 @@ func TestRunAfterStopWaitsForPanicHandlerBeforeReopeningAdmission(t *testing.T) 
 	}
 }
 
+func (p *Coroutines) hasPendingWork() bool {
+	p.threadsMu.Lock()
+	defer p.threadsMu.Unlock()
+	return p.hasPendingWorkLocked()
+}
+
 func assertShutdownRejectsCreation(t *testing.T, co *Coroutines) {
 	t.Helper()
 	ran := false
@@ -456,12 +462,6 @@ func assertShutdownRejectsCreation(t *testing.T, co *Coroutines) {
 	if !co.admissionClosed() || !thread.Stopped() || ran {
 		t.Fatal("shutdown admitted new work before drain completed")
 	}
-}
-
-func (p *Coroutines) hasPendingWork() bool {
-	p.threadsMu.Lock()
-	defer p.threadsMu.Unlock()
-	return p.hasPendingWorkLocked()
 }
 
 func canLockRegistry(co *Coroutines) bool {

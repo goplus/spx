@@ -33,27 +33,6 @@ type cameraTestMgr struct {
 	positionWrites int
 }
 
-func (m *cameraTestMgr) GetCameraPosition() mathf.Vec2 { return m.position }
-func (m *cameraTestMgr) SetCameraPosition(pos mathf.Vec2) {
-	m.position = pos
-	m.positionWrites++
-}
-func (m *cameraTestMgr) GetCameraZoom() mathf.Vec2        { return m.zoom }
-func (m *cameraTestMgr) SetCameraZoom(zoom mathf.Vec2)    { m.zoom = zoom }
-func (m *cameraTestMgr) GetGlobalCameraRect() mathf.Rect2 { return m.viewport }
-func (m *cameraTestMgr) SetCameraLimit(side, value int64) { m.limits[side] = value }
-func (m *cameraTestMgr) SetCameraSmoothing(enabled bool)  { m.smoothing = enabled }
-
-func setupCameraTestMgr(t *testing.T) *cameraTestMgr {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.CameraMgr
-	mgr := &cameraTestMgr{limits: make(map[int64]int64)}
-	pkgengine.CameraMgr = mgr
-	t.Cleanup(func() { pkgengine.CameraMgr = previous })
-	return mgr
-}
-
 func TestCameraCoordinatesAndWindowScale(t *testing.T) {
 	mgr := setupCameraTestMgr(t)
 	game := &Game{}
@@ -172,4 +151,73 @@ func TestCameraWithoutFollowTargetHasNoPositionUpdate(t *testing.T) {
 	if changed, position := camera.getFollowPos(); changed || position != (mathf.Vec2{}) {
 		t.Fatalf("detached camera follow position = (%v, %v), want false and origin", changed, position)
 	}
+}
+
+func TestCameraFollowObservesPhysicsPositionChanges(t *testing.T) {
+	sprite := newPhysicsPositionTestSprite(1, 2)
+	camera := &cameraImpl{
+		followTarget:          sprite,
+		observedFollowVersion: sprite.spriteState.VisualVersion,
+	}
+
+	if changed, _ := camera.getFollowPos(); changed {
+		t.Fatal("unchanged follow target unexpectedly invalidated the camera")
+	}
+
+	sprite.mergeEnginePosition(3, 4)
+	changed, pos := camera.getFollowPos()
+	if !changed {
+		t.Fatal("physics position change did not invalidate the camera")
+	}
+	if pos.X != 3 || pos.Y != 4 {
+		t.Fatalf("camera follow position = (%v, %v), want (3, 4)", pos.X, pos.Y)
+	}
+
+	camera.observedFollowVersion = sprite.spriteState.VisualVersion
+	if changed, _ := camera.getFollowPos(); changed {
+		t.Fatal("observed follow target still invalidated the camera")
+	}
+}
+
+func TestCameraFollowObservesMousePositionChanges(t *testing.T) {
+	game := new(Game)
+	camera := &cameraImpl{g: game, followTarget: Mouse}
+
+	for _, want := range []mathf.Vec2{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)} {
+		game.inputMgr.setMousePos(want)
+		changed, pos := camera.getFollowPos()
+		if !changed {
+			t.Fatal("mouse follow did not update without a camera dirty flag")
+		}
+		if pos != want {
+			t.Fatalf("camera follow position = %v, want cached mouse position %v", pos, want)
+		}
+	}
+}
+
+func (m *cameraTestMgr) GetCameraPosition() mathf.Vec2 { return m.position }
+
+func (m *cameraTestMgr) SetCameraPosition(pos mathf.Vec2) {
+	m.position = pos
+	m.positionWrites++
+}
+
+func (m *cameraTestMgr) GetCameraZoom() mathf.Vec2 { return m.zoom }
+
+func (m *cameraTestMgr) SetCameraZoom(zoom mathf.Vec2) { m.zoom = zoom }
+
+func (m *cameraTestMgr) GetGlobalCameraRect() mathf.Rect2 { return m.viewport }
+
+func (m *cameraTestMgr) SetCameraLimit(side, value int64) { m.limits[side] = value }
+
+func (m *cameraTestMgr) SetCameraSmoothing(enabled bool) { m.smoothing = enabled }
+
+func setupCameraTestMgr(t *testing.T) *cameraTestMgr {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.CameraMgr
+	mgr := &cameraTestMgr{limits: make(map[int64]int64)}
+	pkgengine.CameraMgr = mgr
+	t.Cleanup(func() { pkgengine.CameraMgr = previous })
+	return mgr
 }

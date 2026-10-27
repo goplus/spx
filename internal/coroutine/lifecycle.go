@@ -182,10 +182,6 @@ func (p *Coroutines) captureAdmission() threadAdmission {
 	}
 }
 
-func (a threadAdmission) valid(epoch uint64) bool {
-	return a.allowed && a.epoch == epoch
-}
-
 func (p *Coroutines) finishSetup() {
 	p.admissionMu.Lock()
 	if p.pendingSetups.Add(-1) == 0 && !p.stopping {
@@ -238,4 +234,8 @@ func (p *Coroutines) notifyDrainLocked() {
 		close(p.drainDone)
 		p.drainDone = nil
 	}
+}
+
+func (a threadAdmission) valid(epoch uint64) bool {
+	return a.allowed && a.epoch == epoch
 }

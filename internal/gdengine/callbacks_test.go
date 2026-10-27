@@ -22,37 +22,28 @@ type callbackTestRuntime struct {
 	calls   *[]string
 }
 
-func (r *callbackTestRuntime) Sprites() map[engine.Object]engine.ISpriter {
-	return r.sprites
-}
-
-func (r *callbackTestRuntime) AdvanceTimeSinceGameStart(delta float64) float64 {
-	*r.calls = append(*r.calls, fmt.Sprintf("advance:%g", delta))
-	return delta
-}
-
-func (r *callbackTestRuntime) InternalUpdateFrame(delta float64, update func(float64)) {
-	*r.calls = append(*r.calls, fmt.Sprintf("runtime-frame:%g", delta))
-	if update != nil {
-		update(delta)
-	}
-}
-
 type callbackTestSprite struct {
 	engine.ISpriter
 	calls *[]string
 }
 
-func (s *callbackTestSprite) OnUpdate(delta float64) {
-	*s.calls = append(*s.calls, fmt.Sprintf("sprite-update:%g", delta))
+type routedCallbackRuntime struct {
+	engine.RuntimeBridge
+	sprites   map[engine.Object]engine.ISpriter
+	nodes     map[engine.Object]engine.IUiNode
+	boundID   engine.Object
+	boundType string
 }
 
-func (s *callbackTestSprite) OnFixedUpdate(delta float64) {
-	*s.calls = append(*s.calls, fmt.Sprintf("sprite-fixed:%g", delta))
+type routedCallbackSprite struct {
+	engine.ISpriter
+	calls []string
+	other engine.ISpriter
 }
 
-func (s *callbackTestSprite) OnDestroy() {
-	*s.calls = append(*s.calls, "sprite-destroy")
+type routedCallbackNode struct {
+	engine.IUiNode
+	calls []string
 }
 
 func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
@@ -245,98 +236,6 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	}
 }
 
-type routedCallbackRuntime struct {
-	engine.RuntimeBridge
-	sprites   map[engine.Object]engine.ISpriter
-	nodes     map[engine.Object]engine.IUiNode
-	boundID   engine.Object
-	boundType string
-}
-
-func (r *routedCallbackRuntime) GetSprite(id engine.Object) engine.ISpriter { return r.sprites[id] }
-func (r *routedCallbackRuntime) GetUINode(id engine.Object) engine.IUiNode  { return r.nodes[id] }
-func (r *routedCallbackRuntime) DeleteSprite(id engine.Object)              { delete(r.sprites, id) }
-func (r *routedCallbackRuntime) DeleteUINode(id engine.Object)              { delete(r.nodes, id) }
-func (r *routedCallbackRuntime) BindSceneInstantiatedSprite(id engine.Object, name string) {
-	r.boundID, r.boundType = id, name
-}
-
-type routedCallbackSprite struct {
-	engine.ISpriter
-	calls []string
-	other engine.ISpriter
-}
-
-func (s *routedCallbackSprite) OnStart()           { s.calls = append(s.calls, "start") }
-func (s *routedCallbackSprite) V_OnScreenEntered() { s.calls = append(s.calls, "V_OnScreenEntered") }
-func (s *routedCallbackSprite) OnScreenEntered()   { s.calls = append(s.calls, "OnScreenEntered") }
-func (s *routedCallbackSprite) V_OnScreenExited()  { s.calls = append(s.calls, "V_OnScreenExited") }
-func (s *routedCallbackSprite) OnScreenExited()    { s.calls = append(s.calls, "OnScreenExited") }
-func (s *routedCallbackSprite) V_OnVfxFinished()   { s.calls = append(s.calls, "V_OnVfxFinished") }
-func (s *routedCallbackSprite) OnVfxFinished()     { s.calls = append(s.calls, "OnVfxFinished") }
-func (s *routedCallbackSprite) V_OnAnimationFinished() {
-	s.calls = append(s.calls, "V_OnAnimationFinished")
-}
-func (s *routedCallbackSprite) OnAnimationFinished() {
-	s.calls = append(s.calls, "OnAnimationFinished")
-}
-func (s *routedCallbackSprite) V_OnAnimationLooped() {
-	s.calls = append(s.calls, "V_OnAnimationLooped")
-}
-func (s *routedCallbackSprite) OnAnimationLooped() { s.calls = append(s.calls, "OnAnimationLooped") }
-func (s *routedCallbackSprite) V_OnFrameChanged()  { s.calls = append(s.calls, "V_OnFrameChanged") }
-func (s *routedCallbackSprite) OnFrameChanged()    { s.calls = append(s.calls, "OnFrameChanged") }
-func (s *routedCallbackSprite) V_OnAnimationChanged() {
-	s.calls = append(s.calls, "V_OnAnimationChanged")
-}
-func (s *routedCallbackSprite) OnAnimationChanged() { s.calls = append(s.calls, "OnAnimationChanged") }
-func (s *routedCallbackSprite) V_OnFramesSetChanged() {
-	s.calls = append(s.calls, "V_OnFramesSetChanged")
-}
-func (s *routedCallbackSprite) OnFramesSetChanged() { s.calls = append(s.calls, "OnFramesSetChanged") }
-func (s *routedCallbackSprite) V_OnTriggerEnter(other engine.ISpriter) {
-	s.calls = append(s.calls, "V_OnTriggerEnter")
-	s.other = other
-}
-func (s *routedCallbackSprite) OnTriggerEnter(other engine.ISpriter) {
-	s.calls = append(s.calls, "OnTriggerEnter")
-	s.other = other
-}
-func (s *routedCallbackSprite) V_OnTriggerExit(other engine.ISpriter) {
-	s.calls = append(s.calls, "V_OnTriggerExit")
-	s.other = other
-}
-func (s *routedCallbackSprite) OnTriggerExit(other engine.ISpriter) {
-	s.calls = append(s.calls, "OnTriggerExit")
-	s.other = other
-}
-
-type routedCallbackNode struct {
-	engine.IUiNode
-	calls []string
-}
-
-func (n *routedCallbackNode) V_OnUiPressed()  { n.calls = append(n.calls, "V_OnUiPressed") }
-func (n *routedCallbackNode) OnUiPressed()    { n.calls = append(n.calls, "OnUiPressed") }
-func (n *routedCallbackNode) V_OnUiReleased() { n.calls = append(n.calls, "V_OnUiReleased") }
-func (n *routedCallbackNode) OnUiReleased()   { n.calls = append(n.calls, "OnUiReleased") }
-func (n *routedCallbackNode) V_OnUiHovered()  { n.calls = append(n.calls, "V_OnUiHovered") }
-func (n *routedCallbackNode) OnUiHovered()    { n.calls = append(n.calls, "OnUiHovered") }
-func (n *routedCallbackNode) V_OnUiClick()    { n.calls = append(n.calls, "V_OnUiClick") }
-func (n *routedCallbackNode) OnUiClick()      { n.calls = append(n.calls, "OnUiClick") }
-func (n *routedCallbackNode) V_OnUiToggle(value bool) {
-	n.calls = append(n.calls, fmt.Sprintf("V_OnUiToggle:%t", value))
-}
-func (n *routedCallbackNode) OnUiToggle(value bool) {
-	n.calls = append(n.calls, fmt.Sprintf("OnUiToggle:%t", value))
-}
-func (n *routedCallbackNode) V_OnUiTextChanged(value string) {
-	n.calls = append(n.calls, fmt.Sprintf("V_OnUiTextChanged:%s", value))
-}
-func (n *routedCallbackNode) OnUiTextChanged(value string) {
-	n.calls = append(n.calls, fmt.Sprintf("OnUiTextChanged:%s", value))
-}
-
 func TestCallbacksRouteToLiveObjectsInOrder(t *testing.T) {
 	sprite, other, node := &routedCallbackSprite{}, &routedCallbackSprite{}, &routedCallbackNode{}
 	bridge := &routedCallbackRuntime{sprites: map[engine.Object]engine.ISpriter{1: sprite, 2: other}, nodes: map[engine.Object]engine.IUiNode{3: node}}
@@ -452,4 +351,140 @@ func TestCoreInputCallbacksAndDiagnosticEvents(t *testing.T) {
 			t.Errorf("missing diagnostic %q", want)
 		}
 	}
+}
+
+func (r *callbackTestRuntime) Sprites() map[engine.Object]engine.ISpriter {
+	return r.sprites
+}
+
+func (r *callbackTestRuntime) AdvanceTimeSinceGameStart(delta float64) float64 {
+	*r.calls = append(*r.calls, fmt.Sprintf("advance:%g", delta))
+	return delta
+}
+
+func (r *callbackTestRuntime) InternalUpdateFrame(delta float64, update func(float64)) {
+	*r.calls = append(*r.calls, fmt.Sprintf("runtime-frame:%g", delta))
+	if update != nil {
+		update(delta)
+	}
+}
+
+func (s *callbackTestSprite) OnUpdate(delta float64) {
+	*s.calls = append(*s.calls, fmt.Sprintf("sprite-update:%g", delta))
+}
+
+func (s *callbackTestSprite) OnFixedUpdate(delta float64) {
+	*s.calls = append(*s.calls, fmt.Sprintf("sprite-fixed:%g", delta))
+}
+
+func (s *callbackTestSprite) OnDestroy() {
+	*s.calls = append(*s.calls, "sprite-destroy")
+}
+
+func (r *routedCallbackRuntime) GetSprite(id engine.Object) engine.ISpriter { return r.sprites[id] }
+
+func (r *routedCallbackRuntime) GetUINode(id engine.Object) engine.IUiNode { return r.nodes[id] }
+
+func (r *routedCallbackRuntime) DeleteSprite(id engine.Object) { delete(r.sprites, id) }
+
+func (r *routedCallbackRuntime) DeleteUINode(id engine.Object) { delete(r.nodes, id) }
+
+func (r *routedCallbackRuntime) BindSceneInstantiatedSprite(id engine.Object, name string) {
+	r.boundID, r.boundType = id, name
+}
+
+func (s *routedCallbackSprite) OnStart() { s.calls = append(s.calls, "start") }
+
+func (s *routedCallbackSprite) V_OnScreenEntered() { s.calls = append(s.calls, "V_OnScreenEntered") }
+
+func (s *routedCallbackSprite) OnScreenEntered() { s.calls = append(s.calls, "OnScreenEntered") }
+
+func (s *routedCallbackSprite) V_OnScreenExited() { s.calls = append(s.calls, "V_OnScreenExited") }
+
+func (s *routedCallbackSprite) OnScreenExited() { s.calls = append(s.calls, "OnScreenExited") }
+
+func (s *routedCallbackSprite) V_OnVfxFinished() { s.calls = append(s.calls, "V_OnVfxFinished") }
+
+func (s *routedCallbackSprite) OnVfxFinished() { s.calls = append(s.calls, "OnVfxFinished") }
+
+func (s *routedCallbackSprite) V_OnAnimationFinished() {
+	s.calls = append(s.calls, "V_OnAnimationFinished")
+}
+
+func (s *routedCallbackSprite) OnAnimationFinished() {
+	s.calls = append(s.calls, "OnAnimationFinished")
+}
+
+func (s *routedCallbackSprite) V_OnAnimationLooped() {
+	s.calls = append(s.calls, "V_OnAnimationLooped")
+}
+
+func (s *routedCallbackSprite) OnAnimationLooped() { s.calls = append(s.calls, "OnAnimationLooped") }
+
+func (s *routedCallbackSprite) V_OnFrameChanged() { s.calls = append(s.calls, "V_OnFrameChanged") }
+
+func (s *routedCallbackSprite) OnFrameChanged() { s.calls = append(s.calls, "OnFrameChanged") }
+
+func (s *routedCallbackSprite) V_OnAnimationChanged() {
+	s.calls = append(s.calls, "V_OnAnimationChanged")
+}
+
+func (s *routedCallbackSprite) OnAnimationChanged() { s.calls = append(s.calls, "OnAnimationChanged") }
+
+func (s *routedCallbackSprite) V_OnFramesSetChanged() {
+	s.calls = append(s.calls, "V_OnFramesSetChanged")
+}
+
+func (s *routedCallbackSprite) OnFramesSetChanged() { s.calls = append(s.calls, "OnFramesSetChanged") }
+
+func (s *routedCallbackSprite) V_OnTriggerEnter(other engine.ISpriter) {
+	s.calls = append(s.calls, "V_OnTriggerEnter")
+	s.other = other
+}
+
+func (s *routedCallbackSprite) OnTriggerEnter(other engine.ISpriter) {
+	s.calls = append(s.calls, "OnTriggerEnter")
+	s.other = other
+}
+
+func (s *routedCallbackSprite) V_OnTriggerExit(other engine.ISpriter) {
+	s.calls = append(s.calls, "V_OnTriggerExit")
+	s.other = other
+}
+
+func (s *routedCallbackSprite) OnTriggerExit(other engine.ISpriter) {
+	s.calls = append(s.calls, "OnTriggerExit")
+	s.other = other
+}
+
+func (n *routedCallbackNode) V_OnUiPressed() { n.calls = append(n.calls, "V_OnUiPressed") }
+
+func (n *routedCallbackNode) OnUiPressed() { n.calls = append(n.calls, "OnUiPressed") }
+
+func (n *routedCallbackNode) V_OnUiReleased() { n.calls = append(n.calls, "V_OnUiReleased") }
+
+func (n *routedCallbackNode) OnUiReleased() { n.calls = append(n.calls, "OnUiReleased") }
+
+func (n *routedCallbackNode) V_OnUiHovered() { n.calls = append(n.calls, "V_OnUiHovered") }
+
+func (n *routedCallbackNode) OnUiHovered() { n.calls = append(n.calls, "OnUiHovered") }
+
+func (n *routedCallbackNode) V_OnUiClick() { n.calls = append(n.calls, "V_OnUiClick") }
+
+func (n *routedCallbackNode) OnUiClick() { n.calls = append(n.calls, "OnUiClick") }
+
+func (n *routedCallbackNode) V_OnUiToggle(value bool) {
+	n.calls = append(n.calls, fmt.Sprintf("V_OnUiToggle:%t", value))
+}
+
+func (n *routedCallbackNode) OnUiToggle(value bool) {
+	n.calls = append(n.calls, fmt.Sprintf("OnUiToggle:%t", value))
+}
+
+func (n *routedCallbackNode) V_OnUiTextChanged(value string) {
+	n.calls = append(n.calls, fmt.Sprintf("V_OnUiTextChanged:%s", value))
+}
+
+func (n *routedCallbackNode) OnUiTextChanged(value string) {
+	n.calls = append(n.calls, fmt.Sprintf("OnUiTextChanged:%s", value))
 }

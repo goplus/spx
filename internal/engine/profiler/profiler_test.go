@@ -122,26 +122,6 @@ func TestCalcfpsRebasesAfterEngineTimeRestart(t *testing.T) {
 	}
 }
 
-func captureProfile(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	previousCo, previousEnabled, previousDetailed := gco, Enabled, printDetailedStats
-	previousData, previousStart, previousDuration := timingData, totalStart, lastUpdateDuration
-	previousDebug, previousStack, previousGC := Debug, enabledStack, prevGCStats
-	previousFPS, previousFrame, previousTime := fps, debugLastFrame, debugLastTime
-	t.Cleanup(func() {
-		gco, Enabled, printDetailedStats = previousCo, previousEnabled, previousDetailed
-		timingData, totalStart, lastUpdateDuration = previousData, previousStart, previousDuration
-		Debug, enabledStack, prevGCStats = previousDebug, previousStack, previousGC
-		fps, debugLastFrame, debugLastTime = previousFPS, previousFrame, previousTime
-		spxlog.SetStdoutOutput(os.Stdout)
-	})
-	output := new(bytes.Buffer)
-	spxlog.SetStdoutOutput(output)
-	gco, Enabled, printDetailedStats = coroutine.New(nil), true, true
-	timingData = make(map[string]TimingInfo)
-	return output
-}
-
 func TestProfilingEnableStackAndDisabledSamples(t *testing.T) {
 	output := captureProfile(t)
 	Enabled = false
@@ -238,4 +218,24 @@ func TestCalcfpsUpdatesElapsedInterval(t *testing.T) {
 	if debugLastFrame != itime.Frame() || debugLastTime < 0 {
 		t.Fatalf("interval state frame=%d,time=%g", debugLastFrame, debugLastTime)
 	}
+}
+
+func captureProfile(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	previousCo, previousEnabled, previousDetailed := gco, Enabled, printDetailedStats
+	previousData, previousStart, previousDuration := timingData, totalStart, lastUpdateDuration
+	previousDebug, previousStack, previousGC := Debug, enabledStack, prevGCStats
+	previousFPS, previousFrame, previousTime := fps, debugLastFrame, debugLastTime
+	t.Cleanup(func() {
+		gco, Enabled, printDetailedStats = previousCo, previousEnabled, previousDetailed
+		timingData, totalStart, lastUpdateDuration = previousData, previousStart, previousDuration
+		Debug, enabledStack, prevGCStats = previousDebug, previousStack, previousGC
+		fps, debugLastFrame, debugLastTime = previousFPS, previousFrame, previousTime
+		spxlog.SetStdoutOutput(os.Stdout)
+	})
+	output := new(bytes.Buffer)
+	spxlog.SetStdoutOutput(output)
+	gco, Enabled, printDetailedStats = coroutine.New(nil), true, true
+	timingData = make(map[string]TimingInfo)
+	return output
 }

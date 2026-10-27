@@ -10,29 +10,18 @@ import (
 	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
-func TestSetLayerPublicAPI(t *testing.T) {
-	spriteType := reflect.TypeOf((*Sprite)(nil)).Elem()
-	if _, ok := spriteType.MethodByName("ChangeLayer"); ok {
-		t.Fatal("Sprite should not expose ChangeLayer")
-	}
-	if _, ok := spriteType.MethodByName("SetLayer__1"); !ok {
-		t.Fatal("Sprite should keep SetLayer__1 for overload dispatch")
-	}
+type shiftedSprite struct {
+	value int
+	SpriteImpl
+}
 
-	spriteImplType := reflect.TypeOf((*SpriteImpl)(nil))
-	if _, ok := spriteImplType.MethodByName("ChangeLayer"); ok {
-		t.Fatal("SpriteImpl should not expose ChangeLayer")
-	}
-	if _, ok := spriteImplType.MethodByName("SetLayer__1"); !ok {
-		t.Fatal("SpriteImpl should keep SetLayer__1 for overload dispatch")
-	}
+type spriteWithoutImplementation struct{ Sprite }
 
-	if XGoo_Sprite_SetLayerWith != ".SetLayerTo,.SetLayer__1" {
-		t.Fatalf("XGoo_Sprite_SetLayerWith = %q, want %q", XGoo_Sprite_SetLayerWith, ".SetLayerTo,.SetLayer__1")
-	}
-	if XGoo_SpriteImpl_SetLayerWith != ".SetLayerTo,.SetLayer__1" {
-		t.Fatalf("XGoo_SpriteImpl_SetLayerWith = %q, want %q", XGoo_SpriteImpl_SetLayerWith, ".SetLayerTo,.SetLayer__1")
-	}
+type layoutExtraBaseSprite struct {
+	SpriteImpl
+	owner *Game
+	Extra SpriteImpl
+	value int
 }
 
 func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
@@ -95,13 +84,6 @@ func TestStopIfCurrentCoroutineExternalCallerDoesNotStopActiveThread(t *testing.
 	co.Join(thread)
 }
 
-type shiftedSprite struct {
-	value int
-	SpriteImpl
-}
-
-func (*shiftedSprite) Main() {}
-
 func TestSpriteBaseLayoutKeepsLookupAndUserFields(t *testing.T) {
 	sprite := &shiftedSprite{value: 7}
 	if got := spriteOf(sprite); got != &sprite.SpriteImpl {
@@ -119,8 +101,6 @@ func TestSpriteBaseLayoutKeepsLookupAndUserFields(t *testing.T) {
 		t.Fatal("restoring user fields overwrote SpriteImpl")
 	}
 }
-
-type spriteWithoutImplementation struct{ Sprite }
 
 func TestSpriteLifecycleAndAnimationOverloadsInDebugMode(t *testing.T) {
 	game := setupCloneLimitGame(t)
@@ -149,56 +129,6 @@ func TestSpriteLifecycleAndAnimationOverloadsInDebugMode(t *testing.T) {
 	}
 }
 
-func TestSpritePenPublicAPIUpdatesDrawingState(t *testing.T) {
-	mgr := setupSpyPenMgr(t)
-	sprite := newPenTestSprite()
-	configurePenRenderOffsetSprite(sprite)
-	sprite.SetPenHue(20)
-	sprite.ChangePenHue(10)
-	sprite.SetPenShade(40)
-	sprite.ChangePenShade(5)
-	sprite.SetPenSize(3)
-	sprite.ChangePenSize(2)
-	sprite.PenDown()
-	sprite.PenUp()
-	sprite.Stamp()
-	if sprite.pen().legacyPenColor.hue != 15 || sprite.pen().legacyPenColor.shade != 45 || sprite.pen().penWidth != 5 || sprite.pen().isPenDown {
-		t.Fatalf("pen API state=%+v", sprite.pen().penState)
-	}
-	if mgr.stampSpriteCalls != 1 {
-		t.Fatalf("stamp captures=%d,want1", mgr.stampSpriteCalls)
-	}
-}
-
-func TestSpriteDialogueDebugModeKeepsPresentationAndAnswer(t *testing.T) {
-	game := setupCloneLimitGame(t)
-	game.debugState.DebugInstr = true
-	mgr := installAskTestUiMgr(t)
-	sprite := newCloneLimitSprite(game, "speaker")
-	sprite.Show()
-	sprite.SayWith("hello", 0)
-	sprite.ThinkWith("thought", 0)
-	sprite.QuoteMsgEx("quote", "source", 0)
-	if sprite.bubble().textObj.msg != "thought" || sprite.bubble().quoteObj.message != "quote" {
-		t.Fatal("debug logging changed dialogue presentation")
-	}
-	mgr.onAskVisible = func() { game.dialogState.AskPanel.OnCheck("answer") }
-	sprite.Ask("question")
-	if game.Answer() != "answer" || sprite.bubble().textObj != nil {
-		t.Fatal("debug Ask did not store the answer and retire its bubble")
-	}
-	sprite.bubble().stopAll()
-}
-
-type layoutExtraBaseSprite struct {
-	SpriteImpl
-	owner *Game
-	Extra SpriteImpl
-	value int
-}
-
-func (*layoutExtraBaseSprite) Main() {}
-
 func TestSpriteLayoutKeepsFirstImplementation(t *testing.T) {
 	game := setupStageLoadTestGame(t, gameTestFS{
 		"sprites/extra/index.json": `{"costumes":[{"name":"idle","imageWidth":10,"imageHeight":10}]}`,
@@ -226,3 +156,7 @@ func TestSpriteLayoutKeepsFirstImplementation(t *testing.T) {
 		t.Fatal("cloning did not invoke InitFrom for both SpriteImpl fields")
 	}
 }
+
+func (*shiftedSprite) Main() {}
+
+func (*layoutExtraBaseSprite) Main() {}

@@ -31,6 +31,8 @@ import (
 	"time"
 )
 
+type acquireTestWriter func([]byte) (int, error)
+
 func TestAcquireRejectsDownloadedSizeAndDigestMismatchWithoutPublishing(t *testing.T) {
 	const payload = "verified payload"
 	tests := []struct {
@@ -638,22 +640,6 @@ func TestAcquireFileAllowsConcurrentReadAndClose(t *testing.T) {
 	}
 }
 
-func acquireTestEntryNames(t *testing.T, root string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	names := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".lock") {
-			continue
-		}
-		names = append(names, entry.Name())
-	}
-	return names
-}
-
 func TestAcquiredFileInvalidAndClosedState(t *testing.T) {
 	for _, file := range []*AcquiredFile{nil, {}} {
 		if n, err := file.Read(make([]byte, 1)); n != 0 || !errors.Is(err, os.ErrInvalid) {
@@ -682,6 +668,50 @@ func TestAcquiredFileInvalidAndClosedState(t *testing.T) {
 	}
 	if _, err := file.Stat(); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("closed Stat = %v, want os.ErrClosed", err)
+	}
+}
+
+type closeOrderTestLease struct {
+	file     *os.File
+	closes   atomic.Int32
+	closeErr error
+}
+
+func (l *closeOrderTestLease) Close() error {
+	l.closes.Add(1)
+	if _, err := l.file.Stat(); !errors.Is(err, os.ErrClosed) {
+		return errors.New("lease released before the acquired file was closed")
+	}
+	return l.closeErr
+}
+
+func TestAcquiredFileConcurrentClosePreservesOrderAndError(t *testing.T) {
+	file, err := os.Create(filepath.Join(t.TempDir(), "asset"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	closeErr := errors.New("lease close failure")
+	lease := &closeOrderTestLease{file: file, closeErr: closeErr}
+	acquired := &AcquiredFile{file: file, lease: lease}
+	start := make(chan struct{})
+	var callers sync.WaitGroup
+	results := make([]error, 32)
+	for i := range results {
+		callers.Go(func() {
+			<-start
+			results[i] = acquired.Close()
+		})
+	}
+	close(start)
+	callers.Wait()
+	for i, err := range results {
+		if !errors.Is(err, closeErr) || errors.Is(err, os.ErrClosed) || err != results[0] {
+			t.Errorf("Close caller %d = %v, want the same lease error %v", i, err, results[0])
+		}
+	}
+	if got := lease.closes.Load(); got != 1 {
+		t.Fatalf("lease closes = %d, want 1", got)
 	}
 }
 
@@ -759,6 +789,76 @@ func TestAcquireFileInvalidRequestAndCancellation(t *testing.T) {
 	})
 }
 
+func TestOpenAcquiredFileCancelsWhileWaitingForLease(t *testing.T) {
+	root := t.TempDir()
+	spec := acquireTestSpec("asset", "trusted")
+	path, err := acquirePath(t.Context(), root, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := (CrossProcessLockProvider{}).AcquireExclusive(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+
+	// The exclusive lease stays held until the shared acquisition has returned;
+	// its deadline cannot race with an unlock and accidentally open the asset.
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	acquired, err := openAcquiredFile(ctx, root, spec)
+	if acquired != nil {
+		defer acquired.Close()
+	}
+	if acquired != nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("open while exclusively leased = %v, %v; want deadline exceeded", acquired, err)
+	}
+	if err := lease.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	spec.Offline = true
+	spec.Fetch = func(context.Context, string, io.Writer) error {
+		t.Error("offline reopen fetched the cached asset")
+		return nil
+	}
+	acquired, err = AcquireFile(t.Context(), root, spec)
+	if err != nil {
+		t.Fatalf("offline reopen after cancellation: %v", err)
+	}
+	defer acquired.Close()
+	if data, err := io.ReadAll(acquired); err != nil || string(data) != "trusted" {
+		t.Fatalf("offline reopen = %q, %v; want trusted", data, err)
+	}
+}
+
+func TestAcquireLockedPathCancellationDoesNotFetch(t *testing.T) {
+	path := t.TempDir()
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	lease, err := acquirePlatformRootFileLock(t.Context(), path, root, "asset", lockExclusive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	spec := acquireTestSpec("asset", "trusted")
+	spec.Fetch = func(context.Context, string, io.Writer) error {
+		t.Error("cancelled acquisition fetched a payload")
+		return nil
+	}
+	if got, err := acquireLockedPath(ctx, path, root, spec); got != "" || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled acquisition = %q, %v; want context.Canceled", got, err)
+	}
+	if names := acquireTestEntryNames(t, path); len(names) != 0 {
+		t.Fatalf("cancelled acquisition left assets: %v", names)
+	}
+}
+
 func TestAcquireLockedPathPreservesInspectionError(t *testing.T) {
 	root := t.TempDir()
 	cacheRoot, err := os.OpenRoot(root)
@@ -778,10 +878,6 @@ func TestAcquireLockedPathPreservesInspectionError(t *testing.T) {
 		t.Fatalf("closed acquisition root = %q, %v; want empty path and os.ErrClosed", path, err)
 	}
 }
-
-type acquireTestWriter func([]byte) (int, error)
-
-func (w acquireTestWriter) Write(data []byte) (int, error) { return w(data) }
 
 func TestAcquireLimitWriter(t *testing.T) {
 	writeErr := errors.New("destination failed")
@@ -921,16 +1017,6 @@ func TestAcquireRejectsRenamedRootBeforePublication(t *testing.T) {
 	}
 }
 
-func acquireTestSpec(name, body string) FetchSpec {
-	return FetchSpec{
-		Name: name, Size: int64(len(body)), SHA256: testDigest(body),
-		Fetch: func(_ context.Context, _ string, dst io.Writer) error {
-			_, err := io.WriteString(dst, body)
-			return err
-		},
-	}
-}
-
 func TestAcquireFileRejectsReservedAndNonportableNamesBeforeCreatingCache(t *testing.T) {
 	for _, name := range []string{
 		"", ".", "..", "/absolute", "nested/asset", `nested\asset`,
@@ -1018,5 +1104,138 @@ func TestAcquireFileAllowsNonreservedPortableNames(t *testing.T) {
 				t.Fatalf("acquired contents = %q, %v; want payload", data, err)
 			}
 		})
+	}
+}
+
+func TestOpenAcquiredFileRejectsChangedAssetsAndReleasesLease(t *testing.T) {
+	for _, change := range []string{"removed", "different size", "different digest", "directory"} {
+		t.Run(change, func(t *testing.T) {
+			root := t.TempDir()
+			spec := acquireTestSpec("asset", "trusted")
+			path, err := acquirePath(t.Context(), root, spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := ErrDigestMismatch
+			switch change {
+			case "removed", "directory":
+				err = os.Remove(path)
+				want = os.ErrNotExist
+				if err == nil && change == "directory" {
+					err = os.Mkdir(path, 0o700)
+					want = ErrUnsafeArchive
+				}
+			case "different size":
+				err = os.WriteFile(path, []byte("too long"), 0o600)
+			case "different digest":
+				err = os.WriteFile(path, []byte("changed"), 0o600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec.Fetch = func(context.Context, string, io.Writer) error {
+				t.Error("opening an acquired file unexpectedly fetched a replacement")
+				return errors.New("unexpected fetch")
+			}
+			file, err := openAcquiredFile(t.Context(), root, spec)
+			if file != nil {
+				_ = file.Close()
+			}
+			if file != nil || !errors.Is(err, want) {
+				t.Fatalf("open changed asset = %v, %v; want %v", file, err, want)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			lease, err := (CrossProcessLockProvider{}).AcquireExclusive(ctx, path)
+			if err != nil {
+				t.Fatalf("failed verification retained shared lease: %v", err)
+			}
+			if err := lease.Close(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestOpenAcquiredFileRejectsReplacedRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "cache")
+	spec := acquireTestSpec("asset", "trusted")
+	if _, err := acquirePath(t.Context(), root, spec); err != nil {
+		t.Fatal(err)
+	}
+	retired := root + ".old"
+	if err := os.Rename(root, retired); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := openAcquiredFile(t.Context(), root, spec)
+	if file != nil {
+		_ = file.Close()
+	}
+	if file != nil || !errors.Is(err, ErrUnsafeArchive) {
+		t.Fatalf("open replaced root = %v, %v; want ErrUnsafeArchive", file, err)
+	}
+	for path, want := range map[string]string{
+		root: "replacement", filepath.Join(retired, spec.Name): "trusted",
+	} {
+		if got, err := os.ReadFile(path); err != nil || string(got) != want {
+			t.Fatalf("file %q after rejected open = %q, %v; want %q", path, got, err, want)
+		}
+	}
+}
+
+func TestOpenAcquiredFileCancellationLeavesCacheUsable(t *testing.T) {
+	root := t.TempDir()
+	spec := acquireTestSpec("asset", "trusted")
+	if _, err := acquirePath(t.Context(), root, spec); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	file, err := openAcquiredFile(ctx, root, spec)
+	if file != nil {
+		_ = file.Close()
+	}
+	if file != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled open = %v, %v; want context.Canceled", file, err)
+	}
+	spec.Offline = true
+	file, err = AcquireFile(t.Context(), root, spec)
+	if err != nil {
+		t.Fatalf("reopen cached asset after cancellation: %v", err)
+	}
+	defer file.Close()
+	if got, err := io.ReadAll(file); err != nil || string(got) != "trusted" {
+		t.Fatalf("cached asset after cancellation = %q, %v; want trusted", got, err)
+	}
+}
+
+func (w acquireTestWriter) Write(data []byte) (int, error) { return w(data) }
+
+func acquireTestEntryNames(t *testing.T, root string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".lock") {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	return names
+}
+
+func acquireTestSpec(name, body string) FetchSpec {
+	return FetchSpec{
+		Name: name, Size: int64(len(body)), SHA256: testDigest(body),
+		Fetch: func(_ context.Context, _ string, dst io.Writer) error {
+			_, err := io.WriteString(dst, body)
+			return err
+		},
 	}
 }

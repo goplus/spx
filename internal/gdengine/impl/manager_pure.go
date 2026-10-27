@@ -103,8 +103,6 @@ type uiMgr struct {
 	enginewrap.UiMgrImpl
 }
 
-func (*platformMgr) IsMainThread() bool { return true }
-
 func BindMgr(mgrs []IManager) {
 	for _, mgr := range mgrs {
 		switch v := mgr.(type) {
@@ -163,3 +161,5 @@ func CreateMgrs() []IManager {
 		&uiMgr{},
 	}
 }
+
+func (*platformMgr) IsMainThread() bool { return true }

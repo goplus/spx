@@ -39,10 +39,7 @@ func MatchValue[T comparable](want T) func(any) bool {
 func MatchAnyOf[T comparable](values []T) func(any) bool {
 	return func(data any) bool {
 		got, ok := data.(T)
-		if !ok {
-			return false
-		}
-		return slices.Contains(values, got)
+		return ok && slices.Contains(values, got)
 	}
 }
 

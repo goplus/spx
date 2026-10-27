@@ -74,28 +74,28 @@ func ResolveInstalledRuntime(directories []string, names RuntimeNames) (Assets, 
 // ValidateFiles checks a complete runtime before it is run or packaged.
 // Acquisition still owns content hashes, release identity and use leases;
 // this shared check never substitutes file names for those guarantees.
-func (assets Assets) ValidateFiles(names RuntimeNames) error {
+func (a Assets) ValidateFiles(names RuntimeNames) error {
 	if err := names.validate(); err != nil {
 		return err
 	}
-	return assets.validateFiles(names)
+	return a.validateFiles(names)
 }
 
-func (assets Assets) validateFiles(names RuntimeNames) error {
-	if err := validateNamedRuntimeFile("Engine", assets.EnginePath, names.Engine); err != nil {
+func (a Assets) validateFiles(names RuntimeNames) error {
+	if err := validateNamedRuntimeFile("Engine", a.EnginePath, names.Engine); err != nil {
 		return err
 	}
-	if err := validateNamedRuntimeFile("runtime pack", assets.PackPath, names.Pack); err != nil {
+	if err := validateNamedRuntimeFile("runtime pack", a.PackPath, names.Pack); err != nil {
 		return err
 	}
-	if filepath.Dir(assets.EnginePath) != filepath.Dir(assets.PackPath) {
+	if filepath.Dir(a.EnginePath) != filepath.Dir(a.PackPath) {
 		return fmt.Errorf("launchpack: Engine and runtime pack must share one directory")
 	}
-	return validateNamedRuntimeFile("interpreter bridge", assets.BridgePath, names.Bridge)
+	return validateNamedRuntimeFile("interpreter bridge", a.BridgePath, names.Bridge)
 }
 
-func (names RuntimeNames) validate() error {
-	for _, name := range []string{names.Engine, names.Pack, names.Bridge} {
+func (n RuntimeNames) validate() error {
+	for _, name := range []string{n.Engine, n.Pack, n.Bridge} {
 		if name == "" || name == "." || name == ".." || filepath.Base(name) != name || strings.ContainsAny(name, `/\\`) {
 			return fmt.Errorf("launchpack: invalid runtime file name %q", name)
 		}
@@ -103,18 +103,18 @@ func (names RuntimeNames) validate() error {
 	// A Unix version can itself end in .exe; Windows adds one executable
 	// suffix after the version. Accept either spelling without stripping a
 	// suffix that belongs to the version.
-	if !strings.HasPrefix(names.Engine, release.RuntimeTag) ||
-		(names.Pack != names.Engine+".pck" && names.Pack != strings.TrimSuffix(names.Engine, ".exe")+".pck") {
+	if !strings.HasPrefix(n.Engine, release.RuntimeTag) ||
+		(n.Pack != n.Engine+".pck" && n.Pack != strings.TrimSuffix(n.Engine, ".exe")+".pck") {
 		return fmt.Errorf("launchpack: Engine and runtime pack file names must identify the same version")
 	}
 	return nil
 }
 
-func (names RuntimeNames) inDirectory(directory string) Assets {
+func (n RuntimeNames) inDirectory(directory string) Assets {
 	return Assets{
-		EnginePath: filepath.Join(directory, names.Engine),
-		PackPath:   filepath.Join(directory, names.Pack),
-		BridgePath: filepath.Join(directory, names.Bridge),
+		EnginePath: filepath.Join(directory, n.Engine),
+		PackPath:   filepath.Join(directory, n.Pack),
+		BridgePath: filepath.Join(directory, n.Bridge),
 	}
 }
 
