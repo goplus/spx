@@ -13,7 +13,7 @@ while IFS= read -r package; do
   # A trailing slash matches both a package tree's root and its children.
   case "$package/" in
     # Exclude examples and generated bindings (covered through pkg/ispx).
-    /|*/internal/webffi*|\
+    /|\
     "$module_path"/test/*|"$module_path"/tutorial/*|\
     "$module_path"/pkg/ispx/internal/pkg/*) continue ;;
   esac

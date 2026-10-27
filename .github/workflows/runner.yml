@@ -12,10 +12,54 @@ jobs:
   static-checks:
     name: Static checks
     uses: ./.github/workflows/static_checks.yml
+    with:
+      collect_coverage: true
 
   go-builds:
     name: Go builds
     uses: ./.github/workflows/go_builds.yml
+
+  coverage:
+    name: Upload combined coverage
+    needs: [static-checks, go-builds]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage
+
+      - name: Collect coverage profiles
+        id: profiles
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          profiles = []
+          for source in ("static", "macos", "windows"):
+              directory = Path("coverage") / f"coverage-{source}"
+              reports = [path.as_posix() for path in directory.rglob("*.out") if path.is_file()]
+              if not reports:
+                  raise SystemExit(f"No coverage profiles found for {source}")
+              profiles.extend(reports)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"coverage={','.join(sorted(profiles))}\n")
+          PY
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: ${{ steps.profiles.outputs.coverage }}
+          disable_search: true
 
   runtime-resolution:
     name: Resolve published runtime
@@ -84,6 +128,7 @@ jobs:
     needs:
       - static-checks
       - go-builds
+      - coverage
       - runtime-resolution
       - spx-module-integration
       - web-build
@@ -94,6 +139,7 @@ jobs:
         env:
           STATIC_CHECKS_RESULT: ${{ needs.static-checks.result }}
           GO_BUILDS_RESULT: ${{ needs.go-builds.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
           RUNTIME_RESOLUTION_RESULT: ${{ needs.runtime-resolution.result }}
           RUNTIME_STATE: ${{ needs.runtime-resolution.outputs.runtime_state }}
           RUNTIME_REASON: ${{ needs.runtime-resolution.outputs.runtime_reason }}
@@ -114,6 +160,7 @@ jobs:
 
           require_job_result static-checks "$STATIC_CHECKS_RESULT" success
           require_job_result go-builds "$GO_BUILDS_RESULT" success
+          require_job_result coverage "$COVERAGE_RESULT" success
           require_job_result runtime-resolution "$RUNTIME_RESOLUTION_RESULT" success
 
           case "$RUNTIME_STATE" in

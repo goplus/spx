@@ -3,10 +3,6 @@ name: Build Runtime Assets
 on:
   workflow_call:
 
-concurrency:
-  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-runtime-assets
-  cancel-in-progress: true
-
 jobs:
   runtime-assets:
     name: Build runtime assets

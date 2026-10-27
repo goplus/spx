@@ -543,15 +543,15 @@ jobs:
             exit 1
           fi
 
-          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
+          if release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,assets 2>/dev/null)"; then
+            is_draft="$(jq -r .isDraft <<< "$release_json")"
             if [ "$is_draft" != true ]; then
               mkdir -p published
               gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
               (cd published && sha256sum -c SHA256SUMS)
               if ! diff -u \
                 <(find dist -maxdepth 1 -type f -printf '%f\n' | sort) \
-                <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort); then
+                <(jq -r '.assets[].name' <<< "$release_json" | sort); then
                 echo "[error] Runtime tag $RELEASE_TAG has an unexpected asset set" >&2
                 exit 1
               fi
@@ -564,7 +564,7 @@ jobs:
             fi
             while IFS= read -r name; do
               [ -z "$name" ] || gh release delete-asset "$RELEASE_TAG" "$name" --repo "$REPOSITORY" --yes
-            done < <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')
+            done < <(jq -r '.assets[].name' <<< "$release_json")
           else
             gh release create "$RELEASE_TAG" \
               --repo "$REPOSITORY" \
@@ -600,14 +600,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
-            is_draft="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)"
+          if release_json="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json isDraft,assets 2>/dev/null)"; then
+            is_draft="$(jq -r .isDraft <<< "$release_json")"
             if [ "$is_draft" != true ]; then
               mkdir -p published
               gh release download "$RELEASE_TAG" --repo "$REPOSITORY" --dir published
               (cd published && sha256sum -c SHA256SUMS)
               find dist -maxdepth 1 -type f -printf '%f\n' | sort > published/local-assets.txt
-              gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | sort > published/remote-assets.txt
+              jq -r '.assets[].name' <<< "$release_json" | sort > published/remote-assets.txt
               if cmp -s dist/SHA256SUMS published/SHA256SUMS && \
                 cmp -s published/local-assets.txt published/remote-assets.txt; then
                 echo "[info] Identical SPX release already exists: $RELEASE_TAG"
@@ -618,7 +618,7 @@ jobs:
             fi
             while IFS= read -r name; do
               [ -z "$name" ] || gh release delete-asset "$RELEASE_TAG" "$name" --repo "$REPOSITORY" --yes
-            done < <(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')
+            done < <(jq -r '.assets[].name' <<< "$release_json")
           else
             gh release create "$RELEASE_TAG" \
               --repo "$REPOSITORY" \
@@ -731,8 +731,6 @@ jobs:
     uses: ./.github/workflows/publish_web_package.yml
     with:
       target: ${{ github.sha }}
-      release_version: ''
-      release_artifact: ''
 
   finalize-spx:
     name: Finalize SPX release
