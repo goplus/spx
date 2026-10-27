@@ -3,7 +3,7 @@ module github.com/goplus/spx/v4/cmd/ispx
 go 1.26.0
 
 require (
-	github.com/goplus/ixgo v1.2.5
+	github.com/goplus/ixgo v1.2.6
 	github.com/goplus/spx/v4 v4.0.0
 )
 
