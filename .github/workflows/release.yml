@@ -442,8 +442,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 1
 
       - name: Set up locked Go and XGo
         uses: ./.github/actions/deps
@@ -503,7 +501,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
           persist-credentials: false
 
       - name: Revalidate locked Godot ancestry before publishing

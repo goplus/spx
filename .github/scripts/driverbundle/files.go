@@ -62,7 +62,7 @@ func openRegularFile(path string) (*os.File, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+	if !info.Mode().IsRegular() {
 		return nil, nil, &notRegularError{path: path}
 	}
 	file, err := os.Open(path)
