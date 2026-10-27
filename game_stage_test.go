@@ -43,25 +43,33 @@ type targetLookupSprite struct {
 	SpriteImpl
 }
 
-func (*targetLookupSprite) Main() {}
-
-func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
-	sprite := &targetLookupSprite{}
-	sprite.g = g
-	sprite.name = name
-	sprite.sprite = sprite
-	sprite.spriteState.Cloned = cloned
-	return sprite
-}
-
-func (a *targetPropertyActor) Health() float64 {
-	return a.Power
-}
-
 type targetPropertyGame struct {
 	Game
 	StageScore int
 	Actor      targetPropertyActor
+}
+
+type stagePlanGame struct {
+	Game
+	Value    collisionLayerOrderSprite
+	Pointer  *collisionLayerOrderSprite
+	Dynamic  Sprite
+	values   []collisionLayerOrderSprite
+	pointers []*collisionLayerOrderSprite
+}
+
+type gameNavigationMgr struct {
+	pkgengine.INavigationMgr
+	grid, cell, from, to mathf.Vec2
+	jump, debug          bool
+	setups               int
+}
+
+type gameBackdropSpriteMgr struct {
+	pkgengine.ISpriteMgr
+	repeat        mathf.Vec4
+	position      mathf.Vec2
+	positionCalls int
 }
 
 func TestGameUsernameReturnsConfiguredUsername(t *testing.T) {
@@ -208,15 +216,6 @@ func TestGameGetTargetPropertyTargetMethod(t *testing.T) {
 	if got.Float() != 3.5 {
 		t.Fatalf("Actor.Health = %v, want 3.5", got.Float())
 	}
-}
-
-type stagePlanGame struct {
-	Game
-	Value    collisionLayerOrderSprite
-	Pointer  *collisionLayerOrderSprite
-	Dynamic  Sprite
-	values   []collisionLayerOrderSprite
-	pointers []*collisionLayerOrderSprite
 }
 
 func TestStageUsesDirectFieldsAndPreservesSpriteOrder(t *testing.T) {
@@ -514,22 +513,6 @@ func TestGamePropertyResolutionScopes(t *testing.T) {
 	}
 }
 
-type gameNavigationMgr struct {
-	pkgengine.INavigationMgr
-	grid, cell, from, to mathf.Vec2
-	jump, debug          bool
-	setups               int
-}
-
-func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
-	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
-	m.setups++
-}
-func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) pkgengine.Array {
-	m.from, m.to, m.jump = from, to, jump
-	return []float32{1, 2, 3, 4}
-}
-
 func TestGamePathFinderConfigurationAndQueries(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	previous := pkgengine.NavigationMgr
@@ -657,35 +640,6 @@ func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
 	}
 }
 
-type gameBackdropSpriteMgr struct {
-	pkgengine.ISpriteMgr
-	repeat        mathf.Vec4
-	position      mathf.Vec2
-	positionCalls int
-}
-
-func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect string, x, y, z, w float64) {
-	if effect == "repeat_scale" {
-		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
-	}
-}
-func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
-	m.position = pos
-	m.positionCalls++
-}
-
-// Stage-focused tests execute the same prepare/apply phases as project loading,
-// while retaining the already-live sprite fixtures they supply.
-func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
-	plan := projectPlan{sprites: make(map[string]spritePlan)}
-	var err error
-	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
-	if err != nil {
-		return nil, err
-	}
-	return p.applyStageEntries(gamer, &plan), nil
-}
-
 func TestStagePreparationChecksInitFromOnlyForNonemptyGroups(t *testing.T) {
 	for _, test := range []struct {
 		name  string
@@ -712,4 +666,125 @@ func TestStagePreparationChecksInitFromOnlyForNonemptyGroups(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSpritePropertiesDistinguishMissingAndZeroValues(t *testing.T) {
+	newSprite := func() *SpriteImpl {
+		sprite := &SpriteImpl{}
+		sprite.components.transform = &transformComponent{
+			x:             10,
+			y:             20,
+			direction:     30,
+			rotationStyle: LeftRight,
+		}
+		sprite.spriteState.IsVisible = true
+		sprite.spriteState.Cloned = true
+		sprite.runtimeState.Scale = 2
+		sprite.costumeIndex = 3
+		return sprite
+	}
+
+	missing, err := parseSpriteProperties(coreproject.StageShape{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unchanged := newSprite()
+	applySpriteProperties(unchanged, missing)
+	if transform := unchanged.transform(); transform.x != 10 || transform.y != 20 ||
+		transform.direction != 30 || transform.rotationStyle != LeftRight {
+		t.Fatalf("missing properties changed transform: %+v", transform)
+	}
+	if !unchanged.spriteState.IsVisible || unchanged.runtimeState.Scale != 2 || unchanged.costumeIndex != 3 {
+		t.Fatalf("missing properties changed sprite: %+v", unchanged)
+	}
+
+	zero, err := parseSpriteProperties(coreproject.StageShape{
+		"x": 0.0, "y": 0.0, "heading": 0.0,
+		"rotationStyle": "none", "visible": false,
+		"size": 0.0, "costumeIndex": 0.0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset := newSprite()
+	applySpriteProperties(reset, zero)
+	if transform := reset.transform(); transform.x != 0 || transform.y != 0 ||
+		transform.direction != 0 || transform.rotationStyle != None {
+		t.Fatalf("zero properties were not applied to transform: %+v", transform)
+	}
+	if reset.spriteState.IsVisible || reset.runtimeState.Scale != 0 || reset.costumeIndex != 0 {
+		t.Fatalf("zero properties were not applied to sprite: %+v", reset)
+	}
+}
+
+func TestParseSpritePropertiesRejectsWrongTypes(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"x", "0", "float64"},
+		{"y", true, "float64"},
+		{"heading", nil, "float64"},
+		{"rotationStyle", 0.0, "string"},
+		{"visible", 0.0, "bool"},
+		{"size", "small", "float64"},
+		{"costumeIndex", 0, "float64"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parseSpriteProperties(coreproject.StageShape{test.name: test.value})
+			if err == nil || !strings.Contains(err.Error(), "want "+test.want) {
+				t.Fatalf("parseSpriteProperties error = %v, want type %s", err, test.want)
+			}
+		})
+	}
+}
+
+func (*targetLookupSprite) Main() {}
+
+func (a *targetPropertyActor) Health() float64 {
+	return a.Power
+}
+
+func (m *gameNavigationMgr) SetupPathFinderWithSize(grid, cell mathf.Vec2, jump, debug bool) {
+	m.grid, m.cell, m.jump, m.debug = grid, cell, jump, debug
+	m.setups++
+}
+
+func (m *gameNavigationMgr) FindPath(from, to mathf.Vec2, jump bool) pkgengine.Array {
+	m.from, m.to, m.jump = from, to, jump
+	return []float32{1, 2, 3, 4}
+}
+
+func (m *gameBackdropSpriteMgr) SetMaterialParamsVec(_ pkgengine.Object, effect string, x, y, z, w float64) {
+	if effect == "repeat_scale" {
+		m.repeat = mathf.Vec4{X: x, Y: y, Z: z, W: w}
+	}
+}
+
+func (m *gameBackdropSpriteMgr) SetPosition(_ pkgengine.Object, pos mathf.Vec2) {
+	m.position = pos
+	m.positionCalls++
+}
+
+// Stage-focused tests execute the same prepare/apply phases as project loading,
+// while retaining the already-live sprite fixtures they supply.
+func (p *Game) loadStageEntries(gamer reflect.Value, entries []any) ([]Sprite, error) {
+	plan := projectPlan{sprites: make(map[string]spritePlan)}
+	var err error
+	plan.stage, err = p.prepareStageEntries(p.fs, gamer, entries, &plan)
+	if err != nil {
+		return nil, err
+	}
+	return p.applyStageEntries(gamer, &plan), nil
+}
+
+func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprite {
+	sprite := &targetLookupSprite{}
+	sprite.g = g
+	sprite.name = name
+	sprite.sprite = sprite
+	sprite.spriteState.Cloned = cloned
+	return sprite
 }

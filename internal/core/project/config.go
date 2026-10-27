@@ -225,18 +225,6 @@ type SoundConfig struct {
 	SampleCount int    `json:"sampleCount"`
 }
 
-func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
-	return p.Backdrops
-}
-
-func (p *ProjectConfig) GetBackdropIndex() int {
-	return p.BackdropIndex
-}
-
-func (p *SpriteConfig) GetCostumeIndex() int {
-	return p.CostumeIndex
-}
-
 func ToMapMode(mode string) int {
 	switch mode {
 	case "repeat":
@@ -249,4 +237,16 @@ func ToMapMode(mode string) int {
 		return MapModeFillRatio
 	}
 	return MapModeFill
+}
+
+func (p *ProjectConfig) GetBackdrops() []*BackdropConfig {
+	return p.Backdrops
+}
+
+func (p *ProjectConfig) GetBackdropIndex() int {
+	return p.BackdropIndex
+}
+
+func (p *SpriteConfig) GetCostumeIndex() int {
+	return p.CostumeIndex
 }

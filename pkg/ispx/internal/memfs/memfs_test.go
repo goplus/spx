@@ -42,38 +42,6 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func openTestFile(t *testing.T, fsys *FS, name string) fs.File {
-	t.Helper()
-	file, err := fsys.Open(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := file.Close(); err != nil {
-			t.Errorf("Close(%q): %v", name, err)
-		}
-	})
-	return file
-}
-
-func assertFileInfo(t *testing.T, info fs.FileInfo, name string, size int64, mode fs.FileMode) {
-	t.Helper()
-	if info.Name() != name || info.Size() != size || info.Mode() != mode || info.IsDir() != mode.IsDir() {
-		t.Errorf("metadata = (%q, %d, %v, directory=%v), want (%q, %d, %v)", info.Name(), info.Size(), info.Mode(), info.IsDir(), name, size, mode)
-	}
-	if !info.ModTime().Equal(time.Unix(0, 0)) || info.Sys() != nil {
-		t.Errorf("metadata time/sys = (%v, %v), want Unix epoch and nil", info.ModTime(), info.Sys())
-	}
-}
-
-func assertPathError(t *testing.T, err error, op, name string, want error) {
-	t.Helper()
-	var pathErr *fs.PathError
-	if !errors.As(err, &pathErr) || pathErr.Op != op || pathErr.Path != name || pathErr.Err != want || !errors.Is(err, want) {
-		t.Fatalf("error = %v, want PathError{%q, %q, %v}", err, op, name, want)
-	}
-}
-
 func TestFileAndDirectoryMetadata(t *testing.T) {
 	fsys := New(map[string][]byte{
 		"file.txt":        []byte("hello"),
@@ -301,5 +269,37 @@ func TestDirReadDirReportsRemovedDirectoryAndCanRetry(t *testing.T) {
 	entries, err = directory.ReadDir(1)
 	if err != nil || len(entries) != 1 || entries[0].Name() != "restored.txt" {
 		t.Fatalf("retry after failed listing = %v, %v", entries, err)
+	}
+}
+
+func openTestFile(t *testing.T, fsys *FS, name string) fs.File {
+	t.Helper()
+	file, err := fsys.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("Close(%q): %v", name, err)
+		}
+	})
+	return file
+}
+
+func assertFileInfo(t *testing.T, info fs.FileInfo, name string, size int64, mode fs.FileMode) {
+	t.Helper()
+	if info.Name() != name || info.Size() != size || info.Mode() != mode || info.IsDir() != mode.IsDir() {
+		t.Errorf("metadata = (%q, %d, %v, directory=%v), want (%q, %d, %v)", info.Name(), info.Size(), info.Mode(), info.IsDir(), name, size, mode)
+	}
+	if !info.ModTime().Equal(time.Unix(0, 0)) || info.Sys() != nil {
+		t.Errorf("metadata time/sys = (%v, %v), want Unix epoch and nil", info.ModTime(), info.Sys())
+	}
+}
+
+func assertPathError(t *testing.T, err error, op, name string, want error) {
+	t.Helper()
+	var pathErr *fs.PathError
+	if !errors.As(err, &pathErr) || pathErr.Op != op || pathErr.Path != name || pathErr.Err != want || !errors.Is(err, want) {
+		t.Fatalf("error = %v, want PathError{%q, %q, %v}", err, op, name, want)
 	}
 }

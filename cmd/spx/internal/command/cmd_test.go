@@ -34,34 +34,6 @@ import (
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
-func writeCommandTestFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func readTestFile(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	return string(data)
-}
-
-func setTestCommandLine(t *testing.T, args ...string) {
-	t.Helper()
-	oldFlags, oldArgs := flag.CommandLine, os.Args
-	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
-	flag.CommandLine.SetOutput(io.Discard)
-	os.Args = args
-	t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
-}
-
 func TestRunCmdRejectsInvalidFlags(t *testing.T) {
 	for _, args := range [][]string{
 		{"--goenv", "/tmp/goenv"},
@@ -657,43 +629,6 @@ func TestInitReportsScaffoldWriteFailures(t *testing.T) {
 	}
 }
 
-// installCommandTestTools isolates command lookup so no host SDK or browser can
-// accidentally run when a test exercises external-tool orchestration.
-func installCommandTestTools(t *testing.T, scripts map[string]string) string {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("fake command tools use POSIX shell scripts")
-	}
-	binDir := t.TempDir()
-	for name, script := range scripts {
-		if err := os.WriteFile(filepath.Join(binDir, name), []byte("#!/bin/sh\nset -eu\n"+script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Setenv("PATH", binDir)
-	return binDir
-}
-
-// Restrict only a temporary test fixture; restore its mode before TempDir cleanup.
-func restrictCommandTestPath(t *testing.T, name string, mode os.FileMode) {
-	t.Helper()
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("requires POSIX permissions enforced for an unprivileged user")
-	}
-	info, err := os.Stat(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(name, mode); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chmod(name, info.Mode().Perm()); err != nil && !os.IsNotExist(err) {
-			t.Errorf("restore fixture permissions: %v", err)
-		}
-	})
-}
-
 func TestCommandRejectsUnsupportedInternalModes(t *testing.T) {
 	cmd := &CmdTool{Args: ExtraArgs{Tags: launcherStringPointer("pure_engine")}}
 	for _, tc := range []struct {
@@ -1002,4 +937,69 @@ func TestHideIOSFilesPreservesDirectoryBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func writeCommandTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
+func setTestCommandLine(t *testing.T, args ...string) {
+	t.Helper()
+	oldFlags, oldArgs := flag.CommandLine, os.Args
+	flag.CommandLine = flag.NewFlagSet("spx", flag.ContinueOnError)
+	flag.CommandLine.SetOutput(io.Discard)
+	os.Args = args
+	t.Cleanup(func() { flag.CommandLine, os.Args = oldFlags, oldArgs })
+}
+
+// installCommandTestTools isolates command lookup so no host SDK or browser can
+// accidentally run when a test exercises external-tool orchestration.
+func installCommandTestTools(t *testing.T, scripts map[string]string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("fake command tools use POSIX shell scripts")
+	}
+	binDir := t.TempDir()
+	for name, script := range scripts {
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte("#!/bin/sh\nset -eu\n"+script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", binDir)
+	return binDir
+}
+
+// Restrict only a temporary test fixture; restore its mode before TempDir cleanup.
+func restrictCommandTestPath(t *testing.T, name string, mode os.FileMode) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions enforced for an unprivileged user")
+	}
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, mode); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(name, info.Mode().Perm()); err != nil && !os.IsNotExist(err) {
+			t.Errorf("restore fixture permissions: %v", err)
+		}
+	})
 }

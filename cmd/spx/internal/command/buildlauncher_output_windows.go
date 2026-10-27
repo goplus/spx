@@ -26,6 +26,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+var replaceFileW = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReplaceFileW")
+
+const replaceFileWriteThrough = 1
+
 func outputPathsEqual(left, right string) bool {
 	return strings.EqualFold(left, right)
 }
@@ -50,10 +54,6 @@ func launcherOutputAliasAllowed(existing, resolved string) bool {
 func launcherStageIsExecutable(info os.FileInfo) bool {
 	return info.Size() > 0
 }
-
-var replaceFileW = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReplaceFileW")
-
-const replaceFileWriteThrough = 1
 
 func replaceExistingLauncherOutput(stage, final string) error {
 	finalName, err := windows.UTF16PtrFromString(final)

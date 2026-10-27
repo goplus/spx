@@ -18,12 +18,15 @@ package spx
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/engine/profiler"
 	itime "github.com/goplus/spx/v4/internal/time"
+	"github.com/goplus/spx/v4/internal/ui"
 )
 
 // -----------------------------------------------------------------------------
@@ -98,6 +101,28 @@ func (p *Game) OnEngineUpdate(float64) {
 	})
 }
 
+func (p *Game) OnEngineRender(float64) {
+	runBetweenScripts(func() {
+		defer p.flushPenCommands()
+		if !p.lifecycleState.IsRunned.Load() {
+			return
+		}
+		p.camera.onUpdate()
+		activeShapes := p.shapeMgr.getTempShapes()
+		p.flushSpriteProxyChanges(activeShapes)
+		p.shapeMgr.flushBubbleVisuals(activeShapes)
+	})
+}
+
+// OnEngineFrameEnd pauses completed replays after rendering and capture.
+func (p *Game) OnEngineFrameEnd() {
+	p.finishInputSessionFrame()
+}
+
+func (p *Game) OnEnginePause(bool) {
+	// Pause is handled by engine managers.
+}
+
 // dispatchShapeUpdates runs under the managed frame dispatcher. Each shape's
 // first slice precedes event registration; future-frame waits stay independent.
 func (p *Game) dispatchShapeUpdates() {
@@ -121,28 +146,6 @@ func (p *Game) dispatchShapeUpdates() {
 		}
 	}
 	gco.StartBatch(tasks, coroutine.BatchWaitFirstSlice)
-}
-
-func (p *Game) OnEngineRender(float64) {
-	runBetweenScripts(func() {
-		defer p.flushPenCommands()
-		if !p.lifecycleState.IsRunned.Load() {
-			return
-		}
-		p.camera.onUpdate()
-		activeShapes := p.shapeMgr.getTempShapes()
-		p.flushSpriteProxyChanges(activeShapes)
-		p.shapeMgr.flushBubbleVisuals(activeShapes)
-	})
-}
-
-// OnEngineFrameEnd pauses completed replays after rendering and capture.
-func (p *Game) OnEngineFrameEnd() {
-	p.finishInputSessionFrame()
-}
-
-func (p *Game) OnEnginePause(bool) {
-	// Pause is handled by engine managers.
 }
 
 // -----------------------------------------------------------------------------
@@ -208,6 +211,70 @@ func (p *Game) takeStartSinks(generation uint64) ([]eventSink, bool) {
 
 func (p *Game) markStartDispatched(generation uint64) bool {
 	return p.markBootstrapFlag(generation, &p.lifecycleState.StartDispatched)
+}
+
+func (p *Game) initLogicLoop() {
+	gco.Create("logicLoop", p.logicLoop)
+}
+
+func (p *Game) logicLoop(coroutine.Thread) {
+	tempAudios, tempAnimations := []string{}, []*animState{}
+	for {
+		tempAudios, tempAnimations = p.processLogicFrame(tempAudios, tempAnimations)
+		engine.WaitNextFrame()
+		p.showDebugPanel()
+	}
+}
+
+func (p *Game) processLogicFrame(tempAudios []string, tempAnimations []*animState) ([]string, []*animState) {
+	items := p.shapeMgr.getTempShapes()
+	// Flush all pending audio before completing any animations.
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			tempAudios = sprite.flushPendingAudios(tempAudios)
+		}
+	}
+	for _, item := range items {
+		if sprite, ok := item.(*SpriteImpl); ok {
+			tempAnimations = sprite.flushCompletedAnimations(tempAnimations)
+		}
+	}
+	return tempAudios, tempAnimations
+}
+
+func (p *Game) showDebugPanel() {
+	profiler.Debug = p.debugState.Debug
+	if !p.debugState.Debug {
+		if p.debugState.DebugPanel != nil {
+			p.debugState.DebugPanel.Destroy()
+			p.debugState.DebugPanel = nil
+		}
+		return
+	}
+	if p.debugState.DebugPanel == nil {
+		p.debugState.DebugPanel = ui.NewUiDebug()
+	}
+
+	updateInfo, _ := profiler.GetStats("GameUpdate")
+	coroInfo, _ := profiler.GetStats("CoroUpdateJobs")
+	renderInfo, _ := profiler.GetStats("GameRender")
+	lastInfo := gco.UpdateStats()
+
+	msg := fmt.Sprintf("FPS: %.f\n", itime.FPS())
+	msg += fmt.Sprintf("Shape: %v\n", p.shapeMgr.count())
+	msg += fmt.Sprintf("GameUpdate: %v\n", updateInfo.ActualCall)
+	msg += fmt.Sprintf("GameRender: %v\n", renderInfo.ActualCall)
+	msg += fmt.Sprintf("CoroUpdateJobs: %v\n", coroInfo.ActualCall)
+	msg += fmt.Sprintf("coro: MoveTime: %.2f\n", lastInfo.MoveTime)
+	msg += fmt.Sprintf("coro: WaitTime: %.2f\n", lastInfo.WaitTime)
+	msg += fmt.Sprintf("coro: TaskProcessing: %.2f\n", lastInfo.JobTime)
+	msg += fmt.Sprintf("coro: TaskCounts: %v\n", lastInfo.JobCount)
+	msg += fmt.Sprintf("coro: WaitFrameCount: %v\n", lastInfo.FrameWaitCount)
+	msg += fmt.Sprintf("coro: WaitMainCount: %v\n", lastInfo.MainThreadCount)
+	msg += fmt.Sprintf("coro: NextCount: %v\n", lastInfo.DeferredCount)
+	msg += fmt.Sprintf("coro: GCCount: %v\n", lastInfo.GCCount)
+	msg += fmt.Sprintf("coro: LoopIterations: %v\n", lastInfo.LoopIterations)
+	p.debugState.DebugPanel.Show(msg)
 }
 
 // -----------------------------------------------------------------------------

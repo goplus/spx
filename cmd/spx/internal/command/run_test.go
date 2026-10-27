@@ -32,6 +32,11 @@ import (
 	"github.com/goplus/spx/v4/internal/scaffold"
 )
 
+type webServerProcessStub struct {
+	stop      func(int) (bool, error)
+	listeners func(int) ([]int, error)
+}
+
 func TestRunWebCommandOrderAndErrors(t *testing.T) {
 	failure := errors.New("step failed")
 	for _, tt := range []struct {
@@ -562,17 +567,6 @@ func TestRuntimeSearchDirectoriesPreserveOrderAndDeduplicate(t *testing.T) {
 	}
 }
 
-func mustWriteAssetIndex(t *testing.T, projectDir string) {
-	t.Helper()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := os.MkdirAll(assetDir, 0o755); err != nil {
-		t.Fatalf("mkdir assets: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(assetDir, "index.json"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatalf("write assets/index.json: %v", err)
-	}
-}
-
 func TestStopWebIgnoresInvalidPIDFile(t *testing.T) {
 	targetDir := t.TempDir()
 	cmd := CmdTool{TargetDir: targetDir}
@@ -599,109 +593,6 @@ func TestWebServerPIDPathUsesAbsoluteTargetDir(t *testing.T) {
 	want := filepath.Join(targetDir, ".gdspx_web_server.pid")
 	if got != want {
 		t.Fatalf("webServerPIDPath = %s, want %s", got, want)
-	}
-}
-
-func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir runtime dir: %v", err)
-	}
-
-	var script string
-	if runtime.GOOS == "windows" {
-		script = fmt.Sprintf("@echo off\r\ncd > %q\r\nfor %%%%a in (%%*) do @echo %%%%a>>%q\r\necho SPX_PROJECT_DIR=%%SPX_PROJECT_DIR%%>>%q\r\necho SPX_ASSET_DIR=%%SPX_ASSET_DIR%%>>%q\r\necho SPX_SESSION_DIR=%%SPX_SESSION_DIR%%>>%q\r\n", logPath, logPath, logPath, logPath, logPath)
-	} else {
-		script = fmt.Sprintf("#!/bin/sh\npwd > %q\nprintf '%%s\\n' \"$@\" >> %q\nprintf 'SPX_PROJECT_DIR=%%s\\nSPX_ASSET_DIR=%%s\\nSPX_SESSION_DIR=%%s\\n' \"$SPX_PROJECT_DIR\" \"$SPX_ASSET_DIR\" \"$SPX_SESSION_DIR\" >> %q\n", logPath, logPath, logPath)
-	}
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatalf("write runtime executable: %v", err)
-	}
-}
-
-func writePureEngineTestProject(t *testing.T, goDir string) {
-	t.Helper()
-	for name, content := range map[string]string{
-		"go.mod": "module example.com/pureenginetest\n\ngo 1.23\n",
-		"main.go": `package main
-
-import (
-	"os"
-	"strings"
-)
-
-func main() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fields := append([]string{cwd, requiredTag}, os.Args[2:]...)
-	if err := os.WriteFile(os.Args[1], []byte(strings.Join(fields, "\n")), 0o644); err != nil {
-		panic(err)
-	}
-}
-`,
-		"tag.go": `//go:build pure_test_tag
-
-package main
-
-const requiredTag = "pure_test_tag"
-`,
-	} {
-		if err := os.WriteFile(filepath.Join(goDir, name), []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
-	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func workingDirectory(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-func assertWorkingDirectory(t *testing.T, want string) {
-	t.Helper()
-	if got := workingDirectory(t); got != want {
-		t.Fatalf("working directory changed from %q to %q", want, got)
-	}
-}
-
-func assertPureEngineLog(t *testing.T, logPath, targetDir, tag string, wantArgs ...string) {
-	t.Helper()
-	log, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(string(log), "\n")
-	wantLines := append([]string{targetDir, tag}, wantArgs...)
-	if len(lines) != len(wantLines) || !reflect.DeepEqual(lines[1:], wantLines[1:]) {
-		t.Fatalf("pure-engine log = %q, want %q", log, strings.Join(wantLines, "\n"))
-	}
-	assertSameDirectory(t, lines[0], targetDir)
-}
-
-func assertSameDirectory(t *testing.T, got, want string) {
-	t.Helper()
-	gotInfo, err := os.Stat(got)
-	if err != nil {
-		t.Fatalf("stat runtime working directory %q: %v", got, err)
-	}
-	wantInfo, err := os.Stat(want)
-	if err != nil {
-		t.Fatalf("stat expected runtime working directory %q: %v", want, err)
-	}
-	if !os.SameFile(gotInfo, wantInfo) {
-		t.Fatalf("runtime working directory = %q, want %q", got, want)
 	}
 }
 
@@ -1033,22 +924,6 @@ func TestRunPackModeRejectsIncompleteSessionBeforeStartingEngine(t *testing.T) {
 	}
 }
 
-type webServerProcessStub struct {
-	stop      func(int) (bool, error)
-	listeners func(int) ([]int, error)
-}
-
-func (s webServerProcessStub) Stop(pid int) (bool, error) {
-	return s.stop(pid)
-}
-
-func (s webServerProcessStub) ListeningPIDs(port int) ([]int, error) {
-	if s.listeners == nil {
-		return nil, nil
-	}
-	return s.listeners(port)
-}
-
 func TestStopWebUsesScopedVerifiedCandidates(t *testing.T) {
 	denied := errors.New("permission denied")
 	for _, tt := range []struct {
@@ -1100,5 +975,130 @@ func TestStopWebUsesScopedVerifiedCandidates(t *testing.T) {
 				t.Fatalf("PID file error = %v, keep %v", statErr, tt.keepPID)
 			}
 		})
+	}
+}
+
+func (s webServerProcessStub) Stop(pid int) (bool, error) {
+	return s.stop(pid)
+}
+
+func (s webServerProcessStub) ListeningPIDs(port int) ([]int, error) {
+	if s.listeners == nil {
+		return nil, nil
+	}
+	return s.listeners(port)
+}
+
+func mustWriteAssetIndex(t *testing.T, projectDir string) {
+	t.Helper()
+	assetDir := filepath.Join(projectDir, "assets")
+	if err := os.MkdirAll(assetDir, 0o755); err != nil {
+		t.Fatalf("mkdir assets: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetDir, "index.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatalf("write assets/index.json: %v", err)
+	}
+}
+
+func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir runtime dir: %v", err)
+	}
+
+	var script string
+	if runtime.GOOS == "windows" {
+		script = fmt.Sprintf("@echo off\r\ncd > %q\r\nfor %%%%a in (%%*) do @echo %%%%a>>%q\r\necho SPX_PROJECT_DIR=%%SPX_PROJECT_DIR%%>>%q\r\necho SPX_ASSET_DIR=%%SPX_ASSET_DIR%%>>%q\r\necho SPX_SESSION_DIR=%%SPX_SESSION_DIR%%>>%q\r\n", logPath, logPath, logPath, logPath, logPath)
+	} else {
+		script = fmt.Sprintf("#!/bin/sh\npwd > %q\nprintf '%%s\\n' \"$@\" >> %q\nprintf 'SPX_PROJECT_DIR=%%s\\nSPX_ASSET_DIR=%%s\\nSPX_SESSION_DIR=%%s\\n' \"$SPX_PROJECT_DIR\" \"$SPX_ASSET_DIR\" \"$SPX_SESSION_DIR\" >> %q\n", logPath, logPath, logPath)
+	}
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write runtime executable: %v", err)
+	}
+}
+
+func writePureEngineTestProject(t *testing.T, goDir string) {
+	t.Helper()
+	for name, content := range map[string]string{
+		"go.mod": "module example.com/pureenginetest\n\ngo 1.23\n",
+		"main.go": `package main
+
+import (
+	"os"
+	"strings"
+)
+
+func main() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	fields := append([]string{cwd, requiredTag}, os.Args[2:]...)
+	if err := os.WriteFile(os.Args[1], []byte(strings.Join(fields, "\n")), 0o644); err != nil {
+		panic(err)
+	}
+}
+`,
+		"tag.go": `//go:build pure_test_tag
+
+package main
+
+const requiredTag = "pure_test_tag"
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(goDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func workingDirectory(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func assertWorkingDirectory(t *testing.T, want string) {
+	t.Helper()
+	if got := workingDirectory(t); got != want {
+		t.Fatalf("working directory changed from %q to %q", want, got)
+	}
+}
+
+func assertPureEngineLog(t *testing.T, logPath, targetDir, tag string, wantArgs ...string) {
+	t.Helper()
+	log, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(log), "\n")
+	wantLines := append([]string{targetDir, tag}, wantArgs...)
+	if len(lines) != len(wantLines) || !reflect.DeepEqual(lines[1:], wantLines[1:]) {
+		t.Fatalf("pure-engine log = %q, want %q", log, strings.Join(wantLines, "\n"))
+	}
+	assertSameDirectory(t, lines[0], targetDir)
+}
+
+func assertSameDirectory(t *testing.T, got, want string) {
+	t.Helper()
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat runtime working directory %q: %v", got, err)
+	}
+	wantInfo, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("stat expected runtime working directory %q: %v", want, err)
+	}
+	if !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("runtime working directory = %q, want %q", got, want)
 	}
 }

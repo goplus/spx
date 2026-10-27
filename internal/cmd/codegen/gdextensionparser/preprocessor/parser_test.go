@@ -103,6 +103,38 @@ func TestParseCommentRegression(t *testing.T) {
 	require.Equal(t, "const i int = 5;\n\tconst j int = 6;\n\tconst k int = 7;\n\n\t/* typed arrays */\n\tconst x int = 1;\n\tconst y int = 2;\n\n\t\n\n", ast.Eval(false))
 }
 
+func TestPreprocessorIncludesAcceptDigitLeadingNames(t *testing.T) {
+	for _, filename := range []string{"1.h", "1_name.h"} {
+		t.Run(filename, func(t *testing.T) {
+			ast, err := ParsePreprocessorString("#include <" + filename + ">\n")
+			require.NoError(t, err)
+			require.Len(t, ast.Directives, 1)
+			require.NotNil(t, ast.Directives[0].Include)
+			require.Equal(t, filename, ast.Directives[0].Include.Name)
+			require.Equal(t, "\n", ast.Eval(false))
+		})
+	}
+}
+
+func TestPreprocessorRejectsMalformedDirectives(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		source string
+	}{
+		{"unterminated conditional", "#ifdef READY\nint value;\n"},
+		{"missing definition name", "#define\n"},
+		{"unsupported include form", "#include \"local.h\"\n"},
+		{"unsupported numeric include form", "#include \"1.h\"\n"},
+		{"unsupported directive", "#undef READY\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, err := ParsePreprocessorString(tt.source)
+			require.Error(t, err)
+			require.Nil(t, ast, "invalid headers must not expose a partially parsed AST")
+		})
+	}
+}
+
 func TestConditionalDirectiveEvaluation(t *testing.T) {
 	for _, tt := range []struct {
 		name      string

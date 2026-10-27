@@ -31,50 +31,50 @@ type UiAsk struct {
 	lastEnterState bool
 }
 
-// OnStart binds UI nodes and subscribes to clicks in the engine callback context.
-func (pself *UiAsk) OnStart() {
-	pself.askBody = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody")
-	pself.askLabel = engine.BridgeBindUI[UiNode](pself.GetId(), "MF/Frame/AskBody/LabelAsk")
-
-	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input")
-	pself.checkBtn = engine.BridgeBindUI[UiNode](pself.GetId(), "M/Input/Check")
-
-	pself.checkBtn.OnUiClickEvent.Subscribe(func() {
-		pself.handleCheck()
-	})
-}
-
-// Update handles Enter key presses.
-func (pself *UiAsk) Update() {
-	enterPressed := engine.Managers().InputMgr.GetKey(int64(gdx.KeyEnter)) || engine.Managers().InputMgr.GetKey(int64(gdx.KeyKPEnter))
-	// Trigger only on key press (not held down)
-	if enterPressed && !pself.lastEnterState {
-		pself.handleCheck()
-	}
-
-	pself.lastEnterState = enterPressed
-}
-
-func (pself *UiAsk) Show(showQuestionInPanel bool, question string, onCheck func(string)) {
-	pself.OnCheck = onCheck
-	showQuestion := showQuestionInPanel && question != ""
-	engine.Managers().UiMgr.SetVisible(pself.askBody.GetId(), showQuestion)
-	if showQuestion {
-		engine.Managers().UiMgr.SetText(pself.askLabel.GetId(), question)
-	}
-	engine.Managers().UiMgr.SetText(pself.input.GetId(), "")
-	engine.Managers().UiMgr.SetVisible(pself.GetId(), true)
-	pself.lastEnterState = false
-}
-
 func NewUiAsk() *UiAsk {
 	return engine.NewUiNode[UiAsk]()
 }
 
+// OnStart binds UI nodes and subscribes to clicks in the engine callback context.
+func (p *UiAsk) OnStart() {
+	p.askBody = engine.BridgeBindUI[UiNode](p.GetId(), "MF/Frame/AskBody")
+	p.askLabel = engine.BridgeBindUI[UiNode](p.GetId(), "MF/Frame/AskBody/LabelAsk")
+
+	p.input = engine.BridgeBindUI[UiNode](p.GetId(), "M/Input")
+	p.checkBtn = engine.BridgeBindUI[UiNode](p.GetId(), "M/Input/Check")
+
+	p.checkBtn.OnUiClickEvent.Subscribe(func() {
+		p.handleCheck()
+	})
+}
+
+// Update handles Enter key presses.
+func (p *UiAsk) Update() {
+	enterPressed := engine.Managers().InputMgr.GetKey(int64(gdx.KeyEnter)) || engine.Managers().InputMgr.GetKey(int64(gdx.KeyKPEnter))
+	// Trigger only on key press (not held down)
+	if enterPressed && !p.lastEnterState {
+		p.handleCheck()
+	}
+
+	p.lastEnterState = enterPressed
+}
+
+func (p *UiAsk) Show(showQuestionInPanel bool, question string, onCheck func(string)) {
+	p.OnCheck = onCheck
+	showQuestion := showQuestionInPanel && question != ""
+	engine.Managers().UiMgr.SetVisible(p.askBody.GetId(), showQuestion)
+	if showQuestion {
+		engine.Managers().UiMgr.SetText(p.askLabel.GetId(), question)
+	}
+	engine.Managers().UiMgr.SetText(p.input.GetId(), "")
+	engine.Managers().UiMgr.SetVisible(p.GetId(), true)
+	p.lastEnterState = false
+}
+
 // handleCheck hides the dialog before invoking the callback, if present.
-func (pself *UiAsk) handleCheck() {
-	if pself.OnCheck != nil {
-		pself.SetVisible(false)
-		pself.OnCheck(pself.input.GetText())
+func (p *UiAsk) handleCheck() {
+	if p.OnCheck != nil {
+		p.SetVisible(false)
+		p.OnCheck(p.input.GetText())
 	}
 }

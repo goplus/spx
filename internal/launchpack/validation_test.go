@@ -77,32 +77,6 @@ func TestValidatePackPath(t *testing.T) {
 	}
 }
 
-func validLaunchpackConfig(t *testing.T) Config {
-	t.Helper()
-	root := t.TempDir()
-	project := filepath.Join(root, "project")
-	writeProjectTestFile(t, filepath.Join(project, "main.spx"), "onStart => {}\n")
-	writeProjectTestFile(t, filepath.Join(project, "assets", "index.json"), "{}")
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	executable, err = filepath.EvalSymlinks(executable)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := projectpolicy.SnapshotPortableConfig(project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return Config{ProjectDir: project, ProjectFile: filepath.Join(project, "main.spx"), ProjectExt: ".spx",
-		PackDir: "assets", PackIndex: "index.json", PortableConfig: snapshot,
-		GoCommand: executable, WorkDir: root, GoWork: "off", BridgePackage: "./bridge",
-		Output: filepath.Join(root, "launcher"), RuntimeLock: release.DefaultRuntimeLock(),
-		IO: IO{Env: []string{}},
-	}
-}
-
 func TestLauncherConfigurationRejectsUnsafeInputs(t *testing.T) {
 	tests := []struct {
 		name, want string
@@ -259,16 +233,6 @@ func TestProjectBundleRejectsNestedProjectFile(t *testing.T) {
 	}
 }
 
-func writeProjectTestFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestProjectAllowlistRejectsUnsafeOrIncompleteProjects(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
@@ -304,5 +268,41 @@ func TestProjectAllowlistRejectsUnsafeOrIncompleteProjects(t *testing.T) {
 	cfg.ProjectExt = "spx"
 	if files, err := collectProjectAllowlist(cfg); err != nil || !slices.Equal(files, []string{"main.spx"}) {
 		t.Fatalf("extension normalization: %q, %v", files, err)
+	}
+}
+
+func validLaunchpackConfig(t *testing.T) Config {
+	t.Helper()
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	writeProjectTestFile(t, filepath.Join(project, "main.spx"), "onStart => {}\n")
+	writeProjectTestFile(t, filepath.Join(project, "assets", "index.json"), "{}")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := projectpolicy.SnapshotPortableConfig(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Config{ProjectDir: project, ProjectFile: filepath.Join(project, "main.spx"), ProjectExt: ".spx",
+		PackDir: "assets", PackIndex: "index.json", PortableConfig: snapshot,
+		GoCommand: executable, WorkDir: root, GoWork: "off", BridgePackage: "./bridge",
+		Output: filepath.Join(root, "launcher"), RuntimeLock: release.DefaultRuntimeLock(),
+		IO: IO{Env: []string{}},
+	}
+}
+
+func writeProjectTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -7,13 +7,6 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
-func runtimeBridgeTestInstall(t *testing.T, bridge RuntimeBridge) {
-	t.Helper()
-	previous := runtimeBridge
-	SetRuntimeBridge(bridge)
-	t.Cleanup(func() { SetRuntimeBridge(previous) })
-}
-
 type runtimeBridgeTestConstruction struct {
 	operation string
 	typ       reflect.Type
@@ -30,36 +23,47 @@ type runtimeBridgeTestConstructor struct {
 	registered []reflect.Type
 }
 
-func (b *runtimeBridgeTestConstructor) construct(request runtimeBridgeTestConstruction) reflect.Value {
-	b.requests = append(b.requests, request)
-	return b.result
-}
-
-func (b *runtimeBridgeTestConstructor) RegisterSpriteType(typ reflect.Type) {
-	b.registered = append(b.registered, typ)
-}
-
-func (b *runtimeBridgeTestConstructor) CreateSprite(typ reflect.Type, position mathf.Vec2) reflect.Value {
-	return b.construct(runtimeBridgeTestConstruction{operation: "sprite", typ: typ, position: position})
-}
-
-func (b *runtimeBridgeTestConstructor) CreateEmptySprite(typ reflect.Type, position mathf.Vec2) reflect.Value {
-	return b.construct(runtimeBridgeTestConstruction{operation: "empty sprite", typ: typ, position: position})
-}
-
-func (b *runtimeBridgeTestConstructor) CreateBackdrop(typ reflect.Type) reflect.Value {
-	return b.construct(runtimeBridgeTestConstruction{operation: "backdrop", typ: typ})
-}
-
-func (b *runtimeBridgeTestConstructor) CreateUI(typ reflect.Type, name string, engineUI bool) reflect.Value {
-	return b.construct(runtimeBridgeTestConstruction{operation: "ui", typ: typ, name: name, engineUI: engineUI})
-}
-
-func (b *runtimeBridgeTestConstructor) BindUI(typ reflect.Type, parent Object, path string) reflect.Value {
-	return b.construct(runtimeBridgeTestConstruction{operation: "bind ui", typ: typ, parent: parent, name: path})
-}
-
 type runtimeBridgeTestObject struct{ value int }
+
+type runtimeBridgeTestAccess struct {
+	RuntimeBridge
+	sprites   map[Object]ISpriter
+	nodes     map[Object]IUiNode
+	updates   []float64
+	now       float64
+	boundID   Object
+	boundType string
+}
+
+type runtimeBridgeTestScheduledCall struct {
+	operation           string
+	node                ISpriter
+	position, position2 mathf.Vec2
+	duration, duration2 float64
+}
+
+type runtimeBridgeTestScheduler struct {
+	RuntimeBridge
+	calls     []runtimeBridgeTestScheduledCall
+	callbacks []func()
+}
+
+type runtimeBridgeTestLifecycleEvent struct {
+	name string
+	id   Object
+}
+
+type runtimeBridgeTestSprite struct {
+	Sprite
+	events       []runtimeBridgeTestLifecycleEvent
+	readyOnStart bool
+}
+
+type runtimeBridgeTestUI struct {
+	UiNode
+	events       []runtimeBridgeTestLifecycleEvent
+	readyOnStart bool
+}
 
 func TestRuntimeBridgeConstructionPreservesTypesAndIdentity(t *testing.T) {
 	position := mathf.Vec2{X: 12, Y: -34}
@@ -114,38 +118,6 @@ func TestRuntimeBridgeRegistrationAndMissingUI(t *testing.T) {
 	}
 }
 
-type runtimeBridgeTestAccess struct {
-	RuntimeBridge
-	sprites   map[Object]ISpriter
-	nodes     map[Object]IUiNode
-	updates   []float64
-	now       float64
-	boundID   Object
-	boundType string
-}
-
-func (b *runtimeBridgeTestAccess) InternalUpdateFrame(delta float64, update func(float64)) {
-	b.updates = append(b.updates, delta)
-	if update != nil {
-		update(delta)
-	}
-}
-func (b *runtimeBridgeTestAccess) ClearAllSprites()              { clear(b.sprites) }
-func (b *runtimeBridgeTestAccess) GetSprite(id Object) ISpriter  { return b.sprites[id] }
-func (b *runtimeBridgeTestAccess) GetUINode(id Object) IUiNode   { return b.nodes[id] }
-func (b *runtimeBridgeTestAccess) Sprites() map[Object]ISpriter  { return b.sprites }
-func (b *runtimeBridgeTestAccess) UiNodes() map[Object]IUiNode   { return b.nodes }
-func (b *runtimeBridgeTestAccess) DeleteSprite(id Object)        { delete(b.sprites, id) }
-func (b *runtimeBridgeTestAccess) DeleteUINode(id Object)        { delete(b.nodes, id) }
-func (b *runtimeBridgeTestAccess) TimeSinceGameStarted() float64 { return b.now }
-func (b *runtimeBridgeTestAccess) AdvanceTimeSinceGameStart(delta float64) float64 {
-	b.now += delta
-	return b.now
-}
-func (b *runtimeBridgeTestAccess) BindSceneInstantiatedSprite(id Object, typeName string) {
-	b.boundID, b.boundType = id, typeName
-}
-
 func TestRuntimeBridgeAccessorsPreserveRuntimeState(t *testing.T) {
 	sprite, ui := &Sprite{Id: 7}, &UiNode{Id: 11}
 	bridge := &runtimeBridgeTestAccess{
@@ -185,36 +157,6 @@ func TestRuntimeBridgeAccessorsPreserveRuntimeState(t *testing.T) {
 	if bridge.boundID != 31 || bridge.boundType != "Enemy" {
 		t.Errorf("bound scene sprite = (%d, %q)", bridge.boundID, bridge.boundType)
 	}
-}
-
-type runtimeBridgeTestScheduledCall struct {
-	operation           string
-	node                ISpriter
-	position, position2 mathf.Vec2
-	duration, duration2 float64
-}
-
-type runtimeBridgeTestScheduler struct {
-	RuntimeBridge
-	calls     []runtimeBridgeTestScheduledCall
-	callbacks []func()
-}
-
-func (b *runtimeBridgeTestScheduler) schedule(call runtimeBridgeTestScheduledCall, callback func()) {
-	b.calls = append(b.calls, call)
-	b.callbacks = append(b.callbacks, callback)
-}
-func (b *runtimeBridgeTestScheduler) DelayCall(delay float64, callback func()) {
-	b.schedule(runtimeBridgeTestScheduledCall{operation: "delay", duration: delay}, callback)
-}
-func (b *runtimeBridgeTestScheduler) DelaySpriteCall(delay float64, node ISpriter, callback func()) {
-	b.schedule(runtimeBridgeTestScheduledCall{operation: "sprite delay", node: node, duration: delay}, callback)
-}
-func (b *runtimeBridgeTestScheduler) TweenPos(node ISpriter, position mathf.Vec2, duration float64, callback func()) {
-	b.schedule(runtimeBridgeTestScheduledCall{operation: "tween", node: node, position: position, duration: duration}, callback)
-}
-func (b *runtimeBridgeTestScheduler) TweenPos2(node ISpriter, position mathf.Vec2, duration float64, position2 mathf.Vec2, duration2 float64, callback func()) {
-	b.schedule(runtimeBridgeTestScheduledCall{operation: "two-stage tween", node: node, position: position, duration: duration, position2: position2, duration2: duration2}, callback)
 }
 
 func TestRuntimeBridgeSchedulingPreservesArgumentsAndCallbacks(t *testing.T) {
@@ -269,49 +211,6 @@ func TestRuntimeBridgeMissingPanicsClearly(t *testing.T) {
 			call()
 		})
 	}
-}
-
-type runtimeBridgeTestLifecycleEvent struct {
-	name string
-	id   Object
-}
-
-type runtimeBridgeTestSprite struct {
-	Sprite
-	events       []runtimeBridgeTestLifecycleEvent
-	readyOnStart bool
-}
-
-func (s *runtimeBridgeTestSprite) SetId(id Object) {
-	s.Sprite.SetId(id)
-	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"set id", s.Id})
-}
-func (s *runtimeBridgeTestSprite) onCreate() {
-	s.Sprite.onCreate()
-	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"create", s.Id})
-}
-func (s *runtimeBridgeTestSprite) OnStart() {
-	s.readyOnStart = s.OnTriggerEnterEvent != nil && s.OnVfxFinishedEvent != nil
-	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"start", s.Id})
-}
-
-type runtimeBridgeTestUI struct {
-	UiNode
-	events       []runtimeBridgeTestLifecycleEvent
-	readyOnStart bool
-}
-
-func (n *runtimeBridgeTestUI) SetId(id Object) {
-	n.UiNode.SetId(id)
-	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"set id", n.Id})
-}
-func (n *runtimeBridgeTestUI) onCreate() {
-	n.UiNode.onCreate()
-	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"create", n.Id})
-}
-func (n *runtimeBridgeTestUI) OnStart() {
-	n.readyOnStart = n.OnUiClickEvent != nil && n.OnUiTextChangedEvent != nil
-	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"start", n.Id})
 }
 
 func TestRuntimeBridgeLifecycleOrder(t *testing.T) {
@@ -370,4 +269,123 @@ func TestBaseSpritePreservesEmbeddedIdentity(t *testing.T) {
 	if other.BaseSprite() == sprite.BaseSprite() {
 		t.Fatal("distinct sprites must not share base identity")
 	}
+}
+
+func (b *runtimeBridgeTestConstructor) RegisterSpriteType(typ reflect.Type) {
+	b.registered = append(b.registered, typ)
+}
+
+func (b *runtimeBridgeTestConstructor) CreateSprite(typ reflect.Type, position mathf.Vec2) reflect.Value {
+	return b.construct(runtimeBridgeTestConstruction{operation: "sprite", typ: typ, position: position})
+}
+
+func (b *runtimeBridgeTestConstructor) CreateEmptySprite(typ reflect.Type, position mathf.Vec2) reflect.Value {
+	return b.construct(runtimeBridgeTestConstruction{operation: "empty sprite", typ: typ, position: position})
+}
+
+func (b *runtimeBridgeTestConstructor) CreateBackdrop(typ reflect.Type) reflect.Value {
+	return b.construct(runtimeBridgeTestConstruction{operation: "backdrop", typ: typ})
+}
+
+func (b *runtimeBridgeTestConstructor) CreateUI(typ reflect.Type, name string, engineUI bool) reflect.Value {
+	return b.construct(runtimeBridgeTestConstruction{operation: "ui", typ: typ, name: name, engineUI: engineUI})
+}
+
+func (b *runtimeBridgeTestConstructor) BindUI(typ reflect.Type, parent Object, path string) reflect.Value {
+	return b.construct(runtimeBridgeTestConstruction{operation: "bind ui", typ: typ, parent: parent, name: path})
+}
+
+func (b *runtimeBridgeTestConstructor) construct(request runtimeBridgeTestConstruction) reflect.Value {
+	b.requests = append(b.requests, request)
+	return b.result
+}
+
+func (b *runtimeBridgeTestAccess) InternalUpdateFrame(delta float64, update func(float64)) {
+	b.updates = append(b.updates, delta)
+	if update != nil {
+		update(delta)
+	}
+}
+
+func (b *runtimeBridgeTestAccess) ClearAllSprites() { clear(b.sprites) }
+
+func (b *runtimeBridgeTestAccess) GetSprite(id Object) ISpriter { return b.sprites[id] }
+
+func (b *runtimeBridgeTestAccess) GetUINode(id Object) IUiNode { return b.nodes[id] }
+
+func (b *runtimeBridgeTestAccess) Sprites() map[Object]ISpriter { return b.sprites }
+
+func (b *runtimeBridgeTestAccess) UiNodes() map[Object]IUiNode { return b.nodes }
+
+func (b *runtimeBridgeTestAccess) DeleteSprite(id Object) { delete(b.sprites, id) }
+
+func (b *runtimeBridgeTestAccess) DeleteUINode(id Object) { delete(b.nodes, id) }
+
+func (b *runtimeBridgeTestAccess) TimeSinceGameStarted() float64 { return b.now }
+
+func (b *runtimeBridgeTestAccess) AdvanceTimeSinceGameStart(delta float64) float64 {
+	b.now += delta
+	return b.now
+}
+
+func (b *runtimeBridgeTestAccess) BindSceneInstantiatedSprite(id Object, typeName string) {
+	b.boundID, b.boundType = id, typeName
+}
+
+func (b *runtimeBridgeTestScheduler) DelayCall(delay float64, callback func()) {
+	b.schedule(runtimeBridgeTestScheduledCall{operation: "delay", duration: delay}, callback)
+}
+
+func (b *runtimeBridgeTestScheduler) DelaySpriteCall(delay float64, node ISpriter, callback func()) {
+	b.schedule(runtimeBridgeTestScheduledCall{operation: "sprite delay", node: node, duration: delay}, callback)
+}
+
+func (b *runtimeBridgeTestScheduler) TweenPos(node ISpriter, position mathf.Vec2, duration float64, callback func()) {
+	b.schedule(runtimeBridgeTestScheduledCall{operation: "tween", node: node, position: position, duration: duration}, callback)
+}
+
+func (b *runtimeBridgeTestScheduler) TweenPos2(node ISpriter, position mathf.Vec2, duration float64, position2 mathf.Vec2, duration2 float64, callback func()) {
+	b.schedule(runtimeBridgeTestScheduledCall{operation: "two-stage tween", node: node, position: position, duration: duration, position2: position2, duration2: duration2}, callback)
+}
+
+func (b *runtimeBridgeTestScheduler) schedule(call runtimeBridgeTestScheduledCall, callback func()) {
+	b.calls = append(b.calls, call)
+	b.callbacks = append(b.callbacks, callback)
+}
+
+func (s *runtimeBridgeTestSprite) SetId(id Object) {
+	s.Sprite.SetId(id)
+	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"set id", s.Id})
+}
+
+func (s *runtimeBridgeTestSprite) OnStart() {
+	s.readyOnStart = s.OnTriggerEnterEvent != nil && s.OnVfxFinishedEvent != nil
+	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"start", s.Id})
+}
+
+func (s *runtimeBridgeTestSprite) onCreate() {
+	s.Sprite.onCreate()
+	s.events = append(s.events, runtimeBridgeTestLifecycleEvent{"create", s.Id})
+}
+
+func (n *runtimeBridgeTestUI) SetId(id Object) {
+	n.UiNode.SetId(id)
+	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"set id", n.Id})
+}
+
+func (n *runtimeBridgeTestUI) OnStart() {
+	n.readyOnStart = n.OnUiClickEvent != nil && n.OnUiTextChangedEvent != nil
+	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"start", n.Id})
+}
+
+func (n *runtimeBridgeTestUI) onCreate() {
+	n.UiNode.onCreate()
+	n.events = append(n.events, runtimeBridgeTestLifecycleEvent{"create", n.Id})
+}
+
+func runtimeBridgeTestInstall(t *testing.T, bridge RuntimeBridge) {
+	t.Helper()
+	previous := runtimeBridge
+	SetRuntimeBridge(bridge)
+	t.Cleanup(func() { SetRuntimeBridge(previous) })
 }

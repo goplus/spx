@@ -28,6 +28,8 @@ type readyQueue struct {
 	cursor  int64 // Last selected live script position.
 }
 
+type readyHeap []Thread
+
 func (q *readyQueue) add(th Thread) {
 	index := q.current
 	if th.resumeOrder <= q.cursor {
@@ -57,8 +59,6 @@ func (q *readyQueue) pop() Thread {
 		}
 	}
 }
-
-type readyHeap []Thread
 
 func (h readyHeap) Len() int { return len(h) }
 

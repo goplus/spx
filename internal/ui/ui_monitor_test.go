@@ -53,73 +53,30 @@ type monitorRenderSpyLayout struct {
 	minimum            float64
 }
 
-func newMonitorRenderSpy() *monitorRenderSpy {
-	return &monitorRenderSpy{
-		visible:      make(map[engine.Object]bool),
-		ranges:       make(map[engine.Object]float64),
-		text:         make(map[engine.Object]string),
-		color:        make(map[engine.Object]mathf.Color),
-		items:        make(map[engine.Object][]string),
-		size:         make(map[engine.Object]mathf.Vec2),
-		maxWidths:    make(map[engine.Object][]float64),
-		naturalWidth: make(map[engine.Object]map[string]float64),
-		appliedWidth: make(map[engine.Object]float64),
-		layouts:      make(map[engine.Object]monitorRenderSpyLayout),
-	}
+type monitorEngineUiSpy struct {
+	gdx.IUiMgr
+	canvasScale mathf.Vec2
+	visible     map[gdx.Object]bool
+	texts       map[gdx.Object]string
+	maxWidths   map[gdx.Object]float64
+	colors      map[gdx.Object]mathf.Color
+	sizes       map[gdx.Object]mathf.Vec2
+	scales      map[gdx.Object]mathf.Vec2
+	positions   map[gdx.Object]mathf.Vec2
 }
 
-func (p *monitorRenderSpy) SetVisible(id engine.Object, visible bool) { p.visible[id] = visible }
-func (p *monitorRenderSpy) SetText(id engine.Object, text string)     { p.text[id] = text }
-func (p *monitorRenderSpy) SetTextMaxWidth(id engine.Object, text string, maxWidth float64) float64 {
-	p.text[id] = text
-	p.maxWidths[id] = append(p.maxWidths[id], maxWidth)
-	natural := float64(len([]rune(text)))
-	if widths := p.naturalWidth[id]; widths != nil {
-		if width, ok := widths[text]; ok {
-			natural = width
-		}
-	}
-	applied := math.Min(natural, maxWidth)
-	p.appliedWidth[id] = applied
-	return applied
-}
-func (p *monitorRenderSpy) SetColor(id engine.Object, color mathf.Color) {
-	p.color[id] = color
+type parsedMonitorScene struct {
+	nodes     map[string]string
+	nodeTypes map[string]string
+	resources map[string]string
+	externals map[string]string
 }
 
-func (p *monitorRenderSpy) GetSize(id engine.Object) mathf.Vec2 { return p.size[id] }
-func (p *monitorRenderSpy) SetSize(id engine.Object, size mathf.Vec2) {
-	p.size[id] = size
-	if size != (mathf.Vec2{}) {
-		return
-	}
-	layout, ok := p.layouts[id]
-	if !ok {
-		return
-	}
-	width := layout.horizontalOverhead + p.appliedWidth[layout.label] + p.appliedWidth[layout.value]
-	if width < layout.minimum {
-		width = layout.minimum
-	}
-	p.size[id] = mathf.NewVec2(width, 0)
-}
-func (p *monitorRenderSpy) SetListItems(id engine.Object, name string, items engine.Array, color mathf.Color) {
-	p.listCalls++
-	p.items[id] = slices.Clone(items.([]string))
-	p.text[id] = name
-	p.color[id] = color
-}
-
-func (p *monitorRenderSpy) reset() {
-	clear(p.visible)
-	clear(p.text)
-	clear(p.color)
-	clear(p.items)
-	clear(p.size)
-	clear(p.maxWidths)
-	clear(p.appliedWidth)
-	p.listCalls = 0
-}
+var (
+	monitorNodeHeader     = regexp.MustCompile(`^\[node name="([^"]+)" type="([^"]+)"(?: parent="([^"]+)")?[^]]*\]$`)
+	monitorResourceHeader = regexp.MustCompile(`^\[sub_resource [^]]*id="([^"]+)"\]$`)
+	monitorExternalHeader = regexp.MustCompile(`^\[ext_resource [^]]*id="([^"]+)"\]$`)
+)
 
 func TestUiMonitorRender(t *testing.T) {
 	color := mathf.NewColorRGBAi(0xff, 0x8c, 0x1a, 0xff)
@@ -261,64 +218,6 @@ func TestUiMonitorRenderScalarTextConstrainsBothLabels(t *testing.T) {
 	}
 }
 
-type monitorEngineUiSpy struct {
-	gdx.IUiMgr
-	canvasScale mathf.Vec2
-	visible     map[gdx.Object]bool
-	texts       map[gdx.Object]string
-	maxWidths   map[gdx.Object]float64
-	colors      map[gdx.Object]mathf.Color
-	sizes       map[gdx.Object]mathf.Vec2
-	scales      map[gdx.Object]mathf.Vec2
-	positions   map[gdx.Object]mathf.Vec2
-}
-
-func newMonitorEngineUiSpy() *monitorEngineUiSpy {
-	return &monitorEngineUiSpy{
-		canvasScale: mathf.NewVec2(0.5, 0.5),
-		visible:     make(map[gdx.Object]bool),
-		texts:       make(map[gdx.Object]string),
-		maxWidths:   make(map[gdx.Object]float64),
-		colors:      make(map[gdx.Object]mathf.Color),
-		sizes:       make(map[gdx.Object]mathf.Vec2),
-		scales:      make(map[gdx.Object]mathf.Vec2),
-		positions:   make(map[gdx.Object]mathf.Vec2),
-	}
-}
-
-func (m *monitorEngineUiSpy) GetCanvasScale(gdx.Object) mathf.Vec2 { return m.canvasScale }
-func (m *monitorEngineUiSpy) SetVisible(id gdx.Object, visible bool) {
-	m.visible[id] = visible
-}
-func (m *monitorEngineUiSpy) SetText(id gdx.Object, text string) { m.texts[id] = text }
-func (m *monitorEngineUiSpy) SetTextMaxWidth(id gdx.Object, text string, maxWidth float64) float64 {
-	m.texts[id] = text
-	m.maxWidths[id] = maxWidth
-	return maxWidth
-}
-func (m *monitorEngineUiSpy) SetColor(id gdx.Object, color mathf.Color) { m.colors[id] = color }
-func (m *monitorEngineUiSpy) SetSize(id gdx.Object, size mathf.Vec2)    { m.sizes[id] = size }
-func (m *monitorEngineUiSpy) SetScale(id gdx.Object, scale mathf.Vec2)  { m.scales[id] = scale }
-func (m *monitorEngineUiSpy) SetGlobalPosition(id gdx.Object, position mathf.Vec2) {
-	m.positions[id] = position
-}
-
-func setupMonitorEngine(t *testing.T) *monitorEngineUiSpy {
-	t.Helper()
-	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
-	oldScale := engine.WindowScale()
-	enginewrap.Init(func(call func()) { call() })
-	mgr := newMonitorEngineUiSpy()
-	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
-	engine.SetWindowScale(1)
-	t.Cleanup(func() {
-		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
-		engine.SetWindowScale(oldScale)
-		enginewrap.Init(engine.WaitMainThread)
-	})
-	return mgr
-}
-
 func TestUiMonitorEngineTransformsAndRender(t *testing.T) {
 	mgr := setupMonitorEngine(t)
 	panel, _ := newBoundMonitor(t)
@@ -354,54 +253,6 @@ func TestUiMonitorEngineTransformsAndRender(t *testing.T) {
 	}
 	if got := mgr.sizes[view.root.GetId()]; got != (mathf.Vec2{}) {
 		t.Fatalf("rendered root size = %v, want reset size", got)
-	}
-}
-
-func newBoundMonitor(t *testing.T) (*UiMonitor, map[string]engine.Object) {
-	t.Helper()
-	panel := &UiMonitor{}
-	bound := make(map[string]engine.Object)
-	nextID := engine.Object(1)
-	panel.bindViews(func(path string) *UiNode {
-		if _, exists := bound[path]; exists {
-			t.Fatalf("duplicate monitor binding %q", path)
-		}
-		bound[path] = nextID
-		node := &UiNode{}
-		node.SetId(nextID)
-		nextID++
-		return node
-	})
-	return panel, bound
-}
-
-func assertMonitorPayload(t *testing.T, spy *monitorRenderSpy, view monitorView, name, value string, color mathf.Color) {
-	t.Helper()
-	if spy.listCalls != 0 || len(spy.size) != 0 {
-		t.Fatal("scalar monitor used list-only operations")
-	}
-	wantTextCount := 1
-	if view.label != nil {
-		wantTextCount++
-		if got := spy.text[view.label.GetId()]; got != name {
-			t.Errorf("label text = %q, want %q", got, name)
-		}
-	}
-	if got := spy.text[view.value.GetId()]; got != value {
-		t.Errorf("value text = %q, want %q", got, value)
-	}
-	if len(spy.text) != wantTextCount {
-		t.Errorf("text updates = %v, want only active view", spy.text)
-	}
-
-	if view.colorTarget == nil {
-		if len(spy.color) != 0 {
-			t.Errorf("default appearance changed color: %v", spy.color)
-		}
-		return
-	}
-	if got := spy.color[view.colorTarget.GetId()]; got != color || len(spy.color) != 1 {
-		t.Errorf("color updates = %v, want {%d: %v}", spy.color, view.colorTarget.GetId(), color)
 	}
 }
 
@@ -510,112 +361,6 @@ func TestUiMonitorSceneContract(t *testing.T) {
 		assertMonitorSceneProperties(t, parsed.resources[resourceID], properties)
 	}
 }
-
-type parsedMonitorScene struct {
-	nodes     map[string]string
-	nodeTypes map[string]string
-	resources map[string]string
-	externals map[string]string
-}
-
-var (
-	monitorNodeHeader     = regexp.MustCompile(`^\[node name="([^"]+)" type="([^"]+)"(?: parent="([^"]+)")?[^]]*\]$`)
-	monitorResourceHeader = regexp.MustCompile(`^\[sub_resource [^]]*id="([^"]+)"\]$`)
-	monitorExternalHeader = regexp.MustCompile(`^\[ext_resource [^]]*id="([^"]+)"\]$`)
-)
-
-func parseMonitorScene(t *testing.T, source string) parsedMonitorScene {
-	t.Helper()
-	parsed := parsedMonitorScene{
-		nodes:     make(map[string]string),
-		nodeTypes: make(map[string]string),
-		resources: make(map[string]string),
-		externals: make(map[string]string),
-	}
-	var section strings.Builder
-	flush := func() {
-		text := section.String()
-		header, _, _ := strings.Cut(text, "\n")
-		switch {
-		case monitorNodeHeader.MatchString(header):
-			match := monitorNodeHeader.FindStringSubmatch(header)
-			path := "."
-			if match[3] == "." {
-				path = match[1]
-			} else if match[3] != "" {
-				path = match[3] + "/" + match[1]
-			}
-			parsed.nodes[path] = text
-			parsed.nodeTypes[path] = match[2]
-		case monitorResourceHeader.MatchString(header):
-			parsed.resources[monitorResourceHeader.FindStringSubmatch(header)[1]] = text
-		case monitorExternalHeader.MatchString(header):
-			parsed.externals[monitorExternalHeader.FindStringSubmatch(header)[1]] = text
-		}
-		section.Reset()
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(source))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "[") && section.Len() > 0 {
-			flush()
-		}
-		section.WriteString(line)
-		section.WriteByte('\n')
-	}
-	flush()
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("scan UiMonitor scene: %v", err)
-	}
-	return parsed
-}
-
-func monitorSceneProperty(section, name string) string {
-	prefix := name + " = "
-	for _, line := range strings.Split(section, "\n") {
-		if strings.HasPrefix(line, prefix) {
-			return strings.TrimPrefix(line, prefix)
-		}
-	}
-	return ""
-}
-
-func monitorSceneResource(t *testing.T, scene parsedMonitorScene, node, property string) string {
-	t.Helper()
-	id := monitorSceneReference(t, monitorSceneProperty(node, property), "SubResource")
-	resource, ok := scene.resources[id]
-	if !ok {
-		t.Fatalf("missing sub-resource %q", id)
-	}
-	return resource
-}
-
-func monitorSceneReference(t *testing.T, value, kind string) string {
-	t.Helper()
-	prefix, suffix := kind+`("`, `")`
-	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
-		t.Fatalf("invalid %s reference %q", kind, value)
-	}
-	return strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
-}
-
-func assertMonitorSceneProperties(t *testing.T, section string, want map[string]string) {
-	t.Helper()
-	if section == "" {
-		t.Fatal("missing UiMonitor scene section")
-	}
-	for property, value := range want {
-		if got := monitorSceneProperty(section, property); got != value {
-			t.Errorf("%s = %q, want %q", property, got, value)
-		}
-	}
-}
-
-func (p *monitorRenderSpy) SetRange(id engine.Object, min, max, step, value float64) {
-	p.ranges[id] = math.Max(min, math.Min(max, math.Floor((value-min)/step+0.5)*step+min))
-}
-func (p *monitorRenderSpy) GetRangeValue(id engine.Object) float64 { return p.ranges[id] }
 
 func TestListMonitorRender(t *testing.T) {
 	panel, bound := newBoundMonitor(t)
@@ -774,6 +519,274 @@ func TestDisplayMonitorsStopMouse(t *testing.T) {
 	}
 	if got := monitorSceneProperty(parsed.nodes["ScratchSlider/V/Slider"], "mouse_filter"); got != "0" {
 		t.Errorf("slider mouse_filter = %q, want 0 (stop)", got)
+	}
+}
+
+func (p *monitorRenderSpy) SetVisible(id engine.Object, visible bool) { p.visible[id] = visible }
+
+func (p *monitorRenderSpy) SetText(id engine.Object, text string) { p.text[id] = text }
+
+func (p *monitorRenderSpy) SetTextMaxWidth(id engine.Object, text string, maxWidth float64) float64 {
+	p.text[id] = text
+	p.maxWidths[id] = append(p.maxWidths[id], maxWidth)
+	natural := float64(len([]rune(text)))
+	if widths := p.naturalWidth[id]; widths != nil {
+		if width, ok := widths[text]; ok {
+			natural = width
+		}
+	}
+	applied := math.Min(natural, maxWidth)
+	p.appliedWidth[id] = applied
+	return applied
+}
+
+func (p *monitorRenderSpy) SetColor(id engine.Object, color mathf.Color) {
+	p.color[id] = color
+}
+
+func (p *monitorRenderSpy) GetSize(id engine.Object) mathf.Vec2 { return p.size[id] }
+
+func (p *monitorRenderSpy) SetSize(id engine.Object, size mathf.Vec2) {
+	p.size[id] = size
+	if size != (mathf.Vec2{}) {
+		return
+	}
+	layout, ok := p.layouts[id]
+	if !ok {
+		return
+	}
+	width := layout.horizontalOverhead + p.appliedWidth[layout.label] + p.appliedWidth[layout.value]
+	if width < layout.minimum {
+		width = layout.minimum
+	}
+	p.size[id] = mathf.NewVec2(width, 0)
+}
+
+func (p *monitorRenderSpy) SetListItems(id engine.Object, name string, items engine.Array, color mathf.Color) {
+	p.listCalls++
+	p.items[id] = slices.Clone(items.([]string))
+	p.text[id] = name
+	p.color[id] = color
+}
+
+func (p *monitorRenderSpy) SetRange(id engine.Object, min, max, step, value float64) {
+	p.ranges[id] = math.Max(min, math.Min(max, math.Floor((value-min)/step+0.5)*step+min))
+}
+
+func (p *monitorRenderSpy) GetRangeValue(id engine.Object) float64 { return p.ranges[id] }
+
+func (p *monitorRenderSpy) reset() {
+	clear(p.visible)
+	clear(p.text)
+	clear(p.color)
+	clear(p.items)
+	clear(p.size)
+	clear(p.maxWidths)
+	clear(p.appliedWidth)
+	p.listCalls = 0
+}
+
+func (m *monitorEngineUiSpy) GetCanvasScale(gdx.Object) mathf.Vec2 { return m.canvasScale }
+
+func (m *monitorEngineUiSpy) SetVisible(id gdx.Object, visible bool) {
+	m.visible[id] = visible
+}
+
+func (m *monitorEngineUiSpy) SetText(id gdx.Object, text string) { m.texts[id] = text }
+
+func (m *monitorEngineUiSpy) SetTextMaxWidth(id gdx.Object, text string, maxWidth float64) float64 {
+	m.texts[id] = text
+	m.maxWidths[id] = maxWidth
+	return maxWidth
+}
+
+func (m *monitorEngineUiSpy) SetColor(id gdx.Object, color mathf.Color) { m.colors[id] = color }
+
+func (m *monitorEngineUiSpy) SetSize(id gdx.Object, size mathf.Vec2) { m.sizes[id] = size }
+
+func (m *monitorEngineUiSpy) SetScale(id gdx.Object, scale mathf.Vec2) { m.scales[id] = scale }
+
+func (m *monitorEngineUiSpy) SetGlobalPosition(id gdx.Object, position mathf.Vec2) {
+	m.positions[id] = position
+}
+
+func newMonitorRenderSpy() *monitorRenderSpy {
+	return &monitorRenderSpy{
+		visible:      make(map[engine.Object]bool),
+		ranges:       make(map[engine.Object]float64),
+		text:         make(map[engine.Object]string),
+		color:        make(map[engine.Object]mathf.Color),
+		items:        make(map[engine.Object][]string),
+		size:         make(map[engine.Object]mathf.Vec2),
+		maxWidths:    make(map[engine.Object][]float64),
+		naturalWidth: make(map[engine.Object]map[string]float64),
+		appliedWidth: make(map[engine.Object]float64),
+		layouts:      make(map[engine.Object]monitorRenderSpyLayout),
+	}
+}
+
+func newMonitorEngineUiSpy() *monitorEngineUiSpy {
+	return &monitorEngineUiSpy{
+		canvasScale: mathf.NewVec2(0.5, 0.5),
+		visible:     make(map[gdx.Object]bool),
+		texts:       make(map[gdx.Object]string),
+		maxWidths:   make(map[gdx.Object]float64),
+		colors:      make(map[gdx.Object]mathf.Color),
+		sizes:       make(map[gdx.Object]mathf.Vec2),
+		scales:      make(map[gdx.Object]mathf.Vec2),
+		positions:   make(map[gdx.Object]mathf.Vec2),
+	}
+}
+
+func setupMonitorEngine(t *testing.T) *monitorEngineUiSpy {
+	t.Helper()
+	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
+	oldScale := engine.WindowScale()
+	enginewrap.Init(func(call func()) { call() })
+	mgr := newMonitorEngineUiSpy()
+	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
+	engine.SetWindowScale(1)
+	t.Cleanup(func() {
+		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
+		engine.SetWindowScale(oldScale)
+		enginewrap.Init(engine.WaitMainThread)
+	})
+	return mgr
+}
+
+func newBoundMonitor(t *testing.T) (*UiMonitor, map[string]engine.Object) {
+	t.Helper()
+	panel := &UiMonitor{}
+	bound := make(map[string]engine.Object)
+	nextID := engine.Object(1)
+	panel.bindViews(func(path string) *UiNode {
+		if _, exists := bound[path]; exists {
+			t.Fatalf("duplicate monitor binding %q", path)
+		}
+		bound[path] = nextID
+		node := &UiNode{}
+		node.SetId(nextID)
+		nextID++
+		return node
+	})
+	return panel, bound
+}
+
+func assertMonitorPayload(t *testing.T, spy *monitorRenderSpy, view monitorView, name, value string, color mathf.Color) {
+	t.Helper()
+	if spy.listCalls != 0 || len(spy.size) != 0 {
+		t.Fatal("scalar monitor used list-only operations")
+	}
+	wantTextCount := 1
+	if view.label != nil {
+		wantTextCount++
+		if got := spy.text[view.label.GetId()]; got != name {
+			t.Errorf("label text = %q, want %q", got, name)
+		}
+	}
+	if got := spy.text[view.value.GetId()]; got != value {
+		t.Errorf("value text = %q, want %q", got, value)
+	}
+	if len(spy.text) != wantTextCount {
+		t.Errorf("text updates = %v, want only active view", spy.text)
+	}
+
+	if view.colorTarget == nil {
+		if len(spy.color) != 0 {
+			t.Errorf("default appearance changed color: %v", spy.color)
+		}
+		return
+	}
+	if got := spy.color[view.colorTarget.GetId()]; got != color || len(spy.color) != 1 {
+		t.Errorf("color updates = %v, want {%d: %v}", spy.color, view.colorTarget.GetId(), color)
+	}
+}
+
+func parseMonitorScene(t *testing.T, source string) parsedMonitorScene {
+	t.Helper()
+	parsed := parsedMonitorScene{
+		nodes:     make(map[string]string),
+		nodeTypes: make(map[string]string),
+		resources: make(map[string]string),
+		externals: make(map[string]string),
+	}
+	var section strings.Builder
+	flush := func() {
+		text := section.String()
+		header, _, _ := strings.Cut(text, "\n")
+		switch {
+		case monitorNodeHeader.MatchString(header):
+			match := monitorNodeHeader.FindStringSubmatch(header)
+			path := "."
+			if match[3] == "." {
+				path = match[1]
+			} else if match[3] != "" {
+				path = match[3] + "/" + match[1]
+			}
+			parsed.nodes[path] = text
+			parsed.nodeTypes[path] = match[2]
+		case monitorResourceHeader.MatchString(header):
+			parsed.resources[monitorResourceHeader.FindStringSubmatch(header)[1]] = text
+		case monitorExternalHeader.MatchString(header):
+			parsed.externals[monitorExternalHeader.FindStringSubmatch(header)[1]] = text
+		}
+		section.Reset()
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(source))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "[") && section.Len() > 0 {
+			flush()
+		}
+		section.WriteString(line)
+		section.WriteByte('\n')
+	}
+	flush()
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan UiMonitor scene: %v", err)
+	}
+	return parsed
+}
+
+func monitorSceneProperty(section, name string) string {
+	prefix := name + " = "
+	for _, line := range strings.Split(section, "\n") {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
+		}
+	}
+	return ""
+}
+
+func monitorSceneResource(t *testing.T, scene parsedMonitorScene, node, property string) string {
+	t.Helper()
+	id := monitorSceneReference(t, monitorSceneProperty(node, property), "SubResource")
+	resource, ok := scene.resources[id]
+	if !ok {
+		t.Fatalf("missing sub-resource %q", id)
+	}
+	return resource
+}
+
+func monitorSceneReference(t *testing.T, value, kind string) string {
+	t.Helper()
+	prefix, suffix := kind+`("`, `")`
+	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
+		t.Fatalf("invalid %s reference %q", kind, value)
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
+}
+
+func assertMonitorSceneProperties(t *testing.T, section string, want map[string]string) {
+	t.Helper()
+	if section == "" {
+		t.Fatal("missing UiMonitor scene section")
+	}
+	for property, value := range want {
+		if got := monitorSceneProperty(section, property); got != value {
+			t.Errorf("%s = %q, want %q", property, got, value)
+		}
 	}
 }
 

@@ -37,34 +37,12 @@ type extractZipFixture struct {
 	method uint16
 }
 
-func writeExtractZipFixture(t *testing.T, entries ...extractZipFixture) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "archive.zip")
-	output, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := zip.NewWriter(output)
-	for _, item := range entries {
-		header := &zip.FileHeader{Name: item.name, Method: item.method}
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			_ = output.Close()
-			t.Fatal(err)
-		}
-		if _, err := entry.Write([]byte(item.data)); err != nil {
-			_ = output.Close()
-			t.Fatal(err)
-		}
-	}
-	if err := writer.Close(); err != nil {
-		_ = output.Close()
-		t.Fatal(err)
-	}
-	if err := output.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return path
+type downloadRoundTripFunc func(*http.Request) (*http.Response, error)
+
+type downloadResponseBody struct {
+	io.Reader
+	closeErr error
+	closed   bool
 }
 
 func TestExtractZipWithOptionsRejectsResourceExhaustion(t *testing.T) {
@@ -379,23 +357,6 @@ func TestDownloadLimitAvoidsOverflow(t *testing.T) {
 	}
 }
 
-type downloadRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f downloadRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
-type downloadResponseBody struct {
-	io.Reader
-	closeErr error
-	closed   bool
-}
-
-func (b *downloadResponseBody) Close() error {
-	b.closed = true
-	return b.closeErr
-}
-
 func TestDownloadURLPreservesErrorsAndDestination(t *testing.T) {
 	failure := errors.New("response failed")
 	for _, test := range []struct {
@@ -502,4 +463,43 @@ func TestDownloadURLRejectsUnusableDestination(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f downloadRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func (b *downloadResponseBody) Close() error {
+	b.closed = true
+	return b.closeErr
+}
+
+func writeExtractZipFixture(t *testing.T, entries ...extractZipFixture) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "archive.zip")
+	output, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(output)
+	for _, item := range entries {
+		header := &zip.FileHeader{Name: item.name, Method: item.method}
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(item.data)); err != nil {
+			_ = output.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

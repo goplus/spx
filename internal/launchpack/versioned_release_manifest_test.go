@@ -142,41 +142,6 @@ func TestVersionedReleaseManifestFailedRefreshPreservesCache(t *testing.T) {
 	}
 }
 
-func testVersionedReleaseManifestSpec(cacheRoot string) versionedReleaseManifestSpec {
-	return versionedReleaseManifestSpec{
-		CacheRoot: cacheRoot,
-		Namespace: "runtime",
-		Version:   "1.2.3",
-		Name:      "manifest.json",
-		URL:       "https://example.invalid/manifest.json",
-		MaxSize:   1024,
-	}
-}
-
-func testVersionedReleaseManifestPath(spec versionedReleaseManifestSpec) string {
-	return filepath.Join(spec.CacheRoot, versionedReleaseManifestCacheDirectory, spec.Namespace, spec.Version, spec.Name)
-}
-
-func acquireTestVersionedReleaseManifest(spec versionedReleaseManifestSpec) (testVersionedManifest, []byte, error) {
-	return acquireVersionedReleaseManifest(context.Background(), spec, func(data []byte) (testVersionedManifest, error) {
-		var manifest testVersionedManifest
-		err := json.Unmarshal(data, &manifest)
-		return manifest, err
-	}, func(manifest testVersionedManifest) string {
-		return manifest.Version
-	})
-}
-
-func writeVersionedReleaseManifestTestFile(t *testing.T, path string, data []byte) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestVersionedManifestRejectsInvalidInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
@@ -365,5 +330,40 @@ func TestVersionedManifestOfflineDetectsReplacementAfterParsing(t *testing.T) {
 	_, data, err := acquireVersionedReleaseManifest(context.Background(), spec, parse, func(m testVersionedManifest) string { return m.Version })
 	if err == nil || !strings.Contains(err.Error(), "offline cached release manifest is invalid") || data != nil {
 		t.Fatalf("replaced cache = %q, %v", data, err)
+	}
+}
+
+func testVersionedReleaseManifestSpec(cacheRoot string) versionedReleaseManifestSpec {
+	return versionedReleaseManifestSpec{
+		CacheRoot: cacheRoot,
+		Namespace: "runtime",
+		Version:   "1.2.3",
+		Name:      "manifest.json",
+		URL:       "https://example.invalid/manifest.json",
+		MaxSize:   1024,
+	}
+}
+
+func testVersionedReleaseManifestPath(spec versionedReleaseManifestSpec) string {
+	return filepath.Join(spec.CacheRoot, versionedReleaseManifestCacheDirectory, spec.Namespace, spec.Version, spec.Name)
+}
+
+func acquireTestVersionedReleaseManifest(spec versionedReleaseManifestSpec) (testVersionedManifest, []byte, error) {
+	return acquireVersionedReleaseManifest(context.Background(), spec, func(data []byte) (testVersionedManifest, error) {
+		var manifest testVersionedManifest
+		err := json.Unmarshal(data, &manifest)
+		return manifest, err
+	}, func(manifest testVersionedManifest) string {
+		return manifest.Version
+	})
+}
+
+func writeVersionedReleaseManifestTestFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

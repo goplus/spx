@@ -100,14 +100,6 @@ func (m *Manager) ReleaseSound(soundObj engine.Object) {
 	m.destroyReleasedSoundIfIdle(soundObj)
 }
 
-func (m *Manager) destroyReleasedSoundIfIdle(soundObj engine.Object) {
-	if _, pending := m.pendingDestroy[soundObj]; !pending || len(m.obj2ids[soundObj]) != 0 {
-		return
-	}
-	delete(m.pendingDestroy, soundObj)
-	m.backend.DestroyAudio(soundObj)
-}
-
 func (m *Manager) Pause(path string) {
 	if id := m.pruneDeadID(path); id != invalidPlaybackID {
 		m.backend.Pause(id)
@@ -252,6 +244,14 @@ func (m *Manager) ChangeVolume(soundObj engine.Object, delta float64) {
 		delta = 0
 	}
 	m.SetVolume(soundObj, m.GetVolume(soundObj)+delta)
+}
+
+func (m *Manager) destroyReleasedSoundIfIdle(soundObj engine.Object) {
+	if _, pending := m.pendingDestroy[soundObj]; !pending || len(m.obj2ids[soundObj]) != 0 {
+		return
+	}
+	delete(m.pendingDestroy, soundObj)
+	m.backend.DestroyAudio(soundObj)
 }
 
 func (m *Manager) pruneDeadID(path string) int64 {

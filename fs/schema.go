@@ -43,6 +43,18 @@ type ReadDirer interface {
 	ReadDir(dir string) ([]DirEntry, error)
 }
 
+type GdDir interface {
+	GetPath() string
+}
+
+// -------------------------------------------------------------------------------------
+
+type OpenFunc = func(file string) (Dir, error)
+
+var (
+	openSchemas = map[string]OpenFunc{}
+)
+
 // DirEntriesFromFS converts standard library directory entries while
 // preserving their order.
 func DirEntriesFromFS(entries []iofs.DirEntry) []DirEntry {
@@ -51,10 +63,6 @@ func DirEntriesFromFS(entries []iofs.DirEntry) []DirEntry {
 		result[i] = DirEntry{Name: entry.Name(), IsDir: entry.IsDir()}
 	}
 	return result
-}
-
-type GdDir interface {
-	GetPath() string
 }
 
 func SplitSchema(path string) (schema, file string) {
@@ -66,14 +74,6 @@ func SplitSchema(path string) (schema, file string) {
 	file = strings.TrimPrefix(file, "//")
 	return
 }
-
-// -------------------------------------------------------------------------------------
-
-type OpenFunc = func(file string) (Dir, error)
-
-var (
-	openSchemas = map[string]OpenFunc{}
-)
 
 func RegisterSchema(schema string, open OpenFunc) {
 	openSchemas[schema] = open

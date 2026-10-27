@@ -32,16 +32,20 @@ type UiMeasure struct {
 	labelContainer *UiNode
 }
 
-// OnStart binds UI nodes in the engine callback context.
-func (pself *UiMeasure) OnStart() {
-	pself.container = engine.BridgeBindUI[UiNode](pself.GetId(), "C")
-	pself.imageLine = engine.BridgeBindUI[UiNode](pself.GetId(), "C/Line")
-	pself.labelContainer = engine.BridgeBindUI[UiNode](pself.GetId(), "LC")
-	pself.labelValue = engine.BridgeBindUI[UiNode](pself.GetId(), "LC/Label")
+func NewUiMeasure() *UiMeasure {
+	return engine.NewUiNode[UiMeasure]()
 }
 
-func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
+// OnStart binds UI nodes in the engine callback context.
+func (p *UiMeasure) OnStart() {
+	p.container = engine.BridgeBindUI[UiNode](p.GetId(), "C")
+	p.imageLine = engine.BridgeBindUI[UiNode](p.GetId(), "C/Line")
+	p.labelContainer = engine.BridgeBindUI[UiNode](p.GetId(), "LC")
+	p.labelValue = engine.BridgeBindUI[UiNode](p.GetId(), "LC/Label")
+}
+
+func (p *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name string, color Color) {
+	engine.Managers().UiMgr.SetScale(p.GetId(), engine.UniformVec2(engine.WindowScale()))
 	extraLen := 4.0 // Compensate for the engine's measurement image size.
 	length += extraLen
 
@@ -51,16 +55,12 @@ func (pself *UiMeasure) UpdateInfo(wpos Vec2, length, heading float64, name stri
 	labelPos := pos
 	pos = pos.Sub(NewVec2(sc.Y, sc.X))
 
-	engine.Managers().UiMgr.SetGlobalPosition(pself.container.GetId(), pos)
-	engine.Managers().UiMgr.SetColor(pself.container.GetId(), color)
-	engine.Managers().UiMgr.SetSize(pself.container.GetId(), NewVec2(length+extraLen, 26))
-	engine.Managers().UiMgr.SetRotation(pself.container.GetId(), rad)
+	engine.Managers().UiMgr.SetGlobalPosition(p.container.GetId(), pos)
+	engine.Managers().UiMgr.SetColor(p.container.GetId(), color)
+	engine.Managers().UiMgr.SetSize(p.container.GetId(), NewVec2(length+extraLen, 26))
+	engine.Managers().UiMgr.SetRotation(p.container.GetId(), rad)
 
-	engine.Managers().UiMgr.SetGlobalPosition(pself.labelContainer.GetId(), labelPos)
-	engine.Managers().UiMgr.SetColor(pself.labelContainer.GetId(), color)
-	engine.Managers().UiMgr.SetText(pself.labelValue.GetId(), name)
-}
-
-func NewUiMeasure() *UiMeasure {
-	return engine.NewUiNode[UiMeasure]()
+	engine.Managers().UiMgr.SetGlobalPosition(p.labelContainer.GetId(), labelPos)
+	engine.Managers().UiMgr.SetColor(p.labelContainer.GetId(), color)
+	engine.Managers().UiMgr.SetText(p.labelValue.GetId(), name)
 }

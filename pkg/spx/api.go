@@ -23,10 +23,6 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-func isSpxEnv() bool {
-	return engine.GetGame() != nil
-}
-
 // IsAbortThreadError reports whether err is the SPX abort-thread sentinel.
 func IsAbortThreadError(err any) bool {
 	return engine.IsAbortThreadError(err)
@@ -122,4 +118,8 @@ func WaitNextFrame() float64 {
 		time.Sleep(time.Millisecond * 16)
 		return time.Since(startTime).Seconds()
 	}
+}
+
+func isSpxEnv() bool {
+	return engine.GetGame() != nil
 }

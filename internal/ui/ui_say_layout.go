@@ -70,6 +70,36 @@ type SayBubbleLayout struct {
 	viewport        sayBubbleRect
 }
 
+// NewSayBubbleContent prepares the immutable text/style portion of a bubble.
+func NewSayBubbleContent(msg string, style int) SayBubbleContent {
+	formattedMessage := formatSayMessage(msg)
+	return SayBubbleContent{
+		formattedMessage: formattedMessage,
+		style:            style,
+		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
+	}
+}
+
+// NewSayBubbleLayoutContext captures the current display state.
+func NewSayBubbleLayoutContext(winSize mathf.Vec2) SayBubbleLayoutContext {
+	baseSize := mathf.NewVec2(float64(baseScreenWidth), float64(baseScreenHeight))
+	return newSayBubbleLayoutContext(
+		winSize,
+		baseSize,
+		engine.Managers().CameraMgr.GetPosition(),
+		engine.Managers().CameraMgr.GetCameraZoom(),
+		engine.WindowScale(),
+		clampUIPositionInScreen,
+	)
+}
+
+// NewSayBubbleLayout builds a standalone layout. The shape manager uses a
+// shared context and cached SayBubbleContent for multiple bubbles.
+func NewSayBubbleLayout(winSize, worldPosition, spriteSize mathf.Vec2, msg string, style int) SayBubbleLayout {
+	content := NewSayBubbleContent(msg, style)
+	return NewSayBubbleLayoutContext(winSize).NewLayout(0, worldPosition, spriteSize, content)
+}
+
 // NewLayout builds the preferred layout for one bubble. stableID must remain
 // unchanged for the bubble's lifetime so equal-score layouts never depend on
 // shape activation or render order.
@@ -134,36 +164,6 @@ func (l SayBubbleLayout) Equal(other SayBubbleLayout) bool {
 		l.content.formattedMessage == other.content.formattedMessage &&
 		l.content.style == other.content.style &&
 		l.renderScale == other.renderScale
-}
-
-// NewSayBubbleContent prepares the immutable text/style portion of a bubble.
-func NewSayBubbleContent(msg string, style int) SayBubbleContent {
-	formattedMessage := formatSayMessage(msg)
-	return SayBubbleContent{
-		formattedMessage: formattedMessage,
-		style:            style,
-		baseExtent:       estimateSayBubbleExtent(formattedMessage, style),
-	}
-}
-
-// NewSayBubbleLayoutContext captures the current display state.
-func NewSayBubbleLayoutContext(winSize mathf.Vec2) SayBubbleLayoutContext {
-	baseSize := mathf.NewVec2(float64(baseScreenWidth), float64(baseScreenHeight))
-	return newSayBubbleLayoutContext(
-		winSize,
-		baseSize,
-		engine.Managers().CameraMgr.GetPosition(),
-		engine.Managers().CameraMgr.GetCameraZoom(),
-		engine.WindowScale(),
-		clampUIPositionInScreen,
-	)
-}
-
-// NewSayBubbleLayout builds a standalone layout. The shape manager uses a
-// shared context and cached SayBubbleContent for multiple bubbles.
-func NewSayBubbleLayout(winSize, worldPosition, spriteSize mathf.Vec2, msg string, style int) SayBubbleLayout {
-	content := NewSayBubbleContent(msg, style)
-	return NewSayBubbleLayoutContext(winSize).NewLayout(0, worldPosition, spriteSize, content)
 }
 
 func newSayBubbleLayoutContext(

@@ -47,6 +47,42 @@ const (
 // ErrArchiveLimit identifies excessive ZIP work.
 var ErrArchiveLimit = errors.New("zip: archive limit exceeded")
 
+type zipPath struct {
+	name      string
+	directory bool
+}
+
+type zipLimitedReadCloser struct {
+	io.ReadCloser
+	max      int64
+	read     int64
+	name     string
+	limitErr error
+}
+
+func (r *zipLimitedReadCloser) Read(p []byte) (int, error) {
+	if r.limitErr != nil {
+		return 0, r.limitErr
+	}
+	// Entry validation bounds max, leaving room for the sentinel byte.
+	allowed := r.max - r.read
+	if int64(len(p)) > allowed+1 {
+		p = p[:allowed+1]
+	}
+	n, err := r.ReadCloser.Read(p)
+	if n < 0 || n > len(p) {
+		r.limitErr = fmt.Errorf("%w: entry %q returned invalid read count %d", ErrArchiveLimit, r.name, n)
+		return 0, r.limitErr
+	}
+	r.read += int64(n)
+	if int64(n) > allowed {
+		r.limitErr = fmt.Errorf("%w: entry %q uncompressed output exceeds limit %d", ErrArchiveLimit, r.name, r.max)
+		// Do not expose the sentinel byte.
+		return int(allowed), r.limitErr
+	}
+	return n, err
+}
+
 // preflightZipArchive bounds work before zip.NewReader allocates entries.
 func preflightZipArchive(reader io.ReaderAt, size int64) error {
 	err := zippreflight.Check(reader, size, zippreflight.Limits{
@@ -95,11 +131,6 @@ func validateZipReader(reader *zip.Reader) error {
 		total += size
 	}
 	return validateZipPaths(paths)
-}
-
-type zipPath struct {
-	name      string
-	directory bool
 }
 
 func newZipPath(file *zip.File) (zipPath, error) {
@@ -196,35 +227,4 @@ func openZipEntry(file *zip.File) (io.ReadCloser, error) {
 		max:        int64(file.UncompressedSize64),
 		name:       file.Name,
 	}, nil
-}
-
-type zipLimitedReadCloser struct {
-	io.ReadCloser
-	max      int64
-	read     int64
-	name     string
-	limitErr error
-}
-
-func (r *zipLimitedReadCloser) Read(p []byte) (int, error) {
-	if r.limitErr != nil {
-		return 0, r.limitErr
-	}
-	// Entry validation bounds max, leaving room for the sentinel byte.
-	allowed := r.max - r.read
-	if int64(len(p)) > allowed+1 {
-		p = p[:allowed+1]
-	}
-	n, err := r.ReadCloser.Read(p)
-	if n < 0 || n > len(p) {
-		r.limitErr = fmt.Errorf("%w: entry %q returned invalid read count %d", ErrArchiveLimit, r.name, n)
-		return 0, r.limitErr
-	}
-	r.read += int64(n)
-	if int64(n) > allowed {
-		r.limitErr = fmt.Errorf("%w: entry %q uncompressed output exceeds limit %d", ErrArchiveLimit, r.name, r.max)
-		// Do not expose the sentinel byte.
-		return int(allowed), r.limitErr
-	}
-	return n, err
 }

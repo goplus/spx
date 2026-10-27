@@ -47,71 +47,6 @@ func TestHighestTag(t *testing.T) {
 	}
 }
 
-// Each scenario uses an isolated repository, so developer tags and Git settings
-// cannot change the release version being checked.
-func newVersionRepo(t *testing.T) func(...string) string {
-	t.Helper()
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is required for pseudo-version integration tests")
-	}
-	t.Chdir(t.TempDir())
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_AUTHOR_NAME", "Version Test")
-	t.Setenv("GIT_AUTHOR_EMAIL", "version@example.invalid")
-	t.Setenv("GIT_COMMITTER_NAME", "Version Test")
-	t.Setenv("GIT_COMMITTER_EMAIL", "version@example.invalid")
-	t.Setenv("GIT_AUTHOR_DATE", "2026-01-02T03:04:05+02:00")
-	t.Setenv("GIT_COMMITTER_DATE", "2026-01-02T03:04:05+02:00")
-	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"} {
-		if value, ok := os.LookupEnv(key); ok {
-			t.Cleanup(func() { _ = os.Setenv(key, value) })
-			if err := os.Unsetenv(key); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	git := func(args ...string) string {
-		t.Helper()
-		out, err := exec.Command("git", args...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-		return strings.TrimSpace(string(out))
-	}
-	git("init", "--quiet")
-	git("config", "commit.gpgsign", "false")
-	git("config", "tag.gpgsign", "false")
-	git("commit", "--quiet", "--allow-empty", "-m", "initial")
-	return git
-}
-
-func runVersionMain(t *testing.T, args ...string) string {
-	t.Helper()
-	oldArgs, oldStdout := os.Args, os.Stdout
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		os.Args, os.Stdout = oldArgs, oldStdout
-		_ = reader.Close()
-		_ = writer.Close()
-	})
-	os.Args = append([]string{"pseudo_version"}, args...)
-	os.Stdout = writer
-	main()
-	os.Args, os.Stdout = oldArgs, oldStdout
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	out, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
-}
-
 func TestPseudoVersionMain(t *testing.T) {
 	t.Run("untagged commit uses UTC and twelve digit revision", func(t *testing.T) {
 		git := newVersionRepo(t)
@@ -193,4 +128,69 @@ func TestPseudoVersionInvalidTarget(t *testing.T) {
 	if !strings.Contains(string(out), "git rev-parse refs/heads/nonexistent-version-target:") {
 		t.Fatalf("invalid target diagnostic = %q; want failed Git command", out)
 	}
+}
+
+// Each scenario uses an isolated repository, so developer tags and Git settings
+// cannot change the release version being checked.
+func newVersionRepo(t *testing.T) func(...string) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is required for pseudo-version integration tests")
+	}
+	t.Chdir(t.TempDir())
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_AUTHOR_NAME", "Version Test")
+	t.Setenv("GIT_AUTHOR_EMAIL", "version@example.invalid")
+	t.Setenv("GIT_COMMITTER_NAME", "Version Test")
+	t.Setenv("GIT_COMMITTER_EMAIL", "version@example.invalid")
+	t.Setenv("GIT_AUTHOR_DATE", "2026-01-02T03:04:05+02:00")
+	t.Setenv("GIT_COMMITTER_DATE", "2026-01-02T03:04:05+02:00")
+	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"} {
+		if value, ok := os.LookupEnv(key); ok {
+			t.Cleanup(func() { _ = os.Setenv(key, value) })
+			if err := os.Unsetenv(key); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		out, err := exec.Command("git", args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init", "--quiet")
+	git("config", "commit.gpgsign", "false")
+	git("config", "tag.gpgsign", "false")
+	git("commit", "--quiet", "--allow-empty", "-m", "initial")
+	return git
+}
+
+func runVersionMain(t *testing.T, args ...string) string {
+	t.Helper()
+	oldArgs, oldStdout := os.Args, os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.Args, os.Stdout = oldArgs, oldStdout
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+	os.Args = append([]string{"pseudo_version"}, args...)
+	os.Stdout = writer
+	main()
+	os.Args, os.Stdout = oldArgs, oldStdout
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }

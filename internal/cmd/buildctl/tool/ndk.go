@@ -68,15 +68,15 @@ const (
 
 var errInvalidNDKArchive = errors.New("invalid Android NDK archive")
 
-func (archive androidNDKArchive) validate() error {
-	if archive.archiveOS == "" || archive.hostTag == "" || archive.size <= 0 {
+func (a androidNDKArchive) validate() error {
+	if a.archiveOS == "" || a.hostTag == "" || a.size <= 0 {
 		return fmt.Errorf("invalid Android NDK archive specification")
 	}
-	if !strings.HasPrefix(archive.hostTag, archive.archiveOS+"-") {
-		return fmt.Errorf("host tag %q for Android NDK does not match archive OS %q", archive.hostTag, archive.archiveOS)
+	if !strings.HasPrefix(a.hostTag, a.archiveOS+"-") {
+		return fmt.Errorf("host tag %q for Android NDK does not match archive OS %q", a.hostTag, a.archiveOS)
 	}
-	digest, err := hex.DecodeString(archive.sha256)
-	if err != nil || len(digest) != sha256.Size || archive.sha256 != strings.ToLower(archive.sha256) {
+	digest, err := hex.DecodeString(a.sha256)
+	if err != nil || len(digest) != sha256.Size || a.sha256 != strings.ToLower(a.sha256) {
 		return fmt.Errorf("invalid Android NDK archive SHA-256")
 	}
 	return nil

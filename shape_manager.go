@@ -52,6 +52,33 @@ type shapeManager struct {
 	nextTextBubbleLayoutID uint64
 }
 
+// GetWidget returns the widget instance with given name. It panics if not found.
+// Instead of being used directly, it is meant to be called by `XGot_Game_XGox_GetWidget` only.
+// We extract `GetWidget` to keep `XGot_Game_XGox_GetWidget` simple, which simplifies work in ispx,
+// see details in https://github.com/goplus/builder/issues/765#issuecomment-2313915805.
+func GetWidget(sg ShapeGetter, name WidgetName) Widget {
+	items := sg.getAllShapes()
+	for _, item := range items {
+		widget, ok := item.(Widget)
+		if !ok {
+			continue
+		}
+		if widget.GetName() == name {
+			return widget
+		}
+	}
+	panic("GetWidget: widget not found - " + name)
+}
+
+// GetWidget returns the widget instance (in given type) with given name. It panics if not found.
+func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
+	widget, ok := GetWidget(sg, name).(any).(*T)
+	if !ok {
+		panic("GetWidget: type mismatch - " + name)
+	}
+	return widget
+}
+
 func (s *shapeManager) init() {
 	s.cloneCount = 0
 	s.pendingClones = 0
@@ -355,4 +382,12 @@ func (s *shapeManager) calculateNewIndex(currentIdx, n int) int {
 		}
 	}
 	return currentIdx
+}
+
+func (p *Game) getAllShapes() []Shape {
+	return p.shapeMgr.all()
+}
+
+func (p *SpriteImpl) getAllShapes() []Shape {
+	return p.g.shapeMgr.all()
 }

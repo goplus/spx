@@ -45,25 +45,6 @@ type buildEnvironment struct {
 	Arch            string
 }
 
-func (env BuildEnvironment) ShellExports() string {
-	lines := []string{
-		"export PROJ_DIR=" + ShellQuote(env.ProjectDir),
-		"export ENGINE_DIR=" + ShellQuote(env.EngineDir),
-		"export GODOT_SRC=" + ShellQuote(env.GodotSrc),
-		"export SPX_MODULE_SRC=" + ShellQuote(env.SPXModuleSrc),
-		"export ENGINE_VERSION=" + ShellQuote(env.EngineVersion),
-		"export GOPATH=" + ShellQuote(env.GoPath),
-		"export VERSION=" + ShellQuote(env.Version),
-		"export GODOT_REPOSITORY=" + ShellQuote(env.GodotRepository),
-		"export GODOT_REF=" + ShellQuote(env.GodotRef),
-		"export GODOT_COMMIT=" + ShellQuote(env.GodotCommit),
-		"export TEMPLATE_DIR=" + ShellQuote(env.TemplateDir),
-		"export PLATFORM=" + ShellQuote(env.Platform),
-		"export ARCH=" + ShellQuote(env.Arch),
-	}
-	return strings.Join(lines, "\n") + "\n"
-}
-
 func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEnvironment, error) {
 	runtimeLock := release.DefaultRuntimeLock()
 	goPath, err := EnsureGoPath()
@@ -117,6 +98,29 @@ func ResolveBuildEnvironment(repoRoot string, requestedPlatform string) (BuildEn
 		Platform:        platform,
 		Arch:            arch,
 	}, nil
+}
+
+func ShellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func (env BuildEnvironment) ShellExports() string {
+	lines := []string{
+		"export PROJ_DIR=" + ShellQuote(env.ProjectDir),
+		"export ENGINE_DIR=" + ShellQuote(env.EngineDir),
+		"export GODOT_SRC=" + ShellQuote(env.GodotSrc),
+		"export SPX_MODULE_SRC=" + ShellQuote(env.SPXModuleSrc),
+		"export ENGINE_VERSION=" + ShellQuote(env.EngineVersion),
+		"export GOPATH=" + ShellQuote(env.GoPath),
+		"export VERSION=" + ShellQuote(env.Version),
+		"export GODOT_REPOSITORY=" + ShellQuote(env.GodotRepository),
+		"export GODOT_REF=" + ShellQuote(env.GodotRef),
+		"export GODOT_COMMIT=" + ShellQuote(env.GodotCommit),
+		"export TEMPLATE_DIR=" + ShellQuote(env.TemplateDir),
+		"export PLATFORM=" + ShellQuote(env.Platform),
+		"export ARCH=" + ShellQuote(env.Arch),
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func resolveGodotSrc(repoRoot string) (string, error) {
@@ -178,8 +182,4 @@ func detectGodotTemplateDir(engineVersion string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported host OS: %s", runtime.GOOS)
 	}
-}
-
-func ShellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }

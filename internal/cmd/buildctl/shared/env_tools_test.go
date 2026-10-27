@@ -471,29 +471,6 @@ func TestVulkanSDKDiscoveryRejectsMissingInstallations(t *testing.T) {
 	}
 }
 
-func writeSPXModuleFixture(t *testing.T, root string) string {
-	t.Helper()
-	source := filepath.Join(root, "godot_modules", "spx")
-	for _, name := range []string{"SCsub", "config.py"} {
-		if err := os.MkdirAll(filepath.Dir(filepath.Join(source, name)), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(source, name), []byte("fixture\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	profile := []byte(`{
-  "schema": 1,
-  "common": ["optimize=size"],
-  "editor_release": ["debug_symbols=true"],
-  "template_release": ["debug_symbols=false"]
-}`)
-	if err := os.WriteFile(filepath.Join(source, shared.SConsProfileFilename), profile, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return source
-}
-
 func TestResolveSPXModuleSource(t *testing.T) {
 	repoRoot := t.TempDir()
 	absolute := filepath.Join(t.TempDir(), "spx")
@@ -605,4 +582,27 @@ func TestLoadSPXModuleRejectsInvalidFileTypesAndProfile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func writeSPXModuleFixture(t *testing.T, root string) string {
+	t.Helper()
+	source := filepath.Join(root, "godot_modules", "spx")
+	for _, name := range []string{"SCsub", "config.py"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(source, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(source, name), []byte("fixture\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	profile := []byte(`{
+  "schema": 1,
+  "common": ["optimize=size"],
+  "editor_release": ["debug_symbols=true"],
+  "template_release": ["debug_symbols=false"]
+}`)
+	if err := os.WriteFile(filepath.Join(source, shared.SConsProfileFilename), profile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return source
 }

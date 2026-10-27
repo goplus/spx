@@ -36,13 +36,9 @@ type resetMainThreadPlatform struct {
 	main uint64
 }
 
-func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.main }
-
 type resetDirectPlatform struct {
 	gdx.IPlatformMgr
 }
-
-func (resetDirectPlatform) IsMainThread() bool { return true }
 
 type resetRecordingExt struct {
 	gdx.IExtMgr
@@ -54,68 +50,6 @@ type resetBlockingExt struct {
 	callback func()
 	entered  chan int64
 	release  chan struct{}
-}
-
-func (r *resetBlockingExt) RequestReset(exitCode int64) {
-	if r.callback != nil {
-		r.callback()
-	}
-	r.entered <- exitCode
-	<-r.release
-}
-
-func (r *resetRecordingExt) RequestReset(exitCode int64) {
-	r.calls <- exitCode
-}
-
-func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
-	t.Helper()
-
-	original := gco
-	originalPlatform := gdx.PlatformMgr
-	originalExt := gdx.ExtMgr
-	recorder := &resetRecordingExt{calls: make(chan int64, 1)}
-	SetCoroutines(co)
-	gdx.PlatformMgr = resetDirectPlatform{}
-	gdx.ExtMgr = recorder
-	enginewrap.Init(WaitMainThread)
-	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		SetCoroutines(original)
-		gdx.PlatformMgr = originalPlatform
-		gdx.ExtMgr = originalExt
-	})
-	return recorder
-}
-
-func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		probe := co.Create("reset-close-probe", func(coroutine.Thread) {})
-		if probe.Stopped() {
-			return
-		}
-		runtime.Gosched()
-	}
-	t.Fatal("reset barrier did not close coroutine admission")
-}
-
-func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		var ran atomic.Bool
-		probe := co.Create("reset-open-probe", func(coroutine.Thread) {
-			ran.Store(true)
-		})
-		co.Join(probe)
-		if ran.Load() {
-			return
-		}
-		runtime.Gosched()
-	}
-	t.Fatal("reset barrier did not reopen coroutine admission")
 }
 
 func TestResetWebRuntimeReturnsBeforeExternalDrain(t *testing.T) {
@@ -339,4 +273,70 @@ func TestResetWebRuntimeWaitsForManagedCallersOnMainThread(t *testing.T) {
 		t.Fatalf("reset callbacks = %d, want 1", got)
 	}
 	waitForResetAdmissionOpen(t, co)
+}
+
+func (p resetMainThreadPlatform) IsMainThread() bool { return gid.Get() == p.main }
+
+func (resetDirectPlatform) IsMainThread() bool { return true }
+
+func (r *resetBlockingExt) RequestReset(exitCode int64) {
+	if r.callback != nil {
+		r.callback()
+	}
+	r.entered <- exitCode
+	<-r.release
+}
+
+func (r *resetRecordingExt) RequestReset(exitCode int64) {
+	r.calls <- exitCode
+}
+
+func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingExt {
+	t.Helper()
+
+	original := gco
+	originalPlatform := gdx.PlatformMgr
+	originalExt := gdx.ExtMgr
+	recorder := &resetRecordingExt{calls: make(chan int64, 1)}
+	SetCoroutines(co)
+	gdx.PlatformMgr = resetDirectPlatform{}
+	gdx.ExtMgr = recorder
+	enginewrap.Init(WaitMainThread)
+	t.Cleanup(func() {
+		co.RunAfterStop(nil)
+		SetCoroutines(original)
+		gdx.PlatformMgr = originalPlatform
+		gdx.ExtMgr = originalExt
+	})
+	return recorder
+}
+
+func waitForResetAdmissionClose(t *testing.T, co *coroutine.Coroutines) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		probe := co.Create("reset-close-probe", func(coroutine.Thread) {})
+		if probe.Stopped() {
+			return
+		}
+		runtime.Gosched()
+	}
+	t.Fatal("reset barrier did not close coroutine admission")
+}
+
+func waitForResetAdmissionOpen(t *testing.T, co *coroutine.Coroutines) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var ran atomic.Bool
+		probe := co.Create("reset-open-probe", func(coroutine.Thread) {
+			ran.Store(true)
+		})
+		co.Join(probe)
+		if ran.Load() {
+			return
+		}
+		runtime.Gosched()
+	}
+	t.Fatal("reset barrier did not reopen coroutine admission")
 }

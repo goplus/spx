@@ -122,6 +122,39 @@ type canonicalBundle struct {
 	Entries   []Entry   `json:"entries"`
 }
 
+// ParseManifest parses and validates a v1 manifest. Manifest files are
+// untrusted identity inputs, so unknown fields, duplicate object keys and
+// trailing JSON values are rejected instead of being silently ignored.
+func ParseManifest(data []byte) (Bundle, error) {
+	return ParseManifestWithLimits(data, Limits{})
+}
+
+// ParseManifestWithLimits applies caller-supplied limits.
+func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
+	limits, err := limits.withDefaults()
+	if err != nil {
+		return Bundle{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
+	}
+	if int64(len(data)) > limits.MaxManifestBytes {
+		return Bundle{}, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
+	}
+	var decoded *Bundle
+	if err := strictjson.Decode(data, &decoded); err != nil {
+		return Bundle{}, fmt.Errorf("%w: decode JSON: %v", ErrInvalidManifest, err)
+	}
+	if decoded == nil {
+		return Bundle{}, fmt.Errorf("%w: decode JSON: manifest top-level value must be an object", ErrInvalidManifest)
+	}
+	b := *decoded
+	if err := b.ValidateWithLimits(limits); err != nil {
+		return Bundle{}, err
+	}
+	if b.Schema == "" {
+		b.Schema = SchemaV1
+	}
+	return b, nil
+}
+
 // Validate checks structure, names, modes, duplicate/case-fold collisions,
 // sizes and all entry digests. It does not access the files named by the
 // manifest.
@@ -176,17 +209,6 @@ func (b Bundle) CanonicalBytesWithLimits(limits Limits) ([]byte, error) {
 	return b.canonical(entries).bytesWithLimits(limits)
 }
 
-func (b canonicalBundle) bytesWithLimits(limits Limits) ([]byte, error) {
-	data, err := json.Marshal(b)
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > limits.MaxManifestBytes {
-		return nil, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
-	}
-	return data, nil
-}
-
 // IdentityDigest computes the full SHA-256 identity of the canonical bundle
 // manifest. It is not truncated and does not include Bundle.Digest.
 func (b Bundle) IdentityDigest() (string, error) {
@@ -225,39 +247,6 @@ func (b Bundle) WithDigestWithLimits(limits Limits) (Bundle, error) {
 		b.Schema = SchemaV1
 	}
 	b.Digest = digest
-	return b, nil
-}
-
-// ParseManifest parses and validates a v1 manifest. Manifest files are
-// untrusted identity inputs, so unknown fields, duplicate object keys and
-// trailing JSON values are rejected instead of being silently ignored.
-func ParseManifest(data []byte) (Bundle, error) {
-	return ParseManifestWithLimits(data, Limits{})
-}
-
-// ParseManifestWithLimits applies caller-supplied limits.
-func ParseManifestWithLimits(data []byte, limits Limits) (Bundle, error) {
-	limits, err := limits.withDefaults()
-	if err != nil {
-		return Bundle{}, fmt.Errorf("%w: %v", ErrInvalidManifest, err)
-	}
-	if int64(len(data)) > limits.MaxManifestBytes {
-		return Bundle{}, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
-	}
-	var decoded *Bundle
-	if err := strictjson.Decode(data, &decoded); err != nil {
-		return Bundle{}, fmt.Errorf("%w: decode JSON: %v", ErrInvalidManifest, err)
-	}
-	if decoded == nil {
-		return Bundle{}, fmt.Errorf("%w: decode JSON: manifest top-level value must be an object", ErrInvalidManifest)
-	}
-	b := *decoded
-	if err := b.ValidateWithLimits(limits); err != nil {
-		return Bundle{}, err
-	}
-	if b.Schema == "" {
-		b.Schema = SchemaV1
-	}
 	return b, nil
 }
 
@@ -325,6 +314,17 @@ func (b Bundle) canonical(entries entryIndex) canonicalBundle {
 		return out.Entries[i].Name < out.Entries[j].Name
 	})
 	return out
+}
+
+func (b canonicalBundle) bytesWithLimits(limits Limits) ([]byte, error) {
+	data, err := json.Marshal(b)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limits.MaxManifestBytes {
+		return nil, fmt.Errorf("%w: manifest size %d exceeds limit %d", ErrArchiveLimit, len(data), limits.MaxManifestBytes)
+	}
+	return data, nil
 }
 
 func (l Limits) withDefaults() (Limits, error) {

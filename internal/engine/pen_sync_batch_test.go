@@ -137,6 +137,28 @@ func TestPenSyncBufferBarrierFlushesBeforeOperation(t *testing.T) {
 	}
 }
 
+func TestPenSyncBufferOptionalCallbacksPreserveQueuedCommands(t *testing.T) {
+	var absent *PenSyncBuffer
+	called := 0
+	absent.Flush(func([]float32) { t.Fatal("nil buffer flushed") })
+	absent.Discard()
+	absent.Barrier(nil, func() { called++ })
+	buffer := NewPenSyncBuffer(0)
+	buffer.AddUp(7)
+	buffer.Flush(nil)
+	buffer.Barrier(nil, func() { called++ })
+	buffer.Barrier(func([]float32) { t.Fatal("nil operation flushed commands") }, nil)
+	buffer.Flush(func(data []float32) {
+		if data[0] != 1 {
+			t.Fatalf("lost queued commands: %v", data)
+		}
+		called++
+	})
+	if called != 3 {
+		t.Fatalf("callback count=%d", called)
+	}
+}
+
 func assertPenCommand(t *testing.T, data []float32, index, operation int, objectID Object, args [4]float32) {
 	t.Helper()
 	record := data[1+index*PenBatchFields : 1+(index+1)*PenBatchFields]
@@ -157,27 +179,5 @@ func assertPenCommand(t *testing.T, data []float32, index, operation int, object
 	}
 	if record[7] != 0 {
 		t.Fatalf("command %d reserved lane = %v, want 0", index, record[7])
-	}
-}
-
-func TestPenSyncBufferOptionalCallbacksPreserveQueuedCommands(t *testing.T) {
-	var absent *PenSyncBuffer
-	called := 0
-	absent.Flush(func([]float32) { t.Fatal("nil buffer flushed") })
-	absent.Discard()
-	absent.Barrier(nil, func() { called++ })
-	buffer := NewPenSyncBuffer(0)
-	buffer.AddUp(7)
-	buffer.Flush(nil)
-	buffer.Barrier(nil, func() { called++ })
-	buffer.Barrier(func([]float32) { t.Fatal("nil operation flushed commands") }, nil)
-	buffer.Flush(func(data []float32) {
-		if data[0] != 1 {
-			t.Fatalf("lost queued commands: %v", data)
-		}
-		called++
-	})
-	if called != 3 {
-		t.Fatalf("callback count=%d", called)
 	}
 }

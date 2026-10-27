@@ -109,27 +109,6 @@ func ClearInventory(items *spx.List) {
 
 `
 
-func newDirectFuncInterp(t testing.TB, mode ixgo.Mode) *ixgo.Interp {
-	t.Helper()
-	ctx := ixgo.NewContext(mode | ixgo.SupportMultipleInterp)
-	ctx.SetLeastCallForEnablePool(0)
-	i, err := ctx.LoadInterp("callbacks.go", directFuncSource)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(i.UnsafeRelease)
-	return i
-}
-
-func directFuncRun(t testing.TB, i *ixgo.Interp, name string, args ...any) any {
-	t.Helper()
-	value, err := i.RunFunc(name, args...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return value
-}
-
 type directFuncCallbacks struct {
 	values    []any
 	increment func()
@@ -143,35 +122,80 @@ type directFuncCallbacks struct {
 	state     func() []any
 }
 
-func loadDirectFuncCallbacks(t testing.TB, i *ixgo.Interp, name string, args ...any) directFuncCallbacks {
-	t.Helper()
-	values := directFuncRun(t, i, name, args...).([]any)
-	c := directFuncCallbacks{
-		values:    values,
-		increment: values[0].(func()),
-		even:      values[1].(func() bool),
-		snapshot:  values[2].(func() error),
-		key:       values[3].(func(spx.Key)),
-		text:      values[4].(func(string)),
-		data:      values[5].(func(any)),
-		sprite:    values[6].(func(spx.Sprite)),
-		message:   values[7].(func(string, any)),
-	}
-	if len(values) == 9 {
-		c.state = values[8].(func() []any)
-	}
-	return c
-}
-
-func (c directFuncCallbacks) checkState(t *testing.T, want []any) {
-	t.Helper()
-	if got := c.state(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("callback state = %#v, want %#v", got, want)
-	}
-}
-
 // No Sprite methods are needed: this verifies interface identity at the bridge.
 type directFuncTestSprite struct{ spx.Sprite }
+
+const procedureStopSource = `package main
+
+import "github.com/goplus/spx/v4"
+
+var game spx.Game
+var sprite spx.SpriteImpl
+
+func Run() int {
+	n := 0
+	spx.Procedure(func() {
+		n++
+		spx.Procedure(func() {
+			n += 10
+			game.Stop(spx.ThisScript)
+			n += 1000
+		})
+		n += 100
+		spx.Repeat(3, func() {
+			sprite.Stop(spx.ThisScript)
+			n += 1000
+		})
+		n += 1000
+	})
+	return n
+}
+
+func OtherPanic() (result string) {
+	defer func() { result = recover().(string) }()
+	spx.Procedure(func() { panic("user panic") })
+	return "unreachable"
+}
+
+func NilGame() (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	var p *spx.Game
+	spx.Procedure(func() { p.Stop(spx.ThisScript) })
+	return
+}
+
+func NilSprite() (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	var p *spx.SpriteImpl
+	spx.Procedure(func() { p.Stop(spx.ThisScript) })
+	return
+}
+
+func PromotedAndDynamic() int {
+	var p struct { spx.Game }
+	var target interface { Stop(spx.StopKind) } = &p
+	stop := target.Stop
+	count := 0
+	spx.Procedure(func() {
+		p.Stop(spx.StopKind(12345)) // Unknown kinds remain a no-op.
+		count++
+		stop(spx.ThisScript)
+		count++
+	})
+	return count
+}
+
+func RunStops(n int) int {
+	count := 0
+	for i := 0; i < n; i++ {
+		spx.Procedure(func() {
+			count++
+			game.Stop(spx.ThisScript)
+		})
+	}
+	return count
+}
+`
 
 func TestDirectFuncCallbacks(t *testing.T) {
 	for _, mode := range []struct {
@@ -367,89 +391,6 @@ func BenchmarkDirectFuncEvents(b *testing.B) {
 	})
 }
 
-const procedureStopSource = `package main
-
-import "github.com/goplus/spx/v4"
-
-var game spx.Game
-var sprite spx.SpriteImpl
-
-func Run() int {
-	n := 0
-	spx.Procedure(func() {
-		n++
-		spx.Procedure(func() {
-			n += 10
-			game.Stop(spx.ThisScript)
-			n += 1000
-		})
-		n += 100
-		spx.Repeat(3, func() {
-			sprite.Stop(spx.ThisScript)
-			n += 1000
-		})
-		n += 1000
-	})
-	return n
-}
-
-func OtherPanic() (result string) {
-	defer func() { result = recover().(string) }()
-	spx.Procedure(func() { panic("user panic") })
-	return "unreachable"
-}
-
-func NilGame() (panicked bool) {
-	defer func() { panicked = recover() != nil }()
-	var p *spx.Game
-	spx.Procedure(func() { p.Stop(spx.ThisScript) })
-	return
-}
-
-func NilSprite() (panicked bool) {
-	defer func() { panicked = recover() != nil }()
-	var p *spx.SpriteImpl
-	spx.Procedure(func() { p.Stop(spx.ThisScript) })
-	return
-}
-
-func PromotedAndDynamic() int {
-	var p struct { spx.Game }
-	var target interface { Stop(spx.StopKind) } = &p
-	stop := target.Stop
-	count := 0
-	spx.Procedure(func() {
-		p.Stop(spx.StopKind(12345)) // Unknown kinds remain a no-op.
-		count++
-		stop(spx.ThisScript)
-		count++
-	})
-	return count
-}
-
-func RunStops(n int) int {
-	count := 0
-	for i := 0; i < n; i++ {
-		spx.Procedure(func() {
-			count++
-			game.Stop(spx.ThisScript)
-		})
-	}
-	return count
-}
-`
-
-func newProcedureStopInterp(t testing.TB) *ixgo.Interp {
-	t.Helper()
-	ctx := ixgo.NewContext(ixgo.EnableCachedReg | ixgo.SupportMultipleInterp)
-	i, err := ctx.LoadInterp("main.go", procedureStopSource)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(i.UnsafeRelease)
-	return i
-}
-
 func TestInterpretedProcedureStop(t *testing.T) {
 	i := newProcedureStopInterp(t)
 	for _, test := range []struct {
@@ -503,4 +444,63 @@ func TestInterpretedListMutation(t *testing.T) {
 	if items.Len() != 0 {
 		t.Fatal("interpreter did not clear the host inventory")
 	}
+}
+
+func (c directFuncCallbacks) checkState(t *testing.T, want []any) {
+	t.Helper()
+	if got := c.state(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("callback state = %#v, want %#v", got, want)
+	}
+}
+
+func newDirectFuncInterp(t testing.TB, mode ixgo.Mode) *ixgo.Interp {
+	t.Helper()
+	ctx := ixgo.NewContext(mode | ixgo.SupportMultipleInterp)
+	ctx.SetLeastCallForEnablePool(0)
+	i, err := ctx.LoadInterp("callbacks.go", directFuncSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(i.UnsafeRelease)
+	return i
+}
+
+func directFuncRun(t testing.TB, i *ixgo.Interp, name string, args ...any) any {
+	t.Helper()
+	value, err := i.RunFunc(name, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func loadDirectFuncCallbacks(t testing.TB, i *ixgo.Interp, name string, args ...any) directFuncCallbacks {
+	t.Helper()
+	values := directFuncRun(t, i, name, args...).([]any)
+	c := directFuncCallbacks{
+		values:    values,
+		increment: values[0].(func()),
+		even:      values[1].(func() bool),
+		snapshot:  values[2].(func() error),
+		key:       values[3].(func(spx.Key)),
+		text:      values[4].(func(string)),
+		data:      values[5].(func(any)),
+		sprite:    values[6].(func(spx.Sprite)),
+		message:   values[7].(func(string, any)),
+	}
+	if len(values) == 9 {
+		c.state = values[8].(func() []any)
+	}
+	return c
+}
+
+func newProcedureStopInterp(t testing.TB) *ixgo.Interp {
+	t.Helper()
+	ctx := ixgo.NewContext(ixgo.EnableCachedReg | ixgo.SupportMultipleInterp)
+	i, err := ctx.LoadInterp("main.go", procedureStopSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(i.UnsafeRelease)
+	return i
 }

@@ -34,6 +34,15 @@ import (
 	"github.com/goplus/spx/v4/internal/projectpolicy"
 )
 
+type portableConfigTestFS struct{ file fs.File }
+
+type portableConfigTestDirectory struct {
+	fs.File
+	entries   []fs.DirEntry
+	err       error
+	readCalls int
+}
+
 func TestPortableConfigFSUsesCapturedBytes(t *testing.T) {
 	projectDir := t.TempDir()
 	writeNativeTestFile(t, filepath.Join(projectDir, ".config"), `{"extasset":"live"}`)
@@ -310,22 +319,6 @@ func TestPortableConfigRootReadDirErrorsAreCached(t *testing.T) {
 	}
 }
 
-type portableConfigTestFS struct{ file fs.File }
-
-func (f portableConfigTestFS) Open(string) (fs.File, error) { return f.file, nil }
-
-type portableConfigTestDirectory struct {
-	fs.File
-	entries   []fs.DirEntry
-	err       error
-	readCalls int
-}
-
-func (d *portableConfigTestDirectory) ReadDir(int) ([]fs.DirEntry, error) {
-	d.readCalls++
-	return d.entries, d.err
-}
-
 func TestPortableConfigRootValidation(t *testing.T) {
 	base := t.TempDir()
 	session := filepath.Join(base, "session")
@@ -443,6 +436,13 @@ func TestLoadPortableConfigOverlayAbsentAndInvalidSnapshots(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f portableConfigTestFS) Open(string) (fs.File, error) { return f.file, nil }
+
+func (d *portableConfigTestDirectory) ReadDir(int) ([]fs.DirEntry, error) {
+	d.readCalls++
+	return d.entries, d.err
 }
 
 func assertPortableConfigError(t *testing.T, err error, want string) {

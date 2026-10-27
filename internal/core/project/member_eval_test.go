@@ -31,10 +31,6 @@ type memberEvalFixture struct {
 	Score int
 }
 
-func (f *memberEvalFixture) Value() float64  { return 1.234 }
-func (f *memberEvalFixture) Single() float32 { return 2.5 }
-func (f *memberEvalFixture) Text() string    { return "level complete" }
-
 // EmbeddedBase is embedded (anonymously) inside the fixtures below.
 // It must be exported so the anonymous field itself is exported, matching
 // the real-world pattern (e.g. spx.SpriteImpl, *Game).
@@ -67,6 +63,20 @@ type unexportedEmbedFixture struct {
 	unexportedEmbedBase // unexported anonymous field
 	Name                string
 }
+
+type CyclicMemberFixture struct {
+	*CyclicMemberFixture
+	*CycleMemberLeaf
+	Label string
+}
+
+type CycleMemberLeaf struct{ Score int }
+
+type CycleMemberBranch struct{ *CycleMemberLeaf }
+
+type CycleMemberLeft struct{ *CycleMemberBranch }
+
+type CycleMemberRight struct{ *CycleMemberBranch }
 
 func TestResolveMemberStringEvalField(t *testing.T) {
 	fixture := memberEvalFixture{Score: 7}
@@ -246,12 +256,6 @@ func TestResolveMemberValueEvalOriginalMethod(t *testing.T) {
 	}
 }
 
-type CyclicMemberFixture struct {
-	*CyclicMemberFixture
-	*CycleMemberLeaf
-	Label string
-}
-
 func TestResolveMemberEvalEmbeddedRootIgnoresTopLevelFrom(t *testing.T) {
 	fixture := &CyclicMemberFixture{Label: "root"}
 	fixture.CyclicMemberFixture = fixture
@@ -259,13 +263,6 @@ func TestResolveMemberEvalEmbeddedRootIgnoresTopLevelFrom(t *testing.T) {
 		t.Fatal("from must only restrict direct fields, including when an embedded pointer revisits the root")
 	}
 }
-
-func (*CyclicMemberFixture) Value() int { return 42 }
-
-type CycleMemberLeaf struct{ Score int }
-type CycleMemberBranch struct{ *CycleMemberLeaf }
-type CycleMemberLeft struct{ *CycleMemberBranch }
-type CycleMemberRight struct{ *CycleMemberBranch }
 
 func TestResolveMemberEvalCyclicEmbeddings(t *testing.T) {
 	if os.Getenv("SPX_TEST_MEMBER_CYCLES") != "1" {
@@ -475,3 +472,11 @@ func TestResolveMemberEvalSkipsNonStructEmbeddings(t *testing.T) {
 		}
 	}
 }
+
+func (f *memberEvalFixture) Value() float64 { return 1.234 }
+
+func (f *memberEvalFixture) Single() float32 { return 2.5 }
+
+func (f *memberEvalFixture) Text() string { return "level complete" }
+
+func (*CyclicMemberFixture) Value() int { return 42 }

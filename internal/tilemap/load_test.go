@@ -30,18 +30,6 @@ type testDir struct {
 	files map[string]string
 }
 
-func (d testDir) Open(name string) (io.ReadCloser, error) {
-	content, ok := d.files[name]
-	if !ok {
-		return nil, errors.New("file not found")
-	}
-	return io.NopCloser(strings.NewReader(content)), nil
-}
-
-func (d testDir) Close() error {
-	return nil
-}
-
 func TestLoadNewFormat(t *testing.T) {
 	dir := testDir{
 		files: map[string]string{
@@ -277,4 +265,16 @@ func TestCalcWorldBoundsIntegerEdges(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (d testDir) Open(name string) (io.ReadCloser, error) {
+	content, ok := d.files[name]
+	if !ok {
+		return nil, errors.New("file not found")
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (d testDir) Close() error {
+	return nil
 }

@@ -38,6 +38,8 @@ type FS struct {
 	file *os.File
 }
 
+var spxBaseDir = defaultSPXBaseDir()
+
 // Open opens a zip filesystem object.
 func Open(file string) (fs.Dir, error) {
 	source, err := os.Open(file)
@@ -63,11 +65,11 @@ func Open(file string) (fs.Dir, error) {
 }
 
 // Close closes the filesystem object.
-func (zipf *FS) Close() error {
-	if zipf == nil || zipf.file == nil {
+func (z *FS) Close() error {
+	if z == nil || z.file == nil {
 		return nil
 	}
-	return zipf.file.Close()
+	return z.file.Close()
 }
 
 func openHttpWith(remotePath, scheme string) (fs.Dir, error) {
@@ -249,5 +251,3 @@ func defaultSPXBaseDir() string {
 	}
 	return filepath.Join(os.TempDir(), "spx")
 }
-
-var spxBaseDir = defaultSPXBaseDir()

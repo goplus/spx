@@ -36,6 +36,8 @@ import (
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 )
 
+type ndkRoundTripFunc func(*http.Request) (*http.Response, error)
+
 func TestParseToolSetupNDKArgs(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -252,103 +254,6 @@ func TestUpdateNDKShellConfigRepairsPartialBlock(t *testing.T) {
 	}
 }
 
-func testNDKHostTag() string {
-	if runtime.GOOS == "windows" {
-		return "windows-x86_64"
-	}
-	return "linux-x86_64"
-}
-
-func testNDKRoot(t *testing.T) string {
-	t.Helper()
-	root, err := expectedNDKRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-func writeNDKZipFixture(t *testing.T, dst string) androidNDKArchive {
-	t.Helper()
-	return writeNDKZipFixtureFor(t, dst, testNDKRoot(t), androidNDKVersion, testNDKHostTag())
-}
-
-func writeNDKZipFixtureFor(t *testing.T, dst, root, revision, hostTag string) androidNDKArchive {
-	t.Helper()
-	var buffer bytes.Buffer
-	writer := zip.NewWriter(&buffer)
-	writeNDKZipEntry(t, writer, root+"/source.properties", []byte("Pkg.Revision = "+revision+"\n"), 0o644)
-	bin := root + "/toolchains/llvm/prebuilt/" + hostTag + "/bin/"
-	if strings.HasPrefix(hostTag, "windows-") {
-		writeNDKZipEntry(t, writer, bin+"clang.exe", []byte("compiler"), 0o755)
-		writeNDKZipEntry(t, writer, bin+"clang++.exe", []byte("compiler"), 0o755)
-	} else {
-		writeNDKZipSymlink(t, writer, bin+"clang", "clang-12")
-		writeNDKZipSymlink(t, writer, bin+"clang++", "clang")
-		writeNDKZipEntry(t, writer, bin+"clang-12", []byte("#!/bin/sh\nexit 0\n"), 0o755)
-	}
-	for _, name := range requiredNDKFiles(hostTag) {
-		writeNDKZipEntry(t, writer, root+"/"+name, []byte("required"), 0o644)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	writeToolFixture(t, dst, buffer.String(), 0o644)
-	data := buffer.Bytes()
-	sum := sha256.Sum256(data)
-	archiveOS, _, _ := strings.Cut(hostTag, "-")
-	return androidNDKArchive{
-		archiveOS: archiveOS,
-		hostTag:   hostTag,
-		size:      int64(len(data)),
-		sha256:    hex.EncodeToString(sum[:]),
-	}
-}
-
-func writeNDKZipEntry(t *testing.T, writer *zip.Writer, name string, data []byte, mode fs.FileMode) {
-	t.Helper()
-	header := &zip.FileHeader{Name: name, Method: zip.Store}
-	header.SetMode(mode)
-	entry, err := writer.CreateHeader(header)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := entry.Write(data); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeNDKZipSymlink(t *testing.T, writer *zip.Writer, name, target string) {
-	t.Helper()
-	writeNDKZipEntry(t, writer, name, []byte(target), fs.ModeSymlink|0o777)
-}
-
-func writeInstalledNDKFixture(t *testing.T, root, hostTag string, symlinkTools bool) {
-	t.Helper()
-	writeToolFixture(t, filepath.Join(root, "source.properties"), "Pkg.Revision = "+androidNDKVersion+"\n", 0o644)
-	bin := filepath.Join(root, "toolchains", "llvm", "prebuilt", hostTag, "bin")
-	if strings.HasPrefix(hostTag, "windows-") {
-		for _, name := range []string{"clang.exe", "clang++.exe"} {
-			writeToolFixture(t, filepath.Join(bin, name), "compiler", 0o755)
-		}
-	} else {
-		writeToolFixture(t, filepath.Join(bin, "clang-12"), "#!/bin/sh\nexit 0\n", 0o755)
-		for name, target := range map[string]string{"clang": "clang-12", "clang++": "clang"} {
-			path := filepath.Join(bin, name)
-			if symlinkTools {
-				if err := os.Symlink(target, path); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				writeToolFixture(t, path, "#!/bin/sh\nexit 0\n", 0o755)
-			}
-		}
-	}
-	for _, name := range requiredNDKFiles(hostTag) {
-		writeToolFixture(t, filepath.Join(root, filepath.FromSlash(name)), "required", 0o644)
-	}
-}
-
 func TestAndroidNDKSetupExistingInstallation(t *testing.T) {
 	for _, state := range []string{"valid", "unmanaged", "managed"} {
 		t.Run(state, func(t *testing.T) {
@@ -383,21 +288,6 @@ func TestAndroidNDKSetupExistingInstallation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func newNDKEnvironment(t *testing.T) androidNDKEnv {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("SHELL", "/bin/bash")
-	t.Setenv("ANDROID_SDK_ROOT", filepath.Join(home, "sdk"))
-	t.Setenv("ANDROID_NDK_ROOT", "")
-	env, err := resolveAndroidNDKEnv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return env
 }
 
 func TestInstallNDKReplacement(t *testing.T) {
@@ -569,10 +459,6 @@ func TestNDKShellConfiguration(t *testing.T) {
 		t.Fatal("configuration through regular file accepted")
 	}
 }
-
-type ndkRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f ndkRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestNDKArchiveDownloadAndRetry(t *testing.T) {
 	for _, test := range []struct {
@@ -1117,4 +1003,118 @@ func TestRestoreNDKSymlinksRejectsBlockedMaterialization(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f ndkRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func testNDKHostTag() string {
+	if runtime.GOOS == "windows" {
+		return "windows-x86_64"
+	}
+	return "linux-x86_64"
+}
+
+func testNDKRoot(t *testing.T) string {
+	t.Helper()
+	root, err := expectedNDKRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func writeNDKZipFixture(t *testing.T, dst string) androidNDKArchive {
+	t.Helper()
+	return writeNDKZipFixtureFor(t, dst, testNDKRoot(t), androidNDKVersion, testNDKHostTag())
+}
+
+func writeNDKZipFixtureFor(t *testing.T, dst, root, revision, hostTag string) androidNDKArchive {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	writeNDKZipEntry(t, writer, root+"/source.properties", []byte("Pkg.Revision = "+revision+"\n"), 0o644)
+	bin := root + "/toolchains/llvm/prebuilt/" + hostTag + "/bin/"
+	if strings.HasPrefix(hostTag, "windows-") {
+		writeNDKZipEntry(t, writer, bin+"clang.exe", []byte("compiler"), 0o755)
+		writeNDKZipEntry(t, writer, bin+"clang++.exe", []byte("compiler"), 0o755)
+	} else {
+		writeNDKZipSymlink(t, writer, bin+"clang", "clang-12")
+		writeNDKZipSymlink(t, writer, bin+"clang++", "clang")
+		writeNDKZipEntry(t, writer, bin+"clang-12", []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	}
+	for _, name := range requiredNDKFiles(hostTag) {
+		writeNDKZipEntry(t, writer, root+"/"+name, []byte("required"), 0o644)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	writeToolFixture(t, dst, buffer.String(), 0o644)
+	data := buffer.Bytes()
+	sum := sha256.Sum256(data)
+	archiveOS, _, _ := strings.Cut(hostTag, "-")
+	return androidNDKArchive{
+		archiveOS: archiveOS,
+		hostTag:   hostTag,
+		size:      int64(len(data)),
+		sha256:    hex.EncodeToString(sum[:]),
+	}
+}
+
+func writeNDKZipEntry(t *testing.T, writer *zip.Writer, name string, data []byte, mode fs.FileMode) {
+	t.Helper()
+	header := &zip.FileHeader{Name: name, Method: zip.Store}
+	header.SetMode(mode)
+	entry, err := writer.CreateHeader(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(data); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeNDKZipSymlink(t *testing.T, writer *zip.Writer, name, target string) {
+	t.Helper()
+	writeNDKZipEntry(t, writer, name, []byte(target), fs.ModeSymlink|0o777)
+}
+
+func writeInstalledNDKFixture(t *testing.T, root, hostTag string, symlinkTools bool) {
+	t.Helper()
+	writeToolFixture(t, filepath.Join(root, "source.properties"), "Pkg.Revision = "+androidNDKVersion+"\n", 0o644)
+	bin := filepath.Join(root, "toolchains", "llvm", "prebuilt", hostTag, "bin")
+	if strings.HasPrefix(hostTag, "windows-") {
+		for _, name := range []string{"clang.exe", "clang++.exe"} {
+			writeToolFixture(t, filepath.Join(bin, name), "compiler", 0o755)
+		}
+	} else {
+		writeToolFixture(t, filepath.Join(bin, "clang-12"), "#!/bin/sh\nexit 0\n", 0o755)
+		for name, target := range map[string]string{"clang": "clang-12", "clang++": "clang"} {
+			path := filepath.Join(bin, name)
+			if symlinkTools {
+				if err := os.Symlink(target, path); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				writeToolFixture(t, path, "#!/bin/sh\nexit 0\n", 0o755)
+			}
+		}
+	}
+	for _, name := range requiredNDKFiles(hostTag) {
+		writeToolFixture(t, filepath.Join(root, filepath.FromSlash(name)), "required", 0o644)
+	}
+}
+
+func newNDKEnvironment(t *testing.T) androidNDKEnv {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SHELL", "/bin/bash")
+	t.Setenv("ANDROID_SDK_ROOT", filepath.Join(home, "sdk"))
+	t.Setenv("ANDROID_NDK_ROOT", "")
+	env, err := resolveAndroidNDKEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env
 }

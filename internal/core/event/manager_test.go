@@ -24,6 +24,22 @@ import (
 	"testing"
 )
 
+var registrationMethods = []struct {
+	name   string
+	bucket Bucket
+	add    func(*Manager, Sink) bool
+}{
+	{"Add", BucketClick, func(mgr *Manager, sink Sink) bool {
+		mgr.Add(BucketClick, sink)
+		return true
+	}},
+	{"AddStart", BucketStart, func(mgr *Manager, sink Sink) bool {
+		mgr.Add(BucketStart, sink)
+		return true
+	}},
+	{"TryAddStart", BucketStart, (*Manager).TryAddStart},
+}
+
 func TestManagerReset(t *testing.T) {
 	var mgr Manager
 	for bucket := Bucket(0); bucket < bucketCount; bucket++ {
@@ -99,22 +115,6 @@ func TestManagerStartLifecycle(t *testing.T) {
 	if !mgr.TryAddStart(Sink{Owner: "after-reset", Handler: func() {}}) {
 		t.Fatal("expected reset to reopen start registration")
 	}
-}
-
-var registrationMethods = []struct {
-	name   string
-	bucket Bucket
-	add    func(*Manager, Sink) bool
-}{
-	{"Add", BucketClick, func(mgr *Manager, sink Sink) bool {
-		mgr.Add(BucketClick, sink)
-		return true
-	}},
-	{"AddStart", BucketStart, func(mgr *Manager, sink Sink) bool {
-		mgr.Add(BucketStart, sink)
-		return true
-	}},
-	{"TryAddStart", BucketStart, (*Manager).TryAddStart},
 }
 
 func TestManagerSnapshotsAcrossRepeatedAppend(t *testing.T) {
@@ -341,5 +341,59 @@ func TestMatchRisingEdge(t *testing.T) {
 				t.Fatalf("condition evaluated %d times, want %d", index, len(tt.values))
 			}
 		})
+	}
+}
+
+func TestIgnore1(t *testing.T) {
+	calls := 0
+	Ignore1[string](func() { calls++ })("ignored")
+	Ignore1[string](nil)("ignored")
+	if calls != 1 {
+		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestResolveStop(t *testing.T) {
+	isSprite := func(obj any) bool { return obj == "sprite" || obj == "owner" }
+	isGame := func(obj any) bool { return obj == "game" }
+
+	filter, stopCaller := ResolveStop(AllSprites, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("sprite", false) || filter("game", false) {
+		t.Fatal("AllSprites resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(ThisSprite, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("owner", false) || filter("other", false) {
+		t.Fatal("ThisSprite resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(OtherScriptsInSprite, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("owner", false) || filter("owner", true) {
+		t.Fatal("OtherScriptsInSprite resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(AllOtherScripts, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("sprite", false) || !filter("game", false) || filter("sprite", true) {
+		t.Fatal("AllOtherScripts resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(AllStop, "owner", isSprite, isGame)
+	if !stopCaller || filter == nil || !filter("sprite", true) || !filter("game", true) || filter("other", false) {
+		t.Fatal("AllStop resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(ThisScript, "owner", isSprite, isGame)
+	if !stopCaller || filter != nil {
+		t.Fatal("ThisScript resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(OtherScriptsInGame, "owner", isSprite, isGame)
+	if stopCaller || filter == nil || !filter("game", false) || filter("game", true) || filter("owner", false) {
+		t.Fatal("OtherScriptsInGame resolution mismatch")
+	}
+
+	filter, stopCaller = ResolveStop(StopKind(999), "owner", isSprite, isGame)
+	if stopCaller || filter != nil {
+		t.Fatal("unknown stop kind resolution mismatch")
 	}
 }

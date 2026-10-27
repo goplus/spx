@@ -95,125 +95,6 @@ func (p *SpriteImpl) mirrorPosition(proxy *engine.Sprite, position mathf.Vec2, a
 	p.mergeEnginePosition(position.X, position.Y)
 }
 
-// -----------------------------------------------------------------------------
-// Frame Sync
-// -----------------------------------------------------------------------------
-func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
-	batch := proxyBatch{changes: p.shapeMgr.proxyChangeBuffer}
-	p.shapeMgr.proxyChangeBuffer = nil
-	defer func() {
-		p.shapeMgr.proxyChangeBuffer = sliceutil.Reset(batch.changes, 0)
-	}()
-	p.syncBuffer.Clear()
-	p.shapeMgr.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
-	p.flushSyncBuffer()
-	p.shapeMgr.commitProxyChanges(batch)
-	p.camera.setDirtyFlag(false)
-}
-
-func (p *Game) flushSyncBuffer() {
-	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
-}
-
-func (p *Game) pullPhysicsPositions() {
-	pull := &p.physicsPull
-	buffer := p.syncBuffer
-	reuse := pull.busy.CompareAndSwap(false, true)
-	if !reuse {
-		pull = &physicsPullBuffer{}
-		buffer = &engine.SpriteSyncBuffer{}
-	}
-	pull.ids = pull.ids[:0]
-	defer func() {
-		pull.sprites = sliceutil.Reset(pull.sprites, 0)
-		if reuse {
-			pull.busy.Store(false)
-		}
-	}()
-	for _, shape := range p.shapeMgr.items {
-		sprite, ok := shape.(*SpriteImpl)
-		if !ok || !sprite.shouldPullPhysicsPosition() {
-			continue
-		}
-		pull.ids = append(pull.ids, sprite.runtimeState.SyncSprite.Id)
-		pull.sprites = append(pull.sprites, sprite)
-	}
-	if len(pull.ids) == 0 {
-		return
-	}
-	applyPhysicsPositions(pull.sprites, buffer.GetPositions(pull.ids))
-}
-
-func (p *Game) processPhysicsTriggers() {
-	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents)
-	p.dispatchPhysicsTriggers()
-}
-
-// dispatchPhysicsTriggers keeps the batch intact if a touch dispatch panics.
-func (p *Game) dispatchPhysicsTriggers() {
-	for _, pair := range p.triggerEvents {
-		if pair.Src == nil || pair.Dst == nil {
-			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
-			continue
-		}
-		src, ok1 := pair.Src.Target.(*SpriteImpl)
-		dst, ok2 := pair.Dst.Target.(*SpriteImpl)
-		if !ok1 || !ok2 {
-			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
-			continue
-		}
-		if !isSpriteTouchable(src) || !isSpriteTouchable(dst) {
-			continue
-		}
-		src.fireTouchStart(dst)
-	}
-	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
-}
-
-// -----------------------------------------------------------------------------
-// Base Object Visual Sync
-// -----------------------------------------------------------------------------
-// applyDirtyUpdate consumes only this update, preserving reentrant changes and
-// restoring the retry flag if the engine write fails.
-func applyDirtyUpdate(dirty *bool, update func()) {
-	if !*dirty {
-		return
-	}
-	*dirty = false
-	completed := false
-	defer func() {
-		if !completed {
-			*dirty = true
-		}
-	}()
-	update()
-	completed = true
-}
-
-func (p *baseObj) applyLayerUpdate() {
-	applyDirtyUpdate(&p.runtimeState.IsLayerDirty, func() {
-		if !engine.HasLayerSortMethod() {
-			p.runtimeState.SyncSprite.SetZIndex(int64(p.runtimeState.Layer))
-		}
-	})
-}
-
-func (p *baseObj) applyCostumeTexture() {
-	applyDirtyUpdate(&p.runtimeState.IsCostumeDirty, func() {
-		syncSprite := p.runtimeState.SyncSprite
-		path := p.getCostumePath()
-		renderScale := p.getCostumeRenderScale()
-		if p.isCostumeAtlas() {
-			rect := p.getCostumeAtlasRegion()
-			uvRemap := p.currentCostume().frame.AtlasUVRect
-			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
-			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
-		} else {
-			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
-		}
-	})
-}
-
 func (p *SpriteImpl) applyCostumeUpdate() {
 	// Texture setters emit synchronous callbacks. Nested queries must not
 	// interleave another texture write with this preparation's scale and UVs.
@@ -469,6 +350,125 @@ func (p *SpriteImpl) captureProxyVisual() preparedProxyVisual {
 		proxy:        p.runtimeState.SyncSprite,
 		dirtyVersion: p.spriteState.DirtyVersion,
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Frame Sync
+// -----------------------------------------------------------------------------
+func (p *Game) flushSpriteProxyChanges(activeShapes []Shape) {
+	batch := proxyBatch{changes: p.shapeMgr.proxyChangeBuffer}
+	p.shapeMgr.proxyChangeBuffer = nil
+	defer func() {
+		p.shapeMgr.proxyChangeBuffer = sliceutil.Reset(batch.changes, 0)
+	}()
+	p.syncBuffer.Clear()
+	p.shapeMgr.collectProxyChanges(activeShapes, p.syncBuffer, &batch)
+	p.flushSyncBuffer()
+	p.shapeMgr.commitProxyChanges(batch)
+	p.camera.setDirtyFlag(false)
+}
+
+func (p *Game) flushSyncBuffer() {
+	engine.SyncBatchUpdateSprites(p.syncBuffer.Serialize())
+}
+
+func (p *Game) pullPhysicsPositions() {
+	pull := &p.physicsPull
+	buffer := p.syncBuffer
+	reuse := pull.busy.CompareAndSwap(false, true)
+	if !reuse {
+		pull = &physicsPullBuffer{}
+		buffer = &engine.SpriteSyncBuffer{}
+	}
+	pull.ids = pull.ids[:0]
+	defer func() {
+		pull.sprites = sliceutil.Reset(pull.sprites, 0)
+		if reuse {
+			pull.busy.Store(false)
+		}
+	}()
+	for _, shape := range p.shapeMgr.items {
+		sprite, ok := shape.(*SpriteImpl)
+		if !ok || !sprite.shouldPullPhysicsPosition() {
+			continue
+		}
+		pull.ids = append(pull.ids, sprite.runtimeState.SyncSprite.Id)
+		pull.sprites = append(pull.sprites, sprite)
+	}
+	if len(pull.ids) == 0 {
+		return
+	}
+	applyPhysicsPositions(pull.sprites, buffer.GetPositions(pull.ids))
+}
+
+func (p *Game) processPhysicsTriggers() {
+	p.triggerEvents = engine.GetTriggerEvents(p.triggerEvents)
+	p.dispatchPhysicsTriggers()
+}
+
+// dispatchPhysicsTriggers keeps the batch intact if a touch dispatch panics.
+func (p *Game) dispatchPhysicsTriggers() {
+	for _, pair := range p.triggerEvents {
+		if pair.Src == nil || pair.Dst == nil {
+			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
+			continue
+		}
+		src, ok1 := pair.Src.Target.(*SpriteImpl)
+		dst, ok2 := pair.Dst.Target.(*SpriteImpl)
+		if !ok1 || !ok2 {
+			spxlog.Info("Physics error: unexpected trigger pair - invalid sprite types")
+			continue
+		}
+		if !isSpriteTouchable(src) || !isSpriteTouchable(dst) {
+			continue
+		}
+		src.fireTouchStart(dst)
+	}
+	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
+}
+
+func (p *baseObj) applyLayerUpdate() {
+	applyDirtyUpdate(&p.runtimeState.IsLayerDirty, func() {
+		if !engine.HasLayerSortMethod() {
+			p.runtimeState.SyncSprite.SetZIndex(int64(p.runtimeState.Layer))
+		}
+	})
+}
+
+func (p *baseObj) applyCostumeTexture() {
+	applyDirtyUpdate(&p.runtimeState.IsCostumeDirty, func() {
+		syncSprite := p.runtimeState.SyncSprite
+		path := p.getCostumePath()
+		renderScale := p.getCostumeRenderScale()
+		if p.isCostumeAtlas() {
+			rect := p.getCostumeAtlasRegion()
+			uvRemap := p.currentCostume().frame.AtlasUVRect
+			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
+			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
+		} else {
+			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
+		}
+	})
+}
+
+// -----------------------------------------------------------------------------
+// Base Object Visual Sync
+// -----------------------------------------------------------------------------
+// applyDirtyUpdate consumes only this update, preserving reentrant changes and
+// restoring the retry flag if the engine write fails.
+func applyDirtyUpdate(dirty *bool, update func()) {
+	if !*dirty {
+		return
+	}
+	*dirty = false
+	completed := false
+	defer func() {
+		if !completed {
+			*dirty = true
+		}
+	}()
+	update()
+	completed = true
 }
 
 // -----------------------------------------------------------------------------

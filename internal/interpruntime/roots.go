@@ -42,53 +42,6 @@ type Roots struct {
 	SessionDir string
 }
 
-// Validate checks the interpreted runtime path contract.
-func (r Roots) Validate() error {
-	paths := []struct {
-		name          string
-		path          string
-		rejectSymlink bool
-	}{
-		{name: "ProjectDir", path: r.ProjectDir},
-		{name: "AssetDir", path: r.AssetDir, rejectSymlink: true},
-		{name: "SessionDir", path: r.SessionDir, rejectSymlink: true},
-	}
-	for _, item := range paths {
-		if err := validateAbsoluteCleanPath(item.name, item.path); err != nil {
-			return err
-		}
-		if err := validateDirectory(item.name, item.path, item.rejectSymlink); err != nil {
-			return err
-		}
-	}
-	if err := validateDirectoryWithin("AssetDir", r.ProjectDir, r.AssetDir); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Environment replaces ambient runtime paths with validated roots.
-func (r Roots) Environment(base []string) ([]string, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-	env := make([]string, 0, len(base)+3)
-	for _, entry := range base {
-		key, _, ok := strings.Cut(entry, "=")
-		if ok {
-			if _, root := rootEnvKey(key); root {
-				continue
-			}
-		}
-		env = append(env, entry)
-	}
-	return append(env,
-		ProjectDirEnv+"="+r.ProjectDir,
-		AssetDirEnv+"="+r.AssetDir,
-		SessionDirEnv+"="+r.SessionDir,
-	), nil
-}
-
 // RootsFromEnv parses and validates roots from a complete process environment.
 // Duplicate root variables are rejected instead of relying on platform-specific
 // duplicate-key precedence.
@@ -149,6 +102,53 @@ func PortableConfigFromEnv(env []string) (directory, identity string, found bool
 		return "", "", false, fmt.Errorf("interpruntime: portable config environment is incomplete")
 	}
 	return directory, identity, dirFound, nil
+}
+
+// Validate checks the interpreted runtime path contract.
+func (r Roots) Validate() error {
+	paths := []struct {
+		name          string
+		path          string
+		rejectSymlink bool
+	}{
+		{name: "ProjectDir", path: r.ProjectDir},
+		{name: "AssetDir", path: r.AssetDir, rejectSymlink: true},
+		{name: "SessionDir", path: r.SessionDir, rejectSymlink: true},
+	}
+	for _, item := range paths {
+		if err := validateAbsoluteCleanPath(item.name, item.path); err != nil {
+			return err
+		}
+		if err := validateDirectory(item.name, item.path, item.rejectSymlink); err != nil {
+			return err
+		}
+	}
+	if err := validateDirectoryWithin("AssetDir", r.ProjectDir, r.AssetDir); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Environment replaces ambient runtime paths with validated roots.
+func (r Roots) Environment(base []string) ([]string, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+	env := make([]string, 0, len(base)+3)
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, root := rootEnvKey(key); root {
+				continue
+			}
+		}
+		env = append(env, entry)
+	}
+	return append(env,
+		ProjectDirEnv+"="+r.ProjectDir,
+		AssetDirEnv+"="+r.AssetDir,
+		SessionDirEnv+"="+r.SessionDir,
+	), nil
 }
 
 func validateDirectoryWithin(name, root, directory string) error {

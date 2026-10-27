@@ -26,9 +26,7 @@ import (
 func RunCommandOutputWithEnv(workdir string, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = env
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
+	cmd.Dir = workdir
 	return cmd.CombinedOutput()
 }
 
@@ -38,9 +36,7 @@ func RunCommandOutput(name string, args ...string) ([]byte, error) {
 
 func RunStreamingCommand(workdir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
+	cmd.Dir = workdir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

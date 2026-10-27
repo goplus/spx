@@ -38,31 +38,20 @@ type configTestResMgr struct {
 	lists map[string]string
 }
 
-func (m *configTestResMgr) HasFile(path string) bool {
-	_, ok := m.files[path]
-	return ok
+type sourceConfigDir struct {
+	resourceTestDir
+	files   map[string]string
+	openErr error
 }
 
-func (m *configTestResMgr) ReadAllText(path string) string {
-	m.reads[path]++
-	return m.files[path]
+type closeErrorReader struct {
+	io.Reader
+	err error
 }
 
-func (m *configTestResMgr) ListDirectories(path string) string {
-	if listing, ok := m.lists[path]; ok {
-		return listing
-	}
-	return "[]"
-}
-
-func installConfigTestResMgr(t *testing.T, files map[string]string) *configTestResMgr {
-	t.Helper()
-	enginewrap.Init(func(call func()) { call() })
-	manager := &configTestResMgr{files: files, reads: make(map[string]int)}
-	previous := pkgengine.ResMgr
-	pkgengine.ResMgr = manager
-	t.Cleanup(func() { pkgengine.ResMgr = previous })
-	return manager
+type closeErrorDir struct {
+	resourceTestDir
+	err error
 }
 
 func TestOpenResourcesKeepsEngineReadsBelowPackedOverlay(t *testing.T) {
@@ -210,29 +199,6 @@ func TestLoadJSONReadsBareEngineConfigStrictly(t *testing.T) {
 	}
 }
 
-type sourceConfigDir struct {
-	resourceTestDir
-	files   map[string]string
-	openErr error
-}
-
-func (d *sourceConfigDir) Open(name string) (io.ReadCloser, error) {
-	if value, ok := d.files[name]; ok {
-		return io.NopCloser(strings.NewReader(value)), nil
-	}
-	if d.openErr != nil {
-		return nil, d.openErr
-	}
-	return nil, os.ErrNotExist
-}
-
-func (d *sourceConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
-	if name == "fonts" {
-		return []spxfs.DirEntry{{Name: "Local", IsDir: true}, {Name: "README.txt"}}, nil
-	}
-	return nil, os.ErrNotExist
-}
-
 func TestOpenResourcesPreservesNativeAndWebFontSources(t *testing.T) {
 	for _, test := range []struct {
 		name, root, engineFile string
@@ -342,22 +308,6 @@ func TestOpenResourcesReportsMalformedEngineDirectoryListing(t *testing.T) {
 	}
 }
 
-type closeErrorReader struct {
-	io.Reader
-	err error
-}
-
-func (r closeErrorReader) Close() error { return r.err }
-
-type closeErrorDir struct {
-	resourceTestDir
-	err error
-}
-
-func (d *closeErrorDir) Open(string) (io.ReadCloser, error) {
-	return closeErrorReader{err: d.err}, nil
-}
-
 func TestVerifyFileDoesNotMaskSourceCloseErrorWithEngineFallback(t *testing.T) {
 	installConfigTestResMgr(t, map[string]string{"res://assets/font.ttf": "mounted font"})
 	wantErr := errors.New("source close failed")
@@ -404,4 +354,54 @@ func TestOpenResourcesDoesNotReadPreviousProjectAssets(t *testing.T) {
 			t.Fatalf("read %q from the previous project", file)
 		}
 	}
+}
+
+func (m *configTestResMgr) HasFile(path string) bool {
+	_, ok := m.files[path]
+	return ok
+}
+
+func (m *configTestResMgr) ReadAllText(path string) string {
+	m.reads[path]++
+	return m.files[path]
+}
+
+func (m *configTestResMgr) ListDirectories(path string) string {
+	if listing, ok := m.lists[path]; ok {
+		return listing
+	}
+	return "[]"
+}
+
+func (d *sourceConfigDir) Open(name string) (io.ReadCloser, error) {
+	if value, ok := d.files[name]; ok {
+		return io.NopCloser(strings.NewReader(value)), nil
+	}
+	if d.openErr != nil {
+		return nil, d.openErr
+	}
+	return nil, os.ErrNotExist
+}
+
+func (d *sourceConfigDir) ReadDir(name string) ([]spxfs.DirEntry, error) {
+	if name == "fonts" {
+		return []spxfs.DirEntry{{Name: "Local", IsDir: true}, {Name: "README.txt"}}, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (r closeErrorReader) Close() error { return r.err }
+
+func (d *closeErrorDir) Open(string) (io.ReadCloser, error) {
+	return closeErrorReader{err: d.err}, nil
+}
+
+func installConfigTestResMgr(t *testing.T, files map[string]string) *configTestResMgr {
+	t.Helper()
+	enginewrap.Init(func(call func()) { call() })
+	manager := &configTestResMgr{files: files, reads: make(map[string]int)}
+	previous := pkgengine.ResMgr
+	pkgengine.ResMgr = manager
+	t.Cleanup(func() { pkgengine.ResMgr = previous })
+	return manager
 }

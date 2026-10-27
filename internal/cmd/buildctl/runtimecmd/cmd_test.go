@@ -30,6 +30,25 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
+type recordedCall struct {
+	script string
+	args   []string
+}
+
+type recordedCommand struct {
+	dir  string
+	name string
+	args []string
+}
+
+type recordingRunner struct {
+	calls       []recordedCall
+	commands    []recordedCommand
+	repoRoot    string
+	commandHook func(workdir string, name string, args ...string) error
+	scriptErr   error
+}
+
 func TestRuntimeDispatchAndArgumentErrors(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -676,15 +695,18 @@ func TestLocalRuntimeManifestMissingEngineDoesNotPublish(t *testing.T) {
 }
 
 func TestCompressWasmArtifactsInstallsBrotli(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux package manager fixture")
-	}
-	osRelease, err := os.ReadFile("/etc/os-release")
-	if err != nil {
-		t.Skipf("cannot identify Linux package manager: %v", err)
-	}
-	if lower := strings.ToLower(string(osRelease)); !strings.Contains(lower, "id=ubuntu") && !strings.Contains(lower, "id=debian") {
-		t.Skip("APT installation fixture requires Ubuntu or Debian")
+	switch runtime.GOOS {
+	case "linux":
+		osRelease, err := os.ReadFile("/etc/os-release")
+		if err != nil {
+			t.Skipf("cannot identify Linux package manager: %v", err)
+		}
+		if lower := strings.ToLower(string(osRelease)); !strings.Contains(lower, "id=ubuntu") && !strings.Contains(lower, "id=debian") {
+			t.Skip("APT installation fixture requires Ubuntu or Debian")
+		}
+	case "darwin":
+	default:
+		t.Skip("package manager fixture requires Linux or macOS")
 	}
 	copyCommand, err := exec.LookPath("cp")
 	if err != nil {
@@ -699,6 +721,12 @@ func TestCompressWasmArtifactsInstallsBrotli(t *testing.T) {
 		{"install succeeds without binary", "missing binary", "brotli installation failed", "apt-get update\napt-get install -y brotli\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if runtime.GOOS == "darwin" {
+				if tc.failure == "update" {
+					t.Skip("Homebrew installation has no separate update command")
+				}
+				tc.wantCalls = "install brotli\n"
+			}
 			root := t.TempDir()
 			bin := filepath.Join(root, "commands")
 			log := filepath.Join(root, "install.log")
@@ -726,6 +754,13 @@ case "$2" in
     ;;
   *) exit 92 ;;
 esac
+`)
+			mustWriteExecutable(t, filepath.Join(bin, "brew"), `#!/bin/sh
+printf '%s\n' "$*" >> "$BROTLI_TEST_LOG"
+[ "$*" = 'install brotli' ] || exit 90
+[ "$BROTLI_TEST_FAILURE" != install ] || exit 42
+[ "$BROTLI_TEST_FAILURE" != 'missing binary' ] || exit 0
+exec "$BROTLI_TEST_COPY" "$BROTLI_TEST_SOURCE" "$BROTLI_TEST_DEST"
 `)
 			mustWriteExecutable(t, brotliFixture, `#!/bin/sh
 [ "$1" = -q ] && [ "$2" = 11 ] && [ "$3" = -o ] || exit 93
@@ -766,23 +801,67 @@ exec "$BROTLI_TEST_COPY" "$5" "$4"
 	}
 }
 
-type recordedCall struct {
-	script string
-	args   []string
+func TestBrotliLinuxInstallRejectsMissingReleaseAndTools(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("package manager fixtures use POSIX shell scripts")
+	}
+	if _, err := os.Stat("/etc/os-release"); !errors.Is(err, os.ErrNotExist) {
+		t.Skip("fixture requires a host without /etc/os-release")
+	}
+	bin := t.TempDir()
+	marker := filepath.Join(bin, "installer-ran")
+	t.Setenv("PATH", bin)
+	t.Setenv("BROTLI_TEST_LOG", marker)
+	mustWriteExecutable(t, filepath.Join(bin, "sudo"), "#!/bin/sh\n: > \"$BROTLI_TEST_LOG\"\nexit 99\n")
+	const want = "unable to install brotli automatically on linux: no supported package manager found"
+	if err := installBrotliLinux(); err == nil || err.Error() != want {
+		t.Fatalf("unsupported Linux installation = %v, want %q", err, want)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unsupported Linux installation ran an installer: %v", err)
+	}
 }
 
-type recordedCommand struct {
-	dir  string
-	name string
-	args []string
-}
-
-type recordingRunner struct {
-	calls       []recordedCall
-	commands    []recordedCommand
-	repoRoot    string
-	commandHook func(workdir string, name string, args ...string) error
-	scriptErr   error
+func TestBrotliLinuxInstallCommands(t *testing.T) {
+	apt := [][]string{{"apt-get", "update"}, {"apt-get", "install", "-y", "brotli"}}
+	dnf := [][]string{{"dnf", "install", "-y", "brotli"}}
+	yum := [][]string{{"yum", "install", "-y", "brotli"}}
+	for _, tt := range []struct {
+		name, release string
+		available     []string
+		want          [][]string
+	}{
+		{"Ubuntu uses apt even when not found on PATH", "ID=ubuntu\n", nil, apt},
+		{"Debian prefers apt", "ID=debian\n", []string{"dnf", "yum"}, apt},
+		{"distribution matching ignores case", "ID=UBUNTU\n", nil, apt},
+		{"Fedora prefers dnf", "ID=fedora\n", []string{"apt-get", "dnf", "yum"}, dnf},
+		{"RHEL falls back to yum", "ID=rhel\n", []string{"apt-get", "yum"}, yum},
+		{"CentOS leaves missing yum to command execution", "ID=centos\n", nil, yum},
+		{"unknown distribution prefers apt", "ID=custom\n", []string{"apt-get", "dnf", "yum"}, apt},
+		{"unknown distribution prefers dnf over yum", "ID=custom\n", []string{"dnf", "yum"}, dnf},
+		{"unknown distribution uses yum", "ID=custom\n", []string{"yum"}, yum},
+		{"missing release uses available manager", "", []string{"dnf"}, dnf},
+		{"missing release and tools", "", nil, nil},
+		{"unsupported package manager", "ID=arch\n", []string{"pacman"}, nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			available := make(map[string]bool)
+			for _, name := range tt.available {
+				available[name] = true
+			}
+			commands, err := brotliLinuxInstallCommands(tt.release, available)
+			if tt.want == nil {
+				const wantError = "unable to install brotli automatically on linux: no supported package manager found"
+				if err == nil || err.Error() != wantError || len(commands) != 0 {
+					t.Fatalf("unsupported installer = %v, %v; want no commands and %q", commands, err, wantError)
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(commands, tt.want) {
+				t.Fatalf("installation commands = %v, %v; want %v", commands, err, tt.want)
+			}
+		})
+	}
 }
 
 func (r *recordingRunner) RunScript(relativePath string, args ...string) error {

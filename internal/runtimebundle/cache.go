@@ -42,27 +42,6 @@ type Cache struct {
 	Permissions  Permissions
 }
 
-// Path returns the on-disk location for a namespace/digest pair. It does not
-// create anything and rejects invalid identities.
-func (c *Cache) Path(namespace Namespace, digest string) (string, error) {
-	if c == nil || c.Root == "" {
-		return "", fmt.Errorf("runtimebundle: nil or empty cache root")
-	}
-	if !filepath.IsAbs(c.Root) || filepath.Clean(c.Root) != c.Root {
-		return "", fmt.Errorf("runtimebundle: cache root must be absolute and clean: %q", c.Root)
-	}
-	if err := validateCacheRoot(c.Root); err != nil {
-		return "", err
-	}
-	if !namespace.valid() {
-		return "", fmt.Errorf("runtimebundle: invalid cache namespace %q", namespace)
-	}
-	if err := validateSHA256(digest); err != nil {
-		return "", fmt.Errorf("runtimebundle: invalid cache digest: %v", err)
-	}
-	return filepath.Join(c.Root, string(namespace), digest), nil
-}
-
 // NewCache constructs a cache using OS-backed cross-process locks.
 func NewCache(root string) *Cache {
 	return newCache(root, CrossProcessLockProvider{})
@@ -106,6 +85,27 @@ func DefaultCacheRoot() string {
 		base = os.TempDir()
 	}
 	return filepath.Join(base, "spx", "runtimebundle")
+}
+
+// Path returns the on-disk location for a namespace/digest pair. It does not
+// create anything and rejects invalid identities.
+func (c *Cache) Path(namespace Namespace, digest string) (string, error) {
+	if c == nil || c.Root == "" {
+		return "", fmt.Errorf("runtimebundle: nil or empty cache root")
+	}
+	if !filepath.IsAbs(c.Root) || filepath.Clean(c.Root) != c.Root {
+		return "", fmt.Errorf("runtimebundle: cache root must be absolute and clean: %q", c.Root)
+	}
+	if err := validateCacheRoot(c.Root); err != nil {
+		return "", err
+	}
+	if !namespace.valid() {
+		return "", fmt.Errorf("runtimebundle: invalid cache namespace %q", namespace)
+	}
+	if err := validateSHA256(digest); err != nil {
+		return "", fmt.Errorf("runtimebundle: invalid cache digest: %v", err)
+	}
+	return filepath.Join(c.Root, string(namespace), digest), nil
 }
 
 func newCache(root string, lockProvider LockProvider) *Cache {

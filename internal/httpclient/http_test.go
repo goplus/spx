@@ -29,8 +29,10 @@ import (
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
-func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return fn(req)
+type closeTrackingBody struct {
+	io.Reader
+	closes   int
+	closeErr error
 }
 
 func TestDoPreservesClientForHTTPRedirects(t *testing.T) {
@@ -193,14 +195,6 @@ func TestDoRejectsMissingFinalURLWithoutBody(t *testing.T) {
 	if !errors.Is(err, ErrInsecureRedirect) {
 		t.Fatalf("Do error = %v, want missing final URL rejection", err)
 	}
-}
-
-func getURL(client *http.Client, rawURL string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	return Do(client, req)
 }
 
 func TestDoRejectsMissingRequestURL(t *testing.T) {
@@ -488,13 +482,19 @@ func TestCloseResponseBodyHandlesEmptyAndFailedBodies(t *testing.T) {
 	}
 }
 
-type closeTrackingBody struct {
-	io.Reader
-	closes   int
-	closeErr error
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func (b *closeTrackingBody) Close() error {
 	b.closes++
 	return b.closeErr
+}
+
+func getURL(client *http.Client, rawURL string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return Do(client, req)
 }

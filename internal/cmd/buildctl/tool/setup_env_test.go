@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
 	"github.com/goplus/spx/v4/internal/release"
 )
 
@@ -258,6 +259,44 @@ func TestJDKShellExports(t *testing.T) {
 	}
 }
 
+func TestWindowsJDKEnvironmentPreservesInheritedPath(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows environment keys are case-insensitive")
+	}
+	root := t.TempDir()
+	javaHome, fallbackBin := filepath.Join(root, "missing-jdk"), filepath.Join(root, "fallback")
+	javaPath := filepath.Join(fallbackBin, "java.exe")
+	writeToolFixture(t, javaPath, "fixture", 0o600)
+	// Remove the original key before setting Path so the environment has only
+	// that casing, regardless of the key inherited by the test process.
+	t.Setenv("PATH", "")
+	if err := os.Unsetenv("PATH"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("Path", fallbackBin)
+	t.Setenv("PATHEXT", ".EXE")
+	t.Setenv("JAVA_HOME", javaHome)
+	env, err := resolveJDKShellEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(javaHome, "bin") + string(os.PathListSeparator) + fallbackBin
+	if env["PATH"] != want {
+		t.Fatalf("JDK PATH = %q, want %q", env["PATH"], want)
+	}
+	for key := range env {
+		if key != "PATH" && strings.EqualFold(key, "PATH") {
+			t.Fatalf("JDK environment retains duplicate PATH key %q", key)
+		}
+	}
+	if got, err := shared.ResolveCommandPath("java", env); err != nil || got != javaPath {
+		t.Fatalf("Java fallback = %q, %v; want %q", got, err, javaPath)
+	}
+	if got := os.Getenv("Path"); got != fallbackBin {
+		t.Fatalf("JDK environment resolution changed parent Path to %q", got)
+	}
+}
+
 func TestSetupJDKWithLocalCommandFixtures(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux package manager selection")
@@ -320,6 +359,84 @@ if [ "$2" = install ] && [ "$TOOL_FAIL" != verification ]; then : > "$JDK_MARKER
 				}
 			}
 		})
+	}
+}
+
+func TestSetupJDKWithHomebrewFixture(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Homebrew installation is macOS-only")
+	}
+	for _, tt := range []struct {
+		name, version, failure, wantError string
+		install                           bool
+	}{
+		{"already installed", strconv.Itoa(requiredJDKMajor), "", "", false},
+		{"missing Homebrew", "11", "", "homebrew not found", false},
+		{"install and verify", "11", "", "", true},
+		{"installer failure", "11", "install", "exit status 42", true},
+		{"installed version is wrong", "11", "verification", "failed to install JDK", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			bin := filepath.Join(root, "bin")
+			javaHome := filepath.Join(root, "jdk")
+			log := filepath.Join(root, "install.log")
+			t.Setenv("PATH", bin)
+			t.Setenv("JAVA_HOME", javaHome)
+			t.Setenv("JDK_VERSION", tt.version)
+			t.Setenv("JDK_REQUIRED", strconv.Itoa(requiredJDKMajor))
+			t.Setenv("JDK_MARKER", filepath.Join(root, "installed"))
+			t.Setenv("TOOL_FAIL", tt.failure)
+			t.Setenv("TOOL_LOG", log)
+			writeToolFixture(t, filepath.Join(bin, "java"), "#!/bin/sh\nprintf 'openjdk version \"11\"\\n' >&2\n", 0o755)
+			writeToolFixture(t, filepath.Join(javaHome, "bin", "java"), `#!/bin/sh
+if [ -f "$JDK_MARKER" ]; then JDK_VERSION=$JDK_REQUIRED; fi
+printf 'openjdk version "%s"\n' "$JDK_VERSION" >&2
+`, 0o755)
+			if tt.install {
+				// The only installer visible on PATH is this local fixture.
+				writeToolFixture(t, filepath.Join(bin, "brew"), `#!/bin/sh
+printf '%s\n' "$*" >> "$TOOL_LOG"
+[ "$*" = "install openjdk@$JDK_REQUIRED" ] || exit 90
+[ "$TOOL_FAIL" != install ] || exit 42
+if [ "$TOOL_FAIL" != verification ]; then : > "$JDK_MARKER"; fi
+`, 0o755)
+			}
+			err := runToolSetupJDK(nil)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("JDK setup error = %v, want %q", err, tt.wantError)
+			}
+			calls, err := os.ReadFile(log)
+			if tt.install {
+				want := "install openjdk@" + strconv.Itoa(requiredJDKMajor) + "\n"
+				if err != nil || string(calls) != want {
+					t.Fatalf("installer calls = %q, %v; want %q", calls, err, want)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("JDK setup unexpectedly ran an installer: %q, %v", calls, err)
+			}
+		})
+	}
+}
+
+func TestSetupJDKWindowsRequiresManualInstallation(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows never installs a JDK automatically")
+	}
+	root := t.TempDir()
+	t.Setenv("PATH", root)
+	t.Setenv("JAVA_HOME", root)
+	err := runToolSetupJDK(nil)
+	want := "on Windows, install JDK " + strconv.Itoa(requiredJDKMajor) + " manually and ensure JAVA_HOME is set"
+	if err == nil || err.Error() != want {
+		t.Fatalf("JDK setup error = %v, want %q", err, want)
+	}
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("manual JDK setup modified local state: %v, %v", entries, err)
 	}
 }
 
@@ -489,10 +606,85 @@ func TestEnsureSConsRejectsBlockedEnvironmentDirectory(t *testing.T) {
 	}
 }
 
-func TestDetectJavaVersionRejectsCommandFailure(t *testing.T) {
+func TestDetectJavaVersionUsesProvidedPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Java fixtures use POSIX shell scripts")
+	}
+	parentBin, javaHome := t.TempDir(), t.TempDir()
+	javaBin := filepath.Join(javaHome, "bin")
+	failingBin := t.TempDir()
+	writeToolFixture(t, filepath.Join(parentBin, "java"), "#!/bin/sh\nprintf 'openjdk version \""+strconv.Itoa(requiredJDKMajor-1)+"\"\\n' >&2\n", 0o755)
+	writeToolFixture(t, filepath.Join(javaBin, "java"), "#!/bin/sh\nprintf 'openjdk version \""+strconv.Itoa(requiredJDKMajor)+"\"\\n' >&2\n", 0o755)
+	writeToolFixture(t, filepath.Join(failingBin, "java"), "#!/bin/sh\nprintf 'openjdk version \""+strconv.Itoa(requiredJDKMajor)+"\"\\n' >&2\nexit 1\n", 0o755)
+	t.Setenv("PATH", parentBin)
+	t.Setenv("JAVA_HOME", javaHome)
+	resolved, err := resolveJDKShellEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(javaBin)
+	for _, tt := range []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"resolved JAVA_HOME", resolved, true},
+		{"relative PATH", map[string]string{"PATH": "."}, true},
+		{"command failure with valid version", map[string]string{"PATH": failingBin}, false},
+		{"missing PATH", map[string]string{"JAVA_HOME": javaHome}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			major, ok := detectJavaMajorVersion(tt.env)
+			wantMajor := 0
+			if tt.want {
+				wantMajor = requiredJDKMajor
+			}
+			if major != wantMajor || ok != tt.want {
+				t.Fatalf("Java version = %d, %v; want %d, %v", major, ok, wantMajor, tt.want)
+			}
+			if os.Getenv("PATH") != parentBin {
+				t.Fatal("Java detection changed the parent PATH")
+			}
+		})
+	}
+}
+
+func TestDetectJavaVersionRejectsMissingCommand(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if major, ok := detectJavaMajorVersion(map[string]string{"PATH": t.TempDir()}); ok || major != 0 {
 		t.Fatalf("missing Java = %d, %v", major, ok)
+	}
+}
+
+func TestDetectJavaVersionRejectsRemovedWorkingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows prevents removal of the working directory")
+	}
+	root := t.TempDir()
+	working := filepath.Join(root, "working")
+	marker := filepath.Join(root, "java-ran")
+	writeToolFixture(t, filepath.Join(root, "bin", "java"), "#!/bin/sh\n: > "+strconv.Quote(marker)+"\nprintf 'openjdk version \""+strconv.Itoa(requiredJDKMajor)+"\"\\n' >&2\n", 0o755)
+	if err := os.Mkdir(working, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(working)
+	if err := os.Remove(working); err != nil {
+		t.Fatal(err)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		t.Skipf("host still resolves the removed working directory as %q", cwd)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("removed working directory = %v", err)
+	}
+	env := map[string]string{"PATH": filepath.Join("..", "bin")}
+	if path, err := shared.ResolveCommandPath("java", env); err != nil || filepath.IsAbs(path) {
+		t.Fatalf("relative Java fixture = %q, %v", path, err)
+	}
+	if major, ok := detectJavaMajorVersion(env); ok || major != 0 {
+		t.Fatalf("Java in removed working directory = %d, %v", major, ok)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Java ran without a resolvable working directory: %v", err)
 	}
 }
 

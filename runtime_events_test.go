@@ -31,17 +31,19 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
-	t.Helper()
-
-	co := setupRuntimeScheduler(t)
-	game := new(Game)
-	game.bindScriptEvents()
-	game.inputMgr.init(game)
-	engine.SetGame(game)
-	t.Cleanup(func() { engine.SetGame(nil) })
-	return co, game
+type clickThroughSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	hits          map[pkgengine.Object]bool
+	lastIsTrigger map[pkgengine.Object]bool
 }
+
+type disappearingClickTarget struct {
+	proxy      engine.Sprite
+	proxyReads int
+	clicks     int
+}
+
+type touchEventSprite struct{ SpriteImpl }
 
 func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
@@ -63,18 +65,6 @@ func TestStopFromExternalCallerDoesNotExcludeActiveCoroutine(t *testing.T) {
 	}
 	close(release)
 	co.Join(thread)
-}
-
-func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, done func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for !done() {
-		if time.Now().After(deadline) {
-			t.Fatal("coroutine scheduler did not reach the expected state")
-		}
-		co.Update()
-		runtime.Gosched()
-	}
 }
 
 func TestOnStartFromCoroutineWaitsForFirstSlices(t *testing.T) {
@@ -278,16 +268,6 @@ func TestOnCondIgnoresNilCallbacks(t *testing.T) {
 	if got := game.scriptEvents.manager.Snapshot(coreevent.BucketCondition); len(got) != 0 {
 		t.Fatalf("condition sinks = %d, want 0", len(got))
 	}
-}
-
-func pollRuntimeConditions(registry *scriptEventRegistry) {
-	gco.RunBetweenScripts(registry.sampleConditions)
-	withEventRegistrationBarrier(registry.game, registry.dispatchConditions)
-}
-
-func pollRuntimeEventConditions(game *Game) {
-	game.OnEngineBeforeUpdate(1.0 / 30)
-	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
 }
 
 func TestOnCondStartsAfterOnStartPhase(t *testing.T) {
@@ -592,66 +572,47 @@ func TestRepeatedReceiverDoesNotDeferNewSibling(t *testing.T) {
 }
 
 func TestNestedAsyncBroadcastCycleYieldsAtRoundBoundary(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
+	for _, test := range []struct {
+		name          string
+		requestRedraw bool
+	}{
+		{name: "redraw requested", requestRedraw: true},
+		{name: "without loop continuation"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			var calls []string
+			game.OnMsg__1("a", func() {
+				calls = append(calls, "a")
+				if test.requestRedraw {
+					engine.RequestRedraw()
+				}
+				if len(calls) < 8 {
+					game.Broadcast__0("b")
+				}
+			})
+			game.OnMsg__1("b", func() {
+				calls = append(calls, "b")
+				if len(calls) < 8 {
+					game.Broadcast__0("a")
+				}
+			})
 
-	var calls []string
-	game.OnMsg__1("a", func() {
-		calls = append(calls, "a")
-		engine.RequestRedraw()
-		if len(calls) < 8 {
-			game.Broadcast__0("b")
-		}
-	})
-	game.OnMsg__1("b", func() {
-		calls = append(calls, "b")
-		if len(calls) < 8 {
 			game.Broadcast__0("a")
-		}
-	})
-
-	game.Broadcast__0("a")
-	for frame := 0; frame < 4; frame++ {
-		if frame > 0 {
-			itime.Update(0, 0)
-		}
-		co.Update()
-		want := []string{"a", "b", "a", "b", "a", "b", "a", "b"}[:2*(frame+1)]
-		if !reflect.DeepEqual(calls, want) {
-			t.Fatalf("calls after frame %d = %v, want %v", frame, calls, want)
-		}
-		if frame < 3 && co.UpdateStats().DeferredCount == 0 {
-			t.Fatalf("recursive receiver was not deferred after frame %d", frame)
-		}
-	}
-}
-
-func TestNestedAsyncBroadcastCycleWaitsForNextFrameWithoutLoopContinuation(t *testing.T) {
-	co, game := setupRuntimeEventGame(t)
-
-	var calls []string
-	game.OnMsg__1("a", func() {
-		calls = append(calls, "a")
-		if len(calls) < 8 {
-			game.Broadcast__0("b")
-		}
-	})
-	game.OnMsg__1("b", func() {
-		calls = append(calls, "b")
-		if len(calls) < 8 {
-			game.Broadcast__0("a")
-		}
-	})
-
-	game.Broadcast__0("a")
-	for frame := 0; frame < 4; frame++ {
-		if frame > 0 {
-			itime.Update(0, 0)
-		}
-		co.Update()
-		want := []string{"a", "b", "a", "b", "a", "b", "a", "b"}[:2*(frame+1)]
-		if !reflect.DeepEqual(calls, want) {
-			t.Fatalf("calls after frame %d = %v, want %v", frame, calls, want)
-		}
+			for frame := 0; frame < 4; frame++ {
+				if frame > 0 {
+					itime.Update(0, 0)
+				}
+				co.Update()
+				want := []string{"a", "b", "a", "b", "a", "b", "a", "b"}[:2*(frame+1)]
+				if !reflect.DeepEqual(calls, want) {
+					t.Fatalf("calls after frame %d = %v, want %v", frame, calls, want)
+				}
+				if test.requestRedraw && frame < 3 && co.UpdateStats().DeferredCount == 0 {
+					t.Fatalf("recursive receiver was not deferred after frame %d", frame)
+				}
+			}
+		})
 	}
 }
 
@@ -924,52 +885,6 @@ func TestGameRunBootstrapTasksExecutesQueuedHooksOnce(t *testing.T) {
 	}
 }
 
-type clickThroughSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
-	hits          map[pkgengine.Object]bool
-	lastIsTrigger map[pkgengine.Object]bool
-}
-
-func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, point mathf.Vec2, isTrigger bool) bool {
-	if s.lastIsTrigger != nil {
-		s.lastIsTrigger[obj] = isTrigger
-	}
-	return s.hits[obj]
-}
-
-func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
-
-func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
-	t.Helper()
-
-	setupImmediateEngineCalls(t)
-
-	original := pkgengine.SpriteMgr
-	mgr := &clickThroughSpriteMgr{
-		hits:          hits,
-		lastIsTrigger: make(map[pkgengine.Object]bool),
-	}
-	pkgengine.SpriteMgr = mgr
-	t.Cleanup(func() {
-		pkgengine.SpriteMgr = original
-	})
-	return mgr
-}
-
-func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick bool) *SpriteImpl {
-	sprite := &SpriteImpl{}
-	sprite.g = g
-	sprite.name = name
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
-	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
-	if registerClick {
-		sprite.OnClick(func() {})
-	}
-	return sprite
-}
-
 func TestFindClickTargetRespectsLayerOrderAndVisibility(t *testing.T) {
 	for _, test := range []struct {
 		name       string
@@ -1127,23 +1042,6 @@ func TestLeftButtonDownRoutesClicksAfterStartingSwipe(t *testing.T) {
 	}
 }
 
-type disappearingClickTarget struct {
-	proxy      engine.Sprite
-	proxyReads int
-	clicks     int
-}
-
-func (c *disappearingClickTarget) getProxy() *engine.Sprite {
-	c.proxyReads++
-	if c.proxyReads > 1 {
-		return nil
-	}
-	return &c.proxy
-}
-
-func (c *disappearingClickTarget) Visible() bool        { return true }
-func (c *disappearingClickTarget) doWhenClick(this any) { c.clicks++ }
-
 func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T) {
 	previous := gco
 	gco = nil
@@ -1179,17 +1077,6 @@ func TestLeftButtonDownDoesNotFallThroughWhenTargetProxyDisappears(t *testing.T)
 			t.Fatalf("global blocked %v: missing target proxy consumed the stage gate", blocked)
 		}
 	}
-}
-
-type touchEventSprite struct{ SpriteImpl }
-
-func (*touchEventSprite) Main() {}
-
-func newTouchEventSprite(game *Game, name string) *touchEventSprite {
-	sprite := &touchEventSprite{}
-	sprite.g, sprite.name, sprite.sprite = game, name, sprite
-	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
-	return sprite
 }
 
 func TestTouchStartGate(t *testing.T) {
@@ -1289,4 +1176,99 @@ func TestPointHitsClickTargetRejectsMissingOrHiddenProxy(t *testing.T) {
 	if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
 		t.Fatal("hidden sprite accepted a click")
 	}
+}
+
+func (s *clickThroughSpriteMgr) CheckCollisionWithPoint(obj pkgengine.Object, point mathf.Vec2, isTrigger bool) bool {
+	if s.lastIsTrigger != nil {
+		s.lastIsTrigger[obj] = isTrigger
+	}
+	return s.hits[obj]
+}
+
+func (s *clickThroughSpriteMgr) SetZIndex(obj pkgengine.Object, z int64) {}
+
+func (c *disappearingClickTarget) Visible() bool { return true }
+
+func (c *disappearingClickTarget) getProxy() *engine.Sprite {
+	c.proxyReads++
+	if c.proxyReads > 1 {
+		return nil
+	}
+	return &c.proxy
+}
+
+func (c *disappearingClickTarget) doWhenClick(this any) { c.clicks++ }
+
+func (*touchEventSprite) Main() {}
+
+func setupRuntimeEventGame(t *testing.T) (*coroutine.Coroutines, *Game) {
+	t.Helper()
+
+	co := setupRuntimeScheduler(t)
+	game := new(Game)
+	game.bindScriptEvents()
+	game.inputMgr.init(game)
+	engine.SetGame(game)
+	t.Cleanup(func() { engine.SetGame(nil) })
+	return co, game
+}
+
+func updateRuntimeEventSchedulerUntil(t *testing.T, co *coroutine.Coroutines, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatal("coroutine scheduler did not reach the expected state")
+		}
+		co.Update()
+		runtime.Gosched()
+	}
+}
+
+func pollRuntimeConditions(registry *scriptEventRegistry) {
+	gco.RunBetweenScripts(registry.sampleConditions)
+	withEventRegistrationBarrier(registry.game, registry.dispatchConditions)
+}
+
+func pollRuntimeEventConditions(game *Game) {
+	game.OnEngineBeforeUpdate(1.0 / 30)
+	withEventRegistrationBarrier(game, game.scriptEvents.dispatchConditions)
+}
+
+func setupClickThroughSpriteMgr(t *testing.T, hits map[pkgengine.Object]bool) *clickThroughSpriteMgr {
+	t.Helper()
+
+	setupImmediateEngineCalls(t)
+
+	original := pkgengine.SpriteMgr
+	mgr := &clickThroughSpriteMgr{
+		hits:          hits,
+		lastIsTrigger: make(map[pkgengine.Object]bool),
+	}
+	pkgengine.SpriteMgr = mgr
+	t.Cleanup(func() {
+		pkgengine.SpriteMgr = original
+	})
+	return mgr
+}
+
+func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick bool) *SpriteImpl {
+	sprite := &SpriteImpl{}
+	sprite.g = g
+	sprite.name = name
+	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
+	if registerClick {
+		sprite.OnClick(func() {})
+	}
+	return sprite
+}
+
+func newTouchEventSprite(game *Game, name string) *touchEventSprite {
+	sprite := &touchEventSprite{}
+	sprite.g, sprite.name, sprite.sprite = game, name, sprite
+	sprite.scriptEventBindings.bind(&game.scriptEvents, &sprite.SpriteImpl)
+	return sprite
 }

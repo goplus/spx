@@ -192,13 +192,6 @@ func CallVariantGetPtrDestructor(
 	return (GDExtensionPtrDestructor)(ret)
 }
 
-func freeReturnedString(value GdString) {
-	C.cgo_callfn_GDExtensionSpxGlobalFreeString(
-		(C.GDExtensionSpxGlobalFreeString)(builtinAPI.SpxGlobalFreeString),
-		(C.GdString)(value),
-	)
-}
-
 func CallGlobalRegisterCallbacks(
 	callback_ptr GDExtensionSpxCallbackInfoPtr,
 ) {
@@ -217,6 +210,13 @@ func (x *GDExtensionBuiltinInterface) resolveAPIFunctions() {
 	x.StringToUtf8Chars = (GDExtensionInterfaceStringToUtf8Chars)(resolveCFunc("string_to_utf8_chars"))
 	x.VariantGetPtrConstructor = (GDExtensionInterfaceVariantGetPtrConstructor)(resolveCFunc("variant_get_ptr_constructor"))
 	x.VariantGetPtrDestructor = (GDExtensionInterfaceVariantGetPtrDestructor)(resolveCFunc("variant_get_ptr_destructor"))
+}
+
+func freeReturnedString(value GdString) {
+	C.cgo_callfn_GDExtensionSpxGlobalFreeString(
+		(C.GDExtensionSpxGlobalFreeString)(builtinAPI.SpxGlobalFreeString),
+		(C.GdString)(value),
+	)
 }
 
 func stringInitConstructorBindings() {

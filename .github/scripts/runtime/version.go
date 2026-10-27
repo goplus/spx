@@ -104,6 +104,21 @@ func main() {
 	fmt.Println(release.DefaultRuntimeLock().RuntimeVersion)
 }
 
+func (d releaseDescription) githubOutputs() []githubOutput {
+	return []githubOutput{
+		{name: "release_tag", value: d.ReleaseTag},
+		{name: "version", value: d.Version},
+		{name: "runtime_version", value: d.RuntimeVersion},
+		{name: "runtime_abi", value: strconv.Itoa(d.RuntimeABI)},
+		{name: "runtime_tag", value: d.RuntimeTag},
+		{name: "runtime_manifest", value: d.RuntimeManifest},
+		{name: "release_repository", value: d.ReleaseRepository},
+		{name: "godot_repository", value: d.GodotRepository},
+		{name: "godot_commit", value: d.GodotCommit},
+		{name: "module_path", value: d.ModulePath},
+	}
+}
+
 func describeRelease() (releaseDescription, error) {
 	meta := release.DefaultReleaseMeta()
 	lock := release.DefaultRuntimeLock()
@@ -135,21 +150,6 @@ func githubRepositoryName(repositoryURL string) (string, error) {
 		return "", fmt.Errorf("runtime Godot repository %q must identify one owner/repository", repositoryURL)
 	}
 	return repository, nil
-}
-
-func (d releaseDescription) githubOutputs() []githubOutput {
-	return []githubOutput{
-		{name: "release_tag", value: d.ReleaseTag},
-		{name: "version", value: d.Version},
-		{name: "runtime_version", value: d.RuntimeVersion},
-		{name: "runtime_abi", value: strconv.Itoa(d.RuntimeABI)},
-		{name: "runtime_tag", value: d.RuntimeTag},
-		{name: "runtime_manifest", value: d.RuntimeManifest},
-		{name: "release_repository", value: d.ReleaseRepository},
-		{name: "godot_repository", value: d.GodotRepository},
-		{name: "godot_commit", value: d.GodotCommit},
-		{name: "module_path", value: d.ModulePath},
-	}
 }
 
 func writeGitHubOutput(path string, outputs []githubOutput) error {

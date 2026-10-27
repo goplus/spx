@@ -22,6 +22,10 @@ import (
 	"time"
 )
 
+type namedOwner struct{}
+
+type invalidNamedOwner struct{}
+
 func TestThreadIdentity(t *testing.T) {
 	co := New(nil)
 	var wantID int64
@@ -262,13 +266,9 @@ func TestExternalCallsPreserveActiveThread(t *testing.T) {
 	}
 }
 
-type namedOwner struct{}
-
 func (*namedOwner) Name() string {
 	return "named-thread"
 }
-
-type invalidNamedOwner struct{}
 
 func (*invalidNamedOwner) Name(_ string) string {
 	return "invalid"

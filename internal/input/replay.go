@@ -176,7 +176,7 @@ func (r InputReplay) Validate() error {
 			buttons = frame.State.Buttons
 		} else {
 			for eventIndex, event := range frame.MouseEvents {
-				if event.Button < 1 || event.Button > 3 {
+				if event.Button < MouseButtonLeft || event.Button > MouseButtonMiddle {
 					return fmt.Errorf("input replay frame %d mouse event %d has invalid button %d", i, eventIndex, event.Button)
 				}
 				mask := uint8(1 << (event.Button - 1))

@@ -106,20 +106,36 @@ func TestDefaultLoggerOutputs(t *testing.T) {
 }
 
 func TestLoggerPanic(t *testing.T) {
-	for _, level := range []Level{LevelDebug, LevelNone} {
-		t.Run(level.String(), func(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		level      Level
+		useDefault bool
+	}{
+		{"logger/debug", LevelDebug, false},
+		{"logger/none", LevelNone, false},
+		{"default/debug", LevelDebug, true},
+		{"default/none", LevelNone, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			var output bytes.Buffer
-			logger := New("panic", level, &output)
+			logger := New("panic", tc.level, &output)
+			panicf := logger.Panicf
+			if tc.useDefault {
+				previous := defaultLogger
+				defaultLogger = logger
+				t.Cleanup(func() { defaultLogger = previous })
+				panicf = Panicf
+			}
 			func() {
 				defer func() {
 					if got := recover(); got == nil || !strings.Contains(fmt.Sprint(got), "failure 42") {
 						t.Errorf("panic = %v", got)
 					}
 				}()
-				logger.Panicf("failure %d", 42)
+				panicf("failure %d", 42)
 			}()
-			if got := strings.Contains(output.String(), "failure 42"); got != (level != LevelNone) {
-				t.Errorf("panic logged=%v at level %s", got, level)
+			if got := strings.Contains(output.String(), "failure 42"); got != (tc.level != LevelNone) {
+				t.Errorf("panic logged=%v at level %s", got, tc.level)
 			}
 			logger.SetLevel(LevelInfo)
 			logger.Info("after panic")

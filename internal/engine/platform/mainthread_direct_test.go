@@ -29,10 +29,6 @@ type panicPlatformMgr struct {
 	gdx.IPlatformMgr
 }
 
-func (panicPlatformMgr) IsMainThread() bool {
-	panic("direct platforms should not call Godot to check the main thread")
-}
-
 func TestTryCallEngineDirectlySkipsGodotWithoutNativeBridge(t *testing.T) {
 	previous := gdx.PlatformMgr
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
@@ -45,4 +41,8 @@ func TestTryCallEngineDirectlySkipsGodotWithoutNativeBridge(t *testing.T) {
 	if !called {
 		t.Fatal("direct engine call did not run")
 	}
+}
+
+func (panicPlatformMgr) IsMainThread() bool {
+	panic("direct platforms should not call Godot to check the main thread")
 }

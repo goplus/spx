@@ -26,6 +26,34 @@ import (
 	"testing/fstest"
 )
 
+type schemaTestDir struct{}
+
+type verificationTestDir struct {
+	Dir
+	verify func(string) error
+}
+
+type openFileTestDir struct {
+	Dir
+	open func(string) (io.ReadCloser, error)
+}
+
+type closeFileTestReader struct {
+	io.Reader
+	close func() error
+}
+
+type directoryListTestDir struct {
+	Dir
+	ReadDirer
+	list func(string) ([]string, error)
+}
+
+type readDirTestDir struct {
+	Dir
+	read func(string) ([]DirEntry, error)
+}
+
 func TestSplitSchema(t *testing.T) {
 	tests := []struct {
 		path   string
@@ -97,14 +125,6 @@ func TestRegisterSchemaAndOpen(t *testing.T) {
 	}
 }
 
-type schemaTestDir struct{}
-
-func (*schemaTestDir) Open(name string) (io.ReadCloser, error) {
-	return io.NopCloser(strings.NewReader(name)), nil
-}
-
-func (*schemaTestDir) Close() error { return nil }
-
 func TestDirEntriesFromFS(t *testing.T) {
 	fixture := fstest.MapFS{
 		"a.txt":  &fstest.MapFile{},
@@ -127,27 +147,6 @@ func TestDirEntriesFromFS(t *testing.T) {
 		}
 	}
 }
-
-type verificationTestDir struct {
-	Dir
-	verify func(string) error
-}
-
-func (d verificationTestDir) VerifyFile(name string) error { return d.verify(name) }
-
-type openFileTestDir struct {
-	Dir
-	open func(string) (io.ReadCloser, error)
-}
-
-func (d openFileTestDir) Open(name string) (io.ReadCloser, error) { return d.open(name) }
-
-type closeFileTestReader struct {
-	io.Reader
-	close func() error
-}
-
-func (r closeFileTestReader) Close() error { return r.close() }
 
 func TestVerifyFileUsesCapability(t *testing.T) {
 	wantErr := errors.New("verification failed")
@@ -198,23 +197,6 @@ func TestVerifyFileOpenAndCloseErrors(t *testing.T) {
 	}
 }
 
-type directoryListTestDir struct {
-	Dir
-	ReadDirer
-	list func(string) ([]string, error)
-}
-
-func (d directoryListTestDir) ListDirectories(name string) ([]string, error) {
-	return d.list(name)
-}
-
-type readDirTestDir struct {
-	Dir
-	read func(string) ([]DirEntry, error)
-}
-
-func (d readDirTestDir) ReadDir(name string) ([]DirEntry, error) { return d.read(name) }
-
 func TestListDirectoriesUsesCapability(t *testing.T) {
 	wantErr := errors.New("listing failed")
 	dir := directoryListTestDir{list: func(name string) ([]string, error) {
@@ -253,3 +235,21 @@ func TestListDirectoriesReadDirFallback(t *testing.T) {
 		}
 	}
 }
+
+func (*schemaTestDir) Open(name string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(name)), nil
+}
+
+func (*schemaTestDir) Close() error { return nil }
+
+func (d verificationTestDir) VerifyFile(name string) error { return d.verify(name) }
+
+func (d openFileTestDir) Open(name string) (io.ReadCloser, error) { return d.open(name) }
+
+func (r closeFileTestReader) Close() error { return r.close() }
+
+func (d directoryListTestDir) ListDirectories(name string) ([]string, error) {
+	return d.list(name)
+}
+
+func (d readDirTestDir) ReadDir(name string) ([]DirEntry, error) { return d.read(name) }

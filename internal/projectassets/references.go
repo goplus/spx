@@ -19,9 +19,10 @@ package projectassets
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path"
-	"sort"
+	"slices"
 )
 
 type resolver struct {
@@ -52,13 +53,7 @@ func (r *resolver) collectSprites(packed map[string]spriteConfig) error {
 	}); err != nil {
 		return err
 	}
-	return collectSourceSection(r, "sprites", packed, func(source, base string, data []byte) error {
-		var config spriteConfig
-		if err := json.Unmarshal(data, &config); err != nil {
-			return fmt.Errorf("projectassets: decode %q: %w", source, err)
-		}
-		return r.addSpriteReferences(source, base, config)
-	})
+	return collectSourceSection(r, "sprites", packed, r.addSpriteReferences)
 }
 
 func (r *resolver) addSpriteReferences(source, base string, config spriteConfig) error {
@@ -85,11 +80,7 @@ func (r *resolver) collectSounds(packed map[string]soundConfig) error {
 	}); err != nil {
 		return err
 	}
-	return collectSourceSection(r, "sounds", packed, func(source, base string, data []byte) error {
-		var config soundConfig
-		if err := json.Unmarshal(data, &config); err != nil {
-			return fmt.Errorf("projectassets: decode %q: %w", source, err)
-		}
+	return collectSourceSection(r, "sounds", packed, func(source, base string, config soundConfig) error {
 		return r.addReference(source, base, config.Path)
 	})
 }
@@ -100,13 +91,7 @@ func (r *resolver) collectFonts(packed map[string]fontFamilyConfig, hasPackedCat
 			return r.addFontReferences(path.Join(r.packDir, packedIndexFile)+"#fonts/"+name, path.Join(r.packDir, "fonts", name), config)
 		})
 	}
-	return collectSourceSection(r, "fonts", map[string]fontFamilyConfig(nil), func(source, base string, data []byte) error {
-		var config fontFamilyConfig
-		if err := json.Unmarshal(data, &config); err != nil {
-			return fmt.Errorf("projectassets: decode %q: %w", source, err)
-		}
-		return r.addFontReferences(source, base, config)
-	})
+	return collectSourceSection(r, "fonts", map[string]fontFamilyConfig(nil), r.addFontReferences)
 }
 
 func (r *resolver) addFontReferences(source, base string, config fontFamilyConfig) error {
@@ -118,7 +103,7 @@ func (r *resolver) addFontReferences(source, base string, config fontFamilyConfi
 	return nil
 }
 
-func collectSourceSection[T any](r *resolver, section string, packed map[string]T, collect func(source, base string, data []byte) error) error {
+func collectSourceSection[T any](r *resolver, section string, packed map[string]T, collect func(source, base string, config T) error) error {
 	directory := path.Join(r.packDir, section)
 	entries, ok, err := readPinnedDir(r.root, directory)
 	if err != nil || !ok {
@@ -145,7 +130,11 @@ func collectSourceSection[T any](r *resolver, section string, packed map[string]
 			return err
 		}
 		if found {
-			if err := collect(source, base, data); err != nil {
+			var config T
+			if err := json.Unmarshal(data, &config); err != nil {
+				return fmt.Errorf("projectassets: decode %q: %w", source, err)
+			}
+			if err := collect(source, base, config); err != nil {
 				return err
 			}
 		}
@@ -154,12 +143,7 @@ func collectSourceSection[T any](r *resolver, section string, packed map[string]
 }
 
 func forEachSorted[T any](values map[string]T, visit func(string, T) error) error {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range slices.Sorted(maps.Keys(values)) {
 		if err := visit(name, values[name]); err != nil {
 			return err
 		}

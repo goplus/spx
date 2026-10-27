@@ -74,14 +74,6 @@ func Sched() int {
 	return 0
 }
 
-// Current identifies the execution-lock owner, not necessarily the caller.
-func currentScriptThread() coroutine.Thread {
-	if gco == nil || !gco.IsInCoroutine() {
-		return nil
-	}
-	return gco.Current()
-}
-
 func Forever(call func()) {
 	coreruntime.Forever(call, engine.NewControlFlowWaiter())
 }
@@ -99,6 +91,19 @@ func WaitUntil(__xgo_autoclosure_condition func() bool) {
 	coreruntime.WaitUntil(__xgo_autoclosure_condition, engine.NewControlFlowWaiter())
 }
 
+func init() {
+	gco = coroutine.New(engine.OnPanic)
+	engine.SetCoroutines(gco)
+}
+
+// Current identifies the execution-lock owner, not necessarily the caller.
+func currentScriptThread() coroutine.Thread {
+	if gco == nil || !gco.IsInCoroutine() {
+		return nil
+	}
+	return gco.Current()
+}
+
 func handleMainExecutionTimeout(thread coroutine.Thread) bool {
 	if !coreruntime.MainExecutionTimedOut(thread.MainStartedAt(), time.Now(), mainExecTimeoutSec*time.Second) {
 		return false
@@ -108,9 +113,4 @@ func handleMainExecutionTimeout(thread coroutine.Thread) bool {
 	thread.DisableMainTimeout()
 	gco.Sched(thread)
 	return true
-}
-
-func init() {
-	gco = coroutine.New(engine.OnPanic)
-	engine.SetCoroutines(gco)
 }

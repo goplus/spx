@@ -18,6 +18,25 @@ package coroutine
 
 import "github.com/goplus/spx/v4/internal/time"
 
+// WaitForChan receives one value from ch. Inside a coroutine it yields while
+// waiting; otherwise it blocks the caller directly.
+func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
+	me := p.callerThread()
+	if me == nil {
+		return <-ch
+	}
+
+	var value T
+	p.WaitToDo(func() {
+		select {
+		case value = <-ch:
+		case <-me.Context().Done():
+		}
+	})
+	// Only return the result after the script resumes normally.
+	return value
+}
+
 // Wait suspends the current coroutine for t seconds of level time.
 func (p *Coroutines) Wait(t float64) {
 	me := p.callerThread()
@@ -71,25 +90,6 @@ func (p *Coroutines) WaitToDo(fn func()) {
 	if result.panicked {
 		panic(result.panicValue)
 	}
-}
-
-// WaitForChan receives one value from ch. Inside a coroutine it yields while
-// waiting; otherwise it blocks the caller directly.
-func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
-	me := p.callerThread()
-	if me == nil {
-		return <-ch
-	}
-
-	var value T
-	p.WaitToDo(func() {
-		select {
-		case value = <-ch:
-		case <-me.Context().Done():
-		}
-	})
-	// Only return the result after the script resumes normally.
-	return value
 }
 
 // admitWorker registers external work under the admission barrier.

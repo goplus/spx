@@ -495,37 +495,6 @@ func TestResolveGoBinRejectsUnavailableCommand(t *testing.T) {
 	}
 }
 
-func sourceRuntimeConfig(sourceRoot, cacheRoot string) Config {
-	return Config{
-		RuntimeSourceRoot: sourceRoot,
-		RuntimeCacheRoot:  cacheRoot,
-		Source:            SourceIdentity{SourceMode: true},
-	}
-}
-
-func writeInstalledRuntimeTest(t *testing.T, spec release.HostRuntimeSpec, engine, pack string) string {
-	t.Helper()
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, spec.RuntimeName), []byte(engine), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, spec.PackName), []byte(pack), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return bin
-}
-
-func assertRuntimeFile(t *testing.T, path, want string) {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != want {
-		t.Fatalf("runtime file = %q, want %q", data, want)
-	}
-}
-
 func TestSourceRuntimeFallbackPreservesResolutionErrors(t *testing.T) {
 	lock := release.DefaultRuntimeLock()
 	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
@@ -605,5 +574,36 @@ func TestSourceRuntimePreservesMaterializationFailures(t *testing.T) {
 			}
 			assertRuntimeFile(t, cache, "blocked")
 		})
+	}
+}
+
+func sourceRuntimeConfig(sourceRoot, cacheRoot string) Config {
+	return Config{
+		RuntimeSourceRoot: sourceRoot,
+		RuntimeCacheRoot:  cacheRoot,
+		Source:            SourceIdentity{SourceMode: true},
+	}
+}
+
+func writeInstalledRuntimeTest(t *testing.T, spec release.HostRuntimeSpec, engine, pack string) string {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, spec.RuntimeName), []byte(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, spec.PackName), []byte(pack), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+func assertRuntimeFile(t *testing.T, path, want string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != want {
+		t.Fatalf("runtime file = %q, want %q", data, want)
 	}
 }

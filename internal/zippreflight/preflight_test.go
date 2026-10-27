@@ -35,12 +35,11 @@ type testEntry struct {
 	comment string
 }
 
-func testLimits() Limits {
-	return Limits{
-		MaxArchiveBytes:          2 << 20,
-		MaxCentralDirectoryBytes: 1 << 20,
-		MaxEntries:               100,
-	}
+type failingReaderAt struct {
+	io.ReaderAt
+	offset int64
+	length int
+	err    error
 }
 
 func TestCheckRejectsInvalidInput(t *testing.T) {
@@ -359,20 +358,6 @@ func TestCheckRejectsMalformedCentralDirectory(t *testing.T) {
 	}
 }
 
-type failingReaderAt struct {
-	io.ReaderAt
-	offset int64
-	length int
-	err    error
-}
-
-func (r failingReaderAt) ReadAt(p []byte, offset int64) (int, error) {
-	if offset == r.offset && len(p) == r.length {
-		return 0, r.err
-	}
-	return r.ReaderAt.ReadAt(p, offset)
-}
-
 func TestCheckRejectsUnreadableMetadata(t *testing.T) {
 	data := makeZip64(t, makeZip(t, "", testEntry{name: "one"}))
 	locator := findEnd(t, data) - directory64LocLen
@@ -469,6 +454,21 @@ func TestScanCentralDirectoryHonorsDeclaredEnd(t *testing.T) {
 
 func TestCheckAcceptsEmptyZip(t *testing.T) {
 	assertAccepted(t, makeZip(t, ""))
+}
+
+func (r failingReaderAt) ReadAt(p []byte, offset int64) (int, error) {
+	if offset == r.offset && len(p) == r.length {
+		return 0, r.err
+	}
+	return r.ReaderAt.ReadAt(p, offset)
+}
+
+func testLimits() Limits {
+	return Limits{
+		MaxArchiveBytes:          2 << 20,
+		MaxCentralDirectoryBytes: 1 << 20,
+		MaxEntries:               100,
+	}
 }
 
 func assertAccepted(t *testing.T, data []byte) {

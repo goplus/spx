@@ -44,36 +44,12 @@ type testZipEntry struct {
 	flags  uint16
 }
 
-func writeTestZip(t *testing.T, entries ...testZipEntry) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "bundle.zip")
-	var data bytes.Buffer
-	writer := zip.NewWriter(&data)
-	for _, item := range entries {
-		header := &zip.FileHeader{Name: item.name, Method: item.method, Flags: item.flags}
-		if item.mode != 0 {
-			header.SetMode(item.mode)
-		}
-		entry, err := writer.CreateHeader(header)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := entry.Write([]byte(item.data)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, data.Bytes(), 0o666); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func testDigest(data string) string {
-	sum := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(sum[:])
+// zipFailureReader exercises read and close errors through archive/zip's public
+// decompressor hook, rather than changing the verifier's implementation.
+type zipFailureReader struct {
+	io.Reader
+	closeErr error
+	closes   int
 }
 
 func TestVerifyZipBuildsFullManifestAndRejectsUnsafeNames(t *testing.T) {
@@ -955,19 +931,6 @@ func TestHashReaderEnforcesSizeAndPreservesReadErrors(t *testing.T) {
 	}
 }
 
-// zipFailureReader exercises read and close errors through archive/zip's public
-// decompressor hook, rather than changing the verifier's implementation.
-type zipFailureReader struct {
-	io.Reader
-	closeErr error
-	closes   int
-}
-
-func (r *zipFailureReader) Close() error {
-	r.closes++
-	return r.closeErr
-}
-
 func TestZipReadersPreserveFailuresAndExtractionCleansUp(t *testing.T) {
 	const payload = "target"
 	zipPath := writeTestZip(t, testZipEntry{name: "asset", data: payload})
@@ -1174,4 +1137,41 @@ func TestZipPreflightRejectsMalformedAndOverLimitArchives(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (r *zipFailureReader) Close() error {
+	r.closes++
+	return r.closeErr
+}
+
+func writeTestZip(t *testing.T, entries ...testZipEntry) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "bundle.zip")
+	var data bytes.Buffer
+	writer := zip.NewWriter(&data)
+	for _, item := range entries {
+		header := &zip.FileHeader{Name: item.name, Method: item.method, Flags: item.flags}
+		if item.mode != 0 {
+			header.SetMode(item.mode)
+		}
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(item.data)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data.Bytes(), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func testDigest(data string) string {
+	sum := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(sum[:])
 }

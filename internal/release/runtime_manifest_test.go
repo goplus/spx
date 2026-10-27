@@ -260,30 +260,6 @@ func TestParseRuntimeManifestRejectsUnknownAndTrailingJSON(t *testing.T) {
 	}
 }
 
-func runtimeManifestFixture(t *testing.T) (RuntimeLock, RuntimeProvenance, []RuntimeAssetInput, string) {
-	t.Helper()
-	lock := DefaultRuntimeLock()
-	assetDir := t.TempDir()
-	inputs := make([]RuntimeAssetInput, 0, len(lock.RequiredAssets))
-	for _, name := range lock.RequiredAssets {
-		path := filepath.Join(assetDir, name)
-		if err := os.WriteFile(path, []byte("asset:"+name+"\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		inputs = append(inputs, RuntimeAssetInput{Name: name, Path: path})
-	}
-	slices.Reverse(inputs)
-	provenance := RuntimeProvenance{
-		SPXCommit:               strings.Repeat("a", 40),
-		GodotCommit:             lock.Godot.Commit,
-		ModuleTree:              strings.Repeat("b", 40),
-		RuntimePackSourceSHA256: strings.Repeat("c", 64),
-		BuildRecipeSHA256:       strings.Repeat("d", 64),
-		Toolchain:               lock.Toolchain,
-	}
-	return lock, provenance, inputs, assetDir
-}
-
 func TestRuntimeManifestReleaseBindingAndRequiredAssets(t *testing.T) {
 	lock, provenance, inputs, _ := runtimeManifestFixture(t)
 	manifest, err := GenerateRuntimeManifest(lock, provenance, inputs)
@@ -412,4 +388,28 @@ func TestRuntimeManifestFileFailures(t *testing.T) {
 	if _, err := GenerateRuntimeManifest(RuntimeLock{}, provenance, inputs); err == nil {
 		t.Fatal("invalid generation lock accepted")
 	}
+}
+
+func runtimeManifestFixture(t *testing.T) (RuntimeLock, RuntimeProvenance, []RuntimeAssetInput, string) {
+	t.Helper()
+	lock := DefaultRuntimeLock()
+	assetDir := t.TempDir()
+	inputs := make([]RuntimeAssetInput, 0, len(lock.RequiredAssets))
+	for _, name := range lock.RequiredAssets {
+		path := filepath.Join(assetDir, name)
+		if err := os.WriteFile(path, []byte("asset:"+name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		inputs = append(inputs, RuntimeAssetInput{Name: name, Path: path})
+	}
+	slices.Reverse(inputs)
+	provenance := RuntimeProvenance{
+		SPXCommit:               strings.Repeat("a", 40),
+		GodotCommit:             lock.Godot.Commit,
+		ModuleTree:              strings.Repeat("b", 40),
+		RuntimePackSourceSHA256: strings.Repeat("c", 64),
+		BuildRecipeSHA256:       strings.Repeat("d", 64),
+		Toolchain:               lock.Toolchain,
+	}
+	return lock, provenance, inputs, assetDir
 }

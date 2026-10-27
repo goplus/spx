@@ -17,9 +17,12 @@
 package spx
 
 import (
-	itime "github.com/goplus/spx/v4/internal/time"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/goplus/spx/v4/internal/coroutine"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 func TestRand0SwapsReversedBounds(t *testing.T) {
@@ -284,36 +287,6 @@ func TestEqualUsesULPToleranceOnlyForNumericEquality(t *testing.T) {
 	}
 }
 
-func TestPenColorParamFromString(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected PenColorParam
-	}{
-		{name: "color lowercase", input: "color", expected: PenHue},
-		{name: "color uppercase", input: "COLOR", expected: PenHue},
-		{name: "color mixed case", input: "Color", expected: PenHue},
-		{name: "saturation", input: "saturation", expected: PenSaturation},
-		{name: "saturation uppercase", input: "SATURATION", expected: PenSaturation},
-		{name: "brightness", input: "brightness", expected: PenBrightness},
-		{name: "brightness uppercase", input: "BRIGHTNESS", expected: PenBrightness},
-		{name: "transparency", input: "transparency", expected: PenTransparency},
-		{name: "transparency uppercase", input: "TRANSPARENCY", expected: PenTransparency},
-		{name: "unknown string falls back to PenNone", input: "unknown", expected: PenNone},
-		{name: "empty string falls back to PenNone", input: "", expected: PenNone},
-		{name: "numeric string falls back to PenNone", input: "123", expected: PenNone},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := PenColorParamFromString(tt.input)
-			if got != tt.expected {
-				t.Errorf("PenColorParamFromString(%q) = %v, want %v", tt.input, got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestNumericAndClockUtilities(t *testing.T) {
 	for _, tt := range []struct {
 		value float64
@@ -337,5 +310,102 @@ func TestNumericAndClockUtilities(t *testing.T) {
 	itime.Update(0.25, 30)
 	if DeltaTime() != 0.25 || TimeSinceLevelLoad() != 0.25 {
 		t.Fatalf("logical clock = %v/%v", DeltaTime(), TimeSinceLevelLoad())
+	}
+}
+
+func TestDeterministicRandomIsolatedPerCoroutine(t *testing.T) {
+	t.Cleanup(ResetRandomSeed)
+	co := setupRuntimeScheduler(t)
+
+	runScenario := func(extraDraws int) []float64 {
+		t.Helper()
+		setDeterministicRandomSeed(123)
+
+		doneA := make(chan struct{}, 1)
+		co.Create("extra-draws", func(me coroutine.Thread) {
+			for range extraDraws {
+				_ = Rand__1(0, 1)
+			}
+			doneA <- struct{}{}
+		})
+		select {
+		case <-doneA:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for extra-draw coroutine")
+		}
+
+		doneB := make(chan []float64, 1)
+		co.Create("captured-sequence", func(me coroutine.Thread) {
+			doneB <- []float64{Rand__1(0, 1), Rand__1(0, 1)}
+		})
+		select {
+		case values := <-doneB:
+			return values
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for captured-sequence coroutine")
+			return nil
+		}
+	}
+
+	gotA := runScenario(1)
+	gotB := runScenario(5)
+	if len(gotA) != len(gotB) {
+		t.Fatalf("sequence length mismatch: %v vs %v", gotA, gotB)
+	}
+	for i := range gotA {
+		if gotA[i] != gotB[i] {
+			t.Fatalf("coroutine-local deterministic random mismatch at %d: %v vs %v", i, gotA, gotB)
+		}
+	}
+}
+
+func TestDeterministicRandomIgnoresWaitToDoGoroutineDraws(t *testing.T) {
+	t.Cleanup(ResetRandomSeed)
+	co := setupRuntimeScheduler(t)
+
+	runScenario := func(drawOutsideCoroutine bool) []float64 {
+		t.Helper()
+		setDeterministicRandomSeed(123)
+
+		done := make(chan []float64, 1)
+		co.Create("wait-to-do-random", func(me coroutine.Thread) {
+			co.WaitToDo(func() {
+				if drawOutsideCoroutine {
+					_ = Rand__1(0, 1)
+				}
+			})
+			done <- []float64{Rand__1(0, 1), Rand__1(0, 1)}
+		})
+
+		select {
+		case values := <-done:
+			return values
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for wait-to-do-random coroutine")
+			return nil
+		}
+	}
+
+	gotA := runScenario(false)
+	gotB := runScenario(true)
+	for i := range gotA {
+		if gotA[i] != gotB[i] {
+			t.Fatalf("wait-to-do goroutine shifted coroutine random stream at %d: %v vs %v", i, gotA, gotB)
+		}
+	}
+}
+
+func TestRandomWithoutSchedulerAndInt31Sequence(t *testing.T) {
+	previous := gco
+	gco = nil
+	t.Cleanup(func() { gco = previous; ResetRandomSeed() })
+	if currentCoroutineID() != 0 || lastAllocatedCoroutineID() != 0 {
+		t.Fatal("scheduler-free random has a coroutine identity")
+	}
+	SetRandomSeed(91)
+	first := randomInt31n(1000)
+	SetRandomSeed(91)
+	if second := randomInt31n(1000); second != first || second < 0 || second >= 1000 {
+		t.Fatalf("int31 sequence changed: %d/%d", first, second)
 	}
 }

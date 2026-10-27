@@ -39,9 +39,43 @@ type monitorEvalFixture struct {
 	calls int
 }
 
-func (g *monitorEvalFixture) Value() float64 {
-	g.calls++
-	return g.score
+type monitorPanelSpy struct {
+	visible bool
+	events  []string
+	style   ui.MonitorStyle
+	value   ui.MonitorValue
+	scale   float64
+	pos     mathf.Vec2
+}
+
+type SliderMonitorGame struct {
+	Game
+	score float64
+	Dot   sliderMonitorSprite
+}
+
+type sliderMonitorSprite struct {
+	SpriteImpl
+	*SliderMonitorGame
+	score float64
+}
+
+type gameWidgetUiMgr struct {
+	*askTestUiMgr
+	rangeValue float64
+}
+
+type ListMonitorGame struct {
+	Game
+	items  List
+	values []string
+	Monkey listMonitorSprite
+}
+
+type listMonitorSprite struct {
+	SpriteImpl
+	*ListMonitorGame
+	items List
 }
 
 func TestMonitorEvalPreservesFormatting(t *testing.T) {
@@ -82,39 +116,6 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 			t.Errorf("unexpected binding for %v", binding)
 		}
 	}
-}
-
-type monitorPanelSpy struct {
-	visible bool
-	events  []string
-	style   ui.MonitorStyle
-	value   ui.MonitorValue
-	scale   float64
-	pos     mathf.Vec2
-}
-
-func (p *monitorPanelSpy) Render(style ui.MonitorStyle, value ui.MonitorValue) {
-	p.events = append(p.events, "render")
-	p.style, p.value = style, value
-}
-
-func (p *monitorPanelSpy) SetVisible(visible bool) {
-	p.visible = visible
-	if visible {
-		p.events = append(p.events, "show")
-	} else {
-		p.events = append(p.events, "hide")
-	}
-}
-
-func (p *monitorPanelSpy) UpdateScale(scale float64) {
-	p.events = append(p.events, "scale")
-	p.scale = scale
-}
-
-func (p *monitorPanelSpy) UpdatePos(pos mathf.Vec2) {
-	p.events = append(p.events, "position")
-	p.pos = pos
 }
 
 func TestMonitorRefreshLifecycle(t *testing.T) {
@@ -328,27 +329,6 @@ func TestTutorialMonitorFixtures(t *testing.T) {
 	}
 }
 
-func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
-	binding, _ := bindMonitor(g, target, val, appearance)
-	return binding.read
-}
-
-func testMonitorShape(t *testing.T, fields coreproject.StageShape) coreproject.MonitorShape {
-	t.Helper()
-	shape := coreproject.StageShape{
-		"target": "", "val": "score", "name": "score", "label": "score",
-		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
-	}
-	for key, value := range fields {
-		shape[key] = value
-	}
-	parsed, err := coreproject.ParseMonitorShape(shape)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return parsed
-}
-
 func TestMonitorSliderConfig(t *testing.T) {
 	for _, mode := range []any{"slider", float64(3)} {
 		if got := monitorAppearance(testMonitorShape(t, coreproject.StageShape{"mode": mode})); got != ui.MonitorAppearanceSlider {
@@ -426,17 +406,6 @@ func TestMonitorSliderWritesBeforeRefresh(t *testing.T) {
 	}
 }
 
-type SliderMonitorGame struct {
-	Game
-	score float64
-	Dot   sliderMonitorSprite
-}
-type sliderMonitorSprite struct {
-	SpriteImpl
-	*SliderMonitorGame
-	score float64
-}
-
 func TestMonitorSliderTargetScope(t *testing.T) {
 	game := SliderMonitorGame{score: 1}
 	game.Dot.SliderMonitorGame = &game
@@ -501,30 +470,6 @@ func TestMonitorBindingCapabilities(t *testing.T) {
 	}
 }
 
-type gameWidgetUiMgr struct {
-	*askTestUiMgr
-	rangeValue float64
-}
-
-func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2)                 {}
-func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2            { return mathf.NewVec2(1, 1) }
-func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2)        {}
-func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color)                {}
-func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2)                  {}
-func (*gameWidgetUiMgr) SetRotation(pkgengine.Object, float64)                 {}
-func (m *gameWidgetUiMgr) SetRange(_ pkgengine.Object, _, _, _, value float64) { m.rangeValue = value }
-func (m *gameWidgetUiMgr) GetRangeValue(pkgengine.Object) float64              { return m.rangeValue }
-func setupGameWidgetUi(t *testing.T) *gameWidgetUiMgr {
-	t.Helper()
-	base := installAskTestUiMgr(t)
-	previousCamera := pkgengine.CameraMgr
-	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
-	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
-	manager := &gameWidgetUiMgr{askTestUiMgr: base}
-	pkgengine.UiMgr = manager
-	return manager
-}
-
 func TestMonitorConstructionAndWidgetTransforms(t *testing.T) {
 	manager := setupGameWidgetUi(t)
 	game := &monitorEvalFixture{score: 5}
@@ -561,4 +506,225 @@ func TestMonitorConstructionAndWidgetTransforms(t *testing.T) {
 	if err != nil || plain.updateInput != nil {
 		t.Fatalf("plain monitor=%+v, err=%v", plain, err)
 	}
+}
+
+func TestListMonitorItems(t *testing.T) {
+	list := NewList("苹果", 1.23456789, true, nil, NewValue("[b]text[/b]\nnext"))
+	for _, value := range []any{list, &list, list.data} {
+		want := []string{"苹果", "1.23456789", "true", "", "[b]text[/b]\nnext"}
+		if got := listMonitorItems(value); !slices.Equal(got, want) {
+			t.Errorf("listMonitorItems(%T) = %q, want %q", value, got, want)
+		}
+	}
+	for _, value := range []any{nil, (*List)(nil), []string(nil), NewList(), 42} {
+		if got := listMonitorItems(value); len(got) != 0 {
+			t.Errorf("listMonitorItems(%T) = %q, want empty", value, got)
+		}
+	}
+	array := [2]int{1, 2}
+	for _, value := range []any{array, &array, []int{1, 2}} {
+		if got := listMonitorItems(value); !slices.Equal(got, []string{"1", "2"}) {
+			t.Errorf("listMonitorItems(%T) = %q", value, got)
+		}
+	}
+}
+
+func TestListMonitorEvalTracksChanges(t *testing.T) {
+	g := ListMonitorGame{items: NewList("first")}
+	g.Monkey.ListMonitorGame = &g
+	g.Monkey.items = NewList("sprite")
+	root := reflect.ValueOf(&g).Elem()
+	for _, name := range []string{"items", "getVar:items", "current", "Current"} {
+		t.Run(name, func(t *testing.T) {
+			g.items = NewList("first")
+			eval := monitorEvalForTest(root, "", name, ui.MonitorAppearanceList)
+			if eval == nil {
+				t.Fatal("list binding failed")
+			}
+			before := eval().Items
+			g.items.Append("second")
+			g.items.Set(0, "changed")
+			if got := eval().Items; !slices.Equal(got, []string{"changed", "second"}) {
+				t.Fatalf("after append/set: %q", got)
+			}
+			if !slices.Equal(before, []string{"first"}) {
+				t.Fatalf("snapshot changed: %q", before)
+			}
+			g.items.Delete(0)
+			if got := eval().Items; !slices.Equal(got, []string{"second"}) {
+				t.Fatalf("after delete: %q", got)
+			}
+			g.items = NewList("replacement")
+			if got := eval().Items; !slices.Equal(got, []string{"replacement"}) {
+				t.Fatalf("after replacement: %q", got)
+			}
+			g.items.Clear()
+			if len(eval().Items) != 0 {
+				t.Fatal("clear not reflected")
+			}
+		})
+	}
+	spriteEval := monitorEvalForTest(root, "Monkey", "getVar:items", ui.MonitorAppearanceList)
+	if spriteEval == nil || !slices.Equal(spriteEval().Items, []string{"sprite"}) {
+		t.Fatal("sprite-local list binding failed")
+	}
+	globalEval := monitorEvalForTest(root, "Monkey", "values", ui.MonitorAppearanceList)
+	g.values = []string{"shared"}
+	if globalEval == nil || !slices.Equal(globalEval().Items, g.values) {
+		t.Fatal("promoted global slice binding failed")
+	}
+	g.values = append(g.values, "grown")
+	if !slices.Equal(globalEval().Items, g.values) {
+		t.Fatal("slice growth not reflected")
+	}
+	for _, binding := range [][2]string{{"", "getVar:"}, {"", "missing"}, {"missing", "items"}} {
+		if monitorEvalForTest(root, binding[0], binding[1], ui.MonitorAppearanceList) != nil {
+			t.Errorf("unexpected binding for %v", binding)
+		}
+	}
+}
+
+func TestListMonitorConfiguration(t *testing.T) {
+	for _, mode := range []any{"list", float64(4)} {
+		if got := monitorAppearance(testMonitorShape(t, coreproject.StageShape{"mode": mode})); got != ui.MonitorAppearanceList {
+			t.Errorf("mode %v: %v", mode, got)
+		}
+	}
+	for _, tt := range []struct {
+		width, height any
+		want          mathf.Vec2
+	}{
+		{nil, nil, mathf.NewVec2(100, 200)},
+		{0.0, 0.0, mathf.NewVec2(100, 200)},
+		{180.0, 240.0, mathf.NewVec2(180, 240)},
+		{1.0, 1.0, mathf.NewVec2(100, 60)},
+		{math.NaN(), math.Inf(1), mathf.NewVec2(100, 200)},
+	} {
+		if got := parseListMonitorDimensions(coreproject.StageShape{"width": tt.width, "height": tt.height}); got != tt.want {
+			t.Errorf("dimensions(%v, %v) = %v, want %v", tt.width, tt.height, got, tt.want)
+		}
+	}
+}
+
+func TestListMonitorVisibility(t *testing.T) {
+	g := &Game{}
+	global := &Monitor{target: "", val: "getVar:items"}
+	local := &Monitor{target: "Monkey", val: "items"}
+	g.shapeMgr.add(global)
+	g.shapeMgr.add(local)
+	g.ShowVar("items")
+	if !global.Visible() || local.Visible() || !global.isDirty {
+		t.Fatal("ShowVar did not select the global list")
+	}
+	g.HideVar("items")
+	if global.Visible() {
+		t.Fatal("HideVar did not hide the list")
+	}
+	if !g.setStageMonitor("Monkey", "getVar:items", true) || !local.Visible() || global.Visible() {
+		t.Fatal("sprite list visibility mismatch")
+	}
+}
+
+func TestSpriteVariableMonitorsPreferLocalThenStage(t *testing.T) {
+	game := &Game{}
+	sprite := &SpriteImpl{g: game, name: "actor"}
+	local := &Monitor{target: "actor", val: "score"}
+	global := &Monitor{target: "", val: "score"}
+	fallback := &Monitor{target: "", val: "lives"}
+	game.shapeMgr.items = []Shape{local, global, fallback}
+	sprite.ShowVar("score")
+	if !local.visible || global.visible {
+		t.Fatal("local show changed the shadowed stage monitor")
+	}
+	sprite.HideVar("score")
+	if local.visible {
+		t.Fatal("local monitor remained visible")
+	}
+	sprite.ShowVar("lives")
+	if !fallback.visible {
+		t.Fatal("stage fallback was not shown")
+	}
+	sprite.HideVar("lives")
+	if fallback.visible {
+		t.Fatal("stage fallback remained visible")
+	}
+}
+
+func (g *monitorEvalFixture) Value() float64 {
+	g.calls++
+	return g.score
+}
+
+func (p *monitorPanelSpy) Render(style ui.MonitorStyle, value ui.MonitorValue) {
+	p.events = append(p.events, "render")
+	p.style, p.value = style, value
+}
+
+func (p *monitorPanelSpy) SetVisible(visible bool) {
+	p.visible = visible
+	if visible {
+		p.events = append(p.events, "show")
+	} else {
+		p.events = append(p.events, "hide")
+	}
+}
+
+func (p *monitorPanelSpy) UpdateScale(scale float64) {
+	p.events = append(p.events, "scale")
+	p.scale = scale
+}
+
+func (p *monitorPanelSpy) UpdatePos(pos mathf.Vec2) {
+	p.events = append(p.events, "position")
+	p.pos = pos
+}
+
+func (*gameWidgetUiMgr) SetScale(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) GetCanvasScale(pkgengine.Object) mathf.Vec2 { return mathf.NewVec2(1, 1) }
+
+func (*gameWidgetUiMgr) SetGlobalPosition(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) SetColor(pkgengine.Object, mathf.Color) {}
+
+func (*gameWidgetUiMgr) SetSize(pkgengine.Object, mathf.Vec2) {}
+
+func (*gameWidgetUiMgr) SetRotation(pkgengine.Object, float64) {}
+
+func (m *gameWidgetUiMgr) SetRange(_ pkgengine.Object, _, _, _, value float64) { m.rangeValue = value }
+
+func (m *gameWidgetUiMgr) GetRangeValue(pkgengine.Object) float64 { return m.rangeValue }
+
+func (g *ListMonitorGame) Current() *List { return &g.items }
+
+func monitorEvalForTest(g reflect.Value, target, val string, appearance ui.MonitorAppearance) func() ui.MonitorValue {
+	binding, _ := bindMonitor(g, target, val, appearance)
+	return binding.read
+}
+
+func testMonitorShape(t *testing.T, fields coreproject.StageShape) coreproject.MonitorShape {
+	t.Helper()
+	shape := coreproject.StageShape{
+		"target": "", "val": "score", "name": "score", "label": "score",
+		"mode": 1.0, "x": 0.0, "y": 0.0, "visible": true,
+	}
+	for key, value := range fields {
+		shape[key] = value
+	}
+	parsed, err := coreproject.ParseMonitorShape(shape)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
+
+func setupGameWidgetUi(t *testing.T) *gameWidgetUiMgr {
+	t.Helper()
+	base := installAskTestUiMgr(t)
+	previousCamera := pkgengine.CameraMgr
+	pkgengine.CameraMgr = bubbleLayoutCameraMgr{}
+	t.Cleanup(func() { pkgengine.CameraMgr = previousCamera })
+	manager := &gameWidgetUiMgr{askTestUiMgr: base}
+	pkgengine.UiMgr = manager
+	return manager
 }

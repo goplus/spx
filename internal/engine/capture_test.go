@@ -25,19 +25,6 @@ import (
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-func isolateCaptureState(t *testing.T) {
-	t.Helper()
-	captureState.mu.Lock()
-	requests, sequence, handler := captureState.requests, captureState.sequence, captureState.handler
-	captureState.requests, captureState.sequence, captureState.handler = nil, 0, nil
-	captureState.mu.Unlock()
-	t.Cleanup(func() {
-		captureState.mu.Lock()
-		captureState.requests, captureState.sequence, captureState.handler = requests, sequence, handler
-		captureState.mu.Unlock()
-	})
-}
-
 func TestCaptureCanCarryInputTickMetadata(t *testing.T) {
 	SetGame(nil)
 	isolateCaptureState(t)
@@ -319,4 +306,17 @@ func TestCaptureRequestQueuesForActiveGame(t *testing.T) {
 	if got.Sequence == 0 {
 		t.Fatal("capture sequence was not assigned")
 	}
+}
+
+func isolateCaptureState(t *testing.T) {
+	t.Helper()
+	captureState.mu.Lock()
+	requests, sequence, handler := captureState.requests, captureState.sequence, captureState.handler
+	captureState.requests, captureState.sequence, captureState.handler = nil, 0, nil
+	captureState.mu.Unlock()
+	t.Cleanup(func() {
+		captureState.mu.Lock()
+		captureState.requests, captureState.sequence, captureState.handler = requests, sequence, handler
+		captureState.mu.Unlock()
+	})
 }

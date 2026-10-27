@@ -152,6 +152,35 @@ func (cmd *CmdTool) resolveAndroidBuildContext(androidNdkRoot string) (androidBu
 	}, nil
 }
 
+func (cmd *CmdTool) buildAndroidSharedLibraries(paths androidBuildContext) error {
+	for _, build := range androidBuildConfigs() {
+		logInfof("Building Android shared library for %s: %s", build.name, paths.goDir)
+		if err := cmd.buildAndroidSharedLibrary(paths, build); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cmd *CmdTool) buildAndroidSharedLibrary(paths androidBuildContext, build androidBuildConfig) error {
+	if err := util.ExecCommand(
+		util.CommandOptions{
+			Dir: paths.goDir,
+			Env: []string{
+				"CGO_ENABLED=1",
+				"GOOS=android",
+				"GOARCH=" + build.goArch,
+				"CC=" + filepath.Join(paths.ndkToolchain, build.ccPrefix+paths.minSDK+"-clang"),
+			},
+		},
+		"go", "build", "-tags=android,packmode", "-buildmode=c-shared",
+		"-o", filepath.Join(paths.libDir, build.outputFile), ".",
+	); err != nil {
+		return fmt.Errorf("failed to build for %s: %w", build.name, err)
+	}
+	return nil
+}
+
 func resolveAndroidHostTag() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
@@ -179,16 +208,6 @@ func prepareAndroidLibraryDir(libDir string) error {
 	return nil
 }
 
-func (cmd *CmdTool) buildAndroidSharedLibraries(paths androidBuildContext) error {
-	for _, build := range androidBuildConfigs() {
-		logInfof("Building Android shared library for %s: %s", build.name, paths.goDir)
-		if err := cmd.buildAndroidSharedLibrary(paths, build); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func androidBuildConfigs() []androidBuildConfig {
 	return []androidBuildConfig{
 		{
@@ -204,23 +223,4 @@ func androidBuildConfigs() []androidBuildConfig {
 			ccPrefix:   "armv7a-linux-androideabi",
 		},
 	}
-}
-
-func (cmd *CmdTool) buildAndroidSharedLibrary(paths androidBuildContext, build androidBuildConfig) error {
-	if err := util.ExecCommand(
-		util.CommandOptions{
-			Dir: paths.goDir,
-			Env: []string{
-				"CGO_ENABLED=1",
-				"GOOS=android",
-				"GOARCH=" + build.goArch,
-				"CC=" + filepath.Join(paths.ndkToolchain, build.ccPrefix+paths.minSDK+"-clang"),
-			},
-		},
-		"go", "build", "-tags=android,packmode", "-buildmode=c-shared",
-		"-o", filepath.Join(paths.libDir, build.outputFile), ".",
-	); err != nil {
-		return fmt.Errorf("failed to build for %s: %w", build.name, err)
-	}
-	return nil
 }

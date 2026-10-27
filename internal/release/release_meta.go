@@ -97,48 +97,6 @@ type releaseCatalog struct {
 
 var defaultReleaseCatalog = mustNewReleaseCatalog(allRuntimeReleaseDefinitions(), allSPXRuntimeMappings())
 
-// DownloadURL returns the GitHub release download URL for assetName.
-func (r AssetRelease) DownloadURL(assetName string) string {
-	return "https://github.com/" + r.Repository + "/releases/download/" + r.Tag + "/" + assetName
-}
-
-// RuntimeBinaryTag returns the runtime executable/pck base filename.
-func (m ReleaseMeta) RuntimeBinaryTag() string {
-	return RuntimeTag + m.Runtime.Version
-}
-
-// RuntimeDownloadURL returns the runtime archive URL for the given zip asset name.
-func (m ReleaseMeta) RuntimeDownloadURL(zipName string) string {
-	return m.Runtime.EngineAssets.DownloadURL(zipName)
-}
-
-// RuntimeAssetDownloadURL returns the packaged runtime asset bundle URL for the given zip asset name.
-func (m ReleaseMeta) RuntimeAssetDownloadURL(zipName string) string {
-	return m.Runtime.RuntimeAssets.DownloadURL(zipName)
-}
-
-// RuntimePackAssetName returns the exact runtime pack filename published for
-// this SPX version. SPX v2.0.0 predates RuntimeAssetZipName.
-func (m ReleaseMeta) RuntimePackAssetName() string {
-	return m.Runtime.RuntimePackAsset
-}
-
-// RequiresRuntimeManifest reports whether this mapping uses the current atomic
-// runtime release contract. Legacy releases intentionally have no manifest.
-func (m ReleaseMeta) RequiresRuntimeManifest() bool {
-	return m.Runtime.RuntimeAssets.ManifestName != ""
-}
-
-// RuntimeManifestDownloadURL returns the manifest URL for the selected atomic
-// runtime release, or an empty string for a legacy release.
-func (m ReleaseMeta) RuntimeManifestDownloadURL() string {
-	if !m.RequiresRuntimeManifest() {
-		return ""
-	}
-	assets := m.Runtime.RuntimeAssets
-	return assets.DownloadURL(assets.ManifestName)
-}
-
 // DefaultReleaseMeta returns the current configured SPX/runtime mapping.
 func DefaultReleaseMeta() ReleaseMeta {
 	meta, ok := defaultReleaseCatalog.resolveSPXVersion(currentSPXVersion)
@@ -187,6 +145,48 @@ func ResolveReleaseMetaForRuntimeVersion(runtimeVersion string) (ReleaseMeta, er
 		return meta, nil
 	}
 	return ReleaseMeta{}, fmt.Errorf("release: unknown runtime version %q", runtimeVersion)
+}
+
+// DownloadURL returns the GitHub release download URL for assetName.
+func (r AssetRelease) DownloadURL(assetName string) string {
+	return "https://github.com/" + r.Repository + "/releases/download/" + r.Tag + "/" + assetName
+}
+
+// RuntimeBinaryTag returns the runtime executable/pck base filename.
+func (m ReleaseMeta) RuntimeBinaryTag() string {
+	return RuntimeTag + m.Runtime.Version
+}
+
+// RuntimeDownloadURL returns the runtime archive URL for the given zip asset name.
+func (m ReleaseMeta) RuntimeDownloadURL(zipName string) string {
+	return m.Runtime.EngineAssets.DownloadURL(zipName)
+}
+
+// RuntimeAssetDownloadURL returns the packaged runtime asset bundle URL for the given zip asset name.
+func (m ReleaseMeta) RuntimeAssetDownloadURL(zipName string) string {
+	return m.Runtime.RuntimeAssets.DownloadURL(zipName)
+}
+
+// RuntimePackAssetName returns the exact runtime pack filename published for
+// this SPX version. SPX v2.0.0 predates RuntimeAssetZipName.
+func (m ReleaseMeta) RuntimePackAssetName() string {
+	return m.Runtime.RuntimePackAsset
+}
+
+// RequiresRuntimeManifest reports whether this mapping uses the current atomic
+// runtime release contract. Legacy releases intentionally have no manifest.
+func (m ReleaseMeta) RequiresRuntimeManifest() bool {
+	return m.Runtime.RuntimeAssets.ManifestName != ""
+}
+
+// RuntimeManifestDownloadURL returns the manifest URL for the selected atomic
+// runtime release, or an empty string for a legacy release.
+func (m ReleaseMeta) RuntimeManifestDownloadURL() string {
+	if !m.RequiresRuntimeManifest() {
+		return ""
+	}
+	assets := m.Runtime.RuntimeAssets
+	return assets.DownloadURL(assets.ManifestName)
 }
 
 func (c releaseCatalog) resolveSPXVersion(spxVersion string) (ReleaseMeta, bool) {

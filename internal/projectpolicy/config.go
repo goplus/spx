@@ -47,6 +47,44 @@ type PortableConfigSnapshot struct {
 	fileInfo os.FileInfo
 }
 
+// ValidatePortableConfig rejects configuration that cannot be captured in a
+// self-contained project snapshot for the driver. A missing .config is valid;
+// when present it must be a stable regular non-symlink file.
+func ValidatePortableConfig(projectDir string) error {
+	_, err := SnapshotPortableConfig(projectDir)
+	return err
+}
+
+// SnapshotPortableConfig validates .config and retains the exact identity and
+// bytes for later use by a portable run or build.
+func SnapshotPortableConfig(projectDir string) (PortableConfigSnapshot, error) {
+	configPath := filepath.Join(projectDir, configName)
+	root, err := os.OpenRoot(projectDir)
+	if err != nil {
+		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: open project root: %w", configPath, err)
+	}
+	defer root.Close()
+	data, info, found, err := readStableRegularRootFile(root, configName)
+	if err != nil {
+		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: %w", configPath, err)
+	}
+	return makePortableConfigSnapshot(configPath, data, info, found)
+}
+
+// SnapshotPortableConfigRoot reads .config through a pinned directory handle.
+// It is used at process boundaries where path containment would leave a
+// replacement window between validation and read.
+func SnapshotPortableConfigRoot(root *os.Root) (PortableConfigSnapshot, error) {
+	if root == nil {
+		return PortableConfigSnapshot{}, fmt.Errorf("portable project config root is nil")
+	}
+	data, info, found, err := readStableRegularRootFile(root, configName)
+	if err != nil {
+		return PortableConfigSnapshot{}, fmt.Errorf("read portable project config: %w", err)
+	}
+	return makePortableConfigSnapshot(configName, data, info, found)
+}
+
 // Present reports whether .config existed when the snapshot was captured.
 func (s PortableConfigSnapshot) Present() bool {
 	return s.ready && s.found
@@ -94,48 +132,10 @@ func (s PortableConfigSnapshot) Verify(projectDir string) error {
 		return nil
 	}
 	if !os.SameFile(s.fileInfo, info) || !stableMetadata(s.fileInfo, info) ||
-		sha256.Sum256(data) != s.digest || !bytes.Equal(data, s.data) {
+		!bytes.Equal(data, s.data) {
 		return fmt.Errorf("project config %q changed after validation", configPath)
 	}
 	return nil
-}
-
-// ValidatePortableConfig rejects configuration that cannot be captured in a
-// self-contained project snapshot for the driver. A missing .config is valid;
-// when present it must be a stable regular non-symlink file.
-func ValidatePortableConfig(projectDir string) error {
-	_, err := SnapshotPortableConfig(projectDir)
-	return err
-}
-
-// SnapshotPortableConfig validates .config and retains the exact identity and
-// bytes for later use by a portable run or build.
-func SnapshotPortableConfig(projectDir string) (PortableConfigSnapshot, error) {
-	configPath := filepath.Join(projectDir, configName)
-	root, err := os.OpenRoot(projectDir)
-	if err != nil {
-		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: open project root: %w", configPath, err)
-	}
-	defer root.Close()
-	data, info, found, err := readStableRegularRootFile(root, configName)
-	if err != nil {
-		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: %w", configPath, err)
-	}
-	return makePortableConfigSnapshot(configPath, data, info, found)
-}
-
-// SnapshotPortableConfigRoot reads .config through a pinned directory handle.
-// It is used at process boundaries where path containment would leave a
-// replacement window between validation and read.
-func SnapshotPortableConfigRoot(root *os.Root) (PortableConfigSnapshot, error) {
-	if root == nil {
-		return PortableConfigSnapshot{}, fmt.Errorf("portable project config root is nil")
-	}
-	data, info, found, err := readStableRegularRootFile(root, configName)
-	if err != nil {
-		return PortableConfigSnapshot{}, fmt.Errorf("read portable project config: %w", err)
-	}
-	return makePortableConfigSnapshot(configName, data, info, found)
 }
 
 func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo, found bool) (PortableConfigSnapshot, error) {

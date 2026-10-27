@@ -34,20 +34,20 @@ type monitorSliderState struct {
 	position float64
 }
 
-func (pself *UiMonitor) ReadSliderChange() (float64, bool) {
-	return pself.readSliderChange(&engine.Managers().UiMgr)
+func (p *UiMonitor) ReadSliderChange() (float64, bool) {
+	return p.readSliderChange(&engine.Managers().UiMgr)
 }
 
-func (pself *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {
-	if pself.active != MonitorAppearanceSlider {
+func (p *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {
+	if p.active != MonitorAppearanceSlider {
 		return 0, false
 	}
-	position := sink.GetRangeValue(pself.views[MonitorAppearanceSlider].input.GetId())
-	if position == pself.slider.position {
+	position := sink.GetRangeValue(p.views[MonitorAppearanceSlider].input.GetId())
+	if position == p.slider.position {
 		return 0, false
 	}
-	pself.slider.position = position
-	config := pself.slider.config
+	p.slider.position = position
+	config := p.slider.config
 	// Divide whole hundredths to avoid multiplication noise for decimal steps.
 	units := 1 / config.Step
 	steps := math.Round((position - config.Min) / config.Step)
@@ -55,18 +55,18 @@ func (pself *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool)
 	return value, true
 }
 
-func (pself *UiMonitor) renderSlider(sink monitorRenderSink, slider MonitorSlider, text string) {
-	pself.slider.config = slider
+func (p *UiMonitor) renderSlider(sink monitorRenderSink, slider MonitorSlider, text string) {
+	p.slider.config = slider
 	number, err := strconv.ParseFloat(text, 64)
 	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
 		number = slider.Min/2 + slider.Max/2
 	}
-	id := pself.views[MonitorAppearanceSlider].input.GetId()
+	id := p.views[MonitorAppearanceSlider].input.GetId()
 	// HTML ranges exclude a maximum that does not fall on a valid step.
 	maximum := slider.Min + slider.steps()*slider.Step
 	number = math.Max(slider.Min, math.Min(maximum, number))
 	sink.SetRange(id, slider.Min, maximum, slider.Step, number)
-	pself.slider.position = sink.GetRangeValue(id)
+	p.slider.position = sink.GetRangeValue(id)
 }
 
 func (s MonitorSlider) steps() float64 {

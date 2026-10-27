@@ -26,6 +26,10 @@ type FS struct {
 	base string
 }
 
+func init() {
+	fs.RegisterSchema("", Open)
+}
+
 // Open opens a zipped file object.
 func (p *FS) Open(name string) (io.ReadCloser, error) {
 	f, err := openAsset(p.base + name)
@@ -39,8 +43,4 @@ func (f *FS) Close() error {
 
 func (f *FS) GetPath() string {
 	return f.base
-}
-
-func init() {
-	fs.RegisterSchema("", Open)
 }

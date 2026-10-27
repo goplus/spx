@@ -30,6 +30,8 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimebundle"
 )
 
+type materializeTestWriter func([]byte) (int, error)
+
 func TestMaterializeComponentRejectsNilInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -227,6 +229,4 @@ func TestContextWriter(t *testing.T) {
 	}
 }
 
-type materializeTestWriter func([]byte) (int, error)
-
-func (write materializeTestWriter) Write(p []byte) (int, error) { return write(p) }
+func (f materializeTestWriter) Write(p []byte) (int, error) { return f(p) }

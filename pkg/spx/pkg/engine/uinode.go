@@ -32,75 +32,93 @@ type UiNode struct {
 	OnUiTextChangedEvent *Event1[string]
 }
 
-func (pself *UiNode) onCreate() {
-	pself.OnUiClickEvent = NewEvent0()
-	pself.OnUiPressedEvent = NewEvent0()
-	pself.OnUiReleasedEvent = NewEvent0()
-	pself.OnUiHoveredEvent = NewEvent0()
-	pself.OnUiToggleEvent = NewEvent1[bool]()
-	pself.OnUiTextChangedEvent = NewEvent1[string]()
+func (p *UiNode) V_OnUiClick() {
+	p.OnUiClickEvent.Trigger()
 }
 
-func (pself *UiNode) V_OnUiClick() {
-	pself.OnUiClickEvent.Trigger()
-}
-func (pself *UiNode) V_OnUiPressed() {
-	pself.OnUiPressedEvent.Trigger()
-}
-func (pself *UiNode) V_OnUiReleased() {
-	pself.OnUiReleasedEvent.Trigger()
-}
-func (pself *UiNode) V_OnUiHovered() {
-	pself.OnUiHoveredEvent.Trigger()
-}
-func (pself *UiNode) V_OnUiToggle(isOn bool) {
-	pself.OnUiToggleEvent.Trigger(isOn)
-}
-func (pself *UiNode) V_OnUiTextChanged(txt string) {
-	pself.OnUiTextChangedEvent.Trigger(txt)
+func (p *UiNode) V_OnUiPressed() {
+	p.OnUiPressedEvent.Trigger()
 }
 
-func (pself *UiNode) OnUiClick() {
-}
-func (pself *UiNode) OnUiPressed() {
-}
-func (pself *UiNode) OnUiReleased() {
-}
-func (pself *UiNode) OnUiHovered() {
-}
-func (pself *UiNode) OnUiToggle(isOn bool) {
-}
-func (pself *UiNode) OnUiTextChanged(txt string) {
+func (p *UiNode) V_OnUiReleased() {
+	p.OnUiReleasedEvent.Trigger()
 }
 
-func (pself *UiNode) Destroy() bool {
-	return UiMgr.DestroyNode(pself.Id)
-}
-func (pself *UiNode) GetId() Object {
-	return pself.Id
-}
-func (pself *UiNode) SetId(id Object) {
-	pself.Id = id
-}
-func (pself *UiNode) OnStart() {
-}
-func (pself *UiNode) OnUpdate(delta float64) {
-}
-func (pself *UiNode) OnFixedUpdate(delta float64) {
+func (p *UiNode) V_OnUiHovered() {
+	p.OnUiHoveredEvent.Trigger()
 }
 
-func (pself *UiNode) OnDestroy() {
+func (p *UiNode) V_OnUiToggle(isOn bool) {
+	p.OnUiToggleEvent.Trigger(isOn)
 }
 
-func (pself *UiNode) SetSize(value Vec2) {
-	UiMgr.SetSize(pself.Id, value)
+func (p *UiNode) V_OnUiTextChanged(txt string) {
+	p.OnUiTextChangedEvent.Trigger(txt)
 }
-func (pself *UiNode) GetSize() Vec2 {
-	return UiMgr.GetSize(pself.Id)
+
+func (p *UiNode) OnUiClick() {
 }
-func (pself *UiNode) SetRotation(value float64) {
-	UiMgr.SetRotation(pself.Id, value)
+
+func (p *UiNode) OnUiPressed() {
 }
-func (pself *UiNode) GetRotation() float64 {
-	return UiMgr.GetRotation(pself.Id)
+
+func (p *UiNode) OnUiReleased() {
+}
+
+func (p *UiNode) OnUiHovered() {
+}
+
+func (p *UiNode) OnUiToggle(isOn bool) {
+}
+
+func (p *UiNode) OnUiTextChanged(txt string) {
+}
+
+func (p *UiNode) Destroy() bool {
+	return UiMgr.DestroyNode(p.Id)
+}
+
+func (p *UiNode) GetId() Object {
+	return p.Id
+}
+
+func (p *UiNode) SetId(id Object) {
+	p.Id = id
+}
+
+func (p *UiNode) OnStart() {
+}
+
+func (p *UiNode) OnUpdate(delta float64) {
+}
+
+func (p *UiNode) OnFixedUpdate(delta float64) {
+}
+
+func (p *UiNode) OnDestroy() {
+}
+
+func (p *UiNode) SetSize(value Vec2) {
+	UiMgr.SetSize(p.Id, value)
+}
+
+func (p *UiNode) GetSize() Vec2 {
+	return UiMgr.GetSize(p.Id)
+}
+
+func (p *UiNode) SetRotation(value float64) {
+	UiMgr.SetRotation(p.Id, value)
+}
+
+func (p *UiNode) GetRotation() float64 {
+	return UiMgr.GetRotation(p.Id)
+}
+
+func (p *UiNode) onCreate() {
+	p.OnUiClickEvent = NewEvent0()
+	p.OnUiPressedEvent = NewEvent0()
+	p.OnUiReleasedEvent = NewEvent0()
+	p.OnUiHoveredEvent = NewEvent0()
+	p.OnUiToggleEvent = NewEvent1[bool]()
+	p.OnUiTextChangedEvent = NewEvent1[string]()
 }

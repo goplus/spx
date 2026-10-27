@@ -14,51 +14,6 @@ import (
 
 type executeWorkerPlatform struct{ gdx.IPlatformMgr }
 
-func (executeWorkerPlatform) IsMainThread() bool { return false }
-
-func testContext(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	t.Cleanup(cancel)
-	return ctx
-}
-
-func waitForEngineSignal(t *testing.T, done <-chan struct{}, timeout time.Duration, failure string) {
-	t.Helper()
-	select {
-	case <-done:
-	case <-time.After(timeout):
-		t.Fatal(failure)
-	}
-}
-
-func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
-	t.Helper()
-	co := coroutine.New(nil)
-	previous, previousPlatform := gco, gdx.PlatformMgr
-	SetCoroutines(co)
-	gdx.PlatformMgr = executeWorkerPlatform{}
-	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		SetCoroutines(previous)
-		gdx.PlatformMgr = previousPlatform
-	})
-	return co
-}
-
-func blockExecuteScheduler(t *testing.T, co *coroutine.Coroutines) func() {
-	t.Helper()
-	started, unblock := make(chan struct{}), make(chan struct{})
-	release := sync.OnceFunc(func() { close(unblock) })
-	t.Cleanup(release)
-	co.Create("blocker", func(coroutine.Thread) {
-		close(started)
-		<-unblock
-	})
-	waitForEngineSignal(t, started, time.Second, "scheduler blocker did not start")
-	return release
-}
-
 func TestExecuteReturnsWhenStoppedBeforeStart(t *testing.T) {
 	co := setupExecuteTest(t)
 	release := blockExecuteScheduler(t, co)
@@ -177,4 +132,49 @@ func TestExecuteWaitsForCompletionWithDefaultOwner(t *testing.T) {
 	if callbackContext.Err() == nil {
 		t.Fatal("Execute returned before its coroutine completed")
 	}
+}
+
+func (executeWorkerPlatform) IsMainThread() bool { return false }
+
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+	return ctx
+}
+
+func waitForEngineSignal(t *testing.T, done <-chan struct{}, timeout time.Duration, failure string) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatal(failure)
+	}
+}
+
+func setupExecuteTest(t *testing.T) *coroutine.Coroutines {
+	t.Helper()
+	co := coroutine.New(nil)
+	previous, previousPlatform := gco, gdx.PlatformMgr
+	SetCoroutines(co)
+	gdx.PlatformMgr = executeWorkerPlatform{}
+	t.Cleanup(func() {
+		co.RunAfterStop(nil)
+		SetCoroutines(previous)
+		gdx.PlatformMgr = previousPlatform
+	})
+	return co
+}
+
+func blockExecuteScheduler(t *testing.T, co *coroutine.Coroutines) func() {
+	t.Helper()
+	started, unblock := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(unblock) })
+	t.Cleanup(release)
+	co.Create("blocker", func(coroutine.Thread) {
+		close(started)
+		<-unblock
+	})
+	waitForEngineSignal(t, started, time.Second, "scheduler blocker did not start")
+	return release
 }

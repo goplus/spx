@@ -127,15 +127,9 @@ func (c *Cache) materializePath(ctx context.Context, request materializationRequ
 		return "", err
 	}
 
-	if ok, hitErr := c.validCacheHitRoot(namespaceRoot, string(namespace), digest, expected); hitErr != nil {
+	if ok, hitErr := c.validMaterializedHit(cacheRoot, namespaceRoot, namespace, digest, expected); hitErr != nil {
 		return "", hitErr
 	} else if ok {
-		if err := checkPinnedRootPath(c.Root, cacheRoot); err != nil {
-			return "", err
-		}
-		if err := checkPinnedChildPath(cacheRoot, string(namespace), namespaceRoot); err != nil {
-			return "", err
-		}
 		return target, nil
 	}
 
@@ -219,7 +213,7 @@ func (c *Cache) materializePath(ctx context.Context, request materializationRequ
 	if err := namespaceRoot.Rename(filepath.FromSlash(tempName), filepath.FromSlash(digest)); err != nil {
 		// Revalidate a competing publisher's winner; never accept an
 		// unverified target merely because rename lost.
-		if ok, hitErr := c.validCacheHitRoot(namespaceRoot, string(namespace), digest, expected); hitErr == nil && ok {
+		if ok, hitErr := c.validMaterializedHit(cacheRoot, namespaceRoot, namespace, digest, expected); hitErr == nil && ok {
 			return target, nil
 		}
 		return "", fmt.Errorf("runtimebundle: atomically publish cache %s: %w", target, err)
@@ -277,7 +271,7 @@ func (c *Cache) tryMaterializedHit(ctx context.Context, namespace Namespace, dig
 	if err := checkPinnedChildPath(cacheRoot, string(namespace), namespaceRoot); err != nil {
 		return nil, false, err
 	}
-	ok, err := c.validCacheHitRoot(namespaceRoot, string(namespace), digest, expected)
+	ok, err := c.validMaterializedHit(cacheRoot, namespaceRoot, namespace, digest, expected)
 	if err != nil || !ok {
 		return nil, false, err
 	}

@@ -61,6 +61,102 @@ func init() {
 	defaultLogger = NewWithOutputs("SPX", LevelInfo, os.Stdout, os.Stderr)
 }
 
+// New creates a new logger with the specified prefix, level, and output
+func New(prefix string, level Level, out io.Writer) *Logger {
+	return NewWithOutputs(prefix, level, out, out)
+}
+
+// NewWithOutputs creates a new logger with independent stdout/stderr outputs.
+func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	if stderr == nil {
+		stderr = io.Discard
+	}
+	return &Logger{
+		level:        level,
+		stdoutLogger: log.New(stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+		stderrLogger: log.New(stderr, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+		prefix:       prefix,
+	}
+}
+
+// Default returns the default logger
+func Default() *Logger {
+	return defaultLogger
+}
+
+// SetLevel sets the logging level for the default logger
+func SetLevel(level Level) {
+	defaultLogger.SetLevel(level)
+}
+
+// SetOutput sets both stdout/stderr destinations for the default logger.
+func SetOutput(w io.Writer) {
+	defaultLogger.SetOutput(w)
+}
+
+// SetStdoutOutput sets the stdout destination for the default logger.
+func SetStdoutOutput(w io.Writer) {
+	defaultLogger.SetStdoutOutput(w)
+}
+
+// SetStderrOutput sets the stderr destination for the default logger.
+func SetStderrOutput(w io.Writer) {
+	defaultLogger.SetStderrOutput(w)
+}
+
+// Package-level convenience functions using the default logger
+
+// Debug logs a debug message using the default logger
+func Debug(format string, args ...any) {
+	defaultLogger.Debug(format, args...)
+}
+
+// Info logs an informational message using the default logger
+func Info(format string, args ...any) {
+	defaultLogger.Info(format, args...)
+}
+
+// Warn logs a warning message using the default logger
+func Warn(format string, args ...any) {
+	defaultLogger.Warn(format, args...)
+}
+
+// Error logs an error message using the default logger
+func Error(format string, args ...any) {
+	defaultLogger.Error(format, args...)
+}
+
+// Fatalf exits with the formatted message, also logging it at error level if the current log level permits.
+func Fatalf(format string, args ...any) {
+	defaultLogger.Fatalf(format, args...)
+}
+
+// Panicf panics with the formatted message, also logging it at error level if the current log level permits.
+func Panicf(format string, args ...any) {
+	defaultLogger.Panicf(format, args...)
+}
+
+// ParseLevel converts a string to a log level
+func ParseLevel(s string) Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn", "warning":
+		return LevelWarn
+	case "error":
+		return LevelError
+	case "none":
+		return LevelNone
+	default:
+		return LevelInfo
+	}
+}
+
 // String returns the string representation of the log level
 func (l Level) String() string {
 	switch l {
@@ -164,102 +260,6 @@ func (l *Logger) Panicf(format string, args ...any) {
 		panic(msg)
 	}
 	l.stderrLogger.Panicf("[%s] [%s] %s", LevelError.String(), l.prefix, msg)
-}
-
-// New creates a new logger with the specified prefix, level, and output
-func New(prefix string, level Level, out io.Writer) *Logger {
-	return NewWithOutputs(prefix, level, out, out)
-}
-
-// NewWithOutputs creates a new logger with independent stdout/stderr outputs.
-func NewWithOutputs(prefix string, level Level, stdout, stderr io.Writer) *Logger {
-	if stdout == nil {
-		stdout = io.Discard
-	}
-	if stderr == nil {
-		stderr = io.Discard
-	}
-	return &Logger{
-		level:        level,
-		stdoutLogger: log.New(stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		stderrLogger: log.New(stderr, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		prefix:       prefix,
-	}
-}
-
-// Default returns the default logger
-func Default() *Logger {
-	return defaultLogger
-}
-
-// SetLevel sets the logging level for the default logger
-func SetLevel(level Level) {
-	defaultLogger.SetLevel(level)
-}
-
-// SetOutput sets both stdout/stderr destinations for the default logger.
-func SetOutput(w io.Writer) {
-	defaultLogger.SetOutput(w)
-}
-
-// SetStdoutOutput sets the stdout destination for the default logger.
-func SetStdoutOutput(w io.Writer) {
-	defaultLogger.SetStdoutOutput(w)
-}
-
-// SetStderrOutput sets the stderr destination for the default logger.
-func SetStderrOutput(w io.Writer) {
-	defaultLogger.SetStderrOutput(w)
-}
-
-// Package-level convenience functions using the default logger
-
-// Debug logs a debug message using the default logger
-func Debug(format string, args ...any) {
-	defaultLogger.Debug(format, args...)
-}
-
-// Info logs an informational message using the default logger
-func Info(format string, args ...any) {
-	defaultLogger.Info(format, args...)
-}
-
-// Warn logs a warning message using the default logger
-func Warn(format string, args ...any) {
-	defaultLogger.Warn(format, args...)
-}
-
-// Error logs an error message using the default logger
-func Error(format string, args ...any) {
-	defaultLogger.Error(format, args...)
-}
-
-// Fatalf exits with the formatted message, also logging it at error level if the current log level permits.
-func Fatalf(format string, args ...any) {
-	defaultLogger.Fatalf(format, args...)
-}
-
-// Panicf panics with the formatted message, also logging it at error level if the current log level permits.
-func Panicf(format string, args ...any) {
-	defaultLogger.Panicf(format, args...)
-}
-
-// ParseLevel converts a string to a log level
-func ParseLevel(s string) Level {
-	switch strings.ToLower(s) {
-	case "debug":
-		return LevelDebug
-	case "info":
-		return LevelInfo
-	case "warn", "warning":
-		return LevelWarn
-	case "error":
-		return LevelError
-	case "none":
-		return LevelNone
-	default:
-		return LevelInfo
-	}
 }
 
 func (l *Logger) targetLogger(level Level) *log.Logger {

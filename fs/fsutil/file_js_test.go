@@ -26,6 +26,15 @@ import (
 	"github.com/goplus/spx/v4/fs/fsutil"
 )
 
+type fileTransport func(*http.Request) (*http.Response, error)
+
+type trackedBody struct {
+	io.Reader
+	closed bool
+}
+
+type failingReader struct{ err error }
+
 func TestOpenFile(t *testing.T) {
 	body := &trackedBody{Reader: strings.NewReader("hello world")}
 	setFileTransport(t, func(req *http.Request) (*http.Response, error) {
@@ -78,9 +87,14 @@ func TestOpenFileErrors(t *testing.T) {
 	})
 }
 
-type fileTransport func(*http.Request) (*http.Response, error)
-
 func (f fileTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func (b *trackedBody) Close() error {
+	b.closed = true
+	return nil
+}
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
 
 func setFileTransport(t *testing.T, transport fileTransport) {
 	t.Helper()
@@ -88,17 +102,3 @@ func setFileTransport(t *testing.T, transport fileTransport) {
 	http.DefaultClient = &http.Client{Transport: transport}
 	t.Cleanup(func() { http.DefaultClient = original })
 }
-
-type trackedBody struct {
-	io.Reader
-	closed bool
-}
-
-func (b *trackedBody) Close() error {
-	b.closed = true
-	return nil
-}
-
-type failingReader struct{ err error }
-
-func (r failingReader) Read([]byte) (int, error) { return 0, r.err }

@@ -34,6 +34,15 @@ type archiveLimitWriter struct {
 	remaining int64
 }
 
+// WriteArchive collects cfg and writes its canonical ZIP to w.
+func WriteArchive(w io.Writer, cfg Config) (Digest, error) {
+	bundle, err := collect(cfg)
+	if err != nil {
+		return Digest{}, err
+	}
+	return bundle.writeZIP(w)
+}
+
 // String returns the lowercase hexadecimal SHA-256.
 func (d Digest) String() string {
 	return hex.EncodeToString(d[:])
@@ -49,15 +58,6 @@ func (w *archiveLimitWriter) Write(data []byte) (int, error) {
 		err = io.ErrShortWrite
 	}
 	return n, err
-}
-
-// WriteArchive collects cfg and writes its canonical ZIP to w.
-func WriteArchive(w io.Writer, cfg Config) (Digest, error) {
-	bundle, err := collect(cfg)
-	if err != nil {
-		return Digest{}, err
-	}
-	return bundle.writeZIP(w)
 }
 
 // writeZIP writes the canonical ZIP to w. It does not close w.

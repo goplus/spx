@@ -25,9 +25,15 @@ import (
 	"github.com/goplus/spx/v4/fs"
 )
 
+func init() {
+	fs.RegisterSchema("zip", Open)
+	fs.RegisterSchema("hzip", OpenHttp)
+	fs.RegisterSchema("hzips", OpenHttps)
+}
+
 // Open opens a zipped file object.
-func (zipf *FS) Open(name string) (io.ReadCloser, error) {
-	for _, f := range zipf.File {
+func (z *FS) Open(name string) (io.ReadCloser, error) {
+	for _, f := range z.File {
 		if f.Name == name {
 			return openZipEntry(f)
 		}
@@ -48,10 +54,4 @@ func newZipReader(source io.ReaderAt, size int64) (*zip.Reader, error) {
 		return nil, err
 	}
 	return reader, nil
-}
-
-func init() {
-	fs.RegisterSchema("zip", Open)
-	fs.RegisterSchema("hzip", OpenHttp)
-	fs.RegisterSchema("hzips", OpenHttps)
 }

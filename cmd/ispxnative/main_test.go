@@ -391,32 +391,6 @@ func TestBuildPinnedProjectUsesConfigOverlay(t *testing.T) {
 	}
 }
 
-func nativeRunTestRoots(t *testing.T) interpruntime.Roots {
-	t.Helper()
-	projectDir := t.TempDir()
-	assetDir := filepath.Join(projectDir, "assets")
-	if err := os.Mkdir(assetDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	return interpruntime.Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: t.TempDir()}
-}
-
-func nativeRunTestEnv(t *testing.T, roots interpruntime.Roots) []string {
-	t.Helper()
-	env, err := roots.Environment(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return env
-}
-
-func writeNativeTestFile(t *testing.T, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRunRejectsInvalidEnvironment(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -585,5 +559,31 @@ func main() { os.Exit(7) }
 				t.Errorf("clean project exit reported an interpreter error: %s", output)
 			}
 		})
+	}
+}
+
+func nativeRunTestRoots(t *testing.T) interpruntime.Roots {
+	t.Helper()
+	projectDir := t.TempDir()
+	assetDir := filepath.Join(projectDir, "assets")
+	if err := os.Mkdir(assetDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return interpruntime.Roots{ProjectDir: projectDir, AssetDir: assetDir, SessionDir: t.TempDir()}
+}
+
+func nativeRunTestEnv(t *testing.T, roots interpruntime.Roots) []string {
+	t.Helper()
+	env, err := roots.Environment(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env
+}
+
+func writeNativeTestFile(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

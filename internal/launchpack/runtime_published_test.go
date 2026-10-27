@@ -43,117 +43,10 @@ type publishedRuntimeFixture struct {
 	assets       map[string][]byte
 }
 
-func newPublishedRuntimeFixture(t *testing.T) publishedRuntimeFixture {
-	t.Helper()
-	lock, spec := defaultHostRuntimeTest(t)
-	root := t.TempDir()
-	assets := make(map[string][]byte, len(lock.RequiredAssets))
-	for _, name := range lock.RequiredAssets {
-		var data []byte
-		switch name {
-		case spec.ArchiveName:
-			data = writeRuntimeZip(t, filepath.Join(root, name), runtimeZipEntry{
-				Name: spec.BinaryName, Mode: 0o755,
-				Data: []byte("fixture-engine-" + runtime.GOOS + "-" + runtime.GOARCH),
-			})
-		case release.RuntimeAssetZipName:
-			data = writeRuntimeZip(t, filepath.Join(root, name),
-				runtimeZipEntry{Name: "gdspxrt.pck", Mode: 0o600, Data: []byte("fixture-pack")},
-				runtimeZipEntry{Name: "runtime.gdextension", Mode: 0o600, Data: []byte("fixture-extension")},
-			)
-		default:
-			data = []byte("fixture-" + name)
-			if err := os.WriteFile(filepath.Join(root, name), data, 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		assets[name] = data
-	}
-
-	provenance := release.RuntimeProvenance{
-		SPXCommit:               strings.Repeat("a", 40),
-		GodotCommit:             lock.Godot.Commit,
-		ModuleTree:              strings.Repeat("b", 40),
-		RuntimePackSourceSHA256: strings.Repeat("c", 64),
-		BuildRecipeSHA256:       strings.Repeat("d", 64),
-		Toolchain:               lock.Toolchain,
-	}
-	inputs := make([]release.RuntimeAssetInput, 0, len(lock.RequiredAssets))
-	for _, name := range lock.RequiredAssets {
-		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: filepath.Join(root, name)})
-	}
-	manifest, err := release.GenerateRuntimeManifest(lock, provenance, inputs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifestData, err := manifest.JSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return publishedRuntimeFixture{lock: lock, spec: spec, manifest: manifest, manifestData: manifestData, assets: assets}
-}
-
 type runtimeZipEntry struct {
 	Name string
 	Mode os.FileMode
 	Data []byte
-}
-
-func writeRuntimeZip(t *testing.T, filePath string, entries ...runtimeZipEntry) []byte {
-	t.Helper()
-	var data bytes.Buffer
-	archive := zip.NewWriter(&data)
-	for _, entry := range entries {
-		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
-		header.SetMode(entry.Mode)
-		writer, err := archive.CreateHeader(header)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := writer.Write(entry.Data); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := archive.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filePath, data.Bytes(), 0o666); err != nil {
-		t.Fatal(err)
-	}
-	return data.Bytes()
-}
-
-func (f publishedRuntimeFixture) fetcher(replacements map[string][]byte, calls *int) func(context.Context, string, io.Writer) error {
-	return func(ctx context.Context, url string, dst io.Writer) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		(*calls)++
-		name := path.Base(url)
-		data, ok := replacements[name]
-		if !ok {
-			if name == f.lock.Manifest {
-				data = f.manifestData
-			} else {
-				data = f.assets[name]
-			}
-		}
-		if len(data) == 0 {
-			return fmt.Errorf("fixture has no release asset %q", name)
-		}
-		_, err := io.Copy(dst, bytes.NewReader(data))
-		return err
-	}
-}
-
-func (f publishedRuntimeFixture) dependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
-	return runtimeAssetDependencies{
-		fetch: fetch, cacheRoot: func() string { return cacheRoot },
-	}
-}
-
-func publishedRuntimeConfig(cacheRoot string) Config {
-	return Config{RuntimeCacheRoot: cacheRoot}
 }
 
 func TestAcquireRuntimeAssetsFromPublishedRelease(t *testing.T) {
@@ -502,4 +395,111 @@ func TestMaterializeRuntimeRejectsInvalidLocalInputs(t *testing.T) {
 			t.Fatalf("missing %s = %v", without, err)
 		}
 	}
+}
+
+func (f publishedRuntimeFixture) fetcher(replacements map[string][]byte, calls *int) func(context.Context, string, io.Writer) error {
+	return func(ctx context.Context, url string, dst io.Writer) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		(*calls)++
+		name := path.Base(url)
+		data, ok := replacements[name]
+		if !ok {
+			if name == f.lock.Manifest {
+				data = f.manifestData
+			} else {
+				data = f.assets[name]
+			}
+		}
+		if len(data) == 0 {
+			return fmt.Errorf("fixture has no release asset %q", name)
+		}
+		_, err := io.Copy(dst, bytes.NewReader(data))
+		return err
+	}
+}
+
+func (f publishedRuntimeFixture) dependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
+	return runtimeAssetDependencies{
+		fetch: fetch, cacheRoot: func() string { return cacheRoot },
+	}
+}
+
+func newPublishedRuntimeFixture(t *testing.T) publishedRuntimeFixture {
+	t.Helper()
+	lock, spec := defaultHostRuntimeTest(t)
+	root := t.TempDir()
+	assets := make(map[string][]byte, len(lock.RequiredAssets))
+	for _, name := range lock.RequiredAssets {
+		var data []byte
+		switch name {
+		case spec.ArchiveName:
+			data = writeRuntimeZip(t, filepath.Join(root, name), runtimeZipEntry{
+				Name: spec.BinaryName, Mode: 0o755,
+				Data: []byte("fixture-engine-" + runtime.GOOS + "-" + runtime.GOARCH),
+			})
+		case release.RuntimeAssetZipName:
+			data = writeRuntimeZip(t, filepath.Join(root, name),
+				runtimeZipEntry{Name: "gdspxrt.pck", Mode: 0o600, Data: []byte("fixture-pack")},
+				runtimeZipEntry{Name: "runtime.gdextension", Mode: 0o600, Data: []byte("fixture-extension")},
+			)
+		default:
+			data = []byte("fixture-" + name)
+			if err := os.WriteFile(filepath.Join(root, name), data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		assets[name] = data
+	}
+
+	provenance := release.RuntimeProvenance{
+		SPXCommit:               strings.Repeat("a", 40),
+		GodotCommit:             lock.Godot.Commit,
+		ModuleTree:              strings.Repeat("b", 40),
+		RuntimePackSourceSHA256: strings.Repeat("c", 64),
+		BuildRecipeSHA256:       strings.Repeat("d", 64),
+		Toolchain:               lock.Toolchain,
+	}
+	inputs := make([]release.RuntimeAssetInput, 0, len(lock.RequiredAssets))
+	for _, name := range lock.RequiredAssets {
+		inputs = append(inputs, release.RuntimeAssetInput{Name: name, Path: filepath.Join(root, name)})
+	}
+	manifest, err := release.GenerateRuntimeManifest(lock, provenance, inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestData, err := manifest.JSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return publishedRuntimeFixture{lock: lock, spec: spec, manifest: manifest, manifestData: manifestData, assets: assets}
+}
+
+func writeRuntimeZip(t *testing.T, filePath string, entries ...runtimeZipEntry) []byte {
+	t.Helper()
+	var data bytes.Buffer
+	archive := zip.NewWriter(&data)
+	for _, entry := range entries {
+		header := &zip.FileHeader{Name: entry.Name, Method: zip.Store}
+		header.SetMode(entry.Mode)
+		writer, err := archive.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := writer.Write(entry.Data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, data.Bytes(), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	return data.Bytes()
+}
+
+func publishedRuntimeConfig(cacheRoot string) Config {
+	return Config{RuntimeCacheRoot: cacheRoot}
 }

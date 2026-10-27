@@ -16,6 +16,12 @@
 
 package input
 
+const (
+	MouseButtonLeft   int64 = 1
+	MouseButtonRight  int64 = 2
+	MouseButtonMiddle int64 = 3
+)
+
 // KeyEvent is a key transition in input order, independent of its source.
 type KeyEvent struct {
 	Id        int64

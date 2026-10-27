@@ -23,17 +23,17 @@ type UiDebug struct {
 	input *UiNode
 }
 
-// OnStart binds UI nodes in the engine callback context.
-func (pself *UiDebug) OnStart() {
-	pself.input = engine.BridgeBindUI[UiNode](pself.GetId(), "Label")
-}
-
-func (pself *UiDebug) Show(msg string) {
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(engine.WindowScale()))
-	engine.Managers().UiMgr.SetVisible(pself.input.GetId(), msg != "")
-	engine.Managers().UiMgr.SetText(pself.input.GetId(), msg)
-}
-
 func NewUiDebug() *UiDebug {
 	return engine.NewUiNode[UiDebug]()
+}
+
+// OnStart binds UI nodes in the engine callback context.
+func (p *UiDebug) OnStart() {
+	p.input = engine.BridgeBindUI[UiNode](p.GetId(), "Label")
+}
+
+func (p *UiDebug) Show(msg string) {
+	engine.Managers().UiMgr.SetScale(p.GetId(), engine.UniformVec2(engine.WindowScale()))
+	engine.Managers().UiMgr.SetVisible(p.input.GetId(), msg != "")
+	engine.Managers().UiMgr.SetText(p.input.GetId(), msg)
 }

@@ -165,22 +165,6 @@ func TestCanonicalSourcePath(t *testing.T) {
 	}
 }
 
-func exportTestTypes(t *testing.T, filename string) []byte {
-	t.Helper()
-	fset := token.NewFileSet()
-	file := fset.AddFile(filename, -1, len("package pkg\n"))
-	file.SetLinesForContent([]byte("package pkg\n"))
-	pkg := types.NewPackage("example.com/pkg", "pkg")
-	pkg.Scope().Insert(types.NewTypeName(file.Pos(0), pkg, "Number", types.Typ[types.Int]))
-	pkg.MarkComplete()
-
-	var buf bytes.Buffer
-	if err := gcexportdata.Write(&buf, fset, pkg); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
-
 func TestCanonicalizeOutputDirectory(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "example.com", "pkg")
@@ -300,4 +284,20 @@ func TestFlagValue(t *testing.T) {
 			t.Errorf("flags%q=%q,%v", tc.args, got, ok)
 		}
 	}
+}
+
+func exportTestTypes(t *testing.T, filename string) []byte {
+	t.Helper()
+	fset := token.NewFileSet()
+	file := fset.AddFile(filename, -1, len("package pkg\n"))
+	file.SetLinesForContent([]byte("package pkg\n"))
+	pkg := types.NewPackage("example.com/pkg", "pkg")
+	pkg.Scope().Insert(types.NewTypeName(file.Pos(0), pkg, "Number", types.Typ[types.Int]))
+	pkg.MarkComplete()
+
+	var buf bytes.Buffer
+	if err := gcexportdata.Write(&buf, fset, pkg); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

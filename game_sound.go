@@ -102,20 +102,20 @@ func (p *Game) ClearSoundEffects() {
 	p.clearSoundEffects(p.audioState.SoundObj)
 }
 
-func (p *Game) clearSoundEffects(soundObj engine.Object) {
-	if soundObj == invalidSoundObject {
-		return
-	}
-	p.soundMgr.SetPan(soundObj, 0)
-	p.soundMgr.SetPitch(soundObj, 0)
-}
-
 func (p *Game) StopAllSounds() {
 	p.soundMgr.StopAll()
 }
 
 func (p *Game) Loudness() float64 {
 	return 0
+}
+
+func (p *Game) clearSoundEffects(soundObj engine.Object) {
+	if soundObj == invalidSoundObject {
+		return
+	}
+	p.soundMgr.SetPan(soundObj, 0)
+	p.soundMgr.SetPitch(soundObj, 0)
 }
 
 func (p *Game) applyAudioSettings(settings coreproject.SystemSettings) {

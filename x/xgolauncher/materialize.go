@@ -27,6 +27,18 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
+type contextWriter struct {
+	ctx context.Context
+	dst io.Writer
+}
+
+func (w contextWriter) Write(p []byte) (int, error) {
+	if err := w.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return w.dst.Write(p)
+}
+
 func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workDir string, namespace runtimebundle.Namespace, expectedDigest string, write func(io.Writer) error) (*runtimebundle.Materialized, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("xgolauncher: nil materialization context")
@@ -73,16 +85,4 @@ func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workD
 	}
 	closeFile = false
 	return cache.Materialize(ctx, namespace, zipPath, &bundle)
-}
-
-type contextWriter struct {
-	ctx context.Context
-	dst io.Writer
-}
-
-func (w contextWriter) Write(p []byte) (int, error) {
-	if err := w.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return w.dst.Write(p)
 }

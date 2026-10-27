@@ -37,8 +37,24 @@ type portableConfigFS struct {
 	data    []byte
 }
 
-func newPortableConfigFS(base fs.FS, overlay *portableConfigOverlay) *portableConfigFS {
-	return &portableConfigFS{base: base, present: overlay.present, data: overlay.data}
+type portableConfigRoot struct {
+	fs.File
+	directory fs.ReadDirFile
+	overlay   *portableConfigFS
+	once      sync.Once
+	mu        sync.Mutex
+	entries   []fs.DirEntry
+	err       error
+	offset    int
+}
+
+type portableConfigFile struct {
+	*bytes.Reader
+	info portableConfigInfo
+}
+
+type portableConfigInfo struct {
+	size int64
 }
 
 func (f *portableConfigFS) Open(name string) (fs.File, error) {
@@ -88,26 +104,6 @@ func (f *portableConfigFS) overlayRootEntries(entries []fs.DirEntry) []fs.DirEnt
 	return result
 }
 
-func isPortableConfigPath(name string) bool {
-	first, _, _ := strings.Cut(name, "/")
-	return isPortableConfigName(first)
-}
-
-func isPortableConfigName(name string) bool {
-	return name == ".config" || (runtime.GOOS == "windows" && strings.EqualFold(name, ".config"))
-}
-
-type portableConfigRoot struct {
-	fs.File
-	directory fs.ReadDirFile
-	overlay   *portableConfigFS
-	once      sync.Once
-	mu        sync.Mutex
-	entries   []fs.DirEntry
-	err       error
-	offset    int
-}
-
 func (f *portableConfigRoot) ReadDir(n int) ([]fs.DirEntry, error) {
 	f.once.Do(func() {
 		if f.directory == nil {
@@ -143,25 +139,35 @@ func (f *portableConfigRoot) ReadDir(n int) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-type portableConfigFile struct {
-	*bytes.Reader
-	info portableConfigInfo
+func (f *portableConfigFile) Close() error { return nil }
+
+func (f *portableConfigFile) Stat() (fs.FileInfo, error) { return f.info, nil }
+
+func (portableConfigInfo) Name() string { return ".config" }
+
+func (i portableConfigInfo) Size() int64 { return i.size }
+
+func (portableConfigInfo) Mode() fs.FileMode { return 0o444 }
+
+func (portableConfigInfo) ModTime() time.Time { return time.Time{} }
+
+func (portableConfigInfo) IsDir() bool { return false }
+
+func (portableConfigInfo) Sys() any { return nil }
+
+func newPortableConfigFS(base fs.FS, overlay *portableConfigOverlay) *portableConfigFS {
+	return &portableConfigFS{base: base, present: overlay.present, data: overlay.data}
+}
+
+func isPortableConfigPath(name string) bool {
+	first, _, _ := strings.Cut(name, "/")
+	return isPortableConfigName(first)
+}
+
+func isPortableConfigName(name string) bool {
+	return name == ".config" || (runtime.GOOS == "windows" && strings.EqualFold(name, ".config"))
 }
 
 func newPortableConfigFile(data []byte) *portableConfigFile {
 	return &portableConfigFile{Reader: bytes.NewReader(data), info: portableConfigInfo{size: int64(len(data))}}
 }
-
-func (f *portableConfigFile) Close() error               { return nil }
-func (f *portableConfigFile) Stat() (fs.FileInfo, error) { return f.info, nil }
-
-type portableConfigInfo struct {
-	size int64
-}
-
-func (portableConfigInfo) Name() string       { return ".config" }
-func (i portableConfigInfo) Size() int64      { return i.size }
-func (portableConfigInfo) Mode() fs.FileMode  { return 0o444 }
-func (portableConfigInfo) ModTime() time.Time { return time.Time{} }
-func (portableConfigInfo) IsDir() bool        { return false }
-func (portableConfigInfo) Sys() any           { return nil }

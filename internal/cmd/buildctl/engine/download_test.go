@@ -100,41 +100,6 @@ func TestExtractZipRejectsEntryAboveEngineSizeLimit(t *testing.T) {
 	}
 }
 
-func writeRawZipFixture(t *testing.T, declaredSize uint64) string {
-	t.Helper()
-	dataSize := declaredSize/runtimebundle.MaxCompressionRatio + 1
-	data := make([]byte, int(dataSize))
-	zipPath := filepath.Join(t.TempDir(), "archive.zip")
-	output, err := os.Create(zipPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := zip.NewWriter(output)
-	entry, err := writer.CreateRaw(&zip.FileHeader{
-		Name:               "editor",
-		Method:             zip.Store,
-		CRC32:              crc32.ChecksumIEEE(data),
-		CompressedSize64:   uint64(len(data)),
-		UncompressedSize64: declaredSize,
-	})
-	if err != nil {
-		_ = output.Close()
-		t.Fatal(err)
-	}
-	if _, err := entry.Write(data); err != nil {
-		_ = output.Close()
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		_ = output.Close()
-		t.Fatal(err)
-	}
-	if err := output.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return zipPath
-}
-
 func TestDownloadBinariesFromZipValidatesBeforeInstalling(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -848,46 +813,18 @@ func TestDownloadRuntimePackValidatesBeforeInstalling(t *testing.T) {
 	}
 }
 
-func newEngineDownloadFixture(t *testing.T, platform string) engineDownloadEnv {
-	t.Helper()
-	root := t.TempDir()
-	env := engineDownloadEnv{
-		version: "test", platform: platform, arch: "x86_64",
-		assetDir: filepath.Join(root, "assets"), cacheDir: filepath.Join(root, "cache"),
-		goBinDir: filepath.Join(root, "bin"), templateDir: filepath.Join(root, "templates"),
-	}
-	for _, dir := range []string{env.assetDir, env.cacheDir, env.goBinDir, env.templateDir} {
-		mustMkdirAll(t, dir)
-	}
-	return env
-}
-
-func assertEngineDownloadFiles(t *testing.T, env engineDownloadEnv, want map[string]string) {
-	t.Helper()
-	counts := make(map[string]int)
-	for path, content := range want {
-		counts[filepath.Dir(path)]++
-		if data, err := os.ReadFile(path); err != nil || string(data) != content {
-			t.Errorf("installed %s = %q, err = %v; want %q", path, data, err, content)
-		}
-	}
-	for _, dir := range []string{env.cacheDir, env.goBinDir, env.templateDir} {
-		if entries, err := os.ReadDir(dir); err != nil || len(entries) != counts[dir] {
-			t.Errorf("directory %s = %v, err = %v; want %d files and no temporary artifacts", dir, entries, err, counts[dir])
-		}
-	}
-}
-
 func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux release artifact fixture")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("release preparation fixture requires Linux or macOS")
 	}
 	for _, operation := range []string{"runtime", "skip runtime pack", "editor", "linux pack", "ios command"} {
 		t.Run(operation, func(t *testing.T) {
-			if operation == "linux pack" && runtime.GOARCH != "amd64" {
-				t.Skip("Linux runtime pack is amd64-only")
+			if operation == "linux pack" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+				t.Skip("Linux runtime pack requires linux/amd64")
 			}
 			root := isolateEngineEnvironment(t)
+			// Asset installation supports an explicit target regardless of the host.
+			t.Setenv("PLATFORM", "linux")
 			t.Chdir(root)
 			env, err := resolveEngineDownloadEnv(root, "linux")
 			if err != nil {
@@ -958,8 +895,8 @@ func TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs(t *testing.T) {
 }
 
 func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		t.Skip("Linux/amd64 release preparation fixture")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("release preparation fixture requires Linux or macOS")
 	}
 	for _, entry := range []struct {
 		name string
@@ -973,6 +910,9 @@ func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 	} {
 		for _, failure := range []string{"environment", "asset directory", "manifest", "missing binary"} {
 			t.Run(entry.name+"/"+failure, func(t *testing.T) {
+				if entry.name == "linux pack" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+					t.Skip("Linux runtime pack requires linux/amd64")
+				}
 				root := isolateEngineEnvironment(t)
 				assets := filepath.Join(root, "assets")
 				mustMkdirAll(t, assets)
@@ -996,6 +936,7 @@ func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 	}
 	t.Run("runtime pack failure", func(t *testing.T) {
 		root := isolateEngineEnvironment(t)
+		t.Setenv("PLATFORM", "linux")
 		env, err := resolveEngineDownloadEnv(root, "linux")
 		if err != nil {
 			t.Fatal(err)
@@ -1071,5 +1012,70 @@ func TestLocalAssetLinkFailures(t *testing.T) {
 	}
 	if err := fetchEngineAsset(env, "asset.zip", "unused", filepath.Join(blocker, "asset")); err == nil {
 		t.Fatal("blocked fetch destination accepted")
+	}
+}
+
+func writeRawZipFixture(t *testing.T, declaredSize uint64) string {
+	t.Helper()
+	dataSize := declaredSize/runtimebundle.MaxCompressionRatio + 1
+	data := make([]byte, int(dataSize))
+	zipPath := filepath.Join(t.TempDir(), "archive.zip")
+	output, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(output)
+	entry, err := writer.CreateRaw(&zip.FileHeader{
+		Name:               "editor",
+		Method:             zip.Store,
+		CRC32:              crc32.ChecksumIEEE(data),
+		CompressedSize64:   uint64(len(data)),
+		UncompressedSize64: declaredSize,
+	})
+	if err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if _, err := entry.Write(data); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		_ = output.Close()
+		t.Fatal(err)
+	}
+	if err := output.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return zipPath
+}
+
+func newEngineDownloadFixture(t *testing.T, platform string) engineDownloadEnv {
+	t.Helper()
+	root := t.TempDir()
+	env := engineDownloadEnv{
+		version: "test", platform: platform, arch: "x86_64",
+		assetDir: filepath.Join(root, "assets"), cacheDir: filepath.Join(root, "cache"),
+		goBinDir: filepath.Join(root, "bin"), templateDir: filepath.Join(root, "templates"),
+	}
+	for _, dir := range []string{env.assetDir, env.cacheDir, env.goBinDir, env.templateDir} {
+		mustMkdirAll(t, dir)
+	}
+	return env
+}
+
+func assertEngineDownloadFiles(t *testing.T, env engineDownloadEnv, want map[string]string) {
+	t.Helper()
+	counts := make(map[string]int)
+	for path, content := range want {
+		counts[filepath.Dir(path)]++
+		if data, err := os.ReadFile(path); err != nil || string(data) != content {
+			t.Errorf("installed %s = %q, err = %v; want %q", path, data, err, content)
+		}
+	}
+	for _, dir := range []string{env.cacheDir, env.goBinDir, env.templateDir} {
+		if entries, err := os.ReadDir(dir); err != nil || len(entries) != counts[dir] {
+			t.Errorf("directory %s = %v, err = %v; want %d files and no temporary artifacts", dir, entries, err, counts[dir])
+		}
 	}
 }

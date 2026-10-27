@@ -19,12 +19,14 @@
 package ffi
 
 import (
+	"bytes"
 	"math"
 	"reflect"
 	"testing"
 	"unsafe"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/stringallocator"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -239,6 +241,237 @@ func TestNativeScalarConversions(t *testing.T) {
 		}
 	}()
 	CallBuiltinConstructor(nil, nil)
+}
+
+func TestReturnedStringsUseRuntimeAllocator(t *testing.T) {
+	previous := builtinAPI.SpxGlobalFreeString
+	builtinAPI.SpxGlobalFreeString = GDExtensionSpxGlobalFreeString(stringallocator.FreeCallback())
+	t.Cleanup(func() { builtinAPI.SpxGlobalFreeString = previous })
+	for _, tt := range []struct{ name, value string }{
+		{"empty", ""},
+		{"unicode", "héllo 世界"},
+		{"newlines", "line one\nline two"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			stringallocator.Reset()
+			t.Cleanup(stringallocator.Reset)
+			owned := GdString(stringallocator.Allocate(tt.value))
+			if owned == nil {
+				t.Fatal("fixture failed to allocate a native string")
+			}
+			borrowed := copyString(owned)
+			if borrowed != tt.value || stringallocator.ReleaseCount() != 0 {
+				t.Fatalf("borrowed string = %q, release count = %d", borrowed, stringallocator.ReleaseCount())
+			}
+			got := ToString(owned)
+			if got != tt.value || borrowed != tt.value {
+				t.Fatalf("string copies after native release = %q, %q; want %q", got, borrowed, tt.value)
+			}
+			if stringallocator.ReleaseCount() != 1 || stringallocator.HasOutstandingAllocation() {
+				t.Fatalf("runtime allocator release count = %d, outstanding allocation = %v", stringallocator.ReleaseCount(), stringallocator.HasOutstandingAllocation())
+			}
+			if got := ToString(nil); got != "" || stringallocator.ReleaseCount() != 1 {
+				t.Fatalf("nil return = %q, release count = %d", got, stringallocator.ReleaseCount())
+			}
+		})
+	}
+}
+
+// Native bindings and the C fixture are process-wide, so these tests must not
+// run in parallel. Restore every binding to keep shuffled/repeated runs isolated.
+func bindNativeBuiltinFixture(t *testing.T) []string {
+	t.Helper()
+	previousResolver, previousAPI := resolveCFunc, builtinAPI
+	previousStrings, previousCallbacks := globalStringMethodBindings, callbacks
+	stringallocator.Reset()
+	t.Cleanup(func() {
+		resolveCFunc, builtinAPI = previousResolver, previousAPI
+		globalStringMethodBindings, callbacks = previousStrings, previousCallbacks
+		stringallocator.Reset()
+	})
+	var names []string
+	resolveCFunc = func(name string) unsafe.Pointer {
+		names = append(names, name)
+		return getProcAddress(uintptr(stringallocator.Resolver()), name)
+	}
+	builtinAPI.resolveAPIFunctions()
+	return names
+}
+
+func TestNativeBuiltinResolution(t *testing.T) {
+	names := bindNativeBuiltinFixture(t)
+	bindings := map[string]unsafe.Pointer{
+		"spx_global_register_callbacks": unsafe.Pointer(builtinAPI.SpxGlobalRegisterCallbacks),
+		"spx_global_free_string":        unsafe.Pointer(builtinAPI.SpxGlobalFreeString),
+		"string_new_with_latin1_chars":  unsafe.Pointer(builtinAPI.StringNewWithLatin1Chars),
+		"string_new_with_utf8_chars":    unsafe.Pointer(builtinAPI.StringNewWithUtf8Chars),
+		"string_to_latin1_chars":        unsafe.Pointer(builtinAPI.StringToLatin1Chars),
+		"string_to_utf8_chars":          unsafe.Pointer(builtinAPI.StringToUtf8Chars),
+		"variant_get_ptr_constructor":   unsafe.Pointer(builtinAPI.VariantGetPtrConstructor),
+		"variant_get_ptr_destructor":    unsafe.Pointer(builtinAPI.VariantGetPtrDestructor),
+	}
+	if len(names) != len(bindings) {
+		t.Fatalf("resolved symbols = %v, want %d builtin symbols", names, len(bindings))
+	}
+	for _, name := range names {
+		got, ok := bindings[name]
+		want := getProcAddress(uintptr(stringallocator.Resolver()), name)
+		if !ok || got == nil || got != want {
+			t.Fatalf("binding %q = %p, want %p", name, got, want)
+		}
+		delete(bindings, name)
+	}
+	if got := getProcAddress(uintptr(stringallocator.Resolver()), "unknown_builtin"); got != nil {
+		t.Fatalf("unknown symbol = %p, want nil", got)
+	}
+	owned := GdString(stringallocator.Allocate("resolved allocator"))
+	if got := ToString(owned); got != "resolved allocator" || stringallocator.ReleaseCount() != 1 || stringallocator.HasOutstandingAllocation() {
+		t.Fatalf("resolved allocator returned %q, releases = %d, outstanding = %v", got, stringallocator.ReleaseCount(), stringallocator.HasOutstandingAllocation())
+	}
+}
+
+func TestNativeBuiltinConstructorsAndInitialization(t *testing.T) {
+	bindNativeBuiltinFixture(t)
+	configuration := initialization{}
+	doInitialization(&configuration)
+	if configuration.initialize == nil || configuration.deinitialize == nil {
+		t.Fatal("initialization callbacks were not installed")
+	}
+	constructor, destructor := globalStringMethodBindings.constructor, globalStringMethodBindings.destructor
+	if constructor == nil || destructor == nil {
+		t.Fatal("string constructor/destructor bindings are nil")
+	}
+	if got := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_VECTOR2, 0); got != nil {
+		t.Fatalf("unsupported constructor type returned %p", got)
+	}
+	for _, index := range []int32{-1, math.MaxInt32} {
+		if got := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, index); got != nil {
+			t.Fatalf("unsupported constructor index %d returned %p", index, got)
+		}
+	}
+	if got := CallVariantGetPtrDestructor(GDEXTENSION_VARIANT_TYPE_VECTOR2); got != nil {
+		t.Fatalf("unsupported destructor type returned %p", got)
+	}
+	storage := ToGdArrayInfo([]int64{0})
+	defer storage.Free()
+	base := storage.gdArray.data
+	CallBuiltinConstructor(constructor, GDExtensionUninitializedTypePtr(base))
+	if got := storage.ToInt64s()[0]; got != 71 {
+		t.Fatalf("no-argument constructor wrote %d, want 71", got)
+	}
+	arguments := ToGdArrayInfo([]int64{17, -3})
+	defer arguments.Free()
+	withArguments := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, 1)
+	if withArguments == nil {
+		t.Fatal("argument constructor is nil")
+	}
+	CallBuiltinConstructor(withArguments, GDExtensionUninitializedTypePtr(base),
+		GDExtensionConstTypePtr(arguments.gdArray.data),
+		GDExtensionConstTypePtr(unsafe.Add(arguments.gdArray.data, unsafe.Sizeof(int64(0)))))
+	if got := storage.ToInt64s()[0]; got != 167 {
+		t.Fatalf("constructor arguments wrote %d, want 167", got)
+	}
+	if got := arguments.ToInt64s(); !reflect.DeepEqual(got, []int64{17, -3}) {
+		t.Fatalf("constructor modified its const arguments: %v", got)
+	}
+	CallPtrDestructor(destructor, GDExtensionTypePtr(base))
+	if got := storage.ToInt64s()[0]; got != -99 {
+		t.Fatalf("destructor wrote %d, want -99", got)
+	}
+}
+
+func TestNativeBuiltinStringCalls(t *testing.T) {
+	bindNativeBuiltinFixture(t)
+	for _, tc := range []struct {
+		name, value string
+		tag         byte
+		create      func(GDExtensionUninitializedStringPtr, string)
+		read        func(GDExtensionConstStringPtr, *Char, GdInt) GdInt
+	}{
+		{"latin1", "caf\xe9", 'L', CallStringNewWithLatin1Chars, CallStringToLatin1Chars},
+		{"utf8", "héllo 世界", 'U', CallStringNewWithUtf8Chars, CallStringToUtf8Chars},
+		{"empty", "", 'U', CallStringNewWithUtf8Chars, CallStringToUtf8Chars},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storage := ToGdArrayInfo(make([]byte, len(tc.value)+2))
+			defer storage.Free()
+			base := storage.gdArray.data
+			tc.create(GDExtensionUninitializedStringPtr(base), tc.value)
+			want := append([]byte{tc.tag}, []byte(tc.value)...)
+			want = append(want, 0)
+			if got := storage.ToBytes(); !bytes.Equal(got, want) {
+				t.Fatalf("string destination = %q, want %q", got, want)
+			}
+			self := GDExtensionConstStringPtr(base)
+			if got := tc.read(self, nil, 0); int(got) != len(tc.value) {
+				t.Fatalf("length query = %d, want %d", got, len(tc.value))
+			}
+			for _, limit := range []int{0, 2, len(tc.value) + 1} {
+				output := bytes.Repeat([]byte{'?'}, len(tc.value)+2)
+				got := tc.read(self, (*Char)(unsafe.Pointer(&output[0])), GdInt(limit))
+				want := bytes.Repeat([]byte{'?'}, len(output))
+				copy(want[:min(limit, len(tc.value))], tc.value)
+				if int(got) != len(tc.value) || !bytes.Equal(output, want) {
+					t.Fatalf("read limit %d = %q, length %d; want %q, length %d", limit, output, got, want, len(tc.value))
+				}
+			}
+		})
+	}
+}
+
+func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {
+	bindNativeBuiltinFixture(t)
+	CallGlobalRegisterCallbacks(nil)
+	if stringallocator.RegistrationCount() != 1 || stringallocator.HasRegistration() {
+		t.Fatal("nil callback table was not forwarded")
+	}
+	empty := SpxCallbackInfo{}
+	CallGlobalRegisterCallbacks(GDExtensionSpxCallbackInfoPtr(unsafe.Pointer(&empty)))
+	if stringallocator.RegistrationCount() != 2 || !stringallocator.HasRegistration() {
+		t.Fatal("non-nil callback table was not forwarded")
+	}
+	if calls := stringallocator.InvokeCallbacks(0, 0, 0, 0, nil); calls != 0 {
+		t.Fatalf("empty table invoked %d callbacks", calls)
+	}
+	registerEngineCallback()
+	if stringallocator.RegistrationCount() != 3 || !stringallocator.HasRegistration() {
+		t.Fatal("generated C callback table was not registered")
+	}
+	const id int64 = 1<<54 + 3
+	const text = "héllo action 世界"
+	borrowed := stringallocator.Allocate(text)
+	BindCallback(engine.CallbackInfo{})
+	// Calling back through C must also be safe before handlers are bound.
+	if calls := stringallocator.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
+		t.Fatalf("registered C callback fields = %d, want 11", calls)
+	}
+	var got []any
+	BindCallback(engine.CallbackInfo{
+		CoreCallbackInfo: engine.CoreCallbackInfo{
+			OnEngineStart:  func() { got = append(got, "start") },
+			OnEngineUpdate: func(delta float64) { got = append(got, delta) },
+			OnEnginePause:  func(paused bool) { got = append(got, paused) },
+			OnKeyPressed:   func(key int64) { got = append(got, key) },
+		},
+		OnSpriteReady:             func(object int64) { got = append(got, object) },
+		OnActionPressed:           func(action string) { got = append(got, action) },
+		OnAxisChanged:             func(action string, value float64) { got = append(got, action, value) },
+		OnCollisionEnter:          func(self, other int64) { got = append(got, self, other) },
+		OnSceneSpriteInstantiated: func(object int64, name string) { got = append(got, object, name) },
+		OnUiToggle:                func(object int64, on bool) { got = append(got, object, on) },
+		OnUiTextChanged:           func(object int64, text string) { got = append(got, object, text) },
+	})
+	if calls := stringallocator.InvokeCallbacks(id, -7, -.125, 2, borrowed); calls != 11 {
+		t.Fatalf("C callback calls = %d, want 11", calls)
+	}
+	if stringallocator.ReleaseCount() != 0 || copyString(GdString(borrowed)) != text {
+		t.Fatal("callbacks released or modified the borrowed string")
+	}
+	*(*byte)(borrowed) = '?'
+	want := []any{"start", -.125, true, id, int64(-7), text, text, -.125, id, int64(-7), id, text, id, true, id, text}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("retained C callback values = %#v, want %#v", got, want)
+	}
 }
 
 func TestNativeCallbacksForwardValuesAndAllowMissingHandlers(t *testing.T) {

@@ -8,112 +8,37 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
-	internalaudio "github.com/goplus/spx/v4/internal/audio"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	tm "github.com/goplus/spx/v4/internal/tilemap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type penCanvasTilemapMgr struct {
+type tilemapUnloadSceneMgr struct {
+	gdx.ISceneMgr
+	clearCalls int
+}
+
+type tilemapAPIMgr struct {
 	gdx.ITilemapMgr
-	events *[]string
+	positions []float32
+	path      string
+	pos       mathf.Vec2
+	layer     int64
+	erased    bool
+	collision []float32
 }
 
-func (*penCanvasTilemapMgr) SetLayerIndex(int64) {}
-func (m *penCanvasTilemapMgr) PlaceTilesWithLayer(gdx.Array, string, int64) {
-	*m.events = append(*m.events, "tiles")
+type decoratorSceneMgr struct {
+	gdx.ISceneMgr
+	path                                  string
+	position, pivot, scale, colliderPivot mathf.Vec2
+	rotation                              float64
+	layer, collider                       int64
+	params                                []float64
 }
 
-type penCanvasCameraMgr struct {
-	gdx.ICameraMgr
-	limits [4]int64
-	calls  int
-}
-
-func (m *penCanvasCameraMgr) SetCameraLimit(side, limit int64) {
-	m.calls++
-	m.limits[side] = limit
-}
-
-func (*penCanvasCameraMgr) SetCameraSmoothing(bool) {}
-
-type penCanvasAudioBackend struct {
-	internalaudio.Backend
-}
-
-func (*penCanvasAudioBackend) CreateAudio() gdx.Object { return 1 }
-
-func newPenCanvasTilemapTestGame(t *testing.T) (*Game, *spyPenMgr, *penCanvasCameraMgr, string) {
-	t.Helper()
-
-	spy := setupSpyPenMgr(t)
-	originalTilemapMgr, originalCameraMgr := gdx.TilemapMgr, gdx.CameraMgr
-	gdx.TilemapMgr = &penCanvasTilemapMgr{events: &spy.events}
-	cameraSpy := &penCanvasCameraMgr{}
-	gdx.CameraMgr = cameraSpy
-	t.Cleanup(func() {
-		gdx.TilemapMgr, gdx.CameraMgr = originalTilemapMgr, originalCameraMgr
-	})
-
-	const tilemapPath = "tilemaps/map1.json"
-	fs := gameTestFS{
-		tilemapPath: `{
-			"tilemap": {
-				"tile_size": {"width": 32, "height": 16},
-				"tileset": {"sources": []},
-				"layers": [{"tile_data": [1, 2, 3, 0, 0, 1, 4, 5, 0, 0]}]
-			},
-			"decorators": [],
-			"sprites": []
-		}`,
-	}
-	game := &Game{fs: fs}
-	game.displayState.WorldWidth = 480
-	game.displayState.WorldHeight = 360
-	game.tilemapMgr.g = game
-	game.tilemapMgr.fs = fs
-	game.camera = &cameraImpl{g: game}
-	game.Camera = game.camera
-	game.soundMgr.Init(&penCanvasAudioBackend{})
-	return game, spy, cameraSpy, tilemapPath
-}
-
-func TestTilemapSyncsPenCanvasAfterWorldSize(t *testing.T) {
-	for _, tt := range []struct {
-		name   string
-		load   func(*Game, string)
-		events []string
-	}{
-		{"setup", func(game *Game, path string) {
-			game.tilemapMgr.loadMap(path)
-			game.setupAudioAndTilemap(&coreproject.ProjectConfig{})
-		}, []string{"tiles", "canvas"}},
-		{"dynamic load", func(game *Game, path string) {
-			game.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
-			game.queuePenMove(1, mathf.NewVec2(10, 20))
-			game.LoadTilemap(path)
-		}, []string{"tiles", "batch", "canvas"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			game, penSpy, cameraSpy, tilemapPath := newPenCanvasTilemapTestGame(t)
-			tt.load(game, tilemapPath)
-			if game.displayState.WorldWidth != 96 || game.displayState.WorldHeight != 48 {
-				t.Fatalf("world size = %dx%d, want 96x48", game.displayState.WorldWidth, game.displayState.WorldHeight)
-			}
-			if penSpy.canvasCalls != 1 || penSpy.canvasWidth != 96 || penSpy.canvasHeight != 48 {
-				t.Fatalf("pen canvas calls/size = %d/%dx%d, want 1/96x48", penSpy.canvasCalls, penSpy.canvasWidth, penSpy.canvasHeight)
-			}
-			wantLimits := [4]int64{64, -80, 160, -32}
-			if cameraSpy.calls != 4 || cameraSpy.limits != wantLimits {
-				t.Fatalf("camera limit calls/values = %d/%v, want 4/%v", cameraSpy.calls, cameraSpy.limits, wantLimits)
-			}
-			if !reflect.DeepEqual(penSpy.events, tt.events) {
-				t.Fatalf("events = %v, want %v", penSpy.events, tt.events)
-			}
-		})
-	}
-}
+type decoratorResMgr struct{ gdx.IResMgr }
 
 func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 	for _, test := range []struct{ name, decorators string }{
@@ -158,13 +83,6 @@ func TestLoadStageWithNativeTilemapSkipsBackdrops(t *testing.T) {
 	}
 }
 
-type tilemapUnloadSceneMgr struct {
-	gdx.ISceneMgr
-	clearCalls int
-}
-
-func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
-
 func TestUnloadTilemapClearsStateOnce(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	for _, tt := range []struct {
@@ -195,42 +113,6 @@ func TestUnloadTilemapClearsStateOnce(t *testing.T) {
 			}
 		})
 	}
-}
-
-type tilemapAPIMgr struct {
-	gdx.ITilemapMgr
-	positions []float32
-	path      string
-	pos       mathf.Vec2
-	layer     int64
-	erased    bool
-	collision []float32
-}
-
-func (m *tilemapAPIMgr) PlaceTiles(positions gdx.Array, path string) {
-	m.positions = positions.([]float32)
-	m.path = path
-}
-func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
-	m.pos, m.path, m.erased = pos, path, false
-}
-func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
-func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
-	m.pos, m.layer, m.erased = pos, layer, true
-}
-func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
-	m.pos = pos
-	if m.erased {
-		return ""
-	}
-	return m.path
-}
-func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
-	m.layer = layer
-	return m.GetTile(pos)
-}
-func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points gdx.Array) {
-	m.path, m.collision = path, points.([]float32)
 }
 
 func TestGameTilePlacementAndQueries(t *testing.T) {
@@ -265,24 +147,6 @@ func TestGameTilePlacementAndQueries(t *testing.T) {
 		t.Fatalf("collision points=%v", manager.collision)
 	}
 }
-
-type decoratorSceneMgr struct {
-	gdx.ISceneMgr
-	path                                  string
-	position, pivot, scale, colliderPivot mathf.Vec2
-	rotation                              float64
-	layer, collider                       int64
-	params                                []float64
-}
-
-func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params gdx.Array) gdx.Object {
-	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
-	return 991
-}
-
-type decoratorResMgr struct{ gdx.IResMgr }
-
-func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }
 
 func TestTilemapDecoratorCoordinates(t *testing.T) {
 	setupImmediateEngineCalls(t)
@@ -329,3 +193,44 @@ func TestTilemapLoadAndEmptyBounds(t *testing.T) {
 	}()
 	game.tilemapMgr.loadMap("missing.json")
 }
+
+func (m *tilemapUnloadSceneMgr) ClearPureSprites() { m.clearCalls++ }
+
+func (m *tilemapAPIMgr) PlaceTiles(positions gdx.Array, path string) {
+	m.positions = positions.([]float32)
+	m.path = path
+}
+
+func (m *tilemapAPIMgr) PlaceTile(pos mathf.Vec2, path string) {
+	m.pos, m.path, m.erased = pos, path, false
+}
+
+func (m *tilemapAPIMgr) EraseTile(pos mathf.Vec2) { m.pos, m.erased = pos, true }
+
+func (m *tilemapAPIMgr) EraseTileWithLayer(pos mathf.Vec2, layer int64) {
+	m.pos, m.layer, m.erased = pos, layer, true
+}
+
+func (m *tilemapAPIMgr) GetTile(pos mathf.Vec2) string {
+	m.pos = pos
+	if m.erased {
+		return ""
+	}
+	return m.path
+}
+
+func (m *tilemapAPIMgr) GetTileWithLayer(pos mathf.Vec2, layer int64) string {
+	m.layer = layer
+	return m.GetTile(pos)
+}
+
+func (m *tilemapAPIMgr) SetTileWithCollisionInfo(path string, points gdx.Array) {
+	m.path, m.collision = path, points.([]float32)
+}
+
+func (m *decoratorSceneMgr) CreateStaticSprite(path string, pos mathf.Vec2, rotation float64, scale mathf.Vec2, layer int64, pivot mathf.Vec2, collider int64, colliderPivot mathf.Vec2, params gdx.Array) gdx.Object {
+	m.path, m.position, m.rotation, m.scale, m.layer, m.pivot, m.collider, m.colliderPivot, m.params = path, pos, rotation, scale, layer, pivot, collider, colliderPivot, params.([]float64)
+	return 991
+}
+
+func (*decoratorResMgr) GetImageSize(string) mathf.Vec2 { return mathf.NewVec2(20, 10) }

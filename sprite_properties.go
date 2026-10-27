@@ -46,6 +46,10 @@ type spriteProperties struct {
 	costumeIndex  int
 }
 
+func (p spriteProperties) has(property spriteProperty) bool {
+	return p.present&property != 0
+}
+
 func parseSpriteProperties(shape coreproject.StageShape) (spriteProperties, error) {
 	var props spriteProperties
 	floatFields := [...]struct {
@@ -100,10 +104,6 @@ func parseSpriteProperties(shape coreproject.StageShape) (spriteProperties, erro
 
 func invalidSpritePropertyType(name string, value any, want string) error {
 	return fmt.Errorf("stage shape field %q has type %T, want %s", name, value, want)
-}
-
-func (p spriteProperties) has(property spriteProperty) bool {
-	return p.present&property != 0
 }
 
 func applySpriteProperties(dest *SpriteImpl, props spriteProperties) {

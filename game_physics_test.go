@@ -36,46 +36,10 @@ type gameQueryPhysicsMgr struct {
 	areas, bodies bool
 }
 
-func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) internalengine.Array {
-	m.from, m.to, m.mask = pos, size, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) internalengine.Array {
-	m.from, m.radius, m.mask = pos, radius, mask
-	return m.result
-}
-
-func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore internalengine.Array, mask int64, areas, bodies bool) internalengine.Array {
-	m.from, m.to, m.mask = from, to, mask
-	m.ignore = ignore.([]int64)
-	m.areas, m.bodies = areas, bodies
-	return m.result
-}
-
-func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
-	t.Helper()
-	setupImmediateEngineCalls(t)
-	previous := pkgengine.PhysicsMgr
-	manager := &gameQueryPhysicsMgr{}
-	pkgengine.PhysicsMgr = manager
-	t.Cleanup(func() { pkgengine.PhysicsMgr = previous })
-	game := &Game{}
-	sprite := newTargetLookupSprite(game, "target", false)
-	const id = 89001
-	proxy := &internalengine.Sprite{Sprite: pkgengine.Sprite{Id: id}, Target: &sprite.SpriteImpl}
-	sprite.runtimeState.SyncSprite = proxy
-	registry := pkgengine.Sprites()
-	old, existed := registry[id]
-	registry[id] = proxy
-	t.Cleanup(func() {
-		if existed {
-			registry[id] = old
-		} else {
-			delete(registry, id)
-		}
-	})
-	return game, manager, sprite
+type gameDebugDrawMgr struct {
+	pkgengine.IDebugMgr
+	lines  [][2]mathf.Vec2
+	colors []mathf.Color
 }
 
 func TestGameIntersectionQueriesResolveLiveSprites(t *testing.T) {
@@ -139,17 +103,6 @@ func TestGameRaycastResolvesTargetsAndIgnores(t *testing.T) {
 			}
 		})
 	}
-}
-
-type gameDebugDrawMgr struct {
-	pkgengine.IDebugMgr
-	lines  [][2]mathf.Vec2
-	colors []mathf.Color
-}
-
-func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
-	m.colors = append(m.colors, color)
 }
 
 func TestGameDebugDrawLinesValidatesCompleteSegments(t *testing.T) {
@@ -249,14 +202,6 @@ func TestTryRaycastResult(t *testing.T) {
 	}
 }
 
-func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
-	m.colors = append(m.colors, color)
-}
-func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
-	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
-	m.colors = append(m.colors, color)
-}
 func TestGameDebugDrawingPrimitives(t *testing.T) {
 	setupImmediateEngineCalls(t)
 	previous := pkgengine.DebugMgr
@@ -278,6 +223,7 @@ func TestGameDebugDrawingPrimitives(t *testing.T) {
 		}
 	}
 }
+
 func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	game, _, sprite := setupGameQueryPhysics(t)
 	if got := game.buildSpriteCollisionData([]Sprite{nil}); len(got) != 0 {
@@ -299,4 +245,61 @@ func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
 	if !slices.Equal(mgr.collisionModes, want) {
 		t.Fatalf("collision modes = %v, want %v", mgr.collisionModes, want)
 	}
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionRect(pos, size mathf.Vec2, mask int64) internalengine.Array {
+	m.from, m.to, m.mask = pos, size, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) CheckCollisionCircle(pos mathf.Vec2, radius float64, mask int64) internalengine.Array {
+	m.from, m.radius, m.mask = pos, radius, mask
+	return m.result
+}
+
+func (m *gameQueryPhysicsMgr) RaycastWithDetails(from, to mathf.Vec2, ignore internalengine.Array, mask int64, areas, bodies bool) internalengine.Array {
+	m.from, m.to, m.mask = from, to, mask
+	m.ignore = ignore.([]int64)
+	m.areas, m.bodies = areas, bodies
+	return m.result
+}
+
+func (m *gameDebugDrawMgr) DebugDrawLine(from, to mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{from, to})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawRect(pos, size mathf.Vec2, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, size})
+	m.colors = append(m.colors, color)
+}
+
+func (m *gameDebugDrawMgr) DebugDrawCircle(pos mathf.Vec2, radius float64, color mathf.Color) {
+	m.lines = append(m.lines, [2]mathf.Vec2{pos, mathf.NewVec2(radius, radius)})
+	m.colors = append(m.colors, color)
+}
+
+func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLookupSprite) {
+	t.Helper()
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.PhysicsMgr
+	manager := &gameQueryPhysicsMgr{}
+	pkgengine.PhysicsMgr = manager
+	t.Cleanup(func() { pkgengine.PhysicsMgr = previous })
+	game := &Game{}
+	sprite := newTargetLookupSprite(game, "target", false)
+	const id = 89001
+	proxy := &internalengine.Sprite{Sprite: pkgengine.Sprite{Id: id}, Target: &sprite.SpriteImpl}
+	sprite.runtimeState.SyncSprite = proxy
+	registry := pkgengine.Sprites()
+	old, existed := registry[id]
+	registry[id] = proxy
+	t.Cleanup(func() {
+		if existed {
+			registry[id] = old
+		} else {
+			delete(registry, id)
+		}
+	})
+	return game, manager, sprite
 }

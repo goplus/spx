@@ -222,17 +222,6 @@ func TestCollectRejectsSymlinkedReferencedFile(t *testing.T) {
 	}
 }
 
-func writeAssetTestFile(t *testing.T, root, relative, content string) {
-	t.Helper()
-	name := filepath.Join(root, filepath.FromSlash(relative))
-	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestResolveRejectsInvalidConfigurationAndLayout(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
@@ -424,30 +413,6 @@ func TestPinnedAssetsReportPermissionErrors(t *testing.T) {
 	}
 }
 
-func denyAssetRead(t *testing.T, name string) {
-	t.Helper()
-	info, err := os.Stat(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(name, 0); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chmod(name, info.Mode().Perm()); err != nil {
-			t.Error(err)
-		}
-	})
-	probe, err := os.Open(name)
-	if err == nil {
-		probe.Close()
-		t.Skip("filesystem or user permits reading mode-000 paths")
-	}
-	if !errors.Is(err, os.ErrPermission) {
-		t.Fatalf("permission probe = %v", err)
-	}
-}
-
 func TestPinnedAssetPathsAndSnapshots(t *testing.T) {
 	rootDir := t.TempDir()
 	writeAssetTestFile(t, rootDir, "config.json", "{}")
@@ -539,5 +504,40 @@ func TestResolveRequiresAtLeastOneIndex(t *testing.T) {
 	}
 	if _, err := Resolve(Config{root, "assets", "index.json"}); err == nil || !strings.Contains(err.Error(), "contains neither") {
 		t.Fatalf("missing indexes = %v", err)
+	}
+}
+
+func writeAssetTestFile(t *testing.T, root, relative, content string) {
+	t.Helper()
+	name := filepath.Join(root, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func denyAssetRead(t *testing.T, name string) {
+	t.Helper()
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(name, info.Mode().Perm()); err != nil {
+			t.Error(err)
+		}
+	})
+	probe, err := os.Open(name)
+	if err == nil {
+		probe.Close()
+		t.Skip("filesystem or user permits reading mode-000 paths")
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("permission probe = %v", err)
 	}
 }

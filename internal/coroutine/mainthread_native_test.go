@@ -37,36 +37,9 @@ type mainThreadTestPlatform struct {
 	main bool
 }
 
-func (p mainThreadTestPlatform) IsMainThread() bool {
-	return p.main
-}
-
-func setMainThreadForTest(t *testing.T, main bool) {
-	t.Helper()
-	previous := gdx.PlatformMgr
-	gdx.PlatformMgr = mainThreadTestPlatform{main: main}
-	t.Cleanup(func() { gdx.PlatformMgr = previous })
-}
-
-func waitForQueuedJob(t *testing.T, co *Coroutines) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for co.currentJobCount() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("main-thread call was not queued")
-		}
-		runtime.Gosched()
-	}
-}
-
 type observedDoneContext struct {
 	context.Context
 	onDone func()
-}
-
-func (c *observedDoneContext) Done() <-chan struct{} {
-	c.onDone()
-	return c.Context.Done()
 }
 
 func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
@@ -850,5 +823,32 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 	waitForThreadSignal(t, fresh.done, "fresh script did not finish")
 	if fresh.Stopped() {
 		t.Fatal("successful recovery rejected a fresh script")
+	}
+}
+
+func (p mainThreadTestPlatform) IsMainThread() bool {
+	return p.main
+}
+
+func (c *observedDoneContext) Done() <-chan struct{} {
+	c.onDone()
+	return c.Context.Done()
+}
+
+func setMainThreadForTest(t *testing.T, main bool) {
+	t.Helper()
+	previous := gdx.PlatformMgr
+	gdx.PlatformMgr = mainThreadTestPlatform{main: main}
+	t.Cleanup(func() { gdx.PlatformMgr = previous })
+}
+
+func waitForQueuedJob(t *testing.T, co *Coroutines) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for co.currentJobCount() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("main-thread call was not queued")
+		}
+		runtime.Gosched()
 	}
 }

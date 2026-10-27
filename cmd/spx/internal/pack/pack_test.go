@@ -29,6 +29,15 @@ import (
 	"testing"
 )
 
+type zipSnapshot struct {
+	counts   map[string]int
+	contents map[string]string
+}
+
+type packCloseResult struct{ err error }
+
+type packWriteFunc func([]byte) (int, error)
+
 func TestPackProjectIncludesResourcesWithinProject(t *testing.T) {
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "Game")
@@ -492,67 +501,6 @@ func TestPackProjectPreservesValidationOrder(t *testing.T) {
 	}
 }
 
-type zipSnapshot struct {
-	counts   map[string]int
-	contents map[string]string
-}
-
-func readZipSnapshot(t *testing.T, zipPath string) zipSnapshot {
-	t.Helper()
-
-	reader, err := zip.OpenReader(zipPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reader.Close()
-
-	snapshot := zipSnapshot{
-		counts:   make(map[string]int),
-		contents: make(map[string]string),
-	}
-	for _, file := range reader.File {
-		snapshot.counts[file.Name]++
-		if file.FileInfo().IsDir() {
-			continue
-		}
-
-		content, err := readZipFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
-		snapshot.contents[file.Name] = content
-	}
-	return snapshot
-}
-
-func readZipFile(file *zip.File) (string, error) {
-	reader, err := file.Open()
-	if err != nil {
-		return "", err
-	}
-
-	data, readErr := io.ReadAll(reader)
-	closeErr := reader.Close()
-	if readErr != nil {
-		return "", readErr
-	}
-	if closeErr != nil {
-		return "", closeErr
-	}
-	return string(data), nil
-}
-
-func writeTestFile(t *testing.T, filePath string, content string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestPackProjectRejectsInvalidRootsAndDestinations(t *testing.T) {
 	for _, name := range []string{"missing root", "file root", "symlink root", "directory destination", "symlink destination", "missing destination parent"} {
 		t.Run(name, func(t *testing.T) {
@@ -598,10 +546,6 @@ func TestPackProjectRejectsInvalidRootsAndDestinations(t *testing.T) {
 		t.Fatalf("invalid destination error = %v", err)
 	}
 }
-
-type packCloseResult struct{ err error }
-
-func (c packCloseResult) Close() error { return c.err }
 
 func TestClosePackOutputPreservesFirstErrorAndClosesFile(t *testing.T) {
 	packErr, writerErr := errors.New("packing failed"), errors.New("zip close failed")
@@ -923,10 +867,6 @@ func TestPackPathHelpersRejectMixedPathForms(t *testing.T) {
 	}
 }
 
-type packWriteFunc func([]byte) (int, error)
-
-func (write packWriteFunc) Write(data []byte) (int, error) { return write(data) }
-
 func TestPackZipDetectsWriteFailuresAndConcurrentFileChanges(t *testing.T) {
 	for _, kind := range []string{"output failure", "file changed", "file header too long", "directory header too long", "root entry"} {
 		t.Run(kind, func(t *testing.T) {
@@ -1187,5 +1127,65 @@ func TestReadJSONFileReportsUnreadableInput(t *testing.T) {
 	}
 	if err := readJSONFile(name, new(any)); !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("unreadable JSON error = %v, want permission denied", err)
+	}
+}
+
+func (c packCloseResult) Close() error { return c.err }
+
+func (f packWriteFunc) Write(data []byte) (int, error) { return f(data) }
+
+func readZipSnapshot(t *testing.T, zipPath string) zipSnapshot {
+	t.Helper()
+
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+
+	snapshot := zipSnapshot{
+		counts:   make(map[string]int),
+		contents: make(map[string]string),
+	}
+	for _, file := range reader.File {
+		snapshot.counts[file.Name]++
+		if file.FileInfo().IsDir() {
+			continue
+		}
+
+		content, err := readZipFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot.contents[file.Name] = content
+	}
+	return snapshot
+}
+
+func readZipFile(file *zip.File) (string, error) {
+	reader, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+
+	data, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil {
+		return "", readErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	return string(data), nil
+}
+
+func writeTestFile(t *testing.T, filePath string, content string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
 	}
 }

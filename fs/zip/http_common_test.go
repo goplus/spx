@@ -28,6 +28,15 @@ import (
 	"time"
 )
 
+type remoteRoundTripper func(*http.Request) (*http.Response, error)
+
+type remoteErrorReader struct{ err error }
+
+type remoteTrackedBody struct {
+	io.Reader
+	closes int
+}
+
 func TestParseRemoteURLRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name, raw, scheme string
@@ -63,13 +72,16 @@ func TestParseRemoteURLRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-func TestParseRemoteURLPreservesPathAndQuery(t *testing.T) {
+func TestParseRemoteURLCanonicalizesURLsAndCacheKeys(t *testing.T) {
 	tests := []struct {
 		raw, scheme, want string
 	}{
 		{"EXAMPLE.test:8080/a%20b.zip?next=https://other.test/a&token=1", "http://", "http://example.test:8080/a%20b.zip?next=https://other.test/a&token=1"},
 		{"[::1]:8443/a.zip?token=2", "https://", "https://[::1]:8443/a.zip?token=2"},
 		{"example.test", "https://", "https://example.test"},
+		{"EXAMPLE.test/a.zip?token=1", "http://", "http://example.test/a.zip?token=1"},
+		{"example.test/a.zip?token=1", "https://", "https://example.test/a.zip?token=1"},
+		{"example.test/a.zip?token=2", "https://", "https://example.test/a.zip?token=2"},
 	}
 	keys := make(map[string]bool)
 	for _, test := range tests {
@@ -85,11 +97,6 @@ func TestParseRemoteURLPreservesPathAndQuery(t *testing.T) {
 			t.Fatalf("distinct URLs share cache key %q", key)
 		}
 		keys[key] = true
-	}
-	_, first, _ := parseRemoteURL("example.test/a.zip?token=1", "https://")
-	_, second, _ := parseRemoteURL("example.test/a.zip?token=2", "https://")
-	if first == second {
-		t.Fatal("different query strings share a cache key")
 	}
 }
 
@@ -207,24 +214,26 @@ func TestGetRemoteTransportError(t *testing.T) {
 }
 
 func TestRemoteClientTimeoutAndNilDefault(t *testing.T) {
+	const defaultTimeout = 5 * time.Minute
 	t.Run("nil default", func(t *testing.T) {
 		setRemoteHTTPClient(t, nil)
 		client := remoteClientForScheme("http://")
-		if client == nil || client.Timeout != remoteHTTPTimeout || http.DefaultClient != nil {
+		if client == nil || client.Timeout != defaultTimeout || http.DefaultClient != nil {
 			t.Fatalf("client = %#v, default = %#v", client, http.DefaultClient)
 		}
 	})
-	for _, timeout := range []time.Duration{-time.Second, 0, time.Minute, remoteHTTPTimeout, remoteHTTPTimeout + time.Second} {
-		t.Run(timeout.String(), func(t *testing.T) {
-			original := &http.Client{Timeout: timeout}
+	for _, test := range []struct {
+		timeout, want time.Duration
+	}{
+		{-time.Second, defaultTimeout}, {0, defaultTimeout}, {time.Minute, time.Minute},
+		{defaultTimeout, defaultTimeout}, {defaultTimeout + time.Second, defaultTimeout},
+	} {
+		t.Run(test.timeout.String(), func(t *testing.T) {
+			original := &http.Client{Timeout: test.timeout}
 			setRemoteHTTPClient(t, original)
 			client := remoteClientForScheme("http://")
-			want := timeout
-			if want <= 0 || want > remoteHTTPTimeout {
-				want = remoteHTTPTimeout
-			}
-			if client == original || client.Timeout != want || original.Timeout != timeout {
-				t.Fatalf("clone timeout = %v, original = %v, want %v and %v", client.Timeout, original.Timeout, want, timeout)
+			if client == original || client.Timeout != test.want || original.Timeout != test.timeout {
+				t.Fatalf("clone timeout = %v, original = %v, want %v and %v", client.Timeout, original.Timeout, test.want, test.timeout)
 			}
 		})
 	}
@@ -300,29 +309,20 @@ func TestCheckFinalRemoteScheme(t *testing.T) {
 	}
 }
 
+func (t remoteRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return t(request)
+}
+
+func (r remoteErrorReader) Read([]byte) (int, error) { return 0, r.err }
+
+func (b *remoteTrackedBody) Close() error {
+	b.closes++
+	return nil
+}
+
 func setRemoteHTTPClient(t *testing.T, client *http.Client) {
 	t.Helper()
 	previous := http.DefaultClient
 	http.DefaultClient = client
 	t.Cleanup(func() { http.DefaultClient = previous })
-}
-
-type remoteRoundTripper func(*http.Request) (*http.Response, error)
-
-func (transport remoteRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return transport(request)
-}
-
-type remoteErrorReader struct{ err error }
-
-func (reader remoteErrorReader) Read([]byte) (int, error) { return 0, reader.err }
-
-type remoteTrackedBody struct {
-	io.Reader
-	closes int
-}
-
-func (body *remoteTrackedBody) Close() error {
-	body.closes++
-	return nil
 }

@@ -266,8 +266,8 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
 | Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
 | Physical position reads and final sprite submission | `runtime_sync.go`, `component_transform.go`, `shape_manager.go` |
-| Frame input sampling, unified input and timer dispatch | `runtime_input.go`, `runtime_replay_input.go` |
-| Condition registration, sampling, and matched-handler dispatch | `runtime_conditions.go` |
+| Frame input sampling, unified input and timer dispatch | `runtime_input.go` |
+| Condition registration, sampling, and matched-handler dispatch | `runtime_events.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
 
 `UpdateStats()` returns statistics from the latest update, with durations in
@@ -355,9 +355,9 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
 Core regression coverage is in `runtime_scratch_scheduler_test.go`,
-`runtime_events_test.go`, `runtime_events_order_test.go`,
+`runtime_events_test.go`, `runtime_event_order_test.go`,
 `runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_native_test.go`,
-`runtime_sync_test.go`, `runtime_native_test.go`, `internal/engine/runtime_delta_test.go`,
+`runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/runtime_delta_test.go`,
 `internal/engine/execute_native_test.go`,
 `sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
 `internal/coroutine/order_test.go`.

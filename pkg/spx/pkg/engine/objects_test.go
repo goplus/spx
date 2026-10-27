@@ -9,6 +9,25 @@ import (
 	"github.com/goplus/spbase/mathf"
 )
 
+type objectTestSpriteMgr struct {
+	ISpriteMgr
+	ids                       []Object
+	position, velocity, scale mathf.Vec2
+	physics                   [4]int64
+	animationName             string
+	animationSpeed            float64
+	animationLoop, reverse    bool
+	destroyed                 bool
+}
+
+type objectTestUiMgr struct {
+	IUiMgr
+	ids       []Object
+	size      mathf.Vec2
+	rotation  float64
+	destroyed bool
+}
+
 func TestSpriteEvents(t *testing.T) {
 	first, second := &Sprite{}, &Sprite{}
 	first.onCreate()
@@ -72,117 +91,6 @@ func TestUiNodeEvents(t *testing.T) {
 	t.Run("text changed", func(t *testing.T) {
 		assertObjectEventPayloads(t, first.OnUiTextChangedEvent, second.OnUiTextChangedEvent, first.V_OnUiTextChanged, []string{"你好, player", ""})
 	})
-}
-
-func assertObjectEvent(t *testing.T, first, second *Event0, trigger func()) {
-	t.Helper()
-	if first == nil || second == nil || first == second {
-		t.Fatal("onCreate must create an independent event per object")
-	}
-	var firstCalls, secondCalls int
-	first.Subscribe(func() { firstCalls++ })
-	second.Subscribe(func() { secondCalls++ })
-	trigger()
-	if firstCalls != 1 || secondCalls != 0 {
-		t.Fatalf("event calls = (%d, %d), want (1, 0)", firstCalls, secondCalls)
-	}
-}
-
-func assertObjectEventPayloads[T any](t *testing.T, first, second *Event1[T], trigger func(T), want []T) {
-	t.Helper()
-	if first == nil || second == nil || first == second {
-		t.Fatal("onCreate must create an independent event per object")
-	}
-	var got []T
-	first.Subscribe(func(value T) { got = append(got, value) })
-	second.Subscribe(func(T) { t.Error("event leaked to another object") })
-	for _, value := range want {
-		trigger(value)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("event payloads = %v, want %v", got, want)
-	}
-}
-
-type objectTestSpriteMgr struct {
-	ISpriteMgr
-	ids                       []Object
-	position, velocity, scale mathf.Vec2
-	physics                   [4]int64
-	animationName             string
-	animationSpeed            float64
-	animationLoop, reverse    bool
-	destroyed                 bool
-}
-
-func (m *objectTestSpriteMgr) GetPosition(id Object) mathf.Vec2 {
-	m.ids = append(m.ids, id)
-	return m.position
-}
-func (m *objectTestSpriteMgr) SetPosition(id Object, value mathf.Vec2) {
-	m.ids = append(m.ids, id)
-	m.position = value
-}
-func (m *objectTestSpriteMgr) GetVelocity(id Object) mathf.Vec2 {
-	m.ids = append(m.ids, id)
-	return m.velocity
-}
-func (m *objectTestSpriteMgr) SetVelocity(id Object, value mathf.Vec2) {
-	m.ids = append(m.ids, id)
-	m.velocity = value
-}
-func (m *objectTestSpriteMgr) GetScale(id Object) mathf.Vec2 {
-	m.ids = append(m.ids, id)
-	return m.scale
-}
-func (m *objectTestSpriteMgr) SetScale(id Object, value mathf.Vec2) {
-	m.ids = append(m.ids, id)
-	m.scale = value
-}
-func (m *objectTestSpriteMgr) SetTriggerLayer(id Object, value int64) {
-	m.ids = append(m.ids, id)
-	m.physics[0] = value
-}
-func (m *objectTestSpriteMgr) SetCollisionLayer(id Object, value int64) {
-	m.ids = append(m.ids, id)
-	m.physics[1] = value
-}
-func (m *objectTestSpriteMgr) SetCollisionMask(id Object, value int64) {
-	m.ids = append(m.ids, id)
-	m.physics[2] = value
-}
-func (m *objectTestSpriteMgr) SetTriggerMask(id Object, value int64) {
-	m.ids = append(m.ids, id)
-	m.physics[3] = value
-}
-func (m *objectTestSpriteMgr) PlayAnim(id Object, name string, speed float64, loop, reverse bool) {
-	m.ids = append(m.ids, id)
-	m.animationName, m.animationSpeed, m.animationLoop, m.reverse = name, speed, loop, reverse
-}
-func (m *objectTestSpriteMgr) DestroySprite(id Object) bool {
-	m.ids = append(m.ids, id)
-	return m.destroyed
-}
-
-func objectTestInstallSpriteMgr(t *testing.T) *objectTestSpriteMgr {
-	t.Helper()
-	previous := SpriteMgr
-	m := &objectTestSpriteMgr{}
-	SpriteMgr = m
-	t.Cleanup(func() { SpriteMgr = previous })
-	return m
-}
-
-func objectTestAssertIDs(t *testing.T, ids []Object, want Object) {
-	t.Helper()
-	if len(ids) == 0 {
-		t.Fatal("manager received no calls")
-	}
-	for _, id := range ids {
-		if id != want {
-			t.Fatalf("manager received object %d, want %d", id, want)
-		}
-	}
 }
 
 func TestSpriteAxisHelpers(t *testing.T) {
@@ -250,35 +158,6 @@ func TestSpriteAnimationPhysicsAndDestroy(t *testing.T) {
 	objectTestAssertIDs(t, m.ids, 92)
 }
 
-type objectTestUiMgr struct {
-	IUiMgr
-	ids       []Object
-	size      mathf.Vec2
-	rotation  float64
-	destroyed bool
-}
-
-func (m *objectTestUiMgr) GetSize(id Object) mathf.Vec2 {
-	m.ids = append(m.ids, id)
-	return m.size
-}
-func (m *objectTestUiMgr) SetSize(id Object, value mathf.Vec2) {
-	m.ids = append(m.ids, id)
-	m.size = value
-}
-func (m *objectTestUiMgr) GetRotation(id Object) float64 {
-	m.ids = append(m.ids, id)
-	return m.rotation
-}
-func (m *objectTestUiMgr) SetRotation(id Object, value float64) {
-	m.ids = append(m.ids, id)
-	m.rotation = value
-}
-func (m *objectTestUiMgr) DestroyNode(id Object) bool {
-	m.ids = append(m.ids, id)
-	return m.destroyed
-}
-
 func TestUiNodePropertiesAndDestroy(t *testing.T) {
 	previous := UiMgr
 	m := &objectTestUiMgr{}
@@ -305,4 +184,140 @@ func TestUiNodePropertiesAndDestroy(t *testing.T) {
 		}
 	}
 	objectTestAssertIDs(t, m.ids, 65)
+}
+
+func (m *objectTestSpriteMgr) GetPosition(id Object) mathf.Vec2 {
+	m.ids = append(m.ids, id)
+	return m.position
+}
+
+func (m *objectTestSpriteMgr) SetPosition(id Object, value mathf.Vec2) {
+	m.ids = append(m.ids, id)
+	m.position = value
+}
+
+func (m *objectTestSpriteMgr) GetVelocity(id Object) mathf.Vec2 {
+	m.ids = append(m.ids, id)
+	return m.velocity
+}
+
+func (m *objectTestSpriteMgr) SetVelocity(id Object, value mathf.Vec2) {
+	m.ids = append(m.ids, id)
+	m.velocity = value
+}
+
+func (m *objectTestSpriteMgr) GetScale(id Object) mathf.Vec2 {
+	m.ids = append(m.ids, id)
+	return m.scale
+}
+
+func (m *objectTestSpriteMgr) SetScale(id Object, value mathf.Vec2) {
+	m.ids = append(m.ids, id)
+	m.scale = value
+}
+
+func (m *objectTestSpriteMgr) SetTriggerLayer(id Object, value int64) {
+	m.ids = append(m.ids, id)
+	m.physics[0] = value
+}
+
+func (m *objectTestSpriteMgr) SetCollisionLayer(id Object, value int64) {
+	m.ids = append(m.ids, id)
+	m.physics[1] = value
+}
+
+func (m *objectTestSpriteMgr) SetCollisionMask(id Object, value int64) {
+	m.ids = append(m.ids, id)
+	m.physics[2] = value
+}
+
+func (m *objectTestSpriteMgr) SetTriggerMask(id Object, value int64) {
+	m.ids = append(m.ids, id)
+	m.physics[3] = value
+}
+
+func (m *objectTestSpriteMgr) PlayAnim(id Object, name string, speed float64, loop, reverse bool) {
+	m.ids = append(m.ids, id)
+	m.animationName, m.animationSpeed, m.animationLoop, m.reverse = name, speed, loop, reverse
+}
+
+func (m *objectTestSpriteMgr) DestroySprite(id Object) bool {
+	m.ids = append(m.ids, id)
+	return m.destroyed
+}
+
+func (m *objectTestUiMgr) GetSize(id Object) mathf.Vec2 {
+	m.ids = append(m.ids, id)
+	return m.size
+}
+
+func (m *objectTestUiMgr) SetSize(id Object, value mathf.Vec2) {
+	m.ids = append(m.ids, id)
+	m.size = value
+}
+
+func (m *objectTestUiMgr) GetRotation(id Object) float64 {
+	m.ids = append(m.ids, id)
+	return m.rotation
+}
+
+func (m *objectTestUiMgr) SetRotation(id Object, value float64) {
+	m.ids = append(m.ids, id)
+	m.rotation = value
+}
+
+func (m *objectTestUiMgr) DestroyNode(id Object) bool {
+	m.ids = append(m.ids, id)
+	return m.destroyed
+}
+
+func assertObjectEvent(t *testing.T, first, second *Event0, trigger func()) {
+	t.Helper()
+	if first == nil || second == nil || first == second {
+		t.Fatal("onCreate must create an independent event per object")
+	}
+	var firstCalls, secondCalls int
+	first.Subscribe(func() { firstCalls++ })
+	second.Subscribe(func() { secondCalls++ })
+	trigger()
+	if firstCalls != 1 || secondCalls != 0 {
+		t.Fatalf("event calls = (%d, %d), want (1, 0)", firstCalls, secondCalls)
+	}
+}
+
+func assertObjectEventPayloads[T any](t *testing.T, first, second *Event1[T], trigger func(T), want []T) {
+	t.Helper()
+	if first == nil || second == nil || first == second {
+		t.Fatal("onCreate must create an independent event per object")
+	}
+	var got []T
+	first.Subscribe(func(value T) { got = append(got, value) })
+	second.Subscribe(func(T) { t.Error("event leaked to another object") })
+	for _, value := range want {
+		trigger(value)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("event payloads = %v, want %v", got, want)
+	}
+}
+
+func objectTestInstallSpriteMgr(t *testing.T) *objectTestSpriteMgr {
+	t.Helper()
+	previous := SpriteMgr
+	m := &objectTestSpriteMgr{}
+	SpriteMgr = m
+	t.Cleanup(func() { SpriteMgr = previous })
+	return m
+}
+
+func objectTestAssertIDs(t *testing.T, ids []Object, want Object) {
+	t.Helper()
+	if len(ids) == 0 {
+		t.Fatal("manager received no calls")
+	}
+	for _, id := range ids {
+		if id != want {
+			t.Fatalf("manager received object %d, want %d", id, want)
+		}
+	}
 }

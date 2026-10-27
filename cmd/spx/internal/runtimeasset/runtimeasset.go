@@ -119,7 +119,11 @@ func assetMode(name string) os.FileMode {
 }
 
 func manifestCacheKey(names []string) (string, bool, error) {
-	data, err := fs.ReadFile(embeddedAssets, assetPath(manifestFileName))
+	return manifestCacheKeyFromFS(embeddedAssets, names)
+}
+
+func manifestCacheKeyFromFS(assets fs.FS, names []string) (string, bool, error) {
+	data, err := fs.ReadFile(assets, assetPath(manifestFileName))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", false, nil
@@ -211,7 +215,7 @@ func extractAsset(cacheDir, name string) (err error) {
 
 	dstPath := filepath.Join(cacheDir, name)
 	mode := assetMode(name)
-	if dstInfo, err := os.Stat(dstPath); err == nil && dstInfo.Mode().IsRegular() && dstInfo.Size() == info.Size() {
+	if dstInfo, err := os.Lstat(dstPath); err == nil && dstInfo.Mode().IsRegular() && dstInfo.Size() == info.Size() {
 		// The cache key identifies the expected bundle, not the current file contents.
 		matches, err := cachedAssetMatches(dstPath, name)
 		if err != nil {

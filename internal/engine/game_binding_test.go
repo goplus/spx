@@ -40,50 +40,10 @@ type bindingTestGame struct {
 	onReset   func()
 }
 
-func (*bindingTestGame) OnEngineStart()               {}
-func (*bindingTestGame) OnEngineUpdate(float64)       {}
-func (*bindingTestGame) OnEngineBeforeUpdate(float64) {}
-func (*bindingTestGame) OnEngineRender(float64)       {}
-func (*bindingTestGame) OnEngineFrameEnd()            {}
-func (g *bindingTestGame) OnEngineDestroy() {
-	g.destroyed.Add(1)
-	if owner, ok := GetGame().(*struct{}); ok {
-		g.ownerSeen.Store(owner)
-	}
-}
-func (g *bindingTestGame) OnEngineReset() {
-	g.reset.Add(1)
-	if owner, ok := GetGame().(*struct{}); ok {
-		g.ownerSeen.Store(owner)
-	}
-	if g.onReset != nil {
-		g.onReset()
-	}
-}
-func (g *bindingTestGame) OnEnginePause(paused bool) {
-	g.paused.Store(paused)
-}
-
-func isolateGameBinding(t *testing.T) {
-	t.Helper()
-	previous := activeGame.Swap(nil)
-	t.Cleanup(func() { activeGame.Store(previous) })
-}
-
-func bindGame(callbacks IGame, owner any) (*gameBinding, error) {
-	return bindGameAtPhase(callbacks, owner, gameRunning)
-}
-
-func bindGameAtPhase(callbacks IGame, owner any, phase gamePhase) (*gameBinding, error) {
-	binding, err := beginGame(callbacks, owner)
-	if err != nil {
-		return nil, err
-	}
-	binding.storePhase(phase)
-	if phase != gameStarting {
-		binding.startDone = nil
-	}
-	return binding, nil
+type frameRecordingGame struct {
+	bindingTestGame
+	step   func(string)
+	deltas []float64
 }
 
 func TestBindGameRejectsSecondGameWithoutReplacingFirst(t *testing.T) {
@@ -771,21 +731,6 @@ func TestDestroyWaitsPastFormerDrainTimeout(t *testing.T) {
 	}
 }
 
-type frameRecordingGame struct {
-	bindingTestGame
-	step   func(string)
-	deltas []float64
-}
-
-func (g *frameRecordingGame) record(name string, delta float64) {
-	g.deltas = append(g.deltas, delta)
-	g.step(name)
-}
-func (g *frameRecordingGame) OnEngineBeforeUpdate(delta float64) { g.record("before", delta) }
-func (g *frameRecordingGame) OnEngineUpdate(delta float64)       { g.record("update", delta) }
-func (g *frameRecordingGame) OnEngineRender(delta float64)       { g.record("render", delta) }
-func (g *frameRecordingGame) OnEngineFrameEnd()                  { g.step("end") }
-
 func TestFrameRuntimeUpdatesPrecedeScriptsAndCapture(t *testing.T) {
 	for _, stop := range []bool{false, true} {
 		t.Run(map[bool]string{false: "running", true: "stopped"}[stop], func(t *testing.T) {
@@ -910,4 +855,70 @@ func TestFrameStopBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (*bindingTestGame) OnEngineStart() {}
+
+func (*bindingTestGame) OnEngineUpdate(float64) {}
+
+func (*bindingTestGame) OnEngineBeforeUpdate(float64) {}
+
+func (*bindingTestGame) OnEngineRender(float64) {}
+
+func (*bindingTestGame) OnEngineFrameEnd() {}
+
+func (g *bindingTestGame) OnEngineDestroy() {
+	g.destroyed.Add(1)
+	if owner, ok := GetGame().(*struct{}); ok {
+		g.ownerSeen.Store(owner)
+	}
+}
+
+func (g *bindingTestGame) OnEngineReset() {
+	g.reset.Add(1)
+	if owner, ok := GetGame().(*struct{}); ok {
+		g.ownerSeen.Store(owner)
+	}
+	if g.onReset != nil {
+		g.onReset()
+	}
+}
+
+func (g *bindingTestGame) OnEnginePause(paused bool) {
+	g.paused.Store(paused)
+}
+
+func (g *frameRecordingGame) OnEngineBeforeUpdate(delta float64) { g.record("before", delta) }
+
+func (g *frameRecordingGame) OnEngineUpdate(delta float64) { g.record("update", delta) }
+
+func (g *frameRecordingGame) OnEngineRender(delta float64) { g.record("render", delta) }
+
+func (g *frameRecordingGame) OnEngineFrameEnd() { g.step("end") }
+
+func (g *frameRecordingGame) record(name string, delta float64) {
+	g.deltas = append(g.deltas, delta)
+	g.step(name)
+}
+
+func isolateGameBinding(t *testing.T) {
+	t.Helper()
+	previous := activeGame.Swap(nil)
+	t.Cleanup(func() { activeGame.Store(previous) })
+}
+
+func bindGame(callbacks IGame, owner any) (*gameBinding, error) {
+	return bindGameAtPhase(callbacks, owner, gameRunning)
+}
+
+func bindGameAtPhase(callbacks IGame, owner any, phase gamePhase) (*gameBinding, error) {
+	binding, err := beginGame(callbacks, owner)
+	if err != nil {
+		return nil, err
+	}
+	binding.storePhase(phase)
+	if phase != gameStarting {
+		binding.startDone = nil
+	}
+	return binding, nil
 }

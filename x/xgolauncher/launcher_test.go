@@ -35,6 +35,12 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
+type launcherTestFile struct {
+	Name string
+	Mode os.FileMode
+	Data []byte
+}
+
 func TestProcessStatusSuccess(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -269,12 +275,6 @@ func launcherTestPayload(t *testing.T, engineScript string, configure ...func(*r
 		t.Fatal(err)
 	}
 	return payloadBytes, payloadDigest, manifestDigest, verified.Manifest
-}
-
-type launcherTestFile struct {
-	Name string
-	Mode os.FileMode
-	Data []byte
 }
 
 func launcherTestSources(files ...launcherTestFile) []runtimepayload.FileSource {

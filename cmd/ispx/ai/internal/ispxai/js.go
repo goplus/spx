@@ -30,10 +30,18 @@ import (
 )
 
 const defaultAIInteractionEndpoint = "/api/ai/interaction"
+
 const aiDescriptionKnowledgeBaseKey = "AI-generated descriptive summary of the game world"
 
 var aiBridgeTransport = newJSAITransport()
+
 var jsTypeError = js.Global().Get("Error")
+
+type jsAITransport struct {
+	mu            sync.RWMutex
+	endpoint      string
+	tokenProvider js.Value
+}
 
 func init() {
 	ai.SetDefaultTransport(aiBridgeTransport)
@@ -42,27 +50,24 @@ func init() {
 	js.Global().Set("xbuilder_set_ai_interaction_api_token_provider", jsFuncOfWithError(setAIInteractionAPITokenProvider))
 }
 
-func jsFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
-	return js.FuncOf(func(this js.Value, args []js.Value) any {
-		result := fn(this, args)
-		if err, ok := result.(error); ok {
-			return jsTypeError.New(err.Error())
-		}
-		return result
-	})
-}
-
-type jsAITransport struct {
-	mu            sync.RWMutex
-	endpoint      string
-	tokenProvider js.Value
-}
-
-func newJSAITransport() *jsAITransport {
-	return &jsAITransport{
-		endpoint:      defaultAIInteractionEndpoint,
-		tokenProvider: js.Undefined(),
+func (t *jsAITransport) Interact(ctx context.Context, req ai.Request) (ai.Response, error) {
+	var resp ai.Response
+	if err := t.postJSON(ctx, "/turn", req, &resp); err != nil {
+		return ai.Response{}, err
 	}
+	return resp, nil
+}
+
+func (t *jsAITransport) Archive(ctx context.Context, turns []ai.Turn, existingArchive string) (ai.ArchivedHistory, error) {
+	payload := map[string]any{
+		"turns":           turns,
+		"existingArchive": existingArchive,
+	}
+	var resp ai.ArchivedHistory
+	if err := t.postJSON(ctx, "/archive", payload, &resp); err != nil {
+		return ai.ArchivedHistory{}, err
+	}
+	return resp, nil
 }
 
 func (t *jsAITransport) setEndpoint(endpoint string) {
@@ -91,26 +96,6 @@ func (t *jsAITransport) config() (endpoint string, tokenProvider js.Value) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.endpoint, t.tokenProvider
-}
-
-func (t *jsAITransport) Interact(ctx context.Context, req ai.Request) (ai.Response, error) {
-	var resp ai.Response
-	if err := t.postJSON(ctx, "/turn", req, &resp); err != nil {
-		return ai.Response{}, err
-	}
-	return resp, nil
-}
-
-func (t *jsAITransport) Archive(ctx context.Context, turns []ai.Turn, existingArchive string) (ai.ArchivedHistory, error) {
-	payload := map[string]any{
-		"turns":           turns,
-		"existingArchive": existingArchive,
-	}
-	var resp ai.ArchivedHistory
-	if err := t.postJSON(ctx, "/archive", payload, &resp); err != nil {
-		return ai.ArchivedHistory{}, err
-	}
-	return resp, nil
 }
 
 func (t *jsAITransport) postJSON(ctx context.Context, path string, payload, target any) error {
@@ -162,6 +147,23 @@ func (t *jsAITransport) postJSON(ctx context.Context, path string, payload, targ
 		return fmt.Errorf("failed to unmarshal response json: %w", err)
 	}
 	return nil
+}
+
+func jsFuncOfWithError(fn func(this js.Value, args []js.Value) any) js.Func {
+	return js.FuncOf(func(this js.Value, args []js.Value) any {
+		result := fn(this, args)
+		if err, ok := result.(error); ok {
+			return jsTypeError.New(err.Error())
+		}
+		return result
+	})
+}
+
+func newJSAITransport() *jsAITransport {
+	return &jsAITransport{
+		endpoint:      defaultAIInteractionEndpoint,
+		tokenProvider: js.Undefined(),
+	}
 }
 
 func setAIDescription(this js.Value, args []js.Value) any {

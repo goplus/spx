@@ -32,26 +32,6 @@ type tweenTestSprite struct {
 	positions []mathf.Vec2
 }
 
-func (s *tweenTestSprite) GetId() Object           { return s.id }
-func (s *tweenTestSprite) GetPosition() mathf.Vec2 { return s.position }
-func (s *tweenTestSprite) SetPosition(position mathf.Vec2) {
-	s.position = position
-	s.positions = append(s.positions, position)
-}
-
-func setupTweenTest(t *testing.T) *tweenTestSprite {
-	t.Helper()
-	resetRuntimeDeltaTestState()
-	t.Cleanup(resetRuntimeDeltaTestState)
-	sprite := &tweenTestSprite{id: 1}
-	state.sprites[sprite.id] = sprite
-	return sprite
-}
-
-func advanceTweenTest(delta float64) {
-	updateTweens(delta, invokeRuntimeCallback)
-}
-
 func TestTweenCompletionWritesEndpointBeforeCallback(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -139,4 +119,26 @@ func TestTweenCallbacksFollowAllUpdatesAndDeferNewTweens(t *testing.T) {
 	if first.position.X != 20 {
 		t.Fatalf("new tween position = %v, want (20,0)", first.position)
 	}
+}
+
+func (s *tweenTestSprite) GetId() Object { return s.id }
+
+func (s *tweenTestSprite) GetPosition() mathf.Vec2 { return s.position }
+
+func (s *tweenTestSprite) SetPosition(position mathf.Vec2) {
+	s.position = position
+	s.positions = append(s.positions, position)
+}
+
+func setupTweenTest(t *testing.T) *tweenTestSprite {
+	t.Helper()
+	resetRuntimeDeltaTestState()
+	t.Cleanup(resetRuntimeDeltaTestState)
+	sprite := &tweenTestSprite{id: 1}
+	state.sprites[sprite.id] = sprite
+	return sprite
+}
+
+func advanceTweenTest(delta float64) {
+	updateTweens(delta, invokeRuntimeCallback)
 }

@@ -27,6 +27,8 @@ import (
 	"testing"
 )
 
+type localManifestErrorWriter struct{ err error }
+
 func TestLocalRuntimeManifestWriteAndVerify(t *testing.T) {
 	root := t.TempDir()
 	lock, enginePath, packPath := writeHostRuntimeTestFiles(t, root, "engine-v1", "pack-v1")
@@ -270,53 +272,6 @@ func TestPublishLocalRuntimeManifestRejectsDestinationSymlink(t *testing.T) {
 	}
 }
 
-func writeHostRuntimeTestFiles(t *testing.T, root, engine, pack string) (RuntimeLock, string, string) {
-	t.Helper()
-	lock := DefaultRuntimeLock()
-	spec, err := HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
-	enginePath := filepath.Join(root, spec.RuntimeName)
-	packPath := filepath.Join(root, spec.PackName)
-	if err := os.WriteFile(enginePath, []byte(engine), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(packPath, []byte(pack), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return lock, enginePath, packPath
-}
-
-func loadLocalRuntimeManifest(path string) (LocalRuntimeManifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return LocalRuntimeManifest{}, err
-	}
-	return ParseLocalRuntimeManifest(data)
-}
-
-func localManifestFixture(t *testing.T) (LocalRuntimeManifest, string, string) {
-	t.Helper()
-	lock := DefaultRuntimeLock()
-	spec, err := HostRuntimeSpecFor(lock, "linux", "amd64")
-	if err != nil {
-		t.Fatal(err)
-	}
-	root := t.TempDir()
-	engine, pack := filepath.Join(root, spec.RuntimeName), filepath.Join(root, spec.PackName)
-	for name, content := range map[string]string{engine: "engine", pack: "pack"} {
-		if err := os.WriteFile(name, []byte(content), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	manifest, err := NewLocalRuntimeManifest(lock, "linux", "amd64", engine, pack)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return manifest, engine, pack
-}
-
 func TestLocalManifestRejectsInvalidStructureAtPublicBoundaries(t *testing.T) {
 	base, _, _ := localManifestFixture(t)
 	for _, tt := range []struct {
@@ -532,13 +487,58 @@ func TestVerifiedLocalCopyRejectsChangedDataAndFailedSink(t *testing.T) {
 	}
 }
 
-type localManifestErrorWriter struct{ err error }
-
-func (w localManifestErrorWriter) Write([]byte) (int, error) { return 0, w.err }
-
 func TestLocalManifestVerificationRejectsMissingPublishedObjects(t *testing.T) {
 	manifest, _, _ := localManifestFixture(t)
 	if err := manifest.VerifyFiles(t.TempDir()); err == nil || !strings.Contains(err.Error(), "verify local runtime engine") || !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("missing published object = %v", err)
 	}
+}
+
+func (w localManifestErrorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func writeHostRuntimeTestFiles(t *testing.T, root, engine, pack string) (RuntimeLock, string, string) {
+	t.Helper()
+	lock := DefaultRuntimeLock()
+	spec, err := HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enginePath := filepath.Join(root, spec.RuntimeName)
+	packPath := filepath.Join(root, spec.PackName)
+	if err := os.WriteFile(enginePath, []byte(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(packPath, []byte(pack), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return lock, enginePath, packPath
+}
+
+func loadLocalRuntimeManifest(path string) (LocalRuntimeManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return LocalRuntimeManifest{}, err
+	}
+	return ParseLocalRuntimeManifest(data)
+}
+
+func localManifestFixture(t *testing.T) (LocalRuntimeManifest, string, string) {
+	t.Helper()
+	lock := DefaultRuntimeLock()
+	spec, err := HostRuntimeSpecFor(lock, "linux", "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	engine, pack := filepath.Join(root, spec.RuntimeName), filepath.Join(root, spec.PackName)
+	for name, content := range map[string]string{engine: "engine", pack: "pack"} {
+		if err := os.WriteFile(name, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest, err := NewLocalRuntimeManifest(lock, "linux", "amd64", engine, pack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifest, engine, pack
 }

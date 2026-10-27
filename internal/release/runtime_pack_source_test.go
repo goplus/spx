@@ -521,27 +521,6 @@ func TestRuntimePackSourceTreeSHA256RejectsEmptySelection(t *testing.T) {
 	}
 }
 
-func gitTreeFixture(entries ...string) []byte {
-	return []byte(strings.Join(entries, "\x00") + "\x00")
-}
-
-// Fake Git serves local protocol responses; PATH excludes the host Git binary.
-func installReleaseGitFixture(t *testing.T, output string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX command fixture")
-	}
-	bin := t.TempDir()
-	script := "#!/bin/sh\nprintf '%b' \"$SPX_GIT_OUTPUT\"\nprintf '%s' \"$SPX_GIT_ERROR\" >&2\nexit \"$SPX_GIT_STATUS\"\n"
-	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	t.Setenv("SPX_GIT_OUTPUT", output)
-	t.Setenv("SPX_GIT_ERROR", "")
-	t.Setenv("SPX_GIT_STATUS", "0")
-}
-
 func TestTrackedRuntimeDigestsRejectInvalidRepositoryResponses(t *testing.T) {
 	for _, digest := range []struct {
 		name string
@@ -824,4 +803,25 @@ func TestProjectGodotPresetRequiresOptions(t *testing.T) {
 	if _, err := projectGodotPreset([]byte("[preset.0]\nname=\"Linux\"\n"), "Linux"); err == nil || !strings.Contains(err.Error(), "has no options") {
 		t.Fatalf("missing preset options = %v", err)
 	}
+}
+
+func gitTreeFixture(entries ...string) []byte {
+	return []byte(strings.Join(entries, "\x00") + "\x00")
+}
+
+// Fake Git serves local protocol responses; PATH excludes the host Git binary.
+func installReleaseGitFixture(t *testing.T, output string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX command fixture")
+	}
+	bin := t.TempDir()
+	script := "#!/bin/sh\nprintf '%b' \"$SPX_GIT_OUTPUT\"\nprintf '%s' \"$SPX_GIT_ERROR\" >&2\nexit \"$SPX_GIT_STATUS\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("SPX_GIT_OUTPUT", output)
+	t.Setenv("SPX_GIT_ERROR", "")
+	t.Setenv("SPX_GIT_STATUS", "0")
 }

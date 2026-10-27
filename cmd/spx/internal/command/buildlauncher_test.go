@@ -136,30 +136,6 @@ func TestBuildLauncherBuildFlags(t *testing.T) {
 	}
 }
 
-func findSPXRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			if _, err := os.Stat(filepath.Join(dir, "cmd", "ispxnative", "main.go")); err == nil {
-				return dir
-			}
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("SPX source root not found")
-		}
-		dir = parent
-	}
-}
-
-func launcherStringPointer(value string) *string { return &value }
-
-func launcherBoolPointer(value bool) *bool { return &value }
-
 func TestLoadLauncherProject(t *testing.T) {
 	const project = "project main.spx Game github.com/goplus/spx/v4 math\n"
 	const wildcard = "project *.spx Game github.com/goplus/spx/v4 math\n"
@@ -330,3 +306,27 @@ func TestBuildLauncherFailureDoesNotPublishOutput(t *testing.T) {
 		})
 	}
 }
+
+func findSPXRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			if _, err := os.Stat(filepath.Join(dir, "cmd", "ispxnative", "main.go")); err == nil {
+				return dir
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("SPX source root not found")
+		}
+		dir = parent
+	}
+}
+
+func launcherStringPointer(value string) *string { return &value }
+
+func launcherBoolPointer(value bool) *bool { return &value }

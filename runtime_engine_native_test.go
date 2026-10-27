@@ -50,24 +50,25 @@ type eventDispatchPlatform struct {
 	workerOnce sync.Once
 }
 
-func (p *eventDispatchPlatform) IsMainThread() bool {
-	if p.mainGID.Load() == gid.Get() {
-		return true
-	}
-	if p.workerSeen != nil {
-		p.workerOnce.Do(func() { close(p.workerSeen) })
-	}
-	return false
-}
-
-func (p *eventDispatchPlatform) useCurrentAsMainThread() {
-	p.mainGID.Store(gid.Get())
-}
-
 type eventLifecycleFunc func(coroutine.Thread) func()
 
-func (f eventLifecycleFunc) RegisterInvocation(thread coroutine.Thread) func() {
-	return f(thread)
+type inputFrameSpriteMgr struct {
+	enginewrap.SpriteMgrImpl
+	platform    *eventDispatchPlatform
+	queries     atomic.Int32
+	wrongThread atomic.Bool
+}
+
+type failingPauseExtMgr struct{ inputFrameFailureExtMgr }
+
+type resetDuringStartupPlatform struct {
+	loadGamePlatformMgr
+	onTitle func()
+}
+
+type queuedQuerySpriteMgr struct {
+	*frameSyncSpriteMgr
+	queriedPosition mathf.Vec2
 }
 
 func TestConditionSamplingServicesPendingMainThreadCall(t *testing.T) {
@@ -367,21 +368,6 @@ func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 	}
 }
 
-type inputFrameSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
-	platform    *eventDispatchPlatform
-	queries     atomic.Int32
-	wrongThread atomic.Bool
-}
-
-func (p *inputFrameSpriteMgr) CheckCollisionWithPoint(pkgengine.Object, mathf.Vec2, bool) bool {
-	p.queries.Add(1)
-	if !p.platform.IsMainThread() {
-		p.wrongThread.Store(true)
-	}
-	return true
-}
-
 func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
 	_, game := setupInputFrameGame(t)
 	platform := &eventDispatchPlatform{}
@@ -468,20 +454,6 @@ func TestSnapshotReportsBodyAndCaptureFailures(t *testing.T) {
 	}
 }
 
-func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
-	t.Helper()
-	previousGame := engine.GetGame()
-	engine.SetGame(nil)
-	t.Cleanup(func() { engine.SetGame(previousGame) })
-	setupRuntimeScheduler(t)
-	setupImmediateEngineCalls(t)
-	old := pkgengine.ExtMgr
-	recorder := &inputFrameFailureExtMgr{}
-	pkgengine.ExtMgr = recorder
-	t.Cleanup(func() { pkgengine.ExtMgr = old })
-	return recorder
-}
-
 func TestRuntimeInvalidConfigurationAndIdentityReportErrors(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -521,10 +493,6 @@ func TestExitOverloadsForwardExitCodes(t *testing.T) {
 		})
 	}
 }
-
-type failingPauseExtMgr struct{ inputFrameFailureExtMgr }
-
-func (*failingPauseExtMgr) Pause() { panic("pause unavailable") }
 
 func TestFinishingInputSessionReportsPauseFailure(t *testing.T) {
 	resetInputSessionTest(t)
@@ -584,16 +552,6 @@ func TestOnEngineStartReportsResourceLoadFailure(t *testing.T) {
 	}
 }
 
-type resetDuringStartupPlatform struct {
-	loadGamePlatformMgr
-	onTitle func()
-}
-
-func (p *resetDuringStartupPlatform) SetWindowTitle(title string) {
-	p.loadGamePlatformMgr.SetWindowTitle(title)
-	p.onTitle()
-}
-
 func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	if isolatedGameTest(t) {
 		return
@@ -621,24 +579,6 @@ func TestOnEngineStartRejectsResetDuringResourceLoad(t *testing.T) {
 	if game.bootstrapGeneration() != generation+1 || game.lifecycleState.IsRunned.Load() || game.lifecycleState.BootstrapDone.Load() || gamer.mainCalls != 0 {
 		t.Fatalf("stale startup survived reset: generation=%d running=%v bootstrap=%v main=%d", game.bootstrapGeneration(), game.lifecycleState.IsRunned.Load(), game.lifecycleState.BootstrapDone.Load(), gamer.mainCalls)
 	}
-}
-
-type queuedQuerySpriteMgr struct {
-	*frameSyncSpriteMgr
-	queriedPosition mathf.Vec2
-}
-
-func (m *queuedQuerySpriteMgr) GetPosition(id pkgengine.Object) mathf.Vec2 {
-	return m.positions[int64(id)]
-}
-
-func (m *queuedQuerySpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, _ float64, _ mathf.Vec2, _ bool, _ mathf.Vec2) {
-	m.positions[int64(id)] = pos
-}
-
-func (m *queuedQuerySpriteMgr) CheckCollisionByColor(id pkgengine.Object, _ mathf.Color, _, _ float64) bool {
-	m.queriedPosition = m.positions[int64(id)]
-	return false
 }
 
 func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
@@ -694,4 +634,64 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 			requirePosition(t, sprite, tt.want.X, tt.want.Y)
 		})
 	}
+}
+
+func (p *eventDispatchPlatform) IsMainThread() bool {
+	if p.mainGID.Load() == gid.Get() {
+		return true
+	}
+	if p.workerSeen != nil {
+		p.workerOnce.Do(func() { close(p.workerSeen) })
+	}
+	return false
+}
+
+func (p *eventDispatchPlatform) useCurrentAsMainThread() {
+	p.mainGID.Store(gid.Get())
+}
+
+func (f eventLifecycleFunc) RegisterInvocation(thread coroutine.Thread) func() {
+	return f(thread)
+}
+
+func (p *inputFrameSpriteMgr) CheckCollisionWithPoint(pkgengine.Object, mathf.Vec2, bool) bool {
+	p.queries.Add(1)
+	if !p.platform.IsMainThread() {
+		p.wrongThread.Store(true)
+	}
+	return true
+}
+
+func (*failingPauseExtMgr) Pause() { panic("pause unavailable") }
+
+func (p *resetDuringStartupPlatform) SetWindowTitle(title string) {
+	p.loadGamePlatformMgr.SetWindowTitle(title)
+	p.onTitle()
+}
+
+func (m *queuedQuerySpriteMgr) GetPosition(id pkgengine.Object) mathf.Vec2 {
+	return m.positions[int64(id)]
+}
+
+func (m *queuedQuerySpriteMgr) SetTransform(id pkgengine.Object, pos mathf.Vec2, _ float64, _ mathf.Vec2, _ bool, _ mathf.Vec2) {
+	m.positions[int64(id)] = pos
+}
+
+func (m *queuedQuerySpriteMgr) CheckCollisionByColor(id pkgengine.Object, _ mathf.Color, _, _ float64) bool {
+	m.queriedPosition = m.positions[int64(id)]
+	return false
+}
+
+func setupRuntimeFailureRecorder(t *testing.T) *inputFrameFailureExtMgr {
+	t.Helper()
+	previousGame := engine.GetGame()
+	engine.SetGame(nil)
+	t.Cleanup(func() { engine.SetGame(previousGame) })
+	setupRuntimeScheduler(t)
+	setupImmediateEngineCalls(t)
+	old := pkgengine.ExtMgr
+	recorder := &inputFrameFailureExtMgr{}
+	pkgengine.ExtMgr = recorder
+	t.Cleanup(func() { pkgengine.ExtMgr = old })
+	return recorder
 }

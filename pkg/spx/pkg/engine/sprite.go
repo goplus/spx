@@ -31,217 +31,225 @@ type Sprite struct {
 }
 
 // BaseSprite identifies the shared engine object behind embedded sprite views.
-func (pself *Sprite) BaseSprite() *Sprite { return pself }
+func (p *Sprite) BaseSprite() *Sprite { return p }
 
-func (pself *Sprite) onCreate() {
-	pself.OnTriggerEnterEvent = NewEvent1[ISpriter]()
-	pself.OnTriggerExitEvent = NewEvent1[ISpriter]()
-	pself.OnScreenExitedEvent = NewEvent0()
-	pself.OnScreenEnteredEvent = NewEvent0()
-	pself.OnFramesSetChangedEvent = NewEvent0()
-	pself.OnAnimationChangedEvent = NewEvent0()
-	pself.OnFrameChangedEvent = NewEvent0()
-	pself.OnAnimationLoopedEvent = NewEvent0()
-	pself.OnAnimationFinishedEvent = NewEvent0()
-	pself.OnVfxFinishedEvent = NewEvent0()
+func (p *Sprite) V_OnScreenExited() {
+	p.OnScreenExitedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnScreenExited() {
-	pself.OnScreenExitedEvent.Trigger()
+func (p *Sprite) OnScreenExited() {
 }
 
-func (pself *Sprite) OnScreenExited() {
+func (p *Sprite) V_OnScreenEntered() {
+	p.OnScreenEnteredEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnScreenEntered() {
-	pself.OnScreenEnteredEvent.Trigger()
+func (p *Sprite) OnScreenEntered() {
 }
 
-func (pself *Sprite) OnScreenEntered() {
+func (p *Sprite) V_OnFramesSetChanged() {
+	p.OnFramesSetChangedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnFramesSetChanged() {
-	pself.OnFramesSetChangedEvent.Trigger()
+func (p *Sprite) OnFramesSetChanged() {
 }
 
-func (pself *Sprite) OnFramesSetChanged() {
+func (p *Sprite) V_OnAnimationChanged() {
+	p.OnAnimationChangedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnAnimationChanged() {
-	pself.OnAnimationChangedEvent.Trigger()
+func (p *Sprite) OnAnimationChanged() {
 }
 
-func (pself *Sprite) OnAnimationChanged() {
+func (p *Sprite) V_OnFrameChanged() {
+	p.OnFrameChangedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnFrameChanged() {
-	pself.OnFrameChangedEvent.Trigger()
+func (p *Sprite) OnFrameChanged() {
 }
 
-func (pself *Sprite) OnFrameChanged() {
+func (p *Sprite) V_OnAnimationLooped() {
+	p.OnAnimationLoopedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnAnimationLooped() {
-	pself.OnAnimationLoopedEvent.Trigger()
+func (p *Sprite) OnAnimationLooped() {
 }
 
-func (pself *Sprite) OnAnimationLooped() {
+func (p *Sprite) V_OnVfxFinished() {
+	p.OnVfxFinishedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnVfxFinished() {
-	pself.OnVfxFinishedEvent.Trigger()
+func (p *Sprite) OnVfxFinished() {
 }
 
-func (pself *Sprite) OnVfxFinished() {
+func (p *Sprite) V_OnAnimationFinished() {
+	p.OnAnimationFinishedEvent.Trigger()
 }
 
-func (pself *Sprite) V_OnAnimationFinished() {
-	pself.OnAnimationFinishedEvent.Trigger()
+func (p *Sprite) OnAnimationFinished() {
 }
 
-func (pself *Sprite) OnAnimationFinished() {
+func (p *Sprite) V_OnTriggerEnter(other ISpriter) {
+	p.OnTriggerEnterEvent.Trigger(other)
 }
 
-func (pself *Sprite) V_OnTriggerEnter(other ISpriter) {
-	pself.OnTriggerEnterEvent.Trigger(other)
+func (p *Sprite) V_OnTriggerExit(other ISpriter) {
+	p.OnTriggerExitEvent.Trigger(other)
 }
 
-func (pself *Sprite) V_OnTriggerExit(other ISpriter) {
-	pself.OnTriggerExitEvent.Trigger(other)
+func (p *Sprite) OnTriggerEnter(ISpriter) {}
+
+func (p *Sprite) OnTriggerExit(ISpriter) {}
+
+func (p *Sprite) GetId() Object {
+	return p.Id
 }
 
-func (pself *Sprite) OnTriggerEnter(ISpriter) {}
-
-func (pself *Sprite) OnTriggerExit(ISpriter) {}
-
-func (pself *Sprite) GetId() Object {
-	return pself.Id
-}
-func (pself *Sprite) SetId(id Object) {
-	pself.Id = id
-}
-func (pself *Sprite) Destroy() bool {
-	return SpriteMgr.DestroySprite(pself.Id)
-}
-func (pself *Sprite) OnStart() {
-}
-func (pself *Sprite) OnUpdate(delta float64) {
-}
-func (pself *Sprite) OnFixedUpdate(delta float64) {
+func (p *Sprite) SetId(id Object) {
+	p.Id = id
 }
 
-func (pself *Sprite) OnDestroy() {
+func (p *Sprite) Destroy() bool {
+	return SpriteMgr.DestroySprite(p.Id)
 }
 
-func (pself *Sprite) AddPos(deltaX, deltaY float64) {
-	pos := pself.GetPosition()
+func (p *Sprite) OnStart() {
+}
+
+func (p *Sprite) OnUpdate(delta float64) {
+}
+
+func (p *Sprite) OnFixedUpdate(delta float64) {
+}
+
+func (p *Sprite) OnDestroy() {
+}
+
+func (p *Sprite) AddPos(deltaX, deltaY float64) {
+	pos := p.GetPosition()
 	pos.X += deltaX
 	pos.Y += deltaY
-	pself.SetPosition(pos)
-}
-func (pself *Sprite) AddPosX(delta float64) {
-	pself.AddPos(delta, 0)
+	p.SetPosition(pos)
 }
 
-func (pself *Sprite) AddPosY(delta float64) {
-	pself.AddPos(0, delta)
+func (p *Sprite) AddPosX(delta float64) {
+	p.AddPos(delta, 0)
 }
 
-func (pself *Sprite) GetPosX() float64 {
-	return pself.GetPosition().X
+func (p *Sprite) AddPosY(delta float64) {
+	p.AddPos(0, delta)
 }
 
-func (pself *Sprite) GetPosY() float64 {
-	return pself.GetPosition().Y
+func (p *Sprite) GetPosX() float64 {
+	return p.GetPosition().X
 }
 
-func (pself *Sprite) SetPosX(value float64) {
-	pos := pself.GetPosition()
+func (p *Sprite) GetPosY() float64 {
+	return p.GetPosition().Y
+}
+
+func (p *Sprite) SetPosX(value float64) {
+	pos := p.GetPosition()
 	pos.X = value
-	pself.SetPosition(pos)
+	p.SetPosition(pos)
 }
 
-func (pself *Sprite) SetPosY(value float64) {
-	pos := pself.GetPosition()
+func (p *Sprite) SetPosY(value float64) {
+	pos := p.GetPosition()
 	pos.Y = value
-	pself.SetPosition(pos)
+	p.SetPosition(pos)
 }
 
-func (pself *Sprite) AddVel(deltaX, deltaY float64) {
-	pos := pself.GetVelocity()
+func (p *Sprite) AddVel(deltaX, deltaY float64) {
+	pos := p.GetVelocity()
 	pos.X += deltaX
 	pos.Y += deltaY
-	pself.SetVelocity(pos)
-}
-func (pself *Sprite) AddVelX(delta float64) {
-	pself.AddVel(delta, 0)
+	p.SetVelocity(pos)
 }
 
-func (pself *Sprite) AddVelY(delta float64) {
-	pself.AddVel(0, delta)
+func (p *Sprite) AddVelX(delta float64) {
+	p.AddVel(delta, 0)
 }
 
-func (pself *Sprite) GetVelX() float64 {
-	return pself.GetVelocity().X
+func (p *Sprite) AddVelY(delta float64) {
+	p.AddVel(0, delta)
 }
 
-func (pself *Sprite) GetVelY() float64 {
-	return pself.GetVelocity().Y
+func (p *Sprite) GetVelX() float64 {
+	return p.GetVelocity().X
 }
 
-func (pself *Sprite) SetVelX(value float64) {
-	pos := pself.GetVelocity()
+func (p *Sprite) GetVelY() float64 {
+	return p.GetVelocity().Y
+}
+
+func (p *Sprite) SetVelX(value float64) {
+	pos := p.GetVelocity()
 	pos.X = value
-	pself.SetVelocity(pos)
+	p.SetVelocity(pos)
 }
 
-func (pself *Sprite) SetVelY(value float64) {
-	pos := pself.GetVelocity()
+func (p *Sprite) SetVelY(value float64) {
+	pos := p.GetVelocity()
 	pos.Y = value
-	pself.SetVelocity(pos)
+	p.SetVelocity(pos)
 }
 
-func (pself *Sprite) AddScale(deltaX, deltaY float64) {
-	pos := pself.GetScale()
+func (p *Sprite) AddScale(deltaX, deltaY float64) {
+	pos := p.GetScale()
 	pos.X += deltaX
 	pos.Y += deltaY
-	pself.SetScale(pos)
-}
-func (pself *Sprite) AddScaleX(delta float64) {
-	pself.AddScale(delta, 0)
+	p.SetScale(pos)
 }
 
-func (pself *Sprite) AddScaleY(delta float64) {
-	pself.AddScale(0, delta)
+func (p *Sprite) AddScaleX(delta float64) {
+	p.AddScale(delta, 0)
 }
 
-func (pself *Sprite) GetScaleX() float64 {
-	return pself.GetScale().X
+func (p *Sprite) AddScaleY(delta float64) {
+	p.AddScale(0, delta)
 }
 
-func (pself *Sprite) GetScaleY() float64 {
-	return pself.GetScale().Y
+func (p *Sprite) GetScaleX() float64 {
+	return p.GetScale().X
 }
 
-func (pself *Sprite) SetScaleX(value float64) {
-	scale := pself.GetScale()
+func (p *Sprite) GetScaleY() float64 {
+	return p.GetScale().Y
+}
+
+func (p *Sprite) SetScaleX(value float64) {
+	scale := p.GetScale()
 	scale.X = value
-	pself.SetScale(scale)
+	p.SetScale(scale)
 }
 
-func (pself *Sprite) SetScaleY(value float64) {
-	scale := pself.GetScale()
+func (p *Sprite) SetScaleY(value float64) {
+	scale := p.GetScale()
 	scale.Y = value
-	pself.SetScale(scale)
+	p.SetScale(scale)
 }
 
-func (pself *Sprite) PlayAnimation(name string) {
-	pself.PlayAnim(name, 1, false, false)
+func (p *Sprite) PlayAnimation(name string) {
+	p.PlayAnim(name, 1, false, false)
 }
 
-func (pself *Sprite) DisablePhysic() {
-	pself.SetTriggerLayer(0)
-	pself.SetCollisionLayer(0)
-	pself.SetCollisionMask(0)
-	pself.SetTriggerMask(0)
+func (p *Sprite) DisablePhysic() {
+	p.SetTriggerLayer(0)
+	p.SetCollisionLayer(0)
+	p.SetCollisionMask(0)
+	p.SetTriggerMask(0)
+}
+
+func (p *Sprite) onCreate() {
+	p.OnTriggerEnterEvent = NewEvent1[ISpriter]()
+	p.OnTriggerExitEvent = NewEvent1[ISpriter]()
+	p.OnScreenExitedEvent = NewEvent0()
+	p.OnScreenEnteredEvent = NewEvent0()
+	p.OnFramesSetChangedEvent = NewEvent0()
+	p.OnAnimationChangedEvent = NewEvent0()
+	p.OnFrameChangedEvent = NewEvent0()
+	p.OnAnimationLoopedEvent = NewEvent0()
+	p.OnAnimationFinishedEvent = NewEvent0()
+	p.OnVfxFinishedEvent = NewEvent0()
 }

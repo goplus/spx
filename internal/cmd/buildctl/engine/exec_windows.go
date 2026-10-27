@@ -27,9 +27,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func configureTrackedCommand(cmd *exec.Cmd) {}
-
 var trackedSignals = []os.Signal{os.Interrupt}
+
+func configureTrackedCommand(cmd *exec.Cmd) {}
 
 func trackedProcessExists(pid int) (bool, error) {
 	if pid <= 0 {

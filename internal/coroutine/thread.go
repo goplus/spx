@@ -130,23 +130,6 @@ func (th Thread) Cancel() {
 	th.suspendCond.Signal()
 }
 
-// resume wakes th or records a signal for its next yield.
-func (th Thread) resume() {
-	th.suspendMu.Lock()
-	defer th.suspendMu.Unlock()
-	if th.canceled() {
-		return
-	}
-
-	switch th.suspendState {
-	case suspendWaiting:
-		th.suspendState = suspendRunning
-		th.suspendCond.Signal()
-	case suspendRunning:
-		th.suspendState = suspendSignaled
-	}
-}
-
 // Warp reports whether screen refresh is suppressed.
 func (th Thread) Warp() bool {
 	return th.warp.Load()
@@ -208,6 +191,23 @@ func (th Thread) MainStartedAt() stime.Time {
 // DisableMainTimeout stops timeout checks for the current Main.
 func (th Thread) DisableMainTimeout() {
 	th.mainStartedAt = stime.Time{}
+}
+
+// resume wakes th or records a signal for its next yield.
+func (th Thread) resume() {
+	th.suspendMu.Lock()
+	defer th.suspendMu.Unlock()
+	if th.canceled() {
+		return
+	}
+
+	switch th.suspendState {
+	case suspendWaiting:
+		th.suspendState = suspendRunning
+		th.suspendCond.Signal()
+	case suspendRunning:
+		th.suspendState = suspendSignaled
+	}
 }
 
 // canceled also recognizes normal completion, which cancels the thread context.

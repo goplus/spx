@@ -313,40 +313,6 @@ public:
 	}
 }
 
-func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
-	return &clang.TypedefFunction{
-		Name:       name,
-		ReturnType: clang.PrimitiveType{Name: returnType},
-		Arguments:  arguments,
-	}
-}
-
-func managerArgument(name, typeName string) clang.Argument {
-	return clang.Argument{
-		Name: name,
-		Type: clang.Type{Primitive: &clang.PrimitiveType{Name: typeName}},
-	}
-}
-
-func generatedMethod(t *testing.T, filename string, source []byte, name string) string {
-	t.Helper()
-
-	files := token.NewFileSet()
-	parsed, err := parser.ParseFile(files, filename, source, 0)
-	require.NoError(t, err)
-	for _, declaration := range parsed.Decls {
-		function, ok := declaration.(*ast.FuncDecl)
-		if !ok || function.Name.Name != name {
-			continue
-		}
-		start := files.Position(function.Pos()).Offset
-		end := files.Position(function.End()).Offset
-		return string(source[start:end])
-	}
-	t.Fatalf("generated method %s not found", name)
-	return ""
-}
-
 func TestNativeCallbacksMatchABI(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")
 	source, err := os.ReadFile(filepath.Join(root, "godot_modules", "spx", "gdextension_spx_ext.h"))
@@ -422,4 +388,38 @@ typedef struct {
 			require.ErrorContains(t, generation.Output.Commit(), path)
 		})
 	}
+}
+
+func managerFunction(name, returnType string, arguments ...clang.Argument) *clang.TypedefFunction {
+	return &clang.TypedefFunction{
+		Name:       name,
+		ReturnType: clang.PrimitiveType{Name: returnType},
+		Arguments:  arguments,
+	}
+}
+
+func managerArgument(name, typeName string) clang.Argument {
+	return clang.Argument{
+		Name: name,
+		Type: clang.Type{Primitive: &clang.PrimitiveType{Name: typeName}},
+	}
+}
+
+func generatedMethod(t *testing.T, filename string, source []byte, name string) string {
+	t.Helper()
+
+	files := token.NewFileSet()
+	parsed, err := parser.ParseFile(files, filename, source, 0)
+	require.NoError(t, err)
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != name {
+			continue
+		}
+		start := files.Position(function.Pos()).Offset
+		end := files.Position(function.End()).Offset
+		return string(source[start:end])
+	}
+	t.Fatalf("generated method %s not found", name)
+	return ""
 }

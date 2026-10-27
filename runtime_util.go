@@ -89,14 +89,7 @@ func Compare(v1, v2 any) int {
 
 	s1 := strings.ToLower(toString(v1))
 	s2 := strings.ToLower(toString(v2))
-	switch {
-	case s1 < s2:
-		return -1
-	case s1 > s2:
-		return 1
-	default:
-		return 0
-	}
+	return strings.Compare(s1, s2)
 }
 
 // Equal reports whether two values match Scratch's = operator semantics.

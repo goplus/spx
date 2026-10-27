@@ -26,6 +26,12 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+type pathResourceSpy struct {
+	gdx.IResMgr
+	modes []bool
+	files map[string]string
+}
+
 func TestBuildFilesystemAssetPath(t *testing.T) {
 	original := assetPaths
 	t.Cleanup(func() {
@@ -301,29 +307,6 @@ func TestReadFilesystemConfigHandlesMissingUnreadableAndInvalidFiles(t *testing.
 	}
 }
 
-type pathResourceSpy struct {
-	gdx.IResMgr
-	modes []bool
-	files map[string]string
-}
-
-func (s *pathResourceSpy) SetLoadMode(filesystem bool)    { s.modes = append(s.modes, filesystem) }
-func (s *pathResourceSpy) HasFile(path string) bool       { _, ok := s.files[path]; return ok }
-func (s *pathResourceSpy) ReadAllText(path string) string { return s.files[path] }
-
-func setupAssetPathTest(t *testing.T) *pathResourceSpy {
-	t.Helper()
-	previousPaths, previousRes := assetPaths, gdx.ResMgr
-	t.Cleanup(func() {
-		assetPaths, gdx.ResMgr = previousPaths, previousRes
-		enginewrap.Init(WaitMainThread)
-	})
-	resources := &pathResourceSpy{files: make(map[string]string)}
-	gdx.ResMgr = resources
-	enginewrap.Init(func(call func()) { call() })
-	return resources
-}
-
 func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 	previous := assetPaths
 	t.Cleanup(func() { assetPaths = previous })
@@ -350,4 +333,23 @@ func TestExternalAssetSuffixMatchesOnlyConfiguredParentSegments(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s *pathResourceSpy) SetLoadMode(filesystem bool) { s.modes = append(s.modes, filesystem) }
+
+func (s *pathResourceSpy) HasFile(path string) bool { _, ok := s.files[path]; return ok }
+
+func (s *pathResourceSpy) ReadAllText(path string) string { return s.files[path] }
+
+func setupAssetPathTest(t *testing.T) *pathResourceSpy {
+	t.Helper()
+	previousPaths, previousRes := assetPaths, gdx.ResMgr
+	t.Cleanup(func() {
+		assetPaths, gdx.ResMgr = previousPaths, previousRes
+		enginewrap.Init(WaitMainThread)
+	})
+	resources := &pathResourceSpy{files: make(map[string]string)}
+	gdx.ResMgr = resources
+	enginewrap.Init(func(call func()) { call() })
+	return resources
 }

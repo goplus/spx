@@ -25,6 +25,18 @@ import (
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
+type bridgeMainThreadPlatform struct{ gdx.IPlatformMgr }
+
+type bridgeDestroySprite struct {
+	gdx.ISpriter
+	calls int
+}
+
+type bridgeDestroyNode struct {
+	gdx.IUiNode
+	calls int
+}
+
 func TestManagersReturnsStableSingleton(t *testing.T) {
 	first := Managers()
 	if first == nil {
@@ -60,30 +72,6 @@ func TestBridgeGetSpriteChecksConcreteType(t *testing.T) {
 	if got := (runtimeBridge{}).GetSprite(2); got != other {
 		t.Fatalf("runtime bridge GetSprite(2) = %v, want original implementation", got)
 	}
-}
-
-type bridgeMainThreadPlatform struct{ gdx.IPlatformMgr }
-
-func (bridgeMainThreadPlatform) IsMainThread() bool { return true }
-
-type bridgeDestroySprite struct {
-	gdx.ISpriter
-	calls int
-}
-
-func (s *bridgeDestroySprite) Destroy() bool {
-	s.calls++
-	return true
-}
-
-type bridgeDestroyNode struct {
-	gdx.IUiNode
-	calls int
-}
-
-func (n *bridgeDestroyNode) Destroy() bool {
-	n.calls++
-	return true
 }
 
 func TestBridgeClearAllSpritesDestroysAndUnregistersNodes(t *testing.T) {
@@ -193,4 +181,16 @@ func TestBridgeMathAndWindowScale(t *testing.T) {
 			t.Errorf("UniformVec2(%v) = %v", value, got)
 		}
 	}
+}
+
+func (bridgeMainThreadPlatform) IsMainThread() bool { return true }
+
+func (s *bridgeDestroySprite) Destroy() bool {
+	s.calls++
+	return true
+}
+
+func (n *bridgeDestroyNode) Destroy() bool {
+	n.calls++
+	return true
 }

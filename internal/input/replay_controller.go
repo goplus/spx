@@ -30,6 +30,24 @@ type InputReplayController struct {
 	resolved bool
 }
 
+// CloneInputReplay returns an isolated snapshot, preserving nested slice shapes.
+// As in recording and decoding, an absent Frames slice becomes an empty slice.
+func CloneInputReplay(replay InputReplay) InputReplay {
+	cloned := replay
+	cloned.Initial = CloneInputReplayState(replay.Initial)
+	cloned.Frames = make([]InputReplayFrame, len(replay.Frames))
+	for i, frame := range replay.Frames {
+		cloned.Frames[i] = cloneInputReplayFrame(frame)
+	}
+	return cloned
+}
+
+// CloneInputReplayState copies state without changing nil or empty key slices.
+func CloneInputReplayState(state InputReplayState) InputReplayState {
+	state.KeysDown = slices.Clone(state.KeysDown)
+	return state
+}
+
 func (c *InputReplayController) StartRecording(initial InputReplayState, fixedTimestep float64) error {
 	if err := validateFiniteNonNegative("fixed timestep", fixedTimestep); err != nil {
 		return err
@@ -166,27 +184,9 @@ func (c *InputReplayController) resolveReplay() (InputReplayFrame, bool, error) 
 	return cloneInputReplayFrame(frozen), firstTick, nil
 }
 
-// CloneInputReplay returns an isolated snapshot, preserving nested slice shapes.
-// As in recording and decoding, an absent Frames slice becomes an empty slice.
-func CloneInputReplay(replay InputReplay) InputReplay {
-	cloned := replay
-	cloned.Initial = CloneInputReplayState(replay.Initial)
-	cloned.Frames = make([]InputReplayFrame, len(replay.Frames))
-	for i, frame := range replay.Frames {
-		cloned.Frames[i] = cloneInputReplayFrame(frame)
-	}
-	return cloned
-}
-
 func cloneInputReplayFrame(frame InputReplayFrame) InputReplayFrame {
 	frame.State = CloneInputReplayState(frame.State)
 	frame.MouseEvents = slices.Clone(frame.MouseEvents)
 	frame.KeyEvents = slices.Clone(frame.KeyEvents)
 	return frame
-}
-
-// CloneInputReplayState copies state without changing nil or empty key slices.
-func CloneInputReplayState(state InputReplayState) InputReplayState {
-	state.KeysDown = slices.Clone(state.KeysDown)
-	return state
 }

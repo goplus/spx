@@ -164,13 +164,19 @@ func TestEnvironmentCommandEntryPoints(t *testing.T) {
 }
 
 func TestEnvironmentCommandExternalTools(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("POSIX/Linux tool fixtures")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("tool fixtures require Linux or macOS")
 	}
 	t.Run("pinned source", func(t *testing.T) {
 		root := newBuildctlFixture(t)
 		bin := filepath.Join(root, "tools")
 		writeBuildctlTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+release.DefaultRuntimeLock().Godot.Commit+"'\n")
+		t.Setenv("SDKROOT", root)
+		t.Setenv("CC", filepath.Join(bin, "git"))
+		t.Setenv("CXX", filepath.Join(bin, "git"))
+		for _, name := range []string{"CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
+			t.Setenv(name, "")
+		}
 		t.Setenv("PATH", bin)
 		// An empty checkout exercises the source acquisition callback, using only fake git.
 		if err := runEnv([]string{"ensure-engine-source"}); err != nil {
@@ -189,6 +195,9 @@ func TestEnvironmentCommandExternalTools(t *testing.T) {
 			t.Fatal("missing SDK accepted")
 		}
 		sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
+		if runtime.GOOS == "darwin" {
+			sdk = filepath.Join(root, "Library", "Application Support", "emsdk", "emsdk")
+		}
 		mustWriteFile(t, filepath.Join(sdk, "emsdk_env.sh"), []byte("export EMSDK="+shared.ShellQuote(sdk)+"\nexport EM_CONFIG="+shared.ShellQuote(filepath.Join(root, "config"))+"\nexport PATH=/usr/bin\n"))
 		output, err := captureBuildctlOutput(t, func() error { return runEnv([]string{"export-emsdk-shell"}) })
 		want := "export EMSDK=" + shared.ShellQuote(sdk) + "\nexport EM_CONFIG=" + shared.ShellQuote(filepath.Join(root, "config")) + "\nexport PATH='/usr/bin'\n"

@@ -22,6 +22,7 @@ import (
 
 	"github.com/goplus/spx/v4/internal/engine"
 	inputstate "github.com/goplus/spx/v4/internal/input"
+	itime "github.com/goplus/spx/v4/internal/time"
 )
 
 const defaultInputSessionRandomSeed int64 = 1
@@ -41,6 +42,15 @@ var preparedInputSession struct {
 	nextToken uint64
 	plan      *inputSessionPlan
 	claimed   bool
+}
+
+// inputSessionEnvironment owns deterministic process settings for one Game
+// lifecycle. Rendering pace remains a project/host concern and is not changed.
+type inputSessionEnvironment struct {
+	stopOnce sync.Once
+
+	previousFixed        float64
+	previousFixedEnabled bool
 }
 
 // inputSession belongs to exactly one Game lifecycle.
@@ -163,6 +173,17 @@ func (p *Game) terminalInputSessionStatus() (InputSessionStatus, bool) {
 	status := p.inputTerminal
 	p.inputSessionMu.RUnlock()
 	return status, status.Phase != ""
+}
+
+func (p *Game) finishInputSessionFrame() {
+	session := p.currentInputSession()
+	if session == nil {
+		return
+	}
+	session.endFrame()
+	if _, err := session.completeReplayFrame(engine.Managers().ExtMgr.Pause); err != nil {
+		engine.Panic(err)
+	}
 }
 
 func (s *inputSession) close(reason string) InputSessionStatus {
@@ -294,17 +315,6 @@ func (s *inputSession) endFrame() {
 	s.mu.Unlock()
 }
 
-func (p *Game) finishInputSessionFrame() {
-	session := p.currentInputSession()
-	if session == nil {
-		return
-	}
-	session.endFrame()
-	if _, err := session.completeReplayFrame(engine.Managers().ExtMgr.Pause); err != nil {
-		engine.Panic(err)
-	}
-}
-
 func (s *inputSession) completeReplayFrame(freeze func()) (bool, error) {
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()
@@ -330,6 +340,21 @@ func (s *inputSession) completeReplayFrame(freeze func()) (bool, error) {
 	s.phase = InputSessionPhaseCompleted
 	s.mu.Unlock()
 	return true, nil
+}
+
+func (e *inputSessionEnvironment) start(fixedTimestep float64) {
+	e.previousFixed, e.previousFixedEnabled = itime.FixedDeltaTime()
+	itime.SetFixedDeltaTime(fixedTimestep)
+}
+
+func (e *inputSessionEnvironment) stop() {
+	e.stopOnce.Do(func() {
+		if e.previousFixedEnabled {
+			itime.SetFixedDeltaTime(e.previousFixed)
+		} else {
+			itime.SetFixedDeltaTime(0)
+		}
+	})
 }
 
 func prepareInputRecordingSession(fixedTimestep float64, option InputSessionOptions) (InputSessionPreparation, error) {

@@ -18,12 +18,12 @@ package impl
 
 type baseMgr struct{}
 
-func (pself *baseMgr) OnStart() {}
+func (p *baseMgr) OnStart() {}
 
-func (pself *baseMgr) OnUpdate(delta float64) {}
+func (p *baseMgr) OnUpdate(delta float64) {}
 
-func (pself *baseMgr) OnFixedUpdate(delta float64) {}
+func (p *baseMgr) OnFixedUpdate(delta float64) {}
 
-func (pself *baseMgr) OnDestroy() {}
+func (p *baseMgr) OnDestroy() {}
 
-func (pself *baseMgr) OnPause(isPaused bool) {}
+func (p *baseMgr) OnPause(isPaused bool) {}

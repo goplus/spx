@@ -31,6 +31,14 @@ import (
 	"github.com/goplus/spx/v4/internal/release"
 )
 
+type setupTestRunner struct {
+	t         *testing.T
+	root      string
+	scripts   [][]string
+	commands  []string
+	scriptErr error
+}
+
 func TestRunDispatchesUsageAndUnknownCommands(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -297,37 +305,6 @@ func TestDoctorEntryPointFailuresAndPinnedCheckout(t *testing.T) {
 	}
 }
 
-type setupTestRunner struct {
-	t         *testing.T
-	root      string
-	scripts   [][]string
-	commands  []string
-	scriptErr error
-}
-
-func (r *setupTestRunner) RepoRootDir() string { return r.root }
-func (r *setupTestRunner) RunScript(script string, args ...string) error {
-	r.scripts = append(r.scripts, append([]string{script}, args...))
-	return r.scriptErr
-}
-func (r *setupTestRunner) RunCommand(dir, name string, args ...string) error {
-	if dir != r.root || name != "go" || len(args) != 5 || args[0] != "run" || args[1] != "./cmd/spx" || args[3] != "--path" {
-		r.t.Fatalf("unexpected export command: %s %s %q", dir, name, args)
-	}
-	r.commands = append(r.commands, args[2])
-	dst := filepath.Join(args[4], "project", ".builds")
-	switch args[2] {
-	case "exportpack":
-		mustWriteFile(r.t, filepath.Join(dst, "pc", "gdexport.pck"), []byte("exported pack"))
-	case "exporttemplateweb":
-		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.pck"), []byte("web pack"))
-		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.js"), []byte("engine code"))
-	default:
-		r.t.Fatalf("unexpected export operation: %q", args[2])
-	}
-	return nil
-}
-
 func TestSetupLocalArtifacts(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux release fixtures")
@@ -428,6 +405,31 @@ func TestSetupAndRuntimePackFailures(t *testing.T) {
 	if err := ensureRuntimePack(runner); err == nil {
 		t.Fatal("missing GOPATH resolver accepted")
 	}
+}
+
+func (r *setupTestRunner) RepoRootDir() string { return r.root }
+
+func (r *setupTestRunner) RunScript(script string, args ...string) error {
+	r.scripts = append(r.scripts, append([]string{script}, args...))
+	return r.scriptErr
+}
+
+func (r *setupTestRunner) RunCommand(dir, name string, args ...string) error {
+	if dir != r.root || name != "go" || len(args) != 5 || args[0] != "run" || args[1] != "./cmd/spx" || args[3] != "--path" {
+		r.t.Fatalf("unexpected export command: %s %s %q", dir, name, args)
+	}
+	r.commands = append(r.commands, args[2])
+	dst := filepath.Join(args[4], "project", ".builds")
+	switch args[2] {
+	case "exportpack":
+		mustWriteFile(r.t, filepath.Join(dst, "pc", "gdexport.pck"), []byte("exported pack"))
+	case "exporttemplateweb":
+		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.pck"), []byte("web pack"))
+		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.js"), []byte("engine code"))
+	default:
+		r.t.Fatalf("unexpected export operation: %q", args[2])
+	}
+	return nil
 }
 
 func mustMkdirAll(t *testing.T, path string) {

@@ -72,11 +72,6 @@ var (
 	ErrInputSessionNotRecording = inputstate.ErrInputSessionNotRecording
 )
 
-// Cancel discards this preparation if no Game has claimed it yet.
-func (p InputSessionPreparation) Cancel() bool {
-	return cancelPreparedInputSession(p.token)
-}
-
 // PrepareInputRecording configures recording for the next Game lifecycle.
 func PrepareInputRecording(fps float64, options ...InputSessionOptions) (InputSessionPreparation, error) {
 	if fps <= 0 || math.IsNaN(fps) || math.IsInf(fps, 0) {
@@ -128,6 +123,11 @@ func EncodeInputReplay(replay InputReplay) (string, error) {
 // DecodeInputReplay decodes and validates replay JSON.
 func DecodeInputReplay(data string) (InputReplay, error) {
 	return inputstate.DecodeInputReplay([]byte(data))
+}
+
+// Cancel discards this preparation if no Game has claimed it yet.
+func (p InputSessionPreparation) Cancel() bool {
+	return cancelPreparedInputSession(p.token)
 }
 
 func normalizeInputSessionOptions(options []InputSessionOptions) (InputSessionOptions, error) {

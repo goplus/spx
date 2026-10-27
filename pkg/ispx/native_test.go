@@ -19,11 +19,7 @@ type interpreterExitBackend struct {
 	exit func(int64)
 }
 
-func (b interpreterExitBackend) RequestExit(code int64) { b.exit(code) }
-
 type interpreterPlatform struct{ gdx.IPlatformMgr }
-
-func (interpreterPlatform) IsMainThread() bool { return true }
 
 func TestInterpreterShutdownWaitsForRun(t *testing.T) {
 	isolateInterpreter(t)
@@ -118,3 +114,7 @@ func TestInterpreterShutdownWaitsForRun(t *testing.T) {
 		t.Fatal("completed interpreter still reports a running instance")
 	}
 }
+
+func (b interpreterExitBackend) RequestExit(code int64) { b.exit(code) }
+
+func (interpreterPlatform) IsMainThread() bool { return true }

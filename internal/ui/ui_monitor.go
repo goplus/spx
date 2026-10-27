@@ -136,26 +136,56 @@ type monitorRenderSink interface {
 	GetRangeValue(engine.Object) float64
 }
 
+func NewUiMonitor() *UiMonitor {
+	return engine.NewUiNode[UiMonitor]()
+}
+
 func (p MonitorAppearance) IsCompatible() bool {
 	return p == MonitorAppearanceCompatible || p == MonitorAppearanceCompatibleLarge || p == MonitorAppearanceList || p == MonitorAppearanceSlider
 }
 
 // !!Warning: this method is called from the engine callback context
-func (pself *UiMonitor) OnStart() {
-	pself.bindViews(func(path string) *UiNode {
-		return engine.BridgeBindUI[UiNode](pself.GetId(), path)
+func (p *UiMonitor) OnStart() {
+	p.bindViews(func(path string) *UiNode {
+		return engine.BridgeBindUI[UiNode](p.GetId(), path)
 	})
 }
 
-func (pself *UiMonitor) SetVisible(isOn bool) {
-	engine.Managers().UiMgr.SetVisible(pself.GetId(), isOn)
+func (p *UiMonitor) SetVisible(isOn bool) {
+	engine.Managers().UiMgr.SetVisible(p.GetId(), isOn)
+}
+
+func (p *UiMonitor) UpdateScale(monitorScale float64) {
+	windowScale := engine.WindowScale()
+	monitorScale *= windowScale
+	engine.Managers().UiMgr.SetScale(p.GetId(), engine.UniformVec2(monitorScale))
+}
+
+func (p *UiMonitor) UpdatePos(worldPos Vec2) {
+	uiPosition := ViewToUI(worldPos)
+	engine.Managers().UiMgr.SetGlobalPosition(p.GetId(), uiPosition)
+
+	valueLabelCanvasScale := p.getValueLabelCanvasScale(p.views[MonitorAppearanceCompatibleLarge])
+
+	viewportRect := engine.Managers().CameraMgr.GetViewportRect()
+
+	p.maxValueLabelLocalWidth = calculateMaxValueLabelLocalWidth(
+		float64(viewportRect.Size.X),
+		float64(uiPosition.X),
+		valueLabelCanvasScale,
+		scratchValueOnlyHorizontalLayoutOverhead,
+	)
+}
+
+func (p *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
+	p.render(&engine.Managers().UiMgr, style, value)
 }
 
 // getValueLabelCanvasScale returns the effective canvas scale of the value
 // label, including the scale inherited from its UI ancestors and canvas layer.
 // The width limit is calculated in Viewport coordinates and applied in the
 // label's local coordinate system, so this scale is the conversion factor.
-func (pself *UiMonitor) getValueLabelCanvasScale(view monitorView) float64 {
+func (p *UiMonitor) getValueLabelCanvasScale(view monitorView) float64 {
 	if view.value == nil {
 		return 0
 	}
@@ -164,37 +194,7 @@ func (pself *UiMonitor) getValueLabelCanvasScale(view monitorView) float64 {
 	return math.Abs(float64(scale.X))
 }
 
-func (pself *UiMonitor) UpdateScale(monitorScale float64) {
-	windowScale := engine.WindowScale()
-	monitorScale *= windowScale
-	engine.Managers().UiMgr.SetScale(pself.GetId(), engine.UniformVec2(monitorScale))
-}
-
-func (pself *UiMonitor) UpdatePos(worldPos Vec2) {
-	uiPosition := ViewToUI(worldPos)
-	engine.Managers().UiMgr.SetGlobalPosition(pself.GetId(), uiPosition)
-
-	valueLabelCanvasScale := pself.getValueLabelCanvasScale(pself.views[MonitorAppearanceCompatibleLarge])
-
-	viewportRect := engine.Managers().CameraMgr.GetViewportRect()
-
-	pself.maxValueLabelLocalWidth = calculateMaxValueLabelLocalWidth(
-		float64(viewportRect.Size.X),
-		float64(uiPosition.X),
-		valueLabelCanvasScale,
-		scratchValueOnlyHorizontalLayoutOverhead,
-	)
-}
-
-func (pself *UiMonitor) Render(style MonitorStyle, value MonitorValue) {
-	pself.render(&engine.Managers().UiMgr, style, value)
-}
-
-func NewUiMonitor() *UiMonitor {
-	return engine.NewUiNode[UiMonitor]()
-}
-
-func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
+func (p *UiMonitor) bindViews(bind func(string) *UiNode) {
 	optional := func(path string) *UiNode {
 		if path == "" {
 			return nil
@@ -202,7 +202,7 @@ func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
 		return bind(path)
 	}
 	for i, spec := range monitorViewSpecs {
-		pself.views[i] = monitorView{
+		p.views[i] = monitorView{
 			root:        bind(spec.root),
 			value:       optional(spec.value),
 			label:       optional(spec.label),
@@ -210,36 +210,36 @@ func (pself *UiMonitor) bindViews(bind func(string) *UiNode) {
 			input:       optional(spec.input),
 		}
 	}
-	pself.active = monitorAppearanceCount
+	p.active = monitorAppearanceCount
 }
 
-func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value MonitorValue) {
+func (p *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value MonitorValue) {
 	appearance := normalizeMonitorAppearance(style.Appearance)
-	changed := pself.active != appearance
+	changed := p.active != appearance
 	if changed {
-		for i, view := range pself.views {
+		for i, view := range p.views {
 			sink.SetVisible(view.root.GetId(), MonitorAppearance(i) == appearance)
 		}
-		pself.active = appearance
+		p.active = appearance
 	}
 
 	if appearance == MonitorAppearanceSlider {
-		pself.renderSlider(sink, style.Slider, value.Text)
+		p.renderSlider(sink, style.Slider, value.Text)
 	}
 
-	view := pself.views[appearance]
+	view := p.views[appearance]
 	if appearance == MonitorAppearanceList {
 		id := view.root.GetId()
 		sink.SetSize(id, style.Dimensions)
 		// The style is fixed for a monitor; only changed items cross the bridge.
-		if changed || !slices.Equal(pself.listItems, value.Items) {
+		if changed || !slices.Equal(p.listItems, value.Items) {
 			sink.SetListItems(id, style.Label, value.Items, style.Color)
-			pself.listItems = slices.Clone(value.Items)
+			p.listItems = slices.Clone(value.Items)
 		}
 		return
 	}
 
-	pself.renderScalarText(sink, appearance, view, style.Label, value.Text)
+	p.renderScalarText(sink, appearance, view, style.Label, value.Text)
 	if view.colorTarget != nil {
 		sink.SetColor(view.colorTarget.GetId(), style.Color)
 	}
@@ -248,8 +248,8 @@ func (pself *UiMonitor) render(sink monitorRenderSink, style MonitorStyle, value
 // renderScalarText applies the viewport-derived width only to the
 // ScratchValueOnly value label. Other appearances have different container
 // margins and continue to use their scene layout without this constraint.
-func (pself *UiMonitor) renderScalarText(sink monitorRenderSink, appearance MonitorAppearance, view monitorView, labelText, valueText string) {
-	maxValueLabelLocalWidth := pself.maxValueLabelLocalWidth
+func (p *UiMonitor) renderScalarText(sink monitorRenderSink, appearance MonitorAppearance, view monitorView, labelText, valueText string) {
+	maxValueLabelLocalWidth := p.maxValueLabelLocalWidth
 
 	if maxValueLabelLocalWidth <= 0 || appearance != MonitorAppearanceCompatibleLarge {
 		if view.label != nil {

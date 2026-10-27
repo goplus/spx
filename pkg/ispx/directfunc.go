@@ -21,6 +21,20 @@ import (
 	"github.com/goplus/spx/v4"
 )
 
+// DirectFuncVal must be the first field of each value receiver so ixgo can
+// recover the interpreted function and its captured environment.
+type directResult[T any] struct {
+	ixgo.DirectFuncVal
+}
+
+type directAction[T any] struct {
+	ixgo.DirectFuncVal
+}
+
+type directMessageFunc struct {
+	ixgo.DirectFuncVal
+}
+
 // Register the callback signatures used by SPX scripts on every interpreter
 // platform. func() is already built into ixgo. Other signatures retain ixgo's
 // reflective fallback.
@@ -34,12 +48,6 @@ func init() {
 	ixgo.RegisterDirectFuncFor(bindDirectMessage)
 }
 
-// DirectFuncVal must be the first field of each value receiver so ixgo can
-// recover the interpreted function and its captured environment.
-type directResult[T any] struct {
-	ixgo.DirectFuncVal
-}
-
 func (c directResult[T]) call() T {
 	value := c.Call()
 	if value == nil {
@@ -51,28 +59,20 @@ func (c directResult[T]) call() T {
 	return value.(T)
 }
 
-func bindDirectResult[T any](c ixgo.DirectFuncVal) func() T {
-	return directResult[T]{c}.call
-}
-
-type directAction[T any] struct {
-	ixgo.DirectFuncVal
-}
-
 func (c directAction[T]) call(arg T) {
 	c.CallDiscard(arg)
 }
 
-func bindDirectAction[T any](c ixgo.DirectFuncVal) func(T) {
-	return directAction[T]{c}.call
-}
-
-type directMessageFunc struct {
-	ixgo.DirectFuncVal
-}
-
 func (c directMessageFunc) call(name string, data any) {
 	c.CallDiscard(name, data)
+}
+
+func bindDirectResult[T any](c ixgo.DirectFuncVal) func() T {
+	return directResult[T]{c}.call
+}
+
+func bindDirectAction[T any](c ixgo.DirectFuncVal) func(T) {
+	return directAction[T]{c}.call
 }
 
 func bindDirectMessage(c ixgo.DirectFuncVal) func(string, any) {

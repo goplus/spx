@@ -46,6 +46,11 @@ type costume struct {
 	frame     assetutil.FrameDescriptor
 }
 
+type costumeSizeKey struct {
+	path    string
+	logical bool
+}
+
 func (c *costume) getAssetPath() string {
 	return costumeAssetPath(c.path)
 }
@@ -150,11 +155,6 @@ func costumePixelSize(imagePath string) mathf.Vec2 {
 
 func costumeLogicalSize(imagePath string) mathf.Vec2 {
 	return cachedCostumeSize(imagePath, true)
-}
-
-type costumeSizeKey struct {
-	path    string
-	logical bool
 }
 
 func cachedCostumeSize(imagePath string, logical bool) mathf.Vec2 {

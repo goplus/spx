@@ -39,25 +39,6 @@ func TestCommandFixture(t *testing.T) {
 	os.Exit(0)
 }
 
-func fixtureExitError(t *testing.T) error {
-	t.Helper()
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stopper := New("linux")
-	output, err := stopper.output(executable, "-test.run=^TestCommandFixture$", "--", "--webserver-fixture", "ok")
-	if err != nil || string(output) != "fixture output" {
-		t.Fatalf("default output = %q, %v", output, err)
-	}
-	_, err = stopper.output(executable, "-test.run=^TestCommandFixture$", "--", "--webserver-fixture", "fail")
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
-		t.Fatalf("fixture error = %v", err)
-	}
-	return err
-}
-
 func TestStop(t *testing.T) {
 	denied := errors.New("permission denied")
 	for _, goos := range []string{"linux", "windows"} {
@@ -238,6 +219,25 @@ func TestListeningPIDs(t *testing.T) {
 			})
 		}
 	}
+}
+
+func fixtureExitError(t *testing.T) error {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopper := New("linux")
+	output, err := stopper.output(executable, "-test.run=^TestCommandFixture$", "--", "--webserver-fixture", "ok")
+	if err != nil || string(output) != "fixture output" {
+		t.Fatalf("default output = %q, %v", output, err)
+	}
+	_, err = stopper.output(executable, "-test.run=^TestCommandFixture$", "--", "--webserver-fixture", "fail")
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("fixture error = %v", err)
+	}
+	return err
 }
 
 // All kill paths are intercepted; no tests signal a real process.

@@ -184,26 +184,22 @@ func (p *scriptEventBindings) OnBackdrop__1(name BackdropName, onBackdrop func()
 	p.register(coreevent.BucketBackdropChanged, p.owner, handler, coreevent.MatchValue(name))
 }
 
-// Message Broadcast
-func (p *Game) Broadcast__0(msg MsgName) {
-	p.doBroadcast(msg, nil, false)
-}
-
-func (p *Game) Broadcast__1(msg MsgName, data any) {
-	p.doBroadcast(msg, data, false)
-}
-
-func (p *Game) BroadcastAndWait__0(msg MsgName) {
-	p.doBroadcast(msg, nil, true)
-}
-
-func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
-	p.doBroadcast(msg, data, true)
-}
-
-func (p *Game) bindScriptEvents() {
-	p.scriptEvents.game = p
-	p.scriptEventBindings.bind(&p.scriptEvents, p)
+// OnCond handles rising edges without reentry, skipping polls while active.
+// Conditions must be fast and non-blocking.
+func (p *scriptEventBindings) OnCond(__xgo_autoclosure_condition func() bool, onCondition func()) {
+	if __xgo_autoclosure_condition == nil || onCondition == nil {
+		return
+	}
+	running := false
+	edge := coreevent.MatchRisingEdge(__xgo_autoclosure_condition)
+	p.register(coreevent.BucketCondition, p.owner,
+		func() {
+			running = true
+			defer func() { running = false }()
+			onCondition()
+		},
+		func(data any) bool { return !running && edge(data) },
+	)
 }
 
 func (p *scriptEventBindings) bind(registry *scriptEventRegistry, owner any) {
@@ -224,6 +220,28 @@ func (p *scriptEventBindings) registerKeyHandler(keys []Key, handler func(Key)) 
 		return
 	}
 	p.register(coreevent.BucketKeyPressed, p.owner, handler, coreevent.MatchAnyOf(slices.Clone(keys)))
+}
+
+// Message Broadcast
+func (p *Game) Broadcast__0(msg MsgName) {
+	p.doBroadcast(msg, nil, false)
+}
+
+func (p *Game) Broadcast__1(msg MsgName, data any) {
+	p.doBroadcast(msg, data, false)
+}
+
+func (p *Game) BroadcastAndWait__0(msg MsgName) {
+	p.doBroadcast(msg, nil, true)
+}
+
+func (p *Game) BroadcastAndWait__1(msg MsgName, data any) {
+	p.doBroadcast(msg, data, true)
+}
+
+func (p *Game) bindScriptEvents() {
+	p.scriptEvents.game = p
+	p.scriptEventBindings.bind(&p.scriptEvents, p)
 }
 
 func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
@@ -417,6 +435,36 @@ func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchCo
 	return execution.context
 }
 
+func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool) {
+	p.dispatchGlobal(coreevent.BucketBackdropChanged, scriptEventDispatch{
+		mode:      eventBatchMode(wait),
+		matchData: name,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			handler := ev.Handler.(*scriptEventHandler)
+			handler.run.(func(BackdropName))(name)
+		},
+	})
+}
+
+// sampleConditions matches predicates within the caller's sampling barrier,
+// before the frame clock advances.
+func (p *scriptEventRegistry) sampleConditions() {
+	p.pendingConditions = matchingEventSinks(p.globalSinks(coreevent.BucketCondition), nil)
+}
+
+// dispatchConditions registers sampled handlers within the caller's event barrier,
+// without reevaluating conditions.
+func (p *scriptEventRegistry) dispatchConditions() {
+	sinks := p.pendingConditions
+	p.pendingConditions = nil
+	dispatchMatchedScriptEventBatch(sinks, scriptEventDispatch{
+		mode: coroutine.BatchAsync,
+		run: func(_ coroutine.Thread, sink *eventSink) {
+			sink.Handler.(func())()
+		},
+	})
+}
+
 func (p *messageDispatchContext) waitForTurn(thread coroutine.Thread, receiver *scriptEventHandler) {
 	for !p.claimTurn(receiver) {
 		gco.YieldToNextRoundFor(thread)
@@ -439,13 +487,16 @@ func (p *messageDispatchContext) claimTurn(receiver *scriptEventHandler) bool {
 	return true
 }
 
-func (p *scriptEventRegistry) doWhenBackdropChanged(name BackdropName, wait bool) {
-	p.dispatchGlobal(coreevent.BucketBackdropChanged, scriptEventDispatch{
-		mode:      eventBatchMode(wait),
-		matchData: name,
-		run: func(_ coroutine.Thread, ev *eventSink) {
-			handler := ev.Handler.(*scriptEventHandler)
-			handler.run.(func(BackdropName))(name)
-		},
-	})
+// -----------------------------------------------------------------------------
+// Runtime Helpers
+// -----------------------------------------------------------------------------
+func nameOf(this any) string {
+	if spr, ok := this.(*SpriteImpl); ok {
+		return spr.name
+	}
+	if _, ok := this.(*Game); ok {
+		return "Game"
+	}
+	engine.Panic("scriptEventBindings: unexpected this object")
+	return ""
 }

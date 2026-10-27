@@ -232,52 +232,6 @@ func TestAcquireRuntimeAssetsAutoDiscoveredManifestIdentityMismatchFailsClosed(t
 	}
 }
 
-func defaultHostRuntimeTest(t *testing.T) (release.RuntimeLock, release.HostRuntimeSpec) {
-	t.Helper()
-	lock := release.DefaultRuntimeLock()
-	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return lock, spec
-}
-
-func localRuntimeTestDependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
-	dependencies := defaultRuntimeAssetDependencies()
-	dependencies.fetch = fetch
-	dependencies.cacheRoot = func() string { return cacheRoot }
-	return dependencies
-}
-
-func mustReadLaunchpackTestFile(t *testing.T, path string) []byte {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
-func publishLocalRuntimeTest(t *testing.T, root, manifestPath string, spec release.HostRuntimeSpec, engine, pack string) string {
-	t.Helper()
-	enginePath := filepath.Join(root, spec.RuntimeName)
-	packPath := filepath.Join(root, spec.PackName)
-	if err := os.WriteFile(enginePath, []byte(engine), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(packPath, []byte(pack), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	manifest, err := release.NewLocalRuntimeManifest(release.DefaultRuntimeLock(), runtime.GOOS, runtime.GOARCH, enginePath, packPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := release.PublishLocalRuntimeManifest(manifestPath, manifest, enginePath, packPath); err != nil {
-		t.Fatal(err)
-	}
-	return manifestPath
-}
-
 func TestEngineBundleRejectsMissingFilesAndUnsafeDestinations(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
@@ -656,4 +610,50 @@ func TestRuntimeAssetsValidateSelectedNamesAndSourceBridge(t *testing.T) {
 	if err := assets.ValidateFiles(names); err == nil || !strings.Contains(err.Error(), "share one directory") {
 		t.Fatalf("separate engine and pack = %v", err)
 	}
+}
+
+func defaultHostRuntimeTest(t *testing.T) (release.RuntimeLock, release.HostRuntimeSpec) {
+	t.Helper()
+	lock := release.DefaultRuntimeLock()
+	spec, err := release.HostRuntimeSpecFor(lock, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return lock, spec
+}
+
+func localRuntimeTestDependencies(cacheRoot string, fetch func(context.Context, string, io.Writer) error) runtimeAssetDependencies {
+	dependencies := defaultRuntimeAssetDependencies()
+	dependencies.fetch = fetch
+	dependencies.cacheRoot = func() string { return cacheRoot }
+	return dependencies
+}
+
+func mustReadLaunchpackTestFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func publishLocalRuntimeTest(t *testing.T, root, manifestPath string, spec release.HostRuntimeSpec, engine, pack string) string {
+	t.Helper()
+	enginePath := filepath.Join(root, spec.RuntimeName)
+	packPath := filepath.Join(root, spec.PackName)
+	if err := os.WriteFile(enginePath, []byte(engine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(packPath, []byte(pack), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := release.NewLocalRuntimeManifest(release.DefaultRuntimeLock(), runtime.GOOS, runtime.GOARCH, enginePath, packPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := release.PublishLocalRuntimeManifest(manifestPath, manifest, enginePath, packPath); err != nil {
+		t.Fatal(err)
+	}
+	return manifestPath
 }

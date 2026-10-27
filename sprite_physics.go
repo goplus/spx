@@ -159,6 +159,28 @@ func (p *SpriteImpl) TriggerEnabled() bool {
 	return p.physics().isTriggerEnabled()
 }
 
+func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
+	if physics := p.physics(); physics != nil {
+		physics.markAutoShapesDirty()
+	}
+}
+
+func (p *SpriteImpl) syncAutoPhysicsShapesAfterCostumeChange() {
+	if physics := p.physics(); physics != nil {
+		physics.refreshAutoShapes(p.runtimeState.SyncSprite)
+	}
+}
+
+// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
+func (p *SpriteImpl) updatePhysicsShapesScale() {
+	if p.runtimeState.SyncSprite == nil {
+		return
+	}
+	physics := p.physics()
+	physics.colliderConfig(true).applyShape(p.runtimeState.SyncSprite, true, p)
+	physics.colliderConfig(false).applyShape(p.runtimeState.SyncSprite, false, p)
+}
+
 // -----------------------------------------------------------------------------
 // Internal Physics
 // -----------------------------------------------------------------------------
@@ -315,28 +337,6 @@ func (p *physicsComponent) refreshAutoShapes(syncProxy *engine.Sprite) {
 	p.triggerInfo.refreshAutoShape(syncProxy, true, p.sprite)
 	p.collisionInfo.refreshAutoShape(syncProxy, false, p.sprite)
 	p.autoShapesDirty = false
-}
-
-func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
-	if physics := p.physics(); physics != nil {
-		physics.markAutoShapesDirty()
-	}
-}
-
-func (p *SpriteImpl) syncAutoPhysicsShapesAfterCostumeChange() {
-	if physics := p.physics(); physics != nil {
-		physics.refreshAutoShapes(p.runtimeState.SyncSprite)
-	}
-}
-
-// updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
-func (p *SpriteImpl) updatePhysicsShapesScale() {
-	if p.runtimeState.SyncSprite == nil {
-		return
-	}
-	physics := p.physics()
-	physics.colliderConfig(true).applyShape(p.runtimeState.SyncSprite, true, p)
-	physics.colliderConfig(false).applyShape(p.runtimeState.SyncSprite, false, p)
 }
 
 // toPhysicsMode converts string to PhysicsMode.

@@ -34,6 +34,23 @@ func (p *Coroutines) Sched(me Thread) {
 	p.yield(me)
 }
 
+// StopAtNextYield cancels me when it next yields to the scheduler.
+// It must be called by the currently running managed coroutine.
+func (p *Coroutines) StopAtNextYield(me Thread) {
+	p.requireCurrent(me)
+	me.stopAtNextYield.Store(true)
+}
+
+// IsInCoroutine reports whether the caller is running in this manager.
+func (p *Coroutines) IsInCoroutine() bool {
+	return p.callerThread() != nil
+}
+
+// Current returns the coroutine that currently owns runMu, or nil.
+func (p *Coroutines) Current() Thread {
+	return p.current.Load()
+}
+
 // yield releases the current slice after its blocking state has been published.
 func (p *Coroutines) yield(me Thread) {
 	p.requireCurrent(me)
@@ -83,23 +100,6 @@ func (p *Coroutines) trackCleanup(th Thread) {
 	p.pendingExecution[th] = struct{}{}
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
-}
-
-// StopAtNextYield cancels me when it next yields to the scheduler.
-// It must be called by the currently running managed coroutine.
-func (p *Coroutines) StopAtNextYield(me Thread) {
-	p.requireCurrent(me)
-	me.stopAtNextYield.Store(true)
-}
-
-// IsInCoroutine reports whether the caller is running in this manager.
-func (p *Coroutines) IsInCoroutine() bool {
-	return p.callerThread() != nil
-}
-
-// Current returns the coroutine that currently owns runMu, or nil.
-func (p *Coroutines) Current() Thread {
-	return p.current.Load()
 }
 
 // callerThread identifies the calling goroutine; Current identifies the runMu owner.

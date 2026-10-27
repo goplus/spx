@@ -29,30 +29,6 @@ import (
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func setupRuntimeScheduler(t *testing.T) *coroutine.Coroutines {
-	t.Helper()
-	co := coroutine.New(nil)
-	installRuntimeScheduler(t, co, nil)
-	return co
-}
-
-// beforeRestore runs after the test's coroutines stop, while their scheduler
-// remains bound. Register other resource cleanup before installing the scheduler.
-func installRuntimeScheduler(t testing.TB, co *coroutine.Coroutines, beforeRestore func()) {
-	t.Helper()
-	original := gco
-	gco = co
-	engine.SetCoroutines(co)
-	t.Cleanup(func() {
-		co.RunAfterStop(nil)
-		if beforeRestore != nil {
-			beforeRestore()
-		}
-		gco = original
-		engine.SetCoroutines(original)
-	})
-}
-
 func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 	original := setupRuntimeScheduler(t)
 	stopped := make(chan struct{})
@@ -602,4 +578,28 @@ func TestLogicFramePreservesEmptyScratch(t *testing.T) {
 			t.Fatalf("nil scratch = %#v, %#v, want nil slices", audios, animations)
 		}
 	}
+}
+
+func setupRuntimeScheduler(t *testing.T) *coroutine.Coroutines {
+	t.Helper()
+	co := coroutine.New(nil)
+	installRuntimeScheduler(t, co, nil)
+	return co
+}
+
+// beforeRestore runs after the test's coroutines stop, while their scheduler
+// remains bound. Register other resource cleanup before installing the scheduler.
+func installRuntimeScheduler(t testing.TB, co *coroutine.Coroutines, beforeRestore func()) {
+	t.Helper()
+	original := gco
+	gco = co
+	engine.SetCoroutines(co)
+	t.Cleanup(func() {
+		co.RunAfterStop(nil)
+		if beforeRestore != nil {
+			beforeRestore()
+		}
+		gco = original
+		engine.SetCoroutines(original)
+	})
 }

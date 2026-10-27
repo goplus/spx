@@ -26,10 +26,6 @@ type file struct {
 	*bytes.Reader
 }
 
-func (f *file) Close() error {
-	return nil
-}
-
 func OpenFile(path string) (io.ReadSeekCloser, error) {
 	res, err := http.Get(path)
 	if err != nil {
@@ -42,4 +38,8 @@ func OpenFile(path string) (io.ReadSeekCloser, error) {
 	}
 	f := &file{bytes.NewReader(body)}
 	return f, nil
+}
+
+func (f *file) Close() error {
+	return nil
 }

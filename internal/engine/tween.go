@@ -43,29 +43,29 @@ var (
 	tempTweenInfos = make([]*tweenCallInfo, 0)
 )
 
-func (info *posTweenInfo) getEndTime() float64 {
-	return info.startTime + info.duration
+func (i *posTweenInfo) getEndTime() float64 {
+	return i.startTime + i.duration
 }
 
-func (info *tweenCallInfo) isDone() bool {
-	return info.curIndex >= len(info.infos)
+func (i *tweenCallInfo) isDone() bool {
+	return i.curIndex >= len(i.infos)
 }
 
-func (info *tweenCallInfo) advance(delta float64) {
-	info.timer += delta
-	for !info.isDone() && info.timer >= info.infos[info.curIndex].getEndTime() {
-		if runtimeSpriteAlive(info.sprite) {
-			info.sprite.SetPosition(info.infos[info.curIndex].value)
+func (i *tweenCallInfo) advance(delta float64) {
+	i.timer += delta
+	for !i.isDone() && i.timer >= i.infos[i.curIndex].getEndTime() {
+		if runtimeSpriteAlive(i.sprite) {
+			i.sprite.SetPosition(i.infos[i.curIndex].value)
 		}
-		info.curIndex++
-		if !info.isDone() && runtimeSpriteAlive(info.sprite) {
-			info.startValue = info.sprite.GetPosition()
+		i.curIndex++
+		if !i.isDone() && runtimeSpriteAlive(i.sprite) {
+			i.startValue = i.sprite.GetPosition()
 		}
 	}
-	if !info.isDone() && runtimeSpriteAlive(info.sprite) {
-		segment := info.infos[info.curIndex]
-		percent := Clamp01f((info.timer - segment.startTime) / segment.duration)
-		info.sprite.SetPosition(info.startValue.Lerpf(segment.value, percent))
+	if !i.isDone() && runtimeSpriteAlive(i.sprite) {
+		segment := i.infos[i.curIndex]
+		percent := Clamp01f((i.timer - segment.startTime) / segment.duration)
+		i.sprite.SetPosition(i.startValue.Lerpf(segment.value, percent))
 	}
 }
 

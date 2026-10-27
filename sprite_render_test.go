@@ -25,19 +25,6 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 )
 
-func newTestRenderSprite() *SpriteImpl {
-	return &SpriteImpl{
-		name: "TestSprite",
-		baseObj: baseObj{
-			costumes: []*costume{
-				{name: "idle"},
-				{name: "run"},
-			},
-			costumeIndex: 1,
-		},
-	}
-}
-
 func TestSpriteSetCostume(t *testing.T) {
 	for _, tt := range []struct {
 		name                    string
@@ -102,27 +89,6 @@ func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
 	if got := sprite.ResolveCostumeIndex("3"); got != 2 {
 		t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", "3", got, 2)
 	}
-}
-
-func newRenderOffsetTestSprite() *SpriteImpl {
-	sprite := &SpriteImpl{g: &Game{}}
-	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
-		RotationStyle: "normal",
-		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
-		AnimBindings:  map[string]string{},
-	})
-	sprite.runtimeState.Scale = 1
-	sprite.transform().pivot = mathf.NewVec2(3, 4)
-	sprite.costumes = []*costume{{
-		atlas: true,
-		frame: assetutil.FrameDescriptor{
-			Center:           mathf.NewVec2(10, 20),
-			BitmapResolution: 1,
-			Width:            100,
-			Height:           80,
-		},
-	}}
-	return sprite
 }
 
 func TestGetCostumeRenderOffsetUsesPivot(t *testing.T) {
@@ -317,4 +283,38 @@ func TestSpriteRenderingOverloadsAndDebugPreserveState(t *testing.T) {
 	if game.shapeMgr.findShapeIndex(&sprite.SpriteImpl) != len(game.shapeMgr.items)-1 {
 		t.Fatal("front layer overload did not place sprite last")
 	}
+}
+
+func newTestRenderSprite() *SpriteImpl {
+	return &SpriteImpl{
+		name: "TestSprite",
+		baseObj: baseObj{
+			costumes: []*costume{
+				{name: "idle"},
+				{name: "run"},
+			},
+			costumeIndex: 1,
+		},
+	}
+}
+
+func newRenderOffsetTestSprite() *SpriteImpl {
+	sprite := &SpriteImpl{g: &Game{}}
+	sprite.components.initComponents(sprite, &coreproject.SpriteConfig{
+		RotationStyle: "normal",
+		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
+		AnimBindings:  map[string]string{},
+	})
+	sprite.runtimeState.Scale = 1
+	sprite.transform().pivot = mathf.NewVec2(3, 4)
+	sprite.costumes = []*costume{{
+		atlas: true,
+		frame: assetutil.FrameDescriptor{
+			Center:           mathf.NewVec2(10, 20),
+			BitmapResolution: 1,
+			Width:            100,
+			Height:           80,
+		},
+	}}
+	return sprite
 }

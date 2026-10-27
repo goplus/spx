@@ -36,6 +36,13 @@ import (
 	"github.com/goplus/spx/v4/internal/runtimepayload"
 )
 
+type launchpackErrorWriter struct{ err error }
+
+type launcherSourceReplacingWriter struct {
+	io.Writer
+	source string
+}
+
 func TestGeneratedLauncherGolden(t *testing.T) {
 	const want = `package main
 
@@ -70,20 +77,6 @@ func main() {
 `
 	if got := string(renderGeneratedLauncher("payload-digest", "manifest-digest")); got != want {
 		t.Fatalf("generated launcher changed:\n%s", got)
-	}
-}
-
-// The fixture implements only the Go build output contract; no compiler or
-// network is needed to exercise packaging rollback and graph verification.
-func launcherGoFixture(t *testing.T, cfg *Config, body string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("shell command fixture")
-	}
-	cfg.GoCommand = filepath.Join(cfg.WorkDir, "fake-go")
-	script := "#!/bin/sh\nset -eu\nout=''\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = '-o' ]; then shift; out=$1; fi\n  shift\ndone\n" + body + "\n"
-	if err := os.WriteFile(cfg.GoCommand, []byte(script), 0700); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -341,25 +334,6 @@ func TestPinnedPayloadSourcesRejectMutationAndShortReads(t *testing.T) {
 	}
 }
 
-type launchpackErrorWriter struct{ err error }
-
-func (w launchpackErrorWriter) Write([]byte) (int, error) { return 0, w.err }
-
-type launcherSourceReplacingWriter struct {
-	io.Writer
-	source string
-}
-
-func (w *launcherSourceReplacingWriter) Write(data []byte) (int, error) {
-	if w.source != "" {
-		if err := os.Rename(w.source, w.source+".moved"); err != nil {
-			return 0, err
-		}
-		w.source = ""
-	}
-	return w.Writer.Write(data)
-}
-
 func TestLauncherPayloadAuthenticatesAndRejectsUnsafeInputs(t *testing.T) {
 	for _, tt := range []struct {
 		name, want    string
@@ -562,30 +536,6 @@ func TestBuildLauncherEndToEnd(t *testing.T) {
 	}
 }
 
-func launchpackRepoRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	root, err := filepath.Abs(filepath.Join(dir, "..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	root, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
-func executableSuffix(goos string) string {
-	if goos == "windows" {
-		return ".exe"
-	}
-	return ""
-}
-
 func TestBuildLauncherFailureReleasesBridgeWork(t *testing.T) {
 	for _, tt := range []struct {
 		name, want string
@@ -636,4 +586,54 @@ func TestBuildLauncherFailureReleasesBridgeWork(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (w launchpackErrorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func (w *launcherSourceReplacingWriter) Write(data []byte) (int, error) {
+	if w.source != "" {
+		if err := os.Rename(w.source, w.source+".moved"); err != nil {
+			return 0, err
+		}
+		w.source = ""
+	}
+	return w.Writer.Write(data)
+}
+
+// The fixture implements only the Go build output contract; no compiler or
+// network is needed to exercise packaging rollback and graph verification.
+func launcherGoFixture(t *testing.T, cfg *Config, body string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell command fixture")
+	}
+	cfg.GoCommand = filepath.Join(cfg.WorkDir, "fake-go")
+	script := "#!/bin/sh\nset -eu\nout=''\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = '-o' ]; then shift; out=$1; fi\n  shift\ndone\n" + body + "\n"
+	if err := os.WriteFile(cfg.GoCommand, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func launchpackRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.Abs(filepath.Join(dir, "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func executableSuffix(goos string) string {
+	if goos == "windows" {
+		return ".exe"
+	}
+	return ""
 }

@@ -39,6 +39,11 @@ type MonitorShape struct {
 	Visible                  bool
 }
 
+type MeasureShape struct {
+	Size, Scale, Heading, X, Y float64
+	Color                      mathf.Color
+}
+
 func ParseMonitorShape(shape StageShape) (config MonitorShape, err error) {
 	if config.Target, err = shapeField[string](shape, "target"); err != nil {
 		return
@@ -78,11 +83,6 @@ func ParseMonitorShape(shape StageShape) (config MonitorShape, err error) {
 		config.Size, _ = tools.GetFloat(shape["size"])
 	}
 	return
-}
-
-type MeasureShape struct {
-	Size, Scale, Heading, X, Y float64
-	Color                      mathf.Color
 }
 
 func ParseMeasureShape(shape StageShape) (config MeasureShape, err error) {

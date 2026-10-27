@@ -23,7 +23,33 @@ covered_web_test() {
   GOOS=js GOARCH=wasm covered_test "$profile" "-exec=\"$goroot/lib/wasm/go_js_wasm_exec\"" "$@"
 }
 
+require_native_platform() {
+  local expected="$1" host target
+  host="$(go env GOHOSTOS)"
+  target="$(go env GOOS)"
+  if [ "$host" != "$expected" ] || [ "$target" != "$expected" ]; then
+    echo "This Go coverage suite requires a native $expected runner (host=$host, target=$target)" >&2
+    exit 1
+  fi
+}
+
 case "${1:-}" in
+  # These focused suites complement Linux coverage without repeating all tests.
+  macos)
+    require_native_platform darwin
+    covered_test coverage-buildctl-macos.out -v \
+      -run '^(TestCommandRunnerRepairsMacOSGoToolchainForChild|TestCommandRunnerRunCommandReturnsEnvironmentError|TestConfigureCurrentMacOSGoToolchainEnv|TestCurrentBuildEnvReturnsIndependentCopy|TestSetupJDKWithHomebrewFixture|TestCompressWasmArtifactsInstallsBrotli|TestBrotliLinuxInstallRejectsMissingReleaseAndTools)$' \
+      ./internal/cmd/buildctl/shared ./internal/cmd/buildctl/tool ./internal/cmd/buildctl/runtimecmd
+    ;;
+  windows)
+    require_native_platform windows
+    covered_test coverage-buildctl-windows.out -v \
+      -run '^Test(ReplaceFileWindows|Windows.*|FetchURLToFileReplacesExistingDestination|SConsEnvironmentCommands|SetupJDKWindowsRequiresManualInstallation)$' \
+      ./internal/cmd/buildctl/shared ./internal/cmd/buildctl/tool
+    covered_test coverage-engine-windows.out -v \
+      -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$' \
+      ./internal/cmd/buildctl/engine
+    ;;
   web)
     covered_web_test coverage-web.out \
       ./internal/gdengine/binding/web ./pkg/ispx ./internal/coroutine

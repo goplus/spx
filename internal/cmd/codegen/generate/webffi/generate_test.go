@@ -698,18 +698,6 @@ for (const status of [true, false, 'throw', 'wrong-length']) {
 	require.NoError(t, err, "%s", output)
 }
 
-func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
-	t.Helper()
-	var params []string
-	for _, param := range spec.Params() {
-		params = append(params, param.Declaration())
-	}
-	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
-	require.NoError(t, err)
-	function := ast.CollectGDExtensionInterfaceFunctions()[0]
-	return &function
-}
-
 func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
 	ast, err := clang.ParseCString(`typedef GdBool (*GDExtensionSpxExampleSetValues)(GdObj obj, GdInt index, GdFloat scale, GdBool enabled, int32_t count);`)
 	require.NoError(t, err)
@@ -729,4 +717,16 @@ func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
 	require.Contains(t, manager, "arg0Low, arg0High := JsSplitGdObj(obj)")
 	require.Contains(t, manager, "arg1Low, arg1High := JsSplitGdInt(index)")
 	require.Contains(t, manager, "Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(scale), enabled, count)")
+}
+
+func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
+	t.Helper()
+	var params []string
+	for _, param := range spec.Params() {
+		params = append(params, param.Declaration())
+	}
+	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")
+	require.NoError(t, err)
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	return &function
 }

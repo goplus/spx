@@ -30,15 +30,10 @@ type askShowUiMgr struct {
 	text    map[gdx.Object]string
 }
 
-func (m *askShowUiMgr) SetVisible(id gdx.Object, visible bool) {
-	m.visible[id] = visible
+type askInputMgr struct {
+	gdx.IInputMgr
+	pressed map[int64]bool
 }
-
-func (m *askShowUiMgr) SetText(id gdx.Object, text string) {
-	m.text[id] = text
-}
-
-func (m *askShowUiMgr) GetText(id gdx.Object) string { return m.text[id] }
 
 func TestUiAskShow(t *testing.T) {
 	enginewrap.Init(func(call func()) { call() })
@@ -140,12 +135,6 @@ func TestUiAskShow(t *testing.T) {
 	}
 }
 
-type askInputMgr struct {
-	gdx.IInputMgr
-	pressed map[int64]bool
-}
-
-func (m *askInputMgr) GetKey(key int64) bool { return m.pressed[key] }
 func TestUiAskUpdateOnlySubmitsOnKeyEdge(t *testing.T) {
 	enginewrap.Init(func(f func()) { f() })
 	oldInput, oldUI := gdx.InputMgr, gdx.UiMgr
@@ -180,3 +169,15 @@ func TestUiAskUpdateOnlySubmitsOnKeyEdge(t *testing.T) {
 		t.Fatal("submitted without callback")
 	}
 }
+
+func (m *askShowUiMgr) SetVisible(id gdx.Object, visible bool) {
+	m.visible[id] = visible
+}
+
+func (m *askShowUiMgr) SetText(id gdx.Object, text string) {
+	m.text[id] = text
+}
+
+func (m *askShowUiMgr) GetText(id gdx.Object) string { return m.text[id] }
+
+func (m *askInputMgr) GetKey(key int64) bool { return m.pressed[key] }

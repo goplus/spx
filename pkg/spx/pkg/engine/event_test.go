@@ -31,35 +31,6 @@ type eventTestHarness struct {
 	arguments      func(int) [2]int
 }
 
-func eventTestCases() map[string]func() eventTestHarness {
-	return map[string]func() eventTestHarness{
-		"Event0": func() eventTestHarness {
-			e := NewEvent0()
-			return eventTestHarness{
-				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func() { fn([2]int{}) }) },
-				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
-				trigger: func(int) { e.Trigger() }, arguments: func(int) [2]int { return [2]int{} },
-			}
-		},
-		"Event1": func() eventTestHarness {
-			e := NewEvent1[int]()
-			return eventTestHarness{
-				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func(a int) { fn([2]int{a}) }) },
-				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
-				trigger: e.Trigger, arguments: func(a int) [2]int { return [2]int{a} },
-			}
-		},
-		"Event2": func() eventTestHarness {
-			e := NewEvent2[int, int]()
-			return eventTestHarness{
-				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func(a, b int) { fn([2]int{a, b}) }) },
-				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
-				trigger: func(a int) { e.Trigger(a, -a) }, arguments: func(a int) [2]int { return [2]int{a, -a} },
-			}
-		},
-	}
-}
-
 func TestEventTriggerReentryPreservesOuterSnapshot(t *testing.T) {
 	for name, create := range eventTestCases() {
 		t.Run(name, func(t *testing.T) {
@@ -167,5 +138,34 @@ func TestEventConcurrentTriggersOwnTheirSnapshots(t *testing.T) {
 				t.Fatalf("listener calls=%d,%d, want %d each", first.Load(), second.Load(), workers)
 			}
 		})
+	}
+}
+
+func eventTestCases() map[string]func() eventTestHarness {
+	return map[string]func() eventTestHarness{
+		"Event0": func() eventTestHarness {
+			e := NewEvent0()
+			return eventTestHarness{
+				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func() { fn([2]int{}) }) },
+				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
+				trigger: func(int) { e.Trigger() }, arguments: func(int) [2]int { return [2]int{} },
+			}
+		},
+		"Event1": func() eventTestHarness {
+			e := NewEvent1[int]()
+			return eventTestHarness{
+				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func(a int) { fn([2]int{a}) }) },
+				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
+				trigger: e.Trigger, arguments: func(a int) [2]int { return [2]int{a} },
+			}
+		},
+		"Event2": func() eventTestHarness {
+			e := NewEvent2[int, int]()
+			return eventTestHarness{
+				subscribe:   func(fn func([2]int)) int { return e.Subscribe(func(a, b int) { fn([2]int{a, b}) }) },
+				unsubscribe: e.Unsubscribe, unsubscribeAll: e.UnsubscribeAll,
+				trigger: func(a int) { e.Trigger(a, -a) }, arguments: func(a int) [2]int { return [2]int{a, -a} },
+			}
+		},
 	}
 }
