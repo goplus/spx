@@ -157,6 +157,7 @@ func init() {
 			"Contains":                   reflect.ValueOf(q.Contains),
 			"DecodeInputReplay":          reflect.ValueOf(q.DecodeInputReplay),
 			"DeltaTime":                  reflect.ValueOf(q.DeltaTime),
+			"Div":                        reflect.ValueOf(q.Div),
 			"EncodeInputReplay":          reflect.ValueOf(q.EncodeInputReplay),
 			"Equal":                      reflect.ValueOf(q.Equal),
 			"Exit__0":                    reflect.ValueOf(q.Exit__0),
@@ -612,6 +613,7 @@ func init() {
 		"Compare":                      func_Compare,
 		"Contains":                     func_Contains,
 		"DeltaTime":                    func_DeltaTime,
+		"Div":                          func_Div,
 		"Equal":                        func_Equal,
 		"Exit__0":                      func_Exit__0,
 		"Exit__1":                      func_Exit__1,
@@ -659,6 +661,10 @@ func func_Contains(ctx ixgo.DirectCallContext) {
 
 func func_DeltaTime(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.DeltaTime())
+}
+
+func func_Div(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.Div(ixgo.DirectCallArg[float64](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1)))
 }
 
 func func_Equal(ctx ixgo.DirectCallContext) {

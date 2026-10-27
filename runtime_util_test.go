@@ -47,6 +47,45 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 	}
 }
 
+func TestDiv(t *testing.T) {
+	negativeZero := math.Copysign(0, -1)
+	tests := []struct {
+		name string
+		a, b float64
+		want float64
+	}{
+		{name: "positive operands", a: 7, b: 2, want: 3.5},
+		{name: "negative dividend", a: -7, b: 2, want: -3.5},
+		{name: "negative divisor", a: 7, b: -2, want: -3.5},
+		{name: "negative operands", a: -7, b: -2, want: 3.5},
+		{name: "fractional operands", a: 0.5, b: 0.25, want: 2},
+		{name: "zero dividend", a: 0, b: 2, want: 0},
+		{name: "negative zero dividend", a: negativeZero, b: 2, want: negativeZero},
+		{name: "zero by zero", a: 0, b: 0, want: 0},
+		{name: "zero by negative zero", a: 0, b: negativeZero, want: 0},
+		{name: "positive by zero", a: 1, b: 0, want: math.Inf(1)},
+		{name: "negative by zero", a: -1, b: 0, want: math.Inf(-1)},
+		{name: "positive by negative zero", a: 1, b: negativeZero, want: math.Inf(-1)},
+		{name: "negative by negative zero", a: -1, b: negativeZero, want: math.Inf(1)},
+		{name: "NaN dividend", a: math.NaN(), b: 1, want: 0},
+		{name: "NaN divisor", a: 1, b: math.NaN(), want: 0},
+		{name: "infinite dividend", a: math.Inf(1), b: -2, want: math.Inf(-1)},
+		{name: "infinite divisor", a: 1, b: math.Inf(1), want: 0},
+		{name: "negative infinite divisor", a: 1, b: math.Inf(-1), want: negativeZero},
+		{name: "infinity by infinity", a: math.Inf(1), b: math.Inf(1), want: 0},
+		{name: "opposite infinities", a: math.Inf(1), b: math.Inf(-1), want: 0},
+		{name: "overflow", a: math.MaxFloat64, b: 0.5, want: math.Inf(1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Div(tt.a, tt.b); got != tt.want || math.Signbit(got) != math.Signbit(tt.want) {
+				t.Fatalf("Div(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFloorMod(t *testing.T) {
 	tests := []struct {
 		name              string

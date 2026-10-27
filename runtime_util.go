@@ -50,6 +50,17 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
+// Div returns a divided by b, converting a NaN result to zero while preserving
+// infinities. For example, Div(0, 0) returns 0 and Div(1, 0) returns +Inf.
+// In SPX scripts, it can be called as div(a, b).
+func Div(a, b float64) float64 {
+	result := a / b
+	if math.IsNaN(result) {
+		return 0
+	}
+	return result
+}
+
 // FloorMod returns the remainder of dividend divided by divisor using
 // floored-division semantics. Unlike math.Mod, a non-zero result has the same
 // sign as divisor. This matches Scratch's mod operator:
