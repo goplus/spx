@@ -56,9 +56,6 @@ var (
 	//go:embed sprite.go.tmpl
 	spriteTemplate string
 
-	//go:embed sprite_pure.go.tmpl
-	spritePureTemplate string
-
 	//go:embed sync.go.tmpl
 	syncTemplate string
 )
@@ -153,30 +150,13 @@ func (g *Generator) renderManagerInterface(codegenDir string) error {
 }
 
 func (g *Generator) renderSyncAPI(codegenDir string) error {
-	variants := []struct {
-		filename     string
-		buildTag     string
-		wrapFunction func(*clang.TypedefFunction) string
-	}{
-		{"sync.gen.go", "!pure_engine", g.genSyncAPIWrapFunction},
-		{"sync_pure.gen.go", "pure_engine", g.genSyncPureAPIWrapFunction},
+	funcs := template.FuncMap{
+		"lowerCamelCase":         strcase.ToLowerCamel,
+		"camelCase":              strcase.ToCamel,
+		"genSyncAPIWrapFunction": g.genSyncAPIWrapFunction,
 	}
-	for _, variant := range variants {
-		funcs := template.FuncMap{
-			"lowerCamelCase":         strcase.ToLowerCamel,
-			"camelCase":              strcase.ToCamel,
-			"genSyncAPIWrapFunction": variant.wrapFunction,
-		}
-		data := struct {
-			common.ManagerData
-			BuildTag string
-		}{g.ManagerData(), variant.buildTag}
-		if err := g.Output.RenderFile(funcs, syncTemplate, data,
-			filepath.Join(codegenDir, common.EngineWrapRelDir, variant.filename)); err != nil {
-			return fmt.Errorf("generate %s: %w", variant.filename, err)
-		}
-	}
-	return nil
+	return g.Output.RenderFile(funcs, syncTemplate, g.ManagerData(),
+		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync.gen.go"))
 }
 
 func (g *Generator) renderManagerImpl(codegenDir, className string) error {
@@ -186,19 +166,7 @@ func (g *Generator) renderManagerImpl(codegenDir, className string) error {
 	})
 	data := implData{Methods: methods, ClassName: className}
 	funcs := template.FuncMap{"getManagerImpl": g.getManagerImpl}
-	variants := []struct {
-		suffix string
-		text   string
-	}{
-		{".gen.go", spriteTemplate},
-		{"_pure.gen.go", spritePureTemplate},
-	}
-	for _, variant := range variants {
-		filename := strings.ToLower(className) + variant.suffix
-		if err := g.Output.RenderFile(funcs, variant.text, data,
-			filepath.Join(codegenDir, common.EnginePkgRelDir, filename)); err != nil {
-			return fmt.Errorf("generate %s: %w", filename, err)
-		}
-	}
-	return nil
+	filename := strings.ToLower(className) + ".gen.go"
+	return g.Output.RenderFile(funcs, spriteTemplate, data,
+		filepath.Join(codegenDir, common.EnginePkgRelDir, filename))
 }

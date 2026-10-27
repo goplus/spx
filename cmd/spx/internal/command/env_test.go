@@ -181,11 +181,14 @@ func TestPrepareCommandNormalizesRelativeProjectPath(t *testing.T) {
 	t.Setenv("GOOS", "linux")
 	t.Setenv("GOARCH", "amd64")
 	t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
-	serverAddr, tags := "", "pure_engine"
+	serverAddr := ""
+	binDir := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	writeCommandTestFile(t, filepath.Join(binDir, "gdspxtest"+executableSuffix(runtime.GOOS)), "engine fixture")
 	cmd := CmdTool{
-		FileSuffix: "spx", Version: "test", ProjectFS: webExportTestFS,
+		FileSuffix: "spx", Version: "test", ProjectFS: webExportTestFS, GoBinPath: binDir,
 		GoModTemplate: "must not create a nested local module",
-		Args:          ExtraArgs{CmdName: "build", Path: &relativePath, ServerAddr: &serverAddr, Tags: &tags},
+		Args:          ExtraArgs{CmdName: "build", Path: &relativePath, ServerAddr: &serverAddr},
 	}
 	spec, ok := findCommand("build")
 	if !ok {
@@ -345,7 +348,6 @@ func TestShouldReimport(t *testing.T) {
 		cmdName     string
 		runtimeMode bool
 		cacheExists bool
-		tags        string
 		want        bool
 	}{
 		{name: "reimports native build", cmdName: "build", want: true},
@@ -358,16 +360,6 @@ func TestShouldReimport(t *testing.T) {
 		{name: "skips exportminigame", cmdName: "exportminigame", want: false},
 		{name: "skips exportminiprogram", cmdName: "exportminiprogram", want: false},
 		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
-		{name: "skips pure engine mode", cmdName: "build", tags: "pure_engine", want: false},
-		{name: "skips comma separated pure engine", cmdName: "build", tags: "debug,pure_engine,extra", want: false},
-		{name: "skips space separated pure engine", cmdName: "build", tags: "debug pure_engine extra", want: false},
-		{name: "skips quoted pure engine", cmdName: "build", tags: "'pure_engine'", want: false},
-		{name: "skips quoted field among tags", cmdName: "build", tags: `debug "pure_engine" extra`, want: false},
-		{name: "retains engine for prefixed tag", cmdName: "build", tags: "not_pure_engine", want: true},
-		{name: "retains engine for suffixed tag", cmdName: "build", tags: "pure_engine_extra", want: true},
-		{name: "mixed separators follow Go space parsing", cmdName: "build", tags: "debug,pure_engine extra", want: true},
-		{name: "quoted tag list is one field", cmdName: "build", tags: "'debug pure_engine'", want: true},
-		{name: "unterminated quote does not select pure engine", cmdName: "build", tags: "'pure_engine", want: true},
 		{name: "skips when cache exists", cmdName: "exporttemplateweb", cacheExists: true, want: false},
 	}
 
@@ -383,23 +375,9 @@ func TestShouldReimport(t *testing.T) {
 				RuntimeMode: tt.runtimeMode,
 				Args:        ExtraArgs{CmdName: tt.cmdName},
 			}
-			if tt.tags != "" {
-				tags := tt.tags
-				cmd.Args.Tags = &tags
-			}
 
 			if got := cmd.ShouldReimport(); got != tt.want {
 				t.Fatalf("ShouldReimport() = %v, want %v", got, tt.want)
-			}
-			if tt.tags != "" {
-				t.Setenv("PATH", t.TempDir())
-				cmd.GoBinPath = t.TempDir()
-				if err := cmd.setupEnginePaths(); err != nil {
-					t.Fatal(err)
-				}
-				if (cmd.CmdPath != "") != tt.want {
-					t.Fatalf("engine command for tags %q = %q, want external engine: %v", tt.tags, cmd.CmdPath, tt.want)
-				}
 			}
 		})
 	}
@@ -738,7 +716,9 @@ func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
 			before := workingDirectory(t)
 			t.Setenv("GOOS", "linux")
 			t.Setenv("GOARCH", "amd64")
-			tags := "pure_engine"
+			binDir := t.TempDir()
+			t.Setenv("PATH", t.TempDir())
+			writeCommandTestFile(t, filepath.Join(binDir, "gdspxtest"+executableSuffix(runtime.GOOS)), "engine fixture")
 			source := filepath.Base(target)
 			if linked {
 				source = "linked-game"
@@ -746,12 +726,14 @@ func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
 					t.Skipf("symlink unavailable: %v", err)
 				}
 			}
-			cmd := CmdTool{TargetDir: source, Args: ExtraArgs{Tags: &tags}}
+			cmd := CmdTool{TargetDir: source, GoBinPath: binDir}
 			if err := cmd.SetupEnv("test", webExportTestFS, "template/project", "project"); err != nil {
 				t.Fatal(err)
 			}
 			project := filepath.Join(target, "project")
 			for name, paths := range map[string][2]string{
+				"engine":   {cmd.CmdPath, filepath.Join(binDir, "gdspxtest"+executableSuffix(runtime.GOOS))},
+				"runtime":  {cmd.RuntimeCmdPath, filepath.Join(binDir, "gdspxrttest"+executableSuffix(runtime.GOOS))},
 				"source":   {cmd.TargetDir, target},
 				"argument": {*cmd.Args.Path, target},
 				"project":  {cmd.ProjectDir, project},

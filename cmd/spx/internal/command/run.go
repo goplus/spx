@@ -60,21 +60,6 @@ func (cmd *CmdTool) RunInterpreted(pargs ...string) error {
 	return cmd.runInterpretedEngine(assets.EnginePath, assets.BridgePath, "interpreted", pargs...)
 }
 
-func (cmd *CmdTool) RunPureEngine(pargs ...string) error {
-	binaryName := "main" + executableSuffix(runtime.GOOS)
-	buildArgs := []string{"build"}
-	if cmd.Args.Tags != nil && *cmd.Args.Tags != "" {
-		buildArgs = append(buildArgs, "-tags="+*cmd.Args.Tags)
-	}
-	buildArgs = append(buildArgs, "-o", binaryName)
-	if err := util.ExecCommand(util.CommandOptions{Env: []string{"CGO_ENABLED=0"}, Dir: cmd.GoDir}, "go", buildArgs...); err != nil {
-		return fmt.Errorf("failed to build Go binary: %w", err)
-	}
-
-	binaryPath := filepath.Join(cmd.GoDir, binaryName)
-	return util.RunCommandInDir(cmd.TargetDir, binaryPath, pargs...)
-}
-
 func (cmd *CmdTool) RunWeb() error {
 	return runWebCommand(func() error {
 		return cmd.installRepoWebRuntime(webNormalMode)

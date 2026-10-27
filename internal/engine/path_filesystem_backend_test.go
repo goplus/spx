@@ -1,4 +1,4 @@
-//go:build !packmode && !pure_engine
+//go:build !packmode
 
 package engine
 

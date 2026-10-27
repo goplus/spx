@@ -1,5 +1,3 @@
-//go:build !pure_engine
-
 package engine
 
 import (

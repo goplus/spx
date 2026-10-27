@@ -103,7 +103,7 @@ func TestValidateBuildLauncherArgs(t *testing.T) {
 		args ExtraArgs
 	}{
 		{name: "arch", args: ExtraArgs{Arch: launcherStringPointer("arm64")}},
-		{name: "tags", args: ExtraArgs{Tags: launcherStringPointer("pure_engine")}},
+		{name: "tags", args: ExtraArgs{Tags: launcherStringPointer("custom_tag")}},
 		{name: "servermode", args: ExtraArgs{ServerMode: launcherBoolPointer(true)}},
 		{name: "build", args: ExtraArgs{Build: launcherStringPointer("fast")}},
 		{name: "mode", args: ExtraArgs{Mode: launcherStringPointer("worker")}},

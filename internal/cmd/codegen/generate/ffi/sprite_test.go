@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSpriteImplementationsPreservePublicParameters(t *testing.T) {
+func TestSpriteImplementationPreservesPublicParameters(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_sprite_mgr.h"), []byte(`class SpxSpriteMgr {
 public:
@@ -53,31 +53,20 @@ typedef GdString (*GDExtensionSpxSpriteLabel)();`)
 	require.NoError(t, generation.renderManagerImpl(codegenDir, "Sprite"))
 	require.NoError(t, generation.Output.Commit())
 	methods := []struct {
-		name, signature, call, zero string
+		name, signature, call string
 	}{
-		{"SetEnabled", "SetEnabled(enabled bool)", "SpriteMgr.SetEnabled(pself.Id, enabled)", ""},
-		{"Collect", "Collect(values []float32) bool", "return SpriteMgr.Collect(pself.Id, values)", "return false"},
-		{"Write", "Write(output *[3]float32)", "SpriteMgr.Write(pself.Id, output)", ""},
-		{"CollectObjects", "CollectObjects(obj []int64)", "SpriteMgr.CollectObjects(obj)", ""},
-		{"Select", "Select(enabled bool, obj Object)", "SpriteMgr.Select(enabled, obj)", ""},
-		{"Label", "Label() string", "return SpriteMgr.Label()", `return ""`},
+		{"SetEnabled", "SetEnabled(enabled bool)", "SpriteMgr.SetEnabled(pself.Id, enabled)"},
+		{"Collect", "Collect(values []float32) bool", "return SpriteMgr.Collect(pself.Id, values)"},
+		{"Write", "Write(output *[3]float32)", "SpriteMgr.Write(pself.Id, output)"},
+		{"CollectObjects", "CollectObjects(obj []int64)", "SpriteMgr.CollectObjects(obj)"},
+		{"Select", "Select(enabled bool, obj Object)", "SpriteMgr.Select(enabled, obj)"},
+		{"Label", "Label() string", "return SpriteMgr.Label()"},
 	}
-	for _, filename := range []string{"sprite.gen.go", "sprite_pure.gen.go"} {
-		t.Run(filename, func(t *testing.T) {
-			path := filepath.Join(codegenDir, common.EnginePkgRelDir, filename)
-			output, err := os.ReadFile(path)
-			require.NoError(t, err)
-			for _, method := range methods {
-				body := method.call
-				if filename == "sprite_pure.gen.go" {
-					body = method.zero
-				}
-				if body != "" {
-					body = "\t" + body + "\n"
-				}
-				require.Equal(t, "func (pself *Sprite) "+method.signature+" {\n"+body+"}",
-					generatedMethod(t, path, output, method.name))
-			}
-		})
+	path := filepath.Join(codegenDir, common.EnginePkgRelDir, "sprite.gen.go")
+	output, err := os.ReadFile(path)
+	require.NoError(t, err)
+	for _, method := range methods {
+		require.Equal(t, "func (pself *Sprite) "+method.signature+" {\n\t"+method.call+"\n}",
+			generatedMethod(t, path, output, method.name))
 	}
 }

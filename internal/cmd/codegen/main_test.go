@@ -149,12 +149,12 @@ func TestGenerateCodeFailurePreservesPublishedOutputs(t *testing.T) {
 			config.parsedASTPath = filepath.Join(root, "internal/gdengine/binding/native/callbacks.gen.go")
 			return nil
 		}},
-		{"synchronized API output conflict", "generate sync_pure.gen.go", func(root string, config *codegenConfig) error {
-			config.parsedASTPath = filepath.Join(root, "internal/enginewrap/sync_pure.gen.go")
+		{"synchronized API output conflict", "generate synchronized API", func(root string, config *codegenConfig) error {
+			config.parsedASTPath = filepath.Join(root, "internal/enginewrap/sync.gen.go")
 			return nil
 		}},
 		{"Sprite output conflict", "generate Sprite manager implementation", func(root string, config *codegenConfig) error {
-			config.parsedASTPath = filepath.Join(root, "pkg/spx/pkg/engine/sprite_pure.gen.go")
+			config.parsedASTPath = filepath.Join(root, "pkg/spx/pkg/engine/sprite.gen.go")
 			return nil
 		}},
 		{"callback defaults output conflict", "generate GDExtension sources: duplicate generated file", func(_ string, config *codegenConfig) error {
