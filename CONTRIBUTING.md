@@ -212,8 +212,18 @@ checks must pass before merge.
 
 ### Go coverage
 
-CI collects atomic Go statement coverage and uploads it to
-[Codecov](https://codecov.io/gh/goplus/spx).
+CI collects atomic Go statement coverage. After Linux/Web, macOS, and Windows
+jobs succeed, it uploads all profiles to [Codecov](https://codecov.io/gh/goplus/spx)
+in one report. Each execution of the coverage job attempts at most one upload;
+separate push/PR runs and job reruns can upload again. Missing artifacts fail
+collection; partial reports are not uploaded. Codecov upload errors retain the
+action's default non-blocking policy, so the CI gate guarantees complete input
+reports, not successful delivery or subsequent processing by Codecov.
+
+Coverage artifacts are retained for 7 days. Fixed names with overwrite enabled
+allow failed-job reruns to reuse reports from successful jobs while those artifacts
+remain available. After they expire, use **Re-run all jobs** to regenerate them;
+rerunning only failed jobs does not recreate artifacts from successful producers.
 
 To reproduce host coverage using the same package selection as CI:
 
@@ -228,7 +238,7 @@ Keep the profile path relative so the root module and `cmd/ispx` write separate
 files; an absolute path would overwrite the first report. CI also records
 Node/WASM Go tests and `.github/scripts` Go tools in separate profiles.
 
-Coverage includes Linux host Go tests (excluding `internal/webffi`) and
+Coverage includes Linux host Go tests and
 Node/WASM binding, coroutine, interpreter, and process-fallback tests, subject
 to Go build tags. The nested `cmd/ispx` and `internal/cmd/codegen` modules have
 separate profiles.

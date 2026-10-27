@@ -198,6 +198,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         base_env = {
             "STATIC_CHECKS_RESULT": "success",
             "GO_BUILDS_RESULT": "success",
+            "COVERAGE_RESULT": "success",
             "RUNTIME_RESOLUTION_RESULT": "success",
             "RUNTIME_REASON": "test runtime resolution",
         }
@@ -211,7 +212,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 completed = run_shell(gate, env=expected)
                 self.assertEqual(completed.returncode, 0, completed.stderr)
             for job in (
-                "STATIC_CHECKS_RESULT", "GO_BUILDS_RESULT", "RUNTIME_RESOLUTION_RESULT",
+                "STATIC_CHECKS_RESULT", "GO_BUILDS_RESULT", "COVERAGE_RESULT", "RUNTIME_RESOLUTION_RESULT",
                 "MODULE_INTEGRATION_RESULT", "WEB_BUILD_RESULT",
             ):
                 for result in ("success", "failure", "cancelled", "skipped", ""):
@@ -422,12 +423,105 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("Reusing public runtime release for $RUNTIME_VERSION", script)
         self.assertNotIn('cmp -s "dist/$RUNTIME_MANIFEST"', script)
 
+    def test_publish_steps_reuse_metadata_and_stop_before_upload_on_failure(self):
+        mocks = r'''gh() {
+  local operation="$2"
+  printf 'gh %s\n' "$operation" >> "$TRACE"
+  [ "$operation" != "$FAIL_OPERATION" ] || return 7
+  case "$operation" in
+    view)
+      [[ "$*" == *'--json isDraft,assets' ]] || return 98
+      [ "$RELEASE_STATE" != absent ] || return 1
+      printf '%s\n' "$RELEASE_JSON"
+      ;;
+    download) cp remote/* published/ ;;
+    create|delete-asset|upload|edit) ;;
+    *) return 99 ;;
+  esac
+}
+sha256sum() { echo checksum >> "$TRACE"; return "$CHECKSUM_EXIT"; }
+go() { echo manifest >> "$TRACE"; return "$MANIFEST_EXIT"; }
+# The workflow uses GNU find; keep this fixture portable to macOS.
+find() {
+  local path
+  for path in "$1"/*; do
+    [ ! -f "$path" ] || printf '%s\n' "${path##*/}"
+  done
+}
+'''
+        for job, step in (
+            ("publish-runtime", "Publish immutable runtime release"),
+            ("publish-spx", "Prepare SPX release draft"),
+        ):
+            scenarios = ["absent", "draft", "public", "extra-assets", "download-failure",
+                         "checksum-failure", "create-failure"]
+            if job == "publish-runtime":
+                scenarios.append("manifest-failure")
+            for scenario in scenarios:
+                with self.subTest(job=job, scenario=scenario), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    for folder in ("dist", "remote"):
+                        (root / folder).mkdir()
+                        for name in ("asset.zip", "manifest.json", "SHA256SUMS"):
+                            (root / folder / name).write_text("same fixture contents\n")
+                    if scenario == "extra-assets":
+                        (root / "remote" / "extra.zip").write_text("unexpected\n")
+                    state = scenario if scenario in ("absent", "draft") else "public"
+                    if scenario == "create-failure":
+                        state = "absent"
+                    metadata = {"isDraft": state == "draft", "assets": [
+                        {"name": path.name} for path in sorted((root / "remote").iterdir())
+                    ]}
+                    result = run_shell(mocks + step_script(self.jobs[job], step), cwd=root, env={
+                        "TRACE": str(root / "trace"), "RELEASE_STATE": state,
+                        "RELEASE_JSON": json.dumps(metadata), "REPOSITORY": "fixture/spx",
+                        "RELEASE_TAG": "v4.0.0", "GITHUB_SHA": "a" * 40,
+                        "RUNTIME_STATE": "missing", "RUNTIME_VERSION": "4.0.0",
+                        "RUNTIME_MANIFEST": "manifest.json",
+                        "FAIL_OPERATION": scenario.removesuffix("-failure")
+                        if scenario in ("download-failure", "create-failure") else "",
+                        "CHECKSUM_EXIT": "7" if scenario == "checksum-failure" else "0",
+                        "MANIFEST_EXIT": "7" if scenario == "manifest-failure" else "0",
+                    })
+                    self.assertEqual(result.returncode == 0, scenario in ("absent", "draft", "public"),
+                                     result.stderr)
+                    trace = (root / "trace").read_text().splitlines()
+                    self.assertEqual(trace.count("gh view"), 1)
+                    writes = [event for event in trace if event in (
+                        "gh create", "gh delete-asset", "gh upload", "gh edit",
+                    )]
+                    expected = []
+                    if scenario in ("absent", "draft"):
+                        expected = (["gh create"] if scenario == "absent" else
+                                    ["gh delete-asset"] * len(metadata["assets"]))
+                        expected += ["gh upload"] + (["gh edit"] if job == "publish-runtime" else [])
+                    elif scenario == "create-failure":
+                        expected = ["gh create"]
+                    self.assertEqual(writes, expected)
+                    if scenario == "public":
+                        self.assertIn("checksum", trace)
+                        self.assertEqual("manifest" in trace, job == "publish-runtime")
+
+    def test_dry_run_cannot_enter_any_publication_job(self):
+        required_guards = {
+            "publish-runtime": "inputs.operation!='dry-run'",
+            "publish-spx": "inputs.operation=='publish-release'",
+            "publish-web-package": "inputs.operation=='publish-release'",
+            "finalize-spx": "inputs.operation=='publish-release'",
+            "publish-dev-web-package": "inputs.operation=='publish-dev-npm'",
+        }
+        for job, guard in required_guards.items():
+            with self.subTest(job=job):
+                condition = job_condition(self.jobs[job])
+                self.assertIn(guard, condition.split("&&"))
+                self.assertNotIn("||", condition)
+
     def test_publish_dev_uses_exact_sha_and_oidc(self):
         block = self.jobs["publish-dev-web-package"]
         self.assertIn("    uses: ./.github/workflows/publish_web_package.yml", block)
         self.assertIn("      target: ${{ github.sha }}", block)
-        self.assertIn("      release_version: ''", block)
-        self.assertIn("      release_artifact: ''", block)
+        for name in ("release_version", "release_artifact"):
+            self.assertIn("        default: ''", workflow_input_block(self.web_package_workflow, name))
         self.assertIn("      contents: read", block)
         self.assertIn("      id-token: write", block)
 
@@ -554,19 +648,19 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 fake_bin / "npm",
                 """#!/bin/sh
 set -eu
+printf '%s\\n' "$*" >> "$MOCK_NPM_TRACE"
 case "$1:$3" in
   pack:*)
     printf '%s\\n' '[{"filename":"spx.tgz","integrity":"sha512-local"}]'
     ;;
-  view:version)
-    printf '%s\\n' "$MOCK_VERSION"
-    ;;
   view:dist.integrity)
-    printf '%s\\n' 'sha512-local'
+    [ "$MOCK_EXISTS" = true ] || exit 1
+    printf '%s\\n' "$MOCK_INTEGRITY"
     ;;
   view:dist-tags)
     printf '{"dev":"%s"}\\n' "$MOCK_DIST_TAG"
     ;;
+  publish:*) ;;
   *)
     exit 99
     ;;
@@ -575,24 +669,58 @@ esac
             )
 
             version = "4.0.1-0.20260814000000-aaaaaaaaaaaa"
-            for remote_dist_tag, succeeds in ((version, True), ("older", False)):
-                with self.subTest(remote_dist_tag=remote_dist_tag):
+            trace = workspace_path / "npm-trace"
+            for exists, integrity, remote_dist_tag, error in (
+                (True, "sha512-local", version, ""),
+                (True, "sha512-local", "older", "not selected by dist-tag"),
+                (True, "sha512-different", version, "does not match"),
+                (False, "", "", ""),
+            ):
+                with self.subTest(exists=exists, integrity=integrity, remote_dist_tag=remote_dist_tag):
+                    trace.unlink(missing_ok=True)
                     completed = run_shell(
                         publish,
                         cwd=workspace,
                         env={
                             "IS_RELEASE": "false",
+                            "MOCK_EXISTS": str(exists).lower(),
+                            "MOCK_INTEGRITY": integrity,
                             "MOCK_DIST_TAG": remote_dist_tag,
-                            "MOCK_VERSION": version,
+                            "MOCK_NPM_TRACE": str(trace),
                             "PATH": f"{fake_bin}:{os.environ['PATH']}",
-                            "SPX_VERSION": f"v{version}",
+                            "SPX_VERSION": version,
                         },
                     )
                     self.assertEqual(
                         completed.returncode == 0,
-                        succeeds,
+                        not error,
                         completed.stderr,
                     )
+                    if error:
+                        self.assertIn(error, completed.stderr)
+                    commands = trace.read_text().splitlines()
+                    self.assertEqual(commands.count(f"view @xgo-pkgs/spx@{version} dist.integrity"), 1)
+                    self.assertEqual([command for command in commands if command.startswith("publish ")],
+                                     [] if exists else ["publish .npm/packages/spx.tgz --access public --tag dev"])
+
+    def test_web_package_normalizes_versions_without_go_for_releases(self):
+        script = step_script(self.web_package_jobs["build"], "Compute package version")
+        trace = 'go() { echo "$*" >&2; echo v4.0.1-0.20260814000000-aaaaaaaaaaaa; return "${GO_EXIT:-0}"; }\n' + script
+        for release, version in (("", "4.0.1-0.20260814000000-aaaaaaaaaaaa"),
+                                 ("4.0.0", "4.0.0"), ("v4.0.0", "4.0.0")):
+            with self.subTest(release=release), tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "env"
+                result = run_shell(trace, env={"RELEASE_VERSION": release, "GITHUB_ENV": str(output)})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.read_text(), f"SPX_VERSION={version}\n")
+                self.assertEqual(result.stderr, "" if release else "run ./.github/scripts/npm/pseudo_version.go HEAD\n")
+                if not release:
+                    output.unlink()
+                    result = run_shell(trace, env={
+                        "RELEASE_VERSION": release, "GITHUB_ENV": str(output), "GO_EXIT": "7",
+                    })
+                    self.assertEqual(result.returncode, 7, result.stderr)
+                    self.assertFalse(output.exists())
 
     def test_release_gate_is_operation_aware_and_fail_closed(self):
         block = self.jobs["release-gate"]
@@ -680,7 +808,7 @@ class StaticChecksWorkflowTest(unittest.TestCase):
             "Test CI contracts",
             "Check runtime fingerprints",
             "Test Go modules",
-            "Upload coverage to Codecov",
+            "Save coverage for combined upload",
         ]
         positions = [steps.index(f"- name: {name}\n") for name in names]
         self.assertEqual(positions, sorted(positions))
@@ -707,14 +835,16 @@ class StaticChecksWorkflowTest(unittest.TestCase):
         self.assertIn("cmd/ispx/build.sh", blocks["Check shell scripts"])
         # Filenames belong to the runner; the workflow only combines its outputs.
         self.assertNotRegex(steps, r"coverage(?:-[\w-]+)?\.out")
-        codecov = blocks["Upload coverage to Codecov"]
-        output_steps = re.findall(r"\$\{\{\s*steps\.([a-z-]+)\.outputs\.coverage\s*\}\}", codecov)
+        artifact = blocks["Save coverage for combined upload"]
+        output_steps = re.findall(r"\$\{\{\s*steps\.([a-z-]+)\.outputs\.coverage\s*\}\}", artifact)
         self.assertEqual(output_steps, [
             "go-tests", "web-tests", "web-process-tests", "web-interpreter-tests", "tool-tests", "codegen-tests",
         ])
-        self.assertEqual(steps.count("uses: codecov/codecov-action@v7"), 1)
-        self.assertIn("slug: goplus/spx", codecov)
-        self.assertIn("disable_search: true", codecov)
+        self.assertIn("if: inputs.collect_coverage", artifact)
+        self.assertIn("uses: actions/upload-artifact@v7", artifact)
+        self.assertIn("name: coverage-static", artifact)
+        self.assertIn("if-no-files-found: error", artifact)
+        self.assertIn("overwrite: true", artifact)
 
     def test_contract_tests_preserve_order_and_stop_on_failure(self):
         script = step_script(self.steps, "Test CI contracts")
@@ -748,46 +878,126 @@ class StaticChecksWorkflowTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
 
 
+class CoverageWorkflowTest(unittest.TestCase):
+    def test_only_runner_uploads_after_all_producers_succeed(self):
+        workflow = RUNNER_WORKFLOW_PATH.read_text(encoding="utf-8")
+        jobs = job_blocks(workflow)
+        coverage = jobs["coverage"]
+        self.assertEqual(job_needs(coverage), ("static-checks", "go-builds"))
+        self.assertEqual(job_condition(coverage), "")  # Default success() is required.
+        self.assertIn("coverage", job_needs(jobs["ci-gate"]))
+        self.assertIn("COVERAGE_RESULT: ${{ needs.coverage.result }}", jobs["ci-gate"])
+        self.assertIn("collect_coverage: true", jobs["static-checks"])
+        self.assertIn("files: ${{ steps.profiles.outputs.coverage }}", coverage)
+        self.assertIn("slug: goplus/spx", coverage)
+        self.assertIn("disable_search: true", coverage)
+        for path in RUNNER_WORKFLOW_PATH.parent.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                self.assertEqual(path.read_text().count("uses: codecov/codecov-action@"),
+                                 1 if path == RUNNER_WORKFLOW_PATH else 0)
+        downloads = coverage.split("uses: actions/download-artifact@v8")[1:]
+        self.assertEqual(len(downloads), 1)
+        settings = downloads[0].split("\n      - name:")[0]
+        self.assertIn("pattern: coverage-*", settings)
+        self.assertIn("path: coverage", settings)
+        self.assertNotIn("merge-multiple: true", settings)
+        static = STATIC_CHECKS_WORKFLOW_PATH.read_text()
+        self.assertIn("default: false", workflow_input_block(static, "collect_coverage"))
+        # Release assembly downloads all artifacts; coverage must stay out of that run.
+        release = job_blocks(WORKFLOW_PATH.read_text())["static-checks"]
+        self.assertNotIn("collect_coverage:", release)
+
+    def test_collection_requires_every_source_and_keeps_nested_profiles(self):
+        job = job_blocks(RUNNER_WORKFLOW_PATH.read_text())["coverage"]
+        script = step_script(job, "Collect coverage profiles")
+        sources = {
+            "static": ["coverage.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
+                       "coverage-web.out", "cmd/ispx/coverage-web.out"],
+            "macos": ["coverage-buildctl-macos.out"],
+            "windows": ["coverage-buildctl-windows.out", "coverage-engine-windows.out"],
+        }
+        for missing in (None, *sources):
+            for empty_directory in (False, True) if missing else (False,):
+                with self.subTest(missing=missing, empty_directory=empty_directory), tempfile.TemporaryDirectory(prefix="spx coverage ") as directory:
+                    root = Path(directory)
+                    output = root / "output"
+                    # Unknown artifacts and local reports must not be uploaded.
+                    for name in ("coverage.out", "coverage/coverage-unrelated/coverage.out"):
+                        path = root / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text("unrelated\n")
+                    profiles = []
+                    for source, names in sources.items():
+                        source_dir = root / "coverage" / f"coverage-{source}"
+                        if source == missing:
+                            if empty_directory:
+                                source_dir.mkdir(parents=True)
+                            continue
+                        for name in names:
+                            path = source_dir / name
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_text("mode: atomic\n")
+                            profiles.append(path.relative_to(root).as_posix())
+                    result = run_shell(script, cwd=root, env={"GITHUB_OUTPUT": str(output)})
+                    if missing:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(f"No coverage profiles found for {missing}", result.stderr)
+                        self.assertFalse(output.exists())
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        self.assertEqual(output.read_text(), f"coverage={','.join(sorted(profiles))}\n")
+
+
 class GoBuildsWorkflowTest(unittest.TestCase):
     def test_native_coverage_uses_existing_build_matrix_and_unique_uploads(self):
         jobs = job_blocks(GO_BUILDS_WORKFLOW_PATH.read_text(encoding="utf-8"))
         self.assertEqual(list(jobs), ["go-build"])
         job = jobs["go-build"]
         self.assertIn("    runs-on: ${{ matrix.os }}", job)
-        self.assertEqual(re.findall(r"^          - (.+)$", job, re.MULTILINE), [
-            "ubuntu-latest", "macos-latest", "windows-latest",
+        self.assertEqual(re.findall(r"- os: (\S+)\n\s+coverage-suite: (\S+)", job), [
+            ("ubuntu-latest", "''"), ("macos-latest", "macos"), ("windows-latest", "windows"),
         ])
         blocks = {
             block.splitlines()[0]: block
             for block in job.split("      - name: ")[1:]
         }
-        for suite, runner, name in (
-            ("macos", "macOS", "Test macOS buildctl environment"),
-            ("windows", "Windows", "Test Windows file replacement and process tracking"),
-        ):
-            with self.subTest(suite=suite):
-                test = blocks[name]
-                self.assertIn(f"        id: {suite}-tests\n", test)
-                self.assertIn(f"        if: runner.os == '{runner}'\n", test)
-                self.assertIn("        shell: bash\n", test)
-                self.assertIn(f"run: bash .github/scripts/test_go_coverage.sh {suite}", test)
-                self.assertNotIn("working-directory:", test)
-                upload = blocks[f"Upload {runner} coverage to Codecov"]
-                self.assertIn(f"        if: runner.os == '{runner}'\n", upload)
-                self.assertIn("uses: codecov/codecov-action@v7", upload)
-                self.assertIn(f"files: ${{{{ steps.{suite}-tests.outputs.coverage }}}}", upload)
-                self.assertIn(f"flags: buildctl-{suite}", upload)
-                self.assertIn("slug: goplus/spx", upload)
-                self.assertIn("disable_search: true", upload)
-                self.assertLess(job.index(f"- name: {name}\n"), job.index(f"- name: Upload {runner} coverage"))
-        self.assertEqual(job.count("uses: codecov/codecov-action@v7"), 2)
+        test = blocks["Test native platform behavior"]
+        self.assertIn("id: native-tests", test)
+        self.assertIn("COVERAGE_SUITE: ${{ matrix.coverage-suite }}", test)
+        self.assertIn('run: bash .github/scripts/test_go_coverage.sh "$COVERAGE_SUITE"', test)
+        self.assertIn("shell: bash", test)
+        upload = blocks["Save native coverage for combined upload"]
+        for block in (test, upload):
+            self.assertIn("if: matrix.coverage-suite != ''", block)
+        self.assertIn("uses: actions/upload-artifact@v7", upload)
+        self.assertIn("name: coverage-${{ matrix.coverage-suite }}", upload)
+        self.assertIn("path: ${{ steps.native-tests.outputs.coverage }}", upload)
+        self.assertIn("if-no-files-found: error", upload)
+        self.assertIn("overwrite: true", upload)
+        self.assertLess(job.index(test), job.index(upload))
         self.assertNotRegex(job, r"coverage(?:-[\w-]+)?\.out")
         self.assertNotRegex(job, r"GO(?:OS|ARCH):")
         self.assertNotIn("continue-on-error:", job)
-        self.assertIn("run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)", blocks["Build Go packages"])
         self.assertIn("if: runner.os == 'Linux'", blocks["Build cmd/ispx"])
         self.assertIn("working-directory: cmd/ispx\n        run: ./build.sh --base", blocks["Build cmd/ispx"])
         self.assertIn("working-directory: cmd/ispxnative\n        run: ./build.sh", blocks["Build cmd/ispxnative"])
+
+    def test_build_discovery_preserves_packages_and_stops_on_failure(self):
+        job = job_blocks(GO_BUILDS_WORKFLOW_PATH.read_text())["go-build"]
+        script = step_script(job, "Build Go packages")
+        trace = '''go() {
+  if [ "$1" = list ]; then
+    printf '%s\\n' github.com/goplus/spx/v4 github.com/goplus/spx/v4/cmd/ispxnative github.com/goplus/spx/v4/fs
+    return "${LIST_EXIT:-0}"
+  fi
+  printf '%s\\n' "$*"
+}
+''' + script
+        for code in (0, 7):
+            with self.subTest(code=code):
+                result = run_shell(trace, env={"LIST_EXIT": str(code)})
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertEqual(result.stdout, "build -v github.com/goplus/spx/v4 github.com/goplus/spx/v4/fs\n" if code == 0 else "")
 
 
 class InterpreterCIWorkflowTest(unittest.TestCase):
@@ -798,7 +1008,6 @@ class InterpreterCIWorkflowTest(unittest.TestCase):
             with self.subTest(job=job.splitlines()[0]):
                 self.assertIn("    env:\n      GOWORK: 'off'", job)
                 self.assertNotIn("cmd/ispx/ai", job)
-                self.assertIn("          go mod download\n          cd cmd/ispx && go mod download\n", job)
         self.assertIn("go generate ./cmd/spx/internal/command/...", static)
         self.assertIn("go generate ./pkg/ispx/...", static)
         self.assertIn("working-directory: cmd/ispx\n        run: ./build.sh --base", builds)
@@ -900,7 +1109,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             f"{module}/pkg/ispx/internal/pkgextra", "example.com/other/test",
         ]
         excluded = [
-            "", f"{module}/internal/webffi", f"{module}/internal/webffi/generated",
+            "",
             f"{module}/test", f"{module}/test/project", f"{module}/tutorial",
             f"{module}/tutorial/01-Hello", f"{module}/pkg/ispx/internal/pkg",
             f"{module}/pkg/ispx/internal/pkg/github.com/goplus/spx/v4",
@@ -1029,7 +1238,9 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     for directory, arguments in calls
                     for argument in arguments if argument.startswith("-coverprofile=")
                 ]
-                self.assertEqual(self.output.read_text(encoding="utf-8"), f"coverage={','.join(profiles)}\n")
+                self.assertEqual(self.output.read_text(encoding="utf-8").splitlines(), [
+                    "coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS",
+                ])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
                 self.assertCountEqual(actual, profiles)
                 all_profiles.extend(profiles)

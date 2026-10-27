@@ -54,7 +54,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
           ref: ${{ inputs.target }}
 
@@ -105,19 +104,15 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Compute pseudo-version
-        if: inputs.release_version == ''
-        run: |
-          SPX_VERSION="$(go run ./.github/scripts/npm/pseudo_version.go HEAD)"
-          echo "[info] SPX version: ${SPX_VERSION}"
-          echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
-
-      - name: Compute release version
-        if: inputs.release_version != ''
+      - name: Compute package version
         env:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          SPX_VERSION="${RELEASE_VERSION#v}"
+          SPX_VERSION="$RELEASE_VERSION"
+          if [ -z "$SPX_VERSION" ]; then
+            SPX_VERSION="$(go run ./.github/scripts/npm/pseudo_version.go HEAD)"
+          fi
+          SPX_VERSION="${SPX_VERSION#v}"
           echo "[info] SPX version: ${SPX_VERSION}"
           echo "SPX_VERSION=${SPX_VERSION}" >> "${GITHUB_ENV}"
 
@@ -132,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          npm_package_version="${SPX_VERSION#v}"
+          npm_package_version="$SPX_VERSION"
           npm_dist_tag="dev"
           if [[ "${IS_RELEASE}" == "true" ]]; then
             npm_dist_tag="latest"
@@ -152,8 +147,7 @@ jobs:
           local_integrity="$(jq -r '.[0].integrity' <<< "$pack_json")"
           package_path=".npm/packages/${package_filename}"
 
-          if npm view "@xgo-pkgs/spx@${npm_package_version}" version >/dev/null 2>&1; then
-            remote_integrity="$(npm view "@xgo-pkgs/spx@${npm_package_version}" dist.integrity)"
+          if remote_integrity="$(npm view "@xgo-pkgs/spx@${npm_package_version}" dist.integrity 2>/dev/null)"; then
             if [ "$remote_integrity" != "$local_integrity" ]; then
               echo "[error] Existing npm package integrity $remote_integrity does not match $local_integrity" >&2
               exit 1

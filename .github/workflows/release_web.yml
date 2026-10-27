@@ -9,10 +9,6 @@ on:
         default: false
         type: boolean
 
-concurrency:
-  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-release-web
-  cancel-in-progress: true
-
 jobs:
   web-build:
     name: Build web bundle (${{ matrix.mode }})
@@ -75,11 +71,6 @@ jobs:
           MATRIX_MODE: ${{ matrix.mode }}
         run: |
           "$BUILDCTL" runtime export-web --mode "$MATRIX_MODE"
-          if [ ! -f "${{ matrix.zip_file }}" ]; then
-            echo "[error] Release bundle not found: ${{ matrix.zip_file }}" >&2
-            exit 1
-          fi
-          echo "[ok] Release bundle built: ${{ matrix.zip_file }}"
 
       - name: Verify release bundle
         run: unzip -t "${{ matrix.zip_file }}"

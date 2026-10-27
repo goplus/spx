@@ -9,10 +9,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        include:
+          - os: ubuntu-latest
+            coverage-suite: ''
+          - os: macos-latest
+            coverage-suite: macos
+          - os: windows-latest
+            coverage-suite: windows
     runs-on: ${{ matrix.os }}
     env:
       GOWORK: 'off'
@@ -25,45 +28,30 @@ jobs:
         with:
           setup-mode: none
 
-      - name: Download Go modules
-        shell: bash
-        run: |
-          go mod download
-          cd cmd/ispx && go mod download
-
       - name: Build Go packages
         shell: bash
-        run: go build -v $(go list ./... | grep -v /internal/webffi | grep -v /cmd/ispx)
+        run: |
+          # The native interpreter is built separately as a shared library below.
+          packages="$(go list ./... | grep -v '/cmd/ispxnative$')"
+          go build -v $packages
 
-      - name: Test macOS buildctl environment
-        id: macos-tests
-        if: runner.os == 'macOS'
+      - name: Test native platform behavior
+        id: native-tests
+        if: matrix.coverage-suite != ''
         shell: bash
-        run: bash .github/scripts/test_go_coverage.sh macos
+        env:
+          COVERAGE_SUITE: ${{ matrix.coverage-suite }}
+        run: bash .github/scripts/test_go_coverage.sh "$COVERAGE_SUITE"
 
-      - name: Upload macOS coverage to Codecov
-        if: runner.os == 'macOS'
-        uses: codecov/codecov-action@v7
+      - name: Save native coverage for combined upload
+        if: matrix.coverage-suite != ''
+        uses: actions/upload-artifact@v7
         with:
-          slug: goplus/spx
-          files: ${{ steps.macos-tests.outputs.coverage }}
-          flags: buildctl-macos
-          disable_search: true
-
-      - name: Test Windows file replacement and process tracking
-        id: windows-tests
-        if: runner.os == 'Windows'
-        shell: bash
-        run: bash .github/scripts/test_go_coverage.sh windows
-
-      - name: Upload Windows coverage to Codecov
-        if: runner.os == 'Windows'
-        uses: codecov/codecov-action@v7
-        with:
-          slug: goplus/spx
-          files: ${{ steps.windows-tests.outputs.coverage }}
-          flags: buildctl-windows
-          disable_search: true
+          name: coverage-${{ matrix.coverage-suite }}
+          path: ${{ steps.native-tests.outputs.coverage }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
       - name: Build cmd/ispx
         if: runner.os == 'Linux'

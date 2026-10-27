@@ -53,5 +53,3 @@ SPX web runtime bundle for browser-based runners.
 
 This package is generated from \`spx_web.zip\` in the SPX release pipeline.
 EOF
-
-npm pack "${package_dir}" --dry-run

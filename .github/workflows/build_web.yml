@@ -3,10 +3,6 @@ name: Build Web Bundle
 on:
   workflow_call:
 
-concurrency:
-  group: ci-${{github.actor}}-${{github.head_ref || github.run_number}}-${{github.ref}}-web
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,13 +29,4 @@ jobs:
       - name: Export web bundle
         run: |
           "$BUILDCTL" runtime export-web --mode normal
-
-      - name: Verify bundle artifact
-        run: |
-          if [ ! -f spx_web.zip ]; then
-            echo "[error] Bundle artifact not found: spx_web.zip" >&2
-            exit 1
-          fi
-
-          echo "[ok] Bundle artifact found: spx_web.zip"
           ls -lh spx_web.zip

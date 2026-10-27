@@ -109,15 +109,6 @@ runs:
           log_success "SPX executable permissions prepared"
         }
 
-        should_run_smoke_test() {
-          local target_platform="$1"
-          local target_arch="$2"
-          local runner_platform="$3"
-          local runner_arch="$4"
-
-          [ "$target_platform" = "$runner_platform" ] && [ "$target_arch" = "$runner_arch" ]
-        }
-
         prepare_test_project() {
           local verify_test_root_dir="$1"
           local test_project_dir="$2"
@@ -174,7 +165,7 @@ runs:
           fi
 
           if [ "$spx_status" -ne 0 ]; then
-            if should_tolerate_windows_gdspxrt_shutdown_exit "$runner_platform" "$log_path"; then
+            if [ "$runner_platform" = windows ] && spx_run_reached_success "$log_path"; then
               log_warn "Smoke test reached success marker but exited with status $spx_status"
               log_info "Continuing because Windows gdspxrt can occasionally fail during shutdown after the project completed"
             else
@@ -238,7 +229,7 @@ runs:
         SPX_BIN_PATH="$VERIFY_ROOT_DIR/$SPX_BINARY_NAME"
         verify_standalone_binary "$SPX_BIN_PATH" "$TARGET_PLATFORM" "$TARGET_ARCH"
 
-        if ! should_run_smoke_test "$TARGET_PLATFORM" "$TARGET_ARCH" "$RUNNER_PLATFORM" "$RUNNER_ARCH"; then
+        if [ "$TARGET_PLATFORM" != "$RUNNER_PLATFORM" ] || [ "$TARGET_ARCH" != "$RUNNER_ARCH" ]; then
           log_info "Skipping smoke test on non-native runner"
           log_info "Runner platform/arch does not match package target"
           log_success "Release package verification passed"

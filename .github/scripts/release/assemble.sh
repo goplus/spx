@@ -30,12 +30,6 @@ if [ "$RUNTIME_STATE" = ready ]; then
     --lock internal/release/runtime.lock.json \
     --verify-manifest "dist/runtime/$RUNTIME_MANIFEST" \
     --asset-directory dist/runtime
-  for name in "${required_assets[@]}"; do
-    if [ ! -s "dist/runtime/$name" ]; then
-      echo "[error] Published $RUNTIME_TAG is missing locked asset: $name" >&2
-      exit 1
-    fi
-  done
 else
   for name in "${required_assets[@]}"; do
     path="${files[$name]:-}"

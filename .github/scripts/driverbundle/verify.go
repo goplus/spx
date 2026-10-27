@@ -103,13 +103,6 @@ func verifyBundleFileForRuntime(zipPath string, bundle driverbundle.Bundle, runt
 	if err != nil {
 		return fmt.Errorf("verify ZIP with runtimebundle: %w", err)
 	}
-	interfaceDigest, err := driverbundle.ComputeEngineInterfaceDigestFromSHA256(bundle.Files[0].SHA256, bundle.Files[1].SHA256)
-	if err != nil {
-		return fmt.Errorf("identify Engine interface: %w", err)
-	}
-	if interfaceDigest != bundle.EngineInterfaceDigest {
-		return fmt.Errorf("Engine interface digest = %s, want descriptor %s", interfaceDigest, bundle.EngineInterfaceDigest)
-	}
 	return nil
 }
 

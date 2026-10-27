@@ -86,5 +86,9 @@ case "${1:-}" in
 esac
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  (IFS=,; echo "coverage=${coverage_files[*]}" >> "$GITHUB_OUTPUT")
+  {
+    echo 'coverage<<COVERAGE_PATHS'
+    printf '%s\n' "${coverage_files[@]}"
+    echo 'COVERAGE_PATHS'
+  } >> "$GITHUB_OUTPUT"
 fi
