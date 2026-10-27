@@ -111,9 +111,6 @@ func (cmd *CmdTool) handleInterpretedRunCommand() error {
 
 // executeEditor runs the editor command.
 func (cmd *CmdTool) executeEditor() error {
-	if cmd.usesPureEngine() {
-		return fmt.Errorf("editor command is not supported in pure_engine mode")
-	}
 	args := cmd.engineArgs(cmd.ProjectDir)
 	args = append(args, "-e")
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
@@ -121,19 +118,12 @@ func (cmd *CmdTool) executeEditor() error {
 
 // executeRune runs the rune command.
 func (cmd *CmdTool) executeRune() error {
-	if cmd.usesPureEngine() {
-		return fmt.Errorf("rune command is not supported in pure_engine mode")
-	}
 	args := cmd.checkMovieArgs(cmd.ProjectDir)
 	return util.RunCommandInDir(cmd.ProjectDir, cmd.CmdPath, args...)
 }
 
 // executeRunNative runs the native desktop runtime command.
 func (cmd *CmdTool) executeRunNative() error {
-	if cmd.usesPureEngine() {
-		args := cmd.Args.String()
-		return cmd.RunPureEngine(args...)
-	}
 	args := cmd.checkMovieArgs(cmd.RuntimeTempDir)
 	return cmd.RunPackMode(args...)
 }

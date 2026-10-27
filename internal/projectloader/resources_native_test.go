@@ -1,4 +1,4 @@
-//go:build !js && !pure_engine
+//go:build !js
 
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.

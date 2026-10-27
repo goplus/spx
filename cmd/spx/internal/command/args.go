@@ -114,7 +114,6 @@ Examples:
     #CMDNAME buildtinygo                  # Build TinyGo static library for ESP32
     #CMDNAME buildlauncher --path ./game # Build ./game/.builds/game
     #CMDNAME exportminigame -build=fast   # Export minigame without compression (faster)
-    #CMDNAME runnative -tags=pure_engine  # Run in pure engine mode
     #CMDNAME export --fullscreen          # Export with fullscreen mode
 	`
 	fmt.Println(strings.ReplaceAll(msg, "#CMDNAME", cmdName))

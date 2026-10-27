@@ -26,14 +26,12 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	builderai "github.com/goplus/spx/v4/cmd/spx/internal/command/builderai"
 	"github.com/goplus/spx/v4/cmd/spx/internal/util"
-	"github.com/goplus/spx/v4/internal/base/quoted"
 )
 
 const envName = "gdspx"
@@ -187,12 +185,6 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 }
 
 func (cmd *CmdTool) setupEnginePaths() error {
-	if cmd.usesPureEngine() {
-		cmd.BinPostfix = executableSuffix(runtime.GOOS)
-		cmd.CmdPath = ""
-		return nil
-	}
-
 	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version)
 	if err != nil {
 		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", envName, cmd.GoBinPath, err)
@@ -210,11 +202,7 @@ func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
 	targetDir, projectDir := cmd.TargetDir, cmd.ProjectDir
 	cmd.GoDir = filepath.Join(projectDir, "go")
 
-	if cmd.usesPureEngine() {
-		cmd.RuntimeCmdPath = ""
-	} else {
-		cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
-	}
+	cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
 
 	runtimeTempDir := filepath.Join(targetDir, ".temp")
 	cmd.RuntimeTempDir = runtimeTempDir
@@ -283,7 +271,7 @@ func (cmd *CmdTool) shouldRunGoModTidy() bool {
 
 func (cmd *CmdTool) shouldSkipProjectImport() bool {
 	spec, _ := findCommand(cmd.Args.CmdName)
-	return cmd.RuntimeMode || cmd.usesPureEngine() || spec.setup == webExportSetup ||
+	return cmd.RuntimeMode || spec.setup == webExportSetup ||
 		spec.build == tinyGoBuild || spec.build == wasmBuild
 }
 
@@ -353,19 +341,6 @@ func (cmd *CmdTool) projectImportTimeout() time.Duration {
 // findSpxRoot finds a local spx repo.
 func (cmd *CmdTool) findSpxRoot() string {
 	return findSpxRootFrom(cmd.TargetDir)
-}
-
-func (cmd *CmdTool) usesPureEngine() bool {
-	if cmd.Args.Tags == nil {
-		return false
-	}
-	tags := *cmd.Args.Tags
-	// Go accepts quoted, space-separated tags as a legacy alternative to commas.
-	if strings.ContainsAny(tags, " '") {
-		fields, err := quoted.Split(tags)
-		return err == nil && slices.Contains(fields, "pure_engine")
-	}
-	return slices.Contains(strings.Split(tags, ","), "pure_engine")
 }
 
 // getIspxWebDir returns the installed web runtime.

@@ -36,7 +36,6 @@ func (g *Generator) MustGdxReturnType(function *clang.TypedefFunction) string {
 	return typeName
 }
 
-// syncSignature is shared by the forwarding and pure-engine implementations.
 func (g *Generator) syncSignature(function *clang.TypedefFunction) string {
 	mgrName := g.GetManagerName(function.Name)
 	methodName := function.Name[len("GDExtensionSpx")+len(strcase.ToCamel(mgrName)):]
@@ -51,14 +50,6 @@ func (g *Generator) syncSignature(function *clang.TypedefFunction) string {
 		signature += " " + returnType
 	}
 	return signature
-}
-
-func (g *Generator) genSyncPureAPIWrapFunction(function *clang.TypedefFunction) string {
-	body := g.syncSignature(function) + " {"
-	if returnType := g.MustGdxReturnType(function); returnType != "" {
-		body += "\n\treturn " + goZeroValue(returnType) + "\n"
-	}
-	return body + "}"
 }
 
 func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) string {
@@ -88,19 +79,4 @@ func (g *Generator) genSyncAPIWrapFunction(function *clang.TypedefFunction) stri
 	}
 	sb.WriteString("}")
 	return sb.String()
-}
-
-func goZeroValue(typeName string) string {
-	switch typeName {
-	case "bool":
-		return "false"
-	case "int64", "float64", "Object", "gdx.Object":
-		return "0"
-	case "string":
-		return `""`
-	case "Array", "gdx.Array":
-		return "nil"
-	default:
-		return typeName + "{}"
-	}
 }

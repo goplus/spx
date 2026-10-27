@@ -1,4 +1,4 @@
-//go:build js && wasm && !pure_engine
+//go:build js && wasm
 
 package impl
 

@@ -131,13 +131,11 @@ graph TD
 #### 引擎同步包装层
 
 - `internal/enginewrap/sync.gen.go`
-- `internal/enginewrap/sync_pure.gen.go`
 
 #### 对外 Go API
 
 - `pkg/spx/pkg/engine/interface.gen.go`
 - `pkg/spx/pkg/engine/sprite.gen.go`
-- `pkg/spx/pkg/engine/sprite_pure.gen.go`
 
 #### Godot C++ / Web JS 注入文件
 

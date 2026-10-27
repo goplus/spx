@@ -631,7 +631,6 @@ func TestMatchesRuntimePackTarget(t *testing.T) {
 		{"runtime_capture_linux.go", "package spx\n", true},
 		{"open_mobile.go", "//go:build android || ios\n\npackage asset\n", false},
 		{"path_packmode.go", "//go:build packmode\n\npackage engine\n", false},
-		{"facade_pure.go", "//go:build pure_engine\n\npackage facade\n", false},
 		{"facade_web.go", "//go:build js\n\npackage facade\n", false},
 		{"macro_on.go", "//go:build profiler\n\npackage profiler\n", false},
 		{"macro_off.go", "//go:build !profiler\n\npackage profiler\n", true},

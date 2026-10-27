@@ -193,87 +193,6 @@ func TestPrepareInterpretedCommandOnlyResolvesPaths(t *testing.T) {
 	}
 }
 
-func TestRunPureEngineBuildsWithTagsAndRunsFromTargetDir(t *testing.T) {
-	goDir := t.TempDir()
-	targetDir := t.TempDir()
-	logPath := filepath.Join(t.TempDir(), "pure-engine.log")
-	writePureEngineTestProject(t, goDir)
-
-	t.Setenv("GOTOOLCHAIN", "local")
-	t.Setenv("GOPROXY", "off")
-	tags := "pure_test_tag"
-	cmd := CmdTool{
-		GoDir: goDir, TargetDir: targetDir,
-		Args: ExtraArgs{Tags: &tags},
-	}
-	before := workingDirectory(t)
-	if err := cmd.RunPureEngine(logPath, "--sample", "value"); err != nil {
-		t.Fatalf("RunPureEngine returned error: %v", err)
-	}
-	assertWorkingDirectory(t, before)
-
-	binaryPath := filepath.Join(goDir, "main"+executableSuffix(runtime.GOOS))
-	if !fileExists(binaryPath) {
-		t.Fatalf("pure-engine binary not created at %s", binaryPath)
-	}
-	assertPureEngineLog(t, logPath, targetDir, tags, "--sample", "value")
-}
-
-func TestRunPureEngineSupportsConcurrentWorkingDirectories(t *testing.T) {
-	t.Setenv("GOTOOLCHAIN", "local")
-	t.Setenv("GOPROXY", "off")
-	tags := "pure_test_tag"
-	type run struct {
-		cmd     CmdTool
-		logPath string
-	}
-	runs := make([]run, 2)
-	for i := range runs {
-		goDir := t.TempDir()
-		writePureEngineTestProject(t, goDir)
-		runs[i] = run{
-			cmd: CmdTool{
-				GoDir: goDir, TargetDir: t.TempDir(),
-				Args: ExtraArgs{Tags: &tags},
-			},
-			logPath: filepath.Join(t.TempDir(), fmt.Sprintf("pure-engine-%d.log", i)),
-		}
-	}
-
-	before := workingDirectory(t)
-	errs := make(chan error, len(runs))
-	for _, run := range runs {
-		go func() {
-			errs <- run.cmd.RunPureEngine(run.logPath)
-		}()
-	}
-	for range runs {
-		if err := <-errs; err != nil {
-			t.Fatalf("concurrent RunPureEngine returned error: %v", err)
-		}
-	}
-	assertWorkingDirectory(t, before)
-	for _, run := range runs {
-		assertPureEngineLog(t, run.logPath, run.cmd.TargetDir, tags)
-	}
-}
-
-func TestRunPureEngineBuildFailureKeepsWorkingDirectory(t *testing.T) {
-	goDir := filepath.Join(t.TempDir(), "missing")
-
-	before := workingDirectory(t)
-	setTestCommandLine(t, "spx", "runnative", "-tags=pure_engine")
-	cmd := &CmdTool{GoDir: goDir, TargetDir: t.TempDir()}
-	if err := cmd.parseCommandLineArgs(cmd.initializeFlags()); err != nil {
-		t.Fatal(err)
-	}
-	err := cmd.executeRunNative()
-	if err == nil || !strings.Contains(err.Error(), "failed to build Go binary") {
-		t.Fatalf("RunPureEngine error = %v, want build failure context", err)
-	}
-	assertWorkingDirectory(t, before)
-}
-
 func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 	projectDir := t.TempDir()
 	mustWriteAssetIndex(t, projectDir)
@@ -1018,41 +937,6 @@ func writeTestRuntimeExecutable(t *testing.T, path string, logPath string) {
 	}
 }
 
-func writePureEngineTestProject(t *testing.T, goDir string) {
-	t.Helper()
-	for name, content := range map[string]string{
-		"go.mod": "module example.com/pureenginetest\n\ngo 1.23\n",
-		"main.go": `package main
-
-import (
-	"os"
-	"strings"
-)
-
-func main() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fields := append([]string{cwd, requiredTag}, os.Args[2:]...)
-	if err := os.WriteFile(os.Args[1], []byte(strings.Join(fields, "\n")), 0o644); err != nil {
-		panic(err)
-	}
-}
-`,
-		"tag.go": `//go:build pure_test_tag
-
-package main
-
-const requiredTag = "pure_test_tag"
-`,
-	} {
-		if err := os.WriteFile(filepath.Join(goDir, name), []byte(content), 0o644); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
-	}
-}
-
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -1072,20 +956,6 @@ func assertWorkingDirectory(t *testing.T, want string) {
 	if got := workingDirectory(t); got != want {
 		t.Fatalf("working directory changed from %q to %q", want, got)
 	}
-}
-
-func assertPureEngineLog(t *testing.T, logPath, targetDir, tag string, wantArgs ...string) {
-	t.Helper()
-	log, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(string(log), "\n")
-	wantLines := append([]string{targetDir, tag}, wantArgs...)
-	if len(lines) != len(wantLines) || !reflect.DeepEqual(lines[1:], wantLines[1:]) {
-		t.Fatalf("pure-engine log = %q, want %q", log, strings.Join(wantLines, "\n"))
-	}
-	assertSameDirectory(t, lines[0], targetDir)
 }
 
 func assertSameDirectory(t *testing.T, got, want string) {

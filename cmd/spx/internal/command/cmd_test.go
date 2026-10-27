@@ -67,7 +67,7 @@ func TestExtraArgsString(t *testing.T) {
 		},
 		{
 			"build flags stay in CLI",
-			[]string{"--path=", "-arch", "arm64", "-tags", "pure_engine", "-target", "board", "-build", "fast", "-mode", "worker", "-o", "launcher", "-install", "-onlys", "-onlyc", "-movie"},
+			[]string{"--path=", "-arch", "arm64", "-tags", "custom_tag", "-target", "board", "-build", "fast", "-mode", "worker", "-o", "launcher", "-install", "-onlys", "-onlyc", "-movie"},
 			nil,
 		},
 	} {
@@ -467,7 +467,7 @@ func TestRunCmdBuildsOnceBeforeImportAndAction(t *testing.T) {
 		testCase{name: "template fresh", command: "exporttemplateweb", want: built + " import run"},
 		testCase{name: "template cached", command: "exporttemplateweb", cache: true, want: "tidy run"},
 		testCase{name: "runtime skips import", command: "runnative", want: built + " run"},
-		testCase{name: "pure engine skips import and DLL", command: "build", tags: "pure_engine", want: "tidy"},
+		testCase{name: "custom build tags retain import and DLL", command: "build", tags: "custom_tag", want: built + " import"},
 		testCase{name: "wasm skips import", command: "buildweb", want: "tidy generate tidy wasm"},
 		testCase{name: "tinygo skips import", command: "buildtinygo", want: "tidy generate tidy tinygo"},
 		testCase{name: "init skips import", command: "init"},
@@ -629,25 +629,15 @@ func TestInitReportsScaffoldWriteFailures(t *testing.T) {
 	}
 }
 
-func TestCommandRejectsUnsupportedInternalModes(t *testing.T) {
-	cmd := &CmdTool{Args: ExtraArgs{Tags: launcherStringPointer("pure_engine")}}
-	for _, tc := range []struct {
-		name string
-		run  func() error
-	}{{"editor", cmd.executeEditor}, {"rune", cmd.executeRune}} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.run(); err == nil || !strings.Contains(err.Error(), "not supported in pure_engine") {
-				t.Fatalf("mode error = %v", err)
-			}
-		})
-	}
+func TestCommandRejectsInvalidPhases(t *testing.T) {
+	cmd := &CmdTool{Args: ExtraArgs{Tags: launcherStringPointer("custom_tag")}}
 	if err := cmd.prepareCommand(commandSpec{name: "invalid", setup: 99}, "", ""); err == nil || !strings.Contains(err.Error(), "invalid setup") {
 		t.Fatalf("setup error = %v", err)
 	}
 	if err := cmd.buildCommand(commandSpec{build: 99}); err == nil || !strings.Contains(err.Error(), "invalid command build phase") {
 		t.Fatalf("build error = %v", err)
 	}
-	if got := cmd.SafeTagArgs(); got != "-tags=pure_engine" {
+	if got := cmd.SafeTagArgs(); got != "-tags=custom_tag" {
 		t.Fatalf("tag argument = %q", got)
 	}
 }

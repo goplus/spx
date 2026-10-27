@@ -24,7 +24,7 @@ import (
 	"github.com/goplus/spx/v4/internal/cmd/codegen/gdextensionparser/clang"
 )
 
-func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string, pure bool) string {
+func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className string) string {
 	lowerManagerName := g.GetManagerName(function.Name)
 	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
 	funcName := function.Name[len("GDExtensionSpx")+len(mgrName):]
@@ -47,17 +47,11 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className st
 		fmt.Fprintf(&sb, " %s", retType)
 	}
 	sb.WriteString(" {\n")
-	if pure {
-		if retType != "" {
-			fmt.Fprintf(&sb, "\treturn %s\n", goZeroValue(retType))
-		}
-	} else {
-		sb.WriteByte('\t')
-		if retType != "" {
-			sb.WriteString("return ")
-		}
-		fmt.Fprintf(&sb, "%sMgr.%s(%s)\n", mgrName, funcName, strings.Join(callArgs, ", "))
+	sb.WriteByte('\t')
+	if retType != "" {
+		sb.WriteString("return ")
 	}
+	fmt.Fprintf(&sb, "%sMgr.%s(%s)\n", mgrName, funcName, strings.Join(callArgs, ", "))
 	sb.WriteString("}\n")
 	return sb.String()
 }

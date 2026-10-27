@@ -1513,11 +1513,7 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 		t.Fatalf("live position = %v", got)
 	}
 	pkgengine.InputMgr = &replayQueryInputMgr{mgr}
-	// The native bridge uses the fake above; pure_engine supplies an always-up
-	// backend. Compare fallback queries with the active bridge in either build.
-	liveA := engine.Managers().InputMgr.GetKey(int64(KeyA))
-	liveB := engine.Managers().InputMgr.GetKey(int64(KeyB))
-	if game.inputMgr.effectiveKeyPressed(KeyA) != liveA || game.inputMgr.effectiveKeyPressed(KeyB) != liveB {
+	if game.inputMgr.effectiveKeyPressed(KeyA) || !game.inputMgr.effectiveKeyPressed(KeyB) {
 		t.Fatal("live key query ignored backend")
 	}
 	_ = game.inputMgr.effectiveMousePressed()
@@ -1540,7 +1536,7 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	if game.KeyPressed(KeyAny) || game.KeyPressed(KeyA) {
 		t.Fatal("empty replay key state reported a held key")
 	}
-	// Keep a replay-held key that differs from both live backends.
+	// Keep a replay-held key that differs from the live backend.
 	game.inputSession.current.KeysDown = []int64{int64(KeyA)}
 	for _, inactive := range []struct {
 		mode  InputSessionMode
@@ -1551,7 +1547,7 @@ func TestReplayInputQueriesUseFrozenState(t *testing.T) {
 	} {
 		game.inputSession.mode = inactive.mode
 		game.inputSession.phase = inactive.phase
-		if game.KeyPressed(KeyA) != liveA || game.KeyPressed(KeyB) != liveB || game.MouseX() != 3 {
+		if game.KeyPressed(KeyA) || !game.KeyPressed(KeyB) || game.MouseX() != 3 {
 			t.Fatal("inactive replay did not return to live queries")
 		}
 	}

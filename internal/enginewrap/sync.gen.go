@@ -1,6 +1,3 @@
-//go:build !pure_engine
-// +build !pure_engine
-
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *

@@ -143,9 +143,6 @@ func (cmd *CmdTool) buildCommand(spec commandSpec) error {
 	case noBuild:
 		return nil
 	case dllBuild:
-		if cmd.usesPureEngine() {
-			return nil
-		}
 		return cmd.BuildDll()
 	case wasmBuild:
 		return cmd.BuildWasm()

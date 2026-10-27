@@ -1,5 +1,5 @@
-//go:build !js && !pure_engine
-// +build !js,!pure_engine
+//go:build !js
+// +build !js
 
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
