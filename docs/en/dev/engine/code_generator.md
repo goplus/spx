@@ -81,7 +81,9 @@ Go and JavaScript strings own their memory, so the manager API has no `FreeStr` 
 
 Structured JavaScript value results such as vectors, rectangles, and colors are fresh objects on each call. Input snapshots and caller-provided output buffers provide reuse where needed. Internal 64-bit integer/object marshalling still reuses its per-instance `low`/`high` split result slots; that representation is separate from structured value results.
 
-The generator also emits `spx_callback_defaults.gen.h` from the existing `SpxCallbackInfo` fields and callback typedefs. The engine uses this table of typed no-op callbacks; no separate callback schema or ABI layout change is needed.
+The existing `SpxCallbackInfo` fields and callback typedefs in `generate/gdext/gdextension_spx_ext.h.tmpl` generate three callback headers: `spx_callback_defaults.gen.h` supplies typed no-op callbacks, `web/godot_js_spx_callbacks.gen.h` declares the Web callback functions, and `web/spx_web_callbacks.gen.h` constructs their typed registration table. These headers and the Web Go dispatcher all use `common.CollectCallbacks`; only callback typedefs referenced by `SpxCallbackInfo` participate. There is no separate callback schema.
+
+When adding a callback, update that ABI template, the Go callback interface and handlers, the engine event source, and its JavaScript forwarding in `web/js/libs/library_godot_gdspx.js`, then regenerate. Web declarations and table entries follow automatically. JavaScript lifecycle hooks, resource loading, and collision batching remain hand-written; adding a declaration does not implement their behavior.
 
 ### Native arrays
 
