@@ -78,6 +78,30 @@ func TestInterpreterInit(t *testing.T) {
 	}
 }
 
+func TestInterpreterLimitPrecision(t *testing.T) {
+	isolateInterpreter(t)
+	if err := Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := Build(map[string][]byte{"main.xgo": []byte(`import "github.com/goplus/spx/v4"
+func main() {}
+func Snap(coordinate float64) float64 { return spx.limitPrecision(coordinate) }
+`)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct{ input, want float64 }{
+		{5e-10, 0},
+		{-5e-10, 0},
+		{42 + 5e-10, 42},
+		{1e-9, 1e-9},
+		{12.25, 12.25},
+	} {
+		if got, err := ixgoInterp.RunFunc("Snap", tt.input); err != nil || got != tt.want {
+			t.Fatalf("limitPrecision(%v) = %v, %v, want %v", tt.input, got, err, tt.want)
+		}
+	}
+}
+
 func TestConfigureFilesystemRoots(t *testing.T) {
 	isolateInterpreter(t)
 	for _, configure := range []struct {

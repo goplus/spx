@@ -50,6 +50,19 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
+// LimitPrecision snaps a coordinate to the nearest integer when the distance is
+// less than 1e-9, matching Scratch's own x/y position reporters. Other values,
+// including NaN and infinities, are returned unchanged.
+// In SPX scripts, use limitPrecision(xpos) or limitPrecision(ypos) for the
+// sprite's own coordinate blocks; read other sprites' coordinates directly.
+func LimitPrecision(coordinate float64) float64 {
+	rounded := math.Round(coordinate)
+	if math.Abs(coordinate-rounded) < 1e-9 {
+		return rounded
+	}
+	return coordinate
+}
+
 // Div returns a divided by b, converting a NaN result to zero while preserving
 // infinities. For example, Div(0, 0) returns 0 and Div(1, 0) returns +Inf.
 // In SPX scripts, it can be called as div(a, b).

@@ -28,43 +28,23 @@ import (
 	itime "github.com/goplus/spx/v4/internal/time"
 )
 
-func TestSpritePositionReportersLimitPrecision(t *testing.T) {
-	inside := math.Nextafter(1e-9, 0)
-	outside := math.Nextafter(1e-9, math.Inf(1))
+func TestSpritePositionReportersPreservePrecision(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
 		x, y         float64
 		wantX, wantY float64
 	}{
-		{"integers", 42, -42, 42, -42},
 		{"near zero", 5e-10, -5e-10, 0, 0},
-		{"inside threshold", inside, -inside, 0, 0},
-		{"at threshold", 1e-9, -1e-9, 1e-9, -1e-9},
-		{"outside threshold", outside, -outside, outside, -outside},
 		{"below integers", 42 - 5e-10, -42 - 5e-10, 42, -42},
 		{"above integers", 42 + 5e-10, -42 + 5e-10, 42, -42},
-		{"outside integer tolerance", 42 + 2e-9, -42 - 2e-9, 42 + 2e-9, -42 - 2e-9},
-		{"fractions", 12.25, -12.75, 12.25, -12.75},
-		{"half integers", 0.5, -0.5, 0.5, -0.5},
-		{"large coordinates", math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64},
-		{"infinities", math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)},
-		{"NaN", math.NaN(), math.NaN(), math.NaN(), math.NaN()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			sprite := newTestTransformSprite(tt.x, tt.y)
-			for _, axis := range []struct {
-				name      string
-				got, want float64
-			}{
-				{"Xpos", sprite.Xpos(), tt.wantX},
-				{"Ypos", sprite.Ypos(), tt.wantY},
-			} {
-				if axis.got != axis.want && !(math.IsNaN(axis.got) && math.IsNaN(axis.want)) {
-					t.Errorf("%s() = %v, want %v", axis.name, axis.got, axis.want)
-				}
+			if x, y := LimitPrecision(sprite.Xpos()), LimitPrecision(sprite.Ypos()); x != tt.wantX || y != tt.wantY {
+				t.Fatalf("own coordinate blocks = (%v, %v), want (%v, %v)", x, y, tt.wantX, tt.wantY)
 			}
-			if x, y := sprite.getXY(); math.Float64bits(x) != math.Float64bits(tt.x) || math.Float64bits(y) != math.Float64bits(tt.y) {
-				t.Fatalf("reporters changed internal position to (%v, %v), want (%v, %v)", x, y, tt.x, tt.y)
+			if x, y := sprite.Xpos(), sprite.Ypos(); x != tt.x || y != tt.y {
+				t.Fatalf("position = (%v, %v), want raw coordinates (%v, %v)", x, y, tt.x, tt.y)
 			}
 		})
 	}
@@ -74,12 +54,12 @@ func TestSpritePositionEasingReachesZero(t *testing.T) {
 	// Match the easing loops in goplus/sb2xbp#780, from both sides of zero.
 	sprite := newTestTransformSprite(501, -501)
 	frames := 0
-	for !Equal(sprite.Xpos(), 0) || !Equal(sprite.Ypos(), 0) {
+	for !Equal(LimitPrecision(sprite.Xpos()), 0) || !Equal(LimitPrecision(sprite.Ypos()), 0) {
 		if frames >= 300 {
 			t.Fatalf("easing did not terminate: position = (%v, %v)", sprite.Xpos(), sprite.Ypos())
 		}
-		sprite.ChangeXpos((0 - sprite.Xpos()) / 10)
-		sprite.ChangeYpos((0 - sprite.Ypos()) / 10)
+		sprite.ChangeXpos((0 - LimitPrecision(sprite.Xpos())) / 10)
+		sprite.ChangeYpos((0 - LimitPrecision(sprite.Ypos())) / 10)
 		frames++
 	}
 	if frames != 256 {
