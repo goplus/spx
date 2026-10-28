@@ -712,6 +712,37 @@ func TestDownloadHostRuntimeAssetsDesktopLifecycle(t *testing.T) {
 	}
 }
 
+func TestTemplateDownloadFailurePreservesInstalledAssets(t *testing.T) {
+	for _, platform := range []string{"macos", "web"} {
+		t.Run(platform, func(t *testing.T) {
+			env := newEngineDownloadFixture(t, platform)
+			t.Setenv("SPX_PREPARE_FORCE_REFRESH", "1")
+			want := make(map[string]string)
+			if platform == "macos" {
+				if err := writeZipFixture(filepath.Join(env.assetDir, "macos-x86_64.zip"), map[string]string{
+					"godot.macos.template_release.x86_64": "runtime",
+				}); err != nil {
+					t.Fatal(err)
+				}
+				want[filepath.Join(env.goBinDir, "gdspxrttest")] = "runtime"
+				want[filepath.Join(env.templateDir, "macos.zip")] = "installed template"
+			} else {
+				want[filepath.Join(env.goBinDir, "gdspxtest_webpack.zip")] = "installed template"
+				for _, name := range webTemplateNames {
+					want[filepath.Join(env.templateDir, name)] = "installed template"
+				}
+			}
+			for path, content := range want {
+				mustWriteFile(t, path, []byte(content))
+			}
+			if err := downloadPlatformAssets(env, "normal", false); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("missing template error = %v, want ErrNotExist", err)
+			}
+			assertEngineDownloadFiles(t, env, want)
+		})
+	}
+}
+
 func TestDownloadPlatformAssetsInstallsMobileTemplates(t *testing.T) {
 	for _, platform := range []string{"android", "ios"} {
 		t.Run(platform, func(t *testing.T) {
@@ -759,12 +790,11 @@ func TestDownloadPlatformAssetsInstallsMobileTemplates(t *testing.T) {
 
 func TestDownloadRuntimePackValidatesBeforeInstalling(t *testing.T) {
 	for _, tt := range []struct {
-		name, assetName, message string
-		files                    map[string]string
-		wantErr                  error
+		name, message string
+		files         map[string]string
+		wantErr       error
 	}{
 		{name: "complete bundle", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},
-		{name: "custom asset name", assetName: "custom-runtime.zip", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension"}},
 		{name: "missing extension", files: map[string]string{"gdspxrt.pck": "new pack"}, message: "missing runtime.gdextension"},
 		{name: "unsupported entry", files: map[string]string{"gdspxrt.pck": "new pack", "runtime.gdextension": "new extension", "extra.txt": "unexpected"}, message: "unsupported entry"},
 		{name: "pack is a directory", files: map[string]string{"gdspxrt.pck/": "", "runtime.gdextension": "new extension"}, message: "unsupported entry"},
@@ -772,12 +802,7 @@ func TestDownloadRuntimePackValidatesBeforeInstalling(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newEngineDownloadFixture(t, "")
-			env.runtimePackAsset = tt.assetName
-			assetName := tt.assetName
-			if assetName == "" {
-				assetName = release.RuntimeAssetZipName
-			}
-			archive := filepath.Join(env.assetDir, assetName)
+			archive := filepath.Join(env.assetDir, release.RuntimeAssetZipName)
 			if tt.files == nil {
 				mustWriteFile(t, archive, []byte("not a ZIP"))
 			} else if err := writeZipFixture(archive, tt.files); err != nil {
@@ -826,11 +851,12 @@ func TestEngineAssetEntryPointsUseLocalReleaseArtifacts(t *testing.T) {
 			// Asset installation supports an explicit target regardless of the host.
 			t.Setenv("PLATFORM", "linux")
 			t.Chdir(root)
-			env, err := resolveEngineDownloadEnv(root, "linux")
+			assets := filepath.Join(root, "assets")
+			mustMkdirAll(t, assets)
+			env, err := prepareEngineDownloadEnv(root, "linux", assets, true)
 			if err != nil {
 				t.Fatal(err)
 			}
-			assets := filepath.Join(root, "assets")
 			for archive, files := range map[string]map[string]string{
 				"linux-" + env.arch + ".zip": {
 					"godot.linuxbsd.template_release." + env.arch: "runtime",
@@ -937,12 +963,12 @@ func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 	t.Run("runtime pack failure", func(t *testing.T) {
 		root := isolateEngineEnvironment(t)
 		t.Setenv("PLATFORM", "linux")
-		env, err := resolveEngineDownloadEnv(root, "linux")
+		assets := filepath.Join(root, "assets")
+		mustMkdirAll(t, assets)
+		env, err := prepareEngineDownloadEnv(root, "linux", assets, true)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assets := filepath.Join(root, "assets")
-		mustMkdirAll(t, assets)
 		for _, name := range []string{"gdspx", "gdspxrt", "gdspxrtdbg"} {
 			mustWriteFile(t, filepath.Join(env.goBinDir, name+env.version), []byte("cached"))
 		}
@@ -954,7 +980,7 @@ func TestEngineAssetEntryPointsFailBeforeInstalling(t *testing.T) {
 	t.Run("invalid environment", func(t *testing.T) {
 		root := isolateEngineEnvironment(t)
 		t.Setenv("PLATFORM", "invalid")
-		if _, err := resolveEngineDownloadEnv(root, ""); err == nil || !strings.Contains(err.Error(), "unsupported platform") {
+		if _, err := prepareEngineDownloadEnv(root, "", "", false); err == nil || !strings.Contains(err.Error(), "unsupported platform") {
 			t.Fatalf("environment error = %v", err)
 		}
 		if err := DownloadEngineAssets(DownloadConfig{}, root); err == nil {
@@ -1010,7 +1036,7 @@ func TestLocalAssetLinkFailures(t *testing.T) {
 	if err := loadEngineAssetManifest(&env); err == nil || !strings.Contains(err.Error(), "resolve runtime lock") {
 		t.Fatalf("unknown lock=%v", err)
 	}
-	if err := fetchEngineAsset(env, "asset.zip", "unused", filepath.Join(blocker, "asset")); err == nil {
+	if err := fetchEngineAsset(env, "asset.zip", filepath.Join(blocker, "asset")); err == nil {
 		t.Fatal("blocked fetch destination accepted")
 	}
 }

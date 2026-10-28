@@ -71,7 +71,7 @@ func downloadDesktopAssets(env engineDownloadEnv, editor bool) error {
 		}
 		macosZip := filepath.Join(env.templateDir, "macos.zip")
 		if shouldDownloadPreparedAsset(macosZip) {
-			if err := fetchEngineAsset(env, "macos.zip", env.urlPrefix+"macos.zip", macosZip); err != nil {
+			if err := fetchEngineAsset(env, "macos.zip", macosZip); err != nil {
 				return err
 			}
 		}

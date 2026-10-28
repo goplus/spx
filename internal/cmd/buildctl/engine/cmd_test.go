@@ -293,7 +293,8 @@ func TestFetchEngineAssetVerifiesBeforeReplacing(t *testing.T) {
 					}
 					dst := filepath.Join(env.goBinDir, "asset.zip")
 					mustWriteFile(t, dst, []byte("installed"))
-					err := fetchEngineAsset(env, name, server.URL+"/"+name, dst)
+					env.urlPrefix = server.URL + "/"
+					err := fetchEngineAsset(env, name, dst)
 					wantFailure := tt.missing || tt.message != ""
 					if (err != nil) != wantFailure {
 						t.Fatalf("fetchEngineAsset error = %v, want failure = %v", err, wantFailure)

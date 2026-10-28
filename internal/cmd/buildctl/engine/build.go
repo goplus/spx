@@ -85,9 +85,9 @@ func prepareEngineBuildEnvironment(buildEnv buildEnvironment) (map[string]string
 }
 
 func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
-	fmt.Fprintf(os.Stdout, "PROJ_DIR=%s\n", buildEnv.ProjectDir)
+	fmt.Fprintf(os.Stdout, "PROJ_DIR=%s\n", buildEnv.RepoRoot)
 	fmt.Fprintf(os.Stdout, "ENGINE_DIR=%s\n", buildEnv.EngineDir)
-	fmt.Fprintf(os.Stdout, "GODOT_SRC=%s\n", buildEnv.GodotSrc)
+	fmt.Fprintf(os.Stdout, "GODOT_SRC=%s\n", buildEnv.EngineDir)
 	fmt.Fprintf(os.Stdout, "ENGINE_VERSION=%s\n", buildEnv.EngineVersion)
 	fmt.Fprintf(os.Stdout, "GOPATH=%s\n", buildEnv.GoPath)
 	fmt.Fprintf(os.Stdout, "VERSION=%s\n", buildEnv.Version)

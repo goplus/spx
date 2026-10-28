@@ -29,10 +29,7 @@ import (
 )
 
 func EnsureEngineSource(repoRoot string, run func(name string, args ...string) error) error {
-	engineDir, err := resolveGodotSrc(repoRoot)
-	if err != nil {
-		return err
-	}
+	engineDir := resolveGodotSrc(repoRoot)
 	lock := release.DefaultRuntimeLock()
 	if FileExists(engineDir) {
 		head, err := gitHead(engineDir)
