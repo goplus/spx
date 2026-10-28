@@ -47,6 +47,54 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 	}
 }
 
+func TestLimitPrecision(t *testing.T) {
+	negativeZero := math.Copysign(0, -1)
+	inside := math.Nextafter(1e-9, 0)
+	outside := math.Nextafter(1e-9, math.Inf(1))
+	for _, tt := range []struct {
+		name        string
+		input, want float64
+	}{
+		{"integer", 42, 42},
+		{"negative integer", -42, -42},
+		{"zero", 0, 0},
+		{"negative zero", negativeZero, negativeZero},
+		{"near zero", 5e-10, 0},
+		{"near negative zero", -5e-10, negativeZero},
+		{"inside threshold", inside, 0},
+		{"inside negative threshold", -inside, negativeZero},
+		{"at threshold", 1e-9, 1e-9},
+		{"at negative threshold", -1e-9, -1e-9},
+		{"outside threshold", outside, outside},
+		{"outside negative threshold", -outside, -outside},
+		{"below integer", 42 - 5e-10, 42},
+		{"above integer", 42 + 5e-10, 42},
+		{"below negative integer", -42 - 5e-10, -42},
+		{"above negative integer", -42 + 5e-10, -42},
+		{"outside integer tolerance", 42 + 2e-9, 42 + 2e-9},
+		{"outside negative integer tolerance", -42 - 2e-9, -42 - 2e-9},
+		{"fraction", 12.25, 12.25},
+		{"negative fraction", -12.75, -12.75},
+		{"half integer", 0.5, 0.5},
+		{"negative half integer", -0.5, -0.5},
+		{"large coordinate", math.MaxFloat64, math.MaxFloat64},
+		{"negative large coordinate", -math.MaxFloat64, -math.MaxFloat64},
+		{"positive infinity", math.Inf(1), math.Inf(1)},
+		{"negative infinity", math.Inf(-1), math.Inf(-1)},
+		{"NaN", math.NaN(), math.NaN()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := LimitPrecision(tt.input)
+			if math.IsNaN(tt.want) && math.IsNaN(got) {
+				return
+			}
+			if got != tt.want || math.Signbit(got) != math.Signbit(tt.want) {
+				t.Fatalf("LimitPrecision(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDiv(t *testing.T) {
 	negativeZero := math.Copysign(0, -1)
 	tests := []struct {

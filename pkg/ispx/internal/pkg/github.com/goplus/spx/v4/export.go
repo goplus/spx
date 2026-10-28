@@ -173,6 +173,7 @@ func init() {
 			"Iround":                     reflect.ValueOf(q.Iround),
 			"IsRunWithoutScreenRefresh":  reflect.ValueOf(q.IsRunWithoutScreenRefresh),
 			"KeyFromString":              reflect.ValueOf(q.KeyFromString),
+			"LimitPrecision":             reflect.ValueOf(q.LimitPrecision),
 			"NewColor":                   reflect.ValueOf(q.NewColor),
 			"NewList":                    reflect.ValueOf(q.NewList),
 			"NewValue":                   reflect.ValueOf(q.NewValue),
@@ -626,6 +627,7 @@ func init() {
 		"Iround":                       func_Iround,
 		"IsRunWithoutScreenRefresh":    func_IsRunWithoutScreenRefresh,
 		"KeyFromString":                func_KeyFromString,
+		"LimitPrecision":               func_LimitPrecision,
 		"NewColor":                     func_NewColor,
 		"NewValue":                     func_NewValue,
 		"PenColorParamFromString":      func_PenColorParamFromString,
@@ -741,6 +743,10 @@ func func_IsRunWithoutScreenRefresh(ctx ixgo.DirectCallContext) {
 
 func func_KeyFromString(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.KeyFromString(ixgo.DirectCallArg[string](ctx, 0)))
+}
+
+func func_LimitPrecision(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.LimitPrecision(ixgo.DirectCallArg[float64](ctx, 0)))
 }
 
 func method_ptr_List_Append(ctx ixgo.DirectCallContext) {
