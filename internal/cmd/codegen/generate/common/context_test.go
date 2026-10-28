@@ -49,6 +49,7 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	metadata.StaticMethods["control"] = "SpxExtMgr::resume"
 	metadata.ArrayBridges["first"].Buffers[0].Data.Name = "changed"
 	metadata.ArrayBridges["first"].Buffers[1].Count = 9
+	metadata.ArrayBridges["first"].Arguments[0].Name = "changed"
 	secondAST, err := clang.ParseCString("typedef void (*GDExtensionSpxCameraShow)();")
 	require.NoError(t, err)
 	second := NewGenerationContext(secondAST, metadata)
@@ -65,11 +66,14 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 	require.Equal(t, "[]float32", spec.Buffers[0].GoType())
 	require.Equal(t, "input", spec.Buffers[0].Data.Name)
 	require.Equal(t, 3, spec.Buffers[1].Count)
+	require.Equal(t, "input", spec.Arguments[0].Name)
 	spec.Buffers[0].Data.Name = "caller mutation"
 	spec.Buffers[1].Count = 8
+	spec.Arguments[0].Name = "caller mutation"
 	again, _ := first.ArrayBridge("first")
 	require.Equal(t, "input", again.Buffers[0].Data.Name)
 	require.Equal(t, 3, again.Buffers[1].Count)
+	require.Equal(t, "input", again.Arguments[0].Name)
 	require.Equal(t, "int64", first.MustGoTypeForCType("GdInt", "test"))
 }
 

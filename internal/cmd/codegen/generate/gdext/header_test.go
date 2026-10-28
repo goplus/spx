@@ -414,6 +414,15 @@ func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
 	header := parseManagerHeader(`class SpxExampleMgr {
  SPX_BIND void collect(GdString label, int mode, const GdObj *objects, int count, float *out, int out_len, float ret_value[3]);
  };`)
+	require.Equal(t, []common.CParam{
+		{CType: "GdString", Name: "label"},
+		{CType: "int", Name: "mode"},
+		{CType: "const GdObj *", Name: "objects"},
+		{CType: "int", Name: "count"},
+		{CType: "float *", Name: "out"},
+		{CType: "int", Name: "out_len"},
+		{CType: "float *", Name: "ret_value"},
+	}, header.metadata.ArrayBridges["GDExtensionSpxExampleCollect"].Arguments)
 	ast, err := clang.ParseCString(header.render(true))
 	require.NoError(t, err)
 	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, header.metadata)}
@@ -426,6 +435,34 @@ func TestMixedScalarsAndArraysUseOneWebABI(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(output), "int mode, const GdObj *objects, int count, float *out, int out_len, float *ret_value")
 	require.Contains(t, string(output), "exampleMgr->collect(gdspx_string_arg_0, mode, objects, count, out, out_len, ret_value);")
+}
+
+func TestArrayBridgeRejectsAmbiguousPublicNames(t *testing.T) {
+	for _, params := range []string{
+		"const float *values_data, int count, float *values, int out_count",
+		"SPX_OUT float values[3], const float *values_data, int count",
+	} {
+		t.Run(params, func(t *testing.T) {
+			require.PanicsWithValue(t, "duplicate high-level array parameter: values", func() {
+				parseManagerHeader("class SpxExampleMgr {\n SPX_BIND void update(" + params + ");\n};")
+			})
+		})
+	}
+	// Scalar arguments are retained even when their name collides with the
+	// public name of an adjacent buffer after its _data suffix is removed.
+	header := parseManagerHeader(`class SpxExampleMgr {
+ SPX_BIND void update(const float *values_data, int count, GdInt values);
+ };`)
+	require.Equal(t, []common.CParam{
+		{CType: "const float *", Name: "values_data"},
+		{CType: "int", Name: "count"},
+		{CType: "GdInt", Name: "values"},
+	}, header.metadata.ArrayBridges["GDExtensionSpxExampleUpdate"].Arguments)
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	require.PanicsWithValue(t, "duplicate public parameter in GDExtensionSpxExampleUpdate: values", func() {
+		common.NewGenerationContext(ast, header.metadata)
+	})
 }
 
 func TestOutputOnlyArraysPreserveDirectionsAndReturnABI(t *testing.T) {
