@@ -21,7 +21,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/goplus/spx/v4/internal/engine"
 	inputstate "github.com/goplus/spx/v4/internal/input"
 )
 
@@ -129,38 +128,6 @@ func captureInputTick() *int64 {
 	}
 	tick := session.currentTick
 	return &tick
-}
-
-func replayKeyEventsFromEngine(events []engine.KeyEvent) []InputReplayKeyEvent {
-	converted := make([]InputReplayKeyEvent, len(events))
-	for i, event := range events {
-		converted[i] = InputReplayKeyEvent{Key: event.Id, Pressed: event.IsPressed}
-	}
-	return converted
-}
-
-func replayMouseEventsFromEngine(events []engine.MouseEvent) []InputReplayMouseEvent {
-	converted := make([]InputReplayMouseEvent, len(events))
-	for i, event := range events {
-		converted[i] = InputReplayMouseEvent{Button: event.Id, Pressed: event.IsPressed}
-	}
-	return converted
-}
-
-func engineMouseEventsFromReplay(events []InputReplayMouseEvent, reuse []engine.MouseEvent) []engine.MouseEvent {
-	reuse = reuse[:0]
-	for _, event := range events {
-		reuse = append(reuse, engine.MouseEvent{Id: event.Button, IsPressed: event.Pressed})
-	}
-	return reuse
-}
-
-func engineKeyEventsFromReplay(events []InputReplayKeyEvent, reuse []engine.KeyEvent) []engine.KeyEvent {
-	reuse = reuse[:0]
-	for _, event := range events {
-		reuse = append(reuse, engine.KeyEvent{Id: event.Key, IsPressed: event.Pressed})
-	}
-	return reuse
 }
 
 func sortedPressedKeys(keys map[int64]bool) []int64 {

@@ -119,8 +119,8 @@ func (c *InputReplayController) Status() InputReplayControllerStatus {
 
 func (c *InputReplayController) Resolve(
 	live InputReplayState,
-	mouseEvents []InputReplayMouseEvent,
-	keyEvents []InputReplayKeyEvent,
+	mouseEvents []MouseEvent,
+	keyEvents []KeyEvent,
 	delta float64,
 ) (effective InputReplayFrame, firstTick bool, err error) {
 	mode := c.modeValue()
@@ -133,12 +133,12 @@ func (c *InputReplayController) Resolve(
 	if err := validateFiniteNonNegative("live delta", delta); err != nil {
 		return InputReplayFrame{}, false, err
 	}
-	effective = InputReplayFrame{
+	effective = cloneInputReplayFrame(InputReplayFrame{
 		Frame:       -1,
-		State:       CloneInputReplayState(live),
-		MouseEvents: slices.Clone(mouseEvents),
-		KeyEvents:   slices.Clone(keyEvents),
-	}
+		State:       live,
+		MouseEvents: mouseEvents,
+		KeyEvents:   keyEvents,
+	})
 	if mode == InputSessionModeIdle {
 		return effective, false, nil
 	}

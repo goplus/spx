@@ -58,7 +58,7 @@ func TestInputReplayValidateRejectsInvalidData(t *testing.T) {
 		{"frame state", func(r *InputReplay) { r.Frames[1].State.KeysDown = []int64{3, 2} }, "frame 1 state"},
 		{"invalid mouse event", func(r *InputReplay) { r.Frames[0].MouseEvents[0].Button = 4 }, "invalid button"},
 		{"duplicate mouse event", func(r *InputReplay) {
-			r.Frames[0].MouseEvents = append(r.Frames[0].MouseEvents, InputReplayMouseEvent{Button: 1, Pressed: true})
+			r.Frames[0].MouseEvents = append(r.Frames[0].MouseEvents, MouseEvent{Button: 1, Pressed: true})
 		}, "does not change"},
 		{"mouse event state mismatch", func(r *InputReplay) { r.Frames[0].State.Buttons = 0 }, "do not match buttons"},
 		{"invalid key event", func(r *InputReplay) { r.Frames[0].KeyEvents[0].Key = 0 }, "invalid key"},
@@ -182,8 +182,8 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 		Buttons:  1,
 		KeysDown: []int64{1, 2},
 	}
-	events0 := []InputReplayKeyEvent{{Key: 2, Pressed: true}}
-	mouseEvents0 := []InputReplayMouseEvent{{Button: 1, Pressed: true}}
+	events0 := []KeyEvent{{Key: 2, Pressed: true}}
+	mouseEvents0 := []MouseEvent{{Button: 1, Pressed: true}}
 	frame0, first, err := controller.Resolve(live0, mouseEvents0, events0, 100)
 	if err != nil {
 		t.Fatal(err)
@@ -200,8 +200,8 @@ func TestInputReplayControllerRecordsTicksAndDeepCopies(t *testing.T) {
 
 	frame1, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: 11, Y: 21}, KeysDown: []int64{2}},
-		[]InputReplayMouseEvent{{Button: 1, Pressed: false}},
-		[]InputReplayKeyEvent{{Key: 1, Pressed: false}},
+		[]MouseEvent{{Button: 1, Pressed: false}},
+		[]KeyEvent{{Key: 1, Pressed: false}},
 		0.25,
 	)
 	if err != nil {
@@ -259,7 +259,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	frame0, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: math.NaN()}},
 		nil,
-		[]InputReplayKeyEvent{{Key: 999, Pressed: true}},
+		[]KeyEvent{{Key: 999, Pressed: true}},
 		math.NaN(),
 	)
 	if err != nil {
@@ -294,7 +294,7 @@ func TestInputReplayControllerReplaysAndFreezesLastState(t *testing.T) {
 	frozen, first, err := controller.Resolve(
 		InputReplayState{Mouse: InputReplayMouse{X: 999, Y: 999}, KeysDown: []int64{999}},
 		nil,
-		[]InputReplayKeyEvent{{Key: 999, Pressed: true}},
+		[]KeyEvent{{Key: 999, Pressed: true}},
 		999,
 	)
 	if err != nil {
@@ -337,7 +337,7 @@ func TestInputReplayPreservesShortClickEdgesWithUnchangedHeldState(t *testing.T)
 		Frames: []InputReplayFrame{{
 			Frame: 0,
 			State: InputReplayState{Buttons: 0},
-			MouseEvents: []InputReplayMouseEvent{
+			MouseEvents: []MouseEvent{
 				{Button: 1, Pressed: true},
 				{Button: 1, Pressed: false},
 			},
@@ -481,7 +481,7 @@ func TestInputReplayControllerSynchronizesInitialBeforeTickZero(t *testing.T) {
 func TestInputReplayControllerIdleResolveReturnsIsolatedLiveFrame(t *testing.T) {
 	var controller InputReplayController
 	live := InputReplayState{KeysDown: []int64{1}}
-	events := []InputReplayKeyEvent{{Key: 1, Pressed: true}}
+	events := []KeyEvent{{Key: 1, Pressed: true}}
 	frame, first, err := controller.Resolve(live, nil, events, 0.1)
 	if err != nil {
 		t.Fatal(err)
@@ -546,8 +546,8 @@ func BenchmarkDecodeInputReplay(b *testing.B) {
 		replay.Frames[i] = InputReplayFrame{
 			Frame: int64(i), Time: float64(i) / 60,
 			State:       InputReplayState{KeysDown: []int64{1}},
-			KeyEvents:   []InputReplayKeyEvent{{Key: 1, Pressed: true}},
-			MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
+			KeyEvents:   []KeyEvent{{Key: 1, Pressed: true}},
+			MouseEvents: []MouseEvent{{Button: 1, Pressed: true}, {Button: 1, Pressed: false}},
 		}
 	}
 	data, err := EncodeInputReplay(replay)
@@ -570,8 +570,8 @@ func TestCloneInputReplayPreservesSliceShapes(t *testing.T) {
 			if name == "empty" {
 				replay.Initial.KeysDown = []int64{}
 				replay.Frames[0].State.KeysDown = []int64{}
-				replay.Frames[0].MouseEvents = []InputReplayMouseEvent{}
-				replay.Frames[0].KeyEvents = []InputReplayKeyEvent{}
+				replay.Frames[0].MouseEvents = []MouseEvent{}
+				replay.Frames[0].KeyEvents = []KeyEvent{}
 			}
 			if got := CloneInputReplay(replay); !reflect.DeepEqual(got, replay) {
 				t.Fatalf("clone changed nested slice shapes: %#v", got)
@@ -619,8 +619,8 @@ func validInputReplay() InputReplay {
 					Buttons:  1,
 					KeysDown: []int64{10, 20},
 				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 20, Pressed: true}},
+				MouseEvents: []MouseEvent{{Button: 1, Pressed: true}},
+				KeyEvents:   []KeyEvent{{Key: 20, Pressed: true}},
 			},
 			{
 				Frame: 1,
@@ -630,8 +630,8 @@ func validInputReplay() InputReplay {
 					Buttons:  0,
 					KeysDown: []int64{20},
 				},
-				MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: false}},
-				KeyEvents:   []InputReplayKeyEvent{{Key: 10, Pressed: false}},
+				MouseEvents: []MouseEvent{{Button: 1, Pressed: false}},
+				KeyEvents:   []KeyEvent{{Key: 10, Pressed: false}},
 			},
 		},
 	}

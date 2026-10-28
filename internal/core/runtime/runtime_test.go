@@ -38,8 +38,8 @@ func TestInputFrameStateProcess(t *testing.T) {
 			Point:             mathf.Vec2{X: 10, Y: 20},
 			LeftButtonPressed: true,
 			KeyEvents: []input.KeyEvent{
-				{Id: 1, IsPressed: true},
-				{Id: 2, IsPressed: false},
+				{Key: 1, Pressed: true},
+				{Key: 2, Pressed: false},
 			},
 		},
 		InputFrameHooks{
@@ -68,8 +68,8 @@ func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.
 			Point:             mathf.Vec2{X: 7, Y: 8},
 			LeftButtonPressed: false,
 			MouseEvents: []input.MouseEvent{
-				{Id: 1, IsPressed: true},
-				{Id: 1, IsPressed: false},
+				{Button: 1, Pressed: true},
+				{Button: 1, Pressed: false},
 			},
 		},
 		InputFrameHooks{
@@ -95,8 +95,8 @@ func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *test
 			Point:             mathf.Vec2{X: 4, Y: 5},
 			LeftButtonPressed: false,
 			MouseEvents: []input.MouseEvent{
-				{Id: 2, IsPressed: false},
-				{Id: 1, IsPressed: true},
+				{Button: 2, Pressed: false},
+				{Button: 1, Pressed: true},
 			},
 		},
 		InputFrameHooks{

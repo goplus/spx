@@ -435,8 +435,8 @@ func TestResetClearsInputAndTriggerEvents(t *testing.T) {
 			keys, held := GetKeyInput(nil)
 			mouse, buttons := GetMouseInput(nil)
 			triggers := GetTriggerEvents(nil)
-			if !slices.Equal(keys, []KeyEvent{{Id: 7, IsPressed: true}}) || !slices.Equal(held, []int64{7}) ||
-				!slices.Equal(mouse, []MouseEvent{{Id: 1, IsPressed: true}}) || buttons != 1 ||
+			if !slices.Equal(keys, []KeyEvent{{Key: 7, Pressed: true}}) || !slices.Equal(held, []int64{7}) ||
+				!slices.Equal(mouse, []MouseEvent{{Button: 1, Pressed: true}}) || buttons != 1 ||
 				!slices.Equal(triggers, []TriggerEvent{{Src: source, Dst: target}}) {
 				t.Fatalf("new game input or triggers: keys=%v held=%v mouse=%v buttons=%d triggers=%v",
 					keys, held, mouse, buttons, triggers)

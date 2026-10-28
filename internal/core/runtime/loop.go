@@ -47,15 +47,15 @@ func (s *InputFrameState) Reset(leftButtonPressed bool) {
 func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
 	leftPressed := s.leftButtonPressed
 	for _, event := range frame.MouseEvents {
-		if event.Id != input.MouseButtonLeft || event.IsPressed == leftPressed {
+		if event.Button != input.MouseButtonLeft || event.Pressed == leftPressed {
 			continue
 		}
-		if event.IsPressed {
+		if event.Pressed {
 			hooks.FireLeftButtonDown(frame.Point)
 		} else {
 			hooks.FireLeftButtonUp(frame.Point)
 		}
-		leftPressed = event.IsPressed
+		leftPressed = event.Pressed
 	}
 	// Old replay files contain only held-state snapshots. This reconciliation
 	// also guards against a platform that reports a state change without an edge.
@@ -68,8 +68,8 @@ func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
 	}
 
 	for _, ev := range frame.KeyEvents {
-		if ev.IsPressed {
-			hooks.OnKeyPressed(ev.Id)
+		if ev.Pressed {
+			hooks.OnKeyPressed(ev.Key)
 		}
 	}
 

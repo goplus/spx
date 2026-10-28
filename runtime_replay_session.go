@@ -77,16 +77,10 @@ type inputSession struct {
 	environment inputSessionEnvironment
 }
 
+// inputRecordingResult is immutable once the session has completed.
 type inputRecordingResult struct {
 	replay InputReplay
-	json   []byte
-}
-
-func (r inputRecordingResult) clone() inputRecordingResult {
-	return inputRecordingResult{
-		replay: inputstate.CloneInputReplay(r.replay),
-		json:   append([]byte(nil), r.json...),
-	}
+	json   string
 }
 
 func (p *Game) attachPreparedInputSession() error {
@@ -221,7 +215,7 @@ func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResul
 		return inputRecordingResult{}, fmt.Errorf("input recording was aborted: %s", reason)
 	}
 	if s.phase == InputSessionPhaseCompleted {
-		result := s.result.clone()
+		result := s.result
 		s.mu.Unlock()
 		return result, nil
 	}
@@ -249,7 +243,7 @@ func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResul
 		return inputRecordingResult{}, err
 	}
 	// Recording returns an owned snapshot; keep it as the cache until finishing succeeds.
-	s.result = inputRecordingResult{replay: replay, json: encoded}
+	s.result = inputRecordingResult{replay: replay, json: string(encoded)}
 	s.mu.Unlock()
 
 	if err := freezeInputSession(freeze); err != nil {
@@ -261,7 +255,7 @@ func (s *inputSession) finishRecordingResult(freeze func()) (inputRecordingResul
 	}
 	s.mu.Lock()
 	s.phase = InputSessionPhaseCompleted
-	result := s.result.clone()
+	result := s.result
 	s.mu.Unlock()
 	return result, nil
 }

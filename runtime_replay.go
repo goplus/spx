@@ -32,8 +32,8 @@ type (
 	InputReplay           = inputstate.InputReplay
 	InputReplayMouse      = inputstate.InputReplayMouse
 	InputReplayState      = inputstate.InputReplayState
-	InputReplayMouseEvent = inputstate.InputReplayMouseEvent
-	InputReplayKeyEvent   = inputstate.InputReplayKeyEvent
+	InputReplayMouseEvent = inputstate.MouseEvent
+	InputReplayKeyEvent   = inputstate.KeyEvent
 	InputReplayFrame      = inputstate.InputReplayFrame
 	InputSessionMode      = inputstate.InputSessionMode
 	InputSessionPhase     = inputstate.InputSessionPhase
@@ -91,13 +91,16 @@ func PrepareInputRecording(fps float64, options ...InputSessionOptions) (InputSe
 // FinishInputRecording completes the active Game's recording.
 func FinishInputRecording() (InputReplay, error) {
 	result, err := finishInputRecording()
-	return result.replay, err
+	if err != nil {
+		return InputReplay{}, err
+	}
+	return inputstate.CloneInputReplay(result.replay), nil
 }
 
 // FinishInputRecordingJSON completes the recording and returns its cached JSON.
 func FinishInputRecordingJSON() (string, error) {
 	result, err := finishInputRecording()
-	return string(result.json), err
+	return result.json, err
 }
 
 // PrepareInputReplay configures playback for the next Game lifecycle.

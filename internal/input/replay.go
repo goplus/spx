@@ -51,22 +51,12 @@ type InputReplayState struct {
 	KeysDown []int64          `json:"keysDown"`
 }
 
-type InputReplayKeyEvent struct {
-	Key     int64 `json:"key"`
-	Pressed bool  `json:"pressed"`
-}
-
-type InputReplayMouseEvent struct {
-	Button  int64 `json:"button"`
-	Pressed bool  `json:"pressed"`
-}
-
 type InputReplayFrame struct {
-	Frame       int64                   `json:"frame"`
-	Time        float64                 `json:"time"`
-	State       InputReplayState        `json:"state"`
-	MouseEvents []InputReplayMouseEvent `json:"mouseEvents,omitempty"`
-	KeyEvents   []InputReplayKeyEvent   `json:"keyEvents,omitempty"`
+	Frame       int64            `json:"frame"`
+	Time        float64          `json:"time"`
+	State       InputReplayState `json:"state"`
+	MouseEvents []MouseEvent     `json:"mouseEvents,omitempty"`
+	KeyEvents   []KeyEvent       `json:"keyEvents,omitempty"`
 }
 
 type InputReplay struct {

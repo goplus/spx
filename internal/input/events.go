@@ -17,19 +17,19 @@
 package input
 
 const (
-	MouseButtonLeft   int64 = 1
-	MouseButtonRight  int64 = 2
-	MouseButtonMiddle int64 = 3
+	MouseButtonLeft int64 = iota + 1
+	MouseButtonRight
+	MouseButtonMiddle
 )
 
 // KeyEvent is a key transition in input order, independent of its source.
 type KeyEvent struct {
-	Id        int64
-	IsPressed bool
+	Key     int64 `json:"key"`
+	Pressed bool  `json:"pressed"`
 }
 
 // MouseEvent is a mouse-button transition in input order.
 type MouseEvent struct {
-	Id        int64
-	IsPressed bool
+	Button  int64 `json:"button"`
+	Pressed bool  `json:"pressed"`
 }
