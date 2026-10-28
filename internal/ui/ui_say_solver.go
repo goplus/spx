@@ -89,6 +89,18 @@ func (s sayBubbleScore) equal(other sayBubbleScore) bool {
 	return s == other
 }
 
+// addCandidate scores the bubble itself and returns its collision bounds,
+// which include the safety gap used only for overlap scoring.
+func (s *sayBubbleScore) addCandidate(layout *SayBubbleLayout, isLeft bool) sayBubbleRect {
+	rect := layout.candidate(isLeft)
+	s.outsideArea += rect.outsideArea(layout.viewport)
+	s.flippedCount += boolInt(isLeft != layout.preferredIsLeft)
+	if layout.hasPrevious {
+		s.changedCount += boolInt(isLeft != layout.previousIsLeft)
+	}
+	return rect.grow(sayBubbleGap / 2)
+}
+
 func canonicalSayBubbleOrder(layouts []SayBubbleLayout) []int {
 	order := make([]int, len(layouts))
 	for i := range order {
@@ -146,11 +158,16 @@ func sayBubblesMayOverlap(a, b SayBubbleLayout) bool {
 
 func resolveSayBubbleComponentExact(layouts []SayBubbleLayout, component []int) {
 	combinationCount := uint64(1) << uint(len(component))
+	var directionStorage [sayBubbleExactLayoutLimit]bool
+	directions := directionStorage[:len(component)]
 	var bestMask uint64
 	var bestScore sayBubbleScore
 	hasBest := false
 	for mask := uint64(0); mask < combinationCount; mask++ {
-		score := scoreSayBubbleMask(layouts, component, mask)
+		for i := range directions {
+			directions[i] = mask&(uint64(1)<<uint(i)) != 0
+		}
+		score := scoreSayBubbleDirections(layouts, component, directions)
 		if !hasBest || score.less(bestScore) ||
 			(score.equal(bestScore) && sayBubbleMaskLess(mask, bestMask, len(component))) {
 			bestMask = mask
@@ -161,27 +178,6 @@ func resolveSayBubbleComponentExact(layouts []SayBubbleLayout, component []int) 
 	for i, index := range component {
 		layouts[index].isLeft = bestMask&(uint64(1)<<uint(i)) != 0
 	}
-}
-
-func scoreSayBubbleMask(layouts []SayBubbleLayout, component []int, mask uint64) sayBubbleScore {
-	score := sayBubbleScore{}
-	for i, index := range component {
-		isLeft := mask&(uint64(1)<<uint(i)) != 0
-		layout := layouts[index]
-		rect := layout.candidate(isLeft)
-		score.outsideArea += rect.outsideArea(layout.viewport)
-		score.flippedCount += boolInt(isLeft != layout.preferredIsLeft)
-		if layout.hasPrevious {
-			score.changedCount += boolInt(isLeft != layout.previousIsLeft)
-		}
-		rect = rect.grow(sayBubbleGap / 2)
-		for j, otherIndex := range component[i+1:] {
-			otherIsLeft := mask&(uint64(1)<<uint(i+j+1)) != 0
-			other := layouts[otherIndex].candidate(otherIsLeft).grow(sayBubbleGap / 2)
-			score.overlapArea += rect.overlapArea(other)
-		}
-	}
-	return score
 }
 
 func sayBubbleMaskLess(a, b uint64, count int) bool {
@@ -220,17 +216,14 @@ func resolveSayBubbleComponentFallback(layouts []SayBubbleLayout, component []in
 			default:
 				directions[i] = !layout.preferredIsLeft
 			}
-			layouts[index].isLeft = directions[i]
 		}
 
 		for pass := 0; pass < len(component); pass++ {
 			changed := false
-			for i, index := range component {
-				currentIsLeft := layouts[index].isLeft
-				current := scoreSayBubbleAt(layouts, component, index, currentIsLeft)
-				alternate := scoreSayBubbleAt(layouts, component, index, !currentIsLeft)
+			for i, currentIsLeft := range directions {
+				current := scoreSayBubbleAt(layouts, component, directions, i, currentIsLeft)
+				alternate := scoreSayBubbleAt(layouts, component, directions, i, !currentIsLeft)
 				if alternate.less(current) {
-					layouts[index].isLeft = !currentIsLeft
 					directions[i] = !currentIsLeft
 					changed = true
 				}
@@ -240,7 +233,7 @@ func resolveSayBubbleComponentFallback(layouts []SayBubbleLayout, component []in
 			}
 		}
 
-		score := scoreSayBubbleComponent(layouts, component)
+		score := scoreSayBubbleDirections(layouts, component, directions)
 		if !hasBest || score.less(bestScore) ||
 			(score.equal(bestScore) && sayBubbleDirectionsLess(directions, bestDirections)) {
 			copy(bestDirections, directions)
@@ -254,41 +247,26 @@ func resolveSayBubbleComponentFallback(layouts []SayBubbleLayout, component []in
 	}
 }
 
-func scoreSayBubbleComponent(layouts []SayBubbleLayout, component []int) sayBubbleScore {
+func scoreSayBubbleDirections(layouts []SayBubbleLayout, component []int, directions []bool) sayBubbleScore {
 	score := sayBubbleScore{}
 	for i, index := range component {
-		layout := layouts[index]
-		rect := layout.candidate(layout.isLeft)
-		score.outsideArea += rect.outsideArea(layout.viewport)
-		score.flippedCount += boolInt(layout.isLeft != layout.preferredIsLeft)
-		if layout.hasPrevious {
-			score.changedCount += boolInt(layout.isLeft != layout.previousIsLeft)
-		}
-		rect = rect.grow(sayBubbleGap / 2)
-		for _, otherIndex := range component[i+1:] {
-			other := layouts[otherIndex].candidate(layouts[otherIndex].isLeft).grow(sayBubbleGap / 2)
+		rect := score.addCandidate(&layouts[index], directions[i])
+		for j, otherIndex := range component[i+1:] {
+			other := layouts[otherIndex].candidate(directions[i+j+1]).grow(sayBubbleGap / 2)
 			score.overlapArea += rect.overlapArea(other)
 		}
 	}
 	return score
 }
 
-func scoreSayBubbleAt(layouts []SayBubbleLayout, component []int, index int, isLeft bool) sayBubbleScore {
-	layout := layouts[index]
-	candidate := layout.candidate(isLeft)
-	score := sayBubbleScore{
-		outsideArea:  candidate.outsideArea(layout.viewport),
-		flippedCount: boolInt(isLeft != layout.preferredIsLeft),
-	}
-	if layout.hasPrevious {
-		score.changedCount = boolInt(isLeft != layout.previousIsLeft)
-	}
-	candidate = candidate.grow(sayBubbleGap / 2)
-	for _, otherIndex := range component {
-		if otherIndex == index {
+func scoreSayBubbleAt(layouts []SayBubbleLayout, component []int, directions []bool, at int, isLeft bool) sayBubbleScore {
+	score := sayBubbleScore{}
+	candidate := score.addCandidate(&layouts[component[at]], isLeft)
+	for i, otherIndex := range component {
+		if i == at {
 			continue
 		}
-		occupied := layouts[otherIndex].candidate(layouts[otherIndex].isLeft).grow(sayBubbleGap / 2)
+		occupied := layouts[otherIndex].candidate(directions[i]).grow(sayBubbleGap / 2)
 		score.overlapArea += candidate.overlapArea(occupied)
 	}
 	return score
