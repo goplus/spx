@@ -207,7 +207,6 @@ func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
 	p.transform().changePosition(dx, dy)
 }
 
-// Xpos returns the sprite's raw x position.
 func (p *SpriteImpl) Xpos() float64 {
 	return p.transform().x
 }
@@ -220,7 +219,6 @@ func (p *SpriteImpl) ChangeXpos(dx float64) {
 	p.transform().changeX(dx)
 }
 
-// Ypos returns the sprite's raw y position.
 func (p *SpriteImpl) Ypos() float64 {
 	return p.transform().y
 }
