@@ -148,132 +148,16 @@ const (
 	ArrayTypeGdObj  = 6
 )
 
-// IArrayInfo interface for unified array operations
-type IArrayInfo interface {
-	Size() int64
-	Type() int64
-	ToInt64s() []int64
-	ToFloats() []float32
-	ToBools() []bool
-	ToBytes() []byte
-	ToObjects() []GdObj
-	ToStrings() []string
-	Free()
-}
-
 // Go wrapper for GdArray
 type ArrayInfoImpl struct {
-	gdArray   C.GdArray
-	needsFree bool
+	gdArray C.GdArray
 }
-
-type GDExtensionSpxCallbackInfoPtr C.GDExtensionSpxCallbackInfoPtr
-
-type SpxCallbackInfo C.SpxCallbackInfo
-
-type GDExtensionVariantPtr C.GDExtensionVariantPtr
-
-type GDExtensionConstVariantPtr C.GDExtensionConstVariantPtr
-
-type GDExtensionUninitializedVariantPtr C.GDExtensionUninitializedVariantPtr
-
-type GDExtensionStringNamePtr C.GDExtensionStringNamePtr
-
-type GDExtensionConstStringNamePtr C.GDExtensionConstStringNamePtr
-
-type GDExtensionUninitializedStringNamePtr C.GDExtensionUninitializedStringNamePtr
-
-type GDExtensionStringPtr C.GDExtensionStringPtr
-
-type GDExtensionConstStringPtr C.GDExtensionConstStringPtr
-
-type GDExtensionUninitializedStringPtr C.GDExtensionUninitializedStringPtr
-
-type GDExtensionObjectPtr C.GDExtensionObjectPtr
-
-type GDExtensionConstObjectPtr C.GDExtensionConstObjectPtr
-
-type GDExtensionUninitializedObjectPtr C.GDExtensionUninitializedObjectPtr
-
-type GDExtensionTypePtr C.GDExtensionTypePtr
-
-type GDExtensionConstTypePtr C.GDExtensionConstTypePtr
-
-type GDExtensionUninitializedTypePtr C.GDExtensionUninitializedTypePtr
-
-type GDExtensionMethodBindPtr C.GDExtensionMethodBindPtr
-
-type GDExtensionInt C.GDExtensionInt
-
-type GDExtensionBool C.GDExtensionBool
-
-type GDObjectInstanceID C.GDObjectInstanceID
-
-type GDExtensionRefPtr C.GDExtensionRefPtr
-
-type GDExtensionConstRefPtr C.GDExtensionConstRefPtr
-
-type GDExtensionPtrConstructor C.GDExtensionPtrConstructor
-
-type GDExtensionPtrDestructor C.GDExtensionPtrDestructor
-
-type GDExtensionVariantType C.GDExtensionVariantType
-
-const (
-	GDEXTENSION_VARIANT_TYPE_NIL GDExtensionVariantType = iota
-	GDEXTENSION_VARIANT_TYPE_BOOL
-	GDEXTENSION_VARIANT_TYPE_INT
-	GDEXTENSION_VARIANT_TYPE_FLOAT
-	GDEXTENSION_VARIANT_TYPE_STRING
-	GDEXTENSION_VARIANT_TYPE_VECTOR2
-	GDEXTENSION_VARIANT_TYPE_VECTOR2I
-	GDEXTENSION_VARIANT_TYPE_RECT2
-	GDEXTENSION_VARIANT_TYPE_RECT2I
-	GDEXTENSION_VARIANT_TYPE_VECTOR3
-	GDEXTENSION_VARIANT_TYPE_VECTOR3I
-	GDEXTENSION_VARIANT_TYPE_TRANSFORM2D
-	GDEXTENSION_VARIANT_TYPE_VECTOR4
-	GDEXTENSION_VARIANT_TYPE_VECTOR4I
-	GDEXTENSION_VARIANT_TYPE_PLANE
-	GDEXTENSION_VARIANT_TYPE_QUATERNION
-	GDEXTENSION_VARIANT_TYPE_AABB
-	GDEXTENSION_VARIANT_TYPE_BASIS
-	GDEXTENSION_VARIANT_TYPE_TRANSFORM3D
-	GDEXTENSION_VARIANT_TYPE_PROJECTION
-	GDEXTENSION_VARIANT_TYPE_COLOR
-	GDEXTENSION_VARIANT_TYPE_STRING_NAME
-	GDEXTENSION_VARIANT_TYPE_NODE_PATH
-	GDEXTENSION_VARIANT_TYPE_RID
-	GDEXTENSION_VARIANT_TYPE_OBJECT
-	GDEXTENSION_VARIANT_TYPE_CALLABLE
-	GDEXTENSION_VARIANT_TYPE_SIGNAL
-	GDEXTENSION_VARIANT_TYPE_DICTIONARY
-	GDEXTENSION_VARIANT_TYPE_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_BYTE_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_INT32_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_INT64_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT32_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_FLOAT64_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_STRING_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR2_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR3_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_COLOR_ARRAY
-	GDEXTENSION_VARIANT_TYPE_PACKED_VECTOR4_ARRAY
-	GDEXTENSION_VARIANT_TYPE_VARIANT_MAX
-)
-
-type GDExtensionInitializationLevel int64
-
-const (
-	GDExtensionInitializationLevelCore    GDExtensionInitializationLevel = 0
-	GDExtensionInitializationLevelServers GDExtensionInitializationLevel = 1
-	GDExtensionInitializationLevelScene   GDExtensionInitializationLevel = 2
-	GDExtensionInitializationLevelEditor  GDExtensionInitializationLevel = 3
-)
 
 type initialization = C.GDExtensionInitialization
 
 type initializationLevel = C.GDExtensionInitializationLevel
+
+const initializationLevelScene = C.GDEXTENSION_INITIALIZATION_SCENE
 
 func ToGdBool(val bool) GdBool {
 	if val {
@@ -339,10 +223,6 @@ func ToGdInt(val int64) GdInt {
 	return GdInt(val)
 }
 
-func ToInt(val GdInt) int64 {
-	return int64(val)
-}
-
 func ToInt64(val GdInt) int64 {
 	return int64(val)
 }
@@ -352,14 +232,6 @@ func ToGdFloat(val float64) GdFloat {
 }
 
 func ToFloat64(val GdFloat) float64 {
-	return float64(val)
-}
-
-func ToFloat32(val GdFloat) float64 {
-	return float64(val)
-}
-
-func ToFloat(val GdFloat) float64 {
 	return float64(val)
 }
 
@@ -373,16 +245,8 @@ func ToString(val GdString) string {
 	return str
 }
 
-func GDExtensionInterfaceObjectMethodBindPtrcall(
-	p_method_bind GDExtensionMethodBindPtr,
-	p_instance GDExtensionObjectPtr,
-	p_args *GDExtensionConstTypePtr,
-	r_ret GDExtensionTypePtr,
-) {
-}
-
 func ToGdArrayInfo(slice interface{}) *ArrayInfoImpl {
-	var info *ArrayInfoImpl = nil
+	var info *ArrayInfoImpl
 	switch v := slice.(type) {
 	case []int64:
 		info = createGdArrayFromInt64s(v)
@@ -412,14 +276,6 @@ func ToGdArrayInfo(slice interface{}) *ArrayInfoImpl {
 	return info
 }
 
-func ToGdArray(slice interface{}) GdArray {
-	info := ToGdArrayInfo(slice)
-	if info == nil {
-		return nil
-	}
-	return GdArray(info.gdArray)
-}
-
 // Conversion functions
 func ToArray(arrayInfo GdArray) any {
 	if arrayInfo == nil {
@@ -427,7 +283,7 @@ func ToArray(arrayInfo GdArray) any {
 	}
 	// Returned GdArray values own a temporary bridge buffer and must be freed
 	// after converting them into Go slices.
-	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo), needsFree: true}
+	info := ArrayInfoImpl{gdArray: C.GdArray(arrayInfo)}
 	defer info.Free()
 	switch info.Type() {
 	case ArrayTypeInt64:
@@ -473,10 +329,9 @@ func (a *ArrayInfoImpl) Type() int64 {
 }
 
 func (a *ArrayInfoImpl) Free() {
-	if a.gdArray != nil && a.needsFree {
+	if a.gdArray != nil {
 		C.freeArrayInfo(a.gdArray)
 		a.gdArray = nil
-		a.needsFree = false
 	}
 }
 
@@ -585,46 +440,40 @@ func copyString(val GdString) string {
 }
 
 func doInitialization(init *initialization) {
-	stringInitConstructorBindings()
 	C.initialization(init)
 }
 
 func getProcAddress(handle uintptr, name string) unsafe.Pointer {
-	name = name + "\000"
 	char := C.CString(name)
 	defer C.free(unsafe.Pointer(char))
 	return C.get_proc_address(C.pointer(handle), char)
 }
 
 func registerEngineCallback() {
-	spx_global_register_callbacks := resolveCFunc("spx_global_register_callbacks")
 	C.spx_global_register_callbacks(
-		C.pointer(uintptr(spx_global_register_callbacks)),
+		C.pointer(uintptr(unsafe.Pointer(builtinAPI.SpxGlobalRegisterCallbacks))),
 	)
 }
 
 //export initialize
 func initialize(_ unsafe.Pointer, level initializationLevel) {
-	if level == 2 {
+	if level == initializationLevelScene {
 		main()
 	}
 }
 
 //export deinitialize
-func deinitialize(_ unsafe.Pointer, level initializationLevel) {
-	if level == 0 {
-	}
-}
+func deinitialize(_ unsafe.Pointer, level initializationLevel) {}
 
 func allocateGdArrayInfo(arrayType int64, size int, isNil bool) *ArrayInfoImpl {
 	if isNil {
-		return &ArrayInfoImpl{gdArray: nil, needsFree: false}
+		return &ArrayInfoImpl{}
 	}
 	arrayInfo := C.createArrayInfo(C.int(arrayType), C.int(size))
 	if arrayInfo == nil {
 		return nil
 	}
-	return &ArrayInfoImpl{gdArray: arrayInfo, needsFree: true}
+	return &ArrayInfoImpl{gdArray: arrayInfo}
 }
 
 func createGdArrayFromInt64s(ints []int64) *ArrayInfoImpl {

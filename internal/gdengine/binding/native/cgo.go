@@ -49,7 +49,7 @@ func gdspx_init(lookupFunc uintptr, classes, configuration unsafe.Pointer) uint8
 	}
 	init := (*initialization)(configuration)
 	*init = initialization{}
-	init.minimum_initialization_level = initializationLevel(GDExtensionInitializationLevelScene)
+	init.minimum_initialization_level = initializationLevelScene
 	doInitialization(init)
 	registerEngineCallback()
 	return 1
