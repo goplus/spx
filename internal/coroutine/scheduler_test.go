@@ -483,7 +483,7 @@ func TestUpdateReturnsWhileStartupWaitsForWorker(t *testing.T) {
 
 func TestStartupCanWaitForNextFrame(t *testing.T) {
 	var completed atomic.Bool
-	itime.Start(nil)
+	itime.Start()
 	co := New(nil)
 	co.Create("startup", func(me Thread) {
 		co.WaitNextFrameFor(me)
@@ -508,7 +508,7 @@ func TestStartupCanWaitForNextFrame(t *testing.T) {
 
 func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 	})
@@ -644,7 +644,7 @@ func TestWakeThreadDoesNotWakeCompletedThread(t *testing.T) {
 
 func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 	})
@@ -706,7 +706,7 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 
 func TestCanceledWaitJobIsDiscardedBeforeItsDeadline(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 
 	resumed := false
 	thread := co.Create("waiting", func(Thread) {

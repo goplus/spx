@@ -185,9 +185,9 @@ func TestWaitYieldResumesWithoutAdvancingFrame(t *testing.T) {
 }
 
 func TestWarpWaiterYieldsAfterBudget(t *testing.T) {
-	defer itime.Start(nil)
+	defer itime.Start()
 	synctest.Test(t, func(t *testing.T) {
-		itime.Start(nil)
+		itime.Start()
 		co := setupExecuteTest(t)
 		done := make(chan struct{})
 		thread := co.Create("warp", func(coroutine.Thread) {
@@ -354,8 +354,8 @@ func TestExecuteNativeFromCoroutineResumesWhenNativeWorkCompletes(t *testing.T) 
 
 func TestWaitAdaptersResumeAfterFrameAndPreserveElapsedTime(t *testing.T) {
 	co := setupExecuteTest(t)
-	itime.Start(nil)
-	t.Cleanup(func() { itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { itime.Start() })
 	elapsed := make(chan float64, 3)
 	thread := co.Create("waits", func(coroutine.Thread) {
 		elapsed <- Wait(.1)

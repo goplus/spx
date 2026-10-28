@@ -802,8 +802,8 @@ func TestFrameStopBoundaries(t *testing.T) {
 			setupExecuteTest(t)
 			resetInputState()
 			resetTriggerEvents()
-			itime.Start(nil)
-			t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start(nil) })
+			itime.Start()
+			t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start() })
 			isolateCaptureState(t)
 			var steps []string
 			var binding *gameBinding

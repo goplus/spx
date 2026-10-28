@@ -25,7 +25,7 @@ import (
 
 func TestWaitResumesAtLogicalDeadline(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	resumedFrame := int64(-1)
 	th := co.Create(nil, func(Thread) {
 		co.Wait(1)
@@ -42,7 +42,7 @@ func TestWaitResumesAtLogicalDeadline(t *testing.T) {
 
 func TestWaitWholeSecondAtFixedFPSDoesNotDriftOneFrame(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	resumedFrame := int64(-1)
 	th := co.Create(nil, func(Thread) {
 		co.Wait(1)
@@ -64,7 +64,7 @@ func TestWaitWholeSecondAtFixedFPSDoesNotDriftOneFrame(t *testing.T) {
 
 func TestConsecutiveWholeSecondWaitsDoNotAccumulateFrameDrift(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	var resumedFrames []int64
 	th := co.Create(nil, func(Thread) {
 		for range 3 {
@@ -87,7 +87,7 @@ func TestConsecutiveWholeSecondWaitsDoNotAccumulateFrameDrift(t *testing.T) {
 
 func TestLongFixedStepWaitDoesNotDrift(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	resumedFrame := int64(-1)
 	th := co.Create(nil, func(Thread) {
 		co.Wait(2400)
@@ -112,7 +112,7 @@ func TestLongFixedStepWaitDoesNotDrift(t *testing.T) {
 
 func TestWaitDoesNotResumeBeforeDeadline(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	resumed := false
 	th := co.Create(nil, func(Thread) {
 		co.Wait(1)
@@ -138,7 +138,7 @@ func TestWaitAlwaysCrossesTheIssuingFrame(t *testing.T) {
 	for _, duration := range []float64{-1, 0, 1e-12, 1e-9} {
 		t.Run(fmt.Sprint(duration), func(t *testing.T) {
 			co := New(nil)
-			itime.Start(nil)
+			itime.Start()
 			resumed := false
 			th := co.Create(nil, func(Thread) {
 				co.Wait(duration)

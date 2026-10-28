@@ -310,8 +310,8 @@ func TestWaitOutsideCoroutine(t *testing.T) {
 }
 
 func TestWaitUsesLogicalFrames(t *testing.T) {
-	itime.Start(nil)
-	t.Cleanup(func() { itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { itime.Start() })
 	co := newAPICoroutines(t, "game")
 	results := make(chan float64, 2)
 	thread := co.Create("waiter", func(coroutine.Thread) {

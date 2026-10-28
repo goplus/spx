@@ -26,37 +26,25 @@ import (
 
 func TestStartInitializesTimeState(t *testing.T) {
 	resetStateForTest()
-	realTimeSinceLevelLoad = 9
 	timeSinceLevelLoad = 8
 	logicalTimeCompensation = 9
 	deltaTime = 7
-	realDeltaTime = 6
-	timeScaleBits.Store(math.Float64bits(5))
 	curFrame.Store(4)
 	fps = 3
 	timerBaseTime = 1
 	registeredTimers = []int64{100, 200}
 	pendingTimers = []int64{200}
 
-	Start(nil)
+	Start()
 
-	if got := TimeScale(); got != 1 {
-		t.Fatalf("TimeScale() = %v, want 1", got)
-	}
 	if got := DeltaTime(); got != 0 {
 		t.Fatalf("DeltaTime() = %v, want 0", got)
-	}
-	if got := UnscaledDeltaTime(); got != 0 {
-		t.Fatalf("UnscaledDeltaTime() = %v, want 0", got)
 	}
 	if got := TimeSinceLevelLoad(); got != 0 {
 		t.Fatalf("TimeSinceLevelLoad() = %v, want 0", got)
 	}
 	if logicalTimeCompensation != 0 {
 		t.Fatalf("logical time compensation = %v, want 0", logicalTimeCompensation)
-	}
-	if got := UnscaledTimeSinceLevelLoad(); got != 0 {
-		t.Fatalf("UnscaledTimeSinceLevelLoad() = %v, want 0", got)
 	}
 	if got := Frame(); got != 0 {
 		t.Fatalf("Frame() = %v, want 0", got)
@@ -77,7 +65,7 @@ func TestStartInitializesTimeState(t *testing.T) {
 
 func TestUpdateCompensatesFixedStepRounding(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	for range 72_000 {
 		Update(1.0/30, 30)
 	}
@@ -86,28 +74,9 @@ func TestUpdateCompensatesFixedStepRounding(t *testing.T) {
 	}
 }
 
-func TestUpdateRefreshesRealTimeState(t *testing.T) {
-	resetStateForTest()
-	now := stdtime.Now()
-	startTimestamp = now.Add(-2500 * stdtime.Millisecond)
-	lastTimestamp = now.Add(-1250 * stdtime.Millisecond)
-
-	Update(1.5, 60)
-
-	if diff := math.Abs(UnscaledTimeSinceLevelLoad() - 2.5); diff > 0.1 {
-		t.Fatalf("UnscaledTimeSinceLevelLoad() = %v, want about 2.5", UnscaledTimeSinceLevelLoad())
-	}
-	if diff := math.Abs(UnscaledDeltaTime() - 1.25); diff > 0.1 {
-		t.Fatalf("UnscaledDeltaTime() = %v, want about 1.25", UnscaledDeltaTime())
-	}
-	if got := Frame(); got != 1 {
-		t.Fatalf("Frame() = %v, want 1", got)
-	}
-}
-
 func TestClearTimersKeepsEngineFrame(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	Update(0.1, 60)
 	before := Frame()
 
@@ -131,6 +100,12 @@ func TestUpdateUsesProvidedLogicalDeltaForLogicalTime(t *testing.T) {
 	if got := TimeSinceLevelLoad(); got != 0.5 {
 		t.Fatalf("TimeSinceLevelLoad() = %v, want 0.5", got)
 	}
+	if got := Frame(); got != 1 {
+		t.Fatalf("Frame() = %v, want 1", got)
+	}
+	if got := FPS(); got != 60 {
+		t.Fatalf("FPS() = %v, want 60", got)
+	}
 	if _, ok := FixedDeltaTime(); !ok {
 		t.Fatal("FixedDeltaTime() disabled, want enabled")
 	}
@@ -146,35 +121,13 @@ func TestSetFixedDeltaTimeDisablesNonPositiveValues(t *testing.T) {
 	}
 }
 
-func TestSetTimeScaleInvokesCallback(t *testing.T) {
-	resetStateForTest()
-	defer resetStateForTest()
-	var got float64
-	Start(func(value float64) { got = value })
-
-	SetTimeScale(1.75)
-	if got != 1.75 {
-		t.Fatalf("SetTimeScale callback value = %v, want 1.75", got)
-	}
-	if scale := TimeScale(); scale != 1.75 {
-		t.Fatalf("TimeScale() = %v, want 1.75", scale)
-	}
-}
-
 func TestRealtimeAccessorsAndNonFiniteLogicalTime(t *testing.T) {
 	resetStateForTest()
 	defer resetStateForTest()
 
-	Start(nil)
-	Sleep(0)
+	Start()
 	if got := RealTimeSinceStart(); got < 0 {
 		t.Fatalf("RealTimeSinceStart() = %v, want non-negative", got)
-	}
-	if got := RealTimeSinceCurFrame(); got < 0 {
-		t.Fatalf("RealTimeSinceCurFrame() = %v, want non-negative", got)
-	}
-	if got := RealTimeSinceCurFrameMs(); got < 0 {
-		t.Fatalf("RealTimeSinceCurFrameMs() = %v, want non-negative", got)
 	}
 
 	timeSinceLevelLoad = 1
@@ -226,30 +179,9 @@ func TestFixedDeltaTimeSupportsConcurrentSessionChanges(t *testing.T) {
 	wg.Wait()
 }
 
-func TestTimeScaleSupportsConcurrentAccess(t *testing.T) {
-	resetStateForTest()
-	var wg sync.WaitGroup
-	for range 4 {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < 1000; i++ {
-				SetTimeScale(float64(i))
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			for i := 0; i < 1000; i++ {
-				_ = TimeScale()
-			}
-		}()
-	}
-	wg.Wait()
-}
-
 func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	RegisterTimer(0.5)
 
 	Update(0.4, 60)
@@ -279,7 +211,7 @@ func TestTimerTracksTimeRelativeToReset(t *testing.T) {
 
 func TestClearTimersClearsRegisteredTimers(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	RegisterTimer(0.1)
 	Update(0.2, 60)
 
@@ -296,7 +228,7 @@ func TestClearTimersClearsRegisteredTimers(t *testing.T) {
 
 func TestTimerRegistrationAfterDispatch(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	RegisterTimer(1)
 	RegisterTimer(2)
 	Update(1, 60)
@@ -317,7 +249,7 @@ func TestTimerRegistrationAfterDispatch(t *testing.T) {
 
 func TestTimerRegistrationAfterDrain(t *testing.T) {
 	resetStateForTest()
-	Start(nil)
+	Start()
 	RegisterTimer(0.5)
 	Update(1, 60)
 	assertTimers(t, 500)
@@ -329,17 +261,12 @@ func TestTimerRegistrationAfterDrain(t *testing.T) {
 }
 
 func resetStateForTest() {
-	realTimeSinceLevelLoad = 0
 	timeSinceLevelLoad = 0
 	logicalTimeCompensation = 0
 	deltaTime = 0
-	realDeltaTime = 0
 	fixedDeltaTimeBits.Store(0)
-	timeScaleBits.Store(0)
 	curFrame.Store(0)
-	setTimeScaleCallback = nil
 	startTimestamp = stdtime.Time{}
-	lastTimestamp = stdtime.Time{}
 	fps = 0
 	timerBaseTime = 0
 	registeredTimers = nil

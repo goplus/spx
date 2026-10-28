@@ -25,7 +25,7 @@ import (
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 	iterations := 0
 	th := co.Create(nil, func(me Thread) {
@@ -49,7 +49,7 @@ func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 
 func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 
 	var rounds []uint64
@@ -69,7 +69,7 @@ func TestScriptRoundAdvancesForSameFrameLoopRounds(t *testing.T) {
 
 func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 
 	resumed := false
@@ -92,7 +92,7 @@ func TestNextRoundWaitDoesNotAdmitRound(t *testing.T) {
 
 func TestLoopContinuationAdmitsPassiveRoundWait(t *testing.T) {
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 
 	passiveResumed := false

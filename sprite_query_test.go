@@ -377,7 +377,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				ghost:             make(map[pkgengine.Object]float64),
 			}
 			pkgengine.SpriteMgr = mgr
-			itime.Start(nil)
+			itime.Start()
 
 			ground := newCloneLimitSprite(game, "Ground")
 			player := newCloneLimitSprite(game, "Player")

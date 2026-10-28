@@ -634,7 +634,7 @@ func TestKeyFromStringSpecialAndUnknownNames(t *testing.T) {
 func setupInputFrameGame(t *testing.T) (*coroutine.Coroutines, *Game) {
 	t.Helper()
 	itime.ClearTimers()
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(itime.ClearTimers)
 	co, game := setupRuntimeEventGame(t)
 	game.inputMgr.init(game)

@@ -345,7 +345,7 @@ func TestNumericAndClockUtilities(t *testing.T) {
 	if got := Compare("z", "a"); got != 1 {
 		t.Fatalf("lexical comparison = %d, want 1", got)
 	}
-	itime.Start(nil)
+	itime.Start()
 	itime.Update(0.25, 30)
 	if DeltaTime() != 0.25 || TimeSinceLevelLoad() != 0.25 {
 		t.Fatalf("logical clock = %v/%v", DeltaTime(), TimeSinceLevelLoad())

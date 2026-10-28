@@ -163,7 +163,7 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 func TestOnTimerMatchesMilliseconds(t *testing.T) {
 	previous := gco
 	gco = nil
-	itime.Start(nil)
+	itime.Start()
 	itime.ClearTimers()
 	t.Cleanup(func() {
 		gco = previous

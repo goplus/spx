@@ -112,7 +112,7 @@ func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 func TestWaitMainThreadPreservesScriptSliceAcrossFrames(t *testing.T) {
 	setMainThreadForTest(t, false)
 	co := New(nil)
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 	})
