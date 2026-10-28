@@ -1,4 +1,4 @@
-//go:build unix
+//go:build windows
 
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
@@ -16,25 +16,39 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
+	"context"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
+	"sync"
 )
 
-// Exit preserves signal termination at the launcher boundary.
-func Exit(status ProcessStatus) {
-	if status.Signal != 0 {
-		sig := syscall.Signal(status.Signal)
-		signal.Reset(sig)
-		if err := syscall.Kill(os.Getpid(), sig); err == nil {
-			// Let the restored disposition terminate before fallback.
-			time.Sleep(time.Second)
+func runCommand(parent context.Context, run func(context.Context) (ProcessStatus, error)) (ProcessStatus, error) {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt)
+	interrupted := false
+	done := make(chan struct{})
+	var wait sync.WaitGroup
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+		select {
+		case <-signals:
+			interrupted = true
+			cancel()
+		case <-done:
 		}
-		os.Exit(128 + status.Signal)
+	}()
+	status, err := run(ctx)
+	signal.Stop(signals)
+	close(done)
+	wait.Wait()
+	if interrupted {
+		return ProcessStatus{Code: 130}, nil
 	}
-	os.Exit(status.Code)
+	return status, err
 }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"bytes"
@@ -50,6 +50,8 @@ exit 42
 `
 	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, script)
 	cacheRoot := filepath.Join(t.TempDir(), "cache")
+	tempRoot := t.TempDir()
+	launcherTestTempDir(t, tempRoot)
 	var stdout, stderr bytes.Buffer
 	cfg := Config{
 		Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
@@ -68,6 +70,7 @@ exit 42
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
 
 	enginePath := filepath.Join(cacheRoot, string(runtimebundle.NamespaceEngine), manifest.Engine.BundleDigest, manifest.Engine.Executable)
 	if err := os.WriteFile(enginePath, []byte("tampered"), 0o700); err != nil {
@@ -82,6 +85,7 @@ exit 42
 	if status.Code != 42 || status.Signal != 0 || !strings.Contains(stdout.String(), "FAKE_ENGINE_OK") {
 		t.Fatalf("cache repair status = %+v, stdout = %q, stderr = %q", status, stdout.String(), stderr.String())
 	}
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
 }
 
 func TestRunPreservesEngineSignal(t *testing.T) {
@@ -98,18 +102,21 @@ func TestRunPreservesEngineSignal(t *testing.T) {
 }
 
 func TestRunRejectsReservedEnginePath(t *testing.T) {
-	payload, payloadDigest, manifestDigest, _ := launcherTestPayload(t, "#!/bin/sh\nexit 0\n")
+	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, "#!/bin/sh\nexit 0\n")
+	cacheRoot, tempRoot := filepath.Join(t.TempDir(), "cache"), t.TempDir()
+	launcherTestTempDir(t, tempRoot)
 	var stderr bytes.Buffer
 	status, err := run(context.Background(), Config{
 		Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
 		Args: []string{"--path=/host"}, Stderr: &stderr,
-	}, filepath.Join(t.TempDir(), "cache"))
+	}, cacheRoot)
 	if err == nil || !strings.Contains(err.Error(), "--path is reserved") {
 		t.Fatalf("error = %v, want reserved path error", err)
 	}
 	if status != (ProcessStatus{}) || stderr.Len() != 0 {
 		t.Fatalf("status = %+v, stderr = %q", status, stderr.String())
 	}
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
 }
 
 func TestExitReproducesSignal(t *testing.T) {
@@ -164,7 +171,7 @@ printf 'engine stderr\n' >&2
 
 func TestRunEngineStartError(t *testing.T) {
 	missingInterpreter := filepath.Join(t.TempDir(), "missing-interpreter")
-	payload, payloadDigest, manifestDigest, _ := launcherTestPayload(t, "#!"+missingInterpreter+"\n")
+	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, "#!"+missingInterpreter+"\n")
 	cacheRoot := filepath.Join(t.TempDir(), "cache")
 	tempRoot := t.TempDir()
 	launcherTestTempDir(t, tempRoot)
@@ -174,8 +181,97 @@ func TestRunEngineStartError(t *testing.T) {
 	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "run Engine:") || status != (ProcessStatus{}) {
 		t.Fatalf("run() = (%+v, %v), want engine start error", status, err)
 	}
-	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
-		t.Fatalf("temporary files = %v, error = %v, want work and session cleanup", entries, err)
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
+}
+
+func TestRunCancellationReleasesLeases(t *testing.T) {
+	for _, phase := range []string{"materialization", "running engine"} {
+		t.Run(phase, func(t *testing.T) {
+			payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, `#!/bin/sh
+trap 'printf "stopped\n" > "$2"; exit 0' TERM
+printf '%s\n' "$SPX_SESSION_DIR" > "$1"
+while :; do sleep 1; done
+`)
+			root, tempRoot := t.TempDir(), t.TempDir()
+			cacheRoot := filepath.Join(root, "cache")
+			started, stopped := filepath.Join(root, "started"), filepath.Join(root, "stopped")
+			launcherTestTempDir(t, tempRoot)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			projectPath := filepath.Join(cacheRoot, string(runtimebundle.NamespaceProject), manifest.Project.BundleDigest)
+			var releaseProject func() error
+			if phase == "materialization" {
+				held, err := (runtimebundle.CrossProcessLockProvider{}).AcquireExclusive(ctx, projectPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer held.Close()
+				releaseProject = held.Close
+			}
+			done := make(chan struct{})
+			var status ProcessStatus
+			var runErr error
+			t.Cleanup(func() {
+				cancel()
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Error("canceled launcher did not finish cleanup")
+				}
+			})
+			go func() {
+				status, runErr = run(ctx, Config{
+					Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
+					Args: []string{started, stopped},
+				}, cacheRoot)
+				close(done)
+			}()
+			if phase == "materialization" {
+				ticker := time.NewTicker(10 * time.Millisecond)
+				defer ticker.Stop()
+				for {
+					matches, err := fs.Glob(os.DirFS(tempRoot), "spx-launcher-*/project.zip")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(matches) == 1 {
+						break
+					}
+					select {
+					case <-done:
+						t.Fatalf("run returned before project materialization: (%+v, %v)", status, runErr)
+					case <-ctx.Done():
+						t.Fatal("launcher did not reach project materialization")
+					case <-ticker.C:
+					}
+				}
+			} else {
+				waitForLauncherMarker(t, started)
+			}
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("launcher did not return after cancellation")
+			}
+			if status != (ProcessStatus{}) || !errors.Is(runErr, context.Canceled) {
+				t.Fatalf("canceled run = (%+v, %v), want zero status and context.Canceled", status, runErr)
+			}
+			if phase == "materialization" {
+				if _, err := os.Stat(started); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("engine started during canceled materialization: %v", err)
+				}
+				if _, err := os.Stat(projectPath); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("canceled materialization published project: %v", err)
+				}
+				if err := releaseProject(); err != nil {
+					t.Fatal(err)
+				}
+			} else if data, err := os.ReadFile(stopped); err != nil || string(data) != "stopped\n" {
+				t.Fatalf("engine shutdown marker = %q, %v; want graceful cancellation", data, err)
+			}
+			assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
+		})
 	}
 }
 
@@ -241,23 +337,8 @@ func TestRunSessionDirectoryErrorReleasesLeases(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("launcher did not return after the project lease was released")
 	}
-	if status != (ProcessStatus{}) || !errors.Is(runErr, os.ErrNotExist) || !strings.Contains(runErr.Error(), "xgolauncher: create Engine session:") {
+	if status != (ProcessStatus{}) || !errors.Is(runErr, os.ErrNotExist) || !strings.Contains(runErr.Error(), "launcher: create Engine session:") {
 		t.Fatalf("run = (%+v, %v), want session directory creation error", status, runErr)
 	}
-	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
-		t.Fatalf("temporary directories after run = %v, %v; want none", entries, err)
-	}
-	for namespace, digest := range map[runtimebundle.Namespace]string{
-		runtimebundle.NamespaceEngine:  manifest.Engine.BundleDigest,
-		runtimebundle.NamespaceBridge:  manifest.Bridge.BundleDigest,
-		runtimebundle.NamespaceProject: manifest.Project.BundleDigest,
-	} {
-		lease, err := locks.AcquireExclusive(ctx, filepath.Join(cacheRoot, string(namespace), digest))
-		if err != nil {
-			t.Fatalf("acquire exclusive %s lease after run: %v", namespace, err)
-		}
-		if err := lease.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
 }

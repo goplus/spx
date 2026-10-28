@@ -37,7 +37,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/goplus/spx/v4/x/xgolauncher"
+	"github.com/goplus/spx/v4/pkg/launcher"
 )
 
 //go:embed payload.spxpkg
@@ -47,17 +47,17 @@ const payloadSHA256 = %s
 const manifestSHA256 = %s
 
 func main() {
-	status, err := xgolauncher.RunCommand(context.Background(), func(ctx context.Context) (xgolauncher.ProcessStatus, error) {
-		return xgolauncher.RunContext(ctx, xgolauncher.Config{
+	status, err := launcher.RunCommand(context.Background(), func(ctx context.Context) (launcher.ProcessStatus, error) {
+		return launcher.RunContext(ctx, launcher.Config{
 			Payload: payload, PayloadSHA256: payloadSHA256, ManifestSHA256: manifestSHA256,
 			Args: os.Args[1:], Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 		})
 	})
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "xgolauncher: %%v\n", err)
-		status = xgolauncher.ProcessStatus{Code: 1}
+		_, _ = fmt.Fprintf(os.Stderr, "launcher: %%v\n", err)
+		status = launcher.ProcessStatus{Code: 1}
 	}
-	xgolauncher.Exit(status)
+	launcher.Exit(status)
 }
 `
 

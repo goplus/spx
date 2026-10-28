@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"context"
@@ -35,7 +35,6 @@ func runCommand(parent context.Context, run func(context.Context) (ProcessStatus
 	done := make(chan struct{})
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	var (
-		mu       sync.Mutex
 		received syscall.Signal
 		wait     sync.WaitGroup
 	)
@@ -45,16 +44,10 @@ func runCommand(parent context.Context, run func(context.Context) (ProcessStatus
 		for {
 			select {
 			case current := <-signals:
-				unixSignal, ok := current.(syscall.Signal)
-				if !ok {
-					continue
-				}
-				mu.Lock()
 				if received == 0 {
-					received = unixSignal
-					cancel(&processsupervisor.SignalCause{Signal: unixSignal})
+					received = current.(syscall.Signal)
+					cancel(&processsupervisor.SignalCause{Signal: received})
 				}
-				mu.Unlock()
 			case <-done:
 				return
 			}
@@ -64,11 +57,8 @@ func runCommand(parent context.Context, run func(context.Context) (ProcessStatus
 	signal.Stop(signals)
 	close(done)
 	wait.Wait()
-	mu.Lock()
-	original := received
-	mu.Unlock()
-	if original != 0 {
-		return ProcessStatus{Signal: int(original)}, nil
+	if received != 0 {
+		return ProcessStatus{Signal: int(received)}, nil
 	}
 	return status, err
 }

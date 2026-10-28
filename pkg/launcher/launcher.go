@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-// Package xgolauncher verifies and runs a self-contained SPX payload offline.
-package xgolauncher
+// Package launcher verifies and runs a self-contained SPX payload offline.
+package launcher
 
 import (
 	"context"

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"archive/zip"
@@ -109,7 +109,7 @@ func TestRunContextRejectsInvalidContext(t *testing.T) {
 				if !errors.Is(err, tt.want) {
 					t.Fatalf("error = %v, want %v before payload verification", err, tt.want)
 				}
-			} else if err.Error() != "xgolauncher: nil context" {
+			} else if err.Error() != "launcher: nil context" {
 				t.Fatalf("error = %v, want nil context error", err)
 			}
 		})
@@ -121,7 +121,7 @@ func TestRunRejectsInvalidCacheRoot(t *testing.T) {
 	status, err := run(t.Context(), Config{
 		Payload: payload, PayloadSHA256: payloadDigest, ManifestSHA256: manifestDigest,
 	}, "relative-cache")
-	if err == nil || !strings.Contains(err.Error(), "xgolauncher: validate cache root:") || status != (ProcessStatus{}) {
+	if err == nil || !strings.Contains(err.Error(), "launcher: validate cache root:") || status != (ProcessStatus{}) {
 		t.Fatalf("run() = (%+v, %v), want zero status and cache root error", status, err)
 	}
 }
@@ -194,7 +194,7 @@ func TestRunMaterializationErrors(t *testing.T) {
 }
 
 func TestRunSessionPreparationError(t *testing.T) {
-	payload, payloadDigest, manifestDigest, _ := launcherTestPayload(t, "unused", func(cfg *runtimepayload.BuildConfig) {
+	payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, "unused", func(cfg *runtimepayload.BuildConfig) {
 		cfg.Project.PackDirectory = "missing-assets"
 	})
 	cacheRoot := filepath.Join(t.TempDir(), "cache")
@@ -206,8 +206,28 @@ func TestRunSessionPreparationError(t *testing.T) {
 	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "prepare Engine session:") || status != (ProcessStatus{}) {
 		t.Fatalf("run() = (%+v, %v), want missing assets error", status, err)
 	}
+	assertLauncherCleanup(t, tempRoot, cacheRoot, manifest)
+}
+
+func assertLauncherCleanup(t *testing.T, tempRoot, cacheRoot string, manifest runtimepayload.Manifest) {
+	t.Helper()
 	if entries, err := os.ReadDir(tempRoot); err != nil || len(entries) != 0 {
 		t.Fatalf("temporary files = %v, error = %v, want work and session cleanup", entries, err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	for namespace, digest := range map[runtimebundle.Namespace]string{
+		runtimebundle.NamespaceEngine:  manifest.Engine.BundleDigest,
+		runtimebundle.NamespaceBridge:  manifest.Bridge.BundleDigest,
+		runtimebundle.NamespaceProject: manifest.Project.BundleDigest,
+	} {
+		lease, err := (runtimebundle.CrossProcessLockProvider{}).AcquireExclusive(ctx, filepath.Join(cacheRoot, string(namespace), digest))
+		if err != nil {
+			t.Fatalf("acquire exclusive %s lease after run: %v", namespace, err)
+		}
+		if err := lease.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

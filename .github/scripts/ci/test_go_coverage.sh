@@ -58,8 +58,8 @@ case "${1:-}" in
     ;;
   web-process)
     covered_web_test coverage-web-process.out \
-      -run 'UnsupportedPlatform|^TestRunRejectsInvalidInput$|^TestRunCommand|^TestPrepareLinuxRuntimePackAssetsRejectsInvalidInputs$' \
-      ./internal/cmd/buildctl/engine ./internal/processsupervisor ./x/xgolauncher
+      -run 'UnsupportedPlatform|^Test(RunCommand|MaterializeComponent)|^Test(RunRejectsInvalidInput|PrepareLinuxRuntimePackAssetsRejectsInvalidInputs|ProcessStatusSuccess|RunRejectsInvalidPayload|RunContextRejectsInvalidContext|ContextWriter)$' \
+      ./internal/cmd/buildctl/engine ./internal/processsupervisor ./pkg/launcher
     ;;
   web-interpreter)
     cd cmd/ispx

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"context"
@@ -41,10 +41,10 @@ func (w contextWriter) Write(p []byte) (int, error) {
 
 func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workDir string, namespace runtimebundle.Namespace, expectedDigest string, write func(io.Writer) error) (*runtimebundle.Materialized, error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("xgolauncher: nil materialization context")
+		return nil, fmt.Errorf("launcher: nil materialization context")
 	}
 	if write == nil {
-		return nil, fmt.Errorf("xgolauncher: nil component writer")
+		return nil, fmt.Errorf("launcher: nil component writer")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -54,19 +54,11 @@ func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workD
 	if err != nil {
 		return nil, err
 	}
-	closeFile := true
-	defer func() {
-		if closeFile {
-			_ = file.Close()
-		}
-	}()
+	defer file.Close()
 	if err := write(contextWriter{ctx: ctx, dst: file}); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err := file.Sync(); err != nil {
 		return nil, err
 	}
 	info, err := file.Stat()
@@ -83,6 +75,5 @@ func materializeComponent(ctx context.Context, cache *runtimebundle.Cache, workD
 	if err := file.Close(); err != nil {
 		return nil, err
 	}
-	closeFile = false
 	return cache.Materialize(ctx, namespace, zipPath, &bundle)
 }

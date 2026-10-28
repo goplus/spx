@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"archive/zip"
@@ -96,21 +96,45 @@ func TestMaterializeComponentCancellation(t *testing.T) {
 }
 
 func TestMaterializeComponentDoesNotOverwriteArchive(t *testing.T) {
-	workDir := t.TempDir()
-	zipPath := filepath.Join(workDir, "project.zip")
-	want := []byte("existing archive")
-	if err := os.WriteFile(zipPath, want, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	materialized, err := materializeComponent(context.Background(), nil, workDir, runtimebundle.NamespaceProject, "", func(io.Writer) error {
-		t.Fatal("writer called for existing archive")
-		return nil
-	})
-	if materialized != nil || !errors.Is(err, os.ErrExist) {
-		t.Fatalf("materializeComponent = %v, %v; want existing archive error", materialized, err)
-	}
-	if got, err := os.ReadFile(zipPath); err != nil || !bytes.Equal(got, want) {
-		t.Fatalf("existing archive = %q, %v; want %q", got, err, want)
+	for _, kind := range []string{"file", "directory", "symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			workDir := t.TempDir()
+			zipPath := filepath.Join(workDir, "project.zip")
+			contentPath := zipPath
+			switch kind {
+			case "directory":
+				if err := os.Mkdir(zipPath, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				contentPath = filepath.Join(zipPath, "keep")
+			case "symlink":
+				contentPath = filepath.Join(t.TempDir(), "keep")
+				if err := os.Symlink(contentPath, zipPath); err != nil {
+					t.Skipf("symlinks unavailable: %v", err)
+				}
+			}
+			want := []byte("existing archive")
+			if err := os.WriteFile(contentPath, want, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			original, err := os.Lstat(zipPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			materialized, err := materializeComponent(context.Background(), nil, workDir, runtimebundle.NamespaceProject, "", func(io.Writer) error {
+				t.Fatal("writer called for existing archive")
+				return nil
+			})
+			if materialized != nil || !errors.Is(err, os.ErrExist) {
+				t.Fatalf("materializeComponent = %v, %v; want existing archive error", materialized, err)
+			}
+			if current, err := os.Lstat(zipPath); err != nil || !os.SameFile(original, current) {
+				t.Fatalf("existing archive replaced: %v", err)
+			}
+			if got, err := os.ReadFile(contentPath); err != nil || !bytes.Equal(got, want) {
+				t.Fatalf("existing archive = %q, %v; want %q", got, err, want)
+			}
+		})
 	}
 }
 
@@ -169,8 +193,9 @@ func TestMaterializeComponent(t *testing.T) {
 	namespace := runtimebundle.NamespaceProject
 	bundle := launcherTestBundle(t, data, namespace)
 	cache := runtimebundle.NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+	workDir := t.TempDir()
 	var writer io.Writer
-	materialized, err := materializeComponent(context.Background(), cache, t.TempDir(), namespace, bundle.Digest, func(dst io.Writer) error {
+	materialized, err := materializeComponent(context.Background(), cache, workDir, namespace, bundle.Digest, func(dst io.Writer) error {
 		writer = dst
 		_, err := dst.Write(data)
 		return err
@@ -179,6 +204,9 @@ func TestMaterializeComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer materialized.Close()
+	if err := os.RemoveAll(workDir); err != nil {
+		t.Fatalf("remove completed input archive: %v", err)
+	}
 	if wantPath := filepath.Join(cache.Root, string(namespace), bundle.Digest); materialized.Path != wantPath {
 		t.Fatalf("materialized path = %q, want %q", materialized.Path, wantPath)
 	}
@@ -193,14 +221,35 @@ func TestMaterializeComponent(t *testing.T) {
 func TestMaterializeComponentPropagatesCacheError(t *testing.T) {
 	data := launcherTestZIP(t, []launcherTestFile{{Name: "main.spx", Mode: 0o644, Data: []byte("onStart => {}")}})
 	bundle := launcherTestBundle(t, data, runtimebundle.NamespaceProject)
-	cache := runtimebundle.NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
-	cache.LockProvider = nil
-	materialized, err := materializeComponent(context.Background(), cache, t.TempDir(), runtimebundle.NamespaceProject, bundle.Digest, func(dst io.Writer) error {
-		_, err := dst.Write(data)
-		return err
-	})
-	if materialized != nil || !errors.Is(err, runtimebundle.ErrCrossProcessLockUnsupported) {
-		t.Fatalf("materializeComponent = %v, %v; want cache lock error", materialized, err)
+	for _, failure := range []string{"unsupported locks", "file occupies cache root"} {
+		t.Run(failure, func(t *testing.T) {
+			cache := runtimebundle.NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+			want := []byte("existing cache path")
+			wantErr := runtimebundle.ErrUnsafeArchive
+			if failure == "unsupported locks" {
+				cache.LockProvider = nil
+				wantErr = runtimebundle.ErrCrossProcessLockUnsupported
+			} else if err := os.WriteFile(cache.Root, want, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var writer io.Writer
+			materialized, err := materializeComponent(context.Background(), cache, t.TempDir(), runtimebundle.NamespaceProject, bundle.Digest, func(dst io.Writer) error {
+				writer = dst
+				_, err := dst.Write(data)
+				return err
+			})
+			if materialized != nil || !errors.Is(err, wantErr) {
+				t.Fatalf("materializeComponent = %v, %v; want %v", materialized, err, wantErr)
+			}
+			if failure == "file occupies cache root" {
+				if got, err := os.ReadFile(cache.Root); err != nil || !bytes.Equal(got, want) {
+					t.Fatalf("existing cache path = %q, %v; want %q", got, err, want)
+				}
+			}
+			if _, err := writer.Write([]byte("more")); !errors.Is(err, os.ErrClosed) {
+				t.Fatalf("write after cache rejection = %v, want closed archive", err)
+			}
+		})
 	}
 }
 
