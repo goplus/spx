@@ -60,6 +60,10 @@ func TestParseEngineDownloadArgs(t *testing.T) {
 		{name: "mode without web", args: []string{"--platform", "android", "--mode", "worker"}, message: "--mode requires --platform web"},
 		{name: "invalid platform", args: []string{"--platform", "invalid"}, message: "platform"},
 		{name: "invalid web mode", args: []string{"--platform", "web", "--mode", "invalid"}, message: "mode"},
+		{name: "same-run before runtime rules", args: []string{"--same-run-artifacts", "--skip-runtime-pack", "--platform", "invalid", "--mode", "invalid"}, message: "--same-run-artifacts requires --asset-dir"},
+		{name: "skip pack before platform rules", args: []string{"--skip-runtime-pack", "--platform", "invalid", "--mode", "invalid"}, message: "--skip-runtime-pack requires --runtime"},
+		{name: "runtime platform before mode", args: []string{"--runtime", "--platform", "invalid", "--mode", "invalid"}, message: "--runtime cannot be combined with --platform"},
+		{name: "runtime mode before web mode", args: []string{"--runtime", "--mode", "invalid"}, message: "--runtime cannot be combined with --mode"},
 		{name: "unknown flag", args: []string{"--unknown"}, message: "flag provided but not defined"},
 		{name: "missing flag value", args: []string{"--asset-dir"}, message: "flag needs an argument"},
 		{name: "positional argument", args: []string{"--runtime", "unexpected"}, wantErr: errUsage},
@@ -79,6 +83,70 @@ func TestParseEngineDownloadArgs(t *testing.T) {
 			}
 			if cfg != tt.want {
 				t.Errorf("config = %#v, want %#v", cfg, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizePlatformMode(t *testing.T) {
+	for _, tt := range []struct {
+		platform, mode, want, message string
+	}{
+		{},
+		{platform: "android"},
+		{platform: "ios"},
+		{platform: "linux"},
+		{platform: "windows"},
+		{platform: "macos"},
+		{platform: "web", want: "normal"},
+		{platform: "web", mode: "normal", want: "normal"},
+		{platform: "web", mode: "worker", want: "worker"},
+		{platform: "web", mode: "minigame", want: "minigame"},
+		{platform: "web", mode: "miniprogram", want: "miniprogram"},
+		{mode: "worker", want: "worker", message: "--mode requires --platform web"},
+		{platform: "android", mode: "invalid", want: "invalid", message: "--mode requires --platform web"},
+		{platform: "web", mode: "invalid", want: "invalid", message: "unsupported web-mode: invalid"},
+		{platform: "web", mode: "Worker", want: "Worker", message: "unsupported web-mode: Worker"},
+		{platform: "WEB", message: "unsupported platform: WEB"},
+		{platform: "invalid", mode: "invalid", want: "invalid", message: "unsupported platform: invalid"},
+	} {
+		t.Run(tt.platform+"/"+tt.mode, func(t *testing.T) {
+			mode, err := normalizePlatformMode(tt.platform, tt.mode)
+			if (err != nil) != (tt.message != "") || err != nil && err.Error() != tt.message {
+				t.Fatalf("validation error = %v, want %q", err, tt.message)
+			}
+			if mode != tt.want {
+				t.Fatalf("mode = %q, want %q", mode, tt.want)
+			}
+		})
+	}
+}
+
+func TestDownloadValidationPreservesNormalizationOrder(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		config   DownloadConfig
+		wantMode string
+		message  string
+	}{
+		{name: "successful web default", config: DownloadConfig{Platform: "web", SameRunArtifacts: true}, wantMode: "normal"},
+		{name: "skip pack failure before web default", config: DownloadConfig{Platform: "web", SkipRuntimePack: true}, message: "--skip-runtime-pack requires --runtime"},
+		{name: "runtime failure before web default", config: DownloadConfig{Platform: "web", Runtime: true}, message: "--runtime cannot be combined with --platform"},
+		{name: "platform failure preserves mode", config: DownloadConfig{Platform: "invalid", Mode: "worker"}, wantMode: "worker", message: "unsupported platform: invalid"},
+		{name: "web mode failure preserves mode", config: DownloadConfig{Platform: "web", Mode: "invalid"}, wantMode: "invalid", message: "unsupported web-mode: invalid"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := tt.config
+			cfg.AssetDir = "artifacts/./runtime/../web"
+			want := cfg
+			want.AssetDir = filepath.Join("artifacts", "web")
+			want.Mode = tt.wantMode
+			err := cfg.validate()
+			if (err != nil) != (tt.message != "") || err != nil && err.Error() != tt.message {
+				t.Fatalf("validation error = %v, want %q", err, tt.message)
+			}
+			if cfg != want {
+				t.Fatalf("config after validation = %#v, want %#v", cfg, want)
 			}
 		})
 	}

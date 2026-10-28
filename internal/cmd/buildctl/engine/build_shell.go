@@ -68,19 +68,10 @@ func ParseEnvExportEngineBuildShellArgs(args []string) (BuildConfig, error) {
 	default:
 		return BuildConfig{}, fmt.Errorf("unsupported build target: %s", cfg.Target)
 	}
-	if err := shared.ValidateOptionalPlatform(cfg.Platform); err != nil {
+	var err error
+	cfg.Mode, err = normalizePlatformMode(cfg.Platform, cfg.Mode)
+	if err != nil {
 		return BuildConfig{}, err
-	}
-	if cfg.Platform == "web" && cfg.Mode == "" {
-		cfg.Mode = "normal"
-	}
-	if cfg.Mode != "" {
-		if cfg.Platform != "web" {
-			return BuildConfig{}, fmt.Errorf("--mode requires --platform web")
-		}
-		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
-			return BuildConfig{}, err
-		}
 	}
 	return cfg, nil
 }

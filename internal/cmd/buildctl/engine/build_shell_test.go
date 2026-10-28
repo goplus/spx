@@ -187,13 +187,32 @@ func TestResolveEngineBuildShellPlanDesktopMappings(t *testing.T) {
 	}
 }
 
-func TestParseEnvExportEngineBuildShellArgsWebDefaultMode(t *testing.T) {
-	cfg, err := ParseEnvExportEngineBuildShellArgs([]string{"--target", "template", "--platform", "web"})
-	if err != nil {
-		t.Fatalf("parseEnvExportEngineBuildShellArgs returned error: %v", err)
-	}
-	if cfg.Mode != "normal" {
-		t.Fatalf("expected normal mode, got %s", cfg.Mode)
+func TestParseEnvExportEngineBuildShellArgs(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		args    []string
+		want    BuildConfig
+		message string
+	}{
+		{name: "host editor", args: []string{"--target", "editor"}, want: BuildConfig{Target: "editor"}},
+		{name: "desktop template", args: []string{"--target", "template", "--platform", "macos"}, want: BuildConfig{Target: "template", Platform: "macos"}},
+		{name: "web default", args: []string{"--target", "template", "--platform", "web"}, want: BuildConfig{Target: "template", Platform: "web", Mode: "normal"}},
+		{name: "web editor explicit mode", args: []string{"--target", "editor", "--platform", "web", "--mode", "worker"}, want: BuildConfig{Target: "editor", Platform: "web", Mode: "worker"}},
+		{name: "missing target before platform", args: []string{"--platform", "invalid", "--mode", "invalid"}, message: "unsupported build target: "},
+		{name: "target before platform", args: []string{"--target", "invalid", "--platform", "invalid", "--mode", "invalid"}, message: "unsupported build target: invalid"},
+		{name: "platform before mode", args: []string{"--target", "template", "--platform", "invalid", "--mode", "invalid"}, message: "unsupported platform: invalid"},
+		{name: "non-web before mode", args: []string{"--target", "editor", "--platform", "linux", "--mode", "invalid"}, message: "--mode requires --platform web"},
+		{name: "invalid web mode", args: []string{"--target", "template", "--platform", "web", "--mode", "invalid"}, message: "unsupported web-mode: invalid"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := ParseEnvExportEngineBuildShellArgs(tt.args)
+			if (err != nil) != (tt.message != "") || err != nil && err.Error() != tt.message {
+				t.Fatalf("parse error = %v, want %q", err, tt.message)
+			}
+			if cfg != tt.want {
+				t.Fatalf("config = %#v, want %#v", cfg, tt.want)
+			}
+		})
 	}
 }
 

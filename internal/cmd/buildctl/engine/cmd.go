@@ -66,21 +66,25 @@ func (cfg *DownloadConfig) validate() error {
 	if cfg.Runtime && cfg.Mode != "" {
 		return errors.New("--runtime cannot be combined with --mode")
 	}
-	if err := shared.ValidateOptionalPlatform(cfg.Platform); err != nil {
-		return err
+	var err error
+	cfg.Mode, err = normalizePlatformMode(cfg.Platform, cfg.Mode)
+	return err
+}
+
+func normalizePlatformMode(platform, mode string) (string, error) {
+	if err := shared.ValidateOptionalPlatform(platform); err != nil {
+		return mode, err
 	}
-	if cfg.Platform == "web" && cfg.Mode == "" {
-		cfg.Mode = "normal"
-	}
-	if cfg.Mode != "" {
-		if cfg.Platform != "web" {
-			return errors.New("--mode requires --platform web")
+	if platform != "web" {
+		if mode != "" {
+			return mode, errors.New("--mode requires --platform web")
 		}
-		if err := shared.ValidateWebMode(cfg.Mode); err != nil {
-			return err
-		}
+		return mode, nil
 	}
-	return nil
+	if mode == "" {
+		mode = "normal"
+	}
+	return mode, shared.ValidateWebMode(mode)
 }
 
 func printEngineUsage() {
