@@ -69,8 +69,6 @@ func TestWorkerExposesOnlyCallbackDispatcher(t *testing.T) {
 }
 
 func TestJSFunctionArgsFlattensGdObj(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimitiveType{
@@ -86,6 +84,8 @@ func TestJSFunctionArgsFlattensGdObj(t *testing.T) {
 		},
 	}
 
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, common.GenerationMetadata{})}
+
 	require.Equal(t, []string{"obj_low", "obj_high"}, generation.jsArgs(function))
 }
 
@@ -93,14 +93,15 @@ func TestJSFunctionArgsSkipsArrayLengthArgument(t *testing.T) {
 	metadata := common.GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]common.ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Arguments: []common.CParam{
+			{CType: "const float *", Name: "buffer_data"},
+			{CType: "int", Name: "len"},
+		},
 		Buffers: []common.ArrayBuffer{{
 			Data:   common.CParam{CType: "const float *", Name: "buffer_data"},
 			Length: common.CParam{CType: "int", Name: "len"}, Type: 2,
 		}},
 	}}
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
-
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
 		Arguments: []clang.Argument{
@@ -119,12 +120,12 @@ func TestJSFunctionArgsSkipsArrayLengthArgument(t *testing.T) {
 		},
 	}
 
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, metadata)}
+
 	require.Equal(t, []string{"buffer"}, generation.jsArgs(function))
 }
 
 func TestJSFunctionBodyUsesLowHighBigIntOrderForFlatGdIntArgs(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimitiveType{
@@ -139,6 +140,8 @@ func TestJSFunctionBodyUsesLowHighBigIntOrderForFlatGdIntArgs(t *testing.T) {
 			},
 		},
 	}
+
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, common.GenerationMetadata{})}
 
 	body := generation.jsBody(function)
 	require.Contains(t, body, "_call(GdInt64FromParts(obj_low, obj_high), _resultPtr)")
@@ -146,8 +149,6 @@ func TestJSFunctionBodyUsesLowHighBigIntOrderForFlatGdIntArgs(t *testing.T) {
 }
 
 func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, common.GenerationMetadata{})}
-
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxPhysicsCheckTouchedStageBoundaries",
 		ReturnType: clang.PrimitiveType{
@@ -162,6 +163,8 @@ func TestJSFunctionBodyUsesInstanceResultForFlatReturn(t *testing.T) {
 			},
 		},
 	}
+
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, common.GenerationMetadata{})}
 
 	body := generation.jsBody(function)
 	require.Contains(t, body, `ToJsInt(_resultPtr, this._reusableResults["GdInt"])`)
@@ -196,7 +199,6 @@ public:
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spx_test_mgr.h"), []byte(header), 0o600))
 	headers, err := gdext.PrepareHeaders(dir)
 	require.NoError(t, err)
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, headers.Metadata)}
 
 	for _, test := range []struct {
 		name string
@@ -208,7 +210,9 @@ public:
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			require.Contains(t, headers.Metadata.ArrayBridges, test.name)
-			body := generation.jsBody(arrayFunction(t, test.name, headers.Metadata.ArrayBridges[test.name]))
+			function := arrayFunction(t, test.name, headers.Metadata.ArrayBridges[test.name])
+			generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, headers.Metadata)}
+			body := generation.jsBody(function)
 			require.Contains(t, body, test.want)
 			require.Contains(t, body, "_call(_arg0, _arg1);")
 			require.NotContains(t, body, "GetNativeArrayPointer(")
@@ -259,15 +263,19 @@ func TestJSFunctionBodyValidatesNativeArray(t *testing.T) {
 	metadata := common.GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]common.ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Arguments: []common.CParam{
+			{CType: "const float *", Name: "buffer_data"},
+			{CType: "int", Name: "len"},
+		},
 		Buffers: []common.ArrayBuffer{{
 			Data:   common.CParam{CType: "const float *", Name: "buffer_data"},
 			Length: common.CParam{CType: "int", Name: "len"}, Type: 2,
 		}},
 	}}
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, metadata)}
+	function := arrayFunction(t, "GDExtensionSpxSpriteBatchUpdateTransforms", metadata.ArrayBridges["GDExtensionSpxSpriteBatchUpdateTransforms"])
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, metadata)}
 
-	body := generation.jsBody(arrayFunction(t, "GDExtensionSpxSpriteBatchUpdateTransforms", metadata.ArrayBridges["GDExtensionSpxSpriteBatchUpdateTransforms"]))
+	body := generation.jsBody(function)
 	require.Contains(t, body, `RequireNativeArray(buffer, "gdspx_sprite_batch_update_transforms", 2, false)`)
 	require.Contains(t, body, "var _arg1 = NativeArrayCount(buffer);")
 	require.NotContains(t, body, "buffer['count']")
@@ -613,7 +621,7 @@ public:
 	require.NoError(t, err)
 	const name = "GDExtensionSpxExampleCollect"
 	function := arrayFunction(t, name, headers.Metadata.ArrayBridges[name])
-	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{}, headers.Metadata)}
+	generation := &Generator{GenerationContext: common.NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, headers.Metadata)}
 	require.Equal(t, []string{"label", "mode", "objects", "out", "ret_value"}, generation.jsArgs(function))
 	body := generation.jsBody(function)
 	manager := generation.managerBody(function)
@@ -722,7 +730,7 @@ func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
 func arrayFunction(t *testing.T, name string, spec common.ArrayBridge) *clang.TypedefFunction {
 	t.Helper()
 	var params []string
-	for _, param := range spec.Params() {
+	for _, param := range spec.Arguments {
 		params = append(params, param.Declaration())
 	}
 	ast, err := clang.ParseCString("typedef void (*" + name + ")(" + strings.Join(params, ", ") + ");")

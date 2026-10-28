@@ -183,14 +183,15 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 	metadata := GenerationMetadata{}
 
 	metadata.ArrayBridges = map[string]ArrayBridge{"GDExtensionSpxSpriteBatchUpdateTransforms": {
-		FunctionName: "GDExtensionSpxSpriteBatchUpdateTransforms",
+		Arguments: []CParam{
+			{CType: "const float *", Name: "buffer_data"},
+			{CType: "int", Name: "len"},
+		},
 		Buffers: []ArrayBuffer{{
 			Data:   CParam{CType: "const float *", Name: "buffer_data"},
 			Length: CParam{CType: "int", Name: "len"}, Type: 2,
 		}},
 	}}
-	generation := NewGenerationContext(clang.CHeaderFileAST{}, metadata)
-
 	function := &clang.TypedefFunction{
 		Name: "GDExtensionSpxSpriteBatchUpdateTransforms",
 		Arguments: []clang.Argument{
@@ -209,10 +210,13 @@ func TestEffectiveGoArgumentTypeUsesArrayBridge(t *testing.T) {
 		},
 	}
 
+	generation := NewGenerationContext(clang.CHeaderFileAST{Expr: []clang.Expr{{Function: function}}}, metadata)
 	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").MustGoType(function.Name))
 	require.Equal(t, "[]float32", generation.Parameter(function, "buffer_data").GDXType(function.Name))
 	require.Equal(t, "buffer", generation.Parameter(function, "buffer_data").Name)
 	require.True(t, generation.Parameter(function, "len").IsLength)
+	// Renderers look up ABI argument names, even when the public name differs.
+	require.Equal(t, Parameter{}, generation.Parameter(function, "buffer"))
 }
 
 func TestArrayBufferRejectsUnsupportedElementTypes(t *testing.T) {

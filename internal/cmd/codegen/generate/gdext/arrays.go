@@ -31,10 +31,6 @@ var reOutputMarker = regexp.MustCompile(`\bSPX_OUT\b`)
 var reParamDecl = regexp.MustCompile(`^\s*(.+?[*\s])([A-Za-z_][A-Za-z0-9_]*)\s*$`)
 
 func parseArrayBridge(method classMethodDecl) (common.ArrayBridge, bool) {
-	spec := common.ArrayBridge{
-		FunctionName: method.functionName(),
-		MethodName:   method.MethodName,
-	}
 	params, buffers, ok := parseArrayBuffers(method.Params)
 	if !ok {
 		if strings.ContainsAny(method.Params, "[]") || reOutputMarker.MatchString(method.Params) {
@@ -45,7 +41,7 @@ func parseArrayBridge(method classMethodDecl) (common.ArrayBridge, bool) {
 	if len(buffers) == 0 {
 		return common.ArrayBridge{}, false
 	}
-	spec.Buffers, spec.Arguments = buffers, params
+	spec := common.ArrayBridge{Buffers: buffers, Arguments: params}
 	if method.ReturnType != "void" && !(method.ReturnType == "GdBool" && spec.HasOutputOnly()) {
 		panic("native array methods require void, or GdBool with SPX_OUT: " + method.MethodName)
 	}

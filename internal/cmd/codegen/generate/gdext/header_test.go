@@ -79,7 +79,6 @@ public:
 	require.Equal(t, "buffer", spec.Buffers[0].ArgName())
 	require.Equal(t, "[]float32", spec.Buffers[0].GoType())
 	require.EqualValues(t, 2, spec.Buffers[0].Type)
-	require.Equal(t, "batch_update_transforms", spec.MethodName)
 }
 
 func TestGodotJsTemplateUsesModuleRelativeIncludes(t *testing.T) {
@@ -194,7 +193,9 @@ func TestArrayBridgesKeepDistinctBufferOwnership(t *testing.T) {
  SPX_BIND void read_bytes(uint8_t out[7]);
  SPX_BIND GdArray read_positions(GdArray objects);
  };`)
-	generation := common.NewGenerationContext(clang.CHeaderFileAST{}, header.metadata)
+	ast, err := clang.ParseCString(header.render(true))
+	require.NoError(t, err)
+	generation := common.NewGenerationContext(ast, header.metadata)
 	require.Len(t, header.metadata.ArrayBridges, 2)
 	input, _ := generation.ArrayBridge("GDExtensionSpxExampleUpdateValues")
 	require.Len(t, input.Buffers, 1)

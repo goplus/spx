@@ -33,8 +33,15 @@ func TestGenerationContextSnapshotsMetadata(t *testing.T) {
 		ManagerNames:  []string{"sprite"},
 		StaticMethods: map[string]string{"control": "SpxExtMgr::pause"},
 		ArrayBridges: map[string]ArrayBridge{"first": {
-			FunctionName: "first",
-			Buffers:      []ArrayBuffer{{Type: 2, Data: CParam{Name: "input"}}, {Type: 2, Count: 3}},
+			Arguments: []CParam{
+				{CType: "const float *", Name: "input"},
+				{CType: "int", Name: "len"},
+				{CType: "float *", Name: "output"},
+			},
+			Buffers: []ArrayBuffer{
+				{Type: ArrayFloat, Data: CParam{CType: "const float *", Name: "input"}, Length: CParam{CType: "int", Name: "len"}},
+				{Type: ArrayFloat, Data: CParam{CType: "float *", Name: "output"}, Count: 3},
+			},
 		}},
 	}
 	first := NewGenerationContext(ast, metadata)
@@ -87,6 +94,20 @@ const Manager = "{{manager .}}"
 			})
 		}
 	}
+}
+
+func TestGenerationContextRejectsFunctionsOutsideItsAST(t *testing.T) {
+	ast, err := clang.ParseCString("typedef void (*GDExtensionSpxSpriteShow)(GdObj obj);")
+	require.NoError(t, err)
+	generation := NewGenerationContext(ast, GenerationMetadata{})
+	function := ast.CollectGDExtensionInterfaceFunctions()[0]
+	require.Equal(t, "Object", generation.Parameter(&function, "obj").GoType)
+
+	// A complete declaration from another AST must not trigger lazy preparation.
+	function.Name = "GDExtensionSpxSpriteHide"
+	want := "function is not in generation context: " + function.Name
+	require.PanicsWithValue(t, want, func() { generation.Parameters(&function) })
+	require.PanicsWithValue(t, want, func() { generation.Parameter(&function, "obj") })
 }
 
 func TestCollectCallbacksPreservesABIFieldsAndSignatures(t *testing.T) {
