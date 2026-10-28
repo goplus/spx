@@ -17,6 +17,8 @@
 package spx
 
 import (
+	"math"
+
 	"github.com/goplus/spbase/mathf"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
@@ -207,8 +209,10 @@ func (p *SpriteImpl) ChangeXYpos(dx, dy float64) {
 	p.transform().changePosition(dx, dy)
 }
 
+// Xpos returns the sprite's x position, snapping values less than 1e-9 from an
+// integer to that integer, as in Scratch. The internal position is unchanged.
 func (p *SpriteImpl) Xpos() float64 {
-	return p.transform().x
+	return limitPrecision(p.transform().x)
 }
 
 func (p *SpriteImpl) SetXpos(x float64) {
@@ -219,8 +223,10 @@ func (p *SpriteImpl) ChangeXpos(dx float64) {
 	p.transform().changeX(dx)
 }
 
+// Ypos returns the sprite's y position, snapping values less than 1e-9 from an
+// integer to that integer, as in Scratch. The internal position is unchanged.
 func (p *SpriteImpl) Ypos() float64 {
-	return p.transform().y
+	return limitPrecision(p.transform().y)
 }
 
 func (p *SpriteImpl) SetYpos(y float64) {
@@ -352,6 +358,15 @@ func (p *SpriteImpl) ChangeSize(delta float64) {
 // -----------------------------------------------------------------------------
 // Internal Helpers
 // -----------------------------------------------------------------------------
+// limitPrecision matches Scratch's position reporters so easing loops terminate.
+func limitPrecision(coordinate float64) float64 {
+	rounded := math.Round(coordinate)
+	if math.Abs(coordinate-rounded) < 1e-9 {
+		return rounded
+	}
+	return coordinate
+}
+
 func (p *SpriteImpl) getXY() (x, y float64) {
 	return p.transform().getXY()
 }
