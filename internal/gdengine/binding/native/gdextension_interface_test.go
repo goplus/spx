@@ -19,6 +19,7 @@
 package ffi
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -30,15 +31,15 @@ import (
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-type sceneMainEntered struct{}
+type applicationMainEntered struct{}
 
-var expectSceneMain bool
+var interceptApplicationMain bool
 
 func TestMain(m *testing.M) {
-	// Scene initialization calls main.main through go:linkname. Stop that
-	// reentry here so it can be asserted without running the suite recursively.
-	if expectSceneMain {
-		panic(sceneMainEntered{})
+	// The installed scene hook calls main.main through go:linkname. Intercept
+	// that reentry so lifecycle tests cannot recursively run the test suite.
+	if interceptApplicationMain {
+		panic(applicationMainEntered{})
 	}
 	os.Exit(m.Run())
 }
@@ -222,6 +223,24 @@ func TestToArrayRejectsUnknownNativeType(t *testing.T) {
 	}
 }
 
+func TestNativeArrayAllocationRejectsInvalidMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind int64
+		size int
+	}{
+		{"negative size", ArrayTypeByte, -1},
+		{"unknown nonempty type", -1, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if info := allocateGdArrayInfo(tc.kind, tc.size, false); info != nil {
+				info.Free()
+				t.Fatal("invalid native array metadata allocated storage")
+			}
+		})
+	}
+}
+
 func TestNativeScalarConversions(t *testing.T) {
 	for _, value := range []bool{false, true} {
 		if ToBool(ToGdBool(value)) != value {
@@ -346,20 +365,48 @@ func TestNativeInitialization(t *testing.T) {
 	if !ToBool(CallPlatformIsMainThread()) || stringallocator.RegistrationCount() != 1 || !stringallocator.HasRegistration() {
 		t.Fatal("initialization did not bind the engine API and register callbacks once")
 	}
-	// Other initialization levels and every shutdown level must safely return
-	// through the installed C hooks without entering the application's main.
-	stringallocator.InvokeInactiveLifecycle(unsafe.Pointer(&configuration))
+	for _, phase := range []struct {
+		name       string
+		initialize bool
+	}{{"initialize", true}, {"deinitialize", false}} {
+		for level := 0; level <= 3; level++ {
+			t.Run(fmt.Sprintf("%s/%d", phase.name, level), func(t *testing.T) {
+				interceptApplicationMain = true
+				t.Cleanup(func() { interceptApplicationMain = false })
+				defer func() {
+					got := recover()
+					if phase.initialize && level == int(initializationLevelScene) {
+						if got != (applicationMainEntered{}) {
+							t.Fatalf("scene hook entered %v, want application main", got)
+						}
+					} else if got != nil {
+						t.Fatalf("inactive lifecycle hook entered application main: %v", got)
+					}
+				}()
+				stringallocator.InvokeLifecycle(unsafe.Pointer(&configuration), level, phase.initialize)
+			})
+		}
+	}
 }
 
-func TestNativeSceneInitializationEntersMain(t *testing.T) {
-	expectSceneMain = true
+func TestNativeInitializationRejectsMissingMainThreadAPI(t *testing.T) {
+	bindNativeBuiltinFixture(t)
+	configuration := initialization{}
+	gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration))
+	// A previous link must not mask a missing required symbol in the next one.
+	configuration = initialization{minimum_initialization_level: initializationLevelScene + 1}
 	defer func() {
-		expectSceneMain = false
-		if got := recover(); got != (sceneMainEntered{}) {
-			t.Fatalf("scene initialization = %v, want entry into main", got)
+		if got := recover(); got != "gdengine: spx_platform_is_main_thread is unavailable" {
+			t.Fatalf("missing main-thread API panic = %v", got)
+		}
+		if api.SpxPlatformIsMainThread != nil || stringallocator.RegistrationCount() != 1 {
+			t.Fatal("failed startup reused a stale symbol or registered callbacks")
+		}
+		if configuration.minimum_initialization_level != initializationLevelScene+1 || configuration.initialize != nil || configuration.deinitialize != nil {
+			t.Fatal("failed startup published initialization hooks")
 		}
 	}()
-	initialize(nil, initializationLevelScene)
+	gdspx_init(uintptr(stringallocator.ResolverWithoutMainThread()), nil, unsafe.Pointer(&configuration))
 }
 
 func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {
