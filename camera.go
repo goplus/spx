@@ -117,7 +117,7 @@ func (c *cameraImpl) onUpdate() {
 	c.setXYposDirect(pos.X, pos.Y)
 
 	if sprite, ok := c.followTarget.(*SpriteImpl); ok {
-		c.observedFollowVersion = sprite.spriteState.VisualVersion
+		c.observedFollowVersion = sprite.spriteState.visualVersion
 	}
 }
 
@@ -160,7 +160,7 @@ func (c *cameraImpl) getFollowPos() (bool, mathf.Vec2) {
 	if c.followTarget != nil {
 		switch v := c.followTarget.(type) {
 		case *SpriteImpl:
-			changed := c.observedFollowVersion != v.spriteState.VisualVersion
+			changed := c.observedFollowVersion != v.spriteState.visualVersion
 			return c.isDirty || changed, mathf.NewVec2(v.getXY())
 		case specialObj:
 			if c.followTarget == Mouse {

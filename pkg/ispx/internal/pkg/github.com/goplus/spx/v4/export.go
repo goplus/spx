@@ -62,7 +62,6 @@ func init() {
 			"github.com/goplus/spx/v4/internal/core/event":      "event",
 			"github.com/goplus/spx/v4/internal/core/project":    "project",
 			"github.com/goplus/spx/v4/internal/core/runtime":    "runtime",
-			"github.com/goplus/spx/v4/internal/core/state":      "state",
 			"github.com/goplus/spx/v4/internal/coroutine":       "coroutine",
 			"github.com/goplus/spx/v4/internal/debug":           "debug",
 			"github.com/goplus/spx/v4/internal/engine":          "engine",

@@ -258,8 +258,8 @@ func TestStageUsesDirectFieldsAndPreservesSpriteOrder(t *testing.T) {
 		if sprites[i] != sprite || shapes[i] != spriteOf(sprite) {
 			t.Fatalf("sprite %d bound to wrong live object", i)
 		}
-		if spriteOf(sprite).runtimeState.Layer != firstSpriteLayer+i {
-			t.Fatalf("sprite %d layer = %d", i, spriteOf(sprite).runtimeState.Layer)
+		if spriteOf(sprite).runtimeState.layer != firstSpriteLayer+i {
+			t.Fatalf("sprite %d layer = %d", i, spriteOf(sprite).runtimeState.layer)
 		}
 		if i > 0 && i < 7 && spriteOf(sprite).Xpos() != float64(i) {
 			t.Fatalf("sprite %d x = %v", i, spriteOf(sprite).Xpos())
@@ -552,7 +552,7 @@ func TestGameBackdropOverloads(t *testing.T) {
 	game.costumes = []*costume{newCostumeWithSize(480, 360), newCostumeWithSize(480, 360)}
 	game.costumes[0].name = "first"
 	game.costumes[1].name = "second"
-	game.runtimeState.SyncSprite = &engine.Sprite{Sprite: pkgengine.Sprite{Id: 89801}}
+	game.runtimeState.syncSprite = &engine.Sprite{Sprite: pkgengine.Sprite{Id: 89801}}
 	for _, test := range []struct {
 		name string
 		call func()
@@ -677,9 +677,9 @@ func TestSpritePropertiesDistinguishMissingAndZeroValues(t *testing.T) {
 			direction:     30,
 			rotationStyle: LeftRight,
 		}
-		sprite.spriteState.IsVisible = true
-		sprite.spriteState.Cloned = true
-		sprite.runtimeState.Scale = 2
+		sprite.spriteState.isVisible = true
+		sprite.spriteState.cloned = true
+		sprite.runtimeState.scale = 2
 		sprite.costumeIndex = 3
 		return sprite
 	}
@@ -694,7 +694,7 @@ func TestSpritePropertiesDistinguishMissingAndZeroValues(t *testing.T) {
 		transform.direction != 30 || transform.rotationStyle != LeftRight {
 		t.Fatalf("missing properties changed transform: %+v", transform)
 	}
-	if !unchanged.spriteState.IsVisible || unchanged.runtimeState.Scale != 2 || unchanged.costumeIndex != 3 {
+	if !unchanged.spriteState.isVisible || unchanged.runtimeState.scale != 2 || unchanged.costumeIndex != 3 {
 		t.Fatalf("missing properties changed sprite: %+v", unchanged)
 	}
 
@@ -712,7 +712,7 @@ func TestSpritePropertiesDistinguishMissingAndZeroValues(t *testing.T) {
 		transform.direction != 0 || transform.rotationStyle != None {
 		t.Fatalf("zero properties were not applied to transform: %+v", transform)
 	}
-	if reset.spriteState.IsVisible || reset.runtimeState.Scale != 0 || reset.costumeIndex != 0 {
+	if reset.spriteState.isVisible || reset.runtimeState.scale != 0 || reset.costumeIndex != 0 {
 		t.Fatalf("zero properties were not applied to sprite: %+v", reset)
 	}
 }
@@ -785,6 +785,6 @@ func newTargetLookupSprite(g *Game, name string, cloned bool) *targetLookupSprit
 	sprite.g = g
 	sprite.name = name
 	sprite.sprite = sprite
-	sprite.spriteState.Cloned = cloned
+	sprite.spriteState.cloned = cloned
 	return sprite
 }

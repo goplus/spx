@@ -24,6 +24,22 @@ type layoutExtraBaseSprite struct {
 	value int
 }
 
+func TestSpriteInitFromSelfPreservesStageCloneFamily(t *testing.T) {
+	template := &SpriteImpl{}
+	stage := &SpriteImpl{original: template}
+
+	stage.InitFrom(stage)
+
+	if got := stage.originalSprite(); got != stage {
+		t.Fatalf("self initialization changed clone family from stage %p to %p", stage, got)
+	}
+	var descendant SpriteImpl
+	descendant.InitFrom(stage)
+	if got := descendant.originalSprite(); got != stage {
+		t.Fatalf("descendant clone belongs to %p, want stage %p", got, stage)
+	}
+}
+
 func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
 	game := setupCloneLimitGame(t)
 	source := newCloneLimitSprite(game, "source")
@@ -92,12 +108,12 @@ func TestSpriteBaseLayoutKeepsLookupAndUserFields(t *testing.T) {
 
 	fields := snapshotSpriteUserFields(reflect.ValueOf(sprite).Elem())
 	sprite.value = 11
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	restoreSpriteUserFields(fields)
 	if sprite.value != 7 {
 		t.Fatalf("restored user field = %d, want 7", sprite.value)
 	}
-	if !sprite.spriteState.IsVisible {
+	if !sprite.spriteState.isVisible {
 		t.Fatal("restoring user fields overwrote SpriteImpl")
 	}
 }
@@ -119,7 +135,7 @@ func TestSpriteLifecycleAndAnimationOverloadsInDebugMode(t *testing.T) {
 		sprite.AnimateAndWait("missing")
 		sprite.StopAnimation("missing")
 		sprite.Die()
-		if !sprite.spriteState.IsDying || !sprite.isDestroyed() || game.shapeMgr.findShapeIndex(&sprite.SpriteImpl) >= 0 {
+		if !sprite.spriteState.isDying || !sprite.isDestroyed() || game.shapeMgr.findShapeIndex(&sprite.SpriteImpl) >= 0 {
 			t.Fatal("Die failed to complete lifecycle without a live animation proxy")
 		}
 		sprite.Destroy()

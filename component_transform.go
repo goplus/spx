@@ -185,8 +185,8 @@ func (t *transformComponent) setSize(size float64) {
 	}
 	size = t.clampSpriteScale(size)
 
-	t.sprite.runtimeState.Scale = size
-	t.sprite.runtimeState.IsCostumeDirty = true
+	t.sprite.runtimeState.scale = size
+	t.sprite.runtimeState.isCostumeDirty = true
 	t.sprite.markProxyDirty()
 	t.sprite.updatePhysicsShapesScale()
 }
@@ -195,7 +195,7 @@ func (t *transformComponent) changeSize(delta float64) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("ChangeSize: sprite=%s, delta=%v", t.sprite.name, delta)
 	}
-	t.setSize(t.sprite.runtimeState.Scale + delta)
+	t.setSize(t.sprite.runtimeState.scale + delta)
 }
 
 func (t *transformComponent) getXY() (x, y float64) {
@@ -302,10 +302,10 @@ func (t *transformComponent) moveAxes(x, y float64, axes engine.PositionAxes) {
 	// Same-value setters also own a new write version.
 	t.sprite.markProxyDirty()
 	if axes&engine.PositionX != 0 {
-		t.pendingPosition.x = t.sprite.spriteState.DirtyVersion
+		t.pendingPosition.x = t.sprite.spriteState.dirtyVersion
 	}
 	if axes&engine.PositionY != 0 {
-		t.pendingPosition.y = t.sprite.spriteState.DirtyVersion
+		t.pendingPosition.y = t.sprite.spriteState.dirtyVersion
 	}
 }
 

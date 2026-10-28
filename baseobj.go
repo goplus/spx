@@ -18,18 +18,18 @@ package spx
 
 import (
 	"math"
+	"sync/atomic"
 
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
-	corestate "github.com/goplus/spx/v4/internal/core/state"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 // baseObj provides common functionality for sprites and backdrops.
 type baseObj struct {
-	runtimeState corestate.BaseObjRuntimeState
+	runtimeState baseObjRuntimeState
 
 	costumes     []*costume
 	costumeIndex int
@@ -38,45 +38,57 @@ type baseObj struct {
 	greffUniforms map[EffectKind]float64 // graphic effects uniforms
 }
 
+type baseObjRuntimeState struct {
+	syncSprite     *engine.Sprite
+	scale          float64
+	isCostumeSet   bool
+	isCostumeDirty bool
+	layer          int
+	isLayerDirty   bool
+	hasShader      bool
+	isAnimating    bool
+	hasDestroyed   atomic.Bool
+}
+
 const (
 	shaderPath = "res://engine/shader/spx_sprite_shader.gdshader"
 )
 
 // getSpriteId returns the unique identifier for this sprite.
 func (p *baseObj) getSpriteId() engine.Object {
-	return p.runtimeState.SyncSprite.GetId()
+	return p.runtimeState.syncSprite.GetId()
 }
 
 // getProxy returns the underlying engine sprite.
 func (p *baseObj) getProxy() *engine.Sprite {
-	return p.runtimeState.SyncSprite
+	return p.runtimeState.syncSprite
 }
 
 // setLayer sets the layer/z-order of the object.
 func (p *baseObj) setLayer(layer int) {
-	if p.runtimeState.Layer != layer {
-		p.runtimeState.Layer = layer
-		p.runtimeState.IsLayerDirty = true
+	if p.runtimeState.layer != layer {
+		p.runtimeState.layer = layer
+		p.runtimeState.isLayerDirty = true
 	}
 }
 
 // setCostumeIndex sets the current costume by index.
 func (p *baseObj) setCostumeIndex(value int) {
 	p.costumeIndex = value
-	p.runtimeState.IsCostumeDirty = true
-	p.runtimeState.IsAnimating = false
+	p.runtimeState.isCostumeDirty = true
+	p.runtimeState.isAnimating = false
 }
 
 // isDestroyed reports whether the object has been permanently destroyed.
 // It is safe to call from the engine thread while scripts are still tearing down.
 func (p *baseObj) isDestroyed() bool {
-	return p.runtimeState.IsDestroyed()
+	return p.runtimeState.hasDestroyed.Load()
 }
 
 // markDestroyed records that the object has been permanently destroyed.
 // It is safe to call from script goroutines and read from the engine thread.
 func (p *baseObj) markDestroyed() {
-	p.runtimeState.MarkDestroyed()
+	p.runtimeState.hasDestroyed.Store(true)
 }
 
 // initSpriteCostumes creates costumes from a layout prepared before any engine
@@ -87,7 +99,7 @@ func (p *baseObj) initSpriteCostumes(sprite *coreproject.SpriteConfig, layout *c
 		return
 	}
 
-	p.runtimeState.IsCostumeSet = true
+	p.runtimeState.isCostumeSet = true
 	p.costumes = make([]*costume, 0, len(layout.Frames))
 	if sprite.CostumeSet != nil {
 		cs := sprite.CostumeSet
@@ -151,7 +163,7 @@ func (p *baseObj) init(configs []*coreproject.CostumeConfig, costumeIndex int) {
 	if costumeIndex >= len(configs) || costumeIndex < 0 {
 		costumeIndex = 0
 	}
-	p.runtimeState.IsLayerDirty = true
+	p.runtimeState.isLayerDirty = true
 	p.setCostumeIndex(costumeIndex)
 }
 
@@ -165,7 +177,7 @@ func (p *baseObj) initWithSize(width, height int) {
 // initFrom initializes from another base object (cloning).
 func (p *baseObj) initFrom(src *baseObj) {
 	p.costumes = src.costumes
-	p.runtimeState.HasShader = false
+	p.runtimeState.hasShader = false
 	p.setCostumeIndex(src.costumeIndex)
 }
 
@@ -259,12 +271,12 @@ func (p *baseObj) getCostumeAssetPath() string {
 
 // getCostumeRenderScale returns the render scale for the current costume.
 func (p *baseObj) getCostumeRenderScale() float64 {
-	return p.runtimeState.Scale / float64(p.getCurrentBitmapResolution())
+	return p.runtimeState.scale / float64(p.getCurrentBitmapResolution())
 }
 
 // getAnimRenderScale returns the render scale for animation with given bitmap resolution.
 func (p *baseObj) getAnimRenderScale(bitmapResolution int) float64 {
-	return p.runtimeState.Scale / float64(bitmapResolution)
+	return p.runtimeState.scale / float64(bitmapResolution)
 }
 
 // getCurrentBitmapResolution returns the bitmap resolution of the current costume.
@@ -338,7 +350,7 @@ func (p *baseObj) applyGraphicEffects(isSync bool) {
 
 // doSetGraphicEffect applies a single graphic effect.
 func (p *baseObj) doSetGraphicEffect(kind EffectKind, isSync bool) {
-	if p.runtimeState.SyncSprite == nil {
+	if p.runtimeState.syncSprite == nil {
 		return
 	}
 
@@ -376,26 +388,29 @@ func (p *baseObj) setMaterialParamsVec4(effect string, amount mathf.Vec4, isSync
 
 // applyMaterialParams is the internal implementation for setting scalar material params.
 func (p *baseObj) applyMaterialParams(effect string, amount float64) {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.ensureMaterialShader() {
 		return
 	}
-	if !p.runtimeState.HasShader {
-		p.runtimeState.SyncSprite.SetMaterialShader(shaderPath)
-		p.runtimeState.HasShader = true
-	}
-	p.runtimeState.SyncSprite.SetMaterialParams(effect, amount)
+	p.runtimeState.syncSprite.SetMaterialParams(effect, amount)
 }
 
 // applyMaterialParamsVec4 is the internal implementation for setting vector material params.
 func (p *baseObj) applyMaterialParamsVec4(effect string, val mathf.Vec4) {
-	if p.runtimeState.SyncSprite == nil {
+	if !p.ensureMaterialShader() {
 		return
 	}
-	if !p.runtimeState.HasShader {
-		p.runtimeState.SyncSprite.SetMaterialShader(shaderPath)
-		p.runtimeState.HasShader = true
+	p.runtimeState.syncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
+}
+
+func (p *baseObj) ensureMaterialShader() bool {
+	if p.runtimeState.syncSprite == nil {
+		return false
 	}
-	p.runtimeState.SyncSprite.SetMaterialParamsVec(effect, val.X, val.Y, val.Z, val.W)
+	if !p.runtimeState.hasShader {
+		p.runtimeState.syncSprite.SetMaterialShader(shaderPath)
+		p.runtimeState.hasShader = true
+	}
+	return true
 }
 
 // normalizeEffectValue normalizes an effect value based on its type.

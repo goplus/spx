@@ -65,12 +65,12 @@ func (p *Game) loadPreparedSprite(sprite Sprite, name string, gamer reflect.Valu
 	// Paths in config are already normalized by coreproject.LoadSpriteConfig.
 	config := &prepared.config
 	base.initSpriteCostumes(config, prepared.layout)
-	base.spriteState.DefaultCostumeIndex = base.costumeIndex
+	base.spriteState.defaultCostumeIndex = base.costumeIndex
 	base.scriptEventBindings.bind(&p.scriptEvents, base)
 
 	base.g, base.name, base.sprite = p, name, sprite
-	base.runtimeState.Scale = config.Size
-	base.spriteState.IsVisible = config.Visible
+	base.runtimeState.scale = config.Size
+	base.spriteState.isVisible = config.Visible
 
 	base.components.initComponents(base, config)
 	base.initRuntimeProxy()
@@ -154,7 +154,7 @@ func (p *Game) setupPlatformAndCamera(proj *coreproject.ProjectConfig) {
 	ui.SetBaseScreenSize(baseScreenWidth, baseScreenHeight)
 	ui.ClampUIPositionInScreen(isWindowMapSizeEqual)
 
-	p.runtimeState.SyncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
+	p.runtimeState.syncSprite = engine.NewBackdropProxy(p, p.getCostumePath(), p.getCostumeRenderScale())
 	p.setupBackdrop()
 }
 

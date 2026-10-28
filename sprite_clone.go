@@ -99,7 +99,7 @@ func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteP
 
 func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
 	defer dest.finishCloneInitialization()
-	if dest.spriteState.HasOnCloned {
+	if dest.spriteState.hasOnCloned {
 		dest.doWhenCloned(dest, data)
 	}
 }
@@ -119,10 +119,10 @@ func copySprite(out reflect.Value, source Sprite) (*SpriteImpl, Sprite) {
 		dstField.Addr().Method(field.method).Call([]reflect.Value{srcField.Addr()})
 	}
 	dest.sprite = outPtr
-	dest.runtimeState.IsCostumeDirty = true
+	dest.runtimeState.isCostumeDirty = true
 	// The clone gets a fresh engine proxy, so its copied layer must be pushed
 	// even when it is numerically unchanged from the source layer.
-	dest.runtimeState.IsLayerDirty = true
+	dest.runtimeState.isLayerDirty = true
 
 	src := layout.base(in)
 	dest.components = cloneComponents(src, dest)

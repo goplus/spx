@@ -86,7 +86,7 @@ func (a *animationComponent) initialize(sprite *SpriteImpl, spriteCfg *coreproje
 			config:       ani,
 			spriteName:   a.sprite.name,
 			costumes:     a.sprite.costumes,
-			isCostumeSet: a.sprite.runtimeState.IsCostumeSet,
+			isCostumeSet: a.sprite.runtimeState.isCostumeSet,
 		}
 	}
 }
@@ -195,7 +195,7 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
 	})
 	if isBlocking {
-		a.sprite.runtimeState.IsAnimating = true
+		a.sprite.runtimeState.isAnimating = true
 		for engine.Managers().SpriteMgr.IsPlayingAnim(syncSprite.GetId()) {
 			if info.IsCanceled {
 				break
@@ -223,7 +223,7 @@ func (a *animationComponent) playDefaultAnim() {
 	if syncSprite == nil {
 		return
 	}
-	if !a.sprite.spriteState.IsVisible || a.sprite.spriteState.IsDying {
+	if !a.sprite.spriteState.isVisible || a.sprite.spriteState.isDying {
 		return
 	}
 
@@ -243,7 +243,7 @@ func (a *animationComponent) playDefaultAnim() {
 		a.defaultAnimActive = true
 	} else {
 		a.defaultAnimActive = false
-		a.sprite.goSetCostume(a.sprite.spriteState.DefaultCostumeIndex)
+		a.sprite.goSetCostume(a.sprite.spriteState.defaultCostumeIndex)
 	}
 }
 
@@ -318,7 +318,7 @@ func (a *animationComponent) cancelAnimState(state *animState) int64 {
 	id := state.OnPlayAudioPlaybackID
 	state.OnPlayAudioPlaybackID = 0
 	if a.curAnimState == state {
-		a.sprite.runtimeState.IsAnimating = false
+		a.sprite.runtimeState.isAnimating = false
 	}
 	engine.Unlock()
 	return id
@@ -468,14 +468,14 @@ func (a *animationComponent) syncSprite() *engine.Sprite {
 	if a.sprite == nil {
 		return nil
 	}
-	return a.sprite.runtimeState.SyncSprite
+	return a.sprite.runtimeState.syncSprite
 }
 
 func (a *animationComponent) syncSpriteForPlayback() *engine.Sprite {
 	if a.sprite == nil || a.sprite.isDestroyed() {
 		return nil
 	}
-	return a.sprite.runtimeState.SyncSprite
+	return a.sprite.runtimeState.syncSprite
 }
 
 func prepareTweenParams(params tweenParams) (tweenParams, bool) {

@@ -38,20 +38,20 @@ func TestSpriteSetCostume(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			sprite := newTestRenderSprite()
-			sprite.spriteState.DefaultCostumeIndex = tt.defaultIndex
+			sprite.spriteState.defaultCostumeIndex = tt.defaultIndex
 
 			sprite.setCostume(tt.costume)
 
 			if got := sprite.costumeIndex; got != tt.wantIndex {
 				t.Errorf("costumeIndex = %d, want %d", got, tt.wantIndex)
 			}
-			if got := sprite.spriteState.DefaultCostumeIndex; got != 0 {
+			if got := sprite.spriteState.defaultCostumeIndex; got != 0 {
 				t.Errorf("DefaultCostumeIndex = %d, want 0", got)
 			}
-			if got := uint64(sprite.spriteState.DirtyVersion); got != tt.wantVersion {
+			if got := uint64(sprite.spriteState.dirtyVersion); got != tt.wantVersion {
 				t.Errorf("DirtyVersion = %d, want %d", got, tt.wantVersion)
 			}
-			if got := sprite.runtimeState.IsCostumeDirty; got != tt.wantDirty {
+			if got := sprite.runtimeState.isCostumeDirty; got != tt.wantDirty {
 				t.Errorf("IsCostumeDirty = %v, want %v", got, tt.wantDirty)
 			}
 		})
@@ -191,7 +191,7 @@ func TestAtlasCostumePreservesFrameGeometry(t *testing.T) {
 
 func TestWorldRenderOffsetAppliesRootFlipAndRotation(t *testing.T) {
 	sprite := newRenderOffsetTestSprite()
-	sprite.runtimeState.Scale = 2
+	sprite.runtimeState.scale = 2
 	sprite.transform().rotationStyle = LeftRight
 	sprite.transform().direction = -30
 
@@ -200,7 +200,7 @@ func TestWorldRenderOffsetAppliesRootFlipAndRotation(t *testing.T) {
 		t.Fatalf("left-right world render offset = (%v, %v), want (-74, -48)", x, y)
 	}
 
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().rotationStyle = Normal
 	sprite.transform().direction = 45
 	x, y = getWorldRenderOffset(sprite)
@@ -229,7 +229,7 @@ func TestLegacyLeftRightRotationStyleFlipsNegativeHeading(t *testing.T) {
 
 func TestPhysicsShapePivotSeparatesAutoAndExplicitShapes(t *testing.T) {
 	sprite := newRenderOffsetTestSprite()
-	sprite.runtimeState.Scale = 2
+	sprite.runtimeState.scale = 2
 
 	config := physicConfig{Pivot: mathf.NewVec2(3, 4), Type: physicsColliderRect}
 	if got, want := config.shapePivot(sprite), mathf.NewVec2(6, 8); got != want {
@@ -305,7 +305,7 @@ func newRenderOffsetTestSprite() *SpriteImpl {
 		FAnimations:   map[SpriteAnimationName]*coreproject.AniConfig{},
 		AnimBindings:  map[string]string{},
 	})
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
 	sprite.costumes = []*costume{{
 		atlas: true,

@@ -623,8 +623,8 @@ func TestLoadGameAppliesPreparedMetadataToLiveFields(t *testing.T) {
 		if !ok || live == nil || shapes[i] != &live.SpriteImpl || live.sprite != sprite || live.g != base || live.projectTestGame != game {
 			t.Fatalf("stage sprite %d is not bound to its live game field and owner", i)
 		}
-		if live.Xpos() != positions[i] || live.runtimeState.Layer != firstSpriteLayer+i {
-			t.Errorf("sprite %d: x=%v layer=%d, want x=%v layer=%d", i, live.Xpos(), live.runtimeState.Layer, positions[i], firstSpriteLayer+i)
+		if live.Xpos() != positions[i] || live.runtimeState.layer != firstSpriteLayer+i {
+			t.Errorf("sprite %d: x=%v layer=%d, want x=%v layer=%d", i, live.Xpos(), live.runtimeState.layer, positions[i], firstSpriteLayer+i)
 		}
 	}
 	if base.TilemapName() != "map" || parser.loadedPath == "" {

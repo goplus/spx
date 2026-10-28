@@ -100,7 +100,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := new(SpriteImpl)
-			sprite.spriteState.IsVisible = visible
+			sprite.spriteState.isVisible = visible
 			sprite.components.transform = &transformComponent{
 				sprite:    sprite,
 				direction: 45, rotationStyle: Normal,
@@ -133,7 +133,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 					t.Fatalf("iteration %d ran at frame %d, want %d", i, frame, want)
 				}
 			}
-			if sprite.spriteState.DirtyVersion == 0 {
+			if sprite.spriteState.dirtyVersion == 0 {
 				t.Fatal("rotation style did not mark the render proxy dirty")
 			}
 		})
@@ -268,7 +268,7 @@ func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := new(SpriteImpl)
-			sprite.spriteState.IsVisible = visible
+			sprite.spriteState.isVisible = visible
 			count := 0
 			th := co.Create(sprite, func(coroutine.Thread) {
 				Repeat(5, func() { count++; sprite.markProxyDirty() })
@@ -301,7 +301,7 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
 			itime.Start()
 			sprite := newTestRenderSprite()
-			sprite.spriteState.IsVisible = tt.visible
+			sprite.spriteState.isVisible = tt.visible
 			var frames [3]int64
 			count := 0
 			th := co.Create(sprite, func(coroutine.Thread) {
@@ -496,7 +496,7 @@ func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
 	first, second, late := newSprite("first"), newSprite("second"), newSprite("late")
 	destroyed, unbound := newSprite("destroyed"), newSprite("unbound")
 	destroyed.markDestroyed()
-	unbound.runtimeState.SyncSprite = nil
+	unbound.runtimeState.syncSprite = nil
 	game.shapeMgr.items = []Shape{first, struct{}{}, destroyed, second, unbound}
 	var steps []string
 	backend.onPlay = func(id int64) {

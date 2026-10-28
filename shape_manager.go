@@ -189,7 +189,7 @@ func (s *shapeManager) collectProxyChanges(items []Shape, buffer *engine.SpriteS
 	// Keep deletion requests pending until this batch commits.
 	batch.destroyCount = len(s.destroyItems)
 	for _, sprite := range s.destroyItems {
-		proxy := sprite.runtimeState.SyncSprite
+		proxy := sprite.runtimeState.syncSprite
 		if proxy == nil {
 			continue
 		}
@@ -263,7 +263,7 @@ func (s *shapeManager) removeShape(child Shape) {
 		if sprite.IsCloned() {
 			s.cloneCount--
 		}
-		if sprite.runtimeState.SyncSprite != nil {
+		if sprite.runtimeState.syncSprite != nil {
 			s.destroyItems = append(s.destroyItems, sprite)
 		}
 	}
@@ -358,7 +358,7 @@ func (s *shapeManager) spritesNamed(name string) []*SpriteImpl {
 func (s *shapeManager) findSprite(name SpriteName) *SpriteImpl {
 	for _, item := range s.items {
 		if sp, ok := item.(*SpriteImpl); ok {
-			if !sp.spriteState.Cloned && sp.name == name {
+			if !sp.spriteState.cloned && sp.name == name {
 				return sp
 			}
 		}

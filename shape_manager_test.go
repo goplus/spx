@@ -62,7 +62,7 @@ func TestShapeManagerOnlyQueuesSpritesWithProxies(t *testing.T) {
 		t.Fatal("removing shapes without proxies retained a shape or queued a deletion")
 	}
 	sprite := &SpriteImpl{}
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	s.add(sprite)
 	s.removeShape(sprite)
 	s.removeShape(sprite)
@@ -74,10 +74,10 @@ func TestShapeManagerOnlyQueuesSpritesWithProxies(t *testing.T) {
 func TestShapeManagerCommitsClearedProxyDeletion(t *testing.T) {
 	var s shapeManager
 	sprite := &SpriteImpl{}
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	s.add(sprite)
 	s.removeShape(sprite)
-	sprite.runtimeState.SyncSprite = nil
+	sprite.runtimeState.syncSprite = nil
 
 	var batch proxyBatch
 	s.collectProxyChanges(nil, nil, &batch)
@@ -149,7 +149,7 @@ func TestSpriteLayerMovesSkipNonSpriteShapes(t *testing.T) {
 
 func TestHiddenSpritesStillOccupyLayers(t *testing.T) {
 	game, sprites := newLayerOrderTestGame("A", "B", "C", "D", "E")
-	sprites["D"].spriteState.IsVisible = false
+	sprites["D"].spriteState.isVisible = false
 
 	sprites["C"].SetLayer__1(Forward, 1)
 
@@ -203,10 +203,10 @@ func TestShapeManagerLayerSortPreservesAutomaticOrder(t *testing.T) {
 	if err := engine.SetLayerSortMode("vertical"); err != nil {
 		t.Fatal(err)
 	}
-	sprites["a"].runtimeState.Layer = 17
+	sprites["a"].runtimeState.layer = 17
 	game.shapeMgr.goBackLayers(sprites["a"], -1)
 	game.shapeMgr.updateRenderLayers()
-	if got := spriteOrderNames(game.shapeMgr.items); !reflect.DeepEqual(got, []string{"a", "b"}) || sprites["a"].runtimeState.Layer != 17 {
+	if got := spriteOrderNames(game.shapeMgr.items); !reflect.DeepEqual(got, []string{"a", "b"}) || sprites["a"].runtimeState.layer != 17 {
 		t.Fatalf("manual layering overrode automatic order: %v", got)
 	}
 }
@@ -283,7 +283,7 @@ func assertLayerOrder(t *testing.T, game *Game, want []string) {
 		if !ok {
 			continue
 		}
-		if got := spr.runtimeState.Layer; got != wantLayer {
+		if got := spr.runtimeState.layer; got != wantLayer {
 			t.Fatalf("sprite %q layer = %d, want %d", spr.name, got, wantLayer)
 		}
 		wantLayer++

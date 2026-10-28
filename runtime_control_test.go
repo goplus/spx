@@ -292,7 +292,7 @@ func TestStopAllCancelsWaitingCloneHandler(t *testing.T) {
 		t.Fatal("pending clone survived stop all")
 	}
 	flushCloneProxyUpdates(game)
-	if clone.runtimeState.SyncSprite != nil {
+	if clone.runtimeState.syncSprite != nil {
 		t.Fatal("stopped clone retained its proxy")
 	}
 }

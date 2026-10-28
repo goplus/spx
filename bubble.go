@@ -98,7 +98,7 @@ func (b *bubbleBase) checkNeedsUpdate() bool {
 		return false
 	}
 	return b.isDirty ||
-		b.observedSpriteVersion != b.sprite.spriteState.VisualVersion ||
+		b.observedSpriteVersion != b.sprite.spriteState.visualVersion ||
 		b.observedCameraVersion != b.camera.dirtyVersion
 }
 
@@ -112,7 +112,7 @@ func (b *bubbleBase) getBounds() (center, size mathf.Vec2) {
 
 // markClean marks the bubble as no longer needing a refresh.
 func (b *bubbleBase) markClean() {
-	b.observedSpriteVersion = b.sprite.spriteState.VisualVersion
+	b.observedSpriteVersion = b.sprite.spriteState.visualVersion
 	b.observedCameraVersion = b.camera.dirtyVersion
 	b.isDirty = false
 }

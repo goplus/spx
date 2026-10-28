@@ -55,7 +55,7 @@ type animationLoopCall struct {
 func TestTweenCancellationUnregistersState(t *testing.T) {
 	co := setupRuntimeScheduler(t)
 	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	continued := false
 	thread := co.Create(anim.sprite, func(coroutine.Thread) {
@@ -76,7 +76,7 @@ func TestTweenCancellationUnregistersState(t *testing.T) {
 
 func TestTweenInitializationFailureUnregistersState(t *testing.T) {
 	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	base := &coreproject.AniConfig{IFrameFrom: 1, IFrameTo: 1}
 	anim.shared.animations[StateGlide] = &animationEntry{name: StateGlide, config: base}
 	var recovered any
@@ -166,7 +166,7 @@ func TestPlayDefaultAnimIfIdleSkipsActiveDefaultAnimation(t *testing.T) {
 func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.spriteState.defaultCostumeIndex = 0
 	anim.sprite.costumeIndex = 1
 
 	activeAnim := &animState{Name: "wave"}
@@ -190,7 +190,7 @@ func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
 func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.spriteState.defaultCostumeIndex = 0
 	anim.sprite.costumeIndex = 1
 
 	tween := &animState{Name: StateGlide, AniType: coreproject.AniTypeGlide}
@@ -209,7 +209,7 @@ func TestCleanupTweenWithoutPlaybackRestoresDefaultWhenIdle(t *testing.T) {
 func TestCleanupTweenRestoresDefaultForOwnedPlayback(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.spriteState.defaultCostumeIndex = 0
 	anim.sprite.costumeIndex = 1
 
 	playback := &animState{Name: StateGlide}
@@ -245,7 +245,7 @@ func TestDoTweenRejectsNonPositiveDurationBeforeSideEffects(t *testing.T) {
 			anim := newTestAnimationComponent()
 			backend := &animationAudioBackend{}
 			initTestAnimationAudio(anim, backend)
-			anim.sprite.runtimeState.SyncSprite = nil
+			anim.sprite.runtimeState.syncSprite = nil
 			base := &coreproject.AniConfig{OnPlay: &coreproject.ActionConfig{Play: "step"}}
 			anim.shared.animations[StateGlide] = &animationEntry{
 				name:   StateGlide,
@@ -290,7 +290,7 @@ func TestPrepareTweenParamsUsesTypedEndpointsAndDuration(t *testing.T) {
 
 func TestMissingTweenAnimationUsesDirectMotion(t *testing.T) {
 	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	transform := anim.sprite.transform()
 
@@ -311,7 +311,7 @@ func TestTweenStateRegistrationAndUnregistrationOrder(t *testing.T) {
 	params := tweenParams{aniType: coreproject.AniTypeGlide, duration: 1, speed: 2}
 	base := &coreproject.AniConfig{Speed: 7}
 	co := setupRuntimeScheduler(t)
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	start := func(name string) *animState {
 		thread := co.Create(anim.sprite, func(coroutine.Thread) { anim.doTween(name, base, params) })
@@ -361,7 +361,7 @@ func TestApplyTweenStepMoveUsesAbsolutePosition(t *testing.T) {
 
 func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
 	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 0, 0)
 	anim.sprite.components.transform.direction = 100
 
@@ -381,7 +381,7 @@ func TestApplyTweenStepTurnUsesAbsoluteHeading(t *testing.T) {
 func TestCleanupTweenStopsStaleOwnedPlayback(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
-	anim.sprite.spriteState.DefaultCostumeIndex = 0
+	anim.sprite.spriteState.defaultCostumeIndex = 0
 	anim.sprite.costumeIndex = 1
 
 	playback := &animState{Name: StateGlide}
@@ -459,7 +459,7 @@ func TestFlushCompletedAnimationsKeepsPlaybackIdentity(t *testing.T) {
 			case "destroyed":
 				anim.sprite.markDestroyed()
 			case "unbound":
-				anim.sprite.runtimeState.SyncSprite = nil
+				anim.sprite.runtimeState.syncSprite = nil
 			}
 			queued := anim.doneAnimations
 			buffer := make([]*animState, 0, 2)
@@ -884,9 +884,9 @@ func newTestAnimationComponent() *animationComponent {
 		g:    &Game{},
 		name: "TestSprite",
 	}
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	sprite.spriteState.IsVisible = true
-	sprite.spriteState.DefaultCostumeIndex = 0
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.spriteState.isVisible = true
+	sprite.spriteState.defaultCostumeIndex = 0
 	sprite.costumes = []*costume{newCostumeWithSize(1, 1)}
 
 	anim := &animationComponent{
@@ -931,7 +931,7 @@ func initTestAnimationAudio(anim *animationComponent, backend *animationAudioBac
 func assertTweenStepUsesAbsolutePosition(t *testing.T, kind coreproject.AniType) {
 	t.Helper()
 	anim := newTestAnimationComponent()
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	initTestMotionComponents(anim.sprite, 100, 20)
 
 	params := &tweenParams{

@@ -96,7 +96,6 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/core/event":              {},
 	"internal/core/project":            {},
 	"internal/core/runtime":            {},
-	"internal/core/state":              {},
 	"internal/coroutine":               {},
 	"internal/debug":                   {},
 	"internal/engine":                  {},

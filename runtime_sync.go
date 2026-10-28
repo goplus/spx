@@ -82,7 +82,7 @@ type preparedProxyVisual struct {
 // -----------------------------------------------------------------------------
 // mirrorPosition applies engine position writes without movement side effects.
 func (p *SpriteImpl) mirrorPosition(proxy *engine.Sprite, position mathf.Vec2, axes engine.PositionAxes) {
-	if p.isDestroyed() || p.runtimeState.SyncSprite != proxy {
+	if p.isDestroyed() || p.runtimeState.syncSprite != proxy {
 		return
 	}
 	pending := &p.transform().pendingPosition
@@ -98,23 +98,23 @@ func (p *SpriteImpl) mirrorPosition(proxy *engine.Sprite, position mathf.Vec2, a
 func (p *SpriteImpl) applyCostumeUpdate() {
 	// Texture setters emit synchronous callbacks. Nested queries must not
 	// interleave another texture write with this preparation's scale and UVs.
-	if p.preparedVisual.proxy == p.runtimeState.SyncSprite && p.preparedVisual.preparing {
+	if p.preparedVisual.proxy == p.runtimeState.syncSprite && p.preparedVisual.preparing {
 		return
 	}
 	p.applyLayerUpdate()
 	// Hidden transforms can be acknowledged while their resources stay dirty.
 	// Preparing those resources must submit their matching geometry again.
-	if p.runtimeState.IsCostumeDirty && p.preparedVisual.proxy == p.runtimeState.SyncSprite &&
-		p.spriteState.ProxySyncVersion == p.spriteState.DirtyVersion {
+	if p.runtimeState.isCostumeDirty && p.preparedVisual.proxy == p.runtimeState.syncSprite &&
+		p.spriteState.proxySyncVersion == p.spriteState.dirtyVersion {
 		p.markProxyDirty()
 	}
-	if !p.runtimeState.IsCostumeDirty && !p.hasCostume() {
+	if !p.runtimeState.isCostumeDirty && !p.hasCostume() {
 		return // Clean proxies without a costume use native collision fallback.
 	}
 	// Refresh geometry even when the texture is clean: later callbacks may
 	// change the costume after a heading-only update has already committed.
 	p.preparedVisual = p.captureProxyVisual()
-	if !p.runtimeState.IsCostumeDirty {
+	if !p.runtimeState.isCostumeDirty {
 		return
 	}
 	p.preparedVisual.preparing = true
@@ -143,7 +143,7 @@ func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
 }
 
 func (p *SpriteImpl) initRuntimeProxy() {
-	p.runtimeState.SyncSprite = nil
+	p.runtimeState.syncSprite = nil
 	engine.WaitMainThread(func() {
 		p.ensureProxyInitialized()
 		p.applyCostumeUpdate()
@@ -155,23 +155,23 @@ func (p *SpriteImpl) awake() {
 }
 
 func (p *SpriteImpl) ensureProxyInitialized() {
-	if p.runtimeState.SyncSprite != nil || p.isDestroyed() {
+	if p.runtimeState.syncSprite != nil || p.isDestroyed() {
 		return
 	}
-	p.runtimeState.SyncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
-	p.runtimeState.SyncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
-	p.runtimeState.SyncSprite.MirrorPosition = p.mirrorPosition
+	p.runtimeState.syncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
+	p.runtimeState.syncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
+	p.runtimeState.syncSprite.MirrorPosition = p.mirrorPosition
 	p.applyPhysicsProxyConfig()
-	p.runtimeState.SyncSprite.SetVisible(p.effectiveProxyVisibility())
-	p.runtimeState.SyncSprite.SetTypeName(p.name)
+	p.runtimeState.syncSprite.SetVisible(p.effectiveProxyVisibility())
+	p.runtimeState.syncSprite.SetTypeName(p.name)
 	p.applyGraphicEffects(true)
-	p.runtimeState.SyncSprite.RegisterOnAnimationLooped(p.handleAnimationLooped)
-	p.runtimeState.SyncSprite.RegisterOnAnimationFinished(p.handleAnimationFinished)
+	p.runtimeState.syncSprite.RegisterOnAnimationLooped(p.handleAnimationLooped)
+	p.runtimeState.syncSprite.RegisterOnAnimationFinished(p.handleAnimationFinished)
 	p.markProxyDirty()
 }
 
 func (p *SpriteImpl) effectiveProxyVisibility() bool {
-	if !p.spriteState.IsVisible {
+	if !p.spriteState.isVisible {
 		return false
 	}
 	publication := p.proxyPublication
@@ -192,7 +192,7 @@ func (p *SpriteImpl) finishCloneInitialization() {
 func (p *SpriteImpl) handleAnimationFinished() {
 	engine.Lock()
 	defer engine.Unlock()
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 		return
 	}
 	state := p.animation().curAnimState
@@ -204,7 +204,7 @@ func (p *SpriteImpl) handleAnimationFinished() {
 func (p *SpriteImpl) handleAnimationLooped() {
 	engine.Lock()
 	defer engine.Unlock()
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 		return
 	}
 	p.queueAnimationLoopAudio(p.animation().curAnimState)
@@ -215,14 +215,14 @@ func (p *SpriteImpl) handleAnimationLooped() {
 // Sprite Sync
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) applyPhysicsProxyConfig() {
-	if p.runtimeState.SyncSprite == nil {
+	if p.runtimeState.syncSprite == nil {
 		return
 	}
-	p.physics().applyPhysicsProxyConfig(p.runtimeState.SyncSprite)
+	p.physics().applyPhysicsProxyConfig(p.runtimeState.syncSprite)
 }
 
 func (p *SpriteImpl) shouldPullPhysicsPosition() bool {
-	return p.runtimeState.SyncSprite != nil && p.PhysicsMode() != NoPhysics
+	return p.runtimeState.syncSprite != nil && p.PhysicsMode() != NoPhysics
 }
 
 // mergeEnginePosition preserves pending Go writes per axis while merging engine coordinates.
@@ -241,7 +241,7 @@ func (p *SpriteImpl) mergeEnginePosition(x, y float64) {
 
 func (p *SpriteImpl) syncProxyForQuery() {
 	engine.WaitMainThread(func() {
-		if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+		if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 			return
 		}
 		// Queries need the latest silhouette even when the sprite is hidden.
@@ -252,7 +252,7 @@ func (p *SpriteImpl) syncProxyForQuery() {
 		}
 		// Read and submit in one engine job; queued queries may precede the frame pull.
 		if p.shouldPullPhysicsPosition() {
-			position := p.runtimeState.SyncSprite.GetPosition()
+			position := p.runtimeState.syncSprite.GetPosition()
 			p.mergeEnginePosition(position.X, position.Y)
 		}
 		snapshot := p.snapshotProxy()
@@ -270,11 +270,11 @@ func (p *SpriteImpl) syncProxyForQuery() {
 }
 
 func (p *SpriteImpl) prepareProxyUpdate() {
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 		return
 	}
 	publishingClone := p.cloneProxyPublicationState() == cloneProxyReady
-	if p.spriteState.IsVisible || publishingClone {
+	if p.spriteState.isVisible || publishingClone {
 		p.applyCostumeUpdate()
 	}
 	p.syncAutoPhysicsShapesAfterCostumeChange()
@@ -303,17 +303,17 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) proxyCh
 }
 
 func (p *SpriteImpl) needsProxyUpdate() bool {
-	return !p.isDestroyed() && p.runtimeState.SyncSprite != nil &&
-		p.spriteState.ProxySyncVersion != p.spriteState.DirtyVersion
+	return !p.isDestroyed() && p.runtimeState.syncSprite != nil &&
+		p.spriteState.proxySyncVersion != p.spriteState.dirtyVersion
 }
 
 func (p *SpriteImpl) snapshotProxy() proxySnapshot {
 	prepared := &p.preparedVisual
 	visual := *prepared
-	resourcesReady := !p.runtimeState.IsCostumeDirty && !prepared.preparing
+	resourcesReady := !p.runtimeState.isCostumeDirty && !prepared.preparing
 	// Reentrant costume changes wait for their resources, while position and
 	// visibility still include writes made by later sprites' callbacks.
-	if prepared.proxy != p.runtimeState.SyncSprite || resourcesReady {
+	if prepared.proxy != p.runtimeState.syncSprite || resourcesReady {
 		visual = p.captureProxyVisual()
 		if resourcesReady {
 			// Hidden heading updates also refresh the geometry that can later
@@ -322,10 +322,10 @@ func (p *SpriteImpl) snapshotProxy() proxySnapshot {
 		}
 	}
 	dirtyVersion := visual.dirtyVersion
-	if !p.spriteState.IsVisible && !prepared.preparing {
+	if !p.spriteState.isVisible && !prepared.preparing {
 		// Confirm the submitted transform, not deferred resource preparation.
 		// IsCostumeDirty independently keeps the next resource update pending.
-		dirtyVersion = p.spriteState.DirtyVersion
+		dirtyVersion = p.spriteState.dirtyVersion
 	}
 	return proxySnapshot{
 		proxyVisual: visual.proxyVisual,
@@ -347,8 +347,8 @@ func (p *SpriteImpl) captureProxyVisual() preparedProxyVisual {
 			renderOffset: mathf.NewVec2(offsetX, offsetY),
 			rotation:     engine.DegToRad(rotation),
 		},
-		proxy:        p.runtimeState.SyncSprite,
-		dirtyVersion: p.spriteState.DirtyVersion,
+		proxy:        p.runtimeState.syncSprite,
+		dirtyVersion: p.spriteState.dirtyVersion,
 	}
 }
 
@@ -392,7 +392,7 @@ func (p *Game) pullPhysicsPositions() {
 		if !ok || !sprite.shouldPullPhysicsPosition() {
 			continue
 		}
-		pull.ids = append(pull.ids, sprite.runtimeState.SyncSprite.Id)
+		pull.ids = append(pull.ids, sprite.runtimeState.syncSprite.Id)
 		pull.sprites = append(pull.sprites, sprite)
 	}
 	if len(pull.ids) == 0 {
@@ -428,25 +428,25 @@ func (p *Game) dispatchPhysicsTriggers() {
 }
 
 func (p *baseObj) applyLayerUpdate() {
-	applyDirtyUpdate(&p.runtimeState.IsLayerDirty, func() {
+	applyDirtyUpdate(&p.runtimeState.isLayerDirty, func() {
 		if !engine.HasLayerSortMethod() {
-			p.runtimeState.SyncSprite.SetZIndex(int64(p.runtimeState.Layer))
+			p.runtimeState.syncSprite.SetZIndex(int64(p.runtimeState.layer))
 		}
 	})
 }
 
 func (p *baseObj) applyCostumeTexture() {
-	applyDirtyUpdate(&p.runtimeState.IsCostumeDirty, func() {
-		syncSprite := p.runtimeState.SyncSprite
+	applyDirtyUpdate(&p.runtimeState.isCostumeDirty, func() {
+		syncSprite := p.runtimeState.syncSprite
 		path := p.getCostumePath()
 		renderScale := p.getCostumeRenderScale()
 		if p.isCostumeAtlas() {
 			rect := p.getCostumeAtlasRegion()
 			uvRemap := p.currentCostume().frame.AtlasUVRect
-			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.IsAnimating)
+			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.isAnimating)
 			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
 		} else {
-			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.IsAnimating)
+			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.isAnimating)
 		}
 	})
 }
@@ -476,15 +476,15 @@ func applyDirtyUpdate(dirty *bool, update func()) {
 // -----------------------------------------------------------------------------
 func commitProxyChange(update proxyChange) {
 	p := update.sprite
-	if p == nil || p.runtimeState.SyncSprite != update.proxy {
+	if p == nil || p.runtimeState.syncSprite != update.proxy {
 		return
 	}
 	if update.destroy {
-		p.runtimeState.SyncSprite = nil
+		p.runtimeState.syncSprite = nil
 		return
 	}
-	if !p.preparedVisual.preparing && p.spriteState.DirtyVersion == update.dirtyVersion {
-		p.spriteState.ProxySyncVersion = update.dirtyVersion
+	if !p.preparedVisual.preparing && p.spriteState.dirtyVersion == update.dirtyVersion {
+		p.spriteState.proxySyncVersion = update.dirtyVersion
 	}
 	// Confirm each axis separately; preserve writes made after collection.
 	pending := &p.transform().pendingPosition
@@ -511,5 +511,5 @@ func applyPhysicsPositions(sprites []*SpriteImpl, positions []float32) {
 }
 
 func isSpriteTouchable(sprite *SpriteImpl) bool {
-	return sprite.spriteState.IsVisible && !sprite.spriteState.IsDying
+	return sprite.spriteState.isVisible && !sprite.spriteState.isDying
 }

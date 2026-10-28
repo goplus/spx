@@ -44,7 +44,7 @@ func (p *SpriteImpl) Show() {
 }
 
 func (p *SpriteImpl) Visible() bool {
-	return p.spriteState.IsVisible
+	return p.spriteState.isVisible
 }
 
 func (p *SpriteImpl) CostumeName() SpriteCostumeName {
@@ -150,11 +150,11 @@ func (p *SpriteImpl) setVisible(visible bool) {
 		spxlog.Debug("%s visible is %t", p.name, visible)
 	}
 
-	if visible == p.spriteState.IsVisible {
+	if visible == p.spriteState.isVisible {
 		return
 	}
 
-	p.spriteState.IsVisible = visible
+	p.spriteState.isVisible = visible
 	engine.RequestRedraw()
 	p.markProxyDirty()
 }
@@ -166,7 +166,7 @@ func (p *SpriteImpl) setCostume(costume any) {
 	if !p.goSetCostume(costume) {
 		return
 	}
-	p.spriteState.DefaultCostumeIndex = p.costumeIndex
+	p.spriteState.defaultCostumeIndex = p.costumeIndex
 	p.markAutoPhysicsShapesDirty()
 	p.markProxyDirty()
 }
@@ -180,7 +180,7 @@ func (p *SpriteImpl) isFullyGhosted() bool {
 }
 
 func getRenderOffset(p *SpriteImpl) (float64, float64) {
-	return getCostumeRenderOffset(p.currentCostume(), p.getPivot(), p.runtimeState.Scale, p.runtimeState.Scale)
+	return getCostumeRenderOffset(p.currentCostume(), p.getPivot(), p.runtimeState.scale, p.runtimeState.scale)
 }
 
 func getCostumeRenderOffset(c *costume, pivot mathf.Vec2, scaleX, scaleY float64) (float64, float64) {

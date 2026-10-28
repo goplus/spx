@@ -229,7 +229,7 @@ func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 	if got := game.buildSpriteCollisionData([]Sprite{nil}); len(got) != 0 {
 		t.Fatalf("nil sprite collision=%v", got)
 	}
-	sprite.runtimeState.SyncSprite.Target = (*SpriteImpl)(nil)
+	sprite.runtimeState.syncSprite.Target = (*SpriteImpl)(nil)
 	if got := game.checkCollision([]internalengine.Object{sprite.getSpriteId()}); len(got) != 0 {
 		t.Fatalf("nil target collision=%v", got)
 	}
@@ -290,7 +290,7 @@ func setupGameQueryPhysics(t *testing.T) (*Game, *gameQueryPhysicsMgr, *targetLo
 	sprite := newTargetLookupSprite(game, "target", false)
 	const id = 89001
 	proxy := &internalengine.Sprite{Sprite: pkgengine.Sprite{Id: id}, Target: &sprite.SpriteImpl}
-	sprite.runtimeState.SyncSprite = proxy
+	sprite.runtimeState.syncSprite = proxy
 	registry := pkgengine.Sprites()
 	old, existed := registry[id]
 	registry[id] = proxy

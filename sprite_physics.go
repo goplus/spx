@@ -167,18 +167,18 @@ func (p *SpriteImpl) markAutoPhysicsShapesDirty() {
 
 func (p *SpriteImpl) syncAutoPhysicsShapesAfterCostumeChange() {
 	if physics := p.physics(); physics != nil {
-		physics.refreshAutoShapes(p.runtimeState.SyncSprite)
+		physics.refreshAutoShapes(p.runtimeState.syncSprite)
 	}
 }
 
 // updatePhysicsShapesScale updates collision and trigger shapes when sprite scale changes.
 func (p *SpriteImpl) updatePhysicsShapesScale() {
-	if p.runtimeState.SyncSprite == nil {
+	if p.runtimeState.syncSprite == nil {
 		return
 	}
 	physics := p.physics()
-	physics.colliderConfig(true).applyShape(p.runtimeState.SyncSprite, true, p)
-	physics.colliderConfig(false).applyShape(p.runtimeState.SyncSprite, false, p)
+	physics.colliderConfig(true).applyShape(p.runtimeState.syncSprite, true, p)
+	physics.colliderConfig(false).applyShape(p.runtimeState.syncSprite, false, p)
 }
 
 // -----------------------------------------------------------------------------
@@ -283,7 +283,7 @@ func (cfg *physicConfig) updateAutoBounds(sprite *SpriteImpl, isTrigger bool) {
 
 func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sprite *SpriteImpl) {
 	pivot := cfg.shapePivot(sprite)
-	scale := sprite.runtimeState.Scale
+	scale := sprite.runtimeState.scale
 
 	switch cfg.Type {
 	case physicsColliderCircle:
@@ -310,7 +310,7 @@ func (cfg *physicConfig) applyShape(syncProxy *engine.Sprite, isTrigger bool, sp
 }
 
 func (cfg *physicConfig) shapePivot(sprite *SpriteImpl) mathf.Vec2 {
-	pivot := cfg.Pivot.Mulf(sprite.runtimeState.Scale)
+	pivot := cfg.Pivot.Mulf(sprite.runtimeState.scale)
 	if cfg.Type == physicsColliderAuto {
 		offsetX, offsetY := getRenderOffset(sprite)
 		pivot = pivot.Add(mathf.NewVec2(offsetX, offsetY))

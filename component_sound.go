@@ -62,12 +62,12 @@ func (s *soundComponent) onDestroy() {
 
 func (s *soundComponent) play(name SoundName, loop bool) int64 {
 	s.sprite.g.ensureSoundObject(&s.soundObj)
-	return s.sprite.g.playSound(s.sprite.runtimeState.SyncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+	return s.sprite.g.playSound(s.sprite.runtimeState.syncSprite, s.soundObj, name, loop, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
 }
 
 func (s *soundComponent) playAndWait(name SoundName) {
 	s.sprite.g.ensureSoundObject(&s.soundObj)
-	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.SyncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
+	s.sprite.g.playSoundAndWait(s.sprite.runtimeState.syncSprite, s.soundObj, name, s.sprite.g.audioState.AudioAttenuation, s.sprite.g.audioState.AudioMaxDistance)
 }
 
 // ============================================================================

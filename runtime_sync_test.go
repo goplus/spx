@@ -113,7 +113,7 @@ func TestProxyTransformQueryAndBatchMatch(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	sprite.transform().direction = 45
 	sprite.transform().rotationStyle = Normal
 
@@ -169,12 +169,12 @@ func TestProxyRebuildAndDestroySubmitOnlyPendingTransforms(t *testing.T) {
 	sprite.initRuntimeProxy()
 	collect(1)
 	collect(0)
-	oldProxy := sprite.runtimeState.SyncSprite
+	oldProxy := sprite.runtimeState.syncSprite
 	if oldProxy.CallbackAlive == nil || !oldProxy.CallbackAlive() {
 		t.Fatal("initialized proxy rejected callbacks for its live sprite")
 	}
 	sprite.initRuntimeProxy()
-	if sprite.runtimeState.SyncSprite == oldProxy {
+	if sprite.runtimeState.syncSprite == oldProxy {
 		t.Fatal("rebuild reused the old proxy")
 	}
 	collect(1)
@@ -182,7 +182,7 @@ func TestProxyRebuildAndDestroySubmitOnlyPendingTransforms(t *testing.T) {
 
 	sprite.Show()
 	sprite.destroy()
-	if oldProxy.CallbackAlive() || sprite.runtimeState.SyncSprite.CallbackAlive() {
+	if oldProxy.CallbackAlive() || sprite.runtimeState.syncSprite.CallbackAlive() {
 		t.Fatal("proxy accepted callbacks after logical sprite destruction")
 	}
 	operations := len(mgr.recordedOperations())
@@ -199,7 +199,7 @@ func TestPullPhysicsPositionsFiltersAndKeepsIDOrder(t *testing.T) {
 	first := newPullPhysicsSprite(1, KinematicPhysics, 1, 2)
 	noPhysics := newPullPhysicsSprite(2, NoPhysics, 2, 3)
 	missing := newPullPhysicsSprite(4, DynamicPhysics, 4, 5)
-	missing.runtimeState.SyncSprite = nil
+	missing.runtimeState.syncSprite = nil
 	last := newPullPhysicsSprite(3, DynamicPhysics, 3, 4)
 	game := &Game{syncBuffer: engine.NewSpriteSyncBuffer(4)}
 	game.shapeMgr.items = []Shape{first, noPhysics, struct{}{}, missing, last}
@@ -219,24 +219,24 @@ func TestPullPhysicsPositionsFiltersAndKeepsIDOrder(t *testing.T) {
 		{last, 31, 32, 1},
 	} {
 		x, y := tt.sprite.transform().getXY()
-		if x != tt.x || y != tt.y || tt.sprite.spriteState.VisualVersion != tt.version {
-			t.Errorf("sprite position=(%v,%v) visual version=%d, want (%v,%v) version %d", x, y, tt.sprite.spriteState.VisualVersion, tt.x, tt.y, tt.version)
+		if x != tt.x || y != tt.y || tt.sprite.spriteState.visualVersion != tt.version {
+			t.Errorf("sprite position=(%v,%v) visual version=%d, want (%v,%v) version %d", x, y, tt.sprite.spriteState.visualVersion, tt.x, tt.y, tt.version)
 		}
-		if tt.sprite.spriteState.DirtyVersion != 0 {
+		if tt.sprite.spriteState.dirtyVersion != 0 {
 			t.Errorf("physics pull dirtied proxy: %+v", tt.sprite.spriteState)
 		}
 	}
 	game.pullPhysicsPositions()
-	if first.spriteState.VisualVersion != 1 || last.spriteState.VisualVersion != 1 {
+	if first.spriteState.visualVersion != 1 || last.spriteState.visualVersion != 1 {
 		t.Fatal("unchanged position incremented visual version")
 	}
 	mgr.positions = []float32{13, 14, float32(math.NaN()), 40}
 	game.pullPhysicsPositions()
-	if x, y := last.transform().getXY(); x != 31 || y != 32 || last.spriteState.VisualVersion != 1 {
-		t.Fatalf("missing sentinel changed last sprite to (%v,%v), version %d", x, y, last.spriteState.VisualVersion)
+	if x, y := last.transform().getXY(); x != 31 || y != 32 || last.spriteState.visualVersion != 1 {
+		t.Fatalf("missing sentinel changed last sprite to (%v,%v), version %d", x, y, last.spriteState.visualVersion)
 	}
-	if x, y := first.transform().getXY(); x != 13 || y != 14 || first.spriteState.VisualVersion != 2 {
-		t.Fatalf("valid result not applied to first sprite: (%v,%v), version %d", x, y, first.spriteState.VisualVersion)
+	if x, y := first.transform().getXY(); x != 13 || y != 14 || first.spriteState.visualVersion != 2 {
+		t.Fatalf("valid result not applied to first sprite: (%v,%v), version %d", x, y, first.spriteState.visualVersion)
 	}
 	game.shapeMgr.items = []Shape{noPhysics, struct{}{}, missing}
 	game.pullPhysicsPositions()
@@ -344,24 +344,24 @@ func TestMergeEnginePositionInvalidatesVisualsOnlyWhenChanged(t *testing.T) {
 	sprite := newPhysicsPositionTestSprite(1, 2)
 
 	sprite.mergeEnginePosition(1, 2)
-	if sprite.spriteState.VisualVersion != 0 {
-		t.Fatalf("unchanged position visual version = %d, want 0", sprite.spriteState.VisualVersion)
+	if sprite.spriteState.visualVersion != 0 {
+		t.Fatalf("unchanged position visual version = %d, want 0", sprite.spriteState.visualVersion)
 	}
 
 	sprite.mergeEnginePosition(3, 4)
-	if sprite.spriteState.VisualVersion != 1 {
-		t.Fatalf("changed position visual version = %d, want 1", sprite.spriteState.VisualVersion)
+	if sprite.spriteState.visualVersion != 1 {
+		t.Fatalf("changed position visual version = %d, want 1", sprite.spriteState.visualVersion)
 	}
-	if sprite.spriteState.DirtyVersion != 0 {
-		t.Fatalf("physics writeback dirtied proxy state: DirtyVersion=%d", sprite.spriteState.DirtyVersion)
+	if sprite.spriteState.dirtyVersion != 0 {
+		t.Fatalf("physics writeback dirtied proxy state: DirtyVersion=%d", sprite.spriteState.dirtyVersion)
 	}
 	if x, y := sprite.transform().getXY(); x != 3 || y != 4 {
 		t.Fatalf("physics position = (%v, %v), want (3, 4)", x, y)
 	}
 
 	sprite.mergeEnginePosition(3, 4)
-	if sprite.spriteState.VisualVersion != 1 {
-		t.Fatalf("repeated position visual version = %d, want 1", sprite.spriteState.VisualVersion)
+	if sprite.spriteState.visualVersion != 1 {
+		t.Fatalf("repeated position visual version = %d, want 1", sprite.spriteState.visualVersion)
 	}
 }
 
@@ -370,15 +370,15 @@ func TestDispatchPhysicsTriggersFiltersPairs(t *testing.T) {
 	source := newPhysicsTriggerTestSprite(game, "source")
 	target := newPhysicsTriggerTestSprite(game, "target")
 	hidden := newPhysicsTriggerTestSprite(game, "hidden")
-	hidden.spriteState.IsVisible = false
+	hidden.spriteState.isVisible = false
 	dying := newPhysicsTriggerTestSprite(game, "dying")
-	dying.spriteState.IsDying = true
+	dying.spriteState.isDying = true
 	noHandler := newPhysicsTriggerTestSprite(game, "no-handler")
 	var nilSprite *SpriteImpl
 	typedNil := &engine.Sprite{Target: nilSprite}
 	wrongType := &engine.Sprite{Target: "not a sprite"}
 	emptyTarget := &engine.Sprite{}
-	src, dst := source.runtimeState.SyncSprite, target.runtimeState.SyncSprite
+	src, dst := source.runtimeState.syncSprite, target.runtimeState.syncSprite
 
 	var calls []Sprite
 	for _, sprite := range []*touchEventSprite{source, target, hidden, dying} {
@@ -400,14 +400,14 @@ func TestDispatchPhysicsTriggersFiltersPairs(t *testing.T) {
 		{"nil destination target", src, emptyTarget, false},
 		{"typed nil source and invalid destination", typedNil, wrongType, false},
 		{"invalid source and typed nil destination", wrongType, typedNil, false},
-		{"hidden source and invalid destination", hidden.runtimeState.SyncSprite, wrongType, false},
-		{"hidden source", hidden.runtimeState.SyncSprite, dst, false},
-		{"hidden destination", src, hidden.runtimeState.SyncSprite, false},
-		{"dying source", dying.runtimeState.SyncSprite, dst, false},
-		{"dying destination", src, dying.runtimeState.SyncSprite, false},
-		{"hidden source short circuits typed nil destination", hidden.runtimeState.SyncSprite, typedNil, false},
-		{"dying source short circuits typed nil destination", dying.runtimeState.SyncSprite, typedNil, false},
-		{"no source handler", noHandler.runtimeState.SyncSprite, dst, false},
+		{"hidden source and invalid destination", hidden.runtimeState.syncSprite, wrongType, false},
+		{"hidden source", hidden.runtimeState.syncSprite, dst, false},
+		{"hidden destination", src, hidden.runtimeState.syncSprite, false},
+		{"dying source", dying.runtimeState.syncSprite, dst, false},
+		{"dying destination", src, dying.runtimeState.syncSprite, false},
+		{"hidden source short circuits typed nil destination", hidden.runtimeState.syncSprite, typedNil, false},
+		{"dying source short circuits typed nil destination", dying.runtimeState.syncSprite, typedNil, false},
+		{"no source handler", noHandler.runtimeState.syncSprite, dst, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			calls = nil
@@ -438,11 +438,11 @@ func TestDispatchPhysicsTriggersOrderAndBufferReuse(t *testing.T) {
 			calls = append(calls, sprite.name+":"+spriteOf(other).name)
 		})
 	}
-	firstPair := engine.TriggerEvent{Src: first.runtimeState.SyncSprite, Dst: second.runtimeState.SyncSprite}
+	firstPair := engine.TriggerEvent{Src: first.runtimeState.syncSprite, Dst: second.runtimeState.syncSprite}
 	backing := make([]engine.TriggerEvent, 4)
 	backing[0] = firstPair
-	backing[1] = engine.TriggerEvent{Src: second.runtimeState.SyncSprite, Dst: last.runtimeState.SyncSprite}
-	backing[2] = engine.TriggerEvent{Src: first.runtimeState.SyncSprite, Dst: last.runtimeState.SyncSprite}
+	backing[1] = engine.TriggerEvent{Src: second.runtimeState.syncSprite, Dst: last.runtimeState.syncSprite}
+	backing[2] = engine.TriggerEvent{Src: first.runtimeState.syncSprite, Dst: last.runtimeState.syncSprite}
 	backing[3] = firstPair // Capacity beyond the active batch is not cleared.
 	game.triggerEvents = backing[:3]
 	game.dispatchPhysicsTriggers()
@@ -482,18 +482,18 @@ func TestDispatchPhysicsTriggersRechecksTouchability(t *testing.T) {
 			source.addTouchStartHandler(func(other Sprite) {
 				calls = append(calls, other)
 				if dying {
-					target.spriteState.IsDying = true
+					target.spriteState.isDying = true
 				} else {
-					target.spriteState.IsVisible = false
+					target.spriteState.isVisible = false
 				}
 			})
 			target.addTouchStartHandler(func(Sprite) { t.Error("untouchable source fired a callback") })
-			src, dst := source.runtimeState.SyncSprite, target.runtimeState.SyncSprite
+			src, dst := source.runtimeState.syncSprite, target.runtimeState.syncSprite
 			game.triggerEvents = []engine.TriggerEvent{
 				{Src: src, Dst: dst},
 				{Src: dst, Dst: src},
 				{Src: src, Dst: dst},
-				{Src: src, Dst: last.runtimeState.SyncSprite},
+				{Src: src, Dst: last.runtimeState.syncSprite},
 			}
 			game.dispatchPhysicsTriggers()
 			if want := []Sprite{target, last}; !slices.Equal(calls, want) {
@@ -511,22 +511,22 @@ func TestDispatchPhysicsTriggersPanicRetainsBatch(t *testing.T) {
 			target := newPhysicsTriggerTestSprite(game, "target")
 			panicking := newPhysicsTriggerTestSprite(game, "panicking")
 			hidden := newPhysicsTriggerTestSprite(game, "hidden")
-			hidden.spriteState.IsVisible = false
+			hidden.spriteState.isVisible = false
 			var nilSprite *SpriteImpl
 			typedNil := &engine.Sprite{Target: nilSprite}
 			calls := 0
 			source.addTouchStartHandler(func(Sprite) { calls++ })
 			panicValue := new(int)
 			panicking.addTouchStartHandler(func(Sprite) { panic(panicValue) })
-			src, dst := source.runtimeState.SyncSprite, target.runtimeState.SyncSprite
-			pair := engine.TriggerEvent{Src: panicking.runtimeState.SyncSprite, Dst: dst}
+			src, dst := source.runtimeState.syncSprite, target.runtimeState.syncSprite
+			pair := engine.TriggerEvent{Src: panicking.runtimeState.syncSprite, Dst: dst}
 			switch name {
 			case "typed nil source":
 				pair.Src = typedNil
 			case "typed nil destination":
 				pair.Src, pair.Dst = src, typedNil
 			case "typed nil source before hidden destination":
-				pair.Src, pair.Dst = typedNil, hidden.runtimeState.SyncSprite
+				pair.Src, pair.Dst = typedNil, hidden.runtimeState.syncSprite
 			}
 			game.triggerEvents = []engine.TriggerEvent{{Src: src, Dst: dst}, pair, {Src: src, Dst: dst}}
 			before := slices.Clone(game.triggerEvents)
@@ -554,24 +554,24 @@ func TestProxyCallbacksIgnoreMissingAndDestroyedSprites(t *testing.T) {
 	for _, sprite := range []*SpriteImpl{{}, destroyed} {
 		sprite.handleAnimationFinished()
 		sprite.handleAnimationLooped()
-		if sprite.runtimeState.SyncSprite != nil {
+		if sprite.runtimeState.syncSprite != nil {
 			t.Fatal("stale callback created a proxy")
 		}
 	}
 	sprite := &SpriteImpl{}
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	sprite.ensureProxyInitialized()
 
 	for _, state := range []string{"missing", "replaced", "destroyed"} {
 		t.Run(state, func(t *testing.T) {
 			sprite := newPhysicsPositionTestSprite(10, 20)
 			proxy := &engine.Sprite{}
-			sprite.runtimeState.SyncSprite = proxy
+			sprite.runtimeState.syncSprite = proxy
 			switch state {
 			case "missing":
-				sprite.runtimeState.SyncSprite = nil
+				sprite.runtimeState.syncSprite = nil
 			case "replaced":
-				sprite.runtimeState.SyncSprite = &engine.Sprite{}
+				sprite.runtimeState.syncSprite = &engine.Sprite{}
 			case "destroyed":
 				sprite.markDestroyed()
 			}
@@ -636,7 +636,7 @@ func TestDirectProxyAxisWritesPreserveOtherPendingAxis(t *testing.T) {
 			} else {
 				sprite.SetXpos(99)
 			}
-			tt.write(sprite.runtimeState.SyncSprite)
+			tt.write(sprite.runtimeState.syncSprite)
 			requirePosition(t, sprite, tt.want.X, tt.want.Y)
 
 			sprite.g.flushSpriteProxyChanges(sprite.g.shapeMgr.items)
@@ -692,13 +692,13 @@ func TestProxyQueryAndBatchRejectInvalidTransformsWithoutAcknowledging(t *testin
 					}
 				}, "sprite 1", field+"=")
 				if mgr.submissions != 0 || sprite.transform().pendingPosition != pending ||
-					sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+					sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 					t.Fatal("invalid transform was submitted or acknowledged")
 				}
 				sprite.SetHeading(45)
 				sprite.SetXpos(80)
 				sprite.g.flushSpriteProxyChanges(sprite.g.shapeMgr.items)
-				if mgr.submissions != 1 || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+				if mgr.submissions != 1 || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 					t.Fatal("corrected transform did not commit")
 				}
 			})
@@ -719,25 +719,25 @@ func TestPositionSyncRequiresSuccessfulSubmission(t *testing.T) {
 			sprite.mergeEnginePosition(100, 200)
 			wantPanic := "position sync failed"
 			if mode == "serialization" {
-				sprite.runtimeState.SyncSprite.Id = 1<<24 + 1
+				sprite.runtimeState.syncSprite.Id = 1<<24 + 1
 				wantPanic = "invalid sprite ID"
 			} else {
 				mgr.fail = true
 			}
 			requireSyncPanic(t, sync, wantPanic)
-			if sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+			if sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 				t.Fatal("failed sync consumed dirty state")
 			}
 			mgr.position = mathf.NewVec2(300, 400)
 			sprite.mergeEnginePosition(300, 400)
 			requirePosition(t, sprite, 42, 400)
 			mgr.fail = false
-			sprite.runtimeState.SyncSprite.Id = 1
+			sprite.runtimeState.syncSprite.Id = 1
 			sync()
 			if mgr.submissions != 1 || mgr.position != mathf.NewVec2(42, 400) {
 				t.Fatalf("submitted %d positions, latest %v", mgr.submissions, mgr.position)
 			}
-			if sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+			if sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 				t.Fatal("successful sync left dirty state")
 			}
 			sprite.mergeEnginePosition(500, 600)
@@ -770,7 +770,7 @@ func TestPositionSyncPreservesLaterWrites(t *testing.T) {
 				mgr.position = mathf.NewVec2(100, 200)
 				sprite.mergeEnginePosition(100, 200)
 				requirePosition(t, sprite, test.x, test.y)
-				if sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+				if sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 					t.Fatal("older submission acknowledged a newer write")
 				}
 				mgr.onSubmit = nil
@@ -797,7 +797,7 @@ func TestProxyCollectionIncludesCallbackWrites(t *testing.T) {
 			s.syncProxyForQuery()
 		}, 84},
 		{"direct position", func(s *SpriteImpl) {
-			s.runtimeState.SyncSprite.SetPosition(mathf.NewVec2(84, 20))
+			s.runtimeState.syncSprite.SetPosition(mathf.NewVec2(84, 20))
 		}, 84},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -808,11 +808,11 @@ func TestProxyCollectionIncludesCallbackWrites(t *testing.T) {
 			game := sprite.g
 			later := &newCloneAwakeOrderSprite(game, "costume").SpriteImpl
 			later.currentCostume().path = "sprites/costume.png"
-			later.runtimeState.IsCostumeDirty = true
-			later.runtimeState.IsLayerDirty = false
-			later.runtimeState.SyncSprite = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
+			later.runtimeState.isCostumeDirty = true
+			later.runtimeState.isLayerDirty = false
+			later.runtimeState.syncSprite = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
 			const id = pkgengine.Object(9001)
-			pkgengine.InitSpriteInstance(id, later.runtimeState.SyncSprite, nil)
+			pkgengine.InitSpriteInstance(id, later.runtimeState.syncSprite, nil)
 			registry := pkgengine.Sprites()
 			previous, existed := registry[id]
 			t.Cleanup(func() {
@@ -823,7 +823,7 @@ func TestProxyCollectionIncludesCallbackWrites(t *testing.T) {
 				}
 			})
 			registry[id] = &framesChangedSprite{
-				ISpriter: later.runtimeState.SyncSprite,
+				ISpriter: later.runtimeState.syncSprite,
 				changed:  func() { test.write(sprite) },
 			}
 			game.shapeMgr.add(later)
@@ -832,7 +832,7 @@ func TestProxyCollectionIncludesCallbackWrites(t *testing.T) {
 				t.Fatalf("texture callbacks=%d, submitted position=%v, want (%v, 20)", textures.callbacks, mgr.position, test.x)
 			}
 			requirePosition(t, sprite, test.x, 20)
-			if sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+			if sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 				t.Fatal("callback changes were not included in the final submission")
 			}
 			mgr.position = mathf.NewVec2(100, 200)
@@ -855,9 +855,9 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			mgr.fail = failure == "bridge"
 			sprite.SetXpos(42)
 			invalid := &newCloneAwakeOrderSprite(game, "invalid").SpriteImpl
-			invalid.runtimeState.IsCostumeDirty = false
-			invalid.runtimeState.SyncSprite = &engine.Sprite{Target: invalid, MirrorPosition: invalid.mirrorPosition}
-			invalid.runtimeState.SyncSprite.Id = 2
+			invalid.runtimeState.isCostumeDirty = false
+			invalid.runtimeState.syncSprite = &engine.Sprite{Target: invalid, MirrorPosition: invalid.mirrorPosition}
+			invalid.runtimeState.syncSprite.Id = 2
 			if failure == "serialization" {
 				// A finite Go coordinate can overflow the float32 batch protocol.
 				invalid.SetXpos(math.MaxFloat64)
@@ -868,7 +868,7 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			destroyed := &SpriteImpl{}
 			proxy := &engine.Sprite{}
 			proxy.Id = 3
-			destroyed.runtimeState.SyncSprite = proxy
+			destroyed.runtimeState.syncSprite = proxy
 			game.shapeMgr.add(destroyed)
 			game.shapeMgr.removeShape(destroyed)
 			game.shapeMgr.removeShape(destroyed)
@@ -880,11 +880,11 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			if mgr.submissions != 0 {
 				t.Fatal("failed batch committed positions to the engine")
 			}
-			if len(mgr.batches) != 0 || destroyed.runtimeState.SyncSprite != proxy || len(game.shapeMgr.destroyItems) != 1 {
+			if len(mgr.batches) != 0 || destroyed.runtimeState.syncSprite != proxy || len(game.shapeMgr.destroyItems) != 1 {
 				t.Fatal("failed batch consumed a native proxy or its pending deletion")
 			}
 			for _, pending := range []*SpriteImpl{sprite, invalid} {
-				if pending.spriteState.ProxySyncVersion == pending.spriteState.DirtyVersion {
+				if pending.spriteState.proxySyncVersion == pending.spriteState.dirtyVersion {
 					t.Fatalf("rejected batch acknowledged sprite %q", pending.name)
 				}
 			}
@@ -899,11 +899,11 @@ func TestProxyCommitRetriesPositionAndDeletionAfterFailure(t *testing.T) {
 			if len(mgr.batches) != 1 || !slices.Equal(batchDeleteIDs(mgr.batches[0]), []float32{3}) {
 				t.Fatalf("retry did not submit exactly one deletion: %v", mgr.batches)
 			}
-			if destroyed.runtimeState.SyncSprite != nil || len(game.shapeMgr.destroyItems) != 0 {
+			if destroyed.runtimeState.syncSprite != nil || len(game.shapeMgr.destroyItems) != 0 {
 				t.Fatal("successful retry retained the deleted proxy or request")
 			}
 			for _, synced := range []*SpriteImpl{sprite, invalid} {
-				if synced.spriteState.ProxySyncVersion != synced.spriteState.DirtyVersion {
+				if synced.spriteState.proxySyncVersion != synced.spriteState.dirtyVersion {
 					t.Fatalf("successful retry did not acknowledge sprite %q", synced.name)
 				}
 			}
@@ -922,8 +922,8 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 	game := sprite.g
 	first, later := &SpriteImpl{}, &SpriteImpl{}
 	for i, item := range []*SpriteImpl{first, later} {
-		item.runtimeState.SyncSprite = &engine.Sprite{}
-		item.runtimeState.SyncSprite.Id = int64(i + 2)
+		item.runtimeState.syncSprite = &engine.Sprite{}
+		item.runtimeState.syncSprite.Id = int64(i + 2)
 	}
 	game.shapeMgr.add(first)
 	game.shapeMgr.removeShape(first)
@@ -933,7 +933,7 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 		mgr.onSubmit = nil
 	}
 	game.flushSpriteProxyChanges(game.shapeMgr.items)
-	if first.runtimeState.SyncSprite != nil || later.runtimeState.SyncSprite == nil ||
+	if first.runtimeState.syncSprite != nil || later.runtimeState.syncSprite == nil ||
 		len(game.shapeMgr.destroyItems) != 1 || game.shapeMgr.destroyItems[0] != later {
 		t.Fatal("commit consumed a deletion that was not in the submitted batch")
 	}
@@ -942,7 +942,7 @@ func TestProxyCommitKeepsDeletionsQueuedDuringSubmission(t *testing.T) {
 		!slices.Equal(batchDeleteIDs(mgr.batches[1]), []float32{3}) {
 		t.Fatalf("deletions did not preserve submission boundaries: %v", mgr.batches)
 	}
-	if later.runtimeState.SyncSprite != nil || len(game.shapeMgr.destroyItems) != 0 {
+	if later.runtimeState.syncSprite != nil || len(game.shapeMgr.destroyItems) != 0 {
 		t.Fatal("later deletion was not committed")
 	}
 	game.flushSpriteProxyChanges(game.shapeMgr.items)
@@ -970,7 +970,7 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 		{
 			name: "direct position and hide",
 			onChange: func(s *SpriteImpl) {
-				s.runtimeState.SyncSprite.SetPosition(mathf.NewVec2(84, 25))
+				s.runtimeState.syncSprite.SetPosition(mathf.NewVec2(84, 25))
 				s.Hide()
 			},
 			first: expectedFrame{1, mathf.NewVec2(84, 25), false}, nextSize: 1.5,
@@ -984,7 +984,7 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 				s.beginCloneProxyPublication()
 				s.markProxyDirty()
 				s.syncProxyForQuery()
-				if mgr.visible[s.runtimeState.SyncSprite.Id] {
+				if mgr.visible[s.runtimeState.syncSprite.Id] {
 					t.Fatal("pending clone was published by query")
 				}
 				s.finishCloneInitialization()
@@ -1013,9 +1013,9 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 			}
 			sprite.SetCostume__0("costume1")
 			sprite.SetXpos(42)
-			trigger := later.runtimeState.SyncSprite
+			trigger := later.runtimeState.syncSprite
 			if test.onOwnTexture {
-				trigger = sprite.runtimeState.SyncSprite
+				trigger = sprite.runtimeState.syncSprite
 			}
 			calls := 0
 			trigger.OnFramesSetChangedEvent.Subscribe(func() {
@@ -1025,7 +1025,7 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 					test.onChange(sprite)
 				}
 			})
-			later.runtimeState.IsCostumeDirty = true
+			later.runtimeState.isCostumeDirty = true
 			game.flushSpriteProxyChanges(game.shapeMgr.items)
 			if calls != 1 {
 				t.Fatalf("synchronous resource callbacks = %d, want 1", calls)
@@ -1035,10 +1035,10 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 			if mgr.positions[1] != want.position || mgr.visible[1] != want.visible {
 				t.Fatalf("submitted position/visibility = %v/%v, want %v/%v", mgr.positions[1], mgr.visible[1], want.position, want.visible)
 			}
-			if synced := sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion; synced != (want.costume == 2 || !want.visible) {
+			if synced := sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion; synced != (want.costume == 2 || !want.visible) {
 				t.Fatalf("captured transform acknowledged = %v", synced)
 			}
-			if sprite.runtimeState.IsCostumeDirty != (want.costume != 2) {
+			if sprite.runtimeState.isCostumeDirty != (want.costume != 2) {
 				t.Fatal("resource preparation state does not match the captured costume")
 			}
 			if sprite.transform().pendingPosition != (positionVersions{}) {
@@ -1048,7 +1048,7 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 			sprite.Show()
 			game.flushSpriteProxyChanges(game.shapeMgr.items)
 			requirePreparedResource(t, sprite, mgr, 2, test.nextSize)
-			if sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+			if sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 				t.Fatal("next frame did not acknowledge the current resource generation")
 			}
 		})
@@ -1076,10 +1076,10 @@ func TestProxyPreparedResourcesPreserveCommittedHeading(t *testing.T) {
 				t.Fatal("clean preparation uploaded the texture again")
 			}
 
-			later.runtimeState.SyncSprite.OnFramesSetChangedEvent.Subscribe(func() {
+			later.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(func() {
 				sprite.SetCostume__0("costume2")
 			})
-			later.runtimeState.IsCostumeDirty = true
+			later.runtimeState.isCostumeDirty = true
 			flush()
 			got := mgr.visuals[1]
 			if math.Abs(got.rotation-want.rotation) > 1e-6 || got.scale != want.scale || got.renderOffset != want.renderOffset {
@@ -1088,11 +1088,11 @@ func TestProxyPreparedResourcesPreserveCommittedHeading(t *testing.T) {
 			if mgr.setTextureCalls[1] != uploads || mgr.texturePaths[1] != engine.ToAssetPath(sprite.costumes[0].path) {
 				t.Fatal("reentrant costume was uploaded before its preparation")
 			}
-			if !sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+			if !sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 				t.Fatal("unprepared costume was acknowledged")
 			}
 			flush()
-			if mgr.setTextureCalls[1] != uploads+1 || sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+			if mgr.setTextureCalls[1] != uploads+1 || sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 				t.Fatal("next frame did not prepare and acknowledge the new costume exactly once")
 			}
 		})
@@ -1121,7 +1121,7 @@ func TestHiddenProxyDeferredResourcesConverge(t *testing.T) {
 				sprite.SetXpos(42)
 				mgr.failAt = "batch"
 				requireSyncPanic(t, flush, "batch", "failed")
-				if sprite.transform().pendingPosition.x == 0 || sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+				if sprite.transform().pendingPosition.x == 0 || sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 					t.Fatal("failed hidden submission acknowledged position or transform")
 				}
 				mgr.failAt = ""
@@ -1135,13 +1135,13 @@ func TestHiddenProxyDeferredResourcesConverge(t *testing.T) {
 						t.Error("unchanged hidden sprite resubmitted its transform")
 					}
 				}
-				if !sprite.runtimeState.IsCostumeDirty || mgr.setTextureCalls[1] != uploads {
+				if !sprite.runtimeState.isCostumeDirty || mgr.setTextureCalls[1] != uploads {
 					t.Fatal("hidden resources were not deferred")
 				}
 				if query {
 					mgr.failAt = "resource"
 					requireSyncPanic(t, sprite.syncProxyForQuery, "resource", "failed")
-					if !sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+					if !sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 						t.Fatal("failed query acknowledged deferred resources")
 					}
 					mgr.failAt = ""
@@ -1151,7 +1151,7 @@ func TestHiddenProxyDeferredResourcesConverge(t *testing.T) {
 					flush()
 				}
 				requirePreparedResource(t, sprite, mgr, costume, size)
-				if mgr.visible[1] == query || sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion {
+				if mgr.visible[1] == query || sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion {
 					t.Fatal("deferred resources did not synchronize with their transform")
 				}
 				flush()
@@ -1172,7 +1172,7 @@ func TestHiddenProxyQueryPreservesReentrantResources(t *testing.T) {
 	sprite.SetCostume__0("costume1")
 	flush()
 	calls := 0
-	proxy := sprite.runtimeState.SyncSprite
+	proxy := sprite.runtimeState.syncSprite
 	proxy.OnFramesSetChangedEvent.Subscribe(func() {
 		calls++
 		sprite.SetCostume__0("costume2")
@@ -1180,7 +1180,7 @@ func TestHiddenProxyQueryPreservesReentrantResources(t *testing.T) {
 		sprite.syncProxyForQuery()
 	})
 	sprite.syncProxyForQuery()
-	if calls != 1 || mgr.positions[1].X != 84 || mgr.visible[1] || !sprite.runtimeState.IsCostumeDirty {
+	if calls != 1 || mgr.positions[1].X != 84 || mgr.visible[1] || !sprite.runtimeState.isCostumeDirty {
 		t.Fatal("nested hidden query lost position, visibility, or pending resources")
 	}
 	requirePreparedResource(t, sprite, mgr, 1, 1.5)
@@ -1191,7 +1191,7 @@ func TestHiddenProxyQueryPreservesReentrantResources(t *testing.T) {
 	}
 	sprite.syncProxyForQuery()
 	requirePreparedResource(t, sprite, mgr, 2, 1.5)
-	if sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion || sprite.transform().pendingPosition != (positionVersions{}) {
+	if sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion || sprite.transform().pendingPosition != (positionVersions{}) {
 		t.Fatal("second hidden query did not finish pending resources and position")
 	}
 }
@@ -1205,17 +1205,17 @@ func TestHiddenProxyHeadingSurvivesCallbackShow(t *testing.T) {
 	sprite.SetHeading(0)
 	flush()
 	want := mgr.visuals[1]
-	later.runtimeState.SyncSprite.OnFramesSetChangedEvent.Subscribe(func() {
+	later.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(func() {
 		sprite.Show()
 		sprite.SetCostume__0("costume2")
 	})
-	later.runtimeState.IsCostumeDirty = true
+	later.runtimeState.isCostumeDirty = true
 	flush()
 	got := mgr.visuals[1]
 	if !mgr.visible[1] || math.Abs(got.rotation-want.rotation) > 1e-6 || got.scale != want.scale || got.renderOffset != want.renderOffset {
 		t.Fatalf("callback show reverted hidden geometry: got %+v, want %+v", got, want)
 	}
-	if !sprite.runtimeState.IsCostumeDirty || sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+	if !sprite.runtimeState.isCostumeDirty || sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 		t.Fatal("callback show acknowledged unprepared resources")
 	}
 }
@@ -1229,17 +1229,17 @@ func TestProxyPreparedResourcesRetryAfterFailure(t *testing.T) {
 			sprite.SetCostume__0("costume1")
 			sprite.SetXpos(42)
 			if failure == "layer" {
-				sprite.runtimeState.IsLayerDirty = true
+				sprite.runtimeState.isLayerDirty = true
 			}
-			later.runtimeState.IsCostumeDirty = true
-			later.runtimeState.SyncSprite.OnFramesSetChangedEvent.Subscribe(func() { sprite.SetCostume__0("costume2") })
+			later.runtimeState.isCostumeDirty = true
+			later.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(func() { sprite.SetCostume__0("costume2") })
 			mgr.failAt = failure
 			if failure == "resource after query" {
 				mgr.failAt = "resource"
-				sprite.runtimeState.SyncSprite.OnFramesSetChangedEvent.Subscribe(sprite.syncProxyForQuery)
+				sprite.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(sprite.syncProxyForQuery)
 			}
 			requireSyncPanic(t, func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }, "resource", "failed")
-			if sprite.spriteState.ProxySyncVersion == sprite.spriteState.DirtyVersion {
+			if sprite.spriteState.proxySyncVersion == sprite.spriteState.dirtyVersion {
 				t.Fatal("failed submission acknowledged resource state")
 			}
 			if failure == "resource after query" {
@@ -1251,22 +1251,22 @@ func TestProxyPreparedResourcesRetryAfterFailure(t *testing.T) {
 			} else if sprite.transform().pendingPosition.x == 0 {
 				t.Fatal("failed submission discarded position intent")
 			}
-			if mgr.failAt == "resource" && !sprite.runtimeState.IsCostumeDirty {
+			if mgr.failAt == "resource" && !sprite.runtimeState.isCostumeDirty {
 				t.Fatal("failed resource preparation discarded the retry")
 			}
-			if failure == "layer" && !sprite.runtimeState.IsLayerDirty {
+			if failure == "layer" && !sprite.runtimeState.isLayerDirty {
 				t.Fatal("failed layer preparation discarded the retry")
 			}
 			mgr.failAt = ""
-			sprite.runtimeState.SyncSprite.OnFramesSetChangedEvent.UnsubscribeAll()
-			later.runtimeState.SyncSprite.OnFramesSetChangedEvent.UnsubscribeAll()
+			sprite.runtimeState.syncSprite.OnFramesSetChangedEvent.UnsubscribeAll()
+			later.runtimeState.syncSprite.OnFramesSetChangedEvent.UnsubscribeAll()
 			game.flushSpriteProxyChanges(game.shapeMgr.items)
 			wantIndex := 2
 			if failure != "batch" {
 				wantIndex = 1
 			}
 			requirePreparedResource(t, sprite, mgr, wantIndex, 1.5)
-			if sprite.runtimeState.IsCostumeDirty || sprite.runtimeState.IsLayerDirty || sprite.spriteState.ProxySyncVersion != sprite.spriteState.DirtyVersion ||
+			if sprite.runtimeState.isCostumeDirty || sprite.runtimeState.isLayerDirty || sprite.spriteState.proxySyncVersion != sprite.spriteState.dirtyVersion ||
 				sprite.transform().pendingPosition != (positionVersions{}) {
 				t.Fatal("successful retry did not finish resource and position synchronization")
 			}
@@ -1413,8 +1413,8 @@ func setupPullPositionSpriteMgr(t *testing.T) *pullPositionSpriteMgr {
 
 func newPullPhysicsSprite(id int64, mode PhysicsMode, x, y float64) *SpriteImpl {
 	sprite := newPhysicsPositionTestSprite(x, y)
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	sprite.runtimeState.SyncSprite.Id = id
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite.Id = id
 	sprite.components.physics = &physicsComponent{sprite: sprite, physicsMode: mode}
 	return sprite
 }
@@ -1447,8 +1447,8 @@ func newPhysicsTriggerTestGame(t *testing.T) *Game {
 
 func newPhysicsTriggerTestSprite(game *Game, name string) *touchEventSprite {
 	sprite := newTouchEventSprite(game, name)
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &engine.Sprite{Target: &sprite.SpriteImpl, MirrorPosition: sprite.mirrorPosition}
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.syncSprite = &engine.Sprite{Target: &sprite.SpriteImpl, MirrorPosition: sprite.mirrorPosition}
 	return sprite
 }
 
@@ -1464,9 +1464,9 @@ func setupPositionSyncSprite(t *testing.T) (*SpriteImpl, *positionSyncSpriteMgr)
 	game.camera = &cameraImpl{g: game}
 	sprite := &newCloneAwakeOrderSprite(game, "position").SpriteImpl
 	sprite.transform().x, sprite.transform().y = 10, 20
-	sprite.runtimeState.IsCostumeDirty = false
-	sprite.runtimeState.SyncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
-	sprite.runtimeState.SyncSprite.Id = 1
+	sprite.runtimeState.isCostumeDirty = false
+	sprite.runtimeState.syncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
+	sprite.runtimeState.syncSprite.Id = 1
 	game.shapeMgr.add(sprite)
 	return sprite, mgr
 }
@@ -1517,8 +1517,8 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 		sprite.costumes = append(sprite.costumes, c)
 	}
 	sprite.costumeIndex = 0
-	sprite.runtimeState.Scale = 1.5
-	sprite.runtimeState.IsCostumeDirty = true
+	sprite.runtimeState.scale = 1.5
+	sprite.runtimeState.isCostumeDirty = true
 	sprite.transform().direction = 90
 	sprite.transform().rotationStyle = Normal
 	// A configured pivot must stay paired with the costume anchor and size.
@@ -1526,8 +1526,8 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 	sprite.markProxyDirty()
 	later := &newCloneAwakeOrderSprite(sprite.g, "later").SpriteImpl
 	later.currentCostume().path = "later.png"
-	later.runtimeState.IsCostumeDirty = false
-	later.runtimeState.SyncSprite = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
+	later.runtimeState.isCostumeDirty = false
+	later.runtimeState.syncSprite = &engine.Sprite{Target: later, MirrorPosition: later.mirrorPosition}
 	sprite.g.shapeMgr.add(later)
 	for i, s := range []*SpriteImpl{sprite, later} {
 		id := pkgengine.Object(i + 1)
@@ -1540,7 +1540,7 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 				delete(registry, id)
 			}
 		})
-		pkgengine.InitSpriteInstance(id, s.runtimeState.SyncSprite, func(id pkgengine.Object, proxy pkgengine.ISpriter) {
+		pkgengine.InitSpriteInstance(id, s.runtimeState.syncSprite, func(id pkgengine.Object, proxy pkgengine.ISpriter) {
 			registry[id] = proxy
 		})
 	}
@@ -1549,7 +1549,7 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 
 func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedResourceSpriteMgr, index int, size float64) {
 	t.Helper()
-	id := sprite.runtimeState.SyncSprite.Id
+	id := sprite.runtimeState.syncSprite.Id
 	c := sprite.costumes[index]
 	if got, want := mgr.texturePaths[id], engine.ToAssetPath(c.path); got != want {
 		t.Fatalf("texture = %q, want %q", got, want)
