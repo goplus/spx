@@ -28,26 +28,20 @@ type MonitorSlider struct {
 	Min, Max, Step float64
 }
 
-// monitorSliderState tracks the last rendered range independently of the view.
-type monitorSliderState struct {
-	config   MonitorSlider
-	position float64
-}
-
 func (p *UiMonitor) ReadSliderChange() (float64, bool) {
 	return p.readSliderChange(&engine.Managers().UiMgr)
 }
 
 func (p *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {
-	if p.active != MonitorAppearanceSlider {
+	if !p.sliderReady {
 		return 0, false
 	}
-	position := sink.GetRangeValue(p.views[MonitorAppearanceSlider].input.GetId())
-	if position == p.slider.position {
+	position := sink.GetRangeValue(p.view.input.GetId())
+	if position == p.sliderPosition {
 		return 0, false
 	}
-	p.slider.position = position
-	config := p.slider.config
+	p.sliderPosition = position
+	config := p.style.Slider
 	// Divide whole hundredths to avoid multiplication noise for decimal steps.
 	units := 1 / config.Step
 	steps := math.Round((position - config.Min) / config.Step)
@@ -55,18 +49,19 @@ func (p *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {
 	return value, true
 }
 
-func (p *UiMonitor) renderSlider(sink monitorRenderSink, slider MonitorSlider, text string) {
-	p.slider.config = slider
+func (p *UiMonitor) renderSlider(sink monitorRenderSink, text string) {
+	slider := p.style.Slider
 	number, err := strconv.ParseFloat(text, 64)
 	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
 		number = slider.Min/2 + slider.Max/2
 	}
-	id := p.views[MonitorAppearanceSlider].input.GetId()
+	id := p.view.input.GetId()
 	// HTML ranges exclude a maximum that does not fall on a valid step.
 	maximum := slider.Min + slider.steps()*slider.Step
 	number = math.Max(slider.Min, math.Min(maximum, number))
 	sink.SetRange(id, slider.Min, maximum, slider.Step, number)
-	p.slider.position = sink.GetRangeValue(id)
+	p.sliderPosition = sink.GetRangeValue(id)
+	p.sliderReady = true
 }
 
 func (s MonitorSlider) steps() float64 {

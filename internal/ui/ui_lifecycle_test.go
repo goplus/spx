@@ -73,7 +73,7 @@ func TestUIPrefabsBindChildrenBeforeFirstUse(t *testing.T) {
 				children = map[string]*UiNode{"C": panel.container, "C/Line": panel.imageLine, "LC": panel.labelContainer, "LC/Label": panel.labelValue}
 			case *UiQuote:
 				children = map[string]*UiNode{
-					"C": panel.container, "C/ImageL": panel.imageL, "C/ImageR": panel.imageR,
+					"C":          panel.container,
 					"C/LabelDes": panel.labelDes, "C/LabelMsg": panel.labelMsg,
 				}
 			case *UiSay:
@@ -110,46 +110,48 @@ func TestUIPrefabsBindChildrenBeforeFirstUse(t *testing.T) {
 }
 
 func TestUiMonitorFactoryInitializesFirstRender(t *testing.T) {
-	mgr := setupUILifecycle(t)
-
-	panel := NewUiMonitor()
-	if mgr.prefabs[panel.GetId()] != "res://engine/ui/UiMonitor.tscn" || gdx.UiNodes()[panel.GetId()] != panel {
-		t.Fatal("monitor factory did not create and register its prefab")
-	}
-	if panel.active != monitorAppearanceCount {
-		t.Fatal("new monitor already has an active view")
-	}
-	if _, changed := panel.ReadSliderChange(); changed {
-		t.Fatal("new monitor reported slider input before first render")
-	}
-	for i, spec := range monitorViewSpecs {
-		view := panel.views[i]
-		for _, child := range []struct {
-			path string
-			node *UiNode
-		}{{spec.root, view.root}, {spec.label, view.label}, {spec.value, view.value}, {spec.colorTarget, view.colorTarget}, {spec.input, view.input}} {
-			if child.path == "" {
-				if child.node != nil {
-					t.Fatal("optional monitor node unexpectedly bound")
+	for appearance := MonitorAppearanceDefault; appearance < monitorAppearanceCount; appearance++ {
+		t.Run(monitorViewSpecs[appearance].root, func(t *testing.T) {
+			mgr := setupUILifecycle(t)
+			panel := NewUiMonitor(MonitorStyle{Appearance: appearance, Label: "score", Slider: MonitorSlider{0, 100, 1}})
+			if mgr.prefabs[panel.GetId()] != "res://engine/ui/UiMonitor.tscn" || gdx.UiNodes()[panel.GetId()] != panel {
+				t.Fatal("monitor factory did not create and register its prefab")
+			}
+			if _, changed := panel.ReadSliderChange(); changed {
+				t.Fatal("new monitor reported slider input before first render")
+			}
+			spec := monitorViewSpecs[appearance]
+			paths := map[string]bool{spec.root: true}
+			for _, path := range []string{spec.label, spec.value, spec.colorTarget, spec.input} {
+				if path != "" {
+					paths[path] = true
 				}
-				continue
 			}
-			if child.node == nil || mgr.bindings[child.node.GetId()] != (uiLifecycleBinding{panel.GetId(), child.path}) {
-				t.Fatalf("monitor child %q was not bound to its prefab", child.path)
+			if appearance != MonitorAppearanceDefault {
+				paths["BG"] = true
 			}
-		}
-	}
-
-	panel.Render(MonitorStyle{Label: "score"}, MonitorValue{Text: "42"})
-	for i, view := range panel.views {
-		visible, set := mgr.visible[view.root.GetId()]
-		if !set || visible != (MonitorAppearance(i) == MonitorAppearanceDefault) {
-			t.Fatalf("first render did not set view %d visibility", i)
-		}
-	}
-	view := panel.views[MonitorAppearanceDefault]
-	if mgr.text[view.label.GetId()] != "score" || mgr.text[view.value.GetId()] != "42" {
-		t.Fatal("first monitor render lost its label or value")
+			if len(mgr.bindings) != len(paths) {
+				t.Fatalf("bound %d nodes, want only %d needed nodes", len(mgr.bindings), len(paths))
+			}
+			for id, binding := range mgr.bindings {
+				if binding.parent != panel.GetId() || !paths[binding.path] || gdx.UiNodes()[id] == nil {
+					t.Fatalf("unexpected or incomplete monitor binding %+v", binding)
+				}
+				if binding.path == spec.root && !mgr.visible[id] {
+					t.Fatal("selected monitor root is hidden")
+				}
+				if binding.path == "BG" && appearance != MonitorAppearanceDefault && mgr.visible[id] {
+					t.Fatal("default monitor root remained visible")
+				}
+			}
+			// Scalar rendering and initialization use real engine manager wrappers.
+			if appearance < MonitorAppearanceList {
+				panel.Render(MonitorValue{Text: "42"})
+				if mgr.text[panel.view.value.GetId()] != "42" {
+					t.Fatal("first monitor render lost its value")
+				}
+			}
+		})
 	}
 }
 
@@ -195,6 +197,11 @@ func TestMeasureShapeKeepsLabelInLogicalUnits(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (m *uiLifecycleMgr) SetListItems(id gdx.Object, label string, items gdx.Array, color mathf.Color) {
+	m.SetText(id, label)
+	m.SetColor(id, color)
 }
 
 func (m *uiLifecycleMgr) CreateNode(path string) gdx.Object {

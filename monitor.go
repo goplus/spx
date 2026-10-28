@@ -51,7 +51,6 @@ type Monitor struct {
 	val         string
 	eval        func() ui.MonitorValue
 	updateInput func() bool
-	style       ui.MonitorStyle
 	pos         mathf.Vec2
 	visible     bool
 	panel       monitorPanel
@@ -63,7 +62,7 @@ type Monitor struct {
 
 // monitorPanel separates widget lifecycle from the engine-backed view.
 type monitorPanel interface {
-	Render(ui.MonitorStyle, ui.MonitorValue)
+	Render(ui.MonitorValue)
 	SetVisible(bool)
 	UpdateScale(float64)
 	UpdatePos(mathf.Vec2)
@@ -172,7 +171,7 @@ func (p *Monitor) onUpdate(delta float64) {
 		// A later refresh already applied the UI state while the getter waited.
 		// Publish only its value, preserving visibility and pending layout edits.
 		if p.visible {
-			p.panel.Render(p.style, value)
+			p.panel.Render(value)
 		}
 		return
 	}
@@ -180,7 +179,7 @@ func (p *Monitor) onUpdate(delta float64) {
 		p.panel.UpdateScale(p.size)
 		p.panel.UpdatePos(p.pos)
 		if hasValue {
-			p.panel.Render(p.style, value)
+			p.panel.Render(value)
 		}
 	}
 	p.panel.SetVisible(visible)
@@ -230,11 +229,10 @@ func newMonitor(g reflect.Value, prepared preparedMonitor) (*Monitor, error) {
 		return nil, err
 	}
 
-	panel := ui.NewUiMonitor()
+	panel := ui.NewUiMonitor(prepared.style)
 	monitor := &Monitor{
 		target: v.Target, val: v.Val, eval: binding.read, name: v.Name, size: v.Size,
 		visible: v.Visible, pos: mathf.NewVec2(v.X, v.Y), panel: panel,
-		style:   prepared.style,
 		isDirty: true, // Initial dirty state to ensure first render.
 	}
 	if binding.write != nil {

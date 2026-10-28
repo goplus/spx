@@ -78,16 +78,12 @@ func calculateSayRenderScale(
 	baseSize mathf.Vec2,
 	cameraZoom mathf.Vec2,
 	windowScale float64,
-	isThink bool,
 ) mathf.Vec2 {
 	windowScale = validWindowScale(windowScale)
 	uniformScale := 1.0
 	if baseSize.X > 0 && baseSize.Y > 0 {
 		scaleVec := winSize.Div(baseSize)
 		uniformScale = math.Min(float64(scaleVec.X), float64(scaleVec.Y))
-	}
-	if isThink {
-		uniformScale *= thinkScale
 	}
 	return cameraZoom.Divf(windowScale).Mulf(uniformScale)
 }
