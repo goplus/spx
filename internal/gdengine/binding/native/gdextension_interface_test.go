@@ -19,8 +19,8 @@
 package ffi
 
 import (
-	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -29,6 +29,19 @@ import (
 	"github.com/goplus/spx/v4/internal/gdengine/binding/native/testdata/stringallocator"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
+
+type sceneMainEntered struct{}
+
+var expectSceneMain bool
+
+func TestMain(m *testing.M) {
+	// Scene initialization calls main.main through go:linkname. Stop that
+	// reentry here so it can be asserted without running the suite recursively.
+	if expectSceneMain {
+		panic(sceneMainEntered{})
+	}
+	os.Exit(m.Run())
+}
 
 func TestToGdArrayInfoPreservesTypedEmptyArrays(t *testing.T) {
 	tests := []struct {
@@ -178,12 +191,12 @@ func TestNativeArrayValuesAndOwnership(t *testing.T) {
 				}
 			}
 			// ToArray consumes the owned return buffer; its result survives that free.
-			if got := ToArray(ToGdArray(tc.input)); !reflect.DeepEqual(got, tc.want) {
+			if got := ToArray(ToGdArrayInfo(tc.input).Raw()); !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("owned return = %#v, want %#v", got, tc.want)
 			}
 		})
 	}
-	if (*ArrayInfoImpl)(nil).Raw() != nil || ToArray(nil) != nil || ToGdArray([]byte(nil)) != nil {
+	if (*ArrayInfoImpl)(nil).Raw() != nil || ToArray(nil) != nil || ToGdArrayInfo([]byte(nil)).Raw() != nil {
 		t.Fatal("nil array conversion was not nil")
 	}
 	for _, input := range []any{nil, 42, []int{1}} {
@@ -219,13 +232,13 @@ func TestNativeScalarConversions(t *testing.T) {
 		t.Fatal("noncanonical boolean or nil string conversion")
 	}
 	for _, value := range []int64{math.MinInt64, -1, 0, 1<<54 + 3, math.MaxInt64} {
-		if ToInt(ToGdInt(value)) != value || ToInt64(ToGdInt(value)) != value || int64(ToObject(ToGdObj(engine.Object(value)))) != value {
+		if ToInt64(ToGdInt(value)) != value || int64(ToObject(ToGdObj(engine.Object(value)))) != value {
 			t.Fatalf("integer precision lost: %d", value)
 		}
 	}
 	for _, value := range []float64{-1.5, 0, 2.25} {
 		gd := ToGdFloat(value)
-		if ToFloat(gd) != value || ToFloat32(gd) != value || ToFloat64(gd) != value {
+		if ToFloat64(gd) != value {
 			t.Fatalf("float round trip %v", value)
 		}
 	}
@@ -235,12 +248,6 @@ func TestNativeScalarConversions(t *testing.T) {
 	if ToVec2(ToGdVec2(vec2)) != vec2 || ToVec4(ToGdVec4(vec4)) != vec4 || ToColor(ToGdColor(color)) != color || ToRect2(ToGdRect2(rect)) != rect {
 		t.Fatal("structured value round trip changed components")
 	}
-	defer func() {
-		if got := recover(); got != "constructor is null" {
-			t.Fatalf("nil constructor panic = %v", got)
-		}
-	}()
-	CallBuiltinConstructor(nil, nil)
 }
 
 func TestReturnedStringsUseRuntimeAllocator(t *testing.T) {
@@ -281,12 +288,12 @@ func TestReturnedStringsUseRuntimeAllocator(t *testing.T) {
 // run in parallel. Restore every binding to keep shuffled/repeated runs isolated.
 func bindNativeBuiltinFixture(t *testing.T) []string {
 	t.Helper()
-	previousResolver, previousAPI := resolveCFunc, builtinAPI
-	previousStrings, previousCallbacks := globalStringMethodBindings, callbacks
+	previousResolver, previousBuiltinAPI, previousAPI := resolveCFunc, builtinAPI, api
+	previousCallbacks := callbacks
 	stringallocator.Reset()
 	t.Cleanup(func() {
-		resolveCFunc, builtinAPI = previousResolver, previousAPI
-		globalStringMethodBindings, callbacks = previousStrings, previousCallbacks
+		resolveCFunc, builtinAPI, api = previousResolver, previousBuiltinAPI, previousAPI
+		callbacks = previousCallbacks
 		stringallocator.Reset()
 	})
 	var names []string
@@ -303,12 +310,6 @@ func TestNativeBuiltinResolution(t *testing.T) {
 	bindings := map[string]unsafe.Pointer{
 		"spx_global_register_callbacks": unsafe.Pointer(builtinAPI.SpxGlobalRegisterCallbacks),
 		"spx_global_free_string":        unsafe.Pointer(builtinAPI.SpxGlobalFreeString),
-		"string_new_with_latin1_chars":  unsafe.Pointer(builtinAPI.StringNewWithLatin1Chars),
-		"string_new_with_utf8_chars":    unsafe.Pointer(builtinAPI.StringNewWithUtf8Chars),
-		"string_to_latin1_chars":        unsafe.Pointer(builtinAPI.StringToLatin1Chars),
-		"string_to_utf8_chars":          unsafe.Pointer(builtinAPI.StringToUtf8Chars),
-		"variant_get_ptr_constructor":   unsafe.Pointer(builtinAPI.VariantGetPtrConstructor),
-		"variant_get_ptr_destructor":    unsafe.Pointer(builtinAPI.VariantGetPtrDestructor),
 	}
 	if len(names) != len(bindings) {
 		t.Fatalf("resolved symbols = %v, want %d builtin symbols", names, len(bindings))
@@ -330,111 +331,41 @@ func TestNativeBuiltinResolution(t *testing.T) {
 	}
 }
 
-func TestNativeBuiltinConstructorsAndInitialization(t *testing.T) {
+func TestNativeInitialization(t *testing.T) {
 	bindNativeBuiltinFixture(t)
-	configuration := initialization{}
-	doInitialization(&configuration)
+	configuration := initialization{minimum_initialization_level: initializationLevelScene + 1}
+	if got := gdspx_init(uintptr(stringallocator.Resolver()), nil, unsafe.Pointer(&configuration)); got != 1 {
+		t.Fatalf("initialization result = %d, want success", got)
+	}
+	if configuration.minimum_initialization_level != initializationLevelScene {
+		t.Fatal("initialization did not select the scene level")
+	}
 	if configuration.initialize == nil || configuration.deinitialize == nil {
 		t.Fatal("initialization callbacks were not installed")
 	}
-	constructor, destructor := globalStringMethodBindings.constructor, globalStringMethodBindings.destructor
-	if constructor == nil || destructor == nil {
-		t.Fatal("string constructor/destructor bindings are nil")
+	if !ToBool(CallPlatformIsMainThread()) || stringallocator.RegistrationCount() != 1 || !stringallocator.HasRegistration() {
+		t.Fatal("initialization did not bind the engine API and register callbacks once")
 	}
-	if got := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_VECTOR2, 0); got != nil {
-		t.Fatalf("unsupported constructor type returned %p", got)
-	}
-	for _, index := range []int32{-1, math.MaxInt32} {
-		if got := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, index); got != nil {
-			t.Fatalf("unsupported constructor index %d returned %p", index, got)
-		}
-	}
-	if got := CallVariantGetPtrDestructor(GDEXTENSION_VARIANT_TYPE_VECTOR2); got != nil {
-		t.Fatalf("unsupported destructor type returned %p", got)
-	}
-	storage := ToGdArrayInfo([]int64{0})
-	defer storage.Free()
-	base := storage.gdArray.data
-	CallBuiltinConstructor(constructor, GDExtensionUninitializedTypePtr(base))
-	if got := storage.ToInt64s()[0]; got != 71 {
-		t.Fatalf("no-argument constructor wrote %d, want 71", got)
-	}
-	arguments := ToGdArrayInfo([]int64{17, -3})
-	defer arguments.Free()
-	withArguments := CallVariantGetPtrConstructor(GDEXTENSION_VARIANT_TYPE_STRING, 1)
-	if withArguments == nil {
-		t.Fatal("argument constructor is nil")
-	}
-	CallBuiltinConstructor(withArguments, GDExtensionUninitializedTypePtr(base),
-		GDExtensionConstTypePtr(arguments.gdArray.data),
-		GDExtensionConstTypePtr(unsafe.Add(arguments.gdArray.data, unsafe.Sizeof(int64(0)))))
-	if got := storage.ToInt64s()[0]; got != 167 {
-		t.Fatalf("constructor arguments wrote %d, want 167", got)
-	}
-	if got := arguments.ToInt64s(); !reflect.DeepEqual(got, []int64{17, -3}) {
-		t.Fatalf("constructor modified its const arguments: %v", got)
-	}
-	CallPtrDestructor(destructor, GDExtensionTypePtr(base))
-	if got := storage.ToInt64s()[0]; got != -99 {
-		t.Fatalf("destructor wrote %d, want -99", got)
-	}
+	// Other initialization levels and every shutdown level must safely return
+	// through the installed C hooks without entering the application's main.
+	stringallocator.InvokeInactiveLifecycle(unsafe.Pointer(&configuration))
 }
 
-func TestNativeBuiltinStringCalls(t *testing.T) {
-	bindNativeBuiltinFixture(t)
-	for _, tc := range []struct {
-		name, value string
-		tag         byte
-		create      func(GDExtensionUninitializedStringPtr, string)
-		read        func(GDExtensionConstStringPtr, *Char, GdInt) GdInt
-	}{
-		{"latin1", "caf\xe9", 'L', CallStringNewWithLatin1Chars, CallStringToLatin1Chars},
-		{"utf8", "héllo 世界", 'U', CallStringNewWithUtf8Chars, CallStringToUtf8Chars},
-		{"empty", "", 'U', CallStringNewWithUtf8Chars, CallStringToUtf8Chars},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			storage := ToGdArrayInfo(make([]byte, len(tc.value)+2))
-			defer storage.Free()
-			base := storage.gdArray.data
-			tc.create(GDExtensionUninitializedStringPtr(base), tc.value)
-			want := append([]byte{tc.tag}, []byte(tc.value)...)
-			want = append(want, 0)
-			if got := storage.ToBytes(); !bytes.Equal(got, want) {
-				t.Fatalf("string destination = %q, want %q", got, want)
-			}
-			self := GDExtensionConstStringPtr(base)
-			if got := tc.read(self, nil, 0); int(got) != len(tc.value) {
-				t.Fatalf("length query = %d, want %d", got, len(tc.value))
-			}
-			for _, limit := range []int{0, 2, len(tc.value) + 1} {
-				output := bytes.Repeat([]byte{'?'}, len(tc.value)+2)
-				got := tc.read(self, (*Char)(unsafe.Pointer(&output[0])), GdInt(limit))
-				want := bytes.Repeat([]byte{'?'}, len(output))
-				copy(want[:min(limit, len(tc.value))], tc.value)
-				if int(got) != len(tc.value) || !bytes.Equal(output, want) {
-					t.Fatalf("read limit %d = %q, length %d; want %q, length %d", limit, output, got, want, len(tc.value))
-				}
-			}
-		})
-	}
+func TestNativeSceneInitializationEntersMain(t *testing.T) {
+	expectSceneMain = true
+	defer func() {
+		expectSceneMain = false
+		if got := recover(); got != (sceneMainEntered{}) {
+			t.Fatalf("scene initialization = %v, want entry into main", got)
+		}
+	}()
+	initialize(nil, initializationLevelScene)
 }
 
 func TestNativeRegisteredCallbacksCrossCABI(t *testing.T) {
 	bindNativeBuiltinFixture(t)
-	CallGlobalRegisterCallbacks(nil)
-	if stringallocator.RegistrationCount() != 1 || stringallocator.HasRegistration() {
-		t.Fatal("nil callback table was not forwarded")
-	}
-	empty := SpxCallbackInfo{}
-	CallGlobalRegisterCallbacks(GDExtensionSpxCallbackInfoPtr(unsafe.Pointer(&empty)))
-	if stringallocator.RegistrationCount() != 2 || !stringallocator.HasRegistration() {
-		t.Fatal("non-nil callback table was not forwarded")
-	}
-	if calls := stringallocator.InvokeCallbacks(0, 0, 0, 0, nil); calls != 0 {
-		t.Fatalf("empty table invoked %d callbacks", calls)
-	}
 	registerEngineCallback()
-	if stringallocator.RegistrationCount() != 3 || !stringallocator.HasRegistration() {
+	if stringallocator.RegistrationCount() != 1 || !stringallocator.HasRegistration() {
 		t.Fatal("generated C callback table was not registered")
 	}
 	const id int64 = 1<<54 + 3
