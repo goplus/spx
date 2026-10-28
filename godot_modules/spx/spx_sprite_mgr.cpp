@@ -55,11 +55,14 @@
 #include "spx_res_mgr.h"
 #include "spx_scene_mgr.h"
 #include "spx_sprite.h"
+#include "spx_task_utils.h"
 
 #include <algorithm>
+#include <atomic>
+#include <functional>
 #include <vector>
 
-#define DEFAULT_COLLISION_ALPHA_THRESHOLD 0.05
+#define DEFAULT_COLLISION_ALPHA_THRESHOLD 0.007
 
 
 StringName SpxSpriteMgr::default_texture_anim;
@@ -89,11 +92,72 @@ namespace {
 using SpxPixelQuery::Layer;
 using SpxPixelQuery::Snapshot;
 
+constexpr int DEFAULT_PIXEL_COLLISION_SAMPLING_STEP = 1;
+constexpr int PIXEL_QUERY_TILE_SIZE = 32;
+constexpr int PIXEL_QUERY_MIN_PARALLEL_TILES = 4;
+
 bool capture_sprite_pixels(SpxSprite *p_sprite, Snapshot &r_snapshot, bool p_require_visible, bool p_apply_collision_alpha) {
 	if (!p_sprite || (p_require_visible && !p_sprite->is_visible_in_tree())) {
 		return false;
 	}
 	return SpxPixelQuery::capture(p_sprite->get_anim2d(), p_apply_collision_alpha, r_snapshot);
+}
+
+template <typename Predicate>
+bool parallel_any_pixel(const Rect2i &p_rect, int p_step, const Predicate &p_matches, const String &p_description) {
+	if (!p_rect.has_area()) {
+		return false;
+	}
+
+	const int sampling_step = MAX(p_step, 1);
+	const int tiles_x = (p_rect.size.x + PIXEL_QUERY_TILE_SIZE - 1) / PIXEL_QUERY_TILE_SIZE;
+	const int tiles_y = (p_rect.size.y + PIXEL_QUERY_TILE_SIZE - 1) / PIXEL_QUERY_TILE_SIZE;
+	const int total_tiles = tiles_x * tiles_y;
+	const Vector2i rect_end = p_rect.position + p_rect.size;
+	std::atomic<bool> found = false;
+
+	const SpxTaskUtils::IndexedTask process_tile = [&](uint32_t p_index) {
+		if (found.load(std::memory_order_relaxed)) {
+			return;
+		}
+
+		const int tile_x = (int)p_index / tiles_y;
+		const int tile_y = (int)p_index % tiles_y;
+		const Vector2i tile_position(
+				p_rect.position.x + tile_x * PIXEL_QUERY_TILE_SIZE,
+				p_rect.position.y + tile_y * PIXEL_QUERY_TILE_SIZE);
+		const Vector2i tile_end(
+				MIN(tile_position.x + PIXEL_QUERY_TILE_SIZE, rect_end.x),
+				MIN(tile_position.y + PIXEL_QUERY_TILE_SIZE, rect_end.y));
+
+		// Keep every tile on the same sampling grid as the original full scan.
+		const Vector2i tile_offset = tile_position - p_rect.position;
+		const Vector2i first_sample(
+				tile_position.x + (sampling_step - tile_offset.x % sampling_step) % sampling_step,
+				tile_position.y + (sampling_step - tile_offset.y % sampling_step) % sampling_step);
+		for (int x = first_sample.x; x < tile_end.x; x += sampling_step) {
+			for (int y = first_sample.y; y < tile_end.y; y += sampling_step) {
+				if (p_matches(Vector2((real_t)x + 0.5f, (real_t)y + 0.5f))) {
+					found.store(true, std::memory_order_relaxed);
+					return;
+				}
+			}
+		}
+	};
+
+	const std::function<void()> serial_task = [&]() {
+		for (int tile_x = 0; tile_x < tiles_x; ++tile_x) {
+			for (int tile_y = 0; tile_y < tiles_y; ++tile_y) {
+				process_tile((uint32_t)(tile_x * tiles_y + tile_y));
+				if (found.load(std::memory_order_relaxed)) {
+					return;
+				}
+			}
+		}
+	};
+
+	SpxTaskUtils::execute_group_task(total_tiles, process_tile, serial_task, PIXEL_QUERY_MIN_PARALLEL_TILES, p_description);
+	return found.load(std::memory_order_relaxed);
 }
 
 bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_threshold, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
@@ -108,14 +172,14 @@ bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_thres
 	if (!overlap_rect.has_area() || !SpxPixelQuery::load_image(query_a, p_cache) || !SpxPixelQuery::load_image(query_b, p_cache)) {
 		return false;
 	}
-	return SpxPixelQuery::any_pixel_center(overlap_rect, p_step, [&](const Vector2 &sample_pos) {
+	return parallel_any_pixel(overlap_rect, p_step, [&](const Vector2 &sample_pos) {
 		Color color_a;
 		if (!SpxPixelQuery::sample(query_a, sample_pos, color_a) || color_a.a <= p_alpha_threshold) {
 			return false;
 		}
 		Color color_b;
 		return SpxPixelQuery::sample(query_b, sample_pos, color_b) && color_b.a > p_alpha_threshold;
-	});
+	}, String("SPXAlphaCollision"));
 }
 
 } // namespace
@@ -123,8 +187,7 @@ bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_thres
 void SpxSpriteMgr::on_awake() {
 	default_texture_anim = "default";
 
-	// Initialize pixel collision sampling step with default value of 2 (good balance between performance and accuracy)
-	pixel_collision_sampling_step = 2;
+	pixel_collision_sampling_step = DEFAULT_PIXEL_COLLISION_SAMPLING_STEP;
 
 	dont_destroy_root = memnew(Node2D);
 	dont_destroy_root->set_name("dont_destroy_root");
@@ -1035,11 +1098,11 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 		return a.in_front_of(b);
 	});
 
-	return SpxPixelQuery::any_pixel_center(SpxPixelQuery::pixel_centers(self_query.bounds), pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
+	return parallel_any_pixel(SpxPixelQuery::pixel_centers(self_query.bounds), pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 		Color self_color;
 		return SpxPixelQuery::sample_premultiplied(self_query, sample_pos, self_color) &&
 				self_matches(self_color) && scene_matches(SpxPixelQuery::composite(scene_queries, sample_pos));
-	});
+	}, String("SPXSceneColorCollision"));
 }
 
 GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
@@ -1073,12 +1136,12 @@ GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
 		if (!SpxPixelQuery::load_image(query2)) {
 			continue;
 		}
-		if (SpxPixelQuery::any_pixel_center(overlap_rect, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
+		if (parallel_any_pixel(overlap_rect, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 				Color color1;
 				Color color2;
 				return SpxPixelQuery::sample(query1, sample_pos, color1) &&
 						SpxPixelQuery::sample(query2, sample_pos, color2) && check_func(color1, color2);
-			})) {
+			}, String("SPXColorCollision"))) {
 			return true;
 		}
 	}

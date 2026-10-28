@@ -103,6 +103,7 @@ type DirectLoadSprite struct {
 
 type gameTestSpriteMgr struct {
 	*spyCloneSpriteMgr
+	pixelCollisionSamplingSteps []int64
 }
 
 type gameTestExtMgr struct {
@@ -1180,7 +1181,9 @@ func (*gameTestSpriteMgr) SetColliderRect(pkgengine.Object, mathf.Vec2, mathf.Ve
 
 func (*gameTestSpriteMgr) SetTriggerRect(pkgengine.Object, mathf.Vec2, mathf.Vec2) {}
 
-func (*gameTestSpriteMgr) SetPixelCollisionSamplingStep(int64) {}
+func (m *gameTestSpriteMgr) SetPixelCollisionSamplingStep(step int64) {
+	m.pixelCollisionSamplingSteps = append(m.pixelCollisionSamplingSteps, step)
+}
 
 func (*gameTestExtMgr) SetLayerSorterMode(int64) {}
 

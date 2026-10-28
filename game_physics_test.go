@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/base/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -238,12 +239,20 @@ func TestGameCollisionSkipsInvalidSprites(t *testing.T) {
 func TestApplyPhysicsSettingsForwardsCollisionMode(t *testing.T) {
 	game := setupStageLoadTestGame(t, nil)
 	mgr := pkgengine.PhysicsMgr.(*gameTestPhysicsMgr)
+	spriteMgr := pkgengine.SpriteMgr.(*gameTestSpriteMgr)
+	spriteMgr.pixelCollisionSamplingSteps = nil
 	want := []bool{true, false, true}
 	for _, byPixel := range want {
-		game.applyPhysicsSettings(coreproject.SystemSettings{CollisionByPixel: byPixel})
+		game.applyPhysicsSettings(coreproject.SystemSettings{
+			CollisionByPixel:        byPixel,
+			PixelCollisionPrecision: collision.PixelPrecisionHigh,
+		})
 	}
 	if !slices.Equal(mgr.collisionModes, want) {
 		t.Fatalf("collision modes = %v, want %v", mgr.collisionModes, want)
+	}
+	if wantSteps := []int64{collision.PixelPrecisionHigh, collision.PixelPrecisionHigh, collision.PixelPrecisionHigh}; !slices.Equal(spriteMgr.pixelCollisionSamplingSteps, wantSteps) {
+		t.Fatalf("pixel collision sampling steps = %v, want %v", spriteMgr.pixelCollisionSamplingSteps, wantSteps)
 	}
 }
 

@@ -562,6 +562,43 @@ TEST_CASE("[SceneTree][SPX] Color sensing honors the configured color threshold"
 	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(1, 0, 0), 0.035, 0.99));
 }
 
+TEST_CASE("[SceneTree][SPX] Pixel queries preserve results across multiple sampling tiles") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	VisualFixture fixture;
+	fixture.resources->set_game_datas(fixture.png_path.get_base_dir(), Vector<String>());
+
+	auto make_frames = [](const Ref<Image> &p_image) {
+		Ref<SpriteFrames> frames;
+		frames.instantiate();
+		frames->add_frame("default", ImageTexture::create_from_image(p_image));
+		return frames;
+	};
+
+	Ref<Image> self_image = Image::create_empty(96, 96, false, Image::FORMAT_RGBA8);
+	self_image->fill(Color(0, 0, 0, 0));
+	self_image->set_pixel(33, 0, Color(1, 0, 0, 1));
+	Ref<Image> other_image = Image::create_empty(96, 96, false, Image::FORMAT_RGBA8);
+	other_image->fill(Color(0, 0, 0, 0));
+	other_image->set_pixel(33, 0, Color(0, 0, 1, 1));
+	SpxSprite *self = fixture.create_sprite();
+	self->get_anim2d()->set_sprite_frames(make_frames(self_image));
+	SpxSprite *other = fixture.create_sprite();
+	other->get_anim2d()->set_sprite_frames(make_frames(other_image));
+	CHECK(fixture.sprites->get_pixel_collision_sampling_step() == 1);
+	fixture.sprites->set_pixel_collision_sampling_step(3);
+
+	const GdObj id = self->get_gid();
+	CHECK(fixture.sprites->check_collision_with_sprite(id, other->get_gid(), 0.99, true));
+	CHECK(fixture.sprites->check_collision_by_alpha(id, 0.99));
+	CHECK(fixture.sprites->check_collision_by_color(id, Color(0, 0, 1), 0.01, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(0, 1, 0), 0.01, 0.99));
+	CHECK(fixture.sprites->check_collision_by_colors(id, Color(1, 0, 0), Color(0, 0, 1), 0.01, 0.99));
+	CHECK_FALSE(fixture.sprites->check_collision_by_colors(id, Color(0, 1, 0), Color(0, 0, 1), 0.01, 0.99));
+
+	self->get_anim2d()->set_scale(Vector2(0.001, 0.001));
+	CHECK_FALSE(fixture.sprites->check_collision_by_color(id, Color(0, 0, 1), 0.01, 0.99));
+}
+
 TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preserve from-end playback") {
 	// The SceneTree listener returns before Audio initialization. Cloning Area2D
 	// enumerates audio bus properties; the listener owns AudioServer teardown.

@@ -45,8 +45,8 @@ func TestParseColliderShapeType(t *testing.T) {
 }
 
 func TestParsePixelCollisionPrecision(t *testing.T) {
-	if got := ParsePixelCollisionPrecision(nil); got != PixelPrecisionLow {
-		t.Fatalf("ParsePixelCollisionPrecision(nil) = %d, want %d", got, PixelPrecisionLow)
+	if got := ParsePixelCollisionPrecision(nil); got != PixelPrecisionHigh {
+		t.Fatalf("ParsePixelCollisionPrecision(nil) = %d, want %d", got, PixelPrecisionHigh)
 	}
 	tests := []struct {
 		input string
@@ -55,7 +55,7 @@ func TestParsePixelCollisionPrecision(t *testing.T) {
 		{input: "high", want: PixelPrecisionHigh},
 		{input: "medium", want: PixelPrecisionMedium},
 		{input: "low", want: PixelPrecisionLow},
-		{input: "bad", want: PixelPrecisionLow},
+		{input: "bad", want: PixelPrecisionHigh},
 	}
 	for _, tt := range tests {
 		input := tt.input
