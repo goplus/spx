@@ -589,8 +589,8 @@ func TestGameBackdropOverloads(t *testing.T) {
 
 func TestGameGraphicEffectsAndClock(t *testing.T) {
 	setupRuntimeScheduler(t)
-	itime.Start(nil)
-	t.Cleanup(func() { itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { itime.Start() })
 	var game Game
 	game.SetGraphicEffect(ColorEffect, 10)
 	game.ChangeGraphicEffect(ColorEffect, 5)
@@ -617,8 +617,8 @@ func TestGameGraphicEffectsAndClock(t *testing.T) {
 
 func TestGameFrameWaitAndRepeatUntil(t *testing.T) {
 	co := setupRuntimeScheduler(t)
-	itime.Start(nil)
-	t.Cleanup(func() { itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { itime.Start() })
 	var game Game
 	count := 0
 	finished := false

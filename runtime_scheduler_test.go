@@ -80,7 +80,7 @@ func TestRuntimeSchedulerFixtureDrainsBeforeRestoringBindings(t *testing.T) {
 
 func TestNonVisualLoopsShareFrame(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
-	itime.Start(nil)
+	itime.Start()
 	counts := [2]int{}
 	for i := range counts {
 		th := co.Create(nil, func(coroutine.Thread) {
@@ -98,7 +98,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
-			itime.Start(nil)
+			itime.Start()
 			sprite := new(SpriteImpl)
 			sprite.spriteState.IsVisible = visible
 			sprite.components.transform = &transformComponent{
@@ -143,7 +143,7 @@ func TestRotationStyleChangesControlRedrawBoundary(t *testing.T) {
 func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 	resetInputSessionTest(t)
 	co, game := setupRuntimeEventGame(t)
-	itime.Start(nil)
+	itime.Start()
 	setupCaptureTest(t)
 	setupImmediateEngineCalls(t)
 	originalInputMgr, originalExtMgr := pkgengine.InputMgr, pkgengine.ExtMgr
@@ -219,7 +219,7 @@ func TestReplayFinalTickConditionBeforePause(t *testing.T) {
 
 func TestRedrawFinishesWholeRound(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
-	itime.Start(nil)
+	itime.Start()
 	var visual, nonVisual int
 	th := co.Create(nil, func(coroutine.Thread) {
 		Forever(func() {
@@ -244,7 +244,7 @@ func TestRedrawFinishesWholeRound(t *testing.T) {
 
 func TestExplicitWaitStillCrossesFrame(t *testing.T) {
 	co, _ := setupRuntimeEventGame(t)
-	itime.Start(nil)
+	itime.Start()
 	count := 0
 	th := co.Create(nil, func(coroutine.Thread) {
 		Repeat(3, func() {
@@ -266,7 +266,7 @@ func TestSpriteVisibilityControlsRedrawBoundary(t *testing.T) {
 	for _, visible := range []bool{false, true} {
 		t.Run(map[bool]string{false: "hidden", true: "visible"}[visible], func(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
-			itime.Start(nil)
+			itime.Start()
 			sprite := new(SpriteImpl)
 			sprite.spriteState.IsVisible = visible
 			count := 0
@@ -299,7 +299,7 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			co, _ := setupRuntimeEventGame(t)
-			itime.Start(nil)
+			itime.Start()
 			sprite := newTestRenderSprite()
 			sprite.spriteState.IsVisible = tt.visible
 			var frames [3]int64
@@ -328,7 +328,7 @@ func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {
 			co, game, _ := setupInputSourceTest(t)
 			game.markGameStarted(game.bootstrapGeneration())
-			itime.Start(nil)
+			itime.Start()
 			var tracked float64
 			fired := 0
 			game.OnStart(func() {
@@ -413,7 +413,7 @@ func TestConditionSamplingSkipsBootstrapWhileScriptIsRunning(t *testing.T) {
 func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 	co, game, _ := setupInputSourceTest(t)
 	game.markGameStarted(game.bootstrapGeneration())
-	itime.Start(nil)
+	itime.Start()
 	game.lifecycleState.StartDispatched.Store(true)
 	var sampled, handled float64
 	game.OnCond(func() bool { sampled = game.Timer(); return sampled > 0.01 }, func() { handled = game.Timer() })
@@ -433,7 +433,7 @@ func TestConditionSamplesBeforeClockAndHandlerUsesNewClock(t *testing.T) {
 func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
 	co, game, _ := setupInputSourceTest(t)
 	game.markGameStarted(game.bootstrapGeneration())
-	itime.Start(nil)
+	itime.Start()
 	game.lifecycleState.StartDispatched.Store(true)
 	value := true
 	evaluations, calls := 0, 0
@@ -477,7 +477,7 @@ func TestConditionDoesNotReenterRunningHandler(t *testing.T) {
 func TestLogicFramePreservesPhasesAndShapeSnapshot(t *testing.T) {
 	setupRuntimeScheduler(t)
 	itime.ClearTimers()
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(itime.ClearTimers)
 	game := &Game{sounds: make(map[string]sound)}
 	backend := &animationAudioBackend{}

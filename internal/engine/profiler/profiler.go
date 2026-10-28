@@ -31,24 +31,22 @@ var (
 
 	debugLastTime  float64 = 0
 	debugLastFrame int64   = 0
-	prevGCStats    debug.GCStats
+	gcStats        debug.GCStats
 	timingData     = make(map[string]TimingInfo)
 
-	// Controls whether to print detailed performance statistics
-	printDetailedStats bool
 	lastUpdateDuration float64
 	totalStart         stime.Time
 	Debug              bool
 	Enabled            bool
-	enabledStack       []bool
 )
 
 // TimingInfo records the execution time and related information of each module
 type TimingInfo struct {
-	PreCall    float64       // Preparation time before the call
-	ActualCall float64       // Actual function execution time
-	PostCall   float64       // Cleanup time after the call
-	GCStats    debug.GCStats // GC statistics
+	PreCall     float64 // Preparation time before the call
+	ActualCall  float64 // Actual function execution time
+	PostCall    float64 // Cleanup time after the call
+	GCCount     int64
+	GCPauseTime stime.Duration
 }
 
 func Calcfps() float64 {
@@ -74,57 +72,32 @@ func SetGco(co *coroutine.Coroutines) {
 	gco = co
 }
 
-func EnableTemporarily(enabled bool) {
-	enabledStack = append(enabledStack, Enabled)
-	Enabled = enabled
-}
-
-func Restore() {
-	if len(enabledStack) == 0 {
-		return
-	}
-	Enabled = enabledStack[len(enabledStack)-1]
-	enabledStack = enabledStack[:len(enabledStack)-1]
-}
-
-func BeginSample(sampleName ...string) {
+func BeginSample() {
 	if !Enabled {
 		return
 	}
-	name := "Unnamed"
-	if len(sampleName) > 0 {
-		name = sampleName[0]
-	}
-	spxlog.Info("========== Begin profiling sample: %s ==========", name)
+	spxlog.Info("========== Begin profiling sample: Unnamed ==========")
 
 	totalStart = stime.Now()
 	// Clear the timing data of the previous frame
 	clear(timingData)
 }
 
-func EndSample(sampleName ...string) {
+func EndSample() {
 	if !Enabled {
 		return
 	}
 	// Calculate the total time
 	total := stime.Since(totalStart).Seconds() * 1000
 
-	name := "Unnamed"
-	interval := 20.0
-	if len(sampleName) > 0 {
-		name = sampleName[0]
-		interval = 0.0
-	}
-
 	// print a brief message
-	if total > interval {
+	if total > 20 {
 		spxlog.Info("Total time: %.3fms (GameUpdate: %.3fms, CoroUpdateJobs: %.3fms, GameRender: %.3fms)",
 			total, timingData["GameUpdate"].ActualCall, timingData["CoroUpdateJobs"].ActualCall, timingData["GameRender"].ActualCall)
 	}
 
 	// If the coroutine update time exceeds the threshold, or the pre/post processing time is too long, print detailed information
-	if printDetailedStats ||
-		timingData["CoroUpdateJobs"].ActualCall > 20 ||
+	if timingData["CoroUpdateJobs"].ActualCall > 20 ||
 		(timingData["CoroUpdateJobs"].PreCall+timingData["CoroUpdateJobs"].PostCall) > 5 ||
 		(gco != nil && timingData["CoroUpdateJobs"].ActualCall > 10 &&
 			timingData["CoroUpdateJobs"].ActualCall > 2*getCoroStatsTotal()) {
@@ -133,7 +106,7 @@ func EndSample(sampleName ...string) {
 
 	lastUpdateDuration = total
 
-	spxlog.Info("========== End profiling sample: %s ==========", name)
+	spxlog.Info("========== End profiling sample: Unnamed ==========")
 }
 
 func GetStats(name string) (TimingInfo, bool) {
@@ -151,7 +124,8 @@ func MeasureFunctionTime(name string, fn func()) {
 	preCallStart := stime.Now()
 
 	// Get the GC statistics before the call
-	debug.ReadGCStats(&prevGCStats)
+	debug.ReadGCStats(&gcStats)
+	previousGCCount, previousGCPause := gcStats.NumGC, gcStats.PauseTotal
 
 	// Preparation phase ends
 	preCallEnd := stime.Now()
@@ -165,7 +139,9 @@ func MeasureFunctionTime(name string, fn func()) {
 	postCallStart := stime.Now()
 
 	// Get the GC difference
-	gcDiff := getGCDiff()
+	debug.ReadGCStats(&gcStats)
+	gcCount := gcStats.NumGC - previousGCCount
+	gcPause := gcStats.PauseTotal - previousGCPause
 
 	// Post-processing phase ends
 	postCallEnd := stime.Now()
@@ -177,10 +153,11 @@ func MeasureFunctionTime(name string, fn func()) {
 
 	// Store the timing information
 	timingData[name] = TimingInfo{
-		PreCall:    preCallTime,
-		ActualCall: actualCallTime,
-		PostCall:   postCallTime,
-		GCStats:    gcDiff,
+		PreCall:     preCallTime,
+		ActualCall:  actualCallTime,
+		PostCall:    postCallTime,
+		GCCount:     gcCount,
+		GCPauseTime: gcPause,
 	}
 }
 
@@ -194,28 +171,6 @@ func getCoroStatsTotal() float64 {
 	return stats.InitTime + stats.LoopTime + stats.MoveTime
 }
 
-// getGCDiff retrieves the difference in GC statistics
-func getGCDiff() debug.GCStats {
-	var currentStats debug.GCStats
-	debug.ReadGCStats(&currentStats)
-
-	diff := debug.GCStats{
-		NumGC:          currentStats.NumGC - prevGCStats.NumGC,
-		PauseTotal:     currentStats.PauseTotal - prevGCStats.PauseTotal,
-		PauseQuantiles: currentStats.PauseQuantiles,
-		PauseEnd:       currentStats.PauseEnd,
-	}
-
-	// Only copy the latest pause time
-	if len(currentStats.Pause) > 0 && len(prevGCStats.Pause) > 0 {
-		diff.Pause = make([]stime.Duration, len(currentStats.Pause))
-		copy(diff.Pause, currentStats.Pause)
-	}
-
-	prevGCStats = currentStats
-	return diff
-}
-
 // printTimingInfo prints timing information
 func printTimingInfo() {
 	spxlog.Info("========== Engine Module Detailed Timing Information ==========")
@@ -224,10 +179,10 @@ func printTimingInfo() {
 		spxlog.Info("%s: Total %.3fms (Preparation: %.3fms, Execution: %.3fms, Cleanup: %.3fms)",
 			name, total, info.PreCall, info.ActualCall, info.PostCall)
 
-		if info.GCStats.NumGC > 0 {
+		if info.GCCount > 0 {
 			spxlog.Info("  GC: %d times, Total pause: %.3fms",
-				info.GCStats.NumGC,
-				float64(info.GCStats.PauseTotal)/float64(stime.Millisecond))
+				info.GCCount,
+				float64(info.GCPauseTime)/float64(stime.Millisecond))
 		}
 	}
 
@@ -293,10 +248,10 @@ func printCoroStats(coroInfo TimingInfo) {
 		spxlog.Info("Possible reasons for the performance difference:")
 
 		// Check GC
-		if coroInfo.GCStats.NumGC > 0 {
+		if coroInfo.GCCount > 0 {
 			spxlog.Info("  - Garbage collection: %d GCs occurred during the engine's measurement, total pause time %.3fms",
-				coroInfo.GCStats.NumGC,
-				float64(coroInfo.GCStats.PauseTotal)/float64(stime.Millisecond))
+				coroInfo.GCCount,
+				float64(coroInfo.GCPauseTime)/float64(stime.Millisecond))
 		}
 
 		// Check coroutine internal GC

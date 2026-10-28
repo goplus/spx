@@ -150,7 +150,7 @@ func TestHandlerRestartFrameOrder(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			co := New(nil)
-			itime.Start(nil)
+			itime.Start()
 			t.Cleanup(func() {
 				co.RunAfterStop(nil)
 			})

@@ -647,7 +647,7 @@ func resetRuntimeDeltaTestState() {
 	state.uiNodes = make(map[Object]gdx.IUiNode)
 	state.timeSinceStart = 0
 	itime.SetFixedDeltaTime(0)
-	itime.Start(nil)
+	itime.Start()
 }
 
 func advanceRuntimeDeltaFrame(realDelta float64) {

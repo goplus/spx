@@ -143,7 +143,7 @@ func onStart() {
 	if binding == nil {
 		return
 	}
-	itime.Start(Managers().PlatformMgr.SetTimeScale)
+	itime.Start()
 	binding.callbacks.OnEngineStart()
 }
 

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -34,10 +33,10 @@ import (
 func TestEndSampleSkipsMissingCoroutineStats(t *testing.T) {
 	output := captureProfile(t)
 
-	BeginSample("no coroutine update")
-	EndSample("no coroutine update")
+	BeginSample()
+	EndSample()
 
-	if !strings.Contains(output.String(), "End profiling sample: no coroutine update") {
+	if !strings.Contains(output.String(), "End profiling sample: Unnamed") {
 		t.Fatalf("profiling output was not captured: %s", output)
 	}
 	if strings.Contains(output.String(), "Coroutine Module Detailed Statistics") {
@@ -45,11 +44,43 @@ func TestEndSampleSkipsMissingCoroutineStats(t *testing.T) {
 	}
 }
 
+func TestEndSampleReportsSlowFrame(t *testing.T) {
+	output := captureProfile(t)
+	BeginSample()
+	timingData["GameUpdate"] = TimingInfo{ActualCall: 7}
+	timingData["CoroUpdateJobs"] = TimingInfo{ActualCall: 4}
+	timingData["GameRender"] = TimingInfo{ActualCall: 3}
+	totalStart = time.Now().Add(-30 * time.Millisecond)
+	EndSample()
+
+	if !strings.Contains(output.String(), "GameUpdate: 7.000ms, CoroUpdateJobs: 4.000ms, GameRender: 3.000ms") {
+		t.Fatalf("slow frame summary missing: %s", output)
+	}
+	if strings.Contains(output.String(), "Detailed Timing Information") {
+		t.Fatalf("slow frame without coroutine overhead printed details: %s", output)
+	}
+	if lastUpdateDuration < 30 {
+		t.Fatalf("frame duration = %gms, want at least 30ms", lastUpdateDuration)
+	}
+}
+
+func TestEndSampleReportsCoroutineAccountingGap(t *testing.T) {
+	output := captureProfile(t)
+	BeginSample()
+	timingData["CoroUpdateJobs"] = TimingInfo{ActualCall: 15}
+	EndSample()
+
+	for _, want := range []string{"Coroutine Module Detailed Statistics", "Engine measured total time: 15.000ms", "Coroutine internal measured total time: 0.000ms"} {
+		if !strings.Contains(output.String(), want) {
+			t.Errorf("missing %q in profile: %s", want, output)
+		}
+	}
+}
+
 func TestEndSampleReportsCoroutineStats(t *testing.T) {
 	for _, updated := range []bool{false, true} {
 		t.Run(fmt.Sprintf("updated=%v", updated), func(t *testing.T) {
 			output := captureProfile(t)
-			printDetailedStats = updated
 			if updated {
 				gco.SetPerfDebug(true)
 				thread := gco.Create("profiled", func(me coroutine.Thread) {
@@ -64,9 +95,9 @@ func TestEndSampleReportsCoroutineStats(t *testing.T) {
 			if updated && (stats.JobCount != 1 || stats.GCCount == 0) {
 				t.Fatalf("update did not record its job and GC: %+v", stats)
 			}
-			BeginSample("coroutine update")
-			timingData["CoroUpdateJobs"] = TimingInfo{ActualCall: stats.TotalTime + 11}
-			EndSample("coroutine update")
+			BeginSample()
+			timingData["CoroUpdateJobs"] = TimingInfo{ActualCall: max(stats.TotalTime+11, 21)}
+			EndSample()
 
 			if count := strings.Count(output.String(), "Coroutine Module Detailed Statistics"); count != 1 {
 				t.Errorf("coroutine statistics printed %d times, want 1: %s", count, output)
@@ -107,12 +138,12 @@ func TestEndSampleReportsCoroutineStats(t *testing.T) {
 }
 
 func TestCalcfpsRebasesAfterEngineTimeRestart(t *testing.T) {
-	itime.Start(nil)
+	itime.Start()
 	debugLastFrame = 100
 	debugLastTime = -1
 	fps = 30
 
-	itime.Start(nil)
+	itime.Start()
 
 	if got := Calcfps(); got < 0 {
 		t.Fatalf("Calcfps() after engine time restart = %v, want non-negative", got)
@@ -122,25 +153,9 @@ func TestCalcfpsRebasesAfterEngineTimeRestart(t *testing.T) {
 	}
 }
 
-func TestProfilingEnableStackAndDisabledSamples(t *testing.T) {
+func TestProfilingDisabledSamples(t *testing.T) {
 	output := captureProfile(t)
 	Enabled = false
-	enabledStack = nil
-	Restore()
-	EnableTemporarily(true)
-	EnableTemporarily(false)
-	if Enabled {
-		t.Fatal("nested override ignored")
-	}
-	Restore()
-	if !Enabled {
-		t.Fatal("inner restore lost outer override")
-	}
-	Restore()
-	Restore()
-	if Enabled {
-		t.Fatal("outer restore lost original state")
-	}
 	BeginSample()
 	EndSample()
 	if output.Len() != 0 {
@@ -170,7 +185,7 @@ func TestMeasureFunctionTimeRecordsGCAndReturnsIndependentStats(t *testing.T) {
 			t.Fatalf("mode=%+v calls=%d, recorded=%v", mode, called, ok)
 		}
 		if ok {
-			if got.PreCall < 0 || got.ActualCall < 0 || got.PostCall < 0 || got.GCStats.NumGC < 1 {
+			if got.PreCall < 0 || got.ActualCall < 0 || got.PostCall < 0 || got.GCCount < 1 {
 				t.Fatalf("invalid measurement=%+v", got)
 			}
 			got.ActualCall = -1
@@ -179,7 +194,7 @@ func TestMeasureFunctionTimeRecordsGCAndReturnsIndependentStats(t *testing.T) {
 			}
 			MeasureFunctionTime("next", func() { runtime.GC() })
 			next, ok := GetStats("next")
-			if !ok || next.GCStats.NumGC < 1 || len(next.GCStats.Pause) == 0 {
+			if !ok || next.GCCount < 1 || next.GCPauseTime < 0 {
 				t.Fatalf("second GC measurement=%+v", next)
 			}
 		}
@@ -197,9 +212,9 @@ func TestDetailedTimingExplainsPreparationAndGC(t *testing.T) {
 		t.Fatal("missing coroutine warning absent")
 	}
 	SetGco(coroutine.New(nil))
-	BeginSample("prepare")
-	timingData["CoroUpdateJobs"] = TimingInfo{PreCall: 2, ActualCall: 30, PostCall: 4, GCStats: debug.GCStats{NumGC: 1, PauseTotal: time.Millisecond}}
-	EndSample("prepare")
+	BeginSample()
+	timingData["CoroUpdateJobs"] = TimingInfo{PreCall: 2, ActualCall: 30, PostCall: 4, GCCount: 1, GCPauseTime: time.Millisecond}
+	EndSample()
 	for _, want := range []string{"GC: 1 times, Total pause: 1.000ms", "Garbage collection: 1 GCs occurred", "Function call overhead: Preparation phase 2.000ms, Cleanup phase 4.000ms", "Engine measured total time: 36.000ms"} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("missing %q in %s", want, output)
@@ -222,20 +237,20 @@ func TestCalcfpsUpdatesElapsedInterval(t *testing.T) {
 
 func captureProfile(t *testing.T) *bytes.Buffer {
 	t.Helper()
-	previousCo, previousEnabled, previousDetailed := gco, Enabled, printDetailedStats
+	previousCo, previousEnabled := gco, Enabled
 	previousData, previousStart, previousDuration := timingData, totalStart, lastUpdateDuration
-	previousDebug, previousStack, previousGC := Debug, enabledStack, prevGCStats
+	previousDebug, previousGC := Debug, gcStats
 	previousFPS, previousFrame, previousTime := fps, debugLastFrame, debugLastTime
 	t.Cleanup(func() {
-		gco, Enabled, printDetailedStats = previousCo, previousEnabled, previousDetailed
+		gco, Enabled = previousCo, previousEnabled
 		timingData, totalStart, lastUpdateDuration = previousData, previousStart, previousDuration
-		Debug, enabledStack, prevGCStats = previousDebug, previousStack, previousGC
+		Debug, gcStats = previousDebug, previousGC
 		fps, debugLastFrame, debugLastTime = previousFPS, previousFrame, previousTime
 		spxlog.SetStdoutOutput(os.Stdout)
 	})
 	output := new(bytes.Buffer)
 	spxlog.SetStdoutOutput(output)
-	gco, Enabled, printDetailedStats = coroutine.New(nil), true, true
+	gco, Enabled = coroutine.New(nil), true
 	timingData = make(map[string]TimingInfo)
 	return output
 }

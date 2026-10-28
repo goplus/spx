@@ -174,7 +174,7 @@ func TestBubbleRemovalUnlocksBeforeDestroy(t *testing.T) {
 func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 	installAskTestUiMgr(t)
 	co := setupRuntimeScheduler(t)
-	itime.Start(nil)
+	itime.Start()
 	_, sprite, component := newBubbleTestSprite()
 
 	done := false
@@ -628,7 +628,7 @@ func TestAskWaitsForAnswerAcrossFrames(t *testing.T) {
 	t.Cleanup(func() { pkgengine.InputMgr = originalInput })
 	t.Cleanup(itime.ClearTimers)
 	co := setupRuntimeScheduler(t)
-	itime.Start(nil)
+	itime.Start()
 	game := &Game{}
 	game.shapeMgr.init()
 	answered := false

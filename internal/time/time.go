@@ -25,34 +25,17 @@ import (
 const DefaultFPS = 30
 
 var (
-	realTimeSinceLevelLoad  float64
 	timeSinceLevelLoad      float64
 	logicalTimeCompensation float64
 	deltaTime               float64
-	realDeltaTime           float64
 	fixedDeltaTimeBits      atomic.Uint64
-	timeScaleBits           atomic.Uint64
 	curFrame                atomic.Int64
-	setTimeScaleCallback    func(float64)
 	startTimestamp          stdtime.Time
-	lastTimestamp           stdtime.Time
 	fps                     float64
 )
 
-func Sleep(ms float64) {
-	stdtime.Sleep(stdtime.Microsecond * stdtime.Duration(ms*1000))
-}
-
 func RealTimeSinceStart() float64 {
 	return stdtime.Since(startTimestamp).Seconds()
-}
-
-func RealTimeSinceCurFrame() float64 {
-	return stdtime.Since(lastTimestamp).Seconds()
-}
-
-func RealTimeSinceCurFrameMs() float64 {
-	return RealTimeSinceCurFrame() * 1000
 }
 
 func FPS() float64 {
@@ -61,17 +44,6 @@ func FPS() float64 {
 
 func Frame() int64 {
 	return curFrame.Load()
-}
-
-func TimeScale() float64 {
-	return math.Float64frombits(timeScaleBits.Load())
-}
-
-func SetTimeScale(value float64) {
-	if setTimeScaleCallback != nil {
-		setTimeScaleCallback(value)
-	}
-	timeScaleBits.Store(math.Float64bits(value))
 }
 
 func DeltaTime() float64 {
@@ -102,41 +74,24 @@ func SetFixedDeltaTime(delta float64) {
 	fixedDeltaTimeBits.Store(math.Float64bits(delta))
 }
 
-func UnscaledDeltaTime() float64 {
-	return realDeltaTime
-}
-
-func UnscaledTimeSinceLevelLoad() float64 {
-	return realTimeSinceLevelLoad
-}
-
 func TimeSinceLevelLoad() float64 {
 	return timeSinceLevelLoad
 }
 
-func Start(setTimeScaleCB func(float64)) {
-	now := stdtime.Now()
-
-	realTimeSinceLevelLoad, timeSinceLevelLoad = 0, 0
+func Start() {
+	timeSinceLevelLoad = 0
 	logicalTimeCompensation = 0
-	deltaTime, realDeltaTime = 0, 0
-	timeScaleBits.Store(math.Float64bits(1))
+	deltaTime = 0
 	curFrame.Store(0)
 	fps = DefaultFPS
 
-	setTimeScaleCallback = setTimeScaleCB
-	startTimestamp, lastTimestamp = now, now
+	startTimestamp = stdtime.Now()
 	ResetTimer()
 }
 
 // Update records frame timing. The delta argument must already be the
 // resolved SPX logical delta for the current update path.
 func Update(delta float64, pfps float64) {
-	curTime := stdtime.Now()
-	realTimeSinceLevelLoad = curTime.Sub(startTimestamp).Seconds()
-	realDeltaTime = curTime.Sub(lastTimestamp).Seconds()
-	lastTimestamp = curTime
-
 	deltaTime = delta
 	advanceLogicalTime(delta)
 	curFrame.Add(1)

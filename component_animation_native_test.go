@@ -189,7 +189,7 @@ func TestAnimationCancellationDuringInitializationReleasesCapturedAudio(t *testi
 func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	co, anim, _, audio := setupAnimationLifecycle(t)
 	itime.ClearTimers()
-	itime.Start(nil)
+	itime.Start()
 	t.Cleanup(itime.ClearTimers)
 	game := anim.sprite.g
 	game.bindScriptEvents()

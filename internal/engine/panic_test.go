@@ -145,8 +145,8 @@ func TestCaptureFailureStopsFrameAndReportsExit(t *testing.T) {
 	isolateCaptureState(t)
 	resetInputState()
 	resetTriggerEvents()
-	itime.Start(nil)
-	t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start() })
 	previousExt := gdx.ExtMgr
 	t.Cleanup(func() { gdx.ExtMgr = previousExt; enginewrap.Init(WaitMainThread) })
 	gdx.PlatformMgr = resetDirectPlatform{}

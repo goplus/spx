@@ -117,8 +117,8 @@ func TestScratchImmediateGlide(t *testing.T) {
 }
 
 func TestSpriteGlidePositiveDurationInterpolates(t *testing.T) {
-	itime.Start(nil)
-	t.Cleanup(func() { itime.Start(nil) })
+	itime.Start()
+	t.Cleanup(func() { itime.Start() })
 	co := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(12, -8)
 	finished := false
@@ -282,7 +282,7 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 }
 
 func TestSpriteTurnToDirMultipleRevolutionsUsesShortestAnimation(t *testing.T) {
-	t.Cleanup(func() { itime.Start(nil) })
+	t.Cleanup(func() { itime.Start() })
 	co := setupRuntimeScheduler(t)
 	sprite := newTestTransformSprite(0, 0)
 	sprite.SetHeading(-10)
@@ -900,7 +900,7 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 func TestTransformComponentStepUsesConfiguredAnimationDuration(t *testing.T) {
 	t.Cleanup(itime.ClearTimers)
 	co := setupRuntimeScheduler(t)
-	itime.Start(nil)
+	itime.Start()
 	sprite := newTestTransformSprite(0, 0)
 	animation := &coreproject.AniConfig{StepDuration: 0.001}
 	sprite.animation().shared.animations["walk"] = &animationEntry{name: "walk", config: animation}
@@ -936,7 +936,7 @@ func TestTransformComponentDebugVisualOperations(t *testing.T) {
 	if transform.rotationStyle != LeftRight || transform.direction != 45 {
 		t.Fatal("unbound sprite lost its rotation style or heading")
 	}
-	itime.Start(nil)
+	itime.Start()
 	done := false
 	thread := gco.Create(sprite, func(coroutine.Thread) {
 		transform.glide(5, 7, 0.01)

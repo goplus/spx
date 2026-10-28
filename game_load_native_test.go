@@ -360,7 +360,7 @@ func TestLoadGameStageFailureClosesResources(t *testing.T) {
 
 func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 	// Restore real frame timing after the bubble advances it with its fake clock.
-	t.Cleanup(func() { itime.Start(nil) })
+	t.Cleanup(func() { itime.Start() })
 	synctest.Test(t, func(t *testing.T) {
 		var warnings bytes.Buffer
 		spxlog.SetStdoutOutput(&warnings)
