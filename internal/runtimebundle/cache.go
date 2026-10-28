@@ -22,19 +22,12 @@ import (
 	"path/filepath"
 )
 
-// CacheOptions controls a Cache. Zero Limits selects the verifier defaults. A custom
-// LockProvider or Permissions implementation is useful for tests and for
-// platforms with an explicitly verified integration.
-type CacheOptions struct {
-	Limits       Limits
-	LockProvider LockProvider
-	Permissions  Permissions
-}
-
 // Cache is a content-addressed runtime bundle cache. It creates
 // <root>/<namespace>/<full-sha256> directories and never uses a shortened
 // digest. NewCache uses an OS-backed cross-process provider; callers that
 // explicitly accept process-local coordination must use NewProcessLocalCache.
+// Set configuration before concurrent use; operations do not modify it.
+// Zero Limits and nil Permissions select the platform defaults.
 type Cache struct {
 	Root         string
 	Limits       Limits
@@ -52,29 +45,6 @@ func NewCache(root string) *Cache {
 // adapters that can prove they never share a cache root across processes.
 func NewProcessLocalCache(root string) *Cache {
 	return newCache(root, ProcessLockProvider{})
-}
-
-// NewCacheWithOptions validates options and constructs a cache.
-func NewCacheWithOptions(root string, options CacheOptions) (*Cache, error) {
-	if root == "" {
-		return nil, fmt.Errorf("runtimebundle: cache root is empty")
-	}
-	limits, err := options.Limits.withDefaults()
-	if err != nil {
-		return nil, err
-	}
-	if options.LockProvider == nil {
-		options.LockProvider = CrossProcessLockProvider{}
-	}
-	if options.Permissions == nil {
-		options.Permissions = defaultPermissions()
-	}
-	return &Cache{
-		Root:         filepath.Clean(root),
-		Limits:       limits,
-		LockProvider: options.LockProvider,
-		Permissions:  options.Permissions,
-	}, nil
 }
 
 // DefaultCacheRoot returns the user cache namespace used by runtimebundle
@@ -115,4 +85,11 @@ func newCache(root string, lockProvider LockProvider) *Cache {
 		LockProvider: lockProvider,
 		Permissions:  defaultPermissions(),
 	}
+}
+
+func (c *Cache) permissions() Permissions {
+	if c.Permissions != nil {
+		return c.Permissions
+	}
+	return defaultPermissions()
 }

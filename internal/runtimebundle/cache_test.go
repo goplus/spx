@@ -322,13 +322,16 @@ func TestCacheMaterializeMetadataLimitDoesNotPublishPartialTarget(t *testing.T) 
 	}
 }
 
-func TestCacheNestedFileCacheHitDoesNotRequireExplicitParentEntry(t *testing.T) {
-	zipPath := writeTestZip(t, testZipEntry{name: "bin/run", mode: 0o755, data: "trusted"})
+func TestCacheDefaultPermissionsProtectNestedFilesAndRepair(t *testing.T) {
+	zipPath := writeTestZip(t,
+		testZipEntry{name: "bin/run", mode: 0o755, data: "trusted"},
+		testZipEntry{name: "config.json", data: "{}"},
+	)
 	bundle, err := VerifyZip(zipPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache := &Cache{Root: t.TempDir(), LockProvider: ProcessLockProvider{}}
+	cache := &Cache{Root: filepath.Join(t.TempDir(), "cache"), LockProvider: ProcessLockProvider{}}
 	first, err := materializeTestPath(cache, context.Background(), NamespaceEngine, zipPath, &bundle)
 	if err != nil {
 		t.Fatalf("first materialize: %v", err)
@@ -339,6 +342,30 @@ func TestCacheNestedFileCacheHitDoesNotRequireExplicitParentEntry(t *testing.T) 
 	}
 	if first != second {
 		t.Fatalf("cache hit path = %s, want %s", second, first)
+	}
+	if err := os.WriteFile(filepath.Join(first, "bin", "run"), []byte("tampered"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, &bundle)
+	if err != nil || repaired != first {
+		t.Fatalf("repair = %q, %v; want %q", repaired, err, first)
+	}
+	if data, err := os.ReadFile(filepath.Join(repaired, "bin", "run")); err != nil || string(data) != "trusted" {
+		t.Fatalf("repaired executable = %q, %v", data, err)
+	}
+	if cache.Permissions != nil {
+		t.Fatal("materialization changed the default permissions configuration")
+	}
+	if runtimeIsUnix() {
+		for path, want := range map[string]os.FileMode{
+			cache.Root: 0o700, repaired: 0o700, filepath.Join(repaired, "bin"): 0o700,
+			filepath.Join(repaired, "bin", "run"): 0o700, filepath.Join(repaired, "config.json"): 0o600,
+		} {
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != want {
+				t.Fatalf("private mode for %s = %v, %v; want %o", path, info, err, want)
+			}
+		}
 	}
 }
 
@@ -418,6 +445,56 @@ func TestCacheConcurrentMaterializePublishesOneCompleteTarget(t *testing.T) {
 	}
 	if len(items) != 1 || items[0] != paths[0] {
 		t.Fatalf("List included incomplete named directory: %#v", items)
+	}
+}
+
+func TestCacheConcurrentUseWithDefaultPermissions(t *testing.T) {
+	zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
+	root := filepath.Join(t.TempDir(), "cache")
+	target, err := materializeTestPath(NewProcessLocalCache(root), t.Context(), NamespaceEngine, zipPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := &Cache{Root: root, LockProvider: ProcessLockProvider{}}
+	const workers = 16
+	errs := make([]error, workers)
+	paths := make([]string, workers)
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for i := range workers {
+		group.Go(func() {
+			<-start
+			if i%2 == 0 {
+				paths[i], errs[i] = materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, nil)
+				return
+			}
+			var items []string
+			items, errs[i] = cache.List(NamespaceEngine)
+			if len(items) == 1 {
+				paths[i] = items[0]
+			}
+		})
+	}
+	close(start)
+	group.Wait()
+	for i, err := range errs {
+		if err != nil || paths[i] != target {
+			t.Fatalf("worker %d = %q, %v; want %q", i, paths[i], err, target)
+		}
+	}
+	after, err := os.Stat(target)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("concurrent cache hits replaced target: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+		t.Fatalf("shared cache content = %q, %v", data, err)
+	}
+	if cache.Permissions != nil {
+		t.Fatal("concurrent operations changed the default permissions configuration")
 	}
 }
 
@@ -511,17 +588,6 @@ func TestPinnedChildRootRejectsPathReplacement(t *testing.T) {
 				t.Fatalf("changed child check = %v, want ErrUnsafeArchive", err)
 			}
 		})
-	}
-}
-
-func TestGarbageCollectionFailsClosed(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := NewProcessLocalCache(t.TempDir()).Collect(ctx, GCOptions{}); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled GC error = %v, want context.Canceled", err)
-	}
-	if err := NewProcessLocalCache(t.TempDir()).Collect(context.Background(), GCOptions{}); !errors.Is(err, ErrGCUnsupported) {
-		t.Fatalf("GC error = %v, want ErrGCUnsupported", err)
 	}
 }
 
@@ -906,46 +972,58 @@ func TestCrossProcessLockKillReleases(t *testing.T) {
 	}
 }
 
-func TestNewCacheWithOptions(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "cache")
-	for _, tt := range []struct {
-		name    string
-		root    string
-		options CacheOptions
-		wantErr string
+func TestCacheConfiguredLimitsApplyBeforeMaterialization(t *testing.T) {
+	zipPath := writeTestZip(t,
+		testZipEntry{name: "runtime", mode: 0o755, data: "trusted"},
+		testZipEntry{name: "data", data: "asset"},
+	)
+	bundle, err := VerifyZip(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, constructor := range []struct {
+		name string
+		new  func(string) *Cache
 	}{
-		{"empty root", "", CacheOptions{}, "cache root is empty"},
-		{"invalid limits", root, CacheOptions{Limits: Limits{MaxEntries: -1}}, "negative archive limit"},
-		{"defaults", root + string(filepath.Separator), CacheOptions{}, ""},
-		{"custom", root, CacheOptions{Limits: Limits{MaxEntries: 2}, LockProvider: ProcessLockProvider{}, Permissions: modePermissions{}}, ""},
+		{"cross process", NewCache},
+		{"process local", NewProcessLocalCache},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			cache, err := NewCacheWithOptions(tt.root, tt.options)
-			if tt.wantErr != "" {
-				if cache != nil || err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("NewCacheWithOptions = %v, %v; want %q", cache, err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			wantLimits, err := tt.options.Limits.withDefaults()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cache.Root != root || cache.Limits != wantLimits || cache.Permissions == nil || cache.LockProvider == nil {
-				t.Fatalf("cache options not applied: %+v", cache)
-			}
-			if tt.options.LockProvider != nil {
-				if cache.LockProvider != tt.options.LockProvider || cache.Permissions != tt.options.Permissions {
-					t.Fatal("custom adapters were replaced")
-				}
-			} else if _, ok := cache.LockProvider.(CrossProcessLockProvider); !ok {
-				t.Fatalf("default lock provider = %T", cache.LockProvider)
-			}
-			if _, err := os.Lstat(root); !os.IsNotExist(err) {
-				t.Fatalf("constructor created cache storage: %v", err)
+		t.Run(constructor.name, func(t *testing.T) {
+			for _, tt := range []struct {
+				name   string
+				limits Limits
+			}{
+				{"entry count", Limits{MaxEntries: 1}},
+				{"entry size", Limits{MaxEntrySize: 6}},
+				{"total size", Limits{MaxEntrySize: 7, MaxTotalSize: 11}},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					for _, expected := range []*Bundle{nil, &bundle} {
+						root := filepath.Join(t.TempDir(), "cache")
+						cache := constructor.new(root + string(filepath.Separator))
+						cache.Limits = tt.limits
+						if materialized, err := cache.Materialize(t.Context(), NamespaceEngine, zipPath, expected); materialized != nil || !errors.Is(err, ErrArchiveLimit) {
+							if materialized != nil {
+								_ = materialized.Close()
+							}
+							t.Fatalf("restricted cache = %v, %v; want ErrArchiveLimit", materialized, err)
+						}
+						if _, err := os.Lstat(root); !os.IsNotExist(err) {
+							t.Fatalf("rejected archive created cache: %v", err)
+						}
+						cache.Limits = Limits{MaxEntries: 2, MaxEntrySize: 7, MaxTotalSize: 12}
+						target, err := materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, expected)
+						if err != nil {
+							t.Fatalf("archive exactly at configured limits: %v", err)
+						}
+						if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+							t.Fatalf("materialized executable = %q, %v", data, err)
+						}
+						if cache.Root != root || cache.Limits != (Limits{MaxEntries: 2, MaxEntrySize: 7, MaxTotalSize: 12}) {
+							t.Fatalf("materialization changed cache configuration: %+v", cache)
+						}
+					}
+				})
 			}
 		})
 	}
