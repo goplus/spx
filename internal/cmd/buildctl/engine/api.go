@@ -36,19 +36,9 @@ func ShouldRefreshPreparedAssets() bool {
 }
 
 func PrepareHostEditorAsset(repoRoot, assetDir string) error {
-	env, err := resolveEngineDownloadEnv(repoRoot, "")
+	env, err := prepareEngineDownloadEnv(repoRoot, "", assetDir, true)
 	if err != nil {
 		return err
-	}
-	if assetDir != "" {
-		if err := setLocalAssetDir(&env, repoRoot, assetDir, true); err != nil {
-			return err
-		}
-	}
-	if env.verifyManifest {
-		if err := loadEngineAssetManifest(&env); err != nil {
-			return err
-		}
 	}
 	return downloadPlatformAssets(env, "editor", true)
 }

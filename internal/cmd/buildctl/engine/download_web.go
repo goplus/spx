@@ -41,7 +41,7 @@ func downloadWebAssets(env engineDownloadEnv, mode string) error {
 	}
 	cachedZip := filepath.Join(env.goBinDir, fmt.Sprintf("gdspx%s_%s", env.version, spec.CacheSuffix))
 	if shouldDownloadPreparedAsset(cachedZip) {
-		if err := fetchEngineAsset(env, spec.ReleaseTemplate, env.urlPrefix+spec.ReleaseTemplate, cachedZip); err != nil {
+		if err := fetchEngineAsset(env, spec.ReleaseTemplate, cachedZip); err != nil {
 			return err
 		}
 	}

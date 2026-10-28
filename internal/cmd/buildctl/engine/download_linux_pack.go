@@ -30,20 +30,16 @@ import (
 const linuxRuntimePackArch = "x86_64"
 
 type engineDownloadEnv struct {
-	repoRoot              string
-	version               string
-	platform              string
-	arch                  string
-	goBinDir              string
-	templateDir           string
-	cacheDir              string
-	urlPrefix             string
-	runtimeAssetURLPrefix string
-	runtimePackAsset      string
-	assetDir              string
-	verifyManifest        bool
-	allowMissingManifest  bool
-	manifest              *release.RuntimeManifest
+	version              string
+	platform             string
+	arch                 string
+	goBinDir             string
+	templateDir          string
+	cacheDir             string
+	urlPrefix            string
+	assetDir             string
+	allowMissingManifest bool
+	manifest             *release.RuntimeManifest
 }
 
 // PrepareLinuxRuntimePackAssets installs only the Linux/amd64 assets used by
@@ -56,26 +52,18 @@ func PrepareLinuxRuntimePackAssets(repoRoot, assetDir string) error {
 		return fmt.Errorf("preparing Linux runtime packs requires an engine asset directory")
 	}
 
-	env, err := resolveEngineDownloadEnv(repoRoot, "linux")
+	env, err := prepareEngineDownloadEnv(repoRoot, "linux", assetDir, true)
 	if err != nil {
 		return err
 	}
 	env.arch = linuxRuntimePackArch
-	if err := setLocalAssetDir(&env, repoRoot, assetDir, true); err != nil {
-		return err
-	}
-	if env.verifyManifest {
-		if err := loadEngineAssetManifest(&env); err != nil {
-			return err
-		}
-	}
 	if err := downloadLinuxAssets(env, false); err != nil {
 		return err
 	}
 	return downloadLinuxAssets(env, true)
 }
 
-func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, error) {
+func prepareEngineDownloadEnv(repoRoot, platform, assetDir string, allowMissingManifest bool) (engineDownloadEnv, error) {
 	buildEnv, err := shared.ResolveBuildEnvironment(repoRoot, platform)
 	if err != nil {
 		return engineDownloadEnv{}, err
@@ -86,23 +74,27 @@ func resolveEngineDownloadEnv(repoRoot, platform string) (engineDownloadEnv, err
 	}
 
 	env := engineDownloadEnv{
-		repoRoot:              buildEnv.RepoRoot,
-		version:               buildEnv.Version,
-		platform:              buildEnv.Platform,
-		arch:                  buildEnv.Arch,
-		goBinDir:              filepath.Join(buildEnv.GoPath, "bin"),
-		templateDir:           buildEnv.TemplateDir,
-		cacheDir:              filepath.Join(repoRoot, "internal", "cmd", "buildctl", "bin"),
-		urlPrefix:             lock.RuntimeAssetDownloadURL(""),
-		runtimeAssetURLPrefix: lock.RuntimeAssetDownloadURL(""),
-		runtimePackAsset:      release.RuntimeAssetZipName,
-		verifyManifest:        true,
+		version:     buildEnv.Version,
+		platform:    buildEnv.Platform,
+		arch:        buildEnv.Arch,
+		goBinDir:    filepath.Join(buildEnv.GoPath, "bin"),
+		templateDir: buildEnv.TemplateDir,
+		cacheDir:    filepath.Join(repoRoot, "internal", "cmd", "buildctl", "bin"),
+		urlPrefix:   lock.RuntimeAssetDownloadURL(""),
 	}
 
 	for _, dir := range []string{env.goBinDir, env.templateDir, env.cacheDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return engineDownloadEnv{}, err
 		}
+	}
+	if assetDir != "" {
+		if err := setLocalAssetDir(&env, repoRoot, assetDir, allowMissingManifest); err != nil {
+			return engineDownloadEnv{}, err
+		}
+	}
+	if err := loadEngineAssetManifest(&env); err != nil {
+		return engineDownloadEnv{}, err
 	}
 	return env, nil
 }

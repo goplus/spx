@@ -32,7 +32,7 @@ import (
 
 const maxRuntimeManifestBytes int64 = 1 << 20
 
-func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
+func fetchEngineAsset(env engineDownloadEnv, name, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func fetchEngineAsset(env engineDownloadEnv, name, url, dst string) error {
 	defer os.Remove(tmpPath)
 
 	if env.assetDir == "" {
-		if err := fetchURLToFile(url, tmpPath); err != nil {
+		if err := fetchURLToFile(env.urlPrefix+name, tmpPath); err != nil {
 			return err
 		}
 	} else {

@@ -37,7 +37,7 @@ func downloadBinaryFromZip(env engineDownloadEnv, zipName, assetName, dst string
 
 func downloadBinariesFromZip(env engineDownloadEnv, zipName string, installs []binaryInstall) error {
 	zipPath := filepath.Join(env.cacheDir, zipName)
-	if err := fetchEngineAsset(env, zipName, env.urlPrefix+zipName, zipPath); err != nil {
+	if err := fetchEngineAsset(env, zipName, zipPath); err != nil {
 		return err
 	}
 	defer os.Remove(zipPath)

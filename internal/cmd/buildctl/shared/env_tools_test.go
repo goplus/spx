@@ -70,8 +70,8 @@ func TestResolveBuildEnvironment(t *testing.T) {
 				t.Fatalf("runtime version = %q, want locked version %q", env.Version, want)
 			}
 			wantEngine := filepath.Join(repoRoot, test.wantEngine)
-			if env.EngineDir != wantEngine || env.GodotSrc != wantEngine {
-				t.Fatalf("engine dir = %q, Godot source = %q, want %q", env.EngineDir, env.GodotSrc, wantEngine)
+			if env.EngineDir != wantEngine {
+				t.Fatalf("engine dir = %q, want %q", env.EngineDir, wantEngine)
 			}
 			if want := filepath.Join(repoRoot, test.wantModule); env.SPXModuleSrc != want {
 				t.Fatalf("SPX module source = %q, want %q", env.SPXModuleSrc, want)
@@ -82,10 +82,8 @@ func TestResolveBuildEnvironment(t *testing.T) {
 
 func TestBuildEnvironmentShellExports(t *testing.T) {
 	env := shared.BuildEnvironment{
-		RepoRoot:        "not exported",
-		ProjectDir:      "/project with spaces",
+		RepoRoot:        "/project with spaces",
 		EngineDir:       "/engine's source",
-		GodotSrc:        "/godot",
 		SPXModuleSrc:    "/module",
 		EngineVersion:   "4.5.stable",
 		GoPath:          "/go",
@@ -97,12 +95,9 @@ func TestBuildEnvironmentShellExports(t *testing.T) {
 		Platform:        "linux",
 		Arch:            "x86_64",
 	}
-	if got := reflect.TypeOf(env).Name(); got != "buildEnvironment" {
-		t.Fatalf("type name = %q, want buildEnvironment", got)
-	}
 	const want = `export PROJ_DIR='/project with spaces'
 export ENGINE_DIR='/engine'"'"'s source'
-export GODOT_SRC='/godot'
+export GODOT_SRC='/engine'"'"'s source'
 export SPX_MODULE_SRC='/module'
 export ENGINE_VERSION='4.5.stable'
 export GOPATH='/go'

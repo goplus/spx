@@ -21,19 +21,9 @@ import (
 )
 
 func DownloadEngineAssets(cfg DownloadConfig, repoRoot string) error {
-	env, err := resolveEngineDownloadEnv(repoRoot, cfg.Platform)
+	env, err := prepareEngineDownloadEnv(repoRoot, cfg.Platform, cfg.AssetDir, cfg.SameRunArtifacts)
 	if err != nil {
 		return err
-	}
-	if cfg.AssetDir != "" {
-		if err := setLocalAssetDir(&env, repoRoot, cfg.AssetDir, cfg.SameRunArtifacts); err != nil {
-			return err
-		}
-	}
-	if env.verifyManifest {
-		if err := loadEngineAssetManifest(&env); err != nil {
-			return err
-		}
 	}
 
 	if cfg.Runtime {

@@ -27,5 +27,5 @@ func downloadAndroidAssets(env engineDownloadEnv) error {
 }
 
 func downloadIOSAssets(env engineDownloadEnv) error {
-	return fetchEngineAsset(env, "ios.zip", env.urlPrefix+"ios.zip", filepath.Join(env.templateDir, "ios.zip"))
+	return fetchEngineAsset(env, "ios.zip", filepath.Join(env.templateDir, "ios.zip"))
 }
