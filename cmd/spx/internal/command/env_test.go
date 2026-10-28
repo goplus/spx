@@ -163,55 +163,6 @@ func TestAdaptGoModReportsScaffoldErrors(t *testing.T) {
 	})
 }
 
-func TestPrepareCommandNormalizesRelativeProjectPath(t *testing.T) {
-	targetDir, err := filepath.EvalSymlinks(setupAdaptGoModFixture(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Chdir(filepath.Dir(targetDir))
-	before := workingDirectory(t)
-	relativePath := filepath.Base(targetDir)
-	wantAbsDir, err := filepath.Abs(relativePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(targetDir, "main.spx"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GOOS", "linux")
-	t.Setenv("GOARCH", "amd64")
-	t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
-	serverAddr := ""
-	binDir := t.TempDir()
-	t.Setenv("PATH", t.TempDir())
-	writeCommandTestFile(t, filepath.Join(binDir, "gdspxtest"+executableSuffix(runtime.GOOS)), "engine fixture")
-	cmd := CmdTool{
-		FileSuffix: "spx", Version: "test", ProjectFS: webExportTestFS, GoBinPath: binDir,
-		GoModTemplate: "must not create a nested local module",
-		Args:          ExtraArgs{CmdName: "build", Path: &relativePath, ServerAddr: &serverAddr},
-	}
-	spec, ok := findCommand("build")
-	if !ok {
-		t.Fatal("build command is not registered")
-	}
-	if err := cmd.prepareCommand(spec, "template/project", "project"); err != nil {
-		t.Fatal(err)
-	}
-	assertWorkingDirectory(t, before)
-	if cmd.TargetDir != wantAbsDir || !filepath.IsAbs(cmd.TargetDir) {
-		t.Fatalf("TargetDir = %q, want %q", cmd.TargetDir, wantAbsDir)
-	}
-	if cmd.TargetDir != wantAbsDir || *cmd.Args.Path != wantAbsDir {
-		t.Fatalf("command paths = %q, %q, want %q", cmd.TargetDir, *cmd.Args.Path, wantAbsDir)
-	}
-	if cmd.ProjectDir != filepath.Join(wantAbsDir, "project") {
-		t.Fatalf("ProjectDir = %q, want generated project below %q", cmd.ProjectDir, wantAbsDir)
-	}
-	if _, err := os.Stat(filepath.Join(wantAbsDir, "go.mod")); !os.IsNotExist(err) {
-		t.Fatalf("relative local project unexpectedly received a nested module: %v", err)
-	}
-}
-
 func TestShouldRunGoModTidy(t *testing.T) {
 	repoTargetDir := setupAdaptGoModFixture(t)
 	repoCmd := CmdTool{TargetDir: repoTargetDir}
@@ -346,7 +297,6 @@ func TestShouldReimport(t *testing.T) {
 	tests := []struct {
 		name        string
 		cmdName     string
-		runtimeMode bool
 		cacheExists bool
 		want        bool
 	}{
@@ -359,7 +309,10 @@ func TestShouldReimport(t *testing.T) {
 		{name: "skips exportwebworker", cmdName: "exportwebworker", want: false},
 		{name: "skips exportminigame", cmdName: "exportminigame", want: false},
 		{name: "skips exportminiprogram", cmdName: "exportminiprogram", want: false},
-		{name: "skips runtime mode", cmdName: "runweb", runtimeMode: true, want: false},
+		{name: "skips native runtime", cmdName: "runnative", want: false},
+		{name: "skips interpreted runtime", cmdName: "run", want: false},
+		{name: "skips web runtime", cmdName: "runweb", want: false},
+		{name: "skips worker runtime", cmdName: "runwebworker", want: false},
 		{name: "skips when cache exists", cmdName: "exporttemplateweb", cacheExists: true, want: false},
 	}
 
@@ -371,9 +324,8 @@ func TestShouldReimport(t *testing.T) {
 			}
 
 			cmd := CmdTool{
-				ProjectDir:  projectDir,
-				RuntimeMode: tt.runtimeMode,
-				Args:        ExtraArgs{CmdName: tt.cmdName},
+				ProjectDir: projectDir,
+				Args:       ExtraArgs{CmdName: tt.cmdName},
 			}
 
 			if got := cmd.ShouldReimport(); got != tt.want {
@@ -604,7 +556,7 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 			if scenario == "invalid fallback" {
 				fallback = "\x00"
 			}
-			suffix, got, err := resolveAppPath(fallback, "gdspx", "test")
+			got, err := resolveAppPath(fallback, "gdspx", "test")
 			if scenario == "invalid fallback" {
 				if err == nil {
 					t.Fatal("invalid fallback path accepted")
@@ -615,8 +567,8 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 			if scenario == "working PATH binary" {
 				want = filepath.Join(binDir, name)
 			}
-			if err != nil || got != want || suffix != executableSuffix(runtime.GOOS) {
-				t.Fatalf("app path = %q, %q, %v; want %q", suffix, got, err, want)
+			if err != nil || got != want {
+				t.Fatalf("app path = %q, %v; want %q", got, err, want)
 			}
 			if scenario != "working PATH binary" {
 				if info, err := os.Stat(got); err != nil || info.Mode()&0o111 == 0 {
@@ -624,6 +576,39 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestResolveAppPathReportsPermissionRepairFailure(t *testing.T) {
+	bin := t.TempDir()
+	binary := filepath.Join(bin, "gdspxtest")
+	switch runtime.GOOS {
+	case "linux":
+		// procfs exposes readable files whose modes cannot be changed, even by root.
+		if err := os.Symlink("/proc/version", binary); err != nil {
+			t.Fatal(err)
+		}
+	case "darwin":
+		writeCommandTestFile(t, binary, "engine")
+		if err := exec.Command("/usr/bin/chflags", "uchg", binary).Run(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := exec.Command("/usr/bin/chflags", "nouchg", binary).Run(); err != nil {
+				t.Errorf("restore engine fixture: %v", err)
+			}
+		})
+	default:
+		t.Skip("requires a file with immutable permissions")
+	}
+	t.Setenv("PATH", t.TempDir())
+	got, err := resolveAppPath(bin, "gdspx", "test")
+	var pathErr *os.PathError
+	if got != binary || !errors.As(err, &pathErr) || pathErr.Op != "chmod" || pathErr.Path != binary {
+		t.Fatalf("app path = %q, %v; want %q and its chmod error", got, err, binary)
+	}
+	if info, err := os.Stat(binary); err != nil || info.Mode()&0o111 != 0 {
+		t.Fatalf("failed permission repair changed engine mode: %v, %v", info, err)
 	}
 }
 
@@ -658,13 +643,19 @@ func TestFindSpxRoot(t *testing.T) {
 	}
 }
 
-func TestSetupEnvRejectsInvalidPlatformEngineAndSession(t *testing.T) {
+func TestPrepareCommandRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 	for _, scenario := range []string{"unsupported architecture", "invalid engine path", "missing target directory", "blocked session directory", "missing project template"} {
 		t.Run(scenario, func(t *testing.T) {
 			t.Setenv("GOARCH", "amd64")
 			t.Setenv("PATH", t.TempDir())
 			root := t.TempDir()
-			cmd := &CmdTool{TargetDir: root, GoBinPath: filepath.Join(root, "bin")}
+			serverAddr := ""
+			cmd := &CmdTool{
+				Version: "test", FileSuffix: "spx", GoBinPath: filepath.Join(root, "bin"),
+				Args: ExtraArgs{Path: &root, ServerAddr: &serverAddr},
+			}
+			writeCommandTestFile(t, filepath.Join(root, "main.spx"), "")
+			t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
 			want := ""
 			switch scenario {
 			case "unsupported architecture":
@@ -674,15 +665,16 @@ func TestSetupEnvRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 				cmd.GoBinPath = "invalid\x00path"
 				want = "requires engine to be installed"
 			case "missing target directory":
-				cmd.TargetDir = filepath.Join(root, "missing")
-				want = "failed to resolve project directory"
+				target := filepath.Join(root, "missing")
+				cmd.Args.Path = &target
+				want = "failed to resolve target directory"
 			case "blocked session directory":
 				writeCommandTestFile(t, filepath.Join(root, ".temp"), "keep")
 				want = "failed to create temp directory"
 			case "missing project template":
 				want = "prepare project files"
 			}
-			err := cmd.SetupEnv("test", embed.FS{}, "template/project", "project")
+			err := cmd.prepareCommand(commandSpec{setup: projectSetup}, "template/project", "project")
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("setup error = %v, want %q", err, want)
 			}
@@ -690,7 +682,7 @@ func TestSetupEnvRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 				if !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("missing source error = %v, want ErrNotExist", err)
 				}
-				if _, err := os.Stat(cmd.TargetDir); !os.IsNotExist(err) {
+				if _, err := os.Stat(*cmd.Args.Path); !os.IsNotExist(err) {
 					t.Fatalf("failed setup created the missing source directory: %v", err)
 				}
 			}
@@ -701,7 +693,7 @@ func TestSetupEnvRejectsInvalidPlatformEngineAndSession(t *testing.T) {
 	}
 }
 
-func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
+func TestPrepareCommandAcceptsRelativeTargetDirectory(t *testing.T) {
 	for _, linked := range []bool{false, true} {
 		name := "directory"
 		if linked {
@@ -726,8 +718,14 @@ func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
 					t.Skipf("symlink unavailable: %v", err)
 				}
 			}
-			cmd := CmdTool{TargetDir: source, GoBinPath: binDir}
-			if err := cmd.SetupEnv("test", webExportTestFS, "template/project", "project"); err != nil {
+			serverAddr := ""
+			cmd := CmdTool{
+				Version: "test", FileSuffix: "spx", ProjectFS: webExportTestFS, GoBinPath: binDir,
+				Args: ExtraArgs{Path: &source, ServerAddr: &serverAddr},
+			}
+			writeCommandTestFile(t, filepath.Join(target, "main.spx"), "")
+			t.Setenv("GODEBUG", os.Getenv("GODEBUG"))
+			if err := cmd.prepareCommand(commandSpec{setup: projectSetup}, "template/project", "project"); err != nil {
 				t.Fatal(err)
 			}
 			project := filepath.Join(target, "project")
@@ -738,7 +736,6 @@ func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
 				"argument": {*cmd.Args.Path, target},
 				"project":  {cmd.ProjectDir, project},
 				"go":       {cmd.GoDir, filepath.Join(project, "go")},
-				"session":  {cmd.RuntimeTempDir, filepath.Join(target, ".temp")},
 				"library":  {cmd.LibPath, filepath.Join(project, "lib", libraryFileName(envName, "linux", "amd64"))},
 			} {
 				if paths[0] != paths[1] {
@@ -760,9 +757,9 @@ func TestSetupEnvAcceptsRelativeTargetDirectory(t *testing.T) {
 			if _, err := os.Stat(filepath.Join(target, "go.mod")); !os.IsNotExist(err) {
 				t.Fatalf("local source project was scaffolded: %v", err)
 			}
-			roots, err := cmd.interpretedRoots()
-			if err != nil || roots.ProjectDir != target || roots.SessionDir != filepath.Join(target, ".temp") {
-				t.Fatalf("interpreted roots after cwd change = %+v, %v", roots, err)
+			roots := cmd.interpretedRoots()
+			if roots.ProjectDir != target || roots.SessionDir != filepath.Join(target, ".temp") {
+				t.Fatalf("interpreted roots after cwd change = %+v", roots)
 			}
 			if got, want := cmd.webServerPIDPath(), filepath.Join(target, ".gdspx_web_server.pid"); got != want {
 				t.Fatalf("PID path = %q, want %q", got, want)
@@ -790,35 +787,12 @@ func TestCommandsReportDeletedWorkingDirectory(t *testing.T) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Getwd in removed working directory = %v", err)
 	}
-	for _, scenario := range []string{"check project", "project paths", "project name", "command paths", "interpreted project", "interpreted session"} {
-		t.Run(scenario, func(t *testing.T) {
-			target := "."
-			cmd := &CmdTool{TargetDir: target, Args: ExtraArgs{Path: &target}}
-			var err error
-			want := ""
-			switch scenario {
-			case "check project":
-				err, want = cmd.CheckEnv(), "failed to resolve target directory"
-			case "project paths":
-				err, want = cmd.setupProjectPaths("linux", "amd64"), "failed to resolve project directory"
-			case "project name":
-				err, want = cmd.updateProjectName(), "failed to resolve target directory"
-			case "command paths":
-				err, want = cmd.setupPaths("project"), "failed to resolve target directory"
-			case "interpreted project":
-				_, err = cmd.interpretedRoots()
-				want = "resolve interpreted project directory"
-			case "interpreted session":
-				cmd.TargetDir, cmd.RuntimeTempDir = root, "session"
-				_, err = cmd.interpretedRoots()
-				want = "resolve interpreted session directory"
-			}
-			if err == nil || !strings.Contains(err.Error(), want) {
-				t.Fatalf("deleted working directory error = %v, want %q", err, want)
-			}
-		})
+	target := "."
+	cmd := CmdTool{Args: ExtraArgs{Path: &target}}
+	if err := cmd.setupPaths("project"); err == nil || !strings.Contains(err.Error(), "failed to resolve target directory") {
+		t.Fatalf("deleted working directory error = %v", err)
 	}
-	cmd := CmdTool{GoBinPath: "relative-runtime"}
+	cmd = CmdTool{GoBinPath: "relative-runtime"}
 	if dirs := cmd.runtimeSearchDirs(); len(dirs) == 0 || dirs[0] != cmd.GoBinPath {
 		t.Fatalf("runtime search lost configured directory when cwd disappeared: %v", dirs)
 	}

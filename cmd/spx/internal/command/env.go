@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"fmt"
 	"os"
@@ -42,24 +41,15 @@ var projectNameReplacer = strings.NewReplacer("_", "", " ", "", "\"", "", "\n", 
 
 // CheckEnv validates the target directory.
 func (cmd *CmdTool) CheckEnv() error {
-	dir, err := filepath.Abs(cmd.TargetDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve target directory path: %w", err)
-	}
-
-	exist := util.CheckFileExist(dir, cmd.FileSuffix, false)
+	exist := util.CheckFileExist(cmd.TargetDir, cmd.FileSuffix, false)
 	if !exist {
 		return fmt.Errorf("cannot find %s file, not a valid project directory", cmd.FileSuffix)
 	}
 	return nil
 }
 
-// SetupEnv prepares command state.
-func (cmd *CmdTool) SetupEnv(version string, fs embed.FS, fsRelDir string, projectRelPath string) error {
-	cmd.ProjectFS = fs
-	cmd.Version = version
-	cmd.ProjectRelPath = projectRelPath
-
+// setupEnv prepares the engine and generated project using resolved command paths.
+func (cmd *CmdTool) setupEnv(fsRelDir string) error {
 	goos, goarch, err := resolveTargetPlatform()
 	if err != nil {
 		return err
@@ -135,7 +125,7 @@ func (cmd *CmdTool) Reimport() error {
 func (cmd *CmdTool) Clear() error {
 	for _, artifact := range []string{
 		cmd.ProjectDir,
-		path.Join(cmd.TargetDir, ".temp"),
+		cmd.runtimeTempDir(),
 		path.Join(cmd.TargetDir, "go.sum"),
 		path.Join(cmd.TargetDir, "xgo_autogen.go"),
 	} {
@@ -185,28 +175,21 @@ func (cmd *CmdTool) setupPaths(dstRelDir string) error {
 }
 
 func (cmd *CmdTool) setupEnginePaths() error {
-	binPostfix, cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version)
+	cmdPath, err := resolveAppPath(cmd.GoBinPath, envName, cmd.Version)
 	if err != nil {
 		return fmt.Errorf("%s requires engine to be installed as a binary at %s: %w", envName, cmd.GoBinPath, err)
 	}
-	cmd.BinPostfix = binPostfix
 	cmd.CmdPath = cmdPath
 	return nil
 }
 
 func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
-	// SetupEnv can be called independently of CLI path resolution.
-	if err := cmd.resolveProjectPaths(cmd.TargetDir, cmd.ProjectRelPath); err != nil {
-		return fmt.Errorf("failed to resolve project directory: %w", err)
-	}
-	targetDir, projectDir := cmd.TargetDir, cmd.ProjectDir
+	projectDir := cmd.ProjectDir
 	cmd.GoDir = filepath.Join(projectDir, "go")
 
-	cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+cmd.BinPostfix)
+	cmd.RuntimeCmdPath = path.Join(cmd.GoBinPath, "gdspxrt"+cmd.Version+executableSuffix(runtime.GOOS))
 
-	runtimeTempDir := filepath.Join(targetDir, ".temp")
-	cmd.RuntimeTempDir = runtimeTempDir
-	if err := os.MkdirAll(runtimeTempDir, 0o755); err != nil {
+	if err := os.MkdirAll(cmd.runtimeTempDir(), 0o755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
@@ -215,11 +198,7 @@ func (cmd *CmdTool) setupProjectPaths(goos, goarch string) error {
 }
 
 func (cmd *CmdTool) updateProjectName() error {
-	targetDir, err := filepath.Abs(cmd.TargetDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve target directory: %w", err)
-	}
-	projectName := projectNameReplacer.Replace(filepath.Base(targetDir))
+	projectName := projectNameReplacer.Replace(filepath.Base(cmd.TargetDir))
 
 	engineFilePath := path.Join(cmd.ProjectDir, "project.godot")
 	content, err := os.ReadFile(engineFilePath)
@@ -271,7 +250,7 @@ func (cmd *CmdTool) shouldRunGoModTidy() bool {
 
 func (cmd *CmdTool) shouldSkipProjectImport() bool {
 	spec, _ := findCommand(cmd.Args.CmdName)
-	return cmd.RuntimeMode || spec.setup == webExportSetup ||
+	return spec.runtime || spec.setup == interpretedSetup || spec.setup == webExportSetup ||
 		spec.build == tinyGoBuild || spec.build == wasmBuild
 }
 
@@ -413,26 +392,23 @@ func hasGoModuleDeclaration(content, modulePath string) bool {
 	return false
 }
 
-func resolveAppPath(gobinDir, tag, version string) (string, string, error) {
-	binPostfix := executableSuffix(runtime.GOOS)
-
-	tagName := tag + version
-	dstFileName := tagName + binPostfix
+func resolveAppPath(gobinDir, tag, version string) (string, error) {
+	dstFileName := tag + version + executableSuffix(runtime.GOOS)
 	gdx, err := exec.LookPath(dstFileName)
 	if err == nil {
 		if _, err := exec.Command(gdx, "--version").CombinedOutput(); err == nil {
-			return binPostfix, gdx, nil
+			return gdx, nil
 		}
 	}
 
 	cmdPath := path.Join(gobinDir, dstFileName)
 	info, err := os.Stat(cmdPath)
 	if err != nil && !os.IsNotExist(err) {
-		return binPostfix, "", err
+		return "", err
 	} else if err == nil && info.Mode()&0o111 == 0 {
 		if err := os.Chmod(cmdPath, 0o755); err != nil {
-			return binPostfix, cmdPath, err
+			return cmdPath, err
 		}
 	}
-	return binPostfix, cmdPath, nil
+	return cmdPath, nil
 }

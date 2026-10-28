@@ -77,10 +77,7 @@ func (cmd *CmdTool) StopWeb() error {
 }
 
 func (cmd *CmdTool) runInterpretedEngine(runtimePath, bridgePath, engineKind string, pargs ...string) error {
-	roots, err := cmd.interpretedRoots()
-	if err != nil {
-		return err
-	}
+	roots := cmd.interpretedRoots()
 	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{
 		Roots: roots, BridgePath: bridgePath,
 	}); err != nil {
@@ -120,30 +117,16 @@ func (cmd *CmdTool) resolveInterpretedRuntimeAssets() (launchpack.Assets, error)
 	return assets, nil
 }
 
-func (cmd *CmdTool) interpretedRoots() (interpruntime.Roots, error) {
-	if cmd.TargetDir == "" {
-		return interpruntime.Roots{}, fmt.Errorf("interpreted project directory is not configured")
-	}
-	projectDir, err := filepath.Abs(cmd.TargetDir)
-	if err != nil {
-		return interpruntime.Roots{}, fmt.Errorf("resolve interpreted project directory: %w", err)
-	}
-	sessionDir := cmd.RuntimeTempDir
-	if sessionDir == "" {
-		sessionDir = filepath.Join(projectDir, ".temp")
-	}
-	if !filepath.IsAbs(sessionDir) {
-		var err error
-		sessionDir, err = filepath.Abs(sessionDir)
-		if err != nil {
-			return interpruntime.Roots{}, fmt.Errorf("resolve interpreted session directory: %w", err)
-		}
-	}
+func (cmd *CmdTool) runtimeTempDir() string {
+	return filepath.Join(cmd.TargetDir, ".temp")
+}
+
+func (cmd *CmdTool) interpretedRoots() interpruntime.Roots {
 	return interpruntime.Roots{
-		ProjectDir: projectDir,
-		AssetDir:   filepath.Join(projectDir, "assets"),
-		SessionDir: filepath.Clean(sessionDir),
-	}, nil
+		ProjectDir: cmd.TargetDir,
+		AssetDir:   filepath.Join(cmd.TargetDir, "assets"),
+		SessionDir: cmd.runtimeTempDir(),
+	}
 }
 
 func (cmd *CmdTool) runtimeSearchDirs() []string {
