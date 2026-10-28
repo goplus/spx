@@ -127,7 +127,7 @@ func TestCameraFollowResolvesTargetsWithoutReplacingOnMissingName(t *testing.T) 
 		}
 	}
 	camera.follow(Mouse)
-	game.inputMgr.setMousePos(mathf.NewVec2(45, 67))
+	game.inputMgr.mousePos = mathf.NewVec2(45, 67)
 	if changed, pos := camera.getFollowPos(); !changed || pos != mathf.NewVec2(45, 67) {
 		t.Fatalf("mouse follow = (%v, %v), want (true, (45, 67))", changed, pos)
 	}
@@ -184,7 +184,7 @@ func TestCameraFollowObservesMousePositionChanges(t *testing.T) {
 	camera := &cameraImpl{g: game, followTarget: Mouse}
 
 	for _, want := range []mathf.Vec2{mathf.NewVec2(1, 2), mathf.NewVec2(3, 4)} {
-		game.inputMgr.setMousePos(want)
+		game.inputMgr.mousePos = want
 		changed, pos := camera.getFollowPos()
 		if !changed {
 			t.Fatal("mouse follow did not update without a camera dirty flag")

@@ -25,21 +25,17 @@ import (
 	inputstate "github.com/goplus/spx/v4/internal/input"
 )
 
-type inputMouseState struct {
-	position InputReplayMouse
-	buttons  uint8
-}
-
 type inputSessionTick struct {
-	frame     InputReplayFrame
-	initial   inputMouseState
-	firstTick bool
+	frame              InputReplayFrame
+	initialLeftPressed bool
+	firstTick          bool
 }
 
 // inputPlaybackState contains only scalar values, so queries cannot expose the
 // session's held-key slice or require an owned copy of it.
 type inputPlaybackState struct {
-	inputMouseState
+	position   InputReplayMouse
+	buttons    uint8
 	keyPressed bool
 }
 
@@ -60,7 +56,7 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		if err := s.controller.SynchronizeRecordingInitial(initial); err != nil {
 			return inputSessionTick{}, err
 		}
-		s.initial = inputMouseState{position: initial.Mouse, buttons: initial.Buttons}
+		s.initialLeftPressed = initial.Buttons&1 != 0
 		s.initialPending = false
 	}
 
@@ -81,9 +77,9 @@ func (s *inputSession) consumeSampledInputTickLocked(
 		s.phase = InputSessionPhaseFinishing
 	}
 	return inputSessionTick{
-		frame:     frame,
-		initial:   s.initial,
-		firstTick: firstTick,
+		frame:              frame,
+		initialLeftPressed: s.initialLeftPressed,
+		firstTick:          firstTick,
 	}, nil
 }
 
@@ -101,8 +97,9 @@ func (s *inputSession) playbackInput(key Key) (inputPlaybackState, bool) {
 		_, pressed = slices.BinarySearch(s.current.KeysDown, int64(key))
 	}
 	return inputPlaybackState{
-		inputMouseState: inputMouseState{position: s.current.Mouse, buttons: s.current.Buttons},
-		keyPressed:      pressed,
+		position:   s.current.Mouse,
+		buttons:    s.current.Buttons,
+		keyPressed: pressed,
 	}, true
 }
 

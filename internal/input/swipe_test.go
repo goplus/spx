@@ -132,16 +132,7 @@ func TestSwipeRecognizerInitWithClockResetsTrackingAndNilUsesDefault(t *testing.
 	}
 }
 
-func TestSwipeRecognizerInit(t *testing.T) {
-	var sr SwipeRecognizer
-	sr.Init()
-	if sr.timeToSwipe != 0.5 || sr.minimumDistance != 50 || sr.maximumDistance != 500 {
-		t.Fatalf("Init thresholds = (%v, %v, %v), want (0.5, 50, 500)", sr.timeToSwipe, sr.minimumDistance, sr.maximumDistance)
-	}
-	if sr.IsTracking() || sr.now == nil {
-		t.Fatalf("Init state = tracking %v, clock nil=%v; want false and non-nil", sr.IsTracking(), sr.now == nil)
-	}
-
+func TestSwipeRecognizerZeroValueTracking(t *testing.T) {
 	var zero SwipeRecognizer
 	zero.Expire()
 	zero.StartTracking(mathf.NewVec2(1, 2))

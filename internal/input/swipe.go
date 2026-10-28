@@ -31,19 +31,17 @@ type SwipeResult struct {
 	EndPos    mathf.Vec2
 }
 
-type SwipeRecognizer struct {
-	timeToSwipe     float64
-	minimumDistance float64
-	maximumDistance float64
+const (
+	swipeTimeLimit       = 0.5
+	swipeMinimumDistance = 50.0
+	swipeMaximumDistance = 500.0
+)
 
+type SwipeRecognizer struct {
 	isTracking bool
 	startTime  time.Time
 	startPoint mathf.Vec2
 	now        func() time.Time
-}
-
-func (sr *SwipeRecognizer) Init() {
-	sr.InitWithClock(nil)
 }
 
 // A nil clock falls back to the system clock.
@@ -51,13 +49,7 @@ func (sr *SwipeRecognizer) InitWithClock(now func() time.Time) {
 	if now == nil {
 		now = time.Now
 	}
-	sr.timeToSwipe = 0.5
-	sr.minimumDistance = 50.0
-	sr.maximumDistance = 500.0
-	sr.isTracking = false
-	sr.startTime = time.Time{}
-	sr.startPoint = mathf.Vec2{}
-	sr.now = now
+	*sr = SwipeRecognizer{now: now}
 }
 
 func (sr *SwipeRecognizer) StartTracking(startPos mathf.Vec2) {
@@ -79,7 +71,7 @@ func (sr *SwipeRecognizer) Expire() {
 	if !sr.isTracking {
 		return
 	}
-	if sr.timeToSwipe > 0 && sr.elapsedSeconds() > sr.timeToSwipe {
+	if sr.elapsedSeconds() > swipeTimeLimit {
 		sr.StopTracking()
 	}
 }
@@ -90,17 +82,14 @@ func (sr *SwipeRecognizer) Finish(point mathf.Vec2) (SwipeResult, bool) {
 	}
 	elapsed := sr.elapsedSeconds()
 	sr.StopTracking()
-	if elapsed <= 0 {
-		return SwipeResult{}, false
-	}
-	if sr.timeToSwipe > 0 && elapsed > sr.timeToSwipe {
+	if elapsed <= 0 || elapsed > swipeTimeLimit {
 		return SwipeResult{}, false
 	}
 
 	dx := point.X - sr.startPoint.X
 	dy := point.Y - sr.startPoint.Y
 	distance := math.Sqrt(dx*dx + dy*dy)
-	if distance < sr.minimumDistance || distance > sr.maximumDistance {
+	if distance < swipeMinimumDistance || distance > swipeMaximumDistance {
 		return SwipeResult{}, false
 	}
 

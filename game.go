@@ -67,7 +67,6 @@ const (
 const (
 	schedTimeoutMs              = 3000
 	mainExecTimeoutSec          = 3
-	mouseMovementThreshold      = 1.0
 	initialSpriteSyncBufferSize = 100
 	initialPenSyncBufferSize    = 256
 	baseScreenWidth             = 480

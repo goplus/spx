@@ -67,6 +67,10 @@ func TestClickGatePrunesExpiredEntriesAndRemove(t *testing.T) {
 }
 
 func TestClickGateInitWithClockResetsStateAndNilUsesDefault(t *testing.T) {
+	var zero ClickGate
+	if !zero.Allow(1) {
+		t.Fatal("zero-value gate blocked a click")
+	}
 	now := time.Unix(0, 0)
 	var gate ClickGate
 	gate.InitWithClock(50*time.Millisecond, func() time.Time { return now })
@@ -83,29 +87,5 @@ func TestClickGateInitWithClockResetsStateAndNilUsesDefault(t *testing.T) {
 	}
 	if gate.now == nil {
 		t.Fatal("nil clock was not replaced with the default clock")
-	}
-}
-
-func TestClickGateInitAndReset(t *testing.T) {
-	var zero ClickGate
-	if !zero.Allow(1) {
-		t.Fatal("zero-value gate blocked a click")
-	}
-
-	var gate ClickGate
-	gate.Init(50 * time.Millisecond)
-	if gate.minIntervalMs != 50 || gate.now == nil {
-		t.Fatalf("Init state = interval %d, clock nil=%v; want 50 and non-nil", gate.minIntervalMs, gate.now == nil)
-	}
-	if !gate.Allow(1) {
-		t.Fatal("first click after Init was blocked")
-	}
-
-	gate.Reset()
-	if len(gate.lastClickMs) != 0 {
-		t.Fatalf("lastClickMs len = %d after Reset, want 0", len(gate.lastClickMs))
-	}
-	if !gate.Allow(1) {
-		t.Fatal("Reset did not clear the click interval")
 	}
 }

@@ -63,16 +63,16 @@ type inputSession struct {
 	captureKey Key
 	controller inputstate.InputReplayController
 
-	initial        inputMouseState
-	current        InputReplayState
-	currentTime    float64
-	currentTick    int64
-	hasCurrentTick bool
-	initialPending bool
-	result         inputRecordingResult
-	abortReason    string
-	frameOpen      bool
-	terminalStatus InputSessionStatus
+	initialLeftPressed bool
+	current            InputReplayState
+	currentTime        float64
+	currentTick        int64
+	hasCurrentTick     bool
+	initialPending     bool
+	result             inputRecordingResult
+	abortReason        string
+	frameOpen          bool
+	terminalStatus     InputSessionStatus
 
 	environment inputSessionEnvironment
 }
@@ -462,7 +462,7 @@ func newInputSession(plan *inputSessionPlan) (*inputSession, error) {
 			return nil, err
 		}
 		fixedTimestep = plan.replay.FixedTimestep
-		session.initial = inputMouseState{position: plan.replay.Initial.Mouse, buttons: plan.replay.Initial.Buttons}
+		session.initialLeftPressed = plan.replay.Initial.Buttons&1 != 0
 		session.current = inputstate.CloneInputReplayState(plan.replay.Initial)
 	default:
 		return nil, fmt.Errorf("unsupported input session mode %q", plan.mode)

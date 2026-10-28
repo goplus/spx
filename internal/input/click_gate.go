@@ -29,10 +29,6 @@ type ClickGate struct {
 	now           func() time.Time
 }
 
-func (g *ClickGate) Init(minInterval time.Duration) {
-	g.InitWithClock(minInterval, nil)
-}
-
 // A nil clock falls back to the system clock.
 func (g *ClickGate) InitWithClock(minInterval time.Duration, now func() time.Time) {
 	if now == nil {
@@ -43,12 +39,6 @@ func (g *ClickGate) InitWithClock(minInterval time.Duration, now func() time.Tim
 	g.minIntervalMs = int64(minInterval / time.Millisecond)
 	g.lastClickMs = make(map[int64]int64)
 	g.now = now
-}
-
-func (g *ClickGate) Reset() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	clear(g.lastClickMs)
 }
 
 func (g *ClickGate) Allow(id int64) bool {

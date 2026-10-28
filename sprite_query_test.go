@@ -476,7 +476,7 @@ func TestSpriteMouseSensingUsesWorldPointWithoutVisibilityFilter(t *testing.T) {
 	game, mgr, sprite, _ := newTouchingPair(t, false)
 	pointMgr := &mouseSensingSpriteMgr{touchingSyncSpriteMgr: mgr}
 	pkgengine.SpriteMgr = pointMgr
-	game.inputMgr.setMousePos(mathf.NewVec2(12, 34))
+	game.inputMgr.mousePos = mathf.NewVec2(12, 34)
 	sprite.Hide()
 	if !sprite.TouchingWith(Mouse) || pointMgr.point != mathf.NewVec2(12, 34) || pointMgr.visibleOnly {
 		t.Fatalf("mouse query point=%v visibleOnly=%v", pointMgr.point, pointMgr.visibleOnly)

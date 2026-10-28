@@ -162,10 +162,6 @@ func (p *inputManager) init(g *Game) {
 	p.swipe.InitWithClock(g.inputClock)
 }
 
-func (p *inputManager) setMousePos(pos mathf.Vec2) {
-	p.mousePos = pos
-}
-
 func (p *inputManager) onKeyDown(key Key) {
 	// Note: key-up callbacks are not part of the current event sink API.
 	p.g.scriptEvents.doWhenKeyPressed(key)
@@ -209,8 +205,4 @@ func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
 	} else {
 		p.g.scriptEvents.doWhenSwipe(Direction(result.Direction), p.g)
 	}
-}
-
-func (p *inputManager) onMouseMove(mathf.Vec2) {
-	p.swipe.Expire()
 }

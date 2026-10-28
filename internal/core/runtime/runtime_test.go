@@ -29,7 +29,6 @@ import (
 func TestInputFrameStateProcess(t *testing.T) {
 	var (
 		downs []mathf.Vec2
-		moves []mathf.Vec2
 		keys  []int64
 	)
 	var state InputFrameState
@@ -42,12 +41,10 @@ func TestInputFrameStateProcess(t *testing.T) {
 				{Id: 1, IsPressed: true},
 				{Id: 2, IsPressed: false},
 			},
-			MouseMovementThreshold: 1,
 		},
 		InputFrameHooks{
 			FireLeftButtonDown: func(pos mathf.Vec2) { downs = append(downs, pos) },
 			FireLeftButtonUp:   func(mathf.Vec2) {},
-			OnMouseMove:        func(pos mathf.Vec2) { moves = append(moves, pos) },
 			OnKeyPressed:       func(key int64) { keys = append(keys, key) },
 		},
 	)
@@ -55,14 +52,8 @@ func TestInputFrameStateProcess(t *testing.T) {
 	if len(downs) != 1 || downs[0].X != 10 || downs[0].Y != 20 {
 		t.Fatalf("unexpected button downs: %+v", downs)
 	}
-	if len(moves) != 1 || moves[0].X != 10 || moves[0].Y != 20 {
-		t.Fatalf("unexpected mouse moves: %+v", moves)
-	}
 	if len(keys) != 1 || keys[0] != 1 {
 		t.Fatalf("unexpected key presses: %+v", keys)
-	}
-	if state.lastMousePos.X != 10 || state.lastMousePos.Y != 20 {
-		t.Fatalf("lastMousePos = %+v, want {10 20}", state.lastMousePos)
 	}
 	if !state.leftButtonPressed {
 		t.Fatal("expected left button state to update")
@@ -84,7 +75,6 @@ func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.
 		InputFrameHooks{
 			FireLeftButtonDown: func(mathf.Vec2) { edges = append(edges, "down") },
 			FireLeftButtonUp:   func(mathf.Vec2) { edges = append(edges, "up") },
-			OnMouseMove:        func(mathf.Vec2) {},
 			OnKeyPressed:       func(int64) {},
 		},
 	)
@@ -98,7 +88,7 @@ func TestInputFrameStateProcessPreservesPressAndReleaseWithinOneTick(t *testing.
 
 func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *testing.T) {
 	var state InputFrameState
-	state.Reset(mathf.Vec2{}, true)
+	state.Reset(true)
 	var ups int
 	state.Process(
 		InputFrame{
@@ -112,7 +102,6 @@ func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *test
 		InputFrameHooks{
 			FireLeftButtonDown: func(mathf.Vec2) { t.Error("unchanged left-button edge fired a down callback") },
 			FireLeftButtonUp:   func(mathf.Vec2) { ups++ },
-			OnMouseMove:        func(mathf.Vec2) {},
 			OnKeyPressed:       func(int64) {},
 		},
 	)
@@ -123,9 +112,9 @@ func TestInputFrameStateProcessIgnoresUnrelatedEdgesAndReconcilesRelease(t *test
 
 func TestInputFrameStateResetReplacesSessionState(t *testing.T) {
 	var state InputFrameState
-	state.Reset(mathf.Vec2{X: 3, Y: 4}, true)
-	if state.lastMousePos != (mathf.Vec2{X: 3, Y: 4}) || !state.leftButtonPressed {
-		t.Fatalf("reset state = %+v, want point {3 4} and pressed", state)
+	state.Reset(true)
+	if !state.leftButtonPressed {
+		t.Fatalf("reset state = %+v, want pressed", state)
 	}
 }
 
@@ -308,7 +297,7 @@ func TestSwipeStateInitWithClockResetsState(t *testing.T) {
 	}
 }
 
-func TestSwipeStateMovementExpiresTargetBeforeFinish(t *testing.T) {
+func TestSwipeStateExpiryClearsTargetBeforeFinish(t *testing.T) {
 	now := time.Unix(0, 0)
 	var state SwipeState[string]
 	state.InitWithClock(func() time.Time { return now })
@@ -316,7 +305,7 @@ func TestSwipeStateMovementExpiresTargetBeforeFinish(t *testing.T) {
 	now = now.Add(600 * time.Millisecond)
 	state.Expire()
 	if state.target != "" || state.recognizer.IsTracking() {
-		t.Fatal("expired movement did not clear the target and tracking")
+		t.Fatal("expiry did not clear the target and tracking")
 	}
 
 	// A later clock correction cannot revive an expired gesture.
