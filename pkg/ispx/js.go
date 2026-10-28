@@ -82,23 +82,18 @@ func ispxStart(this js.Value, args []js.Value) any {
 	}
 	go func() {
 		defer preparation.Cancel()
-		defer func() {
-			if r := recover(); r != nil {
-				reportRuntimeError(fmt.Errorf("interpreter exited with panic: %v", r))
-			}
-		}()
+		defer reportRuntimePanic("interpreter")
 
 		exitCode, err := Run()
 		if err != nil {
 			reportRuntimeError(fmt.Errorf("interpreter exited with code %d: %w", exitCode, err))
-			return
 		}
 	}()
 	return nil
 }
 
 func prepareHostInputSession(args []js.Value) (spx.InputSessionPreparation, error) {
-	if len(args) == 0 || args[0].Type() == js.TypeUndefined || args[0].Type() == js.TypeNull {
+	if len(args) == 0 || isJSNil(args[0]) {
 		return spx.InputSessionPreparation{}, nil
 	}
 	input := args[0]
@@ -117,7 +112,7 @@ func prepareHostInputSession(args []js.Value) (spx.InputSessionPreparation, erro
 	case "record":
 		fps := float64(defaultHostInputRecordingFPS)
 		value := input.Get("fps")
-		if value.Type() != js.TypeUndefined && value.Type() != js.TypeNull {
+		if !isJSNil(value) {
 			if value.Type() != js.TypeNumber {
 				return spx.InputSessionPreparation{}, errors.New("input recording FPS must be a number")
 			}
@@ -126,7 +121,7 @@ func prepareHostInputSession(args []js.Value) (spx.InputSessionPreparation, erro
 		return prepareHostInputRecording(fps, options)
 	case "replay":
 		value := input.Get("data")
-		if value.Type() == js.TypeUndefined || value.Type() == js.TypeNull {
+		if isJSNil(value) {
 			return spx.InputSessionPreparation{}, errors.New("missing input replay data")
 		}
 		data, err := copyJSReplayData(value)
@@ -141,7 +136,7 @@ func prepareHostInputSession(args []js.Value) (spx.InputSessionPreparation, erro
 
 func hostInputSessionOptions(input js.Value) (spx.InputSessionOptions, error) {
 	value := input.Get("captureKey")
-	if value.Type() == js.TypeUndefined || value.Type() == js.TypeNull {
+	if isJSNil(value) {
 		return spx.InputSessionOptions{}, nil
 	}
 	if value.Type() != js.TypeString {
@@ -185,21 +180,26 @@ func inputSessionStatusToJS(status spx.InputSessionStatus) js.Value {
 }
 
 func copyJSReplayData(value js.Value) ([]byte, error) {
-	switch {
-	case value.Type() == js.TypeString:
+	if value.Type() == js.TypeString {
 		return []byte(value.String()), nil
-	case value.InstanceOf(jsTypeUint8Array):
-		data := make([]byte, value.Get("byteLength").Int())
-		js.CopyBytesToGo(data, value)
-		return data, nil
-	case value.InstanceOf(jsTypeArrayBuffer):
-		bytes := jsTypeUint8Array.New(value)
-		data := make([]byte, bytes.Get("byteLength").Int())
-		js.CopyBytesToGo(data, bytes)
-		return data, nil
-	default:
-		return nil, errors.New("expected string, Uint8Array, or ArrayBuffer")
 	}
+	if data, ok := copyJSBinaryData(value); ok {
+		return data, nil
+	}
+	return nil, errors.New("expected string, Uint8Array, or ArrayBuffer")
+}
+
+func copyJSBinaryData(value js.Value) ([]byte, bool) {
+	switch {
+	case value.InstanceOf(jsTypeUint8Array):
+	case value.InstanceOf(jsTypeArrayBuffer):
+		value = jsTypeUint8Array.New(value)
+	default:
+		return nil, false
+	}
+	data := make([]byte, value.Get("byteLength").Int())
+	js.CopyBytesToGo(data, value)
+	return data, true
 }
 
 func copyBytesToJS(data []byte) js.Value {
@@ -212,18 +212,24 @@ func copyBytesToJS(data []byte) js.Value {
 // goroutine to avoid blocking the JavaScript main thread.
 func ispxStop(this js.Value, args []js.Value) any {
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				reportRuntimeError(fmt.Errorf("shutdown exited with panic: %v", r))
-			}
-		}()
+		defer reportRuntimePanic("shutdown")
 
 		if err := Shutdown(); err != nil {
 			reportRuntimeError(fmt.Errorf("failed to shutdown: %w", err))
-			return
 		}
 	}()
 	return nil
+}
+
+// reportRuntimePanic must be deferred directly by the asynchronous entry point.
+func reportRuntimePanic(operation string) {
+	if r := recover(); r != nil {
+		reportRuntimeError(fmt.Errorf("%s exited with panic: %v", operation, r))
+	}
+}
+
+func isJSNil(value js.Value) bool {
+	return value.IsUndefined() || value.IsNull()
 }
 
 // reportRuntimeError reports a runtime error to JavaScript and requests a reset.
@@ -259,18 +265,10 @@ func convertJSFilesToMap(input js.Value) (map[string][]byte, error) {
 	for i := range n {
 		name := keys.Index(i).String()
 
-		var jsData js.Value
-		switch v := input.Get(name); {
-		case v.InstanceOf(jsTypeUint8Array):
-			jsData = v
-		case v.InstanceOf(jsTypeArrayBuffer):
-			jsData = jsTypeUint8Array.New(v)
-		default:
+		data, ok := copyJSBinaryData(input.Get(name))
+		if !ok {
 			return nil, fmt.Errorf("unsupported file value type for %q", name)
 		}
-		length := jsData.Get("length").Int()
-		data := make([]byte, length)
-		js.CopyBytesToGo(data, jsData)
 
 		files[name] = data
 	}

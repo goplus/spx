@@ -58,13 +58,6 @@ type fileInfo struct {
 	mode fs.FileMode
 }
 
-// dirEntry implements [fs.DirEntry].
-type dirEntry struct {
-	name string
-	size int64
-	mode fs.FileMode
-}
-
 // New creates a new [FS].
 func New(files map[string][]byte) *FS {
 	return &FS{files: files}
@@ -130,15 +123,11 @@ func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 
 	des := make([]fs.DirEntry, 0, len(entries))
 	for _, entryName := range slices.Sorted(maps.Keys(entries)) {
-		isDir := entries[entryName]
-		de := &dirEntry{name: entryName}
-		if isDir {
-			de.mode = dirMode
-		} else {
-			de.mode = fileMode
-			de.size = int64(len(f.files[prefix+entryName]))
+		mode, size := fileMode, int64(len(f.files[prefix+entryName]))
+		if entries[entryName] {
+			mode, size = dirMode, 0
 		}
-		des = append(des, de)
+		des = append(des, fs.FileInfoToDirEntry(newFileInfo(entryName, size, mode)))
 	}
 	return des, nil
 }
@@ -151,19 +140,12 @@ func (f *FS) Stat(name string) (fs.FileInfo, error) {
 
 	// Check if it's a file.
 	if content, ok := f.files[name]; ok {
-		return &fileInfo{
-			name: path.Base(name),
-			size: int64(len(content)),
-			mode: fileMode,
-		}, nil
+		return newFileInfo(name, int64(len(content)), fileMode), nil
 	}
 
 	// Check if it's a directory.
 	if f.hasDir(name) {
-		return &fileInfo{
-			name: path.Base(name),
-			mode: dirMode,
-		}, nil
+		return newFileInfo(name, 0, dirMode), nil
 	}
 
 	return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrNotExist}
@@ -185,11 +167,7 @@ func (f *FS) hasDir(name string) bool {
 
 // Stat implements [fs.File].
 func (f *file) Stat() (fs.FileInfo, error) {
-	return &fileInfo{
-		name: path.Base(f.name),
-		size: int64(len(f.content)),
-		mode: fileMode,
-	}, nil
+	return newFileInfo(f.name, int64(len(f.content)), fileMode), nil
 }
 
 // Read implements [fs.File].
@@ -210,10 +188,7 @@ func (f *file) Close() error {
 
 // Stat implements [fs.File].
 func (d *dir) Stat() (fs.FileInfo, error) {
-	return &fileInfo{
-		name: path.Base(d.name),
-		mode: dirMode,
-	}, nil
+	return newFileInfo(d.name, 0, dirMode), nil
 }
 
 // Read implements [fs.File].
@@ -252,6 +227,10 @@ func (d *dir) ReadDir(n int) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
+func newFileInfo(name string, size int64, mode fs.FileMode) *fileInfo {
+	return &fileInfo{name: path.Base(name), size: size, mode: mode}
+}
+
 func (fi *fileInfo) Name() string { return fi.name }
 
 func (fi *fileInfo) Size() int64 { return fi.size }
@@ -263,17 +242,3 @@ func (fi *fileInfo) ModTime() time.Time { return time.Unix(0, 0) }
 func (fi *fileInfo) IsDir() bool { return fi.mode.IsDir() }
 
 func (fi *fileInfo) Sys() any { return nil }
-
-func (de *dirEntry) Name() string { return de.name }
-
-func (de *dirEntry) IsDir() bool { return de.mode.IsDir() }
-
-func (de *dirEntry) Type() fs.FileMode { return de.mode.Type() }
-
-func (de *dirEntry) Info() (fs.FileInfo, error) {
-	return &fileInfo{
-		name: de.name,
-		size: de.size,
-		mode: de.mode,
-	}, nil
-}
