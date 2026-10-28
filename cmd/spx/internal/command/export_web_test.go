@@ -29,10 +29,13 @@ import (
 	"testing"
 )
 
-//go:embed template/project/* template/project/.godot/* template/platform/web/* template/platform/webnormal/*
+//go:embed template/project/* template/project/.godot/* template/platform/web/* template/platform/webnormal/* template/platform/webworker/* template/platform/webminigame/game.json template/platform/webminiprogram/*
 var webExportTestFS embed.FS
 
-//go:embed template/platform/webminigame/engine
+//go:embed template/platform/web/*
+var commonWebPlatformFS embed.FS
+
+//go:embed template/platform/web/* template/platform/webminigame/engine
 var conflictingMinigamePlatformFS embed.FS
 
 func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
@@ -534,13 +537,16 @@ func TestWebExportModeWorkflows(t *testing.T) {
 			switch mode {
 			case webWorkerMode:
 				engine := readTestFile(t, filepath.Join(cmd.WebDir, "engine.js"))
-				if !strings.Contains(engine, "handleGameRunnerMessage(e.data)") || !strings.Contains(engine, "runtime();") {
+				if !strings.Contains(engine, "handleGameRunnerMessage(e.data)") || !strings.Contains(engine, "runtime();") || !strings.Contains(engine, "workerOverlay();") {
 					t.Fatalf("worker engine lacks runtime/message handler: %s", engine)
 				}
 				if _, err := os.Stat(filepath.Join(cmd.WebDir, "__worker")); !os.IsNotExist(err) {
 					t.Fatalf("worker staging directory retained: %v", err)
 				}
 			case webMinigameMode:
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "game.json")); got != "{\"deviceOrientation\":\"landscape\"}\n" {
+					t.Fatalf("minigame overlay = %q", got)
+				}
 				archivePath = filepath.Join(cmd.WebDir, "engine", "game.zip")
 				if got := readTestFile(t, filepath.Join(cmd.WebDir, "engine", "engine.wasm")); got != "engine wasm" {
 					t.Fatalf("engine wasm = %q", got)
@@ -560,6 +566,9 @@ func TestWebExportModeWorkflows(t *testing.T) {
 					}
 				}
 			case webMiniprogramMode:
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "mini.txt")); got != "miniprogram overlay\n" {
+					t.Fatalf("miniprogram overlay = %q", got)
+				}
 				if _, err := os.Stat(filepath.Join(cmd.WebDir, "lab")); !os.IsNotExist(err) {
 					t.Fatalf("miniprogram retained debug lab: %v", err)
 				}
@@ -573,6 +582,67 @@ func TestWebExportModeWorkflows(t *testing.T) {
 				if data, err := fs.ReadFile(archive, name); err != nil || string(data) != want {
 					t.Fatalf("exported archive entry %s = %q, %v; want %q", name, data, err, want)
 				}
+			}
+		})
+	}
+}
+
+func TestWebExportRejectsMissingModeOverlay(t *testing.T) {
+	for _, tc := range []struct {
+		mode   string
+		export func(*CmdTool) error
+	}{
+		{webNormalMode, (*CmdTool).ExportWeb},
+		{webWorkerMode, (*CmdTool).ExportWebWorker},
+		{webMinigameMode, (*CmdTool).ExportMinigame},
+		{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			cmd := newWebExportFixture(t, tc.mode)
+			cmd.PlatformFS = commonWebPlatformFS
+			t.Setenv("WECHAT_DEV_TOOLS", "")
+			err := tc.export(cmd)
+			if !errors.Is(err, fs.ErrNotExist) || !strings.Contains(err.Error(), "template/platform/web"+tc.mode) {
+				t.Fatalf("missing mode overlay = %v, want original missing-source error", err)
+			}
+			switch tc.mode {
+			case webWorkerMode:
+				if _, err := os.Stat(filepath.Join(cmd.WebDir, "__worker")); !os.IsNotExist(err) {
+					t.Fatalf("failed overlay retained worker staging: %v", err)
+				}
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); got != "runtime();" {
+					t.Fatalf("failed overlay changed worker runtime: %q", got)
+				}
+			case webMinigameMode:
+				if got := readTestFile(t, filepath.Join(cmd.WebDir+"_bck", "engine.wasm")); got != "engine wasm" {
+					t.Fatalf("failed overlay changed raw engine: %q", got)
+				}
+				if _, err := os.Stat(filepath.Join(cmd.WebDir, "engine")); !os.IsNotExist(err) {
+					t.Fatalf("failed overlay continued preparing minigame engine: %v", err)
+				}
+			case webMiniprogramMode:
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "lab", "debug.txt")); got != "debug only" {
+					t.Fatalf("failed overlay continued removing lab assets: %q", got)
+				}
+			}
+			cmd.PlatformFS = webExportTestFS
+			if err := tc.export(cmd); err != nil {
+				t.Fatalf("retry with complete overlay: %v", err)
+			}
+			archivePath := filepath.Join(cmd.WebDir, "game.zip")
+			if tc.mode == webMinigameMode {
+				archivePath = filepath.Join(cmd.WebDir, "engine", "game.zip")
+				if _, err := os.Stat(cmd.WebDir + "_bck"); !os.IsNotExist(err) {
+					t.Fatalf("successful retry retained backup: %v", err)
+				}
+			}
+			archive, err := zip.OpenReader(archivePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer archive.Close()
+			if data, err := fs.ReadFile(archive, "main.spx"); err != nil || string(data) != "onStart => {}\n" {
+				t.Fatalf("retried project archive = %q, %v", data, err)
 			}
 		})
 	}
@@ -652,8 +722,80 @@ func TestWebExportMissingPrerequisites(t *testing.T) {
 	}
 }
 
+func TestWebExportCommonFailuresStopBeforeBuildAndPack(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		cause      error
+		prepare    func(*testing.T, *CmdTool, string)
+	}{
+		{"export directory", "failed to create web export directory", os.ErrPermission, func(t *testing.T, cmd *CmdTool, template string) {
+			parent := t.TempDir()
+			cmd.ProjectDir = filepath.Join(parent, "project")
+			cmd.WebDir = filepath.Join(cmd.ProjectDir, ".builds", "web")
+			restrictCommandTestPath(t, parent, 0o500)
+		}},
+		{"runtime directory is file", "failed to copy web runtime", nil, func(t *testing.T, cmd *CmdTool, template string) {
+			if err := os.RemoveAll(template); err != nil {
+				t.Fatal(err)
+			}
+			writeCommandTestFile(t, template, "not a directory")
+		}},
+		{"project template", "failed to copy web project template", fs.ErrNotExist, func(t *testing.T, cmd *CmdTool, template string) {
+			cmd.ProjectFS = embed.FS{}
+		}},
+		{"missing HTML", "failed to rename web entry page", fs.ErrNotExist, func(t *testing.T, cmd *CmdTool, template string) {
+			if err := os.Remove(filepath.Join(template, "godot.editor.html")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"HTML destination is directory", "failed to rename web entry page", nil, func(t *testing.T, cmd *CmdTool, template string) {
+			writeCommandTestFile(t, filepath.Join(template, "index.html", "keep"), "original")
+		}},
+		{"interpreter destination conflict", "failed to copy interpreter web runtime", nil, func(t *testing.T, cmd *CmdTool, template string) {
+			writeCommandTestFile(t, filepath.Join(cmd.GoBinPath, "ispx", "engine.js", "keep"), "conflict")
+		}},
+		{"common overlay", "failed to copy web overlay template/platform/web", fs.ErrNotExist, func(t *testing.T, cmd *CmdTool, template string) {
+			cmd.PlatformFS = embed.FS{}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newWebExportFixture(t, webNormalMode)
+			goLog := filepath.Join(t.TempDir(), "go.log")
+			t.Setenv("SPX_WEB_GO_LOG", goLog)
+			installCommandTestTools(t, map[string]string{"go": `printf invoked > "$SPX_WEB_GO_LOG"; exit 37`})
+			template := filepath.Join(cmd.GoBinPath, "gdspxrttest_webnormal")
+			tc.prepare(t, cmd, template)
+			err := cmd.ExportWeb()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("export error = %v, want %q", err, tc.want)
+			}
+			if tc.cause != nil {
+				if !errors.Is(err, tc.cause) {
+					t.Fatalf("export lost original cause %v: %v", tc.cause, err)
+				}
+			} else {
+				var pathErr *os.PathError
+				var linkErr *os.LinkError
+				if !errors.As(err, &pathErr) && !errors.As(err, &linkErr) {
+					t.Fatalf("export lost filesystem error: %v", err)
+				}
+			}
+			for _, path := range []string{goLog, filepath.Join(cmd.WebDir, "game.zip"), filepath.Join(cmd.WebDir, "ispx.wasm")} {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Fatalf("failed preparation reached later export step %s: %v", path, err)
+				}
+			}
+			if tc.name == "HTML destination is directory" {
+				if got := readTestFile(t, filepath.Join(cmd.WebDir, "index.html", "keep")); got != "original" {
+					t.Fatalf("failed rename changed destination: %q", got)
+				}
+			}
+		})
+	}
+}
+
 func TestWebExportFailureCleanup(t *testing.T) {
-	for _, scenario := range []string{"worker bundle", "worker patch", "minigame workspace", "minigame engine", "minigame JS"} {
+	for _, scenario := range []string{"worker overlay", "worker bundle", "worker patch", "minigame overlay", "minigame workspace", "minigame engine", "minigame JS"} {
 		t.Run(scenario, func(t *testing.T) {
 			mode := webMinigameMode
 			if strings.HasPrefix(scenario, "worker") {
@@ -663,6 +805,9 @@ func TestWebExportFailureCleanup(t *testing.T) {
 			template := filepath.Join(cmd.GoBinPath, "gdspxrttest_web"+mode)
 			want := ""
 			switch scenario {
+			case "worker overlay":
+				writeCommandTestFile(t, filepath.Join(template, "__worker", "worker.js", "keep"), "conflicting directory")
+				want = "failed to copy web overlay"
 			case "worker bundle":
 				// A directory cannot be replaced by the runtime script during bundling.
 				writeCommandTestFile(t, filepath.Join(template, "__worker", "go.wasm.exec.js", "keep"), "original")
@@ -673,6 +818,9 @@ func TestWebExportFailureCleanup(t *testing.T) {
 			case "minigame workspace":
 				cmd.PlatformFS = conflictingMinigamePlatformFS
 				want = "failed to create " + filepath.Join(cmd.WebDir, "engine")
+			case "minigame overlay":
+				cmd.PlatformFS = commonWebPlatformFS
+				want = "failed to copy web overlay"
 			case "minigame engine":
 				if err := os.Remove(filepath.Join(template, "engine.wasm")); err != nil {
 					t.Fatal(err)
@@ -698,7 +846,19 @@ func TestWebExportFailureCleanup(t *testing.T) {
 				if scenario == "worker patch" && readTestFile(t, filepath.Join(cmd.WebDir, "engine.js")) != "unrecognized engine" {
 					t.Fatal("failed patch changed engine source")
 				}
-			} else if scenario == "minigame workspace" {
+				if scenario == "worker overlay" {
+					var pathErr *os.PathError
+					if !errors.As(err, &pathErr) {
+						t.Fatalf("worker cleanup lost the copy error: %v", err)
+					}
+					if got := readTestFile(t, filepath.Join(cmd.WebDir, "engine.js")); got != readTestFile(t, filepath.Join(template, "engine.js")) {
+						t.Fatalf("failed overlay changed engine source: %q", got)
+					}
+					if got := readTestFile(t, filepath.Join(cmd.WebDir, "go.wasm.exec.js")); got != "runtime();" {
+						t.Fatalf("failed overlay moved worker runtime: %q", got)
+					}
+				}
+			} else if scenario == "minigame workspace" || scenario == "minigame overlay" {
 				backup := cmd.WebDir + "_bck"
 				if got := readTestFile(t, filepath.Join(backup, "engine.wasm")); got != "engine wasm" {
 					t.Fatalf("failed workspace preparation changed raw engine: %q", got)
@@ -706,8 +866,10 @@ func TestWebExportFailureCleanup(t *testing.T) {
 				if len(readTestFile(t, filepath.Join(backup, "game.zip"))) == 0 {
 					t.Fatal("failed workspace preparation lost the project archive")
 				}
-				if got := readTestFile(t, filepath.Join(cmd.WebDir, "engine")); got != "conflicting engine file\n" {
-					t.Fatalf("failed workspace preparation overwrote conflicting template: %q", got)
+				if scenario == "minigame workspace" {
+					if got := readTestFile(t, filepath.Join(cmd.WebDir, "engine")); got != "conflicting engine file\n" {
+						t.Fatalf("failed workspace preparation overwrote conflicting template: %q", got)
+					}
 				}
 			} else if scenario == "minigame engine" {
 				backup := cmd.WebDir + "_bck"
