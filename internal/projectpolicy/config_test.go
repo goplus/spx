@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 func TestValidatePortableConfig(t *testing.T) {
@@ -110,7 +112,7 @@ func TestPortableConfigSnapshotRejectsIdentityAndContentDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !os.SameFile(snapshot.fileInfo, info) || !stableMetadata(snapshot.fileInfo, info) {
+	if !os.SameFile(snapshot.fileInfo, info) || !stablefile.SameMetadata(snapshot.fileInfo, info) {
 		t.Fatal("content-drift fixture also changed identity or metadata")
 	}
 	if err := snapshot.Verify(projectDir); err == nil || !strings.Contains(err.Error(), "changed after validation") {
@@ -239,6 +241,7 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 	}{
 		{"initial stat failure", "", os.ErrPermission},
 		{"open failure", "", os.ErrPermission},
+		{"removed before open", "", os.ErrNotExist},
 		{"closed handle", "", os.ErrClosed},
 		{"write-only handle", "", nil},
 		{"opened directory", "changed while opening", nil},
@@ -248,14 +251,21 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 			projectDir := t.TempDir()
 			configPath := filepath.Join(projectDir, configName)
 			writePolicyTestFile(t, configPath, []byte(`{}`))
-			access := stableFileAccess{lstat: os.Lstat, open: os.Open}
+			access := stablefile.Reader{Lstat: os.Lstat, Open: os.Open}
 			switch test.name {
 			case "initial stat failure":
-				access.lstat = func(string) (os.FileInfo, error) { return nil, os.ErrPermission }
+				access.Lstat = func(string) (os.FileInfo, error) { return nil, os.ErrPermission }
 			case "open failure":
-				access.open = func(string) (*os.File, error) { return nil, os.ErrPermission }
+				access.Open = func(string) (*os.File, error) { return nil, os.ErrPermission }
+			case "removed before open":
+				access.Open = func(name string) (*os.File, error) {
+					if err := os.Remove(name); err != nil {
+						t.Fatal(err)
+					}
+					return os.Open(name)
+				}
 			case "closed handle":
-				access.open = func(name string) (*os.File, error) {
+				access.Open = func(name string) (*os.File, error) {
 					file, err := os.Open(name)
 					if err == nil {
 						err = file.Close()
@@ -263,11 +273,11 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 					return file, err
 				}
 			case "write-only handle":
-				access.open = func(name string) (*os.File, error) { return os.OpenFile(name, os.O_WRONLY, 0) }
+				access.Open = func(name string) (*os.File, error) { return os.OpenFile(name, os.O_WRONLY, 0) }
 			case "opened directory":
-				access.open = func(string) (*os.File, error) { return os.Open(projectDir) }
+				access.Open = func(string) (*os.File, error) { return os.Open(projectDir) }
 			case "opened replacement inode":
-				access.open = func(name string) (*os.File, error) {
+				access.Open = func(name string) (*os.File, error) {
 					if err := os.Rename(name, name+".original"); err != nil {
 						t.Fatal(err)
 					}
@@ -276,8 +286,8 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 				}
 			}
 			var opened *os.File
-			open := access.open
-			access.open = func(name string) (*os.File, error) {
+			open := access.Open
+			access.Open = func(name string) (*os.File, error) {
 				file, err := open(name)
 				opened = file
 				if file != nil {
@@ -285,7 +295,7 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 				}
 				return file, err
 			}
-			data, info, found, err := readStableFile(configPath, access)
+			data, info, err := readStableFile(configPath, access)
 			if err == nil || (test.want != nil && !errors.Is(err, test.want)) || !strings.Contains(err.Error(), test.message) {
 				t.Fatalf("readStableFile = %v, want %v / %q", err, test.want, test.message)
 			}
@@ -295,8 +305,8 @@ func TestReadStableFileRejectsUnusableAccess(t *testing.T) {
 					t.Fatalf("write-only failure = %v, want read error", err)
 				}
 			}
-			if data != nil || info != nil || found {
-				t.Fatalf("failed read returned trusted snapshot: %q, %v, %v", data, info, found)
+			if data != nil || info != nil {
+				t.Fatalf("failed read returned trusted snapshot: %q, %v", data, info)
 			}
 			if opened != nil {
 				if _, err := opened.Stat(); !errors.Is(err, os.ErrClosed) {
@@ -313,11 +323,11 @@ func TestReadStableFileRejectsChangesDuringRead(t *testing.T) {
 			projectDir := t.TempDir()
 			configPath := filepath.Join(projectDir, configName)
 			writePolicyTestFile(t, configPath, []byte(`{}`))
-			access := stableFileAccess{lstat: os.Lstat, open: os.Open}
+			access := stablefile.Reader{Lstat: os.Lstat, Open: os.Open}
 			want := "changed while reading"
 			if kind == "oversized on open" {
 				want = "exceeds"
-				access.open = func(name string) (*os.File, error) {
+				access.Open = func(name string) (*os.File, error) {
 					if err := os.Truncate(name, maxPortableConfigBytes+1); err != nil {
 						t.Fatal(err)
 					}
@@ -325,7 +335,7 @@ func TestReadStableFileRejectsChangesDuringRead(t *testing.T) {
 				}
 			} else {
 				calls := 0
-				access.lstat = func(name string) (os.FileInfo, error) {
+				access.Lstat = func(name string) (os.FileInfo, error) {
 					calls++
 					if calls == 2 {
 						switch kind {
@@ -353,12 +363,12 @@ func TestReadStableFileRejectsChangesDuringRead(t *testing.T) {
 					return os.Lstat(name)
 				}
 			}
-			data, info, found, err := readStableFile(configPath, access)
+			data, info, err := readStableFile(configPath, access)
 			if err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("readStableFile = %v, want %q", err, want)
 			}
-			if data != nil || info != nil || found {
-				t.Fatalf("changed file returned trusted snapshot: %q, %v, %v", data, info, found)
+			if data != nil || info != nil {
+				t.Fatalf("changed file returned trusted snapshot: %q, %v", data, info)
 			}
 		})
 	}

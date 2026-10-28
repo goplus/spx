@@ -27,6 +27,7 @@ import (
 	"sync"
 	_ "unsafe"
 
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 	"github.com/goplus/spx/v4/internal/interpruntime"
 	"github.com/goplus/spx/v4/pkg/ispx"
 )
@@ -138,44 +139,11 @@ func validateAssetIndex(assetDir string) error {
 }
 
 func validateStableRegularFile(name string) (bool, error) {
-	before, err := os.Lstat(name)
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return false, fmt.Errorf("must be a regular non-symlink file")
-	}
-	file, err := os.Open(name)
-	if err != nil {
-		return false, err
-	}
-	opened, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return false, err
-	}
-	read, readErr := io.Copy(io.Discard, file)
-	afterOpened, statErr := file.Stat()
-	closeErr := file.Close()
-	afterPath, lstatErr := os.Lstat(name)
-	if readErr != nil {
-		return false, readErr
-	}
-	if statErr != nil {
-		return false, statErr
-	}
-	if closeErr != nil {
-		return false, closeErr
-	}
-	if lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 || !opened.Mode().IsRegular() ||
-		!os.SameFile(before, opened) || !os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-		read != opened.Size() || opened.Mode() != afterOpened.Mode() || opened.Size() != afterOpened.Size() || opened.ModTime() != afterOpened.ModTime() {
+	info, err := (stablefile.Reader{AllowMissing: true}).Copy(name, io.Discard)
+	if err == stablefile.ErrChangedOpening || err == stablefile.ErrChangedReading {
 		return false, fmt.Errorf("changed while it was read")
 	}
-	return true, nil
+	return info != nil, err
 }
 
 func openPinnedProjectRoot(projectDir string) (*os.Root, error) {

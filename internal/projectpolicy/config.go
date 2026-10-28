@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 const (
@@ -41,7 +43,6 @@ const (
 // callers cannot manufacture a snapshot that bypasses validation.
 type PortableConfigSnapshot struct {
 	ready    bool
-	found    bool
 	data     []byte
 	digest   [sha256.Size]byte
 	fileInfo os.FileInfo
@@ -64,11 +65,11 @@ func SnapshotPortableConfig(projectDir string) (PortableConfigSnapshot, error) {
 		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: open project root: %w", configPath, err)
 	}
 	defer root.Close()
-	data, info, found, err := readStableRegularRootFile(root, configName)
+	data, info, err := readStableRegularRootFile(root, configName)
 	if err != nil {
 		return PortableConfigSnapshot{}, fmt.Errorf("validate project config %q: %w", configPath, err)
 	}
-	return makePortableConfigSnapshot(configPath, data, info, found)
+	return makePortableConfigSnapshot(configPath, data, info)
 }
 
 // SnapshotPortableConfigRoot reads .config through a pinned directory handle.
@@ -78,16 +79,16 @@ func SnapshotPortableConfigRoot(root *os.Root) (PortableConfigSnapshot, error) {
 	if root == nil {
 		return PortableConfigSnapshot{}, fmt.Errorf("portable project config root is nil")
 	}
-	data, info, found, err := readStableRegularRootFile(root, configName)
+	data, info, err := readStableRegularRootFile(root, configName)
 	if err != nil {
 		return PortableConfigSnapshot{}, fmt.Errorf("read portable project config: %w", err)
 	}
-	return makePortableConfigSnapshot(configName, data, info, found)
+	return makePortableConfigSnapshot(configName, data, info)
 }
 
 // Present reports whether .config existed when the snapshot was captured.
 func (s PortableConfigSnapshot) Present() bool {
-	return s.ready && s.found
+	return s.ready && s.fileInfo != nil
 }
 
 // Bytes returns an immutable copy of the validated .config contents. It
@@ -107,7 +108,7 @@ func (s PortableConfigSnapshot) Identity() (string, error) {
 	if !s.ready {
 		return "", fmt.Errorf("portable project config snapshot is uninitialized")
 	}
-	if !s.found {
+	if !s.Present() {
 		return portableConfigAbsentIdentity, nil
 	}
 	return portableConfigSHA256Prefix + hex.EncodeToString(s.digest[:]), nil
@@ -121,25 +122,25 @@ func (s PortableConfigSnapshot) Verify(projectDir string) error {
 		return fmt.Errorf("portable project config snapshot is uninitialized")
 	}
 	configPath := filepath.Join(projectDir, configName)
-	data, info, found, err := readStableRegularFile(configPath)
+	data, info, err := readStableRegularFile(configPath)
 	if err != nil {
 		return fmt.Errorf("revalidate project config %q: %w", configPath, err)
 	}
-	if found != s.found {
+	if (info != nil) != s.Present() {
 		return fmt.Errorf("project config %q changed after validation", configPath)
 	}
-	if !found {
+	if info == nil {
 		return nil
 	}
-	if !os.SameFile(s.fileInfo, info) || !stableMetadata(s.fileInfo, info) ||
+	if !os.SameFile(s.fileInfo, info) || !stablefile.SameMetadata(s.fileInfo, info) ||
 		!bytes.Equal(data, s.data) {
 		return fmt.Errorf("project config %q changed after validation", configPath)
 	}
 	return nil
 }
 
-func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo, found bool) (PortableConfigSnapshot, error) {
-	if !found {
+func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo) (PortableConfigSnapshot, error) {
+	if info == nil {
 		return PortableConfigSnapshot{ready: true}, nil
 	}
 
@@ -153,6 +154,6 @@ func makePortableConfigSnapshot(configPath string, data []byte, info os.FileInfo
 		return PortableConfigSnapshot{}, fmt.Errorf("project config %q uses unsupported extasset; move resources inside the project directory", configPath)
 	}
 	return PortableConfigSnapshot{
-		ready: true, found: true, data: data, digest: sha256.Sum256(data), fileInfo: info,
+		ready: true, data: data, digest: sha256.Sum256(data), fileInfo: info,
 	}, nil
 }

@@ -19,53 +19,25 @@ package pack
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 const maxPackJSONSize = 16 << 20
 
 func readJSONFile(name string, value any) error {
-	before, err := os.Lstat(name)
-	if err != nil {
-		return err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+	data, _, err := (stablefile.Reader{MaxBytes: maxPackJSONSize}).Read(name)
+	switch {
+	case err == stablefile.ErrTooLarge:
+		return fmt.Errorf("%s exceeds the JSON size limit", name)
+	case err == stablefile.ErrNotRegular:
 		return fmt.Errorf("%s must be a regular non-symlink file", name)
-	}
-	if before.Size() > maxPackJSONSize {
-		return fmt.Errorf("%s exceeds the JSON size limit", name)
-	}
-
-	file, err := os.Open(name)
-	if err != nil {
-		return err
-	}
-	opened, statErr := file.Stat()
-	current, lstatErr := os.Lstat(name)
-	if statErr != nil || lstatErr != nil || current.Mode()&os.ModeSymlink != 0 ||
-		!opened.Mode().IsRegular() || !os.SameFile(before, opened) || !os.SameFile(opened, current) {
-		_ = file.Close()
+	case err == stablefile.ErrChangedOpening:
 		return fmt.Errorf("%s changed while it was opened", name)
-	}
-
-	data, readErr := io.ReadAll(io.LimitReader(file, maxPackJSONSize+1))
-	afterOpened, statErr := file.Stat()
-	afterPath, lstatErr := os.Lstat(name)
-	closeErr := file.Close()
-	if readErr != nil {
-		return readErr
-	}
-	if statErr != nil || lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
-		!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-		!sameStableFileMetadata(opened, afterOpened) || int64(len(data)) != opened.Size() {
+	case err == stablefile.ErrChangedReading:
 		return fmt.Errorf("%s changed while it was read", name)
-	}
-	if len(data) > maxPackJSONSize {
-		return fmt.Errorf("%s exceeds the JSON size limit", name)
-	}
-	if closeErr != nil {
-		return closeErr
+	case err != nil:
+		return err
 	}
 	return json.Unmarshal(data, value)
 }

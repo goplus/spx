@@ -18,80 +18,25 @@ package projectpolicy
 
 import (
 	"fmt"
-	"io"
 	"os"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
-type stableFileAccess struct {
-	lstat func(string) (os.FileInfo, error)
-	open  func(string) (*os.File, error)
+func readStableRegularFile(name string) ([]byte, os.FileInfo, error) {
+	return readStableFile(name, stablefile.Reader{})
 }
 
-func readStableRegularFile(name string) ([]byte, os.FileInfo, bool, error) {
-	return readStableFile(name, stableFileAccess{lstat: os.Lstat, open: os.Open})
+func readStableRegularRootFile(root *os.Root, name string) ([]byte, os.FileInfo, error) {
+	return readStableFile(name, stablefile.Reader{Lstat: root.Lstat, Open: root.Open})
 }
 
-func readStableRegularRootFile(root *os.Root, name string) ([]byte, os.FileInfo, bool, error) {
-	return readStableFile(name, stableFileAccess{lstat: root.Lstat, open: root.Open})
-}
-
-func readStableFile(name string, access stableFileAccess) ([]byte, os.FileInfo, bool, error) {
-	before, err := access.lstat(name)
-	if os.IsNotExist(err) {
-		return nil, nil, false, nil
+func readStableFile(name string, reader stablefile.Reader) ([]byte, os.FileInfo, error) {
+	reader.MaxBytes = maxPortableConfigBytes
+	reader.AllowMissing = true
+	data, info, err := reader.Read(name)
+	if err == stablefile.ErrTooLarge {
+		return nil, nil, fmt.Errorf("exceeds %d bytes", maxPortableConfigBytes)
 	}
-	if err != nil {
-		return nil, nil, false, err
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return nil, nil, false, fmt.Errorf("must be a regular non-symlink file")
-	}
-	if before.Size() < 0 || before.Size() > maxPortableConfigBytes {
-		return nil, nil, false, fmt.Errorf("exceeds %d bytes", maxPortableConfigBytes)
-	}
-
-	file, err := access.open(name)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	opened, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return nil, nil, false, err
-	}
-	if !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
-		file.Close()
-		return nil, nil, false, fmt.Errorf("changed while opening")
-	}
-	if opened.Size() < 0 || opened.Size() > maxPortableConfigBytes {
-		file.Close()
-		return nil, nil, false, fmt.Errorf("exceeds %d bytes", maxPortableConfigBytes)
-	}
-	data, readErr := io.ReadAll(io.LimitReader(file, maxPortableConfigBytes+1))
-	afterOpened, statErr := file.Stat()
-	closeErr := file.Close()
-	afterPath, lstatErr := access.lstat(name)
-	if readErr != nil {
-		return nil, nil, false, readErr
-	}
-	if statErr != nil {
-		return nil, nil, false, statErr
-	}
-	if closeErr != nil {
-		return nil, nil, false, closeErr
-	}
-	if int64(len(data)) > maxPortableConfigBytes {
-		return nil, nil, false, fmt.Errorf("exceeds %d bytes", maxPortableConfigBytes)
-	}
-	if lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
-		!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-		int64(len(data)) != opened.Size() || !stableMetadata(opened, afterOpened) ||
-		!stableMetadata(afterOpened, afterPath) {
-		return nil, nil, false, fmt.Errorf("changed while reading")
-	}
-	return data, afterOpened, true, nil
-}
-
-func stableMetadata(before, after os.FileInfo) bool {
-	return before.Mode() == after.Mode() && before.Size() == after.Size() && before.ModTime() == after.ModTime()
+	return data, info, err
 }

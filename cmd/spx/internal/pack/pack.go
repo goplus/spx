@@ -24,6 +24,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 type dirInfo struct {
@@ -100,7 +102,7 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		if err != nil {
 			return fmt.Errorf("inspect project entry %s before packing: %w", filePath, err)
 		}
-		if current.Mode()&os.ModeSymlink != 0 || (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
+		if (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
 			return fmt.Errorf("project entry %s changed after collection", filePath)
 		}
 		if current.IsDir() != info.IsDir() {
@@ -161,7 +163,7 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		}
 		if statErr != nil || lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
 			!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-			copied != opened.Size() || !sameStableFileMetadata(opened, afterOpened) {
+			copied != opened.Size() || !stablefile.SameMetadata(opened, afterOpened) {
 			return fmt.Errorf("project entry %s changed while packing", filePath)
 		}
 		if closeErr != nil {
@@ -181,10 +183,6 @@ func validZipEntryName(name string) bool {
 		}
 	}
 	return true
-}
-
-func sameStableFileMetadata(before, after os.FileInfo) bool {
-	return before.Mode() == after.Mode() && before.Size() == after.Size() && before.ModTime() == after.ModTime()
 }
 
 func openPackRoot(path string) (*os.Root, error) {
