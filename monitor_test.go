@@ -42,7 +42,6 @@ type monitorEvalFixture struct {
 type monitorPanelSpy struct {
 	visible bool
 	events  []string
-	style   ui.MonitorStyle
 	value   ui.MonitorValue
 	scale   float64
 	pos     mathf.Vec2
@@ -119,13 +118,14 @@ func TestMonitorEvalPreservesFormatting(t *testing.T) {
 }
 
 func TestMonitorRefreshLifecycle(t *testing.T) {
-	for name, appearance := range map[string]ui.MonitorAppearance{"scalar": ui.MonitorAppearanceCompatible, "list": ui.MonitorAppearanceList} {
+	for name, value := range map[string]ui.MonitorValue{
+		"scalar": {Text: "42"},
+		"list":   {Items: []string{"one", "two"}},
+	} {
 		t.Run(name, func(t *testing.T) {
 			panel := &monitorPanelSpy{}
-			value := ui.MonitorValue{Text: "42", Items: []string{"one", "two"}}
 			m := &Monitor{
 				panel: panel, visible: true, isDirty: true, size: 1,
-				style: ui.MonitorStyle{Appearance: appearance, Label: "value"},
 				eval: func() ui.MonitorValue {
 					panel.events = append(panel.events, "eval")
 					return value
@@ -141,8 +141,8 @@ func TestMonitorRefreshLifecycle(t *testing.T) {
 			}
 			visible := []string{"eval", "scale", "position", "render", "show"}
 			refresh(0, visible...)
-			if panel.style != m.style || !reflect.DeepEqual(panel.value, value) {
-				t.Fatal("style or value was lost during refresh")
+			if !reflect.DeepEqual(panel.value, value) {
+				t.Fatal("value was lost during refresh")
 			}
 			refresh(0.1)
 			m.SetXYpos(12, -34)
@@ -655,9 +655,9 @@ func (g *monitorEvalFixture) Value() float64 {
 	return g.score
 }
 
-func (p *monitorPanelSpy) Render(style ui.MonitorStyle, value ui.MonitorValue) {
+func (p *monitorPanelSpy) Render(value ui.MonitorValue) {
 	p.events = append(p.events, "render")
-	p.style, p.value = style, value
+	p.value = value
 }
 
 func (p *monitorPanelSpy) SetVisible(visible bool) {

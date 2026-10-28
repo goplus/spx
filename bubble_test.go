@@ -594,8 +594,15 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	sprite := newRenderOffsetTestSprite()
 	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
 	sprite.spriteState.IsVisible = true
-	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), msg: "first", style: ui.StyleSay}
-	bubble.onUpdate()
+	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), content: ui.NewSayBubbleContent("first", ui.StyleSay)}
+	manager := shapeManager{}
+	sprite.spriteState.IsVisible = false
+	manager.flushBubbleVisuals([]Shape{bubble})
+	if bubble.hasLayout || !bubble.isDirty || slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
+		t.Fatal("hidden bubble initialized or rendered its layout")
+	}
+	sprite.spriteState.IsVisible = true
+	manager.flushBubbleVisuals([]Shape{bubble})
 	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
 		t.Fatalf("text bubble was not rendered: dirty=%v text=%v", bubble.isDirty, mgr.text)
 	}
@@ -612,6 +619,11 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 		t.Fatal("hidden bubble consumed its pending visual update")
 	}
 	sprite.spriteState.IsVisible = true
+	panel := bubble.panel
+	bubble.panel = nil
+	bubble.markDirty()
+	manager.flushBubbleVisuals([]Shape{bubble})
+	bubble.panel = panel
 	quote := &quoterBubble{bubbleBase: bubbleBase{sprite: sprite, camera: bubble.camera, isDirty: true}, panel: ui.NewUiQuote(), message: "quotation", description: "speaker"}
 	quote.onUpdate()
 	container := mgr.bound[askTestBinding{parent: quote.panel.GetId(), path: "C"}]

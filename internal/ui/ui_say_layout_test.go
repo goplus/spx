@@ -139,7 +139,6 @@ func TestSayBubbleLayoutContextTransformsSpriteTopAndScale(t *testing.T) {
 			assertVec2Near(t, "tail anchor", layout.position, mathf.NewVec2(40, 60))
 			assertVec2Near(t, "render scale", layout.renderScale, test.scale)
 			assertVec2Near(t, "collision extent", layout.extent, test.extent)
-			assertVec2Near(t, "standalone scale", calculateSayRenderScale(winSize, baseSize, cameraZoom, 2, test.style == StyleThink), test.scale)
 			if layout.stableID != 7 || layout.viewport != (sayBubbleRect{left: -480, right: 480, bottom: -270, top: 270}) {
 				t.Fatalf("layout identity/viewport = %d, %+v", layout.stableID, layout.viewport)
 			}
@@ -400,10 +399,10 @@ func TestSayBubbleRendering(t *testing.T) {
 	}{{StyleSay, 1}, {StyleThink, 0.8}} {
 		// With camera zoom 2 and window scale 2, neither the tail nor the
 		// already-resolved Think scale should be multiplied a second time.
-		layout := NewSayBubbleLayout(win, pos, size, "hello", test.style)
-		assertVec2Near(t, "standalone tail anchor", layout.position, mathf.NewVec2(20, 35))
-		assertVec2Near(t, "standalone render scale", layout.renderScale, mathf.NewVec2(test.scale, test.scale))
-		say.SetText(win, pos, size, "hello", test.style)
+		layout := NewSayBubbleLayoutContext(win).NewLayout(0, pos, size, NewSayBubbleContent("hello", test.style))
+		assertVec2Near(t, "resolved tail anchor", layout.position, mathf.NewVec2(20, 35))
+		assertVec2Near(t, "resolved render scale", layout.renderScale, mathf.NewVec2(test.scale, test.scale))
+		say.SetTextLayout(layout)
 		assertVec2Near(t, "rendered tail anchor", mgr.positions[1], mathf.NewVec2(270, 90))
 		assertVec2Near(t, "rendered scale", mgr.scales[1], mathf.NewVec2(test.scale, test.scale))
 	}

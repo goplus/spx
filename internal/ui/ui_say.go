@@ -84,13 +84,6 @@ func (s *UiSay) OnStart() {
 	engine.Managers().UiMgr.SetVisible(s.rightThink.vbox.GetId(), false)
 }
 
-// SetText sets the text content and position for the say/think bubble
-func (s *UiSay) SetText(winSize mathf.Vec2, pos mathf.Vec2, size mathf.Vec2, msg string, style int) {
-	content := NewSayBubbleContent(msg, style)
-	layout := NewSayBubbleLayoutContext(winSize).NewLayout(0, pos, size, content)
-	s.SetTextLayout(layout)
-}
-
 // SetTextLayout applies a layout resolved together with the other active bubbles.
 func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
 	isThink := layout.content.style == StyleThink

@@ -25,8 +25,6 @@ import (
 type UiQuote struct {
 	UiNode
 	container *UiNode
-	imageL    *UiNode
-	imageR    *UiNode
 	labelDes  *UiNode
 	labelMsg  *UiNode
 }
@@ -38,8 +36,6 @@ func NewUiQuote() *UiQuote {
 // OnStart binds UI nodes in the engine callback context.
 func (p *UiQuote) OnStart() {
 	p.container = engine.BridgeBindUI[UiNode](p.GetId(), "C")
-	p.imageL = engine.BridgeBindUI[UiNode](p.GetId(), "C/ImageL")
-	p.imageR = engine.BridgeBindUI[UiNode](p.GetId(), "C/ImageR")
 	p.labelDes = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelDes")
 	p.labelMsg = engine.BridgeBindUI[UiNode](p.GetId(), "C/LabelMsg")
 }

@@ -136,22 +136,12 @@ func (p *textBubble) flushPendingRemoval(frame int64) {
 
 func (p *textBubble) onUpdate() {
 	if p.checkNeedsUpdate() {
-		p.refresh()
+		if p.panel != nil {
+			// The shape manager resolves visible text layouts before this update.
+			p.panel.SetTextLayout(p.layout)
+		}
 		p.markClean()
 	}
-}
-
-func (p *textBubble) refresh() {
-	if p.panel == nil {
-		return
-	}
-	if p.hasLayout {
-		p.panel.SetTextLayout(p.layout)
-		return
-	}
-	winSize := p.sprite.g.getWindowSize()
-	center, size := p.getBounds()
-	p.panel.SetText(winSize, center, size, p.msg, p.style)
 }
 
 func (p *textBubble) setLayout(layout ui.SayBubbleLayout) {
