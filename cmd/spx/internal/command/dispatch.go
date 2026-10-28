@@ -116,7 +116,6 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	default:
 		return fmt.Errorf("command %q has an invalid setup", spec.name)
 	}
-	cmd.RuntimeMode = spec.runtime
 	if err := cmd.CheckEnv(); err != nil {
 		return err
 	}
@@ -126,7 +125,7 @@ func (cmd *CmdTool) prepareCommand(spec commandSpec, fsRelDir, dstRelDir string)
 	if spec.setup == webExportSetup {
 		return nil
 	}
-	return cmd.SetupEnv(cmd.Version, cmd.ProjectFS, fsRelDir, dstRelDir)
+	return cmd.setupEnv(fsRelDir)
 }
 
 func (cmd *CmdTool) buildCommand(spec commandSpec) error {

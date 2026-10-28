@@ -39,21 +39,12 @@ var (
 )
 
 func main() {
-	cmd := &command.CmdTool{}
-
-	// Initialize with default values
-	cmd.ServerPort = 8005
-	cmd.ProjectRelPath = "/project"
-	cmd.BinPostfix = ""
-
-	// Initialize with provided values
-	cmd.ProjectFS = projectFS
-	cmd.PlatformFS = platformFS
-	cmd.Version = release.DefaultRuntimeLock().RuntimeVersion
-	cmd.GoModTemplate = scaffold.GoMod()
-
-	// Initialize the Args field if not already initialized
-	err := cmd.RunCmd(appName, appName, cmd.Version, projectFS, "template/project", "project")
+	cmd := &command.CmdTool{
+		ServerPort:    8005,
+		PlatformFS:    platformFS,
+		GoModTemplate: scaffold.GoMod(),
+	}
+	err := cmd.RunCmd(appName, appName, release.DefaultRuntimeLock().RuntimeVersion, projectFS, "template/project", "project")
 	if err != nil {
 		os.Exit(1)
 	}

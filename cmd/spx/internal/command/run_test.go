@@ -216,7 +216,7 @@ func TestRunPackModeUsesSessionEnvironment(t *testing.T) {
 	}
 
 	cmd := CmdTool{
-		TargetDir: projectDir, ProjectDir: generatedDir, RuntimeTempDir: sessionDir,
+		TargetDir: projectDir, ProjectDir: generatedDir,
 		RuntimeCmdPath: runtimePath, LibPath: libPath,
 	}
 	before := workingDirectory(t)
@@ -277,12 +277,10 @@ func TestRunInterpretedCreatesIsolatedSessionAndCopiesSharedLibrary(t *testing.T
 	}
 
 	cmd := CmdTool{
-		GoBinPath:      goBinPath,
-		RuntimeTempDir: runtimeTempDir,
-		TargetDir:      projectDir,
-		Version:        version,
+		GoBinPath: goBinPath,
+		TargetDir: projectDir,
+		Version:   version,
 	}
-	cmd.BinPostfix = executableSuffix(runtime.GOOS)
 
 	before := workingDirectory(t)
 	if err := cmd.RunInterpreted("--path", "ignored"); err != nil {
@@ -367,14 +365,14 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 	tests := []struct {
 		name    string
 		wantErr string
-		run     func(sessionDir string) error
+		run     func() error
 	}{
 		{
 			name:    "pack mode",
 			wantErr: "native Engine failed",
-			run: func(sessionDir string) error {
+			run: func() error {
 				cmd := CmdTool{
-					TargetDir: projectDir, RuntimeTempDir: sessionDir,
+					TargetDir:      projectDir,
 					RuntimeCmdPath: runtimePath, LibPath: libPath,
 				}
 				return cmd.RunPackMode()
@@ -383,10 +381,10 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 		{
 			name:    "interpreted mode",
 			wantErr: "interpreted Engine failed",
-			run: func(sessionDir string) error {
+			run: func() error {
 				cmd := CmdTool{
-					TargetDir: projectDir, RuntimeTempDir: sessionDir,
-					GoBinPath: goBinPath, Version: version, BinPostfix: executableSuffix(runtime.GOOS),
+					TargetDir: projectDir,
+					GoBinPath: goBinPath, Version: version,
 				}
 				return cmd.RunInterpreted()
 			},
@@ -396,7 +394,7 @@ func TestRunModesKeepDistinctEngineFailureContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			before := workingDirectory(t)
-			err := tt.run(filepath.Join(projectDir, ".temp-"+strings.ReplaceAll(tt.name, " ", "-")))
+			err := tt.run()
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("run error = %v, want context %q", err, tt.wantErr)
 			}
@@ -437,9 +435,8 @@ func TestResolveInterpretedRuntimeAssetsFallsBackToExternalWhenEmbeddedUnavailab
 	}
 
 	cmd := CmdTool{
-		GoBinPath:  goBinPath,
-		Version:    version,
-		BinPostfix: executableSuffix(targetOS),
+		GoBinPath: goBinPath,
+		Version:   version,
 	}
 
 	assets, err := cmd.resolveInterpretedRuntimeAssets()
@@ -512,31 +509,6 @@ func TestWebServerPIDPathUsesAbsoluteTargetDir(t *testing.T) {
 	want := filepath.Join(targetDir, ".gdspx_web_server.pid")
 	if got != want {
 		t.Fatalf("webServerPIDPath = %s, want %s", got, want)
-	}
-}
-
-func TestInterpretedRootsResolveDefaultsAndRelativePaths(t *testing.T) {
-	root := t.TempDir()
-	t.Chdir(root)
-	for _, tt := range []struct {
-		name             string
-		cmd              CmdTool
-		project, session string
-	}{
-		{"logical root", CmdTool{TargetDir: root}, root, filepath.Join(root, ".temp")},
-		{"relative root", CmdTool{TargetDir: "game"}, filepath.Join(root, "game"), filepath.Join(root, "game", ".temp")},
-		{"relative session", CmdTool{TargetDir: root, RuntimeTempDir: "session"}, root, filepath.Join(root, "session")},
-		{"explicit session", CmdTool{TargetDir: root, RuntimeTempDir: filepath.Join(root, "other")}, root, filepath.Join(root, "other")},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.cmd.interpretedRoots()
-			if err != nil || got.ProjectDir != tt.project || got.AssetDir != filepath.Join(tt.project, "assets") || got.SessionDir != tt.session {
-				t.Fatalf("interpreted roots = %+v, %v; want project %q, session %q", got, err, tt.project, tt.session)
-			}
-		})
-	}
-	if _, err := (&CmdTool{}).interpretedRoots(); err == nil || !strings.Contains(err.Error(), "project directory is not configured") {
-		t.Fatalf("missing roots error = %v", err)
 	}
 }
 
@@ -736,7 +708,7 @@ func TestInstallRepoWebRuntimeUsesOnlyMissingAssets(t *testing.T) {
 	}
 }
 
-func TestInterpretedRuntimeReportsMissingAssetsAndInitializesCommand(t *testing.T) {
+func TestInterpretedRuntimeReportsMissingAssetsAndUsesSessionDirectory(t *testing.T) {
 	for _, version := range []string{"", "../runtime", `runtime\escape`} {
 		t.Run("invalid version "+version, func(t *testing.T) {
 			root := t.TempDir()
@@ -796,7 +768,7 @@ func TestInterpretedRuntimeReportsMissingAssetsAndInitializesCommand(t *testing.
 			if err := cmd.handleInterpretedRunCommand(); err == nil || !strings.Contains(err.Error(), "runtime assets not available") {
 				t.Fatalf("run error = %v", err)
 			}
-			if !cmd.RuntimeMode || cmd.RuntimeTempDir != filepath.Join(root, ".temp") || cmd.RuntimeCmdPath != "" {
+			if cmd.RuntimeCmdPath != "" {
 				t.Fatalf("initialized command = %+v", cmd)
 			}
 			if info, err := os.Stat(filepath.Join(root, ".temp", "output")); err != nil || !info.IsDir() {
@@ -819,7 +791,7 @@ func TestRunPackModeRejectsIncompleteSessionBeforeStartingEngine(t *testing.T) {
 			want := ""
 			switch scenario {
 			case "missing project":
-				cmd.TargetDir, want = "", "project directory is not configured"
+				cmd.TargetDir, want = "", "ProjectDir is empty"
 			case "missing bridge":
 				if err := os.Remove(cmd.LibPath); err != nil {
 					t.Fatal(err)
