@@ -887,7 +887,7 @@ func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T)
 	if got := transform.calculateTargetAngleToPos(0, 0); got != 35 {
 		t.Fatalf("direction to current position = %v, want 35", got)
 	}
-	sprite.g.inputMgr.setMousePos(mathf.NewVec2(0, 10))
+	sprite.g.inputMgr.mousePos = mathf.NewVec2(0, 10)
 	if got := transform.directionToTarget(Mouse); !(math.Abs(got) <= 1e-9) {
 		t.Fatalf("direction to mouse above sprite = %v, want 0", got)
 	}

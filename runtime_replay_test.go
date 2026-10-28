@@ -232,9 +232,10 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	session := claimPreparedSession(t, game)
-	clicks := 0
+	clicks, swipes := 0, 0
 	var keys []Key
 	game.OnClick(func() { clicks++ })
+	game.OnSwipe__0(90, func() { swipes++ })
 	game.OnAnyKey(func(key Key) { keys = append(keys, key) })
 	for i, sample := range samples {
 		if !game.inputMgr.prepareInputFrame(0.1) {
@@ -252,6 +253,9 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		game.dispatchFrameEvents()
 		co.Update()
 		session.endFrame()
+	}
+	if swipes != 0 {
+		t.Fatal("same-tick press/release or stationary hold produced a swipe")
 	}
 	if clicks != 2 || !reflect.DeepEqual(keys, []Key{KeyB, KeyA}) {
 		t.Fatalf("replayed handlers = %d clicks, keys %v, want 2 clicks and [B A] once", clicks, keys)
@@ -1080,7 +1084,7 @@ func BenchmarkPrepareInputFrame(b *testing.B) {
 	for _, scenario := range []struct {
 		name string
 		step float64
-	}{{"idle", 0}, {"moving", mouseMovementThreshold + 1}} {
+	}{{"idle", 0}, {"moving", 2}} {
 		b.Run(scenario.name, func(b *testing.B) {
 			game := &Game{}
 			game.inputMgr.g = game
@@ -1097,12 +1101,6 @@ func BenchmarkPrepareInputFrame(b *testing.B) {
 
 func TestPrepareInputFrameSharesLiveRecordingAndReplayConversion(t *testing.T) {
 	points := []mathf.Vec2{{}, {X: 5, Y: 6}, {X: 5.5, Y: 6}, {X: 9, Y: 12}}
-	want := [][]event{
-		{},
-		{&eventMouseMove{Pos: points[1]}},
-		{},
-		{&eventMouseMove{Pos: points[3]}},
-	}
 	for _, mode := range []string{"live", "recording", "replay"} {
 		t.Run(mode, func(t *testing.T) {
 			_, game, mgr := setupInputSourceTest(t)
@@ -1139,8 +1137,8 @@ func TestPrepareInputFrameSharesLiveRecordingAndReplayConversion(t *testing.T) {
 				if batch == nil {
 					t.Fatalf("frame %d has no input batch", i)
 				}
-				if len(batch.events) != len(want[i]) || len(want[i]) > 0 && !reflect.DeepEqual(batch.events, want[i]) {
-					t.Fatalf("frame %d events = %+v, want %+v", i, batch, want[i])
+				if len(batch.events) != 0 {
+					t.Fatalf("frame %d generated events for pointer movement: %+v", i, batch.events)
 				}
 				if got := game.inputMgr.mousePos; got != point {
 					t.Fatalf("frame %d mouse = %v, want %v", i, got, point)
@@ -1164,11 +1162,9 @@ func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
 	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
 		t.Fatal("first frame was not prepared")
 	}
-	batch := game.inputMgr.frame.pending
-	want := []event{&eventMouseMove{Pos: first}}
 	mgr.point = next
 	game.dispatchFrameEvents()
-	if !reflect.DeepEqual(batch.events, want) || game.MouseX() != first.X || game.MouseY() != first.Y || mgr.samples != 1 {
+	if game.MouseX() != first.X || game.MouseY() != first.Y || mgr.samples != 1 {
 		t.Fatal("input arriving after prepare changed the frozen frame")
 	}
 	if game.inputMgr.frame.pending != nil {
@@ -1177,11 +1173,8 @@ func TestPrepareInputFrameFreezesMouseUntilNextSample(t *testing.T) {
 	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
 		t.Fatal("next frame was not prepared")
 	}
-	if got := game.inputMgr.frame.pending.events; !reflect.DeepEqual(got, []event{&eventMouseMove{Pos: next}}) {
-		t.Fatalf("next frame events = %+v, want mouse move to %v", got, next)
-	}
-	if !reflect.DeepEqual(batch.events, want) {
-		t.Fatal("next sample reused the prior frame's event storage")
+	if game.MouseX() != next.X || game.MouseY() != next.Y || mgr.samples != 2 {
+		t.Fatal("next frame did not sample the latest position")
 	}
 }
 
@@ -1321,6 +1314,7 @@ func TestPrepareInputFramePreservesInitialHeldStateAndLiveHandoff(t *testing.T) 
 	if !game.MousePressed() || !game.KeyPressed(KeyA) {
 		t.Fatal("initial held state was not visible to game input queries")
 	}
+	game.inputMgr.swipe.Begin(mathf.Vec2{}, &SpriteImpl{name: "replay target"})
 	game.dispatchFrameEvents()
 	game.abortInputSession("return to live input")
 	mgr.point = mathf.Vec2{X: 40, Y: -30}
@@ -1328,18 +1322,21 @@ func TestPrepareInputFramePreservesInitialHeldStateAndLiveHandoff(t *testing.T) 
 		t.Fatal("live handoff frame was not prepared")
 	}
 	if got := game.inputMgr.frame.pending.events; len(got) != 0 {
-		t.Fatalf("handoff manufactured release/movement edges: %+v", got)
+		t.Fatalf("handoff manufactured release edges: %+v", got)
 	}
 	if game.inputMgr.mousePos != mgr.point {
 		t.Fatal("handoff retained replay input state")
 	}
 	game.dispatchFrameEvents()
+	if _, target, ok := game.inputMgr.swipe.Finish(mathf.Vec2{X: 100}); ok || target != nil {
+		t.Fatal("live handoff retained a gesture from the replay clock")
+	}
 	mgr.point.X += 5
 	if !game.inputMgr.prepareInputFrame(1.0 / 30) {
 		t.Fatal("next live frame was not prepared")
 	}
-	if got, want := game.inputMgr.frame.pending.events, []event{&eventMouseMove{Pos: mgr.point}}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("live input after handoff = %+v, want %+v", got, want)
+	if len(game.inputMgr.frame.pending.events) != 0 || game.inputMgr.mousePos != mgr.point {
+		t.Fatal("live input after handoff lost its current position or created an event")
 	}
 }
 
@@ -1347,7 +1344,7 @@ func TestGameResetClearsPreparedInputFrame(t *testing.T) {
 	resetInputSessionTest(t)
 	game := setupStageLoadTestGame(t, gameTestFS{})
 	game.inputMgr.frame.pending = &inputFrame{events: []event{&eventKeyDown{Key: KeyA}}}
-	game.inputMgr.frame.history.Reset(mathf.Vec2{X: 7, Y: 8}, true)
+	game.inputMgr.frame.history.Reset(true)
 	game.reset()
 	if game.inputMgr.frame.pending != nil {
 		t.Fatal("game reset retained a pending frame")

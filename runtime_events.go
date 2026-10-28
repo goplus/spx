@@ -283,8 +283,6 @@ func (p *Game) handleEvent(ev event) {
 		p.inputMgr.onLeftButtonUp(e.Pos)
 	case *eventLeftButtonDown:
 		p.inputMgr.onLeftButtonDown(e.Pos)
-	case *eventMouseMove:
-		p.inputMgr.onMouseMove(e.Pos)
 	case *eventKeyDown:
 		p.inputMgr.onKeyDown(e.Key)
 	case *eventStart:

@@ -103,7 +103,7 @@ func TestResolveTargetPosition(t *testing.T) {
 	game := &Game{}
 	game.initShapeMgr()
 	game.inputMgr.init(game)
-	game.inputMgr.setMousePos(mathf.Vec2{X: 17, Y: -23})
+	game.inputMgr.mousePos = mathf.Vec2{X: 17, Y: -23}
 	original := newTargetLookupSprite(game, "actor", false)
 	original.components.transform = &transformComponent{sprite: &original.SpriteImpl, x: 12, y: -34}
 	clone := newTargetLookupSprite(game, "actor", true)

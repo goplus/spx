@@ -65,21 +65,20 @@ func (p *inputManager) prepareInputFrame(delta float64) bool {
 	point := mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
 	if session == nil && c.hadSession {
 		// The previous session owns its input edges. Resume from held state.
-		c.history.Reset(point, state.Buttons&1 != 0)
+		c.history.Reset(state.Buttons&1 != 0)
 		c.mouseEvents, c.keyEvents = c.mouseEvents[:0], c.keyEvents[:0]
 	}
 	c.hadSession = session != nil
 	p.mousePos = point
 	batch := &inputFrame{}
 	if edges := len(c.mouseEvents) + len(c.keyEvents); edges > 0 {
-		batch.events = make([]event, 0, edges+3)
+		batch.events = make([]event, 0, edges+2)
 	}
 	c.history.Process(coreruntime.InputFrame{
-		Point:                  point,
-		LeftButtonPressed:      state.Buttons&1 != 0,
-		MouseEvents:            c.mouseEvents,
-		KeyEvents:              c.keyEvents,
-		MouseMovementThreshold: mouseMovementThreshold,
+		Point:             point,
+		LeftButtonPressed: state.Buttons&1 != 0,
+		MouseEvents:       c.mouseEvents,
+		KeyEvents:         c.keyEvents,
 	}, batch.eventHooks(captureKey))
 	c.pending = batch
 	return true
@@ -112,8 +111,7 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 		return InputReplayState{}, err
 	}
 	if resolved.firstTick {
-		point := mathf.Vec2{X: resolved.initial.position.X, Y: resolved.initial.position.Y}
-		c.history.Reset(point, resolved.initial.buttons&1 != 0)
+		c.history.Reset(resolved.initialLeftPressed)
 		p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
 		p.swipe.InitWithClock(p.g.inputClock)
 	}
@@ -151,6 +149,9 @@ func (p *Game) dispatchFrameEvents() {
 	if frame == nil {
 		return
 	}
+	// Expire the previous gesture after the frame clock advances and before
+	// button edges can begin a new gesture, including frames with no movement.
+	p.inputMgr.swipe.Expire()
 	// Capture requests must observe the advanced frame clock.
 	for range frame.captures {
 		Snapshot("", nil)
@@ -178,9 +179,6 @@ func (p *inputFrame) eventHooks(captureKey Key) coreruntime.InputFrameHooks {
 		},
 		FireLeftButtonUp: func(point mathf.Vec2) {
 			p.events = append(p.events, &eventLeftButtonUp{Pos: point})
-		},
-		OnMouseMove: func(point mathf.Vec2) {
-			p.events = append(p.events, &eventMouseMove{Pos: point})
 		},
 		OnKeyPressed: func(keyID int64) {
 			key := Key(keyID)

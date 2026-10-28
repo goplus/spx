@@ -17,36 +17,31 @@
 package runtime
 
 import (
-	"math"
-
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/input"
 )
 
 type InputFrame struct {
-	Point                  mathf.Vec2
-	LeftButtonPressed      bool
-	MouseEvents            []input.MouseEvent
-	KeyEvents              []input.KeyEvent
-	MouseMovementThreshold float64
+	Point             mathf.Vec2
+	LeftButtonPressed bool
+	MouseEvents       []input.MouseEvent
+	KeyEvents         []input.KeyEvent
 }
 
 // InputFrameState is the consumer-local history used to normalize input
 // snapshots and ordered edges into one stream of input events.
 type InputFrameState struct {
-	lastMousePos      mathf.Vec2
 	leftButtonPressed bool
 }
 
 type InputFrameHooks struct {
 	FireLeftButtonDown func(mathf.Vec2)
 	FireLeftButtonUp   func(mathf.Vec2)
-	OnMouseMove        func(mathf.Vec2)
 	OnKeyPressed       func(int64)
 }
 
-func (s *InputFrameState) Reset(point mathf.Vec2, leftButtonPressed bool) {
-	*s = InputFrameState{lastMousePos: point, leftButtonPressed: leftButtonPressed}
+func (s *InputFrameState) Reset(leftButtonPressed bool) {
+	*s = InputFrameState{leftButtonPressed: leftButtonPressed}
 }
 
 func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
@@ -70,13 +65,6 @@ func (s *InputFrameState) Process(frame InputFrame, hooks InputFrameHooks) {
 		} else {
 			hooks.FireLeftButtonDown(frame.Point)
 		}
-	}
-
-	dx := frame.Point.X - s.lastMousePos.X
-	dy := frame.Point.Y - s.lastMousePos.Y
-	if math.Abs(dx) > frame.MouseMovementThreshold || math.Abs(dy) > frame.MouseMovementThreshold {
-		hooks.OnMouseMove(frame.Point)
-		s.lastMousePos = frame.Point
 	}
 
 	for _, ev := range frame.KeyEvents {

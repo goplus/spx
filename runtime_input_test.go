@@ -266,6 +266,34 @@ func TestDispatchFrameEventsUsesAdvancedClockForDueTimers(t *testing.T) {
 	}
 }
 
+func TestInputFrameExpiresStationarySwipeAfterClockAdvances(t *testing.T) {
+	_, game, _ := setupInputSourceTest(t)
+	clockReads := 0
+	game.inputMgr.swipe.InitWithClock(func() time.Time {
+		clockReads++
+		return time.Unix(0, int64(itime.TimeSinceLevelLoad()*float64(time.Second)))
+	})
+	game.inputMgr.swipe.Begin(mathf.Vec2{}, &SpriteImpl{name: "held"})
+	if !game.inputMgr.prepareInputFrame(0.6) {
+		t.Fatal("stationary frame was not prepared")
+	}
+	if len(game.inputMgr.frame.pending.events) != 0 || clockReads != 1 {
+		t.Fatal("sampling manufactured an event or expired before advancing the clock")
+	}
+	itime.Update(0.6, 30)
+	game.dispatchFrameEvents()
+	game.dispatchFrameEvents()
+	if clockReads != 2 {
+		t.Fatalf("clock read %d times, want begin and one frame expiry", clockReads)
+	}
+
+	// An expired stationary gesture cannot revive when a logical clock rewinds.
+	itime.Update(-0.5, 30)
+	if _, target, ok := game.inputMgr.swipe.Finish(mathf.Vec2{X: 100}); ok || target != nil || clockReads != 2 {
+		t.Fatal("stationary expiry retained its target or allowed a gesture after clock rollback")
+	}
+}
+
 func TestDueTimerCanRunBeforePendingLogicFrame(t *testing.T) {
 	co, game := setupInputFrameGame(t)
 	backend := &animationAudioBackend{}
@@ -476,16 +504,18 @@ func TestKeyFromStringRecognizesExclam(t *testing.T) {
 }
 
 func TestMouseCoordinatesUseLatestLiveInput(t *testing.T) {
-	var game Game
-	game.inputMgr.init(&game)
+	_, game, mgr := setupInputSourceTest(t)
 	for _, point := range []mathf.Vec2{{X: 12.5, Y: -8}, {X: -20, Y: 31.25}} {
-		game.inputMgr.setMousePos(point)
+		mgr.point = point
+		if !game.inputMgr.prepareInputFrame(1.0 / 30) {
+			t.Fatal("live input frame was not prepared")
+		}
 		if x, y := game.MouseX(), game.MouseY(); x != point.X || y != point.Y {
 			t.Fatalf("mouse coordinates = (%v, %v), want (%v, %v)", x, y, point.X, point.Y)
 		}
 	}
 
-	game.inputMgr.init(&game)
+	game.inputMgr.init(game)
 	if x, y := game.MouseX(), game.MouseY(); x != 0 || y != 0 {
 		t.Fatalf("mouse coordinates after reinitialization = (%v, %v), want (0, 0)", x, y)
 	}
@@ -577,7 +607,8 @@ func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
 				game.inputMgr.swipe.Begin(mathf.Vec2{}, target)
 				now = now.Add(tt.elapsed)
 				if tt.expire {
-					game.inputMgr.onMouseMove(mathf.Vec2{X: 50})
+					game.inputMgr.frame.pending = &inputFrame{}
+					game.dispatchFrameEvents()
 					now = now.Add(-500 * time.Millisecond)
 				}
 				game.inputMgr.onLeftButtonUp(mathf.Vec2{X: tt.distance})
