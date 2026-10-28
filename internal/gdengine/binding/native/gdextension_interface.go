@@ -71,7 +71,7 @@ static inline GdArray createArrayInfo(int type, int size){
 }
 static inline void freeArrayInfo(GdArray arrayInfo) {
     if (arrayInfo == NULL) return;
-    if (arrayInfo->type == 4  && arrayInfo->data != NULL) {//ARRAY_TYPE_STRING
+    if (arrayInfo->type == GD_ARRAY_TYPE_STRING && arrayInfo->data != NULL) {
         char** stringData = (char**)arrayInfo->data;
         for (int i = 0; i < arrayInfo->size; i++) {
             free(stringData[i]);
@@ -139,13 +139,13 @@ type GdArray C.GdArray
 
 // Array type constants
 const (
-	ArayTypeUnknown = 0
-	ArrayTypeInt64  = 1
-	ArrayTypeFloat  = 2
-	ArrayTypeBool   = 3
-	ArrayTypeString = 4
-	ArrayTypeByte   = 5
-	ArrayTypeGdObj  = 6
+	ArayTypeUnknown = C.GD_ARRAY_TYPE_UNKNOWN
+	ArrayTypeInt64  = C.GD_ARRAY_TYPE_INT64
+	ArrayTypeFloat  = C.GD_ARRAY_TYPE_FLOAT
+	ArrayTypeBool   = C.GD_ARRAY_TYPE_BOOL
+	ArrayTypeString = C.GD_ARRAY_TYPE_STRING
+	ArrayTypeByte   = C.GD_ARRAY_TYPE_BYTE
+	ArrayTypeGdObj  = C.GD_ARRAY_TYPE_GDOBJ
 )
 
 // Go wrapper for GdArray

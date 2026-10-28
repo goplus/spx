@@ -43,22 +43,22 @@ func (c *GenerationContext) Parameters(function *clang.TypedefFunction) []Parame
 	if params, ok := c.parameters[function.Name]; ok {
 		return params
 	}
-	params, _ := c.prepareParameters(function)
-	return params
+	panic("function is not in generation context: " + function.Name)
 }
 
 func (c *GenerationContext) Parameter(function *clang.TypedefFunction, name string) Parameter {
 	if function == nil {
 		return Parameter{}
 	}
-	if params, ok := c.parameterNames[function.Name]; ok {
-		return params[name]
+	for _, param := range c.Parameters(function) {
+		if param.Argument.Name == name {
+			return param
+		}
 	}
-	_, params := c.prepareParameters(function)
-	return params[name]
+	return Parameter{}
 }
 
-func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) ([]Parameter, map[string]Parameter) {
+func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) []Parameter {
 	args := c.EffectiveArguments(function)
 	indices := make(map[string]int, len(args))
 	for i, arg := range args {
@@ -73,7 +73,6 @@ func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) (
 		}
 	}
 	params := make([]Parameter, 0, len(args))
-	names := make(map[string]Parameter, len(args))
 	publicNames := make(map[string]bool)
 	for i, arg := range args {
 		param := Parameter{Argument: arg, Name: arg.Name, Index: i, LengthIndex: -1, IsLength: lengths[arg.Name]}
@@ -99,9 +98,8 @@ func (c *GenerationContext) prepareParameters(function *clang.TypedefFunction) (
 			param.GoType = c.goTypes[arg.Type.Primitive.Name]
 		}
 		params = append(params, param)
-		names[arg.Name] = param
 	}
-	return params, names
+	return params
 }
 
 func (p Parameter) LocalName(prefix string) string { return fmt.Sprintf("%s%d", prefix, p.Index) }

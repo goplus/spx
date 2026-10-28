@@ -47,7 +47,6 @@ type GenerationContext struct {
 	staticMethods    map[string]string
 	returnParameters map[string]CParam
 	parameters       map[string][]Parameter
-	parameterNames   map[string]map[string]Parameter
 }
 
 // ManagerData is the template view of declarations and their manager names.
@@ -66,7 +65,6 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 		staticMethods:    maps.Clone(metadata.StaticMethods),
 		returnParameters: maps.Clone(metadata.ReturnParameters),
 		parameters:       make(map[string][]Parameter),
-		parameterNames:   make(map[string]map[string]Parameter),
 		goTypes: map[string]string{
 			"GdInt": "int64", "GdFloat": "float64", "GdObj": "Object",
 			"GdVec2": "Vec2", "GdVec3": "Vec3", "GdVec4": "Vec4",
@@ -79,7 +77,7 @@ func NewGenerationContext(ast clang.CHeaderFileAST, metadata GenerationMetadata)
 		c.arrayBridges[name] = spec.Clone()
 	}
 	for _, function := range ast.CollectGDExtensionInterfaceFunctions() {
-		c.parameters[function.Name], c.parameterNames[function.Name] = c.prepareParameters(&function)
+		c.parameters[function.Name] = c.prepareParameters(&function)
 		c.managerSet[c.GetManagerName(function.Name)] = true
 	}
 	for _, name := range []string{"", "string", "variant", "global"} {

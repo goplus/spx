@@ -185,10 +185,10 @@ func parseManagerHeader(input string) *headerCollector {
 				g.metadata.StaticMethods[functionName] = currentClassName + "Mgr::" + methodDecl.MethodName
 			}
 			if arrayBridge {
-				g.metadata.ArrayBridges[spec.FunctionName] = spec
+				g.metadata.ArrayBridges[functionName] = spec
 				// Lower every fixed array to its pointer ABI after preserving its extent.
 				var params []string
-				for _, param := range spec.Params() {
+				for _, param := range spec.Arguments {
 					params = append(params, param.Declaration())
 				}
 				methodDecl.Params = strings.Join(params, ", ")
