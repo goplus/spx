@@ -33,6 +33,7 @@
 
 #include "../spx_list_monitor.h"
 #include "../spx_ui_mgr.h"
+#include "scene/resources/packed_scene.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxUiMgr {
@@ -334,6 +335,20 @@ TEST_CASE("[SceneTree][SPX] UI scene creation releases incompatible roots and pr
 	CHECK(ui->create_node(missing_path.get_data()) == NULL_OBJECT_ID);
 	ERR_PRINT_ON;
 	CHECK(orphan_node_count() == orphans);
+
+	// A valid resource can still contain no scene root to instantiate.
+	Ref<PackedScene> empty_scene;
+	empty_scene.instantiate();
+	const String empty_path = "res://spx_empty_ui_scene.tscn";
+	empty_scene->set_path(empty_path);
+	const auto encoded_empty_path = empty_path.utf8();
+	const int children = scene.root->get_child_count(true);
+	ERR_PRINT_OFF;
+	CHECK(ui->create_node(encoded_empty_path.get_data()) == NULL_OBJECT_ID);
+	ERR_PRINT_ON;
+	CHECK(orphan_node_count() == orphans);
+	CHECK(scene.root->get_child_count(true) == children);
+	CHECK(TestSpx::take_string(ui->get_text(button)) == "Fallback");
 }
 
 TEST_CASE("[SceneTree][SPX] UI texture bindings share resources across images buttons and toggles") {

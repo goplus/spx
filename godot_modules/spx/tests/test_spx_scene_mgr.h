@@ -190,6 +190,15 @@ TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested tra
 	memdelete(completed);
 	manager->on_update(1.0); // A completed export is consumed exactly once.
 	manager->export_scene_as_png(group);
+	auto *detached = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(detached);
+	scene.root->remove_child(detached);
+	manager->on_reset(0); // Cancellation also owns a snapshot removed from the tree.
+	CHECK(detached->is_queued_for_deletion());
+	CHECK(detached->get_parent() == nullptr);
+	manager->on_update(1.0);
+	memdelete(detached);
+	manager->export_scene_as_png(group);
 	auto *last = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
 	REQUIRE(last);
 	manager->on_destroy();

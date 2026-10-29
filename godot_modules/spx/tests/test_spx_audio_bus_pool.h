@@ -33,6 +33,7 @@
 
 #include "../spx_audio_bus_pool.h"
 #include "core/math/math_funcs.h"
+#include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/audio/effects/audio_effect_panner.h"
 #include "servers/audio_server.h"
 #include "tests/test_macros.h"
@@ -77,10 +78,20 @@ TEST_CASE("[Audio][SPX] Audio bus pool borrows project buses without claiming pr
 	audio_server->set_bus_volume_db(borrowed_sfx, borrowed_sfx_volume_db);
 	audio_server->set_bus_volume_db(colliding_bus, colliding_volume_db);
 	audio_server->add_bus_effect(colliding_bus, colliding_effect);
+	Ref<AudioEffectAmplify> project_effect;
+	project_effect.instantiate();
+	audio_server->add_bus_effect(borrowed_sfx, project_effect);
 
 	SpxAudioBusPool::init();
 	CHECK_EQ(audio_server->get_bus_count(), 5);
+	SpxAudioBusPool *pool = SpxAudioBusPool::get_singleton();
+	CHECK_EQ(pool->get_pan("Sfx"), 0.0f);
+	pool->set_pan("Sfx", 0.5f); // Skip unrelated project effects, rather than replacing them.
+	pool->set_pan("Sfx", -0.5f);
 	SpxAudioBusPool::reset();
+	CHECK_EQ(audio_server->get_bus_effect_count(borrowed_sfx), 2);
+	CHECK(audio_server->get_bus_effect(borrowed_sfx, 0) == project_effect);
+	CHECK_EQ(pool->get_pan("Sfx"), -0.5f);
 
 	CHECK_EQ(audio_server->get_bus_index("Sfx"), borrowed_sfx);
 	CHECK_EQ(audio_server->get_bus_index("Music"), borrowed_music);

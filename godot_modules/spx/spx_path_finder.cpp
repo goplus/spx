@@ -338,18 +338,8 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_
 				continue;
 			}
 
-			Vector2 min_pt = poly[0];
-			Vector2 max_pt = poly[0];
-			for (int k = 1; k < poly.size(); ++k) {
-				min_pt = min_pt.min(poly[k]);
-				max_pt = max_pt.max(poly[k]);
-			}
-
-			Vector2 poly_size = max_pt - min_pt;
-			if (poly_size.x <= cached_cell_size.x && poly_size.y <= cached_cell_size.y) {
-				continue;
-			}
-
+			// Even a small local polygon can cover neighboring grid cells after
+			// the layer transform (for example, a scaled tilemap) is applied.
 			Vector<Vector2> world_poly;
 			world_poly.resize(poly.size());
 			for (int k = 0; k < poly.size(); ++k) {

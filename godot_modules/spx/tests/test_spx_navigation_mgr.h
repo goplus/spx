@@ -60,6 +60,13 @@ TEST_CASE("[SceneTree][SPX] Navigation returns SPX coordinates and routes around
 	auto *manager = scene.engine->get_navigation();
 	manager->setup_path_finder_with_size(Vector2(16, 16), Vector2(16, 16), false, false);
 	const auto direct = find_path(manager);
+	// Queries outside the configured grid return an owned, empty ABI array.
+	ERR_PRINT_OFF;
+	auto outside = TestSpx::take_array(manager->find_path(Vector2(10000, 10000), Vector2(40, -8), false));
+	ERR_PRINT_ON;
+	REQUIRE(outside != nullptr);
+	CHECK(outside->type == GD_ARRAY_TYPE_FLOAT);
+	CHECK(outside->size == 0);
 	REQUIRE(direct.size() == 6);
 	for (int i = 0; i < direct.size(); i++) {
 		CHECK(direct[i] == Vector2(-40 + i * 16, -8));

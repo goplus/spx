@@ -39,6 +39,7 @@
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "scene/resources/2d/circle_shape_2d.h"
+#include "scene/resources/2d/rectangle_shape_2d.h"
 #include "scene/resources/placeholder_textures.h"
 #include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
@@ -192,7 +193,7 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 	CHECK(finder->get_size() == Vector2i());
 }
 
-TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported and missing obstacle geometry") {
+TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported, missing, and disabled obstacle geometry") {
 	TestSpx::EngineScene scene;
 	auto *body = memnew(StaticBody2D);
 	scene.root->add_child(body);
@@ -221,6 +222,20 @@ TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported and missing obstacle
 	for (const Vector2 &point : direct) {
 		CHECK_FALSE(finder->is_cell_solid(Vector2i((point / Vector2(16, 16)).floor())));
 	}
+
+	// A supported shape must stop blocking when disabled, without removing its body.
+	auto *rectangle = memnew(CollisionShape2D);
+	Ref<RectangleShape2D> rectangle_shape;
+	rectangle_shape.instantiate();
+	rectangle_shape->set_size(Vector2(8, 8));
+	rectangle->set_shape(rectangle_shape);
+	rectangle->set_position(Vector2(8, 8));
+	body->add_child(rectangle);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i()));
+	rectangle->set_disabled(true);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->find_path(Vector2(-24, 8), Vector2(24, 8)) == direct);
 }
 
 TEST_CASE("[SceneTree][SPX] Navigation retains overlapping obstacle ownership across updates and deletion") {
@@ -279,7 +294,7 @@ TEST_CASE("[SceneTree][SPX] Navigation retains overlapping obstacle ownership ac
 	CHECK(direct.size() == 8);
 }
 
-TEST_CASE("[SceneTree][SPX] Removing a sprite preserves tile collision cells and rescanning replaces tile occupancy") {
+TEST_CASE("[SceneTree][SPX] Tile collision occupancy survives sprite removal and tracks layer updates") {
 	TestSpx::EngineScene scene;
 	Ref<SpxPathFinder> finder;
 	finder.instantiate();
@@ -314,6 +329,14 @@ TEST_CASE("[SceneTree][SPX] Removing a sprite preserves tile collision cells and
 	finder->set_sprite_obstacle(sprite, false);
 	CHECK(finder->is_cell_solid(Vector2i()));
 	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
+	// A one-cell local polygon spans multiple navigation cells when scaled.
+	layer->set_scale(Vector2(3, 3));
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i(2, 2)));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(3, 2)));
+	layer->set_scale(Vector2(1, 1));
+	finder->add_all_obstacles(scene.root);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(2, 2)));
 	sprites->get_sprite(sprite)->hide();
 	layer->erase_cell(Vector2i());
 	finder->add_all_obstacles(scene.root);
@@ -343,6 +366,12 @@ TEST_CASE("[SceneTree][SPX] Removing a sprite preserves tile collision cells and
 	scene.root->add_child(layer);
 	finder->add_all_obstacles(scene.root);
 	CHECK(finder->is_cell_solid(Vector2i()));
+	SUBCASE("Immediate deletion releases occupancy on the next query") {}
+	SUBCASE("Queued deletion releases occupancy before the node leaves the tree") {
+		layer->queue_free();
+		finder->find_path(Vector2(-24, 8), Vector2(24, 8));
+		CHECK_FALSE(finder->is_cell_solid(Vector2i()));
+	}
 	memdelete(layer);
 	finder->find_path(Vector2(-24, 8), Vector2(24, 8));
 	CHECK_FALSE(finder->is_cell_solid(Vector2i()));

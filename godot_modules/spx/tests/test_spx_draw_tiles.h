@@ -31,6 +31,7 @@
 #ifndef TEST_SPX_DRAW_TILES_H
 #define TEST_SPX_DRAW_TILES_H
 #include "../spx_draw_tiles.h"
+#include "../spx_scene_mgr.h"
 #include "../spx_tilemap_mgr.h"
 #include "spx_test_fixtures.h"
 namespace TestSpxDrawTiles {
@@ -343,6 +344,43 @@ TEST_CASE("[SceneTree][SPX] Tile editor mouse gestures paint, erase and drag the
 	motion(Vector2(80, 80));
 	click(false);
 	CHECK(layer->get_position() == Vector2(24, 32));
+}
+
+TEST_CASE("[SceneTree][SPX] Tile editor retries failed SVG loads and requires Ctrl for export") {
+	TestSpx::TempDirectory files("spx_tile_svg_retry");
+	TestSpx::EngineScene scene;
+	auto *editor = memnew(TileEditor);
+	scene.root->add_child(editor);
+	editor->set_layer_index(0);
+	auto *layer = Object::cast_to<TileMapLayer>(editor->get_child(0));
+	REQUIRE(layer);
+	const auto path = files.file("tile.svg").utf8();
+	ERR_PRINT_OFF;
+	editor->place_tile_spx(Vector2(8, -8), path.get_data());
+	ERR_PRINT_ON;
+	CHECK(layer->get_used_cells().is_empty());
+	CHECK(layer->get_tile_set()->get_source_count() == 0);
+
+	files.write("tile.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><rect width=\"16\" height=\"16\" fill=\"red\"/></svg>");
+	editor->place_tile_spx(Vector2(8, -8), path.get_data());
+	CHECK(layer->get_used_cells().size() == 1);
+	CHECK(TestSpx::take_string(editor->get_tile_spx(Vector2(8, -8))) == files.file("tile.svg"));
+	const int children = scene.root->get_child_count(true);
+	Ref<InputEventKey> key;
+	key.instantiate();
+	key->set_keycode(Key::E);
+	key->set_pressed(true);
+	editor->input(key);
+	CHECK(scene.root->get_child_count(true) == children);
+	key->set_ctrl_pressed(true);
+	editor->input(key);
+	CHECK(scene.root->get_child_count(true) == children + 1);
+	auto *snapshot = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(snapshot);
+	CHECK(snapshot->get_size() == Vector2i(16, 16));
+	scene.engine->get_scene()->on_reset(0);
+	CHECK(snapshot->is_queued_for_deletion());
+	memdelete(snapshot);
 }
 
 } // namespace TestSpxDrawTiles

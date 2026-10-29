@@ -44,6 +44,7 @@
 #include "../recorder/thread_safe_frame_buffer.h"
 #include "core/io/marshalls.h"
 #include "main/main_loop_phase_callback_bus.h"
+#include "servers/rendering_server.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxRecorder {
@@ -611,6 +612,9 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 		REQUIRE(writer->begin_realtime(Size2i(4, 4), 30, path) == OK);
 		CHECK(writer->is_recording_active());
 		CHECK(writer->get_state_name() == "Recording");
+		REQUIRE(writer->write_frame(Ref<Image>(), nullptr) == OK);
+		CHECK(writer->get_combined_statistics().game_frames_added == 0);
+		CHECK(writer->get_combined_statistics().video_stats.total_recorded_frames == 0);
 		ERR_PRINT_OFF;
 		CHECK(writer->begin_realtime(Size2i(4, 4), 30, path) == ERR_INVALID_PARAMETER);
 		auto changed = config;
@@ -651,6 +655,40 @@ TEST_CASE("[SceneTree][SPX] Realtime recording captures its first frame and can 
 		}
 		writer->end_realtime();
 	}
+}
+
+TEST_CASE("[SceneTree][SPX] Realtime capture tolerates a detached main viewport") {
+	TestSpx::TempDirectory files("spx_detached_capture");
+	TestSpx::EngineScene scene;
+	auto *server = RenderingServer::get_singleton();
+	auto *window = SceneTree::get_singleton()->get_root();
+	const RID viewport = server->viewport_find_from_screen_attachment(DisplayServer::MAIN_WINDOW_ID);
+	REQUIRE(viewport == window->get_viewport_rid());
+	// Changing content scale refreshes the window's exact screen attachment on restoration.
+	struct RestoreAttachment {
+		Window *window;
+		real_t scale;
+		~RestoreAttachment() {
+			window->set_content_scale_factor(scale * 2);
+			window->set_content_scale_factor(scale);
+		}
+	} restore{ window, window->get_content_scale_factor() };
+	auto destroy = [](RealtimeWriter *writer) { memdelete(writer); };
+	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
+	auto config = ObsStyleMovieWriter::get_standard_config();
+	config.enable_post_merge = false;
+	writer->set_recording_config(config);
+	const String path = files.file("capture.avi");
+	REQUIRE(writer->begin_realtime(Size2i(4, 4), 30, path) == OK);
+	server->viewport_attach_to_screen(viewport, Rect2(), DisplayServer::INVALID_WINDOW_ID);
+	REQUIRE_FALSE(server->viewport_find_from_screen_attachment(DisplayServer::MAIN_WINDOW_ID).is_valid());
+	writer->add_realtime_frame();
+	CHECK(writer->is_recording_active());
+	CHECK(writer->get_combined_statistics().game_frames_added == 0);
+	CHECK(writer->get_combined_statistics().video_stats.total_recorded_frames == 0);
+	writer->end_realtime();
+	CHECK_FALSE(writer->is_recording_active());
+	check_avi_index(read_avi(path + "_video.avi"), 0);
 }
 
 TEST_CASE("[SceneTree][SPX] Realtime recording rejects invalid configuration before allocating workers") {
@@ -784,7 +822,19 @@ TEST_CASE("[SceneTree][SPX] Recording manager owns API sessions and command-line
 	REQUIRE(header > 0);
 	CHECK(decode_uint32(defaults.ptr() + header + 40) > 0);
 	CHECK(decode_uint32(defaults.ptr() + header + 44) > 0);
-	MovieRecorderManager::shutdown();
+	request.video_width = 4;
+	request.video_height = 0; // One valid dimension must not bypass size resolution.
+	request.output_path = files.file("shutdown.avi");
+	REQUIRE(MovieRecorderManager::start_recording(request) == OK);
+	MovieRecorderManager::shutdown(); // Finalize an API-owned session, not only an idle manager.
+	CHECK_FALSE(MovieRecorderManager::is_recording());
+	CHECK_FALSE(MovieRecorderManager::has_active_instance());
+	CHECK(MovieRecorderManager::get_recording_duration() == 0);
+	const auto stopped = read_avi(request.output_path + "_video.avi");
+	const int stopped_header = find_tag(stopped, "avih");
+	REQUIRE(stopped_header > 0);
+	CHECK(decode_uint32(stopped.ptr() + stopped_header + 40) > 0);
+	CHECK(decode_uint32(stopped.ptr() + stopped_header + 44) > 0);
 	MovieRecorderManager::shutdown();
 	CHECK_FALSE(MovieRecorderManager::is_initialized());
 	MovieRecorderManager::initialize();
@@ -1056,6 +1106,39 @@ TEST_CASE("[SPX] AVI recovery rejects incomplete PCM frames and truncated uninde
 			CHECK_FALSE(FileAccess::exists(files.file("invalid.avi")));
 			CHECK(FileAccess::get_file_as_bytes(audio) == bytes);
 		}
+	}
+}
+
+TEST_CASE("[SPX] AVI merger rejects non-video payload tags even when the index agrees") {
+	TestSpx::TempDirectory files("spx_avi_video_tags");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("merged.avi");
+	write_avi_pair(video, audio);
+	const auto original = read_avi(video), original_audio = read_avi(audio);
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	processor.set_config(config);
+	for (bool indexed : { true, false }) {
+		auto bytes = original;
+		const int index = find_tag(bytes, "idx1"), chunk = find_tag(bytes, "00db");
+		REQUIRE(index > 0);
+		REQUIRE(chunk > 0);
+		memcpy(bytes.ptrw() + chunk, "00wb", 4);
+		memcpy(bytes.ptrw() + index + 8, "00wb", 4);
+		if (!indexed) {
+			bytes.resize(index);
+			encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
+		}
+		write_avi(video, bytes);
+		files.write("merged.avi", "previous recording");
+		ERR_PRINT_OFF;
+		const auto result = processor.merge_files(video, audio, output);
+		ERR_PRINT_ON;
+		CHECK(result.error_code == ERR_FILE_CORRUPT);
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK(FileAccess::get_file_as_string(output) == "previous recording");
+		CHECK(FileAccess::get_file_as_bytes(video) == bytes);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
 	}
 }
 
@@ -1388,7 +1471,7 @@ TEST_CASE("[SPX] AVI parser rejects incomplete duplicated and out-of-order conta
 	PostMergeProcessor::MergeConfig config;
 	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
 	processor.set_config(config);
-	for (int damage = 0; damage < 13; ++damage) {
+	for (int damage = 0; damage < 17; ++damage) {
 		INFO("Container damage: ", damage);
 		auto bytes = original;
 		switch (damage) {
@@ -1437,6 +1520,22 @@ TEST_CASE("[SPX] AVI parser rejects incomplete duplicated and out-of-order conta
 			case 12:
 				bytes.resize(index + 4); // Recovery must reject an incomplete movi chunk.
 				encode_uint32(decode_uint32(original.ptr() + movi - 4) + 4, bytes.ptrw() + movi - 4);
+				break;
+			case 13:
+				bytes.append_array(original.slice(movi - 8, index)); // Duplicate movi after a valid index.
+				break;
+			case 14:
+				// A first hdrl after movi must not repair the earlier missing header.
+				memcpy(bytes.ptrw() + hdrl, "JUNK", 4);
+				bytes.append_array(original.slice(hdrl - 8, movi - 8));
+				break;
+			case 15:
+				// LIST child has its header, but not the four-byte list type.
+				encode_uint32(2, bytes.ptrw() + strl - 4);
+				break;
+			case 16:
+				// strh fits in the physical file but escapes its immediate strl parent.
+				encode_uint32(58, bytes.ptrw() + strl - 4);
 				break;
 		}
 		if (bytes.size() >= 12) {
