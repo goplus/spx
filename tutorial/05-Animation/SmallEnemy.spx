@@ -8,7 +8,7 @@ onStart => {
 
 onCloned => {
 	life = 3
-	setXYpos float64(rand(-131, 131)), 237
+	setXYpos rand(-131, 131), 237
 	show
 	for {
 		waitNextFrame

@@ -27,11 +27,11 @@ import (
 const compareMaxULPs = 2
 
 // Rand__0 returns a random integer between from and to (inclusive).
-func Rand__0(from, to int) int {
+func Rand__0(from, to int) float64 {
 	if to < from {
 		from, to = to, from
 	}
-	return from + randomIntn(to-from+1)
+	return float64(from + randomIntn(to-from+1))
 }
 
 // Rand__1 returns a random float64 between from and to.
