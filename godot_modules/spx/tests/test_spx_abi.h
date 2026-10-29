@@ -65,7 +65,7 @@ TEST_CASE("[SPX] ABI array access rejects type confusion and malformed storage")
 
 	GdArray floats = SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, 2);
 	REQUIRE(floats != nullptr);
-	CHECK(SpxAbi::get_array<float>(floats, 0) != nullptr);
+	REQUIRE(SpxAbi::get_array<float>(floats, 0) != nullptr);
 	SpxAbi::set_array<float>(floats, 0, 1.5f);
 	SpxAbi::set_array<float>(floats, -1, 9.0f);
 	SpxAbi::set_array<float>(floats, 2, 9.0f);

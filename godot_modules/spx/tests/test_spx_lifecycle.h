@@ -68,7 +68,7 @@ TEST_CASE("[SceneTree][SPX] Managers release owned nodes and preserve an authore
 	engine->set_root_node(tree, root);
 	engine->on_awake();
 	Node *ui_layer = root->get_node_or_null(NodePath("SpxUiMgr"));
-	CHECK(Object::cast_to<CanvasLayer>(ui_layer) != nullptr);
+	REQUIRE(Object::cast_to<CanvasLayer>(ui_layer) != nullptr);
 	CHECK(root->get_node_or_null(NodePath("SpxResMgr")) == nullptr);
 	CHECK(root->get_node_or_null(NodePath("SpxPhysicsMgr")) == nullptr);
 	CHECK(root->get_node_or_null(NodePath("SpxExtMgr")) == nullptr);

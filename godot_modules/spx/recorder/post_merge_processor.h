@@ -145,7 +145,6 @@ private:
 	Error write_video_stream_header(Ref<FileAccess> output_file, const AviFileInfo &video_info);
 	Error write_audio_stream_header(Ref<FileAccess> output_file, const AviFileInfo &audio_info);
 	Error interleave_avi_data(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info);
-	Error interleave_avi_data_timestamped(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info);
 	Error write_merged_avi_index(Ref<FileAccess> output_file, const Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Helper methods for timestamp-based interleaving

@@ -37,9 +37,7 @@
 namespace TestSpxDrawTiles {
 TEST_CASE("[SceneTree][SPX] Tile editing preserves layers, collision geometry and undo history") {
 	TestSpx::TempDirectory files("spx_draw_tiles");
-	Ref<Image> image = Image::create_empty(32, 32, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("tile.png")) == OK);
+	files.write_png("tile.png", Vector2i(32, 32), Color(1, 0, 0));
 	CharString path = files.file("tile.png").utf8();
 	TestSpx::EngineScene scene;
 	auto *tiles = memnew(SpxDrawTiles);
@@ -100,7 +98,10 @@ TEST_CASE("[SceneTree][SPX] Tile editing preserves layers, collision geometry an
 	CHECK(TestSpx::take_string(tiles->get_tile_spx(Vector2(), -1)).is_empty());
 	tiles->set_layer_index(0);
 	tiles->set_tile_size(8);
-	CHECK(Object::cast_to<TileMapLayer>(tiles->get_child(0))->get_tile_set()->get_tile_size() == Vector2i(8, 8));
+	layer = Object::cast_to<TileMapLayer>(tiles->get_child(0));
+	REQUIRE(layer != nullptr);
+	REQUIRE(layer->get_tile_set().is_valid());
+	CHECK(layer->get_tile_set()->get_tile_size() == Vector2i(8, 8));
 	tiles->place_tile_spx(Vector2(4, -4), path.get_data());
 	CHECK(tile_set->get_source_count() == 1);
 	CHECK(tile_set->get_source(1) != source);
@@ -111,9 +112,7 @@ TEST_CASE("[SceneTree][SPX] Tile editing preserves layers, collision geometry an
 
 TEST_CASE("[SceneTree][SPX] Tilemap manager loads textures lazily and places batches across layers") {
 	TestSpx::TempDirectory files("spx_tile_batches");
-	Ref<Image> image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	image->fill(Color(0, 1, 0));
-	REQUIRE(image->save_png(files.file("tile.png")) == OK);
+	files.write_png("tile.png", Vector2i(16, 16), Color(0, 1, 0));
 	CharString path = files.file("tile.png").utf8();
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_tilemap();
@@ -247,9 +246,7 @@ TEST_CASE("[SceneTree][SPX] Invalid tile batches preserve existing cells and mis
 
 TEST_CASE("[SceneTree][SPX] Tile collision arrays validate payloads before opening the editor") {
 	TestSpx::TempDirectory files("spx_tile_collision_array");
-	auto image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 1, 1));
-	REQUIRE(image->save_png(files.file("tile.png")) == OK);
+	files.write_png("tile.png", Vector2i(16, 16), Color(1, 1, 1));
 	auto path = files.file("tile.png").utf8();
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_tilemap();

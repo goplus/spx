@@ -570,6 +570,71 @@ TEST_CASE("[SPX] AVI merger preserves frame payloads and converts PCM with valid
 	CHECK_FALSE(FileAccess::exists(audio));
 }
 
+TEST_CASE("[SPX] AVI interleaving preserves unequal streams and strategy ordering") {
+	TestSpx::TempDirectory files("spx_interleave_order");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio); // Video frames occur at 0 and 33,333 microseconds.
+	SimpleAudioWriter writer;
+	REQUIRE(writer.open(audio, 48000, 2) == OK);
+	Vector<int32_t> pcm;
+	pcm.resize(480 * 2);
+	for (int i = 0; i < 3; ++i) {
+		pcm.fill((i + 1) * 0x10000000);
+		REQUIRE(writer.write_audio_chunk(pcm.ptr(), 480) == OK); // 0, 10,000, 20,000 microseconds.
+	}
+	writer.close();
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED, PostMergeProcessor::MergeConfig::INTERLEAVE_BUFFERED_TIMESTAMP }) {
+		INFO("Interleave strategy: ", strategy);
+		PostMergeProcessor processor;
+		PostMergeProcessor::MergeConfig config;
+		config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+		config.interleave_strategy = strategy;
+		config.keep_intermediate_files = true;
+		processor.set_config(config);
+		const String output = files.file("merged.avi");
+		REQUIRE(processor.merge_files(video, audio, output).error_code == OK);
+		const auto bytes = read_avi(output);
+		check_avi_index(bytes, 5);
+		const int index = find_tag(bytes, "idx1"), movi = find_tag(bytes, "movi"), stream = find_tag(bytes, "auds");
+		REQUIRE(stream > 0);
+		CHECK(decode_uint32(bytes.ptr() + stream + 32) == 1440);
+		bool is_video[5] = {};
+		int audio_chunks = 0;
+		for (int i = 0; i < 5; ++i) {
+			const uint8_t *entry = bytes.ptr() + index + 8 + i * 16;
+			is_video[i] = memcmp(entry, "00db", 4) == 0;
+			if (!is_video[i]) {
+				CHECK(memcmp(entry, "01wb", 4) == 0);
+				REQUIRE(decode_uint32(entry + 12) == 480 * 2 * 2);
+				const uint32_t chunk = movi + decode_uint32(entry + 8);
+				++audio_chunks;
+				PackedByteArray expected_pcm;
+				expected_pcm.resize(480 * 2 * 2);
+				for (int sample = 0; sample < 480 * 2; ++sample) {
+					encode_uint16(audio_chunks * 0x1000, expected_pcm.ptrw() + sample * 2);
+				}
+				CHECK(memcmp(bytes.ptr() + chunk + 8, expected_pcm.ptr(), expected_pcm.size()) == 0);
+			}
+		}
+		CHECK(audio_chunks == 3);
+		if (strategy == PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
+			CHECK(is_video[0]);
+			CHECK_FALSE(is_video[1]);
+			CHECK(is_video[2]);
+			CHECK_FALSE(is_video[3]);
+			CHECK_FALSE(is_video[4]);
+		} else {
+			CHECK(is_video[0] != is_video[1]); // Equal timestamps need not have a stable tie order.
+			CHECK_FALSE(is_video[2]);
+			CHECK_FALSE(is_video[3]);
+			CHECK(is_video[4]);
+		}
+		CHECK(FileAccess::get_file_as_bytes(video) == original_video);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
+	}
+}
+
 class RealtimeWriter : public ObsStyleMovieWriter {
 public:
 	using ObsStyleMovieWriter::get_audio_mix_rate;

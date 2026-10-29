@@ -158,9 +158,7 @@ TEST_CASE("[SPX] Tilemap files reject missing malformed and empty documents") {
 
 TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and owned layers") {
 	TestSpx::TempDirectory files("spx_tilemap_loader");
-	Ref<Image> image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("atlas.png")) == OK);
+	files.write_png("atlas.png", Vector2i(16, 16), Color(1, 0, 0));
 	SpxTileMapData map;
 	REQUIRE(map.from_json(map_document()));
 	TileMapLayer *encoded = memnew(TileMapLayer);
@@ -218,9 +216,7 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and ow
 
 TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and preserves valid polygons") {
 	TestSpx::TempDirectory files("spx_tilemap_physics");
-	Ref<Image> image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("atlas.png")) == OK);
+	files.write_png("atlas.png", Vector2i(16, 16), Color(1, 0, 0));
 	SpxTileMapData map;
 	REQUIRE(map.from_json(map_document()));
 	auto &physics = map.tileset.sources.write[0].tiles.write[0].physics;

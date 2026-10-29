@@ -181,14 +181,8 @@ Error PostMergeProcessor::custom_avi_merge(const String &video_path, const Strin
 		return header_error;
 	}
 
-	// Interleave video and audio data
-
-	Error interleave_error;
-	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
-		interleave_error = interleave_avi_data(video_path, audio_path, output_file, video_info, audio_info);
-	} else {
-		interleave_error = interleave_avi_data_timestamped(video_path, audio_path, output_file, video_info, audio_info);
-	}
+	// Interleave video and audio data.
+	Error interleave_error = interleave_avi_data(video_path, audio_path, output_file, video_info, audio_info);
 
 	if (interleave_error != OK) {
 		result.error_message = "Failed to interleave video and audio data";
@@ -699,7 +693,7 @@ Error PostMergeProcessor::write_video_stream_header(Ref<FileAccess> output_file,
 Error PostMergeProcessor::write_audio_stream_header(Ref<FileAccess> output_file, const AviFileInfo &audio_info) {
 	const AviFileInfo::StreamInfo &audio_stream = audio_info.streams_info[0];
 	const uint32_t sample_rate = audio_stream.rate / audio_stream.scale;
-	const uint32_t channels = audio_stream.sample_size / 4; // Input is validated 32-bit PCM.
+	const uint32_t channels = audio_stream.sample_size / 4; // SPX audio writers store 32-bit PCM.
 
 	// AUDIO STREAM (Stream 1) - Convert to 16-bit
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
@@ -741,7 +735,7 @@ Error PostMergeProcessor::write_audio_stream_header(Ref<FileAccess> output_file,
 }
 
 Error PostMergeProcessor::interleave_avi_data(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info) {
-	if (config.enable_debug_output) {
+	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE && config.enable_debug_output) {
 		print_line("PostMergeProcessor: Starting data interleaving");
 		print_line("  Video movi offset: " + String::num_int64(video_info.movi_data_offset) + ", size: " + String::num_int64(video_info.movi_data_size));
 		print_line("  Audio movi offset: " + String::num_int64(audio_info.movi_data_offset) + ", size: " + String::num_int64(audio_info.movi_data_size));
@@ -755,8 +749,12 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 		return ERR_FILE_CANT_OPEN;
 	}
 
-	const Vector<AviFileInfo::IndexEntry> &video_chunks = video_info.index_entries;
-	const Vector<AviFileInfo::IndexEntry> &audio_chunks = audio_info.index_entries;
+	Vector<TimestampedChunk> all_chunks;
+	if (config.interleave_strategy != MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
+		calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
+		calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
+		all_chunks.sort();
+	}
 
 	// Write movi list header
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
@@ -767,21 +765,31 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 
 	Vector<AviFileInfo::IndexEntry> merged_index;
 
-	// Simple interleaving: alternate between video and audio chunks
-	int video_idx = 0, audio_idx = 0;
 	uint32_t chunk_offset = 4; // Relative to movi data start
+	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
+		// Simple interleaving: alternate between video and audio chunks
+		int video_idx = 0, audio_idx = 0;
 
-	while (video_idx < video_chunks.size() || audio_idx < audio_chunks.size()) {
-		for (bool is_video : { true, false }) {
-			int &index = is_video ? video_idx : audio_idx;
-			const AviFileInfo &info = is_video ? video_info : audio_info;
-			if (index >= info.index_entries.size()) {
-				continue;
+		while (video_idx < video_info.index_entries.size() || audio_idx < audio_info.index_entries.size()) {
+			for (bool is_video : { true, false }) {
+				int &index = is_video ? video_idx : audio_idx;
+				const AviFileInfo &info = is_video ? video_info : audio_info;
+				if (index >= info.index_entries.size()) {
+					continue;
+				}
+				const AviFileInfo::IndexEntry &entry = info.index_entries[index++];
+				TimestampedChunk chunk{};
+				chunk.file_offset = info.movi_data_offset + entry.chunk_offset;
+				chunk.chunk_size = entry.chunk_size;
+				Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
+				if (error != OK) {
+					return error;
+				}
 			}
-			const AviFileInfo::IndexEntry &entry = info.index_entries[index++];
-			TimestampedChunk chunk{};
-			chunk.file_offset = info.movi_data_offset + entry.chunk_offset;
-			chunk.chunk_size = entry.chunk_size;
+		}
+	} else {
+		for (const TimestampedChunk &chunk : all_chunks) {
+			const bool is_video = chunk.type == TimestampedChunk::VIDEO_CHUNK;
 			Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
 			if (error != OK) {
 				return error;
@@ -802,9 +810,11 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 		return index_error;
 	}
 
-	print_line("PostMergeProcessor: Data interleaving completed");
-	print_line("  Merged chunks: " + String::num_int64(merged_index.size()));
-	print_line("  Movi size: " + String::num_int64(movi_size) + " bytes");
+	if (config.interleave_strategy == MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE) {
+		print_line("PostMergeProcessor: Data interleaving completed");
+		print_line("  Merged chunks: " + String::num_int64(merged_index.size()));
+		print_line("  Movi size: " + String::num_int64(movi_size) + " bytes");
+	}
 	return OK;
 }
 
@@ -853,68 +863,6 @@ Error PostMergeProcessor::write_merged_avi_index(Ref<FileAccess> output_file, co
 		output_file->store_32(entry.flags);
 		output_file->store_32(entry.chunk_offset);
 		output_file->store_32(entry.chunk_size);
-	}
-
-	return OK;
-}
-
-// Timestamp-based interleaving implementation
-Error PostMergeProcessor::interleave_avi_data_timestamped(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info) {
-	// Open input files
-	Ref<FileAccess> video_file = FileAccess::open(video_path, FileAccess::READ);
-	Ref<FileAccess> audio_file = FileAccess::open(audio_path, FileAccess::READ);
-
-	if (video_file.is_null() || audio_file.is_null()) {
-		return ERR_FILE_CANT_OPEN;
-	}
-
-	// Calculate timestamps for all chunks
-	Vector<TimestampedChunk> all_chunks;
-	calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
-	calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
-
-	// Sort by timestamp
-	all_chunks.sort();
-
-	// Write movi list header
-	output_file->store_buffer((const uint8_t *)"LIST", 4);
-	uint64_t movi_size_pos = output_file->get_position();
-	output_file->store_32(0); // Placeholder
-	output_file->store_buffer((const uint8_t *)"movi", 4);
-	uint64_t movi_start = output_file->get_position();
-
-	Vector<AviFileInfo::IndexEntry> merged_index;
-	uint32_t chunk_offset = 4; // Relative to movi data start
-
-	// Process chunks in timestamp order
-	for (int i = 0; i < all_chunks.size(); i++) {
-		const TimestampedChunk &chunk = all_chunks[i];
-
-		Error write_error = write_avi_chunk(
-				chunk.type == TimestampedChunk::VIDEO_CHUNK ? video_file : audio_file,
-				output_file,
-				chunk,
-				chunk.type == TimestampedChunk::VIDEO_CHUNK,
-				chunk_offset,
-				merged_index);
-
-		if (write_error != OK) {
-			return write_error;
-		}
-
-	}
-
-	// Update movi size
-	uint64_t movi_end = output_file->get_position();
-	uint32_t movi_size = movi_end - movi_start;
-	output_file->seek(movi_size_pos);
-	output_file->store_32(movi_size + 4); // +4 for 'movi' fourcc
-	output_file->seek(movi_end);
-
-	// Write index
-	Error index_error = write_merged_avi_index(output_file, merged_index);
-	if (index_error != OK) {
-		return index_error;
 	}
 
 	return OK;

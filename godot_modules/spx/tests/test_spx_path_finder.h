@@ -236,6 +236,19 @@ TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported, missing, and disabl
 	rectangle->set_disabled(true);
 	finder->add_all_obstacles(scene.root);
 	CHECK(finder->find_path(Vector2(-24, 8), Vector2(24, 8)) == direct);
+	body->set_scale(Vector2(2, 1));
+	body->set_rotation(Math_PI / 2);
+	rectangle->set_disabled(false);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i(-1, 0)));
+	CHECK(finder->is_cell_solid(Vector2i(-1, 1)));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
+	body->set_transform(Transform2D());
+	rectangle_shape->set_size(Vector2(16, 16));
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i(1, 1))); // Maximum grid edge remains inclusive.
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(2, 1)));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(-1, 0)));
 }
 
 TEST_CASE("[SceneTree][SPX] Navigation retains overlapping obstacle ownership across updates and deletion") {

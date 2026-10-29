@@ -36,6 +36,7 @@
 #include "../spx_engine.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
+#include "core/io/image.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "servers/audio_server.h"
@@ -75,6 +76,12 @@ struct TempDirectory {
 	}
 
 	String file(const String &name) const { return path.path_join(name); }
+
+	void write_png(const String &name, const Vector2i &size, const Color &color) const {
+		Ref<Image> image = Image::create_empty(size.x, size.y, false, Image::FORMAT_RGBA8);
+		image->fill(color);
+		REQUIRE(image->save_png(file(name)) == OK);
+	}
 
 	void write(const String &name, const String &contents) const {
 		Ref<FileAccess> output = FileAccess::open(file(name), FileAccess::WRITE);

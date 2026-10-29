@@ -102,9 +102,7 @@ TEST_CASE("[SceneTree][SPX] Pen strokes queue only while down and share a resiza
 
 TEST_CASE("[SceneTree][SPX] Pen stamps hold resources until submission and accept sprite visuals") {
 	TestSpx::TempDirectory files("spx_pen_stamp");
-	auto image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("stamp.png")) == OK);
+	files.write_png("stamp.png", Vector2i(4, 4), Color(1, 0, 0));
 	const CharString path = files.file("stamp.png").utf8();
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_pen();

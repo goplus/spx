@@ -90,10 +90,7 @@ struct GdStringArray {
 
 static String apply_fonts_raw(SpxResMgr &p_res_mgr, const String &p_default_path, GdArray p_paths, GdArray p_families, GdArray p_preferences) {
 	CharString default_path = p_default_path.utf8();
-	GdString result = p_res_mgr.apply_project_fonts(default_path.get_data(), p_paths, p_families, p_preferences);
-	String error = String::utf8(static_cast<const char *>(result));
-	SpxAbi::free_return_cstr(result);
-	return error;
+	return TestSpx::take_string(p_res_mgr.apply_project_fonts(default_path.get_data(), p_paths, p_families, p_preferences));
 }
 
 static String apply_fonts(SpxResMgr &p_res_mgr, const String &p_default_path, GdStringArray &p_paths, GdStringArray &p_families, GdStringArray &p_preferences) {
@@ -733,9 +730,7 @@ TEST_CASE("[SceneTree][SPX] Resource manager resolves project paths and invalida
 
 TEST_CASE("[SceneTree][SPX] Atlas animation metadata selects exact frame regions and rejects invalid rectangles") {
 	TestSpx::TempDirectory files("spx_atlas_animation");
-	auto image = Image::create_empty(16, 8, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("atlas.png")) == OK);
+	files.write_png("atlas.png", Vector2i(16, 8), Color(1, 0, 0));
 	TestSpx::EngineScene scene;
 	auto *resources = scene.engine->get_res();
 	Dictionary first;

@@ -375,9 +375,7 @@ TEST_CASE("[SceneTree][SPX] Sprite material parameters affect the attached shade
 	Ref<ShaderMaterial> material = animated->get_material();
 	REQUIRE(material.is_valid());
 	REQUIRE(material->get_shader().is_valid());
-	GdString shader_path = manager->get_material_shader(id);
-	CHECK(SpxStr(shader_path) == files.file("sprite.gdshader"));
-	SpxAbi::free_return_cstr(shader_path);
+	CHECK(TestSpx::take_string(manager->get_material_shader(id)) == files.file("sprite.gdshader"));
 	manager->set_material_params(id, "amount", 0.75);
 	CHECK(manager->get_material_params(id, "amount") == doctest::Approx(0.75));
 	CHECK(double(material->get_shader_parameter("amount")) == doctest::Approx(0.75));

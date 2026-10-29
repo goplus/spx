@@ -48,9 +48,7 @@ namespace TestSpxSceneMgr {
 
 TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static colliders") {
 	TestSpx::TempDirectory files("spx_scene");
-	Ref<Image> image = Image::create_empty(16, 8, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 0, 0));
-	REQUIRE(image->save_png(files.file("sprite.png")) == OK);
+	files.write_png("sprite.png", Vector2i(16, 8), Color(1, 0, 0));
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_scene();
 	const CharString path = files.file("sprite.png").utf8();
@@ -209,9 +207,7 @@ TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested tra
 
 TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and polygon colliders") {
 	TestSpx::TempDirectory files("spx_static_shapes");
-	auto image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
-	image->fill(Color(1, 1, 1));
-	REQUIRE(image->save_png(files.file("sprite.png")) == OK);
+	files.write_png("sprite.png", Vector2i(16, 16), Color(1, 1, 1));
 	const CharString path = files.file("sprite.png").utf8();
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_scene();

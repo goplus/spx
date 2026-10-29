@@ -251,34 +251,26 @@ void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *sh
 		return;
 	}
 
-	Vector2 half_size = rect->get_size() * 0.5f;
-
-	PackedVector2Array local_points;
-	local_points.push_back(Vector2(-half_size.x, -half_size.y));
-	local_points.push_back(Vector2(half_size.x, -half_size.y));
-	local_points.push_back(Vector2(half_size.x, half_size.y));
-	local_points.push_back(Vector2(-half_size.x, half_size.y));
-
-	Transform2D global_xform = owner->get_global_transform() * shape->get_transform();
-	PackedVector2Array world_points;
-	for (int i = 0; i < local_points.size(); i++) {
-		world_points.push_back(global_xform.xform(local_points[i]));
+	// Keep the original corner arithmetic before flooring grid boundaries.
+	const Vector2 half_size = rect->get_size() * 0.5f;
+	const Vector2 corners[] = {
+		Vector2(-half_size.x, -half_size.y), Vector2(half_size.x, -half_size.y),
+		Vector2(half_size.x, half_size.y), Vector2(-half_size.x, half_size.y),
+	};
+	const Transform2D transform = owner->get_global_transform() * shape->get_transform();
+	Vector2 min_p = transform.xform(corners[0]);
+	Vector2 max_p = min_p;
+	for (int i = 1; i < 4; i++) {
+		const Vector2 point = transform.xform(corners[i]);
+		min_p = min_p.min(point);
+		max_p = max_p.max(point);
 	}
-
-	Vector2 min_p = world_points[0];
-	Vector2 max_p = world_points[0];
-	for (int i = 1; i < world_points.size(); i++) {
-		min_p = min_p.min(world_points[i]);
-		max_p = max_p.max(world_points[i]);
-	}
-
 	const Rect2i region = astar->get_region();
-	Vector2i start = _world_to_cell(min_p).max(region.position);
-	Vector2i end = _world_to_cell(max_p).min(region.get_end() - Vector2i(1, 1));
+	const Vector2i start = _world_to_cell(min_p).max(region.position);
+	const Vector2i end = _world_to_cell(max_p).min(region.get_end() - Vector2i(1, 1));
 
 	for (int x = start.x; x <= end.x; x++) {
 		for (int y = start.y; y <= end.y; y++) {
-			// Now assume no rotation, otherwise use Geometry2D::is_point_in_polygon
 			r_cells.insert(Vector2i(x, y));
 		}
 	}
