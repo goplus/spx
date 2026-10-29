@@ -6,18 +6,12 @@ codecov:
 
 coverage:
   status:
-    # Preserve the existing Go baseline while C++ establishes its first report.
-    # The repository total and badge still include both languages.
     project:
       default:
         target: auto
-        paths:
-          - '.*\.go$'
     patch:
       default:
         target: auto
-        paths:
-          - '.*\.go$'
 
 ignore:
   # Example projects and test fixtures.

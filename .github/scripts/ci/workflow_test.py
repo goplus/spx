@@ -123,7 +123,7 @@ class CoverageWorkflowTest(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(f"{job}: missing", result.stderr)
 
-    def test_only_cpp_coverage_is_carried_forward_when_its_tests_are_skipped(self):
+    def test_combined_coverage_checks_preserve_cpp_carryforward(self):
         config = load_workflow(WORKFLOWS.parent / "codecov.yml")
         self.assertEqual(config["flags"], {
             "go": {"carryforward": "false"},
@@ -131,12 +131,9 @@ class CoverageWorkflowTest(unittest.TestCase):
         })
         self.assertEqual(config["comment"]["show_carryforward_flags"], "true")
         self.assertEqual(config["codecov"]["notify"], {"manual_trigger": "true"})
-        # The pre-migration Go baseline has no flags. Path filtering preserves
-        # that comparison without excluding C++ from the aggregate report.
+        # Both status checks include the combined Go and C++ report.
         for check in ("project", "patch"):
-            self.assertEqual(config["coverage"]["status"][check]["default"], {
-                "target": "auto", "paths": [r".*\.go$"],
-            })
+            self.assertEqual(config["coverage"]["status"][check]["default"], {"target": "auto"})
 
     def test_collection_requires_every_source_and_keeps_nested_profiles(self):
         script = SCRIPTS / "ci/collect_coverage.py"
