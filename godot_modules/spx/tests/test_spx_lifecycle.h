@@ -36,6 +36,7 @@
 #include "../spx_engine.h"
 #include "../spx_ext_mgr.h"
 #include "../spx_layer_sorter.h"
+#include "../spx_platform_mgr.h"
 #include "../spx_ui_mgr.h"
 #include "../recorder/movie_recorder_manager.h"
 #include "main/main_loop_phase_callback_bus.h"
@@ -69,6 +70,11 @@ TEST_CASE("[SceneTree][SPX] Managers release owned nodes and preserve an authore
 	engine->on_awake();
 	Node *ui_layer = root->get_node_or_null(NodePath("SpxUiMgr"));
 	REQUIRE(Object::cast_to<CanvasLayer>(ui_layer) != nullptr);
+	if (Object::cast_to<CanvasLayer>(ui_layer) == nullptr) {
+		SpxEngine::shutdown();
+		memdelete(root);
+		return;
+	}
 	CHECK(root->get_node_or_null(NodePath("SpxResMgr")) == nullptr);
 	CHECK(root->get_node_or_null(NodePath("SpxPhysicsMgr")) == nullptr);
 	CHECK(root->get_node_or_null(NodePath("SpxExtMgr")) == nullptr);
@@ -134,6 +140,10 @@ TEST_CASE("[SPX] Engine callback registration has one idempotent owner") {
 	SpxEngine::register_callbacks(nullptr);
 	SpxEngine *registered_engine = SpxEngine::get_singleton();
 	REQUIRE(registered_engine != nullptr);
+	CHECK(registered_engine->get_root() == nullptr);
+	// A platform reset can arrive before the scene root has been attached.
+	registered_engine->get_platform()->set_stretch(true, 480, 360);
+	registered_engine->get_platform()->on_reset(0);
 	CHECK(registered_engine->get_root() == nullptr);
 	registered_engine->capture_last_frame();
 	registered_engine->pause();

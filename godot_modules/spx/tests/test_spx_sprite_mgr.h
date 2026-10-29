@@ -961,6 +961,53 @@ TEST_CASE("[SceneTree][SPX] Pixel collision events track overlap, visibility and
 	CHECK(manager->check_collision_with_point(a, Vector2(), true));
 }
 
+TEST_CASE("[SceneTree][SPX] Destroying one collision pair preserves unrelated active pairs") {
+	TestSpx::TempDirectory files("spx_independent_pixel_pairs");
+	files.write_png("solid.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	const CharString texture = files.file("solid.png").utf8();
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *manager = scene.engine->get_sprite();
+	const GdObj a = manager->create_bare_sprite(Vector2());
+	const GdObj b = manager->create_bare_sprite(Vector2());
+	const GdObj c = manager->create_bare_sprite(Vector2(100, 0));
+	const GdObj d = manager->create_bare_sprite(Vector2(100, 0));
+	for (GdObj id : { a, b, c, d }) {
+		manager->set_texture(id, texture.get_data());
+	}
+	static Vector<TriggerPair> enters, exits;
+	enters.clear();
+	exits.clear();
+	scene.engine->get_callbacks()->func_on_trigger_enter = [](GdObj first, GdObj second) { enters.push_back(TriggerPair(first, second)); };
+	scene.engine->get_callbacks()->func_on_trigger_exit = [](GdObj first, GdObj second) { exits.push_back(TriggerPair(first, second)); };
+	manager->on_trigger_enter(a, b);
+	manager->on_trigger_enter(c, d);
+	manager->on_update(0.016);
+	REQUIRE(enters.size() == 4);
+	// Pair cleanup happens on the actual PREDELETE notification, not when
+	// destroy_sprite merely queues a node for a later SceneTree frame.
+	memdelete(manager->get_sprite(b));
+	CHECK_FALSE(manager->is_sprite_alive(b));
+	CHECK(exits.size() == 1);
+	if (exits.size() == 1) {
+		CHECK(exits[0] == TriggerPair(a, b));
+	}
+	manager->on_update(0.016);
+	CHECK(enters.size() == 4);
+	CHECK(exits.size() == 1);
+	// The surviving broad-phase pair must still be checked, and its active
+	// pixel pair must not have been removed with the destroyed sprite.
+	manager->set_visible(d, false);
+	manager->on_update(0.016);
+	CHECK(exits.size() == 3);
+	if (exits.size() == 3) {
+		CHECK(exits[1] == TriggerPair(c, d));
+		CHECK(exits[2] == TriggerPair(c, d));
+	}
+	manager->set_visible(d, true);
+	manager->on_update(0.016);
+	CHECK(enters.size() == 6);
+}
+
 TEST_CASE("[SceneTree][SPX] Sprite scenes validate root type and apply requested positions") {
 	TestSpx::TempDirectory files("spx_sprite_scene");
 	files.write("sprite.tscn", "[gd_scene format=3]\n[node name=\"Dragon\" type=\"SpxSprite\"]\n[node name=\"RenderRoot\" type=\"Node2D\" parent=\".\"]\n[node name=\"Anim2D\" type=\"AnimatedSprite2D\" parent=\"RenderRoot\"]\n[node name=\"Collider2D\" type=\"CollisionShape2D\" parent=\".\"]\n[node name=\"Area2D\" type=\"Area2D\" parent=\".\"]\n[node name=\"Trigger2D\" type=\"CollisionShape2D\" parent=\"Area2D\"]\n");

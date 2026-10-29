@@ -685,6 +685,23 @@ TEST_CASE("[SceneTree][SPX] Animation metadata rejects malformed schemas before 
 	CHECK(resources.get_animation_frame_offset("missing", -1) == Vector2());
 }
 
+#ifdef MODULE_MINIMP3_ENABLED
+TEST_CASE("[SceneTree][SPX] Direct MP3 audio loads playable data and invalidates its cache") {
+	SpxResMgr resources;
+	const String path = TestSpxData::get_path("audio/tone.mp3");
+	const Ref<AudioStream> loaded = resources.load_audio(path, true);
+	REQUIRE(loaded.is_valid());
+	CHECK(loaded->get_length() > 0);
+	CHECK(loaded->instantiate_playback().is_valid());
+	CHECK(resources.load_audio(path, true) == loaded);
+	resources.update_caches(Vector<String>{ path });
+	const Ref<AudioStream> replacement = resources.load_audio(path, true);
+	REQUIRE(replacement.is_valid());
+	CHECK(replacement != loaded);
+	CHECK(replacement->get_length() == loaded->get_length());
+}
+#endif
+
 TEST_CASE("[SceneTree][SPX] Resource manager resolves project paths and invalidates direct audio caches") {
 	TestSpx::TempDirectory files("spx_resource_paths");
 	files.write("text.txt", "alpha\nbeta");

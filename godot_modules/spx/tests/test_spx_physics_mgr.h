@@ -114,6 +114,19 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	SpxAbi::set_array(ignore.get(), 0, id);
 	auto miss = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 30), Vector2(40, 30), ignore.get(), 4, true, true));
 	CHECK(SpxAbi::get_array<GdInt>(miss.get(), 0)[0] == 0);
+	// A malformed exclusion buffer must not silently become an unfiltered query.
+	auto malformed = TestSpx::take_array(SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, 1));
+	ERR_PRINT_OFF;
+	auto rejected = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 30), Vector2(40, 30), malformed.get(), 4, false, true));
+	ERR_PRINT_ON;
+	REQUIRE(rejected != nullptr);
+	const auto *rejected_values = SpxAbi::get_array<GdInt>(rejected.get(), 0);
+	REQUIRE(rejected_values);
+	if (!rejected_values) {
+		return;
+	}
+	CHECK(rejected_values[0] == 0);
+	CHECK(physics->raycast(Vector2(0, 30), Vector2(40, 30), 4) == id);
 	for (bool circle : { false, true }) {
 		auto hits = TestSpx::take_array(circle ? physics->check_collision_circle(Vector2(20, 30), 2, 4) : physics->check_collision_rect(Vector2(20, 30), Vector2(4, 4), 4));
 		REQUIRE(hits->size == 1);

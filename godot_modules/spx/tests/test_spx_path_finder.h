@@ -347,6 +347,12 @@ TEST_CASE("[SceneTree][SPX] Tile collision occupancy survives sprite removal and
 	finder->add_all_obstacles(scene.root);
 	CHECK(finder->is_cell_solid(Vector2i(2, 2)));
 	CHECK_FALSE(finder->is_cell_solid(Vector2i(3, 2)));
+	layer->set_tile_set(Ref<TileSet>());
+	finder->add_all_obstacles(scene.root);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(2, 2)));
+	layer->set_tile_set(tileset);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i(2, 2)));
 	layer->set_scale(Vector2(1, 1));
 	finder->add_all_obstacles(scene.root);
 	CHECK_FALSE(finder->is_cell_solid(Vector2i(2, 2)));
@@ -361,6 +367,8 @@ TEST_CASE("[SceneTree][SPX] Tile collision occupancy survives sprite removal and
 	finder->add_all_obstacles(scene.root);
 	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
 	data->set_collision_polygons_count(0, 1);
+	finder->add_all_obstacles(scene.root); // Empty polygons must not produce neighboring occupancy.
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
 	data->set_collision_polygon_points(0, 0, Vector<Vector2>({ Vector2(-8, -8), Vector2(8, -8), Vector2(8, 8), Vector2(-8, 8) }));
 	layer->set_cell(Vector2i(100, 100), 0, Vector2i());
 	layer->set_cell(Vector2i(1, 0), 99, Vector2i());

@@ -33,6 +33,7 @@
 #include "../spx.h"
 #include "../spx_platform_mgr.h"
 #include "core/config/engine.h"
+#include "core/os/thread.h"
 #include "spx_test_fixtures.h"
 namespace TestSpxPlatformMgr {
 TEST_CASE("[SceneTree][SPX] Platform settings control engine timing, scaling and persistent storage") {
@@ -68,6 +69,26 @@ TEST_CASE("[SceneTree][SPX] Platform settings control engine timing, scaling and
 	CHECK(manager->get_max_fps() == 30);
 	CHECK(engine->get_max_fps() == 30);
 	CHECK(manager->is_main_thread());
+
+#ifdef THREADS_ENABLED
+	struct WorkerContext {
+		SpxPlatformMgr *manager;
+		bool main_thread = true;
+	} context{ manager };
+	Thread worker;
+	const Thread::ID worker_id = worker.start([](void *data) {
+		auto *context = static_cast<WorkerContext *>(data);
+		context->main_thread = context->manager->is_main_thread();
+	}, &context);
+	REQUIRE(worker_id != Thread::UNASSIGNED_ID);
+	if (worker_id == Thread::UNASSIGNED_ID) {
+		return;
+	}
+	worker.wait_to_finish();
+	CHECK_FALSE(context.main_thread);
+#endif
+	CHECK(manager->is_main_thread());
+	CHECK(TestSpx::take_string(manager->get_persistent_data_dir()) == OS::get_singleton()->get_user_data_dir());
 	manager->set_debug_mode(true);
 	CHECK(manager->is_debug_mode());
 	CHECK(Spx::is_debug_mode());
@@ -83,6 +104,13 @@ TEST_CASE("[SceneTree][SPX] Platform settings control engine timing, scaling and
 	manager->set_stretch(true, 480, 360);
 	manager->set_window_size(480, 360, true);
 	CHECK(window->get_content_scale_size() == Vector2i(480, 360));
+	manager->set_window_size(640, 480, false);
+	CHECK(window->get_size() == Vector2i(640, 480));
+	CHECK(window->get_content_scale_size() == Vector2i(480, 360));
+	// Native getters report the display backend, not the logical content size.
+	CHECK(Vector2(manager->get_window_size()) == Vector2(DisplayServer::get_singleton()->window_get_size()));
+	CHECK(Vector2(manager->get_window_position()) == Vector2(DisplayServer::get_singleton()->window_get_position()));
+	CHECK(manager->is_window_fullscreen() == (window->get_mode() == Window::MODE_FULLSCREEN));
 	manager->on_reset(0);
 	CHECK(window->get_content_scale_mode() == Window::CONTENT_SCALE_MODE_DISABLED);
 	CHECK(window->get_content_scale_aspect() == Window::CONTENT_SCALE_ASPECT_IGNORE);

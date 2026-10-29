@@ -100,7 +100,13 @@ TEST_CASE("[SceneTree][SPX] Tile editing preserves layers, collision geometry an
 	tiles->set_tile_size(8);
 	layer = Object::cast_to<TileMapLayer>(tiles->get_child(0));
 	REQUIRE(layer != nullptr);
+	if (!layer) {
+		return;
+	}
 	REQUIRE(layer->get_tile_set().is_valid());
+	if (layer->get_tile_set().is_null()) {
+		return;
+	}
 	CHECK(layer->get_tile_set()->get_tile_size() == Vector2i(8, 8));
 	tiles->place_tile_spx(Vector2(4, -4), path.get_data());
 	CHECK(tile_set->get_source_count() == 1);

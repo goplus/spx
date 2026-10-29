@@ -219,6 +219,65 @@ TEST_CASE("[SceneTree][SPX] UI wrapper resolves controls by ObjectID and uses st
 	CHECK(ui.get_control_item() == nullptr);
 }
 
+TEST_CASE("[SceneTree][SPX] Rebinding a UI wrapper disconnects the previous control without destroying it") {
+	BindingListener listener;
+	SpxUi ui;
+	ui.set_gid(46);
+	ui.set_type((GdInt)ESpxUiType::Button);
+	Button *first = memnew(Button);
+	Button *second = memnew(Button);
+	REQUIRE(ui.set_control_item(first, &listener) == OK);
+	REQUIRE(first->get_child_count(true) > 0);
+	if (!(first->get_child_count(true) > 0)) {
+		memdelete(first);
+		memdelete(second);
+		return;
+	}
+	Node *first_binding_node = first->get_child(0, true);
+	REQUIRE(first_binding_node != nullptr);
+	if (!(first_binding_node != nullptr)) {
+		memdelete(first);
+		memdelete(second);
+		return;
+	}
+	const ObjectID first_binding = first_binding_node->get_instance_id();
+	CHECK(ui.owns_binding(first_binding));
+	first->emit_signal(SNAME("pressed"));
+	REQUIRE(listener.events.size() == 1);
+
+	REQUIRE(ui.set_control_item(second, &listener) == OK);
+	REQUIRE(second->get_child_count(true) > 0);
+	if (!(second->get_child_count(true) > 0)) {
+		memdelete(first);
+		memdelete(second);
+		return;
+	}
+	Node *second_binding_node = second->get_child(0, true);
+	REQUIRE(second_binding_node != nullptr);
+	if (!(second_binding_node != nullptr)) {
+		memdelete(first);
+		memdelete(second);
+		return;
+	}
+	const ObjectID second_binding = second_binding_node->get_instance_id();
+	CHECK_FALSE(ui.owns_binding(first_binding));
+	CHECK(ui.owns_binding(second_binding));
+	CHECK(ui.get_button() == second);
+	CHECK_FALSE(first->is_queued_for_deletion());
+	first->emit_signal(SNAME("pressed"));
+	CHECK(listener.events.size() == 1);
+	memdelete(first);
+	CHECK(listener.destroyed_gid == 0);
+	CHECK(ui.get_button() == second);
+	second->emit_signal(SNAME("pressed"));
+	CHECK(listener.events.size() == 2);
+	CHECK(listener.clicked_binding_id == second_binding);
+	memdelete(second);
+	CHECK(listener.destroyed_gid == 46);
+	CHECK(listener.destroyed_binding_id == second_binding);
+	CHECK(ui.get_control_item() == nullptr);
+}
+
 TEST_CASE("[SceneTree][SPX] UI label wraps only when its natural width exceeds the limit") {
 	SpxUi ui;
 	ui.set_gid(8);

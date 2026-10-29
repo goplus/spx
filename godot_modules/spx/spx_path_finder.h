@@ -112,7 +112,7 @@ private:
 
 	void _process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, HashSet<Vector2i> &r_cells);
 	void _process_static_obstacles(Node2D *body, bool add = true);
-	void _process_tilemap_obstacles(TileMapLayer *tilemap, int p_layer_id = 0);
+	void _process_tilemap_obstacles(TileMapLayer &layer);
 	void _process_sprite_obstacle(GdObj obj, bool add);
 
 	Rect2 _get_scene_bounds(Node *root);

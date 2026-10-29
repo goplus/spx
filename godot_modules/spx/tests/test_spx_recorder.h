@@ -1356,6 +1356,55 @@ esac
 	CHECK(FileAccess::get_file_as_bytes(video) == original_video);
 	CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
 }
+
+TEST_CASE("[SPX] FFmpeg merge preserves recordings when a checked executable stops working") {
+	TestSpx::TempDirectory files("spx_ffmpeg_changed");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("output.avi");
+	write_avi_pair(video, audio);
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	for (int failure = 0; failure < 3; ++failure) {
+		INFO("Subprocess failure: ", failure);
+		// Deterministic subprocess lifecycle: fail the second probe, disappear after
+		// the second probe, or launch successfully but fail without diagnostics.
+		const String executable = "ffmpeg_" + itos(failure);
+		String script = R"SH(#!/bin/sh
+if [ "$1" = "-version" ]; then
+  if [ -f "$0.checked" ]; then
+    SECOND_PROBE
+  else
+    touch "$0.checked"
+  fi
+  printf 'ffmpeg test fixture\n'
+  exit 0
+fi
+exit 7
+)SH";
+		script = script.replace("SECOND_PROBE", failure == 0 ? "exit 1" : (failure == 1 ? "rm -- \"$0\"" : ":"));
+		files.write(executable, script);
+		REQUIRE(FileAccess::set_unix_permissions(files.file(executable), 0700) == OK);
+		files.write("output.avi", "previous recording");
+		PostMergeProcessor processor;
+		PostMergeProcessor::MergeConfig config;
+		config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
+		config.ffmpeg_path = files.file(executable);
+		config.keep_intermediate_files = false;
+		processor.set_config(config);
+		ERR_PRINT_OFF;
+		const auto result = processor.merge_files(video, audio, output);
+		ERR_PRINT_ON;
+		CHECK(result.error_code == (failure == 0 ? ERR_FILE_NOT_FOUND : ERR_FILE_CANT_WRITE));
+		if (failure == 0) {
+			CHECK(result.error_message == "FFmpeg not found in system PATH");
+		} else if (failure == 2) {
+			CHECK(result.error_message == "FFmpeg failed with exit code 7");
+		}
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK(result.output_file_path.is_empty());
+		CHECK(FileAccess::get_file_as_string(output) == "previous recording");
+		CHECK(FileAccess::get_file_as_bytes(video) == original_video);
+		CHECK(FileAccess::get_file_as_bytes(audio) == original_audio);
+	}
+}
 #endif
 
 TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only after success") {
@@ -1474,9 +1523,9 @@ TEST_CASE("[SPX] Native movie routes honor enabled modes and supported extension
 	} restore{ settings->get_setting("movie_writer/obs_mode"), settings->get_setting("movie_writer/realtime_mode") };
 	auto destroy = [](RealtimeWriter *writer) { memdelete(writer); };
 	std::unique_ptr<RealtimeWriter, decltype(destroy)> writer(memnew(RealtimeWriter), destroy);
-	for (int mode = 0; mode < 3; ++mode) {
-		settings->set_setting("movie_writer/obs_mode", mode == 1);
-		settings->set_setting("movie_writer/realtime_mode", mode == 2);
+	for (int mode = 0; mode < 4; ++mode) {
+		settings->set_setting("movie_writer/obs_mode", bool(mode & 1));
+		settings->set_setting("movie_writer/realtime_mode", bool(mode & 2));
 		CHECK(writer->handles_file("capture.AVI") == (mode != 0));
 		CHECK(spx_recorder_claims_movie("capture.avi") == (mode != 0));
 		CHECK_FALSE(writer->handles_file("capture.png"));
@@ -1663,7 +1712,8 @@ TEST_CASE("[SPX] AVI merge accepts compressed-video chunk tags and optional unkn
 #ifdef UNIX_ENABLED
 TEST_CASE("[SPX] Verbose headless command-line recording finalizes valid AVI streams") {
 	TestSpx::TempDirectory files("spx_cli_movie");
-	files.write("project.godot", R"GODOT(config_version=5
+	for (bool keep : { true, false }) {
+		files.write("project.godot", String(R"GODOT(config_version=5
 [application]
 run/main_scene="res://main.tscn"
 [display]
@@ -1674,36 +1724,42 @@ file_logging/enable_file_logging=false
 [movie_writer]
 obs_mode=true
 obs_enable_debug_output=true
-obs_keep_intermediate_files=true
-)GODOT");
-	files.write("main.tscn", "[gd_scene format=3]\n[node name=\"RecordingFixture\" type=\"Node\"]\n");
-	const String path = files.file("capture.avi");
-	List<String> arguments;
-	for (const String &argument : { String("--headless"), String("--verbose"), String("--path"), files.path, String("--write-movie"), path, String("--quit-after"), String("3") }) {
-		arguments.push_back(argument);
+obs_keep_intermediate_files=KEEP
+)GODOT").replace("KEEP", keep ? "true" : "false"));
+		files.write("main.tscn", "[gd_scene format=3]\n[node name=\"RecordingFixture\" type=\"Node\"]\n");
+		const String path = files.file("capture.avi");
+		List<String> arguments;
+		for (const String &argument : { String("--headless"), String("--verbose"), String("--path"), files.path, String("--write-movie"), path, String("--quit-after"), String("3") }) {
+			arguments.push_back(argument);
+		}
+		String output;
+		int exit_code = -1;
+		const Error error = OS::get_singleton()->execute(OS::get_singleton()->get_executable_path(), arguments, &output, &exit_code, true);
+		INFO(output);
+		REQUIRE(error == OK);
+		REQUIRE(exit_code == 0);
+		CHECK_FALSE(output.contains("ERROR:"));
+		CHECK(output.contains("IndependentVideoRecorder initialized"));
+		CHECK(output.contains("IndependentAudioRecorder initialization completed"));
+		CHECK(output.contains("OBS-style Recording Completed"));
+		CHECK(output.contains("Intermediate files cleaned up successfully") == !keep);
+		for (const char *suffix : { "_video.avi", "_audio.avi", "_merged.avi" }) {
+			if (!keep && String(suffix) != "_merged.avi") {
+				CHECK_FALSE(FileAccess::exists(path + suffix));
+				continue;
+			}
+			const auto bytes = read_avi(path + suffix);
+			const int index = find_tag(bytes, "idx1");
+			REQUIRE(index > 0);
+			check_avi_index(bytes, decode_uint32(bytes.ptr() + index + 4) / 16);
+		}
+		const auto merged = read_avi(path + "_merged.avi");
+		const int header = find_tag(merged, "avih");
+		REQUIRE(header > 0);
+		CHECK(decode_uint32(merged.ptr() + header + 40) == 16);
+		CHECK(decode_uint32(merged.ptr() + header + 44) == 12);
+		CHECK(decode_uint32(merged.ptr() + header + 32) == 2);
 	}
-	String output;
-	int exit_code = -1;
-	const Error error = OS::get_singleton()->execute(OS::get_singleton()->get_executable_path(), arguments, &output, &exit_code, true);
-	INFO(output);
-	REQUIRE(error == OK);
-	REQUIRE(exit_code == 0);
-	CHECK_FALSE(output.contains("ERROR:"));
-	CHECK(output.contains("IndependentVideoRecorder initialized"));
-	CHECK(output.contains("IndependentAudioRecorder initialization completed"));
-	CHECK(output.contains("OBS-style Recording Completed"));
-	for (const char *suffix : { "_video.avi", "_audio.avi", "_merged.avi" }) {
-		const auto bytes = read_avi(path + suffix);
-		const int index = find_tag(bytes, "idx1");
-		REQUIRE(index > 0);
-		check_avi_index(bytes, decode_uint32(bytes.ptr() + index + 4) / 16);
-	}
-	const auto merged = read_avi(path + "_merged.avi");
-	const int header = find_tag(merged, "avih");
-	REQUIRE(header > 0);
-	CHECK(decode_uint32(merged.ptr() + header + 40) == 16);
-	CHECK(decode_uint32(merged.ptr() + header + 44) == 12);
-	CHECK(decode_uint32(merged.ptr() + header + 32) == 2);
 }
 #endif
 

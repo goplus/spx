@@ -122,7 +122,7 @@ void SpxPathFinder::add_all_obstacles(Node *root) {
 			} else if (SpxSprite *sprite = Object::cast_to<SpxSprite>(child)) {
 				_process_static_obstacles(sprite, sprite->get_physics_mode() == SpxSprite::PhysicsMode::STATIC);
 			} else if (TileMapLayer *layer = Object::cast_to<TileMapLayer>(child)) {
-				_process_tilemap_obstacles(layer);
+				_process_tilemap_obstacles(*layer);
 			}
 
 			stack.push_back(child);
@@ -288,44 +288,40 @@ void SpxPathFinder::_process_static_obstacles(Node2D *body, bool add) {
 	_replace_obstacle_cells(body->get_instance_id(), cells);
 }
 
-void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_id) {
-	if (!layer) {
-		return;
-	}
-
+void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer &layer) {
 	HashSet<Vector2i> cells;
-	Ref<TileSet> tileset = layer->get_tile_set();
-	if (tileset.is_null() || p_layer_id < 0 || p_layer_id >= tileset->get_physics_layers_count()) {
-		_replace_obstacle_cells(layer->get_instance_id(), cells);
+	Ref<TileSet> tileset = layer.get_tile_set();
+	if (tileset.is_null() || tileset->get_physics_layers_count() == 0) {
+		_replace_obstacle_cells(layer.get_instance_id(), cells);
 		return;
 	}
 	const Rect2i region = astar->get_region();
-	Array used_cells = layer->get_used_cells();
+	Array used_cells = layer.get_used_cells();
 
 	for (int i = 0; i < used_cells.size(); ++i) {
 		Vector2i cell = used_cells[i];
-		TileData *td = layer->get_cell_tile_data(cell);
+		TileData *td = layer.get_cell_tile_data(cell);
 		if (!td) {
 			continue;
 		}
 
-		int poly_count = td->get_collision_polygons_count(p_layer_id);
+		int poly_count = td->get_collision_polygons_count(0);
 
 		if (poly_count <= 0) {
 			continue;
 		}
 
-		Vector2 cell_local = layer->map_to_local(cell);
-		Vector2 cell_global = layer->to_global(cell_local);
+		Vector2 cell_local = layer.map_to_local(cell);
+		Vector2 cell_global = layer.to_global(cell_local);
 		Vector2i center_cell = _world_to_cell(cell_global);
 		if (region.has_point(center_cell)) {
 			cells.insert(center_cell);
 		}
 
-		Transform2D xform = layer->get_global_transform();
+		Transform2D xform = layer.get_global_transform();
 
 		for (int j = 0; j < poly_count; ++j) {
-			Vector<Vector2> poly = td->get_collision_polygon_points(p_layer_id, j);
+			Vector<Vector2> poly = td->get_collision_polygon_points(0, j);
 			if (poly.is_empty()) {
 				continue;
 			}
@@ -358,7 +354,7 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_
 			}
 		}
 	}
-	_replace_obstacle_cells(layer->get_instance_id(), cells);
+	_replace_obstacle_cells(layer.get_instance_id(), cells);
 }
 
 void SpxPathFinder::_process_sprite_obstacle(GdObj obj, bool add) {

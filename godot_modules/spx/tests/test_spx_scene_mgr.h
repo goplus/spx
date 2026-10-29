@@ -34,6 +34,7 @@
 #include "../spx_physics_mgr.h"
 #include "../spx_scene_mgr.h"
 #include "../spx_sprite.h"
+#include "../spx_sprite_mgr.h"
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/2d/sprite_2d.h"
 #include "scene/2d/tile_map_layer.h"
@@ -92,6 +93,26 @@ TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static collide
 	Vector<ISortableSprite *> sprites;
 	manager->collect_sortable_sprites(sprites);
 	CHECK(sprites.size() == 2);
+	// Clearing managed actors must leave authored render/static sprites intact.
+	auto *actors = scene.engine->get_sprite();
+	const GdObj actor = actors->create_bare_sprite(Vector2());
+	auto *actor_node = actors->get_sprite(actor);
+	REQUIRE(actor_node);
+	if (!actor_node) {
+		return;
+	}
+	Node *actor_root = actor_node->get_parent();
+	manager->destroy_all_sprites();
+	CHECK(actors->get_sprite(actor) == nullptr);
+	CHECK(actor_root->is_queued_for_deletion());
+	CHECK(manager->id_pure_sprites.size() == 2);
+	const GdObj replacement = actors->create_bare_sprite(Vector2(3, 4));
+	auto *replacement_node = actors->get_sprite(replacement);
+	REQUIRE(replacement_node);
+	if (!replacement_node) {
+		return;
+	}
+	CHECK(replacement_node->get_parent() != actor_root);
 	manager->destroy_pure_sprite(render);
 	CHECK_FALSE(manager->id_pure_sprites.has(render));
 	CHECK(node->is_queued_for_deletion());
