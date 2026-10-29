@@ -62,17 +62,21 @@ public:
 	}
 };
 
+static void publish_stream_playback(AudioStreamPlayer2D *player) {
+	// Publish queued playback so pause assertions exercise an active stream.
+	PhysicsServer2D *physics = PhysicsServer2D::get_singleton();
+	physics->sync();
+	player->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
+	physics->end_sync();
+}
+
 static void start_stream_playback(AudioStreamPlayer2D *player, float offset) {
 	// The test driver mixes streams; production keeps the platform default.
 	CHECK_EQ(player->get_playback_type(), AudioServer::PLAYBACK_TYPE_DEFAULT);
 	player->stop();
 	player->set_playback_type(AudioServer::PLAYBACK_TYPE_STREAM);
 	player->play(offset);
-	// Publish queued playback so pause assertions exercise an active stream.
-	PhysicsServer2D *physics = PhysicsServer2D::get_singleton();
-	physics->sync();
-	player->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
-	physics->end_sync();
+	publish_stream_playback(player);
 }
 
 TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
@@ -127,6 +131,17 @@ TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	REQUIRE(player != nullptr);
 	start_stream_playback(player, 0.5f);
 	REQUIRE(audio->is_playing(playback));
+	audio->set_pan(object, 0.25f);
+	CHECK(Math::is_equal_approx(audio->get_pan(object), 0.25f));
+	audio->set_volume(object, 0.6f);
+	CHECK(Math::is_equal_approx(audio->get_volume(object), 0.6f));
+	audio->set_timer(playback, 0.1f);
+	CHECK(audio->get_timer(playback) >= 0.0f);
+	CHECK(audio->restart(playback));
+	publish_stream_playback(player);
+	audio->set_loop(playback, true);
+	CHECK(audio->get_loop(playback));
+	audio->set_loop(playback, false);
 	const Ref<AudioStreamPlayback> playing_stream = player->get_stream_playback();
 	const GdFloat position = audio->get_timer(playback);
 	audio->set_pitch(object, 1.5f);
