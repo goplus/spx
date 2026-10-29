@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,6 +43,9 @@ func BuildEngine(cfg BuildConfig, repoRoot string) error {
 	if err != nil {
 		return err
 	}
+	if cfg.TestModule && plan.Target != "editor" {
+		return fmt.Errorf("SPX module tests require a host editor build")
+	}
 	commandEnv, sconsCommand, err := prepareEngineBuildEnvironment(buildEnv)
 	if err != nil {
 		return err
@@ -49,7 +53,7 @@ func BuildEngine(cfg BuildConfig, repoRoot string) error {
 
 	switch plan.Target {
 	case "editor":
-		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, module, plan)
+		return buildEngineEditor(buildEnv, commandEnv, sconsCommand, module, plan, cfg.TestModule)
 	case "template":
 		return buildEngineTemplate(buildEnv, commandEnv, sconsCommand, module, plan)
 	default:
@@ -98,19 +102,45 @@ func printBuildEnvironmentSummary(buildEnv buildEnvironment) {
 	fmt.Fprintf(os.Stdout, "SPX module source: %s\n", buildEnv.SPXModuleSrc)
 }
 
-func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan) error {
+func buildEngineEditor(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan, testModule bool) error {
 	buildArgs := []string{"target=editor", "dev_build=yes"}
+	if testModule {
+		buildArgs = append(buildArgs, "tests=yes")
+	}
 	if plan.EditorUseVSProj {
 		buildArgs = append(buildArgs, "vsproj=yes")
 	}
 	args := module.EditorBuildArgs(buildArgs...)
 	fmt.Fprintf(os.Stdout, "scons %s\n", shellJoin(args))
-	if err := runLockedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
-		return err
-	}
+	return withEngineBuildLock(engineBuildLockDir(buildEnv.EngineDir), func() error {
+		if err := runTrackedEngineCommandWithEnv(buildEnv.EngineDir, commandEnv, sconsCommand, args...); err != nil {
+			return err
+		}
+		source := filepath.Join(buildEnv.EngineDir, plan.EditorSource)
+		if testModule {
+			if err := runSPXModuleTests(buildEnv.EngineDir, commandEnv, source); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", plan.EditorDestination)
+		return shared.CopyFile(source, plan.EditorDestination)
+	})
+}
 
-	fmt.Fprintf(os.Stdout, "Destination binary path: %s\n", plan.EditorDestination)
-	return shared.CopyFile(filepath.Join(buildEnv.EngineDir, plan.EditorSource), plan.EditorDestination)
+func runSPXModuleTests(workdir string, env map[string]string, editor string) error {
+	args := []string{"--headless", "--test", "--test-case=*SPX*"}
+	output, err := shared.RunCommandOutputWithEnv(workdir, shared.EnvMapToSlice(env), editor, append(args, "--list-test-cases")...)
+	fmt.Fprint(os.Stdout, string(output))
+	if err != nil {
+		return fmt.Errorf("list SPX module tests: %w", err)
+	}
+	if !bytes.Contains(output, []byte("[SPX]")) {
+		return fmt.Errorf("the tests=yes editor did not register SPX module tests")
+	}
+	if err := runTrackedEngineCommandWithEnv(workdir, env, editor, args...); err != nil {
+		return fmt.Errorf("run SPX module tests: %w", err)
+	}
+	return nil
 }
 
 func buildEngineTemplate(buildEnv buildEnvironment, commandEnv map[string]string, sconsCommand string, module shared.SPXModule, plan BuildShellPlan) error {
@@ -202,12 +232,15 @@ func shellJoin(args []string) string {
 	return strings.Join(quoted, " ")
 }
 
-func runLockedEngineCommandWithEnv(workdir string, env map[string]string, name string, args ...string) error {
-	lockDir := filepath.Join(filepath.Dir(workdir), ".spx_build_lock")
+func engineBuildLockDir(workdir string) string {
 	if filepath.Base(workdir) == "godot" {
-		lockDir = filepath.Join(workdir, ".spx_build_lock")
+		return filepath.Join(workdir, ".spx_build_lock")
 	}
-	return withEngineBuildLock(lockDir, func() error {
+	return filepath.Join(filepath.Dir(workdir), ".spx_build_lock")
+}
+
+func runLockedEngineCommandWithEnv(workdir string, env map[string]string, name string, args ...string) error {
+	return withEngineBuildLock(engineBuildLockDir(workdir), func() error {
 		return runTrackedEngineCommandWithEnv(workdir, env, name, args...)
 	})
 }

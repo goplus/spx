@@ -1,0 +1,47 @@
+name: Package Linux
+
+on:
+  workflow_call:
+    inputs:
+      engine_artifacts:
+        description: 'Use Godot engine artifacts produced by the current workflow run'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  package-linux:
+    name: Package Linux standalone
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Download current-run engine artifacts
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: runtime-*linux-x86_64
+          path: runtime-assets
+          merge-multiple: true
+
+      - name: Download current-run runtime pack
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: runtime-spx-assets
+          path: runtime-assets
+
+      - name: Install Linux dependencies
+        uses: ./.github/actions/install-linux-dependencies
+        timeout-minutes: 20
+        with:
+          profile: native
+
+      - name: Package and upload standalone artifact
+        uses: ./.github/actions/package-standalone
+        with:
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
+          platform: linux
+          package-arch: x64
+          artifact-name: spx-standalone-linux-x64

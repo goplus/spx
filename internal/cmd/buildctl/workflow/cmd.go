@@ -324,8 +324,8 @@ func buildHostRuntimeWorkflow(runner shared.ScriptRunner) error {
 }
 
 func buildDevWorkflow(cfg workflowBuildDevConfig, runner shared.ScriptRunner) error {
-	printWorkflowStep(1, 4, "Build host editor")
-	if err := engine.BuildEngine(engine.BuildConfig{Target: "editor"}, runner.RepoRootDir()); err != nil {
+	printWorkflowStep(1, 4, "Build host editor and test SPX module")
+	if err := engine.BuildEngine(engine.BuildConfig{Target: "editor", TestModule: true}, runner.RepoRootDir()); err != nil {
 		return err
 	}
 

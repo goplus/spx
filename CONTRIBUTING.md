@@ -212,15 +212,15 @@ checks must pass before merge.
 
 ### Go coverage
 
-CI collects atomic Go statement coverage. After Linux/Web, macOS, and Windows
-jobs succeed, it uploads all profiles to [Codecov](https://codecov.io/gh/goplus/spx)
-in one report. Each execution of the coverage job attempts at most one upload;
-separate push/PR runs and job reruns can upload again. Missing artifacts fail
-collection; partial reports are not uploaded. Codecov upload errors retain the
-action's default non-blocking policy, so the CI gate guarantees complete input
-reports, not successful delivery or subsequent processing by Codecov.
+CI collects atomic Go statement coverage from Linux/Web, macOS, and Windows.
+After all checks for the selected runtime path pass, the final CI gate collects
+the Go profiles and, when module tests ran, the C++ report. It uploads them to
+[Codecov](https://codecov.io/gh/goplus/spx) separately under `go` and `cpp`, then
+requests checks for the combined report. Missing artifacts, upload errors, or
+notification errors fail the gate. Separate push/PR runs and job reruns can
+upload again; Codecov merges uploads for the same commit.
 
-Coverage artifacts are retained for 7 days. Fixed names with overwrite enabled
+Go coverage artifacts are retained for 7 days. Fixed names with overwrite enabled
 allow failed-job reruns to reuse reports from successful jobs while those artifacts
 remain available. After they expire, use **Re-run all jobs** to regenerate them;
 rerunning only failed jobs does not recreate artifacts from successful producers.
@@ -228,7 +228,7 @@ rerunning only failed jobs does not recreate artifacts from successful producers
 To reproduce host coverage using the same package selection as CI:
 
 ```sh
-bash .github/scripts/test_go.sh -coverprofile=coverage.out -covermode=atomic
+bash .github/scripts/ci/test_go.sh -coverprofile=coverage.out -covermode=atomic
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 (cd cmd/ispx && go tool cover -func=coverage.out)
@@ -236,7 +236,7 @@ go tool cover -html=coverage.out
 
 Keep the profile path relative so the root module and `cmd/ispx` write separate
 files; an absolute path would overwrite the first report. CI also records
-Node/WASM Go tests and `.github/scripts` Go tools in separate profiles.
+Node/WASM Go tests and `.github/cmd` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests and
 Node/WASM binding, coroutine, interpreter, and process-fallback tests, subject
@@ -244,11 +244,11 @@ to Go build tags. The nested `cmd/ispx` and `internal/cmd/codegen` modules have
 separate profiles.
 
 The existing Go build matrix also collects targeted native macOS buildctl
-environment and Homebrew JDK/Brotli fixture coverage, plus Windows command
-lookup, file replacement, tool setup, and process-lock coverage. These are not full
+environment, Homebrew JDK/Brotli fixture, and CLI permission-repair coverage,
+plus Windows command lookup, file replacement, tool setup, and process-lock coverage. These are not full
 cross-platform test suites. Reproduce them on their respective native hosts
-with `bash .github/scripts/test_go_coverage.sh macos` or
-`bash .github/scripts/test_go_coverage.sh windows`.
+with `bash .github/scripts/ci/test_go_coverage.sh macos` or
+`bash .github/scripts/ci/test_go_coverage.sh windows`.
 
 Godot end-to-end, browser, C++, JavaScript, and other platform-specific paths
 remain outside these Go coverage suites. Packages without tests may report
@@ -263,6 +263,40 @@ differ from local coverage totals.
 Like [XGo](https://github.com/goplus/xgo), uploads omit a token. Codecov may
 require repository or organization setup. The `dev` badge needs a successful
 upload from `dev`.
+
+### C++ module coverage
+
+When CI selects the current-module path (`missing` or `incompatible` runtime),
+the locked Godot workflow builds the Linux editor with `tests=yes`,
+`use_coverage=yes`, and `optimize=none`, then runs the `*SPX*` unit tests.
+The coverage build caches SCons signatures, objects, archives, and `.gcno`
+metadata together. The cache requires a matching Godot commit, build settings,
+toolchain, and runner environment. When only the SPX module changes, it reuses
+the engine build and rebuilds the module and tests. Configure probes rerun to
+keep capability detection independent of cached probe files. The editor is linked
+and tests run every time; `.gcda` execution counts are never cached and are cleared
+before testing. Successful compilation saves the cache before tests run, so a
+later test failure does not discard the build. The first compatible build is
+still a cold build.
+
+Godot uses pinned gcovr to produce a Cobertura report for maintained native
+code under `godot_modules/spx`, excluding tests, third-party code, and generated
+bindings. It publishes only the report as the `coverage-spx-cpp` artifact.
+The final SPX CI gate uploads that report alongside Go coverage with the `cpp`
+flag. Missing or empty reports fail CI. Manually dispatching `Test Godot Module`
+produces the artifact without publishing a partial Codecov report. These
+artifacts are retained for one day; after expiry, rerun all integration jobs
+to regenerate the report.
+
+The `cpp` flag carries forward its latest coverage when CI reuses a
+published runtime and skips module tests. Codecov labels this as historical
+coverage, not a new test run. A successful Go and C++ upload is needed to
+establish the initial baseline. The repository report and badge include both
+languages. The existing project and patch checks compare Go paths against the
+historical Go baseline, which predates flags; no C++ percentage threshold is
+enforced yet. A separate C++ regression check can be added once `dev` has its
+first complete report. This report does not measure browser execution or
+Web-only C++ code.
 
 ## Working across SPX and Godot
 

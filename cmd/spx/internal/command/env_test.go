@@ -582,24 +582,32 @@ func TestResolveAppPathSearchAndFallback(t *testing.T) {
 func TestResolveAppPathReportsPermissionRepairFailure(t *testing.T) {
 	bin := t.TempDir()
 	binary := filepath.Join(bin, "gdspxtest")
+	writeCommandTestFile(t, binary, "engine")
+	var command, enable, disable string
 	switch runtime.GOOS {
 	case "linux":
-		// procfs exposes readable files whose modes cannot be changed, even by root.
-		if err := os.Symlink("/proc/version", binary); err != nil {
-			t.Fatal(err)
-		}
+		command, enable, disable = "chattr", "+i", "-i"
 	case "darwin":
-		writeCommandTestFile(t, binary, "engine")
-		if err := exec.Command("/usr/bin/chflags", "uchg", binary).Run(); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := exec.Command("/usr/bin/chflags", "nouchg", binary).Run(); err != nil {
-				t.Errorf("restore engine fixture: %v", err)
-			}
-		})
+		command, enable, disable = "chflags", "uchg", "nouchg"
 	default:
 		t.Skip("requires a file with immutable permissions")
+	}
+	flagTool, err := exec.LookPath(command)
+	if err != nil {
+		t.Skipf("immutable fixture requires %s: %v", command, err)
+	}
+	if output, err := exec.Command(flagTool, enable, binary).CombinedOutput(); err != nil {
+		// Linux requires filesystem support and CAP_LINUX_IMMUTABLE. Ordinary
+		// read-only modes still allow the owner to chmod their own file.
+		t.Skipf("cannot make the temporary fixture immutable: %v: %s", err, output)
+	}
+	t.Cleanup(func() {
+		if output, err := exec.Command(flagTool, disable, binary).CombinedOutput(); err != nil {
+			t.Errorf("restore engine fixture: %v: %s", err, output)
+		}
+	})
+	if info, err := os.Stat(binary); err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 != 0 {
+		t.Fatalf("fixture must be a nonexecutable regular file: %v, %v", info, err)
 	}
 	t.Setenv("PATH", t.TempDir())
 	got, err := resolveAppPath(bin, "gdspx", "test")

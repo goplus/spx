@@ -1,0 +1,115 @@
+name: Check Source
+
+on:
+  workflow_call:
+    inputs:
+      check_export_types:
+        description: Require the embedded SPX type snapshot to match generated output byte for byte
+        type: boolean
+        default: false
+      collect_coverage:
+        description: Save coverage for the caller to upload with the other test jobs
+        type: boolean
+        default: false
+
+jobs:
+  check-source:
+    name: Check source and run tests
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Set up CI test dependencies
+        run: python3 -m pip install -r .github/scripts/ci/requirements.txt
+
+      - name: Check workflow syntax
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck=
+
+      - name: Ensure generated files are up to date
+        env:
+          CHECK_EXPORT_TYPES: ${{ inputs.check_export_types }}
+        run: bash .github/scripts/ci/check_generated.sh --check-export-types "$CHECK_EXPORT_TYPES"
+
+      - name: Check shell scripts
+        shell: bash
+        run: |
+          while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done < <(find .github/actions .github/scripts -name '*.sh' -type f -print0)
+          bash -n cmd/ispx/build.sh
+
+      - name: Set up Node.js for Web bridge tests
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Test Web bridge
+        run: node --test cmd/ispx/tests/*.test.cjs godot_modules/spx/web/tests/*.test.cjs
+
+      - name: Test Go Web packages
+        id: web-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh web
+
+      - name: Test Go Web process fallbacks
+        id: web-process-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh web-process
+
+      - name: Test Go Web interpreter
+        id: web-interpreter-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh web-interpreter
+
+      - name: Test Web ABI memory ownership
+        env:
+          GDSPX_SANITIZERS: address,undefined
+        run: bash godot_modules/spx/web/tests/run_string_abi_test.sh
+
+      - name: Test CI tooling
+        id: tool-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh tools
+
+      - name: Test binding generator
+        id: codegen-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh codegen
+
+      - name: Test CI contracts
+        shell: bash
+        run: python3 .github/scripts/ci/test_python.py
+
+      - name: Check runtime fingerprints
+        shell: bash
+        run: |
+          for digest in pack-source build-recipe; do
+            go run ./.github/cmd/runtime-digest "$digest" HEAD >/dev/null
+          done
+
+      - name: Test Go modules
+        id: go-tests
+        shell: bash
+        run: bash .github/scripts/ci/test_go_coverage.sh native
+
+      - name: Save coverage for combined upload
+        if: inputs.collect_coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-source
+          path: |
+            ${{ steps.go-tests.outputs.coverage }}
+            ${{ steps.web-tests.outputs.coverage }}
+            ${{ steps.web-process-tests.outputs.coverage }}
+            ${{ steps.web-interpreter-tests.outputs.coverage }}
+            ${{ steps.tool-tests.outputs.coverage }}
+            ${{ steps.codegen-tests.outputs.coverage }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7

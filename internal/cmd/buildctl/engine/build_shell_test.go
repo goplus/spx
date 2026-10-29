@@ -171,7 +171,7 @@ func TestResolveEngineBuildShellPlanDesktopMappings(t *testing.T) {
 				}
 				want := BuildShellPlan{Target: target, Platform: tt.platform}
 				if target == "editor" {
-					want.EditorSource = filepath.Join("bin", "godot."+tt.sconsPlatform+".editor.dev."+arch)
+					want.EditorSource = filepath.Join("bin", "godot."+tt.sconsPlatform+".editor.dev."+arch+tt.editorSuffix)
 					want.EditorDestination = filepath.Join(goPath, "bin", "gdspx"+version+tt.editorSuffix)
 					want.EditorUseVSProj = tt.useVSProj
 				} else {

@@ -1,5 +1,24 @@
-# Keep coverage focused on maintained Go implementation code.
-# These filters apply in Codecov; raw profiles stay unfiltered.
+# Keep coverage focused on maintained implementation code.
+# Go profiles are filtered here; C++ reports are scoped by gcovr.
+codecov:
+  notify:
+    manual_trigger: true
+
+coverage:
+  status:
+    # Preserve the existing Go baseline while C++ establishes its first report.
+    # The repository total and badge still include both languages.
+    project:
+      default:
+        target: auto
+        paths:
+          - '.*\.go$'
+    patch:
+      default:
+        target: auto
+        paths:
+          - '.*\.go$'
+
 ignore:
   # Example projects and test fixtures.
   - "tutorial/"
@@ -13,3 +32,14 @@ ignore:
   - "**/xgo_autogen*.go"
   - "pkg/ispx/internal/pkg/"
   - "cmd/ispx/ai/internal/pkg/"
+
+flags:
+  go:
+    carryforward: false
+  cpp:
+    paths:
+      - "godot_modules/spx/"
+    carryforward: true
+
+comment:
+  show_carryforward_flags: true

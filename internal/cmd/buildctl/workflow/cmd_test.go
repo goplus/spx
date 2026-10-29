@@ -404,8 +404,8 @@ func TestWorkflowAdditionalFailurePaths(t *testing.T) {
 }
 
 func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("isolated Linux build toolchain")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("fixture executables require Linux or macOS")
 	}
 	for _, target := range []string{"dev", "editor", "desktop", "web", "android", "ios"} {
 		t.Run(target, func(t *testing.T) {
@@ -428,6 +428,14 @@ func TestBuildWorkflowsWithOfflineTools(t *testing.T) {
 			if !reflect.DeepEqual(gotExports, wantExports) {
 				t.Fatalf("exports=%v,want %v", gotExports, wantExports)
 			}
+			testRecord, err := os.ReadFile(filepath.Join(runner.repoRoot, "module-tests"))
+			if target == "dev" {
+				if err != nil || string(testRecord) != "list\ntest\n" {
+					t.Fatalf("module tests = %q (%v), want list then test", testRecord, err)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("%s unexpectedly ran module tests: %q (%v)", target, testRecord, err)
+			}
 			if entries, err := os.ReadDir(filepath.Join(runner.repoRoot, ".tmp")); err == nil && len(entries) != 0 {
 				t.Fatalf("temporary export workspaces leaked: %v", entries)
 			}
@@ -443,10 +451,10 @@ func TestBuildWorkflowFailureStopsSubsequentSteps(t *testing.T) {
 			t.Fatalf("%s install failure=%v,calls=%v,commands=%v", target, err, runner.calls, runner.commands)
 		}
 	}
-	if runtime.GOOS != "linux" {
-		t.Skip("isolated Linux build toolchain")
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("fixture executables require Linux or macOS")
 	}
-	for _, stage := range []string{"editor", "host", "web", "install"} {
+	for _, stage := range []string{"editor", "test-list", "test-empty", "test-run", "host", "web", "install"} {
 		t.Run("dev/"+stage, func(t *testing.T) {
 			runner := newWorkflowBuildFixture(t)
 			t.Setenv("WORKFLOW_FAIL", stage)
@@ -460,7 +468,7 @@ func TestBuildWorkflowFailureStopsSubsequentSteps(t *testing.T) {
 			if err == nil {
 				t.Fatal("failed build succeeded")
 			}
-			wantExports := map[string]int{"editor": 0, "host": 0, "web": 1, "install": 2}[stage]
+			wantExports := map[string]int{"editor": 0, "test-list": 0, "test-empty": 0, "test-run": 0, "host": 0, "web": 1, "install": 2}[stage]
 			if len(runner.commands) != wantExports {
 				t.Fatalf("exports after %s failure=%v,want %d", stage, runner.commands, wantExports)
 			}
@@ -470,6 +478,11 @@ func TestBuildWorkflowFailureStopsSubsequentSteps(t *testing.T) {
 				}
 			} else if len(runner.calls) != 0 {
 				t.Fatalf("failed build installed tools: %v", runner.calls)
+			}
+			if strings.HasPrefix(stage, "test-") {
+				if _, err := os.Stat(filepath.Join(runner.repoRoot, "template-built")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("module test failure continued into template compilation")
+				}
 			}
 		})
 	}
@@ -608,33 +621,64 @@ func newWorkflowBuildFixture(t *testing.T) *recordingRunner {
 	for _, name := range []string{"xgo", "go", "python3"} {
 		writeWorkflowTool(t, filepath.Join(bin, name), "exit 0\n")
 	}
+	// Avoid consulting the host SDK or compiler when resolving macOS build flags.
+	t.Setenv("SDKROOT", root)
+	t.Setenv("CC", filepath.Join(bin, "go"))
+	t.Setenv("CXX", filepath.Join(bin, "go"))
+	for _, name := range []string{"CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
+		t.Setenv(name, "")
+	}
+	t.Setenv("WORKFLOW_ROOT", root)
+	t.Setenv("WORKFLOW_FAIL", "")
 	writeWorkflowTool(t, filepath.Join(bin, "git"), "printf '%s\\n' '"+lock.Godot.Commit+"'\n")
 	venv := filepath.Join(root, ".bin", "scons-"+lock.Toolchain.SCons, "bin")
 	writeWorkflowTool(t, filepath.Join(venv, "python"), "printf '%s\\n' '"+lock.Toolchain.SCons+"'\n")
 	writeWorkflowTool(t, filepath.Join(venv, "scons"), `case "$*" in
-  *platform=linuxbsd*) [ "$WORKFLOW_FAIL" != host ] || exit 23 ;;
+  *tests=yes*) printf enabled > "$WORKFLOW_ROOT/module-tests-enabled" ;;
+esac
+case "$*" in
+  *target=template_release*) printf built > "$WORKFLOW_ROOT/template-built" ;;
+esac
+case "$*" in
+  *platform=linuxbsd*|*platform=macos*) [ "$WORKFLOW_FAIL" != host ] || exit 23 ;;
   *platform=web*) [ "$WORKFLOW_FAIL" != web ] || exit 23 ;;
 esac
 exit 0
 `)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	env, err := shared.ResolveBuildEnvironment(root, "linux")
+	env, err := shared.ResolveBuildEnvironment(root, "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	hostPlatform := map[string]string{"linux": "linuxbsd", "darwin": "macos"}[runtime.GOOS]
 	for _, name := range []string{
-		"godot.linuxbsd.editor.dev." + env.Arch, "godot.linuxbsd.template_release." + env.Arch,
+		"godot." + hostPlatform + ".template_release." + env.Arch,
 		"godot_ios.zip", "android_debug.apk", "android_release.apk", "android_source.zip",
 		"godot.web.template_release.wasm32.nothreads.zip",
 	} {
 		mustWriteFile(t, filepath.Join(env.EngineDir, "bin", name), []byte("built "+name))
 	}
+	writeWorkflowTool(t, filepath.Join(env.EngineDir, "bin", "godot."+hostPlatform+".editor.dev."+env.Arch), `set -eu
+test -s .spx_build_lock/pid
+test -s "$WORKFLOW_ROOT/module-tests-enabled"
+if [ "$#" = 4 ]; then
+  printf 'list\n' >> "$WORKFLOW_ROOT/module-tests"
+  [ "$WORKFLOW_FAIL" != test-list ] || exit 23
+  if [ "$WORKFLOW_FAIL" != test-empty ]; then printf '[SPX] fixture\n'; fi
+else
+  printf 'test\n' >> "$WORKFLOW_ROOT/module-tests"
+  [ "$WORKFLOW_FAIL" != test-run ] || exit 23
+fi
+`)
 	writeWorkflowTool(t, filepath.Join(env.EngineDir, "platform", "android", "java", "gradlew"), "exit 0\n")
 	javaHome := filepath.Join(root, "java")
 	writeWorkflowTool(t, filepath.Join(javaHome, "bin", "java"), "printf '%s\\n' 'openjdk version \""+lock.Toolchain.JDK+".0.0\"'\n")
 	t.Setenv("JAVA_HOME", javaHome)
 	t.Setenv("PATH", filepath.Join(javaHome, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	sdk := filepath.Join(root, ".local", "share", "emsdk", "emsdk")
+	if runtime.GOOS == "darwin" {
+		sdk = filepath.Join(root, "Library", "Application Support", "emsdk", "emsdk")
+	}
 	sdkBin := filepath.Join(sdk, "upstream", "emscripten")
 	for _, name := range []string{"emcc", "em++"} {
 		writeWorkflowTool(t, filepath.Join(sdkBin, name), "printf '%s\\n' 'emcc fixture "+lock.Toolchain.EMSDK+"'\n")
@@ -648,6 +692,11 @@ exit 0
 	runner.commandHook = func(dir, name string, args ...string) error {
 		if dir != root || name != "go" || len(args) != 5 || args[0] != "run" || args[1] != "./cmd/spx" || args[3] != "--path" {
 			t.Fatalf("unexpected export command %s %s %q", dir, name, args)
+		}
+		if shared.FileExists(filepath.Join(root, "module-tests-enabled")) {
+			if data, err := os.ReadFile(filepath.Join(root, "module-tests")); err != nil || string(data) != "list\ntest\n" {
+				t.Fatalf("export ran before successful module tests: %q (%v)", data, err)
+			}
 		}
 		output := filepath.Join(args[4], "project", ".builds")
 		switch args[2] {

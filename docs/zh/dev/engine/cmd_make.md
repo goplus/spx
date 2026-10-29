@@ -35,7 +35,7 @@ GODOT_SRC=/absolute/path/to/godot make dev MODE=normal
 | --- | --- |
 | `make setup` | 准备本机编辑器和 native runtime 资产。 |
 | `make setup-web MODE=...` | 为一种 runtime 模式准备 Web 资产。 |
-| `make dev MODE=...` | 从源码构建完整的本地开发环境。 |
+| `make dev MODE=...` | 测试本机 SPX 模块，再从源码构建完整的本地开发环境。 |
 | `make doctor` | 校验最终解析出的 lock、工具链、模块 profile 和 Godot checkout。 |
 | `make build-editor` | 从源码构建本机 editor。 |
 | `make build-desktop` | 从源码构建本机 desktop template 和 runtime pack。 |
@@ -100,6 +100,8 @@ GODOT_SRC=/absolute/path/to/godot \
 SPX_MODULE_SRC=./godot_modules/spx \
 make dev MODE=normal
 ```
+
+`make dev` 首先以 `tests=yes` 构建本机 editor，再以 headless 模式运行 `*SPX*` 筛选出的 Godot SPX 模块测试。测试失败或没有注册 SPX 测试时，流程立即停止，不会继续构建 runtime pack、Web 资产或安装工具。
 
 如果只需要构建某个平台，可将 `dev` 换成 `build-editor`、`build-desktop`、`build-web MODE=...`、`build-android` 或 `build-ios`。
 

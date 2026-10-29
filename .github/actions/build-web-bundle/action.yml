@@ -1,0 +1,37 @@
+name: Build Web bundle
+description: Prepare Web assets and export the official base-profile bundle.
+inputs:
+  web-mode:
+    description: 'Web runtime mode: normal, worker, minigame, or miniprogram'
+    required: false
+    default: 'normal'
+  engine-asset-dir:
+    description: 'Optional directory containing engine artifacts from the current workflow run'
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Set up toolchain
+      uses: ./.github/actions/setup-toolchain
+
+    - name: Build local buildctl
+      id: buildctl
+      uses: ./.github/actions/setup-buildctl
+
+    - name: Prepare and export Web bundle
+      shell: bash
+      env:
+        BUILDCTL: ${{ steps.buildctl.outputs.path }}
+        GOWORK: 'off'
+        SPX_ISPX_PROFILE: base
+        WEB_MODE: ${{ inputs.web-mode }}
+        ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
+      run: |
+        set -euo pipefail
+
+        args=(web --mode "$WEB_MODE" --export-bundle)
+        if [ -n "$ENGINE_ASSET_DIR" ]; then
+          args+=(--asset-dir "$ENGINE_ASSET_DIR")
+        fi
+        "$BUILDCTL" setup "${args[@]}"

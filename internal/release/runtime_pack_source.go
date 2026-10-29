@@ -29,7 +29,8 @@ import (
 
 var runtimeBuildRecipeFiles = map[string]struct{}{
 	".github/scripts/runtime/build_pack.sh":               {},
-	".github/scripts/runtime_build_contract.py":           {},
+	".github/scripts/runtime/build_contract.py":           {},
+	".github/scripts/setup/build_buildctl.sh":             {},
 	"cmd/internal/macos_go_toolchain.sh":                  {},
 	"internal/cmd/buildctl/main.go":                       {},
 	"internal/cmd/buildctl/runtime_dispatch.go":           {},
@@ -64,6 +65,7 @@ var runtimePackSourceFiles = map[string]struct{}{
 	"cmd/spx/internal/command/args.go":                              {},
 	"cmd/spx/internal/command/build.go":                             {},
 	"cmd/spx/internal/command/cmd.go":                               {},
+	"cmd/spx/internal/command/dispatch.go":                          {},
 	"cmd/spx/internal/command/env.go":                               {},
 	"cmd/spx/internal/command/export.go":                            {},
 	"cmd/spx/internal/command/logging.go":                           {},
@@ -251,8 +253,8 @@ func isRuntimeBuildRecipePath(name string) bool {
 	}
 	// Keep this at file granularity: buildctl also contains engine compilation,
 	// Web compression, and developer orchestration that do not participate in
-	// the release_runtime_assets export-pack path. That workflow passes
-	// setup-mode=none, so the general setup/prepare path is excluded as well. If
+	// the build_runtime_pack export-pack path. Its toolchain setup does not
+	// prepare engine assets, so the general setup/prepare path is excluded. If
 	// the executed call graph starts using a new helper, add it here with a
 	// selector test.
 	if _, ok := runtimeBuildRecipeFiles[name]; ok {

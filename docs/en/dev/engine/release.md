@@ -3,10 +3,10 @@
 SPX and the Godot runtime use separate versions and are paired by one controlled workflow through explicit mappings. Inspect the declaration with:
 
 ```sh
-go run ./.github/scripts/runtime/version.go --json
+go run ./.github/cmd/runtime-version --json
 ```
 
-SPX `v4.0.0` uses the Go module `github.com/goplus/spx/v4`, paired with runtime `4.0.0` and runtime ABI `4`. Projects migrating from v3 must update the module path in `go.mod`, Go imports, and `gox.mod`. `AtFrame`, `CurrentFrame`, and `XGot_Game_Reload` have been removed, and `Rand__0` now returns `int`; callers must adapt accordingly. The runtime callback table layout and exported symbols have also changed, so v3 runtimes cannot be mixed with v4 products.
+SPX `v4.0.1` uses the Go module `github.com/goplus/spx/v4`, paired with runtime `4.0.1` and runtime ABI `4`. Projects migrating from v3 must update the module path in `go.mod`, Go imports, and `gox.mod`. `AtFrame`, `CurrentFrame`, and `XGot_Game_Reload` have been removed, and `Rand__0` now returns `int`; callers must adapt accordingly. The runtime callback table layout and exported symbols have also changed, so v3 runtimes cannot be mixed with v4 products.
 
 SPX Web release bundles and npm packages include only the base interpreter. Builder builds its own AI-enabled interpreter. See [interpreter development](../../../../cmd/ispx/README.md) for local builds, generation, and testing.
 
@@ -23,7 +23,7 @@ The first atomic external-module release is SPX `v3.2.0`, runtime `2.4.0` (tag `
 | Complete runtime release | `runtime-v<runtime_version>`, a same-version manifest, the required asset set, and every asset checksum |
 | SPX product packages | SPX release commit, selected atomic runtime, and platform packaging flow |
 
-SPX and Godot Actions both invoke `.github/scripts/runtime_build_contract.py` from the selected SPX commit to validate the lock and SCons profile. Engine cache toolchain digests are platform-scoped: native uses SCons, Web adds EMSDK, and Android adds JDK plus the NDK. An unknown NDK installer alias fails only an Android build; it does not block unrelated platforms.
+SPX and Godot Actions both invoke `.github/scripts/runtime/build_contract.py` from the selected SPX commit to validate the lock and SCons profile. Engine cache toolchain digests are platform-scoped: native uses SCons, Web adds EMSDK, and Android adds JDK plus the NDK. An unknown NDK installer alias fails only an Android build; it does not block unrelated platforms.
 
 The manifest records `module_tree`, `runtime_pack_source_sha256`, and `build_recipe_sha256` as the byte-producing source identity. A published runtime is reusable only when those values match the selected SPX revision and its lock-bound ABI, Godot commit, toolchain, repository, and asset contract also match. If any of those inputs changes, the publisher must bump `runtime_version` first. Godot SCons caches use their own build-input digests, and documentation is outside both runtime and cache digests.
 
@@ -35,16 +35,16 @@ The module tree remains a strict digest of the complete `godot_modules/spx` tree
 
    ```sh
    make pin-godot-candidate GODOT_SHA=<40-character-sha>
-   python3 .github/scripts/runtime_lock_snapshot.py check
+   python3 .github/scripts/runtime/lock_snapshot.py check
    ```
 
-   The command retains the current lock ref; provide `GODOT_REF=<branch-or-tag>` only when changing it. `pin-godot-candidate` explicitly asserts that the current runtime is unpublished, permits replacing its snapshot, and allows a remotely verified pre-merge candidate. It cannot weaken the release verifier or authorize publication, and must never be used after that runtime is public. The equivalent low-level command is `python3 .github/scripts/runtime_lock_snapshot.py pin-godot <sha> --premerge`.
-2. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/release.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree, does not need to equal `godot.commit`, and is outside the source-ancestry rule.
+   The command retains the current lock ref; provide `GODOT_REF=<branch-or-tag>` only when changing it. `pin-godot-candidate` explicitly asserts that the current runtime is unpublished, permits replacing its snapshot, and allows a remotely verified pre-merge candidate. It cannot weaken the release verifier or authorize publication, and must never be used after that runtime is public. The equivalent low-level command is `python3 .github/scripts/runtime/lock_snapshot.py pin-godot <sha> --premerge`.
+2. Independently pin the reusable-workflow implementation with a full SHA in `.github/workflows/build_release.yml` and `.github/workflows/test_godot_module.yml`. That `uses: ...@SHA` selects workflow code; it does not select the Godot source tree, does not need to equal `godot.commit`, and is outside the source-ancestry rule.
 3. Freeze the SPX candidate commit on a release branch in `goplus/spx`. Confirm that `currentSPXVersion` resolves through the current lock while historical mappings and snapshots remain unchanged. Atomic runtime definitions are derived from those snapshots rather than repeated by hand. Run the release `dry-run`; it builds the exact locked Godot commit and marks the ancestry result in the workflow summary. A fetchable commit proven to descend from the canonical ref, but not yet be contained by it, is labeled candidate-only and cannot be published; an unrelated commit, unresolved ref, or comparison failure stops the dry-run.
 4. Merge or otherwise promote that exact Godot commit into `godot.ref`, then verify the publication boundary:
 
    ```sh
-   python3 .github/scripts/runtime_lock_snapshot.py verify-godot
+   python3 .github/scripts/runtime/lock_snapshot.py verify-godot
    ```
 
    A normal merge preserves the candidate as an ancestor. A squash or rebase changes the source identity; run `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` and repeat the dry-run instead of publishing the old candidate SHA.
@@ -56,8 +56,8 @@ Never publish from a fork. The `publish-runtime` and `publish-release` operation
 
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
-python3 .github/scripts/runtime_lock_snapshot.py check
-python3 .github/scripts/runtime_lock_snapshot.py verify-godot
+python3 .github/scripts/runtime/lock_snapshot.py check
+python3 .github/scripts/runtime/lock_snapshot.py verify-godot
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -110,7 +110,7 @@ gh workflow run release.yml \
 
 The operation pins the exact commit SHA captured by the dispatch, builds the Web normal bundle, computes a pseudo-version, and publishes it under the npm `dev` dist-tag. It does not build the release runtime or platform products and does not create a GitHub Release. Before publishing, it applies the same source-identity reuse check; the selected runtime must already be public, complete, and compatible. A missing runtime must be published first, while an incompatible same-version runtime requires a version bump. A target SHA carrying an exact production `v4.*` tag fails closed. Development npm publication shares the `spx-release` concurrency group with production releases so different SHAs and production/development publication cannot race over dist-tags.
 
-Do not restore publication on every push to `dev`. Explicit publication avoids repeated failures while a newly advanced runtime lock has no public runtime and avoids creating an irreversible npm version for every merge. Configure the npm Trusted Publisher with organization `goplus`, repository `spx`, workflow filename `release.yml`, and no environment. Production and development packages then use the same top-level OIDC identity. `publish_web_package.yml` is reusable-only and must not be dispatched directly.
+Do not restore publication on every push to `dev`. Explicit publication avoids repeated failures while a newly advanced runtime lock has no public runtime and avoids creating an irreversible npm version for every merge. Configure the npm Trusted Publisher with organization `goplus`, repository `spx`, workflow filename `release.yml`, and no environment. Production and development packages then use the same top-level OIDC identity. `publish_npm.yml` is reusable-only and must not be dispatched directly.
 
 ## Maintaining later versions
 
@@ -122,6 +122,7 @@ Do not restore publication on every push to `dev`. Explicit publication avoids r
   ```
 
   Add `RUNTIME_ABI=N` only when the runtime ABI itself changes. The command uses authenticated `gh` API reads to require both current releases to be public and both target release/tag names to be unused before it writes. It then archives the previous SPX mapping, advances the current lock, creates the new immutable snapshot, and runs the release-metadata tests. It never publishes and never changes the Godot pin. If the current pair is still an unpublished candidate, keep those versions instead of archiving them as release history.
+- Correcting fingerprint inputs can also invalidate public runtime reuse, for example when adding `exportpack` command dispatch to pack-source identity. Check resolution and follow the migration policy above; do not omit executed build inputs to preserve an old digest. Standalone ZIP metadata is normalized. Publish changed packaging under a new SPX version instead of replacing old assets.
 - Every atomic runtime definition must have an immutable lock snapshot at `internal/release/runtime_locks/<runtime-version>.json`. Historical versions use that snapshot to recover build configuration, platform asset names, and the SPX/runtime mapping rather than consulting the newer default lock.
 - After creating a new runtime version, use `make pin-godot GODOT_SHA=<sha>` for a strict pin, `make pin-godot-unpublished GODOT_SHA=<sha>` to replace its unpublished snapshot after the commit reaches the lock ref, or `make pin-godot-candidate GODOT_SHA=<sha>` for a verified pre-merge dry-run candidate. All three retain the current lock ref unless `GODOT_REF=...` is supplied, derive the snapshot filename from the current lock, and never touch other historical versions.
 - The project `go.mod` scaffold renders the declared SPX version automatically. The `v4.0.0` requirement in `internal/cmd/codegen/go.mod` is only the major-version floor for its local `replace`; do not bump either file during a release.

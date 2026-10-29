@@ -26,9 +26,10 @@ type DownloadConfig struct {
 }
 
 type BuildConfig struct {
-	Target   string
-	Platform string
-	Mode     string
+	Target     string
+	Platform   string
+	Mode       string
+	TestModule bool
 }
 
 func ShouldRefreshPreparedAssets() bool {

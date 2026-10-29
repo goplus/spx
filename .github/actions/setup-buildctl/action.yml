@@ -1,22 +1,13 @@
 name: Set up buildctl
-description: Build the local buildctl binary and export BUILDCTL for later CI steps.
+description: Build buildctl from this checkout and expose its executable path.
+outputs:
+  path:
+    description: Absolute path of the buildctl executable
+    value: ${{ steps.build.outputs.path }}
 runs:
   using: composite
   steps:
     - name: Build local buildctl
+      id: build
       shell: bash
-      run: |
-        set -euo pipefail
-
-        source ./cmd/internal/macos_go_toolchain.sh
-        configure_macos_go_toolchain
-
-        if [ -n "${BUILDCTL:-}" ] && [ -x "$BUILDCTL" ]; then
-          exit 0
-        fi
-
-        buildctl_path="$(pwd)/.bin/buildctl$(go env GOEXE)"
-
-        mkdir -p ./.bin
-        macos_go_toolchain_go_build -o "$buildctl_path" ./internal/cmd/buildctl
-        echo "BUILDCTL=$buildctl_path" >> "$GITHUB_ENV"
+      run: bash .github/scripts/setup/build_buildctl.sh

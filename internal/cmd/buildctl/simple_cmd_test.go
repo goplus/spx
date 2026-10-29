@@ -32,11 +32,12 @@ import (
 )
 
 type setupTestRunner struct {
-	t         *testing.T
-	root      string
-	scripts   [][]string
-	commands  []string
-	scriptErr error
+	t             *testing.T
+	root          string
+	scripts       [][]string
+	commands      []string
+	scriptErr     error
+	commandErrors map[string]error
 }
 
 func TestRunDispatchesUsageAndUnknownCommands(t *testing.T) {
@@ -86,6 +87,7 @@ func TestParseSetupCommandArgs(t *testing.T) {
 		{name: "local assets", args: []string{"web", "--asset-dir", "artifacts/runtime"}, want: setupConfig{target: "web", mode: "normal", assetDir: "artifacts/runtime"}},
 		{name: "published host", args: []string{"host", "--published-runtime"}, want: setupConfig{target: "host", publishedRuntime: true}},
 		{name: "published full", args: []string{"full", "--published-runtime"}, want: setupConfig{target: "full", mode: "normal", publishedRuntime: true}},
+		{name: "web bundle", args: []string{"web", "--mode", "worker", "--asset-dir", "runtime-assets", "--export-bundle"}, want: setupConfig{target: "web", mode: "worker", assetDir: "runtime-assets", exportBundle: true}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -107,6 +109,8 @@ func TestParseSetupCommandArgs(t *testing.T) {
 		{"web", "--published-runtime"},
 		{"host", "--asset-dir", "artifacts", "--published-runtime"},
 		{"full", "extra"},
+		{"host", "--export-bundle"},
+		{"full", "--export-bundle"},
 	}
 	for _, args := range invalid {
 		if _, err := parseSetupCommandArgs(args); err == nil {
@@ -349,7 +353,7 @@ func TestSetupLocalArtifacts(t *testing.T) {
 				} else if err != nil {
 					t.Fatal(err)
 				}
-				wantScript := []string{filepath.Join("cmd", "spx", "install.sh")}
+				wantScript := []string{"cmd/spx/install.sh"}
 				if target != "host" {
 					wantScript = append(wantScript, "--web")
 					if target == "web" {
@@ -419,6 +423,9 @@ func (r *setupTestRunner) RunCommand(dir, name string, args ...string) error {
 		r.t.Fatalf("unexpected export command: %s %s %q", dir, name, args)
 	}
 	r.commands = append(r.commands, args[2])
+	if err := r.commandErrors[args[2]]; err != nil {
+		return err
+	}
 	dst := filepath.Join(args[4], "project", ".builds")
 	switch args[2] {
 	case "exportpack":
@@ -426,6 +433,8 @@ func (r *setupTestRunner) RunCommand(dir, name string, args ...string) error {
 	case "exporttemplateweb":
 		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.pck"), []byte("web pack"))
 		mustWriteFile(r.t, filepath.Join(dst, "webi", "engine.js"), []byte("engine code"))
+	case "exportweb", "exportwebworker", "exportminigame", "exportminiprogram":
+		mustWriteFile(r.t, filepath.Join(dst, "web", "index.html"), []byte("web bundle"))
 	default:
 		r.t.Fatalf("unexpected export operation: %q", args[2])
 	}

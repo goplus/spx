@@ -3,10 +3,10 @@
 SPX 发布与 Godot runtime 使用两套版本，并由同一受控流程按显式映射配对。当前发布声明可用以下命令查看：
 
 ```sh
-go run ./.github/scripts/runtime/version.go --json
+go run ./.github/cmd/runtime-version --json
 ```
 
-SPX `v4.0.0` 使用 Go module `github.com/goplus/spx/v4`，配套 runtime `4.0.0`、runtime ABI `4`。从 v3 迁移时，需要同步更新项目的 `go.mod`、Go import 和 `gox.mod` 中的模块路径。`AtFrame`、`CurrentFrame`、`XGot_Game_Reload` 已移除，`Rand__0` 现在返回 `int`；依赖这些接口的代码需要适配。runtime 的回调表布局和导出符号也已变化，v3 runtime 不能与 v4 产品混用。
+SPX `v4.0.1` 使用 Go module `github.com/goplus/spx/v4`，配套 runtime `4.0.1`、runtime ABI `4`。从 v3 迁移时，需要同步更新项目的 `go.mod`、Go import 和 `gox.mod` 中的模块路径。`AtFrame`、`CurrentFrame`、`XGot_Game_Reload` 已移除，`Rand__0` 现在返回 `int`；依赖这些接口的代码需要适配。runtime 的回调表布局和导出符号也已变化，v3 runtime 不能与 v4 产品混用。
 
 SPX 发布的 Web 包和 npm 包只包含基础解释器，Builder 自行构建带 AI 的解释器。本地构建、代码生成和测试见[解释器开发说明](../../../../cmd/ispx/README.md)。
 
@@ -23,7 +23,7 @@ SPX 发布的 Web 包和 npm 包只包含基础解释器，Builder 自行构建�
 | 完整 runtime release | `runtime-v<runtime_version>`、同版本 manifest、required asset 集合与全部资产 checksum |
 | SPX 产品包 | SPX release commit、选定的原子 runtime、各平台打包流程 |
 
-SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime_build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
+SPX 与 Godot Actions 都调用所选 SPX commit 中的 `.github/scripts/runtime/build_contract.py` 校验 lock 与 SCons profile。引擎 cache 的工具链摘要按平台收敛：native 只包含 SCons，Web 额外包含 EMSDK，Android 额外包含 JDK 与 NDK。未知的 NDK installer alias 只会阻断 Android 构建，不会误伤其他平台。
 
 manifest 记录的 `module_tree`、`runtime_pack_source_sha256` 和 `build_recipe_sha256` 共同构成会影响产物字节的源码身份。只有这些值与所选 SPX revision 一致，并且 lock 约束的 ABI、Godot commit、toolchain、repository 和资产契约也一致时，已发布 runtime 才能复用。任一输入发生变化，发布者都必须先提升 `runtime_version`。Godot SCons cache 使用独立的构建输入摘要；文档不进入 runtime 或 cache digest。
 
@@ -35,16 +35,16 @@ module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘�
 
    ```sh
    make pin-godot-candidate GODOT_SHA=<40-character-sha>
-   python3 .github/scripts/runtime_lock_snapshot.py check
+   python3 .github/scripts/runtime/lock_snapshot.py check
    ```
 
-   该命令默认保留 lock 当前的 ref；只有切换持久 branch/tag 时才传 `GODOT_REF=<branch-or-tag>`。`pin-godot-candidate` 由操作者明确声明 current runtime 尚未发布、允许替换其 snapshot，并允许使用远端已验证的 pre-merge candidate；它不能削弱 release verifier 或授权发布，runtime 公开后绝不能再使用。等价的底层命令是 `python3 .github/scripts/runtime_lock_snapshot.py pin-godot <sha> --premerge`。
-2. 在 `.github/workflows/release.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等，也不受 source ancestry 规则约束。
+   该命令默认保留 lock 当前的 ref；只有切换持久 branch/tag 时才传 `GODOT_REF=<branch-or-tag>`。`pin-godot-candidate` 由操作者明确声明 current runtime 尚未发布、允许替换其 snapshot，并允许使用远端已验证的 pre-merge candidate；它不能削弱 release verifier 或授权发布，runtime 公开后绝不能再使用。等价的底层命令是 `python3 .github/scripts/runtime/lock_snapshot.py pin-godot <sha> --premerge`。
+2. 在 `.github/workflows/build_release.yml` 与 `.github/workflows/test_godot_module.yml` 中独立使用完整 SHA 固定 reusable workflow 的实现。`uses: ...@SHA` 选择的是 workflow 代码，不是 Godot 源码，不要求与 `godot.commit` 相等，也不受 source ancestry 规则约束。
 3. 在 `goplus/spx` 的发布分支冻结 SPX candidate commit。确认 `currentSPXVersion` 通过 current lock 解析，并保持历史 mapping 与 snapshot 不变；atomic runtime definition 由这些 snapshot 自动派生，不再手写重复。执行 release `dry-run`；它会构建 lock 中精确的 Godot commit，并在 workflow summary 标出 ancestry 结果。只有 verifier 已确认可获取、以 canonical ref tip 为祖先但尚未被该 ref 包含的 commit，才会标记为 candidate-only；无关 commit、ref 无法解析或比较失败会直接阻断 dry-run。
 4. 将该 Godot commit 原样 merge 或提升到 `godot.ref`，然后校验发布边界：
 
    ```sh
-   python3 .github/scripts/runtime_lock_snapshot.py verify-godot
+   python3 .github/scripts/runtime/lock_snapshot.py verify-godot
    ```
 
    普通 merge 会保留 candidate 的祖先关系；squash 或 rebase 会改变源码身份，此时运行 `make pin-godot-unpublished GODOT_SHA=<resulting-sha>` 固定最终 commit 并重跑 dry-run，不能发布旧 candidate SHA。
@@ -56,8 +56,8 @@ module tree 仍严格覆盖完整的 `godot_modules/spx` tree。pack-source 摘�
 
 ```sh
 GODOT_SRC=/absolute/path/to/final-godot make doctor
-python3 .github/scripts/runtime_lock_snapshot.py check
-python3 .github/scripts/runtime_lock_snapshot.py verify-godot
+python3 .github/scripts/runtime/lock_snapshot.py check
+python3 .github/scripts/runtime/lock_snapshot.py verify-godot
 go list ./... | grep -v '/internal/webffi' | xargs go test
 git diff --check
 ```
@@ -110,7 +110,7 @@ gh workflow run release.yml \
 
 该操作固定使用 dispatch 捕获的精确 commit SHA，构建 Web normal 包，计算 pseudo-version，并发布到 npm `dev` dist-tag。它不会构建 release runtime、平台产品包或创建 GitHub Release。发布前会执行相同的源码身份复用校验，所选 runtime 必须已经公开、完整且兼容；runtime 不存在时应先发布，存在同版本但不兼容时必须提升版本。如果目标 SHA 恰好已有正式 `v4.*` tag，则会 fail closed。开发版 npm 与正式发布共用 `spx-release` 并发组，避免不同 SHA 或正式/开发发布同时竞争 dist-tag。
 
-不要恢复 `dev` 每次 push 自动发布。显式操作可以避免 runtime lock 已推进但对应 runtime 尚未公开时反复失败，也避免为每次合入产生不可撤销的 npm 版本。npm Trusted Publisher 应固定为 organization `goplus`、repository `spx`、workflow filename `release.yml`，environment 留空；正式版与开发版都通过该顶层 workflow 的 OIDC 身份发布。`publish_web_package.yml` 只是 reusable workflow，不应单独触发。
+不要恢复 `dev` 每次 push 自动发布。显式操作可以避免 runtime lock 已推进但对应 runtime 尚未公开时反复失败，也避免为每次合入产生不可撤销的 npm 版本。npm Trusted Publisher 应固定为 organization `goplus`、repository `spx`、workflow filename `release.yml`，environment 留空；正式版与开发版都通过该顶层 workflow 的 OIDC 身份发布。`publish_npm.yml` 只是 reusable workflow，不应单独触发。
 
 ## 后续版本维护
 
@@ -122,6 +122,7 @@ gh workflow run release.yml \
   ```
 
   只有 runtime ABI 本身变化时才额外传 `RUNTIME_ABI=N`。该命令会先通过已认证的 `gh` API 只读检查确认两项 current release 已公开、两项目标 release/tag 均未占用，再归档上一条 SPX mapping、推进 current lock、创建新的不可变 snapshot，并执行 release metadata 测试；它不会发布，也不会修改 Godot pin。current pair 仍是未发布 candidate 时，应继续使用原版本，不能把它归档成发布历史。
+- runtime 指纹输入范围的修正也可能使公开 runtime 不再兼容，例如将 `exportpack` 的命令调度纳入 pack-source。应检查复用判定并按上述规则迁移，不能为保留旧 digest 而排除实际构建输入。standalone ZIP 使用规范化元数据；打包方式改变后的资产应随新 SPX 版本发布，不能覆盖旧版本。
 - 每个原子 runtime definition 都必须有不可变的 `internal/release/runtime_locks/<runtime-version>.json` 快照；历史版本根据该快照恢复构建配置、平台资产名称和 SPX/runtime 映射，不能读取更新后的默认 lock。
 - 新 runtime version 创建后，严格固定使用 `make pin-godot GODOT_SHA=<sha>`；commit 已进入 lock ref 且需要替换未发布 snapshot 时使用 `make pin-godot-unpublished GODOT_SHA=<sha>`；合并前 dry-run candidate 使用 `make pin-godot-candidate GODOT_SHA=<sha>`。三者默认保留 current lock ref，只有传入 `GODOT_REF=...` 才会切换，并且只根据 current lock 推导 snapshot 文件名，不会触碰其他历史版本。
 - 项目 `go.mod` scaffold 会自动渲染当前声明的 SPX 版本。`internal/cmd/codegen/go.mod` 中的 `v4.0.0` 只是本地 `replace` 所需的 major-version floor，发布时不要修改这两个文件。

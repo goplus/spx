@@ -1,0 +1,138 @@
+name: CI
+on: [push, pull_request, merge_group]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-source:
+    name: Check source
+    uses: ./.github/workflows/check_source.yml
+    with:
+      collect_coverage: true
+
+  build-go:
+    name: Build and test Go
+    uses: ./.github/workflows/build_go.yml
+
+  resolve-runtime:
+    name: Resolve published runtime
+    runs-on: ubuntu-22.04
+    outputs:
+      runtime_state: ${{ steps.runtime.outputs.runtime_state }}
+      runtime_reason: ${{ steps.runtime.outputs.runtime_reason }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate current runtime lock snapshot
+        run: python3 .github/scripts/runtime/lock_snapshot.py check
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve runtime release
+        id: runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: go run ./.github/cmd/runtime-resolution --github-output "$GITHUB_OUTPUT"
+
+      - name: Report runtime CI policy
+        env:
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+        run: |
+          {
+            echo "### Runtime CI policy"
+            echo
+            echo "- State: \`$RUNTIME_STATE\`"
+            echo "- Reason: $RUNTIME_REASON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  test-godot-module:
+    name: Test SPX module with locked Godot
+    needs: [check-source, resolve-runtime]
+    # Job conditions implicitly require every dependency to succeed; this only
+    # selects the runtime path.
+    if: >-
+      ${{
+        needs.resolve-runtime.outputs.runtime_state == 'missing' ||
+        needs.resolve-runtime.outputs.runtime_state == 'incompatible'
+      }}
+    uses: ./.github/workflows/test_godot_module.yml
+
+  build-web:
+    name: Build Web bundle with published runtime
+    needs: [check-source, resolve-runtime]
+    if: needs.resolve-runtime.outputs.runtime_state == 'ready'
+    uses: ./.github/workflows/build_web.yml
+
+  ci-gate:
+    if: ${{ !cancelled() }}
+    needs:
+      - check-source
+      - build-go
+      - resolve-runtime
+      - test-godot-module
+      - build-web
+    name: CI gate
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify required CI path passed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 .github/scripts/ci/check_results.py
+
+      - name: Download Go coverage artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-{source,macos,windows}
+          path: coverage
+
+      - name: Download C++ coverage artifact
+        if: needs.test-godot-module.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: coverage-spx-cpp
+          path: coverage/cpp
+
+      - name: Collect Go coverage profiles
+        id: profiles
+        run: python3 .github/scripts/ci/collect_coverage.py coverage --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload Go coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: ${{ steps.profiles.outputs.coverage }}
+          flags: go
+          disable_search: true
+          fail_ci_if_error: true
+
+      - name: Upload C++ coverage to Codecov
+        if: needs.test-godot-module.result == 'success'
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          files: coverage/cpp/coverage.xml
+          flags: cpp
+          disable_search: true
+          fail_ci_if_error: true
+
+      - name: Finalize Codecov checks
+        uses: codecov/codecov-action@v7
+        with:
+          slug: goplus/spx
+          run_command: send-notifications
+          fail_ci_if_error: true
