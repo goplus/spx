@@ -86,6 +86,9 @@ struct TempDirectory {
 	void write(const String &name, const String &contents) const {
 		Ref<FileAccess> output = FileAccess::open(file(name), FileAccess::WRITE);
 		REQUIRE(output.is_valid());
+		if (output.is_null()) {
+			return; // REQUIRE does not abort in no-exception test builds.
+		}
 		output->store_string(contents);
 	}
 };

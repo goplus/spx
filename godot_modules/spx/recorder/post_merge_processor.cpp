@@ -923,6 +923,7 @@ Error PostMergeProcessor::write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAc
 	ERR_FAIL_COND_V(original_size != chunk.chunk_size || original_size > file_size - input_file->get_position(), ERR_FILE_CORRUPT);
 	ERR_FAIL_COND_V(!is_video && original_size % 4 != 0, ERR_FILE_CORRUPT);
 
+	uint32_t written_size = original_size;
 	if (is_video) {
 		// Write video chunk (keep original format)
 		output_file->store_buffer((const uint8_t *)"00db", 4); // Stream 0, video
@@ -938,16 +939,6 @@ Error PostMergeProcessor::write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAc
 		if (original_size % 2 != 0) {
 			output_file->store_8(0);
 		}
-
-		// Add to index
-		AviFileInfo::IndexEntry entry;
-		memcpy(entry.fourcc, "00db", 4);
-		entry.flags = 0x10; // AVIIF_KEYFRAME
-		entry.chunk_offset = chunk_offset;
-		entry.chunk_size = original_size;
-		merged_index.push_back(entry);
-
-		chunk_offset += 8 + original_size + (original_size & 1);
 	} else {
 		// Audio chunk - convert 32-bit to 16-bit
 		Vector<int32_t> audio_data_32;
@@ -964,23 +955,22 @@ Error PostMergeProcessor::write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAc
 			audio_data_16.write[i] = sample_16;
 		}
 
-		uint32_t converted_size = audio_data_16.size() * 2;
+		written_size = audio_data_16.size() * 2;
 
 		// Write audio chunk
 		output_file->store_buffer((const uint8_t *)"01wb", 4); // Stream 1, audio
-		output_file->store_32(converted_size);
-		output_file->store_buffer((const uint8_t *)audio_data_16.ptr(), converted_size);
-
-		// Add to index
-		AviFileInfo::IndexEntry entry;
-		memcpy(entry.fourcc, "01wb", 4);
-		entry.flags = 0;
-		entry.chunk_offset = chunk_offset;
-		entry.chunk_size = converted_size;
-		merged_index.push_back(entry);
-
-		chunk_offset += 8 + converted_size;
+		output_file->store_32(written_size);
+		output_file->store_buffer((const uint8_t *)audio_data_16.ptr(), written_size);
 	}
+
+	AviFileInfo::IndexEntry entry;
+	memcpy(entry.fourcc, is_video ? "00db" : "01wb", 4);
+	entry.flags = is_video ? 0x10 : 0; // AVIIF_KEYFRAME for video.
+	entry.chunk_offset = chunk_offset;
+	entry.chunk_size = written_size;
+	merged_index.push_back(entry);
+	// PCM conversion produces an even size; only video can require padding.
+	chunk_offset += 8 + written_size + (written_size & 1);
 
 	return OK;
 }

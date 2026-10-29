@@ -74,8 +74,7 @@ private:
 	mutable Mutex buffer_mutex;
 	uint32_t buffer_size = 0;
 
-	// Temporary buffers
-	Vector<int32_t> temp_audio_buffer;
+	// Audio chunk buffer
 	Vector<int32_t> chunk_buffer;
 
 	// Statistics
@@ -88,11 +87,12 @@ private:
 	void recording_loop();
 
 	// Internal processing methods
-	bool process_audio_chunk(uint64_t current_recording_time);
-	void update_statistics(uint64_t chunk_process_start_time, uint32_t samples_processed);
+	bool process_audio_chunk();
+	void update_statistics(uint64_t chunk_process_start_time);
 	void update_buffer_level();
 
 	// Buffer management
+	void configure_buffers();
 	bool read_audio_chunk(Vector<int32_t> &output_buffer, uint32_t requested_samples);
 	void handle_buffer_underrun();
 	void handle_buffer_overrun();

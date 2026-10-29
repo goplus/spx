@@ -106,15 +106,13 @@ static Ref<Image> render_project_text() {
 }
 
 struct SvgFile {
-	String path = TestUtils::get_temp_path("spx_resource_cache.svg");
+	TestSpx::TempDirectory files{ "spx_resource_cache" };
+	String path = files.file("resource.svg");
 
 	SvgFile() { write(8, 6); }
-	~SvgFile() { DirAccess::remove_absolute(path); }
 
 	void write(int p_width, int p_height) {
-		Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE);
-		REQUIRE(file.is_valid());
-		file->store_string(vformat("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"><rect width=\"100%%\" height=\"100%%\" fill=\"red\"/></svg>", p_width, p_height));
+		files.write("resource.svg", vformat("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\"><rect width=\"100%%\" height=\"100%%\" fill=\"red\"/></svg>", p_width, p_height));
 	}
 
 	void create_clip(SpxResMgr &p_resources) {
@@ -287,10 +285,9 @@ TEST_CASE("[SceneTree][SPX] Direct texture loader preserves WebP frame size and 
 
 TEST_CASE("[SceneTree][SPX] Direct bitmap failures preserve checked loading and retry") {
 	SpxResMgr resources;
-	const String path = TestUtils::get_temp_path("spx_bitmap_retry.png");
-	if (FileAccess::exists(path)) {
-		REQUIRE(DirAccess::remove_absolute(path) == OK);
-	}
+	TestSpx::TempDirectory files("spx_bitmap_retry");
+	const String path = files.file("texture.png");
+	REQUIRE_FALSE(FileAccess::exists(path));
 
 	ERR_PRINT_OFF
 	resources.reload_texture(path.utf8().get_data());
@@ -306,9 +303,7 @@ TEST_CASE("[SceneTree][SPX] Direct bitmap failures preserve checked loading and 
 	REQUIRE(placeholder_image.is_valid());
 	CHECK(placeholder_image->get_pixel(0, 0).is_equal_approx(Color(1, 0, 1, 128.0f / 255.0f)));
 
-	Ref<Image> image = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
-	image->fill(Color(0, 1, 0));
-	REQUIRE(image->save_png(path) == OK);
+	files.write_png("texture.png", Vector2i(8, 6), Color(0, 1, 0));
 	const Ref<Texture2D> loaded = resources.load_texture_checked(path);
 	REQUIRE(loaded.is_valid());
 	CHECK(loaded != placeholder);

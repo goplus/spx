@@ -40,16 +40,14 @@
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
 #include "../spx_sprite_render_util.h"
-#include "core/io/dir_access.h"
-#include "core/io/file_access.h"
 #include "core/io/json.h"
 #include "scene/2d/animated_sprite_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "servers/audio_server.h"
 #include "scene/resources/image_texture.h"
+#include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
-#include "tests/test_utils.h"
 
 namespace TestSpxSpriteRenderUtil {
 
@@ -110,9 +108,10 @@ struct VisualFixture {
 	Node2D *root = nullptr;
 	SpxResMgr *resources = nullptr;
 	SpxSpriteMgr *sprites = nullptr;
-	String png_path = TestUtils::get_temp_path("spx_visual.png");
-	String svg_path = TestUtils::get_temp_path("spx_visual.svg");
-	String retry_path = TestUtils::get_temp_path("spx_visual_retry.svg");
+	TestSpx::TempDirectory files{ "spx_visual" };
+	String png_path = files.file("spx_visual.png");
+	String svg_path = files.file("spx_visual.svg");
+	String retry_path = files.file("spx_visual_retry.svg");
 
 	VisualFixture() {
 		SpxEngine::register_callbacks(nullptr);
@@ -125,30 +124,19 @@ struct VisualFixture {
 		resources->on_awake();
 		sprites = engine->get_sprite();
 		sprites->on_awake();
-		Ref<Image> image = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
-		image->fill(Color(1, 0, 0));
-		CHECK(image->save_png(png_path) == OK);
-		write_svg(svg_path);
-		write_text(retry_path, "invalid SVG");
+		files.write_png("spx_visual.png", Vector2i(8, 6), Color(1, 0, 0));
+		write_svg("spx_visual.svg");
+		files.write("spx_visual_retry.svg", "invalid SVG");
 	}
 
 	~VisualFixture() {
 		SpxEngine::shutdown();
 		memdelete(root);
-		DirAccess::remove_absolute(png_path);
-		DirAccess::remove_absolute(svg_path);
-		DirAccess::remove_absolute(retry_path);
 	}
 
-	static void write_text(const String &p_path, const String &p_text) {
-		Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::WRITE);
-		REQUIRE(file.is_valid());
-		file->store_string(p_text);
-	}
-
-	static void write_svg(const String &p_path) {
-		write_text(
-				p_path,
+	void write_svg(const String &p_name) {
+		files.write(
+				p_name,
 				"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" "
 				"height=\"6\"><rect width=\"8\" height=\"6\" fill=\"red\"/></svg>");
 	}
@@ -215,7 +203,7 @@ TEST_CASE("[SceneTree][SPX] Bitmap and SVG visuals select their sampling filters
 TEST_CASE("[SceneTree][SPX] Fractional SVG render bounds and pixel queries share logical geometry") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
 	VisualFixture fixture;
-	VisualFixture::write_text(fixture.svg_path, "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\" fill=\"red\"/></svg>");
+	fixture.files.write("spx_visual.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\" fill=\"red\"/></svg>");
 	const CharString path = fixture.svg_path.utf8();
 	CHECK(fixture.resources->get_image_size(path.get_data()) == Vector2(11, 7));
 	CHECK(fixture.resources->get_image_logical_size(path.get_data()) == Vector2(10.75, 6.25));
@@ -253,8 +241,8 @@ TEST_CASE("[SceneTree][SPX] Fractional SVG render bounds and pixel queries share
 TEST_CASE("[SceneTree][SPX] SVG frame changes and reloads retain fractional logical dimensions") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
 	VisualFixture fixture;
-	VisualFixture::write_text(fixture.svg_path, "<svg width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
-	VisualFixture::write_text(fixture.retry_path, "<svg width=\"17.125\" height=\"9.75\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	fixture.files.write("spx_visual.svg", "<svg width=\"10.75\" height=\"6.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	fixture.files.write("spx_visual_retry.svg", "<svg width=\"17.125\" height=\"9.75\"><rect width=\"100%\" height=\"100%\"/></svg>");
 	fixture.create_clip("fractional", fixture.svg_path, fixture.retry_path);
 	SpxSprite *sprite = fixture.create_sprite();
 	sprite->set_render_scale(Vector2(3, 3));
@@ -267,14 +255,14 @@ TEST_CASE("[SceneTree][SPX] SVG frame changes and reloads retain fractional logi
 	CHECK(query.bounds.size.is_equal_approx(Vector2(17.125, 9.75) * 3));
 	const Ref<Texture2D> texture = query.texture;
 
-	VisualFixture::write_text(fixture.retry_path, "<svg width=\"12.5\" height=\"10.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
+	fixture.files.write("spx_visual_retry.svg", "<svg width=\"12.5\" height=\"10.25\"><rect width=\"100%\" height=\"100%\"/></svg>");
 	const CharString path = fixture.retry_path.utf8();
 	fixture.resources->reload_texture(path.get_data());
 	REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, query));
 	CHECK(query.texture == texture);
 	CHECK(query.bounds.size.is_equal_approx(Vector2(12.5, 10.25) * 3));
 	CHECK(fixture.resources->get_image_logical_size(path.get_data()) == Vector2(12.5, 10.25));
-	VisualFixture::write_text(fixture.retry_path, "invalid SVG");
+	fixture.files.write("spx_visual_retry.svg", "invalid SVG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture(path.get_data());
 	ERR_PRINT_ON
@@ -328,7 +316,7 @@ TEST_CASE("[SceneTree][SPX] Animation creation publishes complete clips and "
 	CHECK(fixture.resources->get_animation_frames("ReviewSprite::retry").is_null());
 	CHECK_FALSE(fixture.resources->is_dynamic_anim_mode());
 	CHECK_FALSE(fixture.resources->is_svg_animation("ReviewSprite::retry"));
-	VisualFixture::write_svg(fixture.retry_path);
+	fixture.write_svg("spx_visual_retry.svg");
 	fixture.create_clip("retry", fixture.svg_path, fixture.retry_path);
 	const Ref<SpriteFrames> frames =
 			fixture.resources->get_animation_frames("ReviewSprite::retry");
@@ -402,7 +390,7 @@ TEST_CASE("[SceneTree][SPX] Failed visual preparation preserves source and "
 	sprite->get_anim2d()->set_frame_and_progress(1, 0.4);
 	const CharString broken_path = fixture.retry_path.utf8();
 	const CharString broken_bitmap = fixture.png_path.utf8();
-	VisualFixture::write_text(fixture.png_path, "invalid PNG");
+	fixture.files.write("spx_visual.png", "invalid PNG");
 	ERR_PRINT_OFF
 	sprite->set_texture(broken_bitmap.get_data());
 	sprite->set_texture(broken_path.get_data());
@@ -417,13 +405,13 @@ TEST_CASE("[SceneTree][SPX] Failed visual preparation preserves source and "
 	CHECK_FALSE(original->get_animation_loop("ReviewSprite::svg"));
 
 	// The cached 1x source stays valid while the requested 2x source fails.
-	VisualFixture::write_text(fixture.svg_path, "invalid SVG");
+	fixture.files.write("spx_visual.svg", "invalid SVG");
 	ERR_PRINT_OFF
 	sprite->set_render_scale(Vector2(2, 2));
 	ERR_PRINT_ON
 	CHECK(sprite->get_anim2d()->get_sprite_frames() == original);
 	CHECK(sprite->get_anim2d()->get_scale() == Vector2(2, 2));
-	VisualFixture::write_svg(fixture.svg_path);
+	fixture.write_svg("spx_visual.svg");
 	sprite->set_render_scale(Vector2(2, 2));
 	CHECK(sprite->get_anim2d()->get_sprite_frames() != original);
 	CHECK(sprite->get_anim2d()->get_scale() == Vector2(1, 1));
@@ -461,7 +449,7 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 	REQUIRE(SpxPixelQuery::load_image(after_png, &images));
 	CHECK(after_png.image->get_pixel(0, 0) == Color(0, 0, 1));
 	CHECK_FALSE(texture->is_pixel_opaque(1, 0));
-	VisualFixture::write_text(fixture.png_path, "invalid PNG");
+	fixture.files.write("spx_visual.png", "invalid PNG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture("spx_visual.png");
 	ERR_PRINT_ON
@@ -478,8 +466,7 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 	SpxPixelQuery::Snapshot before_svg;
 	before_svg.texture = svg_texture;
 	REQUIRE(SpxPixelQuery::load_image(before_svg, &images));
-	VisualFixture::write_text(
-			fixture.svg_path,
+	fixture.files.write("spx_visual.svg",
 			"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" "
 			"height=\"10\"><rect width=\"12\" height=\"10\" fill=\"blue\"/></svg>");
 	fixture.resources->reload_texture("spx_visual.svg");
@@ -492,7 +479,7 @@ TEST_CASE("[SceneTree][SPX] Texture reload normalizes paths and preserves "
 	after_svg.texture = svg_texture;
 	REQUIRE(SpxPixelQuery::load_image(after_svg, &images));
 	CHECK(after_svg.image->get_pixel(0, 0) == Color(0, 0, 1));
-	VisualFixture::write_text(fixture.svg_path, "invalid SVG");
+	fixture.files.write("spx_visual.svg", "invalid SVG");
 	ERR_PRINT_OFF
 	fixture.resources->reload_texture("spx_visual.svg");
 	ERR_PRINT_ON
