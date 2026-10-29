@@ -1,0 +1,57 @@
+name: Package macOS
+
+on:
+  workflow_call:
+    inputs:
+      engine_artifacts:
+        description: 'Use Godot engine artifacts produced by the current workflow run'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  package-macos:
+    name: Package macOS standalone (${{ matrix.arch_name }})
+    runs-on: ${{ matrix.runs_on }}
+    strategy:
+      matrix:
+        include:
+          - arch_name: x64
+            runtime_arch: x86_64
+            runs_on: macos-15-intel
+          - arch_name: arm64
+            runtime_arch: arm64
+            runs_on: macos-15
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Download current-run engine artifacts
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: runtime-*macos-${{ matrix.runtime_arch }}
+          path: runtime-assets
+          merge-multiple: true
+
+      - name: Download current-run universal macOS template
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: runtime-macos-universal
+          path: runtime-assets
+
+      - name: Download current-run runtime pack
+        if: inputs.engine_artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: runtime-spx-assets
+          path: runtime-assets
+
+      - name: Package and upload standalone artifact
+        uses: ./.github/actions/package-standalone
+        with:
+          engine-asset-dir: ${{ inputs.engine_artifacts && 'runtime-assets' || '' }}
+          platform: darwin
+          package-arch: ${{ matrix.arch_name }}
+          artifact-name: spx-standalone-darwin-${{ matrix.arch_name }}

@@ -1,0 +1,324 @@
+name: Build release artifacts
+
+on:
+  workflow_call:
+    inputs:
+      operation:
+        description: 'dry-run, publish-runtime, or publish-release'
+        required: true
+        type: string
+      release_tag:
+        description: 'SPX release tag declared by the source commit'
+        required: true
+        type: string
+      platforms:
+        description: 'all or comma-separated web,macos,windows,linux'
+        required: true
+        type: string
+    outputs:
+      release_tag:
+        description: 'Validated SPX release tag'
+        value: ${{ jobs.plan-release.outputs.release_tag }}
+      version:
+        description: 'SPX package version'
+        value: ${{ jobs.plan-release.outputs.version }}
+      runtime_version:
+        description: 'Runtime artifact version'
+        value: ${{ jobs.plan-release.outputs.runtime_version }}
+      runtime_tag:
+        description: 'Validated runtime release tag'
+        value: ${{ jobs.plan-release.outputs.runtime_tag }}
+      runtime_manifest:
+        description: 'Runtime manifest asset name'
+        value: ${{ jobs.plan-release.outputs.runtime_manifest }}
+      runtime_state:
+        description: 'Verified runtime source: ready or missing'
+        value: ${{ jobs.plan-release.outputs.runtime_state }}
+      release_repository:
+        description: 'Canonical release repository'
+        value: ${{ jobs.plan-release.outputs.release_repository }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan-release:
+    name: Validate locked release inputs
+    runs-on: ubuntu-22.04
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      version: ${{ steps.release.outputs.version }}
+      runtime_version: ${{ steps.release.outputs.runtime_version }}
+      runtime_abi: ${{ steps.release.outputs.runtime_abi }}
+      runtime_tag: ${{ steps.release.outputs.runtime_tag }}
+      runtime_manifest: ${{ steps.release.outputs.runtime_manifest }}
+      release_repository: ${{ steps.release.outputs.release_repository }}
+      godot_repository: ${{ steps.release.outputs.godot_repository }}
+      godot_commit: ${{ steps.release.outputs.godot_commit }}
+      runtime_state: ${{ steps.runtime.outputs.runtime_state }}
+      run_web: ${{ steps.plan.outputs.run_web }}
+      run_macos: ${{ steps.plan.outputs.run_macos }}
+      run_windows: ${{ steps.plan.outputs.run_windows }}
+      run_linux: ${{ steps.plan.outputs.run_linux }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Validate current runtime lock snapshot
+        shell: bash
+        run: python3 .github/scripts/runtime/lock_snapshot.py check
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Describe release and runtime lock
+        id: release
+        shell: bash
+        run: go run ./.github/cmd/runtime-version --github-output "$GITHUB_OUTPUT"
+
+      - name: Validate release inputs
+        id: plan
+        shell: bash
+        env:
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          EXPECTED_RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_REPOSITORY: ${{ steps.release.outputs.release_repository }}
+          PLATFORMS_INPUT: ${{ inputs.platforms }}
+        run: python3 .github/scripts/release/plan.py inputs
+      # Resolution downloads only release metadata and the manifest, then
+      # compares its runtime identity with this source. The assemble job
+      # downloads and checksum-verifies every published asset before reuse.
+      - name: Resolve locked runtime release
+        id: runtime
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: go run ./.github/cmd/runtime-resolution --github-output "$GITHUB_OUTPUT"
+
+      - name: Enforce runtime reuse policy
+        shell: bash
+        env:
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+        run: python3 .github/scripts/release/plan.py runtime-policy
+
+      - name: Verify locked Godot source ancestry
+        id: godot-ancestry
+        if: steps.runtime.outputs.runtime_state == 'missing'
+        shell: bash
+        env:
+          OPERATION_INPUT: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+
+          ancestry_args=(
+            verify-godot
+            --lock internal/release/runtime.lock.json
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [ "$OPERATION_INPUT" = dry-run ]; then
+            ancestry_args+=(--allow-premerge-candidate)
+          fi
+          python3 .github/scripts/runtime/lock_snapshot.py "${ancestry_args[@]}"
+
+      - name: Summarize locked Godot source ancestry
+        if: >-
+          ${{
+            always() &&
+            steps.runtime.outcome == 'success' &&
+            steps.runtime.outputs.runtime_state != 'incompatible'
+          }}
+        shell: bash
+        env:
+          ANCESTRY_STATUS: ${{ steps.godot-ancestry.outputs.godot_ancestry_status }}
+          GODOT_COMMIT: ${{ steps.release.outputs.godot_commit }}
+          GODOT_REPOSITORY: ${{ steps.release.outputs.godot_repository }}
+          GODOT_REF: ${{ steps.godot-ancestry.outputs.godot_ref }}
+          GODOT_REF_COMMIT: ${{ steps.godot-ancestry.outputs.godot_ref_commit }}
+          OPERATION_INPUT: ${{ inputs.operation }}
+          RUNTIME_STATE: ${{ steps.runtime.outputs.runtime_state }}
+          RUNTIME_REASON: ${{ steps.runtime.outputs.runtime_reason }}
+        run: python3 .github/scripts/release/plan.py ancestry-summary
+
+      - name: Validate immutable publish targets
+        if: inputs.operation != 'dry-run'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RUNTIME_TAG: ${{ steps.release.outputs.runtime_tag }}
+          RUNTIME_MANIFEST: ${{ steps.release.outputs.runtime_manifest }}
+          REPOSITORY: ${{ steps.release.outputs.release_repository }}
+          OPERATION: ${{ inputs.operation }}
+        run: python3 .github/scripts/release/publish.py validate-targets
+
+  check-source:
+    name: Check source
+    needs: plan-release
+    uses: ./.github/workflows/check_source.yml
+    with:
+      check_export_types: true
+
+  build-godot-runtime:
+    name: Build locked Godot runtime
+    needs: [plan-release, check-source]
+    if: needs.plan-release.outputs.runtime_state == 'missing'
+    # Pin the canonical workflow implementation independently from the Godot
+    # source identity supplied by runtime.lock through godot_ref below.
+    uses: goplus/godot/.github/workflows/release_builds.yml@da5e3d22675b0186a29b4990620317b6ad1ab624
+    with:
+      runtime_version: ${{ needs.plan-release.outputs.runtime_version }}
+      runtime_abi: ${{ needs.plan-release.outputs.runtime_abi }}
+      platforms: all
+      godot_repository: ${{ needs.plan-release.outputs.godot_repository }}
+      godot_ref: ${{ needs.plan-release.outputs.godot_commit }}
+      spx_repository: ${{ github.repository }}
+      spx_ref: ${{ github.sha }}
+
+  build-runtime-pack:
+    name: Build runtime pack
+    needs: build-godot-runtime
+    uses: ./.github/workflows/build_runtime_pack.yml
+
+  runtime-prerequisites:
+    name: Verify runtime prerequisites
+    needs: [plan-release, check-source, build-godot-runtime, build-runtime-pack]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan-release.result == 'success' &&
+        needs.check-source.result == 'success' &&
+        (
+          (needs.plan-release.outputs.runtime_state == 'ready' && needs.build-godot-runtime.result == 'skipped' && needs.build-runtime-pack.result == 'skipped') ||
+          (needs.plan-release.outputs.runtime_state == 'missing' && needs.build-godot-runtime.result == 'success' && needs.build-runtime-pack.result == 'success')
+        )
+      }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Confirm runtime bundle source
+        env:
+          RUNTIME_STATE: ${{ needs.plan-release.outputs.runtime_state }}
+          RUNTIME_TAG: ${{ needs.plan-release.outputs.runtime_tag }}
+        run: |
+          if [ "$RUNTIME_STATE" = ready ]; then
+            echo "[info] Products will consume published $RUNTIME_TAG"
+          else
+            echo "[info] Products will consume current-run runtime artifacts"
+          fi
+
+  package-web:
+    name: Package Web
+    needs: [plan-release, runtime-prerequisites]
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_web == 'true' }}
+    uses: ./.github/workflows/package_web.yml
+    with:
+      engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
+
+  package-macos:
+    name: Package macOS
+    needs: [plan-release, runtime-prerequisites]
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_macos == 'true' }}
+    uses: ./.github/workflows/package_macos.yml
+    with:
+      engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
+
+  package-windows:
+    name: Package Windows
+    needs: [plan-release, runtime-prerequisites]
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_windows == 'true' }}
+    uses: ./.github/workflows/package_windows.yml
+    with:
+      engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
+
+  package-linux:
+    name: Package Linux
+    needs: [plan-release, runtime-prerequisites]
+    if: ${{ !cancelled() && needs.runtime-prerequisites.result == 'success' && needs.plan-release.outputs.run_linux == 'true' }}
+    uses: ./.github/workflows/package_linux.yml
+    with:
+      engine_artifacts: ${{ needs.plan-release.outputs.runtime_state == 'missing' }}
+
+  assemble-release:
+    name: Assemble and verify releases
+    needs:
+      - plan-release
+      - runtime-prerequisites
+      - package-web
+      - package-macos
+      - package-windows
+      - package-linux
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.plan-release.result == 'success' &&
+        needs.runtime-prerequisites.result == 'success' &&
+        (needs.plan-release.outputs.run_web != 'true' || needs.package-web.result == 'success') &&
+        (needs.plan-release.outputs.run_macos != 'true' || needs.package-macos.result == 'success') &&
+        (needs.plan-release.outputs.run_windows != 'true' || needs.package-windows.result == 'success') &&
+        (needs.plan-release.outputs.run_linux != 'true' || needs.package-linux.result == 'success')
+      }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Download release build artifacts
+        if: needs.plan-release.outputs.runtime_state == 'missing' || inputs.operation != 'publish-runtime'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '{runtime-*,web-release,web-worker-release,web-minigame-release,web-miniprogram-release,spx-standalone-*}'
+          path: artifacts
+
+      - name: Assemble immutable asset sets
+        id: assemble
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ needs.plan-release.outputs.release_repository }}
+          RUNTIME_STATE: ${{ needs.plan-release.outputs.runtime_state }}
+          RUNTIME_TAG: ${{ needs.plan-release.outputs.runtime_tag }}
+          RUNTIME_MANIFEST: ${{ needs.plan-release.outputs.runtime_manifest }}
+          RUN_WEB: ${{ needs.plan-release.outputs.run_web }}
+          RUN_MACOS: ${{ needs.plan-release.outputs.run_macos }}
+          RUN_WINDOWS: ${{ needs.plan-release.outputs.run_windows }}
+          RUN_LINUX: ${{ needs.plan-release.outputs.run_linux }}
+        run: python3 .github/scripts/release/assemble.py
+
+      - name: Upload assembled runtime release
+        if: needs.plan-release.outputs.runtime_state == 'missing' || inputs.operation == 'dry-run'
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-runtime-release-${{ needs.plan-release.outputs.runtime_version }}
+          path: dist/runtime
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload assembled SPX release
+        if: steps.assemble.outputs.product_count != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: spx-product-release-${{ needs.plan-release.outputs.version }}
+          path: dist/product
+          if-no-files-found: error
+          retention-days: 14
+
+  build-gate:
+    name: Verify release artifacts completed
+    needs: [plan-release, assemble-release]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require verified release artifacts
+        env:
+          PLAN_RESULT: ${{ needs.plan-release.result }}
+          ASSEMBLE_RESULT: ${{ needs.assemble-release.result }}
+        run: |
+          if [ "$PLAN_RESULT" != success ] || [ "$ASSEMBLE_RESULT" != success ]; then
+            echo "[error] Release artifacts incomplete: plan=$PLAN_RESULT assemble=$ASSEMBLE_RESULT" >&2
+            exit 1
+          fi

@@ -206,7 +206,7 @@ func resolveEditorBuildPaths(env buildEnvironment) (source string, destination s
 			false,
 			nil
 	case "windows":
-		return filepath.Join("bin", fmt.Sprintf("godot.windows.editor.dev.%s", env.Arch)),
+		return filepath.Join("bin", fmt.Sprintf("godot.windows.editor.dev.%s.exe", env.Arch)),
 			filepath.Join(env.GoPath, "bin", fmt.Sprintf("gdspx%s.exe", env.Version)),
 			true,
 			nil

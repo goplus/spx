@@ -63,6 +63,7 @@ func parseSetupCommandArgs(args []string) (setupConfig, error) {
 	fs.StringVar(&cfg.mode, "mode", "", "Web mode: normal, worker, minigame, or miniprogram")
 	fs.StringVar(&cfg.assetDir, "asset-dir", "", "Read engine assets from a local workflow artifact directory")
 	fs.BoolVar(&cfg.publishedRuntime, "published-runtime", false, "Install the locked runtime pack from its published release")
+	fs.BoolVar(&cfg.exportBundle, "export-bundle", false, "Export the Web bundle after preparing Web assets")
 	fs.Usage = printSetupCommandUsage
 	if err := fs.Parse(args[1:]); err != nil {
 		return setupConfig{}, err
@@ -94,11 +95,15 @@ func parseSetupCommandArgs(args []string) (setupConfig, error) {
 	if cfg.target == "web" && cfg.publishedRuntime {
 		return setupConfig{}, errors.New("--published-runtime is only supported by setup host and setup full")
 	}
+	if cfg.exportBundle && cfg.target != "web" {
+		return setupConfig{}, errors.New("--export-bundle is only supported by setup web")
+	}
 	return cfg, nil
 }
 
 func printSetupCommandUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: buildctl setup <host|web|full> [--mode normal|worker|minigame|miniprogram] [--asset-dir path] [--published-runtime]")
+	fmt.Fprintln(os.Stderr, "       buildctl setup web [--mode normal|worker|minigame|miniprogram] [--asset-dir path] --export-bundle")
 }
 
 func runBuild(args []string) error {

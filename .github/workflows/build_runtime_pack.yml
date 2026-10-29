@@ -1,0 +1,48 @@
+name: Build Runtime Pack
+
+on:
+  workflow_call:
+
+jobs:
+  build-runtime-pack:
+    name: Build runtime pack
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Download current-run engine artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: runtime-*linux-x86_64
+          path: runtime-assets
+          merge-multiple: true
+
+      - name: Install Linux dependencies
+        uses: ./.github/actions/install-linux-dependencies
+        timeout-minutes: 20
+        with:
+          profile: native
+
+      - name: Set up locked Go and XGo
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Build local buildctl
+        id: buildctl
+        uses: ./.github/actions/setup-buildctl
+
+      - name: Build runtime asset bundle
+        env:
+          BUILDCTL: ${{ steps.buildctl.outputs.path }}
+        run: |
+          bash .github/scripts/runtime/build_pack.sh \
+            runtime-assets \
+            dist/spx-runtime-assets.zip
+
+      - name: Upload runtime asset bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-spx-assets
+          path: dist/spx-runtime-assets.zip
+          if-no-files-found: error
+          retention-days: 14

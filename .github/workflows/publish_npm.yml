@@ -1,0 +1,94 @@
+name: Publish npm Package
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Full SPX commit SHA to publish
+        required: true
+        type: string
+      release_version:
+        description: Release version without the leading v; empty publishes a development version
+        required: false
+        default: ''
+        type: string
+      release_artifact:
+        description: Current-run Actions artifact containing the already verified spx_web.zip
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: web-package-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  publish-npm:
+    name: Publish npm package
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+    steps:
+      - name: Validate publication target
+        env:
+          RELEASE_ARTIFACT: ${{ inputs.release_artifact }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [[ ! "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "[error] Publication target must be a full lowercase commit SHA, not ${TARGET}" >&2
+            exit 1
+          fi
+          if { [ -z "$RELEASE_VERSION" ] && [ -n "$RELEASE_ARTIFACT" ]; } || \
+            { [ -n "$RELEASE_VERSION" ] && [ -z "$RELEASE_ARTIFACT" ]; }; then
+            echo "[error] release_version and release_artifact must both be empty or both be set" >&2
+            exit 1
+          fi
+
+      - name: Check out code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.target }}
+
+      - name: Verify checked-out publication source
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          TARGET: ${{ inputs.target }}
+        run: python3 .github/scripts/npm/publish.py verify-source
+
+      - name: Download verified release Web bundle
+        if: inputs.release_artifact != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.release_artifact }}
+          path: .
+
+      - name: Install Linux dependencies
+        if: inputs.release_artifact == ''
+        uses: ./.github/actions/install-linux-dependencies
+        timeout-minutes: 20
+        with:
+          profile: web
+
+      - name: Build web bundle
+        if: inputs.release_artifact == ''
+        uses: ./.github/actions/build-web-bundle
+        with:
+          web-mode: normal
+
+      - name: Set up Node.js for npm publishing
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish web package to npm
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: python3 .github/scripts/npm/publish.py publish

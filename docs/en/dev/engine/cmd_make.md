@@ -35,7 +35,7 @@ Run `make help` for the primary commands and `make help-advanced` for lower-leve
 | --- | --- |
 | `make setup` | Set up the host editor and native runtime assets. |
 | `make setup-web MODE=...` | Set up Web assets for one runtime mode. |
-| `make dev MODE=...` | Build the complete local development stack from source. |
+| `make dev MODE=...` | Test the host SPX module, then build the complete local development stack from source. |
 | `make doctor` | Validate the resolved lock, toolchain, module profile, and Godot checkout. |
 | `make build-editor` | Build the host editor from source. |
 | `make build-desktop` | Build the host desktop template and runtime pack from source. |
@@ -100,6 +100,8 @@ GODOT_SRC=/absolute/path/to/godot \
 SPX_MODULE_SRC=./godot_modules/spx \
 make dev MODE=normal
 ```
+
+`make dev` first builds the host editor with `tests=yes` and runs the Godot SPX module tests headlessly, using the `*SPX*` test-case filter. A failing test or no registered SPX tests stops the workflow before building the runtime pack and Web assets or installing the tools.
 
 For a narrower source build, replace `dev` with `build-editor`, `build-desktop`, `build-web MODE=...`, `build-android`, or `build-ios`.
 

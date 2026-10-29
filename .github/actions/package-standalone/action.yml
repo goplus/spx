@@ -1,0 +1,59 @@
+name: Package and upload standalone artifact
+description: Prepare, package, verify, and upload one native standalone SPX artifact.
+inputs:
+  engine-asset-dir:
+    description: Optional engine artifacts from the current workflow run
+    default: ''
+  platform:
+    description: Package platform (darwin, windows, or linux)
+    required: true
+  package-arch:
+    description: Package architecture (x64 or arm64)
+    required: true
+  artifact-name:
+    description: Actions artifact name consumed by release assembly
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Set up toolchain
+      uses: ./.github/actions/setup-toolchain
+
+    - name: Build local buildctl
+      id: buildctl
+      uses: ./.github/actions/setup-buildctl
+
+    - name: Prepare standalone release
+      id: prepare
+      shell: bash
+      env:
+        BUILDCTL: ${{ steps.buildctl.outputs.path }}
+        ENGINE_ASSET_DIR: ${{ inputs.engine-asset-dir }}
+      run: bash .github/scripts/standalone/prepare.sh
+
+    - name: Package standalone release
+      shell: bash
+      env:
+        GOWORK: 'off'
+        SPX_BIN: ${{ steps.prepare.outputs.spx-bin }}
+        PACKAGE_FILE: ${{ inputs.artifact-name }}.zip
+      run: go run ./.github/cmd/package-standalone --binary "$SPX_BIN" --output "$PACKAGE_FILE"
+
+    - name: Verify standalone release package
+      shell: bash
+      env:
+        GOWORK: 'off'
+        PACKAGE_FILE: ${{ inputs.artifact-name }}.zip
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_ARCH: ${{ inputs.package-arch }}
+        RUNNER_OS_CONTEXT: ${{ runner.os }}
+        RUNNER_ARCH_CONTEXT: ${{ runner.arch }}
+      run: bash .github/scripts/standalone/verify.sh
+
+    - name: Upload standalone release artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-name }}.zip
+        if-no-files-found: error
+        retention-days: 14

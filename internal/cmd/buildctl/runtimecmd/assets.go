@@ -71,8 +71,13 @@ func exportWebRuntime(cfg runtimeExportWebConfig, runner shared.ScriptRunner) er
 	if err := toolpkg.InstallTools(toolpkg.InstallConfig{Web: true, NoEmbedRuntime: true}, runner); err != nil {
 		return err
 	}
+	return ExportPreparedWebRuntime(cfg.mode, runner)
+}
 
-	spec, err := shared.ResolveWebMode(cfg.mode)
+// ExportPreparedWebRuntime exports a bundle using tools and templates already
+// prepared by the caller. The standalone export-web command installs tools first.
+func ExportPreparedWebRuntime(mode string, runner shared.ScriptRunner) error {
+	spec, err := shared.ResolveWebMode(mode)
 	if err != nil {
 		return err
 	}

@@ -139,7 +139,7 @@ printf built > "$SPX_ARTIFACT"
 					env["SPX_ARTIFACT"] = source
 					env["SPX_BUILD_RECORD"] = filepath.Join(root, "build record")
 					if target == "editor" {
-						err = buildEngineEditor(buildEnv, env, scons, module, plan)
+						err = buildEngineEditor(buildEnv, env, scons, module, plan, false)
 					} else {
 						err = buildEngineTemplate(buildEnv, env, scons, module, plan)
 					}
@@ -166,6 +166,104 @@ printf built > "$SPX_ARTIFACT"
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestBuildEngineEditorModuleTests(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture executables require a POSIX shell")
+	}
+	module, moduleSource := loadEngineTestSPXModule(t, `{"schema":1,"common":[],"editor_release":[],"template_release":[]}`)
+	for _, platform := range []string{"linux", "macos", "windows"} {
+		for _, failure := range []string{"success", "build", "list", "empty", "test"} {
+			t.Run(platform+"/"+failure, func(t *testing.T) {
+				root, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				buildEnv := buildEnvironment{
+					EngineDir: filepath.Join(root, "godot"), GoPath: filepath.Join(root, "go path"),
+					Platform: platform, Arch: "arm64", Version: "test",
+				}
+				plan, err := resolveEngineBuildShellPlan(buildEnv, BuildConfig{Target: "editor"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				source := filepath.Join(buildEnv.EngineDir, plan.EditorSource)
+				writeEngineTestTool(t, source, `set -eu
+test -s .spx_build_lock/pid
+if [ "$#" = 4 ]; then
+  printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.list"
+  [ "$SPX_FAILURE" != list ] || exit 23
+  if [ "$SPX_FAILURE" = empty ]; then printf '0 test cases\n'; else printf '[SPX] fixture\n'; fi
+else
+  test -s "$SPX_RECORD.list"
+  printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.test"
+  [ "$SPX_FAILURE" != test ] || exit 23
+fi
+`)
+				mustWriteFile(t, plan.EditorDestination, []byte("old installation"))
+				scons := filepath.Join(root, "build tools", "scons")
+				writeEngineTestTool(t, scons, `set -eu
+test -s .spx_build_lock/pid
+printf '%s\n' "$PWD" "$SPX_MARKER" "$@" > "$SPX_RECORD.build"
+[ "$SPX_FAILURE" != build ] || exit 23
+`)
+				env := shared.CurrentEnvMap()
+				env["SPX_MARKER"] = "space ' quote $literal"
+				env["SPX_FAILURE"] = failure
+				env["SPX_RECORD"] = filepath.Join(root, "commands")
+				err = buildEngineEditor(buildEnv, env, scons, module, plan, true)
+				if failure == "success" {
+					if err != nil {
+						t.Fatal(err)
+					}
+				} else if failure == "empty" {
+					if err == nil || !strings.Contains(err.Error(), "did not register SPX module tests") {
+						t.Fatalf("empty test list error = %v", err)
+					}
+				} else {
+					var exitErr *exec.ExitError
+					if !errors.As(err, &exitErr) || exitErr.ExitCode() != 23 {
+						t.Fatalf("error = %v, want exit 23", err)
+					}
+				}
+				wantBuild := []string{buildEnv.EngineDir, env["SPX_MARKER"], "target=editor", "dev_build=yes", "tests=yes"}
+				if plan.EditorUseVSProj {
+					wantBuild = append(wantBuild, "vsproj=yes")
+				}
+				assertEngineTestCommandRecord(t, env["SPX_RECORD"]+".build", append(wantBuild, "custom_modules="+moduleSource))
+				wantTest := []string{buildEnv.EngineDir, env["SPX_MARKER"], "--headless", "--test", "--test-case=*SPX*"}
+				for _, stage := range []string{"list", "test"} {
+					path := env["SPX_RECORD"] + "." + stage
+					called := failure != "build" && (stage == "list" || failure == "success" || failure == "test")
+					if !called {
+						if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+							t.Fatalf("unexpected %s execution after %s failure", stage, failure)
+						}
+						continue
+					}
+					args := append([]string(nil), wantTest...)
+					if stage == "list" {
+						args = append(args, "--list-test-cases")
+					}
+					assertEngineTestCommandRecord(t, path, args)
+				}
+				wantInstalled := []byte("old installation")
+				if failure == "success" {
+					wantInstalled, err = os.ReadFile(source)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if data, err := os.ReadFile(plan.EditorDestination); err != nil || string(data) != string(wantInstalled) {
+					t.Fatalf("installed artifact = %q (%v), want %q", data, err, wantInstalled)
+				}
+				if _, err := os.Stat(engineBuildLockDir(buildEnv.EngineDir)); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("build lock was not released: %v", err)
+				}
+			})
 		}
 	}
 }
@@ -371,7 +469,7 @@ func TestBuildEngineEntryPoint(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("toolchain fixture requires Linux or macOS")
 	}
-	for _, scenario := range []string{"editor", "template", "invalid platform", "invalid target", "template directory", "missing python", "missing source"} {
+	for _, scenario := range []string{"editor", "template", "invalid platform", "invalid target", "template tests", "template directory", "missing python", "missing source"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := isolateEngineEnvironment(t)
 			t.Chdir(root)
@@ -420,6 +518,8 @@ func TestBuildEngineEntryPoint(t *testing.T) {
 				cfg.Platform, wantError = "invalid", "unsupported platform"
 			case "invalid target":
 				cfg.Target, wantError = "invalid", "unsupported build target"
+			case "template tests":
+				cfg.TestModule, wantError = true, "SPX module tests require a host editor build"
 			case "template directory":
 				mustWriteFile(t, filepath.Dir(env.TemplateDir), []byte("blocked"))
 				wantError = "not a directory"

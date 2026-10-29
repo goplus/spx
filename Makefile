@@ -74,14 +74,14 @@ $(BUILDCTL_BIN): $(BUILDCTL_SOURCES)
 buildctl: $(BUILDCTL_BIN) ## Build cached buildctl binary at ./.bin/buildctl
 
 bump-release: validate-bump-release ## Advance SPX and create a paired immutable runtime snapshot
-	python3 .github/scripts/release_bump.py "$(SPX_VERSION)" "$(RUNTIME_VERSION)"$(if $(strip $(RUNTIME_ABI)), --runtime-abi "$(RUNTIME_ABI)")
+	python3 .github/scripts/release/bump.py "$(SPX_VERSION)" "$(RUNTIME_VERSION)"$(if $(strip $(RUNTIME_ABI)), --runtime-abi "$(RUNTIME_ABI)")
 	git diff --check
 
 pin-godot: override PIN_GODOT_POLICY :=
 pin-godot-unpublished: override PIN_GODOT_POLICY := --unpublished
 pin-godot-candidate: override PIN_GODOT_POLICY := --premerge
 pin-godot pin-godot-unpublished pin-godot-candidate: validate-pin-godot
-	python3 .github/scripts/runtime_lock_snapshot.py pin-godot "$(GODOT_SHA)"$(if $(strip $(GODOT_REF)), --ref "$(GODOT_REF)")$(if $(PIN_GODOT_POLICY), $(PIN_GODOT_POLICY))
+	python3 .github/scripts/runtime/lock_snapshot.py pin-godot "$(GODOT_SHA)"$(if $(strip $(GODOT_REF)), --ref "$(GODOT_REF)")$(if $(PIN_GODOT_POLICY), $(PIN_GODOT_POLICY))
 
 pin-godot: ## Strictly pin a Godot commit already contained by the current lock ref
 
@@ -148,7 +148,7 @@ setup: ## Set up the host SPX development environment
 setup-web: ## Set up Web assets. Usage: make setup-web [MODE=normal|worker|minigame|miniprogram]
 	$(BUILDCTL_CMD) setup web --mode "$(WEB_MODE)"
 
-dev: ## Build the complete local development stack. Usage: make dev [MODE=normal|worker|minigame|miniprogram]
+dev: ## Build and test the host SPX module, then build the complete local stack. Usage: make dev [MODE=normal|worker|minigame|miniprogram]
 	$(BUILDCTL_CMD) build dev --mode "$(WEB_MODE)"
 
 doctor: ## Validate and print the resolved build configuration

@@ -1,0 +1,100 @@
+name: Test Godot Module
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spx-module-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-inputs:
+    name: Resolve current SPX and locked Godot
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      runtime_version: ${{ steps.lock.outputs.runtime-version }}
+      runtime_abi: ${{ steps.lock.outputs.runtime-abi }}
+      godot_repository: ${{ steps.lock.outputs.godot-repository }}
+      godot_commit: ${{ steps.lock.outputs.godot-commit }}
+      spx_sha: ${{ steps.lock.outputs.spx-sha }}
+    steps:
+      - name: Check out current SPX source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Resolve runtime lock
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/runtime/build_contract.py describe \
+            --lock internal/release/runtime.lock.json \
+            --github-output "${GITHUB_OUTPUT}"
+          echo "spx-sha=$(git rev-parse --verify 'HEAD^{commit}')" >> "${GITHUB_OUTPUT}"
+
+      - name: Report locked checkout identity
+        shell: bash
+        env:
+          GODOT_COMMIT: ${{ steps.lock.outputs.godot-commit }}
+          GODOT_REPOSITORY: ${{ steps.lock.outputs.godot-repository }}
+          GODOT_VERSION: ${{ steps.lock.outputs.godot-version }}
+          MODULE_PATH: ${{ steps.lock.outputs.module-relative-path }}
+          RUNTIME_ABI: ${{ steps.lock.outputs.runtime-abi }}
+          RUNTIME_VERSION: ${{ steps.lock.outputs.runtime-version }}
+          SPX_SHA: ${{ steps.lock.outputs.spx-sha }}
+          TOOLCHAIN_EMSDK: ${{ steps.lock.outputs.emsdk-version }}
+          TOOLCHAIN_SCONS: ${{ steps.lock.outputs.scons-version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Locked cross-repository inputs"
+            echo
+            echo "| Input | Identity |"
+            echo "| --- | --- |"
+            echo "| Runtime | \`${RUNTIME_VERSION}\` (ABI \`${RUNTIME_ABI}\`) |"
+            echo "| SPX | \`${SPX_SHA}\` |"
+            echo "| Godot | \`${GODOT_REPOSITORY}@${GODOT_COMMIT}\` (\`${GODOT_VERSION}\`) |"
+            echo "| Module path | \`${MODULE_PATH}\` |"
+            echo "| SCons / Emscripten | \`${TOOLCHAIN_SCONS}\` / \`${TOOLCHAIN_EMSDK}\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  test-module:
+    name: Build and test current SPX module
+    needs: resolve-inputs
+    # Pin the canonical workflow implementation independently from the Godot
+    # source identity supplied by runtime.lock below.
+    uses: goplus/godot/.github/workflows/spx_module_checks.yml@da5e3d22675b0186a29b4990620317b6ad1ab624
+    with:
+      runtime_version: ${{ needs.resolve-inputs.outputs.runtime_version }}
+      runtime_abi: ${{ needs.resolve-inputs.outputs.runtime_abi }}
+      godot_repository: ${{ needs.resolve-inputs.outputs.godot_repository }}
+      godot_ref: ${{ needs.resolve-inputs.outputs.godot_commit }}
+      spx_repository: ${{ github.repository }}
+      spx_ref: ${{ needs.resolve-inputs.outputs.spx_sha }}
+
+  integration-gate:
+    name: SPX module integration gate
+    if: ${{ !cancelled() }}
+    needs: [resolve-inputs, test-module]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify integration checks passed
+        shell: python
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          for job in ("resolve-inputs", "test-module"):
+              result = needs.get(job, {}).get("result", "missing")
+              if result != "success":
+                  sys.exit(f"Required integration job did not pass: {job}: {result}")

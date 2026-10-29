@@ -23,6 +23,7 @@ import (
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/engine"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/runtimecmd"
 	"github.com/goplus/spx/v4/internal/cmd/buildctl/shared"
+	"github.com/goplus/spx/v4/internal/cmd/buildctl/tool"
 	"github.com/goplus/spx/v4/internal/release"
 )
 
@@ -31,6 +32,7 @@ type setupConfig struct {
 	mode             string
 	assetDir         string
 	publishedRuntime bool
+	exportBundle     bool
 }
 
 func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
@@ -39,12 +41,18 @@ func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
 		if err := prepareRuntimeAssets(runner, cfg.assetDir, cfg.publishedRuntime); err != nil {
 			return err
 		}
-		return runner.RunScript(filepath.Join("cmd", "spx", "install.sh"))
+		return tool.InstallTools(tool.InstallConfig{}, runner)
 	case "web":
 		if err := engine.PrepareHostEditorAsset(runner.RepoRootDir(), cfg.assetDir); err != nil {
 			return err
 		}
-		return prepareWebAssets(cfg.mode, runner, false, cfg.assetDir)
+		if err := prepareWebAssets(cfg.mode, runner, false, cfg.assetDir); err != nil {
+			return err
+		}
+		if cfg.exportBundle {
+			return runtimecmd.ExportPreparedWebRuntime(cfg.mode, runner)
+		}
+		return nil
 	case "full":
 		if err := prepareRuntimeAssets(runner, cfg.assetDir, cfg.publishedRuntime); err != nil {
 			return err
@@ -57,7 +65,7 @@ func setupAssets(cfg setupConfig, runner shared.ScriptRunner) error {
 
 func prepareRuntimeAssets(runner shared.ScriptRunner, assetDir string, publishedRuntime bool) error {
 	// A same-run release directory contains the canonical runtime pack built by
-	// release_runtime_assets.yml. Install that exact pack so every standalone
+	// build_runtime_pack.yml. Install that exact pack so every standalone
 	// product consumes the bytes that will be published in runtime-v*.
 	useLockedRuntimePack := assetDir != "" || publishedRuntime
 	if err := engine.DownloadEngineAssets(engine.DownloadConfig{
@@ -91,11 +99,7 @@ func prepareWebAssets(webMode string, runner shared.ScriptRunner, embedRuntime b
 	if err := engine.DownloadEngineAssets(engine.DownloadConfig{Platform: "web", Mode: webMode, AssetDir: assetDir, SameRunArtifacts: assetDir != ""}, runner.RepoRootDir()); err != nil {
 		return err
 	}
-	args := []string{"--web"}
-	if !embedRuntime {
-		args = append(args, "--no-embed-runtime")
-	}
-	if err := runner.RunScript(filepath.Join("cmd", "spx", "install.sh"), args...); err != nil {
+	if err := tool.InstallTools(tool.InstallConfig{Web: true, NoEmbedRuntime: !embedRuntime}, runner); err != nil {
 		return err
 	}
 	return runtimecmd.ExportWebTemplateRuntime(webMode, runner)
