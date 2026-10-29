@@ -291,12 +291,10 @@ to regenerate the report.
 The `cpp` flag carries forward its latest coverage when CI reuses a
 published runtime and skips module tests. Codecov labels this as historical
 coverage, not a new test run. A successful Go and C++ upload is needed to
-establish the initial baseline. The repository report and badge include both
-languages. The existing project and patch checks compare Go paths against the
-historical Go baseline, which predates flags; no C++ percentage threshold is
-enforced yet. A separate C++ regression check can be added once `dev` has its
-first complete report. This report does not measure browser execution or
-Web-only C++ code.
+establish the initial baseline. The repository report, badge, and project check
+include both languages; the patch check measures changed Go and C++ lines.
+Both checks use the base commit's combined coverage as their automatic target.
+The C++ report does not measure browser execution or Web-only C++ code.
 
 ## Working across SPX and Godot
 
