@@ -162,6 +162,9 @@ Error PostMergeProcessor::custom_avi_merge(const String &video_path, const Strin
 		return audio_parse_error;
 	}
 
+	ERR_FAIL_COND_V(memcmp(video_info.streams_info[0].fourcc_type, "vids", 4) != 0 ||
+			memcmp(audio_info.streams_info[0].fourcc_type, "auds", 4) != 0, ERR_FILE_CORRUPT);
+
 	// Create output file
 	Ref<FileAccess> output_file = FileAccess::open(output_path, FileAccess::WRITE);
 	if (output_file.is_null()) {
@@ -283,6 +286,9 @@ Error PostMergeProcessor::parse_avi_file(const String &file_path, AviFileInfo &a
 		return ERR_FILE_CANT_OPEN;
 	}
 
+	const uint64_t file_size = file->get_length();
+	ERR_FAIL_COND_V(file_size < 12, ERR_FILE_CORRUPT);
+
 	// Read RIFF header
 	char riff_header[4];
 	file->get_buffer((uint8_t *)riff_header, 4);
@@ -290,7 +296,8 @@ Error PostMergeProcessor::parse_avi_file(const String &file_path, AviFileInfo &a
 		return ERR_FILE_CORRUPT;
 	}
 
-	file->get_32(); // Skip file size
+	const uint32_t riff_size = file->get_32();
+	ERR_FAIL_COND_V(riff_size < 4 || uint64_t(riff_size) + 8 != file_size, ERR_FILE_CORRUPT);
 
 	char avi_header[4];
 	file->get_buffer((uint8_t *)avi_header, 4);
@@ -298,103 +305,85 @@ Error PostMergeProcessor::parse_avi_file(const String &file_path, AviFileInfo &a
 		return ERR_FILE_CORRUPT;
 	}
 
-	// Parse AVI structure based on SimpleAudioWriter/SimpleVideoWriter format
 	bool found_hdrl = false;
 	bool found_movi = false;
-
-	uint64_t pos = 12; // Start after RIFF+AVI header
-
-	// Look for LIST hdrl chunk first
-	if (pos < file->get_length() - 8) {
+	bool found_index = false;
+	for (uint64_t pos = 12; pos < file_size;) {
+		ERR_FAIL_COND_V(file_size - pos < 8, ERR_FILE_CORRUPT);
 		file->seek(pos);
-		char chunk_fourcc[4];
-		file->get_buffer((uint8_t *)chunk_fourcc, 4);
-		uint32_t chunk_size = file->get_32();
+		char fourcc[4];
+		file->get_buffer((uint8_t *)fourcc, 4);
+		const uint32_t chunk_size = file->get_32();
+		const uint64_t padded_size = uint64_t(chunk_size) + (chunk_size & 1);
+		ERR_FAIL_COND_V(padded_size > file_size - file->get_position(), ERR_FILE_CORRUPT);
 
-		if (memcmp(chunk_fourcc, "LIST", 4) == 0) {
+		if (memcmp(fourcc, "LIST", 4) == 0) {
+			ERR_FAIL_COND_V(chunk_size < 4, ERR_FILE_CORRUPT);
 			char list_type[4];
 			file->get_buffer((uint8_t *)list_type, 4);
-
 			if (memcmp(list_type, "hdrl", 4) == 0) {
-				Error hdrl_error = parse_hdrl_chunk(file, avi_info, chunk_size - 4);
-				if (hdrl_error == OK) {
-					found_hdrl = true;
+				ERR_FAIL_COND_V(found_hdrl || found_movi, ERR_FILE_CORRUPT);
+				Error error = parse_hdrl_chunk(file, avi_info, chunk_size - 4);
+				if (error != OK) {
+					return error;
 				}
-				// SimpleVideoWriter includes odml LIST inside hdrl, so don't skip yet
-				// The hdrl parser will handle the internal structure
-			} else {
-				// Not hdrl, skip this LIST
-				pos += 8 + chunk_size;
-				if (chunk_size % 2 != 0) {
-					pos++;
-				}
-			}
-		} else {
-			// Not a LIST chunk
-			pos += 8 + chunk_size;
-			if (chunk_size % 2 != 0) {
-				pos++;
-			}
-		}
-	}
-
-	// Now look for movi LIST - it should be right after hdrl
-	// Update position based on actual file position after hdrl parsing
-	pos = file->get_position();
-
-	if (pos < file->get_length() - 8) {
-		file->seek(pos);
-		char chunk_fourcc[4];
-		file->get_buffer((uint8_t *)chunk_fourcc, 4);
-		uint32_t chunk_size = file->get_32();
-
-		if (memcmp(chunk_fourcc, "LIST", 4) == 0) {
-			char list_type[4];
-			file->get_buffer((uint8_t *)list_type, 4);
-
-			if (memcmp(list_type, "movi", 4) == 0) {
+				found_hdrl = true;
+			} else if (memcmp(list_type, "movi", 4) == 0) {
+				ERR_FAIL_COND_V(!found_hdrl || found_movi, ERR_FILE_CORRUPT);
 				avi_info.movi_list_offset = pos;
-				avi_info.movi_data_offset = pos + 12; // LIST+size+movi = 12
+				avi_info.movi_data_offset = pos + 12;
 				avi_info.movi_data_size = chunk_size - 4;
 				found_movi = true;
-				pos += 8 + chunk_size; // Move past movi LIST
-				if (chunk_size % 2 != 0) {
-					pos++; // Align to even boundary
-				}
 			}
+		} else if (memcmp(fourcc, "idx1", 4) == 0) {
+			ERR_FAIL_COND_V(!found_movi || found_index, ERR_FILE_CORRUPT);
+			Error error = parse_idx1_chunk(file, avi_info, chunk_size);
+			if (error != OK) {
+				return error;
+			}
+			found_index = true;
 		}
+		pos += 8 + padded_size;
 	}
 
-	// Look for idx1 chunk
-	if (found_movi && pos < file->get_length() - 8) {
-		file->seek(pos);
-		char chunk_fourcc[4];
-		file->get_buffer((uint8_t *)chunk_fourcc, 4);
-		uint32_t chunk_size = file->get_32();
-
-		if (memcmp(chunk_fourcc, "idx1", 4) == 0) {
-			Error idx_error = parse_idx1_chunk(file, avi_info, chunk_size);
-			if (idx_error != OK) {
-				return idx_error;
-			}
-		}
-	}
-
-	if (!found_hdrl || !found_movi) {
+	ERR_FAIL_COND_V(!found_hdrl || !found_movi || avi_info.streams != 1 || avi_info.streams_info.size() != 1, ERR_FILE_CORRUPT);
+	const AviFileInfo::StreamInfo &stream = avi_info.streams_info[0];
+	ERR_FAIL_COND_V(stream.scale == 0 || stream.rate < stream.scale, ERR_FILE_CORRUPT);
+	if (memcmp(stream.fourcc_type, "vids", 4) == 0) {
+		ERR_FAIL_COND_V(avi_info.microsec_per_frame == 0 || avi_info.width == 0 || avi_info.height == 0, ERR_FILE_CORRUPT);
+	} else if (memcmp(stream.fourcc_type, "auds", 4) == 0) {
+		ERR_FAIL_COND_V(stream.sample_size == 0 || stream.sample_size % 4 != 0, ERR_FILE_CORRUPT);
+	} else {
 		return ERR_FILE_CORRUPT;
 	}
 
+	if (avi_info.index_entries.is_empty()) {
+		return scan_movi_chunks(file, avi_info, avi_info.index_entries);
+	}
+	// Our single-stream writers index every movi chunk in file order.
+	uint64_t expected_offset = 0;
+	for (const AviFileInfo::IndexEntry &entry : avi_info.index_entries) {
+		ERR_FAIL_COND_V(entry.chunk_offset != expected_offset, ERR_FILE_CORRUPT);
+		Error error = validate_movi_chunk(file, avi_info, entry);
+		if (error != OK) {
+			return error;
+		}
+		expected_offset += 8 + uint64_t(entry.chunk_size) + (entry.chunk_size & 1);
+	}
+	ERR_FAIL_COND_V(expected_offset != avi_info.movi_data_size, ERR_FILE_CORRUPT);
 	return OK;
 }
 
 Error PostMergeProcessor::parse_hdrl_chunk(Ref<FileAccess> file, AviFileInfo &avi_info, uint32_t chunk_size) {
 	uint64_t hdrl_start = file->get_position();
 	uint64_t chunk_end = hdrl_start + chunk_size;
+	ERR_FAIL_COND_V(chunk_size < 64 || chunk_end > file->get_length(), ERR_FILE_CORRUPT);
 
 	// First, look for avih chunk
 	char chunk_fourcc[4];
 	file->get_buffer((uint8_t *)chunk_fourcc, 4);
 	uint32_t sub_chunk_size = file->get_32();
+	ERR_FAIL_COND_V(sub_chunk_size < 56 || uint64_t(sub_chunk_size) + (sub_chunk_size & 1) > chunk_end - file->get_position(), ERR_FILE_CORRUPT);
 
 	if (memcmp(chunk_fourcc, "avih", 4) == 0) {
 		// Parse main AVI header
@@ -408,8 +397,7 @@ Error PostMergeProcessor::parse_hdrl_chunk(Ref<FileAccess> file, AviFileInfo &av
 		file->get_32(); // suggested_buffer_size
 		avi_info.width = file->get_32();
 		avi_info.height = file->get_32();
-		// Skip reserved fields (4 * 4 = 16 bytes)
-		file->seek(file->get_position() + 16);
+		file->seek(hdrl_start + 8 + sub_chunk_size + (sub_chunk_size & 1));
 	} else {
 		return ERR_FILE_CORRUPT;
 	}
@@ -417,15 +405,15 @@ Error PostMergeProcessor::parse_hdrl_chunk(Ref<FileAccess> file, AviFileInfo &av
 	// Look for LIST strl chunk(s)
 	while (file->get_position() < chunk_end) {
 		// Check if we have enough bytes for another chunk
-		if (file->get_position() + 8 > chunk_end) {
-			break;
-		}
+		ERR_FAIL_COND_V(chunk_end - file->get_position() < 8, ERR_FILE_CORRUPT);
 
 		uint64_t chunk_start = file->get_position();
 		file->get_buffer((uint8_t *)chunk_fourcc, 4);
 		sub_chunk_size = file->get_32();
+		ERR_FAIL_COND_V(uint64_t(sub_chunk_size) + (sub_chunk_size & 1) > chunk_end - file->get_position(), ERR_FILE_CORRUPT);
 
 		if (memcmp(chunk_fourcc, "LIST", 4) == 0) {
+			ERR_FAIL_COND_V(sub_chunk_size < 4, ERR_FILE_CORRUPT);
 			char list_type[4];
 			file->get_buffer((uint8_t *)list_type, 4);
 
@@ -433,25 +421,13 @@ Error PostMergeProcessor::parse_hdrl_chunk(Ref<FileAccess> file, AviFileInfo &av
 				// Parse stream header
 				AviFileInfo::StreamInfo stream_info;
 				Error stream_error = parse_stream_header(file, stream_info, sub_chunk_size - 4);
-				if (stream_error == OK) {
-					avi_info.streams_info.push_back(stream_info);
+				if (stream_error != OK) {
+					return stream_error;
 				}
-			} else if (memcmp(list_type, "odml", 4) == 0) {
-				// Skip odml content
-				file->seek(chunk_start + 8 + sub_chunk_size);
-			} else {
-				// Skip unknown LIST type
-				file->seek(chunk_start + 8 + sub_chunk_size);
+				avi_info.streams_info.push_back(stream_info);
 			}
-		} else {
-			// Skip unknown chunk
-			file->seek(chunk_start + 8 + sub_chunk_size);
 		}
-
-		// Align to even boundary
-		if (file->get_position() % 2 != 0) {
-			file->seek(file->get_position() + 1);
-		}
+		file->seek(chunk_start + 8 + sub_chunk_size + (sub_chunk_size & 1));
 	}
 
 	return OK;
@@ -460,12 +436,14 @@ Error PostMergeProcessor::parse_hdrl_chunk(Ref<FileAccess> file, AviFileInfo &av
 Error PostMergeProcessor::parse_stream_header(Ref<FileAccess> file, AviFileInfo::StreamInfo &stream_info, uint32_t chunk_size) {
 	uint64_t strl_start = file->get_position();
 	uint64_t chunk_end = strl_start + chunk_size;
+	ERR_FAIL_COND_V(chunk_size < 56 || chunk_end > file->get_length(), ERR_FILE_CORRUPT);
 
 	// Look for strh chunk first
 	char chunk_fourcc[4];
 	file->get_buffer((uint8_t *)chunk_fourcc, 4);
 	uint32_t sub_chunk_size = file->get_32();
 
+	ERR_FAIL_COND_V(sub_chunk_size < 48 || uint64_t(sub_chunk_size) + (sub_chunk_size & 1) > chunk_end - file->get_position(), ERR_FILE_CORRUPT);
 	if (memcmp(chunk_fourcc, "strh", 4) == 0) {
 		// Parse stream header
 		file->get_buffer((uint8_t *)stream_info.fourcc_type, 4);
@@ -481,7 +459,7 @@ Error PostMergeProcessor::parse_stream_header(Ref<FileAccess> file, AviFileInfo:
 		file->get_32(); // quality
 		stream_info.sample_size = file->get_32();
 		// Skip remaining strh fields
-		file->seek(file->get_position() + sub_chunk_size - 48);
+		file->seek(strl_start + 8 + sub_chunk_size + (sub_chunk_size & 1));
 	} else {
 		if (config.enable_debug_output) {
 			print_line("PostMergeProcessor: Expected strh chunk but found something else");
@@ -493,6 +471,7 @@ Error PostMergeProcessor::parse_stream_header(Ref<FileAccess> file, AviFileInfo:
 	if (file->get_position() < chunk_end - 8) {
 		file->get_buffer((uint8_t *)chunk_fourcc, 4);
 		sub_chunk_size = file->get_32();
+		ERR_FAIL_COND_V(sub_chunk_size > chunk_end - file->get_position(), ERR_FILE_CORRUPT);
 
 		if (memcmp(chunk_fourcc, "strf", 4) == 0) {
 			if (config.enable_debug_output) {
@@ -793,29 +772,8 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 		return ERR_FILE_CANT_OPEN;
 	}
 
-	// If no index entries, scan movi data directly
-	Vector<AviFileInfo::IndexEntry> video_chunks;
-	Vector<AviFileInfo::IndexEntry> audio_chunks;
-
-	if (video_info.index_entries.size() == 0 && video_info.movi_data_offset > 0) {
-		// Scan video movi data
-		scan_movi_chunks(video_file, video_info.movi_data_offset, video_info.movi_data_size, video_chunks);
-		if (config.enable_debug_output) {
-			print_line("PostMergeProcessor: Found " + String::num_int64(video_chunks.size()) + " video chunks by scanning");
-		}
-	} else {
-		video_chunks = video_info.index_entries;
-	}
-
-	if (audio_info.index_entries.size() == 0 && audio_info.movi_data_offset > 0) {
-		// Scan audio movi data
-		scan_movi_chunks(audio_file, audio_info.movi_data_offset, audio_info.movi_data_size, audio_chunks);
-		if (config.enable_debug_output) {
-			print_line("PostMergeProcessor: Found " + String::num_int64(audio_chunks.size()) + " audio chunks by scanning");
-		}
-	} else {
-		audio_chunks = audio_info.index_entries;
-	}
+	const Vector<AviFileInfo::IndexEntry> &video_chunks = video_info.index_entries;
+	const Vector<AviFileInfo::IndexEntry> &audio_chunks = audio_info.index_entries;
 
 	// Write movi list header
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
@@ -831,97 +789,20 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 	uint32_t chunk_offset = 4; // Relative to movi data start
 
 	while (video_idx < video_chunks.size() || audio_idx < audio_chunks.size()) {
-		// Write video chunk if available
-		if (video_idx < video_chunks.size()) {
-			const AviFileInfo::IndexEntry &video_entry = video_chunks[video_idx];
-
-			// Read and copy video chunk (keep original format)
-			video_file->seek(video_info.movi_data_offset + video_entry.chunk_offset);
-
-			// Read chunk header
-			char fourcc[4];
-			video_file->get_buffer((uint8_t *)fourcc, 4);
-			uint32_t chunk_size = video_file->get_32();
-
-			// Write video chunk with stream 0 ID
-			output_file->store_buffer((const uint8_t *)"00db", 4); // Stream 0, video
-			output_file->store_32(chunk_size);
-
-			// Copy data
-			Vector<uint8_t> chunk_data;
-			chunk_data.resize(chunk_size);
-			video_file->get_buffer(chunk_data.ptrw(), chunk_size);
-			output_file->store_buffer(chunk_data.ptr(), chunk_size);
-
-			// Pad to even boundary
-			if (chunk_size % 2 != 0) {
-				output_file->store_8(0);
-				chunk_size++;
+		for (bool is_video : { true, false }) {
+			int &index = is_video ? video_idx : audio_idx;
+			const AviFileInfo &info = is_video ? video_info : audio_info;
+			if (index >= info.index_entries.size()) {
+				continue;
 			}
-
-			// Add to merged index
-			AviFileInfo::IndexEntry merged_entry;
-			memcpy(merged_entry.fourcc, "00db", 4);
-			merged_entry.flags = 0x10; // AVIIF_KEYFRAME
-			merged_entry.chunk_offset = chunk_offset;
-			merged_entry.chunk_size = video_entry.chunk_size;
-			merged_index.push_back(merged_entry);
-
-			chunk_offset += 8 + chunk_size; // 4cc + size + data + padding
-			video_idx++;
-		}
-
-		// Write audio chunk if available (convert 32-bit to 16-bit)
-		if (audio_idx < audio_chunks.size()) {
-			const AviFileInfo::IndexEntry &audio_entry = audio_chunks[audio_idx];
-
-			// Read audio chunk
-			audio_file->seek(audio_info.movi_data_offset + audio_entry.chunk_offset);
-
-			// Read chunk header
-			char fourcc[4];
-			audio_file->get_buffer((uint8_t *)fourcc, 4);
-			uint32_t chunk_size = audio_file->get_32();
-
-			// Read 32-bit audio data
-			Vector<int32_t> audio_data_32;
-			audio_data_32.resize(chunk_size / 4);
-			audio_file->get_buffer((uint8_t *)audio_data_32.ptrw(), chunk_size);
-
-			// Convert to 16-bit
-			Vector<int16_t> audio_data_16;
-			audio_data_16.resize(audio_data_32.size());
-
-			for (int i = 0; i < audio_data_32.size(); i++) {
-				// Convert 32-bit to 16-bit with proper scaling
-				int32_t sample_32 = audio_data_32[i];
-				int16_t sample_16 = (int16_t)CLAMP(sample_32 >> 16, -32768, 32767);
-				audio_data_16.write[i] = sample_16;
+			const AviFileInfo::IndexEntry &entry = info.index_entries[index++];
+			TimestampedChunk chunk{};
+			chunk.file_offset = info.movi_data_offset + entry.chunk_offset;
+			chunk.chunk_size = entry.chunk_size;
+			Error error = write_avi_chunk(is_video ? video_file : audio_file, output_file, chunk, is_video, chunk_offset, merged_index);
+			if (error != OK) {
+				return error;
 			}
-
-			uint32_t converted_size = audio_data_16.size() * 2; // 16-bit
-
-			// Write audio chunk with stream 1 ID
-			output_file->store_buffer((const uint8_t *)"01wb", 4); // Stream 1, audio
-			output_file->store_32(converted_size);
-			output_file->store_buffer((const uint8_t *)audio_data_16.ptr(), converted_size);
-
-			// Pad to even boundary
-			if (converted_size % 2 != 0) {
-				output_file->store_8(0);
-				converted_size++;
-			}
-
-			// Add to merged index
-			AviFileInfo::IndexEntry merged_entry;
-			memcpy(merged_entry.fourcc, "01wb", 4);
-			merged_entry.flags = 0; // No special flags for audio
-			merged_entry.chunk_offset = chunk_offset;
-			merged_entry.chunk_size = converted_size;
-			merged_index.push_back(merged_entry);
-
-			chunk_offset += 8 + converted_size; // 4cc + size + data + padding
-			audio_idx++;
 		}
 	}
 
@@ -944,43 +825,39 @@ Error PostMergeProcessor::interleave_avi_data(const String &video_path, const St
 	return OK;
 }
 
-void PostMergeProcessor::scan_movi_chunks(Ref<FileAccess> file, uint64_t movi_offset, uint32_t movi_size, Vector<AviFileInfo::IndexEntry> &chunks) {
-	uint64_t pos = movi_offset;
-	uint64_t movi_end = movi_offset + movi_size;
-
-	while (pos < movi_end - 8) {
-		file->seek(pos);
-
-		// Read chunk header
-		char fourcc[4];
-		file->get_buffer((uint8_t *)fourcc, 4);
-		uint32_t chunk_size = file->get_32();
-
-		// Validate chunk
-		if (chunk_size > movi_size || chunk_size > 0x7FFFFFFF) {
-			break;
-		}
-
-		// Check if it's a valid data chunk
-		if ((memcmp(fourcc, "00db", 4) == 0) || // Video
-				(memcmp(fourcc, "00dc", 4) == 0) || // Compressed video
-				(memcmp(fourcc, "00wb", 4) == 0) || // Audio
-				(memcmp(fourcc, "01wb", 4) == 0)) { // Audio stream 1
-
-			AviFileInfo::IndexEntry entry;
-			memcpy(entry.fourcc, fourcc, 4);
-			entry.flags = (fourcc[2] == 'd') ? 0x10 : 0; // KEYFRAME for video
-			entry.chunk_offset = pos - movi_offset; // Relative to movi start
-			entry.chunk_size = chunk_size;
-			chunks.push_back(entry);
-		}
-
-		// Move to next chunk
-		pos += 8 + chunk_size;
-		if (chunk_size % 2 != 0) {
-			pos++; // Align to even boundary
-		}
+Error PostMergeProcessor::validate_movi_chunk(Ref<FileAccess> file, const AviFileInfo &info, const AviFileInfo::IndexEntry &entry) {
+	const uint64_t chunk_end = uint64_t(entry.chunk_offset) + 8 + entry.chunk_size + (entry.chunk_size & 1);
+	ERR_FAIL_COND_V(chunk_end > info.movi_data_size, ERR_FILE_CORRUPT);
+	file->seek(info.movi_data_offset + entry.chunk_offset);
+	char fourcc[4];
+	file->get_buffer((uint8_t *)fourcc, 4);
+	ERR_FAIL_COND_V(memcmp(fourcc, entry.fourcc, 4) != 0 || file->get_32() != entry.chunk_size, ERR_FILE_CORRUPT);
+	if (memcmp(info.streams_info[0].fourcc_type, "auds", 4) == 0) {
+		ERR_FAIL_COND_V(memcmp(fourcc, "00wb", 4) != 0 || entry.chunk_size % info.streams_info[0].sample_size != 0, ERR_FILE_CORRUPT);
+	} else {
+		ERR_FAIL_COND_V(memcmp(fourcc, "00db", 4) != 0 && memcmp(fourcc, "00dc", 4) != 0, ERR_FILE_CORRUPT);
 	}
+	return OK;
+}
+
+Error PostMergeProcessor::scan_movi_chunks(Ref<FileAccess> file, const AviFileInfo &info, Vector<AviFileInfo::IndexEntry> &chunks) {
+	uint64_t offset = 0;
+	while (offset < info.movi_data_size) {
+		ERR_FAIL_COND_V(info.movi_data_size - offset < 8, ERR_FILE_CORRUPT);
+		file->seek(info.movi_data_offset + offset);
+		AviFileInfo::IndexEntry entry{};
+		file->get_buffer((uint8_t *)entry.fourcc, 4);
+		entry.chunk_size = file->get_32();
+		entry.chunk_offset = offset;
+		entry.flags = entry.fourcc[2] == 'd' ? 0x10 : 0;
+		Error error = validate_movi_chunk(file, info, entry);
+		if (error != OK) {
+			return error;
+		}
+		chunks.push_back(entry);
+		offset += 8 + uint64_t(entry.chunk_size) + (entry.chunk_size & 1);
+	}
+	return OK;
 }
 
 Error PostMergeProcessor::write_merged_avi_index(Ref<FileAccess> output_file, const Vector<AviFileInfo::IndexEntry> &merged_index) {
@@ -1008,26 +885,10 @@ Error PostMergeProcessor::interleave_avi_data_timestamped(const String &video_pa
 		return ERR_FILE_CANT_OPEN;
 	}
 
-	// Get chunks with fallback to scanning if no index
-	Vector<AviFileInfo::IndexEntry> video_chunks;
-	Vector<AviFileInfo::IndexEntry> audio_chunks;
-
-	if (video_info.index_entries.size() == 0 && video_info.movi_data_offset > 0) {
-		scan_movi_chunks(video_file, video_info.movi_data_offset, video_info.movi_data_size, video_chunks);
-	} else {
-		video_chunks = video_info.index_entries;
-	}
-
-	if (audio_info.index_entries.size() == 0 && audio_info.movi_data_offset > 0) {
-		scan_movi_chunks(audio_file, audio_info.movi_data_offset, audio_info.movi_data_size, audio_chunks);
-	} else {
-		audio_chunks = audio_info.index_entries;
-	}
-
 	// Calculate timestamps for all chunks
 	Vector<TimestampedChunk> all_chunks;
-	calculate_chunk_timestamps(video_chunks, video_info, true, all_chunks);
-	calculate_chunk_timestamps(audio_chunks, audio_info, false, all_chunks);
+	calculate_chunk_timestamps(video_info.index_entries, video_info, true, all_chunks);
+	calculate_chunk_timestamps(audio_info.index_entries, audio_info, false, all_chunks);
 
 	// Sort by timestamp
 	all_chunks.sort();
@@ -1046,7 +907,7 @@ Error PostMergeProcessor::interleave_avi_data_timestamped(const String &video_pa
 	for (int i = 0; i < all_chunks.size(); i++) {
 		const TimestampedChunk &chunk = all_chunks[i];
 
-		Error write_error = write_timestamped_chunk(
+		Error write_error = write_avi_chunk(
 				chunk.type == TimestampedChunk::VIDEO_CHUNK ? video_file : audio_file,
 				output_file,
 				chunk,
@@ -1154,15 +1015,6 @@ void PostMergeProcessor::calculate_chunk_timestamps(const Vector<AviFileInfo::In
 	}
 }
 
-uint32_t PostMergeProcessor::calculate_optimal_audio_chunk_size(uint32_t video_fps, uint32_t sample_rate) {
-	// Calculate optimal audio chunk size to match video frame duration
-	double frame_duration_s = 1.0 / video_fps;
-	uint32_t samples_per_frame = sample_rate * frame_duration_s;
-
-	// Align to 256 sample boundary for efficiency
-	return ((samples_per_frame + 255) / 256) * 256;
-}
-
 bool PostMergeProcessor::validate_av_sync(uint64_t video_ts, uint64_t audio_ts) {
 	uint64_t drift = video_ts > audio_ts ? video_ts - audio_ts : audio_ts - video_ts;
 
@@ -1173,16 +1025,20 @@ bool PostMergeProcessor::validate_av_sync(uint64_t video_ts, uint64_t audio_ts) 
 	return true;
 }
 
-Error PostMergeProcessor::write_timestamped_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file,
+Error PostMergeProcessor::write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file,
 		const TimestampedChunk &chunk, bool is_video,
 		uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index) {
-	// Seek to chunk location
+	// Input files are reopened after parsing; check again before copying a payload.
+	const uint64_t file_size = input_file->get_length();
+	ERR_FAIL_COND_V(chunk.file_offset > file_size || file_size - chunk.file_offset < 8, ERR_FILE_CORRUPT);
 	input_file->seek(chunk.file_offset);
 
 	// Read chunk header
 	char fourcc[4];
 	input_file->get_buffer((uint8_t *)fourcc, 4);
 	uint32_t original_size = input_file->get_32();
+	ERR_FAIL_COND_V(original_size != chunk.chunk_size || original_size > file_size - input_file->get_position(), ERR_FILE_CORRUPT);
+	ERR_FAIL_COND_V(!is_video && original_size % 4 != 0, ERR_FILE_CORRUPT);
 
 	if (is_video) {
 		// Write video chunk (keep original format)

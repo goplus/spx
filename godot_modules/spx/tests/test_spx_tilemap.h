@@ -216,6 +216,38 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader creates atlas collisions cells and ow
 	CHECK(disabled->is_queued_for_deletion());
 }
 
+TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and preserves valid polygons") {
+	TestSpx::TempDirectory files("spx_tilemap_physics");
+	Ref<Image> image = Image::create_empty(16, 16, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 0));
+	REQUIRE(image->save_png(files.file("atlas.png")) == OK);
+	SpxTileMapData map;
+	REQUIRE(map.from_json(map_document()));
+	auto &physics = map.tileset.sources.write[0].tiles.write[0].physics;
+	const SpxTilePhysicsData valid = physics[0];
+	physics.clear();
+	for (int layer : { -1, 0, 1 }) {
+		SpxTilePhysicsData entry = valid;
+		entry.layer = layer;
+		physics.push_back(entry);
+	}
+	REQUIRE(map.save_to_file(files.file("map.json")));
+	TestSpx::EngineScene scene;
+	const CharString path = files.file("map.json").utf8();
+	ERR_PRINT_OFF;
+	scene.engine->get_tilemapparser()->load_tilemap(path.get_data());
+	ERR_PRINT_ON;
+	REQUIRE(scene.engine->get_tilemapparser()->has_tilemap("meadow"));
+	auto *ground = Object::cast_to<TileMapLayer>(scene.root->get_node_or_null(NodePath("ground")));
+	REQUIRE(ground != nullptr);
+	Ref<TileSetAtlasSource> atlas = ground->get_tile_set()->get_source(3);
+	REQUIRE(atlas.is_valid());
+	TileData *tile = atlas->get_tile_data(Vector2i(), 0);
+	REQUIRE(tile != nullptr);
+	CHECK(tile->get_collision_polygons_count(0) == 1);
+	CHECK(tile->get_collision_polygon_points(0, 0) == Vector<Vector2>({ Vector2(-4, -4), Vector2(4, -4), Vector2(0, 4) }));
+}
+
 } // namespace TestSpxTilemap
 
 #endif // TEST_SPX_TILEMAP_H

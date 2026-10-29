@@ -43,12 +43,12 @@ class SpxSceneMgr : public SpxManager {
 
 private:
 	const String DEFAULT_SAVE_PATH = "user://exported_scene.png";
-	bool export_pending = false;
 	double elapsed = 0.0;
-	SubViewport *viewport_to_export = nullptr;
+	ObjectID viewport_to_export;
 	Vector2 cached_cell_size{ 16, 16 };
 
 	void _request_export(SubViewport *viewport);
+	void _cancel_export();
 	void _export_vp_png(SubViewport *viewport);
 
 public:

@@ -98,6 +98,12 @@ static int find_tag(const PackedByteArray &bytes, const char *tag) {
 	return -1;
 }
 
+static void write_avi(const String &path, const PackedByteArray &bytes) {
+	auto file = FileAccess::open(path, FileAccess::WRITE);
+	REQUIRE(file.is_valid());
+	file->store_buffer(bytes);
+}
+
 static PackedByteArray read_avi(const String &path) {
 	PackedByteArray bytes = FileAccess::get_file_as_bytes(path);
 	REQUIRE(bytes.size() >= 12);
@@ -716,18 +722,13 @@ TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed head
 	TestSpx::TempDirectory files("spx_avi_recovery");
 	const String video = files.file("video.avi"), audio = files.file("audio.avi");
 	write_avi_pair(video, audio, 20);
-	auto write = [](const String &path, const PackedByteArray &bytes) {
-		auto file = FileAccess::open(path, FileAccess::WRITE);
-		REQUIRE(file.is_valid());
-		file->store_buffer(bytes);
-	};
 	for (const String &path : { video, audio }) {
 		auto bytes = read_avi(path);
 		int index = find_tag(bytes, "idx1");
 		REQUIRE(index > 0);
 		bytes.resize(index);
 		encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
-		write(path, bytes);
+		write_avi(path, bytes);
 	}
 	PostMergeProcessor processor;
 	PostMergeProcessor::MergeConfig config;
@@ -753,7 +754,7 @@ TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed head
 		REQUIRE(offset >= 0);
 		bad.set(offset, 'X');
 		String broken = files.file("broken.avi");
-		write(broken, bad);
+		write_avi(broken, bad);
 		ERR_PRINT_OFF;
 		auto result = processor.merge_files(broken, audio, files.file("invalid.avi"));
 		ERR_PRINT_ON;
@@ -761,7 +762,9 @@ TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed head
 		CHECK_FALSE(result.intermediate_files_cleaned);
 	}
 	files.write("bad_audio.avi", "RIFFxxxxxxxxxxxxxxxx");
+	ERR_PRINT_OFF;
 	CHECK(processor.merge_files(video, files.file("bad_audio.avi"), files.file("bad.avi")).error_code == ERR_FILE_CORRUPT);
+	ERR_PRINT_ON;
 	CHECK(processor.merge_files(video, audio, files.file("missing/output.avi")).error_code == ERR_FILE_BAD_PATH);
 	config.method = PostMergeProcessor::METHOD_FFMPEG_SYSTEM;
 	config.ffmpeg_path = files.file("missing-ffmpeg");
@@ -786,7 +789,8 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 	config.keep_intermediate_files = false;
 	processor.set_config(config);
 
-	for (int damage = 0; damage < 3; ++damage) {
+	for (int damage = 0; damage < 7; ++damage) {
+		INFO("Index damage case: ", damage);
 		auto bytes = original;
 		switch (damage) {
 			case 0:
@@ -798,13 +802,22 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 				break;
 			case 2:
 				bytes.resize(bytes.size() - 1); // Truncated final entry.
+				encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
+				break;
+			case 3:
+				encode_uint32(UINT32_MAX, bytes.ptrw() + index + 16); // Offset beyond movi.
+				break;
+			case 4:
+				encode_uint32(UINT32_MAX, bytes.ptrw() + index + 20); // Size overflows a 32-bit end offset.
+				break;
+			case 5:
+				bytes.set(index + 8, 'X'); // Index tag disagrees with the actual chunk.
+				break;
+			case 6:
+				encode_uint32(1, bytes.ptrw() + index + 20); // Index size disagrees with the actual chunk.
 				break;
 		}
-		{
-			auto file = FileAccess::open(video, FileAccess::WRITE);
-			REQUIRE(file.is_valid());
-			file->store_buffer(bytes);
-		}
+		write_avi(video, bytes);
 		ERR_PRINT_OFF;
 		auto result = processor.merge_files(video, audio, files.file("invalid.avi"));
 		ERR_PRINT_ON;
@@ -813,6 +826,204 @@ TEST_CASE("[SPX] AVI merger rejects damaged indexes without consuming input stre
 		CHECK(FileAccess::exists(video));
 		CHECK(FileAccess::exists(audio));
 		CHECK_FALSE(FileAccess::exists(files.file("invalid.avi")));
+	}
+}
+
+TEST_CASE("[SPX] AVI merger requires complete ordered indexes and preserves existing output") {
+	TestSpx::TempDirectory files("spx_avi_index_order");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi"), output = files.file("merged.avi");
+	write_avi_pair(video, audio);
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	files.write("merged.avi", "existing recording");
+	const auto original_output = FileAccess::get_file_as_bytes(output);
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED }) {
+		config.interleave_strategy = strategy;
+		processor.set_config(config);
+		for (bool damage_audio : { true, false }) {
+			for (int damage = 0; damage < 3; ++damage) {
+				INFO("Strategy: ", strategy, ", audio: ", damage_audio, ", index damage: ", damage);
+				auto bytes = damage_audio ? original_audio : original_video;
+				const int index = find_tag(bytes, "idx1");
+				REQUIRE(index > 0);
+				if (damage == 0) {
+					// Duplicating a valid entry must not duplicate its payload.
+					memcpy(bytes.ptrw() + index + 24, bytes.ptr() + index + 8, 16);
+				} else if (damage == 1) {
+					// A valid prefix must not silently drop the last payload.
+					bytes.resize(index + 24);
+					encode_uint32(16, bytes.ptrw() + index + 4);
+					encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
+				} else {
+					// Individually valid entries must preserve their recording order.
+					for (int i = 0; i < 16; ++i) {
+						uint8_t first = bytes[index + 8 + i];
+						bytes.set(index + 8 + i, bytes[index + 24 + i]);
+						bytes.set(index + 24 + i, first);
+					}
+				}
+				write_avi(video, damage_audio ? original_video : bytes);
+				write_avi(audio, damage_audio ? bytes : original_audio);
+				ERR_PRINT_OFF;
+				auto result = processor.merge_files(video, audio, output);
+				ERR_PRINT_ON;
+				CHECK(result.error_code == ERR_FILE_CORRUPT);
+				CHECK_FALSE(result.intermediate_files_cleaned);
+				CHECK(FileAccess::get_file_as_bytes(output) == original_output);
+				CHECK(FileAccess::get_file_as_bytes(video) == (damage_audio ? original_video : bytes));
+				CHECK(FileAccess::get_file_as_bytes(audio) == (damage_audio ? bytes : original_audio));
+			}
+		}
+	}
+}
+
+TEST_CASE("[SPX] AVI merger rejects invalid timing and nested chunk boundaries") {
+	TestSpx::TempDirectory files("spx_avi_headers");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio);
+	const auto original_video = read_avi(video), original_audio = read_avi(audio);
+	struct Damage {
+		bool audio;
+		const char *tag;
+		int offset;
+		uint32_t value;
+	};
+	const Damage cases[] = {
+		{ false, "RIFF", 4, 0 },
+		{ false, "hdrl", -4, 0 },
+		{ false, "hdrl", -4, 8 },
+		{ false, "avih", 4, 4 },
+		{ false, "avih", 8, 0 }, // Zero frame duration formerly divided by zero.
+		{ false, "strl", -4, 2 },
+		{ false, "strl", -4, 8 },
+		{ false, "strh", 4, 4 },
+		{ false, "strh", 4, UINT32_MAX },
+		{ false, "strf", 4, UINT32_MAX },
+		{ false, "vids", 20, 0 }, // scale
+		{ false, "vids", 24, 0 }, // rate
+		{ false, "movi", -4, UINT32_MAX },
+		{ true, "auds", 44, 0 }, // Zero PCM frame size formerly divided by zero.
+		{ true, "auds", 44, 3 }, // PCM requires whole 32-bit samples.
+	};
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	processor.set_config(config);
+	const String output = files.file("invalid.avi");
+	for (const Damage &damage : cases) {
+		INFO("Invalid ", damage.tag, " field ", damage.offset, " = ", damage.value);
+		auto bytes = damage.audio ? original_audio : original_video;
+		const int tag = find_tag(bytes, damage.tag);
+		REQUIRE(tag >= 0);
+		encode_uint32(damage.value, bytes.ptrw() + tag + damage.offset);
+		write_avi(video, damage.audio ? original_video : bytes);
+		write_avi(audio, damage.audio ? bytes : original_audio);
+		ERR_PRINT_OFF;
+		auto result = processor.merge_files(video, audio, output);
+		ERR_PRINT_ON;
+		CHECK(result.error_code == ERR_FILE_CORRUPT);
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK_FALSE(FileAccess::exists(output));
+		CHECK(FileAccess::get_file_as_bytes(video) == (damage.audio ? original_video : bytes));
+		CHECK(FileAccess::get_file_as_bytes(audio) == (damage.audio ? bytes : original_audio));
+	}
+}
+
+TEST_CASE("[SPX] AVI recovery rejects incomplete PCM frames and truncated unindexed payloads") {
+	TestSpx::TempDirectory files("spx_avi_payloads");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio);
+	const auto original = read_avi(audio);
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	processor.set_config(config);
+	for (bool indexed : { true, false }) {
+		for (int damage = 0; damage < 3; ++damage) {
+			INFO("Indexed: ", indexed, ", payload damage: ", damage);
+			auto bytes = original;
+			const int index = find_tag(bytes, "idx1");
+			const int chunk = find_tag(bytes, "00wb");
+			REQUIRE(index > 0);
+			REQUIRE(chunk > 0);
+			const uint32_t size = decode_uint32(bytes.ptr() + chunk + 4);
+			if (damage == 0) {
+				// Both header and index agree, but the payload ends inside an int32 sample.
+				encode_uint32(size - 1, bytes.ptrw() + chunk + 4);
+				encode_uint32(size - 1, bytes.ptrw() + index + 20);
+			} else if (damage == 1) {
+				encode_uint32(bytes.size(), bytes.ptrw() + chunk + 4);
+				encode_uint32(bytes.size(), bytes.ptrw() + index + 20);
+			} else {
+				// Matching tags still must identify PCM in an audio stream.
+				bytes.set(chunk + 2, 'd');
+				bytes.set(index + 10, 'd');
+			}
+			if (!indexed) {
+				bytes.resize(index);
+				encode_uint32(bytes.size() - 8, bytes.ptrw() + 4);
+			}
+			write_avi(audio, bytes);
+			ERR_PRINT_OFF;
+			auto result = processor.merge_files(video, audio, files.file("invalid.avi"));
+			ERR_PRINT_ON;
+			CHECK(result.error_code == ERR_FILE_CORRUPT);
+			CHECK_FALSE(result.intermediate_files_cleaned);
+			CHECK_FALSE(FileAccess::exists(files.file("invalid.avi")));
+			CHECK(FileAccess::get_file_as_bytes(audio) == bytes);
+		}
+	}
+}
+
+TEST_CASE("[SPX] AVI parser keeps word padding inside the parent header") {
+	TestSpx::TempDirectory files("spx_avi_padding");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	write_avi_pair(video, audio);
+	const auto original = read_avi(video);
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	processor.set_config(config);
+	for (bool main_header : { true, false }) {
+		auto bytes = original;
+		const int child = find_tag(bytes, main_header ? "avih" : "strh");
+		const int parent = find_tag(bytes, main_header ? "hdrl" : "strl");
+		REQUIRE(child > 0);
+		REQUIRE(parent > 0);
+		const uint32_t size = main_header ? 57 : 49;
+		encode_uint32(size, bytes.ptrw() + child + 4);
+		encode_uint32(4 + 8 + size, bytes.ptrw() + parent - 4);
+		write_avi(video, bytes);
+		ERR_PRINT_OFF;
+		auto result = processor.merge_files(video, audio, files.file("invalid.avi"));
+		ERR_PRINT_ON;
+		CHECK(result.error_code == ERR_FILE_CORRUPT);
+		CHECK_FALSE(FileAccess::exists(files.file("invalid.avi")));
+	}
+}
+
+TEST_CASE("[SPX] AVI merger accepts empty video and audio streams") {
+	TestSpx::TempDirectory files("spx_avi_empty");
+	const String video = files.file("video.avi"), audio = files.file("audio.avi");
+	const String empty_video = files.file("empty_video.avi"), empty_audio = files.file("empty_audio.avi");
+	write_avi_pair(video, audio);
+	write_avi_pair(empty_video, empty_audio, 0);
+	PostMergeProcessor processor;
+	PostMergeProcessor::MergeConfig config;
+	config.method = PostMergeProcessor::METHOD_CUSTOM_AVI;
+	config.keep_intermediate_files = true;
+	for (auto strategy : { PostMergeProcessor::MergeConfig::INTERLEAVE_SIMPLE_ALTERNATE, PostMergeProcessor::MergeConfig::INTERLEAVE_TIMESTAMP_BASED }) {
+		config.interleave_strategy = strategy;
+		processor.set_config(config);
+		for (int empty = 1; empty <= 3; ++empty) {
+			const String output = files.file("merged.avi");
+			auto result = processor.merge_files(empty & 1 ? empty_video : video, empty & 2 ? empty_audio : audio, output);
+			INFO(result.error_message);
+			REQUIRE(result.error_code == OK);
+			check_avi_index(read_avi(output), empty == 3 ? 0 : 2);
+		}
 	}
 }
 

@@ -84,6 +84,19 @@ TEST_CASE("[SPX] Batch finite preflight checks every selected lane") {
 	CHECK_FALSE(SpxBatchValidation::all_finite(non_finite_values, 3));
 }
 
+TEST_CASE("[SPX] Pixel collision sampling rejects unrepresentable bridge steps") {
+	SpxSpriteMgr manager;
+	manager.set_pixel_collision_sampling_step(3);
+	for (GdInt step : { GdInt(INT_MAX) + 1, GdInt(1) << 32, std::numeric_limits<GdInt>::max() }) {
+		ERR_PRINT_OFF;
+		manager.set_pixel_collision_sampling_step(step);
+		ERR_PRINT_ON;
+		CHECK(manager.get_pixel_collision_sampling_step() == 3);
+	}
+	manager.set_pixel_collision_sampling_step(INT_MAX);
+	CHECK(manager.get_pixel_collision_sampling_step() == INT_MAX);
+}
+
 TEST_CASE("[SceneTree][SPX] Dynamic impulses change momentum once independently of tick rate") {
 	SceneTree *tree = SceneTree::get_singleton();
 	for (int ticks_per_second : { 30, 60, 120 }) {

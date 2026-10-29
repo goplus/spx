@@ -451,6 +451,7 @@ void SpxSpriteMgr::batch_update_physics(const float *buffer_data, int len) {
 }
 
 void SpxSpriteMgr::set_pixel_collision_sampling_step(GdInt step) {
+	ERR_FAIL_COND_MSG(step > INT_MAX, "Pixel collision sampling step exceeds the supported integer range.");
 	// Clamp to valid range (minimum 1, as 0 or negative would cause infinite loop)
 	if (step < 1) {
 		pixel_collision_sampling_step = 1;

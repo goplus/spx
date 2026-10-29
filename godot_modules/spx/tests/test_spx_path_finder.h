@@ -32,9 +32,13 @@
 #define TEST_SPX_PATH_FINDER_H
 
 #include "../spx_path_finder.h"
+#include "../spx_sprite_mgr.h"
+#include "scene/2d/physics/collision_shape_2d.h"
+#include "scene/2d/physics/static_body_2d.h"
 #include "scene/2d/tile_map_layer.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+#include "scene/resources/2d/circle_shape_2d.h"
 #include "scene/resources/placeholder_textures.h"
 #include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
@@ -169,6 +173,37 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 	memdelete(drawer);
 	finder->reset();
 	CHECK(finder->get_size() == Vector2i());
+}
+
+TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported and missing obstacle geometry") {
+	TestSpx::EngineScene scene;
+	auto *body = memnew(StaticBody2D);
+	scene.root->add_child(body);
+	body->add_child(memnew(CollisionShape2D));
+	auto *circle = memnew(CollisionShape2D);
+	Ref<CircleShape2D> shape;
+	shape.instantiate();
+	shape->set_radius(32);
+	circle->set_shape(shape);
+	body->add_child(circle);
+	Ref<SpxPathFinder> finder;
+	finder.instantiate();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16));
+	finder->add_all_obstacles(nullptr);
+	const auto direct = finder->find_path(Vector2(-24, 8), Vector2(24, 8));
+	REQUIRE(direct.size() == 4);
+
+	auto *sprites = scene.engine->get_sprite();
+	const GdObj dynamic_sprite = sprites->create_bare_sprite(Vector2(8, -8));
+	sprites->set_collider_rect(dynamic_sprite, Vector2(), Vector2(16, 16));
+	ERR_PRINT_OFF;
+	finder->set_sprite_obstacle(NULL_OBJECT_ID, true);
+	finder->set_sprite_obstacle(dynamic_sprite, true);
+	ERR_PRINT_ON;
+	CHECK(finder->find_path(Vector2(-24, 8), Vector2(24, 8)) == direct);
+	for (const Vector2 &point : direct) {
+		CHECK_FALSE(finder->is_cell_solid(Vector2i((point / Vector2(16, 16)).floor())));
+	}
 }
 
 } // namespace TestSpxPathFinder

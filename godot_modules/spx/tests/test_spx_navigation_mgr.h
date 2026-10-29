@@ -72,7 +72,11 @@ TEST_CASE("[SceneTree][SPX] Navigation returns SPX coordinates and routes around
 	const auto detour = find_path(manager);
 	CHECK(detour.size() > direct.size());
 	CHECK_FALSE(detour.has(Vector2(8, -8)));
+	// Hiding an obstacle before removing it must not leave stale blocked cells.
+	sprites->get_sprite(obstacle)->hide();
 	manager->set_obstacle(obstacle, false);
+	CHECK(find_path(manager) == direct);
+	manager->set_obstacle(obstacle, true);
 	CHECK(find_path(manager) == direct);
 	manager->on_reset(0);
 	manager->on_reset(0);

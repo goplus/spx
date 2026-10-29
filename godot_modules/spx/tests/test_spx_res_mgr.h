@@ -244,6 +244,49 @@ TEST_CASE("[SceneTree][SPX] Direct bitmap failures preserve checked loading and 
 	CHECK(DirAccess::remove_absolute(path) == OK);
 }
 
+TEST_CASE("[SceneTree][SPX] Bitmap reload preserves texture identity and retries failed reads") {
+	TestSpx::TempDirectory files("spx_bitmap_reload");
+	const String path = files.file("texture.png");
+	const CharString path_utf8 = path.utf8();
+	SpxResMgr resources;
+	Ref<Image> image = Image::create_empty(8, 6, false, Image::FORMAT_RGBA8);
+	image->fill(Color(0, 0, 0, 0));
+	REQUIRE(image->save_png(path) == OK);
+	resources.reload_texture(path_utf8.get_data());
+	const Ref<Texture2D> texture = resources.load_texture_checked(path);
+	REQUIRE(texture.is_valid());
+	CHECK(texture->get_size() == Vector2(8, 6));
+	CHECK(Rect2(resources.get_bound_from_alpha(path_utf8.get_data())) == Rect2());
+
+	image = Image::create_empty(10, 12, false, Image::FORMAT_RGBA8);
+	image->fill(Color(0, 0, 0, 0));
+	image->set_pixel(2, 3, Color(0, 1, 0));
+	image->set_pixel(6, 7, Color(0, 1, 0));
+	REQUIRE(image->save_png(path) == OK);
+	resources.reload_texture(path_utf8.get_data());
+	CHECK(resources.load_texture_checked(path) == texture);
+	CHECK(texture->get_size() == Vector2(10, 12));
+	CHECK(texture->get_image()->get_pixel(2, 3) == Color(0, 1, 0));
+	CHECK(Rect2(resources.get_bound_from_alpha(path_utf8.get_data())) == Rect2(2, 3, 5, 5));
+
+	REQUIRE(DirAccess::remove_absolute(path) == OK);
+	ERR_PRINT_OFF;
+	resources.reload_texture(path_utf8.get_data());
+	ERR_PRINT_ON;
+	CHECK(resources.load_texture_checked(path) == texture);
+	CHECK(texture->get_size() == Vector2(10, 12));
+	CHECK(texture->get_image()->get_pixel(2, 3) == Color(0, 1, 0));
+
+	image->fill(Color(1, 0, 0));
+	REQUIRE(image->save_png(path) == OK);
+	resources.update_caches(Vector<String>{ path });
+	const Ref<Texture2D> replacement = resources.load_texture_checked(path);
+	REQUIRE(replacement.is_valid());
+	CHECK(replacement != texture);
+	CHECK(replacement->get_image()->get_pixel(2, 3) == Color(1, 0, 0));
+	CHECK(texture->get_image()->get_pixel(2, 3) == Color(0, 1, 0));
+}
+
 TEST_CASE("[SceneTree][SPX] Project theme font helper updates default and fallback fonts") {
 	ProjectFontStateReset reset;
 	Ref<FontFile> project_font;

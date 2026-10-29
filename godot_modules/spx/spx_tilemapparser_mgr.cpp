@@ -250,15 +250,16 @@ void SpxTilemapparserMgr::_create_atlas_source(Ref<TileSet> tileset, const SpxTi
 
 		TileData *td = atlas->get_tile_data(tile_data.atlas_coords, 0);
 		if (td != nullptr) {
-			_setup_tile_physics(td, tile_data);
+			_setup_tile_physics(td, tile_data, tileset->get_physics_layers_count());
 		}
 	}
 }
 
-void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTileData &data) {
+void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTileData &data, int physics_layer_count) {
 	for (int i = 0; i < data.physics.size(); i++) {
 		const SpxTilePhysicsData &phys_data = data.physics[i];
-		int layer_id = phys_data.layer;
+		const int layer_id = phys_data.layer;
+		ERR_CONTINUE_MSG(layer_id < 0 || layer_id >= physics_layer_count, "Tile collision references an invalid physics layer.");
 
 		for (int p = 0; p < phys_data.polygons.size(); p++) {
 			const Vector<float> &polygon_flat = phys_data.polygons[p];
@@ -273,8 +274,8 @@ void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTile
 
 			if (polygon.size() >= 3) {
 				// Ensure enough polygons exist
-				while (tile_data->get_collision_polygons_count(layer_id) <= p) {
-					tile_data->add_collision_polygon(layer_id);
+				if (tile_data->get_collision_polygons_count(layer_id) <= p) {
+					tile_data->set_collision_polygons_count(layer_id, p + 1);
 				}
 				tile_data->set_collision_polygon_points(layer_id, p, polygon);
 			}

@@ -158,6 +158,8 @@ void SpxLayerSorter::_collect_sprites(const Vector<ISortableSprite *> &sortables
 				found->sortable = sp;
 				if (!is_static) {
 					_mark_dirty(sp);
+				} else {
+					static_initialized = false;
 				}
 			}
 		} else {

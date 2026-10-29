@@ -38,6 +38,7 @@
 #include "tests/test_macros.h"
 
 #include <algorithm>
+#include <climits>
 
 namespace TestSpxPixelQuery {
 
@@ -53,6 +54,17 @@ TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
 	CHECK(visited[1] == Vector2(-0.5, 1.5));
 	CHECK(visited[2] == Vector2(1.5, -0.5));
 	CHECK(visited[3] == Vector2(1.5, 1.5));
+}
+
+TEST_CASE("[SPX] Pixel sampling handles steps and rectangle ends beyond integer coordinates") {
+	for (const Rect2i &rect : { Rect2i(1, 1, 2, 2), Rect2i(INT_MAX - 1, INT_MAX - 1, 4, 4) }) {
+		int visits = 0;
+		CHECK_FALSE(SpxPixelQuery::any_pixel_center(rect, INT_MAX, [&](Vector2) {
+			// Stop a regressed loop before it can hang the test process.
+			return ++visits > 1;
+		}));
+		CHECK(visits == 1);
+	}
 }
 
 TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
@@ -166,7 +178,7 @@ TEST_CASE("[SPX] Scene colors blend premultiplied pen pixels between sprites and
 	Layer pen = solid_layer(Color(0.5, 0, 0, 0.5), Layer::PEN);
 	pen.pixel_query.image_premultiplied = true;
 	Layer sprite = solid_layer(Color(0, 0, 1, 1), Layer::SPRITE);
-	std::vector<Layer> layers{backdrop, pen, sprite};
+	std::vector<Layer> layers{ backdrop, pen, sprite };
 	auto sort_layers = [&]() {
 		std::sort(layers.begin(), layers.end(), [](const Layer &a, const Layer &b) {
 			return a.in_front_of(b);

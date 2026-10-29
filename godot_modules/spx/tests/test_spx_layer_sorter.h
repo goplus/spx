@@ -233,6 +233,30 @@ TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecy
 	memdelete(drawer);
 }
 
+TEST_CASE("[SceneTree][SPX] Moving static sprites refreshes their order against both groups") {
+	SorterFixture fixture;
+	SortableSprite back(1, Point2(10, 10), true);
+	SortableSprite front(2, Point2(20, 30), true);
+	SortableSprite moving(3, Point2(15, 20));
+	Vector<ISortableSprite *> sprites{ &back, &front, &moving };
+	fixture.sorter.update(sprites);
+	CHECK(back.z_index == 1);
+	CHECK(moving.z_index == 2);
+	CHECK(front.z_index == 3);
+
+	front.position.y = 5;
+	fixture.sorter.update(sprites);
+	CHECK(front.z_index == 1);
+	CHECK(back.z_index == 2);
+	CHECK(moving.z_index == 3);
+	CHECK(fixture.sorter.get_static_sorted().front().id == front.id);
+
+	fixture.sorter.update(sprites);
+	CHECK(front.z_updates == 2);
+	CHECK(back.z_updates == 2);
+	CHECK(moving.z_updates == 2);
+}
+
 } // namespace TestSpxLayerSorter
 
 #endif // TEST_SPX_LAYER_SORTER_H

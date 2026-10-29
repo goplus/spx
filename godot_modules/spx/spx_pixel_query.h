@@ -90,9 +90,10 @@ Rect2i overlap(const Rect2 &p_a, const Rect2 &p_b);
 template <typename Predicate>
 bool any_pixel_center(const Rect2i &p_rect, int p_step, const Predicate &p_matches) {
 	// Callers clamp p_step to at least one when setting the sampling policy.
-	const Vector2i end = p_rect.position + p_rect.size;
-	for (int x = p_rect.position.x; x < end.x; x += p_step) {
-		for (int y = p_rect.position.y; y < end.y; y += p_step) {
+	const int64_t end_x = int64_t(p_rect.position.x) + p_rect.size.x;
+	const int64_t end_y = int64_t(p_rect.position.y) + p_rect.size.y;
+	for (int64_t x = p_rect.position.x; x < end_x; x += p_step) {
+		for (int64_t y = p_rect.position.y; y < end_y; y += p_step) {
 			if (p_matches(Vector2((real_t)x + 0.5f, (real_t)y + 0.5f))) {
 				return true;
 			}

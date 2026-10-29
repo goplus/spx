@@ -258,7 +258,7 @@ void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *sh
 }
 
 void SpxPathFinder::_process_static_obstacles(Node2D *body, bool add) {
-	if (!body->is_visible_in_tree()) {
+	if (add && !body->is_visible_in_tree()) {
 		return;
 	}
 

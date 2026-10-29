@@ -43,7 +43,6 @@
 #include "servers/physics_server_2d.h"
 
 #include "spx_abi.h"
-#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_ext_mgr.h"
 #include "spx_image_texture.h"

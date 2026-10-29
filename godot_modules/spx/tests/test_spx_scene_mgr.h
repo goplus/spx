@@ -106,9 +106,15 @@ TEST_CASE("[SceneTree][SPX] Scene manager owns render sprites and static collide
 	CHECK(manager->pure_sprite_root->get_parent() == scene.root);
 }
 
-TEST_CASE("[SceneTree][SPX] Scene bounds include nested transformed tile layers") {
+TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested transformed tile layers") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_scene();
+	const int initial_children = scene.root->get_child_count();
+	ERR_PRINT_OFF;
+	manager->export_scene_as_png(nullptr);
+	manager->export_scene_as_png(scene.root);
+	ERR_PRINT_ON;
+	CHECK(scene.root->get_child_count() == initial_children);
 	CHECK(manager->get_tilemap_bounds(nullptr) == Rect2());
 	Node2D *group = memnew(Node2D);
 	scene.root->add_child(group);
@@ -136,6 +142,51 @@ TEST_CASE("[SceneTree][SPX] Scene bounds include nested transformed tile layers"
 	CHECK(manager->get_scene_bounds(scene.root) == Rect2(-6, 20, 48, 32));
 	layer->set_scale(Vector2(2, 2));
 	CHECK(manager->get_scene_bounds(scene.root) == Rect2(-22, 20, 96, 64));
+	const int authored_children = scene.root->get_child_count(false);
+	const int all_children = scene.root->get_child_count(true);
+	ERR_PRINT_OFF;
+	manager->export_scene_as_png(scene.root); // Runtime helpers cannot be duplicated.
+	ERR_PRINT_ON;
+	CHECK(scene.root->get_child_count(true) == all_children);
+
+	manager->export_scene_as_png(group);
+	auto *first = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(first);
+	CHECK(first->get_size() == Vector2i(96, 64));
+	CHECK(first->get_child_count() == 1);
+	manager->on_update(0.25);
+	CHECK_FALSE(first->is_queued_for_deletion());
+	CHECK(manager->get_scene_bounds(scene.root) == Rect2(-22, 20, 96, 64));
+	CHECK(scene.root->get_child_count(false) == authored_children);
+	manager->export_scene_as_png(group);
+	auto *second = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(second);
+	CHECK(second != first);
+	CHECK(second->get_size() == Vector2i(96, 64));
+	REQUIRE(second->get_child_count() == 1);
+	Node *copy = second->get_child(0);
+	REQUIRE(copy);
+	CHECK(copy->find_children("*", "SubViewport", true, false).is_empty());
+	CHECK(first->is_queued_for_deletion());
+	CHECK(first->get_parent() == nullptr);
+	memdelete(first);
+	manager->on_reset(0);
+	CHECK(second->is_queued_for_deletion());
+	manager->on_update(1.0); // Reset cancels saving the pending snapshot.
+	memdelete(second);
+
+	manager->export_scene_as_png(group);
+	auto *removed = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(removed);
+	memdelete(removed);
+	manager->on_update(1.0); // Scene removal must not leave a dangling viewport.
+	manager->export_scene_as_png(group);
+	auto *last = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(last);
+	manager->on_destroy();
+	CHECK(last->is_queued_for_deletion());
+	manager->on_update(1.0);
+	memdelete(last);
 }
 
 TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and polygon colliders") {

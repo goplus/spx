@@ -37,6 +37,18 @@
 
 namespace TestSpxUiMgr {
 
+static int orphan_node_count() {
+	static int count;
+	count = 0;
+	ObjectDB::debug_objects([](Object *object) {
+		Node *node = Object::cast_to<Node>(object);
+		if (node != nullptr && !node->is_inside_tree()) {
+			count++;
+		}
+	});
+	return count;
+}
+
 TEST_CASE("[SceneTree][SPX] UI manager creates typed controls and preserves text") {
 	TestSpx::EngineScene scene;
 	SpxUiMgr *ui = scene.engine->get_ui();
@@ -174,6 +186,10 @@ TEST_CASE("[SceneTree][SPX] UI binding preserves an authored child and rejects i
 	CHECK(child->get_parent() == parent);
 	CHECK(ui->bind_node(wrapper->get_gid(), "missing") == NULL_OBJECT_ID);
 	CHECK(ui->bind_node(0, "Choice") == NULL_OBJECT_ID);
+	Node *non_control = memnew(Node);
+	non_control->set_name("NotAControl");
+	parent->add_child(non_control);
+	CHECK(ui->bind_node(wrapper->get_gid(), "NotAControl") == NULL_OBJECT_ID);
 	CHECK(ui->on_create_node(nullptr, (int)ESpxUiType::Control) == nullptr);
 	ERR_PRINT_OFF;
 	CHECK_FALSE(ui->destroy_node(0));
@@ -206,6 +222,16 @@ TEST_CASE("[SceneTree][SPX] List monitor scrolls long lists and clears stale con
 	CHECK(scroll->is_visible());
 	CHECK(scroll->get_max() == 240);
 	CHECK(scroll->get_page() == 100);
+	// Malformed bridge arrays must leave the current list intact.
+	for (GdArrayInfo invalid : { GdArrayInfo{ 10, GD_ARRAY_TYPE_INT64, values },
+				 GdArrayInfo{ -1, GD_ARRAY_TYPE_STRING, values },
+				 GdArrayInfo{ 10, GD_ARRAY_TYPE_STRING, nullptr } }) {
+		ERR_PRINT_OFF;
+		ui->set_list_items(wrapper->get_gid(), "invalid", &invalid, Color());
+		ERR_PRINT_ON;
+		CHECK(scroll->is_visible());
+		CHECK(scroll->get_max() == 240);
+	}
 	MessageQueue::get_singleton()->flush();
 	Ref<InputEventMouseButton> wheel;
 	wheel.instantiate();
@@ -262,6 +288,43 @@ TEST_CASE("[SceneTree][SPX] Authored UI scenes forward clicks and invalidate des
 	CHECK(ui->get_type(control) == (GdInt)ESpxUiType::Control);
 	CHECK(ui->create_node("") == 0);
 }
+
+TEST_CASE("[SceneTree][SPX] UI scene creation releases incompatible roots and preserves typed defaults") {
+	TestSpx::TempDirectory files("spx_ui_scene_types");
+	files.write("node.tscn", "[gd_scene format=3]\n[node name=\"Root\" type=\"Node\"]\n[node name=\"Child\" type=\"Node\" parent=\".\"]\n");
+	files.write("label.tscn", "[gd_scene format=3]\n[node name=\"Root\" type=\"Label\"]\ntext = \"Authored\"\n");
+	files.write("toggle.tscn", "[gd_scene format=3]\n[node name=\"Root\" type=\"CheckButton\"]\nbutton_pressed = true\ntext = \"Choice\"\n");
+	TestSpx::EngineScene scene;
+	auto *ui = scene.engine->get_ui();
+	const int orphans = orphan_node_count();
+	const auto node_path = files.file("node.tscn").utf8();
+	CHECK(ui->create_node(node_path.get_data()) == NULL_OBJECT_ID);
+	CHECK(orphan_node_count() == orphans);
+
+	const auto label_path = files.file("label.tscn").utf8();
+	const GdObj button = ui->create_button(label_path.get_data(), "Fallback");
+	REQUIRE(button != NULL_OBJECT_ID);
+	CHECK(ui->get_node(button)->get_button() != nullptr);
+	CHECK(TestSpx::take_string(ui->get_text(button)) == "Fallback");
+	CHECK(orphan_node_count() == orphans);
+
+	const GdObj label = ui->create_label(label_path.get_data(), "Updated");
+	REQUIRE(label != NULL_OBJECT_ID);
+	CHECK(ui->get_node(label)->get_label()->get_name() == "Root");
+	CHECK(TestSpx::take_string(ui->get_text(label)) == "Updated");
+	const auto toggle_path = files.file("toggle.tscn").utf8();
+	const GdObj toggle = ui->create_toggle(toggle_path.get_data(), false);
+	REQUIRE(toggle != NULL_OBJECT_ID);
+	CHECK_FALSE(ui->get_node(toggle)->get_toggle()->is_pressed());
+	CHECK(TestSpx::take_string(ui->get_text(toggle)) == "Choice");
+
+	const auto missing_path = files.file("missing.tscn").utf8();
+	ERR_PRINT_OFF;
+	CHECK(ui->create_node(missing_path.get_data()) == NULL_OBJECT_ID);
+	ERR_PRINT_ON;
+	CHECK(orphan_node_count() == orphans);
+}
+
 TEST_CASE("[SceneTree][SPX] UI texture bindings share resources across images buttons and toggles") {
 	TestSpx::EngineScene scene;
 	auto *ui = scene.engine->get_ui();
