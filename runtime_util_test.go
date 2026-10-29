@@ -37,7 +37,7 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 		if got < to || got > from {
 			t.Fatalf("Rand__0(%d, %d) = %v, want value in [%d, %d]", from, to, got, to, from)
 		}
-		if got != from {
+		if got != float64(from) {
 			sawNonUpperBound = true
 		}
 	}
@@ -186,9 +186,9 @@ func TestContainsUsesCaseInsensitiveSemantics(t *testing.T) {
 
 func TestRandomSeedMakesScriptRandomDeterministic(t *testing.T) {
 	SetRandomSeed(123)
-	gotA := []any{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
+	gotA := []float64{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
 	SetRandomSeed(123)
-	gotB := []any{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
+	gotB := []float64{Rand__0(1, 10), Rand__1(0, 1), Rand__0(1, 10)}
 	defer ResetRandomSeed()
 
 	for i := range gotA {
