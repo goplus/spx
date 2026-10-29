@@ -205,11 +205,7 @@ void SpxDrawTiles::_draw() {
 
 void SpxDrawTiles::input(const Ref<InputEvent> &p_event) {
 	Ref<InputEventKey> key = p_event;
-	if (!key.is_valid()) {
-		return;
-	}
-
-	if (key->is_pressed() && key->get_keycode() == Key::E &&
+	if (key.is_valid() && key->is_pressed() && key->get_keycode() == Key::E &&
 			(key->get_modifiers_mask().has_flag(KeyModifierMask::CTRL))) {
 		sceneMgr->export_scene_as_png(this);
 	}
@@ -503,6 +499,11 @@ void SpxDrawTiles::redo() {
 void SpxDrawTiles::clear_all_layers() {
 	_destroy_layers();
 	_clear_cache();
+	if (shared_tile_set.is_valid()) {
+		while (shared_tile_set->get_source_count() > 0) {
+			shared_tile_set->remove_source(shared_tile_set->get_source_id(0));
+		}
+	}
 	queue_redraw();
 }
 

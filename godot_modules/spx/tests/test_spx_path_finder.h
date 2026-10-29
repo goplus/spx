@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_path_finder.h                                                */
+/*  test_spx_path_finder.h                                              */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -36,6 +36,7 @@
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
 #include "scene/resources/placeholder_textures.h"
+#include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxPathFinder {
@@ -99,6 +100,75 @@ TEST_CASE("[SceneTree][SPX] Path finder tests tile collision polygons at cell ce
 
 	tree->set_current_scene(previous_scene);
 	memdelete(root);
+}
+
+class DebugDrawer : public PathDebugDrawer {
+public:
+	explicit DebugDrawer(const Ref<SpxPathFinder> &finder) :
+			PathDebugDrawer(finder) {}
+	using PathDebugDrawer::input;
+};
+
+TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and detach safely") {
+	TestSpx::EngineScene scene;
+	Ref<SpxPathFinder> finder;
+	finder.instantiate();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	CHECK(finder->get_size() == Vector2i(8, 8));
+	CHECK(finder->get_cell_size() == Vector2(16, 16));
+	CHECK(finder->cell_to_world_gd(Vector2i(1, 1)) == Vector2(24, 24));
+	int count = scene.root->get_child_count();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), true);
+	CHECK(scene.root->get_child_count() == count);
+	finder->reset();
+	auto *viewport = memnew(SubViewport);
+	viewport->set_size(Vector2i(256, 256));
+	scene.root->add_child(viewport);
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16), false);
+	auto *drawer = memnew(DebugDrawer(finder));
+	viewport->add_child(drawer);
+	drawer->set_process_input(false);
+	CHECK(drawer->get_z_index() == 1000);
+	CHECK_FALSE(drawer->is_z_relative());
+	auto motion = [&](Vector2 pos) {
+		Ref<InputEventMouseMotion> e;
+		e.instantiate();
+		e->set_position(pos);
+		viewport->push_input(e, true);
+		drawer->input(e);
+		MessageQueue::get_singleton()->flush();
+	};
+	auto click = [&](MouseButton button, bool pressed) {
+		Ref<InputEventMouseButton> e;
+		e.instantiate();
+		e->set_button_index(button);
+		e->set_pressed(pressed);
+		drawer->input(e);
+		MessageQueue::get_singleton()->flush();
+	};
+	motion(Vector2(-40, -8));
+	click(MouseButton::LEFT, true);
+	click(MouseButton::LEFT, false);
+	motion(Vector2(40, -8));
+	click(MouseButton::RIGHT, true);
+	click(MouseButton::RIGHT, false);
+	auto path = finder->find_path(Vector2(-40, -8), Vector2(40, -8));
+	REQUIRE(path.size() == 6);
+	drawer->set_path(path);
+	MessageQueue::get_singleton()->flush();
+	click(MouseButton::RIGHT, true);
+	motion(Vector2(24, 24));
+	click(MouseButton::RIGHT, false);
+	motion(Vector2(-40, -8));
+	click(MouseButton::LEFT, true);
+	motion(Vector2(-24, 24));
+	click(MouseButton::LEFT, false);
+	drawer->set_path_finder(Ref<SpxPathFinder>());
+	motion(Vector2());
+	click(MouseButton::LEFT, true);
+	memdelete(drawer);
+	finder->reset();
+	CHECK(finder->get_size() == Vector2i());
 }
 
 } // namespace TestSpxPathFinder

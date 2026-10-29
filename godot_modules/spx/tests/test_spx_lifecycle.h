@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_lifecycle.h                                                  */
+/*  test_spx_lifecycle.h                                                */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -35,11 +35,13 @@
 #include "../spx_callback_proxy.h"
 #include "../spx_engine.h"
 #include "../spx_ext_mgr.h"
+#include "../spx_layer_sorter.h"
 #include "../spx_ui_mgr.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/main/canvas_layer.h"
 #include "scene/main/window.h"
 #include "servers/audio_server.h"
+#include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxLifecycle {
@@ -224,6 +226,120 @@ TEST_CASE("[SPX] Control mailbox coalesces reset parameters and preserves later 
 	controls.set_accepting(true);
 	CHECK_FALSE(controls.take(SpxPendingControls::NEXT_FRAME));
 	CHECK_FALSE(controls.take(SpxPendingControls::PAUSE));
+}
+
+TEST_CASE("[SceneTree][SPX] Public engine controls serialize worker requests on the main loop") {
+	REQUIRE_FALSE(Spx::is_initialized());
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	if (!AudioServer::get_singleton()) {
+		AudioDriverManager::initialize(AudioDriverManager::get_driver_count() - 1);
+		memnew(AudioServer)->init();
+	}
+	auto *tree = SceneTree::get_singleton();
+	const bool paused = tree->is_paused();
+	struct Cleanup {
+		SceneTree *tree;
+		bool paused;
+		~Cleanup() {
+			Spx::on_destroy();
+			auto *node = tree->get_root()->get_node_or_null(NodePath("SpxEngineNode"));
+			if (node) {
+				memdelete(node);
+			}
+			tree->set_pause(paused);
+		}
+	} cleanup{ tree, paused };
+	SpxEngine::register_callbacks(nullptr);
+	auto *engine = SpxEngine::get_singleton();
+	static int updates, fixed_updates, resets, reset_code;
+	updates = 0;
+	fixed_updates = 0;
+	resets = 0;
+	reset_code = -1;
+	engine->get_callbacks()->func_on_engine_update = [](GdFloat) { ++updates; };
+	engine->get_callbacks()->func_on_engine_fixed_update = [](GdFloat) { ++fixed_updates; };
+	engine->get_callbacks()->func_on_engine_reset = []() { ++resets; };
+	SpxEngine::register_runtime_reset_callbacks([](GdInt code) { reset_code = code; });
+	engine->set_delay_runtime_reset(false);
+	Spx::on_start(nullptr);
+	CHECK_FALSE(Spx::is_initialized());
+	Spx::on_start(tree);
+	Spx::on_start(tree);
+	REQUIRE(Spx::is_initialized());
+	Spx::restart();
+	Spx::on_update(0.016);
+	Spx::on_fixed_update(0.016);
+	CHECK(updates == 1);
+	CHECK(fixed_updates == 1);
+	Spx::pause();
+	CHECK(Spx::is_paused());
+	Spx::on_update(0.016);
+	Spx::on_fixed_update(0.016);
+	CHECK(updates == 1);
+	CHECK(fixed_updates == 1);
+	Spx::next_frame();
+	Spx::on_fixed_update(0.016);
+	Spx::on_update(0.016);
+	CHECK(updates == 2);
+	CHECK(fixed_updates == 2);
+	CHECK(Spx::is_paused());
+	CHECK(tree->is_paused());
+	Thread worker;
+	worker.start([](void *) { Spx::resume(); }, nullptr);
+	worker.wait_to_finish();
+	CHECK(Spx::is_paused());
+	Spx::on_update(0.016);
+	CHECK_FALSE(Spx::is_paused());
+	CHECK(updates == 3);
+	worker.start([](void *) {
+		Spx::pause();
+		Spx::next_frame();
+	},
+			nullptr);
+	worker.wait_to_finish();
+	Spx::on_update(0.016);
+	CHECK(Spx::is_paused());
+	CHECK(updates == 4);
+	worker.start([](void *) { Spx::reset(17); }, nullptr);
+	worker.wait_to_finish();
+	CHECK(resets == 0);
+	Spx::on_update(0.016);
+	CHECK(resets == 1);
+	CHECK(reset_code == 17);
+	CHECK(engine->is_reset());
+	Spx::reset(18);
+	CHECK(resets == 1);
+	worker.start([](void *) { Spx::restart(); }, nullptr);
+	worker.wait_to_finish();
+	Spx::on_update(0.016);
+	CHECK_FALSE(engine->is_reset());
+	CHECK_FALSE(Spx::is_paused());
+	Spx::restart();
+	SpxExtMgr::pause();
+	CHECK(SpxExtMgr::is_paused());
+	SpxExtMgr::next_frame();
+	SpxExtMgr::resume();
+	CHECK_FALSE(SpxExtMgr::is_paused());
+	SpxExtMgr::request_reset(19);
+	CHECK(reset_code == 19);
+	SpxExtMgr::request_restart();
+	CHECK_FALSE(engine->is_reset());
+	static String panic;
+	panic = "";
+	SpxEngine::register_runtime_panic_callbacks([](GdString message) { panic = SpxStr(message); });
+	SpxExtMgr::on_runtime_panic("test panic");
+	CHECK(panic == "test panic");
+	SpxExtMgr::set_layer_sorter_mode((GdInt)LayerSortMode::NONE);
+	Spx::on_destroy();
+	CHECK_FALSE(Spx::is_initialized());
+	Spx::on_update(0.016);
+	Spx::on_fixed_update(0.016);
+	Spx::pause();
+	Spx::resume();
+	Spx::next_frame();
+	Spx::restart();
+	Spx::reset(0);
+	CHECK_FALSE(SpxEngine::is_initialized());
 }
 
 } // namespace TestSpxLifecycle

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_audio.h                                                      */
+/*  test_spx_audio.h                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -149,7 +149,28 @@ TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	CHECK_FALSE(player->get_stream_paused());
 	CHECK(audio->is_playing(playback));
 
+	// Allocating an effect bus migrates an existing voice without restarting it.
+	audio->set_pan(object, -0.4f);
+	CHECK(audio->get_pan(object) == doctest::Approx(-0.4f));
+	audio->set_volume(object, 0.25f);
+	CHECK(audio->get_volume(object) == doctest::Approx(0.25f));
+	CHECK(player->get_bus() != "Master");
+	CHECK(player->get_stream_playback() == playing_stream);
 	audio->pause(playback);
+	SUBCASE("Seek and restart an existing playback") {
+		audio->resume(playback);
+		audio->set_timer(playback, 0.75f);
+		CHECK(audio->get_timer(playback) == doctest::Approx(0.75f));
+		CHECK(audio->restart(playback));
+		CHECK(audio->get_timer(playback) == doctest::Approx(0.0f));
+		audio->stop_all();
+	}
+	SUBCASE("Invalid playback handles remain inert") {
+		CHECK_FALSE(audio->restart(0));
+		CHECK_FALSE(audio->is_playing(0));
+		audio->set_timer(0, 1.0f);
+		audio->stop_all();
+	}
 	SUBCASE("Stop one paused playback") {
 		audio->stop(playback);
 	}

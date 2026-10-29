@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_collision_debug_overlay.h                                    */
+/*  test_spx_collision_debug_overlay.h                                  */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -36,6 +36,7 @@
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+#include "scene/resources/2d/rectangle_shape_2d.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxCollisionDebugOverlay {
@@ -101,8 +102,18 @@ TEST_CASE("[SceneTree][SPX] Collision debug mode updates overlays already in the
 	REQUIRE(tree != nullptr);
 	tree->get_root()->add_child(target);
 
+	Ref<RectangleShape2D> shape;
+	shape.instantiate();
+	shape->set_size(Vector2(20, 30));
+	target->set_shape(shape);
 	Spx::set_debug_mode(true);
 	const bool native_debug_visible = Engine::get_singleton()->is_editor_hint() || tree->is_debugging_collisions_hint();
+	CHECK(overlay->is_visible() == !native_debug_visible);
+	MessageQueue::get_singleton()->flush();
+	target->set_one_way_collision(true);
+	target->queue_redraw();
+	MessageQueue::get_singleton()->flush();
+	CHECK(target->is_one_way_collision_enabled());
 	CHECK(overlay->is_visible() == !native_debug_visible);
 	Spx::set_debug_mode(false);
 	CHECK_FALSE(overlay->is_visible());

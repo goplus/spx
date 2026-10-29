@@ -37,7 +37,7 @@ Error SimpleVideoWriter::open(const String &p_path, const Size2i &p_movie_size, 
 	f->store_32(0); // Total length (update later)
 	f->store_buffer((const uint8_t *)"AVI ", 4);
 	f->store_buffer((const uint8_t *)"LIST", 4);
-	f->store_32(196); // hdrl size: 4 + 4 + 4 + 56 + 4 + 4 + 132 (video stream only)
+	f->store_32(208); // hdrl type + avih + strl + odml
 	f->store_buffer((const uint8_t *)"hdrl", 4);
 	f->store_buffer((const uint8_t *)"avih", 4);
 	f->store_32(56);
@@ -59,7 +59,7 @@ Error SimpleVideoWriter::open(const String &p_path, const Size2i &p_movie_size, 
 
 	// Video stream header
 	f->store_buffer((const uint8_t *)"LIST", 4);
-	f->store_32(132); // strl size: 4 + 4 + 4 + 48 + 4 + 4 + 40 + 4 + 4 + 16
+	f->store_32(108); // strl type + strh + strf; odml is a sibling LIST
 	f->store_buffer((const uint8_t *)"strl", 4);
 	f->store_buffer((const uint8_t *)"strh", 4);
 	f->store_32(48);
@@ -128,16 +128,14 @@ Error SimpleVideoWriter::write_frame(const Ref<Image> &p_image) {
 	}
 
 	PackedByteArray jpg_buffer = img->save_jpg_to_buffer(quality);
-	uint32_t s = jpg_buffer.size();
 
 	f->store_buffer((const uint8_t *)"00db", 4); // Stream 0, Video
 	f->store_32(jpg_buffer.size()); // sizes
 	f->store_buffer(jpg_buffer.ptr(), jpg_buffer.size());
 	if (jpg_buffer.size() & 1) {
 		f->store_8(0);
-		s++;
 	}
-	jpg_frame_sizes.push_back(s);
+	jpg_frame_sizes.push_back(jpg_buffer.size());
 
 	frame_count++;
 
@@ -161,8 +159,8 @@ void SimpleVideoWriter::close() {
 		f->store_32(ofs);
 		f->store_32(jpg_frame_sizes[i]);
 
-		ofs += jpg_frame_sizes[i] + 8;
-		all_data_size += jpg_frame_sizes[i];
+		ofs += jpg_frame_sizes[i] + (jpg_frame_sizes[i] & 1) + 8;
+		all_data_size += jpg_frame_sizes[i] + (jpg_frame_sizes[i] & 1);
 	}
 
 	// Update size information in the file header
@@ -176,7 +174,7 @@ void SimpleVideoWriter::close() {
 	f->seek(total_frames_ofs3);
 	f->store_32(frame_count);
 	f->seek(movi_data_ofs);
-	f->store_32(all_data_size + 4 + 16 * frame_count);
+	f->store_32(all_data_size + 4 + 8 * frame_count);
 
 	f.unref();
 

@@ -40,7 +40,7 @@ Error SimpleAudioWriter::open(const String &p_path, uint32_t p_sample_rate, uint
 	f->store_32(0); // Total length (update later)
 	f->store_buffer((const uint8_t *)"AVI ", 4);
 	f->store_buffer((const uint8_t *)"LIST", 4);
-	f->store_32(140); // hdrl size: 4 + 4 + 4 + 56 + 4 + 4 + 84 (audio stream only)
+	f->store_32(160); // hdrl type + avih + strl
 	f->store_buffer((const uint8_t *)"hdrl", 4);
 	f->store_buffer((const uint8_t *)"avih", 4);
 	f->store_32(56);
@@ -158,7 +158,7 @@ void SimpleAudioWriter::close() {
 	}
 	f->store_32(total_samples);
 	f->seek(movi_data_ofs);
-	f->store_32(all_data_size + 4 + 16 * audio_chunk_count);
+	f->store_32(all_data_size + 4 + 8 * audio_chunk_count);
 
 	f.unref();
 

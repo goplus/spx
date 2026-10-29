@@ -215,7 +215,7 @@ bool IndependentVideoRecorder::process_frame(uint64_t current_recording_time) {
 
 	ThreadSafeFrameBuffer::FrameData frame_to_write;
 
-	if (frame_data.frame_sequence == last_game_frame_sequence || frame_data.image.is_null()) {
+	if ((has_valid_frame && frame_data.frame_sequence == last_game_frame_sequence) || frame_data.image.is_null()) {
 		// No new frame from the game or invalid frame, use a repeated frame
 		if (!has_valid_frame) {
 			// No valid frame yet, skip

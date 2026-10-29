@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_layer_sorter.h                                                 */
+/*  test_spx_layer_sorter.h                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -46,6 +46,7 @@ struct SortableSprite : ISortableSprite {
 	GdObj id;
 	Point2 position;
 	bool is_static = false;
+	bool valid = true;
 	int z_index = 0;
 	int z_updates = 0;
 
@@ -59,7 +60,7 @@ struct SortableSprite : ISortableSprite {
 		z_updates++;
 	}
 	int get_sort_z_index() const override { return z_index; }
-	bool is_node_valid() const override { return true; }
+	bool is_node_valid() const override { return valid; }
 	bool is_sort_static() const override { return is_static; }
 };
 
@@ -174,6 +175,62 @@ TEST_CASE("[SceneTree][SPX] Layer sorter reset drops cached sprites") {
 	CHECK_EQ(replacement.z_index, 1);
 	CHECK_EQ(fixed.z_updates, 1);
 	CHECK_EQ(moving.z_updates, 1);
+}
+
+TEST_CASE("[SceneTree][SPX] Static-only layers update z-order when members disappear") {
+	SorterFixture fixture;
+	SortableSprite back(1, Point2(10, 10), true), front(2, Point2(20, 20), true);
+	fixture.sorter.add_static_sprite(nullptr);
+	fixture.sorter.add_static_sprite(&front);
+	fixture.sorter.add_static_sprite(&front);
+	fixture.sorter.add_static_sprite(&back);
+	CHECK(fixture.sorter.get_static_sorted().size() == 2);
+	fixture.sorter.update(Vector<ISortableSprite *>({ &front, &back }));
+	CHECK(back.z_index == 1);
+	CHECK(front.z_index == 2);
+	back.valid = false;
+	fixture.sorter.update(Vector<ISortableSprite *>({ &front, &back, nullptr }));
+	CHECK(fixture.sorter.get_static_sorted().size() == 1);
+	CHECK(front.z_index == 1);
+	fixture.sorter.remove_static_sprite(nullptr);
+	fixture.sorter.remove_static_sprite(&front);
+	CHECK(fixture.sorter.get_static_sorted().empty());
+	fixture.sorter.add_static_sprite(&back);
+	CHECK(fixture.sorter.get_static_sorted().empty());
+	fixture.sorter.set_mode(LayerSortMode::NONE);
+	front.position = Point2(1, 1);
+	int count = front.z_updates;
+	fixture.sorter.update(Vector<ISortableSprite *>({ &front }));
+	CHECK(front.z_updates == count);
+}
+
+TEST_CASE("[SceneTree][SPX] Layer sorting debug overlay follows the scene lifecycle") {
+	SorterFixture fixture;
+	Spx::set_debug_mode(true);
+	SortableSprite fixed(1, Point2(20, 20), true), moving(2, Point2(40, 40));
+	Vector<ISortableSprite *> sprites{ &fixed, &moving };
+	fixture.sorter.update(sprites);
+	auto drawers = fixture.viewport->find_children("*", "Node2D", true, false);
+	Node2D *drawer = nullptr;
+	for (int i = 0; i < drawers.size(); ++i) {
+		auto *node = Object::cast_to<Node2D>(drawers[i]);
+		if (node->get_z_index() == 1000) {
+			drawer = node;
+		}
+	}
+	REQUIRE(drawer);
+	CHECK_FALSE(drawer->is_z_relative());
+	MessageQueue::get_singleton()->flush();
+	CHECK(fixed.z_index == 1);
+	CHECK(moving.z_index == 2);
+	moving.position = Point2(10, 10);
+	fixture.sorter.update(sprites);
+	MessageQueue::get_singleton()->flush();
+	CHECK(moving.z_index == 1);
+	CHECK(fixed.z_index == 2);
+	fixture.sorter.reset();
+	CHECK(drawer->is_queued_for_deletion());
+	memdelete(drawer);
 }
 
 } // namespace TestSpxLayerSorter

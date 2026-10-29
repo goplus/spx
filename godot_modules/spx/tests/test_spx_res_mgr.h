@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_res_mgr.h                                                    */
+/*  test_spx_res_mgr.h                                                  */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -38,8 +38,10 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
+#include "scene/resources/audio_stream_wav.h"
 #include "scene/theme/theme_db.h"
 #include "spx_test_data.h"
+#include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
 #include "tests/test_utils.h"
 
@@ -408,6 +410,110 @@ TEST_CASE("[SceneTree][SPX] Malformed project font arrays are rejected atomicall
 	CHECK(ThemeDB::get_singleton()->get_default_theme() == published_theme);
 	CHECK(ThemeDB::get_singleton()->get_default_theme()->get_default_font() == published_font);
 	CHECK(render_project_text()->get_data() == published_svg->get_data());
+}
+
+TEST_CASE("[SceneTree][SPX] Resource manager resolves project paths and invalidates direct audio caches") {
+	TestSpx::TempDirectory files("spx_resource_paths");
+	files.write("text.txt", "alpha\nbeta");
+	REQUIRE(DirAccess::make_dir_recursive_absolute(files.file("assets")) == OK);
+	TestSpx::EngineScene scene;
+	Ref<AudioStreamWAV> wave;
+	wave.instantiate();
+	wave->set_format(AudioStreamWAV::FORMAT_16_BITS);
+	wave->set_mix_rate(8000);
+	PackedByteArray pcm;
+	pcm.resize(160);
+	pcm.fill(0);
+	wave->set_data(pcm);
+	REQUIRE(wave->save_to_wav(files.file("tone.wav")) == OK);
+	auto *resources = scene.engine->get_res();
+	resources->set_game_datas(files.path, Vector<String>());
+	resources->set_load_mode(true);
+	CHECK(resources->get_load_mode());
+	CHECK(resources->has_file("text.txt"));
+	CHECK(resources->has_file("../text.txt"));
+	CHECK_FALSE(resources->has_file("missing.txt"));
+	CHECK(TestSpx::take_string(resources->read_all_text("text.txt")) == "alpha\nbeta\n");
+	CHECK(TestSpx::take_string(resources->read_all_text("missing.txt")).is_empty());
+	Variant parsed = JSON::parse_string(TestSpx::take_string(resources->list_directories(".")));
+	Array dirs = parsed;
+	REQUIRE(dirs.size() == 1);
+	CHECK(String(dirs[0]) == "assets");
+	Ref<AudioStreamWAV> loaded = resources->load_audio("tone.wav");
+	REQUIRE(loaded.is_valid());
+	CHECK(loaded->get_mix_rate() == 8000);
+	CHECK(loaded->get_data() == pcm);
+	CHECK(resources->load_audio("tone.wav") == loaded);
+	resources->update_caches(Vector<String>({ "tone.wav" }));
+	CHECK(resources->load_audio("tone.wav") != loaded);
+	CHECK(resources->load_audio("missing.wav").is_null());
+	files.write("invalid.mp3", "invalid");
+	files.write("unsupported.bin", "bytes");
+	ERR_PRINT_OFF;
+	CHECK(resources->load_audio("invalid.mp3").is_null());
+	CHECK(resources->load_audio("unsupported.bin").is_null());
+	ERR_PRINT_ON;
+}
+
+TEST_CASE("[SceneTree][SPX] Atlas animation metadata selects exact frame regions and rejects invalid rectangles") {
+	TestSpx::TempDirectory files("spx_atlas_animation");
+	auto image = Image::create_empty(16, 8, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 0));
+	REQUIRE(image->save_png(files.file("atlas.png")) == OK);
+	TestSpx::EngineScene scene;
+	auto *resources = scene.engine->get_res();
+	Dictionary first;
+	first["x"] = 0;
+	first["y"] = 0;
+	first["w"] = 8;
+	first["h"] = 8;
+	Dictionary second = first.duplicate();
+	second["x"] = 8;
+	Array offset;
+	offset.push_back(2);
+	offset.push_back(3);
+	second["offset"] = offset;
+	Dictionary payload;
+	payload["base_path"] = files.file("atlas.png");
+	payload["max_bitmap"] = 1;
+	Array entries;
+	entries.push_back(first);
+	entries.push_back(second);
+	payload["frames"] = entries;
+	auto json = JSON::stringify(payload).utf8();
+	resources->create_animation("Dragon", "walk", json.get_data(), 12, true);
+	auto frames = resources->get_animation_frames("Dragon::walk");
+	REQUIRE(frames.is_valid());
+	CHECK(frames->get_frame_count("Dragon::walk") == 2);
+	CHECK(frames->get_animation_speed("Dragon::walk") == 12);
+	Ref<AtlasTexture> atlas = frames->get_frame_texture("Dragon::walk", 1);
+	REQUIRE(atlas.is_valid());
+	CHECK(atlas->get_region() == Rect2(8, 0, 8, 8));
+	CHECK(atlas->get_atlas()->get_size() == Vector2(16, 8));
+	resources->create_animation("Dragon", "walk", json.get_data(), 30, true);
+	CHECK(resources->get_animation_frames("Dragon::walk") == frames);
+	CHECK(frames->get_animation_speed("Dragon::walk") == 12);
+	for (int invalid = 0; invalid < 3; ++invalid) {
+		Dictionary bad = payload.duplicate(true);
+		if (invalid == 0) {
+			bad.erase("base_path");
+		}
+		if (invalid == 1) {
+			Array entries = bad["frames"];
+			Dictionary entry = entries[0];
+			entry.erase("w");
+		}
+		if (invalid == 2) {
+			Array entries = bad["frames"];
+			Dictionary entry = entries[0];
+			entry["h"] = 0;
+		}
+		auto text = JSON::stringify(bad).utf8();
+		ERR_PRINT_OFF;
+		resources->create_animation("Dragon", "invalid", text.get_data(), 12, true);
+		ERR_PRINT_ON;
+		CHECK_FALSE(resources->has_animation("Dragon::invalid"));
+	}
 }
 
 } // namespace TestSpxResMgr

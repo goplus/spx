@@ -266,7 +266,7 @@ void SpxPathFinder::_process_static_obstacles(Node2D *body, bool add) {
 		Node *child = body->get_child(j);
 
 		if (CollisionShape2D *shape = Object::cast_to<CollisionShape2D>(child)) {
-			_process_rectangle_shape(body, shape);
+			_process_rectangle_shape(body, shape, add);
 		}
 	}
 }

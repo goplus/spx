@@ -354,7 +354,6 @@ GdInt SpxSpriteMgr::_create_sprite(GdString path, GdVec2 pos, GdBool is_backdrop
 	SpxSprite *sprite = nullptr;
 	if (path_str == "") {
 		sprite = memnew(SpxSprite);
-		sprite->set_position(spx_to_godot_vec2(pos));
 		Node2D *render_root = memnew(Node2D);
 		render_root->set_name("RenderRoot");
 		sprite->add_child(render_root);
@@ -397,6 +396,7 @@ GdInt SpxSpriteMgr::_create_sprite(GdString path, GdVec2 pos, GdBool is_backdrop
 		}
 	}
 
+	sprite->set_position(spx_to_godot_vec2(pos));
 	sprite->set_backdrop(is_backdrop);
 	sprite->set_gid(get_unique_id());
 	sprite_root->add_child(sprite);

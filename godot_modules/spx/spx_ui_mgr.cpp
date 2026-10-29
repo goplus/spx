@@ -80,16 +80,17 @@ ESpxUiType SpxUiMgr::get_node_type(Node *obj) {
 		return ESpxUiType::Label;
 	}
 
-	if (dynamic_cast<SpxButton *>(obj)) {
-		return ESpxUiType::Button;
+	// CheckButton derives from Button, so identify the more specific type first.
+	if (dynamic_cast<SpxToggle *>(obj)) {
+		return ESpxUiType::Toggle;
 	}
 
 	if (dynamic_cast<SpxImage *>(obj)) {
 		return ESpxUiType::Image;
 	}
 
-	if (dynamic_cast<SpxToggle *>(obj)) {
-		return ESpxUiType::Toggle;
+	if (dynamic_cast<SpxButton *>(obj)) {
+		return ESpxUiType::Button;
 	}
 
 	if (dynamic_cast<SpxInput *>(obj)) {
@@ -259,6 +260,7 @@ GdObj SpxUiMgr::create_image(GdString path) {
 
 GdObj SpxUiMgr::create_toggle(GdString path, GdBool value) {
 	CREATE_UI_NODE(Toggle)
+	control->set_pressed_no_signal(value);
 	return node->get_gid();
 }
 

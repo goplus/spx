@@ -375,6 +375,7 @@ Error PostMergeProcessor::parse_avi_file(const String &file_path, AviFileInfo &a
 		if (memcmp(chunk_fourcc, "idx1", 4) == 0) {
 			Error idx_error = parse_idx1_chunk(file, avi_info, chunk_size);
 			if (idx_error != OK) {
+				return idx_error;
 			}
 		}
 	}
@@ -506,6 +507,7 @@ Error PostMergeProcessor::parse_stream_header(Ref<FileAccess> file, AviFileInfo:
 }
 
 Error PostMergeProcessor::parse_idx1_chunk(Ref<FileAccess> file, AviFileInfo &avi_info, uint32_t chunk_size) {
+	ERR_FAIL_COND_V(chunk_size % 16 != 0 || chunk_size > file->get_length() - file->get_position(), ERR_FILE_CORRUPT);
 	uint32_t entry_count = chunk_size / 16; // Each index entry is 16 bytes
 
 	if (config.enable_debug_output) {
@@ -516,7 +518,10 @@ Error PostMergeProcessor::parse_idx1_chunk(Ref<FileAccess> file, AviFileInfo &av
 		AviFileInfo::IndexEntry entry;
 		file->get_buffer((uint8_t *)entry.fourcc, 4);
 		entry.flags = file->get_32();
-		entry.chunk_offset = file->get_32();
+		// idx1 offsets include the four-byte movi type; internal offsets start at the first chunk.
+		const uint32_t offset = file->get_32();
+		ERR_FAIL_COND_V(offset < 4, ERR_FILE_CORRUPT);
+		entry.chunk_offset = offset - 4;
 		entry.chunk_size = file->get_32();
 
 		avi_info.index_entries.push_back(entry);
@@ -668,7 +673,7 @@ Error PostMergeProcessor::write_merged_avi_header(Ref<FileAccess> output_file, c
 Error PostMergeProcessor::write_video_stream_header(Ref<FileAccess> output_file, const AviFileInfo &video_info) {
 	// VIDEO STREAM (Stream 0)
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
-	output_file->store_32(132); // strl size: 4 + 4 + 4 + 56 + 4 + 4 + 40 + 4 + 4 + 16
+	output_file->store_32(116); // strl type + strh + strf
 	output_file->store_buffer((const uint8_t *)"strl", 4);
 
 	// Video stream header (strh)
@@ -736,7 +741,7 @@ Error PostMergeProcessor::write_audio_stream_header(Ref<FileAccess> output_file,
 
 	// AUDIO STREAM (Stream 1) - Convert to 16-bit
 	output_file->store_buffer((const uint8_t *)"LIST", 4);
-	output_file->store_32(84); // strl size: 4 + 4 + 4 + 56 + 4 + 4 + 16
+	output_file->store_32(92); // strl type + strh + strf
 	output_file->store_buffer((const uint8_t *)"strl", 4);
 
 	// Audio stream header (strh)
@@ -756,10 +761,8 @@ Error PostMergeProcessor::write_audio_stream_header(Ref<FileAccess> output_file,
 	output_file->store_32(12288); // suggested_buffer_size
 	output_file->store_32(0xFFFFFFFF); // quality (max for audio)
 	output_file->store_32(channels * 2); // sample_size (16-bit per channel)
-	output_file->store_32(0); // reserved
-	output_file->store_32(0); // reserved
-	output_file->store_32(0); // reserved
-	output_file->store_32(0); // reserved
+	output_file->store_32(0); // rcFrame left/top
+	output_file->store_32(0); // rcFrame right/bottom
 
 	// Audio stream format (strf) - WAVEFORMATEX
 	output_file->store_buffer((const uint8_t *)"strf", 4);
@@ -1203,7 +1206,7 @@ Error PostMergeProcessor::write_timestamped_chunk(Ref<FileAccess> input_file, Re
 		memcpy(entry.fourcc, "00db", 4);
 		entry.flags = 0x10; // AVIIF_KEYFRAME
 		entry.chunk_offset = chunk_offset;
-		entry.chunk_size = original_size;
+		entry.chunk_size = chunk.chunk_size;
 		merged_index.push_back(entry);
 
 		chunk_offset += 8 + original_size;
