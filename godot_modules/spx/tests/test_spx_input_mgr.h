@@ -59,6 +59,8 @@ TEST_CASE("[SceneTree][SPX] Input actions expose equivalent name and registered-
 	CHECK(manager->register_action(positive) == right);
 	CHECK_FALSE(manager->is_action_pressed(positive));
 	CHECK_FALSE(manager->is_action_pressed_id(right));
+	CHECK_FALSE(manager->is_action_just_pressed_id(right));
+	CHECK_FALSE(manager->is_action_just_released_id(right));
 	input->action_press(positive, 0.75);
 	CHECK(manager->is_action_pressed(positive));
 	CHECK(manager->is_action_pressed_id(right));
@@ -74,7 +76,10 @@ TEST_CASE("[SceneTree][SPX] Input actions expose equivalent name and registered-
 	CHECK_FALSE(manager->is_action_just_pressed_id(100));
 	CHECK_FALSE(manager->is_action_just_released_id(-1));
 	CHECK(manager->get_axis_id(-1, right) == 0);
+	CHECK(manager->get_axis_id(left, -1) == 0);
 	manager->on_reset(0);
+	CHECK_FALSE(scene.root->has_node(NodePath("input_proxy")));
+	manager->on_reset(0); // Reset is safe when the reusable proxy is already detached.
 	CHECK_FALSE(scene.root->has_node(NodePath("input_proxy")));
 	CHECK_FALSE(manager->is_action_pressed_id(right));
 	CHECK(manager->register_action(positive) == 0);
@@ -92,11 +97,14 @@ TEST_CASE("[SceneTree][SPX] Input snapshots keep mouse and key states distinct")
 	Ref<InputEventKey> key;
 	key.instantiate();
 	key->set_keycode(Key::A);
-	key->set_key_label(Key::A);
+	// The layout label may differ from the logical keycode. Both are accepted.
+	key->set_key_label(Key::B);
 	key->set_pressed(true);
 	input->parse_input_event(key);
 	input->flush_buffered_events();
 	CHECK(manager->get_key(int(Key::A)));
+	CHECK(manager->get_key(int(Key::B)));
+	CHECK(manager->get_key_state(int(Key::B)) == 1);
 	CHECK(manager->get_key_state(int(Key::A)) == 1);
 	CHECK(manager->get_key(-1));
 	key = key->duplicate();
@@ -104,6 +112,7 @@ TEST_CASE("[SceneTree][SPX] Input snapshots keep mouse and key states distinct")
 	input->parse_input_event(key);
 	input->flush_buffered_events();
 	CHECK_FALSE(manager->get_key(int(Key::A)));
+	CHECK_FALSE(manager->get_key(int(Key::B)));
 	CHECK(manager->get_key_state(int(Key::A)) == 0);
 	Ref<InputEventMouseButton> button;
 	button.instantiate();
@@ -125,6 +134,19 @@ TEST_CASE("[SceneTree][SPX] Input snapshots keep mouse and key states distinct")
 	input->parse_input_event(button);
 	input->flush_buffered_events();
 	CHECK_FALSE(manager->get_mouse_state(int(MouseButton::LEFT)));
+}
+TEST_CASE("[SceneTree][SPX] Input proxy destruction tolerates an already stopped manager") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_input();
+	manager->on_start();
+	manager->on_reset(0);
+	manager->on_destroy();
+	manager->on_reset(0);
+	manager->on_destroy();
+	CHECK_FALSE(scene.root->has_node(NodePath("input_proxy")));
+	// A later start must create a usable replacement, rather than reuse the queued proxy.
+	manager->on_start();
+	CHECK(scene.root->has_node(NodePath("input_proxy")));
 }
 } // namespace TestSpxInputMgr
 #endif

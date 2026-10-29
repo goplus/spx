@@ -809,6 +809,7 @@ TEST_CASE("[SceneTree][SPX] Pixel sensing skips hidden distant and unreadable vi
 	placeholder->set_size(Vector2(8, 8));
 	assign(unreadable, placeholder);
 	manager->set_visible(near, false);
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
 	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
 	// The dummy renderer cannot read back the pen viewport used by color sensing.
 	ERR_PRINT_OFF;
@@ -817,6 +818,13 @@ TEST_CASE("[SceneTree][SPX] Pixel sensing skips hidden distant and unreadable vi
 	CHECK_FALSE(manager->check_collision_with_sprite(self, far, 0.5, true));
 	CHECK_FALSE(manager->check_collision_with_sprite(self, unreadable, 0.5, true));
 	manager->set_visible(near, true);
+	// A visible first operand must not hide a transparent second operand's
+	// alpha test. Restoring the second image must restore both query paths.
+	assign(near, solid(Color(0, 1, 0, 0)));
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
+	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
+	assign(near, solid(Color(0, 1, 0)));
+	CHECK(manager->check_collision_with_sprite(self, near, 0.5, true));
 	CHECK(manager->check_collision_by_alpha(self, 0.5));
 	ERR_PRINT_OFF;
 	CHECK(manager->check_collision_by_color(self, Color(0, 1, 0), 0.1, 0.5));
@@ -1090,6 +1098,29 @@ TEST_CASE("[SceneTree][SPX] Authored sprite components migrate and forward engin
 	area->emit_signal("area_exited", other->get_area2d());
 	CHECK(enters == 1);
 	CHECK(exits == 1);
+	// Physics can report ordinary Godot areas too; they are not SPX sprite
+	// contacts. Backdrops also own an Area2D but must not publish contacts.
+	auto *foreign_area = memnew(Area2D);
+	scene.root->add_child(foreign_area);
+	area->emit_signal("area_entered", foreign_area);
+	area->emit_signal("area_exited", foreign_area);
+	const GdObj backdrop_id = manager->create_backdrop("");
+	auto *backdrop = manager->get_sprite(backdrop_id);
+	CHECK(backdrop != nullptr);
+	if (backdrop != nullptr) {
+		auto *backdrop_area = backdrop->get_area2d();
+		CHECK(backdrop_area != nullptr);
+		if (backdrop_area != nullptr) {
+			backdrop_area->emit_signal("area_entered", other->get_area2d());
+			backdrop_area->emit_signal("area_exited", other->get_area2d());
+		}
+	}
+	CHECK(enters == 1);
+	CHECK(exits == 1);
+	area->emit_signal("area_entered", other->get_area2d());
+	area->emit_signal("area_exited", other->get_area2d());
+	CHECK(enters == 2);
+	CHECK(exits == 2);
 	auto &sorter = SpxLayerSorter::instance();
 	sorter.set_mode(LayerSortMode::VERTICAL);
 	manager->on_update(0.016);

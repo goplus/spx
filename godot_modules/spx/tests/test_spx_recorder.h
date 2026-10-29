@@ -906,6 +906,97 @@ TEST_CASE("[SceneTree][SPX] Recording manager owns API sessions and command-line
 	CHECK(MovieRecorderManager::is_initialized());
 }
 
+TEST_CASE("[Audio][SPX] Recording manager reuses the command-line size without a display server") {
+	TestSpx::TempDirectory files("spx_recording_no_display");
+	REQUIRE(DisplayServer::get_singleton() == nullptr);
+	REQUIRE(RenderingServer::get_singleton() == nullptr);
+	REQUIRE_FALSE(MovieRecorderManager::is_recording());
+	REQUIRE(AudioServer::get_singleton() != nullptr);
+	if (DisplayServer::get_singleton() != nullptr || RenderingServer::get_singleton() != nullptr ||
+			MovieRecorderManager::is_recording() || AudioServer::get_singleton() == nullptr) {
+		return;
+	}
+	auto *writer = dynamic_cast<ObsStyleMovieWriter *>(spx_find_realtime_movie_recorder("capture.avi"));
+	REQUIRE(writer != nullptr);
+	if (writer == nullptr) {
+		return;
+	}
+	struct Restore {
+		ObsStyleMovieWriter *writer;
+		ObsStyleMovieWriter::ObsRecordingConfig config;
+		Variant obs_mode;
+		bool initialized;
+		~Restore() {
+			get_main_loop_phase_callback_bus().notify_movie_end();
+			MovieRecorderManager::shutdown();
+			if (initialized) {
+				MovieRecorderManager::initialize();
+			}
+			writer->set_recording_config(config);
+			ProjectSettings::get_singleton()->set_setting("movie_writer/obs_mode", obs_mode);
+		}
+	} restore{ writer, writer->get_recording_config(), ProjectSettings::get_singleton()->get_setting("movie_writer/obs_mode"), MovieRecorderManager::is_initialized() };
+	auto config = restore.config;
+	config.enable_post_merge = false;
+	writer->set_recording_config(config);
+	ProjectSettings::get_singleton()->set_setting("movie_writer/obs_mode", true);
+	MovieRecorderManager::initialize();
+	const int effects = AudioServer::get_singleton()->get_bus_effect_count(0);
+	auto &bus = get_main_loop_phase_callback_bus();
+	const String command = files.file("command.avi");
+	Error error = bus.resolve_movie_route(command);
+	REQUIRE(error == OK);
+	if (error != OK) {
+		return;
+	}
+	error = bus.notify_movie_begin(Size2i(4, 6), 30, command);
+	REQUIRE(error == OK);
+	if (error != OK) {
+		return;
+	}
+	bus.notify_movie_end();
+	CHECK_FALSE(MovieRecorderManager::is_recording());
+	CHECK(AudioServer::get_singleton()->get_bus_effect_count(0) == effects);
+	MovieRecorderManager::RecordingConfig request;
+	request.output_path = files.file("fallback.avi");
+	request.video_width = 0;
+	request.video_height = 0;
+	error = MovieRecorderManager::start_recording(request);
+	REQUIRE(error == OK);
+	if (error != OK) {
+		return;
+	}
+	error = MovieRecorderManager::stop_recording();
+	REQUIRE(error == OK);
+	if (error != OK) {
+		return;
+	}
+	CHECK(AudioServer::get_singleton()->get_bus_effect_count(0) == effects);
+	const auto video = FileAccess::get_file_as_bytes(request.output_path + "_video.avi");
+	REQUIRE(video.size() >= 12);
+	if (video.size() < 12) {
+		return;
+	}
+	CHECK(find_tag(video, "RIFF") == 0);
+	CHECK(find_tag(video, "AVI ") == 8);
+	CHECK(decode_uint32(video.ptr() + 4) == video.size() - 8);
+	const int header = find_tag(video, "avih");
+	REQUIRE(header > 0);
+	REQUIRE((header >= 0 && uint64_t(header) + 48 <= uint64_t(video.size())));
+	if (header <= 0 || uint64_t(header) + 48 > uint64_t(video.size())) {
+		return;
+	}
+	const int index = find_tag(video, "idx1");
+	REQUIRE((index >= 0 && uint64_t(index) + 8 == uint64_t(video.size())));
+	if (index < 0 || uint64_t(index) + 8 != uint64_t(video.size())) {
+		return;
+	}
+	CHECK(decode_uint32(video.ptr() + index + 4) == 0);
+	CHECK(decode_uint32(video.ptr() + header + 40) == 4);
+	CHECK(decode_uint32(video.ptr() + header + 44) == 6);
+	CHECK_FALSE(MovieRecorderManager::has_active_instance());
+}
+
 TEST_CASE("[SPX] AVI recovery scans unindexed streams and rejects malformed headers") {
 	TestSpx::TempDirectory files("spx_avi_recovery");
 	const String video = files.file("video.avi"), audio = files.file("audio.avi");

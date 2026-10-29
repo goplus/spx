@@ -136,6 +136,72 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	CHECK(empty->size == 0);
 }
 
+TEST_CASE("[SceneTree][SPX] Ground contact applies friction and consumes impulses once") {
+	TestSpx::EngineScene scene;
+	auto *sprites = scene.engine->get_sprite();
+	const GdObj floor = sprites->create_bare_sprite(Vector2(0, -20));
+	sprites->set_collider_rect(floor, Vector2(), Vector2(256, 10));
+	sprites->set_physics_mode(floor, SpxSprite::STATIC);
+	const GdObj actor = sprites->create_bare_sprite(Vector2(0, -9.5));
+	sprites->set_collider_rect(actor, Vector2(), Vector2(10, 10));
+	auto *body = sprites->get_sprite(actor);
+	REQUIRE(body);
+	if (!body) {
+		return;
+	}
+	body->set_physics_mode(SpxSprite::DYNAMIC);
+	body->set_mass(2);
+	body->set_drag(0);
+	body->set_friction(5);
+	body->set_use_gravity(true);
+	body->set_floor_snap_length(2);
+	struct RestoreFriction {
+		GdFloat value = SpxPhysicsDefine::get_global_friction();
+		~RestoreFriction() { SpxPhysicsDefine::set_global_friction(value); }
+	} restore;
+	SpxPhysicsDefine::set_global_friction(1);
+	auto *tree = SceneTree::get_singleton();
+	auto *server = PhysicsServer2D::get_singleton();
+	constexpr double delta = 0.1;
+	auto synchronize = [&]() {
+		tree->flush_transform_notifications();
+		server->sync();
+		server->end_sync();
+		server->step(delta);
+		server->sync();
+	};
+	synchronize();
+	body->apply_floor_snap(); // Real collision query, not an injected floor flag.
+	server->end_sync();
+	REQUIRE(body->is_on_floor());
+	if (!body->is_on_floor()) {
+		return;
+	}
+	auto tick = [&]() {
+		tree->process(delta); // move_and_slide also supports calls outside Main's physics loop.
+		synchronize();
+		tree->physics_process(delta);
+		server->end_sync();
+	};
+	body->set_velocity(Vector2(10, 0));
+	body->add_impulse(Vector2(4, 0));
+	tick();
+	CHECK(body->is_on_floor());
+	CHECK(body->get_velocity().is_equal_approx(Vector2(11.5, 0)));
+	tick();
+	CHECK(body->get_velocity().is_equal_approx(Vector2(11, 0)));
+	body->set_velocity(Vector2(0.25, 0));
+	tick();
+	CHECK(body->get_velocity() == Vector2()); // Friction cannot reverse motion.
+	body->add_force(Vector2(20, 0));
+	body->add_impulse(Vector2(4, 0));
+	body->set_physics_mode(SpxSprite::STATIC);
+	tick();
+	body->set_physics_mode(SpxSprite::DYNAMIC);
+	tick();
+	CHECK(body->get_velocity() == Vector2());
+}
+
 TEST_CASE("[SceneTree][SPX] Global physics settings are shared by sprite physics") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_physics();
