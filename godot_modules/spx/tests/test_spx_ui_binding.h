@@ -106,6 +106,101 @@ TEST_CASE("[SceneTree][SPX] Detached UI binding does not call a stale listener")
 	CHECK(binding_listener.events.is_empty());
 }
 
+TEST_CASE("[SceneTree][SPX] UI binding rejects invalid attachment without replacing its owner") {
+	BindingListener listener;
+	Button *first = memnew(Button);
+	Button *second = memnew(Button);
+	SpxUiBinding *binding = memnew(SpxUiBinding);
+	first->add_child(binding, false, Node::INTERNAL_MODE_BACK);
+	ERR_PRINT_OFF;
+	CHECK(binding->attach(nullptr, 41, &listener) == ERR_INVALID_PARAMETER);
+	ERR_PRINT_ON;
+	CHECK(binding->get_control() == nullptr);
+	CHECK(binding->get_gid() == 0);
+	REQUIRE(binding->attach(first, 42, &listener) == OK);
+	ERR_PRINT_OFF;
+	CHECK(binding->attach(second, 43, &listener) == ERR_ALREADY_IN_USE);
+	ERR_PRINT_ON;
+	CHECK(binding->get_control() == first);
+	CHECK(binding->get_gid() == 42);
+	second->emit_signal(SNAME("pressed"));
+	CHECK(listener.events.is_empty());
+	first->emit_signal(SNAME("pressed"));
+	CHECK(listener.clicked_gid == 42);
+	REQUIRE(listener.events.size() == 1);
+
+	binding->detach();
+	binding->detach();
+	CHECK(binding->get_control() == nullptr);
+	CHECK(binding->get_gid() == 0);
+	first->remove_child(binding);
+	second->add_child(binding, false, Node::INTERNAL_MODE_BACK);
+	REQUIRE(binding->attach(second, 43, &listener) == OK);
+	first->emit_signal(SNAME("pressed"));
+	CHECK(listener.events.size() == 1);
+	second->emit_signal(SNAME("pressed"));
+	CHECK(listener.clicked_gid == 43);
+	CHECK(listener.events.size() == 2);
+	memdelete(first);
+	CHECK(listener.destroyed_gid == 0);
+	memdelete(second);
+	CHECK(listener.destroyed_gid == 43);
+	CHECK(listener.events.size() == 3);
+}
+
+TEST_CASE("[SceneTree][SPX] UI binding preserves reference counted authored signal connections") {
+	BindingListener listener;
+	PressedListener authored;
+	authored.events = &listener.events;
+	Button *button = memnew(Button);
+	const Callable pressed = callable_mp(&authored, &PressedListener::on_pressed);
+	REQUIRE(button->connect(SNAME("pressed"), pressed, Object::CONNECT_REFERENCE_COUNTED) == OK);
+	REQUIRE(button->connect(SNAME("pressed"), pressed, Object::CONNECT_REFERENCE_COUNTED) == OK);
+	SpxUiBinding *binding = memnew(SpxUiBinding);
+	button->add_child(binding, false, Node::INTERNAL_MODE_BACK);
+	REQUIRE(binding->attach(button, 44, &listener) == OK);
+	button->emit_signal(SNAME("pressed"));
+	REQUIRE(listener.events.size() == 2);
+	CHECK(listener.events[0] == 1);
+	CHECK(listener.events[1] == 2);
+
+	button->disconnect(SNAME("pressed"), pressed);
+	CHECK(button->is_connected(SNAME("pressed"), pressed));
+	listener.events.clear();
+	button->emit_signal(SNAME("pressed"));
+	REQUIRE(listener.events.size() == 2);
+	CHECK(listener.events[0] == 1);
+	CHECK(listener.events[1] == 2);
+	button->disconnect(SNAME("pressed"), pressed);
+	CHECK_FALSE(button->is_connected(SNAME("pressed"), pressed));
+	listener.events.clear();
+	button->emit_signal(SNAME("pressed"));
+	REQUIRE(listener.events.size() == 1);
+	CHECK(listener.events[0] == 1);
+	memdelete(button);
+	CHECK(listener.destroyed_gid == 44);
+}
+
+TEST_CASE("[SceneTree][SPX] UI binding supports absent listeners and externally removed signals") {
+	Button *button = memnew(Button);
+	SpxUiBinding *binding = memnew(SpxUiBinding);
+	button->add_child(binding, false, Node::INTERNAL_MODE_BACK);
+	REQUIRE(binding->attach(button, 45, nullptr) == OK);
+	button->emit_signal(SNAME("pressed"));
+	CHECK(binding->get_control() == button);
+	CHECK(binding->get_gid() == 45);
+	List<Object::Connection> connections;
+	button->get_signal_connection_list(SNAME("pressed"), &connections);
+	REQUIRE(connections.size() == 1);
+	const Callable callback = connections.front()->get().callable;
+	button->disconnect(SNAME("pressed"), callback);
+	binding->detach();
+	CHECK_FALSE(button->is_connected(SNAME("pressed"), callback));
+	CHECK(binding->get_control() == nullptr);
+	CHECK(binding->get_gid() == 0);
+	memdelete(button);
+}
+
 TEST_CASE("[SceneTree][SPX] UI wrapper resolves controls by ObjectID and uses standard layout APIs") {
 	SpxUi ui;
 	ui.set_gid(7);
@@ -145,9 +240,14 @@ TEST_CASE("[SceneTree][SPX] UI label wraps only when its natural width exceeds t
 	CHECK(label->get_custom_minimum_size().x == doctest::Approx(max_width));
 	CHECK(label->get_text() == text);
 
-	CHECK(ui.set_text_max_width((GdString)"short", 10000) < max_width);
+	CHECK(ui.set_text_max_width((GdString) "short", 10000) < max_width);
 	CHECK(label->get_autowrap_mode() == TextServer::AUTOWRAP_OFF);
 	CHECK(label->get_custom_minimum_size() == Size2(7, 3));
+	for (GdFloat limit : { GdFloat(0), GdFloat(-1), GdFloat(INFINITY), GdFloat(NAN) }) {
+		CHECK(ui.set_text_max_width((GdString)text, limit) == doctest::Approx(natural_width));
+		CHECK(label->get_autowrap_mode() == TextServer::AUTOWRAP_OFF);
+		CHECK(label->get_custom_minimum_size() == Size2(7, 3));
+	}
 
 	memdelete(label);
 	CHECK(ui.get_control_item() == nullptr);

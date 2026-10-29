@@ -32,8 +32,8 @@
 #define TEST_SPX_ABI_H
 
 #include "../spx_abi.h"
-#include "core/string/print_string.h"
 #include "../web/godot_js_spx_util.h"
+#include "core/string/print_string.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxAbi {
@@ -58,12 +58,19 @@ TEST_CASE("[SPX] ABI string arrays are safe when only partially populated") {
 }
 
 TEST_CASE("[SPX] ABI array access rejects type confusion and malformed storage") {
+	CHECK(SpxAbi::create_array(GD_ARRAY_TYPE_BYTE, -1) == nullptr);
+	CHECK(SpxAbi::create_array(GD_ARRAY_TYPE_BYTE, INT32_MAX) == nullptr);
 	CHECK(SpxAbi::create_array(GD_ARRAY_TYPE_UNKNOWN, 0) == nullptr);
 	CHECK(SpxAbi::create_array(99, 0) == nullptr);
 
 	GdArray floats = SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, 2);
 	REQUIRE(floats != nullptr);
 	CHECK(SpxAbi::get_array<float>(floats, 0) != nullptr);
+	SpxAbi::set_array<float>(floats, 0, 1.5f);
+	SpxAbi::set_array<float>(floats, -1, 9.0f);
+	SpxAbi::set_array<float>(floats, 2, 9.0f);
+	CHECK(*SpxAbi::get_array<float>(floats, 0) == 1.5f);
+	CHECK(SpxAbi::get_array<double>(floats, 0) == nullptr);
 	CHECK(SpxAbi::get_array<int64_t>(floats, 0) == nullptr);
 	CHECK(SpxAbi::get_array<float>(floats, 2) == nullptr);
 	SpxAbi::free_array(floats);
@@ -87,6 +94,67 @@ TEST_CASE("[SPX] ABI array access rejects type confusion and malformed storage")
 	CHECK(SpxAbi::get_array<GdObj>(objects, 0) != nullptr);
 	CHECK(SpxAbi::get_array<GdInt>(objects, 0) != nullptr);
 	SpxAbi::free_array(objects);
+	SpxAbi::free_array(nullptr);
+}
+
+TEST_CASE("[SPX] Preallocated object pools keep ownership across reuse and expansion") {
+	ObjectPool<int> pool(2);
+	int *first = pool.acquire();
+	int *second = pool.acquire();
+	int *third = pool.acquire();
+	REQUIRE(first != nullptr);
+	REQUIRE(second != nullptr);
+	REQUIRE(third != nullptr);
+	CHECK(first != second);
+	CHECK(second != third);
+	CHECK(pool.is_active(first));
+	CHECK(pool.is_active(second));
+	CHECK(pool.is_active(third));
+	CHECK_FALSE(pool.is_active(nullptr));
+	pool.release(nullptr);
+	pool.release(second);
+	CHECK_FALSE(pool.is_active(second));
+	CHECK(pool.acquire() == second);
+	CHECK(pool.is_active(second));
+}
+
+TEST_CASE("[SPX] ABI empty arrays and invalid access preserve borrowed storage") {
+	for (int type : { GD_ARRAY_TYPE_STRING, GD_ARRAY_TYPE_INT64, GD_ARRAY_TYPE_GDOBJ, GD_ARRAY_TYPE_FLOAT, GD_ARRAY_TYPE_BOOL, GD_ARRAY_TYPE_BYTE }) {
+		GdArray empty = SpxAbi::create_array(type, 0);
+		REQUIRE(empty != nullptr);
+		CHECK(empty->size == 0);
+		CHECK(empty->type == type);
+		CHECK(empty->data == nullptr);
+		CHECK(SpxAbi::get_array<GdString>(empty, 0) == nullptr);
+		SpxAbi::free_array(empty);
+	}
+
+	GdInt values[] = { 17, 29 };
+	GdArrayInfo borrowed = { 2, GD_ARRAY_TYPE_INT64, values };
+	CHECK(SpxAbi::get_array<GdInt>(nullptr, 0) == nullptr);
+	SpxAbi::set_array<GdInt>(nullptr, 0, 99);
+	CHECK(SpxAbi::get_array<GdInt>(&borrowed, -1) == nullptr);
+	CHECK(SpxAbi::get_array<GdInt>(&borrowed, INT64_MAX) == nullptr);
+	CHECK(SpxAbi::_get_array(&borrowed, 0, 0, GD_ARRAY_TYPE_INT64) == nullptr);
+	CHECK(SpxAbi::_get_array(&borrowed, 0, -1, GD_ARRAY_TYPE_INT64) == nullptr);
+	SpxAbi::set_array<float>(&borrowed, 0, 99.0f);
+	SpxAbi::set_array<uint32_t>(&borrowed, 0, 99);
+	SpxAbi::set_array<GdString>(&borrowed, 0, "not an integer");
+	for (int size : { -1, 0, INT32_MAX }) {
+		borrowed.size = size;
+		CHECK(SpxAbi::get_array<GdInt>(&borrowed, 0) == nullptr);
+		SpxAbi::set_array<GdInt>(&borrowed, 0, 99);
+	}
+	borrowed.size = 2;
+	borrowed.type = GD_ARRAY_TYPE_UNKNOWN;
+	CHECK(SpxAbi::get_array<uint32_t>(&borrowed, 0) == nullptr);
+	borrowed.type = GD_ARRAY_TYPE_INT64;
+	CHECK(values[0] == 17);
+	CHECK(values[1] == 29);
+	SpxAbi::set_array<GdInt>(&borrowed, 1, 31);
+	CHECK(values[0] == 17);
+	CHECK(values[1] == 31);
+	CHECK(SpxAbi::get_array<const GdInt>(&borrowed, 1) == &values[1]);
 }
 
 TEST_CASE("[SPX] ObjectPool rejects foreign and duplicate pointers") {

@@ -37,6 +37,8 @@
 #include "../spx_ext_mgr.h"
 #include "../spx_layer_sorter.h"
 #include "../spx_ui_mgr.h"
+#include "../recorder/movie_recorder_manager.h"
+#include "main/main_loop_phase_callback_bus.h"
 #include "scene/2d/camera_2d.h"
 #include "scene/main/canvas_layer.h"
 #include "scene/main/window.h"
@@ -125,10 +127,19 @@ TEST_CASE(
 
 TEST_CASE("[SPX] Engine callback registration has one idempotent owner") {
 	REQUIRE_FALSE(SpxEngine::is_initialized());
+	SpxEngine::register_runtime_exit_callbacks(nullptr);
+	SpxEngine::register_runtime_reset_callbacks(nullptr);
+	SpxEngine::register_runtime_panic_callbacks(nullptr);
 
 	SpxEngine::register_callbacks(nullptr);
 	SpxEngine *registered_engine = SpxEngine::get_singleton();
 	REQUIRE(registered_engine != nullptr);
+	CHECK(registered_engine->get_root() == nullptr);
+	registered_engine->capture_last_frame();
+	registered_engine->pause();
+	registered_engine->resume();
+	registered_engine->next_frame();
+	CHECK_FALSE(registered_engine->is_paused());
 
 	ERR_PRINT_OFF
 	SpxEngine::register_callbacks(nullptr);
@@ -259,16 +270,22 @@ TEST_CASE("[SceneTree][SPX] Public engine controls serialize worker requests on 
 	engine->get_callbacks()->func_on_engine_update = [](GdFloat) { ++updates; };
 	engine->get_callbacks()->func_on_engine_fixed_update = [](GdFloat) { ++fixed_updates; };
 	engine->get_callbacks()->func_on_engine_reset = []() { ++resets; };
+	engine->get_callbacks()->func_on_engine_start = nullptr;
 	SpxEngine::register_runtime_reset_callbacks([](GdInt code) { reset_code = code; });
 	engine->set_delay_runtime_reset(false);
 	Spx::on_start(nullptr);
 	CHECK_FALSE(Spx::is_initialized());
-	Spx::on_start(tree);
+	auto &bus = get_main_loop_phase_callback_bus();
+	const auto registrations = bus.get_registration_count();
+	Spx::register_main_loop_callbacks();
+	CHECK(bus.get_registration_count() == registrations);
+	Spx::register_extension_functions();
+	bus.notify_start(tree);
 	Spx::on_start(tree);
 	REQUIRE(Spx::is_initialized());
 	Spx::restart();
-	Spx::on_update(0.016);
-	Spx::on_fixed_update(0.016);
+	bus.notify_update(0.016);
+	bus.notify_fixed_update(0.016);
 	CHECK(updates == 1);
 	CHECK(fixed_updates == 1);
 	Spx::pause();
@@ -330,7 +347,34 @@ TEST_CASE("[SceneTree][SPX] Public engine controls serialize worker requests on 
 	SpxExtMgr::on_runtime_panic("test panic");
 	CHECK(panic == "test panic");
 	SpxExtMgr::set_layer_sorter_mode((GdInt)LayerSortMode::NONE);
-	Spx::on_destroy();
+	engine->get_callbacks()->func_on_engine_update = nullptr;
+	engine->get_callbacks()->func_on_engine_fixed_update = nullptr;
+	engine->get_callbacks()->func_on_engine_pause = nullptr;
+	engine->get_callbacks()->func_on_engine_reset = nullptr;
+	SpxEngine::register_runtime_reset_callbacks(nullptr);
+	SpxEngine::register_runtime_panic_callbacks(nullptr);
+	SpxExtMgr::on_runtime_panic("no listener");
+	CHECK(panic == "test panic");
+	Spx::on_update(0.016);
+	Spx::on_fixed_update(0.016);
+	ERR_PRINT_OFF;
+	worker.start([](void *data) {
+		auto *engine = static_cast<SpxEngine *>(data);
+		engine->pause();
+		engine->resume();
+		engine->next_frame();
+	}, engine);
+	worker.wait_to_finish();
+	ERR_PRINT_ON;
+	CHECK_FALSE(engine->is_paused());
+	Spx::pause();
+	CHECK(engine->is_paused());
+	Spx::resume();
+	Spx::reset(20);
+	CHECK(engine->is_reset());
+	CHECK(reset_code == 19);
+	bus.notify_destroy();
+	MovieRecorderManager::initialize();
 	CHECK_FALSE(Spx::is_initialized());
 	Spx::on_update(0.016);
 	Spx::on_fixed_update(0.016);
@@ -340,6 +384,58 @@ TEST_CASE("[SceneTree][SPX] Public engine controls serialize worker requests on 
 	Spx::restart();
 	Spx::reset(0);
 	CHECK_FALSE(SpxEngine::is_initialized());
+}
+
+TEST_CASE("[SceneTree][SPX] Delayed resets fire once and are canceled by restart or shutdown") {
+	TestSpx::EngineScene scene;
+	auto *engine = scene.engine;
+	auto *tree = SceneTree::get_singleton();
+	struct RestorePause {
+		SceneTree *tree;
+		bool paused = tree->is_paused();
+		~RestorePause() { tree->set_pause(paused); }
+	} restore{ tree };
+	static int received;
+	received = 0;
+	SpxEngine::register_runtime_reset_callbacks([](GdInt code) { received = code; });
+	engine->restart();
+	engine->set_delay_runtime_reset(true);
+	engine->on_reset(71);
+	CHECK(received == 0);
+	engine->restart();
+	tree->process(6.0);
+	CHECK(received == 0);
+	CHECK_FALSE(engine->is_paused());
+	engine->on_reset(72);
+	tree->process(6.0);
+	CHECK(received == 72);
+	CHECK(engine->is_paused());
+	tree->process(6.0);
+	CHECK(received == 72);
+	engine->restart();
+	engine->on_reset(73);
+	SpxEngine::shutdown();
+	tree->process(6.0);
+	CHECK(received == 72);
+}
+
+TEST_CASE("[SceneTree][SPX] Exit callbacks receive the code before runtime events stop") {
+	TestSpx::EngineScene scene;
+	struct RestoreExitCode {
+		int code = OS::get_singleton()->get_exit_code();
+		~RestoreExitCode() { OS::get_singleton()->set_exit_code(code); }
+	} restore;
+	static int received;
+	received = 0;
+	SpxEngine::register_runtime_exit_callbacks([](GdInt code) { received = code; });
+	SpxExtMgr::request_exit(17);
+	CHECK(received == 17);
+	CHECK(OS::get_singleton()->get_exit_code() == 17);
+	const int children = scene.root->get_child_count();
+	scene.engine->on_awake();
+	scene.engine->on_update(0.016);
+	scene.engine->on_fixed_update(0.016);
+	CHECK(scene.root->get_child_count() == children);
 }
 
 } // namespace TestSpxLifecycle

@@ -405,11 +405,13 @@ void SpxUi::set_rotation(GdFloat value) {
 
 GdBool SpxUi::get_flip(GdBool horizontal) {
 	auto image = get_image();
+	ERR_FAIL_NULL_V(image, false);
 	return horizontal ? image->is_flipped_h() : image->is_flipped_v();
 }
 
 void SpxUi::set_flip(GdBool horizontal, GdBool is_flip) {
 	auto image = get_image();
+	ERR_FAIL_NULL(image);
 	if (horizontal) {
 		image->set_flip_h(is_flip);
 	} else {

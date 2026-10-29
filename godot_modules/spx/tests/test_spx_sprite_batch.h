@@ -320,6 +320,12 @@ TEST_CASE("[SceneTree][SPX] Transform batch uses destroy-wins semantics") {
 	};
 	manager.batch_update_visuals(visual_batch, sizeof(visual_batch) / sizeof(visual_batch[0]));
 	CHECK_EQ(sprite->get_render_scale(), Vector2(1, 1));
+	uint32_t low = uint32_t(id), high = uint32_t(uint64_t(id) >> 32);
+	float physics_batch[] = { 1, 1, 0, 0, 50, 60, 0 };
+	memcpy(&physics_batch[2], &low, sizeof(low));
+	memcpy(&physics_batch[3], &high, sizeof(high));
+	manager.batch_update_physics(physics_batch, 7);
+	CHECK(sprite->get_velocity() == Vector2());
 }
 
 TEST_CASE("[SceneTree][SPX] Physics batches preserve raw masks and update all supported properties") {
@@ -410,11 +416,14 @@ TEST_CASE("[SceneTree][SPX] Visual batches apply scales and optional z-order ato
 		CHECK(Vector2(sprite->get_render_scale()) == Vector2(4, 5));
 	}
 	values[5] = 1;
-	values[4] = 100000;
-	ERR_PRINT_OFF;
-	manager->batch_update_visuals(values, 10);
-	ERR_PRINT_ON;
-	CHECK(sprite->get_z_index() == 7);
+	for (float invalid_z : { 100000.0f, -100000.0f, 0.5f }) {
+		values[4] = invalid_z;
+		ERR_PRINT_OFF;
+		manager->batch_update_visuals(values, 10);
+		ERR_PRINT_ON;
+		CHECK(sprite->get_z_index() == 7);
+		CHECK(Vector2(sprite->get_render_scale()) == Vector2(4, 5));
+	}
 	manager->set_pixel_collision_sampling_step(3);
 	CHECK(manager->get_pixel_collision_sampling_step() == 3);
 	ERR_PRINT_OFF;
@@ -491,6 +500,8 @@ TEST_CASE("[SceneTree][SPX] Malformed batch envelopes never mutate or delete liv
 		(manager->*apply)(header, 2);
 		header[0] = 2;
 		(manager->*apply)(header, 2);
+		header[0] = float(1 << 30);
+		(manager->*apply)(header, 2);
 		ERR_PRINT_ON;
 		CHECK(manager->is_sprite_alive(id));
 		CHECK(Vector2(manager->get_position(id)) == Vector2(3, 4));
@@ -500,6 +511,18 @@ TEST_CASE("[SceneTree][SPX] Malformed batch envelopes never mutate or delete liv
 	manager->batch_update_transforms(transform, 3);
 	ERR_PRINT_ON;
 	CHECK(manager->is_sprite_alive(id));
+	float invalid_delete_count[] = { 0, nan };
+	ERR_PRINT_OFF;
+	manager->batch_update_transforms(invalid_delete_count, 2);
+	ERR_PRINT_ON;
+	float update[] = { 1, 0, float(id), 50, 60, 0, 1, 1, 0, 0, 1 };
+	for (float invalid_id : { -1.0f, 0.5f, std::numeric_limits<float>::max() }) {
+		update[2] = invalid_id;
+		ERR_PRINT_OFF;
+		manager->batch_update_transforms(update, 11);
+		ERR_PRINT_ON;
+		CHECK(Vector2(manager->get_position(id)) == Vector2(3, 4));
+	}
 	float visual[] = { 1, float(id), 1, 1, 0, 2, 0, 0, 1, 1 };
 	for (int field : { 1, 2, 6 }) {
 		float old = visual[field];

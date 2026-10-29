@@ -197,6 +197,9 @@ TEST_CASE("[SceneTree][SPX] UI binding preserves an authored child and rejects i
 	CHECK(ui->get_type(0) == 0);
 	CHECK(ui->get_text(0) == nullptr);
 	ERR_PRINT_ON;
+	const GdObj parent_id = wrapper->get_gid();
+	memdelete(parent);
+	CHECK(ui->bind_node(parent_id, "Choice") == NULL_OBJECT_ID);
 }
 
 class ListMonitor : public SpxListMonitor {
@@ -253,6 +256,14 @@ TEST_CASE("[SceneTree][SPX] List monitor scrolls long lists and clears stale con
 	drag->set_relative(Vector2(0, 8));
 	monitor->gui_input(drag);
 	CHECK(scroll->get_value() == 16);
+	GdArrayInfo empty = {};
+	empty.type = GD_ARRAY_TYPE_STRING;
+	ui->set_list_items(wrapper->get_gid(), "empty array", &empty, Color(0, 1, 0));
+	CHECK_FALSE(scroll->is_visible());
+	CHECK(scroll->get_value() == 0);
+	CHECK(scroll->get_max() == scroll->get_page());
+	ui->set_list_items(wrapper->get_gid(), "items", &array, Color(1, 0, 0));
+	CHECK(scroll->is_visible());
 	ui->set_list_items(wrapper->get_gid(), "empty", nullptr, Color(0, 1, 0));
 	CHECK_FALSE(scroll->is_visible());
 	CHECK(scroll->get_value() == 0);
@@ -343,6 +354,131 @@ TEST_CASE("[SceneTree][SPX] UI texture bindings share resources across images bu
 	CHECK(ui->get_node(ids[0])->get_image()->get_texture() == texture);
 	CHECK(ui->get_node(ids[1])->get_button()->get_button_icon() == texture);
 	CHECK(ui->get_node(ids[2])->get_toggle()->get_button_icon() == texture);
+	ERR_PRINT_OFF;
+	ui->set_texture(ids[0], "res://spx_missing_icon.png");
+	ui->set_text(ids[0], "unsupported");
+	CHECK(TestSpx::take_string(ui->get_text(ids[0])).is_empty());
+	const GdObj label = ui->create_label("", "keep text");
+	ui->set_texture(label, text.get_data());
+	CHECK(ui->get_texture(label) == nullptr);
+	ERR_PRINT_ON;
+	CHECK(ui->get_node(ids[0])->get_image()->get_texture() == texture);
+	CHECK(TestSpx::take_string(ui->get_text(label)) == "keep text");
+}
+
+TEST_CASE("[SceneTree][SPX] Stale UI handles cannot mutate surviving controls") {
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *ui = scene.engine->get_ui();
+	const GdObj stale = ui->create_label("", "removed");
+	Control *removed = ui->get_node(stale)->get_control();
+	REQUIRE(ui->destroy_node(stale));
+	memdelete(removed);
+	REQUIRE(ui->get_node(stale) == nullptr);
+	const GdObj live = ui->create_label("", "unchanged");
+	ui->set_position(live, Vector2(12, 34));
+	ui->set_color(live, Color(0.2, 0.4, 0.6));
+	ERR_PRINT_OFF;
+	ui->set_text(stale, "changed");
+	ui->set_texture(stale, "missing.png");
+	ui->set_rect(stale, Rect2(1, 2, 3, 4));
+	ui->set_color(stale, Color(1, 0, 0));
+	ui->set_font_size(stale, 72);
+	ui->set_visible(stale, false);
+	ui->set_interactable(stale, false);
+	ui->set_layout_direction(stale, Control::LAYOUT_DIRECTION_RTL);
+	ui->set_layout_mode(stale, Control::LAYOUT_MODE_ANCHORS);
+	ui->set_anchors_preset(stale, Control::PRESET_FULL_RECT);
+	ui->set_scale(stale, Vector2(3, 4));
+	ui->set_position(stale, Vector2(50, 60));
+	ui->set_size(stale, Vector2(70, 80));
+	ui->set_global_position(stale, Vector2(90, 100));
+	ui->set_rotation(stale, 2);
+	ui->set_flip(stale, true, true);
+	ui->set_range(stale, 0, 100, 1, 50);
+	ui->set_list_items(stale, "items", nullptr, Color());
+	CHECK(ui->get_type(stale) == 0);
+	CHECK(ui->get_text(stale) == nullptr);
+	CHECK(ui->get_texture(stale) == nullptr);
+	CHECK(ui->set_text_max_width(stale, "wrapped", 100) == 0);
+	CHECK(Rect2(ui->get_rect(stale)) == Rect2());
+	CHECK(Color(ui->get_color(stale)) == Color(GdColor()));
+	CHECK(ui->get_font_size(stale) == 0);
+	CHECK_FALSE(ui->get_visible(stale));
+	CHECK_FALSE(ui->get_interactable(stale));
+	CHECK(ui->get_layout_direction(stale) == 0);
+	CHECK(ui->get_layout_mode(stale) == 0);
+	CHECK(ui->get_anchors_preset(stale) == 0);
+	CHECK(Vector2(ui->get_scale(stale)) == Vector2());
+	CHECK(Vector2(ui->get_canvas_scale(stale)) == Vector2());
+	CHECK(Vector2(ui->get_position(stale)) == Vector2());
+	CHECK(Vector2(ui->get_size(stale)) == Vector2());
+	CHECK(Vector2(ui->get_global_position(stale)) == Vector2());
+	CHECK(ui->get_rotation(stale) == 0);
+	CHECK_FALSE(ui->get_flip(stale, false));
+	CHECK(ui->get_range_value(stale) == 0);
+	ui->set_list_items(live, "wrong type", nullptr, Color());
+	ui->set_range(live, 0, 100, 1, 50);
+	CHECK(ui->get_range_value(live) == 0);
+	ui->set_flip(live, true, true);
+	CHECK_FALSE(ui->get_flip(live, true));
+	CHECK(ui->set_text_max_width(ui->create_image(""), "wrong type", 100) == 0);
+	ERR_PRINT_ON;
+	CHECK(TestSpx::take_string(ui->get_text(live)) == "unchanged");
+	CHECK(Vector2(ui->get_position(live)) == Vector2(12, 34));
+	CHECK(Color(ui->get_color(live)) == Color(0.2, 0.4, 0.6));
+	CHECK(ui->get_visible(live));
+}
+
+TEST_CASE("[SceneTree][SPX] Detached UI wrappers reject property access and mismatched types") {
+	TestSpx::EngineScene scene;
+	auto *ui = scene.engine->get_ui();
+	const GdObj id = ui->create_button("", "keep");
+	SpxUi *wrapper = ui->get_node(id);
+	wrapper->detach_control_binding();
+	ERR_PRINT_OFF;
+	wrapper->queue_free();
+	wrapper->set_rect(Rect2(1, 2, 3, 4));
+	wrapper->set_color(Color(1, 0, 0));
+	wrapper->set_font_size(24);
+	wrapper->set_visible(true);
+	wrapper->set_layout_mode(Control::LAYOUT_MODE_ANCHORS);
+	CHECK(Rect2(wrapper->get_rect()) == Rect2());
+	CHECK(Color(wrapper->get_color()) == Color(GdColor()));
+	CHECK(wrapper->get_font_size() == 0);
+	CHECK_FALSE(wrapper->get_visible());
+	CHECK(wrapper->get_layout_mode() == 0);
+	CHECK(wrapper->get_anchors_preset() == 0);
+	CHECK(wrapper->set_control_item(nullptr, nullptr) == ERR_INVALID_PARAMETER);
+	CHECK(wrapper->get_label() == nullptr);
+	CHECK(wrapper->get_image() == nullptr);
+	CHECK(wrapper->get_toggle() == nullptr);
+	CHECK(wrapper->get_input() == nullptr);
+	CHECK(wrapper->get_slider() == nullptr);
+	wrapper->set_type((int)ESpxUiType::Label);
+	CHECK(wrapper->get_button() == nullptr);
+	CHECK(wrapper->set_text_max_width("detached", 100) == 0);
+	ERR_PRINT_ON;
+	CHECK_FALSE(wrapper->owns_binding(ObjectID()));
+}
+
+TEST_CASE("[SceneTree][SPX] UI teardown tolerates a detached canvas and repeated shutdown") {
+	TestSpx::EngineScene scene;
+	auto *ui = scene.engine->get_ui();
+	const GdObj id = ui->create_button("", "kept until canvas deletion");
+	Control *button = ui->get_node(id)->get_control();
+	Node *canvas = button->get_parent();
+	REQUIRE(canvas != nullptr);
+	const ObjectID button_id = button->get_instance_id();
+	canvas->get_parent()->remove_child(canvas);
+	ui->on_destroy();
+	CHECK(ui->get_node(id) == nullptr);
+	CHECK(canvas->is_queued_for_deletion());
+	CHECK(button->get_parent() == canvas);
+	CHECK_FALSE(button->is_queued_for_deletion());
+	ui->on_destroy();
+	CHECK(ui->get_node(id) == nullptr);
+	memdelete(canvas);
+	CHECK(ObjectDB::get_instance(button_id) == nullptr);
 }
 
 } // namespace TestSpxUiMgr

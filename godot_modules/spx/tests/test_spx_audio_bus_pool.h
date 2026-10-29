@@ -225,6 +225,38 @@ TEST_CASE("[Audio][SPX] Panning follows Scratch equal-power mixing and zero bypa
 	}
 }
 
+TEST_CASE("[Audio][SPX] Audio buses reject stale names without changing another voice") {
+	SpxAudioBusPool::reset();
+	SpxAudioBusPool::shutdown();
+	SpxAudioBusPool::init();
+	struct Cleanup {
+		~Cleanup() { SpxAudioBusPool::shutdown(); }
+	} cleanup;
+	auto *pool = SpxAudioBusPool::get_singleton();
+	auto *server = AudioServer::get_singleton();
+	const StringName active = pool->alloc();
+	const StringName released = pool->alloc();
+	pool->set_volume(active, 0.5f);
+	pool->set_pan(active, 0.25f);
+	pool->free(released);
+	for (const StringName &invalid : { StringName("missing_spx_bus"), released }) {
+		pool->set_volume(invalid, 0.1f);
+		pool->set_pan(invalid, -1.0f);
+		CHECK(pool->get_volume(invalid) == 0.0f);
+		CHECK(pool->get_pan(invalid) == 0.0f);
+		pool->free(invalid);
+	}
+	CHECK(pool->get_volume(active) == doctest::Approx(0.5f));
+	CHECK(pool->get_pan(active) == doctest::Approx(0.25f));
+	remove_bus(server, released);
+	const StringName replacement = pool->alloc();
+	CHECK_FALSE(replacement.is_empty());
+	CHECK(server->get_bus_index(replacement) > 0);
+	remove_bus(server, active);
+	pool->free(active); // Authored edits may remove an allocated bus before release.
+	CHECK(pool->get_volume(replacement) == doctest::Approx(1.0f));
+}
+
 } // namespace TestSpxAudioBusPool
 
 #endif // TEST_SPX_AUDIO_BUS_POOL_H

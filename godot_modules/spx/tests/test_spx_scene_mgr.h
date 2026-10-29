@@ -181,6 +181,15 @@ TEST_CASE("[SceneTree][SPX] Scene bounds and export snapshots include nested tra
 	memdelete(removed);
 	manager->on_update(1.0); // Scene removal must not leave a dangling viewport.
 	manager->export_scene_as_png(group);
+	auto *completed = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
+	REQUIRE(completed);
+	ERR_PRINT_OFF;
+	manager->on_update(1.0); // Headless rendering cannot provide an image to save.
+	ERR_PRINT_ON;
+	CHECK(completed->is_queued_for_deletion());
+	memdelete(completed);
+	manager->on_update(1.0); // A completed export is consumed exactly once.
+	manager->export_scene_as_png(group);
 	auto *last = Object::cast_to<SubViewport>(scene.root->get_child(-1, true));
 	REQUIRE(last);
 	manager->on_destroy();
@@ -234,8 +243,29 @@ TEST_CASE("[SceneTree][SPX] Static sprite creation supports circle, capsule and 
 	CHECK(manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(ColliderType::RECT), Vector2(), &params) == 0);
 	ERR_PRINT_ON;
 	CHECK(manager->id_pure_sprites.size() == before);
+	params.size = 2;
+	params.data = nullptr;
+	ERR_PRINT_OFF;
+	CHECK(manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(ColliderType::RECT), Vector2(), &params) == 0);
+	ERR_PRINT_ON;
+	CHECK(manager->id_pure_sprites.size() == before);
 	manager->create_pure_sprite(path.get_data(), Vector2(), 0);
 	CHECK(manager->id_pure_sprites.size() == before + 1);
+	for (auto type : { ColliderType::CIRCLE, ColliderType::RECT, ColliderType::CAPSULE }) {
+		const auto default_id = manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(type), Vector2(), nullptr);
+		REQUIRE(default_id != 0);
+		auto *body = dynamic_cast<Node2D *>(manager->id_pure_sprites[default_id]);
+		REQUIRE(body);
+		auto *shape = Object::cast_to<CollisionShape2D>(body->get_child(1));
+		REQUIRE(shape);
+		CHECK(shape->get_shape().is_valid());
+	}
+	manager->on_destroy();
+	manager->create_pure_sprite(path.get_data(), Vector2(), 0);
+	CHECK(manager->create_render_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2()) == 0);
+	CHECK(manager->create_static_sprite(path.get_data(), Vector2(), 0, Vector2(1, 1), 0, Vector2(), int(ColliderType::RECT), Vector2(), nullptr) == 0);
+	manager->clear_pure_sprites();
+	CHECK(manager->id_pure_sprites.is_empty());
 }
 
 TEST_CASE("[SceneTree][SPX] Scene manager switches reloads and unloads authored scenes") {

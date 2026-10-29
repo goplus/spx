@@ -273,9 +273,3 @@ void IndependentVideoRecorder::update_statistics(uint64_t frame_process_start_ti
 		stats.avg_frame_process_time_us = (stats.avg_frame_process_time_us * 9 + process_time) / 10;
 	}
 }
-
-// Simplified version, no longer uses complex frame flags
-uint8_t IndependentVideoRecorder::determine_frame_flags(const ThreadSafeFrameBuffer::FrameData &frame_data) {
-	// Simplified version, no longer uses complex frame flags
-	return 0;
-}

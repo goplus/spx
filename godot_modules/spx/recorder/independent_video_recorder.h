@@ -88,7 +88,6 @@ private:
 	// Internal processing methods
 	bool process_frame(uint64_t current_recording_time);
 	void update_statistics(uint64_t frame_process_start_time);
-	uint8_t determine_frame_flags(const ThreadSafeFrameBuffer::FrameData &frame_data);
 
 public:
 	IndependentVideoRecorder();

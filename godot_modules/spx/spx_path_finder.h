@@ -33,6 +33,7 @@
 
 #include "core/math/a_star_grid_2d.h"
 #include "core/object/object.h"
+#include "core/templates/hash_set.h"
 #include "gdextension_spx_ext.h"
 #include "scene/2d/node_2d.h"
 
@@ -47,6 +48,8 @@ class SpxPathFinder : public RefCounted {
 private:
 	Ref<AStarGrid2D> astar;
 	PathDebugDrawer *drawer = nullptr;
+	HashMap<ObjectID, HashSet<Vector2i>> obstacle_cells;
+	HashMap<Vector2i, int> cell_occupancy;
 
 	Vector2 cached_cell_size{ 16, 16 };
 
@@ -70,6 +73,8 @@ public:
 
 	_FORCE_INLINE_ void reset() {
 		astar->clear();
+		obstacle_cells.clear();
+		cell_occupancy.clear();
 		_destroy_drawer();
 	}
 
@@ -100,11 +105,12 @@ public:
 private:
 	Vector2i _world_to_cell(const Vector2 &pos) const;
 	Vector2 _cell_to_world(const Vector2i &cell) const;
-	void _set_point_solid(int cx, int cy, PackedVector2Array &world_poly);
+	void _replace_obstacle_cells(ObjectID p_owner, const HashSet<Vector2i> &p_cells);
+	void _prune_removed_obstacles();
 
 	void _setup_astar(Node *root, Vector2i &grid_size, Vector2i &cell_size);
 
-	void _process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, bool add = true);
+	void _process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, HashSet<Vector2i> &r_cells);
 	void _process_static_obstacles(Node2D *body, bool add = true);
 	void _process_tilemap_obstacles(TileMapLayer *tilemap, int p_layer_id = 0);
 	void _process_sprite_obstacle(GdObj obj, bool add);

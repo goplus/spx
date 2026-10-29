@@ -65,8 +65,6 @@ private:
 	TileMapLayer *_create_tilemap_layer(const SpxTileMapLayerData &data, Ref<TileSet> tileset, const Vector2 &node_offset);
 
 	// Helper methods
-	String _get_base_path(const String &json_path);
-	Vector<uint8_t> _base64_decode(const String &base64_str);
 
 public:
 	// Lifecycle methods

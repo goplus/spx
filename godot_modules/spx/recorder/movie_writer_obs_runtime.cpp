@@ -43,6 +43,9 @@ ObsStyleMovieWriter::ObsStyleMovieWriter() :
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_repeat_frame_marking")) {
 		obs_config.enable_repeat_frame_marking = GLOBAL_GET("movie_writer/obs_enable_repeat_frame_marking");
 	}
+	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_debug_output")) {
+		obs_config.enable_debug_output = GLOBAL_GET("movie_writer/obs_enable_debug_output");
+	}
 	if (ProjectSettings::get_singleton()->has_setting("movie_writer/obs_enable_post_merge")) {
 		obs_config.enable_post_merge = GLOBAL_GET("movie_writer/obs_enable_post_merge");
 	}
@@ -87,7 +90,13 @@ void ObsStyleMovieWriter::add_realtime_frame() {
 	}
 
 	RID main_viewport = RenderingServer::get_singleton()->viewport_find_from_screen_attachment(DisplayServer::MAIN_WINDOW_ID);
+	if (!main_viewport.is_valid()) {
+		return; // Headless rendering has no screen attachment to capture.
+	}
 	RID main_texture = RenderingServer::get_singleton()->viewport_get_texture(main_viewport);
+	if (!main_texture.is_valid()) {
+		return;
+	}
 	Ref<Image> frame = RenderingServer::get_singleton()->texture_2d_get(main_texture);
 	if (frame.is_valid() && RenderingServer::get_singleton()->viewport_is_using_hdr_2d(main_viewport)) {
 		frame->convert(Image::FORMAT_RGBA8);
@@ -260,17 +269,9 @@ Error ObsStyleMovieWriter::setup_components() {
 	// Independent recording mode
 	// Create double buffer
 	frame_buffer = new ThreadSafeFrameBuffer();
-	if (!frame_buffer) {
-		ERR_PRINT("ObsStyleMovieWriter: Failed to create frame buffer");
-		return ERR_OUT_OF_MEMORY;
-	}
 
 	// Create video recorder
 	video_recorder = new IndependentVideoRecorder();
-	if (!video_recorder) {
-		ERR_PRINT("ObsStyleMovieWriter: Failed to create video recorder");
-		return ERR_OUT_OF_MEMORY;
-	}
 
 	// Configure video recorder
 	IndependentVideoRecorder::RecordingConfig video_config;
@@ -289,20 +290,6 @@ Error ObsStyleMovieWriter::setup_components() {
 
 	// Create audio recorder
 	audio_recorder = new IndependentAudioRecorder();
-	if (!audio_recorder) {
-		ERR_PRINT("ObsStyleMovieWriter: Failed to create audio recorder");
-		return ERR_OUT_OF_MEMORY;
-	}
-
-	// Configure audio recorder
-	IndependentAudioRecorder::AudioConfig audio_config;
-	audio_config.sample_rate = obs_config.audio_sample_rate;
-	audio_config.channels = obs_config.audio_channels;
-	audio_config.chunk_size = (audio_config.sample_rate * obs_config.audio_chunk_ms) / 1000;
-	audio_config.buffer_size_seconds = obs_config.audio_buffer_seconds;
-	audio_config.enable_audio_monitoring = obs_config.enable_audio_monitoring;
-
-	// Note: audio_recorder needs to be associated with HybridAudioDriver in setup_audio_capture
 
 	update_recording_state(STATE_INITIALIZED);
 

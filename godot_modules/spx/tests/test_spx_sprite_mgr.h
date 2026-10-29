@@ -32,6 +32,7 @@
 #define TEST_SPX_SPRITE_MGR_H
 
 #include "../spx_layer_sorter.h"
+#include "../spx_image_texture.h"
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
@@ -91,6 +92,19 @@ TEST_CASE("[SceneTree][SPX] Sprite manager converts coordinates and owns sprite 
 	manager->set_child_scale(id, "attachment", Vector2(2, 4));
 	CHECK(Vector2(manager->get_child_scale(id, "attachment")) == Vector2(2, 4));
 	CHECK(child->get_scale() == Vector2(2, 4));
+	Node *logic = memnew(Node);
+	logic->set_name("logic");
+	sprite->add_child(logic);
+	for (const char *path : { "missing", "logic" }) {
+		manager->set_child_position(id, path, Vector2(9, 8));
+		manager->set_child_rotation(id, path, 1);
+		manager->set_child_scale(id, path, Vector2(3, 4));
+		CHECK(Vector2(manager->get_child_position(id, path)) == Vector2());
+		CHECK(manager->get_child_rotation(id, path) == 0);
+		CHECK(Vector2(manager->get_child_scale(id, path)) == Vector2());
+	}
+	CHECK(logic->get_parent() == sprite);
+	CHECK(child->get_scale() == Vector2(2, 4));
 	const GdObj clone = manager->clone_sprite(id);
 	REQUIRE(clone != NULL_OBJECT_ID);
 	CHECK(clone != id);
@@ -112,6 +126,150 @@ TEST_CASE("[SceneTree][SPX] Sprite manager converts coordinates and owns sprite 
 	CHECK_FALSE(manager->destroy_sprite(id));
 	CHECK(manager->clone_sprite(id) == NULL_OBJECT_ID);
 	ERR_PRINT_ON;
+}
+
+TEST_CASE("[SceneTree][SPX] Destroyed sprite handles return defaults and cannot mutate queued nodes") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2(3, 4));
+	auto *sprite = manager->get_sprite(id);
+	manager->set_velocity(id, Vector2(5, 6));
+	const Transform2D transform = sprite->get_transform();
+	const auto frames = sprite->get_anim2d()->get_sprite_frames();
+	const auto shape = sprite->get_collider(false)->get_shape();
+	Node *parent = sprite->get_parent();
+	REQUIRE(manager->destroy_sprite(id));
+	const GdObj survivor = manager->create_bare_sprite(Vector2(7, 8));
+	REQUIRE(survivor != id);
+
+	// A queued node still exists until the frame ends. Every public operation
+	// must respect pending deletion, including setters that load assets.
+	ERR_PRINT_OFF;
+	for (auto setter : { &SpxSpriteMgr::set_dont_destroy_on_load, &SpxSpriteMgr::pause_anim,
+			 &SpxSpriteMgr::stop_anim, &SpxSpriteMgr::move_and_slide }) {
+		(manager->*setter)(id);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_process, &SpxSpriteMgr::set_physic_process,
+			 &SpxSpriteMgr::set_debug_collision_visible, &SpxSpriteMgr::set_visible,
+			 &SpxSpriteMgr::set_anim_centered, &SpxSpriteMgr::set_anim_flip_h,
+			 &SpxSpriteMgr::set_anim_flip_v, &SpxSpriteMgr::set_use_gravity,
+			 &SpxSpriteMgr::set_collision_enabled, &SpxSpriteMgr::set_trigger_enabled }) {
+		(manager->*setter)(id, false);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_position, &SpxSpriteMgr::set_scale,
+			 &SpxSpriteMgr::set_render_scale, &SpxSpriteMgr::set_pivot,
+			 &SpxSpriteMgr::set_anim_offset, &SpxSpriteMgr::set_velocity,
+			 &SpxSpriteMgr::add_force, &SpxSpriteMgr::add_impulse }) {
+		(manager->*setter)(id, Vector2(90, 80));
+	}
+	for (auto setter : { &SpxSpriteMgr::set_rotation, &SpxSpriteMgr::set_anim_speed_scale,
+			 &SpxSpriteMgr::set_gravity, &SpxSpriteMgr::set_mass,
+			 &SpxSpriteMgr::set_gravity_scale, &SpxSpriteMgr::set_drag,
+			 &SpxSpriteMgr::set_friction }) {
+		(manager->*setter)(id, 12);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_z_index, &SpxSpriteMgr::set_anim_frame,
+			 &SpxSpriteMgr::set_physics_mode, &SpxSpriteMgr::set_collision_layer,
+			 &SpxSpriteMgr::set_collision_mask, &SpxSpriteMgr::set_trigger_layer,
+			 &SpxSpriteMgr::set_trigger_mask }) {
+		(manager->*setter)(id, 2);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_type_name, &SpxSpriteMgr::set_material_shader,
+			 &SpxSpriteMgr::set_texture, &SpxSpriteMgr::set_texture_direct,
+			 &SpxSpriteMgr::set_anim, &SpxSpriteMgr::play_backwards_anim }) {
+		(manager->*setter)(id, "res://missing_destroyed_sprite_asset");
+	}
+	for (auto setter : { &SpxSpriteMgr::set_collider_rect, &SpxSpriteMgr::set_collider_capsule,
+			 &SpxSpriteMgr::set_trigger_rect, &SpxSpriteMgr::set_trigger_capsule }) {
+		(manager->*setter)(id, Vector2(1, 2), Vector2(10, 20));
+	}
+	for (auto setter : { &SpxSpriteMgr::set_collider_circle, &SpxSpriteMgr::set_trigger_circle }) {
+		(manager->*setter)(id, Vector2(1, 2), 10);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_collider_polygon, &SpxSpriteMgr::set_trigger_polygon }) {
+		(manager->*setter)(id, Vector2(), nullptr);
+	}
+	for (auto setter : { &SpxSpriteMgr::set_texture_atlas, &SpxSpriteMgr::set_texture_atlas_direct }) {
+		(manager->*setter)(id, "res://missing_destroyed_sprite_asset", Rect2(0, 0, 1, 1));
+	}
+	manager->set_transform(id, Vector2(10, 20), 1, Vector2(2, 3), false, Vector2(4, 5));
+	manager->set_color(id, Color(1, 0, 0));
+	manager->set_child_position(id, "RenderRoot", Vector2(10, 20));
+	manager->set_child_rotation(id, "RenderRoot", 1);
+	manager->set_child_scale(id, "RenderRoot", Vector2(2, 3));
+	manager->set_material_params(id, "amount", 5);
+	manager->set_material_params_vec(id, "bounds", 1, 2, 3, 4);
+	manager->set_material_params_vec4(id, "bounds", Vector4(1, 2, 3, 4));
+	manager->set_material_params_color(id, "color", Color(1, 0, 0));
+	manager->play_anim(id, "missing", 1, true, false);
+
+	for (auto getter : { &SpxSpriteMgr::get_position, &SpxSpriteMgr::get_scale,
+			 &SpxSpriteMgr::get_render_scale, &SpxSpriteMgr::get_pivot,
+			 &SpxSpriteMgr::get_anim_offset, &SpxSpriteMgr::get_velocity,
+			 &SpxSpriteMgr::get_last_motion, &SpxSpriteMgr::get_position_delta,
+			 &SpxSpriteMgr::get_floor_normal, &SpxSpriteMgr::get_wall_normal,
+			 &SpxSpriteMgr::get_real_velocity }) {
+		CHECK(Vector2((manager->*getter)(id)) == Vector2());
+	}
+	for (auto getter : { &SpxSpriteMgr::is_sprite_alive, &SpxSpriteMgr::is_debug_collision_visible,
+			 &SpxSpriteMgr::get_visible, &SpxSpriteMgr::is_playing_anim,
+			 &SpxSpriteMgr::is_anim_centered, &SpxSpriteMgr::is_anim_flipped_h,
+			 &SpxSpriteMgr::is_anim_flipped_v, &SpxSpriteMgr::is_on_floor,
+			 &SpxSpriteMgr::is_on_floor_only, &SpxSpriteMgr::is_on_wall,
+			 &SpxSpriteMgr::is_on_wall_only, &SpxSpriteMgr::is_on_ceiling,
+			 &SpxSpriteMgr::is_on_ceiling_only, &SpxSpriteMgr::is_use_gravity,
+			 &SpxSpriteMgr::is_collision_enabled, &SpxSpriteMgr::is_trigger_enabled }) {
+		CHECK_FALSE((manager->*getter)(id));
+	}
+	for (auto getter : { &SpxSpriteMgr::get_rotation, &SpxSpriteMgr::get_gravity,
+			 &SpxSpriteMgr::get_mass, &SpxSpriteMgr::get_drag, &SpxSpriteMgr::get_friction }) {
+		CHECK((manager->*getter)(id) == 0);
+	}
+	for (auto getter : { &SpxSpriteMgr::get_anim_speed_scale, &SpxSpriteMgr::get_anim_playing_speed,
+			 &SpxSpriteMgr::get_gravity_scale }) {
+		CHECK((manager->*getter)(id) == 1);
+	}
+	for (auto getter : { &SpxSpriteMgr::get_z_index, &SpxSpriteMgr::get_anim_frame,
+			 &SpxSpriteMgr::get_physics_mode, &SpxSpriteMgr::get_collision_layer,
+			 &SpxSpriteMgr::get_collision_mask, &SpxSpriteMgr::get_trigger_layer,
+			 &SpxSpriteMgr::get_trigger_mask }) {
+		CHECK((manager->*getter)(id) == 0);
+	}
+	for (auto getter : { &SpxSpriteMgr::get_texture, &SpxSpriteMgr::get_material_shader,
+			 &SpxSpriteMgr::get_anim, &SpxSpriteMgr::get_current_anim_name }) {
+		CHECK((manager->*getter)(id) == nullptr);
+	}
+	CHECK(Color(manager->get_color(id)) == Color());
+	CHECK(Vector2(manager->get_child_position(id, "RenderRoot")) == Vector2());
+	CHECK(manager->get_child_rotation(id, "RenderRoot") == 0);
+	CHECK(Vector2(manager->get_child_scale(id, "RenderRoot")) == Vector2());
+	CHECK(manager->get_material_params(id, "amount") == 0);
+	CHECK(Vector4(manager->get_material_params_vec4(id, "bounds")) == Vector4());
+	CHECK(Color(manager->get_material_params_color(id, "color")) == Color());
+	CHECK_FALSE(manager->check_collision(id, survivor, false, false));
+	CHECK_FALSE(manager->check_collision(survivor, id, false, false));
+	CHECK_FALSE(manager->check_collision_with_sprite(id, survivor, 0.5, true));
+	CHECK_FALSE(manager->check_collision_with_sprite(survivor, id, 0.5, true));
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(3, 4), false));
+	CHECK_FALSE(manager->check_collision_by_color(id, Color(1, 0, 0), 0.1, 0.5));
+	CHECK_FALSE(manager->check_collision_by_colors(id, Color(1, 0, 0), Color(0, 1, 0), 0.1, 0.5));
+	CHECK_FALSE(manager->check_collision_by_alpha(id, 0.5));
+	CHECK_FALSE(manager->destroy_sprite(id));
+	CHECK(manager->clone_sprite(id) == NULL_OBJECT_ID);
+	ERR_PRINT_ON;
+
+	CHECK(sprite->is_queued_for_deletion());
+	CHECK(sprite->get_parent() == parent);
+	CHECK(sprite->get_transform() == transform);
+	CHECK(sprite->get_velocity() == Vector2(5, -6));
+	CHECK(sprite->get_anim2d()->get_sprite_frames() == frames);
+	CHECK(sprite->get_collider(false)->get_shape() == shape);
+	CHECK(sprite->is_visible());
+	CHECK(Vector2(manager->get_position(survivor)) == Vector2(7, 8));
+	Vector<ISortableSprite *> sprites;
+	manager->collect_sortable_sprites(sprites);
+	REQUIRE(sprites.size() == 1);
+	CHECK(sprites[0] == manager->get_sprite(survivor));
 }
 
 TEST_CASE("[SceneTree][SPX] Sprite collider and trigger shapes preserve SPX coordinates") {
@@ -226,6 +384,8 @@ TEST_CASE("[SceneTree][SPX] Sprite material parameters affect the attached shade
 	manager->set_material_params_vec4(id, "bounds", Vector4(1, 2, 3, 4));
 	CHECK(Vector4(manager->get_material_params_vec4(id, "bounds")) == Vector4(1, 2, 3, 4));
 	CHECK(Vector4(material->get_shader_parameter("bounds")) == Vector4(1, 2, 3, 4));
+	manager->set_material_params_vec(id, "bounds", 4, 3, 2, 1);
+	CHECK(Vector4(material->get_shader_parameter("bounds")) == Vector4(4, 3, 2, 1));
 	manager->set_material_params_color(id, "color", tint);
 	CHECK(Color(manager->get_material_params_color(id, "color")) == tint);
 	manager->set_color(id, Color(1, 0, 0, 1));
@@ -289,6 +449,393 @@ TEST_CASE("[SceneTree][SPX] Sprite animation controls update playback and frame 
 	manager->set_anim_offset(id, Vector2(3, 5));
 	CHECK(Vector2(manager->get_anim_offset(id)) == Vector2(3, 5));
 	CHECK(animated->get_offset() == Vector2(3, -5));
+	const auto old_frames = animated->get_sprite_frames();
+	const StringName old_animation = animated->get_animation();
+	ERR_PRINT_OFF;
+	manager->set_anim(id, "missing");
+	ERR_PRINT_ON;
+	CHECK(animated->get_sprite_frames() == old_frames);
+	CHECK(animated->get_animation() == old_animation);
+}
+
+TEST_CASE("[SceneTree][SPX] Incomplete sprite components keep visual and collision operations inert") {
+	TestSpx::TempDirectory files("spx_incomplete_sprite");
+	files.write("sprite.gdshader", "shader_type canvas_item;");
+	TestSpx::EngineScene scene;
+	SpxSprite *sprite = memnew(SpxSprite);
+	scene.root->add_child(sprite);
+	ERR_PRINT_OFF;
+	sprite->on_start();
+	ERR_PRINT_ON;
+	CHECK(sprite->get_anim2d() == nullptr);
+	CHECK(sprite->get_texture() == nullptr);
+	CHECK(sprite->get_rect() == Rect2(0, 0, 1, 1));
+	CHECK(sprite->get_material_shader() == nullptr);
+	const auto shader = files.file("sprite.gdshader").utf8();
+	sprite->set_material_shader(shader.get_data());
+	sprite->set_color(Color(1, 0, 0));
+	CHECK(Color(sprite->get_color()) == Color(GdColor()));
+	sprite->set_material_params("amount", 1);
+	sprite->set_material_params_vec4("bounds", Vector4(1, 2, 3, 4));
+	sprite->set_material_params_color("color", Color(1, 0, 0));
+	sprite->set_uv_remap(Vector4(1, 1, 0, 0));
+	CHECK(sprite->get_material_params("amount") == 0);
+	CHECK(Vector4(sprite->get_material_params_vec4("bounds")) == Vector4());
+	CHECK(Color(sprite->get_material_params_color("color")) == Color(GdColor()));
+	sprite->set_render_scale(Vector2(2, 3));
+	sprite->set_render_offset(Vector2(4, 5));
+	sprite->set_render_offset(Vector2(4, 5));
+	sprite->set_dynamic_frame_offset_enabled(true);
+	CHECK(sprite->is_dynamic_frame_offset_enabled());
+	CHECK(Vector2(sprite->get_render_scale()) == Vector2(2, 3));
+	sprite->set_collider_rect(Vector2(), Vector2(8, 8));
+	sprite->set_trigger_circle(Vector2(), 4);
+	CHECK_FALSE(sprite->check_collision(nullptr, false, false));
+	CHECK_FALSE(sprite->check_collision(sprite, false, false));
+	CHECK_FALSE(sprite->check_collision_with_point(Vector2(), true));
+	CHECK(sprite->get_collider(false) == nullptr);
+	CHECK(sprite->get_collider(true) == nullptr);
+	ERR_PRINT_OFF;
+	sprite->play_anim("missing", 1, true, false);
+	sprite->play_backwards_anim("missing");
+	sprite->pause_anim();
+	sprite->stop_anim();
+	sprite->set_anim("missing");
+	sprite->set_anim_frame(2);
+	sprite->set_anim_speed_scale(2);
+	sprite->set_anim_centered(true);
+	sprite->set_anim_flip_h(true);
+	sprite->set_anim_flip_v(true);
+	CHECK_FALSE(sprite->is_playing_anim());
+	CHECK(sprite->get_anim() == nullptr);
+	CHECK(sprite->get_anim_frame() == 0);
+	CHECK(sprite->get_anim_speed_scale() == 1);
+	CHECK(sprite->get_anim_playing_speed() == 0);
+	CHECK_FALSE(sprite->is_anim_centered());
+	CHECK_FALSE(sprite->is_anim_flipped_h());
+	CHECK_FALSE(sprite->is_anim_flipped_v());
+	CHECK(Vector2(sprite->get_anim_offset()) == Vector2());
+	sprite->set_texture("missing.png");
+	sprite->set_texture_atlas("missing.png", Rect2(0, 0, 1, 1));
+	sprite->set_trigger_layer(3);
+	sprite->set_trigger_mask(3);
+	CHECK(sprite->get_trigger_layer() == 0);
+	CHECK(sprite->get_trigger_mask() == 0);
+	ERR_PRINT_ON;
+	CHECK(sprite->get_anim2d() == nullptr);
+	CHECK(sprite->get_texture() == nullptr);
+	CHECK(sprite->get_trigger() == nullptr);
+
+	// Invalid authored scenes can acquire their missing components later.
+	// Repeating startup must neither discard existing children nor bind twice.
+	auto *collider = memnew(CollisionShape2D);
+	collider->set_name("Collider2D");
+	sprite->add_child(collider);
+	ERR_PRINT_OFF;
+	sprite->on_start();
+	ERR_PRINT_ON;
+	CHECK(sprite->get_collider(false) == collider);
+	CHECK(sprite->get_anim2d() == nullptr);
+	auto *animation = memnew(AnimatedSprite2D);
+	sprite->add_child(animation);
+	ERR_PRINT_OFF;
+	sprite->on_start();
+	ERR_PRINT_ON;
+	CHECK(sprite->get_anim2d() == animation);
+	CHECK(sprite->get_trigger() == nullptr);
+	auto *area = memnew(Area2D);
+	area->set_name("Area2D");
+	sprite->add_child(area);
+	ERR_PRINT_OFF;
+	sprite->on_start();
+	ERR_PRINT_ON;
+	CHECK(sprite->get_trigger() == nullptr);
+	auto *trigger = memnew(CollisionShape2D);
+	trigger->set_name("Trigger2D");
+	area->add_child(trigger);
+	sprite->on_start();
+	sprite->on_start();
+	CHECK(sprite->get_trigger() == trigger);
+	CHECK(animation->get_parent() == sprite->get_node(NodePath("RenderRoot")));
+	List<Object::Connection> connections;
+	area->get_signal_connection_list("area_entered", &connections);
+	CHECK(connections.size() == 1);
+}
+
+TEST_CASE("[SceneTree][SPX] Sprite materials reject missing shaders without changing visible state") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	const Color tint(0.2, 0.4, 0.6, 0.8);
+	manager->set_color(id, tint);
+	manager->set_material_params(id, "amount", 1);
+	manager->set_material_params_color(id, "color", Color(1, 0, 0));
+	manager->set_material_params_vec4(id, "bounds", Vector4(1, 2, 3, 4));
+	sprite->set_uv_remap(Vector4(1, 1, 0, 0));
+	CHECK(manager->get_material_params(id, "amount") == 0);
+	CHECK(Vector4(manager->get_material_params_vec4(id, "bounds")) == Vector4());
+	CHECK(Color(manager->get_material_params_color(id, "color")) == Color(GdColor()));
+	ERR_PRINT_OFF;
+	manager->set_material_shader(id, "res://missing_spx_shader.gdshader");
+	ERR_PRINT_ON;
+	CHECK(sprite->get_anim2d()->get_material().is_null());
+	CHECK(Color(manager->get_color(id)).is_equal_approx(tint));
+	CHECK(manager->get_material_shader(id) == nullptr);
+}
+
+TEST_CASE("[SceneTree][SPX] Point collision falls back to trigger geometry without readable pixels") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2(20, 30));
+	const GdObj other = manager->create_bare_sprite(Vector2(20, 30));
+	manager->set_trigger_rect(id, Vector2(5, 7), Vector2(10, 10));
+	manager->set_collider_circle(id, Vector2(), 1);
+	CHECK(manager->check_collision_with_point(id, Vector2(25, 37), true));
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(100, 100), true));
+	manager->set_visible(id, false);
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(25, 37), true));
+	CHECK(manager->check_collision_with_point(id, Vector2(25, 37), false));
+	manager->get_sprite(id)->get_trigger()->set_shape(Ref<Shape2D>());
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(25, 37), false));
+	CHECK_FALSE(manager->check_collision(id, other, true, true));
+	CHECK_FALSE(manager->check_collision_by_alpha(id, 0.5));
+	CHECK_FALSE(manager->check_collision_by_color(id, Color(1, 0, 0), 0.1, 0.5));
+	ERR_PRINT_OFF;
+	CHECK_FALSE(manager->is_anim_flipped_h(0));
+	GdArrayInfo wrong_points{ 6, GD_ARRAY_TYPE_INT64, nullptr };
+	manager->set_collider_polygon(id, Vector2(), &wrong_points);
+	ERR_PRINT_ON;
+	CHECK(Ref<CircleShape2D>(manager->get_sprite(id)->get_collider(false)->get_shape()).is_valid());
+}
+
+TEST_CASE("[SceneTree][SPX] Sprite force and impulse APIs convert SPX vectors before integration") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	manager->set_physics_mode(id, SpxSprite::DYNAMIC);
+	manager->set_use_gravity(id, false);
+	manager->set_drag(id, 0);
+	manager->set_friction(id, 0);
+	manager->set_mass(id, 2);
+	manager->add_force(id, Vector2(10, 20));
+	manager->add_impulse(id, Vector2(6, 8));
+	SceneTree::get_singleton()->physics_process(0.1);
+	CHECK(Vector2(manager->get_velocity(id)).is_equal_approx(Vector2(4, 6)));
+	CHECK(manager->get_sprite(id)->get_velocity().is_equal_approx(Vector2(4, -6)));
+	SceneTree::get_singleton()->physics_process(0.1);
+	CHECK(Vector2(manager->get_velocity(id)).is_equal_approx(Vector2(5, 8)));
+	manager->set_velocity(id, Vector2());
+	const Vector2 position = manager->get_position(id);
+	manager->move_and_slide(id);
+	CHECK(Vector2(manager->get_position(id)) == position);
+	ERR_PRINT_OFF;
+	CHECK(Vector2(manager->get_floor_normal(id)) == Vector2());
+	CHECK(Vector2(manager->get_wall_normal(id)) == Vector2());
+	ERR_PRINT_ON;
+}
+
+#ifdef THREADS_ENABLED
+TEST_CASE("[SceneTree][SPX] Sprite getters and mutations reject worker access") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2(3, 4));
+	manager->set_anim_flip_h(id, true);
+	struct Request {
+		SpxSpriteMgr *manager;
+		GdObj id;
+		Vector2 position;
+		bool flipped = true;
+		bool retrieved = true;
+		float positions[2] = { 11, 12 };
+	} request{ manager, id, Vector2(9, 9) };
+	Thread worker;
+	ERR_PRINT_OFF;
+	const auto thread = worker.start([](void *p_data) {
+		auto &data = *static_cast<Request *>(p_data);
+		data.manager->set_position(data.id, Vector2(8, 9));
+		data.position = data.manager->get_position(data.id);
+		data.flipped = data.manager->is_anim_flipped_h(data.id);
+		const float transforms[] = { 1, 0, float(data.id), 100, 200, 0, 1, 1, 0, 0, 1 };
+		const float visuals[] = { 1, float(data.id), 2, 3, 0, 0, 0, 0, 0, 0 };
+		float physics[] = { 1, 1, 0, 0, 100, 200, 0 };
+		const uint32_t low = uint32_t(data.id), high = uint32_t(uint64_t(data.id) >> 32);
+		memcpy(&physics[2], &low, sizeof(low));
+		memcpy(&physics[3], &high, sizeof(high));
+		data.manager->batch_update_transforms(transforms, 11);
+		data.manager->batch_update_visuals(visuals, 10);
+		data.manager->batch_update_physics(physics, 7);
+		data.retrieved = data.manager->batch_retrieve_positions(&data.id, 1, data.positions, 2);
+	}, &request);
+	if (worker.is_started()) {
+		worker.wait_to_finish();
+	}
+	ERR_PRINT_ON;
+	REQUIRE(thread != Thread::UNASSIGNED_ID);
+	CHECK(request.position == Vector2());
+	CHECK_FALSE(request.flipped);
+	CHECK_FALSE(request.retrieved);
+	CHECK(request.positions[0] == 11);
+	CHECK(request.positions[1] == 12);
+	CHECK(Vector2(manager->get_position(id)) == Vector2(3, 4));
+	CHECK(Vector2(manager->get_render_scale(id)) == Vector2(1, 1));
+	CHECK(Vector2(manager->get_velocity(id)) == Vector2());
+	CHECK(manager->is_anim_flipped_h(id));
+}
+#endif
+
+TEST_CASE("[SceneTree][SPX] Sprite signals stay silent while the runtime is inactive") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2());
+	auto *sprite = manager->get_sprite(id);
+	static int calls;
+	calls = 0;
+	auto count = [](GdObj) { ++calls; };
+	auto *callbacks = scene.engine->get_callbacks();
+	callbacks->func_on_sprite_animation_looped = count;
+	callbacks->func_on_sprite_animation_finished = count;
+	callbacks->func_on_sprite_screen_entered = count;
+	callbacks->func_on_sprite_screen_exited = count;
+	callbacks->func_on_trigger_enter = [](GdObj, GdObj) { ++calls; };
+	callbacks->func_on_trigger_exit = [](GdObj, GdObj) { ++calls; };
+	sprite->get_anim2d()->emit_signal("animation_looped");
+	sprite->get_anim2d()->emit_signal("animation_finished");
+	Node *notifier = sprite->get_node(NodePath("RenderRoot/VisibleNotifier2D"));
+	notifier->emit_signal("screen_entered");
+	notifier->emit_signal("screen_exited");
+	sprite->get_area2d()->emit_signal("area_entered", sprite->get_area2d());
+	sprite->get_area2d()->emit_signal("area_exited", sprite->get_area2d());
+	CHECK(calls == 0);
+}
+
+TEST_CASE("[SceneTree][SPX] Sprite texture bounds and frame offsets follow authored visuals") {
+	TestSpx::TempDirectory files("spx_frame_bounds");
+	files.write("sprite.gdshader", "shader_type canvas_item; uniform vec4 atlas_uv_rect2;");
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj id = manager->create_bare_sprite(Vector2(10.25, -20.25));
+	auto *sprite = manager->get_sprite(id);
+	auto *animation = sprite->get_anim2d();
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->add_frame("default", Ref<Texture2D>());
+	animation->set_sprite_frames(frames);
+	CHECK(sprite->get_texture() == nullptr);
+	CHECK(sprite->get_rect() == Rect2(0, 0, 1, 1));
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(8, 6));
+	frames->set_frame("default", 0, texture);
+	CHECK(sprite->get_rect() == Rect2(6.25, 17.25, 8, 6));
+	auto *viewport = sprite->get_viewport();
+	const bool snap = viewport->is_snap_2d_transforms_to_pixel_enabled();
+	viewport->set_snap_2d_transforms_to_pixel(true);
+	CHECK(sprite->get_rect() == Rect2(6, 17, 8, 6));
+	viewport->set_snap_2d_transforms_to_pixel(snap);
+	Ref<ImageTexture> empty;
+	empty.instantiate();
+	frames->set_frame("default", 0, empty);
+	CHECK(sprite->get_rect() == Rect2(10.25, 20.25, 1, 1));
+	frames->set_frame("default", 0, texture);
+	sprite->set_render_offset(Vector2(2, 3));
+	sprite->set_anim_offset(Vector2(5, 6));
+	sprite->set_dynamic_frame_offset_enabled(true);
+	CHECK(animation->get_offset() == Vector2(3, 3));
+	sprite->set_dynamic_frame_offset_enabled(false);
+	CHECK_FALSE(sprite->is_dynamic_frame_offset_enabled());
+	CHECK(animation->get_offset() == Vector2(5, 6));
+	const auto shader_path = files.file("sprite.gdshader").utf8();
+	manager->set_material_shader(id, shader_path.get_data());
+	sprite->on_start();
+	Ref<ShaderMaterial> material = animation->get_material();
+	REQUIRE(material.is_valid());
+	CHECK(Rect2(material->get_shader_parameter("atlas_uv_rect2")) == Rect2(0, 0, 1, 1));
+}
+
+TEST_CASE("[SceneTree][SPX] Sortable render and static sprites retain pivots and tree lifetime") {
+	TestSpx::EngineScene scene;
+	auto *parent = memnew(Node2D);
+	parent->set_position(Vector2(10, 20));
+	scene.root->add_child(parent);
+	auto *rendered = memnew(SpxRenderSprite);
+	auto *body = memnew(SpxStaticSprite);
+	rendered->set_sort_id(7);
+	body->set_sort_id(8);
+	rendered->set_pivot(Vector2(2, 3));
+	body->set_pivot(Vector2(2, 3));
+	CHECK(rendered->get_sort_id_internal() == 7);
+	CHECK(body->get_sort_id_internal() == 8);
+	CHECK(Vector2(rendered->get_pivot()) == Vector2(2, 3));
+	CHECK(Vector2(body->get_pivot()) == Vector2(2, 3));
+	for (Node2D *node : { static_cast<Node2D *>(rendered), static_cast<Node2D *>(body) }) {
+		auto *sortable = dynamic_cast<ISortableSprite *>(node);
+		REQUIRE(sortable != nullptr);
+		CHECK_FALSE(sortable->is_node_valid());
+		parent->add_child(node);
+		node->set_position(Vector2(5, 6));
+		CHECK(sortable->is_node_valid());
+		CHECK(sortable->is_sort_static());
+		CHECK(sortable->get_sort_position() == Vector2(13, 23));
+		sortable->set_sort_z_index(-5);
+		CHECK(sortable->get_sort_z_index() == -5);
+		CHECK(node->get_z_index() == -5);
+	}
+	CHECK(rendered->get_sort_id() == 7);
+	CHECK(body->get_sort_id() == 8);
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel sensing skips hidden distant and unreadable visuals") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	auto assign = [&](GdObj id, const Ref<Texture2D> &texture) {
+		Ref<SpriteFrames> frames;
+		frames.instantiate();
+		frames->add_frame("default", texture);
+		manager->get_sprite(id)->get_anim2d()->set_sprite_frames(frames);
+	};
+	auto solid = [](Color color) {
+		Ref<Image> image = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+		image->fill(color);
+		return SpxImageTexture::create_from_image(image);
+	};
+	const GdObj self = manager->create_bare_sprite(Vector2());
+	const GdObj near = manager->create_bare_sprite(Vector2());
+	const GdObj far = manager->create_bare_sprite(Vector2(100, 100));
+	const GdObj unreadable = manager->create_bare_sprite(Vector2());
+	assign(self, solid(Color(1, 0, 0)));
+	assign(near, solid(Color(0, 1, 0)));
+	assign(far, solid(Color(1, 0, 0)));
+	Ref<PlaceholderTexture2D> placeholder;
+	placeholder.instantiate();
+	placeholder->set_size(Vector2(8, 8));
+	assign(unreadable, placeholder);
+	manager->set_visible(near, false);
+	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
+	// The dummy renderer cannot read back the pen viewport used by color sensing.
+	ERR_PRINT_OFF;
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(1, 0, 0), 0.1, 0.5));
+	ERR_PRINT_ON;
+	CHECK_FALSE(manager->check_collision_with_sprite(self, far, 0.5, true));
+	CHECK_FALSE(manager->check_collision_with_sprite(self, unreadable, 0.5, true));
+	manager->set_visible(near, true);
+	CHECK(manager->check_collision_by_alpha(self, 0.5));
+	ERR_PRINT_OFF;
+	CHECK(manager->check_collision_by_color(self, Color(0, 1, 0), 0.1, 0.5));
+	ERR_PRINT_ON;
+	assign(unreadable, solid(Color(0, 0, 1)));
+	manager->set_z_index(unreadable, 10);
+	ERR_PRINT_OFF;
+	CHECK(manager->check_collision_by_color(self, Color(0, 0, 1), 0.1, 0.5));
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(0, 1, 0), 0.1, 0.5));
+	ERR_PRINT_ON;
+	assign(self, solid(Color(1, 0, 0, 0)));
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
+	assign(self, placeholder);
+	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(0, 0, 1), 0.1, 0.5));
+	manager->get_sprite(self)->get_anim2d()->set_sprite_frames(Ref<SpriteFrames>());
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
 }
 
 TEST_CASE("[SceneTree][SPX] Sprite physics controls preserve mode and velocity conventions") {

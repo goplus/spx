@@ -76,32 +76,32 @@ ESpxUiType SpxUiMgr::get_node_type(Node *obj) {
 		return ESpxUiType::None;
 	}
 
-	if (dynamic_cast<SpxLabel *>(obj)) {
+	if (Object::cast_to<SpxLabel>(obj)) {
 		return ESpxUiType::Label;
 	}
 
 	// CheckButton derives from Button, so identify the more specific type first.
-	if (dynamic_cast<SpxToggle *>(obj)) {
+	if (Object::cast_to<SpxToggle>(obj)) {
 		return ESpxUiType::Toggle;
 	}
 
-	if (dynamic_cast<SpxImage *>(obj)) {
+	if (Object::cast_to<SpxImage>(obj)) {
 		return ESpxUiType::Image;
 	}
 
-	if (dynamic_cast<SpxButton *>(obj)) {
+	if (Object::cast_to<SpxButton>(obj)) {
 		return ESpxUiType::Button;
 	}
 
-	if (dynamic_cast<SpxInput *>(obj)) {
+	if (Object::cast_to<SpxInput>(obj)) {
 		return ESpxUiType::Input;
 	}
 
-	if (dynamic_cast<SpxSlider *>(obj)) {
+	if (Object::cast_to<SpxSlider>(obj)) {
 		return ESpxUiType::Slider;
 	}
 
-	if (dynamic_cast<SpxControl *>(obj)) {
+	if (Object::cast_to<SpxControl>(obj)) {
 		return ESpxUiType::Control;
 	}
 	return ESpxUiType::None;

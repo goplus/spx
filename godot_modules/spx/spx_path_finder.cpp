@@ -84,6 +84,9 @@ void SpxPathFinder::setup(Vector2i grid_size, Vector2i cell_size, bool with_debu
 	}
 
 	if (root) {
+		astar->clear();
+		obstacle_cells.clear();
+		cell_occupancy.clear();
 		_setup_astar(root, grid_size, cell_size);
 
 		add_all_obstacles(root);
@@ -117,9 +120,7 @@ void SpxPathFinder::add_all_obstacles(Node *root) {
 			if (StaticBody2D *body = Object::cast_to<StaticBody2D>(child)) {
 				_process_static_obstacles(body);
 			} else if (SpxSprite *sprite = Object::cast_to<SpxSprite>(child)) {
-				if (sprite->get_physics_mode() == SpxSprite::PhysicsMode::STATIC) {
-					_process_static_obstacles(sprite);
-				}
+				_process_static_obstacles(sprite, sprite->get_physics_mode() == SpxSprite::PhysicsMode::STATIC);
 			} else if (TileMapLayer *layer = Object::cast_to<TileMapLayer>(child)) {
 				_process_tilemap_obstacles(layer);
 			}
@@ -136,7 +137,7 @@ void SpxPathFinder::set_sprite_obstacle(GdObj obj, bool enabled) {
 GdArray SpxPathFinder::find_path_spx(GdVec2 p_from, GdVec2 p_to) {
 	auto path_points = find_path(spx_to_godot_vec2(p_from), spx_to_godot_vec2(p_to));
 	auto count = path_points.size();
-	if (count < 0 || count > std::numeric_limits<int32_t>::max() / 2) {
+	if (count > std::numeric_limits<int32_t>::max() / 2) {
 		return nullptr;
 	}
 	const int32_t output_count = static_cast<int32_t>(count) * 2;
@@ -161,6 +162,7 @@ GdArray SpxPathFinder::find_path_spx(GdVec2 p_from, GdVec2 p_to) {
 }
 
 PackedVector2Array SpxPathFinder::find_path(Vector2 start, Vector2 end) {
+	_prune_removed_obstacles();
 	PackedVector2Array path;
 
 	Vector2i from = _world_to_cell(start);
@@ -186,10 +188,34 @@ Vector2 SpxPathFinder::_cell_to_world(const Vector2i &cell) const {
 			cell.y * cached_cell_size.y + cached_cell_size.y * 0.5);
 }
 
-void SpxPathFinder::_set_point_solid(int cx, int cy, PackedVector2Array &world_poly) {
-	Vector2 center = _cell_to_world(Vector2i(cx, cy));
-	if (Geometry2D::is_point_in_polygon(center, world_poly)) {
-		astar->set_point_solid(Vector2i(cx, cy), true);
+void SpxPathFinder::_replace_obstacle_cells(ObjectID p_owner, const HashSet<Vector2i> &p_cells) {
+	if (const auto *previous = obstacle_cells.getptr(p_owner)) {
+		for (const Vector2i &cell : *previous) {
+			if (--cell_occupancy[cell] == 0) {
+				cell_occupancy.erase(cell);
+				astar->set_point_solid(cell, false);
+			}
+		}
+	}
+	if (p_cells.is_empty()) {
+		obstacle_cells.erase(p_owner);
+		return;
+	}
+	obstacle_cells[p_owner] = p_cells;
+	for (const Vector2i &cell : p_cells) {
+		cell_occupancy[cell]++;
+		astar->set_point_solid(cell, true);
+	}
+}
+
+void SpxPathFinder::_prune_removed_obstacles() {
+	for (auto it = obstacle_cells.begin(); it;) {
+		const ObjectID owner = it->key;
+		++it;
+		auto *node = Object::cast_to<Node>(ObjectDB::get_instance(owner));
+		if (!node || !node->is_inside_tree() || node->is_queued_for_deletion()) {
+			_replace_obstacle_cells(owner, {});
+		}
 	}
 }
 
@@ -215,8 +241,8 @@ void SpxPathFinder::_setup_astar(Node *root, Vector2i &grid_size, Vector2i &cell
 	astar->update();
 }
 
-void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, bool add) {
-	if (!shape || !shape->get_shape().is_valid()) {
+void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *shape, HashSet<Vector2i> &r_cells) {
+	if (shape->is_disabled() || !shape->get_shape().is_valid()) {
 		return;
 	}
 
@@ -246,29 +272,28 @@ void SpxPathFinder::_process_rectangle_shape(Node2D *owner, CollisionShape2D *sh
 		max_p = max_p.max(world_points[i]);
 	}
 
-	Vector2i start = _world_to_cell(min_p);
-	Vector2i end = _world_to_cell(max_p);
+	const Rect2i region = astar->get_region();
+	Vector2i start = _world_to_cell(min_p).max(region.position);
+	Vector2i end = _world_to_cell(max_p).min(region.get_end() - Vector2i(1, 1));
 
 	for (int x = start.x; x <= end.x; x++) {
 		for (int y = start.y; y <= end.y; y++) {
 			// Now assume no rotation, otherwise use Geometry2D::is_point_in_polygon
-			astar->set_point_solid(Vector2i(x, y), add);
+			r_cells.insert(Vector2i(x, y));
 		}
 	}
 }
 
 void SpxPathFinder::_process_static_obstacles(Node2D *body, bool add) {
-	if (add && !body->is_visible_in_tree()) {
-		return;
-	}
-
-	for (int j = 0; j < body->get_child_count(); j++) {
-		Node *child = body->get_child(j);
-
-		if (CollisionShape2D *shape = Object::cast_to<CollisionShape2D>(child)) {
-			_process_rectangle_shape(body, shape, add);
+	HashSet<Vector2i> cells;
+	if (add && body->is_visible_in_tree()) {
+		for (int j = 0; j < body->get_child_count(); j++) {
+			if (auto *shape = Object::cast_to<CollisionShape2D>(body->get_child(j))) {
+				_process_rectangle_shape(body, shape, cells);
+			}
 		}
 	}
+	_replace_obstacle_cells(body->get_instance_id(), cells);
 }
 
 void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_id) {
@@ -276,6 +301,13 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_
 		return;
 	}
 
+	HashSet<Vector2i> cells;
+	Ref<TileSet> tileset = layer->get_tile_set();
+	if (tileset.is_null() || p_layer_id < 0 || p_layer_id >= tileset->get_physics_layers_count()) {
+		_replace_obstacle_cells(layer->get_instance_id(), cells);
+		return;
+	}
+	const Rect2i region = astar->get_region();
 	Array used_cells = layer->get_used_cells();
 
 	for (int i = 0; i < used_cells.size(); ++i) {
@@ -293,7 +325,10 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_
 
 		Vector2 cell_local = layer->map_to_local(cell);
 		Vector2 cell_global = layer->to_global(cell_local);
-		astar->set_point_solid(_world_to_cell(cell_global), true);
+		Vector2i center_cell = _world_to_cell(cell_global);
+		if (region.has_point(center_cell)) {
+			cells.insert(center_cell);
+		}
 
 		Transform2D xform = layer->get_global_transform();
 
@@ -328,16 +363,20 @@ void SpxPathFinder::_process_tilemap_obstacles(TileMapLayer *layer, int p_layer_
 				max_w = max_w.max(world_poly[k]);
 			}
 
-			Vector2i min_cell = _world_to_cell(min_w);
-			Vector2i max_cell = _world_to_cell(max_w);
+			Vector2i min_cell = _world_to_cell(min_w).max(region.position);
+			Vector2i max_cell = _world_to_cell(max_w).min(region.get_end() - Vector2i(1, 1));
 
 			for (int cx = min_cell.x; cx <= max_cell.x; ++cx) {
 				for (int cy = min_cell.y; cy <= max_cell.y; ++cy) {
-					_set_point_solid(cx, cy, world_poly);
+					Vector2i candidate(cx, cy);
+					if (Geometry2D::is_point_in_polygon(_cell_to_world(candidate), world_poly)) {
+						cells.insert(candidate);
+					}
 				}
 			}
 		}
 	}
+	_replace_obstacle_cells(layer->get_instance_id(), cells);
 }
 
 void SpxPathFinder::_process_sprite_obstacle(GdObj obj, bool add) {
@@ -347,7 +386,7 @@ void SpxPathFinder::_process_sprite_obstacle(GdObj obj, bool add) {
 		return;
 	}
 
-	if (sprite->get_physics_mode() != SpxSprite::PhysicsMode::STATIC) {
+	if (add && sprite->get_physics_mode() != SpxSprite::PhysicsMode::STATIC) {
 		print_error("Skip processing non-static obstacles.");
 		return;
 	}
@@ -471,7 +510,7 @@ void PathDebugDrawer::input(const Ref<InputEvent> &p_event) {
 		Vector2 mouse_pos = get_global_mouse_position();
 		if (dragging == DRAG_START) {
 			start = mouse_pos;
-		} else if (dragging == DRAG_END) {
+		} else {
 			end = mouse_pos;
 		}
 

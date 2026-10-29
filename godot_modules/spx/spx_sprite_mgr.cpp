@@ -246,7 +246,7 @@ void SpxSpriteMgr::set_type_name(GdObj obj, GdString type_name) {
 
 void SpxSpriteMgr::set_child_position(GdObj obj, GdString path, GdVec2 pos) {
 	SPX_REQUIRE_SPRITE_VOID()
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		child->set_position(spx_to_godot_vec2(pos));
 	}
@@ -254,7 +254,7 @@ void SpxSpriteMgr::set_child_position(GdObj obj, GdString path, GdVec2 pos) {
 
 GdVec2 SpxSpriteMgr::get_child_position(GdObj obj, GdString path) {
 	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		auto pos = child->get_position();
 		return godot_to_spx_vec2(pos);
@@ -264,7 +264,7 @@ GdVec2 SpxSpriteMgr::get_child_position(GdObj obj, GdString path) {
 
 void SpxSpriteMgr::set_child_rotation(GdObj obj, GdString path, GdFloat rot) {
 	SPX_REQUIRE_SPRITE_VOID()
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		child->set_rotation(rot);
 	}
@@ -272,7 +272,7 @@ void SpxSpriteMgr::set_child_rotation(GdObj obj, GdString path, GdFloat rot) {
 
 GdFloat SpxSpriteMgr::get_child_rotation(GdObj obj, GdString path) {
 	SPX_REQUIRE_SPRITE_RETURN(0)
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		return child->get_rotation();
 	}
@@ -281,7 +281,7 @@ GdFloat SpxSpriteMgr::get_child_rotation(GdObj obj, GdString path) {
 
 void SpxSpriteMgr::set_child_scale(GdObj obj, GdString path, GdVec2 scale) {
 	SPX_REQUIRE_SPRITE_VOID()
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		child->set_scale(scale);
 	}
@@ -289,7 +289,7 @@ void SpxSpriteMgr::set_child_scale(GdObj obj, GdString path, GdVec2 scale) {
 
 GdVec2 SpxSpriteMgr::get_child_scale(GdObj obj, GdString path) {
 	SPX_REQUIRE_SPRITE_RETURN(GdVec2())
-	auto child = (Node2D *)sprite->get_node(SpxStr(path));
+	auto *child = Object::cast_to<Node2D>(sprite->get_node_or_null(SpxStr(path)));
 	if (child != nullptr) {
 		return child->get_scale();
 	}
@@ -686,11 +686,7 @@ void SpxSpriteMgr::set_anim_flip_h(GdObj obj, GdBool p_flip) {
 }
 
 GdBool SpxSpriteMgr::is_anim_flipped_h(GdObj obj) {
-	auto sprite = get_sprite(obj);
-	if (sprite == nullptr) {
-		print_error("try to get property of a null sprite" + itos(obj));
-		return false;
-	}
+	SPX_REQUIRE_SPRITE_RETURN(false)
 	return sprite->is_anim_flipped_h();
 }
 

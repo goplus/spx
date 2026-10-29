@@ -113,12 +113,6 @@ Error SimpleAudioWriter::write_audio_chunk(const int32_t *p_audio_data, int p_fr
 	f->store_32(data_size);
 	f->store_buffer((const uint8_t *)p_audio_data, data_size);
 
-	// Byte alignment
-	if (data_size & 1) {
-		f->store_8(0);
-		data_size++;
-	}
-
 	audio_chunk_sizes.push_back(data_size);
 	audio_chunk_count++;
 

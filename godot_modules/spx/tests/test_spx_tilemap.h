@@ -226,11 +226,12 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and pres
 	auto &physics = map.tileset.sources.write[0].tiles.write[0].physics;
 	const SpxTilePhysicsData valid = physics[0];
 	physics.clear();
-	for (int layer : { -1, 0, 1 }) {
+	for (int layer : { -1, 0, 0, 1 }) {
 		SpxTilePhysicsData entry = valid;
 		entry.layer = layer;
 		physics.push_back(entry);
 	}
+	physics.write[1].polygons.push_back(Vector<float>({ 0, 0, 1, 1 }));
 	REQUIRE(map.save_to_file(files.file("map.json")));
 	TestSpx::EngineScene scene;
 	const CharString path = files.file("map.json").utf8();
@@ -246,6 +247,37 @@ TEST_CASE("[SceneTree][SPX] Tilemap loader skips invalid physics layers and pres
 	REQUIRE(tile != nullptr);
 	CHECK(tile->get_collision_polygons_count(0) == 1);
 	CHECK(tile->get_collision_polygon_points(0, 0) == Vector<Vector2>({ Vector2(-4, -4), Vector2(4, -4), Vector2(0, 4) }));
+}
+
+TEST_CASE("[SceneTree][SPX] Tilemap names derive from paths and unsupported sources do not create atlases") {
+	TestSpx::TempDirectory files("spx_tilemap_names");
+	SpxTileMapData map;
+	REQUIRE(map.from_json(JSON::parse_string(R"({"tileset":{"sources":[{"id":1,"type":"collection"},{"id":2,"type":"atlas","texture":""},{"id":3,"type":"atlas","texture":"missing.png"}]},"layers":[{"name":"empty","tile_map_data":"!!!"}]})")));
+	REQUIRE(map.save_to_file(files.file("map.json")));
+	REQUIRE(map.save_to_file(files.file("bare.json")));
+	TestSpx::EngineScene scene;
+	auto *loader = scene.engine->get_tilemapparser();
+	const int children = scene.root->get_child_count();
+	const CharString missing = files.file("missing.json").utf8();
+	ERR_PRINT_OFF;
+	loader->load_tilemap(missing.get_data());
+	ERR_PRINT_ON;
+	CHECK(scene.root->get_child_count() == children);
+	const CharString path = files.file("map.json").utf8();
+	const CharString directory_name = files.path.get_file().utf8();
+	ERR_PRINT_OFF;
+	loader->load_tilemap(path.get_data());
+	ERR_PRINT_ON;
+	CHECK(loader->has_tilemap(directory_name.get_data()));
+	auto *layer = Object::cast_to<TileMapLayer>(scene.root->get_child(-1));
+	REQUIRE(layer);
+	CHECK(layer->get_tile_set()->get_source_count() == 0);
+	scene.engine->get_res()->set_game_datas(files.path, {});
+	ERR_PRINT_OFF;
+	loader->load_tilemap("bare.json");
+	ERR_PRINT_ON;
+	CHECK(loader->has_tilemap("bare"));
+	CHECK(loader->get_tilemap_layer_count("bare") == 1);
 }
 
 } // namespace TestSpxTilemap

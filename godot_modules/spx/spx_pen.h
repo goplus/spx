@@ -45,7 +45,6 @@ private:
 	GdObj id;
 	SpxPenSurface *surface = nullptr;
 	Vector2 last_draw_pos;
-	bool has_last_draw_pos = false;
 	bool needs_start_cap = true;
 	bool is_pen_down = false;
 	float min_draw_distance = 1.0f;

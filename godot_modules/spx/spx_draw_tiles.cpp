@@ -137,26 +137,18 @@ void SpxDrawTiles::_notification(int p_what) {
 		_ready();
 	}
 
-	if (p_what == NOTIFICATION_PROCESS) {
-		_process(get_process_delta_time());
-	}
-
 	if (p_what == NOTIFICATION_DRAW) {
 		_draw();
 	}
 }
 
 void SpxDrawTiles::_ready() {
-	set_process(true);
 	set_process_input(true);
 	set_z_index(1000);
 
 	shared_tile_set.instantiate();
 	shared_tile_set->set_tile_size(default_cell_size);
 	update_default_collision_rect();
-}
-
-void SpxDrawTiles::_process(double delta) {
 }
 
 void SpxDrawTiles::update_default_collision_rect() {
@@ -197,7 +189,7 @@ void SpxDrawTiles::_draw() {
 			.set_mouse_pos(get_global_mouse_position())
 			.set_current_texture(current_texture)
 			.set_flipped_axis(axis_flipped)
-			.set_axis_dragging(axis_flipped);
+			.set_axis_dragging(axis_dragging);
 
 	renderer.draw(this, ctx);
 }
@@ -330,7 +322,7 @@ void SpxDrawTiles::set_tile_texture_spx(GdString texture_path, const Vector<Vect
 		tex = path_cached_textures_bimap.get_value(path);
 	} else {
 		tex = resMgr->load_texture(path, true);
-		if (!tex.is_null() && tex.is_valid()) {
+		if (tex.is_valid()) {
 			path_cached_textures_bimap.insert(path, tex);
 		}
 	}
@@ -361,6 +353,9 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	}
 
 	int source_id = _get_or_create_source_id(current_texture);
+	if (source_id == TileSet::INVALID_SOURCE) {
+		return;
+	}
 
 	for (int i = 0; i + 1 < len; i += 2) {
 		Vector2 pos = { position_data[i], position_data[i + 1] };

@@ -108,6 +108,7 @@ TEST_CASE("[SceneTree][SPX] Path finder tests tile collision polygons at cell ce
 
 class DebugDrawer : public PathDebugDrawer {
 public:
+	DebugDrawer() = default;
 	explicit DebugDrawer(const Ref<SpxPathFinder> &finder) :
 			PathDebugDrawer(finder) {}
 	using PathDebugDrawer::input;
@@ -150,12 +151,21 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 		drawer->input(e);
 		MessageQueue::get_singleton()->flush();
 	};
+	click(MouseButton::MIDDLE, true);
+	click(MouseButton::MIDDLE, false);
+	SUBCASE("Choose the end point before the start point") {
+		motion(Vector2(40, -8));
+		click(MouseButton::RIGHT, true);
+		click(MouseButton::RIGHT, false);
+	}
 	motion(Vector2(-40, -8));
 	click(MouseButton::LEFT, true);
 	click(MouseButton::LEFT, false);
 	motion(Vector2(40, -8));
 	click(MouseButton::RIGHT, true);
 	click(MouseButton::RIGHT, false);
+	click(MouseButton::LEFT, true); // A distant start point is not draggable here.
+	click(MouseButton::LEFT, false);
 	auto path = finder->find_path(Vector2(-40, -8), Vector2(40, -8));
 	REQUIRE(path.size() == 6);
 	drawer->set_path(path);
@@ -164,6 +174,8 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 	motion(Vector2(24, 24));
 	click(MouseButton::RIGHT, false);
 	motion(Vector2(-40, -8));
+	click(MouseButton::RIGHT, true); // A distant end point is not draggable here.
+	click(MouseButton::RIGHT, false);
 	click(MouseButton::LEFT, true);
 	motion(Vector2(-24, 24));
 	click(MouseButton::LEFT, false);
@@ -171,6 +183,11 @@ TEST_CASE("[SceneTree][SPX] Navigation debug gestures retain a usable grid and d
 	motion(Vector2());
 	click(MouseButton::LEFT, true);
 	memdelete(drawer);
+	auto *unconfigured = memnew(DebugDrawer);
+	viewport->add_child(unconfigured);
+	unconfigured->input(Ref<InputEvent>());
+	MessageQueue::get_singleton()->flush();
+	memdelete(unconfigured);
 	finder->reset();
 	CHECK(finder->get_size() == Vector2i());
 }
@@ -204,6 +221,131 @@ TEST_CASE("[SceneTree][SPX] Path finder ignores unsupported and missing obstacle
 	for (const Vector2 &point : direct) {
 		CHECK_FALSE(finder->is_cell_solid(Vector2i((point / Vector2(16, 16)).floor())));
 	}
+}
+
+TEST_CASE("[SceneTree][SPX] Navigation retains overlapping obstacle ownership across updates and deletion") {
+	TestSpx::EngineScene scene;
+	Ref<SpxPathFinder> finder;
+	finder.instantiate();
+	finder->setup(Vector2i(16, 16), Vector2i(16, 16));
+	auto *sprites = scene.engine->get_sprite();
+	auto create_obstacle = [&](Vector2 position) {
+		GdObj id = sprites->create_bare_sprite(position);
+		sprites->set_physics_mode(id, SpxSprite::STATIC);
+		sprites->set_collider_rect(id, Vector2(), Vector2(16, 16));
+		return id;
+	};
+	GdObj first = create_obstacle(Vector2(8, -8));
+	GdObj second = create_obstacle(Vector2(24, -8));
+	finder->set_sprite_obstacle(first, true);
+	finder->set_sprite_obstacle(first, true);
+	finder->set_sprite_obstacle(second, true);
+	CHECK(finder->is_cell_solid(Vector2i(0, 0)));
+	CHECK(finder->is_cell_solid(Vector2i(1, 0)));
+	finder->set_sprite_obstacle(first, false);
+	finder->set_sprite_obstacle(first, false);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(0, 0)));
+	CHECK(finder->is_cell_solid(Vector2i(1, 0)));
+	finder->set_sprite_obstacle(second, false);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
+
+	finder->set_sprite_obstacle(first, true);
+	sprites->get_sprite(first)->set_position(Vector2(56, 8));
+	finder->set_sprite_obstacle(first, true);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(0, 0)));
+	CHECK(finder->is_cell_solid(Vector2i(3, 0)));
+	// Removal uses the stored footprint even after further movement or mode changes.
+	sprites->get_sprite(first)->set_position(Vector2(-40, 8));
+	sprites->set_physics_mode(first, SpxSprite::NO_PHYSICS);
+	finder->set_sprite_obstacle(first, false);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(3, 0)));
+	sprites->set_physics_mode(first, SpxSprite::STATIC);
+	finder->set_sprite_obstacle(first, true);
+	CHECK(finder->is_cell_solid(Vector2i(-3, 0)));
+	sprites->set_physics_mode(first, SpxSprite::NO_PHYSICS);
+	finder->add_all_obstacles(scene.root);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(-3, 0)));
+
+	sprites->set_physics_mode(first, SpxSprite::STATIC);
+	sprites->get_sprite(first)->set_position(Vector2(24, 8));
+	finder->set_sprite_obstacle(first, true);
+	finder->set_sprite_obstacle(second, true);
+	sprites->destroy_sprite(first);
+	finder->find_path(Vector2(-40, 8), Vector2(72, 8));
+	CHECK(finder->is_cell_solid(Vector2i(1, 0)));
+	sprites->destroy_sprite(second);
+	const auto direct = finder->find_path(Vector2(-40, 8), Vector2(72, 8));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
+	CHECK(direct.size() == 8);
+}
+
+TEST_CASE("[SceneTree][SPX] Removing a sprite preserves tile collision cells and rescanning replaces tile occupancy") {
+	TestSpx::EngineScene scene;
+	Ref<SpxPathFinder> finder;
+	finder.instantiate();
+	finder->setup(Vector2i(8, 8), Vector2i(16, 16));
+	Ref<PlaceholderTexture2D> texture;
+	texture.instantiate();
+	texture->set_size(Vector2(16, 16));
+	Ref<TileSetAtlasSource> atlas;
+	atlas.instantiate();
+	atlas->set_texture(texture);
+	atlas->set_texture_region_size(Vector2i(16, 16));
+	atlas->create_tile(Vector2i());
+	Ref<TileSet> tileset;
+	tileset.instantiate();
+	tileset->set_tile_size(Vector2i(16, 16));
+	tileset->add_physics_layer();
+	tileset->add_source(atlas, 0);
+	auto *data = atlas->get_tile_data(Vector2i(), 0);
+	REQUIRE(data);
+	data->set_collision_polygons_count(0, 1);
+	data->set_collision_polygon_points(0, 0, Vector<Vector2>({ Vector2(-8, -8), Vector2(8, -8), Vector2(8, 8), Vector2(-8, 8) }));
+	auto *layer = memnew(TileMapLayer);
+	layer->set_tile_set(tileset);
+	layer->set_cell(Vector2i(), 0, Vector2i());
+	scene.root->add_child(layer);
+	auto *sprites = scene.engine->get_sprite();
+	GdObj sprite = sprites->create_bare_sprite(Vector2(8, -8));
+	sprites->set_physics_mode(sprite, SpxSprite::STATIC);
+	sprites->set_collider_rect(sprite, Vector2(), Vector2(16, 16));
+	finder->add_all_obstacles(scene.root);
+	finder->add_all_obstacles(scene.root);
+	finder->set_sprite_obstacle(sprite, false);
+	CHECK(finder->is_cell_solid(Vector2i()));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
+	sprites->get_sprite(sprite)->hide();
+	layer->erase_cell(Vector2i());
+	finder->add_all_obstacles(scene.root);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
+	layer->set_cell(Vector2i(), 0, Vector2i());
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i()));
+	data->set_collision_polygons_count(0, 0);
+	finder->add_all_obstacles(scene.root);
+	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
+	data->set_collision_polygons_count(0, 1);
+	data->set_collision_polygon_points(0, 0, Vector<Vector2>({ Vector2(-8, -8), Vector2(8, -8), Vector2(8, 8), Vector2(-8, 8) }));
+	layer->set_cell(Vector2i(100, 100), 0, Vector2i());
+	layer->set_cell(Vector2i(1, 0), 99, Vector2i());
+	auto *empty_layer = memnew(TileMapLayer);
+	scene.root->add_child(empty_layer);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i()));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i(1, 0)));
+	Ref<TileSet> empty_tileset;
+	empty_tileset.instantiate();
+	empty_layer->set_tile_set(empty_tileset);
+	finder->add_all_obstacles(scene.root);
+	scene.root->remove_child(layer);
+	finder->find_path(Vector2(-24, 8), Vector2(24, 8));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
+	scene.root->add_child(layer);
+	finder->add_all_obstacles(scene.root);
+	CHECK(finder->is_cell_solid(Vector2i()));
+	memdelete(layer);
+	finder->find_path(Vector2(-24, 8), Vector2(24, 8));
+	CHECK_FALSE(finder->is_cell_solid(Vector2i()));
 }
 
 } // namespace TestSpxPathFinder

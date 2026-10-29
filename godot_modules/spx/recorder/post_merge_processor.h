@@ -150,7 +150,6 @@ private:
 
 	// Helper methods for timestamp-based interleaving
 	void calculate_chunk_timestamps(const Vector<AviFileInfo::IndexEntry> &chunks, const AviFileInfo &info, bool is_video, Vector<TimestampedChunk> &timestamped_chunks);
-	bool validate_av_sync(uint64_t video_ts, uint64_t audio_ts);
 	Error write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, const TimestampedChunk &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Utility methods

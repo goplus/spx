@@ -72,8 +72,6 @@ private:
 	// Audio ring buffer
 	RingBuffer<int32_t> audio_ring_buffer;
 	mutable Mutex buffer_mutex;
-	std::atomic<uint32_t> buffer_read_pos{ 0 };
-	std::atomic<uint32_t> buffer_write_pos{ 0 };
 	uint32_t buffer_size = 0;
 
 	// Temporary buffers

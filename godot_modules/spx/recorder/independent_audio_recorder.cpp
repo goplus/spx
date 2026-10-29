@@ -15,8 +15,6 @@
 IndependentAudioRecorder::IndependentAudioRecorder() {
 	recording_active.store(false);
 	thread_started.store(false);
-	buffer_read_pos.store(0);
-	buffer_write_pos.store(0);
 	buffer_size = 0;
 	recording_start_time = 0;
 }
@@ -88,8 +86,6 @@ Error IndependentAudioRecorder::start_recording() {
 	}
 
 	audio_ring_buffer.clear();
-	buffer_read_pos.store(0);
-	buffer_write_pos.store(0);
 
 	recording_active.store(true);
 	recording_start_time = OS::get_singleton()->get_ticks_usec();
@@ -203,8 +199,6 @@ void IndependentAudioRecorder::reset_statistics() {
 	MutexLock lock(stats_mutex);
 
 	stats = AudioStats();
-	buffer_read_pos.store(0);
-	buffer_write_pos.store(0);
 	recording_start_time = 0;
 }
 
@@ -296,23 +290,11 @@ bool IndependentAudioRecorder::process_audio_chunk(uint64_t current_recording_ti
 }
 
 bool IndependentAudioRecorder::read_audio_chunk(Vector<int32_t> &output_buffer, uint32_t requested_samples) {
-	uint32_t available = get_available_samples();
-
-	if (available < requested_samples) {
-		return false; // Not enough data
-	}
-
 	MutexLock lock(buffer_mutex);
-
-	int samples_read = audio_ring_buffer.read(output_buffer.ptrw(), requested_samples);
-
-	if (samples_read < (int)requested_samples) {
-		// Fill the remaining samples with 0
-		for (int i = samples_read; i < (int)requested_samples; i++) {
-			output_buffer.write[i] = 0;
-		}
+	if (uint32_t(audio_ring_buffer.data_left()) < requested_samples) {
+		return false;
 	}
-
+	audio_ring_buffer.read(output_buffer.ptrw(), requested_samples);
 	return true;
 }
 
@@ -351,10 +333,4 @@ void IndependentAudioRecorder::handle_buffer_underrun() {
 void IndependentAudioRecorder::handle_buffer_overrun() {
 	MutexLock lock(stats_mutex);
 	stats.buffer_overruns++;
-
-	// Skip the oldest data to make space
-	uint32_t samples_to_skip = config.chunk_size * config.channels;
-	uint32_t read_pos = buffer_read_pos.load();
-	read_pos = (read_pos + samples_to_skip) % buffer_size;
-	buffer_read_pos.store(read_pos);
 }
