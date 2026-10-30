@@ -79,7 +79,7 @@ func TestAnimationCancellationCleansNativeResources(t *testing.T) {
 				if continued || !state.IsCanceled || state.OnPlayAudioRestartPending || state.OnPlayAudioPlaybackID != 0 {
 					t.Fatalf("canceled playback continued=%v, state=%+v", continued, state)
 				}
-				if anim.sprite.isDestroyed() || anim.sprite.runtimeState.IsAnimating || len(anim.activeTweenStates) != 0 || anim.curAnimState != nil {
+				if anim.sprite.isDestroyed() || anim.sprite.runtimeState.isAnimating || len(anim.activeTweenStates) != 0 || anim.curAnimState != nil {
 					t.Fatal("cancellation left animation state or destroyed the sprite")
 				}
 				if audio.playing[id] || len(audio.stops) != 1 || audio.stops[0] != id || sprites.velocity != (mathf.Vec2{}) {
@@ -107,7 +107,7 @@ func TestAnimationInitializationFailureReleasesAudio(t *testing.T) {
 	if recovered != failure {
 		t.Fatalf("panic = %v, want original failure", recovered)
 	}
-	if anim.curAnimState != nil || anim.sprite.runtimeState.IsAnimating || len(audio.stops) != 1 || audio.playing[1] {
+	if anim.curAnimState != nil || anim.sprite.runtimeState.isAnimating || len(audio.stops) != 1 || audio.playing[1] {
 		t.Fatalf("failed initialization left playback=%v, audio stops=%v", anim.curAnimState, audio.stops)
 	}
 }
@@ -148,7 +148,7 @@ func TestAnimationCleanupSkipsDestroyedProxy(t *testing.T) {
 	if sprites.pauses != 0 {
 		t.Fatal("cleanup called the destroyed proxy")
 	}
-	if !state.IsCanceled || state.OnPlayAudioPlaybackID != 0 || audio.playing[1] || anim.sprite.runtimeState.IsAnimating {
+	if !state.IsCanceled || state.OnPlayAudioPlaybackID != 0 || audio.playing[1] || anim.sprite.runtimeState.isAnimating {
 		t.Fatal("destroyed playback retained local state or audio")
 	}
 }
@@ -162,7 +162,7 @@ func TestBlockingAnimationCancellationPreservesReplacement(t *testing.T) {
 	replacement := anim.curAnimState
 	co.Stop(first)
 	joinAnimationThread(t, co, first)
-	if anim.curAnimState != replacement || replacement.IsCanceled || !anim.sprite.runtimeState.IsAnimating || !sprites.playing {
+	if anim.curAnimState != replacement || replacement.IsCanceled || !anim.sprite.runtimeState.isAnimating || !sprites.playing {
 		t.Fatal("old waiter changed replacement playback")
 	}
 	co.Stop(second)
@@ -311,7 +311,7 @@ func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
 			case "other animation":
 				state.Name = "other"
 			case "unbound":
-				anim.sprite.runtimeState.SyncSprite = nil
+				anim.sprite.runtimeState.syncSprite = nil
 			}
 			anim.stopAnimation(name)
 			if mode == "matching" {
@@ -327,13 +327,13 @@ func TestStopAnimationOnlyStopsMatchingLivePlayback(t *testing.T) {
 
 func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
 	co, anim, sprites, _ := setupAnimationLifecycle(t)
-	anim.sprite.spriteState.IsVisible = true
+	anim.sprite.spriteState.isVisible = true
 	anim.shared.defaultAnimation = "walk"
 	anim.playDefaultAnim()
 	if !anim.defaultAnimActive || !sprites.playing {
 		t.Fatal("configured default animation did not start")
 	}
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	sprites.play = func() { anim.cancelAnimState(anim.curAnimState) }
 	finished := false
 	thread := co.Create(anim.sprite, func(coroutine.Thread) {
@@ -342,7 +342,7 @@ func TestDefaultAnimationPlaybackAndCancellationDuringStart(t *testing.T) {
 	})
 	co.Update()
 	joinAnimationThread(t, co, thread)
-	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.IsAnimating {
+	if !finished || anim.curAnimState == nil || !anim.curAnimState.IsCanceled || anim.sprite.runtimeState.isAnimating {
 		t.Fatal("cancellation during start did not release the blocking animation")
 	}
 }
@@ -383,7 +383,7 @@ func setupAnimationLifecycle(t *testing.T) (*coroutine.Coroutines, *animationCom
 	enginewrap.Init(engine.WaitMainThread)
 	anim := newTestAnimationComponent()
 	anim.sprite.scriptEventBindings.bind(&scriptEventRegistry{}, anim.sprite)
-	anim.sprite.spriteState.IsVisible = false
+	anim.sprite.spriteState.isVisible = false
 	anim.sprite.g.physicsEnabled = true
 	anim.sprite.physics().physicsMode = DynamicPhysics
 	initTestMotionComponents(anim.sprite, 0, 0)

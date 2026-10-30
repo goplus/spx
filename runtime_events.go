@@ -79,7 +79,7 @@ func (p *scriptEventBindings) OnStart(onStart func()) {
 	if p.scriptEventRegistry.manager.TryAddStart(sink) {
 		return
 	}
-	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.Cloned {
+	if sprite, ok := sink.Owner.(*SpriteImpl); ok && sprite.spriteState.cloned {
 		return
 	}
 	spxlog.Warn("Event: ignoring late OnStart registration for %s", nameOf(sink.Owner))

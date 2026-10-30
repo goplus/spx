@@ -489,7 +489,7 @@ func TestKeyHandlerIdentityIncludesRegistrationAndOwner(t *testing.T) {
 	game.OnKey__0(KeySpace, run)
 	game.OnKey__0(KeySpace, run)
 	clone := &SpriteImpl{g: game}
-	clone.spriteState.Cloned = true
+	clone.spriteState.cloned = true
 	clone.scriptEventBindings.bind(&game.scriptEvents, clone)
 	clone.OnKey__0(KeySpace, run)
 	game.scriptEvents.doWhenKeyPressed(KeySpace)

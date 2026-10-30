@@ -79,7 +79,7 @@ func (p *Game) setupBackdrop() {
 	if layout.RepeatScale != nil {
 		p.setMaterialParamsVec4("repeat_scale", *layout.RepeatScale, false)
 	}
-	p.runtimeState.Scale = 1
+	p.runtimeState.scale = 1
 	engine.WaitMainThread(func() {
 		p.applyLayerUpdate()
 		p.applyCostumeTexture()
@@ -88,11 +88,11 @@ func (p *Game) setupBackdrop() {
 	if p.displayState.MapMode == coreproject.MapModeActualSize {
 		x, y := getCostumeRenderOffset(p.currentCostume(), p.currentCostume().pivot, layout.ScaleX, layout.ScaleY)
 		spriteMgr.SetPosition(
-			p.runtimeState.SyncSprite.GetId(),
+			p.runtimeState.syncSprite.GetId(),
 			mathf.NewVec2(x, y),
 		)
 	}
-	spriteMgr.SetScale(p.runtimeState.SyncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
+	spriteMgr.SetScale(p.runtimeState.syncSprite.GetId(), mathf.NewVec2(layout.ScaleX, layout.ScaleY))
 }
 
 // -----------------------------------------------------------------------------

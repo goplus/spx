@@ -100,7 +100,7 @@ func TestCameraFollowUpdatesOnlyWhenTargetChanges(t *testing.T) {
 	if mgr.position != mathf.NewVec2(21, 34) || mgr.positionWrites != 2 {
 		t.Fatalf("changed follow update = %v, writes = %d", mgr.position, mgr.positionWrites)
 	}
-	if camera.observedFollowVersion != sprite.spriteState.VisualVersion {
+	if camera.observedFollowVersion != sprite.spriteState.visualVersion {
 		t.Fatal("camera did not acknowledge the target's visual version")
 	}
 	camera.follow(nil)
@@ -157,7 +157,7 @@ func TestCameraFollowObservesPhysicsPositionChanges(t *testing.T) {
 	sprite := newPhysicsPositionTestSprite(1, 2)
 	camera := &cameraImpl{
 		followTarget:          sprite,
-		observedFollowVersion: sprite.spriteState.VisualVersion,
+		observedFollowVersion: sprite.spriteState.visualVersion,
 	}
 
 	if changed, _ := camera.getFollowPos(); changed {
@@ -173,7 +173,7 @@ func TestCameraFollowObservesPhysicsPositionChanges(t *testing.T) {
 		t.Fatalf("camera follow position = (%v, %v), want (3, 4)", pos.X, pos.Y)
 	}
 
-	camera.observedFollowVersion = sprite.spriteState.VisualVersion
+	camera.observedFollowVersion = sprite.spriteState.visualVersion
 	if changed, _ := camera.getFollowPos(); changed {
 		t.Fatal("observed follow target still invalidated the camera")
 	}

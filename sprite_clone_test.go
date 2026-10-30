@@ -110,6 +110,7 @@ type spyCloneSpriteMgr struct {
 	nextID     pkgengine.Object
 	zIndexes   map[pkgengine.Object]int64
 	operations []cloneProxyOperation
+	shaderIDs  []pkgengine.Object
 }
 
 type cloneLimitSprite struct {
@@ -156,14 +157,25 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	if got := dest.CostumeIndex(); got != 0 {
 		t.Fatalf("runtime clone costume = %d, want default costume 0 after awake", got)
 	}
-	if !dest.spriteState.HasOnCloned || !*source.sawAwakeInMain {
+	if !dest.spriteState.hasOnCloned || !*source.sawAwakeInMain {
 		t.Fatal("runtime clone did not run Main after awake")
 	}
-	if dest.runtimeState.SyncSprite == nil {
+	if dest.runtimeState.syncSprite == nil {
 		t.Fatal("runtime clone proxy was not initialized")
 	}
 	if !dest.isCloneProxyPublicationBlocked() {
 		t.Fatal("runtime clone publication state was not created")
+	}
+}
+
+func TestSpriteInitFromCopiesDefaultCostumeIndex(t *testing.T) {
+	source := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 3}}
+	dest := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 1}}
+
+	dest.InitFrom(source)
+
+	if got := dest.spriteState.defaultCostumeIndex; got != source.spriteState.defaultCostumeIndex {
+		t.Fatalf("default costume index = %d, want %d", got, source.spriteState.defaultCostumeIndex)
 	}
 }
 
@@ -564,13 +576,13 @@ func TestCloneSpriteInsertsImmediatelyBehindSource(t *testing.T) {
 		t.Fatalf("shape[3] = %v, want front sprite", shapes[3])
 	}
 
-	if got, want := source.runtimeState.Layer, 3; got != want {
+	if got, want := source.runtimeState.layer, 3; got != want {
 		t.Fatalf("source layer = %d, want %d", got, want)
 	}
-	if got, want := cloned.runtimeState.Layer, 2; got != want {
+	if got, want := cloned.runtimeState.layer, 2; got != want {
 		t.Fatalf("clone layer = %d, want %d", got, want)
 	}
-	if got, want := front.runtimeState.Layer, 4; got != want {
+	if got, want := front.runtimeState.layer, 4; got != want {
 		t.Fatalf("front layer = %d, want %d", got, want)
 	}
 }
@@ -584,10 +596,10 @@ func TestCloneSpriteSynchronizesFinalLayerBeforePublication(t *testing.T) {
 	source.sawAwakeInMain = nil
 	source.onClonedFired = nil
 	source.clonedDone = nil
-	source.runtimeState.Layer = firstSpriteLayer + 6
-	source.runtimeState.IsLayerDirty = true
+	source.runtimeState.layer = firstSpriteLayer + 6
+	source.runtimeState.isLayerDirty = true
 	source.initRuntimeProxy()
-	sourceID := source.runtimeState.SyncSprite.GetId()
+	sourceID := source.runtimeState.syncSprite.GetId()
 	game.shapeMgr.add(spriteOf(source))
 
 	var cloned *SpriteImpl
@@ -595,12 +607,12 @@ func TestCloneSpriteSynchronizesFinalLayerBeforePublication(t *testing.T) {
 		cloned = sprite
 	})
 
-	if cloned == nil || cloned.runtimeState.SyncSprite == nil {
+	if cloned == nil || cloned.runtimeState.syncSprite == nil {
 		t.Fatal("clone proxy was not initialized")
 	}
 	flushCloneProxyUpdates(&game)
 
-	cloneID := cloned.runtimeState.SyncSprite.GetId()
+	cloneID := cloned.runtimeState.syncSprite.GetId()
 	if got, want := mgr.zIndex(cloneID), int64(firstSpriteLayer); got != want {
 		t.Fatalf("published clone proxy z-index = %d, want final layer %d", got, want)
 	}
@@ -640,13 +652,13 @@ func TestRepeatedClonesStackNewestBehindSourceAndInFrontOfOlderClone(t *testing.
 	if shapes[2] != spriteOf(source) {
 		t.Fatalf("shape[2] = %v, want source sprite", shapes[2])
 	}
-	if got, want := source.runtimeState.Layer, firstSpriteLayer+2; got != want {
+	if got, want := source.runtimeState.layer, firstSpriteLayer+2; got != want {
 		t.Fatalf("source layer = %d, want %d", got, want)
 	}
-	if got, want := clones[0].runtimeState.Layer, firstSpriteLayer; got != want {
+	if got, want := clones[0].runtimeState.layer, firstSpriteLayer; got != want {
 		t.Fatalf("oldest clone layer = %d, want %d", got, want)
 	}
-	if got, want := clones[1].runtimeState.Layer, firstSpriteLayer+1; got != want {
+	if got, want := clones[1].runtimeState.layer, firstSpriteLayer+1; got != want {
 		t.Fatalf("newest clone layer = %d, want %d", got, want)
 	}
 }
@@ -837,7 +849,7 @@ func TestClonedSpriteCollisionTargetRegistrationDoesNotRefreshCollisionLayers(t 
 	spriteA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
 	spriteB := newCollisionLayerOrderSprite(&game.Game, "SpriteB", nil)
 	cloneA := newCollisionLayerOrderSprite(&game.Game, "SpriteA", nil)
-	cloneA.spriteState.Cloned = true
+	cloneA.spriteState.cloned = true
 
 	game.setupCollisionData([]Sprite{spriteA, spriteB})
 	spriteA.physics().collisionTargets["SpriteB"] = true
@@ -948,7 +960,7 @@ func TestCloneLimitBoundsRecursiveCloneHandlers(t *testing.T) {
 		t.Fatalf("shape count = %d, want 301", len(game.getAllShapes()))
 	}
 	for i, shape := range game.getAllShapes() {
-		if got := shape.(*SpriteImpl).runtimeState.Layer; got != firstSpriteLayer+i {
+		if got := shape.(*SpriteImpl).runtimeState.layer; got != firstSpriteLayer+i {
 			t.Fatalf("shape %d layer = %d, want %d", i, got, firstSpriteLayer+i)
 		}
 	}
@@ -1058,11 +1070,11 @@ func TestCloneLimitPreservesLayerOrderAfterRecycling(t *testing.T) {
 	mgr := pkgengine.SpriteMgr.(*spyCloneSpriteMgr)
 	for _, shape := range game.getAllShapes() {
 		sprite := shape.(*SpriteImpl)
-		if sprite.runtimeState.SyncSprite == nil {
+		if sprite.runtimeState.syncSprite == nil {
 			continue
 		}
-		if got := mgr.zIndex(sprite.runtimeState.SyncSprite.GetId()); got != int64(sprite.runtimeState.Layer) {
-			t.Fatalf("%s rendered z-index = %d, want %d", sprite.name, got, sprite.runtimeState.Layer)
+		if got := mgr.zIndex(sprite.runtimeState.syncSprite.GetId()); got != int64(sprite.runtimeState.layer) {
+			t.Fatalf("%s rendered z-index = %d, want %d", sprite.name, got, sprite.runtimeState.layer)
 		}
 	}
 }
@@ -1200,6 +1212,7 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	original := newCloneLimitSprite(game, "original")
 	original.pen().penWidth = 5
 	original.SetSoundEffect(SoundPanEffect, -40)
+	original.SetGraphicEffect(ColorEffect, 10)
 	parent := createRuntimeClone(&original.SpriteImpl)
 	parent.SetXYpos(30, -15)
 	parent.SetHeading(90)
@@ -1207,6 +1220,8 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	parent.physics().collisionTargets["touching"] = true
 	parent.pen().penWidth = 50
 	parent.SetSoundEffect(SoundPanEffect, 80)
+	parent.SetGraphicEffect(ColorEffect, 20)
+	parent.applyMaterialParamsVec4("atlas_uv_rect2", mathf.Vec4{Z: 1, W: 1})
 
 	// Give the parent distinct read-only configuration and per-instance runtime state.
 	parentAnimation := parent.animation()
@@ -1221,6 +1236,15 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	original.SetSoundEffect(SoundPanEffect, 20)
 
 	child := createRuntimeClone(parent)
+	if child.greffUniforms[ColorEffect] != 20 {
+		t.Fatal("graphic effects did not inherit the parent's current value")
+	}
+	// Scalar and vector parameters share one shader initialization per proxy.
+	// The child's copied state must still initialize its own material.
+	mgr := pkgengine.SpriteMgr.(*spyCloneSpriteMgr)
+	if want := []pkgengine.Object{parent.getSpriteId(), child.getSpriteId()}; !slices.Equal(mgr.shaderIDs, want) {
+		t.Fatalf("shader initialization = %v, want one per clone %v", mgr.shaderIDs, want)
+	}
 	if child.pen().penWidth != 7 || child.GetSoundEffect(SoundPanEffect) != 20 {
 		t.Fatal("pen and sound did not inherit the current original state")
 	}
@@ -1248,6 +1272,14 @@ func TestCloneComponentsUseOriginalAndParentState(t *testing.T) {
 	child.SetPhysicsMode(StaticPhysics)
 	child.pen().penWidth = 9
 	child.SetSoundEffect(SoundPanEffect, 90)
+	child.SetGraphicEffect(ColorEffect, 30)
+	child.ClearGraphicEffects()
+	if parent.greffUniforms[ColorEffect] != 20 || original.greffUniforms[ColorEffect] != 10 {
+		t.Fatal("changing or clearing descendant effects changed its parent or original")
+	}
+	if len(mgr.shaderIDs) != 2 {
+		t.Fatal("later effect updates reinitialized a clone's shader")
+	}
 	if parent.Xpos() != 30 || parent.PhysicsMode() != DynamicPhysics || parent.pen().penWidth != 50 || parent.GetSoundEffect(SoundPanEffect) != 80 {
 		t.Fatal("changing descendant state changed the parent")
 	}
@@ -1391,7 +1423,14 @@ func (s *spyCloneSpriteMgr) SetTexture(obj pkgengine.Object, path string) {
 
 func (s *spyCloneSpriteMgr) SetRenderScale(obj pkgengine.Object, scale mathf.Vec2) {}
 
-func (s *spyCloneSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {}
+func (s *spyCloneSpriteMgr) SetMaterialShader(obj pkgengine.Object, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shaderIDs = append(s.shaderIDs, obj)
+}
+
+func (s *spyCloneSpriteMgr) SetMaterialParamsVec(pkgengine.Object, string, float64, float64, float64, float64) {
+}
 
 func (s *spyCloneSpriteMgr) SetMaterialParams(
 	obj pkgengine.Object, effect string, amount float64,
@@ -1562,8 +1601,8 @@ func newCloneProxyInitSprite(g *Game, registerCloned, hideOnCloned bool) *cloneP
 	final.name, final.path = "final", "final.png"
 	sprite.costumes = []*costume{placeholder, final}
 	sprite.costumeIndex = 0
-	sprite.runtimeState.Scale = 1
-	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.scale = 1
+	sprite.spriteState.isVisible = true
 	sprite.g = g
 	sprite.name = "Score"
 	sprite.sprite = sprite

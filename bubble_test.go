@@ -207,7 +207,7 @@ func TestTimedBubbleEntryPointsScheduleRemoval(t *testing.T) {
 
 func TestBubbleObservesCameraChangesAfterDirtyFlagIsCleared(t *testing.T) {
 	sprite := &SpriteImpl{}
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	camera := &cameraImpl{}
 	bubble := bubbleBase{sprite: sprite, camera: camera, isDirty: true}
 
@@ -256,7 +256,7 @@ func TestBubbleObservesSpriteChangesAfterProxySync(t *testing.T) {
 func TestBubbleVisualsAreDeferredUntilFrameEnd(t *testing.T) {
 	_, game := setupRuntimeEventGame(t)
 	sprite := &SpriteImpl{}
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	quote := &quoterBubble{
 		bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true},
 	}
@@ -450,7 +450,7 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	t.Cleanup(func() { pkgengine.CameraMgr = original })
 	newBubble := func(id uint64) *textBubble {
 		sprite := newRenderOffsetTestSprite()
-		sprite.spriteState.IsVisible = true
+		sprite.spriteState.isVisible = true
 		sprite.g.displayState.WindowWidth = 480
 		sprite.g.displayState.WindowHeight = 360
 		return &textBubble{
@@ -482,7 +482,7 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement, second}) {
 		t.Fatal("equal-valued replacement bubble was not detected by pointer identity")
 	}
-	second.sprite.spriteState.IsVisible = false
+	second.sprite.spriteState.isVisible = false
 	layout([]Shape{&replacement, second})
 	if !slices.Equal(shapes.activeTextBubbles, []*textBubble{&replacement}) {
 		t.Fatal("hidden bubble remained active")
@@ -507,7 +507,7 @@ func TestLayoutTextBubblesTracksPointerIdentity(t *testing.T) {
 				first, second, third := newBubble(1), newBubble(2), newBubble(3)
 				bubbles := []*textBubble{first, second, third}
 				if reason == "hidden" {
-					bubbles[removed].sprite.spriteState.IsVisible = false
+					bubbles[removed].sprite.spriteState.isVisible = false
 				} else {
 					bubbles[removed].panel = nil
 				}
@@ -559,7 +559,7 @@ func TestAskQuestionPlacement(t *testing.T) {
 				game.Ask(question)
 			} else {
 				sprite := &SpriteImpl{g: game}
-				sprite.spriteState.IsVisible = test.spriteVisible
+				sprite.spriteState.isVisible = test.spriteVisible
 				sprite.Ask(question)
 			}
 
@@ -593,15 +593,15 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	t.Cleanup(func() { pkgengine.CameraMgr = originalCamera; engine.SetWindowScale(originalScale) })
 	sprite := newRenderOffsetTestSprite()
 	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite, camera: &cameraImpl{}, isDirty: true}, panel: ui.NewUiSay(), content: ui.NewSayBubbleContent("first", ui.StyleSay)}
 	manager := shapeManager{}
-	sprite.spriteState.IsVisible = false
+	sprite.spriteState.isVisible = false
 	manager.flushBubbleVisuals([]Shape{bubble})
 	if bubble.hasLayout || !bubble.isDirty || slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
 		t.Fatal("hidden bubble initialized or rendered its layout")
 	}
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	manager.flushBubbleVisuals([]Shape{bubble})
 	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "first") {
 		t.Fatalf("text bubble was not rendered: dirty=%v text=%v", bubble.isDirty, mgr.text)
@@ -612,13 +612,13 @@ func TestBubbleRefreshUsesCurrentTextLayoutAndQuoteBounds(t *testing.T) {
 	if bubble.isDirty || !slices.Contains(bubbleRenderedTexts(mgr.text), "planned") {
 		t.Fatal("precomputed layout did not replace the visible text")
 	}
-	sprite.spriteState.IsVisible = false
+	sprite.spriteState.isVisible = false
 	bubble.markDirty()
 	bubble.onUpdate()
 	if !bubble.isDirty {
 		t.Fatal("hidden bubble consumed its pending visual update")
 	}
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	panel := bubble.panel
 	bubble.panel = nil
 	bubble.markDirty()
@@ -732,7 +732,7 @@ func TestShapeManagerRelayoutsChangedBubbleInput(t *testing.T) {
 	engine.SetWindowScale(1)
 	t.Cleanup(func() { engine.SetWindowScale(previousScale) })
 	sprite := newRenderOffsetTestSprite()
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	sprite.g.displayState.WindowWidth, sprite.g.displayState.WindowHeight = 480, 360
 	bubble := &textBubble{bubbleBase: bubbleBase{sprite: sprite}, layoutID: 1, panel: &ui.UiSay{}, content: ui.NewSayBubbleContent("hello", ui.StyleSay)}
 	manager := shapeManager{textBubbles: []*textBubble{bubble}}
@@ -818,7 +818,7 @@ func newBubbleTestSprite() (*Game, *SpriteImpl, *bubbleComponent) {
 	game := &Game{}
 	game.shapeMgr.init()
 	sprite := &SpriteImpl{g: game}
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	component := &bubbleComponent{sprite: sprite}
 	sprite.components.bubble = component
 	return game, sprite, component

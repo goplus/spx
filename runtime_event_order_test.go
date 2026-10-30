@@ -186,7 +186,7 @@ func TestGlobalBroadcastIncludesCloneAtItsCurrentLayer(t *testing.T) {
 	// Clone handlers are registered after the original targets, but the clone
 	// itself is inserted immediately behind its source in the live layer list.
 	clone := newEventOrderSprite(game, "source-clone")
-	clone.spriteState.Cloned = true
+	clone.spriteState.cloned = true
 	clone.OnMsg__1("clone-order", func() { log.add("clone") })
 	game.shapeMgr.addClonedShape(source, clone)
 

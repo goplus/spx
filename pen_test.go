@@ -479,7 +479,7 @@ func TestPenComponentStampUsesRenderedPosition(t *testing.T) {
 
 	sprite.pen().stamp()
 
-	if spy.stampSpriteCalls != 1 || spy.lastStampSprite != sprite.runtimeState.SyncSprite.Id {
+	if spy.stampSpriteCalls != 1 || spy.lastStampSprite != sprite.runtimeState.syncSprite.Id {
 		t.Fatalf("PenStampSprite calls = %d, sprite = %v", spy.stampSpriteCalls, spy.lastStampSprite)
 	}
 	if got, want := spy.spriteMgr.position, mathf.NewVec2(50, 60); got != want {
@@ -494,7 +494,7 @@ func TestPenComponentStampSyncsRenderedTransform(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
-	sprite.runtimeState.Scale = 2
+	sprite.runtimeState.scale = 2
 	sprite.transform().direction = -30
 	sprite.transform().rotationStyle = LeftRight
 
@@ -545,8 +545,8 @@ func TestPenComponentStampSyncsHiddenSpriteBeforeCapture(t *testing.T) {
 	spy := setupSpyPenMgr(t)
 	sprite := newPenTestSprite()
 	configurePenRenderOffsetSprite(sprite)
-	sprite.spriteState.IsVisible = false
-	sprite.runtimeState.Scale = 2
+	sprite.spriteState.isVisible = false
+	sprite.runtimeState.scale = 2
 	sprite.transform().x = 120
 	spy.onStamp = func() {
 		if got := spy.spriteMgr.position.X; got != 120 {
@@ -1222,7 +1222,7 @@ func newPenTestSprite() *penTestSprite {
 }
 
 func configurePenRenderOffsetSprite(sprite *penTestSprite) {
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().x = 50
 	sprite.transform().y = 60
 	sprite.transform().pivot = mathf.NewVec2(3, 4)
@@ -1236,9 +1236,9 @@ func configurePenRenderOffsetSprite(sprite *penTestSprite) {
 		},
 	}}
 	sprite.costumeIndex = 0
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(101)
-	sprite.runtimeState.IsCostumeDirty = true
+	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.syncSprite.SetId(101)
+	sprite.runtimeState.isCostumeDirty = true
 	sprite.markProxyDirty()
 }
 

@@ -177,7 +177,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	shape := &captureFlushTestShape{}
 	game.shapeMgr.add(shape)
 	destroyed := &SpriteImpl{}
-	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
+	destroyed.runtimeState.syncSprite = &engine.Sprite{}
 	game.shapeMgr.add(destroyed)
 	game.shapeMgr.removeShape(destroyed)
 
@@ -191,7 +191,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	if shape.updates != 0 {
 		t.Fatalf("post-coroutine proxy flush advanced shape logic %d times, want 0", shape.updates)
 	}
-	if destroyed.runtimeState.SyncSprite != nil {
+	if destroyed.runtimeState.syncSprite != nil {
 		t.Fatal("pending sprite destroy was not flushed on an ordinary frame")
 	}
 	if len(spriteMgr.batches) != 1 {
@@ -199,7 +199,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	}
 
 	destroyedWithCapture := &SpriteImpl{}
-	destroyedWithCapture.runtimeState.SyncSprite = &engine.Sprite{}
+	destroyedWithCapture.runtimeState.syncSprite = &engine.Sprite{}
 	game.shapeMgr.add(destroyedWithCapture)
 	game.shapeMgr.removeShape(destroyedWithCapture)
 	if err := engine.EnqueueCapture("after-coroutine", nil); err != nil {
@@ -209,7 +209,7 @@ func TestOnEngineRenderFlushesSpriteProxiesEveryFrame(t *testing.T) {
 	if shape.updates != 0 {
 		t.Fatalf("capture-frame proxy flush advanced shape logic %d times, want 0", shape.updates)
 	}
-	if destroyedWithCapture.runtimeState.SyncSprite != nil {
+	if destroyedWithCapture.runtimeState.syncSprite != nil {
 		t.Fatal("pending sprite destroy was not included in the capture-frame proxy flush")
 	}
 	if len(spriteMgr.batches) != 2 {
@@ -231,7 +231,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 	shape := &captureFlushTestShape{}
 	game.shapeMgr.add(shape)
 	destroyed := &SpriteImpl{}
-	destroyed.runtimeState.SyncSprite = &engine.Sprite{}
+	destroyed.runtimeState.syncSprite = &engine.Sprite{}
 	game.shapeMgr.add(destroyed)
 	game.shapeMgr.removeShape(destroyed)
 	if _, err := PrepareInputReplay(validRuntimeReplay(InputReplayFrame{Frame: 0, State: InputReplayState{}})); err != nil {
@@ -248,7 +248,7 @@ func TestOnEngineRenderFlushesSpriteProxiesBeforeReplayEOFPause(t *testing.T) {
 	if shape.updates != 0 {
 		t.Fatalf("EOF-only proxy flush advanced shape logic %d times, want 0", shape.updates)
 	}
-	if destroyed.runtimeState.SyncSprite != nil {
+	if destroyed.runtimeState.syncSprite != nil {
 		t.Fatal("pending sprite destroy was not flushed before EOF pause")
 	}
 	if len(spriteMgr.batches) != 1 {
@@ -378,7 +378,7 @@ func TestFrameSyncCommitsCollisionSliceAndKeepsFutureWait(t *testing.T) {
 		engine.WaitNextFrame()
 		source.SetXpos(84)
 	})
-	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.SyncSprite, Dst: target.runtimeState.SyncSprite}}
+	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 
 	runFrameSyncGame(co, game)
 	if source.Xpos() != 42 || mgr.positions[1].X != 42 || len(mgr.batches) != 1 {
@@ -407,7 +407,7 @@ func TestFrameSyncRetainsBootstrapContactsUntilFirstActiveFrame(t *testing.T) {
 			t.Error("OnStart ran before bootstrap contacts were registered")
 		}
 	})
-	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.SyncSprite, Dst: target.runtimeState.SyncSprite}}
+	game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 	game.OnEngineUpdate(0)
 	co.Update()
 	game.OnEngineRender(0)
@@ -473,7 +473,7 @@ func TestFrameSyncShapeWaitPreservesRegistrationAndCommit(t *testing.T) {
 			game.OnKey__0(KeyA, func() { keys++ })
 			source.addTouchStartHandler(func(Sprite) { touches++ })
 			game.OnStart(func() { starts++ })
-			game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.SyncSprite, Dst: target.runtimeState.SyncSprite}}
+			game.triggerEvents = []engine.TriggerEvent{{Src: source.runtimeState.syncSprite, Dst: target.runtimeState.syncSprite}}
 			game.OnEngineBeforeUpdate(1.0 / 60)
 			game.inputMgr.frame.pending.events = append(game.inputMgr.frame.pending.events, &eventKeyDown{Key: KeyA})
 			itime.Update(1.0/60, 60)
@@ -712,7 +712,7 @@ func TestFrameSyncDestroyCancelsOnlyItsSpriteContinuations(t *testing.T) {
 	co, game, _ := setupFrameSyncGame(t)
 	destroyed := addFrameSyncSprite(game, 1, "destroyed")
 	survivor := addFrameSyncSprite(game, 2, "survivor")
-	pkgengine.InitSpriteInstance(1, destroyed.runtimeState.SyncSprite, nil)
+	pkgengine.InitSpriteInstance(1, destroyed.runtimeState.syncSprite, nil)
 	owners := []any{destroyed, survivor, game}
 	threads := make([]coroutine.Thread, len(owners))
 	continued := make([]bool, len(owners))
@@ -729,7 +729,7 @@ func TestFrameSyncDestroyCancelsOnlyItsSpriteContinuations(t *testing.T) {
 		destroyed.Destroy()
 		co.Join(threads[0])
 	})
-	if !cleaned[0] || continued[0] || !destroyed.isDestroyed() || destroyed.runtimeState.SyncSprite == nil {
+	if !cleaned[0] || continued[0] || !destroyed.isDestroyed() || destroyed.runtimeState.syncSprite == nil {
 		t.Fatal("public Destroy did not cancel its continuation before proxy deletion committed")
 	}
 	runFrameSyncCall(t, co, func() {
@@ -750,7 +750,7 @@ func TestFrameSyncPreservesDirectEnginePositionWrite(t *testing.T) {
 	// Low-level runtime tweens write the proxy after the physical snapshot.
 	withEventRegistrationBarrier(frameEventDispatcher{}, func() {
 		engine.WaitMainThread(func() {
-			sprite.runtimeState.SyncSprite.SetPosition(mathf.NewVec2(42, 43))
+			sprite.runtimeState.syncSprite.SetPosition(mathf.NewVec2(42, 43))
 		})
 		sprite.Hide()
 	})
@@ -867,10 +867,10 @@ func setupFrameSyncGame(t *testing.T) (*coroutine.Coroutines, *Game, *frameSyncS
 
 func addFrameSyncSprite(game *Game, id int64, name string) *SpriteImpl {
 	sprite := &newCloneAwakeOrderSprite(game, name).SpriteImpl
-	sprite.runtimeState.SyncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
-	sprite.runtimeState.SyncSprite.SetId(id)
-	sprite.runtimeState.IsCostumeDirty = false
-	sprite.spriteState.IsVisible = true
+	sprite.runtimeState.syncSprite = &engine.Sprite{Target: sprite, MirrorPosition: sprite.mirrorPosition}
+	sprite.runtimeState.syncSprite.SetId(id)
+	sprite.runtimeState.isCostumeDirty = false
+	sprite.spriteState.isVisible = true
 	sprite.physics().physicsMode = DynamicPhysics
 	sprite.markProxyDirty()
 	game.shapeMgr.add(sprite)

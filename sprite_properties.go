@@ -121,13 +121,13 @@ func applySpriteProperties(dest *SpriteImpl, props spriteProperties) {
 		transform.rotationStyle = props.rotationStyle
 	}
 	if props.has(spritePropertyVisible) {
-		dest.spriteState.IsVisible = props.visible
+		dest.spriteState.isVisible = props.visible
 	}
 	if props.has(spritePropertySize) {
-		dest.runtimeState.Scale = props.size
+		dest.runtimeState.scale = props.size
 	}
 	if props.has(spritePropertyCostumeIndex) {
 		dest.setCostumeIndex(props.costumeIndex)
 	}
-	dest.spriteState.Cloned = false
+	dest.spriteState.cloned = false
 }

@@ -114,7 +114,7 @@ func (p *SpriteImpl) flushPendingAudios(buffer []string) []string {
 	pendingOnPlayAudioStates := p.animation().takePendingOnPlayAudioStates()
 	engine.Unlock()
 
-	if p.isDestroyed() || p.runtimeState.SyncSprite == nil {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
 		return buffer[:0]
 	}
 

@@ -86,7 +86,7 @@ func TestBoundsWithoutColliderPreserveFractionalCostumeGeometry(t *testing.T) {
 		Y:                1.5,
 		BitmapResolution: 2,
 	})}
-	sprite.runtimeState.Scale = 1.5
+	sprite.runtimeState.scale = 1.5
 	sprite.transform().direction = 90
 	sprite.transform().pivot = mathf.NewVec2(0.5, -0.25)
 	sprite.physics().triggerInfo.Type = physicsColliderNone
@@ -167,7 +167,7 @@ func TestPendingCloneSensingByNameIsIndependentFromRenderPublication(t *testing.
 
 func TestLogicallyHiddenPendingCloneDoesNotAcquireSensingVisibility(t *testing.T) {
 	mgr, receiver, target := newPendingCloneSensingPair(t)
-	receiver.spriteState.IsVisible = false
+	receiver.spriteState.isVisible = false
 
 	if receiver.Touching__0(target) {
 		t.Fatal("logically hidden pending clone participated in sensing")
@@ -318,8 +318,8 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 		{name: "hit", path: "hit.png", frame: assetutil.FrameDescriptor{BitmapResolution: 1, Width: 1, Height: 1}},
 	}
 	sprite.costumeIndex = 0
-	sprite.runtimeState.IsCostumeDirty = false
-	sprite.runtimeState.IsAnimating = false
+	sprite.runtimeState.isCostumeDirty = false
+	sprite.runtimeState.isAnimating = false
 
 	mgr.texturePaths[1] = internalengine.ToAssetPath("idle.png")
 	mgr.expectedTexturePaths[1] = internalengine.ToAssetPath("hit.png")
@@ -335,8 +335,8 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 	if got := mgr.checkedTexturePaths[1]; got != internalengine.ToAssetPath("hit.png") {
 		t.Fatalf("collision used texture %q, want %q", got, internalengine.ToAssetPath("hit.png"))
 	}
-	if sprite.runtimeState.IsCostumeDirty {
-		t.Fatal("runtimeState.IsCostumeDirty = true, want false after immediate query sync")
+	if sprite.runtimeState.isCostumeDirty {
+		t.Fatal("runtimeState.isCostumeDirty = true, want false after immediate query sync")
 	}
 
 	if !sprite.touchingColor(mathf.Color{}) {
@@ -385,7 +385,7 @@ func TestShortLivedGroundClonesRemainTouchableAcrossFrames(t *testing.T) {
 				game.shapeMgr.items[0], game.shapeMgr.items[1] = game.shapeMgr.items[1], game.shapeMgr.items[0]
 			}
 			for _, sprite := range []*cloneLimitSprite{ground, player} {
-				sprite.runtimeState.Scale = 1
+				sprite.runtimeState.scale = 1
 				sprite.Show()
 				sprite.initRuntimeProxy()
 			}
@@ -455,15 +455,15 @@ func TestSpriteSensingWithoutProxyAndInvalidTargets(t *testing.T) {
 		t.Fatal("sprite without implementation participated in sensing")
 	}
 	target := &cloneLimitSprite{}
-	target.spriteState.IsDying = true
+	target.spriteState.isDying = true
 	if sprite.TouchingWith(target) {
 		t.Fatal("dying target participated in sensing")
 	}
-	sprite.spriteState.IsDying = true
+	sprite.spriteState.isDying = true
 	if sprite.TouchingWith("target") {
 		t.Fatal("dying receiver participated in sensing")
 	}
-	sprite.spriteState.IsDying = false
+	sprite.spriteState.isDying = false
 	defer func() {
 		if recover() == nil {
 			t.Fatal("unsupported collision target did not panic")
@@ -494,7 +494,7 @@ func TestPendingCloneSensingReportsCleanupFailureAndDoubleRelease(t *testing.T) 
 		t.Fatalf("cleanup failure=%v leases=%d", failure, sprite.proxyPublication.sensingVisibilityLeases.Load())
 	}
 	failure = capturePendingCloneSensingPanic(func() {
-		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.SyncSprite})
+		releasePendingCloneSensingVisibility(pendingCloneSensingVisibilityLease{sprite: &sprite.SpriteImpl, publication: sprite.proxyPublication, proxy: sprite.runtimeState.syncSprite})
 	})
 	if failure != "spx: negative pending clone sensing visibility lease count" {
 		t.Fatalf("double release failure=%v", failure)
@@ -610,7 +610,7 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, mgr, receiver, target := newTouchingPair(t, true)
 			target.physics().collisionInfo = physicConfig{Type: physicsColliderRect, Params: []float64{2, 2}}
-			target.runtimeState.IsCostumeDirty = false
+			target.runtimeState.isCostumeDirty = false
 			tc.breakCostume(target)
 			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
 			if _, bounded := target.queryBounds(false); bounded {
@@ -625,7 +625,7 @@ func TestTouchingNameFallsBackWithoutCostume(t *testing.T) {
 
 func TestPhysicsQueryBoundsRespectRotationStyle(t *testing.T) {
 	sp := newTouchingQuerySprite("target", 100, 50, 2)
-	sp.runtimeState.Scale = 2
+	sp.runtimeState.scale = 2
 	sp.physics().collisionInfo = physicConfig{
 		Type:   physicsColliderRect,
 		Pivot:  mathf.NewVec2(10, 2),
@@ -655,7 +655,7 @@ func TestTouchingNameSeesCloneImmediately(t *testing.T) {
 	target.SetXYpos(20, 0)
 	clone := newTouchingQuerySprite("target", 0, 0, 3)
 	clone.g = game
-	clone.spriteState.Cloned = true
+	clone.spriteState.cloned = true
 	mgr.positions[3] = mathf.NewVec2(0, 0)
 	game.shapeMgr.add(&clone.SpriteImpl)
 	if !receiver.Touching__1("target") {
@@ -679,7 +679,7 @@ func TestTouchingNameFollowsShapeOrder(t *testing.T) {
 	first(&target.SpriteImpl)
 	clone := newTouchingQuerySprite("target", 0, 0, 3)
 	clone.g = game
-	clone.spriteState.Cloned = true
+	clone.spriteState.cloned = true
 	game.shapeMgr.addClonedShape(&target.SpriteImpl, &clone.SpriteImpl)
 	first(&clone.SpriteImpl)
 	game.shapeMgr.activateShape(&clone.SpriteImpl)
@@ -757,7 +757,7 @@ func TestTouchingNameUsesMinimumCircleRadius(t *testing.T) {
 			_, mgr, receiver, target := newTouchingPair(t, true)
 			for _, sp := range []*touchingQuerySprite{receiver, target} {
 				sp.physics().collisionInfo = physicConfig{Type: physicsColliderCircle, Params: []float64{tc.radius}}
-				sp.runtimeState.Scale = tc.scale
+				sp.runtimeState.scale = tc.scale
 			}
 			target.SetXYpos(0.015, 0)
 			mgr.collisionResult = func(pkgengine.Object, pkgengine.Object) bool { return true }
@@ -786,7 +786,7 @@ func TestCollisionQueriesRejectUnavailableOrInvalidGeometry(t *testing.T) {
 		}
 	}
 	sprite.physics().collisionInfo = physicConfig{Type: physicsColliderCapsule, Params: []float64{3, 2}}
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().direction = 90
 	box, bounded := sprite.queryBounds(false)
 	if !bounded || box != (collision.AABB{MinX: -3, MinY: -3, MaxX: 3, MaxY: 3}) {
@@ -1010,10 +1010,10 @@ func newTouchingTestSprite(name string, x, y float64, id pkgengine.Object) *Spri
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
 	sprite.baseObj.initWithSize(1, 1)
-	sprite.runtimeState.Scale = 1
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.runtimeState.scale = 1
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.syncSprite.SetId(id)
 	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
 		mgr.visible[id] = true
 	}
@@ -1034,10 +1034,10 @@ func newTouchingQuerySprite(name string, x, y float64, id pkgengine.Object) *tou
 	sprite.g.displayState.WorldWidth = 480
 	sprite.g.displayState.WorldHeight = 360
 	sprite.baseObj.initWithSize(1, 1)
-	sprite.runtimeState.Scale = 1
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.runtimeState.scale = 1
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.syncSprite.SetId(id)
 	sprite.sprite = sprite
 	if mgr, ok := pkgengine.SpriteMgr.(*touchingSyncSpriteMgr); ok {
 		mgr.visible[id] = true

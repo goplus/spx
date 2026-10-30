@@ -307,13 +307,13 @@ func TestLoadStageEntriesReservesLayerZeroForPen(t *testing.T) {
 	if got, want := len(sprites), 2; got != want {
 		t.Fatalf("loaded sprite count = %d, want %d", got, want)
 	}
-	if got, want := back.runtimeState.Layer, penCanvasLayer+1; got != want {
+	if got, want := back.runtimeState.layer, penCanvasLayer+1; got != want {
 		t.Fatalf("back layer = %d, want %d", got, want)
 	}
-	if got, want := front.runtimeState.Layer, penCanvasLayer+2; got != want {
+	if got, want := front.runtimeState.layer, penCanvasLayer+2; got != want {
 		t.Fatalf("front layer = %d, want %d", got, want)
 	}
-	if !back.runtimeState.IsLayerDirty || !front.runtimeState.IsLayerDirty {
+	if !back.runtimeState.isLayerDirty || !front.runtimeState.isLayerDirty {
 		t.Fatal("loaded sprite layers must be marked dirty for engine synchronization")
 	}
 }
@@ -373,10 +373,10 @@ func TestLoadStageEntriesAssignsContiguousLayersToExpandedStageSprites(t *testin
 	}
 	for i, shape := range wantOrder {
 		spr := shape.(*SpriteImpl)
-		if got, want := spr.runtimeState.Layer, firstSpriteLayer+i; got != want {
+		if got, want := spr.runtimeState.layer, firstSpriteLayer+i; got != want {
 			t.Fatalf("sprite %d layer = %d, want %d", i, got, want)
 		}
-		if !spr.runtimeState.IsLayerDirty {
+		if !spr.runtimeState.isLayerDirty {
 			t.Fatalf("sprite %d layer must be marked dirty for engine synchronization", i)
 		}
 	}
@@ -390,10 +390,10 @@ func TestInitRuntimeProxyAppliesCostumeBeforeAwake(t *testing.T) {
 
 	sprite.initRuntimeProxy()
 
-	if sprite.runtimeState.SyncSprite == nil {
+	if sprite.runtimeState.syncSprite == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
 	}
-	if sprite.runtimeState.IsCostumeDirty {
+	if sprite.runtimeState.isCostumeDirty {
 		t.Fatal("IsCostumeDirty = true, want false after initRuntimeProxy")
 	}
 }
@@ -422,21 +422,21 @@ func TestApplySpritePropsBeforeInitRuntimeProxy(t *testing.T) {
 	if dest == nil {
 		t.Fatal("instantiateStageSprite returned nil sprite")
 	}
-	if dest.runtimeState.SyncSprite == nil {
+	if dest.runtimeState.syncSprite == nil {
 		t.Fatal("SyncSprite = nil, want initialized proxy")
 	}
-	if dest.runtimeState.IsCostumeDirty {
+	if dest.runtimeState.isCostumeDirty {
 		t.Fatal("IsCostumeDirty = true, want false after instantiateStageSprite")
 	}
 	if dest.costumeIndex != 1 {
 		t.Fatalf("costumeIndex = %d, want 1", dest.costumeIndex)
 	}
-	if dest.spriteState.IsVisible {
+	if dest.spriteState.isVisible {
 		t.Fatal("IsVisible = true, want false from stage shape override")
 	}
 	mgr.assertNoVisibleWrites(t)
-	if dest.runtimeState.Scale != 2 {
-		t.Fatalf("Scale = %v, want 2", dest.runtimeState.Scale)
+	if dest.runtimeState.scale != 2 {
+		t.Fatalf("Scale = %v, want 2", dest.runtimeState.scale)
 	}
 }
 
@@ -460,10 +460,10 @@ func TestInstantiateStageSpriteSkipsRuntimeCloneLifecycle(t *testing.T) {
 	if got := dest.CostumeIndex(); got != 1 {
 		t.Fatalf("stage instance costume = %d, want 1 before awake", got)
 	}
-	if dest.spriteState.HasOnCloned || *source.sawAwakeInMain {
+	if dest.spriteState.hasOnCloned || *source.sawAwakeInMain {
 		t.Fatal("stage instantiation ran sprite Main")
 	}
-	if dest.runtimeState.SyncSprite == nil {
+	if dest.runtimeState.syncSprite == nil {
 		t.Fatal("stage instance proxy was not initialized")
 	}
 }

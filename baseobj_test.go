@@ -52,8 +52,8 @@ func TestBaseObjInitialCostumeIndexFallsBackToFirst(t *testing.T) {
 			sprite.init([]*coreproject.CostumeConfig{cfg}, index)
 			stage.initBackdrops([]*coreproject.BackdropConfig{{CostumeConfig: *cfg}}, index)
 			for _, obj := range []*baseObj{&sprite, &stage} {
-				if obj.costumeIndex != 0 || obj.getCostumeName() != "first" || !obj.runtimeState.IsCostumeDirty {
-					t.Fatalf("initial costume = %d/%q, dirty=%v", obj.costumeIndex, obj.getCostumeName(), obj.runtimeState.IsCostumeDirty)
+				if obj.costumeIndex != 0 || obj.getCostumeName() != "first" || !obj.runtimeState.isCostumeDirty {
+					t.Fatalf("initial costume = %d/%q, dirty=%v", obj.costumeIndex, obj.getCostumeName(), obj.runtimeState.isCostumeDirty)
 				}
 			}
 		})
@@ -75,8 +75,8 @@ func TestBaseObjInitializesSingleCostumeSetWithRect(t *testing.T) {
 	}
 	var obj baseObj
 	obj.initSpriteCostumes(config, layout)
-	if !obj.runtimeState.IsCostumeSet || len(obj.costumes) != 2 || obj.costumeIndex != 0 {
-		t.Fatalf("costume set = %v, frames = %d, initial = %d", obj.runtimeState.IsCostumeSet, len(obj.costumes), obj.costumeIndex)
+	if !obj.runtimeState.isCostumeSet || len(obj.costumes) != 2 || obj.costumeIndex != 0 {
+		t.Fatalf("costume set = %v, frames = %d, initial = %d", obj.runtimeState.isCostumeSet, len(obj.costumes), obj.costumeIndex)
 	}
 	for i, costume := range obj.costumes {
 		if costume.frame.PosX != 20+i*20 || costume.frame.PosY != 10 || costume.frame.Width != 20 || costume.frame.Height != 20 || costume.frame.BitmapResolution != 2 || costume.faceRight != 90 {
@@ -100,7 +100,7 @@ func TestBaseObjGraphicEffectsAccumulateBeforeProxyExists(t *testing.T) {
 	}
 	obj.setMaterialParams("color", 0.75, true)
 	obj.setMaterialParamsVec4("remap", mathf.Vec4{X: 1}, false)
-	if obj.runtimeState.HasShader {
+	if obj.runtimeState.hasShader {
 		t.Fatal("unbound material update created a shader")
 	}
 }

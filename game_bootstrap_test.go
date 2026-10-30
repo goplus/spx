@@ -275,7 +275,7 @@ func TestPrepareStageBootstrapRunsOnLoadedAfterAllMainsYield(t *testing.T) {
 				resumed++
 			})
 			prepareAwakeCostumes(&sprite.SpriteImpl)
-			sprite.runtimeState.SyncSprite = &engine.Sprite{}
+			sprite.runtimeState.syncSprite = &engine.Sprite{}
 			sprites = append(sprites, sprite)
 		}
 
@@ -458,7 +458,7 @@ func newBootstrapAwakeOrderSprite(g *Game, name string) *bootstrapAwakeOrderSpri
 	sprite.scriptEventBindings.bind(&g.scriptEvents, &sprite.SpriteImpl)
 	sprite.components.initComponents(&sprite.SpriteImpl, &coreproject.SpriteConfig{})
 	prepareAwakeCostumes(&sprite.SpriteImpl)
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	return sprite
 }
 
@@ -467,7 +467,7 @@ func prepareAwakeCostumes(sprite *SpriteImpl) {
 	// another costume so lifecycle tests observe that effect instead of a flag.
 	sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}
 	sprite.setCostumeIndex(1)
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 }
 
 func runBootstrapTasksWithScheduler(t *testing.T, game *Game, generation uint64) {

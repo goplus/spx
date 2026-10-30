@@ -123,7 +123,7 @@ func TestOnStartUsesTargetOrder(t *testing.T) {
 	game.shapeMgr.add(laser)
 	game.shapeMgr.add(transition)
 	game.shapeMgr.add(levels)
-	transition.spriteState.IsVisible = true
+	transition.spriteState.isVisible = true
 
 	level := 7.0
 	var order []string
@@ -930,7 +930,7 @@ func TestTouchPointUsesSensingQuery(t *testing.T) {
 
 	var g Game
 	sprite := newClickTestSprite(&g, "probe", 1, false)
-	sprite.spriteState.IsVisible = false
+	sprite.spriteState.isVisible = false
 
 	if !sprite.touchPoint(12, 34) {
 		t.Fatal("expected touchPoint hit")
@@ -1089,13 +1089,13 @@ func TestTouchStartGate(t *testing.T) {
 	source := newTouchEventSprite(game, "source")
 	target := newTouchEventSprite(game, "target")
 	source.fireTouchStart(&target.SpriteImpl)
-	if source.spriteState.HasOnTouchStart {
+	if source.spriteState.hasOnTouchStart {
 		t.Fatal("touch without a handler enabled dispatch")
 	}
 
 	calls := 0
 	source.addTouchStartHandler(func(Sprite) { calls++ })
-	if !source.spriteState.HasOnTouchStart {
+	if !source.spriteState.hasOnTouchStart {
 		t.Fatal("registered touch handler did not enable dispatch")
 	}
 	source.fireTouchStart(&target.SpriteImpl)
@@ -1106,11 +1106,11 @@ func TestTouchStartGate(t *testing.T) {
 	clone := newTouchEventSprite(game, "source")
 	clone.SpriteImpl.InitFrom(&source.SpriteImpl)
 	clone.fireTouchStart(&target.SpriteImpl)
-	if clone.spriteState.HasOnTouchStart || calls != 1 {
+	if clone.spriteState.hasOnTouchStart || calls != 1 {
 		t.Fatal("clone inherited the source handler gate")
 	}
 	clone.addTouchStartHandler(func(Sprite) { calls++ })
-	if !clone.spriteState.HasOnTouchStart {
+	if !clone.spriteState.hasOnTouchStart {
 		t.Fatal("clone touch handler did not enable dispatch")
 	}
 	clone.fireTouchStart(&target.SpriteImpl)
@@ -1157,7 +1157,7 @@ func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
 		t.Fatalf("debug handlers = %v, want %v", got, want)
 	}
 	game.scriptEvents.manager.SnapshotStartOnce()
-	sprite.spriteState.Cloned = true
+	sprite.spriteState.cloned = true
 	sprite.OnStart(func() { t.Error("late clone start ran") })
 	game.OnStart(func() { t.Error("late game start ran") })
 	if got := len(game.scriptEvents.manager.Snapshot(coreevent.BucketStart)); got != 0 {
@@ -1172,7 +1172,7 @@ func TestPointHitsClickTargetRejectsMissingOrHiddenProxy(t *testing.T) {
 		t.Fatal("missing proxy accepted a click")
 	}
 	sprite := newClickTestSprite(game, "hidden", 1, false)
-	sprite.spriteState.IsVisible = false
+	sprite.spriteState.isVisible = false
 	if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
 		t.Fatal("hidden sprite accepted a click")
 	}
@@ -1256,9 +1256,9 @@ func newClickTestSprite(g *Game, name string, id pkgengine.Object, registerClick
 	sprite := &SpriteImpl{}
 	sprite.g = g
 	sprite.name = name
-	sprite.spriteState.IsVisible = true
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(id)
+	sprite.spriteState.isVisible = true
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.runtimeState.syncSprite.SetId(id)
 	sprite.scriptEventBindings.bind(&g.scriptEvents, sprite)
 	if registerClick {
 		sprite.OnClick(func() {})

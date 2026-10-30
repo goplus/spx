@@ -192,9 +192,9 @@ func TestSpriteHeadingMultipleRevolutions(t *testing.T) {
 	if got := sprite.Heading(); got != 0 {
 		t.Fatalf("ChangeHeading: got %v, want 0", got)
 	}
-	version := sprite.spriteState.DirtyVersion
+	version := sprite.spriteState.dirtyVersion
 	sprite.SetHeading(1080)
-	if sprite.spriteState.DirtyVersion != version {
+	if sprite.spriteState.dirtyVersion != version {
 		t.Fatal("equivalent heading dirtied the sprite proxy")
 	}
 }
@@ -218,14 +218,14 @@ func TestSpriteHeadingIgnoresNonFiniteInputs(t *testing.T) {
 			t.Run(action.name+"/"+input.name, func(t *testing.T) {
 				sprite := newTestTransformSprite(0, 0)
 				sprite.SetHeading(45)
-				dirty, visual := sprite.spriteState.DirtyVersion, sprite.spriteState.VisualVersion
+				dirty, visual := sprite.spriteState.dirtyVersion, sprite.spriteState.visualVersion
 
 				action.apply(sprite, input.value)
 
-				if sprite.Heading() != 45 || sprite.spriteState.DirtyVersion != dirty ||
-					sprite.spriteState.VisualVersion != visual {
+				if sprite.Heading() != 45 || sprite.spriteState.dirtyVersion != dirty ||
+					sprite.spriteState.visualVersion != visual {
 					t.Fatalf("invalid input changed heading or versions: heading=%v dirty=%v visual=%v",
-						sprite.Heading(), sprite.spriteState.DirtyVersion, sprite.spriteState.VisualVersion)
+						sprite.Heading(), sprite.spriteState.dirtyVersion, sprite.spriteState.visualVersion)
 				}
 				sprite.ChangeHeading(405)
 				if sprite.Heading() != 90 {
@@ -257,7 +257,7 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 					co := setupRuntimeScheduler(t)
 					sprite := newTestTransformSprite(0, 0)
 					sprite.SetHeading(45)
-					version := sprite.spriteState.DirtyVersion
+					version := sprite.spriteState.dirtyVersion
 					if animation == "with animation" {
 						sprite.animation().shared.animations[StateTurn] = &animationEntry{
 							name: StateTurn, config: &coreproject.AniConfig{TurnToDuration: 1},
@@ -269,10 +269,10 @@ func TestSpriteTurnIgnoresNonFiniteInputs(t *testing.T) {
 						finished = true
 					})
 					co.JoinFirstSlice(thread)
-					if !finished || sprite.Heading() != 45 || sprite.spriteState.DirtyVersion != version ||
+					if !finished || sprite.Heading() != 45 || sprite.spriteState.dirtyVersion != version ||
 						sprite.animation().getCurTweenState() != nil {
 						t.Fatalf("invalid turn: finished=%v heading=%v dirty=%v tween=%v",
-							finished, sprite.Heading(), sprite.spriteState.DirtyVersion, sprite.animation().getCurTweenState())
+							finished, sprite.Heading(), sprite.spriteState.dirtyVersion, sprite.animation().getCurTweenState())
 					}
 					co.Join(thread)
 				})
@@ -447,7 +447,7 @@ func TestFixWorldRange(t *testing.T) {
 				},
 			}}
 			sprite.costumeIndex = 0
-			sprite.runtimeState.Scale = tt.scale
+			sprite.runtimeState.scale = tt.scale
 			sprite.transform().direction = tt.heading
 
 			x, y := sprite.transform().fixWorldRange(tt.x, tt.y)
@@ -474,8 +474,8 @@ func TestFixWorldRangeUsesRenderedCostumeBoundsInsteadOfAutoTrigger(t *testing.T
 		},
 	}}
 	sprite.baseObj.costumeIndex = 0
-	sprite.runtimeState.Scale = 1
-	sprite.runtimeState.SyncSprite = &engine.Sprite{}
+	sprite.runtimeState.scale = 1
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
 	sprite.transform().direction = 90
 	sprite.physics().triggerInfo.Type = physicsColliderAuto
 	sprite.physics().triggerInfo.Pivot = mathf.NewVec2(0.25, 0)
@@ -499,7 +499,7 @@ func TestFenceBoundsIncludesCostumeRotation(t *testing.T) {
 		},
 	}}
 	sprite.baseObj.costumeIndex = 0
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().direction = 0
 
 	got := sprite.fenceBounds()
@@ -546,7 +546,7 @@ func TestFractionalCostumeFenceUsesLogicalGeometry(t *testing.T) {
 		BitmapResolution: 1,
 	})}
 	sprite.baseObj.costumeIndex = 0
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.transform().direction = 90
 	sprite.transform().changeX(-5)
 	if got := sprite.Xpos(); got != -396 {
@@ -635,7 +635,7 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 			game := setupCloneLimitGame(t)
 			sprite := newCloneLimitSprite(game, "source")
 			sprite.transform().x, sprite.transform().y, sprite.transform().direction = 30, 40, 60
-			dirtyVersion := sprite.spriteState.DirtyVersion
+			dirtyVersion := sprite.spriteState.dirtyVersion
 			finished := false
 			thread := gco.Create(sprite, func(coroutine.Thread) {
 				action.run(sprite)
@@ -643,8 +643,8 @@ func TestSpriteMotionIgnoresMissingTarget(t *testing.T) {
 			})
 			gco.JoinFirstSlice(thread)
 
-			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.DirtyVersion != dirtyVersion {
-				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.DirtyVersion)
+			if !finished || sprite.Xpos() != 30 || sprite.Ypos() != 40 || sprite.Heading() != 60 || sprite.spriteState.dirtyVersion != dirtyVersion {
+				t.Fatalf("missing target altered sprite: finished=%v position=(%v,%v) heading=%v dirty=%v", finished, sprite.Xpos(), sprite.Ypos(), sprite.Heading(), sprite.spriteState.dirtyVersion)
 			}
 		})
 	}
@@ -676,7 +676,7 @@ func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
 					sprite.SetHeading(60)
 					target := newCloneLimitSprite(game, "target")
 					target.SetXYpos(-10, -10)
-					wantDirty := sprite.spriteState.DirtyVersion + 1
+					wantDirty := sprite.spriteState.dirtyVersion + 1
 
 					// Both the initial turn and the unchanged heading must return
 					// without waiting; only the initial turn publishes a change.
@@ -691,8 +691,8 @@ func TestSpriteTurnWithoutAnimationFinishesImmediately(t *testing.T) {
 							t.Fatalf("turn %d yielded without an animation", attempt+1)
 						}
 						gco.Join(thread)
-						if sprite.Heading() != -135 || sprite.spriteState.DirtyVersion != wantDirty {
-							t.Fatalf("turn %d: heading=%v dirty=%v, want -135 and %v", attempt+1, sprite.Heading(), sprite.spriteState.DirtyVersion, wantDirty)
+						if sprite.Heading() != -135 || sprite.spriteState.dirtyVersion != wantDirty {
+							t.Fatalf("turn %d: heading=%v dirty=%v, want -135 and %v", attempt+1, sprite.Heading(), sprite.spriteState.dirtyVersion, wantDirty)
 						}
 						if sprite.Xpos() != 0 || sprite.Ypos() != 0 {
 							t.Fatalf("turn moved sprite to (%v, %v)", sprite.Xpos(), sprite.Ypos())
@@ -868,14 +868,14 @@ func TestTransformComponentScaleFallbacksAndTinyStage(t *testing.T) {
 		t.Fatalf("tiny stage scale = %v, want minimum visible scale 0.5", got)
 	}
 	transform.setSize(-2)
-	if sprite.runtimeState.Scale != 0.5 {
-		t.Fatalf("negative size = %v, want clamped visible size 0.5", sprite.runtimeState.Scale)
+	if sprite.runtimeState.scale != 0.5 {
+		t.Fatalf("negative size = %v, want clamped visible size 0.5", sprite.runtimeState.scale)
 	}
 }
 
 func TestTransformComponentKeepsBottomFenceAndHeadingAtOwnPosition(t *testing.T) {
 	sprite := newTestTransformSprite(0, 0)
-	sprite.runtimeState.Scale = 1
+	sprite.runtimeState.scale = 1
 	sprite.costumes = []*costume{newCostumeWithSize(20, 20)}
 	sprite.g.displayState.WorldWidth, sprite.g.displayState.WorldHeight = 100, 100
 	sprite.g.displayState.MinWorldX, sprite.g.displayState.MinWorldY = -50, -50

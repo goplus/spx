@@ -114,13 +114,13 @@ func (p *penComponent) penDown() {
 }
 
 func (p *penComponent) stamp() {
-	if p.sprite.isDestroyed() || p.sprite.runtimeState.SyncSprite == nil {
+	if p.sprite.isDestroyed() || p.sprite.runtimeState.syncSprite == nil {
 		return
 	}
 	engine.RequestRedraw()
 	p.sprite.g.penCommandBarrier(func() {
 		p.sprite.syncProxyForQuery()
-		engine.Managers().PenMgr.PenStampSprite(p.sprite.runtimeState.SyncSprite.Id)
+		engine.Managers().PenMgr.PenStampSprite(p.sprite.runtimeState.syncSprite.Id)
 	})
 }
 

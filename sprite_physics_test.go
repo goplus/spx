@@ -85,7 +85,7 @@ func TestPhysicsLayersSurviveClone(t *testing.T) {
 	mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask = 0, 0, 0, 0
 	sprite.physics().collisionInfo.Type = physicsColliderNone
 	sprite.physics().triggerInfo.Type = physicsColliderNone
-	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.SyncSprite)
+	sprite.physics().applyPhysicsProxyConfig(sprite.runtimeState.syncSprite)
 	if mgr.collisionLayer != 2 || mgr.collisionMask != 4 || mgr.triggerLayer != 8 || mgr.triggerMask != 16 {
 		t.Fatalf("replayed layers = (%d, %d, %d, %d)", mgr.collisionLayer, mgr.collisionMask, mgr.triggerLayer, mgr.triggerMask)
 	}
@@ -121,7 +121,7 @@ func TestSetPolygonColliderSyncsScaledShape(t *testing.T) {
 		t.Fatalf("input points were mutated: %v", points)
 	}
 
-	sprite.runtimeState.Scale = 3
+	sprite.runtimeState.scale = 3
 	sprite.updatePhysicsShapesScale()
 	wantRescaledPoints := []float32{-3, -6, 9, -12, 15, 18}
 	if !slices.Equal(mgr.collisionPoints, wantRescaledPoints) || !slices.Equal(mgr.triggerPoints, wantRescaledPoints) {
@@ -140,7 +140,7 @@ func TestShapeRefreshKeepsCollidersDisabled(t *testing.T) {
 	sprite.SetCollisionEnabled(false)
 	sprite.SetTriggerEnabled(false)
 
-	sprite.runtimeState.Scale = 3
+	sprite.runtimeState.scale = 3
 	sprite.updatePhysicsShapesScale()
 	sprite.SetColliderPivot(false, 1, 2)
 	sprite.SetColliderPivot(true, 3, 4)
@@ -316,7 +316,7 @@ func TestPhysicsApplyRectAndAutoShapes(t *testing.T) {
 				t.Run(fmt.Sprintf("%s/trigger=%t/params=%#v", shape.name, trigger, params), func(t *testing.T) {
 					sprite, mgr := newPolygonColliderTestSprite(t)
 					cfg := physicConfig{Type: shape.kind, Pivot: mathf.NewVec2(3, 4), Params: params}
-					cfg.applyShape(sprite.runtimeState.SyncSprite, trigger, sprite)
+					cfg.applyShape(sprite.runtimeState.syncSprite, trigger, sprite)
 					if len(params) < 2 {
 						if mgr.rectCalls != 0 {
 							t.Fatalf("short params caused %d rect calls", mgr.rectCalls)
@@ -380,7 +380,7 @@ func TestSpritePhysicsAPIKeepsBackendAndColliderState(t *testing.T) {
 	if got := cfg.String(); !strings.Contains(got, "Mask: 4, Layer: 2") || !strings.Contains(got, "Params: [3]") || !strings.Contains(got, fmt.Sprint(cfg.Pivot)) {
 		t.Fatalf("missing config diagnostics: %s", got)
 	}
-	sprite.runtimeState.SyncSprite = nil
+	sprite.runtimeState.syncSprite = nil
 	sprite.updatePhysicsShapesScale()
 }
 
@@ -466,14 +466,14 @@ func TestSpriteBounceOffEdgeDefaultsToStageArea(t *testing.T) {
 				cameraNearest: tt.camera,
 			})
 			sprite := newEdgeTestSprite(tt.from)
-			version := sprite.spriteState.DirtyVersion
+			version := sprite.spriteState.dirtyVersion
 
 			sprite.BounceOffEdge()
 
 			if got := sprite.Heading(); math.IsNaN(got) || math.Abs(got-tt.want) > 1e-9 {
 				t.Fatalf("BounceOffEdge() heading = %v, want %v", got, tt.want)
 			}
-			if sprite.spriteState.DirtyVersion == version {
+			if sprite.spriteState.dirtyVersion == version {
 				t.Fatal("bounce did not publish the transform change")
 			}
 		})
@@ -689,8 +689,8 @@ func newPolygonColliderTestSprite(t *testing.T) (*SpriteImpl, *polygonColliderSp
 	})
 
 	sprite := newRenderOffsetTestSprite()
-	sprite.runtimeState.Scale = 2
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{
+	sprite.runtimeState.scale = 2
+	sprite.runtimeState.syncSprite = &internalengine.Sprite{
 		Sprite: pkgengine.Sprite{Id: 1},
 	}
 	return sprite, mgr
@@ -718,9 +718,9 @@ func installEdgePhysicsMgr(t *testing.T, mgr pkgengine.IPhysicsMgr) {
 
 func newEdgeTestSprite(direction Direction) *SpriteImpl {
 	sprite := newTestTransformSprite(0, 0)
-	sprite.spriteState.IsVisible = true
+	sprite.spriteState.isVisible = true
 	sprite.transform().direction = direction
-	sprite.runtimeState.SyncSprite = &internalengine.Sprite{}
-	sprite.runtimeState.SyncSprite.SetId(42)
+	sprite.runtimeState.syncSprite = &internalengine.Sprite{}
+	sprite.runtimeState.syncSprite.SetId(42)
 	return sprite
 }

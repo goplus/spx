@@ -499,7 +499,7 @@ func TestSoundPlayAndComponentPlayUseSamePlaybackParameters(t *testing.T) {
 	initTestAnimationAudio(anim, backend)
 	anim.sprite.g.audioState.AudioAttenuation = 0.35
 	anim.sprite.g.audioState.AudioMaxDistance = 640
-	anim.sprite.runtimeState.SyncSprite.Id = 42
+	anim.sprite.runtimeState.syncSprite.Id = 42
 
 	anim.sprite.Play__1("walk", true)
 	playID := anim.sprite.sound().play("walk", true)
@@ -533,7 +533,7 @@ func TestSpritePlayAndWaitResumesAfterPlaybackFinishes(t *testing.T) {
 	backend := &animationAudioBackend{}
 	initTestAnimationAudio(anim, backend)
 	sprite := anim.sprite
-	sprite.runtimeState.SyncSprite.Id = 42
+	sprite.runtimeState.syncSprite.Id = 42
 	sprite.g.audioState.AudioAttenuation = 0.35
 	sprite.g.audioState.AudioMaxDistance = 640
 	finished := false

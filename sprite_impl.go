@@ -19,7 +19,6 @@ package spx
 import (
 	"maps"
 
-	corestate "github.com/goplus/spx/v4/internal/core/state"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
@@ -30,7 +29,7 @@ type SpriteImpl struct {
 
 	sprite      Sprite
 	original    *SpriteImpl
-	spriteState corestate.SpriteRuntimeState
+	spriteState spriteRuntimeState
 	// proxyPublication points to fresh clone-local state. The pointer itself
 	// remains stable after clone construction so reflective cloning never copies
 	// publication state while it is in use.
@@ -42,6 +41,18 @@ type SpriteImpl struct {
 	g *Game
 }
 
+type spriteRuntimeState struct {
+	isVisible           bool
+	cloned              bool
+	isDying             bool
+	dirtyVersion        uint64
+	proxySyncVersion    uint64
+	visualVersion       uint64
+	hasOnCloned         bool
+	hasOnTouchStart     bool
+	defaultCostumeIndex int
+}
+
 // -----------------------------------------------------------------------------
 // Public API
 // -----------------------------------------------------------------------------
@@ -49,21 +60,17 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.baseObj.initFrom(&src.baseObj)
 	p.scriptEventBindings.bind(src.scriptEventRegistry, p)
 
-	p.g, p.name, p.runtimeState.Scale = src.g, src.name, src.runtimeState.Scale
+	p.g, p.name, p.runtimeState.scale = src.g, src.name, src.runtimeState.scale
 	p.greffUniforms = maps.Clone(src.greffUniforms)
 
-	p.spriteState.IsVisible = src.spriteState.IsVisible
 	p.original = src.originalSprite()
-	p.spriteState.Cloned = true
-	p.spriteState.IsDying = false
-
-	p.spriteState.DirtyVersion = 0
-	p.spriteState.VisualVersion = 0
-	p.spriteState.ProxySyncVersion = 0
+	p.spriteState = spriteRuntimeState{
+		isVisible:           src.spriteState.isVisible,
+		cloned:              true,
+		defaultCostumeIndex: src.spriteState.defaultCostumeIndex,
+	}
 	p.proxyPublication = nil
 	p.preparedVisual = preparedProxyVisual{}
-	p.spriteState.HasOnCloned = false
-	p.spriteState.HasOnTouchStart = false
 }
 
 func (p *SpriteImpl) Die() {
@@ -83,7 +90,7 @@ func (p *SpriteImpl) Destroy() {
 }
 
 func (p *SpriteImpl) DeleteThisClone() {
-	if !p.spriteState.Cloned {
+	if !p.spriteState.cloned {
 		return
 	}
 	p.Destroy()
@@ -94,24 +101,24 @@ func (p *SpriteImpl) Name() string {
 }
 
 func (p *SpriteImpl) IsCloned() bool {
-	return p.spriteState.Cloned
+	return p.spriteState.cloned
 }
 
 // -----------------------------------------------------------------------------
 // Internal State
 // -----------------------------------------------------------------------------
 func (p *SpriteImpl) setDying() {
-	p.spriteState.IsDying = true
+	p.spriteState.isDying = true
 }
 
 func (p *SpriteImpl) markProxyDirty() {
 	p.markVisualDirty()
-	p.spriteState.DirtyVersion++
+	p.spriteState.dirtyVersion++
 }
 
 func (p *SpriteImpl) markVisualDirty() {
 	p.requestRedrawIfVisible()
-	p.spriteState.VisualVersion++
+	p.spriteState.visualVersion++
 }
 
 // -----------------------------------------------------------------------------
@@ -165,7 +172,7 @@ func (p *SpriteImpl) destroy() {
 	p.clearHandlers()
 	p.components.destroyComponents()
 	p.g.shapeMgr.removeShape(p)
-	if syncSprite := p.runtimeState.SyncSprite; syncSprite != nil {
+	if syncSprite := p.runtimeState.syncSprite; syncSprite != nil {
 		p.g.inputMgr.clickGate.Remove(syncSprite.GetId())
 	}
 	p.markDestroyed()
