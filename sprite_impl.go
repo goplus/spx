@@ -67,7 +67,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.spriteState = spriteRuntimeState{
 		isVisible:           src.spriteState.isVisible,
 		cloned:              true,
-		defaultCostumeIndex: p.spriteState.defaultCostumeIndex,
+		defaultCostumeIndex: src.spriteState.defaultCostumeIndex,
 	}
 	p.proxyPublication = nil
 	p.preparedVisual = preparedProxyVisual{}

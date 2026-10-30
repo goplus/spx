@@ -168,6 +168,17 @@ func TestInstantiateRuntimeCloneRunsCloneLifecycle(t *testing.T) {
 	}
 }
 
+func TestSpriteInitFromCopiesDefaultCostumeIndex(t *testing.T) {
+	source := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 3}}
+	dest := &SpriteImpl{spriteState: spriteRuntimeState{defaultCostumeIndex: 1}}
+
+	dest.InitFrom(source)
+
+	if got := dest.spriteState.defaultCostumeIndex; got != source.spriteState.defaultCostumeIndex {
+		t.Fatalf("default costume index = %d, want %d", got, source.spriteState.defaultCostumeIndex)
+	}
+}
+
 func TestFinishCloneInitializationPreservesPublicationState(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
