@@ -38,6 +38,7 @@ const (
 const maxClones = 300
 
 type shapeManager struct {
+	layersDirty            bool
 	cloneCount             int
 	pendingClones          int
 	items                  []Shape
@@ -80,6 +81,7 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 }
 
 func (s *shapeManager) init() {
+	s.layersDirty = false
 	s.cloneCount = 0
 	s.pendingClones = 0
 	s.named = nil
@@ -207,8 +209,11 @@ func (s *shapeManager) commitProxyChanges(batch proxyBatch) {
 }
 
 func (s *shapeManager) add(shape Shape) {
-	if sprite, ok := shape.(*SpriteImpl); ok && sprite.IsCloned() {
-		s.cloneCount++
+	if sprite, ok := shape.(*SpriteImpl); ok {
+		s.layersDirty = true
+		if sprite.IsCloned() {
+			s.cloneCount++
+		}
 	}
 	if bubble, ok := shape.(*textBubble); ok && bubble.layoutID == 0 {
 		s.nextTextBubbleLayoutID++
@@ -301,16 +306,35 @@ func (s *shapeManager) goBackLayers(spr *SpriteImpl, n int) {
 
 	s.items = sliceutil.MoveToIndex(s.items, idx, newIdx)
 	clear(s.named)
-	s.updateRenderLayers()
+	if s.layersDirty {
+		s.updateRenderLayers()
+	} else {
+		s.updateRenderLayerRange(min(idx, newIdx), max(idx, newIdx)+1)
+	}
 }
 
 func (s *shapeManager) updateRenderLayers() {
+	// Automatic sorting may defer renumbering while shapes are added or removed.
+	s.layersDirty = true
 	if engine.HasLayerSortMethod() {
 		return
 	}
 
+	s.updateRenderLayerRange(0, len(s.items))
+	s.layersDirty = false
+}
+
+// Layer moves affect only the crossed sprites. The unchanged prefix supplies
+// the first layer; non-sprite shapes do not occupy layers.
+func (s *shapeManager) updateRenderLayerRange(start, end int) {
 	layer := firstSpriteLayer
-	for _, item := range s.items {
+	for i := start - 1; i >= 0; i-- {
+		if sprite, ok := s.items[i].(*SpriteImpl); ok {
+			layer = sprite.runtimeState.layer + 1
+			break
+		}
+	}
+	for _, item := range s.items[start:end] {
 		if sp, ok := item.(*SpriteImpl); ok {
 			sp.setLayer(layer)
 			layer++

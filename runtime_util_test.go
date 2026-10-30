@@ -327,6 +327,64 @@ func TestOutOfRangeListItemDoesNotEqualZero(t *testing.T) {
 	}
 }
 
+func TestCompareListInsertionStopsAtMissingItem(t *testing.T) {
+	tests := []struct {
+		name    string
+		initial []any
+		insert  []float64
+		want    []float64
+	}{
+		{
+			name:   "negative value in empty list",
+			insert: []float64{-2000},
+			want:   []float64{-2000},
+		},
+		{
+			name:    "negative value after last item",
+			initial: []any{20, 0, -2},
+			insert:  []float64{-2000},
+			want:    []float64{20, 0, -2, -2000},
+		},
+		{
+			name:    "repeated negative sentinel",
+			initial: []any{-2000, -10000},
+			insert:  []float64{-10000, -10000},
+			want:    []float64{-2000, -10000, -10000, -10000},
+		},
+		{
+			name:   "mixed sprite depths",
+			insert: []float64{-10000, -2000, 175, 0, -180, -10000, -60, -60, 5},
+			want:   []float64{175, 5, 0, -60, -60, -180, -2000, -10000, -10000},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := NewList(tt.initial...)
+			for _, depth := range tt.insert {
+				index := 0
+				// Scratch insertion loops compare the missing tail as an empty
+				// string. Converting it to a float would loop forever for negatives.
+				for Compare(depth, list.At(index)) < 0 {
+					index++
+					if index > list.Len() {
+						t.Fatalf("inserting %g passed the missing tail of a %d-item list", depth, list.Len())
+					}
+				}
+				list.Insert(index, depth)
+			}
+			if got := list.Len(); got != len(tt.want) {
+				t.Fatalf("list length = %d, want %d", got, len(tt.want))
+			}
+			for index, want := range tt.want {
+				if got := list.At(index).Float(); got != want {
+					t.Errorf("list item %d = %g, want %g", index, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestEqualUsesULPToleranceOnlyForNumericEquality(t *testing.T) {
 	twoULPsAbove116 := 116.0
 	for range compareMaxULPs {
