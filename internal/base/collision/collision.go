@@ -57,7 +57,7 @@ func ParseColliderShapeType(typeName string, defaultValue int64) int64 {
 
 func ParsePixelCollisionPrecision(precision *string) int64 {
 	if precision == nil {
-		return PixelPrecisionLow
+		return PixelPrecisionHigh
 	}
 	switch *precision {
 	case "high":
@@ -67,7 +67,7 @@ func ParsePixelCollisionPrecision(precision *string) int64 {
 	case "low":
 		return PixelPrecisionLow
 	default:
-		spxlog.Warn("Invalid pixelCollisionPrecision value '%s', using default 'low'", *precision)
-		return PixelPrecisionLow
+		spxlog.Warn("Invalid pixelCollisionPrecision value '%s', using default 'high'", *precision)
+		return PixelPrecisionHigh
 	}
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	spxfs "github.com/goplus/spx/v4/fs"
 	_ "github.com/goplus/spx/v4/fs/asset"
+	"github.com/goplus/spx/v4/internal/base/collision"
 )
 
 type fakeGdDir struct {
@@ -968,6 +969,9 @@ func TestResolveSystemSettings(t *testing.T) {
 	}
 	if !settings.CollisionByPixel || !settings.AutoSetCollisionLayer {
 		t.Fatalf("unexpected collision defaults: %+v", settings)
+	}
+	if settings.PixelCollisionPrecision != collision.PixelPrecisionHigh {
+		t.Fatalf("default pixel collision precision = %d, want %d", settings.PixelCollisionPrecision, collision.PixelPrecisionHigh)
 	}
 
 	auto := false
