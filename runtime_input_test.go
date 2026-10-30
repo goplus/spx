@@ -521,6 +521,33 @@ func TestMouseCoordinatesUseLatestLiveInput(t *testing.T) {
 	}
 }
 
+func TestInputFrameSwipePreservesReplayClockRollback(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		frameTime float64
+		want      bool
+	}{
+		{"backward frame retains gesture", 0.9, true},
+		{"expired frame cannot revive gesture", 1.6, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, game, _ := setupInputSourceTest(t)
+			session := &inputSession{currentTime: 1}
+			game.inputMgr.swipe.InitWithClock(session.logicalClock)
+			game.inputMgr.swipe.Begin(mathf.Vec2{}, nil)
+			if !game.inputMgr.prepareInputFrame(0.1) {
+				t.Fatal("stationary frame was not prepared")
+			}
+			session.currentTime = test.frameTime
+			game.dispatchFrameEvents()
+			session.currentTime = 1.1
+			if _, _, ok := game.inputMgr.swipe.Finish(mathf.Vec2{X: 100}); ok != test.want {
+				t.Fatalf("swipe after clock correction = %v, want %v", ok, test.want)
+			}
+		})
+	}
+}
+
 func TestSwipeRoutingAllowsHandlerToBeginNextGesture(t *testing.T) {
 	previous := gco
 	gco = nil

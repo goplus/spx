@@ -266,6 +266,87 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 	}
 }
 
+func TestReplaySwipeExpiryAcrossFrameBoundaries(t *testing.T) {
+	press := InputReplayMouseEvent{Button: 1, Pressed: true}
+	release := InputReplayMouseEvent{Button: 1}
+	for _, test := range []struct {
+		name       string
+		frames     []InputReplayFrame
+		wantSwipes []int
+		wantClicks int
+	}{
+		{
+			name: "release at timeout remains valid",
+			frames: []InputReplayFrame{
+				{Time: 0, State: InputReplayState{Buttons: 1}, MouseEvents: []InputReplayMouseEvent{press}},
+				{Time: 0.5, State: InputReplayState{Mouse: InputReplayMouse{X: 100}}, MouseEvents: []InputReplayMouseEvent{release}},
+			},
+			wantSwipes: []int{0, 1}, wantClicks: 1,
+		},
+		{
+			name: "stationary frame past timeout expires gesture",
+			frames: []InputReplayFrame{
+				{Time: 0, State: InputReplayState{Buttons: 1}, MouseEvents: []InputReplayMouseEvent{press}},
+				{Time: 0.500001, State: InputReplayState{Buttons: 1}},
+				{Time: 0.6, State: InputReplayState{Mouse: InputReplayMouse{X: 100}}, MouseEvents: []InputReplayMouseEvent{release}},
+			},
+			wantSwipes: []int{0, 0, 0}, wantClicks: 1,
+		},
+		{
+			name: "expired gesture permits a new press in the same frame",
+			frames: []InputReplayFrame{
+				{Time: 0, State: InputReplayState{Buttons: 1}, MouseEvents: []InputReplayMouseEvent{press}},
+				{Time: 0.6, State: InputReplayState{Mouse: InputReplayMouse{X: 100}, Buttons: 1}, MouseEvents: []InputReplayMouseEvent{release, press}},
+				{Time: 0.7, State: InputReplayState{Mouse: InputReplayMouse{X: 200}}, MouseEvents: []InputReplayMouseEvent{release}},
+			},
+			wantSwipes: []int{0, 0, 1}, wantClicks: 2,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co, game, _ := setupInputSourceTest(t)
+			for i := range test.frames {
+				test.frames[i].Frame = int64(i)
+			}
+			if _, err := PrepareInputReplay(validRuntimeReplay(test.frames...)); err != nil {
+				t.Fatal(err)
+			}
+			session := claimPreparedSession(t, game)
+			clicks, swipes := 0, 0
+			game.OnClick(func() { clicks++ })
+			game.OnSwipe__0(90, func() { swipes++ })
+			for i, want := range test.wantSwipes {
+				// Deliberately differ from replay times: expiry follows the resolved clock.
+				if !game.inputMgr.prepareInputFrame(0.01) {
+					t.Fatalf("replay frame %d was not prepared", i)
+				}
+				game.dispatchFrameEvents()
+				co.Update()
+				game.dispatchFrameEvents()
+				co.Update()
+				session.endFrame()
+				if swipes != want {
+					t.Fatalf("frame %d swipe callbacks = %d, want %d", i, swipes, want)
+				}
+			}
+			if clicks != test.wantClicks {
+				t.Fatalf("click callbacks = %d, want %d", clicks, test.wantClicks)
+			}
+			if completed, err := session.completeReplayFrame(nil); err != nil || !completed {
+				t.Fatalf("complete replay = %v, %v", completed, err)
+			}
+			before := session.status()
+			if game.inputMgr.prepareInputFrame(1) {
+				t.Fatal("completed replay prepared an extra frame")
+			}
+			game.dispatchFrameEvents()
+			co.Update()
+			if session.status() != before || swipes != test.wantSwipes[len(test.wantSwipes)-1] || clicks != test.wantClicks {
+				t.Fatal("completed replay advanced or repeated input callbacks")
+			}
+		})
+	}
+}
+
 func TestPrearmedInputRecordingDerivesFreshConsumerInitial(t *testing.T) {
 	resetInputSessionTest(t)
 	if _, err := PrepareInputRecording(30); err != nil {
