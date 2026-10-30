@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 
 func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, error) {
 	if ctx == nil {
-		return ProcessStatus{}, errors.New("xgolauncher: nil context")
+		return ProcessStatus{}, errors.New("launcher: nil context")
 	}
 	if err := ctx.Err(); err != nil {
 		return ProcessStatus{}, err
@@ -50,12 +50,12 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 	}
 	cache := runtimebundle.NewCache(cacheRoot)
 	if _, err := cache.Path(runtimebundle.NamespaceEngine, verified.Manifest.Engine.BundleDigest); err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: validate cache root: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: validate cache root: %w", err)
 	}
 
 	workDir, err := os.MkdirTemp("", "spx-launcher-")
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: create launcher work directory: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: create launcher work directory: %w", err)
 	}
 	defer os.RemoveAll(workDir)
 
@@ -63,21 +63,21 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 		return verified.WriteComponentZIP("engine/", dst)
 	})
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: materialize Engine: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: materialize Engine: %w", err)
 	}
 	defer engine.Close()
 	bridge, err := materializeComponent(ctx, cache, workDir, runtimebundle.NamespaceBridge, verified.Manifest.Bridge.BundleDigest, func(dst io.Writer) error {
 		return verified.WriteComponentZIP("bridge/", dst)
 	})
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: materialize bridge: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: materialize bridge: %w", err)
 	}
 	defer bridge.Close()
 	project, err := materializeComponent(ctx, cache, workDir, runtimebundle.NamespaceProject, verified.Manifest.Project.BundleDigest, func(dst io.Writer) error {
 		return verified.WriteProjectZIP(dst)
 	})
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: materialize project: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: materialize project: %w", err)
 	}
 	defer project.Close()
 
@@ -86,7 +86,7 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 	}
 	sessionDir, err := os.MkdirTemp("", "spx-session-")
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: create Engine session: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: create Engine session: %w", err)
 	}
 	defer os.RemoveAll(sessionDir)
 	if err := ctx.Err(); err != nil {
@@ -99,7 +99,7 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 	}
 	bridgePath := filepath.Join(bridge.Path, verified.Manifest.Bridge.File)
 	if err := interpruntime.PrepareSession(interpruntime.SessionConfig{Roots: roots, BridgePath: bridgePath}); err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: prepare Engine session: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: prepare Engine session: %w", err)
 	}
 	command, err := interpruntime.PrepareCommand(ctx, interpruntime.CommandConfig{
 		Roots: roots, Executable: filepath.Join(engine.Path, verified.Manifest.Engine.Executable),
@@ -107,11 +107,11 @@ func run(ctx context.Context, cfg Config, cacheRoot string) (ProcessStatus, erro
 		PathPolicy: interpruntime.RejectPath,
 	})
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: prepare Engine command: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: prepare Engine command: %w", err)
 	}
 	status, err := processsupervisor.Run(ctx, command)
 	if err != nil {
-		return ProcessStatus{}, fmt.Errorf("xgolauncher: run Engine: %w", err)
+		return ProcessStatus{}, fmt.Errorf("launcher: run Engine: %w", err)
 	}
 	return ProcessStatus{Code: status.Code, Signal: status.Signal}, nil
 }

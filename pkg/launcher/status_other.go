@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import "os"
 

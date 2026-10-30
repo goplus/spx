@@ -1,5 +1,3 @@
-//go:build !unix && !windows
-
 /*
  * Copyright (c) 2026 The XGo Authors (xgo.dev). All rights reserved.
  *
@@ -16,13 +14,20 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
-func runCommand(parent context.Context, run func(context.Context) (ProcessStatus, error)) (ProcessStatus, error) {
-	// Preserve callback cancellation even without signal forwarding.
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
-	return run(ctx)
+// RunCommand owns signal cancellation around one launcher command.
+func RunCommand(parent context.Context, run func(context.Context) (ProcessStatus, error)) (ProcessStatus, error) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if run == nil {
+		return ProcessStatus{}, errors.New("launcher: nil command")
+	}
+	return runCommand(parent, run)
 }

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"context"
@@ -49,6 +49,16 @@ func TestRunCommandCancelsCleanupBeforeReturningSignal(t *testing.T) {
 				}
 				select {
 				case <-ctx.Done():
+					// A later signal during cleanup must not replace the first one.
+					second := syscall.SIGINT
+					if second == sig {
+						second = syscall.SIGTERM
+					}
+					if err := syscall.Kill(os.Getpid(), second); err != nil {
+						return ProcessStatus{}, err
+					}
+					// Model cleanup that stays active while OS notifications arrive.
+					time.Sleep(100 * time.Millisecond)
 					return ProcessStatus{Code: 42}, ctx.Err()
 				case <-time.After(5 * time.Second):
 					return ProcessStatus{}, context.DeadlineExceeded

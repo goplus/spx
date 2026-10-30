@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package xgolauncher
+package launcher
 
 import (
 	"context"
@@ -32,7 +32,7 @@ import (
 func TestRunCommand(t *testing.T) {
 	t.Run("nil command", func(t *testing.T) {
 		status, err := RunCommand(t.Context(), nil)
-		if status != (ProcessStatus{}) || err == nil || err.Error() != "xgolauncher: nil command" {
+		if status != (ProcessStatus{}) || err == nil || err.Error() != "launcher: nil command" {
 			t.Fatalf("RunCommand(ctx, nil) = (%+v, %v), want zero status and nil command error", status, err)
 		}
 	})
@@ -87,17 +87,22 @@ func TestRunCommand(t *testing.T) {
 }
 
 func TestRunCommandParentCancellation(t *testing.T) {
+	cause := errors.New("parent canceled")
+	callbackErr := errors.New("cleanup failed")
 	for _, tt := range []struct {
 		name   string
 		before bool
+		status ProcessStatus
+		err    error
 	}{
-		{name: "before callback", before: true},
-		{name: "during callback"},
+		{name: "before callback", before: true, status: ProcessStatus{Code: 7}, err: cause},
+		{name: "during callback", status: ProcessStatus{Code: 7}, err: cause},
+		{name: "callback failure", before: true, status: ProcessStatus{Code: 19}, err: callbackErr},
+		{name: "callback completes successfully"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			parent, cancel := context.WithCancelCause(t.Context())
 			defer cancel(nil)
-			cause := errors.New("parent canceled")
 			if tt.before {
 				cancel(cause)
 			}
@@ -105,13 +110,13 @@ func TestRunCommandParentCancellation(t *testing.T) {
 				if !tt.before {
 					cancel(cause)
 				}
-				if ctx.Err() != context.Canceled {
-					t.Errorf("callback context error = %v, want context.Canceled", ctx.Err())
+				if ctx.Err() != context.Canceled || context.Cause(ctx) != cause {
+					t.Errorf("callback context = (%v, %v), want canceled with parent cause", ctx.Err(), context.Cause(ctx))
 				}
-				return ProcessStatus{Code: 7}, context.Cause(ctx)
+				return tt.status, tt.err
 			})
-			if status != (ProcessStatus{Code: 7}) || err != cause {
-				t.Fatalf("RunCommand() = (%+v, %v), want code 7 and parent cancellation cause", status, err)
+			if status != tt.status || err != tt.err {
+				t.Fatalf("RunCommand() = (%+v, %v), want callback result (%+v, %v)", status, err, tt.status, tt.err)
 			}
 		})
 	}
