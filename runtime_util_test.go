@@ -18,6 +18,9 @@ package spx
 
 import (
 	"math"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -283,6 +286,95 @@ func TestCharAt(t *testing.T) {
 	}
 }
 
+func TestCharAtLongStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"ascii", strings.Repeat("0123456789abcdef\x00\x7f", 64)},
+		{"unicode", strings.Repeat("a你🙂e\u0301", 64)},
+		{"invalid utf8", strings.Repeat("a\xff\xc0\xaf你\xe2\x82", 64)},
+		{"late unicode", strings.Repeat("a", 1024) + "🙂"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runes := []rune(tt.text)
+			for pass := range 2 {
+				for i := range len(runes) + 1 {
+					idx := i
+					if pass == 1 {
+						idx = len(runes) - i
+					}
+					want := ""
+					if idx < len(runes) {
+						want = string(runes[idx])
+					}
+					if got := CharAt(tt.text, idx); got != want {
+						t.Fatalf("CharAt at %d = %q, want %q", idx, got, want)
+					}
+				}
+			}
+			for _, idx := range []int{-1, len(tt.text), int(^uint(0) >> 1)} {
+				if got := CharAt(tt.text, idx); got != "" {
+					t.Errorf("CharAt at out-of-range index %d = %q", idx, got)
+				}
+			}
+		})
+	}
+}
+
+func TestCharAtCacheBounds(t *testing.T) {
+	charAtCache.Store(nil)
+	t.Cleanup(func() { charAtCache.Store(nil) })
+	for _, size := range []int{charAtCacheMinBytes, charAtCacheMaxBytes} {
+		text := strings.Repeat("a", size-1) + "z"
+		if got := CharAt(text, size-1); got != "z" {
+			t.Fatalf("CharAt with %d bytes = %q, want z", size, got)
+		}
+		entry := charAtCache.Load()
+		if entry == nil || entry.text != text {
+			t.Fatalf("string with %d bytes was not cached", size)
+		}
+	}
+	entry := charAtCache.Load()
+	for _, size := range []int{charAtCacheMinBytes - 1, charAtCacheMaxBytes + 1} {
+		text := strings.Repeat("b", size-1) + "y"
+		if got := CharAt(text, size-1); got != "y" {
+			t.Fatalf("CharAt with %d bytes = %q, want y", size, got)
+		}
+		if charAtCache.Load() != entry {
+			t.Fatalf("string with %d bytes evicted the cached entry", size)
+		}
+	}
+}
+
+func TestCharAtConcurrent(t *testing.T) {
+	texts := []string{
+		strings.Repeat("0123456789abcdef", 64),
+		strings.Repeat("a你🙂e\u0301", 64),
+		strings.Repeat("a\xff你\xe2\x82", 64),
+	}
+	var wg sync.WaitGroup
+	for worker := range 8 {
+		wg.Go(func() {
+			text := texts[worker%len(texts)]
+			runes := []rune(text)
+			for i := range 1024 {
+				idx := (i*31 + worker) % (len(runes) + 1)
+				want := ""
+				if idx < len(runes) {
+					want = string(runes[idx])
+				}
+				if got := CharAt(text, idx); got != want {
+					t.Errorf("worker %d: CharAt at %d = %q, want %q", worker, idx, got, want)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+}
+
 func TestCompareAndEqual(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -494,5 +586,41 @@ func TestRandomWithoutSchedulerAndInt31Sequence(t *testing.T) {
 	SetRandomSeed(91)
 	if second := randomInt31n(1000); second != first || second < 0 || second >= 1000 {
 		t.Fatalf("int31 sequence changed: %d/%d", first, second)
+	}
+}
+
+func BenchmarkCharAtSequential(b *testing.B) {
+	for _, size := range []int{1024, 16 * 1024} {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			text := strings.Repeat("0123456789abcdef", size/16)
+			charAtCache.Store(nil)
+			b.SetBytes(int64(len(text)))
+			b.ReportAllocs()
+			for b.Loop() {
+				for idx := range len(text) {
+					CharAt(text, idx)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkCharAtLargeLast(b *testing.B) {
+	text := strings.Repeat("0123456789abcdef", (1<<20)/16)
+	charAtCache.Store(nil)
+	b.ReportAllocs()
+	for b.Loop() {
+		CharAt(text, len(text)-1)
+	}
+}
+
+func BenchmarkCharAtEqualContentDistinctStorage(b *testing.B) {
+	cached := strings.Repeat("0123456789abcdef", (1<<20)/16)
+	charAtCache.Store(nil)
+	CharAt(cached, 0)
+	text := strings.Clone(cached)
+	b.ReportAllocs()
+	for b.Loop() {
+		CharAt(text, len(text)-1)
 	}
 }

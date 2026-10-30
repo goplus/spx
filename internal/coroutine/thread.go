@@ -28,6 +28,9 @@ import (
 	"github.com/goplus/spx/v4/internal/time"
 )
 
+// warpClockOrigin lets hot loop edges read only the monotonic clock.
+var warpClockOrigin = stime.Now()
+
 type suspendState uint8
 
 const (
@@ -150,7 +153,8 @@ func (th Thread) ShouldYield(budget stime.Duration) bool {
 		return true
 	}
 
-	now := stime.Now().UnixNano()
+	// Keep zero reserved for an execution window that has not started.
+	now := int64(stime.Since(warpClockOrigin)) + 1
 	startedAt := th.warpStart.Load()
 	if startedAt == 0 {
 		th.warpStart.Store(now)
