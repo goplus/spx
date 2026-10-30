@@ -30,10 +30,11 @@ import (
 )
 
 const (
-	webNormalMode      = "normal"
-	webWorkerMode      = "worker"
-	webMinigameMode    = "minigame"
-	webMiniprogramMode = "miniprogram"
+	webNormalMode       = "normal"
+	webWorkerMode       = "worker"
+	webMinigameMode     = "minigame"
+	webMiniprogramMode  = "miniprogram"
+	webPlatformTemplate = "template/platform/web"
 )
 
 type minigamePaths struct {
@@ -59,8 +60,7 @@ func (cmd *CmdTool) ExportWeb() error {
 	if err := cmd.exportWebCommon(webNormalMode); err != nil {
 		return err
 	}
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webNormalMode, cmd.WebDir, true)
-	return nil
+	return cmd.copyWebOverlay(webNormalMode, cmd.WebDir)
 }
 
 // ExportWebWorker exports the project for the worker-based web runtime.
@@ -69,10 +69,12 @@ func (cmd *CmdTool) ExportWebWorker() error {
 		return err
 	}
 	extDir := filepath.Join(cmd.WebDir, "__"+webWorkerMode)
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webWorkerMode, extDir, true)
 	defer func() {
 		_ = os.RemoveAll(extDir)
 	}()
+	if err := cmd.copyWebOverlay(webWorkerMode, extDir); err != nil {
+		return err
+	}
 
 	insertCode, err := cmd.readWebWorkerBundle(extDir)
 	if err != nil {
@@ -107,9 +109,19 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 	if err := cmd.exportWebCommon(webMiniprogramMode); err != nil {
 		return err
 	}
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMiniprogramMode, cmd.WebDir, true)
+	if err := cmd.copyWebOverlay(webMiniprogramMode, cmd.WebDir); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(filepath.Join(cmd.WebDir, "lab")); err != nil {
 		return fmt.Errorf("failed to remove web lab assets: %w", err)
+	}
+	return nil
+}
+
+func (cmd *CmdTool) copyWebOverlay(mode, destination string) error {
+	source := webPlatformTemplate + mode
+	if err := util.CopyDir(cmd.PlatformFS, source, destination, true); err != nil {
+		return fmt.Errorf("failed to copy web overlay %s: %w", source, err)
 	}
 	return nil
 }
@@ -124,21 +136,33 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 	}
 
 	dstPath := filepath.Join(cmd.ProjectDir, ".builds", "web")
-	os.MkdirAll(dstPath, 0o755)
-	util.CopyDir2(templateDir, dstPath)
+	if err := os.MkdirAll(dstPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create web export directory: %w", err)
+	}
+	if err := util.CopyDir2(templateDir, dstPath); err != nil {
+		return fmt.Errorf("failed to copy web runtime from %s: %w", templateDir, err)
+	}
 
 	logInfof("Exporting web assets to %s", dstPath)
-	util.CopyDir(cmd.ProjectFS, "template/project", cmd.ProjectDir, true)
+	if err := util.CopyDir(cmd.ProjectFS, "template/project", cmd.ProjectDir, true); err != nil {
+		return fmt.Errorf("failed to copy web project template: %w", err)
+	}
 
-	os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html"))
+	if err := renameWebEntryPage(dstPath); err != nil {
+		return err
+	}
 
 	ispxWebDir, err := cmd.getIspxWebDir()
 	if err != nil {
 		return err
 	}
-	util.CopyDir2(ispxWebDir, cmd.WebDir)
+	if err := util.CopyDir2(ispxWebDir, cmd.WebDir); err != nil {
+		return fmt.Errorf("failed to copy interpreter web runtime from %s: %w", ispxWebDir, err)
+	}
 
-	util.CopyDir(cmd.PlatformFS, "template/platform/web", cmd.WebDir, true)
+	if err := cmd.copyWebOverlay("", cmd.WebDir); err != nil {
+		return err
+	}
 
 	output, err := util.OutputCommand(util.CommandOptions{Dir: cmd.TargetDir}, "go", "env", "GOROOT")
 	if err != nil {
@@ -153,6 +177,22 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 		return err
 	}
 	return cmd.writeWebLogicAssets(mode)
+}
+
+func renameWebEntryPage(dir string) error {
+	destination := filepath.Join(dir, "index.html")
+	var lastErr error
+	for _, name := range []string{"engine.html", "godot.editor.html"} {
+		source := filepath.Join(dir, name)
+		if err := os.Rename(source, destination); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to rename web entry page: %w", err)
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("failed to rename web entry page: %w", lastErr)
 }
 
 func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
@@ -236,7 +276,9 @@ func (cmd *CmdTool) prepareMinigameWorkspace() (minigamePaths, error) {
 		return minigamePaths{}, fmt.Errorf("failed to backup web directory: %w", err)
 	}
 
-	util.CopyDir(cmd.PlatformFS, "template/platform/web"+webMinigameMode, cmd.WebDir, true)
+	if err := cmd.copyWebOverlay(webMinigameMode, cmd.WebDir); err != nil {
+		return minigamePaths{}, err
+	}
 	for _, dir := range []string{paths.engineDir, paths.jsDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return minigamePaths{}, fmt.Errorf("failed to create %s: %w", dir, err)
