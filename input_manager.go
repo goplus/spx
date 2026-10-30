@@ -143,10 +143,39 @@ type inputManager struct {
 	frame     inputFrameState
 }
 
-// KeyFromString returns KeyMax for an unrecognized key name.
+var scratchKeyNames = map[string]Key{
+	// Scratch key names, including the wildcard handled separately by Scratch.
+	"any":         KeyAny,
+	"space":       KeySpace,
+	"enter":       KeyEnter,
+	"up arrow":    KeyUp,
+	"down arrow":  KeyDown,
+	"left arrow":  KeyLeft,
+	"right arrow": KeyRight,
+
+	// Additional key names supported by TurboWarp projects.
+	"backspace":   KeyBackspace,
+	"delete":      KeyDelete,
+	"shift":       KeyShift,
+	"caps lock":   KeyCapsLock,
+	"scroll lock": KeyScrollLock,
+	"control":     KeyControl,
+	"escape":      KeyEscape,
+	"insert":      KeyInsert,
+	"home":        KeyHome,
+	"end":         KeyEnd,
+	"page up":     KeyPageUp,
+	"page down":   KeyPageDown,
+}
+
+// KeyFromString parses an SPX key name or a lowercase Scratch/TurboWarp key name.
+// It returns KeyMax for an unrecognized key name.
 func KeyFromString(key string) Key {
 	if key == "Any" {
 		return KeyAny
+	}
+	if k, ok := scratchKeyNames[key]; ok {
+		return k
 	}
 	if keyCode, ok := inkey.Parse(key); ok {
 		return Key(keyCode)
