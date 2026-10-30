@@ -285,6 +285,25 @@ func TestSpriteRenderingOverloadsAndDebugPreserveState(t *testing.T) {
 	}
 }
 
+func TestSpriteGhostFadeOutAfterExtendedFadeIn(t *testing.T) {
+	// CoalDestroyer's Play button keeps fading in until clicked, then fades out.
+	// See https://github.com/goplus/sb2xbp/issues/860.
+	var sprite SpriteImpl
+	sprite.SetGraphicEffect(GhostEffect, 100)
+	for range 60 {
+		sprite.ChangeGraphicEffect(GhostEffect, -5)
+	}
+	if got := sprite.greffUniforms[GhostEffect]; got != 0 {
+		t.Errorf("ghost after extended fade-in = %v, want 0", got)
+	}
+	for range 20 {
+		sprite.ChangeGraphicEffect(GhostEffect, 5)
+	}
+	if !sprite.isFullyGhosted() {
+		t.Fatalf("sprite remains visible after fade-out: ghost = %v", sprite.greffUniforms[GhostEffect])
+	}
+}
+
 func newTestRenderSprite() *SpriteImpl {
 	return &SpriteImpl{
 		name: "TestSprite",

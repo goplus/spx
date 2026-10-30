@@ -316,7 +316,7 @@ func (p *baseObj) requireGreffUniforms() map[EffectKind]float64 {
 // setGraphicEffect sets a graphic effect to a specific value.
 func (p *baseObj) setGraphicEffect(kind EffectKind, val float64) {
 	effs := p.requireGreffUniforms()
-	effs[kind] = val
+	effs[kind] = clampEffectValue(kind, val)
 	p.doSetGraphicEffect(kind, false)
 }
 
@@ -327,7 +327,7 @@ func (p *baseObj) changeGraphicEffect(kind EffectKind, delta float64) {
 	if oldVal, ok := effs[kind]; ok {
 		newVal += oldVal
 	}
-	effs[kind] = newVal
+	effs[kind] = clampEffectValue(kind, newVal)
 	p.doSetGraphicEffect(kind, false)
 }
 
@@ -411,6 +411,18 @@ func (p *baseObj) ensureMaterialShader() bool {
 		p.runtimeState.hasShader = true
 	}
 	return true
+}
+
+// clampEffectValue limits stored effects so later changes start at Scratch's bounds.
+func clampEffectValue(kind EffectKind, val float64) float64 {
+	switch kind {
+	case BrightnessEffect:
+		return mathf.Clamp(val, -100, 100)
+	case GhostEffect:
+		return mathf.Clamp(val, 0, 100)
+	default:
+		return val
+	}
 }
 
 // normalizeEffectValue normalizes an effect value based on its type.
