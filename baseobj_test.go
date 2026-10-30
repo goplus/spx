@@ -105,6 +105,54 @@ func TestBaseObjGraphicEffectsAccumulateBeforeProxyExists(t *testing.T) {
 	}
 }
 
+func TestBaseObjGraphicEffectLimits(t *testing.T) {
+	for _, tt := range []struct {
+		name                string
+		kind                EffectKind
+		value, delta        float64
+		wantSet, wantChange float64
+	}{
+		{"brightness below minimum", BrightnessEffect, -125, 5, -100, -95},
+		{"brightness above maximum", BrightnessEffect, 125, -5, 100, 95},
+		{"brightness crosses minimum", BrightnessEffect, -95, -10, -95, -100},
+		{"brightness crosses maximum", BrightnessEffect, 95, 10, 95, 100},
+		{"brightness fractional", BrightnessEffect, -12.5, -0.5, -12.5, -13},
+		{"ghost below minimum", GhostEffect, -25, 5, 0, 5},
+		{"ghost above maximum", GhostEffect, 125, -5, 100, 95},
+		{"ghost crosses minimum", GhostEffect, 5, -10, 5, 0},
+		{"ghost crosses maximum", GhostEffect, 95, 10, 95, 100},
+		{"ghost fractional", GhostEffect, 12.5, 0.5, 12.5, 13},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var obj baseObj
+			obj.setGraphicEffect(tt.kind, tt.value)
+			if got := obj.greffUniforms[tt.kind]; got != tt.wantSet {
+				t.Errorf("effect after set = %v, want %v", got, tt.wantSet)
+			}
+			obj.changeGraphicEffect(tt.kind, tt.delta)
+			if got := obj.greffUniforms[tt.kind]; got != tt.wantChange {
+				t.Errorf("effect after change = %v, want %v", got, tt.wantChange)
+			}
+		})
+	}
+}
+
+func TestBaseObjOtherGraphicEffectsRemainUnbounded(t *testing.T) {
+	for _, kind := range []EffectKind{ColorEffect, FishEyeEffect, WhirlEffect, PixelateEffect, MosaicEffect} {
+		t.Run(kind.String(), func(t *testing.T) {
+			var obj baseObj
+			obj.setGraphicEffect(kind, 1000)
+			if got := obj.greffUniforms[kind]; got != 1000 {
+				t.Fatalf("effect after set = %v, want 1000", got)
+			}
+			obj.changeGraphicEffect(kind, -2000)
+			if got := obj.greffUniforms[kind]; got != -1000 {
+				t.Fatalf("effect after change = %v, want -1000", got)
+			}
+		})
+	}
+}
+
 func TestInitSpriteCostumesConsumesPreparedLayout(t *testing.T) {
 	assetPath := costumeAssetPath("sprites/hero.png")
 	costumeSizeCache.Store(costumeSizeKey{path: assetPath}, mathf.NewVec2(20, 10))
