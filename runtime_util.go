@@ -19,6 +19,8 @@ package spx
 import (
 	"math"
 	"strings"
+	"sync/atomic"
+	"unicode/utf8"
 
 	"github.com/goplus/spx/v4/internal/engine"
 	itime "github.com/goplus/spx/v4/internal/time"
@@ -139,12 +141,46 @@ func TimeSinceLevelLoad() Seconds {
 	return itime.TimeSinceLevelLoad()
 }
 
+const (
+	charAtCacheMinBytes = 256
+	charAtCacheMaxBytes = 2 << 20
+)
+
+type charAtCacheEntry struct {
+	text  string
+	runes []rune // nil when text contains only ASCII bytes.
+}
+
+// Keep one immutable entry so repeated indexing of large strings does not scan
+// from the beginning on every call. Small strings do not evict this entry.
+var charAtCache atomic.Pointer[charAtCacheEntry]
+
 // CharAt returns the character at the given 0-based index in the string s.
 // It is similar to Scratch's operator_letter_of block, but uses Go-style
 // 0-based indexing. It returns an empty string if idx is out of range for the
 // rune sequence.
 func CharAt(s string, idx int) string {
-	if idx < 0 {
+	if idx < 0 || idx >= len(s) {
+		return ""
+	}
+	if len(s) >= charAtCacheMinBytes && len(s) <= charAtCacheMaxBytes {
+		entry := charAtCache.Load()
+		if entry == nil || entry.text != s {
+			entry = &charAtCacheEntry{text: s}
+			for i := range len(s) {
+				if s[i] >= utf8.RuneSelf {
+					entry.runes = []rune(s)
+					break
+				}
+			}
+			charAtCache.Store(entry)
+		}
+		if entry.runes == nil {
+			return string(s[idx])
+		}
+		if idx < len(entry.runes) {
+			return string(entry.runes[idx])
+		}
 		return ""
 	}
 	for _, r := range s {

@@ -21,6 +21,10 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
+
+	coreruntime "github.com/goplus/spx/v4/internal/core/runtime"
+	"github.com/goplus/spx/v4/internal/coroutine"
 )
 
 func TestListInitFromOwnsElementStorage(t *testing.T) {
@@ -446,5 +450,43 @@ func TestListRandomPositionUsesValidElement(t *testing.T) {
 	list.Clear()
 	if list.At(Random).data != nil {
 		t.Fatal("empty list has a random item")
+	}
+}
+
+// Model ClearTT's 8-list and 3-list initialization loops without interpreter dispatch.
+func BenchmarkChessListInitialization(b *testing.B) {
+	for _, checkBudget := range []bool{false, true} {
+		b.Run(fmt.Sprintf("warp-check=%t", checkBudget), func(b *testing.B) {
+			co := coroutine.New(nil)
+			b.Cleanup(func() { co.RunAfterStop(nil) })
+			b.ReportAllocs()
+			b.ResetTimer()
+			var initialized int
+			thread := co.Create("initialize", func(thread coroutine.Thread) {
+				thread.SetWarp(true)
+				yield := func() {}
+				if checkBudget {
+					yield = func() { thread.ShouldYield(time.Hour) }
+				}
+				for range b.N {
+					var lists [11]List
+					coreruntime.Repeat(262144, func() {
+						for i := range 8 {
+							lists[i].Append(0)
+						}
+					}, yield)
+					coreruntime.Repeat(262144, func() {
+						for i := 8; i < 11; i++ {
+							lists[i].Append(0)
+						}
+					}, yield)
+					initialized = lists[10].Len()
+				}
+			})
+			co.Join(thread)
+			if initialized != 262144 {
+				b.Fatal("initialization lost list elements")
+			}
+		})
 	}
 }

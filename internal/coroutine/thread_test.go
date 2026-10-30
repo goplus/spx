@@ -19,6 +19,7 @@ package coroutine
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -96,6 +97,7 @@ func TestSetWarp(t *testing.T) {
 func TestShouldYield(t *testing.T) {
 	t.Run("without warp", func(t *testing.T) {
 		thread := New(nil).newThread("loop")
+		t.Cleanup(thread.Cancel)
 		if !thread.ShouldYield(time.Hour) {
 			t.Fatal("ordinary loop did not yield")
 		}
@@ -103,45 +105,44 @@ func TestShouldYield(t *testing.T) {
 			t.Fatalf("ordinary loop started a warp budget at %d", got)
 		}
 	})
-
-	t.Run("start budget", func(t *testing.T) {
-		thread := New(nil).newThread("warp")
-		thread.SetWarp(true)
-		if thread.ShouldYield(time.Hour) {
-			t.Fatal("first warp loop edge yielded before starting its budget")
-		}
-		if thread.warpStart.Load() == 0 {
-			t.Fatal("first warp loop edge did not start its budget")
-		}
-	})
-
-	t.Run("within budget", func(t *testing.T) {
-		thread := New(nil).newThread("warp")
-		thread.SetWarp(true)
-		startedAt := time.Now().Add(-time.Minute).UnixNano()
-		thread.warpStart.Store(startedAt)
-		if thread.ShouldYield(time.Hour) {
-			t.Fatal("warp loop yielded before exhausting its budget")
-		}
-		if got := thread.warpStart.Load(); got != startedAt {
-			t.Fatalf("warp loop changed its budget start to %d, want %d", got, startedAt)
-		}
-	})
-
-	t.Run("exhausted budget", func(t *testing.T) {
-		thread := New(nil).newThread("warp")
-		thread.SetWarp(true)
-		thread.warpStart.Store(time.Now().Add(-time.Hour).UnixNano())
-		if !thread.ShouldYield(time.Minute) {
-			t.Fatal("warp loop did not yield after exhausting its budget")
-		}
-		if got := thread.warpStart.Load(); got != 0 {
-			t.Fatalf("exhausted warp budget was not reset: %d", got)
-		}
-		if thread.ShouldYield(time.Minute) || thread.warpStart.Load() == 0 {
-			t.Fatal("warp loop did not start a fresh budget after yielding")
-		}
-	})
+	for _, budget := range []time.Duration{-time.Nanosecond, 0, time.Millisecond, 500 * time.Millisecond} {
+		t.Run(budget.String(), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				thread := New(nil).newThread("warp")
+				t.Cleanup(thread.Cancel)
+				thread.SetWarp(true)
+				if thread.ShouldYield(budget) {
+					t.Fatal("first edge must start the budget")
+				}
+				startedAt := thread.warpStart.Load()
+				if startedAt == 0 {
+					t.Fatal("first edge did not start the budget")
+				}
+				if budget >= 0 {
+					if thread.ShouldYield(budget) {
+						t.Fatal("warp loop yielded before its budget")
+					}
+					time.Sleep(budget)
+					if thread.ShouldYield(budget) {
+						t.Fatal("edge exactly at budget must not yield")
+					}
+					if thread.warpStart.Load() != startedAt {
+						t.Fatal("loop edge restarted an unexpired budget")
+					}
+					time.Sleep(time.Nanosecond)
+				}
+				if !thread.ShouldYield(budget) {
+					t.Fatal("edge after budget must yield")
+				}
+				if thread.warpStart.Load() != 0 {
+					t.Fatal("exhausted warp budget was not reset")
+				}
+				if thread.ShouldYield(budget) || thread.warpStart.Load() == 0 {
+					t.Fatal("yield must reset the next execution window")
+				}
+			})
+		})
+	}
 }
 
 func TestIsSchedTimeoutUsesFrameTimestampAndThreshold(t *testing.T) {
@@ -282,5 +283,20 @@ func waitForThreadSignal(t *testing.T, signal <-chan struct{}, failure string) {
 	case <-signal:
 	case <-timer.C:
 		t.Fatal(failure)
+	}
+}
+
+func BenchmarkShouldYield(b *testing.B) {
+	for _, warp := range []bool{false, true} {
+		b.Run(fmt.Sprintf("warp=%t", warp), func(b *testing.B) {
+			thread := New(nil).newThread("loop")
+			thread.SetWarp(warp)
+			b.Cleanup(thread.Cancel)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				thread.ShouldYield(time.Hour)
+			}
+		})
 	}
 }
