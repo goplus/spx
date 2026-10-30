@@ -47,6 +47,67 @@ func TestRand0SwapsReversedBounds(t *testing.T) {
 	}
 }
 
+func TestRand1IntegralBoundsIncludeBothEnds(t *testing.T) {
+	t.Cleanup(ResetRandomSeed)
+	for _, bounds := range [][2]float64{{1, 12}, {12, 1}, {-3, -1}, {-1, 1}, {0, 1}, {7, 7}, {1e20, 1e20}} {
+		SetRandomSeed(1042497735)
+		low, high := math.Min(bounds[0], bounds[1]), math.Max(bounds[0], bounds[1])
+		seenLow, seenHigh := false, false
+		for range 256 {
+			got := Rand__1(bounds[0], bounds[1])
+			if got < low || got > high || math.Trunc(got) != got {
+				t.Fatalf("Rand__1(%v, %v) = %v, want integer in [%v, %v]", bounds[0], bounds[1], got, low, high)
+			}
+			seenLow = seenLow || got == low
+			seenHigh = seenHigh || got == high
+		}
+		if !seenLow || !seenHigh {
+			t.Fatalf("Rand__1(%v, %v) did not reach both endpoints", bounds[0], bounds[1])
+		}
+	}
+}
+
+func TestRand1FractionalBoundsKeepFractionalResults(t *testing.T) {
+	t.Cleanup(ResetRandomSeed)
+	for _, bounds := range [][2]float64{{1.5, 12}, {1, 12.5}, {12.5, 1}, {-3, -1.5}, {0.5, 0.5}} {
+		SetRandomSeed(1042497735)
+		low, high := math.Min(bounds[0], bounds[1]), math.Max(bounds[0], bounds[1])
+		seenFraction := false
+		for range 64 {
+			got := Rand__1(bounds[0], bounds[1])
+			if got < low || got > high || (low != high && got == high) {
+				t.Fatalf("Rand__1(%v, %v) = %v, outside fractional range", bounds[0], bounds[1], got)
+			}
+			seenFraction = seenFraction || math.Trunc(got) != got
+		}
+		if !seenFraction {
+			t.Fatalf("Rand__1(%v, %v) only returned integers", bounds[0], bounds[1])
+		}
+	}
+}
+
+// The matching-card project draws float-valued IDs, allowing two cards per ID.
+// Excluding the upper bound traps its warp loop after dealing only 22 cards.
+func TestRand1CanDealAllCardPairs(t *testing.T) {
+	SetRandomSeed(1042497735)
+	t.Cleanup(ResetRandomSeed)
+	var counts [12]int
+	dealt := 0
+	for attempts := 0; attempts < 1024 && dealt < 24; attempts++ {
+		index := int(Rand__1(1, float64(len(counts)))) - 1
+		if index < 0 || index >= len(counts) {
+			t.Fatalf("card index %d is out of range", index)
+		}
+		if counts[index] < 2 {
+			counts[index]++
+			dealt++
+		}
+	}
+	if dealt != 24 {
+		t.Fatalf("dealing stalled after %d cards: %v", dealt, counts)
+	}
+}
+
 func TestLimitPrecision(t *testing.T) {
 	negativeZero := math.Copysign(0, -1)
 	inside := math.Nextafter(1e-9, 0)
@@ -386,7 +447,7 @@ func TestNumericAndClockUtilities(t *testing.T) {
 	SetRandomSeed(7)
 	t.Cleanup(ResetRandomSeed)
 	for range 20 {
-		if got := Rand__1(5, -2); got < -2 || got >= 5 {
+		if got := Rand__1(5.5, -2); got < -2 || got >= 5.5 {
 			t.Fatalf("reversed float bounds: %v", got)
 		}
 	}

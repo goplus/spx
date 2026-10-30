@@ -34,10 +34,17 @@ func Rand__0(from, to int) float64 {
 	return float64(from + randomIntn(to-from+1))
 }
 
-// Rand__1 returns a random float64 between from and to.
+// Rand__1 returns a random number between from and to. Like Scratch, integral
+// bounds select an integer from the inclusive range, even when stored as floats.
 func Rand__1(from, to float64) float64 {
 	if to < from {
 		from, to = to, from
+	}
+	if from == to {
+		return from
+	}
+	if math.Mod(from, 1) == 0 && math.Mod(to, 1) == 0 {
+		return from + math.Floor(randomFloat64()*(to-from+1))
 	}
 	return randomFloat64()*(to-from) + from
 }
