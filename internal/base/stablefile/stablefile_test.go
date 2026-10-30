@@ -165,7 +165,7 @@ func TestCopyReportsStatFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("after copying", func(t *testing.T) {
+	t.Run("during copying", func(t *testing.T) {
 		name := filepath.Join(t.TempDir(), "value")
 		if err := os.WriteFile(name, []byte("data"), 0o600); err != nil {
 			t.Fatal(err)
