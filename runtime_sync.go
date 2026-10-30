@@ -164,7 +164,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 	p.applyPhysicsProxyConfig()
 	p.runtimeState.syncSprite.SetVisible(p.effectiveProxyVisibility())
 	p.runtimeState.syncSprite.SetTypeName(p.name)
-	p.applyGraphicEffects()
+	p.applyGraphicEffects(true)
 	p.runtimeState.syncSprite.RegisterOnAnimationLooped(p.handleAnimationLooped)
 	p.runtimeState.syncSprite.RegisterOnAnimationFinished(p.handleAnimationFinished)
 	p.markProxyDirty()

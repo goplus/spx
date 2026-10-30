@@ -338,15 +338,13 @@ func (p *baseObj) clearGraphicEffects() {
 	for i := range int(enumNumOfEffect) {
 		effs[EffectKind(i)] = 0
 	}
-	if p.runtimeState.syncSprite != nil {
-		engine.WaitMainThread(p.applyGraphicEffects)
-	}
+	p.applyGraphicEffects(false)
 }
 
-// applyGraphicEffects applies all graphic effects on the engine thread.
-func (p *baseObj) applyGraphicEffects() {
+// applyGraphicEffects applies all graphic effects.
+func (p *baseObj) applyGraphicEffects(isSync bool) {
 	for i := range int(enumNumOfEffect) {
-		p.doSetGraphicEffect(EffectKind(i), true)
+		p.doSetGraphicEffect(EffectKind(i), isSync)
 	}
 }
 
