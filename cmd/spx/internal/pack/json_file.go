@@ -26,7 +26,11 @@ import (
 const maxPackJSONSize = 16 << 20
 
 func readJSONFile(name string, value any) error {
-	data, _, err := (stablefile.Reader{MaxBytes: maxPackJSONSize}).Read(name)
+	return readJSONFileWithReader(name, value, stablefile.Reader{MaxBytes: maxPackJSONSize})
+}
+
+func readJSONFileWithReader(name string, value any, reader stablefile.Reader) error {
+	data, _, err := reader.Read(name)
 	switch {
 	case err == stablefile.ErrTooLarge:
 		return fmt.Errorf("%s exceeds the JSON size limit", name)

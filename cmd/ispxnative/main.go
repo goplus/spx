@@ -139,7 +139,11 @@ func validateAssetIndex(assetDir string) error {
 }
 
 func validateStableRegularFile(name string) (bool, error) {
-	info, err := (stablefile.Reader{AllowMissing: true}).Copy(name, io.Discard)
+	return validateStableFile(name, stablefile.Reader{AllowMissing: true})
+}
+
+func validateStableFile(name string, reader stablefile.Reader) (bool, error) {
+	info, err := reader.Copy(name, io.Discard)
 	if err == stablefile.ErrChangedOpening || err == stablefile.ErrChangedReading {
 		return false, fmt.Errorf("changed while it was read")
 	}

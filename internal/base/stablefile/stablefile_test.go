@@ -143,6 +143,52 @@ func TestReadRejectsIdentityChangedSinceCollection(t *testing.T) {
 	}
 }
 
+func TestCopyReportsStatFailures(t *testing.T) {
+	t.Run("after opening", func(t *testing.T) {
+		name := filepath.Join(t.TempDir(), "value")
+		if err := os.WriteFile(name, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		reader := Reader{Open: func(path string) (*os.File, error) {
+			file, err := os.Open(path)
+			if err != nil {
+				return nil, err
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			return file, nil
+		}}
+		_, _, err := reader.Read(name)
+		if !errors.Is(err, os.ErrClosed) {
+			t.Fatalf("initial Stat error = %v, want closed-file error", err)
+		}
+	})
+
+	t.Run("after copying", func(t *testing.T) {
+		name := filepath.Join(t.TempDir(), "value")
+		if err := os.WriteFile(name, []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var opened *os.File
+		reader := Reader{Open: func(path string) (*os.File, error) {
+			var err error
+			opened, err = os.Open(path)
+			return opened, err
+		}}
+		dst := writerFunc(func(data []byte) (int, error) {
+			if err := opened.Close(); err != nil {
+				t.Fatal(err)
+			}
+			return io.Discard.Write(data)
+		})
+		_, err := reader.Copy(name, dst)
+		if !errors.Is(err, os.ErrClosed) {
+			t.Fatalf("post-copy Stat error = %v, want closed-file error", err)
+		}
+	})
+}
+
 func TestCopyRejectsChangesDuringWrite(t *testing.T) {
 	writeErr := errors.New("destination failed")
 	for _, test := range []struct {
