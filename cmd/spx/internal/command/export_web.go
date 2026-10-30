@@ -30,10 +30,11 @@ import (
 )
 
 const (
-	webNormalMode      = "normal"
-	webWorkerMode      = "worker"
-	webMinigameMode    = "minigame"
-	webMiniprogramMode = "miniprogram"
+	webNormalMode       = "normal"
+	webWorkerMode       = "worker"
+	webMinigameMode     = "minigame"
+	webMiniprogramMode  = "miniprogram"
+	webPlatformTemplate = "template/platform/web"
 )
 
 type minigamePaths struct {
@@ -118,7 +119,7 @@ func (cmd *CmdTool) ExportMiniprogram() error {
 }
 
 func (cmd *CmdTool) copyWebOverlay(mode, destination string) error {
-	source := "template/platform/web" + mode
+	source := webPlatformTemplate + mode
 	if err := util.CopyDir(cmd.PlatformFS, source, destination, true); err != nil {
 		return fmt.Errorf("failed to copy web overlay %s: %w", source, err)
 	}

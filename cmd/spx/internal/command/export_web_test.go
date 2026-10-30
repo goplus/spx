@@ -38,6 +38,16 @@ var commonWebPlatformFS embed.FS
 //go:embed template/platform/web/* template/platform/webminigame/engine
 var conflictingMinigamePlatformFS embed.FS
 
+var webExportModes = []struct {
+	mode   string
+	export func(*CmdTool) error
+}{
+	{webNormalMode, (*CmdTool).ExportWeb},
+	{webWorkerMode, (*CmdTool).ExportWebWorker},
+	{webMinigameMode, (*CmdTool).ExportMinigame},
+	{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
+}
+
 func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 	projectRoot := t.TempDir()
 	t.Chdir(projectRoot)
@@ -506,15 +516,7 @@ func TestWeChatDevToolsUsesTargetProjectDirectory(t *testing.T) {
 }
 
 func TestWebExportModeWorkflows(t *testing.T) {
-	for _, tc := range []struct {
-		mode   string
-		export func(*CmdTool) error
-	}{
-		{webNormalMode, (*CmdTool).ExportWeb},
-		{webWorkerMode, (*CmdTool).ExportWebWorker},
-		{webMinigameMode, (*CmdTool).ExportMinigame},
-		{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
-	} {
+	for _, tc := range webExportModes {
 		t.Run(tc.mode, func(t *testing.T) {
 			t.Chdir(t.TempDir())
 			before := workingDirectory(t)
@@ -588,15 +590,7 @@ func TestWebExportModeWorkflows(t *testing.T) {
 }
 
 func TestWebExportRejectsMissingModeOverlay(t *testing.T) {
-	for _, tc := range []struct {
-		mode   string
-		export func(*CmdTool) error
-	}{
-		{webNormalMode, (*CmdTool).ExportWeb},
-		{webWorkerMode, (*CmdTool).ExportWebWorker},
-		{webMinigameMode, (*CmdTool).ExportMinigame},
-		{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
-	} {
+	for _, tc := range webExportModes {
 		t.Run(tc.mode, func(t *testing.T) {
 			cmd := newWebExportFixture(t, tc.mode)
 			cmd.PlatformFS = commonWebPlatformFS
@@ -649,15 +643,7 @@ func TestWebExportRejectsMissingModeOverlay(t *testing.T) {
 }
 
 func TestWebExportMissingPrerequisites(t *testing.T) {
-	for _, tc := range []struct {
-		mode   string
-		export func(*CmdTool) error
-	}{
-		{webNormalMode, (*CmdTool).ExportWeb},
-		{webWorkerMode, (*CmdTool).ExportWebWorker},
-		{webMinigameMode, (*CmdTool).ExportMinigame},
-		{webMiniprogramMode, (*CmdTool).ExportMiniprogram},
-	} {
+	for _, tc := range webExportModes {
 		t.Run(tc.mode, func(t *testing.T) {
 			mode := tc.mode
 			cmd := newWebExportFixture(t, mode)
