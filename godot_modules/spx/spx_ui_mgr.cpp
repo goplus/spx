@@ -76,31 +76,32 @@ ESpxUiType SpxUiMgr::get_node_type(Node *obj) {
 		return ESpxUiType::None;
 	}
 
-	if (dynamic_cast<SpxLabel *>(obj)) {
+	if (Object::cast_to<SpxLabel>(obj)) {
 		return ESpxUiType::Label;
 	}
 
-	if (dynamic_cast<SpxButton *>(obj)) {
-		return ESpxUiType::Button;
-	}
-
-	if (dynamic_cast<SpxImage *>(obj)) {
-		return ESpxUiType::Image;
-	}
-
-	if (dynamic_cast<SpxToggle *>(obj)) {
+	// CheckButton derives from Button, so identify the more specific type first.
+	if (Object::cast_to<SpxToggle>(obj)) {
 		return ESpxUiType::Toggle;
 	}
 
-	if (dynamic_cast<SpxInput *>(obj)) {
+	if (Object::cast_to<SpxImage>(obj)) {
+		return ESpxUiType::Image;
+	}
+
+	if (Object::cast_to<SpxButton>(obj)) {
+		return ESpxUiType::Button;
+	}
+
+	if (Object::cast_to<SpxInput>(obj)) {
 		return ESpxUiType::Input;
 	}
 
-	if (dynamic_cast<SpxSlider *>(obj)) {
+	if (Object::cast_to<SpxSlider>(obj)) {
 		return ESpxUiType::Slider;
 	}
 
-	if (dynamic_cast<SpxControl *>(obj)) {
+	if (Object::cast_to<SpxControl>(obj)) {
 		return ESpxUiType::Control;
 	}
 	return ESpxUiType::None;
@@ -176,20 +177,23 @@ void SpxUiMgr::on_reset(int reset_code) {
 
 Control *SpxUiMgr::create_control(GdString path) {
 	const String path_str = SpxStr(path);
-	Control *node = nullptr;
-	if (path_str != "") {
-		Ref<PackedScene> scene = ResourceLoader::load(path_str);
-		if (scene.is_null()) {
-			print_error("Failed to load sprite scene " + path_str);
-			return nullptr;
-		} else {
-			node = dynamic_cast<Control *>(scene->instantiate());
-			if (node == nullptr) {
-				print_error("Failed to load sprite scene , type invalid " + path_str);
-			}
-		}
+	if (path_str.is_empty()) {
+		return nullptr;
 	}
-	return node;
+	Ref<PackedScene> scene = ResourceLoader::load(path_str);
+	if (scene.is_null()) {
+		print_error("Failed to load UI scene " + path_str);
+		return nullptr;
+	}
+	Node *root = scene->instantiate();
+	Control *control = Object::cast_to<Control>(root);
+	if (control == nullptr) {
+		if (root != nullptr) {
+			memdelete(root);
+		}
+		print_error("UI scene root must be a Control: " + path_str);
+	}
+	return control;
 }
 
 SpxUi *SpxUiMgr::on_create_node(Control *control, GdInt type, bool is_attach) {
@@ -216,14 +220,18 @@ SpxUi *SpxUiMgr::on_create_node(Control *control, GdInt type, bool is_attach) {
 	return node;
 }
 
-#define CREATE_UI_NODE(TYPE)                                              \
-	Spx##TYPE *control = dynamic_cast<Spx##TYPE *>(create_control(path)); \
-	if (control == nullptr) {                                             \
-		control = memnew(Spx##TYPE);                                      \
-	}                                                                     \
-	auto node = on_create_node(control, (GdInt)ESpxUiType::TYPE);         \
-	if (node == nullptr) {                                                \
-		return NULL_OBJECT_ID;                                            \
+#define CREATE_UI_NODE(TYPE)                                      \
+	Control *loaded = create_control(path);                       \
+	Spx##TYPE *control = Object::cast_to<Spx##TYPE>(loaded);      \
+	if (control == nullptr) {                                     \
+		if (loaded != nullptr) {                                  \
+			memdelete(loaded);                                    \
+		}                                                         \
+		control = memnew(Spx##TYPE);                              \
+	}                                                             \
+	auto node = on_create_node(control, (GdInt)ESpxUiType::TYPE); \
+	if (node == nullptr) {                                        \
+		return NULL_OBJECT_ID;                                    \
 	}
 
 GdObj SpxUiMgr::create_node(GdString path) {
@@ -259,6 +267,7 @@ GdObj SpxUiMgr::create_image(GdString path) {
 
 GdObj SpxUiMgr::create_toggle(GdString path, GdBool value) {
 	CREATE_UI_NODE(Toggle)
+	control->set_pressed_no_signal(value);
 	return node->get_gid();
 }
 

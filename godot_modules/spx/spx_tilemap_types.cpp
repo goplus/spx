@@ -326,12 +326,7 @@ bool SpxTileMapData::parse_from_file(const String &json_path, SpxTileMapData &ou
 		return false;
 	}
 
-	String json_content;
-	while (!file->eof_reached()) {
-		String line = file->get_line();
-		json_content += line + "\n";
-	}
-	file->close();
+	String json_content = file->get_as_text();
 
 	if (json_content.is_empty()) {
 		ERR_PRINT("SpxTileMapData: JSON file is empty: " + json_path);

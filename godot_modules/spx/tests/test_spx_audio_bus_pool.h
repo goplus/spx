@@ -33,6 +33,7 @@
 
 #include "../spx_audio_bus_pool.h"
 #include "core/math/math_funcs.h"
+#include "servers/audio/effects/audio_effect_amplify.h"
 #include "servers/audio/effects/audio_effect_panner.h"
 #include "servers/audio_server.h"
 #include "tests/test_macros.h"
@@ -77,10 +78,20 @@ TEST_CASE("[Audio][SPX] Audio bus pool borrows project buses without claiming pr
 	audio_server->set_bus_volume_db(borrowed_sfx, borrowed_sfx_volume_db);
 	audio_server->set_bus_volume_db(colliding_bus, colliding_volume_db);
 	audio_server->add_bus_effect(colliding_bus, colliding_effect);
+	Ref<AudioEffectAmplify> project_effect;
+	project_effect.instantiate();
+	audio_server->add_bus_effect(borrowed_sfx, project_effect);
 
 	SpxAudioBusPool::init();
 	CHECK_EQ(audio_server->get_bus_count(), 5);
+	SpxAudioBusPool *pool = SpxAudioBusPool::get_singleton();
+	CHECK_EQ(pool->get_pan("Sfx"), 0.0f);
+	pool->set_pan("Sfx", 0.5f); // Skip unrelated project effects, rather than replacing them.
+	pool->set_pan("Sfx", -0.5f);
 	SpxAudioBusPool::reset();
+	CHECK_EQ(audio_server->get_bus_effect_count(borrowed_sfx), 2);
+	CHECK(audio_server->get_bus_effect(borrowed_sfx, 0) == project_effect);
+	CHECK_EQ(pool->get_pan("Sfx"), -0.5f);
 
 	CHECK_EQ(audio_server->get_bus_index("Sfx"), borrowed_sfx);
 	CHECK_EQ(audio_server->get_bus_index("Music"), borrowed_music);
@@ -223,6 +234,38 @@ TEST_CASE("[Audio][SPX] Panning follows Scratch equal-power mixing and zero bypa
 		CHECK_EQ(output[i].left, input[i].left);
 		CHECK_EQ(output[i].right, input[i].right);
 	}
+}
+
+TEST_CASE("[Audio][SPX] Audio buses reject stale names without changing another voice") {
+	SpxAudioBusPool::reset();
+	SpxAudioBusPool::shutdown();
+	SpxAudioBusPool::init();
+	struct Cleanup {
+		~Cleanup() { SpxAudioBusPool::shutdown(); }
+	} cleanup;
+	auto *pool = SpxAudioBusPool::get_singleton();
+	auto *server = AudioServer::get_singleton();
+	const StringName active = pool->alloc();
+	const StringName released = pool->alloc();
+	pool->set_volume(active, 0.5f);
+	pool->set_pan(active, 0.25f);
+	pool->free(released);
+	for (const StringName &invalid : { StringName("missing_spx_bus"), released }) {
+		pool->set_volume(invalid, 0.1f);
+		pool->set_pan(invalid, -1.0f);
+		CHECK(pool->get_volume(invalid) == 0.0f);
+		CHECK(pool->get_pan(invalid) == 0.0f);
+		pool->free(invalid);
+	}
+	CHECK(pool->get_volume(active) == doctest::Approx(0.5f));
+	CHECK(pool->get_pan(active) == doctest::Approx(0.25f));
+	remove_bus(server, released);
+	const StringName replacement = pool->alloc();
+	CHECK_FALSE(replacement.is_empty());
+	CHECK(server->get_bus_index(replacement) > 0);
+	remove_bus(server, active);
+	pool->free(active); // Authored edits may remove an allocated bus before release.
+	CHECK(pool->get_volume(replacement) == doctest::Approx(1.0f));
 }
 
 } // namespace TestSpxAudioBusPool

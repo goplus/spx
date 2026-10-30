@@ -46,7 +46,6 @@ void SpxPen::on_create(GdInt p_id, Node *p_root) {
 	id = p_id;
 	surface = static_cast<SpxPenSurface *>(p_root);
 	is_pen_down = false;
-	has_last_draw_pos = false;
 	needs_start_cap = true;
 	min_draw_distance = 1.0f;
 	pen_properties.transparency = 1.0f;
@@ -55,7 +54,6 @@ void SpxPen::on_create(GdInt p_id, Node *p_root) {
 
 void SpxPen::on_destroy() {
 	surface = nullptr;
-	has_last_draw_pos = false;
 	needs_start_cap = true;
 	is_pen_down = false;
 	move_by_mouse = false;
@@ -77,7 +75,6 @@ GdVec2 SpxPen::_get_draw_position(GdVec2 position, float size) const {
 void SpxPen::_start_new_line() {
 	if (is_pen_down) {
 		last_draw_pos = _get_draw_position(current_pen_pos, pen_properties.size);
-		has_last_draw_pos = true;
 		needs_start_cap = true;
 	}
 }
@@ -89,17 +86,12 @@ void SpxPen::_append_current_point_if_needed(GdVec2 position) {
 	}
 	const Vector2 draw_position = _get_draw_position(current_pen_pos, pen_properties.size);
 
-	if (has_last_draw_pos) {
-		float distance = last_draw_pos.distance_to(draw_position);
-		if (distance < min_draw_distance) {
-			return;
-		}
-		_draw_line(last_draw_pos, draw_position, pen_properties.size, _get_current_color(), needs_start_cap);
-	} else {
-		_draw_line(draw_position, draw_position, pen_properties.size, _get_current_color(), true);
+	float distance = last_draw_pos.distance_to(draw_position);
+	if (distance < min_draw_distance) {
+		return;
 	}
+	_draw_line(last_draw_pos, draw_position, pen_properties.size, _get_current_color(), needs_start_cap);
 	last_draw_pos = draw_position;
-	has_last_draw_pos = true;
 	needs_start_cap = false;
 }
 
@@ -122,14 +114,12 @@ void SpxPen::on_update(float delta) {
 }
 
 void SpxPen::on_reset(int reset_code) {
-	has_last_draw_pos = false;
 	needs_start_cap = true;
 	is_pen_down = false;
 	move_by_mouse = false;
 }
 
 void SpxPen::on_erase_all() {
-	has_last_draw_pos = is_pen_down;
 	needs_start_cap = true;
 	last_draw_pos = _get_draw_position(current_pen_pos, pen_properties.size);
 }
@@ -166,14 +156,12 @@ void SpxPen::on_down(GdBool p_move_by_mouse) {
 	const Vector2 draw_position = _get_draw_position(current_pen_pos, pen_properties.size);
 	_draw_line(draw_position, draw_position, pen_properties.size, _get_current_color(), true);
 	last_draw_pos = draw_position;
-	has_last_draw_pos = true;
 	needs_start_cap = false;
 	is_pen_down = true;
 }
 
 void SpxPen::on_up() {
 	is_pen_down = false;
-	has_last_draw_pos = false;
 	needs_start_cap = true;
 }
 

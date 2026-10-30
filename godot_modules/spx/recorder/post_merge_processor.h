@@ -145,21 +145,19 @@ private:
 	Error write_video_stream_header(Ref<FileAccess> output_file, const AviFileInfo &video_info);
 	Error write_audio_stream_header(Ref<FileAccess> output_file, const AviFileInfo &audio_info);
 	Error interleave_avi_data(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info);
-	Error interleave_avi_data_timestamped(const String &video_path, const String &audio_path, Ref<FileAccess> output_file, const AviFileInfo &video_info, const AviFileInfo &audio_info);
 	Error write_merged_avi_index(Ref<FileAccess> output_file, const Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Helper methods for timestamp-based interleaving
 	void calculate_chunk_timestamps(const Vector<AviFileInfo::IndexEntry> &chunks, const AviFileInfo &info, bool is_video, Vector<TimestampedChunk> &timestamped_chunks);
-	uint32_t calculate_optimal_audio_chunk_size(uint32_t video_fps, uint32_t sample_rate);
-	bool validate_av_sync(uint64_t video_ts, uint64_t audio_ts);
-	Error write_timestamped_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, const TimestampedChunk &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
+	Error write_avi_chunk(Ref<FileAccess> input_file, Ref<FileAccess> output_file, const TimestampedChunk &chunk, bool is_video, uint32_t &chunk_offset, Vector<AviFileInfo::IndexEntry> &merged_index);
 
 	// Utility methods
 	bool check_ffmpeg_availability();
 	bool file_exists(const String &path);
 	Error cleanup_intermediate_files(const String &video_path, const String &audio_path);
 	uint64_t get_file_size(const String &path);
-	void scan_movi_chunks(Ref<FileAccess> file, uint64_t movi_offset, uint32_t movi_size, Vector<AviFileInfo::IndexEntry> &chunks);
+	Error validate_movi_chunk(Ref<FileAccess> file, const AviFileInfo &info, const AviFileInfo::IndexEntry &entry);
+	Error scan_movi_chunks(Ref<FileAccess> file, const AviFileInfo &info, Vector<AviFileInfo::IndexEntry> &chunks);
 
 public:
 	PostMergeProcessor();

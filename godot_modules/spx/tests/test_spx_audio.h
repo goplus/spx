@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_audio.h                                                      */
+/*  test_spx_audio.h                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -34,6 +34,7 @@
 #include "../spx_audio_mgr.h"
 #include "../spx_engine.h"
 #include "../spx_res_mgr.h"
+#include "../spx_camera_mgr.h"
 #include "scene/2d/audio_stream_player_2d.h"
 #include "scene/main/window.h"
 #include "scene/resources/audio_stream_wav.h"
@@ -135,6 +136,7 @@ TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	CHECK_EQ(audio->get_timer(playback), position);
 	CHECK(audio->is_playing(playback));
 
+
 	audio->pause(playback);
 	audio->set_pitch(object, 0.5f);
 	CHECK_EQ(player->get_pitch_scale(), 0.5f);
@@ -149,7 +151,100 @@ TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	CHECK_FALSE(player->get_stream_paused());
 	CHECK(audio->is_playing(playback));
 
+	// Allocating an effect bus migrates an existing voice without restarting it.
+	audio->set_pan(object, -0.4f);
+	CHECK(audio->get_pan(object) == doctest::Approx(-0.4f));
+	audio->set_volume(object, 0.25f);
+	CHECK(audio->get_volume(object) == doctest::Approx(0.25f));
+	CHECK(player->get_bus() != "Master");
+	CHECK(player->get_stream_playback() == playing_stream);
 	audio->pause(playback);
+	SUBCASE("Seek and restart an existing playback") {
+		audio->resume(playback);
+		audio->set_timer(playback, 0.75f);
+		CHECK(audio->get_timer(playback) == doctest::Approx(0.75f));
+		CHECK(audio->restart(playback));
+		CHECK(audio->get_timer(playback) == doctest::Approx(0.0f));
+		audio->stop_all();
+	}
+	SUBCASE("Worker calls cannot mutate audio ownership or playback") {
+		GdInt rejected = -1;
+		struct Context {
+			SpxAudioMgr *audio;
+			GdObj object;
+			GdInt *rejected;
+		} context{ audio, object, &rejected };
+		Thread worker;
+		ERR_PRINT_OFF;
+		worker.start([](void *data) {
+			auto &context = *static_cast<Context *>(data);
+			context.audio->on_update(0.1f);
+			context.audio->on_reset(0);
+			context.audio->on_destroy();
+			context.audio->stop_all();
+			context.audio->destroy_audio(context.object);
+			*context.rejected = context.audio->play(context.object, "res://spx_paused_audio_test.wav");
+			context.audio->pause(1);
+		}, &context);
+		worker.wait_to_finish();
+		ERR_PRINT_ON;
+		CHECK(rejected == 0);
+		CHECK(audio->get_object(object) != nullptr);
+		CHECK(audio->is_playing(playback));
+		CHECK(player->get_stream_paused());
+		audio->stop_all();
+	}
+
+	SUBCASE("Invalid playback handles remain inert") {
+		audio->set_pitch(0, 4);
+		audio->set_pan(0, 1);
+		audio->set_volume(0, 0);
+		CHECK(audio->play(0, "res://spx_paused_audio_test.wav") == 0);
+		ERR_PRINT_OFF;
+		CHECK(audio->play(object, "res://missing_spx_audio.wav") == 0);
+		ERR_PRINT_ON;
+		CHECK(audio->get_pitch(object) == 0.5f);
+		CHECK(audio->get_volume(object) == doctest::Approx(0.25f));
+		CHECK_FALSE(audio->restart(0));
+		CHECK_FALSE(audio->is_playing(0));
+		audio->pause(0);
+		audio->resume(0);
+		audio->stop(0);
+		audio->set_loop(0, true);
+		CHECK_FALSE(audio->get_loop(0));
+		CHECK(audio->get_timer(0) == 0);
+		CHECK(audio->get_pitch(0) == 0);
+		CHECK(audio->get_pan(0) == 0);
+		CHECK(audio->get_volume(0) == 0);
+		audio->set_timer(0, 1.0f);
+		auto *voice = audio->get_object(object);
+		REQUIRE(voice);
+		ERR_PRINT_OFF;
+		voice->pause(0);
+		voice->resume(0);
+		voice->set_loop(0, true);
+		voice->set_timer(0, 1);
+		CHECK_FALSE(voice->is_playing(0));
+		CHECK_FALSE(voice->restart(0));
+		CHECK_FALSE(voice->get_loop(0));
+		CHECK(voice->get_timer(0) == 0);
+		ERR_PRINT_ON;
+		audio->stop_all();
+	}
+	SUBCASE("Missing and queued voice owners reject playback without replacing a live voice") {
+		auto *voice = audio->get_object(object);
+		REQUIRE(voice);
+		auto *owner = memnew(Node);
+		root->add_child(owner);
+		owner->queue_free();
+		CHECK_FALSE(voice->play(playback, "res://spx_paused_audio_test.wav", owner));
+		CHECK(voice->has_audio(playback));
+		SpxAudio detached;
+		detached.on_create(0, nullptr);
+		CHECK_FALSE(detached.play(1, "res://spx_paused_audio_test.wav"));
+		detached.on_destroy();
+		audio->stop_all();
+	}
 	SUBCASE("Stop one paused playback") {
 		audio->stop(playback);
 	}
@@ -201,7 +296,25 @@ TEST_CASE("[SceneTree][SPX] Audio effects preserve playback lifetimes") {
 	SUBCASE("Pitch tolerates deleted players") {
 		memdelete(player);
 		audio->set_pitch(object, 2.0f);
+		CHECK_FALSE(audio->is_playing(playback));
 		audio->on_update(0.1f);
+	}
+	SUBCASE("Restart retires a voice whose stream was removed") {
+		player->set_stream(Ref<AudioStream>());
+		CHECK_FALSE(audio->restart(playback));
+		CHECK(player->is_queued_for_deletion());
+		CHECK_FALSE(audio->get_object(object)->has_audio(playback));
+	}
+	SUBCASE("Camera-owned sounds follow camera lifetime") {
+		GdInt camera_voice = audio->play_with_attenuation(object, "res://spx_paused_audio_test.wav", -1, 0, 100);
+		REQUIRE(camera_voice != 0);
+		auto children = engine->get_camera()->get_camera()->find_children("*", "AudioStreamPlayer2D", true, false);
+		REQUIRE(children.size() == 1);
+		auto *camera_player = Object::cast_to<AudioStreamPlayer2D>(children[0]);
+		REQUIRE(camera_player);
+		camera_player->queue_free();
+		CHECK_FALSE(audio->is_playing(camera_voice));
+		audio->stop_all();
 	}
 	CHECK_FALSE(audio->is_playing(playback));
 }

@@ -49,14 +49,23 @@
 #include "spx_sprite_mgr.h"
 
 void SpxSceneMgr::_request_export(SubViewport *viewport) {
-	viewport_to_export = viewport;
-	export_pending = true;
+	viewport_to_export = viewport->get_instance_id();
 	elapsed = 0.0;
+}
+
+void SpxSceneMgr::_cancel_export() {
+	if (auto *viewport = Object::cast_to<SubViewport>(ObjectDB::get_instance(viewport_to_export))) {
+		if (Node *parent = viewport->get_parent()) {
+			parent->remove_child(viewport);
+		}
+		viewport->queue_free();
+	}
+	viewport_to_export = ObjectID();
 }
 
 void SpxSceneMgr::_export_vp_png(SubViewport *viewport) {
 	Ref<Image> image = viewport->get_texture()->get_image();
-	Error err = image->save_png(DEFAULT_SAVE_PATH);
+	Error err = image.is_valid() ? image->save_png(DEFAULT_SAVE_PATH) : ERR_UNAVAILABLE;
 	String full_path = ProjectSettings::get_singleton()->globalize_path(DEFAULT_SAVE_PATH);
 	if (err == OK) {
 		print_line_rich("TileMap scene saved to: " + full_path);
@@ -74,16 +83,20 @@ void SpxSceneMgr::on_awake() {
 }
 
 void SpxSceneMgr::on_update(float delta) {
-	if (export_pending) {
+	if (viewport_to_export.is_valid()) {
 		elapsed += delta;
 		if (elapsed >= 1.0) {
-			export_pending = false;
-			_export_vp_png(viewport_to_export);
+			auto *viewport = Object::cast_to<SubViewport>(ObjectDB::get_instance(viewport_to_export));
+			viewport_to_export = ObjectID();
+			if (viewport) {
+				_export_vp_png(viewport);
+			}
 		}
 	}
 }
 
 void SpxSceneMgr::on_destroy() {
+	_cancel_export();
 	// Clear pure sprites without recreating the root node (we're destroying)
 	id_pure_sprites.clear();
 	SpxLayerSorter::instance().reset();
@@ -94,6 +107,7 @@ void SpxSceneMgr::on_destroy() {
 }
 
 void SpxSceneMgr::on_reset(int reset_code) {
+	_cancel_export();
 	clear_pure_sprites();
 }
 
@@ -144,8 +158,8 @@ void SpxSceneMgr::collect_sortable_sprites(Vector<ISortableSprite *> &out) {
 Rect2 SpxSceneMgr::get_scene_bounds(Node *node) {
 	Rect2 total_rect;
 
-	for (int i = 0; i < node->get_child_count(); i++) {
-		Node *child = node->get_child(i);
+	for (int i = 0; i < node->get_child_count(false); i++) {
+		Node *child = node->get_child(i, false);
 		Rect2 child_rect;
 
 		if (TileMapLayer *tml = Object::cast_to<TileMapLayer>(child)) {
@@ -201,17 +215,24 @@ void SpxSceneMgr::export_scene_as_png(Node *root) {
 		return;
 	}
 
+	_cancel_export();
+	Node *copy = root->duplicate(Node::DUPLICATE_USE_INSTANTIATION);
+	if (!copy) {
+		print_error("Failed to duplicate scene for export!");
+		return;
+	}
+
 	SubViewport *viewport = memnew(SubViewport);
 	viewport->set_size(rect.size);
 	viewport->set_update_mode(SubViewport::UPDATE_ALWAYS);
 	viewport->set_clear_mode(SubViewport::CLEAR_MODE_ALWAYS);
 
-	Node *copy = root->duplicate(Node::DUPLICATE_USE_INSTANTIATION);
 	if (Node2D *n2d = Object::cast_to<Node2D>(copy)) {
 		n2d->set_position(n2d->get_global_position() - rect.position);
 	}
 	viewport->add_child(copy);
-	get_tree()->get_current_scene()->add_child(viewport);
+	// Pending snapshots must not affect authored scene bounds.
+	get_spx_root()->add_child(viewport, false, Node::INTERNAL_MODE_BACK);
 	_request_export(viewport);
 }
 
@@ -276,21 +297,13 @@ GdObj SpxSceneMgr::create_static_sprite(GdString texture_path, GdVec2 pos, GdFlo
 	static_body->add_child(sprite);
 	sprite->set_position(spx_to_godot_vec2(pivot));
 
-	// Create collision shape (default: rectangle matching texture size)
+	// Create the requested collision shape.
 	CollisionShape2D *collision_shape = memnew(CollisionShape2D);
 
 	static_body->set_collider(collision_shape);
 	static_body->add_child(collision_shape);
 	collision_shape->set_position(spx_to_godot_vec2(collider_pivot));
 	switch (type) {
-		case ColliderType::NONE:
-			if (texture.is_valid()) {
-				Ref<RectangleShape2D> rect = memnew(RectangleShape2D);
-				Vector2 texture_size = texture->get_size();
-				rect->set_size(texture_size);
-				collision_shape->set_shape(rect);
-			}
-			break;
 		case ColliderType::CIRCLE: {
 			Ref<CircleShape2D> circle = memnew(CircleShape2D);
 			if (data_len > 0) {

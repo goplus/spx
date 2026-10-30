@@ -230,10 +230,6 @@ Vector2 SpxResMgr::_read_offset(const Dictionary &d) {
 	}
 
 	Array off = d["offset"];
-	if (off.size() < 2) {
-		return Vector2(0, 0);
-	}
-
 	return Vector2(
 			double(off[0]),
 			double(off[1]));

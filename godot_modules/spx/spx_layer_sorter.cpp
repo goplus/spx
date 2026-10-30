@@ -51,17 +51,16 @@ void SpxLayerSorter::update(const Vector<ISortableSprite *> &sortables) {
 
 	_collect_sprites(sortables);
 
-	if (dynamic_dirty.empty()) {
-		return;
+	if (!dynamic_dirty.empty()) {
+		float ratio = float(dynamic_dirty.size()) / float(dynamic_sorted.size() + 1);
+		if (ratio > full_sort_ratio) {
+			_full_sort_dynamic();
+		} else {
+			_incremental_sort_dynamic();
+		}
 	}
 
-	float ratio = float(dynamic_dirty.size()) / float(dynamic_sorted.size() + 1);
-	if (ratio > full_sort_ratio) {
-		_full_sort_dynamic();
-	} else {
-		_incremental_sort_dynamic();
-	}
-
+	// Static-only scenes and removed sprites also need their z-order refreshed.
 	_apply_z_index_merged();
 
 	if (Spx::is_debug_mode() && !drawer) {
@@ -159,6 +158,8 @@ void SpxLayerSorter::_collect_sprites(const Vector<ISortableSprite *> &sortables
 				found->sortable = sp;
 				if (!is_static) {
 					_mark_dirty(sp);
+				} else {
+					static_initialized = false;
 				}
 			}
 		} else {

@@ -4,6 +4,7 @@
 
 #include "movie_recorder_manager.h"
 
+#include "core/config/project_settings.h"
 #include "core/os/os.h"
 #include "core/os/time.h"
 #include "main/main_loop_phase_callback_bus.h"
@@ -19,6 +20,23 @@ uint32_t MovieRecorderManager::default_fps = 60;
 uint64_t MovieRecorderManager::recording_start_time = 0;
 uint64_t MovieRecorderManager::callback_registration = MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID;
 bool MovieRecorderManager::command_line_recording = false;
+
+static Size2i resolve_movie_size(Size2i requested, const Size2i &fallback) {
+	if (requested.x > 0 && requested.y > 0) {
+		return requested;
+	}
+	if (DisplayServer::get_singleton()) {
+		requested = DisplayServer::get_singleton()->window_get_size();
+		if (requested.x > 0 && requested.y > 0) {
+			return requested;
+		}
+	}
+	if (fallback.x > 0 && fallback.y > 0) {
+		return fallback;
+	}
+	// Headless display servers have no window; use the configured render size.
+	return Size2i(GLOBAL_GET("display/window/size/viewport_width"), GLOBAL_GET("display/window/size/viewport_height"));
+}
 
 void MovieRecorderManager::initialize() {
 	if (callback_registration != MainLoopPhaseCallbackBus::INVALID_REGISTRATION_ID) {
@@ -81,13 +99,7 @@ Error MovieRecorderManager::start_recording(const RecordingConfig &p_config) {
 	recording_start_time = Time::get_singleton()->get_ticks_usec();
 	return OK;
 #else
-	Size2i size(p_config.video_width, p_config.video_height);
-	if (size.x <= 0 || size.y <= 0) {
-		size = default_movie_size;
-		if (DisplayServer::get_singleton() != nullptr) {
-			size = DisplayServer::get_singleton()->window_get_size();
-		}
-	}
+	const Size2i size = resolve_movie_size(Size2i(p_config.video_width, p_config.video_height), default_movie_size);
 	const uint32_t fps = p_config.video_fps > 0 ? p_config.video_fps : default_fps;
 	return _begin(size, fps, p_config.output_path, false);
 #endif
@@ -154,9 +166,9 @@ bool MovieRecorderManager::_movie_requires_live_audio(void *p_userdata, const St
 }
 
 Error MovieRecorderManager::_movie_begin(void *p_userdata, const Size2i &p_movie_size, uint32_t p_fps, const String &p_movie_path) {
-	default_movie_size = p_movie_size;
+	default_movie_size = resolve_movie_size(p_movie_size, default_movie_size);
 	default_fps = p_fps > 0 ? p_fps : 60;
-	return _begin(p_movie_size, default_fps, p_movie_path, true);
+	return _begin(default_movie_size, default_fps, p_movie_path, true);
 }
 
 void MovieRecorderManager::_movie_frame(void *p_userdata) {

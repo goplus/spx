@@ -37,7 +37,7 @@ void SpxNavigationMgr::on_reset(int reset_code) {
 	}
 }
 void SpxNavigationMgr::setup_path_finder_with_size(GdVec2 grid_size, GdVec2 cell_size, GdBool with_jump, GdBool with_debug) {
-	if (path_finder.is_null() || !path_finder.is_valid()) {
+	if (path_finder.is_null()) {
 		path_finder.instantiate();
 		path_finder->setup_spx(grid_size, cell_size, with_debug);
 		path_finder->set_jumping_enabled(with_jump);
@@ -55,7 +55,7 @@ void SpxNavigationMgr::set_obstacle(GdObj obj, GdBool enabled) {
 }
 
 GdArray SpxNavigationMgr::find_path(GdVec2 p_from, GdVec2 p_to, GdBool with_jump) {
-	if (path_finder.is_null() || !path_finder.is_valid()) {
+	if (path_finder.is_null()) {
 		setup_path_finder(with_jump);
 	}
 

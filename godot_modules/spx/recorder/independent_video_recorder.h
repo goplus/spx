@@ -76,7 +76,6 @@ private:
 	// Statistics
 	RecordingStats stats;
 	uint64_t recording_start_time = 0;
-	uint64_t last_stats_update_time = 0;
 
 	// Synchronization protection
 	mutable Mutex stats_mutex;
@@ -86,9 +85,8 @@ private:
 	void recording_loop();
 
 	// Internal processing methods
-	bool process_frame(uint64_t current_recording_time);
+	bool process_frame();
 	void update_statistics(uint64_t frame_process_start_time);
-	uint8_t determine_frame_flags(const ThreadSafeFrameBuffer::FrameData &frame_data);
 
 public:
 	IndependentVideoRecorder();

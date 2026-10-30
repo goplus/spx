@@ -86,27 +86,20 @@ void SpxTilemapparserMgr::load_tilemap(GdString json_path) {
 	}
 
 	// Get base path for relative texture paths
-	String base_path = _get_base_path(engine_path);
+	String base_path = engine_path.get_base_dir();
 
 	// Stage 2: Data Structure -> Godot Objects (handled by this manager)
 	Ref<TileSet> tileset = _create_tileset(data.tileset, base_path);
-	if (tileset.is_null()) {
-		print_error("SpxTilemapparserMgr: Failed to create TileSet for: " + tilemap_name);
-		return;
-	}
-
 	tileset_cache[tilemap_name] = tileset;
 
 	Vector<TileMapLayer *> layers;
 	for (int i = 0; i < data.layers.size(); i++) {
 		TileMapLayer *layer = _create_tilemap_layer(data.layers[i], tileset, data.node_offset);
-		if (layer != nullptr) {
-			Node *spx_root = get_spx_root();
-			if (spx_root != nullptr) {
-				spx_root->add_child(layer);
-			}
-			layers.push_back(layer);
+		Node *spx_root = get_spx_root();
+		if (spx_root != nullptr) {
+			spx_root->add_child(layer);
 		}
+		layers.push_back(layer);
 	}
 
 	tilemap_layers[tilemap_name] = layers;
@@ -118,9 +111,7 @@ void SpxTilemapparserMgr::unload_tilemap(GdString name) {
 	if (tilemap_layers.has(tilemap_name)) {
 		Vector<TileMapLayer *> &layers = tilemap_layers[tilemap_name];
 		for (TileMapLayer *layer : layers) {
-			if (layer != nullptr) {
-				layer->queue_free();
-			}
+			layer->queue_free();
 		}
 		tilemap_layers.erase(tilemap_name);
 	}
@@ -131,9 +122,7 @@ void SpxTilemapparserMgr::unload_tilemap(GdString name) {
 void SpxTilemapparserMgr::destroy_all_tilemaps() {
 	for (KeyValue<String, Vector<TileMapLayer *>> &kv : tilemap_layers) {
 		for (TileMapLayer *layer : kv.value) {
-			if (layer != nullptr) {
-				layer->queue_free();
-			}
+			layer->queue_free();
 		}
 	}
 	tilemap_layers.clear();
@@ -160,30 +149,6 @@ GdInt SpxTilemapparserMgr::get_tilemap_layer_count(GdString name) {
 // ============================================================================
 // Helper Methods
 // ============================================================================
-
-String SpxTilemapparserMgr::_get_base_path(const String &json_path) {
-	int last_slash = json_path.rfind("/");
-	if (last_slash == -1) {
-		last_slash = json_path.rfind("\\");
-	}
-
-	if (last_slash != -1) {
-		return json_path.substr(0, last_slash);
-	}
-	return "";
-}
-
-Vector<uint8_t> SpxTilemapparserMgr::_base64_decode(const String &base64_str) {
-	PackedByteArray decoded = core_bind::Marshalls::get_singleton()->base64_to_raw(base64_str);
-
-	Vector<uint8_t> result;
-	result.resize(decoded.size());
-	for (int i = 0; i < decoded.size(); i++) {
-		result.write[i] = decoded[i];
-	}
-
-	return result;
-}
 
 // ============================================================================
 // Godot Object Creation Methods
@@ -224,7 +189,7 @@ void SpxTilemapparserMgr::_create_atlas_source(Ref<TileSet> tileset, const SpxTi
 
 	// Resolve relative path
 	String full_texture_path = base_path.is_empty() ? data.texture : base_path.path_join(data.texture);
-	Ref<Texture2D> texture = resMgr->load_texture(full_texture_path, true);
+	Ref<Texture2D> texture = resMgr->load_texture_checked(full_texture_path, true);
 	if (texture.is_null()) {
 		print_error("SpxTilemapparserMgr: Failed to load texture: " + full_texture_path);
 		return;
@@ -250,15 +215,16 @@ void SpxTilemapparserMgr::_create_atlas_source(Ref<TileSet> tileset, const SpxTi
 
 		TileData *td = atlas->get_tile_data(tile_data.atlas_coords, 0);
 		if (td != nullptr) {
-			_setup_tile_physics(td, tile_data);
+			_setup_tile_physics(td, tile_data, tileset->get_physics_layers_count());
 		}
 	}
 }
 
-void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTileData &data) {
+void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTileData &data, int physics_layer_count) {
 	for (int i = 0; i < data.physics.size(); i++) {
 		const SpxTilePhysicsData &phys_data = data.physics[i];
-		int layer_id = phys_data.layer;
+		const int layer_id = phys_data.layer;
+		ERR_CONTINUE_MSG(layer_id < 0 || layer_id >= physics_layer_count, "Tile collision references an invalid physics layer.");
 
 		for (int p = 0; p < phys_data.polygons.size(); p++) {
 			const Vector<float> &polygon_flat = phys_data.polygons[p];
@@ -273,8 +239,8 @@ void SpxTilemapparserMgr::_setup_tile_physics(TileData *tile_data, const SpxTile
 
 			if (polygon.size() >= 3) {
 				// Ensure enough polygons exist
-				while (tile_data->get_collision_polygons_count(layer_id) <= p) {
-					tile_data->add_collision_polygon(layer_id);
+				if (tile_data->get_collision_polygons_count(layer_id) <= p) {
+					tile_data->set_collision_polygons_count(layer_id, p + 1);
 				}
 				tile_data->set_collision_polygon_points(layer_id, p, polygon);
 			}
@@ -296,7 +262,7 @@ TileMapLayer *SpxTilemapparserMgr::_create_tilemap_layer(const SpxTileMapLayerDa
 
 	// Parse tile_map_data (Base64 encoded binary data)
 	if (!data.tile_map_data_base64.is_empty()) {
-		Vector<uint8_t> bytes = _base64_decode(data.tile_map_data_base64);
+		Vector<uint8_t> bytes = core_bind::Marshalls::get_singleton()->base64_to_raw(data.tile_map_data_base64);
 		if (bytes.size() > 0) {
 			layer->set_tile_map_data_from_array(bytes);
 		}

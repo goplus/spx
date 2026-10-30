@@ -43,7 +43,6 @@
 #include "servers/physics_server_2d.h"
 
 #include "spx_abi.h"
-#include "spx_abi.h"
 #include "spx_engine.h"
 #include "spx_ext_mgr.h"
 #include "spx_image_texture.h"
@@ -138,26 +137,18 @@ void SpxDrawTiles::_notification(int p_what) {
 		_ready();
 	}
 
-	if (p_what == NOTIFICATION_PROCESS) {
-		_process(get_process_delta_time());
-	}
-
 	if (p_what == NOTIFICATION_DRAW) {
 		_draw();
 	}
 }
 
 void SpxDrawTiles::_ready() {
-	set_process(true);
 	set_process_input(true);
 	set_z_index(1000);
 
 	shared_tile_set.instantiate();
 	shared_tile_set->set_tile_size(default_cell_size);
 	update_default_collision_rect();
-}
-
-void SpxDrawTiles::_process(double delta) {
 }
 
 void SpxDrawTiles::update_default_collision_rect() {
@@ -198,18 +189,14 @@ void SpxDrawTiles::_draw() {
 			.set_mouse_pos(get_global_mouse_position())
 			.set_current_texture(current_texture)
 			.set_flipped_axis(axis_flipped)
-			.set_axis_dragging(axis_flipped);
+			.set_axis_dragging(axis_dragging);
 
 	renderer.draw(this, ctx);
 }
 
 void SpxDrawTiles::input(const Ref<InputEvent> &p_event) {
 	Ref<InputEventKey> key = p_event;
-	if (!key.is_valid()) {
-		return;
-	}
-
-	if (key->is_pressed() && key->get_keycode() == Key::E &&
+	if (key.is_valid() && key->is_pressed() && key->get_keycode() == Key::E &&
 			(key->get_modifiers_mask().has_flag(KeyModifierMask::CTRL))) {
 		sceneMgr->export_scene_as_png(this);
 	}
@@ -335,7 +322,7 @@ void SpxDrawTiles::set_tile_texture_spx(GdString texture_path, const Vector<Vect
 		tex = path_cached_textures_bimap.get_value(path);
 	} else {
 		tex = resMgr->load_texture(path, true);
-		if (!tex.is_null() && tex.is_valid()) {
+		if (tex.is_valid()) {
 			path_cached_textures_bimap.insert(path, tex);
 		}
 	}
@@ -366,6 +353,9 @@ void SpxDrawTiles::_place_tiles_bulk_spx(GdArray positions) {
 	}
 
 	int source_id = _get_or_create_source_id(current_texture);
+	if (source_id == TileSet::INVALID_SOURCE) {
+		return;
+	}
 
 	for (int i = 0; i + 1 < len; i += 2) {
 		Vector2 pos = { position_data[i], position_data[i + 1] };
@@ -503,6 +493,11 @@ void SpxDrawTiles::redo() {
 void SpxDrawTiles::clear_all_layers() {
 	_destroy_layers();
 	_clear_cache();
+	if (shared_tile_set.is_valid()) {
+		while (shared_tile_set->get_source_count() > 0) {
+			shared_tile_set->remove_source(shared_tile_set->get_source_id(0));
+		}
+	}
 	queue_redraw();
 }
 

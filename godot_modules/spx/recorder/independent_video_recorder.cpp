@@ -11,14 +11,7 @@
 #include "core/string/print_string.h"
 #include "movie_utils.h"
 
-IndependentVideoRecorder::IndependentVideoRecorder() {
-	recording_active.store(false);
-	thread_started.store(false);
-	last_game_frame_sequence = 0;
-	has_valid_frame = false;
-	recording_start_time = 0;
-	last_stats_update_time = 0;
-}
+IndependentVideoRecorder::IndependentVideoRecorder() = default;
 
 IndependentVideoRecorder::~IndependentVideoRecorder() {
 	if (is_recording()) {
@@ -126,12 +119,7 @@ float IndependentVideoRecorder::get_repeat_frame_ratio() const {
 }
 
 void IndependentVideoRecorder::update_config(const RecordingConfig &p_config) {
-	config.target_fps = p_config.target_fps;
-	config.video_width = p_config.video_width;
-	config.video_height = p_config.video_height;
-	config.jpeg_quality = p_config.jpeg_quality;
-	config.enable_timestamp_chunks = p_config.enable_timestamp_chunks;
-	config.enable_repeat_frame_marking = p_config.enable_repeat_frame_marking;
+	config = p_config;
 
 	if (video_writer.is_valid()) {
 		video_writer->set_quality(config.jpeg_quality);
@@ -145,7 +133,6 @@ void IndependentVideoRecorder::reset_statistics() {
 	last_game_frame_sequence = 0;
 	has_valid_frame = false;
 	recording_start_time = 0;
-	last_stats_update_time = 0;
 }
 
 String IndependentVideoRecorder::get_debug_info() const {
@@ -184,7 +171,7 @@ void IndependentVideoRecorder::recording_loop() {
 		if (current_time >= next_record_time) {
 			uint64_t frame_process_start = OS::get_singleton()->get_ticks_usec();
 
-			bool frame_processed = process_frame(next_record_time - recording_start_time);
+			bool frame_processed = process_frame();
 
 			if (frame_processed) {
 				frame_count++;
@@ -210,12 +197,12 @@ void IndependentVideoRecorder::recording_loop() {
 	}
 }
 
-bool IndependentVideoRecorder::process_frame(uint64_t current_recording_time) {
+bool IndependentVideoRecorder::process_frame() {
 	ThreadSafeFrameBuffer::FrameData frame_data = frame_buffer->get_current_frame();
 
 	ThreadSafeFrameBuffer::FrameData frame_to_write;
 
-	if (frame_data.frame_sequence == last_game_frame_sequence || frame_data.image.is_null()) {
+	if ((has_valid_frame && frame_data.frame_sequence == last_game_frame_sequence) || frame_data.image.is_null()) {
 		// No new frame from the game or invalid frame, use a repeated frame
 		if (!has_valid_frame) {
 			// No valid frame yet, skip
@@ -272,10 +259,4 @@ void IndependentVideoRecorder::update_statistics(uint64_t frame_process_start_ti
 		// Moving average with 90% old value + 10% new value
 		stats.avg_frame_process_time_us = (stats.avg_frame_process_time_us * 9 + process_time) / 10;
 	}
-}
-
-// Simplified version, no longer uses complex frame flags
-uint8_t IndependentVideoRecorder::determine_frame_flags(const ThreadSafeFrameBuffer::FrameData &frame_data) {
-	// Simplified version, no longer uses complex frame flags
-	return 0;
 }

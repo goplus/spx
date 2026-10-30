@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  test_spx_collision_debug_overlay.h                                    */
+/*  test_spx_collision_debug_overlay.h                                  */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -36,6 +36,7 @@
 #include "scene/2d/physics/collision_shape_2d.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+#include "scene/resources/2d/rectangle_shape_2d.h"
 #include "tests/test_macros.h"
 
 namespace TestSpxCollisionDebugOverlay {
@@ -101,8 +102,18 @@ TEST_CASE("[SceneTree][SPX] Collision debug mode updates overlays already in the
 	REQUIRE(tree != nullptr);
 	tree->get_root()->add_child(target);
 
+	Ref<RectangleShape2D> shape;
+	shape.instantiate();
+	shape->set_size(Vector2(20, 30));
+	target->set_shape(shape);
 	Spx::set_debug_mode(true);
 	const bool native_debug_visible = Engine::get_singleton()->is_editor_hint() || tree->is_debugging_collisions_hint();
+	CHECK(overlay->is_visible() == !native_debug_visible);
+	MessageQueue::get_singleton()->flush();
+	target->set_one_way_collision(true);
+	target->queue_redraw();
+	MessageQueue::get_singleton()->flush();
+	CHECK(target->is_one_way_collision_enabled());
 	CHECK(overlay->is_visible() == !native_debug_visible);
 	Spx::set_debug_mode(false);
 	CHECK_FALSE(overlay->is_visible());
@@ -111,6 +122,48 @@ TEST_CASE("[SceneTree][SPX] Collision debug mode updates overlays already in the
 	tree->get_root()->remove_child(target);
 	target->remove_child(overlay);
 	memdelete(overlay);
+	memdelete(target);
+}
+
+TEST_CASE("[SceneTree][SPX] Collision overlay retargeting disconnects old shapes and tolerates deleted targets") {
+	CollisionShape2D *first = memnew(CollisionShape2D);
+	CollisionShape2D *second = memnew(CollisionShape2D);
+	SpxCollisionDebugOverlay *overlay = memnew(SpxCollisionDebugOverlay);
+	SceneTree::get_singleton()->get_root()->add_child(overlay);
+	const Color first_color(1, 0, 0, 0.2), second_color(0, 0, 1, 0.4);
+	overlay->configure(first, first_color, true);
+	CHECK(first->has_connections(SNAME("draw")));
+	overlay->configure(second, second_color, true);
+	CHECK_FALSE(first->has_connections(SNAME("draw")));
+	CHECK(second->has_connections(SNAME("draw")));
+	CHECK(first->get_debug_color() == first_color);
+	CHECK(second->get_debug_color() == second_color);
+	// A target can leave the tree before its overlay is freed. A queued draw
+	// must resolve the ObjectID again rather than dereferencing the old shape.
+	memdelete(second);
+	overlay->sync_debug_mode(true);
+	overlay->queue_redraw();
+	MessageQueue::get_singleton()->flush();
+	overlay->configure(nullptr, first_color, false);
+	CHECK_FALSE(overlay->is_visible());
+	SceneTree::get_singleton()->get_root()->remove_child(overlay);
+	memdelete(overlay);
+	memdelete(first);
+}
+
+TEST_CASE("[SceneTree][SPX] Collision overlay yields to editor collision drawing") {
+	CollisionShape2D *target = memnew(CollisionShape2D);
+	SpxCollisionDebugOverlay *overlay = spx_ensure_collision_debug_overlay(target, Color(0, 0, 1, 0.2), true);
+	const bool previous_editor_hint = Engine::get_singleton()->is_editor_hint();
+	Engine::get_singleton()->set_editor_hint(true);
+	overlay->sync_debug_mode(true);
+	CHECK_FALSE(overlay->is_visible());
+	CHECK_FALSE(overlay->is_processing());
+	Engine::get_singleton()->set_editor_hint(false);
+	overlay->sync_debug_mode(true);
+	CHECK(overlay->is_visible());
+	CHECK(overlay->is_processing());
+	Engine::get_singleton()->set_editor_hint(previous_editor_hint);
 	memdelete(target);
 }
 

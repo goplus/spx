@@ -35,9 +35,14 @@
 #include "../spx_pixel_query.h"
 #include "scene/resources/atlas_texture.h"
 #include "scene/resources/image_texture.h"
+#include "scene/resources/material.h"
+#include "scene/resources/placeholder_textures.h"
+#include "scene/resources/shader.h"
+#include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
 
 #include <algorithm>
+#include <climits>
 
 namespace TestSpxPixelQuery {
 
@@ -53,6 +58,17 @@ TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
 	CHECK(visited[1] == Vector2(-0.5, 1.5));
 	CHECK(visited[2] == Vector2(1.5, -0.5));
 	CHECK(visited[3] == Vector2(1.5, 1.5));
+}
+
+TEST_CASE("[SPX] Pixel sampling handles steps and rectangle ends beyond integer coordinates") {
+	for (const Rect2i &rect : { Rect2i(1, 1, 2, 2), Rect2i(INT_MAX - 1, INT_MAX - 1, 4, 4) }) {
+		int visits = 0;
+		CHECK_FALSE(SpxPixelQuery::any_pixel_center(rect, INT_MAX, [&](Vector2) {
+			// Stop a regressed loop before it can hang the test process.
+			return ++visits > 1;
+		}));
+		CHECK(visits == 1);
+	}
 }
 
 TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
@@ -159,6 +175,118 @@ TEST_CASE("[SceneTree][SPX] Pixel image cache bypasses unversioned textures") {
 	CHECK(first.image->get_pixel(0, 0).r == 1.0f);
 }
 
+TEST_CASE("[SceneTree][SPX] Pixel snapshots reject unavailable frames and honor shader opacity") {
+	TestSpx::EngineScene scene;
+	SpxPixelQuery::Snapshot snapshot;
+	CHECK(SpxPixelQuery::frame_texture(nullptr).is_null());
+	CHECK_FALSE(SpxPixelQuery::capture(nullptr, true, snapshot));
+	CHECK_FALSE(SpxPixelQuery::load_image(snapshot));
+	auto *animation = memnew(AnimatedSprite2D);
+	scene.root->add_child(animation);
+	animation->set_sprite_frames(Ref<SpriteFrames>());
+	CHECK(SpxPixelQuery::frame_texture(animation).is_null());
+	CHECK_FALSE(SpxPixelQuery::capture(animation, false, snapshot));
+	Ref<SpriteFrames> frames;
+	frames.instantiate();
+	frames->remove_animation("default");
+	animation->set_sprite_frames(frames);
+	CHECK(SpxPixelQuery::frame_texture(animation).is_null());
+	frames->add_animation("default");
+	Ref<Image> image = Image::create_empty(2, 2, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 0));
+	frames->add_frame("default", SpxImageTexture::create_from_image(image));
+	animation->set_animation("default");
+	Ref<Shader> shader;
+	shader.instantiate();
+	shader->set_code("shader_type canvas_item; uniform float alpha_amount = 0.0;");
+	Ref<ShaderMaterial> material;
+	material.instantiate();
+	material->set_shader(shader);
+	animation->set_material(material);
+	animation->set_flip_v(true);
+	material->set_shader_parameter("alpha_amount", 0.25);
+	REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.collision_alpha_scale == doctest::Approx(0.75));
+	REQUIRE(SpxPixelQuery::load_image(snapshot));
+	const auto retained_image = snapshot.image;
+	CHECK(SpxPixelQuery::load_image(snapshot));
+	CHECK(snapshot.image == retained_image);
+	Color color;
+	CHECK(SpxPixelQuery::sample(snapshot, Vector2(-0.5, -0.5), color));
+	CHECK(color.a == doctest::Approx(0.75));
+	material->set_shader_parameter("alpha_amount", 2.0);
+	CHECK_FALSE(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.image.is_null());
+	CHECK(SpxPixelQuery::capture(animation, false, snapshot));
+	CHECK(snapshot.collision_alpha_scale == 1);
+	material->set_shader_parameter("alpha_amount", -1.0);
+	CHECK(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.collision_alpha_scale == 1);
+	animation->set_centered(false);
+	animation->set_offset(Vector2(3, 4));
+	material->set_shader(Ref<Shader>());
+	REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.local_rect == Rect2(3, 4, 2, 2));
+	CHECK(snapshot.collision_alpha_scale == 1);
+	shader->set_code("shader_type canvas_item;");
+	material->set_shader(shader);
+	material->set_shader_parameter("alpha_amount", Variant());
+	CHECK(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.collision_alpha_scale == 1);
+}
+
+TEST_CASE("[SceneTree][SPX] Pixel cache drops stale images when texture readback fails") {
+	class ReadbackTexture : public SpxImageTexture {
+	public:
+		bool readable = true;
+		Ref<Image> get_image() const override { return readable ? SpxImageTexture::get_image() : Ref<Image>(); }
+	};
+	Ref<ReadbackTexture> texture;
+	texture.instantiate();
+	const auto image = Image::create_empty(2, 2, false, Image::FORMAT_RGBA8);
+	SpxImageTexture::replace_image(texture, image);
+	SpxPixelQuery::Snapshot first;
+	first.texture = texture;
+	SpxPixelQuery::ImageCache cache;
+	REQUIRE(SpxPixelQuery::load_image(first, &cache));
+	REQUIRE(cache.size() == 1);
+	texture->readable = false;
+	SpxImageTexture::replace_image(texture, image);
+	SpxPixelQuery::Snapshot unavailable;
+	unavailable.texture = texture;
+	CHECK_FALSE(SpxPixelQuery::load_image(unavailable, &cache));
+	CHECK(cache.empty());
+	CHECK(first.image.is_valid());
+	texture->readable = true;
+	CHECK(SpxPixelQuery::load_image(unavailable, &cache));
+	CHECK(cache.size() == 1);
+}
+
+TEST_CASE("[SceneTree][SPX] CPU image textures invalidate inherited mutations and accept ordinary replacements") {
+	CHECK(SpxImageTexture::get_logical_size(Ref<Texture2D>()) == Vector2());
+	CHECK(SpxImageTexture::get_pixel_to_logical_scale(Ref<Texture2D>()) == Vector2(1, 1));
+	Ref<SpxImageTexture> empty;
+	empty.instantiate();
+	CHECK(empty->get_image().is_null());
+	CHECK(empty->is_pixel_opaque(0, 0));
+	CHECK(SpxImageTexture::get_pixel_to_logical_scale(empty) == Vector2(1, 1));
+	Ref<Image> image = Image::create_empty(4, 4, false, Image::FORMAT_RGBA8);
+	image->fill(Color(1, 0, 0));
+	Ref<ImageTexture> texture = SpxImageTexture::create_from_image(image, Vector2(2, 2));
+	CHECK(SpxImageTexture::get_logical_size(texture) == Vector2(2, 2));
+	auto *cpu_texture = dynamic_cast<SpxImageTexture *>(texture.ptr());
+	REQUIRE(cpu_texture != nullptr);
+	const uint64_t version = cpu_texture->image_version();
+	texture->set_image(image);
+	CHECK(cpu_texture->image_version() > version);
+	CHECK(SpxImageTexture::get_logical_size(texture) == Vector2(4, 4));
+	Ref<ImageTexture> ordinary;
+	ordinary.instantiate();
+	SpxImageTexture::replace_image(ordinary, image);
+	CHECK(ordinary->get_size() == Vector2(4, 4));
+	CHECK(SpxImageTexture::get_pixel_to_logical_scale(ordinary) == Vector2(1, 1));
+}
+
 TEST_CASE("[SPX] Scene colors blend premultiplied pen pixels between sprites and backdrop") {
 	using SpxPixelQuery::Layer;
 	Layer backdrop = solid_layer(Color(0, 1, 0, 1), Layer::BACKDROP);
@@ -166,7 +294,7 @@ TEST_CASE("[SPX] Scene colors blend premultiplied pen pixels between sprites and
 	Layer pen = solid_layer(Color(0.5, 0, 0, 0.5), Layer::PEN);
 	pen.pixel_query.image_premultiplied = true;
 	Layer sprite = solid_layer(Color(0, 0, 1, 1), Layer::SPRITE);
-	std::vector<Layer> layers{backdrop, pen, sprite};
+	std::vector<Layer> layers{ backdrop, pen, sprite };
 	auto sort_layers = [&]() {
 		std::sort(layers.begin(), layers.end(), [](const Layer &a, const Layer &b) {
 			return a.in_front_of(b);
@@ -223,6 +351,25 @@ TEST_CASE("[SPX] Premultiplied snapshots apply opacity once and retain world tra
 	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10.5, 20.5), color));
 	CHECK(color == Color(0.25, 0, 0, 0.25));
 	CHECK_FALSE(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(0.5, 0.5), color));
+	for (Vector2 outside : { Vector2(9.5, 20.5), Vector2(11.5, 20.5),
+			 Vector2(10.5, 19.5), Vector2(10.5, 21.5) }) {
+		color = Color(0, 1, 0);
+		CHECK_FALSE(SpxPixelQuery::sample(snapshot, outside, color));
+		CHECK(color == Color(0, 1, 0));
+	}
+}
+
+TEST_CASE("[SPX] Scene colors ignore empty corners of rotated sprites and distant layers") {
+	using SpxPixelQuery::Layer;
+	Layer rotated = solid_layer(Color(1, 0, 0), Layer::SPRITE);
+	const Transform2D transform(Math_PI / 4, Vector2());
+	rotated.pixel_query.inverse_transform = transform.affine_inverse();
+	rotated.pixel_query.bounds = SpxPixelQuery::world_bounds(transform, rotated.pixel_query.local_rect);
+	const Vector2 empty_corner(-0.5, 0.1);
+	REQUIRE(rotated.pixel_query.bounds.has_point(empty_corner));
+	CHECK(SpxPixelQuery::composite({ rotated }, empty_corner) == Color(1, 1, 1, 0));
+	CHECK(SpxPixelQuery::composite({ rotated }, Vector2(10, 10)) == Color(1, 1, 1, 0));
+	CHECK(SpxPixelQuery::composite({ rotated }, transform.xform(Vector2(0.5, 0.5))) == Color(1, 0, 0));
 }
 
 } // namespace TestSpxPixelQuery
