@@ -297,7 +297,7 @@ func TestSwipeStateInitWithClockResetsState(t *testing.T) {
 	}
 }
 
-func TestSwipeStateExpiryClearsTargetBeforeFinish(t *testing.T) {
+func TestSwipeStateExpiresTargetBeforeFinish(t *testing.T) {
 	now := time.Unix(0, 0)
 	var state SwipeState[string]
 	state.InitWithClock(func() time.Time { return now })
@@ -305,7 +305,7 @@ func TestSwipeStateExpiryClearsTargetBeforeFinish(t *testing.T) {
 	now = now.Add(600 * time.Millisecond)
 	state.Expire()
 	if state.target != "" || state.recognizer.IsTracking() {
-		t.Fatal("expiry did not clear the target and tracking")
+		t.Fatal("expired gesture did not clear the target and tracking")
 	}
 
 	// A later clock correction cannot revive an expired gesture.

@@ -176,9 +176,10 @@ submission to force collision continuations through a future-frame wait.
 ### Input and timer frame boundaries
 
 Edges sampled before the input snapshot cutoff belong to this frame; later input
-belongs to the next. Each valid input frame checks the previous swipe gesture
-for expiry after the frame clock advances and before routing mouse-button edges, including
-frames without mouse movement. Mouse movement does not produce a routing event.
+belongs to the next. Each prepared input frame expires the previous swipe gesture
+after the frame clock advances and before dispatch, including frames without pointer
+movement. With no prepared frame, dispatch does not expire gestures. Mouse movement
+does not produce a routing event.
 Routing order is mouse-button edges, keys, then due timers; this does not impose
 a global order on user handlers. Timers registered or reactivated by `ResetTimer`
 during dispatch are checked in a subsequent batch.
