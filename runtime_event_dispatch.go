@@ -224,9 +224,12 @@ func eventBatchMode(wait bool) coroutine.BatchMode {
 }
 
 func matchingEventSinks(sinks []eventSink, matchData any) []eventSink {
-	matched := make([]eventSink, 0, len(sinks))
+	var matched []eventSink
 	for _, sink := range sinks {
 		if sink.Cond == nil || sink.Cond(matchData) {
+			if matched == nil {
+				matched = make([]eventSink, 0, len(sinks))
+			}
 			matched = append(matched, sink)
 		}
 	}
