@@ -52,7 +52,7 @@ case "${1:-}" in
       -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$' \
       ./internal/cmd/buildctl/engine
     covered_test coverage-runtimebundle-windows.out -v \
-      -run '^TestCache(DefaultPermissionsProtectNestedFilesAndRepair|UsesConfiguredWindowsPermissions)$' \
+      -run '^Test(CacheDefaultPermissionsProtectNestedFilesAndRepair|CacheUsesConfiguredWindowsPermissions|WindowsPrivateDACLIsAppliedAtCreation|AcquireCreatesProtectedWindowsCache|VerifyPrivateSecurityDescriptor.*)$' \
       ./internal/runtimebundle
     ;;
   web)

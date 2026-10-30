@@ -183,7 +183,13 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     cache_test, = [call for call in tests if "./internal/runtimebundle" in call["args"]]
                     args = cache_test["args"]
                     for name in ("TestCacheDefaultPermissionsProtectNestedFilesAndRepair",
-                                 "TestCacheUsesConfiguredWindowsPermissions"):
+                                 "TestCacheUsesConfiguredWindowsPermissions",
+                                 "TestWindowsPrivateDACLIsAppliedAtCreation",
+                                 "TestAcquireCreatesProtectedWindowsCache",
+                                 "TestVerifyPrivateSecurityDescriptorUsesBinarySIDs",
+                                 "TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms",
+                                 "TestVerifyPrivateSecurityDescriptorRejectsUnexpectedACL",
+                                 "TestVerifyPrivateSecurityDescriptorRejectsMissingDACL"):
                         self.assertRegex(name, args[args.index("-run") + 1])
                 if suite in ("web-interpreter", "codegen"):
                     expected = "cmd/ispx" if suite == "web-interpreter" else "internal/cmd/codegen"

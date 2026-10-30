@@ -97,10 +97,14 @@ func TestAcquireCreatesProtectedWindowsCache(t *testing.T) {
 type recordingWindowsPermissions struct {
 	windowsPermissions
 	directoryCalls int
+	failDirectory  string
 }
 
 func (p *recordingWindowsPermissions) EnsureDir(path string) error {
 	p.directoryCalls++
+	if path == p.failDirectory {
+		return os.ErrPermission
+	}
 	return p.windowsPermissions.EnsureDir(path)
 }
 
@@ -143,6 +147,22 @@ func TestCacheUsesConfiguredWindowsPermissions(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
 		t.Fatalf("valid cache after Remove = %q, %v", data, err)
+	}
+
+	permissions.failDirectory = filepath.Dir(target)
+	materialized, err := cache.Materialize(t.Context(), NamespaceEngine, zipPath, nil)
+	if materialized != nil {
+		_ = materialized.Close()
+		t.Fatal("Materialize returned a result despite namespace permission failure")
+	}
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "protect cache namespace") {
+		t.Fatalf("Materialize error = %v; want wrapped namespace permission error", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+		t.Fatalf("valid cache after namespace permission failure = %q, %v", data, err)
+	}
+	if entries, err := cache.List(NamespaceEngine); err != nil || len(entries) != 1 || entries[0] != target {
+		t.Fatalf("List after namespace permission failure = %v, %v", entries, err)
 	}
 }
 
