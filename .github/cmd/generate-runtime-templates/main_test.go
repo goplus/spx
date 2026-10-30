@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,4 +75,27 @@ func newTemplateRepo(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func TestGenerateRuntimeTemplatesMainReportsFailure(t *testing.T) {
+	const helper = "SPX_TEST_TEMPLATE_MAIN_ERROR"
+	if os.Getenv(helper) == "1" {
+		main()
+		return
+	}
+	dir := t.TempDir()
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestGenerateRuntimeTemplatesMainReportsFailure$")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), helper+"=1")
+	output, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(output) != 0 {
+		t.Fatalf("main = %v, stdout = %q; want exit 1 without output", err, output)
+	}
+	if !strings.Contains(string(exit.Stderr), "find repo root: go.mod not found") {
+		t.Fatalf("stderr = %q; want missing repository diagnostic", exit.Stderr)
+	}
+	if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+		t.Fatalf("failed generation left files: %v, %v", entries, err)
+	}
 }

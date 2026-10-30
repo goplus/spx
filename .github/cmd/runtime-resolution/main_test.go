@@ -582,3 +582,115 @@ func gitOutput(t *testing.T, repoRoot string, args ...string) string {
 func roundTripClient(fn roundTripFunc) *http.Client {
 	return &http.Client{Transport: fn}
 }
+
+func TestRuntimeResolutionMainReportsFailure(t *testing.T) {
+	const helper = "SPX_TEST_RESOLUTION_MAIN_ERROR"
+	if os.Getenv(helper) == "1" {
+		os.Args = []string{"runtime-resolution", "--unknown-resolution-option"}
+		main()
+		return
+	}
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestRuntimeResolutionMainReportsFailure$")
+	cmd.Env = append(os.Environ(), helper+"=1")
+	output, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(output) != 0 {
+		t.Fatalf("main = %v, stdout = %q; want exit 1 without resolution", err, output)
+	}
+	if !strings.Contains(string(exit.Stderr), "flag provided but not defined: -unknown-resolution-option") {
+		t.Fatalf("stderr = %q; want invalid option diagnostic", exit.Stderr)
+	}
+}
+
+func TestResolveRuntimePropagatesTransportFailures(t *testing.T) {
+	fixture := newRuntimeResolutionFixture(t)
+	failure := errors.New("connection interrupted")
+	for _, tt := range []struct {
+		name    string
+		status  int
+		path    string
+		message string
+	}{
+		{"release", http.StatusOK, "/repos/" + fixture.lock.ReleaseRepository + "/releases/tags/" + fixture.lock.RuntimeReleaseTag(), "resolve runtime release"},
+		{"manifest", http.StatusOK, "/manifest", "manifest:"},
+		{"repository", http.StatusNotFound, "/repos/" + fixture.lock.ReleaseRepository, "verify release repository"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server, _ := fixture.server(t, tt.status, false, fixture.manifest, nil)
+			defer server.Close()
+			config := fixture.config
+			config.GitHubAPIURL = server.URL
+			config.HTTPClient = roundTripClient(func(request *http.Request) (*http.Response, error) {
+				if request.URL.Path == tt.path {
+					return nil, failure
+				}
+				return server.Client().Transport.RoundTrip(request)
+			})
+			got, err := resolveRuntime(t.Context(), config)
+			if !errors.Is(err, failure) || !strings.Contains(err.Error(), tt.message) || got != (runtimeResolution{}) {
+				t.Fatalf("resolveRuntime = %+v, %v; want zero result and %q transport failure", got, err, tt.message)
+			}
+		})
+	}
+}
+
+func TestRuntimeResolutionRejectsIncompleteSourceRevisions(t *testing.T) {
+	fixture := newRuntimeResolutionFixture(t)
+	for _, tt := range []struct {
+		name   string
+		module bool
+		pack   bool
+		want   string
+	}{
+		{"module tree", false, false, "resolve current module tree:"},
+		{"pack inputs", true, false, "runtime pack source"},
+		{"recipe inputs", true, true, "runtime build recipe tree contains no tracked inputs"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			files := map[string]string{"README.md": "incomplete source checkout\n"}
+			if tt.module {
+				files[filepath.Join(fixture.lock.Module.Path, "module.cpp")] = "// module input\n"
+			}
+			if tt.pack {
+				files["go.mod"] = "module example.com/runtime\n\ngo 1.26.0\n"
+			}
+			for name, data := range files {
+				path := filepath.Join(root, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			gitOutput(t, root, "init", "--quiet")
+			gitOutput(t, root, "add", ".")
+			gitOutput(t, root, "-c", "user.name=Runtime Test", "-c", "user.email=runtime@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "incomplete inputs")
+			config, manifest := fixture.config, fixture.manifest
+			config.RepoRoot = root
+			if tt.module {
+				manifest.Provenance.ModuleTree = gitOutput(t, root, "rev-parse", "HEAD:"+fixture.lock.Module.Path)
+			}
+			if tt.pack {
+				digest, err := release.RuntimePackSourceSHA256(root, "HEAD")
+				if err != nil {
+					t.Fatal(err)
+				}
+				manifest.Provenance.RuntimePackSourceSHA256 = digest
+			}
+			reason, err := currentRuntimeIncompatibility(config, fixture.lock, manifest)
+			if err == nil || !strings.Contains(err.Error(), tt.want) || reason != "" {
+				t.Fatalf("incomplete source = %q, %v; want %q error, not an incompatibility result", reason, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestGitRevisionReportsMissingExecutable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	revision, err := gitRevision(t.TempDir(), "HEAD")
+	if !errors.Is(err, exec.ErrNotFound) || revision != "" {
+		t.Fatalf("gitRevision = %q, %v; want missing Git executable error", revision, err)
+	}
+}

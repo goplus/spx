@@ -17,6 +17,7 @@
 package command
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -426,4 +427,34 @@ func stageLauncherTestOutput(t *testing.T, final string) string {
 	}
 	t.Cleanup(cleanup)
 	return stage
+}
+
+func TestLauncherOutputInspectionPreservesInaccessiblePaths(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "launcher")
+	writeCommandTestFile(t, target, "existing output")
+	restrictCommandTestPath(t, root, 0)
+	for _, check := range []struct {
+		name string
+		run  func() error
+	}{
+		{"target", func() error { return validateLauncherOutputTarget(target) }},
+		{"parent", func() error { return validateLauncherExistingPath(filepath.Join(root, "child"), true) }},
+		{"alias", func() error {
+			_, err := canonicalizeLauncherOutputAlias(filepath.Join(root, "child", "launcher"))
+			return err
+		}},
+	} {
+		t.Run(check.name, func(t *testing.T) {
+			if err := check.run(); !errors.Is(err, os.ErrPermission) {
+				t.Fatalf("inspection error = %v, want permission error", err)
+			}
+		})
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTestFile(t, target); got != "existing output" {
+		t.Fatalf("inaccessible output changed: %q", got)
+	}
 }

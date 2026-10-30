@@ -1166,8 +1166,12 @@ func TestCacheMaterializeRechecksSourceAndCancellationAtLeaseBoundaries(t *testi
 		{"different valid ZIP", ErrDigestMismatch, lockExclusive},
 		{"cancelled", context.Canceled, lockExclusive},
 		{"cancelled after cache miss", context.Canceled, lockShared},
+		{"read-only namespace", os.ErrPermission, lockExclusive},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "read-only namespace" && (!runtimeIsUnix() || os.Geteuid() == 0) {
+				t.Skip("requires POSIX permissions and an unprivileged user")
+			}
 			zipPath := writeTestZip(t, testZipEntry{name: "runtime", data: "trusted"})
 			original, err := os.ReadFile(zipPath)
 			if err != nil {
@@ -1194,6 +1198,10 @@ func TestCacheMaterializeRechecksSourceAndCancellationAtLeaseBoundaries(t *testi
 						err = os.WriteFile(zipPath, []byte("invalid ZIP"), 0o600)
 					case "different valid ZIP":
 						err = os.WriteFile(zipPath, changed, 0o600)
+					case "read-only namespace":
+						namespace := filepath.Join(cache.Root, string(NamespaceEngine))
+						err = os.Chmod(namespace, 0o500)
+						t.Cleanup(func() { _ = os.Chmod(namespace, 0o700) })
 					case "cancelled", "cancelled after cache miss":
 						cancel()
 					}
@@ -1210,6 +1218,11 @@ func TestCacheMaterializeRechecksSourceAndCancellationAtLeaseBoundaries(t *testi
 			items, err := os.ReadDir(filepath.Join(cache.Root, string(NamespaceEngine)))
 			if err != nil || len(items) != 0 {
 				t.Fatalf("failed publication left cache entries: %v, %v", items, err)
+			}
+			if tt.name == "read-only namespace" {
+				if err := os.Chmod(filepath.Join(cache.Root, string(NamespaceEngine)), 0o700); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := os.WriteFile(zipPath, original, 0o600); err != nil {
 				t.Fatal(err)

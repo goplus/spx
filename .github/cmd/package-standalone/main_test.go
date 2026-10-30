@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -235,5 +236,29 @@ func TestPackageStandaloneRejectsInputAliasesWithoutChangingFiles(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+func TestPackageStandaloneMainReportsFailure(t *testing.T) {
+	const helper = "SPX_TEST_STANDALONE_MAIN_ERROR"
+	if os.Getenv(helper) == "1" {
+		os.Args = []string{"package-standalone", "--binary", "missing-spx", "--output", "release.zip"}
+		main()
+		return
+	}
+	dir := t.TempDir()
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestPackageStandaloneMainReportsFailure$")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), helper+"=1")
+	output, err := cmd.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(output) != 0 {
+		t.Fatalf("main = %v, stdout = %q; want exit 1 without output", err, output)
+	}
+	if !strings.Contains(string(exit.Stderr), "standalone binary must be named spx or spx.exe") {
+		t.Fatalf("stderr = %q; want invalid binary diagnostic", exit.Stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "release.zip")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid input created release archive: %v", err)
 	}
 }

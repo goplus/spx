@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -332,6 +333,57 @@ func TestWriteZipFilePropagatesEntryFailure(t *testing.T) {
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestArchivePermissionFailuresPreserveSources(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires POSIX permissions and an unprivileged user")
+	}
+	for _, operation := range []string{"unreadable input", "unreadable directory", "blocked named output", "blocked directory output"} {
+		t.Run(operation, func(t *testing.T) {
+			source := t.TempDir()
+			asset := filepath.Join(source, "asset")
+			if err := os.WriteFile(asset, []byte("preserved"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			outputDir := t.TempDir()
+			output := filepath.Join(outputDir, "assets.zip")
+			restricted, mode := source, os.FileMode(0)
+			switch operation {
+			case "unreadable input":
+				restricted = asset
+			case "blocked named output", "blocked directory output":
+				restricted, mode = outputDir, 0o500
+				if err := os.WriteFile(output, []byte("previous archive"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Chmod(restricted, mode); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(restricted, 0o700) })
+			var err error
+			if operation == "unreadable input" || operation == "blocked named output" {
+				err = WriteNamedZip(output, map[string]string{"asset": asset})
+			} else {
+				err = ZipDirectory(source, output)
+			}
+			if !errors.Is(err, os.ErrPermission) {
+				t.Fatalf("archive = %v, want permission error", err)
+			}
+			if err := os.Chmod(restricted, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if data, err := os.ReadFile(asset); err != nil || string(data) != "preserved" {
+				t.Fatalf("source changed after failure: %q, %v", data, err)
+			}
+			if strings.HasPrefix(operation, "blocked") {
+				if data, err := os.ReadFile(output); err != nil || string(data) != "previous archive" {
+					t.Fatalf("existing archive changed: %q, %v", data, err)
+				}
+			}
+		})
 	}
 }
 

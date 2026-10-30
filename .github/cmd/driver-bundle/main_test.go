@@ -21,11 +21,14 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -65,9 +68,7 @@ func TestPackageAndVerifyIsDeterministic(t *testing.T) {
 				"--output", outputPath, "--descriptor", descriptorPath,
 				"--goos", target.GOOS, "--goarch", target.GOARCH,
 			}
-			if err := runPackage(args); err != nil {
-				t.Fatalf("package: %v", err)
-			}
+			runDriverMain(t, append([]string{"package"}, args...)...)
 			firstZIP, err := os.ReadFile(outputPath)
 			if err != nil {
 				t.Fatal(err)
@@ -76,9 +77,7 @@ func TestPackageAndVerifyIsDeterministic(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := runVerify([]string{"--output", outputPath, "--descriptor", descriptorPath}); err != nil {
-				t.Fatalf("verify: %v", err)
-			}
+			runDriverMain(t, "verify", "--output", outputPath, "--descriptor", descriptorPath)
 
 			secondOutput := filepath.Join(directory, "second", spec.BundleName)
 			secondDescriptor := filepath.Join(directory, "second", "bundle.json")
@@ -276,6 +275,22 @@ func TestPackageFailureDoesNotLeaveTemporaryFiles(t *testing.T) {
 			p["output"] = filepath.Join(p["pack"], filepath.Base(p["output"]))
 		}, "prepare ZIP output"},
 		{"blocked descriptor parent", func(t *testing.T, p map[string]string) { p["descriptor"] = filepath.Join(p["pack"], "descriptor.json") }, "prepare descriptor output"},
+		{"ZIP parent is read-only", func(t *testing.T, p map[string]string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("requires Unix permission bits")
+			}
+			dir := filepath.Dir(p["output"])
+			if err := os.Chmod(dir, 0o500); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.Chmod(dir, 0o700) })
+			if probe, err := os.CreateTemp(dir, "probe-"); err == nil {
+				probe.Close()
+				t.Skip("user bypasses directory permission checks")
+			} else if !errors.Is(err, os.ErrPermission) {
+				t.Fatalf("permission probe: %v", err)
+			}
+		}, "create temporary ZIP"},
 		{"ZIP destination is a directory", func(t *testing.T, p map[string]string) {
 			if err := os.Mkdir(p["output"], 0o700); err != nil {
 				t.Fatal(err)
@@ -441,6 +456,31 @@ func TestRegularFileAndAtomicWriteFailures(t *testing.T) {
 	if err := syncDirectory(filepath.Join(dir, "missing")); err == nil {
 		t.Fatal("synced missing directory")
 	}
+	t.Run("removed working directory", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows keeps the working directory open")
+		}
+		working := t.TempDir()
+		t.Chdir(working)
+		if err := os.Remove(working); err != nil {
+			t.Fatal(err)
+		}
+		for _, test := range []struct{ name, output, input string }{
+			{"relative output", "bundle.zip", source},
+			{"relative input", filepath.Join(dir, "bundle.zip"), "source"},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				err := rejectOutputAliases(test.output, filepath.Join(dir, "bundle.json"), test.input)
+				if !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("removed working directory: %v", err)
+				}
+			})
+		}
+		data, err := os.ReadFile(source)
+		if err != nil || string(data) != "original" {
+			t.Fatalf("source changed: %q, %v", data, err)
+		}
+	})
 }
 
 func TestDigestWriterCountsOnlyWrittenBytes(t *testing.T) {
@@ -496,6 +536,9 @@ func TestVerifyReleaseChecksVersionsAndBundles(t *testing.T) {
 	writeDriverTestFile(t, filepath.Join(directory, driverbundle.ManifestName), manifestData)
 
 	args := []string{"--lock", lockPath, "--directory", directory, "--spx-version", manifest.SPXVersion}
+	if err := runVerifyRelease([]string{"--lock", lockPath + ".missing", "--directory", directory, "--spx-version", manifest.SPXVersion}); err == nil || !strings.Contains(err.Error(), "read runtime lock") {
+		t.Fatalf("missing lock error = %v", err)
+	}
 	if err := runVerifyRelease(args); err != nil {
 		t.Fatal(err)
 	}
@@ -529,9 +572,7 @@ func TestAssemblePublishesSortedVerifiedRelease(t *testing.T) {
 	for _, descriptor := range descriptors {
 		args = append(args, "--descriptor", descriptor)
 	}
-	if err := runAssemble(args); err != nil {
-		t.Fatal(err)
-	}
+	runDriverMain(t, append([]string{"assemble"}, args...)...)
 	data, err := os.ReadFile(output)
 	if err != nil {
 		t.Fatal(err)
@@ -543,9 +584,7 @@ func TestAssemblePublishesSortedVerifiedRelease(t *testing.T) {
 	if !slices.IsSortedFunc(manifest.Bundles, compareDriverBundles) {
 		t.Fatalf("unsorted bundles: %#v", manifest.Bundles)
 	}
-	if err := runVerifyRelease([]string{"--lock", args[1], "--directory", filepath.Dir(output), "--spx-version", "v3.2.4"}); err != nil {
-		t.Fatalf("assembled release did not verify: %v", err)
-	}
+	runDriverMain(t, "verify-release", "--lock", args[1], "--directory", filepath.Dir(output), "--spx-version", "v3.2.4")
 }
 
 func TestAssembleRejectsInvalidInputsWithoutManifest(t *testing.T) {
@@ -694,4 +733,141 @@ func writeDriverTestLock(t *testing.T, path string, lock release.RuntimeLock) {
 		t.Fatal(err)
 	}
 	writeDriverTestFile(t, path, data)
+}
+
+func runDriverMain(t *testing.T, args ...string) {
+	t.Helper()
+	original := os.Args
+	defer func() { os.Args = original }()
+	os.Args = append([]string{"driver-bundle"}, args...)
+	main()
+}
+
+func TestDriverMainHelp(t *testing.T) {
+	original := os.Stdout
+	output, err := os.CreateTemp(t.TempDir(), "stdout-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer output.Close()
+	os.Stdout = output
+	defer func() { os.Stdout = original }()
+	for _, arg := range []string{"-h", "--help", "help"} {
+		runDriverMain(t, arg)
+	}
+	data, err := os.ReadFile(output.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected bytes.Buffer
+	usage(&expected)
+	if string(data) != strings.Repeat(expected.String(), 3) {
+		t.Fatalf("help output = %q", data)
+	}
+}
+
+func TestReadOnlyFilesRejectWritesWithoutChangingInputs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires Unix permission bits")
+	}
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source")
+	writeDriverTestFile(t, source, []byte("original"))
+	if err := os.Chmod(source, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(source, 0o600) })
+	if file, err := os.Open(source); err == nil {
+		file.Close()
+		t.Skip("user bypasses file permission checks")
+	}
+	if _, _, err := openRegularFile(source); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("unreadable source: %v", err)
+	}
+	if err := os.Chmod(source, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(dir, "locked")
+	if err := os.Mkdir(locked, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o700) })
+	destination := filepath.Join(locked, "destination")
+	if err := copyRegularFile(source, destination); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("read-only destination: %v", err)
+	}
+	entries, err := os.ReadDir(locked)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("failed copy left files: %v, %v", entries, err)
+	}
+	data, err := os.ReadFile(source)
+	if err != nil || string(data) != "original" {
+		t.Fatalf("source changed: %q, %v", data, err)
+	}
+}
+
+type driverWriteFunc func([]byte) (int, error)
+
+func (f driverWriteFunc) Write(data []byte) (int, error) { return f(data) }
+
+func TestAddZipFileRejectsSourceChangedWhileReading(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "source")
+	writeDriverTestFile(t, source, bytes.Repeat([]byte("original"), 4096))
+	changed := false
+	archive := zip.NewWriter(driverWriteFunc(func(data []byte) (int, error) {
+		if !changed {
+			changed = true
+			if err := os.Truncate(source, 0); err != nil {
+				return 0, err
+			}
+		}
+		return len(data), nil
+	}))
+	if _, err := addZipFile(archive, source, "source", 0o644); err == nil || !strings.Contains(err.Error(), "source changed while reading") {
+		t.Fatalf("changed source error = %v", err)
+	}
+	if !changed {
+		t.Fatal("fixture did not change the source")
+	}
+}
+
+func TestDriverMainFailures(t *testing.T) {
+	const helper = "SPX_TEST_DRIVER_MAIN_FAILURE"
+	if args := os.Getenv(helper); args != "" {
+		if err := json.Unmarshal([]byte(args), &os.Args); err != nil {
+			t.Fatal(err)
+		}
+		main()
+		return
+	}
+	for _, test := range []struct {
+		name string
+		args []string
+		code int
+		want string
+	}{
+		{"missing command", nil, 2, "usage: driver-bundle"},
+		{"unknown command", []string{"unknown"}, 1, `unknown command "unknown"`},
+		{"package missing paths", []string{"package"}, 1, "engine, pack, bridge, output, and descriptor paths are required"},
+		{"verify missing paths", []string{"verify"}, 1, "output and descriptor paths are required"},
+		{"assemble missing manifest", []string{"assemble"}, 1, "manifest path is required"},
+		{"verify release missing version", []string{"verify-release"}, 1, "--spx-version is required"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			args, err := json.Marshal(append([]string{"driver-bundle"}, test.args...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(os.Args[0], "-test.run=^TestDriverMainFailures$")
+			cmd.Env = append(os.Environ(), helper+"="+string(args))
+			output, err := cmd.Output()
+			exit, ok := err.(*exec.ExitError)
+			if !ok || exit.ExitCode() != test.code || len(output) != 0 {
+				t.Fatalf("main(%q): error = %v, stdout = %q; want exit %d and no output", test.args, err, output, test.code)
+			}
+			if !strings.Contains(string(exit.Stderr), test.want) {
+				t.Fatalf("stderr = %q, want %q", exit.Stderr, test.want)
+			}
+		})
+	}
 }

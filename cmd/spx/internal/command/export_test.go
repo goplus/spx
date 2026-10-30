@@ -338,6 +338,52 @@ func TestMobileExportToolWorkflows(t *testing.T) {
 	}
 }
 
+func TestMobileExportStopsBeforeGodotOnSetupFailure(t *testing.T) {
+	for _, platform := range []struct {
+		name   string
+		export func(*CmdTool) error
+	}{
+		{"android", (*CmdTool).ExportApk},
+		{"ios", (*CmdTool).ExportIos},
+	} {
+		for _, failure := range []string{"assets", "build output", "godot", "project"} {
+			t.Run(platform.name+"/"+failure, func(t *testing.T) {
+				cmd, logPath := newMobileExportFixture(t)
+				var want string
+				switch failure {
+				case "assets":
+					cmd.TargetDir = filepath.Join(cmd.TargetDir, "missing")
+					want = "inspect project assets"
+				case "build output":
+					writeCommandTestFile(t, filepath.Join(cmd.ProjectDir, ".builds"), "keep")
+					want = "create"
+				case "godot":
+					cmd.CmdPath = filepath.Join(cmd.ProjectDir, "missing-godot")
+					want = "godot binary not found"
+				case "project":
+					if err := os.Remove(filepath.Join(cmd.ProjectDir, "project.godot")); err != nil {
+						t.Fatal(err)
+					}
+					want = "godot project file not found"
+				}
+				if err := platform.export(cmd); err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("export error = %v, want %q", err, want)
+				}
+				calls, err := os.ReadFile(logPath)
+				if err != nil && !os.IsNotExist(err) {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(calls), "import|") || strings.Contains(string(calls), "export|") {
+					t.Fatalf("Godot ran after setup failure: %s", calls)
+				}
+				if failure == "build output" && readTestFile(t, filepath.Join(cmd.ProjectDir, ".builds")) != "keep" {
+					t.Fatal("setup failure changed existing output")
+				}
+			})
+		}
+	}
+}
+
 func TestMobileLibraryBuildStopsAtFailedTool(t *testing.T) {
 	for _, tt := range []struct{ step, context string }{
 		{"sdk:iphonesimulator", "failed to get simulator SDK path"},
