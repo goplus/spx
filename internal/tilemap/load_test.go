@@ -80,6 +80,29 @@ func TestLoadNewFormatRequiresValidTilemapJSON(t *testing.T) {
 	}
 }
 
+func TestLoadOptionalAndMalformedData(t *testing.T) {
+	if got, err := Load(nil, ""); err != nil || !reflect.DeepEqual(got, LoadResult{}) {
+		t.Fatalf("disabled tilemap = %+v, %v", got, err)
+	}
+	for _, content := range []string{"", "{", "{} trailing"} {
+		t.Run(content, func(t *testing.T) {
+			files := map[string]string{"tilemaps/map1/tilemap.json": "{}"}
+			if content != "" {
+				files["tilemaps/map1.json"] = content
+				files["tilemaps/map1/decorator.json"] = content
+			}
+			if got, err := Load(testDir{files: files}, "tilemaps/map1.json"); err == nil || !reflect.DeepEqual(got, LoadResult{}) {
+				t.Fatalf("invalid legacy map = %+v, %v", got, err)
+			}
+			// A failed optional decorator must not discard the valid tilemap.
+			got, err := Load(testDir{files: files}, "tilemaps/map1")
+			if err != nil || !got.UseNewLoader || got.TilemapPath != "tilemaps/map1/tilemap.json" || got.DecoratorData != nil || got.DecoratorErr == nil {
+				t.Fatalf("invalid optional decorator = %+v, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestLoadOldFormat(t *testing.T) {
 	dir := testDir{
 		files: map[string]string{
@@ -202,8 +225,10 @@ func TestCalcWorldBoundsNoTiles(t *testing.T) {
 		},
 	}
 
-	if _, ok := CalcWorldBounds(data); ok {
-		t.Fatal("CalcWorldBounds ok = true, want false")
+	for _, empty := range []*TscnMapData{nil, {}, data} {
+		if got, ok := CalcWorldBounds(empty); ok || got != (WorldBounds{}) {
+			t.Fatalf("empty bounds = %+v, %v; want zero, false", got, ok)
+		}
 	}
 }
 

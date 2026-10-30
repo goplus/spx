@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -70,6 +71,40 @@ func TestRunDispatchesUsageAndUnknownCommands(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), test.contains) {
 				t.Fatalf("run(%q) error = %v, want substring %q", test.args, err, test.contains)
+			}
+		})
+	}
+}
+
+func TestMainFailureDiagnostics(t *testing.T) {
+	const helper = "SPX_TEST_BUILDCTL_FAILURE"
+	if failure := os.Getenv(helper); failure != "" {
+		os.Args = []string{"buildctl"}
+		if failure == "unknown" {
+			os.Args = append(os.Args, "unknown")
+		}
+		main()
+		return
+	}
+	for _, failure := range []string{"usage", "unknown"} {
+		t.Run(failure, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestMainFailureDiagnostics$")
+			cmd.Env = append(os.Environ(), helper+"="+failure)
+			output, err := cmd.Output()
+			exit, ok := err.(*exec.ExitError)
+			if !ok || exit.ExitCode() != 1 || len(output) != 0 {
+				t.Fatalf("main: error = %v, stdout = %q; want exit 1 and no stdout", err, output)
+			}
+			stderr := string(exit.Stderr)
+			if strings.Count(stderr, "Usage: buildctl") != 1 {
+				t.Fatalf("expected one usage message: %q", stderr)
+			}
+			if failure == "usage" {
+				if strings.Contains(stderr, "Error:") {
+					t.Fatalf("usage error printed redundant diagnostic: %q", stderr)
+				}
+			} else if strings.Count(stderr, `Error: unknown command "unknown"`) != 1 {
+				t.Fatalf("missing or duplicate command error: %q", stderr)
 			}
 		})
 	}

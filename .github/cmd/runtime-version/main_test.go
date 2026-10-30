@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -169,5 +170,51 @@ func TestWriteGitHubOutputAppendsAndReportsOpenFailure(t *testing.T) {
 	}
 	if err := writeGitHubOutput(t.TempDir(), []githubOutput{{name: "new", value: "value"}}); err == nil || !strings.Contains(err.Error(), "open GitHub output") {
 		t.Fatalf("open error = %v", err)
+	}
+}
+
+func TestVersionMainFailures(t *testing.T) {
+	const helper = "SPX_TEST_VERSION_FAILURE"
+	if args := os.Getenv(helper); args != "" {
+		if err := json.Unmarshal([]byte(args), &os.Args); err != nil {
+			t.Fatal(err)
+		}
+		flag.CommandLine = flag.NewFlagSet("runtime-version", flag.ContinueOnError)
+		if os.Args[1] == "--json" {
+			if err := os.Stdout.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		main()
+		return
+	}
+	for _, test := range []struct {
+		name string
+		args []string
+		code int
+		want string
+	}{
+		{"conflicting modes", []string{"--spx-version", "--runtime-tag"}, 2, "Usage of runtime-version"},
+		{"positional argument", []string{"unexpected"}, 2, "Usage of runtime-version"},
+		{"invalid release", []string{"--resolve-spx", "not-a-release"}, 1, "unknown SPX version"},
+		{"output is directory", []string{"--github-output", t.TempDir()}, 1, "open GitHub output"},
+		{"JSON output closed", []string{"--json"}, 1, "file already closed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			args, err := json.Marshal(append([]string{"runtime-version"}, test.args...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(os.Args[0], "-test.run=^TestVersionMainFailures$")
+			cmd.Env = append(os.Environ(), helper+"="+string(args))
+			output, err := cmd.Output()
+			exit, ok := err.(*exec.ExitError)
+			if !ok || exit.ExitCode() != test.code || len(output) != 0 {
+				t.Fatalf("main(%q): error = %v, stdout = %q; want exit %d and no output", test.args, err, output, test.code)
+			}
+			if !strings.Contains(string(exit.Stderr), test.want) {
+				t.Fatalf("stderr = %q, want %q", exit.Stderr, test.want)
+			}
+		})
 	}
 }

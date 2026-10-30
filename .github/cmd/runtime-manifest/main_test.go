@@ -410,6 +410,22 @@ func TestManifestMainModesAndOutputFailures(t *testing.T) {
 			}
 		})
 	}
+	t.Run("closed stdout", func(t *testing.T) {
+		output, err := os.CreateTemp(dir, "closed-stdout-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := output.Close(); err != nil {
+			t.Fatal(err)
+		}
+		originalStdout := os.Stdout
+		t.Cleanup(func() { os.Stdout = originalStdout })
+		os.Stdout = output
+		if err := runReleaseManifest(args); !errors.Is(err, os.ErrClosed) || !strings.Contains(err.Error(), "write runtime manifest:") {
+			t.Fatalf("closed stdout error = %v; want manifest write failure", err)
+		}
+	})
+
 	for _, flag := range []string{"--output", "--checksums"} {
 		t.Run(flag, func(t *testing.T) {
 			badArgs := append(append([]string(nil), args...), "--output", filepath.Join(dir, "manifest.json"), flag, dir)
@@ -421,3 +437,36 @@ func TestManifestMainModesAndOutputFailures(t *testing.T) {
 }
 
 func (w manifestFailWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestManifestMainReportsFailures(t *testing.T) {
+	const helper = "SPX_TEST_MANIFEST_MAIN_ERROR"
+	if mode := os.Getenv(helper); mode != "" {
+		os.Args = []string{"runtime-manifest", "--unknown-manifest-option"}
+		if mode == "embedded" {
+			os.Args = []string{"runtime-manifest", "asset=missing-asset"}
+		}
+		main()
+		return
+	}
+	for _, tt := range []struct {
+		name    string
+		message string
+	}{
+		{"embedded", "missing-asset"},
+		{"release", "flag provided but not defined"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestManifestMainReportsFailures$")
+			cmd.Dir = t.TempDir()
+			cmd.Env = append(os.Environ(), helper+"="+tt.name)
+			output, err := cmd.Output()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(output) != 0 {
+				t.Fatalf("main = %v, stdout = %q; want exit 1 without manifest", err, output)
+			}
+			if !strings.Contains(string(exit.Stderr), tt.message) {
+				t.Fatalf("stderr = %q; want %q", exit.Stderr, tt.message)
+			}
+		})
+	}
+}

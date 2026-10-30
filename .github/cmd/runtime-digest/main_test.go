@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,4 +139,38 @@ func newDigestRepo(t *testing.T) func(...string) string {
 	git("config", "user.email", "digest@example.invalid")
 	git("config", "commit.gpgsign", "false")
 	return git
+}
+
+func TestRuntimeDigestMainExitStatus(t *testing.T) {
+	const helper = "SPX_TEST_DIGEST_MAIN_ERROR"
+	if mode := os.Getenv(helper); mode != "" {
+		os.Args = []string{"runtime-digest"}
+		if mode == "repository" {
+			os.Args = append(os.Args, "pack-source", "HEAD")
+		}
+		main()
+		return
+	}
+	for _, tt := range []struct {
+		name    string
+		code    int
+		message string
+	}{
+		{"usage", 2, "usage: runtime-digest"},
+		{"repository", 1, "git"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestRuntimeDigestMainExitStatus$")
+			cmd.Dir = t.TempDir()
+			cmd.Env = append(os.Environ(), helper+"="+tt.name)
+			output, err := cmd.Output()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != tt.code || len(output) != 0 {
+				t.Fatalf("main = %v, stdout = %q; want exit %d without digest", err, output, tt.code)
+			}
+			if !strings.Contains(string(exit.Stderr), tt.message) {
+				t.Fatalf("stderr = %q; want %q", exit.Stderr, tt.message)
+			}
+		})
+	}
 }
