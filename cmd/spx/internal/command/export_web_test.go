@@ -65,9 +65,9 @@ func TestExportWebUsesInstalledRuntimeWithoutProjectBuild(t *testing.T) {
 	binDir := filepath.Join(goPath, "bin")
 	runtimeDir := filepath.Join(binDir, "gdspxrttest_webnormal")
 	for name, data := range map[string]string{
-		filepath.Join(runtimeDir, "godot.editor.html"): "<html>runtime</html>",
-		filepath.Join(binDir, "ispx", "runner.js"):     "interpreter runtime",
-		filepath.Join(binDir, "ispx.wasm"):             "interpreter wasm",
+		filepath.Join(runtimeDir, "engine.html"):   "<html>runtime</html>",
+		filepath.Join(binDir, "ispx", "runner.js"): "interpreter runtime",
+		filepath.Join(binDir, "ispx.wasm"):         "interpreter wasm",
 	} {
 		writeCommandTestFile(t, name, data)
 	}
@@ -642,6 +642,20 @@ func TestWebExportRejectsMissingModeOverlay(t *testing.T) {
 	}
 }
 
+func TestWebExportAcceptsLegacyEntryPage(t *testing.T) {
+	cmd := newWebExportFixture(t, webNormalMode)
+	template := filepath.Join(cmd.GoBinPath, "gdspxrttest_webnormal")
+	if err := os.Rename(filepath.Join(template, "engine.html"), filepath.Join(template, "godot.editor.html")); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.ExportWeb(); err != nil {
+		t.Fatalf("exportweb with legacy entry page: %v", err)
+	}
+	if got := readTestFile(t, filepath.Join(cmd.WebDir, "index.html")); got != "web entry" {
+		t.Fatalf("legacy entry page = %q, want %q", got, "web entry")
+	}
+}
+
 func TestWebExportMissingPrerequisites(t *testing.T) {
 	for _, tc := range webExportModes {
 		t.Run(tc.mode, func(t *testing.T) {
@@ -730,7 +744,7 @@ func TestWebExportCommonFailuresStopBeforeBuildAndPack(t *testing.T) {
 			cmd.ProjectFS = embed.FS{}
 		}},
 		{"missing HTML", "failed to rename web entry page", fs.ErrNotExist, func(t *testing.T, cmd *CmdTool, template string) {
-			if err := os.Remove(filepath.Join(template, "godot.editor.html")); err != nil {
+			if err := os.Remove(filepath.Join(template, "engine.html")); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -1072,7 +1086,7 @@ func newWebExportFixture(t *testing.T, mode string) *CmdTool {
 	for name, content := range map[string]string{
 		filepath.Join(root, "main.spx"):                          "onStart => {}\n",
 		filepath.Join(root, "assets", "index.json"):              "{}",
-		filepath.Join(templateDir, "godot.editor.html"):          "web entry",
+		filepath.Join(templateDir, "engine.html"):                "web entry",
 		filepath.Join(templateDir, "engine.wasm"):                "engine wasm",
 		filepath.Join(templateDir, "engine.js"):                  "{if(initializedJS){checkMailbox()}};throw ex}}self.onmessage=handleMessage}",
 		filepath.Join(cmd.GoBinPath, "ispx", "game.js"):          "game();",

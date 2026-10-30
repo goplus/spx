@@ -148,8 +148,8 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 		return fmt.Errorf("failed to copy web project template: %w", err)
 	}
 
-	if err := os.Rename(filepath.Join(dstPath, "godot.editor.html"), filepath.Join(dstPath, "index.html")); err != nil {
-		return fmt.Errorf("failed to rename web entry page: %w", err)
+	if err := renameWebEntryPage(dstPath); err != nil {
+		return err
 	}
 
 	ispxWebDir, err := cmd.getIspxWebDir()
@@ -177,6 +177,22 @@ func (cmd *CmdTool) exportWebCommon(mode string) error {
 		return err
 	}
 	return cmd.writeWebLogicAssets(mode)
+}
+
+func renameWebEntryPage(dir string) error {
+	destination := filepath.Join(dir, "index.html")
+	var lastErr error
+	for _, name := range []string{"engine.html", "godot.editor.html"} {
+		source := filepath.Join(dir, name)
+		if err := os.Rename(source, destination); err == nil {
+			return nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to rename web entry page: %w", err)
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("failed to rename web entry page: %w", lastErr)
 }
 
 func (cmd *CmdTool) writeWebLogicAssets(mode string) error {
