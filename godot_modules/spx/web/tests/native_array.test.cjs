@@ -140,10 +140,13 @@ for (const phase of ['update', 'destroy', 'reset']) {
 
 test('Web callback signatures match their C value types', () => {
     const b = engineBridge();
-    const header = fs.readFileSync(path.join(__dirname, '../godot_js_spx.h'), 'utf8');
+    const header = fs.readFileSync(path.join(__dirname, '../godot_js_spx_callbacks.gen.h'), 'utf8');
     const types = {GdObj: 'j', GdInt: 'j', GdString: 'i', GdFloat: 'f', GdBool: 'i'};
-    for (const [, name, params] of header.matchAll(/extern void (godot_js_spx_on_\w+)\(([^)]*)\);/g)) {
-        const signature = 'v' + (params ? params.split(',').map(param => {
+    const declarations = [...header.matchAll(/extern void (godot_js_spx_on_\w+)\(([^)]*)\);/g)];
+    assert.equal(declarations.length, 43, 'generated header must expose every Web callback');
+    for (const [, name, params] of declarations) {
+        const normalizedParams = params.trim();
+        const signature = 'v' + (normalizedParams && normalizedParams !== 'void' ? normalizedParams.split(',').map(param => {
             const type = param.trim().split(/\s+/)[0];
             assert.ok(types[type], `unexpected callback type: ${param}`);
             return types[type];

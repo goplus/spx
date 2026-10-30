@@ -55,6 +55,45 @@ func TestWriteEngineJSTrimsTrailingWhitespace(t *testing.T) {
 	require.NotContains(t, string(body), "Module._gdspx_test_do_thing")
 }
 
+func TestCallbackDispatcherUsesABIFields(t *testing.T) {
+	ast, err := clang.ParseCString(`
+typedef void (*GDExtensionSpxCallbackOnUnused)(GdInt key);
+typedef void (*GDExtensionSpxCallbackOnReady)();
+typedef void (*GDExtensionSpxCallbackOnChanged)(GdObj obj, GdString text);
+typedef struct {
+ GDExtensionSpxCallbackOnChanged custom_field;
+ GDExtensionSpxCallbackOnReady func_on_ready;
+} SpxCallbackInfo;`)
+	require.NoError(t, err)
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.NoError(t, generation.renderCallbacks(codegenDir))
+	require.NoError(t, generation.Output.Commit())
+	body, err := os.ReadFile(filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
+	require.NoError(t, err)
+	source := string(body)
+	require.Contains(t, source, "callbacks.OnChanged(arg0, arg1)")
+	require.Contains(t, source, "callbacks.OnReady()")
+	require.NotContains(t, source, "OnUnused", "unregistered typedefs must not create dispatch handlers")
+	require.Less(t, strings.Index(source, "if eventVal.Equal(jsEventOnChanged)"), strings.Index(source, "if eventVal.Equal(jsEventOnReady)"), "dispatch order follows SpxCallbackInfo")
+}
+
+func TestCallbackDispatcherRejectsInvalidABIWithoutOutput(t *testing.T) {
+	ast, err := clang.ParseCString(`
+typedef void (*GDExtensionSpxCallbackOnReady)();
+typedef struct {
+ GDExtensionSpxCallbackOnReady func_on_ready;
+ Unknown unsupported;
+} SpxCallbackInfo;`)
+	require.NoError(t, err)
+	generation := &Generator{Output: &common.OutputPlan{}, GenerationContext: common.NewGenerationContext(ast, common.GenerationMetadata{})}
+	codegenDir := filepath.Join(t.TempDir(), "internal", "cmd", "codegen")
+	require.EqualError(t, generation.renderCallbacks(codegenDir), "unsupported callback unsupported")
+	require.NoError(t, generation.Output.Commit())
+	_, err = os.Stat(filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
+	require.True(t, os.IsNotExist(err), "invalid ABI published a partial dispatcher")
+}
+
 func TestWorkerExposesOnlyCallbackDispatcher(t *testing.T) {
 	root := t.TempDir()
 	generation := &Generator{Output: &common.OutputPlan{}}

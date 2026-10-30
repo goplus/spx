@@ -4,6 +4,7 @@ package webffi
 
 import (
 	"encoding/binary"
+	"reflect"
 	"slices"
 	"sync"
 	"syscall/js"
@@ -293,6 +294,80 @@ func TestDispatcherRecordsKeyState(t *testing.T) {
 	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyReleased, JsFromGdInt(key)})
 	if keyDown[key] {
 		t.Fatal("key release was not recorded without a handler")
+	}
+}
+
+func TestDispatcherPreservesCallbackPayloads(t *testing.T) {
+	previousCallbacks := callbacks
+	t.Cleanup(func() { callbacks = previousCallbacks })
+	var gotEvent string
+	var gotPayload []any
+	calls := 0
+	record := func(event string, payload ...any) {
+		calls++
+		gotEvent, gotPayload = event, payload
+	}
+	callbacks = engine.CallbackInfo{
+		CoreCallbackInfo: engine.CoreCallbackInfo{
+			OnEngineDestroyed: func() { record("OnEngineDestroyed") },
+			OnEnginePause:     func(paused bool) { record("OnEnginePause", paused) },
+			OnMousePressed:    func(button int64) { record("OnMousePressed", button) },
+		},
+		OnSceneSpriteInstantiated: func(obj int64, text string) { record("OnSceneSpriteInstantiated", obj, text) },
+		OnSpriteReady:             func(obj int64) { record("OnSpriteReady", obj) },
+		OnSpriteUpdated:           func(delta float64) { record("OnSpriteUpdated", delta) },
+		OnActionPressed:           func(action string) { record("OnActionPressed", action) },
+		OnAxisChanged:             func(axis string, value float64) { record("OnAxisChanged", axis, value) },
+		OnCollisionEnter:          func(self, other int64) { record("OnCollisionEnter", self, other) },
+		OnUiToggle:                func(obj int64, value bool) { record("OnUiToggle", obj, value) },
+		OnUiTextChanged:           func(obj int64, text string) { record("OnUiTextChanged", obj, text) },
+	}
+	const object int64 = 1<<63 - 1
+	const other int64 = -1 << 63
+	const text = "世界\x00inside"
+	cases := []struct {
+		event   string
+		payload []js.Value
+		want    []any
+	}{
+		{"OnEngineDestroyed", nil, nil},
+		{"OnEnginePause", []js.Value{js.ValueOf(1)}, []any{true}},
+		{"OnEnginePause", []js.Value{js.ValueOf(false)}, []any{false}},
+		{"OnMousePressed", []js.Value{JsFromGdInt(other)}, []any{other}},
+		{"OnSceneSpriteInstantiated", []js.Value{JsFromGdObj(object), js.ValueOf(text)}, []any{object, text}},
+		{"OnSpriteReady", []js.Value{JsFromGdObj(other)}, []any{other}},
+		{"OnSpriteUpdated", []js.Value{js.ValueOf(0.125)}, []any{0.125}},
+		{"OnActionPressed", []js.Value{js.ValueOf(text)}, []any{text}},
+		{"OnAxisChanged", []js.Value{js.ValueOf(text), js.ValueOf(-0.75)}, []any{text, -0.75}},
+		{"OnCollisionEnter", []js.Value{JsFromGdInt(object), JsFromGdInt(other)}, []any{object, other}},
+		{"OnUiToggle", []js.Value{JsFromGdObj(object), js.ValueOf(true)}, []any{object, true}},
+		{"OnUiTextChanged", []js.Value{JsFromGdObj(other), js.ValueOf(text)}, []any{other, text}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.event, func(t *testing.T) {
+			before := calls
+			args := append([]js.Value{js.ValueOf(tc.event)}, tc.payload...)
+			if result := gdspxDispatch(js.Undefined(), args); result != nil {
+				t.Fatalf("dispatch result = %v, want nil", result)
+			}
+			if calls != before+1 || gotEvent != tc.event || !reflect.DeepEqual(gotPayload, tc.want) {
+				t.Fatalf("dispatch = %s %v (%d calls), want %s %v (1 call)", gotEvent, gotPayload, calls-before, tc.event, tc.want)
+			}
+		})
+	}
+	before := calls
+	for _, args := range [][]js.Value{
+		nil, {js.Undefined()}, {js.Null()}, {js.ValueOf(42)}, {js.ValueOf("OnUnknown")},
+	} {
+		gdspxDispatch(js.Undefined(), args)
+	}
+	if calls != before {
+		t.Fatal("unknown or missing event called a registered handler")
+	}
+	// Unbound ordinary callbacks must return before inspecting their payload.
+	callbacks = engine.CallbackInfo{}
+	for _, tc := range cases {
+		gdspxDispatch(js.Undefined(), []js.Value{js.ValueOf(tc.event)})
 	}
 }
 

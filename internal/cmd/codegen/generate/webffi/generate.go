@@ -79,13 +79,17 @@ func (g *Generator) Generate(codegenDir, spxModulePath string) error {
 }
 
 func (g *Generator) renderCallbacks(codegenDir string) error {
+	callbacks, err := common.CollectCallbacks(g.AST())
+	if err != nil {
+		return err
+	}
 	funcs := template.FuncMap{
 		"add":                   common.Add,
 		"trimPrefix":            strings.TrimPrefix,
 		"mustPrimitiveTypeName": common.MustPrimitiveTypeName,
 	}
 
-	return g.Output.RenderFile(funcs, callbacksTemplate, g.AST(),
+	return g.Output.RenderFile(funcs, callbacksTemplate, callbacks,
 		filepath.Join(codegenDir, WebRelDir, "callbacks.gen.go"))
 }
 

@@ -46,7 +46,7 @@ type Generator struct {
 }
 
 func (g *Generator) Generate(codegenDir, spxModulePath string, headers Headers) error {
-	if err := g.renderCallbackDefaults(spxModulePath); err != nil {
+	if err := g.renderCallbacks(spxModulePath); err != nil {
 		return err
 	}
 	if err := g.renderCPP(filepath.Join(spxModulePath, "gdextension_spx_ext.cpp"), extensionTemplate); err != nil {

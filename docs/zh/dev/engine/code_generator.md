@@ -316,7 +316,9 @@ Go 和 JavaScript 字符串由各自语言管理内存，manager 接口中没有
 
 JS 的向量、矩形、颜色等结构化返回值每次创建新对象。输入快照和调用方提供的输出缓冲区负责需要的复用。内部 64 位整数、对象 ID 的 `low`/`high` 拆分结果仍按桥接实例复用；它属于底层整数传输表示，不改变结构化值的返回语义。
 
-默认 callback 表由已有 `SpxCallbackInfo` 字段和 callback typedef 生成到 `spx_callback_defaults.gen.h`，不另设 callback schema。
+`generate/gdext/gdextension_spx_ext.h.tmpl` 中已有的 `SpxCallbackInfo` 字段和 callback typedef 通过 `common.CollectCallbacks` 生成三份头文件：`spx_callback_defaults.gen.h` 提供类型匹配的空回调，`web/godot_js_spx_callbacks.gen.h` 声明 Web 回调函数，`web/spx_web_callbacks.gen.h` 构造对应的注册表。Web Go dispatcher 也使用这份字段清单，只处理 `SpxCallbackInfo` 字段引用的 callback typedef，不另设 callback schema。
+
+新增回调时，修改上述 ABI 模板、Go 回调接口及处理函数、引擎事件源，以及 `web/js/libs/library_godot_gdspx.js` 中的 JavaScript 转发，再重新生成。Web 函数声明与注册项会自动跟随。JavaScript 生命周期钩子、资源加载和碰撞批处理仍由手写代码负责；生成声明不会自动实现这些行为。
 
 ### 5.5 Web Go 缓存
 
