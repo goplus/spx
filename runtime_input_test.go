@@ -503,6 +503,40 @@ func TestKeyFromStringRecognizesExclam(t *testing.T) {
 	}
 }
 
+func TestKeyFromStringScratchKeyNames(t *testing.T) {
+	tests := []struct {
+		name string
+		want Key
+	}{
+		{"any", KeyAny},
+		{"space", KeySpace},
+		{"enter", KeyEnter},
+		{"up arrow", KeyUp},
+		{"down arrow", KeyDown},
+		{"left arrow", KeyLeft},
+		{"right arrow", KeyRight},
+		{"backspace", KeyBackspace},
+		{"delete", KeyDelete},
+		{"shift", KeyShift},
+		{"caps lock", KeyCapsLock},
+		{"scroll lock", KeyScrollLock},
+		{"control", KeyControl},
+		{"escape", KeyEscape},
+		{"insert", KeyInsert},
+		{"home", KeyHome},
+		{"end", KeyEnd},
+		{"page up", KeyPageUp},
+		{"page down", KeyPageDown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := KeyFromString(tt.name); got != tt.want {
+				t.Fatalf("KeyFromString(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMouseCoordinatesUseLatestLiveInput(t *testing.T) {
 	_, game, mgr := setupInputSourceTest(t)
 	for _, point := range []mathf.Vec2{{X: 12.5, Y: -8}, {X: -20, Y: 31.25}} {
@@ -650,11 +684,31 @@ func TestSwipeRoutingIgnoresFailedAndExpiredGestures(t *testing.T) {
 }
 
 func TestKeyFromStringSpecialAndUnknownNames(t *testing.T) {
-	if KeyFromString("Any") != KeyAny {
-		t.Fatal("Any did not resolve to wildcard")
+	tests := []struct {
+		name string
+		want Key
+	}{
+		{"Any", KeyAny},
+		{"Enter", KeyEnter},
+		{"Return", KeyEnter},
+		{"Space", KeySpace},
+		{"Up", KeyUp},
+		{"Escape", KeyEscape},
+		{"Ctrl", KeyControl},
+		{"a", KeyA},
+		{"A", KeyA},
+		{"0", Key0},
+		{"", KeyMax},
+		{"not a keyboard key", KeyMax},
+		{"ENTER", KeyMax},
+		{"Up Arrow", KeyMax},
 	}
-	if KeyFromString("not a keyboard key") != KeyMax {
-		t.Fatal("unknown key did not return KeyMax")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := KeyFromString(tt.name); got != tt.want {
+				t.Fatalf("KeyFromString(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
 	}
 }
 
