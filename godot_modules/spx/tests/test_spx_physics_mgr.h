@@ -34,6 +34,8 @@
 #include "../spx_physics_mgr.h"
 #include "../spx_sprite.h"
 #include "../spx_sprite_mgr.h"
+#include "scene/2d/physics/static_body_2d.h"
+#include "scene/resources/2d/rectangle_shape_2d.h"
 #include "scene/resources/world_2d.h"
 #include "spx_test_fixtures.h"
 namespace TestSpxPhysicsMgr {
@@ -87,6 +89,17 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	sprites->set_physics_mode(id, SpxSprite::STATIC);
 	sprites->set_collision_layer(id, 4);
 	sprites->set_trigger_layer(id, 0);
+	// Authored Godot geometry participates in queries without an SPX sprite handle.
+	auto *wall = memnew(StaticBody2D);
+	wall->set_position(Vector2(20, -60));
+	wall->set_collision_layer(4);
+	auto *shape = memnew(CollisionShape2D);
+	Ref<RectangleShape2D> rectangle;
+	rectangle.instantiate();
+	rectangle->set_size(Vector2(10, 10));
+	shape->set_shape(rectangle);
+	wall->add_child(shape);
+	scene.root->add_child(wall);
 	SceneTree::get_singleton()->flush_transform_notifications();
 	PhysicsServer2D *server = PhysicsServer2D::get_singleton();
 	server->sync();
@@ -99,6 +112,25 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	} guard;
 	CHECK(physics->raycast(Vector2(0, 30), Vector2(40, 30), 4) == id);
 	CHECK(physics->raycast(Vector2(0, 30), Vector2(40, 30), 2) == 0);
+	auto wall_hit = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 60), Vector2(40, 60), nullptr, 4, false, true));
+	REQUIRE(wall_hit);
+	if (!wall_hit) {
+		return;
+	}
+	REQUIRE(wall_hit->size == 6);
+	if (wall_hit->size != 6) {
+		return;
+	}
+	const auto *wall_values = SpxAbi::get_array<GdInt>(wall_hit.get(), 0);
+	REQUIRE(wall_values);
+	if (!wall_values) {
+		return;
+	}
+	CHECK(wall_values[0] == 1);
+	CHECK(wall_values[1] == 0);
+	CHECK(wall_values[2] == 150000);
+	CHECK(wall_values[3] == 600000);
+	CHECK(physics->check_collision(Vector2(0, 60), Vector2(40, 60), 4, false, true));
 	CHECK(physics->check_collision(Vector2(0, 30), Vector2(40, 30), 4, false, true));
 	auto hit = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 30), Vector2(40, 30), nullptr, 4, false, true));
 	REQUIRE(hit->size == 6);
@@ -114,6 +146,26 @@ TEST_CASE("[SceneTree][SPX] Physics queries respect masks, exclusions and SPX co
 	SpxAbi::set_array(ignore.get(), 0, id);
 	auto miss = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 30), Vector2(40, 30), ignore.get(), 4, true, true));
 	CHECK(SpxAbi::get_array<GdInt>(miss.get(), 0)[0] == 0);
+	// An invalid handle is ignored, unlike a malformed exclusion buffer.
+	SpxAbi::set_array(ignore.get(), 0, GdObj(0));
+	ERR_PRINT_OFF;
+	auto stale = TestSpx::take_array(physics->raycast_with_details(Vector2(0, 30), Vector2(40, 30), ignore.get(), 4, false, true));
+	ERR_PRINT_ON;
+	REQUIRE(stale);
+	if (!stale) {
+		return;
+	}
+	REQUIRE(stale->size == 6);
+	if (stale->size != 6) {
+		return;
+	}
+	const auto *stale_values = SpxAbi::get_array<GdInt>(stale.get(), 0);
+	REQUIRE(stale_values);
+	if (!stale_values) {
+		return;
+	}
+	CHECK(stale_values[0] == 1);
+	CHECK(stale_values[1] == id);
 	// A malformed exclusion buffer must not silently become an unfiltered query.
 	auto malformed = TestSpx::take_array(SpxAbi::create_array(GD_ARRAY_TYPE_FLOAT, 1));
 	ERR_PRINT_OFF;

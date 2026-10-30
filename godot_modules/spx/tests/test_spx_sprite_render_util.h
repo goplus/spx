@@ -46,6 +46,7 @@
 #include "scene/main/window.h"
 #include "servers/audio_server.h"
 #include "scene/resources/image_texture.h"
+#include "scene/resources/placeholder_textures.h"
 #include "spx_test_fixtures.h"
 #include "tests/test_macros.h"
 
@@ -100,6 +101,28 @@ TEST_CASE("[SPX] Animation frame UV rect falls back for non-atlas frames") {
 	const Rect2 default_uv(0, 0, 1, 1);
 	CHECK(spx_get_animation_frame_uv_rect(frames, "missing", 0) == default_uv);
 	CHECK(spx_get_animation_frame_uv_rect(frames, "default", 0) == default_uv);
+	CHECK(spx_get_animation_frame_uv_rect(Ref<SpriteFrames>(), "default", 0) == default_uv);
+	CHECK(spx_get_animation_frame_uv_rect(frames, "default", -1) == default_uv);
+	CHECK(spx_get_animation_frame_uv_rect(frames, "default", 1) == default_uv);
+
+	frames->set_frame("default", 0, Ref<Texture2D>());
+	CHECK(spx_get_animation_frame_uv_rect(frames, "default", 0) == default_uv);
+	Ref<AtlasTexture> atlas;
+	atlas.instantiate();
+	atlas->set_region(Rect2(20, 10, 40, 30));
+	frames->set_frame("default", 0, atlas);
+	CHECK(spx_get_animation_frame_uv_rect(frames, "default", 0) == default_uv);
+
+	// Placeholder dimensions may arrive after the animation is configured.
+	Ref<PlaceholderTexture2D> source;
+	source.instantiate();
+	atlas->set_atlas(source);
+	for (const Size2 size : { Size2(0, 100), Size2(200, 0) }) {
+		source->set_size(size);
+		CHECK(spx_get_animation_frame_uv_rect(frames, "default", 0) == default_uv);
+	}
+	source->set_size(Size2(200, 100));
+	CHECK(spx_get_animation_frame_uv_rect(frames, "default", 0).is_equal_approx(Rect2(0.1, 0.1, 0.2, 0.3)));
 }
 
 // Only the managers used by visual operations are awakened. This exercises

@@ -42,6 +42,7 @@
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
 #include "scene/resources/2d/rectangle_shape_2d.h"
 #include "scene/resources/material.h"
+#include "scene/resources/packed_scene.h"
 #include "spx_test_fixtures.h"
 
 namespace TestSpxSpriteMgr {
@@ -1025,14 +1026,57 @@ TEST_CASE("[SceneTree][SPX] Sprite scenes validate root type and apply requested
 	const CharString path = files.file("sprite.tscn").utf8(), wrong = files.file("wrong.tscn").utf8(), missing = files.file("missing.tscn").utf8();
 	const GdObj id = manager->create_sprite(path.get_data(), Vector2(5, 10));
 	REQUIRE(id != 0);
+	if (id == 0) {
+		return;
+	}
 	CHECK(Vector2(manager->get_position(id)) == Vector2(5, 10));
 	const GdObj backdrop = manager->create_backdrop(path.get_data());
 	REQUIRE(backdrop != 0);
+	if (backdrop == 0) {
+		return;
+	}
 	CHECK(manager->get_sprite(backdrop)->is_backdrop_sprite());
 	ERR_PRINT_OFF;
 	CHECK(manager->create_sprite(wrong.get_data(), Vector2()) == 0);
 	CHECK(manager->create_sprite(missing.get_data(), Vector2()) == 0);
 	ERR_PRINT_ON;
+
+	// A cached resource may exist before its scene root has been populated.
+	Ref<PackedScene> pending;
+	pending.instantiate();
+	const String pending_path = files.file("pending.tscn");
+	pending->set_path(pending_path);
+	const CharString encoded_pending_path = pending_path.utf8();
+	auto *original_sprite = manager->get_sprite(id);
+	REQUIRE(original_sprite != nullptr);
+	if (!original_sprite) {
+		return;
+	}
+	Node *sprite_root = original_sprite->get_parent();
+	REQUIRE(sprite_root != nullptr);
+	if (!sprite_root) {
+		return;
+	}
+	const int children = sprite_root->get_child_count();
+	ERR_PRINT_OFF;
+	CHECK(manager->create_sprite(encoded_pending_path.get_data(), Vector2()) == 0);
+	ERR_PRINT_ON;
+	CHECK(sprite_root->get_child_count() == children);
+	CHECK(Vector2(manager->get_position(id)) == Vector2(5, 10));
+	CHECK(manager->get_sprite(backdrop)->is_backdrop_sprite());
+
+	const Error packed = pending->pack(original_sprite);
+	REQUIRE(packed == OK);
+	if (packed != OK) {
+		return;
+	}
+	const GdObj recovered = manager->create_sprite(encoded_pending_path.get_data(), Vector2(12, -7));
+	REQUIRE(recovered != 0);
+	if (recovered == 0) {
+		return;
+	}
+	CHECK(Vector2(manager->get_position(recovered)) == Vector2(12, -7));
+	CHECK(sprite_root->get_child_count() == children + 1);
 }
 
 TEST_CASE("[SceneTree][SPX] Authored sprite components migrate and forward engine signals once") {

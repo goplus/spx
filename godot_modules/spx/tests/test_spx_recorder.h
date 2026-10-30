@@ -1526,6 +1526,46 @@ TEST_CASE("[SPX] AVI merge preserves inputs on output failure and cleans up only
 	check_avi_index(read_avi(blocked), 4);
 	CHECK_FALSE(FileAccess::exists(video));
 	CHECK_FALSE(FileAccess::exists(audio));
+#ifdef UNIX_ENABLED
+	const auto expected_output = FileAccess::get_file_as_bytes(blocked);
+	for (bool block_video : { true, false }) {
+		INFO("Read-only source directory contains video: ", block_video);
+		TestSpx::TempDirectory locked("spx_merge_readonly");
+		// Restore before TempDirectory removes its contents, including on early returns.
+		struct RestorePermissions {
+			String path;
+			~RestorePermissions() { FileAccess::set_unix_permissions(path, 0700); }
+		} restore{ locked.path };
+		const String locked_video = block_video ? locked.file("video.avi") : video;
+		const String locked_audio = block_video ? audio : locked.file("audio.avi");
+		write_avi_pair(locked_video, locked_audio);
+		locked.write("permission_probe", "probe");
+		const Error permissions = FileAccess::set_unix_permissions(locked.path, 0500);
+		REQUIRE(permissions == OK);
+		if (permissions != OK) {
+			return;
+		}
+		if (DirAccess::remove_absolute(locked.file("permission_probe")) == OK) {
+			WARN_MESSAGE(false, "Skipping read-only cleanup checks: filesystem or user bypasses directory permissions");
+			continue;
+		}
+		result = processor.merge_files(locked_video, locked_audio, blocked);
+		CHECK(result.error_code == OK); // A cleanup failure must not invalidate the recording.
+		CHECK(result.output_file_path == blocked);
+		CHECK_FALSE(result.intermediate_files_cleaned);
+		CHECK(FileAccess::get_file_as_bytes(blocked) == expected_output);
+		const String retained = block_video ? locked_video : locked_audio;
+		CHECK(FileAccess::get_file_as_bytes(retained) == (block_video ? original_video : original_audio));
+		// Both deletions are attempted even if video cleanup fails first.
+		CHECK_FALSE(FileAccess::exists(block_video ? locked_audio : locked_video));
+		const Error restored = FileAccess::set_unix_permissions(locked.path, 0700);
+		REQUIRE(restored == OK);
+		if (restored != OK) {
+			return;
+		}
+		CHECK(DirAccess::remove_absolute(retained) == OK);
+	}
+#endif
 }
 
 TEST_CASE("[SceneTree][SPX] Recording workers finalize their files when destroyed while active") {

@@ -301,6 +301,61 @@ TEST_CASE("[SceneTree][SPX] Authored UI scenes forward clicks and invalidate des
 	CHECK(ui->create_node("") == 0);
 }
 
+TEST_CASE("[SceneTree][SPX] UI reset tolerates control deletion from its destruction callback") {
+	TestSpx::EngineScene scene(TestSpx::EngineScene::FULL_RUNTIME);
+	auto *ui = scene.engine->get_ui();
+	const GdObj id = ui->create_button("", "Before reset");
+	SpxUi *wrapper = ui->get_node(id);
+	REQUIRE(wrapper != nullptr);
+	if (wrapper == nullptr) {
+		return;
+	}
+	static Button *reset_button;
+	reset_button = wrapper->get_button();
+	REQUIRE(reset_button != nullptr);
+	if (reset_button == nullptr) {
+		return;
+	}
+	const ObjectID button_id = reset_button->get_instance_id();
+	static int clicks, destructions;
+	static GdObj destroyed;
+	clicks = destructions = 0;
+	destroyed = 0;
+	scene.engine->get_callbacks()->func_on_ui_clicked = [](GdObj) { clicks++; };
+	scene.engine->get_callbacks()->func_on_ui_destroyed = [](GdObj p_id) {
+		destructions++;
+		destroyed = p_id;
+		if (reset_button != nullptr) {
+			Button *button = reset_button;
+			reset_button = nullptr;
+			// User cleanup can emit a final signal and free the control.
+			button->emit_signal("pressed");
+			memdelete(button);
+		}
+	};
+	ui->on_reset(0);
+	CHECK(destructions == 1);
+	CHECK(destroyed == id);
+	CHECK(clicks == 0);
+	CHECK(ui->get_node(id) == nullptr);
+	CHECK(ObjectDB::get_instance(button_id) == nullptr);
+
+	const GdObj replacement = ui->create_button("", "After reset");
+	SpxUi *new_wrapper = ui->get_node(replacement);
+	REQUIRE(new_wrapper != nullptr);
+	if (new_wrapper == nullptr) {
+		return;
+	}
+	Button *new_button = new_wrapper->get_button();
+	REQUIRE(new_button != nullptr);
+	if (new_button == nullptr) {
+		return;
+	}
+	new_button->emit_signal("pressed");
+	CHECK(clicks == 1);
+	CHECK(destructions == 1);
+}
+
 TEST_CASE("[SceneTree][SPX] UI scene creation releases incompatible roots and preserves typed defaults") {
 	TestSpx::TempDirectory files("spx_ui_scene_types");
 	files.write("node.tscn", "[gd_scene format=3]\n[node name=\"Root\" type=\"Node\"]\n[node name=\"Child\" type=\"Node\" parent=\".\"]\n");
