@@ -1,5 +1,10 @@
 name: CI
-on: [push, pull_request, merge_group]
+on:
+  push:
+    branches-ignore: ['gh-readonly-queue/**']
+    tags: ['**']
+  pull_request:
+  merge_group:
 
 permissions:
   contents: read
@@ -83,6 +88,16 @@ jobs:
       - build-web
     name: CI gate
     runs-on: ubuntu-22.04
+    env:
+      PUBLISH_COVERAGE: >-
+        ${{
+          github.repository == 'goplus/spx' &&
+          (
+            github.event_name == 'pull_request' ||
+            github.event_name == 'merge_group' ||
+            (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+          )
+        }}
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -95,44 +110,48 @@ jobs:
         run: python3 .github/scripts/ci/check_results.py
 
       - name: Download Go coverage artifacts
+        if: env.PUBLISH_COVERAGE == 'true'
         uses: actions/download-artifact@v8
         with:
           pattern: coverage-{source,macos,windows}
           path: coverage
 
       - name: Download C++ coverage artifact
-        if: needs.test-godot-module.result == 'success'
+        if: env.PUBLISH_COVERAGE == 'true' && needs.test-godot-module.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: coverage-spx-cpp
           path: coverage/cpp
 
       - name: Collect Go coverage profiles
+        if: env.PUBLISH_COVERAGE == 'true'
         id: profiles
         run: python3 .github/scripts/ci/collect_coverage.py coverage --github-output "$GITHUB_OUTPUT"
 
       - name: Upload Go coverage to Codecov
+        if: env.PUBLISH_COVERAGE == 'true'
         uses: codecov/codecov-action@v7
         with:
-          slug: goplus/spx
+          slug: ${{ github.repository }}
           files: ${{ steps.profiles.outputs.coverage }}
           flags: go
           disable_search: true
           fail_ci_if_error: true
 
       - name: Upload C++ coverage to Codecov
-        if: needs.test-godot-module.result == 'success'
+        if: env.PUBLISH_COVERAGE == 'true' && needs.test-godot-module.result == 'success'
         uses: codecov/codecov-action@v7
         with:
-          slug: goplus/spx
+          slug: ${{ github.repository }}
           files: coverage/cpp/coverage.xml
           flags: cpp
           disable_search: true
           fail_ci_if_error: true
 
       - name: Finalize Codecov checks
+        if: env.PUBLISH_COVERAGE == 'true'
         uses: codecov/codecov-action@v7
         with:
-          slug: goplus/spx
+          slug: ${{ github.repository }}
           run_command: send-notifications
           fail_ci_if_error: true

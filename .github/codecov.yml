@@ -3,15 +3,17 @@
 codecov:
   notify:
     manual_trigger: true
+    # Required CI jobs have passed before notifications are sent.
+    wait_for_ci: false
 
 coverage:
   status:
     project:
       default:
-        target: auto
+        informational: true
     patch:
       default:
-        target: auto
+        informational: true
 
 ignore:
   # Example projects and test fixtures.

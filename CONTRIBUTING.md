@@ -213,12 +213,18 @@ checks must pass before merge.
 ### Go coverage
 
 CI collects atomic Go statement coverage from Linux/Web, macOS, and Windows.
+Coverage is published by upstream pull requests, pushes to upstream `dev`, and
+merge-group runs. Other branch and fork pushes run tests without publishing
+duplicate coverage.
+
 After all checks for the selected runtime path pass, the final CI gate collects
 the Go profiles and, when module tests ran, the C++ report. It uploads them to
 [Codecov](https://codecov.io/gh/goplus/spx) separately under `go` and `cpp`, then
 requests checks for the combined report. Missing artifacts, upload errors, or
-notification errors fail the gate. Separate push/PR runs and job reruns can
-upload again; Codecov merges uploads for the same commit.
+notification errors fail the gate. Codecov evaluates coverage asynchronously and
+publishes informational `codecov/project` and `codecov/patch` results. Coverage
+changes do not fail these checks, and the CI gate does not wait for them.
+Job reruns can upload again; Codecov merges uploads for the same commit SHA.
 
 Go coverage artifacts are retained for 7 days. Fixed names with overwrite enabled
 allow failed-job reruns to reuse reports from successful jobs while those artifacts
