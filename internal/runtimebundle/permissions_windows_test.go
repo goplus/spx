@@ -195,12 +195,12 @@ func TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms(t *testing.T) {
 	})
 
 	t.Run("inherited leaf with mapped mask", func(t *testing.T) {
-		entries := testPrivateACEs(user, system)
-		for i := range entries {
-			entries[i].AccessPermissions = fileAllAccessMask
-			entries[i].Inheritance = windows.INHERITED_ACCESS_ENTRY
+		// Build inherited ACEs directly: ID marks inheritance and FA maps file full control.
+		descriptor, err := windows.SecurityDescriptorFromString(
+			"D:(A;ID;FA;;;" + user.String() + ")(A;ID;FA;;;" + system.String() + ")")
+		if err != nil {
+			t.Fatal(err)
 		}
-		descriptor := testPrivateSecurityDescriptor(t, false, entries)
 		if err := verifyPrivateSecurityDescriptor("test", descriptor, user, system, false, false); err != nil {
 			t.Fatal(err)
 		}
