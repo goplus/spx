@@ -42,6 +42,8 @@
 #include "tests/test_macros.h"
 
 #include <climits>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 
 namespace TestSpxSpriteBatch {
@@ -50,6 +52,22 @@ class SpriteMgrProbe : public SpxSpriteMgr {
 public:
 	void register_sprite(SpxSprite *p_sprite) { _register_sprite(p_sprite); }
 };
+
+static float raw_u32(uint32_t p_value) {
+	float result = 0.0f;
+	std::memcpy(&result, &p_value, sizeof(result));
+	return result;
+}
+
+static void append_physics_command(Vector<float> &r_packet, int p_command, GdObj p_id, float p_a, float p_b = 0.0f) {
+	const uint64_t id = static_cast<uint64_t>(p_id);
+	r_packet.push_back((float)p_command);
+	r_packet.push_back(raw_u32((uint32_t)id));
+	r_packet.push_back(raw_u32((uint32_t)(id >> 32)));
+	r_packet.push_back(p_a);
+	r_packet.push_back(p_b);
+	r_packet.push_back(0.0f);
+}
 
 TEST_CASE("[SPX] Batch count decoding rejects unsafe float-to-int conversions") {
 	int decoded = -1;
@@ -546,6 +564,64 @@ TEST_CASE("[SceneTree][SPX] Malformed batch envelopes never mutate or delete liv
 		CHECK(sprite->get_velocity() == Vector2());
 	}
 	CHECK(Vector2(manager->get_position(id)) == Vector2(3, 4));
+}
+
+TEST_CASE("[SceneTree][SPX] Visual and physics batches apply every command kind") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	TransformFixture fixture;
+	SpxSpriteMgr &manager = *fixture.sprites;
+	const GdObj id = manager.create_bare_sprite(Vector2());
+	SpxSprite *sprite = manager.get_sprite(id);
+	REQUIRE(sprite != nullptr);
+
+	const float visual[] = {
+		1.0f,
+		(float)id, 2.0f, 3.0f, 17.0f, 3.0f, 0.1f, 0.2f, 0.5f, 0.6f,
+	};
+	manager.batch_update_visuals(visual, sizeof(visual) / sizeof(visual[0]));
+	CHECK(sprite->get_render_scale() == Vector2(2, 3));
+	CHECK(sprite->get_z_index() == 17);
+
+	Vector<float> physics;
+	physics.push_back(14.0f);
+	append_physics_command(physics, 1, id, 8.0f, -9.0f);
+	append_physics_command(physics, 2, id, 12.0f);
+	append_physics_command(physics, 3, id, 2.5f);
+	append_physics_command(physics, 4, id, raw_u32((uint32_t)SpxSprite::KINEMATIC));
+	append_physics_command(physics, 5, id, 0.0f);
+	append_physics_command(physics, 6, id, 0.75f);
+	append_physics_command(physics, 7, id, 0.2f);
+	append_physics_command(physics, 8, id, 0.3f);
+	append_physics_command(physics, 9, id, raw_u32(0x12));
+	append_physics_command(physics, 10, id, raw_u32(0x34));
+	append_physics_command(physics, 11, id, raw_u32(0x56));
+	append_physics_command(physics, 12, id, raw_u32(0x78));
+	append_physics_command(physics, 13, id, 0.0f);
+	append_physics_command(physics, 14, id, 0.0f);
+	manager.batch_update_physics(physics.ptr(), physics.size());
+
+	CHECK(manager.get_velocity(id) == Vector2(8, -9));
+	CHECK(Math::is_equal_approx(manager.get_gravity(id), 12.0f));
+	CHECK(Math::is_equal_approx(manager.get_mass(id), 2.5f));
+	CHECK(manager.get_physics_mode(id) == SpxSprite::KINEMATIC);
+	CHECK_FALSE(manager.is_use_gravity(id));
+	CHECK(Math::is_equal_approx(manager.get_gravity_scale(id), 0.75f));
+	CHECK(Math::is_equal_approx(manager.get_drag(id), 0.2f));
+	CHECK(Math::is_equal_approx(manager.get_friction(id), 0.3f));
+	CHECK(manager.get_collision_layer(id) == 0x12);
+	CHECK(manager.get_collision_mask(id) == 0x34);
+	CHECK(manager.get_trigger_layer(id) == 0x56);
+	CHECK(manager.get_trigger_mask(id) == 0x78);
+	CHECK_FALSE(manager.is_collision_enabled(id));
+	CHECK_FALSE(manager.is_trigger_enabled(id));
+
+	Vector<float> missing;
+	missing.push_back(1.0f);
+	append_physics_command(missing, 1, 999999, 1.0f, 2.0f);
+	manager.batch_update_physics(missing.ptr(), missing.size());
+	manager.batch_update_physics(nullptr, 0);
+	manager.batch_update_visuals(nullptr, 0);
+	manager.batch_update_transforms(nullptr, 0);
 }
 
 } // namespace TestSpxSpriteBatch

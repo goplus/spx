@@ -104,9 +104,132 @@ TEST_CASE("[SceneTree][SPX] Managers release owned nodes and preserve an authore
 }
 
 static int shutdown_callback_count = 0;
+static int engine_start_count = 0;
+static int engine_fixed_update_count = 0;
+static int engine_update_count = 0;
+static int engine_reset_count = 0;
+static int engine_pause_count = 0;
+static GdInt runtime_reset_code = -1;
+
+#ifdef THREADS_ENABLED
+struct PendingControlWorker {
+	static void run(void *) {
+		Spx::restart();
+		Spx::reset(41);
+		Spx::pause();
+		Spx::resume();
+		Spx::next_frame();
+	}
+};
+#endif // THREADS_ENABLED
 static void shutdown_from_destroy_callback() {
 	shutdown_callback_count++;
 	SpxEngine::shutdown();
+}
+
+TEST_CASE("[SceneTree][SPX] SPX main-loop lifecycle dispatches controls and callbacks") {
+	REQUIRE_FALSE(SpxEngine::is_initialized());
+	if (AudioServer::get_singleton() == nullptr) {
+		AudioDriverManager::initialize(AudioDriverManager::get_driver_count() - 1);
+		memnew(AudioServer)->init();
+	}
+	Spx::on_destroy();
+	SpxEngine::register_callbacks(nullptr);
+	Spx::on_start(nullptr);
+	CHECK_FALSE(Spx::is_initialized());
+
+	SceneTree *tree = SceneTree::get_singleton();
+	Spx::on_start(tree);
+	REQUIRE(Spx::is_initialized());
+	SpxEngine *engine = SpxEngine::get_singleton();
+	REQUIRE(engine != nullptr);
+	Node *engine_node = engine->get_spx_root();
+	REQUIRE(engine_node != nullptr);
+	CHECK(engine->get_root() == tree->get_root());
+	CHECK(engine->get_tree() == tree);
+	CHECK(engine->get_unique_id() > 0);
+
+	engine_start_count = 0;
+	engine_fixed_update_count = 0;
+	engine_update_count = 0;
+	engine_reset_count = 0;
+	engine_pause_count = 0;
+	runtime_reset_code = -1;
+	engine->get_callbacks()->func_on_engine_start = []() { engine_start_count++; };
+	engine->get_callbacks()->func_on_engine_fixed_update = [](GdFloat) { engine_fixed_update_count++; };
+	engine->get_callbacks()->func_on_engine_update = [](GdFloat) { engine_update_count++; };
+	engine->get_callbacks()->func_on_engine_reset = []() { engine_reset_count++; };
+	engine->get_callbacks()->func_on_engine_pause = [](GdBool) { engine_pause_count++; };
+	SpxEngine::register_runtime_reset_callbacks([](GdInt p_code) { runtime_reset_code = p_code; });
+
+	Spx::on_start(tree);
+	engine->on_awake();
+	CHECK(engine_start_count == 0);
+	engine->restart();
+	Spx::on_fixed_update(0.02);
+	Spx::on_update(0.016);
+	CHECK(engine_fixed_update_count == 1);
+	CHECK(engine_update_count == 1);
+
+	Spx::pause();
+	CHECK(Spx::is_paused());
+	Spx::on_fixed_update(0.02);
+	Spx::on_update(0.016);
+	CHECK(engine_fixed_update_count == 1);
+	CHECK(engine_update_count == 1);
+	Spx::next_frame();
+	Spx::on_update(0.016);
+	CHECK(engine_update_count == 2);
+	Spx::resume();
+	CHECK_FALSE(Spx::is_paused());
+	CHECK(engine_pause_count >= 2);
+
+	engine->set_delay_runtime_reset(false);
+	SpxExtMgr::request_reset(7);
+	CHECK(engine->is_reset());
+	CHECK(engine_reset_count == 1);
+	CHECK(runtime_reset_code == 7);
+	SpxExtMgr::request_restart();
+	CHECK_FALSE(engine->is_reset());
+	engine->set_delay_runtime_reset(true);
+	Spx::reset(8);
+	CHECK(engine->is_reset());
+	CHECK(engine_reset_count == 2);
+	Spx::restart();
+	CHECK_FALSE(engine->is_reset());
+#ifdef THREADS_ENABLED
+	Thread control_worker;
+	const Thread::ID control_worker_id = control_worker.start(&PendingControlWorker::run, nullptr);
+	if (control_worker.is_started()) {
+		control_worker.wait_to_finish();
+	}
+	REQUIRE_NE(control_worker_id, Thread::UNASSIGNED_ID);
+	Spx::on_update(0.016);
+	Spx::on_update(0.016);
+	Spx::on_update(0.016);
+	CHECK(engine->is_reset());
+	Spx::restart();
+	CHECK_FALSE(engine->is_reset());
+#endif // THREADS_ENABLED
+	engine->capture_last_frame();
+	engine->clear_frozen_frame();
+
+	Spx::on_destroy();
+	CHECK_FALSE(Spx::is_initialized());
+	CHECK_FALSE(SpxEngine::is_initialized());
+	Spx::on_fixed_update(0.02);
+	Spx::on_update(0.016);
+	Spx::reset(9);
+	Spx::restart();
+	Spx::pause();
+	Spx::resume();
+	Spx::next_frame();
+	Spx::on_destroy();
+
+	if (engine_node->get_parent() != nullptr) {
+		engine_node->get_parent()->remove_child(engine_node);
+	}
+	memdelete(engine_node);
 }
 
 TEST_CASE(
