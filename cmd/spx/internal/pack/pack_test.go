@@ -27,6 +27,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 type zipSnapshot struct {
@@ -1127,6 +1129,45 @@ func TestReadJSONFileReportsUnreadableInput(t *testing.T) {
 	}
 	if err := readJSONFile(name, new(any)); !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("unreadable JSON error = %v, want permission denied", err)
+	}
+}
+
+func TestReadJSONFileMapsStableReadFailures(t *testing.T) {
+	root := t.TempDir()
+	name := filepath.Join(root, "value.json")
+	writeTestFile(t, name, `{}`)
+
+	original, err := os.Lstat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(name, name+".old"); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, name, `{}`)
+	if err := readJSONFileWithReader(name, new(any), stablefile.Reader{
+		MaxBytes: maxPackJSONSize,
+		Expected: original,
+	}); err == nil || !strings.Contains(err.Error(), "changed while it was opened") {
+		t.Fatalf("identity drift error = %v", err)
+	}
+
+	writeTestFile(t, name, `{}`)
+	calls := 0
+	reader := stablefile.Reader{
+		MaxBytes: maxPackJSONSize,
+		Lstat: func(path string) (os.FileInfo, error) {
+			calls++
+			if calls == 2 {
+				if err := os.Remove(path); err != nil {
+					return nil, err
+				}
+			}
+			return os.Lstat(path)
+		},
+	}
+	if err := readJSONFileWithReader(name, new(any), reader); err == nil || !strings.Contains(err.Error(), "changed while it was read") {
+		t.Fatalf("read drift error = %v", err)
 	}
 }
 

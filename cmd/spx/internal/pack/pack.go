@@ -19,11 +19,12 @@ package pack
 import (
 	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 )
 
 type dirInfo struct {
@@ -100,7 +101,7 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 		if err != nil {
 			return fmt.Errorf("inspect project entry %s before packing: %w", filePath, err)
 		}
-		if current.Mode()&os.ModeSymlink != 0 || (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
+		if (!current.IsDir() && !current.Mode().IsRegular()) || !os.SameFile(info, current) {
 			return fmt.Errorf("project entry %s changed after collection", filePath)
 		}
 		if current.IsDir() != info.IsDir() {
@@ -132,40 +133,20 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 			continue
 		}
 
-		fileToZip, err := dirInfo.root.Open(dirInfo.rootPath)
-		if err != nil {
-			return err
-		}
-		opened, err := fileToZip.Stat()
-		if err != nil {
-			fileToZip.Close()
-			return fmt.Errorf("stat opened project entry %s: %w", filePath, err)
-		}
-		current, err = dirInfo.root.Lstat(dirInfo.rootPath)
-		if err != nil || !opened.Mode().IsRegular() || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(info, opened) || !os.SameFile(opened, current) {
-			fileToZip.Close()
-			return fmt.Errorf("project entry %s changed while opening", filePath)
-		}
-
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			fileToZip.Close()
 			return err
 		}
-		copied, copyErr := io.Copy(writer, fileToZip)
-		afterOpened, statErr := fileToZip.Stat()
-		afterPath, lstatErr := dirInfo.root.Lstat(dirInfo.rootPath)
-		closeErr := fileToZip.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if statErr != nil || lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
-			!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-			copied != opened.Size() || !sameStableFileMetadata(opened, afterOpened) {
-			return fmt.Errorf("project entry %s changed while packing", filePath)
-		}
-		if closeErr != nil {
-			return closeErr
+		reader := stablefile.Reader{Expected: info, Lstat: dirInfo.root.Lstat, Open: dirInfo.root.Open}
+		if _, err := reader.Copy(dirInfo.rootPath, writer); err != nil {
+			switch err {
+			case stablefile.ErrNotRegular, stablefile.ErrChangedOpening:
+				return fmt.Errorf("project entry %s changed while opening", filePath)
+			case stablefile.ErrChangedReading:
+				return fmt.Errorf("project entry %s changed while packing", filePath)
+			default:
+				return err
+			}
 		}
 	}
 	return nil
@@ -181,10 +162,6 @@ func validZipEntryName(name string) bool {
 		}
 	}
 	return true
-}
-
-func sameStableFileMetadata(before, after os.FileInfo) bool {
-	return before.Mode() == after.Mode() && before.Size() == after.Size() && before.ModTime() == after.ModTime()
 }
 
 func openPackRoot(path string) (*os.Root, error) {

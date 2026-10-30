@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goplus/spx/v4/internal/base/stablefile"
 	"github.com/goplus/spx/v4/internal/interpruntime"
 )
 
@@ -203,6 +204,38 @@ func TestValidateStableRegularFileRejectsUnreadableFile(t *testing.T) {
 	}
 	if err := validateAssetIndex(dir); !errors.Is(err, fs.ErrPermission) || !strings.Contains(err.Error(), strconv.Quote(name)) {
 		t.Fatalf("asset validation lost path or permission error: %v", err)
+	}
+}
+
+func TestValidateStableFileReportsChangedReads(t *testing.T) {
+	root := t.TempDir()
+	name := filepath.Join(root, "index.json")
+	writeNativeTestFile(t, name, `{}`)
+	original, err := os.Lstat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(name, name+".old"); err != nil {
+		t.Fatal(err)
+	}
+	writeNativeTestFile(t, name, `{}`)
+	if exists, err := validateStableFile(name, stablefile.Reader{Expected: original}); exists || err == nil || !strings.Contains(err.Error(), "changed while it was read") {
+		t.Fatalf("identity drift validation = (%v, %v)", exists, err)
+	}
+
+	writeNativeTestFile(t, name, `{}`)
+	calls := 0
+	reader := stablefile.Reader{Lstat: func(path string) (os.FileInfo, error) {
+		calls++
+		if calls == 2 {
+			if err := os.Remove(path); err != nil {
+				return nil, err
+			}
+		}
+		return os.Lstat(path)
+	}}
+	if exists, err := validateStableFile(name, reader); exists || err == nil || !strings.Contains(err.Error(), "changed while it was read") {
+		t.Fatalf("content drift validation = (%v, %v)", exists, err)
 	}
 }
 
