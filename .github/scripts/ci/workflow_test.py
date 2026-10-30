@@ -46,24 +46,40 @@ class SourceChecksWorkflowTest(unittest.TestCase):
 
 
 class CoverageWorkflowTest(unittest.TestCase):
+    def test_coverage_publication_events(self):
+        workflow = load_workflow(CI_WORKFLOW_PATH)
+        self.assertEqual(set(workflow["on"]), {"push", "pull_request", "merge_group"})
+        self.assertEqual(workflow["on"]["push"], {
+            "branches-ignore": ["gh-readonly-queue/**"], "tags": ["**"],
+        })
+        publish = workflow["jobs"]["ci-gate"]["env"]["PUBLISH_COVERAGE"]
+        self.assertEqual(job_condition({"if": publish}),
+                         "github.repository=='goplus/spx'&&("
+                         "github.event_name=='pull_request'||github.event_name=='merge_group'||"
+                         "(github.event_name=='push'&&github.ref=='refs/heads/dev'))")
+
     def test_coverage_is_uploaded_only_after_the_selected_ci_path_passes(self):
         jobs = load_workflow(CI_WORKFLOW_PATH)["jobs"]
         coverage = jobs["ci-gate"]
+        self.assertEqual(load_workflow(CI_WORKFLOW_PATH)["permissions"], {
+            "contents": "read",
+        })
+        self.assertNotIn("permissions", coverage)
         self.assertCountEqual(job_needs(coverage), (
             "check-source", "build-go", "resolve-runtime", "test-godot-module", "build-web",
         ))
         self.assertEqual(job_condition(coverage), "!cancelled()")
         self.assertEqual(jobs["check-source"]["with"]["collect_coverage"], "true")
         go, cpp, finalize = action_steps(coverage, "codecov/codecov-action")
-        for key, value in {"files": "${{ steps.profiles.outputs.coverage }}", "slug": "goplus/spx",
+        for key, value in {"files": "${{ steps.profiles.outputs.coverage }}", "slug": "${{ github.repository }}",
                            "flags": "go", "disable_search": "true"}.items():
             self.assertEqual(go["with"][key], value)
         self.assertEqual(cpp["with"], {
-            "slug": "goplus/spx", "files": "coverage/cpp/coverage.xml", "flags": "cpp",
+            "slug": "${{ github.repository }}", "files": "coverage/cpp/coverage.xml", "flags": "cpp",
             "disable_search": "true", "fail_ci_if_error": "true",
         })
         self.assertEqual(finalize["with"], {
-            "slug": "goplus/spx", "run_command": "send-notifications", "fail_ci_if_error": "true",
+            "slug": "${{ github.repository }}", "run_command": "send-notifications", "fail_ci_if_error": "true",
         })
         for path in CI_WORKFLOW_PATH.parent.glob("*.yml"):
             count = sum(len(action_steps(job, "codecov/codecov-action"))
@@ -80,12 +96,16 @@ class CoverageWorkflowTest(unittest.TestCase):
         self.assertEqual(indices, sorted(indices))
         for step in ordered:
             self.assertNotIn("continue-on-error", step)
-            condition = "needs.test-godot-module.result == 'success'" if step in (cpp, cpp_download) else "success()"
+            condition = "success()" if step == guard else "env.PUBLISH_COVERAGE == 'true'"
+            if step in (cpp, cpp_download):
+                condition += " && needs.test-godot-module.result == 'success'"
             self.assertEqual(step.get("if", "success()"), condition)
         for step in (go, cpp, finalize):
             self.assertEqual(step["with"]["fail_ci_if_error"], "true")
         static = load_workflow(SOURCE_CHECKS_WORKFLOW_PATH)
         self.assertEqual(static["on"]["workflow_call"]["inputs"]["collect_coverage"]["default"], "false")
+
+        self.assertEqual(coverage["steps"][-1], finalize)
 
     def test_module_workflow_keeps_its_gate_without_publishing_partial_coverage(self):
         workflow = load_workflow(MODULE_WORKFLOW_PATH)
@@ -130,10 +150,12 @@ class CoverageWorkflowTest(unittest.TestCase):
             "cpp": {"paths": ["godot_modules/spx/"], "carryforward": "true"},
         })
         self.assertEqual(config["comment"]["show_carryforward_flags"], "true")
-        self.assertEqual(config["codecov"]["notify"], {"manual_trigger": "true"})
+        self.assertEqual(config["codecov"]["notify"], {
+            "manual_trigger": "true", "wait_for_ci": "false",
+        })
         # Both status checks include the combined Go and C++ report.
         for check in ("project", "patch"):
-            self.assertEqual(config["coverage"]["status"][check]["default"], {"target": "auto"})
+            self.assertEqual(config["coverage"]["status"][check]["default"], {"informational": "true"})
 
     def test_collection_requires_every_source_and_keeps_nested_profiles(self):
         script = SCRIPTS / "ci/collect_coverage.py"
