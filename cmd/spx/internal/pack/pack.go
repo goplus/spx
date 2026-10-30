@@ -19,7 +19,6 @@ package pack
 import (
 	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
@@ -134,40 +133,20 @@ func packZip(zipWriter *zip.Writer, baseFolder string, paths []dirInfo) error {
 			continue
 		}
 
-		fileToZip, err := dirInfo.root.Open(dirInfo.rootPath)
-		if err != nil {
-			return err
-		}
-		opened, err := fileToZip.Stat()
-		if err != nil {
-			fileToZip.Close()
-			return fmt.Errorf("stat opened project entry %s: %w", filePath, err)
-		}
-		current, err = dirInfo.root.Lstat(dirInfo.rootPath)
-		if err != nil || !opened.Mode().IsRegular() || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(info, opened) || !os.SameFile(opened, current) {
-			fileToZip.Close()
-			return fmt.Errorf("project entry %s changed while opening", filePath)
-		}
-
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			fileToZip.Close()
 			return err
 		}
-		copied, copyErr := io.Copy(writer, fileToZip)
-		afterOpened, statErr := fileToZip.Stat()
-		afterPath, lstatErr := dirInfo.root.Lstat(dirInfo.rootPath)
-		closeErr := fileToZip.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if statErr != nil || lstatErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
-			!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
-			copied != opened.Size() || !stablefile.SameMetadata(opened, afterOpened) {
-			return fmt.Errorf("project entry %s changed while packing", filePath)
-		}
-		if closeErr != nil {
-			return closeErr
+		reader := stablefile.Reader{Lstat: dirInfo.root.Lstat, Open: dirInfo.root.Open}
+		if _, err := reader.Copy(dirInfo.rootPath, writer); err != nil {
+			switch err {
+			case stablefile.ErrNotRegular, stablefile.ErrChangedOpening:
+				return fmt.Errorf("project entry %s changed while opening", filePath)
+			case stablefile.ErrChangedReading:
+				return fmt.Errorf("project entry %s changed while packing", filePath)
+			default:
+				return err
+			}
 		}
 	}
 	return nil
