@@ -624,3 +624,89 @@ func TestMessageExecutionContextReleasedOnCancelAndReset(t *testing.T) {
 		t.Fatalf("after reset and completion: calls = %d, retained contexts = %d", calls, len(game.scriptEvents.messageExecutions))
 	}
 }
+
+func TestMatchingEventSinks(t *testing.T) {
+	for _, matches := range [][]int{nil, {2}, {0, 2}, {0, 1, 2}} {
+		var calls []int
+		sinks := make([]eventSink, 3)
+		for i := range sinks {
+			sinks[i] = eventSink{Owner: i, Cond: func(data any) bool {
+				if data != "message" {
+					t.Fatalf("predicate data = %v", data)
+				}
+				calls = append(calls, i)
+				return slices.Contains(matches, i)
+			}}
+		}
+		got := matchingEventSinks(sinks, "message")
+		if !slices.Equal(calls, []int{0, 1, 2}) {
+			t.Fatalf("predicate calls = %v", calls)
+		}
+		if len(got) != len(matches) {
+			t.Fatalf("matches = %d, want %d", len(got), len(matches))
+		}
+		for i, owner := range matches {
+			if got[i].Owner != owner {
+				t.Fatalf("match %d owner = %v, want %d", i, got[i].Owner, owner)
+			}
+			got[i].Owner = "changed"
+			if sinks[owner].Owner != owner {
+				t.Fatal("result aliases the source snapshot")
+			}
+		}
+	}
+	unconditional := []eventSink{{Owner: "unconditional"}}
+	if got := matchingEventSinks(unconditional, nil); len(got) != 1 || got[0].Owner != "unconditional" {
+		t.Fatalf("unconditional match = %v", got)
+	}
+	if got := matchingEventSinks(nil, nil); len(got) != 0 {
+		t.Fatalf("empty snapshot matched %d sinks", len(got))
+	}
+}
+
+// Australia broadcasts "Front Waypoints" every frame without a matching hat.
+// Include successful dispatches to guard against shifting cost to normal broadcasts.
+func BenchmarkBroadcastMatching(b *testing.B) {
+	previous := gco
+	gco = nil
+	defer func() { gco = previous }()
+	for _, scenario := range []struct {
+		name    string
+		matches int
+	}{{"missing", 0}, {"one", 1}, {"all", 64}} {
+		b.Run(scenario.name, func(b *testing.B) {
+			game := new(Game)
+			game.bindScriptEvents()
+			game.initShapeMgr()
+			for i := range 16 {
+				sprite := newEventOrderSprite(game, "waypoint")
+				game.shapeMgr.add(sprite)
+				for j := range 4 {
+					message := "other"
+					if i*4+j < scenario.matches {
+						message = "tick"
+					}
+					sprite.OnMsg__1(message, func() {})
+				}
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				game.Broadcast__0("tick")
+			}
+		})
+	}
+}
+
+func TestMatchingEventSinksNoMatchAllocations(t *testing.T) {
+	sinks := make([]eventSink, 64)
+	for i := range sinks {
+		sinks[i].Cond = coreevent.MatchValue("other")
+	}
+	if allocs := testing.AllocsPerRun(100, func() {
+		if got := matchingEventSinks(sinks, "tick"); len(got) != 0 {
+			t.Fatalf("unexpected matches: %d", len(got))
+		}
+	}); allocs != 0 {
+		t.Fatalf("no-match filtering allocated %g times", allocs)
+	}
+}
