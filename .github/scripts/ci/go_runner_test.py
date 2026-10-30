@@ -179,6 +179,18 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     self.assertEqual(len(tests), 1)
                     self.assertIn("./.github/cmd/...", targets)
                     self.assertFalse(any(target.endswith(".go") for target in targets))
+                if suite == "windows":
+                    cache_test, = [call for call in tests if "./internal/runtimebundle" in call["args"]]
+                    args = cache_test["args"]
+                    for name in ("TestCacheDefaultPermissionsProtectNestedFilesAndRepair",
+                                 "TestCacheUsesConfiguredWindowsPermissions",
+                                 "TestWindowsPrivateDACLIsAppliedAtCreation",
+                                 "TestAcquireCreatesProtectedWindowsCache",
+                                 "TestVerifyPrivateSecurityDescriptorUsesBinarySIDs",
+                                 "TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms",
+                                 "TestVerifyPrivateSecurityDescriptorRejectsUnexpectedACL",
+                                 "TestVerifyPrivateSecurityDescriptorRejectsMissingDACL"):
+                        self.assertRegex(name, args[args.index("-run") + 1])
                 if suite in ("web-interpreter", "codegen"):
                     expected = "cmd/ispx" if suite == "web-interpreter" else "internal/cmd/codegen"
                     self.assertEqual({call["directory"] for call in tests}, {expected})

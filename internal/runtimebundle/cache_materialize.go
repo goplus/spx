@@ -85,9 +85,6 @@ func (c *Cache) materializePath(ctx context.Context, request materializationRequ
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if c.Permissions == nil {
-		c.Permissions = defaultPermissions()
-	}
 	zipPath, expected, limits := request.zipPath, &request.expected, request.limits
 	namespace, digest := expected.Namespace, expected.Digest
 
@@ -107,7 +104,7 @@ func (c *Cache) materializePath(ctx context.Context, request materializationRequ
 	}
 	defer lease.Close()
 
-	cacheRoot, err := openOrCreateCacheRoot(c.Root, c.Permissions)
+	cacheRoot, err := openOrCreateCacheRoot(c.Root, c.permissions())
 	if err != nil {
 		return "", fmt.Errorf("runtimebundle: pin cache root: %w", err)
 	}
@@ -255,7 +252,7 @@ func (c *Cache) tryMaterializedHit(ctx context.Context, namespace Namespace, dig
 			_ = lease.Close()
 		}
 	}()
-	cacheRoot, err := openOrCreateCacheRoot(c.Root, c.Permissions)
+	cacheRoot, err := openOrCreateCacheRoot(c.Root, c.permissions())
 	if err != nil {
 		return nil, false, fmt.Errorf("runtimebundle: pin cache root: %w", err)
 	}

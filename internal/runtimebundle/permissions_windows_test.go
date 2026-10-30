@@ -94,6 +94,78 @@ func TestAcquireCreatesProtectedWindowsCache(t *testing.T) {
 	}
 }
 
+type recordingWindowsPermissions struct {
+	windowsPermissions
+	directoryCalls int
+	failDirectory  string
+}
+
+func (p *recordingWindowsPermissions) EnsureDir(path string) error {
+	p.directoryCalls++
+	if path == p.failDirectory {
+		return os.ErrPermission
+	}
+	return p.windowsPermissions.EnsureDir(path)
+}
+
+func TestCacheUsesConfiguredWindowsPermissions(t *testing.T) {
+	permissions := &recordingWindowsPermissions{}
+	cache := NewProcessLocalCache(filepath.Join(t.TempDir(), "cache"))
+	cache.Permissions = permissions
+	zipPath := writeTestZip(t, testZipEntry{name: "runtime", mode: 0o755, data: "trusted"})
+	target, err := materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if permissions.directoryCalls == 0 {
+		t.Fatal("materialization did not use configured permissions")
+	}
+	for _, path := range []string{cache.Root, filepath.Dir(target), target, filepath.Join(target, "runtime")} {
+		if err := verifyPrivateDACL(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls := permissions.directoryCalls
+	if hit, err := materializeTestPath(cache, t.Context(), NamespaceEngine, zipPath, nil); err != nil || hit != target {
+		t.Fatalf("cache hit = %q, %v; want %q", hit, err, target)
+	}
+	if permissions.directoryCalls <= calls {
+		t.Fatal("cache hit bypassed configured permissions")
+	}
+	calls = permissions.directoryCalls
+	if entries, err := cache.List(NamespaceEngine); err != nil || len(entries) != 1 || entries[0] != target {
+		t.Fatalf("List = %v, %v", entries, err)
+	}
+	if permissions.directoryCalls != calls {
+		t.Fatal("listing cache attempted to create directories")
+	}
+	if err := cache.Remove(NamespaceEngine, filepath.Base(target)); err == nil {
+		t.Fatal("Remove deleted a valid cache target")
+	}
+	if permissions.directoryCalls <= calls || cache.Permissions != permissions {
+		t.Fatal("cache operation replaced or bypassed configured permissions")
+	}
+	if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+		t.Fatalf("valid cache after Remove = %q, %v", data, err)
+	}
+
+	permissions.failDirectory = filepath.Dir(target)
+	materialized, err := cache.Materialize(t.Context(), NamespaceEngine, zipPath, nil)
+	if materialized != nil {
+		_ = materialized.Close()
+		t.Fatal("Materialize returned a result despite namespace permission failure")
+	}
+	if !errors.Is(err, os.ErrPermission) || !strings.Contains(err.Error(), "protect cache namespace") {
+		t.Fatalf("Materialize error = %v; want wrapped namespace permission error", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(target, "runtime")); err != nil || string(data) != "trusted" {
+		t.Fatalf("valid cache after namespace permission failure = %q, %v", data, err)
+	}
+	if entries, err := cache.List(NamespaceEngine); err != nil || len(entries) != 1 || entries[0] != target {
+		t.Fatalf("List after namespace permission failure = %v, %v", entries, err)
+	}
+}
+
 func TestVerifyPrivateSecurityDescriptorUsesBinarySIDs(t *testing.T) {
 	user := testWindowsSID(t, "S-1-5-21-111-222-333-1001")
 	systemInACL := testWindowsSID(t, "S-1-5-18")
@@ -123,12 +195,12 @@ func TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms(t *testing.T) {
 	})
 
 	t.Run("inherited leaf with mapped mask", func(t *testing.T) {
-		entries := testPrivateACEs(user, system)
-		for i := range entries {
-			entries[i].AccessPermissions = fileAllAccessMask
-			entries[i].Inheritance = windows.INHERITED_ACCESS_ENTRY
+		// Build inherited ACEs directly: ID marks inheritance and FA maps file full control.
+		descriptor, err := windows.SecurityDescriptorFromString(
+			"D:(A;ID;FA;;;" + user.String() + ")(A;ID;FA;;;" + system.String() + ")")
+		if err != nil {
+			t.Fatal(err)
 		}
-		descriptor := testPrivateSecurityDescriptor(t, false, entries)
 		if err := verifyPrivateSecurityDescriptor("test", descriptor, user, system, false, false); err != nil {
 			t.Fatal(err)
 		}

@@ -29,16 +29,14 @@ import (
 // root path used by publication. It runs before lock acquisition because the
 // sidecar lives beside the target, not inside it.
 func (c *Cache) prepareCacheNamespace(namespace Namespace) error {
-	if c.Permissions == nil {
-		c.Permissions = defaultPermissions()
-	}
-	cacheRoot, err := openOrCreateCacheRoot(c.Root, c.Permissions)
+	permissions := c.permissions()
+	cacheRoot, err := openOrCreateCacheRoot(c.Root, permissions)
 	if err != nil {
 		return fmt.Errorf("runtimebundle: pin cache root for lock: %w", err)
 	}
 	defer cacheRoot.Close()
 	if runtimeIsWindows() {
-		if err := c.Permissions.EnsureDir(filepath.Join(c.Root, string(namespace))); err != nil {
+		if err := permissions.EnsureDir(filepath.Join(c.Root, string(namespace))); err != nil {
 			return fmt.Errorf("runtimebundle: protect cache namespace: %w", err)
 		}
 	}

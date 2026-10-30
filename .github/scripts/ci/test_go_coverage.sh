@@ -51,6 +51,9 @@ case "${1:-}" in
     covered_test coverage-engine-windows.out -v \
       -run '^Test(DetectStaleEngineBuildLockProtectsLivePID|EngineBuildLockRecoversExitedPID|EngineLockWaitsForActiveOwner)$' \
       ./internal/cmd/buildctl/engine
+    covered_test coverage-runtimebundle-windows.out -v \
+      -run '^Test(CacheDefaultPermissionsProtectNestedFilesAndRepair|CacheUsesConfiguredWindowsPermissions|WindowsPrivateDACLIsAppliedAtCreation|AcquireCreatesProtectedWindowsCache|VerifyPrivateSecurityDescriptor.*)$' \
+      ./internal/runtimebundle
     ;;
   web)
     covered_web_test coverage-web.out \

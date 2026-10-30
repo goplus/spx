@@ -24,31 +24,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
-// CacheStats is reserved for the future quota/age collector. It is provided
-// as a stable shape so callers do not need to inspect cache internals.
-type CacheStats struct {
-	Bytes        int64
-	Entries      int
-	Oldest       time.Time
-	Namespaces   map[Namespace]int
-	CompleteOnly bool
-}
-
 // Remove removes a cache target only when it is absent or fails complete
-// verification. It refuses to remove a valid target; callers needing quota or
-// age-based deletion must wait for the lease-aware GC implementation.
+// verification. It refuses to remove a valid target.
 func (c *Cache) Remove(namespace Namespace, digest string) error {
 	if c == nil {
 		return fmt.Errorf("runtimebundle: nil cache")
 	}
 	if c.LockProvider == nil {
 		return ErrCrossProcessLockUnsupported
-	}
-	if c.Permissions == nil {
-		c.Permissions = defaultPermissions()
 	}
 	target, err := c.Path(namespace, digest)
 	if err != nil {
@@ -133,9 +118,6 @@ func (c *Cache) List(namespace Namespace) ([]string, error) {
 	}
 	if c.LockProvider == nil {
 		return nil, ErrCrossProcessLockUnsupported
-	}
-	if c.Permissions == nil {
-		c.Permissions = defaultPermissions()
 	}
 	if err := validateCacheRoot(c.Root); err != nil {
 		return nil, err
