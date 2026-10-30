@@ -38,8 +38,10 @@ var (
 type Reader struct {
 	MaxBytes     int64
 	AllowMissing bool
-	Lstat        func(string) (os.FileInfo, error)
-	Open         func(string) (*os.File, error)
+	// Expected pins the file identity captured by an earlier collection pass.
+	Expected os.FileInfo
+	Lstat    func(string) (os.FileInfo, error)
+	Open     func(string) (*os.File, error)
 }
 
 // Read returns bytes and metadata only after a successful stable read.
@@ -68,6 +70,9 @@ func (r Reader) Copy(name string, dst io.Writer) (os.FileInfo, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if r.Expected != nil && !os.SameFile(r.Expected, before) {
+		return nil, ErrChangedOpening
 	}
 	if !before.Mode().IsRegular() {
 		return nil, ErrNotRegular
@@ -113,7 +118,7 @@ func (r Reader) Copy(name string, dst io.Writer) (os.FileInfo, error) {
 	if r.tooLarge(count) {
 		return nil, ErrTooLarge
 	}
-	if pathErr != nil || afterPath.Mode()&os.ModeSymlink != 0 ||
+	if pathErr != nil || (r.Expected != nil && !os.SameFile(r.Expected, afterPath)) || afterPath.Mode()&os.ModeSymlink != 0 ||
 		!os.SameFile(opened, afterOpened) || !os.SameFile(afterOpened, afterPath) ||
 		count != opened.Size() || !SameMetadata(opened, afterOpened) || !SameMetadata(afterOpened, afterPath) {
 		return nil, ErrChangedReading

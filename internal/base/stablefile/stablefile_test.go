@@ -120,6 +120,29 @@ func TestReadRejectsInvalidOrReplacedFiles(t *testing.T) {
 	}
 }
 
+func TestReadRejectsIdentityChangedSinceCollection(t *testing.T) {
+	dir := t.TempDir()
+	name := filepath.Join(dir, "value")
+	if err := os.WriteFile(name, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.Lstat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(name, name+".old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte("replacement"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	data, info, err := (Reader{Expected: expected}).Read(name)
+	if !errors.Is(err, ErrChangedOpening) || data != nil || info != nil {
+		t.Fatalf("Read = %q, %v, %v; want identity change error", data, info, err)
+	}
+}
+
 func TestCopyRejectsChangesDuringWrite(t *testing.T) {
 	writeErr := errors.New("destination failed")
 	for _, test := range []struct {
