@@ -17,8 +17,10 @@
 package spx
 
 import (
+	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/coroutine"
@@ -31,12 +33,16 @@ type shapeLayerSortManager struct{ pkgengine.IExtMgr }
 func TestShapeManagerInitClearsReferences(t *testing.T) {
 	marker := &struct{}{}
 	s := shapeManager{
+		layersDirty:  true,
 		items:        []Shape{marker},
 		tempItems:    []Shape{marker},
 		destroyItems: []*SpriteImpl{{}},
 	}
 	itemCap, tempCap, destroyCap := cap(s.items), cap(s.tempItems), cap(s.destroyItems)
 	s.init()
+	if s.layersDirty {
+		t.Fatal("reset retained pending layer renumbering")
+	}
 	for name, shapes := range map[string][]Shape{
 		"items": s.items, "tempItems": s.tempItems,
 	} {
@@ -288,4 +294,94 @@ func assertLayerOrder(t *testing.T, game *Game, want []string) {
 		}
 		wantLayer++
 	}
+}
+
+func BenchmarkSpriteLayerMoves(b *testing.B) {
+	for _, size := range []int{62, 300} {
+		for _, distance := range []int{0, 1, size / 2, size} {
+			b.Run(fmt.Sprintf("sprites=%d/distance=%d", size, distance), func(b *testing.B) {
+				game := &Game{}
+				game.initShapeMgr()
+				for range size {
+					game.shapeMgr.add(&SpriteImpl{g: game})
+				}
+				game.shapeMgr.updateRenderLayers()
+				sprite := game.shapeMgr.items[size/4].(*SpriteImpl)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					game.shapeMgr.goBackLayers(sprite, -distance)
+					game.shapeMgr.goBackLayers(sprite, distance)
+				}
+			})
+		}
+	}
+}
+
+func TestLayerMovesMatchFullRenumbering(t *testing.T) {
+	game, sprites := newLayerOrderTestGame("A", "B", "C", "D", "E")
+	markers := []*struct{ label string }{{"leading"}, {"middle"}, {"trailing"}}
+	game.shapeMgr.items = []Shape{markers[0], sprites["A"], sprites["B"], markers[1], sprites["C"], sprites["D"], sprites["E"], markers[2]}
+	sprites["D"].spriteState.cloned = true
+	sprites["D"].spriteState.isVisible = false
+	game.shapeMgr.updateRenderLayers()
+	for step := range 100 {
+		for _, name := range []string{"A", "D", "C", "E", "B"} {
+			for _, distance := range []int{1, -1, 0, 3, -3, math.MaxInt, math.MinInt} {
+				sprite := sprites[name]
+				before := append([]Shape(nil), game.shapeMgr.items...)
+				old := slices.Index(before, Shape(sprite))
+				at, remaining := old, distance
+				direction := -1
+				if remaining < 0 {
+					direction = 1
+				}
+				for next := at + direction; remaining != 0 && next >= 0 && next < len(before); next += direction {
+					at = next
+					if _, ok := before[next].(*SpriteImpl); ok {
+						remaining += direction
+					}
+				}
+				want := slices.Delete(before, old, old+1)
+				want = slices.Insert(want, at, Shape(sprite))
+				game.shapeMgr.goBackLayers(sprite, distance)
+				if !slices.Equal(game.shapeMgr.items, want) {
+					t.Fatalf("step %d: moving %s by %d changed target order", step, name, distance)
+				}
+				assertLayerOrder(t, game, spriteOrderNames(want))
+			}
+		}
+	}
+}
+
+func TestLayerMovesRenumberAfterAutomaticSortMutations(t *testing.T) {
+	setupImmediateEngineCalls(t)
+	previous := pkgengine.ExtMgr
+	pkgengine.ExtMgr = &shapeLayerSortManager{}
+	t.Cleanup(func() { _ = engine.SetLayerSortMode("none"); pkgengine.ExtMgr = previous })
+	game, sprites := newLayerOrderTestGame("A", "B", "C", "D", "E")
+	if err := engine.SetLayerSortMode("vertical"); err != nil {
+		t.Fatal(err)
+	}
+	game.shapeMgr.removeShape(sprites["A"])
+	clone := &SpriteImpl{g: game, name: "clone"}
+	clone.spriteState.cloned = true
+	game.shapeMgr.addClonedShape(sprites["E"], clone)
+	if err := engine.SetLayerSortMode("none"); err != nil {
+		t.Fatal(err)
+	}
+	// Neither the removed first layer nor the inserted clone is in this move's range.
+	sprites["B"].SetLayer__1(Forward, 1)
+	assertLayerOrder(t, game, []string{"C", "B", "D", "clone", "E"})
+	if game.shapeMgr.layersDirty {
+		t.Fatal("full renumbering left the layer cache dirty")
+	}
+}
+
+func TestLayerMovesRenumberNewlyAddedSprites(t *testing.T) {
+	game, sprites := newLayerOrderTestGame("A", "B", "C")
+	added := &SpriteImpl{g: game, name: "added"}
+	game.shapeMgr.add(added)
+	sprites["A"].SetLayer__1(Forward, 1)
+	assertLayerOrder(t, game, []string{"B", "A", "C", "added"})
 }
