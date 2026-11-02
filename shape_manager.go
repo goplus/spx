@@ -38,10 +38,13 @@ const (
 const maxClones = 300
 
 type shapeManager struct {
-	layersDirty            bool
-	cloneCount             int
-	pendingClones          int
-	items                  []Shape
+	layersDirty   bool
+	cloneCount    int
+	pendingClones int
+	items         []Shape
+	// Deduplicated dirty queue for scene queries.
+	dirtySprites           []*SpriteImpl
+	dirtySpriteIndex       map[*SpriteImpl]int
 	named                  map[string][]*SpriteImpl
 	tempItems              []Shape
 	destroyItems           []*SpriteImpl
@@ -86,6 +89,10 @@ func (s *shapeManager) init() {
 	s.pendingClones = 0
 	s.named = nil
 	s.items = sliceutil.Reset(s.items, 64)
+	s.dirtySprites = sliceutil.Reset(s.dirtySprites, 0)
+	if s.dirtySpriteIndex != nil {
+		clear(s.dirtySpriteIndex)
+	}
 	s.tempItems = sliceutil.Reset(s.tempItems, 50)
 	s.destroyItems = sliceutil.Reset(s.destroyItems, 16)
 	s.proxyChangeBuffer = sliceutil.Reset(s.proxyChangeBuffer, 0)
@@ -96,6 +103,48 @@ func (s *shapeManager) init() {
 	s.nextTextBubbleLayoutID = 0
 }
 
+func (s *shapeManager) noteProxyDirty(sprite *SpriteImpl) {
+	if s.dirtySpriteIndex == nil {
+		s.dirtySpriteIndex = make(map[*SpriteImpl]int)
+	}
+	if _, exists := s.dirtySpriteIndex[sprite]; exists {
+		return
+	}
+	s.dirtySpriteIndex[sprite] = len(s.dirtySprites)
+	s.dirtySprites = append(s.dirtySprites, sprite)
+}
+
+// Track sprites dirtied before they entered the active shape list.
+func (s *shapeManager) trackExistingDirtySprite(sprite *SpriteImpl) {
+	if sprite == nil || !sprite.needsProxyUpdate() {
+		return
+	}
+	if s.dirtySpriteIndex == nil {
+		s.dirtySpriteIndex = make(map[*SpriteImpl]int)
+	}
+	if _, exists := s.dirtySpriteIndex[sprite]; !exists {
+		s.noteProxyDirty(sprite)
+	}
+}
+
+func (s *shapeManager) removeDirtySprite(sprite *SpriteImpl) {
+	if sprite == nil || s.dirtySpriteIndex == nil {
+		return
+	}
+	idx, exists := s.dirtySpriteIndex[sprite]
+	if !exists {
+		return
+	}
+	last := len(s.dirtySprites) - 1
+	if idx != last {
+		swapped := s.dirtySprites[last]
+		s.dirtySprites[idx] = swapped
+		s.dirtySpriteIndex[swapped] = idx
+	}
+	s.dirtySprites[last] = nil
+	s.dirtySprites = s.dirtySprites[:last]
+	delete(s.dirtySpriteIndex, sprite)
+}
 func (s *shapeManager) reset() {
 	engine.ClearAllSprites()
 	s.init()
@@ -214,6 +263,7 @@ func (s *shapeManager) add(shape Shape) {
 		if sprite.IsCloned() {
 			s.cloneCount++
 		}
+		s.trackExistingDirtySprite(sprite)
 	}
 	if bubble, ok := shape.(*textBubble); ok && bubble.layoutID == 0 {
 		s.nextTextBubbleLayoutID++
@@ -241,6 +291,7 @@ func (s *shapeManager) addClonedShape(src, clone Shape) {
 	clear(s.named)
 	if sprite, ok := clone.(*SpriteImpl); ok && sprite.IsCloned() {
 		s.cloneCount++
+		s.trackExistingDirtySprite(sprite)
 	}
 	s.updateRenderLayers()
 }
@@ -265,6 +316,7 @@ func (s *shapeManager) removeShape(child Shape) {
 	s.items = sliceutil.DeleteAt(s.items, idx)
 	clear(s.named)
 	if sprite, ok := child.(*SpriteImpl); ok {
+		// Keep deletion dirty until its native destroy batch commits.
 		if sprite.IsCloned() {
 			s.cloneCount--
 		}

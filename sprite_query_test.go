@@ -347,6 +347,136 @@ func TestTouchingColorSyncsDirtyCostumeImmediately(t *testing.T) {
 	}
 }
 
+func TestTouchingColorSyncsDirtySceneSpritesImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	game := &Game{}
+	game.displayState.WorldWidth = 480
+	game.displayState.WorldHeight = 360
+	game.initShapeMgr()
+	receiver := newTouchingTestSprite("receiver", 0, 0, 1)
+	target := newTouchingTestSprite("target", 0, 0, 2)
+	receiver.g = game
+	target.g = game
+	game.shapeMgr.add(receiver)
+	game.shapeMgr.add(target)
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+	mgr.positions[2] = mathf.NewVec2(0, 0)
+
+	target.SetXpos(42)
+	var queriedTargetPosition mathf.Vec2
+	mgr.onColorCollision = func() {
+		queriedTargetPosition = mgr.positions[2]
+	}
+	receiver.touchingColor(mathf.Color{})
+
+	if queriedTargetPosition != (mathf.Vec2{X: 42, Y: 0}) {
+		t.Fatalf("color query saw target at %v, want (42,0)", queriedTargetPosition)
+	}
+	firstTargetSyncs := mgr.setTransformCalls[2]
+	receiver.touchingColor(mathf.Color{})
+	if got := mgr.setTransformCalls[2]; got != firstTargetSyncs {
+		t.Fatalf("unchanged target was synchronized %d extra times, want 0", got-firstTargetSyncs)
+	}
+	target.SetXpos(84)
+	receiver.touchingColor(mathf.Color{})
+	if got := mgr.positions[2]; got != (mathf.Vec2{X: 84, Y: 0}) {
+		t.Fatalf("second color query saw target at %v, want (84,0)", got)
+	}
+	target.setLayer(7)
+	receiver.touchingColor(mathf.Color{})
+	if target.runtimeState.isLayerDirty {
+		t.Fatal("color query did not synchronize the target's dirty layer")
+	}
+}
+
+func TestTouchingColorSyncsDirtyTransientOwnerImmediately(t *testing.T) {
+	mgr := newTouchingSyncSpriteMgr()
+	installTouchingSyncSpriteMgr(t, mgr)
+
+	game := &Game{}
+	game.displayState.WorldWidth = 480
+	game.displayState.WorldHeight = 360
+	game.initShapeMgr()
+	owner := newTouchingTestSprite("owner", 0, 0, 1)
+	owner.SetXpos(42)
+	owner.g = game
+	mgr.positions[1] = mathf.NewVec2(0, 0)
+
+	owner.touchingColor(mathf.Color{})
+
+	if got := mgr.positions[1]; got != (mathf.Vec2{X: 42, Y: 0}) {
+		t.Fatalf("color query saw transient owner at %v, want (42,0)", got)
+	}
+	if got := mgr.setTransformCalls[1]; got != 1 {
+		t.Fatalf("transient owner was synchronized %d times, want 1", got)
+	}
+}
+
+func TestHiddenColorQueriesSyncDeferredCostume(t *testing.T) {
+	tests := []struct {
+		name  string
+		query func(*SpriteImpl) bool
+	}{
+		{name: "color", query: func(sprite *SpriteImpl) bool {
+			return sprite.touchingColor(mathf.Color{})
+		}},
+		{name: "colors", query: func(sprite *SpriteImpl) bool {
+			return sprite.touchingColors(mathf.Color{}, mathf.Color{})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sprite, _, mgr := setupPreparedResourceSync(t)
+			game := sprite.g
+			flush := func() { game.flushSpriteProxyChanges(game.shapeMgr.items) }
+			flush()
+			sprite.Hide()
+			flush()
+			sprite.SetCostume__0("costume1")
+			flush()
+			if !sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() || len(game.shapeMgr.dirtySprites) != 0 {
+				t.Fatal("hidden frame did not leave only the deferred costume pending")
+			}
+			mgr.expectedTexturePaths[1] = internalengine.ToAssetPath(sprite.costumes[1].path)
+
+			if !tt.query(sprite) {
+				t.Fatal("color query used the stale hidden costume")
+			}
+			requirePreparedResource(t, sprite, mgr, 1, 1.5)
+			if sprite.runtimeState.isCostumeDirty || sprite.needsProxyUpdate() {
+				t.Fatal("color query did not finish the deferred costume synchronization")
+			}
+		})
+	}
+}
+
+func TestColorQueryIncludesReentrantSceneChanges(t *testing.T) {
+	sprite, later, mgr := setupPreparedResourceSync(t)
+	game := sprite.g
+	game.flushSpriteProxyChanges(game.shapeMgr.items)
+	sprite.SetXpos(42)
+	later.runtimeState.isCostumeDirty = true
+	later.markProxyDirty()
+	later.runtimeState.syncSprite.OnFramesSetChangedEvent.Subscribe(func() {
+		sprite.SetXpos(84)
+	})
+	var queriedPosition mathf.Vec2
+	mgr.onColorCollision = func() {
+		queriedPosition = mgr.positions[1]
+	}
+
+	later.touchingColor(mathf.Color{})
+
+	if queriedPosition != (mathf.Vec2{X: 84, Y: 20}) {
+		t.Fatalf("color query saw reentrant position %v, want (84,20)", queriedPosition)
+	}
+	if len(game.shapeMgr.dirtySprites) != 0 || sprite.needsProxyUpdate() {
+		t.Fatal("color query left the reentrant scene change pending")
+	}
+}
+
 func TestTouchingColorUsesConfiguredThreshold(t *testing.T) {
 	mgr := newTouchingSyncSpriteMgr()
 	installTouchingSyncSpriteMgr(t, mgr)

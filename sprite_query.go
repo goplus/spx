@@ -202,7 +202,7 @@ func (p *SpriteImpl) touchPoint(x, y float64) bool {
 }
 
 func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
-	if !p.prepareSelfCollisionQuery() {
+	if !p.prepareSceneColorQuery() {
 		return false
 	}
 	p.g.flushPenCommands()
@@ -210,7 +210,7 @@ func (p *SpriteImpl) touchingColor(color mathf.Color) bool {
 }
 
 func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
-	if !p.prepareSelfCollisionQuery() {
+	if !p.prepareSceneColorQuery() {
 		return false
 	}
 	p.g.flushPenCommands()
@@ -221,6 +221,14 @@ func (p *SpriteImpl) touchingColors(spriteColor, targetColor mathf.Color) bool {
 		colorThreshold,
 		alphaThreshold,
 	)
+}
+
+func (p *SpriteImpl) prepareSceneColorQuery() bool {
+	if p.g == nil || p.runtimeState.syncSprite == nil {
+		return false
+	}
+	p.g.syncSpriteProxiesForQuery(p)
+	return true
 }
 
 func (p *SpriteImpl) touchingSprite(dst *SpriteImpl) bool {

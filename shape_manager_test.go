@@ -77,6 +77,22 @@ func TestShapeManagerOnlyQueuesSpritesWithProxies(t *testing.T) {
 	}
 }
 
+func TestShapeManagerTracksSpriteDirtyBeforeAdd(t *testing.T) {
+	var s shapeManager
+	sprite := &SpriteImpl{}
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.spriteState.dirtyVersion = 1
+
+	s.add(sprite)
+
+	if len(s.dirtySprites) != 1 || s.dirtySprites[0] != sprite {
+		t.Fatal("adding a dirty sprite did not queue it for proxy synchronization")
+	}
+	if got := s.dirtySpriteIndex[sprite]; got != 0 {
+		t.Fatalf("dirty sprite index = %d, want 0", got)
+	}
+}
+
 func TestShapeManagerCommitsClearedProxyDeletion(t *testing.T) {
 	var s shapeManager
 	sprite := &SpriteImpl{}
