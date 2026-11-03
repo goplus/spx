@@ -38,6 +38,16 @@
 
 namespace SpxPixelQuery {
 
+enum class SamplePointMode {
+	INTEGER,
+	PIXEL_CENTER,
+};
+
+enum class ImageFilterMode {
+	NEAREST,
+	LINEAR,
+};
+
 // Per-query values and strong resource references, with no manager or sprite
 // ownership. Images are fetched lazily, only after the world bounds overlap.
 struct Snapshot {
@@ -48,6 +58,8 @@ struct Snapshot {
 	Transform2D inverse_transform;
 	Vector2i image_size;
 	real_t collision_alpha_scale = 1.0f;
+	// Preserve the resolved render filter so bitmap and SVG silhouettes are sampled consistently.
+	ImageFilterMode image_filter = ImageFilterMode::NEAREST;
 	bool flip_h = false;
 	bool flip_v = false;
 	// Transparent render targets store premultiplied RGB, unlike costume images.
@@ -83,18 +95,18 @@ Rect2 world_bounds(const Transform2D &p_transform, const Rect2 &p_local_rect);
 bool capture(AnimatedSprite2D *p_animation, bool p_apply_collision_alpha, Snapshot &r_snapshot);
 bool load_image(Snapshot &r_snapshot, ImageCache *p_cache = nullptr);
 
-// Select world pixel centers, not pixel edges. Sampling is x-major and keeps
-// its origin at this rectangle's first center even when the step exceeds one.
-Rect2i pixel_centers(const Rect2 &p_bounds);
-Rect2i overlap(const Rect2 &p_a, const Rect2 &p_b);
+// INTEGER samples world coordinates n; PIXEL_CENTER samples n + 0.5 in the
+// same coordinate system. Both grids have unit spacing but differ in phase.
+Rect2i sample_points(const Rect2 &p_bounds, SamplePointMode p_mode);
+Rect2i overlap(const Rect2 &p_a, const Rect2 &p_b, SamplePointMode p_mode);
+Vector2 sample_point(const Vector2i &p_grid_position, SamplePointMode p_mode);
 template <typename Predicate>
-bool any_pixel_center(const Rect2i &p_rect, int p_step, const Predicate &p_matches) {
-	// Callers clamp p_step to at least one when setting the sampling policy.
+bool any_sample_point(const Rect2i &p_rect, SamplePointMode p_mode, int p_step, const Predicate &p_matches) {
 	const int64_t end_x = int64_t(p_rect.position.x) + p_rect.size.x;
 	const int64_t end_y = int64_t(p_rect.position.y) + p_rect.size.y;
 	for (int64_t x = p_rect.position.x; x < end_x; x += p_step) {
 		for (int64_t y = p_rect.position.y; y < end_y; y += p_step) {
-			if (p_matches(Vector2((real_t)x + 0.5f, (real_t)y + 0.5f))) {
+			if (p_matches(sample_point(Vector2i((int)x, (int)y), p_mode))) {
 				return true;
 			}
 		}
@@ -103,9 +115,13 @@ bool any_pixel_center(const Rect2i &p_rect, int p_step, const Predicate &p_match
 }
 
 // load_image must succeed first. Apply inverse transform, pivot/centering and
-// texture flips before flooring; this also preserves negative-scale behavior.
+// texture flips in normalized coordinates before selecting the nearest texel.
 bool sample(const Snapshot &p_snapshot, const Vector2 &p_world_pos, Color &r_color);
 bool sample_premultiplied(const Snapshot &p_snapshot, const Vector2 &p_world_pos, Color &r_color);
+
+// Silhouettes use normalized texture coordinates. NEAREST checks the base
+// texel; LINEAR checks all four neighbors so scaled SVG edges are retained.
+real_t silhouette_alpha(const Snapshot &p_snapshot, const Vector2 &p_world_pos);
 
 // Layers arrive front-to-back (descending z, stage order, then tree index).
 // Scratch composites their premultiplied colors over a white clear color.

@@ -33,6 +33,7 @@
 
 #include "../spx_image_texture.h"
 #include "../spx_pixel_query.h"
+#include "scene/main/viewport.h"
 #include "scene/resources/atlas_texture.h"
 #include "scene/resources/image_texture.h"
 #include "scene/resources/material.h"
@@ -46,10 +47,25 @@
 
 namespace TestSpxPixelQuery {
 
-TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
-	const Rect2i centers = SpxPixelQuery::pixel_centers(Rect2(-0.6, -0.6, 3.2, 3.2));
+TEST_CASE("[SPX] Pixel sensing supports integer and center sample grids") {
+	const Rect2 bounds(-0.6, -0.6, 3.2, 3.2);
+	const Rect2i integer_points = SpxPixelQuery::sample_points(bounds, SpxPixelQuery::SamplePointMode::INTEGER);
 	Vector<Vector2> visited;
-	CHECK_FALSE(SpxPixelQuery::any_pixel_center(centers, 2, [&](Vector2 point) {
+	CHECK_FALSE(SpxPixelQuery::any_sample_point(integer_points, SpxPixelQuery::SamplePointMode::INTEGER, 2, [&](Vector2 point) {
+		visited.push_back(point);
+		return false;
+	}));
+	REQUIRE(visited.size() == 9);
+	CHECK(visited[0] == Vector2(-1, -1));
+	CHECK(visited[1] == Vector2(-1, 1));
+	CHECK(visited[2] == Vector2(-1, 3));
+	CHECK(visited[3] == Vector2(1, -1));
+	CHECK(visited[8] == Vector2(3, 3));
+
+	// Center sampling keeps the step but shifts the entire grid by half a unit.
+	const Rect2i center_points = SpxPixelQuery::sample_points(bounds, SpxPixelQuery::SamplePointMode::PIXEL_CENTER);
+	visited.clear();
+	CHECK_FALSE(SpxPixelQuery::any_sample_point(center_points, SpxPixelQuery::SamplePointMode::PIXEL_CENTER, 2, [&](Vector2 point) {
 		visited.push_back(point);
 		return false;
 	}));
@@ -61,14 +77,41 @@ TEST_CASE("[SPX] Pixel sampling keeps world-center origin at larger steps") {
 }
 
 TEST_CASE("[SPX] Pixel sampling handles steps and rectangle ends beyond integer coordinates") {
-	for (const Rect2i &rect : { Rect2i(1, 1, 2, 2), Rect2i(INT_MAX - 1, INT_MAX - 1, 4, 4) }) {
-		int visits = 0;
-		CHECK_FALSE(SpxPixelQuery::any_pixel_center(rect, INT_MAX, [&](Vector2) {
-			// Stop a regressed loop before it can hang the test process.
-			return ++visits > 1;
-		}));
-		CHECK(visits == 1);
+	for (SpxPixelQuery::SamplePointMode mode : { SpxPixelQuery::SamplePointMode::INTEGER, SpxPixelQuery::SamplePointMode::PIXEL_CENTER }) {
+		for (const Rect2i &rect : { Rect2i(1, 1, 2, 2), Rect2i(INT_MAX - 1, INT_MAX - 1, 4, 4) }) {
+			int visits = 0;
+			CHECK_FALSE(SpxPixelQuery::any_sample_point(rect, mode, INT_MAX, [&](Vector2) {
+				// Stop a regressed overflow loop before it can hang the test process.
+				return ++visits > 1;
+			}));
+			CHECK(visits == 1);
+		}
 	}
+}
+
+TEST_CASE("[SPX] Silhouette sampling follows nearest and linear image filters") {
+	SpxPixelQuery::Snapshot snapshot;
+	snapshot.image = Image::create_empty(3, 2, false, Image::FORMAT_RGBA8);
+	snapshot.image->fill(Color(0, 0, 0, 0));
+	snapshot.image->set_pixel(2, 0, Color(1, 0, 0, 1));
+	snapshot.image_size = snapshot.image->get_size();
+	snapshot.local_rect = Rect2(0, 0, 3, 2);
+
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(2, 0.5)) == 0.0f);
+	snapshot.image_filter = SpxPixelQuery::ImageFilterMode::LINEAR;
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(2, 0.5)) == 1.0f);
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(3, 0.5)) == 1.0f);
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(2, 2)) == 0.0f);
+	snapshot.image_filter = SpxPixelQuery::ImageFilterMode::NEAREST;
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(3, 0.5)) == 1.0f);
+	snapshot.collision_alpha_scale = 0.5f;
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(3, 0.5)) == doctest::Approx(0.5));
+	CHECK(SpxPixelQuery::silhouette_alpha(snapshot, Vector2(4.6, 0.5)) == 0.0f);
+	SpxPixelQuery::Snapshot empty_image;
+	CHECK(SpxPixelQuery::silhouette_alpha(empty_image, Vector2()) == 0.0f);
+	empty_image.image = Image::create_empty(1, 1, false, Image::FORMAT_RGBA8);
+	empty_image.image_size = Vector2i(1, 0);
+	CHECK(SpxPixelQuery::silhouette_alpha(empty_image, Vector2()) == 0.0f);
 }
 
 TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
@@ -79,13 +122,16 @@ TEST_CASE("[SPX] Pixel sampling applies flips after inverse transforms") {
 	snapshot.image_size = Vector2i(2, 1);
 	snapshot.inverse_transform = Transform2D(0, Vector2(-10, 0));
 	Color color;
-	CHECK(SpxPixelQuery::sample(snapshot, Vector2(10.5, 0.5), color));
+	CHECK(SpxPixelQuery::sample(snapshot, Vector2(10, 0.5), color));
 	CHECK(color == Color(1, 0, 0, 1));
 	snapshot.flip_h = true;
 	snapshot.collision_alpha_scale = 0.5;
-	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10.5, 0.5), color));
+	CHECK(SpxPixelQuery::sample_premultiplied(snapshot, Vector2(10, 0.5), color));
 	CHECK(color == Color(0, 0.5, 0, 0.5));
 	CHECK_FALSE(SpxPixelQuery::sample(snapshot, Vector2(12.5, 0.5), color));
+	SpxPixelQuery::Snapshot empty_image;
+	empty_image.image = Image::create_empty(1, 1, false, Image::FORMAT_RGBA8);
+	CHECK_FALSE(SpxPixelQuery::sample(empty_image, Vector2(), color));
 }
 
 static SpxPixelQuery::Layer solid_layer(const Color &p_color, SpxPixelQuery::Layer::Order p_order) {
@@ -204,9 +250,59 @@ TEST_CASE("[SceneTree][SPX] Pixel snapshots reject unavailable frames and honor 
 	material->set_shader(shader);
 	animation->set_material(material);
 	animation->set_flip_v(true);
+	animation->set_texture_filter(CanvasItem::TEXTURE_FILTER_LINEAR);
 	material->set_shader_parameter("alpha_amount", 0.25);
 	REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
 	CHECK(snapshot.collision_alpha_scale == doctest::Approx(0.75));
+	struct FilterCase {
+		CanvasItem::TextureFilter texture_filter;
+		SpxPixelQuery::ImageFilterMode image_filter;
+	};
+	for (const FilterCase &filter_case : {
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_LINEAR, SpxPixelQuery::ImageFilterMode::LINEAR },
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, SpxPixelQuery::ImageFilterMode::LINEAR },
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC, SpxPixelQuery::ImageFilterMode::LINEAR },
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_NEAREST, SpxPixelQuery::ImageFilterMode::NEAREST },
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_NEAREST_WITH_MIPMAPS, SpxPixelQuery::ImageFilterMode::NEAREST },
+			 FilterCase{ CanvasItem::TEXTURE_FILTER_NEAREST_WITH_MIPMAPS_ANISOTROPIC, SpxPixelQuery::ImageFilterMode::NEAREST } }) {
+		animation->set_texture_filter(filter_case.texture_filter);
+		REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
+		CHECK(snapshot.image_filter == filter_case.image_filter);
+	}
+	auto *filter_parent = memnew(Node2D);
+	scene.root->add_child(filter_parent);
+	animation->reparent(filter_parent);
+	animation->set_texture_filter(CanvasItem::TEXTURE_FILTER_PARENT_NODE);
+	filter_parent->set_texture_filter(CanvasItem::TEXTURE_FILTER_LINEAR_WITH_MIPMAPS);
+	REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
+	CHECK(snapshot.image_filter == SpxPixelQuery::ImageFilterMode::LINEAR);
+
+	filter_parent->set_texture_filter(CanvasItem::TEXTURE_FILTER_PARENT_NODE);
+	Viewport *viewport = animation->get_viewport();
+	REQUIRE(viewport != nullptr);
+	const Viewport::DefaultCanvasItemTextureFilter original_viewport_filter = viewport->get_default_canvas_item_texture_filter();
+	struct ViewportFilterCase {
+		Viewport::DefaultCanvasItemTextureFilter texture_filter;
+		SpxPixelQuery::ImageFilterMode image_filter;
+	};
+	for (const ViewportFilterCase &filter_case : {
+			 ViewportFilterCase{ Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR, SpxPixelQuery::ImageFilterMode::LINEAR },
+			 ViewportFilterCase{ Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, SpxPixelQuery::ImageFilterMode::LINEAR },
+			 ViewportFilterCase{ Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST, SpxPixelQuery::ImageFilterMode::NEAREST },
+			 ViewportFilterCase{ Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST_WITH_MIPMAPS, SpxPixelQuery::ImageFilterMode::NEAREST } }) {
+		viewport->set_default_canvas_item_texture_filter(filter_case.texture_filter);
+		REQUIRE(SpxPixelQuery::capture(animation, true, snapshot));
+		CHECK(snapshot.image_filter == filter_case.image_filter);
+	}
+	viewport->set_default_canvas_item_texture_filter(original_viewport_filter);
+	auto *detached_animation = memnew(AnimatedSprite2D);
+	scene.root->add_child(detached_animation);
+	detached_animation->set_sprite_frames(frames);
+	scene.root->remove_child(detached_animation);
+	SpxPixelQuery::Snapshot detached_snapshot;
+	REQUIRE(SpxPixelQuery::capture(detached_animation, false, detached_snapshot));
+	CHECK(detached_snapshot.image_filter == SpxPixelQuery::ImageFilterMode::NEAREST);
+	memdelete(detached_animation);
 	REQUIRE(SpxPixelQuery::load_image(snapshot));
 	const auto retained_image = snapshot.image;
 	CHECK(SpxPixelQuery::load_image(snapshot));
@@ -369,6 +465,9 @@ TEST_CASE("[SPX] Scene colors ignore empty corners of rotated sprites and distan
 	REQUIRE(rotated.pixel_query.bounds.has_point(empty_corner));
 	CHECK(SpxPixelQuery::composite({ rotated }, empty_corner) == Color(1, 1, 1, 0));
 	CHECK(SpxPixelQuery::composite({ rotated }, Vector2(10, 10)) == Color(1, 1, 1, 0));
+	CHECK(SpxPixelQuery::composite({ rotated }, Vector2(0, 10)) == Color(1, 1, 1, 0));
+	CHECK(SpxPixelQuery::composite({ rotated }, Vector2(-10, 0)) == Color(1, 1, 1, 0));
+	CHECK(SpxPixelQuery::composite({ rotated }, Vector2(0, -10)) == Color(1, 1, 1, 0));
 	CHECK(SpxPixelQuery::composite({ rotated }, transform.xform(Vector2(0.5, 0.5))) == Color(1, 0, 0));
 }
 

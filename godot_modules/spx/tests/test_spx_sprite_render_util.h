@@ -202,25 +202,31 @@ TEST_CASE("[SceneTree][SPX] Bitmap and SVG visuals select their sampling filters
 	SpxSprite *sprite = fixture.create_sprite();
 	const CharString png_path = fixture.png_path.utf8();
 	const CharString svg_path = fixture.svg_path.utf8();
+	auto check_filter = [&](CanvasItem::TextureFilter p_render_filter, SpxPixelQuery::ImageFilterMode p_query_filter) {
+		CHECK(sprite->get_anim2d()->get_texture_filter() == p_render_filter);
+		SpxPixelQuery::Snapshot snapshot;
+		REQUIRE(SpxPixelQuery::capture(sprite->get_anim2d(), false, snapshot));
+		CHECK(snapshot.image_filter == p_query_filter);
+	};
 
 	sprite->set_texture(png_path.get_data());
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+	check_filter(CanvasItem::TEXTURE_FILTER_NEAREST, SpxPixelQuery::ImageFilterMode::NEAREST);
 
 	sprite->set_texture(svg_path.get_data());
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+	check_filter(CanvasItem::TEXTURE_FILTER_LINEAR, SpxPixelQuery::ImageFilterMode::LINEAR);
 
 	sprite->set_texture_atlas(png_path.get_data(), Rect2(1, 1, 4, 3));
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+	check_filter(CanvasItem::TEXTURE_FILTER_NEAREST, SpxPixelQuery::ImageFilterMode::NEAREST);
 
 	sprite->set_texture_atlas(svg_path.get_data(), Rect2(1, 1, 4, 3));
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+	check_filter(CanvasItem::TEXTURE_FILTER_LINEAR, SpxPixelQuery::ImageFilterMode::LINEAR);
 
-	// Sampling follows the frame source, not the animation name's extension.
+	// Filtering follows the frame source, not the animation name's extension.
 	sprite->play_anim("bitmap.svg", 1, false, false);
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_NEAREST);
+	check_filter(CanvasItem::TEXTURE_FILTER_NEAREST, SpxPixelQuery::ImageFilterMode::NEAREST);
 
 	sprite->play_anim("svg.png", 1, false, false);
-	CHECK(sprite->get_anim2d()->get_texture_filter() == CanvasItem::TEXTURE_FILTER_LINEAR);
+	check_filter(CanvasItem::TEXTURE_FILTER_LINEAR, SpxPixelQuery::ImageFilterMode::LINEAR);
 }
 
 TEST_CASE("[SceneTree][SPX] Fractional SVG render bounds and pixel queries share logical geometry") {
@@ -576,10 +582,14 @@ TEST_CASE("[SceneTree][SPX] Pixel queries preserve results across multiple sampl
 
 	Ref<Image> self_image = Image::create_empty(96, 96, false, Image::FORMAT_RGBA8);
 	self_image->fill(Color(0, 0, 0, 0));
-	self_image->set_pixel(33, 0, Color(1, 0, 0, 1));
 	Ref<Image> other_image = Image::create_empty(96, 96, false, Image::FORMAT_RGBA8);
 	other_image->fill(Color(0, 0, 0, 0));
-	other_image->set_pixel(33, 0, Color(0, 0, 1, 1));
+	// At the second tile's first step-three sample, direct color and normalized
+	// silhouette mapping select adjacent texels; both belong in this regression.
+	for (int x : { 32, 33 }) {
+		self_image->set_pixel(x, 0, Color(1, 0, 0, 1));
+		other_image->set_pixel(x, 0, Color(0, 0, 1, 1));
+	}
 	SpxSprite *self = fixture.create_sprite();
 	self->get_anim2d()->set_sprite_frames(make_frames(self_image));
 	SpxSprite *other = fixture.create_sprite();
