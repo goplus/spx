@@ -48,6 +48,8 @@ if args == ["env", "GOROOT"]:
     print("/mock/go root")
 elif args == ["env", "GOHOSTOS"]:
     print(os.environ["MOCK_GOHOSTOS"])
+elif args == ["env", "GOHOSTARCH"]:
+    print(os.environ["MOCK_GOHOSTARCH"])
 elif args == ["env", "GOOS"]:
     print(os.environ["MOCK_GOOS"])
 elif args == ["list", "./..."]:
@@ -171,6 +173,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "GOARCH": "",
                 "MOCK_CAPTURE_PLATFORM": "1",
                 "MOCK_GOHOSTOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"),
+                "MOCK_GOHOSTARCH": "amd64",
                 "MOCK_GOOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"),
                 **environment,
             },
@@ -228,7 +231,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out"])
                 self.assertEqual(compact[0], {
                     "directory": ".", "args": ["run", "./.github/cmd/compact-coverage", *profiles],
-                    "GOOS": "", "GOARCH": "",
+                    "GOOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"), "GOARCH": "amd64",
                 })
                 self.assertEqual(calls[-1], compact[0])
                 self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS"])
@@ -236,6 +239,21 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 self.assertCountEqual(actual, profiles)
                 all_profiles.extend(profiles)
         self.assertEqual(len(all_profiles), len(set(all_profiles)))
+
+    def test_web_compaction_uses_host_with_exported_target(self):
+        for suite in ("web", "web-process", "web-interpreter"):
+            with self.subTest(suite=suite):
+                result = self.run_coverage_suite(
+                    suite, GOOS="js", GOARCH="wasm", MOCK_GOHOSTARCH="arm64",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                calls = self.recorded_calls()
+                for call in calls:
+                    if call["args"][0] == "test":
+                        self.assertEqual((call["GOOS"], call["GOARCH"]), ("js", "wasm"))
+                self.assertEqual(calls[-1]["args"][0], "run")
+                self.assertEqual((calls[-1]["GOOS"], calls[-1]["GOARCH"]), ("linux", "arm64"))
+                self.assertTrue(self.output.exists())
 
     def test_failed_coverage_commands_stop_the_suite_without_publishing_outputs(self):
         for suite in self.coverage_suites:
