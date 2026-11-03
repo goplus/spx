@@ -114,11 +114,23 @@ func (p *SpriteImpl) setDying() {
 func (p *SpriteImpl) markProxyDirty() {
 	p.markVisualDirty()
 	p.spriteState.dirtyVersion++
+	if p.g != nil {
+		p.g.shapeMgr.noteProxyDirty(p)
+	}
 }
 
 func (p *SpriteImpl) markVisualDirty() {
 	p.requestRedrawIfVisible()
 	p.spriteState.visualVersion++
+}
+
+func (p *SpriteImpl) setLayer(layer int) {
+	previous := p.runtimeState.layer
+	p.baseObj.setLayer(layer)
+	if previous != layer && p.g != nil {
+		// Layer changes bypass transform versions but affect scene color compositing.
+		p.g.shapeMgr.noteProxyDirty(p)
+	}
 }
 
 // -----------------------------------------------------------------------------

@@ -240,32 +240,97 @@ func (p *SpriteImpl) mergeEnginePosition(x, y float64) {
 }
 
 func (p *SpriteImpl) syncProxyForQuery() {
+	engine.WaitMainThread(p.syncProxyForQueryOnMainThread)
+}
+
+// The caller must already be on the engine main thread.
+func (p *SpriteImpl) syncProxyForQueryOnMainThread() {
+	p.prepareProxyForQueryOnMainThread()
+	p.submitProxyForQueryOnMainThread()
+}
+
+// The caller must already be on the engine main thread.
+func (p *SpriteImpl) prepareProxyForQueryOnMainThread() {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
+		if p.g != nil {
+			p.g.shapeMgr.removeDirtySprite(p)
+		}
+		return
+	}
+	// Queries need the latest silhouette even when the sprite is hidden.
+	p.applyCostumeUpdate()
+	p.syncAutoPhysicsShapesAfterCostumeChange()
+}
+
+// The caller must already be on the engine main thread.
+func (p *SpriteImpl) submitProxyForQueryOnMainThread() {
+	if p.isDestroyed() || p.runtimeState.syncSprite == nil {
+		if p.g != nil {
+			p.g.shapeMgr.removeDirtySprite(p)
+		}
+		return
+	}
+	if !p.needsProxyUpdate() {
+		if p.g != nil {
+			p.g.shapeMgr.removeDirtySprite(p)
+		}
+		return
+	}
+	// Read and submit in one engine job; queued queries may precede the frame pull.
+	if p.shouldPullPhysicsPosition() {
+		position := p.runtimeState.syncSprite.GetPosition()
+		p.mergeEnginePosition(position.X, position.Y)
+	}
+	snapshot := p.snapshotProxy()
+	proxy := snapshot.change.proxy
+	engine.ValidateSpriteTransform(proxy.Id, snapshot.position, snapshot.rotation, snapshot.scale, snapshot.renderOffset)
+	proxy.SetTransform(
+		snapshot.position,
+		snapshot.rotation,
+		snapshot.scale,
+		snapshot.visible,
+		snapshot.renderOffset,
+	)
+	commitProxyChange(snapshot.change)
+}
+
+// Color queries sample every native scene sprite, so synchronize all queued
+// proxy changes before querying.
+func (p *Game) syncSpriteProxiesForQuery(owner *SpriteImpl) {
+	if len(p.shapeMgr.dirtySprites) == 0 &&
+		(owner == nil || !owner.needsQueryProxyUpdate()) {
+		return
+	}
 	engine.WaitMainThread(func() {
-		if p.isDestroyed() || p.runtimeState.syncSprite == nil {
-			return
+		sprites := make([]*SpriteImpl, 0, len(p.shapeMgr.dirtySprites)+1)
+		seen := make(map[*SpriteImpl]struct{}, cap(sprites))
+		appendPending := func() {
+			for _, sprite := range p.shapeMgr.dirtySprites {
+				if _, ok := seen[sprite]; ok {
+					continue
+				}
+				seen[sprite] = struct{}{}
+				sprites = append(sprites, sprite)
+			}
+			if owner != nil && owner.needsQueryProxyUpdate() {
+				if _, ok := seen[owner]; !ok {
+					seen[owner] = struct{}{}
+					sprites = append(sprites, owner)
+				}
+			}
 		}
-		// Queries need the latest silhouette even when the sprite is hidden.
-		p.applyCostumeUpdate()
-		p.syncAutoPhysicsShapesAfterCostumeChange()
-		if !p.needsProxyUpdate() {
-			return
+
+		appendPending()
+		// Resource writes may synchronously dirty more sprites. Each sprite is
+		// prepared once, so the worklist remains bounded.
+		for i := 0; i < len(sprites); i++ {
+			sprites[i].prepareProxyForQueryOnMainThread()
+			appendPending()
 		}
-		// Read and submit in one engine job; queued queries may precede the frame pull.
-		if p.shouldPullPhysicsPosition() {
-			position := p.runtimeState.syncSprite.GetPosition()
-			p.mergeEnginePosition(position.X, position.Y)
+		// Capture transforms only after resource callbacks have completed.
+		for _, sprite := range sprites {
+			sprite.submitProxyForQueryOnMainThread()
 		}
-		snapshot := p.snapshotProxy()
-		proxy := snapshot.change.proxy
-		engine.ValidateSpriteTransform(proxy.Id, snapshot.position, snapshot.rotation, snapshot.scale, snapshot.renderOffset)
-		proxy.SetTransform(
-			snapshot.position,
-			snapshot.rotation,
-			snapshot.scale,
-			snapshot.visible,
-			snapshot.renderOffset,
-		)
-		commitProxyChange(snapshot.change)
 	})
 }
 
@@ -305,6 +370,11 @@ func (p *SpriteImpl) collectProxyUpdate(buffer *engine.SpriteSyncBuffer) proxyCh
 func (p *SpriteImpl) needsProxyUpdate() bool {
 	return !p.isDestroyed() && p.runtimeState.syncSprite != nil &&
 		p.spriteState.proxySyncVersion != p.spriteState.dirtyVersion
+}
+
+func (p *SpriteImpl) needsQueryProxyUpdate() bool {
+	return !p.isDestroyed() && p.runtimeState.syncSprite != nil &&
+		(p.needsProxyUpdate() || p.runtimeState.isCostumeDirty || p.runtimeState.isLayerDirty)
 }
 
 func (p *SpriteImpl) snapshotProxy() proxySnapshot {
@@ -481,6 +551,9 @@ func commitProxyChange(update proxyChange) {
 	}
 	if update.destroy {
 		p.runtimeState.syncSprite = nil
+		if p.g != nil {
+			p.g.shapeMgr.removeDirtySprite(p)
+		}
 		return
 	}
 	if !p.preparedVisual.preparing && p.spriteState.dirtyVersion == update.dirtyVersion {
@@ -493,6 +566,9 @@ func commitProxyChange(update proxyChange) {
 	}
 	if pending.y == update.positionVersions.y {
 		pending.y = 0
+	}
+	if p.g != nil && !p.needsProxyUpdate() {
+		p.g.shapeMgr.removeDirtySprite(p)
 	}
 }
 
