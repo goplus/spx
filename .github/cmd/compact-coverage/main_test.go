@@ -78,7 +78,7 @@ func TestCompactHeaderOnlyProfiles(t *testing.T) {
 	}
 }
 
-func TestCompactInvalidProfilesRemainUntouched(t *testing.T) {
+func TestCompactInvalidProfilesStopBeforeLaterInputs(t *testing.T) {
 	for _, input := range []string{
 		"",
 		"mode: unknown\n",
@@ -88,19 +88,26 @@ func TestCompactInvalidProfilesRemainUntouched(t *testing.T) {
 		t.Run(input, func(t *testing.T) {
 			dir := t.TempDir()
 			name := filepath.Join(dir, "coverage.out")
-			if err := os.WriteFile(name, []byte(input), 0o644); err != nil {
-				t.Fatal(err)
+			later := filepath.Join(dir, "later.out")
+			// A valid later profile would change if run did not stop on the error.
+			unchanged := map[string]string{name: input, later: "mode: atomic\r\n"}
+			for path, content := range unchanged {
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			}
 			var stderr bytes.Buffer
-			if code := run([]string{name}, &stderr); code != 1 || !strings.Contains(stderr.String(), name) {
+			if code := run([]string{name, later}, &stderr); code != 1 || !strings.Contains(stderr.String(), name) {
 				t.Fatalf("run = %d, %q", code, stderr.String())
 			}
-			got, err := os.ReadFile(name)
-			if err != nil || string(got) != input {
-				t.Fatalf("invalid input changed: %q, %v", got, err)
+			for path, content := range unchanged {
+				got, err := os.ReadFile(path)
+				if err != nil || string(got) != content {
+					t.Fatalf("%s changed: %q, %v", path, got, err)
+				}
 			}
 			entries, err := os.ReadDir(dir)
-			if err != nil || len(entries) != 1 {
+			if err != nil || len(entries) != len(unchanged) {
 				t.Fatalf("temporary output was left behind: %v, %v", entries, err)
 			}
 		})

@@ -213,25 +213,25 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 for call, (profile, packages) in zip(tests, reports.items()):
                     args = call["args"]
                     self.assertEqual(call["directory"], Path(profile).parent.as_posix())
-                    self.assertEqual([arg for arg in args if arg.startswith(("./", "github.com/"))], packages)
-                    self.assertEqual([arg for arg in args if arg.startswith("-coverprofile=")],
-                                     [f"-coverprofile={Path(profile).name}"])
-                    self.assertIn("-covermode=atomic", args)
-                    self.assertFalse(any(arg.endswith(".go") for arg in args))
-                    if suite == "native":
-                        # No extra flags may silently narrow this full-module run.
-                        self.assertEqual(args, [
-                            "test", "-coverpkg=" + ",".join(packages), "-v",
-                            f"-coverprofile={Path(profile).name}", "-covermode=atomic", *packages,
-                        ])
-                    if suite == "codegen":
-                        self.assertIn("-coverpkg=./...", args)
                     web = suite.startswith("web")
                     self.assertEqual((call["GOOS"], call["GOARCH"]), ("js", "wasm") if web else ("", ""))
+                    options = [f"-coverprofile={Path(profile).name}", "-covermode=atomic"]
                     if web:
-                        self.assertIn('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"', args)
-                    if suite in ("macos", "windows"):
+                        options.append('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"')
+                    if suite in ("native", "codegen"):
+                        options.append("-coverpkg=" + ",".join(packages))
+                    if suite in ("native", "tools", "macos", "windows"):
+                        options.append("-v")
+                    if suite in ("macos", "windows", "web-process"):
                         self.assertIn("-run", args)
+                        for option in options:
+                            self.assertIn(option, args)
+                        self.assertEqual([arg for arg in args if arg.startswith(("./", "github.com/"))], packages)
+                        self.assertEqual([arg for arg in args if arg.startswith("-coverprofile=")], [options[0]])
+                        self.assertFalse(any(arg.endswith(".go") for arg in args))
+                    else:
+                        # Full suites must not accept extra flags that narrow or skip tests.
+                        self.assertCountEqual(args, ["test", *options, *packages])
                 compact = {
                     "directory": ".", "args": ["run", "./.github/cmd/compact-coverage", *reports],
                     "GOOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"), "GOARCH": "amd64",
