@@ -93,11 +93,44 @@ func main() {
 	if compat.Div(0, 0) != 0 || compat.FloorMod(-7, 3) != 2 || compat.LimitPrecision(42 + 5e-10) != 42 {
 		panic("numeric operator bindings")
 	}
+	target := &volumeTarget{}
+	compat.SetVolume(target, 42)
+	if target.volume != 42 {
+		panic("set volume binding")
+	}
+	compat.ChangeVolume(target, 3)
+	if target.delta != 3 {
+		panic("change volume binding")
+	}
+	compat.SetSoundEffect(target, spx.SoundPanEffect, 4)
+	if target.kind != spx.SoundPanEffect || target.effect != 4 {
+		panic("set sound effect binding")
+	}
+	compat.ChangeSoundEffect(target, spx.SoundPitchEffect, 5)
+	if target.kind != spx.SoundPitchEffect || target.delta != 5 {
+		panic("change sound effect binding")
+	}
 	probe := spx.NewValue("dispatch probe")
 	list := compat.NewList(probe)
 	if list.String() != "probe" || stringify(&list) != "probe" || probe.String() != "probe" || stringify(probe) != "probe" {
 		panic("static and interface method dispatch")
 	}
+}
+
+type volumeTarget struct {
+	volume float64
+	delta  float64
+	kind   spx.SoundEffectKind
+	effect float64
+}
+
+func (t *volumeTarget) SetVolume(volume float64) { t.volume = volume }
+func (t *volumeTarget) ChangeVolume(delta float64) { t.delta = delta }
+func (t *volumeTarget) SetSoundEffect(kind spx.SoundEffectKind, value float64) {
+	t.kind, t.effect = kind, value
+}
+func (t *volumeTarget) ChangeSoundEffect(kind spx.SoundEffectKind, delta float64) {
+	t.kind, t.delta = kind, delta
 }
 `
 
@@ -153,6 +186,8 @@ func TestInterpreterScratchCompat(t *testing.T) {
 				if execution == "fallback" {
 					// Context overrides bypass generated direct-call adapters.
 					for name, fn := range map[string]any{
+						"github.com/goplus/spx/v4/pkg/scratchcompat.ChangeSoundEffect":       scratchcompat.ChangeSoundEffect,
+						"github.com/goplus/spx/v4/pkg/scratchcompat.ChangeVolume":            scratchcompat.ChangeVolume,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.CharAt":                  scratchcompat.CharAt,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.Compare":                 scratchcompat.Compare,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.Contains":                scratchcompat.Contains,
@@ -165,6 +200,8 @@ func TestInterpreterScratchCompat(t *testing.T) {
 						"github.com/goplus/spx/v4/pkg/scratchcompat.PenColorParamFromString": scratchcompat.PenColorParamFromString,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.Rand":                    scratchcompat.Rand,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex":     scratchcompat.ResolveCostumeIndex,
+						"github.com/goplus/spx/v4/pkg/scratchcompat.SetSoundEffect":          scratchcompat.SetSoundEffect,
+						"github.com/goplus/spx/v4/pkg/scratchcompat.SetVolume":               scratchcompat.SetVolume,
 						"(*github.com/goplus/spx/v4/internal/scratch.List).Init":             (*spx.List).Init,
 						"(*github.com/goplus/spx/v4/internal/scratch.List).InitFrom":         (*spx.List).InitFrom,
 						"(*github.com/goplus/spx/v4/internal/scratch.List).String":           (*spx.List).String,

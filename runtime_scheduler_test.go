@@ -323,6 +323,60 @@ func TestCostumeChangesControlRedrawBoundary(t *testing.T) {
 	}
 }
 
+func TestSoundControlsRequestRedrawBoundary(t *testing.T) {
+	type soundControls interface {
+		SetVolume(float64)
+		ChangeVolume(float64)
+		SetSoundEffect(SoundEffectKind, float64)
+		ChangeSoundEffect(SoundEffectKind, float64)
+	}
+	controls := []struct {
+		name string
+		call func(soundControls)
+	}{
+		{"set volume", func(c soundControls) { c.SetVolume(50) }},
+		{"change volume", func(c soundControls) { c.ChangeVolume(1) }},
+		{"set effect", func(c soundControls) { c.SetSoundEffect(SoundPanEffect, 10) }},
+		{"change effect", func(c soundControls) { c.ChangeSoundEffect(SoundPanEffect, 1) }},
+	}
+	for _, target := range []string{"game", "sprite"} {
+		for _, control := range controls {
+			t.Run(target+"/"+control.name, func(t *testing.T) {
+				co, _ := setupRuntimeEventGame(t)
+				itime.Start()
+
+				game := new(Game)
+				game.soundMgr.Init(&fakeAudioBackend{})
+				var sound soundControls = game
+				if target == "sprite" {
+					sprite := &SpriteImpl{g: game}
+					sprite.components.sound = &soundComponent{sprite: sprite}
+					sound = sprite
+				}
+
+				frames := [3]int64{}
+				count := 0
+				th := co.Create(nil, func(coroutine.Thread) {
+					Repeat(len(frames), func() {
+						control.call(sound)
+						frames[count] = itime.Frame()
+						count++
+					})
+				})
+				co.JoinFirstSlice(th)
+				for range frames {
+					co.Update()
+					itime.Update(1.0/30, 30)
+				}
+
+				if count != len(frames) || frames != [3]int64{0, 1, 2} {
+					t.Fatalf("iterations = %d at frames %v, want 3 at frames [0 1 2]", count, frames)
+				}
+			})
+		}
+	}
+}
+
 func TestTimerTrackingHatDoesNotFire(t *testing.T) {
 	for _, redraw := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nonvisual", true: "redraw-every-round"}[redraw], func(t *testing.T) {

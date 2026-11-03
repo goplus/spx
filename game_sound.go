@@ -75,11 +75,13 @@ func (p *Game) StopPlaying(name SoundName) {
 func (p *Game) SetVolume(volume float64) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
 	p.soundMgr.SetVolume(p.audioState.SoundObj, volume)
+	engine.RequestRedraw()
 }
 
 func (p *Game) ChangeVolume(delta float64) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
 	p.soundMgr.ChangeVolume(p.audioState.SoundObj, delta)
+	engine.RequestRedraw()
 }
 
 func (p *Game) GetSoundEffect(kind SoundEffectKind) float64 {
@@ -90,11 +92,13 @@ func (p *Game) GetSoundEffect(kind SoundEffectKind) float64 {
 func (p *Game) SetSoundEffect(kind SoundEffectKind, value float64) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
 	p.setSoundEffect(p.audioState.SoundObj, kind, value)
+	engine.RequestRedraw()
 }
 
 func (p *Game) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	p.ensureSoundObject(&p.audioState.SoundObj)
 	p.changeSoundEffect(p.audioState.SoundObj, kind, delta)
+	engine.RequestRedraw()
 }
 
 func (p *Game) ClearSoundEffects() {
