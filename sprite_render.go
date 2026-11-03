@@ -18,11 +18,11 @@ package spx
 
 import (
 	"math"
-	"strconv"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
 	spxlog "github.com/goplus/spx/v4/internal/log"
+	"github.com/goplus/spx/v4/internal/scratch"
 )
 
 var (
@@ -55,6 +55,9 @@ func (p *SpriteImpl) CostumeIndex() int {
 	return p.getCostumeIndex()
 }
 
+// ResolveCostumeIndex resolves a costume name or 1-based integer string to an index.
+//
+// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex] instead.
 func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("ResolveCostumeIndex: sprite=%s, costume=%v", p.name, costume)
@@ -63,18 +66,7 @@ func (p *SpriteImpl) ResolveCostumeIndex(costume string) int {
 		return idx
 	}
 
-	idx, err := strconv.Atoi(costume)
-	if err != nil {
-		return -1
-	}
-	if len(p.costumes) == 0 {
-		return idx - 1
-	}
-	if idx >= 0 && idx <= len(p.costumes) {
-		return idx - 1
-	}
-	idx = (idx - 1) % len(p.costumes)
-	return idx
+	return scratch.ParseCostumeIndex(costume, len(p.costumes))
 }
 
 func (p *SpriteImpl) SetCostume__0(costume SpriteCostumeName) {

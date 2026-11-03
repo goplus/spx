@@ -17,14 +17,9 @@
 package spx
 
 import (
-	"math"
-	"strings"
-
 	"github.com/goplus/spx/v4/internal/engine"
 	itime "github.com/goplus/spx/v4/internal/time"
 )
-
-const compareMaxULPs = 2
 
 // Rand__0 returns a random integer between from and to (inclusive).
 func Rand__0(from, to int) float64 {
@@ -34,17 +29,10 @@ func Rand__0(from, to int) float64 {
 	return float64(from + randomIntn(to-from+1))
 }
 
-// Rand__1 returns a random number between from and to. Like Scratch, integral
-// bounds select an integer from the inclusive range, even when stored as floats.
+// Rand__1 returns a random float64 between from and to.
 func Rand__1(from, to float64) float64 {
 	if to < from {
 		from, to = to, from
-	}
-	if from == to {
-		return from
-	}
-	if math.Mod(from, 1) == 0 && math.Mod(to, 1) == 0 {
-		return from + math.Floor(randomFloat64()*(to-from+1))
 	}
 	return randomFloat64()*(to-from) + from
 }
@@ -57,85 +45,6 @@ func Iround(v float64) int {
 	return int(v - 0.5)
 }
 
-// LimitPrecision snaps a coordinate to the nearest integer when the distance is
-// less than 1e-9, matching Scratch's own x/y position reporters. Other values,
-// including NaN and infinities, are returned unchanged.
-// In SPX scripts, use limitPrecision(xpos) or limitPrecision(ypos) for the
-// sprite's own coordinate blocks; read other sprites' coordinates directly.
-func LimitPrecision(coordinate float64) float64 {
-	rounded := math.Round(coordinate)
-	if math.Abs(coordinate-rounded) < 1e-9 {
-		return rounded
-	}
-	return coordinate
-}
-
-// Div returns a divided by b, converting a NaN result to zero while preserving
-// infinities. For example, Div(0, 0) returns 0 and Div(1, 0) returns +Inf.
-// In SPX scripts, it can be called as div(a, b).
-func Div(a, b float64) float64 {
-	result := a / b
-	if math.IsNaN(result) {
-		return 0
-	}
-	return result
-}
-
-// FloorMod returns the remainder of dividend divided by divisor using
-// floored-division semantics. Unlike math.Mod, a non-zero result has the same
-// sign as divisor. This matches Scratch's mod operator:
-// https://github.com/scratchfoundation/scratch-vm/blob/3070e30241c391254d94f3a98129f9e96b902631/src/blocks/scratch3_operators.js#L118-L125
-func FloorMod(dividend, divisor float64) float64 {
-	result := math.Mod(dividend, divisor)
-	if result/divisor < 0 {
-		result += divisor
-	}
-	return result
-}
-
-// Contains reports whether substr is within s using Scratch's
-// case-insensitive string matching semantics.
-func Contains(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
-}
-
-// Compare compares values using the same rules as Scratch's =, <, and >
-// operator blocks.
-//
-// Values are compared numerically when both sides can be interpreted as numbers;
-// otherwise they are compared as case-insensitive strings.
-func Compare(v1, v2 any) int {
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			switch {
-			case n1 < n2:
-				return -1
-			case n1 > n2:
-				return 1
-			default:
-				return 0
-			}
-		}
-	}
-
-	s1 := strings.ToLower(toString(v1))
-	s2 := strings.ToLower(toString(v2))
-	return strings.Compare(s1, s2)
-}
-
-// Equal reports whether two values match Scratch's = operator semantics.
-// Numeric values tolerate a small number of adjacent floating-point values to
-// absorb representation-level rounding errors. Compare remains exact for
-// ordering.
-func Equal(v1, v2 any) bool {
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			return nearlyEqual(n1, n2)
-		}
-	}
-	return Compare(v1, v2) == 0
-}
-
 // DeltaTime returns the time elapsed since the previous frame.
 func DeltaTime() Seconds {
 	return itime.DeltaTime()
@@ -146,23 +55,6 @@ func TimeSinceLevelLoad() Seconds {
 	return itime.TimeSinceLevelLoad()
 }
 
-// CharAt returns the character at the given 0-based index in the string s.
-// It is similar to Scratch's operator_letter_of block, but uses Go-style
-// 0-based indexing. It returns an empty string if idx is out of range for the
-// rune sequence.
-func CharAt(s string, idx int) string {
-	if idx < 0 {
-		return ""
-	}
-	for _, r := range s {
-		if idx == 0 {
-			return string(r)
-		}
-		idx--
-	}
-	return ""
-}
-
 // Exit__0 exits the program with exit code 0.
 func Exit__0() {
 	engine.RequestExit(0)
@@ -171,49 +63,4 @@ func Exit__0() {
 // Exit__1 exits the program with the specified exit code.
 func Exit__1(code int) {
 	engine.RequestExit(int64(code))
-}
-
-// PenColorParamFromString converts a string to its corresponding PenColorParam.
-// It accepts "color", "saturation", "brightness", and "transparency" (case-insensitive).
-// Returns PenNone if the string is not recognized.
-func PenColorParamFromString(s string) PenColorParam {
-	switch strings.ToLower(s) {
-	case "color":
-		return PenHue
-	case "saturation":
-		return PenSaturation
-	case "brightness":
-		return PenBrightness
-	case "transparency":
-		return PenTransparency
-	default:
-		return PenNone
-	}
-}
-
-func nearlyEqual(a, b float64) bool {
-	if a == b {
-		return true
-	}
-	if math.IsNaN(a) || math.IsNaN(b) || math.IsInf(a, 0) || math.IsInf(b, 0) {
-		return false
-	}
-	for range compareMaxULPs {
-		a = math.Nextafter(a, b)
-		if a == b {
-			return true
-		}
-	}
-	return false
-}
-
-func toCompareNumber(v any) (float64, bool) {
-	v = fromObj(v)
-	if v == nil {
-		return 0, false
-	}
-	if s, ok := v.(string); ok && strings.TrimSpace(s) == "" {
-		return 0, false
-	}
-	return toFloat64Any(v)
 }

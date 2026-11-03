@@ -16,7 +16,10 @@
 
 package spx
 
-import coreevent "github.com/goplus/spx/v4/internal/core/event"
+import (
+	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/scratch"
+)
 
 // -----------------------------------------------------------------------------
 // Types
@@ -120,6 +123,16 @@ const (
 
 // VarName identifies a monitor variable by name.
 type VarName = string
+
+// Pos identifies a list index or a special motion target.
+type Pos = int
+
+const (
+	Invalid Pos = scratch.ListInvalid
+	Last    Pos = scratch.ListLast
+	All         = scratch.ListAll // Pos or StopKind
+	Random  Pos = scratch.ListRandom
+)
 
 // Target can be a Sprite, SpriteName, specialObj (Mouse), or Pos (Random).
 type Target = any
@@ -269,6 +282,10 @@ type Sprite interface {
 	// Costume Methods
 	CostumeName() SpriteCostumeName
 	CostumeIndex() int
+
+	// ResolveCostumeIndex resolves a costume name or 1-based integer string to an index.
+	//
+	// Deprecated: Use [github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex] instead.
 	ResolveCostumeIndex(costume string) int
 
 	SetCostume__0(costume SpriteCostumeName)

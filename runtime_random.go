@@ -20,6 +20,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/goplus/spx/v4/internal/scratch"
 )
 
 type randomScope uint8
@@ -39,6 +41,10 @@ type randomState struct {
 }
 
 var scriptRandom = newRandomState()
+
+func init() {
+	scratch.SetListRandomSource(randomInt31n)
+}
 
 // SetRandomSeed resets the shared script random source with seed.
 func SetRandomSeed(seed int64) {

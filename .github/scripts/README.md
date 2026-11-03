@@ -70,11 +70,14 @@ consumer together when changing them.
 - Source checks run pinned actionlint and check automation shell syntax.
   `ci/check_generated.sh` generates bindings and runtime files, then rejects tracked
   changes and untracked generated outputs. It defaults to the strict release
-  check. Regular CI passes `--check-export-types false` to restore the type
-  snapshot after generation; existing local or staged snapshot edits are rejected
-  before generation. Run it in a clean worktree.
+  check. Regular CI passes `--check-export-types false` to restore the SPX and
+  Scratch compatibility type snapshots after generation; existing local or staged
+  snapshot edits are rejected before generation. Run it in a clean worktree.
 - `ci/test_go.sh` is the local and CI entry point for native Go tests in both modules; it owns package selection and forwards Go test arguments.
 - `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After success, the script reports the suite's profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
+- `native` preserves both module reports and adds `coverage-scratch.out`, using
+  `-coverpkg` to count Scratch implementations exercised by the existing SPX,
+  compatibility, and interpreter tests.
 - `macos` and `windows` require their native OS and run targeted platform tests. macOS covers child toolchain environments, local Homebrew JDK/Brotli fixtures, and CLI permission repair; Windows covers command lookup, replacement, tool setup, and process locks. They neither install real tools nor download SDKs.
 - `tools` tests every automation command with `go test ./.github/cmd/...` and
   produces one `coverage-tools.out`. Root `go test ./...` does not discover

@@ -691,16 +691,6 @@ func TestLegacyPenHueResetsTransparencyAndSkipsUnchangedProperties(t *testing.T)
 	if spy.batchCalls != batches {
 		t.Fatal("unchanged legacy appearance submitted another pen batch")
 	}
-	if got := wrapLegacyPenShade(-25); got != 175 {
-		t.Fatalf("wrapped shade = %v, want 175", got)
-	}
-	for _, shade := range []float64{25, 175} {
-		got := makeLegacyPenColor(0, shade, 25)
-		want := mathf.NewColor(35.0/60, 0, 0, 0.75)
-		if !samePenColor(got, want) {
-			t.Fatalf("legacy shade %v = %v, want %v", shade, got, want)
-		}
-	}
 }
 
 func TestPenComponentQueuesOneOrderedBatch(t *testing.T) {
@@ -976,6 +966,12 @@ func TestSpritePenPublicAPIUpdatesDrawingState(t *testing.T) {
 }
 
 func TestPenColorParamFromString(t *testing.T) {
+	for want, got := range []PenColorParam{PenHue, PenSaturation, PenBrightness, PenTransparency, PenNone} {
+		if got != PenColorParam(want) {
+			t.Fatalf("pen color parameter value = %d, want %d", got, want)
+		}
+	}
+
 	tests := []struct {
 		name     string
 		input    string
@@ -993,6 +989,10 @@ func TestPenColorParamFromString(t *testing.T) {
 		{name: "unknown string falls back to PenNone", input: "unknown", expected: PenNone},
 		{name: "empty string falls back to PenNone", input: "", expected: PenNone},
 		{name: "numeric string falls back to PenNone", input: "123", expected: PenNone},
+		{name: "leading whitespace is not trimmed", input: " color", expected: PenNone},
+		{name: "trailing whitespace is not trimmed", input: "color ", expected: PenNone},
+		{name: "whitespace only falls back to PenNone", input: " \t\n", expected: PenNone},
+		{name: "hue is not a color alias", input: "hue", expected: PenNone},
 	}
 
 	for _, tt := range tests {

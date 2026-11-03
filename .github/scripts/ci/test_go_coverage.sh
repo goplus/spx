@@ -79,6 +79,10 @@ case "${1:-}" in
     profile=coverage.out
     bash .github/scripts/ci/test_go.sh -v -coverprofile="$profile" -covermode=atomic
     coverage_files=("$profile" "cmd/ispx/$profile")
+    # Count Scratch helpers exercised through runtime and interpreter tests.
+    covered_test coverage-scratch.out \
+      -coverpkg=./internal/scratch,./pkg/scratchcompat \
+      . ./internal/scratch ./pkg/scratchcompat ./pkg/ispx
     ;;
   *)
     echo "Unknown Go coverage suite: ${1:-}" >&2

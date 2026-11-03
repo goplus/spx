@@ -20,10 +20,19 @@ import (
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/scratch"
 )
 
 // Config configures game startup and runtime behavior.
 type Config = coreproject.Config
+
+// Value stores a value with conversion and comparison helpers.
+type Value = scratch.Value
+
+// NewValue creates a new Value initialized with the given object.
+func NewValue(o any) Value {
+	return scratch.NewValue(o)
+}
 
 // Shape is the common runtime item type stored by the game.
 type Shape any

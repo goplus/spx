@@ -17,13 +17,18 @@ esac
 
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.."
 repo_root="$PWD"
-type_snapshot=pkg/ispx/internal/pkg/github.com/goplus/spx/v4/export.types
-# Regular CI restores this file after generation because private implementation
-# changes affect it too. Never discard a local edit or a staged snapshot.
-if ! git diff --quiet -- "$type_snapshot" || ! git diff --cached --quiet -- "$type_snapshot"; then
-  echo "Commit or stash changes to $type_snapshot before checking generated files" >&2
-  exit 1
-fi
+type_snapshots=(
+  pkg/ispx/internal/pkg/github.com/goplus/spx/v4/export.types
+  pkg/ispx/internal/pkg/github.com/goplus/spx/v4/pkg/scratchcompat/export.types
+)
+# Regular CI restores these files after generation because private implementation
+# changes affect them too. Never discard a local edit or a staged snapshot.
+for type_snapshot in "${type_snapshots[@]}"; do
+  if ! git diff --quiet -- "$type_snapshot" || ! git diff --cached --quiet -- "$type_snapshot"; then
+    echo "Commit or stash changes to $type_snapshot before checking generated files" >&2
+    exit 1
+  fi
+done
 
 (
   cd internal/cmd/codegen
@@ -32,7 +37,7 @@ fi
 go generate ./cmd/spx/internal/command/...
 go generate ./pkg/ispx/...
 if [ "$check_export_types" = false ]; then
-  git restore -- "$type_snapshot"
+  git restore -- "${type_snapshots[@]}"
 fi
 
 git diff --exit-code

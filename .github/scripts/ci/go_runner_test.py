@@ -194,6 +194,16 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 if suite in ("web-interpreter", "codegen"):
                     expected = "cmd/ispx" if suite == "web-interpreter" else "internal/cmd/codegen"
                     self.assertEqual({call["directory"] for call in tests}, {expected})
+                if suite == "native":
+                    self.assertEqual([(call["directory"], call["args"]) for call in tests], [
+                        (".", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic",
+                               "github.com/goplus/spx/v4"]),
+                        ("cmd/ispx", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "./..."]),
+                        (".", ["test", "-coverprofile=coverage-scratch.out", "-covermode=atomic",
+                               "-coverpkg=./internal/scratch,./pkg/scratchcompat",
+                               ".", "./internal/scratch", "./pkg/scratchcompat", "./pkg/ispx"]),
+                    ])
+                    self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out", "coverage-scratch.out"])
                 self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS"])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
                 self.assertCountEqual(actual, profiles)
@@ -211,6 +221,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     self.assertEqual(result.returncode, 7, result.stderr)
                     self.assertEqual(self.recorded_calls(), calls[:index])
                     self.assertFalse(self.output.exists())
+                    if suite == "native" and index == len(calls):
+                        self.assertTrue((self.root / "coverage-scratch.out").exists())
 
     def test_platform_coverage_rejects_wrong_host_and_cross_compilation(self):
         for suite, expected in (("macos", "darwin"), ("windows", "windows")):

@@ -24,6 +24,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/scratch"
 	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/goplus/spx/v4/internal/ui"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
@@ -198,10 +199,20 @@ func (p *Game) GetTarget(target string) *SpriteImpl {
 }
 
 func (p *Game) GetTargetProperty(target string, name PropertyName) Value {
-	if val, ok := p.resolveTargetProperty(target, name); ok {
-		return val
+	if name == "" {
+		return Value{}
 	}
-	return Value{}
+
+	resolvedTarget, from := p.resolvePropertyTarget(target)
+	if from < 0 {
+		return Value{}
+	}
+
+	eval := coreproject.ResolveMemberValueEval(resolvedTarget, name, from)
+	if eval == nil {
+		return Value{}
+	}
+	return scratch.WrapValue(eval())
 }
 
 func (p *Game) HideVar(name PropertyName) {
@@ -273,23 +284,6 @@ func (p *Game) propertyRootValue() reflect.Value {
 		return reflect.ValueOf(p.gamer).Elem()
 	}
 	return reflect.ValueOf(p).Elem()
-}
-
-func (p *Game) resolveTargetProperty(target string, name PropertyName) (Value, bool) {
-	if name == "" {
-		return Value{}, false
-	}
-
-	resolvedTarget, from := p.resolvePropertyTarget(target)
-	if from < 0 {
-		return Value{}, false
-	}
-
-	eval := coreproject.ResolveMemberValueEval(resolvedTarget, name, from)
-	if eval == nil {
-		return Value{}, false
-	}
-	return Value{data: eval()}, true
 }
 
 func (p *Game) resolvePropertyTarget(target string) (reflect.Value, int) {

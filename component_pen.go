@@ -21,6 +21,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
+	"github.com/goplus/spx/v4/internal/scratch"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -69,7 +70,7 @@ func (p *penComponent) initialize(sprite *SpriteImpl) {
 	p.penColor = mathf.NewColorRGBAi(66, 133, 244, 255)
 	p.penWidth = 1
 	p.syncPenColorComponents()
-	p.legacyPenColor = newLegacyPenState()
+	p.legacyPenColor = legacyPenState{hue: legacyDefaultPenHue, shade: legacyDefaultPenShade}
 }
 
 // cloneFor creates a new pen component for newSprite without sharing drawing resources.
@@ -152,36 +153,37 @@ func (p *penComponent) setPenColor(color Color) {
 	}
 	p.penColor = nextColor
 	p.ensureClonePenReady()
-	p.applyPenColorProperty()
-	p.syncLegacyPenStateFromColor()
+	p.syncPenColorComponents()
+	p.updatePenColor()
+	p.legacyPenColor = legacyPenState{hue: p.penHue, shade: p.penBrightness / 2}
 }
 
 // Legacy Color
 
 func (p *penComponent) setPenHue(value float64) {
-	nextValue := wrapPenColorPercent(value / 2)
+	nextValue := scratch.WrapPenHue(value / 2)
 	if p.penObj != nil &&
 		nearlyEqualPenValue(p.legacyPenColor.hue, nextValue) &&
 		nearlyEqualPenValue(p.penTransparency, 0) {
 		return
 	}
-	p.updateLegacyPenState(p.legacyPenColor.withHue(nextValue), true)
+	p.updateLegacyPenState(legacyPenState{hue: nextValue, shade: p.legacyPenColor.shade}, true)
 }
 
 func (p *penComponent) changePenHue(delta float64) {
-	nextValue := wrapPenColorPercent(p.legacyPenColor.hue + delta/2)
+	nextValue := scratch.WrapPenHue(p.legacyPenColor.hue + delta/2)
 	if p.penObj != nil && nearlyEqualPenValue(p.legacyPenColor.hue, nextValue) {
 		return
 	}
-	p.updateLegacyPenState(p.legacyPenColor.withHue(nextValue), false)
+	p.updateLegacyPenState(legacyPenState{hue: nextValue, shade: p.legacyPenColor.shade}, false)
 }
 
 func (p *penComponent) setPenShade(value float64) {
-	nextValue := wrapLegacyPenShade(value)
+	nextValue := scratch.WrapLegacyPenShade(value)
 	if p.penObj != nil && nearlyEqualPenValue(p.legacyPenColor.shade, nextValue) {
 		return
 	}
-	p.updateLegacyPenState(p.legacyPenColor.withShade(nextValue), false)
+	p.updateLegacyPenState(legacyPenState{hue: p.legacyPenColor.hue, shade: nextValue}, false)
 }
 
 func (p *penComponent) changePenShade(delta float64) {
@@ -196,7 +198,7 @@ func (p *penComponent) setPenColorParam(kind PenColorParam, value float64) {
 		return
 	}
 	if kind == PenHue {
-		value = wrapPenColorPercent(value)
+		value = scratch.WrapPenHue(value)
 	} else {
 		value = mathf.Clamp(value, 0, 100)
 	}
@@ -276,12 +278,6 @@ func (p *penComponent) syncPenPosition(x, y float64) {
 // Pen Appearance
 // ============================================================================
 
-func (p *penComponent) applyPenColorProperty() {
-	p.checkOrCreatePen()
-	p.syncPenColorComponents()
-	p.updatePenColor()
-}
-
 func (p *penComponent) syncPenColorComponents() {
 	h, s, v := p.penColor.ToHSV()
 	p.penHue = hueToPercent(h)
@@ -297,7 +293,7 @@ func (p *penComponent) applyPenHsvProperty() {
 }
 
 func (p *penComponent) applyLegacyPenColor() {
-	p.penColor = p.legacyPenColor.color(p.penTransparency)
+	p.penColor = scratch.LegacyPenColor(p.legacyPenColor.hue, p.legacyPenColor.shade, p.penTransparency)
 	p.syncPenColorComponents()
 	p.legacyPenColor.hue = p.penHue
 	p.updatePenColor()
@@ -319,10 +315,6 @@ func (p *penComponent) ensureClonePenReady() {
 	p.sprite.g.queuePenDown(*p.penObj)
 }
 
-func (p *penComponent) syncLegacyPenStateFromColor() {
-	p.legacyPenColor.syncFromHSV(p.penHue, p.penBrightness)
-}
-
 func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTransparency bool) {
 	p.ensureClonePenReady()
 	p.legacyPenColor = state
@@ -334,25 +326,6 @@ func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTranspare
 
 func (p *penComponent) updatePenColor() {
 	p.sprite.g.queuePenColor(*p.penObj, p.penColor)
-}
-
-func (s legacyPenState) withHue(hue float64) legacyPenState {
-	s.hue = hue
-	return s
-}
-
-func (s legacyPenState) withShade(shade float64) legacyPenState {
-	s.shade = shade
-	return s
-}
-
-func (s *legacyPenState) syncFromHSV(hue, brightness float64) {
-	s.hue = hue
-	s.shade = brightness / 2
-}
-
-func (s legacyPenState) color(transparency float64) mathf.Color {
-	return makeLegacyPenColor(s.hue, s.shade, transparency)
 }
 
 // ============================================================================
@@ -381,44 +354,6 @@ func alphaToTransparency(alpha float64) float64 {
 
 func transparencyToAlpha(transparency float64) float64 {
 	return 1 - percentToNormalized(transparency)
-}
-
-func newLegacyPenState() legacyPenState {
-	return legacyPenState{
-		hue:   legacyDefaultPenHue,
-		shade: legacyDefaultPenShade,
-	}
-}
-
-func makeLegacyPenColor(hue, shade, transparency float64) mathf.Color {
-	baseColor := mathf.NewColorHSV(percentToHue(hue), 1, 1)
-	normalizedShade := shade
-	if normalizedShade > 100 {
-		normalizedShade = 200 - normalizedShade
-	}
-	if normalizedShade < 50 {
-		baseColor = mathf.ColorBlack().Lerp(baseColor, (10+normalizedShade)/60)
-	} else {
-		baseColor = baseColor.Lerp(mathf.ColorWhite(), (normalizedShade-50)/60)
-	}
-	baseColor.A = transparencyToAlpha(transparency)
-	return baseColor
-}
-
-func wrapLegacyPenShade(shade float64) float64 {
-	shade = math.Mod(shade, 200)
-	if shade < 0 {
-		shade += 200
-	}
-	return shade
-}
-
-func wrapPenColorPercent(value float64) float64 {
-	value = math.Mod(value, 100)
-	if value < 0 {
-		value += 100
-	}
-	return value
 }
 
 func nearlyEqualPenValue(a, b float64) bool {
