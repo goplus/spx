@@ -27,6 +27,7 @@ import (
 	_ "embed"
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild/typesdata"
+	spx "github.com/goplus/spx/v4"
 )
 
 //go:embed export.types
@@ -38,10 +39,15 @@ func init() {
 		Path: "github.com/goplus/spx/v4/pkg/scratchcompat",
 		Deps: map[string]string{
 			"github.com/goplus/spx/v4":                  "spx",
+			"github.com/goplus/spx/v4/internal/engine":  "engine",
 			"github.com/goplus/spx/v4/internal/scratch": "scratch",
 		},
 		Interfaces: map[string]reflect.Type{
-			"CostumeResolver": reflect.TypeOf((*q.CostumeResolver)(nil)).Elem(),
+			"CostumeResolver":    reflect.TypeOf((*q.CostumeResolver)(nil)).Elem(),
+			"SoundEffectChanger": reflect.TypeOf((*q.SoundEffectChanger)(nil)).Elem(),
+			"SoundEffectSetter":  reflect.TypeOf((*q.SoundEffectSetter)(nil)).Elem(),
+			"VolumeChanger":      reflect.TypeOf((*q.VolumeChanger)(nil)).Elem(),
+			"VolumeSetter":       reflect.TypeOf((*q.VolumeSetter)(nil)).Elem(),
 		},
 		NamedTypes: map[string]reflect.Type{},
 		AliasTypes: map[string]reflect.Type{
@@ -49,6 +55,8 @@ func init() {
 		},
 		Vars: map[string]reflect.Value{},
 		Funcs: map[string]reflect.Value{
+			"ChangeSoundEffect":       reflect.ValueOf(q.ChangeSoundEffect),
+			"ChangeVolume":            reflect.ValueOf(q.ChangeVolume),
 			"CharAt":                  reflect.ValueOf(q.CharAt),
 			"Compare":                 reflect.ValueOf(q.Compare),
 			"Contains":                reflect.ValueOf(q.Contains),
@@ -61,6 +69,8 @@ func init() {
 			"PenColorParamFromString": reflect.ValueOf(q.PenColorParamFromString),
 			"Rand":                    reflect.ValueOf(q.Rand),
 			"ResolveCostumeIndex":     reflect.ValueOf(q.ResolveCostumeIndex),
+			"SetSoundEffect":          reflect.ValueOf(q.SetSoundEffect),
+			"SetVolume":               reflect.ValueOf(q.SetVolume),
 		},
 		TypedConsts: map[string]ixgo.TypedConst{
 			"Invalid": {Typ: reflect.TypeOf(q.Invalid), Value: constant.MakeInt64(int64(q.Invalid))},
@@ -73,6 +83,8 @@ func init() {
 		Import: typesdata.ImportFunc("github.com/goplus/spx/v4/pkg/scratchcompat", exportTypesData),
 	})
 	ixgo.RegisterDirectCalls("github.com/goplus/spx/v4/pkg/scratchcompat", map[string]ixgo.DirectCallAdapter{
+		"ChangeSoundEffect":       func_ChangeSoundEffect,
+		"ChangeVolume":            func_ChangeVolume,
 		"CharAt":                  func_CharAt,
 		"Compare":                 func_Compare,
 		"Contains":                func_Contains,
@@ -85,7 +97,17 @@ func init() {
 		"PenColorParamFromString": func_PenColorParamFromString,
 		"Rand":                    func_Rand,
 		"ResolveCostumeIndex":     func_ResolveCostumeIndex,
+		"SetSoundEffect":          func_SetSoundEffect,
+		"SetVolume":               func_SetVolume,
 	})
+}
+
+func func_ChangeSoundEffect(ctx ixgo.DirectCallContext) {
+	q.ChangeSoundEffect(ixgo.DirectCallArg[q.SoundEffectChanger](ctx, 0), ixgo.DirectCallArg[spx.SoundEffectKind](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2))
+}
+
+func func_ChangeVolume(ctx ixgo.DirectCallContext) {
+	q.ChangeVolume(ixgo.DirectCallArg[q.VolumeChanger](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
 }
 
 func func_CharAt(ctx ixgo.DirectCallContext) {
@@ -134,4 +156,12 @@ func func_Rand(ctx ixgo.DirectCallContext) {
 
 func func_ResolveCostumeIndex(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.ResolveCostumeIndex(ixgo.DirectCallArg[q.CostumeResolver](ctx, 0), ixgo.DirectCallArg[string](ctx, 1)))
+}
+
+func func_SetSoundEffect(ctx ixgo.DirectCallContext) {
+	q.SetSoundEffect(ixgo.DirectCallArg[q.SoundEffectSetter](ctx, 0), ixgo.DirectCallArg[spx.SoundEffectKind](ctx, 1), ixgo.DirectCallArg[float64](ctx, 2))
+}
+
+func func_SetVolume(ctx ixgo.DirectCallContext) {
+	q.SetVolume(ixgo.DirectCallArg[q.VolumeSetter](ctx, 0), ixgo.DirectCallArg[float64](ctx, 1))
 }
