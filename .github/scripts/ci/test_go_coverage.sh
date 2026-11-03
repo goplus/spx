@@ -77,19 +77,18 @@ case "${1:-}" in
     ;;
   native)
     profile=coverage.out
-    bash .github/scripts/ci/test_go.sh -v -coverprofile="$profile" -covermode=atomic
+    bash .github/scripts/ci/test_go.sh --cover -v -coverprofile="$profile" -covermode=atomic
     coverage_files=("$profile" "cmd/ispx/$profile")
-    # Default coverage counts each package's own tests. Instrument shared helpers
-    # in their caller tests to capture cross-package coverage, including new tests.
-    covered_test coverage-scratch.out \
-      -coverpkg=./internal/base/numeric,./internal/scratch,./internal/ui,./pkg/scratchcompat \
-      . ./pkg/ispx ./internal/tools
     ;;
   *)
     echo "Unknown Go coverage suite: ${1:-}" >&2
     exit 1
     ;;
 esac
+
+# Cross-package profiles repeat blocks across test binaries. Compact before upload.
+cd "$repo_root"
+go run ./.github/cmd/compact-coverage "${coverage_files[@]}"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   {

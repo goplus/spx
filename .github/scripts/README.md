@@ -73,21 +73,19 @@ consumer together when changing them.
   check. Regular CI passes `--check-export-types false` to restore the SPX and
   Scratch compatibility type snapshots after generation; existing local or staged
   snapshot edits are rejected before generation. Run it in a clean worktree.
-- `ci/test_go.sh` is the local and CI entry point for native Go tests in both modules; it owns package selection and forwards Go test arguments.
-- `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After success, the script reports the suite's profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
-- `native` preserves separate full reports for the root and `cmd/ispx` modules
-  and adds `coverage-scratch.out`, using `-coverpkg` to instrument `internal/base/numeric`,
-  `internal/scratch`, `internal/ui`, and `pkg/scratchcompat` while rerunning the root,
-  `pkg/ispx`, and `internal/tools` package tests. Selecting whole caller packages
-  includes new integration tests automatically. Scratch unit tests run once in the
-  full native suite; the additional report counts calls into shared implementations.
-  Default Go coverage only instruments the tested package. This extra pass captures
-  calls from other packages while keeping generated interpreter bindings out of its profile.
+- `ci/test_go.sh` runs native Go tests in both modules and forwards Go test arguments.
+  Its optional leading `--cover` flag uses the selected test packages as the `-coverpkg` list.
+- `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After all tests succeed, `compact-coverage` merges duplicate blocks in each profile, retaining zero-hit blocks and summing execution counts. Only then does the script report the profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
+- `native` runs the selected root and `cmd/ispx` module packages once with cross-package
+  instrumentation, producing one `coverage.out` per module. Both testing and
+  instrumentation reuse `ci/test_go.sh`'s package selection, which excludes examples,
+  tutorials, and generated interpreter packages. Generated files in selected packages
+  remain in the profiles; `.github/codecov.yml` applies file exclusions when reporting.
 - `macos` and `windows` require their native OS and run targeted platform tests. macOS covers child toolchain environments, local Homebrew JDK/Brotli fixtures, and CLI permission repair; Windows covers command lookup, replacement, tool setup, and process locks. They neither install real tools nor download SDKs.
 - `tools` tests every automation command with `go test ./.github/cmd/...` and
   produces one `coverage-tools.out`. Root `go test ./...` does not discover
   `.github` packages.
-- `check_source.yml` owns Linux/Web/tooling suite ordering. `build_go.yml` runs the targeted native suites in its existing macOS/Windows build jobs. Both save profiles as Actions artifacts using the test runner's outputs. Release source checks keep Go coverage collection disabled; release assembly independently downloads only runtime, Web, and standalone artifact namespaces. `.github/codecov.yml` owns Go reporting exclusions; raw Go profiles remain unfiltered.
+- `check_source.yml` owns Linux/Web/tooling suite ordering. `build_go.yml` runs the targeted native suites in its existing macOS/Windows build jobs. Both save profiles as Actions artifacts using the test runner's outputs. Release source checks keep Go coverage collection disabled; release assembly independently downloads only runtime, Web, and standalone artifact namespaces.
 - `test_godot_module.yml` verifies the locked Godot checks and produces
   `coverage-spx-cpp`. The final `ci.yml` gate validates the selected runtime
   path, collects all required reports, uploads them under separate `go` and

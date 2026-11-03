@@ -51,7 +51,7 @@ elif args == ["env", "GOHOSTOS"]:
 elif args == ["env", "GOOS"]:
     print(os.environ["MOCK_GOOS"])
 elif args == ["list", "./..."]:
-    print(os.environ["MOCK_PACKAGES"])
+    print(os.environ["MOCK_NESTED_PACKAGES" if directory == "cmd/ispx" else "MOCK_PACKAGES"])
 elif args[0] == "test":
     for argument in args[1:]:
         if argument.startswith("-coverprofile="):
@@ -60,6 +60,9 @@ elif args[0] == "test":
                 "mode: atomic\n" + directory + "/source.go:1.1,2.1 1 1\n",
                 encoding="utf-8",
             )
+elif args[0] == "run" and args[1:2] == ["./.github/cmd/compact-coverage"]:
+    if len(args) < 3 or not all(Path(path).is_file() for path in args[2:]):
+        sys.exit(98)
 else:
     sys.exit(99)
 
@@ -79,6 +82,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "MOCK_ROOT": str(self.root),
                 "MOCK_LOG": str(self.log),
                 "MOCK_PACKAGES": "\n".join(packages),
+                "MOCK_NESTED_PACKAGES": "github.com/goplus/spx/v4/cmd/ispx",
                 **environment,
             },
         )
@@ -99,13 +103,22 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             f"{module}/pkg/ispx/internal/pkg/github.com/goplus/spx/v4",
         ]
         arguments = ("-v", "-coverprofile=coverage.out", "-covermode=atomic", "-run", "Test With Spaces")
-        completed = self.run_script([*included, *excluded], *arguments)
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(self.recorded_calls(), [
-            {"directory": ".", "args": ["list", "./..."]},
-            {"directory": ".", "args": ["test", *arguments, *included]},
-            {"directory": "cmd/ispx", "args": ["test", *arguments, "./..."]},
-        ])
+        nested = [f"{module}/cmd/ispx", f"{module}/cmd/ispx/helper"]
+        for cover in (False, True):
+            with self.subTest(cover=cover):
+                completed = self.run_script(
+                    [*included, *excluded], *(["--cover"] if cover else []), *arguments,
+                    MOCK_NESTED_PACKAGES="\n".join(nested),
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                root_coverage = ["-coverpkg=" + ",".join(included)] if cover else []
+                nested_coverage = ["-coverpkg=" + ",".join(nested)] if cover else []
+                self.assertEqual(self.recorded_calls(), [
+                    {"directory": ".", "args": ["list", "./..."]},
+                    {"directory": ".", "args": ["test", *root_coverage, *arguments, *included]},
+                    {"directory": "cmd/ispx", "args": ["list", "./..."]},
+                    {"directory": "cmd/ispx", "args": ["test", *nested_coverage, *arguments, *nested]},
+                ])
         for directory in (".", "cmd/ispx"):
             with self.subTest(directory=directory):
                 self.assertEqual(
@@ -135,6 +148,15 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             {"directory": ".", "args": ["test", "-race", module]},
         ])
 
+    def test_nested_discovery_cannot_run_a_partial_selection(self):
+        for environment, code in (({"MOCK_FAIL_CALL": "3"}, 7), ({"MOCK_NESTED_PACKAGES": ""}, 1)):
+            with self.subTest(environment=environment):
+                completed = self.run_script(["github.com/goplus/spx/v4"], "--cover", **environment)
+                self.assertEqual(completed.returncode, code, completed.stderr)
+                calls = self.recorded_calls()
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(calls[-1], {"directory": "cmd/ispx", "args": ["list", "./..."]})
+
     coverage_suites = ("macos", "windows", "web", "web-process", "web-interpreter", "tools", "codegen", "native")
 
     def run_coverage_suite(self, suite, **environment):
@@ -163,6 +185,8 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 calls = self.recorded_calls()
                 tests = [call for call in calls if call["args"][0] == "test"]
                 self.assertTrue(tests)
+                compact = [call for call in calls if call["args"][0] == "run"]
+                self.assertEqual(len(compact), 1)
                 profiles = []
                 for call in tests:
                     args = call["args"]
@@ -195,21 +219,18 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     expected = "cmd/ispx" if suite == "web-interpreter" else "internal/cmd/codegen"
                     self.assertEqual({call["directory"] for call in tests}, {expected})
                 if suite == "native":
-                    self.assertEqual(len(tests), 3)
-                    self.assertEqual([(call["directory"], call["args"]) for call in tests[:2]], [
-                        (".", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic",
+                    self.assertEqual(len(tests), 2)
+                    self.assertEqual([(call["directory"], call["args"]) for call in tests], [
+                        (".", ["test", "-coverpkg=github.com/goplus/spx/v4", "-v", "-coverprofile=coverage.out", "-covermode=atomic",
                                "github.com/goplus/spx/v4"]),
-                        ("cmd/ispx", ["test", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "./..."]),
+                        ("cmd/ispx", ["test", "-coverpkg=github.com/goplus/spx/v4/cmd/ispx", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "github.com/goplus/spx/v4/cmd/ispx"]),
                     ])
-                    scratch = tests[2]
-                    self.assertEqual(scratch["directory"], ".")
-                    args = scratch["args"]
-                    self.assertIn("-coverpkg=./internal/base/numeric,./internal/scratch,./internal/ui,./pkg/scratchcompat", args)
-                    self.assertEqual(args[-3:], [".", "./pkg/ispx", "./internal/tools"])
-                    self.assertNotIn("./internal/scratch", args)
-                    self.assertNotIn("./pkg/scratchcompat", args)
-                    self.assertNotIn("-run", args)
-                    self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out", "coverage-scratch.out"])
+                    self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out"])
+                self.assertEqual(compact[0], {
+                    "directory": ".", "args": ["run", "./.github/cmd/compact-coverage", *profiles],
+                    "GOOS": "", "GOARCH": "",
+                })
+                self.assertEqual(calls[-1], compact[0])
                 self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS"])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
                 self.assertCountEqual(actual, profiles)
@@ -227,8 +248,6 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     self.assertEqual(result.returncode, 7, result.stderr)
                     self.assertEqual(self.recorded_calls(), calls[:index])
                     self.assertFalse(self.output.exists())
-                    if suite == "native" and index == len(calls):
-                        self.assertTrue((self.root / "coverage-scratch.out").exists())
 
     def test_platform_coverage_rejects_wrong_host_and_cross_compilation(self):
         for suite, expected in (("macos", "darwin"), ("windows", "windows")):
