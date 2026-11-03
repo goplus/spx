@@ -68,10 +68,12 @@ func (p *SpriteImpl) Volume() float64 {
 
 func (p *SpriteImpl) SetVolume(volume float64) {
 	p.sound().setVolume(volume)
+	engine.RequestRedraw()
 }
 
 func (p *SpriteImpl) ChangeVolume(delta float64) {
 	p.sound().changeVolume(delta)
+	engine.RequestRedraw()
 }
 
 // -----------------------------------------------------------------------------
@@ -83,10 +85,12 @@ func (p *SpriteImpl) GetSoundEffect(kind SoundEffectKind) float64 {
 
 func (p *SpriteImpl) SetSoundEffect(kind SoundEffectKind, value float64) {
 	p.sound().setSoundEffect(kind, value)
+	engine.RequestRedraw()
 }
 
 func (p *SpriteImpl) ChangeSoundEffect(kind SoundEffectKind, delta float64) {
 	p.sound().changeSoundEffect(kind, delta)
+	engine.RequestRedraw()
 }
 
 func (p *SpriteImpl) ClearSoundEffects() {
