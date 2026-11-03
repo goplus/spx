@@ -204,20 +204,11 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     scratch = tests[2]
                     self.assertEqual(scratch["directory"], ".")
                     args = scratch["args"]
-                    self.assertIn("-coverpkg=./internal/scratch,./pkg/scratchcompat", args)
-                    self.assertEqual(args[-2:], [".", "./pkg/ispx"])
+                    self.assertIn("-coverpkg=./internal/base/numeric,./internal/scratch,./internal/ui,./pkg/scratchcompat", args)
+                    self.assertEqual(args[-3:], [".", "./pkg/ispx", "./internal/tools"])
                     self.assertNotIn("./internal/scratch", args)
                     self.assertNotIn("./pkg/scratchcompat", args)
-                    pattern = args[args.index("-run") + 1]
-                    for name in ("TestListRandomPositionSharesScriptRandomSource",
-                                 "TestListRandomPositionKeepsCoroutineSource",
-                                 "TestResolveCostumeIndex", "TestResolveCostumeIndexPrefersNames",
-                                 "TestResolveCostumeIndexWithNoCostumes", "TestPenColorParamFromString",
-                                 "TestListMonitorEvalTracksChanges", "TestInterpreterScratchCompat"):
-                        self.assertRegex(name, pattern)
-                    for name in ("TestRandomSeedMakesScriptRandomDeterministic",
-                                 "TestSpriteSetCostume", "TestMonitorRefreshLifecycle"):
-                        self.assertNotRegex(name, pattern)
+                    self.assertNotIn("-run", args)
                     self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out", "coverage-scratch.out"])
                 self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS"])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]

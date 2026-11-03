@@ -75,10 +75,14 @@ consumer together when changing them.
   snapshot edits are rejected before generation. Run it in a clean worktree.
 - `ci/test_go.sh` is the local and CI entry point for native Go tests in both modules; it owns package selection and forwards Go test arguments.
 - `ci/test_go_coverage.sh <suite>` runs the `web`, `web-process`, `web-interpreter`, `tools`, `codegen`, `native`, `macos`, or `windows` suite with atomic coverage. Web suites select `js/wasm` and the Go WebAssembly executor automatically. After success, the script reports the suite's profiles as newline-separated paths through the `coverage` step output when `GITHUB_OUTPUT` is set.
-- `native` preserves both module reports and adds `coverage-scratch.out`, using
-  `-coverpkg` for focused costume, list, pen, and interpreter integration tests.
-  Scratch unit tests run once in the full native suite; the additional report
-  counts shared implementations exercised through those integration boundaries.
+- `native` preserves separate full reports for the root and `cmd/ispx` modules
+  and adds `coverage-scratch.out`, using `-coverpkg` to instrument `internal/base/numeric`,
+  `internal/scratch`, `internal/ui`, and `pkg/scratchcompat` while rerunning the root,
+  `pkg/ispx`, and `internal/tools` package tests. Selecting whole caller packages
+  includes new integration tests automatically. Scratch unit tests run once in the
+  full native suite; the additional report counts calls into shared implementations.
+  Default Go coverage only instruments the tested package. This extra pass captures
+  calls from other packages while keeping generated interpreter bindings out of its profile.
 - `macos` and `windows` require their native OS and run targeted platform tests. macOS covers child toolchain environments, local Homebrew JDK/Brotli fixtures, and CLI permission repair; Windows covers command lookup, replacement, tool setup, and process locks. They neither install real tools nor download SDKs.
 - `tools` tests every automation command with `go test ./.github/cmd/...` and
   produces one `coverage-tools.out`. Root `go test ./...` does not discover

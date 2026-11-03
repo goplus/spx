@@ -76,6 +76,17 @@ func main() {
 	if stringify(&items) != "APPLE 03.5" || valueNumber.Float() != 3.5 || items.At(1).Raw() != "03.5" {
 		panic("alias identity and methods")
 	}
+	var copied compat.List
+	copied.Init([]any{"init", 7}...)
+	if copied.String() != "init 7" {
+		panic("variadic list initialization")
+	}
+	copied.InitFrom(&legacy)
+	var restored spx.List
+	restored.InitFrom(&copied)
+	if copied.At(1).Raw() != "03.5" || restored.String() != "APPLE 03.5" {
+		panic("InitFrom pointer arguments across aliases")
+	}
 	if !compat.Equal(number, 3.5) || compat.Compare(items.At(0), "apple") != 0 || !compat.Contains("Scratch", "RAT") {
 		panic("wrapped operator arguments")
 	}
@@ -96,6 +107,20 @@ type scratchDispatchProbe func() string
 
 func (p scratchDispatchProbe) String() string { return p() }
 
+func scratchAdapterOnStack(adapter string) bool {
+	var pcs [32]uintptr
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs[:])])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, "/internal/scratch."+adapter) {
+			return true
+		}
+		if !more {
+			return false
+		}
+	}
+}
+
 func TestInterpreterScratchCompat(t *testing.T) {
 	for _, execution := range []string{"direct", "fallback"} {
 		for _, optimization := range []string{"default", "optimized"} {
@@ -112,16 +137,7 @@ func TestInterpreterScratchCompat(t *testing.T) {
 								t.Error("unexpected method probe call")
 								return "probe"
 							}
-							var pcs [32]uintptr
-							frames := runtime.CallersFrames(pcs[:runtime.Callers(1, pcs[:])])
-							seen := false
-							for {
-								frame, more := frames.Next()
-								seen = seen || strings.HasSuffix(frame.Function, "/internal/scratch."+adapters[probeCalls])
-								if !more {
-									break
-								}
-							}
+							seen := scratchAdapterOnStack(adapters[probeCalls])
 							// Context overrides affect static calls; interface calls still
 							// use the registered native adapter in both execution modes.
 							wantDirect := execution == "direct" || probeCalls%2 == 1
@@ -149,6 +165,8 @@ func TestInterpreterScratchCompat(t *testing.T) {
 						"github.com/goplus/spx/v4/pkg/scratchcompat.PenColorParamFromString": scratchcompat.PenColorParamFromString,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.Rand":                    scratchcompat.Rand,
 						"github.com/goplus/spx/v4/pkg/scratchcompat.ResolveCostumeIndex":     scratchcompat.ResolveCostumeIndex,
+						"(*github.com/goplus/spx/v4/internal/scratch.List).Init":             (*spx.List).Init,
+						"(*github.com/goplus/spx/v4/internal/scratch.List).InitFrom":         (*spx.List).InitFrom,
 						"(*github.com/goplus/spx/v4/internal/scratch.List).String":           (*spx.List).String,
 						"(github.com/goplus/spx/v4/internal/scratch.Value).String":           spx.Value.String,
 					} {

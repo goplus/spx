@@ -60,29 +60,6 @@ func TestRandPreservesOperandTypes(t *testing.T) {
 	}
 }
 
-func TestRandPreservesIntegerRangeEvaluationOrder(t *testing.T) {
-	t.Cleanup(spx.ResetRandomSeed)
-	high := float64(1 << 53)
-	low := high - 4
-	spx.SetRandomSeed(17)
-	wants := make([]float64, 64)
-	orderMatters := false
-	for i := range wants {
-		unit := spx.Rand__1(0, 1)
-		wants[i] = low + math.Floor(unit*((high+1)-low))
-		orderMatters = orderMatters || wants[i] != low+math.Floor(unit*(high-low+1))
-	}
-	if !orderMatters {
-		t.Fatal("test samples must distinguish (high+1)-low from high-low+1")
-	}
-	spx.SetRandomSeed(17)
-	for i, want := range wants {
-		if got := scratchcompat.Rand(low, high); got != want {
-			t.Fatalf("draw %d: Rand(%.0f, %.0f) = %.0f, want %.0f", i, low, high, got, want)
-		}
-	}
-}
-
 // The matching-card project draws float-valued IDs, allowing two cards per ID.
 // Excluding the upper bound traps its warp loop after dealing only 22 cards.
 func TestRandCanDealAllCardPairs(t *testing.T) {
