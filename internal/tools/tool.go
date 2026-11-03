@@ -16,41 +16,19 @@
 
 package tools
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/goplus/spx/v4/internal/base/numeric"
+)
 
 func GetFloat(unk any) (float64, bool) {
-	switch i := unk.(type) {
-	case float32:
-		return float64(i), true
-	case float64:
-		return float64(i), true
-	case int64:
-		return float64(i), true
-	case int32:
-		return float64(i), true
-	case int16:
-		return float64(i), true
-	case int8:
-		return float64(i), true
-	case uint64:
-		return float64(i), true
-	case uint32:
-		return float64(i), true
-	case uint16:
-		return float64(i), true
-	case uint8:
-		return float64(i), true
-	case int:
-		return float64(i), true
-	case uint:
-		return float64(i), true
-	case string:
-		f, err := strconv.ParseFloat(i, 64)
+	if text, ok := unk.(string); ok {
+		f, err := strconv.ParseFloat(text, 64)
 		if err != nil {
 			return 0, false
 		}
-		return float64(f), true
-	default:
-		return 0, false
+		return f, true
 	}
+	return numeric.Float64(unk)
 }

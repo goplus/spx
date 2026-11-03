@@ -345,6 +345,8 @@ func TestMonitorSliderConfig(t *testing.T) {
 		{coreproject.StageShape{"sliderMin": 5.0, "sliderMax": 5.0}, ui.MonitorSlider{Min: 5, Max: 5, Step: 1}},
 		{coreproject.StageShape{"sliderMin": -math.MaxFloat64, "sliderMax": math.MaxFloat64}, ui.MonitorSlider{Min: 0, Max: 100, Step: 1}},
 		{coreproject.StageShape{"sliderMax": math.MaxFloat64, "isDiscrete": false}, ui.MonitorSlider{Min: 0, Max: 100, Step: 0.01}},
+		{coreproject.StageShape{"sliderMin": "--5", "sliderMax": " 10 ", "isDiscrete": "false"}, ui.MonitorSlider{Min: 0, Max: 100, Step: 1}},
+		{coreproject.StageShape{"sliderMin": "-2.5", "sliderMax": "2.5", "isDiscrete": false}, ui.MonitorSlider{Min: -2.5, Max: 2.5, Step: 0.01}},
 	} {
 		if got := parseMonitorSlider(tt.config); got != tt.want {
 			t.Errorf("got %+v, want %+v", got, tt.want)
@@ -509,16 +511,29 @@ func TestMonitorConstructionAndWidgetTransforms(t *testing.T) {
 }
 
 func TestListMonitorItems(t *testing.T) {
-	list := NewList("苹果", 1.23456789, true, nil, NewValue("[b]text[/b]\nnext"))
-	for _, value := range []any{list, &list, list.data} {
+	items := []any{"苹果", 1.23456789, true, nil, NewValue("[b]text[/b]\nnext")}
+	list := NewList(items...)
+	var retained List
+	retained.Init(items...)
+	for _, value := range []any{list, &list, retained, &retained, items} {
 		want := []string{"苹果", "1.23456789", "true", "", "[b]text[/b]\nnext"}
 		if got := listMonitorItems(value); !slices.Equal(got, want) {
 			t.Errorf("listMonitorItems(%T) = %q, want %q", value, got, want)
 		}
 	}
-	for _, value := range []any{nil, (*List)(nil), []string(nil), NewList(), 42} {
-		if got := listMonitorItems(value); len(got) != 0 {
-			t.Errorf("listMonitorItems(%T) = %q, want empty", value, got)
+	for _, tt := range []struct {
+		value   any
+		wantNil bool
+	}{
+		{nil, true},
+		{(*List)(nil), true},
+		{[]string(nil), false},
+		{NewList(), false},
+		{List{}, false},
+		{42, true},
+	} {
+		if got := listMonitorItems(tt.value); len(got) != 0 || (got == nil) != tt.wantNil {
+			t.Errorf("listMonitorItems(%T) = %#v, want empty with nil=%v", tt.value, got, tt.wantNil)
 		}
 	}
 	array := [2]int{1, 2}

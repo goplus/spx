@@ -18,6 +18,7 @@ package spx
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -71,6 +72,15 @@ func TestResolveCostumeIndex(t *testing.T) {
 		{name: "in range", costume: "2", want: 1},
 		{name: "wrap", costume: "3", want: 0},
 		{name: "wrap to zero", costume: "4", want: 1},
+		{name: "negative whole cycle", costume: "-1", want: 0},
+		{name: "negative remainder", costume: "-2", want: -1},
+		{name: "explicit positive sign", costume: "+2", want: 1},
+		{name: "minimum integer wraps subtraction", costume: strconv.Itoa(math.MinInt), want: 1},
+		{name: "maximum integer", costume: strconv.Itoa(math.MaxInt), want: 0},
+		{name: "integer overflow", costume: strconv.Itoa(math.MaxInt) + "0", want: -1},
+		{name: "fraction is not an integer", costume: "2.5", want: -1},
+		{name: "whitespace is not trimmed", costume: " 2 ", want: -1},
+		{name: "compound signs are not accepted", costume: "--2", want: -1},
 		{name: "invalid", costume: "missing", want: -1},
 	}
 
@@ -83,11 +93,36 @@ func TestResolveCostumeIndex(t *testing.T) {
 	}
 }
 
+func TestResolveCostumeIndexPrefersNames(t *testing.T) {
+	for _, name := range []string{"1", "0", "-2", " 2 ", strconv.Itoa(math.MaxInt) + "0"} {
+		t.Run(name, func(t *testing.T) {
+			sprite := newTestRenderSprite()
+			sprite.costumes[1].name = name
+			if got := sprite.ResolveCostumeIndex(name); got != 1 {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want named costume at 1", name, got)
+			}
+		})
+	}
+}
+
 func TestResolveCostumeIndexWithNoCostumes(t *testing.T) {
 	sprite := &SpriteImpl{}
 
-	if got := sprite.ResolveCostumeIndex("3"); got != 2 {
-		t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", "3", got, 2)
+	for _, tt := range []struct {
+		costume string
+		want    int
+	}{
+		{"3", 2},
+		{"0", -1},
+		{"-2", -3},
+		{strconv.Itoa(math.MinInt), math.MaxInt},
+		{"missing", -1},
+	} {
+		t.Run(tt.costume, func(t *testing.T) {
+			if got := sprite.ResolveCostumeIndex(tt.costume); got != tt.want {
+				t.Fatalf("ResolveCostumeIndex(%q) = %d, want %d", tt.costume, got, tt.want)
+			}
+		})
 	}
 }
 

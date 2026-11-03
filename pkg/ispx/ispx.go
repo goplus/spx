@@ -61,6 +61,7 @@ var defaultPackagesToImport = []string{
 	"sync/atomic",
 	"time",
 	"github.com/goplus/spx/v4",
+	"github.com/goplus/spx/v4/pkg/scratchcompat",
 	"github.com/qiniu/x/osx",
 	"github.com/qiniu/x/stringslice",
 	"github.com/qiniu/x/stringutil",

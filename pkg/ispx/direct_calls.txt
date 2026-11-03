@@ -3,10 +3,6 @@
 # All supported package functions; this compact group includes XGo lowering helpers.
 *
 
-# Lightweight container and value operations commonly used in script loops.
-List.*
-Value.*
-
 # Per-frame game input and timing operations.
 Game.KeyPressed
 Game.MousePressed

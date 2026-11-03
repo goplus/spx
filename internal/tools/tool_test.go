@@ -30,7 +30,7 @@ func TestGetFloat(t *testing.T) {
 			}
 		})
 	}
-	for _, value := range []any{nil, true, struct{}{}, "", "invalid", "1e9999"} {
+	for _, value := range []any{nil, true, struct{}{}, "", "invalid", "1e9999", "--12", " 12 "} {
 		if got, ok := GetFloat(value); ok || got != 0 {
 			t.Errorf("GetFloat(%v) = %v, %v", value, got, ok)
 		}

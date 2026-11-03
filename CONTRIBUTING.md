@@ -231,18 +231,19 @@ allow failed-job reruns to reuse reports from successful jobs while those artifa
 remain available. After they expire, use **Re-run all jobs** to regenerate them;
 rerunning only failed jobs does not recreate artifacts from successful producers.
 
-To reproduce host coverage using the same package selection as CI:
+To reproduce host coverage using the same suites as CI:
 
 ```sh
-bash .github/scripts/ci/test_go.sh -coverprofile=coverage.out -covermode=atomic
+bash .github/scripts/ci/test_go_coverage.sh native
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 (cd cmd/ispx && go tool cover -func=coverage.out)
+go tool cover -func=coverage-scratch.out
 ```
 
-Keep the profile path relative so the root module and `cmd/ispx` write separate
-files; an absolute path would overwrite the first report. CI also records
-Node/WASM Go tests and `.github/cmd` Go tools in separate profiles.
+See [Tests and coverage](.github/scripts/README.md#tests-and-coverage) for suite
+details and supplementary Scratch coverage collection.
+CI also records Node/WASM Go tests and `.github/cmd` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests and
 Node/WASM binding, coroutine, interpreter, and process-fallback tests, subject

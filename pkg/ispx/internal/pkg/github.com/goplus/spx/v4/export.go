@@ -71,6 +71,7 @@ func init() {
 			"github.com/goplus/spx/v4/internal/input/keycode":   "keycode",
 			"github.com/goplus/spx/v4/internal/log":             "log",
 			"github.com/goplus/spx/v4/internal/projectloader":   "projectloader",
+			"github.com/goplus/spx/v4/internal/scratch":         "scratch",
 			"github.com/goplus/spx/v4/internal/tilemap":         "tilemap",
 			"github.com/goplus/spx/v4/internal/time":            "time",
 			"github.com/goplus/spx/v4/internal/tools":           "tools",
@@ -84,7 +85,6 @@ func init() {
 			"path":        "path",
 			"reflect":     "reflect",
 			"slices":      "slices",
-			"strconv":     "strconv",
 			"strings":     "strings",
 			"sync":        "sync",
 			"sync/atomic": "atomic",
@@ -105,14 +105,12 @@ func init() {
 			"Game":                    reflect.TypeOf((*q.Game)(nil)).Elem(),
 			"InputSessionOptions":     reflect.TypeOf((*q.InputSessionOptions)(nil)).Elem(),
 			"InputSessionPreparation": reflect.TypeOf((*q.InputSessionPreparation)(nil)).Elem(),
-			"List":                    reflect.TypeOf((*q.List)(nil)).Elem(),
 			"Monitor":                 reflect.TypeOf((*q.Monitor)(nil)).Elem(),
 			"MotionOptions":           reflect.TypeOf((*q.MotionOptions)(nil)).Elem(),
 			"PenColorParam":           reflect.TypeOf((*q.PenColorParam)(nil)).Elem(),
 			"RotationStyle":           reflect.TypeOf((*q.RotationStyle)(nil)).Elem(),
 			"SoundEffectKind":         reflect.TypeOf((*q.SoundEffectKind)(nil)).Elem(),
 			"SpriteImpl":              reflect.TypeOf((*q.SpriteImpl)(nil)).Elem(),
-			"Value":                   reflect.TypeOf((*q.Value)(nil)).Elem(),
 		},
 		AliasTypes: map[string]reflect.Type{
 			"BackdropName":          reflect.TypeOf((*q.BackdropName)(nil)).Elem(),
@@ -131,6 +129,7 @@ func init() {
 			"InputSessionPhase":     reflect.TypeOf((*q.InputSessionPhase)(nil)).Elem(),
 			"InputSessionStatus":    reflect.TypeOf((*q.InputSessionStatus)(nil)).Elem(),
 			"Key":                   reflect.TypeOf((*q.Key)(nil)).Elem(),
+			"List":                  reflect.TypeOf((*q.List)(nil)).Elem(),
 			"MsgName":               reflect.TypeOf((*q.MsgName)(nil)).Elem(),
 			"PhysicsMode":           reflect.TypeOf((*q.PhysicsMode)(nil)).Elem(),
 			"Pos":                   reflect.TypeOf((*q.Pos)(nil)).Elem(),
@@ -143,6 +142,7 @@ func init() {
 			"SpriteName":            reflect.TypeOf((*q.SpriteName)(nil)).Elem(),
 			"StopKind":              reflect.TypeOf((*q.StopKind)(nil)).Elem(),
 			"Target":                reflect.TypeOf((*q.Target)(nil)).Elem(),
+			"Value":                 reflect.TypeOf((*q.Value)(nil)).Elem(),
 			"VarName":               reflect.TypeOf((*q.VarName)(nil)).Elem(),
 			"WidgetName":            reflect.TypeOf((*q.WidgetName)(nil)).Elem(),
 		},
@@ -562,17 +562,6 @@ func init() {
 		"(*Game).ResetTimer":           method_ptr_Game_ResetTimer,
 		"(*Game).Stop":                 method_ptr_Game_Stop,
 		"(*Game).Timer":                method_ptr_Game_Timer,
-		"(*List).Append":               method_ptr_List_Append,
-		"(*List).At":                   method_ptr_List_At,
-		"(*List).Clear":                method_ptr_List_Clear,
-		"(*List).Contains":             method_ptr_List_Contains,
-		"(*List).Delete":               method_ptr_List_Delete,
-		"(*List).IndexOf":              method_ptr_List_IndexOf,
-		"(*List).InitFrom":             method_ptr_List_InitFrom,
-		"(*List).Insert":               method_ptr_List_Insert,
-		"(*List).Len":                  method_ptr_List_Len,
-		"(*List).Set":                  method_ptr_List_Set,
-		"(*List).String":               method_ptr_List_String,
 		"(*SpriteImpl).ChangeHeading":  method_ptr_SpriteImpl_ChangeHeading,
 		"(*SpriteImpl).ChangePenSize":  method_ptr_SpriteImpl_ChangePenSize,
 		"(*SpriteImpl).ChangeXYpos":    method_ptr_SpriteImpl_ChangeXYpos,
@@ -600,15 +589,6 @@ func init() {
 		"(*SpriteImpl).Visible":        method_ptr_SpriteImpl_Visible,
 		"(*SpriteImpl).Xpos":           method_ptr_SpriteImpl_Xpos,
 		"(*SpriteImpl).Ypos":           method_ptr_SpriteImpl_Ypos,
-		"(*Value).Equal":               method_ptr_Value_Equal,
-		"(*Value).Float":               method_ptr_Value_Float,
-		"(*Value).Int":                 method_ptr_Value_Int,
-		"(*Value).Set":                 method_ptr_Value_Set,
-		"(*Value).String":              method_ptr_Value_String,
-		"(Value).Equal":                method_Value_Equal,
-		"(Value).Float":                method_Value_Float,
-		"(Value).Int":                  method_Value_Int,
-		"(Value).String":               method_Value_String,
 		"CharAt":                       func_CharAt,
 		"Compare":                      func_Compare,
 		"Contains":                     func_Contains,
@@ -628,6 +608,7 @@ func init() {
 		"KeyFromString":                func_KeyFromString,
 		"LimitPrecision":               func_LimitPrecision,
 		"NewColor":                     func_NewColor,
+		"NewList":                      func_NewList,
 		"NewValue":                     func_NewValue,
 		"PenColorParamFromString":      func_PenColorParamFromString,
 		"Procedure":                    func_Procedure,
@@ -748,52 +729,12 @@ func func_LimitPrecision(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.LimitPrecision(ixgo.DirectCallArg[float64](ctx, 0)))
 }
 
-func method_ptr_List_Append(ctx ixgo.DirectCallContext) {
-	(*q.List).Append(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1))
-}
-
-func method_ptr_List_At(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.List).At(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1)))
-}
-
-func method_ptr_List_Clear(ctx ixgo.DirectCallContext) {
-	(*q.List).Clear(ixgo.DirectCallArg[*q.List](ctx, 0))
-}
-
-func method_ptr_List_Contains(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.List).Contains(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
-}
-
-func method_ptr_List_Delete(ctx ixgo.DirectCallContext) {
-	(*q.List).Delete(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1))
-}
-
-func method_ptr_List_IndexOf(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.List).IndexOf(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
-}
-
-func method_ptr_List_InitFrom(ctx ixgo.DirectCallContext) {
-	(*q.List).InitFrom(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[*q.List](ctx, 1))
-}
-
-func method_ptr_List_Insert(ctx ixgo.DirectCallContext) {
-	(*q.List).Insert(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1), ixgo.DirectCallArg[any](ctx, 2))
-}
-
-func method_ptr_List_Len(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.List).Len(ixgo.DirectCallArg[*q.List](ctx, 0)))
-}
-
-func method_ptr_List_Set(ctx ixgo.DirectCallContext) {
-	(*q.List).Set(ixgo.DirectCallArg[*q.List](ctx, 0), ixgo.DirectCallArg[int](ctx, 1), ixgo.DirectCallArg[any](ctx, 2))
-}
-
-func method_ptr_List_String(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.List).String(ixgo.DirectCallArg[*q.List](ctx, 0)))
-}
-
 func func_NewColor(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.NewColor(ixgo.DirectCallArg[any](ctx, 0)))
+}
+
+func func_NewList(ctx ixgo.DirectCallContext) {
+	ctx.SetResult(q.NewList(ixgo.DirectCallArg[[]any](ctx, 0)...))
 }
 
 func func_NewValue(ctx ixgo.DirectCallContext) {
@@ -958,42 +899,6 @@ func method_ptr_SpriteImpl_Ypos(ctx ixgo.DirectCallContext) {
 
 func func_TimeSinceLevelLoad(ctx ixgo.DirectCallContext) {
 	ctx.SetResult(q.TimeSinceLevelLoad())
-}
-
-func method_Value_Equal(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.Value.Equal(ixgo.DirectCallArg[q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
-}
-
-func method_ptr_Value_Equal(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.Value).Equal(ixgo.DirectCallArg[*q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1)))
-}
-
-func method_Value_Float(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.Value.Float(ixgo.DirectCallArg[q.Value](ctx, 0)))
-}
-
-func method_ptr_Value_Float(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.Value).Float(ixgo.DirectCallArg[*q.Value](ctx, 0)))
-}
-
-func method_Value_Int(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.Value.Int(ixgo.DirectCallArg[q.Value](ctx, 0)))
-}
-
-func method_ptr_Value_Int(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.Value).Int(ixgo.DirectCallArg[*q.Value](ctx, 0)))
-}
-
-func method_ptr_Value_Set(ctx ixgo.DirectCallContext) {
-	(*q.Value).Set(ixgo.DirectCallArg[*q.Value](ctx, 0), ixgo.DirectCallArg[any](ctx, 1))
-}
-
-func method_Value_String(ctx ixgo.DirectCallContext) {
-	ctx.SetResult(q.Value.String(ixgo.DirectCallArg[q.Value](ctx, 0)))
-}
-
-func method_ptr_Value_String(ctx ixgo.DirectCallContext) {
-	ctx.SetResult((*q.Value).String(ixgo.DirectCallArg[*q.Value](ctx, 0)))
 }
 
 func func_WaitUntil(ctx ixgo.DirectCallContext) {

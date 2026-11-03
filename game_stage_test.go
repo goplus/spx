@@ -47,6 +47,7 @@ type targetPropertyGame struct {
 	Game
 	StageScore int
 	Actor      targetPropertyActor
+	Wrapped    Value
 }
 
 type stagePlanGame struct {
@@ -145,7 +146,7 @@ func TestGameGetTargetPropertyMissing(t *testing.T) {
 	game := &targetPropertyGame{}
 	game.gamer = game
 	for _, target := range []string{"", "Actor", "Missing"} {
-		if got := game.GetTargetProperty(target, "Missing"); got.data != nil {
+		if got := game.GetTargetProperty(target, "Missing"); got.Raw() != nil {
 			t.Errorf("GetTargetProperty(%q, Missing) = %v, want empty value", target, got)
 		}
 	}
@@ -195,6 +196,18 @@ func TestGameGetTargetPropertyStageField(t *testing.T) {
 	got := g.GetTargetProperty("", "StageScore")
 	if got.Int() != 23 {
 		t.Fatalf("StageScore = %d, want 23", got.Int())
+	}
+}
+
+func TestGameGetTargetPropertyPreservesValueWrapper(t *testing.T) {
+	g := &targetPropertyGame{Wrapped: NewValue("7")}
+	g.gamer = g
+	got := g.GetTargetProperty("", "Wrapped")
+	if wrapped, ok := got.Raw().(Value); !ok || wrapped.Raw() != "7" {
+		t.Fatalf("Wrapped = %T(%v), want the original Value", got.Raw(), got.Raw())
+	}
+	if got.Int() != 0 || Compare(got, 10) != 1 {
+		t.Fatal("property evaluation must retain the extra Value wrapper")
 	}
 }
 
@@ -497,8 +510,8 @@ func TestGamePropertyResolutionScopes(t *testing.T) {
 	if got := plain.propertyRootValue(); got.Addr().Interface() != &plain {
 		t.Fatal("unbound game root changed")
 	}
-	if _, ok := plain.resolveTargetProperty("", ""); ok {
-		t.Fatal("empty property resolved")
+	if got := plain.GetTargetProperty("", ""); got.Raw() != nil {
+		t.Fatalf("empty property = %v, want zero Value", got)
 	}
 	if plain.setStageMonitor("", "missing", true) {
 		t.Fatal("missing monitor resolved")

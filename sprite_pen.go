@@ -16,17 +16,19 @@
 
 package spx
 
+import "github.com/goplus/spx/v4/internal/scratch"
+
 // -----------------------------------------------------------------------------
 // Color
 // -----------------------------------------------------------------------------
 type PenColorParam int
 
 const (
-	PenHue PenColorParam = iota
-	PenSaturation
-	PenBrightness
-	PenTransparency
-	PenNone
+	PenHue          PenColorParam = scratch.PenHue
+	PenSaturation   PenColorParam = scratch.PenSaturation
+	PenBrightness   PenColorParam = scratch.PenBrightness
+	PenTransparency PenColorParam = scratch.PenTransparency
+	PenNone         PenColorParam = scratch.PenNone
 )
 
 // -----------------------------------------------------------------------------

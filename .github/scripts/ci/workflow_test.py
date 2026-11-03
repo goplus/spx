@@ -160,7 +160,7 @@ class CoverageWorkflowTest(unittest.TestCase):
     def test_collection_requires_every_source_and_keeps_nested_profiles(self):
         script = SCRIPTS / "ci/collect_coverage.py"
         sources = {
-            "source": ["coverage.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
+            "source": ["coverage.out", "coverage-scratch.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
                        "coverage-web.out", "cmd/ispx/coverage-web.out"],
             "macos": ["coverage-buildctl-macos.out"],
             "windows": ["coverage-buildctl-windows.out", "coverage-engine-windows.out"],

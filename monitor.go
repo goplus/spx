@@ -25,6 +25,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	spxlog "github.com/goplus/spx/v4/internal/log"
+	"github.com/goplus/spx/v4/internal/scratch"
 	"github.com/goplus/spx/v4/internal/tools"
 	"github.com/goplus/spx/v4/internal/ui"
 )
@@ -293,8 +294,8 @@ func parseMonitorColor(v coreproject.StageShape, appearance ui.MonitorAppearance
 
 func parseListMonitorDimensions(v coreproject.StageShape) mathf.Vec2 {
 	dimension := func(key string, fallback, minimum float64) float64 {
-		value := monitorNumber(v, key, fallback)
-		if value <= 0 {
+		value, ok := tools.GetFloat(v[key])
+		if !ok || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
 			return fallback
 		}
 		return math.Max(value, minimum)
@@ -303,28 +304,13 @@ func parseListMonitorDimensions(v coreproject.StageShape) mathf.Vec2 {
 }
 
 func parseMonitorSlider(v coreproject.StageShape) ui.MonitorSlider {
-	min, max := monitorNumber(v, "sliderMin", 0), monitorNumber(v, "sliderMax", 100)
-	if min > max {
-		min, max = max, min
+	min, _ := tools.GetFloat(v["sliderMin"])
+	max, ok := tools.GetFloat(v["sliderMax"])
+	if !ok {
+		max = 100
 	}
-	step := 1.0
-	if discrete, ok := v["isDiscrete"].(bool); ok && !discrete {
-		step = 0.01
-	}
-	if math.IsInf((max-min)/step, 0) || math.IsInf(min/step, 0) || math.IsInf(max/step, 0) {
-		min, max = 0, 100
-	}
-	return ui.MonitorSlider{Min: min, Max: max, Step: step}
-}
-
-// monitorNumber reads finite dimensions and range limits. Monitor scale retains
-// its existing parsing rules and deliberately does not use this helper.
-func monitorNumber(v coreproject.StageShape, key string, fallback float64) float64 {
-	value, ok := tools.GetFloat(v[key])
-	if !ok || math.IsNaN(value) || math.IsInf(value, 0) {
-		return fallback
-	}
-	return value
+	discrete, ok := v["isDiscrete"].(bool)
+	return ui.NewMonitorSlider(min, max, !ok || discrete)
 }
 
 // -----------------------------------------------------------------------------
@@ -335,9 +321,7 @@ func getTarget(g reflect.Value, target string) (reflect.Value, int) {
 		return g, 1 // spx.Game
 	}
 	if val := coreproject.FindFieldPtr(g, target, 0); val != nil {
-		if _, ok := val.(Shape); ok {
-			return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
-		}
+		return reflect.ValueOf(val).Elem(), 2 // (spx.Sprite, *Game)
 	}
 	return reflect.Value{}, -1
 }
@@ -386,13 +370,13 @@ func buildMonitorEval(target reflect.Value, from int, val string, appearance ui.
 // slice or list. Replacing or growing a list is reflected on the next refresh.
 func listMonitorItems(value any) []string {
 	switch list := value.(type) {
-	case List:
-		return listMonitorItems(list.data)
-	case *List:
+	case scratch.List:
+		return scratch.ListItems(list)
+	case *scratch.List:
 		if list == nil {
 			return nil
 		}
-		return listMonitorItems(list.data)
+		return scratch.ListItems(*list)
 	}
 	list := reflect.ValueOf(value)
 	for list.IsValid() && (list.Kind() == reflect.Pointer || list.Kind() == reflect.Interface) {
@@ -403,7 +387,7 @@ func listMonitorItems(value any) []string {
 	}
 	items := make([]string, list.Len())
 	for i := range items {
-		items[i] = toString(list.Index(i).Interface())
+		items[i] = scratch.ToString(list.Index(i).Interface())
 	}
 	return items
 }

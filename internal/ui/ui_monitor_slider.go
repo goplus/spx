@@ -28,6 +28,51 @@ type MonitorSlider struct {
 	Min, Max, Step float64
 }
 
+// NewMonitorSlider normalizes monitor bounds and selects integer or hundredth steps.
+func NewMonitorSlider(min, max float64, discrete bool) MonitorSlider {
+	if math.IsNaN(min) || math.IsInf(min, 0) {
+		min = 0
+	}
+	if math.IsNaN(max) || math.IsInf(max, 0) {
+		max = 100
+	}
+	if min > max {
+		min, max = max, min
+	}
+	step := 1.0
+	if !discrete {
+		step = 0.01
+	}
+	if math.IsInf((max-min)/step, 0) || math.IsInf(min/step, 0) || math.IsInf(max/step, 0) {
+		min, max = 0, 100
+	}
+	return MonitorSlider{Min: min, Max: max, Step: step}
+}
+
+// EffectiveMax excludes a maximum that does not fall on a valid step.
+func (s MonitorSlider) EffectiveMax() float64 {
+	steps := math.Floor((s.Max-s.Min)/s.Step + 1e-9)
+	return s.Min + steps*s.Step
+}
+
+// ParseValue clamps a numeric string to the slider range. Invalid or nonfinite
+// values use the midpoint; parsing deliberately follows strconv.ParseFloat.
+func (s MonitorSlider) ParseValue(text string) float64 {
+	number, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
+		number = s.Min/2 + s.Max/2
+	}
+	return math.Max(s.Min, math.Min(s.EffectiveMax(), number))
+}
+
+// Quantize rounds a position to a step anchored at the minimum.
+func (s MonitorSlider) Quantize(position float64) float64 {
+	// Divide whole hundredths to avoid multiplication noise for decimal steps.
+	units := 1 / s.Step
+	steps := math.Round((position - s.Min) / s.Step)
+	return (s.Min*units + steps) / units
+}
+
 func (p *UiMonitor) ReadSliderChange() (float64, bool) {
 	return p.readSliderChange(&engine.Managers().UiMgr)
 }
@@ -41,29 +86,13 @@ func (p *UiMonitor) readSliderChange(sink monitorRenderSink) (float64, bool) {
 		return 0, false
 	}
 	p.sliderPosition = position
-	config := p.style.Slider
-	// Divide whole hundredths to avoid multiplication noise for decimal steps.
-	units := 1 / config.Step
-	steps := math.Round((position - config.Min) / config.Step)
-	value := (config.Min*units + steps) / units
-	return value, true
+	return p.style.Slider.Quantize(position), true
 }
 
 func (p *UiMonitor) renderSlider(sink monitorRenderSink, text string) {
 	slider := p.style.Slider
-	number, err := strconv.ParseFloat(text, 64)
-	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
-		number = slider.Min/2 + slider.Max/2
-	}
 	id := p.view.input.GetId()
-	// HTML ranges exclude a maximum that does not fall on a valid step.
-	maximum := slider.Min + slider.steps()*slider.Step
-	number = math.Max(slider.Min, math.Min(maximum, number))
-	sink.SetRange(id, slider.Min, maximum, slider.Step, number)
+	sink.SetRange(id, slider.Min, slider.EffectiveMax(), slider.Step, slider.ParseValue(text))
 	p.sliderPosition = sink.GetRangeValue(id)
 	p.sliderReady = true
-}
-
-func (s MonitorSlider) steps() float64 {
-	return math.Floor((s.Max-s.Min)/s.Step + 1e-9)
 }
