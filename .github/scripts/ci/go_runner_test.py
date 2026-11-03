@@ -44,14 +44,8 @@ if os.environ.get("MOCK_CAPTURE_PLATFORM") == "1":
 log_path = Path(os.environ["MOCK_LOG"])
 with log_path.open("a", encoding="utf-8") as log:
     log.write(json.dumps(call) + "\n")
-if args == ["env", "GOROOT"]:
-    print("/mock/go root")
-elif args == ["env", "GOHOSTOS"]:
-    print(os.environ["MOCK_GOHOSTOS"])
-elif args == ["env", "GOHOSTARCH"]:
-    print(os.environ["MOCK_GOHOSTARCH"])
-elif args == ["env", "GOOS"]:
-    print(os.environ["MOCK_GOOS"])
+if len(args) == 2 and args[0] == "env":
+    print(os.environ["MOCK_" + args[1]])
 elif args == ["list", "./..."]:
     print(os.environ["MOCK_NESTED_PACKAGES" if directory == "cmd/ispx" else "MOCK_PACKAGES"])
 elif args[0] == "test":
@@ -83,6 +77,7 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                 "MOCK_ROOT": str(self.root),
                 "MOCK_LOG": str(self.log),
+                "MOCK_GOROOT": "/mock/go root",
                 "MOCK_PACKAGES": "\n".join(packages),
                 "MOCK_NESTED_PACKAGES": "github.com/goplus/spx/v4/cmd/ispx",
                 **environment,
@@ -121,12 +116,12 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                     {"directory": "cmd/ispx", "args": ["list", "./..."]},
                     {"directory": "cmd/ispx", "args": ["test", *nested_coverage, *arguments, *nested]},
                 ])
-        for directory in (".", "cmd/ispx"):
-            with self.subTest(directory=directory):
-                self.assertEqual(
-                    (self.root / directory / "coverage.out").read_text(encoding="utf-8"),
-                    f"mode: atomic\n{directory}/source.go:1.1,2.1 1 1\n",
-                )
+                for directory in (".", "cmd/ispx"):
+                    with self.subTest(directory=directory):
+                        self.assertEqual(
+                            (self.root / directory / "coverage.out").read_text(encoding="utf-8"),
+                            f"mode: atomic\n{directory}/source.go:1.1,2.1 1 1\n",
+                        )
 
     def test_discovery_errors_and_empty_selection_stop_before_testing(self):
         for name, packages, environment, code in (
@@ -159,7 +154,33 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
                 self.assertEqual(len(calls), 3)
                 self.assertEqual(calls[-1], {"directory": "cmd/ispx", "args": ["list", "./..."]})
 
-    coverage_suites = ("macos", "windows", "web", "web-process", "web-interpreter", "tools", "codegen", "native")
+    # Expected report paths and package selections, independent of recorded calls.
+    coverage_suites = {
+        "macos": {
+            "coverage-buildctl-macos.out": [
+                "./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool", "./internal/cmd/buildctl/runtimecmd",
+            ],
+            "coverage-command-macos.out": ["./cmd/spx/internal/command"],
+        },
+        "windows": {
+            "coverage-buildctl-windows.out": ["./internal/cmd/buildctl/shared", "./internal/cmd/buildctl/tool"],
+            "coverage-engine-windows.out": ["./internal/cmd/buildctl/engine"],
+            "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
+        },
+        "web": {
+            "coverage-web.out": ["./internal/gdengine/binding/web", "./pkg/ispx", "./internal/coroutine"],
+        },
+        "web-process": {
+            "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/processsupervisor", "./pkg/launcher"],
+        },
+        "web-interpreter": {"cmd/ispx/coverage-web.out": ["./..."]},
+        "tools": {"coverage-tools.out": ["./.github/cmd/..."]},
+        "codegen": {"internal/cmd/codegen/coverage.out": ["./..."]},
+        "native": {
+            "coverage.out": ["github.com/goplus/spx/v4"],
+            "cmd/ispx/coverage.out": ["github.com/goplus/spx/v4/cmd/ispx"],
+        },
+    }
 
     def run_coverage_suite(self, suite, **environment):
         self.output.unlink(missing_ok=True)
@@ -180,65 +201,62 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         )
 
     def test_coverage_suites_select_targets_and_report_every_profile(self):
-        all_profiles = []
-        for suite in self.coverage_suites:
+        all_profiles = [profile for reports in self.coverage_suites.values() for profile in reports]
+        self.assertEqual(len(all_profiles), len(set(all_profiles)))
+        for suite, reports in self.coverage_suites.items():
             with self.subTest(suite=suite):
                 result = self.run_coverage_suite(suite)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 calls = self.recorded_calls()
                 tests = [call for call in calls if call["args"][0] == "test"]
-                self.assertTrue(tests)
-                compact = [call for call in calls if call["args"][0] == "run"]
-                self.assertEqual(len(compact), 1)
-                profiles = []
-                for call in tests:
+                self.assertEqual(len(tests), len(reports))
+                for call, (profile, packages) in zip(tests, reports.items()):
                     args = call["args"]
+                    self.assertEqual(call["directory"], Path(profile).parent.as_posix())
+                    self.assertEqual([arg for arg in args if arg.startswith(("./", "github.com/"))], packages)
+                    self.assertEqual([arg for arg in args if arg.startswith("-coverprofile=")],
+                                     [f"-coverprofile={Path(profile).name}"])
                     self.assertIn("-covermode=atomic", args)
-                    profile, = [arg.split("=", 1)[1] for arg in args if arg.startswith("-coverprofile=")]
-                    profiles.append((Path(call["directory"]) / profile).as_posix())
-                    self.assertEqual((call["GOOS"], call["GOARCH"]), ("js", "wasm") if suite.startswith("web") else ("", ""))
-                    if suite.startswith("web"):
-                        self.assertTrue(any(arg.startswith("-exec=") and "go_js_wasm_exec" in arg for arg in args))
+                    self.assertFalse(any(arg.endswith(".go") for arg in args))
+                    if suite == "native":
+                        # No extra flags may silently narrow this full-module run.
+                        self.assertEqual(args, [
+                            "test", "-coverpkg=" + ",".join(packages), "-v",
+                            f"-coverprofile={Path(profile).name}", "-covermode=atomic", *packages,
+                        ])
+                    if suite == "codegen":
+                        self.assertIn("-coverpkg=./...", args)
+                    web = suite.startswith("web")
+                    self.assertEqual((call["GOOS"], call["GOARCH"]), ("js", "wasm") if web else ("", ""))
+                    if web:
+                        self.assertIn('-exec="/mock/go root/lib/wasm/go_js_wasm_exec"', args)
                     if suite in ("macos", "windows"):
                         self.assertIn("-run", args)
-                if suite == "tools":
-                    targets = {arg for call in tests for arg in call["args"]}
-                    self.assertEqual(len(tests), 1)
-                    self.assertIn("./.github/cmd/...", targets)
-                    self.assertFalse(any(target.endswith(".go") for target in targets))
-                if suite == "windows":
-                    cache_test, = [call for call in tests if "./internal/runtimebundle" in call["args"]]
-                    args = cache_test["args"]
-                    for name in ("TestCacheDefaultPermissionsProtectNestedFilesAndRepair",
-                                 "TestCacheUsesConfiguredWindowsPermissions",
-                                 "TestWindowsPrivateDACLIsAppliedAtCreation",
-                                 "TestAcquireCreatesProtectedWindowsCache",
-                                 "TestVerifyPrivateSecurityDescriptorUsesBinarySIDs",
-                                 "TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms",
-                                 "TestVerifyPrivateSecurityDescriptorRejectsUnexpectedACL",
-                                 "TestVerifyPrivateSecurityDescriptorRejectsMissingDACL"):
-                        self.assertRegex(name, args[args.index("-run") + 1])
-                if suite in ("web-interpreter", "codegen"):
-                    expected = "cmd/ispx" if suite == "web-interpreter" else "internal/cmd/codegen"
-                    self.assertEqual({call["directory"] for call in tests}, {expected})
-                if suite == "native":
-                    self.assertEqual(len(tests), 2)
-                    self.assertEqual([(call["directory"], call["args"]) for call in tests], [
-                        (".", ["test", "-coverpkg=github.com/goplus/spx/v4", "-v", "-coverprofile=coverage.out", "-covermode=atomic",
-                               "github.com/goplus/spx/v4"]),
-                        ("cmd/ispx", ["test", "-coverpkg=github.com/goplus/spx/v4/cmd/ispx", "-v", "-coverprofile=coverage.out", "-covermode=atomic", "github.com/goplus/spx/v4/cmd/ispx"]),
-                    ])
-                    self.assertEqual(profiles, ["coverage.out", "cmd/ispx/coverage.out"])
-                self.assertEqual(compact[0], {
-                    "directory": ".", "args": ["run", "./.github/cmd/compact-coverage", *profiles],
+                compact = {
+                    "directory": ".", "args": ["run", "./.github/cmd/compact-coverage", *reports],
                     "GOOS": {"macos": "darwin", "windows": "windows"}.get(suite, "linux"), "GOARCH": "amd64",
-                })
-                self.assertEqual(calls[-1], compact[0])
-                self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *profiles, "COVERAGE_PATHS"])
+                }
+                self.assertEqual([call for call in calls if call["args"][0] == "run"], [compact])
+                self.assertEqual(calls[-1], compact)
+                self.assertEqual(self.output.read_text().splitlines(), ["coverage<<COVERAGE_PATHS", *reports, "COVERAGE_PATHS"])
                 actual = [profile.relative_to(self.root).as_posix() for profile in self.root.rglob("coverage*.out")]
-                self.assertCountEqual(actual, profiles)
-                all_profiles.extend(profiles)
-        self.assertEqual(len(all_profiles), len(set(all_profiles)))
+                self.assertCountEqual(actual, reports)
+
+    def test_windows_coverage_includes_cache_security_tests(self):
+        result = self.run_coverage_suite("windows")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        cache_test, = [call for call in self.recorded_calls() if "./internal/runtimebundle" in call["args"]]
+        args = cache_test["args"]
+        for name in ("TestCacheDefaultPermissionsProtectNestedFilesAndRepair",
+                     "TestCacheUsesConfiguredWindowsPermissions",
+                     "TestWindowsPrivateDACLIsAppliedAtCreation",
+                     "TestAcquireCreatesProtectedWindowsCache",
+                     "TestVerifyPrivateSecurityDescriptorUsesBinarySIDs",
+                     "TestVerifyPrivateSecurityDescriptorAcceptsExpectedForms",
+                     "TestVerifyPrivateSecurityDescriptorRejectsUnexpectedACL",
+                     "TestVerifyPrivateSecurityDescriptorRejectsMissingDACL"):
+            with self.subTest(name=name):
+                self.assertRegex(name, args[args.index("-run") + 1])
 
     def test_web_compaction_uses_host_with_exported_target(self):
         for suite in ("web", "web-process", "web-interpreter"):
@@ -288,7 +306,6 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
         result = self.run_coverage_suite("tools", GITHUB_OUTPUT="")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.output.exists())
-
 
 
 if __name__ == "__main__":

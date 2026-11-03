@@ -28,6 +28,10 @@ func TestCompactProfilesMergeCountersAndRetainUncoveredBlocks(t *testing.T) {
 			if err := os.WriteFile(name, []byte(input), 0o640); err != nil {
 				t.Fatal(err)
 			}
+			original, err := os.Stat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
 			for range 2 {
 				var stderr bytes.Buffer
 				if code := run([]string{name}, &stderr); code != 0 || stderr.Len() != 0 {
@@ -36,6 +40,17 @@ func TestCompactProfilesMergeCountersAndRetainUncoveredBlocks(t *testing.T) {
 				got, err := os.ReadFile(name)
 				if err != nil || string(got) != want {
 					t.Fatalf("profile = %q, %v; want %q", got, err, want)
+				}
+				info, err := os.Stat(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if info.Mode().Perm() != original.Mode().Perm() {
+					t.Fatalf("permissions = %v; want %v", info.Mode().Perm(), original.Mode().Perm())
+				}
+				entries, err := os.ReadDir(filepath.Dir(name))
+				if err != nil || len(entries) != 1 {
+					t.Fatalf("temporary output was left behind: %v, %v", entries, err)
 				}
 			}
 		})

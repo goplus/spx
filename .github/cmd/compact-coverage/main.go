@@ -70,15 +70,12 @@ func compactProfile(name string) error {
 		return err
 	}
 	writer := bufio.NewWriter(output)
-	if _, err := fmt.Fprintln(writer, header); err != nil {
-		return err
-	}
+	// Buffered writes retain the first error; Flush checks it before replacement.
+	fmt.Fprintln(writer, header)
 	for _, profile := range profiles {
 		for _, block := range profile.Blocks {
-			if _, err := fmt.Fprintf(writer, "%s:%d.%d,%d.%d %d %d\n", profile.FileName,
-				block.StartLine, block.StartCol, block.EndLine, block.EndCol, block.NumStmt, block.Count); err != nil {
-				return err
-			}
+			fmt.Fprintf(writer, "%s:%d.%d,%d.%d %d %d\n", profile.FileName,
+				block.StartLine, block.StartCol, block.EndLine, block.EndCol, block.NumStmt, block.Count)
 		}
 	}
 	if err := writer.Flush(); err != nil {
