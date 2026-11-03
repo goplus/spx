@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package scratch
+package ui
 
 import "testing"
 
-func TestSliderTextUsesMonitorParsing(t *testing.T) {
-	slider := NewSlider(10, 20, true)
+func TestMonitorSliderTextUsesMonitorParsing(t *testing.T) {
+	slider := NewMonitorSlider(10, 20, true)
 	for _, tt := range []struct {
 		text string
 		want float64
@@ -42,8 +42,8 @@ func TestSliderTextUsesMonitorParsing(t *testing.T) {
 	}
 }
 
-func TestSliderStepBoundaries(t *testing.T) {
-	slider := NewSlider(0, 10.5, true)
+func TestMonitorSliderStepBoundaries(t *testing.T) {
+	slider := NewMonitorSlider(0, 10.5, true)
 	if got := slider.EffectiveMax(); got != 10 {
 		t.Fatalf("EffectiveMax() = %v, want 10", got)
 	}
@@ -56,7 +56,7 @@ func TestSliderStepBoundaries(t *testing.T) {
 		{0, 0.3, 0.3},
 		{0.005, 0.305, 0.305},
 	} {
-		if got := NewSlider(tt.min, 1, false).Quantize(tt.position); got != tt.want {
+		if got := NewMonitorSlider(tt.min, 1, false).Quantize(tt.position); got != tt.want {
 			t.Errorf("Quantize(%v) with minimum %v = %.17g, want %.17g", tt.position, tt.min, got, tt.want)
 		}
 	}

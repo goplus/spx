@@ -28,38 +28,28 @@ import (
 	"github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
+// Exercise bindings and type identity here; semantic matrices live in internal/scratch.
 const scratchCompatSource = `import (
-	"math"
 	"github.com/goplus/spx/v4"
 	compat "github.com/goplus/spx/v4/pkg/scratchcompat"
 )
 
-type UserSprite struct {
-	spx.SpriteImpl
-}
-
+type UserSprite struct { spx.SpriteImpl }
 func (*UserSprite) Main() {}
-
-type CustomSprite struct {
-	UserSprite
-}
-
-func (*CustomSprite) ResolveCostumeIndex(name string) int {
-	return len(name)
-}
-
+type CustomSprite struct { UserSprite }
+func (*CustomSprite) ResolveCostumeIndex(name string) int { return len(name) }
 func stringify(v interface { String() string }) string { return v.String() }
 
 func main() {
+	const all int8 = compat.All
+	if all != -3 || compat.Invalid != spx.Invalid || compat.Last != spx.Last || compat.Random != spx.Random {
+		panic("list constant exports")
+	}
 	if compat.PenColorParamFromString("COLOR") != spx.PenHue || compat.KeyFromString("space") != spx.KeySpace {
 		panic("compatible constants and parsing")
 	}
-	if spx.KeyFromString("space") != spx.KeyMax || spx.KeyFromString("Any") != spx.KeyAny {
-		panic("native key names")
-	}
-	user := &UserSprite{}
-	var sprite spx.Sprite = user
-	for _, resolver := range []compat.CostumeResolver{&spx.SpriteImpl{}, user, sprite} {
+	var sprite spx.Sprite = &UserSprite{}
+	for _, resolver := range []compat.CostumeResolver{&spx.SpriteImpl{}, sprite} {
 		if compat.ResolveCostumeIndex(resolver, "3") != 2 {
 			panic("native and interpreted costume resolvers")
 		}
@@ -70,41 +60,21 @@ func main() {
 	}
 	defer spx.ResetRandomSeed()
 	spx.SetRandomSeed(17)
-	unit := spx.Rand__1(0, 1)
-	wantNext := spx.Rand__0(1, 10000)
-	bounds := compat.NewList("1")
-	for _, input := range []any{"1", spx.NewValue("1"), bounds.At(0)} {
-		spx.SetRandomSeed(17)
-		if compat.Rand(input, input) != 1 || compat.Rand(input, 2) != 1 + math.Floor(unit*2) || spx.Rand__0(1, 10000) != wantNext {
-			panic("original inputs and shared random source")
-		}
-	}
+	want := spx.Rand__1(1, 2)
 	spx.SetRandomSeed(17)
-	if compat.Rand("1.0", 2) != 1 + unit {
-		panic("decimal string remains continuous")
+	if compat.Rand(spx.NewValue("1.0"), 2) != want {
+		panic("wrapped random operand and runtime source")
 	}
-	if compat.CharAt("中文", 1) != "中" || spx.CharAt("中文", 0) != "中" || compat.CharAt("中文", 0) != "" {
-		panic("public character index conventions")
+	if compat.CharAt("中文", 1) != "中" {
+		panic("character binding")
 	}
 	number := spx.NewValue("03.5")
 	var legacy spx.List = compat.NewList("APPLE", number)
 	var items compat.List = legacy
 	var valueNumber interface { Float() float64 } = number
-	if stringify(&items) != "APPLE 03.5" || valueNumber.Float() != 3.5 {
-		panic("alias interface methods")
-	}
-	var copied compat.List
-	copied.InitFrom(&legacy)
-	copied.Set(compat.Last, "copy")
-	if items.At(compat.Last).Raw() != "03.5" || copied.At(1).String() != "copy" {
-		panic("alias storage ownership")
-	}
-	if copied.IndexOf("missing") != compat.Invalid || !copied.Contains(copied.At(compat.Random)) {
-		panic("list positions")
-	}
-	copied.Delete(compat.All)
-	if copied.Len() != 0 || items.Len() != 2 {
-		panic("list deletion")
+	items.Set(compat.Last, number)
+	if stringify(&items) != "APPLE 03.5" || valueNumber.Float() != 3.5 || items.At(1).Raw() != "03.5" {
+		panic("alias identity and methods")
 	}
 	if !compat.Equal(number, 3.5) || compat.Compare(items.At(0), "apple") != 0 || !compat.Contains("Scratch", "RAT") {
 		panic("wrapped operator arguments")
@@ -112,7 +82,6 @@ func main() {
 	if compat.Div(0, 0) != 0 || compat.FloorMod(-7, 3) != 2 || compat.LimitPrecision(42 + 5e-10) != 42 {
 		panic("numeric operator bindings")
 	}
-
 	probe := spx.NewValue("dispatch probe")
 	list := compat.NewList(probe)
 	if list.String() != "probe" || stringify(&list) != "probe" || probe.String() != "probe" || stringify(probe) != "probe" {

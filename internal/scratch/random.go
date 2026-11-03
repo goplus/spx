@@ -59,7 +59,7 @@ func randomNumber(value any) (float64, bool) {
 	case string:
 		return randomStringNumber(value), !strings.ContainsRune(value, '.')
 	}
-	number, ok := ToFloat64(value)
+	number, ok := toFloat64(value)
 	if !ok {
 		return 0, false
 	}

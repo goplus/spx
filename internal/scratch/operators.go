@@ -134,5 +134,5 @@ func toCompareNumber(v any) (float64, bool) {
 	if v == nil {
 		return 0, false
 	}
-	return ToFloat64(v)
+	return toFloat64(v)
 }

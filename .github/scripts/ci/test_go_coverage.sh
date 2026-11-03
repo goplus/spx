@@ -79,10 +79,12 @@ case "${1:-}" in
     profile=coverage.out
     bash .github/scripts/ci/test_go.sh -v -coverprofile="$profile" -covermode=atomic
     coverage_files=("$profile" "cmd/ispx/$profile")
-    # Count Scratch helpers exercised through runtime and interpreter tests.
+    # Unit coverage is already in coverage.out. Only repeat the integration
+    # cases whose calls into Scratch helpers need cross-package instrumentation.
     covered_test coverage-scratch.out \
       -coverpkg=./internal/scratch,./pkg/scratchcompat \
-      . ./internal/scratch ./pkg/scratchcompat ./pkg/ispx
+      -run '^Test(ListRandomPosition.*|ResolveCostumeIndex.*|PenColorParamFromString|ListMonitorEvalTracksChanges|InterpreterScratchCompat)$' \
+      . ./pkg/ispx
     ;;
   *)
     echo "Unknown Go coverage suite: ${1:-}" >&2

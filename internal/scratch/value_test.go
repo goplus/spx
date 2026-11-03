@@ -40,10 +40,10 @@ func TestToFloat64String(t *testing.T) {
 		{"negative zero", "-0", math.Copysign(0, -1), true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got, ok := ToFloat64(test.input)
+			got, ok := toFloat64(test.input)
 			equal := math.Float64bits(got) == math.Float64bits(test.want) || math.IsNaN(got) && math.IsNaN(test.want)
 			if ok != test.ok || !equal {
-				t.Errorf("ToFloat64(%q) = %g, %v; want %g, %v", test.input, got, ok, test.want, test.ok)
+				t.Errorf("toFloat64(%q) = %g, %v; want %g, %v", test.input, got, ok, test.want, test.ok)
 			}
 		})
 	}
@@ -89,8 +89,8 @@ func TestToIntString(t *testing.T) {
 		{"negative overflow", "-1e30", 0, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got, ok := ToInt(test.input); ok != test.ok || got != test.want {
-				t.Fatalf("ToInt(%q) = %d, %v; want %d, %v", test.input, got, ok, test.want, test.ok)
+			if got, ok := toInt(test.input); ok != test.ok || got != test.want {
+				t.Fatalf("toInt(%q) = %d, %v; want %d, %v", test.input, got, ok, test.want, test.ok)
 			}
 		})
 	}
@@ -103,8 +103,8 @@ func TestToIntPreservesIntegerPrecision(t *testing.T) {
 	want := int64(1<<53) + 1
 	for _, input := range []any{want, uint64(want), strconv.FormatInt(want, 10)} {
 		t.Run(fmt.Sprintf("%T", input), func(t *testing.T) {
-			if got, ok := ToInt(input); !ok || int64(got) != want {
-				t.Fatalf("ToInt(%v) = %d, %v; want %d, true", input, got, ok, want)
+			if got, ok := toInt(input); !ok || int64(got) != want {
+				t.Fatalf("toInt(%v) = %d, %v; want %d, true", input, got, ok, want)
 			}
 		})
 	}
@@ -117,8 +117,8 @@ func TestToIntOutOfRange(t *testing.T) {
 	}
 	for _, input := range inputs {
 		t.Run(fmt.Sprintf("%T(%v)", input, input), func(t *testing.T) {
-			if got, ok := ToInt(input); ok || got != 0 {
-				t.Fatalf("ToInt() = %d, %v; want 0, false", got, ok)
+			if got, ok := toInt(input); ok || got != 0 {
+				t.Fatalf("toInt() = %d, %v; want 0, false", got, ok)
 			}
 		})
 	}
@@ -164,11 +164,11 @@ func TestValueNumericConversions(t *testing.T) {
 			if got := value.Float(); got != float64(test.want) {
 				t.Errorf("Value.Float() = %g, want %d", got, test.want)
 			}
-			if got, ok := ToInt(test.input); !ok || got != test.want {
-				t.Errorf("ToInt() = %d, %v; want %d, true", got, ok, test.want)
+			if got, ok := toInt(test.input); !ok || got != test.want {
+				t.Errorf("toInt() = %d, %v; want %d, true", got, ok, test.want)
 			}
-			if got, ok := ToFloat64(test.input); !ok || got != float64(test.want) {
-				t.Errorf("ToFloat64() = %g, %v; want %d, true", got, ok, test.want)
+			if got, ok := toFloat64(test.input); !ok || got != float64(test.want) {
+				t.Errorf("toFloat64() = %g, %v; want %d, true", got, ok, test.want)
 			}
 		})
 	}

@@ -21,6 +21,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/goplus/spx/v4/internal/base/numeric"
 )
 
 // UnwrapValue unwraps one layer of Value. It uses the concrete value type so
@@ -94,9 +96,9 @@ func float64ToInt(f float64) (int, bool) {
 	return int(f), true
 }
 
-// ToInt converts values to int, accepting compound signs and preserving integer
+// toInt converts values to int, accepting compound signs and preserving integer
 // precision. Nil becomes zero; failed conversions return zero and false.
-func ToInt(v any) (int, bool) {
+func toInt(v any) (int, bool) {
 	switch x := v.(type) {
 	case nil:
 		return 0, true
@@ -150,36 +152,12 @@ func ToInt(v any) (int, bool) {
 	return 0, false
 }
 
-// ToFloat64 converts values to float64, accepting compound signs. Nil becomes
+// toFloat64 converts values to float64, accepting compound signs. Nil becomes
 // zero; failed conversions return zero and false.
-func ToFloat64(v any) (float64, bool) {
+func toFloat64(v any) (float64, bool) {
 	switch x := v.(type) {
 	case nil:
 		return 0, true
-	case float64:
-		return x, true
-	case float32:
-		return float64(x), true
-	case int:
-		return float64(x), true
-	case int8:
-		return float64(x), true
-	case int16:
-		return float64(x), true
-	case int32:
-		return float64(x), true
-	case int64:
-		return float64(x), true
-	case uint:
-		return float64(x), true
-	case uint8:
-		return float64(x), true
-	case uint16:
-		return float64(x), true
-	case uint32:
-		return float64(x), true
-	case uint64:
-		return float64(x), true
 	case bool:
 		if x {
 			return 1, true
@@ -188,5 +166,5 @@ func ToFloat64(v any) (float64, bool) {
 	case string:
 		return parseFloatString(x)
 	}
-	return 0, false
+	return numeric.Float64(v)
 }

@@ -65,13 +65,22 @@ func (p *List) Len() int {
 	return len(p.data)
 }
 
-func (p *List) String() string {
-	sep := ""
-	items := make([]string, len(p.data))
-	for i, item := range p.data {
+// ListItems returns a string snapshot without retaining the list's storage.
+func ListItems(list List) []string {
+	items := make([]string, len(list.data))
+	for i, item := range list.data {
 		items[i] = ToString(item)
-		if len(items[i]) != 1 {
+	}
+	return items
+}
+
+func (p *List) String() string {
+	items := ListItems(*p)
+	sep := ""
+	for _, item := range items {
+		if len(item) != 1 {
 			sep = " "
+			break
 		}
 	}
 	return strings.Join(items, sep)

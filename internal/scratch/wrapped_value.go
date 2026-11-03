@@ -45,12 +45,12 @@ func (p Value) String() string {
 }
 
 func (p Value) Int() int {
-	i, _ := ToInt(p.data)
+	i, _ := toInt(p.data)
 	return i
 }
 
 func (p Value) Float() float64 {
-	f, _ := ToFloat64(p.data)
+	f, _ := toFloat64(p.data)
 	return f
 }
 

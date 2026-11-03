@@ -243,9 +243,10 @@ go tool cover -func=coverage-scratch.out
 
 The native suite preserves separate full reports for the root and `cmd/ispx`
 modules. It also produces `coverage-scratch.out`, instrumenting `internal/scratch`
-and `pkg/scratchcompat` while running their existing unit tests, SPX tests, and
-interpreter tests. This counts shared implementations exercised through public
-entry points; Go's default per-package coverage omits those cross-package calls.
+and `pkg/scratchcompat` for focused costume, list, pen, and interpreter integration
+tests. Unit coverage comes from the full native suite; only these integration
+cases run again to count calls into shared implementations that Go's default
+per-package coverage omits.
 CI also records Node/WASM Go tests and `.github/cmd` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests and

@@ -92,6 +92,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/audio":                   {},
 	"internal/base/collision":          {},
 	"internal/base/defaults":           {},
+	"internal/base/numeric":            {},
 	"internal/base/sliceutil":          {},
 	"internal/core/event":              {},
 	"internal/core/project":            {},

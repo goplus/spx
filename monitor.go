@@ -310,7 +310,7 @@ func parseMonitorSlider(v coreproject.StageShape) ui.MonitorSlider {
 		max = 100
 	}
 	discrete, ok := v["isDiscrete"].(bool)
-	return scratch.NewSlider(min, max, !ok || discrete)
+	return ui.NewMonitorSlider(min, max, !ok || discrete)
 }
 
 // -----------------------------------------------------------------------------
@@ -371,16 +371,12 @@ func buildMonitorEval(target reflect.Value, from int, val string, appearance ui.
 func listMonitorItems(value any) []string {
 	switch list := value.(type) {
 	case scratch.List:
-		return listMonitorItems(&list)
+		return scratch.ListItems(list)
 	case *scratch.List:
 		if list == nil {
 			return nil
 		}
-		items := make([]string, list.Len())
-		for i := range items {
-			items[i] = list.At(i).String()
-		}
-		return items
+		return scratch.ListItems(*list)
 	}
 	list := reflect.ValueOf(value)
 	for list.IsValid() && (list.Kind() == reflect.Pointer || list.Kind() == reflect.Interface) {
