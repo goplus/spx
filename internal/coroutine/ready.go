@@ -38,14 +38,6 @@ func (q *readyQueue) add(th Thread) {
 	heap.Push(&q.heaps[index], th)
 }
 
-// removeReadyLocked detaches th from its published or staged ready heap.
-// Caller holds schedulerMu.
-func (th Thread) removeReadyLocked() {
-	if th.readyHeap != nil {
-		heap.Remove(th.readyHeap, th.readyIndex)
-	}
-}
-
 func (q *readyQueue) pop() Thread {
 	for {
 		if len(q.heaps[q.current]) == 0 {
@@ -90,4 +82,12 @@ func (h *readyHeap) Pop() any {
 	*h = (*h)[:last]
 	th.readyHeap = nil
 	return th
+}
+
+// removeReadyLocked detaches th from its published or staged ready heap.
+// Caller holds schedulerMu.
+func (th Thread) removeReadyLocked() {
+	if th.readyHeap != nil {
+		heap.Remove(th.readyHeap, th.readyIndex)
+	}
 }
