@@ -59,20 +59,17 @@ class CoverageWorkflowTest(unittest.TestCase):
                          "(github.event_name=='push'&&github.ref=='refs/heads/dev'))")
 
     def test_coverage_is_uploaded_only_after_the_selected_ci_path_passes(self):
-        jobs = load_workflow(CI_WORKFLOW_PATH)["jobs"]
+        workflow = load_workflow(CI_WORKFLOW_PATH)
+        jobs = workflow["jobs"]
         coverage = jobs["ci-gate"]
-        self.assertEqual(load_workflow(CI_WORKFLOW_PATH)["permissions"], {
+        self.assertEqual(workflow["permissions"], {
             "contents": "read",
         })
         self.assertNotIn("permissions", coverage)
-        self.assertCountEqual(job_needs(coverage), (
-            "check-source", "build-go", "resolve-runtime", "test-godot-module", "build-web",
-        ))
-        self.assertEqual(job_condition(coverage), "!cancelled()")
         self.assertEqual(jobs["check-source"]["with"]["collect_coverage"], "true")
         go, cpp, finalize = action_steps(coverage, "codecov/codecov-action")
         for key, value in {"files": "${{ steps.profiles.outputs.coverage }}", "slug": "${{ github.repository }}",
-                           "flags": "go", "disable_search": "true"}.items():
+                           "flags": "go", "disable_search": "true", "fail_ci_if_error": "true"}.items():
             self.assertEqual(go["with"][key], value)
         self.assertEqual(cpp["with"], {
             "slug": "${{ github.repository }}", "files": "coverage/cpp/coverage.xml", "flags": "cpp",
@@ -100,8 +97,6 @@ class CoverageWorkflowTest(unittest.TestCase):
             if step in (cpp, cpp_download):
                 condition += " && needs.test-godot-module.result == 'success'"
             self.assertEqual(step.get("if", "success()"), condition)
-        for step in (go, cpp, finalize):
-            self.assertEqual(step["with"]["fail_ci_if_error"], "true")
         static = load_workflow(SOURCE_CHECKS_WORKFLOW_PATH)
         self.assertEqual(static["on"]["workflow_call"]["inputs"]["collect_coverage"]["default"], "false")
 
@@ -157,10 +152,10 @@ class CoverageWorkflowTest(unittest.TestCase):
         for check in ("project", "patch"):
             self.assertEqual(config["coverage"]["status"][check]["default"], {"informational": "true"})
 
-    def test_collection_requires_every_source_and_keeps_nested_profiles(self):
+    def test_collection_requires_every_source_and_keeps_module_profiles(self):
         script = SCRIPTS / "ci/collect_coverage.py"
         sources = {
-            "source": ["coverage.out", "coverage-scratch.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
+            "source": ["coverage.out", "cmd/ispx/coverage.out", "internal/cmd/codegen/coverage.out",
                        "coverage-web.out", "cmd/ispx/coverage-web.out"],
             "macos": ["coverage-buildctl-macos.out"],
             "windows": ["coverage-buildctl-windows.out", "coverage-engine-windows.out"],

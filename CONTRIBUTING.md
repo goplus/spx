@@ -238,11 +238,10 @@ bash .github/scripts/ci/test_go_coverage.sh native
 go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 (cd cmd/ispx && go tool cover -func=coverage.out)
-go tool cover -func=coverage-scratch.out
 ```
 
 See [Tests and coverage](.github/scripts/README.md#tests-and-coverage) for suite
-details and supplementary Scratch coverage collection.
+details, package selection, and coverage profile compaction.
 CI also records Node/WASM Go tests and `.github/cmd` Go tools in separate profiles.
 
 Coverage includes Linux host Go tests and
