@@ -25,7 +25,7 @@ import (
 
 func main() {
 	ctx := ixgo.NewContext(ixgo.SupportMultipleInterp | ixgo.EnableCachedReg)
-	if err := ispx.Init(ctx); err != nil {
+	if err := ispx.Init(ctx, ispx.WithCallFusion()); err != nil {
 		panic(err)
 	}
 	select {}

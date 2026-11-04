@@ -19,9 +19,144 @@ package coroutine
 import (
 	"sync/atomic"
 	"testing"
+	stime "time"
 
 	itime "github.com/goplus/spx/v4/internal/time"
 )
+
+func TestLoopCheckpointInlinesSingleScriptWithinBudget(t *testing.T) {
+	co := New(nil)
+	co.SetPerfDebug(true)
+	itime.Start()
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+
+	const iterations = 128
+	var completed atomic.Int64
+	th := co.Create("single-loop", func(me Thread) {
+		for range iterations {
+			completed.Add(1)
+			co.YieldLoopFor(me)
+		}
+	})
+	co.JoinFirstSlice(th)
+	co.Update()
+
+	if got := completed.Load(); got != iterations {
+		t.Fatalf("completed iterations = %d, want %d", got, iterations)
+	}
+	// 第一次继续需要真实轮次，后续检查点应当直接继续。
+	if jobs := co.UpdateStats().JobCount; jobs > 3 {
+		t.Fatalf("processed jobs = %d, want at most 3 for inlined loop", jobs)
+	}
+	stats := co.UpdateStats()
+	if stats.LoopYieldCount != iterations-1 || stats.LoopInlineCount != iterations-1 ||
+		stats.LoopScheduledCount != 0 || stats.LoopDeferredCount != 0 {
+		t.Fatalf("loop stats = %+v, want all in-frame checkpoints inline", stats)
+	}
+}
+
+func TestLoopCheckpointKeepsPeerRoundFairness(t *testing.T) {
+	co := New(nil)
+	itime.Start()
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+
+	order := make([]string, 0, 6)
+	newLoop := func(name string) Thread {
+		return co.Create(name, func(me Thread) {
+			for range 3 {
+				order = append(order, name)
+				co.YieldLoopFor(me)
+			}
+		})
+	}
+	first := newLoop("first")
+	second := newLoop("second")
+	joinFirstSliceAll(co, []Thread{first, second})
+	co.Update()
+
+	want := []string{"first", "second", "first", "second", "first", "second"}
+	if len(order) != len(want) {
+		t.Fatalf("execution order = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("execution order = %v, want %v", order, want)
+		}
+	}
+}
+
+func TestLoopCheckpointStopsAtFrameBudget(t *testing.T) {
+	co := New(nil)
+	co.SetPerfDebug(true)
+	itime.Start()
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+
+	base := stime.Now()
+	var elapsed atomic.Int64
+	co.loopNow = func() stime.Time {
+		return base.Add(stime.Duration(elapsed.Load()))
+	}
+
+	var completed atomic.Int64
+	th := co.Create("budgeted-loop", func(me Thread) {
+		for i := range 3 {
+			completed.Add(1)
+			if i == 1 {
+				elapsed.Store(int64(loopWorkBudget))
+			}
+			co.YieldLoopFor(me)
+		}
+	})
+	co.JoinFirstSlice(th)
+	co.Update()
+	if got := completed.Load(); got != 2 {
+		t.Fatalf("first frame iterations = %d, want 2", got)
+	}
+	first := co.UpdateStats()
+	if first.LoopYieldCount != 1 || first.LoopInlineCount != 0 || first.LoopScheduledCount != 1 ||
+		first.LoopSameFrameCount != 1 || first.LoopDeferredCount != 1 {
+		t.Fatalf("first frame loop stats = %+v, want one deferred checkpoint", first)
+	}
+
+	itime.Update(1.0/30, 30)
+	co.Update()
+	if got := completed.Load(); got != 3 {
+		t.Fatalf("second frame iterations = %d, want 3", got)
+	}
+	second := co.UpdateStats()
+	if second.LoopYieldCount != 1 || second.LoopInlineCount != 1 || second.LoopScheduledCount != 0 ||
+		second.LoopDeferredCount != 0 || second.LoopNextFrameCount != 1 {
+		t.Fatalf("second frame loop stats = %+v, want one resumed checkpoint", second)
+	}
+}
+
+func TestLoopCheckpointStopsForRedraw(t *testing.T) {
+	co := New(nil)
+	itime.Start()
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+
+	var completed atomic.Int64
+	th := co.Create("redraw-loop", func(me Thread) {
+		for i := range 3 {
+			completed.Add(1)
+			if i == 1 {
+				co.RequestRedraw()
+			}
+			co.YieldLoopFor(me)
+		}
+	})
+	co.JoinFirstSlice(th)
+	co.Update()
+	if got := completed.Load(); got != 2 {
+		t.Fatalf("redraw frame iterations = %d, want 2", got)
+	}
+
+	itime.Update(1.0/30, 30)
+	co.Update()
+	if got := completed.Load(); got != 3 {
+		t.Fatalf("next frame iterations = %d, want 3", got)
+	}
+}
 
 func TestLoopBudgetYieldsWithoutStoppingScript(t *testing.T) {
 	co := New(nil)

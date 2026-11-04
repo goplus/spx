@@ -50,13 +50,13 @@ func TestInterpreterInit(t *testing.T) {
 			}
 			if custom {
 				ctx.Lookup = func(root, path string) (string, bool) { return "custom-lookup", false }
-				options = append(options, WithSSAOptimization())
+				options = append(options, WithSSAOptimization(), WithCallFusion())
 			}
 			if err := Init(ctx, options...); err != nil {
 				t.Fatal(err)
 			}
-			if ixgoCtx == nil || ixgoCtx.Lookup == nil || optimizeSSA != custom {
-				t.Fatalf("initialization state: context=%v, optimize=%v", ixgoCtx, optimizeSSA)
+			if ixgoCtx == nil || ixgoCtx.Lookup == nil || optimizeSSA != custom || callFusion != custom {
+				t.Fatalf("initialization state: context=%v, optimize=%v, callFusion=%v", ixgoCtx, optimizeSSA, callFusion)
 			}
 			if custom {
 				if ixgoCtx != ctx {
@@ -212,6 +212,42 @@ func TestInterpreterBuildRunAndRebuild(t *testing.T) {
 	}
 }
 
+func TestInterpreterBuildRunWithCallFusion(t *testing.T) {
+	isolateInterpreter(t)
+	if err := Init(nil, WithCallFusion()); err != nil {
+		t.Fatal(err)
+	}
+	err := Build(map[string][]byte{"main.xgo": []byte(`import spx "github.com/goplus/spx/v4"
+
+type holder struct {
+	values spx.List
+	allowed spx.List
+}
+
+func (p *holder) check() bool {
+	return spx.Equal(p.values.At(0), 2) && p.allowed.Contains(p.values.At(0))
+}
+
+var result bool
+
+func main() {
+	h := holder{values: spx.NewList("02"), allowed: spx.NewList(2)}
+	result = h.check()
+}
+
+func Result() bool { return result }
+`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, err := Run(); code != 0 || err != nil {
+		t.Fatalf("Run() = %d, %v", code, err)
+	}
+	if result, err := ixgoInterp.RunFunc("Result"); result != true || err != nil {
+		t.Fatalf("Result() = %v, %v", result, err)
+	}
+}
+
 func TestReadmeTutorialExamplesMatchSource(t *testing.T) {
 	readme, err := os.ReadFile("../../README.md")
 	if err != nil {
@@ -300,8 +336,8 @@ func (i interpreterImportFailure) Import(path string) (*types.Package, error) {
 func isolateInterpreter(t *testing.T) {
 	t.Helper()
 	mu.Lock()
-	previousCtx, previousInterp, previousDone, previousOptimize := ixgoCtx, ixgoInterp, runDone, optimizeSSA
-	ixgoCtx, ixgoInterp, runDone, optimizeSSA = nil, nil, nil, false
+	previousCtx, previousInterp, previousDone, previousOptimize, previousCallFusion := ixgoCtx, ixgoInterp, runDone, optimizeSSA, callFusion
+	ixgoCtx, ixgoInterp, runDone, optimizeSSA, callFusion = nil, nil, nil, false, false
 	mu.Unlock()
 	t.Cleanup(func() {
 		mu.Lock()
@@ -312,7 +348,7 @@ func isolateInterpreter(t *testing.T) {
 		if ixgoInterp != nil {
 			ixgoInterp.UnsafeRelease()
 		}
-		ixgoCtx, ixgoInterp, runDone, optimizeSSA = previousCtx, previousInterp, previousDone, previousOptimize
+		ixgoCtx, ixgoInterp, runDone, optimizeSSA, callFusion = previousCtx, previousInterp, previousDone, previousOptimize, previousCallFusion
 		spxfs.RegisterSchema("", asset.Open)
 	})
 }

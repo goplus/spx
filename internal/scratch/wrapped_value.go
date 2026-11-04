@@ -60,3 +60,13 @@ func (p *Value) Set(v any) {
 	}
 	p.data = UnwrapValue(v)
 }
+
+// SetAt is equivalent to p.Set(source.At(i)), but keeps the list lookup and
+// assignment behind one interpreter call boundary.
+func (p *Value) SetAt(source *List, i int) {
+	value := source.rawAt(i)
+	if p == nil {
+		return
+	}
+	p.data = value
+}

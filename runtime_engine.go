@@ -274,6 +274,8 @@ func (p *Game) showDebugPanel() {
 	msg += fmt.Sprintf("coro: NextCount: %v\n", lastInfo.DeferredCount)
 	msg += fmt.Sprintf("coro: GCCount: %v\n", lastInfo.GCCount)
 	msg += fmt.Sprintf("coro: LoopIterations: %v\n", lastInfo.LoopIterations)
+	msg += fmt.Sprintf("coro: LoopYield: %v (inline %v, scheduled %v)\n", lastInfo.LoopYieldCount, lastInfo.LoopInlineCount, lastInfo.LoopScheduledCount)
+	msg += fmt.Sprintf("coro: LoopRound: same-frame %v, deferred %v, resumed-next-frame %v\n", lastInfo.LoopSameFrameCount, lastInfo.LoopDeferredCount, lastInfo.LoopNextFrameCount)
 	p.debugState.DebugPanel.Show(msg)
 }
 

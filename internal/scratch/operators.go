@@ -99,13 +99,89 @@ func Compare(v1, v2 any) int {
 // Numeric comparisons involving NaN return false.
 // Value operands are unwrapped once.
 func Equal(v1, v2 any) bool {
-	v1, v2 = UnwrapValue(v1), UnwrapValue(v2)
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			return nearlyEqual(n1, n2)
+	return equalValues(normalizeEqualValue(v1), normalizeEqualValue(v2))
+}
+
+// equalValue caches the Scratch-compatible interpretation of one dynamic
+// value. List searches can normalize the needle once instead of repeating the
+// same unwrapping and numeric conversion for every element.
+type equalValue struct {
+	raw         any
+	number      float64
+	integer     int64
+	numeric     bool
+	fastInteger bool
+}
+
+func normalizeEqualValue(v any) equalValue {
+	v = UnwrapValue(v)
+	if integer, ok := equalityFastInteger(v); ok {
+		return equalValue{
+			raw:         v,
+			number:      float64(integer),
+			integer:     integer,
+			numeric:     true,
+			fastInteger: true,
 		}
 	}
-	return compareStrings(v1, v2) == 0
+	number, numeric := toCompareNumber(v)
+	return equalValue{raw: v, number: number, numeric: numeric}
+}
+
+func equalValues(v1, v2 equalValue) bool {
+	// Particle types and list indexes are predominantly small integers. Keep
+	// them out of float conversion and ULP comparison on the hot path.
+	if v1.fastInteger && v2.fastInteger {
+		return v1.integer == v2.integer
+	}
+	if v1.numeric && v2.numeric {
+		return nearlyEqual(v1.number, v2.number)
+	}
+	return compareStrings(v1.raw, v2.raw) == 0
+}
+
+func equalityFastInteger(v any) (int64, bool) {
+	// Restrict the shortcut to the common signed-32-bit range. Values outside
+	// it use the existing float path, preserving all prior precision behavior.
+	const (
+		min = int64(-1 << 31)
+		max = int64(1<<31 - 1)
+	)
+	var integer int64
+	switch v := v.(type) {
+	case int:
+		integer = int64(v)
+	case int8:
+		integer = int64(v)
+	case int16:
+		integer = int64(v)
+	case int32:
+		integer = int64(v)
+	case int64:
+		integer = v
+	case uint:
+		if uint64(v) > uint64(max) {
+			return 0, false
+		}
+		integer = int64(v)
+	case uint8:
+		integer = int64(v)
+	case uint16:
+		integer = int64(v)
+	case uint32:
+		if uint64(v) > uint64(max) {
+			return 0, false
+		}
+		integer = int64(v)
+	case uint64:
+		if v > uint64(max) {
+			return 0, false
+		}
+		integer = int64(v)
+	default:
+		return 0, false
+	}
+	return integer, integer >= min && integer <= max
 }
 
 func compareStrings(v1, v2 any) int {

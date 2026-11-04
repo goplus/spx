@@ -134,6 +134,67 @@ func TestListEquality(t *testing.T) {
 	}
 }
 
+func TestFusedListCallsMatchOriginalSemantics(t *testing.T) {
+	source := NewList(1, "02", "Apple")
+	category := NewList(2, "apple")
+
+	for _, test := range []struct {
+		name     string
+		index    int
+		expected any
+	}{
+		{name: "first", index: 0, expected: 1.0},
+		{name: "numeric string", index: 1, expected: 2},
+		{name: "last", index: ListLast, expected: "apple"},
+		{name: "invalid", index: ListInvalid, expected: ""},
+		{name: "past end", index: 100, expected: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := source.EqualAt(test.index, test.expected), Equal(source.At(test.index), test.expected); got != want {
+				t.Errorf("EqualAt(%d, %v) = %v, want %v", test.index, test.expected, got, want)
+			}
+			if got, want := category.ContainsAt(&source, test.index), category.Contains(source.At(test.index)); got != want {
+				t.Errorf("ContainsAt(source, %d) = %v, want %v", test.index, got, want)
+			}
+		})
+	}
+
+	// Init can retain a Value. Fusion must not unwrap it more times than the
+	// original At expression does.
+	var nested List
+	nested.Init(NewValue(2))
+	if got, want := source.ContainsAt(&nested, 0), source.Contains(nested.At(0)); got != want {
+		t.Fatalf("ContainsAt nested value = %v, want %v", got, want)
+	}
+	if got, want := nested.EqualAt(0, 2), Equal(nested.At(0), 2); got != want {
+		t.Fatalf("EqualAt nested value = %v, want %v", got, want)
+	}
+}
+
+func TestFusedListMutationAndTypedAccessMatchOriginalSemantics(t *testing.T) {
+	source := NewList(1, "2", 3.5)
+	destination := NewList(9, 8, 7)
+	var value Value
+
+	value.SetAt(&source, 1)
+	if got, want := value.String(), source.At(1).String(); got != want {
+		t.Fatalf("Value.SetAt = %q, want %q", got, want)
+	}
+	destination.SetAt(0, &source, 2)
+	if got, want := destination.At(0).Float(), source.At(2).Float(); got != want {
+		t.Fatalf("List.SetAt = %v, want %v", got, want)
+	}
+	if got, want := source.IntAt(1), source.At(1).Int(); got != want {
+		t.Fatalf("List.IntAt = %d, want %d", got, want)
+	}
+	if got, want := source.FloatAt(2), source.At(2).Float(); got != want {
+		t.Fatalf("List.FloatAt = %v, want %v", got, want)
+	}
+	if got, want := source.StringAt(0), source.At(0).String(); got != want {
+		t.Fatalf("List.StringAt = %q, want %q", got, want)
+	}
+}
+
 func TestListSetOutOfBoundsIsNoOp(t *testing.T) {
 	tests := []struct {
 		name  string

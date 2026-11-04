@@ -30,6 +30,12 @@ type readyQueue struct {
 
 type readyHeap []Thread
 
+func (q *readyQueue) empty() bool {
+	// readyQueue 使用两个堆维护脚本顺序和换圈位置；两个堆都为空才表示
+	// 没有已经准备好、可以抢占当前脚本的脚本。
+	return len(q.heaps[0]) == 0 && len(q.heaps[1]) == 0
+}
+
 func (q *readyQueue) add(th Thread) {
 	index := q.current
 	if th.resumeOrder <= q.cursor {

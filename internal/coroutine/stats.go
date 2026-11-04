@@ -38,6 +38,21 @@ type UpdateStats struct {
 	GCCount         int     // GC cycles during the update.
 	GCStatsEnabled  bool    // GCCount and GCPauseTime are valid only when true.
 	LoopIterations  int     // Update-loop iterations.
+	// LoopYieldCount 是本次 Update 内脚本到达 YieldLoopFor 的次数。
+	// 它统计循环检查点，不是调度器自身的 LoopIterations。
+	LoopYieldCount int
+	// LoopInlineCount 是检查点直接在当前协程继续下一轮的次数。
+	LoopInlineCount int
+	// LoopScheduledCount 是检查点进入 enqueueAndYield 完整调度路径的次数。
+	LoopScheduledCount int
+	// LoopSameFrameCount 是 waitLoop 在本次 Update 内进入 roundJobs 后，
+	// 又被转换为 waitYield 并恢复的次数。
+	LoopSameFrameCount int
+	// LoopDeferredCount 是本次 Update 结束时仍留在 roundJobs、被推迟到
+	// 后续 Update 的 waitLoop 数量，是“当前帧未完成循环续接”的直接指标。
+	LoopDeferredCount int
+	// LoopNextFrameCount 是本次 Update 恢复上一帧推迟的 waitLoop 数量。
+	LoopNextFrameCount int
 }
 
 // SetPerfDebug enables or disables GC statistics collection during Update.
@@ -74,6 +89,14 @@ func (p *Coroutines) finishStats(stats *UpdateStats, start stime.Time, before *s
 	accounted := stats.InitTime + stats.LoopTime + stats.MoveTime
 	stats.TotalTime = total
 	stats.ExternalTime = total - accounted
+	if p.perfDebug.Load() {
+		stats.LoopYieldCount = int(p.loopYieldCount.Load())
+		stats.LoopInlineCount = int(p.loopInlineCount.Load())
+		stats.LoopScheduledCount = int(p.loopScheduledCount.Load())
+		stats.LoopSameFrameCount = int(p.loopSameFrameCount.Load())
+		stats.LoopDeferredCount = int(p.loopDeferredCount.Load())
+		stats.LoopNextFrameCount = int(p.loopNextFrameCount.Load())
+	}
 
 	p.statsMu.Lock()
 	p.lastUpdateStats = *stats
