@@ -131,6 +131,25 @@ func TestStyleListEquality(t *testing.T) {
 	}
 }
 
+var benchmarkListContainsResult bool
+
+func BenchmarkListContainsParticleValues(b *testing.B) {
+	lists := []List{
+		NewList("", 1, 2, 3),
+		NewList(4, 5, 9),
+	}
+	needles := []Value{NewValue(3), NewValue(1)}
+
+	b.ResetTimer()
+	result := false
+	for i := 0; i < b.N; i++ {
+		for index := range lists {
+			result = lists[index].Contains(needles[index]) != result
+		}
+	}
+	benchmarkListContainsResult = result
+}
+
 func TestListSetOutOfBoundsIsNoOp(t *testing.T) {
 	tests := []struct {
 		name  string

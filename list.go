@@ -121,8 +121,9 @@ func (p *List) String() string {
 
 // Contains returns true if the list contains the element v.
 func (p *List) Contains(v obj) bool {
+	needle := normalizeEqualValue(v)
 	for _, item := range p.data {
-		if Equal(item, v) {
+		if equalValues(normalizeEqualValue(item), needle) {
 			return true
 		}
 	}
@@ -192,8 +193,9 @@ func (p *List) At(i Pos) Value {
 // IndexOf returns the zero-based position of the first occurrence of v in the list.
 // Returns Invalid (-1) if v is not found.
 func (p *List) IndexOf(v obj) Pos {
+	needle := normalizeEqualValue(v)
 	for i, item := range p.data {
-		if Equal(item, v) {
+		if equalValues(normalizeEqualValue(item), needle) {
 			return Pos(i)
 		}
 	}

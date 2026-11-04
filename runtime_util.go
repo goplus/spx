@@ -128,12 +128,97 @@ func Compare(v1, v2 any) int {
 // absorb representation-level rounding errors. Compare remains exact for
 // ordering.
 func Equal(v1, v2 any) bool {
-	if n1, ok1 := toCompareNumber(v1); ok1 {
-		if n2, ok2 := toCompareNumber(v2); ok2 {
-			return nearlyEqual(n1, n2)
+	return equalValues(normalizeEqualValue(v1), normalizeEqualValue(v2))
+}
+
+// equalValue keeps the normalized forms needed by repeated equality checks.
+// Lists use it to normalize the searched value once instead of once per item.
+type equalValue struct {
+	raw         any
+	number      float64
+	integer     int64
+	numeric     bool
+	fastInteger bool
+}
+
+func normalizeEqualValue(v any) equalValue {
+	v = fromObj(v)
+	if i, ok := equalityFastInteger(v); ok {
+		return equalValue{
+			raw:         v,
+			number:      float64(i),
+			integer:     i,
+			numeric:     true,
+			fastInteger: true,
 		}
 	}
-	return Compare(v1, v2) == 0
+	n, ok := toCompareNumber(v)
+	return equalValue{raw: v, number: n, numeric: ok}
+}
+
+func equalValues(v1, v2 equalValue) bool {
+	if v1.fastInteger && v2.fastInteger {
+		return v1.integer == v2.integer
+	}
+	if v1.numeric && v2.numeric {
+		return nearlyEqual(v1.number, v2.number)
+	}
+	// Empty strings are deliberately non-numeric in Scratch. A primitive
+	// numeric value can never have an empty textual representation.
+	if (v1.numeric && isBlankString(v2.raw)) || (v2.numeric && isBlankString(v1.raw)) {
+		return false
+	}
+	return strings.ToLower(toString(v1.raw)) == strings.ToLower(toString(v2.raw))
+}
+
+func isBlankString(v any) bool {
+	s, ok := v.(string)
+	return ok && strings.TrimSpace(s) == ""
+}
+
+// equalityFastInteger covers the range used by generated block values while
+// staying far below the point where adjacent integers are within the ULP
+// tolerance used by Equal.
+func equalityFastInteger(v any) (int64, bool) {
+	const (
+		min = int64(-1 << 31)
+		max = int64(1<<31 - 1)
+	)
+	var i int64
+	switch v := v.(type) {
+	case int:
+		i = int64(v)
+	case int8:
+		i = int64(v)
+	case int16:
+		i = int64(v)
+	case int32:
+		i = int64(v)
+	case int64:
+		i = v
+	case uint:
+		if uint64(v) > uint64(max) {
+			return 0, false
+		}
+		i = int64(v)
+	case uint8:
+		i = int64(v)
+	case uint16:
+		i = int64(v)
+	case uint32:
+		if uint64(v) > uint64(max) {
+			return 0, false
+		}
+		i = int64(v)
+	case uint64:
+		if v > uint64(max) {
+			return 0, false
+		}
+		i = int64(v)
+	default:
+		return 0, false
+	}
+	return i, i >= min && i <= max
 }
 
 // DeltaTime returns the time elapsed since the previous frame.

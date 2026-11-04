@@ -493,6 +493,39 @@ func TestEqualUsesULPToleranceOnlyForNumericEquality(t *testing.T) {
 	}
 }
 
+func TestEqualFastPathMatchesPreviousSemantics(t *testing.T) {
+	values := []any{
+		nil,
+		"", "  ", "0", "01", "--1", "Apple", "true", "NaN",
+		false, true,
+		int(-1), int(0), int(1), int8(1), int16(2), int32(3),
+		int64(1<<31 - 1), int64(1 << 31), int64(1 << 53), int64(1<<53 + 1),
+		uint(1), uint32(1<<31 - 1), uint32(1 << 31), uint64(1<<53 + 1),
+		float32(1), float64(-1), float64(0), float64(1),
+		math.Nextafter(1, math.Inf(1)), math.Inf(-1), math.Inf(1), math.NaN(),
+		NewValue("01"), NewValue(1), NewValue(true), Value{},
+	}
+
+	previousEqual := func(v1, v2 any) bool {
+		if n1, ok1 := toCompareNumber(v1); ok1 {
+			if n2, ok2 := toCompareNumber(v2); ok2 {
+				return nearlyEqual(n1, n2)
+			}
+		}
+		return Compare(v1, v2) == 0
+	}
+
+	for _, v1 := range values {
+		for _, v2 := range values {
+			got := Equal(v1, v2)
+			want := previousEqual(v1, v2)
+			if got != want {
+				t.Fatalf("Equal(%T(%v), %T(%v)) = %v, previous behavior %v", v1, v1, v2, v2, got, want)
+			}
+		}
+	}
+}
+
 func TestNumericAndClockUtilities(t *testing.T) {
 	for _, tt := range []struct {
 		value float64
