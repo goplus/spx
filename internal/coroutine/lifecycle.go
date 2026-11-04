@@ -143,8 +143,9 @@ func (p *Coroutines) finishThread(th Thread, gid uint64, recovered any) {
 	}
 	th.cancelFunc()
 	close(th.done)
-	p.readyQueue.remove(th)
+	th.removeReadyLocked()
 	delete(p.pendingExecution, th)
+	delete(p.waitBatch.runnable.pendingExecution, th)
 	p.releaseLocked(th)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()

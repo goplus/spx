@@ -69,16 +69,16 @@ type Coroutines struct {
 
 	// schedulerMu guards script selection, pendingExecution, readyQueue, and currentJobs.
 	// A single Update call owns roundJobs and deferredJobs.
-	schedulerMu      sync.Mutex
-	schedulerCond    *sync.Cond
-	pendingExecution map[Thread]struct{} // Scripts ready to run or finish cancellation cleanup.
-	readyQueue       readyQueue          // Published scripts waiting for execution.
-	selectedThread   Thread              // Scheduler permit owner; may still be waiting for runMu.
-	currentJobs      *queue[*waitJob]
-	deferredJobs     *queue[*waitJob]
-	roundJobs        *queue[*waitJob]
-	redrawFrame      atomic.Int64
-	scriptRound      atomic.Uint64
+	schedulerMu    sync.Mutex
+	schedulerCond  *sync.Cond
+	*runnableState           // Published scripts and cancellation cleanup.
+	waitBatch      waitBatch // Unpublished batch; guarded by schedulerMu.
+	selectedThread Thread    // Scheduler permit owner; may still be waiting for runMu.
+	currentJobs    *queue[*waitJob]
+	deferredJobs   *queue[*waitJob]
+	roundJobs      *queue[*waitJob]
+	redrawFrame    atomic.Int64
+	scriptRound    atomic.Uint64
 
 	nextThreadID atomic.Int64
 
@@ -106,10 +106,15 @@ func New(onPanic func(PanicReport)) *Coroutines {
 	// Nodes move between these queues, so they share a recycling pool.
 	jobs := newQueue[*waitJob]()
 	p := &Coroutines{
-		onPanic:           onPanic,
-		shutdownGate:      make(chan struct{}, 1),
-		allThreads:        make(map[Thread]struct{}),
-		pendingExecution:  make(map[Thread]struct{}),
+		onPanic:       onPanic,
+		shutdownGate:  make(chan struct{}, 1),
+		allThreads:    make(map[Thread]struct{}),
+		runnableState: newRunnableState(),
+		waitBatch: waitBatch{
+			runnable:     newRunnableState(),
+			deferredJobs: &queue[*waitJob]{pool: jobs.pool},
+			roundJobs:    &queue[*waitJob]{pool: jobs.pool},
+		},
 		currentJobs:       jobs,
 		deferredJobs:      &queue[*waitJob]{pool: jobs.pool},
 		roundJobs:         &queue[*waitJob]{pool: jobs.pool},

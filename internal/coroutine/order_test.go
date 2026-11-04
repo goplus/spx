@@ -81,7 +81,7 @@ func TestFrameResumesMixedWaitsInRegistrationOrder(t *testing.T) {
 	}
 }
 
-func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
+func TestFrameResumesOlderScriptBeforeBatchFirstSlices(t *testing.T) {
 	previousProcs := runtime.GOMAXPROCS(1)
 	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 	co := New(nil)
@@ -116,7 +116,9 @@ func TestFrameWaitsForBatchFirstSlicesBeforeNextScript(t *testing.T) {
 	itime.Update(1.0/30, 30)
 	co.Update()
 
-	if want := []string{"parent", "first handler", "second handler", "parent continued", "sibling"}; !slices.Equal(order, want) {
+	// Waiting for the new batch yields to the older sibling already admitted
+	// in this round; the parent still resumes only after both first slices.
+	if want := []string{"parent", "sibling", "first handler", "second handler", "parent continued"}; !slices.Equal(order, want) {
 		t.Fatalf("script order = %v, want %v", order, want)
 	}
 }

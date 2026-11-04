@@ -22,6 +22,33 @@ import (
 	"github.com/visualfc/gid"
 )
 
+// A runnableState keeps queue membership and pending cleanup together. It must
+// not be copied because threads retain pointers into its ready heaps.
+type runnableState struct {
+	readyQueue       readyQueue
+	pendingExecution map[Thread]struct{}
+}
+
+func newRunnableState() *runnableState {
+	return &runnableState{pendingExecution: make(map[Thread]struct{})}
+}
+
+// Mark published work pending, queuing live scripts and retaining cancellation cleanup.
+func (p *runnableState) markPendingLocked(th Thread) {
+	if _, pending := p.pendingExecution[th]; pending || !th.published {
+		return
+	}
+	select {
+	case <-th.done:
+		return
+	default:
+	}
+	p.pendingExecution[th] = struct{}{}
+	if !th.canceled() {
+		p.readyQueue.add(th)
+	}
+}
+
 // Sched yields the current coroutine and resumes it without an Update pass.
 func (p *Coroutines) Sched(me Thread) {
 	p.requireCurrent(me)
@@ -126,22 +153,6 @@ func (p *Coroutines) wakeThread(th Thread) {
 	p.schedulerMu.Unlock()
 }
 
-// Mark published work pending, queuing live scripts and retaining cancellation cleanup.
-func (p *Coroutines) markPendingLocked(th Thread) {
-	if _, pending := p.pendingExecution[th]; pending || !th.published {
-		return
-	}
-	select {
-	case <-th.done:
-		return
-	default:
-	}
-	p.pendingExecution[th] = struct{}{}
-	if !th.canceled() {
-		p.readyQueue.add(th)
-	}
-}
-
 func (p *Coroutines) blockThread(th Thread) {
 	p.schedulerMu.Lock()
 	p.blockThreadLocked(th)
@@ -154,7 +165,7 @@ func (p *Coroutines) blockThreadLocked(th Thread) {
 	if th.stopAtNextYield.Swap(false) {
 		th.Cancel()
 	}
-	p.readyQueue.remove(th)
+	th.removeReadyLocked()
 	if !th.canceled() {
 		delete(p.pendingExecution, th)
 	}

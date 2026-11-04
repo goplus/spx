@@ -51,15 +51,31 @@ type updateState struct {
 	workDeadline     stime.Time
 }
 
+// waitBatch retains a wait scan's clock, boundary, and unpublished results.
+// Keeping it separate from executable work lets engine dispatchers run between Updates.
+type waitBatch struct {
+	active       bool
+	remaining    int
+	frame        int64
+	levelTime    float64
+	runnable     *runnableState
+	deferredJobs *queue[*waitJob]
+	roundJobs    *queue[*waitJob]
+}
+
 type updateAction uint8
 
 const (
-	updateProcessJob updateAction = iota
+	updateMainThreadJob updateAction = iota
 	updateRetry
 	updateComplete
 )
 
-const updateWatchdogTimeout = stime.Second
+const (
+	updateWatchdogTimeout = stime.Second
+	// Bound lock hold time and amortize watchdog checks across small chunks.
+	waitScanChunkSize = 64
+)
 
 // Update processes queued wait jobs and resumes eligible coroutines.
 // The engine must serialize Update calls.
@@ -91,17 +107,20 @@ func (p *Coroutines) runUpdateLoop(stats *UpdateStats, state *updateState) {
 updateLoop:
 	for {
 		iterations++
-		action, job := p.nextUpdateAction(stats)
+		action, job := p.nextUpdateAction(state, stats)
 		switch action {
 		case updateComplete:
 			if p.queueNextRound(state) {
 				continue
 			}
 			break updateLoop
-		case updateProcessJob:
+		case updateMainThreadJob:
 			start := stime.Now()
 			stats.JobCount++
-			p.processJob(state, stats, job)
+			if !job.thread.canceled() {
+				job.call()
+				stats.MainThreadCount++
+			}
 			stats.JobTime += elapsedMillis(start)
 		case updateRetry:
 		}
@@ -119,58 +138,95 @@ updateLoop:
 	p.promoteDeferredJobs(stats)
 }
 
-func (p *Coroutines) nextUpdateAction(stats *UpdateStats) (updateAction, *waitJob) {
+func (p *Coroutines) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *waitJob) {
 	start := stime.Now()
-	action := updateProcessJob
 	p.schedulerMu.Lock()
-	pending := p.hasPendingExecutionLocked()
-	job, queued := p.currentJobs.peekFront()
-	// Service engine calls before waiting for scripts, including startup, to yield.
-	if (!queued || job.kind != waitMainThread) && pending {
-		p.schedulerCond.Wait()
-		action = updateRetry
-	} else if !queued {
-		action = updateComplete
-	} else {
-		// Engine waiters may also take jobs, so select and remove under one lock.
-		job = p.currentJobs.popFront()
+	defer p.schedulerMu.Unlock()
+	// Service engine calls before waiting for scripts or publishing a batch.
+	if job := p.takeMainThreadJobLocked(); job != nil {
+		stats.WaitTime += elapsedMillis(start)
+		return updateMainThreadJob, job
 	}
-	p.schedulerMu.Unlock()
+	if p.hasPendingExecutionLocked() {
+		p.schedulerCond.Wait()
+		stats.WaitTime += elapsedMillis(start)
+		return updateRetry, nil
+	}
+	batch := &p.waitBatch
+	if batch.active && batch.remaining == 0 {
+		// The previous iteration checked the watchdog before publication.
+		p.runnableState, batch.runnable = batch.runnable, p.runnableState
+		batch.active = false
+		p.scheduleLocked()
+		stats.WaitTime += elapsedMillis(start)
+		return updateRetry, nil
+	}
+	if p.currentJobs.len() == 0 {
+		stats.WaitTime += elapsedMillis(start)
+		return updateComplete, nil
+	}
+	// Account for selecting the batch before measuring its processing time.
 	stats.WaitTime += elapsedMillis(start)
-	return action, job
+	p.scanWaitBatchLocked(state, stats)
+	return updateRetry, nil
 }
 
-func (p *Coroutines) processJob(state *updateState, stats *UpdateStats, job *waitJob) {
+// Scan a bounded part of the batch without publishing any scripts. Each chunk
+// releases schedulerMu and returns to the watchdog. Caller has no pending work.
+func (p *Coroutines) scanWaitBatchLocked(state *updateState, stats *UpdateStats) {
+	start := stime.Now()
+	batch := &p.waitBatch
+	if !batch.active {
+		batch.active = true
+		batch.remaining = p.currentJobs.len()
+		batch.frame, batch.levelTime = state.frame, state.levelTime
+		batch.runnable.readyQueue.cursor = 0
+	}
+	for range waitScanChunkSize {
+		job := p.currentJobs.popFront()
+		batch.remaining--
+		stats.JobCount++
+		p.stageWaitJobLocked(stats, job)
+		next, queued := p.currentJobs.peekFront()
+		if batch.remaining == 0 || !queued || next.kind == waitMainThread {
+			batch.remaining = 0
+			p.deferredJobs.appendFrom(batch.deferredJobs)
+			p.roundJobs.appendFrom(batch.roundJobs)
+			break
+		}
+	}
+	stats.JobTime += elapsedMillis(start)
+}
+
+// Classify a wait into the batch's runnable, deferred, or next-round work.
+func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 	if job.thread.canceled() {
 		return
 	}
 
+	batch := &p.waitBatch
 	switch job.kind {
 	case waitLoop, waitNextRound:
-		if job.frame < state.frame {
-			p.wakeThread(job.thread)
-		} else {
-			p.roundJobs.pushBack(job)
+		if job.frame >= batch.frame {
+			batch.roundJobs.pushBack(job)
+			return
 		}
 	case waitFrame:
-		if job.frame >= state.frame {
-			p.deferredJobs.pushBack(job)
-		} else {
-			p.wakeThread(job.thread)
-			stats.FrameWaitCount++
+		if job.frame >= batch.frame {
+			batch.deferredJobs.pushBack(job)
+			return
 		}
+		stats.FrameWaitCount++
 	case waitTime:
-		if job.frame >= state.frame || job.deadline > state.levelTime {
-			p.deferredJobs.pushBack(job)
-		} else {
-			p.wakeThread(job.thread)
+		if job.frame >= batch.frame || job.deadline > batch.levelTime {
+			batch.deferredJobs.pushBack(job)
+			return
 		}
 	case waitYield:
-		p.wakeThread(job.thread)
-	case waitMainThread:
-		job.call()
-		stats.MainThreadCount++
+	default:
+		return
 	}
+	batch.runnable.markPendingLocked(job.thread)
 }
 
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
@@ -180,8 +236,8 @@ func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
 	p.deferredJobs.sortStable(func(a, b *waitJob) int {
 		return cmp.Compare(a.thread.resumeOrder, b.thread.resumeOrder)
 	})
-	stats.DeferredCount = p.deferredJobs.len()
 	p.schedulerMu.Lock()
+	stats.DeferredCount = p.deferredJobs.len() + p.waitBatch.deferredJobs.len() + p.waitBatch.roundJobs.len()
 	p.currentJobs.appendFrom(p.deferredJobs)
 	p.schedulerMu.Unlock()
 	stats.MoveTime = elapsedMillis(start)

@@ -357,6 +357,128 @@ func TestAsyncBroadcastCallerContinuesBeforeOrderedReceiverBatch(t *testing.T) {
 	co.Update()
 }
 
+func TestAsyncBroadcastReceiversFollowEarlierScriptsInRound(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		wait    func(*coroutine.Coroutines, coroutine.Thread)
+		advance float64
+		redraw  bool
+	}{
+		{
+			name:    "next frame",
+			wait:    (*coroutine.Coroutines).WaitNextFrameFor,
+			advance: 1.0 / 30,
+		},
+		{
+			name: "same-frame loop round",
+			wait: (*coroutine.Coroutines).YieldLoopFor,
+		},
+		{
+			name:   "same-frame loop round with redraw",
+			wait:   (*coroutine.Coroutines).YieldLoopFor,
+			redraw: true,
+		},
+		{
+			name: "elapsed wait",
+			wait: func(co *coroutine.Coroutines, _ coroutine.Thread) {
+				co.Wait(1)
+			},
+			advance: 1,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co, game := setupRuntimeEventGame(t)
+			itime.Start()
+			var log eventOrderLog
+			game.OnMsg__1("new-receiver", func() { log.add("C") })
+
+			a := co.Create(game, func(me coroutine.Thread) {
+				test.wait(co, me)
+				log.add("A-before")
+				if test.redraw {
+					engine.RequestRedraw()
+				}
+				game.Broadcast__0("new-receiver")
+				log.add("A-after")
+			})
+			co.JoinFirstSlice(a)
+			b := co.Create(game, func(me coroutine.Thread) {
+				test.wait(co, me)
+				log.add("B")
+			})
+			co.JoinFirstSlice(b)
+
+			// Both old scripts are eligible together. A's broadcast must not
+			// let its new receiver overtake B's continuation.
+			if test.advance > 0 {
+				itime.Update(test.advance, 30)
+			}
+			co.Update()
+			requireEventOrder(t, &log, []string{"A-before", "A-after", "B", "C"})
+		})
+	}
+}
+
+func TestAsyncBroadcastDoesNotWaitForUnexpiredEarlierScript(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	itime.Start()
+	var log eventOrderLog
+	game.OnMsg__1("new-receiver", func() { log.add("C") })
+
+	a := co.Create(game, func(coroutine.Thread) {
+		engine.WaitNextFrame()
+		log.add("A-before")
+		game.Broadcast__0("new-receiver")
+		log.add("A-after")
+	})
+	co.JoinFirstSlice(a)
+	b := co.Create(game, func(coroutine.Thread) {
+		engine.Wait(1)
+		log.add("B")
+	})
+	co.JoinFirstSlice(b)
+
+	itime.Update(0.5, 30)
+	co.Update()
+	requireEventOrder(t, &log, []string{"A-before", "A-after", "C"})
+
+	itime.Update(0.5, 30)
+	co.Update()
+	requireEventOrder(t, &log, []string{"A-before", "A-after", "C", "B"})
+}
+
+func TestBroadcastAndWaitResumesOlderScriptBeforeNewReceiver(t *testing.T) {
+	co, game := setupRuntimeEventGame(t)
+	itime.Start()
+	var log eventOrderLog
+	game.OnMsg__1("new-receiver", func() {
+		log.add("C-before")
+		engine.WaitNextFrame()
+		log.add("C-after")
+	})
+
+	a := co.Create(game, func(coroutine.Thread) {
+		engine.WaitNextFrame()
+		log.add("A-before")
+		game.BroadcastAndWait__0("new-receiver")
+		log.add("A-after")
+	})
+	co.JoinFirstSlice(a)
+	b := co.Create(game, func(coroutine.Thread) {
+		engine.WaitNextFrame()
+		log.add("B")
+	})
+	co.JoinFirstSlice(b)
+
+	itime.Update(1.0/30, 30)
+	co.Update()
+	requireEventOrder(t, &log, []string{"A-before", "B", "C-before"})
+
+	itime.Update(1.0/30, 30)
+	co.Update()
+	requireEventOrder(t, &log, []string{"A-before", "B", "C-before", "C-after", "A-after"})
+}
+
 func TestBroadcastRestartsRunningReceiversIndependently(t *testing.T) {
 	co, game := setupRuntimeEventGame(t)
 	setupCaptureTest(t)
