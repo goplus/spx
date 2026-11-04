@@ -35,6 +35,10 @@ func compactProfile(name string) error {
 		return err
 	}
 	defer input.Close()
+	return compactOpenedProfile(name, input)
+}
+
+func compactOpenedProfile(name string, input *os.File) error {
 	info, err := input.Stat()
 	if err != nil {
 		return err
@@ -64,9 +68,19 @@ func compactProfile(name string) error {
 	if err != nil {
 		return err
 	}
+	return replaceProfile(name, output, info.Mode().Perm(), header, profiles)
+}
+
+type profileOutput interface {
+	io.WriteCloser
+	Name() string
+	Chmod(os.FileMode) error
+}
+
+func replaceProfile(name string, output profileOutput, mode os.FileMode, header string, profiles []*cover.Profile) error {
 	defer os.Remove(output.Name())
 	defer output.Close()
-	if err := output.Chmod(info.Mode().Perm()); err != nil {
+	if err := output.Chmod(mode); err != nil {
 		return err
 	}
 	writer := bufio.NewWriter(output)
