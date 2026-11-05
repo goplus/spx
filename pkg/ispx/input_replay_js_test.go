@@ -24,6 +24,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall/js"
 	"testing"
 	"testing/synctest"
@@ -189,37 +190,84 @@ func TestExportedStartRejectsInvalidInputSession(t *testing.T) {
 }
 
 func TestStartFailureCancelsPreparedInputSession(t *testing.T) {
-	isolateInterpreter(t)
-	reported := make(chan string, 1)
-	setJSFunction(t, "gdspx_ext_on_runtime_panic", func(_ js.Value, args []js.Value) any {
-		reported <- args[0].String()
-		return nil
-	})
-	setJSFunction(t, "gdspx_ext_request_reset", func(_ js.Value, _ []js.Value) any { return nil })
-	global := js.Global()
-
-	if result := global.Get("ispx_start").Invoke(map[string]any{"mode": "record"}); !result.IsNull() {
-		t.Fatalf("ispx_start = %v, want null", result)
-	}
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-	var message string
-	select {
-	case message = <-reported:
-	case <-timeout.C:
-		t.Fatal("interpreter startup failure was not reported")
-	}
-	// The error callback runs before the deferred preparation cleanup.
-	for spx.GetInputSessionStatus().Mode != spx.InputSessionModeIdle {
-		select {
-		case <-timeout.C:
-			t.Fatal("failed startup left an input session prepared")
-		default:
-			time.Sleep(time.Millisecond)
-		}
-	}
-	if want := "interpreter exited with panic: ispx: not built"; message != want {
-		t.Fatalf("runtime error = %q, want %q", message, want)
+	for _, state := range []string{"not built", "already running"} {
+		t.Run(state, func(t *testing.T) {
+			isolateInterpreter(t)
+			reported := make(chan string, 1)
+			setJSFunction(t, "gdspx_ext_on_runtime_panic", func(_ js.Value, args []js.Value) any {
+				reported <- args[0].String()
+				return nil
+			})
+			setJSFunction(t, "gdspx_ext_request_reset", func(_ js.Value, _ []js.Value) any { return nil })
+			start := js.Global().Get("ispx_start")
+			var firstRun <-chan struct{}
+			if state == "already running" {
+				entered, release := make(chan struct{}), make(chan struct{})
+				releaseRun := sync.OnceFunc(func() { close(release) })
+				defer releaseRun()
+				ctx := ixgo.NewContext(ixgo.SupportMultipleInterp)
+				ctx.RegisterExternal("main.wait", func() { close(entered); <-release })
+				pkg, err := ctx.LoadFile("main.go", "package main; func wait() {}; func main() { wait() }")
+				if err != nil {
+					t.Fatal(err)
+				}
+				interp, err := ctx.NewInterp(pkg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				mu.Lock()
+				ixgoCtx, ixgoInterp = ctx, interp
+				mu.Unlock()
+				if result := start.Invoke(); !result.IsNull() {
+					t.Fatalf("first ispx_start = %v, want null", result)
+				}
+				select {
+				case <-entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("first interpreter did not enter the program")
+				}
+				mu.Lock()
+				firstRun = runDone
+				mu.Unlock()
+				t.Cleanup(func() {
+					releaseRun()
+					select {
+					case <-firstRun:
+					case <-time.After(5 * time.Second):
+						t.Error("first interpreter did not finish during cleanup")
+					}
+				})
+			}
+			if result := start.Invoke(map[string]any{"mode": "record"}); !result.IsNull() {
+				t.Fatalf("ispx_start = %v, want null", result)
+			}
+			timeout := time.NewTimer(5 * time.Second)
+			defer timeout.Stop()
+			var message string
+			select {
+			case message = <-reported:
+			case <-timeout.C:
+				t.Fatal("interpreter startup failure was not reported")
+			}
+			// The error callback runs before the deferred preparation cleanup.
+			for spx.GetInputSessionStatus().Mode != spx.InputSessionModeIdle {
+				select {
+				case <-timeout.C:
+					t.Fatal("failed startup left an input session prepared")
+				default:
+					time.Sleep(time.Millisecond)
+				}
+			}
+			if want := "interpreter exited with panic: ispx: " + state; message != want {
+				t.Fatalf("runtime error = %q, want %q", message, want)
+			}
+			mu.Lock()
+			unchanged := runDone == firstRun
+			mu.Unlock()
+			if !unchanged {
+				t.Fatal("failed startup replaced the existing run")
+			}
+		})
 	}
 }
 
