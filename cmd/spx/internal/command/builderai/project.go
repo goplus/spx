@@ -106,15 +106,6 @@ func EnsureGoMod(projectRoot string, opts ProjectOptions) error {
 	_ = file.AddRequire(ModulePath, Version)
 	if ReplacementPath != "" {
 		ensureGoModReplace(file, ModulePath, ReplacementPath, ReplacementVersion)
-	} else {
-		// Migrate projects created while the SPX v4 compatibility fork was pinned.
-		for _, repl := range file.Replace {
-			if repl.Old.Path == ModulePath &&
-				repl.New.Path == "github.com/joeykchen/builder/tools/ai" &&
-				repl.New.Version == "v0.0.0-20261023045302-57741b3a68e6" {
-				_ = file.DropReplace(repl.Old.Path, repl.Old.Version)
-			}
-		}
 	}
 	if opts.FindSpxRoot != nil {
 		if spxRoot := opts.FindSpxRoot(projectRoot); spxRoot != "" {

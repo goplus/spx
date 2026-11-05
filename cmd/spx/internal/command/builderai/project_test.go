@@ -220,21 +220,13 @@ func TestEnsureGoModPreservesRequirementsAndLineEndings(t *testing.T) {
 }
 
 func TestEnsureGoModPropagatesBuilderAIReplacement(t *testing.T) {
-	const temporaryFork = "github.com/joeykchen/builder/tools/ai v0.0.0-20261023045302-57741b3a68e6"
-	for _, tt := range []struct {
-		name, replacements, comment string
-		removedVersions             []string
-	}{
+	for _, tt := range []struct{ name, replacements, comment string }{
 		{name: "new replacement"},
 		{name: "existing local replacement", replacements: "replace " + ModulePath + " => ../local-ai // AI backend\n", comment: "// AI backend"},
 		{name: "existing versioned replacement", replacements: "replace " + ModulePath + " " + Version + " => example.com/old-ai v0.1.0\n"},
 		{name: "multiple old replacements", replacements: "replace " + ModulePath + " => example.com/old-ai v0.1.0 // AI backend\nreplace " + ModulePath + " v0.0.0 => ../old-ai\n", comment: "// AI backend"},
 		{name: "versioned replacement before wildcard", replacements: "replace " + ModulePath + " v0.0.0 => ../old-ai\nreplace " + ModulePath + " => example.com/old-ai v0.1.0 // AI backend\n", comment: "// AI backend"},
 		{name: "multiple versioned replacements", replacements: "replace " + ModulePath + " v0.1.0 => ../old-ai\nreplace " + ModulePath + " v0.2.0 => example.com/old-ai v0.3.0\n"},
-		{name: "temporary wildcard replacement", replacements: "replace " + ModulePath + " => " + temporaryFork + "\n", removedVersions: []string{""}},
-		{name: "temporary versioned replacement", replacements: "replace " + ModulePath + " v0.0.0 => " + temporaryFork + "\n", removedVersions: []string{"v0.0.0"}},
-		{name: "temporary replacements alongside custom replacements", replacements: "replace " + ModulePath + " => " + temporaryFork + "\nreplace " + ModulePath + " v0.0.0 => " + temporaryFork + "\nreplace " + ModulePath + " v0.1.0 => ../local-ai // AI backend\nreplace example.com/custom-ai => " + temporaryFork + "\n", comment: "// AI backend", removedVersions: []string{"", "v0.0.0"}},
-		{name: "custom version of temporary fork", replacements: "replace " + ModulePath + " => github.com/joeykchen/builder/tools/ai v0.1.0 // AI backend\n", comment: "// AI backend"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -253,10 +245,6 @@ func TestEnsureGoModPropagatesBuilderAIReplacement(t *testing.T) {
 			}
 			if ReplacementPath != "" {
 				want[module.Version{Path: ModulePath}] = module.Version{Path: ReplacementPath, Version: ReplacementVersion}
-			} else {
-				for _, version := range tt.removedVersions {
-					delete(want, module.Version{Path: ModulePath, Version: version})
-				}
 			}
 			if err := EnsureGoMod(root, ProjectOptions{}); err != nil {
 				t.Fatal(err)
