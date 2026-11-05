@@ -45,12 +45,5 @@ func (p *Latch) Open() {
 
 // Wait yields inside this manager and blocks other callers until the latch opens.
 func (p *Latch) Wait() {
-	manager := p.manager
-	me := manager.callerThread()
-	if me == nil {
-		manager.waitOutsideScript(p.done)
-		return
-	}
-
-	manager.waitOn(me, &p.waiters)
+	p.manager.waitOn(p.manager.Caller(), p.done, &p.waiters)
 }

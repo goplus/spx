@@ -37,8 +37,11 @@ func (p *Coroutines) StartBatch(tasks []Task, mode BatchMode) []Thread {
 	if len(tasks) == 0 {
 		return nil
 	}
-	if mode == BatchWaitFirstSlice && p.callerThread() == nil {
+	if mode == BatchWaitFirstSlice && p.Caller() == nil {
 		panic("coroutine: FirstSlice requires a managed caller")
+	}
+	if mode != BatchAsync {
+		p.requireCanWait()
 	}
 
 	threads := p.registerBatch(tasks)

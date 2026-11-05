@@ -117,11 +117,7 @@ func TestRunBetweenScriptsSkipsCanceledMainThreadCall(t *testing.T) {
 	canceled := co.newThread("canceled")
 	canceled.stopped.Store(true)
 	var called atomic.Bool
-	co.enqueuePriorityJob(&waitJob{
-		thread: canceled,
-		kind:   waitMainThread,
-		call:   func() { called.Store(true) },
-	})
+	co.queueMainThreadCallForTest(canceled, func() { called.Store(true) })
 
 	co.pumpMainThread()
 	if called.Load() {

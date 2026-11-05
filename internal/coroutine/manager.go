@@ -28,6 +28,9 @@ var (
 	// ErrNotCurrent signals a yield without execution ownership.
 	ErrNotCurrent = errors.New("can not yield a non-running thread")
 
+	// ErrForeignThread rejects waiting on a thread owned by another manager.
+	ErrForeignThread = errors.New("coroutine: thread belongs to another manager")
+
 	// ErrAbortThread is the panic value used to stop the current coroutine.
 	ErrAbortThread = errors.New("abort thread")
 
@@ -40,16 +43,14 @@ var (
 
 // PanicReport preserves an unhandled coroutine panic and its diagnostic context.
 type PanicReport struct {
-	Value         any
-	Name          string
-	Stack         string // Stack at the panic site, captured during recovery.
-	CreationStack string // Optional stack captured when the coroutine was created.
+	Value any
+	Name  string
+	Stack string // Stack at the panic site, captured during recovery.
 }
 
 // Coroutines coordinates thread lifecycle and cooperative scheduling.
 type Coroutines struct {
 	onPanic func(PanicReport)
-	debug   bool
 
 	// runMu serializes script slices; current identifies its owner.
 	runMu   sync.Mutex
@@ -67,13 +68,14 @@ type Coroutines struct {
 	workerCount int
 	drainDone   chan struct{} // Created lazily by drains; closed when all work exits.
 
-	// schedulerMu guards script selection, pendingExecution, readyQueue, and currentJobs.
+	// schedulerMu guards script selection, pendingExecution, readyQueue, currentJobs, and mainCalls.
 	// A single Update call owns roundJobs and deferredJobs.
 	schedulerMu    sync.Mutex
 	schedulerCond  *sync.Cond
-	*runnableState           // Published scripts and cancellation cleanup.
-	waitBatch      waitBatch // Unpublished batch; guarded by schedulerMu.
-	selectedThread Thread    // Scheduler permit owner; may still be waiting for runMu.
+	*runnableState                   // Published scripts and cancellation cleanup.
+	waitBatch      waitBatch         // Unpublished batch; guarded by schedulerMu.
+	selectedThread Thread            // Scheduler permit owner; may still be waiting for runMu.
+	mainCalls      []*mainThreadCall // Engine calls, served in reverse arrival order.
 	currentJobs    *queue[*waitJob]
 	deferredJobs   *queue[*waitJob]
 	roundJobs      *queue[*waitJob]

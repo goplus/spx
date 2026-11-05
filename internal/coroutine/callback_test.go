@@ -119,19 +119,17 @@ func TestShutdownCallbackCanStopAndRejectCreation(t *testing.T) {
 	})
 }
 
-func TestTryRunFromEngineSkipsWhenAdmissionIsClosed(t *testing.T) {
+func TestRunSyncSkipsWhenAdmissionIsClosed(t *testing.T) {
 	co := New(nil)
 	called := false
 	co.RunAfterStop(func() {
 		if !co.admissionClosed() {
 			t.Fatal("shutdown callback ran with admission open")
 		}
-		if !co.TryRunFromEngine("rejected", func() { called = true }) {
-			t.Fatal("TryRunFromEngine did not report a handled shutdown call")
-		}
+		co.RunSync("rejected", func(Thread) { called = true })
 	})
 	if called {
-		t.Fatal("TryRunFromEngine ran a callback after admission closed")
+		t.Fatal("RunSync ran a callback after admission closed")
 	}
 }
 
@@ -232,37 +230,27 @@ func TestExclusiveCallbackRejectsBlockedWaits(t *testing.T) {
 	}
 }
 
-func TestEngineEntryRejectsReentry(t *testing.T) {
-	for _, test := range []struct {
-		name  string
-		enter func(*Coroutines, func())
-	}{
-		{"RunBetweenScripts", func(co *Coroutines, call func()) { co.RunBetweenScripts(call) }},
-		{"TryRunFromEngine", func(co *Coroutines, call func()) { co.TryRunFromEngine(nil, call) }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			for _, managed := range []bool{true, false} {
-				co := New(nil)
-				called := false
-				var recovered any
-				attempt := func() {
-					recovered = catchPanic(func() { test.enter(co, func() { called = true }) })
-				}
-				if managed {
-					caller := co.Create("caller", func(Thread) { attempt() })
-					waitForThreadSignal(t, caller.done, "rejected engine entry blocked its caller")
-				} else {
-					co.RunBetweenScripts(attempt)
-				}
-				if recovered != ErrReentrantWait || called {
-					t.Fatalf("managed=%v: reentry panic=%v, callback ran=%v", managed, recovered, called)
-				}
-				co.RunBetweenScripts(func() { called = true })
-				if !called {
-					t.Fatal("rejected reentry prevented a subsequent engine call")
-				}
-			}
-		})
+func TestRunBetweenScriptsRejectsReentry(t *testing.T) {
+	for _, managed := range []bool{true, false} {
+		co := New(nil)
+		called := false
+		var recovered any
+		attempt := func() {
+			recovered = catchPanic(func() { co.RunBetweenScripts(func() { called = true }) })
+		}
+		if managed {
+			caller := co.Create("caller", func(Thread) { attempt() })
+			waitForThreadSignal(t, caller.done, "rejected engine entry blocked its caller")
+		} else {
+			co.RunBetweenScripts(attempt)
+		}
+		if recovered != ErrReentrantWait || called {
+			t.Fatalf("managed=%v: reentry panic=%v, callback ran=%v", managed, recovered, called)
+		}
+		co.RunBetweenScripts(func() { called = true })
+		if !called {
+			t.Fatal("rejected reentry prevented a subsequent engine call")
+		}
 	}
 }
 

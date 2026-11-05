@@ -422,10 +422,11 @@ func (p *scriptEventRegistry) doWhenIReceive(msg string, data any, wait bool) {
 }
 
 func (p *scriptEventRegistry) currentMessageDispatchContext() *messageDispatchContext {
-	if gco == nil || !gco.IsInCoroutine() {
+	thread := currentScriptThread()
+	if thread == nil {
 		return new(messageDispatchContext)
 	}
-	execution, ok := p.messageExecutions[gco.Current()]
+	execution, ok := p.messageExecutions[thread]
 	if !ok {
 		return new(messageDispatchContext)
 	}

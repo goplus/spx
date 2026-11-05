@@ -36,7 +36,7 @@ func Wait(secs float64) float64 {
 }
 
 func WaitYield() {
-	gco.WaitYield(gco.Current())
+	gco.WaitYield(gco.Caller())
 }
 
 func WaitNextFrame() float64 {
@@ -102,7 +102,8 @@ func ShouldWaitNextFrame() bool {
 // NewControlFlowWaiter caches the calling thread for generated loop yields.
 func NewControlFlowWaiter() func() {
 	co := gco
-	if co == nil || !co.IsInCoroutine() {
+	thread := currentThread()
+	if thread == nil {
 		return func() {
 			if ShouldWaitNextFrame() {
 				WaitNextFrame()
@@ -110,7 +111,6 @@ func NewControlFlowWaiter() func() {
 		}
 	}
 
-	thread := co.Current()
 	return func() {
 		if !thread.Warp() {
 			co.YieldLoopFor(thread)

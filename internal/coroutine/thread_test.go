@@ -253,7 +253,7 @@ func TestExternalCallsPreserveActiveThread(t *testing.T) {
 			if called != test.wantCall {
 				t.Fatalf("callback called = %v, want %v", called, test.wantCall)
 			}
-			if co.Current() != thread || co.callerThread() != nil {
+			if co.Current() != thread || co.Caller() != nil {
 				t.Fatal("external call changed script ownership or caller identity")
 			}
 			co.schedulerMu.Lock()

@@ -51,13 +51,11 @@ func TestEngineDispatchLetsJavaScriptCompleteWorker(t *testing.T) {
 	co := New(nil)
 	hostDone := make(chan struct{})
 	completed := false
-	if !co.TryRunFromEngine("host-dispatch", func() {
+	co.RunSync("host-dispatch", func(Thread) {
 		closeFromJavaScript(t, hostDone)
 		co.WaitToDo(func() { <-hostDone })
 		completed = true
-	}) {
-		t.Fatal("direct platform did not handle dispatch")
-	}
+	})
 	if !completed {
 		t.Fatal("dispatch returned before its worker completed")
 	}

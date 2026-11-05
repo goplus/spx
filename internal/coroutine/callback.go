@@ -7,6 +7,7 @@ type callbackScope uint8
 const (
 	callbackNoDrain callbackScope = 1 << iota
 	callbackExclusive
+	callbackCleanup
 )
 
 type callbackResult struct {
@@ -54,7 +55,14 @@ func (p *Coroutines) callbackScope() callbackScope {
 }
 
 func (p *Coroutines) requireDrainCaller() {
-	if p.callerThread() != nil || p.callbackScope() != 0 {
+	if p.Caller() != nil || p.callbackScope() != 0 {
+		panic(ErrReentrantWait)
+	}
+}
+
+// Check before publishing a wait or admitting work that requires another slice.
+func (p *Coroutines) requireCanWait() {
+	if p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}
 }

@@ -101,7 +101,13 @@ func (p *scriptEventRegistry) register(bucket coreevent.Bucket, owner, run any, 
 }
 
 func (p *scriptEventRegistry) dispatchGlobal(bucket coreevent.Bucket, event scriptEventDispatch) {
-	p.dispatchSinks(p.globalSinks(bucket), event)
+	sinks := p.manager.Snapshot(bucket)
+	withEventRegistrationBarrier(p.game, func() {
+		// Registrations are immutable, but live target order changes with scripts.
+		ordered := sinksInTargetOrder(p.game, sinks)
+		matched := matchingEventSinks(ordered, event.matchData)
+		dispatchMatchedScriptEventBatch(matched, event)
+	})
 }
 
 func (p *scriptEventRegistry) dispatchTarget(bucket coreevent.Bucket, owner any, event scriptEventDispatch) {
@@ -179,23 +185,20 @@ func (p *scriptEventRegistry) isPendingStartThread(thread coroutine.Thread) bool
 	return ok
 }
 
+// globalSinks reads live target order; callers must serialize with script slices.
 func (p *scriptEventRegistry) globalSinks(bucket coreevent.Bucket) []eventSink {
 	return sinksInTargetOrder(p.game, p.manager.Snapshot(bucket))
 }
 
 // Register all handlers before returning; keep engine calls live while waiting.
 func withEventRegistrationBarrier(owner any, dispatch func()) {
-	if gco == nil || gco.IsInCoroutine() {
+	if gco == nil {
 		dispatch()
 		return
 	}
-	if gco.TryRunFromEngine(owner, dispatch) {
-		return
-	}
-	dispatcher := gco.Create(owner, func(coroutine.Thread) {
+	gco.RunSync(owner, func(coroutine.Thread) {
 		dispatch()
 	})
-	gco.Join(dispatcher)
 }
 
 func dispatchMatchedScriptEventBatch(matched []eventSink, event scriptEventDispatch) {

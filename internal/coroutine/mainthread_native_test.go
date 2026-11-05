@@ -42,7 +42,7 @@ type observedDoneContext struct {
 	onDone func()
 }
 
-func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
+func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
 	co := New(nil)
 
@@ -57,7 +57,7 @@ func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 	callbackRan := atomic.Bool{}
 	dispatchDone := make(chan struct{})
 	go func() {
-		co.TryRunFromEngine("dispatcher", func() {
+		co.RunSync("dispatcher", func(Thread) {
 			callbackRan.Store(true)
 		})
 		close(dispatchDone)
@@ -174,7 +174,7 @@ func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	go func() {
 		co.runMu.Lock()
 		defer co.runMu.Unlock()
-		co.enqueuePriorityJob(&waitJob{kind: waitMainThread, call: unblock})
+		co.queueMainThreadCallForTest(nil, unblock)
 		close(queued)
 		<-release
 		value = 42
@@ -464,7 +464,8 @@ func TestMainThreadCallCanceledBeforeDispatch(t *testing.T) {
 	if recovered := catchPanic(pending.wait); recovered != ErrAbortThread {
 		t.Fatalf("canceled wait panic = %v, want %v", recovered, ErrAbortThread)
 	}
-	pending.run(co, func() { t.Error("canceled call ran after its waiter returned") })
+	pending.call = func() { t.Error("canceled call ran after its waiter returned") }
+	pending.run(co)
 	if len(pending.done) != 0 {
 		t.Fatal("canceled call published a result after its waiter returned")
 	}
@@ -475,7 +476,8 @@ func TestMainThreadCallCanceledBeforeClaim(t *testing.T) {
 	caller := co.newThread("caller")
 	pending := &mainThreadCall{caller: caller, done: make(chan callbackResult, 1)}
 	caller.Cancel()
-	pending.run(co, func() { t.Error("call ran after its caller was canceled") })
+	pending.call = func() { t.Error("call ran after its caller was canceled") }
+	pending.run(co)
 	select {
 	case result := <-pending.done:
 		if result.panicked {

@@ -194,9 +194,7 @@ func TestAnimationConditionReplacementSurvivesQueuedCompletion(t *testing.T) {
 	game := anim.sprite.g
 	game.bindScriptEvents()
 	game.shapeMgr.items = []Shape{anim.sprite}
-	if !co.TryRunFromEngine(anim.sprite, func() { anim.sprite.AnimateWith("walk", false) }) {
-		t.Fatal("fixture did not use native engine dispatch")
-	}
+	co.RunSync(anim.sprite, func(coroutine.Thread) { anim.sprite.AnimateWith("walk", false) })
 	old := anim.curAnimState
 	if old == nil {
 		t.Fatal("original public playback did not start")

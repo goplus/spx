@@ -6,7 +6,7 @@ SPX 包含 XGo 游戏运行时、平台绑定和 SPX 使用的 Godot 分支。�
 
 Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑定调用引擎；Web 通过 JavaScript 连接 Go WASM 与 Emscripten 编译的 Godot。
 
-协程未处理的 panic 通过 `coroutine.PanicReport` 传递到引擎，保留原始值、线程名和故障位置的栈。引擎日志和 `OnRuntimePanic` 回调包含这些信息，可选的创建栈单独标注。`ErrAbortThread` 和 `ErrStopThisScript` 仍作为正常控制流，不报告为错误。关闭屏障会等待 panic 报告结束；即使报告处理器发生 panic，生命周期清理也仍会执行。
+协程未处理的 panic 通过 `coroutine.PanicReport` 传递到引擎，保留原始值、线程名和故障位置的栈。引擎日志和 `OnRuntimePanic` 回调包含这些信息。`ErrAbortThread` 和 `ErrStopThisScript` 仍作为正常控制流，不报告为错误。关闭屏障会等待 panic 报告结束；即使报告处理器发生 panic，生命周期清理也仍会执行。
 
 ### 职责与依赖方向
 

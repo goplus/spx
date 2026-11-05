@@ -81,7 +81,7 @@ func TestShutdownRejectsManagedCallerWithoutSideEffects(t *testing.T) {
 		recovered = catchPanic(func() {
 			co.RunAfterStop(func() { t.Error("rejected shutdown ran its callback") })
 		})
-		if co.Current() != me || co.callerThread() != me {
+		if co.Current() != me || co.Caller() != me {
 			t.Error("rejected shutdown changed the managed caller")
 		}
 	})
@@ -268,7 +268,7 @@ func TestStopAllInvalidatesPendingAdmission(t *testing.T) {
 				t.Errorf("rejected thread %s remained open while the caller held runMu", name)
 			}
 		}
-		if !thread.Stopped() || co.Current() != me || co.callerThread() != me {
+		if !thread.Stopped() || co.Current() != me || co.Caller() != me {
 			t.Error("rejected creation was not stopped or changed the current script")
 		}
 		if threads := co.snapshotThreads(); len(threads) != 1 || threads[0] != me {
