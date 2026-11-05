@@ -340,7 +340,8 @@ bool SpxPenSurface::capture(const Rect2 &p_query_bounds, SpxPixelQuery::Snapshot
 	}
 	r_snapshot.local_rect = Rect2(-Vector2(canvas_size) * 0.5f, Vector2(canvas_size));
 	r_snapshot.bounds = SpxPixelQuery::world_bounds(get_global_transform(), r_snapshot.local_rect);
-	if (!SpxPixelQuery::overlap(p_query_bounds, r_snapshot.bounds).has_area()) {
+	// Pen sensing uses the same integer world grid as sprite sensing.
+	if (!SpxPixelQuery::overlap(p_query_bounds, r_snapshot.bounds, SpxPixelQuery::SamplePointMode::INTEGER).has_area()) {
 		return false;
 	}
 	r_snapshot.inverse_transform = get_global_transform().affine_inverse();

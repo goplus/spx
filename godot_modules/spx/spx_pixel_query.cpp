@@ -30,6 +30,7 @@
 
 #include "spx_pixel_query.h"
 
+#include "scene/main/viewport.h"
 #include "scene/resources/material.h"
 #include "spx_image_texture.h"
 
@@ -84,30 +85,62 @@ static _FORCE_INLINE_ real_t get_collision_alpha_scale(AnimatedSprite2D *p_anim2
 	return 1.0f;
 }
 
-Rect2i pixel_centers(const Rect2 &p_rect) {
-	const Vector2i begin(
-			(int)Math::ceil(p_rect.position.x - 0.5f),
-			(int)Math::ceil(p_rect.position.y - 0.5f));
-	const Vector2i end(
-			(int)Math::floor(p_rect.position.x + p_rect.size.x - 0.5f) + 1,
-			(int)Math::floor(p_rect.position.y + p_rect.size.y - 0.5f) + 1);
+Rect2i sample_points(const Rect2 &p_rect, SamplePointMode p_mode) {
+	Vector2i begin;
+	Vector2i end;
+	if (p_mode == SamplePointMode::INTEGER) {
+		// Snap outward and include both integer endpoints.
+		begin = Vector2i(
+				(int)Math::floor(p_rect.position.x),
+				(int)Math::floor(p_rect.position.y));
+		end = Vector2i(
+				(int)Math::ceil(p_rect.position.x + p_rect.size.x) + 1,
+				(int)Math::ceil(p_rect.position.y + p_rect.size.y) + 1);
+	} else {
+		// Keep only n + 0.5 centers contained by the original bounds.
+		begin = Vector2i(
+				(int)Math::ceil(p_rect.position.x - 0.5f),
+				(int)Math::ceil(p_rect.position.y - 0.5f));
+		end = Vector2i(
+				(int)Math::floor(p_rect.position.x + p_rect.size.x - 0.5f) + 1,
+				(int)Math::floor(p_rect.position.y + p_rect.size.y - 0.5f) + 1);
+	}
 
 	return Rect2i(begin, Vector2i(MAX(end.x - begin.x, 0), MAX(end.y - begin.y, 0)));
 }
 
-Rect2i overlap(const Rect2 &p_a, const Rect2 &p_b) {
-	return pixel_centers(p_a).intersection(pixel_centers(p_b));
+Rect2i overlap(const Rect2 &p_a, const Rect2 &p_b, SamplePointMode p_mode) {
+	return sample_points(p_a, p_mode).intersection(sample_points(p_b, p_mode));
 }
 
-static _FORCE_INLINE_ bool read_image_pixel(const Ref<Image> &p_image, const Vector2i &p_image_size, const Vector2 &p_local_pos, Color &r_color) {
-	const int px = (int)Math::floor(p_local_pos.x);
-	const int py = (int)Math::floor(p_local_pos.y);
-	if (px < 0 || px >= p_image_size.x || py < 0 || py >= p_image_size.y) {
-		return false;
+Vector2 sample_point(const Vector2i &p_grid_position, SamplePointMode p_mode) {
+	// Rect2i stores grid indices; the mode determines their world-space offset.
+	const real_t offset = p_mode == SamplePointMode::PIXEL_CENTER ? 0.5f : 0.0f;
+	return Vector2(p_grid_position) + Vector2(offset, offset);
+}
+
+static _FORCE_INLINE_ ImageFilterMode resolved_image_filter(AnimatedSprite2D *p_anim2d) {
+	const CanvasItem::TextureFilter texture_filter = p_anim2d->get_texture_filter_in_tree();
+	if (texture_filter == CanvasItem::TEXTURE_FILTER_PARENT_NODE) {
+		// An all-parent chain stays unresolved on CanvasItem; rendering falls back
+		// to the viewport default instead.
+		Viewport *viewport = p_anim2d->get_viewport();
+		if (viewport != nullptr) {
+			const Viewport::DefaultCanvasItemTextureFilter viewport_filter = viewport->get_default_canvas_item_texture_filter();
+			if (viewport_filter == Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR ||
+					viewport_filter == Viewport::DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS) {
+				return ImageFilterMode::LINEAR;
+			}
+		}
+		return ImageFilterMode::NEAREST;
 	}
 
-	r_color = p_image->get_pixel(px, py);
-	return true;
+	if (texture_filter == CanvasItem::TEXTURE_FILTER_LINEAR ||
+			texture_filter == CanvasItem::TEXTURE_FILTER_LINEAR_WITH_MIPMAPS ||
+			texture_filter == CanvasItem::TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC) {
+		return ImageFilterMode::LINEAR;
+	}
+	return ImageFilterMode::NEAREST;
 }
 
 bool capture(AnimatedSprite2D *p_anim2d, bool p_apply_collision_alpha, Snapshot &r_query) {
@@ -130,6 +163,9 @@ bool capture(AnimatedSprite2D *p_anim2d, bool p_apply_collision_alpha, Snapshot 
 	r_query.bounds = world_bounds(p_anim2d->get_global_transform(), r_query.local_rect);
 	r_query.inverse_transform = p_anim2d->get_global_transform().affine_inverse();
 	r_query.image_size = Vector2i((int)texture_size.x, (int)texture_size.y);
+	// Follow the resolved render filter instead of guessing from a file name.
+	// Visual loading configures bitmaps as nearest and SVGs as linear.
+	r_query.image_filter = resolved_image_filter(p_anim2d);
 	r_query.flip_h = p_anim2d->is_flipped_h();
 	r_query.flip_v = p_anim2d->is_flipped_v();
 	return true;
@@ -169,25 +205,37 @@ bool load_image(Snapshot &r_query, ImageCache *p_cache) {
 	return true;
 }
 
-static _FORCE_INLINE_ Vector2 to_image_coord(const Snapshot &p_query, const Vector2 &p_world_pos) {
-	Vector2 image_pos = p_query.inverse_transform.xform(p_world_pos) - p_query.local_rect.position;
+static _FORCE_INLINE_ bool to_normalized_image_coord(const Snapshot &p_query, const Vector2 &p_world_pos, Vector2 &r_normalized) {
+	if (MIN(p_query.image_size.x, p_query.image_size.y) <= 0) {
+		return false;
+	}
+
+	const Vector2 image_pos = p_query.inverse_transform.xform(p_world_pos) - p_query.local_rect.position;
+	r_normalized = Vector2(
+			image_pos.x / (real_t)p_query.image_size.x,
+			image_pos.y / (real_t)p_query.image_size.y);
 	if (p_query.flip_h) {
-		image_pos.x = (real_t)p_query.image_size.x - image_pos.x;
+		r_normalized.x = 1.0f - r_normalized.x;
 	}
 	if (p_query.flip_v) {
-		image_pos.y = (real_t)p_query.image_size.y - image_pos.y;
+		r_normalized.y = 1.0f - r_normalized.y;
 	}
-	return image_pos;
+	return r_normalized.x >= 0.0f && r_normalized.x <= 1.0f &&
+			r_normalized.y >= 0.0f && r_normalized.y <= 1.0f;
 }
 
 bool sample(
 		const Snapshot &p_query,
 		const Vector2 &p_world_pos,
 		Color &r_color) {
-	const Vector2 local_pos = to_image_coord(p_query, p_world_pos);
-	if (!read_image_pixel(p_query.image, p_query.image_size, local_pos, r_color)) {
+	Vector2 normalized;
+	if (!to_normalized_image_coord(p_query, p_world_pos, normalized)) {
 		return false;
 	}
+	// Scratch accepts both normalized edges and maps 1.0 to the last texel.
+	const int px = (int)Math::floor(normalized.x * (real_t)(p_query.image_size.x - 1));
+	const int py = (int)Math::floor(normalized.y * (real_t)(p_query.image_size.y - 1));
+	r_color = p_query.image->get_pixel(px, py);
 	r_color.a *= p_query.collision_alpha_scale;
 	return true;
 }
@@ -204,6 +252,37 @@ bool sample_premultiplied(
 	r_color.g *= rgb_scale;
 	r_color.b *= rgb_scale;
 	return true;
+}
+
+static _FORCE_INLINE_ real_t image_alpha(const Snapshot &p_query, int p_x, int p_y) {
+	if (!Rect2i(Vector2i(), p_query.image_size).has_point(Vector2i(p_x, p_y))) {
+		return 0.0f;
+	}
+	return p_query.image->get_pixel(p_x, p_y).a;
+}
+
+real_t silhouette_alpha(const Snapshot &p_query, const Vector2 &p_world_pos) {
+	if (p_query.image.is_null()) {
+		return 0.0f;
+	}
+	if (MIN(p_query.image_size.x, p_query.image_size.y) <= 0) {
+		return 0.0f;
+	}
+
+	Vector2 normalized;
+	if (!to_normalized_image_coord(p_query, p_world_pos, normalized)) {
+		return 0.0f;
+	}
+	const int px = (int)Math::floor(normalized.x * (real_t)(p_query.image_size.x - 1));
+	const int py = (int)Math::floor(normalized.y * (real_t)(p_query.image_size.y - 1));
+	real_t alpha = image_alpha(p_query, px, py);
+	if (p_query.image_filter == ImageFilterMode::LINEAR) {
+		// Silhouette sensing tests coverage, so any covered neighbor is sufficient.
+		alpha = MAX(alpha, image_alpha(p_query, px + 1, py));
+		alpha = MAX(alpha, image_alpha(p_query, px, py + 1));
+		alpha = MAX(alpha, image_alpha(p_query, px + 1, py + 1));
+	}
+	return alpha * p_query.collision_alpha_scale;
 }
 
 bool Layer::in_front_of(const Layer &p_other) const {
@@ -226,7 +305,11 @@ Color composite(
 		if (remaining_alpha <= 0.0f) {
 			break;
 		}
-		if (!query.pixel_query.bounds.has_point(p_world_pos)) {
+		const Rect2 &bounds = query.pixel_query.bounds;
+		const Vector2 bounds_end = bounds.position + bounds.size;
+		// Normalized texture sampling accepts both edges, unlike Rect2::has_point().
+		if (p_world_pos.x < bounds.position.x || p_world_pos.x > bounds_end.x ||
+				p_world_pos.y < bounds.position.y || p_world_pos.y > bounds_end.y) {
 			continue;
 		}
 

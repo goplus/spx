@@ -90,21 +90,24 @@ static _FORCE_INLINE_ GdFloat color_rgb_distance_squared(const GdColor &p_a, con
 namespace {
 
 using SpxPixelQuery::Layer;
+using SpxPixelQuery::SamplePointMode;
 using SpxPixelQuery::Snapshot;
 
 constexpr int DEFAULT_PIXEL_COLLISION_SAMPLING_STEP = 1;
 constexpr int PIXEL_QUERY_TILE_SIZE = 32;
 constexpr int PIXEL_QUERY_MIN_PARALLEL_TILES = 4;
+// Sensing uses integer world coordinates; keep the phase choice explicit.
+constexpr SamplePointMode SENSING_POINT_MODE = SamplePointMode::INTEGER;
 
-bool capture_sprite_pixels(SpxSprite *p_sprite, Snapshot &r_snapshot, bool p_require_visible, bool p_apply_collision_alpha) {
-	if (!p_sprite || (p_require_visible && !p_sprite->is_visible_in_tree())) {
+bool capture_sprite_pixels(SpxSprite &p_sprite, Snapshot &r_snapshot, bool p_require_visible, bool p_apply_collision_alpha) {
+	if (p_require_visible && !p_sprite.is_visible_in_tree()) {
 		return false;
 	}
-	return SpxPixelQuery::capture(p_sprite->get_anim2d(), p_apply_collision_alpha, r_snapshot);
+	return SpxPixelQuery::capture(p_sprite.get_anim2d(), p_apply_collision_alpha, r_snapshot);
 }
 
 template <typename Predicate>
-bool parallel_any_pixel(const Rect2i &p_rect, int p_step, const Predicate &p_matches, const String &p_description) {
+bool parallel_any_sample_point(const Rect2i &p_rect, SamplePointMode p_mode, int p_step, const Predicate &p_matches, const String &p_description) {
 	if (!p_rect.has_area()) {
 		return false;
 	}
@@ -130,14 +133,14 @@ bool parallel_any_pixel(const Rect2i &p_rect, int p_step, const Predicate &p_mat
 				MIN(tile_position.x + PIXEL_QUERY_TILE_SIZE, rect_end.x),
 				MIN(tile_position.y + PIXEL_QUERY_TILE_SIZE, rect_end.y));
 
-		// Keep every tile on the same sampling grid as the original full scan.
+		// Keep every tile on the full rectangle's grid or steps above one can skip samples.
 		const Vector2i tile_offset = tile_position - p_rect.position;
 		const Vector2i first_sample(
 				tile_position.x + (sampling_step - tile_offset.x % sampling_step) % sampling_step,
 				tile_position.y + (sampling_step - tile_offset.y % sampling_step) % sampling_step);
 		for (int x = first_sample.x; x < tile_end.x; x += sampling_step) {
 			for (int y = first_sample.y; y < tile_end.y; y += sampling_step) {
-				if (p_matches(Vector2((real_t)x + 0.5f, (real_t)y + 0.5f))) {
+				if (p_matches(SpxPixelQuery::sample_point(Vector2i(x, y), p_mode))) {
 					found.store(true, std::memory_order_relaxed);
 					return;
 				}
@@ -160,7 +163,7 @@ bool parallel_any_pixel(const Rect2i &p_rect, int p_step, const Predicate &p_mat
 	return found.load(std::memory_order_relaxed);
 }
 
-bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_threshold, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
+bool check_pixel_collision(SpxSprite &p_a, SpxSprite &p_b, GdFloat p_alpha_threshold, SamplePointMode p_mode, int p_step, SpxPixelQuery::ImageCache *p_cache = nullptr) {
 	Snapshot query_a;
 	Snapshot query_b;
 	if (!capture_sprite_pixels(p_a, query_a, true, false) ||
@@ -168,17 +171,15 @@ bool check_pixel_collision(SpxSprite *p_a, SpxSprite *p_b, GdFloat p_alpha_thres
 		return false;
 	}
 
-	const Rect2i overlap_rect = SpxPixelQuery::overlap(query_a.bounds, query_b.bounds);
+	const Rect2i overlap_rect = SpxPixelQuery::overlap(query_a.bounds, query_b.bounds, p_mode);
 	if (!overlap_rect.has_area() || !SpxPixelQuery::load_image(query_a, p_cache) || !SpxPixelQuery::load_image(query_b, p_cache)) {
 		return false;
 	}
-	return parallel_any_pixel(overlap_rect, p_step, [&](const Vector2 &sample_pos) {
-		Color color_a;
-		if (!SpxPixelQuery::sample(query_a, sample_pos, color_a) || color_a.a <= p_alpha_threshold) {
+	return parallel_any_sample_point(overlap_rect, p_mode, p_step, [&](const Vector2 &sample_pos) {
+		if (SpxPixelQuery::silhouette_alpha(query_a, sample_pos) <= p_alpha_threshold) {
 			return false;
 		}
-		Color color_b;
-		return SpxPixelQuery::sample(query_b, sample_pos, color_b) && color_b.a > p_alpha_threshold;
+		return SpxPixelQuery::silhouette_alpha(query_b, sample_pos) > p_alpha_threshold;
 	}, String("SPXAlphaCollision"));
 }
 
@@ -377,7 +378,7 @@ GdBool SpxSpriteMgr::check_collision_with_point(GdObj obj, GdVec2 point, GdBool 
 	// Scratch keeps point sensing and click picking distinct:
 	// - click queries respect visibility and ghost alpha
 	// - sensing queries ignore both and use the sprite silhouette directly
-	if (capture_sprite_pixels(sprite, query, is_click_query, is_click_query) && SpxPixelQuery::load_image(query)) {
+	if (capture_sprite_pixels(*sprite, query, is_click_query, is_click_query) && SpxPixelQuery::load_image(query)) {
 		Color color;
 		return SpxPixelQuery::sample(query, point, color) && color.a > 0.0f;
 	}
@@ -1029,7 +1030,7 @@ GdBool SpxSpriteMgr::check_collision_with_sprite(GdObj obj, GdObj obj_b, GdFloat
 		return sprite->check_collision(sprite_target, false, false);
 	}
 
-	return check_pixel_collision(sprite, sprite_target, alpha_threshold, pixel_collision_sampling_step);
+	return check_pixel_collision(*sprite, *sprite_target, alpha_threshold, SENSING_POINT_MODE, pixel_collision_sampling_step);
 }
 
 GdBool SpxSpriteMgr::check_collision_by_color(GdObj obj, GdColor color, GdFloat color_threshold, GdFloat alpha_threshold) {
@@ -1057,7 +1058,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 
 	Snapshot self_query;
 	// Scratch uses the caller's silhouette/color as the query mask even when ghosted or hidden.
-	if (!capture_sprite_pixels(sprite, self_query, false, false)) {
+	if (!capture_sprite_pixels(*sprite, self_query, false, false)) {
 		return false;
 	}
 	if (!SpxPixelQuery::load_image(self_query)) {
@@ -1072,10 +1073,10 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 		}
 
 		Layer query;
-		if (!capture_sprite_pixels(candidate, query.pixel_query, true, true)) {
+		if (!capture_sprite_pixels(*candidate, query.pixel_query, true, true)) {
 			continue;
 		}
-		if (!SpxPixelQuery::overlap(self_query.bounds, query.pixel_query.bounds).has_area()) {
+		if (!SpxPixelQuery::overlap(self_query.bounds, query.pixel_query.bounds, SENSING_POINT_MODE).has_area()) {
 			continue;
 		}
 		if (!SpxPixelQuery::load_image(query.pixel_query)) {
@@ -1098,7 +1099,7 @@ GdBool SpxSpriteMgr::_check_scene_color_collision(GdObj obj, ColorMatchFunc self
 		return a.in_front_of(b);
 	});
 
-	return parallel_any_pixel(SpxPixelQuery::pixel_centers(self_query.bounds), pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
+	return parallel_any_sample_point(SpxPixelQuery::sample_points(self_query.bounds, SENSING_POINT_MODE), SENSING_POINT_MODE, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 		Color self_color;
 		return SpxPixelQuery::sample_premultiplied(self_query, sample_pos, self_color) &&
 				self_matches(self_color) && scene_matches(SpxPixelQuery::composite(scene_queries, sample_pos));
@@ -1110,7 +1111,7 @@ GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
 
 	Snapshot query1;
 	// Scratch uses the caller's silhouette/color as the mask even when ghosted or hidden.
-	if (!capture_sprite_pixels(sprite, query1, false, false)) {
+	if (!capture_sprite_pixels(*sprite, query1, false, false)) {
 		return false;
 	}
 	if (!SpxPixelQuery::load_image(query1)) {
@@ -1125,22 +1126,23 @@ GdBool SpxSpriteMgr::_check_collision(GdObj obj, ColorCheckFunc check_func) {
 		}
 
 		Snapshot query2;
-		if (!capture_sprite_pixels(sp2, query2, true, true)) {
+		if (!capture_sprite_pixels(*sp2, query2, true, true)) {
 			continue;
 		}
 
-		const Rect2i overlap_rect = SpxPixelQuery::overlap(query1.bounds, query2.bounds);
+		const Rect2i overlap_rect = SpxPixelQuery::overlap(query1.bounds, query2.bounds, SENSING_POINT_MODE);
 		if (!overlap_rect.has_area()) {
 			continue;
 		}
 		if (!SpxPixelQuery::load_image(query2)) {
 			continue;
 		}
-		if (parallel_any_pixel(overlap_rect, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
+		if (parallel_any_sample_point(overlap_rect, SENSING_POINT_MODE, pixel_collision_sampling_step, [&](const Vector2 &sample_pos) {
 				Color color1;
 				Color color2;
-				return SpxPixelQuery::sample(query1, sample_pos, color1) &&
-						SpxPixelQuery::sample(query2, sample_pos, color2) && check_func(color1, color2);
+				color1.a = SpxPixelQuery::silhouette_alpha(query1, sample_pos);
+				color2.a = SpxPixelQuery::silhouette_alpha(query2, sample_pos);
+				return check_func(color1, color2);
 			}, String("SPXColorCollision"))) {
 			return true;
 		}
@@ -1230,7 +1232,7 @@ void SpxSpriteMgr::_check_pixel_collision_events() {
 			continue;
 		}
 
-		if (check_pixel_collision(sprite1, sprite2, DEFAULT_COLLISION_ALPHA_THRESHOLD, pixel_collision_sampling_step, &image_cache)) {
+		if (check_pixel_collision(*sprite1, *sprite2, DEFAULT_COLLISION_ALPHA_THRESHOLD, SENSING_POINT_MODE, pixel_collision_sampling_step, &image_cache)) {
 			if (pixel_collision_pairs.insert(trigger).second) {
 				enter_triggers.push_back(trigger);
 			}

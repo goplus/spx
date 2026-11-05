@@ -590,10 +590,35 @@ TEST_CASE("[SceneTree][SPX] Point collision falls back to trigger geometry witho
 	const GdObj other = manager->create_bare_sprite(Vector2(20, 30));
 	manager->set_trigger_rect(id, Vector2(5, 7), Vector2(10, 10));
 	manager->set_collider_circle(id, Vector2(), 1);
+	manager->get_sprite(id)->get_anim2d()->set_sprite_frames(Ref<SpriteFrames>());
 	CHECK(manager->check_collision_with_point(id, Vector2(25, 37), true));
 	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(100, 100), true));
 	manager->set_visible(id, false);
 	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(25, 37), true));
+	CHECK(manager->check_collision_with_point(id, Vector2(25, 37), false));
+	manager->set_visible(id, true);
+	Ref<Image> readable_image = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+	readable_image->fill(Color(1, 0, 0, 1));
+	Ref<SpriteFrames> readable_frames;
+	readable_frames.instantiate();
+	readable_frames->add_frame("default", SpxImageTexture::create_from_image(readable_image));
+	manager->get_sprite(id)->get_anim2d()->set_sprite_frames(readable_frames);
+	CHECK(manager->check_collision_with_point(id, Vector2(20, 30), false));
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(100, 100), false));
+	Ref<Image> transparent_image = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+	transparent_image->fill(Color(1, 0, 0, 0));
+	Ref<SpriteFrames> transparent_frames;
+	transparent_frames.instantiate();
+	transparent_frames->add_frame("default", SpxImageTexture::create_from_image(transparent_image));
+	manager->get_sprite(id)->get_anim2d()->set_sprite_frames(transparent_frames);
+	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(20, 30), false));
+	Ref<PlaceholderTexture2D> placeholder;
+	placeholder.instantiate();
+	placeholder->set_size(Vector2(8, 8));
+	Ref<SpriteFrames> unreadable_frames;
+	unreadable_frames.instantiate();
+	unreadable_frames->add_frame("default", placeholder);
+	manager->get_sprite(id)->get_anim2d()->set_sprite_frames(unreadable_frames);
 	CHECK(manager->check_collision_with_point(id, Vector2(25, 37), false));
 	manager->get_sprite(id)->get_trigger()->set_shape(Ref<Shape2D>());
 	CHECK_FALSE(manager->check_collision_with_point(id, Vector2(25, 37), false));
@@ -839,10 +864,71 @@ TEST_CASE("[SceneTree][SPX] Pixel sensing skips hidden distant and unreadable vi
 	assign(self, solid(Color(1, 0, 0, 0)));
 	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
 	assign(self, placeholder);
+	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
 	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
 	CHECK_FALSE(manager->check_collision_by_color(self, Color(0, 0, 1), 0.1, 0.5));
 	manager->get_sprite(self)->get_anim2d()->set_sprite_frames(Ref<SpriteFrames>());
 	CHECK_FALSE(manager->check_collision_with_sprite(self, near, 0.5, true));
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(0, 0, 1), 0.1, 0.5));
+	CHECK_FALSE(manager->check_collision_by_alpha(self, 0.5));
+}
+
+TEST_CASE("[SceneTree][SPX] Color sensing keeps flipped opaque edges covered") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	auto assign_solid = [&](GdObj p_id, const Color &p_color) {
+		Ref<Image> image = Image::create_empty(8, 8, false, Image::FORMAT_RGBA8);
+		image->fill(p_color);
+		Ref<SpriteFrames> frames;
+		frames.instantiate();
+		frames->add_frame("default", SpxImageTexture::create_from_image(image));
+		manager->get_sprite(p_id)->get_anim2d()->set_sprite_frames(frames);
+	};
+
+	const GdObj self = manager->create_bare_sprite(Vector2());
+	const GdObj other = manager->create_bare_sprite(Vector2());
+	assign_solid(self, Color(1, 0, 0));
+	assign_solid(other, Color(0, 0, 1));
+	manager->get_sprite(other)->get_anim2d()->set_flip_h(true);
+
+	// The dummy renderer cannot read back the pen viewport used by color sensing.
+	ERR_PRINT_OFF;
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(1, 1, 1), 0.01, 0.99));
+	CHECK(manager->check_collision_by_color(self, Color(0, 0, 1), 0.01, 0.99));
+	manager->get_sprite(other)->get_anim2d()->set_flip_h(false);
+	manager->get_sprite(other)->get_anim2d()->set_flip_v(true);
+	CHECK_FALSE(manager->check_collision_by_color(self, Color(1, 1, 1), 0.01, 0.99));
+	ERR_PRINT_ON;
+}
+
+TEST_CASE("[SceneTree][SPX] Integer-grid sensing does not stop a five-pixel laser half a pixel early") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	auto assign_solid = [&](GdObj p_id, int p_width, int p_height) {
+		Ref<Image> image = Image::create_empty(p_width, p_height, false, Image::FORMAT_RGBA8);
+		image->fill(Color(1, 0, 0, 1));
+		Ref<SpriteFrames> frames;
+		frames.instantiate();
+		frames->add_frame("default", SpxImageTexture::create_from_image(image));
+		manager->get_sprite(p_id)->get_anim2d()->set_sprite_frames(frames);
+	};
+
+	const GdObj laser = manager->create_bare_sprite(Vector2(120, -83));
+	const GdObj receiver = manager->create_bare_sprite(Vector2(120, -107));
+	assign_solid(laser, 20, 20);
+	assign_solid(receiver, 44, 44);
+	manager->get_sprite(laser)->get_anim2d()->set_scale(Vector2(5.00743f / 20.0f, 5.0f / 20.0f));
+	manager->get_sprite(receiver)->get_anim2d()->set_scale(Vector2(43.2f / 44.0f, 43.2f / 44.0f));
+	manager->set_rotation(laser, Math_PI / 2.0f);
+
+	// The laser ends near 85.5037 while the receiver begins at 85.4. A center
+	// grid tests 85.5 too early; integer points 85 and 86 are not shared yet.
+	CHECK_FALSE(manager->check_collision_with_sprite(laser, receiver, 0.007f, true));
+	manager->set_position(laser, Vector2(120, -84));
+	// After one more unit of motion, integer point 86 belongs to both silhouettes.
+	CHECK(manager->check_collision_with_sprite(laser, receiver, 0.007f, true));
+	manager->set_rotation(laser, 0.0f);
+	CHECK(manager->check_collision_with_sprite(laser, receiver, 0.007f, true));
 }
 
 TEST_CASE("[SceneTree][SPX] Sprite physics controls preserve mode and velocity conventions") {
