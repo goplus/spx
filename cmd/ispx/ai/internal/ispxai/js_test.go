@@ -224,7 +224,7 @@ func TestTransportInteract(t *testing.T) {
 	transportMockFetch(t, func(this js.Value, args []js.Value) any {
 		calls++
 		url, options = args[0].String(), args[1]
-		return transportResolved(js.Global().Get("Response").New(`{"text":"向前走","commandName":"move","commandArgs":{"steps":10}}`))
+		return transportResolved(js.Global().Get("Response").New(`{"commandName":"move","commandArgs":{"steps":10}}`))
 	})
 	req := ai.Request{
 		Content:          "你好",
@@ -232,7 +232,7 @@ func TestTransportInteract(t *testing.T) {
 		Role:             "guide",
 		RoleContext:      map[string]any{"friendly": true},
 		KnowledgeBase:    map[string]any{"goal": "find the key"},
-		History:          []ai.Turn{{RequestContent: "where?", ResponseText: "here"}},
+		History:          []ai.Turn{{RequestContent: "where?", ResponseCommandName: "locate", ExecutedCommandResult: &ai.CommandResult{Success: true}}},
 		ArchivedHistory:  "arrived at the forest",
 		ContinuationTurn: 1,
 	}
@@ -240,7 +240,7 @@ func TestTransportInteract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ai.Response{Text: "向前走", CommandName: "move", CommandArgs: map[string]any{"steps": float64(10)}}
+	want := ai.Response{CommandName: "move", CommandArgs: map[string]any{"steps": float64(10)}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Interact() = %#v, want %#v", got, want)
 	}
@@ -277,7 +277,7 @@ func TestTransportArchive(t *testing.T) {
 		url, options = args[0].String(), args[1]
 		return transportResolved(js.Global().Get("Response").New(`{"content":"找到了钥匙"}`))
 	})
-	turns := []ai.Turn{{RequestContent: "open the chest", ResponseText: "found the key", IsInitial: true}}
+	turns := []ai.Turn{{RequestContent: "open the chest", ResponseCommandName: "open", ExecutedCommandResult: &ai.CommandResult{Success: true}, IsInitial: true}}
 	got, err := transport.Archive(jsTestContext(t), turns, "entered the room")
 	if err != nil {
 		t.Fatal(err)
@@ -305,15 +305,20 @@ func TestTransportArchive(t *testing.T) {
 
 func TestTransportHTTPErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		status     int
-		statusText string
-		retryAfter string
-		wantRetry  time.Duration
+		name          string
+		status        int
+		statusText    string
+		retryAfter    string
+		wantRetry     time.Duration
+		bodyReadFails bool
 	}{
 		{name: "server error", status: 503, statusText: "Service Unavailable"},
+		{name: "client error", status: 403, statusText: "Forbidden", retryAfter: "60", wantRetry: time.Minute},
 		{name: "rate limited", status: 429, statusText: "Too Many Requests", retryAfter: "12", wantRetry: 12 * time.Second},
 		{name: "rate limited without retry header", status: 429, statusText: "Too Many Requests"},
+		{name: "server error with unreadable body", status: 503, statusText: "Service Unavailable", bodyReadFails: true},
+		{name: "client error with unreadable body", status: 403, statusText: "Forbidden", retryAfter: "60", wantRetry: time.Minute, bodyReadFails: true},
+		{name: "rate limited with unreadable body", status: 429, statusText: "Too Many Requests", retryAfter: "12", wantRetry: 12 * time.Second, bodyReadFails: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -322,13 +327,23 @@ func TestTransportHTTPErrors(t *testing.T) {
 				if tt.retryAfter != "" {
 					headers["Retry-After"] = tt.retryAfter
 				}
-				return transportResolved(js.Global().Get("Response").New("try again later", map[string]any{
+				response := js.Global().Get("Response").New("try again later", map[string]any{
 					"status": tt.status, "statusText": tt.statusText, "headers": headers,
-				}))
+				})
+				if tt.bodyReadFails {
+					response.Set("text", jsTestFunc(t, func(this js.Value, args []js.Value) any {
+						return transportRejected("body unavailable")
+					}))
+				}
+				return transportResolved(response)
 			})
 			got, err := newJSAITransport().Interact(jsTestContext(t), ai.Request{Content: "hello"})
-			if err == nil || !strings.Contains(err.Error(), tt.statusText+": try again later") {
-				t.Fatalf("Interact() error = %v, want status and response body", err)
+			wantMessage := tt.statusText + ": try again later"
+			if tt.bodyReadFails {
+				wantMessage = tt.statusText + " (and failed to read error body: promise rejected: body unavailable)"
+			}
+			if err == nil || !strings.Contains(err.Error(), wantMessage) {
+				t.Fatalf("Interact() error = %v, want %q", err, wantMessage)
 			}
 			if !reflect.DeepEqual(got, ai.Response{}) {
 				t.Errorf("failed Interact() response = %#v, want zero value", got)
@@ -339,6 +354,17 @@ func TestTransportHTTPErrors(t *testing.T) {
 			}
 			if rateLimit != nil && rateLimit.RetryAfter != tt.wantRetry {
 				t.Errorf("RetryAfter = %v, want %v", rateLimit.RetryAfter, tt.wantRetry)
+			}
+			var clientError *ai.ClientError
+			if errors.As(err, &clientError) != (tt.status >= 400 && tt.status < 500 && tt.status != 429) {
+				t.Fatalf("client error = %v, status = %d", clientError, tt.status)
+			}
+			if clientError != nil && (clientError.StatusCode != tt.status || clientError.RetryAfter != tt.wantRetry) {
+				t.Errorf("client error = %#v, want status %d and retry after %v", clientError, tt.status, tt.wantRetry)
+			}
+			var retryable *ai.RetryableError
+			if errors.As(err, &retryable) != (tt.status >= 500) {
+				t.Fatalf("retryable error = %v, status = %d", retryable, tt.status)
 			}
 		})
 	}
