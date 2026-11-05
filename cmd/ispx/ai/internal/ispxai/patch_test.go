@@ -81,8 +81,8 @@ func Register(player *ai.Player, handler func(int, string) error) {
 						Name:        "Move",
 						Description: "Command Move",
 						Parameters: []ai.CommandParamSpec{
-							{Name: "Steps", Type: "int"},
-							{Name: "Message", Type: "string"},
+							{Name: "Steps", Schema: ai.CommandValueSpec{Type: "integer"}},
+							{Name: "Message", Schema: ai.CommandValueSpec{Type: "string"}},
 						},
 					}}
 					if got := transport.requests[0].CommandSpecs; !reflect.DeepEqual(got, wantSpecs) {
@@ -109,7 +109,7 @@ func TestRegisterPatchPreservesCommandValidation(t *testing.T) {
 		wantError   string
 	}{
 		{commandType: "int", wantError: "AI command must be a struct type"},
-		{commandType: "struct{ Steps int }", wantError: "AI command struct must have a name"},
+		{commandType: "struct{ Steps int }", wantError: `invalid AI command name "": must not be empty`},
 	} {
 		t.Run(test.commandType, func(t *testing.T) {
 			interp := newPatchedInterp(t, fmt.Sprintf(`

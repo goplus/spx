@@ -5,7 +5,7 @@ go 1.26.0
 tool github.com/goplus/ixgo/cmd/qexp
 
 require (
-	github.com/goplus/builder/tools/ai v0.0.0-20260724041336-c23d9b241e6b
+	github.com/goplus/builder/tools/ai v0.0.0-20261028063721-7ed7719569b0
 	github.com/goplus/ixgo v1.2.6
 	github.com/goplus/mod v0.22.1
 	github.com/goplus/spx/v4 v4.0.0
@@ -27,5 +27,3 @@ require (
 )
 
 replace github.com/goplus/spx/v4 => ../../..
-
-replace github.com/goplus/builder/tools/ai => github.com/joeykchen/builder/tools/ai v0.0.0-20261023045302-57741b3a68e6

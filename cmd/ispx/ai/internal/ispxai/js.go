@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/goplus/builder/tools/ai"
 )
@@ -253,16 +254,28 @@ func awaitJSPromise(ctx context.Context, promise js.Value) (js.Value, error) {
 func jsHTTPError(ctx context.Context, resp js.Value) error {
 	status := resp.Get("status").Int()
 	statusText := resp.Get("statusText").String()
+	var retryAfter time.Duration
+	if headers := resp.Get("headers"); !isJSNil(headers) {
+		if value := headers.Call("get", "Retry-After"); !isJSNil(value) {
+			retryAfter = ai.RetryAfterFromHeader(value.String())
+		}
+	}
 	bodyVal, err := awaitJSValue(ctx, resp.Call("text"))
 	if err != nil {
-		return fmt.Errorf("failed to fetch with status %d %s (and failed to read error body: %w)", status, statusText, err)
+		err = fmt.Errorf("failed to fetch with status %d %s (and failed to read error body: %w)", status, statusText, err)
+	} else {
+		err = fmt.Errorf("failed to fetch with status %d %s: %s", status, statusText, bodyVal.String())
 	}
-	err = fmt.Errorf("failed to fetch with status %d %s: %s", status, statusText, bodyVal.String())
-	if status == 429 {
-		retryAfter := ai.RetryAfterFromHeader(resp.Get("headers").Call("get", "Retry-After").String())
+	switch {
+	case status == 429:
 		return &ai.TooManyRequestsError{RetryAfter: retryAfter, Err: err}
+	case status >= 400 && status < 500:
+		return &ai.ClientError{StatusCode: status, RetryAfter: retryAfter, Err: err}
+	case status >= 500:
+		return &ai.RetryableError{Err: err}
+	default:
+		return err
 	}
-	return err
 }
 
 func jsError(args []js.Value) error {

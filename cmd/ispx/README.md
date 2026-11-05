@@ -42,4 +42,35 @@ GOOS=js GOARCH=wasm go test -exec="\"$(go env GOROOT)/lib/wasm/go_js_wasm_exec\"
 
 From the repository root, `make generate` generates bindings, interpreter registrations and CLI dependency metadata, then formats all three modules. Use `make generate-runtime` to regenerate only registrations and dependency metadata.
 
-Builder AI dependencies and the temporary v4 compatibility replacement are pinned in [ai/go.mod](ai/go.mod). The CLI generates matching metadata for AI-enabled projects without adding AI to the base interpreter. Update these dependencies manually, then run `make generate` and the local tests above. When upstream supports v4, update the AI requirement and remove the fork replacement. Both interpreter modules use local SPX v4 replacements for development.
+## Switching Builder AI between upstream and a fork
+
+[ai/go.mod](ai/go.mod) is the source of truth for the Builder AI version and any temporary fork replacement. The CLI generates matching dependency metadata from it; do not edit `cmd/spx/internal/command/builderai/version_gen.go` by hand. Both interpreter modules use local SPX replacements for development.
+
+When upgrading SPX before Builder AI supports the new version, first update the fork's SPX requirement and imports to the target version, then push that commit. Keep the AI module path as `github.com/goplus/builder/tools/ai`. A major SPX upgrade requires changing imports such as `/v4` to `/v5` inside the fork; a replacement alone cannot make those types compatible.
+
+From the SPX repository root, select the fork and resolve a commit to a pinned Go module version:
+
+```sh
+ai_fork=github.com/joeykchen/builder/tools/ai
+ai_fork_ref='<fork-commit-sha>'
+ai_fork_version="$(go -C cmd/ispx/ai list -m -f '{{.Version}}' "$ai_fork@$ai_fork_ref")"
+
+go -C cmd/ispx/ai mod edit \
+  "-replace=github.com/goplus/builder/tools/ai=$ai_fork@$ai_fork_version"
+go -C cmd/ispx/ai mod tidy
+make generate-runtime
+```
+
+Keep the `require` entry on the official module and use a versioned remote `replace` for the fork. The metadata generator rejects local directory replacements so generated projects can resolve the same dependency on other machines.
+
+Once upstream supports the target SPX version, remove the replacement before updating the requirement:
+
+```sh
+ai_upstream_ref='<upstream-commit-or-version>'
+go -C cmd/ispx/ai mod edit -dropreplace=github.com/goplus/builder/tools/ai
+go -C cmd/ispx/ai get "github.com/goplus/builder/tools/ai@$ai_upstream_ref"
+go -C cmd/ispx/ai mod tidy
+make generate-runtime
+```
+
+After either switch, run the AI native and WASM tests above, `go test ./cmd/spx/internal/command/builderai/...` from the repository root, and `bash cmd/ispx/build.sh --ai`. Commit the module files, generated CLI metadata, and AI registration changes together. Changes to the upstream API may also require adapting the bridge and its tests.
