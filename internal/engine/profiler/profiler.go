@@ -227,6 +227,11 @@ func printCoroStats(coroInfo TimingInfo) {
 	if stats.LoopIterations > 0 {
 		spxlog.Info("    - Loop iterations: %d", stats.LoopIterations)
 	}
+	if stats.LoopYieldCount > 0 {
+		spxlog.Info("    - Loop checkpoints: total=%d inline=%d scheduled=%d same-frame=%d deferred-next-frame=%d resumed-from-previous-frame=%d",
+			stats.LoopYieldCount, stats.LoopInlineCount, stats.LoopScheduledCount,
+			stats.LoopSameFrameCount, stats.LoopDeferredCount, stats.LoopNextFrameCount)
+	}
 
 	spxlog.Info("    - Task processing: %.3fms (Task count: %d)",
 		stats.JobTime, stats.JobCount)

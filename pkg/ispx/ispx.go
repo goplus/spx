@@ -37,11 +37,13 @@ var (
 	ixgoInterp  *ixgo.Interp
 	runDone     chan struct{}
 	optimizeSSA bool
+	callFusion  bool
 )
 
 // initOptions controls optional interpreter initialization behavior.
 type initOptions struct {
 	optimizeSSA bool
+	callFusion  bool
 }
 
 // InitOption configures interpreter initialization.
@@ -78,6 +80,13 @@ func init() {
 func WithSSAOptimization() InitOption {
 	return func(options *initOptions) {
 		options.optimizeSSA = true
+	}
+}
+
+// WithCallFusion enables SPX-specific fusion of generated high-frequency list calls.
+func WithCallFusion() InitOption {
+	return func(options *initOptions) {
+		options.callFusion = true
 	}
 }
 
@@ -133,6 +142,7 @@ func XGot_Game_XGox_GetWidget[T any](sg ShapeGetter, name WidgetName) *T {
 
 	ixgoCtx = ctx
 	optimizeSSA = opts.optimizeSSA
+	callFusion = opts.callFusion
 	return nil
 }
 
@@ -176,6 +186,16 @@ func BuildFS(fsys fs.FS) error {
 	source, err := xgobuild.BuildFSDir(ixgoCtx, newXGoParserFS(fsys), ".")
 	if err != nil {
 		return fmt.Errorf("failed to build XGo source: %w", err)
+	}
+	if callFusion {
+		// xgobuild 已经把 SPX/XGo 转成普通 Go 源码；这里在 ixgo 解析
+		// 之前做一次 AST 局部重写。之后 LoadFile 看到的就是融合后的
+		// List.ContainsAt/EqualAt/SetAt 等调用，解释器本身不需要知道
+		// 这是优化产生的代码。
+		source, err = fuseGeneratedListCalls(source)
+		if err != nil {
+			return fmt.Errorf("failed to fuse generated SPX calls: %w", err)
+		}
 	}
 
 	pkg, err := ixgoCtx.LoadFile("main.go", source)

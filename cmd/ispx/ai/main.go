@@ -39,7 +39,7 @@ func main() {
 	if err := ispxai.RegisterPatch(ixgoCtx); err != nil {
 		panic(err)
 	}
-	if err := ispx.Init(ixgoCtx); err != nil {
+	if err := ispx.Init(ixgoCtx, ispx.WithCallFusion()); err != nil {
 		panic(err)
 	}
 	select {}

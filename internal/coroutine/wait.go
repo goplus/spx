@@ -117,10 +117,27 @@ func (p *Coroutines) enqueueAndYield(job *waitJob) {
 	me := job.thread
 	p.requireCurrent(me)
 	// Publish blocking and its wake-up job atomically.
+	//
+	// waitLoop/waitNextRound 会增加 loopWaiters，表示已有脚本正在等待
+	// 调度器安排下一轮。只要这个计数非零，YieldLoopFor 就不能假设自己
+	// 是唯一需要推进的脚本，必须保留完整的队列调度。
 	p.schedulerMu.Lock()
+	if job.kind == waitLoop || job.kind == waitNextRound {
+		job.loopWait = true
+		job.loopContinuation = job.kind == waitLoop
+		p.loopWaiters.Add(1)
+	}
 	p.currentJobs.pushBack(job)
 	p.blockThreadLocked(me)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 	p.yield(me)
+}
+
+func (p *Coroutines) releaseLoopWaiter(job *waitJob) {
+	if !job.loopWait {
+		return
+	}
+	job.loopWait = false
+	p.loopWaiters.Add(-1)
 }

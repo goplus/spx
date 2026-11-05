@@ -77,8 +77,22 @@ type Coroutines struct {
 	currentJobs    *queue[*waitJob]
 	deferredJobs   *queue[*waitJob]
 	roundJobs      *queue[*waitJob]
-	redrawFrame    atomic.Int64
-	scriptRound    atomic.Uint64
+	// loopWork exposes the active Update budget to loop checkpoints.
+	loopWork loopWorkState
+	// loopWaiters tracks published round waits that have not resumed yet.
+	loopWaiters atomic.Int64
+	redrawFrame atomic.Int64
+	scriptRound atomic.Uint64
+
+	// Loop counters are sampled only while performance debugging is enabled.
+	// Script goroutines and Update may run on different goroutines, so the
+	// counters are atomic even though the scheduler queues use schedulerMu.
+	loopYieldCount     atomic.Int64
+	loopInlineCount    atomic.Int64
+	loopScheduledCount atomic.Int64
+	loopSameFrameCount atomic.Int64
+	loopDeferredCount  atomic.Int64
+	loopNextFrameCount atomic.Int64
 
 	nextThreadID atomic.Int64
 
@@ -90,6 +104,7 @@ type Coroutines struct {
 	perfDebug         atomic.Bool
 	readGCStats       func(*sdebug.GCStats)
 	updateWatchdogNow func() stime.Time
+	loopNow           func() stime.Time
 	statsMu           sync.RWMutex
 	lastUpdateStats   UpdateStats
 
@@ -120,6 +135,7 @@ func New(onPanic func(PanicReport)) *Coroutines {
 		roundJobs:         &queue[*waitJob]{pool: jobs.pool},
 		readGCStats:       sdebug.ReadGCStats,
 		updateWatchdogNow: stime.Now,
+		loopNow:           stime.Now,
 	}
 	p.shutdownGate <- struct{}{}
 	p.schedulerCond = sync.NewCond(&p.schedulerMu)

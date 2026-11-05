@@ -42,6 +42,12 @@ type waitJob struct {
 	call     func()  // Engine-thread action, only for waitMainThread.
 	deadline float64 // Level-time deadline for a time job.
 	frame    int64   // Issuing frame for frame-gated jobs.
+	// loopWait records whether this job contributes to loopWaiters. The count
+	// must be released when the job is canceled or made runnable.
+	loopWait bool
+	// loopContinuation survives waitLoop being rewritten to waitYield, so the
+	// profiler can distinguish a same-frame loop continuation.
+	loopContinuation bool
 }
 
 type updateState struct {
@@ -49,6 +55,15 @@ type updateState struct {
 	levelTime        float64
 	watchdogDeadline stime.Time
 	workDeadline     stime.Time
+}
+
+// loopWorkState is a scheduler-locked snapshot of the current Update's frame
+// and loop budget. It is advisory: failed checks always use normal scheduling.
+type loopWorkState struct {
+	active    bool
+	frame     int64
+	levelTime float64
+	deadline  stime.Time
 }
 
 // waitBatch retains a wait scan's clock, boundary, and unpublished results.
@@ -84,20 +99,50 @@ func (p *Coroutines) Update() {
 	gcStatsBefore := p.captureGCStats()
 
 	stats, state := p.beginUpdate()
+	p.beginLoopWork(&state)
+	defer p.endLoopWork(state.frame)
 	stats.GCStatsEnabled = gcStatsBefore != nil
 	p.runUpdateLoop(&stats, &state)
 	p.finishStats(&stats, start, gcStatsBefore)
 }
 
 func (p *Coroutines) beginUpdate() (UpdateStats, updateState) {
+	if p.perfDebug.Load() {
+		p.loopYieldCount.Store(0)
+		p.loopInlineCount.Store(0)
+		p.loopScheduledCount.Store(0)
+		p.loopSameFrameCount.Store(0)
+		p.loopDeferredCount.Store(0)
+		p.loopNextFrameCount.Store(0)
+	}
 	start := stime.Now()
+	workStartedAt := p.loopNow()
 	state := updateState{
 		frame:            itime.Frame(),
 		levelTime:        itime.TimeSinceLevelLoad(),
 		watchdogDeadline: p.updateWatchdogNow().Add(updateWatchdogTimeout),
-		workDeadline:     start.Add(loopWorkBudget),
+		workDeadline:     workStartedAt.Add(loopWorkBudget),
 	}
 	return UpdateStats{InitTime: elapsedMillis(start)}, state
+}
+
+func (p *Coroutines) beginLoopWork(state *updateState) {
+	p.schedulerMu.Lock()
+	p.loopWork = loopWorkState{
+		active:    true,
+		frame:     state.frame,
+		levelTime: state.levelTime,
+		deadline:  state.workDeadline,
+	}
+	p.schedulerMu.Unlock()
+}
+
+func (p *Coroutines) endLoopWork(frame int64) {
+	p.schedulerMu.Lock()
+	if p.loopWork.active && p.loopWork.frame == frame {
+		p.loopWork.active = false
+	}
+	p.schedulerMu.Unlock()
 }
 
 func (p *Coroutines) runUpdateLoop(stats *UpdateStats, state *updateState) {
@@ -201,6 +246,7 @@ func (p *Coroutines) scanWaitBatchLocked(state *updateState, stats *UpdateStats)
 // Classify a wait into the batch's runnable, deferred, or next-round work.
 func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 	if job.thread.canceled() {
+		p.releaseLoopWaiter(job)
 		return
 	}
 
@@ -211,6 +257,10 @@ func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 			batch.roundJobs.pushBack(job)
 			return
 		}
+		if job.kind == waitLoop && p.perfDebug.Load() {
+			p.loopNextFrameCount.Add(1)
+		}
+		p.releaseLoopWaiter(job)
 	case waitFrame:
 		if job.frame >= batch.frame {
 			batch.deferredJobs.pushBack(job)
@@ -223,6 +273,10 @@ func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 			return
 		}
 	case waitYield:
+		if job.loopContinuation && p.perfDebug.Load() {
+			p.loopSameFrameCount.Add(1)
+		}
+		p.releaseLoopWaiter(job)
 	default:
 		return
 	}
@@ -231,12 +285,30 @@ func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
 	start := stime.Now()
+	if p.perfDebug.Load() {
+		for node := p.roundJobs.head; node != nil; node = node.next {
+			if node.value.kind == waitLoop {
+				p.loopDeferredCount.Add(1)
+			}
+		}
+	}
 	p.deferredJobs.appendFrom(p.roundJobs)
 	// Deferred waits retain script order, including restarted handlers.
 	p.deferredJobs.sortStable(func(a, b *waitJob) int {
 		return cmp.Compare(a.thread.resumeOrder, b.thread.resumeOrder)
 	})
 	p.schedulerMu.Lock()
+	if p.perfDebug.Load() {
+		// currentJobs and waitBatch are scheduler-owned. Count them under the
+		// scheduler lock so profiling does not introduce a queue data race.
+		for _, jobs := range []*queue[*waitJob]{p.currentJobs, p.waitBatch.roundJobs} {
+			for node := jobs.head; node != nil; node = node.next {
+				if node.value.kind == waitLoop {
+					p.loopDeferredCount.Add(1)
+				}
+			}
+		}
+	}
 	stats.DeferredCount = p.deferredJobs.len() + p.waitBatch.deferredJobs.len() + p.waitBatch.roundJobs.len()
 	p.currentJobs.appendFrom(p.deferredJobs)
 	p.schedulerMu.Unlock()

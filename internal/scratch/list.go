@@ -91,6 +91,14 @@ func (p *List) Contains(v any) bool {
 	return p.IndexOf(v) != ListInvalid
 }
 
+// ContainsAt is equivalent to p.Contains(source.At(i)), but avoids creating
+// and passing an intermediate Value through the interpreter.
+func (p *List) ContainsAt(source *List, i int) bool {
+	// Keep the Value wrapper that At would return. Init may intentionally retain
+	// a nested Value, and the unfused expression unwraps only the outer layer.
+	return p.Contains(WrapValue(source.rawAt(i)))
+}
+
 // Append adds the element v to the end of the list.
 func (p *List) Append(v any) {
 	p.data = append(p.data, UnwrapValue(v))
@@ -102,6 +110,18 @@ func (p *List) Set(i int, v any) {
 	i = getListPos(i, n)
 	if i >= 0 && i < n {
 		p.data[i] = UnwrapValue(v)
+	}
+}
+
+// SetAt is equivalent to p.Set(i, source.At(sourceIndex)). Read the source
+// before writing the destination so aliased lists keep normal Go evaluation
+// order.
+func (p *List) SetAt(i int, source *List, sourceIndex int) {
+	value := source.rawAt(sourceIndex)
+	n := len(p.data)
+	i = getListPos(i, n)
+	if i >= 0 && i < n {
+		p.data[i] = value
 	}
 }
 
@@ -135,19 +155,49 @@ func (p *List) Delete(i int) {
 
 // At returns the Value at the specified index.
 func (p *List) At(i int) Value {
+	return WrapValue(p.rawAt(i))
+}
+
+// rawAt applies the normal list-position rules without wrapping the result.
+// Fused calls use it to avoid immediately creating and unpacking a Value.
+func (p *List) rawAt(i int) any {
 	n := len(p.data)
 	i = getListPos(i, n)
 	if i < 0 || i >= n {
-		return Value{}
+		return nil
 	}
-	return WrapValue(p.data[i])
+	return p.data[i]
+}
+
+// IntAt is equivalent to p.At(i).Int().
+func (p *List) IntAt(i int) int {
+	value, _ := toInt(p.rawAt(i))
+	return value
+}
+
+// FloatAt is equivalent to p.At(i).Float().
+func (p *List) FloatAt(i int) float64 {
+	value, _ := toFloat64(p.rawAt(i))
+	return value
+}
+
+// StringAt is equivalent to p.At(i).String().
+func (p *List) StringAt(i int) string {
+	return ToString(p.rawAt(i))
+}
+
+// EqualAt is equivalent to Equal(p.At(i), v).
+func (p *List) EqualAt(i int, v any) bool {
+	// Preserve Equal(At(i), v)'s single-layer unwrapping for nested Values.
+	return Equal(WrapValue(p.rawAt(i)), v)
 }
 
 // IndexOf returns the zero-based position of the first occurrence of v in the list.
 // Returns ListInvalid (-1) if v is not found.
 func (p *List) IndexOf(v any) int {
+	needle := normalizeEqualValue(v)
 	for i, item := range p.data {
-		if Equal(item, v) {
+		if equalValues(normalizeEqualValue(item), needle) {
 			return i
 		}
 	}
