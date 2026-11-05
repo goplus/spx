@@ -17,6 +17,7 @@
 package ui
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"slices"
@@ -38,6 +39,51 @@ type uiRenderSpy struct {
 }
 
 type uiRenderCamera struct{ gdx.ICameraMgr }
+
+func TestSayBubbleScoresIncludeBoundsGapAndDirectionCosts(t *testing.T) {
+	winSize := mathf.NewVec2(200, 100)
+	layouts := []SayBubbleLayout{
+		newSayBubbleLayout(winSize, mathf.NewVec2(90, 40), "", StyleSay, true),
+		newSayBubbleLayout(winSize, mathf.NewVec2(95, 40), "", StyleSay, false),
+	}
+	for i := range layouts {
+		layouts[i].extent = mathf.NewVec2(30, 20)
+	}
+	layouts[0].hasPrevious = true
+	layouts[0].previousIsLeft = false
+	layouts[1].previousIsLeft = true // Ignored without hasPrevious.
+	component := []int{0, 1}
+	for _, tc := range []struct {
+		mask  uint64
+		whole sayBubbleScore
+		first sayBubbleScore
+	}{
+		{0, sayBubbleScore{600, 924, 1, 0}, sayBubbleScore{300, 924, 1, 0}},
+		{1, sayBubbleScore{800, 364, 0, 1}, sayBubbleScore{500, 364, 0, 1}},
+	} {
+		// Each bubble extends 10 units above the viewport. The right-facing
+		// first bubble also extends 20 units beyond its right edge. Overlap
+		// includes the 8-unit safety gap, but outside area does not.
+		directions := make([]bool, len(component))
+		for i := range layouts {
+			directions[i] = tc.mask&(1<<uint(i)) != 0
+			// Search state must be independent of the last published layout.
+			layouts[i].isLeft = !directions[i]
+		}
+		if got := scoreSayBubbleMask(layouts, component, tc.mask); got != tc.whole {
+			t.Errorf("mask %d score = %+v, want %+v", tc.mask, got, tc.whole)
+		}
+		if got := scoreSayBubbleDirections(layouts, component, directions); got != tc.whole {
+			t.Errorf("component score = %+v, want %+v", got, tc.whole)
+		}
+		if got := scoreSayBubbleAt(layouts, component, directions, 0, directions[0]); got != tc.first {
+			t.Errorf("first bubble score = %+v, want %+v", got, tc.first)
+		}
+		if got := scoreSayBubbleAt(layouts, []int{1, 0}, []bool{directions[1], directions[0]}, 1, directions[0]); got != tc.first {
+			t.Errorf("reordered first bubble score = %+v, want %+v", got, tc.first)
+		}
+	}
+}
 
 func TestResolveSayBubbleLayoutsEscapesJointFlipLocalMinimum(t *testing.T) {
 	winSize := mathf.NewVec2(480, 360)
@@ -114,6 +160,74 @@ func TestResolveSayBubbleLayoutsStableIDsIgnoreInputOrder(t *testing.T) {
 			t.Fatalf("permutation %v score = %+v, want %+v", permutation, score, wantScore)
 		}
 	}
+}
+
+func TestResolveSayBubbleLayoutsMatchesExhaustiveReference(t *testing.T) {
+	for _, scene := range []string{"coincident", "edges", "separated"} {
+		for count := 1; count <= 7; count++ {
+			t.Run(fmt.Sprintf("%s/%d", scene, count), func(t *testing.T) {
+				base := make([]SayBubbleLayout, count)
+				for i := range base {
+					position := mathf.Vec2{}
+					switch scene {
+					case "edges":
+						position = mathf.NewVec2(float64(i*37-110), float64(i%3*11+25))
+					case "separated":
+						position = mathf.NewVec2(float64(i*80-200), float64(i%2*100))
+					}
+					base[i] = newSayBubbleLayout(mathf.NewVec2(200, 100), position, "", StyleSay, i%2 == 0)
+					base[i].stableID = uint64(i + 1)
+					base[i].extent = mathf.NewVec2(28.25+float64(i)*3.75, 13.5+float64(i)/4)
+					base[i].hasPrevious = i%3 != 0
+					base[i].previousIsLeft = i%2 != 0
+				}
+				want := exhaustiveSayBubbleDirections(base)
+				for shift := range base {
+					layouts := append(append([]SayBubbleLayout(nil), base[shift:]...), base[:shift]...)
+					ResolveSayBubbleLayouts(layouts)
+					for _, layout := range layouts {
+						if layout.isLeft != want[layout.stableID-1] {
+							t.Fatalf("shift %d ID %d direction = %t, exhaustive result = %v", shift, layout.stableID, layout.isLeft, want)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+// This reference enumerates directions in canonical order and compares the
+// four objective terms directly, independently of the production scorers,
+// component decomposition, mask order and score/tie comparison helpers.
+func exhaustiveSayBubbleDirections(layouts []SayBubbleLayout) []bool {
+	directions := make([]bool, len(layouts))
+	best := make([]bool, len(layouts))
+	var bestCost [4]float64
+	for code := 0; code < 1<<len(layouts); code++ {
+		for i := range directions {
+			directions[i] = code&(1<<uint(len(layouts)-i-1)) != 0
+		}
+		var cost [4]float64
+		for i, layout := range layouts {
+			rect := layout.candidate(directions[i])
+			cost[0] += rect.outsideArea(layout.viewport)
+			if directions[i] != layout.preferredIsLeft {
+				cost[2]++
+			}
+			if layout.hasPrevious && directions[i] != layout.previousIsLeft {
+				cost[3]++
+			}
+			for j := i + 1; j < len(layouts); j++ {
+				other := layouts[j].candidate(directions[j])
+				cost[1] += rect.grow(sayBubbleGap / 2).overlapArea(other.grow(sayBubbleGap / 2))
+			}
+		}
+		if code == 0 || slices.Compare(cost[:], bestCost[:]) < 0 {
+			bestCost = cost
+			copy(best, directions)
+		}
+	}
+	return best
 }
 
 func TestSayBubbleLayoutContextTransformsSpriteTopAndScale(t *testing.T) {
@@ -292,44 +406,48 @@ func TestSayBubbleLayoutContextKeepsClampPolicy(t *testing.T) {
 }
 
 func TestResolveSayBubbleLayoutsLargeComponent(t *testing.T) {
-	base := make([]SayBubbleLayout, sayBubbleExactLayoutLimit+1)
-	component := make([]int, len(base))
-	for i := range base {
-		base[i] = newSayBubbleLayout(mathf.NewVec2(480, 360), mathf.NewVec2(float64(i*4-24), 0), "crowded bubble", StyleSay, i%2 == 0)
-		base[i].stableID = uint64(i + 1)
-		base[i].hasPrevious = i%3 != 0
-		base[i].previousIsLeft = i%2 != 0
-		component[i] = i
-	}
-	preferred := scoreSayBubbleComponent(base, component)
-	var want map[uint64]bool
-	for _, reverse := range []bool{false, true} {
-		layouts := append([]SayBubbleLayout(nil), base...)
-		if reverse {
-			slices.Reverse(layouts)
-		}
-		ResolveSayBubbleLayouts(layouts)
-		if score := scoreSayBubbleComponent(layouts, component); preferred.less(score) {
-			t.Fatalf("fallback worsened preferred layout: %+v -> %+v", preferred, score)
-		}
-		got := make(map[uint64]bool, len(layouts))
-		for i, layout := range layouts {
-			got[layout.stableID] = layout.isLeft
-			current := scoreSayBubbleAt(layouts, component, i, layout.isLeft)
-			if alternate := scoreSayBubbleAt(layouts, component, i, !layout.isLeft); alternate.less(current) {
-				t.Fatalf("bubble %d still has an improving single flip: %+v -> %+v", layout.stableID, current, alternate)
+	// Frozen from the original search, indexed by stable ID; 1 means isLeft.
+	for _, want := range []string{"0010011001111", "000000010101110101110111"} {
+		t.Run(fmt.Sprint(len(want)), func(t *testing.T) {
+			base := make([]SayBubbleLayout, len(want))
+			component := make([]int, len(base))
+			for i := range base {
+				base[i] = newSayBubbleLayout(mathf.NewVec2(480, 360), mathf.NewVec2(float64(i*4-24), 0), "crowded bubble", StyleSay, i%2 == 0)
+				base[i].stableID = uint64(i + 1)
+				base[i].hasPrevious = i%3 != 0
+				base[i].previousIsLeft = i%2 != 0
+				component[i] = i
 			}
-		}
-		if want == nil {
-			want = got
-		} else if !reflect.DeepEqual(got, want) {
-			t.Fatalf("input order changed fallback result: %v, want %v", got, want)
-		}
-		previous := append([]SayBubbleLayout(nil), layouts...)
-		ResolveSayBubbleLayouts(layouts)
-		if !reflect.DeepEqual(layouts, previous) {
-			t.Fatal("resolving the same input changed the layout")
-		}
+			preferred := scoreSayBubbleComponent(base, component)
+			for _, order := range []string{"original", "reversed", "rotated"} {
+				layouts := append([]SayBubbleLayout(nil), base...)
+				switch order {
+				case "reversed":
+					slices.Reverse(layouts)
+				case "rotated":
+					layouts = append(layouts[len(base)/2:], layouts[:len(base)/2]...)
+				}
+				ResolveSayBubbleLayouts(layouts)
+				if score := scoreSayBubbleComponent(layouts, component); preferred.less(score) {
+					t.Fatalf("fallback worsened preferred layout: %+v -> %+v", preferred, score)
+				}
+				directions := sayBubbleComponentDirections(layouts, component)
+				for i, layout := range layouts {
+					if layout.isLeft != (want[layout.stableID-1] == '1') {
+						t.Fatalf("%s ID %d direction = %t, want stable directions %s", order, layout.stableID, layout.isLeft, want)
+					}
+					current := scoreSayBubbleAt(layouts, component, directions, i, layout.isLeft)
+					if alternate := scoreSayBubbleAt(layouts, component, directions, i, !layout.isLeft); alternate.less(current) {
+						t.Fatalf("bubble %d still has an improving single flip: %+v -> %+v", layout.stableID, current, alternate)
+					}
+				}
+				previous := append([]SayBubbleLayout(nil), layouts...)
+				ResolveSayBubbleLayouts(layouts)
+				if !reflect.DeepEqual(layouts, previous) {
+					t.Fatal("resolving the same input changed the layout")
+				}
+			}
+		})
 	}
 }
 
@@ -491,6 +609,26 @@ func assertVec2Near(t *testing.T, name string, got, want mathf.Vec2) {
 	if math.Abs(float64(got.X-want.X)) > epsilon || math.Abs(float64(got.Y-want.Y)) > epsilon {
 		t.Fatalf("%s = %v, want %v", name, got, want)
 	}
+}
+
+func scoreSayBubbleMask(layouts []SayBubbleLayout, component []int, mask uint64) sayBubbleScore {
+	directions := make([]bool, len(component))
+	for i := range directions {
+		directions[i] = mask&(1<<uint(i)) != 0
+	}
+	return scoreSayBubbleDirections(layouts, component, directions)
+}
+
+func scoreSayBubbleComponent(layouts []SayBubbleLayout, component []int) sayBubbleScore {
+	return scoreSayBubbleDirections(layouts, component, sayBubbleComponentDirections(layouts, component))
+}
+
+func sayBubbleComponentDirections(layouts []SayBubbleLayout, component []int) []bool {
+	directions := make([]bool, len(component))
+	for i, index := range component {
+		directions[i] = layouts[index].isLeft
+	}
+	return directions
 }
 
 func newSayBubbleLayout(winSize, position mathf.Vec2, formattedMessage string, style int, preferredIsLeft bool) SayBubbleLayout {
