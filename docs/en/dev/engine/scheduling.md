@@ -222,10 +222,12 @@ JSON loader ignores the old field. Frame batches no longer offer `DropNewest`,
    of the default 30 Hz interval, or 25 ms. This budget controls admission of
    another round; it does not interrupt the current round. `Warp` uses a
    separate 500 ms cooperative yield budget.
-4. **Preserve script order across frames.** Deferred waits and loop continuations
-   are checked in script registration order. Each keeps its resume conditions.
-   Runnable scripts, including new handlers, yield or finish before another
-   queued script resumes. Engine main-thread calls remain available throughout.
+4. **Preserve script order across frames.** When resuming a batch of waits and loop
+   continuations, check each one's resume conditions and admit all eligible scripts
+   to the runnable queue before execution in script registration order. New handlers
+   created by their asynchronous broadcasts follow older scripts admitted to that
+   round; unexpired waits do not block them. Engine main-thread calls are processed
+   separately, and synchronous calls retain the current script slice.
    Restarting an active event handler preserves its position in this order while
    assigning a new Thread ID. Invocations started after the previous one stopped
    or completed take a new registration position.
@@ -317,10 +319,17 @@ in Go and requires no Godot C++ interface changes.
 The loop and condition-event rules follow the corresponding Scratch mechanisms.
 They do not imply complete Scratch VM compatibility or identical iteration
 counts across runs or platforms.
-For example, an asynchronous broadcast's new runnable handlers may execute before
-older scripts still in the wait queue. Scratch instead appends new threads to its
-existing thread list. The scheduler watchdog checks time only after regaining
-control; it does not provide preemption or a hard timeout.
+Older scripts admitted in the same waiting batch and the handlers created by their
+asynchronous broadcasts follow Scratch's append order: if A and B are admitted
+together and A broadcasts to a new C, the observable handler order is A, B, C.
+Wait admission releases the scheduler lock and checks the one-second watchdog
+every 64 jobs, and checks it again before publishing a completed batch. An
+interrupted batch retains its original clock snapshot and resumes scanning on
+the next Update; none of its scripts runs until the whole batch is ready.
+Engine dispatchers, main-thread calls, and cancellation cleanup can still run
+between chunks and Updates.
+Once published, script batches may continue running; the watchdog does not
+provide preemption or a hard timeout.
 
 ## Regression coverage
 
@@ -329,7 +338,11 @@ control; it does not provide preemption or a hard timeout.
 - Explicit waits retain their boundaries, and `Warp` retains its yield rules.
 - Deferred waits retain registration order; unexpired waits do not block
   eligible scripts.
+- Older scripts precede handlers newly created by broadcasts in their round,
+  including loop continuations and elapsed time waits.
 - Scripts continue in later frames after budget exhaustion and remain cancellable.
+- Interrupted wait admission preserves broadcast order, allows engine dispatchers
+  to run, and does not prevent cancellation or shutdown.
 - Predicates and handlers observe the states before and after clock advancement,
   respectively; slow frames preserve this phase ordering.
 - Live input, recording, and replay share frame batches; routing and registration

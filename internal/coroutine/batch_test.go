@@ -17,6 +17,7 @@
 package coroutine
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 	"sync"
@@ -506,105 +507,95 @@ func TestStopAllKeepsAdmissionClosedUntilRegistrationsFinish(t *testing.T) {
 	}
 }
 
-func TestStartBatchRegistrationGoexitRestoresAdmission(t *testing.T) {
-	co := New(nil)
-	done := make(chan struct{})
-	var cleaned, ran atomic.Int32
-
-	go func() {
-		defer close(done)
-		co.StartBatch([]Task{
-			{
-				RegisterInvocation: func(Thread) func() {
-					return func() { cleaned.Add(1) }
-				},
-				Run: func(Thread) { ran.Add(1) },
-			},
-			{
-				RegisterInvocation: func(Thread) func() {
-					co.StopAll()
-					runtime.Goexit()
-					return nil
-				},
-				Run: func(Thread) { ran.Add(1) },
-			},
-		}, BatchAsync)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("registration Goexit did not unwind the batch")
-	}
-	co.drain()
-	if got := co.pendingSetups.Load(); got != 0 {
-		t.Fatalf("pending registration hooks = %d, want 0", got)
-	}
-	if got := ran.Load(); got != 0 {
-		t.Fatalf("tasks ran %d times after registration Goexit", got)
-	}
-	if got := cleaned.Load(); got != 1 {
-		t.Fatalf("cleanup calls = %d, want 1", got)
-	}
-
-	next := co.Create("after-registration-Goexit", func(Thread) {
-		ran.Add(1)
-	})
-	co.Join(next)
-	if next.Stopped() || ran.Load() != 1 {
-		t.Fatal("admission did not recover after registration Goexit")
-	}
-}
-
-func TestStartBatchRegistrationPanicStopsBatch(t *testing.T) {
-	co := New(nil)
-	recovered := make(chan any, 1)
-	var cleaned, ran atomic.Int32
-
-	go func() {
-		defer func() { recovered <- recover() }()
-		co.StartBatch([]Task{
-			{
-				RegisterInvocation: func(Thread) func() {
-					return func() { cleaned.Add(1) }
-				},
-				Run: func(Thread) { ran.Add(1) },
-			},
-			{
-				RegisterInvocation: func(Thread) func() {
-					co.StopAll()
-					panic("registration failure")
-				},
-				Run: func(Thread) { ran.Add(1) },
-			},
-		}, BatchAsync)
-	}()
-
-	select {
-	case got := <-recovered:
-		if got != "registration failure" {
-			t.Fatalf("registration panic = %v, want registration failure", got)
+func TestStartBatchRegistrationFailureStopsBatch(t *testing.T) {
+	for _, failure := range []string{"panic", "panic nil", "Goexit"} {
+		for _, stopAll := range []bool{false, true} {
+			for _, managed := range []bool{false, true} {
+				for failAt := range 3 {
+					t.Run(fmt.Sprintf("%s/stopAll=%v/managed=%v/at=%d", failure, stopAll, managed, failAt), func(t *testing.T) {
+						co := New(nil)
+						t.Cleanup(func() { co.RunAfterStop(nil) })
+						var cleaned, ran atomic.Int32
+						var registered []Thread
+						var panicValue any
+						returned := false
+						done := make(chan struct{})
+						tasks := make([]Task, 3)
+						for i := range tasks {
+							tasks[i] = Task{
+								RegisterInvocation: func(thread Thread) func() {
+									registered = append(registered, thread)
+									if i == failAt {
+										// Without StopAll, registration must cancel the
+										// failing task itself, before the batch unwinds.
+										if stopAll {
+											co.StopAll()
+										}
+										switch failure {
+										case "panic":
+											panic("registration failure")
+										case "panic nil":
+											panic(nil)
+										case "Goexit":
+											runtime.Goexit()
+										}
+									}
+									return func() { cleaned.Add(1) }
+								},
+								Run: func(Thread) { ran.Add(1) },
+							}
+						}
+						invoke := func() {
+							defer close(done)
+							defer func() { panicValue = recover() }()
+							co.StartBatch(tasks, BatchAsync)
+							returned = true
+						}
+						var caller Thread
+						if managed {
+							caller = co.Create("caller", func(Thread) { invoke() })
+						} else {
+							go invoke()
+						}
+						waitForThreadSignal(t, done, "registration failure did not unwind the batch")
+						if returned || len(registered) != failAt+1 {
+							t.Fatalf("returned=%v, registrations=%d, want false and %d", returned, len(registered), failAt+1)
+						}
+						if failure == "panic" && panicValue != "registration failure" {
+							t.Fatalf("registration panic = %v, want registration failure", panicValue)
+						}
+						for _, thread := range registered {
+							waitForThreadSignal(t, thread.done, "registration failure left a task running")
+							waitForThreadSignal(t, thread.firstSliceDone, "registration failure left a first slice open")
+							if !thread.Stopped() {
+								t.Fatal("registration failure did not cancel a task")
+							}
+						}
+						if caller != nil {
+							waitForThreadSignal(t, caller.done, "registration failure left the caller running")
+						}
+						co.drain()
+						if got := cleaned.Load(); got != int32(failAt) {
+							t.Fatalf("cleanup calls = %d, want %d", got, failAt)
+						}
+						if ran.Load() != 0 || co.pendingSetups.Load() != 0 || len(co.snapshotThreads()) != 0 {
+							t.Fatal("registration failure left running tasks, registration hooks, or registered threads")
+						}
+						co.schedulerMu.Lock()
+						pending := len(co.pendingExecution) + len(co.waitBatch.runnable.pendingExecution)
+						co.schedulerMu.Unlock()
+						if pending != 0 {
+							t.Fatalf("pending cleanup = %d, want 0", pending)
+						}
+						next := co.Create("after-registration-failure", func(Thread) { ran.Add(1) })
+						co.Join(next)
+						if next.Stopped() || ran.Load() != 1 {
+							t.Fatal("admission did not recover after registration failure")
+						}
+					})
+				}
+			}
 		}
-	case <-time.After(time.Second):
-		t.Fatal("registration panic did not return")
-	}
-	co.drain()
-	if got := ran.Load(); got != 0 {
-		t.Fatalf("tasks ran %d times after registration panic", got)
-	}
-	if got := cleaned.Load(); got != 1 {
-		t.Fatalf("cleanup calls = %d, want 1", got)
-	}
-	if got := co.pendingSetups.Load(); got != 0 {
-		t.Fatalf("pending registration hooks = %d, want 0", got)
-	}
-
-	next := co.Create("after-registration-panic", func(Thread) {
-		ran.Add(1)
-	})
-	co.Join(next)
-	if next.Stopped() || ran.Load() != 1 {
-		t.Fatal("admission did not recover after registration panic")
 	}
 }
 

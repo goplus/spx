@@ -145,6 +145,11 @@ func (p *Coroutines) enqueuePriorityJob(job *waitJob) {
 func (p *Coroutines) takeMainThreadJob() *waitJob {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
+	return p.takeMainThreadJobLocked()
+}
+
+// Select and remove together so Update and engine waiters cannot claim the same job.
+func (p *Coroutines) takeMainThreadJobLocked() *waitJob {
 	if job, ok := p.currentJobs.peekFront(); ok && job.kind == waitMainThread {
 		return p.currentJobs.popFront()
 	}

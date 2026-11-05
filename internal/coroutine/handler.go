@@ -54,7 +54,7 @@ func (p *HandlerState) RegisterInvocation(thread Thread) func() {
 		return nil
 	}
 	if p.policy == RestartExisting && thread != nil && previous != nil &&
-		!previous.Stopped() && previous.Context().Err() == nil {
+		!previous.canceled() {
 		thread.resumeOrder = previous.resumeOrder
 	}
 	// Retire the previous invocation before another registration can inherit

@@ -46,6 +46,50 @@ func TestRestartHandlerIgnoresRetiredCleanup(t *testing.T) {
 	}
 }
 
+func TestRestartHandlerPreservesOnlyActiveOrder(t *testing.T) {
+	for _, name := range []string{"absent", "active", "canceled", "completed"} {
+		t.Run(name, func(t *testing.T) {
+			co := New(nil)
+			state := NewHandlerState(RestartExisting)
+			previous, next := co.newThread("previous"), co.newThread("next")
+			defer previous.Cancel()
+			defer next.Cancel()
+			if name != "absent" {
+				state.RegisterInvocation(previous)
+			}
+			switch name {
+			case "canceled":
+				previous.Cancel()
+			case "completed":
+				// Retain handler state until cleanup, as completion can do.
+				previous.cancelFunc()
+			}
+			want := next.resumeOrder
+			if name == "active" {
+				want = previous.resumeOrder
+			}
+			cleanup := state.RegisterInvocation(next)
+			defer cleanup()
+			if next.resumeOrder != want {
+				t.Fatalf("restart order = %d, want %d", next.resumeOrder, want)
+			}
+		})
+	}
+}
+
+func TestRestartHandlerAllowsNilReplacement(t *testing.T) {
+	co := New(nil)
+	state := NewHandlerState(RestartExisting)
+	previous := co.newThread("previous")
+	defer previous.Cancel()
+	state.RegisterInvocation(previous)
+	cleanup := state.RegisterInvocation(nil)
+	defer cleanup()
+	if !previous.Stopped() || state.active != nil {
+		t.Fatal("nil replacement did not retire the previous invocation")
+	}
+}
+
 func TestConcurrentHandlerRestartWaitsForPreviousCancellation(t *testing.T) {
 	co := New(nil)
 	state := NewHandlerState(RestartExisting)
@@ -116,6 +160,8 @@ func TestIgnoreHandlerAllowsCanceledAndCompletedInvocations(t *testing.T) {
 		t.Fatal("canceled invocation retained admission")
 	}
 	retireFirst()
+	// Context completion alone must not release admission before cleanup.
+	third.cancelFunc()
 	fourth := co.newThread("fourth")
 	defer co.Stop(fourth)
 	if cleanup := state.RegisterInvocation(fourth); cleanup != nil || !fourth.Stopped() {

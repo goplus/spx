@@ -66,13 +66,6 @@ func (p *Coroutines) registerBatch(tasks []Task) []Thread {
 	}()
 	admission := p.captureAdmission()
 	for i, task := range tasks {
-		if registerInvocation := task.RegisterInvocation; registerInvocation != nil {
-			// Record the task before its callback so panic cleanup can cancel it.
-			task.RegisterInvocation = func(thread Thread) func() {
-				threads[i] = thread
-				return registerInvocation(thread)
-			}
-		}
 		threads[i] = p.registerTask(admission, task)
 	}
 	registered = true
