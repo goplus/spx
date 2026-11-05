@@ -86,15 +86,6 @@ static int has_registration(void) { return registration_nonnull; }
 
 static void is_main_thread(GdBool *result) { *result = 1; }
 
-static void invoke_inactive_lifecycle(GDExtensionInitialization *config) {
-	for (int level = GDEXTENSION_INITIALIZATION_CORE; level <= GDEXTENSION_INITIALIZATION_EDITOR; level++) {
-		if (level != config->minimum_initialization_level) {
-			config->initialize(config->userdata, (GDExtensionInitializationLevel)level);
-		}
-		config->deinitialize(config->userdata, (GDExtensionInitializationLevel)level);
-	}
-}
-
 static int invoke_callbacks(GdObj object, GdInt other, GdFloat delta, GdBool flag, GdString text) {
 	int calls = 0;
 #define INVOKE(field, ...) if (registered_callbacks.field != NULL) { registered_callbacks.field(__VA_ARGS__); calls++; }
@@ -113,6 +104,8 @@ static int invoke_callbacks(GdObj object, GdInt other, GdFloat delta, GdBool fla
 	return calls;
 }
 
+// Startup succeeds with only SPX ABI entries; legacy String/Variant symbols
+// deliberately remain unresolved.
 static GDExtensionInterfaceFunctionPtr resolve_builtin(const char *name) {
 #define RESOLVE(symbol, fn) if (strcmp(name, symbol) == 0) return (GDExtensionInterfaceFunctionPtr)fn
 	RESOLVE("spx_global_register_callbacks", register_callbacks);
@@ -123,6 +116,18 @@ static GDExtensionInterfaceFunctionPtr resolve_builtin(const char *name) {
 }
 
 static GDExtensionInterfaceGetProcAddress builtin_resolver(void) { return resolve_builtin; }
+
+static GDExtensionInterfaceFunctionPtr resolve_without_main_thread(const char *name) {
+	if (strcmp(name, "spx_platform_is_main_thread") == 0) return NULL;
+	return resolve_builtin(name);
+}
+
+static GDExtensionInterfaceGetProcAddress resolver_without_main_thread(void) { return resolve_without_main_thread; }
+
+static void invoke_lifecycle(GDExtensionInitialization *config, int level, int initializing) {
+	if (initializing) config->initialize(config->userdata, (GDExtensionInitializationLevel)level);
+	else config->deinitialize(config->userdata, (GDExtensionInitializationLevel)level);
+}
 */
 import "C"
 
@@ -153,16 +158,24 @@ func Resolver() unsafe.Pointer {
 	return unsafe.Pointer(C.builtin_resolver())
 }
 
+func ResolverWithoutMainThread() unsafe.Pointer {
+	return unsafe.Pointer(C.resolver_without_main_thread())
+}
+
+func InvokeLifecycle(config unsafe.Pointer, level int, initializing bool) {
+	var start C.int
+	if initializing {
+		start = 1
+	}
+	C.invoke_lifecycle((*C.GDExtensionInitialization)(config), C.int(level), start)
+}
+
 func RegistrationCount() int {
 	return int(C.count_registrations())
 }
 
 func HasRegistration() bool {
 	return C.has_registration() != 0
-}
-
-func InvokeInactiveLifecycle(configuration unsafe.Pointer) {
-	C.invoke_inactive_lifecycle((*C.GDExtensionInitialization)(configuration))
 }
 
 func InvokeCallbacks(object, other int64, delta float64, flag uint8, text unsafe.Pointer) int {
