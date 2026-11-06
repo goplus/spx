@@ -1166,15 +1166,24 @@ func TestDebugEventBindingsAndBroadcastOverloads(t *testing.T) {
 	game.Stop(StopKind(-999))
 }
 
-func TestPointHitsClickTargetRejectsMissingOrHiddenProxy(t *testing.T) {
+func TestPointHitsClickTargetRejectsInvalidTarget(t *testing.T) {
 	game := &Game{}
-	if game.pointHitsClickTarget(&SpriteImpl{}, mathf.Vec2{}) {
-		t.Fatal("missing proxy accepted a click")
-	}
-	sprite := newClickTestSprite(game, "hidden", 1, false)
-	sprite.spriteState.isVisible = false
-	if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
-		t.Fatal("hidden sprite accepted a click")
+	for _, state := range []string{"missing proxy", "hidden", "destroyed"} {
+		t.Run(state, func(t *testing.T) {
+			sprite := newClickTestSprite(game, state, 1, false)
+			switch state {
+			case "missing proxy":
+				sprite.runtimeState.syncSprite = nil
+			case "hidden":
+				sprite.spriteState.isVisible = false
+			case "destroyed":
+				sprite.markDestroyed()
+			}
+			// No backend is installed: these guards must reject before a hit query.
+			if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
+				t.Fatal("invalid target accepted a click")
+			}
+		})
 	}
 }
 

@@ -915,6 +915,242 @@ func TestSpriteDragPenUpBeforeResumeKeepsDrawingStopped(t *testing.T) {
 	}
 }
 
+func TestSpriteDragFailedLongPressWaitsForMovement(t *testing.T) {
+	co, g, _ := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSession = clock
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hits[1] = false
+	p := mathf.NewVec2(10, 20)
+	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
+	clock.currentTime = .4
+	dispatchSpriteDragFrame(co, g, p)
+	if g.inputMgr.drag.active {
+		t.Fatal("unexpected initial activation")
+	}
+	mgr.hits[1] = true
+	clock.currentTime = .5
+	dispatchSpriteDragFrame(co, g, p)
+	if g.inputMgr.drag.active {
+		t.Fatal("stationary pointer retried failed timeout and captured arriving sprite")
+	}
+}
+func TestSpriteDragCameraLongPressPicksCurrentPoint(t *testing.T) {
+	co, g, s := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSession = clock
+	p := mathf.NewVec2(10, 20)
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hit = func(_ pkgengine.Object, pt mathf.Vec2) bool { x, y := s.getXY(); return pt == mathf.NewVec2(x, y) }
+	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
+	camera := pkgengine.CameraMgr.(*dragCameraMgr)
+	camera.world.Position.X += 100
+	s.SetXYpos(110, 20)
+	clock.currentTime = .4
+	dispatchSpriteDragFrame(co, g, mathf.NewVec2(110, 20))
+	if !g.inputMgr.drag.active {
+		t.Fatal("long press used obsolete world point instead of current point below stationary screen pixel")
+	}
+}
+func TestSpriteDragCameraLongPressRejectsOldPoint(t *testing.T) {
+	co, g, s := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSession = clock
+	p := mathf.NewVec2(10, 20)
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hit = func(_ pkgengine.Object, pt mathf.Vec2) bool { x, y := s.getXY(); return pt == mathf.NewVec2(x, y) }
+	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
+	camera := pkgengine.CameraMgr.(*dragCameraMgr)
+	camera.world.Position.X += 100
+	clock.currentTime = .4
+	dispatchSpriteDragFrame(co, g, mathf.NewVec2(110, 20))
+	if g.inputMgr.drag.active {
+		t.Fatalf("picked old sprite now away from cursor; position=%v", mathf.NewVec2(s.getXY()))
+	}
+}
+
+func TestSpriteDragFailedMovementConsumesTimeout(t *testing.T) {
+	co, g, _ := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSession = clock
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hits[1] = false
+	start := mathf.NewVec2(10, 20)
+	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
+	moved := mathf.NewVec2(14, 20)
+	clock.currentTime = .1
+	dispatchSpriteDragFrame(co, g, moved)
+	mgr.hits[1] = true
+	clock.currentTime = .4
+	dispatchSpriteDragFrame(co, g, moved)
+	if g.inputMgr.drag.active {
+		t.Fatal("failed movement did not cancel timeout")
+	}
+	dispatchSpriteDragFrame(co, g, mathf.NewVec2(14.1, 20))
+	if !g.inputMgr.drag.active {
+		t.Fatal("subsequent sampled pointer movement did not retry")
+	}
+}
+
+func TestSpriteDragFractionalCameraDoesNotRetryFailedMovement(t *testing.T) {
+	co, g, _ := setupSpriteDragTest(t)
+	clock := &inputSession{}
+	g.inputSession = clock
+	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
+	mgr.hits[1] = false
+	camera := pkgengine.CameraMgr.(*dragCameraMgr)
+	camera.world.Position = mathf.NewVec2(-237.13, -180.27)
+	camera.world.Size = mathf.NewVec2(480/1.37, 360/1.37)
+	pointAtView := func(view mathf.Vec2) mathf.Vec2 {
+		g.inputMgr.frame.dragProjection = g.inputMgr.sampleDragProjection()
+		return g.inputMgr.frame.dragProjection.worldPoint(view)
+	}
+	startView := mathf.NewVec2(250.3, 160.7)
+	start := pointAtView(startView)
+	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
+	stationary := startView.Add(mathf.NewVec2(4.1, 0))
+	dispatchSpriteDragFrame(co, g, pointAtView(stationary)) // Failed movement cancels timeout.
+	mgr.hits[1] = true
+	for i := 1; i <= 20; i++ {
+		camera.world.Position = camera.world.Position.Add(mathf.NewVec2(.13, -.27))
+		camera.world.Size = camera.world.Size.Mulf(1.001)
+		clock.currentTime = float64(i) / 10
+		dispatchSpriteDragFrame(co, g, pointAtView(stationary))
+		if g.inputMgr.drag.active {
+			t.Fatalf("camera-only change retried drag at frame %d", i)
+		}
+	}
+	dispatchSpriteDragFrame(co, g, pointAtView(stationary.Add(mathf.NewVec2(.01, 0))))
+	if !g.inputMgr.drag.active {
+		t.Fatal("sampled .01 pixel movement did not retry")
+	}
+}
+
+// Exercise the real sampling/dispatch path without seeding drag state or
+// replacing prepared events. Replay supplies button edges at the input boundary;
+// this does not exercise the live engine's platform event queue.
+func TestSpriteDragSamplingAndDispatch(t *testing.T) {
+	for _, gesture := range []string{"first down", "same tick click", "held", "activate"} {
+		t.Run(gesture, func(t *testing.T) {
+			resetInputSessionTest(t)
+			co, game, sprite := setupSpriteDragTest(t)
+			setupInputSourceManager(t)
+			frames := []InputReplayFrame{{Frame: 0, Time: 0, State: InputReplayState{Mouse: InputReplayMouse{X: 10, Y: 20}, Buttons: 1}, MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}}}}
+			if gesture == "same tick click" {
+				frames[0].State.Buttons = 0
+				frames[0].MouseEvents = append(frames[0].MouseEvents, InputReplayMouseEvent{Button: 1})
+			}
+			if gesture == "held" || gesture == "activate" {
+				at := .1
+				if gesture == "activate" {
+					at = .4
+				}
+				frames = append(frames, InputReplayFrame{Frame: 1, Time: at, State: frames[0].State})
+			}
+			if _, err := PrepareInputReplay(validRuntimeReplay(frames...)); err != nil {
+				t.Fatal(err)
+			}
+			session := claimPreparedSession(t, game)
+			t.Cleanup(func() { game.abortInputSession("test finished") })
+			clicks := 0
+			sprite.OnClick(func() { clicks++ })
+			camera := pkgengine.CameraMgr.(*dragCameraMgr)
+			for i := range frames {
+				sampledWorld := camera.world
+				if !game.inputMgr.prepareInputFrame(.01) {
+					t.Fatal("missing input frame")
+				}
+				projection := game.inputMgr.frame.dragProjection
+				if projection == nil || projection.world != sampledWorld {
+					t.Fatal("frame did not freeze its sampling projection")
+				}
+				if i == len(frames)-1 {
+					camera.world.Position.X += 100
+					if gesture == "activate" {
+						sprite.SetXYpos(110, 20)
+						pkgengine.SpriteMgr.(*dragSpriteMgr).hit = func(_ pkgengine.Object, point mathf.Vec2) bool { return point == mathf.NewVec2(110, 20) }
+					}
+				}
+				game.dispatchFrameEvents()
+				co.Update()
+				session.endFrame()
+			}
+			drag := game.inputMgr.drag
+			if gesture == "same tick click" {
+				if drag.pressed || drag.active || drag.target != nil || clicks != 1 {
+					t.Fatalf("short click retained state or lost click: drag=%+v clicks=%d", drag, clicks)
+				}
+				return
+			}
+			if drag.startView != mathf.NewVec2(250, 160) {
+				t.Fatalf("press used dispatch-time camera: %v", drag.startView)
+			}
+			if drag.active != (gesture == "activate") {
+				t.Fatalf("active=%v for %s", drag.active, gesture)
+			}
+			if clicks != 0 {
+				t.Fatal("held press generated a click")
+			}
+			if gesture == "activate" {
+				assertSpriteDragPosition(t, sprite, 110, 20)
+			} else {
+				assertSpriteDragPosition(t, sprite, 10, 20)
+			}
+		})
+	}
+}
+
+func TestSpriteDragProjectionFallback(t *testing.T) {
+	for _, dimension := range []string{"no camera", "world width", "world height", "viewport width", "viewport height"} {
+		t.Run(dimension, func(t *testing.T) {
+			_, game, _ := setupSpriteDragTest(t)
+			camera := pkgengine.CameraMgr.(*dragCameraMgr)
+			switch dimension {
+			case "no camera":
+				game.camera = nil
+			case "world width":
+				camera.world.Size.X = 0
+			case "world height":
+				camera.world.Size.Y = 0
+			case "viewport width":
+				camera.viewport.Size.X = 0
+			case "viewport height":
+				camera.viewport.Size.Y = 0
+			}
+			projection := game.inputMgr.sampleDragProjection()
+			point := mathf.NewVec2(10, 20)
+			if projection != nil || projection.viewportPoint(point) != point || projection.worldPoint(point) != point {
+				t.Fatal("unavailable projection must preserve world input")
+			}
+		})
+	}
+}
+
+func TestSpriteDragRejectsStaleTarget(t *testing.T) {
+	// Public cancellation APIs clear drag state immediately. Also check the
+	// dispatch guard when an invalid target is already retained in a snapshot.
+	for _, invalid := range []string{"disabled", "hidden", "destroyed"} {
+		t.Run(invalid, func(t *testing.T) {
+			co, game, sprite := setupSpriteDragTest(t)
+			start := mathf.NewVec2(10, 20)
+			dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
+			switch invalid {
+			case "disabled":
+				sprite.spriteState.isDraggable = false
+			case "hidden":
+				sprite.spriteState.isVisible = false
+			case "destroyed":
+				sprite.markDestroyed()
+			}
+			dispatchSpriteDragFrame(co, game, mathf.NewVec2(30, 40))
+			if game.inputMgr.drag != (spriteDragState{}) {
+				t.Fatal("invalid target retained drag state")
+			}
+			assertSpriteDragPosition(t, sprite, 10, 20)
+		})
+	}
+}
+
 func setupSpriteDragTest(t *testing.T) (*coroutine.Coroutines, *Game, *SpriteImpl) {
 	t.Helper()
 	co, game := setupInputFrameGame(t)
@@ -980,167 +1216,4 @@ func assertSpriteDragPosition(t *testing.T, sprite *SpriteImpl, x, y float64) {
 	if gotX, gotY := sprite.getXY(); gotX != x || gotY != y {
 		t.Fatalf("sprite position = (%v, %v), want (%v, %v)", gotX, gotY, x, y)
 	}
-}
-
-func TestSpriteDragFailedLongPressShouldNotRetryWhileStationary(t *testing.T) {
-	co, g, _ := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hits[1] = false
-	p := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
-	clock.currentTime = .4
-	dispatchSpriteDragFrame(co, g, p)
-	if g.inputMgr.drag.active {
-		t.Fatal("unexpected initial activation")
-	}
-	mgr.hits[1] = true
-	clock.currentTime = .5
-	dispatchSpriteDragFrame(co, g, p)
-	if g.inputMgr.drag.active {
-		t.Fatal("stationary pointer retried failed timeout and captured arriving sprite")
-	}
-}
-func TestSpriteDragCameraLongPressShouldPickCurrentWorldPoint(t *testing.T) {
-	co, g, s := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	p := mathf.NewVec2(10, 20)
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hit = func(_ pkgengine.Object, pt mathf.Vec2) bool { x, y := s.getXY(); return pt == mathf.NewVec2(x, y) }
-	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position.X += 100
-	s.SetXYpos(110, 20)
-	clock.currentTime = .4
-	dispatchSpriteDragFrame(co, g, mathf.NewVec2(110, 20))
-	if !g.inputMgr.drag.active {
-		t.Fatal("long press used obsolete world point instead of current point below stationary screen pixel")
-	}
-}
-func TestSpriteDragCameraLongPressShouldNotJumpOldSprite(t *testing.T) {
-	co, g, s := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	p := mathf.NewVec2(10, 20)
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hit = func(_ pkgengine.Object, pt mathf.Vec2) bool { x, y := s.getXY(); return pt == mathf.NewVec2(x, y) }
-	dispatchSpriteDragFrame(co, g, p, &eventLeftButtonDown{Pos: p})
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position.X += 100
-	clock.currentTime = .4
-	dispatchSpriteDragFrame(co, g, mathf.NewVec2(110, 20))
-	if g.inputMgr.drag.active {
-		t.Fatalf("picked old sprite now away from cursor; position=%v", mathf.NewVec2(s.getXY()))
-	}
-}
-
-func TestSpriteDragFailedMovementConsumesTimeout(t *testing.T) {
-	co, g, _ := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hits[1] = false
-	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
-	moved := mathf.NewVec2(14, 20)
-	clock.currentTime = .1
-	dispatchSpriteDragFrame(co, g, moved)
-	mgr.hits[1] = true
-	clock.currentTime = .4
-	dispatchSpriteDragFrame(co, g, moved)
-	if g.inputMgr.drag.active {
-		t.Fatal("failed movement did not cancel timeout")
-	}
-	dispatchSpriteDragFrame(co, g, mathf.NewVec2(14.1, 20))
-	if !g.inputMgr.drag.active {
-		t.Fatal("subsequent sampled pointer movement did not retry")
-	}
-}
-
-func TestSpriteDragCameraProjectionFrozenAtSampling(t *testing.T) {
-	co, g, s := setupSpriteDragTest(t)
-	live := setupInputSourceManager(t)
-	live.point = mathf.NewVec2(10, 20)
-	g.inputMgr.drag.pressed = true
-	// Start the press with a frozen input frame, as prepareInputFrame does.
-	if !g.inputMgr.prepareInputFrame(.01) {
-		t.Fatal("no input frame")
-	}
-	g.inputMgr.frame.pending.events = []event{&eventLeftButtonDown{Pos: live.point}}
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position.X += 100
-	g.dispatchFrameEvents()
-	co.Update()
-	if g.inputMgr.drag.active {
-		t.Fatal("camera update between sampling and dispatch activated drag")
-	}
-	if got := g.inputMgr.drag.startView; got != mathf.NewVec2(250, 160) {
-		t.Fatalf("press used dispatch-time projection: %v", got)
-	}
-	// Active dragging must still update position on each frame.
-	g.inputMgr.drag.active = true
-	g.inputMgr.drag.target = s
-	g.inputMgr.drag.offset = mathf.Vec2{}
-	dispatchSpriteDragFrame(co, g, mathf.NewVec2(110, 20))
-	assertSpriteDragPosition(t, s, 110, 20)
-}
-
-func TestSpriteDragFractionalCameraDoesNotRetryFailedMovement(t *testing.T) {
-	co, g, _ := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	mgr := pkgengine.SpriteMgr.(*dragSpriteMgr)
-	mgr.hits[1] = false
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position = mathf.NewVec2(-237.13, -180.27)
-	camera.world.Size = mathf.NewVec2(480/1.37, 360/1.37)
-	pointAtView := func(view mathf.Vec2) mathf.Vec2 {
-		g.inputMgr.frame.dragProjection = g.inputMgr.sampleDragProjection()
-		return g.inputMgr.frame.dragProjection.worldPoint(view)
-	}
-	startView := mathf.NewVec2(250.3, 160.7)
-	start := pointAtView(startView)
-	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
-	stationary := startView.Add(mathf.NewVec2(4.1, 0))
-	dispatchSpriteDragFrame(co, g, pointAtView(stationary)) // Failed movement cancels timeout.
-	mgr.hits[1] = true
-	for i := 1; i <= 20; i++ {
-		camera.world.Position = camera.world.Position.Add(mathf.NewVec2(.13, -.27))
-		camera.world.Size = camera.world.Size.Mulf(1.001)
-		clock.currentTime = float64(i) / 10
-		dispatchSpriteDragFrame(co, g, pointAtView(stationary))
-		if g.inputMgr.drag.active {
-			t.Fatalf("camera-only change retried drag at frame %d", i)
-		}
-	}
-	dispatchSpriteDragFrame(co, g, pointAtView(stationary.Add(mathf.NewVec2(.01, 0))))
-	if !g.inputMgr.drag.active {
-		t.Fatal("sampled .01 pixel movement did not retry")
-	}
-}
-
-func TestSpriteDragActivationUsesDispatchCamera(t *testing.T) {
-	co, g, s := setupSpriteDragTest(t)
-	clock := &inputSession{}
-	g.inputSession = clock
-	start := mathf.NewVec2(10, 20)
-	dispatchSpriteDragFrame(co, g, start, &eventLeftButtonDown{Pos: start})
-	// Sampling still sees the old camera; scene updates then move the camera
-	// and sprite together, keeping the sprite beneath the same screen pixel.
-	g.inputMgr.frame.dragProjection = g.inputMgr.sampleDragProjection()
-	g.inputMgr.mousePos = start
-	g.inputMgr.frame.pending = &inputFrame{}
-	camera := pkgengine.CameraMgr.(*dragCameraMgr)
-	camera.world.Position.X += 100
-	s.SetXYpos(110, 20)
-	pkgengine.SpriteMgr.(*dragSpriteMgr).hit = func(_ pkgengine.Object, p mathf.Vec2) bool { return p == mathf.NewVec2(110, 20) }
-	clock.currentTime = .4
-	g.dispatchFrameEvents()
-	co.Update()
-	if !g.inputMgr.drag.active {
-		t.Fatal("activation did not pick with current camera")
-	}
-	assertSpriteDragPosition(t, s, 110, 20)
 }

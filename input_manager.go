@@ -171,11 +171,12 @@ func (p *inputManager) onKeyDown(key Key) {
 
 func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	target := p.g.findClickTarget(point)
+	view := p.frame.dragProjection.viewportPoint(point)
 	p.drag = spriteDragState{
 		pressed:        true,
-		lastView:       p.dragViewportPoint(point),
+		startView:      view,
+		lastView:       view,
 		timeoutPending: true,
-		startView:      p.dragViewportPoint(point),
 		pressedAt:      p.g.inputClock(),
 	}
 	sprite, _ := target.(*SpriteImpl)

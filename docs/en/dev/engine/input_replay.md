@@ -49,7 +49,15 @@ change live query results.
 
 The v1 stream covers the SPX input snapshot used by game logic, including supported pointer, keyboard, and action state. The exact schema is versioned; readers must reject incompatible future formats rather than guessing.
 
-Drag gestures use the sampled world pointer and the camera/viewport projection from the same input frame to detect pointer movement. Activation picks and computes the offset using the current camera, reprojecting both screen points together. Replays must reproduce the same camera and viewport evolution. The 400 ms long-press attempt is one-shot; after a failed attempt, a later sampled viewport-position change beyond the drag threshold can retry. The stream does not contain browser mousemove events, so same-position events and movement that returns within one tick cannot be reconstructed. The v1 format is unchanged.
+Drag gestures detect pointer movement using the world pointer and camera/viewport
+projection sampled in the same input frame. Activation uses the current camera
+to reproject both screen points before picking a target and computing its offset.
+Replays must reproduce the same camera and viewport evolution.
+
+The 400 ms long-press attempt is one-shot. After a failed attempt, a later sampled
+viewport-position change beyond the drag threshold can retry. The stream does
+not contain browser mousemove events, so same-position events and movement that
+returns within one tick cannot be reconstructed. The v1 format is unchanged.
 
 ## EOF and end-of-frame completion
 

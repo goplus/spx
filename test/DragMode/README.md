@@ -14,8 +14,8 @@ spx runnative --path ./test/DragMode
 A draggable sprite starts moving after the pointer travels more than 3 viewport
 pixels or stays pressed for 400 ms. Small movement still counts as a click on
 release. Clicks use the topmost visible hit target. Dragging picks among draggable
-sprites, so a non-draggable foreground sprite does not block dragging through it. Dragging with the
-pen down draws nothing, and the next scripted movement resumes from the drop
+sprites, so a non-draggable foreground sprite does not block dragging through it.
+Dragging with the pen down draws nothing, and the next scripted movement resumes from the drop
 position without an extra pen-down dot.
 
 Input recording/replay v1 keeps mouse positions in world coordinates. Reproduce

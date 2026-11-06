@@ -24,16 +24,6 @@ import (
 	"github.com/goplus/spx/v4/internal/engine"
 )
 
-// SetDragMode controls whether the user can drag this sprite with the left mouse
-// button. Draggable enables dragging; NotDraggable (or any other value) disables
-// it and ends a pending or active drag.
-func (p *SpriteImpl) SetDragMode(mode DragMode) {
-	p.spriteState.isDraggable = mode == Draggable
-	if !p.spriteState.isDraggable && p.g != nil {
-		p.g.inputMgr.cancelDrag(p)
-	}
-}
-
 const (
 	dragDistance = 3 // Viewport pixels.
 	dragDelay    = 400 * time.Millisecond
@@ -50,15 +40,35 @@ type spriteDragState struct {
 	active         bool
 }
 
-func (p *SpriteImpl) isDragging() bool {
-	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
-}
-
 // Input (including v1 recordings) is in world space. Freeze its projection
 // with the frame: camera following can change the camera before dispatch.
 // Viewport pixels need not match browser CSS pixels.
 type dragProjection struct {
 	world, view mathf.Rect2
+}
+
+// SetDragMode controls whether the user can drag this sprite with the left mouse
+// button. Draggable enables dragging; NotDraggable (or any other value) disables
+// it and ends a pending or active drag.
+func (p *SpriteImpl) SetDragMode(mode DragMode) {
+	p.spriteState.isDraggable = mode == Draggable
+	if !p.spriteState.isDraggable && p.g != nil {
+		p.g.inputMgr.cancelDrag(p)
+	}
+}
+
+func (p *SpriteImpl) isDragging() bool {
+	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
+}
+
+// Drag picking filters candidates before hit testing, unlike ordinary clicks.
+func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
+	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
+			return sprite
+		}
+	}
+	return nil
 }
 
 func (p *inputManager) sampleDragProjection() *dragProjection {
@@ -71,36 +81,6 @@ func (p *inputManager) sampleDragProjection() *dragProjection {
 		return nil
 	}
 	return &dragProjection{world: world, view: view}
-}
-
-func (p *inputManager) dragViewportPoint(point mathf.Vec2) mathf.Vec2 {
-	projection := p.frame.dragProjection
-	if projection == nil {
-		return point
-	}
-	world, view := projection.world, projection.view
-	return mathf.NewVec2((point.X-world.Position.X)*view.Size.X/world.Size.X,
-		(-point.Y-world.Position.Y)*view.Size.Y/world.Size.Y)
-}
-
-// Resolve a screen-space point against a camera projection.
-func (projection *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
-	if projection == nil {
-		return point
-	}
-	world, view := projection.world, projection.view
-	return mathf.NewVec2(point.X*world.Size.X/view.Size.X+world.Position.X,
-		-(point.Y*world.Size.Y/view.Size.Y + world.Position.Y))
-}
-
-// Drag picking filters candidates before hit testing, unlike ordinary clicks.
-func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
-	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
-			return sprite
-		}
-	}
-	return nil
 }
 
 func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
@@ -121,12 +101,12 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 		return
 	}
 	if !drag.active {
-		view := p.dragViewportPoint(point)
+		view := p.frame.dragProjection.viewportPoint(point)
 		// Ignore projection roundoff, not scene movement or frame timing.
-		moved := !view.Sub(drag.lastView).IsApproximatelyZero()
+		pointerMoved := !view.Sub(drag.lastView).IsApproximatelyZero()
 		drag.lastView = view
 		distance := view.Sub(drag.startView)
-		movementTrigger := moved && distance.LengthSquared() > dragDistance*dragDistance
+		movementTrigger := pointerMoved && distance.LengthSquared() > dragDistance*dragDistance
 		// Consume the one-shot timeout even if picking fails. Later pointer
 		// movement can retry; scene changes alone must not capture a sprite.
 		if !movementTrigger && (!drag.timeoutPending || p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond) {
@@ -158,4 +138,23 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 		pen.needsPositionReset = true
 	}
 	transform.writePosition(x, y, engine.PositionXY)
+}
+
+func (projection *dragProjection) viewportPoint(point mathf.Vec2) mathf.Vec2 {
+	if projection == nil {
+		return point
+	}
+	world, view := projection.world, projection.view
+	return mathf.NewVec2((point.X-world.Position.X)*view.Size.X/world.Size.X,
+		(-point.Y-world.Position.Y)*view.Size.Y/world.Size.Y)
+}
+
+// Resolve a screen-space point against a camera projection.
+func (projection *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
+	if projection == nil {
+		return point
+	}
+	world, view := projection.world, projection.view
+	return mathf.NewVec2(point.X*world.Size.X/view.Size.X+world.Position.X,
+		-(point.Y*world.Size.Y/view.Size.Y + world.Position.Y))
 }
