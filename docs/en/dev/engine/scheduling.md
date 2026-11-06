@@ -291,7 +291,8 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Engine-facing update callbacks and runtime timers/tweens | `internal/gdengine/callbacks.go`, `internal/engine/runtime_bridge.go` |
 | Physical position reads and final sprite submission | `runtime_sync.go`, `component_transform.go`, `shape_manager.go` |
 | Frame input sampling, unified input and timer dispatch | `runtime_input.go` |
-| Condition registration, sampling, and matched-handler dispatch | `runtime_events.go` |
+| Shared script event registration and dispatch, condition sampling | `runtime_events.go` |
+| Game broadcasts, event binding and routing, click target selection | `game_events.go` |
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
 
 `UpdateStats()` returns statistics from the latest update, with durations in
@@ -394,7 +395,7 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 
 Core regression coverage is in `runtime_scheduler_test.go`,
 `runtime_events_test.go`, `runtime_event_order_test.go`,
-`runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_test.go`,
+`runtime_engine_test.go`, `runtime_replay_test.go`,
 `runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/runtime_delta_test.go`,
 `internal/engine/execute_native_test.go`,
 `sprite_clone_test.go`, `internal/coroutine/loop_test.go`,

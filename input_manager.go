@@ -134,6 +134,11 @@ const (
 
 const mouseClickInterval = 50 * time.Millisecond
 
+const (
+	clickTimerGlobal = -1
+	clickTimerStage  = 0
+)
+
 type inputManager struct {
 	g        *Game
 	mousePos mathf.Vec2
@@ -164,11 +169,6 @@ func (p *inputManager) init(g *Game) {
 	p.swipe.InitWithClock(g.inputClock)
 }
 
-func (p *inputManager) onKeyDown(key Key) {
-	// Note: key-up callbacks are not part of the current event sink API.
-	p.g.scriptEvents.doWhenKeyPressed(key)
-}
-
 func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	target := p.g.findClickTarget(point)
 	sprite, _ := target.(*SpriteImpl)
@@ -197,11 +197,11 @@ func (p *inputManager) click(target clicker) {
 		if proxy == nil || !p.clickGate.Allow(proxy.GetId()) {
 			return
 		}
-		target.doWhenClick(target)
+		target.doWhenClick()
 		return
 	}
 	if p.clickGate.Allow(clickTimerStage) {
-		p.g.scriptEvents.doWhenClick(p.g)
+		p.g.doWhenClick()
 	}
 }
 
@@ -231,8 +231,8 @@ func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
 			Direction(result.Direction), result.Velocity, result.Distance, targetName)
 	}
 	if target != nil {
-		target.doWhenSwipe(Direction(result.Direction), target)
+		target.doWhenSwipe(Direction(result.Direction))
 	} else {
-		p.g.scriptEvents.doWhenSwipe(Direction(result.Direction), p.g)
+		p.g.doWhenSwipe(Direction(result.Direction))
 	}
 }

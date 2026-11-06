@@ -20,6 +20,8 @@ import (
 	"slices"
 
 	coreevent "github.com/goplus/spx/v4/internal/core/event"
+	"github.com/goplus/spx/v4/internal/coroutine"
+	spxlog "github.com/goplus/spx/v4/internal/log"
 )
 
 func (p *SpriteImpl) OnCloned__0(onCloned func()) {
@@ -28,7 +30,7 @@ func (p *SpriteImpl) OnCloned__0(onCloned func()) {
 
 func (p *SpriteImpl) OnCloned__1(onCloned func(data any)) {
 	p.spriteState.hasOnCloned = true
-	p.register(coreevent.BucketCloned, p, onCloned)
+	p.register(coreevent.BucketCloned, onCloned)
 }
 
 func (p *SpriteImpl) OnTouchStart__0(sprite SpriteName, onTouchStart func()) {
@@ -61,13 +63,36 @@ func (p *SpriteImpl) OnTouchStart__3(sprites []SpriteName, onTouchStart func(Spr
 	})
 }
 
-func (p *SpriteImpl) fireTouchStart(obj *SpriteImpl) {
-	if p.spriteState.hasOnTouchStart {
-		p.doWhenTouchStart(p, obj)
-	}
-}
-
 func (p *SpriteImpl) addTouchStartHandler(onTouchStart func(Sprite)) {
 	p.spriteState.hasOnTouchStart = true
-	p.register(coreevent.BucketTouchStart, p, onTouchStart)
+	p.register(coreevent.BucketTouchStart, onTouchStart)
+}
+
+func (p *SpriteImpl) doWhenCloned(data any) {
+	p.dispatchTarget(coreevent.BucketCloned, p, scriptEventDispatch{
+		mode:      coroutine.BatchWaitFirstSlice,
+		matchData: p,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			if isDebugEventEnabled() {
+				spxlog.Debug("OnCloned: %s", p.name)
+			}
+			ev.Handler.(func(any))(data)
+		},
+	})
+}
+
+func (p *SpriteImpl) doWhenTouchStart(obj *SpriteImpl) {
+	if !p.spriteState.hasOnTouchStart {
+		return
+	}
+	p.dispatchTarget(coreevent.BucketTouchStart, p, scriptEventDispatch{
+		mode:      coroutine.BatchAsync,
+		matchData: p,
+		run: func(_ coroutine.Thread, ev *eventSink) {
+			if isDebugEventEnabled() {
+				spxlog.Debug("OnTouchStart: %s, %s", p.name, obj.name)
+			}
+			ev.Handler.(func(Sprite))(obj.sprite)
+		},
+	})
 }

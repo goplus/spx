@@ -52,7 +52,7 @@ func TestSpriteTouchStartOverloadsFilterNamedTargets(t *testing.T) {
 	source.OnTouchStart__2([]SpriteName{"first", "second"}, func() { got = append(got, "multiple") })
 	source.OnTouchStart__3([]SpriteName{"first", "second"}, func(s Sprite) { got = append(got, "multiple:"+spriteOf(s).Name()) })
 	for _, target := range []*cloneLimitSprite{other, first, second} {
-		source.fireTouchStart(&target.SpriteImpl)
+		source.doWhenTouchStart(&target.SpriteImpl)
 		gco.Update()
 	}
 	want := []string{"single", "single:first", "multiple", "multiple:first", "multiple", "multiple:second"}

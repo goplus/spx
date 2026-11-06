@@ -223,7 +223,8 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 引擎层更新回调与 runtime 延时、tween | `internal/gdengine/callbacks.go`、`internal/engine/runtime_bridge.go` |
 | 物理位置回读与帧末精灵提交 | `runtime_sync.go`、`component_transform.go`、`shape_manager.go` |
 | 帧输入采样、统一输入与 Timer 派发 | `runtime_input.go` |
-| 条件注册、状态采样与已匹配事件派发 | `runtime_events.go` |
+| 公共脚本事件注册与派发、条件采样 | `runtime_events.go` |
+| Game 广播、事件绑定与路由、点击目标选择 | `game_events.go` |
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
 
 `UpdateStats()` 返回最近一次更新的统计，耗时单位为毫秒。
@@ -298,7 +299,6 @@ GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 
 核心回归位于 `runtime_scheduler_test.go`、`runtime_events_test.go`、
 `runtime_event_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
-`runtime_event_dispatch_test.go`、
 `runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/runtime_delta_test.go`、
 `internal/engine/execute_native_test.go`、
 `sprite_clone_test.go`、`internal/coroutine/loop_test.go`、

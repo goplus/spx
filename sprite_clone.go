@@ -100,7 +100,7 @@ func instantiateStageSprite(out reflect.Value, source Sprite, properties spriteP
 func dispatchCloneLifecycle(dest *SpriteImpl, data any) {
 	defer dest.finishCloneInitialization()
 	if dest.spriteState.hasOnCloned {
-		dest.doWhenCloned(dest, data)
+		dest.doWhenCloned(data)
 	}
 }
 
