@@ -31,24 +31,21 @@ const (
 
 type spriteDragState struct {
 	pressed       bool
-	clickDeferred bool        // The clicked sprite was draggable, so it did not click on mouse down.
-	target        *SpriteImpl // Captured on mouse down; never replaced during this press.
+	clickDeferred bool        // Click target was draggable on mouse down.
+	target        *SpriteImpl // Fixed for this press.
 	startView     mathf.Vec2
 	pressedAt     time.Time
 	offset        mathf.Vec2
 	active        bool
 }
 
-// Input (including v1 recordings) is in world space. Freeze its projection
-// with the frame: camera following can change the camera before dispatch.
-// Viewport pixels need not match browser CSS pixels.
+// dragProjection preserves the input frame's world-to-viewport mapping.
 type dragProjection struct {
 	world, view mathf.Rect2
 }
 
-// SetDragMode controls whether the user can drag this sprite with the left mouse
-// button. Draggable enables dragging; NotDraggable (or any other value) disables
-// it and ends a pending or active drag.
+// SetDragMode enables left-button dragging for Draggable.
+// Any other value disables dragging and cancels the current gesture.
 func (p *SpriteImpl) SetDragMode(mode DragMode) {
 	p.spriteState.isDraggable = mode == Draggable
 	if !p.spriteState.isDraggable && p.g != nil {
@@ -60,8 +57,7 @@ func (p *SpriteImpl) isDragging() bool {
 	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
 }
 
-// Drag picking filters candidates before hit testing, unlike ordinary clicks.
-// It runs only on mouse down: an empty press cannot acquire a target later.
+// Drag picking ignores non-draggable foreground sprites.
 func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
 	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
 		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
@@ -85,8 +81,7 @@ func (p *inputManager) sampleDragProjection() *dragProjection {
 
 func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
 	if p.drag.target == sprite {
-		// Cancelling a pending background candidate must not cancel the
-		// ordinary foreground click. Clear the candidate so it cannot revive.
+		// Preserve foreground clicks when cancelling a pending background drag.
 		pressed := p.drag.pressed && !p.drag.active && !p.drag.clickDeferred
 		p.drag = spriteDragState{pressed: pressed}
 	}
@@ -104,7 +99,7 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 	}
 	view := p.frame.dragProjection.viewportPoint(point)
 	distance := view.Sub(drag.startView)
-	// Keep v1 timestamp tolerance when checking the activation threshold.
+	// Allow for v1 replay timestamp rounding.
 	if !drag.active && distance.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
 		return
 	}
@@ -120,7 +115,7 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 		x, y := sprite.getXY()
 		drag.offset = mathf.NewVec2(x-start.X, y-start.Y)
 		drag.active = true
-		p.swipe.Finish(point) // A drag takes over any pending foreground swipe.
+		p.swipe.Finish(point) // Drag takes over the foreground swipe.
 		sprite.SetLayerTo(Front)
 	}
 	transform := sprite.transform()
@@ -144,7 +139,6 @@ func (projection *dragProjection) viewportPoint(point mathf.Vec2) mathf.Vec2 {
 		(-point.Y-world.Position.Y)*view.Size.Y/world.Size.Y)
 }
 
-// Resolve a screen-space point against a camera projection.
 func (projection *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
 	if projection == nil {
 		return point

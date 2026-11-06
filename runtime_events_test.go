@@ -1179,7 +1179,7 @@ func TestPointHitsClickTargetRejectsInvalidTarget(t *testing.T) {
 			case "destroyed":
 				sprite.markDestroyed()
 			}
-			// No backend is installed: these guards must reject before a hit query.
+			// No backend: rejection must precede the hit query.
 			if game.pointHitsClickTarget(sprite, mathf.Vec2{}) {
 				t.Fatal("invalid target accepted a click")
 			}

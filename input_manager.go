@@ -182,7 +182,7 @@ func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	}
 	if p.drag.clickDeferred {
 		p.swipe.Finish(point)
-		return // A click is delivered on release if this press does not drag.
+		return
 	}
 	p.swipe.Begin(point, sprite)
 	p.click(target)
@@ -211,11 +211,10 @@ func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
 	p.drag = spriteDragState{}
 	result, target, ok := p.swipe.Finish(point)
 	if drag.active {
-		return // A drag never also becomes a click or swipe.
+		return // Dragging suppresses clicks and swipes.
 	}
 	if drag.pressed {
-		// Release picks independently of mouse down. Only draggable sprites
-		// defer their click until mouse up.
+		// Pick the release target independently of the drag candidate.
 		if released, ok := p.g.findClickTarget(point).(*SpriteImpl); ok && released.spriteState.isDraggable {
 			p.click(released)
 		}

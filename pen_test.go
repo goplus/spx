@@ -969,7 +969,7 @@ func TestPenResumeAfterDragBatchesRestoreBeforeDrawing(t *testing.T) {
 			sprite := newPenTestSprite()
 			sprite.PenDown()
 			initialDowns, initialUps := spy.penDownCalls, spy.penUpCalls
-			// Dragging changes the logical position without moving the native pen.
+			// Simulate a drag without advancing the native pen.
 			sprite.transform().setPositionRaw(50, 60)
 			sprite.pen().needsPositionReset = true
 			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)

@@ -187,8 +187,7 @@ func TestSpriteDragCandidateDoesNotSuppressForegroundSwipe(t *testing.T) {
 			case "disable":
 				candidate.SetDragMode(NotDraggable)
 			}
-			// 100 world units in 100 ms is a swipe; at .02 zoom it is only
-			// two viewport pixels and does not activate the pending drag.
+			// This swipe spans only two viewport pixels at .02 zoom.
 			clock.currentTime = .1
 			end := start.Add(mathf.NewVec2(100, 0))
 			dispatchSpriteDragFrame(co, game, end, &eventLeftButtonUp{Pos: end})
@@ -360,7 +359,7 @@ func TestSpriteDragLongPressAfterExtendedRecording(t *testing.T) {
 				sprite.OnClick(func() { clicks++ })
 				point := mathf.NewVec2(10, 20)
 				boundary := tc.start + tc.fps*2/5
-				// Existing v1 recordings accumulated timestamps one tick at a time.
+				// Reproduce timestamp rounding in v1 recordings.
 				for i := 0; i <= boundary; i++ {
 					if i > 0 {
 						clock.currentTime += 1 / float64(tc.fps)
@@ -576,7 +575,7 @@ func TestSpriteDragCameraMotionDoesNotActivate(t *testing.T) {
 	dispatchSpriteDragFrame(co, game, start, &eventLeftButtonDown{Pos: start})
 	camera := pkgengine.CameraMgr.(*dragCameraMgr)
 	camera.world.Position.X += 100
-	// The same display pixel now corresponds to a different world point.
+	// Keep the pointer stationary in the viewport.
 	dispatchSpriteDragFrame(co, game, start.Add(mathf.NewVec2(100, 0)))
 	if game.inputMgr.drag.active {
 		t.Fatal("camera movement activated a stationary pointer")
@@ -690,7 +689,7 @@ func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 						state.Buttons = 0
 						edges = append(edges, InputReplayMouseEvent{Button: 1})
 					}
-					// Mock only the engine sampling boundary; record and dispatch each tick.
+					// Supply input at the engine sampling boundary.
 					tick, err := consumeInputTickWithMouseEvents(state, edges, nil, 1/float64(fps))
 					if err != nil {
 						t.Fatal(err)
@@ -1127,9 +1126,7 @@ func TestSpriteDragFloat32CameraNeverCapturesAfterEmptyPress(t *testing.T) {
 	assertSpriteDragPosition(t, sprite, 10, 20)
 }
 
-// Exercise the real sampling/dispatch path without seeding drag state or
-// replacing prepared events. Replay supplies button edges at the input boundary;
-// this does not exercise the live engine's platform event queue.
+// Replay exercises sampling and dispatch, not the platform event queue.
 func TestSpriteDragSamplingAndDispatch(t *testing.T) {
 	for _, gesture := range []string{"first down", "same tick click", "held", "activate"} {
 		t.Run(gesture, func(t *testing.T) {
@@ -1254,7 +1251,7 @@ func TestSpriteDragActiveSamplingAndDispatch(t *testing.T) {
 					co.Update()
 					session.endFrame()
 				}
-				// Keep the original world-space grab offset (-2, 2).
+				// Preserve the world-space grab offset (-2, 2).
 				switch change {
 				case "pan":
 					assertSpriteDragPosition(t, sprite, 130, -10)
@@ -1298,8 +1295,7 @@ func TestSpriteDragProjectionFallback(t *testing.T) {
 }
 
 func TestSpriteDragRejectsStaleTarget(t *testing.T) {
-	// Public cancellation APIs clear drag state immediately. Also check the
-	// dispatch guard when an invalid target is already retained in a snapshot.
+	// Bypass public cancellation to exercise the stale-target guard.
 	for _, invalid := range []string{"disabled", "hidden", "destroyed"} {
 		t.Run(invalid, func(t *testing.T) {
 			co, game, sprite := setupSpriteDragTest(t)

@@ -144,9 +144,8 @@ void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 		append_index(quad_index + 1);
 		append_index(quad_index + 3);
 
-		// Half-circle caps meet the quad at its edge. Full discs would blend over
-		// the quad and darken translucent endpoints within a single pen segment.
-		// A continuing stroke reuses the preceding endpoint cap.
+		// Half-circle caps avoid double-blending the line body.
+		// Continuing strokes reuse the preceding endpoint cap.
 		if (command.draw_start_cap) {
 			append_half_cap(command.from, normal, command.color);
 		}

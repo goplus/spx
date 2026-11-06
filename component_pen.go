@@ -58,7 +58,7 @@ type penComponent struct {
 	sprite *SpriteImpl
 	penState
 	penObj *gdx.Object
-	// A drag moves the sprite without drawing; resume the pen at its new origin.
+	// Dragging must not draw a connecting stroke.
 	needsPositionReset bool
 }
 
@@ -275,8 +275,7 @@ func (p *penComponent) movePen(x, y float64) {
 	p.syncPenPosition(x, y)
 }
 
-// Restore the logical state after dragging or cloning without drawing a point.
-// Only an explicit penDown should add a point at the current position.
+// Restore the pen origin and state without drawing a point.
 func (p *penComponent) restorePenState() {
 	x, y := p.sprite.getXY()
 	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)

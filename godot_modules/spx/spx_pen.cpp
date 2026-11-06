@@ -152,8 +152,7 @@ void SpxPen::move_to(GdVec2 position) {
 }
 
 void SpxPen::restore_state(GdVec2 position, GdBool is_down) {
-	// Dragging and lazy clone initialization restore the next stroke's origin
-	// and logical pen state without drawing the dot of an explicit pen-down.
+	// Dragging and cloning must not add a pen-down dot.
 	current_pen_pos = position;
 	last_draw_pos = _get_draw_position(position, pen_properties.size);
 	needs_start_cap = true;

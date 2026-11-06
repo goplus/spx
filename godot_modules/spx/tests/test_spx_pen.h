@@ -166,8 +166,8 @@ TEST_CASE("[SceneTree][SPX] Restoring a pen origin and down state does not draw"
 		float commands[] = { 1, 6, object_id_lane(uint32_t(id)), object_id_lane(uint32_t(id >> 32)), float(position.x), float(position.y), is_down ? 1.0f : 0.0f, 0, 0 };
 		manager->batch_update_commands(commands, 9);
 	};
-	manager->set_pen_size_to(pen, 3); // Also check the width-specific half-pixel origin.
-	// A clone can inherit a down pen before its native pen object exists.
+	manager->set_pen_size_to(pen, 3); // Exercise the half-pixel offset for width 3.
+	// A fresh clone inherits pen state without executing penDown.
 	restore_state(Vector2(10, 20), true);
 	CHECK_FALSE(canvas->has_pending_commands());
 	manager->move_pen_to(pen, Vector2(10.75, 20));
@@ -177,24 +177,23 @@ TEST_CASE("[SceneTree][SPX] Restoring a pen origin and down state does not draw"
 	manager->flush_all();
 	restore_state(Vector2(100, 70), true);
 	CHECK_FALSE(canvas->has_pending_commands());
-	// This movement is below the draw threshold only when the origin was reset
-	// to the new position, including its coordinate conversion and pixel offset.
+	// Subpixel motion checks the restored origin, Y conversion, and pixel offset.
 	manager->move_pen_to(pen, Vector2(100.75, 70));
 	CHECK_FALSE(canvas->has_pending_commands());
 	manager->move_pen_to(pen, Vector2(110, 70));
-	CHECK(canvas->has_pending_commands()); // Restored the down state without a pen-down dot.
+	CHECK(canvas->has_pending_commands());
 	manager->flush_all();
 
 	restore_state(Vector2(150, 30), true);
 	CHECK_FALSE(canvas->has_pending_commands());
 	for (int i = 0; i < 2; ++i) {
 		manager->pen_down(pen, false);
-		CHECK(canvas->has_pending_commands()); // Every explicit penDown still draws a point.
+		CHECK(canvas->has_pending_commands()); // Explicit penDown draws even when already down.
 		manager->flush_all();
 	}
 	restore_state(Vector2(200, 40), false);
 	manager->move_pen_to(pen, Vector2(210, 40));
-	CHECK_FALSE(canvas->has_pending_commands()); // Restoring up silently disables drawing.
+	CHECK_FALSE(canvas->has_pending_commands());
 }
 
 TEST_CASE("[SceneTree][SPX] Pen state restoration preserves batch ordering and atomic validation") {
@@ -214,16 +213,17 @@ TEST_CASE("[SceneTree][SPX] Pen state restoration preserves batch ordering and a
 	ERR_PRINT_OFF;
 	manager->batch_update_commands(rejected, 17);
 	ERR_PRINT_ON;
+	// Rejection preserves the stroke's origin and down state.
 	manager->move_pen_to(pen, Vector2(10.75, 20));
-	CHECK_FALSE(canvas->has_pending_commands()); // Rejection must not change the origin.
+	CHECK_FALSE(canvas->has_pending_commands());
 	manager->move_pen_to(pen, Vector2(20, 20));
-	CHECK(canvas->has_pending_commands()); // Rejection must not change the down state.
+	CHECK(canvas->has_pending_commands());
 	manager->flush_all();
 	float commands[] = { 2,
 		6, low, high, 100, 70, 1, 0, 0,
 		1, low, high, 100.75, 70, 0, 0, 0 };
 	manager->batch_update_commands(commands, 17);
-	CHECK_FALSE(canvas->has_pending_commands()); // Restore must precede the move in this batch.
+	CHECK_FALSE(canvas->has_pending_commands()); // Restore must precede the move.
 	manager->move_pen_to(pen, Vector2(110, 70));
 	CHECK(canvas->has_pending_commands());
 }
