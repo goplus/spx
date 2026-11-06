@@ -13,8 +13,8 @@ spx runnative --path ./test/DragMode
 
 A draggable sprite starts moving after the pointer travels more than 3 viewport
 pixels or stays pressed for 400 ms. Small movement still counts as a click on
-release. The topmost visible hit target is used for both clicks and drags; a
-non-draggable foreground sprite blocks dragging through it. Dragging with the
+release. Clicks use the topmost visible hit target. Dragging picks among draggable
+sprites, so a non-draggable foreground sprite does not block dragging through it. Dragging with the
 pen down draws nothing, and the next scripted movement resumes from the drop
 position without an extra pen-down dot.
 

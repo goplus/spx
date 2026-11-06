@@ -25,11 +25,12 @@ import (
 
 // Sampling runs between script slices; pending is consumed on the engine thread.
 type inputFrameState struct {
-	history     coreruntime.InputFrameState
-	mouseEvents []engine.MouseEvent
-	keyEvents   []engine.KeyEvent
-	hadSession  bool
-	pending     *inputFrame
+	history        coreruntime.InputFrameState
+	mouseEvents    []engine.MouseEvent
+	keyEvents      []engine.KeyEvent
+	hadSession     bool
+	pending        *inputFrame
+	dragProjection *dragProjection
 }
 
 type inputFrame struct {
@@ -61,6 +62,10 @@ func (p *inputManager) prepareInputFrame(delta float64) bool {
 			return false
 		}
 		captureKey = session.captureKey
+	}
+	c.dragProjection = nil
+	if p.drag.pressed || state.Buttons&1 != 0 || len(c.mouseEvents) != 0 {
+		c.dragProjection = p.sampleDragProjection()
 	}
 	point := mathf.Vec2{X: state.Mouse.X, Y: state.Mouse.Y}
 	if session == nil && c.hadSession {

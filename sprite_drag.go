@@ -17,6 +17,7 @@
 package spx
 
 import (
+	"slices"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
@@ -39,36 +40,67 @@ const (
 )
 
 type spriteDragState struct {
-	pressed   bool
-	target    *SpriteImpl
-	start     mathf.Vec2
-	startView mathf.Vec2
-	pressedAt time.Time
-	offset    mathf.Vec2
-	active    bool
+	pressed        bool
+	target         *SpriteImpl
+	startView      mathf.Vec2
+	lastView       mathf.Vec2
+	timeoutPending bool
+	pressedAt      time.Time
+	offset         mathf.Vec2
+	active         bool
 }
 
 func (p *SpriteImpl) isDragging() bool {
 	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
 }
 
-// Input (including recordings) is in world space. Project it into the viewport
-// using the actual camera rect, so camera movement and smoothing do not count
-// as pointer movement. Viewport pixels need not match browser CSS pixels.
-func (p *inputManager) dragViewportPoint(point mathf.Vec2) mathf.Vec2 {
+// Input (including v1 recordings) is in world space. Freeze its projection
+// with the frame: camera following can change the camera before dispatch.
+// Viewport pixels need not match browser CSS pixels.
+type dragProjection struct {
+	world, view mathf.Rect2
+}
+
+func (p *inputManager) sampleDragProjection() *dragProjection {
 	if p.g.camera == nil {
-		return point
+		return nil
 	}
 	camera := engine.Managers().CameraMgr
 	world, view := camera.GetGlobalCameraRect(), camera.GetViewportRect()
-	if world.Size.X == 0 || world.Size.Y == 0 {
+	if world.Size.X == 0 || world.Size.Y == 0 || view.Size.X == 0 || view.Size.Y == 0 {
+		return nil
+	}
+	return &dragProjection{world: world, view: view}
+}
+
+func (p *inputManager) dragViewportPoint(point mathf.Vec2) mathf.Vec2 {
+	projection := p.frame.dragProjection
+	if projection == nil {
 		return point
 	}
-	// Camera rectangles use Godot's downward-positive Y, unlike SPX points.
-	return mathf.Vec2{
-		X: (point.X - world.Position.X) * view.Size.X / world.Size.X,
-		Y: (-point.Y - world.Position.Y) * view.Size.Y / world.Size.Y,
+	world, view := projection.world, projection.view
+	return mathf.NewVec2((point.X-world.Position.X)*view.Size.X/world.Size.X,
+		(-point.Y-world.Position.Y)*view.Size.Y/world.Size.Y)
+}
+
+// Resolve a screen-space point against a camera projection.
+func (projection *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
+	if projection == nil {
+		return point
 	}
+	world, view := projection.world, projection.view
+	return mathf.NewVec2(point.X*world.Size.X/view.Size.X+world.Position.X,
+		-(point.Y*world.Size.Y/view.Size.Y + world.Position.Y))
+}
+
+// Drag picking filters candidates before hit testing, unlike ordinary clicks.
+func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
+	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
+			return sprite
+		}
+	}
+	return nil
 }
 
 func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
@@ -89,20 +121,29 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 		return
 	}
 	if !drag.active {
-		delta := p.dragViewportPoint(point).Sub(drag.startView)
-		// A microsecond tolerance keeps accumulated v1 replay timestamps from
-		// delaying the 400 ms boundary by an entire frame.
-		if delta.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
+		view := p.dragViewportPoint(point)
+		// Ignore projection roundoff, not scene movement or frame timing.
+		moved := !view.Sub(drag.lastView).IsApproximatelyZero()
+		drag.lastView = view
+		distance := view.Sub(drag.startView)
+		movementTrigger := moved && distance.LengthSquared() > dragDistance*dragDistance
+		// Consume the one-shot timeout even if picking fails. Later pointer
+		// movement can retry; scene changes alone must not capture a sprite.
+		if !movementTrigger && (!drag.timeoutPending || p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond) {
 			return
 		}
-		// Scripts may have moved or reordered sprites while the press waited.
-		sprite, _ = p.g.findClickTarget(drag.start).(*SpriteImpl)
-		if sprite == nil || !sprite.spriteState.isDraggable {
+		drag.timeoutPending = false
+		// Picking sees the scene at activation, not the scene at sampling.
+		currentProjection := p.sampleDragProjection()
+		start := currentProjection.worldPoint(drag.startView)
+		sprite = p.g.findDragTarget(start)
+		if sprite == nil {
 			return
 		}
 		x, y := sprite.getXY()
 		drag.target = sprite
-		drag.offset = mathf.NewVec2(x-drag.start.X, y-drag.start.Y)
+		drag.offset = mathf.NewVec2(x-start.X, y-start.Y)
+		point = currentProjection.worldPoint(view)
 		drag.active = true
 		sprite.SetLayerTo(Front)
 	}
