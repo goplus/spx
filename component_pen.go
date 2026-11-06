@@ -59,7 +59,7 @@ type penComponent struct {
 	penState
 	penObj *gdx.Object
 	// A drag moves the sprite without drawing; resume the pen at its new origin.
-	positionReset bool
+	needsPositionReset bool
 }
 
 // ============================================================================
@@ -97,7 +97,7 @@ func (p *penComponent) penUp() {
 		return
 	}
 	p.isPenDown = false
-	p.positionReset = false
+	p.needsPositionReset = false
 	if p.penObj == nil {
 		return
 	}
@@ -111,8 +111,8 @@ func (p *penComponent) penDown() {
 	if !wasDown || created {
 		p.syncPenAppearance()
 	}
-	x, y := p.sprite.getXY()
 	if !p.resetPositionIfNeeded() {
+		x, y := p.sprite.getXY()
 		p.syncPenPosition(x, y)
 	}
 	p.isPenDown = true
@@ -276,10 +276,10 @@ func (p *penComponent) movePen(x, y float64) {
 // Resetting after a drag preserves the logical pen state and draws nothing.
 // In particular, it must not call PenDown, which would add a point at the origin.
 func (p *penComponent) resetPositionIfNeeded() bool {
-	if p.positionReset {
+	if p.needsPositionReset {
 		startX, startY := p.sprite.getXY()
 		p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(startX, startY), p.isPenDown)
-		p.positionReset = false
+		p.needsPositionReset = false
 		return true
 	}
 	return false
@@ -331,7 +331,7 @@ func (p *penComponent) ensureClonePenReady() {
 	x, y := p.sprite.getXY()
 	// Inheriting a down pen does not execute a penDown block or draw a point.
 	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)
-	p.positionReset = false
+	p.needsPositionReset = false
 }
 
 func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTransparency bool) {

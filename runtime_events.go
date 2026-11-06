@@ -252,6 +252,9 @@ func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 
 	sprite, ok := target.(*SpriteImpl)
 	if ok {
+		if sprite.isDestroyed() {
+			return false
+		}
 		sprite.syncProxyForQuery()
 		if sprite.isFullyGhosted() {
 			return false

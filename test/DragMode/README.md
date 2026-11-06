@@ -10,3 +10,17 @@ From the repository root, run with the installed matching native runtime:
 ```sh
 spx runnative --path ./test/DragMode
 ```
+
+A draggable sprite starts moving after the pointer travels more than 3 viewport
+pixels or stays pressed for 400 ms. Small movement still counts as a click on
+release. The topmost visible hit target is used for both clicks and drags; a
+non-draggable foreground sprite blocks dragging through it. Dragging with the
+pen down draws nothing, and the next scripted movement resumes from the drop
+position without an extra pen-down dot.
+
+Input recording/replay v1 keeps mouse positions in world coordinates. Reproduce
+the same scene, camera, and viewport when comparing a recording with its replay;
+the format does not record the display transform. The threshold uses viewport
+pixels, not browser CSS pixels, so on HiDPI or CSS-scaled canvases its physical
+movement tolerance can differ from Scratch's 3 CSS pixels. Browser/GPU behavior
+needs validation with a matching rebuilt runtime.

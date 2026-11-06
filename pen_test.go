@@ -32,27 +32,29 @@ import (
 )
 
 type spyPenMgr struct {
-	canvasWidth      int64
-	canvasHeight     int64
-	canvasCalls      int
-	createCalls      int
-	moveCalls        int
-	restoreCalls     int
-	penDownCalls     int
-	penDownModes     []bool
-	penUpCalls       int
-	setColorCalls    int
-	setSizeCalls     int
-	stampSpriteCalls int
-	lastMove         mathf.Vec2
-	lastRestore      mathf.Vec2
-	lastRestoreDown  bool
-	lastStampSprite  engine.Object
-	spriteMgr        *spyStampSpriteMgr
-	onStamp          func()
-	batchCalls       int
-	batches          [][]float32
-	events           []string
+	canvasWidth       int64
+	canvasHeight      int64
+	canvasCalls       int
+	createCalls       int
+	moveCalls         int
+	restoreCalls      int
+	penDownCalls      int
+	penDownModes      []bool
+	penUpCalls        int
+	setColorCalls     int
+	setSizeCalls      int
+	stampSpriteCalls  int
+	lastMove          mathf.Vec2
+	lastMoveObject    engine.Object
+	lastRestore       mathf.Vec2
+	lastRestoreObject engine.Object
+	lastRestoreDown   bool
+	lastStampSprite   engine.Object
+	spriteMgr         *spyStampSpriteMgr
+	onStamp           func()
+	batchCalls        int
+	batches           [][]float32
+	events            []string
 }
 
 type spyStampSpriteMgr struct {
@@ -453,6 +455,12 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	want := mathf.NewVec2(20, 40)
 	if spy.lastMove != want {
 		t.Fatalf("MovePenTo position = %v, want %v", spy.lastMove, want)
+	}
+	if want := []string{"size", "color", "restore", "move"}; !slices.Equal(spy.events, want) {
+		t.Fatalf("clone initialization events = %v, want %v", spy.events, want)
+	}
+	if spy.lastRestoreObject != *pen.penObj || spy.lastMoveObject != *pen.penObj {
+		t.Fatal("clone initialization and movement targeted a different pen")
 	}
 }
 
@@ -963,7 +971,7 @@ func TestPenResumeAfterDragBatchesRestoreBeforeDrawing(t *testing.T) {
 			initialDowns, initialUps := spy.penDownCalls, spy.penUpCalls
 			// Dragging changes the logical position without moving the native pen.
 			sprite.transform().setPositionRaw(50, 60)
-			sprite.pen().positionReset = true
+			sprite.pen().needsPositionReset = true
 			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
 			wantLast := internalengine.PenBatchMove
 			if explicitDown {
@@ -996,7 +1004,7 @@ func TestPenResumeAfterDragBatchesRestoreBeforeDrawing(t *testing.T) {
 					t.Fatalf("move destination = (%v, %v), want (70, 80)", batch[move+3], batch[move+4])
 				}
 			}
-			if sprite.pen().positionReset || !sprite.pen().isPenDown {
+			if sprite.pen().needsPositionReset || !sprite.pen().isPenDown {
 				t.Fatal("resume failed to clear the pending reset while retaining pen-down state")
 			}
 		})
@@ -1203,12 +1211,14 @@ func (s *spyPenMgr) PenStamp(obj engine.Object) {}
 func (s *spyPenMgr) MovePenTo(obj engine.Object, position mathf.Vec2) {
 	s.moveCalls++
 	s.lastMove = position
+	s.lastMoveObject = obj
 	s.events = append(s.events, "move")
 }
 
 func (s *spyPenMgr) RestorePenState(obj engine.Object, position mathf.Vec2, isDown bool) {
 	s.restoreCalls++
 	s.lastRestore = position
+	s.lastRestoreObject = obj
 	s.lastRestoreDown = isDown
 	s.events = append(s.events, "restore")
 }

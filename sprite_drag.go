@@ -17,7 +17,7 @@
 package spx
 
 import (
-	"slices"
+	"time"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
@@ -33,26 +33,42 @@ func (p *SpriteImpl) SetDragMode(mode DragMode) {
 	}
 }
 
+const (
+	dragDistance = 3 // Viewport pixels.
+	dragDelay    = 400 * time.Millisecond
+)
+
 type spriteDragState struct {
-	target *SpriteImpl
-	start  mathf.Vec2
-	offset mathf.Vec2
-	active bool
-	click  bool
+	pressed   bool
+	target    *SpriteImpl
+	start     mathf.Vec2
+	startView mathf.Vec2
+	pressedAt time.Time
+	offset    mathf.Vec2
+	active    bool
 }
 
 func (p *SpriteImpl) isDragging() bool {
 	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
 }
 
-func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
-	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
-		sprite, ok := item.(*SpriteImpl)
-		if ok && sprite.spriteState.isDraggable && !sprite.isDestroyed() && p.pointHitsClickTarget(sprite, point) {
-			return sprite
-		}
+// Input (including recordings) is in world space. Project it into the viewport
+// using the actual camera rect, so camera movement and smoothing do not count
+// as pointer movement. Viewport pixels need not match browser CSS pixels.
+func (p *inputManager) dragViewportPoint(point mathf.Vec2) mathf.Vec2 {
+	if p.g.camera == nil {
+		return point
 	}
-	return nil
+	camera := engine.Managers().CameraMgr
+	world, view := camera.GetGlobalCameraRect(), camera.GetViewportRect()
+	if world.Size.X == 0 || world.Size.Y == 0 {
+		return point
+	}
+	// Camera rectangles use Godot's downward-positive Y, unlike SPX points.
+	return mathf.Vec2{
+		X: (point.X - world.Position.X) * view.Size.X / world.Size.X,
+		Y: (-point.Y - world.Position.Y) * view.Size.Y / world.Size.Y,
+	}
 }
 
 func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
@@ -65,17 +81,28 @@ func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
 func (p *inputManager) updateDrag(point mathf.Vec2) {
 	drag := &p.drag
 	sprite := drag.target
-	if sprite == nil {
+	if !drag.pressed && sprite == nil {
 		return
 	}
-	if !sprite.spriteState.isDraggable || !sprite.Visible() || sprite.isDestroyed() {
+	if sprite != nil && (!sprite.spriteState.isDraggable || !sprite.Visible() || sprite.isDestroyed()) {
 		p.cancelDrag(sprite)
 		return
 	}
 	if !drag.active {
-		if point == drag.start {
+		delta := p.dragViewportPoint(point).Sub(drag.startView)
+		// A microsecond tolerance keeps accumulated v1 replay timestamps from
+		// delaying the 400 ms boundary by an entire frame.
+		if delta.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
 			return
 		}
+		// Scripts may have moved or reordered sprites while the press waited.
+		sprite, _ = p.g.findClickTarget(drag.start).(*SpriteImpl)
+		if sprite == nil || !sprite.spriteState.isDraggable {
+			return
+		}
+		x, y := sprite.getXY()
+		drag.target = sprite
+		drag.offset = mathf.NewVec2(x-drag.start.X, y-drag.start.Y)
 		drag.active = true
 		sprite.SetLayerTo(Front)
 	}
@@ -87,7 +114,7 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 	// Dragging bypasses script movement and pen drawing while still publishing
 	// the position through the normal versioned proxy synchronization path.
 	if pen := sprite.pen(); pen != nil && pen.isPenDown {
-		pen.positionReset = true
+		pen.needsPositionReset = true
 	}
 	transform.writePosition(x, y, engine.PositionXY)
 }

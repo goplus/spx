@@ -171,19 +171,16 @@ func (p *inputManager) onKeyDown(key Key) {
 
 func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	target := p.g.findClickTarget(point)
-	p.drag = spriteDragState{}
-	if sprite := p.g.findDragTarget(point); sprite != nil {
-		x, y := sprite.getXY()
-		p.drag = spriteDragState{
-			target: sprite,
-			start:  point,
-			offset: mathf.Vec2{X: x - point.X, Y: y - point.Y},
-			click:  target == sprite,
-		}
+	p.drag = spriteDragState{
+		pressed:   true,
+		start:     point,
+		startView: p.dragViewportPoint(point),
+		pressedAt: p.g.inputClock(),
 	}
-	swipeTarget, _ := target.(*SpriteImpl)
-	p.swipe.Begin(point, swipeTarget)
-	if swipeTarget != nil && swipeTarget.spriteState.isDraggable {
+	sprite, _ := target.(*SpriteImpl)
+	p.swipe.Begin(point, sprite)
+	if sprite != nil && sprite.spriteState.isDraggable {
+		p.drag.target = sprite
 		return // A click is delivered on release if this press does not drag.
 	}
 	p.click(target)
@@ -207,20 +204,22 @@ func (p *inputManager) click(target clicker) {
 }
 
 func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
-	if p.drag.target != nil {
-		p.updateDrag(point)
-		drag := p.drag
-		p.drag = spriteDragState{}
-		// A captured drag gesture never also becomes a swipe.
-		p.swipe.Finish(point)
-		if drag.target != nil && drag.click && !drag.active && p.g.pointHitsClickTarget(drag.target, point) {
-			p.click(drag.target)
-		}
-		return
-	}
+	p.updateDrag(point)
+	drag := p.drag
+	p.drag = spriteDragState{}
 	result, target, ok := p.swipe.Finish(point)
-	if !ok {
-		return
+	if drag.active {
+		return // A drag never also becomes a click or swipe.
+	}
+	if drag.pressed {
+		// Release picks independently of mouse down. Only draggable sprites
+		// defer their click until mouse up.
+		if released, ok := p.g.findClickTarget(point).(*SpriteImpl); ok && released.spriteState.isDraggable {
+			p.click(released)
+		}
+	}
+	if drag.target != nil || !ok {
+		return // A press captured by a draggable sprite is not a swipe.
 	}
 	if isDebugEventEnabled() {
 		targetName := "stage"
