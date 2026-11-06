@@ -106,12 +106,12 @@ func (p *penComponent) penUp() {
 
 func (p *penComponent) penDown() {
 	engine.RequestRedraw()
-	wasDown := p.isPenDown
-	created := p.checkOrCreatePen()
-	if !wasDown || created {
+	if p.checkOrCreatePen() || !p.isPenDown {
 		p.syncPenAppearance()
 	}
-	if !p.resetPositionIfNeeded() {
+	if p.needsPositionReset {
+		p.restorePenState()
+	} else {
 		x, y := p.sprite.getXY()
 		p.syncPenPosition(x, y)
 	}
@@ -269,20 +269,18 @@ func (p *penComponent) movePen(x, y float64) {
 	}
 	engine.RequestRedraw()
 	p.ensureClonePenReady()
-	p.resetPositionIfNeeded()
+	if p.needsPositionReset {
+		p.restorePenState()
+	}
 	p.syncPenPosition(x, y)
 }
 
-// Resetting after a drag preserves the logical pen state and draws nothing.
-// In particular, it must not call PenDown, which would add a point at the origin.
-func (p *penComponent) resetPositionIfNeeded() bool {
-	if p.needsPositionReset {
-		startX, startY := p.sprite.getXY()
-		p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(startX, startY), p.isPenDown)
-		p.needsPositionReset = false
-		return true
-	}
-	return false
+// Restore the logical state after dragging or cloning without drawing a point.
+// Only an explicit penDown should add a point at the current position.
+func (p *penComponent) restorePenState() {
+	x, y := p.sprite.getXY()
+	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)
+	p.needsPositionReset = false
 }
 
 func (p *penComponent) syncPenPosition(x, y float64) {
@@ -323,15 +321,11 @@ func (p *penComponent) syncPenAppearance() {
 }
 
 func (p *penComponent) ensureClonePenReady() {
-	created := p.checkOrCreatePen()
-	if !created || !p.isPenDown {
+	if !p.checkOrCreatePen() || !p.isPenDown {
 		return
 	}
 	p.syncPenAppearance()
-	x, y := p.sprite.getXY()
-	// Inheriting a down pen does not execute a penDown block or draw a point.
-	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)
-	p.needsPositionReset = false
+	p.restorePenState()
 }
 
 func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTransparency bool) {

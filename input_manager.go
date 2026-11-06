@@ -171,20 +171,20 @@ func (p *inputManager) onKeyDown(key Key) {
 
 func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	target := p.g.findClickTarget(point)
+	sprite, _ := target.(*SpriteImpl)
 	view := p.frame.dragProjection.viewportPoint(point)
 	p.drag = spriteDragState{
-		pressed:        true,
-		startView:      view,
-		lastView:       view,
-		timeoutPending: true,
-		pressedAt:      p.g.inputClock(),
+		pressed:       true,
+		clickDeferred: sprite != nil && sprite.spriteState.isDraggable,
+		target:        p.g.findDragTarget(point),
+		startView:     view,
+		pressedAt:     p.g.inputClock(),
 	}
-	sprite, _ := target.(*SpriteImpl)
-	p.swipe.Begin(point, sprite)
-	if sprite != nil && sprite.spriteState.isDraggable {
-		p.drag.target = sprite
+	if p.drag.clickDeferred {
+		p.swipe.Finish(point)
 		return // A click is delivered on release if this press does not drag.
 	}
+	p.swipe.Begin(point, sprite)
 	p.click(target)
 }
 
@@ -220,8 +220,8 @@ func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
 			p.click(released)
 		}
 	}
-	if drag.target != nil || !ok {
-		return // A press captured by a draggable sprite is not a swipe.
+	if !ok {
+		return
 	}
 	if isDebugEventEnabled() {
 		targetName := "stage"

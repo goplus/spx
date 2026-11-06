@@ -36,9 +36,17 @@
 #include "../spx_sprite_mgr.h"
 #include "scene/resources/canvas_item_material.h"
 #include "spx_test_fixtures.h"
+#include <cstring>
 #include <limits>
 #include <thread>
 namespace TestSpxPen {
+
+inline float object_id_lane(uint32_t bits) {
+	float value;
+	std::memcpy(&value, &bits, sizeof(value));
+	return value;
+}
+
 TEST_CASE("[SceneTree][SPX] Pen strokes queue only while down and share a resizable canvas") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_pen();
@@ -155,12 +163,7 @@ TEST_CASE("[SceneTree][SPX] Restoring a pen origin and down state does not draw"
 			return;
 		}
 		const uint64_t id = pen;
-		auto lane = [](uint32_t bits) {
-			float value;
-			memcpy(&value, &bits, sizeof(value));
-			return value;
-		};
-		float commands[] = { 1, 6, lane(uint32_t(id)), lane(uint32_t(id >> 32)), float(position.x), float(position.y), is_down ? 1.0f : 0.0f, 0, 0 };
+		float commands[] = { 1, 6, object_id_lane(uint32_t(id)), object_id_lane(uint32_t(id >> 32)), float(position.x), float(position.y), is_down ? 1.0f : 0.0f, 0, 0 };
 		manager->batch_update_commands(commands, 9);
 	};
 	manager->set_pen_size_to(pen, 3); // Also check the width-specific half-pixel origin.
@@ -201,12 +204,7 @@ TEST_CASE("[SceneTree][SPX] Pen state restoration preserves batch ordering and a
 	REQUIRE(canvas);
 	const GdObj pen = manager->create_pen();
 	const uint64_t id = pen;
-	auto lane = [](uint32_t bits) {
-		float value;
-		memcpy(&value, &bits, sizeof(value));
-		return value;
-	};
-	const float low = lane(uint32_t(id)), high = lane(uint32_t(id >> 32));
+	const float low = object_id_lane(uint32_t(id)), high = object_id_lane(uint32_t(id >> 32));
 	manager->move_pen_to(pen, Vector2(10, 20));
 	manager->pen_down(pen, false);
 	manager->flush_all();
@@ -236,13 +234,8 @@ TEST_CASE("[SceneTree][SPX] Pen command batches validate all operations before d
 	auto *canvas = Object::cast_to<SpxPenCanvas>(scene.root->get_node(NodePath("pen_root/pen_render_target/pen_canvas_drawer")));
 	REQUIRE(canvas);
 	const GdObj pen = manager->create_pen();
-	uint64_t id = pen;
-	auto lane = [](uint32_t bits) {
-		float value;
-		memcpy(&value, &bits, sizeof(value));
-		return value;
-	};
-	const float low = lane(uint32_t(id)), high = lane(uint32_t(id >> 32));
+	const uint64_t id = pen;
+	const float low = object_id_lane(uint32_t(id)), high = object_id_lane(uint32_t(id >> 32));
 	float commands[] = { 5,
 		4, low, high, 1, 0, 0, 1, 0,
 		5, low, high, 3, 0, 0, 0, 0,

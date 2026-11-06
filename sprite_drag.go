@@ -30,14 +30,13 @@ const (
 )
 
 type spriteDragState struct {
-	pressed        bool
-	target         *SpriteImpl
-	startView      mathf.Vec2
-	lastView       mathf.Vec2
-	timeoutPending bool
-	pressedAt      time.Time
-	offset         mathf.Vec2
-	active         bool
+	pressed       bool
+	clickDeferred bool        // The clicked sprite was draggable, so it did not click on mouse down.
+	target        *SpriteImpl // Captured on mouse down; never replaced during this press.
+	startView     mathf.Vec2
+	pressedAt     time.Time
+	offset        mathf.Vec2
+	active        bool
 }
 
 // Input (including v1 recordings) is in world space. Freeze its projection
@@ -62,6 +61,7 @@ func (p *SpriteImpl) isDragging() bool {
 }
 
 // Drag picking filters candidates before hit testing, unlike ordinary clicks.
+// It runs only on mouse down: an empty press cannot acquire a target later.
 func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
 	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
 		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
@@ -85,46 +85,40 @@ func (p *inputManager) sampleDragProjection() *dragProjection {
 
 func (p *inputManager) cancelDrag(sprite *SpriteImpl) {
 	if p.drag.target == sprite {
-		p.drag = spriteDragState{}
-		p.swipe.Finish(p.mousePos)
+		// Cancelling a pending background candidate must not cancel the
+		// ordinary foreground click. Clear the candidate so it cannot revive.
+		pressed := p.drag.pressed && !p.drag.active && !p.drag.clickDeferred
+		p.drag = spriteDragState{pressed: pressed}
 	}
 }
 
 func (p *inputManager) updateDrag(point mathf.Vec2) {
 	drag := &p.drag
 	sprite := drag.target
-	if !drag.pressed && sprite == nil {
+	if sprite == nil {
 		return
 	}
-	if sprite != nil && (!sprite.spriteState.isDraggable || !sprite.Visible() || sprite.isDestroyed()) {
+	if !sprite.spriteState.isDraggable || !sprite.Visible() || sprite.isDestroyed() {
 		p.cancelDrag(sprite)
 		return
 	}
 	if !drag.active {
 		view := p.frame.dragProjection.viewportPoint(point)
-		// Ignore projection roundoff, not scene movement or frame timing.
-		pointerMoved := !view.Sub(drag.lastView).IsApproximatelyZero()
-		drag.lastView = view
 		distance := view.Sub(drag.startView)
-		movementTrigger := pointerMoved && distance.LengthSquared() > dragDistance*dragDistance
-		// Consume the one-shot timeout even if picking fails. Later pointer
-		// movement can retry; scene changes alone must not capture a sprite.
-		if !movementTrigger && (!drag.timeoutPending || p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond) {
+		// The target is already captured, but activation still waits for an
+		// intentional movement or hold. Keep v1 replay timestamp tolerance.
+		if distance.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
 			return
 		}
-		drag.timeoutPending = false
-		// Picking sees the scene at activation, not the scene at sampling.
+		// Preserve the captured sprite's current position if it or the camera
+		// moved while waiting; layer changes cannot select another sprite.
 		currentProjection := p.sampleDragProjection()
 		start := currentProjection.worldPoint(drag.startView)
-		sprite = p.g.findDragTarget(start)
-		if sprite == nil {
-			return
-		}
 		x, y := sprite.getXY()
-		drag.target = sprite
 		drag.offset = mathf.NewVec2(x-start.X, y-start.Y)
 		point = currentProjection.worldPoint(view)
 		drag.active = true
+		p.swipe.Finish(point) // A drag takes over any pending foreground swipe.
 		sprite.SetLayerTo(Front)
 	}
 	transform := sprite.transform()
