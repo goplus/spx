@@ -162,6 +162,7 @@ type GDExtensionSpxPenBatchUpdateCommands C.GDExtensionSpxPenBatchUpdateCommands
 type GDExtensionSpxPenPenStamp C.GDExtensionSpxPenPenStamp
 type GDExtensionSpxPenPenStampSprite C.GDExtensionSpxPenPenStampSprite
 type GDExtensionSpxPenMovePenTo C.GDExtensionSpxPenMovePenTo
+type GDExtensionSpxPenRestorePenState C.GDExtensionSpxPenRestorePenState
 type GDExtensionSpxPenPenDown C.GDExtensionSpxPenPenDown
 type GDExtensionSpxPenPenUp C.GDExtensionSpxPenPenUp
 type GDExtensionSpxPenSetPenColorTo C.GDExtensionSpxPenSetPenColorTo
@@ -1062,6 +1063,19 @@ func CallPenMovePenTo(
 	arg2 := (C.GdVec2)(position)
 
 	C.cgo_callfn_GDExtensionSpxPenMovePenTo(arg0, arg1, arg2)
+
+}
+func CallPenRestorePenState(
+	obj GdObj,
+	position GdVec2,
+	is_down GdBool,
+) {
+	arg0 := (C.GDExtensionSpxPenRestorePenState)(api.SpxPenRestorePenState)
+	arg1 := (C.GdObj)(obj)
+	arg2 := (C.GdVec2)(position)
+	arg3 := (C.GdBool)(is_down)
+
+	C.cgo_callfn_GDExtensionSpxPenRestorePenState(arg0, arg1, arg2, arg3)
 
 }
 func CallPenPenDown(

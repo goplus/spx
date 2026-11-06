@@ -57,6 +57,7 @@ enum SpxPenBatchCommand {
 	SPX_PEN_BATCH_UP = 3,
 	SPX_PEN_BATCH_COLOR = 4,
 	SPX_PEN_BATCH_SET_SIZE = 5,
+	SPX_PEN_BATCH_RESTORE_STATE = 6,
 };
 
 constexpr int SPX_PEN_BATCH_FIELDS = 8;
@@ -89,7 +90,8 @@ bool is_valid_pen_batch_command(float p_value) {
 			p_value == SPX_PEN_BATCH_DOWN ||
 			p_value == SPX_PEN_BATCH_UP ||
 			p_value == SPX_PEN_BATCH_COLOR ||
-			p_value == SPX_PEN_BATCH_SET_SIZE;
+			p_value == SPX_PEN_BATCH_SET_SIZE ||
+			p_value == SPX_PEN_BATCH_RESTORE_STATE;
 }
 
 } // namespace
@@ -189,6 +191,9 @@ void SpxPenMgr::batch_update_commands(const float *buffer_data, int len) {
 			case SPX_PEN_BATCH_SET_SIZE:
 				pen->set_size_to(record[3]);
 				break;
+			case SPX_PEN_BATCH_RESTORE_STATE:
+				pen->restore_state(spx_to_godot_vec2(GdVec2(record[3], record[4])), record[5] != 0.0f);
+				break;
 		}
 	}
 
@@ -232,6 +237,10 @@ void SpxPenMgr::flush_all() {
 
 void SpxPenMgr::move_pen_to(GdObj obj, GdVec2 position) {
 	SPX_WITH_PEN_OR_RETURN(obj, pen->move_to(spx_to_godot_vec2(position)))
+}
+
+void SpxPenMgr::restore_pen_state(GdObj obj, GdVec2 position, GdBool is_down) {
+	SPX_WITH_PEN_OR_RETURN(obj, pen->restore_state(spx_to_godot_vec2(position), is_down))
 }
 
 void SpxPenMgr::pen_stamp(GdObj obj) {

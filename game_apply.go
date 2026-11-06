@@ -71,6 +71,7 @@ func (p *Game) loadPreparedSprite(sprite Sprite, name string, gamer reflect.Valu
 	base.g, base.name, base.sprite = p, name, sprite
 	base.runtimeState.scale = config.Size
 	base.spriteState.isVisible = config.Visible
+	base.spriteState.isDraggable = config.IsDraggable
 
 	base.components.initComponents(base, config)
 	base.initRuntimeProxy()

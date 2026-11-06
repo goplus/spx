@@ -60,6 +60,7 @@ public:
 	SPX_BIND void pen_stamp(GdObj obj);
 	SPX_BIND void pen_stamp_sprite(GdObj sprite_id);
 	SPX_BIND void move_pen_to(GdObj obj, GdVec2 position);
+	SPX_BIND void restore_pen_state(GdObj obj, GdVec2 position, GdBool is_down);
 	SPX_BIND void pen_down(GdObj obj, GdBool move_by_mouse);
 	SPX_BIND void pen_up(GdObj obj);
 	SPX_BIND void set_pen_color_to(GdObj obj, GdColor color);

@@ -1,0 +1,7 @@
+{
+  "costumes": [{"name": "fixed", "path": "fixed.svg", "bitmapResolution": 1, "imageWidth": 80, "imageHeight": 80, "x": 40, "y": 40}],
+  "heading": 90,
+  "rotationStyle": "normal",
+  "size": 1,
+  "visible": true
+}

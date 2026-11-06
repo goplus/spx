@@ -600,6 +600,16 @@ gdspx_pen_move_pen_to(obj_low,obj_high,position) {
 		if (_arg1) FreeGdVec2(_arg1);
 	}
 }
+gdspx_pen_restore_pen_state(obj_low,obj_high,position,is_down) {
+	var _call = Module['_gdspx_pen_restore_pen_state'];
+	var _arg1;
+	try {
+		_arg1 = ToGdVec2(position);
+		_call(GdInt64FromParts(obj_low, obj_high), _arg1, is_down ? 1 : 0);
+	} finally {
+		if (_arg1) FreeGdVec2(_arg1);
+	}
+}
 gdspx_pen_pen_down(obj_low,obj_high,move_by_mouse) {
 	var _call = Module['_gdspx_pen_pen_down'];
 	_call(GdInt64FromParts(obj_low, obj_high), move_by_mouse ? 1 : 0);
@@ -3374,6 +3384,7 @@ GdspxFuncs.prototype['gdspx_pen_batch_update_commands'] = GdspxFuncs.prototype.g
 GdspxFuncs.prototype['gdspx_pen_pen_stamp'] = GdspxFuncs.prototype.gdspx_pen_pen_stamp;
 GdspxFuncs.prototype['gdspx_pen_pen_stamp_sprite'] = GdspxFuncs.prototype.gdspx_pen_pen_stamp_sprite;
 GdspxFuncs.prototype['gdspx_pen_move_pen_to'] = GdspxFuncs.prototype.gdspx_pen_move_pen_to;
+GdspxFuncs.prototype['gdspx_pen_restore_pen_state'] = GdspxFuncs.prototype.gdspx_pen_restore_pen_state;
 GdspxFuncs.prototype['gdspx_pen_pen_down'] = GdspxFuncs.prototype.gdspx_pen_pen_down;
 GdspxFuncs.prototype['gdspx_pen_pen_up'] = GdspxFuncs.prototype.gdspx_pen_pen_up;
 GdspxFuncs.prototype['gdspx_pen_set_pen_color_to'] = GdspxFuncs.prototype.gdspx_pen_set_pen_color_to;

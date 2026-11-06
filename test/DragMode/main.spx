@@ -1,0 +1,3 @@
+onStart => {
+	println "DragMode: drag the blue tile; Space toggles dragging; the gray tile stays fixed."
+}

@@ -31,6 +31,16 @@ func (p *Game) queuePenMove(obj engine.Object, position mathf.Vec2) {
 	}
 }
 
+func (p *Game) queuePenRestoreState(obj engine.Object, position mathf.Vec2, isDown bool) {
+	if p.penSyncBuffer == nil {
+		engine.Managers().PenMgr.RestorePenState(obj, position, isDown)
+		return
+	}
+	if p.penSyncBuffer.AddRestoreState(obj, position.X, position.Y, isDown) {
+		p.flushPenCommands()
+	}
+}
+
 func (p *Game) queuePenDown(obj engine.Object) {
 	if p.penSyncBuffer == nil {
 		engine.Managers().PenMgr.PenDown(obj, false)

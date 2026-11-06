@@ -176,7 +176,7 @@ func (p *SpriteImpl) touching(obj Target) bool {
 		}
 	case Sprite:
 		src := spriteOf(v)
-		if src == nil || src.spriteState.isDying {
+		if src == nil || src.spriteState.isDying || src.isDragging() {
 			return false
 		}
 		return src.touchingSprite(p)
@@ -358,7 +358,7 @@ func (p *Game) touchingSpriteBy(dst *SpriteImpl, name string) *SpriteImpl {
 	pixel := !p.physicsEnabled
 	dstBox, dstBounded := dst.queryBounds(pixel)
 	for _, sp := range p.shapeMgr.spritesNamed(name) {
-		if sp == dst || !sp.spriteState.isVisible || sp.spriteState.isDying || sp.runtimeState.syncSprite == nil {
+		if sp == dst || !sp.spriteState.isVisible || sp.spriteState.isDying || sp.isDragging() || sp.runtimeState.syncSprite == nil {
 			continue
 		}
 		if box, bounded := sp.queryBounds(pixel); dstBounded && bounded && !dstBox.Intersects(box) {

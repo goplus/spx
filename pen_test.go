@@ -37,6 +37,7 @@ type spyPenMgr struct {
 	canvasCalls      int
 	createCalls      int
 	moveCalls        int
+	restoreCalls     int
 	penDownCalls     int
 	penDownModes     []bool
 	penUpCalls       int
@@ -44,6 +45,8 @@ type spyPenMgr struct {
 	setSizeCalls     int
 	stampSpriteCalls int
 	lastMove         mathf.Vec2
+	lastRestore      mathf.Vec2
+	lastRestoreDown  bool
 	lastStampSprite  engine.Object
 	spriteMgr        *spyStampSpriteMgr
 	onStamp          func()
@@ -432,8 +435,11 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	if spy.createCalls != 1 {
 		t.Fatalf("CreatePen calls = %d, want 1", spy.createCalls)
 	}
-	if spy.penDownCalls != 1 {
-		t.Fatalf("PenDown calls = %d, want 1", spy.penDownCalls)
+	if spy.penDownCalls != 0 || spy.restoreCalls != 1 || !spy.lastRestoreDown {
+		t.Fatal("inherited pen-down state must be restored without drawing a point")
+	}
+	if spy.lastRestore != mathf.NewVec2(12, 34) {
+		t.Fatalf("restored position = %v, want (12, 34)", spy.lastRestore)
 	}
 	if spy.setSizeCalls != 1 {
 		t.Fatalf("SetPenSizeTo calls = %d, want 1", spy.setSizeCalls)
@@ -441,8 +447,8 @@ func TestPenComponentCloneMoveMaterializesPenTrail(t *testing.T) {
 	if spy.setColorCalls != 1 {
 		t.Fatalf("SetPenColorTo calls = %d, want 1", spy.setColorCalls)
 	}
-	if spy.moveCalls != 2 {
-		t.Fatalf("MovePenTo calls = %d, want 2", spy.moveCalls)
+	if spy.moveCalls != 1 {
+		t.Fatalf("MovePenTo calls = %d, want 1", spy.moveCalls)
 	}
 	want := mathf.NewVec2(20, 40)
 	if spy.lastMove != want {
@@ -765,20 +771,19 @@ func TestClonePenColorChangeFollowsInitialDrawingState(t *testing.T) {
 	wantOps := []int{
 		internalengine.PenBatchSetSize,
 		internalengine.PenBatchColor,
-		internalengine.PenBatchMove,
-		internalengine.PenBatchDown,
+		internalengine.PenBatchRestoreState,
 		internalengine.PenBatchColor,
 	}
 	if got := penBatchOperations(batch); !slices.Equal(got, wantOps) {
 		t.Fatalf("commands = %v, want %v", got, wantOps)
 	}
-	if got := batch[1+3*internalengine.PenBatchFields+3]; got != 0 {
-		t.Fatalf("clone pen down moveByMouse = %v, want 0", got)
+	if got := batch[1+2*internalengine.PenBatchFields+5]; got != 1 {
+		t.Fatalf("clone restored pen-down state = %v, want 1", got)
 	}
 	if got := batch[1+internalengine.PenBatchFields+6]; got != 0.25 {
 		t.Fatalf("initial alpha = %v, want 0.25", got)
 	}
-	if got := batch[1+4*internalengine.PenBatchFields+6]; got != float32(0.15) {
+	if got := batch[1+3*internalengine.PenBatchFields+6]; got != float32(0.15) {
 		t.Fatalf("changed alpha = %v, want 0.15", got)
 	}
 	if original.pen().penColor.A != 0.25 {
@@ -918,6 +923,7 @@ func TestEveryPenCommandFlushesAtBatchLimit(t *testing.T) {
 		add  func(*Game)
 	}{
 		{"move", internalengine.PenBatchMove, func(g *Game) { g.queuePenMove(1, mathf.NewVec2(2, 3)) }},
+		{"restore state", internalengine.PenBatchRestoreState, func(g *Game) { g.queuePenRestoreState(1, mathf.NewVec2(2, 3), true) }},
 		{"down", internalengine.PenBatchDown, func(g *Game) { g.queuePenDown(1) }},
 		{"color", internalengine.PenBatchColor, func(g *Game) { g.queuePenColor(1, mathf.NewColorRGBA(1, 0, 0, 1)) }},
 		{"size", internalengine.PenBatchSetSize, func(g *Game) { g.queuePenSize(1, 3) }},
@@ -939,6 +945,59 @@ func TestEveryPenCommandFlushesAtBatchLimit(t *testing.T) {
 			game.flushPenCommands()
 			if spy.batchCalls != 1 {
 				t.Fatal("flushed batch was replayed")
+			}
+		})
+	}
+}
+
+func TestPenResumeAfterDragBatchesRestoreBeforeDrawing(t *testing.T) {
+	for _, explicitDown := range []bool{false, true} {
+		name := "move"
+		if explicitDown {
+			name = "explicit pen down"
+		}
+		t.Run(name, func(t *testing.T) {
+			spy := setupSpyPenMgr(t)
+			sprite := newPenTestSprite()
+			sprite.PenDown()
+			initialDowns, initialUps := spy.penDownCalls, spy.penUpCalls
+			// Dragging changes the logical position without moving the native pen.
+			sprite.transform().setPositionRaw(50, 60)
+			sprite.pen().positionReset = true
+			sprite.g.penSyncBuffer = internalengine.NewPenSyncBuffer(1)
+			wantLast := internalengine.PenBatchMove
+			if explicitDown {
+				sprite.PenDown()
+				wantLast = internalengine.PenBatchDown
+			} else {
+				sprite.SetXYpos(70, 80)
+			}
+			if spy.restoreCalls != 0 || spy.penDownCalls != initialDowns || spy.penUpCalls != initialUps {
+				t.Fatal("queued pen reset bypassed batching")
+			}
+			sprite.g.flushPenCommands()
+			if spy.batchCalls != 1 {
+				t.Fatalf("batch calls = %d, want 1", spy.batchCalls)
+			}
+			batch := spy.batches[0]
+			want := []int{internalengine.PenBatchRestoreState, wantLast}
+			if got := penBatchOperations(batch); !slices.Equal(got, want) {
+				t.Fatalf("pen command order = %v, want %v", got, want)
+			}
+			if batch[4] != 50 || batch[5] != 60 {
+				t.Fatalf("reset position = (%v, %v), want (50, 60)", batch[4], batch[5])
+			}
+			if batch[6] != 1 {
+				t.Fatalf("restored pen-down state = %v, want 1", batch[6])
+			}
+			if !explicitDown {
+				move := 1 + internalengine.PenBatchFields
+				if batch[move+3] != 70 || batch[move+4] != 80 {
+					t.Fatalf("move destination = (%v, %v), want (70, 80)", batch[move+3], batch[move+4])
+				}
+			}
+			if sprite.pen().positionReset || !sprite.pen().isPenDown {
+				t.Fatal("resume failed to clear the pending reset while retaining pen-down state")
 			}
 		})
 	}
@@ -1145,6 +1204,13 @@ func (s *spyPenMgr) MovePenTo(obj engine.Object, position mathf.Vec2) {
 	s.moveCalls++
 	s.lastMove = position
 	s.events = append(s.events, "move")
+}
+
+func (s *spyPenMgr) RestorePenState(obj engine.Object, position mathf.Vec2, isDown bool) {
+	s.restoreCalls++
+	s.lastRestore = position
+	s.lastRestoreDown = isDown
+	s.events = append(s.events, "restore")
 }
 
 func (s *spyPenMgr) PenDown(obj engine.Object, moveByMouse bool) {

@@ -86,6 +86,7 @@ public:
 	void on_up();
 	void stamp();
 	void move_to(GdVec2 position);
+	void restore_state(GdVec2 position, GdBool is_down);
 	void set_color_to(GdColor color);
 	void change_by(GdInt property, GdFloat amount);
 	void set_to(GdInt property, GdFloat value);

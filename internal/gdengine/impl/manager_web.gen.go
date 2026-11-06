@@ -482,6 +482,11 @@ func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
 	arg1 := JsFromGdVec2(position)
 	API.SpxPenMovePenTo.Invoke(arg0Low, arg0High, arg1)
 }
+func (pself *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
+	arg0Low, arg0High := JsSplitGdObj(obj)
+	arg1 := JsFromGdVec2(position)
+	API.SpxPenRestorePenState.Invoke(arg0Low, arg0High, arg1, is_down)
+}
 func (pself *penMgr) PenDown(obj Object, move_by_mouse bool) {
 	arg0Low, arg0High := JsSplitGdObj(obj)
 	API.SpxPenPenDown.Invoke(arg0Low, arg0High, move_by_mouse)

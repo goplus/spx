@@ -101,6 +101,7 @@ func init() {
 		},
 		NamedTypes: map[string]reflect.Type{
 			"Color":                   reflect.TypeOf((*q.Color)(nil)).Elem(),
+			"DragMode":                reflect.TypeOf((*q.DragMode)(nil)).Elem(),
 			"EffectKind":              reflect.TypeOf((*q.EffectKind)(nil)).Elem(),
 			"Game":                    reflect.TypeOf((*q.Game)(nil)).Elem(),
 			"InputSessionOptions":     reflect.TypeOf((*q.InputSessionOptions)(nil)).Elem(),
@@ -216,6 +217,7 @@ func init() {
 			"DbgFlagLoad":                {Typ: reflect.TypeOf(q.DbgFlagLoad), Value: constant.MakeInt64(int64(q.DbgFlagLoad))},
 			"DbgFlagPerf":                {Typ: reflect.TypeOf(q.DbgFlagPerf), Value: constant.MakeInt64(int64(q.DbgFlagPerf))},
 			"Down":                       {Typ: reflect.TypeOf(q.Down), Value: constant.MakeFromLiteral("1.8e+2", token.FLOAT, 0)},
+			"Draggable":                  {Typ: reflect.TypeOf(q.Draggable), Value: constant.MakeInt64(int64(q.Draggable))},
 			"DynamicPhysics":             {Typ: reflect.TypeOf(q.DynamicPhysics), Value: constant.MakeInt64(int64(q.DynamicPhysics))},
 			"Edge":                       {Typ: reflect.TypeOf(q.Edge), Value: constant.MakeInt64(int64(q.Edge))},
 			"EdgeBottom":                 {Typ: reflect.TypeOf(q.EdgeBottom), Value: constant.MakeInt64(int64(q.EdgeBottom))},
@@ -350,6 +352,7 @@ func init() {
 			"NoPhysics":                  {Typ: reflect.TypeOf(q.NoPhysics), Value: constant.MakeInt64(int64(q.NoPhysics))},
 			"None":                       {Typ: reflect.TypeOf(q.None), Value: constant.MakeInt64(int64(q.None))},
 			"Normal":                     {Typ: reflect.TypeOf(q.Normal), Value: constant.MakeInt64(int64(q.Normal))},
+			"NotDraggable":               {Typ: reflect.TypeOf(q.NotDraggable), Value: constant.MakeInt64(int64(q.NotDraggable))},
 			"OtherScriptsInGame":         {Typ: reflect.TypeOf(q.OtherScriptsInGame), Value: constant.MakeInt64(int64(q.OtherScriptsInGame))},
 			"OtherScriptsInSprite":       {Typ: reflect.TypeOf(q.OtherScriptsInSprite), Value: constant.MakeInt64(int64(q.OtherScriptsInSprite))},
 			"PenBrightness":              {Typ: reflect.TypeOf(q.PenBrightness), Value: constant.MakeInt64(int64(q.PenBrightness))},

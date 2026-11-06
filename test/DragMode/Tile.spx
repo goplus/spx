@@ -1,0 +1,24 @@
+var (
+	dragEnabled bool
+	clicks int
+)
+
+onStart => {
+	dragEnabled = true
+	setDragMode Draggable
+}
+
+onKey KeySpace, => {
+	dragEnabled = !dragEnabled
+	if dragEnabled {
+		setDragMode Draggable
+	} else {
+		setDragMode NotDraggable
+	}
+	println "Dragging enabled:", dragEnabled
+}
+
+onClick => {
+	clicks++
+	println "Tile clicks:", clicks
+}

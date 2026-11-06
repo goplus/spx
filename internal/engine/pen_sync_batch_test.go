@@ -27,6 +27,7 @@ func TestPenSyncBufferFlushesOneOrderedBatch(t *testing.T) {
 	const secondID = Object(0x0102030405060708)
 
 	buffer.AddColor(firstID, 0.1, 0.2, 0.3, 0.4)
+	buffer.AddRestoreState(secondID, 3, -4, true)
 	buffer.AddMove(secondID, 10, -20)
 	buffer.AddDown(firstID, false)
 	buffer.AddSetSize(secondID, 8)
@@ -40,18 +41,19 @@ func TestPenSyncBufferFlushesOneOrderedBatch(t *testing.T) {
 		}
 	})
 
-	if want := 1 + 5*PenBatchFields; len(got) != want {
+	if want := 1 + 6*PenBatchFields; len(got) != want {
 		t.Fatalf("batch len = %d, want %d", len(got), want)
 	}
-	if got[0] != 5 {
-		t.Fatalf("command count = %v, want 5", got[0])
+	if got[0] != 6 {
+		t.Fatalf("command count = %v, want 6", got[0])
 	}
 
 	assertPenCommand(t, got, 0, PenBatchColor, firstID, [4]float32{0.1, 0.2, 0.3, 0.4})
-	assertPenCommand(t, got, 1, PenBatchMove, secondID, [4]float32{10, -20})
-	assertPenCommand(t, got, 2, PenBatchDown, firstID, [4]float32{})
-	assertPenCommand(t, got, 3, PenBatchSetSize, secondID, [4]float32{8})
-	assertPenCommand(t, got, 4, PenBatchUp, firstID, [4]float32{})
+	assertPenCommand(t, got, 1, PenBatchRestoreState, secondID, [4]float32{3, -4, 1})
+	assertPenCommand(t, got, 2, PenBatchMove, secondID, [4]float32{10, -20})
+	assertPenCommand(t, got, 3, PenBatchDown, firstID, [4]float32{})
+	assertPenCommand(t, got, 4, PenBatchSetSize, secondID, [4]float32{8})
+	assertPenCommand(t, got, 5, PenBatchUp, firstID, [4]float32{})
 }
 
 func TestPenSyncBufferPreservesObjectIDBits(t *testing.T) {

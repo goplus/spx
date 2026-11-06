@@ -140,6 +140,96 @@ TEST_CASE("[SceneTree][SPX] Pen stamps hold resources until submission and accep
 	manager->destroy_pen(pen);
 }
 
+TEST_CASE("[SceneTree][SPX] Restoring a pen origin and down state does not draw") {
+	bool batched = false;
+	SUBCASE("direct restore") {}
+	SUBCASE("batched restore") { batched = true; }
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_pen();
+	auto *canvas = Object::cast_to<SpxPenCanvas>(scene.root->get_node(NodePath("pen_root/pen_render_target/pen_canvas_drawer")));
+	REQUIRE(canvas);
+	const GdObj pen = manager->create_pen();
+	auto restore_state = [&](Vector2 position, bool is_down) {
+		if (!batched) {
+			manager->restore_pen_state(pen, position, is_down);
+			return;
+		}
+		const uint64_t id = pen;
+		auto lane = [](uint32_t bits) {
+			float value;
+			memcpy(&value, &bits, sizeof(value));
+			return value;
+		};
+		float commands[] = { 1, 6, lane(uint32_t(id)), lane(uint32_t(id >> 32)), float(position.x), float(position.y), is_down ? 1.0f : 0.0f, 0, 0 };
+		manager->batch_update_commands(commands, 9);
+	};
+	manager->set_pen_size_to(pen, 3); // Also check the width-specific half-pixel origin.
+	// A clone can inherit a down pen before its native pen object exists.
+	restore_state(Vector2(10, 20), true);
+	CHECK_FALSE(canvas->has_pending_commands());
+	manager->move_pen_to(pen, Vector2(10.75, 20));
+	CHECK_FALSE(canvas->has_pending_commands());
+	manager->move_pen_to(pen, Vector2(20, 20));
+	CHECK(canvas->has_pending_commands());
+	manager->flush_all();
+	restore_state(Vector2(100, 70), true);
+	CHECK_FALSE(canvas->has_pending_commands());
+	// This movement is below the draw threshold only when the origin was reset
+	// to the new position, including its coordinate conversion and pixel offset.
+	manager->move_pen_to(pen, Vector2(100.75, 70));
+	CHECK_FALSE(canvas->has_pending_commands());
+	manager->move_pen_to(pen, Vector2(110, 70));
+	CHECK(canvas->has_pending_commands()); // Restored the down state without a pen-down dot.
+	manager->flush_all();
+
+	restore_state(Vector2(150, 30), true);
+	CHECK_FALSE(canvas->has_pending_commands());
+	for (int i = 0; i < 2; ++i) {
+		manager->pen_down(pen, false);
+		CHECK(canvas->has_pending_commands()); // Every explicit penDown still draws a point.
+		manager->flush_all();
+	}
+	restore_state(Vector2(200, 40), false);
+	manager->move_pen_to(pen, Vector2(210, 40));
+	CHECK_FALSE(canvas->has_pending_commands()); // Restoring up silently disables drawing.
+}
+
+TEST_CASE("[SceneTree][SPX] Pen state restoration preserves batch ordering and atomic validation") {
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_pen();
+	auto *canvas = Object::cast_to<SpxPenCanvas>(scene.root->get_node(NodePath("pen_root/pen_render_target/pen_canvas_drawer")));
+	REQUIRE(canvas);
+	const GdObj pen = manager->create_pen();
+	const uint64_t id = pen;
+	auto lane = [](uint32_t bits) {
+		float value;
+		memcpy(&value, &bits, sizeof(value));
+		return value;
+	};
+	const float low = lane(uint32_t(id)), high = lane(uint32_t(id >> 32));
+	manager->move_pen_to(pen, Vector2(10, 20));
+	manager->pen_down(pen, false);
+	manager->flush_all();
+	float rejected[] = { 2,
+		6, low, high, 100, 70, 0, 0, 0,
+		99, low, high, 0, 0, 0, 0, 0 };
+	ERR_PRINT_OFF;
+	manager->batch_update_commands(rejected, 17);
+	ERR_PRINT_ON;
+	manager->move_pen_to(pen, Vector2(10.75, 20));
+	CHECK_FALSE(canvas->has_pending_commands()); // Rejection must not change the origin.
+	manager->move_pen_to(pen, Vector2(20, 20));
+	CHECK(canvas->has_pending_commands()); // Rejection must not change the down state.
+	manager->flush_all();
+	float commands[] = { 2,
+		6, low, high, 100, 70, 1, 0, 0,
+		1, low, high, 100.75, 70, 0, 0, 0 };
+	manager->batch_update_commands(commands, 17);
+	CHECK_FALSE(canvas->has_pending_commands()); // Restore must precede the move in this batch.
+	manager->move_pen_to(pen, Vector2(110, 70));
+	CHECK(canvas->has_pending_commands());
+}
+
 TEST_CASE("[SceneTree][SPX] Pen command batches validate all operations before drawing") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_pen();
@@ -244,6 +334,7 @@ TEST_CASE("[SceneTree][SPX] Pen APIs reject missing handles and tolerate detache
 	REQUIRE(canvas);
 	ERR_PRINT_OFF;
 	manager->move_pen_to(0, Vector2());
+	manager->restore_pen_state(0, Vector2(), true);
 	manager->pen_stamp(0);
 	manager->pen_down(0, false);
 	manager->pen_up(0);
@@ -265,6 +356,7 @@ TEST_CASE("[SceneTree][SPX] Pen APIs reject missing handles and tolerate detache
 	pen.on_create(42, nullptr);
 	CHECK(pen.get_id() == 42);
 	pen.on_down(false);
+	pen.restore_state(Vector2(5, 5), true);
 	pen.move_to(Vector2(10, 10));
 	pen.set_to(-1, 0.5);
 	pen.change_by(-1, 0.5);

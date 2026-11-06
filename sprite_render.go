@@ -138,6 +138,9 @@ func (p *SpriteImpl) requestRedrawIfVisible() {
 }
 
 func (p *SpriteImpl) setVisible(visible bool) {
+	if !visible && p.g != nil {
+		p.g.inputMgr.cancelDrag(p)
+	}
 	if isDebugInstrEnabled() {
 		spxlog.Debug("%s visible is %t", p.name, visible)
 	}

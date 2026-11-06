@@ -58,6 +58,8 @@ type penComponent struct {
 	sprite *SpriteImpl
 	penState
 	penObj *gdx.Object
+	// A drag moves the sprite without drawing; resume the pen at its new origin.
+	positionReset bool
 }
 
 // ============================================================================
@@ -95,6 +97,7 @@ func (p *penComponent) penUp() {
 		return
 	}
 	p.isPenDown = false
+	p.positionReset = false
 	if p.penObj == nil {
 		return
 	}
@@ -109,7 +112,9 @@ func (p *penComponent) penDown() {
 		p.syncPenAppearance()
 	}
 	x, y := p.sprite.getXY()
-	p.syncPenPosition(x, y)
+	if !p.resetPositionIfNeeded() {
+		p.syncPenPosition(x, y)
+	}
 	p.isPenDown = true
 	p.sprite.g.queuePenDown(*p.penObj)
 }
@@ -264,7 +269,20 @@ func (p *penComponent) movePen(x, y float64) {
 	}
 	engine.RequestRedraw()
 	p.ensureClonePenReady()
+	p.resetPositionIfNeeded()
 	p.syncPenPosition(x, y)
+}
+
+// Resetting after a drag preserves the logical pen state and draws nothing.
+// In particular, it must not call PenDown, which would add a point at the origin.
+func (p *penComponent) resetPositionIfNeeded() bool {
+	if p.positionReset {
+		startX, startY := p.sprite.getXY()
+		p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(startX, startY), p.isPenDown)
+		p.positionReset = false
+		return true
+	}
+	return false
 }
 
 func (p *penComponent) syncPenPosition(x, y float64) {
@@ -311,8 +329,9 @@ func (p *penComponent) ensureClonePenReady() {
 	}
 	p.syncPenAppearance()
 	x, y := p.sprite.getXY()
-	p.syncPenPosition(x, y)
-	p.sprite.g.queuePenDown(*p.penObj)
+	// Inheriting a down pen does not execute a penDown block or draw a point.
+	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)
+	p.positionReset = false
 }
 
 func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTransparency bool) {

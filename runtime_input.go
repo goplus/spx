@@ -67,6 +67,7 @@ func (p *inputManager) prepareInputFrame(delta float64) bool {
 		// The previous session owns its input edges. Resume from held state.
 		c.history.Reset(state.Buttons&1 != 0)
 		c.mouseEvents, c.keyEvents = c.mouseEvents[:0], c.keyEvents[:0]
+		p.drag = spriteDragState{}
 	}
 	c.hadSession = session != nil
 	p.mousePos = point
@@ -114,6 +115,7 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 		c.history.Reset(resolved.initialLeftPressed)
 		p.clickGate.InitWithClock(mouseClickInterval, p.g.inputClock)
 		p.swipe.InitWithClock(p.g.inputClock)
+		p.drag = spriteDragState{}
 	}
 	c.mouseEvents = engineMouseEventsFromReplay(resolved.frame.MouseEvents, c.mouseEvents)
 	c.keyEvents = engineKeyEventsFromReplay(resolved.frame.KeyEvents, c.keyEvents)
@@ -169,6 +171,7 @@ func (p *Game) dispatchFrameEvents() {
 		for _, ev := range frame.events {
 			p.handleEvent(ev)
 		}
+		p.inputMgr.updateDrag(p.inputMgr.mousePos)
 	})
 }
 

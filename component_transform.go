@@ -289,8 +289,15 @@ func (t *transformComponent) moveTo(x, y float64) {
 }
 
 func (t *transformComponent) moveAxes(x, y float64, axes engine.PositionAxes) {
+	if t.sprite.isDragging() {
+		return
+	}
 	x, y = t.fixWorldRange(x, y)
 	t.sprite.movePen(x, y)
+	t.writePosition(x, y, axes)
+}
+
+func (t *transformComponent) writePosition(x, y float64, axes engine.PositionAxes) {
 	// Fencing can move the other axis too.
 	if x != t.x {
 		axes |= engine.PositionX

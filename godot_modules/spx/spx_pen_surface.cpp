@@ -53,6 +53,9 @@ void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 	constexpr int CAP_SEGMENTS = 12;
 	constexpr int DISC_VERTEX_COUNT = CAP_SEGMENTS + 1;
 	constexpr int DISC_INDEX_COUNT = CAP_SEGMENTS * 3;
+	constexpr int HALF_CAP_SEGMENTS = CAP_SEGMENTS / 2;
+	constexpr int HALF_CAP_VERTEX_COUNT = HALF_CAP_SEGMENTS + 2;
+	constexpr int HALF_CAP_INDEX_COUNT = HALF_CAP_SEGMENTS * 3;
 	Vector<int> indices;
 	Vector<Point2> vertices;
 	Vector<Color> colors;
@@ -64,9 +67,9 @@ void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 			required_vertices += DISC_VERTEX_COUNT;
 			required_indices += DISC_INDEX_COUNT;
 		} else {
-			const int disc_count = command.draw_start_cap ? 2 : 1;
-			required_vertices += 4 + disc_count * DISC_VERTEX_COUNT;
-			required_indices += 6 + disc_count * DISC_INDEX_COUNT;
+			const int cap_count = command.draw_start_cap ? 2 : 1;
+			required_vertices += 4 + cap_count * HALF_CAP_VERTEX_COUNT;
+			required_indices += 6 + cap_count * HALF_CAP_INDEX_COUNT;
 		}
 	}
 
@@ -102,6 +105,22 @@ void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 			append_index(center_index + 1 + ((i + 1) % CAP_SEGMENTS));
 		}
 	};
+	auto append_half_cap = [&](const Vector2 &p_center, const Vector2 &p_normal, const Color &p_color) {
+		const int center_index = vertex_count;
+		append_vertex(p_center, p_color);
+		const Vector2 outward(-p_normal.y, p_normal.x);
+		append_vertex(p_center + p_normal, p_color);
+		for (int i = 1; i < HALF_CAP_SEGMENTS; i++) {
+			const float angle = Math_PI * (float)i / (float)HALF_CAP_SEGMENTS;
+			append_vertex(p_center + p_normal * Math::cos(angle) + outward * Math::sin(angle), p_color);
+		}
+		append_vertex(p_center - p_normal, p_color);
+		for (int i = 0; i < HALF_CAP_SEGMENTS; i++) {
+			append_index(center_index);
+			append_index(center_index + 1 + i);
+			append_index(center_index + 2 + i);
+		}
+	};
 
 	for (int i = p_begin; i < p_end; i++) {
 		const DrawCommand &command = pending_commands[i];
@@ -125,12 +144,13 @@ void SpxPenCanvas::_draw_line_batch(int p_begin, int p_end) {
 		append_index(quad_index + 1);
 		append_index(quad_index + 3);
 
-		// Scratch uses round pen caps. A continuing stroke reuses the preceding
-		// endpoint cap, including when the segments are flushed in different frames.
+		// Half-circle caps meet the quad at its edge. Full discs would blend over
+		// the quad and darken translucent endpoints within a single pen segment.
+		// A continuing stroke reuses the preceding endpoint cap.
 		if (command.draw_start_cap) {
-			append_disc(command.from, radius, command.color);
+			append_half_cap(command.from, normal, command.color);
 		}
-		append_disc(command.to, radius, command.color);
+		append_half_cap(command.to, -normal, command.color);
 	}
 
 	DEV_ASSERT(vertex_count == required_vertices);

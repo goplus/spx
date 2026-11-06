@@ -370,6 +370,10 @@ void gdspx_pen_move_pen_to(GdObj obj, GdVec2 *position) {
 	 penMgr->move_pen_to(obj, *position);
 }
 EMSCRIPTEN_KEEPALIVE
+void gdspx_pen_restore_pen_state(GdObj obj, GdVec2 *position, GdBool is_down) {
+	 penMgr->restore_pen_state(obj, *position, is_down);
+}
+EMSCRIPTEN_KEEPALIVE
 void gdspx_pen_pen_down(GdObj obj, GdBool move_by_mouse) {
 	 penMgr->pen_down(obj, move_by_mouse);
 }
