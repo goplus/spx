@@ -119,20 +119,20 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 	transform.writePosition(x, y, engine.PositionXY)
 }
 
-func (projection *dragProjection) viewportPoint(point mathf.Vec2) mathf.Vec2 {
-	if projection == nil {
+func (d *dragProjection) viewportPoint(point mathf.Vec2) mathf.Vec2 {
+	if d == nil {
 		return point
 	}
-	world, view := projection.world, projection.view
+	world, view := d.world, d.view
 	return mathf.NewVec2((point.X-world.Position.X)*view.Size.X/world.Size.X,
 		(-point.Y-world.Position.Y)*view.Size.Y/world.Size.Y)
 }
 
-func (projection *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
-	if projection == nil {
+func (d *dragProjection) worldPoint(point mathf.Vec2) mathf.Vec2 {
+	if d == nil {
 		return point
 	}
-	world, view := projection.world, projection.view
+	world, view := d.world, d.view
 	return mathf.NewVec2(point.X*world.Size.X/view.Size.X+world.Position.X,
 		-(point.Y*world.Size.Y/view.Size.Y + world.Position.Y))
 }
