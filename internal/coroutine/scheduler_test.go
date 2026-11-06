@@ -389,13 +389,10 @@ func TestUpdateWaitsForCoroutineSpawnedByCurrentTask(t *testing.T) {
 		co := New(nil)
 		var ran atomic.Bool
 
-		co.enqueueJob(&waitJob{
-			kind: waitMainThread,
-			call: func() {
-				co.Create("spawned", func(me Thread) {
-					ran.Store(true)
-				})
-			},
+		co.queueMainThreadCallForTest(nil, func() {
+			co.Create("spawned", func(me Thread) {
+				ran.Store(true)
+			})
 		})
 
 		co.Update()
@@ -522,9 +519,6 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 
 	now := time.Now()
 	co.updateWatchdogNow = func() time.Time { return now }
-	co.enqueueJob(&waitJob{kind: waitMainThread, call: func() {
-		now = now.Add(updateWatchdogTimeout)
-	}})
 
 	resumed := make(chan struct{})
 	thread := co.Create("slow-frame", func(me Thread) {
@@ -534,7 +528,11 @@ func TestUpdateWatchdogPreservesScriptsAndQueuedWork(t *testing.T) {
 	waitForThreadSignal(t, thread.firstSliceDone, "script did not reach its yield")
 
 	queuedRan := false
-	co.enqueueJob(&waitJob{kind: waitMainThread, call: func() { queuedRan = true }})
+	co.queueMainThreadCallForTest(nil, func() { queuedRan = true })
+	// Engine calls run newest first; let the newest call exhaust this Update.
+	co.queueMainThreadCallForTest(nil, func() {
+		now = now.Add(updateWatchdogTimeout)
+	})
 	co.Update()
 
 	if thread.Stopped() || deferred.Stopped() {
@@ -664,9 +662,9 @@ func TestUpdatePreservesJobsWithConcurrentMainThreadService(t *testing.T) {
 	for producer := range producerCount {
 		producers.Go(func() {
 			for index := range jobsPerProducer {
-				co.enqueuePriorityJob(&waitJob{kind: waitMainThread, call: func() {
+				co.queueMainThreadCallForTest(nil, func() {
 					calls[producer*jobsPerProducer+index].Add(1)
-				}})
+				})
 			}
 		})
 	}
@@ -735,19 +733,16 @@ func TestUpdateWaitsForJoinWaiterResumedByCompletingThread(t *testing.T) {
 		co := New(nil)
 		var waiterRan atomic.Bool
 
-		co.enqueueJob(&waitJob{
-			kind: waitMainThread,
-			call: func() {
-				co.Create("controller", func(controller Thread) {
-					var target Thread
-					co.Create("waiter", func(waiter Thread) {
-						co.Join(target)
-						waiterRan.Store(true)
-					})
-					target = co.Create("target", func(target Thread) {
-					})
+		co.queueMainThreadCallForTest(nil, func() {
+			co.Create("controller", func(controller Thread) {
+				var target Thread
+				co.Create("waiter", func(waiter Thread) {
+					co.Join(target)
+					waiterRan.Store(true)
 				})
-			},
+				target = co.Create("target", func(target Thread) {
+				})
+			})
 		})
 
 		co.Update()
@@ -768,7 +763,7 @@ func (p *Coroutines) enqueueJob(job *waitJob) {
 func (p *Coroutines) currentJobCount() int {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
-	return p.currentJobs.len()
+	return p.currentJobs.len() + len(p.mainCalls)
 }
 
 func isSuspended(thread Thread) bool {

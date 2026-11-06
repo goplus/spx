@@ -25,6 +25,7 @@ import (
 
 type mainThreadCall struct {
 	caller  Thread
+	call    func()
 	done    chan callbackResult
 	claimed atomic.Bool // Claimed by execution or cancellation.
 }
@@ -32,14 +33,19 @@ type mainThreadCall struct {
 // WaitMainThread runs call on the engine thread, directly when the platform allows.
 // Managed callers retain their script slice while waiting.
 func (p *Coroutines) WaitMainThread(call func()) {
-	p.waitMainThread(call, p.callerThread())
+	caller := p.Caller()
+	if p.callbackScope()&callbackCleanup != 0 {
+		// Engine wrappers nested in cleanup inherit its cancellation exemption.
+		caller = nil
+	}
+	p.waitMainThread(call, caller)
 }
 
 // CleanupMainThread runs call on the engine thread, ignoring script cancellation.
 // Call must not yield; shutdown waits for managed callers to finish.
 func (p *Coroutines) CleanupMainThread(call func()) {
 	p.waitMainThread(func() {
-		id, previous := p.enterCallback(callbackExclusive)
+		id, previous := p.enterCallback(callbackExclusive | callbackCleanup)
 		defer p.leaveCallback(id, previous)
 		call()
 	}, nil)
@@ -49,7 +55,7 @@ func (p *Coroutines) CleanupMainThread(call func()) {
 // servicing queued engine-thread jobs. Native callers must use the engine thread.
 // Calls that already hold a script slice are rejected.
 func (p *Coroutines) RunBetweenScripts(call func()) {
-	if p.callerThread() != nil || p.callbackScope()&callbackExclusive != 0 {
+	if p.Caller() != nil || p.callbackScope()&callbackExclusive != 0 {
 		panic(ErrReentrantWait)
 	}
 	if hasMainThreadQueue {
@@ -66,43 +72,65 @@ func (p *Coroutines) RunBetweenScripts(call func()) {
 	call()
 }
 
-// TryRunFromEngine runs call in a managed coroutine when the caller
-// has direct engine access. While waiting, it services engine jobs without
-// advancing frames. It reports handled when shutdown skips the call.
-func (p *Coroutines) TryRunFromEngine(owner any, call func()) bool {
-	if p.admissionClosed() {
-		return true
-	}
-	if p.callerThread() != nil || p.callbackScope()&callbackExclusive != 0 {
-		panic(ErrReentrantWait)
-	}
-	return platform.TryCallEngineDirectly(func() {
-		// Shutdown may have closed admission after the initial check.
-		if p.admissionClosed() {
-			return
-		}
-		dispatcher := p.Create(owner, func(Thread) {
-			call()
-		})
-		p.waitForSignal(dispatcher.done)
-	})
-}
-
 func (p *Coroutines) waitMainThread(call func(), caller Thread) {
-	if platform.TryCallEngineDirectly(call) {
+	if platform.TryCallEngineDirectly(func() {
+		p.invokeMainThreadDirect(caller, call)
+	}) {
 		return
 	}
 
 	pending := &mainThreadCall{
 		caller: caller,
+		call:   call,
 		done:   make(chan callbackResult, 1),
 	}
-	p.enqueuePriorityJob(&waitJob{
-		thread: pending.caller,
-		kind:   waitMainThread,
-		call:   func() { pending.run(p, call) },
-	})
+	p.enqueueMainThreadCall(pending)
 	pending.wait()
+}
+
+func (p *Coroutines) invokeMainThreadDirect(caller Thread, call func()) {
+	if caller.canceled() {
+		panic(ErrAbortThread)
+	}
+	func() {
+		scope := callbackNoDrain
+		if caller != nil {
+			scope |= callbackExclusive
+		}
+		id, previous := p.enterCallback(scope)
+		defer p.leaveCallback(id, previous)
+		defer func() {
+			// Let uncanceled panics propagate with their original fault stack.
+			if caller.canceled() {
+				recover()
+			}
+		}()
+		call()
+	}()
+	// A canceled panic (including panic(nil)) reaches this check, but Goexit
+	// never returns from the inner call and must not be replaced with a panic.
+	checkMainThreadResult(caller, callbackResult{})
+}
+
+func (p *Coroutines) invokeMainThread(caller Thread, call func()) callbackResult {
+	if caller.canceled() {
+		return callbackResult{}
+	}
+	scope := callbackNoDrain
+	if caller != nil {
+		scope |= callbackExclusive
+	}
+	return p.invokeCallback(scope, call)
+}
+
+// Cancellation takes precedence over a completed callback, including its panic.
+func checkMainThreadResult(caller Thread, result callbackResult) {
+	if caller.canceled() {
+		panic(ErrAbortThread)
+	}
+	if result.panicked {
+		panic(result.panicValue)
+	}
 }
 
 // waitForSignal serves native engine jobs while waiting, without advancing frames.
@@ -125,52 +153,49 @@ func (p *Coroutines) waitForSignal(ready <-chan struct{}) {
 
 // pumpMainThread serves only engine jobs; it never advances script rounds or frames.
 func (p *Coroutines) pumpMainThread() {
-	job := p.takeMainThreadJob()
-	if job == nil {
+	pending := p.takeMainThreadCall()
+	if pending == nil {
 		runtime.Gosched()
 		return
 	}
-	if !job.thread.canceled() {
-		job.call()
+	if !pending.caller.canceled() {
+		pending.run(p)
 	}
 }
 
-func (p *Coroutines) enqueuePriorityJob(job *waitJob) {
+func (p *Coroutines) enqueueMainThreadCall(pending *mainThreadCall) {
 	p.schedulerMu.Lock()
-	p.currentJobs.pushFront(job)
+	p.mainCalls = append(p.mainCalls, pending)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
 }
 
-func (p *Coroutines) takeMainThreadJob() *waitJob {
+func (p *Coroutines) takeMainThreadCall() *mainThreadCall {
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
-	return p.takeMainThreadJobLocked()
+	return p.takeMainThreadCallLocked()
 }
 
-// Select and remove together so Update and engine waiters cannot claim the same job.
-func (p *Coroutines) takeMainThreadJobLocked() *waitJob {
-	if job, ok := p.currentJobs.peekFront(); ok && job.kind == waitMainThread {
-		return p.currentJobs.popFront()
+// Select and remove together so Update and engine waiters cannot claim the same call.
+func (p *Coroutines) takeMainThreadCallLocked() *mainThreadCall {
+	if len(p.mainCalls) == 0 {
+		return nil
 	}
-	return nil
+	last := len(p.mainCalls) - 1
+	pending := p.mainCalls[last]
+	p.mainCalls[last] = nil
+	p.mainCalls = p.mainCalls[:last]
+	return pending
 }
 
-func (c *mainThreadCall) run(p *Coroutines, call func()) {
+func (c *mainThreadCall) run(p *Coroutines) {
 	if !c.claimed.CompareAndSwap(false, true) {
 		return
 	}
 	result := callbackResult{}
 	// Notify the waiter even if call exits the engine goroutine with Goexit.
 	defer func() { c.done <- result }()
-	if c.caller.canceled() {
-		return
-	}
-	scope := callbackNoDrain
-	if c.caller != nil {
-		scope |= callbackExclusive
-	}
-	result = p.invokeCallback(scope, call)
+	result = p.invokeMainThread(c.caller, c.call)
 }
 
 func (c *mainThreadCall) wait() {
@@ -180,12 +205,7 @@ func (c *mainThreadCall) wait() {
 	}
 	select {
 	case result := <-c.done:
-		if c.caller.canceled() {
-			panic(ErrAbortThread)
-		}
-		if result.panicked {
-			panic(result.panicValue)
-		}
+		checkMainThreadResult(c.caller, result)
 	case <-canceled:
 		if !c.claimed.CompareAndSwap(false, true) {
 			// Keep script ownership until the running call returns.

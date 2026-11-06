@@ -96,12 +96,11 @@ func init() {
 	engine.SetCoroutines(gco)
 }
 
-// Current identifies the execution-lock owner, not necessarily the caller.
 func currentScriptThread() coroutine.Thread {
-	if gco == nil || !gco.IsInCoroutine() {
+	if gco == nil {
 		return nil
 	}
-	return gco.Current()
+	return gco.Caller()
 }
 
 func handleMainExecutionTimeout(thread coroutine.Thread) bool {

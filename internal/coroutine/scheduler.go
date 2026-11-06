@@ -52,6 +52,7 @@ func (p *runnableState) markPendingLocked(th Thread) {
 // Sched yields the current coroutine and resumes it without an Update pass.
 func (p *Coroutines) Sched(me Thread) {
 	p.requireCurrent(me)
+	p.requireCanWait()
 	// Requeue this script before advancing to the next runnable position.
 	p.schedulerMu.Lock()
 	p.blockThreadLocked(me)
@@ -70,12 +71,22 @@ func (p *Coroutines) StopAtNextYield(me Thread) {
 
 // IsInCoroutine reports whether the caller is running in this manager.
 func (p *Coroutines) IsInCoroutine() bool {
-	return p.callerThread() != nil
+	return p.Caller() != nil
 }
 
 // Current returns the coroutine that currently owns runMu, or nil.
 func (p *Coroutines) Current() Thread {
 	return p.current.Load()
+}
+
+// Caller returns this manager's thread running on the calling goroutine, or nil.
+// Unlike Current, it never borrows another goroutine's script ownership.
+func (p *Coroutines) Caller() Thread {
+	value, ok := p.goroutineThreads.Load(gid.Get())
+	if !ok {
+		return nil
+	}
+	return value.(Thread)
 }
 
 // yield releases the current slice after its blocking state has been published.
@@ -129,17 +140,8 @@ func (p *Coroutines) trackCleanup(th Thread) {
 	p.schedulerMu.Unlock()
 }
 
-// callerThread identifies the calling goroutine; Current identifies the runMu owner.
-func (p *Coroutines) callerThread() Thread {
-	value, ok := p.goroutineThreads.Load(gid.Get())
-	if !ok {
-		return nil
-	}
-	return value.(Thread)
-}
-
 func (p *Coroutines) requireCurrent(me Thread) {
-	if me == nil || p.callerThread() != me || p.Current() != me {
+	if me == nil || p.Caller() != me || p.Current() != me {
 		panic(ErrNotCurrent)
 	}
 }

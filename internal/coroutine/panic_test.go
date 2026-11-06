@@ -36,9 +36,6 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 				if !strings.Contains(report.Stack, "panicWithValue") {
 					t.Errorf("report does not include the fault site: %q", report.Stack)
 				}
-				if report.CreationStack != "" {
-					t.Error("creation stack captured when debug is disabled")
-				}
 			default:
 				t.Fatal("panic was not reported")
 			}
@@ -46,10 +43,9 @@ func TestPanicReportPreservesValueAndFaultStack(t *testing.T) {
 	}
 }
 
-func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
+func TestPanicReportPreservesRuntimePanicAndFaultStack(t *testing.T) {
 	reports := make(chan PanicReport, 1)
 	co := New(func(report PanicReport) { reports <- report })
-	co.debug = true
 	worker := co.Create("runtime-panic-worker", func(Thread) {
 		panicWithNilDereference(nil)
 	})
@@ -62,12 +58,6 @@ func TestPanicReportPreservesRuntimePanicAndCreationStack(t *testing.T) {
 		}
 		if !strings.Contains(report.Stack, "panicWithNilDereference") {
 			t.Errorf("report does not include the fault site: %q", report.Stack)
-		}
-		if !strings.Contains(report.CreationStack, "TestPanicReportPreservesRuntimePanicAndCreationStack") {
-			t.Errorf("report does not include the creation site: %q", report.CreationStack)
-		}
-		if strings.Contains(report.CreationStack, "panicWithNilDereference") {
-			t.Error("creation stack was replaced with the fault stack")
 		}
 	default:
 		t.Fatal("runtime panic was not reported")

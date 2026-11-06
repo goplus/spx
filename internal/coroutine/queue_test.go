@@ -17,48 +17,16 @@
 package coroutine
 
 import (
-	"cmp"
 	"math/rand/v2"
 	"slices"
 	"testing"
 )
 
-func TestQueueSortStable(t *testing.T) {
-	type entry struct{ key int }
-	a, b, c := &entry{2}, &entry{1}, &entry{2}
-	var q queue[*entry]
-	compare := func(a, b *entry) int { return cmp.Compare(a.key, b.key) }
-	q.sortStable(compare)
-	if _, ok := q.peekFront(); ok {
-		t.Fatal("empty queue has a front value")
-	}
-
-	for range 2 {
-		for _, value := range []*entry{a, b, c} {
-			q.pushBack(value)
-		}
-		q.sortStable(compare)
-		if first, ok := q.peekFront(); !ok || first != b || q.len() != 3 {
-			t.Fatal("PeekFront changed the sorted queue")
-		}
-		for i, want := range []*entry{b, a, c} {
-			if got := q.popFront(); got != want {
-				t.Errorf("PopFront %d after stable sort = %p, want %p", i+1, got, want)
-			}
-		}
-		for _, value := range q.sortBuffer {
-			if value != nil {
-				t.Fatal("sort buffer retains a queued value")
-			}
-		}
-	}
-}
-
 func TestQueuePushPopPreservesOrder(t *testing.T) {
 	q := newQueue[int]()
+	q.pushBack(0)
 	q.pushBack(1)
 	q.pushBack(2)
-	q.pushFront(0)
 
 	if got := q.popFront(); got != 0 {
 		t.Fatalf("first PopFront = %d, want 0", got)
@@ -89,7 +57,7 @@ func TestQueueSupportsZeroValueWithPooling(t *testing.T) {
 		t.Fatalf("PopFront = %d, want 7", got)
 	}
 
-	q.pushFront(9)
+	q.pushBack(9)
 	if got := q.popFront(); got != 9 {
 		t.Fatalf("PopFront = %d, want 9", got)
 	}
@@ -137,41 +105,42 @@ func TestQueueRandomOperations(t *testing.T) {
 		i := random.IntN(len(queues))
 		q := &queues[i]
 		value := random.IntN(100)
-		switch random.IntN(7) {
+		switch random.IntN(5) {
 		case 0:
 			q.pushBack(value)
 			expected[i] = append(expected[i], value)
 		case 1:
-			q.pushFront(value)
-			expected[i] = slices.Insert(expected[i], 0, value)
-		case 2:
 			if len(expected[i]) > 0 {
 				if got := q.popFront(); got != expected[i][0] {
 					t.Fatalf("step %d: PopFront = %d, want %d", step, got, expected[i][0])
 				}
 				expected[i] = expected[i][1:]
 			}
-		case 3:
+		case 2:
 			other := 1 - i
 			q.appendFrom(&queues[other])
 			expected[i] = append(expected[i], expected[other]...)
 			expected[other] = nil
-		case 4:
-			q.sortStable(cmp.Compare[int])
-			slices.Sort(expected[i])
-		case 5:
+		case 3:
 			if got := q.any(func(v int) bool { return v == value }); got != slices.Contains(expected[i], value) {
 				t.Fatalf("step %d: Any(%d) = %v", step, value, got)
 			}
-		case 6:
+		case 4:
 			q.appendFrom(q)
 		}
 		for j := range queues {
 			if got := queues[j].len(); got != len(expected[j]) {
 				t.Fatalf("step %d: queue %d Count = %d, want %d", step, j, got, len(expected[j]))
 			}
-			if first, ok := queues[j].peekFront(); ok != (len(expected[j]) > 0) || ok && first != expected[j][0] {
-				t.Fatalf("step %d: queue %d PeekFront = %d, %v, values = %v", step, j, first, ok, expected[j])
+			node := queues[j].head
+			for index, want := range expected[j] {
+				if node == nil || node.value != want {
+					t.Fatalf("step %d: queue %d item %d does not match %d", step, j, index, want)
+				}
+				node = node.next
+			}
+			if node != nil {
+				t.Fatalf("step %d: queue %d has unexpected trailing nodes", step, j)
 			}
 		}
 	}

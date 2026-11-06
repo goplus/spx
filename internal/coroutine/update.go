@@ -17,7 +17,6 @@
 package coroutine
 
 import (
-	"cmp"
 	stime "time"
 
 	"github.com/goplus/spx/v4/internal/log"
@@ -29,17 +28,15 @@ type waitKind int
 const (
 	waitFrame waitKind = iota
 	waitTime
-	waitMainThread
 	waitYield
 	waitLoop
 	waitNextRound
 )
 
-// waitJob holds a script wait or engine-thread call.
+// waitJob holds a script wait.
 type waitJob struct {
-	thread   Thread // Waiting coroutine; may be nil for waitMainThread.
+	thread   Thread // Waiting coroutine.
 	kind     waitKind
-	call     func()  // Engine-thread action, only for waitMainThread.
 	deadline float64 // Level-time deadline for a time job.
 	frame    int64   // Issuing frame for frame-gated jobs.
 }
@@ -66,7 +63,7 @@ type waitBatch struct {
 type updateAction uint8
 
 const (
-	updateMainThreadJob updateAction = iota
+	updateMainThreadCall updateAction = iota
 	updateRetry
 	updateComplete
 )
@@ -107,18 +104,18 @@ func (p *Coroutines) runUpdateLoop(stats *UpdateStats, state *updateState) {
 updateLoop:
 	for {
 		iterations++
-		action, job := p.nextUpdateAction(state, stats)
+		action, pending := p.nextUpdateAction(state, stats)
 		switch action {
 		case updateComplete:
 			if p.queueNextRound(state) {
 				continue
 			}
 			break updateLoop
-		case updateMainThreadJob:
+		case updateMainThreadCall:
 			start := stime.Now()
 			stats.JobCount++
-			if !job.thread.canceled() {
-				job.call()
+			if !pending.caller.canceled() {
+				pending.run(p)
 				stats.MainThreadCount++
 			}
 			stats.JobTime += elapsedMillis(start)
@@ -138,14 +135,14 @@ updateLoop:
 	p.promoteDeferredJobs(stats)
 }
 
-func (p *Coroutines) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *waitJob) {
+func (p *Coroutines) nextUpdateAction(state *updateState, stats *UpdateStats) (updateAction, *mainThreadCall) {
 	start := stime.Now()
 	p.schedulerMu.Lock()
 	defer p.schedulerMu.Unlock()
 	// Service engine calls before waiting for scripts or publishing a batch.
-	if job := p.takeMainThreadJobLocked(); job != nil {
+	if pending := p.takeMainThreadCallLocked(); pending != nil {
 		stats.WaitTime += elapsedMillis(start)
-		return updateMainThreadJob, job
+		return updateMainThreadCall, pending
 	}
 	if p.hasPendingExecutionLocked() {
 		p.schedulerCond.Wait()
@@ -187,9 +184,7 @@ func (p *Coroutines) scanWaitBatchLocked(state *updateState, stats *UpdateStats)
 		batch.remaining--
 		stats.JobCount++
 		p.stageWaitJobLocked(stats, job)
-		next, queued := p.currentJobs.peekFront()
-		if batch.remaining == 0 || !queued || next.kind == waitMainThread {
-			batch.remaining = 0
+		if batch.remaining == 0 {
 			p.deferredJobs.appendFrom(batch.deferredJobs)
 			p.roundJobs.appendFrom(batch.roundJobs)
 			break
@@ -232,10 +227,7 @@ func (p *Coroutines) stageWaitJobLocked(stats *UpdateStats, job *waitJob) {
 func (p *Coroutines) promoteDeferredJobs(stats *UpdateStats) {
 	start := stime.Now()
 	p.deferredJobs.appendFrom(p.roundJobs)
-	// Deferred waits retain script order, including restarted handlers.
-	p.deferredJobs.sortStable(func(a, b *waitJob) int {
-		return cmp.Compare(a.thread.resumeOrder, b.thread.resumeOrder)
-	})
+	// The ready queue orders scripts after the whole wait batch is scanned.
 	p.schedulerMu.Lock()
 	stats.DeferredCount = p.deferredJobs.len() + p.waitBatch.deferredJobs.len() + p.waitBatch.roundJobs.len()
 	p.currentJobs.appendFrom(p.deferredJobs)

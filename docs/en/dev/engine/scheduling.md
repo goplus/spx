@@ -17,8 +17,15 @@ apply to all projects using the corresponding APIs.
 
 Each admitted script uses a Go goroutine to preserve its stack. `runMu` serializes
 script slices. `yield` releases execution ownership; a resumed script must acquire it
-again before continuing. `Current()` identifies that owner, not the goroutine
-calling an API. `Task.Owner` and `Thread.Owner` identify the logical task owner.
+again before continuing. `Current()` identifies that owner. `Caller()` returns the
+managed script belonging to the calling goroutine, or nil for an external caller,
+even while another script is running. `Task.Owner` and `Thread.Owner` identify the
+logical task owner.
+
+`RunSync` is the common entry point for synchronous script execution. Managed
+callers run inline; host callers create and wait for a managed task. Native
+engine callers keep their engine-thread binding while servicing engine requests.
+Closed admission skips host requests.
 
 Time, frame, Join, and external-task waits release execution ownership.
 `WaitMainThread` is a synchronous engine call and retains the script slice while
@@ -26,12 +33,18 @@ waiting. Cancellation can discard a queued request; a running request must retur
 before its calling script exits. Engine-thread waits service engine requests
 without advancing future frames.
 
+`CleanupMainThread` and its nested engine calls ignore script cancellation, but
+must still retain script execution ownership.
+
 Channel receives use managed external tasks and publish their result only after
 the script resumes normally. A wait that exits through cancellation does not
 write its result to the caller.
 `JoinFirstSlice(thread)` waits for the target's first yield or completion.
-Join and Latch unregister waiters on completion or cancellation. `Execute` waits
-for task completion even when admission rejects the task or cancellation prevents
+Join and Latch unregister waiters on completion or cancellation. `Join`,
+`JoinFirstSlice`, and `JoinAll` must use the manager that created their targets;
+foreign targets are rejected with `ErrForeignThread` before registering a wait.
+These APIs do not provide cooperative waits between scripts in different managers.
+`Execute` waits for task completion even when admission rejects the task or cancellation prevents
 its callback from starting.
 
 Cancellation, script completion, and runtime drain are separate stages. Both
@@ -87,9 +100,10 @@ accept host callers; empty batches return immediately in every mode.
 Scripts, workers, registration callbacks, cleanup, final panic handlers, shutdown
 callbacks, and callbacks holding exclusive script ownership cannot synchronously
 drain. Such calls panic with `ErrReentrantWait` before canceling tasks or changing
-admission. Exclusive callbacks also cannot synchronously
-execute scripts or block on Join / Latch, since those scripts cannot acquire execution ownership.
-Completed waits may return.
+admission. Engine calls and frame-boundary callbacks holding exclusive script
+ownership cannot yield, synchronously execute scripts, or block on Join / Latch;
+these calls also fail with `ErrReentrantWait`. Completed waits and empty batches
+may return. Runtime user callbacks running as independent tasks may still wait.
 
 Shutdown callbacks run with admission closed but without holding the admission
 lock. They may call `StopAll`; new tasks are rejected. Normal return, panic, and
@@ -109,10 +123,12 @@ code and circular dependencies can still prevent cleanup.
 
 ### Concurrency invariants
 
-- `schedulerMu` protects runnable state and the shared current-job queue. Update
-  and engine waiters select and remove a job under that lock, then execute it
-  after unlocking. The engine serializes Update calls, which own the deferred
-  and next-round queues; queues have no separate locks.
+- `schedulerMu` protects runnable state, the current script-wait queue, and a
+  separate main-thread call queue. Update and engine waiters take engine calls
+  under that lock, then execute them after unlocking. Engine calls retain their
+  existing newest-first priority and do not consume a wait batch's scan count.
+  The engine serializes Update calls, which own the deferred and next-round
+  queues; queues have no separate locks.
 - Admission readers may register concurrently; `pendingSetups` is atomic and
   delays reopening until all registration callbacks finish. Callbacks run outside
   the admission lock. The atomic epoch rejects requests from before a stop,
@@ -143,9 +159,10 @@ rounds; starting another round does not advance the frame number or timer.
    startup scripts first yield or finish.
 2. Advance the clock, then advance runtime delay timers and tweens inside a
    managed dispatcher. Register sprite `OnUpdate`, due timer, and completed tween
-   callbacks in one ordered batch of independent script tasks. A waiting callback
+   callbacks in one batch of independent script tasks. A waiting callback
    lets later tasks run without suspending frame advancement. Timers and tweens
-   created by these callbacks advance next frame.
+   created by these callbacks advance next frame. Different sprites in a custom
+   runtime have no guaranteed `OnUpdate` registration order or stable order across frames.
 3. Prepare game updates and handle capture-key requests. Freeze due script Timer
    events, register matched conditions, route input and Timer events, then
    register cached collision handlers before dispatching startup handlers.
@@ -267,6 +284,7 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Callback reentry guards, engine-thread calls, frame-boundary callbacks | `internal/coroutine/callback.go`, `mainthread.go` |
 | Timed and channel waits, worker lifecycle | `internal/coroutine/wait.go` |
 | Frame waits, loop rounds, redraw budget | `internal/coroutine/frame.go` |
+| Synchronous script entry and shared Join / Latch waits | `internal/coroutine/execute.go`, `waiters.go` |
 | Wait-job processing and scheduler statistics | `internal/coroutine/update.go`, `stats.go` |
 | Control-flow integration | `internal/engine/coro.go` |
 | Frame phase ordering | `internal/engine/engine.go`, `runtime_engine.go` |
@@ -277,7 +295,10 @@ and Reset. The first `SnapshotStartOnce` still closes start registration until R
 | Visibility checks and redraw notification | `sprite_render.go` and the relevant visual operations |
 
 `UpdateStats()` returns statistics from the latest update, with durations in
-milliseconds. `queue`, `waitJob`, and `waitKind` are private scheduler details.
+milliseconds. Wait-record scan order is unspecified. After a watchdog interruption,
+`FrameWaitCount` and `DeferredCount` can vary with the scanned prefix; they do not
+determine script execution order.
+`queue`, `waitJob`, and `waitKind` are private scheduler details.
 
 Frame-boundary callbacks exclude script execution while servicing queued
 engine main-thread calls. A script waiting on such a call must not block
@@ -336,8 +357,8 @@ provide preemption or a hard timeout.
 - Nonvisual loops can run multiple rounds per frame; redraws do not truncate
   the current round's other scripts.
 - Explicit waits retain their boundaries, and `Warp` retains its yield rules.
-- Deferred waits retain registration order; unexpired waits do not block
-  eligible scripts.
+- Scripts resumed from deferred waits retain registration order; unexpired waits
+  do not block eligible scripts.
 - Older scripts precede handlers newly created by broadcasts in their round,
   including loop continuations and elapsed time waits.
 - Scripts continue in later frames after budget exhaustion and remain cancellable.
@@ -371,13 +392,14 @@ go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
-Core regression coverage is in `runtime_scratch_scheduler_test.go`,
+Core regression coverage is in `runtime_scheduler_test.go`,
 `runtime_events_test.go`, `runtime_event_order_test.go`,
-`runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_native_test.go`,
+`runtime_engine_test.go`, `runtime_replay_test.go`, `runtime_event_dispatch_test.go`,
 `runtime_sync_test.go`, `runtime_engine_native_test.go`, `internal/engine/runtime_delta_test.go`,
 `internal/engine/execute_native_test.go`,
-`sprite_clone_collision_test.go`, `internal/coroutine/loop_test.go`, and
-`internal/coroutine/order_test.go`.
+`sprite_clone_test.go`, `internal/coroutine/loop_test.go`,
+`internal/coroutine/order_test.go`, `internal/coroutine/wait_order_test.go`, and
+`internal/coroutine/ready_test.go`.
 Cancellation and restart coverage is in `internal/coroutine/thread_test.go`,
 `internal/coroutine/worker_test.go`, `internal/coroutine/join_test.go`,
 `internal/coroutine/handler_test.go`, and `internal/engine/execute_test.go`.

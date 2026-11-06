@@ -14,16 +14,24 @@ SPX 使用协作式脚本调度。脚本执行到让出执行权或结束后，�
 
 每个获准执行的脚本使用一个 Go goroutine 保存调用栈，通过 `runMu` 串行执行脚本片段。
 `yield` 释放执行权；被唤醒的脚本重新取得执行权后才能继续。`Current()` 表示当前
-执行权的拥有者，不代表调用 API 的 goroutine 身份。
+执行权的拥有者；`Caller()` 返回调用 API 的 goroutine 所属的受管理脚本，外部调用返回 nil。
+即使另一个脚本正在执行，外部调用也不会借用它的身份。
 `Task.Owner` 和 `Thread.Owner` 表示任务的逻辑归属对象。
+
+`RunSync` 是同步执行脚本的统一入口：受管理脚本直接执行，宿主创建并等待受管理任务。
+原生引擎调用方在等待和处理引擎请求期间保持引擎线程绑定；准入关闭时跳过宿主请求。
 
 普通时间、帧、Join 和外部任务等待会让出执行权。`WaitMainThread` 是同步引擎调用，
 等待期间保留当前脚本片段：尚未开始的请求可以取消，已经开始的请求必须完成后，
 调用脚本才能退出。主线程等待脚本时继续处理引擎请求，不推进未来帧。
+`CleanupMainThread` 及其嵌套引擎调用不受脚本取消影响，但仍不能让出脚本执行权。
 
 channel 接收复用受管理的外部任务，只在脚本正常恢复后提交接收结果；等待因取消
 退出时不会写入调用方的数据。`JoinFirstSlice(thread)` 等待目标首次让出或结束。
 Join 和 Latch 的等待登记在正常返回或取消时都会解除。
+`Join`、`JoinFirstSlice` 和 `JoinAll` 必须通过创建目标线程的 manager 调用；
+跨 manager 的目标会在登记等待前以 `ErrForeignThread` 拒绝。
+这些接口不提供不同 manager 脚本之间的协作式等待。
 `Execute` 等待任务生命周期结束，因此任务启动前被取消或拒绝也能返回。
 
 请求取消、脚本结束和运行时清理完成是三个阶段。`Cancel` 与 `Stop` 都请求停止并
@@ -66,8 +74,10 @@ Join 和 Latch 的等待登记在正常返回或取消时都会解除。
 也接受宿主调用；空批次在所有模式下都立即返回。
 
 脚本、worker、`RegisterInvocation`、cleanup、最终异常处理、停机回调和独占脚本执行权的
-回调不能同步 drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。独占回调也不能再次
-同步执行脚本或等待未完成的 Join / Latch，否则脚本无法取得执行权；已经完成的等待可直接返回。
+回调不能同步 drain；调用会在取消任务或改变准入前抛出 `ErrReentrantWait`。
+独占脚本执行权的引擎调用和帧边界回调不能让出执行权、再次同步执行脚本，或等待未完成的
+Join / Latch；这些调用同样以 `ErrReentrantWait` 拒绝。已经完成的等待和空批次可直接返回。
+独立任务中的 runtime 用户回调仍可正常等待。
 
 停机回调期间，准入保持关闭，但不持有准入锁。回调可以调用 `StopAll`，新任务会被拒绝；
 正常返回、panic 或 `Goexit` 都会恢复准入。
@@ -81,9 +91,10 @@ Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，�
 
 ### 并发约束
 
-- `schedulerMu` 保护 runnable 状态和共享的当前任务队列；Update 与引擎等待者在
-  锁内选择并取出任务，解锁后执行。引擎串行调用 Update，由它独占延后和下一轮队列；
-  队列不再单独加锁。
+- `schedulerMu` 保护 runnable 状态、当前脚本等待队列和独立的主线程调用队列。
+  Update 与引擎等待者在锁内取出引擎调用，解锁后执行。引擎调用保留后入先出的
+  既有优先顺序，不消耗等待批次的扫描计数。引擎串行调用 Update，由它独占延后
+  和下一轮队列；队列不再单独加锁。
 - 准入读锁允许并行登记，原子计数 `pendingSetups` 将重新开放准入推迟到所有登记回调结束。
   登记回调在锁外执行；原子 epoch 使准入重新开放后仍能拒绝停止前的过期请求。
 - 等待登记与 blocked 状态一起发布，锁序为 `schedulerMu` → `waiterSet.mu`。
@@ -109,9 +120,10 @@ Web 后台等待让出 Go goroutine；同步 JS 回调若依赖后续事件，�
    从 Godot 回读物理精灵位置，为普通输入、录制或回放冻结帧输入批次，
    并在帧时钟推进前采样条件事件。条件采样在启动脚本首次让出或结束后启用。
 2. 推进时钟，再通过受管理的派发协程推进 runtime 延时计时和 tween 状态。
-   精灵 `OnUpdate`、到期延时和已完成 tween 的回调按登记顺序组成一个独立任务批次。
+   精灵 `OnUpdate`、到期延时和已完成 tween 的回调组成一个独立任务批次。
    某个回调等待时，后续任务仍可执行，不会挂起帧推进。
    回调新建的 timer 和 tween 从下一帧开始推进。
+   自定义 runtime 的不同精灵 `OnUpdate` 不保证按精灵登记顺序调用，也不保证跨帧次序稳定。
 3. 准备游戏更新并处理截图快捷键请求；冻结已到期的脚本 Timer，登记已匹配的
    条件处理函数，路由输入和 Timer，再登记缓存的碰撞处理函数，最后派发启动事件。
    登记顺序不保证不同批次处理函数的执行顺序。
@@ -204,6 +216,7 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 回调重入限制、主线程调用、帧边界回调 | `internal/coroutine/callback.go`、`mainthread.go` |
 | 定时与通道等待、worker 生命周期 | `internal/coroutine/wait.go` |
 | 帧等待、循环轮次、重绘预算 | `internal/coroutine/frame.go` |
+| 同步脚本入口、Join / Latch 的共享等待协议 | `internal/coroutine/execute.go`、`waiters.go` |
 | 等待任务处理与调度统计 | `internal/coroutine/update.go`、`stats.go` |
 | 控制流与调度器衔接 | `internal/engine/coro.go` |
 | 帧阶段顺序 | `internal/engine/engine.go`、`runtime_engine.go` |
@@ -214,6 +227,8 @@ Timer 在 `OnEngineUpdate` 的前置事件阶段路由；待播放音频和已�
 | 可见性判断与重绘通知 | `sprite_render.go` 及对应视觉操作入口 |
 
 `UpdateStats()` 返回最近一次更新的统计，耗时单位为毫秒。
+等待记录的扫描次序不作保证；watchdog 中断时，`FrameWaitCount` 和 `DeferredCount`
+可能随已扫描的前缀变化，不能据此推断脚本执行顺序。
 `queue`、`waitJob` 和 `waitKind` 是调度器的私有实现。
 
 帧边界回调与脚本执行互斥，同时处理已排队的引擎主线程调用，
@@ -281,13 +296,14 @@ go test ./...
 GOOS=js GOARCH=wasm go test -c -o /tmp/spx-scheduling.test.wasm .
 ```
 
-核心回归位于 `runtime_scratch_scheduler_test.go`、`runtime_events_test.go`、
+核心回归位于 `runtime_scheduler_test.go`、`runtime_events_test.go`、
 `runtime_event_order_test.go`、`runtime_engine_test.go`、`runtime_replay_test.go`、
-`runtime_event_dispatch_native_test.go`、
+`runtime_event_dispatch_test.go`、
 `runtime_sync_test.go`、`runtime_engine_native_test.go`、`internal/engine/runtime_delta_test.go`、
 `internal/engine/execute_native_test.go`、
-`sprite_clone_collision_test.go`、`internal/coroutine/loop_test.go` 和
-`internal/coroutine/order_test.go`。
+`sprite_clone_test.go`、`internal/coroutine/loop_test.go`、
+`internal/coroutine/order_test.go`、`internal/coroutine/wait_order_test.go` 和
+`internal/coroutine/ready_test.go`。
 取消与重启覆盖位于 `internal/coroutine/thread_test.go`、
 `internal/coroutine/worker_test.go`、`internal/coroutine/join_test.go`、
 `internal/coroutine/handler_test.go` 和 `internal/engine/execute_test.go`。

@@ -18,6 +18,7 @@ package coroutine
 
 // Join waits until target has finished. It yields when called from a coroutine
 // managed by this manager and blocks the calling goroutine otherwise.
+// A non-nil target must belong to this manager, even if already finished.
 func (p *Coroutines) Join(target Thread) {
 	if target == nil {
 		return
@@ -26,14 +27,17 @@ func (p *Coroutines) Join(target Thread) {
 	p.join(target, target.done, &target.joinWaiters)
 }
 
-// JoinAll waits for each target to finish.
+// JoinAll validates all targets before waiting for each to finish.
 func (p *Coroutines) JoinAll(targets []Thread) {
+	for _, target := range targets {
+		p.requireOwnThread(target)
+	}
 	for _, target := range targets {
 		p.Join(target)
 	}
 }
 
-// JoinFirstSlice waits until target first yields or finishes.
+// JoinFirstSlice waits until target first yields or finishes in this manager.
 func (p *Coroutines) JoinFirstSlice(target Thread) {
 	if target == nil {
 		return
@@ -43,13 +47,16 @@ func (p *Coroutines) JoinFirstSlice(target Thread) {
 }
 
 func (p *Coroutines) join(target Thread, done <-chan struct{}, waiters *waiterSet) {
-	me := p.callerThread()
-	if me == nil {
-		p.waitOutsideScript(done)
-		return
-	}
+	p.requireOwnThread(target)
+	me := p.Caller()
 	if me == target {
 		return
 	}
-	p.waitOn(me, waiters)
+	p.waitOn(me, done, waiters)
+}
+
+func (p *Coroutines) requireOwnThread(target Thread) {
+	if target != nil && target.manager != p {
+		panic(ErrForeignThread)
+	}
 }

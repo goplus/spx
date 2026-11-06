@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	stime "time"
 
-	"github.com/goplus/spx/v4/internal/debug"
 	"github.com/goplus/spx/v4/internal/time"
 )
 
@@ -39,9 +38,9 @@ const (
 type threadImpl struct {
 	Owner any // Strings and Name() provide the diagnostic name.
 
-	id    int64
-	name  string
-	stack string
+	manager *Coroutines // Immutable scheduler ownership, including after completion.
+	id      int64
+	name    string
 
 	// Active handler restarts inherit this position without changing identity.
 	resumeOrder int64
@@ -78,6 +77,7 @@ type Thread = *threadImpl
 func (p *Coroutines) newThread(owner any) Thread {
 	th := &threadImpl{
 		Owner:          owner,
+		manager:        p,
 		id:             p.nextThreadID.Add(1),
 		schedFrame:     -1,
 		name:           threadName(owner),
@@ -86,9 +86,6 @@ func (p *Coroutines) newThread(owner any) Thread {
 	}
 	th.resumeOrder = th.id
 	th.ctx, th.cancelFunc = context.WithCancel(context.Background())
-	if p.debug {
-		th.stack = debug.GetStackTrace()
-	}
 	th.suspendCond = sync.NewCond(&th.suspendMu)
 	return th
 }

@@ -48,9 +48,19 @@ func (p *waiterSet) close(done chan struct{}) map[Thread]struct{} {
 	return waiters
 }
 
-// Publish blocking and registration under schedulerMu, then waiterSet.mu.
-// Cancellation unregisters even when Yield panics.
-func (p *Coroutines) waitOn(me Thread, waiters *waiterSet) {
+// Completed waits return immediately. Other callers block; managed callers
+// publish blocking and registration under schedulerMu, then waiterSet.mu.
+func (p *Coroutines) waitOn(me Thread, done <-chan struct{}, waiters *waiterSet) {
+	select {
+	case <-done:
+		return
+	default:
+	}
+	p.requireCanWait()
+	if me == nil {
+		<-done
+		return
+	}
 	p.schedulerMu.Lock()
 	registered := waiters.add(me)
 	if registered {
@@ -60,6 +70,7 @@ func (p *Coroutines) waitOn(me Thread, waiters *waiterSet) {
 	p.schedulerMu.Unlock()
 
 	if registered {
+		// Cancellation unregisters even when yield panics.
 		defer waiters.remove(me)
 		p.yield(me)
 	}
@@ -70,16 +81,4 @@ func (p *Coroutines) wakeWaiters(waiters map[Thread]struct{}) {
 	p.wakeWaitersLocked(waiters)
 	p.schedulerCond.Signal()
 	p.schedulerMu.Unlock()
-}
-
-func (p *Coroutines) waitOutsideScript(done <-chan struct{}) {
-	select {
-	case <-done:
-		return
-	default:
-	}
-	if p.callbackScope()&callbackExclusive != 0 {
-		panic(ErrReentrantWait)
-	}
-	<-done
 }

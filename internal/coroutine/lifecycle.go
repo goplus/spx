@@ -165,10 +165,9 @@ func (p *Coroutines) handleThreadPanic(th Thread, recovered any) {
 		id, previous := p.enterCallback(callbackNoDrain)
 		defer p.leaveCallback(id, previous)
 		p.onPanic(PanicReport{
-			Value:         recovered,
-			Name:          th.name,
-			Stack:         string(sdebug.Stack()),
-			CreationStack: th.stack,
+			Value: recovered,
+			Name:  th.name,
+			Stack: string(sdebug.Stack()),
 		})
 		return
 	}
@@ -179,7 +178,7 @@ func (p *Coroutines) captureAdmission() threadAdmission {
 	epoch := p.admissionEpoch.Load()
 	return threadAdmission{
 		epoch:   epoch,
-		allowed: epoch&1 == 0 && !p.callerThread().canceled(),
+		allowed: epoch&1 == 0 && !p.Caller().canceled(),
 	}
 }
 

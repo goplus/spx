@@ -28,28 +28,14 @@ func Execute(owner any, fn func(ctx context.Context, owner any)) {
 		return
 	}
 	co := gco
-	if co.IsInCoroutine() {
-		thread := co.Current()
+	if co.Caller() == nil {
+		owner = resolveOwner(owner)
+	}
+	co.RunSync(owner, func(thread coroutine.Thread) {
 		if isRuntimeWorkCurrent(binding) {
 			fn(thread.Context(), owner)
 		}
-		return
-	}
-
-	owner = resolveOwner(owner)
-	call := func() {
-		if isRuntimeWorkCurrent(binding) {
-			fn(co.Current().Context(), owner)
-		}
-	}
-	if co.TryRunFromEngine(owner, call) {
-		return
-	}
-	thread := co.Create(owner, func(coroutine.Thread) {
-		call()
 	})
-	// Completion also covers cancellation before the callback starts.
-	co.Join(thread)
 }
 
 func WaitMainThread(call func()) {

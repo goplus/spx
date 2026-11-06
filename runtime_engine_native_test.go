@@ -309,8 +309,8 @@ func TestAsyncDispatchDuringShutdownDoesNotRunRejectedLifecycle(t *testing.T) {
 	}
 	go func() {
 		platform.useCurrentAsMainThread()
-		co.TryRunFromEngine("outer", func() {
-			callbackStarted <- co.Current()
+		co.RunSync("outer", func(thread coroutine.Thread) {
+			callbackStarted <- thread
 			<-releaseCallback
 			dispatchMatchedScriptEventBatch([]eventSink{{Owner: handler, Handler: lifecycle}}, event)
 			close(registrationDone)

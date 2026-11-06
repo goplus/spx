@@ -82,8 +82,8 @@ func resolveOwner(owner any) any {
 
 func currentThread() coroutine.Thread {
 	co := gco
-	if co == nil || !co.IsInCoroutine() {
+	if co == nil {
 		return nil
 	}
-	return co.Current()
+	return co.Caller()
 }

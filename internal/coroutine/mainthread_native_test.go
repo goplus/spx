@@ -34,7 +34,8 @@ import (
 
 type mainThreadTestPlatform struct {
 	gdx.IPlatformMgr
-	main bool
+	main           bool
+	onIsMainThread func()
 }
 
 type observedDoneContext struct {
@@ -42,7 +43,32 @@ type observedDoneContext struct {
 	onDone func()
 }
 
-func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
+func TestRunSyncRechecksAdmissionOnEngineThread(t *testing.T) {
+	co := New(nil)
+	previous := gdx.PlatformMgr
+	t.Cleanup(func() { gdx.PlatformMgr = previous })
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	checked := false
+	gdx.PlatformMgr = mainThreadTestPlatform{
+		main: true,
+		onIsMainThread: sync.OnceFunc(func() {
+			// Close admission after RunSync's first check, before its engine call.
+			co.admissionMu.Lock()
+			co.closeAdmissionLocked()
+			co.admissionMu.Unlock()
+			checked = true
+		}),
+	}
+	co.RunSync("rejected", func(Thread) { t.Error("shutdown admitted the callback") })
+	if !checked || !co.admissionClosed() {
+		t.Fatal("fixture did not close admission at the engine boundary")
+	}
+	if co.LastThreadID() != 0 || co.hasPendingWork() {
+		t.Fatal("RunSync created a task after shutdown closed admission")
+	}
+}
+
+func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
 	setMainThreadForTest(t, true)
 	co := New(nil)
 
@@ -57,7 +83,7 @@ func TestTryRunFromEngineRejectedByShutdownBarrier(t *testing.T) {
 	callbackRan := atomic.Bool{}
 	dispatchDone := make(chan struct{})
 	go func() {
-		co.TryRunFromEngine("dispatcher", func() {
+		co.RunSync("dispatcher", func(Thread) {
 			callbackRan.Store(true)
 		})
 		close(dispatchDone)
@@ -174,7 +200,7 @@ func TestRunBetweenScriptsServicesPendingMainThreadCall(t *testing.T) {
 	go func() {
 		co.runMu.Lock()
 		defer co.runMu.Unlock()
-		co.enqueuePriorityJob(&waitJob{kind: waitMainThread, call: unblock})
+		co.queueMainThreadCallForTest(nil, unblock)
 		close(queued)
 		<-release
 		value = 42
@@ -464,7 +490,8 @@ func TestMainThreadCallCanceledBeforeDispatch(t *testing.T) {
 	if recovered := catchPanic(pending.wait); recovered != ErrAbortThread {
 		t.Fatalf("canceled wait panic = %v, want %v", recovered, ErrAbortThread)
 	}
-	pending.run(co, func() { t.Error("canceled call ran after its waiter returned") })
+	pending.call = func() { t.Error("canceled call ran after its waiter returned") }
+	pending.run(co)
 	if len(pending.done) != 0 {
 		t.Fatal("canceled call published a result after its waiter returned")
 	}
@@ -475,7 +502,8 @@ func TestMainThreadCallCanceledBeforeClaim(t *testing.T) {
 	caller := co.newThread("caller")
 	pending := &mainThreadCall{caller: caller, done: make(chan callbackResult, 1)}
 	caller.Cancel()
-	pending.run(co, func() { t.Error("call ran after its caller was canceled") })
+	pending.call = func() { t.Error("call ran after its caller was canceled") }
+	pending.run(co)
 	select {
 	case result := <-pending.done:
 		if result.panicked {
@@ -827,6 +855,9 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 }
 
 func (p mainThreadTestPlatform) IsMainThread() bool {
+	if p.onIsMainThread != nil {
+		p.onIsMainThread()
+	}
 	return p.main
 }
 

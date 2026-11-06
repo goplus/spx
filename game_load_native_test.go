@@ -382,9 +382,7 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 			}
 			time.Sleep(schedTimeoutMs*time.Millisecond + time.Nanosecond)
 			close(timedOut)
-			if got := Sched(); got != 0 {
-				t.Errorf("timed-out Sched() = %d, want 0", got)
-			}
+			Sched()
 			returned = true
 		})
 		<-timedOut
@@ -410,8 +408,9 @@ func TestSchedLoopTimeoutWaitsBeforeReporting(t *testing.T) {
 		if want := []int64{1}; !slices.Equal(recorder.exits, want) {
 			t.Errorf("runtime exit codes = %v, want %v", recorder.exits, want)
 		}
-		if !returned || !thread.Stopped() {
-			t.Errorf("timeout completion: returned=%v, stopped=%v, want both true", returned, thread.Stopped())
+		// Reporting requests exit and cancels this script during its engine call.
+		if returned || !thread.Stopped() {
+			t.Errorf("timeout completion: returned=%v, stopped=%v, want false/true", returned, thread.Stopped())
 		}
 	})
 }

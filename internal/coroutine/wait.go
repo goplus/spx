@@ -21,8 +21,14 @@ import "github.com/goplus/spx/v4/internal/time"
 // WaitForChan receives one value from ch. Inside a coroutine it yields while
 // waiting; otherwise it blocks the caller directly.
 func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
-	me := p.callerThread()
+	me := p.Caller()
 	if me == nil {
+		select {
+		case value := <-ch:
+			return value
+		default:
+		}
+		p.requireCanWait()
 		return <-ch
 	}
 
@@ -39,7 +45,7 @@ func WaitForChan[T any](p *Coroutines, ch <-chan T) T {
 
 // Wait suspends the current coroutine for t seconds of level time.
 func (p *Coroutines) Wait(t float64) {
-	me := p.callerThread()
+	me := p.Caller()
 	if me == nil {
 		return
 	}
@@ -59,11 +65,12 @@ func (p *Coroutines) WaitYield(me Thread) {
 // WaitToDo runs fn in a worker and yields when called from a coroutine.
 // Other callers run fn directly.
 func (p *Coroutines) WaitToDo(fn func()) {
-	me := p.callerThread()
+	me := p.Caller()
 	if me == nil {
 		fn()
 		return
 	}
+	p.requireCanWait()
 	if !p.admitWorker(me) {
 		panic(ErrAbortThread)
 	}
@@ -116,6 +123,7 @@ func (p *Coroutines) finishWorker() {
 func (p *Coroutines) enqueueAndYield(job *waitJob) {
 	me := job.thread
 	p.requireCurrent(me)
+	p.requireCanWait()
 	// Publish blocking and its wake-up job atomically.
 	p.schedulerMu.Lock()
 	p.currentJobs.pushBack(job)

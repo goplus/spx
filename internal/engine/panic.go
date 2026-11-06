@@ -39,11 +39,7 @@ func CheckPanic() {
 
 // OnPanic reports a coroutine panic.
 func OnPanic(report coroutine.PanicReport) {
-	stack := report.Stack
-	if report.CreationStack != "" {
-		stack += "\ncreated at:\n" + report.CreationStack
-	}
-	handlePanic(report.Name, stack, report.Value, true)
+	handlePanic(report.Name, report.Stack, report.Value, true)
 }
 
 // Panic reports a runtime panic.

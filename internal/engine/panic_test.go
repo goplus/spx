@@ -99,9 +99,9 @@ func TestPanicAdaptersReportCauseAndHonorExitPolicy(t *testing.T) {
 			panic("callback failed")
 		}, "panic: callback failed", true},
 		{"formatted panic", func() { Panicf("resource %s failed: %d", "cat", 7) }, "resource cat failed: 7", true},
-		{"coroutine creation stack", func() {
-			OnPanic(coroutine.PanicReport{Name: "worker", Stack: "fault", CreationStack: "creator", Value: "boom"})
-		}, "worker: panic: boom\nstack:\nfault\ncreated at:\ncreator", true},
+		{"coroutine fault stack", func() {
+			OnPanic(coroutine.PanicReport{Name: "worker", Stack: "fault", Value: "boom"})
+		}, "worker: panic: boom\nstack:\nfault", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateGameBinding(t)

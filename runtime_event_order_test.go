@@ -829,6 +829,81 @@ func TestExternalBroadcastAndWaitWaitsForReceiverCompletion(t *testing.T) {
 	requireEventOrder(t, &log, []string{"child-ran", "receiver-returned"})
 }
 
+func TestExternalBroadcastOrdersSnapshotBetweenScriptSlices(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
+	back.OnMsg__1("ordered", func() { log.add("back") })
+	front.OnMsg__1("ordered", func() { log.add("front") })
+	entered, changeLayers := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(changeLayers) })
+	t.Cleanup(release)
+	worker := co.Create(back, func(coroutine.Thread) {
+		close(entered)
+		<-changeLayers
+		back.SetLayerTo(Front)
+		back.OnMsg__1("ordered", func() { log.add("late") })
+	})
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("layer-changing script did not start")
+	}
+	lastID := co.LastThreadID()
+	returned := make(chan struct{})
+	go func() {
+		game.BroadcastAndWait__0("ordered")
+		close(returned)
+	}()
+	// The dispatcher can be created only after capturing the receiver snapshot.
+	// Keep the running script's slice until that dispatcher is waiting for it.
+	deadline := time.Now().Add(time.Second)
+	for co.LastThreadID() == lastID {
+		if time.Now().After(deadline) {
+			t.Fatal("external broadcast did not create its dispatcher")
+		}
+		runtime.Gosched()
+	}
+	release()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("external broadcast did not complete")
+	}
+	co.Join(worker)
+	// Ordering observes the completed script slice; membership remains the
+	// original snapshot, so the newly registered handler is not included.
+	requireEventOrder(t, &log, []string{"back", "front"})
+}
+
+func TestExternalBroadcastConcurrentLayerChanges(t *testing.T) {
+	co, game, back, front := setupEventOrderGame(t)
+	var log eventOrderLog
+	back.OnMsg__1("ordered", func() { log.add("back") })
+	front.OnMsg__1("ordered", func() { log.add("front") })
+	entered, start := make(chan struct{}), make(chan struct{})
+	release := sync.OnceFunc(func() { close(start) })
+	t.Cleanup(release)
+	worker := co.Create(back, func(coroutine.Thread) {
+		close(entered)
+		<-start
+		for range 1000 {
+			back.SetLayerTo(Front)
+			back.SetLayerTo(Back)
+		}
+	})
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("layer-changing script did not start")
+	}
+	// Neither operation is ordered after the other by a test-only lock. The
+	// dispatcher's script slice must protect both the slice header and elements.
+	release()
+	game.BroadcastAndWait__0("ordered")
+	co.Join(worker)
+	requireEventOrder(t, &log, []string{"front", "back"})
+}
+
 func TestBroadcastStopAllPreventsLaterReceivers(t *testing.T) {
 	co, game, back, front := setupEventOrderGame(t)
 	var log eventOrderLog

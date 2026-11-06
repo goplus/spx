@@ -33,7 +33,7 @@ func (p *Coroutines) ScriptRound() uint64 {
 
 // WaitNextFrame suspends the current coroutine until the next frame.
 func (p *Coroutines) WaitNextFrame() {
-	p.WaitNextFrameFor(p.callerThread())
+	p.WaitNextFrameFor(p.Caller())
 }
 
 // WaitNextFrameFor suspends me until the next frame.

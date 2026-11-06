@@ -82,7 +82,7 @@ func TestWaitBatchPreservesOrderAcrossWatchdog(t *testing.T) {
 				want := []string{"dispatcher"}
 				// A priority engine call arriving during the pause must neither
 				// publish the partial batch nor consume its remaining wait count.
-				co.enqueuePriorityJob(&waitJob{kind: waitMainThread, call: func() { record("main") }})
+				co.queueMainThreadCallForTest(nil, func() { record("main") })
 				expireUpdateAtFirstCheckpoint(co)
 				co.Update()
 				if stats := co.UpdateStats(); stats.JobCount != 1 || stats.MainThreadCount != 1 {

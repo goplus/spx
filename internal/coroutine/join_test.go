@@ -27,6 +27,100 @@ func TestJoinFirstSliceNilIsNoOp(t *testing.T) {
 	co.JoinFirstSlice(nil)
 }
 
+func TestJoinRejectsForeignThreads(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		join func(*Coroutines, Thread)
+	}{
+		{"done", (*Coroutines).Join},
+		{"first-slice", (*Coroutines).JoinFirstSlice},
+		{"all", func(co *Coroutines, target Thread) { co.JoinAll([]Thread{nil, target}) }},
+	} {
+		for _, completed := range []bool{false, true} {
+			name := test.name + "/live"
+			if completed {
+				name = test.name + "/completed"
+			}
+			t.Run(name, func(t *testing.T) {
+				co, other := New(nil), New(nil)
+				release := make(chan struct{})
+				var once sync.Once
+				unblock := func() { once.Do(func() { close(release) }) }
+				t.Cleanup(func() {
+					unblock()
+					co.RunAfterStop(nil)
+					other.RunAfterStop(nil)
+				})
+				target := other.Create("foreign", func(Thread) { <-release })
+				if completed {
+					unblock()
+					other.Join(target)
+				}
+				for _, managed := range []bool{false, true} {
+					result := make(chan any, 1)
+					attempt := func() { result <- catchPanic(func() { test.join(co, target) }) }
+					if managed {
+						co.Create("caller", func(Thread) { attempt() })
+					} else {
+						go attempt()
+					}
+					select {
+					case got := <-result:
+						if got != ErrForeignThread {
+							t.Fatalf("managed=%v: panic = %v, want ErrForeignThread", managed, got)
+						}
+					case <-time.After(time.Second):
+						t.Fatalf("managed=%v: foreign Join waited instead of rejecting", managed)
+					}
+				}
+				unblock()
+				co.RunAfterStop(nil)
+				other.RunAfterStop(nil)
+				// A rejected waiter must never enter the target manager's scheduler.
+				for _, manager := range []*Coroutines{co, other} {
+					manager.schedulerMu.Lock()
+					pending := manager.hasPendingExecutionLocked()
+					manager.schedulerMu.Unlock()
+					if pending {
+						t.Fatal("foreign Join left executable work in a manager")
+					}
+					updated := make(chan struct{})
+					go func() { manager.Update(); close(updated) }()
+					waitForThreadSignal(t, updated, "Update blocked after rejected Join")
+				}
+			})
+		}
+	}
+}
+
+func TestJoinAllValidatesBeforeWaiting(t *testing.T) {
+	co, other := New(nil), New(nil)
+	t.Cleanup(func() { co.RunAfterStop(nil); other.RunAfterStop(nil) })
+	local := co.Create("local", func(Thread) { co.Wait(1e9) })
+	co.JoinFirstSlice(local)
+	foreign := other.Create("foreign", func(Thread) {})
+	other.Join(foreign)
+	result := make(chan any, 1)
+	caller := co.Create("caller", func(Thread) {
+		result <- catchPanic(func() { co.JoinAll([]Thread{nil, local, foreign}) })
+	})
+	select {
+	case got := <-result:
+		if got != ErrForeignThread {
+			t.Fatalf("panic = %v, want ErrForeignThread", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("JoinAll waited for an earlier target before validating the batch")
+	}
+	waitForThreadSignal(t, caller.done, "rejected caller did not finish")
+	local.joinWaiters.mu.Lock()
+	waiters := len(local.joinWaiters.threads)
+	local.joinWaiters.mu.Unlock()
+	if waiters != 0 {
+		t.Fatal("JoinAll registered a waiter before validating all targets")
+	}
+}
+
 func TestJoinCanceledWaiterIsRemoved(t *testing.T) {
 	for _, test := range []struct {
 		name    string

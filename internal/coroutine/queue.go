@@ -16,35 +16,23 @@
 
 package coroutine
 
-import (
-	"slices"
-	"sync"
-)
+import "sync"
 
 type node[T any] struct {
 	value T
 	next  *node[T]
 }
 
-// queue is a deque whose caller owns synchronization. Its zero value is ready for use.
+// queue is a FIFO whose caller owns synchronization. Its zero value is ready for use.
 type queue[T any] struct {
 	head  *node[T]
 	tail  *node[T]
 	count int
 	pool  *sync.Pool
-
-	sortBuffer []T
 }
 
 func (q *queue[T]) len() int {
 	return q.count
-}
-
-func (q *queue[T]) peekFront() (value T, ok bool) {
-	if q.head == nil {
-		return value, false
-	}
-	return q.head.value, true
 }
 
 func (q *queue[T]) pushBack(value T) {
@@ -55,16 +43,6 @@ func (q *queue[T]) pushBack(value T) {
 		q.tail.next = newNode
 	}
 	q.tail = newNode
-	q.count++
-}
-
-func (q *queue[T]) pushFront(value T) {
-	newNode := q.acquireNode(value)
-	newNode.next = q.head
-	q.head = newNode
-	if q.count == 0 {
-		q.tail = newNode
-	}
 	q.count++
 }
 
@@ -116,24 +94,6 @@ func (q *queue[T]) any(match func(T) bool) bool {
 		}
 	}
 	return false
-}
-
-func (q *queue[T]) sortStable(compare func(T, T) int) {
-	if q.count < 2 {
-		return
-	}
-	values := slices.Grow(q.sortBuffer[:0], q.count)
-	for n := q.head; n != nil; n = n.next {
-		values = append(values, n.value)
-	}
-	q.sortBuffer = values
-	defer clear(values)
-	slices.SortStableFunc(values, compare)
-	n := q.head
-	for _, value := range values {
-		n.value = value
-		n = n.next
-	}
 }
 
 func (q *queue[T]) ensurePool() {
