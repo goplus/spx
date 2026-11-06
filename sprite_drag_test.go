@@ -1201,6 +1201,76 @@ func TestSpriteDragSamplingAndDispatch(t *testing.T) {
 	}
 }
 
+func TestSpriteDragActiveSamplingAndDispatch(t *testing.T) {
+	for _, release := range []bool{false, true} {
+		for _, change := range []string{"pan", "zoom", "viewport", "missing sample", "missing dispatch"} {
+			t.Run(fmt.Sprintf("%s/release=%v", change, release), func(t *testing.T) {
+				resetInputSessionTest(t)
+				co, game, sprite := setupSpriteDragTest(t)
+				setupInputSourceManager(t)
+				frames := []InputReplayFrame{
+					{Frame: 0, Time: 0, State: InputReplayState{Mouse: InputReplayMouse{X: 12, Y: 18}, Buttons: 1}, MouseEvents: []InputReplayMouseEvent{{Button: 1, Pressed: true}}},
+					{Frame: 1, Time: .1, State: InputReplayState{Mouse: InputReplayMouse{X: 32, Y: 38}, Buttons: 1}},
+					{Frame: 2, Time: .2, State: InputReplayState{Mouse: InputReplayMouse{X: 32, Y: 38}, Buttons: 1}},
+				}
+				if release {
+					frames[2].State.Buttons = 0
+					frames[2].MouseEvents = []InputReplayMouseEvent{{Button: 1}}
+				}
+				if _, err := PrepareInputReplay(validRuntimeReplay(frames...)); err != nil {
+					t.Fatal(err)
+				}
+				session := claimPreparedSession(t, game)
+				t.Cleanup(func() { game.abortInputSession("test finished") })
+				sprite.OnClick(func() { t.Error("drag generated a click") })
+				camera := pkgengine.CameraMgr.(*dragCameraMgr)
+				for i := range frames {
+					if i == 2 && change == "missing sample" {
+						camera.world.Size.X = 0
+					}
+					if !game.inputMgr.prepareInputFrame(.01) {
+						t.Fatal("missing input frame")
+					}
+					if i == 2 {
+						if !game.inputMgr.drag.active {
+							t.Fatal("drag must already be active before the camera changes")
+						}
+						assertSpriteDragPosition(t, sprite, 30, 40)
+						// Keep the pointer at viewport (272, 142).
+						switch change {
+						case "pan":
+							camera.world.Position = camera.world.Position.Add(mathf.NewVec2(100, 50))
+						case "zoom":
+							camera.world.Size = camera.world.Size.Divf(2)
+						case "viewport":
+							camera.viewport.Size = camera.viewport.Size.Mulf(2)
+						case "missing sample":
+							camera.world.Size.X = 480
+						case "missing dispatch":
+							camera.world.Size.X = 0
+						}
+					}
+					game.dispatchFrameEvents()
+					co.Update()
+					session.endFrame()
+				}
+				// Keep the original world-space grab offset (-2, 2).
+				switch change {
+				case "pan":
+					assertSpriteDragPosition(t, sprite, 130, -10)
+				case "zoom", "viewport":
+					assertSpriteDragPosition(t, sprite, -106, 111)
+				default:
+					assertSpriteDragPosition(t, sprite, 30, 40)
+				}
+				if game.inputMgr.drag.active != !release {
+					t.Fatalf("active = %v after release=%v", game.inputMgr.drag.active, release)
+				}
+			})
+		}
+	}
+}
+
 func TestSpriteDragProjectionFallback(t *testing.T) {
 	for _, dimension := range []string{"no camera", "world width", "world height", "viewport width", "viewport height"} {
 		t.Run(dimension, func(t *testing.T) {

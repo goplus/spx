@@ -65,9 +65,9 @@ drag gesture, including before activation. The gesture cannot transfer to anothe
 sprite or resume when visibility or dragging is restored; a new press is required.
 
 Drag gestures detect pointer movement using the world pointer and camera/viewport
-projection sampled in the same input frame. At activation, the current camera
-reprojects the press and current screen points into world coordinates. The offset
-uses the captured sprite's current position and the reprojected press point.
+projection sampled in the same input frame. Every drag update, including release,
+reprojects the sampled viewport point through the current camera. At activation,
+the offset uses the sprite's current position and the reprojected press point.
 Activation applies the pointer displacement since mouse down to that current
 position, without pulling the sprite back after scene or camera updates. Replays
 must reproduce the same scene, camera, and viewport evolution.

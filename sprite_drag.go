@@ -102,21 +102,23 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 		p.cancelDrag(sprite)
 		return
 	}
+	view := p.frame.dragProjection.viewportPoint(point)
+	distance := view.Sub(drag.startView)
+	// Keep v1 timestamp tolerance when checking the activation threshold.
+	if !drag.active && distance.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
+		return
+	}
+	// Account for camera changes after sampling, including on release.
+	projection := p.sampleDragProjection()
+	if (p.frame.dragProjection == nil) != (projection == nil) {
+		return // Do not mix world and viewport coordinates.
+	}
+	point = projection.worldPoint(view)
 	if !drag.active {
-		view := p.frame.dragProjection.viewportPoint(point)
-		distance := view.Sub(drag.startView)
-		// The target is already captured, but activation still waits for an
-		// intentional movement or hold. Keep v1 replay timestamp tolerance.
-		if distance.LengthSquared() <= dragDistance*dragDistance && p.g.inputClock().Sub(drag.pressedAt) < dragDelay-time.Microsecond {
-			return
-		}
-		// Preserve the captured sprite's current position if it or the camera
-		// moved while waiting; layer changes cannot select another sprite.
-		currentProjection := p.sampleDragProjection()
-		start := currentProjection.worldPoint(drag.startView)
+		// Rebase the grab offset after scene changes while waiting.
+		start := projection.worldPoint(drag.startView)
 		x, y := sprite.getXY()
 		drag.offset = mathf.NewVec2(x-start.X, y-start.Y)
-		point = currentProjection.worldPoint(view)
 		drag.active = true
 		p.swipe.Finish(point) // A drag takes over any pending foreground swipe.
 		sprite.SetLayerTo(Front)
@@ -126,8 +128,7 @@ func (p *inputManager) updateDrag(point mathf.Vec2) {
 	if x == transform.x && y == transform.y {
 		return
 	}
-	// Dragging bypasses script movement and pen drawing while still publishing
-	// the position through the normal versioned proxy synchronization path.
+	// Resume drawing from the drop position on the next scripted move.
 	if pen := sprite.pen(); pen != nil && pen.isPenDown {
 		pen.needsPositionReset = true
 	}
