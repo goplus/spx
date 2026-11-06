@@ -187,10 +187,12 @@ func TestRunEngineStartError(t *testing.T) {
 func TestRunCancellationReleasesLeases(t *testing.T) {
 	for _, phase := range []string{"materialization", "running engine"} {
 		t.Run(phase, func(t *testing.T) {
+			// Use only shell builtins while awaiting cancellation so a foreground
+			// sleep cannot defer TERM past the supervisor's shutdown grace period.
 			payload, payloadDigest, manifestDigest, manifest := launcherTestPayload(t, `#!/bin/sh
 trap 'printf "stopped\n" > "$2"; exit 0' TERM
 printf '%s\n' "$SPX_SESSION_DIR" > "$1"
-while :; do sleep 1; done
+while :; do :; done
 `)
 			root, tempRoot := t.TempDir(), t.TempDir()
 			cacheRoot := filepath.Join(root, "cache")
