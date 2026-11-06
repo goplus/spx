@@ -492,7 +492,7 @@ func (p *Game) dispatchPhysicsTriggers() {
 		if !isSpriteTouchable(src) || !isSpriteTouchable(dst) {
 			continue
 		}
-		src.fireTouchStart(dst)
+		src.doWhenTouchStart(dst)
 	}
 	p.triggerEvents = sliceutil.Reset(p.triggerEvents, 0)
 }
