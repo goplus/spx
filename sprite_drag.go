@@ -17,7 +17,6 @@
 package spx
 
 import (
-	"slices"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
@@ -55,16 +54,6 @@ func (p *SpriteImpl) SetDragMode(mode DragMode) {
 
 func (p *SpriteImpl) isDragging() bool {
 	return p.g != nil && p.g.inputMgr.drag.target == p && p.g.inputMgr.drag.active
-}
-
-// Drag picking ignores non-draggable foreground sprites.
-func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
-	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
-		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
-			return sprite
-		}
-	}
-	return nil
 }
 
 func (p *inputManager) sampleDragProjection() *dragProjection {

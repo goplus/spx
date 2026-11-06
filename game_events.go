@@ -84,6 +84,16 @@ func (p *Game) findClickTarget(point mathf.Vec2) clicker {
 	return nil
 }
 
+// Drag picking ignores non-draggable foreground sprites.
+func (p *Game) findDragTarget(point mathf.Vec2) *SpriteImpl {
+	for _, item := range slices.Backward(p.shapeMgr.getTempShapes()) {
+		if sprite, ok := item.(*SpriteImpl); ok && sprite.spriteState.isDraggable && p.pointHitsClickTarget(sprite, point) {
+			return sprite
+		}
+	}
+	return nil
+}
+
 func (p *Game) pointHitsClickTarget(target clicker, point mathf.Vec2) bool {
 	syncSprite := target.getProxy()
 	if syncSprite == nil || !target.Visible() {
