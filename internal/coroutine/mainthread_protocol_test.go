@@ -1,7 +1,10 @@
 package coroutine
 
 import (
+	"errors"
+	"reflect"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +22,91 @@ func useDirectMainThread(t *testing.T) {
 	previous := gdx.PlatformMgr
 	gdx.PlatformMgr = directMainThreadPlatform{}
 	t.Cleanup(func() { gdx.PlatformMgr = previous })
+}
+
+func TestWaitMainThreadDirectPreservesFaultStack(t *testing.T) {
+	useDirectMainThread(t)
+	errorValue := errors.New("callback failure")
+	for _, cleanup := range []bool{false, true} {
+		name := "normal"
+		if cleanup {
+			name = "cleanup"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, value := range []any{"sentinel", errorValue, []string{"uncomparable", "value"}} {
+				t.Run(reflect.TypeOf(value).String(), func(t *testing.T) {
+					reports := make(chan PanicReport, 1)
+					co := New(func(report PanicReport) { reports <- report })
+					worker := co.Create("callback-worker", func(Thread) {
+						call := co.WaitMainThread
+						if cleanup {
+							call = co.CleanupMainThread
+						}
+						call(func() { panicWithValue(value) })
+					})
+					waitForThreadSignal(t, worker.done, "panicking callback did not finish")
+					co.RunAfterStop(nil)
+					select {
+					case report := <-reports:
+						if !reflect.DeepEqual(report.Value, value) || value == errorValue && report.Value != errorValue {
+							t.Errorf("reported panic = %#v, want original %#v", report.Value, value)
+						}
+						if report.Name != "callback-worker" {
+							t.Errorf("reported name = %q, want callback-worker", report.Name)
+						}
+						if !strings.Contains(report.Stack, "panicWithValue") {
+							t.Errorf("report lost the callback fault site:\n%s", report.Stack)
+						}
+					default:
+						t.Fatal("callback panic was not reported")
+					}
+					co.callbacks.Range(func(_, _ any) bool {
+						t.Error("panicking callback retained its scope")
+						return false
+					})
+				})
+			}
+		})
+	}
+}
+
+func TestWaitMainThreadDirectPreservesCanceledAbnormalExit(t *testing.T) {
+	useDirectMainThread(t)
+	t.Setenv("GODEBUG", "panicnil=1")
+	for _, test := range []struct {
+		name string
+		call func()
+		want any
+	}{
+		{"nil panic", func() { panicWithValue(nil) }, ErrAbortThread},
+		{"Goexit", runtime.Goexit, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			co := New(nil)
+			checked := false
+			worker := co.Create("canceled-callback", func(me Thread) {
+				defer func() {
+					if got := recover(); got != test.want {
+						t.Errorf("exit panic = %v, want %v", got, test.want)
+					}
+					if co.callbackScope() != 0 {
+						t.Error("abnormal callback retained its scope")
+					}
+					checked = true
+				}()
+				co.WaitMainThread(func() {
+					me.Cancel()
+					test.call()
+				})
+				t.Error("canceled abnormal callback returned normally")
+			})
+			waitForThreadSignal(t, worker.done, "canceled callback did not finish")
+			co.RunAfterStop(nil)
+			if !checked {
+				t.Fatal("canceled callback never reached its caller's defer")
+			}
+		})
+	}
 }
 
 func TestWaitMainThreadDirectCancellation(t *testing.T) {

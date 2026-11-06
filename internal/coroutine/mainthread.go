@@ -73,11 +73,9 @@ func (p *Coroutines) RunBetweenScripts(call func()) {
 }
 
 func (p *Coroutines) waitMainThread(call func(), caller Thread) {
-	var result callbackResult
 	if platform.TryCallEngineDirectly(func() {
-		result = p.invokeMainThread(caller, call)
+		p.invokeMainThreadDirect(caller, call)
 	}) {
-		checkMainThreadResult(caller, result)
 		return
 	}
 
@@ -88,6 +86,30 @@ func (p *Coroutines) waitMainThread(call func(), caller Thread) {
 	}
 	p.enqueueMainThreadCall(pending)
 	pending.wait()
+}
+
+func (p *Coroutines) invokeMainThreadDirect(caller Thread, call func()) {
+	if caller.canceled() {
+		panic(ErrAbortThread)
+	}
+	func() {
+		scope := callbackNoDrain
+		if caller != nil {
+			scope |= callbackExclusive
+		}
+		id, previous := p.enterCallback(scope)
+		defer p.leaveCallback(id, previous)
+		defer func() {
+			// Let uncanceled panics propagate with their original fault stack.
+			if caller.canceled() {
+				recover()
+			}
+		}()
+		call()
+	}()
+	// A canceled panic (including panic(nil)) reaches this check, but Goexit
+	// never returns from the inner call and must not be replaced with a panic.
+	checkMainThreadResult(caller, callbackResult{})
 }
 
 func (p *Coroutines) invokeMainThread(caller Thread, call func()) callbackResult {

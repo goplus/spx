@@ -34,12 +34,38 @@ import (
 
 type mainThreadTestPlatform struct {
 	gdx.IPlatformMgr
-	main bool
+	main           bool
+	onIsMainThread func()
 }
 
 type observedDoneContext struct {
 	context.Context
 	onDone func()
+}
+
+func TestRunSyncRechecksAdmissionOnEngineThread(t *testing.T) {
+	co := New(nil)
+	previous := gdx.PlatformMgr
+	t.Cleanup(func() { gdx.PlatformMgr = previous })
+	t.Cleanup(func() { co.RunAfterStop(nil) })
+	checked := false
+	gdx.PlatformMgr = mainThreadTestPlatform{
+		main: true,
+		onIsMainThread: sync.OnceFunc(func() {
+			// Close admission after RunSync's first check, before its engine call.
+			co.admissionMu.Lock()
+			co.closeAdmissionLocked()
+			co.admissionMu.Unlock()
+			checked = true
+		}),
+	}
+	co.RunSync("rejected", func(Thread) { t.Error("shutdown admitted the callback") })
+	if !checked || !co.admissionClosed() {
+		t.Fatal("fixture did not close admission at the engine boundary")
+	}
+	if co.LastThreadID() != 0 || co.hasPendingWork() {
+		t.Fatal("RunSync created a task after shutdown closed admission")
+	}
 }
 
 func TestRunSyncRejectedByShutdownBarrier(t *testing.T) {
@@ -829,6 +855,9 @@ func TestShutdownCleanupGoexitKeepsAdmissionClosedUntilRecovery(t *testing.T) {
 }
 
 func (p mainThreadTestPlatform) IsMainThread() bool {
+	if p.onIsMainThread != nil {
+		p.onIsMainThread()
+	}
 	return p.main
 }
 
