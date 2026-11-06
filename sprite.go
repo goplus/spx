@@ -26,6 +26,9 @@ import (
 // -----------------------------------------------------------------------------
 type RotationStyle int
 
+// DragMode controls whether a sprite can be dragged with the mouse.
+type DragMode int
+
 type specialObj int
 
 type switchAction int
@@ -90,6 +93,11 @@ const (
 	None RotationStyle = iota
 	Normal
 	LeftRight
+)
+
+const (
+	NotDraggable DragMode = iota
+	Draggable
 )
 
 const (
@@ -201,6 +209,7 @@ type Sprite interface {
 	ChangeXpos(dx float64)
 	ChangeYpos(dy float64)
 	ChangeXYpos(dx, dy float64)
+	SetDragMode(mode DragMode)
 
 	// Movement Methods
 	Step__0(step float64)

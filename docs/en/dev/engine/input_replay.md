@@ -49,6 +49,36 @@ change live query results.
 
 The v1 stream covers the SPX input snapshot used by game logic, including supported pointer, keyboard, and action state. The exact schema is versioned; readers must reject incompatible future formats rather than guessing.
 
+At mouse down, a drag gesture captures the topmost hit among draggable sprites;
+a non-draggable foreground sprite does not block that selection. The captured
+sprite starts dragging after the pointer moves more than 3 viewport pixels or
+the button stays pressed for 400 ms. A press with no draggable hit cannot capture
+a sprite that appears later. Moving sprites, layer changes, and camera changes
+do not select a different target. This is an intentional SPX difference from
+Scratch's delayed drag picking.
+
+Click targets are selected independently using the existing click rules; capturing
+or cancelling a pending background drag does not change foreground click routing.
+
+Hiding, destroying, or disabling dragging on the captured sprite cancels the
+drag gesture, including before activation. The gesture cannot transfer to another
+sprite or resume when visibility or dragging is restored; a new press is required.
+
+Drag gestures detect pointer movement using the world pointer and camera/viewport
+projection sampled in the same input frame. Every drag update, including release,
+reprojects the sampled viewport point through the current camera. At activation,
+the offset uses the sprite's current position and the reprojected press point.
+Activation applies the pointer displacement since mouse down to that current
+position, without pulling the sprite back after scene or camera updates. Replays
+must reproduce the same scene, camera, and viewport evolution.
+
+The stream does not contain browser mousemove events, so same-position events
+and movement that returns within one tick cannot be reconstructed. The threshold
+uses viewport pixels, which can differ from Scratch's CSS pixels on HiDPI or
+CSS-scaled canvases. The v1 format is unchanged, but recordings made with delayed
+target selection can produce different results in dynamic scenes under the new
+mouse-down capture rule.
+
 ## EOF and end-of-frame completion
 
 Reaching the final input item does not necessarily mean the visible result is ready. Replay completion is finalized at the appropriate frame boundary so game logic, engine synchronization, and rendering can consume the last tick before capture begins.

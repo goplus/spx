@@ -1,5 +1,6 @@
 #include "register_types.h"
 
+#include "../../../spx_pen.h"
 #include "../../../spx_pen_surface.h"
 #include "../../../spx_pixel_query.h"
 #include "core/io/file_access.h"
@@ -157,6 +158,46 @@ public:
 		surface->flush();
 		surface->clear();
 		pixel(capture("clear_pending"), Vector2i(), Color(0, 0, 0, 0), "clear discards queued commands");
+
+		SpxPen dragged_pen;
+		dragged_pen.on_create(1, surface);
+		dragged_pen.set_size_to(8);
+		dragged_pen.set_color_to(Color(1, 0, 0, 0.5));
+		dragged_pen.move_to(Vector2(-24, -16));
+		dragged_pen.on_down(false);
+		dragged_pen.restore_state(Vector2(-8, 0), true);
+		image = capture("drag_without_drawing");
+		pixel(image, Vector2i(-24, -16), Color(0.5, 0, 0, 0.5), "explicit pen down draws its initial point");
+		pixel(image, Vector2i(-16, -8), Color(0, 0, 0, 0), "dragging does not draw a connecting line");
+		pixel(image, Vector2i(-8, 0), Color(0, 0, 0, 0), "resetting the origin does not draw a point");
+		dragged_pen.move_to(Vector2(16, 0));
+		image = capture("drag_resume_transparency");
+		pixel(image, Vector2i(-10, 0), Color(0.5, 0, 0, 0.5), "resumed line has a round start cap");
+		pixel(image, Vector2i(-6, 0), Color(0.5, 0, 0, 0.5), "resumed start cap does not overlap the line body");
+		pixel(image, Vector2i(4, 0), Color(0.5, 0, 0, 0.5), "resumed line body keeps the requested transparency");
+		pixel(image, Vector2i(14, 0), Color(0.5, 0, 0, 0.5), "resumed end cap does not overlap the line body");
+		pixel(image, Vector2i(18, 0), Color(0.5, 0, 0, 0.5), "resumed line has a round end cap");
+		surface->clear();
+		dragged_pen.restore_state(Vector2(), true);
+		dragged_pen.on_down(false);
+		pixel(capture("drag_explicit_pen_down"), Vector2i(), Color(0.5, 0, 0, 0.5), "explicit pen down after a drag still draws a point");
+		dragged_pen.on_down(false);
+		pixel(capture("drag_repeated_pen_down"), Vector2i(), Color(0.75, 0, 0, 0.75), "repeated explicit pen down deliberately blends another point");
+		dragged_pen.on_destroy();
+		surface->clear();
+		SpxPen cloned_pen;
+		cloned_pen.on_create(2, surface);
+		cloned_pen.set_size_to(8);
+		cloned_pen.set_color_to(Color(0, 0, 1, 0.5));
+		cloned_pen.restore_state(Vector2(-8, 0), true);
+		pixel(capture("clone_restore_without_drawing"), Vector2i(-8, 0), Color(0, 0, 0, 0), "inheriting a down pen does not draw an initial point");
+		cloned_pen.move_to(Vector2(16, 0));
+		image = capture("clone_first_line_transparency");
+		pixel(image, Vector2i(-10, 0), Color(0, 0, 0.5, 0.5), "clone's first line starts at its inherited origin");
+		pixel(image, Vector2i(-6, 0), Color(0, 0, 0.5, 0.5), "clone's first line has no extra pen-down dot");
+		pixel(image, Vector2i(4, 0), Color(0, 0, 0.5, 0.5), "clone's first line preserves its inherited down state");
+		cloned_pen.on_destroy();
+		surface->clear();
 
 		surface->draw_line(Vector2(-8, -10), Vector2(8, -10), 4, Color(1, 1, 1), true);
 		surface->flush();

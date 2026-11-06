@@ -288,6 +288,23 @@ onCond score >= 3, => {
 	}
 }
 
+func TestBuildSpriteDragMode(t *testing.T) {
+	isolateInterpreter(t)
+	if err := Init(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := Build(map[string][]byte{
+		"main.spx": []byte(""),
+		"Tile.spx": []byte(`setDragMode Draggable
+onKey KeySpace, => {
+	setDragMode NotDraggable
+}
+`),
+	}); err != nil {
+		t.Fatalf("build sprite drag modes with embedded runtime types: %v", err)
+	}
+}
+
 func (i interpreterImportFailure) Import(path string) (*types.Package, error) {
 	if path == "fmt" {
 		return nil, i.err

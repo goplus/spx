@@ -134,6 +134,7 @@ type IPenMgr interface {
 	PenStamp(obj Object)
 	PenStampSprite(sprite_id Object)
 	MovePenTo(obj Object, position Vec2)
+	RestorePenState(obj Object, position Vec2, is_down bool)
 	PenDown(obj Object, move_by_mouse bool)
 	PenUp(obj Object)
 	SetPenColorTo(obj Object, color Color)

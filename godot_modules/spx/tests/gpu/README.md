@@ -4,7 +4,8 @@ Godot's ordinary `--test` SceneTree runner uses a mock display and dummy
 renderer. This small, explicitly enabled test module also runs pen operations
 in a normal SceneTree and checks actual OpenGL readback pixels on macOS.
 It covers material snapshots, mixed stamp/line ordering, actual SPX effects,
-alpha blending, repeated flushes, clear, resize, transforms, cached readback,
+alpha blending, drag origins without extra pen dots, round-cap transparency,
+repeated flushes, clear, resize, transforms, cached readback,
 skipping readback for non-overlapping queries, and display of the premultiplied
 pen layer. The interactive SPX demo is in `test/PenStampSensing`.
 

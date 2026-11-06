@@ -139,6 +139,7 @@ type inputManager struct {
 	mousePos mathf.Vec2
 
 	clickGate inputstate.ClickGate
+	drag      spriteDragState
 	swipe     coreruntime.SwipeState[*SpriteImpl]
 	frame     inputFrameState
 }
@@ -158,6 +159,7 @@ func (p *inputManager) init(g *Game) {
 	p.mousePos = mathf.Vec2{}
 	p.g = g
 	p.frame = inputFrameState{}
+	p.drag = spriteDragState{}
 	p.clickGate.InitWithClock(mouseClickInterval, g.inputClock)
 	p.swipe.InitWithClock(g.inputClock)
 }
@@ -169,8 +171,24 @@ func (p *inputManager) onKeyDown(key Key) {
 
 func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 	target := p.g.findClickTarget(point)
-	swipeTarget, _ := target.(*SpriteImpl)
-	p.swipe.Begin(point, swipeTarget)
+	sprite, _ := target.(*SpriteImpl)
+	view := p.frame.dragProjection.viewportPoint(point)
+	p.drag = spriteDragState{
+		pressed:       true,
+		clickDeferred: sprite != nil && sprite.spriteState.isDraggable,
+		target:        p.g.findDragTarget(point),
+		startView:     view,
+		pressedAt:     p.g.inputClock(),
+	}
+	if p.drag.clickDeferred {
+		p.swipe.Finish(point)
+		return
+	}
+	p.swipe.Begin(point, sprite)
+	p.click(target)
+}
+
+func (p *inputManager) click(target clicker) {
 	if !p.clickGate.Allow(clickTimerGlobal) {
 		return
 	}
@@ -188,7 +206,19 @@ func (p *inputManager) onLeftButtonDown(point mathf.Vec2) {
 }
 
 func (p *inputManager) onLeftButtonUp(point mathf.Vec2) {
+	p.updateDrag(point)
+	drag := p.drag
+	p.drag = spriteDragState{}
 	result, target, ok := p.swipe.Finish(point)
+	if drag.active {
+		return // Dragging suppresses clicks and swipes.
+	}
+	if drag.pressed {
+		// Pick the release target independently of the drag candidate.
+		if released, ok := p.g.findClickTarget(point).(*SpriteImpl); ok && released.spriteState.isDraggable {
+			p.click(released)
+		}
+	}
 	if !ok {
 		return
 	}

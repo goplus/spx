@@ -151,6 +151,14 @@ void SpxPen::move_to(GdVec2 position) {
 	_append_current_point_if_needed(position);
 }
 
+void SpxPen::restore_state(GdVec2 position, GdBool is_down) {
+	// Dragging and cloning must not add a pen-down dot.
+	current_pen_pos = position;
+	last_draw_pos = _get_draw_position(position, pen_properties.size);
+	needs_start_cap = true;
+	is_pen_down = is_down;
+}
+
 void SpxPen::on_down(GdBool p_move_by_mouse) {
 	move_by_mouse = p_move_by_mouse;
 	const Vector2 draw_position = _get_draw_position(current_pen_pos, pen_properties.size);

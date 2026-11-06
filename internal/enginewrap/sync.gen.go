@@ -555,6 +555,11 @@ func (*penMgrImpl) MovePenTo(obj gdx.Object, position Vec2) {
 		gdx.PenMgr.MovePenTo(obj, position)
 	})
 }
+func (*penMgrImpl) RestorePenState(obj gdx.Object, position Vec2, is_down bool) {
+	callInMainThread(func() {
+		gdx.PenMgr.RestorePenState(obj, position, is_down)
+	})
+}
 func (*penMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool) {
 	callInMainThread(func() {
 		gdx.PenMgr.PenDown(obj, move_by_mouse)

@@ -281,6 +281,7 @@ typedef void (*GDExtensionSpxPenBatchUpdateCommands)(const float *buffer_data, i
 typedef void (*GDExtensionSpxPenPenStamp)(GdObj obj);
 typedef void (*GDExtensionSpxPenPenStampSprite)(GdObj sprite_id);
 typedef void (*GDExtensionSpxPenMovePenTo)(GdObj obj, GdVec2 position);
+typedef void (*GDExtensionSpxPenRestorePenState)(GdObj obj, GdVec2 position, GdBool is_down);
 typedef void (*GDExtensionSpxPenPenDown)(GdObj obj, GdBool move_by_mouse);
 typedef void (*GDExtensionSpxPenPenUp)(GdObj obj);
 typedef void (*GDExtensionSpxPenSetPenColorTo)(GdObj obj, GdColor color);

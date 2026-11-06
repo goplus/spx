@@ -28,6 +28,7 @@ const (
 	PenBatchUp
 	PenBatchColor
 	PenBatchSetSize
+	PenBatchRestoreState
 )
 
 // PenSyncBuffer preserves the global order of pen commands while reducing
@@ -48,6 +49,10 @@ func NewPenSyncBuffer(capacity int) *PenSyncBuffer {
 
 func (b *PenSyncBuffer) AddMove(obj Object, x, y float64) bool {
 	return b.add(PenBatchMove, obj, x, y, 0, 0)
+}
+
+func (b *PenSyncBuffer) AddRestoreState(obj Object, x, y float64, isDown bool) bool {
+	return b.add(PenBatchRestoreState, obj, x, y, boolArg(isDown), 0)
 }
 
 func (b *PenSyncBuffer) AddDown(obj Object, moveByMouse bool) bool {

@@ -103,6 +103,7 @@ type GDExtensionInterface struct {
 	SpxPenPenStamp                              GDExtensionSpxPenPenStamp
 	SpxPenPenStampSprite                        GDExtensionSpxPenPenStampSprite
 	SpxPenMovePenTo                             GDExtensionSpxPenMovePenTo
+	SpxPenRestorePenState                       GDExtensionSpxPenRestorePenState
 	SpxPenPenDown                               GDExtensionSpxPenPenDown
 	SpxPenPenUp                                 GDExtensionSpxPenPenUp
 	SpxPenSetPenColorTo                         GDExtensionSpxPenSetPenColorTo
@@ -443,6 +444,7 @@ func (x *GDExtensionInterface) resolveAPIFunctions() {
 	x.SpxPenPenStamp = (GDExtensionSpxPenPenStamp)(resolveCFunc("spx_pen_pen_stamp"))
 	x.SpxPenPenStampSprite = (GDExtensionSpxPenPenStampSprite)(resolveCFunc("spx_pen_pen_stamp_sprite"))
 	x.SpxPenMovePenTo = (GDExtensionSpxPenMovePenTo)(resolveCFunc("spx_pen_move_pen_to"))
+	x.SpxPenRestorePenState = (GDExtensionSpxPenRestorePenState)(resolveCFunc("spx_pen_restore_pen_state"))
 	x.SpxPenPenDown = (GDExtensionSpxPenPenDown)(resolveCFunc("spx_pen_pen_down"))
 	x.SpxPenPenUp = (GDExtensionSpxPenPenUp)(resolveCFunc("spx_pen_pen_up"))
 	x.SpxPenSetPenColorTo = (GDExtensionSpxPenSetPenColorTo)(resolveCFunc("spx_pen_set_pen_color_to"))

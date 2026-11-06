@@ -1,0 +1,8 @@
+{
+  "run": {"title": "SPX Drag Mode", "width": 480, "height": 360},
+  "map": {"width": 480, "height": 360},
+  "zorder": [
+    {"type": "sprite", "target": "Tile", "x": -100, "y": 0},
+    {"type": "sprite", "target": "Fixed", "x": 130, "y": -80}
+  ]
+}

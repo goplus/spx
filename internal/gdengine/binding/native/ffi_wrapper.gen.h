@@ -414,6 +414,12 @@ void cgo_callfn_GDExtensionSpxPenMovePenTo(const GDExtensionSpxPenMovePenTo fn, 
 	}
 	fn(obj, position);
 }
+void cgo_callfn_GDExtensionSpxPenRestorePenState(const GDExtensionSpxPenRestorePenState fn, GdObj obj, GdVec2 position, GdBool is_down) {
+	if (!fn) {
+		return;
+	}
+	fn(obj, position, is_down);
+}
 void cgo_callfn_GDExtensionSpxPenPenDown(const GDExtensionSpxPenPenDown fn, GdObj obj, GdBool move_by_mouse) {
 	if (!fn) {
 		return;

@@ -43,6 +43,7 @@ type SpriteImpl struct {
 
 type spriteRuntimeState struct {
 	isVisible           bool
+	isDraggable         bool
 	cloned              bool
 	isDying             bool
 	dirtyVersion        uint64
@@ -66,6 +67,7 @@ func (p *SpriteImpl) InitFrom(src *SpriteImpl) {
 	p.original = src.originalSprite()
 	p.spriteState = spriteRuntimeState{
 		isVisible:           src.spriteState.isVisible,
+		isDraggable:         src.spriteState.isDraggable,
 		cloned:              true,
 		defaultCostumeIndex: src.spriteState.defaultCostumeIndex,
 	}

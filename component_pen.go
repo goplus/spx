@@ -58,6 +58,8 @@ type penComponent struct {
 	sprite *SpriteImpl
 	penState
 	penObj *gdx.Object
+	// Dragging must not draw a connecting stroke.
+	needsPositionReset bool
 }
 
 // ============================================================================
@@ -95,6 +97,7 @@ func (p *penComponent) penUp() {
 		return
 	}
 	p.isPenDown = false
+	p.needsPositionReset = false
 	if p.penObj == nil {
 		return
 	}
@@ -103,13 +106,15 @@ func (p *penComponent) penUp() {
 
 func (p *penComponent) penDown() {
 	engine.RequestRedraw()
-	wasDown := p.isPenDown
-	created := p.checkOrCreatePen()
-	if !wasDown || created {
+	if p.checkOrCreatePen() || !p.isPenDown {
 		p.syncPenAppearance()
 	}
-	x, y := p.sprite.getXY()
-	p.syncPenPosition(x, y)
+	if p.needsPositionReset {
+		p.restorePenState()
+	} else {
+		x, y := p.sprite.getXY()
+		p.syncPenPosition(x, y)
+	}
 	p.isPenDown = true
 	p.sprite.g.queuePenDown(*p.penObj)
 }
@@ -264,7 +269,17 @@ func (p *penComponent) movePen(x, y float64) {
 	}
 	engine.RequestRedraw()
 	p.ensureClonePenReady()
+	if p.needsPositionReset {
+		p.restorePenState()
+	}
 	p.syncPenPosition(x, y)
+}
+
+// Restore the pen origin and state without drawing a point.
+func (p *penComponent) restorePenState() {
+	x, y := p.sprite.getXY()
+	p.sprite.g.queuePenRestoreState(*p.penObj, mathf.NewVec2(x, y), p.isPenDown)
+	p.needsPositionReset = false
 }
 
 func (p *penComponent) syncPenPosition(x, y float64) {
@@ -305,14 +320,11 @@ func (p *penComponent) syncPenAppearance() {
 }
 
 func (p *penComponent) ensureClonePenReady() {
-	created := p.checkOrCreatePen()
-	if !created || !p.isPenDown {
+	if !p.checkOrCreatePen() || !p.isPenDown {
 		return
 	}
 	p.syncPenAppearance()
-	x, y := p.sprite.getXY()
-	p.syncPenPosition(x, y)
-	p.sprite.g.queuePenDown(*p.penObj)
+	p.restorePenState()
 }
 
 func (p *penComponent) updateLegacyPenState(state legacyPenState, resetTransparency bool) {

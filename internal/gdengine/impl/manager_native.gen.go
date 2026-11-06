@@ -638,6 +638,14 @@ func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
 		CallPenMovePenTo(arg0, arg1)
 	})
 }
+func (pself *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
+	enginewrap.CallInMainThread(func() {
+		arg0 := ToGdObj(obj)
+		arg1 := ToGdVec2(position)
+		arg2 := ToGdBool(is_down)
+		CallPenRestorePenState(arg0, arg1, arg2)
+	})
+}
 func (pself *penMgr) PenDown(obj Object, move_by_mouse bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
