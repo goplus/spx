@@ -60,7 +60,7 @@ func TestSpriteDragModeLoadsAndClones(t *testing.T) {
 			game := setupStageLoadTestGame(t, files)
 			gamer := reflect.ValueOf(&game.Game).Elem()
 			sprite := &layoutInterfaceOwnerSprite{}
-			prepared, err := prepareSprite(files, "owner", reflect.TypeOf(*sprite), gamer)
+			prepared, err := prepareSprite(files, "owner", reflect.TypeOf(sprite).Elem(), gamer)
 			if err != nil {
 				t.Fatal(err)
 			}
