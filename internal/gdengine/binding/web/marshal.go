@@ -28,100 +28,96 @@ import (
 
 var jsObject = js.Global().Get("Object")
 
-func JsFromGdObj(val engine.Object) js.Value {
-	return JsFromGdInt(int64(val))
+func JSToGdBool(val js.Value) bool {
+	switch val.Type() {
+	case js.TypeNumber:
+		return val.Int() != 0
+	case js.TypeBoolean:
+		return val.Bool()
+	default:
+		panic("unsupported JavaScript boolean value")
+	}
 }
 
-func JsSplitGdObj(val engine.Object) (uint32, uint32) {
-	return JsSplitGdInt(int64(val))
+func JSFromGdInt(val int64) js.Value {
+	intJS := jsObject.New()
+	low, high := JSSplitGdInt(val)
+	intJS.Set("low", low)
+	intJS.Set("high", high)
+	return intJS
 }
 
-// JsSplitGdInt encodes a web bridge GdInt/GdObj as (low, high) uint32 parts.
-// JS wrappers rebuild a signed BigInt in this order for by-value Wasm inputs.
-func JsSplitGdInt(val int64) (uint32, uint32) {
-	return uint32(val), uint32(val >> 32)
-}
-
-func JsFromGdInt(val int64) js.Value {
-	intJs := jsObject.New()
-	low, high := JsSplitGdInt(val)
-	intJs.Set("low", low)
-	intJs.Set("high", high)
-	return intJs
-}
-
-func JsToGdObject(val js.Value) engine.Object {
-	return engine.Object(JsToGdInt(val))
-}
-
-func JsToGdObj(val js.Value) int64 {
-	return JsToGdInt(val)
-}
-
-func JsToGdInt(val js.Value) int64 {
+func JSToGdInt(val js.Value) int64 {
 	low := uint32(val.Get("low").Int())
 	high := uint32(val.Get("high").Int())
 	return gdIntFromParts(low, high)
 }
 
-func JsFromGdString(object string) js.Value {
-	return js.ValueOf(object)
+// JSSplitGdInt encodes a web bridge GdInt/GdObj as (low, high) uint32 parts.
+// JS wrappers rebuild a signed BigInt in this order for by-value Wasm inputs.
+func JSSplitGdInt(val int64) (uint32, uint32) {
+	return uint32(val), uint32(val >> 32)
 }
 
-func JsFromGdVec2(vec mathf.Vec2) js.Value {
-	vec2Js := jsObject.New()
-	vec2Js.Set("x", float32(vec.X))
-	vec2Js.Set("y", float32(vec.Y))
-	return vec2Js
+// gdIntFromParts reconstructs the 64-bit GdInt/GdObj value from the web
+// bridge's JS-visible (low, high) representation.
+func gdIntFromParts(low, high uint32) int64 {
+	return int64(uint64(high)<<32 | uint64(low))
 }
 
-func JsFromGdVec3(vec mathf.Vec3) js.Value {
-	vec3Js := jsObject.New()
-	vec3Js.Set("x", float32(vec.X))
-	vec3Js.Set("y", float32(vec.Y))
-	vec3Js.Set("z", float32(vec.Z))
-	return vec3Js
+func JSFromGdObj(val engine.Object) js.Value {
+	return JSFromGdInt(int64(val))
 }
 
-func JsFromGdVec4(vec mathf.Vec4) js.Value {
-	vec4Js := jsObject.New()
-	vec4Js.Set("x", float32(vec.X))
-	vec4Js.Set("y", float32(vec.Y))
-	vec4Js.Set("z", float32(vec.Z))
-	vec4Js.Set("w", float32(vec.W))
-	return vec4Js
+func JSToGdObj(val js.Value) int64 {
+	return JSToGdInt(val)
 }
 
-func JsFromGdColor(color mathf.Color) js.Value {
-	colorJs := jsObject.New()
-	colorJs.Set("r", float32(color.R))
-	colorJs.Set("g", float32(color.G))
-	colorJs.Set("b", float32(color.B))
-	colorJs.Set("a", float32(color.A))
-	return colorJs
+func JSToGdObject(val js.Value) engine.Object {
+	return engine.Object(JSToGdInt(val))
 }
 
-func JsFromGdRect2(rect mathf.Rect2) js.Value {
-	rectJs := jsObject.New()
-	rectJs.Set("position", JsFromGdVec2(rect.Position))
-	rectJs.Set("size", JsFromGdVec2(rect.Size))
-	return rectJs
+func JSSplitGdObj(val engine.Object) (uint32, uint32) {
+	return JSSplitGdInt(int64(val))
 }
 
-func JsToGdString(object js.Value) string {
-	s := object.String()
+func JSToGdFloat(val js.Value) float64 {
+	return val.Float()
+}
+
+func JSFromGdString(value string) js.Value {
+	return js.ValueOf(value)
+}
+
+func JSToGdString(value js.Value) string {
+	s := value.String()
 	// Strip null terminators from C/FFI layer to ensure proper string comparison
 	return strings.TrimRight(s, "\x00")
 }
 
-func JsToGdVec2(vec js.Value) mathf.Vec2 {
+func JSFromGdVec2(vec mathf.Vec2) js.Value {
+	vec2JS := jsObject.New()
+	vec2JS.Set("x", float32(vec.X))
+	vec2JS.Set("y", float32(vec.Y))
+	return vec2JS
+}
+
+func JSToGdVec2(vec js.Value) mathf.Vec2 {
 	return mathf.Vec2{
 		X: vec.Get("x").Float(),
 		Y: vec.Get("y").Float(),
 	}
 }
 
-func JsToGdVec3(vec js.Value) mathf.Vec3 {
+func JSFromGdVec3(vec mathf.Vec3) js.Value {
+	vec3JS := jsObject.New()
+	vec3JS.Set("x", float32(vec.X))
+	vec3JS.Set("y", float32(vec.Y))
+	vec3JS.Set("z", float32(vec.Z))
+	return vec3JS
+}
+
+func JSToGdVec3(vec js.Value) mathf.Vec3 {
 	return mathf.Vec3{
 		X: vec.Get("x").Float(),
 		Y: vec.Get("y").Float(),
@@ -129,7 +125,16 @@ func JsToGdVec3(vec js.Value) mathf.Vec3 {
 	}
 }
 
-func JsToGdVec4(vec js.Value) mathf.Vec4 {
+func JSFromGdVec4(vec mathf.Vec4) js.Value {
+	vec4JS := jsObject.New()
+	vec4JS.Set("x", float32(vec.X))
+	vec4JS.Set("y", float32(vec.Y))
+	vec4JS.Set("z", float32(vec.Z))
+	vec4JS.Set("w", float32(vec.W))
+	return vec4JS
+}
+
+func JSToGdVec4(vec js.Value) mathf.Vec4 {
 	return mathf.Vec4{
 		X: vec.Get("x").Float(),
 		Y: vec.Get("y").Float(),
@@ -138,7 +143,16 @@ func JsToGdVec4(vec js.Value) mathf.Vec4 {
 	}
 }
 
-func JsToGdColor(color js.Value) mathf.Color {
+func JSFromGdColor(color mathf.Color) js.Value {
+	colorJS := jsObject.New()
+	colorJS.Set("r", float32(color.R))
+	colorJS.Set("g", float32(color.G))
+	colorJS.Set("b", float32(color.B))
+	colorJS.Set("a", float32(color.A))
+	return colorJS
+}
+
+func JSToGdColor(color js.Value) mathf.Color {
 	return mathf.Color{
 		R: color.Get("r").Float(),
 		G: color.Get("g").Float(),
@@ -147,38 +161,16 @@ func JsToGdColor(color js.Value) mathf.Color {
 	}
 }
 
-func JsToGdRect2(rect js.Value) mathf.Rect2 {
+func JSFromGdRect2(rect mathf.Rect2) js.Value {
+	rectJS := jsObject.New()
+	rectJS.Set("position", JSFromGdVec2(rect.Position))
+	rectJS.Set("size", JSFromGdVec2(rect.Size))
+	return rectJS
+}
+
+func JSToGdRect2(rect js.Value) mathf.Rect2 {
 	return mathf.Rect2{
-		Position: JsToGdVec2(rect.Get("position")),
-		Size:     JsToGdVec2(rect.Get("size")),
+		Position: JSToGdVec2(rect.Get("position")),
+		Size:     JSToGdVec2(rect.Get("size")),
 	}
-}
-
-func JsToGdBool(val js.Value) bool {
-	switch val.Type() {
-	case js.TypeNumber:
-		return val.Int() != 0
-	case js.TypeBoolean:
-		return val.Bool()
-	default:
-		panic("unknow type")
-	}
-}
-
-func JsToGdFloat(val js.Value) float64 {
-	return val.Float()
-}
-
-func JsToGdFloat32(val js.Value) float32 {
-	return float32(val.Float())
-}
-
-func JsToGdInt64(val js.Value) int64 {
-	return int64(val.Int())
-}
-
-// gdIntFromParts reconstructs the 64-bit GdInt/GdObj value from the web
-// bridge's JS-visible (low, high) representation.
-func gdIntFromParts(low, high uint32) int64 {
-	return int64(uint64(high)<<32 | uint64(low))
 }

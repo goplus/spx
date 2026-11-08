@@ -11,8 +11,8 @@ import "C"
 
 {{ range . }}
 {{ $name := trimPrefix .Function.Name "GDExtensionSpxCallback" -}}
-//export {{ .Field }}
-func {{ .Field }}({{ range $i, $arg := .Arguments }}{{ if $i }}, {{ end }}arg{{ $i }} {{ $arg.GoType }}{{ end }}) {
+//export {{ .ExportName }}
+func {{ .ExportName }}({{ range $i, $arg := .Arguments }}{{ if $i }}, {{ end }}arg{{ $i }} {{ $arg.Type }}{{ end }}) {
     if callbacks.{{ $name }} != nil {
         callbacks.{{ $name }}({{ range $i, $arg := .Arguments }}{{ if $i }}, {{ end }}{{ $arg.Value }}{{ end }})
     }

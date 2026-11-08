@@ -27,7 +27,10 @@ import (
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func bindCallbacks() CallbackInfo {
+// spriteSnapshot reuses storage when dispatching callbacks to runtime sprites.
+var spriteSnapshot = make([]ISpriter, 0)
+
+func makeCallbacks() CallbackInfo {
 	return CallbackInfo{
 		CoreCallbackInfo: CoreCallbackInfo{
 			OnEngineStart:       onEngineStart,
@@ -66,7 +69,6 @@ func bindCallbacks() CallbackInfo {
 		OnCollisionStay:  onCollisionStay,
 		OnCollisionExit:  onCollisionExit,
 		OnTriggerEnter:   onTriggerEnter,
-		OnTriggerStay:    onTriggerStay,
 		OnTriggerExit:    onTriggerExit,
 
 		// Go UI construction handles OnStart; the update callback has no delta.
@@ -80,6 +82,16 @@ func bindCallbacks() CallbackInfo {
 	}
 }
 
+// Preserve the synchronous update order for standalone engine clients.
+func standaloneCallbacks(callbacks CoreCallbackInfo) CoreCallbackInfo {
+	update := callbacks.OnEngineUpdate
+	callbacks.OnEngineUpdate = func(delta float64) {
+		InternalUpdateFrame(delta, update)
+	}
+	return callbacks
+}
+
+// engine
 func onEngineStart() {
 	if coreCallbacks.OnEngineStart != nil {
 		coreCallbacks.OnEngineStart()
@@ -97,8 +109,8 @@ func onEngineUpdate(delta float64) {
 
 func onEngineFixedUpdate(delta float64) {
 	// Physics keeps Godot's delta even during input replay.
-	sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
-	for _, sprite := range sprites {
+	spriteSnapshot = slices.AppendSeq(spriteSnapshot[:0], maps.Values(Sprites()))
+	for _, sprite := range spriteSnapshot {
 		sprite.OnFixedUpdate(delta)
 	}
 	if coreCallbacks.OnEngineFixedUpdate != nil {
@@ -110,8 +122,8 @@ func onEngineDestroy() {
 	if coreCallbacks.OnEngineDestroy != nil {
 		coreCallbacks.OnEngineDestroy()
 	}
-	sprites = slices.AppendSeq(sprites[:0], maps.Values(Sprites()))
-	for _, sprite := range sprites {
+	spriteSnapshot = slices.AppendSeq(spriteSnapshot[:0], maps.Values(Sprites()))
+	for _, sprite := range spriteSnapshot {
 		sprite.OnDestroy()
 	}
 }
@@ -134,8 +146,9 @@ func onEnginePause(isPaused bool) {
 	}
 }
 
-func onSceneSpriteInstantiated(id int64, type_name string) {
-	BindSceneInstantiatedSprite(Object(id), type_name)
+// scene
+func onSceneSpriteInstantiated(id int64, typeName string) {
+	BindSceneInstantiatedSprite(Object(id), typeName)
 }
 
 // sprite
@@ -155,6 +168,62 @@ func onSpriteFixedUpdated(delta float64) {
 
 func onSpriteDestroyed(id int64) {
 	DeleteSprite(Object(id))
+}
+
+func onSpriteScreenEntered(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnScreenEntered()
+		sprite.OnScreenEntered()
+	}
+}
+
+func onSpriteScreenExited(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnScreenExited()
+		sprite.OnScreenExited()
+	}
+}
+
+func onSpriteVfxFinished(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnVfxFinished()
+		sprite.OnVfxFinished()
+	}
+}
+
+func onSpriteAnimationFinished(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnAnimationFinished()
+		sprite.OnAnimationFinished()
+	}
+}
+
+func onSpriteAnimationLooped(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnAnimationLooped()
+		sprite.OnAnimationLooped()
+	}
+}
+
+func onSpriteFrameChanged(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnFrameChanged()
+		sprite.OnFrameChanged()
+	}
+}
+
+func onSpriteAnimationChanged(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnAnimationChanged()
+		sprite.OnAnimationChanged()
+	}
+}
+
+func onSpriteFramesSetChanged(id int64) {
+	if sprite := GetSprite(Object(id)); sprite != nil {
+		sprite.V_OnFramesSetChanged()
+		sprite.OnFramesSetChanged()
+	}
 }
 
 // input
@@ -224,9 +293,6 @@ func onTriggerEnter(id int64, oid int64) {
 	}
 }
 
-func onTriggerStay(id int64, oid int64) {
-}
-
 func onTriggerExit(id int64, oid int64) {
 	if sprite := GetSprite(Object(id)); sprite != nil {
 		if other := GetSprite(Object(oid)); other != nil {
@@ -237,6 +303,10 @@ func onTriggerExit(id int64, oid int64) {
 }
 
 // ui
+func onUiDestroyed(id int64) {
+	DeleteUINode(Object(id))
+}
+
 func onUiPressed(id int64) {
 	if node := GetUINode(Object(id)); node != nil {
 		node.V_OnUiPressed()
@@ -277,73 +347,4 @@ func onUiTextChanged(id int64, text string) {
 		node.V_OnUiTextChanged(text)
 		node.OnUiTextChanged(text)
 	}
-}
-
-func onUiDestroyed(id int64) {
-	DeleteUINode(Object(id))
-}
-
-func onSpriteScreenEntered(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnScreenEntered()
-		sprite.OnScreenEntered()
-	}
-}
-
-func onSpriteScreenExited(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnScreenExited()
-		sprite.OnScreenExited()
-	}
-}
-
-func onSpriteVfxFinished(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnVfxFinished()
-		sprite.OnVfxFinished()
-	}
-}
-
-func onSpriteAnimationFinished(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationFinished()
-		sprite.OnAnimationFinished()
-	}
-}
-
-func onSpriteAnimationLooped(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationLooped()
-		sprite.OnAnimationLooped()
-	}
-}
-
-func onSpriteFrameChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnFrameChanged()
-		sprite.OnFrameChanged()
-	}
-}
-
-func onSpriteAnimationChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnAnimationChanged()
-		sprite.OnAnimationChanged()
-	}
-}
-
-func onSpriteFramesSetChanged(id int64) {
-	if sprite := GetSprite(Object(id)); sprite != nil {
-		sprite.V_OnFramesSetChanged()
-		sprite.OnFramesSetChanged()
-	}
-}
-
-// Preserve the synchronous update order for standalone engine clients.
-func standaloneCallbacks(callbacks CoreCallbackInfo) CoreCallbackInfo {
-	update := callbacks.OnEngineUpdate
-	callbacks.OnEngineUpdate = func(delta float64) {
-		InternalUpdateFrame(delta, update)
-	}
-	return callbacks
 }

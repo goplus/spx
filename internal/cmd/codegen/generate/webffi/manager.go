@@ -43,9 +43,9 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 			source = buffer.GoSliceExpr()
 			fmt.Fprintf(&sb, "\t%s\n", buffer.GoArgumentCheck(function.Name))
 			if buffer.OutputOnly {
-				fmt.Fprintf(&sb, "\t%s := JsAllocNativeArray(%s, len(%s))\n", argName, buffer.Type.GoConstant(), source)
+				fmt.Fprintf(&sb, "\t%s := JSBorrowNativeArray(%s, len(%s))\n", argName, buffer.Type.GoConstant(), source)
 			} else {
-				fmt.Fprintf(&sb, "\t%s := JsFromNativeArray(%s, %s)\n", argName, source, buffer.Type.GoConstant())
+				fmt.Fprintf(&sb, "\t%s := JSFromNativeArray(%s, %s)\n", argName, source, buffer.Type.GoConstant())
 			}
 			if buffer.Writable() {
 				outputs = append(outputs, fmt.Sprintf("\n\tCopyNativeArrayOutput(%s, %s)", source, argName))
@@ -53,7 +53,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 		case param.WebInt64ByValue():
 			typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
 			low, high := argName+"Low", argName+"High"
-			fmt.Fprintf(&sb, "\t%s, %s := JsSplit%s(%s)\n", low, high, typeName, source)
+			fmt.Fprintf(&sb, "\t%s, %s := JSSplit%s(%s)\n", low, high, typeName, source)
 			params = append(params, low, high)
 			continue
 		case param.WebScalarByValue():
@@ -66,7 +66,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 			continue
 		default:
 			typeName := common.MustPrimitiveTypeName(param.Argument, function.Name)
-			fmt.Fprintf(&sb, "\t%s := JsFrom%s(%s)\n", argName, typeName, source)
+			fmt.Fprintf(&sb, "\t%s := JSFrom%s(%s)\n", argName, typeName, source)
 		}
 		params = append(params, argName)
 	}
@@ -78,7 +78,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 	fmt.Fprintf(&sb, "API.Spx%s.Invoke(%s)", strings.TrimPrefix(function.Name, "GDExtensionSpx"), strings.Join(params, ", "))
 	outputStatus := g.HasOutputStatus(function)
 	if outputStatus {
-		sb.WriteString("\n\tif !JsToGdBool(_result) { return false }")
+		sb.WriteString("\n\tif !JSToGdBool(_result) { return false }")
 	}
 	sb.WriteString(strings.Join(outputs, ""))
 	if outputStatus {
@@ -88,7 +88,7 @@ func (g *Generator) managerBody(function *clang.TypedefFunction) string {
 		if name == "GdObj" {
 			name = "GdObject"
 		}
-		fmt.Fprintf(&sb, "\n\treturn JsTo%s(_result)", name)
+		fmt.Fprintf(&sb, "\n\treturn JSTo%s(_result)", name)
 	}
 	return sb.String()
 }

@@ -35,12 +35,6 @@ var (
 	actionAxis       = map[string]float64{}
 )
 
-func RecordWebKeyState(key int64, pressed bool) {
-	keyMu.Lock()
-	keyDown[key] = pressed
-	keyMu.Unlock()
-}
-
 func CachedInputGetGlobalMousePos(fallback func() mathf.Vec2) mathf.Vec2 {
 	if inputSnap.ok {
 		return inputSnap.mouse
@@ -65,6 +59,13 @@ func CachedInputGetKey(key int64, fallback func() bool) bool {
 	return fallback()
 }
 
+func CachedInputGetKeyState(key int64, fallback func() int64) int64 {
+	if CachedInputGetKey(key, func() bool { return fallback() != 0 }) {
+		return 1
+	}
+	return 0
+}
+
 func CachedInputGetAxis(neg, pos string, fallback func() float64) float64 {
 	return cachedAction(actionAxis, neg+"\x00"+pos, func() float64 {
 		if value, ok := webActionAxis(neg, pos); ok {
@@ -72,13 +73,6 @@ func CachedInputGetAxis(neg, pos string, fallback func() float64) float64 {
 		}
 		return fallback()
 	})
-}
-
-func CachedInputGetKeyState(key int64, fallback func() int64) int64 {
-	if CachedInputGetKey(key, func() bool { return fallback() != 0 }) {
-		return 1
-	}
-	return 0
 }
 
 func CachedInputIsActionPressed(action string, fallback func() bool) bool {
@@ -91,6 +85,12 @@ func CachedInputIsActionJustPressed(action string, fallback func() bool) bool {
 
 func CachedInputIsActionJustReleased(action string, fallback func() bool) bool {
 	return cachedActionBool("just_released", action, fallback)
+}
+
+func recordKeyState(key int64, pressed bool) {
+	keyMu.Lock()
+	keyDown[key] = pressed
+	keyMu.Unlock()
 }
 
 func cachedActionBool(kind, action string, fallback func() bool) bool {

@@ -1,5 +1,3 @@
-//go:build !js
-
 /*
  * Copyright (c) 2021 The XGo Authors (xgo.dev). All rights reserved.
  *
@@ -16,19 +14,33 @@
  * limitations under the License.
  */
 
-package facade
+package ffi
 
-import (
-	"github.com/goplus/spx/v4/internal/gdengine/binding/native"
-	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
+/*
+#include "gdextension_spx_interface.h"
+*/
+import "C"
+
+type (
+	Uint8T  C.uint8_t
+	Uint32T C.uint32_t
+	Uint64T C.uint64_t
+	Char    C.char
+	WcharT  C.wchar_t
+	Char16T C.char16_t
+	Char32T C.char32_t
 )
 
-func LinkFFI() (*LinkSession, bool) {
-	return newLinkSession(func(ready func()) {
-		ready()
-	}, nil), false
-}
-
-func RegisterCallbacks(callbacks engine.CallbackInfo) {
-	ffi.BindCallback(callbacks)
-}
+type (
+	GdBool   C.GdBool
+	GdInt    C.GdInt
+	GdObj    C.GdObj
+	GdFloat  C.GdFloat
+	GdString C.GdString
+	GdVec2   C.GdVec2
+	GdVec3   C.GdVec3
+	GdVec4   C.GdVec4
+	GdColor  C.GdColor
+	GdRect2  C.GdRect2
+	GdArray  C.GdArray
+)

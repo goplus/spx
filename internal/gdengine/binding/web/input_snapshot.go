@@ -39,7 +39,7 @@ var (
 	actionEpoch int
 )
 
-func SyncWebInputSnapshot() {
+func syncInputSnapshot() {
 	clearActionCache()
 
 	bindings := js.Global().Get("GdspxFuncs")
@@ -58,7 +58,7 @@ func SyncWebInputSnapshot() {
 		return
 	}
 
-	data, ok := JsToGdArray(fn.Invoke()).([]float32)
+	data, ok := JSToGdArray(fn.Invoke()).([]float32)
 	if !ok || len(data) < 3 {
 		inputSnap.ok = false
 		return

@@ -7,13 +7,13 @@ import (
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
-func TestCreateMgrsReturnsIndependentOrderedSlices(t *testing.T) {
+func TestCreateManagersReturnsIndependentOrderedSlices(t *testing.T) {
 	want := []engine.IManager{
 		&audioMgr{}, &cameraMgr{}, &debugMgr{}, &extMgr{}, &inputMgr{},
 		&navigationMgr{}, &penMgr{}, &physicsMgr{}, &platformMgr{}, &resMgr{},
 		&sceneMgr{}, &spriteMgr{}, &tilemapMgr{}, &tilemapparserMgr{}, &uiMgr{},
 	}
-	first := CreateMgrs()
+	first := CreateManagers()
 	if len(first) != len(want) {
 		t.Fatalf("manager count = %d, want %d", len(first), len(want))
 	}
@@ -24,7 +24,7 @@ func TestCreateMgrsReturnsIndependentOrderedSlices(t *testing.T) {
 	}
 
 	first[0] = nil
-	second := CreateMgrs()
+	second := CreateManagers()
 	if first[0] != nil {
 		t.Fatal("constructing managers overwrote a previous result")
 	}
@@ -37,11 +37,11 @@ func TestCreateMgrsReturnsIndependentOrderedSlices(t *testing.T) {
 	}
 }
 
-func TestCreateMgrsLifecycleDoesNotBind(t *testing.T) {
+func TestCreateManagersLifecycleDoesNotBind(t *testing.T) {
 	previous := engine.AudioMgr
 	t.Cleanup(func() { engine.AudioMgr = previous })
 	engine.AudioMgr = nil
-	managers := CreateMgrs()
+	managers := CreateManagers()
 	if engine.AudioMgr != nil {
 		t.Fatal("constructing managers bound the audio manager")
 	}
@@ -59,8 +59,8 @@ func TestCreateMgrsLifecycleDoesNotBind(t *testing.T) {
 			}
 		})
 	}
-	BindMgr(managers[:1])
+	BindManagers(managers[:1])
 	if engine.AudioMgr != managers[0].(engine.IAudioMgr) {
-		t.Fatal("BindMgr did not bind the constructed audio manager")
+		t.Fatal("BindManagers did not bind the constructed audio manager")
 	}
 }

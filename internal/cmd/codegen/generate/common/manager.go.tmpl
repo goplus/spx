@@ -1,4 +1,18 @@
-func BindMgr(mgrs []IManager) {
+{{ range $name := .Managers -}}
+type {{$name}}Mgr struct {
+	baseMgr
+}
+{{ end }}
+
+func CreateManagers() []IManager {
+	return []IManager{
+{{- range $name := .Managers }}
+		&{{$name}}Mgr{},
+{{- end }}
+	}
+}
+
+func BindManagers(mgrs []IManager) {
 	for _, mgr := range mgrs {
 		switch v := mgr.(type) {
 {{- range $name := .Managers }}
@@ -6,22 +20,8 @@ func BindMgr(mgrs []IManager) {
 			{{camelCase $name}}Mgr = v
 {{ end }}
 		default:
-			panic(fmt.Sprintf("engine init error : unknown manager type %s", reflect.TypeOf(mgr).String()))
+			panic(fmt.Sprintf("engine init error: unknown manager type %T", mgr))
 		}
-	}
-}
-
-{{ range $name := .Managers -}}
-type {{$name}}Mgr struct {
-	baseMgr
-}
-{{ end }}
-
-func CreateMgrs() []IManager {
-	return []IManager{
-{{- range $name := .Managers }}
-		&{{$name}}Mgr{},
-{{- end }}
 	}
 }
 

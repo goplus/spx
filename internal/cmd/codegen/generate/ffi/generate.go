@@ -110,6 +110,7 @@ func (g *Generator) renderWrapperGo(codegenDir string) error {
 		"cgoCastArgument":    common.CgoCastArgument,
 		"cgoCastReturnType":  common.CgoCastReturnType,
 		"cgoCleanUpArgument": common.CgoCleanUpArgument,
+		"hasPrefix":          strings.HasPrefix,
 		"trimPrefix":         strings.TrimPrefix,
 	}
 

@@ -28,6 +28,6 @@ func LinkFFI() (*LinkSession, bool) {
 	return newLinkSession(link.Run, link.Unlink), interpreter
 }
 
-func RegisterCallbacks(callbacks engine.CallbackInfo) {
-	webffi.BindCallback(callbacks)
+func BindCallbacks(callbacks engine.CallbackInfo) {
+	webffi.BindCallbacks(callbacks)
 }

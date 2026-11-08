@@ -37,16 +37,82 @@ import "C"
 
 import (
 	"fmt"
+	"math"
+	"unsafe"
+
 	. "github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/enginewrap"
 	. "github.com/goplus/spx/v4/internal/gdengine/binding/native"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
-	"math"
-	"reflect"
-	"unsafe"
 )
 
-func BindMgr(mgrs []IManager) {
+type audioMgr struct {
+	baseMgr
+}
+type cameraMgr struct {
+	baseMgr
+}
+type debugMgr struct {
+	baseMgr
+}
+type extMgr struct {
+	baseMgr
+}
+type inputMgr struct {
+	baseMgr
+}
+type navigationMgr struct {
+	baseMgr
+}
+type penMgr struct {
+	baseMgr
+}
+type physicsMgr struct {
+	baseMgr
+}
+type platformMgr struct {
+	baseMgr
+}
+type resMgr struct {
+	baseMgr
+}
+type sceneMgr struct {
+	baseMgr
+}
+type spriteMgr struct {
+	baseMgr
+}
+type tilemapMgr struct {
+	baseMgr
+}
+type tilemapparserMgr struct {
+	baseMgr
+}
+type uiMgr struct {
+	baseMgr
+}
+
+func CreateManagers() []IManager {
+	return []IManager{
+		&audioMgr{},
+		&cameraMgr{},
+		&debugMgr{},
+		&extMgr{},
+		&inputMgr{},
+		&navigationMgr{},
+		&penMgr{},
+		&physicsMgr{},
+		&platformMgr{},
+		&resMgr{},
+		&sceneMgr{},
+		&spriteMgr{},
+		&tilemapMgr{},
+		&tilemapparserMgr{},
+		&uiMgr{},
+	}
+}
+
+func BindManagers(mgrs []IManager) {
 	for _, mgr := range mgrs {
 		switch v := mgr.(type) {
 		case IAudioMgr:
@@ -95,74 +161,8 @@ func BindMgr(mgrs []IManager) {
 			UiMgr = v
 
 		default:
-			panic(fmt.Sprintf("engine init error : unknown manager type %s", reflect.TypeOf(mgr).String()))
+			panic(fmt.Sprintf("engine init error: unknown manager type %T", mgr))
 		}
-	}
-}
-
-type audioMgr struct {
-	baseMgr
-}
-type cameraMgr struct {
-	baseMgr
-}
-type debugMgr struct {
-	baseMgr
-}
-type extMgr struct {
-	baseMgr
-}
-type inputMgr struct {
-	baseMgr
-}
-type navigationMgr struct {
-	baseMgr
-}
-type penMgr struct {
-	baseMgr
-}
-type physicsMgr struct {
-	baseMgr
-}
-type platformMgr struct {
-	baseMgr
-}
-type resMgr struct {
-	baseMgr
-}
-type sceneMgr struct {
-	baseMgr
-}
-type spriteMgr struct {
-	baseMgr
-}
-type tilemapMgr struct {
-	baseMgr
-}
-type tilemapparserMgr struct {
-	baseMgr
-}
-type uiMgr struct {
-	baseMgr
-}
-
-func CreateMgrs() []IManager {
-	return []IManager{
-		&audioMgr{},
-		&cameraMgr{},
-		&debugMgr{},
-		&extMgr{},
-		&inputMgr{},
-		&navigationMgr{},
-		&penMgr{},
-		&physicsMgr{},
-		&platformMgr{},
-		&resMgr{},
-		&sceneMgr{},
-		&spriteMgr{},
-		&tilemapMgr{},
-		&tilemapparserMgr{},
-		&uiMgr{},
 	}
 }
 

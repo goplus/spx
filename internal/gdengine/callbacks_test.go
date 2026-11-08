@@ -47,10 +47,10 @@ type routedCallbackNode struct {
 }
 
 func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
-	previousCallbacks, previousSprites := coreCallbacks, sprites
+	previousCallbacks, previousSprites := coreCallbacks, spriteSnapshot
 	previousDelta, _ := itime.FixedDeltaTime()
 	t.Cleanup(func() {
-		coreCallbacks, sprites = previousCallbacks, previousSprites
+		coreCallbacks, spriteSnapshot = previousCallbacks, previousSprites
 		itime.SetFixedDeltaTime(previousDelta)
 		engine.SetRuntimeBridge(nil)
 	})
@@ -73,7 +73,7 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 						calls = append(calls, "frame-end")
 					},
 				}
-				bindCallbacks().OnEngineUpdate(0.25)
+				makeCallbacks().OnEngineUpdate(0.25)
 
 				logical := 0.25
 				if fixed > 0 {
@@ -93,8 +93,8 @@ func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
 }
 
 func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
-	previousCallbacks, previousSprites := coreCallbacks, sprites
-	previousLink, previousInterpreter := activeLink, isWebIntepreterMode
+	previousCallbacks, previousSprites := coreCallbacks, spriteSnapshot
+	previousLink, previousInterpreter := activeLink, isWebInterpreterMode
 	previousAudio, previousCamera, previousDebug := engine.AudioMgr, engine.CameraMgr, engine.DebugMgr
 	previousExt, previousInput, previousNavigation := engine.ExtMgr, engine.InputMgr, engine.NavigationMgr
 	previousPen, previousPhysics, previousPlatform := engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr
@@ -102,15 +102,15 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 	previousTilemap, previousTilemapparser, previousUI := engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr
 	previousDelta, _ := itime.FixedDeltaTime()
 	t.Cleanup(func() {
-		coreCallbacks, sprites = previousCallbacks, previousSprites
-		activeLink, isWebIntepreterMode = previousLink, previousInterpreter
+		coreCallbacks, spriteSnapshot = previousCallbacks, previousSprites
+		activeLink, isWebInterpreterMode = previousLink, previousInterpreter
 		engine.AudioMgr, engine.CameraMgr, engine.DebugMgr = previousAudio, previousCamera, previousDebug
 		engine.ExtMgr, engine.InputMgr, engine.NavigationMgr = previousExt, previousInput, previousNavigation
 		engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr = previousPen, previousPhysics, previousPlatform
 		engine.ResMgr, engine.SceneMgr, engine.SpriteMgr = previousRes, previousScene, previousSprite
 		engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr = previousTilemap, previousTilemapparser, previousUI
 		if runtime.GOOS != "js" {
-			facade.RegisterCallbacks(bindCallbacks())
+			facade.BindCallbacks(makeCallbacks())
 		}
 		itime.SetFixedDeltaTime(previousDelta)
 		engine.SetRuntimeBridge(nil)
@@ -165,7 +165,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 					session := PrepareLink(standaloneCallbacks(core))
 					t.Cleanup(func() {
 						session.Unlink()
-						if activeLink != nil || isWebIntepreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {
+						if activeLink != nil || isWebInterpreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {
 							t.Error("Unlink retained the active session or callbacks")
 						}
 					})
@@ -197,7 +197,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 						}
 					}
 				}
-				callbacks := bindCallbacks()
+				callbacks := makeCallbacks()
 				callbacks.OnEngineStart()
 				callbacks.OnEngineUpdate(0.25)
 				callbacks.OnEngineFixedUpdate(0.5)
@@ -223,7 +223,7 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 		if activeLink == nil {
 			t.Fatal("public link did not install an active session")
 		}
-		bindCallbacks().OnEngineUpdate(0.25)
+		makeCallbacks().OnEngineUpdate(0.25)
 		want := []string{"advance:0.25", "runtime-frame:0.25", "core-update:0.25"}
 		if !slices.Equal(calls, want) {
 			t.Fatalf("public link frame calls = %v, want %v", calls, want)
@@ -241,7 +241,7 @@ func TestCallbacksRouteToLiveObjectsInOrder(t *testing.T) {
 	bridge := &routedCallbackRuntime{sprites: map[engine.Object]engine.ISpriter{1: sprite, 2: other}, nodes: map[engine.Object]engine.IUiNode{3: node}}
 	engine.SetRuntimeBridge(bridge)
 	t.Cleanup(func() { engine.SetRuntimeBridge(nil) })
-	callbacks := bindCallbacks()
+	callbacks := makeCallbacks()
 	callbacks.OnSceneSpriteInstantiated(41, "Cat")
 	if bridge.boundID != 41 || bridge.boundType != "Cat" {
 		t.Fatalf("scene binding=%d/%s", bridge.boundID, bridge.boundType)
@@ -318,7 +318,7 @@ func TestCoreInputCallbacksAndDiagnosticEvents(t *testing.T) {
 	var output bytes.Buffer
 	spxlog.SetLevel(spxlog.LevelDebug)
 	spxlog.SetStdoutOutput(&output)
-	callbacks := bindCallbacks()
+	callbacks := makeCallbacks()
 	var calls []string
 	core := engine.CoreCallbackInfo{
 		OnEngineDestroyed: func() { calls = append(calls, "destroyed") }, OnEngineReset: func() { calls = append(calls, "reset") },

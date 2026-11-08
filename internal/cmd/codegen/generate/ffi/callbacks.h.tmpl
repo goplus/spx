@@ -3,11 +3,12 @@
 #define SPX_CALLBACKS_GEN_H
 
 {{ range . -}}
-extern void {{ .Field }}({{ range $i, $arg := .Arguments }}{{ if $i }}, {{ end }}{{ $arg.CType }} arg{{ $i }}{{ else }}void{{ end }});
+extern void {{ .ExportName }}({{ range $i, $arg := .Arguments }}{{ if $i }}, {{ end }}{{ $arg.Type }} arg{{ $i }}{{ else }}void{{ end }});
 {{ end }}
-static inline void spx_global_register_callbacks(pointer fn) {
+// Builds the Go callback table and passes it to the resolved engine function.
+static inline void cgo_register_engine_callbacks(pointer fn) {
 	SpxCallbackInfo info = {0};
-{{ range . }}	info.{{ .Field }} = {{ .Field }};
+{{ range . }}	info.{{ .Field }} = {{ .ExportName }};
 {{ end }}	((GDExtensionSpxGlobalRegisterCallbacks)fn)((GDExtensionSpxCallbackInfoPtr)&info);
 }
 

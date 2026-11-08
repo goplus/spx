@@ -27,17 +27,17 @@ import (
 
 var jsUint8Array = js.Global().Get("Uint8Array")
 
-func JsFromGdArray(array engine.Array) js.Value {
+func JSFromGdArray(array engine.Array) js.Value {
 	return jsFromArray(array, 0)
 }
 
-// JsFromNativeArray preserves the declared ABI type, including signed object IDs.
-func JsFromNativeArray(array engine.Array, arrayType int32) js.Value {
+// JSFromNativeArray preserves the declared ABI type, including signed object IDs.
+func JSFromNativeArray(array engine.Array, arrayType int32) js.Value {
 	return jsFromArray(array, arrayType)
 }
 
-// JsAllocNativeArray borrows output storage without copying or clearing its bytes.
-func JsAllocNativeArray(arrayType int32, count int) js.Value {
+// JSBorrowNativeArray borrows output storage without copying or clearing its bytes.
+func JSBorrowNativeArray(arrayType int32, count int) js.Value {
 	switch arrayType {
 	case GdArrayTypeInt64, GdArrayTypeGdObj, GdArrayTypeFloat, GdArrayTypeByte:
 	default:
@@ -58,7 +58,7 @@ func JsAllocNativeArray(arrayType int32, count int) js.Value {
 	return wrapper
 }
 
-func JsToGdArray(value js.Value) engine.Array {
+func JSToGdArray(value js.Value) engine.Array {
 	if value.Type() != js.TypeObject {
 		return nil
 	}
@@ -112,7 +112,7 @@ func CopyNativeArrayOutput(target engine.Array, wrapper js.Value) {
 
 func jsFromArray(array engine.Array, arrayType int32) js.Value {
 	if array == nil {
-		panic("JsFromGdArray doesn't support nil array")
+		panic("JSFromGdArray doesn't support nil array")
 	}
 	value := describeArray(array)
 	if value == nil {

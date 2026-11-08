@@ -97,18 +97,18 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		}
 		callbacks.OnEngineStart()
 	} else if eventVal.Equal(jsEventOnEngineUpdate) {
-		SyncWebInputSnapshot()
+		syncInputSnapshot()
 		if callbacks.OnEngineUpdate == nil {
 			return nil
 		}
-		arg0 := JsToGdFloat(args[1])
+		arg0 := JSToGdFloat(args[1])
 		callbacks.OnEngineUpdate(arg0)
 	} else if eventVal.Equal(jsEventOnEngineFixedUpdate) {
-		SyncWebInputSnapshot()
+		syncInputSnapshot()
 		if callbacks.OnEngineFixedUpdate == nil {
 			return nil
 		}
-		arg0 := JsToGdFloat(args[1])
+		arg0 := JSToGdFloat(args[1])
 		callbacks.OnEngineFixedUpdate(arg0)
 	} else if eventVal.Equal(jsEventOnEngineDestroy) {
 		contactEventGeneration++
@@ -133,109 +133,109 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		if callbacks.OnEnginePause == nil {
 			return nil
 		}
-		arg0 := JsToGdBool(args[1])
+		arg0 := JSToGdBool(args[1])
 		callbacks.OnEnginePause(arg0)
 	} else if eventVal.Equal(jsEventOnSceneSpriteInstantiated) {
 		if callbacks.OnSceneSpriteInstantiated == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
-		arg1 := JsToGdString(args[2])
+		arg0 := JSToGdObj(args[1])
+		arg1 := JSToGdString(args[2])
 		callbacks.OnSceneSpriteInstantiated(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnSpriteReady) {
 		if callbacks.OnSpriteReady == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteReady(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteUpdated) {
 		if callbacks.OnSpriteUpdated == nil {
 			return nil
 		}
-		arg0 := JsToGdFloat(args[1])
+		arg0 := JSToGdFloat(args[1])
 		callbacks.OnSpriteUpdated(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteFixedUpdated) {
 		if callbacks.OnSpriteFixedUpdated == nil {
 			return nil
 		}
-		arg0 := JsToGdFloat(args[1])
+		arg0 := JSToGdFloat(args[1])
 		callbacks.OnSpriteFixedUpdated(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteDestroyed) {
 		if callbacks.OnSpriteDestroyed == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteDestroyed(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteFramesSetChanged) {
 		if callbacks.OnSpriteFramesSetChanged == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteFramesSetChanged(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteAnimationChanged) {
 		if callbacks.OnSpriteAnimationChanged == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteAnimationChanged(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteFrameChanged) {
 		if callbacks.OnSpriteFrameChanged == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteFrameChanged(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteAnimationLooped) {
 		if callbacks.OnSpriteAnimationLooped == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteAnimationLooped(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteAnimationFinished) {
 		if callbacks.OnSpriteAnimationFinished == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteAnimationFinished(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteVfxFinished) {
 		if callbacks.OnSpriteVfxFinished == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteVfxFinished(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteScreenExited) {
 		if callbacks.OnSpriteScreenExited == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteScreenExited(arg0)
 	} else if eventVal.Equal(jsEventOnSpriteScreenEntered) {
 		if callbacks.OnSpriteScreenEntered == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnSpriteScreenEntered(arg0)
 	} else if eventVal.Equal(jsEventOnMousePressed) {
 		if callbacks.OnMousePressed == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
+		arg0 := JSToGdInt(args[1])
 		callbacks.OnMousePressed(arg0)
 	} else if eventVal.Equal(jsEventOnMouseReleased) {
 		if callbacks.OnMouseReleased == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
+		arg0 := JSToGdInt(args[1])
 		callbacks.OnMouseReleased(arg0)
 	} else if eventVal.Equal(jsEventOnKeyPressed) {
-		arg0 := JsToGdInt(args[1])
-		RecordWebKeyState(arg0, true)
+		arg0 := JSToGdInt(args[1])
+		recordKeyState(arg0, true)
 		if callbacks.OnKeyPressed == nil {
 			return nil
 		}
 		callbacks.OnKeyPressed(arg0)
 	} else if eventVal.Equal(jsEventOnKeyReleased) {
-		arg0 := JsToGdInt(args[1])
-		RecordWebKeyState(arg0, false)
+		arg0 := JSToGdInt(args[1])
+		recordKeyState(arg0, false)
 		if callbacks.OnKeyReleased == nil {
 			return nil
 		}
@@ -244,124 +244,124 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		if callbacks.OnActionPressed == nil {
 			return nil
 		}
-		arg0 := JsToGdString(args[1])
+		arg0 := JSToGdString(args[1])
 		callbacks.OnActionPressed(arg0)
 	} else if eventVal.Equal(jsEventOnActionJustPressed) {
 		if callbacks.OnActionJustPressed == nil {
 			return nil
 		}
-		arg0 := JsToGdString(args[1])
+		arg0 := JSToGdString(args[1])
 		callbacks.OnActionJustPressed(arg0)
 	} else if eventVal.Equal(jsEventOnActionJustReleased) {
 		if callbacks.OnActionJustReleased == nil {
 			return nil
 		}
-		arg0 := JsToGdString(args[1])
+		arg0 := JSToGdString(args[1])
 		callbacks.OnActionJustReleased(arg0)
 	} else if eventVal.Equal(jsEventOnAxisChanged) {
 		if callbacks.OnAxisChanged == nil {
 			return nil
 		}
-		arg0 := JsToGdString(args[1])
-		arg1 := JsToGdFloat(args[2])
+		arg0 := JSToGdString(args[1])
+		arg1 := JSToGdFloat(args[2])
 		callbacks.OnAxisChanged(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnCollisionEnter) {
 		if callbacks.OnCollisionEnter == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnCollisionEnter(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnCollisionStay) {
 		if callbacks.OnCollisionStay == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnCollisionStay(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnCollisionExit) {
 		if callbacks.OnCollisionExit == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnCollisionExit(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnTriggerEnter) {
 		if callbacks.OnTriggerEnter == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnTriggerEnter(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnTriggerStay) {
 		if callbacks.OnTriggerStay == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnTriggerStay(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnTriggerExit) {
 		if callbacks.OnTriggerExit == nil {
 			return nil
 		}
-		arg0 := JsToGdInt(args[1])
-		arg1 := JsToGdInt(args[2])
+		arg0 := JSToGdInt(args[1])
+		arg1 := JSToGdInt(args[2])
 		callbacks.OnTriggerExit(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnUiReady) {
 		if callbacks.OnUiReady == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiReady(arg0)
 	} else if eventVal.Equal(jsEventOnUiUpdated) {
 		if callbacks.OnUiUpdated == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiUpdated(arg0)
 	} else if eventVal.Equal(jsEventOnUiDestroyed) {
 		if callbacks.OnUiDestroyed == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiDestroyed(arg0)
 	} else if eventVal.Equal(jsEventOnUiPressed) {
 		if callbacks.OnUiPressed == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiPressed(arg0)
 	} else if eventVal.Equal(jsEventOnUiReleased) {
 		if callbacks.OnUiReleased == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiReleased(arg0)
 	} else if eventVal.Equal(jsEventOnUiHovered) {
 		if callbacks.OnUiHovered == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiHovered(arg0)
 	} else if eventVal.Equal(jsEventOnUiClicked) {
 		if callbacks.OnUiClicked == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
+		arg0 := JSToGdObj(args[1])
 		callbacks.OnUiClicked(arg0)
 	} else if eventVal.Equal(jsEventOnUiToggle) {
 		if callbacks.OnUiToggle == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
-		arg1 := JsToGdBool(args[2])
+		arg0 := JSToGdObj(args[1])
+		arg1 := JSToGdBool(args[2])
 		callbacks.OnUiToggle(arg0, arg1)
 	} else if eventVal.Equal(jsEventOnUiTextChanged) {
 		if callbacks.OnUiTextChanged == nil {
 			return nil
 		}
-		arg0 := JsToGdObj(args[1])
-		arg1 := JsToGdString(args[2])
+		arg0 := JSToGdObj(args[1])
+		arg1 := JSToGdString(args[2])
 		callbacks.OnUiTextChanged(arg0, arg1)
 	}
 	return nil

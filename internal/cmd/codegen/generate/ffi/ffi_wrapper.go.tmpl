@@ -32,9 +32,11 @@ const (
 )
 {{ end }}
 
-// C function aliases
+// C function aliases used to call into the engine.
 {{ range $i, $f := $view.CollectFunctions -}}
+{{ if not (hasPrefix $f.Name "GDExtensionSpxCallback") -}}
 type {{ $f.Name }} C.{{ $f.Name }}
+{{ end -}}
 {{ end }}
 
 // call gdextension interface functions

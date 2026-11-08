@@ -20,12 +20,12 @@ typedef uintptr_t pointer;
 extern void initialize(void *userdata, GDExtensionInitializationLevel p_level);
 extern void deinitialize(void *userdata, GDExtensionInitializationLevel p_level);
 
-static inline void initialization(GDExtensionInitialization *p_init) {
+static inline void cgo_setup_initialization(GDExtensionInitialization *p_init) {
 	p_init->initialize = initialize;
 	p_init->deinitialize = deinitialize;
 }
 
-static inline void *get_proc_address(uintptr_t fn, const char* p_name) {
+static inline void *cgo_get_proc_address(uintptr_t fn, const char* p_name) {
 	return (void *)((GDExtensionInterfaceGetProcAddress)fn)(p_name);
 }
 

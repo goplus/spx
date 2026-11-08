@@ -28,11 +28,12 @@ import (
 
 type callbackData struct {
 	common.Callback
-	Arguments []callbackArgumentData
+	ExportName string
+	Arguments  []callbackArgumentData
 }
 
 type callbackArgumentData struct {
-	CType, GoType, Value string
+	Type, Value string
 }
 
 func (g *Generator) renderCallbacks(codegenDir string) error {
@@ -42,7 +43,10 @@ func (g *Generator) renderCallbacks(codegenDir string) error {
 	}
 	var callbacks []callbackData
 	for _, declaration := range declarations {
-		data := callbackData{Callback: declaration}
+		data := callbackData{
+			Callback:   declaration,
+			ExportName: "go_" + strings.TrimPrefix(declaration.Field, "func_"),
+		}
 		for i, argument := range declaration.Function.Arguments {
 			arg, err := callbackArgument(argument, fmt.Sprintf("arg%d", i))
 			if err != nil {
@@ -61,19 +65,19 @@ func (g *Generator) renderCallbacks(codegenDir string) error {
 }
 
 func callbackArgument(argument clang.Argument, name string) (callbackArgumentData, error) {
-	data := callbackArgumentData{CType: argument.Type.CStyleString()}
-	switch data.CType {
+	data := callbackArgumentData{Type: argument.Type.CStyleString()}
+	switch data.Type {
 	case "GdInt", "GdObj":
-		data.GoType, data.Value = "C.GDExtensionInt", "int64("+name+")"
+		data.Value = "int64(" + name + ")"
 	case "GdFloat":
-		data.GoType, data.Value = "C.GDReal", "float64("+name+")"
+		data.Value = "float64(" + name + ")"
 	case "GdBool":
-		data.GoType, data.Value = "C.GDExtensionBool", name+" != 0"
+		data.Value = name + " != 0"
 	case "GdString":
 		// Callback strings remain owned by the engine. ToString would free them.
-		data.GoType, data.Value = "C.GdString", "copyString(GdString("+name+"))"
+		data.Value = "copyString(" + name + ")"
 	default:
-		return callbackArgumentData{}, fmt.Errorf("unsupported callback argument %s", data.CType)
+		return callbackArgumentData{}, fmt.Errorf("unsupported callback argument %s", data.Type)
 	}
 	return data, nil
 }

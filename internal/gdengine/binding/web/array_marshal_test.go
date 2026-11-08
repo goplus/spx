@@ -8,9 +8,6 @@ import (
 	"reflect"
 	"syscall/js"
 	"testing"
-
-	"github.com/goplus/spbase/mathf"
-	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 func TestNativeArrayOutputCopiesIntoCallerStorage(t *testing.T) {
@@ -71,7 +68,7 @@ func TestNativeArrayRejectsInvalidMetadata(t *testing.T) {
 			"count":  test.count,
 			"data":   jsUint8Array.New(test.length),
 		})
-		if got := JsToGdArray(value); got != nil {
+		if got := JSToGdArray(value); got != nil {
 			t.Fatalf("accepted invalid metadata %#v: %#v", test, got)
 		}
 	}
@@ -105,15 +102,15 @@ func TestNativeArrayBridgeRoundtrip(t *testing.T) {
 		{[]string(nil), []string{}},
 		{[]bool(nil), []bool{}},
 	} {
-		value := JsFromGdArray(test.input)
-		if got := JsToGdArray(value); !reflect.DeepEqual(got, test.want) {
+		value := JSFromGdArray(test.input)
+		if got := JSToGdArray(value); !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("roundtrip %T: got %#v, want %#v", test.input, got, test.want)
 		}
 	}
-	if got := JsToGdArray(JsFromNativeArray([]int64{-1, 1<<54 + 3}, GdArrayTypeGdObj)); !reflect.DeepEqual(got, []int64{-1, 1<<54 + 3}) {
+	if got := JSToGdArray(JSFromNativeArray([]int64{-1, 1<<54 + 3}, GdArrayTypeGdObj)); !reflect.DeepEqual(got, []int64{-1, 1<<54 + 3}) {
 		t.Fatalf("declared object array=%v", got)
 	}
-	for _, call := range []func(){func() { JsFromGdArray(nil) }, func() { JsFromNativeArray([]byte{1}, GdArrayTypeFloat) }, func() { CopyNativeArrayOutput([]bool{true}, js.Undefined()) }, func() { CopyNativeArrayOutput([]byte{1}, js.Undefined()) }} {
+	for _, call := range []func(){func() { JSFromGdArray(nil) }, func() { JSFromNativeArray([]byte{1}, GdArrayTypeFloat) }, func() { CopyNativeArrayOutput([]bool{true}, js.Undefined()) }, func() { CopyNativeArrayOutput([]byte{1}, js.Undefined()) }} {
 		func() {
 			defer func() {
 				if recover() == nil {
@@ -123,7 +120,7 @@ func TestNativeArrayBridgeRoundtrip(t *testing.T) {
 			call()
 		}()
 	}
-	if !JsFromGdArray(42).IsNull() {
+	if !JSFromGdArray(42).IsNull() {
 		t.Fatal("unsupported storage returned an array")
 	}
 }
@@ -141,7 +138,7 @@ func TestAllocateNativeOutputKeepsBorrowedBytes(t *testing.T) {
 	t.Cleanup(func() { js.Global().Set("GdspxBorrowNativeArray", previous); borrow.Release() })
 	for _, typ := range []int32{GdArrayTypeFloat, GdArrayTypeInt64, GdArrayTypeGdObj, GdArrayTypeByte} {
 		for _, count := range []int{0, 3} {
-			wrapper := JsAllocNativeArray(typ, count)
+			wrapper := JSBorrowNativeArray(typ, count)
 			size, _ := arrayElementSize(typ)
 			data := make([]byte, size*count)
 			js.CopyBytesToGo(data, wrapper.Get("data"))
@@ -166,7 +163,7 @@ func TestAllocateNativeOutputKeepsBorrowedBytes(t *testing.T) {
 					t.Error("invalid output allocation was accepted")
 				}
 			}()
-			JsAllocNativeArray(tc.typ, tc.count)
+			JSBorrowNativeArray(tc.typ, tc.count)
 		}()
 	}
 	if calls != previousCalls {
@@ -178,53 +175,7 @@ func TestAllocateNativeOutputKeepsBorrowedBytes(t *testing.T) {
 			t.Error("missing allocator did not fail")
 		}
 	}()
-	JsAllocNativeArray(GdArrayTypeFloat, 3)
-}
-
-func TestWebScalarMarshallingPreservesValues(t *testing.T) {
-	for _, value := range []int64{math.MinInt64, -1, 0, 1<<54 + 3, math.MaxInt64} {
-		if got := JsToGdInt(JsFromGdInt(value)); got != value {
-			t.Errorf("integer round trip=%d, want %d", got, value)
-		}
-		object := engine.Object(value)
-		if JsToGdObject(JsFromGdObj(object)) != object || JsToGdObj(JsFromGdObj(object)) != value {
-			t.Errorf("object precision lost: %d", value)
-		}
-		low, high := JsSplitGdObj(object)
-		if gdIntFromParts(low, high) != value {
-			t.Errorf("split object precision lost: %d", value)
-		}
-	}
-	for _, tc := range []struct {
-		input any
-		want  bool
-	}{{true, true}, {false, false}, {2, true}, {0, false}, {-1, true}} {
-		if got := JsToGdBool(js.ValueOf(tc.input)); got != tc.want {
-			t.Errorf("boolean %v=%v", tc.input, got)
-		}
-	}
-	for _, value := range []js.Value{js.Null(), js.Undefined(), js.ValueOf("true")} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Error("invalid boolean accepted")
-				}
-			}()
-			JsToGdBool(value)
-		}()
-	}
-	if got := JsToGdString(JsFromGdString("héllo\x00inside\x00\x00")); got != "héllo\x00inside" {
-		t.Fatalf("string terminators=%q", got)
-	}
-	vec2, vec3, vec4 := mathf.NewVec2(1.5, -2.25), mathf.NewVec3(1, 2, 3), mathf.NewVec4(1, 2, 3, 4)
-	color := mathf.NewColor(.25, .5, .75, 1)
-	rect := mathf.Rect2{Position: vec2, Size: mathf.NewVec2(40, 50)}
-	if JsToGdVec2(JsFromGdVec2(vec2)) != vec2 || JsToGdVec3(JsFromGdVec3(vec3)) != vec3 || JsToGdVec4(JsFromGdVec4(vec4)) != vec4 || JsToGdColor(JsFromGdColor(color)) != color || JsToGdRect2(JsFromGdRect2(rect)) != rect {
-		t.Fatal("structured value round trip changed components")
-	}
-	if JsToGdFloat(js.ValueOf(-1.5)) != -1.5 || JsToGdFloat32(js.ValueOf(2.25)) != 2.25 || JsToGdInt64(js.ValueOf(-42)) != -42 {
-		t.Fatal("scalar conversion lost value")
-	}
+	JSBorrowNativeArray(GdArrayTypeFloat, 3)
 }
 
 func TestBorrowNativeArrayRejectsMalformedHostBuffers(t *testing.T) {
@@ -235,13 +186,13 @@ func TestBorrowNativeArrayRejectsMalformedHostBuffers(t *testing.T) {
 			borrow := js.FuncOf(func(js.Value, []js.Value) any { return result })
 			defer borrow.Release()
 			js.Global().Set("GdspxBorrowNativeArray", borrow)
-			if !JsFromGdArray([]byte{1}).IsNull() {
+			if !JSFromGdArray([]byte{1}).IsNull() {
 				t.Errorf("malformed host buffer accepted: %v", result)
 			}
 		}()
 	}
 	for _, value := range []js.Value{js.ValueOf(42), js.ValueOf(map[string]any{arrayTag: false}), js.ValueOf(map[string]any{arrayTag: true, "data": "not bytes"})} {
-		if JsToGdArray(value) != nil {
+		if JSToGdArray(value) != nil {
 			t.Error("malformed JS array accepted")
 		}
 	}

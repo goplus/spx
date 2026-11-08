@@ -24,15 +24,7 @@ import (
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v4/internal/gdengine/impl"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
-	gdspx "github.com/goplus/spx/v4/pkg/spx/pkg/gdspx"
-)
-
-var (
-	coreCallbacks       CoreCallbackInfo
-	sprites             = make([]ISpriter, 0)
-	isWebIntepreterMode bool
-	activeLink          *LinkSession
-	linkMu              sync.Mutex
+	"github.com/goplus/spx/v4/pkg/spx/pkg/gdspx"
 )
 
 // LinkSession owns the backend resources installed by one Link call.
@@ -40,14 +32,19 @@ type LinkSession struct {
 	backend *facade.LinkSession
 }
 
-type linkerBridge struct{}
+var (
+	coreCallbacks        CoreCallbackInfo
+	isWebInterpreterMode bool
+	activeLink           *LinkSession
+	linkMu               sync.Mutex
+)
 
 func init() {
 	gdspx.SetLinkerBridge(linkerBridge{})
 }
 
 func IsWebIntepreterMode() bool {
-	return isWebIntepreterMode
+	return isWebInterpreterMode
 }
 
 func Link(coreCallbackInfo CoreCallbackInfo) {
@@ -70,15 +67,15 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 		if !committed {
 			backend.Unlink()
 			coreCallbacks = CoreCallbackInfo{}
-			isWebIntepreterMode = false
+			isWebInterpreterMode = false
 		}
 	}()
 
-	isWebIntepreterMode = interpreter
+	isWebInterpreterMode = interpreter
 	coreCallbacks = coreCallbackInfo
-	facade.RegisterCallbacks(bindCallbacks())
+	facade.BindCallbacks(makeCallbacks())
 	// These Go adapters have no lifecycle behavior; the backend owns its managers.
-	engineimpl.BindMgr(engineimpl.CreateMgrs())
+	engineimpl.BindManagers(engineimpl.CreateManagers())
 	activeLink = session
 	committed = true
 	return session
@@ -89,18 +86,6 @@ func Unlink() {
 	session := activeLink
 	linkMu.Unlock()
 	session.Unlink()
-}
-
-func (linkerBridge) IsWebIntepreterMode() bool {
-	return IsWebIntepreterMode()
-}
-
-func (linkerBridge) Link(coreCallbackInfo CoreCallbackInfo) {
-	Link(coreCallbackInfo)
-}
-
-func (linkerBridge) Unlink() {
-	Unlink()
 }
 
 func (s *LinkSession) Run(ready func()) {
@@ -119,5 +104,19 @@ func (s *LinkSession) Unlink() {
 	}
 	activeLink = nil
 	coreCallbacks = CoreCallbackInfo{}
-	isWebIntepreterMode = false
+	isWebInterpreterMode = false
+}
+
+type linkerBridge struct{}
+
+func (linkerBridge) IsWebIntepreterMode() bool {
+	return IsWebIntepreterMode()
+}
+
+func (linkerBridge) Link(coreCallbackInfo CoreCallbackInfo) {
+	Link(coreCallbackInfo)
+}
+
+func (linkerBridge) Unlink() {
+	Unlink()
 }

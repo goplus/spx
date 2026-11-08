@@ -25,303 +25,303 @@ package ffi
 */
 import "C"
 
-//export func_on_engine_start
-func func_on_engine_start() {
+//export go_on_engine_start
+func go_on_engine_start() {
 	if callbacks.OnEngineStart != nil {
 		callbacks.OnEngineStart()
 	}
 }
 
-//export func_on_engine_update
-func func_on_engine_update(arg0 C.GDReal) {
+//export go_on_engine_update
+func go_on_engine_update(arg0 GdFloat) {
 	if callbacks.OnEngineUpdate != nil {
 		callbacks.OnEngineUpdate(float64(arg0))
 	}
 }
 
-//export func_on_engine_fixed_update
-func func_on_engine_fixed_update(arg0 C.GDReal) {
+//export go_on_engine_fixed_update
+func go_on_engine_fixed_update(arg0 GdFloat) {
 	if callbacks.OnEngineFixedUpdate != nil {
 		callbacks.OnEngineFixedUpdate(float64(arg0))
 	}
 }
 
-//export func_on_engine_destroy
-func func_on_engine_destroy() {
+//export go_on_engine_destroy
+func go_on_engine_destroy() {
 	if callbacks.OnEngineDestroy != nil {
 		callbacks.OnEngineDestroy()
 	}
 }
 
-//export func_on_engine_destroyed
-func func_on_engine_destroyed() {
+//export go_on_engine_destroyed
+func go_on_engine_destroyed() {
 	if callbacks.OnEngineDestroyed != nil {
 		callbacks.OnEngineDestroyed()
 	}
 }
 
-//export func_on_engine_reset
-func func_on_engine_reset() {
+//export go_on_engine_reset
+func go_on_engine_reset() {
 	if callbacks.OnEngineReset != nil {
 		callbacks.OnEngineReset()
 	}
 }
 
-//export func_on_engine_pause
-func func_on_engine_pause(arg0 C.GDExtensionBool) {
+//export go_on_engine_pause
+func go_on_engine_pause(arg0 GdBool) {
 	if callbacks.OnEnginePause != nil {
 		callbacks.OnEnginePause(arg0 != 0)
 	}
 }
 
-//export func_on_scene_sprite_instantiated
-func func_on_scene_sprite_instantiated(arg0 C.GDExtensionInt, arg1 C.GdString) {
+//export go_on_scene_sprite_instantiated
+func go_on_scene_sprite_instantiated(arg0 GdObj, arg1 GdString) {
 	if callbacks.OnSceneSpriteInstantiated != nil {
-		callbacks.OnSceneSpriteInstantiated(int64(arg0), copyString(GdString(arg1)))
+		callbacks.OnSceneSpriteInstantiated(int64(arg0), copyString(arg1))
 	}
 }
 
-//export func_on_sprite_ready
-func func_on_sprite_ready(arg0 C.GDExtensionInt) {
+//export go_on_sprite_ready
+func go_on_sprite_ready(arg0 GdObj) {
 	if callbacks.OnSpriteReady != nil {
 		callbacks.OnSpriteReady(int64(arg0))
 	}
 }
 
-//export func_on_sprite_updated
-func func_on_sprite_updated(arg0 C.GDReal) {
+//export go_on_sprite_updated
+func go_on_sprite_updated(arg0 GdFloat) {
 	if callbacks.OnSpriteUpdated != nil {
 		callbacks.OnSpriteUpdated(float64(arg0))
 	}
 }
 
-//export func_on_sprite_fixed_updated
-func func_on_sprite_fixed_updated(arg0 C.GDReal) {
+//export go_on_sprite_fixed_updated
+func go_on_sprite_fixed_updated(arg0 GdFloat) {
 	if callbacks.OnSpriteFixedUpdated != nil {
 		callbacks.OnSpriteFixedUpdated(float64(arg0))
 	}
 }
 
-//export func_on_sprite_destroyed
-func func_on_sprite_destroyed(arg0 C.GDExtensionInt) {
+//export go_on_sprite_destroyed
+func go_on_sprite_destroyed(arg0 GdObj) {
 	if callbacks.OnSpriteDestroyed != nil {
 		callbacks.OnSpriteDestroyed(int64(arg0))
 	}
 }
 
-//export func_on_sprite_frames_set_changed
-func func_on_sprite_frames_set_changed(arg0 C.GDExtensionInt) {
+//export go_on_sprite_frames_set_changed
+func go_on_sprite_frames_set_changed(arg0 GdObj) {
 	if callbacks.OnSpriteFramesSetChanged != nil {
 		callbacks.OnSpriteFramesSetChanged(int64(arg0))
 	}
 }
 
-//export func_on_sprite_animation_changed
-func func_on_sprite_animation_changed(arg0 C.GDExtensionInt) {
+//export go_on_sprite_animation_changed
+func go_on_sprite_animation_changed(arg0 GdObj) {
 	if callbacks.OnSpriteAnimationChanged != nil {
 		callbacks.OnSpriteAnimationChanged(int64(arg0))
 	}
 }
 
-//export func_on_sprite_frame_changed
-func func_on_sprite_frame_changed(arg0 C.GDExtensionInt) {
+//export go_on_sprite_frame_changed
+func go_on_sprite_frame_changed(arg0 GdObj) {
 	if callbacks.OnSpriteFrameChanged != nil {
 		callbacks.OnSpriteFrameChanged(int64(arg0))
 	}
 }
 
-//export func_on_sprite_animation_looped
-func func_on_sprite_animation_looped(arg0 C.GDExtensionInt) {
+//export go_on_sprite_animation_looped
+func go_on_sprite_animation_looped(arg0 GdObj) {
 	if callbacks.OnSpriteAnimationLooped != nil {
 		callbacks.OnSpriteAnimationLooped(int64(arg0))
 	}
 }
 
-//export func_on_sprite_animation_finished
-func func_on_sprite_animation_finished(arg0 C.GDExtensionInt) {
+//export go_on_sprite_animation_finished
+func go_on_sprite_animation_finished(arg0 GdObj) {
 	if callbacks.OnSpriteAnimationFinished != nil {
 		callbacks.OnSpriteAnimationFinished(int64(arg0))
 	}
 }
 
-//export func_on_sprite_vfx_finished
-func func_on_sprite_vfx_finished(arg0 C.GDExtensionInt) {
+//export go_on_sprite_vfx_finished
+func go_on_sprite_vfx_finished(arg0 GdObj) {
 	if callbacks.OnSpriteVfxFinished != nil {
 		callbacks.OnSpriteVfxFinished(int64(arg0))
 	}
 }
 
-//export func_on_sprite_screen_exited
-func func_on_sprite_screen_exited(arg0 C.GDExtensionInt) {
+//export go_on_sprite_screen_exited
+func go_on_sprite_screen_exited(arg0 GdObj) {
 	if callbacks.OnSpriteScreenExited != nil {
 		callbacks.OnSpriteScreenExited(int64(arg0))
 	}
 }
 
-//export func_on_sprite_screen_entered
-func func_on_sprite_screen_entered(arg0 C.GDExtensionInt) {
+//export go_on_sprite_screen_entered
+func go_on_sprite_screen_entered(arg0 GdObj) {
 	if callbacks.OnSpriteScreenEntered != nil {
 		callbacks.OnSpriteScreenEntered(int64(arg0))
 	}
 }
 
-//export func_on_mouse_pressed
-func func_on_mouse_pressed(arg0 C.GDExtensionInt) {
+//export go_on_mouse_pressed
+func go_on_mouse_pressed(arg0 GdInt) {
 	if callbacks.OnMousePressed != nil {
 		callbacks.OnMousePressed(int64(arg0))
 	}
 }
 
-//export func_on_mouse_released
-func func_on_mouse_released(arg0 C.GDExtensionInt) {
+//export go_on_mouse_released
+func go_on_mouse_released(arg0 GdInt) {
 	if callbacks.OnMouseReleased != nil {
 		callbacks.OnMouseReleased(int64(arg0))
 	}
 }
 
-//export func_on_key_pressed
-func func_on_key_pressed(arg0 C.GDExtensionInt) {
+//export go_on_key_pressed
+func go_on_key_pressed(arg0 GdInt) {
 	if callbacks.OnKeyPressed != nil {
 		callbacks.OnKeyPressed(int64(arg0))
 	}
 }
 
-//export func_on_key_released
-func func_on_key_released(arg0 C.GDExtensionInt) {
+//export go_on_key_released
+func go_on_key_released(arg0 GdInt) {
 	if callbacks.OnKeyReleased != nil {
 		callbacks.OnKeyReleased(int64(arg0))
 	}
 }
 
-//export func_on_action_pressed
-func func_on_action_pressed(arg0 C.GdString) {
+//export go_on_action_pressed
+func go_on_action_pressed(arg0 GdString) {
 	if callbacks.OnActionPressed != nil {
-		callbacks.OnActionPressed(copyString(GdString(arg0)))
+		callbacks.OnActionPressed(copyString(arg0))
 	}
 }
 
-//export func_on_action_just_pressed
-func func_on_action_just_pressed(arg0 C.GdString) {
+//export go_on_action_just_pressed
+func go_on_action_just_pressed(arg0 GdString) {
 	if callbacks.OnActionJustPressed != nil {
-		callbacks.OnActionJustPressed(copyString(GdString(arg0)))
+		callbacks.OnActionJustPressed(copyString(arg0))
 	}
 }
 
-//export func_on_action_just_released
-func func_on_action_just_released(arg0 C.GdString) {
+//export go_on_action_just_released
+func go_on_action_just_released(arg0 GdString) {
 	if callbacks.OnActionJustReleased != nil {
-		callbacks.OnActionJustReleased(copyString(GdString(arg0)))
+		callbacks.OnActionJustReleased(copyString(arg0))
 	}
 }
 
-//export func_on_axis_changed
-func func_on_axis_changed(arg0 C.GdString, arg1 C.GDReal) {
+//export go_on_axis_changed
+func go_on_axis_changed(arg0 GdString, arg1 GdFloat) {
 	if callbacks.OnAxisChanged != nil {
-		callbacks.OnAxisChanged(copyString(GdString(arg0)), float64(arg1))
+		callbacks.OnAxisChanged(copyString(arg0), float64(arg1))
 	}
 }
 
-//export func_on_collision_enter
-func func_on_collision_enter(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_collision_enter
+func go_on_collision_enter(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnCollisionEnter != nil {
 		callbacks.OnCollisionEnter(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_collision_stay
-func func_on_collision_stay(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_collision_stay
+func go_on_collision_stay(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnCollisionStay != nil {
 		callbacks.OnCollisionStay(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_collision_exit
-func func_on_collision_exit(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_collision_exit
+func go_on_collision_exit(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnCollisionExit != nil {
 		callbacks.OnCollisionExit(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_trigger_enter
-func func_on_trigger_enter(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_trigger_enter
+func go_on_trigger_enter(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnTriggerEnter != nil {
 		callbacks.OnTriggerEnter(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_trigger_stay
-func func_on_trigger_stay(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_trigger_stay
+func go_on_trigger_stay(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnTriggerStay != nil {
 		callbacks.OnTriggerStay(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_trigger_exit
-func func_on_trigger_exit(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt) {
+//export go_on_trigger_exit
+func go_on_trigger_exit(arg0 GdInt, arg1 GdInt) {
 	if callbacks.OnTriggerExit != nil {
 		callbacks.OnTriggerExit(int64(arg0), int64(arg1))
 	}
 }
 
-//export func_on_ui_ready
-func func_on_ui_ready(arg0 C.GDExtensionInt) {
+//export go_on_ui_ready
+func go_on_ui_ready(arg0 GdObj) {
 	if callbacks.OnUiReady != nil {
 		callbacks.OnUiReady(int64(arg0))
 	}
 }
 
-//export func_on_ui_updated
-func func_on_ui_updated(arg0 C.GDExtensionInt) {
+//export go_on_ui_updated
+func go_on_ui_updated(arg0 GdObj) {
 	if callbacks.OnUiUpdated != nil {
 		callbacks.OnUiUpdated(int64(arg0))
 	}
 }
 
-//export func_on_ui_destroyed
-func func_on_ui_destroyed(arg0 C.GDExtensionInt) {
+//export go_on_ui_destroyed
+func go_on_ui_destroyed(arg0 GdObj) {
 	if callbacks.OnUiDestroyed != nil {
 		callbacks.OnUiDestroyed(int64(arg0))
 	}
 }
 
-//export func_on_ui_pressed
-func func_on_ui_pressed(arg0 C.GDExtensionInt) {
+//export go_on_ui_pressed
+func go_on_ui_pressed(arg0 GdObj) {
 	if callbacks.OnUiPressed != nil {
 		callbacks.OnUiPressed(int64(arg0))
 	}
 }
 
-//export func_on_ui_released
-func func_on_ui_released(arg0 C.GDExtensionInt) {
+//export go_on_ui_released
+func go_on_ui_released(arg0 GdObj) {
 	if callbacks.OnUiReleased != nil {
 		callbacks.OnUiReleased(int64(arg0))
 	}
 }
 
-//export func_on_ui_hovered
-func func_on_ui_hovered(arg0 C.GDExtensionInt) {
+//export go_on_ui_hovered
+func go_on_ui_hovered(arg0 GdObj) {
 	if callbacks.OnUiHovered != nil {
 		callbacks.OnUiHovered(int64(arg0))
 	}
 }
 
-//export func_on_ui_clicked
-func func_on_ui_clicked(arg0 C.GDExtensionInt) {
+//export go_on_ui_clicked
+func go_on_ui_clicked(arg0 GdObj) {
 	if callbacks.OnUiClicked != nil {
 		callbacks.OnUiClicked(int64(arg0))
 	}
 }
 
-//export func_on_ui_toggle
-func func_on_ui_toggle(arg0 C.GDExtensionInt, arg1 C.GDExtensionBool) {
+//export go_on_ui_toggle
+func go_on_ui_toggle(arg0 GdObj, arg1 GdBool) {
 	if callbacks.OnUiToggle != nil {
 		callbacks.OnUiToggle(int64(arg0), arg1 != 0)
 	}
 }
 
-//export func_on_ui_text_changed
-func func_on_ui_text_changed(arg0 C.GDExtensionInt, arg1 C.GdString) {
+//export go_on_ui_text_changed
+func go_on_ui_text_changed(arg0 GdObj, arg1 GdString) {
 	if callbacks.OnUiTextChanged != nil {
-		callbacks.OnUiTextChanged(int64(arg0), copyString(GdString(arg1)))
+		callbacks.OnUiTextChanged(int64(arg0), copyString(arg1))
 	}
 }

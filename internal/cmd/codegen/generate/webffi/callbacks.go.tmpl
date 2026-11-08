@@ -39,7 +39,7 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 	{{ $cbName := trimPrefix $f.Name "GDExtensionSpxCallback" -}}
 	{{ if $i }}} else {{ end }}if eventVal.Equal(jsEvent{{ $cbName }}) {
 		{{ if or (eq $cbName "OnEngineUpdate") (eq $cbName "OnEngineFixedUpdate") -}}
-		SyncWebInputSnapshot()
+		syncInputSnapshot()
 		{{ else if or (eq $cbName "OnEngineStart") (eq $cbName "OnEngineDestroy") (eq $cbName "OnEngineReset") -}}
 		contactEventGeneration++
 		{{ if eq $cbName "OnEngineStart" -}}
@@ -48,18 +48,18 @@ func gdspxDispatch(this js.Value, args []js.Value) any {
 		defer resetInputCache()
 		{{ end -}}
 		{{ else if eq $cbName "OnKeyPressed" -}}
-		arg0 := JsTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
-		RecordWebKeyState(arg0, true)
+		arg0 := JSTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
+		recordKeyState(arg0, true)
 		{{ else if eq $cbName "OnKeyReleased" -}}
-		arg0 := JsTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
-		RecordWebKeyState(arg0, false)
+		arg0 := JSTo{{mustPrimitiveTypeName (index $f.Arguments 0) $f.Name}}(args[1])
+		recordKeyState(arg0, false)
 		{{ end -}}
 		if callbacks.{{ $cbName }} == nil {
 			return nil
 		}
 		{{ if not (or (eq $cbName "OnKeyPressed") (eq $cbName "OnKeyReleased")) -}}
 		{{ range $j, $arg := $f.Arguments -}}
-		arg{{ $j }} := JsTo{{mustPrimitiveTypeName $arg $f.Name}}(args[{{add $j 1}}])
+		arg{{ $j }} := JSTo{{mustPrimitiveTypeName $arg $f.Name}}(args[{{add $j 1}}])
 		{{ end -}}
 		{{ end -}}
 		callbacks.{{ $cbName }}(
