@@ -38,6 +38,8 @@ type inputPlaybackState struct {
 	keyPressed bool
 }
 
+// consumeSampledInputTickLocked requires the caller to hold s.operationMu.
+// It acquires s.mu itself to protect session state during sampling and resolution.
 func (s *inputSession) consumeSampledInputTickLocked(
 	delta float64,
 	sample func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent),

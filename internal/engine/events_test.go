@@ -25,7 +25,6 @@ import (
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
 	onKeyPressed(1)
 	keyInput.cache()
 	onKeyReleased(1)
@@ -42,7 +41,6 @@ func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 
 func TestKeyInputIncludesHeldStateAtUpdateBoundary(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
 	t.Cleanup(DiscardPendingKeyEvents)
 
 	onKeyPressed(2)
@@ -82,8 +80,10 @@ func TestInputDrainOwnsSnapshotsAndReusesCallerBuffers(t *testing.T) {
 
 	keyPrefix := KeyEvent{Key: 9, Pressed: true}
 	mousePrefix := MouseEvent{Button: 3, Pressed: true}
-	keyEvents, keysDown := GetKeyInput(append(make([]KeyEvent, 0, 8), keyPrefix))
-	mouseEvents, buttons := GetMouseInput(append(make([]MouseEvent, 0, 8), mousePrefix))
+	keyBuffer := append(make([]KeyEvent, 0, 8), keyPrefix)
+	mouseBuffer := append(make([]MouseEvent, 0, 8), mousePrefix)
+	keyEvents, keysDown := GetKeyInput(keyBuffer)
+	mouseEvents, buttons := GetMouseInput(mouseBuffer)
 	wantKeys := []KeyEvent{keyPrefix, {Key: 2, Pressed: true}, {Key: 1, Pressed: true}, {Key: 2}}
 	wantMouse := []MouseEvent{mousePrefix, {Button: 1, Pressed: true}, {Button: 1}, {Button: 2, Pressed: true}}
 	if !slices.Equal(keyEvents, wantKeys) || !slices.Equal(keysDown, []int64{1}) {
@@ -91,6 +91,10 @@ func TestInputDrainOwnsSnapshotsAndReusesCallerBuffers(t *testing.T) {
 	}
 	if !slices.Equal(mouseEvents, wantMouse) || buttons != 0b010 {
 		t.Fatalf("mouse input = (%v, %#x), want (%v, 0b010)", mouseEvents, buttons, wantMouse)
+	}
+
+	if &keyEvents[0] != &keyBuffer[0] || &mouseEvents[0] != &mouseBuffer[0] {
+		t.Fatal("draining input replaced caller buffers with sufficient capacity")
 	}
 
 	// A consumer may edit its copies without changing held input or later edges.
@@ -119,15 +123,14 @@ func TestInputDrainOwnsSnapshotsAndReusesCallerBuffers(t *testing.T) {
 	if !slices.Equal(mouseEvents, wantMouse) || buttons != 0 {
 		t.Fatalf("reused mouse buffer = (%v, %#x), want (%v, 0)", mouseEvents, buttons, wantMouse)
 	}
+	if &keyEvents[0] != &keyBuffer[0] || &mouseEvents[0] != &mouseBuffer[0] {
+		t.Fatal("next-frame drain replaced caller buffers with sufficient capacity")
+	}
 }
 
 func TestDiscardPendingKeyEventsPreservesHeldState(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
-	t.Cleanup(func() {
-		keyInput.reset()
-		DiscardPendingKeyEvents()
-	})
+	t.Cleanup(keyInput.reset)
 
 	onKeyPressed(7)
 	DiscardPendingKeyEvents()
