@@ -156,11 +156,14 @@ func TestGenerateManagerWrappersOwnDispatch(t *testing.T) {
 	getter := generatedMethod(t, path, generated, "IsCollisionEnabled")
 	require.Contains(t, setter, "func (s *SpriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool)")
 	require.Contains(t, getter, "func (s *SpriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool")
-	require.Contains(t, setter, "CallInMainThread(func() {\n\t\ts.target().SetTriggerEnabled(obj, trigger)\n\t})")
-	require.Contains(t, getter, "return CallInMainThreadValue(func() bool {\n\t\treturn s.target().IsCollisionEnabled(obj)\n\t})")
+	require.Contains(t, setter, "CallInMainThread(func() {\n\t\tbinding.target().SetTriggerEnabled(obj, trigger)\n\t})")
+	require.Contains(t, getter, "return CallInMainThreadValue(func() bool {\n\t\treturn binding.target().IsCollisionEnabled(obj)\n\t})")
+	require.Contains(t, setter, "binding := s.resolve()")
+	require.Contains(t, getter, "binding := s.resolve()")
+	require.Contains(t, string(generated), "&gdx.SpriteMgr")
 	probe := generatedMethod(t, path, generated, "IsMainThread")
 	require.NotContains(t, probe, "CallInMainThread")
-	require.Contains(t, probe, "return p.target().IsMainThread()")
+	require.Contains(t, probe, "return binding.target().IsMainThread()")
 }
 
 func TestNativeStringArgumentRetainsTemporaryOwnership(t *testing.T) {

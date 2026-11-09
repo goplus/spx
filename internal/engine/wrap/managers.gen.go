@@ -27,8 +27,6 @@ package enginewrap
 
 import (
 	"fmt"
-	"slices"
-	"sync"
 
 	. "github.com/goplus/spbase/mathf"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -57,2260 +55,2226 @@ type AudioMgrImpl struct {
 	*managerBinding[gdx.IAudioMgr]
 }
 
-func (a *AudioMgrImpl) target() gdx.IAudioMgr {
-	return resolveManager[*AudioMgrImpl](a.managerBinding, gdx.AudioMgr, "audio")
+func (a *AudioMgrImpl) resolve() *managerBinding[gdx.IAudioMgr] {
+	return resolveManager[*AudioMgrImpl](a.managerBinding, &gdx.AudioMgr, "audio")
 }
 
 type CameraMgrImpl struct {
 	*managerBinding[gdx.ICameraMgr]
 }
 
-func (c *CameraMgrImpl) target() gdx.ICameraMgr {
-	return resolveManager[*CameraMgrImpl](c.managerBinding, gdx.CameraMgr, "camera")
+func (c *CameraMgrImpl) resolve() *managerBinding[gdx.ICameraMgr] {
+	return resolveManager[*CameraMgrImpl](c.managerBinding, &gdx.CameraMgr, "camera")
 }
 
 type DebugMgrImpl struct {
 	*managerBinding[gdx.IDebugMgr]
 }
 
-func (d *DebugMgrImpl) target() gdx.IDebugMgr {
-	return resolveManager[*DebugMgrImpl](d.managerBinding, gdx.DebugMgr, "debug")
+func (d *DebugMgrImpl) resolve() *managerBinding[gdx.IDebugMgr] {
+	return resolveManager[*DebugMgrImpl](d.managerBinding, &gdx.DebugMgr, "debug")
 }
 
 type ExtMgrImpl struct {
 	*managerBinding[gdx.IExtMgr]
 }
 
-func (e *ExtMgrImpl) target() gdx.IExtMgr {
-	return resolveManager[*ExtMgrImpl](e.managerBinding, gdx.ExtMgr, "ext")
+func (e *ExtMgrImpl) resolve() *managerBinding[gdx.IExtMgr] {
+	return resolveManager[*ExtMgrImpl](e.managerBinding, &gdx.ExtMgr, "ext")
 }
 
 type InputMgrImpl struct {
 	*managerBinding[gdx.IInputMgr]
 }
 
-func (i *InputMgrImpl) target() gdx.IInputMgr {
-	return resolveManager[*InputMgrImpl](i.managerBinding, gdx.InputMgr, "input")
+func (i *InputMgrImpl) resolve() *managerBinding[gdx.IInputMgr] {
+	return resolveManager[*InputMgrImpl](i.managerBinding, &gdx.InputMgr, "input")
 }
 
 type NavigationMgrImpl struct {
 	*managerBinding[gdx.INavigationMgr]
 }
 
-func (n *NavigationMgrImpl) target() gdx.INavigationMgr {
-	return resolveManager[*NavigationMgrImpl](n.managerBinding, gdx.NavigationMgr, "navigation")
+func (n *NavigationMgrImpl) resolve() *managerBinding[gdx.INavigationMgr] {
+	return resolveManager[*NavigationMgrImpl](n.managerBinding, &gdx.NavigationMgr, "navigation")
 }
 
 type PenMgrImpl struct {
 	*managerBinding[gdx.IPenMgr]
 }
 
-func (p *PenMgrImpl) target() gdx.IPenMgr {
-	return resolveManager[*PenMgrImpl](p.managerBinding, gdx.PenMgr, "pen")
+func (p *PenMgrImpl) resolve() *managerBinding[gdx.IPenMgr] {
+	return resolveManager[*PenMgrImpl](p.managerBinding, &gdx.PenMgr, "pen")
 }
 
 type PhysicsMgrImpl struct {
 	*managerBinding[gdx.IPhysicsMgr]
 }
 
-func (p *PhysicsMgrImpl) target() gdx.IPhysicsMgr {
-	return resolveManager[*PhysicsMgrImpl](p.managerBinding, gdx.PhysicsMgr, "physics")
+func (p *PhysicsMgrImpl) resolve() *managerBinding[gdx.IPhysicsMgr] {
+	return resolveManager[*PhysicsMgrImpl](p.managerBinding, &gdx.PhysicsMgr, "physics")
 }
 
 type PlatformMgrImpl struct {
 	*managerBinding[gdx.IPlatformMgr]
 }
 
-func (p *PlatformMgrImpl) target() gdx.IPlatformMgr {
-	return resolveManager[*PlatformMgrImpl](p.managerBinding, gdx.PlatformMgr, "platform")
+func (p *PlatformMgrImpl) resolve() *managerBinding[gdx.IPlatformMgr] {
+	return resolveManager[*PlatformMgrImpl](p.managerBinding, &gdx.PlatformMgr, "platform")
 }
 
 type ResMgrImpl struct {
 	*managerBinding[gdx.IResMgr]
 }
 
-func (r *ResMgrImpl) target() gdx.IResMgr {
-	return resolveManager[*ResMgrImpl](r.managerBinding, gdx.ResMgr, "res")
+func (r *ResMgrImpl) resolve() *managerBinding[gdx.IResMgr] {
+	return resolveManager[*ResMgrImpl](r.managerBinding, &gdx.ResMgr, "res")
 }
 
 type SceneMgrImpl struct {
 	*managerBinding[gdx.ISceneMgr]
 }
 
-func (s *SceneMgrImpl) target() gdx.ISceneMgr {
-	return resolveManager[*SceneMgrImpl](s.managerBinding, gdx.SceneMgr, "scene")
+func (s *SceneMgrImpl) resolve() *managerBinding[gdx.ISceneMgr] {
+	return resolveManager[*SceneMgrImpl](s.managerBinding, &gdx.SceneMgr, "scene")
 }
 
 type SpriteMgrImpl struct {
 	*managerBinding[gdx.ISpriteMgr]
 }
 
-func (s *SpriteMgrImpl) target() gdx.ISpriteMgr {
-	return resolveManager[*SpriteMgrImpl](s.managerBinding, gdx.SpriteMgr, "sprite")
+func (s *SpriteMgrImpl) resolve() *managerBinding[gdx.ISpriteMgr] {
+	return resolveManager[*SpriteMgrImpl](s.managerBinding, &gdx.SpriteMgr, "sprite")
 }
 
 type TilemapMgrImpl struct {
 	*managerBinding[gdx.ITilemapMgr]
 }
 
-func (t *TilemapMgrImpl) target() gdx.ITilemapMgr {
-	return resolveManager[*TilemapMgrImpl](t.managerBinding, gdx.TilemapMgr, "tilemap")
+func (t *TilemapMgrImpl) resolve() *managerBinding[gdx.ITilemapMgr] {
+	return resolveManager[*TilemapMgrImpl](t.managerBinding, &gdx.TilemapMgr, "tilemap")
 }
 
 type TilemapparserMgrImpl struct {
 	*managerBinding[gdx.ITilemapparserMgr]
 }
 
-func (t *TilemapparserMgrImpl) target() gdx.ITilemapparserMgr {
-	return resolveManager[*TilemapparserMgrImpl](t.managerBinding, gdx.TilemapparserMgr, "tilemapparser")
+func (t *TilemapparserMgrImpl) resolve() *managerBinding[gdx.ITilemapparserMgr] {
+	return resolveManager[*TilemapparserMgrImpl](t.managerBinding, &gdx.TilemapparserMgr, "tilemapparser")
 }
 
 type UiMgrImpl struct {
 	*managerBinding[gdx.IUiMgr]
 }
 
-func (u *UiMgrImpl) target() gdx.IUiMgr {
-	return resolveManager[*UiMgrImpl](u.managerBinding, gdx.UiMgr, "ui")
+func (u *UiMgrImpl) resolve() *managerBinding[gdx.IUiMgr] {
+	return resolveManager[*UiMgrImpl](u.managerBinding, &gdx.UiMgr, "ui")
 }
 
-// BindManagers installs shared main-thread wrappers around raw backend managers.
-// The returned function invalidates these wrappers and clears only globals that
-// still refer to this binding, so an older cleanup cannot remove a newer binding.
-func BindManagers(managers []gdx.IManager) func() {
-	var releases []func()
-	release := sync.OnceFunc(func() {
-		for _, release := range slices.Backward(releases) {
-			release()
-		}
-		releases = nil
-	})
-	complete := false
-	defer func() {
-		if !complete {
-			release()
-		}
-	}()
-	for _, manager := range managers {
-		switch backend := manager.(type) {
-		case gdx.IAudioMgr:
-			binding := &managerBinding[gdx.IAudioMgr]{backend: backend}
-			wrapper := &AudioMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.AudioMgr, wrapper))
-		case gdx.ICameraMgr:
-			binding := &managerBinding[gdx.ICameraMgr]{backend: backend}
-			wrapper := &CameraMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.CameraMgr, wrapper))
-		case gdx.IDebugMgr:
-			binding := &managerBinding[gdx.IDebugMgr]{backend: backend}
-			wrapper := &DebugMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.DebugMgr, wrapper))
-		case gdx.IExtMgr:
-			binding := &managerBinding[gdx.IExtMgr]{backend: backend}
-			wrapper := &ExtMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.ExtMgr, wrapper))
-		case gdx.IInputMgr:
-			binding := &managerBinding[gdx.IInputMgr]{backend: backend}
-			wrapper := &InputMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.InputMgr, wrapper))
-		case gdx.INavigationMgr:
-			binding := &managerBinding[gdx.INavigationMgr]{backend: backend}
-			wrapper := &NavigationMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.NavigationMgr, wrapper))
-		case gdx.IPenMgr:
-			binding := &managerBinding[gdx.IPenMgr]{backend: backend}
-			wrapper := &PenMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.PenMgr, wrapper))
-		case gdx.IPhysicsMgr:
-			binding := &managerBinding[gdx.IPhysicsMgr]{backend: backend}
-			wrapper := &PhysicsMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.PhysicsMgr, wrapper))
-		case gdx.IPlatformMgr:
-			binding := &managerBinding[gdx.IPlatformMgr]{backend: backend}
-			wrapper := &PlatformMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.PlatformMgr, wrapper))
-		case gdx.IResMgr:
-			binding := &managerBinding[gdx.IResMgr]{backend: backend}
-			wrapper := &ResMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.ResMgr, wrapper))
-		case gdx.ISceneMgr:
-			binding := &managerBinding[gdx.ISceneMgr]{backend: backend}
-			wrapper := &SceneMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.SceneMgr, wrapper))
-		case gdx.ISpriteMgr:
-			binding := &managerBinding[gdx.ISpriteMgr]{backend: backend}
-			wrapper := &SpriteMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.SpriteMgr, wrapper))
-		case gdx.ITilemapMgr:
-			binding := &managerBinding[gdx.ITilemapMgr]{backend: backend}
-			wrapper := &TilemapMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.TilemapMgr, wrapper))
-		case gdx.ITilemapparserMgr:
-			binding := &managerBinding[gdx.ITilemapparserMgr]{backend: backend}
-			wrapper := &TilemapparserMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.TilemapparserMgr, wrapper))
-		case gdx.IUiMgr:
-			binding := &managerBinding[gdx.IUiMgr]{backend: backend}
-			wrapper := &UiMgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.UiMgr, wrapper))
-		default:
-			panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
-		}
+func bindManager(manager gdx.IManager) func() {
+	switch backend := manager.(type) {
+	case gdx.IAudioMgr:
+		binding := &managerBinding[gdx.IAudioMgr]{backend: backend, name: "audio"}
+		return binding.bind(&gdx.AudioMgr, &AudioMgrImpl{binding})
+	case gdx.ICameraMgr:
+		binding := &managerBinding[gdx.ICameraMgr]{backend: backend, name: "camera"}
+		return binding.bind(&gdx.CameraMgr, &CameraMgrImpl{binding})
+	case gdx.IDebugMgr:
+		binding := &managerBinding[gdx.IDebugMgr]{backend: backend, name: "debug"}
+		return binding.bind(&gdx.DebugMgr, &DebugMgrImpl{binding})
+	case gdx.IExtMgr:
+		binding := &managerBinding[gdx.IExtMgr]{backend: backend, name: "ext"}
+		return binding.bind(&gdx.ExtMgr, &ExtMgrImpl{binding})
+	case gdx.IInputMgr:
+		binding := &managerBinding[gdx.IInputMgr]{backend: backend, name: "input"}
+		return binding.bind(&gdx.InputMgr, &InputMgrImpl{binding})
+	case gdx.INavigationMgr:
+		binding := &managerBinding[gdx.INavigationMgr]{backend: backend, name: "navigation"}
+		return binding.bind(&gdx.NavigationMgr, &NavigationMgrImpl{binding})
+	case gdx.IPenMgr:
+		binding := &managerBinding[gdx.IPenMgr]{backend: backend, name: "pen"}
+		return binding.bind(&gdx.PenMgr, &PenMgrImpl{binding})
+	case gdx.IPhysicsMgr:
+		binding := &managerBinding[gdx.IPhysicsMgr]{backend: backend, name: "physics"}
+		return binding.bind(&gdx.PhysicsMgr, &PhysicsMgrImpl{binding})
+	case gdx.IPlatformMgr:
+		binding := &managerBinding[gdx.IPlatformMgr]{backend: backend, name: "platform"}
+		return binding.bind(&gdx.PlatformMgr, &PlatformMgrImpl{binding})
+	case gdx.IResMgr:
+		binding := &managerBinding[gdx.IResMgr]{backend: backend, name: "res"}
+		return binding.bind(&gdx.ResMgr, &ResMgrImpl{binding})
+	case gdx.ISceneMgr:
+		binding := &managerBinding[gdx.ISceneMgr]{backend: backend, name: "scene"}
+		return binding.bind(&gdx.SceneMgr, &SceneMgrImpl{binding})
+	case gdx.ISpriteMgr:
+		binding := &managerBinding[gdx.ISpriteMgr]{backend: backend, name: "sprite"}
+		return binding.bind(&gdx.SpriteMgr, &SpriteMgrImpl{binding})
+	case gdx.ITilemapMgr:
+		binding := &managerBinding[gdx.ITilemapMgr]{backend: backend, name: "tilemap"}
+		return binding.bind(&gdx.TilemapMgr, &TilemapMgrImpl{binding})
+	case gdx.ITilemapparserMgr:
+		binding := &managerBinding[gdx.ITilemapparserMgr]{backend: backend, name: "tilemapparser"}
+		return binding.bind(&gdx.TilemapparserMgr, &TilemapparserMgrImpl{binding})
+	case gdx.IUiMgr:
+		binding := &managerBinding[gdx.IUiMgr]{backend: backend, name: "ui"}
+		return binding.bind(&gdx.UiMgr, &UiMgrImpl{binding})
+	default:
+		panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
 	}
-	complete = true
-	return release
 }
 
 // IAudioMgr
 func (a *AudioMgrImpl) StopAll() {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().StopAll()
+		binding.target().StopAll()
 	})
 }
 func (a *AudioMgrImpl) CreateAudio() gdx.Object {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return a.target().CreateAudio()
+		return binding.target().CreateAudio()
 	})
 }
 func (a *AudioMgrImpl) DestroyAudio(obj gdx.Object) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().DestroyAudio(obj)
+		binding.target().DestroyAudio(obj)
 	})
 }
 func (a *AudioMgrImpl) SetPitch(obj gdx.Object, pitch float64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().SetPitch(obj, pitch)
+		binding.target().SetPitch(obj, pitch)
 	})
 }
 func (a *AudioMgrImpl) GetPitch(obj gdx.Object) float64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return a.target().GetPitch(obj)
+		return binding.target().GetPitch(obj)
 	})
 }
 func (a *AudioMgrImpl) SetPan(obj gdx.Object, pan float64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().SetPan(obj, pan)
+		binding.target().SetPan(obj, pan)
 	})
 }
 func (a *AudioMgrImpl) GetPan(obj gdx.Object) float64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return a.target().GetPan(obj)
+		return binding.target().GetPan(obj)
 	})
 }
 func (a *AudioMgrImpl) SetVolume(obj gdx.Object, volume float64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().SetVolume(obj, volume)
+		binding.target().SetVolume(obj, volume)
 	})
 }
 func (a *AudioMgrImpl) GetVolume(obj gdx.Object) float64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return a.target().GetVolume(obj)
+		return binding.target().GetVolume(obj)
 	})
 }
 func (a *AudioMgrImpl) PlayWithAttenuation(obj gdx.Object, path string, owner_id gdx.Object, attenuation float64, max_distance float64) int64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return a.target().PlayWithAttenuation(obj, path, owner_id, attenuation, max_distance)
+		return binding.target().PlayWithAttenuation(obj, path, owner_id, attenuation, max_distance)
 	})
 }
 func (a *AudioMgrImpl) Play(obj gdx.Object, path string) int64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return a.target().Play(obj, path)
+		return binding.target().Play(obj, path)
 	})
 }
 func (a *AudioMgrImpl) Pause(aid int64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().Pause(aid)
+		binding.target().Pause(aid)
 	})
 }
 func (a *AudioMgrImpl) Resume(aid int64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().Resume(aid)
+		binding.target().Resume(aid)
 	})
 }
 func (a *AudioMgrImpl) Stop(aid int64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().Stop(aid)
+		binding.target().Stop(aid)
 	})
 }
 func (a *AudioMgrImpl) Restart(aid int64) bool {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() bool {
-		return a.target().Restart(aid)
+		return binding.target().Restart(aid)
 	})
 }
 func (a *AudioMgrImpl) SetLoop(aid int64, loop bool) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().SetLoop(aid, loop)
+		binding.target().SetLoop(aid, loop)
 	})
 }
 func (a *AudioMgrImpl) GetLoop(aid int64) bool {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() bool {
-		return a.target().GetLoop(aid)
+		return binding.target().GetLoop(aid)
 	})
 }
 func (a *AudioMgrImpl) GetTimer(aid int64) float64 {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return a.target().GetTimer(aid)
+		return binding.target().GetTimer(aid)
 	})
 }
 func (a *AudioMgrImpl) SetTimer(aid int64, time float64) {
-	a.target()
+	binding := a.resolve()
 	CallInMainThread(func() {
-		a.target().SetTimer(aid, time)
+		binding.target().SetTimer(aid, time)
 	})
 }
 func (a *AudioMgrImpl) IsPlaying(aid int64) bool {
-	a.target()
+	binding := a.resolve()
 	return CallInMainThreadValue(func() bool {
-		return a.target().IsPlaying(aid)
+		return binding.target().IsPlaying(aid)
 	})
 }
 
 // ICameraMgr
 func (c *CameraMgrImpl) GetCameraPosition() Vec2 {
-	c.target()
+	binding := c.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return c.target().GetCameraPosition()
+		return binding.target().GetCameraPosition()
 	})
 }
 func (c *CameraMgrImpl) SetCameraPosition(position Vec2) {
-	c.target()
+	binding := c.resolve()
 	CallInMainThread(func() {
-		c.target().SetCameraPosition(position)
+		binding.target().SetCameraPosition(position)
 	})
 }
 func (c *CameraMgrImpl) GetCameraZoom() Vec2 {
-	c.target()
+	binding := c.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return c.target().GetCameraZoom()
+		return binding.target().GetCameraZoom()
 	})
 }
 func (c *CameraMgrImpl) SetCameraZoom(size Vec2) {
-	c.target()
+	binding := c.resolve()
 	CallInMainThread(func() {
-		c.target().SetCameraZoom(size)
+		binding.target().SetCameraZoom(size)
 	})
 }
 func (c *CameraMgrImpl) GetViewportRect() Rect2 {
-	c.target()
+	binding := c.resolve()
 	return CallInMainThreadValue(func() Rect2 {
-		return c.target().GetViewportRect()
+		return binding.target().GetViewportRect()
 	})
 }
 func (c *CameraMgrImpl) GetGlobalCameraRect() Rect2 {
-	c.target()
+	binding := c.resolve()
 	return CallInMainThreadValue(func() Rect2 {
-		return c.target().GetGlobalCameraRect()
+		return binding.target().GetGlobalCameraRect()
 	})
 }
 func (c *CameraMgrImpl) GetStageLimitsRect() Rect2 {
-	c.target()
+	binding := c.resolve()
 	return CallInMainThreadValue(func() Rect2 {
-		return c.target().GetStageLimitsRect()
+		return binding.target().GetStageLimitsRect()
 	})
 }
 func (c *CameraMgrImpl) SetCameraLimit(side int64, limit int64) {
-	c.target()
+	binding := c.resolve()
 	CallInMainThread(func() {
-		c.target().SetCameraLimit(side, limit)
+		binding.target().SetCameraLimit(side, limit)
 	})
 }
 func (c *CameraMgrImpl) SetCameraSmoothing(enabled bool) {
-	c.target()
+	binding := c.resolve()
 	CallInMainThread(func() {
-		c.target().SetCameraSmoothing(enabled)
+		binding.target().SetCameraSmoothing(enabled)
 	})
 }
 
 // IDebugMgr
 func (d *DebugMgrImpl) DebugDrawCircle(pos Vec2, radius float64, color Color) {
-	d.target()
+	binding := d.resolve()
 	CallInMainThread(func() {
-		d.target().DebugDrawCircle(pos, radius, color)
+		binding.target().DebugDrawCircle(pos, radius, color)
 	})
 }
 func (d *DebugMgrImpl) DebugDrawRect(pos Vec2, size Vec2, color Color) {
-	d.target()
+	binding := d.resolve()
 	CallInMainThread(func() {
-		d.target().DebugDrawRect(pos, size, color)
+		binding.target().DebugDrawRect(pos, size, color)
 	})
 }
 func (d *DebugMgrImpl) DebugDrawLine(from Vec2, to Vec2, color Color) {
-	d.target()
+	binding := d.resolve()
 	CallInMainThread(func() {
-		d.target().DebugDrawLine(from, to, color)
+		binding.target().DebugDrawLine(from, to, color)
 	})
 }
 
 // IExtMgr
 func (e *ExtMgrImpl) RequestExit(exit_code int64) {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().RequestExit(exit_code)
+		binding.target().RequestExit(exit_code)
 	})
 }
 func (e *ExtMgrImpl) RequestReset(exit_code int64) {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().RequestReset(exit_code)
+		binding.target().RequestReset(exit_code)
 	})
 }
 func (e *ExtMgrImpl) RequestRestart() {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().RequestRestart()
+		binding.target().RequestRestart()
 	})
 }
 func (e *ExtMgrImpl) OnRuntimePanic(msg string) {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().OnRuntimePanic(msg)
+		binding.target().OnRuntimePanic(msg)
 	})
 }
 func (e *ExtMgrImpl) Pause() {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().Pause()
+		binding.target().Pause()
 	})
 }
 func (e *ExtMgrImpl) Resume() {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().Resume()
+		binding.target().Resume()
 	})
 }
 func (e *ExtMgrImpl) IsPaused() bool {
-	e.target()
+	binding := e.resolve()
 	return CallInMainThreadValue(func() bool {
-		return e.target().IsPaused()
+		return binding.target().IsPaused()
 	})
 }
 func (e *ExtMgrImpl) NextFrame() {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().NextFrame()
+		binding.target().NextFrame()
 	})
 }
 func (e *ExtMgrImpl) SetLayerSorterMode(mode int64) {
-	e.target()
+	binding := e.resolve()
 	CallInMainThread(func() {
-		e.target().SetLayerSorterMode(mode)
+		binding.target().SetLayerSorterMode(mode)
 	})
 }
 
 // IInputMgr
 func (i *InputMgrImpl) GetGlobalMousePos() Vec2 {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return i.target().GetGlobalMousePos()
+		return binding.target().GetGlobalMousePos()
 	})
 }
 func (i *InputMgrImpl) GetKey(key int64) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().GetKey(key)
+		return binding.target().GetKey(key)
 	})
 }
 func (i *InputMgrImpl) GetMouseState(mouse_id int64) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().GetMouseState(mouse_id)
+		return binding.target().GetMouseState(mouse_id)
 	})
 }
 func (i *InputMgrImpl) GetKeyState(key int64) int64 {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return i.target().GetKeyState(key)
+		return binding.target().GetKeyState(key)
 	})
 }
 func (i *InputMgrImpl) GetAxis(neg_action string, pos_action string) float64 {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return i.target().GetAxis(neg_action, pos_action)
+		return binding.target().GetAxis(neg_action, pos_action)
 	})
 }
 func (i *InputMgrImpl) IsActionPressed(action string) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionPressed(action)
+		return binding.target().IsActionPressed(action)
 	})
 }
 func (i *InputMgrImpl) IsActionJustPressed(action string) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionJustPressed(action)
+		return binding.target().IsActionJustPressed(action)
 	})
 }
 func (i *InputMgrImpl) IsActionJustReleased(action string) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionJustReleased(action)
+		return binding.target().IsActionJustReleased(action)
 	})
 }
 func (i *InputMgrImpl) RegisterAction(action string) int64 {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return i.target().RegisterAction(action)
+		return binding.target().RegisterAction(action)
 	})
 }
 func (i *InputMgrImpl) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return i.target().GetAxisId(neg_action_id, pos_action_id)
+		return binding.target().GetAxisId(neg_action_id, pos_action_id)
 	})
 }
 func (i *InputMgrImpl) IsActionPressedId(action_id int64) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionPressedId(action_id)
+		return binding.target().IsActionPressedId(action_id)
 	})
 }
 func (i *InputMgrImpl) IsActionJustPressedId(action_id int64) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionJustPressedId(action_id)
+		return binding.target().IsActionJustPressedId(action_id)
 	})
 }
 func (i *InputMgrImpl) IsActionJustReleasedId(action_id int64) bool {
-	i.target()
+	binding := i.resolve()
 	return CallInMainThreadValue(func() bool {
-		return i.target().IsActionJustReleasedId(action_id)
+		return binding.target().IsActionJustReleasedId(action_id)
 	})
 }
 func (i *InputMgrImpl) WriteSnapshot(out *[3]float32) {
-	i.target()
+	binding := i.resolve()
 	CallInMainThread(func() {
-		i.target().WriteSnapshot(out)
+		binding.target().WriteSnapshot(out)
 	})
 }
 
 // INavigationMgr
 func (n *NavigationMgrImpl) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
-	n.target()
+	binding := n.resolve()
 	CallInMainThread(func() {
-		n.target().SetupPathFinderWithSize(grid_size, cell_size, with_jump, with_debug)
+		binding.target().SetupPathFinderWithSize(grid_size, cell_size, with_jump, with_debug)
 	})
 }
 func (n *NavigationMgrImpl) SetupPathFinder(with_jump bool) {
-	n.target()
+	binding := n.resolve()
 	CallInMainThread(func() {
-		n.target().SetupPathFinder(with_jump)
+		binding.target().SetupPathFinder(with_jump)
 	})
 }
 func (n *NavigationMgrImpl) SetObstacle(obj gdx.Object, enabled bool) {
-	n.target()
+	binding := n.resolve()
 	CallInMainThread(func() {
-		n.target().SetObstacle(obj, enabled)
+		binding.target().SetObstacle(obj, enabled)
 	})
 }
 func (n *NavigationMgrImpl) FindPath(p_from Vec2, p_to Vec2, with_jump bool) gdx.Array {
-	n.target()
+	binding := n.resolve()
 	return CallInMainThreadValue(func() gdx.Array {
-		return n.target().FindPath(p_from, p_to, with_jump)
+		return binding.target().FindPath(p_from, p_to, with_jump)
 	})
 }
 
 // IPenMgr
 func (p *PenMgrImpl) DestroyAllPens() {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().DestroyAllPens()
+		binding.target().DestroyAllPens()
 	})
 }
 func (p *PenMgrImpl) SetCanvasSize(width int64, height int64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetCanvasSize(width, height)
+		binding.target().SetCanvasSize(width, height)
 	})
 }
 func (p *PenMgrImpl) CreatePen() gdx.Object {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return p.target().CreatePen()
+		return binding.target().CreatePen()
 	})
 }
 func (p *PenMgrImpl) DestroyPen(obj gdx.Object) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().DestroyPen(obj)
+		binding.target().DestroyPen(obj)
 	})
 }
 func (p *PenMgrImpl) BatchUpdateCommands(buffer []float32) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().BatchUpdateCommands(buffer)
+		binding.target().BatchUpdateCommands(buffer)
 	})
 }
 func (p *PenMgrImpl) PenStamp(obj gdx.Object) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().PenStamp(obj)
+		binding.target().PenStamp(obj)
 	})
 }
 func (p *PenMgrImpl) PenStampSprite(sprite_id gdx.Object) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().PenStampSprite(sprite_id)
+		binding.target().PenStampSprite(sprite_id)
 	})
 }
 func (p *PenMgrImpl) MovePenTo(obj gdx.Object, position Vec2) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().MovePenTo(obj, position)
+		binding.target().MovePenTo(obj, position)
 	})
 }
 func (p *PenMgrImpl) RestorePenState(obj gdx.Object, position Vec2, is_down bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().RestorePenState(obj, position, is_down)
+		binding.target().RestorePenState(obj, position, is_down)
 	})
 }
 func (p *PenMgrImpl) PenDown(obj gdx.Object, move_by_mouse bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().PenDown(obj, move_by_mouse)
+		binding.target().PenDown(obj, move_by_mouse)
 	})
 }
 func (p *PenMgrImpl) PenUp(obj gdx.Object) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().PenUp(obj)
+		binding.target().PenUp(obj)
 	})
 }
 func (p *PenMgrImpl) SetPenColorTo(obj gdx.Object, color Color) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetPenColorTo(obj, color)
+		binding.target().SetPenColorTo(obj, color)
 	})
 }
 func (p *PenMgrImpl) ChangePenBy(obj gdx.Object, property int64, amount float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().ChangePenBy(obj, property, amount)
+		binding.target().ChangePenBy(obj, property, amount)
 	})
 }
 func (p *PenMgrImpl) SetPenTo(obj gdx.Object, property int64, value float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetPenTo(obj, property, value)
+		binding.target().SetPenTo(obj, property, value)
 	})
 }
 func (p *PenMgrImpl) ChangePenSizeBy(obj gdx.Object, amount float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().ChangePenSizeBy(obj, amount)
+		binding.target().ChangePenSizeBy(obj, amount)
 	})
 }
 func (p *PenMgrImpl) SetPenSizeTo(obj gdx.Object, size float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetPenSizeTo(obj, size)
+		binding.target().SetPenSizeTo(obj, size)
 	})
 }
 func (p *PenMgrImpl) SetPenStampTexture(obj gdx.Object, texture_path string) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetPenStampTexture(obj, texture_path)
+		binding.target().SetPenStampTexture(obj, texture_path)
 	})
 }
 func (p *PenMgrImpl) PenStampWithTransform(obj gdx.Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().PenStampWithTransform(obj, texture_path, position, rotation_radians, scale)
+		binding.target().PenStampWithTransform(obj, texture_path, position, rotation_radians, scale)
 	})
 }
 
 // IPhysicsMgr
 func (p *PhysicsMgrImpl) Raycast(from Vec2, to Vec2, collision_mask int64) gdx.Object {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return p.target().Raycast(from, to, collision_mask)
+		return binding.target().Raycast(from, to, collision_mask)
 	})
 }
 func (p *PhysicsMgrImpl) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
+		return binding.target().CheckCollision(from, to, collision_mask, collide_with_areas, collide_with_bodies)
 	})
 }
 func (p *PhysicsMgrImpl) CheckTouchedCameraBoundaries(obj gdx.Object) int64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return p.target().CheckTouchedCameraBoundaries(obj)
+		return binding.target().CheckTouchedCameraBoundaries(obj)
 	})
 }
 func (p *PhysicsMgrImpl) CheckTouchedCameraBoundary(obj gdx.Object, board_type int64) bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().CheckTouchedCameraBoundary(obj, board_type)
+		return binding.target().CheckTouchedCameraBoundary(obj, board_type)
 	})
 }
 func (p *PhysicsMgrImpl) CheckNearestTouchedCameraBoundary(obj gdx.Object) int64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return p.target().CheckNearestTouchedCameraBoundary(obj)
+		return binding.target().CheckNearestTouchedCameraBoundary(obj)
 	})
 }
 func (p *PhysicsMgrImpl) CheckTouchedStageBoundaries(obj gdx.Object) int64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return p.target().CheckTouchedStageBoundaries(obj)
+		return binding.target().CheckTouchedStageBoundaries(obj)
 	})
 }
 func (p *PhysicsMgrImpl) CheckTouchedStageBoundary(obj gdx.Object, board_type int64) bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().CheckTouchedStageBoundary(obj, board_type)
+		return binding.target().CheckTouchedStageBoundary(obj, board_type)
 	})
 }
 func (p *PhysicsMgrImpl) CheckNearestTouchedStageBoundary(obj gdx.Object) int64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return p.target().CheckNearestTouchedStageBoundary(obj)
+		return binding.target().CheckNearestTouchedStageBoundary(obj)
 	})
 }
 func (p *PhysicsMgrImpl) SetCollisionSystemType(is_collision_by_alpha bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetCollisionSystemType(is_collision_by_alpha)
+		binding.target().SetCollisionSystemType(is_collision_by_alpha)
 	})
 }
 func (p *PhysicsMgrImpl) SetGlobalGravity(gravity float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetGlobalGravity(gravity)
+		binding.target().SetGlobalGravity(gravity)
 	})
 }
 func (p *PhysicsMgrImpl) GetGlobalGravity() float64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return p.target().GetGlobalGravity()
+		return binding.target().GetGlobalGravity()
 	})
 }
 func (p *PhysicsMgrImpl) SetGlobalFriction(friction float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetGlobalFriction(friction)
+		binding.target().SetGlobalFriction(friction)
 	})
 }
 func (p *PhysicsMgrImpl) GetGlobalFriction() float64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return p.target().GetGlobalFriction()
+		return binding.target().GetGlobalFriction()
 	})
 }
 func (p *PhysicsMgrImpl) SetGlobalAirDrag(air_drag float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetGlobalAirDrag(air_drag)
+		binding.target().SetGlobalAirDrag(air_drag)
 	})
 }
 func (p *PhysicsMgrImpl) GetGlobalAirDrag() float64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return p.target().GetGlobalAirDrag()
+		return binding.target().GetGlobalAirDrag()
 	})
 }
 func (p *PhysicsMgrImpl) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) gdx.Array {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() gdx.Array {
-		return p.target().CheckCollisionRect(pos, size, collision_mask)
+		return binding.target().CheckCollisionRect(pos, size, collision_mask)
 	})
 }
 func (p *PhysicsMgrImpl) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) gdx.Array {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() gdx.Array {
-		return p.target().CheckCollisionCircle(pos, radius, collision_mask)
+		return binding.target().CheckCollisionCircle(pos, radius, collision_mask)
 	})
 }
 func (p *PhysicsMgrImpl) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites gdx.Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) gdx.Array {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() gdx.Array {
-		return p.target().RaycastWithDetails(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies)
+		return binding.target().RaycastWithDetails(from, to, ignore_sprites, collision_mask, collide_with_areas, collide_with_bodies)
 	})
 }
 
 // IPlatformMgr
 func (p *PlatformMgrImpl) SetStretch(enabled bool, content_width int64, content_height int64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetStretch(enabled, content_width, content_height)
+		binding.target().SetStretch(enabled, content_width, content_height)
 	})
 }
 func (p *PlatformMgrImpl) SetWindowPosition(pos Vec2) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetWindowPosition(pos)
+		binding.target().SetWindowPosition(pos)
 	})
 }
 func (p *PlatformMgrImpl) GetWindowPosition() Vec2 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return p.target().GetWindowPosition()
+		return binding.target().GetWindowPosition()
 	})
 }
 func (p *PlatformMgrImpl) SetWindowSize(width int64, height int64, with_content_scale bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetWindowSize(width, height, with_content_scale)
+		binding.target().SetWindowSize(width, height, with_content_scale)
 	})
 }
 func (p *PlatformMgrImpl) GetWindowSize() Vec2 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return p.target().GetWindowSize()
+		return binding.target().GetWindowSize()
 	})
 }
 func (p *PlatformMgrImpl) SetWindowTitle(title string) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetWindowTitle(title)
+		binding.target().SetWindowTitle(title)
 	})
 }
 func (p *PlatformMgrImpl) GetWindowTitle() string {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() string {
-		return p.target().GetWindowTitle()
+		return binding.target().GetWindowTitle()
 	})
 }
 func (p *PlatformMgrImpl) SetWindowFullscreen(enable bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetWindowFullscreen(enable)
+		binding.target().SetWindowFullscreen(enable)
 	})
 }
 func (p *PlatformMgrImpl) IsWindowFullscreen() bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().IsWindowFullscreen()
+		return binding.target().IsWindowFullscreen()
 	})
 }
 func (p *PlatformMgrImpl) SetDebugMode(enable bool) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetDebugMode(enable)
+		binding.target().SetDebugMode(enable)
 	})
 }
 func (p *PlatformMgrImpl) IsDebugMode() bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().IsDebugMode()
+		return binding.target().IsDebugMode()
 	})
 }
 func (p *PlatformMgrImpl) IsMainThread() bool {
-	return p.target().IsMainThread()
+	binding := p.resolve()
+	return binding.target().IsMainThread()
 }
 func (p *PlatformMgrImpl) GetTimeScale() float64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return p.target().GetTimeScale()
+		return binding.target().GetTimeScale()
 	})
 }
 func (p *PlatformMgrImpl) SetTimeScale(time_scale float64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetTimeScale(time_scale)
+		binding.target().SetTimeScale(time_scale)
 	})
 }
 func (p *PlatformMgrImpl) GetMaxFps() int64 {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return p.target().GetMaxFps()
+		return binding.target().GetMaxFps()
 	})
 }
 func (p *PlatformMgrImpl) SetMaxFps(fps int64) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetMaxFps(fps)
+		binding.target().SetMaxFps(fps)
 	})
 }
 func (p *PlatformMgrImpl) GetPersistentDataDir() string {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() string {
-		return p.target().GetPersistentDataDir()
+		return binding.target().GetPersistentDataDir()
 	})
 }
 func (p *PlatformMgrImpl) SetPersistentDataDir(path string) {
-	p.target()
+	binding := p.resolve()
 	CallInMainThread(func() {
-		p.target().SetPersistentDataDir(path)
+		binding.target().SetPersistentDataDir(path)
 	})
 }
 func (p *PlatformMgrImpl) IsInPersistentDataDir(path string) bool {
-	p.target()
+	binding := p.resolve()
 	return CallInMainThreadValue(func() bool {
-		return p.target().IsInPersistentDataDir(path)
+		return binding.target().IsInPersistentDataDir(path)
 	})
 }
 
 // IResMgr
 func (r *ResMgrImpl) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().CreateAnimation(p_sprite_type, p_anim_name, p_json_ctx, fps, is_atlas)
+		binding.target().CreateAnimation(p_sprite_type, p_anim_name, p_json_ctx, fps, is_atlas)
 	})
 }
 func (r *ResMgrImpl) SetLoadMode(is_direct_mode bool) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().SetLoadMode(is_direct_mode)
+		binding.target().SetLoadMode(is_direct_mode)
 	})
 }
 func (r *ResMgrImpl) GetLoadMode() bool {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() bool {
-		return r.target().GetLoadMode()
+		return binding.target().GetLoadMode()
 	})
 }
 func (r *ResMgrImpl) GetBoundFromAlpha(p_path string) Rect2 {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() Rect2 {
-		return r.target().GetBoundFromAlpha(p_path)
+		return binding.target().GetBoundFromAlpha(p_path)
 	})
 }
 func (r *ResMgrImpl) GetImageSize(p_path string) Vec2 {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return r.target().GetImageSize(p_path)
+		return binding.target().GetImageSize(p_path)
 	})
 }
 func (r *ResMgrImpl) GetImageLogicalSize(p_path string) Vec2 {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return r.target().GetImageLogicalSize(p_path)
+		return binding.target().GetImageLogicalSize(p_path)
 	})
 }
 func (r *ResMgrImpl) ReadAllText(p_path string) string {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() string {
-		return r.target().ReadAllText(p_path)
+		return binding.target().ReadAllText(p_path)
 	})
 }
 func (r *ResMgrImpl) HasFile(p_path string) bool {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() bool {
-		return r.target().HasFile(p_path)
+		return binding.target().HasFile(p_path)
 	})
 }
 func (r *ResMgrImpl) ListDirectories(p_path string) string {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() string {
-		return r.target().ListDirectories(p_path)
+		return binding.target().ListDirectories(p_path)
 	})
 }
 func (r *ResMgrImpl) ReloadTexture(path string) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().ReloadTexture(path)
+		binding.target().ReloadTexture(path)
 	})
 }
 func (r *ResMgrImpl) ApplyProjectFonts(default_font_path string, font_paths gdx.Array, font_families gdx.Array, preferences gdx.Array) string {
-	r.target()
+	binding := r.resolve()
 	return CallInMainThreadValue(func() string {
-		return r.target().ApplyProjectFonts(default_font_path, font_paths, font_families, preferences)
+		return binding.target().ApplyProjectFonts(default_font_path, font_paths, font_families, preferences)
 	})
 }
 func (r *ResMgrImpl) SetDefaultFont(font_path string) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().SetDefaultFont(font_path)
+		binding.target().SetDefaultFont(font_path)
 	})
 }
 func (r *ResMgrImpl) RegisterFontFace(font_path string, family string) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().RegisterFontFace(font_path, family)
+		binding.target().RegisterFontFace(font_path, family)
 	})
 }
 func (r *ResMgrImpl) SetFontPreferences(preferences gdx.Array) {
-	r.target()
+	binding := r.resolve()
 	CallInMainThread(func() {
-		r.target().SetFontPreferences(preferences)
+		binding.target().SetFontPreferences(preferences)
 	})
 }
 
 // ISceneMgr
 func (s *SceneMgrImpl) ChangeSceneToFile(path string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().ChangeSceneToFile(path)
+		binding.target().ChangeSceneToFile(path)
 	})
 }
 func (s *SceneMgrImpl) DestroyAllSprites() {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().DestroyAllSprites()
+		binding.target().DestroyAllSprites()
 	})
 }
 func (s *SceneMgrImpl) ReloadCurrentScene() int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().ReloadCurrentScene()
+		return binding.target().ReloadCurrentScene()
 	})
 }
 func (s *SceneMgrImpl) UnloadCurrentScene() {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().UnloadCurrentScene()
+		binding.target().UnloadCurrentScene()
 	})
 }
 func (s *SceneMgrImpl) ClearPureSprites() {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().ClearPureSprites()
+		binding.target().ClearPureSprites()
 	})
 }
 func (s *SceneMgrImpl) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().CreatePureSprite(texture_path, pos, zindex)
+		binding.target().CreatePureSprite(texture_path, pos, zindex)
 	})
 }
 func (s *SceneMgrImpl) DestroyPureSprite(id gdx.Object) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().DestroyPureSprite(id)
+		binding.target().DestroyPureSprite(id)
 	})
 }
 func (s *SceneMgrImpl) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CreateRenderSprite(texture_path, pos, degree, scale, zindex, pivot)
+		return binding.target().CreateRenderSprite(texture_path, pos, degree, scale, zindex, pivot)
 	})
 }
 func (s *SceneMgrImpl) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params gdx.Array) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CreateStaticSprite(texture_path, pos, degree, scale, zindex, pivot, collider_type, collider_pivot, collider_params)
+		return binding.target().CreateStaticSprite(texture_path, pos, degree, scale, zindex, pivot, collider_type, collider_pivot, collider_params)
 	})
 }
 
 // ISpriteMgr
 func (s *SpriteMgrImpl) SetDontDestroyOnLoad(obj gdx.Object) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetDontDestroyOnLoad(obj)
+		binding.target().SetDontDestroyOnLoad(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetProcess(obj gdx.Object, is_on bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetProcess(obj, is_on)
+		binding.target().SetProcess(obj, is_on)
 	})
 }
 func (s *SpriteMgrImpl) SetPhysicProcess(obj gdx.Object, is_on bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetPhysicProcess(obj, is_on)
+		binding.target().SetPhysicProcess(obj, is_on)
 	})
 }
 func (s *SpriteMgrImpl) SetTypeName(obj gdx.Object, type_name string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTypeName(obj, type_name)
+		binding.target().SetTypeName(obj, type_name)
 	})
 }
 func (s *SpriteMgrImpl) SetPivot(obj gdx.Object, pivot Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetPivot(obj, pivot)
+		binding.target().SetPivot(obj, pivot)
 	})
 }
 func (s *SpriteMgrImpl) GetPivot(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetPivot(obj)
+		return binding.target().GetPivot(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetChildPosition(obj gdx.Object, path string, pos Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetChildPosition(obj, path, pos)
+		binding.target().SetChildPosition(obj, path, pos)
 	})
 }
 func (s *SpriteMgrImpl) GetChildPosition(obj gdx.Object, path string) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetChildPosition(obj, path)
+		return binding.target().GetChildPosition(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) SetChildRotation(obj gdx.Object, path string, rot float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetChildRotation(obj, path, rot)
+		binding.target().SetChildRotation(obj, path, rot)
 	})
 }
 func (s *SpriteMgrImpl) GetChildRotation(obj gdx.Object, path string) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetChildRotation(obj, path)
+		return binding.target().GetChildRotation(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) SetChildScale(obj gdx.Object, path string, scale Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetChildScale(obj, path, scale)
+		binding.target().SetChildScale(obj, path, scale)
 	})
 }
 func (s *SpriteMgrImpl) GetChildScale(obj gdx.Object, path string) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetChildScale(obj, path)
+		return binding.target().GetChildScale(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollision(obj gdx.Object, target gdx.Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollision(obj, target, is_src_trigger, is_dst_trigger)
+		return binding.target().CheckCollision(obj, target, is_src_trigger, is_dst_trigger)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollisionWithPoint(obj gdx.Object, point Vec2, is_click_query bool) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollisionWithPoint(obj, point, is_click_query)
+		return binding.target().CheckCollisionWithPoint(obj, point, is_click_query)
 	})
 }
 func (s *SpriteMgrImpl) SetDebugCollisionVisible(obj gdx.Object, visible bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetDebugCollisionVisible(obj, visible)
+		binding.target().SetDebugCollisionVisible(obj, visible)
 	})
 }
 func (s *SpriteMgrImpl) IsDebugCollisionVisible(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsDebugCollisionVisible(obj)
+		return binding.target().IsDebugCollisionVisible(obj)
 	})
 }
 func (s *SpriteMgrImpl) CreateBackdrop(path string) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CreateBackdrop(path)
+		return binding.target().CreateBackdrop(path)
 	})
 }
 func (s *SpriteMgrImpl) CreateSprite(path string, pos Vec2) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CreateSprite(path, pos)
+		return binding.target().CreateSprite(path, pos)
 	})
 }
 func (s *SpriteMgrImpl) CreateBareSprite(pos Vec2) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CreateBareSprite(pos)
+		return binding.target().CreateBareSprite(pos)
 	})
 }
 func (s *SpriteMgrImpl) CloneSprite(obj gdx.Object) gdx.Object {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return s.target().CloneSprite(obj)
+		return binding.target().CloneSprite(obj)
 	})
 }
 func (s *SpriteMgrImpl) DestroySprite(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().DestroySprite(obj)
+		return binding.target().DestroySprite(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsSpriteAlive(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsSpriteAlive(obj)
+		return binding.target().IsSpriteAlive(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetPosition(obj gdx.Object, pos Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetPosition(obj, pos)
+		binding.target().SetPosition(obj, pos)
 	})
 }
 func (s *SpriteMgrImpl) SetTransform(obj gdx.Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTransform(obj, pos, rot, scale, visible, pivot)
+		binding.target().SetTransform(obj, pos, rot, scale, visible, pivot)
 	})
 }
 func (s *SpriteMgrImpl) GetPosition(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetPosition(obj)
+		return binding.target().GetPosition(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetRotation(obj gdx.Object, rot float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetRotation(obj, rot)
+		binding.target().SetRotation(obj, rot)
 	})
 }
 func (s *SpriteMgrImpl) GetRotation(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetRotation(obj)
+		return binding.target().GetRotation(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetScale(obj gdx.Object, scale Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetScale(obj, scale)
+		binding.target().SetScale(obj, scale)
 	})
 }
 func (s *SpriteMgrImpl) GetScale(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetScale(obj)
+		return binding.target().GetScale(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetRenderScale(obj gdx.Object, scale Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetRenderScale(obj, scale)
+		binding.target().SetRenderScale(obj, scale)
 	})
 }
 func (s *SpriteMgrImpl) GetRenderScale(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetRenderScale(obj)
+		return binding.target().GetRenderScale(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetColor(obj gdx.Object, color Color) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetColor(obj, color)
+		binding.target().SetColor(obj, color)
 	})
 }
 func (s *SpriteMgrImpl) GetColor(obj gdx.Object) Color {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Color {
-		return s.target().GetColor(obj)
+		return binding.target().GetColor(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetMaterialShader(obj gdx.Object, path string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMaterialShader(obj, path)
+		binding.target().SetMaterialShader(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) GetMaterialShader(obj gdx.Object) string {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() string {
-		return s.target().GetMaterialShader(obj)
+		return binding.target().GetMaterialShader(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetMaterialParams(obj gdx.Object, effect string, amount float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMaterialParams(obj, effect, amount)
+		binding.target().SetMaterialParams(obj, effect, amount)
 	})
 }
 func (s *SpriteMgrImpl) GetMaterialParams(obj gdx.Object, effect string) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetMaterialParams(obj, effect)
+		return binding.target().GetMaterialParams(obj, effect)
 	})
 }
 func (s *SpriteMgrImpl) SetMaterialParamsVec(obj gdx.Object, effect string, x float64, y float64, z float64, w float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMaterialParamsVec(obj, effect, x, y, z, w)
+		binding.target().SetMaterialParamsVec(obj, effect, x, y, z, w)
 	})
 }
 func (s *SpriteMgrImpl) SetMaterialParamsVec4(obj gdx.Object, effect string, vec4 Vec4) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMaterialParamsVec4(obj, effect, vec4)
+		binding.target().SetMaterialParamsVec4(obj, effect, vec4)
 	})
 }
 func (s *SpriteMgrImpl) GetMaterialParamsVec4(obj gdx.Object, effect string) Vec4 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec4 {
-		return s.target().GetMaterialParamsVec4(obj, effect)
+		return binding.target().GetMaterialParamsVec4(obj, effect)
 	})
 }
 func (s *SpriteMgrImpl) SetMaterialParamsColor(obj gdx.Object, effect string, color Color) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMaterialParamsColor(obj, effect, color)
+		binding.target().SetMaterialParamsColor(obj, effect, color)
 	})
 }
 func (s *SpriteMgrImpl) GetMaterialParamsColor(obj gdx.Object, effect string) Color {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Color {
-		return s.target().GetMaterialParamsColor(obj, effect)
+		return binding.target().GetMaterialParamsColor(obj, effect)
 	})
 }
 func (s *SpriteMgrImpl) SetTextureAtlas(obj gdx.Object, path string, rect2 Rect2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTextureAtlas(obj, path, rect2)
+		binding.target().SetTextureAtlas(obj, path, rect2)
 	})
 }
 func (s *SpriteMgrImpl) SetTexture(obj gdx.Object, path string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTexture(obj, path)
+		binding.target().SetTexture(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) SetTextureAtlasDirect(obj gdx.Object, path string, rect2 Rect2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTextureAtlasDirect(obj, path, rect2)
+		binding.target().SetTextureAtlasDirect(obj, path, rect2)
 	})
 }
 func (s *SpriteMgrImpl) SetTextureDirect(obj gdx.Object, path string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTextureDirect(obj, path)
+		binding.target().SetTextureDirect(obj, path)
 	})
 }
 func (s *SpriteMgrImpl) GetTexture(obj gdx.Object) string {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() string {
-		return s.target().GetTexture(obj)
+		return binding.target().GetTexture(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetVisible(obj gdx.Object, visible bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetVisible(obj, visible)
+		binding.target().SetVisible(obj, visible)
 	})
 }
 func (s *SpriteMgrImpl) GetVisible(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().GetVisible(obj)
+		return binding.target().GetVisible(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetZIndex(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetZIndex(obj)
+		return binding.target().GetZIndex(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetZIndex(obj gdx.Object, z int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetZIndex(obj, z)
+		binding.target().SetZIndex(obj, z)
 	})
 }
 func (s *SpriteMgrImpl) PlayAnim(obj gdx.Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().PlayAnim(obj, p_name, p_speed, isLoop, p_revert)
+		binding.target().PlayAnim(obj, p_name, p_speed, isLoop, p_revert)
 	})
 }
 func (s *SpriteMgrImpl) PlayBackwardsAnim(obj gdx.Object, p_name string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().PlayBackwardsAnim(obj, p_name)
+		binding.target().PlayBackwardsAnim(obj, p_name)
 	})
 }
 func (s *SpriteMgrImpl) PauseAnim(obj gdx.Object) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().PauseAnim(obj)
+		binding.target().PauseAnim(obj)
 	})
 }
 func (s *SpriteMgrImpl) StopAnim(obj gdx.Object) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().StopAnim(obj)
+		binding.target().StopAnim(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsPlayingAnim(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsPlayingAnim(obj)
+		return binding.target().IsPlayingAnim(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnim(obj gdx.Object, p_name string) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnim(obj, p_name)
+		binding.target().SetAnim(obj, p_name)
 	})
 }
 func (s *SpriteMgrImpl) GetAnim(obj gdx.Object) string {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() string {
-		return s.target().GetAnim(obj)
+		return binding.target().GetAnim(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimFrame(obj gdx.Object, p_frame int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimFrame(obj, p_frame)
+		binding.target().SetAnimFrame(obj, p_frame)
 	})
 }
 func (s *SpriteMgrImpl) GetAnimFrame(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetAnimFrame(obj)
+		return binding.target().GetAnimFrame(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimSpeedScale(obj gdx.Object, p_speed_scale float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimSpeedScale(obj, p_speed_scale)
+		binding.target().SetAnimSpeedScale(obj, p_speed_scale)
 	})
 }
 func (s *SpriteMgrImpl) GetAnimSpeedScale(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetAnimSpeedScale(obj)
+		return binding.target().GetAnimSpeedScale(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetAnimPlayingSpeed(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetAnimPlayingSpeed(obj)
+		return binding.target().GetAnimPlayingSpeed(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimCentered(obj gdx.Object, p_center bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimCentered(obj, p_center)
+		binding.target().SetAnimCentered(obj, p_center)
 	})
 }
 func (s *SpriteMgrImpl) IsAnimCentered(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsAnimCentered(obj)
+		return binding.target().IsAnimCentered(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimOffset(obj gdx.Object, p_offset Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimOffset(obj, p_offset)
+		binding.target().SetAnimOffset(obj, p_offset)
 	})
 }
 func (s *SpriteMgrImpl) GetAnimOffset(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetAnimOffset(obj)
+		return binding.target().GetAnimOffset(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimFlipH(obj gdx.Object, p_flip bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimFlipH(obj, p_flip)
+		binding.target().SetAnimFlipH(obj, p_flip)
 	})
 }
 func (s *SpriteMgrImpl) IsAnimFlippedH(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsAnimFlippedH(obj)
+		return binding.target().IsAnimFlippedH(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetAnimFlipV(obj gdx.Object, p_flip bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetAnimFlipV(obj, p_flip)
+		binding.target().SetAnimFlipV(obj, p_flip)
 	})
 }
 func (s *SpriteMgrImpl) IsAnimFlippedV(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsAnimFlippedV(obj)
+		return binding.target().IsAnimFlippedV(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetCurrentAnimName(obj gdx.Object) string {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() string {
-		return s.target().GetCurrentAnimName(obj)
+		return binding.target().GetCurrentAnimName(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetVelocity(obj gdx.Object, velocity Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetVelocity(obj, velocity)
+		binding.target().SetVelocity(obj, velocity)
 	})
 }
 func (s *SpriteMgrImpl) GetVelocity(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetVelocity(obj)
+		return binding.target().GetVelocity(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnFloor(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnFloor(obj)
+		return binding.target().IsOnFloor(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnFloorOnly(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnFloorOnly(obj)
+		return binding.target().IsOnFloorOnly(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnWall(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnWall(obj)
+		return binding.target().IsOnWall(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnWallOnly(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnWallOnly(obj)
+		return binding.target().IsOnWallOnly(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnCeiling(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnCeiling(obj)
+		return binding.target().IsOnCeiling(obj)
 	})
 }
 func (s *SpriteMgrImpl) IsOnCeilingOnly(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsOnCeilingOnly(obj)
+		return binding.target().IsOnCeilingOnly(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetLastMotion(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetLastMotion(obj)
+		return binding.target().GetLastMotion(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetPositionDelta(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetPositionDelta(obj)
+		return binding.target().GetPositionDelta(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetFloorNormal(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetFloorNormal(obj)
+		return binding.target().GetFloorNormal(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetWallNormal(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetWallNormal(obj)
+		return binding.target().GetWallNormal(obj)
 	})
 }
 func (s *SpriteMgrImpl) GetRealVelocity(obj gdx.Object) Vec2 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return s.target().GetRealVelocity(obj)
+		return binding.target().GetRealVelocity(obj)
 	})
 }
 func (s *SpriteMgrImpl) MoveAndSlide(obj gdx.Object) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().MoveAndSlide(obj)
+		binding.target().MoveAndSlide(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetGravity(obj gdx.Object, gravity float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetGravity(obj, gravity)
+		binding.target().SetGravity(obj, gravity)
 	})
 }
 func (s *SpriteMgrImpl) GetGravity(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetGravity(obj)
+		return binding.target().GetGravity(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetMass(obj gdx.Object, mass float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetMass(obj, mass)
+		binding.target().SetMass(obj, mass)
 	})
 }
 func (s *SpriteMgrImpl) GetMass(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetMass(obj)
+		return binding.target().GetMass(obj)
 	})
 }
 func (s *SpriteMgrImpl) AddForce(obj gdx.Object, force Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().AddForce(obj, force)
+		binding.target().AddForce(obj, force)
 	})
 }
 func (s *SpriteMgrImpl) AddImpulse(obj gdx.Object, impulse Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().AddImpulse(obj, impulse)
+		binding.target().AddImpulse(obj, impulse)
 	})
 }
 func (s *SpriteMgrImpl) SetPhysicsMode(obj gdx.Object, mode int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetPhysicsMode(obj, mode)
+		binding.target().SetPhysicsMode(obj, mode)
 	})
 }
 func (s *SpriteMgrImpl) GetPhysicsMode(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetPhysicsMode(obj)
+		return binding.target().GetPhysicsMode(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetUseGravity(obj gdx.Object, enabled bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetUseGravity(obj, enabled)
+		binding.target().SetUseGravity(obj, enabled)
 	})
 }
 func (s *SpriteMgrImpl) IsUseGravity(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsUseGravity(obj)
+		return binding.target().IsUseGravity(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetGravityScale(obj gdx.Object, scale float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetGravityScale(obj, scale)
+		binding.target().SetGravityScale(obj, scale)
 	})
 }
 func (s *SpriteMgrImpl) GetGravityScale(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetGravityScale(obj)
+		return binding.target().GetGravityScale(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetDrag(obj gdx.Object, drag float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetDrag(obj, drag)
+		binding.target().SetDrag(obj, drag)
 	})
 }
 func (s *SpriteMgrImpl) GetDrag(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetDrag(obj)
+		return binding.target().GetDrag(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetFriction(obj gdx.Object, friction float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetFriction(obj, friction)
+		binding.target().SetFriction(obj, friction)
 	})
 }
 func (s *SpriteMgrImpl) GetFriction(obj gdx.Object) float64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return s.target().GetFriction(obj)
+		return binding.target().GetFriction(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetCollisionLayer(obj gdx.Object, layer int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetCollisionLayer(obj, layer)
+		binding.target().SetCollisionLayer(obj, layer)
 	})
 }
 func (s *SpriteMgrImpl) GetCollisionLayer(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetCollisionLayer(obj)
+		return binding.target().GetCollisionLayer(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetCollisionMask(obj gdx.Object, mask int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetCollisionMask(obj, mask)
+		binding.target().SetCollisionMask(obj, mask)
 	})
 }
 func (s *SpriteMgrImpl) GetCollisionMask(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetCollisionMask(obj)
+		return binding.target().GetCollisionMask(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerLayer(obj gdx.Object, layer int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerLayer(obj, layer)
+		binding.target().SetTriggerLayer(obj, layer)
 	})
 }
 func (s *SpriteMgrImpl) GetTriggerLayer(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetTriggerLayer(obj)
+		return binding.target().GetTriggerLayer(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerMask(obj gdx.Object, mask int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerMask(obj, mask)
+		binding.target().SetTriggerMask(obj, mask)
 	})
 }
 func (s *SpriteMgrImpl) GetTriggerMask(obj gdx.Object) int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetTriggerMask(obj)
+		return binding.target().GetTriggerMask(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetColliderRect(obj gdx.Object, center Vec2, size Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetColliderRect(obj, center, size)
+		binding.target().SetColliderRect(obj, center, size)
 	})
 }
 func (s *SpriteMgrImpl) SetColliderCircle(obj gdx.Object, center Vec2, radius float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetColliderCircle(obj, center, radius)
+		binding.target().SetColliderCircle(obj, center, radius)
 	})
 }
 func (s *SpriteMgrImpl) SetColliderCapsule(obj gdx.Object, center Vec2, size Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetColliderCapsule(obj, center, size)
+		binding.target().SetColliderCapsule(obj, center, size)
 	})
 }
 func (s *SpriteMgrImpl) SetColliderPolygon(obj gdx.Object, center Vec2, points gdx.Array) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetColliderPolygon(obj, center, points)
+		binding.target().SetColliderPolygon(obj, center, points)
 	})
 }
 func (s *SpriteMgrImpl) SetCollisionEnabled(obj gdx.Object, enabled bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetCollisionEnabled(obj, enabled)
+		binding.target().SetCollisionEnabled(obj, enabled)
 	})
 }
 func (s *SpriteMgrImpl) IsCollisionEnabled(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsCollisionEnabled(obj)
+		return binding.target().IsCollisionEnabled(obj)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerRect(obj gdx.Object, center Vec2, size Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerRect(obj, center, size)
+		binding.target().SetTriggerRect(obj, center, size)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerCircle(obj gdx.Object, center Vec2, radius float64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerCircle(obj, center, radius)
+		binding.target().SetTriggerCircle(obj, center, radius)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerCapsule(obj gdx.Object, center Vec2, size Vec2) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerCapsule(obj, center, size)
+		binding.target().SetTriggerCapsule(obj, center, size)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerPolygon(obj gdx.Object, center Vec2, points gdx.Array) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerPolygon(obj, center, points)
+		binding.target().SetTriggerPolygon(obj, center, points)
 	})
 }
 func (s *SpriteMgrImpl) SetTriggerEnabled(obj gdx.Object, trigger bool) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetTriggerEnabled(obj, trigger)
+		binding.target().SetTriggerEnabled(obj, trigger)
 	})
 }
 func (s *SpriteMgrImpl) IsTriggerEnabled(obj gdx.Object) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().IsTriggerEnabled(obj)
+		return binding.target().IsTriggerEnabled(obj)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollisionByColor(obj gdx.Object, color Color, color_threshold float64, alpha_threshold float64) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollisionByColor(obj, color, color_threshold, alpha_threshold)
+		return binding.target().CheckCollisionByColor(obj, color, color_threshold, alpha_threshold)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollisionByColors(obj gdx.Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollisionByColors(obj, sprite_color, target_color, color_threshold, alpha_threshold)
+		return binding.target().CheckCollisionByColors(obj, sprite_color, target_color, color_threshold, alpha_threshold)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollisionByAlpha(obj gdx.Object, alpha_threshold float64) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollisionByAlpha(obj, alpha_threshold)
+		return binding.target().CheckCollisionByAlpha(obj, alpha_threshold)
 	})
 }
 func (s *SpriteMgrImpl) CheckCollisionWithSprite(obj gdx.Object, obj_b gdx.Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixel_perfect)
+		return binding.target().CheckCollisionWithSprite(obj, obj_b, alpha_threshold, use_pixel_perfect)
 	})
 }
 func (s *SpriteMgrImpl) SetPixelCollisionSamplingStep(step int64) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().SetPixelCollisionSamplingStep(step)
+		binding.target().SetPixelCollisionSamplingStep(step)
 	})
 }
 func (s *SpriteMgrImpl) GetPixelCollisionSamplingStep() int64 {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return s.target().GetPixelCollisionSamplingStep()
+		return binding.target().GetPixelCollisionSamplingStep()
 	})
 }
 func (s *SpriteMgrImpl) BatchUpdateTransforms(buffer []float32) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().BatchUpdateTransforms(buffer)
+		binding.target().BatchUpdateTransforms(buffer)
 	})
 }
 func (s *SpriteMgrImpl) BatchUpdateVisuals(buffer []float32) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().BatchUpdateVisuals(buffer)
+		binding.target().BatchUpdateVisuals(buffer)
 	})
 }
 func (s *SpriteMgrImpl) BatchRetrievePositions(objs []int64, out []float32) bool {
-	s.target()
+	binding := s.resolve()
 	return CallInMainThreadValue(func() bool {
-		return s.target().BatchRetrievePositions(objs, out)
+		return binding.target().BatchRetrievePositions(objs, out)
 	})
 }
 func (s *SpriteMgrImpl) BatchUpdatePhysics(buffer []float32) {
-	s.target()
+	binding := s.resolve()
 	CallInMainThread(func() {
-		s.target().BatchUpdatePhysics(buffer)
+		binding.target().BatchUpdatePhysics(buffer)
 	})
 }
 
 // ITilemapMgr
 func (t *TilemapMgrImpl) OpenDrawTilesWithSize(tile_size int64) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().OpenDrawTilesWithSize(tile_size)
+		binding.target().OpenDrawTilesWithSize(tile_size)
 	})
 }
 func (t *TilemapMgrImpl) OpenDrawTiles() {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().OpenDrawTiles()
+		binding.target().OpenDrawTiles()
 	})
 }
 func (t *TilemapMgrImpl) SetLayerIndex(index int64) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().SetLayerIndex(index)
+		binding.target().SetLayerIndex(index)
 	})
 }
 func (t *TilemapMgrImpl) SetTile(texture_path string, with_collision bool) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().SetTile(texture_path, with_collision)
+		binding.target().SetTile(texture_path, with_collision)
 	})
 }
 func (t *TilemapMgrImpl) SetTileWithCollisionInfo(texture_path string, collision_points gdx.Array) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().SetTileWithCollisionInfo(texture_path, collision_points)
+		binding.target().SetTileWithCollisionInfo(texture_path, collision_points)
 	})
 }
 func (t *TilemapMgrImpl) SetLayerOffset(index int64, offset Vec2) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().SetLayerOffset(index, offset)
+		binding.target().SetLayerOffset(index, offset)
 	})
 }
 func (t *TilemapMgrImpl) GetLayerOffset(index int64) Vec2 {
-	t.target()
+	binding := t.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return t.target().GetLayerOffset(index)
+		return binding.target().GetLayerOffset(index)
 	})
 }
 func (t *TilemapMgrImpl) PlaceTiles(positions gdx.Array, texture_path string) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().PlaceTiles(positions, texture_path)
+		binding.target().PlaceTiles(positions, texture_path)
 	})
 }
 func (t *TilemapMgrImpl) PlaceTilesWithLayer(positions gdx.Array, texture_path string, layer_index int64) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().PlaceTilesWithLayer(positions, texture_path, layer_index)
+		binding.target().PlaceTilesWithLayer(positions, texture_path, layer_index)
 	})
 }
 func (t *TilemapMgrImpl) PlaceTile(pos Vec2, texture_path string) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().PlaceTile(pos, texture_path)
+		binding.target().PlaceTile(pos, texture_path)
 	})
 }
 func (t *TilemapMgrImpl) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().PlaceTileWithLayer(pos, texture_path, layer_index)
+		binding.target().PlaceTileWithLayer(pos, texture_path, layer_index)
 	})
 }
 func (t *TilemapMgrImpl) EraseTile(pos Vec2) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().EraseTile(pos)
+		binding.target().EraseTile(pos)
 	})
 }
 func (t *TilemapMgrImpl) EraseTileWithLayer(pos Vec2, layer_index int64) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().EraseTileWithLayer(pos, layer_index)
+		binding.target().EraseTileWithLayer(pos, layer_index)
 	})
 }
 func (t *TilemapMgrImpl) GetTile(pos Vec2) string {
-	t.target()
+	binding := t.resolve()
 	return CallInMainThreadValue(func() string {
-		return t.target().GetTile(pos)
+		return binding.target().GetTile(pos)
 	})
 }
 func (t *TilemapMgrImpl) GetTileWithLayer(pos Vec2, layer_index int64) string {
-	t.target()
+	binding := t.resolve()
 	return CallInMainThreadValue(func() string {
-		return t.target().GetTileWithLayer(pos, layer_index)
+		return binding.target().GetTileWithLayer(pos, layer_index)
 	})
 }
 func (t *TilemapMgrImpl) CloseDrawTiles() {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().CloseDrawTiles()
+		binding.target().CloseDrawTiles()
 	})
 }
 func (t *TilemapMgrImpl) ExitTilemapEditorMode() {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().ExitTilemapEditorMode()
+		binding.target().ExitTilemapEditorMode()
 	})
 }
 
 // ITilemapparserMgr
 func (t *TilemapparserMgrImpl) LoadTilemap(json_path string) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().LoadTilemap(json_path)
+		binding.target().LoadTilemap(json_path)
 	})
 }
 func (t *TilemapparserMgrImpl) UnloadTilemap(name string) {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().UnloadTilemap(name)
+		binding.target().UnloadTilemap(name)
 	})
 }
 func (t *TilemapparserMgrImpl) DestroyAllTilemaps() {
-	t.target()
+	binding := t.resolve()
 	CallInMainThread(func() {
-		t.target().DestroyAllTilemaps()
+		binding.target().DestroyAllTilemaps()
 	})
 }
 func (t *TilemapparserMgrImpl) HasTilemap(name string) bool {
-	t.target()
+	binding := t.resolve()
 	return CallInMainThreadValue(func() bool {
-		return t.target().HasTilemap(name)
+		return binding.target().HasTilemap(name)
 	})
 }
 func (t *TilemapparserMgrImpl) GetTilemapLayerCount(name string) int64 {
-	t.target()
+	binding := t.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return t.target().GetTilemapLayerCount(name)
+		return binding.target().GetTilemapLayerCount(name)
 	})
 }
 
 // IUiMgr
 func (u *UiMgrImpl) BindNode(obj gdx.Object, rel_path string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().BindNode(obj, rel_path)
+		return binding.target().BindNode(obj, rel_path)
 	})
 }
 func (u *UiMgrImpl) CreateNode(path string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateNode(path)
+		return binding.target().CreateNode(path)
 	})
 }
 func (u *UiMgrImpl) CreateButton(path string, text string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateButton(path, text)
+		return binding.target().CreateButton(path, text)
 	})
 }
 func (u *UiMgrImpl) CreateLabel(path string, text string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateLabel(path, text)
+		return binding.target().CreateLabel(path, text)
 	})
 }
 func (u *UiMgrImpl) CreateImage(path string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateImage(path)
+		return binding.target().CreateImage(path)
 	})
 }
 func (u *UiMgrImpl) CreateToggle(path string, value bool) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateToggle(path, value)
+		return binding.target().CreateToggle(path, value)
 	})
 }
 func (u *UiMgrImpl) CreateSlider(path string, value float64) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateSlider(path, value)
+		return binding.target().CreateSlider(path, value)
 	})
 }
 func (u *UiMgrImpl) CreateInput(path string, text string) gdx.Object {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() gdx.Object {
-		return u.target().CreateInput(path, text)
+		return binding.target().CreateInput(path, text)
 	})
 }
 func (u *UiMgrImpl) DestroyNode(obj gdx.Object) bool {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() bool {
-		return u.target().DestroyNode(obj)
+		return binding.target().DestroyNode(obj)
 	})
 }
 func (u *UiMgrImpl) GetType(obj gdx.Object) int64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return u.target().GetType(obj)
+		return binding.target().GetType(obj)
 	})
 }
 func (u *UiMgrImpl) SetText(obj gdx.Object, text string) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetText(obj, text)
+		binding.target().SetText(obj, text)
 	})
 }
 func (u *UiMgrImpl) SetTextMaxWidth(obj gdx.Object, text string, max_width float64) float64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return u.target().SetTextMaxWidth(obj, text, max_width)
+		return binding.target().SetTextMaxWidth(obj, text, max_width)
 	})
 }
 func (u *UiMgrImpl) SetListItems(obj gdx.Object, label string, items gdx.Array, color Color) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetListItems(obj, label, items, color)
+		binding.target().SetListItems(obj, label, items, color)
 	})
 }
 func (u *UiMgrImpl) SetRange(obj gdx.Object, minimum float64, maximum float64, step float64, value float64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetRange(obj, minimum, maximum, step, value)
+		binding.target().SetRange(obj, minimum, maximum, step, value)
 	})
 }
 func (u *UiMgrImpl) GetRangeValue(obj gdx.Object) float64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return u.target().GetRangeValue(obj)
+		return binding.target().GetRangeValue(obj)
 	})
 }
 func (u *UiMgrImpl) GetText(obj gdx.Object) string {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() string {
-		return u.target().GetText(obj)
+		return binding.target().GetText(obj)
 	})
 }
 func (u *UiMgrImpl) SetTexture(obj gdx.Object, path string) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetTexture(obj, path)
+		binding.target().SetTexture(obj, path)
 	})
 }
 func (u *UiMgrImpl) GetTexture(obj gdx.Object) string {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() string {
-		return u.target().GetTexture(obj)
+		return binding.target().GetTexture(obj)
 	})
 }
 func (u *UiMgrImpl) SetColor(obj gdx.Object, color Color) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetColor(obj, color)
+		binding.target().SetColor(obj, color)
 	})
 }
 func (u *UiMgrImpl) GetColor(obj gdx.Object) Color {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Color {
-		return u.target().GetColor(obj)
+		return binding.target().GetColor(obj)
 	})
 }
 func (u *UiMgrImpl) SetFontSize(obj gdx.Object, size int64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetFontSize(obj, size)
+		binding.target().SetFontSize(obj, size)
 	})
 }
 func (u *UiMgrImpl) GetFontSize(obj gdx.Object) int64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return u.target().GetFontSize(obj)
+		return binding.target().GetFontSize(obj)
 	})
 }
 func (u *UiMgrImpl) SetVisible(obj gdx.Object, visible bool) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetVisible(obj, visible)
+		binding.target().SetVisible(obj, visible)
 	})
 }
 func (u *UiMgrImpl) GetVisible(obj gdx.Object) bool {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() bool {
-		return u.target().GetVisible(obj)
+		return binding.target().GetVisible(obj)
 	})
 }
 func (u *UiMgrImpl) SetInteractable(obj gdx.Object, interactable bool) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetInteractable(obj, interactable)
+		binding.target().SetInteractable(obj, interactable)
 	})
 }
 func (u *UiMgrImpl) GetInteractable(obj gdx.Object) bool {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() bool {
-		return u.target().GetInteractable(obj)
+		return binding.target().GetInteractable(obj)
 	})
 }
 func (u *UiMgrImpl) SetRect(obj gdx.Object, rect Rect2) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetRect(obj, rect)
+		binding.target().SetRect(obj, rect)
 	})
 }
 func (u *UiMgrImpl) GetRect(obj gdx.Object) Rect2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Rect2 {
-		return u.target().GetRect(obj)
+		return binding.target().GetRect(obj)
 	})
 }
 func (u *UiMgrImpl) GetLayoutDirection(obj gdx.Object) int64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return u.target().GetLayoutDirection(obj)
+		return binding.target().GetLayoutDirection(obj)
 	})
 }
 func (u *UiMgrImpl) SetLayoutDirection(obj gdx.Object, value int64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetLayoutDirection(obj, value)
+		binding.target().SetLayoutDirection(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetLayoutMode(obj gdx.Object) int64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return u.target().GetLayoutMode(obj)
+		return binding.target().GetLayoutMode(obj)
 	})
 }
 func (u *UiMgrImpl) SetLayoutMode(obj gdx.Object, value int64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetLayoutMode(obj, value)
+		binding.target().SetLayoutMode(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetAnchorsPreset(obj gdx.Object) int64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() int64 {
-		return u.target().GetAnchorsPreset(obj)
+		return binding.target().GetAnchorsPreset(obj)
 	})
 }
 func (u *UiMgrImpl) SetAnchorsPreset(obj gdx.Object, value int64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetAnchorsPreset(obj, value)
+		binding.target().SetAnchorsPreset(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetScale(obj gdx.Object) Vec2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return u.target().GetScale(obj)
+		return binding.target().GetScale(obj)
 	})
 }
 func (u *UiMgrImpl) GetCanvasScale(obj gdx.Object) Vec2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return u.target().GetCanvasScale(obj)
+		return binding.target().GetCanvasScale(obj)
 	})
 }
 func (u *UiMgrImpl) SetScale(obj gdx.Object, value Vec2) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetScale(obj, value)
+		binding.target().SetScale(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetPosition(obj gdx.Object) Vec2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return u.target().GetPosition(obj)
+		return binding.target().GetPosition(obj)
 	})
 }
 func (u *UiMgrImpl) SetPosition(obj gdx.Object, value Vec2) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetPosition(obj, value)
+		binding.target().SetPosition(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetSize(obj gdx.Object) Vec2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return u.target().GetSize(obj)
+		return binding.target().GetSize(obj)
 	})
 }
 func (u *UiMgrImpl) SetSize(obj gdx.Object, value Vec2) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetSize(obj, value)
+		binding.target().SetSize(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetGlobalPosition(obj gdx.Object) Vec2 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() Vec2 {
-		return u.target().GetGlobalPosition(obj)
+		return binding.target().GetGlobalPosition(obj)
 	})
 }
 func (u *UiMgrImpl) SetGlobalPosition(obj gdx.Object, value Vec2) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetGlobalPosition(obj, value)
+		binding.target().SetGlobalPosition(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetRotation(obj gdx.Object) float64 {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() float64 {
-		return u.target().GetRotation(obj)
+		return binding.target().GetRotation(obj)
 	})
 }
 func (u *UiMgrImpl) SetRotation(obj gdx.Object, value float64) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetRotation(obj, value)
+		binding.target().SetRotation(obj, value)
 	})
 }
 func (u *UiMgrImpl) GetFlip(obj gdx.Object, horizontal bool) bool {
-	u.target()
+	binding := u.resolve()
 	return CallInMainThreadValue(func() bool {
-		return u.target().GetFlip(obj, horizontal)
+		return binding.target().GetFlip(obj, horizontal)
 	})
 }
 func (u *UiMgrImpl) SetFlip(obj gdx.Object, horizontal bool, is_flip bool) {
-	u.target()
+	binding := u.resolve()
 	CallInMainThread(func() {
-		u.target().SetFlip(obj, horizontal, is_flip)
+		binding.target().SetFlip(obj, horizontal, is_flip)
 	})
 }

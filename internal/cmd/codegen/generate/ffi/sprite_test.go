@@ -120,6 +120,13 @@ func TestManagerAndObjectReceiversAvoidPublicParameters(t *testing.T) {
 			},
 		},
 		{
+			name: "binding local collisions", className: "Sprite", managerName: "Sprite",
+			cArgs:       "GdObj obj, GdString binding, GdString binding1, GdString binding2",
+			managerArgs: "obj Object, binding string, binding1 string, binding2 string",
+			args:        "binding string, binding1 string, binding2 string",
+			receiver:    "s", callArgs: "s.Id, binding, binding1, binding2",
+		},
+		{
 			name: "hidden length does not collide", className: "Sprite", managerName: "Sprite",
 			cArgs: "GdObj obj, const float *values, int s", managerArgs: "obj Object, values []float32", args: "values []float32",
 			receiver: "s", callArgs: "s.Id, values",
@@ -149,7 +156,7 @@ func TestManagerAndObjectReceiversAvoidPublicParameters(t *testing.T) {
 			// object/wrapper forwarding bodies, without cgo or engine dependencies.
 			source := fmt.Sprintf("package generated\ntype Object int64\ntype %s struct{ Id Object }\ntype %s struct{}\nvar %sMgr %s\nfunc %s {}\n%s",
 				tt.className, managerType, tt.managerName, managerType, signature, method)
-			source += fmt.Sprintf("\ntype %s struct{}\nfunc (*%s) target() *%s { return &%sMgr }\nfunc CallInMainThread(call func()) { call() }\n%s",
+			source += fmt.Sprintf("\ntype %s struct{}\nfunc (*%s) resolve() boundManager { return boundManager{} }\ntype boundManager struct{}\nfunc (boundManager) target() *%s { return &%sMgr }\nfunc CallInMainThread(call func()) { call() }\n%s",
 				wrapperType, wrapperType, managerType, tt.managerName, strings.ReplaceAll(wrapperMethod, "gdx.Object", "Object"))
 			positions := token.NewFileSet()
 			file, err := parser.ParseFile(positions, "receiver.go", source, 0)

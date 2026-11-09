@@ -47,14 +47,14 @@ func (g *Generator) genManagerWrapFunction(function *clang.TypedefFunction) stri
 		fmt.Fprintf(&sb, " %s", returnType)
 	}
 	sb.WriteString(" {\n")
-	call := fmt.Sprintf("%s.target().%s(%s)", receiver, methodName, strings.Join(args, ", "))
+	binding := g.LocalName(function, "binding")
+	call := fmt.Sprintf("%s.target().%s(%s)", binding, methodName, strings.Join(args, ", "))
+	// Capture and validate before dispatch, then recheck the same binding inside.
+	fmt.Fprintf(&sb, "\t%s := %s.resolve()\n", binding, receiver)
 	if function.Name == "GDExtensionSpxPlatformIsMainThread" {
 		fmt.Fprintf(&sb, "\treturn %s\n}", call)
 		return sb.String()
 	}
-	// Reject closed bindings before entering a dispatcher that may have stopped.
-	// Resolve again inside dispatch in case the binding closes while queued.
-	fmt.Fprintf(&sb, "\t%s.target()\n", receiver)
 	if returnType == "" {
 		fmt.Fprintf(&sb, "\tCallInMainThread(func() {\n\t\t%s\n\t})\n}", call)
 	} else {

@@ -42,6 +42,12 @@ Input events belong to `internal/input`; `internal/engine` keeps aliases for its
 
 The root package is intentionally the composition layer. Public overloads, reflection-based XGo objects and generated interpreter exports constrain package boundaries. Move reusable policy into core packages; keep an engine-bound, single-consumer implementation beside its owner. A file split alone does not create a useful architectural boundary.
 
+### Manager binding lifetime
+
+Shared manager wrappers capture one binding before dispatch and recheck that same binding when the queued call executes. Rebinding cannot redirect an old call to a new session. Binding lookup, installation, dispatcher snapshots and native platform probes share short critical sections; no lock crosses dispatch or backend callbacks.
+
+Release rejects later lookups and queued calls but does not wait for calls that passed their final target check. The engine lifecycle still owns coroutine draining and backend resource destruction. Direct reads or writes of public manager globals require coordination with link/unlink; retained wrappers and zero-value facades use the synchronized lookup path.
+
 ### Preparation and effects
 
 Binding generation prepares headers and parses the source ABI in memory, renders and formats all targets into one output plan, then publishes the plan. It does not use the checked-in ABI header as temporary storage. Rendering or validation failure leaves published output unchanged. Publication is not a multi-file filesystem transaction: an I/O failure during commit can still leave a partially written set. See [code generation](./code_generator.md).

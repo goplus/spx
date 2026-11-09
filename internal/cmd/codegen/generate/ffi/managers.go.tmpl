@@ -12,8 +12,6 @@ package enginewrap
 
 import (
 	"fmt"
-	"slices"
-	"sync"
 
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	. "github.com/goplus/spbase/mathf"
@@ -34,42 +32,21 @@ type {{camelCase $name}}MgrImpl struct {
 	*managerBinding[gdx.I{{camelCase $name}}Mgr]
 }
 
-func ({{ $receiver }} *{{camelCase $name}}MgrImpl) target() gdx.I{{camelCase $name}}Mgr {
-	return resolveManager[*{{camelCase $name}}MgrImpl]({{ $receiver }}.managerBinding, gdx.{{camelCase $name}}Mgr, "{{lowerCamelCase $name}}")
+func ({{ $receiver }} *{{camelCase $name}}MgrImpl) resolve() *managerBinding[gdx.I{{camelCase $name}}Mgr] {
+	return resolveManager[*{{camelCase $name}}MgrImpl]({{ $receiver }}.managerBinding, &gdx.{{camelCase $name}}Mgr, "{{lowerCamelCase $name}}")
 }
 {{ end }}
 
-// BindManagers installs shared main-thread wrappers around raw backend managers.
-// The returned function invalidates these wrappers and clears only globals that
-// still refer to this binding, so an older cleanup cannot remove a newer binding.
-func BindManagers(managers []gdx.IManager) func() {
-	var releases []func()
-	release := sync.OnceFunc(func() {
-		for _, release := range slices.Backward(releases) {
-			release()
-		}
-		releases = nil
-	})
-	complete := false
-	defer func() {
-		if !complete {
-			release()
-		}
-	}()
-	for _, manager := range managers {
-		switch backend := manager.(type) {
+func bindManager(manager gdx.IManager) func() {
+	switch backend := manager.(type) {
 {{- range $name := $view.Managers }}
-		case gdx.I{{camelCase $name}}Mgr:
-			binding := &managerBinding[gdx.I{{camelCase $name}}Mgr]{backend: backend}
-			wrapper := &{{camelCase $name}}MgrImpl{binding}
-			releases = append(releases, binding.bind(&gdx.{{camelCase $name}}Mgr, wrapper))
+	case gdx.I{{camelCase $name}}Mgr:
+		binding := &managerBinding[gdx.I{{camelCase $name}}Mgr]{backend: backend, name: "{{lowerCamelCase $name}}"}
+		return binding.bind(&gdx.{{camelCase $name}}Mgr, &{{camelCase $name}}MgrImpl{binding})
 {{- end }}
-		default:
-			panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
-		}
+	default:
+		panic(fmt.Sprintf("enginewrap: unknown manager type %T", manager))
 	}
-	complete = true
-	return release
 }
 
 {{ range $i, $name := $view.Managers -}}

@@ -18,6 +18,7 @@ package enginewrap
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"runtime"
 	"slices"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/goplus/spbase/mathf"
+	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/input"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -352,20 +354,41 @@ func TestManagerBindingsRejectStaleWrappersAndPreserveReplacement(t *testing.T) 
 func TestManagerBindingChecksLifetimeWhenDispatchExecutes(t *testing.T) {
 	previousCallback, previousAudio := mainCallback, gdx.AudioMgr
 	t.Cleanup(func() { mainCallback, gdx.AudioMgr = previousCallback, previousAudio })
-	calls := 0
-	backend := &bindingAudioMgr{setVolume: func(gdx.Object, float64) { calls++ }}
-	cleanup := BindManagers([]gdx.IManager{backend})
-	t.Cleanup(cleanup)
-	retained := gdx.AudioMgr
-	var pending func()
-	Init(func(call func()) { pending = call })
-	retained.SetVolume(1, 0.75)
-	if pending == nil || calls != 0 {
-		t.Fatal("backend ran before the dispatcher executed the callback")
-	}
-	cleanup()
-	if got := catchManagerPanic(pending); got == nil || calls != 0 {
-		t.Fatalf("closed dispatch panic=%v, raw calls=%d; want rejection before raw access", got, calls)
+	for _, facade := range []bool{false, true} {
+		for _, replace := range []bool{false, true} {
+			t.Run(fmt.Sprintf("facade=%t/replace=%t", facade, replace), func(t *testing.T) {
+				calls := 0
+				backend := &bindingAudioMgr{setVolume: func(gdx.Object, float64) { calls++ }}
+				cleanup := BindManagers([]gdx.IManager{backend})
+				t.Cleanup(cleanup)
+				manager := gdx.AudioMgr
+				if facade {
+					manager = new(AudioMgrImpl)
+				}
+				pending := make(chan func(), 1)
+				result := make(chan any, 1)
+				Init(func(call func()) {
+					pending <- call
+					if value := <-result; value != nil {
+						panic(value)
+					}
+				})
+				done := make(chan any, 1)
+				go func() { done <- catchManagerPanic(func() { manager.SetVolume(1, 0.75) }) }()
+				call := <-pending
+				if calls != 0 {
+					t.Fatal("backend ran before the synchronous dispatcher executed the callback")
+				}
+				cleanup()
+				if replace {
+					t.Cleanup(BindManagers([]gdx.IManager{backend}))
+				}
+				result <- catchManagerPanic(call)
+				if got := <-done; got != "enginewrap: audio manager is not bound" || calls != 0 {
+					t.Fatalf("closed dispatch panic=%v, raw calls=%d; want rejection before either backend", got, calls)
+				}
+			})
+		}
 	}
 }
 
@@ -582,4 +605,123 @@ func (m *dispatchInputMgr) GetMouseState(button int64) bool {
 
 func (m *dispatchSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {
 	return m.retrieve(ids, out)
+}
+
+// Public globals are captured before starting workers. Installation and direct
+// reads of those globals still belong to the engine's coordinated link boundary.
+func TestManagerBindingsConcurrentReleaseAndRebind(t *testing.T) {
+	previousCallback, previousAudio, previousPlatform := mainCallback, gdx.AudioMgr, gdx.PlatformMgr
+	t.Cleanup(func() {
+		mainCallback, gdx.AudioMgr, gdx.PlatformMgr = previousCallback, previousAudio, previousPlatform
+	})
+	for _, dispatch := range []struct {
+		name string
+		call func(func())
+	}{
+		{"inline", func(call func()) { call() }},
+		{"scheduler", coroutine.New(nil).WaitMainThread},
+		{"standalone", nil},
+	} {
+		t.Run(dispatch.name, func(t *testing.T) {
+			Init(dispatch.call)
+			audio := &bindingAudioMgr{getVolume: func(gdx.Object) float64 { return 0.5 }}
+			platform := &concurrentPlatformMgr{}
+			cleanup := BindManagers([]gdx.IManager{audio, platform})
+			t.Cleanup(cleanup)
+			retainedAudio, retainedPlatform := gdx.AudioMgr, gdx.PlatformMgr
+			var facade EngineManagers
+			start := make(chan struct{})
+			var workers sync.WaitGroup
+			for _, call := range []func(){
+				func() { retainedAudio.GetVolume(1) },
+				func() { facade.AudioMgr.GetVolume(1) },
+				func() { retainedPlatform.IsMainThread() },
+				func() { facade.PlatformMgr.IsMainThread() },
+			} {
+				workers.Go(func() {
+					<-start
+					for range 1000 {
+						if got := catchManagerPanic(call); got != nil &&
+							got != "enginewrap: audio manager is not bound" &&
+							got != "enginewrap: platform manager is not bound" {
+							t.Errorf("unexpected manager panic: %v", got)
+						}
+					}
+				})
+			}
+			close(start)
+			for range 100 {
+				Init(dispatch.call)
+				next := BindManagers([]gdx.IManager{audio, platform})
+				cleanup()
+				cleanup = next
+			}
+			workers.Wait()
+			cleanup()
+		})
+	}
+}
+
+type concurrentPlatformMgr struct {
+	gdx.IManager
+	gdx.IPlatformMgr
+}
+
+func (*concurrentPlatformMgr) IsMainThread() bool { return true }
+
+func TestManagerBindingReleaseFromBackend(t *testing.T) {
+	previousCallback, previousAudio := mainCallback, gdx.AudioMgr
+	t.Cleanup(func() { mainCallback, gdx.AudioMgr = previousCallback, previousAudio })
+	Init(func(call func()) { call() })
+	var cleanup func()
+	cleanup = BindManagers([]gdx.IManager{&bindingAudioMgr{getVolume: func(gdx.Object) float64 {
+		cleanup()
+		return 0.5
+	}}})
+	t.Cleanup(cleanup)
+	retained := gdx.AudioMgr
+	// A backend may call into Go and release its own binding. No registry lock
+	// may cross that callback, and the already accepted call may finish.
+	if got := retained.GetVolume(1); got != 0.5 {
+		t.Fatalf("accepted call result = %v, want 0.5", got)
+	}
+	if got := catchManagerPanic(func() { retained.GetVolume(1) }); got != "enginewrap: audio manager is not bound" {
+		t.Fatalf("released manager panic = %v", got)
+	}
+}
+
+func TestBindManagersRollsBackOnUnknownManager(t *testing.T) {
+	previousAudio := gdx.AudioMgr
+	t.Cleanup(func() { gdx.AudioMgr = previousAudio })
+	if got := catchManagerPanic(func() {
+		BindManagers([]gdx.IManager{&bindingAudioMgr{}, nil})
+	}); got != "enginewrap: unknown manager type <nil>" {
+		t.Fatalf("unknown manager panic = %v", got)
+	}
+	if gdx.AudioMgr != nil {
+		t.Fatal("failed binding retained its partially installed audio wrapper")
+	}
+}
+
+func TestMousePressedUsesOneBindingAndDispatch(t *testing.T) {
+	previousCallback, previousInput := mainCallback, gdx.InputMgr
+	t.Cleanup(func() { mainCallback, gdx.InputMgr = previousCallback, previousInput })
+	first := &dispatchInputMgr{}
+	cleanup := BindManagers([]gdx.IManager{first})
+	t.Cleanup(cleanup)
+	second := &dispatchInputMgr{pressed: map[int64]bool{input.MouseButtonRight: true}}
+	dispatches := 0
+	Init(func(call func()) {
+		dispatches++
+		call()
+		cleanup()
+		t.Cleanup(BindManagers([]gdx.IManager{second}))
+	})
+	var inputMgr InputMgrImpl
+	if inputMgr.MousePressed() || dispatches != 1 || len(second.queries) != 0 {
+		t.Fatalf("mouse query crossed bindings or repeated dispatch: dispatches=%d, replacement queries=%v", dispatches, second.queries)
+	}
+	if !slices.Equal(first.queries, []int64{input.MouseButtonLeft, input.MouseButtonRight}) {
+		t.Fatalf("original queries = %v, want left and right buttons", first.queries)
+	}
 }

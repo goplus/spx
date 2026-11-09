@@ -100,6 +100,7 @@ var runtimePackSourceDirectories = map[string]struct{}{
 	"internal/coroutine":               {},
 	"internal/debug":                   {},
 	"internal/engine":                  {},
+	"internal/engine/managerstate":     {},
 	"internal/engine/platform":         {},
 	"internal/engine/profiler":         {},
 	"internal/engine/wrap":             {},
