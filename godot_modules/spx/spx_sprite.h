@@ -129,6 +129,7 @@ public:
 	// Lifecycle
 	void on_start();
 	void on_destroy_call();
+	void initialize_clone_visual(const SpxSprite &p_source);
 
 	void set_block_signals(bool p_block);
 
@@ -365,6 +366,9 @@ private:
 	float playback_speed = 1.0f;
 
 	Ref<SpriteFrames> default_sprite_frames;
+	// Single-image costume updates replace one frame in this private resource.
+	// Reusing it avoids allocating a new SpriteFrames for every costume change.
+	Ref<SpriteFrames> single_image_frames;
 	Ref<ShaderMaterial> default_material;
 
 	Area2D *area2d = nullptr;

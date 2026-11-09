@@ -630,6 +630,7 @@ TEST_CASE("[SceneTree][SPX] Scene animation libraries survive cloning and preser
 	SpxSprite *sprite = fixture.create_sprite();
 	sprite->get_anim2d()->set_sprite_frames(authored);
 	sprite->on_start();
+	sprite->set_texture(fixture.png_path.utf8().get_data());
 	sprite->play_anim("idle", 1, false, false);
 	const Ref<SpriteFrames> private_frames = sprite->get_anim2d()->get_sprite_frames();
 	sprite->play_anim("walk", 1, false, true);

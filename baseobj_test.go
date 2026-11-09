@@ -60,6 +60,65 @@ func TestBaseObjInitialCostumeIndexFallsBackToFirst(t *testing.T) {
 	}
 }
 
+func TestBaseObjSetCostumeIndexSkipsSynchronizedSameCostume(t *testing.T) {
+	obj := baseObj{costumeIndex: 1}
+	obj.runtimeState.syncSprite = &engine.Sprite{}
+	obj.runtimeState.isCostumeDisplayed = true
+
+	obj.setCostumeIndex(1)
+
+	if obj.runtimeState.isCostumeDirty {
+		t.Fatal("synchronized same costume was marked dirty")
+	}
+}
+
+func TestBaseObjSetCostumeIndexKeepsRequiredUpdates(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		configure func(*baseObj)
+	}{
+		{
+			name: "initial costume without proxy",
+		},
+		{
+			name: "proxy displays an animation frame",
+			configure: func(obj *baseObj) {
+				obj.runtimeState.syncSprite = &engine.Sprite{}
+			},
+		},
+		{
+			name: "pending costume update",
+			configure: func(obj *baseObj) {
+				obj.runtimeState.syncSprite = &engine.Sprite{}
+				obj.runtimeState.isCostumeDirty = true
+			},
+		},
+		{
+			name: "same costume stops animation",
+			configure: func(obj *baseObj) {
+				obj.runtimeState.syncSprite = &engine.Sprite{}
+				obj.runtimeState.isAnimating = true
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var obj baseObj
+			if tt.configure != nil {
+				tt.configure(&obj)
+			}
+
+			obj.setCostumeIndex(0)
+
+			if !obj.runtimeState.isCostumeDirty {
+				t.Fatal("required costume update was not marked dirty")
+			}
+			if obj.runtimeState.isAnimating {
+				t.Fatal("setCostumeIndex did not stop animation")
+			}
+		})
+	}
+}
+
 func TestBaseObjInitializesSingleCostumeSetWithRect(t *testing.T) {
 	config := &coreproject.SpriteConfig{
 		CostumeIndex: 9,

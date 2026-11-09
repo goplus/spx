@@ -47,7 +47,11 @@ type baseObjRuntimeState struct {
 	isLayerDirty   bool
 	hasShader      bool
 	isAnimating    bool
-	hasDestroyed   atomic.Bool
+	// isCostumeDisplayed tracks the native visual, which can differ from
+	// costumeIndex while an animation or its final frame is displayed.
+	isCostumeDisplayed  bool
+	costumeDisplayEpoch uint64
+	hasDestroyed        atomic.Bool
 }
 
 const (
@@ -74,9 +78,23 @@ func (p *baseObj) setLayer(layer int) {
 
 // setCostumeIndex sets the current costume by index.
 func (p *baseObj) setCostumeIndex(value int) {
+	// Initial setup and pending updates must still mark the costume dirty. Once
+	// a proxy has synchronized this costume, selecting it again is a no-op for
+	// rendering and must not rebuild its engine texture every frame.
+	if p.costumeIndex == value && p.runtimeState.syncSprite != nil &&
+		!p.runtimeState.isCostumeDirty && !p.runtimeState.isAnimating &&
+		p.runtimeState.isCostumeDisplayed {
+		return
+	}
+	p.invalidateCostumeDisplay()
 	p.costumeIndex = value
 	p.runtimeState.isCostumeDirty = true
 	p.runtimeState.isAnimating = false
+}
+
+func (p *baseObj) invalidateCostumeDisplay() {
+	p.runtimeState.isCostumeDisplayed = false
+	p.runtimeState.costumeDisplayEpoch++
 }
 
 // isDestroyed reports whether the object has been permanently destroyed.

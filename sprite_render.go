@@ -158,10 +158,14 @@ func (p *SpriteImpl) setCostume(costume any) {
 	if isDebugInstrEnabled() {
 		spxlog.Debug("SetCostume: sprite=%s, costume=%v", p.name, costume)
 	}
+	previousIndex := p.costumeIndex
 	if !p.goSetCostume(costume) {
 		return
 	}
 	p.spriteState.defaultCostumeIndex = p.costumeIndex
+	if p.costumeIndex == previousIndex && !p.runtimeState.isCostumeDirty {
+		return
+	}
 	p.markAutoPhysicsShapesDirty()
 	p.markProxyDirty()
 }

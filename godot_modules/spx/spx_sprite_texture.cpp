@@ -128,8 +128,13 @@ void SpxSprite::_prepare_texture(const Ref<Texture2D> &p_texture,
 	r_visual = PreparedVisual();
 	r_visual.source = p_source;
 	r_visual.animation = SpxSpriteMgr::default_texture_anim;
-	r_visual.frames.instantiate();
-	r_visual.frames->remove_animation("default");
-	r_visual.frames->add_animation(r_visual.animation);
-	r_visual.frames->add_frame(r_visual.animation, p_texture);
+	if (single_image_frames.is_null()) {
+		single_image_frames.instantiate();
+		single_image_frames->remove_animation("default");
+		single_image_frames->add_animation(r_visual.animation);
+		single_image_frames->add_frame(r_visual.animation, p_texture);
+	} else {
+		single_image_frames->set_frame(r_visual.animation, 0, p_texture);
+	}
+	r_visual.frames = single_image_frames;
 }

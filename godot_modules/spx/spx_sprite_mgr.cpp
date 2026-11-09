@@ -494,6 +494,7 @@ GdInt SpxSpriteMgr::clone_sprite(GdObj obj) {
 	sprite_root->add_child(cloned);
 	_register_sprite(cloned);
 	cloned->on_start();
+	cloned->initialize_clone_visual(*sprite);
 	SPX_CALLBACK->func_on_sprite_ready(cloned->get_gid());
 	return cloned->get_gid();
 }

@@ -192,6 +192,7 @@ func (a *animationComponent) doAnimation(entry *animationEntry, loop bool, speed
 		a.sprite.applyCostumeUpdate()
 		a.prepareAnimationPlayback(entry, syncSprite)
 		playbackStarted = true
+		a.sprite.invalidateCostumeDisplay()
 		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, loop, false)
 	})
 	if isBlocking {
@@ -239,6 +240,7 @@ func (a *animationComponent) playDefaultAnim() {
 
 	if entry, ok := a.shared.animations[animName]; ok {
 		a.prepareAnimationPlayback(entry, syncSprite)
+		a.sprite.invalidateCostumeDisplay()
 		engine.Managers().SpriteMgr.PlayAnim(syncSprite.GetId(), entry.name, speed, true, false)
 		a.defaultAnimActive = true
 	} else {

@@ -144,6 +144,7 @@ func (p *SpriteImpl) isCloneProxyPublicationBlocked() bool {
 
 func (p *SpriteImpl) initRuntimeProxy() {
 	p.runtimeState.syncSprite = nil
+	p.invalidateCostumeDisplay()
 	engine.WaitMainThread(func() {
 		p.ensureProxyInitialized()
 		p.applyCostumeUpdate()
@@ -159,6 +160,7 @@ func (p *SpriteImpl) ensureProxyInitialized() {
 		return
 	}
 	p.runtimeState.syncSprite = engine.BridgeNewBareSprite(p, mathf.NewVec2(p.getXY()))
+	p.invalidateCostumeDisplay()
 	p.runtimeState.syncSprite.CallbackAlive = func() bool { return !p.isDestroyed() }
 	p.runtimeState.syncSprite.MirrorPosition = p.mirrorPosition
 	p.applyPhysicsProxyConfig()
@@ -510,14 +512,21 @@ func (p *baseObj) applyCostumeTexture() {
 		syncSprite := p.runtimeState.syncSprite
 		path := p.getCostumePath()
 		renderScale := p.getCostumeRenderScale()
+		updateTexture := !p.runtimeState.isAnimating
+		costumeIndex := p.costumeIndex
+		p.invalidateCostumeDisplay()
+		displayEpoch := p.runtimeState.costumeDisplayEpoch
 		if p.isCostumeAtlas() {
 			rect := p.getCostumeAtlasRegion()
 			uvRemap := p.currentCostume().frame.AtlasUVRect
-			syncSprite.UpdateTextureAtlas(path, rect, renderScale, !p.runtimeState.isAnimating)
+			syncSprite.UpdateTextureAtlas(path, rect, renderScale, updateTexture)
 			p.setMaterialParamsVec4("atlas_uv_rect2", uvRemap, true)
 		} else {
-			syncSprite.UpdateTexture(path, renderScale, !p.runtimeState.isAnimating)
+			syncSprite.UpdateTexture(path, renderScale, updateTexture)
 		}
+		p.runtimeState.isCostumeDisplayed = updateTexture && path != "" &&
+			p.costumeIndex == costumeIndex && !p.runtimeState.isCostumeDirty &&
+			p.runtimeState.costumeDisplayEpoch == displayEpoch
 	})
 }
 

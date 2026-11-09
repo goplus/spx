@@ -214,6 +214,23 @@ void SpxSprite::_initialize_default_frames() {
 	anim2d->set_sprite_frames(default_sprite_frames);
 }
 
+void SpxSprite::initialize_clone_visual(const SpxSprite &p_source) {
+	default_sprite_frames = p_source.default_sprite_frames;
+	visual_source = p_source.visual_source;
+	playback_speed = p_source.playback_speed;
+
+	if (p_source.single_image_frames.is_null() ||
+			p_source.anim2d->get_sprite_frames() != p_source.single_image_frames) {
+		return;
+	}
+
+	single_image_frames = p_source.single_image_frames->duplicate(false);
+	anim2d->set_sprite_frames(single_image_frames);
+	anim2d->set_animation(p_source.anim2d->get_animation());
+	_update_frame_transform();
+	_update_current_frame_shader_uv_rect();
+}
+
 void SpxSprite::_ensure_visible_notifier() {
 	visible_notifier = get_named_child<VisibleOnScreenNotifier2D>(render_root, "VisibleNotifier2D");
 	if (visible_notifier == nullptr) {

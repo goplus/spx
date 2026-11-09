@@ -129,6 +129,31 @@ TEST_CASE("[SceneTree][SPX] Sprite manager converts coordinates and owns sprite 
 	ERR_PRINT_ON;
 }
 
+TEST_CASE("[SceneTree][SPX] Cloned single-image frames remain isolated") {
+	TestSpx::TempDirectory files("spx_clone_single_image_frames");
+	files.write_png("first.png", Vector2i(8, 8), Color(1, 0, 0, 1));
+	files.write_png("second.png", Vector2i(8, 8), Color(0, 0, 1, 1));
+	const CharString first_path = files.file("first.png").utf8();
+	const CharString second_path = files.file("second.png").utf8();
+	TestSpx::EngineScene scene;
+	auto *manager = scene.engine->get_sprite();
+	const GdObj original = manager->create_bare_sprite(Vector2());
+	manager->set_texture(original, first_path.get_data());
+	Ref<SpriteFrames> original_frames = manager->get_sprite(original)->get_anim2d()->get_sprite_frames();
+	Ref<Texture2D> first_texture = original_frames->get_frame_texture("default", 0);
+
+	const GdObj clone = manager->clone_sprite(original);
+	REQUIRE(clone != NULL_OBJECT_ID);
+	Ref<SpriteFrames> clone_frames = manager->get_sprite(clone)->get_anim2d()->get_sprite_frames();
+	CHECK(clone_frames != original_frames);
+	CHECK(clone_frames->get_frame_texture("default", 0) == first_texture);
+
+	manager->set_texture(original, second_path.get_data());
+	CHECK(manager->get_sprite(original)->get_anim2d()->get_sprite_frames() == original_frames);
+	CHECK(original_frames->get_frame_texture("default", 0) != first_texture);
+	CHECK(clone_frames->get_frame_texture("default", 0) == first_texture);
+}
+
 TEST_CASE("[SceneTree][SPX] Destroyed sprite handles return defaults and cannot mutate queued nodes") {
 	TestSpx::EngineScene scene;
 	auto *manager = scene.engine->get_sprite();
@@ -1046,6 +1071,11 @@ TEST_CASE("[SceneTree][SPX] Pixel collision events track overlap, visibility and
 	CHECK(manager->is_debug_collision_visible(a));
 	manager->set_debug_collision_visible(a, false);
 	CHECK_FALSE(manager->is_debug_collision_visible(a));
+	Ref<SpriteFrames> single_image_frames = manager->get_sprite(a)->get_anim2d()->get_sprite_frames();
+	manager->set_texture(a, clear.get_data());
+	CHECK(manager->get_sprite(a)->get_anim2d()->get_sprite_frames() == single_image_frames);
+	manager->set_texture(a, solid.get_data());
+	CHECK(manager->get_sprite(a)->get_anim2d()->get_sprite_frames() == single_image_frames);
 	manager->set_texture_atlas(a, solid.get_data(), Rect2(0, 0, 4, 4));
 	CHECK(manager->get_sprite(a)->get_anim2d()->get_sprite_frames()->get_frame_texture("default", 0)->get_size() == Vector2(4, 4));
 	manager->set_texture_atlas_direct(a, solid.get_data(), Rect2(0, 0, 2, 2));

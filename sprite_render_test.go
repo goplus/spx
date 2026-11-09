@@ -24,6 +24,7 @@ import (
 	"github.com/goplus/spbase/mathf"
 	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
+	"github.com/goplus/spx/v4/internal/engine"
 )
 
 func TestSpriteSetCostume(t *testing.T) {
@@ -56,6 +57,38 @@ func TestSpriteSetCostume(t *testing.T) {
 				t.Errorf("IsCostumeDirty = %v, want %v", got, tt.wantDirty)
 			}
 		})
+	}
+}
+
+func TestSpriteSetCostumeSkipsSynchronizedSameCostume(t *testing.T) {
+	sprite := newTestRenderSprite()
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+	sprite.runtimeState.isCostumeDisplayed = true
+
+	sprite.setCostume(SpriteCostumeName("run"))
+
+	if sprite.runtimeState.isCostumeDirty {
+		t.Fatal("synchronized same costume was marked dirty")
+	}
+	if sprite.spriteState.dirtyVersion != 0 {
+		t.Fatalf("DirtyVersion = %d, want 0", sprite.spriteState.dirtyVersion)
+	}
+	if sprite.spriteState.defaultCostumeIndex != 1 {
+		t.Fatalf("DefaultCostumeIndex = %d, want 1", sprite.spriteState.defaultCostumeIndex)
+	}
+}
+
+func TestSpriteSetCostumeRestoresSameCostumeOverAnimationFrame(t *testing.T) {
+	sprite := newTestRenderSprite()
+	sprite.runtimeState.syncSprite = &engine.Sprite{}
+
+	sprite.setCostume(SpriteCostumeName("run"))
+
+	if !sprite.runtimeState.isCostumeDirty {
+		t.Fatal("same costume did not replace the displayed animation frame")
+	}
+	if sprite.spriteState.dirtyVersion != 1 {
+		t.Fatalf("DirtyVersion = %d, want 1", sprite.spriteState.dirtyVersion)
 	}
 }
 

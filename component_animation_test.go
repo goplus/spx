@@ -163,6 +163,23 @@ func TestPlayDefaultAnimIfIdleSkipsActiveDefaultAnimation(t *testing.T) {
 	}
 }
 
+func TestAnimationDoneRestoresSameDefaultCostume(t *testing.T) {
+	anim := newTestAnimationComponent()
+	state := &animState{Name: "walk"}
+	anim.curAnimState = state
+	anim.sprite.runtimeState.isAnimating = true
+	anim.sprite.runtimeState.isCostumeDisplayed = false
+
+	anim.onAnimationDone(state)
+
+	if anim.curAnimState != nil || anim.sprite.runtimeState.isAnimating {
+		t.Fatal("finished animation state was not cleared")
+	}
+	if !anim.sprite.runtimeState.isCostumeDirty {
+		t.Fatal("finished animation did not restore the same default costume")
+	}
+}
+
 func TestCleanupTweenWithoutPlaybackKeepsActiveAnimation(t *testing.T) {
 	anim := newTestAnimationComponent()
 	anim.sprite.costumes = []*costume{newCostumeWithSize(1, 1), newCostumeWithSize(1, 1)}

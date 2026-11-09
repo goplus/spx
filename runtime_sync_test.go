@@ -1055,6 +1055,37 @@ func TestProxyPreparedResourcesStayPairedAcrossCallbacks(t *testing.T) {
 	}
 }
 
+func TestCostumeTextureCallbackAnimationKeepsStaticCostumeInvalidated(t *testing.T) {
+	sprite, _, mgr := setupPreparedResourceSync(t)
+	game := sprite.g
+	game.flushSpriteProxyChanges(game.shapeMgr.items)
+	requirePreparedResource(t, sprite, mgr, 0, 1.5)
+
+	calls := 0
+	proxy := sprite.runtimeState.syncSprite
+	proxy.OnFramesSetChangedEvent.Subscribe(func() {
+		calls++
+		// Nonblocking animation playback makes the static costume inactive while
+		// the texture setter is still on the stack.
+		sprite.invalidateCostumeDisplay()
+	})
+	sprite.SetCostume__0("costume1")
+	game.flushSpriteProxyChanges(game.shapeMgr.items)
+	proxy.OnFramesSetChangedEvent.UnsubscribeAll()
+
+	if calls != 1 {
+		t.Fatalf("synchronous resource callbacks = %d, want 1", calls)
+	}
+	if sprite.runtimeState.isCostumeDisplayed {
+		t.Fatal("texture commit overwrote the animation's display state")
+	}
+	version := sprite.spriteState.dirtyVersion
+	sprite.SetCostume__0("costume1")
+	if !sprite.runtimeState.isCostumeDirty || sprite.spriteState.dirtyVersion != version+1 {
+		t.Fatal("same-costume selection did not replace the callback-started animation")
+	}
+}
+
 func TestProxyPreparedResourcesPreserveCommittedHeading(t *testing.T) {
 	for _, query := range []bool{false, true} {
 		t.Run(fmt.Sprintf("query=%v", query), func(t *testing.T) {
@@ -1549,6 +1580,9 @@ func setupPreparedResourceSync(t *testing.T) (*SpriteImpl, *SpriteImpl, *prepare
 
 func requirePreparedResource(t *testing.T, sprite *SpriteImpl, mgr *preparedResourceSpriteMgr, index int, size float64) {
 	t.Helper()
+	if !sprite.runtimeState.isCostumeDirty && !sprite.runtimeState.isCostumeDisplayed {
+		t.Fatal("synchronized static costume is not marked as displayed")
+	}
 	id := sprite.runtimeState.syncSprite.Id
 	c := sprite.costumes[index]
 	if got, want := mgr.texturePaths[id], engine.ToAssetPath(c.path); got != want {
