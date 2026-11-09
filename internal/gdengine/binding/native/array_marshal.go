@@ -117,17 +117,9 @@ func ToGdArrayInfo(slice any) *ArrayInfo {
 	case []int64:
 		return createGdArrayFromInt64s(v)
 	case []float32:
-		return createGdArrayFromFloat32s(v)
+		return createGdArrayFromFloats(v)
 	case []float64:
-		if v == nil {
-			return createGdArrayFromFloat32s(nil)
-		}
-		checkNativeArrayLength(len(v))
-		floats := make([]float32, len(v))
-		for i, f := range v {
-			floats[i] = float32(f)
-		}
-		return createGdArrayFromFloat32s(floats)
+		return createGdArrayFromFloats(v)
 	case []bool:
 		return createGdArrayFromBools(v)
 	case []string:
@@ -200,9 +192,6 @@ func (a *ArrayInfo) ToInt64s() []int64 {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []int64{}
-	}
 	slice := unsafe.Slice((*C.int64_t)(a.gdArray.data), size)
 	result := make([]int64, size)
 	for i, v := range slice {
@@ -216,9 +205,6 @@ func (a *ArrayInfo) ToFloat32s() []float32 {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []float32{}
-	}
 	slice := unsafe.Slice((*C.float)(a.gdArray.data), size)
 	result := make([]float32, size)
 	for i, v := range slice {
@@ -232,9 +218,6 @@ func (a *ArrayInfo) ToBools() []bool {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []bool{}
-	}
 	slice := unsafe.Slice((*C.uint8_t)(a.gdArray.data), size)
 	result := make([]bool, size)
 	for i, v := range slice {
@@ -248,9 +231,6 @@ func (a *ArrayInfo) ToBytes() []byte {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []byte{}
-	}
 	slice := unsafe.Slice((*C.uchar)(a.gdArray.data), size)
 	result := make([]byte, size)
 	for i, v := range slice {
@@ -264,9 +244,6 @@ func (a *ArrayInfo) ToObjectIDs() []int64 {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []int64{}
-	}
 	slice := unsafe.Slice((*C.GdObj)(a.gdArray.data), size)
 	result := make([]int64, size)
 	for i, v := range slice {
@@ -280,9 +257,6 @@ func (a *ArrayInfo) ToStrings() []string {
 		return nil
 	}
 	size := a.Size()
-	if size == 0 {
-		return []string{}
-	}
 	slice := unsafe.Slice((**C.char)(a.gdArray.data), size)
 	result := make([]string, size)
 	for i, cStr := range slice {
@@ -330,7 +304,7 @@ func createGdArrayFromInt64s(ints []int64) *ArrayInfo {
 	return info
 }
 
-func createGdArrayFromFloat32s(floats []float32) *ArrayInfo {
+func createGdArrayFromFloats[T ~float32 | ~float64](floats []T) *ArrayInfo {
 	info := allocateGdArrayInfo(ArrayTypeFloat, len(floats), floats == nil)
 	if info == nil || info.gdArray == nil {
 		return info
