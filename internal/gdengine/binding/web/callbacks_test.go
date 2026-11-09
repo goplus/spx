@@ -65,7 +65,7 @@ func TestContactEventsDecodePackedBytes(t *testing.T) {
 
 func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
 	previousCallbacks := callbacks
-	t.Cleanup(func() { BindCallback(previousCallbacks) })
+	t.Cleanup(func() { BindCallbacks(previousCallbacks) })
 	registerWebGlobals()
 	dispatch := js.Global().Get("gdspx_dispatch")
 	batch := js.Global().Get("gdspx_on_contact_events")
@@ -107,7 +107,7 @@ func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
 						info.OnEngineStart = handler
 					}
 				}
-				BindCallback(info)
+				BindCallbacks(info)
 				batch.Invoke(packed)
 				if !slices.Equal(got, []int64{101}) {
 					t.Fatalf("contacts crossing %s = %v, want [101]", event, got)
@@ -123,12 +123,12 @@ func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
 		}
 	}
 
-	t.Run("BindCallback", func(t *testing.T) {
+	t.Run("BindCallbacks", func(t *testing.T) {
 		var oldContacts, newContacts []int64
-		BindCallback(engine.CallbackInfo{
+		BindCallbacks(engine.CallbackInfo{
 			OnTriggerEnter: func(self, other int64) {
 				oldContacts = append(oldContacts, self)
-				BindCallback(engine.CallbackInfo{
+				BindCallbacks(engine.CallbackInfo{
 					OnTriggerEnter: func(self, other int64) { newContacts = append(newContacts, self) },
 				})
 			},
@@ -146,7 +146,7 @@ func TestContactBatchStopsAtSessionBoundary(t *testing.T) {
 
 func TestContactBatchReentryPreservesPendingEvents(t *testing.T) {
 	previousCallbacks := callbacks
-	t.Cleanup(func() { BindCallback(previousCallbacks) })
+	t.Cleanup(func() { BindCallbacks(previousCallbacks) })
 	registerWebGlobals()
 	batch := js.Global().Get("gdspx_on_contact_events")
 	pack := func(ids ...int64) js.Value {
@@ -171,7 +171,7 @@ func TestContactBatchReentryPreservesPendingEvents(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			outer, inner := pack(101, 102, 103), pack(tc.ids...)
 			var got []int64
-			BindCallback(engine.CallbackInfo{OnTriggerEnter: func(self, other int64) {
+			BindCallbacks(engine.CallbackInfo{OnTriggerEnter: func(self, other int64) {
 				got = append(got, self)
 				if self == 101 {
 					batch.Invoke(inner)
@@ -288,10 +288,10 @@ func TestDispatcherRecordsKeyState(t *testing.T) {
 			t.Fatalf("key = %d, pressed = %v", got, keyDown[key])
 		}
 	}
-	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyPressed, JsFromGdInt(key)})
+	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyPressed, JSFromGdInt(key)})
 
 	callbacks = engine.CallbackInfo{}
-	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyReleased, JsFromGdInt(key)})
+	gdspxDispatch(js.Undefined(), []js.Value{jsEventOnKeyReleased, JSFromGdInt(key)})
 	if keyDown[key] {
 		t.Fatal("key release was not recorded without a handler")
 	}
@@ -333,15 +333,15 @@ func TestDispatcherPreservesCallbackPayloads(t *testing.T) {
 		{"OnEngineDestroyed", nil, nil},
 		{"OnEnginePause", []js.Value{js.ValueOf(1)}, []any{true}},
 		{"OnEnginePause", []js.Value{js.ValueOf(false)}, []any{false}},
-		{"OnMousePressed", []js.Value{JsFromGdInt(other)}, []any{other}},
-		{"OnSceneSpriteInstantiated", []js.Value{JsFromGdObj(object), js.ValueOf(text)}, []any{object, text}},
-		{"OnSpriteReady", []js.Value{JsFromGdObj(other)}, []any{other}},
+		{"OnMousePressed", []js.Value{JSFromGdInt(other)}, []any{other}},
+		{"OnSceneSpriteInstantiated", []js.Value{JSFromGdObj(object), js.ValueOf(text)}, []any{object, text}},
+		{"OnSpriteReady", []js.Value{JSFromGdObj(other)}, []any{other}},
 		{"OnSpriteUpdated", []js.Value{js.ValueOf(0.125)}, []any{0.125}},
 		{"OnActionPressed", []js.Value{js.ValueOf(text)}, []any{text}},
 		{"OnAxisChanged", []js.Value{js.ValueOf(text), js.ValueOf(-0.75)}, []any{text, -0.75}},
-		{"OnCollisionEnter", []js.Value{JsFromGdInt(object), JsFromGdInt(other)}, []any{object, other}},
-		{"OnUiToggle", []js.Value{JsFromGdObj(object), js.ValueOf(true)}, []any{object, true}},
-		{"OnUiTextChanged", []js.Value{JsFromGdObj(other), js.ValueOf(text)}, []any{other, text}},
+		{"OnCollisionEnter", []js.Value{JSFromGdInt(object), JSFromGdInt(other)}, []any{object, other}},
+		{"OnUiToggle", []js.Value{JSFromGdObj(object), js.ValueOf(true)}, []any{object, true}},
+		{"OnUiTextChanged", []js.Value{JSFromGdObj(other), js.ValueOf(text)}, []any{other, text}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.event, func(t *testing.T) {
@@ -372,23 +372,38 @@ func TestDispatcherPreservesCallbackPayloads(t *testing.T) {
 }
 
 func TestWebSessionStartupAndUnlink(t *testing.T) {
-	previousCallbacks, previousInitialized := callbacks, hasInitEngine
+	installLinkHost(t)
+	previousCallbacks, previousInitialized := callbacks, wasmInitialized
 	previousSnapshot, previousGeneration := inputSnap, actionGeneration
 	previousBool, previousAxis, previousContact := actionBool, actionAxis, contactEventGeneration
 	previousKeys := keyDown
 	keyDown = map[int64]bool{}
 	actionBool, actionAxis = map[string]bool{}, map[string]float64{}
 	t.Cleanup(func() {
-		callbacks, hasInitEngine = previousCallbacks, previousInitialized
+		callbacks, wasmInitialized = previousCallbacks, previousInitialized
 		inputSnap, actionGeneration = previousSnapshot, previousGeneration
 		actionBool, actionAxis, contactEventGeneration = previousBool, previousAxis, previousContact
 		keyDown = previousKeys
 	})
 	for _, interpreter := range []bool{false, true} {
 		starts := 0
-		BindCallback(engine.CallbackInfo{CoreCallbackInfo: engine.CoreCallbackInfo{OnEngineStart: func() { starts++ }}})
-		hasInitEngine = true
-		session := &LinkSession{exit: make(chan struct{}), interpreter: interpreter}
+		BindCallbacks(engine.CallbackInfo{CoreCallbackInfo: engine.CoreCallbackInfo{OnEngineStart: func() { starts++ }}})
+		wasmInitialized = !interpreter
+		session, gotInterpreter := Link()
+		if gotInterpreter != interpreter || session.interpreter != interpreter {
+			t.Fatalf("Link interpreter mode = %v/%v, want %v", gotInterpreter, session.interpreter, interpreter)
+		}
+		for _, name := range []string{"go_wasm_init", "gdspx_dispatch", "gdspx_on_contact_events"} {
+			if js.Global().Get(name).Type() != js.TypeFunction {
+				t.Fatalf("Link did not register %s", name)
+			}
+		}
+		api := reflect.ValueOf(API)
+		for i := range api.NumField() {
+			if api.Field(i).Interface().(js.Value).Type() != js.TypeFunction {
+				t.Fatalf("Link did not resolve API field %s", api.Type().Field(i).Name)
+			}
+		}
 		ready, done := make(chan struct{}), make(chan struct{})
 		go func() { session.Run(func() { close(ready) }); close(done) }()
 		finish := sync.OnceFunc(func() {
@@ -418,12 +433,12 @@ func TestWebSessionStartupAndUnlink(t *testing.T) {
 		default:
 		}
 		finish()
-		if hasInitEngine {
+		if wasmInitialized {
 			t.Fatal("unlink retained initialized engine state")
 		}
 	}
 	goWasmInit(js.Undefined(), nil)
-	if !hasInitEngine {
+	if !wasmInitialized {
 		t.Fatal("worker initialization did not set engine state")
 	}
 }

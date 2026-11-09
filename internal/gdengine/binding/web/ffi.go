@@ -31,8 +31,10 @@ type LinkSession struct {
 }
 
 var (
-	callbacks                engine.CallbackInfo
-	hasInitEngine            bool
+	callbacks engine.CallbackInfo
+
+	// wasmInitialized records the worker initialization handshake.
+	wasmInitialized          bool
 	goWasmInitCallbackHandle js.Func
 	callbackDispatcherHandle js.Func
 )
@@ -40,13 +42,8 @@ var (
 func Link() (*LinkSession, bool) {
 	registerWebGlobals()
 	API.resolveAPIFunctions()
-	interpreter := !hasInitEngine
+	interpreter := !wasmInitialized
 	return &LinkSession{exit: make(chan struct{}), interpreter: interpreter}, interpreter
-}
-
-func BindCallback(info engine.CallbackInfo) {
-	contactEventGeneration++
-	callbacks = info
 }
 
 func (s *LinkSession) Run(ready func()) {
@@ -59,7 +56,12 @@ func (s *LinkSession) Run(ready func()) {
 
 func (s *LinkSession) Unlink() {
 	close(s.exit)
-	hasInitEngine = false
+	wasmInitialized = false
+}
+
+func BindCallbacks(info engine.CallbackInfo) {
+	contactEventGeneration++
+	callbacks = info
 }
 
 func resolveJSFunc(funcName string) js.Value {
@@ -76,7 +78,7 @@ func registerWebGlobals() {
 		js.Global().Set("go_wasm_init", goWasmInitCallbackHandle)
 	}
 	registerCallbackDispatcher()
-	registerContactEventQueue()
+	registerContactEventDispatcher()
 }
 
 func registerCallbackDispatcher() {
@@ -89,6 +91,6 @@ func registerCallbackDispatcher() {
 // goWasmInit is only called in worker mode.
 func goWasmInit(this js.Value, args []js.Value) any {
 	spxlog.Info("WASM initialized")
-	hasInitEngine = true
+	wasmInitialized = true
 	return js.ValueOf(nil)
 }

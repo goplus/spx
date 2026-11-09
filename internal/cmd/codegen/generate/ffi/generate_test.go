@@ -319,10 +319,16 @@ func TestNativeCallbacksMatchABI(t *testing.T) {
 	require.NotEmpty(t, fields)
 	require.Len(t, declarations, len(fields))
 	require.Len(t, registrations, len(fields))
+	goOutput, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.go"))
+	require.NoError(t, err)
+	exports := regexp.MustCompile(`(?m)^//export (\w+)$`).FindAllStringSubmatch(string(goOutput), -1)
+	require.Len(t, exports, len(fields))
 	for i, field := range fields {
-		symbol := field.Variable.Name
+		fieldName := field.Variable.Name
+		symbol := "go_" + strings.TrimPrefix(fieldName, "func_")
 		require.Equal(t, symbol, declarations[i][1])
-		require.Equal(t, []string{symbol, symbol}, registrations[i][1:])
+		require.Equal(t, symbol, exports[i][1])
+		require.Equal(t, []string{fieldName, symbol}, registrations[i][1:])
 	}
 }
 
@@ -332,6 +338,7 @@ typedef void (*GDExtensionSpxCallbackOnChanged)(GdObj obj, GdInt key, GdFloat de
 typedef void (*GDExtensionSpxCallbackOnReady)();
 typedef struct {
  GDExtensionSpxCallbackOnReady custom_ready;
+ GDExtensionSpxCallbackOnReady custom_ready_again;
  GDExtensionSpxCallbackOnChanged custom_changed;
 } SpxCallbackInfo;`)
 	require.NoError(t, err)
@@ -341,9 +348,14 @@ typedef struct {
 	require.NoError(t, generation.Output.Commit())
 	generated, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.go"))
 	require.NoError(t, err)
-	method := generatedMethod(t, "callbacks.gen.go", generated, "custom_changed")
-	require.Contains(t, method, "func custom_changed(arg0 C.GDExtensionInt, arg1 C.GDExtensionInt, arg2 C.GDReal, arg3 C.GDExtensionBool, arg4 C.GdString)")
-	require.Contains(t, method, "callbacks.OnChanged(int64(arg0), int64(arg1), float64(arg2), arg3 != 0, copyString(GdString(arg4)))")
+	method := generatedMethod(t, "callbacks.gen.go", generated, "go_custom_changed")
+	require.Contains(t, method, "func go_custom_changed(arg0 GdObj, arg1 GdInt, arg2 GdFloat, arg3 GdBool, arg4 GdString)")
+	require.Contains(t, method, "callbacks.OnChanged(int64(arg0), int64(arg1), float64(arg2), arg3 != 0, copyString(arg4))")
+	header, err := os.ReadFile(filepath.Join(codegenDir, common.NativeRelDir, "callbacks.gen.h"))
+	require.NoError(t, err)
+	require.Contains(t, string(header), "info.custom_ready = go_custom_ready;")
+	require.Contains(t, string(header), "info.custom_ready_again = go_custom_ready_again;")
+	require.Contains(t, string(header), "info.custom_changed = go_custom_changed;")
 	for _, source := range []string{
 		"typedef struct { GdInt count; } Other;",
 		"typedef void (*GDExtensionSpxCallbackValue)(Unknown value); typedef struct { GDExtensionSpxCallbackValue field; } SpxCallbackInfo;",

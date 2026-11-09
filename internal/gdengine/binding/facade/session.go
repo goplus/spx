@@ -27,6 +27,10 @@ type LinkSession struct {
 	closed  bool
 }
 
+func newLinkSession(run func(func()), unlink func()) *LinkSession {
+	return &LinkSession{run: run, unlink: unlink}
+}
+
 func (s *LinkSession) Run(ready func()) {
 	s.mu.Lock()
 	if s.closed || s.started {
@@ -60,8 +64,4 @@ func (s *LinkSession) Unlink() {
 	if s.unlink != nil {
 		s.unlink()
 	}
-}
-
-func newLinkSession(run func(func()), unlink func()) *LinkSession {
-	return &LinkSession{run: run, unlink: unlink}
 }

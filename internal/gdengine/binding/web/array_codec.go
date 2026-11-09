@@ -44,14 +44,6 @@ func newArrayValue[T any](arrayType int32, data []T) *arrayValue {
 	return &arrayValue{Type: arrayType, Count: count, Data: data}
 }
 
-func float32Slice(slice []float64) []float32 {
-	out := make([]float32, len(slice))
-	for i, v := range slice {
-		out[i] = float32(v)
-	}
-	return out
-}
-
 func encodeArrayData(arrayType int32, data any) ([]byte, error) {
 	if data == nil {
 		return []byte{}, nil
@@ -98,25 +90,6 @@ func encodeArrayData(arrayType int32, data any) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("array type is not supported: %d", arrayType)
 	}
-}
-
-// validateArrayShape bounds allocation and checks fixed-width payload lengths.
-// String offsets and terminators are checked by decodeStringArray.
-func validateArrayShape(arrayType int32, count int32, byteLength int) error {
-	if count < 0 || count > maxGdArrayElements || byteLength < 0 || byteLength > maxGdArrayBytes {
-		return fmt.Errorf("array size is invalid")
-	}
-	if arrayType == GdArrayTypeString {
-		if count == 0 && byteLength != 0 || int64(byteLength) < int64(count)*9 {
-			return fmt.Errorf("string array size is invalid")
-		}
-		return nil
-	}
-	size, ok := arrayElementSize(arrayType)
-	if !ok || int64(byteLength) != int64(count)*int64(size) {
-		return fmt.Errorf("array type or data length is invalid")
-	}
-	return nil
 }
 
 func decodeArrayData(arrayType int32, data []byte, count int32) (any, error) {
@@ -178,25 +151,6 @@ func encodeStringArray(data []string) ([]byte, error) {
 	return result, nil
 }
 
-func validateStringArray(data []byte, size int32) error {
-	if size < 0 || size > maxGdArrayElements || int64(size)*8 > int64(len(data)) {
-		return fmt.Errorf("string array table is invalid")
-	}
-	offset := uint64(size) * 8
-	for i := 0; i < int(size); i++ {
-		start := uint64(binary.LittleEndian.Uint32(data[i*8:]))
-		length := uint64(binary.LittleEndian.Uint32(data[i*8+4:]))
-		if start != offset || start+length >= uint64(len(data)) || data[start+length] != 0 {
-			return fmt.Errorf("string array range is invalid")
-		}
-		offset = start + length + 1
-	}
-	if offset != uint64(len(data)) {
-		return fmt.Errorf("string array has trailing bytes")
-	}
-	return nil
-}
-
 func decodeStringArray(data []byte, size int32) ([]string, error) {
 	if err := validateStringArray(data, size); err != nil {
 		return nil, err
@@ -210,12 +164,58 @@ func decodeStringArray(data []byte, size int32) ([]string, error) {
 	return result, nil
 }
 
+// validateArrayShape bounds allocation and checks fixed-width payload lengths.
+// String offsets and terminators are checked by decodeStringArray.
+func validateArrayShape(arrayType int32, count int32, byteLength int) error {
+	if count < 0 || count > maxGdArrayElements || byteLength < 0 || byteLength > maxGdArrayBytes {
+		return fmt.Errorf("array size is invalid")
+	}
+	if arrayType == GdArrayTypeString {
+		if count == 0 && byteLength != 0 || int64(byteLength) < int64(count)*9 {
+			return fmt.Errorf("string array size is invalid")
+		}
+		return nil
+	}
+	size, ok := arrayElementSize(arrayType)
+	if !ok || int64(byteLength) != int64(count)*int64(size) {
+		return fmt.Errorf("array type or data length is invalid")
+	}
+	return nil
+}
+
+func validateStringArray(data []byte, size int32) error {
+	if size < 0 || size > maxGdArrayElements || int64(size)*8 > int64(len(data)) {
+		return fmt.Errorf("string array table is invalid")
+	}
+	offset := uint64(size) * 8
+	for i := range int(size) {
+		start := uint64(binary.LittleEndian.Uint32(data[i*8:]))
+		length := uint64(binary.LittleEndian.Uint32(data[i*8+4:]))
+		if start != offset || start+length >= uint64(len(data)) || data[start+length] != 0 {
+			return fmt.Errorf("string array range is invalid")
+		}
+		offset = start + length + 1
+	}
+	if offset != uint64(len(data)) {
+		return fmt.Errorf("string array has trailing bytes")
+	}
+	return nil
+}
+
 // Check before allocating or converting the source slice.
 func checkedArrayCount(length int) (int32, bool) {
 	if length < 0 || length > maxGdArrayElements {
 		return 0, false
 	}
 	return int32(length), true
+}
+
+func float32Slice(slice []float64) []float32 {
+	out := make([]float32, len(slice))
+	for i, v := range slice {
+		out[i] = float32(v)
+	}
+	return out
 }
 
 func sliceBytes[T int64 | uint64 | float32](data []T) []byte {

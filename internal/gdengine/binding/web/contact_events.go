@@ -36,7 +36,7 @@ const (
 var contactEventsHandle js.Func
 var contactEventGeneration uint64
 
-func registerContactEventQueue() {
+func registerContactEventDispatcher() {
 	if contactEventsHandle.Type() != js.TypeUndefined {
 		return
 	}

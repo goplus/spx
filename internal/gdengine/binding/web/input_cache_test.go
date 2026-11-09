@@ -82,8 +82,8 @@ func TestInputValuesDoNotSurviveSessionBoundary(t *testing.T) {
 func TestInputCacheKeyState(t *testing.T) {
 	previousDown := keyDown
 	keyDown = map[int64]bool{}
-	RecordWebKeyState(1, true)
-	RecordWebKeyState(2, false)
+	recordKeyState(1, true)
+	recordKeyState(2, false)
 	t.Cleanup(func() { keyDown = previousDown })
 	for _, test := range []struct {
 		key, fallback, want int64
@@ -156,14 +156,14 @@ func TestInputActionCache(t *testing.T) {
 			if first != 0 || cached != 0 || calls != 1 {
 				t.Fatal("zero/false results must be cached")
 			}
-			SyncWebInputSnapshot()
+			syncInputSnapshot()
 			query(fallback)
 			if calls != 2 {
 				t.Fatal("next frame must refresh cached results")
 			}
 
-			SyncWebInputSnapshot()
-			if query(func() float64 { SyncWebInputSnapshot(); return 1 }) != 1 {
+			syncInputSnapshot()
+			if query(func() float64 { syncInputSnapshot(); return 1 }) != 1 {
 				t.Fatal("a read spanning frames must still return its result")
 			}
 			if query(fallback) != 0 || calls != 3 {
@@ -195,7 +195,7 @@ func TestInputActionCache(t *testing.T) {
 				t.Fatal("a read spanning reset must not populate the cache")
 			}
 
-			SyncWebInputSnapshot()
+			syncInputSnapshot()
 			func() {
 				defer func() {
 					if recover() != "read failed" {
@@ -254,7 +254,7 @@ func TestActionQueriesUseGeneratedBindings(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			for _, want := range []bool{false, true} {
-				SyncWebInputSnapshot()
+				syncInputSnapshot()
 				calls, result = 0, want
 				for range 2 {
 					got := test.read("left", func() bool { t.Fatal("valid action ID used fallback"); return false })
@@ -284,7 +284,7 @@ func TestActionQueriesUseGeneratedBindings(t *testing.T) {
 	defer axis.Release()
 	API.SpxInputGetAxisId = axis.Value
 	for _, want := range []float64{0, -0.5} {
-		SyncWebInputSnapshot()
+		syncInputSnapshot()
 		calls, axisResult = 0, want
 		for range 2 {
 			got := CachedInputGetAxis("left", "right", func() float64 { t.Fatal("valid axis IDs used fallback"); return 0 })

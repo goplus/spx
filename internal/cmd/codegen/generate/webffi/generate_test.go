@@ -300,7 +300,7 @@ typedef void (*GDExtensionSpxExampleReadChannelLast)(float *out, int channel);`)
 	require.NotContains(t, generation.jsBody(&functions[0]), "_call(_arg0, _arg1);")
 	body := generation.managerBody(&functions[0])
 	require.Contains(t, body, "if out == nil")
-	require.Contains(t, body, "JsAllocNativeArray(GdArrayTypeInt64, len(out[:]))")
+	require.Contains(t, body, "JSBorrowNativeArray(GdArrayTypeInt64, len(out[:]))")
 	require.Contains(t, body, "CopyNativeArrayOutput(out[:], arg0)")
 	for _, tt := range []struct {
 		name      string
@@ -386,15 +386,15 @@ func TestManagerInputCacheUsesGeneratedFallback(t *testing.T) {
 	for _, test := range []struct {
 		method, params, call, conversion string
 	}{
-		{"GetGlobalMousePos", "GdVec2 ret_value", "CachedInputGetGlobalMousePos(func() Vec2", "JsToGdVec2(_result)"},
-		{"GetKey", "GdInt key, GdBool ret_value", "CachedInputGetKey(key, func() bool", "JsToGdBool(_result)"},
-		{"GetMouseState", "GdInt mouse_id, GdBool ret_value", "CachedInputGetMouseState(mouse_id, func() bool", "JsToGdBool(_result)"},
-		{"GetKeyState", "GdInt key, GdInt ret_value", "CachedInputGetKeyState(key, func() int64", "JsToGdInt(_result)"},
-		{"GetAxis", "GdString neg_action, GdString pos_action, GdFloat ret_value", "CachedInputGetAxis(neg_action, pos_action, func() float64", "JsToGdFloat(_result)"},
-		{"IsActionPressed", "GdString action, GdBool ret_value", `CachedInputIsActionPressed(action, func() bool`, "JsToGdBool(_result)"},
-		{"IsActionJustPressed", "GdString action, GdBool ret_value", `CachedInputIsActionJustPressed(action, func() bool`, "JsToGdBool(_result)"},
-		{"IsActionJustReleased", "GdString action, GdBool ret_value", `CachedInputIsActionJustReleased(action, func() bool`, "JsToGdBool(_result)"},
-		{"IsActionPressed", "GdString renamed, GdBool ret_value", `CachedInputIsActionPressed(renamed, func() bool`, "JsToGdBool(_result)"},
+		{"GetGlobalMousePos", "GdVec2 ret_value", "CachedInputGetGlobalMousePos(func() Vec2", "JSToGdVec2(_result)"},
+		{"GetKey", "GdInt key, GdBool ret_value", "CachedInputGetKey(key, func() bool", "JSToGdBool(_result)"},
+		{"GetMouseState", "GdInt mouse_id, GdBool ret_value", "CachedInputGetMouseState(mouse_id, func() bool", "JSToGdBool(_result)"},
+		{"GetKeyState", "GdInt key, GdInt ret_value", "CachedInputGetKeyState(key, func() int64", "JSToGdInt(_result)"},
+		{"GetAxis", "GdString neg_action, GdString pos_action, GdFloat ret_value", "CachedInputGetAxis(neg_action, pos_action, func() float64", "JSToGdFloat(_result)"},
+		{"IsActionPressed", "GdString action, GdBool ret_value", `CachedInputIsActionPressed(action, func() bool`, "JSToGdBool(_result)"},
+		{"IsActionJustPressed", "GdString action, GdBool ret_value", `CachedInputIsActionJustPressed(action, func() bool`, "JSToGdBool(_result)"},
+		{"IsActionJustReleased", "GdString action, GdBool ret_value", `CachedInputIsActionJustReleased(action, func() bool`, "JSToGdBool(_result)"},
+		{"IsActionPressed", "GdString renamed, GdBool ret_value", `CachedInputIsActionPressed(renamed, func() bool`, "JSToGdBool(_result)"},
 	} {
 		t.Run(test.method+"/"+test.params, func(t *testing.T) {
 			parts := strings.Split(test.params, ", ")
@@ -411,8 +411,8 @@ func TestManagerInputCacheUsesGeneratedFallback(t *testing.T) {
 			require.Contains(t, body, "_result := API.SpxInput"+test.method+".Invoke(")
 			require.Contains(t, body, "return "+test.conversion)
 			if strings.Contains(test.params, "renamed") {
-				require.Contains(t, body, "JsFromGdString(renamed)")
-				require.NotContains(t, body, "JsFromGdString(action)")
+				require.Contains(t, body, "JSFromGdString(renamed)")
+				require.NotContains(t, body, "JSFromGdString(action)")
 			}
 		})
 	}
@@ -629,8 +629,8 @@ public:
 	require.Contains(t, body, "var _arg7 = NativeArrayCount(indices);")
 	require.Contains(t, body, "_call(_arg0, _arg1, _arg2, _arg3, _arg4, _arg5, _arg6, _arg7);")
 	manager := generation.managerBody(function)
-	require.Contains(t, manager, "JsFromNativeArray(objs, GdArrayTypeGdObj)")
-	require.Contains(t, manager, "JsFromNativeArray(mask, GdArrayTypeByte)")
+	require.Contains(t, manager, "JSFromNativeArray(objs, GdArrayTypeGdObj)")
+	require.Contains(t, manager, "JSFromNativeArray(mask, GdArrayTypeByte)")
 	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg2, arg4, arg6)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(indices, arg6)")
@@ -663,7 +663,7 @@ public:
 	require.Contains(t, manager, "if objects == nil")
 	require.Contains(t, manager, "if selected == nil")
 	require.Contains(t, manager, "if len(values) > math.MaxInt32")
-	require.Contains(t, manager, "JsFromNativeArray(objects[:], GdArrayTypeGdObj)")
+	require.Contains(t, manager, "JSFromNativeArray(objects[:], GdArrayTypeGdObj)")
 	require.Contains(t, manager, "API.SpxExampleCollect.Invoke(arg0, arg1, arg3)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(selected[:], arg3)")
 	require.NotContains(t, manager, "CopyNativeArrayOutput(objects")
@@ -691,7 +691,7 @@ public:
 	require.Contains(t, manager, "Invoke(arg0, mode, arg2, arg4, arg6)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(out, arg4)")
 	require.Contains(t, manager, "CopyNativeArrayOutput(ret_value[:], arg6)")
-	require.NotContains(t, manager, "return JsTo")
+	require.NotContains(t, manager, "return JSTo")
 	script := `const assert = require('node:assert/strict');
 const invoke = new Function('_call', 'ToGdString', 'FreeGdString', 'RequireNativeArray', 'NativeArrayCount', 'label', 'mode', 'objects', 'out', 'ret_value', ` + strconv.Quote(body) + `);
 for (const failure of [null, 'buffer', 'call']) {
@@ -731,11 +731,11 @@ public:
 	generation := &Generator{GenerationContext: common.NewGenerationContext(ast, headers.Metadata)}
 	function := ast.CollectGDExtensionInterfaceFunctions()[0]
 	manager := generation.managerBody(&function)
-	require.Contains(t, manager, "JsFromNativeArray(input, GdArrayTypeFloat)")
-	require.Contains(t, manager, "JsFromNativeArray(state, GdArrayTypeFloat)")
-	require.Contains(t, manager, "JsAllocNativeArray(GdArrayTypeFloat, len(out))")
-	require.Contains(t, manager, "JsAllocNativeArray(GdArrayTypeByte, len(flags[:]))")
-	guard := strings.Index(manager, "if !JsToGdBool(_result) { return false }")
+	require.Contains(t, manager, "JSFromNativeArray(input, GdArrayTypeFloat)")
+	require.Contains(t, manager, "JSFromNativeArray(state, GdArrayTypeFloat)")
+	require.Contains(t, manager, "JSBorrowNativeArray(GdArrayTypeFloat, len(out))")
+	require.Contains(t, manager, "JSBorrowNativeArray(GdArrayTypeByte, len(flags[:]))")
+	guard := strings.Index(manager, "if !JSToGdBool(_result) { return false }")
 	require.GreaterOrEqual(t, guard, 0)
 	for _, copy := range []string{"CopyNativeArrayOutput(out, arg3)", "CopyNativeArrayOutput(flags[:], arg5)", "CopyNativeArrayOutput(state, arg6)"} {
 		require.Greater(t, strings.Index(manager, copy), guard, copy)
@@ -785,8 +785,8 @@ func TestJSScalarInputsPassByValueAndKeepOutputPointers(t *testing.T) {
 	require.NotContains(t, body, "ToGdFloat")
 	require.NotContains(t, body, "ToGdBool")
 	manager := generation.managerBody(&functions[0])
-	require.Contains(t, manager, "arg0Low, arg0High := JsSplitGdObj(obj)")
-	require.Contains(t, manager, "arg1Low, arg1High := JsSplitGdInt(index)")
+	require.Contains(t, manager, "arg0Low, arg0High := JSSplitGdObj(obj)")
+	require.Contains(t, manager, "arg1Low, arg1High := JSSplitGdInt(index)")
 	require.Contains(t, manager, "Invoke(arg0Low, arg0High, arg1Low, arg1High, float32(scale), enabled, count)")
 }
 

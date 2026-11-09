@@ -68,7 +68,7 @@ Web 端输入查询已改为每帧快照优先：
 
 对应入口：
 
-- Go: `webffi.SyncWebInputSnapshot`
+- Go: `webffi.syncInputSnapshot`
 - Go: `webffi.WebInputMousePos` / `WebInputMouseState` / `WebInputKeyState`
 - Go: `webffi.CachedActionBool` / `CachedActionAxis`
 - Godot: `SpxInputMgr::write_snapshot`
@@ -98,7 +98,7 @@ Web 端 collision / trigger callback 已改成 JS 侧 event queue：
 
 - JS: `GodotGdspx.queueContact`
 - JS: `GodotGdspx.flushContactEvents`
-- Go: `webffi.registerContactEventQueue`
+- Go: `webffi.registerContactEventDispatcher`
 - Go: `webffi.dispatchContactEvent`
 
 Godot 触发事件时先写入 JS 数组队列，在 engine update / fixed update 前批量 flush 给 Go。若 Go direct handler 尚未注册，则回退到原有 `gdspx_dispatch` 逐条派发。
