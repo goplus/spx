@@ -98,7 +98,7 @@ type Game struct {
 	scriptEvents            scriptEventRegistry
 	gamer                   Gamer
 	sprCollisionInfos       map[string]*spriteCollisionInfo
-	sprCollisionData        []*spriteCollisionData
+	sprCollisionData        []spriteCollisionData
 	isAutoSetCollisionLayer bool
 
 	inputMgr       inputManager
