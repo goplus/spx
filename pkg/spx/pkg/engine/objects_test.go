@@ -27,68 +27,149 @@ type objectTestUiMgr struct {
 }
 
 func TestSpriteEvents(t *testing.T) {
-	first, second := &Sprite{}, &Sprite{}
+	first, second := &Sprite{Id: 73}, &Sprite{Id: 74}
 	first.onCreate()
 	second.onCreate()
 	for _, tt := range []struct {
-		name    string
-		first   *Event0
-		second  *Event0
-		trigger func()
+		name                 string
+		first                *Event0
+		second               *Event0
+		defaultHook, trigger func()
 	}{
-		{"screen exited", first.OnScreenExitedEvent, second.OnScreenExitedEvent, first.V_OnScreenExited},
-		{"screen entered", first.OnScreenEnteredEvent, second.OnScreenEnteredEvent, first.V_OnScreenEntered},
-		{"frames set changed", first.OnFramesSetChangedEvent, second.OnFramesSetChangedEvent, first.V_OnFramesSetChanged},
-		{"animation changed", first.OnAnimationChangedEvent, second.OnAnimationChangedEvent, first.V_OnAnimationChanged},
-		{"frame changed", first.OnFrameChangedEvent, second.OnFrameChangedEvent, first.V_OnFrameChanged},
-		{"animation looped", first.OnAnimationLoopedEvent, second.OnAnimationLoopedEvent, first.V_OnAnimationLooped},
-		{"animation finished", first.OnAnimationFinishedEvent, second.OnAnimationFinishedEvent, first.V_OnAnimationFinished},
-		{"vfx finished", first.OnVfxFinishedEvent, second.OnVfxFinishedEvent, first.V_OnVfxFinished},
+		{"screen exited", first.OnScreenExitedEvent, second.OnScreenExitedEvent, first.OnScreenExited, first.V_OnScreenExited},
+		{"screen entered", first.OnScreenEnteredEvent, second.OnScreenEnteredEvent, first.OnScreenEntered, first.V_OnScreenEntered},
+		{"frames set changed", first.OnFramesSetChangedEvent, second.OnFramesSetChangedEvent, first.OnFramesSetChanged, first.V_OnFramesSetChanged},
+		{"animation changed", first.OnAnimationChangedEvent, second.OnAnimationChangedEvent, first.OnAnimationChanged, first.V_OnAnimationChanged},
+		{"frame changed", first.OnFrameChangedEvent, second.OnFrameChangedEvent, first.OnFrameChanged, first.V_OnFrameChanged},
+		{"animation looped", first.OnAnimationLoopedEvent, second.OnAnimationLoopedEvent, first.OnAnimationLooped, first.V_OnAnimationLooped},
+		{"animation finished", first.OnAnimationFinishedEvent, second.OnAnimationFinishedEvent, first.OnAnimationFinished, first.V_OnAnimationFinished},
+		{"vfx finished", first.OnVfxFinishedEvent, second.OnVfxFinishedEvent, first.OnVfxFinished, first.V_OnVfxFinished},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assertObjectEvent(t, tt.first, tt.second, tt.trigger)
+			before := *first
+			assertObjectEvent(t, tt.first, tt.second, tt.defaultHook, tt.trigger)
+			if *first != before {
+				t.Fatal("event hooks changed object identity or event fields")
+			}
 		})
 	}
 	for _, tt := range []struct {
-		name    string
-		first   *Event1[ISpriter]
-		second  *Event1[ISpriter]
-		trigger func(ISpriter)
+		name                 string
+		first                *Event1[ISpriter]
+		second               *Event1[ISpriter]
+		defaultHook, trigger func(ISpriter)
 	}{
-		{"trigger entered", first.OnTriggerEnterEvent, second.OnTriggerEnterEvent, first.V_OnTriggerEnter},
-		{"trigger exited", first.OnTriggerExitEvent, second.OnTriggerExitEvent, first.V_OnTriggerExit},
+		{"trigger entered", first.OnTriggerEnterEvent, second.OnTriggerEnterEvent, first.OnTriggerEnter, first.V_OnTriggerEnter},
+		{"trigger exited", first.OnTriggerExitEvent, second.OnTriggerExitEvent, first.OnTriggerExit, first.V_OnTriggerExit},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assertObjectEventPayloads(t, tt.first, tt.second, tt.trigger, []ISpriter{second, nil})
+			before := *first
+			assertObjectEventPayloads(t, tt.first, tt.second, tt.defaultHook, tt.trigger, []ISpriter{second, nil})
+			if *first != before {
+				t.Fatal("event hooks changed sprite identity or event fields")
+			}
 		})
 	}
 }
 
 func TestUiNodeEvents(t *testing.T) {
-	first, second := &UiNode{}, &UiNode{}
+	first, second := &UiNode{Id: 65}, &UiNode{Id: 66}
 	first.onCreate()
 	second.onCreate()
 	for _, tt := range []struct {
-		name    string
-		first   *Event0
-		second  *Event0
-		trigger func()
+		name                 string
+		first                *Event0
+		second               *Event0
+		defaultHook, trigger func()
 	}{
-		{"click", first.OnUiClickEvent, second.OnUiClickEvent, first.V_OnUiClick},
-		{"pressed", first.OnUiPressedEvent, second.OnUiPressedEvent, first.V_OnUiPressed},
-		{"released", first.OnUiReleasedEvent, second.OnUiReleasedEvent, first.V_OnUiReleased},
-		{"hovered", first.OnUiHoveredEvent, second.OnUiHoveredEvent, first.V_OnUiHovered},
+		{"click", first.OnUiClickEvent, second.OnUiClickEvent, first.OnUiClick, first.V_OnUiClick},
+		{"pressed", first.OnUiPressedEvent, second.OnUiPressedEvent, first.OnUiPressed, first.V_OnUiPressed},
+		{"released", first.OnUiReleasedEvent, second.OnUiReleasedEvent, first.OnUiReleased, first.V_OnUiReleased},
+		{"hovered", first.OnUiHoveredEvent, second.OnUiHoveredEvent, first.OnUiHovered, first.V_OnUiHovered},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			assertObjectEvent(t, tt.first, tt.second, tt.trigger)
+			before := *first
+			assertObjectEvent(t, tt.first, tt.second, tt.defaultHook, tt.trigger)
+			if *first != before {
+				t.Fatal("event hooks changed object identity or event fields")
+			}
 		})
 	}
 	t.Run("toggle", func(t *testing.T) {
-		assertObjectEventPayloads(t, first.OnUiToggleEvent, second.OnUiToggleEvent, first.V_OnUiToggle, []bool{true, false})
+		before := *first
+		assertObjectEventPayloads(t, first.OnUiToggleEvent, second.OnUiToggleEvent, first.OnUiToggle, first.V_OnUiToggle, []bool{true, false})
+		if *first != before {
+			t.Fatal("event hooks changed UI identity or event fields")
+		}
 	})
 	t.Run("text changed", func(t *testing.T) {
-		assertObjectEventPayloads(t, first.OnUiTextChangedEvent, second.OnUiTextChangedEvent, first.V_OnUiTextChanged, []string{"你好, player", ""})
+		before := *first
+		assertObjectEventPayloads(t, first.OnUiTextChangedEvent, second.OnUiTextChangedEvent, first.OnUiTextChanged, first.V_OnUiTextChanged, []string{"你好, player", ""})
+		if *first != before {
+			t.Fatal("event hooks changed UI identity or event fields")
+		}
 	})
+}
+
+func TestDefaultLifecycleHooksPreserveObjects(t *testing.T) {
+	for _, state := range []string{"before initialization", "after initialization"} {
+		t.Run(state, func(t *testing.T) {
+			sprite, node := &Sprite{Id: 73}, &UiNode{Id: 65}
+			var eventCalls int
+			var dispatch []func()
+			if state == "after initialization" {
+				sprite.onCreate()
+				node.onCreate()
+				for _, event := range []*Event0{
+					sprite.OnScreenExitedEvent, sprite.OnScreenEnteredEvent,
+					sprite.OnFramesSetChangedEvent, sprite.OnAnimationChangedEvent,
+					sprite.OnFrameChangedEvent, sprite.OnAnimationLoopedEvent,
+					sprite.OnAnimationFinishedEvent, sprite.OnVfxFinishedEvent,
+					node.OnUiClickEvent, node.OnUiPressedEvent,
+					node.OnUiReleasedEvent, node.OnUiHoveredEvent,
+				} {
+					event.Subscribe(func() { eventCalls++ })
+					dispatch = append(dispatch, event.Trigger)
+				}
+				for _, event := range []*Event1[ISpriter]{sprite.OnTriggerEnterEvent, sprite.OnTriggerExitEvent} {
+					event.Subscribe(func(ISpriter) { eventCalls++ })
+					dispatch = append(dispatch, func() { event.Trigger(nil) })
+				}
+				node.OnUiToggleEvent.Subscribe(func(bool) { eventCalls++ })
+				node.OnUiTextChangedEvent.Subscribe(func(string) { eventCalls++ })
+				dispatch = append(dispatch, func() { node.V_OnUiToggle(false) }, func() { node.V_OnUiTextChanged("") })
+			}
+			wantSprite, wantNode := *sprite, *node
+			for _, hook := range []struct {
+				name string
+				call func(ILifeCycle)
+			}{
+				{"start", ILifeCycle.OnStart},
+				{"update", func(object ILifeCycle) { object.OnUpdate(0.25) }},
+				{"fixed update", func(object ILifeCycle) { object.OnFixedUpdate(0.5) }},
+				{"destroy", ILifeCycle.OnDestroy},
+			} {
+				t.Run(hook.name, func(t *testing.T) {
+					// Unoverridden lifecycle hooks must leave engine-owned state intact,
+					// including when there are no event objects yet.
+					hook.call(sprite)
+					hook.call(node)
+					if *sprite != wantSprite || *node != wantNode {
+						t.Fatal("default lifecycle hook changed object identity or event fields")
+					}
+					if eventCalls != 0 {
+						t.Fatalf("default lifecycle hook dispatched %d events", eventCalls)
+					}
+				})
+			}
+			for _, trigger := range dispatch {
+				trigger()
+			}
+			if eventCalls != len(dispatch) {
+				t.Fatalf("lifecycle hooks changed subscriptions: got %d event calls, want %d", eventCalls, len(dispatch))
+			}
+		})
+	}
 }
 
 func TestSpriteAxisHelpers(t *testing.T) {
@@ -269,7 +350,7 @@ func (m *objectTestUiMgr) DestroyNode(id Object) bool {
 	return m.destroyed
 }
 
-func assertObjectEvent(t *testing.T, first, second *Event0, trigger func()) {
+func assertObjectEvent(t *testing.T, first, second *Event0, defaultHook, trigger func()) {
 	t.Helper()
 	if first == nil || second == nil || first == second {
 		t.Fatal("onCreate must create an independent event per object")
@@ -277,13 +358,17 @@ func assertObjectEvent(t *testing.T, first, second *Event0, trigger func()) {
 	var firstCalls, secondCalls int
 	first.Subscribe(func() { firstCalls++ })
 	second.Subscribe(func() { secondCalls++ })
+	defaultHook()
+	if firstCalls != 0 || secondCalls != 0 {
+		t.Fatalf("default hook dispatched events: (%d, %d)", firstCalls, secondCalls)
+	}
 	trigger()
 	if firstCalls != 1 || secondCalls != 0 {
 		t.Fatalf("event calls = (%d, %d), want (1, 0)", firstCalls, secondCalls)
 	}
 }
 
-func assertObjectEventPayloads[T any](t *testing.T, first, second *Event1[T], trigger func(T), want []T) {
+func assertObjectEventPayloads[T any](t *testing.T, first, second *Event1[T], defaultHook, trigger func(T), want []T) {
 	t.Helper()
 	if first == nil || second == nil || first == second {
 		t.Fatal("onCreate must create an independent event per object")
@@ -291,6 +376,12 @@ func assertObjectEventPayloads[T any](t *testing.T, first, second *Event1[T], tr
 	var got []T
 	first.Subscribe(func(value T) { got = append(got, value) })
 	second.Subscribe(func(T) { t.Error("event leaked to another object") })
+	for _, value := range want {
+		defaultHook(value)
+	}
+	if len(got) != 0 {
+		t.Fatalf("default hook dispatched event payloads: %v", got)
+	}
 	for _, value := range want {
 		trigger(value)
 	}
