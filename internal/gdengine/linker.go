@@ -21,6 +21,7 @@ package gdengine
 import (
 	"sync"
 
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v4/internal/gdengine/impl"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -29,8 +30,11 @@ import (
 
 // LinkSession owns the backend resources installed by one Link call.
 type LinkSession struct {
-	backend *facade.LinkSession
+	backend         *facade.LinkSession
+	releaseManagers func()
 }
+
+type linkerBridge struct{}
 
 var (
 	coreCallbacks        CoreCallbackInfo
@@ -67,7 +71,7 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	coreCallbacks = coreCallbackInfo
 	facade.BindCallbacks(makeCallbacks())
 	// These Go adapters have no lifecycle behavior; the backend owns its managers.
-	engineimpl.BindManagers(engineimpl.CreateManagers())
+	session.releaseManagers = wrap.BindManagers(engineimpl.CreateManagers())
 	activeLink = session
 	return session
 }
@@ -90,6 +94,10 @@ func (s *LinkSession) Unlink() {
 	s.backend.Unlink()
 	linkMu.Lock()
 	defer linkMu.Unlock()
+	if s.releaseManagers != nil {
+		s.releaseManagers()
+		s.releaseManagers = nil
+	}
 	if activeLink != s {
 		return
 	}
@@ -97,8 +105,6 @@ func (s *LinkSession) Unlink() {
 	coreCallbacks = CoreCallbackInfo{}
 	isWebInterpreterMode = false
 }
-
-type linkerBridge struct{}
 
 func (linkerBridge) IsWebIntepreterMode() bool {
 	return IsWebIntepreterMode()

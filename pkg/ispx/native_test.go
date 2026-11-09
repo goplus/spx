@@ -10,7 +10,7 @@ import (
 	"github.com/goplus/ixgo"
 	"github.com/goplus/ixgo/xgobuild"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -24,11 +24,11 @@ type interpreterPlatform struct{ gdx.IPlatformMgr }
 func TestInterpreterShutdownWaitsForRun(t *testing.T) {
 	isolateInterpreter(t)
 	previousExt, previousPlatform := gdx.ExtMgr, gdx.PlatformMgr
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	gdx.PlatformMgr = interpreterPlatform{}
 	t.Cleanup(func() {
 		gdx.ExtMgr, gdx.PlatformMgr = previousExt, previousPlatform
-		enginewrap.Init(engine.WaitMainThread)
+		wrap.Init(engine.WaitMainThread)
 	})
 	entered, release := make(chan struct{}), make(chan struct{})
 	releaseRun := sync.OnceFunc(func() { close(release) })

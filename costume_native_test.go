@@ -30,7 +30,7 @@ import (
 	assetutil "github.com/goplus/spx/v4/internal/assets"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -55,7 +55,7 @@ func TestCostumeSizeCacheSeparatesAssetRoots(t *testing.T) {
 		return
 	}
 
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	resources := &costumeSizeResMgr{sizes: make(map[string]mathf.Vec2)}
 	pkgengine.ResMgr = resources
 	projects := []string{t.TempDir(), t.TempDir()}

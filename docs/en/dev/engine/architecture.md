@@ -17,7 +17,8 @@ Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preservi
 | `internal/core/runtime`, `internal/input` | Input normalization, replay values and script-loop rules | Operates on values and supplied callbacks/clocks |
 | `internal/projectloader` | Runtime resource assembly | Adapts engine resources before core configuration loading |
 | `internal/engine` | Engine lifecycle, coordinate adaptation and frame synchronization | Uses typed manager wrappers |
-| `internal/enginewrap`, `internal/gdengine` | Main-thread calls, native/Web transport and callbacks | Generated bindings implement the declared ABI |
+| `internal/engine/wrap` | Manager wrappers, main-thread dispatch and binding state | Public and internal calls share wrappers that privately hold raw backends |
+| `internal/gdengine` | Native/Web transport, callbacks and binding lifecycle | Backends only convert arguments and implement ABI calls |
 | `godot_modules/spx` | Engine-side implementation and exported manager declarations | Owned by SPX; built with the separate Godot checkout |
 | CLI path and project preparation | Resolve source/generated directories and prepare project inputs | Explicit command directories and returned preparation errors |
 
@@ -30,7 +31,7 @@ flowchart TD
     Loader --> Engine
     Core --> Input[input values and policies]
     Engine --> Input
-    Engine --> Wrappers[enginewrap and gdengine]
+    Engine --> Wrappers[engine/wrap and gdengine]
     Wrappers --> Godot[godot_modules/spx]
     CLI[CLI packaging] --> Core
 ```
@@ -40,6 +41,12 @@ Configuration parsing receives a resource directory once. The runtime loader pla
 Input events belong to `internal/input`; `internal/engine` keeps aliases for its callers. This avoids conversion copies and lets input policy tests run without engine initialization. The public named key-code API remains compatible.
 
 The root package is intentionally the composition layer. Public overloads, reflection-based XGo objects and generated interpreter exports constrain package boundaries. Move reusable policy into core packages; keep an engine-bound, single-consumer implementation beside its owner. A file split alone does not create a useful architectural boundary.
+
+### Manager binding lifetime
+
+Shared manager wrappers capture one binding before dispatch and recheck that same binding when the queued call executes. Rebinding cannot redirect an old call to a new session. Binding lookup, installation, dispatcher snapshots and native platform probes share short critical sections; no lock crosses dispatch or backend callbacks.
+
+Release rejects later lookups and queued calls but does not wait for calls that passed their final target check. The engine lifecycle still owns coroutine draining and backend resource destruction. Direct reads or writes of public manager globals require coordination with link/unlink; retained wrappers and zero-value facades use the synchronized lookup path.
 
 ### Preparation and effects
 

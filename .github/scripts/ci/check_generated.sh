@@ -45,7 +45,7 @@ git diff --exit-code
 # Include untracked outputs: git diff alone misses newly generated files.
 # Keep these roots aligned with codegen and the runtime go:generate commands.
 untracked=$(git ls-files --others --exclude-standard -- \
-  internal/gdengine internal/enginewrap pkg/spx/pkg/engine \
+  internal/gdengine internal/engine/wrap pkg/spx/pkg/engine \
   godot_modules/spx cmd/spx/template/platform/webworker \
   pkg/ispx/internal/pkg cmd/spx/internal/command/builderai)
 if [ -n "$untracked" ]; then

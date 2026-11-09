@@ -25,7 +25,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -658,7 +658,7 @@ func setupUIRendering(t *testing.T) *uiRenderSpy {
 	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
 	oldScale := engine.WindowScale()
 	oldWidth, oldHeight, oldClamp := baseScreenWidth, baseScreenHeight, clampUIPositionInScreen
-	enginewrap.Init(func(f func()) { f() })
+	wrap.Init(func(f func()) { f() })
 	mgr := &uiRenderSpy{askShowUiMgr: askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{}}, positions: map[gdx.Object]mathf.Vec2{}, scales: map[gdx.Object]mathf.Vec2{}, sizes: map[gdx.Object]mathf.Vec2{}, colors: map[gdx.Object]mathf.Color{}, rotations: map[gdx.Object]float64{}}
 	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
 	engine.SetWindowScale(2)
@@ -669,7 +669,7 @@ func setupUIRendering(t *testing.T) *uiRenderSpy {
 		engine.SetWindowScale(oldScale)
 		SetBaseScreenSize(oldWidth, oldHeight)
 		ClampUIPositionInScreen(oldClamp)
-		enginewrap.Init(engine.WaitMainThread)
+		wrap.Init(engine.WaitMainThread)
 	})
 	return mgr
 }

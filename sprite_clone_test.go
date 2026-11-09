@@ -29,7 +29,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -105,7 +105,7 @@ type cloneProxyOperation struct {
 }
 
 type spyCloneSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	mu         sync.Mutex
 	nextID     pkgengine.Object
 	zIndexes   map[pkgengine.Object]int64

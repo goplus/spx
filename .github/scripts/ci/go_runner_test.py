@@ -168,7 +168,10 @@ if len(log_path.read_text(encoding="utf-8").splitlines()) == int(os.environ.get(
             "coverage-runtimebundle-windows.out": ["./internal/runtimebundle"],
         },
         "web": {
-            "coverage-web.out": ["./internal/gdengine/binding/web", "./pkg/ispx", "./internal/coroutine"],
+            "coverage-web.out": [
+                "./internal/gdengine/binding/web", "./internal/gdengine/impl", "./internal/engine/wrap",
+                "./pkg/ispx", "./internal/coroutine",
+            ],
         },
         "web-process": {
             "coverage-web-process.out": ["./internal/cmd/buildctl/engine", "./internal/processsupervisor", "./pkg/launcher"],

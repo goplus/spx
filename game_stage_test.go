@@ -27,7 +27,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/goplus/spx/v4/internal/ui"
 	spxapi "github.com/goplus/spx/v4/pkg/spx"
@@ -556,7 +556,7 @@ func TestGamePathFinderConfigurationAndQueries(t *testing.T) {
 }
 
 func TestGameBackdropOverloads(t *testing.T) {
-	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
 	game := setupStageLoadTestGame(t, gameTestFS{})
 	game.baseObj.initWithSize(480, 360)
 	manager := &gameBackdropSpriteMgr{ISpriteMgr: pkgengine.SpriteMgr}

@@ -42,16 +42,20 @@ func (c *GenerationContext) ManagerInterfaceSignature(function *clang.TypedefFun
 
 // ReceiverName uses the type's initial without shadowing a public parameter.
 func (c *GenerationContext) ReceiverName(function *clang.TypedefFunction, typeName string) string {
+	return c.LocalName(function, strings.ToLower(typeName[:1]))
+}
+
+// LocalName selects a local identifier without shadowing a public parameter.
+func (c *GenerationContext) LocalName(function *clang.TypedefFunction, preferred string) string {
 	used := make(map[string]bool)
 	for _, param := range c.Parameters(function) {
 		if !param.IsLength {
 			used[param.Name] = true
 		}
 	}
-	initial := strings.ToLower(typeName[:1])
-	name := initial
+	name := preferred
 	for suffix := 1; used[name]; suffix++ {
-		name = initial + strconv.Itoa(suffix)
+		name = preferred + strconv.Itoa(suffix)
 	}
 	return name
 }

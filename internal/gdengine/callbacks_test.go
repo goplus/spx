@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	itime "github.com/goplus/spx/v4/internal/time"
@@ -44,6 +45,12 @@ type routedCallbackSprite struct {
 type routedCallbackNode struct {
 	engine.IUiNode
 	calls []string
+}
+
+type unlinkAudioMgr struct {
+	engine.IManager
+	engine.IAudioMgr
+	getVolume func() float64
 }
 
 func TestEngineFrameCallbackOwnsRuntimeUpdates(t *testing.T) {
@@ -167,6 +174,15 @@ func TestEngineCallbacksPreserveRuntimeLifecycle(t *testing.T) {
 						session.Unlink()
 						if activeLink != nil || isWebInterpreterMode || !reflect.ValueOf(coreCallbacks).IsZero() {
 							t.Error("Unlink retained the active session or callbacks")
+						}
+						for i, manager := range []any{
+							engine.AudioMgr, engine.CameraMgr, engine.DebugMgr, engine.ExtMgr, engine.InputMgr,
+							engine.NavigationMgr, engine.PenMgr, engine.PhysicsMgr, engine.PlatformMgr, engine.ResMgr,
+							engine.SceneMgr, engine.SpriteMgr, engine.TilemapMgr, engine.TilemapparserMgr, engine.UiMgr,
+						} {
+							if manager != nil {
+								t.Errorf("Unlink retained manager %d", i)
+							}
 						}
 					})
 					if activeLink != session || session.backend == nil {
@@ -353,6 +369,48 @@ func TestCoreInputCallbacksAndDiagnosticEvents(t *testing.T) {
 	}
 }
 
+// This session owns only Go wrappers; native backend unlink is a no-op too.
+func TestLinkSessionUnlinkAllowsAcceptedManagerCallToFinish(t *testing.T) {
+	previousAudio := engine.AudioMgr
+	t.Cleanup(func() {
+		engine.AudioMgr = previousAudio
+		wrap.Init(nil)
+	})
+	wrap.Init(func(call func()) { call() })
+	entered, finish := make(chan struct{}), make(chan struct{})
+	session := &LinkSession{releaseManagers: wrap.BindManagers([]engine.IManager{
+		&unlinkAudioMgr{getVolume: func() float64 {
+			close(entered)
+			<-finish
+			return 0.5
+		}},
+	})}
+	t.Cleanup(session.Unlink)
+	retained := engine.AudioMgr
+	result := make(chan float64, 1)
+	go func() { result <- retained.GetVolume(1) }()
+	<-entered
+	session.Unlink()
+	session.Unlink()
+	close(finish)
+	if got := <-result; got != 0.5 {
+		t.Fatalf("accepted call result = %v, want 0.5", got)
+	}
+	if engine.AudioMgr != nil {
+		t.Fatal("unlink retained the public manager")
+	}
+	for _, manager := range []engine.IAudioMgr{retained, new(wrap.AudioMgrImpl)} {
+		func() {
+			defer func() {
+				if got := recover(); got != "wrap: audio manager is not bound" {
+					t.Errorf("unlinked manager panic = %v", got)
+				}
+			}()
+			manager.GetVolume(1)
+		}()
+	}
+}
+
 func (r *callbackTestRuntime) Sprites() map[engine.Object]engine.ISpriter {
 	return r.sprites
 }
@@ -488,3 +546,5 @@ func (n *routedCallbackNode) V_OnUiTextChanged(value string) {
 func (n *routedCallbackNode) OnUiTextChanged(value string) {
 	n.calls = append(n.calls, fmt.Sprintf("OnUiTextChanged:%s", value))
 }
+
+func (m *unlinkAudioMgr) GetVolume(engine.Object) float64 { return m.getVolume() }

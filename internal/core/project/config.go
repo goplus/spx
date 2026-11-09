@@ -29,7 +29,7 @@ type Config struct {
 	Index              any    `json:"-"`
 	DontParseFlags     bool   `json:"-"`
 	FullScreen         bool   `json:"fullScreen,omitempty"`
-	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"`
+	DontRunOnUnfocused bool   `json:"pauseOnUnfocused,omitempty"` // Retained for compatibility; currently ignored.
 }
 
 type CameraConfig struct {

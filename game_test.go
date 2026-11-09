@@ -26,7 +26,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -312,6 +312,6 @@ func (mainThreadTestPlatform) IsMainThread() bool {
 
 func setupImmediateEngineCalls(t testing.TB) {
 	t.Helper()
-	enginewrap.Init(func(call func()) { call() })
-	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	wrap.Init(func(call func()) { call() })
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
 }

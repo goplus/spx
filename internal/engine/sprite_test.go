@@ -24,7 +24,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/coroutine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -721,9 +721,9 @@ func (m *backdropProxySpy) SetRenderScale(_ Object, value mathf.Vec2) { m.scale 
 func setupSpriteManagerTest(t *testing.T) {
 	t.Helper()
 	previous := gdx.SpriteMgr
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	t.Cleanup(func() {
 		gdx.SpriteMgr = previous
-		enginewrap.Init(WaitMainThread)
+		wrap.Init(WaitMainThread)
 	})
 }

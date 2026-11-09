@@ -29,7 +29,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -662,7 +662,7 @@ func TestPrepareProjectRequiresAddressableGame(t *testing.T) {
 }
 
 func TestGameDisplayConfigurationAndBackgroundMusic(t *testing.T) {
-	t.Cleanup(func() { enginewrap.Init(engine.WaitMainThread) })
+	t.Cleanup(func() { wrap.Init(engine.WaitMainThread) })
 	game := setupStageLoadTestGame(t, gameTestFS{})
 	manager := &gameDisplayPlatformMgr{}
 	pkgengine.PlatformMgr = manager

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v4/internal/coroutine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
@@ -49,7 +49,7 @@ func TestCoroutinePanicReachesRuntimeWithCauseAndFaultStack(t *testing.T) {
 	SetCoroutines(co)
 	gdx.PlatformMgr = resetDirectPlatform{}
 	gdx.ExtMgr = recorder
-	enginewrap.Init(WaitMainThread)
+	wrap.Init(WaitMainThread)
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 		SetCoroutines(originalCo)
@@ -109,10 +109,10 @@ func TestPanicAdaptersReportCauseAndHonorExitPolicy(t *testing.T) {
 			t.Cleanup(func() {
 				SetCoroutines(previousCo)
 				gdx.ExtMgr = previousExt
-				enginewrap.Init(WaitMainThread)
+				wrap.Init(WaitMainThread)
 			})
 			SetCoroutines(nil)
-			enginewrap.Init(func(call func()) { call() })
+			wrap.Init(func(call func()) { call() })
 			recorder := &panicCalls{}
 			gdx.ExtMgr = recorder
 			binding, err := bindGame(new(bindingTestGame), nil)
@@ -148,9 +148,9 @@ func TestCaptureFailureStopsFrameAndReportsExit(t *testing.T) {
 	itime.Start()
 	t.Cleanup(func() { resetInputState(); resetTriggerEvents(); itime.Start() })
 	previousExt := gdx.ExtMgr
-	t.Cleanup(func() { gdx.ExtMgr = previousExt; enginewrap.Init(WaitMainThread) })
+	t.Cleanup(func() { gdx.ExtMgr = previousExt; wrap.Init(WaitMainThread) })
 	gdx.PlatformMgr = resetDirectPlatform{}
-	enginewrap.Init(WaitMainThread)
+	wrap.Init(WaitMainThread)
 	recorder := &panicCalls{}
 	gdx.ExtMgr = recorder
 	var steps []string
@@ -203,7 +203,7 @@ func TestStartupExitReturnsFirstFrameWithoutPublishingSuccess(t *testing.T) {
 			recorder := &panicRecordingExt{messages: make(chan string, 1), exits: make(chan int64, 1)}
 			SetCoroutines(co)
 			gdx.PlatformMgr, gdx.ExtMgr = platform, recorder
-			enginewrap.Init(WaitMainThread)
+			wrap.Init(WaitMainThread)
 			t.Cleanup(func() {
 				co.RunAfterStop(nil)
 				SetCoroutines(previousCo)

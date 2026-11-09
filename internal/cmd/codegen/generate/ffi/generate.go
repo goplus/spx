@@ -56,8 +56,8 @@ var (
 	//go:embed sprite.go.tmpl
 	spriteTemplate string
 
-	//go:embed sync.go.tmpl
-	syncTemplate string
+	//go:embed managers.go.tmpl
+	managersTemplate string
 )
 
 // Generator renders bindings using metadata owned by one generation task.
@@ -82,7 +82,7 @@ func (g *Generator) Generate(codegenDir string) error {
 		{"native callbacks", g.renderCallbacks},
 		{"manager wrapper", g.renderManager},
 		{"manager interface", g.renderManagerInterface},
-		{"synchronized API", g.renderSyncAPI},
+		{"manager wrappers", g.renderManagerWrappers},
 	}
 	for _, step := range steps {
 		if err := step.render(codegenDir); err != nil {
@@ -150,14 +150,14 @@ func (g *Generator) renderManagerInterface(codegenDir string) error {
 		filepath.Join(codegenDir, common.EnginePkgRelDir, "interface.gen.go"))
 }
 
-func (g *Generator) renderSyncAPI(codegenDir string) error {
+func (g *Generator) renderManagerWrappers(codegenDir string) error {
 	funcs := template.FuncMap{
 		"lowerCamelCase":         strcase.ToLowerCamel,
 		"camelCase":              strcase.ToCamel,
-		"genSyncAPIWrapFunction": g.genSyncAPIWrapFunction,
+		"genManagerWrapFunction": g.genManagerWrapFunction,
 	}
-	return g.Output.RenderFile(funcs, syncTemplate, g.ManagerData(),
-		filepath.Join(codegenDir, common.EngineWrapRelDir, "sync.gen.go"))
+	return g.Output.RenderFile(funcs, managersTemplate, g.ManagerData(),
+		filepath.Join(codegenDir, common.EngineWrapRelDir, "managers.gen.go"))
 }
 
 func (g *Generator) renderManagerImpl(codegenDir, className string) error {

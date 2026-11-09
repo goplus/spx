@@ -27,7 +27,7 @@ import (
 
 	spxfs "github.com/goplus/spx/v4/fs"
 	"github.com/goplus/spx/v4/internal/core/project"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -398,7 +398,7 @@ func (d *closeErrorDir) Open(string) (io.ReadCloser, error) {
 
 func installConfigTestResMgr(t *testing.T, files map[string]string) *configTestResMgr {
 	t.Helper()
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	manager := &configTestResMgr{files: files, reads: make(map[string]int)}
 	previous := pkgengine.ResMgr
 	pkgengine.ResMgr = manager

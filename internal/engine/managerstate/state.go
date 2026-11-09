@@ -14,23 +14,13 @@
  * limitations under the License.
  */
 
-package enginewrap
+// Package managerstate coordinates manager binding lookup and installation.
+package managerstate
 
-// EngineManagers groups the wrappers for the process-wide engine backend.
-type EngineManagers struct {
-	AudioMgr         AudioMgrImpl
-	CameraMgr        CameraMgrImpl
-	InputMgr         InputMgrImpl
-	PhysicsMgr       PhysicsMgrImpl
-	PlatformMgr      PlatformMgrImpl
-	ResMgr           ResMgrImpl
-	SceneMgr         SceneMgrImpl
-	SpriteMgr        SpriteMgrImpl
-	UiMgr            UiMgrImpl
-	ExtMgr           ExtMgrImpl
-	PenMgr           PenMgrImpl
-	DebugMgr         DebugMgrImpl
-	NavigationMgr    NavigationMgrImpl
-	TilemapMgr       TilemapMgrImpl
-	TilemapparserMgr TilemapparserMgrImpl
-}
+import "sync"
+
+// Mu protects wrapper binding/dispatcher state and internal accesses to public
+// manager slots, including the scheduler's platform probe. Direct public global
+// access still requires lifecycle coordination. Never hold Mu across dispatch or a
+// backend call: either can call back into Go and change the binding.
+var Mu sync.RWMutex

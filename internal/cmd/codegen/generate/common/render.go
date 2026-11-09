@@ -35,7 +35,7 @@ var codegenLogger = spxlog.NewWithOutputs("SPX-CODEGEN", spxlog.LevelInfo, os.St
 const (
 	NativeRelDir       = "../../gdengine/binding/native"
 	GDEngineImplRelDir = "../../gdengine/impl"
-	EngineWrapRelDir   = "../../enginewrap"
+	EngineWrapRelDir   = "../../engine/wrap"
 	EnginePkgRelDir    = "../../../pkg/spx/pkg/engine"
 )
 

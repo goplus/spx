@@ -17,7 +17,8 @@ Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑
 | `internal/core/runtime`、`internal/input` | 输入归一化、回放数据和脚本循环规则 | 处理值，通过参数接收回调和时钟 |
 | `internal/projectloader` | 运行时资源装配 | 先适配引擎资源，再交给核心配置层 |
 | `internal/engine` | 引擎生命周期、坐标转换、帧同步 | 使用有类型的 manager 包装 |
-| `internal/enginewrap`、`internal/gdengine` | 主线程调用、原生/Web 传输、回调 | 生成绑定实现声明的 ABI |
+| `internal/engine/wrap` | 管理器包装、主线程调度和绑定状态 | 公开与内部调用共用包装器，私有持有原始后端 |
+| `internal/gdengine` | 原生/Web 传输、回调和绑定生命周期 | 后端只负责参数转换与 ABI 调用 |
 | `godot_modules/spx` | 引擎侧实现与导出的 manager 声明 | 由 SPX 仓库持有，与独立 Godot 仓库一起构建 |
 | CLI 路径与项目准备 | 解析源码/生成项目目录，准备项目输入 | 显式指定命令目录，返回准备错误 |
 
@@ -30,7 +31,7 @@ flowchart TD
     Loader --> Engine
     Core --> Input[input 数据与规则]
     Engine --> Input
-    Engine --> Wrappers[enginewrap 和 gdengine]
+    Engine --> Wrappers[engine/wrap 和 gdengine]
     Wrappers --> Godot[godot_modules/spx]
     CLI[CLI 打包] --> Core
 ```
@@ -40,6 +41,12 @@ flowchart TD
 输入事件归属 `internal/input`，`internal/engine` 为既有调用方保留类型别名。这样不需要转换或复制事件切片，输入规则测试也无需初始化引擎。公开的具名键码类型保持兼容。
 
 根包有意承担装配职责。公开重载、基于反射的 XGo 对象和生成的解释器导出共同约束包边界。可复用规则进入核心包；依赖引擎且只有一个使用方的实现留在所属对象附近。仅拆分文件并不能形成有价值的架构边界。
+
+### 管理器绑定生命周期
+
+共享管理器包装在派发前捕获一次绑定，并在排队调用执行时复核同一绑定，重新绑定不会把旧调用转交给新会话。绑定查找、安装、派发器快照和原生平台探测共用短临界区，任何锁都不跨越派发或后端回调。
+
+解绑会拒绝后续查找和排队调用，但不等待已经通过最终目标校验的调用；协程清退与后端资源销毁仍由引擎生命周期负责。直接读写公开管理器全局变量仍须与 link/unlink 协调；保留的包装引用与零值 facade 使用同步查找路径。
 
 ### 准备阶段与副作用
 

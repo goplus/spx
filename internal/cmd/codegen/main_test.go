@@ -149,8 +149,8 @@ func TestGenerateCodeFailurePreservesPublishedOutputs(t *testing.T) {
 			config.parsedASTPath = filepath.Join(root, "internal/gdengine/binding/native/callbacks.gen.go")
 			return nil
 		}},
-		{"synchronized API output conflict", "generate synchronized API", func(root string, config *codegenConfig) error {
-			config.parsedASTPath = filepath.Join(root, "internal/enginewrap/sync.gen.go")
+		{"manager wrappers output conflict", "generate manager wrappers", func(root string, config *codegenConfig) error {
+			config.parsedASTPath = filepath.Join(root, "internal/engine/wrap/managers.gen.go")
 			return nil
 		}},
 		{"Sprite output conflict", "generate Sprite manager implementation", func(root string, config *codegenConfig) error {

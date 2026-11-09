@@ -69,18 +69,18 @@ func (c *cameraImpl) Zoom() float64 {
 }
 
 func (c *cameraImpl) Xpos() float64 {
-	pos := engine.Managers().CameraMgr.GetPosition()
+	pos := engine.Managers().CameraMgr.GetCameraPosition()
 	return pos.X
 }
 
 func (c *cameraImpl) Ypos() float64 {
-	pos := engine.Managers().CameraMgr.GetPosition()
+	pos := engine.Managers().CameraMgr.GetCameraPosition()
 	return pos.Y
 }
 
 func (c *cameraImpl) SetXYpos(x float64, y float64) {
 	c.setDirtyFlag(true)
-	engine.Managers().CameraMgr.SetPosition(mathf.NewVec2(x, y))
+	engine.Managers().CameraMgr.SetCameraPosition(mathf.NewVec2(x, y))
 }
 
 func (c *cameraImpl) ChangeXYpos(x float64, y float64) {

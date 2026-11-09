@@ -22,6 +22,7 @@ package platform
 import (
 	"runtime"
 
+	"github.com/goplus/spx/v4/internal/engine/managerstate"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -32,7 +33,10 @@ func TryCallEngineDirectly(call func()) bool {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	if gdx.PlatformMgr == nil || !gdx.PlatformMgr.IsMainThread() {
+	managerstate.Mu.RLock()
+	manager := gdx.PlatformMgr
+	managerstate.Mu.RUnlock()
+	if manager == nil || !manager.IsMainThread() {
 		return false
 	}
 	call()

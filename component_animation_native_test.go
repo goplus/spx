@@ -11,7 +11,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -378,7 +378,7 @@ func setupAnimationLifecycle(t *testing.T) (*coroutine.Coroutines, *animationCom
 	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, sprites
 	t.Cleanup(func() { pkgengine.PlatformMgr, pkgengine.SpriteMgr = originalPlatform, originalSprites })
 	co := setupRuntimeScheduler(t)
-	enginewrap.Init(engine.WaitMainThread)
+	wrap.Init(engine.WaitMainThread)
 	anim := newTestAnimationComponent()
 	anim.sprite.scriptEventBindings.bind(&scriptEventRegistry{}, anim.sprite)
 	anim.sprite.spriteState.isVisible = false

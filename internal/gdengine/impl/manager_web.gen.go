@@ -31,7 +31,6 @@
 package impl
 
 import (
-	"fmt"
 	"math"
 
 	. "github.com/goplus/spbase/mathf"
@@ -102,60 +101,6 @@ func CreateManagers() []IManager {
 		&tilemapMgr{},
 		&tilemapparserMgr{},
 		&uiMgr{},
-	}
-}
-
-func BindManagers(mgrs []IManager) {
-	for _, mgr := range mgrs {
-		switch v := mgr.(type) {
-		case IAudioMgr:
-			AudioMgr = v
-
-		case ICameraMgr:
-			CameraMgr = v
-
-		case IDebugMgr:
-			DebugMgr = v
-
-		case IExtMgr:
-			ExtMgr = v
-
-		case IInputMgr:
-			InputMgr = v
-
-		case INavigationMgr:
-			NavigationMgr = v
-
-		case IPenMgr:
-			PenMgr = v
-
-		case IPhysicsMgr:
-			PhysicsMgr = v
-
-		case IPlatformMgr:
-			PlatformMgr = v
-
-		case IResMgr:
-			ResMgr = v
-
-		case ISceneMgr:
-			SceneMgr = v
-
-		case ISpriteMgr:
-			SpriteMgr = v
-
-		case ITilemapMgr:
-			TilemapMgr = v
-
-		case ITilemapparserMgr:
-			TilemapparserMgr = v
-
-		case IUiMgr:
-			UiMgr = v
-
-		default:
-			panic(fmt.Sprintf("engine init error: unknown manager type %T", mgr))
-		}
 	}
 }
 

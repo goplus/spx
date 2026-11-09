@@ -27,7 +27,7 @@ import (
 	internalaudio "github.com/goplus/spx/v4/internal/audio"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
-	"github.com/goplus/spx/v4/internal/enginewrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -58,7 +58,7 @@ type spyPenMgr struct {
 }
 
 type spyStampSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	position     mathf.Vec2
 	rotation     float64
 	scale        mathf.Vec2

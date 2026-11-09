@@ -36,7 +36,7 @@ func SetAssetDir(dir string) {
 	setLegacyFilesystemAssetDir(dir)
 	// Reading the project config uses the Engine resource manager. Keep that
 	// call at the public Engine boundary so path-state tests can configure the
-	// legacy filesystem roots without initializing enginewrap.
+	// legacy filesystem roots without initializing manager wrappers.
 	prefix := defaultAssetPathPrefix
 	if platform.IsWeb() {
 		prefix = ""
