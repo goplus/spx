@@ -497,6 +497,10 @@ func manifestEntriesEqualWithLimits(a, b Bundle, limits Limits) error {
 	if err != nil {
 		return err
 	}
+	return left.entriesEqual(right)
+}
+
+func (left canonicalBundle) entriesEqual(right canonicalBundle) error {
 	if left.Schema != right.Schema || left.Namespace != right.Namespace || len(left.Entries) != len(right.Entries) {
 		return fmt.Errorf("%w: manifest identity fields differ", ErrDigestMismatch)
 	}

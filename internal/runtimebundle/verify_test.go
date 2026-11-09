@@ -360,6 +360,139 @@ func TestVerifyZipExpectedIdentityIsStrict(t *testing.T) {
 	}
 }
 
+// The verifier reuses its scanned index for canonicalization. Every accepted
+// entry must therefore already satisfy the standalone manifest validator.
+func TestVerifyZipScannedEntriesSatisfyManifestValidation(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		entries []testZipEntry
+	}{
+		{name: "empty"},
+		{name: "directories and permissions", entries: []testZipEntry{
+			{name: "private/", mode: fs.ModeDir},
+			{name: "public/", mode: fs.ModeDir | 0o777},
+			{name: "private/empty"},
+			{name: "public/run", mode: 0o755, data: "payload"},
+		}},
+		{name: "unicode spelling", entries: []testZipEntry{{name: "cafe\u0301", mode: 0o644, data: "coffee"}}},
+		{name: "materialized symlink", entries: []testZipEntry{{name: "link", mode: fs.ModeSymlink | 0o777, data: "target"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			limits := Limits{MaxEntries: 4, MaxEntrySize: 7, MaxTotalSize: 7}
+			bundle, err := VerifyZip(writeTestZip(t, tt.entries...), VerifyOptions{
+				Limits: limits, MaterializeSymlinksAsFiles: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := bundle.ValidateWithLimits(limits); err != nil {
+				t.Fatalf("verified manifest violates standalone validation: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyZipExpectedCanonicalIdentity(t *testing.T) {
+	archive := writeTestZip(t,
+		testZipEntry{name: "z", mode: 0o755, data: "payload"},
+		testZipEntry{name: "caf\u00e9", mode: 0o644, data: "coffee"},
+	)
+	bundle, err := VerifyZip(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, namespace := range []Namespace{"", NamespaceEngine, NamespaceBridge, NamespaceProject, NamespaceDriver} {
+		t.Run(string(namespace), func(t *testing.T) {
+			want := bundle
+			want.Schema = ""
+			want.Namespace = namespace
+			want.Entries = []Entry{bundle.Entries[1], bundle.Entries[0]}
+			want.Digest, err = want.IdentityDigest()
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := want
+			before.Entries = append([]Entry(nil), want.Entries...)
+			for _, signed := range []bool{true, false} {
+				if !signed {
+					want.Digest = ""
+					before.Digest = ""
+				}
+				got, err := VerifyZip(archive, VerifyOptions{Expected: &want})
+				if err != nil {
+					t.Fatal(err)
+				}
+				identity := bundle
+				identity.Namespace = namespace
+				identity, err = identity.WithDigest()
+				if err != nil || !reflect.DeepEqual(got, identity) {
+					t.Fatalf("verified bundle = %+v, want %+v; err=%v", got, identity, err)
+				}
+				if !reflect.DeepEqual(want, before) {
+					t.Fatalf("verification mutated Expected: %+v, want %+v", want, before)
+				}
+			}
+		})
+	}
+	t.Run("unicode spelling remains identity", func(t *testing.T) {
+		want := bundle
+		want.Entries = append([]Entry(nil), bundle.Entries...)
+		want.Entries[1].Name = "cafe\u0301"
+		if _, err := VerifyZip(archive, VerifyOptions{Expected: &want}); !errors.Is(err, ErrDigestMismatch) {
+			t.Fatalf("VerifyZip error = %v, want ErrDigestMismatch", err)
+		}
+	})
+
+}
+
+func TestVerifyZipExpectedErrorPrecedence(t *testing.T) {
+	archive := writeTestZip(t, testZipEntry{name: "x", mode: 0o644, data: "payload"})
+	bundle, err := VerifyZip(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := bundle.CanonicalBytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name    string
+		change  func(*Bundle)
+		limits  Limits
+		want    error
+		message string
+	}{
+		{"bare manifest limit before namespace", func(b *Bundle) { b.Namespace = "invalid" }, Limits{MaxManifestBytes: 1}, ErrArchiveLimit, "manifest size"},
+		{"bare manifest limit before expected entry", func(b *Bundle) { b.Entries[0].Size = -1 }, Limits{MaxManifestBytes: 1}, ErrArchiveLimit, "manifest size"},
+		{"namespace before expected schema", func(b *Bundle) { b.Namespace = "invalid"; b.Schema = "invalid" }, Limits{}, ErrInvalidManifest, `unsupported namespace "invalid"`},
+		{"namespaced manifest limit before expected schema", func(b *Bundle) { b.Namespace = NamespaceEngine; b.Schema = "invalid" }, Limits{MaxManifestBytes: int64(len(canonical))}, ErrArchiveLimit, "manifest size"},
+		{"expected schema before entry", func(b *Bundle) { b.Schema = "invalid"; b.Entries[0].Size = -1 }, Limits{}, ErrInvalidManifest, `unsupported schema "invalid"`},
+		{"expected count before entry", func(b *Bundle) { b.Entries = append(b.Entries, Entry{}) }, Limits{MaxEntries: 1}, ErrArchiveLimit, "2 entries exceeds limit 1"},
+		{"expected entry limit before identity", func(b *Bundle) { b.Entries[0].Size++ }, Limits{MaxEntrySize: 7}, ErrArchiveLimit, `entry "x" size 8 exceeds limit 7`},
+		{"expected total limit before identity", func(b *Bundle) { b.Entries = append(b.Entries, b.Entries[0]); b.Entries[1].Name = "y" }, Limits{MaxEntrySize: 7, MaxTotalSize: 7}, ErrArchiveLimit, "total size exceeds limit 7"},
+		{"expected entry before identity and digest", func(b *Bundle) { b.Entries[0].Size = -1; b.Digest = "invalid" }, Limits{}, ErrInvalidManifest, `"x" has negative size`},
+		{"expected name before identity", func(b *Bundle) { b.Entries[0].Name = "../x" }, Limits{}, ErrInvalidEntryName, ""},
+		{"expected entry digest before identity", func(b *Bundle) { b.Entries[0].SHA256 = "invalid" }, Limits{}, ErrInvalidManifest, "sha256"},
+		{"entry identity before digest", func(b *Bundle) { b.Entries[0].Mode = 0o755; b.Digest = "invalid" }, Limits{}, ErrDigestMismatch, `entry "x" differs`},
+		{"entry count before digest", func(b *Bundle) { b.Entries = nil; b.Digest = "invalid" }, Limits{}, ErrDigestMismatch, "manifest identity fields differ"},
+		{"malformed expected digest compares as identity", func(b *Bundle) { b.Digest = "invalid" }, Limits{}, ErrDigestMismatch, "expected invalid"},
+		{"uppercase expected digest is not normalized", func(b *Bundle) { b.Digest = strings.ToUpper(b.Digest) }, Limits{}, ErrDigestMismatch, "expected "},
+		// Expected entries are validated, but their serialization is not subject
+		// to MaxManifestBytes. The archive's canonical bytes own that limit.
+		{"expected serialization does not mask identity", func(b *Bundle) { b.Entries[0].Name = strings.Repeat("a", 200) }, Limits{MaxManifestBytes: int64(len(canonical))}, ErrDigestMismatch, `entry "x" differs`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			expected := bundle
+			expected.Entries = append([]Entry(nil), bundle.Entries...)
+			tt.change(&expected)
+			_, err := VerifyZip(archive, VerifyOptions{Expected: &expected, Limits: tt.limits})
+			if !errors.Is(err, tt.want) || !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("VerifyZip error = %v, want %v containing %q", err, tt.want, tt.message)
+			}
+		})
+	}
+}
+
 func TestExtractVerifiedDetectsInPlaceSourceMutation(t *testing.T) {
 	zipPath := writeTestZip(t, testZipEntry{name: "runtime", mode: 0o755, data: "trusted"})
 	file, err := openSourceZip(zipPath)

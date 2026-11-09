@@ -278,33 +278,38 @@ func verifyReaderAt(reader io.ReaderAt, size int64, options VerifyOptions) (veri
 	}
 	// ZIP manifests are independent of cache namespace. Namespace is supplied
 	// by the cache caller, not guessed from an archive's bytes.
-	bundle, err = bundle.WithDigestWithLimits(limits)
+	// The ZIP scan already normalized and validated every entry in seen.
+	canonical := bundle.canonical(seen)
+	data, err := canonical.bytesWithLimits(limits)
 	if err != nil {
 		return verifiedArchive{}, err
 	}
 	if options.Expected != nil {
-		want := *options.Expected
-		originalDigest := want.Digest
-		if want.Schema == "" {
-			want.Schema = SchemaV1
-		}
-		want.Digest = ""
-		if want.Namespace != "" {
-			bundle.Namespace = want.Namespace
-			bundle, err = bundle.WithDigestWithLimits(limits)
+		if namespace := options.Expected.Namespace; namespace != "" {
+			// Keep the namespace-free manifest size check before namespace
+			// validation, preserving the verifier's error precedence.
+			if !namespace.valid() {
+				return verifiedArchive{}, fmt.Errorf("%w: unsupported namespace %q", ErrInvalidManifest, namespace)
+			}
+			bundle.Namespace = namespace
+			canonical.Namespace = namespace
+			data, err = canonical.bytesWithLimits(limits)
 			if err != nil {
 				return verifiedArchive{}, err
 			}
 		}
-		if err := want.ValidateWithLimits(limits); err != nil {
+		want, err := options.Expected.canonicalWithLimits(limits)
+		if err != nil {
 			return verifiedArchive{}, err
 		}
-		if err := manifestEntriesEqualWithLimits(bundle, want, limits); err != nil {
+		if err := canonical.entriesEqual(want); err != nil {
 			return verifiedArchive{}, err
 		}
-		if originalDigest != "" && bundle.Digest != originalDigest {
-			return verifiedArchive{}, fmt.Errorf("%w: archive %s, expected %s", ErrDigestMismatch, bundle.Digest, originalDigest)
-		}
+	}
+	sum := sha256.Sum256(data)
+	bundle.Digest = hex.EncodeToString(sum[:])
+	if options.Expected != nil && options.Expected.Digest != "" && bundle.Digest != options.Expected.Digest {
+		return verifiedArchive{}, fmt.Errorf("%w: archive %s, expected %s", ErrDigestMismatch, bundle.Digest, options.Expected.Digest)
 	}
 	return verifiedArchive{bundle: bundle, entries: entries}, nil
 }
