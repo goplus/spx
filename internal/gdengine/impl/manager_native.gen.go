@@ -168,66 +168,66 @@ func BindManagers(mgrs []IManager) {
 
 // call gdextension interface functions
 
-func (pself *audioMgr) StopAll() {
+func (a *audioMgr) StopAll() {
 	enginewrap.CallInMainThread(func() {
 		CallAudioStopAll()
 	})
 }
-func (pself *audioMgr) CreateAudio() Object {
+func (a *audioMgr) CreateAudio() Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		retValue := CallAudioCreateAudio()
 		return ToObject(retValue)
 	})
 }
-func (pself *audioMgr) DestroyAudio(obj Object) {
+func (a *audioMgr) DestroyAudio(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallAudioDestroyAudio(arg0)
 	})
 }
-func (pself *audioMgr) SetPitch(obj Object, pitch float64) {
+func (a *audioMgr) SetPitch(obj Object, pitch float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(pitch)
 		CallAudioSetPitch(arg0, arg1)
 	})
 }
-func (pself *audioMgr) GetPitch(obj Object) float64 {
+func (a *audioMgr) GetPitch(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallAudioGetPitch(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *audioMgr) SetPan(obj Object, pan float64) {
+func (a *audioMgr) SetPan(obj Object, pan float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(pan)
 		CallAudioSetPan(arg0, arg1)
 	})
 }
-func (pself *audioMgr) GetPan(obj Object) float64 {
+func (a *audioMgr) GetPan(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallAudioGetPan(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *audioMgr) SetVolume(obj Object, volume float64) {
+func (a *audioMgr) SetVolume(obj Object, volume float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(volume)
 		CallAudioSetVolume(arg0, arg1)
 	})
 }
-func (pself *audioMgr) GetVolume(obj Object) float64 {
+func (a *audioMgr) GetVolume(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallAudioGetVolume(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Object, attenuation float64, max_distance float64) int64 {
+func (a *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Object, attenuation float64, max_distance float64) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -240,7 +240,7 @@ func (pself *audioMgr) PlayWithAttenuation(obj Object, path string, owner_id Obj
 		return ToInt64(retValue)
 	})
 }
-func (pself *audioMgr) Play(obj Object, path string) int64 {
+func (a *audioMgr) Play(obj Object, path string) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -250,122 +250,122 @@ func (pself *audioMgr) Play(obj Object, path string) int64 {
 		return ToInt64(retValue)
 	})
 }
-func (pself *audioMgr) Pause(aid int64) {
+func (a *audioMgr) Pause(aid int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(aid)
 		CallAudioPause(arg0)
 	})
 }
-func (pself *audioMgr) Resume(aid int64) {
+func (a *audioMgr) Resume(aid int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(aid)
 		CallAudioResume(arg0)
 	})
 }
-func (pself *audioMgr) Stop(aid int64) {
+func (a *audioMgr) Stop(aid int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(aid)
 		CallAudioStop(arg0)
 	})
 }
-func (pself *audioMgr) Restart(aid int64) bool {
+func (a *audioMgr) Restart(aid int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(aid)
 		retValue := CallAudioRestart(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *audioMgr) SetLoop(aid int64, loop bool) {
+func (a *audioMgr) SetLoop(aid int64, loop bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(aid)
 		arg1 := ToGdBool(loop)
 		CallAudioSetLoop(arg0, arg1)
 	})
 }
-func (pself *audioMgr) GetLoop(aid int64) bool {
+func (a *audioMgr) GetLoop(aid int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(aid)
 		retValue := CallAudioGetLoop(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *audioMgr) GetTimer(aid int64) float64 {
+func (a *audioMgr) GetTimer(aid int64) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdInt(aid)
 		retValue := CallAudioGetTimer(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *audioMgr) SetTimer(aid int64, time float64) {
+func (a *audioMgr) SetTimer(aid int64, time float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(aid)
 		arg1 := ToGdFloat(time)
 		CallAudioSetTimer(arg0, arg1)
 	})
 }
-func (pself *audioMgr) IsPlaying(aid int64) bool {
+func (a *audioMgr) IsPlaying(aid int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(aid)
 		retValue := CallAudioIsPlaying(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *cameraMgr) GetCameraPosition() Vec2 {
+func (c *cameraMgr) GetCameraPosition() Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		retValue := CallCameraGetCameraPosition()
 		return ToVec2(retValue)
 	})
 }
-func (pself *cameraMgr) SetCameraPosition(position Vec2) {
+func (c *cameraMgr) SetCameraPosition(position Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(position)
 		CallCameraSetCameraPosition(arg0)
 	})
 }
-func (pself *cameraMgr) GetCameraZoom() Vec2 {
+func (c *cameraMgr) GetCameraZoom() Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		retValue := CallCameraGetCameraZoom()
 		return ToVec2(retValue)
 	})
 }
-func (pself *cameraMgr) SetCameraZoom(size Vec2) {
+func (c *cameraMgr) SetCameraZoom(size Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(size)
 		CallCameraSetCameraZoom(arg0)
 	})
 }
-func (pself *cameraMgr) GetViewportRect() Rect2 {
+func (c *cameraMgr) GetViewportRect() Rect2 {
 	return enginewrap.CallInMainThreadValue(func() Rect2 {
 		retValue := CallCameraGetViewportRect()
 		return ToRect2(retValue)
 	})
 }
-func (pself *cameraMgr) GetGlobalCameraRect() Rect2 {
+func (c *cameraMgr) GetGlobalCameraRect() Rect2 {
 	return enginewrap.CallInMainThreadValue(func() Rect2 {
 		retValue := CallCameraGetGlobalCameraRect()
 		return ToRect2(retValue)
 	})
 }
-func (pself *cameraMgr) GetStageLimitsRect() Rect2 {
+func (c *cameraMgr) GetStageLimitsRect() Rect2 {
 	return enginewrap.CallInMainThreadValue(func() Rect2 {
 		retValue := CallCameraGetStageLimitsRect()
 		return ToRect2(retValue)
 	})
 }
-func (pself *cameraMgr) SetCameraLimit(side int64, limit int64) {
+func (c *cameraMgr) SetCameraLimit(side int64, limit int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(side)
 		arg1 := ToGdInt(limit)
 		CallCameraSetCameraLimit(arg0, arg1)
 	})
 }
-func (pself *cameraMgr) SetCameraSmoothing(enabled bool) {
+func (c *cameraMgr) SetCameraSmoothing(enabled bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(enabled)
 		CallCameraSetCameraSmoothing(arg0)
 	})
 }
-func (pself *debugMgr) DebugDrawCircle(pos Vec2, radius float64, color Color) {
+func (d *debugMgr) DebugDrawCircle(pos Vec2, radius float64, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdFloat(radius)
@@ -373,7 +373,7 @@ func (pself *debugMgr) DebugDrawCircle(pos Vec2, radius float64, color Color) {
 		CallDebugDebugDrawCircle(arg0, arg1, arg2)
 	})
 }
-func (pself *debugMgr) DebugDrawRect(pos Vec2, size Vec2, color Color) {
+func (d *debugMgr) DebugDrawRect(pos Vec2, size Vec2, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdVec2(size)
@@ -381,7 +381,7 @@ func (pself *debugMgr) DebugDrawRect(pos Vec2, size Vec2, color Color) {
 		CallDebugDebugDrawRect(arg0, arg1, arg2)
 	})
 }
-func (pself *debugMgr) DebugDrawLine(from Vec2, to Vec2, color Color) {
+func (d *debugMgr) DebugDrawLine(from Vec2, to Vec2, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(from)
 		arg1 := ToGdVec2(to)
@@ -389,24 +389,24 @@ func (pself *debugMgr) DebugDrawLine(from Vec2, to Vec2, color Color) {
 		CallDebugDebugDrawLine(arg0, arg1, arg2)
 	})
 }
-func (pself *extMgr) RequestExit(exit_code int64) {
+func (e *extMgr) RequestExit(exit_code int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(exit_code)
 		CallExtRequestExit(arg0)
 	})
 }
-func (pself *extMgr) RequestReset(exit_code int64) {
+func (e *extMgr) RequestReset(exit_code int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(exit_code)
 		CallExtRequestReset(arg0)
 	})
 }
-func (pself *extMgr) RequestRestart() {
+func (e *extMgr) RequestRestart() {
 	enginewrap.CallInMainThread(func() {
 		CallExtRequestRestart()
 	})
 }
-func (pself *extMgr) OnRuntimePanic(msg string) {
+func (e *extMgr) OnRuntimePanic(msg string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(msg)
 		arg0 := (GdString)(arg0Str)
@@ -414,61 +414,61 @@ func (pself *extMgr) OnRuntimePanic(msg string) {
 		CallExtOnRuntimePanic(arg0)
 	})
 }
-func (pself *extMgr) Pause() {
+func (e *extMgr) Pause() {
 	enginewrap.CallInMainThread(func() {
 		CallExtPause()
 	})
 }
-func (pself *extMgr) Resume() {
+func (e *extMgr) Resume() {
 	enginewrap.CallInMainThread(func() {
 		CallExtResume()
 	})
 }
-func (pself *extMgr) IsPaused() bool {
+func (e *extMgr) IsPaused() bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		retValue := CallExtIsPaused()
 		return ToBool(retValue)
 	})
 }
-func (pself *extMgr) NextFrame() {
+func (e *extMgr) NextFrame() {
 	enginewrap.CallInMainThread(func() {
 		CallExtNextFrame()
 	})
 }
-func (pself *extMgr) SetLayerSorterMode(mode int64) {
+func (e *extMgr) SetLayerSorterMode(mode int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(mode)
 		CallExtSetLayerSorterMode(arg0)
 	})
 }
-func (pself *inputMgr) GetGlobalMousePos() Vec2 {
+func (i *inputMgr) GetGlobalMousePos() Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		retValue := CallInputGetGlobalMousePos()
 		return ToVec2(retValue)
 	})
 }
-func (pself *inputMgr) GetKey(key int64) bool {
+func (i *inputMgr) GetKey(key int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(key)
 		retValue := CallInputGetKey(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) GetMouseState(mouse_id int64) bool {
+func (i *inputMgr) GetMouseState(mouse_id int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(mouse_id)
 		retValue := CallInputGetMouseState(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) GetKeyState(key int64) int64 {
+func (i *inputMgr) GetKeyState(key int64) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdInt(key)
 		retValue := CallInputGetKeyState(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
+func (i *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0Str := C.CString(neg_action)
 		arg0 := (GdString)(arg0Str)
@@ -480,7 +480,7 @@ func (pself *inputMgr) GetAxis(neg_action string, pos_action string) float64 {
 		return ToFloat64(retValue)
 	})
 }
-func (pself *inputMgr) IsActionPressed(action string) bool {
+func (i *inputMgr) IsActionPressed(action string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(action)
 		arg0 := (GdString)(arg0Str)
@@ -489,7 +489,7 @@ func (pself *inputMgr) IsActionPressed(action string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) IsActionJustPressed(action string) bool {
+func (i *inputMgr) IsActionJustPressed(action string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(action)
 		arg0 := (GdString)(arg0Str)
@@ -498,7 +498,7 @@ func (pself *inputMgr) IsActionJustPressed(action string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) IsActionJustReleased(action string) bool {
+func (i *inputMgr) IsActionJustReleased(action string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(action)
 		arg0 := (GdString)(arg0Str)
@@ -507,7 +507,7 @@ func (pself *inputMgr) IsActionJustReleased(action string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) RegisterAction(action string) int64 {
+func (i *inputMgr) RegisterAction(action string) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0Str := C.CString(action)
 		arg0 := (GdString)(arg0Str)
@@ -516,7 +516,7 @@ func (pself *inputMgr) RegisterAction(action string) int64 {
 		return ToInt64(retValue)
 	})
 }
-func (pself *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
+func (i *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdInt(neg_action_id)
 		arg1 := ToGdInt(pos_action_id)
@@ -524,28 +524,28 @@ func (pself *inputMgr) GetAxisId(neg_action_id int64, pos_action_id int64) float
 		return ToFloat64(retValue)
 	})
 }
-func (pself *inputMgr) IsActionPressedId(action_id int64) bool {
+func (i *inputMgr) IsActionPressedId(action_id int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(action_id)
 		retValue := CallInputIsActionPressedId(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) IsActionJustPressedId(action_id int64) bool {
+func (i *inputMgr) IsActionJustPressedId(action_id int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(action_id)
 		retValue := CallInputIsActionJustPressedId(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) IsActionJustReleasedId(action_id int64) bool {
+func (i *inputMgr) IsActionJustReleasedId(action_id int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdInt(action_id)
 		retValue := CallInputIsActionJustReleasedId(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
+func (i *inputMgr) WriteSnapshot(out *[3]float32) {
 	enginewrap.CallInMainThread(func() {
 		if out == nil {
 			panic("GDExtensionSpxInputWriteSnapshot requires a non-nil array: out")
@@ -554,7 +554,7 @@ func (pself *inputMgr) WriteSnapshot(out *[3]float32) {
 		CallInputWriteSnapshot(arg0)
 	})
 }
-func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
+func (n *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Vec2, with_jump bool, with_debug bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(grid_size)
 		arg1 := ToGdVec2(cell_size)
@@ -563,20 +563,20 @@ func (pself *navigationMgr) SetupPathFinderWithSize(grid_size Vec2, cell_size Ve
 		CallNavigationSetupPathFinderWithSize(arg0, arg1, arg2, arg3)
 	})
 }
-func (pself *navigationMgr) SetupPathFinder(with_jump bool) {
+func (n *navigationMgr) SetupPathFinder(with_jump bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(with_jump)
 		CallNavigationSetupPathFinder(arg0)
 	})
 }
-func (pself *navigationMgr) SetObstacle(obj Object, enabled bool) {
+func (n *navigationMgr) SetObstacle(obj Object, enabled bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(enabled)
 		CallNavigationSetObstacle(arg0, arg1)
 	})
 }
-func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Array {
+func (n *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Array {
 	return enginewrap.CallInMainThreadValue(func() Array {
 		arg0 := ToGdVec2(p_from)
 		arg1 := ToGdVec2(p_to)
@@ -585,31 +585,31 @@ func (pself *navigationMgr) FindPath(p_from Vec2, p_to Vec2, with_jump bool) Arr
 		return ToArray(retValue)
 	})
 }
-func (pself *penMgr) DestroyAllPens() {
+func (p *penMgr) DestroyAllPens() {
 	enginewrap.CallInMainThread(func() {
 		CallPenDestroyAllPens()
 	})
 }
-func (pself *penMgr) SetCanvasSize(width int64, height int64) {
+func (p *penMgr) SetCanvasSize(width int64, height int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(width)
 		arg1 := ToGdInt(height)
 		CallPenSetCanvasSize(arg0, arg1)
 	})
 }
-func (pself *penMgr) CreatePen() Object {
+func (p *penMgr) CreatePen() Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		retValue := CallPenCreatePen()
 		return ToObject(retValue)
 	})
 }
-func (pself *penMgr) DestroyPen(obj Object) {
+func (p *penMgr) DestroyPen(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallPenDestroyPen(arg0)
 	})
 }
-func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
+func (p *penMgr) BatchUpdateCommands(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
 		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxPenBatchUpdateCommands array length exceeds int32: buffer")
@@ -619,26 +619,26 @@ func (pself *penMgr) BatchUpdateCommands(buffer []float32) {
 		CallPenBatchUpdateCommands(arg0, arg1)
 	})
 }
-func (pself *penMgr) PenStamp(obj Object) {
+func (p *penMgr) PenStamp(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallPenPenStamp(arg0)
 	})
 }
-func (pself *penMgr) PenStampSprite(sprite_id Object) {
+func (p *penMgr) PenStampSprite(sprite_id Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(sprite_id)
 		CallPenPenStampSprite(arg0)
 	})
 }
-func (pself *penMgr) MovePenTo(obj Object, position Vec2) {
+func (p *penMgr) MovePenTo(obj Object, position Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(position)
 		CallPenMovePenTo(arg0, arg1)
 	})
 }
-func (pself *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
+func (p *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(position)
@@ -646,27 +646,27 @@ func (pself *penMgr) RestorePenState(obj Object, position Vec2, is_down bool) {
 		CallPenRestorePenState(arg0, arg1, arg2)
 	})
 }
-func (pself *penMgr) PenDown(obj Object, move_by_mouse bool) {
+func (p *penMgr) PenDown(obj Object, move_by_mouse bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(move_by_mouse)
 		CallPenPenDown(arg0, arg1)
 	})
 }
-func (pself *penMgr) PenUp(obj Object) {
+func (p *penMgr) PenUp(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallPenPenUp(arg0)
 	})
 }
-func (pself *penMgr) SetPenColorTo(obj Object, color Color) {
+func (p *penMgr) SetPenColorTo(obj Object, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdColor(color)
 		CallPenSetPenColorTo(arg0, arg1)
 	})
 }
-func (pself *penMgr) ChangePenBy(obj Object, property int64, amount float64) {
+func (p *penMgr) ChangePenBy(obj Object, property int64, amount float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(property)
@@ -674,7 +674,7 @@ func (pself *penMgr) ChangePenBy(obj Object, property int64, amount float64) {
 		CallPenChangePenBy(arg0, arg1, arg2)
 	})
 }
-func (pself *penMgr) SetPenTo(obj Object, property int64, value float64) {
+func (p *penMgr) SetPenTo(obj Object, property int64, value float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(property)
@@ -682,21 +682,21 @@ func (pself *penMgr) SetPenTo(obj Object, property int64, value float64) {
 		CallPenSetPenTo(arg0, arg1, arg2)
 	})
 }
-func (pself *penMgr) ChangePenSizeBy(obj Object, amount float64) {
+func (p *penMgr) ChangePenSizeBy(obj Object, amount float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(amount)
 		CallPenChangePenSizeBy(arg0, arg1)
 	})
 }
-func (pself *penMgr) SetPenSizeTo(obj Object, size float64) {
+func (p *penMgr) SetPenSizeTo(obj Object, size float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(size)
 		CallPenSetPenSizeTo(arg0, arg1)
 	})
 }
-func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
+func (p *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(texture_path)
@@ -705,7 +705,7 @@ func (pself *penMgr) SetPenStampTexture(obj Object, texture_path string) {
 		CallPenSetPenStampTexture(arg0, arg1)
 	})
 }
-func (pself *penMgr) PenStampWithTransform(obj Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
+func (p *penMgr) PenStampWithTransform(obj Object, texture_path string, position Vec2, rotation_radians float64, scale Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(texture_path)
@@ -717,7 +717,7 @@ func (pself *penMgr) PenStampWithTransform(obj Object, texture_path string, posi
 		CallPenPenStampWithTransform(arg0, arg1, arg2, arg3, arg4)
 	})
 }
-func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
+func (p *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0 := ToGdVec2(from)
 		arg1 := ToGdVec2(to)
@@ -726,7 +726,7 @@ func (pself *physicsMgr) Raycast(from Vec2, to Vec2, collision_mask int64) Objec
 		return ToObject(retValue)
 	})
 }
-func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
+func (p *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdVec2(from)
 		arg1 := ToGdVec2(to)
@@ -737,14 +737,14 @@ func (pself *physicsMgr) CheckCollision(from Vec2, to Vec2, collision_mask int64
 		return ToBool(retValue)
 	})
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
+func (p *physicsMgr) CheckTouchedCameraBoundaries(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallPhysicsCheckTouchedCameraBoundaries(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
+func (p *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(board_type)
@@ -752,21 +752,21 @@ func (pself *physicsMgr) CheckTouchedCameraBoundary(obj Object, board_type int64
 		return ToBool(retValue)
 	})
 }
-func (pself *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
+func (p *physicsMgr) CheckNearestTouchedCameraBoundary(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallPhysicsCheckNearestTouchedCameraBoundary(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
+func (p *physicsMgr) CheckTouchedStageBoundaries(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallPhysicsCheckTouchedStageBoundaries(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
+func (p *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(board_type)
@@ -774,56 +774,56 @@ func (pself *physicsMgr) CheckTouchedStageBoundary(obj Object, board_type int64)
 		return ToBool(retValue)
 	})
 }
-func (pself *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
+func (p *physicsMgr) CheckNearestTouchedStageBoundary(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallPhysicsCheckNearestTouchedStageBoundary(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
+func (p *physicsMgr) SetCollisionSystemType(is_collision_by_alpha bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(is_collision_by_alpha)
 		CallPhysicsSetCollisionSystemType(arg0)
 	})
 }
-func (pself *physicsMgr) SetGlobalGravity(gravity float64) {
+func (p *physicsMgr) SetGlobalGravity(gravity float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdFloat(gravity)
 		CallPhysicsSetGlobalGravity(arg0)
 	})
 }
-func (pself *physicsMgr) GetGlobalGravity() float64 {
+func (p *physicsMgr) GetGlobalGravity() float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		retValue := CallPhysicsGetGlobalGravity()
 		return ToFloat64(retValue)
 	})
 }
-func (pself *physicsMgr) SetGlobalFriction(friction float64) {
+func (p *physicsMgr) SetGlobalFriction(friction float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdFloat(friction)
 		CallPhysicsSetGlobalFriction(arg0)
 	})
 }
-func (pself *physicsMgr) GetGlobalFriction() float64 {
+func (p *physicsMgr) GetGlobalFriction() float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		retValue := CallPhysicsGetGlobalFriction()
 		return ToFloat64(retValue)
 	})
 }
-func (pself *physicsMgr) SetGlobalAirDrag(air_drag float64) {
+func (p *physicsMgr) SetGlobalAirDrag(air_drag float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdFloat(air_drag)
 		CallPhysicsSetGlobalAirDrag(arg0)
 	})
 }
-func (pself *physicsMgr) GetGlobalAirDrag() float64 {
+func (p *physicsMgr) GetGlobalAirDrag() float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		retValue := CallPhysicsGetGlobalAirDrag()
 		return ToFloat64(retValue)
 	})
 }
-func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
+func (p *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask int64) Array {
 	return enginewrap.CallInMainThreadValue(func() Array {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdVec2(size)
@@ -832,7 +832,7 @@ func (pself *physicsMgr) CheckCollisionRect(pos Vec2, size Vec2, collision_mask 
 		return ToArray(retValue)
 	})
 }
-func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
+func (p *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collision_mask int64) Array {
 	return enginewrap.CallInMainThreadValue(func() Array {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdFloat(radius)
@@ -841,7 +841,7 @@ func (pself *physicsMgr) CheckCollisionCircle(pos Vec2, radius float64, collisio
 		return ToArray(retValue)
 	})
 }
-func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
+func (p *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites Array, collision_mask int64, collide_with_areas bool, collide_with_bodies bool) Array {
 	return enginewrap.CallInMainThreadValue(func() Array {
 		arg0 := ToGdVec2(from)
 		arg1 := ToGdVec2(to)
@@ -860,7 +860,7 @@ func (pself *physicsMgr) RaycastWithDetails(from Vec2, to Vec2, ignore_sprites A
 		return ToArray(retValue)
 	})
 }
-func (pself *platformMgr) SetStretch(enabled bool, content_width int64, content_height int64) {
+func (p *platformMgr) SetStretch(enabled bool, content_width int64, content_height int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(enabled)
 		arg1 := ToGdInt(content_width)
@@ -868,19 +868,19 @@ func (pself *platformMgr) SetStretch(enabled bool, content_width int64, content_
 		CallPlatformSetStretch(arg0, arg1, arg2)
 	})
 }
-func (pself *platformMgr) SetWindowPosition(pos Vec2) {
+func (p *platformMgr) SetWindowPosition(pos Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		CallPlatformSetWindowPosition(arg0)
 	})
 }
-func (pself *platformMgr) GetWindowPosition() Vec2 {
+func (p *platformMgr) GetWindowPosition() Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		retValue := CallPlatformGetWindowPosition()
 		return ToVec2(retValue)
 	})
 }
-func (pself *platformMgr) SetWindowSize(width int64, height int64, with_content_scale bool) {
+func (p *platformMgr) SetWindowSize(width int64, height int64, with_content_scale bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(width)
 		arg1 := ToGdInt(height)
@@ -888,13 +888,13 @@ func (pself *platformMgr) SetWindowSize(width int64, height int64, with_content_
 		CallPlatformSetWindowSize(arg0, arg1, arg2)
 	})
 }
-func (pself *platformMgr) GetWindowSize() Vec2 {
+func (p *platformMgr) GetWindowSize() Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		retValue := CallPlatformGetWindowSize()
 		return ToVec2(retValue)
 	})
 }
-func (pself *platformMgr) SetWindowTitle(title string) {
+func (p *platformMgr) SetWindowTitle(title string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(title)
 		arg0 := (GdString)(arg0Str)
@@ -902,71 +902,71 @@ func (pself *platformMgr) SetWindowTitle(title string) {
 		CallPlatformSetWindowTitle(arg0)
 	})
 }
-func (pself *platformMgr) GetWindowTitle() string {
+func (p *platformMgr) GetWindowTitle() string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		retValue := CallPlatformGetWindowTitle()
 		return ToString(retValue)
 	})
 }
-func (pself *platformMgr) SetWindowFullscreen(enable bool) {
+func (p *platformMgr) SetWindowFullscreen(enable bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(enable)
 		CallPlatformSetWindowFullscreen(arg0)
 	})
 }
-func (pself *platformMgr) IsWindowFullscreen() bool {
+func (p *platformMgr) IsWindowFullscreen() bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		retValue := CallPlatformIsWindowFullscreen()
 		return ToBool(retValue)
 	})
 }
-func (pself *platformMgr) SetDebugMode(enable bool) {
+func (p *platformMgr) SetDebugMode(enable bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(enable)
 		CallPlatformSetDebugMode(arg0)
 	})
 }
-func (pself *platformMgr) IsDebugMode() bool {
+func (p *platformMgr) IsDebugMode() bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		retValue := CallPlatformIsDebugMode()
 		return ToBool(retValue)
 	})
 }
-func (pself *platformMgr) IsMainThread() bool {
+func (p *platformMgr) IsMainThread() bool {
 	retValue := CallPlatformIsMainThread()
 	return ToBool(retValue)
 }
-func (pself *platformMgr) GetTimeScale() float64 {
+func (p *platformMgr) GetTimeScale() float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		retValue := CallPlatformGetTimeScale()
 		return ToFloat64(retValue)
 	})
 }
-func (pself *platformMgr) SetTimeScale(time_scale float64) {
+func (p *platformMgr) SetTimeScale(time_scale float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdFloat(time_scale)
 		CallPlatformSetTimeScale(arg0)
 	})
 }
-func (pself *platformMgr) GetMaxFps() int64 {
+func (p *platformMgr) GetMaxFps() int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		retValue := CallPlatformGetMaxFps()
 		return ToInt64(retValue)
 	})
 }
-func (pself *platformMgr) SetMaxFps(fps int64) {
+func (p *platformMgr) SetMaxFps(fps int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(fps)
 		CallPlatformSetMaxFps(arg0)
 	})
 }
-func (pself *platformMgr) GetPersistentDataDir() string {
+func (p *platformMgr) GetPersistentDataDir() string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		retValue := CallPlatformGetPersistentDataDir()
 		return ToString(retValue)
 	})
 }
-func (pself *platformMgr) SetPersistentDataDir(path string) {
+func (p *platformMgr) SetPersistentDataDir(path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -974,7 +974,7 @@ func (pself *platformMgr) SetPersistentDataDir(path string) {
 		CallPlatformSetPersistentDataDir(arg0)
 	})
 }
-func (pself *platformMgr) IsInPersistentDataDir(path string) bool {
+func (p *platformMgr) IsInPersistentDataDir(path string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -983,7 +983,7 @@ func (pself *platformMgr) IsInPersistentDataDir(path string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
+func (r *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p_json_ctx string, fps int64, is_atlas bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(p_sprite_type)
 		arg0 := (GdString)(arg0Str)
@@ -999,19 +999,19 @@ func (pself *resMgr) CreateAnimation(p_sprite_type string, p_anim_name string, p
 		CallResCreateAnimation(arg0, arg1, arg2, arg3, arg4)
 	})
 }
-func (pself *resMgr) SetLoadMode(is_direct_mode bool) {
+func (r *resMgr) SetLoadMode(is_direct_mode bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdBool(is_direct_mode)
 		CallResSetLoadMode(arg0)
 	})
 }
-func (pself *resMgr) GetLoadMode() bool {
+func (r *resMgr) GetLoadMode() bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		retValue := CallResGetLoadMode()
 		return ToBool(retValue)
 	})
 }
-func (pself *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
+func (r *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
 	return enginewrap.CallInMainThreadValue(func() Rect2 {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1020,7 +1020,7 @@ func (pself *resMgr) GetBoundFromAlpha(p_path string) Rect2 {
 		return ToRect2(retValue)
 	})
 }
-func (pself *resMgr) GetImageSize(p_path string) Vec2 {
+func (r *resMgr) GetImageSize(p_path string) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1029,7 +1029,7 @@ func (pself *resMgr) GetImageSize(p_path string) Vec2 {
 		return ToVec2(retValue)
 	})
 }
-func (pself *resMgr) GetImageLogicalSize(p_path string) Vec2 {
+func (r *resMgr) GetImageLogicalSize(p_path string) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1038,7 +1038,7 @@ func (pself *resMgr) GetImageLogicalSize(p_path string) Vec2 {
 		return ToVec2(retValue)
 	})
 }
-func (pself *resMgr) ReadAllText(p_path string) string {
+func (r *resMgr) ReadAllText(p_path string) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1047,7 +1047,7 @@ func (pself *resMgr) ReadAllText(p_path string) string {
 		return ToString(retValue)
 	})
 }
-func (pself *resMgr) HasFile(p_path string) bool {
+func (r *resMgr) HasFile(p_path string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1056,7 +1056,7 @@ func (pself *resMgr) HasFile(p_path string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *resMgr) ListDirectories(p_path string) string {
+func (r *resMgr) ListDirectories(p_path string) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0Str := C.CString(p_path)
 		arg0 := (GdString)(arg0Str)
@@ -1065,7 +1065,7 @@ func (pself *resMgr) ListDirectories(p_path string) string {
 		return ToString(retValue)
 	})
 }
-func (pself *resMgr) ReloadTexture(path string) {
+func (r *resMgr) ReloadTexture(path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -1073,7 +1073,7 @@ func (pself *resMgr) ReloadTexture(path string) {
 		CallResReloadTexture(arg0)
 	})
 }
-func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
+func (r *resMgr) ApplyProjectFonts(default_font_path string, font_paths Array, font_families Array, preferences Array) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0Str := C.CString(default_font_path)
 		arg0 := (GdString)(arg0Str)
@@ -1106,7 +1106,7 @@ func (pself *resMgr) ApplyProjectFonts(default_font_path string, font_paths Arra
 		return ToString(retValue)
 	})
 }
-func (pself *resMgr) SetDefaultFont(font_path string) {
+func (r *resMgr) SetDefaultFont(font_path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(font_path)
 		arg0 := (GdString)(arg0Str)
@@ -1114,7 +1114,7 @@ func (pself *resMgr) SetDefaultFont(font_path string) {
 		CallResSetDefaultFont(arg0)
 	})
 }
-func (pself *resMgr) RegisterFontFace(font_path string, family string) {
+func (r *resMgr) RegisterFontFace(font_path string, family string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(font_path)
 		arg0 := (GdString)(arg0Str)
@@ -1125,7 +1125,7 @@ func (pself *resMgr) RegisterFontFace(font_path string, family string) {
 		CallResRegisterFontFace(arg0, arg1)
 	})
 }
-func (pself *resMgr) SetFontPreferences(preferences Array) {
+func (r *resMgr) SetFontPreferences(preferences Array) {
 	enginewrap.CallInMainThread(func() {
 		arg0Info := ToGdArrayInfo(preferences)
 		if arg0Info != nil {
@@ -1138,7 +1138,7 @@ func (pself *resMgr) SetFontPreferences(preferences Array) {
 		CallResSetFontPreferences(arg0)
 	})
 }
-func (pself *sceneMgr) ChangeSceneToFile(path string) {
+func (s *sceneMgr) ChangeSceneToFile(path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -1146,28 +1146,28 @@ func (pself *sceneMgr) ChangeSceneToFile(path string) {
 		CallSceneChangeSceneToFile(arg0)
 	})
 }
-func (pself *sceneMgr) DestroyAllSprites() {
+func (s *sceneMgr) DestroyAllSprites() {
 	enginewrap.CallInMainThread(func() {
 		CallSceneDestroyAllSprites()
 	})
 }
-func (pself *sceneMgr) ReloadCurrentScene() int64 {
+func (s *sceneMgr) ReloadCurrentScene() int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		retValue := CallSceneReloadCurrentScene()
 		return ToInt64(retValue)
 	})
 }
-func (pself *sceneMgr) UnloadCurrentScene() {
+func (s *sceneMgr) UnloadCurrentScene() {
 	enginewrap.CallInMainThread(func() {
 		CallSceneUnloadCurrentScene()
 	})
 }
-func (pself *sceneMgr) ClearPureSprites() {
+func (s *sceneMgr) ClearPureSprites() {
 	enginewrap.CallInMainThread(func() {
 		CallSceneClearPureSprites()
 	})
 }
-func (pself *sceneMgr) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {
+func (s *sceneMgr) CreatePureSprite(texture_path string, pos Vec2, zindex int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(texture_path)
 		arg0 := (GdString)(arg0Str)
@@ -1177,13 +1177,13 @@ func (pself *sceneMgr) CreatePureSprite(texture_path string, pos Vec2, zindex in
 		CallSceneCreatePureSprite(arg0, arg1, arg2)
 	})
 }
-func (pself *sceneMgr) DestroyPureSprite(id Object) {
+func (s *sceneMgr) DestroyPureSprite(id Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(id)
 		CallSceneDestroyPureSprite(arg0)
 	})
 }
-func (pself *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) Object {
+func (s *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(texture_path)
 		arg0 := (GdString)(arg0Str)
@@ -1197,7 +1197,7 @@ func (pself *sceneMgr) CreateRenderSprite(texture_path string, pos Vec2, degree 
 		return ToObject(retValue)
 	})
 }
-func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object {
+func (s *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree float64, scale Vec2, zindex int64, pivot Vec2, collider_type int64, collider_pivot Vec2, collider_params Array) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(texture_path)
 		arg0 := (GdString)(arg0Str)
@@ -1221,27 +1221,27 @@ func (pself *sceneMgr) CreateStaticSprite(texture_path string, pos Vec2, degree 
 		return ToObject(retValue)
 	})
 }
-func (pself *spriteMgr) SetDontDestroyOnLoad(obj Object) {
+func (s *spriteMgr) SetDontDestroyOnLoad(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallSpriteSetDontDestroyOnLoad(arg0)
 	})
 }
-func (pself *spriteMgr) SetProcess(obj Object, is_on bool) {
+func (s *spriteMgr) SetProcess(obj Object, is_on bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(is_on)
 		CallSpriteSetProcess(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetPhysicProcess(obj Object, is_on bool) {
+func (s *spriteMgr) SetPhysicProcess(obj Object, is_on bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(is_on)
 		CallSpriteSetPhysicProcess(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetTypeName(obj Object, type_name string) {
+func (s *spriteMgr) SetTypeName(obj Object, type_name string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(type_name)
@@ -1250,21 +1250,21 @@ func (pself *spriteMgr) SetTypeName(obj Object, type_name string) {
 		CallSpriteSetTypeName(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetPivot(obj Object, pivot Vec2) {
+func (s *spriteMgr) SetPivot(obj Object, pivot Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(pivot)
 		CallSpriteSetPivot(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetPivot(obj Object) Vec2 {
+func (s *spriteMgr) GetPivot(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetPivot(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
+func (s *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1274,7 +1274,7 @@ func (pself *spriteMgr) SetChildPosition(obj Object, path string, pos Vec2) {
 		CallSpriteSetChildPosition(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
+func (s *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1284,7 +1284,7 @@ func (pself *spriteMgr) GetChildPosition(obj Object, path string) Vec2 {
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
+func (s *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1294,7 +1294,7 @@ func (pself *spriteMgr) SetChildRotation(obj Object, path string, rot float64) {
 		CallSpriteSetChildRotation(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetChildRotation(obj Object, path string) float64 {
+func (s *spriteMgr) GetChildRotation(obj Object, path string) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1304,7 +1304,7 @@ func (pself *spriteMgr) GetChildRotation(obj Object, path string) float64 {
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
+func (s *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1314,7 +1314,7 @@ func (pself *spriteMgr) SetChildScale(obj Object, path string, scale Vec2) {
 		CallSpriteSetChildScale(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
+func (s *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1324,7 +1324,7 @@ func (pself *spriteMgr) GetChildScale(obj Object, path string) Vec2 {
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
+func (s *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger bool, is_dst_trigger bool) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdObj(target)
@@ -1334,7 +1334,7 @@ func (pself *spriteMgr) CheckCollision(obj Object, target Object, is_src_trigger
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
+func (s *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click_query bool) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(point)
@@ -1343,21 +1343,21 @@ func (pself *spriteMgr) CheckCollisionWithPoint(obj Object, point Vec2, is_click
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
+func (s *spriteMgr) SetDebugCollisionVisible(obj Object, visible bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(visible)
 		CallSpriteSetDebugCollisionVisible(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
+func (s *spriteMgr) IsDebugCollisionVisible(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsDebugCollisionVisible(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CreateBackdrop(path string) Object {
+func (s *spriteMgr) CreateBackdrop(path string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -1366,7 +1366,7 @@ func (pself *spriteMgr) CreateBackdrop(path string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
+func (s *spriteMgr) CreateSprite(path string, pos Vec2) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -1376,42 +1376,42 @@ func (pself *spriteMgr) CreateSprite(path string, pos Vec2) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *spriteMgr) CreateBareSprite(pos Vec2) Object {
+func (s *spriteMgr) CreateBareSprite(pos Vec2) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0 := ToGdVec2(pos)
 		retValue := CallSpriteCreateBareSprite(arg0)
 		return ToObject(retValue)
 	})
 }
-func (pself *spriteMgr) CloneSprite(obj Object) Object {
+func (s *spriteMgr) CloneSprite(obj Object) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteCloneSprite(arg0)
 		return ToObject(retValue)
 	})
 }
-func (pself *spriteMgr) DestroySprite(obj Object) bool {
+func (s *spriteMgr) DestroySprite(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteDestroySprite(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsSpriteAlive(obj Object) bool {
+func (s *spriteMgr) IsSpriteAlive(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsSpriteAlive(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetPosition(obj Object, pos Vec2) {
+func (s *spriteMgr) SetPosition(obj Object, pos Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(pos)
 		CallSpriteSetPosition(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+func (s *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(pos)
@@ -1422,70 +1422,70 @@ func (pself *spriteMgr) SetTransform(obj Object, pos Vec2, rot float64, scale Ve
 		CallSpriteSetTransform(arg0, arg1, arg2, arg3, arg4, arg5)
 	})
 }
-func (pself *spriteMgr) GetPosition(obj Object) Vec2 {
+func (s *spriteMgr) GetPosition(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetPosition(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetRotation(obj Object, rot float64) {
+func (s *spriteMgr) SetRotation(obj Object, rot float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(rot)
 		CallSpriteSetRotation(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetRotation(obj Object) float64 {
+func (s *spriteMgr) GetRotation(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetRotation(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetScale(obj Object, scale Vec2) {
+func (s *spriteMgr) SetScale(obj Object, scale Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(scale)
 		CallSpriteSetScale(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetScale(obj Object) Vec2 {
+func (s *spriteMgr) GetScale(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetScale(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
+func (s *spriteMgr) SetRenderScale(obj Object, scale Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(scale)
 		CallSpriteSetRenderScale(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetRenderScale(obj Object) Vec2 {
+func (s *spriteMgr) GetRenderScale(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetRenderScale(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetColor(obj Object, color Color) {
+func (s *spriteMgr) SetColor(obj Object, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdColor(color)
 		CallSpriteSetColor(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetColor(obj Object) Color {
+func (s *spriteMgr) GetColor(obj Object) Color {
 	return enginewrap.CallInMainThreadValue(func() Color {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetColor(arg0)
 		return ToColor(retValue)
 	})
 }
-func (pself *spriteMgr) SetMaterialShader(obj Object, path string) {
+func (s *spriteMgr) SetMaterialShader(obj Object, path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1494,14 +1494,14 @@ func (pself *spriteMgr) SetMaterialShader(obj Object, path string) {
 		CallSpriteSetMaterialShader(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetMaterialShader(obj Object) string {
+func (s *spriteMgr) GetMaterialShader(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetMaterialShader(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
+func (s *spriteMgr) SetMaterialParams(obj Object, effect string, amount float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1511,7 +1511,7 @@ func (pself *spriteMgr) SetMaterialParams(obj Object, effect string, amount floa
 		CallSpriteSetMaterialParams(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
+func (s *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1521,7 +1521,7 @@ func (pself *spriteMgr) GetMaterialParams(obj Object, effect string) float64 {
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
+func (s *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float64, y float64, z float64, w float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1534,7 +1534,7 @@ func (pself *spriteMgr) SetMaterialParamsVec(obj Object, effect string, x float6
 		CallSpriteSetMaterialParamsVec(arg0, arg1, arg2, arg3, arg4, arg5)
 	})
 }
-func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
+func (s *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Vec4) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1544,7 +1544,7 @@ func (pself *spriteMgr) SetMaterialParamsVec4(obj Object, effect string, vec4 Ve
 		CallSpriteSetMaterialParamsVec4(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
+func (s *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
 	return enginewrap.CallInMainThreadValue(func() Vec4 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1554,7 +1554,7 @@ func (pself *spriteMgr) GetMaterialParamsVec4(obj Object, effect string) Vec4 {
 		return ToVec4(retValue)
 	})
 }
-func (pself *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
+func (s *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1564,7 +1564,7 @@ func (pself *spriteMgr) SetMaterialParamsColor(obj Object, effect string, color 
 		CallSpriteSetMaterialParamsColor(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color {
+func (s *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color {
 	return enginewrap.CallInMainThreadValue(func() Color {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(effect)
@@ -1574,7 +1574,7 @@ func (pself *spriteMgr) GetMaterialParamsColor(obj Object, effect string) Color 
 		return ToColor(retValue)
 	})
 }
-func (pself *spriteMgr) SetTextureAtlas(obj Object, path string, rect2 Rect2) {
+func (s *spriteMgr) SetTextureAtlas(obj Object, path string, rect2 Rect2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1584,7 +1584,7 @@ func (pself *spriteMgr) SetTextureAtlas(obj Object, path string, rect2 Rect2) {
 		CallSpriteSetTextureAtlas(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTexture(obj Object, path string) {
+func (s *spriteMgr) SetTexture(obj Object, path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1593,7 +1593,7 @@ func (pself *spriteMgr) SetTexture(obj Object, path string) {
 		CallSpriteSetTexture(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetTextureAtlasDirect(obj Object, path string, rect2 Rect2) {
+func (s *spriteMgr) SetTextureAtlasDirect(obj Object, path string, rect2 Rect2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1603,7 +1603,7 @@ func (pself *spriteMgr) SetTextureAtlasDirect(obj Object, path string, rect2 Rec
 		CallSpriteSetTextureAtlasDirect(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTextureDirect(obj Object, path string) {
+func (s *spriteMgr) SetTextureDirect(obj Object, path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -1612,42 +1612,42 @@ func (pself *spriteMgr) SetTextureDirect(obj Object, path string) {
 		CallSpriteSetTextureDirect(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetTexture(obj Object) string {
+func (s *spriteMgr) GetTexture(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetTexture(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *spriteMgr) SetVisible(obj Object, visible bool) {
+func (s *spriteMgr) SetVisible(obj Object, visible bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(visible)
 		CallSpriteSetVisible(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetVisible(obj Object) bool {
+func (s *spriteMgr) GetVisible(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetVisible(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) GetZIndex(obj Object) int64 {
+func (s *spriteMgr) GetZIndex(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetZIndex(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetZIndex(obj Object, z int64) {
+func (s *spriteMgr) SetZIndex(obj Object, z int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(z)
 		CallSpriteSetZIndex(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
+func (s *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isLoop bool, p_revert bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(p_name)
@@ -1659,7 +1659,7 @@ func (pself *spriteMgr) PlayAnim(obj Object, p_name string, p_speed float64, isL
 		CallSpritePlayAnim(arg0, arg1, arg2, arg3, arg4)
 	})
 }
-func (pself *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
+func (s *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(p_name)
@@ -1668,26 +1668,26 @@ func (pself *spriteMgr) PlayBackwardsAnim(obj Object, p_name string) {
 		CallSpritePlayBackwardsAnim(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) PauseAnim(obj Object) {
+func (s *spriteMgr) PauseAnim(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallSpritePauseAnim(arg0)
 	})
 }
-func (pself *spriteMgr) StopAnim(obj Object) {
+func (s *spriteMgr) StopAnim(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallSpriteStopAnim(arg0)
 	})
 }
-func (pself *spriteMgr) IsPlayingAnim(obj Object) bool {
+func (s *spriteMgr) IsPlayingAnim(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsPlayingAnim(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnim(obj Object, p_name string) {
+func (s *spriteMgr) SetAnim(obj Object, p_name string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(p_name)
@@ -1696,377 +1696,377 @@ func (pself *spriteMgr) SetAnim(obj Object, p_name string) {
 		CallSpriteSetAnim(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetAnim(obj Object) string {
+func (s *spriteMgr) GetAnim(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetAnim(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimFrame(obj Object, p_frame int64) {
+func (s *spriteMgr) SetAnimFrame(obj Object, p_frame int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(p_frame)
 		CallSpriteSetAnimFrame(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetAnimFrame(obj Object) int64 {
+func (s *spriteMgr) GetAnimFrame(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetAnimFrame(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
+func (s *spriteMgr) SetAnimSpeedScale(obj Object, p_speed_scale float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(p_speed_scale)
 		CallSpriteSetAnimSpeedScale(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetAnimSpeedScale(obj Object) float64 {
+func (s *spriteMgr) GetAnimSpeedScale(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetAnimSpeedScale(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) GetAnimPlayingSpeed(obj Object) float64 {
+func (s *spriteMgr) GetAnimPlayingSpeed(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetAnimPlayingSpeed(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
+func (s *spriteMgr) SetAnimCentered(obj Object, p_center bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(p_center)
 		CallSpriteSetAnimCentered(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsAnimCentered(obj Object) bool {
+func (s *spriteMgr) IsAnimCentered(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsAnimCentered(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimOffset(obj Object, p_offset Vec2) {
+func (s *spriteMgr) SetAnimOffset(obj Object, p_offset Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(p_offset)
 		CallSpriteSetAnimOffset(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetAnimOffset(obj Object) Vec2 {
+func (s *spriteMgr) GetAnimOffset(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetAnimOffset(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
+func (s *spriteMgr) SetAnimFlipH(obj Object, p_flip bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(p_flip)
 		CallSpriteSetAnimFlipH(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsAnimFlippedH(obj Object) bool {
+func (s *spriteMgr) IsAnimFlippedH(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsAnimFlippedH(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
+func (s *spriteMgr) SetAnimFlipV(obj Object, p_flip bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(p_flip)
 		CallSpriteSetAnimFlipV(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsAnimFlippedV(obj Object) bool {
+func (s *spriteMgr) IsAnimFlippedV(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsAnimFlippedV(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) GetCurrentAnimName(obj Object) string {
+func (s *spriteMgr) GetCurrentAnimName(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetCurrentAnimName(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
+func (s *spriteMgr) SetVelocity(obj Object, velocity Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(velocity)
 		CallSpriteSetVelocity(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetVelocity(obj Object) Vec2 {
+func (s *spriteMgr) GetVelocity(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetVelocity(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnFloor(obj Object) bool {
+func (s *spriteMgr) IsOnFloor(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnFloor(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnFloorOnly(obj Object) bool {
+func (s *spriteMgr) IsOnFloorOnly(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnFloorOnly(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnWall(obj Object) bool {
+func (s *spriteMgr) IsOnWall(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnWall(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnWallOnly(obj Object) bool {
+func (s *spriteMgr) IsOnWallOnly(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnWallOnly(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnCeiling(obj Object) bool {
+func (s *spriteMgr) IsOnCeiling(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnCeiling(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) IsOnCeilingOnly(obj Object) bool {
+func (s *spriteMgr) IsOnCeilingOnly(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsOnCeilingOnly(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) GetLastMotion(obj Object) Vec2 {
+func (s *spriteMgr) GetLastMotion(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetLastMotion(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) GetPositionDelta(obj Object) Vec2 {
+func (s *spriteMgr) GetPositionDelta(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetPositionDelta(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) GetFloorNormal(obj Object) Vec2 {
+func (s *spriteMgr) GetFloorNormal(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetFloorNormal(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) GetWallNormal(obj Object) Vec2 {
+func (s *spriteMgr) GetWallNormal(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetWallNormal(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) GetRealVelocity(obj Object) Vec2 {
+func (s *spriteMgr) GetRealVelocity(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetRealVelocity(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *spriteMgr) MoveAndSlide(obj Object) {
+func (s *spriteMgr) MoveAndSlide(obj Object) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		CallSpriteMoveAndSlide(arg0)
 	})
 }
-func (pself *spriteMgr) SetGravity(obj Object, gravity float64) {
+func (s *spriteMgr) SetGravity(obj Object, gravity float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(gravity)
 		CallSpriteSetGravity(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetGravity(obj Object) float64 {
+func (s *spriteMgr) GetGravity(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetGravity(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetMass(obj Object, mass float64) {
+func (s *spriteMgr) SetMass(obj Object, mass float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(mass)
 		CallSpriteSetMass(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetMass(obj Object) float64 {
+func (s *spriteMgr) GetMass(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetMass(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) AddForce(obj Object, force Vec2) {
+func (s *spriteMgr) AddForce(obj Object, force Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(force)
 		CallSpriteAddForce(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) AddImpulse(obj Object, impulse Vec2) {
+func (s *spriteMgr) AddImpulse(obj Object, impulse Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(impulse)
 		CallSpriteAddImpulse(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) SetPhysicsMode(obj Object, mode int64) {
+func (s *spriteMgr) SetPhysicsMode(obj Object, mode int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(mode)
 		CallSpriteSetPhysicsMode(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetPhysicsMode(obj Object) int64 {
+func (s *spriteMgr) GetPhysicsMode(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetPhysicsMode(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetUseGravity(obj Object, enabled bool) {
+func (s *spriteMgr) SetUseGravity(obj Object, enabled bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(enabled)
 		CallSpriteSetUseGravity(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsUseGravity(obj Object) bool {
+func (s *spriteMgr) IsUseGravity(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsUseGravity(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetGravityScale(obj Object, scale float64) {
+func (s *spriteMgr) SetGravityScale(obj Object, scale float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(scale)
 		CallSpriteSetGravityScale(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetGravityScale(obj Object) float64 {
+func (s *spriteMgr) GetGravityScale(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetGravityScale(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetDrag(obj Object, drag float64) {
+func (s *spriteMgr) SetDrag(obj Object, drag float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(drag)
 		CallSpriteSetDrag(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetDrag(obj Object) float64 {
+func (s *spriteMgr) GetDrag(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetDrag(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetFriction(obj Object, friction float64) {
+func (s *spriteMgr) SetFriction(obj Object, friction float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(friction)
 		CallSpriteSetFriction(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetFriction(obj Object) float64 {
+func (s *spriteMgr) GetFriction(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetFriction(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *spriteMgr) SetCollisionLayer(obj Object, layer int64) {
+func (s *spriteMgr) SetCollisionLayer(obj Object, layer int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(layer)
 		CallSpriteSetCollisionLayer(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetCollisionLayer(obj Object) int64 {
+func (s *spriteMgr) GetCollisionLayer(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetCollisionLayer(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetCollisionMask(obj Object, mask int64) {
+func (s *spriteMgr) SetCollisionMask(obj Object, mask int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(mask)
 		CallSpriteSetCollisionMask(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetCollisionMask(obj Object) int64 {
+func (s *spriteMgr) GetCollisionMask(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetCollisionMask(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetTriggerLayer(obj Object, layer int64) {
+func (s *spriteMgr) SetTriggerLayer(obj Object, layer int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(layer)
 		CallSpriteSetTriggerLayer(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetTriggerLayer(obj Object) int64 {
+func (s *spriteMgr) GetTriggerLayer(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetTriggerLayer(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetTriggerMask(obj Object, mask int64) {
+func (s *spriteMgr) SetTriggerMask(obj Object, mask int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(mask)
 		CallSpriteSetTriggerMask(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) GetTriggerMask(obj Object) int64 {
+func (s *spriteMgr) GetTriggerMask(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteGetTriggerMask(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
+func (s *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2074,7 +2074,7 @@ func (pself *spriteMgr) SetColliderRect(obj Object, center Vec2, size Vec2) {
 		CallSpriteSetColliderRect(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetColliderCircle(obj Object, center Vec2, radius float64) {
+func (s *spriteMgr) SetColliderCircle(obj Object, center Vec2, radius float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2082,7 +2082,7 @@ func (pself *spriteMgr) SetColliderCircle(obj Object, center Vec2, radius float6
 		CallSpriteSetColliderCircle(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
+func (s *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2090,7 +2090,7 @@ func (pself *spriteMgr) SetColliderCapsule(obj Object, center Vec2, size Vec2) {
 		CallSpriteSetColliderCapsule(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
+func (s *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2105,21 +2105,21 @@ func (pself *spriteMgr) SetColliderPolygon(obj Object, center Vec2, points Array
 		CallSpriteSetColliderPolygon(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
+func (s *spriteMgr) SetCollisionEnabled(obj Object, enabled bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(enabled)
 		CallSpriteSetCollisionEnabled(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsCollisionEnabled(obj Object) bool {
+func (s *spriteMgr) IsCollisionEnabled(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsCollisionEnabled(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
+func (s *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2127,7 +2127,7 @@ func (pself *spriteMgr) SetTriggerRect(obj Object, center Vec2, size Vec2) {
 		CallSpriteSetTriggerRect(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTriggerCircle(obj Object, center Vec2, radius float64) {
+func (s *spriteMgr) SetTriggerCircle(obj Object, center Vec2, radius float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2135,7 +2135,7 @@ func (pself *spriteMgr) SetTriggerCircle(obj Object, center Vec2, radius float64
 		CallSpriteSetTriggerCircle(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
+func (s *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2143,7 +2143,7 @@ func (pself *spriteMgr) SetTriggerCapsule(obj Object, center Vec2, size Vec2) {
 		CallSpriteSetTriggerCapsule(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
+func (s *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(center)
@@ -2158,21 +2158,21 @@ func (pself *spriteMgr) SetTriggerPolygon(obj Object, center Vec2, points Array)
 		CallSpriteSetTriggerPolygon(arg0, arg1, arg2)
 	})
 }
-func (pself *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
+func (s *spriteMgr) SetTriggerEnabled(obj Object, trigger bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(trigger)
 		CallSpriteSetTriggerEnabled(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) IsTriggerEnabled(obj Object) bool {
+func (s *spriteMgr) IsTriggerEnabled(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallSpriteIsTriggerEnabled(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
+func (s *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_threshold float64, alpha_threshold float64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdColor(color)
@@ -2182,7 +2182,7 @@ func (pself *spriteMgr) CheckCollisionByColor(obj Object, color Color, color_thr
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+func (s *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdColor(sprite_color)
@@ -2193,7 +2193,7 @@ func (pself *spriteMgr) CheckCollisionByColors(obj Object, sprite_color Color, t
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
+func (s *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float64) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(alpha_threshold)
@@ -2201,7 +2201,7 @@ func (pself *spriteMgr) CheckCollisionByAlpha(obj Object, alpha_threshold float6
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+func (s *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdObj(obj_b)
@@ -2211,19 +2211,19 @@ func (pself *spriteMgr) CheckCollisionWithSprite(obj Object, obj_b Object, alpha
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
+func (s *spriteMgr) SetPixelCollisionSamplingStep(step int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(step)
 		CallSpriteSetPixelCollisionSamplingStep(arg0)
 	})
 }
-func (pself *spriteMgr) GetPixelCollisionSamplingStep() int64 {
+func (s *spriteMgr) GetPixelCollisionSamplingStep() int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		retValue := CallSpriteGetPixelCollisionSamplingStep()
 		return ToInt64(retValue)
 	})
 }
-func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
+func (s *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
 		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdateTransforms array length exceeds int32: buffer")
@@ -2233,7 +2233,7 @@ func (pself *spriteMgr) BatchUpdateTransforms(buffer []float32) {
 		CallSpriteBatchUpdateTransforms(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
+func (s *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
 		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdateVisuals array length exceeds int32: buffer")
@@ -2243,7 +2243,7 @@ func (pself *spriteMgr) BatchUpdateVisuals(buffer []float32) {
 		CallSpriteBatchUpdateVisuals(arg0, arg1)
 	})
 }
-func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool {
+func (s *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		if len(objs) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchRetrievePositions array length exceeds int32: objs")
@@ -2259,7 +2259,7 @@ func (pself *spriteMgr) BatchRetrievePositions(objs []int64, out []float32) bool
 		return ToBool(retValue)
 	})
 }
-func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
+func (s *spriteMgr) BatchUpdatePhysics(buffer []float32) {
 	enginewrap.CallInMainThread(func() {
 		if len(buffer) > math.MaxInt32 {
 			panic("GDExtensionSpxSpriteBatchUpdatePhysics array length exceeds int32: buffer")
@@ -2269,24 +2269,24 @@ func (pself *spriteMgr) BatchUpdatePhysics(buffer []float32) {
 		CallSpriteBatchUpdatePhysics(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
+func (t *tilemapMgr) OpenDrawTilesWithSize(tile_size int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(tile_size)
 		CallTilemapOpenDrawTilesWithSize(arg0)
 	})
 }
-func (pself *tilemapMgr) OpenDrawTiles() {
+func (t *tilemapMgr) OpenDrawTiles() {
 	enginewrap.CallInMainThread(func() {
 		CallTilemapOpenDrawTiles()
 	})
 }
-func (pself *tilemapMgr) SetLayerIndex(index int64) {
+func (t *tilemapMgr) SetLayerIndex(index int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(index)
 		CallTilemapSetLayerIndex(arg0)
 	})
 }
-func (pself *tilemapMgr) SetTile(texture_path string, with_collision bool) {
+func (t *tilemapMgr) SetTile(texture_path string, with_collision bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(texture_path)
 		arg0 := (GdString)(arg0Str)
@@ -2295,7 +2295,7 @@ func (pself *tilemapMgr) SetTile(texture_path string, with_collision bool) {
 		CallTilemapSetTile(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision_points Array) {
+func (t *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision_points Array) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(texture_path)
 		arg0 := (GdString)(arg0Str)
@@ -2311,21 +2311,21 @@ func (pself *tilemapMgr) SetTileWithCollisionInfo(texture_path string, collision
 		CallTilemapSetTileWithCollisionInfo(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) SetLayerOffset(index int64, offset Vec2) {
+func (t *tilemapMgr) SetLayerOffset(index int64, offset Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdInt(index)
 		arg1 := ToGdVec2(offset)
 		CallTilemapSetLayerOffset(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) GetLayerOffset(index int64) Vec2 {
+func (t *tilemapMgr) GetLayerOffset(index int64) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdInt(index)
 		retValue := CallTilemapGetLayerOffset(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
+func (t *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Info := ToGdArrayInfo(positions)
 		if arg0Info != nil {
@@ -2341,7 +2341,7 @@ func (pself *tilemapMgr) PlaceTiles(positions Array, texture_path string) {
 		CallTilemapPlaceTiles(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) PlaceTilesWithLayer(positions Array, texture_path string, layer_index int64) {
+func (t *tilemapMgr) PlaceTilesWithLayer(positions Array, texture_path string, layer_index int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0Info := ToGdArrayInfo(positions)
 		if arg0Info != nil {
@@ -2358,7 +2358,7 @@ func (pself *tilemapMgr) PlaceTilesWithLayer(positions Array, texture_path strin
 		CallTilemapPlaceTilesWithLayer(arg0, arg1, arg2)
 	})
 }
-func (pself *tilemapMgr) PlaceTile(pos Vec2, texture_path string) {
+func (t *tilemapMgr) PlaceTile(pos Vec2, texture_path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		arg1Str := C.CString(texture_path)
@@ -2367,7 +2367,7 @@ func (pself *tilemapMgr) PlaceTile(pos Vec2, texture_path string) {
 		CallTilemapPlaceTile(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {
+func (t *tilemapMgr) PlaceTileWithLayer(pos Vec2, texture_path string, layer_index int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		arg1Str := C.CString(texture_path)
@@ -2377,27 +2377,27 @@ func (pself *tilemapMgr) PlaceTileWithLayer(pos Vec2, texture_path string, layer
 		CallTilemapPlaceTileWithLayer(arg0, arg1, arg2)
 	})
 }
-func (pself *tilemapMgr) EraseTile(pos Vec2) {
+func (t *tilemapMgr) EraseTile(pos Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		CallTilemapEraseTile(arg0)
 	})
 }
-func (pself *tilemapMgr) EraseTileWithLayer(pos Vec2, layer_index int64) {
+func (t *tilemapMgr) EraseTileWithLayer(pos Vec2, layer_index int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdInt(layer_index)
 		CallTilemapEraseTileWithLayer(arg0, arg1)
 	})
 }
-func (pself *tilemapMgr) GetTile(pos Vec2) string {
+func (t *tilemapMgr) GetTile(pos Vec2) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdVec2(pos)
 		retValue := CallTilemapGetTile(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *tilemapMgr) GetTileWithLayer(pos Vec2, layer_index int64) string {
+func (t *tilemapMgr) GetTileWithLayer(pos Vec2, layer_index int64) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdVec2(pos)
 		arg1 := ToGdInt(layer_index)
@@ -2405,17 +2405,17 @@ func (pself *tilemapMgr) GetTileWithLayer(pos Vec2, layer_index int64) string {
 		return ToString(retValue)
 	})
 }
-func (pself *tilemapMgr) CloseDrawTiles() {
+func (t *tilemapMgr) CloseDrawTiles() {
 	enginewrap.CallInMainThread(func() {
 		CallTilemapCloseDrawTiles()
 	})
 }
-func (pself *tilemapMgr) ExitTilemapEditorMode() {
+func (t *tilemapMgr) ExitTilemapEditorMode() {
 	enginewrap.CallInMainThread(func() {
 		CallTilemapExitTilemapEditorMode()
 	})
 }
-func (pself *tilemapparserMgr) LoadTilemap(json_path string) {
+func (t *tilemapparserMgr) LoadTilemap(json_path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(json_path)
 		arg0 := (GdString)(arg0Str)
@@ -2423,7 +2423,7 @@ func (pself *tilemapparserMgr) LoadTilemap(json_path string) {
 		CallTilemapparserLoadTilemap(arg0)
 	})
 }
-func (pself *tilemapparserMgr) UnloadTilemap(name string) {
+func (t *tilemapparserMgr) UnloadTilemap(name string) {
 	enginewrap.CallInMainThread(func() {
 		arg0Str := C.CString(name)
 		arg0 := (GdString)(arg0Str)
@@ -2431,12 +2431,12 @@ func (pself *tilemapparserMgr) UnloadTilemap(name string) {
 		CallTilemapparserUnloadTilemap(arg0)
 	})
 }
-func (pself *tilemapparserMgr) DestroyAllTilemaps() {
+func (t *tilemapparserMgr) DestroyAllTilemaps() {
 	enginewrap.CallInMainThread(func() {
 		CallTilemapparserDestroyAllTilemaps()
 	})
 }
-func (pself *tilemapparserMgr) HasTilemap(name string) bool {
+func (t *tilemapparserMgr) HasTilemap(name string) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0Str := C.CString(name)
 		arg0 := (GdString)(arg0Str)
@@ -2445,7 +2445,7 @@ func (pself *tilemapparserMgr) HasTilemap(name string) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
+func (t *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0Str := C.CString(name)
 		arg0 := (GdString)(arg0Str)
@@ -2454,7 +2454,7 @@ func (pself *tilemapparserMgr) GetTilemapLayerCount(name string) int64 {
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
+func (u *uiMgr) BindNode(obj Object, rel_path string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(rel_path)
@@ -2464,7 +2464,7 @@ func (pself *uiMgr) BindNode(obj Object, rel_path string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateNode(path string) Object {
+func (u *uiMgr) CreateNode(path string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2473,7 +2473,7 @@ func (pself *uiMgr) CreateNode(path string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateButton(path string, text string) Object {
+func (u *uiMgr) CreateButton(path string, text string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2485,7 +2485,7 @@ func (pself *uiMgr) CreateButton(path string, text string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateLabel(path string, text string) Object {
+func (u *uiMgr) CreateLabel(path string, text string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2497,7 +2497,7 @@ func (pself *uiMgr) CreateLabel(path string, text string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateImage(path string) Object {
+func (u *uiMgr) CreateImage(path string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2506,7 +2506,7 @@ func (pself *uiMgr) CreateImage(path string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateToggle(path string, value bool) Object {
+func (u *uiMgr) CreateToggle(path string, value bool) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2516,7 +2516,7 @@ func (pself *uiMgr) CreateToggle(path string, value bool) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateSlider(path string, value float64) Object {
+func (u *uiMgr) CreateSlider(path string, value float64) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2526,7 +2526,7 @@ func (pself *uiMgr) CreateSlider(path string, value float64) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) CreateInput(path string, text string) Object {
+func (u *uiMgr) CreateInput(path string, text string) Object {
 	return enginewrap.CallInMainThreadValue(func() Object {
 		arg0Str := C.CString(path)
 		arg0 := (GdString)(arg0Str)
@@ -2538,21 +2538,21 @@ func (pself *uiMgr) CreateInput(path string, text string) Object {
 		return ToObject(retValue)
 	})
 }
-func (pself *uiMgr) DestroyNode(obj Object) bool {
+func (u *uiMgr) DestroyNode(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiDestroyNode(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *uiMgr) GetType(obj Object) int64 {
+func (u *uiMgr) GetType(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetType(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) SetText(obj Object, text string) {
+func (u *uiMgr) SetText(obj Object, text string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(text)
@@ -2561,7 +2561,7 @@ func (pself *uiMgr) SetText(obj Object, text string) {
 		CallUiSetText(arg0, arg1)
 	})
 }
-func (pself *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) float64 {
+func (u *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(text)
@@ -2572,7 +2572,7 @@ func (pself *uiMgr) SetTextMaxWidth(obj Object, text string, max_width float64) 
 		return ToFloat64(retValue)
 	})
 }
-func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
+func (u *uiMgr) SetListItems(obj Object, label string, items Array, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(label)
@@ -2590,7 +2590,7 @@ func (pself *uiMgr) SetListItems(obj Object, label string, items Array, color Co
 		CallUiSetListItems(arg0, arg1, arg2, arg3)
 	})
 }
-func (pself *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
+func (u *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step float64, value float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(minimum)
@@ -2600,21 +2600,21 @@ func (pself *uiMgr) SetRange(obj Object, minimum float64, maximum float64, step 
 		CallUiSetRange(arg0, arg1, arg2, arg3, arg4)
 	})
 }
-func (pself *uiMgr) GetRangeValue(obj Object) float64 {
+func (u *uiMgr) GetRangeValue(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetRangeValue(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *uiMgr) GetText(obj Object) string {
+func (u *uiMgr) GetText(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetText(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *uiMgr) SetTexture(obj Object, path string) {
+func (u *uiMgr) SetTexture(obj Object, path string) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1Str := C.CString(path)
@@ -2623,203 +2623,203 @@ func (pself *uiMgr) SetTexture(obj Object, path string) {
 		CallUiSetTexture(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetTexture(obj Object) string {
+func (u *uiMgr) GetTexture(obj Object) string {
 	return enginewrap.CallInMainThreadValue(func() string {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetTexture(arg0)
 		return ToString(retValue)
 	})
 }
-func (pself *uiMgr) SetColor(obj Object, color Color) {
+func (u *uiMgr) SetColor(obj Object, color Color) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdColor(color)
 		CallUiSetColor(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetColor(obj Object) Color {
+func (u *uiMgr) GetColor(obj Object) Color {
 	return enginewrap.CallInMainThreadValue(func() Color {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetColor(arg0)
 		return ToColor(retValue)
 	})
 }
-func (pself *uiMgr) SetFontSize(obj Object, size int64) {
+func (u *uiMgr) SetFontSize(obj Object, size int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(size)
 		CallUiSetFontSize(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetFontSize(obj Object) int64 {
+func (u *uiMgr) GetFontSize(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetFontSize(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) SetVisible(obj Object, visible bool) {
+func (u *uiMgr) SetVisible(obj Object, visible bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(visible)
 		CallUiSetVisible(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetVisible(obj Object) bool {
+func (u *uiMgr) GetVisible(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetVisible(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *uiMgr) SetInteractable(obj Object, interactable bool) {
+func (u *uiMgr) SetInteractable(obj Object, interactable bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(interactable)
 		CallUiSetInteractable(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetInteractable(obj Object) bool {
+func (u *uiMgr) GetInteractable(obj Object) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetInteractable(arg0)
 		return ToBool(retValue)
 	})
 }
-func (pself *uiMgr) SetRect(obj Object, rect Rect2) {
+func (u *uiMgr) SetRect(obj Object, rect Rect2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdRect2(rect)
 		CallUiSetRect(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetRect(obj Object) Rect2 {
+func (u *uiMgr) GetRect(obj Object) Rect2 {
 	return enginewrap.CallInMainThreadValue(func() Rect2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetRect(arg0)
 		return ToRect2(retValue)
 	})
 }
-func (pself *uiMgr) GetLayoutDirection(obj Object) int64 {
+func (u *uiMgr) GetLayoutDirection(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetLayoutDirection(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) SetLayoutDirection(obj Object, value int64) {
+func (u *uiMgr) SetLayoutDirection(obj Object, value int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(value)
 		CallUiSetLayoutDirection(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetLayoutMode(obj Object) int64 {
+func (u *uiMgr) GetLayoutMode(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetLayoutMode(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) SetLayoutMode(obj Object, value int64) {
+func (u *uiMgr) SetLayoutMode(obj Object, value int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(value)
 		CallUiSetLayoutMode(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetAnchorsPreset(obj Object) int64 {
+func (u *uiMgr) GetAnchorsPreset(obj Object) int64 {
 	return enginewrap.CallInMainThreadValue(func() int64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetAnchorsPreset(arg0)
 		return ToInt64(retValue)
 	})
 }
-func (pself *uiMgr) SetAnchorsPreset(obj Object, value int64) {
+func (u *uiMgr) SetAnchorsPreset(obj Object, value int64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdInt(value)
 		CallUiSetAnchorsPreset(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetScale(obj Object) Vec2 {
+func (u *uiMgr) GetScale(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetScale(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *uiMgr) GetCanvasScale(obj Object) Vec2 {
+func (u *uiMgr) GetCanvasScale(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetCanvasScale(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *uiMgr) SetScale(obj Object, value Vec2) {
+func (u *uiMgr) SetScale(obj Object, value Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(value)
 		CallUiSetScale(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetPosition(obj Object) Vec2 {
+func (u *uiMgr) GetPosition(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetPosition(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *uiMgr) SetPosition(obj Object, value Vec2) {
+func (u *uiMgr) SetPosition(obj Object, value Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(value)
 		CallUiSetPosition(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetSize(obj Object) Vec2 {
+func (u *uiMgr) GetSize(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetSize(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *uiMgr) SetSize(obj Object, value Vec2) {
+func (u *uiMgr) SetSize(obj Object, value Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(value)
 		CallUiSetSize(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetGlobalPosition(obj Object) Vec2 {
+func (u *uiMgr) GetGlobalPosition(obj Object) Vec2 {
 	return enginewrap.CallInMainThreadValue(func() Vec2 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetGlobalPosition(arg0)
 		return ToVec2(retValue)
 	})
 }
-func (pself *uiMgr) SetGlobalPosition(obj Object, value Vec2) {
+func (u *uiMgr) SetGlobalPosition(obj Object, value Vec2) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdVec2(value)
 		CallUiSetGlobalPosition(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetRotation(obj Object) float64 {
+func (u *uiMgr) GetRotation(obj Object) float64 {
 	return enginewrap.CallInMainThreadValue(func() float64 {
 		arg0 := ToGdObj(obj)
 		retValue := CallUiGetRotation(arg0)
 		return ToFloat64(retValue)
 	})
 }
-func (pself *uiMgr) SetRotation(obj Object, value float64) {
+func (u *uiMgr) SetRotation(obj Object, value float64) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdFloat(value)
 		CallUiSetRotation(arg0, arg1)
 	})
 }
-func (pself *uiMgr) GetFlip(obj Object, horizontal bool) bool {
+func (u *uiMgr) GetFlip(obj Object, horizontal bool) bool {
 	return enginewrap.CallInMainThreadValue(func() bool {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(horizontal)
@@ -2827,7 +2827,7 @@ func (pself *uiMgr) GetFlip(obj Object, horizontal bool) bool {
 		return ToBool(retValue)
 	})
 }
-func (pself *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
+func (u *uiMgr) SetFlip(obj Object, horizontal bool, is_flip bool) {
 	enginewrap.CallInMainThread(func() {
 		arg0 := ToGdObj(obj)
 		arg1 := ToGdBool(horizontal)

@@ -31,7 +31,7 @@ var ManagerTemplate string
 // ManagerMethodSignature renders a manager method with its receiver.
 func (c *GenerationContext) ManagerMethodSignature(function *clang.TypedefFunction) string {
 	mgrName := c.GetManagerName(function.Name)
-	return "(pself *" + mgrName + "Mgr) " + c.managerSignature(function, mgrName)
+	return "(" + mgrName[:1] + " *" + mgrName + "Mgr) " + c.managerSignature(function, mgrName)
 }
 
 // ManagerInterfaceSignature renders a manager method without its receiver.

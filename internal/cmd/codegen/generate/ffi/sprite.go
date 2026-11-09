@@ -29,20 +29,21 @@ func (g *Generator) getManagerImpl(function *clang.TypedefFunction, className st
 	mgrName := string(unicode.ToUpper(rune(lowerManagerName[0]))) + lowerManagerName[1:]
 	funcName := function.Name[len("GDExtensionSpx")+len(mgrName):]
 	retType := g.EffectiveGoReturnType(function)
+	receiver := strings.ToLower(className[:1])
 	var params, callArgs []string
 	for i, arg := range g.Parameters(function) {
 		if arg.IsLength {
 			continue
 		}
 		if i == 0 && arg.Name == "obj" && arg.Buffer == nil {
-			callArgs = append(callArgs, "pself.Id")
+			callArgs = append(callArgs, receiver+".Id")
 			continue
 		}
 		params = append(params, arg.Name+" "+arg.MustGoType(function.Name))
 		callArgs = append(callArgs, arg.Name)
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "func (pself *%s) %s(%s)", className, funcName, strings.Join(params, ", "))
+	fmt.Fprintf(&sb, "func (%s *%s) %s(%s)", receiver, className, funcName, strings.Join(params, ", "))
 	if retType != "" {
 		fmt.Fprintf(&sb, " %s", retType)
 	}

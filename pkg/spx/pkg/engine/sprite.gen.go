@@ -30,530 +30,530 @@ import (
 	. "github.com/goplus/spbase/mathf"
 )
 
-func (pself *Sprite) AddForce(force Vec2) {
-	SpriteMgr.AddForce(pself.Id, force)
+func (s *Sprite) AddForce(force Vec2) {
+	SpriteMgr.AddForce(s.Id, force)
 }
 
-func (pself *Sprite) AddImpulse(impulse Vec2) {
-	SpriteMgr.AddImpulse(pself.Id, impulse)
+func (s *Sprite) AddImpulse(impulse Vec2) {
+	SpriteMgr.AddImpulse(s.Id, impulse)
 }
 
-func (pself *Sprite) BatchRetrievePositions(objs []int64, out []float32) bool {
+func (s *Sprite) BatchRetrievePositions(objs []int64, out []float32) bool {
 	return SpriteMgr.BatchRetrievePositions(objs, out)
 }
 
-func (pself *Sprite) BatchUpdatePhysics(buffer []float32) {
+func (s *Sprite) BatchUpdatePhysics(buffer []float32) {
 	SpriteMgr.BatchUpdatePhysics(buffer)
 }
 
-func (pself *Sprite) BatchUpdateTransforms(buffer []float32) {
+func (s *Sprite) BatchUpdateTransforms(buffer []float32) {
 	SpriteMgr.BatchUpdateTransforms(buffer)
 }
 
-func (pself *Sprite) BatchUpdateVisuals(buffer []float32) {
+func (s *Sprite) BatchUpdateVisuals(buffer []float32) {
 	SpriteMgr.BatchUpdateVisuals(buffer)
 }
 
-func (pself *Sprite) CheckCollision(target Object, is_src_trigger bool, is_dst_trigger bool) bool {
-	return SpriteMgr.CheckCollision(pself.Id, target, is_src_trigger, is_dst_trigger)
+func (s *Sprite) CheckCollision(target Object, is_src_trigger bool, is_dst_trigger bool) bool {
+	return SpriteMgr.CheckCollision(s.Id, target, is_src_trigger, is_dst_trigger)
 }
 
-func (pself *Sprite) CheckCollisionByAlpha(alpha_threshold float64) bool {
-	return SpriteMgr.CheckCollisionByAlpha(pself.Id, alpha_threshold)
+func (s *Sprite) CheckCollisionByAlpha(alpha_threshold float64) bool {
+	return SpriteMgr.CheckCollisionByAlpha(s.Id, alpha_threshold)
 }
 
-func (pself *Sprite) CheckCollisionByColor(color Color, color_threshold float64, alpha_threshold float64) bool {
-	return SpriteMgr.CheckCollisionByColor(pself.Id, color, color_threshold, alpha_threshold)
+func (s *Sprite) CheckCollisionByColor(color Color, color_threshold float64, alpha_threshold float64) bool {
+	return SpriteMgr.CheckCollisionByColor(s.Id, color, color_threshold, alpha_threshold)
 }
 
-func (pself *Sprite) CheckCollisionByColors(sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
-	return SpriteMgr.CheckCollisionByColors(pself.Id, sprite_color, target_color, color_threshold, alpha_threshold)
+func (s *Sprite) CheckCollisionByColors(sprite_color Color, target_color Color, color_threshold float64, alpha_threshold float64) bool {
+	return SpriteMgr.CheckCollisionByColors(s.Id, sprite_color, target_color, color_threshold, alpha_threshold)
 }
 
-func (pself *Sprite) CheckCollisionWithPoint(point Vec2, is_click_query bool) bool {
-	return SpriteMgr.CheckCollisionWithPoint(pself.Id, point, is_click_query)
+func (s *Sprite) CheckCollisionWithPoint(point Vec2, is_click_query bool) bool {
+	return SpriteMgr.CheckCollisionWithPoint(s.Id, point, is_click_query)
 }
 
-func (pself *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
-	return SpriteMgr.CheckCollisionWithSprite(pself.Id, obj_b, alpha_threshold, use_pixel_perfect)
+func (s *Sprite) CheckCollisionWithSprite(obj_b Object, alpha_threshold float64, use_pixel_perfect bool) bool {
+	return SpriteMgr.CheckCollisionWithSprite(s.Id, obj_b, alpha_threshold, use_pixel_perfect)
 }
 
-func (pself *Sprite) CloneSprite() Object {
-	return SpriteMgr.CloneSprite(pself.Id)
+func (s *Sprite) CloneSprite() Object {
+	return SpriteMgr.CloneSprite(s.Id)
 }
 
-func (pself *Sprite) CreateBackdrop(path string) Object {
+func (s *Sprite) CreateBackdrop(path string) Object {
 	return SpriteMgr.CreateBackdrop(path)
 }
 
-func (pself *Sprite) CreateBareSprite(pos Vec2) Object {
+func (s *Sprite) CreateBareSprite(pos Vec2) Object {
 	return SpriteMgr.CreateBareSprite(pos)
 }
 
-func (pself *Sprite) CreateSprite(path string, pos Vec2) Object {
+func (s *Sprite) CreateSprite(path string, pos Vec2) Object {
 	return SpriteMgr.CreateSprite(path, pos)
 }
 
-func (pself *Sprite) DestroySprite() bool {
-	return SpriteMgr.DestroySprite(pself.Id)
+func (s *Sprite) DestroySprite() bool {
+	return SpriteMgr.DestroySprite(s.Id)
 }
 
-func (pself *Sprite) GetAnim() string {
-	return SpriteMgr.GetAnim(pself.Id)
+func (s *Sprite) GetAnim() string {
+	return SpriteMgr.GetAnim(s.Id)
 }
 
-func (pself *Sprite) GetAnimFrame() int64 {
-	return SpriteMgr.GetAnimFrame(pself.Id)
+func (s *Sprite) GetAnimFrame() int64 {
+	return SpriteMgr.GetAnimFrame(s.Id)
 }
 
-func (pself *Sprite) GetAnimOffset() Vec2 {
-	return SpriteMgr.GetAnimOffset(pself.Id)
+func (s *Sprite) GetAnimOffset() Vec2 {
+	return SpriteMgr.GetAnimOffset(s.Id)
 }
 
-func (pself *Sprite) GetAnimPlayingSpeed() float64 {
-	return SpriteMgr.GetAnimPlayingSpeed(pself.Id)
+func (s *Sprite) GetAnimPlayingSpeed() float64 {
+	return SpriteMgr.GetAnimPlayingSpeed(s.Id)
 }
 
-func (pself *Sprite) GetAnimSpeedScale() float64 {
-	return SpriteMgr.GetAnimSpeedScale(pself.Id)
+func (s *Sprite) GetAnimSpeedScale() float64 {
+	return SpriteMgr.GetAnimSpeedScale(s.Id)
 }
 
-func (pself *Sprite) GetChildPosition(path string) Vec2 {
-	return SpriteMgr.GetChildPosition(pself.Id, path)
+func (s *Sprite) GetChildPosition(path string) Vec2 {
+	return SpriteMgr.GetChildPosition(s.Id, path)
 }
 
-func (pself *Sprite) GetChildRotation(path string) float64 {
-	return SpriteMgr.GetChildRotation(pself.Id, path)
+func (s *Sprite) GetChildRotation(path string) float64 {
+	return SpriteMgr.GetChildRotation(s.Id, path)
 }
 
-func (pself *Sprite) GetChildScale(path string) Vec2 {
-	return SpriteMgr.GetChildScale(pself.Id, path)
+func (s *Sprite) GetChildScale(path string) Vec2 {
+	return SpriteMgr.GetChildScale(s.Id, path)
 }
 
-func (pself *Sprite) GetCollisionLayer() int64 {
-	return SpriteMgr.GetCollisionLayer(pself.Id)
+func (s *Sprite) GetCollisionLayer() int64 {
+	return SpriteMgr.GetCollisionLayer(s.Id)
 }
 
-func (pself *Sprite) GetCollisionMask() int64 {
-	return SpriteMgr.GetCollisionMask(pself.Id)
+func (s *Sprite) GetCollisionMask() int64 {
+	return SpriteMgr.GetCollisionMask(s.Id)
 }
 
-func (pself *Sprite) GetColor() Color {
-	return SpriteMgr.GetColor(pself.Id)
+func (s *Sprite) GetColor() Color {
+	return SpriteMgr.GetColor(s.Id)
 }
 
-func (pself *Sprite) GetCurrentAnimName() string {
-	return SpriteMgr.GetCurrentAnimName(pself.Id)
+func (s *Sprite) GetCurrentAnimName() string {
+	return SpriteMgr.GetCurrentAnimName(s.Id)
 }
 
-func (pself *Sprite) GetDrag() float64 {
-	return SpriteMgr.GetDrag(pself.Id)
+func (s *Sprite) GetDrag() float64 {
+	return SpriteMgr.GetDrag(s.Id)
 }
 
-func (pself *Sprite) GetFloorNormal() Vec2 {
-	return SpriteMgr.GetFloorNormal(pself.Id)
+func (s *Sprite) GetFloorNormal() Vec2 {
+	return SpriteMgr.GetFloorNormal(s.Id)
 }
 
-func (pself *Sprite) GetFriction() float64 {
-	return SpriteMgr.GetFriction(pself.Id)
+func (s *Sprite) GetFriction() float64 {
+	return SpriteMgr.GetFriction(s.Id)
 }
 
-func (pself *Sprite) GetGravity() float64 {
-	return SpriteMgr.GetGravity(pself.Id)
+func (s *Sprite) GetGravity() float64 {
+	return SpriteMgr.GetGravity(s.Id)
 }
 
-func (pself *Sprite) GetGravityScale() float64 {
-	return SpriteMgr.GetGravityScale(pself.Id)
+func (s *Sprite) GetGravityScale() float64 {
+	return SpriteMgr.GetGravityScale(s.Id)
 }
 
-func (pself *Sprite) GetLastMotion() Vec2 {
-	return SpriteMgr.GetLastMotion(pself.Id)
+func (s *Sprite) GetLastMotion() Vec2 {
+	return SpriteMgr.GetLastMotion(s.Id)
 }
 
-func (pself *Sprite) GetMass() float64 {
-	return SpriteMgr.GetMass(pself.Id)
+func (s *Sprite) GetMass() float64 {
+	return SpriteMgr.GetMass(s.Id)
 }
 
-func (pself *Sprite) GetMaterialParams(effect string) float64 {
-	return SpriteMgr.GetMaterialParams(pself.Id, effect)
+func (s *Sprite) GetMaterialParams(effect string) float64 {
+	return SpriteMgr.GetMaterialParams(s.Id, effect)
 }
 
-func (pself *Sprite) GetMaterialParamsColor(effect string) Color {
-	return SpriteMgr.GetMaterialParamsColor(pself.Id, effect)
+func (s *Sprite) GetMaterialParamsColor(effect string) Color {
+	return SpriteMgr.GetMaterialParamsColor(s.Id, effect)
 }
 
-func (pself *Sprite) GetMaterialParamsVec4(effect string) Vec4 {
-	return SpriteMgr.GetMaterialParamsVec4(pself.Id, effect)
+func (s *Sprite) GetMaterialParamsVec4(effect string) Vec4 {
+	return SpriteMgr.GetMaterialParamsVec4(s.Id, effect)
 }
 
-func (pself *Sprite) GetMaterialShader() string {
-	return SpriteMgr.GetMaterialShader(pself.Id)
+func (s *Sprite) GetMaterialShader() string {
+	return SpriteMgr.GetMaterialShader(s.Id)
 }
 
-func (pself *Sprite) GetPhysicsMode() int64 {
-	return SpriteMgr.GetPhysicsMode(pself.Id)
+func (s *Sprite) GetPhysicsMode() int64 {
+	return SpriteMgr.GetPhysicsMode(s.Id)
 }
 
-func (pself *Sprite) GetPivot() Vec2 {
-	return SpriteMgr.GetPivot(pself.Id)
+func (s *Sprite) GetPivot() Vec2 {
+	return SpriteMgr.GetPivot(s.Id)
 }
 
-func (pself *Sprite) GetPixelCollisionSamplingStep() int64 {
+func (s *Sprite) GetPixelCollisionSamplingStep() int64 {
 	return SpriteMgr.GetPixelCollisionSamplingStep()
 }
 
-func (pself *Sprite) GetPosition() Vec2 {
-	return SpriteMgr.GetPosition(pself.Id)
+func (s *Sprite) GetPosition() Vec2 {
+	return SpriteMgr.GetPosition(s.Id)
 }
 
-func (pself *Sprite) GetPositionDelta() Vec2 {
-	return SpriteMgr.GetPositionDelta(pself.Id)
+func (s *Sprite) GetPositionDelta() Vec2 {
+	return SpriteMgr.GetPositionDelta(s.Id)
 }
 
-func (pself *Sprite) GetRealVelocity() Vec2 {
-	return SpriteMgr.GetRealVelocity(pself.Id)
+func (s *Sprite) GetRealVelocity() Vec2 {
+	return SpriteMgr.GetRealVelocity(s.Id)
 }
 
-func (pself *Sprite) GetRenderScale() Vec2 {
-	return SpriteMgr.GetRenderScale(pself.Id)
+func (s *Sprite) GetRenderScale() Vec2 {
+	return SpriteMgr.GetRenderScale(s.Id)
 }
 
-func (pself *Sprite) GetRotation() float64 {
-	return SpriteMgr.GetRotation(pself.Id)
+func (s *Sprite) GetRotation() float64 {
+	return SpriteMgr.GetRotation(s.Id)
 }
 
-func (pself *Sprite) GetScale() Vec2 {
-	return SpriteMgr.GetScale(pself.Id)
+func (s *Sprite) GetScale() Vec2 {
+	return SpriteMgr.GetScale(s.Id)
 }
 
-func (pself *Sprite) GetTexture() string {
-	return SpriteMgr.GetTexture(pself.Id)
+func (s *Sprite) GetTexture() string {
+	return SpriteMgr.GetTexture(s.Id)
 }
 
-func (pself *Sprite) GetTriggerLayer() int64 {
-	return SpriteMgr.GetTriggerLayer(pself.Id)
+func (s *Sprite) GetTriggerLayer() int64 {
+	return SpriteMgr.GetTriggerLayer(s.Id)
 }
 
-func (pself *Sprite) GetTriggerMask() int64 {
-	return SpriteMgr.GetTriggerMask(pself.Id)
+func (s *Sprite) GetTriggerMask() int64 {
+	return SpriteMgr.GetTriggerMask(s.Id)
 }
 
-func (pself *Sprite) GetVelocity() Vec2 {
-	return SpriteMgr.GetVelocity(pself.Id)
+func (s *Sprite) GetVelocity() Vec2 {
+	return SpriteMgr.GetVelocity(s.Id)
 }
 
-func (pself *Sprite) GetVisible() bool {
-	return SpriteMgr.GetVisible(pself.Id)
+func (s *Sprite) GetVisible() bool {
+	return SpriteMgr.GetVisible(s.Id)
 }
 
-func (pself *Sprite) GetWallNormal() Vec2 {
-	return SpriteMgr.GetWallNormal(pself.Id)
+func (s *Sprite) GetWallNormal() Vec2 {
+	return SpriteMgr.GetWallNormal(s.Id)
 }
 
-func (pself *Sprite) GetZIndex() int64 {
-	return SpriteMgr.GetZIndex(pself.Id)
+func (s *Sprite) GetZIndex() int64 {
+	return SpriteMgr.GetZIndex(s.Id)
 }
 
-func (pself *Sprite) IsAnimCentered() bool {
-	return SpriteMgr.IsAnimCentered(pself.Id)
+func (s *Sprite) IsAnimCentered() bool {
+	return SpriteMgr.IsAnimCentered(s.Id)
 }
 
-func (pself *Sprite) IsAnimFlippedH() bool {
-	return SpriteMgr.IsAnimFlippedH(pself.Id)
+func (s *Sprite) IsAnimFlippedH() bool {
+	return SpriteMgr.IsAnimFlippedH(s.Id)
 }
 
-func (pself *Sprite) IsAnimFlippedV() bool {
-	return SpriteMgr.IsAnimFlippedV(pself.Id)
+func (s *Sprite) IsAnimFlippedV() bool {
+	return SpriteMgr.IsAnimFlippedV(s.Id)
 }
 
-func (pself *Sprite) IsCollisionEnabled() bool {
-	return SpriteMgr.IsCollisionEnabled(pself.Id)
+func (s *Sprite) IsCollisionEnabled() bool {
+	return SpriteMgr.IsCollisionEnabled(s.Id)
 }
 
-func (pself *Sprite) IsDebugCollisionVisible() bool {
-	return SpriteMgr.IsDebugCollisionVisible(pself.Id)
+func (s *Sprite) IsDebugCollisionVisible() bool {
+	return SpriteMgr.IsDebugCollisionVisible(s.Id)
 }
 
-func (pself *Sprite) IsOnCeiling() bool {
-	return SpriteMgr.IsOnCeiling(pself.Id)
+func (s *Sprite) IsOnCeiling() bool {
+	return SpriteMgr.IsOnCeiling(s.Id)
 }
 
-func (pself *Sprite) IsOnCeilingOnly() bool {
-	return SpriteMgr.IsOnCeilingOnly(pself.Id)
+func (s *Sprite) IsOnCeilingOnly() bool {
+	return SpriteMgr.IsOnCeilingOnly(s.Id)
 }
 
-func (pself *Sprite) IsOnFloor() bool {
-	return SpriteMgr.IsOnFloor(pself.Id)
+func (s *Sprite) IsOnFloor() bool {
+	return SpriteMgr.IsOnFloor(s.Id)
 }
 
-func (pself *Sprite) IsOnFloorOnly() bool {
-	return SpriteMgr.IsOnFloorOnly(pself.Id)
+func (s *Sprite) IsOnFloorOnly() bool {
+	return SpriteMgr.IsOnFloorOnly(s.Id)
 }
 
-func (pself *Sprite) IsOnWall() bool {
-	return SpriteMgr.IsOnWall(pself.Id)
+func (s *Sprite) IsOnWall() bool {
+	return SpriteMgr.IsOnWall(s.Id)
 }
 
-func (pself *Sprite) IsOnWallOnly() bool {
-	return SpriteMgr.IsOnWallOnly(pself.Id)
+func (s *Sprite) IsOnWallOnly() bool {
+	return SpriteMgr.IsOnWallOnly(s.Id)
 }
 
-func (pself *Sprite) IsPlayingAnim() bool {
-	return SpriteMgr.IsPlayingAnim(pself.Id)
+func (s *Sprite) IsPlayingAnim() bool {
+	return SpriteMgr.IsPlayingAnim(s.Id)
 }
 
-func (pself *Sprite) IsSpriteAlive() bool {
-	return SpriteMgr.IsSpriteAlive(pself.Id)
+func (s *Sprite) IsSpriteAlive() bool {
+	return SpriteMgr.IsSpriteAlive(s.Id)
 }
 
-func (pself *Sprite) IsTriggerEnabled() bool {
-	return SpriteMgr.IsTriggerEnabled(pself.Id)
+func (s *Sprite) IsTriggerEnabled() bool {
+	return SpriteMgr.IsTriggerEnabled(s.Id)
 }
 
-func (pself *Sprite) IsUseGravity() bool {
-	return SpriteMgr.IsUseGravity(pself.Id)
+func (s *Sprite) IsUseGravity() bool {
+	return SpriteMgr.IsUseGravity(s.Id)
 }
 
-func (pself *Sprite) MoveAndSlide() {
-	SpriteMgr.MoveAndSlide(pself.Id)
+func (s *Sprite) MoveAndSlide() {
+	SpriteMgr.MoveAndSlide(s.Id)
 }
 
-func (pself *Sprite) PauseAnim() {
-	SpriteMgr.PauseAnim(pself.Id)
+func (s *Sprite) PauseAnim() {
+	SpriteMgr.PauseAnim(s.Id)
 }
 
-func (pself *Sprite) PlayAnim(p_name string, p_speed float64, isLoop bool, p_revert bool) {
-	SpriteMgr.PlayAnim(pself.Id, p_name, p_speed, isLoop, p_revert)
+func (s *Sprite) PlayAnim(p_name string, p_speed float64, isLoop bool, p_revert bool) {
+	SpriteMgr.PlayAnim(s.Id, p_name, p_speed, isLoop, p_revert)
 }
 
-func (pself *Sprite) PlayBackwardsAnim(p_name string) {
-	SpriteMgr.PlayBackwardsAnim(pself.Id, p_name)
+func (s *Sprite) PlayBackwardsAnim(p_name string) {
+	SpriteMgr.PlayBackwardsAnim(s.Id, p_name)
 }
 
-func (pself *Sprite) SetAnim(p_name string) {
-	SpriteMgr.SetAnim(pself.Id, p_name)
+func (s *Sprite) SetAnim(p_name string) {
+	SpriteMgr.SetAnim(s.Id, p_name)
 }
 
-func (pself *Sprite) SetAnimCentered(p_center bool) {
-	SpriteMgr.SetAnimCentered(pself.Id, p_center)
+func (s *Sprite) SetAnimCentered(p_center bool) {
+	SpriteMgr.SetAnimCentered(s.Id, p_center)
 }
 
-func (pself *Sprite) SetAnimFlipH(p_flip bool) {
-	SpriteMgr.SetAnimFlipH(pself.Id, p_flip)
+func (s *Sprite) SetAnimFlipH(p_flip bool) {
+	SpriteMgr.SetAnimFlipH(s.Id, p_flip)
 }
 
-func (pself *Sprite) SetAnimFlipV(p_flip bool) {
-	SpriteMgr.SetAnimFlipV(pself.Id, p_flip)
+func (s *Sprite) SetAnimFlipV(p_flip bool) {
+	SpriteMgr.SetAnimFlipV(s.Id, p_flip)
 }
 
-func (pself *Sprite) SetAnimFrame(p_frame int64) {
-	SpriteMgr.SetAnimFrame(pself.Id, p_frame)
+func (s *Sprite) SetAnimFrame(p_frame int64) {
+	SpriteMgr.SetAnimFrame(s.Id, p_frame)
 }
 
-func (pself *Sprite) SetAnimOffset(p_offset Vec2) {
-	SpriteMgr.SetAnimOffset(pself.Id, p_offset)
+func (s *Sprite) SetAnimOffset(p_offset Vec2) {
+	SpriteMgr.SetAnimOffset(s.Id, p_offset)
 }
 
-func (pself *Sprite) SetAnimSpeedScale(p_speed_scale float64) {
-	SpriteMgr.SetAnimSpeedScale(pself.Id, p_speed_scale)
+func (s *Sprite) SetAnimSpeedScale(p_speed_scale float64) {
+	SpriteMgr.SetAnimSpeedScale(s.Id, p_speed_scale)
 }
 
-func (pself *Sprite) SetChildPosition(path string, pos Vec2) {
-	SpriteMgr.SetChildPosition(pself.Id, path, pos)
+func (s *Sprite) SetChildPosition(path string, pos Vec2) {
+	SpriteMgr.SetChildPosition(s.Id, path, pos)
 }
 
-func (pself *Sprite) SetChildRotation(path string, rot float64) {
-	SpriteMgr.SetChildRotation(pself.Id, path, rot)
+func (s *Sprite) SetChildRotation(path string, rot float64) {
+	SpriteMgr.SetChildRotation(s.Id, path, rot)
 }
 
-func (pself *Sprite) SetChildScale(path string, scale Vec2) {
-	SpriteMgr.SetChildScale(pself.Id, path, scale)
+func (s *Sprite) SetChildScale(path string, scale Vec2) {
+	SpriteMgr.SetChildScale(s.Id, path, scale)
 }
 
-func (pself *Sprite) SetColliderCapsule(center Vec2, size Vec2) {
-	SpriteMgr.SetColliderCapsule(pself.Id, center, size)
+func (s *Sprite) SetColliderCapsule(center Vec2, size Vec2) {
+	SpriteMgr.SetColliderCapsule(s.Id, center, size)
 }
 
-func (pself *Sprite) SetColliderCircle(center Vec2, radius float64) {
-	SpriteMgr.SetColliderCircle(pself.Id, center, radius)
+func (s *Sprite) SetColliderCircle(center Vec2, radius float64) {
+	SpriteMgr.SetColliderCircle(s.Id, center, radius)
 }
 
-func (pself *Sprite) SetColliderPolygon(center Vec2, points Array) {
-	SpriteMgr.SetColliderPolygon(pself.Id, center, points)
+func (s *Sprite) SetColliderPolygon(center Vec2, points Array) {
+	SpriteMgr.SetColliderPolygon(s.Id, center, points)
 }
 
-func (pself *Sprite) SetColliderRect(center Vec2, size Vec2) {
-	SpriteMgr.SetColliderRect(pself.Id, center, size)
+func (s *Sprite) SetColliderRect(center Vec2, size Vec2) {
+	SpriteMgr.SetColliderRect(s.Id, center, size)
 }
 
-func (pself *Sprite) SetCollisionEnabled(enabled bool) {
-	SpriteMgr.SetCollisionEnabled(pself.Id, enabled)
+func (s *Sprite) SetCollisionEnabled(enabled bool) {
+	SpriteMgr.SetCollisionEnabled(s.Id, enabled)
 }
 
-func (pself *Sprite) SetCollisionLayer(layer int64) {
-	SpriteMgr.SetCollisionLayer(pself.Id, layer)
+func (s *Sprite) SetCollisionLayer(layer int64) {
+	SpriteMgr.SetCollisionLayer(s.Id, layer)
 }
 
-func (pself *Sprite) SetCollisionMask(mask int64) {
-	SpriteMgr.SetCollisionMask(pself.Id, mask)
+func (s *Sprite) SetCollisionMask(mask int64) {
+	SpriteMgr.SetCollisionMask(s.Id, mask)
 }
 
-func (pself *Sprite) SetColor(color Color) {
-	SpriteMgr.SetColor(pself.Id, color)
+func (s *Sprite) SetColor(color Color) {
+	SpriteMgr.SetColor(s.Id, color)
 }
 
-func (pself *Sprite) SetDebugCollisionVisible(visible bool) {
-	SpriteMgr.SetDebugCollisionVisible(pself.Id, visible)
+func (s *Sprite) SetDebugCollisionVisible(visible bool) {
+	SpriteMgr.SetDebugCollisionVisible(s.Id, visible)
 }
 
-func (pself *Sprite) SetDontDestroyOnLoad() {
-	SpriteMgr.SetDontDestroyOnLoad(pself.Id)
+func (s *Sprite) SetDontDestroyOnLoad() {
+	SpriteMgr.SetDontDestroyOnLoad(s.Id)
 }
 
-func (pself *Sprite) SetDrag(drag float64) {
-	SpriteMgr.SetDrag(pself.Id, drag)
+func (s *Sprite) SetDrag(drag float64) {
+	SpriteMgr.SetDrag(s.Id, drag)
 }
 
-func (pself *Sprite) SetFriction(friction float64) {
-	SpriteMgr.SetFriction(pself.Id, friction)
+func (s *Sprite) SetFriction(friction float64) {
+	SpriteMgr.SetFriction(s.Id, friction)
 }
 
-func (pself *Sprite) SetGravity(gravity float64) {
-	SpriteMgr.SetGravity(pself.Id, gravity)
+func (s *Sprite) SetGravity(gravity float64) {
+	SpriteMgr.SetGravity(s.Id, gravity)
 }
 
-func (pself *Sprite) SetGravityScale(scale float64) {
-	SpriteMgr.SetGravityScale(pself.Id, scale)
+func (s *Sprite) SetGravityScale(scale float64) {
+	SpriteMgr.SetGravityScale(s.Id, scale)
 }
 
-func (pself *Sprite) SetMass(mass float64) {
-	SpriteMgr.SetMass(pself.Id, mass)
+func (s *Sprite) SetMass(mass float64) {
+	SpriteMgr.SetMass(s.Id, mass)
 }
 
-func (pself *Sprite) SetMaterialParams(effect string, amount float64) {
-	SpriteMgr.SetMaterialParams(pself.Id, effect, amount)
+func (s *Sprite) SetMaterialParams(effect string, amount float64) {
+	SpriteMgr.SetMaterialParams(s.Id, effect, amount)
 }
 
-func (pself *Sprite) SetMaterialParamsColor(effect string, color Color) {
-	SpriteMgr.SetMaterialParamsColor(pself.Id, effect, color)
+func (s *Sprite) SetMaterialParamsColor(effect string, color Color) {
+	SpriteMgr.SetMaterialParamsColor(s.Id, effect, color)
 }
 
-func (pself *Sprite) SetMaterialParamsVec(effect string, x float64, y float64, z float64, w float64) {
-	SpriteMgr.SetMaterialParamsVec(pself.Id, effect, x, y, z, w)
+func (s *Sprite) SetMaterialParamsVec(effect string, x float64, y float64, z float64, w float64) {
+	SpriteMgr.SetMaterialParamsVec(s.Id, effect, x, y, z, w)
 }
 
-func (pself *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
-	SpriteMgr.SetMaterialParamsVec4(pself.Id, effect, vec4)
+func (s *Sprite) SetMaterialParamsVec4(effect string, vec4 Vec4) {
+	SpriteMgr.SetMaterialParamsVec4(s.Id, effect, vec4)
 }
 
-func (pself *Sprite) SetMaterialShader(path string) {
-	SpriteMgr.SetMaterialShader(pself.Id, path)
+func (s *Sprite) SetMaterialShader(path string) {
+	SpriteMgr.SetMaterialShader(s.Id, path)
 }
 
-func (pself *Sprite) SetPhysicProcess(is_on bool) {
-	SpriteMgr.SetPhysicProcess(pself.Id, is_on)
+func (s *Sprite) SetPhysicProcess(is_on bool) {
+	SpriteMgr.SetPhysicProcess(s.Id, is_on)
 }
 
-func (pself *Sprite) SetPhysicsMode(mode int64) {
-	SpriteMgr.SetPhysicsMode(pself.Id, mode)
+func (s *Sprite) SetPhysicsMode(mode int64) {
+	SpriteMgr.SetPhysicsMode(s.Id, mode)
 }
 
-func (pself *Sprite) SetPivot(pivot Vec2) {
-	SpriteMgr.SetPivot(pself.Id, pivot)
+func (s *Sprite) SetPivot(pivot Vec2) {
+	SpriteMgr.SetPivot(s.Id, pivot)
 }
 
-func (pself *Sprite) SetPixelCollisionSamplingStep(step int64) {
+func (s *Sprite) SetPixelCollisionSamplingStep(step int64) {
 	SpriteMgr.SetPixelCollisionSamplingStep(step)
 }
 
-func (pself *Sprite) SetPosition(pos Vec2) {
-	SpriteMgr.SetPosition(pself.Id, pos)
+func (s *Sprite) SetPosition(pos Vec2) {
+	SpriteMgr.SetPosition(s.Id, pos)
 }
 
-func (pself *Sprite) SetProcess(is_on bool) {
-	SpriteMgr.SetProcess(pself.Id, is_on)
+func (s *Sprite) SetProcess(is_on bool) {
+	SpriteMgr.SetProcess(s.Id, is_on)
 }
 
-func (pself *Sprite) SetRenderScale(scale Vec2) {
-	SpriteMgr.SetRenderScale(pself.Id, scale)
+func (s *Sprite) SetRenderScale(scale Vec2) {
+	SpriteMgr.SetRenderScale(s.Id, scale)
 }
 
-func (pself *Sprite) SetRotation(rot float64) {
-	SpriteMgr.SetRotation(pself.Id, rot)
+func (s *Sprite) SetRotation(rot float64) {
+	SpriteMgr.SetRotation(s.Id, rot)
 }
 
-func (pself *Sprite) SetScale(scale Vec2) {
-	SpriteMgr.SetScale(pself.Id, scale)
+func (s *Sprite) SetScale(scale Vec2) {
+	SpriteMgr.SetScale(s.Id, scale)
 }
 
-func (pself *Sprite) SetTexture(path string) {
-	SpriteMgr.SetTexture(pself.Id, path)
+func (s *Sprite) SetTexture(path string) {
+	SpriteMgr.SetTexture(s.Id, path)
 }
 
-func (pself *Sprite) SetTextureAtlas(path string, rect2 Rect2) {
-	SpriteMgr.SetTextureAtlas(pself.Id, path, rect2)
+func (s *Sprite) SetTextureAtlas(path string, rect2 Rect2) {
+	SpriteMgr.SetTextureAtlas(s.Id, path, rect2)
 }
 
-func (pself *Sprite) SetTextureAtlasDirect(path string, rect2 Rect2) {
-	SpriteMgr.SetTextureAtlasDirect(pself.Id, path, rect2)
+func (s *Sprite) SetTextureAtlasDirect(path string, rect2 Rect2) {
+	SpriteMgr.SetTextureAtlasDirect(s.Id, path, rect2)
 }
 
-func (pself *Sprite) SetTextureDirect(path string) {
-	SpriteMgr.SetTextureDirect(pself.Id, path)
+func (s *Sprite) SetTextureDirect(path string) {
+	SpriteMgr.SetTextureDirect(s.Id, path)
 }
 
-func (pself *Sprite) SetTransform(pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
-	SpriteMgr.SetTransform(pself.Id, pos, rot, scale, visible, pivot)
+func (s *Sprite) SetTransform(pos Vec2, rot float64, scale Vec2, visible bool, pivot Vec2) {
+	SpriteMgr.SetTransform(s.Id, pos, rot, scale, visible, pivot)
 }
 
-func (pself *Sprite) SetTriggerCapsule(center Vec2, size Vec2) {
-	SpriteMgr.SetTriggerCapsule(pself.Id, center, size)
+func (s *Sprite) SetTriggerCapsule(center Vec2, size Vec2) {
+	SpriteMgr.SetTriggerCapsule(s.Id, center, size)
 }
 
-func (pself *Sprite) SetTriggerCircle(center Vec2, radius float64) {
-	SpriteMgr.SetTriggerCircle(pself.Id, center, radius)
+func (s *Sprite) SetTriggerCircle(center Vec2, radius float64) {
+	SpriteMgr.SetTriggerCircle(s.Id, center, radius)
 }
 
-func (pself *Sprite) SetTriggerEnabled(trigger bool) {
-	SpriteMgr.SetTriggerEnabled(pself.Id, trigger)
+func (s *Sprite) SetTriggerEnabled(trigger bool) {
+	SpriteMgr.SetTriggerEnabled(s.Id, trigger)
 }
 
-func (pself *Sprite) SetTriggerLayer(layer int64) {
-	SpriteMgr.SetTriggerLayer(pself.Id, layer)
+func (s *Sprite) SetTriggerLayer(layer int64) {
+	SpriteMgr.SetTriggerLayer(s.Id, layer)
 }
 
-func (pself *Sprite) SetTriggerMask(mask int64) {
-	SpriteMgr.SetTriggerMask(pself.Id, mask)
+func (s *Sprite) SetTriggerMask(mask int64) {
+	SpriteMgr.SetTriggerMask(s.Id, mask)
 }
 
-func (pself *Sprite) SetTriggerPolygon(center Vec2, points Array) {
-	SpriteMgr.SetTriggerPolygon(pself.Id, center, points)
+func (s *Sprite) SetTriggerPolygon(center Vec2, points Array) {
+	SpriteMgr.SetTriggerPolygon(s.Id, center, points)
 }
 
-func (pself *Sprite) SetTriggerRect(center Vec2, size Vec2) {
-	SpriteMgr.SetTriggerRect(pself.Id, center, size)
+func (s *Sprite) SetTriggerRect(center Vec2, size Vec2) {
+	SpriteMgr.SetTriggerRect(s.Id, center, size)
 }
 
-func (pself *Sprite) SetTypeName(type_name string) {
-	SpriteMgr.SetTypeName(pself.Id, type_name)
+func (s *Sprite) SetTypeName(type_name string) {
+	SpriteMgr.SetTypeName(s.Id, type_name)
 }
 
-func (pself *Sprite) SetUseGravity(enabled bool) {
-	SpriteMgr.SetUseGravity(pself.Id, enabled)
+func (s *Sprite) SetUseGravity(enabled bool) {
+	SpriteMgr.SetUseGravity(s.Id, enabled)
 }
 
-func (pself *Sprite) SetVelocity(velocity Vec2) {
-	SpriteMgr.SetVelocity(pself.Id, velocity)
+func (s *Sprite) SetVelocity(velocity Vec2) {
+	SpriteMgr.SetVelocity(s.Id, velocity)
 }
 
-func (pself *Sprite) SetVisible(visible bool) {
-	SpriteMgr.SetVisible(pself.Id, visible)
+func (s *Sprite) SetVisible(visible bool) {
+	SpriteMgr.SetVisible(s.Id, visible)
 }
 
-func (pself *Sprite) SetZIndex(z int64) {
-	SpriteMgr.SetZIndex(pself.Id, z)
+func (s *Sprite) SetZIndex(z int64) {
+	SpriteMgr.SetZIndex(s.Id, z)
 }
 
-func (pself *Sprite) StopAnim() {
-	SpriteMgr.StopAnim(pself.Id)
+func (s *Sprite) StopAnim() {
+	SpriteMgr.StopAnim(s.Id)
 }

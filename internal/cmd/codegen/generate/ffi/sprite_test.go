@@ -55,9 +55,9 @@ typedef GdString (*GDExtensionSpxSpriteLabel)();`)
 	methods := []struct {
 		name, signature, call string
 	}{
-		{"SetEnabled", "SetEnabled(enabled bool)", "SpriteMgr.SetEnabled(pself.Id, enabled)"},
-		{"Collect", "Collect(values []float32) bool", "return SpriteMgr.Collect(pself.Id, values)"},
-		{"Write", "Write(output *[3]float32)", "SpriteMgr.Write(pself.Id, output)"},
+		{"SetEnabled", "SetEnabled(enabled bool)", "SpriteMgr.SetEnabled(s.Id, enabled)"},
+		{"Collect", "Collect(values []float32) bool", "return SpriteMgr.Collect(s.Id, values)"},
+		{"Write", "Write(output *[3]float32)", "SpriteMgr.Write(s.Id, output)"},
 		{"CollectObjects", "CollectObjects(obj []int64)", "SpriteMgr.CollectObjects(obj)"},
 		{"Select", "Select(enabled bool, obj Object)", "SpriteMgr.Select(enabled, obj)"},
 		{"Label", "Label() string", "return SpriteMgr.Label()"},
@@ -66,7 +66,7 @@ typedef GdString (*GDExtensionSpxSpriteLabel)();`)
 	output, err := os.ReadFile(path)
 	require.NoError(t, err)
 	for _, method := range methods {
-		require.Equal(t, "func (pself *Sprite) "+method.signature+" {\n\t"+method.call+"\n}",
+		require.Equal(t, "func (s *Sprite) "+method.signature+" {\n\t"+method.call+"\n}",
 			generatedMethod(t, path, output, method.name))
 	}
 }

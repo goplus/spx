@@ -22,67 +22,67 @@ import (
 	. "github.com/goplus/spbase/mathf"
 )
 
-func (pself *UiNode) GetType() int64 {
-	return UiMgr.GetType(pself.Id)
+func (u *UiNode) GetType() int64 {
+	return UiMgr.GetType(u.Id)
 }
-func (pself *UiNode) SetText(text string) {
-	UiMgr.SetText(pself.Id, text)
+func (u *UiNode) SetText(text string) {
+	UiMgr.SetText(u.Id, text)
 }
-func (pself *UiNode) GetText() string {
-	return UiMgr.GetText(pself.Id)
+func (u *UiNode) GetText() string {
+	return UiMgr.GetText(u.Id)
 }
-func (pself *UiNode) SetTexture(path string) {
-	UiMgr.SetTexture(pself.Id, path)
+func (u *UiNode) SetTexture(path string) {
+	UiMgr.SetTexture(u.Id, path)
 }
-func (pself *UiNode) GetTexture() string {
-	return UiMgr.GetTexture(pself.Id)
+func (u *UiNode) GetTexture() string {
+	return UiMgr.GetTexture(u.Id)
 }
-func (pself *UiNode) SetColor(color Color) {
-	UiMgr.SetColor(pself.Id, color)
+func (u *UiNode) SetColor(color Color) {
+	UiMgr.SetColor(u.Id, color)
 }
-func (pself *UiNode) GetColor() Color {
-	return UiMgr.GetColor(pself.Id)
+func (u *UiNode) GetColor() Color {
+	return UiMgr.GetColor(u.Id)
 }
-func (pself *UiNode) SetFontSize(size int64) {
-	UiMgr.SetFontSize(pself.Id, size)
+func (u *UiNode) SetFontSize(size int64) {
+	UiMgr.SetFontSize(u.Id, size)
 }
-func (pself *UiNode) GetFontSize() int64 {
-	return UiMgr.GetFontSize(pself.Id)
+func (u *UiNode) GetFontSize() int64 {
+	return UiMgr.GetFontSize(u.Id)
 }
-func (pself *UiNode) SetVisible(visible bool) {
-	UiMgr.SetVisible(pself.Id, visible)
+func (u *UiNode) SetVisible(visible bool) {
+	UiMgr.SetVisible(u.Id, visible)
 }
-func (pself *UiNode) GetVisible() bool {
-	return UiMgr.GetVisible(pself.Id)
+func (u *UiNode) GetVisible() bool {
+	return UiMgr.GetVisible(u.Id)
 }
-func (pself *UiNode) SetInteractable(interactable bool) {
-	UiMgr.SetInteractable(pself.Id, interactable)
+func (u *UiNode) SetInteractable(interactable bool) {
+	UiMgr.SetInteractable(u.Id, interactable)
 }
-func (pself *UiNode) GetInteractable() bool {
-	return UiMgr.GetInteractable(pself.Id)
+func (u *UiNode) GetInteractable() bool {
+	return UiMgr.GetInteractable(u.Id)
 }
-func (pself *UiNode) SetRect(rect Rect2) {
-	UiMgr.SetRect(pself.Id, rect)
+func (u *UiNode) SetRect(rect Rect2) {
+	UiMgr.SetRect(u.Id, rect)
 }
-func (pself *UiNode) GetRect() Rect2 {
-	return UiMgr.GetRect(pself.Id)
+func (u *UiNode) GetRect() Rect2 {
+	return UiMgr.GetRect(u.Id)
 }
-func (pself *UiNode) SetPosition(value Vec2) {
-	UiMgr.SetPosition(pself.Id, value)
+func (u *UiNode) SetPosition(value Vec2) {
+	UiMgr.SetPosition(u.Id, value)
 }
-func (pself *UiNode) GetPosition() Vec2 {
-	return UiMgr.GetPosition(pself.Id)
+func (u *UiNode) GetPosition() Vec2 {
+	return UiMgr.GetPosition(u.Id)
 }
 
-func (pself *UiNode) SetGlobalPosition(value Vec2) {
-	UiMgr.SetGlobalPosition(pself.Id, value)
+func (u *UiNode) SetGlobalPosition(value Vec2) {
+	UiMgr.SetGlobalPosition(u.Id, value)
 }
-func (pself *UiNode) GetGlobalPosition() Vec2 {
-	return UiMgr.GetGlobalPosition(pself.Id)
+func (u *UiNode) GetGlobalPosition() Vec2 {
+	return UiMgr.GetGlobalPosition(u.Id)
 }
-func (pself *UiNode) SetScale(value Vec2) {
-	UiMgr.SetScale(pself.Id, value)
+func (u *UiNode) SetScale(value Vec2) {
+	UiMgr.SetScale(u.Id, value)
 }
-func (pself *UiNode) GetScale() Vec2 {
-	return UiMgr.GetScale(pself.Id)
+func (u *UiNode) GetScale() Vec2 {
+	return UiMgr.GetScale(u.Id)
 }
