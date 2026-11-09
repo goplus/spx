@@ -17,6 +17,8 @@
 package ui
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/goplus/spbase/mathf"
@@ -33,9 +35,11 @@ type uiLifecycleBinding struct {
 
 type uiLifecycleMgr struct {
 	*uiRenderSpy
-	next     gdx.Object
-	prefabs  map[gdx.Object]string
-	bindings map[gdx.Object]uiLifecycleBinding
+	next        gdx.Object
+	prefabs     map[gdx.Object]string
+	bindings    map[gdx.Object]uiLifecycleBinding
+	calls       []string
+	missingPath string
 }
 
 type uiLifecyclePlatform struct{ gdx.IPlatformMgr }
@@ -78,17 +82,10 @@ func TestUIPrefabsBindChildrenBeforeFirstUse(t *testing.T) {
 				}
 			case *UiSay:
 				children = map[string]*UiNode{
-					"VL": panel.left.vbox, "VL/BG/Label": panel.left.label,
-					"VR": panel.right.vbox, "VR/BG/Label": panel.right.label,
-					"VLThink": panel.leftThink.vbox, "VLThink/BG/MC/Label": panel.leftThink.label,
-					"VRThink": panel.rightThink.vbox, "VRThink/BG/MC/Label": panel.rightThink.label,
-				}
-				// No cloud may flash at the origin before its first layout.
-				for _, variant := range []sayNodes{panel.left, panel.right, panel.leftThink, panel.rightThink} {
-					visible, set := mgr.visible[variant.vbox.GetId()]
-					if !set || visible {
-						t.Fatal("new bubble did not explicitly hide every variant")
-					}
+					"VL": panel.variants[0].vbox, "VL/BG/Label": panel.variants[0].label,
+					"VR": panel.variants[1].vbox, "VR/BG/Label": panel.variants[1].label,
+					"VLThink": panel.variants[2].vbox, "VLThink/BG/MC/Label": panel.variants[2].label,
+					"VRThink": panel.variants[3].vbox, "VRThink/BG/MC/Label": panel.variants[3].label,
 				}
 			}
 			if len(mgr.bindings) != len(children) {
@@ -107,6 +104,102 @@ func TestUIPrefabsBindChildrenBeforeFirstUse(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Use bound scene paths rather than UiSay's private storage so this contract
+// also runs against the implementation before the variant refactor.
+func TestUiSayFirstLayoutAndVariantTransitions(t *testing.T) {
+	type variant struct {
+		root, label string
+		left        bool
+		style       int
+	}
+	variants := []variant{
+		{"VL", "VL/BG/Label", true, StyleSay},
+		{"VR", "VR/BG/Label", false, StyleSay},
+		{"VLThink", "VLThink/BG/MC/Label", true, StyleThink},
+		{"VRThink", "VRThink/BG/MC/Label", false, StyleThink},
+		{"VL", "VL/BG/Label", true, 0},
+		{"VR", "VR/BG/Label", false, -1},
+	}
+	for _, first := range variants {
+		t.Run(fmt.Sprintf("%s/style%d", first.root, first.style), func(t *testing.T) {
+			mgr := setupUILifecycle(t)
+			panel := NewUiSay()
+			ids := make(map[string]gdx.Object)
+			for id, binding := range mgr.bindings {
+				if binding.parent != panel.GetId() {
+					t.Fatal("variant bound to the wrong bubble")
+				}
+				ids[binding.path] = id
+			}
+			wantCalls := []string{
+				"bind:VL", "bind:VL/BG/Label", "bind:VR", "bind:VR/BG/Label",
+				"bind:VLThink", "bind:VLThink/BG/MC/Label", "bind:VRThink", "bind:VRThink/BG/MC/Label",
+				"visible:VL:false", "visible:VR:false", "visible:VLThink:false", "visible:VRThink:false",
+			}
+			if !slices.Equal(mgr.calls, wantCalls) {
+				t.Fatalf("initialization calls = %v, want %v", mgr.calls, wantCalls)
+			}
+			for _, variant := range variants[:4] {
+				if visible, set := mgr.visible[ids[variant.root]]; !set || visible {
+					t.Fatalf("%s was not explicitly hidden before first layout", variant.root)
+				}
+			}
+
+			// Every variant is exercised as the first layout, then as the source
+			// of every switch, including repeated rendering of the same variant.
+			for _, next := range variants {
+				for _, current := range []variant{first, next} {
+					mgr.calls = nil
+					clear(mgr.text)
+					layout := SayBubbleLayout{
+						position: mathf.NewVec2(5, 7), renderScale: mathf.NewVec2(2, 3), isLeft: current.left,
+						content: NewSayBubbleContent("first\nsecond", current.style),
+					}
+					panel.SetTextLayout(layout)
+					wantCalls = nil
+					for _, variant := range variants[:4] {
+						visible := variant.root == current.root
+						wantCalls = append(wantCalls, fmt.Sprintf("visible:%s:%t", variant.root, visible))
+						if mgr.visible[ids[variant.root]] != visible {
+							t.Fatalf("%s visibility does not match selected %s", variant.root, current.root)
+						}
+					}
+					wantCalls = append(wantCalls, "scale", "position", "text:"+current.label)
+					if !slices.Equal(mgr.calls, wantCalls) {
+						t.Fatalf("render calls = %v, want %v", mgr.calls, wantCalls)
+					}
+					if len(mgr.text) != 1 || mgr.text[ids[current.label]] != "first\nsecond" {
+						t.Fatal("render did not update only the selected label")
+					}
+					if got := mgr.positions[panel.GetId()]; got != mathf.NewVec2(240, 146) {
+						t.Fatalf("position = %v, want (240, 146)", got)
+					}
+					if got := mgr.scales[panel.GetId()]; got != layout.renderScale {
+						t.Fatalf("scale = %v, want %v", got, layout.renderScale)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestUiSayMissingLabelPanicsBeforeMovingBubble(t *testing.T) {
+	mgr := setupUILifecycle(t)
+	mgr.missingPath = "VL/BG/Label"
+	panel := NewUiSay()
+	mgr.calls = nil
+	defer func() {
+		if recover() == nil {
+			t.Fatal("missing label did not panic")
+		}
+		want := []string{"visible:VL:true", "visible:VR:false", "visible:VLThink:false", "visible:VRThink:false"}
+		if !slices.Equal(mgr.calls, want) {
+			t.Fatalf("missing label calls = %v, want %v", mgr.calls, want)
+		}
+	}()
+	panel.SetTextLayout(SayBubbleLayout{isLeft: true, content: NewSayBubbleContent("hello", StyleSay)})
 }
 
 func TestUiMonitorFactoryInitializesFirstRender(t *testing.T) {
@@ -211,9 +304,33 @@ func (m *uiLifecycleMgr) CreateNode(path string) gdx.Object {
 }
 
 func (m *uiLifecycleMgr) BindNode(parent gdx.Object, path string) gdx.Object {
+	if path == m.missingPath {
+		return 0
+	}
 	m.next++
 	m.bindings[m.next] = uiLifecycleBinding{parent, path}
+	m.calls = append(m.calls, "bind:"+path)
 	return m.next
+}
+
+func (m *uiLifecycleMgr) SetVisible(id gdx.Object, visible bool) {
+	m.calls = append(m.calls, fmt.Sprintf("visible:%s:%t", m.bindings[id].path, visible))
+	m.uiRenderSpy.SetVisible(id, visible)
+}
+
+func (m *uiLifecycleMgr) SetScale(id gdx.Object, scale mathf.Vec2) {
+	m.calls = append(m.calls, "scale")
+	m.uiRenderSpy.SetScale(id, scale)
+}
+
+func (m *uiLifecycleMgr) SetPosition(id gdx.Object, position mathf.Vec2) {
+	m.calls = append(m.calls, "position")
+	m.uiRenderSpy.SetPosition(id, position)
+}
+
+func (m *uiLifecycleMgr) SetText(id gdx.Object, text string) {
+	m.calls = append(m.calls, "text:"+m.bindings[id].path)
+	m.uiRenderSpy.SetText(id, text)
 }
 
 func (uiLifecyclePlatform) IsMainThread() bool { return true }

@@ -19,7 +19,6 @@ package ui
 import (
 	"strings"
 
-	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/text"
 )
@@ -45,10 +44,8 @@ type sayNodes struct {
 // UiSay represents the UI component for displaying say and think bubbles
 type UiSay struct {
 	UiNode
-	left       sayNodes
-	right      sayNodes
-	leftThink  sayNodes
-	rightThink sayNodes
+	// Ordered by style, then direction: say left/right, think left/right.
+	variants [4]sayNodes
 }
 
 // NewUiSay creates a new UiSay instance
@@ -58,65 +55,43 @@ func NewUiSay() *UiSay {
 
 // OnStart binds UI nodes in the engine callback context.
 func (s *UiSay) OnStart() {
-	s.left = sayNodes{
-		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VL"),
-		label: engine.BridgeBindUI[UiNode](s.GetId(), "VL/BG/Label"),
-	}
-	s.right = sayNodes{
-		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VR"),
-		label: engine.BridgeBindUI[UiNode](s.GetId(), "VR/BG/Label"),
-	}
-	s.leftThink = sayNodes{
-		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VLThink"),
-		label: engine.BridgeBindUI[UiNode](s.GetId(), "VLThink/BG/MC/Label"),
-	}
-	s.rightThink = sayNodes{
-		vbox:  engine.BridgeBindUI[UiNode](s.GetId(), "VRThink"),
-		label: engine.BridgeBindUI[UiNode](s.GetId(), "VRThink/BG/MC/Label"),
+	for i, paths := range [4]struct{ vbox, label string }{
+		{"VL", "VL/BG/Label"},
+		{"VR", "VR/BG/Label"},
+		{"VLThink", "VLThink/BG/MC/Label"},
+		{"VRThink", "VRThink/BG/MC/Label"},
+	} {
+		s.variants[i] = sayNodes{
+			vbox:  engine.BridgeBindUI[UiNode](s.GetId(), paths.vbox),
+			label: engine.BridgeBindUI[UiNode](s.GetId(), paths.label),
+		}
 	}
 
 	// Think nodes are visible by default in UiSay.tscn. Keep every variant
 	// hidden until the first layout is applied so a newly-created bubble cannot
 	// briefly render both clouds at the scene origin.
-	engine.Managers().UiMgr.SetVisible(s.left.vbox.GetId(), false)
-	engine.Managers().UiMgr.SetVisible(s.right.vbox.GetId(), false)
-	engine.Managers().UiMgr.SetVisible(s.leftThink.vbox.GetId(), false)
-	engine.Managers().UiMgr.SetVisible(s.rightThink.vbox.GetId(), false)
+	for _, nodes := range s.variants {
+		engine.Managers().UiMgr.SetVisible(nodes.vbox.GetId(), false)
+	}
 }
 
 // SetTextLayout applies a layout resolved together with the other active bubbles.
 func (s *UiSay) SetTextLayout(layout SayBubbleLayout) {
-	isThink := layout.content.style == StyleThink
-	nodes := s.selectNodes(layout.isLeft, isThink)
-
-	s.updateVisibility(layout.isLeft, isThink)
-	s.updateUI(layout.position, layout.renderScale, nodes.label.GetId(), layout.content.formattedMessage)
-}
-
-func (s *UiSay) selectNodes(isLeft bool, isThink bool) sayNodes {
-	switch {
-	case isThink && isLeft:
-		return s.leftThink
-	case isThink:
-		return s.rightThink
-	case isLeft:
-		return s.left
-	default:
-		return s.right
+	selected := 0
+	if !layout.isLeft {
+		selected++
 	}
-}
-
-func (s *UiSay) updateVisibility(isLeft bool, isThink bool) {
-	engine.Managers().UiMgr.SetVisible(s.left.vbox.GetId(), !isThink && isLeft)
-	engine.Managers().UiMgr.SetVisible(s.right.vbox.GetId(), !isThink && !isLeft)
-	engine.Managers().UiMgr.SetVisible(s.leftThink.vbox.GetId(), isThink && isLeft)
-	engine.Managers().UiMgr.SetVisible(s.rightThink.vbox.GetId(), isThink && !isLeft)
-}
-
-func (s *UiSay) updateUI(position mathf.Vec2, scale mathf.Vec2, label engine.Object, text string) {
-	engine.Managers().UiMgr.SetScale(s.GetId(), scale)
-	engine.Managers().UiMgr.SetPosition(s.GetId(), ViewToUI(position))
-	engine.Managers().UiMgr.SetText(label, text)
+	if layout.content.style == StyleThink {
+		selected += 2
+	}
+	selectedNodes := s.variants[selected]
+	for i, nodes := range s.variants {
+		engine.Managers().UiMgr.SetVisible(nodes.vbox.GetId(), i == selected)
+	}
+	label := selectedNodes.label.GetId()
+	engine.Managers().UiMgr.SetScale(s.GetId(), layout.renderScale)
+	engine.Managers().UiMgr.SetPosition(s.GetId(), ViewToUI(layout.position))
+	engine.Managers().UiMgr.SetText(label, layout.content.formattedMessage)
 }
 
 func formatSayMessage(msg string) string {
