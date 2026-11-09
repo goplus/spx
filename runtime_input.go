@@ -111,7 +111,7 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 	c := &p.frame
 	resolved, err := session.consumeSampledInputTickLocked(delta, func() (InputReplayState, []InputReplayMouseEvent, []InputReplayKeyEvent) {
 		state := p.sampleInputState()
-		return state, replayMouseEventsFromEngine(c.mouseEvents), replayKeyEventsFromEngine(c.keyEvents)
+		return state, c.mouseEvents, c.keyEvents
 	})
 	if err != nil {
 		return InputReplayState{}, err
@@ -122,8 +122,9 @@ func (p *inputManager) resolveInputSessionState(session *inputSession, delta flo
 		p.swipe.InitWithClock(p.g.inputClock)
 		p.drag = spriteDragState{}
 	}
-	c.mouseEvents = engineMouseEventsFromReplay(resolved.frame.MouseEvents, c.mouseEvents)
-	c.keyEvents = engineKeyEventsFromReplay(resolved.frame.KeyEvents, c.keyEvents)
+	// Keep reusable frame buffers separate from the controller's snapshots.
+	c.mouseEvents = append(c.mouseEvents[:0], resolved.frame.MouseEvents...)
+	c.keyEvents = append(c.keyEvents[:0], resolved.frame.KeyEvents...)
 	return resolved.frame.State, nil
 }
 

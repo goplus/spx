@@ -25,7 +25,6 @@ import (
 
 func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
 	onKeyPressed(1)
 	keyInput.cache()
 	onKeyReleased(1)
@@ -34,15 +33,14 @@ func TestDiscardPendingKeyEventsDefinesSessionBoundary(t *testing.T) {
 	onKeyPressed(2)
 	keyInput.cache()
 
-	events := GetKeyEvents(nil)
-	if len(events) != 1 || events[0].Id != 2 || !events[0].IsPressed {
+	events, _ := GetKeyInput(nil)
+	if len(events) != 1 || events[0].Key != 2 || !events[0].Pressed {
 		t.Fatalf("events after boundary = %+v, want key 2 pressed", events)
 	}
 }
 
 func TestKeyInputIncludesHeldStateAtUpdateBoundary(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
 	t.Cleanup(DiscardPendingKeyEvents)
 
 	onKeyPressed(2)
@@ -65,13 +63,74 @@ func TestKeyInputIncludesHeldStateAtUpdateBoundary(t *testing.T) {
 	}
 }
 
+func TestInputDrainOwnsSnapshotsAndReusesCallerBuffers(t *testing.T) {
+	resetInputState()
+	t.Cleanup(resetInputState)
+	onKeyPressed(2)
+	onKeyPressed(1)
+	onMousePressed(1)
+	cacheInputState()
+	onKeyReleased(2)
+	onMouseReleased(1)
+	onMousePressed(2)
+	cacheInputState()
+	// Releases arriving after the cache boundary belong to the next frame.
+	onKeyReleased(1)
+	onMouseReleased(2)
+
+	keyPrefix := KeyEvent{Key: 9, Pressed: true}
+	mousePrefix := MouseEvent{Button: 3, Pressed: true}
+	keyBuffer := append(make([]KeyEvent, 0, 8), keyPrefix)
+	mouseBuffer := append(make([]MouseEvent, 0, 8), mousePrefix)
+	keyEvents, keysDown := GetKeyInput(keyBuffer)
+	mouseEvents, buttons := GetMouseInput(mouseBuffer)
+	wantKeys := []KeyEvent{keyPrefix, {Key: 2, Pressed: true}, {Key: 1, Pressed: true}, {Key: 2}}
+	wantMouse := []MouseEvent{mousePrefix, {Button: 1, Pressed: true}, {Button: 1}, {Button: 2, Pressed: true}}
+	if !slices.Equal(keyEvents, wantKeys) || !slices.Equal(keysDown, []int64{1}) {
+		t.Fatalf("key input = (%v, %v), want (%v, [1])", keyEvents, keysDown, wantKeys)
+	}
+	if !slices.Equal(mouseEvents, wantMouse) || buttons != 0b010 {
+		t.Fatalf("mouse input = (%v, %#x), want (%v, 0b010)", mouseEvents, buttons, wantMouse)
+	}
+
+	if &keyEvents[0] != &keyBuffer[0] || &mouseEvents[0] != &mouseBuffer[0] {
+		t.Fatal("draining input replaced caller buffers with sufficient capacity")
+	}
+
+	// A consumer may edit its copies without changing held input or later edges.
+	keyEvents[1] = KeyEvent{Key: 8}
+	mouseEvents[1] = MouseEvent{Button: 3}
+	keysDown[0] = 8
+	if events, held := GetKeyInput(nil); len(events) != 0 || !slices.Equal(held, []int64{1}) {
+		t.Fatalf("second key drain = (%v, %v), want no edges and [1]", events, held)
+	}
+	if events, held := GetMouseInput(nil); len(events) != 0 || held != 0b010 {
+		t.Fatalf("second mouse drain = (%v, %#x), want no edges and 0b010", events, held)
+	}
+	previousKeys, previousMouse := slices.Clone(keyEvents), slices.Clone(mouseEvents)
+	cacheInputState()
+	if !slices.Equal(keyEvents, previousKeys) || !slices.Equal(mouseEvents, previousMouse) || keysDown[0] != 8 {
+		t.Fatal("caching the next frame changed previously returned input")
+	}
+
+	keyEvents, keysDown = GetKeyInput(keyEvents[:1])
+	mouseEvents, buttons = GetMouseInput(mouseEvents[:1])
+	wantKeys = []KeyEvent{keyPrefix, {Key: 1}}
+	wantMouse = []MouseEvent{mousePrefix, {Button: 2}}
+	if !slices.Equal(keyEvents, wantKeys) || len(keysDown) != 0 {
+		t.Fatalf("reused key buffer = (%v, %v), want (%v, [])", keyEvents, keysDown, wantKeys)
+	}
+	if !slices.Equal(mouseEvents, wantMouse) || buttons != 0 {
+		t.Fatalf("reused mouse buffer = (%v, %#x), want (%v, 0)", mouseEvents, buttons, wantMouse)
+	}
+	if &keyEvents[0] != &keyBuffer[0] || &mouseEvents[0] != &mouseBuffer[0] {
+		t.Fatal("next-frame drain replaced caller buffers with sufficient capacity")
+	}
+}
+
 func TestDiscardPendingKeyEventsPreservesHeldState(t *testing.T) {
 	keyInput.reset()
-	DiscardPendingKeyEvents()
-	t.Cleanup(func() {
-		keyInput.reset()
-		DiscardPendingKeyEvents()
-	})
+	t.Cleanup(keyInput.reset)
 
 	onKeyPressed(7)
 	DiscardPendingKeyEvents()
@@ -104,8 +163,8 @@ func TestMouseInputPreservesShortClickForOrdinaryConsumer(t *testing.T) {
 	mouseInput.cache()
 
 	events, buttons := GetMouseInput(nil)
-	if len(events) != 2 || events[0] != (MouseEvent{Id: 1, IsPressed: true}) ||
-		events[1] != (MouseEvent{Id: 1, IsPressed: false}) {
+	if len(events) != 2 || events[0] != (MouseEvent{Button: 1, Pressed: true}) ||
+		events[1] != (MouseEvent{Button: 1, Pressed: false}) {
 		t.Fatalf("mouse events = %+v, want ordered press/release", events)
 	}
 	if buttons != 0 {
@@ -145,14 +204,14 @@ func TestMouseInputKeepsLiveAndFrameStatesSeparate(t *testing.T) {
 		t.Fatal("live input must reflect released middle and held left/right buttons")
 	}
 	events, buttons := GetMouseInput(nil)
-	want := []MouseEvent{{Id: 3, IsPressed: true}}
+	want := []MouseEvent{{Button: 3, Pressed: true}}
 	if !slices.Equal(events, want) || buttons != 0b100 {
 		t.Fatalf("cached input = (%v, %#x), want (%v, 0b100)", events, buttons, want)
 	}
 
 	mouseInput.cache()
 	events, buttons = GetMouseInput(nil)
-	want = []MouseEvent{{Id: 3}, {Id: 1, IsPressed: true}, {Id: 2, IsPressed: true}}
+	want = []MouseEvent{{Button: 3}, {Button: 1, Pressed: true}, {Button: 2, Pressed: true}}
 	if !slices.Equal(events, want) || buttons != 0b011 {
 		t.Fatalf("next frame input = (%v, %#x), want (%v, 0b011)", events, buttons, want)
 	}
@@ -166,7 +225,7 @@ func TestMouseInputKeepsLiveAndFrameStatesSeparate(t *testing.T) {
 	}
 	mouseInput.cache()
 	events, buttons = GetMouseInput(nil)
-	want = []MouseEvent{{Id: 1}, {Id: 2}}
+	want = []MouseEvent{{Button: 1}, {Button: 2}}
 	if !slices.Equal(events, want) || buttons != 0 {
 		t.Fatalf("released input = (%v, %#x), want (%v, 0)", events, buttons, want)
 	}
@@ -202,7 +261,7 @@ func TestMouseInputSnapshotExcludesReleaseAfterCacheBoundary(t *testing.T) {
 	onMouseReleased(1)
 
 	events, buttons := GetMouseInput(nil)
-	if len(events) != 1 || events[0] != (MouseEvent{Id: 1, IsPressed: true}) || buttons != 1 {
+	if len(events) != 1 || events[0] != (MouseEvent{Button: 1, Pressed: true}) || buttons != 1 {
 		t.Fatalf("cached input = %v, buttons %#x, want press and left held", events, buttons)
 	}
 	if IsMouseButtonPressed(1) || AnyMouseButtonPressed() {
@@ -213,7 +272,7 @@ func TestMouseInputSnapshotExcludesReleaseAfterCacheBoundary(t *testing.T) {
 	}
 	mouseInput.cache()
 	events, buttons = GetMouseInput(nil)
-	if len(events) != 1 || events[0] != (MouseEvent{Id: 1}) || buttons != 0 {
+	if len(events) != 1 || events[0] != (MouseEvent{Button: 1}) || buttons != 0 {
 		t.Fatalf("next cached input = %v, buttons %#x, want release and no held buttons", events, buttons)
 	}
 }
@@ -230,7 +289,7 @@ func TestDiscardPendingMouseEventsDefinesConsumerBoundary(t *testing.T) {
 	mouseInput.cache()
 
 	events, _ := GetMouseInput(nil)
-	if len(events) != 1 || events[0] != (MouseEvent{Id: 2, IsPressed: true}) {
+	if len(events) != 1 || events[0] != (MouseEvent{Button: 2, Pressed: true}) {
 		t.Fatalf("mouse events after boundary = %+v, want button 2 pressed", events)
 	}
 }

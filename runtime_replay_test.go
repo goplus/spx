@@ -126,14 +126,6 @@ func TestInputReplayRuntimeUsesIndependentInputTicks(t *testing.T) {
 	if !reflect.DeepEqual(decoded, replay) {
 		t.Fatalf("decoded replay = %+v, want %+v", decoded, replay)
 	}
-	result, err := finishInputRecording()
-	if err != nil {
-		t.Fatal(err)
-	}
-	result.json[0] = '!'
-	if got, err := FinishInputRecordingJSON(); err != nil || got != encoded {
-		t.Fatalf("recording JSON aliases its cache: %s, %v", got, err)
-	}
 	for range 2 {
 		replay.Initial.KeysDown[0] = 999
 		replay.Frames[0].State.KeysDown[0] = 999
@@ -207,13 +199,20 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 			want:  []event{&eventLeftButtonUp{Pos: point}},
 		},
 	}
-	// Supply input edges at the session sampling boundary.
+	// Reuse the engine's edge buffers across ticks. Stored recording frames
+	// must keep their own snapshots when the next sample overwrites them.
+	var mouseBuffer []engine.MouseEvent
+	var keyBuffer []engine.KeyEvent
 	for _, sample := range samples {
 		sample.state.Mouse = InputReplayMouse{X: point.X, Y: point.Y}
-		if _, err := consumeInputTickWithMouseEvents(sample.state, sample.mouse, sample.keys, 0.1); err != nil {
+		mouseBuffer = append(mouseBuffer[:0], sample.mouse...)
+		keyBuffer = append(keyBuffer[:0], sample.keys...)
+		if _, err := consumeInputTickWithMouseEvents(sample.state, mouseBuffer, keyBuffer, 0.1); err != nil {
 			t.Fatal(err)
 		}
 	}
+	clear(mouseBuffer)
+	clear(keyBuffer)
 	replay, err := FinishInputRecording()
 	if err != nil {
 		t.Fatal(err)
@@ -244,6 +243,13 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		if got := game.inputMgr.frame.pending.events; !reflect.DeepEqual(got, sample.want) {
 			t.Fatalf("frame %d events = %+v, want %+v", i, got, sample.want)
 		}
+		if got := &game.inputMgr.frame; !reflect.DeepEqual(got.mouseEvents, sample.mouse) || !reflect.DeepEqual(got.keyEvents, sample.keys) {
+			t.Fatalf("replay frame %d did not preserve its mouse/key edges", i)
+		}
+		// Dispatch owns its normalized events; reusable edge buffers must not
+		// alias those events or the caller's recording.
+		clear(game.inputMgr.frame.mouseEvents)
+		clear(game.inputMgr.frame.keyEvents)
 		if game.MousePressed() != (sample.state.Buttons != 0) || game.KeyPressed(KeyA) != (i == 1) || game.KeyPressed(KeyB) {
 			t.Fatalf("frame %d held state does not match recorded input", i)
 		}
@@ -253,6 +259,9 @@ func TestRecordedInputEdgesReplayThroughFrameDispatch(t *testing.T) {
 		game.dispatchFrameEvents()
 		co.Update()
 		session.endFrame()
+		if !reflect.DeepEqual(replay.Frames[i].MouseEvents, sample.mouse) || !reflect.DeepEqual(replay.Frames[i].KeyEvents, sample.keys) {
+			t.Fatalf("replay frame %d mutated the caller's recording", i)
+		}
 	}
 	if swipes != 0 {
 		t.Fatal("same-tick press/release or stationary hold produced a swipe")
@@ -1180,7 +1189,7 @@ func BenchmarkPrepareInputFrame(b *testing.B) {
 	}
 }
 
-func TestPrepareInputFrameSharesLiveRecordingAndReplayConversion(t *testing.T) {
+func TestPrepareInputFrameSharesLiveRecordingAndReplayRouting(t *testing.T) {
 	points := []mathf.Vec2{{}, {X: 5, Y: 6}, {X: 5.5, Y: 6}, {X: 9, Y: 12}}
 	for _, mode := range []string{"live", "recording", "replay"} {
 		t.Run(mode, func(t *testing.T) {
@@ -1230,6 +1239,17 @@ func TestPrepareInputFrameSharesLiveRecordingAndReplayConversion(t *testing.T) {
 				}
 				if session != nil {
 					session.endFrame()
+				}
+			}
+			if mode == "recording" {
+				recorded, err := session.controller.Recording()
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i, frame := range recorded.Frames {
+					if frame.MouseEvents == nil || frame.KeyEvents == nil {
+						t.Fatalf("frame %d changed empty edge slices to nil", i)
+					}
 				}
 			}
 		})
@@ -1524,7 +1544,7 @@ func TestInputSessionFreezeFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer recording.close("done")
-	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.result.json != nil || len(recording.result.replay.Frames) != 0 {
+	if _, err := recording.finishRecordingResult(freeze); err == nil || recording.phase != InputSessionPhaseRunning || recording.result.json != "" || len(recording.result.replay.Frames) != 0 {
 		t.Fatalf("failed finish left partial result: %+v, %v", recording.status(), err)
 	}
 	if _, err := recording.finishRecordingResult(nil); err != nil {
@@ -1697,7 +1717,7 @@ func TestRecordingTooLargeToEncodeRollsBackFinish(t *testing.T) {
 	if _, err := session.finishRecordingResult(nil); err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("encoding error = %v", err)
 	}
-	if session.phase != InputSessionPhaseRunning || session.result.json != nil {
+	if session.phase != InputSessionPhaseRunning || session.result.json != "" {
 		t.Fatal("failed serialization committed a recording")
 	}
 }
@@ -1718,25 +1738,6 @@ func TestInputPreparationRejectsUnrepresentableTimestepAndDuplicates(t *testing.
 		t.Fatal("duplicate preparation replaced the original descriptor")
 	}
 	(&Game{}).OnEngineFrameEnd()
-}
-
-func TestInputEdgeConversionPreservesOrderAndPayload(t *testing.T) {
-	keys := []engine.KeyEvent{{Id: int64(KeyB), IsPressed: true}, {Id: int64(KeyA), IsPressed: false}}
-	mouse := []engine.MouseEvent{{Id: 3, IsPressed: true}, {Id: 1, IsPressed: false}}
-	wantKeys := []InputReplayKeyEvent{{Key: int64(KeyB), Pressed: true}, {Key: int64(KeyA), Pressed: false}}
-	wantMouse := []InputReplayMouseEvent{{Button: 3, Pressed: true}, {Button: 1, Pressed: false}}
-	if got := replayKeyEventsFromEngine(keys); !reflect.DeepEqual(got, wantKeys) {
-		t.Fatalf("key edges = %v", got)
-	}
-	if got := replayMouseEventsFromEngine(mouse); !reflect.DeepEqual(got, wantMouse) {
-		t.Fatalf("mouse edges = %v", got)
-	}
-	if got := engineKeyEventsFromReplay(wantKeys, make([]engine.KeyEvent, 3)); !reflect.DeepEqual(got, keys) {
-		t.Fatalf("engine key edges = %v", got)
-	}
-	if got := engineMouseEventsFromReplay(wantMouse, make([]engine.MouseEvent, 3)); !reflect.DeepEqual(got, mouse) {
-		t.Fatalf("engine mouse edges = %v", got)
-	}
 }
 
 // Exercise public finish calls after the normal input, scheduler, and frame-end

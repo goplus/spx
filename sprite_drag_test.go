@@ -697,7 +697,7 @@ func TestSpriteDragRecordingJSONRoundTrip(t *testing.T) {
 					batch := &inputFrame{}
 					game.inputMgr.frame.history.Process(coreruntime.InputFrame{
 						Point: point, LeftButtonPressed: state.Buttons != 0,
-						MouseEvents: engineMouseEventsFromReplay(tick.frame.MouseEvents, nil),
+						MouseEvents: tick.frame.MouseEvents,
 					}, batch.eventHooks(0))
 					dispatchSpriteDragFrame(co, game, point, batch.events...)
 					recorded = append(recorded, observe())
