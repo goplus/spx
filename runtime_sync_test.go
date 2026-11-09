@@ -26,26 +26,26 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type pullPositionSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	calls     int
 	ids       []int64
 	positions []float32
 }
 
 type reentrantPullPositionMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	game   *Game
 	nested *SpriteImpl
 	calls  int
 }
 
 type concurrentPullPositionMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	started chan struct{}
 	release chan struct{}
 	calls   atomic.Int32

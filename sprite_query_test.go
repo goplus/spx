@@ -25,13 +25,13 @@ import (
 	"github.com/goplus/spx/v4/internal/base/collision"
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	internalengine "github.com/goplus/spx/v4/internal/engine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
 type touchingSyncSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	positions               map[pkgengine.Object]mathf.Vec2
 	visible                 map[pkgengine.Object]bool
 	texturePaths            map[pkgengine.Object]string

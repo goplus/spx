@@ -21,7 +21,7 @@ package gdengine
 import (
 	"sync"
 
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	engineimpl "github.com/goplus/spx/v4/internal/gdengine/impl"
 	. "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -71,7 +71,7 @@ func PrepareLink(coreCallbackInfo CoreCallbackInfo) *LinkSession {
 	coreCallbacks = coreCallbackInfo
 	facade.BindCallbacks(makeCallbacks())
 	// These Go adapters have no lifecycle behavior; the backend owns its managers.
-	session.releaseManagers = enginewrap.BindManagers(engineimpl.CreateManagers())
+	session.releaseManagers = wrap.BindManagers(engineimpl.CreateManagers())
 	activeLink = session
 	return session
 }

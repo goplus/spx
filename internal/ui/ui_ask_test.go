@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/engine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -36,13 +36,13 @@ type askInputMgr struct {
 }
 
 func TestUiAskShow(t *testing.T) {
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	original := gdx.UiMgr
 	mgr := &askShowUiMgr{IUiMgr: original}
 	gdx.UiMgr = mgr
 	t.Cleanup(func() {
 		gdx.UiMgr = original
-		enginewrap.Init(engine.WaitMainThread)
+		wrap.Init(engine.WaitMainThread)
 	})
 
 	const (
@@ -136,12 +136,12 @@ func TestUiAskShow(t *testing.T) {
 }
 
 func TestUiAskUpdateOnlySubmitsOnKeyEdge(t *testing.T) {
-	enginewrap.Init(func(f func()) { f() })
+	wrap.Init(func(f func()) { f() })
 	oldInput, oldUI := gdx.InputMgr, gdx.UiMgr
 	input := &askInputMgr{pressed: map[int64]bool{}}
 	mgr := &askShowUiMgr{visible: map[gdx.Object]bool{}, text: map[gdx.Object]string{2: "answer"}}
 	gdx.InputMgr, gdx.UiMgr = input, mgr
-	t.Cleanup(func() { gdx.InputMgr, gdx.UiMgr = oldInput, oldUI; enginewrap.Init(engine.WaitMainThread) })
+	t.Cleanup(func() { gdx.InputMgr, gdx.UiMgr = oldInput, oldUI; wrap.Init(engine.WaitMainThread) })
 	field := &UiNode{}
 	field.SetId(2)
 	count := 0

@@ -73,7 +73,7 @@ func TestGenerateNativeManagersLeaveDispatchToSharedWrapper(t *testing.T) {
 	isCollisionEnabled := generatedMethod(t, generatedPath, generated, "IsCollisionEnabled")
 	require.Contains(t, isCollisionEnabled, "retValue := CallSpriteIsCollisionEnabled(arg0)")
 	require.Contains(t, isCollisionEnabled, "return ToBool(retValue)")
-	require.NotContains(t, string(generated), "enginewrap", "native backends must not depend on shared dispatch")
+	require.NotContains(t, string(generated), "github.com/goplus/spx/v4/internal/engine/wrap", "native backends must not depend on shared dispatch")
 
 	isMainThread := generatedMethod(t, generatedPath, generated, "IsMainThread")
 	require.Contains(t, isMainThread, "retValue := CallPlatformIsMainThread()")

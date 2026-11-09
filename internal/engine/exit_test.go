@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/goplus/spx/v4/internal/coroutine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
 )
@@ -299,7 +299,7 @@ func setupWebResetTest(t *testing.T, co *coroutine.Coroutines) *resetRecordingEx
 	SetCoroutines(co)
 	gdx.PlatformMgr = resetDirectPlatform{}
 	gdx.ExtMgr = recorder
-	enginewrap.Init(WaitMainThread)
+	wrap.Init(WaitMainThread)
 	t.Cleanup(func() {
 		co.RunAfterStop(nil)
 		SetCoroutines(original)

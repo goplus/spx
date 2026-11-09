@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/goplus/spx/v4/internal/coroutine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	webffi "github.com/goplus/spx/v4/internal/gdengine/binding/web"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
@@ -21,7 +21,7 @@ var webManagerCacheTestID atomic.Uint64
 func TestBatchRetrievePositionsUpdatesCallerBuffer(t *testing.T) {
 	previousSprite := gdx.SpriteMgr
 	t.Cleanup(func() { gdx.SpriteMgr = previousSprite })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(spriteMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(spriteMgr)}))
 	inside, dispatches := false, 0
 	buffer := []float32{42, 42, 42}
 	success := true
@@ -85,7 +85,7 @@ func TestBatchRetrievePositionsUpdatesCallerBuffer(t *testing.T) {
 func TestWriteSnapshotUpdatesCallerArray(t *testing.T) {
 	previousInput := gdx.InputMgr
 	t.Cleanup(func() { gdx.InputMgr = previousInput })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(inputMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(inputMgr)}))
 	inside := false
 	dispatches := 0
 	out := [3]float32{42, 43, 44}
@@ -148,7 +148,7 @@ func TestWriteSnapshotUpdatesCallerArray(t *testing.T) {
 func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
 	previousAPI, previousAudio := webffi.API, gdx.AudioMgr
 	t.Cleanup(func() { webffi.API, gdx.AudioMgr = previousAPI, previousAudio })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(audioMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(audioMgr)}))
 	co := coroutine.New(nil)
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 	dispatches := 0
@@ -184,7 +184,7 @@ func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
 		mgr  gdx.IAudioMgr
 	}{
 		{"public", gdx.AudioMgr},
-		{"facade", new(enginewrap.AudioMgrImpl)},
+		{"facade", new(wrap.AudioMgrImpl)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := dispatches
@@ -205,7 +205,7 @@ func TestWebManagerDirectAndWrappedCallsDispatchOnce(t *testing.T) {
 func TestWebManagerCacheHitStillChecksCancellation(t *testing.T) {
 	previousAPI, previousInput := webffi.API, gdx.InputMgr
 	t.Cleanup(func() { webffi.API, gdx.InputMgr = previousAPI, previousInput })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(inputMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(inputMgr)}))
 	co := coroutine.New(nil)
 	t.Cleanup(func() { co.RunAfterStop(nil) })
 	dispatches := 0
@@ -232,7 +232,7 @@ func TestWebManagerCacheHitStillChecksCancellation(t *testing.T) {
 		read func(string) bool
 	}{
 		{"public", gdx.InputMgr.IsActionPressed},
-		{"facade", new(enginewrap.InputMgrImpl).IsActionPressed},
+		{"facade", new(wrap.InputMgrImpl).IsActionPressed},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := dispatches
@@ -254,7 +254,7 @@ func TestWebManagerCacheHitStillChecksCancellation(t *testing.T) {
 func TestWebManagerPropagatesBridgePanicAndRestoresScope(t *testing.T) {
 	previous, previousAudio := webffi.API.SpxAudioSetVolume, gdx.AudioMgr
 	t.Cleanup(func() { webffi.API.SpxAudioSetVolume, gdx.AudioMgr = previous, previousAudio })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(audioMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(audioMgr)}))
 	co := coroutine.New(nil)
 	useWebManagerDispatch(t, co.WaitMainThread)
 	webffi.API.SpxAudioSetVolume = js.Global().Get("Function").New("throw new Error('web manager failure')")
@@ -269,20 +269,20 @@ func TestWebManagerPropagatesBridgePanicAndRestoresScope(t *testing.T) {
 func TestWebManagerThreadProbeDoesNotDispatch(t *testing.T) {
 	previous, previousPlatform := webffi.API.SpxPlatformIsMainThread, gdx.PlatformMgr
 	t.Cleanup(func() { webffi.API.SpxPlatformIsMainThread, gdx.PlatformMgr = previous, previousPlatform })
-	t.Cleanup(enginewrap.BindManagers([]gdx.IManager{new(platformMgr)}))
+	t.Cleanup(wrap.BindManagers([]gdx.IManager{new(platformMgr)}))
 	useWebManagerDispatch(t, func(func()) { t.Fatal("thread probe attempted recursive dispatch") })
 	probe := js.FuncOf(func(js.Value, []js.Value) any { return true })
 	t.Cleanup(probe.Release)
 	webffi.API.SpxPlatformIsMainThread = probe.Value
-	if !gdx.PlatformMgr.IsMainThread() || !new(enginewrap.PlatformMgrImpl).IsMainThread() {
+	if !gdx.PlatformMgr.IsMainThread() || !new(wrap.PlatformMgrImpl).IsMainThread() {
 		t.Fatal("thread probe lost the backend result")
 	}
 }
 
 func useWebManagerDispatch(t *testing.T, dispatch func(func())) {
 	t.Helper()
-	enginewrap.Init(dispatch)
-	t.Cleanup(func() { enginewrap.Init(nil) })
+	wrap.Init(dispatch)
+	t.Cleanup(func() { wrap.Init(nil) })
 }
 
 func useWebArrayStorage(t *testing.T, inside *bool) {

@@ -14,23 +14,18 @@
  * limitations under the License.
  */
 
-package enginewrap
+package wrap
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"runtime"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/coroutine"
-	"github.com/goplus/spx/v4/internal/input"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -39,13 +34,6 @@ type dispatchCameraMgr struct {
 	gdx.ICameraMgr
 	position mathf.Vec2
 	reads    int
-}
-
-type dispatchInputMgr struct {
-	gdx.IManager
-	gdx.IInputMgr
-	pressed map[int64]bool
-	queries []int64
 }
 
 type dispatchSpriteMgr struct {
@@ -99,7 +87,7 @@ func TestCallInMainThreadRequiresInitOffMainThread(t *testing.T) {
 			gdx.PlatformMgr = test.platform
 			called := false
 			got := catchManagerPanic(func() { CallInMainThread(func() { called = true }) })
-			if got != "enginewrap: Init must be called before using manager methods off the main thread" || called {
+			if got != "wrap: Init must be called before using manager methods off the main thread" || called {
 				t.Fatalf("panic = %v, called = %v; want Init requirement without execution", got, called)
 			}
 		})
@@ -129,26 +117,6 @@ func TestCallInMainThreadValue(t *testing.T) {
 	}
 	if platform.probes != 0 {
 		t.Fatal("installed dispatcher was bypassed by the platform fast path")
-	}
-}
-
-func TestRunnableOnUnfocusedReportsUnsupportedDisable(t *testing.T) {
-	var output bytes.Buffer
-	spxlog.SetStdoutOutput(&output)
-	t.Cleanup(func() { spxlog.SetStdoutOutput(os.Stdout) })
-	platform := &PlatformMgrImpl{}
-	platform.SetRunnableOnUnfocused(true)
-	if output.Len() != 0 {
-		t.Fatalf("supported setting logged a warning: %q", output.String())
-	}
-	platform.SetRunnableOnUnfocused(false)
-	warning := output.String()
-	if !strings.Contains(warning, "[WARN]") || !strings.Contains(warning, "SetRunnableOnUnfocused(false) is not implemented yet") {
-		t.Fatalf("unsupported setting warning = %q", warning)
-	}
-	platform.SetRunnableOnUnfocused(true)
-	if output.String() != warning {
-		t.Fatalf("restoring the supported setting logged another warning: %q", output.String())
 	}
 }
 
@@ -375,7 +343,7 @@ func TestManagerBindingChecksLifetimeWhenDispatchExecutes(t *testing.T) {
 					}
 					call()
 				})
-				if got := catchManagerPanic(func() { manager.SetVolume(1, 0.75) }); got != "enginewrap: audio manager is not bound" || calls != 0 {
+				if got := catchManagerPanic(func() { manager.SetVolume(1, 0.75) }); got != "wrap: audio manager is not bound" || calls != 0 {
 					t.Fatalf("closed dispatch panic=%v, raw calls=%d; want rejection before either backend", got, calls)
 				}
 			})
@@ -429,7 +397,7 @@ func TestManagerResultWaitsForMainThreadDispatch(t *testing.T) {
 	})
 	go func() {
 		defer close(done)
-		finished <- cameraMgr.GetPosition()
+		finished <- cameraMgr.GetCameraPosition()
 	}()
 
 	var call func()
@@ -464,66 +432,12 @@ func TestManagerResultWaitsForMainThreadDispatch(t *testing.T) {
 		dispatches++
 		call()
 	})
-	cameraMgr.SetPosition(mathf.NewVec2(56, -78))
-	if got := cameraMgr.GetPosition(); got != mathf.NewVec2(56, -78) {
-		t.Fatalf("camera aliases lost the updated position: %v", got)
+	cameraMgr.SetCameraPosition(mathf.NewVec2(56, -78))
+	if got := cameraMgr.GetCameraPosition(); got != mathf.NewVec2(56, -78) {
+		t.Fatalf("camera position = %v, want (56, -78)", got)
 	}
 	if dispatches != 3 {
 		t.Fatalf("manager dispatches = %d, want one per getter/setter call", dispatches)
-	}
-}
-
-func TestMousePressedUsesPrimaryButtons(t *testing.T) {
-	var inputMgr InputMgrImpl
-	previousCallback, previousInput := mainCallback, gdx.InputMgr
-	Init(func(call func()) { call() })
-	t.Cleanup(func() { mainCallback, gdx.InputMgr = previousCallback, previousInput })
-	for _, test := range []struct {
-		name    string
-		buttons []int64
-		want    bool
-	}{
-		{"none", nil, false},
-		{"left", []int64{1}, true},
-		{"right", []int64{2}, true},
-		{"middle only", []int64{3}, false},
-		{"both primary", []int64{1, 2}, true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			backend := &dispatchInputMgr{pressed: make(map[int64]bool)}
-			for _, button := range test.buttons {
-				backend.pressed[button] = true
-			}
-			t.Cleanup(BindManagers([]gdx.IManager{backend}))
-			if got := inputMgr.MousePressed(); got != test.want {
-				t.Fatalf("MousePressed() = %v, want %v", got, test.want)
-			}
-			for _, button := range backend.queries {
-				if button != input.MouseButtonLeft && button != input.MouseButtonRight {
-					t.Errorf("queried non-primary mouse button %d", button)
-				}
-			}
-		})
-	}
-}
-
-func TestMousePressedRetainsItsBoundInput(t *testing.T) {
-	previousCallback, previousInput := mainCallback, gdx.InputMgr
-	t.Cleanup(func() { mainCallback, gdx.InputMgr = previousCallback, previousInput })
-	Init(func(call func()) { call() })
-	first := &dispatchInputMgr{pressed: map[int64]bool{input.MouseButtonLeft: true}}
-	firstCleanup := BindManagers([]gdx.IManager{first})
-	t.Cleanup(firstCleanup)
-	retained := gdx.InputMgr.(*InputMgrImpl)
-	second := &dispatchInputMgr{pressed: map[int64]bool{}}
-	t.Cleanup(BindManagers([]gdx.IManager{second}))
-	if !retained.MousePressed() || len(second.queries) != 0 {
-		t.Fatal("retained manager used the replacement input backend")
-	}
-	firstCleanup()
-	before := len(first.queries)
-	if got := catchManagerPanic(func() { retained.MousePressed() }); got == nil || len(first.queries) != before || len(second.queries) != 0 {
-		t.Fatalf("stale mouse query panic=%v, raw queries=(%d, %d); want rejection before either backend", got, len(first.queries)-before, len(second.queries))
 	}
 }
 
@@ -615,8 +529,8 @@ func TestManagerBindingsConcurrentReleaseAndRebind(t *testing.T) {
 					<-start
 					for range 1000 {
 						if got := catchManagerPanic(call); got != nil &&
-							got != "enginewrap: audio manager is not bound" &&
-							got != "enginewrap: platform manager is not bound" {
+							got != "wrap: audio manager is not bound" &&
+							got != "wrap: platform manager is not bound" {
 							t.Errorf("unexpected manager panic: %v", got)
 						}
 					}
@@ -651,7 +565,7 @@ func TestManagerBindingReleaseFromBackend(t *testing.T) {
 	if got := retained.GetVolume(1); got != 0.5 {
 		t.Fatalf("accepted call result = %v, want 0.5", got)
 	}
-	if got := catchManagerPanic(func() { retained.GetVolume(1) }); got != "enginewrap: audio manager is not bound" {
+	if got := catchManagerPanic(func() { retained.GetVolume(1) }); got != "wrap: audio manager is not bound" {
 		t.Fatalf("released manager panic = %v", got)
 	}
 }
@@ -661,34 +575,11 @@ func TestBindManagersRollsBackOnUnknownManager(t *testing.T) {
 	t.Cleanup(func() { gdx.AudioMgr = previousAudio })
 	if got := catchManagerPanic(func() {
 		BindManagers([]gdx.IManager{&bindingAudioMgr{}, nil})
-	}); got != "enginewrap: unknown manager type <nil>" {
+	}); got != "wrap: unknown manager type <nil>" {
 		t.Fatalf("unknown manager panic = %v", got)
 	}
 	if gdx.AudioMgr != nil {
 		t.Fatal("failed binding retained its partially installed audio wrapper")
-	}
-}
-
-func TestMousePressedUsesOneBindingAndDispatch(t *testing.T) {
-	previousCallback, previousInput := mainCallback, gdx.InputMgr
-	t.Cleanup(func() { mainCallback, gdx.InputMgr = previousCallback, previousInput })
-	first := &dispatchInputMgr{}
-	cleanup := BindManagers([]gdx.IManager{first})
-	t.Cleanup(cleanup)
-	second := &dispatchInputMgr{pressed: map[int64]bool{input.MouseButtonRight: true}}
-	dispatches := 0
-	Init(func(call func()) {
-		dispatches++
-		call()
-		cleanup()
-		t.Cleanup(BindManagers([]gdx.IManager{second}))
-	})
-	var inputMgr InputMgrImpl
-	if inputMgr.MousePressed() || dispatches != 1 || len(second.queries) != 0 {
-		t.Fatalf("mouse query crossed bindings or repeated dispatch: dispatches=%d, replacement queries=%v", dispatches, second.queries)
-	}
-	if !slices.Equal(first.queries, []int64{input.MouseButtonLeft, input.MouseButtonRight}) {
-		t.Fatalf("original queries = %v, want left and right buttons", first.queries)
 	}
 }
 
@@ -699,11 +590,6 @@ func (m *dispatchCameraMgr) GetCameraPosition() mathf.Vec2 {
 
 func (m *dispatchCameraMgr) SetCameraPosition(position mathf.Vec2) {
 	m.position = position
-}
-
-func (m *dispatchInputMgr) GetMouseState(button int64) bool {
-	m.queries = append(m.queries, button)
-	return m.pressed[button]
 }
 
 func (m *dispatchSpriteMgr) BatchRetrievePositions(ids []int64, out []float32) bool {

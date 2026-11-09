@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -346,10 +346,10 @@ func setupAssetPathTest(t *testing.T) *pathResourceSpy {
 	previousPaths, previousRes := assetPaths, gdx.ResMgr
 	t.Cleanup(func() {
 		assetPaths, gdx.ResMgr = previousPaths, previousRes
-		enginewrap.Init(WaitMainThread)
+		wrap.Init(WaitMainThread)
 	})
 	resources := &pathResourceSpy{files: make(map[string]string)}
 	gdx.ResMgr = resources
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	return resources
 }

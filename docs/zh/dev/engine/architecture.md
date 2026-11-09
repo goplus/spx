@@ -17,7 +17,7 @@ Go 到引擎的边界随平台变化：原生平台通过 GDExtension/native 绑
 | `internal/core/runtime`、`internal/input` | 输入归一化、回放数据和脚本循环规则 | 处理值，通过参数接收回调和时钟 |
 | `internal/projectloader` | 运行时资源装配 | 先适配引擎资源，再交给核心配置层 |
 | `internal/engine` | 引擎生命周期、坐标转换、帧同步 | 使用有类型的 manager 包装 |
-| `internal/engine/wrap` | 管理器集合、主线程调度和扩展方法 | 公开与内部调用共用包装器，私有持有原始后端 |
+| `internal/engine/wrap` | 管理器包装、主线程调度和绑定状态 | 公开与内部调用共用包装器，私有持有原始后端 |
 | `internal/gdengine` | 原生/Web 传输、回调和绑定生命周期 | 后端只负责参数转换与 ABI 调用 |
 | `godot_modules/spx` | 引擎侧实现与导出的 manager 声明 | 由 SPX 仓库持有，与独立 Godot 仓库一起构建 |
 | CLI 路径与项目准备 | 解析源码/生成项目目录，准备项目输入 | 显式指定命令目录，返回准备错误 |

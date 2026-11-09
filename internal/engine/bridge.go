@@ -16,11 +16,11 @@
 
 package engine
 
-import enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+import "github.com/goplus/spx/v4/internal/engine/wrap"
 
-var managers enginewrap.EngineManagers
+var managers wrap.EngineManagers
 
 // Managers returns the process-wide manager bridge used by the single runtime.
-func Managers() *enginewrap.EngineManagers {
+func Managers() *wrap.EngineManagers {
 	return &managers
 }

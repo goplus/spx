@@ -83,12 +83,8 @@ func (p *Game) loadGame(resource any, generation uint64) (err error) {
 	p.applyPreparedStage(gamer, proj, generation, &plan)
 	opened.FS = nil // The game now owns the directory.
 
-	platform := &engine.Managers().PlatformMgr
-	if !conf.DontRunOnUnfocused {
-		platform.SetRunnableOnUnfocused(true)
-	}
 	p.initLogicLoop()
-	platform.SetWindowTitle(title)
+	engine.Managers().PlatformMgr.SetWindowTitle(title)
 	return nil
 }
 

@@ -29,7 +29,7 @@ import (
 
 	"github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -616,14 +616,14 @@ func setupMonitorEngine(t *testing.T) *monitorEngineUiSpy {
 	t.Helper()
 	oldUI, oldCamera := gdx.UiMgr, gdx.CameraMgr
 	oldScale := engine.WindowScale()
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	mgr := newMonitorEngineUiSpy()
 	gdx.UiMgr, gdx.CameraMgr = mgr, uiRenderCamera{}
 	engine.SetWindowScale(1)
 	t.Cleanup(func() {
 		gdx.UiMgr, gdx.CameraMgr = oldUI, oldCamera
 		engine.SetWindowScale(oldScale)
-		enginewrap.Init(engine.WaitMainThread)
+		wrap.Init(engine.WaitMainThread)
 	})
 	return mgr
 }

@@ -86,7 +86,7 @@ func NewSayBubbleLayoutContext(winSize mathf.Vec2) SayBubbleLayoutContext {
 	return newSayBubbleLayoutContext(
 		winSize,
 		baseSize,
-		engine.Managers().CameraMgr.GetPosition(),
+		engine.Managers().CameraMgr.GetCameraPosition(),
 		engine.Managers().CameraMgr.GetCameraZoom(),
 		engine.WindowScale(),
 		clampUIPositionInScreen,

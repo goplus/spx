@@ -28,7 +28,7 @@ import (
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
 	"github.com/goplus/spx/v4/internal/engine/profiler"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	"github.com/goplus/spx/v4/internal/ui"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
@@ -44,7 +44,7 @@ type captureFlushTestShape struct {
 }
 
 type captureFlushSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	batches [][]float32
 }
 
@@ -60,7 +60,7 @@ type debugPanelUiMgr struct {
 
 // The backend advances independently of the Go sprite, as Godot physics does.
 type frameSyncSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	positions map[int64]mathf.Vec2
 	batches   [][]float32
 }

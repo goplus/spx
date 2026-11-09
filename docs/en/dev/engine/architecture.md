@@ -17,7 +17,7 @@ Unhandled coroutine panics reach the engine as `coroutine.PanicReport`, preservi
 | `internal/core/runtime`, `internal/input` | Input normalization, replay values and script-loop rules | Operates on values and supplied callbacks/clocks |
 | `internal/projectloader` | Runtime resource assembly | Adapts engine resources before core configuration loading |
 | `internal/engine` | Engine lifecycle, coordinate adaptation and frame synchronization | Uses typed manager wrappers |
-| `internal/engine/wrap` | Manager collection, main-thread dispatch and extension methods | Public and internal calls share wrappers that privately hold raw backends |
+| `internal/engine/wrap` | Manager wrappers, main-thread dispatch and binding state | Public and internal calls share wrappers that privately hold raw backends |
 | `internal/gdengine` | Native/Web transport, callbacks and binding lifecycle | Backends only convert arguments and implement ABI calls |
 | `godot_modules/spx` | Engine-side implementation and exported manager declarations | Owned by SPX; built with the separate Godot checkout |
 | CLI path and project preparation | Resolve source/generated directories and prepare project inputs | Explicit command directories and returned preparation errors |

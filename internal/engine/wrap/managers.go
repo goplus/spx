@@ -14,18 +14,13 @@
  * limitations under the License.
  */
 
-package enginewrap
-
-//lint:file-ignore ST1001 Engine manager extension code intentionally dot-imports engine API types.
+package wrap
 
 import (
 	"slices"
 
-	. "github.com/goplus/spbase/mathf"
 	"github.com/goplus/spx/v4/internal/engine/managerstate"
 	"github.com/goplus/spx/v4/internal/engine/platform"
-	"github.com/goplus/spx/v4/internal/input"
-	spxlog "github.com/goplus/spx/v4/internal/log"
 	gdx "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -83,7 +78,7 @@ func CallInMainThread(call func()) {
 		if platform.TryCallEngineDirectly(call) {
 			return
 		}
-		panic("enginewrap: Init must be called before using manager methods off the main thread")
+		panic("wrap: Init must be called before using manager methods off the main thread")
 	}
 	callback(call)
 }
@@ -97,28 +92,6 @@ func CallInMainThreadValue[T any](call func() T) (result T) {
 	return
 }
 
-func (c *CameraMgrImpl) GetPosition() Vec2 {
-	return c.GetCameraPosition()
-}
-
-func (c *CameraMgrImpl) SetPosition(position Vec2) {
-	c.SetCameraPosition(position)
-}
-
-func (i *InputMgrImpl) MousePressed() bool {
-	binding := i.resolve()
-	return CallInMainThreadValue(func() bool {
-		target := binding.target()
-		return target.GetMouseState(input.MouseButtonLeft) || target.GetMouseState(input.MouseButtonRight)
-	})
-}
-
-func (*PlatformMgrImpl) SetRunnableOnUnfocused(flag bool) {
-	if !flag {
-		spxlog.Warn("SetRunnableOnUnfocused(false) is not implemented yet")
-	}
-}
-
 func (m *managerBinding[T]) binding() *managerBinding[T] { return m }
 
 // target rechecks the captured binding after dispatch. A queued facade call
@@ -128,7 +101,7 @@ func (m *managerBinding[T]) target() T {
 	defer managerstate.Mu.RUnlock()
 	var zero T
 	if m.backend == zero {
-		panic("enginewrap: " + m.name + " manager is not bound")
+		panic("wrap: " + m.name + " manager is not bound")
 	}
 	return m.backend
 }
@@ -160,7 +133,7 @@ func resolveManager[W interface{ binding() *managerBinding[T] }, T comparable](b
 	}
 	var zero T
 	if binding == nil || binding.backend == zero {
-		panic("enginewrap: " + name + " manager is not bound")
+		panic("wrap: " + name + " manager is not bound")
 	}
 	return binding
 }

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 )
 
@@ -60,7 +60,7 @@ func TestCreateManagersLifecycleDoesNotBind(t *testing.T) {
 			}
 		})
 	}
-	unbind := enginewrap.BindManagers(managers[:1])
+	unbind := wrap.BindManagers(managers[:1])
 	t.Cleanup(unbind)
 	if engine.AudioMgr == nil || engine.AudioMgr == managers[0].(engine.IAudioMgr) {
 		t.Fatal("BindManagers did not wrap the constructed audio manager")
@@ -76,10 +76,10 @@ func TestBoundManagersDispatchBeforeBackendCalls(t *testing.T) {
 	t.Cleanup(func() {
 		engine.AudioMgr = previousAudio
 		// This package's tests do not install an engine runtime.
-		enginewrap.Init(nil)
+		wrap.Init(nil)
 	})
-	t.Cleanup(enginewrap.BindManagers([]engine.IManager{new(audioMgr)}))
-	var managers enginewrap.EngineManagers
+	t.Cleanup(wrap.BindManagers([]engine.IManager{new(audioMgr)}))
+	var managers wrap.EngineManagers
 	for _, test := range []struct {
 		name string
 		call func()
@@ -91,7 +91,7 @@ func TestBoundManagersDispatchBeforeBackendCalls(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dispatches := 0
-			enginewrap.Init(func(func()) {
+			wrap.Init(func(func()) {
 				dispatches++
 				// Keep unbound backend functions behind the dispatch boundary.
 			})

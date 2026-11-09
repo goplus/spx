@@ -37,7 +37,7 @@ import (
 	coreproject "github.com/goplus/spx/v4/internal/core/project"
 	"github.com/goplus/spx/v4/internal/coroutine"
 	"github.com/goplus/spx/v4/internal/engine"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	itime "github.com/goplus/spx/v4/internal/time"
 	pkgengine "github.com/goplus/spx/v4/pkg/spx/pkg/engine"
 	"github.com/visualfc/gid"
@@ -53,7 +53,7 @@ type eventDispatchPlatform struct {
 type eventLifecycleFunc func(coroutine.Thread) func()
 
 type inputFrameSpriteMgr struct {
-	enginewrap.SpriteMgrImpl
+	wrap.SpriteMgrImpl
 	platform    *eventDispatchPlatform
 	queries     atomic.Int32
 	wrongThread atomic.Bool
@@ -374,10 +374,10 @@ func TestDispatchFrameEventsServicesClickQueriesOnEngineThread(t *testing.T) {
 	mgr := &inputFrameSpriteMgr{platform: platform}
 	previousPlatform, previousSprites := pkgengine.PlatformMgr, pkgengine.SpriteMgr
 	pkgengine.PlatformMgr, pkgengine.SpriteMgr = platform, mgr
-	enginewrap.Init(engine.WaitMainThread)
+	wrap.Init(engine.WaitMainThread)
 	t.Cleanup(func() {
 		pkgengine.PlatformMgr, pkgengine.SpriteMgr = previousPlatform, previousSprites
-		enginewrap.Init(func(call func()) { call() })
+		wrap.Init(func(call func()) { call() })
 	})
 	sprite := newClickTestSprite(game, "button", 1, false)
 	game.shapeMgr.items = []Shape{sprite}
@@ -604,7 +604,7 @@ func TestFrameSyncQueuedQueryMergesPosition(t *testing.T) {
 			previousPlatform := pkgengine.PlatformMgr
 			pkgengine.PlatformMgr = platform
 			t.Cleanup(func() { pkgengine.PlatformMgr = previousPlatform })
-			enginewrap.Init(engine.WaitMainThread)
+			wrap.Init(engine.WaitMainThread)
 
 			release := make(chan struct{})
 			thread := co.Create(sprite, func(coroutine.Thread) {

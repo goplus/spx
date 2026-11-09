@@ -815,7 +815,7 @@ func CachedInputGetKey(key int64, fallback func() bool) bool { return fallback()
 	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 	source := string(body)
-	require.NotContains(t, source, "enginewrap", "raw backends must not depend on shared dispatch")
+	require.NotContains(t, source, "github.com/goplus/spx/v4/internal/engine/wrap", "raw backends must not depend on shared dispatch")
 	for _, method := range []string{"AudioSetVolume", "AudioGetVolume", "InputGetKey", "PlatformIsMainThread"} {
 		require.Equal(t, 1, strings.Count(source, "API.Spx"+method+".Invoke("), "retain each bridge call, including cache fallback")
 	}

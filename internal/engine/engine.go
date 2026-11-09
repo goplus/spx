@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 
 	"github.com/goplus/spx/v4/internal/engine/profiler"
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	gde "github.com/goplus/spx/v4/internal/gdengine"
 	itime "github.com/goplus/spx/v4/internal/time"
 
@@ -108,7 +108,7 @@ func Main(game IGame, owner any, initialize func()) error {
 	if initialize != nil {
 		initialize()
 	}
-	enginewrap.Init(WaitMainThread)
+	wrap.Init(WaitMainThread)
 	callbacks := gdx.CoreCallbackInfo{
 		OnEngineStart:     onStart,
 		OnEngineUpdate:    onUpdate,

@@ -88,7 +88,7 @@ func SetDefaultFont(path string) {
 }
 
 func BridgeSetCameraPosition(pos Vec2) {
-	Managers().CameraMgr.SetPosition(pos)
+	Managers().CameraMgr.SetCameraPosition(pos)
 }
 
 func BridgeViewToWorld(pos Vec2) Vec2 {
@@ -179,6 +179,6 @@ func waitMainThreadValue[T any](fn func() T) (value T) {
 
 func bridgeCameraTransform() (Vec2, float64) {
 	cameraMgr := Managers().CameraMgr
-	cameraPos := cameraMgr.GetPosition()
+	cameraPos := cameraMgr.GetCameraPosition()
 	return cameraPos, cameraMgr.GetCameraZoom().X / WindowScale()
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	enginewrap "github.com/goplus/spx/v4/internal/engine/wrap"
+	"github.com/goplus/spx/v4/internal/engine/wrap"
 	"github.com/goplus/spx/v4/internal/gdengine/binding/facade"
 	spxlog "github.com/goplus/spx/v4/internal/log"
 	itime "github.com/goplus/spx/v4/internal/time"
@@ -374,11 +374,11 @@ func TestLinkSessionUnlinkAllowsAcceptedManagerCallToFinish(t *testing.T) {
 	previousAudio := engine.AudioMgr
 	t.Cleanup(func() {
 		engine.AudioMgr = previousAudio
-		enginewrap.Init(nil)
+		wrap.Init(nil)
 	})
-	enginewrap.Init(func(call func()) { call() })
+	wrap.Init(func(call func()) { call() })
 	entered, finish := make(chan struct{}), make(chan struct{})
-	session := &LinkSession{releaseManagers: enginewrap.BindManagers([]engine.IManager{
+	session := &LinkSession{releaseManagers: wrap.BindManagers([]engine.IManager{
 		&unlinkAudioMgr{getVolume: func() float64 {
 			close(entered)
 			<-finish
@@ -399,10 +399,10 @@ func TestLinkSessionUnlinkAllowsAcceptedManagerCallToFinish(t *testing.T) {
 	if engine.AudioMgr != nil {
 		t.Fatal("unlink retained the public manager")
 	}
-	for _, manager := range []engine.IAudioMgr{retained, new(enginewrap.AudioMgrImpl)} {
+	for _, manager := range []engine.IAudioMgr{retained, new(wrap.AudioMgrImpl)} {
 		func() {
 			defer func() {
-				if got := recover(); got != "enginewrap: audio manager is not bound" {
+				if got := recover(); got != "wrap: audio manager is not bound" {
 					t.Errorf("unlinked manager panic = %v", got)
 				}
 			}()
